@@ -22,7 +22,7 @@ use kf_core::{HostOps, HostSlice, Plane, Step, Translatable, Vmm};
 use kf_gsp::{CommandPolicy, GspFsm, GuestRam, RamRefused};
 use kf_linux_raw::{Notifier, PollTimeout, Poller, ReadyTokens};
 use kf_trap::{Action, Class, Route, WriteSemantics};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 /// `NV_PROM_DATA(i) = 0x300000 + i`, 1 MiB — where RM streams the VBIOS from.
@@ -56,27 +56,44 @@ pub struct Config {
     /// refusing it by name where the host cannot (`kf_rm::DisplaySeat::x11_dispsw`). Needs
     /// `display=on` ([`Config::check`]). Off, every path is the path it was.
     pub x11_dispsw: bool,
+    /// ★ Display step 3 (`display-broker` set, `docs/design/V3_DISPLAY.md` §8): back the display's
+    /// frames with sealed memfds the broker can receive (five slots). Unset: `cuMemAllocHost` and
+    /// three slots, exactly as before. Refused without `display`.
+    pub display_broker: bool,
+    /// ★ `display-broker-vram=auto|on|off` (§8.11, the GPU-copy rung): VRAM frame slots kayfabe
+    /// allocates for a compositor on the same GPU. Meaningful only with `display_broker`.
+    pub display_broker_vram: kf_broker::gpucopy::VramMode,
     /// ★ The boot display (`gop=on`, [`crate::gop`], `docs/design/V3_DISPLAY.md` §4.11): an option
     /// ROM with a UEFI GOP driver whose framebuffer is BAR1 `[0, G)`, the BAR1 seed, the boot layer
     /// and the console region in fn 65. Needs `display=on`. Off (the default) is today's device.
     pub gop: bool,
+    /// ★ `display-max-fps` (`OWNER_RULINGS.md` §M, `V3_DISPLAY.md` §8.16): the cap on every head's
+    /// emulated vblank tick, in whole Hz, 24..=75; 0 (unset) caps at 75 with today's EDID.
+    /// Validated by [`Config::check`]; needs `display=on`.
+    pub display_max_fps: u32,
 }
 
 impl Config {
-    /// ★ Refusals that need nothing but the configuration — asked first, so they cost nothing.
+    /// ★ The properties that refuse each other or a value, by name — before anything is opened,
+    /// so a refusal costs nothing: `display-broker` and `x11-dispsw` need `display`, and
+    /// `display-max-fps` is
+    /// [`kf_disp::pace::check`]'s.
     ///
     /// # Errors
-    /// `x11-dispsw=on` without `display=on`: with no virtual display the guest's own CPU-RM
-    /// refuses the display-SW object before it asks us (`disp_sw.c:67-71`), so the switch could do
-    /// nothing — a property that silently does nothing is refused by name instead.
+    /// The refusal.
     pub fn check(&self) -> Result<(), String> {
+        if self.display_broker && !self.display {
+            return Err(
+                "display-broker needs display=on (the broker shows the virtual display)".into(),
+            );
+        }
         if self.x11_dispsw && !self.display {
             return Err("x11-dispsw=on needs display=on: without the virtual display the guest's driver \
                  refuses GF100_DISP_SW itself, so there is nothing to twin (docs/design/V3_DISPLAY.md, \
                  the 2026-10-03 x11-dispsw note)"
                 .into());
         }
-        Ok(())
+        kf_disp::pace::check(self.display, self.display_max_fps)
     }
 }
 
@@ -235,6 +252,9 @@ pub struct Device {
     /// Interrupt counters for the boot log.
     pub irq_counts: IrqCounts,
     pub(crate) stop: AtomicBool,
+    /// ★ Display step 3c: display ids whose monitor changed and whose hotplug the register drainer
+    /// still owes the guest (set by the display worker, taken by the drainer).
+    hotplug_pending: AtomicU32,
     /// Boot-log counters.
     pub counters: Counters,
     /// ★ P5c: the VA timing at the previous heartbeat (the heartbeat prints the window).
@@ -279,8 +299,9 @@ impl Device {
         cfg.check()?;
         // ★ The boot display (`gop=on`, `crate::gop`): decided from the configuration and the virtual
         // monitor alone, so a refusal costs nothing. `None` with `gop=off`: every step below that
-        // reads it is then skipped, and the device is today's.
-        let monitor = kf_rm::display::monitors()
+        // reads it is then skipped, and the device is today's. ★ The same monitor the display
+        // model serves (`display-max-fps` included): the firmware's mode is the guest's native one.
+        let monitor = kf_rm::display::monitors(cfg.display_max_fps)
             .into_iter()
             .next()
             .ok_or("no virtual monitor behind the display")?;
@@ -383,9 +404,17 @@ impl Device {
         let store = rm.reserve_gpga(fb_length).map_err(|e| {
             format!(
                 "store of {} MiB refused: {e:?} (host card {bdf}: {n_neighbours} other kf3 device(s) \
-                 of this process already hold {} MiB of store on it)",
+                 of this process already hold {} MiB of store on it{})",
                 cfg.fb_mb,
-                store_neighbours >> 20
+                store_neighbours >> 20,
+                if cfg.display_broker
+                    && cfg.display_broker_vram != kf_broker::gpucopy::VramMode::Off
+                {
+                    "; display-broker-vram allocates up to 50 MiB of display VRAM after the store \
+                     (230 MiB after a 4K mode), and a compositor on this card needs room too"
+                } else {
+                    ""
+                }
             )
         })?;
         let export = rm
@@ -658,11 +687,53 @@ impl Device {
                 let export = rm
                     .export_to_new_fd(store.handle)
                     .map_err(|e| format!("display=on: store export: {e:?}"))?;
-                // ★ The display context's CUDA calls run on a thread of their own too
-                // (`on_cuda_thread`, `kf_cuda::posture`).
+                // ★ §8.11: the GPU-copy rung's probe — at realize (QEMU still has its privileges
+                // for the render node), AFTER the store (the guest's memory wins), on the display's
+                // own RM client (OWNER_RULINGS §N)
+                let broker = cfg.display_broker.then(|| {
+                    use kf_broker::gpucopy::VramMode;
+                    let mode = cfg.display_broker_vram;
+                    let setup = match mode {
+                        VramMode::Off => {
+                            eprintln!("kf3: broker: display-broker-vram=off — host-memory rungs only");
+                            Ok(None)
+                        }
+                        VramMode::On | VramMode::Auto => {
+                            match crate::gpucopy::VramSetup::probe(
+                                &dev,
+                                &bdf,
+                                cfg.gpu_minor,
+                                rm.driver_version(),
+                            ) {
+                                Ok(s) => Ok(Some(&*Box::leak(Box::new(s)))),
+                                Err(e) if mode == VramMode::On => {
+                                    Err(format!("display-broker-vram=on: {e}"))
+                                }
+                                Err(e) => {
+                                    eprintln!(
+                                        "kf3: broker: the GPU-copy rung is NOT offered: {e}; frames \
+                                         go through host memory"
+                                    );
+                                    Ok(None)
+                                }
+                            }
+                        }
+                    };
+                    setup.map(|setup| crate::display::BrokerVram { mode, setup })
+                });
+                let broker = broker.transpose()?;
+                // Keep display CUDA calls on their own unprivileged thread.
                 let fd = export.fd_number();
                 let plane = on_cuda_thread("kf3-cuda-disp", || {
-                    crate::display::DisplayPlane::build(row, table, &bdf, fd, fb_length)
+                    crate::display::DisplayPlane::build(
+                        row,
+                        table,
+                        &bdf,
+                        fd,
+                        fb_length,
+                        broker,
+                        cfg.display_max_fps,
+                    )
                 })?
                 .with_boot(gop.as_ref().map(crate::display::BootScan::of).transpose()?);
                 // the export node stays open for the process (CUDA holds the import)
@@ -910,6 +981,7 @@ impl Device {
             irq_counts: IrqCounts::default(),
             drainer_efd,
             stop: AtomicBool::new(false),
+            hotplug_pending: AtomicU32::new(0),
             counters: Counters::default(),
             vat_prev: Mutex::new(kf_mem::vasmgr::VaTiming::default()),
             prof: Box::default(),
@@ -1984,6 +2056,7 @@ impl Device {
             }
             after_timeout = false;
             self.deliver_rc();
+            self.deliver_hotplug();
             // The experiment's bounded spin: only while doorbells are flowing, only if the privileged
             // ring is empty (register work never waits behind it), and never past the bound.
             if let (Some(d), Some(t)) = (spin, last_delivery)
@@ -2267,20 +2340,43 @@ impl Device {
                 d.scanout_refused.load(o),
                 d.scanout_us_total.load(o) / d.scanouts.load(o).max(1),
                 d.scanout_us_max.load(o)
-            ) + &dp.boot().map_or_else(String::new, |_| {
-                // ★ The boot display (`gop=on`): frames shown from the boot layer, and when the
-                // guest's first armed head retired it.
-                let done = d.boot_done_ms.load(o);
-                format!(
-                    " boot[frames={} retired={}]",
-                    d.boot_frames.load(o),
-                    if done == 0 {
-                        "no".to_string()
-                    } else {
-                        format!("+{done}ms")
-                    }
-                )
-            })
+            ) + &{
+                // ★ §8.16 (`display-max-fps`): the achieved rates per path and `over`, early in
+                // the line (the worker also prints it on a line of its own)
+                let f = dp.fps_fragment();
+                if f.is_empty() {
+                    String::new()
+                } else {
+                    format!(" {f}")
+                }
+            } + &format!(
+                " scanout_no_slot={} scanout_d2h={} scanout_pack={} pack_skipped={} display_vram_mib={} host_cursor_reads={} host_cursor_refused={}",
+                d.scanout_no_slot.load(o),
+                d.scanout_d2h.load(o),
+                d.scanout_pack.load(o),
+                d.scanout_pack_skipped.load(o),
+                d.vram_bytes.load(o) >> 20,
+                d.host_cursor_reads.load(o),
+                d.host_cursor_refused.load(o)
+            )
+                + &dp
+                    .broker
+                    .as_ref()
+                    .map_or_else(String::new, |b| format!(" {}", b.status()))
+                + &dp.boot().map_or_else(String::new, |_| {
+                    // ★ The boot display (`gop=on`): frames shown from the boot layer, and when
+                    // the guest's first armed head retired it.
+                    let done = d.boot_done_ms.load(o);
+                    format!(
+                        " boot[frames={} retired={}]",
+                        d.boot_frames.load(o),
+                        if done == 0 {
+                            "no".to_string()
+                        } else {
+                            format!("+{done}ms")
+                        }
+                    )
+                })
         });
         // ★ EXPERIMENT x11-dispsw: `""` with the switch off (the line is the line it was).
         let irq = irq + &self.chans.dispsw_status(self.x11_dispsw);
@@ -2551,6 +2647,73 @@ impl Device {
         }
         if !back.is_empty() {
             self.chans.requeue_rc(back);
+        }
+    }
+
+    /// ★ Display step 3c (display worker): the monitor behind `display_ids` changed and a hotplug
+    /// registration is live — the drainer (the GSP queue's owner) posts it.
+    pub(crate) fn queue_hotplug(&self, display_ids: u32) {
+        self.hotplug_pending.fetch_or(display_ids, Ordering::AcqRel);
+        let _ = self.drainer_efd.signal();
+    }
+
+    /// ★ Display step 3c, on the drainer (the GSP queue's owner), like [`Self::deliver_rc`]: post
+    /// the pending hotplug to the guest as a LIST `POST_EVENT` (`bNotifyList`, the bare
+    /// `NV2080_NOTIFIERS_HOTPLUG`, `plugDisplayMask` = the changed ids) addressed to the LIVE
+    /// registration, publish, and raise the GSP's stall vector outside the lock. The guest's own RM
+    /// wakes NVKMS, which asks `INTERNAL_GET_HOTPLUG_UNPLUG_STATE` and re-reads the EDID.
+    /// ⊘ With no live registration nothing is posted (a post to a dead pair wedges the RPC path):
+    /// the next probe simply reads the new EDID. A full queue requeues the mask.
+    fn deliver_hotplug(&self) {
+        let mask = self.hotplug_pending.swap(0, Ordering::AcqRel);
+        if mask == 0 {
+            return;
+        }
+        let Some(dp) = self.display else { return };
+        let target = dp.model.lock().ok().and_then(|g| g.hotplug_target());
+        let Some(t) = target else {
+            eprintln!(
+                "kf3: display: hotplug for {mask:#x} NOT posted: no live registration (the next probe reads the new EDID)"
+            );
+            return;
+        };
+        let payload =
+            match kf_abi::postevent::SubdeviceNotify::hotplug(t.client, t.event, mask).encode() {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("kf3: display: hotplug NOT posted: {e}");
+                    return;
+                }
+            };
+        let Ok(mut guard) = self.gsp.lock() else {
+            self.hotplug_pending.fetch_or(mask, Ordering::AcqRel);
+            return;
+        };
+        let g = &mut *guard;
+        let mut ram = Ram(self);
+        let posted = match g.fsm.post_subdevice_event(&mut ram, payload) {
+            Ok(()) => {
+                eprintln!(
+                    "kf3: display: hotplug posted for display {mask:#x} to {:#x}:{:#x}",
+                    t.client, t.event
+                );
+                true
+            }
+            Err(kf_gsp::GspFault::QueueFull { .. }) => {
+                self.hotplug_pending.fetch_or(mask, Ordering::AcqRel);
+                false
+            }
+            Err(f) => {
+                eprintln!("kf3: display: hotplug REFUSED by the queue: {f:?}");
+                false
+            }
+        };
+        if posted {
+            self.publish(g);
+        }
+        drop(guard);
+        if posted {
+            self.latch_and_deliver(kf_rm::authored::GSP_STALL_VECTOR);
         }
     }
 
@@ -2973,6 +3136,9 @@ mod config_tests {
             guest_driver: None,
             display,
             x11_dispsw,
+            display_broker: false,
+            display_broker_vram: Default::default(),
+            display_max_fps: 0,
             gop: false,
         }
     }

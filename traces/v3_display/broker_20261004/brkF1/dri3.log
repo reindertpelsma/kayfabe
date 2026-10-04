@@ -1,0 +1,9 @@
+DRI3_SOURCE 512x512 stride=2048 offset=0 fourcc=XR24 modifier=0x0300000000606014 size=1048576
+Traceback (most recent call last):
+  File "/root/kayfabe/scripts/bench/display/dri3_refusal.py", line 322, in <module>
+    sys.exit(main(sys.argv[1:]))
+  File "/root/kayfabe/scripts/bench/display/dri3_refusal.py", line 228, in main
+    ufd = make_udmabuf(src["size"])
+  File "/root/kayfabe/scripts/bench/display/dri3_refusal.py", line 87, in make_udmabuf
+    raise RuntimeError("UDMABUF_CREATE returned a buffer")
+RuntimeError: UDMABUF_CREATE returned a buffer

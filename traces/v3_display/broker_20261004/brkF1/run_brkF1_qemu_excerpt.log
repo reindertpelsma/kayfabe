@@ -1,0 +1,199 @@
+kf3: display plane ON — virtual NVDisplay for GA102 GA103 GA104 GA106 GA107 (IP 0x04010000, display class 0xc670, 4 heads)
+kf3: broker: GPU-copy rung possible — render node renderD128 (226:128), nvidia-drm gpu_id 0x7, modifier 0x0300000000606014, slot attributes s1-nvkms-offscreen
+kf3: broker: /dev/udmabuf opened — frames can go as a dma-buf (rungs 1 and 1b)
+kf3: display plane built — derived registers, caps page, engine vocabulary, GPU context on 0000:00:07.0
+2026-10-03T23:15:04.060339Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,display-broker=/run/user/1000/nvkvm/display.sock,display-broker-uid=1000: info: kf3: display console registered (head 0 of kf0)
+kf3: broker: relay to /run/user/1000/nvkvm/display.sock (brokers accepted: uid 0, QEMU's effective uid at each connect, display-broker-uid 1000); no clipboard
+2026-10-03T23:15:04.060417Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,display-broker=/run/user/1000/nvkvm/display.sock,display-broker-uid=1000: info: kf3: display broker relay on /run/user/1000/nvkvm/display.sock (input goes to this device's console)
+kf3: display: compose kernel self-test PASSED
+kf3: display worker up — engine 4 heads / 8 windows, caps page published
+kf3: broker: connected to /run/user/1000/nvkvm/display.sock, capabilities 0xfff — no /dev/udmabuf here, so frames go as shared memory only
+kf3: broker: broker window is now 1024x695
+kf3: broker: window active
+kf3: broker: grab off
+kf3: broker: guest cursor: the HOST pointer shows it (hover; not composed)
+2026-10-03T23:15:04.083353Z qemu-system-x86_64: info: kf3: broker: pointing device -> #4 QEMU Virtio Tablet (absolute)
+kf3: broker: the compositor renders on this GPU: the GPU-copy rung may be used
+kf3: broker: the display CAN show XR24 modifier 0x0300000000606014
+kf3: display: +50 ms the console shows NOTHING yet (no head has scanned a window) (core channel FREE)
+kf3: display: resize 1024x695 -> monitor 1024x695 on display 0x100; no hotplug registration (the next probe reads it)
+kf3: family=Ampere phase=Running trapped=1556 applied=1001 refused=2 serviced=133 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=98 walks=102/102 cleared=98 superseded=0 named_missed=1 unreconciled=0 mapped=159 unmapped=9 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=
+kf3: family=Ampere phase=Halted trapped=2406 applied=1204 refused=2 serviced=216 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=111 walks=116/116 cleared=111 superseded=0 named_missed=1 unreconciled=0 mapped=159 unmapped=159 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_byt
+kf3: family=Ampere phase=Running trapped=3579 applied=2162 refused=4 serviced=308 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110c00 mem[inval=171 walks=178/178 cleared=171 superseded=0 named_missed=2 unreconciled=0 mapped=214 unmapped=159 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_by
+kf-rm: display: hotplug event 0xc1d0000c:0x1000e (parent 0x10002) registered
+kf3: display: head 0 idle raster 0x0 period 0 us
+kf3: display: head 1 idle raster 0x0 period 0 us
+kf3: display: head 2 idle raster 0x0 period 0 us
+kf3: display: head 3 ACTIVE raster 1184x715 period 16680 us
+kf3: display: 1 updates completed, 14532 methods
+kf3: display: +46454 ms the console shows head 3 1024x695: [window 6 iso 0x1008f+0x0 1024x695 pitch 64 fmt 0xe6] (core channel allocated)
+kf3: display: 5 updates completed, 15379 methods
+kf3: broker: guest resolution is now 1024x695
+kf3: broker: frames go as a LINEAR dma-buf (udmabuf, zero-copy for the broker)
+kf3: broker: the display CANNOT show XR24 modifier 0x0000000000000000
+kf3: broker: reclaimed frame slot 0: the display refused its format
+kf3: display: pack kernel self-test PASSED (into display VRAM slot 0)
+kf3: broker: frames go as a GPU copy in host VRAM (a block-linear dma-buf, modifier 0x0300000000606014; no byte crosses PCIe, nothing of the guest's is exported)
+kf3: display: 6 updates completed, 15438 methods
+kf3: broker: the display imported a GPU-copy frame (its RELEASE came back)
+kf3: display: 7 updates completed, 15497 methods
+kf3: display: 8 updates completed, 15556 methods
+kf3: display: 9 updates completed, 15615 methods
+kf3: display: 10 updates completed, 15674 methods
+kf3: display: 11 updates completed, 15733 methods
+kf3: family=Ampere phase=Running trapped=9325 applied=2359 refused=4 serviced=505 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=255 walks=265/265 cleared=255 superseded=0 named_missed=2 unreconciled=0 mapped=294 unmapped=177 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_by
+kf3: family=Ampere phase=Running trapped=9341 applied=2359 refused=4 serviced=505 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=255 walks=265/265 cleared=255 superseded=0 named_missed=2 unreconciled=0 mapped=294 unmapped=177 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_by
+kf3: family=Ampere phase=Running trapped=9357 applied=2359 refused=4 serviced=505 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=255 walks=265/265 cleared=255 superseded=0 named_missed=2 unreconciled=0 mapped=294 unmapped=177 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_by
+kf3: family=Ampere phase=Running trapped=9373 applied=2359 refused=4 serviced=505 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=255 walks=265/265 cleared=255 superseded=0 named_missed=2 unreconciled=0 mapped=294 unmapped=177 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_by
+kf3: display: 12 updates completed, 15792 methods
+kf3: display: 13 updates completed, 15851 methods
+kf3: family=Ampere phase=Running trapped=9629 applied=2371 refused=4 serviced=517 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110c00 mem[inval=258 walks=268/268 cleared=258 superseded=0 named_missed=2 unreconciled=0 mapped=311 unmapped=177 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_by
+kf3: display: 14 updates completed, 15910 methods
+kf3: display: +56591 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+kf3: display: 17 updates completed, 15973 methods
+kf3: display: +56842 ms the console shows BLACK 1024x695 (the scanout shown is lost: a lit head has had no window past the hold) (core channel allocated)
+kf3: family=Ampere phase=Running trapped=10323 applied=2408 refused=4 serviced=554 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=263 walks=274/274 cleared=263 superseded=0 named_missed=2 unreconciled=0 mapped=316 unmapped=177 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_b
+kf3: display: +60009 ms the console shows head 3 1024x695: [window 6 iso 0x10091+0x0 1024x695 pitch 64 fmt 0xe6] (core channel allocated)
+kf3: display: 20 updates completed, 106539 methods
+kf3: display: 21 updates completed, 106564 methods
+kf3: family=Ampere phase=Running trapped=14379 applied=2547 refused=4 serviced=693 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81408 mem[inval=332 walks=343/343 cleared=332 superseded=0 named_missed=2 unreconciled=0 mapped=879 unmapped=178 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=163 priv_withheld
+kf3: display: +61189 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+kf3: display: 24 updates completed, 109179 methods
+kf3: display: 25 updates completed, 112685 methods
+kf3: display: +61441 ms the console shows BLACK 1024x695 (the scanout shown is lost: a lit head has had no window past the hold) (core channel allocated)
+kf3: display: +61456 ms the console shows head 3 1024x695: [window 6 iso 0x10091+0x0 1024x695 pitch 64 fmt 0xe6] (core channel allocated)
+kf3: display: 28 updates completed, 158853 methods
+kf3: display: 29 updates completed, 158876 methods
+kf3: family=Ampere phase=Running trapped=20453 applied=2753 refused=4 serviced=899 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=466 walks=479/479 cleared=466 superseded=0 named_missed=2 unreconciled=0 mapped=1555 unmapped=733 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=466 priv_withhel
+kf3: family=Ampere phase=Running trapped=20772 applied=2761 refused=4 serviced=907 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=466 walks=479/479 cleared=466 superseded=0 named_missed=2 unreconciled=0 mapped=1555 unmapped=733 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=466 priv_withhel
+kf3: family=Ampere phase=Running trapped=21004 applied=2761 refused=4 serviced=907 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=466 walks=479/479 cleared=466 superseded=0 named_missed=2 unreconciled=0 mapped=1555 unmapped=733 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=466 priv_withhel
+kf3: family=Ampere phase=Running trapped=26747 applied=2883 refused=4 serviced=1029 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110c00 mem[inval=608 walks=622/622 cleared=608 superseded=0 named_missed=2 unreconciled=0 mapped=1843 unmapped=979 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=496 priv_withhe
+kf3: display: 30 updates completed, 158879 methods
+kf3: display: 31 updates completed, 158890 methods
+kf3: display: guest cursor composition 0x072ff = PREMULT_ALPHA (K1 255, cursor factor 2, viewport factor 7, mode 0); its 256x256 pixels: 163 partially transparent, 0 with a colour channel above alpha (consistent with premultiplied pixels)
+kf3: broker: guest cursor image 256x256 hot 0,0 sent (1 so far)
+kf3: display: 32 updates completed, 158891 methods
+kf3: family=Ampere phase=Running trapped=28144 applied=2891 refused=4 serviced=1033 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=662 walks=676/676 cleared=662 superseded=0 named_missed=2 unreconciled=0 mapped=1874 unmapped=998 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=586 priv_withhe
+kf3: display: 33 updates completed, 158892 methods
+kf3: family=Ampere phase=Running trapped=28560 applied=2891 refused=4 serviced=1033 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=666 walks=680/680 cleared=666 superseded=0 named_missed=2 unreconciled=0 mapped=1877 unmapped=999 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=606 priv_withhe
+kf3: display: 34 updates completed, 158893 methods
+kf3: family=Ampere phase=Running trapped=30383 applied=2906 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=30636 applied=2906 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=30856 applied=2906 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=31087 applied=2906 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=31328 applied=2906 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=31570 applied=2906 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=31803 applied=2906 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=31999 applied=2906 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: broker: broker window is now 1024x768
+kf3: display: resize 1024x768 -> monitor 1024x768 on display 0x100; hotplug queued
+kf3: display: hotplug posted for display 0x100 to 0xc1d0000c:0x1000e
+kf3: family=Ampere phase=Running trapped=32226 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=32465 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: display: 35 updates completed, 158894 methods
+kf3: family=Ampere phase=Running trapped=32717 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: display: 36 updates completed, 158895 methods
+kf3: broker: guest cursor image 256x256 hot 3,1 sent (2 so far)
+kf3: family=Ampere phase=Running trapped=32962 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=33205 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=33439 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=33620 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: display: 37 updates completed, 158896 methods
+kf3: display: 38 updates completed, 158897 methods
+kf3: broker: guest cursor image 256x256 hot 11,11 sent (3 so far)
+kf3: display: 39 updates completed, 158898 methods
+kf3: family=Ampere phase=Running trapped=33851 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=34080 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=34308 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: display: 40 updates completed, 158899 methods
+kf3: broker: guest cursor image 256x256 hot 4,8 sent (4 so far)
+kf3: display: 41 updates completed, 158900 methods
+kf3: display: 42 updates completed, 158901 methods
+kf3: family=Ampere phase=Running trapped=34484 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=34711 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=34941 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: display: 43 updates completed, 158902 methods
+kf3: display: 44 updates completed, 158903 methods
+kf3: display: 45 updates completed, 158904 methods
+kf3: family=Ampere phase=Running trapped=35138 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=35393 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=35612 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: display: 46 updates completed, 158915 methods
+kf3: family=Ampere phase=Running trapped=35812 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=36045 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=36282 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=36479 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=36709 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: display: 47 updates completed, 158916 methods
+kf3: display: 48 updates completed, 158927 methods
+kf3: family=Ampere phase=Running trapped=36945 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=37167 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: broker: grab ON
+kf3: broker: guest cursor: composed into the frame (grabbed; the broker hides its own image)
+2026-10-03T23:17:19.634131Z qemu-system-x86_64: info: kf3: broker: pointing device -> #5 QEMU Virtio Mouse (relative)
+kf3: family=Ampere phase=Running trapped=37414 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=37646 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=37839 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: display: 49 updates completed, 158928 methods
+kf3: family=Ampere phase=Running trapped=38035 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=38235 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: broker: grab off
+kf3: broker: guest cursor: the HOST pointer shows it (hover; not composed)
+2026-10-03T23:17:30.631549Z qemu-system-x86_64: info: kf3: broker: pointing device -> #4 QEMU Virtio Tablet (absolute)
+kf3: family=Ampere phase=Running trapped=38419 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=38656 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=38904 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=39125 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=39303 applied=2908 refused=4 serviced=1044 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=701 walks=715/715 cleared=701 superseded=0 named_missed=2 unreconciled=0 mapped=1879 unmapped=1030 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=696 priv_withh
+kf3: family=Ampere phase=Running trapped=45089 applied=3023 refused=4 serviced=1159 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=849 walks=864/864 cleared=849 superseded=0 named_missed=2 unreconciled=0 mapped=2391 unmapped=1520 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=736 priv_withh
+kf3: family=Ampere phase=Running trapped=45164 applied=3023 refused=4 serviced=1159 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=849 walks=864/864 cleared=849 superseded=0 named_missed=2 unreconciled=0 mapped=2391 unmapped=1520 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=736 priv_withh
+kf3: family=Ampere phase=Running trapped=45240 applied=3023 refused=4 serviced=1159 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=849 walks=864/864 cleared=849 superseded=0 named_missed=2 unreconciled=0 mapped=2391 unmapped=1520 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=736 priv_withh
+kf3: family=Ampere phase=Running trapped=46081 applied=3038 refused=4 serviced=1170 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=876 walks=891/891 cleared=876 superseded=0 named_missed=2 unreconciled=0 mapped=2392 unmapped=1545 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=796 priv_withh
+kf3: broker: guest cursor: composed into the frame (no broker)
+kf3: broker: the display broker closed the connection; the display and input are gone for now (3161 frames relayed, 0 dropped, 0 attached without a commit, 3147 releases, 15 reclaimed). The VM keeps running; reconnecting in the background.
+kf3: broker: connection attempt failed: cannot connect to /run/user/1000/nvkvm/display.sock: connect(AF_UNIX) failed (errno 111) — is the display broker running?
+kf3: broker: retrying in the background (up to every 5000 ms); the VM continues running
+kf3: family=Ampere phase=Running trapped=46288 applied=3038 refused=4 serviced=1170 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=876 walks=891/891 cleared=876 superseded=0 named_missed=2 unreconciled=0 mapped=2392 unmapped=1545 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=796 priv_withh
+kf3: broker: connected to /run/user/1000/nvkvm/display.sock, capabilities 0xfff
+kf3: broker: frames go as a LINEAR dma-buf (udmabuf, zero-copy for the broker)
+kf3: broker: re-sent geometry 1024x695 and the last frame to the new broker
+kf3: broker: reconnected to the display broker (reconnect #1)
+kf3: broker: broker window is now 1920x1080
+kf3: broker: window inactive (input suspended)
+kf3: broker: grab off
+kf3: broker: the compositor renders on this GPU: the GPU-copy rung may be used
+kf3: broker: guest cursor: the HOST pointer shows it (hover; not composed)
+2026-10-03T23:17:49.020826Z qemu-system-x86_64: info: kf3: broker: pointing device -> #4 QEMU Virtio Tablet (absolute)
+kf3: broker: window active
+kf3: broker: broker window is now 1024x695
+kf3: broker: the display CAN show XR24 modifier 0x0300000000606014
+kf3: broker: the display CANNOT show XR24 modifier 0x0000000000000000
+kf3: broker: reclaimed frame slot 0: the display refused its format
+kf3: broker: reclaimed frame slot 1: the display refused its format
+kf3: broker: frames go as shared memory (F_SHM) — an X11 broker accepts it only with --present-mode=shm, and a refusal is not reported back
+kf3: broker: frames go as a GPU copy in host VRAM (a block-linear dma-buf, modifier 0x0300000000606014; no byte crosses PCIe, nothing of the guest's is exported)
+kf3: broker: the display imported a GPU-copy frame (its RELEASE came back)
+kf3: display: resize 1024x695 -> monitor 1024x695 on display 0x100; hotplug queued
+kf3: display: hotplug posted for display 0x100 to 0xc1d0000c:0x1000e
+kf3: family=Ampere phase=Running trapped=46590 applied=3040 refused=4 serviced=1170 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=876 walks=891/891 cleared=876 superseded=0 named_missed=2 unreconciled=0 mapped=2392 unmapped=1545 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=796 priv_withh
+kf3: family=Ampere phase=Running trapped=46820 applied=3040 refused=4 serviced=1170 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81000 mem[inval=876 walks=891/891 cleared=876 superseded=0 named_missed=2 unreconciled=0 mapped=2392 unmapped=1545 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=796 priv_withh
+kf3: display: 50 updates completed, 158939 methods
+kf3: display: +170131 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+kf3: display: 53 updates completed, 159454 methods
+kf3: display: 54 updates completed, 163432 methods
+kf3: display: 55 updates completed, 171645 methods
+kf3: display: +170205 ms the console shows head 3 1024x695: [window 6 iso 0x1008f+0x0 1024x695 pitch 64 fmt 0xe6] (core channel allocated)
+kf3: display: 58 updates completed, 171963 methods
+kf3: display: 59 updates completed, 173344 methods
+kf3: display: 60 updates completed, 173403 methods
+kf3: display: 61 updates completed, 173462 methods
+kf3: family=Ampere phase=Running trapped=49276 applied=3149 refused=4 serviced=1279 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=928 walks=943/943 cleared=928 superseded=0 named_missed=2 unreconciled=0 mapped=2392 unmapped=2223 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=951 priv_withh
+kf3: family=Ampere phase=Running trapped=49292 applied=3149 refused=4 serviced=1279 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=928 walks=943/943 cleared=928 superseded=0 named_missed=2 unreconciled=0 mapped=2392 unmapped=2223 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=951 priv_withh
+kf3: family=Ampere phase=Running trapped=49308 applied=3149 refused=4 serviced=1279 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=928 walks=943/943 cleared=928 superseded=0 named_missed=2 unreconciled=0 mapped=2392 unmapped=2223 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=951 priv_withh
+kf3: display: +175491 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+kf3: display: 63 updates completed, 173521 methods
+kf3: display: +175742 ms the console shows BLACK 1024x695 (the scanout shown is lost: a lit head has had no window past the hold) (core channel allocated)
+kf3: family=Ampere phase=Running trapped=49326 applied=3149 refused=4 serviced=1279 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=928 walks=943/943 cleared=928 superseded=0 named_missed=2 unreconciled=0 mapped=2392 unmapped=2223 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=951 priv_withh
+kf3: display: 66 updates completed, 173584 methods
+kf3: family=Ampere phase=Running trapped=54234 applied=3251 refused=4 serviced=1381 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110c00 mem[inval=932 walks=947/947 cleared=932 superseded=0 named_missed=2 unreconciled=0 mapped=2392 unmapped=2242 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=951 priv_withh
+kf-rm: display: hotplug registration retired by the FREE of 0xc1d0000c:0x1000e

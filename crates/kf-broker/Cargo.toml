@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+[package]
+name = "kf-broker"
+description = "The display-broker relay: nvkvm-pv's broker protocol v2 (unchanged) spoken from the VMM side — the connection machine, the frame ring the console and the broker share, and the input it hands the VMM. VMM-agnostic, safe code (docs/design/V3_DISPLAY.md §8)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kf-linux-raw.workspace = true
+
+[lints]
+workspace = true

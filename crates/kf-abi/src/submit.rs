@@ -1579,8 +1579,15 @@ pub struct NvMemoryAllocationParams {
     /// `NvU32 type` @ +4 — `NVOS32_TYPE_IMAGE` = 0
     /// (`ogkm-580: src/common/sdk/nvidia/inc/nvos.h:884`).
     pub kind: u32,
+    /// `NvU32 flags` @ +8 — `NVOS32_ALLOC_FLAGS_*` (zero for every allocation but a display
+    /// slot's, [`SlotAttrs`]). `[matrix]` at +8 in both layouts of `generated/matrix.rs` (535.309.01;
+    /// 545.23.08 … 615.71.09).
+    pub flags: u32,
     /// `NvU32 attr` @ +24 — see [`ATTR_CONTIGUOUS_VIDMEM`].
     pub attr: u32,
+    /// `NvU32 attr2` @ +28 — `NVOS32_ATTR2_*` (zero but for a display slot). `[matrix]` at +28
+    /// in both layouts of `generated/matrix.rs` (535.309.01; 545.23.08 … 615.71.09).
+    pub attr2: u32,
     /// `NvU64 size` @ +64 — `[IN/OUT]`; RM may round it up.
     pub size: u64,
     /// `NvU64 alignment` @ +72.
@@ -1613,7 +1620,9 @@ impl NvMemoryAllocationParams {
         }
         put(bytes, n, s, 0, &self.owner.to_le_bytes())?;
         put(bytes, n, s, 4, &self.kind.to_le_bytes())?;
+        put(bytes, n, s, 8, &self.flags.to_le_bytes())?;
         put(bytes, n, s, 24, &self.attr.to_le_bytes())?;
+        put(bytes, n, s, 28, &self.attr2.to_le_bytes())?;
         put(bytes, n, s, 64, &self.size.to_le_bytes())?;
         put(bytes, n, s, 72, &self.alignment.to_le_bytes())
     }
@@ -1645,6 +1654,99 @@ pub const ATTR_CONTIGUOUS_VIDMEM: u32 = 2 << 27;
 /// `MapMemoryDma` maps `offset..offset+len` whatever the physical layout underneath. Slicing
 /// GPGA is offset arithmetic, so the physical arrangement is RM's business and not ours.
 pub const ATTR_NONCONTIGUOUS_VIDMEM: u32 = 1 << 27;
+
+// ── the display slots of the GPU-copy broker rung (docs/design/V3_DISPLAY.md §8.11) ──────────
+
+/// `NVOS32_TYPE_IMAGE` (`ogkm-580: src/common/sdk/nvidia/inc/nvos.h:884`).
+pub const TYPE_IMAGE: u32 = 0;
+/// `NVOS32_TYPE_PRIMARY` (`nvos.h:892`).
+pub const TYPE_PRIMARY: u32 = 8;
+/// `NVOS32_ATTR_FORMAT_BLOCK_LINEAR` (2) in field `17:16` (`nvos.h:1004-1013`).
+pub const ATTR_FORMAT_BLOCK_LINEAR: u32 = 2 << 16;
+/// `NVOS32_ATTR_DEPTH_UNKNOWN` (0) in field `2:0` (`nvos.h:917-918`).
+pub const ATTR_DEPTH_UNKNOWN: u32 = 0;
+/// `NVOS32_ATTR_COMPR_NONE` (0) in field `13:12` (`nvos.h:986-987`) — RM then picks
+/// `NV_MMU_PTE_KIND_GENERIC_MEMORY` (0x06) whatever FORMAT says
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/arch/turing/mem_mgr_tu102.c:229-253`).
+pub const ATTR_COMPR_NONE: u32 = 0;
+/// `NVOS32_ATTR2_GPU_CACHEABLE_NO` (2) in field `3:2` (`nvos.h:1122-1125`).
+pub const ATTR2_GPU_CACHEABLE_NO: u32 = 2 << 2;
+/// `NVOS32_ATTR2_ISO_YES` (1) in field `18:18` (`nvos.h:1236-1238`).
+pub const ATTR2_ISO_YES: u32 = 1 << 18;
+/// `NVOS32_ALLOC_FLAGS_FORCE_MEM_GROWS_UP` (`nvos.h:1445`).
+pub const ALLOC_FLAGS_FORCE_MEM_GROWS_UP: u32 = 0x0000_0002;
+/// `NVOS32_ALLOC_FLAGS_ALIGNMENT_FORCE` (`nvos.h:1452`).
+pub const ALLOC_FLAGS_ALIGNMENT_FORCE: u32 = 0x0000_0100;
+/// `NVOS32_ALLOC_FLAGS_NO_SCANOUT` (`nvos.h:1457`).
+pub const ALLOC_FLAGS_NO_SCANOUT: u32 = 0x0000_1000;
+/// `NV_EVO_SURFACE_ALIGNMENT` (`ogkm-580: src/nvidia-modeset/include/nvkms-types.h:94`): what
+/// NVKMS aligns a scanout allocation to.
+pub const EVO_SURFACE_ALIGNMENT: u64 = 0x1000;
+
+/// ★ The attribute set of a display slot — the VRAM frame object kayfabe allocates for the
+/// GPU-copy broker rung (never guest memory). **Setup data, chosen by the box experiment E1**
+/// (`V3_DISPLAY.md` §8.11): which set CUDA imports AND a compositor on the same GPU samples has
+/// not been measured. Every set is uncompressed (`COMPR_NONE`, so the kind is GENERIC 0x06 — the
+/// modifier's `k`) and video memory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SlotAttrs {
+    /// Its name in logs and the device property.
+    pub name: &'static str,
+    /// `type`.
+    pub kind: u32,
+    /// `flags`.
+    pub flags: u32,
+    /// `attr`.
+    pub attr: u32,
+    /// `attr2`.
+    pub attr2: u32,
+    /// `alignment` (0: RM chooses).
+    pub alignment: u64,
+}
+
+/// ★ S0, store-like: the only set a CUDA import has been run on (the store,
+/// `kf_host::HostRm::reserve_gpga`'s fallback; w755x, RTX 3090, 580.159.04). Type IMAGE,
+/// noncontiguous video memory, defaults otherwise.
+pub const SLOT_S0_STORE_LIKE: SlotAttrs = SlotAttrs {
+    name: "s0-store-like",
+    kind: TYPE_IMAGE,
+    flags: 0,
+    attr: ATTR_NONCONTIGUOUS_VIDMEM | ATTR_COMPR_NONE,
+    attr2: 0,
+    alignment: 0,
+};
+
+/// S1, NVKMS's offscreen block-linear allocation, copied from
+/// `ogkm-580: src/nvidia-modeset/kapi/src/nvkms-kapi.c:768-790, 804-806, 866-874`.
+pub const SLOT_S1_NVKMS_OFFSCREEN: SlotAttrs = SlotAttrs {
+    name: "s1-nvkms-offscreen",
+    kind: TYPE_IMAGE,
+    flags: ALLOC_FLAGS_NO_SCANOUT | ALLOC_FLAGS_FORCE_MEM_GROWS_UP,
+    attr: ATTR_FORMAT_BLOCK_LINEAR
+        | ATTR_DEPTH_UNKNOWN
+        | ATTR_NONCONTIGUOUS_VIDMEM
+        | ATTR_COMPR_NONE,
+    attr2: ATTR2_GPU_CACHEABLE_NO,
+    alignment: 0,
+};
+
+/// S2, NVKMS's scanout-shaped allocation (`nvkms-kapi.c:809-833`) — the closest kf3 comes to the
+/// GBM scanout buffer nvkvm-pv showed on screen; a test control, not a scanout plan.
+pub const SLOT_S2_NVKMS_SCANOUT: SlotAttrs = SlotAttrs {
+    name: "s2-nvkms-scanout",
+    kind: TYPE_PRIMARY,
+    flags: ALLOC_FLAGS_ALIGNMENT_FORCE | ALLOC_FLAGS_FORCE_MEM_GROWS_UP,
+    attr: ATTR_FORMAT_BLOCK_LINEAR | ATTR_DEPTH_UNKNOWN | ATTR_CONTIGUOUS_VIDMEM | ATTR_COMPR_NONE,
+    attr2: ATTR2_GPU_CACHEABLE_NO | ATTR2_ISO_YES,
+    alignment: EVO_SURFACE_ALIGNMENT,
+};
+
+/// The three, by name (the `display-broker-vram-attrs` property's values).
+pub const SLOT_ATTR_SETS: [SlotAttrs; 3] = [
+    SLOT_S0_STORE_LIKE,
+    SLOT_S1_NVKMS_OFFSCREEN,
+    SLOT_S2_NVKMS_SCANOUT,
+];
 
 // =====================================================================================
 // `NV01_MEMORY_LIST_OBJECT` — a SLICE of an object someone else allocated
@@ -4053,7 +4155,7 @@ mod tests {
     /// nothing-else-moved check as the channel params.
     #[test]
     fn memory_allocation_params_land_at_the_580_offsets() {
-        let cases: [(NvMemoryAllocationParams, usize, &[u8]); 5] = [
+        let cases: [(NvMemoryAllocationParams, usize, &[u8]); 7] = [
             (
                 NvMemoryAllocationParams {
                     owner: 0x1111_1111,
@@ -4061,6 +4163,22 @@ mod tests {
                 },
                 0,
                 &0x1111_1111u32.to_le_bytes(),
+            ),
+            (
+                NvMemoryAllocationParams {
+                    flags: 0x6666_6666,
+                    ..Default::default()
+                },
+                8,
+                &0x6666_6666u32.to_le_bytes(),
+            ),
+            (
+                NvMemoryAllocationParams {
+                    attr2: 0x7777_7777,
+                    ..Default::default()
+                },
+                28,
+                &0x7777_7777u32.to_le_bytes(),
             ),
             (
                 NvMemoryAllocationParams {
@@ -4105,6 +4223,38 @@ mod tests {
             let expected: Vec<usize> = (offset..offset + want.len()).collect();
             assert_eq!(nonzero, expected, "field at +{offset} spilled");
         }
+    }
+
+    /// ★ The display slots' attribute sets, field by field against `nvos.h`'s ranges (a field
+    /// constant is a VALUE shifted to its range's low bit, not a mask — the mistake
+    /// `NVOS02_FLAGS_LOCATION_PCI` records). Every set is uncompressed video memory.
+    #[test]
+    fn the_display_slot_attribute_sets_are_nvos32_fields() {
+        let field = |v: u32, hi: u32, lo: u32| (v >> lo) & ((1 << (hi - lo + 1)) - 1);
+        for a in SLOT_ATTR_SETS {
+            assert_eq!(field(a.attr, 13, 12), 0, "{}: COMPR_NONE", a.name);
+            assert_eq!(field(a.attr, 26, 25), 0, "{}: LOCATION_VIDMEM", a.name);
+        }
+        let s1 = SLOT_S1_NVKMS_OFFSCREEN;
+        assert_eq!(field(s1.attr, 17, 16), 2, "FORMAT_BLOCK_LINEAR");
+        assert_eq!(field(s1.attr, 28, 27), 1, "PHYSICALITY_NONCONTIGUOUS");
+        assert_eq!(field(s1.attr2, 3, 2), 2, "GPU_CACHEABLE_NO");
+        assert_eq!(s1.flags, 0x1002, "NO_SCANOUT | FORCE_MEM_GROWS_UP");
+        let s2 = SLOT_S2_NVKMS_SCANOUT;
+        assert_eq!(
+            (s2.kind, field(s2.attr, 28, 27)),
+            (8, 2),
+            "PRIMARY, CONTIGUOUS"
+        );
+        assert_eq!(field(s2.attr2, 18, 18), 1, "ISO_YES");
+        assert_eq!(s2.flags, 0x102, "ALIGNMENT_FORCE | FORCE_MEM_GROWS_UP");
+        assert_eq!(s2.alignment, 0x1000);
+        let s0 = SLOT_S0_STORE_LIKE;
+        assert_eq!((s0.kind, s0.flags, s0.attr2), (0, 0, 0));
+        assert_eq!(
+            s0.attr, ATTR_NONCONTIGUOUS_VIDMEM,
+            "the store's fallback attr"
+        );
     }
 
     /// `NV_MEMORY_LIST_ALLOCATION_PARAMS`' offsets, field by field, with the same

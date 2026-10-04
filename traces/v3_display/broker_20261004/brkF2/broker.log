@@ -1,0 +1,111 @@
+nvkvm-broker: DRI3 1.0 reported (below 1.2 — asking for modifiers anyway, some drivers under-report)
+nvkvm-broker: Present 1.2
+nvkvm-broker: scaling: XRender (the window fills even when the guest's mode differs)
+nvkvm-broker: the X server advertises 26 (format, modifier) pairs
+nvkvm-broker:     XR24  modifier 0x0300000000606010 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000606010 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000606011 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000606011 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000606012 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000606012 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000606013 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000606013 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000606014 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000606014 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000606015 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000606015 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000e08010 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000e08010 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000e08011 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000e08011 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000e08012 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000e08012 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000e08013 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000e08013 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000e08014 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000e08014 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000e08015 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000e08015 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x00ffffffffffffff (implicit)
+nvkvm-broker:     AR24  modifier 0x00ffffffffffffff (implicit)
+nvkvm-broker: the X server renders on DRM device 226:128 (render node)
+nvkvm-broker: backend 'x11': window 1920x1080
+nvkvm-broker: grab capabilities: keyboard=1 abs=1 rel=1 lock=1 shortcuts-inhibited=1 focus-events=1 fullscreen=1
+nvkvm-broker: GRAB IS PARTIAL: X11 grabs are total for everything the X server routes, window-manager bindings included; input the kernel handles below X (SysRq, and VT switching on some setups) is not interceptable by any X client
+nvkvm-broker: listening on /run/user/1000/nvkvm/display.sock (mode 0600)
+nvkvm-broker:   allowed uid 0
+nvkvm-broker:   allowed uid 1000
+nvkvm-broker: accepted uid 0 gid 0 pid 218988
+nvkvm-broker: client attached: window 1920x1080, capabilities 0xfff, display device render node 226:128
+nvkvm-broker: grab: CTRL+ALT+G toggles, CTRL+ALT+F fullscreen. X11 grabs are total for everything the X server routes, window-manager bindings included; input the kernel handles below X (SysRq, and VT switching on some setups) is not interceptable by any X client
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 0 rejected; 0 cursor, 0 cursor refused)
+nvkvm-broker: accepted uid 0 gid 0 pid 218988
+nvkvm-broker: client attached: window 1024x695, capabilities 0xfff, display device render node 226:128
+nvkvm-broker: grab: CTRL+ALT+G toggles, CTRL+ALT+F fullscreen. X11 grabs are total for everything the X server routes, window-manager bindings included; input the kernel handles below X (SysRq, and VT switching on some setups) is not interceptable by any X client
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 0 rejected; 0 cursor, 0 cursor refused)
+nvkvm-broker: accepted uid 0 gid 0 pid 218988
+nvkvm-broker: client attached: window 1024x695, capabilities 0xfff, display device render node 226:128
+nvkvm-broker: grab: CTRL+ALT+G toggles, CTRL+ALT+F fullscreen. X11 grabs are total for everything the X server routes, window-manager bindings included; input the kernel handles below X (SysRq, and VT switching on some setups) is not interceptable by any X client
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 0 rejected; 0 cursor, 0 cursor refused)
+nvkvm-broker: accepted uid 0 gid 0 pid 218988
+nvkvm-broker: client attached: window 1024x695, capabilities 0xfff, display device render node 226:128
+nvkvm-broker: grab: CTRL+ALT+G toggles, CTRL+ALT+F fullscreen. X11 grabs are total for everything the X server routes, window-manager bindings included; input the kernel handles below X (SysRq, and VT switching on some setups) is not interceptable by any X client
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 0 rejected; 0 cursor, 0 cursor refused)
+nvkvm-broker: accepted uid 0 gid 0 pid 218988
+nvkvm-broker: client attached: window 1024x695, capabilities 0xfff, display device render node 226:128
+nvkvm-broker: grab: CTRL+ALT+G toggles, CTRL+ALT+F fullscreen. X11 grabs are total for everything the X server routes, window-manager bindings included; input the kernel handles below X (SysRq, and VT switching on some setups) is not interceptable by any X client
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000e08014 (NVIDIA) -> YES
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000e08014 (NVIDIA) -> YES
+nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 0 rejected; 0 cursor, 0 cursor refused)
+nvkvm-broker: accepted uid 0 gid 0 pid 218988
+nvkvm-broker: client attached: window 1024x695, capabilities 0xfff, display device render node 226:128
+nvkvm-broker: grab: CTRL+ALT+G toggles, CTRL+ALT+F fullscreen. X11 grabs are total for everything the X server routes, window-manager bindings included; input the kernel handles below X (SysRq, and VT switching on some setups) is not interceptable by any X client
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606010 (NVIDIA) -> YES
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606010 (NVIDIA) -> YES
+nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 0 rejected; 0 cursor, 0 cursor refused)
+nvkvm-broker: accepted uid 0 gid 0 pid 218988
+nvkvm-broker: client attached: window 1024x695, capabilities 0xfff, display device render node 226:128
+nvkvm-broker: grab: CTRL+ALT+G toggles, CTRL+ALT+F fullscreen. X11 grabs are total for everything the X server routes, window-manager bindings included; input the kernel handles below X (SysRq, and VT switching on some setups) is not interceptable by any X client
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 0 rejected; 0 cursor, 0 cursor refused)
+nvkvm-broker: accepted uid 0 gid 0 pid 218988
+nvkvm-broker: client attached: window 1024x695, capabilities 0xfff, display device render node 226:128
+nvkvm-broker: grab: CTRL+ALT+G toggles, CTRL+ALT+F fullscreen. X11 grabs are total for everything the X server routes, window-manager bindings included; input the kernel handles below X (SysRq, and VT switching on some setups) is not interceptable by any X client
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 0 rejected; 0 cursor, 0 cursor refused)
+nvkvm-broker: accepted uid 0 gid 0 pid 219477
+nvkvm-broker: client attached: window 1024x695, capabilities 0xfff, display device render node 226:128
+nvkvm-broker: grab: CTRL+ALT+G toggles, CTRL+ALT+F fullscreen. X11 grabs are total for everything the X server routes, window-manager bindings included; input the kernel handles below X (SysRq, and VT switching on some setups) is not interceptable by any X client
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+nvkvm-broker: the VM reports: clipboard agent not seen yet (it is announced the first time the guest copies something)
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0000000000000000 (LINEAR) -> NO
+nvkvm-broker: ERROR: ATTACH: fourcc XR24 modifier 0x0000000000000000 (LINEAR) is not advertised by this display.  If the compositor runs on a different GPU than the guest's, no modifier will ever match and a readback/copy path is required — the VMM can ask first with CMD_QUERY_FORMAT; run the broker with --verbose to see what it does advertise.
+nvkvm-broker: Present: COPY  — the frame is being composited, not scanned out
+nvkvm-broker: Present: SKIP  — the frame is being composited, not scanned out
+nvkvm-broker: Present: COPY  — the frame is being composited, not scanned out
+nvkvm-broker: Present: SKIP  — the frame is being composited, not scanned out
+nvkvm-broker: Present: COPY  — the frame is being composited, not scanned out
+nvkvm-broker: Present: SKIP  — the frame is being composited, not scanned out
+nvkvm-broker: Present: COPY  — the frame is being composited, not scanned out
+nvkvm-broker: Present: SKIP  — the frame is being composited, not scanned out
+nvkvm-broker: Present: COPY  — the frame is being composited, not scanned out
+nvkvm-broker: grab ON
+nvkvm-broker: XI RawMotion seq=2979 dev=2 src=4 dx=60 dy=40
+nvkvm-broker: XI RawMotion seq=2979 dev=2 src=4 dx=60 dy=40
+nvkvm-broker: grab off
+nvkvm-broker: the guest changed resolution to 800x600: keeping the window and rescaling into it
+nvkvm-broker: the guest changed resolution to 1280x1024: keeping the window and rescaling into it
+nvkvm-broker: the guest changed resolution to 1024x768: keeping the window and rescaling into it
+nvkvm-broker: client detached: closed the connection (7263 attach, 7263 commit, 1 rejected; 21 cursor, 0 cursor refused)
+
+Session terminated, killing shell...nvkvm-broker: signal received; shutting down

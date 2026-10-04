@@ -1,0 +1,62 @@
+display-max-fps (V3_DISPLAY.md sec. 8.16) - local runs on the dev host, 2026-10-04, no GPU.
+Branch v3-maxfps, cut from v3-broker 82f98f42; code committed as ab329bec (+ the probe at 1d043e57).
+Every cargo command ran under flock /tmp/claude-0/kf-local-cargo.lock with CARGO_TARGET_DIR on /data, -j2.
+
+== tests ==
+cargo test -p kf-disp -p kf-qemu -p kf-rm -p kf-broker -p kf-cuda : 868 passed, 0 failed
+  (broker_loopback.rs: 8 ignored - they need nvkvm-pv's broker binary, as before)
+cargo check --workspace --all-targets : ok
+cargo clippy (the five crates, --all-targets --locked) + scripts/ci/debt.py clippy : new=0
+cargo fmt --all --check : ok;  rustfmt --edition 2024 --check (changed files) : ok
+python3 scripts/ci/debt.py claims : new=0;  bash docs/design/check_sections.sh : offenders=0
+unsafe ratchet (CI's own count): kf-qemu 59, kf-cuda 78 - unchanged
+
+== kf3.c ==
+cc <QEMU 10.2.4 system_ss flags, edu.c's compile command in /workspace/bench/qemu-build> -fsyntax-only -Werror
+   -DPIXMAN_x2r10g10b10=1 -DPIXMAN_x2b10g10r10=2 qemu/hw/misc/kf3/kf3.c : ok
+   (that configured build has CONFIG_PIXMAN off; without the two defines 82f98f42's kf3.c gives the
+    same two errors, PIXMAN_x2r10g10b10/PIXMAN_x2b10g10r10 undeclared, and nothing else)
+kfdisp_probe.c : gcc -O2 -Wall -Werror (libdrm) ok; -DKFDISP_NO_DRM ok;  bash -n hook.sh ok
+
+== mutations (each applied in place to one line, the named test run, the file restored) ==
+M1 paced_period min for max: RED  [test pace::tests::on_heads_keeps_phase_under_the_clamp ... FAILED; test pace::tests::paced_period_is_the_slower_of_raster_and_bound ... FAILED; test pace::tests::pacer_synthetic_time ... FAILED]
+M2 preferred max for min: RED  [test pace::tests::preferred_and_cap_tables ... FAILED]
+M3 check >= at 75: RED  [test pace::tests::config_check_refuses_by_name ... FAILED]
+M4 on_heads compares the raster: RED  [test pace::tests::on_heads_keeps_phase_under_the_clamp ... FAILED]
+M5 due always from now: RED  [test pace::tests::pacer_synthetic_time ... FAILED]
+M6 over >=: RED  [test pace::tests::meter_over ... FAILED]
+M7 non-flip check while unwatched: RED  [test pace::tests::non_flip_copies_follow_d2 ... FAILED]
+M8 non-flip check off the tick: RED  [test pace::tests::a_screendump_is_served_by_a_copy_that_started_after_it ... FAILED; test pace::tests::non_flip_copies_follow_d2 ... FAILED]
+M9 coverage ignored: GREEN(survived)
+M10 serve at the request: RED  [test pace::tests::a_screendump_is_served_by_a_copy_that_started_after_it ... FAILED]
+M11 checksum without the column term: RED  [test pace::tests::the_checksum_sees_a_pixel_a_move_and_a_row_swap ... FAILED]
+M12 digest over unordered rows: RED  [test pace::tests::the_checksum_sees_a_pixel_a_move_and_a_row_swap ... FAILED]
+M13 PTX kernel drops the column term: RED  [test the_sum_kernel_is_the_reference_checksum ... FAILED]
+M14 EDID range max stays 75: RED  [test edid::tests::a_cap_below_60_lists_no_60hz_mode ... FAILED; test edid::tests::every_authored_edid_honours_its_cap ... FAILED]
+M15 60 Hz extras kept below 60: RED  [test edid::tests::a_cap_below_60_lists_no_60hz_mode ... FAILED; test edid::tests::every_authored_edid_honours_its_cap ... FAILED]
+M16 old shrink rule above 60: RED  [test edid::tests::above_60hz_the_rate_yields_not_the_size ... FAILED]
+M17 tearing gate off by default: RED  [test engine::tests::a_head_composes_its_windows_back_to_front ... FAILED]
+M18 presents per window: RED  [test engine::tests::presents_count_one_per_latch_including_core_groups ... FAILED]
+M19 core latches not counted: RED  [test engine::tests::presents_count_one_per_latch_including_core_groups ... FAILED]
+M20 no unpark on idle heads: RED  [test engine::tests::a_group_parked_on_a_head_that_goes_idle_latches ... FAILED]
+M21 model ignores the property: RED  [test display::tests::the_model_serves_the_configured_monitor ... FAILED]
+M22 realize skips Config::check: RED  [test realize_refuses_the_property_by_name ... FAILED]
+M23 SURFACE dedup on size only: RED  [test input_is_bounded_before_the_vmm_sees_it ... FAILED]
+M24 the boot check clock runs unwatched: RED  [test display::tests::the_boot_check_clock_ticks_only_while_it_runs ... FAILED]
+M25 worker computes ticks itself (planted next_vblank): RED  [test display::tests::the_worker_arms_vblanks_only_through_the_pacer ... FAILED]
+M26 epoch bump on every demand: RED  [test display::tests::the_console_refresh_and_new_watchers ... FAILED]
+M9 coverage ignored (host): RED  [test pace::tests::non_flip_copies_follow_d2 ... FAILED]
+M17b tearing gate off by default: RED  [test engine::tests::a_second_tearing_flip_waits_for_the_vblank ... FAILED]
+M27 the gate ignores presented: RED  [test engine::tests::a_second_tearing_flip_waits_for_the_vblank ... FAILED]
+M28 vblank does not clear presented: RED  [test engine::tests::a_second_tearing_flip_waits_for_the_vblank ... FAILED]
+M29 udmabuf HELLO line judged before any slot (the brkF1 bug): RED  [test the_hello_line_claims_shared_memory_only_for_slots_without_a_dma_buf ... FAILED]
+
+M9 survived its first run (the coverage test only checked the VRAM half); the test gained the
+host half and the re-run (M9 coverage ignored (host)) is red. M17 was red only through
+a_head_composes_its_windows_back_to_front; the gate's own test gained an explicit default check (M17b).
+
+== CI ==
+GitHub Actions run 37168646347 (ab329bec): success;  run 37169212027 (1d043e57): success
+
+== not run ==
+Anything on a box: R0, R1, R1b, R4, D2 on hardware, R6; D4 needs x11-dispsw (v3-dispsw-exp).

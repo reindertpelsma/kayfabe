@@ -31,10 +31,14 @@
 //! channel number the display has; a malformed stream stops its channel by name.
 
 use crate::device::Device;
+use kf_broker::{
+    CursorImage, CursorMode, CursorPoint, CursorWant, FrameCursors, HotTracker, ShownFrame,
+};
 use kf_cuda::display::{ComposeLayer, DisplayGpu, Frame};
 use kf_disp::engine::{Acquire, Composition, Effect, Engine, PbLoc, ScanVocab, Vocab};
 use kf_disp::inst::{CtxDma, Layout, Target};
 use kf_disp::model::{ChannelKind, Statement, Waker};
+use kf_disp::pace::{HeadCounts, Meter, NonFlip, Pacer, Sent};
 use kf_disp::ports::{EventReg, Ports};
 use kf_disp::regs::Regs;
 use kf_disp::scanout::{LayerPlan, ScanFormats};
@@ -392,36 +396,47 @@ pub struct DispCounters {
     pub scanout_us_total: AtomicU64,
     /// The longest one.
     pub scanout_us_max: AtomicU64,
+    /// ★ Copies with no free slot — an invariant violation of the frame ring's cap argument
+    /// (`kf_broker::slots`), counted rather than papered over with a slot someone reads.
+    pub scanout_no_slot: AtomicU64,
+    /// ★ GPU-copy rung (§8.11): frames copied to host memory (D2H) …
+    pub scanout_d2h: AtomicU64,
+    /// … frames packed into a VRAM slot (no byte to the CPU) …
+    pub scanout_pack: AtomicU64,
+    /// … frames the broker wanted in VRAM but no VRAM slot could take (none provisioned or large
+    /// enough yet, or every free one still fenced) …
+    pub scanout_pack_skipped: AtomicU64,
+    /// … and the VRAM provisioned for slots, in bytes.
+    pub vram_bytes: AtomicU64,
+    /// ★ §O, the host cursor: guest cursor images copied for the broker (a GPU copy into a buffer
+    /// kf owns, one per frame while a cursor-capable broker is attached) …
+    pub host_cursor_reads: AtomicU64,
+    /// … and cursors the host could not show (XOR, an additive blend, an unreadable surface),
+    /// composed into the frame in every mode instead.
+    pub host_cursor_refused: AtomicU64,
     /// ★ The boot display: copies started from the boot layer (`gop=on`).
     pub boot_frames: AtomicU64,
     /// ★ Milliseconds from the worker's start to the first armed head, when the boot layer retired
     /// (at least 1; 0 while it is still shown, or without one).
     pub boot_done_ms: AtomicU64,
+    /// ★ `display-max-fps` D2 (§8.16): non-flip checks started — a composition and its checksum at
+    /// the console head's tick while watched …
+    pub checks: AtomicU64,
+    /// … of those, checks whose frame was what the last published one was (nothing sent) …
+    pub same: AtomicU64,
+    /// … and screendump/console refresh requests served.
+    pub ondemand: AtomicU64,
 }
 
-/// Console frame slots: one the console shows, one ready, one the GPU fills.
-const SLOTS: usize = 3;
-/// "No slot" in [`ConsoleShare`]'s state word.
-const NO_SLOT: u32 = 0xF;
+/// ★ §8.16: the console or the broker WATCHES while it asked for a frame within this many
+/// milliseconds — non-flip copies are made only then (D2.3), and its return after longer is a new
+/// watcher.
+const WATCHED_MS: u64 = 2000;
 
-fn pack(front: u32, ready: u32) -> u32 {
-    (front & 0xF) | ((ready & 0xF) << 4)
-}
-
-fn unpack(s: u32) -> (u32, u32) {
-    (s & 0xF, (s >> 4) & 0xF)
-}
-
-/// One published frame's description (the slot's frame memory is the worker's).
-#[derive(Debug, Default)]
-struct FrameSlot {
-    addr: AtomicUsize,
-    width: AtomicU32,
-    height: AtomicU32,
-    stride: AtomicU32,
-    format: AtomicU32,
-    serial: AtomicU64,
-}
+/// The most console frame slots ([`kf_broker::slots::MAX_SLOTS`]): three with the broker off
+/// (one shown, one ready, one the GPU fills — today's triple buffer), five with it on (two more
+/// the broker may hold, `docs/design/V3_DISPLAY.md` §8.3).
+const SLOTS: usize = kf_broker::slots::MAX_SLOTS;
 
 /// ★ What the console reads: a frame's host address, geometry, format and serial.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -438,107 +453,267 @@ pub struct FrameView {
     pub format: u32,
     /// Increases with every frame the worker publishes.
     pub serial: u64,
+    /// ★ §8.13: the guest's cursor is composed into this frame.
+    pub cursor: bool,
 }
 
-/// ★★ M2 — the frames the display worker hands QEMU's console, lock-free (`V3_DISPLAY.md` §4.6).
+/// ★★ M2 — the frames the display worker hands QEMU's console (and, with `display-broker`, the
+/// broker relay), lock-free (`V3_DISPLAY.md` §4.6, §8.3).
 ///
-/// Triple buffering in one atomic word `(front, ready)`: the console takes `ready` as its new
-/// `front` ([`ConsoleShare::take`]); the worker fills a slot that is NEITHER (there is always one,
-/// three slots minus two), then publishes it as `ready`, dropping an untaken older one. The console
-/// can only move `ready` to `front`, so the slot the GPU is writing is never the one on screen.
+/// The occupancy is ONE atomic word, [`kf_broker::FrameRing`]: the console takes the ready frame
+/// as its new front ([`ConsoleShare::take`]); the worker fills a slot named nowhere in the word
+/// ([`ConsoleShare::free_slot`]), then publishes it as ready — for the console and, when the
+/// broker is on, for the relay too — dropping an untaken older one. Nobody can name the slot
+/// the GPU is writing, so it is never the one on screen nor one the broker reads.
 /// ⊘ Frame memory is never freed while the device lives (a screendump may still hold a pixman image
 /// of an old front after the console moved on — a stale read is harmless, a freed page is not).
 #[derive(Debug)]
 pub struct ConsoleShare {
-    state: AtomicU32,
-    slots: [FrameSlot; SLOTS],
+    ring: Arc<kf_broker::FrameRing>,
+    /// Per slot: the host address of its current frame (the console's view of the pixels).
+    addrs: [AtomicUsize; SLOTS],
+    /// Per slot: the [`kf_disp::scanout::PixelFormat`] code of its frame.
+    formats: [AtomicU32; SLOTS],
     /// Milliseconds (since the plane's start) of the console's last request — the refresh rate
-    /// follows demand.
+    /// follows demand, and so does the D2H copy.
     demand_ms: AtomicU64,
+    /// ★ The same for the broker's activity (§8.11): it keeps the refresh rate, but feeds the D2H
+    /// copy only while the broker is shown through host memory (`kf_broker::gpucopy::plan`).
+    broker_ms: AtomicU64,
+    /// ★ §8.13: the shown head's cursor image top-left on the console's frame — the worker writes
+    /// it every pass, the console's cursor (`kf3_display_cursor`) adds the image's hot spot to it.
+    cursor_point: CursorPoint,
+    /// ★ §8.13 (the review, 2026-10-04): which frames have the guest's cursor composed in, and
+    /// whether the one the console took last does — the console's cursor follows the frame it
+    /// SHOWS, never the relay's mode alone.
+    cursors: FrameCursors,
     epoch: Instant,
+    /// ★ `display-max-fps` D2.3 (§8.16): refresh requests from the console's `gfx_update` (a
+    /// `screendump` among them; main loop) …
+    refresh_req: AtomicU64,
+    /// … the last one served (worker) …
+    refresh_served: AtomicU64,
+    /// … and the descriptor the worker signals when that advances (the C device's fd handler then
+    /// shows the newest frame and ends the screendump's wait). `None`: none could be made — every
+    /// request is answered at once by the C device.
+    refreshed: Option<Notifier>,
+    /// ★ Bumped when a watcher STARTS (the console's or the broker's first request after 2 s
+    /// without, a broker session that became active): its view may be stale, so the next check
+    /// sends whatever it finds.
+    watch_epoch: AtomicU64,
 }
 
 impl Default for ConsoleShare {
     fn default() -> ConsoleShare {
-        ConsoleShare {
-            state: AtomicU32::new(pack(NO_SLOT, NO_SLOT)),
-            slots: core::array::from_fn(|_| FrameSlot::default()),
-            demand_ms: AtomicU64::new(0),
-            epoch: Instant::now(),
-        }
+        ConsoleShare::over(Arc::new(kf_broker::FrameRing::new(
+            kf_broker::slots::CONSOLE_SLOTS,
+            false,
+        )))
     }
 }
 
 impl ConsoleShare {
+    /// The console over `ring` (5 slots that feed the broker, or 3 that do not).
+    #[must_use]
+    pub fn over(ring: Arc<kf_broker::FrameRing>) -> ConsoleShare {
+        ConsoleShare {
+            ring,
+            addrs: core::array::from_fn(|_| AtomicUsize::new(0)),
+            formats: core::array::from_fn(|_| AtomicU32::new(0)),
+            demand_ms: AtomicU64::new(0),
+            broker_ms: AtomicU64::new(0),
+            cursor_point: CursorPoint::default(),
+            cursors: FrameCursors::default(),
+            epoch: Instant::now(),
+            refresh_req: AtomicU64::new(0),
+            refresh_served: AtomicU64::new(0),
+            refreshed: Notifier::create().ok(),
+            watch_epoch: AtomicU64::new(0),
+        }
+    }
+
+    /// The occupancy ring (the broker relay shares it).
+    #[must_use]
+    pub fn ring(&self) -> &Arc<kf_broker::FrameRing> {
+        &self.ring
+    }
+
+    /// Milliseconds since the plane's start (the console cursor's pacing clock, too).
+    #[must_use]
+    pub fn now_ms(&self) -> u64 {
+        u64::try_from(self.epoch.elapsed().as_millis()).unwrap_or(u64::MAX)
+    }
+
+    /// ★ **Worker**, every pass: the shown head's cursor image top-left on the frame, or `None`.
+    fn note_cursor_point(&self, p: Option<(i32, i32)>) {
+        self.cursor_point.set(p);
+    }
+
+    /// ★ **Console (QEMU's main thread)**: the point [`ConsoleShare::note_cursor_point`] last stored.
+    #[must_use]
+    pub fn cursor_point(&self) -> Option<(i32, i32)> {
+        self.cursor_point.get()
+    }
+
+    /// ★ **Console (QEMU's main thread)**: what the frame [`ConsoleShare::take`] last handed the
+    /// console carries — whether the guest's cursor is composed into it. (`kf3_gfx_update` shows
+    /// every frame it takes; the frame it would refuse — a bad format or geometry — the worker
+    /// never makes.)
+    #[must_use]
+    pub fn shown_frame(&self) -> ShownFrame {
+        self.cursors.shown()
+    }
+
+    /// Record the console's request for frames now. ★ §8.16: a console that had not asked for 2 s
+    /// is a NEW watcher (a VNC client connected, a screendump).
+    pub fn note_demand(&self) {
+        if !self.within(&self.demand_ms, WATCHED_MS) {
+            self.watch_epoch.fetch_add(1, Ordering::Relaxed);
+        }
+        self.demand_ms
+            .store(self.now_ms().max(1), Ordering::Relaxed);
+    }
+
+    /// ★ Record an active broker now (`kf3_broker_ready`) — frames are wanted (the refresh rate),
+    /// the host copy only if the broker is fed through host memory. ★ §8.16: a broker that had
+    /// not been active for 2 s is a new watcher.
+    pub fn note_broker_demand(&self) {
+        if !self.within(&self.broker_ms, WATCHED_MS) {
+            self.watch_epoch.fetch_add(1, Ordering::Relaxed);
+        }
+        self.broker_ms
+            .store(self.now_ms().max(1), Ordering::Relaxed);
+    }
+
+    /// ★ §8.16 (main loop): a broker SESSION became active (a reconnect inside 2 s is still a new
+    /// viewer with an empty window) — the next check sends.
+    pub fn note_new_watcher(&self) {
+        self.watch_epoch.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// The new-watcher counter (worker).
+    #[must_use]
+    pub fn watch_epoch(&self) -> u64 {
+        self.watch_epoch.load(Ordering::Relaxed)
+    }
+
+    /// ★ D2.3 (main loop, the console's `gfx_update`): ask for a frame no older than now. `false`
+    /// when no answer can come (no descriptor): the caller answers its waiter itself.
+    #[must_use]
+    pub fn request_refresh(&self) -> bool {
+        if self.refreshed.is_none() {
+            return false;
+        }
+        self.refresh_req.fetch_add(1, Ordering::AcqRel);
+        true
+    }
+
+    /// The request counter (worker).
+    #[must_use]
+    pub fn refresh_requested(&self) -> u64 {
+        self.refresh_req.load(Ordering::Acquire)
+    }
+
+    /// ★ Worker: every request up to `upto` is served — the frame published (or found unchanged)
+    /// by a copy that started after it is the ready one. One non-blocking descriptor write.
+    fn serve_refresh(&self, upto: u64) {
+        self.refresh_served.fetch_max(upto, Ordering::AcqRel);
+        if let Some(n) = &self.refreshed {
+            let _ = n.signal();
+        }
+    }
+
+    /// The last request served.
+    #[must_use]
+    pub fn refresh_served(&self) -> u64 {
+        self.refresh_served.load(Ordering::Acquire)
+    }
+
+    /// The descriptor the C device watches for served requests, or -1.
+    #[must_use]
+    pub fn refresh_fd(&self) -> i32 {
+        use std::os::fd::AsRawFd as _;
+        self.refreshed
+            .as_ref()
+            .map_or(-1, |n| n.as_source_fd().as_raw_fd())
+    }
+
+    /// Main loop: consume the descriptor's readiness.
+    pub fn refresh_drain(&self) {
+        if let Some(n) = &self.refreshed {
+            let _ = n.drain();
+        }
+    }
+
     /// ★ **Console (QEMU's main thread)**: the newest frame — the ready one becomes the front — or
     /// `None` before the first. The returned memory stays valid and unwritten until the next call.
     pub fn take(&self) -> Option<FrameView> {
-        let now = u64::try_from(self.epoch.elapsed().as_millis()).unwrap_or(u64::MAX);
-        self.demand_ms.store(now.max(1), Ordering::Relaxed);
-        loop {
-            let s = self.state.load(Ordering::Acquire);
-            let (front, ready) = unpack(s);
-            let show = if ready == NO_SLOT { front } else { ready };
-            if show == NO_SLOT {
-                return None;
-            }
-            if ready != NO_SLOT
-                && self
-                    .state
-                    .compare_exchange(s, pack(ready, NO_SLOT), Ordering::AcqRel, Ordering::Acquire)
-                    .is_err()
-            {
-                continue;
-            }
-            let sl = &self.slots[show as usize];
-            return Some(FrameView {
-                addr: sl.addr.load(Ordering::Acquire),
-                width: sl.width.load(Ordering::Acquire),
-                height: sl.height.load(Ordering::Acquire),
-                stride: sl.stride.load(Ordering::Acquire),
-                format: sl.format.load(Ordering::Acquire),
-                serial: sl.serial.load(Ordering::Acquire),
-            });
+        self.note_demand();
+        let slot = self.ring.take_console()?;
+        let g = self.ring.geometry(slot);
+        let cursor = self.cursors.took(slot);
+        Some(FrameView {
+            addr: self.addrs[slot].load(Ordering::Acquire),
+            width: g.width,
+            height: g.height,
+            stride: g.stride,
+            format: self.formats[slot].load(Ordering::Acquire),
+            serial: g.serial,
+            cursor,
+        })
+    }
+
+    /// **Worker**: a slot named nowhere in the occupancy word — the next copy's target. `None`
+    /// breaks the ring's cap argument and is the caller's counted fault, never a fallback.
+    fn free_slot(&self) -> Option<usize> {
+        self.ring.fill_target(None)
+    }
+
+    /// **Worker**: describe slot `i`'s finished frame — in its host frame when `host` (the D2H
+    /// copy ran), in its VRAM slot when `vram` (the pack ran) — then make it the ready one.
+    fn publish(&self, i: usize, f: FrameView, host: bool, vram: Option<kf_broker::VramGeom>) {
+        if i >= SLOTS {
+            return;
         }
-    }
-
-    /// **Worker**: a slot neither shown nor ready — the next copy's target.
-    fn free_slot(&self) -> usize {
-        let (front, ready) = unpack(self.state.load(Ordering::Acquire));
-        (0..SLOTS as u32)
-            .find(|i| *i != front && *i != ready)
-            .unwrap_or(0) as usize
-    }
-
-    /// **Worker**: describe slot `i`'s finished frame, then make it the ready one.
-    fn publish(&self, i: usize, f: FrameView) {
-        let sl = &self.slots[i];
-        sl.addr.store(f.addr, Ordering::Release);
-        sl.width.store(f.width, Ordering::Release);
-        sl.height.store(f.height, Ordering::Release);
-        sl.stride.store(f.stride, Ordering::Release);
-        sl.format.store(f.format, Ordering::Release);
-        sl.serial.store(f.serial, Ordering::Release);
-        let mut s = self.state.load(Ordering::Acquire);
-        loop {
-            let (front, _) = unpack(s);
-            match self.state.compare_exchange(
-                s,
-                pack(front, i as u32),
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            ) {
-                Ok(_) => return,
-                Err(now) => s = now,
-            }
+        if host {
+            self.addrs[i].store(f.addr, Ordering::Release);
+            self.formats[i].store(f.format, Ordering::Release);
+            self.cursors.publish(i, f.cursor);
         }
+        self.ring.describe(
+            i,
+            kf_broker::FrameGeom {
+                width: f.width,
+                height: f.height,
+                stride: f.stride,
+                // the console's x8r8g8b8 byte order is DRM's XRGB8888 (`kf3.c`'s pixman map)
+                fourcc: kf_broker::wire::FOURCC_XR24,
+                serial: f.serial,
+            },
+        );
+        self.ring.describe_backings(i, host, vram);
+        self.ring.publish(i);
     }
 
-    /// Did the console ask for a frame within the last `ms` milliseconds?
+    fn within(&self, at: &AtomicU64, ms: u64) -> bool {
+        let last = at.load(Ordering::Relaxed);
+        last != 0 && self.now_ms().saturating_sub(last) <= ms
+    }
+
+    /// Did the console OR an active broker ask for a frame within the last `ms` milliseconds?
+    /// (Whether anybody watches, §8.16.)
     fn wanted_within(&self, ms: u64) -> bool {
-        let last = self.demand_ms.load(Ordering::Relaxed);
-        let now = u64::try_from(self.epoch.elapsed().as_millis()).unwrap_or(u64::MAX);
-        last != 0 && now.saturating_sub(last) <= ms
+        self.within(&self.demand_ms, ms) || self.within(&self.broker_ms, ms)
+    }
+
+    /// Did the console ask within the last `ms` milliseconds?
+    fn console_wanted_within(&self, ms: u64) -> bool {
+        self.within(&self.demand_ms, ms)
+    }
+
+    /// Was the broker active within the last `ms` milliseconds?
+    fn broker_wanted_within(&self, ms: u64) -> bool {
+        self.within(&self.broker_ms, ms)
     }
 }
 
@@ -861,6 +1036,178 @@ struct WorkerInit {
     gpu: Option<DisplayGpu>,
     layout: Layout,
     notifier_finished: u32,
+    /// ★ The GPU-copy rung's worker half (§8.11), when the device offers it.
+    vram: Option<VramWorker>,
+}
+
+/// ★ What the build hands the display plane for the GPU-copy rung: the property's mode and, when
+/// realize's probe passed, the rung's host state.
+#[derive(Debug, Clone, Copy)]
+pub struct BrokerVram {
+    /// `display-broker-vram`.
+    pub mode: kf_broker::gpucopy::VramMode,
+    /// The probe's result (`None`: the rung is not offered on this host).
+    pub setup: Option<&'static crate::gpucopy::VramSetup>,
+}
+
+/// ★ The GPU-copy rung's worker half (§8.11): slots arrive from the provisioning thread, are
+/// adopted here (the worker owns the CUDA context) and installed into the ring while free.
+struct VramWorker {
+    req: std::sync::mpsc::Sender<kf_broker::gpucopy::Request>,
+    got: std::sync::mpsc::Receiver<Result<crate::gpucopy::Provisioned, String>>,
+    plan: kf_broker::gpucopy::Provisioning,
+    /// Per ring slot: the imported, installed VRAM slot and its bytes.
+    slots: [Option<(kf_cuda::display::SlotId, u64)>; SLOTS],
+    /// Adopted slots waiting for their ring slot to be free.
+    waiting: Vec<(usize, kf_cuda::display::SlotId, u64, kf_broker::VramFds)>,
+    selftested: bool,
+    refused: Option<String>,
+    fence_err_logged: bool,
+}
+
+impl VramWorker {
+    /// ★ Step 5: import into the worker's CUDA context, clear, self-test the pack on the first
+    /// slot (never exported before it passed), close the RM export fd, and queue for the ring.
+    fn adopt(
+        &mut self,
+        gpu: &mut DisplayGpu,
+        p: crate::gpucopy::Provisioned,
+        counters: &DispCounters,
+    ) -> Result<(), String> {
+        let (slot, bytes) = (p.slot, p.bytes);
+        let sid = gpu.import_slot(p.export_fd(), bytes).map_err(|e| {
+            format!(
+                "display VRAM slot {slot}: the CUDA import: {e} — the GPU-copy rung is withdrawn"
+            )
+        })?;
+        gpu.zero_slot(sid)
+            .map_err(|e| format!("display VRAM slot {slot}: the clear: {e}"))?;
+        if !self.selftested {
+            selftest_pack(gpu, sid).map_err(|e| {
+                format!("display VRAM: the pack kernel self-test FAILED: {e} — the GPU-copy rung is withdrawn")
+            })?;
+            self.selftested = true;
+            eprintln!("kf3: display: pack kernel self-test PASSED (into display VRAM slot {slot})");
+        }
+        let (slot, v) = p.into_backing()?;
+        counters.vram_bytes.fetch_add(bytes, Ordering::Relaxed);
+        self.waiting.push((slot, sid, bytes, v));
+        Ok(())
+    }
+
+    /// Install every adopted slot whose ring slot is free now.
+    fn install_waiting(&mut self, ring: &kf_broker::FrameRing) -> Result<(), String> {
+        let mut keep = Vec::new();
+        for (slot, sid, bytes, v) in self.waiting.drain(..) {
+            match ring.install_vram(slot, v) {
+                Ok(()) => self.slots[slot] = Some((sid, bytes)),
+                Err((kf_broker::InstallRefusal::NotFree, v)) => keep.push((slot, sid, bytes, v)),
+                Err((e, _)) => {
+                    return Err(format!(
+                        "display VRAM slot {slot}: the frame ring refused it: {e:?}"
+                    ));
+                }
+            }
+        }
+        self.waiting = keep;
+        Ok(())
+    }
+
+    /// ★ Each pass: adopt what the provisioning thread made, install what is free. A refusal
+    /// withdraws the VRAM kind ONLY (the host rungs go on), loudly, once.
+    fn poll(&mut self, gpu: &mut DisplayGpu, ring: &kf_broker::FrameRing, counters: &DispCounters) {
+        if self.refused.is_some() {
+            return;
+        }
+        while let Ok(made) = self.got.try_recv() {
+            let r = made.and_then(|p| self.adopt(gpu, p, counters));
+            if let Err(e) = r {
+                return self.refuse(ring, e);
+            }
+        }
+        if let Err(e) = self.install_waiting(ring) {
+            self.refuse(ring, e);
+        }
+    }
+
+    fn refuse(&mut self, ring: &kf_broker::FrameRing, e: String) {
+        ring.withdraw(kf_broker::Kind::Vram);
+        self.plan.refuse();
+        eprintln!("kf3: display: {e}");
+        self.refused = Some(e);
+    }
+
+    fn ask(&mut self, r: Option<kf_broker::gpucopy::Request>, ring: &kf_broker::FrameRing) {
+        if let Some(r) = r
+            && self.req.send(r).is_err()
+        {
+            self.refuse(ring, "display VRAM: the provisioning thread is gone".into());
+        }
+    }
+
+    /// ★ The free slots that can take a pack of `extent` bytes NOW: provisioned that large, free,
+    /// and their dma-buf's fences signalled (`DMA_BUF_IOCTL_EXPORT_SYNC_FILE` + `poll(0)` — never
+    /// waits; a kernel without the ioctl is logged once and its slots taken as idle).
+    fn eligible(&mut self, ring: &kf_broker::FrameRing, extent: u64) -> u32 {
+        let mut m = 0;
+        for j in 0..ring.slots().min(SLOTS) {
+            let Some((_, bytes)) = self.slots[j] else {
+                continue;
+            };
+            if bytes < extent || !ring.is_free(j) {
+                continue;
+            }
+            let idle = ring
+                .vram(j)
+                .map_or(Ok(true), |v| kf_linux_raw::dma_buf_idle(v.fd()));
+            match idle {
+                Ok(true) => m |= 1 << j,
+                Ok(false) => {}
+                Err(e) => {
+                    if !self.fence_err_logged {
+                        self.fence_err_logged = true;
+                        eprintln!(
+                            "kf3: display: the dma-buf fence check is unavailable ({e}): VRAM slots \
+                             are reused after RELEASE and the LRU order alone"
+                        );
+                    }
+                    m |= 1 << j;
+                }
+            }
+        }
+        m
+    }
+}
+
+/// ★ The pack kernel on SYNTHETIC frames into slot `sid` before it is ever exported, compared byte
+/// for byte with `kf_disp::vramslot::pack_reference` (the same reference the host-compiled kernel
+/// is held to in kf-disp's `tests/bl_pack_kernel.rs`).
+fn selftest_pack(gpu: &mut DisplayGpu, sid: kf_cuda::display::SlotId) -> Result<(), String> {
+    use kf_disp::vramslot::{GOB_GA106, pack_reference, slot_geom};
+    for (w, h, bh) in crate::gpucopy::selftest_cases() {
+        let g = slot_geom(w, h, bh).ok_or("the self-test geometry")?;
+        let staging = crate::gpucopy::selftest_staging(w, h);
+        let pack = kf_cuda::display::BlPack {
+            width: w,
+            height: h,
+            gobs_per_row: g.gobs_per_row,
+            h_log2: bh,
+            gobs: g.gobs(),
+            bits: GOB_GA106.bits(),
+        };
+        let got = gpu
+            .selftest_bl_pack(sid, &staging, &pack)
+            .map_err(|e| format!("did not run ({w}x{h}, h {bh}): {e}"))?;
+        let want = pack_reference(&GOB_GA106, &staging, &g)?;
+        if let Some(i) = (0..want.len()).find(|&i| got.get(i) != want.get(i)) {
+            return Err(format!(
+                "{w}x{h} at 2^{bh}-GOB blocks: slot byte {i} is {:?}, the reference says {:#04x}",
+                got.get(i),
+                want[i]
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// ★ The plane (leaked for the process, like the device).
@@ -881,13 +1228,29 @@ pub struct DisplayPlane {
     pub counters: DispCounters,
     /// ★ M2: the frames QEMU's console shows.
     pub console: ConsoleShare,
+    /// ★ Display step 3 (`display-broker`): the broker relay's seat — the frame backing and the
+    /// relay the C device's main loop drives (`crate::broker`). `None`: the console alone,
+    /// exactly as before (`cuMemAllocHost`, three slots).
+    pub broker: Option<crate::broker::BrokerSeat>,
     /// The window-class methods a scanout reads (`None`: the family's windows name surfaces by
     /// address — no console yet, M5).
     scan: Option<ScanVocab>,
+    /// ★ Display step 3d: the cursor methods the composition's top layer reads (`None`: the
+    /// family's table lacks one — its cursor is not composed).
+    cursor_vocab: Option<kf_disp::engine::CursorVocab>,
+    /// ★ Display step 3c: the newest resize request from the VMM's UI (`ui_info`), packed
+    /// `width << 48 | height << 32 | refresh_mHz`; 0 = none. Set on the main loop, taken by the
+    /// worker — one atomic, no lock.
+    ui_request: AtomicU64,
     /// The window formats the console can show.
     formats: ScanFormats,
     /// ★ The boot display's picture (`gop=on`); `None` keeps today's console.
     boot: Option<BootScan>,
+    /// ★ `display-max-fps` (§8.16): the property (0 unset) — the cap and the EDID follow it.
+    max_fps: u32,
+    /// ★ The worker's `fps[...]` status fragment, the last window's (published with `try_lock`,
+    /// read with `try_lock`: a diagnostic never waits).
+    fps: Mutex<String>,
 }
 
 impl std::fmt::Debug for DisplayPlane {
@@ -896,6 +1259,53 @@ impl std::fmt::Debug for DisplayPlane {
             .field("map", &self.map)
             .finish_non_exhaustive()
     }
+}
+
+/// ★ The GPU-copy rung's worker half, at build: the ring learns the modifier and the GPU's nodes,
+/// the provisioning thread starts, and with `display-broker-vram=on` the class-0 slots are made,
+/// adopted (pack self-test included) and installed NOW — a refusal fails realize (§w727).
+fn vram_worker(
+    mode: kf_broker::gpucopy::VramMode,
+    setup: &'static crate::gpucopy::VramSetup,
+    ring: &Arc<kf_broker::FrameRing>,
+    gpu: &mut DisplayGpu,
+) -> Result<(VramWorker, u64), String> {
+    use kf_broker::gpucopy::{Provisioning, VramMode};
+    ring.set_vram_modifier(setup.modifier());
+    ring.set_gpu_nodes(setup.nodes());
+    let (req, got) = crate::gpucopy::spawn(setup, ring.clone())?;
+    let mut w = VramWorker {
+        req,
+        got,
+        plan: Provisioning::new(
+            mode,
+            kf_broker::slots::BROKER_SLOTS,
+            kf_disp::vramslot::SLOT_CLASS0,
+            kf_disp::vramslot::SLOT_MAX,
+        ),
+        slots: [None; SLOTS],
+        waiting: Vec::new(),
+        selftested: false,
+        refused: None,
+        fence_err_logged: false,
+    };
+    let counters = DispCounters::default();
+    if mode == VramMode::On
+        && let Some(r) = w.plan.first(true, false)
+    {
+        for slot in r.slots {
+            let p = setup.make(ring, slot, r.bytes)?;
+            w.adopt(gpu, p, &counters)?;
+        }
+        w.install_waiting(ring)?;
+        eprintln!(
+            "kf3: broker: display-broker-vram=on — {} MiB of display VRAM in {} slots, pack self-test passed",
+            counters.vram_bytes.load(Ordering::Relaxed) >> 20,
+            kf_broker::slots::BROKER_SLOTS
+        );
+    }
+    let bytes = counters.vram_bytes.load(Ordering::Relaxed);
+    Ok((w, bytes))
 }
 
 impl DisplayPlane {
@@ -911,7 +1321,10 @@ impl DisplayPlane {
         bdf: &str,
         store_fd: i32,
         store_bytes: u64,
+        broker: Option<BrokerVram>,
+        max_fps: u32,
     ) -> Result<DisplayPlane, String> {
+        kf_disp::pace::check(true, max_fps)?;
         let version = table.driver_version().to_string();
         let regs = Regs::for_ip(&version, row.ip_version).ok_or_else(|| {
             format!(
@@ -935,9 +1348,22 @@ impl DisplayPlane {
             .zip(t.notifier_value("__0_STATUS_FINISHED"))
             .map(|(fld, v)| kf_disp::class::put(0, fld, v))
             .ok_or("display=on: NV_DISP_NOTIFIER__0_STATUS is not derived")?;
-        let model = kf_rm::display::model_for(table, row).ok_or_else(|| {
+        let model = kf_rm::display::model_for(table, row, max_fps).ok_or_else(|| {
             format!("display=on: no derived display layouts for driver {version}")
         })?;
+        // ★ §8.16: what the guest is told the monitor is — graded from the log alone
+        if let Some(m) = model.connectors.first().map(|c| &c.monitor) {
+            eprintln!(
+                "kf3: display: monitor {}x{} at {} mHz, range max {} Hz, EDID fnv1a64={:016x} \
+                 (display-max-fps {})",
+                m.preferred.h_active,
+                m.preferred.v_active,
+                m.preferred.refresh_mhz(),
+                m.cap_hz,
+                m.edid_fnv().unwrap_or(0),
+                max_fps
+            );
+        }
         let ports = model.ports.clone();
         let wake = Arc::new(Notifier::create().map_err(|e| format!("display eventfd: {e:?}"))?);
         let model: SharedDisplayModel = Arc::new(Mutex::new(model));
@@ -957,6 +1383,24 @@ impl DisplayPlane {
         let engine = Engine::new(vocab, row.heads, row.windows);
         let scan = ScanVocab::resolve(t, classes.window, classes.window_imm, classes.core);
         let formats = ScanFormats::resolve(t, classes.window);
+        let cursor_vocab = kf_disp::engine::CursorVocab::resolve(t, classes.core, classes.cursor);
+        let mut vram = None;
+        let mut vram_bytes = 0;
+        let (console, broker) = if let Some(bv) = broker {
+            let ring = Arc::new(kf_broker::FrameRing::new(
+                kf_broker::slots::BROKER_SLOTS,
+                true,
+            ));
+            let seat = crate::broker::BrokerSeat::new(ring.clone())?;
+            if let Some(setup) = bv.setup {
+                let (w, b) = vram_worker(bv.mode, setup, &ring, &mut gpu)?;
+                vram = Some(w);
+                vram_bytes = b;
+            }
+            (ConsoleShare::over(ring), Some(seat))
+        } else {
+            (ConsoleShare::default(), None)
+        };
         Ok(DisplayPlane {
             model,
             ports,
@@ -968,14 +1412,50 @@ impl DisplayPlane {
                 gpu: Some(gpu),
                 layout,
                 notifier_finished,
+                vram,
             })),
             cursor: core::array::from_fn(|_| CursorPorts::default()),
-            counters: DispCounters::default(),
-            console: ConsoleShare::default(),
+            counters: DispCounters {
+                vram_bytes: AtomicU64::new(vram_bytes),
+                ..DispCounters::default()
+            },
+            console,
+            broker,
             scan,
+            cursor_vocab,
+            ui_request: AtomicU64::new(0),
             formats,
             boot: None,
+            max_fps,
+            fps: Mutex::new(String::new()),
         })
+    }
+
+    /// ★ The `display-max-fps` property (0 unset).
+    #[must_use]
+    pub fn max_fps(&self) -> u32 {
+        self.max_fps
+    }
+
+    /// ★ The `fps[...]` status fragment (empty before the worker's first window; `fps[busy]` while
+    /// the worker publishes one — never a wait).
+    #[must_use]
+    pub fn fps_fragment(&self) -> String {
+        self.fps
+            .try_lock()
+            .map_or_else(|_| "fps[busy]".to_string(), |g| g.clone())
+    }
+
+    /// ★ D2.3 (main loop, the console's `gfx_update`, a `screendump`): ask the worker for a frame no
+    /// older than now — it is served at the console head's next tick (a check: sent if it changed),
+    /// or at once when nothing can be copied. `false` when no answer will come.
+    #[must_use]
+    pub fn request_refresh(&self) -> bool {
+        let asked = self.console.request_refresh();
+        if asked {
+            let _ = self.wake.signal();
+        }
+        asked
     }
 
     /// ★ Show `boot` (the boot display's layer, `gop=on`) until the guest arms a head.
@@ -1108,6 +1588,24 @@ impl DisplayPlane {
                 return;
             }
         }
+    }
+
+    /// ★ Display step 3c (QEMU's main loop, the console's `ui_info` — a VNC/GTK resize, or the
+    /// broker's SURFACE): ask for a `width` x `height` monitor at `refresh_mhz` (0 = 60 Hz) on
+    /// `head`. Only head 0 has a console. Lock-free: one atomic store and one eventfd write; the
+    /// worker authors the EDID and queues the hotplug.
+    pub fn request_ui(&self, head: u32, width: u32, height: u32, refresh_mhz: u32) -> bool {
+        if head != 0 || width == 0 || height == 0 {
+            return false;
+        }
+        let w = u64::from(width.min(0xFFFF));
+        let h = u64::from(height.min(0xFFFF));
+        self.ui_request.store(
+            (w << 48) | (h << 32) | u64::from(refresh_mhz),
+            Ordering::Release,
+        );
+        let _ = self.wake.signal();
+        true
     }
 
     fn take_init(&self) -> Option<WorkerInit> {
@@ -1281,6 +1779,7 @@ impl Device {
             gpu,
             layout,
             notifier_finished,
+            vram,
         } = init;
         if let Some(g) = &gpu
             && let Err(e) = g.make_current()
@@ -1338,10 +1837,44 @@ impl Device {
             notifier_finished,
             refusals_logged: 0,
         };
-        let mut next_vblank: [Option<(Instant, Duration)>; MAX_HEADS] = [None; MAX_HEADS];
+        // ★ `display-max-fps` (§8.16): every head's vblank tick, CAPPED — the pacer owns the periods
+        // (this loop does no period arithmetic of its own), on the worker's own clock
+        let clock = Instant::now();
+        let ns = |t: Instant| {
+            u64::try_from(t.saturating_duration_since(clock).as_nanos()).unwrap_or(u64::MAX)
+        };
+        let cap = kf_disp::pace::cap_hz(dp.max_fps);
+        let mut pacer = Pacer::new(cap);
+        let mut meter = Meter::default();
+        // per head: ticks, and ticks with the guest's vblank interrupt enabled (presents: the engine)
+        let mut counts = [HeadCounts::default(); MAX_HEADS];
+        let mut fps_printed: Option<(Instant, String)> = None;
+        let mut watch_epoch = dp.console.watch_epoch();
+        // Boot/preserved pictures have no armed head: their non-flip checks run at the preferred
+        // rate under the cap
+        let idle_period = Duration::from_nanos(kf_disp::pace::paced_period_ns(
+            kf_disp::pace::cap_period_ns(kf_disp::pace::DEFAULT_PREFERRED_HZ),
+            cap,
+        ));
+        eprintln!(
+            "kf3: display: display-max-fps {} — every head's vblank tick is capped at {cap} Hz; \
+             copies without a flip are made at the console head's tick, while watched, and sent \
+             only when the frame's checksum changed",
+            if dp.max_fps == 0 {
+                "unset".to_string()
+            } else {
+                format!("{} Hz", dp.max_fps)
+            }
+        );
+        if let Some(e) = io.gpu.as_ref().and_then(|g| g.checksum_refused()) {
+            eprintln!(
+                "kf3: display: the checksum kernel is REFUSED ({e}) — every non-flip check is sent"
+            );
+        }
         let mut scan = ScanState {
             trace,
             bl_ok,
+            vram,
             ..ScanState::default()
         };
         let mut queue: VecDeque<Queued> = VecDeque::new();
@@ -1363,16 +1896,17 @@ impl Device {
             );
         }
         while !self.stop.load(Ordering::Acquire) {
-            // the deadline: the earliest vblank, a 2 ms acquire poll, or 50 ms
+            // the deadline: the earliest (capped) vblank, a 2 ms acquire poll, the boot picture's
+            // check clock, or 50 ms
             let now = Instant::now();
             let mut deadline = now + Duration::from_millis(50);
-            for (t, _) in next_vblank.iter().flatten() {
-                deadline = deadline.min(*t);
+            if let Some(t) = pacer.next_ns() {
+                deadline = deadline.min(clock + Duration::from_nanos(t));
             }
             if engine.acquire_pending() {
                 deadline = deadline.min(now + Duration::from_millis(2));
             }
-            if let Some(t) = scan.refresh_due(dp) {
+            if let Some(t) = scan.idle_at {
                 deadline = deadline.min(t);
             }
             // a lit head without a window: wake when its hold ends (then the console may go black)
@@ -1466,6 +2000,11 @@ impl Device {
                     }
                 }
             }
+            // 1b. ★ 3c: a resize asked for by the VMM's UI — a new monitor, then a hotplug
+            let req = dp.ui_request.swap(0, Ordering::AcqRel);
+            if req != 0 {
+                self.apply_ui_request(dp, req);
+            }
             // 2. every DMA channel whose PUT moved
             for chn in 0..kf_disp::ports::NUM_CHANNELS as u32 {
                 let Some((pb, decoded, life)) = engine.pushbuffer(chn) else {
@@ -1514,28 +2053,16 @@ impl Device {
                 effects.extend(s.effects);
                 gets.extend(s.gets);
             }
-            // 4. vblanks whose time has come
-            let now = Instant::now();
+            // 4. vblanks whose time has come — each head's CAPPED tick (§8.16), from the pacer
             let mut raised = false;
-            for (h, slot) in next_vblank
-                .iter_mut()
-                .enumerate()
-                .take(dp.map.heads as usize)
-            {
-                let Some((t, period)) = *slot else {
-                    continue;
-                };
-                if now < t {
+            let mut ticked = 0u32;
+            for t in pacer.due(ns(Instant::now())) {
+                let h = t.head as usize;
+                if h >= dp.map.heads as usize {
                     continue;
                 }
-                let next = if now.duration_since(t) > period {
-                    now + period
-                } else {
-                    t + period
-                };
-                *slot = Some((next, period));
                 dp.counters.vblanks.fetch_add(1, Ordering::Relaxed);
-                let s = engine.vblank(h as u32, &mut |a| io.acquired(a));
+                let s = engine.vblank(t.head, &mut |a| io.acquired(a));
                 effects.extend(s.effects);
                 gets.extend(s.gets);
                 let f = dp.ports.frames[h]
@@ -1550,7 +2077,13 @@ impl Device {
                     EventReg::HeadTiming(h),
                     dp.map.head_last_data | dp.map.head_vblank,
                 );
-                raised |= dp.ports.rm_head_timing(h) != 0;
+                let irq = dp.ports.rm_head_timing(h);
+                raised |= irq != 0;
+                counts[h].ticks += 1;
+                if irq & dp.map.head_vblank != 0 {
+                    counts[h].vblirq += 1;
+                }
+                ticked |= 1 << h;
             }
             // 5. acquires waiting without a vblank
             if engine.acquire_pending() {
@@ -1632,6 +2165,47 @@ impl Device {
                 shown,
                 Some(Shown::Armed(_) | Shown::Boot(..) | Shown::Preserved(..))
             );
+            // ★ 3d: the cursor on top of the console's head (an ARMED composition only: the boot,
+            // preserved and blank pictures have no cursor channel behind them); a move or a new
+            // image recomposes
+            let cursor = match &shown {
+                Some(Shown::Armed(c)) => dp
+                    .cursor_vocab
+                    .as_ref()
+                    .and_then(|cv| engine.cursor_scan(cv, c.head)),
+                _ => None,
+            };
+            // ★ §8.13: where the cursor image's top-left is, for the console's cursor in hover (a
+            // move makes no frame then, but the console still follows it)
+            dp.console.note_cursor_point(cursor.as_ref().map(|cs| {
+                (
+                    cs.x.saturating_sub(i32::try_from(cs.hot_x).unwrap_or(0)),
+                    cs.y.saturating_sub(i32::try_from(cs.hot_y).unwrap_or(0)),
+                )
+            }));
+            // ★ §O: where the cursor goes, as the relay decided (hover: the host shows it; grab or
+            // no cursor-capable broker: the frame). A switch recomposes at once — the cursor goes
+            // into the frame or out of it — and in hover a MOVE makes no frame (the host pointer
+            // is the guest's), unless the last frame composed the cursor (one the host cannot
+            // show). Off and grab recompose on a move exactly as before.
+            let cursor_mode = dp
+                .broker
+                .as_ref()
+                .map_or(CursorMode::Off, |b| b.cursor().mode());
+            // ★ §8.16 (D2): a cursor-mode switch, a cursor move, front-buffer drawing — none makes a
+            // copy of its own any more: the console head's next tick composes and checksums the
+            // frame and sends it when it changed (a hover move, which composes nothing, changes
+            // nothing). A switch forces that send (the frame's cursor flag changes either way).
+            if cursor_mode != scan.cursor_mode {
+                scan.cursor_mode = cursor_mode;
+                scan.nonflip.force();
+            }
+            let epoch = dp.console.watch_epoch();
+            if epoch != watch_epoch {
+                watch_epoch = epoch;
+                scan.nonflip.force();
+            }
+            scan.nonflip.request(dp.console.refresh_requested());
             for e in effects {
                 if let Effect::Latched { window } = &e {
                     // ★ the window's ARMED state changed: its next copy resolves it afresh
@@ -1659,14 +2233,35 @@ impl Device {
                 .as_ref()
                 .is_some_and(|g| g.completion_fd().drain() > 0)
             {
-                scan.completed(dp);
+                scan.completed(&mut io);
             }
             scan.give_up_if_stuck(dp);
-            if scan.active && scan.refresh_due(dp).is_some_and(|t| t <= Instant::now()) {
-                scan.want = true;
+            // ★ D2: the console head's tick — the armed head's own, or for a picture with no armed
+            // head (the boot layer, a preserved scanout) the check clock
+            let watched = dp.console.wanted_within(WATCHED_MS);
+            let idle_run = matches!(shown, Some(Shown::Boot(..) | Shown::Preserved(..)))
+                && (watched || scan.nonflip.pending());
+            let console_tick = match &shown {
+                Some(Shown::Armed(c)) => c.head < 32 && ticked & (1 << c.head) != 0,
+                _ => scan.idle_tick(Instant::now(), idle_period, idle_run),
+            };
+            if !idle_run {
+                scan.idle_at = None;
+            }
+            if scan.nonflip.pending() && (!scan.active || io.gpu.is_none()) {
+                // nothing can be copied: the frame the console has is the answer
+                scan.serve_now(dp);
             }
             if scan.want && scan.inflight.is_none() {
-                scan.start(&mut io, shown.as_ref());
+                scan.start(&mut io, shown.as_ref(), cursor.as_ref(), false);
+            } else if scan.nonflip.due(
+                console_tick,
+                watched,
+                scan.active,
+                scan.inflight.is_none(),
+                scan.want || scan.barrier > scan.started,
+            ) {
+                scan.start(&mut io, shown.as_ref(), cursor.as_ref(), true);
             }
             // 7. completions, IN ORDER — each after the state it reports and the copy it follows
             while queue.front().is_some_and(|q| q.need <= scan.done) {
@@ -1770,36 +2365,18 @@ impl Device {
                         }
                     }
                     Effect::Heads => {
-                        for m in engine.heads_armed() {
-                            let h = m.head as usize;
-                            if h >= MAX_HEADS {
-                                continue;
-                            }
-                            let active = m.period_ns > 0;
-                            next_vblank[h] = match (active, next_vblank[h]) {
-                                (false, _) => None,
-                                (true, Some((t, p))) if p.as_nanos() == u128::from(m.period_ns) => {
-                                    Some((t, p))
-                                }
-                                (true, _) => Some((
-                                    Instant::now() + Duration::from_nanos(m.period_ns),
-                                    Duration::from_nanos(m.period_ns),
-                                )),
-                            };
+                        // ★ §8.16: the pacer arms each head at its CAPPED period, in phase when that
+                        // did not change
+                        let heads = engine.heads_armed();
+                        for a in pacer.on_heads(&heads, ns(Instant::now())) {
+                            let active = a.period_ns > 0;
                             if let Some((b, s, fld, awake, sleep)) = dp.map.core_head_state {
                                 store(
-                                    b + m.head as u64 * s,
+                                    b + u64::from(a.head) * s,
                                     kf_disp::class::put(0, fld, if active { awake } else { sleep }),
                                 );
                             }
-                            eprintln!(
-                                "kf3: display: head {} {} raster {}x{} period {} us",
-                                m.head,
-                                if active { "ACTIVE" } else { "idle" },
-                                m.raster.0,
-                                m.raster.1,
-                                m.period_ns / 1000
-                            );
+                            eprintln!("kf3: display: {}", a.line(cap));
                         }
                     }
                     Effect::Latched { window } => {
@@ -1831,11 +2408,98 @@ impl Device {
                     self.latch_and_deliver(kf_rm::authored::DISP_STALL_VECTOR);
                 }
             }
+            // 9. ★ §8.16: the achieved rates per path, per window of at least 1 s — published for
+            // the status line (never waited for) and printed on a line of their own, at most every
+            // 2 s and only when they changed
+            for (h, c) in counts.iter_mut().enumerate() {
+                let p = engine.pace.get(h).copied().unwrap_or_default();
+                (c.presents, c.tearing) = (p.presents, p.tearing);
+            }
+            let o = Ordering::Relaxed;
+            if let Some(w) = meter.sample(
+                ns(Instant::now()),
+                &counts,
+                &pacer.periods(),
+                dp.counters.scanouts.load(o),
+                dp.counters.checks.load(o),
+            ) {
+                let mut st = kf_disp::pace::Status {
+                    cfg_hz: dp.max_fps,
+                    cap_hz: cap,
+                    window: Some(w),
+                    over: meter.over,
+                    same: dp.counters.same.load(o),
+                    ondemand: dp.counters.ondemand.load(o),
+                    ..kf_disp::pace::Status::default()
+                };
+                for (h, hs) in st.heads.iter_mut().enumerate() {
+                    let p = engine.pace.get(h).copied().unwrap_or_default();
+                    if let Some(slot) = pacer.slot(h) {
+                        *hs = kf_disp::pace::HeadStatus {
+                            period_ns: slot.period_ns,
+                            raster_ns: slot.raster_ns,
+                            late_max_us: pacer.late_max_ns(h) / 1000,
+                            held: p.tear_held,
+                            core_imm: p.core_imm,
+                        };
+                    }
+                }
+                let line = st.fragment();
+                if let Ok(mut g) = dp.fps.try_lock() {
+                    g.clone_from(&line);
+                }
+                let due = fps_printed
+                    .as_ref()
+                    .is_none_or(|(t, last)| *last != line && t.elapsed() >= Duration::from_secs(2));
+                if due {
+                    eprintln!("kf3: display {line}");
+                    fps_printed = Some((Instant::now(), line));
+                }
+            }
         }
         // ⊘ QEMU's console may still point at a frame after the worker stops (its main loop refreshes
         // until it ends): the frames and their context stay mapped until the process exits.
         std::mem::forget(scan);
         std::mem::forget(io.gpu.take());
+    }
+
+    /// ★ Display step 3c (the worker): author the monitor a resize asked for — clamped, fitted under
+    /// the connector's pixel-clock limit at the same aspect ratio (`Monitor::for_window`) — put it
+    /// behind connector 0 under the model's lock, and when it CHANGED and a hotplug registration
+    /// is live, queue the hotplug for the drainer.
+    fn apply_ui_request(&self, dp: &DisplayPlane, req: u64) {
+        let (w, h, mhz) = (
+            (req >> 48) as u32,
+            ((req >> 32) & 0xFFFF) as u32,
+            req as u32,
+        );
+        let changed = dp.model.lock().ok().and_then(|mut g| {
+            let max = g
+                .connectors
+                .first()
+                .map_or(165_000, |c| c.monitor.max_pixel_khz);
+            // ★ §8.16: the preferred rate is the host's, under the cap; the cap never moves
+            let m = kf_disp::edid::Monitor::for_window(w, h, mhz, max, dp.max_fps);
+            let (mw, mh) = (m.preferred.h_active, m.preferred.v_active);
+            let (rate, fnv) = (m.preferred.refresh_mhz(), m.edid_fnv().unwrap_or(0));
+            let id = g.set_monitor(0, m)?;
+            Some((id, mw, mh, rate, fnv, g.hotplug_target().is_some()))
+        });
+        match changed {
+            Some((id, mw, mh, rate, fnv, true)) => {
+                eprintln!(
+                    "kf3: display: resize {w}x{h} at {mhz} mHz -> monitor {mw}x{mh} at {rate} mHz \
+                     (EDID fnv1a64={fnv:016x}) on display {id:#x}; hotplug queued"
+                );
+                self.queue_hotplug(id);
+            }
+            Some((id, mw, mh, rate, fnv, false)) => eprintln!(
+                "kf3: display: resize {w}x{h} at {mhz} mHz -> monitor {mw}x{mh} at {rate} mHz \
+                 (EDID fnv1a64={fnv:016x}) on display {id:#x}; no hotplug registration (the next \
+                 probe reads it)"
+            ),
+            None => {}
+        }
     }
 
     /// Publish a channel's CHNCTL allocation bit and CHNSTATUS state: `Some(idle)` allocated, `None`
@@ -1936,6 +2600,13 @@ const FRAME_SMALL: usize = 1920 * 1080 * 4;
 /// The largest frame ([`kf_disp::scanout::MAX_PIXELS`] at 4 bytes).
 const FRAME_MAX: usize = kf_disp::scanout::MAX_PIXELS as usize * 4;
 
+/// ★ §O, the worker's first cursor decision (GPU-free): whether this frame composes the head's
+/// cursor — always without a cursor-capable broker (`want` is `None`: nothing was read) and under
+/// grab; in hover only a cursor the host cannot show ([`CursorMode::composes`]).
+fn cursor_composed(mode: CursorMode, want: Option<&CursorWant>) -> bool {
+    want.is_none_or(|w| mode.composes(w))
+}
+
 /// ★ M2 — the worker's scanout copies (`V3_DISPLAY.md` §4.6). One copy in flight at a time, on the
 /// plane's own stream; its completion is the `cuLaunchHostFunc` signal queued after it.
 #[derive(Default)]
@@ -1946,17 +2617,25 @@ struct ScanState {
     done: u64,
     /// The copy number items queued now wait for.
     barrier: u64,
-    /// A copy is wanted (a flip of the console window, or the refresh clock).
+    /// A FLIP-class copy is wanted (a flip of the console window, a change of what is shown) —
+    /// made at once and always sent. ★ Copies without a flip are [`ScanState::nonflip`]'s (§8.16).
     want: bool,
-    /// The console showed a surface at the last pass (the refresh clock runs only then).
+    /// The console showed a surface at the last pass (non-flip checks run only then).
     active: bool,
-    /// The copy in flight: its number, slot, frame size and start.
-    inflight: Option<(u64, usize, (u32, u32), Instant)>,
+    /// The copy in flight.
+    inflight: Option<Inflight>,
     /// Page-locked frames per slot — grown, never freed while the device lives ([`ConsoleShare`]).
     frames: [Option<Frame>; SLOTS],
     retired: Vec<Frame>,
-    /// When the last copy started.
-    last: Option<Instant>,
+    /// ★ Display step 3: why the broker's frame backing was refused (logged once); the console
+    /// then keeps its own frames, the ring is withdrawn from the broker ([`broker_backing`]) so
+    /// the broker is sent no frame again — never a CPU copy.
+    broker_refused: Option<String>,
+    /// ★ `display-max-fps` D2 (§8.16): copies made without a flip — at the console head's tick,
+    /// while watched, sent only when the checksum changed; screendump requests.
+    nonflip: NonFlip,
+    /// The check clock of a picture with no armed head (the boot layer, a preserved scanout).
+    idle_at: Option<Instant>,
     serial: u64,
     refusals_logged: u32,
     /// `KF3_DISPLAY_TRACE`: each copy's source, and a digest of what it copied.
@@ -1972,11 +2651,68 @@ struct ScanState {
     last_plan: Option<(Vec<LayerPlan>, (u32, u32))>,
     /// ★ 2026-10-04: each window's context DMA as its ARMED state resolved it ([`LatchedDmas`]).
     latched: LatchedDmas,
+    /// ★ The GPU-copy rung's worker half (§8.11).
+    vram: Option<VramWorker>,
+    /// ★ §O: the cursor mode the last pass saw (a change recomposes) …
+    cursor_mode: CursorMode,
+    /// … whether the last copy composed the head's cursor (only then does a move recompose) …
+    cursor_in_frame: bool,
+    /// … the key of the cursor last posted to the relay (posted again only when it changes) …
+    cursor_posted: Option<(u8, u64)>,
+    /// … host-cursor refusals logged so far (bounded) …
+    cursor_refusals: u64,
+    /// … the cursor composition word's line (once per change, §8.12's open alpha question;
+    /// bounded, `kf_disp::scanout::CompositionLog`) …
+    cursor_comp: kf_disp::scanout::CompositionLog,
+    /// … and the hot spot NVKMS does not program, derived from the injected pointer.
+    hot: HotTracker,
+    /// The worker's clock for [`HotTracker`] (its first use).
+    hot_epoch: Option<Instant>,
 }
 
-/// ★ Run the compose kernel on SYNTHETIC surfaces — a block-linear window composed opaque, then a
-/// premultiplied-alpha pixel blended over it — and compare with the reference address function
-/// (`kf_disp::scanout::bl_offset`) and the blend arithmetic, at bring-up, before any guest copy.
+/// ★ §8.16: what the copy in flight is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Phase {
+    /// A non-flip CHECK: the frame composed and checksummed, nothing sent yet — its completion
+    /// decides whether a [`Phase::Send`] of the same composition follows.
+    Check,
+    /// The pack and/or D2H of the composed frame, then its publication.
+    Send,
+}
+
+/// ★ The copy in flight: its number, phase, slot, frame size and start — and which copies it made:
+/// the pack into the slot's VRAM backing (at this block-linear shape) and/or the D2H into its host
+/// frame. Only those backings are published as holding the frame.
+#[derive(Debug, Clone, Copy)]
+struct Inflight {
+    n: u64,
+    phase: Phase,
+    slot: usize,
+    wh: (u32, u32),
+    t0: Instant,
+    vram: Option<kf_broker::VramGeom>,
+    d2h: bool,
+    /// ★ §8.13: it composes the guest's cursor (the console's cursor follows the frame it shows).
+    cursor: bool,
+    /// ★ §8.16: the refresh request it serves when it completes (it started after it).
+    req: u64,
+    /// A checksum was queued with the composition (the row sums are read at completion).
+    summed: bool,
+    /// The boot layer was composed (counted when it is sent).
+    boot: bool,
+}
+
+/// What a composed frame's sends take: the copies the plan chose, the slot and its pack shape.
+struct SendPlan {
+    plan: kf_broker::gpucopy::Plan,
+    eligible: u32,
+    geom: Option<kf_disp::vramslot::SlotGeom>,
+}
+
+/// ★ Run the compose kernel on SYNTHETIC surfaces — a block-linear window composed opaque, a
+/// premultiplied-alpha pixel blended, and (§O, 2026-10-04) an XOR pixel — and compare with the
+/// reference address function (`kf_disp::scanout::bl_offset`) and the blend arithmetic
+/// (`kf_disp::scanout::compose_reference`), at bring-up, before any guest copy.
 fn selftest_compose(gpu: &mut DisplayGpu) -> Result<(), String> {
     // 4 GOBs wide, 2-GOB blocks, 3 block rows; a rectangle offset in both axes, landing at (5, 2)
     let (gpr, bh, block_rows) = (4u32, 1u32, 3u64);
@@ -2060,7 +2796,65 @@ fn selftest_compose(gpu: &mut DisplayGpu) -> Result<(), String> {
             &px[..3]
         ));
     }
+    // ★ §O (2026-10-04): the XOR blend over the black frame, from an alpha-0 pixel with factors
+    // that would make a blend write black: XOR leaves exactly the colour (and the X byte 0), so a
+    // kernel without the XOR path, or one that lets alpha gate it, fails here before any guest
+    // cursor is composed (`kf_disp::scanout::compose_reference` is the arithmetic)
+    let xpx = [0x5a, 0xc3, 0x3c, 0x00]; // B G R A
+    let xor = ComposeLayer {
+        flags: kf_disp::scanout::COMPOSE_XOR,
+        a_s: 0,
+        b_s: 0,
+        a_d: 255,
+        b_d: 0,
+        ..one
+    };
+    let got = gpu
+        .selftest_compose(&xpx, &xor, 1, 1)
+        .map_err(|e| format!("did not run (XOR): {e}"))?;
+    if got[..4] != xpx {
+        return Err(format!("the XOR blend wrote {:?}, not {xpx:?}", &got[..4]));
+    }
     Ok(())
+}
+
+// ★ §O: the compose kernel's flag bits as kf-disp plans them and as kf-cuda's launch check knows
+// them — one set (a drift is a layer refused, or worse, composed as a blend)
+const _: () = assert!(kf_disp::scanout::COMPOSE_FLAGS == kf_cuda::display::COMPOSE_FLAGS);
+
+/// ★ Display step 3 — the worker's choice of memory for a FREE slot it must (re)allocate, kept
+/// GPU-free so a test drives the refusal (the second review of `v3-broker`, 2026-10-03: the
+/// first fix's call site was untested). `seat` (the broker on) makes a broker-visible frame
+/// (`BrokerSeat::frame`); it is not asked once a refusal is recorded. `None` = the console's own
+/// memory (`DisplayGpu::frame`).
+///
+/// ⊘ CORRECTED 2026-10-03: at the first refusal this WITHDRAWS THE HOST KIND from the broker
+/// ([`kf_broker::FrameRing::withdraw`]`(Kind::Host)`) — every slot, reallocated or not. The first
+/// fix withdrew only the slot being reallocated, so a slot that kept its broker memfd went on
+/// feeding the broker while the line below said it would be shown nothing. ⊘ And the same day
+/// (§8.11) it no longer withdraws the WHOLE ring (`withdraw_all`): a refused memfd registration
+/// says nothing about the VRAM slots, so the GPU-copy rung goes on.
+fn broker_backing<F>(
+    ring: &kf_broker::FrameRing,
+    refused: &mut Option<String>,
+    seat: Option<impl FnOnce() -> Result<F, String>>,
+) -> Option<F> {
+    let seat = seat.filter(|_| refused.is_none())?;
+    match seat() {
+        Ok(f) => Some(f),
+        Err(e) => {
+            // before the slot is refilled with memory the broker cannot receive
+            ring.withdraw(kf_broker::Kind::Host);
+            eprintln!(
+                "kf3: display: the BROKER host-memory frame backing is REFUSED ({e}) — the console \
+                 keeps working; the host-memory rungs are withdrawn from every frame slot and the \
+                 broker is sent no frame through host memory from now on (the GPU-copy rung, if \
+                 offered, is unaffected)"
+            );
+            *refused = Some(e);
+            None
+        }
+    }
 }
 
 /// FNV-1a over a frame's visible pixels as R,G,B bytes — the digest `kfdisp_probe` prints for its
@@ -2082,64 +2876,192 @@ fn fnv_rgb_xrgb8888(bytes: &[u8], stride: usize, width: usize, height: usize) ->
 }
 
 impl ScanState {
-    /// When the next refresh copy is due — front-buffer rendering (fbcon, an X server drawing into
-    /// its scanout surface) changes pixels with no flip: 30 Hz while the console is watched, 4 Hz
-    /// otherwise (a screendump still sees a recent frame). `None` while a copy is in flight or
-    /// nothing is shown.
-    fn refresh_due(&self, dp: &DisplayPlane) -> Option<Instant> {
-        if !self.active || self.inflight.is_some() {
-            return None;
+    /// ★ §8.16: the check clock of a picture with no armed head — due every `period` while `run`
+    /// (late ticks rescheduled as the pacer does), stopped otherwise.
+    fn idle_tick(&mut self, now: Instant, period: Duration, run: bool) -> bool {
+        if !run {
+            self.idle_at = None;
+            return false;
         }
-        let every = if dp.console.wanted_within(2000) {
-            Duration::from_millis(33)
-        } else {
-            Duration::from_millis(250)
-        };
-        Some(self.last.map_or_else(Instant::now, |t| t + every))
+        match self.idle_at {
+            None => {
+                self.idle_at = Some(now + period);
+                false
+            }
+            Some(t) if now >= t => {
+                self.idle_at = Some(if now.duration_since(t) > period {
+                    now + period
+                } else {
+                    t + period
+                });
+                true
+            }
+            Some(_) => false,
+        }
     }
 
-    /// The copy in flight completed: publish its frame to the console.
-    fn completed(&mut self, dp: &DisplayPlane) {
-        let Some((n, slot, (w, h), t0)) = self.inflight.take() else {
+    /// ★ Copy `n` is over (published, found unchanged, refused, or given up): the completions
+    /// behind it go, and the refresh requests it started after are served.
+    fn finish(&mut self, dp: &DisplayPlane, n: u64, req: u64) {
+        self.done = self.done.max(n);
+        if self.nonflip.serve(req) {
+            dp.counters.ondemand.fetch_add(1, Ordering::Relaxed);
+            dp.console.serve_refresh(req);
+        }
+    }
+
+    /// ★ Nothing can be copied now (nothing shown, no GPU): every waiting request is served by the
+    /// frame the console already has.
+    fn serve_now(&mut self, dp: &DisplayPlane) {
+        let req = self.nonflip.snapshot();
+        if self.nonflip.serve(req) {
+            dp.counters.ondemand.fetch_add(1, Ordering::Relaxed);
+            dp.console.serve_refresh(req);
+        }
+    }
+
+    /// The composed frame's checksum, when one was queued with it and its rows came back.
+    fn digest_of(io: &Io<'_>, f: &Inflight) -> Option<u64> {
+        let (w, h) = f.wh;
+        f.summed
+            .then(|| io.gpu.as_ref()?.checksum_rows(h).ok())
+            .flatten()
+            .map(|r| kf_disp::pace::digest(&r, w, h))
+    }
+
+    /// The copy in flight completed. ★ §8.16: a CHECK decides here — a flip copy waiting publishes
+    /// the newer frame anyway; otherwise the frame is sent when [`NonFlip::wants_send`] says so,
+    /// from the composition still in the staging frame. A SEND is published to the console.
+    fn completed(&mut self, io: &mut Io<'_>) {
+        let Some(f) = self.inflight.take() else {
             return;
         };
-        self.done = n;
+        let dp = io.dp;
+        let digest = ScanState::digest_of(io, &f);
+        if f.phase == Phase::Check {
+            if self.want || self.barrier > self.started {
+                self.finish(dp, f.n, f.req);
+                return;
+            }
+            let p = self.plan_send(io, f.wh);
+            let now = Sent {
+                digest: digest.unwrap_or_default(),
+                wh: f.wh,
+                cursor: f.cursor,
+                host: p.plan.d2h,
+                vram: p.plan.pack,
+            };
+            if digest.is_some() && !self.nonflip.wants_send(&now) {
+                dp.counters.same.fetch_add(1, Ordering::Relaxed);
+                self.finish(dp, f.n, f.req);
+                return;
+            }
+            self.send(io, &f, &p);
+            return;
+        }
+        let Inflight {
+            n,
+            slot,
+            wh: (w, h),
+            t0,
+            vram,
+            d2h,
+            cursor,
+            req,
+            ..
+        } = f;
         let us = u64::try_from(t0.elapsed().as_micros()).unwrap_or(u64::MAX);
         dp.counters
             .scanout_us_total
             .fetch_add(us, Ordering::Relaxed);
         dp.counters.scanout_us_max.fetch_max(us, Ordering::Relaxed);
-        if let Some(f) = &self.frames[slot] {
-            if self.trace && (n <= 8 || n.is_multiple_of(50)) {
-                let (wu, hu, st) = (w as usize, h as usize, w as usize * 4);
-                let fnv = fnv_rgb_xrgb8888(&f.read(0, st * hu), st, wu, hu);
-                eprintln!("kf3: display: TRACE scanout copy {n} done: {w}x{h} fnv={fnv:016x}");
-            }
-            self.serial += 1;
-            dp.console.publish(
-                slot,
-                FrameView {
-                    addr: f.addr(),
-                    width: w,
-                    height: h,
-                    stride: w * 4,
-                    format: kf_disp::scanout::PixelFormat::Xrgb8888 as u32,
-                    serial: self.serial,
-                },
-            );
-            dp.counters.scanouts.fetch_add(1, Ordering::Relaxed);
+        // the host frame is read (and published) only when the D2H copy filled it
+        let host = self.frames[slot].as_ref().filter(|_| d2h);
+        if host.is_none() && vram.is_none() {
+            self.finish(dp, n, req);
+            return;
         }
+        if let Some(fr) = host
+            && self.trace
+            && (n <= 8 || n.is_multiple_of(50))
+        {
+            let (wu, hu, st) = (w as usize, h as usize, w as usize * 4);
+            let fnv = fnv_rgb_xrgb8888(&fr.read(0, st * hu), st, wu, hu);
+            eprintln!("kf3: display: TRACE scanout copy {n} done: {w}x{h} fnv={fnv:016x}");
+        }
+        self.serial += 1;
+        dp.console.publish(
+            slot,
+            FrameView {
+                addr: host.map_or(0, Frame::addr),
+                width: w,
+                height: h,
+                stride: w * 4,
+                format: kf_disp::scanout::PixelFormat::Xrgb8888 as u32,
+                serial: self.serial,
+                cursor,
+            },
+            host.is_some(),
+            vram,
+        );
+        dp.counters.scanouts.fetch_add(1, Ordering::Relaxed);
+        if let Some(d) = digest {
+            self.nonflip.sent(Sent {
+                digest: d,
+                wh: (w, h),
+                cursor,
+                host: host.is_some(),
+                vram: vram.is_some(),
+            });
+        }
+        // ★ the relay (main loop) learns of it through one non-blocking eventfd write
+        if let Some(b) = &dp.broker {
+            b.frame_published();
+        }
+        self.finish(dp, n, req);
+    }
+
+    /// The pack of a `w`x`h` frame into `slot`'s VRAM backing: its CUDA slot, the launch's shape and
+    /// what the ring publishes (`None` when the slot has no imported VRAM or the frame no shape).
+    fn pack_for(
+        &self,
+        slot: usize,
+        geom: Option<kf_disp::vramslot::SlotGeom>,
+        w: u32,
+        h: u32,
+    ) -> Option<(
+        kf_cuda::display::SlotId,
+        kf_cuda::display::BlPack,
+        kf_broker::VramGeom,
+    )> {
+        let g = geom?;
+        let (sid, _) = (*self.vram.as_ref()?.slots.get(slot)?)?;
+        Some((
+            sid,
+            kf_cuda::display::BlPack {
+                width: w,
+                height: h,
+                gobs_per_row: g.gobs_per_row,
+                h_log2: g.h_log2,
+                gobs: g.gobs(),
+                bits: kf_disp::vramslot::GOB_GA106.bits(),
+            },
+            kf_broker::VramGeom {
+                stride: g.stride,
+                extent: g.extent,
+            },
+        ))
     }
 
     /// ⊘ A copy whose completion never came (a CUDA fault loses the host signal): after
     /// [`STUCK_COPY`] the flips behind it complete anyway — a display that stops is worse than a
     /// console that misses a frame. The slot is not published.
     fn give_up_if_stuck(&mut self, dp: &DisplayPlane) {
-        if let Some((n, _, _, t)) = self.inflight
+        if let Some(Inflight { n, t0: t, req, .. }) = self.inflight
             && t.elapsed() > STUCK_COPY
         {
             self.inflight = None;
-            self.done = n;
+            self.finish(dp, n, req);
             self.refuse(dp, &format!("copy {n} did not complete in {STUCK_COPY:?}"));
         }
     }
@@ -2152,26 +3074,145 @@ impl ScanState {
         }
     }
 
+    /// ★ §O: what the guest shows as its cursor NOW, for the host — `Hidden` without an armed
+    /// composition or an enabled cursor, or for a wholly transparent image; the image (copied by the
+    /// GPU from the store into a buffer kf owns, converted to premultiplied ARGB) when the host can
+    /// show it; `Composed` — refused by name, at a bounded rate — when it cannot (XOR, an additive
+    /// blend, a surface that does not resolve or could not be copied).
+    fn host_cursor_want(
+        &mut self,
+        io: &mut Io<'_>,
+        shown: &Shown,
+        cursor: Option<&kf_disp::engine::CursorScan>,
+    ) -> CursorWant {
+        let (Shown::Armed(comp), Some(cs)) = (shown, cursor) else {
+            return CursorWant::Hidden;
+        };
+        let dp = io.dp;
+        let frame = (comp.width, comp.height);
+        let hover = self.cursor_mode == CursorMode::Hover;
+        let (seq, abs) = dp.broker.as_ref().map_or((0, None), |b| b.cursor().abs());
+        let now_ms = u64::try_from(
+            self.hot_epoch
+                .get_or_insert_with(Instant::now)
+                .elapsed()
+                .as_millis(),
+        )
+        .unwrap_or(u64::MAX);
+        let hot = &mut self.hot;
+        let comp_log = &mut self.cursor_comp;
+        let got = io
+            .resolve(cs.client, cs.handle, 0)
+            .and_then(|dma| kf_disp::scanout::plan_host_cursor(cs, &dma).map_err(|r| r.0))
+            .and_then(|h| {
+                let gpu = io.gpu.as_ref().ok_or("no display GPU context")?;
+                let n = usize::try_from(h.extent).map_err(|_| "an impossible cursor extent")?;
+                let mut raw = vec![0u8; n];
+                gpu.read_store(h.src, &mut raw)
+                    .map_err(|e| format!("copying the cursor image: {e}"))?;
+                dp.counters
+                    .host_cursor_reads
+                    .fetch_add(1, Ordering::Relaxed);
+                // ★ §8.12's open question (premultiplied pixels under a straight blend?): the
+                // composition word the guest programmed, once per change, beside what the pixels
+                // say about their own alpha — the next box run reads the answer off this line
+                let (word, mode) = kf_disp::scanout::cursor_composition(cs);
+                if let Some(n) = comp_log.changed(word) {
+                    let c = h.alpha_census(&raw).unwrap_or_default();
+                    eprintln!(
+                        "kf3: display: guest cursor composition {word:#07x} = {mode} (K1 {}, cursor \
+                         factor {}, viewport factor {}, mode {}); its {}x{} pixels: {} partially \
+                         transparent, {} with a colour channel above alpha ({}) — change {n} (the \
+                         first {} are logged, then every {}th)",
+                        cs.k1,
+                        cs.cursor_factor,
+                        cs.viewport_factor,
+                        cs.mode,
+                        h.size,
+                        h.size,
+                        c.partial,
+                        c.above_alpha,
+                        if c.above_alpha > 0 {
+                            "straight pixels"
+                        } else if c.partial > 0 {
+                            "consistent with premultiplied pixels"
+                        } else {
+                            "no partial alpha to tell"
+                        },
+                        kf_disp::scanout::CompositionLog::LINES,
+                        kf_disp::scanout::CompositionLog::EVERY
+                    );
+                }
+                match h.image(&raw).map_err(|r| r.0)? {
+                    None => Ok(CursorWant::Hidden),
+                    Some(px) => {
+                        // ★ NVKMS programs hot spot 0 (`nvkms-evo3.c:6565-6569`): in hover the hot
+                        // spot is derived from the pointer the relay injected
+                        let derived = abs.filter(|_| hover).and_then(|a| {
+                            kf_disp::scanout::hot_from_pointer(cs, (a.x, a.y), (a.w, a.h), frame)
+                        });
+                        let at = hot.hot(&px, seq, now_ms, derived, h.hot);
+                        CursorImage::new(h.size, h.size, at, px)
+                            .map(|i| CursorWant::Image(Arc::new(i)))
+                    }
+                }
+            });
+        match got {
+            Ok(w) => w,
+            Err(e) => {
+                dp.counters
+                    .host_cursor_refused
+                    .fetch_add(1, Ordering::Relaxed);
+                self.cursor_refusals += 1;
+                let n = self.cursor_refusals;
+                if n <= 4 || n.is_multiple_of(256) {
+                    eprintln!(
+                        "kf3: display: host cursor REFUSED: {e} — composed into the frame instead, \
+                         and the host's is hidden ({n} so far)"
+                    );
+                }
+                CursorWant::Composed
+            }
+        }
+    }
+
     /// ★ Start the next copy of what the console shows: every enabled window of the head composed,
     /// back to front, into the device staging frame, then copied into a free console frame. A copy
     /// that cannot be made (nothing shown, no kernel) completes at once — the flip it follows still
     /// completes (the engine latched it); only the console keeps its previous frame. A window that
     /// cannot be composed is refused by name and left out. ★ The boot layer (`gop=on`) is one
-    /// VMM-authored layer: no context DMA to resolve and nothing to plan.
-    fn start(&mut self, io: &mut Io<'_>, shown: Option<&Shown>) {
-        self.want = false;
-        self.last = Some(Instant::now());
+    /// VMM-authored layer: no context DMA to resolve and nothing to plan; the head's cursor
+    /// (display step 3d) is composed on an ARMED composition only.
+    ///
+    /// ★ §8.16: the composition is checksummed on the GPU too. A FLIP-class copy (`check` false)
+    /// sends at once; a non-flip `check` signals after the checksum and [`ScanState::completed`]
+    /// decides whether the composition is sent.
+    fn start(
+        &mut self,
+        io: &mut Io<'_>,
+        shown: Option<&Shown>,
+        cursor: Option<&kf_disp::engine::CursorScan>,
+        check: bool,
+    ) {
+        if !check {
+            self.want = false;
+        }
         self.started += 1;
         let n = self.started;
+        let req = self.nonflip.snapshot();
+        let t0 = Instant::now();
         let dp = io.dp;
+        if check {
+            dp.counters.checks.fetch_add(1, Ordering::Relaxed);
+        }
         let Some(shown) = shown else {
-            self.done = n;
+            self.finish(dp, n, req);
             return;
         };
         if let Some(Err(e)) = &self.bl_ok {
             let e = format!("the compose kernel failed its self-test ({e})");
             self.refuse(dp, &e);
-            self.done = n;
+            self.finish(dp, n, req);
             return;
         }
         let (w, h) = match shown {
@@ -2180,7 +3221,7 @@ impl ScanState {
         };
         if w == 0 || h == 0 || u64::from(w) * u64::from(h) > kf_disp::scanout::MAX_PIXELS {
             self.refuse(dp, &format!("a {w}x{h} composition"));
-            self.done = n;
+            self.finish(dp, n, req);
             return;
         }
         // plan every window (each bounded by its own context DMA) before the GPU sees one
@@ -2190,37 +3231,38 @@ impl ScanState {
         for e in &planned.refused {
             self.refuse(dp, e);
         }
-        let layers = &planned.layers;
-        let slot = dp.console.free_slot();
-        let need = w as usize * h as usize * 4;
-        let Some(gpu) = io.gpu.as_mut() else {
-            self.done = n;
-            return;
-        };
-        if self.frames[slot].as_ref().is_none_or(|f| f.len() < need) {
-            let cap = if need <= FRAME_SMALL {
-                FRAME_SMALL
-            } else {
-                FRAME_MAX
-            };
-            match gpu.frame(cap) {
-                Ok(f) => {
-                    if let Some(old) = self.frames[slot].replace(f) {
-                        self.retired.push(old);
-                    }
-                }
-                Err(e) => {
-                    self.refuse(dp, &format!("a {cap:#x}-byte console frame: {e}"));
-                    self.done = n;
-                    return;
-                }
+        let mut layers = planned.layers.clone();
+        // ★ §O: with a cursor-capable broker the guest's cursor image is read (a GPU copy into a
+        // buffer kf owns) and posted to the relay; in hover it is then left out of the frame —
+        // unless the host cannot show it, which is composed in every mode
+        let mode = self.cursor_mode;
+        let want = mode
+            .reads()
+            .then(|| self.host_cursor_want(io, shown, cursor));
+        let compose = cursor.filter(|_| cursor_composed(mode, want.as_ref()));
+        if let (Some(w), Some(seat)) = (want, dp.broker.as_ref()) {
+            let key = w.key();
+            if self.cursor_posted != Some(key) && seat.cursor().post(w) {
+                self.cursor_posted = Some(key);
             }
         }
-        let Some(frame) = self.frames[slot].as_ref() else {
-            self.done = n;
+        self.cursor_in_frame = compose.is_some();
+        // ★ 3d: the head's cursor, last — the top layer (its context DMA is the core channel's)
+        if let Some(cs) = compose {
+            let planned = io
+                .resolve(cs.client, cs.handle, 0)
+                .and_then(|dma| kf_disp::scanout::plan_cursor(cs, &dma, w, h).map_err(|r| r.0));
+            match planned {
+                Ok(Some(l)) => layers.push(l),
+                Ok(None) => {}
+                Err(e) => self.refuse(dp, &format!("cursor: {e}")),
+            }
+        }
+        let Some(gpu) = io.gpu.as_mut() else {
+            self.finish(dp, n, req);
             return;
         };
-        let queued = gpu
+        let composed = gpu
             .compose_begin(w, h)
             .map_err(|e| format!("composition {w}x{h}: {e}"))
             .and_then(|()| {
@@ -2228,22 +3270,204 @@ impl ScanState {
                     gpu.compose_layer(&compose_layer(l), w, h)
                         .map_err(|e| format!("window {}: {e}", l.window))
                 })
-            })
-            .and_then(|()| {
-                gpu.compose_finish(w, h, frame)
-                    .map_err(|e| format!("the frame copy: {e}"))
             });
+        if let Err(e) = composed {
+            self.refuse(dp, &e);
+            self.finish(dp, n, req);
+            return;
+        }
+        // ★ §8.16: the change detector, queued behind the composition (a refusal costs only the
+        // detection: the frame is then always sent)
+        let summed = gpu.checksum_refused().is_none() && gpu.compose_checksum(w, h).is_ok();
+        // Preserve the bounded window plans, without the independently managed cursor.
+        self.copied(shown, &planned, (w, h));
+        let f = Inflight {
+            n,
+            phase: Phase::Check,
+            slot: 0,
+            wh: (w, h),
+            t0,
+            vram: None,
+            d2h: false,
+            cursor: self.cursor_in_frame,
+            req,
+            summed,
+            boot: matches!(shown, Shown::Boot(..)),
+        };
+        if check {
+            match gpu.compose_signal() {
+                Ok(()) => self.inflight = Some(f),
+                Err(e) => {
+                    self.refuse(dp, &format!("the completion signal: {e}"));
+                    self.finish(dp, n, req);
+                }
+            }
+            return;
+        }
+        let p = self.plan_send(io, (w, h));
+        self.send(io, &f, &p);
+    }
+
+    /// ★ Display step 3 / §8.11: which copies a `w` x `h` frame gets NOW — the pack into a VRAM slot
+    /// (rung 0), the D2H into host memory, both, or neither (`kf_broker::gpucopy::plan`, GPU-free
+    /// and tested) — provisioning VRAM slots on the way.
+    fn plan_send(&mut self, io: &mut Io<'_>, (w, h): (u32, u32)) -> SendPlan {
+        let dp = io.dp;
+        let ring = dp.console.ring().clone();
+        let geom = kf_disp::vramslot::slot_geom(w, h, kf_disp::vramslot::SLOT_H_LOG2);
+        let want_vram = dp.broker.is_some() && ring.want_vram();
+        let mut eligible = 0u32;
+        if let (Some(v), Some(gpu)) = (self.vram.as_mut(), io.gpu.as_mut()) {
+            v.poll(gpu, &ring, &dp.counters);
+            if want_vram {
+                let r = v.plan.first(false, true);
+                v.ask(r, &ring);
+                if let Some(g) = geom {
+                    let r = v.plan.grow(g.extent);
+                    v.ask(r, &ring);
+                    eligible = v.eligible(&ring, g.extent);
+                }
+            }
+        }
+        let choice = kf_broker::gpucopy::Choice {
+            broker: dp.broker.is_some() && dp.console.broker_wanted_within(WATCHED_MS),
+            want_vram,
+            vram_slot: eligible != 0,
+            console: dp.console.console_wanted_within(WATCHED_MS),
+            host_withdrawn: ring.withdrawn(kf_broker::Kind::Host),
+            vram_withdrawn: ring.withdrawn(kf_broker::Kind::Vram),
+        };
+        let plan = kf_broker::gpucopy::plan(&choice);
+        if choice.broker && want_vram && !plan.pack {
+            dp.counters
+                .scanout_pack_skipped
+                .fetch_add(1, Ordering::Relaxed);
+        }
+        SendPlan {
+            plan,
+            eligible,
+            geom,
+        }
+    }
+
+    /// ★ Send the composition the staging frame holds (copy `f.n`): the pack and/or the D2H the plan
+    /// chose into a free slot, then the completion signal; [`ScanState::completed`] publishes it.
+    fn send(&mut self, io: &mut Io<'_>, f: &Inflight, p: &SendPlan) {
+        let dp = io.dp;
+        let (n, req, (w, h)) = (f.n, f.req, f.wh);
+        let plan = p.plan;
+        let ring = dp.console.ring().clone();
+        if plan.none() {
+            // nobody can be shown this frame: the flips behind it still complete
+            self.finish(dp, n, req);
+            return;
+        }
+        let Some(gpu) = io.gpu.as_mut() else {
+            self.finish(dp, n, req);
+            return;
+        };
+        // the pack takes the eligible free slot the broker gave back longest ago (a RELEASE is
+        // not GPU-idle); otherwise any free slot
+        let picked = if plan.pack {
+            ring.fill_target_lru(None, !p.eligible & 0x1f)
+        } else {
+            dp.console.free_slot()
+        };
+        let Some(slot) = picked else {
+            dp.counters.scanout_no_slot.fetch_add(1, Ordering::Relaxed);
+            self.refuse(
+                dp,
+                "no free frame slot (the frame ring's cap argument broke)",
+            );
+            self.finish(dp, n, req);
+            return;
+        };
+        let need = w as usize * h as usize * 4;
+        if plan.d2h && self.frames[slot].as_ref().is_none_or(|f| f.len() < need) {
+            let cap = if need <= FRAME_SMALL {
+                FRAME_SMALL
+            } else {
+                FRAME_MAX
+            };
+            // ★ with the broker on: a sealed memfd the broker also receives (registered for the
+            // copy, a udmabuf over it when /dev/udmabuf opened); refused once, by name, the
+            // console falls back to its own frames and the ring is withdrawn from the broker
+            // ([`broker_backing`])
+            let shared: &DisplayGpu = gpu;
+            let seat = dp
+                .broker
+                .as_ref()
+                .map(|b| move || b.frame(shared, slot, cap));
+            let made = match broker_backing(dp.console.ring(), &mut self.broker_refused, seat) {
+                Some(f) => Ok(f),
+                None => gpu.frame(cap).map_err(|e| e.to_string()),
+            };
+            match made {
+                Ok(f) => {
+                    if let Some(old) = self.frames[slot].replace(f) {
+                        self.retired.push(old);
+                    }
+                }
+                Err(e) => {
+                    self.refuse(dp, &format!("a {cap:#x}-byte console frame: {e}"));
+                    self.finish(dp, n, req);
+                    return;
+                }
+            }
+        }
+        let frame = if plan.d2h {
+            let Some(f) = self.frames[slot].as_ref() else {
+                self.finish(dp, n, req);
+                return;
+            };
+            Some(f)
+        } else {
+            None
+        };
+        // the pack's slot and shape (only when it was planned: an eligible slot exists)
+        let pack = if plan.pack {
+            self.pack_for(slot, p.geom, w, h)
+        } else {
+            None
+        };
+        let queued = match &pack {
+            Some((sid, pk, _)) => gpu
+                .compose_to_slot(*sid, pk)
+                .map_err(|e| format!("the pack into display VRAM: {e}")),
+            None => Ok(()),
+        }
+        .and_then(|()| match frame {
+            Some(fr) => gpu
+                .compose_to_host(w, h, fr)
+                .map_err(|e| format!("the frame copy: {e}")),
+            None => Ok(()),
+        })
+        .and_then(|()| {
+            gpu.compose_signal()
+                .map_err(|e| format!("the completion signal: {e}"))
+        });
         match queued {
             Ok(()) => {
-                if matches!(shown, Shown::Boot(..)) {
+                if f.boot {
                     dp.counters.boot_frames.fetch_add(1, Ordering::Relaxed);
                 }
-                self.copied(shown, &planned, (w, h));
-                self.inflight = Some((n, slot, (w, h), Instant::now()));
+                if pack.is_some() {
+                    dp.counters.scanout_pack.fetch_add(1, Ordering::Relaxed);
+                }
+                if frame.is_some() {
+                    dp.counters.scanout_d2h.fetch_add(1, Ordering::Relaxed);
+                }
+                self.inflight = Some(Inflight {
+                    phase: Phase::Send,
+                    slot,
+                    vram: pack.map(|(_, _, g)| g),
+                    d2h: frame.is_some(),
+                    ..*f
+                });
             }
             Err(e) => {
                 self.refuse(dp, &e);
-                self.done = n;
+                self.finish(dp, n, req);
             }
         }
     }
@@ -2327,6 +3551,129 @@ impl ScanState {
 mod tests {
     use super::*;
 
+    /// ★ §O: the worker's hover/grab switch. Without a cursor-capable broker (nothing read) and under
+    /// grab the cursor is composed; in hover it is left out unless the host cannot show it.
+    /// ⊘ CORRECTED 2026-10-04 (`display-max-fps`, §8.16): a cursor move no longer makes a copy of
+    /// its own (`move_recomposes` is gone) — the console head's next tick composes the frame and
+    /// sends it only when its checksum changed, so "a hover move makes no frame" now holds because
+    /// a hover frame composes no cursor (`kf_disp::pace::NonFlip`, tested there).
+    #[test]
+    fn hover_leaves_the_cursor_out_of_the_frame() {
+        let img = CursorWant::Image(Arc::new(
+            CursorImage::new(32, 32, (0, 0), vec![1; 32 * 32 * 4]).unwrap(),
+        ));
+        assert!(cursor_composed(CursorMode::Off, None), "today's path");
+        for w in [&img, &CursorWant::Hidden, &CursorWant::Composed] {
+            assert!(cursor_composed(CursorMode::Grabbed, Some(w)), "{w:?}");
+        }
+        assert!(!cursor_composed(CursorMode::Hover, Some(&img)));
+        assert!(!cursor_composed(
+            CursorMode::Hover,
+            Some(&CursorWant::Hidden)
+        ));
+        assert!(
+            cursor_composed(CursorMode::Hover, Some(&CursorWant::Composed)),
+            "XOR"
+        );
+    }
+
+    /// ★ §8.16: the check clock of a picture with no armed head (the boot layer, a preserved
+    /// scanout) ticks every period only while it runs, reschedules a late tick as the pacer does,
+    /// and stops — forgetting its phase — when it does not. (Mutation: a clock that keeps running
+    /// unwatched makes copies nobody sees.)
+    #[test]
+    fn the_boot_check_clock_ticks_only_while_it_runs() {
+        let mut s = ScanState::default();
+        let p = Duration::from_millis(16);
+        let t0 = Instant::now();
+        assert!(!s.idle_tick(t0, p, true), "armed, not due");
+        assert_eq!(s.idle_at, Some(t0 + p));
+        assert!(!s.idle_tick(t0 + p / 2, p, true));
+        assert!(s.idle_tick(t0 + p, p, true));
+        assert_eq!(s.idle_at, Some(t0 + 2 * p));
+        // a stall of many periods: one tick, re-phased from now
+        let late = t0 + 10 * p;
+        assert!(s.idle_tick(late, p, true));
+        assert_eq!(s.idle_at, Some(late + p));
+        assert!(!s.idle_tick(late + p, p, false), "unwatched: no tick");
+        assert_eq!(s.idle_at, None);
+    }
+
+    /// ★ §8.16 D2.3: a refresh request is counted and a served one makes the descriptor readable
+    /// (the C device's handler ends the screendump's wait); a console or broker that starts watching
+    /// bumps the new-watcher counter once, not on every request.
+    #[test]
+    fn the_console_refresh_and_new_watchers() {
+        let c = ConsoleShare::default();
+        assert!(c.refresh_fd() >= 0);
+        assert_eq!(c.refresh_requested(), 0);
+        assert!(c.request_refresh());
+        assert!(c.request_refresh());
+        assert_eq!(c.refresh_requested(), 2);
+        c.serve_refresh(2);
+        assert_eq!(c.refresh_served(), 2);
+        c.serve_refresh(1);
+        assert_eq!(c.refresh_served(), 2, "never backwards");
+        let e = c.watch_epoch();
+        c.note_demand();
+        assert_eq!(c.watch_epoch(), e + 1, "a new console watcher");
+        c.note_demand();
+        let _ = c.take();
+        assert_eq!(c.watch_epoch(), e + 1, "still the same watcher");
+        c.note_broker_demand();
+        assert_eq!(c.watch_epoch(), e + 2, "a new broker watcher");
+        c.note_new_watcher();
+        assert_eq!(c.watch_epoch(), e + 3, "a new broker session");
+        c.refresh_drain();
+    }
+
+    /// ★ §8.16 (the design's test 17): the worker arms vblanks ONLY through the pacer — a source
+    /// scan of this file for period arithmetic of its own (the pre-cap `next_vblank` slots, a
+    /// `Duration` built from a raster period) and for the copy gates the pacer and `NonFlip`
+    /// replaced (`refresh_due`, `move_recomposes`). Known-positive: the scanner finds each pattern
+    /// in a planted line. (Mutation: a helper that is never called passes every pure test; this
+    /// fails when the worker computes ticks itself again.)
+    #[test]
+    fn the_worker_arms_vblanks_only_through_the_pacer() {
+        let src = include_str!("display.rs");
+        let code: String = src
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap()
+            .lines()
+            .map(|l| l.split("//").next().unwrap())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let banned = [
+            "next_vblank",
+            "from_nanos(m.period_ns)",
+            "period_ns / 1000",
+            "fn refresh_due",
+            "move_recomposes",
+        ];
+        let hits = |text: &str| -> Vec<&str> {
+            banned
+                .iter()
+                .copied()
+                .filter(|b| text.contains(b))
+                .collect()
+        };
+        assert_eq!(hits(&code), Vec::<&str>::new());
+        for planted in banned {
+            assert_eq!(hits(&format!("let x = {planted};")), vec![planted]);
+        }
+        for needed in [
+            "pacer.due(",
+            "pacer.on_heads(",
+            "pacer.next_ns()",
+            "scan.nonflip.due(",
+            "self.nonflip.wants_send(",
+            "gpu.compose_checksum(",
+        ] {
+            assert!(code.contains(needed), "the worker no longer calls {needed}");
+        }
+    }
+
     fn map() -> RegMap {
         let r = Regs::for_ip("580.159.04", 0x0401_0000).unwrap();
         let t = kf_disp::class::for_version("580.159.04").unwrap();
@@ -2398,6 +3745,7 @@ mod tests {
             stride: 7680,
             format: 1,
             serial,
+            cursor: false,
         }
     }
 
@@ -2744,9 +4092,14 @@ mod tests {
     #[test]
     fn the_console_takes_the_newest_frame_and_the_gpu_never_writes_the_shown_one() {
         let c = ConsoleShare::default();
+        assert_eq!(
+            c.ring().slots(),
+            3,
+            "the broker off: three slots, as before"
+        );
         assert_eq!(c.take(), None, "no frame before the first copy");
-        let a = c.free_slot();
-        c.publish(a, frame(0x1000, 1));
+        let a = c.free_slot().unwrap();
+        c.publish(a, frame(0x1000, 1), true, None);
         let shown = c.take().unwrap();
         assert_eq!((shown.addr, shown.serial), (0x1000, 1));
         assert_eq!(
@@ -2755,13 +4108,13 @@ mod tests {
             "nothing new: the same front again"
         );
         // two copies complete before the console asks: the second replaces the first
-        let b = c.free_slot();
+        let b = c.free_slot().unwrap();
         assert_ne!(b, a, "never the shown slot");
-        c.publish(b, frame(0x2000, 2));
-        let d = c.free_slot();
+        c.publish(b, frame(0x2000, 2), true, None);
+        let d = c.free_slot().unwrap();
         assert!(d != a && d != b, "neither shown nor ready");
-        c.publish(d, frame(0x3000, 3));
-        let e = c.free_slot();
+        c.publish(d, frame(0x3000, 3), true, None);
+        let e = c.free_slot().unwrap();
         assert_ne!(e, a, "the shown slot is still the console's");
         assert_ne!(e, d, "the ready slot is not a target");
         assert_eq!(
@@ -2769,14 +4122,225 @@ mod tests {
             3,
             "the newest, never the stale one"
         );
-        for _ in 0..100 {
-            let (front, ready) = unpack(c.state.load(Ordering::Acquire));
-            let t = c.free_slot() as u32;
-            assert!(t != front && t != ready);
-            c.publish(t as usize, frame(0x4000, 4));
+        for i in 0..100u64 {
+            let t = c.free_slot().expect("three slots always leave a target");
+            c.publish(t, frame(0x4000, 4 + i), true, None);
             if t.is_multiple_of(2) {
                 c.take();
             }
         }
+    }
+
+    /// A five-slot broker ring whose slots carry a (one-page) memfd backing, as
+    /// `BrokerSeat::frame` installs before the worker publishes into a slot.
+    fn broker_ring() -> Arc<kf_broker::FrameRing> {
+        let ring = Arc::new(kf_broker::FrameRing::new(
+            kf_broker::slots::BROKER_SLOTS,
+            true,
+        ));
+        for j in 0..ring.slots() {
+            let mem =
+                kf_linux_raw::SharedRam::create_named(c"kfq-test-frame", 4096).expect("memfd");
+            ring.install(j, kf_broker::SlotFds::new(mem, None).expect("ids"))
+                .expect("install");
+        }
+        ring
+    }
+
+    /// ★ With the broker on, the console and the relay read ONE ring: a frame the relay holds is
+    /// never a fill target, and the console still gets every newest frame.
+    #[test]
+    fn the_console_and_the_broker_share_one_ring() {
+        let ring = broker_ring();
+        let c = ConsoleShare::over(ring.clone());
+        let a = c.free_slot().unwrap();
+        c.publish(a, frame(0x1000, 1), true, None);
+        assert_eq!(ring.take_broker(), kf_broker::Take::Taken(a));
+        assert_eq!(
+            c.take().unwrap().serial,
+            1,
+            "the console sees the same frame"
+        );
+        let g = ring.geometry(a);
+        assert_eq!(
+            (g.width, g.stride, g.fourcc),
+            (1920, 7680, kf_broker::wire::FOURCC_XR24)
+        );
+        for i in 0..50u64 {
+            let t = c.free_slot().expect("five slots always leave a target");
+            assert_eq!(
+                ring.held_mask() & (1 << t),
+                0,
+                "never a frame the broker holds"
+            );
+            c.publish(t, frame(0x2000, 2 + i), true, None);
+        }
+        assert!(ring.release_held(a));
+    }
+
+    /// ★ §8.13 (the review, 2026-10-04): the console's cursor follows the frame the console SHOWS —
+    /// the bit the worker publishes with a frame is what taking it reports, and a frame the console
+    /// does not take (VRAM only) changes nothing. Known-positive: before any take, `Nothing`.
+    #[test]
+    fn the_console_share_carries_each_frames_cursor_bit_to_what_the_console_shows() {
+        let c = ConsoleShare::default();
+        assert_eq!(c.shown_frame(), ShownFrame::Nothing);
+        let a = c.free_slot().unwrap();
+        c.publish(
+            a,
+            FrameView {
+                cursor: true,
+                ..frame(0x1000, 1)
+            },
+            true,
+            None,
+        );
+        assert!(c.take().unwrap().cursor);
+        assert_eq!(c.shown_frame(), ShownFrame::CursorComposed);
+        let b = c.free_slot().unwrap();
+        c.publish(b, frame(0x2000, 2), true, None);
+        assert!(!c.take().unwrap().cursor);
+        assert_eq!(c.shown_frame(), ShownFrame::CursorFree);
+        let v = c.free_slot().unwrap();
+        c.publish(
+            v,
+            FrameView {
+                cursor: true,
+                ..frame(0, 3)
+            },
+            false,
+            None,
+        );
+        assert_eq!(c.take().unwrap().serial, 2, "the console keeps b");
+        assert_eq!(c.shown_frame(), ShownFrame::CursorFree);
+        // and the cursor point the console reads is the one the worker noted, (-1, -1) included
+        c.note_cursor_point(Some((-1, -1)));
+        assert_eq!(c.cursor_point(), Some((-1, -1)));
+        c.note_cursor_point(None);
+        assert_eq!(c.cursor_point(), None);
+    }
+
+    /// ★ §8.11: a frame only in VRAM (the pack ran, the D2H did not) is offered to the broker and
+    /// NOT to the console, which keeps its last host frame; and the two demand signals: broker
+    /// activity wants frames (the refresh rate) without being the console's demand.
+    #[test]
+    fn a_vram_only_frame_goes_to_the_broker_and_the_console_keeps_its_host_frame() {
+        let ring = broker_ring();
+        for j in 0..ring.slots() {
+            let fd = kf_linux_raw::SharedRam::create_named(c"kfq-test-vram", 4096)
+                .expect("memfd")
+                .dup_for_export()
+                .expect("dup");
+            ring.install_vram(j, kf_broker::VramFds::new(fd, 10 << 20).expect("id"))
+                .expect("install");
+        }
+        let c = ConsoleShare::over(ring.clone());
+        let a = c.free_slot().unwrap();
+        c.publish(a, frame(0x1000, 1), true, None);
+        assert_eq!(c.take().unwrap().serial, 1);
+        let b = c.free_slot().unwrap();
+        let vg = kf_broker::VramGeom {
+            stride: 7680,
+            extent: 8_847_360,
+        };
+        c.publish(b, frame(0, 2), false, Some(vg));
+        assert_eq!(ring.broker_ready(), Some(b), "the broker is offered it");
+        assert!(ring.backed(b, kf_broker::Kind::Vram) && !ring.backed(b, kf_broker::Kind::Host));
+        assert_eq!(ring.vram_geometry(b), vg);
+        let shown = c.take().unwrap();
+        assert_eq!(
+            (shown.addr, shown.serial),
+            (0x1000, 1),
+            "the console keeps its host frame"
+        );
+        // the demand split
+        let d = ConsoleShare::default();
+        assert!(!d.wanted_within(2000));
+        d.note_broker_demand();
+        assert!(d.wanted_within(2000), "the broker keeps the refresh rate");
+        assert!(d.broker_wanted_within(2000));
+        assert!(
+            !d.console_wanted_within(2000),
+            "broker activity is not the console's demand"
+        );
+        let _ = d.take();
+        assert!(d.console_wanted_within(2000));
+    }
+
+    /// ★ The worker's refusal branch, DRIVEN (the second review of `v3-broker`, 2026-10-03: the
+    /// first fix's tests called the ring directly, so deleting the call site passed them all):
+    /// the first refused broker backing withdraws EVERY slot from the broker — the frame that
+    /// was ready, and a slot the worker never reallocates (it keeps its broker memfd and the GPU
+    /// goes on writing it) — while the console gets every frame; the seat is never asked again.
+    #[test]
+    fn a_refused_broker_backing_withdraws_every_slot_from_the_broker() {
+        let ring = broker_ring();
+        let c = ConsoleShare::over(ring.clone());
+        let mut refused = None;
+        assert_eq!(
+            broker_backing(&ring, &mut refused, Some(|| Ok::<u32, String>(7))),
+            Some(7),
+            "before a refusal the seat's frame is used"
+        );
+        assert!(refused.is_none() && !ring.withdrawn(kf_broker::Kind::Host));
+        let a = c.free_slot().unwrap();
+        c.publish(a, frame(0x1000, 1), true, None);
+        assert_eq!(
+            ring.take_broker(),
+            kf_broker::Take::Taken(a),
+            "the broker holds a"
+        );
+        let b = c.free_slot().unwrap();
+        c.publish(b, frame(0x2000, 2), true, None);
+        assert_eq!(ring.broker_ready(), Some(b), "b waits for the broker");
+        // a growing slot's broker backing is refused
+        let got = broker_backing(
+            &ring,
+            &mut refused,
+            Some(|| Err::<u32, String>("cuMemHostRegister of the frame memfd: refused".into())),
+        );
+        assert_eq!(got, None, "the console's own memory");
+        assert!(
+            refused
+                .as_deref()
+                .is_some_and(|e| e.contains("cuMemHostRegister"))
+        );
+        assert!(ring.withdrawn(kf_broker::Kind::Host));
+        assert!(
+            !ring.withdrawn(kf_broker::Kind::Vram),
+            "a host refusal leaves the GPU-copy rung (§8.11)"
+        );
+        assert_eq!(ring.broker_ready(), None, "the ready frame b is dropped");
+        // slots the worker never reallocates still carry their broker memfd: none is offered
+        for i in 0..20u64 {
+            let t = c.free_slot().expect("five slots always leave a target");
+            assert!(ring.fds(t).is_some(), "slot {t} keeps its broker memfd");
+            c.publish(t, frame(0x3000, 3 + i), true, None);
+            assert_eq!(
+                ring.take_broker(),
+                kf_broker::Take::Empty,
+                "slot {t} was offered to the broker after the refusal"
+            );
+            assert_eq!(c.take().unwrap().serial, 3 + i, "the console shows it");
+        }
+        // the seat is never asked again
+        let again = broker_backing(
+            &ring,
+            &mut refused,
+            Some(|| -> Result<u32, String> { panic!("the seat was asked after a refusal") }),
+        );
+        assert_eq!(again, None);
+        assert!(
+            ring.release_held(a),
+            "the frame the broker held stays its own"
+        );
+        // without a broker nothing is withdrawn and no seat exists
+        let plain = ConsoleShare::default();
+        let mut none = None;
+        assert_eq!(
+            broker_backing(plain.ring(), &mut none, None::<fn() -> Result<u32, String>>),
+            None
+        );
+        assert!(none.is_none() && !plain.ring().withdrawn(kf_broker::Kind::Host));
     }
 }

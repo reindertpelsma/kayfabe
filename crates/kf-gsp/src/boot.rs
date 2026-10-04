@@ -2598,6 +2598,30 @@ impl GspFsm {
         self.post_event(ram, &rpc)
     }
 
+    /// ★ Display step 3c: post one LIST `POST_EVENT` (`NV_VGPU_MSG_EVENT_POST_EVENT` with
+    /// `bNotifyList`) whose body is `payload` (`rpc_post_event_v17_00` plus its event data, encoded
+    /// by `kf_abi::postevent::SubdeviceNotify`) — what a GSP sends when a subdevice event such as a
+    /// hotplug fires. Unsolicited, so `sequence` is 0, as for every event; NOT behind
+    /// [`GspFsm::deliver_events`]'s os-event gate (that gate is for the os-event batch). The caller
+    /// raises the GSP interrupt after publishing the registers.
+    ///
+    /// # Errors
+    /// As [`GspFsm::post_event`].
+    pub fn post_subdevice_event(
+        &mut self,
+        ram: &mut dyn GuestRam,
+        payload: Vec<u8>,
+    ) -> Result<(), GspFault> {
+        let rpc = OutgoingRpc {
+            function: self.abi.rpc.codes.post_event,
+            sequence: 0,
+            rpc_result: 0,
+            rpc_result_private: 0,
+            payload,
+        };
+        self.post_event(ram, &rpc)
+    }
+
     pub fn post_event(
         &mut self,
         ram: &mut dyn GuestRam,

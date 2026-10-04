@@ -1,0 +1,69 @@
+//
+// kf_sum.ptx - display-max-fps's change detector (OWNER_RULINGS sec. M decision D2,
+// docs/design/V3_DISPLAY.md sec. 8.16).
+//
+// HAND-WRITTEN PTX, ASCII only (the PTX parser refuses other bytes even in comments). A module of
+// its own, apart from kf_scanout.ptx: a JIT refusal here costs only the change detection (every
+// non-flip check is then sent), never the compose kernel.
+//
+// PTX ISA 6.4 / sm_75: JITs forward onto any Turing-or-later GPU (THE_CONSTRAINTS.md sec. 21). The
+// instruction forms are the ones clang's NVPTX back-end emits for the same loop (mul.lo.s32 with a
+// negative immediate, atom.global.add.u64).
+
+.version 6.4
+.target sm_75
+.address_size 64
+
+// kf_sum - the scanout's change detector (display-max-fps, OWNER_RULINGS sec. M decision D2,
+// docs/design/V3_DISPLAY.md sec. 8.16): a checksum of the composed DEVICE staging frame, so a copy
+// made without a flip is sent only when the frame changed. One CTA per frame row, threads striding
+// its pixels; each thread sums its pixels' terms and adds the partial to the row's 64-bit slot
+// (zeroed by the host first). The term of pixel p at column x is
+//   v = (p ^ x * 0x9e3779b9) * 0x85ebca6b;  v ^= v >> 13
+// - a bijection of p for each column, so one changed pixel always changes its row's sum. The host
+// folds the row sums into one digest (kf_disp::pace::digest); the CPU reference of this kernel is
+// kf_disp::pace::row_sums, and kf-disp's tests/compose_kernel.rs executes THIS text against it.
+// Bounds are the host's (DisplayGpu::compose_checksum): src holds rows x pitch bytes, out rows x 8.
+.visible .entry kf_sum(
+	.param .u64 kf_sum_param_src,
+	.param .u64 kf_sum_param_out,
+	.param .u32 kf_sum_param_width,
+	.param .u32 kf_sum_param_pitch
+)
+{
+	.reg .pred 	%p<2>;
+	.reg .b32 	%r<12>;
+	.reg .b64 	%rd<12>;
+
+	ld.param.u64 	%rd1, [kf_sum_param_src];
+	ld.param.u64 	%rd2, [kf_sum_param_out];
+	ld.param.u32 	%r1, [kf_sum_param_width];
+	ld.param.u32 	%r2, [kf_sum_param_pitch];
+	mov.u32 	%r3, %ctaid.x;		// the row
+	mul.wide.u32 	%rd3, %r3, %r2;
+	add.u64 	%rd3, %rd1, %rd3;	// its first pixel
+	mul.wide.u32 	%rd4, %r3, 8;
+	add.u64 	%rd4, %rd2, %rd4;	// its sum
+	mov.u64 	%rd5, 0;		// this thread's partial
+	mov.u32 	%r4, %tid.x;		// x
+	mov.u32 	%r5, %ntid.x;
+$S_px:
+	setp.ge.u32 	%p1, %r4, %r1;
+	@%p1 bra 	$S_add;
+	shl.b32 	%r6, %r4, 2;
+	cvt.u64.u32 	%rd6, %r6;
+	add.u64 	%rd7, %rd3, %rd6;
+	ld.global.nc.u32 	%r7, [%rd7];
+	mul.lo.s32 	%r8, %r4, -1640531527;	// x * 0x9e3779b9
+	xor.b32 	%r7, %r7, %r8;
+	mul.lo.s32 	%r7, %r7, -2048144789;	// * 0x85ebca6b
+	shr.u32 	%r9, %r7, 13;
+	xor.b32 	%r7, %r7, %r9;
+	cvt.u64.u32 	%rd8, %r7;
+	add.u64 	%rd5, %rd5, %rd8;
+	add.u32 	%r4, %r4, %r5;
+	bra.uni 	$S_px;
+$S_add:
+	atom.global.add.u64 	%rd9, [%rd4], %rd5;
+	ret;
+}

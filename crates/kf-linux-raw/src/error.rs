@@ -200,9 +200,30 @@ pub enum RawError {
         /// The token that named nothing.
         token: u64,
     },
+    /// ★ A unix-socket path this process refuses to connect to (`unixsock_unsafe.rs`): empty,
+    /// relative, an abstract-namespace name, or too long for `sun_path`. Checked before any
+    /// syscall, so a bad `display-broker=` property is refused at realize by name.
+    BadSocketPath {
+        /// Which rule the path broke.
+        why: &'static str,
+    },
 }
 
 impl RawError {
+    /// Whether this is the **would-block** refusal (`EAGAIN`/`EWOULDBLOCK`) of a non-blocking
+    /// descriptor — "not now", never "broken". Matched on the errno, like
+    /// [`RawError::is_interrupted`] and for the same reason.
+    #[must_use]
+    pub fn is_would_block(&self) -> bool {
+        matches!(
+            self,
+            RawError::Syscall {
+                errno: Some(errno),
+                ..
+            } if *errno == libc::EAGAIN || *errno == libc::EWOULDBLOCK
+        )
+    }
+
     /// Whether this is the **interrupted-syscall** refusal (`EINTR`).
     ///
     /// ★★ It lives here rather than at the call site because `errno` numbers are exactly
@@ -308,6 +329,7 @@ impl fmt::Display for RawError {
             RawError::UnknownExport { token } => {
                 write!(f, "export token {token} names no backing this table minted")
             }
+            RawError::BadSocketPath { why } => write!(f, "refused socket path: {why}"),
         }
     }
 }

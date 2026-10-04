@@ -23,6 +23,7 @@ members = [
     "crates/kf-chan",
     "crates/kf-cuda",
     "crates/kf-disp",
+    "crates/kf-broker",
     "crates/kf-oprom",
     "crates/kf-gop-image",
     "crates/kayfabe-doorbell",
@@ -62,6 +63,7 @@ kf-chip = { path = "crates/kf-chip" }
 kf-chan = { path = "crates/kf-chan" }
 kf-cuda = { path = "crates/kf-cuda" }
 kf-disp = { path = "crates/kf-disp" }
+kf-broker = { path = "crates/kf-broker" }
 kf-oprom = { path = "crates/kf-oprom" }
 kf-gop-image = { path = "crates/kf-gop-image" }
 kf-mem = { path = "crates/kf-mem" }

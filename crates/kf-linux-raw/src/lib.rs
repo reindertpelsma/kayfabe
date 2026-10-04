@@ -275,6 +275,8 @@ pub mod capability;
 mod capability_unsafe;
 pub mod census;
 mod chardev_unsafe;
+pub mod drm;
+mod drm_unsafe;
 mod epoll_unsafe;
 pub mod error;
 pub mod geometry;
@@ -289,6 +291,8 @@ pub mod page_size;
 pub mod scratch;
 mod signal_unsafe;
 mod sysconf_unsafe;
+pub mod udmabuf_gate;
+mod unixsock_unsafe;
 mod vcpu_unsafe;
 pub mod view;
 mod window_unsafe;
@@ -296,9 +300,16 @@ mod window_unsafe;
 pub use bounds::HostOffset;
 pub use cache::CachePolicy;
 pub use chardev_unsafe::{CharDevice, DevAccess, DevDir, Indirect, POINTER_FIELD_WIDTH};
+pub use drm_unsafe::{
+    DMA_BUF_EXPORT_SYNC_FILE, GEM_CLOSE, PRIME_HANDLE_TO_FD, dma_buf_idle, gem_close,
+    prime_handle_to_fd,
+};
 pub use epoll_unsafe::{MAX_READY_BATCH, PollTimeout, Poller, ReadyTokens};
 pub use error::RawError;
-pub use host_fd_unsafe::{Notifier, SharedRam, descriptor_budget};
+pub use host_fd_unsafe::{
+    Carrier, DMA_BUF_MAGIC, Notifier, SharedRam, TMPFS_MAGIC, descriptor_budget, fd_carrier,
+    fd_inode, fs_magic, udmabuf_create,
+};
 pub use kvm_unsafe::{Kvm, KvmMemslot, KvmVm};
 pub use mapping_unsafe::{
     Backing, HostProt, HostSpan, HugePageReport, MappedRegion, PlacementId, Reservation,
@@ -311,6 +322,10 @@ pub use scratch::{
 };
 pub use signal_unsafe::{
     BREAK_SIGNAL, ThreadId, current_thread_id, install_break_handler, interrupt_thread,
+};
+pub use unixsock_unsafe::{
+    PeerCredentials, Received, SUN_PATH_BYTES, check_socket_path, effective_uid, peer_credentials,
+    recv_bounded, send_record, unix_connect,
 };
 pub use vcpu_unsafe::{KvmVcpu, VcpuExit};
 pub use view::RegionView;

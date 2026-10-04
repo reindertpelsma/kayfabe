@@ -92,6 +92,89 @@ impl PostEvent {
 
 kf_util::assert_send_sync!(PostEvent);
 
+/// `NV2080_NOTIFIERS_HOTPLUG` (`ogkm-580: src/common/sdk/nvidia/inc/class/cl2080_notification.h:37`).
+pub const NOTIFIERS_HOTPLUG: u32 = 1;
+/// `NV2080_NOTIFIERS_MAXCOUNT` (`cl2080_notification.h:239`): `gpuNotifySubDeviceEvent` asserts a
+/// list post's `notifyIndex` is below it and indexes `notifyActions[]` with it
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/gpu_rmapi.c:532`, `:571`).
+pub const NOTIFIERS_MAXCOUNT: u32 = 198;
+/// Where `eventData[]` starts: it is a flexible `NvU8` array right after `NvBool bNotifyList` @ +28
+/// (`g_rpc-structures.h:1545-1556`), so at **+29**, inside the padding `sizeof` rounds up to 32.
+pub const EVENT_DATA_AT: usize = 29;
+
+/// ★ Display step 3c: a LIST post (`bNotifyList = NV_TRUE`). `_kgspRpcPostEvent` resolves the
+/// `(hClient, hEvent)` pair, then calls `gpuNotifySubDeviceEvent(notifyIndex, eventData, …)`, which
+/// wakes every subdevice notifier the guest's own RM has armed for that index
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:497-535`) — so the guest RM, not this
+/// device, decides whom to wake.
+///
+/// ⊘ The index is the BARE notifier (`NV2080_NOTIFIERS_HOTPLUG` = 1), never the registered
+/// `idx | NV01_EVENT_CLIENT_RM` that [`PostEvent`] echoes: on the list path it is an array index
+/// in the guest kernel, and [`SubdeviceNotify::encode`] refuses anything at or above
+/// [`NOTIFIERS_MAXCOUNT`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SubdeviceNotify {
+    /// `hClient` of a live registration.
+    pub client: u32,
+    /// `hEvent` of that registration (`CliGetEventInfo` must resolve the pair).
+    pub event: u32,
+    /// The bare `NV2080_NOTIFIERS_*` index.
+    pub notify_index: u32,
+    /// `eventData`: for a hotplug, `Nv2080HotplugNotification { plugDisplayMask,
+    /// unplugDisplayMask }` (`cl2080_notification.h:485-489`).
+    pub event_data: [u8; 8],
+}
+
+impl SubdeviceNotify {
+    /// The hotplug post the guest's own fake-plug path builds the same way
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/disp/disp_common_kern_ctrl_minimal.c:262-278`):
+    /// `plugDisplayMask` = the display ids whose monitor changed, nothing unplugged.
+    #[must_use]
+    pub fn hotplug(client: u32, event: u32, plug_display_mask: u32) -> SubdeviceNotify {
+        let mut event_data = [0u8; 8];
+        event_data[..4].copy_from_slice(&plug_display_mask.to_le_bytes());
+        SubdeviceNotify {
+            client,
+            event,
+            notify_index: NOTIFIERS_HOTPLUG,
+            event_data,
+        }
+    }
+
+    /// The body: the 32-byte struct with `eventDataSize` = 8 and `bNotifyList` = 1, the data at
+    /// [`EVENT_DATA_AT`], 40 bytes in all.
+    ///
+    /// # Errors
+    /// A `notify_index` the guest would use as an out-of-bounds array index (≥
+    /// [`NOTIFIERS_MAXCOUNT`] — which includes any index carrying `NV01_EVENT_CLIENT_RM`).
+    pub fn encode(&self) -> Result<Vec<u8>, String> {
+        if self.notify_index >= NOTIFIERS_MAXCOUNT {
+            return Err(format!(
+                "a list POST_EVENT with notifyIndex {:#x} would index notifyActions[{NOTIFIERS_MAXCOUNT}] \
+                 out of bounds in the guest kernel",
+                self.notify_index
+            ));
+        }
+        let mut buf = vec![0u8; RpcPostEventV1700::SIZE + self.event_data.len()];
+        let m = RpcPostEventV1700 {
+            h_client: self.client,
+            h_event: self.event,
+            notify_index: self.notify_index,
+            data: 0,
+            info16: 0,
+            status: 0,
+            event_data_size: self.event_data.len() as u32,
+            b_notify_list: 1,
+        };
+        m.encode_into(&mut buf[..RpcPostEventV1700::SIZE])
+            .map_err(|e| format!("rpc_post_event_v17_00: {e:?}"))?;
+        buf[EVENT_DATA_AT..EVENT_DATA_AT + self.event_data.len()].copy_from_slice(&self.event_data);
+        Ok(buf)
+    }
+}
+
+kf_util::assert_send_sync!(SubdeviceNotify);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -122,5 +205,54 @@ mod tests {
              NON-LIST event; see this module's docs for why a fabricated payload is worse \
              than none"
         );
+    }
+
+    /// ★ 3c: the hotplug LIST post — bare index 1, `bNotifyList` @ +28 = 1, `eventDataSize` @ +24 =
+    /// 8, and the `Nv2080HotplugNotification` at +29 (the flexible array's offset, NOT +32).
+    #[test]
+    fn the_hotplug_list_post_carries_its_data_at_the_flexible_arrays_offset() {
+        let b = SubdeviceNotify::hotplug(0xc1d0_0001, 0xcaf0_0007, 0x100)
+            .encode()
+            .expect("index 1");
+        assert_eq!(b.len(), 40);
+        assert_eq!(&b[0..4], &0xc1d0_0001u32.to_le_bytes());
+        assert_eq!(&b[4..8], &0xcaf0_0007u32.to_le_bytes());
+        assert_eq!(
+            &b[8..12],
+            &1u32.to_le_bytes(),
+            "the bare NV2080_NOTIFIERS_HOTPLUG"
+        );
+        assert_eq!(&b[24..28], &8u32.to_le_bytes(), "eventDataSize");
+        assert_eq!(b[28], 1, "bNotifyList");
+        assert_eq!(&b[29..33], &0x100u32.to_le_bytes(), "plugDisplayMask");
+        assert_eq!(&b[33..37], &0u32.to_le_bytes(), "unplugDisplayMask");
+        let generated = RpcPostEventV1700::LAYOUT
+            .fields
+            .iter()
+            .find(|f| f.c_name == "bNotifyList")
+            .expect("bNotifyList");
+        assert_eq!(
+            generated.offset + generated.width,
+            EVENT_DATA_AT,
+            "eventData[] follows bNotifyList directly"
+        );
+    }
+
+    /// ⊘ A list post never carries an index the guest would use out of bounds — in particular not
+    /// the registered `HOTPLUG | NV01_EVENT_CLIENT_RM` (0x04000001).
+    #[test]
+    fn a_list_post_refuses_an_index_at_or_above_maxcount() {
+        for idx in [NOTIFIERS_MAXCOUNT, 0x0400_0001, u32::MAX] {
+            let p = SubdeviceNotify {
+                notify_index: idx,
+                ..SubdeviceNotify::hotplug(1, 2, 0x100)
+            };
+            assert!(p.encode().is_err(), "{idx:#x}");
+        }
+        let ok = SubdeviceNotify {
+            notify_index: NOTIFIERS_MAXCOUNT - 1,
+            ..SubdeviceNotify::hotplug(1, 2, 0x100)
+        };
+        assert!(ok.encode().is_ok());
     }
 }

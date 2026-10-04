@@ -450,6 +450,20 @@ pub struct Step {
     pub gets: Vec<(u32, u32, u32)>,
 }
 
+/// ★ `display-max-fps` (`crate::pace`): one head's presents, by path — cumulative.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PaceCounts {
+    /// Latches that completed a window of this (active) head — counted once per latch, on every
+    /// path: at a tick, at once, and with the core.
+    pub presents: u64,
+    /// Of those, latches holding a TEARING (immediate) flip.
+    pub tearing: u64,
+    /// Tearing flips the gate parked for the head's next tick (D1).
+    pub tear_held: u64,
+    /// Latches of groups holding the CORE: they latch at once, so the tick does not bound them.
+    pub core_imm: u64,
+}
+
 /// ★ The engine.
 #[derive(Debug)]
 pub struct Engine {
@@ -465,6 +479,15 @@ pub struct Engine {
     pub exceptions: u64,
     /// Emit [`Effect::Trace`] lines (update arrivals, groups, latches).
     pub trace: bool,
+    /// ★ D1 (`OWNER_RULINGS.md` §M, 2026-10-04): a TEARING (immediate) flip on an active head that
+    /// already presented since the head's last tick waits for the next one, so async flips count
+    /// against the cap too. In kayfabe a flip copies a finished buffer, so it never tears; the gate
+    /// is about rate only. On by default.
+    pub tear_gate: bool,
+    /// Per head: a window of it latched since its last tick (the gate's state).
+    presented: [bool; 8],
+    /// Per head: presents by path.
+    pub pace: [PaceCounts; 8],
 }
 
 impl Engine {
@@ -480,6 +503,9 @@ impl Engine {
             methods: 0,
             exceptions: 0,
             trace: false,
+            tear_gate: true,
+            presented: [false; 8],
+            pace: [PaceCounts::default(); 8],
         }
     }
 
@@ -585,9 +611,13 @@ impl Engine {
         st
     }
 
-    /// ★ Head `head`'s vblank: latch every update waiting for it (whose acquires hold).
+    /// ★ Head `head`'s vblank: latch every update waiting for it (whose acquires hold). The head
+    /// may present again: the tearing gate's state clears first.
     pub fn vblank(&mut self, head: u32, acquired: &mut dyn FnMut(&Acquire) -> bool) -> Step {
         let mut st = Step::default();
+        if let Some(p) = self.presented.get_mut(head as usize) {
+            *p = false;
+        }
         for group in self.latching(|h| h == Some(head)) {
             self.latch_group(&group, &mut st, acquired);
         }
@@ -690,6 +720,8 @@ impl Engine {
                 self.group_ready(&group, st, acquired);
                 progressed = true;
             }
+            // a group parked for a head that went idle (F7: its tick will never come)
+            progressed |= self.unpark_idle(st, acquired);
             if !progressed {
                 break;
             }
@@ -820,27 +852,41 @@ impl Engine {
         st: &mut Step,
         acquired: &mut dyn FnMut(&Acquire) -> bool,
     ) {
-        // a non-tearing window on an active head latches at that head's vblank (with the group)
+        // a non-tearing window on an active head latches at that head's vblank (with the group);
+        // ★ D1: so does a tearing one whose head already presented since its last tick
         let heads = self.heads_armed();
         let mut vblank_head = None;
+        let mut tear_head = None;
         for &n in group {
             let Some(c) = self.chans[n as usize].as_ref() else {
                 continue;
             };
-            if c.kind == ChannelKind::Window
-                && fld(c.a(self.vocab.w_present), self.vocab.w_present_begin)
-                    == self.vocab.w_present_non_tearing
-            {
-                let owner = self.owner_head(c.instance);
-                if let Some(h) =
-                    owner.filter(|h| heads.iter().any(|m| m.head == *h && m.period_ns > 0))
-                {
-                    vblank_head = Some(vblank_head.unwrap_or(h));
-                }
+            if c.kind != ChannelKind::Window {
+                continue;
+            }
+            let Some(h) = self
+                .owner_head(c.instance)
+                .filter(|h| heads.iter().any(|m| m.head == *h && m.period_ns > 0))
+            else {
+                continue;
+            };
+            if self.tearing(c) {
+                tear_head = Some(tear_head.unwrap_or(h));
+            } else {
+                vblank_head = Some(vblank_head.unwrap_or(h));
             }
         }
         let has_core = group.contains(&0);
-        let park = if has_core { None } else { vblank_head };
+        let gated = tear_head
+            .filter(|h| self.tear_gate && vblank_head.is_none() && self.presented[*h as usize]);
+        let park = if has_core {
+            None
+        } else {
+            vblank_head.or(gated)
+        };
+        if let Some(h) = gated.filter(|_| !has_core) {
+            self.pace[h as usize].tear_held += 1;
+        }
         let set = group.iter().fold(0, |m, n| m | bit(*n));
         for &n in group {
             if let Some(c) = self.chans[n as usize].as_mut()
@@ -862,6 +908,44 @@ impl Engine {
         if park.is_none() {
             self.latch_group(group, st, acquired);
         }
+    }
+
+    /// Is window channel `c`'s pending flip a TEARING one (`SET_PRESENT_CONTROL.BEGIN_MODE` other
+    /// than `NON_TEARING`: nvidia-drm's async flips program `IMMEDIATE`)?
+    fn tearing(&self, c: &Chan) -> bool {
+        fld(c.a(self.vocab.w_present), self.vocab.w_present_begin)
+            != self.vocab.w_present_non_tearing
+    }
+
+    /// ★ F7: groups parked for a head that is no longer active would wait for a tick that never
+    /// comes — they become acquire-only waits and are latched now when their acquires hold (the
+    /// acquire poll re-evaluates the rest). Returns whether any was unparked.
+    fn unpark_idle(&mut self, st: &mut Step, acquired: &mut dyn FnMut(&Acquire) -> bool) -> bool {
+        let heads = self.heads_armed();
+        let active = |h: u32| heads.iter().any(|m| m.head == h && m.period_ns > 0);
+        let mut any = false;
+        for c in self.chans.iter_mut().flatten() {
+            if let Stage::Latch {
+                update,
+                head: Some(h),
+                group,
+            } = c.stage
+                && !active(h)
+            {
+                c.stage = Stage::Latch {
+                    update,
+                    head: None,
+                    group,
+                };
+                any = true;
+            }
+        }
+        if any {
+            for group in self.latching(|h| h.is_none()) {
+                self.latch_group(&group, st, acquired);
+            }
+        }
+        any
     }
 
     /// Latch the members of `group` that are in the Latch stage, if every acquire among them holds.
@@ -915,6 +999,30 @@ impl Engine {
             .iter()
             .map(|n| (*n, self.window_was_active(*n, &heads_before)))
             .collect();
+        // ★ `display-max-fps`: one present per head with a window in this latch (an active head
+        // before it), by path — taken before any member (the core among them) is armed
+        let mut presented = [None::<bool>; 8];
+        for &n in &members {
+            if let Some(c) = self.chans[n as usize].as_ref()
+                && c.kind == ChannelKind::Window
+                && let Some(h) = self
+                    .owner_head(c.instance)
+                    .filter(|h| heads_before.iter().any(|m| m.head == *h && m.period_ns > 0))
+                && let Some(p) = presented.get_mut(h as usize)
+            {
+                *p = Some(p.unwrap_or(false) | self.tearing(c));
+            }
+        }
+        let has_core = members.contains(&0);
+        for (h, p) in presented.iter().enumerate() {
+            if let Some(tearing) = *p {
+                self.presented[h] = true;
+                let pc = &mut self.pace[h];
+                pc.presents += 1;
+                pc.tearing += u64::from(tearing);
+                pc.core_imm += u64::from(has_core);
+            }
+        }
         if self.trace {
             st.effects.push(Effect::Trace(format!(
                 "latch {members:?} (previously active: {was_active:?})"
@@ -1386,6 +1494,149 @@ impl Engine {
                 dst_factor: fld(factor, sv.comp_factor.2),
             })
         }
+    }
+}
+
+/// ★ Display step 3d (`docs/design/V3_DISPLAY.md` §8.6): the core- and cursor-class methods a
+/// head's cursor is read from — RESOLVED from the derived class table; `None` for a family whose
+/// table lacks one (its cursor is then not composed, and nothing else changes).
+#[derive(Debug, Clone, Copy)]
+pub struct CursorVocab {
+    /// Core `HEAD_SET_CONTEXT_DMA_CURSOR(head, 0)`: base, head stride.
+    ctxdma: (u32, u32),
+    /// Core `HEAD_SET_OFFSET_CURSOR(head, 0)`: base, head stride (256-byte units).
+    offset: (u32, u32),
+    /// Core `HEAD_SET_CONTROL_CURSOR(head)`: base, head stride.
+    control: (u32, u32),
+    enable: (u8, u8),
+    format: (u8, u8),
+    size: (u8, u8),
+    hot_x: (u8, u8),
+    hot_y: (u8, u8),
+    /// `HEAD_SET_CONTROL_CURSOR_FORMAT_A8R8G8B8` — the only format NVKMS programs
+    /// (`ogkm-580: src/nvidia-modeset/src/nvkms-evo3.c:6517-6524`).
+    a8r8g8b8: u32,
+    /// Core `HEAD_SET_CONTROL_CURSOR_COMPOSITION(head)`: base, head stride.
+    comp: (u32, u32),
+    k1: (u8, u8),
+    cursor_factor: (u8, u8),
+    viewport_factor: (u8, u8),
+    mode: (u8, u8),
+    /// Cursor PIO `SET_CURSOR_HOT_SPOT_POINT_OUT(0)` and its `X`, `Y`.
+    point_out: MethodTwoFields,
+}
+
+impl CursorVocab {
+    /// Resolve for core class `core` and cursor PIO class `cursor`.
+    #[must_use]
+    pub fn resolve(t: &ClassTable, core: u32, cursor: u32) -> Option<CursorVocab> {
+        let a = |n: &str| -> Option<(u32, u32)> {
+            let b = t.a(core, n, 0)?;
+            Some((b, t.a(core, n, 1)?.checked_sub(b)?))
+        };
+        let a2 = |n: &str| -> Option<(u32, u32)> {
+            let b = t.a2(core, n, 0, 0)?;
+            Some((b, t.a2(core, n, 1, 0)?.checked_sub(b)?))
+        };
+        let f = |n: &str| t.f(core, n);
+        Some(CursorVocab {
+            ctxdma: a2("HEAD_SET_CONTEXT_DMA_CURSOR")?,
+            offset: a2("HEAD_SET_OFFSET_CURSOR")?,
+            control: a("HEAD_SET_CONTROL_CURSOR")?,
+            enable: f("HEAD_SET_CONTROL_CURSOR_ENABLE")?,
+            format: f("HEAD_SET_CONTROL_CURSOR_FORMAT")?,
+            size: f("HEAD_SET_CONTROL_CURSOR_SIZE")?,
+            hot_x: f("HEAD_SET_CONTROL_CURSOR_HOT_SPOT_X")?,
+            hot_y: f("HEAD_SET_CONTROL_CURSOR_HOT_SPOT_Y")?,
+            a8r8g8b8: t.v(core, "HEAD_SET_CONTROL_CURSOR_FORMAT_A8R8G8B8")?,
+            comp: a("HEAD_SET_CONTROL_CURSOR_COMPOSITION")?,
+            k1: f("HEAD_SET_CONTROL_CURSOR_COMPOSITION_K1")?,
+            cursor_factor: f("HEAD_SET_CONTROL_CURSOR_COMPOSITION_CURSOR_COLOR_FACTOR_SELECT")?,
+            viewport_factor: f("HEAD_SET_CONTROL_CURSOR_COMPOSITION_VIEWPORT_COLOR_FACTOR_SELECT")?,
+            mode: f("HEAD_SET_CONTROL_CURSOR_COMPOSITION_MODE")?,
+            point_out: (
+                t.a(cursor, "SET_CURSOR_HOT_SPOT_POINT_OUT", 0)?,
+                t.f(cursor, "SET_CURSOR_HOT_SPOT_POINT_OUT_X")?,
+                t.f(cursor, "SET_CURSOR_HOT_SPOT_POINT_OUT_Y")?,
+            ),
+        })
+    }
+}
+
+/// ★ A head's enabled cursor, as the armed core state and the cursor channel's last `Update` place
+/// it — the TOP layer of the head's composition (§8.6, display step 3d).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CursorScan {
+    /// The head.
+    pub head: u32,
+    /// The core channel's client (the context DMA's hash key, with channel 0).
+    pub client: u32,
+    /// `HEAD_SET_CONTEXT_DMA_CURSOR(head, 0)`.
+    pub handle: u32,
+    /// Byte offset into it (`HEAD_SET_OFFSET_CURSOR` is in 256-byte units, `nvCtxDmaOffsetFromBytes`).
+    pub offset: u64,
+    /// The image's edge in pixels (`SIZE`: 32, 64, 128 or 256; square).
+    pub size: u32,
+    /// `FORMAT` is `A8R8G8B8`.
+    pub argb8888: bool,
+    /// `HOT_SPOT_X` / `_Y` inside the image (NVKMS programs 0, `nvkms-evo3.c:6568-6569`).
+    pub hot_x: u32,
+    /// Hot spot row.
+    pub hot_y: u32,
+    /// Where the hot spot lands on the head (`SET_CURSOR_HOT_SPOT_POINT_OUT`, signed 16-bit: the
+    /// cursor may hang off the top or left edge).
+    pub x: i32,
+    /// Hot spot row on the head.
+    pub y: i32,
+    /// `HEAD_SET_CONTROL_CURSOR_COMPOSITION`: `K1`, the two factor selects (window-factor
+    /// numbering), and `MODE` (0 blend, 1 XOR).
+    pub k1: u32,
+    /// `CURSOR_COLOR_FACTOR_SELECT`.
+    pub cursor_factor: u32,
+    /// `VIEWPORT_COLOR_FACTOR_SELECT`.
+    pub viewport_factor: u32,
+    /// `MODE`.
+    pub mode: u32,
+}
+
+impl Engine {
+    /// ★ Head `head`'s cursor, if it is enabled and names a surface.
+    #[must_use]
+    pub fn cursor_scan(&self, cv: &CursorVocab, head: u32) -> Option<CursorScan> {
+        if head >= self.heads {
+            return None;
+        }
+        let core = self.chans.first()?.as_ref()?;
+        let at = |(b, s): (u32, u32)| b.checked_add(head.checked_mul(s)?);
+        let ctl = core.armed(at(cv.control)?);
+        if fld(ctl, cv.enable) == 0 {
+            return None;
+        }
+        let handle = core.armed(at(cv.ctxdma)?);
+        if handle == 0 {
+            return None;
+        }
+        let comp = core.armed(at(cv.comp)?);
+        let (pm, px, py) = cv.point_out;
+        let point = self.armed(ChannelKind::Cursor, head, pm).unwrap_or(0);
+        // two's-complement 16-bit fields: the cursor may hang off the top or left edge
+        let signed = |v: u32| i32::from((v & 0xFFFF) as u16 as i16);
+        Some(CursorScan {
+            head,
+            client: core.client,
+            handle,
+            offset: u64::from(core.armed(at(cv.offset)?)) << 8,
+            size: 32 << fld(ctl, cv.size).min(3),
+            argb8888: fld(ctl, cv.format) == cv.a8r8g8b8,
+            hot_x: fld(ctl, cv.hot_x),
+            hot_y: fld(ctl, cv.hot_y),
+            x: signed(fld(point, px)),
+            y: signed(fld(point, py)),
+            k1: fld(comp, cv.k1),
+            cursor_factor: fld(comp, cv.cursor_factor),
+            viewport_factor: fld(comp, cv.viewport_factor),
+            mode: fld(comp, cv.mode),
+        })
     }
 }
 

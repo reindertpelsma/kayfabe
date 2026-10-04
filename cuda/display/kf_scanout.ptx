@@ -27,9 +27,12 @@
 // pixel, pitch = bytes per row), 1 = block-linear (src = the surface's first block, pitch = GOBs
 // per row, x0b/y0 = the rectangle's origin; the address is kf_disp::scanout::bl_offset).
 // Output pixel (ox + x, oy + row), clipped to fw x fh. flags: bit0 the source has alpha, bit1 swap
-// R/B (ABGR source), bit2 opaque (store the source word). Otherwise out = src*fs + dst*fd per
-// channel, fs = clamp(as + bs*a/255), fd = clamp(ad + bd*a/255), a = source alpha (255 without):
-// the host maps SET_COMPOSITION_FACTOR_SELECT onto (as, bs, ad, bd).
+// R/B (ABGR source), bit2 opaque (store the source word), bit3 XOR (2026-10-04, the cursor's
+// MODE_XOR: out = dst XOR (src & 0x00ffffff), alpha and factors unused). Otherwise out = src*fs +
+// dst*fd per channel, fs = clamp(as + bs*a/255), fd = clamp(ad + bd*a/255), a = source alpha (255
+// without): the host maps SET_COMPOSITION_FACTOR_SELECT onto (as, bs, ad, bd).
+// The CPU reference is kf_disp::scanout::compose_reference; kf-disp's tests/compose_kernel.rs
+// executes THIS text, instruction by instruction, against it.
 .visible .entry kf_compose(
 	.param .u64 kf_compose_param_src,
 	.param .u64 kf_compose_param_dst,
@@ -51,7 +54,7 @@
 	.param .s32 kf_compose_param_bd
 )
 {
-	.reg .pred 	%p<8>;
+	.reg .pred 	%p<9>;
 	.reg .b32 	%r<64>;
 	.reg .b64 	%rd<24>;
 
@@ -99,6 +102,8 @@
 	and.b32 	%r27, %r12, 1;		// has alpha
 	and.b32 	%r28, %r12, 2;		// swap R/B
 	and.b32 	%r29, %r12, 4;		// opaque
+	and.b32 	%r52, %r12, 8;		// XOR
+	setp.ne.u32 	%p8, %r52, 0;
 	setp.ne.u32 	%p2, %r1, 0;
 	setp.ne.u32 	%p3, %r28, 0;
 	setp.ne.u32 	%p4, %r29, 0;
@@ -148,8 +153,15 @@ $C_noswap:
 	shl.b32 	%r44, %r32, 2;
 	cvt.u64.u32 	%rd12, %r44;
 	add.u64 	%rd13, %rd3, %rd12;	// the frame pixel
-	@!%p4 bra 	$C_blend;
+	@!%p4 bra 	$C_xor;
 	st.global.u32 	[%rd13], %r40;
+	bra.uni 	$C_next;
+$C_xor:
+	@!%p8 bra 	$C_blend;
+	ld.global.u32 	%r53, [%rd13];	// what lies below
+	and.b32 	%r54, %r40, 16777215;	// the colour (0x00ffffff); alpha plays no part
+	xor.b32 	%r53, %r53, %r54;
+	st.global.u32 	[%rd13], %r53;
 	bra.uni 	$C_next;
 $C_blend:
 	shr.u32 	%r45, %r40, 24;

@@ -115,26 +115,30 @@ pub const MAX_DISPLAY_OBJECTS: usize = 256;
 /// is held; this link drops it before it logs.
 pub type SharedDisplayModel = Arc<Mutex<DisplayModel>>;
 
-/// The monitors behind the virtual connectors: one DVI-D monitor with a 1920×1080@60 EDID we author
-/// (`V3_DISPLAY.md` §4.7; a configurable size is later work).
+/// The monitors behind the virtual connectors: one DVI-D monitor with an EDID we author
+/// (`V3_DISPLAY.md` §4.7) — 1920×1080@60 unless `display-max-fps` is set (`max_fps`, 0 unset: the
+/// EDID is then byte-identical to the one before the property, D5), when the preferred mode and
+/// the range limit follow the cap ([`kf_disp::edid::Monitor::configured`], §8.16).
 ///
 /// ★ Public because the boot display reads the SAME first monitor (`V3_DISPLAY.md` §4.11): kf3's
 /// option ROM carries its preferred mode and EDID, so the firmware's mode is the native one and the
-/// two statements of "what the monitor is" cannot disagree.
+/// two statements of "what the monitor is" cannot disagree — both callers pass the same property.
 #[must_use]
-pub fn monitors() -> Vec<kf_disp::edid::Monitor> {
-    vec![kf_disp::edid::Monitor::default_1080p()]
+pub fn monitors(max_fps: u32) -> Vec<kf_disp::edid::Monitor> {
+    vec![kf_disp::edid::Monitor::configured(max_fps)]
 }
 
 /// ★ The model for a chip's display row and a guest driver, or `None` when this tree has not
-/// derived that driver's display layouts (never a guessed layout: `kf_disp::layout`).
+/// derived that driver's display layouts (never a guessed layout: `kf_disp::layout`). `max_fps` is
+/// the `display-max-fps` property ([`monitors`]).
 #[must_use]
 pub fn model_for(
     driver: &kf_abi::versions::DriverAbiTable,
     row: &kf_chip::display::DisplayRow,
+    max_fps: u32,
 ) -> Option<DisplayModel> {
     let layouts = kf_disp::layout::for_version(&driver.driver_version().to_string())?;
-    Some(DisplayModel::new(row, monitors(), layouts))
+    Some(DisplayModel::new(row, monitors(max_fps), layouts))
 }
 
 fn lock(m: &SharedDisplayModel) -> MutexGuard<'_, DisplayModel> {
@@ -275,7 +279,8 @@ impl DisplayPolicy {
         driver: kf_abi::versions::DriverAbiTable,
         row: &'static kf_chip::display::DisplayRow,
     ) -> DisplayPolicy {
-        let model = model_for(&driver, row).map(|m| Arc::new(Mutex::new(m)));
+        // no display plane here (the GPU-free configuration): the property needs one, so unset
+        let model = model_for(&driver, row, 0).map(|m| Arc::new(Mutex::new(m)));
         if model.is_none() {
             eprintln!(
                 "kf-rm: display: no derived display layouts for guest driver {} — answering the M0 set only \
@@ -592,6 +597,10 @@ impl DisplayRegistry {
         let Ok(h) = self.driver.decode_rpc_alloc(body) else {
             return;
         };
+        if h.class == kf_abi::generated::classes::NV01_EVENT_KERNEL_CALLBACK_EX {
+            self.on_event_alloc(h.client, h.handle, h.parent, body);
+            return;
+        }
         if !is_display_class(h.class) {
             return;
         }
@@ -641,6 +650,44 @@ impl DisplayRegistry {
         finish(st);
     }
 
+    /// ★ Display step 3c (`V3_DISPLAY.md` §8.6): NVKMS's hotplug registration — an accepted
+    /// `NV01_EVENT_KERNEL_CALLBACK_EX` whose `notifyIndex` is `NV2080_NOTIFIERS_HOTPLUG |
+    /// NV01_EVENT_CLIENT_RM` (`ogkm-580: src/nvidia-modeset/src/nvkms-rm.c:1775-1800`;
+    /// `event.c:148-170`) — becomes the `(hClient, hEvent)` a hotplug `POST_EVENT` names.
+    ///
+    /// ⊘ A SEPARATE, narrow seat: `crate::osevent` refuses this class by a pinned rule (its
+    /// `osNotifyEvent` would wake guest-kernel state), and stays untouched. This seat records only
+    /// this one notifier, and the post it feeds is a LIST post (`bNotifyList`) with the bare index,
+    /// so the guest's own RM — gated by its `notifyActions` — decides whom to wake. Only
+    /// `notifyIndex` (`NV0005_ALLOC_PARAMETERS` @ +12) is read; `data` @ +16 is a guest pointer.
+    fn on_event_alloc(&mut self, client: u32, event: u32, parent: u32, body: &[u8]) {
+        let Some(params) = crate::rmrpc::alloc_params_window(&self.driver, body) else {
+            return;
+        };
+        let Some(idx) = params
+            .get(12..16)
+            .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        else {
+            return;
+        };
+        if idx != kf_disp::model::NOTIFIERS_HOTPLUG | kf_disp::model::EVENT_CLIENT_RM {
+            return;
+        }
+        let kept = lock(&self.model).register_hotplug(kf_disp::model::HotplugRegistration {
+            client,
+            event,
+            parent,
+        });
+        eprintln!(
+            "kf-rm: display: hotplug event {client:#x}:{event:#x} (parent {parent:#x}) {}",
+            if kept {
+                "registered"
+            } else {
+                "NOT registered (too many live registrations)"
+            }
+        );
+    }
+
     /// The object `root` of `client` and every remembered display object below it.
     fn subtree(&self, client: u32, root: u32) -> BTreeSet<u32> {
         let mut dead = BTreeSet::from([root]);
@@ -682,6 +729,14 @@ impl DisplayRegistry {
         }
         let st = {
             let mut g = lock(&m);
+            // ★ 3c: a FREE of the hotplug event, its parent or its client retires the registration
+            // (NVKMS frees the event on teardown, `nvkms-rm.c:1917-1924`); a post to a dead pair
+            // would wedge the RPC path
+            if g.retire_hotplug(client, object) > 0 {
+                eprintln!(
+                    "kf-rm: display: hotplug registration retired by the FREE of {client:#x}:{object:#x}"
+                );
+            }
             if object == client {
                 g.free_client(client);
             } else {
@@ -748,6 +803,19 @@ impl CommandPolicy for DisplayPolicy {
         self.note_dispsw(cmd);
         match cmd.function {
             RpcFunction::RmControl => self.on_control(cmd),
+            // ★ 3c: fn 1 starts every GSP boot — a re-init (a driver reload) makes every hotplug
+            // registration of the previous life a dead pair (§40 Tier B). Observed, never answered.
+            RpcFunction::SetGuestSystemInfo => {
+                if let Some(m) = &self.model {
+                    let n = lock(m).retire_all_hotplug();
+                    if n > 0 {
+                        eprintln!(
+                            "kf-rm: display: GSP re-init — {n} hotplug registration(s) retired"
+                        );
+                    }
+                }
+                None
+            }
             // Lifecycle observation is attached to the object seat's accepted event,
             // not to this speculative position at the front of the command chain.
             _ => None,
@@ -764,6 +832,22 @@ mod tests {
 
     fn abi() -> kf_abi::versions::DriverAbiTable {
         *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench")
+    }
+
+    /// ★ `display-max-fps` (§8.16): the model the guest's controls are answered from carries the
+    /// CONFIGURED monitor — the same one `monitors` hands the boot display's option ROM — and unset
+    /// is exactly today's 1080p60 monitor. (Mutation: a `model_for` that ignores the property serves
+    /// the 75 Hz range to a guest capped at 30.)
+    #[test]
+    fn the_model_serves_the_configured_monitor() {
+        assert_eq!(monitors(0), vec![kf_disp::edid::Monitor::default_1080p()]);
+        for fps in [0, 30, 60] {
+            let m = model_for(&abi(), &kf_chip::display::AMPERE, fps).expect("derived");
+            let mon = &m.connectors.first().expect("a connector").monitor;
+            assert_eq!(mon, &monitors(fps)[0], "{fps}");
+            let want = if fps == 0 { 75 } else { fps };
+            assert_eq!(u32::from(mon.edid().unwrap()[78]), want, "{fps}");
+        }
     }
 
     fn policy() -> DisplayPolicy {
@@ -1037,9 +1121,9 @@ mod tests {
             .collect();
         assert_eq!(
             claimed.len(),
-            34 + 6,
-            "the NVKMS bring-up set (with the console pair, the display-SW object's query and \
-             SET_RMFREE_FLAGS) and the six internal controls"
+            35 + 6,
+            "the NVKMS bring-up set (with the console pair, the display-SW object's query, the \
+             internal hotplug state and SET_RMFREE_FLAGS) and the six internal controls"
         );
         assert_eq!(
             claimed.iter().copied().collect::<BTreeSet<u32>>(),
@@ -1072,7 +1156,7 @@ mod tests {
     #[test]
     fn display_allocs_are_tracked_and_frees_release_them() {
         let shared: SharedDisplayModel = Arc::new(Mutex::new(
-            model_for(&abi(), &kf_chip::display::AMPERE).expect("derived"),
+            model_for(&abi(), &kf_chip::display::AMPERE, 0).expect("derived"),
         ));
         let mut p = DisplayPolicy::over(abi(), &kf_chip::display::AMPERE, shared.clone());
         let mut registry = p.registry().unwrap();
@@ -1159,13 +1243,60 @@ mod tests {
         );
     }
 
+    /// ★ Display step 3c: NVKMS's hotplug event (`0x7e`, `HOTPLUG | CLIENT_RM`) registers in the
+    /// narrow seat; another notifier or an OS event does not; the FREE of the event retires it; fn 1
+    /// (a GSP re-init) retires everything.
+    #[test]
+    fn the_hotplug_event_registers_and_retires() {
+        let shared: SharedDisplayModel = Arc::new(Mutex::new(
+            model_for(&abi(), &kf_chip::display::AMPERE, 0).expect("derived"),
+        ));
+        let mut p = DisplayPolicy::over_shared(abi(), &kf_chip::display::AMPERE, &shared);
+        let mut registry = p.registry().unwrap();
+        let ev = |idx: u32| {
+            let mut v = vec![0u8; 24];
+            v[12..16].copy_from_slice(&idx.to_le_bytes());
+            v
+        };
+        let (c, sub) = (0xc1d0_0002, 0x5c00_2080);
+        let target = |s: &SharedDisplayModel| {
+            s.lock()
+                .unwrap()
+                .hotplug_target()
+                .map(|r| (r.client, r.event, r.parent))
+        };
+        registry.observe(&alloc(c, sub, 0xe0, 0x7e, &ev(1 | 0x0400_0000)));
+        registry.observe(&alloc(c, sub, 0xe1, 0x7e, &ev(5 | 0x0400_0000)));
+        registry.observe(&alloc(c, sub, 0xe2, 0x79, &ev(1 | 0x0400_0000)));
+        assert_eq!(target(&shared), Some((c, 0xe0, sub)));
+        assert_eq!(
+            shared.lock().unwrap().hotplug.len(),
+            1,
+            "only the hotplug notifier"
+        );
+        registry.observe(&free(c, sub, 0xe0));
+        assert_eq!(target(&shared), None, "retired by its own FREE");
+        registry.observe(&alloc(c, sub, 0xe0, 0x7e, &ev(1 | 0x0400_0000)));
+        assert!(target(&shared).is_some());
+        assert!(
+            p.respond(&rpc(RpcFunction::SetGuestSystemInfo, vec![0; 64]))
+                .is_none(),
+            "fn 1 is observed, never answered"
+        );
+        assert_eq!(
+            target(&shared),
+            None,
+            "a GSP re-init retires every registration"
+        );
+    }
+
     /// ★ Step (3): with a PLANE attached, the link leaves the statements queued for it and wakes it
     /// (after dropping the lock) instead of draining them into the log; a rebuild over the SAME
     /// shared model keeps what the plane will read.
     #[test]
     fn an_attached_plane_gets_the_statements_and_a_wake() {
         let shared: SharedDisplayModel = Arc::new(Mutex::new(
-            model_for(&abi(), &kf_chip::display::AMPERE).expect("derived"),
+            model_for(&abi(), &kf_chip::display::AMPERE, 0).expect("derived"),
         ));
         let woke = Arc::new(std::sync::atomic::AtomicU32::new(0));
         {
@@ -1212,7 +1343,7 @@ mod tests {
     #[test]
     fn rmfree_flags_mark_the_display_object_the_control_names() {
         let shared: SharedDisplayModel = Arc::new(Mutex::new(
-            model_for(&abi(), &kf_chip::display::AMPERE).expect("derived"),
+            model_for(&abi(), &kf_chip::display::AMPERE, 0).expect("derived"),
         ));
         shared
             .lock()

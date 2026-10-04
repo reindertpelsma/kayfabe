@@ -291,13 +291,21 @@ The design review of 2026-10-03 (`traces/v3_design_review_20261003/`) raised the
 build branches (`v3-gop-rom`, `v3-gop-kf3`, `v3-broker`, `v3-loud-uvm`) use the default shown, so
 nothing waits on them; each one is cheap to change later.
 
+⊘ **Corrected 2026-10-03, later the same day — the broker peer-check row changed.** It said the relay
+accepts "the owner of the socket's directory". The adversarial review of `v3-broker` showed that
+admits a squatter: anyone can create a missing directory under `/tmp` (after a reboot, `mkdir
+/tmp/kf3` by whichever local user is first), then bind the socket, see the guest's screen and type
+into it. That uid is no longer trusted, and QEMU's uid is now read at each connect, after QEMU's
+`-run-with user=` has dropped privileges (it was read once, as root, at realize). The row below
+states the new default (`design/V3_DISPLAY.md` §8.5).
+
 | question | default used | why |
 |---|---|---|
 | Secure Boot with the GOP ROM | ⊘ ANSWERED 2026-10-04 (`OWNER_RULINGS.md` §K): Secure Boot on, ROM self-signed with a per-install kayfabe key enrolled in the VM's OVMF `db` beside Microsoft's keys; swtpm per VM | An unsigned option ROM does not run under Secure Boot. The alternatives are a kayfabe key enrolled through an OVMF vars template, or Microsoft third-party CA signing. Windows 11 makes this a release question. |
 | The firmware crate is unsafe by nature (raw UEFI tables) | a named exception under `firmware/` only, outside the cargo workspace | It never links into the VMM. |
 | OVMF for every bench lane, or only the display lane | display lane only; no legacy VGA BIOS | SeaBIOS lanes stay as the baseline. A legacy VGA BIOS is an estimated 1–2 weeks more. |
 | kf3 has no reset path | a guest reboot needs a QEMU restart; documented | Windows Setup reboots several times, so the Windows lane needs either this or a reset path. |
-| Broker peer check | accept uid 0, QEMU's uid and the owner of the socket's directory, plus an optional `display-broker-uid` | Whoever listens on the socket sees the guest's screen and can type into it, and nvkvm-pv never checked. |
+| Broker peer check | accept uid 0 and QEMU's effective uid, read at each connect (after `-run-with user=` / `-runas`), plus an optional `display-broker-uid`; nothing else. A root QEMU with a desktop user's broker sets `-run-with user=` or `display-broker-uid`. | Whoever listens on the socket sees the guest's screen and can type into it, and nvkvm-pv never checked. The socket directory's owner is not trusted: anyone can create a missing `/tmp` directory. |
 | Broker distribution | installed separately, pinned to an nvkvm-pv revision | Settled with the install path (item 1). |
 | Clipboard | later | It is not in the 2026-10-03 list. |
 | Window sizes above the virtual DVI connector's modes | the largest mode that fits, scaled by the broker | Larger modes need a different virtual connector (`V3_DISPLAY.md` §6.2). |

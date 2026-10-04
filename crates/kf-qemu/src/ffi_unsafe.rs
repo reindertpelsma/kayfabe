@@ -5,6 +5,7 @@ use crate::device::{Config, Device};
 use crate::raw_unsafe::RawRegion;
 use core::ffi::{c_char, c_void};
 use std::ffi::CStr;
+use std::os::unix::ffi::OsStrExt as _;
 
 /// Wire ABI of this surface; the C device refuses a mismatched archive.
 /// ★ 10 (2026-09-30, `v3-mc22`): the union of two INDEPENDENT 9s — `v3-display2`'s frame hand-off
@@ -14,21 +15,33 @@ use std::ffi::CStr;
 /// number above both. `tests/wire_mirror.rs` compiles every entry point here against `kf3.h`.
 /// ★ 11 (2026-10-03, `v3-gop-kf3`, `docs/design/V3_DISPLAY.md` §4.11): the boot display —
 /// [`kf3_realize`] takes `gop`, and [`kf3_option_rom`] hands the C device the ROM to register.
-/// ★ 13 (2026-10-03, `v3-dispsw-exp`, on top of 11): [`kf3_realize`] also takes `x11_dispsw`,
-/// after `gop` (the EXPERIMENT property, default off; `docs/design/V3_DISPLAY.md`, the 2026-10-03
-/// note). ⊘ 13, not 12: 12 is `v3-broker`'s (`display_broker`), a DIFFERENT `kf3_realize`
-/// signature, so its archive must fail this check.
-/// ⊘ 2026-10-04 (`v3-cand-1`, which merges `v3-dispsw-exp` and not `v3-broker`): `v3-broker` may
-/// keep 12 only while it merges into a master still at 11. Merged into a master at 13, its
-/// [`kf3_realize`] has BOTH `x11_dispsw` and `display_broker`, a signature neither 12 nor 13
-/// names, so it must take **14**: `display_broker` after `x11_dispsw`, in this file, `kf3.h` and
-/// `kf3.c`'s call, so that archives at 12 and at 13 are both refused.
-/// ⊘ CORRECTED 2026-10-04 (the `v3-cand-1` review): this note also named `tests/wire_mirror.rs`.
-/// That test holds no ABI number and no `kf3_realize` signature — it reads [`KF3_ABI`] from here
-/// and compares `kf3.h`'s prototypes with these signatures on its own — so it needs no edit. And no
-/// CI test checks `kf3.c`'s call (`kf3.c:835-836`): only the C build does (`build_kf3.sh` on a box,
-/// or `-fsyntax-only` against QEMU 10.2.4), so a `v3-broker` re-merge must rebuild kf3.
-pub const KF3_ABI: u32 = 13;
+/// ★ 12 (2026-10-03, `v3-broker`, display step 3 — `docs/design/V3_DISPLAY.md` §8): ONE number above
+/// master's 11 for the whole broker surface. ⊘ The branch had numbered its own steps 11, 12 and 13
+/// before master's boot display took 11; the merge folds them into this one bump:
+/// `kf3_realize` gains `display_broker` (after `gop`), whose word carries the broker in bit 0 and
+/// `display-broker-vram` in bits 1-2 (0 auto, 1 on, 2 off; [`kf_broker::gpucopy::VramMode::from_abi`]);
+/// the broker relay's surface ([`Kf3BrokerEvent`], [`kf3_broker_start`], [`kf3_broker_frame_fd`],
+/// [`kf3_broker_ready`], [`kf3_broker_stop`]); [`kf3_display_ui_info`] (the console's `ui_info`
+/// hook) and the broker's `SURFACE` event (kind 8). (⊘ "`v3-dispsw-exp` takes 13 when it merges"
+/// is corrected by the registry under 16: 13 is that branch's own number.)
+/// ★ Still 12 on 2026-10-04 (§8.13): the console's cursor in hover ([`Kf3Cursor`],
+/// [`kf3_display_cursor`], [`kf3_display_cursor_pixels`], and since the review of the same day
+/// [`kf3_display_cursor_done`]) joins the broker's surface while it is unmerged — the bump is per
+/// surface reaching master, and an archive without these symbols fails to LINK with a kf3.c that
+/// calls them, never at run time.
+/// ★ 16 (2026-10-04, `v3-maxfps`, `docs/design/V3_DISPLAY.md` §8.16, `OWNER_RULINGS.md` §M): the
+/// configurable frame-rate bound — [`kf3_realize`] gains `display_max_fps` after `display_broker`
+/// (whole Hz, 0 unset), and the console's on-demand refresh joins the surface
+/// ([`kf3_display_refresh`], [`kf3_display_refresh_fd`], [`kf3_display_refresh_drain`]). The
+/// registry (one number per shape that reached a binary, never reused): 11 master (GOP), 12
+/// `v3-broker` (and `v3-windows`, renumbered at its merge), 13 `v3-dispsw-exp`, 14 reserved
+/// (broker-on-13, `v3-cand-1`), 15 `v3-viommu`, 16 this branch — cut from `v3-broker` `82f98f42`,
+/// so a merge with 13, 14 or 15 takes a new number.
+/// ★ 18 (2026-10-04, candidate 2): merge ABI 13's x11_dispsw with ABI 16's broker,
+/// cursor and capped-refresh surface. The realize tail is gop, x11_dispsw, display_broker,
+/// display_max_fps. ABI 17 was already built by the earlier display scratch integration
+/// (with another argument order); neither 14, 16 nor 17 can name this interface.
+pub const KF3_ABI: u32 = 18;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -107,6 +120,8 @@ pub unsafe extern "C" fn kf3_realize(
     display: u32,
     gop: u32,
     x11_dispsw: u32,
+    display_broker: u32,
+    display_max_fps: u32,
     out: *mut *mut c_void,
     err: *mut c_char,
     err_len: usize,
@@ -122,6 +137,13 @@ pub unsafe extern "C" fn kf3_realize(
         )
         .filter(|s| !s.is_empty())
     };
+    let vram = match kf_broker::gpucopy::VramMode::from_abi(display_broker) {
+        Ok(v) => v,
+        Err(e) => {
+            write_err(err, err_len, &e);
+            return -1;
+        }
+    };
     let cfg = Config {
         gpu_minor,
         fb_mb,
@@ -131,6 +153,9 @@ pub unsafe extern "C" fn kf3_realize(
         display: display != 0,
         gop: gop != 0,
         x11_dispsw: x11_dispsw != 0,
+        display_broker: vram.is_some(),
+        display_broker_vram: vram.unwrap_or_default(),
+        display_max_fps,
     };
     match Device::realize(&cfg) {
         Ok(d) => {
@@ -514,6 +539,74 @@ pub struct Kf3Frame {
     pub serial: u64,
 }
 
+/// ★ ABI 12 (display step 3): one input event from the display broker for the C device to inject
+/// (`kind`: 1 key, 2 button, 3 absolute, 4 relative, 5 wheel, 6 grab, 7 close; 8 surface —
+/// `x`, `y` = the broker window's size, `w0` = its refresh in mHz). Every value is
+/// already bounded by the relay (`kf_broker::Input`); the C device still checks a key code
+/// against QEMU's own map.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Kf3BrokerEvent {
+    /// `KF3_BROKER_*` (kf3.h).
+    pub kind: u32,
+    /// Key/button code, x, dx, wheel direction (+1 up, -1 down), grab on, close forced.
+    pub x: i32,
+    /// Pressed, y, dy.
+    pub y: i32,
+    /// The absolute range's width.
+    pub w0: u32,
+    /// The absolute range's height.
+    pub w1: u32,
+}
+
+/// ★ §8.13 (KF3 ABI 12's broker surface, before it reaches master): what QEMU's console is told
+/// about the guest's cursor while a cursor-capable broker hovers ([`kf3_display_cursor`]). `what`:
+/// bit 0 DEFINE — `width` x `height` with the hot spot (`width` = 0: the hidden cursor), its pixels
+/// from [`kf3_display_cursor_pixels`]; bit 1 MOUSE — `dpy_mouse_set(x, y, on)`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Kf3Cursor {
+    /// `KF3_CURSOR_DEFINE` | `KF3_CURSOR_MOUSE`.
+    pub what: u32,
+    /// The image's width (0: the hidden cursor) …
+    pub width: u32,
+    /// … and height (at most 256 each).
+    pub height: u32,
+    /// The hot spot's column …
+    pub hot_x: u32,
+    /// … and row, inside the image.
+    pub hot_y: u32,
+    /// The guest pointer on the console's frame: column …
+    pub x: i32,
+    /// … and row.
+    pub y: i32,
+    /// Whether the cursor is shown.
+    pub on: u32,
+}
+
+impl Kf3BrokerEvent {
+    fn of(i: kf_broker::Input) -> Kf3BrokerEvent {
+        use kf_broker::Input as I;
+        let (kind, x, y, w0, w1) = match i {
+            I::Key { code, down } => (1, i32::from(code), i32::from(down), 0, 0),
+            I::Btn { code, down } => (2, i32::from(code), i32::from(down), 0, 0),
+            I::Abs { x, y, w, h } => (
+                3,
+                x,
+                y,
+                u32::try_from(w).unwrap_or(1),
+                u32::try_from(h).unwrap_or(1),
+            ),
+            I::Rel { dx, dy } => (4, dx, dy, 0, 0),
+            I::Wheel { up } => (5, if up { 1 } else { -1 }, 0, 0, 0),
+            I::Grab(on) => (6, i32::from(on), 0, 0, 0),
+            I::Close { force } => (7, i32::from(force), 0, 0, 0),
+            I::Surface { w, h, mhz } => (8, w, h, mhz, 0),
+        };
+        Kf3BrokerEvent { kind, x, y, w0, w1 }
+    }
+}
+
 /// ★ ABI 10 (`v3-display2`'s 9; QEMU's main thread, the console's `gfx_update`): the newest frame
 /// of the virtual display. `0` and `*out` filled — the memory stays valid, and is not written, until
 /// the next call (the worker never fills the frame the console shows); `-1` before the first frame,
@@ -523,7 +616,8 @@ pub struct Kf3Frame {
 /// `out` is writable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn kf3_display_frame(h: *mut c_void, out: *mut Kf3Frame) -> i32 {
-    let (Some(d), false) = (dev(h), out.is_null()) else {
+    // §R: validated at the boundary — null AND alignment (the review of 2026-10-04)
+    let (Some(d), false) = (dev(h), out.is_null() || !out.is_aligned()) else {
         return -1;
     };
     let Some(f) = d.display.and_then(|dp| dp.console.take()) else {
@@ -540,6 +634,135 @@ pub unsafe extern "C" fn kf3_display_frame(h: *mut c_void, out: *mut Kf3Frame) -
     // SAFETY: `out` is writable (caller contract).
     unsafe { *out = fr };
     0
+}
+
+/// ★ ABI 16 (`display-max-fps` D2.3, `docs/design/V3_DISPLAY.md` §8.16; main thread, the console's
+/// `gfx_update` — a `screendump` among its callers): ask for a frame no older than now. `1`: the
+/// worker will signal [`kf3_display_refresh_fd`] when the newest frame is (it checks the frame at the
+/// console head's next tick and sends it if it changed; at once when nothing can be copied); `0`:
+/// no answer will come (no display, or no descriptor) — the caller answers its waiter itself.
+/// Lock-free: one atomic and one eventfd write.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_display_refresh(h: *mut c_void) -> i32 {
+    match dev(h).and_then(|d| d.display) {
+        Some(dp) if dp.request_refresh() => 1,
+        _ => 0,
+    }
+}
+
+/// ★ ABI 16: the descriptor that becomes readable when refresh requests were served (the C device
+/// watches it on its main loop), or -1 (no display, none could be made).
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_display_refresh_fd(h: *mut c_void) -> i32 {
+    dev(h)
+        .and_then(|d| d.display)
+        .map_or(-1, |dp| dp.console.refresh_fd())
+}
+
+/// ★ ABI 16 (main loop, the refresh descriptor's handler): consume its readiness.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_display_refresh_drain(h: *mut c_void) {
+    if let Some(dp) = dev(h).and_then(|d| d.display) {
+        dp.console.refresh_drain();
+    }
+}
+
+/// ★ §8.13 (ABI 12, main thread: the console's `gfx_update`, AFTER it took its frame, and each
+/// broker pump): what QEMU's console should be told about the guest's cursor now — the
+/// coordinator's decision of 2026-10-04: while a cursor-capable broker hovers the frames carry no
+/// cursor (§O), so the console gets it through QEMU's cursor API (VNC shows it as a real pointer);
+/// under grab, or with no such broker, it stays composed. The define follows the frame the console
+/// shows and is paced (`kf_broker::ConsoleCursor::poll`). Returns `out.what` (0: nothing to do,
+/// also without a display or a broker; `*out` untouched then); after a nonzero return the caller
+/// reports what it applied with [`kf3_display_cursor_done`].
+///
+/// # Safety
+/// `out` is writable (null and misalignment are refused here).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_display_cursor(h: *mut c_void, out: *mut Kf3Cursor) -> i32 {
+    let (Some(dp), false) = (
+        dev(h).and_then(|d| d.display),
+        out.is_null() || !out.is_aligned(),
+    ) else {
+        return 0;
+    };
+    let Some(seat) = dp.broker.as_ref() else {
+        return 0;
+    };
+    let u = seat.console_cursor(
+        dp.console.cursor_point(),
+        dp.console.shown_frame(),
+        dp.console.now_ms(),
+    );
+    let mut c = Kf3Cursor::default();
+    if let Some(define) = u.define {
+        c.what |= 1;
+        if let Some(sh) = define {
+            (c.width, c.height, c.hot_x, c.hot_y) = (sh.width, sh.height, sh.hot.0, sh.hot.1);
+        }
+    }
+    if let Some((x, y, on)) = u.mouse {
+        c.what |= 2;
+        (c.x, c.y, c.on) = (x, y, u32::from(on));
+    }
+    if c.what == 0 {
+        return 0;
+    }
+    // SAFETY: `out` is writable (caller contract), checked non-null and aligned above.
+    unsafe { *out = c };
+    i32::try_from(c.what).unwrap_or(0)
+}
+
+/// ★ §8.13 (ABI 12, main thread, right after acting on a nonzero [`kf3_display_cursor`]): what the C
+/// device APPLIED of it — `KF3_CURSOR_DEFINE` when `dpy_cursor_define` ran, `KF3_CURSOR_MOUSE`
+/// when `dpy_mouse_set` ran (only under an absolute pointer). A part not applied is handed out
+/// again at a later poll (the review of 2026-10-04: Rust used to believe the console held a
+/// cursor the C side had refused to define, and never retried).
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_display_cursor_done(h: *mut c_void, applied: u32) {
+    if let Some(seat) = dev(h)
+        .and_then(|d| d.display)
+        .and_then(|dp| dp.broker.as_ref())
+    {
+        seat.console_cursor_done(applied & 1 != 0, applied & 2 != 0);
+    }
+}
+
+/// The most words [`kf3_display_cursor_pixels`] writes: a 256x256 cursor (the broker's bound,
+/// `kf_broker::wire::CURSOR_MAX_DIM`).
+const CURSOR_MAX_WORDS: u32 = 256 * 256;
+
+/// ★ §8.13 (ABI 12, main thread, right after a DEFINE from [`kf3_display_cursor`]): the defined
+/// image's pixels into `data` — QEMU's `QEMUCursor` data, one host-endian `0xAARRGGBB` word per
+/// pixel, PREMULTIPLIED (what VNC's alpha cursor carries; ⊘ straight until the review of
+/// 2026-10-04) — copied from kayfabe's own copy of the image, never guest memory.
+/// `words` must be exactly the defined `width * height`. 0, or -1 with nothing written.
+///
+/// # Safety
+/// `data` is null or writable for `words` aligned `u32`s (validated here: null, misalignment and
+/// more than 256x256 words are refused before a byte is written).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_display_cursor_pixels(
+    h: *mut c_void,
+    data: *mut u32,
+    words: u32,
+) -> i32 {
+    if data.is_null() || !data.is_aligned() || words == 0 || words > CURSOR_MAX_WORDS {
+        return -1;
+    }
+    let Some(seat) = dev(h)
+        .and_then(|d| d.display)
+        .and_then(|dp| dp.broker.as_ref())
+    else {
+        return -1;
+    };
+    // SAFETY: `data` is non-null, aligned, and writable for `words` u32s (caller contract);
+    // `words` is at most 256x256, so the slice is at most 256 KiB, and it lives only for the call.
+    let out = unsafe { core::slice::from_raw_parts_mut(data, words as usize) };
+    match seat.console_cursor_pixels(out) {
+        Ok(()) => 0,
+        Err(_) => -1,
+    }
 }
 
 /// ★ ABI 10 (`v3-ioeventfd`'s 9): the doorbell register's offset inside the 64 KiB usermode page
@@ -590,6 +813,140 @@ pub extern "C" fn kf3_doorbell_site(h: *mut c_void, gpa: u64, add: u32) {
         } else {
             d.dbfast.site_del(gpa);
         }
+    }
+}
+
+/// ★ ABI 12 (display step 3, `docs/design/V3_DISPLAY.md` §8): start the display-broker relay —
+/// QEMU's main loop, BQL held, after `kf3_realize` with `display_broker` = 1. `path` is the
+/// broker's socket (absolute, shorter than `sun_path`); `extra_uid` is the `display-broker-uid`
+/// property — `-1` none, or one more uid accepted as the broker (any other value is refused by
+/// name); `watch`/`timer` are the C device's fd-handler and timer verbs, called back only from
+/// inside the `kf3_broker_*` entries. Returns 0, or -1 with a message (a broker that is not
+/// running yet is NOT an error: the first attempt runs from the main loop's timer, and a failed
+/// one is retried in the background).
+///
+/// # Safety
+/// `path` is a NUL-terminated string; `err` is null or writable for `err_len` bytes; `watch` and
+/// `timer` must be callable with `opaque` on the main loop for the device's lifetime, must not
+/// re-enter a `kf3_broker_*` entry, and must not block.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_broker_start(
+    h: *mut c_void,
+    path: *const c_char,
+    extra_uid: i64,
+    watch: Option<crate::raw_unsafe::BrokerWatchFn>,
+    timer: Option<crate::raw_unsafe::BrokerTimerFn>,
+    opaque: *mut c_void,
+    now_ms: u64,
+    err: *mut c_char,
+    err_len: usize,
+) -> i32 {
+    let (Some(d), false, Some(watch), Some(timer)) = (dev(h), path.is_null(), watch, timer) else {
+        write_err(err, err_len, "kf3_broker_start: a null argument");
+        return -1;
+    };
+    let Some(seat) = d.display.and_then(|dp| dp.broker.as_ref()) else {
+        write_err(
+            err,
+            err_len,
+            "display-broker needs display=on and a device realized with the broker's frames",
+        );
+        return -1;
+    };
+    // SAFETY: the caller promises a NUL-terminated string.
+    let p = unsafe { CStr::from_ptr(path) };
+    let path = std::path::PathBuf::from(std::ffi::OsStr::from_bytes(p.to_bytes()));
+    // SAFETY: forwarded from this function's contract.
+    let hooks = unsafe { crate::raw_unsafe::BrokerHooks::adopt(watch, timer, opaque) };
+    match seat.start(&path, extra_uid, hooks, now_ms) {
+        Ok(()) => 0,
+        Err(e) => {
+            write_err(err, err_len, &e);
+            -1
+        }
+    }
+}
+
+/// ★ ABI 12: the display worker's frame eventfd, for the C device to watch for readability
+/// (main loop); -1 without a broker.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_broker_frame_fd(h: *mut c_void) -> i32 {
+    dev(h)
+        .and_then(|d| d.display)
+        .and_then(|dp| dp.broker.as_ref())
+        .map_or(-1, crate::broker::BrokerSeat::frame_fd)
+}
+
+/// ★ ABI 12 (main loop, BQL held): something the relay waits on is ready — `fd` is the socket
+/// (`rd`/`wr` say which), the frame eventfd, or -1 for the relay's timer. Writes at most `cap`
+/// input events to `out` and returns how many (never negative; 0 on a bad handle). Reads at most
+/// `cap` packets from the socket; level-triggered readiness delivers the rest.
+///
+/// # Safety
+/// `out` is null or writable for `cap` events.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_broker_ready(
+    h: *mut c_void,
+    fd: i32,
+    rd: u32,
+    wr: u32,
+    now_ms: u64,
+    out: *mut Kf3BrokerEvent,
+    cap: u32,
+) -> i32 {
+    let Some(dp) = dev(h).and_then(|d| d.display) else {
+        return 0;
+    };
+    let Some(seat) = dp.broker.as_ref() else {
+        return 0;
+    };
+    let cap = if out.is_null() { 0 } else { cap as usize };
+    let mut evs = Vec::with_capacity(cap.min(kf_broker::conn::READ_BATCH));
+    let active = seat.ready(fd, rd != 0, wr != 0, now_ms, &mut evs, cap.max(1));
+    if active {
+        // broker activity keeps the refresh clock at the watched rate; it asks for a host copy
+        // only while the broker is fed through host memory (§8.11, two demand signals)
+        dp.console.note_broker_demand();
+    }
+    // ★ §8.16: a session that just became active is a new viewer — the next check sends
+    if seat.became_active(active) {
+        dp.console.note_new_watcher();
+    }
+    let n = evs.len().min(cap);
+    for (i, e) in evs.iter().take(n).enumerate() {
+        // SAFETY: `i < n <= cap`, and `out` is writable for `cap` events (caller contract).
+        unsafe { *out.add(i) = Kf3BrokerEvent::of(*e) };
+    }
+    i32::try_from(n).unwrap_or(0)
+}
+
+/// ★ ABI 12 (main loop, device exit, BEFORE the console closes): stop the relay — unwatch, close,
+/// no timer.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_broker_stop(h: *mut c_void) {
+    if let Some(seat) = dev(h)
+        .and_then(|d| d.display)
+        .and_then(|dp| dp.broker.as_ref())
+    {
+        seat.stop();
+    }
+}
+
+/// ★ ABI 12 (display step 3c; QEMU's main loop, the console's `ui_info` hook after QEMU's 1 s
+/// coalescing): the UI wants head `head` to be `width` x `height` at `refresh_mhz` (0: unknown). The
+/// worker authors a new monitor (EDID) and, when a hotplug registration is live, the drainer posts
+/// the hotplug. Lock-free. Returns 0, or -1 (no display, a head without a console, a zero size).
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_display_ui_info(
+    h: *mut c_void,
+    head: u32,
+    width: u32,
+    height: u32,
+    refresh_mhz: u32,
+) -> i32 {
+    match dev(h).and_then(|d| d.display) {
+        Some(dp) if dp.request_ui(head, width, height, refresh_mhz) => 0,
+        _ => -1,
     }
 }
 

@@ -698,6 +698,10 @@ fn a_head_composes_its_windows_back_to_front() {
     let front = window(0xb0, 0, 250, 250);
     e.step(3, &back.bytes(), back.put(), &mut all_ok);
     e.step(4, &front.bytes(), front.put(), &mut all_ok);
+    // ★ D1 (`display-max-fps`): the second tearing flip on head 1 waits for the head's tick
+    assert!(e.waiting(4));
+    e.vblank(1, &mut all_ok);
+    assert!(!e.waiting(4));
     let mut imm = Ring::new();
     imm.m(ma(IMM, "SET_POINT_OUT", 0), (50 << 16) | 100)
         .m(m(IMM, "UPDATE"), 0);
@@ -713,4 +717,244 @@ fn a_head_composes_its_windows_back_to_front() {
     );
     assert_eq!(f.handle, 0xb0);
     assert_eq!(e.composition(&sv, 0), None, "head 0 shows nothing");
+}
+
+/// ★ Display step 3d: a head's cursor is read from the ARMED core state (context DMA, offset in
+/// 256-byte units, control, composition) and the cursor channel's last `Update` (a signed 16-bit
+/// hot-spot point); a head with no enabled cursor has none.
+#[test]
+fn a_head_cursor_is_scanned_from_the_core_and_its_pio_point() {
+    let k = 0xC67A;
+    let cv = CursorVocab::resolve(t(), CORE, k).expect("GA10x cursor vocabulary");
+    let mut e = engine();
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Cursor, 1, CLIENT, 1, None, 0);
+    assert_eq!(e.cursor_scan(&cv, 1), None, "nothing programmed");
+    let mut ctl = put(0, fl(CORE, "HEAD_SET_CONTROL_CURSOR_ENABLE"), 1);
+    ctl = put(
+        ctl,
+        fl(CORE, "HEAD_SET_CONTROL_CURSOR_FORMAT"),
+        m(CORE, "HEAD_SET_CONTROL_CURSOR_FORMAT_A8R8G8B8"),
+    );
+    ctl = put(
+        ctl,
+        fl(CORE, "HEAD_SET_CONTROL_CURSOR_SIZE"),
+        m(CORE, "HEAD_SET_CONTROL_CURSOR_SIZE_W64_H64"),
+    );
+    let mut comp = put(0, fl(CORE, "HEAD_SET_CONTROL_CURSOR_COMPOSITION_K1"), 255);
+    comp = put(
+        comp,
+        fl(
+            CORE,
+            "HEAD_SET_CONTROL_CURSOR_COMPOSITION_CURSOR_COLOR_FACTOR_SELECT",
+        ),
+        m(
+            CORE,
+            "HEAD_SET_CONTROL_CURSOR_COMPOSITION_CURSOR_COLOR_FACTOR_SELECT_K1",
+        ),
+    );
+    comp = put(
+        comp,
+        fl(
+            CORE,
+            "HEAD_SET_CONTROL_CURSOR_COMPOSITION_VIEWPORT_COLOR_FACTOR_SELECT",
+        ),
+        m(
+            CORE,
+            "HEAD_SET_CONTROL_CURSOR_COMPOSITION_VIEWPORT_COLOR_FACTOR_SELECT_NEG_K1_TIMES_SRC",
+        ),
+    );
+    let a2 = |n: &str| t().a2(CORE, n, 1, 0).unwrap_or_else(|| panic!("{n}(1, 0)"));
+    let mut c = Ring::new();
+    modeset(&mut c, 1, 2);
+    c.m(a2("HEAD_SET_CONTEXT_DMA_CURSOR"), 0xcafe)
+        .m(a2("HEAD_SET_OFFSET_CURSOR"), 0x20)
+        .m(ma(CORE, "HEAD_SET_CONTROL_CURSOR", 1), ctl)
+        .m(ma(CORE, "HEAD_SET_CONTROL_CURSOR_COMPOSITION", 1), comp)
+        .m(m(CORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    let hot = t().a(k, "SET_CURSOR_HOT_SPOT_POINT_OUT", 0).unwrap();
+    e.cursor_write(1, hot, (40 << 16) | 0xFFFB, &mut all_ok);
+    e.cursor_write(1, m(k, "UPDATE"), 0, &mut all_ok);
+    let cs = e.cursor_scan(&cv, 1).expect("head 1's cursor is enabled");
+    assert_eq!(
+        (cs.handle, cs.offset, cs.size, cs.argb8888),
+        (0xcafe, 0x2000, 64, true)
+    );
+    assert_eq!((cs.x, cs.y), (-5, 40), "the point is signed");
+    assert_eq!(
+        (cs.k1, cs.cursor_factor, cs.viewport_factor, cs.mode),
+        (255, 2, 7, 0),
+        "NVKMS's premultiplied cursor"
+    );
+    assert_eq!((cs.client, cs.head), (CLIENT, 1));
+    assert_eq!(e.cursor_scan(&cv, 0), None, "head 0 has no cursor");
+    assert_eq!(e.cursor_scan(&cv, 9), None, "no such head");
+}
+
+/// A window flip: `SET_PRESENT_CONTROL.BEGIN_MODE` = `mode` (0 non-tearing, 1 immediate — what
+/// nvidia-drm's async flips program), interlocked with the windows in `with`, then `UPDATE`.
+fn flip(r: &mut Ring, mode: u32, with: u32) {
+    r.m(
+        m(WIN, "SET_PRESENT_CONTROL"),
+        put(0, fl(WIN, "SET_PRESENT_CONTROL_BEGIN_MODE"), mode),
+    );
+    r.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), with);
+    r.m(m(WIN, "UPDATE"), 0);
+}
+
+/// Head 0 lit (1080p60) with windows 0 and 1 on it; the core's ring for later updates.
+fn lit(e: &mut Engine) -> Ring {
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 1, CLIENT, 1, pb(), 0);
+    let mut c = Ring::new();
+    modeset(&mut c, 0, 0);
+    c.m(ma(CORE, "WINDOW_SET_CONTROL", 1), 0);
+    c.m(m(CORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    assert!(e.heads_armed()[0].period_ns > 0);
+    c
+}
+
+fn latched(s: &Step) -> Vec<u32> {
+    s.effects
+        .iter()
+        .filter_map(|x| match x {
+            Effect::Latched { window } => Some(*window),
+            _ => None,
+        })
+        .collect()
+}
+
+/// ★ D1 (`display-max-fps`, owner decision of 2026-10-04): a TEARING flip on an active head that
+/// already presented since the head's tick waits for the next tick — so async flips are bounded by
+/// the cap too; the first one after a tick still latches at once (it tears as asked). Another
+/// head's tick releases nothing. Known-positive: with the gate off (the mutation) the second flip
+/// latches at once, as before the gate.
+#[test]
+fn a_second_tearing_flip_waits_for_the_vblank() {
+    assert!(engine().tear_gate, "on by default (D1)");
+    for gate in [true, false] {
+        let mut e = engine();
+        e.tear_gate = gate;
+        lit(&mut e);
+        let mut w = Ring::new();
+        flip(&mut w, 1, 0);
+        let s = e.step(1, &w.bytes(), w.put(), &mut all_ok);
+        assert_eq!(
+            latched(&s),
+            vec![0],
+            "gate {gate}: the first latches at once"
+        );
+        flip(&mut w, 1, 0);
+        let s = e.step(1, &w.bytes(), w.put(), &mut all_ok);
+        if !gate {
+            assert_eq!(latched(&s), vec![0], "without the gate it latches at once");
+            assert_eq!(e.pace[0].tear_held, 0);
+            assert_eq!(e.pace[0].presents, 2);
+            continue;
+        }
+        assert!(s.effects.is_empty(), "{:?}", s.effects);
+        assert!(e.waiting(1));
+        assert_eq!(e.pace[0].tear_held, 1);
+        assert!(e.vblank(1, &mut all_ok).effects.is_empty(), "head 1's tick");
+        assert_eq!(latched(&e.vblank(0, &mut all_ok)), vec![0], "head 0's tick");
+        assert!(!e.waiting(1));
+        // presented again at that tick: the next waits again
+        flip(&mut w, 1, 0);
+        assert!(
+            e.step(1, &w.bytes(), w.put(), &mut all_ok)
+                .effects
+                .is_empty()
+        );
+        assert_eq!(e.pace[0].tear_held, 2);
+        // a tick with nothing presented since: the parked one latches, then one at once again
+        e.vblank(0, &mut all_ok);
+        e.vblank(0, &mut all_ok);
+        flip(&mut w, 1, 0);
+        assert_eq!(
+            latched(&e.step(1, &w.bytes(), w.put(), &mut all_ok)),
+            vec![0]
+        );
+        assert_eq!(e.pace[0].presents, 4);
+        assert_eq!(e.pace[0].tearing, 4);
+        assert_eq!(e.pace[1], PaceCounts::default(), "nothing on head 1");
+    }
+}
+
+/// ★ `presents` counts LATCHES, once per head per latch: two windows of one head latched together
+/// are one present; a non-tearing flip at its tick is one; a group holding the core latches at
+/// once and is counted as `core_imm` too (the tick does not bound it, so the meter must see it).
+/// (Mutations: counting per window; a counter blind to core groups.)
+#[test]
+fn presents_count_one_per_latch_including_core_groups() {
+    let mut e = engine();
+    let mut c = lit(&mut e);
+    assert_eq!(e.pace[0].presents, 0, "a modeset alone presents no window");
+    // windows 0 and 1, interlocked, non-tearing: parked, then ONE present at the tick
+    let (mut w0, mut w1) = (Ring::new(), Ring::new());
+    flip(&mut w0, 0, 1 << 1);
+    flip(&mut w1, 0, 1 << 0);
+    e.step(1, &w0.bytes(), w0.put(), &mut all_ok);
+    assert!(
+        e.step(2, &w1.bytes(), w1.put(), &mut all_ok)
+            .effects
+            .is_empty()
+    );
+    let s = e.vblank(0, &mut all_ok);
+    assert_eq!(latched(&s), vec![0, 1]);
+    assert_eq!(e.pace[0].presents, 1, "one latch, two windows");
+    assert_eq!(e.pace[0].tearing, 0);
+    // window 0 interlocked with the core: latches at once, even right after a present
+    w0.m(
+        m(WIN, "SET_INTERLOCK_FLAGS"),
+        put(0, fl(WIN, "SET_INTERLOCK_FLAGS_INTERLOCK_WITH_CORE"), 1),
+    );
+    flip(&mut w0, 0, 0);
+    e.step(1, &w0.bytes(), w0.put(), &mut all_ok);
+    c.m(m(CORE, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 0);
+    c.m(m(CORE, "UPDATE"), 0);
+    let s = e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    assert_eq!(latched(&s), vec![0], "{:?}", s.effects);
+    assert_eq!(e.pace[0].presents, 2);
+    assert_eq!(e.pace[0].core_imm, 1);
+}
+
+/// ★ F7: a flip parked for a head's tick latches when the head goes IDLE (a core update that stops
+/// its raster) — its tick will never come. (Mutation: without the unpark the window stays busy
+/// forever, GET before its UPDATE.)
+#[test]
+fn a_group_parked_on_a_head_that_goes_idle_latches() {
+    let mut e = engine();
+    let mut c = lit(&mut e);
+    let mut w = Ring::new();
+    flip(&mut w, 0, 0);
+    assert!(
+        e.step(1, &w.bytes(), w.put(), &mut all_ok)
+            .effects
+            .is_empty()
+    );
+    assert!(e.waiting(1), "parked for head 0's tick");
+    // the core stops head 0 (pixel clock 0): the parked flip latches in the same pass
+    c.m(ma(CORE, "HEAD_SET_PIXEL_CLOCK_FREQUENCY", 0), 0);
+    c.m(m(CORE, "UPDATE"), 0);
+    let s = e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    assert_eq!(e.heads_armed()[0].period_ns, 0);
+    assert_eq!(latched(&s), vec![0], "{:?}", s.effects);
+    assert!(!e.waiting(1));
+    // one whose acquire does not hold becomes an acquire-only wait (the poll re-checks it)
+    let mut e = engine();
+    let mut c = lit(&mut e);
+    let mut w = Ring::new();
+    w.m(m(WIN, "SET_CONTEXT_DMA_ACQ_SEMAPHORE"), 0xcafe_0a00);
+    w.m(m(WIN, "SET_ACQ_SEMAPHORE_VALUE"), 7);
+    flip(&mut w, 0, 0);
+    e.step(1, &w.bytes(), w.put(), &mut all_ok);
+    c.m(ma(CORE, "HEAD_SET_PIXEL_CLOCK_FREQUENCY", 0), 0);
+    c.m(m(CORE, "UPDATE"), 0);
+    let mut no = |_: &Acquire| false;
+    e.step(0, &c.bytes(), c.put(), &mut no);
+    assert!(e.waiting(1) && e.acquire_pending());
+    assert_eq!(latched(&e.poll_acquires(&mut all_ok)), vec![0]);
 }

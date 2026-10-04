@@ -1,0 +1,269 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+# broker_hook.sh <tag> — POST_CAPTURE_HOOK of broker_lane.sh (docs/design/V3_DISPLAY.md §8.11-§8.12).
+# Runs on the HOST with the guest up, `nvidia` loaded in it, and the broker in the host's desktop.
+#   1. guest KMS (nvidia-drm modeset=1 fbdev=1) — the relay's first frames
+#   2. the guest's Cinnamon session (Xorg + the stock NVIDIA X driver, lightdm autologin), as hook.sh
+#   3. the broker window fullscreen (1:1 with the guest's 1920x1080, so cursor images compare 1:1)
+#   4. HOVER: the host pointer over the window; the host's cursor image (XFixes) against the guest
+#      X server's own cursor image; host and guest screenshots
+#   5. HIDE: the guest hides its cursor (XFixesHideCursor) — the host's must go blank, then return
+#   6. GRAB: CTRL+ALT+G — the host's cursor blank, the cursor COMPOSED into the frame (the console's
+#      screendump around the guest pointer differs from hover's); a relative move; CTRL+ALT+G again
+# Every result is one BRK_* line (boot_capture appends them to the probe log); artefacts go to
+# $BRK_OUT. No step may hang: every guest and host command has a deadline.
+set -uo pipefail
+TAG=${1:?tag}
+HERE="$(cd "$(dirname "$0")" && pwd)"; G="$HERE/../gssh_nv"
+BENCH=${BENCH_DIR:-/workspace/bench}
+OUT=${BRK_OUT:-$BENCH/brk/$TAG}; mkdir -p "$OUT"
+MON=$BENCH/run_${TAG}.mon; Q=$BENCH/run_${TAG}_qemu.log
+XC="$HERE/xcursor.py"
+say(){ echo "BRK_$*"; }
+gq(){ timeout "${2:-60}" "$G" "$1" 2>&1 | tr -d '\r'; }
+HX(){ timeout "${HXT:-20}" env DISPLAY="$BRK_XD" XAUTHORITY="$BRK_XA" "$@"; }
+GX='sudo -u ubuntu env DISPLAY=:0 XAUTHORITY=/home/ubuntu/.Xauthority'
+# the kf3 console's frame (QEMU screendump) as PNG
+shot(){
+    python3 - "$MON" "$OUT/$1.ppm" <<'PY'
+import socket, sys, time
+s = socket.socket(socket.AF_UNIX); s.connect(sys.argv[1]); s.settimeout(10)
+time.sleep(0.2); s.recv(65536)
+s.sendall(("screendump %s kf0\n" % sys.argv[2]).encode()); time.sleep(2)
+PY
+    [ -s "$OUT/$1.ppm" ] && convert "$OUT/$1.ppm" "$OUT/$1.png" 2>/dev/null && rm -f "$OUT/$1.ppm"
+}
+# the host's root window (what the user sees, without the pointer) as PNG
+hshot(){ HX import -window root "$OUT/$1.png" 2>/dev/null; }
+# pixels that differ between two PNGs inside the 96x96 box at (x, y)
+boxdiff(){
+    python3 - "$OUT/$1.png" "$OUT/$2.png" "$3" "$4" <<'PY'
+import sys
+from PIL import Image, ImageChops
+a, b = Image.open(sys.argv[1]).convert("RGB"), Image.open(sys.argv[2]).convert("RGB")
+x, y = int(sys.argv[3]), int(sys.argv[4])
+box = (max(0, x - 16), max(0, y - 16), min(a.width, x + 80), min(a.height, y + 80))
+d = ImageChops.difference(a.crop(box), b.crop(box))
+print(sum(1 for p in d.getdata() if max(p) > 24))
+PY
+}
+# the fraction of pixels (in 1/10000) that differ between two same-size PNGs — the broker's picture
+# (the host's root window with the window fullscreen) against the guest's own frame
+fulldiff(){
+    python3 - "$OUT/$1.png" "$OUT/$2.png" <<'PY'
+import sys
+from PIL import Image, ImageChops
+a, b = Image.open(sys.argv[1]).convert("RGB"), Image.open(sys.argv[2]).convert("RGB")
+if a.size != b.size:
+    print("size_mismatch %dx%d vs %dx%d" % (a.size + b.size)); sys.exit(0)
+d = ImageChops.difference(a, b)
+n = sum(1 for p in d.getdata() if max(p) > 24)
+print("differing_per_10000=%d of %dx%d" % (n * 10000 // (a.width * a.height), a.width, a.height))
+PY
+}
+qline(){ wc -l < "$Q"; }
+since(){ tail -n +"$(( $1 + 1 ))" "$Q"; }
+
+say "HOOK_START $(date -Is)"
+tar -C "$HERE" -cf - xcursor.py | "$G" 'mkdir -p ~/display && tar -xf - -C ~/display'
+
+# 1. guest KMS
+gq 'sudo modprobe nvidia-drm modeset=1 fbdev=1; echo rc=$?' 90 > "$OUT/modprobe.log"
+sleep 6
+say "GUEST_KMS $(tr '\n' ' ' < "$OUT/modprobe.log") nodes=[$(gq 'ls /dev/dri | tr "\n" " "')]"
+say "RELAY_CONNECTED $(grep -ac 'kf3: broker: connected to' "$Q") GPU_COPY_PROBE=[$(grep -a 'GPU-copy rung' "$Q" | head -1 | cut -c1-200)]"
+say "EV_DEVICE broker=[$(grep -a 'renders on DRM device\|EV_DEVICE will' "${BRK_BROKER_LOG:-/dev/null}" | head -1 | cut -c1-160)] relay=[$(grep -a 'the compositor' "$Q" | head -1 | cut -c1-160)] host_nodes=[$(stat -c '%n=%t:%T' /dev/dri/card* /dev/dri/renderD* 2>/dev/null | tr '\n' ' ')]"
+
+# 2. the guest's desktop (Cinnamon on Xorg, as hook.sh's M3)
+bdf=$(gq "lspci -D -d 10de: | awk 'NR==1{print \$1}'")
+IFS=':.' read -r _ b d f <<< "$bdf"
+busid=$(printf 'PCI:%d:%d:%d' "0x${b:-0}" "0x${d:-0}" "0x${f:-0}")
+session=$(gq 'ls /usr/share/xsessions/' | sed -n 's/^\(cinnamon[a-z0-9-]*\)\.desktop$/\1/p' | head -1)
+DESK=$(mktemp -d)
+sed "s/@BUSID@/$busid/" "$HERE/desktop/xorg.conf.in" > "$DESK/xorg.conf"
+sed "s/@SESSION@/${session:-cinnamon}/g" "$HERE/desktop/50-kf-autologin.conf.in" > "$DESK/50-kf-autologin.conf"
+tar -C "$DESK" -cf - xorg.conf 50-kf-autologin.conf | "$G" 'rm -rf ~/desk && mkdir -p ~/desk && tar -xf - -C ~/desk'
+rm -rf "$DESK"
+gq 'sudo cp ~/desk/xorg.conf /etc/X11/xorg.conf && sudo mkdir -p /etc/lightdm/lightdm.conf.d && sudo cp ~/desk/50-kf-autologin.conf /etc/lightdm/lightdm.conf.d/ && : > ~/.xsessionrc && sudo systemctl start lightdm; echo rc=$?' 60 > "$OUT/lightdm.log"
+up=no
+for _ in $(seq 1 45); do
+    if gq "$GX xset q >/dev/null 2>&1 && pgrep -u ubuntu -x cinnamon >/dev/null && echo UP" | grep -q UP; then up=yes; break; fi
+    sleep 2
+done
+say "GUEST_DESKTOP=$up session=${session:-cinnamon} busid=$busid ($(tr '\n' ' ' < "$OUT/lightdm.log"))"
+sleep 20
+shot guest_desktop
+say "RUNGS $(grep -ao 'frames go as [^(;—]*' "$Q" | sort | uniq -c | tr '\n' ' ')"
+grep -aE 'kf3: broker: (the compositor|the display (CAN|CANNOT|imported)|GPU-copy frames are not)' "$Q" | cut -c1-200 | head -6 | sed 's/^/BRK_RUNG_LINE /'
+
+# 3. the broker window, fullscreen (1:1 with the guest)
+# ⊘ [runs brkA, brkA2] a NAME search is not exact: brkA's first match happened to be the broker's
+# window, brkA2's `--onlyvisible` one was not (no focus, so neither CTRL+ALT+F nor CTRL+ALT+G
+# reached it). The broker sets WM_CLASS "nvkvm-display-broker" on its top-level window only.
+W=$(HX xdotool search --class '^nvkvm-display-broker$' 2>/dev/null | head -1)
+say "WINDOW id=[${W:-none}]"
+if [ -z "$W" ]; then say "HOOK_DONE (no broker window)"; exit 0; fi
+HX xdotool windowactivate --sync "$W" >/dev/null 2>&1
+say "WINDOW active=[$(HX xdotool getactivewindow 2>/dev/null)] (must be the window above)"
+HX xdotool key --clearmodifiers ctrl+alt+f >/dev/null 2>&1
+sleep 4
+eval "$(HX xdotool getwindowgeometry --shell "$W" 2>/dev/null)"
+say "WINDOW geometry=${WIDTH:-?}x${HEIGHT:-?}+${X:-?}+${Y:-?} root=[$(HX xdpyinfo 2>/dev/null | grep -m1 dimensions | tr -s ' ')]"
+hshot host_desktop
+
+[ "${BRK_CURSOR:-1}" = 1 ] || { say "HOOK_DONE (no cursor experiments)"; exit 0; }
+# 4. HOVER — the host pointer over the picture, near its top-left corner (the guest's root window
+#    there: Cinnamon's fallback dialog sits in the middle and its buttons change under a pointer),
+#    with the guest's root-window cursor set to a known arrow
+gq "$GX xsetroot -cursor_name left_ptr; echo rc=\$?" > "$OUT/xsetroot_arrow.log"
+HX xdotool windowactivate --sync "$W" >/dev/null 2>&1
+HX xdotool mousemove --window "$W" 30 30 >/dev/null 2>&1; sleep 1
+HX xdotool mousemove --window "$W" 48 44 >/dev/null 2>&1; sleep 3
+say "MODE_LINES $(grep -a 'kf3: broker: guest cursor:' "$Q" | sed 's/^.*kf3: broker: //' | tr '\n' '|' | cut -c1-300)"
+HX python3 "$XC" image "$OUT/cur_host_hover.pam" | sed 's/^/BRK_HOST_HOVER /'
+gpos=$(gq "$GX python3 ~/display/xcursor.py pointer" | sed -n 's/^POINTER //p')
+say "GUEST_POINTER $gpos"
+gq "$GX python3 ~/display/xcursor.py image /tmp/cur_guest_hover.pam" | sed 's/^/BRK_GUEST_CURSOR /'
+"$G" 'cat /tmp/cur_guest_hover.pam' > "$OUT/cur_guest_hover.pam" 2>/dev/null
+python3 "$XC" compare "$OUT/cur_guest_hover.pam" "$OUT/cur_host_hover.pam" | sed 's/^/BRK_HOVER_/'
+shot hover
+hshot host_hover
+say "HOST_VS_GUEST hover $(fulldiff hover host_hover) (the broker fullscreen against the guest frame; the host shot has no pointer, the frame no cursor in hover)"
+set -- $gpos; gx=${1:-0}; gy=${2:-0}
+# the guest frame's size (the relay's last WINDOW) and where the guest pointer is in host pixels
+fr=$(grep -ao 'guest resolution is now [0-9]*x[0-9]*' "$Q" | tail -1 | grep -o '[0-9]*x[0-9]*')
+fw=${fr%x*}; fh=${fr#*x}
+hx=$(( ${X:-0} + gx * ${WIDTH:-1} / ${fw:-1} )); hy=$(( ${Y:-0} + gy * ${HEIGHT:-1} / ${fh:-1} ))
+say "MAP frame=${fr:-?} window=${WIDTH:-?}x${HEIGHT:-?}+${X:-?}+${Y:-?} guest_pointer=$gx,$gy -> host $hx,$hy"
+
+# 4b. HOVER with a large hot spot — the guest's root-window cursor as a crosshair (its hot spot
+#     near the centre, where an underived hot spot 0,0 would be off by half the image); the host
+#     pointer over the root window near the top-left corner
+gq "$GX xsetroot -cursor_name crosshair; echo rc=\$?" > "$OUT/xsetroot.log"
+HX xdotool mousemove --window "$W" 70 60 >/dev/null 2>&1; sleep 1
+HX xdotool mousemove --window "$W" 80 66 >/dev/null 2>&1; sleep 3
+HX python3 "$XC" image "$OUT/cur_host_cross.pam" | sed 's/^/BRK_HOST_CROSS /'
+gq "$GX python3 ~/display/xcursor.py image /tmp/cur_guest_cross.pam" | sed 's/^/BRK_GUEST_CROSS /'
+"$G" 'cat /tmp/cur_guest_cross.pam' > "$OUT/cur_guest_cross.pam" 2>/dev/null
+python3 "$XC" compare "$OUT/cur_guest_cross.pam" "$OUT/cur_host_cross.pam" | sed 's/^/BRK_CROSS_/'
+say "CROSS_SETS $(grep -a 'guest cursor image' "$Q" | tail -3 | sed 's/^.*kf3: broker: //' | tr '\n' '|' | cut -c1-240) xsetroot=[$(tr '\n' ' ' < "$OUT/xsetroot.log")]"
+# §8.13/§8.14 (2026-10-04): the cursor composition word and the pixels' alpha census, as logged
+say "CURSOR_COMPOSITION $(grep -a 'guest cursor composition' "$Q" | tail -2 | sed 's/^.*kf3: display: //' | tr '\n' '|' | cut -c1-400)"
+# §8.13 (BRK_VNC=host:port, the lane's `-vnc`): in hover QEMU's console gets the same cursor through
+# its cursor API — what a VNC client with the alpha-cursor encoding receives, against the guest's own
+# (xcursor.py compare tolerates the straight<->premultiplied round trip as a small channel difference)
+if [ -n "${BRK_VNC:-}" ]; then
+    timeout 20 python3 "$HERE/vnc_cursor.py" "$BRK_VNC" "$OUT/cur_vnc_cross.pam" | sed 's/^/BRK_VNC_HOVER /'
+    python3 "$XC" compare "$OUT/cur_guest_cross.pam" "$OUT/cur_vnc_cross.pam" 2>&1 | sed 's/^/BRK_VNC_HOVER_/'
+fi
+# 4c. §8.14 (2026-10-04): an "invert"-style cursor — the X core font's xterm glyph, a two-colour
+#     cursor with no theme behind it (XCURSOR_PATH names nothing, so libXcursor finds no theme file
+#     and the X server gets the core glyph). NVKMS has no XOR mode (§8.14), so the guest's head is
+#     given whatever the DDX makes of it: the composition line, the host's cursor and the console's
+#     say what kayfabe did with it. The crosshair is put back for the steps below.
+m=$(qline)
+gq "$GX env XCURSOR_PATH=/nonexistent XCURSOR_THEME=kf-none xsetroot -cursor_name xterm; echo rc=\$?" > "$OUT/xsetroot_xterm.log"
+HX xdotool mousemove --window "$W" 70 60 >/dev/null 2>&1; sleep 1
+HX xdotool mousemove --window "$W" 80 66 >/dev/null 2>&1; sleep 3
+HX python3 "$XC" image "$OUT/cur_host_xterm.pam" | sed 's/^/BRK_HOST_XTERM /'
+gq "$GX python3 ~/display/xcursor.py image /tmp/cur_guest_xterm.pam" | sed 's/^/BRK_GUEST_XTERM /'
+"$G" 'cat /tmp/cur_guest_xterm.pam' > "$OUT/cur_guest_xterm.pam" 2>/dev/null
+python3 "$XC" compare "$OUT/cur_guest_xterm.pam" "$OUT/cur_host_xterm.pam" | sed 's/^/BRK_XTERM_/'
+say "XTERM_RELAY xsetroot=[$(tr '\n' ' ' < "$OUT/xsetroot_xterm.log")] $(since "$m" | grep -aE 'kf3: (broker: guest cursor|display: guest cursor composition|display: host cursor REFUSED|display: .*XOR)' | sed 's/^.*kf3: //' | tr '\n' '|' | cut -c1-500)"
+if [ -n "${BRK_VNC:-}" ]; then
+    timeout 20 python3 "$HERE/vnc_cursor.py" "$BRK_VNC" "$OUT/cur_vnc_xterm.pam" | sed 's/^/BRK_VNC_XTERM /'
+fi
+gq "$GX xsetroot -cursor_name crosshair; echo rc=\$?" >> "$OUT/xsetroot.log"
+HX xdotool mousemove --window "$W" 70 60 >/dev/null 2>&1; sleep 1
+HX xdotool mousemove --window "$W" 80 66 >/dev/null 2>&1; sleep 3
+# the rest (hide, grab) happens with the crosshair at this spot; the shots below are taken here
+gpos=$(gq "$GX python3 ~/display/xcursor.py pointer" | sed -n 's/^POINTER //p')
+set -- $gpos; gx=${1:-0}; gy=${2:-0}
+hx=$(( ${X:-0} + gx * ${WIDTH:-1} / ${fw:-1} )); hy=$(( ${Y:-0} + gy * ${HEIGHT:-1} / ${fh:-1} ))
+shot hover
+hshot host_hover
+say "CROSS_MAP guest_pointer=$gx,$gy -> host $hx,$hy"
+
+# 5. HIDE — the guest hides its cursor for 10 s
+m=$(qline)
+( gq "$GX python3 ~/display/xcursor.py hide 10" 30 > "$OUT/guest_hide.log" ) &
+HP=$!
+sleep 4
+HX python3 "$XC" image "$OUT/cur_host_hidden.pam" | sed 's/^/BRK_HOST_HIDDEN /'
+shot hidden
+wait $HP
+sleep 3
+HX python3 "$XC" image "$OUT/cur_host_after_hide.pam" | sed 's/^/BRK_HOST_AFTER_HIDE /'
+say "HIDE_GUEST $(tr '\n' ' ' < "$OUT/guest_hide.log")"
+say "HIDE_RELAY $(since "$m" | grep -ac 'kf3: broker:') relay lines, host_cursor_refusals=$(since "$m" | grep -ac 'host cursor REFUSED')"
+
+# 6. GRAB — CTRL+ALT+G, the composed cursor, a relative move, CTRL+ALT+G
+m=$(qline)
+HX xdotool windowactivate --sync "$W" >/dev/null 2>&1
+HX xdotool key --clearmodifiers ctrl+alt+g >/dev/null 2>&1
+sleep 3
+say "GRAB_ON $(since "$m" | grep -aE 'kf3: broker: (grab|guest cursor)' | sed 's/^.*kf3: broker: //' | tr '\n' '|' | cut -c1-240)"
+HX python3 "$XC" image "$OUT/cur_host_grab.pam" | sed 's/^/BRK_HOST_GRAB /'
+shot grab
+hshot host_grab
+# §8.13: under grab the frame carries the cursor, and the console's defined cursor is the hidden one
+[ -n "${BRK_VNC:-}" ] && timeout 20 python3 "$HERE/vnc_cursor.py" "$BRK_VNC" | sed 's/^/BRK_VNC_GRAB /' 
+say "GRAB_FRAME_DIFF host_hover_vs_host_grab_px=$(boxdiff host_hover host_grab "$hx" "$hy") console_hover_vs_grab_px=$(boxdiff hover grab "$gx" "$gy") (the composed cursor near the guest pointer; the host shot is what the broker shows — the console's frames are fresh only on the host-memory rungs)"
+HX xdotool mousemove_relative -- 60 40 >/dev/null 2>&1; sleep 2
+gpos2=$(gq "$GX python3 ~/display/xcursor.py pointer" | sed -n 's/^POINTER //p')
+shot grab_moved
+hshot host_grab_moved
+set -- $gpos2
+hx2=$(( ${X:-0} + ${1:-0} * ${WIDTH:-1} / ${fw:-1} )); hy2=$(( ${Y:-0} + ${2:-0} * ${HEIGHT:-1} / ${fh:-1} ))
+say "GRAB_MOVE guest_pointer=$gpos -> $gpos2 host_moved_cursor_px=$(boxdiff host_grab host_grab_moved "$hx2" "$hy2") console_moved_cursor_px=$(boxdiff grab grab_moved "${1:-0}" "${2:-0}")"
+m=$(qline)
+HX xdotool key --clearmodifiers ctrl+alt+g >/dev/null 2>&1
+sleep 3
+say "GRAB_OFF $(since "$m" | grep -aE 'kf3: broker: (grab|guest cursor)' | sed 's/^.*kf3: broker: //' | tr '\n' '|' | cut -c1-240)"
+HX xdotool mousemove --window "$W" 80 66 >/dev/null 2>&1; sleep 2
+HX python3 "$XC" image "$OUT/cur_host_after_grab.pam" | sed 's/^/BRK_HOST_AFTER_GRAB /'
+shot after_grab
+hshot host_after_grab
+say "AFTER_GRAB host_hover_vs_host_after_grab_px=$(boxdiff host_hover host_after_grab "$hx" "$hy") (hover again: no cursor in the frame)"
+
+# E3 (BRK_RESILIENCE=1): the broker stopped for 10 s, then killed and started again — the guest
+# must not be held (it answers, its display keeps flipping), and the relay must reconnect and
+# replay its last frame
+if [ "${BRK_RESILIENCE:-0}" = 1 ] && [ -n "${BRK_SU:-}" ]; then
+    # -n: the broker itself (runuser, its parent, matches the same words and is older)
+    bp=$(pgrep -n -f "[n]vkvm-display-broker --socket $BRK_SOCK")
+    m=$(qline)
+    kill -STOP "$bp" 2>/dev/null
+    t0=$(date +%s%N)
+    alive=$(gq 'echo ALIVE' 20)
+    f0=$(gq "$GX timeout 6 glxgears 2>&1 | grep -m1 'frames in' " 30)
+    t1=$(date +%s%N)
+    kill -CONT "$bp" 2>/dev/null
+    say "E3_STOP broker=$bp guest=[${alive}] glxgears_while_stopped=[$f0] took_ms=$(( (t1 - t0) / 1000000 ))"
+    sleep 2
+    kill -9 "$bp" 2>/dev/null; sleep 1
+    # shellcheck disable=SC2086  # BRK_BROKER_ARGS is a flag list
+    runuser -u "$BRK_SU" -- env DISPLAY="$BRK_XD" XAUTHORITY="$BRK_XA" "$BRK_BIN" --socket "$BRK_SOCK" \
+        --backend x11 --persist --verbose ${BRK_BROKER_ARGS:-} >> "${BRK_BROKER_LOG:-/dev/null}" 2>&1 &
+    for _ in $(seq 1 40); do since "$m" | grep -aq 're-sent geometry\|reconnected to the display broker' && break; sleep 0.5; done
+    sleep 3
+    say "E3_KILL9 $(since "$m" | grep -aE 'kf3: broker: (the display broker closed|reconnected|re-sent geometry|connected to)' | sed 's/^.*kf3: broker: //' | tr '\n' '|' | cut -c1-300)"
+    hshot host_after_restart
+    say "E3_AFTER_RESTART guest=[$(gq 'echo ALIVE' 20)] window=[$(HX xdotool search --onlyvisible --name '^nvkvm' 2>/dev/null | head -1)]"
+fi
+
+# BRK_HOLD=<seconds>: keep the guest up for manual checks (ends early on `touch $OUT/release`)
+if [ -n "${BRK_HOLD:-}" ]; then
+    say "HOLD up to ${BRK_HOLD}s from $(date -Is) (touch $OUT/release to end it)"
+    for _ in $(seq 1 "$BRK_HOLD"); do [ -e "$OUT/release" ] && break; sleep 1; done
+    say "HOLD_END $(date -Is)"
+fi
+
+# E5 (part): what QEMU holds — descriptors by kind, its VRAM
+pid=${KF_QEMU_PID:-}
+if [ -n "$pid" ] && [ -d "/proc/$pid/fd" ]; then
+    say "E5_FDS $(ls -l "/proc/$pid/fd" 2>/dev/null | awk '{print $NF}' | sed 's/[0-9]\+/N/g' | sort | uniq -c | sort -rn | head -12 | tr -s ' ' | tr '\n' ';')"
+fi
+say "E5_VRAM $(nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader 2>/dev/null | tr '\n' ';')"
+for f in "$OUT"/*.pam; do [ -s "$f" ] && convert "$f" "${f%.pam}.png" 2>/dev/null; done
+say "HOOK_DONE $(date -Is)"

@@ -203,16 +203,6 @@ jobs:
           if [ "$ran" -gt 0 ]; then
             echo "This runner permits namespaces: $ran gated tests actually executed."
           fi
-      # ★★★ CAP-gate — the LIVE capability tests (`live_cap_*`: kf-linux-raw's bracket and
-      # thread-life clear, kf-host's channel birth, kf-cuda's CUDA-thread posture;
-      # docs/design/THE_CONSTRAINTS.md §30). The runner user holds no capability (`CapEff=0`), so in
-      # the test step above they take the not-held path and assert almost nothing: each one says so
-      # with `CAP-GATE: VACUOUS`. ⊘ That green is not coverage. The logic itself is covered on any
-      # runner by the simulated-thread tests beside them; what only root can show is the real
-      # capget/capset. So this step (1) checks the unprivileged run REACHED all of them, then (2)
-      # builds the three crates' lib test binaries as the runner user and runs only `live_cap_` as
-      # ROOT (the runner has passwordless sudo), where every one must print `CAP-GATE: RAN` and none
-      # `VACUOUS`. Floors, not exact counts: the set may grow.
       - name: CAP-gate — the live capability tests, reached unprivileged and run as root
         run: |
           set -euo pipefail
@@ -254,6 +244,29 @@ jobs:
             echo "::error::as root every live capability test must exercise the real capset:" \
                  "ran=$ran vacuous=$vac"
             exit 1
+          fi
+      - name: UDMABUF-gate reached-count (floor, not an exact match)
+        run: |
+          set -euo pipefail
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
+            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing," \
+                 "empty, or carries no completion sentinel. This step reports NOTHING about" \
+                 "the tree."
+            exit 2
+          fi
+          ran=$(grep -c 'UDMABUF-GATE: RAN' "$log" || true)
+          skipped=$(grep -c 'UDMABUF-GATE: SKIPPED' "$log" || true)
+          total=$(( ran + skipped ))
+          echo "UDMABUF-gate: ran=$ran skipped=$skipped total=$total (floor 2)"
+          if [ "$total" -lt 2 ]; then
+            echo "::error::udmabuf-gated tests were not reached: $total < 2." \
+                 "Either they were deleted, or the gate stopped announcing itself."
+            exit 1
+          fi
+          if [ "$skipped" -gt 0 ]; then
+            echo "::warning::$skipped udmabuf-gated test(s) SKIPPED here (no /dev/udmabuf):" \
+                 "they asserted nothing; the dma-buf rung is graded on a box or a dev host."
           fi
       - name: Clippy (errors and new warning sites fail)
         run: bash scripts/ci/clippy.sh
@@ -1530,6 +1543,62 @@ jobs:
           #   ⊘ No new power: page-locked host memory the display worker already owns, handed to
           #     QEMU's console by address; both CUDA calls act on memory this library allocated.
           #
+          # ★★ `kf-linux-raw` 75 -> 87, 2026-10-03 (`v3-broker`, display step 3a — the broker
+          # relay, docs/design/V3_DISPLAY.md §8). Twelve, itemised:
+          #   `unixsock_unsafe.rs` (+8): `socket(AF_UNIX, NONBLOCK|CLOEXEC)` (integers only,
+          #     adopted on the same line); `connect` (a live, fully initialised `sockaddr_un`, its
+          #     own size; the path is bounded below `sun_path` first); `getsockopt(SO_PEERCRED)`
+          #     (a live `ucred` and its own size); `zeroed_msghdr` (an all-zero plain C struct);
+          #     the one-descriptor `SCM_RIGHTS` header build (a stack `[u64; 3]`, `CMSG_SPACE`
+          #     asserted to fit it); `sendmsg(MSG_NOSIGNAL|MSG_DONTWAIT)` (reads only); `recvmsg`
+          #     with NO control buffer (writes at most the caller's slice; a peer's descriptor is
+          #     dropped by the kernel and reported); and a test-only `recvmsg` with a control
+          #     buffer that adopts the one received descriptor at once.
+          #   `host_fd_unsafe.rs` (+4): `ioctl(UDMABUF_CREATE)` (a 24-byte `#[repr(C)]` mirror,
+          #     size asserted at compile time; the new descriptor adopted on the same line);
+          #     `fstatfs` and its zeroed `statfs` (a live local of the written type); a test-only
+          #     unsealed `memfd_create` (the case `/dev/udmabuf` must refuse).
+          #   ⊘ No new power over guest memory: the socket carries only dedicated, sealed frame
+          #     copies the display worker owns, and reads no descriptor from the peer.
+          #
+          # ★★ `kf-cuda` 75 -> 78 and `kf-qemu` 44 -> 53, 2026-10-03 (`v3-broker`, display step 3a —
+          # the broker relay's kf3 glue, KF3 ABI 11). Itemised:
+          #   kf-cuda `driver_unsafe.rs` (+3): `Cuda::host_register` — `HostSpan::as_ptr` (the span
+          #     of a mapping `display::Frame` OWNS and unregisters before it unmaps) and one call of
+          #     `cuMemHostRegister_v2` (flags 0) on it; `Cuda::host_unregister` — one call of
+          #     `cuMemHostUnregister` on a `PinnedBuf` it consumes.
+          #   kf-qemu `ffi_unsafe.rs` (+5): `kf3_broker_start` (`unsafe extern "C" fn`; `path` a
+          #     NUL-terminated string, `err` writable) with its `CStr::from_ptr` and its
+          #     `BrokerHooks::adopt` (the C verbs' contract forwarded); `kf3_broker_ready`
+          #     (`unsafe extern "C" fn`; `out` writable for `cap`) with its one bounded write per
+          #     event (`i < n <= cap`).
+          #   kf-qemu `raw_unsafe.rs` (+4): `unsafe impl Send for BrokerHooks` (the C state lives for
+          #     the process; the hooks are called only inside a `kf3_broker_*` entry), `unsafe fn
+          #     adopt`, and the two `unsafe { }` calls of the watch and timer verbs.
+          #   ⊘ No new power: the verbs only register fd handlers and a timer on QEMU's main loop,
+          #     for descriptors Rust owns; the registration pins memory this process mapped.
+          #
+          # ★★ `kf-linux-raw` 87 -> 89, 2026-10-03 (`v3-broker`, the review fixes of display step 3).
+          #   `unixsock_unsafe.rs` (+2): `effective_uid` — one `unsafe { }` call of `geteuid` (no
+          #     arguments, no memory, cannot fail). The broker peer check now reads QEMU's euid at
+          #     EVERY connect, after `-run-with user=`/`-runas` dropped privileges (a `/proc` read
+          #     fails inside a `-run-with chroot=` without `/proc`); and a test-only `listen(fd, 1)`
+          #     that narrows std's listener to a backlog of 1, so the full-backlog test needs a few
+          #     descriptors instead of more than `somaxconn` (it failed under `ulimit -n 1024`).
+          #   ⊘ No new power: `geteuid` reads this process's own credential.
+          #
+          # ★★ `kf-linux-raw` 89 -> 93, 2026-10-03 (`v3-broker`, the GPU-copy broker rung —
+          # docs/design/V3_DISPLAY.md §8.11, OWNER_RULINGS.md §L). `drm_unsafe.rs` (+4), each on a
+          # kernel-uapi `#[repr(C)]` mirror whose size is asserted at compile time and encoded in
+          # the request: `ioctl(DRM_IOCTL_PRIME_HANDLE_TO_FD)` (12-byte `drm_prime_handle`; the
+          # new dma-buf descriptor adopted at once); `ioctl(DRM_IOCTL_GEM_CLOSE)` (8 bytes, `_IOW`);
+          # `ioctl(DMA_BUF_IOCTL_EXPORT_SYNC_FILE)` (8 bytes; the sync_file adopted at once) and a
+          # zero-timeout `poll` on that one live `pollfd`.
+          #   ⊘ No new power: the render node's two nvidia-drm ioctls go through the EXISTING
+          #     `CharDevice::ioctl` (its size check and pointer patch-and-scrub) from SAFE code
+          #     (`drm.rs`), allowlisted to `GET_DEV_INFO` and `GEM_IMPORT_NVKMS_MEMORY`; the GEM
+          #     objects are only ever kayfabe's own VRAM frame slots, never guest memory.
+          #
           # ★★★ `firmware/kf-gop:77`, 2026-10-03 — the FIRST entry that is not a crate under crates/,
           # and an owner default rather than a manifest edit (the release brief: "the firmware crate
           # is a named unsafe exception living under firmware/ only, outside the cargo workspace").
@@ -1594,7 +1663,35 @@ jobs:
           # ★ `kf-linux-raw` 77 + 1 = 78 at the merge of the two lines above (`v3-cand-1`, 2026-10-04):
           #   capability_unsafe.rs (2, `v3-sec-nonpriv`) and window_unsafe.rs's `advise` (1,
           #   `v3-scratch-bound`) are disjoint files and disjoint blocks; each branch counted from 75.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:78 kf-cuda:75 kf-qemu:46 firmware/kf-gop:78"
+          #
+          # ★★ MERGE 2026-10-03 (`v3-broker` takes master's boot display): the two branches each moved
+          # `kf-qemu` from 44 — the broker by +9 (53), the GOP option ROM by +2 (46) — so the bar is their
+          # sum, 55; `kf-linux-raw` 93 and `kf-cuda` 78 are the broker's alone; `firmware/kf-gop` 78 is
+          # master's alone.
+          # ★★ `kf-linux-raw` 93 -> 94, 2026-10-04 (`v3-broker`, nvkvm-pv broker `badf2d7`: the broker
+          # accepts only a descriptor it can PROVE to be shmem or a dma-buf, and closes any other on a
+          # helper thread). `host_fd_unsafe.rs` (+1): `fd_carrier`'s one `unsafe { }` call of
+          # `fcntl(fd, F_GET_SEALS)` — no third argument, no memory, a negative return is "not
+          # shmem". The rest of the proof (`fstatfs` only after it succeeded, through the existing
+          # `fs_magic`; `/proc/self/fdinfo` read with std, bounded at 4 KiB) adds no relaxation.
+          #   ⊘ No new power: it classifies a descriptor this process already holds, and asks an
+          #     unproven descriptor's filesystem nothing (no `fstatfs` on FUSE).
+          # ★★ `kf-qemu` 55 -> 59, 2026-10-04 (`v3-broker`, V3_DISPLAY.md §8.13: the guest's cursor for
+          # QEMU's own console while a cursor-capable broker hovers; KF3 ABI 12's broker surface).
+          # `ffi_unsafe.rs` (+4): `kf3_display_cursor` (`unsafe extern "C" fn`: `out` writable) and
+          # its one `unsafe { *out = c }` (checked non-null — and, since the review of 2026-10-04,
+          # aligned — first; that review's `kf3_display_cursor_done` is a SAFE `extern "C" fn` and
+          # adds no relaxation, so the bar stays 59); `kf3_display_cursor_pixels`
+          # (`unsafe extern "C" fn`: `data` writable for `words` u32s) and its one
+          # `slice::from_raw_parts_mut`, formed only after `data` is checked non-null and aligned
+          # and `words` is checked to be 1..=256*256 — the slice lives for the call, and the safe
+          # side (`kf_broker::ConsoleCursor::pixels`) writes it only when `words` is exactly the
+          # defined image's width * height.
+          #   ⊘ No new power: VMM-owned pixels (kayfabe's copy of the cursor) copied into a buffer
+          #     the C device allocated with `cursor_alloc` for exactly that size.
+          # Candidate 2 adds the disjoint capability (2) and scratch advice (1)
+          # blocks to the broker's audited kf-linux-raw count (94).
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:97 kf-cuda:78 kf-qemu:59 firmware/kf-gop:78"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.

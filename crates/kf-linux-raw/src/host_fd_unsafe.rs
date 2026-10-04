@@ -189,6 +189,18 @@ impl SharedRam {
         Ok(meta.blocks().saturating_mul(512))
     }
 
+    /// Test-only: a memfd of `len` bytes with NO seals — what `/dev/udmabuf` must refuse.
+    #[cfg(test)]
+    pub(crate) fn unsealed_for_test(len: u64) -> SharedRam {
+        // SAFETY: as in `create_named`: a NUL-terminated literal name, adopted on the next line.
+        let raw = unsafe { libc::memfd_create(c"kfu-unsealed".as_ptr(), 0) };
+        let fd = adopt_fd(raw, "memfd_create").expect("memfd_create");
+        std::fs::File::from(fd.try_clone().expect("dup"))
+            .set_len(len)
+            .expect("ftruncate");
+        SharedRam { fd, len }
+    }
+
     /// Duplicate the descriptor, for handing to another process.
     ///
     /// The duplicate is close-on-exec: a descriptor that leaks across an unrelated `exec`
@@ -209,6 +221,200 @@ impl SharedRam {
         let raw = unsafe { libc::fcntl(self.fd.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 0) };
         adopt_fd(raw, "fcntl(F_DUPFD_CLOEXEC)")
     }
+}
+
+// =====================================================================================
+// udmabuf — a dma-buf over a SharedRam, and the identity of a descriptor's filesystem
+// =====================================================================================
+
+/// `UDMABUF_CREATE` = `_IOW('u', 0x42, struct udmabuf_create)` (linux
+/// `include/uapi/linux/udmabuf.h:30`): write direction, a 24-byte argument.
+const UDMABUF_CREATE: libc::c_ulong = 0x4018_7542;
+/// `UDMABUF_FLAGS_CLOEXEC` (`udmabuf.h:8`).
+const UDMABUF_FLAGS_CLOEXEC: u32 = 0x01;
+
+/// `struct udmabuf_create` (`udmabuf.h:10-15`).
+#[repr(C)]
+struct UdmabufCreate {
+    memfd: u32,
+    flags: u32,
+    offset: u64,
+    size: u64,
+}
+
+const _: () = assert!(core::mem::size_of::<UdmabufCreate>() == 24);
+
+/// `DMA_BUF_MAGIC` (`include/uapi/linux/magic.h:102`): the `f_type` of every dma-buf file.
+pub const DMA_BUF_MAGIC: i64 = 0x444d_4142;
+/// `TMPFS_MAGIC` (`magic.h:18`): the `f_type` of a memfd.
+pub const TMPFS_MAGIC: i64 = 0x0102_1994;
+
+/// ★ A **dma-buf** over the whole of `ram`, made by `/dev/udmabuf` (`dev`, opened by the caller
+/// read-write) — close-on-exec, offset 0.
+///
+/// The kernel pins the memfd's pages for the dma-buf's life (`drivers/dma-buf/udmabuf.c`), and
+/// accepts only a memfd sealed `F_SEAL_SHRINK` and NOT `F_SEAL_WRITE` (`udmabuf.c:288-303`) —
+/// exactly [`SharedRam`]'s seals — whose size is page-aligned (`:389-392`), checked here first
+/// so a misaligned frame is refused by name rather than as `EINVAL`.
+///
+/// # Errors
+/// [`RawError::Misaligned`] for a size that is not a multiple of `page`; [`RawError::Syscall`]
+/// for the ioctl (`EINVAL` beyond the module's `size_limit_mb`, `ENOTTY` on a descriptor that
+/// is not `/dev/udmabuf`).
+///
+/// # Panics
+/// If called with any ranked lock held, or from a leaf context.
+pub fn udmabuf_create(
+    dev: BorrowedFd<'_>,
+    ram: &SharedRam,
+    page: crate::HostPageSize,
+) -> Result<OwnedFd, RawError> {
+    lockwitness::assert_lock_free("ioctl(UDMABUF_CREATE)");
+    leafwitness::assert_leaf_free("ioctl(UDMABUF_CREATE)");
+    crate::geometry::require_aligned(ram.len_bytes(), page, "udmabuf size")?;
+    let memfd = u32::try_from(ram.fd.as_raw_fd()).map_err(|_| RawError::Syscall {
+        call: "udmabuf: a negative memfd",
+        errno: None,
+    })?;
+    let mut arg = UdmabufCreate {
+        memfd,
+        flags: UDMABUF_FLAGS_CLOEXEC,
+        offset: 0,
+        size: ram.len_bytes(),
+    };
+    // SAFETY: `arg` is a live `#[repr(C)]` mirror of `struct udmabuf_create` (24 bytes, asserted
+    // at compile time) in this frame, and the request's encoded size is that same 24; the
+    // kernel reads exactly that struct. `dev` and the memfd are live for the call. The return
+    // value is a new descriptor or a negative error, consumed by `adopt_fd` on the same line.
+    let raw = unsafe {
+        libc::ioctl(
+            dev.as_raw_fd(),
+            UDMABUF_CREATE as _,
+            core::ptr::from_mut(&mut arg),
+        )
+    };
+    adopt_fd(raw, "ioctl(UDMABUF_CREATE)")
+}
+
+/// ★ The `f_type` of the filesystem `fd` lives on (`fstatfs`) — the identity a receiver checks
+/// to tell a dma-buf ([`DMA_BUF_MAGIC`]) from a memfd ([`TMPFS_MAGIC`]), and one a sender cannot
+/// forge.
+///
+/// # Errors
+/// [`RawError::Syscall`].
+///
+/// # Panics
+/// If called with any ranked lock held, or from a leaf context.
+pub fn fs_magic(fd: BorrowedFd<'_>) -> Result<i64, RawError> {
+    lockwitness::assert_lock_free("fstatfs");
+    leafwitness::assert_leaf_free("fstatfs");
+    // SAFETY: `statfs` is a plain C struct of integers; all-zero is a valid value of it.
+    let mut st: libc::statfs = unsafe { core::mem::zeroed() };
+    // SAFETY: `st` is a live local of the type `fstatfs` writes, exclusively borrowed for the
+    // call; `fd` is live. Checked below before `st` is read.
+    let rc = unsafe { libc::fstatfs(fd.as_raw_fd(), &raw mut st) };
+    if rc != 0 {
+        return Err(last_syscall_error("fstatfs"));
+    }
+    #[allow(clippy::unnecessary_cast)]
+    Ok(st.f_type as i64)
+}
+
+/// ★ What a descriptor PROVES to be, by the display broker's own two proofs in the broker's order
+/// (nvkvm-pv `badf2d7`, `src/broker/nvkvm_broker.c:1228-1360`) — [`fd_carrier`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Carrier {
+    /// `fcntl(F_GET_SEALS)` answered and the file lives on tmpfs: shmem (a memfd, or a tmpfs
+    /// file), carrying these `F_SEAL_*` bits.
+    Shmem {
+        /// The seals.
+        seals: u32,
+    },
+    /// Not shmem, and its `/proc/self/fdinfo` carries `exp_name:` — a line only the dma-buf core
+    /// prints (`dma_buf_show_fdinfo`).
+    DmaBuf,
+    /// Neither: the broker refuses such a descriptor and closes it on a helper thread.
+    Neither,
+}
+
+impl Carrier {
+    /// Shmem sealed `F_SEAL_SHRINK` — what the broker requires of an `F_SHM` frame
+    /// (`nvkvm_broker.c:1640-1668`: without it the size it read can be taken away under the
+    /// reader, a `SIGBUS`), and what `/dev/udmabuf` requires of its memfd.
+    #[must_use]
+    pub fn sealed_against_shrinking(self) -> bool {
+        matches!(self, Carrier::Shmem { seals } if seals & libc::F_SEAL_SHRINK.unsigned_abs() != 0)
+    }
+}
+
+/// The most of `/proc/self/fdinfo/<fd>` [`fd_carrier`] reads — the broker's own bound
+/// (`nvkvm_broker.c:1323-1327`: "4 KiB is far past a dma-buf's six lines").
+const FDINFO_MAX: u64 = 4096;
+
+/// ★ Prove `fd` to be shmem or a dma-buf the way the display broker does since nvkvm-pv `badf2d7`
+/// (`nb_fd_shmem_seals`, `nb_fd_fdinfo_is_dmabuf`, `nvkvm_broker.c:1308-1355`): `F_GET_SEALS`
+/// first — answered from the file's mapping, never by its filesystem — and `fstatfs` only after
+/// it succeeded (by then the `->statfs` is the kernel's own: shmem or hugetlbfs); otherwise the
+/// `exp_name:` line of `/proc/self/fdinfo/<fd>`, which `show_fdinfo` prints for a dma-buf alone.
+/// Nothing asks an unproven descriptor's filesystem anything (on FUSE an `fstatfs` is a request to
+/// a daemon that may never answer), so a descriptor of any kind is classified without blocking.
+///
+/// # Errors
+/// [`RawError::Syscall`] when `/proc/self/fdinfo` cannot be read — the broker then refuses every
+/// dma-buf, and the caller should treat the descriptor as unproven too.
+pub fn fd_carrier(fd: BorrowedFd<'_>) -> Result<Carrier, RawError> {
+    use std::io::Read as _;
+    // SAFETY: `F_GET_SEALS` takes no third argument and dereferences no memory; `fd` is live for
+    // the borrow. A negative return means "not shmem" (`EINVAL`) and is handled, never a fault.
+    let seals = unsafe { libc::fcntl(fd.as_raw_fd(), libc::F_GET_SEALS) };
+    if let Ok(seals) = u32::try_from(seals) {
+        return Ok(if fs_magic(fd)? == TMPFS_MAGIC {
+            Carrier::Shmem { seals }
+        } else {
+            Carrier::Neither // hugetlbfs: sealable, but not what either rung carries
+        });
+    }
+    let unreadable = |e: std::io::Error| RawError::Syscall {
+        call: "read /proc/self/fdinfo (fd_carrier)",
+        errno: e.raw_os_error(),
+    };
+    let mut text = Vec::new();
+    std::fs::File::open(format!("/proc/self/fdinfo/{}", fd.as_raw_fd()))
+        .map_err(unreadable)?
+        .take(FDINFO_MAX)
+        .read_to_end(&mut text)
+        .map_err(unreadable)?;
+    // `dma_buf_show_fdinfo` (`drivers/dma-buf/dma-buf.c`) prints `exp_name:\t<name>` after the
+    // generic `pos:`/`flags:` lines, so it is never the first line: the broker's exact match
+    let needle = b"\nexp_name:\t";
+    Ok(if text.windows(needle.len()).any(|w| w == needle) {
+        Carrier::DmaBuf
+    } else {
+        Carrier::Neither
+    })
+}
+
+/// ★ The identity a peer names a descriptor by: its inode number (`fstat`'s `st_ino`). Stable
+/// across `dup` and `SCM_RIGHTS`, because both share the open file.
+///
+/// ⊘ Not unique across filesystems: dma-buf inodes come from their own counter
+/// (`drivers/dma-buf/dma-buf.c:629-645`) and a memfd's from shmem's, so a caller comparing ids
+/// of two kinds must check them for collisions itself.
+///
+/// # Errors
+/// [`RawError::Syscall`] for the duplicate or the `fstat`.
+pub fn fd_inode(fd: BorrowedFd<'_>) -> Result<u64, RawError> {
+    use std::os::unix::fs::MetadataExt as _;
+    let f = std::fs::File::from(fd.try_clone_to_owned().map_err(|e| RawError::Syscall {
+        call: "fcntl(F_DUPFD_CLOEXEC) (fd_inode)",
+        errno: e.raw_os_error(),
+    })?);
+    f.metadata()
+        .map(|m| m.ino())
+        .map_err(|e| RawError::Syscall {
+            call: "fstat (fd_inode)",
+            errno: e.raw_os_error(),
+        })
 }
 
 /// ★ How many descriptors this process may hold at once — the **real** soft limit, read
@@ -580,6 +786,129 @@ mod tests {
              copy-on-write, an isolate's completions would be invisible to the guest, \
              which is the exact failure §4.4.1 exists to prevent"
         );
+    }
+
+    /// ★ The broker's proof (nvkvm-pv `badf2d7`): a sealed memfd is shmem with its seals, an
+    /// unsealed one too (seals `F_SEAL_SEAL` only, which the broker's `F_SHM` rule then refuses);
+    /// a regular file, a pipe and `/dev/null` are NEITHER — each classified without an `fstatfs`
+    /// on it — and a dma-buf (gated on `/dev/udmabuf`) is a dma-buf.
+    #[test]
+    fn the_brokers_descriptor_proof_tells_shmem_dma_buf_and_neither() {
+        let ram = SharedRam::create_named(c"kfu-carrier", 4096).expect("memfd");
+        let Ok(Carrier::Shmem { seals }) = fd_carrier(ram.as_backing_fd()) else {
+            panic!("a sealed memfd is shmem");
+        };
+        let want = libc::F_SEAL_SHRINK | libc::F_SEAL_GROW | libc::F_SEAL_SEAL;
+        assert_eq!(seals, u32::try_from(want).unwrap(), "the seals it carries");
+        assert!(Carrier::Shmem { seals }.sealed_against_shrinking());
+        let raw = SharedRam::unsealed_for_test(4096);
+        assert_eq!(
+            fd_carrier(raw.as_backing_fd()),
+            Ok(Carrier::Shmem {
+                seals: u32::try_from(libc::F_SEAL_SEAL).unwrap()
+            }),
+            "MFD_ALLOW_SEALING not given: F_SEAL_SEAL only"
+        );
+        assert!(
+            !fd_carrier(raw.as_backing_fd())
+                .unwrap()
+                .sealed_against_shrinking()
+        );
+        assert!(!Carrier::DmaBuf.sealed_against_shrinking());
+        let dir = std::env::temp_dir().join(format!("kfu-carrier-{}", std::process::id()));
+        std::fs::write(&dir, b"not a frame").expect("a regular file");
+        let file = std::fs::File::open(&dir).expect("open");
+        assert_eq!(
+            fd_carrier(file.as_fd()),
+            Ok(Carrier::Neither),
+            "a regular file"
+        );
+        std::fs::remove_file(&dir).ok();
+        let null = std::fs::File::open("/dev/null").expect("/dev/null");
+        assert_eq!(
+            fd_carrier(null.as_fd()),
+            Ok(Carrier::Neither),
+            "a device node"
+        );
+        let (r, _w) = std::io::pipe().expect("pipe");
+        assert_eq!(fd_carrier(r.as_fd()), Ok(Carrier::Neither), "a pipe");
+        crate::require_udmabuf!("the_brokers_descriptor_proof_tells_shmem_dma_buf_and_neither");
+        let dev = crate::udmabuf_gate::open_device().expect("the gate opened it");
+        let page = HostPageSize::query();
+        let ram = SharedRam::create_named(c"kfu-carrier-dma", page.bytes()).expect("memfd");
+        let buf = udmabuf_create(dev.as_fd(), &ram, page).expect("UDMABUF_CREATE");
+        assert_eq!(fd_carrier(buf.as_fd()), Ok(Carrier::DmaBuf));
+    }
+
+    /// ★ `/dev/udmabuf` gated (CI has none): a dma-buf over a sealed memfd, whose filesystem is
+    /// the dma-buf one, whose identity survives a dup, and which maps the SAME pages.
+    #[test]
+    fn a_udmabuf_over_shared_ram_is_a_dma_buf_of_the_same_pages() {
+        crate::require_udmabuf!("a_udmabuf_over_shared_ram_is_a_dma_buf_of_the_same_pages");
+        let dev = crate::udmabuf_gate::open_device().expect("the gate opened it");
+        let page = HostPageSize::query();
+        let ram = SharedRam::create_named(c"kfu-udmabuf-test", 4 * page.bytes()).expect("memfd");
+        let buf = udmabuf_create(dev.as_fd(), &ram, page).expect("UDMABUF_CREATE");
+        assert_eq!(fs_magic(buf.as_fd()), Ok(DMA_BUF_MAGIC));
+        assert_eq!(fs_magic(ram.as_backing_fd()), Ok(TMPFS_MAGIC));
+        let id = fd_inode(buf.as_fd()).expect("ino");
+        let dup = buf.try_clone().expect("dup");
+        assert_eq!(fd_inode(dup.as_fd()), Ok(id), "the id is stable across dup");
+        assert_ne!(
+            fd_inode(ram.as_backing_fd()),
+            Ok(id),
+            "a second identity, not the memfd's"
+        );
+        let a = MappedRegion::map(
+            Backing::SharedFile {
+                fd: ram.as_backing_fd(),
+                offset: 0,
+            },
+            page.bytes(),
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page,
+        )
+        .expect("map the memfd");
+        a.write_from(HostOffset::ZERO, &[0x5A; 16]).expect("write");
+        let b = MappedRegion::map(
+            Backing::SharedFile {
+                fd: buf.as_fd(),
+                offset: 0,
+            },
+            page.bytes(),
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page,
+        )
+        .expect("map the dma-buf");
+        let mut got = [0u8; 16];
+        b.read_into(HostOffset::ZERO, &mut got).expect("read");
+        assert_eq!(
+            got, [0x5A; 16],
+            "the dma-buf is the memfd's pages, not a copy"
+        );
+    }
+
+    /// The kernel refuses a memfd without `F_SEAL_SHRINK` (`udmabuf.c:288-303`); a misaligned
+    /// size is refused by name before the ioctl.
+    #[test]
+    fn udmabuf_refuses_an_unsealed_memfd_and_a_misaligned_size() {
+        crate::require_udmabuf!("udmabuf_refuses_an_unsealed_memfd_and_a_misaligned_size");
+        let dev = crate::udmabuf_gate::open_device().expect("the gate opened it");
+        let page = HostPageSize::query();
+        // an unsealed memfd, through std (no relaxation): the same fd type without the seals
+        let raw = SharedRam::unsealed_for_test(page.bytes());
+        let e = udmabuf_create(dev.as_fd(), &raw, page).unwrap_err();
+        assert!(
+            matches!(e, RawError::Syscall { errno: Some(n), .. } if n == libc::EINVAL),
+            "an unsealed memfd must be EINVAL, got {e:?}"
+        );
+        let odd = SharedRam::create_named(c"kfu-udmabuf-odd", page.bytes() + 8).expect("memfd");
+        assert!(matches!(
+            udmabuf_create(dev.as_fd(), &odd, page),
+            Err(RawError::Misaligned { .. })
+        ));
     }
 
     #[test]

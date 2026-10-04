@@ -10,6 +10,13 @@
  *                                              then page-flip A<->B `flips` times (events counted
  *                                              and timed), end on A and hold `hold_s` seconds, then
  *                                              RESTORE the CRTC it found (fbcon's framebuffer)
+ *   kfdisp_probe show  [card] [hold_s] [flips] [async] [gap_ms]
+ *                                              (display-max-fps, V3_DISPLAY.md sec. 8.16): `async`
+ *                                              flips with DRM_MODE_PAGE_FLIP_ASYNC (nvidia-drm's
+ *                                              tearing flips, the D1 gate's input; `vsync` = the
+ *                                              default), `gap_ms` waits that long after each flip
+ *                                              event before the next flip (a client paced slower than
+ *                                              the cap)
  *   kfdisp_probe ppm   <w> <h> [a|b]           write the pattern as a binary PPM to stdout
  *
  * The pattern is a pure function of (x, y, w, h): the guest's dumb buffer and the host's
@@ -155,6 +162,12 @@ static int cmd_list(const char *card)
         for (int m = 0; m < c->count_modes; m++)
             if (c->modes[m].type & DRM_MODE_TYPE_PREFERRED)
                 printf(" preferred=%ux%u@%u", c->modes[m].hdisplay, c->modes[m].vdisplay, c->modes[m].vrefresh);
+        /* display-max-fps (sec. 8.16): the fastest mode the guest was offered (a cap below 60 must
+         * leave no 60 Hz mode in the list) */
+        uint32_t maxv = 0;
+        for (int m = 0; m < c->count_modes; m++)
+            if (c->modes[m].vrefresh > maxv) maxv = c->modes[m].vrefresh;
+        printf(" max_vrefresh=%u", maxv);
         printf("\n");
         drmModeFreeConnector(c);
     }
@@ -229,7 +242,7 @@ static int wait_flip(int fd, double deadline_s)
     return 0;
 }
 
-static int cmd_show(const char *card, int hold_s, int flips)
+static int cmd_show(const char *card, int hold_s, int flips, int async, int gap_ms)
 {
     int fd = open_card(card);
     if (fd < 0) return 1;
@@ -268,15 +281,21 @@ static int cmd_show(const char *card, int hold_s, int flips)
     printf("KFDISP_SETCRTC_OK ms=%.1f\n", (now_s() - t0) * 1e3);
     int done = 0;
     double first = 0, last = 0;
+    uint32_t fl = DRM_MODE_PAGE_FLIP_EVENT | (async ? DRM_MODE_PAGE_FLIP_ASYNC : 0);
+    uint64_t cap_async = 0;
+    drmGetCap(fd, DRM_CAP_ASYNC_PAGE_FLIP, &cap_async);
+    printf("KFDISP_FLIP_MODE=%s gap_ms=%d cap_async_page_flip=%" PRIu64 "\n",
+           async ? "async" : "vsync", gap_ms, cap_async);
     for (int i = 0; i < flips; i++) {
         struct dumb *nx = (i & 1) ? &a : &b;
-        if (drmModePageFlip(fd, crtc, nx->fb, DRM_MODE_PAGE_FLIP_EVENT, NULL)) {
+        if (drmModePageFlip(fd, crtc, nx->fb, fl, NULL)) {
             printf("KFDISP_FAIL=pageflip#%d %s\n", i, strerror(errno)); break;
         }
         if (wait_flip(fd, 2.0)) { printf("KFDISP_FAIL=flip-timeout#%d\n", i); break; }
         if (!done) first = g_last_flip;
         last = g_last_flip;
         done++;
+        if (gap_ms > 0) usleep((useconds_t)gap_ms * 1000);
     }
     /* end on A so the screendump grades pattern A */
     if (done & 1) {
@@ -306,7 +325,8 @@ int main(int argc, char **argv)
     if (!strcmp(argv[1], "ppm")) return cmd_ppm(argc, argv);
     if (!strcmp(argv[1], "list")) return cmd_list(argc > 2 ? argv[2] : card);
     if (!strcmp(argv[1], "show"))
-        return cmd_show(argc > 2 ? argv[2] : card, argc > 3 ? atoi(argv[3]) : 10, argc > 4 ? atoi(argv[4]) : 120);
+        return cmd_show(argc > 2 ? argv[2] : card, argc > 3 ? atoi(argv[3]) : 10, argc > 4 ? atoi(argv[4]) : 120,
+                        argc > 5 && !strcmp(argv[5], "async"), argc > 6 ? atoi(argv[6]) : 0);
     fprintf(stderr, "unknown mode %s\n", argv[1]);
     return 2;
 }
