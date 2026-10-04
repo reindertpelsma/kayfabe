@@ -4,15 +4,16 @@
 param(
     [Parameter(Mandatory)][string]$Path,
     [Parameter(Mandatory)][string]$OutputPath,
-    [ValidateRange(1,1024)][int]$MaxInputMiB = 64,
-    [ValidateRange(1,1000000)][int]$MaxRecords = 100000
+    [ValidateRange(1,4096)][int]$MaxInputMiB = 64,
+    [ValidateRange(1,1000000)][int]$MaxRecords = 100000,
+    [switch]$GfxPoolOnly
 )
 $ErrorActionPreference = 'Stop'
 $Path = [IO.Path]::GetFullPath($Path)
 $OutputPath = [IO.Path]::GetFullPath($OutputPath)
 if (Test-Path -LiteralPath $OutputPath) { throw 'Output already exists; choose a fresh text-log path.' }
 $temporary = $OutputPath + '.tmp.' + [Guid]::NewGuid().ToString('N')
-$stream = $null; $reader = $null; $writer = $null; $output = $null; $hasher = $null
+$stream = $null; $reader = $null; $writer = $null; $output = $null; $hasher = $null; $exportHasher = $null
 $published = $false
 function Read-Exact([int]$Count) {
     $bytes = $reader.ReadBytes($Count)
@@ -31,15 +32,23 @@ try {
     if ((U32 $header 0) -ne 0x5457474b -or (U32 $header 4) -ne 1 -or (U32 $header 8) -ne 64 -or (U32 $header 12) -ne 64 -or (U32 $header 32) -ne 1 -or (U64 $header 16) -eq 0 -or (U32 $header 36) -ne 0 -or (U64 $header 40) -ne 0 -or (U64 $header 48) -ne 0 -or (U64 $header 56) -ne 0) { throw 'Unsupported capture header.' }
     $output = [IO.File]::Open($temporary,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
     $writer = [IO.StreamWriter]::new($output,[Text.UTF8Encoding]::new($false))
-    Write-Line ([ordered]@{schema='kayfabe-gsp-text/1';kind='header';source_name=[IO.Path]::GetFileName($Path);magic=(U32 $header 0);version=1;header_bytes=64;record_header_bytes=64;qpc_frequency=(U64 $header 16);started_qpc=(U64 $header 24);flags=1;reserved=0;reserved2=@(0,0,0);capture_complete=$false})
-    $count = 0
+    $selection = if ($GfxPoolOnly) { 'gfx-pool-query' } else { 'all' }
+    Write-Line ([ordered]@{schema='kayfabe-gsp-text/1';kind='header';source_name=[IO.Path]::GetFileName($Path);selection=$selection;magic=(U32 $header 0);version=1;header_bytes=64;record_header_bytes=64;qpc_frequency=(U64 $header 16);started_qpc=(U64 $header 24);flags=1;reserved=0;reserved2=@(0,0,0);capture_complete=$false})
+    $exportHasher = [Security.Cryptography.SHA256]::Create()
+    $null = $exportHasher.TransformBlock($header,0,64,$header,0)
+    $count = 0; $sourceRecords = 0; [int64]$exportBytes = 64
     while ($stream.Position -lt $stream.Length) {
-        if ($count -ge $MaxRecords) { throw 'Capture exceeds MaxRecords; no complete export produced.' }
         $record = Read-Exact 64
         $size = U32 $record 8
         $flags = U32 $record 48
         if ((U32 $record 0) -ne 0x5247474b -or (U32 $record 4) -ne 64 -or $size -lt 80 -or $size -gt 65536 -or $size % 8 -ne 0 -or (U32 $record 12) -gt 1 -or ($flags -band 1) -eq 0 -or ($flags -band 0xfffffff8L) -ne 0 -or (U32 $record 60) -ne 0) { throw 'Invalid capture record framing.' }
         $payload = Read-Exact ([int]$size)
+        $sourceRecords++
+        if ($GfxPoolOnly -and ((U32 $record 40) -ne 76 -or $size -lt 100 -or (U32 $payload 88) -ne 0x2080121f)) { continue }
+        if ($count -ge $MaxRecords) { throw 'Selected capture exceeds MaxRecords; no complete export produced.' }
+        $null = $exportHasher.TransformBlock($record,0,64,$record,0)
+        $null = $exportHasher.TransformBlock($payload,0,$payload.Length,$payload,0)
+        $exportBytes += 64 + $payload.Length
         Write-Line ([ordered]@{kind='record';magic=(U32 $record 0);header_bytes=64;payload_bytes=$size;direction=(U32 $record 12);qpc=(U64 $record 16);table_pa=(U64 $record 24);queue_sequence=(U32 $record 32);rpc_sequence=(U32 $record 36);rpc_function=(U32 $record 40);rpc_result=(U32 $record 44);flags=$flags;missing_before=(U32 $record 52);rpc_version=(U32 $record 56);reserved=0;payload_hex=([BitConverter]::ToString($payload)).Replace('-','').ToLowerInvariant()})
         $count++
         if ($count % 256 -eq 0) { $writer.Flush() }
@@ -53,16 +62,19 @@ try {
         if ((Get-Item -LiteralPath $statsPath).Length -gt 65536) { throw 'Statistics sidecar exceeds 64 KiB.' }
         $stats = [IO.File]::ReadAllText($statsPath) | ConvertFrom-Json
     }
-    Write-Line ([ordered]@{kind='footer';records=$count;source_bytes=$stream.Length;source_sha256=$digest;file_export_complete=$true;capture_complete=$false;driver_stats=$stats})
+    $null = $exportHasher.TransformFinalBlock([byte[]]::new(0),0,0)
+    $exportDigest = ([BitConverter]::ToString($exportHasher.Hash)).Replace('-','').ToLowerInvariant()
+    Write-Line ([ordered]@{kind='footer';records=$count;source_records=$sourceRecords;omitted_records=($sourceRecords-$count);source_bytes=$stream.Length;source_sha256=$digest;exported_bytes=$exportBytes;exported_sha256=$exportDigest;all_source_records_exported=($sourceRecords -eq $count);file_export_complete=$true;capture_complete=$false;driver_stats=$stats})
     $writer.Flush(); $output.Flush($true); $writer.Dispose(); $writer=$null; $output=$null
     [IO.File]::Move($temporary,$OutputPath)
     $published=$true
-    [ordered]@{text_log=$OutputPath;records=$count;source_bytes=$stream.Length;source_sha256=$digest;capture_complete=$false} | ConvertTo-Json -Compress
+    [ordered]@{text_log=$OutputPath;selection=$selection;records=$count;omitted_records=($sourceRecords-$count);source_bytes=$stream.Length;source_sha256=$digest;exported_bytes=$exportBytes;exported_sha256=$exportDigest;capture_complete=$false} | ConvertTo-Json -Compress
 } finally {
     if ($writer) { $writer.Dispose() }
     if ($output) { $output.Dispose() }
     if ($reader) { $reader.Dispose() }
     if ($stream) { $stream.Dispose() }
     if ($hasher) { $hasher.Dispose() }
+    if ($exportHasher) { $exportHasher.Dispose() }
     if (-not $published -and (Test-Path -LiteralPath $temporary)) { Remove-Item -LiteralPath $temporary -Force }
 }

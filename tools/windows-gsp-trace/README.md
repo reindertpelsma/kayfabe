@@ -222,6 +222,17 @@ applies the same checksum, ABI, sequence and request/reply validation as for a
 local binary capture. No executable or memory dump is returned or run. Its
 decoded-input limit defaults to 64 MiB (`--max-input-mib` to change explicitly).
 
+For a large capture, prioritize the query evidence with
+`-GfxPoolOnly -MaxInputMiB 512`. This streams the source while retaining only
+RM_CONTROL `0x2080121f` requests/replies in the text log. It reports omitted
+record counts and separate hashes for the original file and the selected
+record stream. The decoder can verify the selected stream; the full-source
+hash is provenance only because omitted bytes are absent. Sequence gaps in
+this mode can include deliberately omitted traffic. Keep the original capture
+on the rental if further controls need to be investigated. Full export remains
+available with explicit bounds, e.g. `-MaxInputMiB 512` and the decoder's
+matching `--max-input-mib 512`.
+
 Create `C:\traces` beforehand. The collector stops the worker, drains the entire
 FIFO and writes `gsp.kgwt.stats.json`. It flushes the C output buffer after each
 read batch and checks trace/statistics write, flush and close failures. A sudden

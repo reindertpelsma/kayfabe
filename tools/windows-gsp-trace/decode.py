@@ -22,6 +22,7 @@ def parse_jsonl(path, max_bytes=64 * 1024 * 1024):
     """Verify a bounded text-data export, then reuse all binary ABI checks."""
     blob = bytearray()
     footer = None
+    selection = 'all'
     count = 0
     fields = ('magic', 'header_bytes', 'payload_bytes', 'direction', 'qpc', 'table_pa',
               'queue_sequence', 'rpc_sequence', 'rpc_function', 'rpc_result', 'flags',
@@ -39,6 +40,9 @@ def parse_jsonl(path, max_bytes=64 * 1024 * 1024):
                 if line_number == 1:
                     if row.get('schema') != 'kayfabe-gsp-text/1' or row.get('kind') != 'header' or row.get('capture_complete') is not False:
                         raise InvalidTrace('unsupported text export header')
+                    selection = row.get('selection', 'all')
+                    if selection not in ('all', 'gfx-pool-query'):
+                        raise InvalidTrace('unsupported export selection')
                     values = [row[k] for k in ('magic', 'version', 'header_bytes', 'record_header_bytes', 'qpc_frequency', 'started_qpc', 'flags', 'reserved')]
                     values += row['reserved2']
                     if any(type(value) is not int for value in values):
@@ -57,10 +61,22 @@ def parse_jsonl(path, max_bytes=64 * 1024 * 1024):
                     footer = row
                 else:
                     raise InvalidTrace('unknown text record kind')
-        if footer is None or footer.get('file_export_complete') is not True or footer.get('capture_complete') is not False or footer.get('records') != count or footer.get('source_bytes') != len(blob) or footer.get('source_sha256') != hashlib.sha256(blob).hexdigest():
+        if footer is None or footer.get('file_export_complete') is not True or footer.get('capture_complete') is not False or footer.get('records') != count or footer.get('exported_bytes', footer.get('source_bytes')) != len(blob) or footer.get('exported_sha256', footer.get('source_sha256')) != hashlib.sha256(blob).hexdigest():
             raise InvalidTrace('missing or inconsistent export footer/hash')
+        if selection == 'all':
+            if footer.get('source_bytes') != len(blob) or footer.get('source_sha256') != hashlib.sha256(blob).hexdigest() or footer.get('omitted_records', 0) != 0:
+                raise InvalidTrace('full export omits source records or disagrees with source hash')
+        else:
+            if 'exported_sha256' not in footer or type(footer.get('omitted_records')) is not int or footer['omitted_records'] < 0 or footer.get('source_records') != count + footer['omitted_records'] or type(footer.get('source_bytes')) is not int or footer['source_bytes'] < len(blob) or not isinstance(footer.get('source_sha256'), str) or len(footer['source_sha256']) != 64 or any(c not in '0123456789abcdef' for c in footer['source_sha256']):
+                raise InvalidTrace('invalid selected-export provenance')
         trace = parse(blob)
+        if selection == 'gfx-pool-query' and any(r.get('control', {}).get('command') != hex(QUERY) for r in trace['records']):
+            raise InvalidTrace('query-only export contains another command')
         trace['export_stats'] = footer.get('driver_stats')
+        trace['text_export'] = dict(selection=selection, omitted_records=footer.get('omitted_records', 0),
+                                    source_bytes=footer['source_bytes'], source_sha256=footer['source_sha256'],
+                                    source_hash_verifiable_from_export=selection == 'all',
+                                    note='In a selected export, sequence gaps can include intentionally omitted records; full-source hash is provenance only.')
         return trace
     except (KeyError, TypeError, struct.error) as error:
         raise InvalidTrace(f'invalid text export structure: {error}') from error
@@ -157,6 +173,7 @@ def summarize(trace, stats=None):
                               rpc_sequence=req[0]['rpc_sequence'], table_pa=req[0]['table_pa']))
     return dict(schema=trace['schema'], complete=False, records=len(records),
                 observed_missing=sum(r['missing_before'] for r in records),
+                text_export=trace.get('text_export'),
                 driver_stats=stats, gfx_pool_observations=queries, unambiguous_query_pairs=pairs,
                 warning='Passive samples cannot prove completeness or cross-GPU behavior. Retained history may predate collector start.')
 
