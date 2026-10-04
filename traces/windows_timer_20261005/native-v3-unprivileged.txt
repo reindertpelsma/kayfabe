@@ -1,0 +1,15 @@
+831f6bd755be7abd2e6b219fd377a692e5f78126
+Uid:	65534	65534	65534	65534
+Gid:	65534	65534	65534	65534
+Groups:	 
+CapInh:	0000000000000000
+CapPrm:	0000000000000000
+CapEff:	0000000000000000
+CapBnd:	0000000000000000
+CapAmb:	0000000000000000
+NoNewPrivs:	1
+host_driver=595.91.07 arch=(400, 4, 161)
+round=0 base=0x9000 layout=TimerLayout { register_bytes: 1044, time_low: 1024, time_high: 1040 } first=1791157009963143744 second=1791157009983204576 delta=20060832 usermode=1791157009983207520 delta_to_usermode=2944
+round=1 base=0x9000 layout=TimerLayout { register_bytes: 1044, time_low: 1024, time_high: 1040 } first=1791157009984065440 second=1791157010004132480 delta=20067040 usermode=1791157010004135424 delta_to_usermode=2944
+round=2 base=0x9000 layout=TimerLayout { register_bytes: 1044, time_low: 1024, time_high: 1040 } first=1791157010004674016 second=1791157010024982880 delta=20308864 usermode=1791157010024985824 delta_to_usermode=2944
+PASS native read-only timer map/read/drop x3
