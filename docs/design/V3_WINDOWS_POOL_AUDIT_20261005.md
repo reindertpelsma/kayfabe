@@ -5,6 +5,21 @@
 `codex/windows-pool-2026-10-05`. This is not a security certification, merge
 approval, or a hardware result. No GPU or rental was used by this review.
 
+**Corrections applied at `535e7df9`, 2026-10-05:** exact measured query layouts
+replace the one-version gate; the timer class ID comes from the compiled matrix;
+policy tests exercise both 24-byte and 40-byte control envelopes across all 29
+admitted guest ABIs. The research script and its design now explicitly qualify
+the regex source check as textual evidence, not semantic proof. The ABI/RM/chip
+suite passed 1,187 tests with zero failures. These changes resolve the two
+compatibility corrections and document the audit-method deviation below; they
+do not resolve the isolation blocker, pool semantics, or timer mapping.
+
+The isolation fix is on `v3-p1p2` at `31b64802`, not current master
+`906a76a4`. It still requires integration and hardware validation. The Windows
+experiment also lacks master's USER-channel correction (`76dba5bd`), so its
+eventual integration must start from the current base plus the full isolation
+fix, rather than assuming that the old Windows base provides those guarantees.
+
 The local, uncommitted replacement of the pool query's 580.65.06-only gate with
 an exact measured-layout check was also read. Findings below distinguish the
 committed baseline from that proposed correction. Subsequent changes need their
