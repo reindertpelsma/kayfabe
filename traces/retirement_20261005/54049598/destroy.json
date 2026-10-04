@@ -1,0 +1,8 @@
+{
+  "time": "2026-10-04T23:26:00.995295+00:00",
+  "id": 54049598,
+  "returncode": 0,
+  "stdout": "destroying instance 54049598.\n",
+  "stderr": "",
+  "evidence_pushed_commit": "91bdf851"
+}

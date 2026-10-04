@@ -40,5 +40,5 @@ the original capture hashes (without needing to copy binary traces).
 - Neither sample establishes complete initialization, OS exclusivity, or
   cross-GPU/driver behavior. See the decoded JSON and exact wrapper outputs.
 
-All evidence was pushed before deleting either rental. Deletion receipts and
-an inventory confirming absence are added after the API accepts deletion.
+All evidence was pushed before deleting either rental. Both were destroyed at 23:26 UTC on October 4; receipts and the subsequent
+inventory confirm their absence. Only template-test rental 54213526 remains.
