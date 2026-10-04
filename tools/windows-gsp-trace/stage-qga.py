@@ -101,9 +101,12 @@ if ($collectorExit -ne 1 -or $collectorStatus -notmatch 'Open driver: Win32') { 
 & "$root\install.ps1" -Action EnableTestSigning | Out-Null
 $bcd=& bcdedit.exe /enum '{current}' | Out-String
 if ($LASTEXITCODE -or $bcd -notmatch '(?im)^\s*testsigning\s+Yes\s*$') { throw "testsigning not recorded in BCD: $bcd" }
-$stage=[ordered]@{schema='kayfabe-gsp-stage-result/1';source_revision=$manifest.source_revision;verified_files=@($manifest.files).Count;signtool_ran=$true;collector_ran=$true;testsigning_next_boot=$true;driver_loaded=$false;native_install_deferred=(Test-Path C:\ProgramData\VastWindows\defer-native-gpu.flag);reboot_performed=$false;staged_utc=(Get-Date).ToUniversalTime().ToString('o')}
-$stage | ConvertTo-Json | Set-Content "$root\stage-result.json" -Encoding UTF8
-$stage | ConvertTo-Json -Compress
+$deviceGuard=$null;$deviceGuardError=$null;$secureBoot=$null
+try { $deviceGuard=Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard -ClassName Win32_DeviceGuard | Select-Object VirtualizationBasedSecurityStatus,SecurityServicesConfigured,SecurityServicesRunning,CodeIntegrityPolicyEnforcementStatus } catch { $deviceGuardError=$_.Exception.Message }
+try { $secureBoot=Confirm-SecureBootUEFI } catch { }
+$stage=[ordered]@{schema='kayfabe-gsp-stage-result/1';secure_boot=$secureBoot;device_guard=$deviceGuard;device_guard_query_error=$deviceGuardError;source_revision=$manifest.source_revision;verified_files=@($manifest.files).Count;signtool_ran=$true;collector_ran=$true;testsigning_next_boot=$true;driver_loaded=$false;native_install_deferred=(Test-Path C:\ProgramData\VastWindows\defer-native-gpu.flag);reboot_performed=$false;staged_utc=(Get-Date).ToUniversalTime().ToString('o')}
+$stage | ConvertTo-Json -Depth 5 | Set-Content "$root\stage-result.json" -Encoding UTF8
+$stage | ConvertTo-Json -Depth 5 -Compress
 '''.replace('__SHA256__', args.sha256.lower())
     result = json.loads(powershell(check))
     (args.work / 'gsp-stage-result.json').write_text(json.dumps(result, indent=2) + '\n')
