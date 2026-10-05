@@ -23,6 +23,8 @@ parser.add_argument('--timer-map', action='store_true',
                     help='enable the experimental read-only host timer mapping')
 parser.add_argument('--private-translated-space', action='store_true',
                     help='enable experimental P1/P2 isolated Translated address space')
+parser.add_argument('--gop', action='store_true',
+                    help='enable Kayfabe virtual UEFI boot display for this run')
 parser.add_argument('--base', type=Path, default=Path('/var/lib/kf-windows-20261005'))
 args = parser.parse_args()
 if not re.fullmatch('[0-9a-f]{8,40}', args.revision):
@@ -60,6 +62,7 @@ with open('/tmp/kayfabe-fastguest.lock', 'a') as lock:
  '-device','virtio-blk-pci,drive=disk0,addr=0x4,disable-modern=on,bootindex=1',
  '-global','i440FX-pcihost.pci-hole64-size=32G',
  '-device','kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,display=on,guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0']
+ if args.gop: cmd[-1] += ',gop=on'
  env = dict(os.environ, KF3_RPC_TRACE='1')
  env.pop('KF3_GFX_POOL_PROBE', None)
  env.pop('KF3_TIMER_MAP', None)
@@ -71,6 +74,7 @@ with open('/tmp/kayfabe-fastguest.lock', 'a') as lock:
      'revision': args.revision, 'argv': cmd, 'pool_probe': args.pool_probe,
      'timer_map': args.timer_map,
      'private_translated_space': args.private_translated_space,
+     'gop': args.gop,
      'time_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
      'backing_image': str(source), 'vfio': False,
  }, indent=2)+'\n')
