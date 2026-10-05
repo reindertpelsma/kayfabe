@@ -1,0 +1,28 @@
+{
+  "product_revision": "fdc991c9d3fd51dab005beda2487365661a3db25",
+  "runner_revision": "152afe7b",
+  "fresh_overlay": true,
+  "host_driver": "595.91.07",
+  "guest_driver": "580.88",
+  "guest_abi": "580.65.06",
+  "gpu": "RTX 4070 / AD104",
+  "gop": false,
+  "auxiliary_vga": true,
+  "vfio": false,
+  "rpc_trace_lines": 363,
+  "memory_registration_replies": [
+    "kf-rm: rpc-trace fn=4 Other(4) seq=0  result=0x0",
+    "kf-rm: rpc-trace fn=4 Other(4) seq=0  result=0x0"
+  ],
+  "code43": true,
+  "nvidia_smi_exit": 9,
+  "gpu_channel_births": 0,
+  "qemu_exit": 0,
+  "kd": {
+    "exit": 0,
+    "stoppedBecause": null,
+    "elapsedSeconds": 60.5836231,
+    "processComplete": true,
+    "analysisComplete": true
+  }
+}

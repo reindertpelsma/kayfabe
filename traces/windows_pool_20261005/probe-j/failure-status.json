@@ -1,0 +1,10 @@
+{
+  "time_utc": "2026-10-05T02:14:49.204925+00:00",
+  "script": "/data/kayfabe-windows-pool-20261005/scripts/bench/windows/device_failure_status.ps1",
+  "script_sha256": "76a766a119ff3b22da831c49a60dc4185cb3950f308ebba01b6102c419fe16e8",
+  "exitcode": 1,
+  "pinned_host_key": true,
+  "publickey_only": true,
+  "agent_forwarding": false,
+  "private_key_stayed_on_controller": true
+}

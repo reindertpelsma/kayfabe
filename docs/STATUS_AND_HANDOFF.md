@@ -65,6 +65,37 @@ master. The older master status below is historical for this checkout.
   `tools/windows-debug-capture/evidence/2026-10-05-nvcd/` for the causal proof and
   Windows usage. The completed proprietary Linux/source evidence `8223efc9`
   is included here at `tools/windows-debug-capture/evidence/runlist-20261005/`.
+- **2026-10-05 checked memory registration:** product branch
+  `codex/guest-memory-list-probe-20261005`, `fdc991c9`, implements bounded function-4
+  SYSRAM registration behind independent `KF3_MEMORY_LIST_PROBE=1`. Nine explicit
+  public-source producer rows are admitted; unknown/older semantics refuse. It
+  checks writable guest RAM, exact ownership and non-reused parent lifetimes;
+  topology changes revoke the descriptor. No host RM verb, GPU map or scheduling
+  reply is added. Independent review passed for the diagnostic; 140 Rust tests
+  and the production C predicate fixture passed. This also fixes effective
+  read-only alias handling in the shared QEMU RAM listener. No production merge
+  or complete hardware/isolation validation is claimed.
+  Fresh **J** on that exact revision/runner `152afe7b` accepts both registrations,
+  reaches display-channel allocation and produces 363 traced/365 serviced RPCs
+  (I:213/215). Windows still reports Code43/smi9; GPU-channel births and display
+  methods remain zero. All 21 emulated display-channel allocations succeed.
+  Repeated `0x50700117` requests are cleanup (one-shot RmFree flags), not polling;
+  scheduling refusals occur later in cleanup. J shut down cleanly, QEMU exit0.
+  The fresh signed-KD live-dump analysis succeeded and contains a new assertion
+  chain, being analysed before further policy changes. Reviewed evidence:
+  `traces/windows_pool_20261005/probe-j/`; raw dump/journal remain private on the
+  controller under `/data/kayfabe-runtime/windows-pool-20261005/probe-j/private-kd/`.
+  A same-revision default-off comparison K is in progress.
+- **Linux oracle:** native open595.91.07/RTX4070 accepts the ordinary class3e
+  SYSTEM-memory allocation with REGISTER_MEMDESC_TO_PHYS_RM set, from UID65534,
+  all capabilities zero and NoNewPrivs1. Both ordinary and registered28KiB
+  allocations and frees return NV_OK. The matching source connects this to
+  memRegisterWithGsp/function4; the attempted dynamic kprobe was rejected before
+  running the client, so exact RPC/PFN bytes were not captured. Direct class81
+  remains privileged and is not a forwarding allowlist. Public-source/compiler
+  evidence covers13 tags and exposes the565 producer semantics change despite
+  unchanged wire layout. See `tools/windows-debug-capture/evidence/` directories
+  `linux-memory-registration-20261005/` and `alloc-memory-20261005/`.
 - Code and text evidence are pushed. The PC (`172.22.1.20`) is disposable and
   shared by serial GPU jobs only. Vast rentals 54049598 and 54159260 were retired
   after saving evidence on `codex/vast-retirement-2026-10-05` (`67ca8133`). Rental

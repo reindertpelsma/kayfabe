@@ -3,7 +3,14 @@
 **STATUS: RESEARCH, 2026-10-05.** Branch `codex/windows-pool-2026-10-05`.
 No successful Windows-through-Kayfabe GPU workload is claimed here yet.
 
-**Latest experiments H/I, 2026-10-05:** the opt-in metadata-only runlist allocation
+**Latest experiment J, 2026-10-05:** checked guest-memory registration at
+`fdc991c9` accepts both function-4 requests and advances Windows to display-channel
+allocation:363 traced RPCs versus213 in I. Code43 remains; no GPU channels or
+display methods execute. The fresh live dump contains a new failure chain under
+analysis. J shut down cleanly. See [J evidence and limits](probe-j/README.md).
+The same-revision default-off comparison K is in progress.
+
+**Earlier experiments H/I, 2026-10-05:** the opt-in metadata-only runlist allocation
 probe at `89618256` passes both previously blocked `0xb297` allocations. Windows
 then sends `ALLOC_MEMORY` (RPC function 4), refused, followed by control
 `0x20801111`, also refused, and teardown. The second refusal may be cleanup after
