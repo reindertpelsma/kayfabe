@@ -110,18 +110,25 @@ nonzero masks.
 
 ## Scheduling control and privilege boundary
 
+The [bounded scheduling follow-up](scheduling-control.md) resolves additional
+535 behavior: +4 selects a group ordinal during runlist construction, +24/25/26
+affect rebuild/staging/submission paths, and +32 enters a potentially event-bearing
+asynchronous path. **Zero count does not bypass scheduling or prove a no-op.**
+An earlier memory-allocation refusal also means the subsequent Windows control
+failure is not yet established as an independent initialization root cause.
+
 Linux 535 and 610 `0x20801111` handlers have matching significant accesses:
 
 | Parameter byte offset | Observed use; names are descriptive unless stated |
 |---|---|
 | 0, u32 | Resource handle, looked up in the caller's RM client, cast to internal `0xf4b771`; its parent must match the calling Subdevice |
-| 4, u32 | Passed onward as a scheduling argument; complete meaning not established |
+| 4, u32 | In 535, compared to the group ordinal while building the hardware runlist; the current entry position is saved on a match. Exact public name unknown |
 | 8, u32 | Looked up as public NVOC `Memory` class `0x4789f2` in the caller's resource hierarchy |
 | 12, u32 | Used downstream as a bound on 12-byte records in the owned memory |
 | 16, u16 | Offset added to the owned Memory object's CPU mapping to locate an index sequence |
 | 20, u32 | Downstream index count; the sequence contains 16-bit indices |
 | 24/25/26, bytes | Scheduling flags passed to scheduler operations; complete meanings not established |
-| 32, u64 | Forwarded to a scheduler operation; complete meaning not established |
+| 32, u64 | Conditionally stored in a pending per-engine record by an asynchronous helper; potentially event/pointer-bearing, complete type not established |
 
 The 610 handler is `_nv055811rm` at `.text+0x4b1cf0`; the 535 counterpart is
 `_nv046624rm` at `.text+0x43ce10`. In 610, resource lookup/type/parent validation
