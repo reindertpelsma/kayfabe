@@ -4,6 +4,22 @@
 `codex/windows-pool-2026-10-05`, based on `v3-windows`/`c50fad9a`, not current
 master. The older master status below is historical for this checkout.
 
+- **Latest result, 2026-10-05: Windows still Code 43.** Fresh L at product
+  `b431aeaf` on `codex/windows-tmo-constructor-probe-20261005` passes J's TMO-buffer
+  allocation precondition and fails later in per-window display construction.
+  This is a construction-only diagnostic: it advertises the compiler-derived
+  TMO bit but refuses ALL display methods before execution/completion. It is
+  explicitly not a production workaround or tone-mapping implementation.
+  Signed-KD/NVIDIA journal evidence proves all three earlier allocation helpers
+  passed; the next failed condition inside constructor `0x16f03c0` is unresolved.
+  L has 365 traced/367 serviced RPCs, zero GPU-channel births/display methods and
+  NVIDIA-SMI exit9. The 92 display tests and QEMU library check passed; independent
+  review approved the isolated experiment. J, K and L all shut down cleanly;
+  all Windows bench VMs are off and the Linux host GPU is healthy.
+  Read `traces/windows_pool_20261005/probe-l/README.md` and
+  `tools/windows-debug-capture/evidence/2026-10-05-startdevice-j.md` next.
+  Continue from the last real failure; do not enable TMO in production or widen
+  scheduling success. The full v3 hardware/isolation merge bar is still required.
 - Windows 580.88 on the borrowed RTX 4070 PC (Linux host 595.91.07) still reports
   Code 43 through Kayfabe. Fresh A/B/C/D/E runs are saved in
   `traces/windows_pool_20261005/`: answering the pool query advances initialization;
@@ -81,8 +97,8 @@ master. The older master status below is historical for this checkout.
   methods remain zero. All 21 emulated display-channel allocations succeed.
   Repeated `0x50700117` requests are cleanup (one-shot RmFree flags), not polling;
   scheduling refusals occur later in cleanup. J shut down cleanly, QEMU exit0.
-  The fresh signed-KD live-dump analysis succeeded and contains a new assertion
-  chain, being analysed before further policy changes. Reviewed evidence:
+  The fresh signed-KD live-dump analysis succeeded and identified the TMO-buffer
+  precondition; L above tests it and reaches the subsequent constructor failure. Reviewed evidence:
   `traces/windows_pool_20261005/probe-j/`; raw dump/journal remain private on the
   controller under `/data/kayfabe-runtime/windows-pool-20261005/probe-j/private-kd/`.
   The same-revision default-off comparison **K** returns to213 traced/215

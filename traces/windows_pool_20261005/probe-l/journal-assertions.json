@@ -1,0 +1,528 @@
+{
+  "source_driver_sha256": "31c79cce80b573e21647ace8d1a2b65697f992e7f86196f89e30af477b1bd47c",
+  "dump_sha256": "6d4739d7b94efbf7560985f8f5796c6d72707874246ada6b4e8578fbec18f12b",
+  "dump_bytes": 343710,
+  "tag": {
+    "bytes": 81518,
+    "sha256": "d65c05f0c247e70141a642305bc2b2f7beae87e7473f939a59279806b38fe8d3"
+  },
+  "schema": {
+    "bytes": 23604,
+    "sha256": "47aae92da4e4872693b399f75ceff2c66ff01b0a519d8532c07eee61f609fc42"
+  },
+  "nvcd": {
+    "offset": 7528,
+    "declared_bytes": 73991,
+    "available_bytes": 73990,
+    "missing_bytes": 1,
+    "version": "e3d5dc6e-db7d-4e28-b09e-f59a942f4a24",
+    "checksum": 11,
+    "checksum_valid": null,
+    "truncated_record_header_bytes": 3
+  },
+  "assertions": [
+    {
+      "dcl_index": 1,
+      "rva": "0x791e96",
+      "source_line": [
+        80
+      ],
+      "level": [
+        0
+      ],
+      "nvidia_callers_rva": [
+        "0x791e96",
+        "0x1a58ef",
+        "0xe6ebf",
+        "0xe4895",
+        "0x19ec317",
+        "0x19652c7",
+        "0x1a346dd",
+        "0x1a4450b",
+        "0x17e4f9e",
+        null
+      ]
+    },
+    {
+      "dcl_index": 3,
+      "rva": "0x302c74",
+      "source_line": [
+        238
+      ],
+      "level": [
+        86
+      ],
+      "nvidia_callers_rva": [
+        "0x302c74",
+        "0x2d855b",
+        "0x10dde5",
+        "0x142bfc",
+        "0xe8c28",
+        "0xe8893",
+        "0x19ec440",
+        "0x19652c7",
+        "0x1a346dd",
+        "0x1a4450b"
+      ]
+    },
+    {
+      "dcl_index": 5,
+      "rva": "0x302d2f",
+      "source_line": [
+        274
+      ],
+      "level": [
+        86
+      ],
+      "nvidia_callers_rva": [
+        "0x302d2f",
+        "0x2d855b",
+        "0x10dde5",
+        "0x142bfc",
+        "0xe8c28",
+        "0xe8893",
+        "0x19ec440",
+        "0x19652c7",
+        "0x1a346dd",
+        "0x1a4450b"
+      ]
+    },
+    {
+      "dcl_index": 7,
+      "rva": "0xbe7001",
+      "source_line": [
+        620
+      ],
+      "level": [
+        86
+      ],
+      "nvidia_callers_rva": [
+        "0xbe7001",
+        "0x10dde5",
+        "0x142bfc",
+        "0xe8c28",
+        "0xe8893",
+        "0x19ec440",
+        "0x19652c7",
+        "0x1a346dd",
+        "0x1a4450b",
+        "0x17e4f9e"
+      ]
+    },
+    {
+      "dcl_index": 9,
+      "rva": "0x30023d",
+      "source_line": [
+        365
+      ],
+      "level": [
+        86
+      ],
+      "nvidia_callers_rva": [
+        "0x30023d",
+        "0x10dde5",
+        "0x142bfc",
+        "0xe8c28",
+        "0xe8893",
+        "0x19ec440",
+        "0x19652c7",
+        "0x1a346dd",
+        "0x1a4450b",
+        "0x17e4f9e"
+      ]
+    },
+    {
+      "dcl_index": 11,
+      "rva": "0x2e7698",
+      "source_line": [
+        1059
+      ],
+      "level": [
+        86
+      ],
+      "nvidia_callers_rva": [
+        "0x2e7698",
+        "0x9a96d6",
+        "0x10e42f",
+        "0x142ca8",
+        "0xe8c6c",
+        "0xe8893",
+        "0x19ec440",
+        "0x19652c7",
+        "0x1a346dd",
+        "0x1a4450b"
+      ]
+    },
+    {
+      "dcl_index": 13,
+      "rva": "0x9a96fa",
+      "source_line": [
+        71
+      ],
+      "level": [
+        86
+      ],
+      "nvidia_callers_rva": [
+        "0x9a96fa",
+        "0x10e42f",
+        "0x142ca8",
+        "0xe8c6c",
+        "0xe8893",
+        "0x19ec440",
+        "0x19652c7",
+        "0x1a346dd",
+        "0x1a4450b",
+        "0x17e4f9e"
+      ]
+    },
+    {
+      "dcl_index": 15,
+      "rva": "0x1abb0a",
+      "source_line": [
+        2582
+      ],
+      "level": [
+        86
+      ],
+      "nvidia_callers_rva": [
+        "0x1abb0a",
+        "0x1a99b6",
+        "0x39d4ea",
+        "0x3d53e1",
+        "0x10ef29",
+        "0x10ebd1",
+        "0x142ca8",
+        "0xe8c6c",
+        "0xe8893",
+        "0x19ec440"
+      ]
+    },
+    {
+      "dcl_index": 17,
+      "rva": "0x62115c",
+      "source_line": [
+        216
+      ],
+      "level": [
+        0
+      ],
+      "nvidia_callers_rva": [
+        "0x62115c",
+        "0x4d3c86",
+        "0x4cdf96",
+        "0x17381e",
+        "0xfd121",
+        "0x286475",
+        "0x26b8d4",
+        "0x25ffb7",
+        "0x25fb79",
+        "0x27f4af"
+      ]
+    },
+    {
+      "dcl_index": 19,
+      "rva": "0x39d558",
+      "source_line": [
+        3226
+      ],
+      "level": [
+        0
+      ],
+      "nvidia_callers_rva": [
+        "0x39d558",
+        "0x3d53e1",
+        "0x10ef29",
+        "0x10ebd1",
+        "0x142ca8",
+        "0xe8c6c",
+        "0xe8893",
+        "0x19ec440",
+        "0x19652c7",
+        "0x1a346dd"
+      ]
+    },
+    {
+      "dcl_index": 21,
+      "rva": "0x1a1267d",
+      "source_line": [],
+      "level": [
+        1
+      ],
+      "nvidia_callers_rva": [
+        "0x1a1267d",
+        "0x1a10583",
+        "0x16158e2",
+        "0x1959373",
+        "0x19ec813",
+        "0x19652c7",
+        "0x1a346dd",
+        "0x1a4450b",
+        "0x17e4f9e",
+        null
+      ]
+    },
+    {
+      "dcl_index": 23,
+      "rva": "0x19fe082",
+      "source_line": [],
+      "level": [
+        1
+      ],
+      "nvidia_callers_rva": [
+        "0x19fe082",
+        "0x19ec93f",
+        "0x19652c7",
+        "0x1a346dd",
+        "0x1a4450b",
+        "0x17e4f9e",
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "dcl_index": 25,
+      "rva": "0x19460d2",
+      "source_line": [],
+      "level": [
+        1
+      ],
+      "nvidia_callers_rva": [
+        "0x19460d2",
+        "0x19eb418",
+        "0x19ecbef",
+        "0x19652c7",
+        "0x1a346dd",
+        "0x1a4450b",
+        "0x17e4f9e",
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "dcl_index": 27,
+      "rva": "0x1947d1c",
+      "source_line": [],
+      "level": [
+        1
+      ],
+      "nvidia_callers_rva": [
+        "0x1947d1c",
+        "0x1946198",
+        "0x19eb418",
+        "0x19ecbef",
+        "0x19652c7",
+        "0x1a346dd",
+        "0x1a4450b",
+        "0x17e4f9e",
+        null,
+        null
+      ]
+    },
+    {
+      "dcl_index": 29,
+      "rva": "0x1769a29",
+      "source_line": [],
+      "level": [
+        1
+      ],
+      "nvidia_callers_rva": [
+        "0x1769a29",
+        "0x19eb7e9",
+        "0x1965389",
+        "0x1a346dd",
+        "0x1a4450b",
+        "0x17e4f9e",
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "dcl_index": 31,
+      "rva": "0x17884de",
+      "source_line": [],
+      "level": [
+        1
+      ],
+      "nvidia_callers_rva": [
+        "0x17884de",
+        "0x1769bb7",
+        "0x19eb7e9",
+        "0x1965389",
+        "0x1a346dd",
+        "0x1a4450b",
+        "0x17e4f9e",
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "dcl_index": 33,
+      "rva": "0x304308",
+      "source_line": [
+        1620
+      ],
+      "level": [
+        86
+      ],
+      "nvidia_callers_rva": [
+        "0x304308",
+        "0x303ad9",
+        "0x1af7b4",
+        "0x3fb47a",
+        "0x25e97c",
+        "0x26e0da",
+        "0x26e453",
+        "0xdc16c",
+        "0xe22829",
+        "0xe220c5"
+      ]
+    },
+    {
+      "dcl_index": 35,
+      "rva": "0x16e97f4",
+      "source_line": [],
+      "level": [
+        1
+      ],
+      "nvidia_callers_rva": [
+        "0x16e97f4",
+        "0x16b4f2a",
+        "0x1615220",
+        "0x1614aed",
+        "0x1959907",
+        "0x1965547",
+        "0x1a346dd",
+        "0x1a4450b",
+        "0x17e4f9e",
+        null
+      ]
+    },
+    {
+      "dcl_index": 37,
+      "rva": "0x16b4f33",
+      "source_line": [],
+      "level": [
+        1
+      ],
+      "nvidia_callers_rva": [
+        "0x16b4f33",
+        "0x1615220",
+        "0x1614aed",
+        "0x1959907",
+        "0x1965547",
+        "0x1a346dd",
+        "0x1a4450b",
+        "0x17e4f9e",
+        null,
+        null
+      ]
+    },
+    {
+      "dcl_index": 39,
+      "rva": "0x1615268",
+      "source_line": [],
+      "level": [
+        1
+      ],
+      "nvidia_callers_rva": [
+        "0x1615268",
+        "0x1614aed",
+        "0x1959907",
+        "0x1965547",
+        "0x1a346dd",
+        "0x1a4450b",
+        "0x17e4f9e",
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "dcl_index": 41,
+      "rva": "0x1615285",
+      "source_line": [],
+      "level": [
+        1
+      ],
+      "nvidia_callers_rva": [
+        "0x1615285",
+        "0x1614aed",
+        "0x1959907",
+        "0x1965547",
+        "0x1a346dd",
+        "0x1a4450b",
+        "0x17e4f9e",
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "dcl_index": 43,
+      "rva": "0x1614af6",
+      "source_line": [],
+      "level": [
+        1
+      ],
+      "nvidia_callers_rva": [
+        "0x1614af6",
+        "0x1959907",
+        "0x1965547",
+        "0x1a346dd",
+        "0x1a4450b",
+        "0x17e4f9e",
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "dcl_index": 45,
+      "rva": "0x1959910",
+      "source_line": [],
+      "level": [
+        1
+      ],
+      "nvidia_callers_rva": [
+        "0x1959910",
+        "0x1965547",
+        "0x1a346dd",
+        "0x1a4450b",
+        "0x17e4f9e",
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "dcl_index": 47,
+      "rva": "0x1965bd1",
+      "source_line": [],
+      "level": [
+        1
+      ],
+      "nvidia_callers_rva": [
+        "0x1965bd1",
+        "0x1a346dd",
+        "0x1a4450b",
+        "0x17e4f9e",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    }
+  ],
+  "note": "RVA-only reviewed projection; raw runtime addresses omitted."
+}

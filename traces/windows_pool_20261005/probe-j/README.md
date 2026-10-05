@@ -41,7 +41,9 @@ exited1 after an empty event-query path, with no stderr output. The new WATCHDOG
 live dump was analysed with the already pinned and Microsoft-signed KD bundle:
 exit0, semantic analysis complete, live dump0x1b0/StartDevice/c000009a. This status
 is not proof of actual RAM exhaustion. The NVIDIA journal has new assertions;
-causal analysis is separate and still in progress at this evidence checkpoint.
+the [causal analysis](../../../tools/windows-debug-capture/evidence/2026-10-05-startdevice-j.md)
+identifies a TMO-buffer precondition. The subsequent [L experiment](../probe-l/README.md)
+passes that helper and reaches a later display constructor failure.
 Raw dump, tagged bytes, full decoded journal and debugger text stay private on
 the controller, not solely on the borrowed PC.
 

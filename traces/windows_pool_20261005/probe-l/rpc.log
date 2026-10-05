@@ -1,0 +1,365 @@
+kf-rm: rpc-trace fn=1 SetGuestSystemInfo seq=0  result=0x0
+kf-rm: rpc-trace fn=65 GetGspStaticInfo seq=0  result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1d00002 parent=0x0 handle=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1d00002 parent=0xc1d00002 handle=0xff010000 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1d00002 parent=0xff010000 handle=0xff030000 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2081 client=0xc1d00002 parent=0xff030000 handle=0xff0d0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a36 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a41 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x208001b0 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x208001b0 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a87 client=0x0 object=0x0 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a40 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801112 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a5c client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a1c client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801803 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a4b client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00003 parent=0x0 handle=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00003 parent=0xc1e00003 handle=0xcaf00000 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00003 parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0073 client=0xc1e00003 parent=0xcaf00000 handle=0xcaf00002 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800af3 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800aac client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a61 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a61 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a61 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800afe client=0x0 object=0x0 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800aff client=0x0 object=0x0 result=none
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00004 parent=0x0 handle=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00004 parent=0xc1e00004 handle=0xcaf00000 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00004 parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x007e client=0xc1e00004 parent=0xcaf00001 handle=0xcaf00003 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=0xc1e00004 object=0xcaf00001 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a59 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800aaf client=0x0 object=0x0 result=none
+kf-rm: rpc-trace fn=70 UpdateBarPde seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a70 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a70 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a6c client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a6c client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a6c client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a01 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800ac6 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800adf client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a49 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00800292 client=0x0 object=0x0 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a80 client=0x0 object=0x0 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a61 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00005 parent=0x0 handle=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00005 parent=0xc1e00005 handle=0xcaf00000 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00005 parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a80 client=0x0 object=0x0 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730151 client=0xc1e00003 object=0xcaf00002 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a0f client=0x0 object=0x0 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080017e client=0x0 object=0x0 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800af3 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a9f client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00006 parent=0x0 handle=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00006 parent=0xc1e00006 handle=0xcaf00000 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00006 parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a1f client=0xc1e00006 object=0xcaf00001 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a2a client=0xc1e00006 object=0xcaf00001 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a26 client=0xc1e00006 object=0xcaf00001 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a22 client=0xc1e00006 object=0xcaf00001 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a30 client=0xc1e00006 object=0xcaf00001 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a2c client=0xc1e00006 object=0xcaf00001 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a2e client=0xc1e00006 object=0xcaf00001 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a34 client=0xc1e00006 object=0xcaf00001 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800b03 client=0xc1e00006 object=0xcaf00001 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800b05 client=0xc1e00006 object=0xcaf00001 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a3d client=0xc1e00006 object=0xcaf00001 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a3f client=0xc1e00006 object=0xcaf00001 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a48 client=0xc1e00006 object=0xcaf00001 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a32 client=0xc1e00006 object=0xcaf00001 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00007 parent=0x0 handle=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00007 parent=0xc1e00007 handle=0xcaf00000 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00007 parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x90f1 client=0xc1e00007 parent=0xcaf00000 handle=0xbaba0042 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x90f10106 client=0xc1e00007 object=0xbaba0042 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc56f client=0xc1e00007 parent=0xcaf00000 handle=0xbaba0045 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080012b client=0xc1e00007 object=0xcaf00001 result=none
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080013f client=0x0 object=0x0 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a4c client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809009 client=0xc1d00002 object=0xff030000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=0xc1d00002 object=0xff030000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809001 client=0xc1d00002 object=0xff030000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809004 client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801303 client=0xc1d00002 object=0xff030000 result=0x56
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00801306 client=0xc1d00002 object=0xff010000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20810108 client=0xc1d00002 object=0xff0d0000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801823 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801823 client=0x0 object=0x0 result=0x56
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800ab8 client=0x0 object=0x0 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800173 client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801315 client=0xc1d00002 object=0xff030000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a12 client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a12 client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a12 client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a12 client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800102 client=0xc1d00002 object=0xff030000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00801c02 client=0xc1d00002 object=0xff010000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00801b02 client=0xc1d00002 object=0xff010000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20803601 client=0xc1d00002 object=0xff030000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808159 client=0xc1d00002 object=0xff030000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800160 client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802801 client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00801707 client=0xc1d00002 object=0xff010000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080012f client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080121f client=0xc1d00002 object=0xff030000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00801707 client=0xc1d00002 object=0xff010000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00801707 client=0xc1d00002 object=0xff010000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00801707 client=0xc1d00002 object=0xff010000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00801707 client=0xc1d00002 object=0xff010000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00801707 client=0xc1d00002 object=0xff010000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00801707 client=0xc1d00002 object=0xff010000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20803801 client=0xc1d00002 object=0xff030000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802806 client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0073 client=0xc1d00002 parent=0xff010000 handle=0xff0a0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730107 client=0xc1d00002 object=0xff0a0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073028b client=0xc1d00002 object=0xff0a0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073013d client=0xc1d00002 object=0xff0a0000 result=none
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc372 client=0xc1d00002 parent=0xff010000 handle=0xff0a0100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080205b client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a060 client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802068 client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00800106 client=0xc1d00002 object=0xff010000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a70a client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a801 client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a07 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a02 client=0xc1d00002 object=0xff030000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a07 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a02 client=0xc1d00002 object=0xff030000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a07 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a02 client=0xc1d00002 object=0xff030000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a12 client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a12 client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a12 client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a12 client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a02f client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800810 client=0xc1d00002 object=0xff030000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x208081ea client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808524 client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730101 client=0xc1d00002 object=0xff0a0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00731369 client=0xc1d00002 object=0xff0a0000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073014b client=0xc1d00002 object=0xff0a0000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730101 client=0xc1d00002 object=0xff0a0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730102 client=0xc1d00002 object=0xff0a0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730287 client=0xc1d00002 object=0xff0a0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073028b client=0xc1d00002 object=0xff0a0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730108 client=0xc1d00002 object=0xff0a0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730240 client=0xc1d00002 object=0xff0a0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730250 client=0xc1d00002 object=0xff0a0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073028b client=0xc1d00002 object=0xff0a0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730285 client=0xc1d00002 object=0xff0a0000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00731140 client=0xc1d00002 object=0xff0a0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073028a client=0xc1d00002 object=0xff0a0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808159 client=0xc1d00002 object=0xff030000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730116 client=0xc1d00002 object=0xff0a0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730285 client=0xc1d00002 object=0xff0a0000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730285 client=0xc1d00002 object=0xff0a0000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730285 client=0xc1d00002 object=0xff0a0000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730285 client=0xc1d00002 object=0xff0a0000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730108 client=0xc1d00002 object=0xff0a0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073011d client=0xc1d00002 object=0xff0a0000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730245 client=0xc1d00002 object=0xff0a0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010b client=0xc1d00002 object=0xff0a0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073012c client=0xc1d00002 object=0xff0a0000 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010b client=0xc1d00002 object=0xff0a0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010b client=0xc1d00002 object=0xff0a0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010b client=0xc1d00002 object=0xff0a0000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730109 client=0xc1d00002 object=0xff0a0000 result=none
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xb297 client=0xc1d00002 parent=0xff030000 handle=0xff008050 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xb297 client=0xc1d00002 parent=0xff030000 handle=0xff008250 result=0x0
+kf-rm: rpc-trace fn=4 Other(4) seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a38 client=0x0 object=0x0 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801110 client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xb297 client=0xc1d00002 parent=0xff030000 handle=0xff008054 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xb297 client=0xc1d00002 parent=0xff030000 handle=0xff008254 result=0x0
+kf-rm: rpc-trace fn=4 Other(4) seq=0  result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0004 client=0xc1d00002 parent=0xff030000 handle=0xff0c0000 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1d00008 parent=0x0 handle=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1d00008 parent=0xc1d00008 handle=0x1 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1d00008 parent=0x1 handle=0x2 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080080b client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0070 client=0xc1d00002 parent=0xff010000 handle=0xff000010 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x90f1 client=0xc1d00002 parent=0xff010000 handle=0xff000870 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x90f10106 client=0xc1d00002 object=0xff000870 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0070 client=0xc1d00002 parent=0xff010000 handle=0xff1fe038 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc770 client=0xc1d00002 parent=0xff010000 handle=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700709 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc77d client=0xc1d00002 parent=0xff1fe100 handle=0xff1fe102 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67e client=0xc1d00002 parent=0xff1fe100 handle=0xff1fe120 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67e client=0xc1d00002 parent=0xff1fe100 handle=0xff1fe121 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67e client=0xc1d00002 parent=0xff1fe100 handle=0xff1fe122 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67e client=0xc1d00002 parent=0xff1fe100 handle=0xff1fe123 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67e client=0xc1d00002 parent=0xff1fe100 handle=0xff1fe124 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67e client=0xc1d00002 parent=0xff1fe100 handle=0xff1fe125 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67e client=0xc1d00002 parent=0xff1fe100 handle=0xff1fe126 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67e client=0xc1d00002 parent=0xff1fe100 handle=0xff1fe127 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67b client=0xc1d00002 parent=0xff1fe100 handle=0xff1fe130 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67b client=0xc1d00002 parent=0xff1fe100 handle=0xff1fe131 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67b client=0xc1d00002 parent=0xff1fe100 handle=0xff1fe132 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67b client=0xc1d00002 parent=0xff1fe100 handle=0xff1fe133 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67b client=0xc1d00002 parent=0xff1fe100 handle=0xff1fe134 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67b client=0xc1d00002 parent=0xff1fe100 handle=0xff1fe135 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67b client=0xc1d00002 parent=0xff1fe100 handle=0xff1fe136 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67b client=0xc1d00002 parent=0xff1fe100 handle=0xff1fe137 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67a client=0xc1d00002 parent=0xff1fe100 handle=0xff1fe108 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67a client=0xc1d00002 parent=0xff1fe100 handle=0xff1fe109 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67a client=0xc1d00002 parent=0xff1fe100 handle=0xff1fe10a result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67a client=0xc1d00002 parent=0xff1fe100 handle=0xff1fe10b result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801111 client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a38 client=0x0 object=0x0 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801111 client=0xc1d00002 object=0xff030000 result=none
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a70 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a6c client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730151 client=0xc1e00003 object=0xcaf00002 result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a38 client=0x0 object=0x0 result=none
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=70 UpdateBarPde seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800afe client=0x0 object=0x0 result=none
+kf-rm: rpc-trace fn=47 UnloadingGuestDriver seq=0  result=0x0

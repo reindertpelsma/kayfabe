@@ -1,0 +1,23 @@
+{
+  "product_revision": "b431aeaf9fca5d78b451754c0de7b8dbbe9d7652",
+  "runner_revision": "b431aeaf9fca5d78b451754c0de7b8dbbe9d7652",
+  "fresh_overlay": true,
+  "host_driver": "595.91.07",
+  "guest_driver": "580.88",
+  "guest_abi": "580.65.06",
+  "gpu": "RTX 4070 / AD104",
+  "vfio": false,
+  "rpc_trace_lines": 365,
+  "code43": true,
+  "nvidia_smi_exit": 9,
+  "gpu_channel_births": 0,
+  "display_methods_executed": 0,
+  "qemu_exit": 0,
+  "kd": {
+    "exit": 0,
+    "stoppedBecause": null,
+    "elapsedSeconds": 62.338474999999995,
+    "processComplete": true,
+    "analysisComplete": true
+  }
+}

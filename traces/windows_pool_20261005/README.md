@@ -3,11 +3,17 @@
 **STATUS: RESEARCH, 2026-10-05.** Branch `codex/windows-pool-2026-10-05`.
 No successful Windows-through-Kayfabe GPU workload is claimed here yet.
 
-**Latest experiment J, 2026-10-05:** checked guest-memory registration at
+**Latest experiment L, 2026-10-05:** the construction-only TMO capability probe
+passes J's previously failing buffer helper and reaches a later per-window
+constructor failure. It still reports Code43, with zero GPU-channel births or
+display methods. All display methods are deliberately refused in this mode;
+this is not a working TMO/display implementation. Both signed dump analysis and
+clean shutdown succeeded. See [L evidence and limits](probe-l/README.md).
+
+**Earlier experiment J, 2026-10-05:** checked guest-memory registration at
 `fdc991c9` accepts both function-4 requests and advances Windows to display-channel
 allocation:363 traced RPCs versus213 in I. Code43 remains; no GPU channels or
-display methods execute. The fresh live dump contains a new failure chain under
-analysis. J shut down cleanly. See [J evidence and limits](probe-j/README.md).
+display methods execute. The fresh live dump identifies the TMO-buffer precondition tested by L. J shut down cleanly. See [J evidence and limits](probe-j/README.md).
 The [same-revision default-off comparison K](probe-k/README.md) returns to213
 traced RPCs and refuses registration, isolating the effect of that flag. K also
 shut down cleanly.

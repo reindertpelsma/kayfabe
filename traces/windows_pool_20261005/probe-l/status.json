@@ -1,0 +1,10 @@
+{
+  "time_utc": "2026-10-05T02:34:24.447912+00:00",
+  "script": "/data/kayfabe-windows-pool-20261005/scripts/bench/windows/pool_probe_status.ps1",
+  "script_sha256": "98db9f3a92b402edf082c42f7177176c432425dcad877454ee35a429978a8028",
+  "exitcode": 0,
+  "pinned_host_key": true,
+  "publickey_only": true,
+  "agent_forwarding": false,
+  "private_key_stayed_on_controller": true
+}

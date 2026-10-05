@@ -1,0 +1,2 @@
+RPC multiset difference (ordering is not compared here):
++ 2 kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
