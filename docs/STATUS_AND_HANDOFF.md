@@ -41,12 +41,22 @@ master. The older master status below is historical for this checkout.
   It is saved under `traces/windows_pool_20261005/vfio-b297-restart/`; Windows
   shut down and the supervisor restored the Linux GPU driver/display. All Windows
   bench VMs are stopped. The raw trace is preserved privately on the controller.
-  A bounded allocation-only diagnostic is in progress on
+  The bounded allocation-only diagnostic is pushed at `89618256` on
   `codex/windows-runlist-allocation-probe-20261005`, based on `e71e4a8b`.
-  Scheduling remains refused. `maxTSGs=0` means native default capacity, not
-  zero capacity. See `tools/windows-debug-capture/evidence/2026-10-05-nvcd/`
-  for the causal proof and Windows usage; proprietary Linux source research
-  is on `codex/windows-runlist-source-2026-10-05`.
+  Its 1,247 scoped tests passed and independent review found no blocking finding
+  for an isolated experiment. Fresh H, runner `13bf3358`, accepts both runlist
+  metadata allocations (engine 1, maxTSGs/QoS zero), then refuses `ALLOC_MEMORY`
+  function 4 and control `0x20801111`. Windows stays Code 43 / smi exit 9, with
+  213 traced RPCs (E: 208), 215 serviced messages and no channel births. Function
+  4 precedes the scheduling refusal; the latter may be cleanup, not the cause.
+  H shut down cleanly, QEMU exit 0; evidence is `traces/windows_pool_20261005/probe-h/`.
+  Next: bounded parameter diagnostics, public memory-registration contract and
+  scheduling semantics. No successful scheduling reply is being introduced.
+  `maxTSGs=0` means native default capacity, not zero capacity; the probe omits
+  native buffers and is explicitly incomplete. See
+  `tools/windows-debug-capture/evidence/2026-10-05-nvcd/` for the causal proof and
+  Windows usage. The completed proprietary Linux/source evidence `8223efc9`
+  is included here at `tools/windows-debug-capture/evidence/runlist-20261005/`.
 - Code and text evidence are pushed. The PC (`172.22.1.20`) is disposable and
   shared by serial GPU jobs only. Vast rentals 54049598 and 54159260 were retired
   after saving evidence on `codex/vast-retirement-2026-10-05` (`67ca8133`). Rental
@@ -54,7 +64,8 @@ master. The older master status below is historical for this checkout.
   SSH and a real CUDA kernel on each of its two RTX 5090s. It was retired after
   saving the evidence. Zero Vast rentals remain as of 2026-10-05 00:48:59 UTC.
 - `vast-windows` runtime remains frozen at `6d8e66f`; docs-only main updates
-  `5cebab4`/`30c6ce7` record the successful fresh template and retirement. The
+  `5cebab4`/`30c6ce7` record the successful fresh template and retirement; `94bee04`
+  clarifies the supported boot/disk configuration. The
   copy-ready template ReadMe/name/description are updated in the repo and `/root`.
   Installer improvements stay on `codex/template-followups-2026-10-05` at
   `a2a3a63`; do not promote them before the requested later fresh-template test.

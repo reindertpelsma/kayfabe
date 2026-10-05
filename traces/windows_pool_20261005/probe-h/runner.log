@@ -1,0 +1,8 @@
+Starting kf-win-probe-h-89618256.service - [systemd-run] /usr/bin/python3 /var/tmp/pc_pool_experiment.py --revision 89618256c3d8e23ba12f12f4937755448effcfb4 --name probe-h --pool-probe --timer-map --private-translated-space --sw-runlist-probe...
+Started kf-win-probe-h-89618256.service - [systemd-run] /usr/bin/python3 /var/tmp/pc_pool_experiment.py --revision 89618256c3d8e23ba12f12f4937755448effcfb4 --name probe-h --pool-probe --timer-map --private-translated-space --sw-runlist-probe.
+Formatting '/var/lib/kf-windows-20261005/probe-h/windows.qcow2', fmt=qcow2 cluster_size=65536 extended_l2=off compression_type=zlib size=161061273600 backing_file=/var/lib/kf-windows-20261005/baseline/windows.qcow2 backing_fmt=qcow2 lazy_refcounts=off refcount_bits=16
+KAYFABE_WINDOWS_START probe-h
+KAYFABE_WINDOWS_EXIT=0
+kf-win-probe-h-89618256.service: Deactivated successfully.
+kf-win-probe-h-89618256.service: Consumed 2min 1.288s CPU time over 1min 59.629s wall clock time, 9.1G memory peak.
+NVIDIA GeForce RTX 4070, 595.91.07, 322 MiB

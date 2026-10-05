@@ -1,0 +1,16 @@
+--- E e71e4a8b
++++ H 89618256
+@@ -179,7 +179,12 @@
+ kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010b client=0xc1d00002 object=0xff0a0000 result=0x0
+ kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010b client=0xc1d00002 object=0xff0a0000 result=0x0
+ kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730109 client=0xc1d00002 object=0xff0a0000 result=none
+-kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xb297 client=0xc1d00002 parent=0xff030000 handle=0xff008050 result=0x56
++kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xb297 client=0xc1d00002 parent=0xff030000 handle=0xff008050 result=0x0
++kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xb297 client=0xc1d00002 parent=0xff030000 handle=0xff008250 result=0x0
++kf-rm: rpc-trace fn=4 Other(4) seq=0  result=none
++kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801111 client=0xc1d00002 object=0xff030000 result=none
++kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
++kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+ kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0004 client=0xc1d00002 parent=0xff030000 handle=0xff0c0000 result=0x0
+ kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+ kf-rm: rpc-trace fn=10 Free seq=0  result=0x0

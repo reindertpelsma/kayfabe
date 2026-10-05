@@ -1,0 +1,36 @@
+{
+  "product_revision": "89618256c3d8e23ba12f12f4937755448effcfb4",
+  "runner_revision": "13bf3358",
+  "comparison": "E plus default-off software-runlist allocation probe",
+  "qemu": "10.2.4",
+  "host_driver": "595.91.07",
+  "guest_driver": "580.88",
+  "guest_wire": "580.65.06",
+  "gpu": "RTX 4070 AD104",
+  "vfio": false,
+  "windows_nvidia_problem": 43,
+  "nvidia_smi_exit": 9,
+  "qemu_exit": 0,
+  "e_traced_rpcs": 208,
+  "h_traced_rpcs": 213,
+  "gpu_channel_births": 0,
+  "bounded_allocations": [
+    {
+      "class": "0xb297",
+      "engine": 1,
+      "maxTSGs": 0,
+      "qosIntrEnableMask": 0
+    },
+    {
+      "class": "0xb297",
+      "engine": 1,
+      "maxTSGs": 0,
+      "qosIntrEnableMask": 0
+    }
+  ],
+  "new_refusals": [
+    "fn4 ALLOC_MEMORY",
+    "control0x20801111"
+  ],
+  "causality_limit": "Memory refusal precedes scheduling refusal; control may be cleanup. No successful GPU work or faithful runlist implementation claimed."
+}

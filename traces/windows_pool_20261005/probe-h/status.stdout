@@ -1,0 +1,43 @@
+2026-10-05T01:07:35.6035577+00:00
+[
+    {
+        "Name":  "Microsoft Basic Display Adapter",
+        "Status":  "Error",
+        "ConfigManagerErrorCode":  10,
+        "PNPDeviceID":  "PCI\\VEN_1234\u0026DEV_1111\u0026SUBSYS_11001AF4\u0026REV_02\\3\u0026267A616A\u00260\u002648",
+        "DriverVersion":  "10.0.26100.1"
+    },
+    {
+        "Name":  "NVIDIA GeForce RTX 4070",
+        "Status":  "Error",
+        "ConfigManagerErrorCode":  43,
+        "PNPDeviceID":  "PCI\\VEN_10DE\u0026DEV_2786\u0026SUBSYS_40EE1458\u0026REV_A1\\3\u0026267A616A\u00260\u002630",
+        "DriverVersion":  "32.0.15.8088"
+    }
+]
+[
+    {
+        "Status":  "Error",
+        "FriendlyName":  "Microsoft Basic Display Adapter",
+        "InstanceId":  "PCI\\VEN_1234\u0026DEV_1111\u0026SUBSYS_11001AF4\u0026REV_02\\3\u0026267A616A\u00260\u002648",
+        "Problem":  10
+    },
+    {
+        "Status":  "Error",
+        "FriendlyName":  "NVIDIA GeForce RTX 4070",
+        "InstanceId":  "PCI\\VEN_10DE\u0026DEV_2786\u0026SUBSYS_40EE1458\u0026REV_A1\\3\u0026267A616A\u00260\u002630",
+        "Problem":  43
+    }
+]
+{
+    "PSChildName":  "0001",
+    "DriverDesc":  "NVIDIA GeForce RTX 4070",
+    "DriverVersion":  "32.0.15.8088",
+    "EnableGpuFirmware":  1
+}
+{
+    "EnableGpuFirmware":  1
+}
+NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+
+NVIDIA_SMI_EXIT=9

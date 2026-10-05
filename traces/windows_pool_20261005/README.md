@@ -3,6 +3,14 @@
 **STATUS: RESEARCH, 2026-10-05.** Branch `codex/windows-pool-2026-10-05`.
 No successful Windows-through-Kayfabe GPU workload is claimed here yet.
 
+**Latest experiment H, 2026-10-05:** the opt-in metadata-only runlist allocation
+probe at `89618256` passes both previously blocked `0xb297` allocations. Windows
+then sends `ALLOC_MEMORY` (RPC function 4), refused, followed by control
+`0x20801111`, also refused, and teardown. The second refusal may be cleanup after
+the first; its position alone does not establish causality. Windows remains
+Code 43, with no GPU channel births. See [probe-h](probe-h/) and the comparison
+with E in [rpc-difference.txt](probe-h/rpc-difference.txt).
+
 **2026-10-05 ABI review follow-up:** the query now checks the compiler-measured
 40-byte layout and all six field offsets/widths for the exact configured tag,
 instead of accepting only 580.65.06. Both 24-byte and 40-byte control envelopes
@@ -72,7 +80,10 @@ Windows still reports Code 43 and nvidia-smi exits 9. Immediately before the FRE
 burst it tries class `0xb297`, refused with `0x56`, then `NV01_TIMER` (`0x0004`),
 also refused with `0x56`. The order motivates a timer-allocation experiment; it
 does **not** establish either allocation as the remaining fatal condition.
-`0xb297` was not found in the public OGKM 580.65.06 tree and remains unidentified.
+At the time of B, `0xb297` was unidentified. Later structured proprietary Linux
+and Windows metadata strongly identify RunlistApi, with public
+`NV_SWRUNLIST_ALLOCATION_PARAMS`; the class mapping remains a documented inference.
+See [the source/metadata evidence](../../tools/windows-debug-capture/evidence/runlist-20261005/README.md).
 
 The source oracle for `NV01_TIMER` is OGKM 580.65.06:
 

@@ -37,8 +37,10 @@ Public `nvos.h:2914–2935` defines the matching 12-byte
 `qosIntrEnableMask`. Its comments describe software-runlist double buffers and
 hardware-format entries. This is a strong contract candidate supported by the
 successful-use path below; this note does not assert a public class-ID definition
-that was not found. The independent proprietary Linux binary audit is the next
-source of class-identity and constructor evidence.
+that was not found. The completed [independent proprietary Linux audit](../runlist-20261005/README.md)
+corroborates the identity and engine namespace. It establishes that zero
+`maxTSGs` requests native default capacity and that allocation may create two
+hardware buffers; metadata-only acceptance is an incomplete diagnostic.
 
 Cleanup callbacks at `0xe059d0` and `0xe05a40` free each nonzero handle separately
 and clear the stored handle. The latter also cleans up the memory/event objects
@@ -58,8 +60,11 @@ The common submit routine at `0x19c4400` invokes subdevice control **`0x20801111
 with that 40-byte record (`0x19c45ec` selects the command). A rejected call returns
 `STATUS_INSUFFICIENT_RESOURCES`. A separate owner routine issues control
 **`0x20801110`** with eight bytes. Neither ID is defined in the inspected public
-OGKM580 headers. Their placement in the FIFO interface and surrounding operation
-support the scheduling interpretation but do not provide an implementation.
+OGKM580 headers. Later OGKM610 source explicitly names `0x20801110`
+`NV2080_CTRL_CMD_FIFO_CONFIG_CTXSW_TIMEOUT`; it configures context-switch timeout,
+not a runlist submission. The proprietary Linux audit separately identifies
+`0x20801111` as the scheduling operation. These findings do not provide a complete
+implementation contract.
 
 Initialization after the class allocations also allocates class `0x90cd`, then
 calls **`0x20801231`** with twenty bytes. The public header names this
