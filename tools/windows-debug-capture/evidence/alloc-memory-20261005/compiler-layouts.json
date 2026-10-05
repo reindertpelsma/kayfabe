@@ -1,0 +1,1895 @@
+{
+  "compiler": "cc (Ubuntu 15.2.0-16ubuntu1) 15.2.0",
+  "probe_sha256": "f024ea82195c2c31baa0d3153721973298d1d430233977ff2aae855e3914e420",
+  "rows": [
+    {
+      "commit": "1739a20efc4acb55fd1dc53dcc66057b70c2613c",
+      "compiler_diagnostics": "",
+      "facts": {
+        "constants": {
+          "NV01_MEMORY_LIST_FBMEM": 130,
+          "NV01_MEMORY_LIST_SYSTEM": 129,
+          "NVOS02_FLAGS_ALLOC_NONE": 1,
+          "NVOS02_FLAGS_COHERENCY_CACHED": 1,
+          "NVOS02_FLAGS_COHERENCY_UNCACHED": 0,
+          "NVOS02_FLAGS_COHERENCY_WRITE_BACK": 5,
+          "NVOS02_FLAGS_COHERENCY_WRITE_COMBINE": 2,
+          "NVOS02_FLAGS_COHERENCY_WRITE_PROTECT": 4,
+          "NVOS02_FLAGS_COHERENCY_WRITE_THROUGH": 3,
+          "NVOS02_FLAGS_LOCATION_PCI": 0,
+          "NVOS02_FLAGS_LOCATION_VIDMEM": 2,
+          "NVOS02_FLAGS_MAPPING_DEFAULT": 0,
+          "NVOS02_FLAGS_MAPPING_NEVER_MAP": 2,
+          "NVOS02_FLAGS_MAPPING_NO_MAP": 1,
+          "NVOS02_FLAGS_PHYSICALITY_CONTIGUOUS": 0,
+          "NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS": 1,
+          "NV_VGPU_MSG_FUNCTION_ALLOC_MEMORY": 4,
+          "NV_VGPU_PTEDESC_IDR_DOUBLE": 2,
+          "NV_VGPU_PTEDESC_IDR_NONE": 0,
+          "NV_VGPU_PTEDESC_IDR_SINGLE": 1,
+          "NV_VGPU_PTEDESC_IDR_TRIPLE": 3,
+          "NV_VGPU_PTE_64_SIZE": 8,
+          "RM_PAGE_SHIFT": 12,
+          "RM_PAGE_SIZE": 4096
+        },
+        "flags": {
+          "ALLOC": {
+            "mask": 196608,
+            "shift": 16
+          },
+          "ALLOC_DEVICE_READ_ONLY": {
+            "mask": 4194304,
+            "shift": 22
+          },
+          "ALLOC_NISO_DISPLAY": {
+            "mask": 1048576,
+            "shift": 20
+          },
+          "ALLOC_TYPE_SYNCPOINT": {
+            "mask": 16777216,
+            "shift": 24
+          },
+          "ALLOC_USER_READ_ONLY": {
+            "mask": 2097152,
+            "shift": 21
+          },
+          "COHERENCY": {
+            "mask": 61440,
+            "shift": 12
+          },
+          "GPU_CACHEABLE": {
+            "mask": 262144,
+            "shift": 18
+          },
+          "KERNEL_MAPPING": {
+            "mask": 524288,
+            "shift": 19
+          },
+          "LOCATION": {
+            "mask": 3840,
+            "shift": 8
+          },
+          "MAPPING": {
+            "mask": 3221225472,
+            "shift": 30
+          },
+          "PEER_MAP_OVERRIDE": {
+            "mask": 8388608,
+            "shift": 23
+          },
+          "PHYSICALITY": {
+            "mask": 240,
+            "shift": 4
+          }
+        },
+        "pte_desc": {
+          "idr": 3,
+          "length": 4294901760,
+          "pte_pde": 8,
+          "reserved1": 65532,
+          "size": 8
+        },
+        "rpc_alloc_memory": {
+          "flags": 16,
+          "format": 24,
+          "hClass": 12,
+          "hClient": 0,
+          "hDevice": 4,
+          "hMemory": 8,
+          "length": 32,
+          "pageCount": 40,
+          "pteAdjust": 20,
+          "pteDesc": 48,
+          "size": 56
+        }
+      },
+      "observed_0x48002000_fields": {
+        "ALLOC": 0,
+        "ALLOC_DEVICE_READ_ONLY": 0,
+        "ALLOC_NISO_DISPLAY": 0,
+        "ALLOC_TYPE_SYNCPOINT": 0,
+        "ALLOC_USER_READ_ONLY": 0,
+        "COHERENCY": 2,
+        "GPU_CACHEABLE": 0,
+        "KERNEL_MAPPING": 0,
+        "LOCATION": 0,
+        "MAPPING": 1,
+        "PEER_MAP_OVERRIDE": 0,
+        "PHYSICALITY": 0
+      },
+      "reviewed_flag_field_mask": 3254779888,
+      "source_blobs": {
+        "kernel-open/nvidia/nv.c": "dbcd8c04f12224deca7e5de2167fbfe601668179",
+        "src/common/sdk/nvidia/inc/class/cl84a0.h": "599a47b065cc4f32de90ff921fa65833add8427e",
+        "src/common/sdk/nvidia/inc/nvos.h": "2b127116bd7ab805e2253d1eb0c7b8bc03c033a5",
+        "src/nvidia/arch/nvalloc/unix/src/os.c": "04a4fb4391ee8ba991d3a58b1b0c5933e8f63212",
+        "src/nvidia/generated/g_rpc-structures.h": "f1941dd0a06da2ad7b3697a550c59742274d1306",
+        "src/nvidia/interface/deprecated/rmapi_deprecated_utils.c": "024a27495d84141d9059bb15e136ade9762e3e99",
+        "src/nvidia/kernel/inc/vgpu/rpc_headers.h": "edc37a744b12799d225bb86a9df71336aa7e72eb",
+        "src/nvidia/kernel/inc/vgpu/sdk-structures.h": "d69982b8f66372872dcb144d0c3ae83a0d608e2f",
+        "src/nvidia/kernel/vgpu/nv/rpc.c": "4e4ee52056fe85b311af770e8884d6f9f4cbf75c",
+        "src/nvidia/src/kernel/gpu/mem_mgr/mem_desc.c": "694112de9bcc5d7d458b6b7e38659b85ad0649c8",
+        "src/nvidia/src/kernel/mem_mgr/mem.c": "0b9def1bba3f4d31e91a113b1085f14cac4e4636",
+        "src/nvidia/src/kernel/rmapi/resource_list.h": "34b28fed08f13ab06f2dacf915a2e849c663b650"
+      },
+      "status": "MEASURED",
+      "tag": "515.43.04",
+      "tag_object": "0d7583fd6359081bc379bb81f900cbb848b1c4fd"
+    },
+    {
+      "commit": "9756a4df56f42c1df568d2cf9e8b84e42ae03ffd",
+      "compiler_diagnostics": "",
+      "facts": {
+        "constants": {
+          "NV01_MEMORY_LIST_FBMEM": 130,
+          "NV01_MEMORY_LIST_SYSTEM": 129,
+          "NVOS02_FLAGS_ALLOC_NONE": 1,
+          "NVOS02_FLAGS_COHERENCY_CACHED": 1,
+          "NVOS02_FLAGS_COHERENCY_UNCACHED": 0,
+          "NVOS02_FLAGS_COHERENCY_WRITE_BACK": 5,
+          "NVOS02_FLAGS_COHERENCY_WRITE_COMBINE": 2,
+          "NVOS02_FLAGS_COHERENCY_WRITE_PROTECT": 4,
+          "NVOS02_FLAGS_COHERENCY_WRITE_THROUGH": 3,
+          "NVOS02_FLAGS_LOCATION_PCI": 0,
+          "NVOS02_FLAGS_LOCATION_VIDMEM": 2,
+          "NVOS02_FLAGS_MAPPING_DEFAULT": 0,
+          "NVOS02_FLAGS_MAPPING_NEVER_MAP": 2,
+          "NVOS02_FLAGS_MAPPING_NO_MAP": 1,
+          "NVOS02_FLAGS_PHYSICALITY_CONTIGUOUS": 0,
+          "NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS": 1,
+          "NV_VGPU_MSG_FUNCTION_ALLOC_MEMORY": 4,
+          "NV_VGPU_PTEDESC_IDR_DOUBLE": 2,
+          "NV_VGPU_PTEDESC_IDR_NONE": 0,
+          "NV_VGPU_PTEDESC_IDR_SINGLE": 1,
+          "NV_VGPU_PTEDESC_IDR_TRIPLE": 3,
+          "NV_VGPU_PTE_64_SIZE": 8,
+          "RM_PAGE_SHIFT": 12,
+          "RM_PAGE_SIZE": 4096
+        },
+        "flags": {
+          "ALLOC": {
+            "mask": 196608,
+            "shift": 16
+          },
+          "ALLOC_DEVICE_READ_ONLY": {
+            "mask": 4194304,
+            "shift": 22
+          },
+          "ALLOC_NISO_DISPLAY": {
+            "mask": 1048576,
+            "shift": 20
+          },
+          "ALLOC_TYPE_SYNCPOINT": {
+            "mask": 16777216,
+            "shift": 24
+          },
+          "ALLOC_USER_READ_ONLY": {
+            "mask": 2097152,
+            "shift": 21
+          },
+          "COHERENCY": {
+            "mask": 61440,
+            "shift": 12
+          },
+          "GPU_CACHEABLE": {
+            "mask": 262144,
+            "shift": 18
+          },
+          "KERNEL_MAPPING": {
+            "mask": 524288,
+            "shift": 19
+          },
+          "LOCATION": {
+            "mask": 3840,
+            "shift": 8
+          },
+          "MAPPING": {
+            "mask": 3221225472,
+            "shift": 30
+          },
+          "MEMORY_PROTECTION": {
+            "mask": 100663296,
+            "shift": 25
+          },
+          "PEER_MAP_OVERRIDE": {
+            "mask": 8388608,
+            "shift": 23
+          },
+          "PHYSICALITY": {
+            "mask": 240,
+            "shift": 4
+          }
+        },
+        "pte_desc": {
+          "idr": 3,
+          "length": 4294901760,
+          "pte_pde": 8,
+          "reserved1": 65532,
+          "size": 8
+        },
+        "rpc_alloc_memory": {
+          "flags": 16,
+          "format": 24,
+          "hClass": 12,
+          "hClient": 0,
+          "hDevice": 4,
+          "hMemory": 8,
+          "length": 32,
+          "pageCount": 40,
+          "pteAdjust": 20,
+          "pteDesc": 48,
+          "size": 56
+        }
+      },
+      "observed_0x48002000_fields": {
+        "ALLOC": 0,
+        "ALLOC_DEVICE_READ_ONLY": 0,
+        "ALLOC_NISO_DISPLAY": 0,
+        "ALLOC_TYPE_SYNCPOINT": 0,
+        "ALLOC_USER_READ_ONLY": 0,
+        "COHERENCY": 2,
+        "GPU_CACHEABLE": 0,
+        "KERNEL_MAPPING": 0,
+        "LOCATION": 0,
+        "MAPPING": 1,
+        "MEMORY_PROTECTION": 0,
+        "PEER_MAP_OVERRIDE": 0,
+        "PHYSICALITY": 0
+      },
+      "reviewed_flag_field_mask": 3355443184,
+      "source_blobs": {
+        "kernel-open/nvidia/nv.c": "02f59246df88e7d37517c62e2c6a81ed724ff0c3",
+        "src/common/sdk/nvidia/inc/class/cl84a0.h": "a1f6d90cb3c32e6e56c302aff3d0f5f9bbf2d4c2",
+        "src/common/sdk/nvidia/inc/nvos.h": "8c4d690d3f4a0fe86655ef246a755efe61da9a30",
+        "src/nvidia/arch/nvalloc/unix/src/os.c": "6ebb9568a6d7ba7e774232d48ee0281697153b64",
+        "src/nvidia/generated/g_rpc-structures.h": "ef0b43666a80725cfdc85186d7556750bbc137ec",
+        "src/nvidia/inc/kernel/gpu/mem_mgr/rm_page_size.h": "ad4acbbbdb4b34082ef563b6c1024b633eb599f4",
+        "src/nvidia/interface/deprecated/rmapi_deprecated_utils.c": "a7d6fb073e9fb3f875cd4283a1e452b2c56254ae",
+        "src/nvidia/kernel/inc/vgpu/rpc_headers.h": "4f355095f6d241e522034c5560ba2add5518854d",
+        "src/nvidia/kernel/inc/vgpu/sdk-structures.h": "f7a0b1be47a713fa8c25041abe146a44986e405e",
+        "src/nvidia/kernel/vgpu/nv/rpc.c": "6fde0a6806c986e3853c15ad10c04f937bea51f4",
+        "src/nvidia/src/kernel/gpu/mem_mgr/mem_desc.c": "92cfc9c5bc3f2f3723020a6f397c07a3c19343ae",
+        "src/nvidia/src/kernel/mem_mgr/mem.c": "a696f2ab5e271bd772f334e397b839365656f677",
+        "src/nvidia/src/kernel/mem_mgr/mem_list.c": "371828eb5a8287c314efb591656d0c54ff0002d5",
+        "src/nvidia/src/kernel/rmapi/resource_list.h": "0e0d4e6a15b8c5e94e533c5b54f26efb690918cf"
+      },
+      "status": "MEASURED",
+      "tag": "535.309.01",
+      "tag_object": "15b1a21dfe4eab54a463a0ea3086823ae35fe02e"
+    },
+    {
+      "commit": "5efcb7f60e6682c6dd5fa3423324513be8690b5d",
+      "compiler_diagnostics": "",
+      "facts": {
+        "constants": {
+          "NV01_MEMORY_LIST_FBMEM": 130,
+          "NV01_MEMORY_LIST_SYSTEM": 129,
+          "NVOS02_FLAGS_ALLOC_NONE": 1,
+          "NVOS02_FLAGS_COHERENCY_CACHED": 1,
+          "NVOS02_FLAGS_COHERENCY_UNCACHED": 0,
+          "NVOS02_FLAGS_COHERENCY_WRITE_BACK": 5,
+          "NVOS02_FLAGS_COHERENCY_WRITE_COMBINE": 2,
+          "NVOS02_FLAGS_COHERENCY_WRITE_PROTECT": 4,
+          "NVOS02_FLAGS_COHERENCY_WRITE_THROUGH": 3,
+          "NVOS02_FLAGS_LOCATION_PCI": 0,
+          "NVOS02_FLAGS_LOCATION_VIDMEM": 2,
+          "NVOS02_FLAGS_MAPPING_DEFAULT": 0,
+          "NVOS02_FLAGS_MAPPING_NEVER_MAP": 2,
+          "NVOS02_FLAGS_MAPPING_NO_MAP": 1,
+          "NVOS02_FLAGS_PHYSICALITY_CONTIGUOUS": 0,
+          "NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS": 1,
+          "NV_VGPU_MSG_FUNCTION_ALLOC_MEMORY": 4,
+          "NV_VGPU_PTEDESC_IDR_DOUBLE": 2,
+          "NV_VGPU_PTEDESC_IDR_NONE": 0,
+          "NV_VGPU_PTEDESC_IDR_SINGLE": 1,
+          "NV_VGPU_PTEDESC_IDR_TRIPLE": 3,
+          "NV_VGPU_PTE_64_SIZE": 8,
+          "RM_PAGE_SHIFT": 12,
+          "RM_PAGE_SIZE": 4096
+        },
+        "flags": {
+          "ALLOC": {
+            "mask": 196608,
+            "shift": 16
+          },
+          "ALLOC_DEVICE_READ_ONLY": {
+            "mask": 4194304,
+            "shift": 22
+          },
+          "ALLOC_NISO_DISPLAY": {
+            "mask": 1048576,
+            "shift": 20
+          },
+          "ALLOC_TYPE_SYNCPOINT": {
+            "mask": 16777216,
+            "shift": 24
+          },
+          "ALLOC_USER_READ_ONLY": {
+            "mask": 2097152,
+            "shift": 21
+          },
+          "COHERENCY": {
+            "mask": 61440,
+            "shift": 12
+          },
+          "GPU_CACHEABLE": {
+            "mask": 262144,
+            "shift": 18
+          },
+          "KERNEL_MAPPING": {
+            "mask": 524288,
+            "shift": 19
+          },
+          "LOCATION": {
+            "mask": 3840,
+            "shift": 8
+          },
+          "MAPPING": {
+            "mask": 3221225472,
+            "shift": 30
+          },
+          "MEMORY_PROTECTION": {
+            "mask": 100663296,
+            "shift": 25
+          },
+          "PEER_MAP_OVERRIDE": {
+            "mask": 8388608,
+            "shift": 23
+          },
+          "PHYSICALITY": {
+            "mask": 240,
+            "shift": 4
+          }
+        },
+        "pte_desc": {
+          "idr": 3,
+          "length": 4294901760,
+          "pte_pde": 8,
+          "reserved1": 65532,
+          "size": 8
+        },
+        "rpc_alloc_memory": {
+          "flags": 16,
+          "format": 24,
+          "hClass": 12,
+          "hClient": 0,
+          "hDevice": 4,
+          "hMemory": 8,
+          "length": 32,
+          "pageCount": 40,
+          "pteAdjust": 20,
+          "pteDesc": 48,
+          "size": 56
+        }
+      },
+      "observed_0x48002000_fields": {
+        "ALLOC": 0,
+        "ALLOC_DEVICE_READ_ONLY": 0,
+        "ALLOC_NISO_DISPLAY": 0,
+        "ALLOC_TYPE_SYNCPOINT": 0,
+        "ALLOC_USER_READ_ONLY": 0,
+        "COHERENCY": 2,
+        "GPU_CACHEABLE": 0,
+        "KERNEL_MAPPING": 0,
+        "LOCATION": 0,
+        "MAPPING": 1,
+        "MEMORY_PROTECTION": 0,
+        "PEER_MAP_OVERRIDE": 0,
+        "PHYSICALITY": 0
+      },
+      "reviewed_flag_field_mask": 3355443184,
+      "source_blobs": {
+        "kernel-open/nvidia/nv.c": "ae2b19d978f116b4b7a7acf609468f9f602e4da3",
+        "src/common/sdk/nvidia/inc/class/cl84a0.h": "a1f6d90cb3c32e6e56c302aff3d0f5f9bbf2d4c2",
+        "src/common/sdk/nvidia/inc/nvos.h": "d9f23bdf99272d40ec0ca33b8d5e51129ee1046c",
+        "src/nvidia/arch/nvalloc/unix/src/os.c": "b565b8a097594037749937f3105e8fa9f3e1941e",
+        "src/nvidia/generated/g_rpc-structures.h": "8bab673e48e3d27f062614aa6d50974c48d57685",
+        "src/nvidia/inc/kernel/gpu/mem_mgr/rm_page_size.h": "ad4acbbbdb4b34082ef563b6c1024b633eb599f4",
+        "src/nvidia/interface/deprecated/rmapi_deprecated_utils.c": "a7d6fb073e9fb3f875cd4283a1e452b2c56254ae",
+        "src/nvidia/kernel/inc/vgpu/rpc_headers.h": "eff711963bcfa4acd99d6049d78a7f2e033d66c9",
+        "src/nvidia/kernel/inc/vgpu/sdk-structures.h": "e4af8600635706ca241d5daeb5d3b4ffc10819c4",
+        "src/nvidia/kernel/vgpu/nv/rpc.c": "8d71772f19af9c0729175302125953a9ebaedac4",
+        "src/nvidia/src/kernel/gpu/mem_mgr/mem_desc.c": "22ee0a8f18f69cc4558c552ab3f04ab6513e444f",
+        "src/nvidia/src/kernel/mem_mgr/mem.c": "78fef97d90b7209cd6ef75b00447276b11864a03",
+        "src/nvidia/src/kernel/mem_mgr/mem_list.c": "d95c6aadcf393a681cf8a2e05ecdd49365c49234",
+        "src/nvidia/src/kernel/rmapi/resource_list.h": "f0600a0056fec9400a0f6e24775806aa1078a6ec"
+      },
+      "status": "MEASURED",
+      "tag": "550.90.12",
+      "tag_object": "d1c532b8509e914044c1f4e0b02196e44c1a4a5a"
+    },
+    {
+      "commit": "ed4be649623435ebb04f5e93f859bf46d977daa4",
+      "compiler_diagnostics": "",
+      "facts": {
+        "constants": {
+          "NV01_MEMORY_LIST_FBMEM": 130,
+          "NV01_MEMORY_LIST_SYSTEM": 129,
+          "NVOS02_FLAGS_ALLOC_NONE": 1,
+          "NVOS02_FLAGS_COHERENCY_CACHED": 1,
+          "NVOS02_FLAGS_COHERENCY_UNCACHED": 0,
+          "NVOS02_FLAGS_COHERENCY_WRITE_BACK": 5,
+          "NVOS02_FLAGS_COHERENCY_WRITE_COMBINE": 2,
+          "NVOS02_FLAGS_COHERENCY_WRITE_PROTECT": 4,
+          "NVOS02_FLAGS_COHERENCY_WRITE_THROUGH": 3,
+          "NVOS02_FLAGS_LOCATION_PCI": 0,
+          "NVOS02_FLAGS_LOCATION_VIDMEM": 2,
+          "NVOS02_FLAGS_MAPPING_DEFAULT": 0,
+          "NVOS02_FLAGS_MAPPING_NEVER_MAP": 2,
+          "NVOS02_FLAGS_MAPPING_NO_MAP": 1,
+          "NVOS02_FLAGS_PHYSICALITY_CONTIGUOUS": 0,
+          "NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS": 1,
+          "NVOS02_FLAGS_REGISTER_MEMDESC_TO_PHYS_RM_TRUE": 1,
+          "NV_VGPU_MSG_FUNCTION_ALLOC_MEMORY": 4,
+          "NV_VGPU_PTEDESC_IDR_DOUBLE": 2,
+          "NV_VGPU_PTEDESC_IDR_NONE": 0,
+          "NV_VGPU_PTEDESC_IDR_SINGLE": 1,
+          "NV_VGPU_PTEDESC_IDR_TRIPLE": 3,
+          "NV_VGPU_PTE_64_SIZE": 8,
+          "RM_PAGE_SHIFT": 12,
+          "RM_PAGE_SIZE": 4096
+        },
+        "flags": {
+          "ALLOC": {
+            "mask": 196608,
+            "shift": 16
+          },
+          "ALLOC_DEVICE_READ_ONLY": {
+            "mask": 4194304,
+            "shift": 22
+          },
+          "ALLOC_NISO_DISPLAY": {
+            "mask": 1048576,
+            "shift": 20
+          },
+          "ALLOC_TYPE_SYNCPOINT": {
+            "mask": 16777216,
+            "shift": 24
+          },
+          "ALLOC_USER_READ_ONLY": {
+            "mask": 2097152,
+            "shift": 21
+          },
+          "COHERENCY": {
+            "mask": 61440,
+            "shift": 12
+          },
+          "GPU_CACHEABLE": {
+            "mask": 262144,
+            "shift": 18
+          },
+          "KERNEL_MAPPING": {
+            "mask": 524288,
+            "shift": 19
+          },
+          "LOCATION": {
+            "mask": 3840,
+            "shift": 8
+          },
+          "MAPPING": {
+            "mask": 3221225472,
+            "shift": 30
+          },
+          "MEMORY_PROTECTION": {
+            "mask": 100663296,
+            "shift": 25
+          },
+          "PEER_MAP_OVERRIDE": {
+            "mask": 8388608,
+            "shift": 23
+          },
+          "PHYSICALITY": {
+            "mask": 240,
+            "shift": 4
+          },
+          "REGISTER_MEMDESC_TO_PHYS_RM": {
+            "mask": 134217728,
+            "shift": 27
+          }
+        },
+        "pte_desc": {
+          "idr": 3,
+          "length": 4294901760,
+          "pte_pde": 8,
+          "reserved1": 65532,
+          "size": 8
+        },
+        "rpc_alloc_memory": {
+          "flags": 16,
+          "format": 24,
+          "hClass": 12,
+          "hClient": 0,
+          "hDevice": 4,
+          "hMemory": 8,
+          "length": 32,
+          "pageCount": 40,
+          "pteAdjust": 20,
+          "pteDesc": 48,
+          "size": 56
+        }
+      },
+      "observed_0x48002000_fields": {
+        "ALLOC": 0,
+        "ALLOC_DEVICE_READ_ONLY": 0,
+        "ALLOC_NISO_DISPLAY": 0,
+        "ALLOC_TYPE_SYNCPOINT": 0,
+        "ALLOC_USER_READ_ONLY": 0,
+        "COHERENCY": 2,
+        "GPU_CACHEABLE": 0,
+        "KERNEL_MAPPING": 0,
+        "LOCATION": 0,
+        "MAPPING": 1,
+        "MEMORY_PROTECTION": 0,
+        "PEER_MAP_OVERRIDE": 0,
+        "PHYSICALITY": 0,
+        "REGISTER_MEMDESC_TO_PHYS_RM": 1
+      },
+      "reviewed_flag_field_mask": 3489660912,
+      "source_blobs": {
+        "kernel-open/nvidia/nv.c": "217d7a7cb27a938a957684845baaae0ec66c9193",
+        "src/common/sdk/nvidia/inc/class/cl84a0.h": "a1f6d90cb3c32e6e56c302aff3d0f5f9bbf2d4c2",
+        "src/common/sdk/nvidia/inc/nvos.h": "6d3e1e5bc4975e7aabc1486ebbcd39555723aeba",
+        "src/nvidia/arch/nvalloc/unix/src/os.c": "9fdb5e87f481b7b2ad086cc794b1fa2fe2a17652",
+        "src/nvidia/generated/g_rpc-structures.h": "288b87cf0e03c2a785cb70ed2e49fb16adcdfe12",
+        "src/nvidia/inc/kernel/gpu/mem_mgr/rm_page_size.h": "e56284e4ffe670c7648b63cba9fde073b491d987",
+        "src/nvidia/inc/kernel/vgpu/rpc_headers.h": "0e622f04719ddc01ffc92288cb4da587ab95b48f",
+        "src/nvidia/inc/kernel/vgpu/sdk-structures.h": "2e3c20de96ce603626c7779dc7a894d2cf4e70e1",
+        "src/nvidia/interface/deprecated/rmapi_deprecated_utils.c": "3014b28515ff8ab594f5d067b895cb8ac8b0aa34",
+        "src/nvidia/src/kernel/gpu/mem_mgr/mem_desc.c": "d11fa1eb134fcfd33bc94235f7552db4d92f197b",
+        "src/nvidia/src/kernel/mem_mgr/mem.c": "a32a35228d3e6b3054534d1e2fa40cdd98bad83d",
+        "src/nvidia/src/kernel/mem_mgr/mem_list.c": "e2f0155e4a3385f41799bf8f5ddb3c3d2f95a3b5",
+        "src/nvidia/src/kernel/rmapi/resource_list.h": "b06114f97419ff64d279c66c02efaa1fa898df75",
+        "src/nvidia/src/kernel/vgpu/rpc.c": "3dfdd47e1df5ba486f09732c4beca2796afd05ea"
+      },
+      "status": "MEASURED",
+      "tag": "560.35.03",
+      "tag_object": "b17f5abf65527d33ca5fbc82f7787c974a375567"
+    },
+    {
+      "commit": "d5a0858f901d15bda4c3d6db19a271507722a860",
+      "compiler_diagnostics": "",
+      "facts": {
+        "constants": {
+          "NV01_MEMORY_LIST_FBMEM": 130,
+          "NV01_MEMORY_LIST_SYSTEM": 129,
+          "NVOS02_FLAGS_ALLOC_NONE": 1,
+          "NVOS02_FLAGS_COHERENCY_CACHED": 1,
+          "NVOS02_FLAGS_COHERENCY_UNCACHED": 0,
+          "NVOS02_FLAGS_COHERENCY_WRITE_BACK": 5,
+          "NVOS02_FLAGS_COHERENCY_WRITE_COMBINE": 2,
+          "NVOS02_FLAGS_COHERENCY_WRITE_PROTECT": 4,
+          "NVOS02_FLAGS_COHERENCY_WRITE_THROUGH": 3,
+          "NVOS02_FLAGS_LOCATION_PCI": 0,
+          "NVOS02_FLAGS_LOCATION_VIDMEM": 2,
+          "NVOS02_FLAGS_MAPPING_DEFAULT": 0,
+          "NVOS02_FLAGS_MAPPING_NEVER_MAP": 2,
+          "NVOS02_FLAGS_MAPPING_NO_MAP": 1,
+          "NVOS02_FLAGS_PHYSICALITY_CONTIGUOUS": 0,
+          "NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS": 1,
+          "NVOS02_FLAGS_REGISTER_MEMDESC_TO_PHYS_RM_TRUE": 1,
+          "NV_VGPU_MSG_FUNCTION_ALLOC_MEMORY": 4,
+          "NV_VGPU_PTEDESC_IDR_DOUBLE": 2,
+          "NV_VGPU_PTEDESC_IDR_NONE": 0,
+          "NV_VGPU_PTEDESC_IDR_SINGLE": 1,
+          "NV_VGPU_PTEDESC_IDR_TRIPLE": 3,
+          "NV_VGPU_PTE_64_SIZE": 8,
+          "RM_PAGE_SHIFT": 12,
+          "RM_PAGE_SIZE": 4096
+        },
+        "flags": {
+          "ALLOC": {
+            "mask": 196608,
+            "shift": 16
+          },
+          "ALLOC_DEVICE_READ_ONLY": {
+            "mask": 4194304,
+            "shift": 22
+          },
+          "ALLOC_NISO_DISPLAY": {
+            "mask": 1048576,
+            "shift": 20
+          },
+          "ALLOC_TYPE_SYNCPOINT": {
+            "mask": 16777216,
+            "shift": 24
+          },
+          "ALLOC_USER_READ_ONLY": {
+            "mask": 2097152,
+            "shift": 21
+          },
+          "COHERENCY": {
+            "mask": 61440,
+            "shift": 12
+          },
+          "GPU_CACHEABLE": {
+            "mask": 262144,
+            "shift": 18
+          },
+          "KERNEL_MAPPING": {
+            "mask": 524288,
+            "shift": 19
+          },
+          "LOCATION": {
+            "mask": 3840,
+            "shift": 8
+          },
+          "MAPPING": {
+            "mask": 3221225472,
+            "shift": 30
+          },
+          "MEMORY_PROTECTION": {
+            "mask": 100663296,
+            "shift": 25
+          },
+          "PEER_MAP_OVERRIDE": {
+            "mask": 8388608,
+            "shift": 23
+          },
+          "PHYSICALITY": {
+            "mask": 240,
+            "shift": 4
+          },
+          "REGISTER_MEMDESC_TO_PHYS_RM": {
+            "mask": 134217728,
+            "shift": 27
+          }
+        },
+        "pte_desc": {
+          "idr": 3,
+          "length": 4294901760,
+          "pte_pde": 8,
+          "reserved1": 65532,
+          "size": 8
+        },
+        "rpc_alloc_memory": {
+          "flags": 16,
+          "format": 24,
+          "hClass": 12,
+          "hClient": 0,
+          "hDevice": 4,
+          "hMemory": 8,
+          "length": 32,
+          "pageCount": 40,
+          "pteAdjust": 20,
+          "pteDesc": 48,
+          "size": 56
+        }
+      },
+      "observed_0x48002000_fields": {
+        "ALLOC": 0,
+        "ALLOC_DEVICE_READ_ONLY": 0,
+        "ALLOC_NISO_DISPLAY": 0,
+        "ALLOC_TYPE_SYNCPOINT": 0,
+        "ALLOC_USER_READ_ONLY": 0,
+        "COHERENCY": 2,
+        "GPU_CACHEABLE": 0,
+        "KERNEL_MAPPING": 0,
+        "LOCATION": 0,
+        "MAPPING": 1,
+        "MEMORY_PROTECTION": 0,
+        "PEER_MAP_OVERRIDE": 0,
+        "PHYSICALITY": 0,
+        "REGISTER_MEMDESC_TO_PHYS_RM": 1
+      },
+      "reviewed_flag_field_mask": 3489660912,
+      "source_blobs": {
+        "kernel-open/nvidia/nv.c": "83705a05134ded3112ddbdc0291f0e98631b752b",
+        "src/common/sdk/nvidia/inc/class/cl84a0.h": "a1f6d90cb3c32e6e56c302aff3d0f5f9bbf2d4c2",
+        "src/common/sdk/nvidia/inc/nvos.h": "c210ffeadb1ae2ce51fcc2f75fc59f23c532dace",
+        "src/nvidia/arch/nvalloc/unix/src/os.c": "8924675fd413b93087f8c33d12145d183e1d0963",
+        "src/nvidia/generated/g_rpc-structures.h": "0410c48e10752c1d5c42bfc2cfa0d7ed3d1f5482",
+        "src/nvidia/inc/kernel/gpu/mem_mgr/rm_page_size.h": "e56284e4ffe670c7648b63cba9fde073b491d987",
+        "src/nvidia/inc/kernel/vgpu/rpc_headers.h": "cf52edc1c9e2a4bb3eb3b02fe334e719afb40bab",
+        "src/nvidia/inc/kernel/vgpu/sdk-structures.h": "97305a7cedd661dccb7f1d29369d65488e65f8ca",
+        "src/nvidia/interface/deprecated/rmapi_deprecated_utils.c": "7c7aa928b9042e51cedc254250990f0ef33f2e54",
+        "src/nvidia/src/kernel/gpu/mem_mgr/mem_desc.c": "09085325d91b2f1f09285061cb1a9831a688eedb",
+        "src/nvidia/src/kernel/mem_mgr/mem.c": "a32a35228d3e6b3054534d1e2fa40cdd98bad83d",
+        "src/nvidia/src/kernel/mem_mgr/mem_list.c": "e2f0155e4a3385f41799bf8f5ddb3c3d2f95a3b5",
+        "src/nvidia/src/kernel/rmapi/resource_list.h": "d0161725150efdfd3147f9fb1fffbd2b4d919e05",
+        "src/nvidia/src/kernel/vgpu/rpc.c": "d2a1b776763562ef22956560042e563c869a1143"
+      },
+      "status": "MEASURED",
+      "tag": "565.57.01",
+      "tag_object": "d56af6fde7d96b53b040d1d94e5d888c71986f44"
+    },
+    {
+      "commit": "54d69484da940413ba6017df9cf43bed8b75da46",
+      "compiler_diagnostics": "",
+      "facts": {
+        "constants": {
+          "NV01_MEMORY_LIST_FBMEM": 130,
+          "NV01_MEMORY_LIST_SYSTEM": 129,
+          "NVOS02_FLAGS_ALLOC_NONE": 1,
+          "NVOS02_FLAGS_COHERENCY_CACHED": 1,
+          "NVOS02_FLAGS_COHERENCY_UNCACHED": 0,
+          "NVOS02_FLAGS_COHERENCY_WRITE_BACK": 5,
+          "NVOS02_FLAGS_COHERENCY_WRITE_COMBINE": 2,
+          "NVOS02_FLAGS_COHERENCY_WRITE_PROTECT": 4,
+          "NVOS02_FLAGS_COHERENCY_WRITE_THROUGH": 3,
+          "NVOS02_FLAGS_LOCATION_PCI": 0,
+          "NVOS02_FLAGS_LOCATION_VIDMEM": 2,
+          "NVOS02_FLAGS_MAPPING_DEFAULT": 0,
+          "NVOS02_FLAGS_MAPPING_NEVER_MAP": 2,
+          "NVOS02_FLAGS_MAPPING_NO_MAP": 1,
+          "NVOS02_FLAGS_PHYSICALITY_CONTIGUOUS": 0,
+          "NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS": 1,
+          "NVOS02_FLAGS_REGISTER_MEMDESC_TO_PHYS_RM_TRUE": 1,
+          "NV_VGPU_MSG_FUNCTION_ALLOC_MEMORY": 4,
+          "NV_VGPU_PTEDESC_IDR_DOUBLE": 2,
+          "NV_VGPU_PTEDESC_IDR_NONE": 0,
+          "NV_VGPU_PTEDESC_IDR_SINGLE": 1,
+          "NV_VGPU_PTEDESC_IDR_TRIPLE": 3,
+          "NV_VGPU_PTE_64_SIZE": 8,
+          "RM_PAGE_SHIFT": 12,
+          "RM_PAGE_SIZE": 4096
+        },
+        "flags": {
+          "ALLOC": {
+            "mask": 196608,
+            "shift": 16
+          },
+          "ALLOC_DEVICE_READ_ONLY": {
+            "mask": 4194304,
+            "shift": 22
+          },
+          "ALLOC_NISO_DISPLAY": {
+            "mask": 1048576,
+            "shift": 20
+          },
+          "ALLOC_TYPE_SYNCPOINT": {
+            "mask": 16777216,
+            "shift": 24
+          },
+          "ALLOC_USER_READ_ONLY": {
+            "mask": 2097152,
+            "shift": 21
+          },
+          "COHERENCY": {
+            "mask": 61440,
+            "shift": 12
+          },
+          "GPU_CACHEABLE": {
+            "mask": 262144,
+            "shift": 18
+          },
+          "KERNEL_MAPPING": {
+            "mask": 524288,
+            "shift": 19
+          },
+          "LOCATION": {
+            "mask": 3840,
+            "shift": 8
+          },
+          "MAPPING": {
+            "mask": 3221225472,
+            "shift": 30
+          },
+          "MEMORY_PROTECTION": {
+            "mask": 100663296,
+            "shift": 25
+          },
+          "PEER_MAP_OVERRIDE": {
+            "mask": 8388608,
+            "shift": 23
+          },
+          "PHYSICALITY": {
+            "mask": 240,
+            "shift": 4
+          },
+          "REGISTER_MEMDESC_TO_PHYS_RM": {
+            "mask": 134217728,
+            "shift": 27
+          }
+        },
+        "pte_desc": {
+          "idr": 3,
+          "length": 4294901760,
+          "pte_pde": 8,
+          "reserved1": 65532,
+          "size": 8
+        },
+        "rpc_alloc_memory": {
+          "flags": 16,
+          "format": 24,
+          "hClass": 12,
+          "hClient": 0,
+          "hDevice": 4,
+          "hMemory": 8,
+          "length": 32,
+          "pageCount": 40,
+          "pteAdjust": 20,
+          "pteDesc": 48,
+          "size": 56
+        }
+      },
+      "observed_0x48002000_fields": {
+        "ALLOC": 0,
+        "ALLOC_DEVICE_READ_ONLY": 0,
+        "ALLOC_NISO_DISPLAY": 0,
+        "ALLOC_TYPE_SYNCPOINT": 0,
+        "ALLOC_USER_READ_ONLY": 0,
+        "COHERENCY": 2,
+        "GPU_CACHEABLE": 0,
+        "KERNEL_MAPPING": 0,
+        "LOCATION": 0,
+        "MAPPING": 1,
+        "MEMORY_PROTECTION": 0,
+        "PEER_MAP_OVERRIDE": 0,
+        "PHYSICALITY": 0,
+        "REGISTER_MEMDESC_TO_PHYS_RM": 1
+      },
+      "reviewed_flag_field_mask": 3489660912,
+      "source_blobs": {
+        "kernel-open/nvidia/nv.c": "102e76eddf8e7aa229a2b53e2b3b82eb6409e928",
+        "src/common/sdk/nvidia/inc/class/cl84a0.h": "a1f6d90cb3c32e6e56c302aff3d0f5f9bbf2d4c2",
+        "src/common/sdk/nvidia/inc/nvos.h": "39ce059deb622de848d7f8f1a84184de2d4e83ac",
+        "src/nvidia/arch/nvalloc/unix/src/os.c": "3bc76cde9d77af0f7312e54cbd3dec9b61c58204",
+        "src/nvidia/generated/g_rpc-structures.h": "c3875f8f2ff1da62a1fd0ee6f06527467ca8500a",
+        "src/nvidia/inc/kernel/gpu/mem_mgr/rm_page_size.h": "e56284e4ffe670c7648b63cba9fde073b491d987",
+        "src/nvidia/inc/kernel/vgpu/rpc_headers.h": "cf52edc1c9e2a4bb3eb3b02fe334e719afb40bab",
+        "src/nvidia/inc/kernel/vgpu/sdk-structures.h": "1bda29aa1f915e50120b31ca05853ed179133535",
+        "src/nvidia/interface/deprecated/rmapi_deprecated_utils.c": "7c7aa928b9042e51cedc254250990f0ef33f2e54",
+        "src/nvidia/src/kernel/gpu/mem_mgr/mem_desc.c": "a998a2fe85e079801506ecba48ad90a2bc4fefa5",
+        "src/nvidia/src/kernel/mem_mgr/mem.c": "6d3a04415229d71a90e638f6f47e8d691ece983d",
+        "src/nvidia/src/kernel/mem_mgr/mem_list.c": "501a19aa242d7a12efff5b8c13499fcfa503abd7",
+        "src/nvidia/src/kernel/rmapi/resource_list.h": "91a657c44908a622f473d60a50a9621471837bbc",
+        "src/nvidia/src/kernel/vgpu/rpc.c": "62d946ecde5d9d7d26ac592573f6626003643c53"
+      },
+      "status": "MEASURED",
+      "tag": "570.86.15",
+      "tag_object": "d31ffcb04e529dc0d516e1511fe1e6c373556666"
+    },
+    {
+      "commit": "307159f2623d3bf45feb9177bd2da52ffbc5ddf9",
+      "compiler_diagnostics": "",
+      "facts": {
+        "constants": {
+          "NV01_MEMORY_LIST_FBMEM": 130,
+          "NV01_MEMORY_LIST_SYSTEM": 129,
+          "NVOS02_FLAGS_ALLOC_NONE": 1,
+          "NVOS02_FLAGS_COHERENCY_CACHED": 1,
+          "NVOS02_FLAGS_COHERENCY_UNCACHED": 0,
+          "NVOS02_FLAGS_COHERENCY_WRITE_BACK": 5,
+          "NVOS02_FLAGS_COHERENCY_WRITE_COMBINE": 2,
+          "NVOS02_FLAGS_COHERENCY_WRITE_PROTECT": 4,
+          "NVOS02_FLAGS_COHERENCY_WRITE_THROUGH": 3,
+          "NVOS02_FLAGS_LOCATION_PCI": 0,
+          "NVOS02_FLAGS_LOCATION_VIDMEM": 2,
+          "NVOS02_FLAGS_MAPPING_DEFAULT": 0,
+          "NVOS02_FLAGS_MAPPING_NEVER_MAP": 2,
+          "NVOS02_FLAGS_MAPPING_NO_MAP": 1,
+          "NVOS02_FLAGS_PHYSICALITY_CONTIGUOUS": 0,
+          "NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS": 1,
+          "NVOS02_FLAGS_REGISTER_MEMDESC_TO_PHYS_RM_TRUE": 1,
+          "NV_VGPU_MSG_FUNCTION_ALLOC_MEMORY": 4,
+          "NV_VGPU_PTEDESC_IDR_DOUBLE": 2,
+          "NV_VGPU_PTEDESC_IDR_NONE": 0,
+          "NV_VGPU_PTEDESC_IDR_SINGLE": 1,
+          "NV_VGPU_PTEDESC_IDR_TRIPLE": 3,
+          "NV_VGPU_PTE_64_SIZE": 8,
+          "RM_PAGE_SHIFT": 12,
+          "RM_PAGE_SIZE": 4096
+        },
+        "flags": {
+          "ALLOC": {
+            "mask": 196608,
+            "shift": 16
+          },
+          "ALLOC_DEVICE_READ_ONLY": {
+            "mask": 4194304,
+            "shift": 22
+          },
+          "ALLOC_NISO_DISPLAY": {
+            "mask": 1048576,
+            "shift": 20
+          },
+          "ALLOC_TYPE_SYNCPOINT": {
+            "mask": 16777216,
+            "shift": 24
+          },
+          "ALLOC_USER_READ_ONLY": {
+            "mask": 2097152,
+            "shift": 21
+          },
+          "COHERENCY": {
+            "mask": 61440,
+            "shift": 12
+          },
+          "GPU_CACHEABLE": {
+            "mask": 262144,
+            "shift": 18
+          },
+          "KERNEL_MAPPING": {
+            "mask": 524288,
+            "shift": 19
+          },
+          "LOCATION": {
+            "mask": 3840,
+            "shift": 8
+          },
+          "MAPPING": {
+            "mask": 3221225472,
+            "shift": 30
+          },
+          "MEMORY_PROTECTION": {
+            "mask": 100663296,
+            "shift": 25
+          },
+          "PEER_MAP_OVERRIDE": {
+            "mask": 8388608,
+            "shift": 23
+          },
+          "PHYSICALITY": {
+            "mask": 240,
+            "shift": 4
+          },
+          "REGISTER_MEMDESC_TO_PHYS_RM": {
+            "mask": 134217728,
+            "shift": 27
+          }
+        },
+        "pte_desc": {
+          "idr": 3,
+          "length": 4294901760,
+          "pte_pde": 8,
+          "reserved1": 65532,
+          "size": 8
+        },
+        "rpc_alloc_memory": {
+          "flags": 16,
+          "format": 24,
+          "hClass": 12,
+          "hClient": 0,
+          "hDevice": 4,
+          "hMemory": 8,
+          "length": 32,
+          "pageCount": 40,
+          "pteAdjust": 20,
+          "pteDesc": 48,
+          "size": 56
+        }
+      },
+      "observed_0x48002000_fields": {
+        "ALLOC": 0,
+        "ALLOC_DEVICE_READ_ONLY": 0,
+        "ALLOC_NISO_DISPLAY": 0,
+        "ALLOC_TYPE_SYNCPOINT": 0,
+        "ALLOC_USER_READ_ONLY": 0,
+        "COHERENCY": 2,
+        "GPU_CACHEABLE": 0,
+        "KERNEL_MAPPING": 0,
+        "LOCATION": 0,
+        "MAPPING": 1,
+        "MEMORY_PROTECTION": 0,
+        "PEER_MAP_OVERRIDE": 0,
+        "PHYSICALITY": 0,
+        "REGISTER_MEMDESC_TO_PHYS_RM": 1
+      },
+      "reviewed_flag_field_mask": 3489660912,
+      "source_blobs": {
+        "kernel-open/nvidia/nv.c": "e38e2c10fdfbccc79c7da40da614c712bf02f0fc",
+        "src/common/sdk/nvidia/inc/class/cl84a0.h": "a1f6d90cb3c32e6e56c302aff3d0f5f9bbf2d4c2",
+        "src/common/sdk/nvidia/inc/nvos.h": "46ec3ccf97a813ea497700d1ec9ca993dd36adb4",
+        "src/nvidia/arch/nvalloc/unix/src/os.c": "d360c27dceda48dd2d1f1e3527d40b64ebecdd05",
+        "src/nvidia/generated/g_rpc-structures.h": "f2ca7dc4e2c86e1f825dd0ca9aba6a2b30899a6a",
+        "src/nvidia/inc/kernel/gpu/mem_mgr/rm_page_size.h": "f25795eac9e3545051350e13006778b13791e1c6",
+        "src/nvidia/inc/kernel/vgpu/rpc_headers.h": "ecdfa64f299e78191ceb6ad3e40ca37debad94a0",
+        "src/nvidia/inc/kernel/vgpu/sdk-structures.h": "183eca851683756dc4bf3c70e347a25faa6ca4b3",
+        "src/nvidia/interface/deprecated/rmapi_deprecated_utils.c": "0b2f8bb9b9d64c660333e3c413f83e11a8338e6e",
+        "src/nvidia/src/kernel/gpu/mem_mgr/mem_desc.c": "7f0e9055f806a3b448b26ee19fdd66eabb80f8d5",
+        "src/nvidia/src/kernel/mem_mgr/mem.c": "2a81684a5aea4a1800bda1ab31f8fe694a9c3bf3",
+        "src/nvidia/src/kernel/mem_mgr/mem_list.c": "892974b26d419d624f28b00d6a0bd8f1b3ce6145",
+        "src/nvidia/src/kernel/rmapi/resource_list.h": "9d95d1e02a861959c57c3e06567fae5847551c63",
+        "src/nvidia/src/kernel/vgpu/rpc.c": "b877039a3126eb63959191015e39b16bccc19488"
+      },
+      "status": "MEASURED",
+      "tag": "580.65.06",
+      "tag_object": "8032cb60785ff04a49698fbe1fac8781bd37b0d6"
+    },
+    {
+      "commit": "455d4b8b75f56d7483489c255705d064fdedf3c6",
+      "compiler_diagnostics": "",
+      "facts": {
+        "constants": {
+          "NV01_MEMORY_LIST_FBMEM": 130,
+          "NV01_MEMORY_LIST_SYSTEM": 129,
+          "NVOS02_FLAGS_ALLOC_NONE": 1,
+          "NVOS02_FLAGS_COHERENCY_CACHED": 1,
+          "NVOS02_FLAGS_COHERENCY_UNCACHED": 0,
+          "NVOS02_FLAGS_COHERENCY_WRITE_BACK": 5,
+          "NVOS02_FLAGS_COHERENCY_WRITE_COMBINE": 2,
+          "NVOS02_FLAGS_COHERENCY_WRITE_PROTECT": 4,
+          "NVOS02_FLAGS_COHERENCY_WRITE_THROUGH": 3,
+          "NVOS02_FLAGS_LOCATION_PCI": 0,
+          "NVOS02_FLAGS_LOCATION_VIDMEM": 2,
+          "NVOS02_FLAGS_MAPPING_DEFAULT": 0,
+          "NVOS02_FLAGS_MAPPING_NEVER_MAP": 2,
+          "NVOS02_FLAGS_MAPPING_NO_MAP": 1,
+          "NVOS02_FLAGS_PHYSICALITY_CONTIGUOUS": 0,
+          "NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS": 1,
+          "NVOS02_FLAGS_REGISTER_MEMDESC_TO_PHYS_RM_TRUE": 1,
+          "NV_VGPU_MSG_FUNCTION_ALLOC_MEMORY": 4,
+          "NV_VGPU_PTEDESC_IDR_DOUBLE": 2,
+          "NV_VGPU_PTEDESC_IDR_NONE": 0,
+          "NV_VGPU_PTEDESC_IDR_SINGLE": 1,
+          "NV_VGPU_PTEDESC_IDR_TRIPLE": 3,
+          "NV_VGPU_PTE_64_SIZE": 8,
+          "RM_PAGE_SHIFT": 12,
+          "RM_PAGE_SIZE": 4096
+        },
+        "flags": {
+          "ALLOC": {
+            "mask": 196608,
+            "shift": 16
+          },
+          "ALLOC_DEVICE_READ_ONLY": {
+            "mask": 4194304,
+            "shift": 22
+          },
+          "ALLOC_NISO_DISPLAY": {
+            "mask": 1048576,
+            "shift": 20
+          },
+          "ALLOC_TYPE_SYNCPOINT": {
+            "mask": 16777216,
+            "shift": 24
+          },
+          "ALLOC_USER_READ_ONLY": {
+            "mask": 2097152,
+            "shift": 21
+          },
+          "COHERENCY": {
+            "mask": 61440,
+            "shift": 12
+          },
+          "GPU_CACHEABLE": {
+            "mask": 262144,
+            "shift": 18
+          },
+          "KERNEL_MAPPING": {
+            "mask": 524288,
+            "shift": 19
+          },
+          "LOCATION": {
+            "mask": 3840,
+            "shift": 8
+          },
+          "MAPPING": {
+            "mask": 3221225472,
+            "shift": 30
+          },
+          "MEMORY_PROTECTION": {
+            "mask": 100663296,
+            "shift": 25
+          },
+          "PEER_MAP_OVERRIDE": {
+            "mask": 8388608,
+            "shift": 23
+          },
+          "PHYSICALITY": {
+            "mask": 240,
+            "shift": 4
+          },
+          "REGISTER_MEMDESC_TO_PHYS_RM": {
+            "mask": 134217728,
+            "shift": 27
+          }
+        },
+        "pte_desc": {
+          "idr": 3,
+          "length": 4294901760,
+          "pte_pde": 8,
+          "reserved1": 65532,
+          "size": 8
+        },
+        "rpc_alloc_memory": {
+          "flags": 16,
+          "format": 24,
+          "hClass": 12,
+          "hClient": 0,
+          "hDevice": 4,
+          "hMemory": 8,
+          "length": 32,
+          "pageCount": 40,
+          "pteAdjust": 20,
+          "pteDesc": 48,
+          "size": 56
+        }
+      },
+      "observed_0x48002000_fields": {
+        "ALLOC": 0,
+        "ALLOC_DEVICE_READ_ONLY": 0,
+        "ALLOC_NISO_DISPLAY": 0,
+        "ALLOC_TYPE_SYNCPOINT": 0,
+        "ALLOC_USER_READ_ONLY": 0,
+        "COHERENCY": 2,
+        "GPU_CACHEABLE": 0,
+        "KERNEL_MAPPING": 0,
+        "LOCATION": 0,
+        "MAPPING": 1,
+        "MEMORY_PROTECTION": 0,
+        "PEER_MAP_OVERRIDE": 0,
+        "PHYSICALITY": 0,
+        "REGISTER_MEMDESC_TO_PHYS_RM": 1
+      },
+      "reviewed_flag_field_mask": 3489660912,
+      "source_blobs": {
+        "kernel-open/nvidia/nv.c": "e5cb1df3c0b9f4e89855536e5f4b9e8f60726ff1",
+        "src/common/sdk/nvidia/inc/class/cl84a0.h": "a1f6d90cb3c32e6e56c302aff3d0f5f9bbf2d4c2",
+        "src/common/sdk/nvidia/inc/nvos.h": "46ec3ccf97a813ea497700d1ec9ca993dd36adb4",
+        "src/nvidia/arch/nvalloc/unix/src/os.c": "2df01713d6574ff153466c42f960bbb0569e6499",
+        "src/nvidia/generated/g_rpc-structures.h": "cdcef0bdaeb82113b36f48ca1b6f1cc44616d2df",
+        "src/nvidia/inc/kernel/gpu/mem_mgr/rm_page_size.h": "f25795eac9e3545051350e13006778b13791e1c6",
+        "src/nvidia/inc/kernel/vgpu/rpc_headers.h": "ecdfa64f299e78191ceb6ad3e40ca37debad94a0",
+        "src/nvidia/inc/kernel/vgpu/sdk-structures.h": "91d1e6ce0a8f7fb790a2a074e98c2c853b74c76e",
+        "src/nvidia/interface/deprecated/rmapi_deprecated_utils.c": "0b2f8bb9b9d64c660333e3c413f83e11a8338e6e",
+        "src/nvidia/src/kernel/gpu/mem_mgr/mem_desc.c": "bfde6b90cec2bc02dd67ec39aeedd3d713938be7",
+        "src/nvidia/src/kernel/mem_mgr/mem.c": "998097edcd7f273eb8fb9cd568c1907b6f219bb8",
+        "src/nvidia/src/kernel/mem_mgr/mem_list.c": "892974b26d419d624f28b00d6a0bd8f1b3ce6145",
+        "src/nvidia/src/kernel/rmapi/resource_list.h": "9d95d1e02a861959c57c3e06567fae5847551c63",
+        "src/nvidia/src/kernel/vgpu/rpc.c": "f00c038efdaebd715b5a5a30e9bfc24a1032ddb0"
+      },
+      "status": "MEASURED",
+      "tag": "580.126.09",
+      "tag_object": "f394189a8606429ca06267f54e818fd207c38ff1"
+    },
+    {
+      "commit": "b81d58ee0224d1d290bef1c080592b619e184042",
+      "compiler_diagnostics": "",
+      "facts": {
+        "constants": {
+          "NV01_MEMORY_LIST_FBMEM": 130,
+          "NV01_MEMORY_LIST_SYSTEM": 129,
+          "NVOS02_FLAGS_ALLOC_NONE": 1,
+          "NVOS02_FLAGS_COHERENCY_CACHED": 1,
+          "NVOS02_FLAGS_COHERENCY_UNCACHED": 0,
+          "NVOS02_FLAGS_COHERENCY_WRITE_BACK": 5,
+          "NVOS02_FLAGS_COHERENCY_WRITE_COMBINE": 2,
+          "NVOS02_FLAGS_COHERENCY_WRITE_PROTECT": 4,
+          "NVOS02_FLAGS_COHERENCY_WRITE_THROUGH": 3,
+          "NVOS02_FLAGS_LOCATION_PCI": 0,
+          "NVOS02_FLAGS_LOCATION_VIDMEM": 2,
+          "NVOS02_FLAGS_MAPPING_DEFAULT": 0,
+          "NVOS02_FLAGS_MAPPING_NEVER_MAP": 2,
+          "NVOS02_FLAGS_MAPPING_NO_MAP": 1,
+          "NVOS02_FLAGS_PHYSICALITY_CONTIGUOUS": 0,
+          "NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS": 1,
+          "NVOS02_FLAGS_REGISTER_MEMDESC_TO_PHYS_RM_TRUE": 1,
+          "NV_VGPU_MSG_FUNCTION_ALLOC_MEMORY": 4,
+          "NV_VGPU_PTEDESC_IDR_DOUBLE": 2,
+          "NV_VGPU_PTEDESC_IDR_NONE": 0,
+          "NV_VGPU_PTEDESC_IDR_SINGLE": 1,
+          "NV_VGPU_PTEDESC_IDR_TRIPLE": 3,
+          "NV_VGPU_PTE_64_SIZE": 8,
+          "RM_PAGE_SHIFT": 12,
+          "RM_PAGE_SIZE": 4096
+        },
+        "flags": {
+          "ALLOC": {
+            "mask": 196608,
+            "shift": 16
+          },
+          "ALLOC_DEVICE_READ_ONLY": {
+            "mask": 4194304,
+            "shift": 22
+          },
+          "ALLOC_NISO_DISPLAY": {
+            "mask": 1048576,
+            "shift": 20
+          },
+          "ALLOC_TYPE_SYNCPOINT": {
+            "mask": 16777216,
+            "shift": 24
+          },
+          "ALLOC_USER_READ_ONLY": {
+            "mask": 2097152,
+            "shift": 21
+          },
+          "COHERENCY": {
+            "mask": 61440,
+            "shift": 12
+          },
+          "GPU_CACHEABLE": {
+            "mask": 262144,
+            "shift": 18
+          },
+          "KERNEL_MAPPING": {
+            "mask": 524288,
+            "shift": 19
+          },
+          "LOCATION": {
+            "mask": 3840,
+            "shift": 8
+          },
+          "MAPPING": {
+            "mask": 3221225472,
+            "shift": 30
+          },
+          "MEMORY_PROTECTION": {
+            "mask": 100663296,
+            "shift": 25
+          },
+          "PEER_MAP_OVERRIDE": {
+            "mask": 8388608,
+            "shift": 23
+          },
+          "PHYSICALITY": {
+            "mask": 240,
+            "shift": 4
+          },
+          "REGISTER_MEMDESC_TO_PHYS_RM": {
+            "mask": 134217728,
+            "shift": 27
+          }
+        },
+        "pte_desc": {
+          "idr": 3,
+          "length": 4294901760,
+          "pte_pde": 8,
+          "reserved1": 65532,
+          "size": 8
+        },
+        "rpc_alloc_memory": {
+          "flags": 16,
+          "format": 24,
+          "hClass": 12,
+          "hClient": 0,
+          "hDevice": 4,
+          "hMemory": 8,
+          "length": 32,
+          "pageCount": 40,
+          "pteAdjust": 20,
+          "pteDesc": 48,
+          "size": 56
+        }
+      },
+      "observed_0x48002000_fields": {
+        "ALLOC": 0,
+        "ALLOC_DEVICE_READ_ONLY": 0,
+        "ALLOC_NISO_DISPLAY": 0,
+        "ALLOC_TYPE_SYNCPOINT": 0,
+        "ALLOC_USER_READ_ONLY": 0,
+        "COHERENCY": 2,
+        "GPU_CACHEABLE": 0,
+        "KERNEL_MAPPING": 0,
+        "LOCATION": 0,
+        "MAPPING": 1,
+        "MEMORY_PROTECTION": 0,
+        "PEER_MAP_OVERRIDE": 0,
+        "PHYSICALITY": 0,
+        "REGISTER_MEMDESC_TO_PHYS_RM": 1
+      },
+      "reviewed_flag_field_mask": 3489660912,
+      "source_blobs": {
+        "kernel-open/nvidia/nv.c": "385a0dfa286312278d3a4e6164397e5d9d71e74b",
+        "src/common/sdk/nvidia/inc/class/cl84a0.h": "a1f6d90cb3c32e6e56c302aff3d0f5f9bbf2d4c2",
+        "src/common/sdk/nvidia/inc/nvos.h": "46ec3ccf97a813ea497700d1ec9ca993dd36adb4",
+        "src/nvidia/arch/nvalloc/unix/src/os.c": "2df01713d6574ff153466c42f960bbb0569e6499",
+        "src/nvidia/generated/g_rpc-structures.h": "48b59c9e8759ee91a380dbef42120aa4ef11105e",
+        "src/nvidia/inc/kernel/gpu/mem_mgr/rm_page_size.h": "f25795eac9e3545051350e13006778b13791e1c6",
+        "src/nvidia/inc/kernel/vgpu/rpc_headers.h": "ecdfa64f299e78191ceb6ad3e40ca37debad94a0",
+        "src/nvidia/inc/kernel/vgpu/sdk-structures.h": "91d1e6ce0a8f7fb790a2a074e98c2c853b74c76e",
+        "src/nvidia/interface/deprecated/rmapi_deprecated_utils.c": "0b2f8bb9b9d64c660333e3c413f83e11a8338e6e",
+        "src/nvidia/src/kernel/gpu/mem_mgr/mem_desc.c": "bfde6b90cec2bc02dd67ec39aeedd3d713938be7",
+        "src/nvidia/src/kernel/mem_mgr/mem.c": "998097edcd7f273eb8fb9cd568c1907b6f219bb8",
+        "src/nvidia/src/kernel/mem_mgr/mem_list.c": "523ed6660bab1967bae904ce0511f5b1d86db79e",
+        "src/nvidia/src/kernel/rmapi/resource_list.h": "9d95d1e02a861959c57c3e06567fae5847551c63",
+        "src/nvidia/src/kernel/vgpu/rpc.c": "3a26b0d4029e8e7361480e72554d6d55b4ca37a8"
+      },
+      "status": "MEASURED",
+      "tag": "580.159.04",
+      "tag_object": "270d37b632592f6601667a3ea8124fed402465df"
+    },
+    {
+      "commit": "20e4e6e19cc26ba47b5cbe23130a396be100c427",
+      "compiler_diagnostics": "",
+      "facts": {
+        "constants": {
+          "NV01_MEMORY_LIST_FBMEM": 130,
+          "NV01_MEMORY_LIST_SYSTEM": 129,
+          "NVOS02_FLAGS_ALLOC_NONE": 1,
+          "NVOS02_FLAGS_COHERENCY_CACHED": 1,
+          "NVOS02_FLAGS_COHERENCY_UNCACHED": 0,
+          "NVOS02_FLAGS_COHERENCY_WRITE_BACK": 5,
+          "NVOS02_FLAGS_COHERENCY_WRITE_COMBINE": 2,
+          "NVOS02_FLAGS_COHERENCY_WRITE_PROTECT": 4,
+          "NVOS02_FLAGS_COHERENCY_WRITE_THROUGH": 3,
+          "NVOS02_FLAGS_LOCATION_PCI": 0,
+          "NVOS02_FLAGS_LOCATION_VIDMEM": 2,
+          "NVOS02_FLAGS_MAPPING_DEFAULT": 0,
+          "NVOS02_FLAGS_MAPPING_NEVER_MAP": 2,
+          "NVOS02_FLAGS_MAPPING_NO_MAP": 1,
+          "NVOS02_FLAGS_PHYSICALITY_CONTIGUOUS": 0,
+          "NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS": 1,
+          "NVOS02_FLAGS_REGISTER_MEMDESC_TO_PHYS_RM_TRUE": 1,
+          "NV_VGPU_MSG_FUNCTION_ALLOC_MEMORY": 4,
+          "NV_VGPU_PTEDESC_IDR_DOUBLE": 2,
+          "NV_VGPU_PTEDESC_IDR_NONE": 0,
+          "NV_VGPU_PTEDESC_IDR_SINGLE": 1,
+          "NV_VGPU_PTEDESC_IDR_TRIPLE": 3,
+          "NV_VGPU_PTE_64_SIZE": 8,
+          "RM_PAGE_SHIFT": 12,
+          "RM_PAGE_SIZE": 4096
+        },
+        "flags": {
+          "ALLOC": {
+            "mask": 196608,
+            "shift": 16
+          },
+          "ALLOC_DEVICE_READ_ONLY": {
+            "mask": 4194304,
+            "shift": 22
+          },
+          "ALLOC_NISO_DISPLAY": {
+            "mask": 1048576,
+            "shift": 20
+          },
+          "ALLOC_TYPE_SYNCPOINT": {
+            "mask": 16777216,
+            "shift": 24
+          },
+          "ALLOC_USER_READ_ONLY": {
+            "mask": 2097152,
+            "shift": 21
+          },
+          "COHERENCY": {
+            "mask": 61440,
+            "shift": 12
+          },
+          "GPU_CACHEABLE": {
+            "mask": 262144,
+            "shift": 18
+          },
+          "KERNEL_MAPPING": {
+            "mask": 524288,
+            "shift": 19
+          },
+          "LOCATION": {
+            "mask": 3840,
+            "shift": 8
+          },
+          "MAPPING": {
+            "mask": 3221225472,
+            "shift": 30
+          },
+          "MEMORY_PROTECTION": {
+            "mask": 100663296,
+            "shift": 25
+          },
+          "PEER_MAP_OVERRIDE": {
+            "mask": 8388608,
+            "shift": 23
+          },
+          "PHYSICALITY": {
+            "mask": 240,
+            "shift": 4
+          },
+          "REGISTER_MEMDESC_TO_PHYS_RM": {
+            "mask": 134217728,
+            "shift": 27
+          }
+        },
+        "pte_desc": {
+          "idr": 3,
+          "length": 4294901760,
+          "pte_pde": 8,
+          "reserved1": 65532,
+          "size": 8
+        },
+        "rpc_alloc_memory": {
+          "flags": 16,
+          "format": 24,
+          "hClass": 12,
+          "hClient": 0,
+          "hDevice": 4,
+          "hMemory": 8,
+          "length": 32,
+          "pageCount": 40,
+          "pteAdjust": 20,
+          "pteDesc": 48,
+          "size": 56
+        }
+      },
+      "observed_0x48002000_fields": {
+        "ALLOC": 0,
+        "ALLOC_DEVICE_READ_ONLY": 0,
+        "ALLOC_NISO_DISPLAY": 0,
+        "ALLOC_TYPE_SYNCPOINT": 0,
+        "ALLOC_USER_READ_ONLY": 0,
+        "COHERENCY": 2,
+        "GPU_CACHEABLE": 0,
+        "KERNEL_MAPPING": 0,
+        "LOCATION": 0,
+        "MAPPING": 1,
+        "MEMORY_PROTECTION": 0,
+        "PEER_MAP_OVERRIDE": 0,
+        "PHYSICALITY": 0,
+        "REGISTER_MEMDESC_TO_PHYS_RM": 1
+      },
+      "reviewed_flag_field_mask": 3489660912,
+      "source_blobs": {
+        "kernel-open/nvidia/nv.c": "385a0dfa286312278d3a4e6164397e5d9d71e74b",
+        "src/common/sdk/nvidia/inc/class/cl84a0.h": "a1f6d90cb3c32e6e56c302aff3d0f5f9bbf2d4c2",
+        "src/common/sdk/nvidia/inc/nvos.h": "46ec3ccf97a813ea497700d1ec9ca993dd36adb4",
+        "src/nvidia/arch/nvalloc/unix/src/os.c": "1fd4f85cd708be5f547ee907ba792d758d426a61",
+        "src/nvidia/generated/g_rpc-structures.h": "ddc46900abb93828286582ce4f85795a8b11b371",
+        "src/nvidia/inc/kernel/gpu/mem_mgr/rm_page_size.h": "f25795eac9e3545051350e13006778b13791e1c6",
+        "src/nvidia/inc/kernel/vgpu/rpc_headers.h": "ecdfa64f299e78191ceb6ad3e40ca37debad94a0",
+        "src/nvidia/inc/kernel/vgpu/sdk-structures.h": "91d1e6ce0a8f7fb790a2a074e98c2c853b74c76e",
+        "src/nvidia/interface/deprecated/rmapi_deprecated_utils.c": "0b2f8bb9b9d64c660333e3c413f83e11a8338e6e",
+        "src/nvidia/src/kernel/gpu/mem_mgr/mem_desc.c": "bfde6b90cec2bc02dd67ec39aeedd3d713938be7",
+        "src/nvidia/src/kernel/mem_mgr/mem.c": "998097edcd7f273eb8fb9cd568c1907b6f219bb8",
+        "src/nvidia/src/kernel/mem_mgr/mem_list.c": "523ed6660bab1967bae904ce0511f5b1d86db79e",
+        "src/nvidia/src/kernel/rmapi/resource_list.h": "9d95d1e02a861959c57c3e06567fae5847551c63",
+        "src/nvidia/src/kernel/vgpu/rpc.c": "0d0a32b5e2642402db91c20e0494823f65d65630"
+      },
+      "status": "MEASURED",
+      "tag": "580.173.02",
+      "tag_object": "6a96469ad3c952050f7e20e62e4d48f194e1f89d"
+    },
+    {
+      "commit": "9f087a6d4e86d85acc0ce1d354d6276fe5047b29",
+      "compiler_diagnostics": "",
+      "facts": {
+        "constants": {
+          "NV01_MEMORY_LIST_FBMEM": 130,
+          "NV01_MEMORY_LIST_SYSTEM": 129,
+          "NVOS02_FLAGS_ALLOC_NONE": 1,
+          "NVOS02_FLAGS_COHERENCY_CACHED": 1,
+          "NVOS02_FLAGS_COHERENCY_UNCACHED": 0,
+          "NVOS02_FLAGS_COHERENCY_WRITE_BACK": 5,
+          "NVOS02_FLAGS_COHERENCY_WRITE_COMBINE": 2,
+          "NVOS02_FLAGS_COHERENCY_WRITE_PROTECT": 4,
+          "NVOS02_FLAGS_COHERENCY_WRITE_THROUGH": 3,
+          "NVOS02_FLAGS_LOCATION_PCI": 0,
+          "NVOS02_FLAGS_LOCATION_VIDMEM": 2,
+          "NVOS02_FLAGS_MAPPING_DEFAULT": 0,
+          "NVOS02_FLAGS_MAPPING_NEVER_MAP": 2,
+          "NVOS02_FLAGS_MAPPING_NO_MAP": 1,
+          "NVOS02_FLAGS_PHYSICALITY_CONTIGUOUS": 0,
+          "NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS": 1,
+          "NVOS02_FLAGS_REGISTER_MEMDESC_TO_PHYS_RM_TRUE": 1,
+          "NV_VGPU_MSG_FUNCTION_ALLOC_MEMORY": 4,
+          "NV_VGPU_PTEDESC_IDR_DOUBLE": 2,
+          "NV_VGPU_PTEDESC_IDR_NONE": 0,
+          "NV_VGPU_PTEDESC_IDR_SINGLE": 1,
+          "NV_VGPU_PTEDESC_IDR_TRIPLE": 3,
+          "NV_VGPU_PTE_64_SIZE": 8,
+          "RM_PAGE_SHIFT": 12,
+          "RM_PAGE_SIZE": 4096
+        },
+        "flags": {
+          "ALLOC": {
+            "mask": 196608,
+            "shift": 16
+          },
+          "ALLOC_DEVICE_READ_ONLY": {
+            "mask": 4194304,
+            "shift": 22
+          },
+          "ALLOC_NISO_DISPLAY": {
+            "mask": 1048576,
+            "shift": 20
+          },
+          "ALLOC_TYPE_SYNCPOINT": {
+            "mask": 16777216,
+            "shift": 24
+          },
+          "ALLOC_USER_READ_ONLY": {
+            "mask": 2097152,
+            "shift": 21
+          },
+          "COHERENCY": {
+            "mask": 61440,
+            "shift": 12
+          },
+          "GPU_CACHEABLE": {
+            "mask": 262144,
+            "shift": 18
+          },
+          "KERNEL_MAPPING": {
+            "mask": 524288,
+            "shift": 19
+          },
+          "LOCATION": {
+            "mask": 3840,
+            "shift": 8
+          },
+          "MAPPING": {
+            "mask": 3221225472,
+            "shift": 30
+          },
+          "MEMORY_PROTECTION": {
+            "mask": 100663296,
+            "shift": 25
+          },
+          "PEER_MAP_OVERRIDE": {
+            "mask": 8388608,
+            "shift": 23
+          },
+          "PHYSICALITY": {
+            "mask": 240,
+            "shift": 4
+          },
+          "REGISTER_MEMDESC_TO_PHYS_RM": {
+            "mask": 134217728,
+            "shift": 27
+          }
+        },
+        "pte_desc": {
+          "idr": 3,
+          "length": 4294901760,
+          "pte_pde": 8,
+          "reserved1": 65532,
+          "size": 8
+        },
+        "rpc_alloc_memory": {
+          "flags": 16,
+          "format": 24,
+          "hClass": 12,
+          "hClient": 0,
+          "hDevice": 4,
+          "hMemory": 8,
+          "length": 32,
+          "pageCount": 40,
+          "pteAdjust": 20,
+          "pteDesc": 48,
+          "size": 56
+        }
+      },
+      "observed_0x48002000_fields": {
+        "ALLOC": 0,
+        "ALLOC_DEVICE_READ_ONLY": 0,
+        "ALLOC_NISO_DISPLAY": 0,
+        "ALLOC_TYPE_SYNCPOINT": 0,
+        "ALLOC_USER_READ_ONLY": 0,
+        "COHERENCY": 2,
+        "GPU_CACHEABLE": 0,
+        "KERNEL_MAPPING": 0,
+        "LOCATION": 0,
+        "MAPPING": 1,
+        "MEMORY_PROTECTION": 0,
+        "PEER_MAP_OVERRIDE": 0,
+        "PHYSICALITY": 0,
+        "REGISTER_MEMDESC_TO_PHYS_RM": 1
+      },
+      "reviewed_flag_field_mask": 3489660912,
+      "source_blobs": {
+        "kernel-open/nvidia/nv.c": "1bea50a5a4a07817a9bb98a5ef0053e26e703ea4",
+        "src/common/sdk/nvidia/inc/class/cl84a0.h": "a1f6d90cb3c32e6e56c302aff3d0f5f9bbf2d4c2",
+        "src/common/sdk/nvidia/inc/nvos.h": "d0dfa4e8f0fa395071b2643a456f92370af467ff",
+        "src/nvidia/arch/nvalloc/unix/src/os.c": "25a4f617d39806dcb0fd3df3e65d7e5b80e7da84",
+        "src/nvidia/generated/g_rpc-structures.h": "58a25692cf94203c51f1c01a9b851a87b8ee506e",
+        "src/nvidia/inc/kernel/gpu/mem_mgr/rm_page_size.h": "f25795eac9e3545051350e13006778b13791e1c6",
+        "src/nvidia/inc/kernel/vgpu/rpc_headers.h": "a742946858f6f814f942fa298887f25ad2b9a28d",
+        "src/nvidia/inc/kernel/vgpu/sdk-structures.h": "f43a7e410e27725b9815f63afc6f771d9610de38",
+        "src/nvidia/interface/deprecated/rmapi_deprecated_utils.c": "0b2f8bb9b9d64c660333e3c413f83e11a8338e6e",
+        "src/nvidia/src/kernel/gpu/mem_mgr/mem_desc.c": "7224895c3f90ef4459eaa3070b29b6e15d73b5cb",
+        "src/nvidia/src/kernel/mem_mgr/mem.c": "9bfe625085533caa3fb9ce62954c7a2edfb0c082",
+        "src/nvidia/src/kernel/mem_mgr/mem_list.c": "8e9b64b5e16578c96b989f1c31630b416fec4745",
+        "src/nvidia/src/kernel/rmapi/resource_list.h": "c08355fca1ee79b02866e9dfecef8f29714e8b57",
+        "src/nvidia/src/kernel/vgpu/rpc.c": "861883f4a279480b3debaf927bd9f06442881448"
+      },
+      "status": "MEASURED",
+      "tag": "595.91.07",
+      "tag_object": "26d82922dc1e444f274294505f73f1c0b8ca682d"
+    },
+    {
+      "commit": "57130a2702d565be81200ea2e114abcb0455e8bb",
+      "compiler_diagnostics": "",
+      "facts": {
+        "constants": {
+          "NV01_MEMORY_LIST_FBMEM": 130,
+          "NV01_MEMORY_LIST_SYSTEM": 129,
+          "NVOS02_FLAGS_ALLOC_NONE": 1,
+          "NVOS02_FLAGS_COHERENCY_CACHED": 1,
+          "NVOS02_FLAGS_COHERENCY_UNCACHED": 0,
+          "NVOS02_FLAGS_COHERENCY_WRITE_BACK": 5,
+          "NVOS02_FLAGS_COHERENCY_WRITE_COMBINE": 2,
+          "NVOS02_FLAGS_COHERENCY_WRITE_PROTECT": 4,
+          "NVOS02_FLAGS_COHERENCY_WRITE_THROUGH": 3,
+          "NVOS02_FLAGS_LOCATION_PCI": 0,
+          "NVOS02_FLAGS_LOCATION_VIDMEM": 2,
+          "NVOS02_FLAGS_MAPPING_DEFAULT": 0,
+          "NVOS02_FLAGS_MAPPING_NEVER_MAP": 2,
+          "NVOS02_FLAGS_MAPPING_NO_MAP": 1,
+          "NVOS02_FLAGS_PHYSICALITY_CONTIGUOUS": 0,
+          "NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS": 1,
+          "NVOS02_FLAGS_REGISTER_MEMDESC_TO_PHYS_RM_TRUE": 1,
+          "NV_VGPU_MSG_FUNCTION_ALLOC_MEMORY": 4,
+          "NV_VGPU_PTEDESC_IDR_DOUBLE": 2,
+          "NV_VGPU_PTEDESC_IDR_NONE": 0,
+          "NV_VGPU_PTEDESC_IDR_SINGLE": 1,
+          "NV_VGPU_PTEDESC_IDR_TRIPLE": 3,
+          "NV_VGPU_PTE_64_SIZE": 8,
+          "RM_PAGE_SHIFT": 12,
+          "RM_PAGE_SIZE": 4096
+        },
+        "flags": {
+          "ALLOC": {
+            "mask": 196608,
+            "shift": 16
+          },
+          "ALLOC_DEVICE_READ_ONLY": {
+            "mask": 4194304,
+            "shift": 22
+          },
+          "ALLOC_NISO_DISPLAY": {
+            "mask": 1048576,
+            "shift": 20
+          },
+          "ALLOC_TYPE_SYNCPOINT": {
+            "mask": 16777216,
+            "shift": 24
+          },
+          "ALLOC_USER_READ_ONLY": {
+            "mask": 2097152,
+            "shift": 21
+          },
+          "COHERENCY": {
+            "mask": 61440,
+            "shift": 12
+          },
+          "GPU_CACHEABLE": {
+            "mask": 262144,
+            "shift": 18
+          },
+          "KERNEL_MAPPING": {
+            "mask": 524288,
+            "shift": 19
+          },
+          "LOCATION": {
+            "mask": 3840,
+            "shift": 8
+          },
+          "MAPPING": {
+            "mask": 3221225472,
+            "shift": 30
+          },
+          "MEMORY_PROTECTION": {
+            "mask": 100663296,
+            "shift": 25
+          },
+          "PEER_MAP_OVERRIDE": {
+            "mask": 8388608,
+            "shift": 23
+          },
+          "PHYSICALITY": {
+            "mask": 240,
+            "shift": 4
+          },
+          "REGISTER_MEMDESC_TO_PHYS_RM": {
+            "mask": 134217728,
+            "shift": 27
+          }
+        },
+        "pte_desc": {
+          "idr": 3,
+          "length": 4294901760,
+          "pte_pde": 8,
+          "reserved1": 65532,
+          "size": 8
+        },
+        "rpc_alloc_memory": {
+          "flags": 16,
+          "format": 24,
+          "hClass": 12,
+          "hClient": 0,
+          "hDevice": 4,
+          "hMemory": 8,
+          "length": 32,
+          "pageCount": 40,
+          "pteAdjust": 20,
+          "pteDesc": 48,
+          "size": 56
+        }
+      },
+      "observed_0x48002000_fields": {
+        "ALLOC": 0,
+        "ALLOC_DEVICE_READ_ONLY": 0,
+        "ALLOC_NISO_DISPLAY": 0,
+        "ALLOC_TYPE_SYNCPOINT": 0,
+        "ALLOC_USER_READ_ONLY": 0,
+        "COHERENCY": 2,
+        "GPU_CACHEABLE": 0,
+        "KERNEL_MAPPING": 0,
+        "LOCATION": 0,
+        "MAPPING": 1,
+        "MEMORY_PROTECTION": 0,
+        "PEER_MAP_OVERRIDE": 0,
+        "PHYSICALITY": 0,
+        "REGISTER_MEMDESC_TO_PHYS_RM": 1
+      },
+      "reviewed_flag_field_mask": 3489660912,
+      "source_blobs": {
+        "kernel-open/nvidia/nv.c": "b771a001e4ca5621feb396a45ccb55dc455af5d2",
+        "src/common/sdk/nvidia/inc/class/cl84a0.h": "a1f6d90cb3c32e6e56c302aff3d0f5f9bbf2d4c2",
+        "src/common/sdk/nvidia/inc/nvos.h": "c061f0a2463a38ddbfc5f2ec550c138fef7f2548",
+        "src/nvidia/arch/nvalloc/unix/src/os.c": "3855b9cb9b0e304559eccd258ec7aa9b3afdce6d",
+        "src/nvidia/generated/g_rpc-structures.h": "7b9d71d1a58d07ea567a5c399b3177903af8af37",
+        "src/nvidia/inc/kernel/gpu/mem_mgr/rm_page_size.h": "f25795eac9e3545051350e13006778b13791e1c6",
+        "src/nvidia/inc/kernel/vgpu/rpc_headers.h": "df5889a2c2af6b2ad7391c661d0c71017e50eed6",
+        "src/nvidia/inc/kernel/vgpu/sdk-structures.h": "e5f8f77fc072307eda9ab5c925de8dcaf768d73d",
+        "src/nvidia/interface/deprecated/rmapi_deprecated_utils.c": "0b2f8bb9b9d64c660333e3c413f83e11a8338e6e",
+        "src/nvidia/src/kernel/gpu/mem_mgr/mem_desc.c": "214af6420a75b1c28695092762f0b20079376996",
+        "src/nvidia/src/kernel/mem_mgr/mem.c": "9bfe625085533caa3fb9ce62954c7a2edfb0c082",
+        "src/nvidia/src/kernel/mem_mgr/mem_list.c": "8e9b64b5e16578c96b989f1c31630b416fec4745",
+        "src/nvidia/src/kernel/rmapi/resource_list.h": "90405f2e77293c26ccfe282d38d7c55ada490e4e",
+        "src/nvidia/src/kernel/vgpu/rpc.c": "fdf05db0a6ccba1a61c50b729c17f4c039d2bde7"
+      },
+      "status": "MEASURED",
+      "tag": "610.43.02",
+      "tag_object": "86856f779971146f807a7ae2a864b4aee147b553"
+    },
+    {
+      "commit": "61dcc93722ecb418bb5f2e00923f05b4b8051dd1",
+      "compiler_diagnostics": "",
+      "facts": {
+        "constants": {
+          "NV01_MEMORY_LIST_FBMEM": 130,
+          "NV01_MEMORY_LIST_SYSTEM": 129,
+          "NVOS02_FLAGS_ALLOC_NONE": 1,
+          "NVOS02_FLAGS_COHERENCY_CACHED": 1,
+          "NVOS02_FLAGS_COHERENCY_UNCACHED": 0,
+          "NVOS02_FLAGS_COHERENCY_WRITE_BACK": 5,
+          "NVOS02_FLAGS_COHERENCY_WRITE_COMBINE": 2,
+          "NVOS02_FLAGS_COHERENCY_WRITE_PROTECT": 4,
+          "NVOS02_FLAGS_COHERENCY_WRITE_THROUGH": 3,
+          "NVOS02_FLAGS_LOCATION_PCI": 0,
+          "NVOS02_FLAGS_LOCATION_VIDMEM": 2,
+          "NVOS02_FLAGS_MAPPING_DEFAULT": 0,
+          "NVOS02_FLAGS_MAPPING_NEVER_MAP": 2,
+          "NVOS02_FLAGS_MAPPING_NO_MAP": 1,
+          "NVOS02_FLAGS_PHYSICALITY_CONTIGUOUS": 0,
+          "NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS": 1,
+          "NVOS02_FLAGS_REGISTER_MEMDESC_TO_PHYS_RM_TRUE": 1,
+          "NV_VGPU_MSG_FUNCTION_ALLOC_MEMORY": 4,
+          "NV_VGPU_PTEDESC_IDR_DOUBLE": 2,
+          "NV_VGPU_PTEDESC_IDR_NONE": 0,
+          "NV_VGPU_PTEDESC_IDR_SINGLE": 1,
+          "NV_VGPU_PTEDESC_IDR_TRIPLE": 3,
+          "NV_VGPU_PTE_64_SIZE": 8,
+          "RM_PAGE_SHIFT": 12,
+          "RM_PAGE_SIZE": 4096
+        },
+        "flags": {
+          "ALLOC": {
+            "mask": 196608,
+            "shift": 16
+          },
+          "ALLOC_DEVICE_READ_ONLY": {
+            "mask": 4194304,
+            "shift": 22
+          },
+          "ALLOC_NISO_DISPLAY": {
+            "mask": 1048576,
+            "shift": 20
+          },
+          "ALLOC_TYPE_SYNCPOINT": {
+            "mask": 16777216,
+            "shift": 24
+          },
+          "ALLOC_USER_READ_ONLY": {
+            "mask": 2097152,
+            "shift": 21
+          },
+          "COHERENCY": {
+            "mask": 61440,
+            "shift": 12
+          },
+          "GPU_CACHEABLE": {
+            "mask": 262144,
+            "shift": 18
+          },
+          "KERNEL_MAPPING": {
+            "mask": 524288,
+            "shift": 19
+          },
+          "LOCATION": {
+            "mask": 3840,
+            "shift": 8
+          },
+          "MAPPING": {
+            "mask": 3221225472,
+            "shift": 30
+          },
+          "MEMORY_PROTECTION": {
+            "mask": 100663296,
+            "shift": 25
+          },
+          "PEER_MAP_OVERRIDE": {
+            "mask": 8388608,
+            "shift": 23
+          },
+          "PHYSICALITY": {
+            "mask": 240,
+            "shift": 4
+          },
+          "REGISTER_MEMDESC_TO_PHYS_RM": {
+            "mask": 134217728,
+            "shift": 27
+          }
+        },
+        "pte_desc": {
+          "idr": 3,
+          "length": 4294901760,
+          "pte_pde": 8,
+          "reserved1": 65532,
+          "size": 8
+        },
+        "rpc_alloc_memory": {
+          "flags": 16,
+          "format": 24,
+          "hClass": 12,
+          "hClient": 0,
+          "hDevice": 4,
+          "hMemory": 8,
+          "length": 32,
+          "pageCount": 40,
+          "pteAdjust": 20,
+          "pteDesc": 48,
+          "size": 56
+        }
+      },
+      "observed_0x48002000_fields": {
+        "ALLOC": 0,
+        "ALLOC_DEVICE_READ_ONLY": 0,
+        "ALLOC_NISO_DISPLAY": 0,
+        "ALLOC_TYPE_SYNCPOINT": 0,
+        "ALLOC_USER_READ_ONLY": 0,
+        "COHERENCY": 2,
+        "GPU_CACHEABLE": 0,
+        "KERNEL_MAPPING": 0,
+        "LOCATION": 0,
+        "MAPPING": 1,
+        "MEMORY_PROTECTION": 0,
+        "PEER_MAP_OVERRIDE": 0,
+        "PHYSICALITY": 0,
+        "REGISTER_MEMDESC_TO_PHYS_RM": 1
+      },
+      "reviewed_flag_field_mask": 3489660912,
+      "source_blobs": {
+        "kernel-open/nvidia/nv.c": "df5a5e0e5ef59fcf44e9532b6bdef4ebf8d3c435",
+        "src/common/sdk/nvidia/inc/class/cl84a0.h": "a1f6d90cb3c32e6e56c302aff3d0f5f9bbf2d4c2",
+        "src/common/sdk/nvidia/inc/nvos.h": "6688d736cd88ed6cc94559062bdc213da052e039",
+        "src/nvidia/arch/nvalloc/unix/src/os.c": "faa5e25c54f14d8f37c52407474ab95f1a935904",
+        "src/nvidia/generated/g_rpc-structures.h": "ddccac193520efcfb7d146a71936dad801041c88",
+        "src/nvidia/inc/kernel/gpu/mem_mgr/rm_page_size.h": "f25795eac9e3545051350e13006778b13791e1c6",
+        "src/nvidia/inc/kernel/vgpu/rpc_headers.h": "df5889a2c2af6b2ad7391c661d0c71017e50eed6",
+        "src/nvidia/inc/kernel/vgpu/sdk-structures.h": "c38c22a6872677815f9adb2b3f5c215090284214",
+        "src/nvidia/interface/deprecated/rmapi_deprecated_utils.c": "cbfe979d1b60962ea2da00184a701c22e1f57ad1",
+        "src/nvidia/src/kernel/gpu/mem_mgr/mem_desc.c": "41007bfdbac58b3fa515685eef59359d7b01341f",
+        "src/nvidia/src/kernel/mem_mgr/mem.c": "9bfe625085533caa3fb9ce62954c7a2edfb0c082",
+        "src/nvidia/src/kernel/mem_mgr/mem_list.c": "8e9b64b5e16578c96b989f1c31630b416fec4745",
+        "src/nvidia/src/kernel/rmapi/resource_list.h": "9cf8f34646481f1ee9519876aa109be25cf26cc6",
+        "src/nvidia/src/kernel/vgpu/rpc.c": "ac39fa01c01a076e6b9987e8ccb28a2f9890e46a"
+      },
+      "status": "MEASURED",
+      "tag": "615.71.09",
+      "tag_object": "d2a24f90e843359450ab313a286f43a88d95c6ce"
+    }
+  ],
+  "schema": 1,
+  "source_repository": "https://github.com/NVIDIA/open-gpu-kernel-modules",
+  "target": "x86_64 Linux; little endian; -m64 -std=gnu11"
+}
