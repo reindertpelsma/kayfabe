@@ -1338,9 +1338,15 @@ impl DisplayPlane {
         let classes = kf_disp::model::Classes::of(row);
         let vocab = Vocab::resolve(t, &classes, &regs)
             .map_err(|e| format!("display=on: method vocabulary: {} is not derived", e.0))?;
-        let constructor_probe =
-            std::env::var("KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE").is_ok_and(|v| v == "1");
-        let caps_author = if constructor_probe {
+        let ilut_constructor_probe =
+            std::env::var("KF3_DISPLAY_ILUT_CONSTRUCTOR_PROBE").is_ok_and(|v| v == "1");
+        // ILUT always includes TMO construction and the blanket method refusal;
+        // setting ILUT alone must never publish these caps with a normal engine.
+        let constructor_probe = ilut_constructor_probe
+            || std::env::var("KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE").is_ok_and(|v| v == "1");
+        let caps_author = if ilut_constructor_probe {
+            kf_disp::caps::ilut_constructor_probe_page
+        } else if constructor_probe {
             kf_disp::caps::constructor_probe_page
         } else {
             kf_disp::caps::page
@@ -1389,7 +1395,7 @@ impl DisplayPlane {
             .map_err(|e| format!("display=on: store import into the display context: {e}"))?;
         let engine = if constructor_probe {
             eprintln!(
-                "kf3: EXPERIMENT display TMO constructor probe: capability advertised; ALL display methods refused before execution"
+                "kf3: EXPERIMENT display constructor probe: TMO advertised, ILUT surface loading={ilut_constructor_probe}; ALL display methods refused before execution"
             );
             Engine::new_constructor_probe(vocab, row.heads, row.windows)
         } else {
