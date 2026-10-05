@@ -11,6 +11,12 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-05 (supersedes every older entry in §0 where they differ)
 
+**PAUSED at owner's request, 2026-10-05 14:37 UTC: 1% weekly allowance left.**
+No further experiments or implementation. Read the
+[stop/resume record](handoff/2026-10-05-WINDOWS-PAUSE.md) before continuing.
+Windows still has Code43. N advanced beyond the ILUT/TMO window constructors to
+an output-LUT constructor; this is diagnostic progress, not working Windows.
+
 **Windows boundary investigation, 2026-10-05 14:26 UTC (current priority):**
 `codex/windows-boundary-comparison-20261005`, worktree
 `/data/kayfabe-boundary-20261005`, holds the comparison harness and reviewed evidence.
