@@ -14,6 +14,13 @@ profile restricted to its executable; the probe profile was then removed.
 change system sysctls, grant Linux capabilities or change product sandbox code.
 All namespace/isolate containment assertions remain active.
 
+One assertion needs a privileged **observer**: a non-dumpable child's namespace
+symlinks are ptrace-protected even from its same-uid parent. The unprivileged run
+announces that missing observer capability. A separate CI run executes the entire
+containment suite with a privileged parent and requires the namespace, capability
+ceiling and capability-drop tests' RAN markers. Thus neither an unavailable
+instrument nor an all-skipped privileged suite can report success.
+
 Unprivileged `/proc/iomem` can redact RAM to `00000000-00000000`. The memory-type
 test now separates its always-run fail-closed assertion from the host-RAM positive
 control, which emits an explicit skipped marker if no complete RAM page is visible.

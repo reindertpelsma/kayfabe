@@ -513,6 +513,21 @@ fn the_sandboxed_childs_capability_ceiling_is_empty_when_it_could_be_emptied() {
 /// parent reads `/proc/<pid>/ns/*` — an edge, not a sleep.
 #[test]
 fn the_sandboxed_child_lives_in_its_own_user_namespace() {
+    // Reading another process's namespace symlink is ptrace-gated. This child
+    // intentionally becomes non-dumpable, so a same-uid parent without the
+    // inspection capability cannot serve as this test's external instrument.
+    // CI runs this entire suite again with a privileged observer and requires
+    // this test's RAN marker there; the sandboxed child still drops every cap.
+    const CAP_SYS_PTRACE: u64 = 1 << 19;
+    let ours = kayfabe_linux_raw::sandbox::privileges().expect("observer privileges");
+    if ours.effective & CAP_SYS_PTRACE == 0 {
+        kayfabe_linux_raw::sandbox::report_gate(
+            "the_sandboxed_child_lives_in_its_own_user_namespace",
+            false,
+            "inspect the non-dumpable child (CAP_SYS_PTRACE is required)",
+        );
+        return;
+    }
     kayfabe_linux_raw::require_user_namespace!(
         "the_sandboxed_child_lives_in_its_own_user_namespace"
     );

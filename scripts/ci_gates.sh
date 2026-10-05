@@ -96,8 +96,9 @@ want_all=0
 # ran=0 skipped=0 on the verification box). Deliberate, as this floor demands.
 # v3 dependency isolation + CI guard self-tests added during the CI repair.
 # The scoped CI namespace profile's setup and removal are explicit steps too.
-GATE_STEPS_ALL_MIN=19
-GATE_STEPS_FAST_MIN=13
+# The second containment run proves properties an unprivileged observer cannot inspect.
+GATE_STEPS_ALL_MIN=20
+GATE_STEPS_FAST_MIN=14
 
 # ★★ A PER-INVOCATION test log, MEASURED 2026-07-30.
 #
