@@ -54,7 +54,7 @@ New-Item -ItemType Directory -Force -Path $cache | Out-Null
 $commands = @('.symfix C:\ProgramData\KayfabeKD\symbols', '.sympath',
     '.reload /f nt', '.reload /f dxgkrnl.sys', '.reload /f watchdog.sys',
     ".load $bin\winext\ext.dll", '.chain', '.bugcheck', '!ext.analyze -v',
-    'lmvm nvlddmkm', 'kv', '.echo KAYFABE_KD_COMMANDS_FINISHED', 'q')
+    'lmvm nvlddmkm', 'kv', '.enumtag', '.echo KAYFABE_KD_COMMANDS_FINISHED', 'q')
 $commandFile = Join-Path $run 'commands.txt'
 $commands | Set-Content -Encoding ASCII -LiteralPath $commandFile
 $argv = @('-noshell', '-sins', '-y', 'srv*C:\ProgramData\KayfabeKD\symbols*https://msdl.microsoft.com/download/symbols',

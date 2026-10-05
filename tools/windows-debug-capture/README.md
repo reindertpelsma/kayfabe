@@ -152,7 +152,7 @@ a fresh tool directory, verifies the bundle and each file, then requires valid M
 Authenticode signatures for every executable/DLL before starting KD. An unused unsigned
 downlevel compatibility shim is omitted; signature requirements were not relaxed. It analyzes
 the dump as data with fixed command-file lines: `.symfix`, `.reload`, `.bugcheck`, `!ext.analyze -v`,
-`lmvm nvlddmkm`, `kv`, `q`. It neither attaches to a running process nor changes the driver.
+`lmvm nvlddmkm`, `kv`, `.enumtag`, `q`. It neither attaches to a running process nor changes the driver.
 [`.symfix`](https://learn.microsoft.com/en-us/windows-hardware/drivers/debuggercmds/-symfix--set-symbol-store-path-)
 selects Microsoft's symbol store. The analysis process is bounded by time and a polled
 32 MiB output threshold; an outer bench timeout must also cover extraction/trust validation.
@@ -163,13 +163,19 @@ package includes that DLL and the analysis extension's dynamically loaded
 `Microsoft.Diagnostics.Analysis.Utilities.dll` companion. Command-file lines avoid inline
 semicolons being interpreted as path separators.
 
-The raw dump remains private. Review debugger text before publishing; a dump can contain
-unrelated memory. A timeout or missing private NVIDIA symbols limits the result and is not
+The raw dump remains private. The final `.enumtag` command enumerates secondary dump data
+including raw bytes; **keep this output private too** until reviewed and selectively extracted.
+[Microsoft documents the GUID-tagged format](https://learn.microsoft.com/en-us/windows-hardware/drivers/debuggercmds/-enumtag--enumerate-secondary-callback-data-).
+Review debugger text before publishing; a dump can contain unrelated memory.
+A timeout or missing private NVIDIA symbols limits the result and is not
 proof of a root cause. The final bundle and wrapper passed on Windows E at
 `C:\ProgramData\KayfabeKD\run-20261005T0011175941255Z`: all bundled PE signatures were valid,
 KD exited zero, and the wrapper's semantic analysis check passed. Controller output is
 preserved privately under `/data/kayfabe-runtime/windows-pool-20261005/kd-v4/` for review before
-publication. A separate fresh controller fetch reproduced the pinned ZIP byte-for-byte.
+publication. That validated wrapper had SHA256
+`ada467b61279ee14ab3633a3bd7af7891de66dcfd600d432189cd18b02dc102e`; the only later command
+addition is `.enumtag`, whose target result is pending. A separate fresh controller fetch
+reproduced the pinned ZIP byte-for-byte.
 
 | Artifact | SHA256 |
 |---|---|
@@ -177,7 +183,7 @@ publication. A separate fresh controller fetch reproduced the pinned ZIP byte-fo
 | `SDK Debuggers-x86_en-us.msi`, inspected for x64 file/CAB mapping | `8f3467fe3982fef2f97b4c1d545b9eaab6f9d002b03fd2118bde4df615a94130` |
 | Generated `kf-kd-bundle.zip` | `a3883456c4631bb46b9091a2d3197f17984df99ba89c36c2f8e54c976052d800` |
 | x64 `kd.exe` | `30bb44fe1c3911bf5e43cf685d931097cbaa72bb2ff272eae9b0e016ee5c2ac9` |
-| `analyze-dump.ps1` | `ada467b61279ee14ab3633a3bd7af7891de66dcfd600d432189cd18b02dc102e` |
+| `analyze-dump.ps1` | `7373e87e3f2681ccd223ada92f1c561e8f29b147c83c599d3865aa1a2049dc6a` |
 
 The SDK version comes from [Microsoft's SDK downloads](https://learn.microsoft.com/en-us/windows/apps/windows-sdk/downloads).
 Its MSI directory/component/file/media tables identify each member in the committed manifest;
