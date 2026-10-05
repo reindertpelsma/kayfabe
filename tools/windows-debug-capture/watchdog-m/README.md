@@ -187,3 +187,41 @@ of the M guest; record the actual result separately. If transport remains lost,
 the owner can stop the VM, preserve its overlay/backing chain, and extract the
 private dump with a read-only filesystem reader. Do not mount the writable live
 guest disk from a second host process or repair the original filesystem.
+
+## Labelled follow-up comparisons (including N)
+
+`compare-series.py` leaves the original M recognizer unchanged and verifies its
+exact source hash before importing it. It accepts a private JSON manifest of two
+to four ordered cases, explicitly named and tied to caller-supplied revisions:
+
+```json
+[
+  {"label":"L","revision":"b431aeaf","dump":"/PRIVATE/L/watchdog.dmp"},
+  {"label":"M","revision":"d2c7ca1b","dump":"/PRIVATE/M/watchdog.dmp"},
+  {"label":"N","revision":"9312854d","dump":"/PRIVATE/N/watchdog.dmp"}
+]
+```
+
+Only put actual recovered N data under N. Keep the run's command/status/recovery
+receipts separately; the dump comparator does not independently establish the
+Kayfabe product revision. The first case must agree with the independent L KD
+module range and decoded journal. Each later dump passes the same unique-name,
+retail-PE identity and source-defined NVCD checks. Every adjacent comparison
+reports counts, an identical prefix, a nonoverlapping identical suffix, and the
+changed/intervening records, including extra tail records when counts differ.
+
+```sh
+python3 tools/windows-debug-capture/watchdog-m/compare-series.py \
+  --manifest /PRIVATE/ordered-dumps.json \
+  --decoder /PRIVATE/nvcd-sources/decode-nvcd.py \
+  --schema /PRIVATE/nvcd-schema/schema.json \
+  --driver /TRUSTED/580.88/Display.Driver/nvlddmkm.sys \
+  --reference-kd /PRIVATE/L/analysis.stdout \
+  --reference-decoded /PRIVATE/L/nvcd.json > /PRIVATE/labelled-comparison.json
+python3 tools/windows-debug-capture/watchdog-m/test_compare_series.py
+```
+
+Before any N result, the labelled tool reproduced the validated real L→M control
+exactly: 17 equal prefix assertions, one changed assertion, six equal suffix
+assertions. Synthetic tests cover insertion/removal, equality and empty sequences.
+The original dump bounds, partial-NVCD limits and no-live-locals caveat still apply.

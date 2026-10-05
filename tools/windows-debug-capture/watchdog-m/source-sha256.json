@@ -5,5 +5,7 @@
   "qga-resync-ping.py": "a26cb53c0e48fbd325ad44d9ce11b3176bca7741e48caeb48133c0b67f58fede",
   "compare-raw.py": "10e794b09ea0def90482033cffb8d2688c0b251d0482055c86336ae7ba06381f",
   "test_compare_raw.py": "f09386bbda8ef4aad2cc17dd4f1c0e4d3ac2db0c57b1be0b3f8be1f8ff314867",
-  "inspect-m.py": "f566d5e19f8ae2de72d85e15aed332c1d4d6c28f73c04730d5fbf653a0f26514"
+  "inspect-m.py": "f566d5e19f8ae2de72d85e15aed332c1d4d6c28f73c04730d5fbf653a0f26514",
+  "compare-series.py": "eabf8280405c7d8fedc87bedc0fee4387e51c69ba6f58a189491db5fee01ead3",
+  "test_compare_series.py": "aae5d70a2ef65e01a8999b127d65dd5b486799dd9f5b7ca6e06c43fa530c065a"
 }
