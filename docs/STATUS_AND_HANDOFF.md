@@ -11,6 +11,62 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-05 (supersedes every older entry in §0 where they differ)
 
+**Windows boundary investigation, 2026-10-05 14:08 UTC (current priority):**
+`codex/windows-boundary-comparison-20261005`, worktree
+`/data/kayfabe-boundary-20261005`, holds the comparison harness and reviewed evidence.
+Product baseline **`b431aeaf`** remains experimental, with pool/timer/translated-space/
+runlist/memory-list/TMO constructor flags enabled only by the research harness.
+Windows NVIDIA 580.88 still ends at **Code 43**. No Windows application or CUDA success
+under Kayfabe is claimed, and nothing from this experiment is promoted to master.
+
+- The [first six-run comparison](../traces/windows_boundary_20261005/README.md)
+  has three successful native/VFIO boots and three repeatable Kayfabe failures from
+  the same immutable Windows disk and driver. All Kayfabe runs contain 365 logged
+  RPCs; a small display-query order variation is retained.
+- The [early native observer cohort](../traces/windows_boundary_20261005/native-early/README.md)
+  adds native runs 8/9/10 and Kayfabe 5 with the same observer-enabled QEMU artifact
+  `a8845e69` (product baseline unchanged). Each healthy native run captures one
+  successful pool-size query pair. All 47 Kayfabe declined/nonzero control IDs
+  occur natively: 41 succeed somewhere in each native recording, six also fail
+  natively. This is neither a causal verdict nor a list to implement: parameters,
+  objects and virtual/physical display topology are not equivalent. Sampling and
+  attachment-generation limits remain explicit. Raw captures stay private.
+- [Source/pinned-driver constructor analysis](../tools/windows-boundary-compare/CONSTRUCTOR.md)
+  identifies an ILUT two-buffer constraint incompatible with the baseline's zero
+  surface-loading capability. Probe **M**, product **`d2c7ca1b`** on
+  `codex/windows-ilut-constructor-probe-20261005`, changes only the source-derived
+  ILUT surface-loading declaration while preserving blanket display-method
+  refusal. It is an intentionally incomplete diagnostic declaration, never a
+  production feature promise. One M boot still reports Code 43 and 365 RPCs;
+  whether the first constructor failure moved is not yet established.
+- M's QGA connection stopped responding during offline dump analysis in Windows.
+  One bounded framing reset failed. QEMU was stopped through QMP; clean Windows
+  shutdown is not established. The stopped overlay was mounted read-only, and
+  its fresh WATCHDOG dump plus partial debugger output were recovered and hashed
+  on the controller. The debugger output contains pipe-resource errors rather
+  than a completed analysis. Do not call this a successful collection run.
+  Host GPU restoration and service exit zero are verified.
+
+Private runtime evidence lives under
+`/data/kayfabe-runtime/windows-boundary-20261005/`, especially
+`boundary-kayfabe-8/offline-recovery/`; product/observer build receipts are alongside.
+The borrowed PC has only regeneratable images/builds plus duplicate evidence. Its
+VM baseline is `/var/lib/kf-windows-20261005/baseline/windows.qcow2`; preserve each
+failed overlay until evidence is durable. Hardware jobs hold
+`/tmp/kayfabe-fastguest.lock` and run strictly serially. The diagnostic VFIO observer
+traps BAR0 reads/writes and copies queue data synchronously; this explicitly differs
+from v3's product trap rules and is not linked into or enabled as a production path.
+No copied native capability/size tables or additional host-control forwarding were
+introduced. Driver/family-wide product compatibility is not established by this
+single Windows580.88/AD104 fixture.
+
+Next: decode M's preserved journal if possible, distinguish the initial guard from
+later constructor failures, and finish K6/K7 with the same executable as the three
+native captures. Keep speculative capability changes on isolated default-off
+branches. The following integration/candidate descriptions remain background;
+older instructions to park Windows and old rental inventories are superseded by
+the owner's current Windows priority and current recorded inventory.
+
 **Experimental integration, not promoted:** `codex/p1p2-integration-2026-10-05`,
 worktree `/tmp/kayfabe-p1p2-integration-20261005`, combines master `906a76a4`,
 the complete P1/P2 branch `31b64802` (merge `a5a350a8`), and Windows branch
