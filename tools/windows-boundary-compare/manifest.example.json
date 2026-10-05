@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "experiment": {
+    "baseline_sha256": "REPLACE_WITH_IMMUTABLE_BASELINE_SHA256",
+    "windows_driver": "580.88",
+    "driver_hash": "REPLACE_WITH_SUPPLIED_DRIVER_HASH",
+    "gpu": "RTX4070",
+    "qemu_revision": "b431aeaf",
+    "note": "Fresh overlays from one baseline; VRAM sizes and topology may intentionally differ."
+  },
+  "runs": [
+    {
+      "id": "vfio-1",
+      "arm": "vfio",
+      "variant": "native",
+      "flags": {},
+      "instrumentation": "Passive KGWT observer; partial retained history. Read-only caps snapshot.",
+      "metadata": {},
+      "rpc": {
+        "format": "kgwt-decoded-json",
+        "path": "vfio-1/decoded.json",
+        "coverage": "partial",
+        "window": "startup",
+        "note": "Observer can miss early initialization and overwrite history."
+      },
+      "display_caps": {
+        "path": "vfio-1/display-caps.bin",
+        "source": "BAR0+0x640000",
+        "milestone": "REPLACE_WITH_EXACT_FIXED_STARTUP_STATUS_MILESTONE",
+        "note": "Exact 4096-byte read-only capability snapshot."
+      }
+    },
+    {
+      "id": "kayfabe-1",
+      "arm": "kayfabe",
+      "variant": "L-construction-only",
+      "flags": {
+        "KF3_SW_RUNLIST_PROBE": true,
+        "KF3_MEMORY_LIST_PROBE": true,
+        "NOTE": "Replace with the complete actual runner flags, including pool/timer/TMO/P1/P2."
+      },
+      "instrumentation": "KF3_RPC_TRACE=1 and read-only caps snapshot; all display methods refused by L diagnostic.",
+      "metadata": {},
+      "rpc": {
+        "format": "kf-rm",
+        "path": "kayfabe-1/rpc.log",
+        "coverage": "partial",
+        "window": "startup",
+        "note": "Declare complete-window only after verifying the specific logging interval is complete."
+      },
+      "display_caps": {
+        "path": "kayfabe-1/display-caps.bin",
+        "source": "BAR0+0x640000",
+        "milestone": "REPLACE_WITH_EXACT_FIXED_STARTUP_STATUS_MILESTONE",
+        "note": "Exact 4096-byte read-only capability snapshot."
+      }
+    }
+  ]
+}
