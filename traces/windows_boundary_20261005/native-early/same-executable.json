@@ -1,0 +1,109 @@
+{
+  "schema": "kayfabe-same-executable-repeats/1",
+  "runs": [
+    {
+      "run": 5,
+      "product_revision": "b431aeaf9fca5d78b451754c0de7b8dbbe9d7652",
+      "qemu_artifact_revision": "a8845e69847b969d01308a64f13e00394ec76e1d",
+      "qemu_sha256": "62cd3c15cfc8f46936409b92e7d7a9c8f33557bf715a87b95dd028c2a3aba250",
+      "baseline_sha256": "9ff194d31f0a871757fd436f14ab0da2e1e8a6360dc36bb925c12af12a64f85c",
+      "initial_uefi_vars_sha256": "4a09148a02665b072071523206a1c9b9c16624413dafb85106e3f8d202db74da",
+      "firmware_code_sha256": "a5708766c49ee39db0f4e7e53d73376e2dbc0d45bf12501c0977c48412bf8902",
+      "driver_sha256": "31c79cce80b573e21647ace8d1a2b65697f992e7f86196f89e30af477b1bd47c",
+      "driver_file_version": "32.0.15.8088",
+      "flags": {
+        "KF3_GFX_POOL_PROBE": "1",
+        "KF3_TIMER_MAP": "1",
+        "KF3_TSPACE": "1",
+        "KF3_SW_RUNLIST_PROBE": "1",
+        "KF3_MEMORY_LIST_PROBE": "1",
+        "KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE": "1",
+        "KF3_DISPLAY_ILUT_CONSTRUCTOR_PROBE": null
+      },
+      "gpu_problem_code": 43,
+      "smi_exit": 9,
+      "uptime_seconds": 99.1971301,
+      "rpc_records": 365,
+      "rpc_sequence_sha256": "fc0a0e5aff1287f64181ad14de577ba31e035d9597c4e7ccc787f672185a97c3",
+      "rpc_multiset_sha256": "adabe23a62d663c1ceb4342fa5479759fc765110a6ad547d8fde69ef80ecfd72",
+      "files_sha256": {
+        "command.json": "a8a4b0aa86ff386c809a1ae86ae3b009fc6b1a47b72cecc719d0c2f28d25b2fc",
+        "status.json": "6562a7b61dc138ac7475d0264c75530883de8972a54a12b108882ef7f00206ef",
+        "qemu.log": "80b387dc61db26c93e58c5ef1b45a6a063795f3fec842f146c98b26020bff59a",
+        "complete.json": "9ac0f8c21cd51cbdc094fece33bddacb2c9d291c94ab1040954206dd3ec30017",
+        "unit-result.txt": "2e53c1060c795356d29fa8abee67dad2afd83357dbe4f719dc4ad7b0150f690c",
+        "host-health.txt": "d03530293e87de2afe9deb904ac41bd07cc35ee103b685917816128a738f58e2"
+      }
+    },
+    {
+      "run": 6,
+      "product_revision": "b431aeaf9fca5d78b451754c0de7b8dbbe9d7652",
+      "qemu_artifact_revision": "a8845e69847b969d01308a64f13e00394ec76e1d",
+      "qemu_sha256": "62cd3c15cfc8f46936409b92e7d7a9c8f33557bf715a87b95dd028c2a3aba250",
+      "baseline_sha256": "9ff194d31f0a871757fd436f14ab0da2e1e8a6360dc36bb925c12af12a64f85c",
+      "initial_uefi_vars_sha256": "4a09148a02665b072071523206a1c9b9c16624413dafb85106e3f8d202db74da",
+      "firmware_code_sha256": "a5708766c49ee39db0f4e7e53d73376e2dbc0d45bf12501c0977c48412bf8902",
+      "driver_sha256": "31c79cce80b573e21647ace8d1a2b65697f992e7f86196f89e30af477b1bd47c",
+      "driver_file_version": "32.0.15.8088",
+      "flags": {
+        "KF3_GFX_POOL_PROBE": "1",
+        "KF3_TIMER_MAP": "1",
+        "KF3_TSPACE": "1",
+        "KF3_SW_RUNLIST_PROBE": "1",
+        "KF3_MEMORY_LIST_PROBE": "1",
+        "KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE": "1",
+        "KF3_DISPLAY_ILUT_CONSTRUCTOR_PROBE": null
+      },
+      "gpu_problem_code": 43,
+      "smi_exit": 9,
+      "uptime_seconds": 99.4800118,
+      "rpc_records": 365,
+      "rpc_sequence_sha256": "fc0a0e5aff1287f64181ad14de577ba31e035d9597c4e7ccc787f672185a97c3",
+      "rpc_multiset_sha256": "adabe23a62d663c1ceb4342fa5479759fc765110a6ad547d8fde69ef80ecfd72",
+      "files_sha256": {
+        "command.json": "ad52f2b645250db78a32189e4e544a760ee974054ee8a15746793731ea8055ba",
+        "status.json": "7d6e436e7411c75e2ee9ce451b86646f41cf16d6f2e5ba76be74ac8b85b11cd4",
+        "qemu.log": "96cbe108b03b13994dc026033d85d8e379d50eb9eafa8e62c9f5d552bab5c913",
+        "complete.json": "7f8f340558dcb13000900c22dae81c4e75a9d3d1115c4e4ce7de553ee84873bf",
+        "unit-result.txt": "2e53c1060c795356d29fa8abee67dad2afd83357dbe4f719dc4ad7b0150f690c",
+        "host-health.txt": "d03530293e87de2afe9deb904ac41bd07cc35ee103b685917816128a738f58e2"
+      }
+    },
+    {
+      "run": 7,
+      "product_revision": "b431aeaf9fca5d78b451754c0de7b8dbbe9d7652",
+      "qemu_artifact_revision": "a8845e69847b969d01308a64f13e00394ec76e1d",
+      "qemu_sha256": "62cd3c15cfc8f46936409b92e7d7a9c8f33557bf715a87b95dd028c2a3aba250",
+      "baseline_sha256": "9ff194d31f0a871757fd436f14ab0da2e1e8a6360dc36bb925c12af12a64f85c",
+      "initial_uefi_vars_sha256": "4a09148a02665b072071523206a1c9b9c16624413dafb85106e3f8d202db74da",
+      "firmware_code_sha256": "a5708766c49ee39db0f4e7e53d73376e2dbc0d45bf12501c0977c48412bf8902",
+      "driver_sha256": "31c79cce80b573e21647ace8d1a2b65697f992e7f86196f89e30af477b1bd47c",
+      "driver_file_version": "32.0.15.8088",
+      "flags": {
+        "KF3_GFX_POOL_PROBE": "1",
+        "KF3_TIMER_MAP": "1",
+        "KF3_TSPACE": "1",
+        "KF3_SW_RUNLIST_PROBE": "1",
+        "KF3_MEMORY_LIST_PROBE": "1",
+        "KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE": "1",
+        "KF3_DISPLAY_ILUT_CONSTRUCTOR_PROBE": null
+      },
+      "gpu_problem_code": 43,
+      "smi_exit": 9,
+      "uptime_seconds": 99.269205,
+      "rpc_records": 365,
+      "rpc_sequence_sha256": "fc0a0e5aff1287f64181ad14de577ba31e035d9597c4e7ccc787f672185a97c3",
+      "rpc_multiset_sha256": "adabe23a62d663c1ceb4342fa5479759fc765110a6ad547d8fde69ef80ecfd72",
+      "files_sha256": {
+        "command.json": "800fdcf91cad27a0d03f374b8353a594fe37a37c5b4ba7d71ad16142a1606d41",
+        "status.json": "df0154c175804057e95f0c1c9e5373c338c2cf57dfc157c0f54e98ad5a1f15fb",
+        "qemu.log": "c6f00fc066b093b81f7e00edc548589d4e38d8d5498f77303e415c60217aa101",
+        "complete.json": "9e4f28765caadf17573292e65146dce459ad37cb435037b5160c0d551cf9380b",
+        "unit-result.txt": "2e53c1060c795356d29fa8abee67dad2afd83357dbe4f719dc4ad7b0150f690c",
+        "host-health.txt": "d03530293e87de2afe9deb904ac41bd07cc35ee103b685917816128a738f58e2"
+      }
+    }
+  ],
+  "normalized_rpc_order_identical": true,
+  "interpretation": "Three Kayfabe L boots using the same executable and fixture as native8/9/10. Existing partial-native coverage, non-equivalent topology/parameters and no causality inference remain in force. Capability snapshots unavailable after Code43. No product changes."
+}

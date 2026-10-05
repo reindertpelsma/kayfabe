@@ -57,6 +57,7 @@ def main():
     parser.add_argument('--qemu-revision')
     parser.add_argument('--gsp-observer', action='store_true')
     parser.add_argument('--ilut-probe', action='store_true')
+    parser.add_argument('--tmo-surface-probe', action='store_true')
     args = parser.parse_args()
     ROOT.mkdir(parents=True, exist_ok=True, mode=0o700)
     script = (HERE/'boundary_status.ps1').read_text()
@@ -80,6 +81,8 @@ def main():
                 extra += ['--gsp-observer']
             if args.ilut_probe and arm == 'kayfabe':
                 extra += ['--ilut-probe']
+            if args.tmo_surface_probe and arm == 'kayfabe':
+                extra += ['--tmo-surface-probe']
             remote(['systemd-run', '--unit='+unit, '--property=RuntimeMaxSec=900',
                     '--property=KillMode=mixed', '--property=TimeoutStopSec=180',
                     '/usr/bin/python3', '-u', REMOTE+'/boundary-tools/pc_boundary_experiment.py',

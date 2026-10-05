@@ -26,6 +26,7 @@ FLAGS = ('KF3_GFX_POOL_PROBE', 'KF3_TIMER_MAP', 'KF3_TSPACE',
          'KF3_SW_RUNLIST_PROBE', 'KF3_MEMORY_LIST_PROBE',
          'KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE')
 ILUT_FLAG = 'KF3_DISPLAY_ILUT_CONSTRUCTOR_PROBE'
+TMO_SURFACE_FLAG = 'KF3_DISPLAY_TMO_SURFACE_CONSTRUCTOR_PROBE'
 
 
 def digest(path):
@@ -56,6 +57,7 @@ def main():
     p.add_argument('--qemu-revision', help='Immutable artifact revision; defaults to product revision')
     p.add_argument('--gsp-observer', action='store_true')
     p.add_argument('--ilut-probe', action='store_true')
+    p.add_argument('--tmo-surface-probe', action='store_true')
     a = p.parse_args()
     if os.geteuid() or not 60 <= a.max_seconds <= 1800:
         p.error('Require root and a 60..1800 second runtime bound')
@@ -64,8 +66,8 @@ def main():
         p.error('Require full source revisions for product and QEMU artifact')
     if a.gsp_observer and (a.arm != 'vfio' or not a.no_mmio_trace):
         p.error('Narrow GSP observer requires VFIO without generic MMIO tracing')
-    if a.ilut_probe and a.arm != 'kayfabe':
-        p.error('ILUT construction probe is only a Kayfabe arm')
+    if (a.ilut_probe or a.tmo_surface_probe) and a.arm != 'kayfabe':
+        p.error('Display construction probes require a Kayfabe arm')
     os.umask(0o077)
     name = f'boundary-{a.arm}-{a.run}'
     work = BASE/name
@@ -130,13 +132,15 @@ def main():
                 cmd += ['-trace', f'events={work}/trace-events,file={work}/mmio.log']
             state = {'schema_version': 1, 'before': before, 'qemu_command': cmd}
         env = dict(os.environ)
-        for flag in (*FLAGS, ILUT_FLAG):
+        for flag in (*FLAGS, ILUT_FLAG, TMO_SURFACE_FLAG):
             env.pop(flag, None)
         env['KF3_RPC_TRACE'] = '1'
         if a.arm == 'kayfabe':
             env.update({flag: '1' for flag in FLAGS})
             if a.ilut_probe:
                 env[ILUT_FLAG] = '1'
+            if a.tmo_surface_probe:
+                env[TMO_SURFACE_FLAG] = '1'
         meta = dict(schema=1, arm=a.arm, run=a.run, revision=a.product_revision,
                     qemu_artifact_revision=artifact, runner_sha256=digest(Path(__file__)),
                     gsp_observer=a.gsp_observer,
@@ -144,7 +148,7 @@ def main():
                     qemu_sha256=digest(qemu),
                     initial_uefi_vars_sha256=digest(work/'OVMF_VARS.fd'),
                     firmware_code_sha256=digest(Path('/usr/share/OVMF/OVMF_CODE_4M.fd')),
-                    flags={flag: env.get(flag) for flag in (*FLAGS, ILUT_FLAG)},
+                    flags={flag: env.get(flag) for flag in (*FLAGS, ILUT_FLAG, TMO_SURFACE_FLAG)},
                     mmio_trace=a.arm == 'vfio' and not a.no_mmio_trace,
                     mmio_read_coverage='not traced; capability page snapshot only',
                     time_utc=datetime.datetime.now(datetime.timezone.utc).isoformat())

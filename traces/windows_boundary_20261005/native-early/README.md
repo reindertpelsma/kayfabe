@@ -10,6 +10,19 @@ under the existing pinned observer decoder's matching rules. This validates an o
 contract for this fixture; it supplies no constants to the implementation and establishes no
 cross-driver or cross-GPU guarantee. Raw payloads remain private.
 
+## Same-executable repetitions completed
+
+Kayfabe6 and7 subsequently completed with the same immutable `a8845e69` QEMU
+executable, disk, firmware, driver and flags as Kayfabe5 and native8/9/10.
+All three Kayfabe runs report Code43 / nvidia-smi exit9 and have **identical
+365-record normalized RPC order**, including every function, selector and result.
+Host restoration and supervisor success are recorded for each. Their hashes and
+fixture details are in [same-executable.json](same-executable.json). Thus this
+cohort now has three boots per arm using the same executable; the earlier K2/3/4
+binary distinction remains historical evidence. Native sampling limits and the
+lack of parameter/object equivalence still apply. The table below retains the
+original cohort; this addition does not silently regenerate its summary.
+
 ## Recorded results
 
 | Run | NVIDIA PnP / nvidia-smi | Records | Attachments | Gaps / drops / unstable samples |
