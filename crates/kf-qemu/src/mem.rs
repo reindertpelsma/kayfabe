@@ -77,15 +77,40 @@ pub struct RamBlock {
 
 /// ★ Guest RAM, as QEMU registered it — the VMM's own guest-physical layout, which is NOT the
 /// identity once there is a PCI hole.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct RamMap {
     blocks: RwLock<Vec<RamBlock>>,
+    generation: AtomicU64,
+}
+
+impl Default for RamMap {
+    fn default() -> Self {
+        Self {
+            blocks: RwLock::new(Vec::new()),
+            generation: AtomicU64::new(1),
+        }
+    }
 }
 
 impl RamMap {
+    // Called with the registration write guard held. Zero is terminal: an exhausted
+    // counter can never revive a descriptor from an earlier topology incarnation.
+    fn revoke(&self) {
+        let old = self.generation.load(Ordering::Relaxed);
+        self.generation.store(
+            if old == 0 {
+                0
+            } else {
+                old.checked_add(1).unwrap_or(0)
+            },
+            Ordering::Relaxed,
+        );
+    }
+
     /// Register (or replace) the block at `b.gpa`.
     pub fn add(&self, b: RamBlock) {
         if let Ok(mut v) = self.blocks.write() {
+            self.revoke();
             v.retain(|x| x.gpa != b.gpa);
             v.push(b);
             v.sort_by_key(|x| x.gpa);
@@ -95,6 +120,7 @@ impl RamMap {
     /// Unregister the block at `gpa`.
     pub fn del(&self, gpa: u64) {
         if let Ok(mut v) = self.blocks.write() {
+            self.revoke();
             v.retain(|x| x.gpa != gpa);
         }
     }
@@ -159,6 +185,112 @@ impl RamMap {
     #[must_use]
     pub fn dma_to_file_range(&self, dma: u64, len: u64) -> Option<u64> {
         self.file_range(dma, len).map(|(_, off)| off)
+    }
+}
+
+/// The checked CPU view authority for MemoryList registration. The QEMU listener
+/// supplies only writable real RAM (no ROM or RAM-device/MMIO). No raw span escapes
+/// the read guard here; unregister waits for the bounded copy before freeing backing.
+pub struct MemoryListRam(pub &'static RamMap);
+impl core::fmt::Debug for MemoryListRam {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("MemoryListRam(..)")
+    }
+}
+
+fn memory_list_block(blocks: &[RamBlock], span: kf_rm::memory_list::RamSpan) -> Option<&RamBlock> {
+    if span.length == 0 {
+        return None;
+    }
+    let end = span.base.checked_add(span.length)?;
+    let first = blocks.iter().find_map(|b| b.fd)?;
+    let mut overlaps = blocks.iter().filter(|b| {
+        b.gpa
+            .checked_add(b.mem.len() as u64)
+            .is_some_and(|e| span.base < e && b.gpa < end)
+    });
+    let b = overlaps.next()?;
+    if overlaps.next().is_some()
+        || b.fd != Some(first)
+        || span.base < b.gpa
+        || end.checked_sub(b.gpa)? > b.mem.len() as u64
+    {
+        return None;
+    }
+    b.fd_off
+        .checked_add(span.base - b.gpa)?
+        .checked_add(span.length)?;
+    Some(b)
+}
+
+impl kf_rm::memory_list::GuestRamAuthority for MemoryListRam {
+    fn validate(&self, span: kf_rm::memory_list::RamSpan) -> Option<u64> {
+        let guard = self.0.blocks.read().ok()?;
+        memory_list_block(&guard, span)?;
+        let generation = self.0.generation.load(Ordering::Relaxed);
+        (generation != 0).then_some(generation)
+    }
+    fn read(
+        &self,
+        span: kf_rm::memory_list::RamSpan,
+        generation: u64,
+        offset: u64,
+        bytes: &mut [u8],
+    ) -> bool {
+        if bytes.len() > kf_rm::memory_list::MAX_ACCESS
+            || !offset
+                .checked_add(bytes.len() as u64)
+                .is_some_and(|end| end <= span.length)
+        {
+            return false;
+        }
+        let Ok(guard) = self.0.blocks.read() else {
+            return false;
+        };
+        if generation == 0 || self.0.generation.load(Ordering::Relaxed) != generation {
+            return false;
+        }
+        let Some(b) = memory_list_block(&guard, span) else {
+            return false;
+        };
+        let Some(at) = (span.base - b.gpa)
+            .checked_add(offset)
+            .and_then(|v| usize::try_from(v).ok())
+        else {
+            return false;
+        };
+        b.mem.read_into(at, bytes)
+    }
+    fn write(
+        &self,
+        span: kf_rm::memory_list::RamSpan,
+        generation: u64,
+        offset: u64,
+        bytes: &[u8],
+    ) -> bool {
+        if bytes.len() > kf_rm::memory_list::MAX_ACCESS
+            || !offset
+                .checked_add(bytes.len() as u64)
+                .is_some_and(|end| end <= span.length)
+        {
+            return false;
+        }
+        let Ok(guard) = self.0.blocks.read() else {
+            return false;
+        };
+        if generation == 0 || self.0.generation.load(Ordering::Relaxed) != generation {
+            return false;
+        }
+        let Some(b) = memory_list_block(&guard, span) else {
+            return false;
+        };
+        let Some(at) = (span.base - b.gpa)
+            .checked_add(offset)
+            .and_then(|v| usize::try_from(v).ok())
+        else {
+            return false;
+        };
+        b.mem.write_from(at, bytes)
     }
 }
 
@@ -3513,5 +3645,135 @@ mod tests {
         );
         assert_eq!(s.cover(&w, HostOffset::new(GRANULE), 3 * GRANULE), Ok(1));
         assert_eq!(s.cover(&w, HostOffset::ZERO, len), Ok(1));
+    }
+}
+
+#[cfg(test)]
+mod memory_list_tests {
+    use super::*;
+    use kf_rm::memory_list::{GuestRamAuthority, MAX_ACCESS, RamSpan};
+    fn setup() -> (MemoryListRam, RamBlock) {
+        let (mem, fd) = crate::raw_unsafe::test_owned_ram(0x8000);
+        let block = RamBlock {
+            gpa: 0x2000,
+            mem,
+            fd: Some(fd),
+            fd_off: 0,
+        };
+        let ram = Box::leak(Box::new(RamMap::default()));
+        ram.add(block);
+        (MemoryListRam(ram), block)
+    }
+    #[test]
+    fn memory_list_live_ram_copy_boundary_and_topology_revocation() {
+        let (ram, block) = setup();
+        let span = RamSpan {
+            base: 0x3000,
+            length: 0x7000,
+        };
+        let epoch = ram.validate(span).unwrap();
+        assert!(ram.write(span, epoch, span.length - 2, &[9, 7]));
+        let mut result = [0; 2];
+        assert!(ram.read(span, epoch, span.length - 2, &mut result));
+        assert_eq!(result, [9, 7]);
+        assert!(!ram.write(span, epoch, span.length - 1, &[1, 2]));
+        assert!(!ram.write(span, epoch, 0, &vec![0; MAX_ACCESS + 1]));
+        assert!(!ram.read(span, 0, 0, &mut result));
+        ram.0.del(block.gpa);
+        assert!(!ram.read(span, epoch, 0, &mut result));
+        ram.0.add(block);
+        assert!(ram.validate(span).is_some());
+        assert!(!ram.write(span, epoch, 0, &[1]));
+        let current = ram.validate(span).unwrap();
+        ram.0.del(0xffff0000); // even unrelated/no-op topology notifications revoke
+        assert!(!ram.read(span, current, 0, &mut result));
+    }
+    #[test]
+    fn memory_list_whole_span_no_holes_overlap_foreign_fd_or_overflow() {
+        let (ram, block) = setup();
+        for span in [
+            RamSpan {
+                base: 0x2000,
+                length: 0,
+            },
+            RamSpan {
+                base: 0x2000,
+                length: 0x8001,
+            },
+            RamSpan {
+                base: 0x1fff,
+                length: 2,
+            },
+            RamSpan {
+                base: u64::MAX,
+                length: 2,
+            },
+        ] {
+            assert!(ram.validate(span).is_none());
+        }
+        ram.0.add(RamBlock {
+            gpa: 0x4000,
+            ..block
+        });
+        assert!(
+            ram.validate(RamSpan {
+                base: 0x3000,
+                length: 0x3000
+            })
+            .is_none()
+        );
+        ram.0.del(0x4000);
+        ram.0.add(RamBlock {
+            gpa: 0xa000,
+            ..block
+        });
+        assert!(
+            ram.validate(RamSpan {
+                base: 0x9000,
+                length: 0x2000
+            })
+            .is_none(),
+            "two adjacent blocks still refused"
+        );
+        let (_, fd) = crate::raw_unsafe::test_owned_ram(1);
+        ram.0.add(RamBlock {
+            gpa: 0x20000,
+            fd: Some(fd),
+            ..block
+        });
+        assert!(
+            ram.validate(RamSpan {
+                base: 0x20000,
+                length: 1
+            })
+            .is_none()
+        );
+        ram.0.add(RamBlock {
+            gpa: 0x2000,
+            fd: None,
+            ..block
+        });
+        assert!(
+            ram.validate(RamSpan {
+                base: 0x2000,
+                length: 1
+            })
+            .is_none()
+        );
+    }
+    #[test]
+    fn memory_list_epoch_exhaustion_is_terminal() {
+        let (ram, block) = setup();
+        let span = RamSpan {
+            base: 0x2000,
+            length: 4096,
+        };
+        ram.0.generation.store(u64::MAX, Ordering::Relaxed);
+        assert_eq!(ram.validate(span), Some(u64::MAX));
+        ram.0.add(block);
+        assert_eq!(ram.validate(span), None);
+        ram.0.del(block.gpa);
+        ram.0.add(block);
+        assert_eq!(ram.validate(span), None);
     }
 }

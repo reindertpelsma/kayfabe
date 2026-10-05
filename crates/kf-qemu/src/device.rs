@@ -813,7 +813,10 @@ impl Device {
                 let objects = kf_rm::rmrpc::ObjectPolicy::over(
                     &t,
                     kf_abi::GuestOs::Linux,
-                    Box::new(kf_rm::rmrpc::GraphObjects::new(family)),
+                    Box::new(
+                        kf_rm::rmrpc::GraphObjects::new(family)
+                            .with_guest_ram(std::sync::Arc::new(crate::mem::MemoryListRam(ram))),
+                    ),
                     kf_rm::rmrpc::ReasmLimits::default(),
                 );
                 kf_rm::served_policy(

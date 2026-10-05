@@ -10,7 +10,7 @@ of an existing contiguous 28 KiB system-memory span. It is not a request to
 allocate one 4 KiB page. The subsequent `0x20801111` request had a null memory
 handle and zero count; it is consistent with cleanup after registration failed,
 not evidence that an empty scheduling request should succeed. See the separate
-[scheduling audit](../runlist-20261005/scheduling-control.md).
+[scheduling audit](https://github.com/reindertpelsma/kayfabe/blob/4dfa6895/tools/windows-debug-capture/evidence/runlist-20261005/scheduling-control.md).
 
 ## Evidence and limits
 

@@ -611,7 +611,11 @@ mod tests {
             ObjectPolicy::over(
                 &driver(),
                 kf_abi::GuestOs::Linux,
-                Box::new(GraphObjects { graph: graph() }),
+                Box::new({
+                    let mut objects = GraphObjects::new(kf_chip::Family::Ada);
+                    objects.graph = graph();
+                    objects
+                }),
                 Default::default(),
             )
         };

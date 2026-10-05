@@ -219,6 +219,16 @@ impl Faulted for ObjectsRefusal {
 /// ★★★ **The object model, as the seam a later crate implements.** Narrow on purpose: see
 /// this module's header for what the old eleven-method `ObjectModel` became.
 pub trait RmObjects: Send {
+    /// Explicit checked SYSRAM registration seam. Default implementations refuse.
+    fn memory_list(
+        &mut self,
+        _request: kf_abi::memory_list::Declaration,
+    ) -> Result<RmEvent, ObjectsRefusal> {
+        Err(ObjectsRefusal::NotModelled {
+            what: "memory-list registration unavailable",
+        })
+    }
+
     /// Explicit diagnostic seam; object implementations refuse unless they support
     /// the bounded graph-only metadata operation. Never delegates to a host alloc.
     fn software_runlist_probe(
@@ -254,19 +264,56 @@ pub trait RmObjects: Send {
 pub struct GraphObjects {
     /// The graph.
     pub graph: RmGraph,
+    ram: Option<std::sync::Arc<dyn crate::memory_list::GuestRamAuthority>>,
 }
 
 impl GraphObjects {
+    /// Attach trusted live QEMU guest-RAM authority; no host GPU allocation.
+    #[must_use]
+    pub fn with_guest_ram(
+        mut self,
+        ram: std::sync::Arc<dyn crate::memory_list::GuestRamAuthority>,
+    ) -> Self {
+        self.ram = Some(ram);
+        self
+    }
+    /// Bounded future-consumer read, requiring a live graph object and RAM generation.
+    pub fn read_memory_list(
+        &self,
+        key: crate::rmgraph::NodeKey,
+        offset: u64,
+        bytes: &mut [u8],
+    ) -> bool {
+        crate::memory_list::read(&self.graph, self.ram.as_ref(), key, offset, bytes)
+    }
+    /// Bounded future-consumer write with the same lifetime/authority checks.
+    pub fn write_memory_list(
+        &self,
+        key: crate::rmgraph::NodeKey,
+        offset: u64,
+        bytes: &[u8],
+    ) -> bool {
+        crate::memory_list::write(&self.graph, self.ram.as_ref(), key, offset, bytes)
+    }
+
     /// A fresh graph for `family`.
     #[must_use]
     pub fn new(family: kf_chip::Family) -> GraphObjects {
         GraphObjects {
             graph: RmGraph::new(family),
+            ram: None,
         }
     }
 }
 
 impl RmObjects for GraphObjects {
+    fn memory_list(
+        &mut self,
+        request: kf_abi::memory_list::Declaration,
+    ) -> Result<RmEvent, ObjectsRefusal> {
+        crate::memory_list::allocate(&mut self.graph, self.ram.as_ref(), request)
+    }
+
     fn software_runlist_probe(
         &mut self,
         request: crate::sw_runlist_probe::Declaration,
@@ -286,6 +333,7 @@ impl RmObjects for GraphObjects {
 
 /// The shared half of [`GraphPolicy`] and [`ObjectPolicy`]: reassemble → translate → apply.
 struct Bridge {
+    memory_list_probe: bool,
     sw_runlist_probe: Option<crate::sw_runlist_probe::Probe>,
     abi: DriverAbiTable,
     guest_os: GuestOs,
@@ -304,6 +352,7 @@ impl Bridge {
     fn new(abi: DriverAbiTable, guest_os: GuestOs, limits: ReasmLimits) -> Bridge {
         Bridge {
             sw_runlist_probe: None,
+            memory_list_probe: false,
             abi,
             guest_os,
             reasm: Reassembler::with_limits(limits),
@@ -330,8 +379,25 @@ impl Bridge {
                 Reassembled::Complete(full) => full,
             };
             let probe_request = self.sw_runlist_probe.as_ref().and_then(|p| p.decode(whole));
-            let is_probe = probe_request.is_some();
-            let t = if let Some(request) = probe_request {
+            let memory_cell = self
+                .memory_list_probe
+                .then(|| kf_abi::memory_list::cell(abi.driver_version()))
+                .flatten();
+            let is_memory = memory_cell
+                .is_some_and(|c| whole.function == kf_gsp::RpcFunction::Other(c.function()));
+            let is_probe = probe_request.is_some() || is_memory;
+            let t = if is_memory {
+                let request = memory_cell.and_then(|c| c.decode(&whole.payload)).ok_or(
+                    BridgeRefusal::Objects(ObjectsRefusal::NotModelled {
+                        what: "memory-list: unsupported or malformed descriptor",
+                    }),
+                )?;
+                Translation::Event(
+                    objects
+                        .memory_list(request)
+                        .map_err(BridgeRefusal::Objects)?,
+                )
+            } else if let Some(request) = probe_request {
                 Translation::Event(
                     objects
                         .software_runlist_probe(request?)
@@ -520,6 +586,7 @@ fn refusal_reply(r: BridgeRefusal) -> Reply {
 /// instrument that can say *"what has this port not built yet"* — permanently empty. This one
 /// claims a **declared, closed set of RPC functions** ([`OBJECT_VERBS`]) and returns `None` for
 /// everything else, byte for byte leaving every other link exactly as it was.
+/// The explicit default-off MemoryList experiment adds only its audited fn4 cell.
 ///
 /// ⊘ It does NOT claim `GSP_RM_CONTROL`: that would take it away from
 /// [`crate::inittables::InitTablePolicy`]. The old `OBJECT_CONTROLS` (schedule, bind, preempt,
@@ -544,6 +611,11 @@ pub const OBJECT_VERBS: &[kf_gsp::RpcFunction] = &[
 ];
 
 impl ObjectPolicy {
+    pub(crate) fn with_memory_list_probe(mut self) -> Self {
+        self.bridge.memory_list_probe = true;
+        self
+    }
+
     pub(crate) fn with_sw_runlist_probe(mut self, probe: crate::sw_runlist_probe::Probe) -> Self {
         self.bridge.sw_runlist_probe = Some(probe);
         self
@@ -614,7 +686,10 @@ impl core::fmt::Debug for ObjectPolicy {
 
 impl CommandPolicy for ObjectPolicy {
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
-        if !ObjectPolicy::claims(cmd.function) {
+        let memory = self.bridge.memory_list_probe
+            && kf_abi::memory_list::cell(self.bridge.abi.driver_version())
+                .is_some_and(|c| cmd.function == kf_gsp::RpcFunction::Other(c.function()));
+        if !ObjectPolicy::claims(cmd.function) && !memory {
             return None;
         }
         Some(self.bridge.respond(&mut *self.objects, cmd))

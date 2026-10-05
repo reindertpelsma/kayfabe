@@ -582,11 +582,7 @@ static bool kf3_bar1_views_build(Kf3State *s, Error **errp)
 
 /* ── guest RAM → Rust ──────────────────────────────────────────────────────────────────── */
 
-static bool kf3_is_guest_ram(MemoryRegionSection *sec)
-{
-    return memory_region_is_ram(sec->mr) && !memory_region_is_rom(sec->mr) &&
-           !memory_region_is_ram_device(sec->mr) && sec->mr->ram_block != NULL;
-}
+#include "kf3_guest_ram.h"
 
 /* ── the doorbell fast path (docs/design/V3_DOORBELL_IOEVENTFD.md) ────────────────────────────
  * Rust keeps the registrations; this file only (a) issues KVM_IOEVENTFD for it — directly, so a

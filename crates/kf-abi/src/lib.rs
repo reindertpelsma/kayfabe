@@ -133,6 +133,7 @@ pub mod host_driver;
 pub mod hostabi;
 pub mod inittables;
 pub mod sw_runlist;
+pub mod memory_list;
 pub mod videocaps;
 // ★ #156 — the ⊘ half of the host-class seam: the three classes that do NOT vary,
 // named by role so a name-based gate can tell them from the three that do.

@@ -297,3 +297,19 @@ impl kf_broker::Host for BrokerHooks {
         unsafe { (self.timer)(self.opaque, d) }
     }
 }
+
+/// Test-only owned bytes and permanently open fd. No unsafe adoption contract is
+/// weakened for production; backing is intentionally retained until process exit.
+#[cfg(test)]
+pub(crate) fn test_owned_ram(bytes: usize) -> (RawRegion, BackendFd) {
+    use std::os::fd::AsRawFd;
+    let mem = Box::leak(vec![0u8; bytes].into_boxed_slice());
+    let file = Box::leak(Box::new(std::fs::File::open("/dev/zero").unwrap()));
+    (
+        RawRegion {
+            ptr: mem.as_mut_ptr(),
+            len: mem.len(),
+        },
+        BackendFd(file.as_raw_fd()),
+    )
+}

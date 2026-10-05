@@ -88,6 +88,16 @@ impl NodeKey {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct ResId(u64);
 
+/// Internal equality-only lifetime token. Unlike reportable ResourceKey ordinals,
+/// this identity is never reused after a resource dies. Never emitted to a guest.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ResourceLifetime(ResId);
+impl core::fmt::Debug for ResourceLifetime {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("ResourceLifetime(..)")
+    }
+}
+
 /// ★★★ §12.41 — **the identity of a live RM resource in every derived plane**: its
 /// origin handle plus which *incarnation* of that handle value it is.
 ///
@@ -357,6 +367,8 @@ impl HandleRef {
 /// The Axis-A adapter decodes real wire structs into this.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct AllocFacts {
+    /// Checked SYSRAM registration, minted only by the explicit RAM-authority seam.
+    pub guest_memory_list: Option<crate::memory_list::RegisteredMemory>,
     /// Default-off diagnostic metadata, owned by this resource's ordinary graph lifetime.
     /// Only the explicitly gated object policy constructs it after checking live parents.
     pub software_runlist_probe: Option<SoftwareRunlistProbe>,
@@ -804,6 +816,8 @@ impl Resource {
 /// Which capacity-bounded table a hostile guest overflowed (see [`RmGraphError::CapacityExceeded`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Capacity {
+    /// The never-reused resource identity counter is exhausted.
+    ResourceIds,
     /// The live-handle table (`Alloc`/`Dup` flood) — bound [`MAX_LIVE_HANDLES`].
     Handles,
     /// Parked (unresolved) dup edges — bound [`MAX_PARKED`].
@@ -1540,7 +1554,9 @@ impl RmGraph {
                     incarnation: 0,
                     parent,
                     class,
-                    kind: if facts.software_runlist_probe.is_some() {
+                    kind: if facts.guest_memory_list.is_some() {
+                        ObjectKind::GuestMemoryList
+                    } else if facts.software_runlist_probe.is_some() {
                         ObjectKind::SoftwareRunlistProbe
                     } else {
                         self.classify(class)
@@ -1645,7 +1661,10 @@ impl RmGraph {
                             return Err(RmGraphError::UndeclaredClientKind(key));
                         };
                         let id = ResId(self.next_res_id);
-                        self.next_res_id += 1;
+                        self.next_res_id = self
+                            .next_res_id
+                            .checked_add(1)
+                            .ok_or(RmGraphError::CapacityExceeded(Capacity::ResourceIds))?;
                         // ★★★ §12.39 Part B — and the namespace's IDENTITY. A client root
                         // owns itself (RM: the `hClient` IS its root object's handle,
                         // `rs_server.c:625`); every other object is owned by the root its
@@ -2242,6 +2261,15 @@ impl RmGraph {
         self.resources.get(&id).map(|r| &r.node)
     }
 
+    /// Equality-only lifetime identity of the current resource (aliases resolve).
+    pub(crate) fn lifetime_of(&self, key: NodeKey) -> Option<ResourceLifetime> {
+        Some(ResourceLifetime(self.handles.get(&key)?.res()))
+    }
+
+    pub(crate) fn lifetime_is_live(&self, token: ResourceLifetime) -> bool {
+        self.resources.contains_key(&token.0)
+    }
+
     /// A live allocation, excluding aliases even when they reuse an old origin value.
     pub(crate) fn allocated_node(&self, key: NodeKey) -> Option<&RmNode> {
         let handle = self.handles.get(&key)?;
@@ -2333,5 +2361,44 @@ impl crate::rmrpc::Faulted for RmGraphError {
             }
             RmGraphError::CapacityExceeded(_) => FaultTag("RmGraphError::CapacityExceeded"),
         }
+    }
+}
+
+#[cfg(test)]
+mod memory_list_lifetime_tests {
+    use super::*;
+    #[test]
+    fn memory_list_resource_identity_exhaustion_refuses_without_insertion() {
+        let mut g = RmGraph::new(kf_chip::Family::Ampere);
+        g.next_res_id = u64::MAX - 1;
+        let root = |client| RmEvent::Alloc {
+            client: HClient(client),
+            parent: HObject(client),
+            handle: HObject(client),
+            class: ClassId(0x41),
+            facts: AllocFacts {
+                client_kind: Some(ClientKind::User { pid: client }),
+                ..Default::default()
+            },
+        };
+        g.apply(root(1)).unwrap();
+        let token = g.lifetime_of(NodeKey::new(HClient(1), HObject(1))).unwrap();
+        g.apply(root(1)).unwrap(); // exact retry consumes no identity
+        assert_eq!(
+            g.apply(root(2)),
+            Err(RmGraphError::CapacityExceeded(Capacity::ResourceIds))
+        );
+        assert_eq!(g.nodes().count(), 1);
+        g.apply(RmEvent::Free {
+            client: HClient(1),
+            handle: HObject(1),
+        })
+        .unwrap();
+        assert!(!g.lifetime_is_live(token));
+        assert_eq!(
+            g.apply(root(1)),
+            Err(RmGraphError::CapacityExceeded(Capacity::ResourceIds))
+        );
+        assert_eq!(g.nodes().count(), 0);
     }
 }
