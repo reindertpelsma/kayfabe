@@ -74,6 +74,19 @@ def main():
             spec = importlib.util.spec_from_file_location('vfio4070', helper)
             vfio = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(vfio)
+            write_sysfs = vfio.write_sysfs
+            def console_aware_write(path, value):
+                try:
+                    write_sysfs(path, value)
+                except FileNotFoundError:
+                    node = Path(path)
+                    # DRM may unregister this console while display services
+                    # stop. Its absence needs no unbind/rebind. All PCI writes
+                    # and any other error retain the helper's refusal behavior.
+                    if node.name != 'bind' or node.parent.parent != Path('/sys/class/vtconsole') or node.exists():
+                        raise
+                    print('VANISHED_VTCONSOLE', path, flush=True)
+            vfio.write_sysfs = console_aware_write
             before = vfio.inventory()
             vfio.require_profile(before['devices'], before['amd'])
             suffix = '' if a.no_mmio_trace else ',x-no-mmap=on'

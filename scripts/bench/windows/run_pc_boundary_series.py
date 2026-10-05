@@ -5,6 +5,7 @@
 Only SSH to the pinned Linux host; no credentials enter the guest. Unique run
 directories and per-run status records preserve interrupted/failed experiments.
 """
+import argparse
 import base64
 import datetime
 import json
@@ -47,10 +48,15 @@ def log(message):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--first-vfio', type=int, choices=range(1, 8), default=5)
+    parser.add_argument('--first-kayfabe', type=int, choices=range(1, 8), default=1)
+    args = parser.parse_args()
     ROOT.mkdir(parents=True, exist_ok=True, mode=0o700)
     script = (HERE/'boundary_status.ps1').read_text()
-    for arm, number in [('vfio', 4), ('kayfabe', 1), ('vfio', 5),
-                        ('kayfabe', 2), ('vfio', 6), ('kayfabe', 3)]:
+    series = [(arm, first+i) for i in range(3)
+              for arm, first in [('vfio', args.first_vfio), ('kayfabe', args.first_kayfabe)]]
+    for arm, number in series:
         name = f'boundary-{arm}-{number}'
         local = ROOT/name
         local.mkdir(mode=0o700)
