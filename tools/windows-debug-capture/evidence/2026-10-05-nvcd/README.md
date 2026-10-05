@@ -42,8 +42,9 @@ The compiler-derived descriptor closure decodes one `NvDebug.NvDump`, including
 `Dcl.DclMsg.324`, is unknown to the selected public schema and retained only as
 length/hash. There is no claim to understand every Windows-private field.
 
-Schema source: OGKM tag `580.65.06`, commit
-`8032cb60785ff04a49698fbe1fac8781bd37b0d6`. `nvcd-schema.c` compiles the actual
+Schema source: OGKM tag `580.65.06`, source commit
+`307159f2623d3bf45feb9177bd2da52ffbc5ddf9` (annotated tag object
+`8032cb60785ff04a49698fbe1fac8781bd37b0d6`). `nvcd-schema.c` compiles the actual
 `NVCD_HEADER`, `NVCD_RECORD`, `RmProtoBuf_RECORD`, `PRB_*` constants and generated
 `g_*_pb.c` descriptor objects. No regex or captured byte layout constructs the
 schema. Resulting `schema.json` SHA256:
