@@ -72,6 +72,11 @@ def u32(value, name):
     return value
 
 
+def u64(value, name):
+    require(type(value) is int and 0 <= value <= 0xffffffffffffffff, f'{name}: expected uint64')
+    return value
+
+
 def hexadecimal(value):
     return None if value is None else f'0x{value:08x}'
 
@@ -162,7 +167,13 @@ def parse_native(data, fmt):
             incomplete += not observed_complete
         # Current decoder does not decode allocations. Unknown remains unknown.
         entry = event(fn, direction, selector, kind, status, inner)
-        entry.update(missing_before=gap, prefix_unknown=prefix, params_complete=observed_complete)
+        generation, trigger = row.get('generation'), row.get('trigger')
+        require((generation is None) == (trigger is None), 'generation and trigger must occur together')
+        if generation is not None:
+            require(u64(generation, 'generation') > 0, 'generation must be positive')
+            require(type(trigger) is int and 1 <= trigger <= 4, 'invalid observer trigger')
+        entry.update(missing_before=gap, prefix_unknown=prefix, params_complete=observed_complete,
+                     generation=generation, trigger=trigger)
         events.append(entry)
         gaps += gap
         unknown += prefix
@@ -171,12 +182,22 @@ def parse_native(data, fmt):
     if export is not None:
         require(isinstance(export, dict), 'native text_export must be object')
         source = {key: export[key] for key in ('selection', 'omitted_records', 'source_bytes',
-                  'source_sha256', 'source_hash_verifiable_from_export') if key in export}
+                  'source_sha256', 'observations_sha256', 'source_hash_verifiable_from_export') if key in export}
         # Decoder-provided provenance only, not permission to treat selected captures as complete.
         require(len(canonical(source)) <= 4096, 'oversized export provenance')
+    stats = doc.get('driver_stats')
+    if stats is not None:
+        require(isinstance(stats, dict), 'driver_stats must be object')
+        allowed = ('triggers', 'bootstrap_attempts', 'attached_tables', 'invalid_bootstrap',
+                   'uninitialized_headers', 'invalid_headers', 'read_failures', 'unstable_snapshots',
+                   'mapping_changed', 'recorded', 'dropped', 'sequence_gaps', 'invalid_elements',
+                   'buffered_bytes')
+        stats = {key: (boolean(value, key) if key == 'limited' else u64(value, key))
+                 for key, value in stats.items() if key in allowed or key == 'limited'}
     return events, dict(observed_missing=gaps, prefix_unknown_records=unknown,
                         incomplete_control_records=incomplete, sampled=True,
-                        source_export=source,
+                        source_export=source, driver_stats=stats,
+                        attachment_note='Generations are observer attachments, not proven distinct boots. Repeated prefixes are retained. invalid_elements includes repeatedly inspected empty/stale slots, not submitted malformed calls.',
                         request_reply_pairing='not attempted',
                         note='Missing prefix, queue gaps and unobserved traffic remain unknown; retained records may predate collection.')
 
@@ -399,7 +420,7 @@ def build_report(manifest_path):
                 interpretation=[
                     'All counts, orders and words are observations of supplied files, not a completeness claim.',
                     'Native KGWT is sampled and partial, including retained history: an absent native call is never proved absent.',
-                    'Requests and replies are independent streams. No pairing uses handles, QPC, queue addresses or RPC sequence.',
+                    'Requests and physical status-queue observations are independent streams. The native direction named reply also includes unsolicited events. No pairing uses handles, QPC, queue addresses or RPC sequence.',
                     'Repeated stability does not imply semantic equivalence, causality, or correctness. Variable values are retained, not classified as noise.',
                     'Different VRAM sizes/topology and diagnostic flags are intentional possibilities; stable cross-arm differences are not automatically defects.',
                     'Manifest identity/milestone declarations are supplied assertions. File hashes authenticate report inputs, not the machine configuration.',

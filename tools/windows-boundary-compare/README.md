@@ -22,6 +22,38 @@ into reports. Each input file and the manifest have exact SHA256 hashes. Output 
 no wall-clock timestamp changes a report. Hashes verify the supplied bytes, not the truth of
 machine/driver identity declarations.
 
+For the early VFIO bootstrap observer, use [native_cohort.py](native_cohort.py) to preserve
+attachment generations, trigger counts and driver sampling statistics and separate source-defined
+asynchronous events from the physical status queue that the decoder names `reply`:
+
+```sh
+python3 tools/drivermatrix/dm.py probe --src /trusted/ogkm-580.65.06 \
+  --spec tools/windows-boundary-compare/source.spec --out /private/source-vocabulary
+python3 tools/windows-boundary-compare/native_cohort.py /private/cohort-manifest.json \
+  --compact --json /private/cohort.json --markdown /private/cohort.md
+```
+
+The normal manifest additionally needs `source: {"values":"/private/source-vocabulary/values.tsv",
+"version":"580.65.06","commit":"307159f2623d3bf45feb9177bd2da52ffbc5ddf9"}`. Pin and check the
+source checkout before compiling. [source.spec](source.spec) uses the existing compiler/DWARF
+mechanism for exact RPC numbers and preprocessor/compiler values for control names. Non-integer
+macros such as bit ranges appear in `missing.tsv`; they are not missing RPCs. Names are source
+associations, not a forwarding policy or a claim that every private command is publicly defined.
+
+The cohort helper additionally bounds the compared control vocabulary to 1024 IDs and each run to
+64 attachment generations; oversized evidence is refused, not truncated.
+
+Run the trusted [early-observer decoder](../vfio-gsp-observer/decode.py) first. This cohort utility
+does not reauthenticate raw framing from a decoded JSON assertion. Each attachment remains
+separate, including duplicated prefixes; an attachment is not proof of a distinct boot. Unknown
+event numbers remain unknown, and enum range markers do not become events. There is no request/reply
+pairing. Native controls outside Kayfabe's observed vocabulary are not presented as missing
+implementation work. `--compact` omits full per-run censuses while retaining their hashes, stream
+lengths, attachment data and all compared control counts/statuses. The native-repeat strata include
+QEMU executable hash and artifact revision, in addition to the ordinary identity fields; supplied
+metadata should include both when available. The older general comparator still presents aggregate
+physical `reply` observations; use the cohort utility for event and attachment separation.
+
 ## Manifest
 
 Start with [manifest.example.json](manifest.example.json), replace its placeholders, and add runs
