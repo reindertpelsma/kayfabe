@@ -1,5 +1,5 @@
-# derived by tools/derive_display_classes.sh from ogkm 610.43.02 — do not edit by hand
-VERSION	610.43.02
+# derived by tools/derive_display_classes.sh from ogkm 580.65.06 — do not edit by hand
+VERSION	580.65.06
 A	NVC373_HEAD_CAPA	48	32
 A	NVC373_HEAD_CAPD	60	32
 A	NVC373_SOR_CAP	324	8

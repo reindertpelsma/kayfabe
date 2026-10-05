@@ -1178,6 +1178,11 @@ mod tests {
             k2: 0,
             src_factor: 1,
             dst_factor: 0,
+            ilut_dma: 0,
+            ilut_offset: 0,
+            ilut_control: 0,
+            ilut_winim_hi: 0,
+            ilut_winim_lo: 0,
         }
     }
 

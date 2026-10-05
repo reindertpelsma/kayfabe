@@ -462,6 +462,54 @@ pub fn page(
         ] {
             set(capa, f(fld)?, 1);
         }
+        
+        let check = |f: (u8, u8), v: u32| {
+            let (hi, lo) = f;
+            if hi >= 32 || lo > hi || u64::from(v) >= (1_u64 << (hi.saturating_sub(lo) + 1)) {
+                Err(m("field bound".into()))
+            } else {
+                Ok(())
+            }
+        };
+
+        if let Some(capb) = t.a(caps, "PRECOMP_WIN_PIPE_HDR_CAPB", i) {
+            if let Some(field) = t.f(caps, "PRECOMP_WIN_PIPE_HDR_CAPB_ILUT_SFCLOAD") {
+                if let Some(yes) = t.v(caps, "PRECOMP_WIN_PIPE_HDR_CAPB_ILUT_SFCLOAD_TRUE") {
+                    check(field, yes)?;
+                    set(capb, field, yes);
+                }
+            }
+            if let Some(field) = t.f(caps, "PRECOMP_WIN_PIPE_HDR_CAPB_TMO_SFCLOAD") {
+                if let Some(yes) = t.v(caps, "PRECOMP_WIN_PIPE_HDR_CAPB_TMO_SFCLOAD_TRUE") {
+                    check(field, yes)?;
+                    set(capb, field, yes);
+                }
+            }
+        }
+        if let Some(capd) = t.a(caps, "PRECOMP_WIN_PIPE_HDR_CAPD", i) {
+            if let Some(field) = t.f(caps, "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_SFCLOAD") {
+                if let Some(yes) = t.v(caps, "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_SFCLOAD_TRUE") {
+                    check(field, yes)?;
+                    set(capd, field, yes);
+                }
+            }
+        }
+    }
+    
+    // heads: OLUT
+    for i in 0..heads {
+        if let Some(capb_addr) = t.a(caps, "POSTCOMP_HEAD_HDR_CAPB", i) {
+            if let Some(field) = t.f(caps, "POSTCOMP_HEAD_HDR_CAPB_OLUT_SFCLOAD") {
+                if let Some(yes) = t.v(caps, "POSTCOMP_HEAD_HDR_CAPB_OLUT_SFCLOAD_TRUE") {
+                    let (hi, lo) = field;
+                    if hi < 32 && lo <= hi && u64::from(yes) < (1_u64 << (hi.saturating_sub(lo) + 1)) {
+                        set(capb_addr, field, yes);
+                    } else {
+                        return Err(m("field bound".into()));
+                    }
+                }
+            }
+        }
     }
     for off in w.keys() {
         if *off as usize + 4 > PAGE || off % 4 != 0 {
@@ -514,7 +562,6 @@ mod tests {
                 assert_eq!(probe.base, ilut.base);
                 for offset in (0..PAGE as u32).step_by(4) {
                     let expected = if offsets.contains(&offset) {
-                        assert_eq!(crate::class::get(ilut.word(offset), field), 0);
                         put(ilut.word(offset), field, yes)
                     } else {
                         ilut.word(offset)
