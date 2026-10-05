@@ -15,6 +15,35 @@ The static path strongly identifies a zero-sized TMO buffer because Kayfabe
 advertises TMO absent. The earlier refused audio-codec allocation is explicitly
 optional. Scheduling control `0x20801111` is not the root identified by this chain.
 
+## Bounded L follow-up: the earlier helper now passes
+
+**2026-10-05:** Experiment L, product`b431aeaf`, advertises the diagnostic TMO
+capability while refusing **all display-channel methods before execution**. It
+still reports Code 43, no channels and zero display methods. Its 365 RPC records
+differ from J's 363 only by two additional`0x50700117` cleanup calls. This is
+construction progress, not TMO operation or rendering support.
+
+The new journal assertion 35 begins`16e97f4 → 16b4f2a → 1615220 → 1614aed →
+1959907 → 1965547`. At`16e9675`, the driver called constructor`16f03c0` for the
+current display-window descriptor. At`16e9689` it tests the constructor's success
+byte at input+`0xa8`; zero branches to`16e97ef`, whose assertion return address
+is`16e97f4`, then returns false through the already documented fatal chain.
+
+This block is reachable only after **all three earlier calls to`169d3f0`
+succeeded**, including J's failing second/TMO descriptor at`owner+6238`.
+The changed leaf therefore confirms that the previous allocation helper passed
+under this diagnostic. It does not prove that the advertised capability is safe
+for normal use.
+
+Constructor`16f03c0` clears the success byte at`16f0484`. Its initial checks
+require nonzero DWORDs at input+0 and+4, input+`0x10` at least
+`input[0]*8+0x28`, and input+`0x14` between 1 and 8. It also validates the input
+buffer-count/flag/pointer combinations, allocates CPU storage and initializes it.
+Only its success path at`16f05e9` sets input+`0xa8` to1. The caller's new assertion
+alone does **not** reveal which of these earlier checks or allocation failed.
+No live local values were recovered, and no further condition is inferred in
+this bounded follow-up. The next investigation starts at this constructor.
+
 ## Pinned input and reproduction
 
 The inspected `nvlddmkm.sys` SHA256 is
@@ -25,7 +54,7 @@ loaded addresses, private journal bytes and guest memory remain private.
 
 [The inspection script](../inspect-startdevice-j.py) verifies that exact hash,
 reads the PE image base, and optionally asks trusted local `objdump` to disassemble
-16 fixed ranges of at most 256 bytes each. It never executes the NVIDIA driver:
+20 fixed ranges of at most 256 bytes each. It never executes the NVIDIA driver:
 
 ```sh
 python3 tools/windows-debug-capture/inspect-startdevice-j.py \
