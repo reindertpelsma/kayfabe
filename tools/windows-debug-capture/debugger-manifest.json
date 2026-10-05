@@ -1,0 +1,163 @@
+[
+  {
+    "id": "fil794fdb4a4e8ce6a65f13620408aaae3f",
+    "path": "x64/dbgcore.dll",
+    "cab": "e8bc712abeffd7c9711ee3f55d4aa99b.cab",
+    "size": 309704,
+    "sha256": "588270938328d8d0da916e807212812603d1e7a2582c1907be59cf6aaaf9b293"
+  },
+  {
+    "id": "filfb53ea2a0e8cd4ed3cecf59eb0ad62c5",
+    "path": "x64/dbghelp.dll",
+    "cab": "e8bc712abeffd7c9711ee3f55d4aa99b.cab",
+    "size": 735728,
+    "sha256": "f1f6998a4095cb48217ff975cbb9161be2bc8297f5e4f3a15818c2a9fcaef3be"
+  },
+  {
+    "id": "fil9a9901028874dae505e5d822594a32d6",
+    "path": "x64/msdia140.dll",
+    "cab": "e8bc712abeffd7c9711ee3f55d4aa99b.cab",
+    "size": 2293704,
+    "sha256": "24b92917b0aff26db5cf328dc3f340a98901ed46382aa470314ef45bf6ea35d3"
+  },
+  {
+    "id": "filf8d927c644b4f94753cd743319e58f07",
+    "path": "x64/symsrv.dll",
+    "cab": "e8bc712abeffd7c9711ee3f55d4aa99b.cab",
+    "size": 1845704,
+    "sha256": "cc7578d281098ccff8d94c17732f8e02d3484c9e46dbee10d3292a7931ff0e90"
+  },
+  {
+    "id": "fil407262edb8ff8c2a5e8682e8ad84c409",
+    "path": "x64/api-ms-win-eventing-provider-l1-1-0.dll",
+    "cab": "4ac48dbdddbc8ce04721f519b9cf1698.cab",
+    "size": 23024,
+    "sha256": "26a5491bfd91cf88f35109e3b19140f9bfb128d69ea4e71a0d0e8a2b55746569"
+  },
+  {
+    "id": "fil536bc1599dc24e68753c13aab3f0b759",
+    "path": "x64/api-ms-win-core-errorhandling-l1-1-1.dll",
+    "cab": "4ac48dbdddbc8ce04721f519b9cf1698.cab",
+    "size": 22984,
+    "sha256": "18478788ab3e29e518af7bc09fec7c10c2e9af2cc006a316f792190418af6221"
+  },
+  {
+    "id": "filbe62e60035635a5b92e6ad0b491c839a",
+    "path": "x64/api-ms-win-core-sysinfo-l1-2-0.dll",
+    "cab": "4ac48dbdddbc8ce04721f519b9cf1698.cab",
+    "size": 22984,
+    "sha256": "79926f1f142fad456effb91163b873387f51f4f7005dd8eec39870a5ae141e24"
+  },
+  {
+    "id": "fil86519e3729af1a91aa6436d08d2fee11",
+    "path": "x64/api-ms-win-core-com-l1-1-0.dll",
+    "cab": "4ac48dbdddbc8ce04721f519b9cf1698.cab",
+    "size": 27120,
+    "sha256": "c71d5e44e8b2c61244c8f87cdc6a5b7b42212b2ea678c12ea2ac156382578e8c"
+  },
+  {
+    "id": "fil50e45ae7343b73937f8837dcec2de02d",
+    "path": "x64/dbgeng.dll",
+    "cab": "4ac48dbdddbc8ce04721f519b9cf1698.cab",
+    "size": 10439112,
+    "sha256": "8a28bc42c8fed644ce760501dfde39ddae793d91fd18f467ad8cfb10cb7c3b2b"
+  },
+  {
+    "id": "fil53b434da7d1e8fc3b17882dc73c7399f",
+    "path": "x64/DbgModel.dll",
+    "cab": "4ac48dbdddbc8ce04721f519b9cf1698.cab",
+    "size": 1194440,
+    "sha256": "ae20d5b5b6bf0840de1449a96f2393f3f0c80257a3d4a53a067290ae6b1aafd4"
+  },
+  {
+    "id": "filc1ae4104e56d38988d57593300ce8d32",
+    "path": "x64/cdb.exe",
+    "cab": "34ee98a7c9420178c55f176f75c3fe10.cab",
+    "size": 178632,
+    "sha256": "506d1fd7ad306f6f53d8d157375a03a8368446923def9457cdfb2e3214054376"
+  },
+  {
+    "id": "fil8c2f72fdf781e1004fc7775d0ca64db7",
+    "path": "x64/kd.exe",
+    "cab": "34ee98a7c9420178c55f176f75c3fe10.cab",
+    "size": 207304,
+    "sha256": "30bb44fe1c3911bf5e43cf685d931097cbaa72bb2ff272eae9b0e016ee5c2ac9"
+  },
+  {
+    "id": "fil4b7589e1402cc79ada3877595e92a9e7",
+    "path": "x64/NOTICE.txt",
+    "cab": "34ee98a7c9420178c55f176f75c3fe10.cab",
+    "size": 100035,
+    "sha256": "4620e9359aeda17d33e2cd76111183741b366a45f66ee61f5e4580cca23cb586"
+  },
+  {
+    "id": "fil337bae8d72e843656337b840f5164edf",
+    "path": "x64/symsrv.yes",
+    "cab": "34ee98a7c9420178c55f176f75c3fe10.cab",
+    "size": 1,
+    "sha256": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068"
+  },
+  {
+    "id": "fil10f561642786519be2830d413cdd8d4c",
+    "path": "x64/triage/pooltag.txt",
+    "cab": "e10f9740446a96314a1731aa7cb4286a.cab",
+    "size": 264859,
+    "sha256": "2037ec8b0d72db09c67015e37248c20a8420b271cf724fe8d5d01a24e0d4c3fa"
+  },
+  {
+    "id": "file958f037b37e02f65daa3543785726bb",
+    "path": "x64/winext/ext.dll",
+    "cab": "e10f9740446a96314a1731aa7cb4286a.cab",
+    "size": 6907376,
+    "sha256": "3937821d2b6c7b8f42fa968691efea00435f8967787f1840aed262cbf3d7e0a8"
+  },
+  {
+    "id": "filfdc3ff8579fe1e8f4b4bf0b7cd337dfd",
+    "path": "x64/triage/triage.ini",
+    "cab": "e10f9740446a96314a1731aa7cb4286a.cab",
+    "size": 2110,
+    "sha256": "52d4297b3a75a611af8567eda29979c9d0fae48ce5e91c4280d37ba203e3a947"
+  },
+  {
+    "id": "filf35f33fa802b49c393539221c8b9a061",
+    "path": "x64/winxp/wow64exts.dll",
+    "cab": "0253f7df0974f9d7169b410d812a5385.cab",
+    "size": 63944,
+    "sha256": "e519a8ce5081ddae7372b45b9d1b806413af8fe89fa11e39b1acee10fc689a3c"
+  },
+  {
+    "id": "filb465d899f62d35863a9506370fe6e1a4",
+    "path": "x64/winxp/kdexts.dll",
+    "cab": "0253f7df0974f9d7169b410d812a5385.cab",
+    "size": 2922952,
+    "sha256": "db454df22369cbf49ff1c5bbe0085eae33d56800bf893666461c4fa9247acb7a"
+  },
+  {
+    "id": "filf17d06a3acb284a578be499759fb776b",
+    "path": "x64/winext/DbgEngCoreDMExt.dll",
+    "cab": "0253f7df0974f9d7169b410d812a5385.cab",
+    "size": 289264,
+    "sha256": "7ea06797b8980f4b7b4d30b534a6cda94d6dfc66595147688147b77bc9d7fb55"
+  },
+  {
+    "id": "fila93327ea952682ec905d7a372155bd50",
+    "path": "x64/winxp/exts.dll",
+    "cab": "0253f7df0974f9d7169b410d812a5385.cab",
+    "size": 657864,
+    "sha256": "901b3a2023766e4dc3dbed3681b4c9ee864a7b141b07e22ff17213188abc1f7a"
+  },
+  {
+    "id": "filc53a8a2e82eb926403c6b1eafc7889c6",
+    "path": "x64/winext/kext.dll",
+    "cab": "0253f7df0974f9d7169b410d812a5385.cab",
+    "size": 235976,
+    "sha256": "1d8bdd5f78de7d868c247fd354b90d7cbd8f7b99d691b5edc2ce075f2f49b7f8"
+  },
+  {
+    "id": "fil023bc7024d793e07507df07785edc787",
+    "path": "x64/winext/Microsoft.Diagnostics.Analysis.Utilities.dll",
+    "cab": "e10f9740446a96314a1731aa7cb4286a.cab",
+    "size": 2386416,
+    "sha256": "ed9c98ad8e2e16a3178f8828762040fbdc020b72adafaaa711bee8e7500aee91"
+  }
+]
