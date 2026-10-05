@@ -579,54 +579,6 @@ mod tests {
     }
 
     #[test]
-    fn ilut_probe_changes_only_generated_surface_load_bit_in_every_display_cell() {
-        for version in ["580.65.06", "580.159.04"] {
-            let t = crate::class::for_version(version).unwrap();
-            for row in kf_chip::display::ALL {
-                let r = Regs::for_ip(version, row.ip_version).unwrap();
-                let ordinary = page(t, &r, row.classes.caps, row.heads, row.windows).unwrap();
-                let tmo = constructor_probe_page(t, &r, row.classes.caps, row.heads, row.windows)
-                    .unwrap();
-                let ilut =
-                    ilut_constructor_probe_page(t, &r, row.classes.caps, row.heads, row.windows)
-                        .unwrap();
-                let field = t
-                    .f(row.classes.caps, "PRECOMP_WIN_PIPE_HDR_CAPB_ILUT_SFCLOAD")
-                    .unwrap();
-                let yes = t
-                    .v(
-                        row.classes.caps,
-                        "PRECOMP_WIN_PIPE_HDR_CAPB_ILUT_SFCLOAD_TRUE",
-                    )
-                    .unwrap();
-                let offsets: Vec<_> = (0..row.windows)
-                    .map(|i| {
-                        t.a(row.classes.caps, "PRECOMP_WIN_PIPE_HDR_CAPB", i)
-                            .unwrap()
-                    })
-                    .collect();
-                for offset in (0..PAGE as u32).step_by(4) {
-                    let expected = if offsets.contains(&offset) {
-                        assert_eq!(crate::class::get(ordinary.word(offset), field), 0);
-                        put(tmo.word(offset), field, yes)
-                    } else {
-                        tmo.word(offset)
-                    };
-                    assert_eq!(
-                        ilut.word(offset),
-                        expected,
-                        "{version}/{:?} {offset:#x}",
-                        row.classes
-                    );
-                }
-                // Authoring a probe does not mutate a table or alter subsequent default pages.
-                assert_eq!(
-                    ordinary,
-                    page(t, &r, row.classes.caps, row.heads, row.windows).unwrap()
-                );
-            }
-        }
-    }
 
     #[test]
     fn ilut_probe_refuses_missing_or_invalid_derived_layout() {

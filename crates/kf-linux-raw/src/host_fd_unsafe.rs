@@ -815,7 +815,7 @@ mod tests {
                 .sealed_against_shrinking()
         );
         assert!(!Carrier::DmaBuf.sealed_against_shrinking());
-        let dir = std::env::temp_dir().join(format!("kfu-carrier-{}", std::process::id()));
+        let dir = std::env::current_dir().unwrap().join(format!("kfu-carrier-{}", std::process::id()));
         std::fs::write(&dir, b"not a frame").expect("a regular file");
         let file = std::fs::File::open(&dir).expect("open");
         assert_eq!(
