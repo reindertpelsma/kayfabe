@@ -1,0 +1,12 @@
+OBSERVER_CLEANUP_COMPLETE
+Traceback (most recent call last):
+  File "/var/tmp/trace-linux-memory-registration.py", line 99, in <module>
+    main()
+    ~~~~^^
+  File "/var/tmp/trace-linux-memory-registration.py", line 51, in main
+    trace_command(definitions, expression.format(group=group) + "\n")
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/tmp/trace-linux-memory-registration.py", line 23, in trace_command
+    if os.write(fd, data) != len(data):
+       ~~~~~~~~^^^^^^^^^^
+OSError: [Errno 22] Invalid argument

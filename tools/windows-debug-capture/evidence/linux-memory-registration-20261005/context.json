@@ -1,0 +1,20 @@
+{
+  "probe_revision": "938e8c2ad2ab266e1ebb439714f863f58d17e2e3",
+  "header_tag": "595.91.07",
+  "header_commit": "9f087a6d4e86d85acc0ce1d354d6276fe5047b29",
+  "source_sha256": "516b80ae6ea65de6a2bbaa435c08aab6f1f7fc24fcca3b42405c0454f98d4889",
+  "built_probe_sha256": "ad179e65565eb312fd1a7952633fd05bc4606e2d759b244b31dfc7b600586ce9",
+  "gpu": "RTX 4070 AD104",
+  "host_driver": "595.91.07 open",
+  "native": true,
+  "uid": 65534,
+  "effective_uid": 65534,
+  "all_capability_sets_zero": true,
+  "no_new_privs": true,
+  "allocation_bytes": 28672,
+  "plain_status": 0,
+  "registered_status": 0,
+  "all_frees_status": 0,
+  "rpc_dynamically_traced": false,
+  "probe_has_no_gpu_work_or_external_physical_addresses": true
+}
