@@ -52,6 +52,7 @@ def main():
     parser.add_argument('--first-vfio', type=int, choices=range(1, 98), default=5)
     parser.add_argument('--first-kayfabe', type=int, choices=range(1, 98), default=1)
     parser.add_argument('--pairs', type=int, choices=range(1, 4), default=3)
+    parser.add_argument('--only-arm', choices=('vfio', 'kayfabe'))
     parser.add_argument('--product-revision')
     parser.add_argument('--qemu-revision')
     parser.add_argument('--gsp-observer', action='store_true')
@@ -60,7 +61,8 @@ def main():
     ROOT.mkdir(parents=True, exist_ok=True, mode=0o700)
     script = (HERE/'boundary_status.ps1').read_text()
     series = [(arm, first+i) for i in range(args.pairs)
-              for arm, first in [('vfio', args.first_vfio), ('kayfabe', args.first_kayfabe)]]
+              for arm, first in [('vfio', args.first_vfio), ('kayfabe', args.first_kayfabe)]
+              if args.only_arm is None or args.only_arm == arm]
     for arm, number in series:
         name = f'boundary-{arm}-{number}'
         local = ROOT/name
