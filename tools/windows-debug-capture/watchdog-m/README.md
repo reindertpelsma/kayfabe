@@ -147,3 +147,30 @@ introduced by `4f27aadbdaca65b85f088c3fe0e17e5cd976f469`. To validate the recipe
 first use, parse it with PowerShell's `System.Management.Automation.Language.Parser`
 and require zero errors. The transfer and collection orchestration has no Windows
 runtime claim yet; the underlying pinned KD wrapper has the earlier L result.
+
+## One bounded transport recovery check
+
+The first M attempt encountered the existing QGA helper's 30-second socket read
+timeout while polling the analysis process; later plain `guest-sync` pings also
+failed. This is a transport failure, not proof that KD exited, reached its time
+limit, or caused a guest hang. Preserve the overlay and private dump before the
+benchmark's outer deadline. No automatic rerun is justified by a lost response.
+
+`qga-resync-ping.py` copies the previously tested Vast Windows `rpc()` function
+unchanged and exposes only a framing reset followed by `guest-ping`. Stop other
+QGA clients first: older clients do not honor its per-socket lock. Invoke once on
+the host with the already verified socket path:
+
+```sh
+timeout 12 python3 qga-resync-ping.py /RUN/qga.sock --timeout 8
+```
+
+The total eight-second budget includes lock acquisition, connect, synchronization
+and ping. Responses are bounded to 8 MiB; a `0xff`-prefixed `guest-sync-delimited`
+discards stale framing before the read-only ping. No guest command is executed.
+A local socket test verified recovery past junk/stale responses and verified
+that the only requests are the sync and ping. This does not establish recovery
+of the M guest; record the actual result separately. If transport remains lost,
+the owner can stop the VM, preserve its overlay/backing chain, and extract the
+private dump with a read-only filesystem reader. Do not mount the writable live
+guest disk from a second host process or repair the original filesystem.
