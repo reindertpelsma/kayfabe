@@ -64,7 +64,7 @@
 #include "system/kvm.h"
 #include "qemu/event_notifier.h"
 #include "qemu/main-loop.h"
-#include "block/aio.h"
+#include "qemu/aio.h"
 #include "qemu/thread.h"
 #include "ui/console.h"
 #include "ui/input.h"
