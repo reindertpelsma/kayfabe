@@ -63,12 +63,12 @@ def main():
         work = REMOTE+'/'+name
         unit = 'kf-'+name
         log('START '+name)
-        remote(['systemd-run', '--unit='+unit, '--property=RuntimeMaxSec=900',
-                '--property=KillMode=mixed', '--property=TimeoutStopSec=180',
-                '/usr/bin/python3', '-u', REMOTE+'/boundary-tools/pc_boundary_experiment.py',
-                '--arm', arm, '--run', number, '--no-mmio-trace'])
         started = time.monotonic()
         try:
+            remote(['systemd-run', '--unit='+unit, '--property=RuntimeMaxSec=900',
+                    '--property=KillMode=mixed', '--property=TimeoutStopSec=180',
+                    '/usr/bin/python3', '-u', REMOTE+'/boundary-tools/pc_boundary_experiment.py',
+                    '--arm', arm, '--run', number, '--no-mmio-trace'])
             deadline = time.monotonic()+300
             while True:
                 ready = remote(['python3', REMOTE+'/boundary-tools/qmp.py', work+'/qga.sock',

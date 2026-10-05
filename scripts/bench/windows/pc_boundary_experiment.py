@@ -31,6 +31,19 @@ def digest(path):
         return hashlib.file_digest(f, 'sha256').hexdigest()
 
 
+def stop_child(child):
+    """Do not permit PCI restoration until QEMU is positively reaped."""
+    if child is None or child.poll() is not None:
+        return
+    child.terminate()
+    try:
+        child.wait(timeout=90)
+    except subprocess.TimeoutExpired:
+        child.kill()
+        # Failure here deliberately prevents restore; never rebind a live VM.
+        child.wait(timeout=30)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--arm', choices=('vfio', 'kayfabe'), required=True)
@@ -130,8 +143,9 @@ def main():
                 vfio.mark(journal, state, 'windows_running')
             deadline = time.monotonic()+a.max_seconds
             while child.poll() is None:
-                trace = work/'mmio.log'
-                if time.monotonic() >= deadline or (trace.exists() and trace.stat().st_size > 256*1024**2):
+                oversized = any(path.exists() and path.stat().st_size > 256*1024**2
+                                for path in (work/'mmio.log', work/'qemu.log', work/'serial.log'))
+                if time.monotonic() >= deadline or oversized:
                     raise RuntimeError('Diagnostic runtime or trace-size bound reached')
                 time.sleep(1)
             if child.returncode:
@@ -141,11 +155,13 @@ def main():
             # unwinds. A second signal must not interrupt ownership restoration.
             for sig in (signal.SIGTERM, signal.SIGHUP):
                 signal.signal(sig, signal.SIG_IGN)
-            if child and child.poll() is None:
-                # The guest disk is a disposable overlay. Never rebind PCI while
-                # QEMU is alive. SIGTERM asks QEMU to perform its normal teardown.
-                child.terminate()
-                child.wait(timeout=120)
+            try:
+                stop_child(child)
+            except Exception as exc:
+                (work/'manual-recovery-required.txt').write_text(
+                    'QEMU exit unconfirmed; PCI restoration intentionally refused.\n'+repr(exc)+'\n')
+                print('BOUNDARY_EXIT_UNCONFIRMED', name, flush=True)
+                raise
             if vfio:
                 vfio.restore(journal, state)
             print('BOUNDARY_EXIT', name, None if child is None else child.returncode, flush=True)
