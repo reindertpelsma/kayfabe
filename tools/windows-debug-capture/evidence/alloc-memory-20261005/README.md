@@ -132,6 +132,58 @@ producer still expands the array. Compared with 580.65.06, the inspected 595,
 and calculate aligned actual size; identical wire offsets do not erase these
 implementation changes.
 
+## Why format zero is a pitch-only subset
+
+This is a hardware PTE kind: the RPC producer reads `memdescGetPteKind`, and
+the receiver calls `memdescSetPteKind` with format. It is not a Windows-specific
+format number. The public
+[`memmgrGetPteKindPitch_GM107`](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/nvidia/src/kernel/gpu/mem_mgr/arch/maxwell/mem_mgr_gm107.c#L1131)
+explicitly returns the kind of pitch-linear surfaces using the published
+`NV_MMU_PTE_KIND_PITCH` definition. The compiler probe now measures that constant
+from the exact header included by this HAL, separately at every recorded tag;
+it is zero in all 13 cells.
+
+Although the HAL function retains a GM107 suffix, the
+[generated dispatch](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/nvidia/generated/g_mem_mgr_nvoc.c#L855)
+selects it for the supported discrete/datacenter families, including Turing,
+Ampere, Ada, Hopper and Blackwell; its exception is Tegra. The published
+TU102, GH100, GB202 and GB20B kind headers independently name the same pitch
+value. `pitch_header_facts` compiles every published dev_mmu.h separately at
+each tag and records whether it declares this symbol and its value; absent
+headers or definitions do not prove a family is unsupported. This is shared
+source behavior, not a table inferred from individual GPU captures.
+Ampere/Ada need not have a separate duplicate pitch definition.
+
+That helper's dispatch itself must not be projected across releases:
+565.57.01's generated helper asserts on GH100/GB100/GB102, while 570.86.15
+directly aliases the GM107 implementation. The 580 dispatch cited above has
+the Tegra exception. The fn4 producer/consumer does not call the pitch-kind
+selection helper; it gets/sets the supplied hardware kind, and the published
+GH100 header explicitly defines pitch zero even at 565. These observations
+justify the restricted encoding, not a claim that every format-selection
+helper or surface-allocation path behaves identically across families.
+
+Do not label zero the generic/default kind. `RM_DEFAULT_PTE_KIND` is a separate
+software sentinel (`0x100`); the
+[TU102 conversion](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/nvidia/src/kernel/gpu/mem_mgr/arch/turing/mem_mgr_tu102.c#L524)
+maps that sentinel to GENERIC_MEMORY, while preserving other kinds. Also do
+not substitute the unrelated `NVOS03_FLAGS_PTE_KIND_PITCH` flag enum. The
+[system-memory constructor](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/nvidia/src/kernel/mem_mgr/system_mem.c#L593)
+passes the allocation's requested format into the descriptor, so the source
+does not prove that every legal SYSRAM registration uses pitch. Accepting only
+the compiler-derived pitch value is an explicit restricted contract; other
+kinds require their own layout/access semantics.
+
+The 13 ABI measurements contain nine positive compressed-contiguous source
+rows. That is sufficient for a diagnostic which admits exactly those rows and
+refuses unknown cells; it is not full coverage of Kayfabe's driver matrix.
+Extending to the remaining measured driver tags requires both compilation and
+behavioral review, because the 560/565 transition demonstrates why matching
+headers alone are insufficient. No unsupported cell may inherit the nearest
+version's behavior. The registration is wholly guest-side and adds no host RM
+verb or die-specific constant, so it adds no dependence on the host driver's
+version; native hardware validation is still narrower than source support.
+
 ## Flags and native constructor
 
 The observed `0x48002000` decodes through the compiled public definitions as

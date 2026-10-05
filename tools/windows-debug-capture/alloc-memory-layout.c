@@ -21,6 +21,8 @@
 #include "gpu/mem_mgr/virt_mem_allocator_common.h"
 #endif
 #include "class/cl84a0.h"
+/* Common pitch-kind HAL uses this published register definition. */
+#include "published/maxwell/gm107/dev_mmu.h"
 
 #define VALUE(name) printf("\"%s\":%llu,", #name, (unsigned long long)(name))
 #define OFFSET(type, field) printf("\"%s\":%zu,", #field, offsetof(type, field))
@@ -56,6 +58,7 @@ int main(void)
     VALUE(NV_VGPU_PTEDESC_IDR_SINGLE); VALUE(NV_VGPU_PTEDESC_IDR_DOUBLE);
     VALUE(NV_VGPU_PTEDESC_IDR_TRIPLE); VALUE(NV_VGPU_MSG_FUNCTION_ALLOC_MEMORY);
     VALUE(NV01_MEMORY_LIST_SYSTEM); VALUE(NV01_MEMORY_LIST_FBMEM);
+    VALUE(NV_MMU_PTE_KIND_PITCH);
     VALUE(NVOS02_FLAGS_PHYSICALITY_CONTIGUOUS);
     VALUE(NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS);
     VALUE(NVOS02_FLAGS_LOCATION_PCI); VALUE(NVOS02_FLAGS_LOCATION_VIDMEM);
