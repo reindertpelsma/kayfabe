@@ -11,8 +11,9 @@ the first; its position alone does not establish causality. Windows remains
 Code 43, with no GPU channel births. See [probe-h](probe-h/) and the comparison
 with E in [rpc-difference.txt](probe-h/rpc-difference.txt).
 
-I at `302f6c9a` adds bounded observation only and reproduces H's 213 RPC lines
-exactly. The refused function-4 request names `NV01_MEMORY_LIST_SYSTEM` (`0x81`),
+I at `302f6c9a` adds bounded observation only. It has the same 213 RPC messages
+and results as H, with one earlier display-query ordering difference, documented
+in [rpc-difference.txt](probe-i/rpc-difference.txt). The refused function-4 request names `NV01_MEMORY_LIST_SYSTEM` (`0x81`),
 length `0x7000` (28 KiB), pageCount 1, flags `0x48002000`, zero pteAdjust/format.
 No PTE/address tail is captured. Public OGKM `memRegisterWithGsp_IMPL` explains
 this as registration of an existing memory descriptor with GSP; the class's

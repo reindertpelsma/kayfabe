@@ -34,5 +34,7 @@
     "00000000",
     "00000000",
     "00000000"
-  ]
+  ],
+  "rpc_multiset_equal_to_H": true,
+  "rpc_difference": "One earlier display-query position changed; see rpc-difference.txt."
 }

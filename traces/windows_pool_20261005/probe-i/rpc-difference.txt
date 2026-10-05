@@ -1,0 +1,14 @@
+--- H
++++ I
+@@ -172,10 +172,10 @@
+ kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730285 client=0xc1d00002 object=0xff0a0000 result=none
+ kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730108 client=0xc1d00002 object=0xff0a0000 result=0x0
+ kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073011d client=0xc1d00002 object=0xff0a0000 result=none
++kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010b client=0xc1d00002 object=0xff0a0000 result=0x0
+ kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730245 client=0xc1d00002 object=0xff0a0000 result=0x0
+ kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010b client=0xc1d00002 object=0xff0a0000 result=0x0
+ kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073012c client=0xc1d00002 object=0xff0a0000 result=none
+-kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010b client=0xc1d00002 object=0xff0a0000 result=0x0
+ kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010b client=0xc1d00002 object=0xff0a0000 result=0x0
+ kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010b client=0xc1d00002 object=0xff0a0000 result=0x0
+ kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730109 client=0xc1d00002 object=0xff0a0000 result=none
