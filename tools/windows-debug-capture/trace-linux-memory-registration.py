@@ -16,7 +16,7 @@ import sys
 
 def trace_command(path, command):
     # A tracefs command endpoint, not a regular appendable file. Neither truncate
-    # existing probes nor request O_APPEND (rejected by some tracefs versions).
+    # existing probes nor depend on regular-file append semantics.
     fd = os.open(path, os.O_WRONLY)
     try:
         data = command.encode()

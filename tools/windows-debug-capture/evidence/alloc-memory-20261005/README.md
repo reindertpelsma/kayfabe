@@ -19,8 +19,12 @@ The principal behavioral oracle is public OGKM 580.65.06, commit
 The Windows observation selects the investigation; it supplies no product
 constant or GPU-die table. The public sender and shared memory-list constructor
 are available; this audit has not found or claimed the complete GSP-side RPC
-dispatcher that translates this wire record to allocation parameters. It also
-does not establish unprivileged host-callability or runtime Linux coverage.
+dispatcher that translates this wire record to allocation parameters. This source
+audit alone establishes neither unprivileged callability nor runtime coverage.
+The subsequent [native Linux test](../linux-memory-registration-20261005/README.md)
+successfully requests registration through an unprivileged SYSTEM-memory
+allocation on 595.91.07. That is distinct from privileged direct MEMORY_LIST
+allocation, and its exact RPC bytes were not captured.
 
 [compiler-layouts.json](compiler-layouts.json) records 13 explicit public tags,
 their dereferenced commits, source Git blob IDs, compiler identity, measured
