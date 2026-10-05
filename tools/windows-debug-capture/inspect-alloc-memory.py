@@ -26,6 +26,29 @@ def git(repo, *args):
     return subprocess.check_output(["git", "-C", str(repo), *args])
 
 
+def measure_pitch_headers(root, paths):
+    """Compile published header definitions; do not infer absent-family support."""
+    rows = {}
+    for header in sorted(p for p in paths if "/swref/published/" in p and p.endswith("/dev_mmu.h")):
+        probe = root / "kind-probe.c"
+        probe.write_text('#include <stdio.h>\n#include ' + json.dumps(str(root / header)) + '''
+#ifdef NV_MMU_PTE_KIND_PITCH
+int main(void) { printf("%u\\n", (unsigned)NV_MMU_PTE_KIND_PITCH); return 0; }
+#else
+int main(void) { puts("NOT_DEFINED"); return 0; }
+#endif
+''')
+        result = subprocess.run(["cc", "-m64", "-std=gnu11", str(probe),
+                                 "-o", str(root / "kind-probe")], capture_output=True, text=True)
+        if result.returncode:
+            rows[header] = {"status": "MISSING", "diagnostics": result.stderr.replace(str(root), "<source>")}
+            continue
+        value = subprocess.check_output([str(root / "kind-probe")], text=True).strip()
+        rows[header] = ({"status": "NOT_DEFINED"} if value == "NOT_DEFINED" else
+                        {"status": "MEASURED", "NV_MMU_PTE_KIND_PITCH": int(value)})
+    return rows
+
+
 def measure(repo, tag):
     commit = git(repo, "rev-parse", tag + "^{commit}").decode().strip()
     all_paths = git(repo, "ls-tree", "-r", "--name-only", commit).decode().splitlines()
@@ -34,7 +57,9 @@ def measure(repo, tag):
     source_paths = [p for p in all_paths if p.endswith((
         "/g_rpc-structures.h", "/sdk-structures.h", "/rpc_headers.h",
         "/rm_page_size.h", "/rpc.c", "/mem_list.c", "/mem.c", "/mem_desc.c",
-        "/nvos.h", "/cl84a0.h", "/rmapi_deprecated_utils.c", "/resource_list.h"))
+        "/nvos.h", "/cl84a0.h", "/rmapi_deprecated_utils.c", "/resource_list.h",
+        "/dev_mmu.h", "/g_mem_mgr_nvoc.c", "/mem_mgr_gm107.c",
+        "/mem_mgr_tu102.c", "/system_mem.c"))
         or p in ("src/nvidia/arch/nvalloc/unix/src/os.c", "kernel-open/nvidia/nv.c")]
     row = {"tag": tag, "tag_object": git(repo, "rev-parse", tag).decode().strip(), "commit": commit,
            "source_blobs": {p: git(repo, "rev-parse", commit + ":" + p).decode().strip()
@@ -65,6 +90,7 @@ def measure(repo, tag):
         row["observed_0x48002000_fields"] = {
             name: (0x48002000 & field["mask"]) >> field["shift"]
             for name, field in facts["flags"].items()}
+        row["pitch_header_facts"] = measure_pitch_headers(root, paths)
     return row
 
 
