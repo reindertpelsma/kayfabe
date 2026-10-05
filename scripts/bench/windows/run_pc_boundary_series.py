@@ -32,7 +32,7 @@ def remote(argv, timeout=60, check=True):
 def guest(work, script):
     encoded = base64.b64encode(script.encode('utf-16-le')).decode()
     return remote(['python3', REMOTE+'/boundary-tools/qmp.py', work+'/qga.sock',
-                   'qga-exec', 'powershell.exe', '-NoProfile', '-NonInteractive',
+                   'qga-exec', r'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe', '-NoProfile', '-NonInteractive',
                    '-EncodedCommand', encoded], timeout=150)
 
 
@@ -49,8 +49,8 @@ def log(message):
 def main():
     ROOT.mkdir(parents=True, exist_ok=True, mode=0o700)
     script = (HERE/'boundary_status.ps1').read_text()
-    for arm, number in [('vfio', 2), ('kayfabe', 1), ('vfio', 3),
-                        ('kayfabe', 2), ('vfio', 4), ('kayfabe', 3)]:
+    for arm, number in [('vfio', 3), ('kayfabe', 1), ('vfio', 4),
+                        ('kayfabe', 2), ('vfio', 5), ('kayfabe', 3)]:
         name = f'boundary-{arm}-{number}'
         local = ROOT/name
         local.mkdir(mode=0o700)
@@ -59,7 +59,7 @@ def main():
         log('START '+name)
         remote(['systemd-run', '--unit='+unit, '--property=RuntimeMaxSec=900',
                 '/usr/bin/python3', '-u', REMOTE+'/boundary-tools/pc_boundary_experiment.py',
-                '--arm', arm, '--run', number])
+                '--arm', arm, '--run', number, '--no-mmio-trace'])
         started = time.monotonic()
         try:
             deadline = time.monotonic()+300
@@ -108,14 +108,19 @@ def main():
                 raise RuntimeError('Runner/host restoration failed: '+result.stdout)
             fetch(work, local, ['qemu.log', 'serial.log'])
             if arm == 'vfio':
-                fetch(work, local, ['vfio-state.json', 'mmio.log'])
+                fetch(work, local, ['vfio-state.json'])
             health = remote(['nvidia-smi', '--query-gpu=name,driver_version', '--format=csv,noheader'])
             (local/'host-health.txt').write_text(health.stdout)
             (local/'complete.json').write_text(json.dumps(dict(complete=True, elapsed=time.monotonic()-started))+'\n')
             log('COMPLETE '+name+'; host GPU restored/healthy')
         except Exception as e:
-            (local/'controller-error.txt').write_text(repr(e)+'\n')
-            log('FAILED '+name+': '+repr(e))
+            detail = type(e).__name__+': '+str(e)[:300]
+            if isinstance(e, subprocess.CalledProcessError):
+                (local/'command-error.stdout').write_text(e.stdout or '')
+                (local/'command-error.stderr').write_text(e.stderr or '')
+                detail = f'Command exited {e.returncode}; see command-error.stderr'
+            (local/'controller-error.txt').write_text(detail+'\n')
+            log('FAILED '+name+': '+detail)
             # The remote bounded supervisor owns shutdown and restoration. Stop
             # its service once, then record result; never start another GPU run.
             remote(['systemctl', 'stop', unit], timeout=180, check=False)
