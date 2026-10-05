@@ -12,6 +12,15 @@ from pathlib import Path
 SHA256 = '31c79cce80b573e21647ace8d1a2b65697f992e7f86196f89e30af477b1bd47c'
 # Reviewed research RVAs only. Fixed windows begin/end at instruction boundaries.
 RANGES = {
+    'l_window_constructor_call': (0x16e965e, 0x16e9698),
+    'l_window_failure_assert': (0x16e97ef, 0x16e981d),
+    'l_constructor_initial_guards': (0x16f0481, 0x16f04bd),
+    'l_constructor_buffer_count_guard': (0x16f04bd, 0x16f0536),
+    'l_constructor_success_and_guard_failure': (0x16f05e9, 0x16f0647),
+    'ilut_window_selection': (0x16e8ddb, 0x16e8e11),
+    'ilut_capb_descriptor_fields': (0x16e8e11, 0x16e8edc),
+    'descriptor_instance_count_getter': (0x1fbb0, 0x1fbb7),
+    'tmo_capd_descriptor_fields': (0x16e8f12, 0x16e8fd2),
     'leaf_preconditions': (0x169d3f0, 0x169d44e),
     'leaf_false_return': (0x169d822, 0x169d83d),
     'descriptor_sizes_and_calls': (0x16e935d, 0x16e93d1),
