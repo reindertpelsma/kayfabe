@@ -9,6 +9,16 @@ bounds are now included from master; the historical P0-missing notices and
 log gate must require the real USER birth evidence. The window-reach and
 Translated/physical-CE probes below still need implementation and hardware runs.
 
+**Probe preparation, 2026-10-05 (`e25e1bf9`):** the separate research branch
+`codex/tspace-probes-2026-10-05` adds `kf-window-probe`, a bounded raw USER-channel
+read with native error-notifier and independent neighbor-liveness checks. It
+builds and passes GPU-free tests only. The native instrumentation self-test,
+host coordinator, full guest framebuffer/RAM/page-table fixtures and actual A/B
+hardware evidence are still required; the historical NOT WRITTEN notices below
+continue to apply to the complete acceptance probes. No physical-mode operand
+is submitted: an audited fixture proving ownership of its actual host physical
+target is a prerequisite. `scripts/p1p2/WINDOW_PROBE.md` records that boundary.
+
 The merge preserves the display/broker and scratch-window counters alongside
 the new carve-out counters, and keeps the existing unsafe allowances unchanged
 while adding the zero-unsafe `kf-chan` perimeter. A display-SW test fixture now

@@ -11,6 +11,20 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-05 (supersedes every older entry in §0 where they differ)
 
+**This research branch adds probe preparation:**
+`codex/tspace-probes-2026-10-05`, `/tmp/kayfabe-tspace-probes-20261005`, code
+`e25e1bf9`, based on integration `3d0959f9` below. `kf-window-probe` builds and
+its four GPU-free verdict/manifest tests pass. It requires a native MMU
+notifier, unchanged canary and neighbor GPU completion; timeout alone fails.
+No GPU was accessed. First hardware step is the native `--self-test` as an
+unprivileged user on an exclusive GPU, followed by the still-required trusted
+guest-window fixture coordinator. Guest RAM/page-table targets and physical
+or Translated submissions remain unimplemented. Read
+`scripts/p1p2/WINDOW_PROBE.md` and
+`traces/tspace_probe_preparation_20261005/README.md`; do not call T-WINDOW-USER
+complete or promote any default from these local checks. The root task owns
+all PC/GPU jobs and Windows debugging; this branch starts none automatically.
+
 **Experimental integration, not promoted:** `codex/p1p2-integration-2026-10-05`,
 worktree `/tmp/kayfabe-p1p2-integration-20261005`, combines master `906a76a4`,
 the complete P1/P2 branch `31b64802` (merge `a5a350a8`), and Windows branch

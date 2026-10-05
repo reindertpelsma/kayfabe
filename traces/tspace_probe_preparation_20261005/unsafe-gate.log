@@ -1,0 +1,43 @@
+crates/kayfabe-linux-raw: 127 relaxation(s) (bar: 127)
+crates/kayfabe-linux-raw/src/host_fd_unsafe.rs:9
+crates/kayfabe-linux-raw/src/scm_unsafe.rs:10
+crates/kayfabe-linux-raw/src/spawn_unsafe.rs:17
+crates/kayfabe-linux-raw/src/window_unsafe.rs:8
+crates/kayfabe-linux-raw/src/epoll_unsafe.rs:3
+crates/kayfabe-linux-raw/src/chardev_unsafe.rs:4
+crates/kayfabe-linux-raw/src/mapping_unsafe.rs:17
+crates/kayfabe-linux-raw/src/vcpu_unsafe.rs:8
+crates/kayfabe-linux-raw/src/sandbox_unsafe.rs:9
+crates/kayfabe-linux-raw/src/sysconf_unsafe.rs:1
+crates/kayfabe-linux-raw/src/signal_unsafe.rs:25
+crates/kayfabe-linux-raw/src/arena_unsafe.rs:6
+crates/kayfabe-linux-raw/src/kvm_unsafe.rs:4
+crates/kayfabe-linux-raw/src/affinity_unsafe.rs:6
+crates/kayfabe-cuda: 43 relaxation(s) (bar: 43)
+43
+crates/kf-linux-raw: 97 relaxation(s) (bar: 97)
+crates/kf-linux-raw/src/host_fd_unsafe.rs:14
+crates/kf-linux-raw/src/drm_unsafe.rs:4
+crates/kf-linux-raw/src/capability_unsafe.rs:2
+crates/kf-linux-raw/src/window_unsafe.rs:9
+crates/kf-linux-raw/src/epoll_unsafe.rs:3
+crates/kf-linux-raw/src/chardev_unsafe.rs:4
+crates/kf-linux-raw/src/mapping_unsafe.rs:24
+crates/kf-linux-raw/src/vcpu_unsafe.rs:8
+crates/kf-linux-raw/src/sysconf_unsafe.rs:1
+crates/kf-linux-raw/src/signal_unsafe.rs:6
+crates/kf-linux-raw/src/kvm_unsafe.rs:6
+crates/kf-linux-raw/src/affinity_unsafe.rs:6
+crates/kf-linux-raw/src/unixsock_unsafe.rs:10
+crates/kf-cuda: 78 relaxation(s) (bar: 78)
+78
+crates/kf-qemu: 61 relaxation(s) (bar: 61)
+crates/kf-qemu/src/raw_unsafe.rs:22
+crates/kf-qemu/src/ffi_unsafe.rs:39
+firmware/kf-gop: 78 relaxation(s) (bar: 78)
+firmware/kf-gop/src/bin/kf-gop-test/check_unsafe.rs:22
+firmware/kf-gop/src/driver_unsafe.rs:32
+firmware/kf-gop/src/efi_unsafe.rs:23
+firmware/kf-gop/src/port_unsafe.rs:1
+crates/kf-chan: 0 relaxation(s) (bar: 0)
+0
