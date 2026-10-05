@@ -14,6 +14,18 @@ import subprocess
 import sys
 
 
+def trace_command(path, command):
+    # A tracefs command endpoint, not a regular appendable file. Neither truncate
+    # existing probes nor request O_APPEND (rejected by some tracefs versions).
+    fd = os.open(path, os.O_WRONLY)
+    try:
+        data = command.encode()
+        if os.write(fd, data) != len(data):
+            raise RuntimeError("short tracefs command write")
+    finally:
+        os.close(fd)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("probe", type=Path)
@@ -36,8 +48,7 @@ def main():
                 ("alloc", "p:{group}/alloc nvidia:rpcAllocMemory_v13_01"),
                 ("result", "r:{group}/result nvidia:rpcAllocMemory_v13_01 status=$retval:u32"),
             ]:
-                with definitions.open("a") as fd:
-                    fd.write(expression.format(group=group) + "\n")
+                trace_command(definitions, expression.format(group=group) + "\n")
                 created.append(name)
             instance.mkdir()
             instance_created = True
@@ -80,8 +91,7 @@ def main():
                 (instance / "events" / group / "enable").write_text("0\n")
                 instance.rmdir()
             for name in reversed(created):
-                with definitions.open("a") as fd:
-                    fd.write(f"-:{group}/{name}\n")
+                trace_command(definitions, f"-:{group}/{name}\n")
             print("OBSERVER_CLEANUP_COMPLETE", flush=True)
 
 
