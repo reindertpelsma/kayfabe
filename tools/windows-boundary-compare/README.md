@@ -116,3 +116,31 @@ Markdown is a bounded overview (first 32 variable words and 64 stable cross-arm 
 section); JSON contains every word/event, the full per-run values, hashes, flags and coverage
 notes. Repetition distinguishes reproducible observations from variation. It does not establish
 causality, cross-die behavior, or authority to fabricate driver-visible success.
+
+## Source-based capability annotations
+
+`annotate_caps.py` reads the existing compiler-generated class TSV, rather than parsing C macro
+bodies or learning register layouts from captures. Select the capability class explicitly:
+
+```sh
+python3 tools/windows-boundary-compare/annotate_caps.py --class C773 \
+  --page vfio-1=/private/vfio-1/display-caps.bin \
+  --page kayfabe-1=/private/kayfabe-1/display-caps.bin \
+  --json /private/caps-named.json --markdown /private/caps-named.md
+```
+
+`--table` selects another explicitly derived TSV; its version and exact hash are recorded.
+Scalar register offsets, array base/stride/count, fields, and enum labels all come from that table.
+The existing C373/C573/C673/C773/CA73 capability classes are covered; unknown classes and method
+classes whose registers exceed this page fail closed. Header `*_INIT` labels are reported as
+names, not claimed valid or required runtime values. Unknown/uncovered bits stay raw. All 1024
+words and every page value remain in JSON; Markdown names differences in the first128 differing
+words. This helper does not group samples into experimental arms or infer stability; use the
+main comparator for that. Bounds are32 pages, exactly4096 bytes each, and4MiB for the source table.
+
+For this audit, rerunning `tools/derive_display_classes.sh` against clean public OGKM580.65.06
+reproduced the committed table byte-for-byte (SHA256
+`0f434f1b996054f1832fd15087e26881d8565df75c641806a7d98cbc39cb5449`). The source is commit
+`307159f2623d3bf45feb9177bd2da52ffbc5ddf9`. The [constructor note](CONSTRUCTOR.md) separates
+public field definitions, pinned Windows dataflow, and research-only hypotheses. None of the
+annotation output is a product per-die table.
