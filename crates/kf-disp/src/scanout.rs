@@ -363,6 +363,16 @@ pub struct LayerPlan {
     pub a_d: i32,
     /// See `a_s`.
     pub b_d: i32,
+    /// The input color table lookup, if enabled.
+    pub ilut: Option<IlutPlan>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IlutPlan {
+    /// Store offset where the ILUT begins.
+    pub src: u64,
+    /// Number of bytes.
+    pub extent: u64,
 }
 
 /// A `SET_COMPOSITION_FACTOR_SELECT` selector as `(a, b)` of `a + b * source_alpha / 255` (both
@@ -392,6 +402,7 @@ fn factor(sel: u32, k1: i32, k2: i32) -> Option<(i32, i32)> {
 pub fn plan_layer(
     s: &Scanout,
     dma: &CtxDma,
+    ilut_dma: Option<&CtxDma>,
     formats: &ScanFormats,
     fw: u32,
     fh: u32,
@@ -479,6 +490,18 @@ pub fn plan_layer(
         b_s,
         a_d,
         b_d,
+        ilut: if s.ilut_control != 0 {
+            ilut_dma.and_then(|d| {
+                let size_field = ((s.ilut_control >> 8) & 0x7FF) + 1; // 11 bits
+                let extent = u64::from(size_field) * 8; // 8 bytes per entry
+                d.span(u64::from(s.ilut_offset) << 8, extent).map(|src| IlutPlan {
+                    src,
+                    extent,
+                })
+            })
+        } else {
+            None
+        },
     }))
 }
 
@@ -502,6 +525,7 @@ pub fn plan_layer(
 pub fn compose_reference(
     l: &LayerPlan,
     src: &[u8],
+    ilut: Option<&[u8]>,
     frame: &mut [u8],
     fw: u32,
     fh: u32,
@@ -548,6 +572,25 @@ pub fn compose_reference(
             let mut w = u32::from_le_bytes([word[0], word[1], word[2], word[3]]);
             if l.flags & COMPOSE_SWAP_RB != 0 {
                 w = (w & 0xff00_ff00) | ((w >> 16) & 0xff) | ((w & 0xff) << 16);
+            }
+            if let Some(lut) = ilut {
+                let size = (lut.len() / 8) as u32;
+                if size > 0 {
+                    let map = |c: u32, offset: usize| -> u32 {
+                        let i = (c * (size - 1)) / 255;
+                        let idx = (i as usize) * 8 + offset;
+                        if idx + 1 < lut.len() {
+                            let val = u16::from_le_bytes([lut[idx], lut[idx + 1]]);
+                            u32::from((val & 0x3FFF) >> 6)
+                        } else {
+                            c
+                        }
+                    };
+                    let b = map(w & 0xff, 4);
+                    let g = map((w >> 8) & 0xff, 2);
+                    let r = map((w >> 16) & 0xff, 0);
+                    w = (w & 0xff00_0000) | (r << 16) | (g << 8) | b;
+                }
             }
             let p = ((dy as usize) * (fw as usize) + dx as usize) * 4;
             let below = u32::from_le_bytes([frame[p], frame[p + 1], frame[p + 2], frame[p + 3]]);
@@ -679,6 +722,7 @@ pub fn plan_cursor(
         extent,
         block_linear: false,
         pitch,
+        ilut: None,
         block_height_log2: 0,
         x0_bytes: 0,
         y0: 0,
@@ -1054,6 +1098,7 @@ pub fn boot_layer(s: &BootSurface) -> Result<LayerPlan, Refused> {
         b_s: 0,
         a_d: 0,
         b_d: 0,
+        ilut: None,
     })
 }
 
@@ -1178,6 +1223,11 @@ mod tests {
             k2: 0,
             src_factor: 1,
             dst_factor: 0,
+            ilut_dma: 0,
+            ilut_offset: 0,
+            ilut_control: 0,
+            ilut_winim_hi: 0,
+            ilut_winim_lo: 0,
         }
     }
 
@@ -1360,7 +1410,7 @@ mod tests {
     fn layers_are_positioned_clipped_and_blended() {
         let f = formats();
         let dma = vid(0x4000_0000, 64 << 20);
-        let full = plan_layer(&fb1080(), &dma, &f, 1920, 1080)
+        let full = plan_layer(&fb1080(), &dma, None, &f, 1920, 1080)
             .unwrap()
             .unwrap();
         assert_eq!(
@@ -1374,18 +1424,18 @@ mod tests {
         (o.width, o.height, o.out_width, o.out_height) = (250, 250, 250, 250);
         (o.out_x, o.out_y, o.format) = (100, 50, 0xCF); // A8R8G8B8
         (o.src_factor, o.dst_factor, o.k1) = (2, 7, 255); // K1 / NEG_K1_TIMES_SRC: premultiplied
-        let l = plan_layer(&o, &dma, &f, 1920, 1080).unwrap().unwrap();
+        let l = plan_layer(&o, &dma, None, &f, 1920, 1080).unwrap().unwrap();
         assert_eq!((l.ox, l.oy, l.width, l.rows), (100, 50, 250, 250));
         assert_eq!(l.flags, 1, "alpha, blended");
         assert_eq!((l.a_s, l.b_s, l.a_d, l.b_d), (255, 0, 255, -255));
         (o.out_x, o.out_y) = (1800, 1000);
-        let c = plan_layer(&o, &dma, &f, 1920, 1080).unwrap().unwrap();
+        let c = plan_layer(&o, &dma, None, &f, 1920, 1080).unwrap().unwrap();
         assert_eq!((c.width, c.rows), (120, 80), "clipped to the frame");
         (o.out_x, o.out_y) = (1920, 0);
-        assert_eq!(plan_layer(&o, &dma, &f, 1920, 1080), Ok(None));
+        assert_eq!(plan_layer(&o, &dma, None, &f, 1920, 1080), Ok(None));
         (o.out_x, o.src_factor) = (0, 9);
         assert!(
-            plan_layer(&o, &dma, &f, 1920, 1080)
+            plan_layer(&o, &dma, None, &f, 1920, 1080)
                 .unwrap_err()
                 .0
                 .contains("not known")
@@ -1394,7 +1444,7 @@ mod tests {
         r.format = 0xE8; // R5G6B5
         r.pitch = 3840 / 64;
         assert!(
-            plan_layer(&r, &dma, &f, 1920, 1080)
+            plan_layer(&r, &dma, None, &f, 1920, 1080)
                 .unwrap_err()
                 .0
                 .contains("composable")
@@ -1570,17 +1620,18 @@ mod tests {
             b_s: f.1,
             a_d: f.2,
             b_d: f.3,
+            ilut: None,
         };
         // B G R A, twice: a white pixel with alpha 0, an all-zero one
         let src = [0xff, 0xff, 0xff, 0x00, 0, 0, 0, 0];
         let mut frame = [0x12, 0x34, 0x56, 0x00, 0x9a, 0xbc, 0xde, 0x00];
-        compose_reference(&one(COMPOSE_XOR, (0, 0, 0, 0)), &src, &mut frame, 2, 1).unwrap();
+        compose_reference(&one(COMPOSE_XOR, (0, 0, 0, 0)), &src, None, &mut frame, 2, 1).unwrap();
         assert_eq!(frame, [0xed, 0xcb, 0xa9, 0x00, 0x9a, 0xbc, 0xde, 0x00]);
         // premultiplied (1, 1 - a): fs = 255, fd = 255 - 255 * 128 / 255 = 127
         let src = [0x40, 0x40, 0x40, 0x80, 0, 0, 0, 0xff];
         let mut frame = [0x80, 0x80, 0x80, 0x00, 0x80, 0x80, 0x80, 0x00];
         let pm = (255, 0, 255, -255);
-        compose_reference(&one(COMPOSE_ALPHA, pm), &src, &mut frame, 2, 1).unwrap();
+        compose_reference(&one(COMPOSE_ALPHA, pm), &src, None, &mut frame, 2, 1).unwrap();
         assert_eq!(
             &frame[..3],
             &[128, 128, 128],
@@ -1588,12 +1639,13 @@ mod tests {
         );
         assert_eq!(&frame[4..7], &[0, 0, 0], "an opaque black pixel");
         let mut frame = [0u8; 8];
-        compose_reference(&one(COMPOSE_OPAQUE, (255, 0, 0, 0)), &src, &mut frame, 2, 1).unwrap();
+        compose_reference(&one(COMPOSE_OPAQUE, (255, 0, 0, 0)), &src, None, &mut frame, 2, 1).unwrap();
         assert_eq!(frame, src, "opaque: the word");
         assert!(
             compose_reference(
                 &one(COMPOSE_OPAQUE, (255, 0, 0, 0)),
                 &src[..7],
+                None,
                 &mut frame,
                 2,
                 1
