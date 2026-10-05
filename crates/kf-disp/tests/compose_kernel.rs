@@ -386,6 +386,7 @@ fn layer(flags: u32, f: (i32, i32, i32, i32)) -> LayerPlan {
         b_s: f.1,
         a_d: f.2,
         b_d: f.3,
+        ilut: None,
     }
 }
 
@@ -405,7 +406,7 @@ fn same(case: &str, l: &LayerPlan, fw: u32, fh: u32, seed: u64) {
     let src = pattern(usize::try_from(l.extent).unwrap() + 64, seed);
     let base = pattern((fw * fh * 4) as usize, seed ^ 0x5a5a);
     let mut want = base.clone();
-    compose_reference(l, &src, &mut want, fw, fh).unwrap_or_else(|e| panic!("{case}: {}", e.0));
+    compose_reference(l, &src, None, &mut want, fw, fh).unwrap_or_else(|e| panic!("{case}: {}", e.0));
     let mut got = base.clone();
     launch(l, &src, &mut got, fw, fh);
     if let Some(i) = (0..got.len()).find(|&i| got[i] != want[i]) {
