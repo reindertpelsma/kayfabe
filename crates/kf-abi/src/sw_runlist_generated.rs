@@ -15,4 +15,18 @@ pub(super) const CELLS: &[super::EvidenceCell] = &[super::EvidenceCell {
     engine: 0,
     max_tsgs: 4,
     qos: 8,
+    observed_control: 0x20801111,
+    observed_control_size: 40,
+    alloc_memory_size: 56,
+    alloc_memory_fields: &[
+        ("hClient", 0, 4),
+        ("hDevice", 4, 4),
+        ("hMemory", 8, 4),
+        ("hClass", 12, 4),
+        ("flags", 16, 4),
+        ("pteAdjust", 20, 4),
+        ("format", 24, 4),
+        ("length", 32, 8),
+        ("pageCount", 40, 4),
+    ],
 }];

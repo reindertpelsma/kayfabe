@@ -25,6 +25,15 @@ fn full_chain_in_separate_environment() {
             String::from_utf8_lossy(&result.stdout),
             String::from_utf8_lossy(&result.stderr)
         );
+        let log = String::from_utf8_lossy(&result.stderr);
+        assert_eq!(
+            log.contains("diagnostic control=0x20801111 params_bytes=40"),
+            enabled == "1"
+        );
+        assert_eq!(
+            log.contains("ALLOC_MEMORY payload_bytes=56 prefix_only=true"),
+            enabled == "1"
+        );
     }
 }
 
@@ -136,6 +145,11 @@ fn child_case() {
         .respond(&command(RpcFunction::RmAlloc, alloc))
         .unwrap();
     assert_eq!(reply.rpc_result == 0, enabled == "1");
+    assert!(
+        policy
+            .respond(&command(RpcFunction::Other(4), vec![0; 56]))
+            .is_none_or(|reply| reply.rpc_result != 0)
+    );
     for (control, bytes) in [(0x20801110u32, 8u32), (0x20801111, 40)] {
         let wire = driver.rm_control_wire();
         let mut payload = vec![0; wire.params_off + bytes as usize];

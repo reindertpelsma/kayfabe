@@ -61,6 +61,37 @@ kernel-client-only scheduling control.
 - At most 16 decoded scalar request records per policy construction are logged
   under the opt-in, including requests whose engine or features are refused.
 
+## Follow-up observations after the allocation experiment
+
+The same opt-in also enables a **logging-only** observer for two exact-cell
+requests. They share a separate 16-record cap per chain construction, which a
+repeated fn1 identity declaration cannot reset. Missing or revoked identity
+disables both. Every observation still returns no reply: normal downstream
+policy and the FSM's unsupported-command refusal remain unchanged.
+
+- `0x20801111`: exactly 40 declared parameter bytes, zero parameter flags, and an
+  exact complete declared control body are required. Only those 40 bytes are
+  printed, as ten raw little-endian words. Labels do not assign unproved field
+  semantics. The code and size are extracted from the pinned Windows caller's
+  instructions at RVAs `0x19c45ec` and `0x19c45e4`; they are diagnostic evidence,
+  not control authorization. Transport padding is never inspected.
+- Function 4, publicly named `ALLOC_MEMORY`: the function number comes from the
+  existing generated driver matrix. The fixed `rpc_alloc_memory_v13_01` size and
+  nine scalar prefix fields are compiled from the exact public source. A payload
+  shorter than the fixed struct is not observed. The log states payload byte
+  length and `prefix_only=true`; the PTE descriptor and variable tail are neither
+  printed nor validated, and no pointer/address is followed. This is not a claim
+  that the complete memory request is valid or implemented.
+
+The ordering matters: a refused `ALLOC_MEMORY` before `0x20801111` could make the
+latter cleanup rather than the initial failure. The observer supplies evidence
+to resolve that question and does not assume the scheduling call is causal.
+
+This follow-up passed 12 focused tests and both served-chain tests. They cover
+short/extended bodies, serialization flags, delivered-padding exclusion, exact
+word output, omission of the PTE tail, identity revocation, the combined cap,
+unchanged requests, and refusal/no channel action in both opt-in states.
+
 ## Reproduce the generated cell
 
 Use a trusted official Windows 580.88 package locally. No retail executable is

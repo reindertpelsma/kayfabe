@@ -22,6 +22,14 @@ pub struct EvidenceCell {
     pub max_tsgs: usize,
     /// Compiler-derived `qosIntrEnableMask` offset.
     pub qos: usize,
+    /// Pinned retail caller's control code; observational only, never an allowlist.
+    pub observed_control: u32,
+    /// Pinned retail caller's exact parameter size for that control.
+    pub observed_control_size: usize,
+    /// Compiled fixed `rpc_alloc_memory_v13_01` size; its PTE tail is not decoded.
+    pub alloc_memory_size: usize,
+    /// Compiled scalar prefix fields only: name, offset, width. No PTE/address fields.
+    pub alloc_memory_fields: &'static [(&'static str, usize, usize)],
 }
 
 /// The complete public three-word allocation declaration; all values are untrusted.

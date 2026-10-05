@@ -35,6 +35,7 @@ pub(crate) struct Probe {
 pub(crate) struct IdentityObserver {
     driver: DriverAbiTable,
     identity: Arc<AtomicBool>,
+    observed: u8,
 }
 
 impl Probe {
@@ -50,7 +51,11 @@ impl Probe {
                 identity: identity.clone(),
                 engines,
             },
-            IdentityObserver { driver, identity },
+            IdentityObserver {
+                driver,
+                identity,
+                observed: 0,
+            },
         )
     }
 
@@ -136,7 +141,83 @@ impl CommandPolicy for IdentityObserver {
             // Every new declaration replaces the old one; malformed/changed identities revoke.
             self.identity.store(admitted, Ordering::Relaxed);
         }
+        if let Some(record) = self.request_observation(cmd) {
+            eprintln!("kf-rm: EXPERIMENT software-runlist diagnostic {record}; observation only");
+        }
         None
+    }
+}
+
+impl IdentityObserver {
+    /// A fixed, bounded diagnostic. It never supplies a reply, touches guest memory,
+    /// reads transport padding, or interprets the opaque control words as pointers.
+    fn request_observation(&mut self, cmd: &RpcCommand) -> Option<String> {
+        use std::fmt::Write;
+        if self.observed >= 16 || !self.identity.load(Ordering::Relaxed) {
+            return None;
+        }
+        let cell = sw_runlist::cell(self.driver.driver_version())?;
+        let mut record = String::new();
+        if cmd.function == RpcFunction::RmControl {
+            let request = self.driver.decode_rpc_control(&cmd.payload).ok()?;
+            // Consume only the declared RPC payload, never delivered queue padding.
+            // Exact body size also excludes partial or unexpected extended requests.
+            if request.cmd != cell.observed_control
+                || request.rmapi_rpc_flags != 0
+                || cell.observed_control_size != 40
+                || request.params_size != 40
+            {
+                return None;
+            }
+            let end = request.params_at.checked_add(cell.observed_control_size)?;
+            if cmd.payload.len() != end {
+                return None;
+            }
+            let params = cmd.payload.get(request.params_at..end)?;
+            write!(
+                record,
+                "control={:#010x} params_bytes=40 raw_u32_le=[",
+                request.cmd
+            )
+            .ok()?;
+            for (index, word) in params.chunks_exact(4).enumerate() {
+                if index != 0 {
+                    record.push(',');
+                }
+                write!(record, "{:08x}", u32::from_le_bytes(word.try_into().ok()?)).ok()?;
+            }
+            record.push(']');
+        } else if let RpcFunction::Other(code) = cmd.function {
+            let function =
+                kf_abi::generated::matrix::RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_ALLOC_MEMORY
+                    .at(self.driver.driver_version())
+                    .ok()
+                    .flatten()?;
+            if u64::from(code) != function || cmd.payload.len() < cell.alloc_memory_size {
+                return None;
+            }
+            // Source-known fixed scalar prefix only. The PTE descriptor/tail is
+            // deliberately omitted: this does not validate/implement its semantics.
+            write!(
+                record,
+                "function={code} ALLOC_MEMORY payload_bytes={} prefix_only=true",
+                cmd.payload.len()
+            )
+            .ok()?;
+            for &(name, offset, width) in cell.alloc_memory_fields {
+                let bytes = cmd.payload.get(offset..offset.checked_add(width)?)?;
+                let value = match width {
+                    4 => u64::from(u32::from_le_bytes(bytes.try_into().ok()?)),
+                    8 => u64::from_le_bytes(bytes.try_into().ok()?),
+                    _ => return None,
+                };
+                write!(record, " {name}={value:#x}").ok()?;
+            }
+        } else {
+            return None;
+        }
+        self.observed += 1;
+        Some(record)
     }
 }
 
@@ -292,6 +373,107 @@ mod tests {
     fn request() -> Declaration {
         let (p, _, cmd) = fixture();
         p.decode(&cmd).unwrap().unwrap()
+    }
+
+    fn scheduling_control() -> RpcCommand {
+        let wire = driver().rm_control_wire();
+        let mut payload = vec![0; wire.params_off + 40];
+        payload[8..12].copy_from_slice(&0x20801111u32.to_le_bytes());
+        payload[wire.params_size_off..wire.params_size_off + 4]
+            .copy_from_slice(&40u32.to_le_bytes());
+        for (index, byte) in payload[wire.params_off..].iter_mut().enumerate() {
+            *byte = index as u8;
+        }
+        command(RpcFunction::RmControl, payload)
+    }
+
+    #[test]
+    fn diagnostic_control_observes_exact_words_without_changing_or_answering() {
+        let (_, mut observer, _) = fixture();
+        let cmd = scheduling_control();
+        let before = cmd.clone();
+        let record = observer.request_observation(&cmd).unwrap();
+        assert!(record.contains("params_bytes=40 raw_u32_le=[03020100,07060504"));
+        assert!(record.ends_with("27262524]"));
+        assert!(record.len() < 200);
+        assert!(observer.respond(&cmd).is_none());
+        assert_eq!(cmd, before);
+    }
+
+    #[test]
+    fn diagnostic_never_reads_short_extended_serialized_or_transport_padding() {
+        for (offset, value) in [
+            (8, 0x20801110u32),
+            (16, 0),
+            (16, 39),
+            (16, 41),
+            (16, u32::MAX),
+            (20, 1),
+            (20, 2),
+        ] {
+            let (_, mut observer, _) = fixture();
+            let mut cmd = scheduling_control();
+            cmd.payload[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+            assert!(observer.request_observation(&cmd).is_none());
+            assert_eq!(observer.observed, 0);
+        }
+        for length in [0, 12, 39, 40, 79, 81, 256] {
+            let (_, mut observer, _) = fixture();
+            let mut cmd = scheduling_control();
+            cmd.delivered = cmd.payload.clone();
+            cmd.payload.resize(length, 0);
+            assert!(observer.request_observation(&cmd).is_none());
+            assert_eq!(observer.observed, 0);
+        }
+    }
+
+    #[test]
+    fn alloc_memory_diagnostic_uses_only_compiled_scalar_prefix_not_pte_bytes() {
+        let (_, mut observer, _) = fixture();
+        let mut payload = vec![0; 5000];
+        payload[12..16].copy_from_slice(&0x3eu32.to_le_bytes());
+        payload[32..40].copy_from_slice(&0x1234000u64.to_le_bytes());
+        payload[40..44].copy_from_slice(&3u32.to_le_bytes());
+        payload[44..].fill(0xfe);
+        let mut cmd = command(RpcFunction::Other(4), payload);
+        let record = observer.request_observation(&cmd).unwrap();
+        assert!(record.contains("ALLOC_MEMORY payload_bytes=5000 prefix_only=true"));
+        assert!(
+            record.contains("hClass=0x3e")
+                && record.contains("length=0x1234000")
+                && record.contains("pageCount=0x3")
+        );
+        assert!(!record.contains("fefe"));
+        assert!(record.len() < 350);
+        assert!(observer.respond(&cmd).is_none());
+        cmd.delivered = cmd.payload.clone();
+        cmd.payload.truncate(55);
+        assert!(observer.request_observation(&cmd).is_none());
+        cmd.payload.resize(56, 0);
+        cmd.function = RpcFunction::Other(5);
+        assert!(observer.request_observation(&cmd).is_none());
+    }
+
+    #[test]
+    fn observation_identity_gate_and_combined_sixteen_record_budget_are_strict() {
+        let (_, mut observer, _) = fixture();
+        let control = scheduling_control();
+        let memory = command(RpcFunction::Other(4), vec![0; 56]);
+        observer.respond(&command(RpcFunction::SetGuestSystemInfo, vec![]));
+        assert!(observer.request_observation(&control).is_none());
+        assert!(observer.request_observation(&memory).is_none());
+        observer.respond(&identity());
+        for index in 0..100 {
+            let record =
+                observer.request_observation(if index % 2 == 0 { &control } else { &memory });
+            assert_eq!(record.is_some(), index < 16);
+        }
+        assert_eq!(observer.observed, 16);
+        observer.respond(&identity());
+        assert!(
+            observer.request_observation(&control).is_none(),
+            "new identity does not reset this chain's cap"
+        );
     }
 
     #[test]
