@@ -1,0 +1,48 @@
+$ErrorActionPreference='Stop'
+$ProgressPreference='SilentlyContinue'
+$root='C:\ProgramData\KayfabeGsp'
+$trace="$root\captures\rtx4070-b297-restart-01"
+$body="$root\manual-b297-collector4070.ps1"
+$collector="$root\build\gsptrace-candidates-0797f6ae.exe"
+if(Test-Path $body){throw 'Fresh collector staging file already exists'}
+[IO.File]::WriteAllBytes($body,[Convert]::FromBase64String('JEVycm9yQWN0aW9uUHJlZmVyZW5jZT0nU3RvcCcKJFByb2dyZXNzUHJlZmVyZW5jZT0nU2lsZW50bHlDb250aW51ZScKJHJvb3Q9J0M6XFByb2dyYW1EYXRhXEtheWZhYmVHc3AnCiR0cmFjZT0iJHJvb3RcY2FwdHVyZXNccnR4NDA3MC1iMjk3LXJlc3RhcnQtMDEiCmZvcmVhY2goJG5hbWUgaW4gQCgnZ3NwLmtnd3QnLCdzdGFydHVwLmpzb24nLCdjb2xsZWN0b3ItZXhpdC5qc29uJykpIHsKICBpZihbSU8uRmlsZV06OkV4aXN0cygiJHRyYWNlXCRuYW1lIikpe3Rocm93ICdBIHByaW9yIGJvb3QgY2FwdHVyZSBleGlzdHM7IHJlZnVzZSB0byBvdmVyd3JpdGUgaXRzIGV2aWRlbmNlJ30KfQp0cnkgewogIGlmICgoR2V0LVNlcnZpY2UgS2F5ZmFiZUdzcFRyYWNlKS5TdGF0dXMgLW5lICdSdW5uaW5nJykgeyB0aHJvdyAnT2JzZXJ2ZXIgaXMgbm90IHJ1bm5pbmcnIH0KICBpZiAoKEdldC1JdGVtUHJvcGVydHkgJ0hLTE06XFNZU1RFTVxDdXJyZW50Q29udHJvbFNldFxTZXJ2aWNlc1xLYXlmYWJlR3NwVHJhY2UnKS5TdGFydCAtbmUgMykgeyB0aHJvdyAnT2JzZXJ2ZXIgaXMgbm90IGNvbmZpZ3VyZWQgZm9yIGRlbWFuZCBzdGFydCcgfQogIGlmICgtbm90IFtJTy5GaWxlXTo6RXhpc3RzKCdDOlxQcm9ncmFtRGF0YVxWYXN0V2luZG93c1xkZWZlci1uYXRpdmUtZ3B1LmZsYWcnKSkgeyB0aHJvdyAnTmF0aXZlIHNldHVwIGlzIG5vdCBkZWZlcnJlZCcgfQogICYgIiRyb290XGJ1aWxkXGdzcHRyYWNlLWNhbmRpZGF0ZXMtMDc5N2Y2YWUuZXhlIiAtLXN0YXR1cyB8IFNldC1Db250ZW50IC1FbmNvZGluZyBVVEY4ICIkdHJhY2VcbWFudWFsLW9ic2VydmVyLWluaXRpYWwuanNvbiIKICBpZiAoJExBU1RFWElUQ09ERSkgeyB0aHJvdyAnQm9vdCBvYnNlcnZlciBzdGF0dXMgZmFpbGVkJyB9CiAgW29yZGVyZWRdQHt0aW1lPShHZXQtRGF0ZSkuVG9Vbml2ZXJzYWxUaW1lKCkuVG9TdHJpbmcoJ28nKTtib290X3RpY2tfbXM9W0Vudmlyb25tZW50XTo6VGlja0NvdW50O29ic2VydmVyX3N5c3RlbV9zdGFydD0kZmFsc2U7aGlzdG9yeV9jb21wbGV0ZT0kZmFsc2V9IHwgQ29udmVydFRvLUpzb24gLUNvbXByZXNzIHwgU2V0LUNvbnRlbnQgIiR0cmFjZVxzdGFydHVwLmpzb24iCn0gY2F0Y2ggewogIFtvcmRlcmVkXUB7dGltZT0oR2V0LURhdGUpLlRvVW5pdmVyc2FsVGltZSgpLlRvU3RyaW5nKCdvJyk7ZXJyb3I9W3N0cmluZ10kX30gfCBDb252ZXJ0VG8tSnNvbiAtQ29tcHJlc3MgfCBTZXQtQ29udGVudCAiJHRyYWNlXHN0YXJ0dXAtZXJyb3IuanNvbiIKICBleGl0IDEKfQokcHJvY2Vzcz0kbnVsbDsgJHN0ZG91dD0kbnVsbDsgJHN0ZGVycj0kbnVsbDsgJG91dENvcHk9JG51bGw7ICRlcnJDb3B5PSRudWxsOyAkc3RhcnRlZD0kZmFsc2UKZnVuY3Rpb24gQ29tcGxldGUtQ29sbGVjdG9yU3RyZWFtcyB7CiAgaWYgKCRvdXRDb3B5KSB7ICRudWxsPSRvdXRDb3B5LkdldEF3YWl0ZXIoKS5HZXRSZXN1bHQoKTsgJHN0ZG91dC5GbHVzaCgkdHJ1ZSkgfQogIGlmICgkZXJyQ29weSkgeyAkbnVsbD0kZXJyQ29weS5HZXRBd2FpdGVyKCkuR2V0UmVzdWx0KCk7ICRzdGRlcnIuRmx1c2goJHRydWUpIH0KfQp0cnkgewogICRhcmd1bWVudHM9JyInKyR0cmFjZSsnXGdzcC5rZ3d0IiAzMDAgLS1zdG9wLWZpbGUgIicrJHRyYWNlKydcc3RvcC5mbGFnIicKICAkcHJvY2Vzcz1bRGlhZ25vc3RpY3MuUHJvY2Vzc106Om5ldygpCiAgJHByb2Nlc3MuU3RhcnRJbmZvLkZpbGVOYW1lPSIkcm9vdFxidWlsZFxnc3B0cmFjZS1jYW5kaWRhdGVzLTA3OTdmNmFlLmV4ZSIKICAkcHJvY2Vzcy5TdGFydEluZm8uQXJndW1lbnRzPSRhcmd1bWVudHMKICAkcHJvY2Vzcy5TdGFydEluZm8uVXNlU2hlbGxFeGVjdXRlPSRmYWxzZQogICRwcm9jZXNzLlN0YXJ0SW5mby5DcmVhdGVOb1dpbmRvdz0kdHJ1ZQogICRwcm9jZXNzLlN0YXJ0SW5mby5SZWRpcmVjdFN0YW5kYXJkT3V0cHV0PSR0cnVlCiAgJHByb2Nlc3MuU3RhcnRJbmZvLlJlZGlyZWN0U3RhbmRhcmRFcnJvcj0kdHJ1ZQogICRzdGRvdXQ9W0lPLkZpbGVdOjpPcGVuKCIkdHJhY2VcY29sbGVjdG9yLnN0ZG91dCIsW0lPLkZpbGVNb2RlXTo6Q3JlYXRlLFtJTy5GaWxlQWNjZXNzXTo6V3JpdGUsW0lPLkZpbGVTaGFyZV06OlJlYWQpCiAgJHN0ZGVycj1bSU8uRmlsZV06Ok9wZW4oIiR0cmFjZVxjb2xsZWN0b3Iuc3RkZXJyIixbSU8uRmlsZU1vZGVdOjpDcmVhdGUsW0lPLkZpbGVBY2Nlc3NdOjpXcml0ZSxbSU8uRmlsZVNoYXJlXTo6UmVhZCkKICBpZiAoLW5vdCAkcHJvY2Vzcy5TdGFydCgpKSB7IHRocm93ICdDYW5ub3Qgc3RhcnQgY29sbGVjdG9yIHByb2Nlc3MnIH0KICAkc3RhcnRlZD0kdHJ1ZQogICMgQ29weSBib3RoIHBpcGVzIGNvbmN1cnJlbnRseTsgYXZvaWQgcGlwZS1idWZmZXIgZGVhZGxvY2tzIGFuZCB1bmJvdW5kZWQgc3RyaW5ncy4KICAkb3V0Q29weT0kcHJvY2Vzcy5TdGFuZGFyZE91dHB1dC5CYXNlU3RyZWFtLkNvcHlUb0FzeW5jKCRzdGRvdXQpCiAgJGVyckNvcHk9JHByb2Nlc3MuU3RhbmRhcmRFcnJvci5CYXNlU3RyZWFtLkNvcHlUb0FzeW5jKCRzdGRlcnIpCiAgd2hpbGUgKC1ub3QgJHByb2Nlc3MuV2FpdEZvckV4aXQoMTAwMCkpIHsKICAgIGlmICgoKEdldC1JdGVtICIkdHJhY2VcZ3NwLmtnd3QiIC1FcnJvckFjdGlvbiBTaWxlbnRseUNvbnRpbnVlKS5MZW5ndGggLWd0IDY0TUIpIC1vciAoKEdldC1QU0RyaXZlIEMpLkZyZWUgLWx0IDEwR0IpKSB7CiAgICAgIE5ldy1JdGVtIC1JdGVtVHlwZSBGaWxlIC1QYXRoICIkdHJhY2Vcc3RvcC5mbGFnIiAtRm9yY2UgfCBPdXQtTnVsbAogICAgICAnQ2FwdHVyZSBzdG9wcGVkIGF0IGRpc2svc2l6ZSBib3VuZCcgfCBTZXQtQ29udGVudCAiJHRyYWNlXHN0b3JhZ2UtbGltaXQudHh0IgogICAgfQogIH0KICAkcHJvY2Vzcy5XYWl0Rm9yRXhpdCgpCiAgQ29tcGxldGUtQ29sbGVjdG9yU3RyZWFtcwogICRjb2RlPSRwcm9jZXNzLkV4aXRDb2RlCiAgaWYgKCRudWxsIC1lcSAkY29kZSkgeyB0aHJvdyAnQ29sbGVjdG9yIGV4aXQgY29kZSBpcyB1bmF2YWlsYWJsZScgfQogIFtvcmRlcmVkXUB7dGltZT0oR2V0LURhdGUpLlRvVW5pdmVyc2FsVGltZSgpLlRvU3RyaW5nKCdvJyk7ZXhpdF9jb2RlPVtpbnRdJGNvZGV9IHwgQ29udmVydFRvLUpzb24gLUNvbXByZXNzIHwgU2V0LUNvbnRlbnQgIiR0cmFjZVxjb2xsZWN0b3ItZXhpdC5qc29uIgogIGV4aXQgJGNvZGUKfSBjYXRjaCB7CiAgJGZhaWx1cmU9W3N0cmluZ10kXwogICRkcmFpbmVkPSR0cnVlCiAgaWYgKCRzdGFydGVkIC1hbmQgLW5vdCAkcHJvY2Vzcy5IYXNFeGl0ZWQpIHsKICAgIE5ldy1JdGVtIC1JdGVtVHlwZSBGaWxlIC1QYXRoICIkdHJhY2Vcc3RvcC5mbGFnIiAtRm9yY2UgfCBPdXQtTnVsbAogICAgJGRyYWluZWQ9JHByb2Nlc3MuV2FpdEZvckV4aXQoMzAwMDApCiAgfQogIGlmICgkc3RhcnRlZCAtYW5kICRkcmFpbmVkKSB7CiAgICB0cnkgeyAkcHJvY2Vzcy5XYWl0Rm9yRXhpdCgpOyBDb21wbGV0ZS1Db2xsZWN0b3JTdHJlYW1zIH0KICAgIGNhdGNoIHsgJGZhaWx1cmUgKz0gJzsgc3RyZWFtIGRyYWluOiAnK1tzdHJpbmddJF8gfQogIH0KICBbb3JkZXJlZF1Ae3RpbWU9KEdldC1EYXRlKS5Ub1VuaXZlcnNhbFRpbWUoKS5Ub1N0cmluZygnbycpO2Vycm9yPSRmYWlsdXJlO2NvbGxlY3Rvcl9kcmFpbmVkPSRkcmFpbmVkO2V4aXRfY29kZT0xfSB8IENvbnZlcnRUby1Kc29uIC1Db21wcmVzcyB8IFNldC1Db250ZW50ICIkdHJhY2VcY29sbGVjdG9yLWV4aXQuanNvbiIKICBleGl0IDEKfSBmaW5hbGx5IHsKICBpZiAoJHN0ZG91dCkgeyAkc3Rkb3V0LkRpc3Bvc2UoKSB9CiAgaWYgKCRzdGRlcnIpIHsgJHN0ZGVyci5EaXNwb3NlKCkgfQogIGlmICgkcHJvY2VzcykgeyAkcHJvY2Vzcy5EaXNwb3NlKCkgfQp9Cg=='))
+if (Test-Path $trace) { throw 'Refuse to overwrite a previous capture' }
+foreach($path in @('C:\ProgramData\VastWindows\defer-native-gpu.flag','C:\ProgramData\VastWindows\hold-native-reboots.flag')) { if(!(Test-Path $path)){throw "Required research hold absent: $path"} }
+foreach($entry in @(
+ @($body,'c0249371b884725e3d1b840fb273ff4538c18e360f2f58aa44b965b2274be31f'),
+ @($collector,'9f1a69942dc52e9e8fded62069b1078a59db06fd2c522e1b1e90596d6fc97bb9'),
+ @('C:\Windows\System32\drivers\kayfabe-gsptrace.sys','e311595276d7451504d7515ce4a592441bd8cdad20c0c15b6e08cce30b90b753'))) {
+ if((Get-FileHash $entry[0] -Algorithm SHA256).Hash.ToLowerInvariant() -ne $entry[1]){throw "Artifact hash mismatch: $($entry[0])"}
+}
+if((Get-Service KayfabeGspTrace).Status -ne 'Stopped'){throw 'Prior observer not stopped'}
+$original=(Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\KayfabeGspTrace').Start
+if($original -ne 3){throw 'Expected original demand-start service'}
+$gpu=@(Get-PnpDevice -PresentOnly -Class Display | Where-Object {$_.InstanceId -like 'PCI\VEN_10DE&DEV_2786&*'})
+if($gpu.Count -ne 1 -or $gpu[0].Status -ne 'OK' -or [int]$gpu[0].Problem -ne 0){throw 'Expected healthy assigned RTX4070'}
+New-Item -ItemType Directory $trace | Out-Null
+Copy-Item $body "$trace\collect-task.ps1"
+[ordered]@{time=[DateTime]::UtcNow.ToString('o');original_observer_start=$original;gpu=$gpu[0].InstanceId;collector_sha256='9f1a69942dc52e9e8fded62069b1078a59db06fd2c522e1b1e90596d6fc97bb9';driver_signed_sha256='e311595276d7451504d7515ce4a592441bd8cdad20c0c15b6e08cce30b90b753';collector_source='0797f6ae20b760b283116514a993d19273d2fd9d';max_seconds=300;max_capture_mib_before_drain=64;history_complete=$false} | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 "$trace\capture-journal.json"
+Start-Service KayfabeGspTrace
+$principal=New-ScheduledTaskPrincipal -UserId SYSTEM -LogonType ServiceAccount -RunLevel Highest
+$settings=New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
+$action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+$trace+'\collect-task.ps1"')
+Register-ScheduledTask -TaskName KayfabeGspCapture4070B297 -Action $action -Principal $principal -Settings $settings | Out-Null
+Export-ScheduledTask -TaskName KayfabeGspCapture4070B297 | Set-Content -Encoding UTF8 "$trace\capture-task.xml"
+Start-ScheduledTask -TaskName KayfabeGspCapture4070B297
+$ready=$false
+for($i=0;$i -lt 40;$i++) {
+ Start-Sleep -Seconds 1
+ if([IO.File]::Exists("$trace\collector-exit.json")){throw ('Collector exited before probe: '+[IO.File]::ReadAllText("$trace\collector-exit.json"))}
+ if([IO.File]::Exists("$trace\startup-error.json")){throw ([IO.File]::ReadAllText("$trace\startup-error.json"))}
+ if([IO.File]::Exists("$trace\gsp.kgwt") -and ([IO.FileInfo]::new("$trace\gsp.kgwt")).Length -ge 64 -and (Get-ScheduledTask KayfabeGspCapture4070B297).State -eq 'Running') {
+  # The running collector owns the exclusive driver handle; do not reopen it.
+  if((Get-Item "$trace\gsp.kgwt").Length -gt 64){
+   $ready=$true
+   [ordered]@{time=[DateTime]::UtcNow.ToString('o');readiness='Collector wrote observed records beyond file header';capture_bytes=(Get-Item "$trace\gsp.kgwt").Length} | ConvertTo-Json | Set-Content -Encoding UTF8 "$trace\before-probe-stats.json"
+   break
+  }
+ }
+}
+if(-not $ready){New-Item -ItemType File "$trace\stop.flag" -Force | Out-Null; throw 'Recorder never attached a GSP table before probe'}
+Get-Content -Raw "$trace\before-probe-stats.json"
+'CAPTURE_READY_FOR_PROBE'

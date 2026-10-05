@@ -1,0 +1,16 @@
+ActiveState=inactive
+SubState=dead
+ExecMainStatus=0
+Oct 05 02:34:16 claude systemd[1]: Starting kf-vfio-b297-20261005.service - [systemd-run] /usr/bin/flock -n /tmp/kayfabe-fastguest.lock /usr/bin/python3 -u /var/tmp/kf-resume-native4070.py --workdir /var/lib/kf-vfio-b297-20261005...
+Oct 05 02:34:16 claude systemd[1]: Started kf-vfio-b297-20261005.service - [systemd-run] /usr/bin/flock -n /tmp/kayfabe-fastguest.lock /usr/bin/python3 -u /var/tmp/kf-resume-native4070.py --workdir /var/lib/kf-vfio-b297-20261005.
+Oct 05 02:37:30 claude flock[37867]: 2026-10-05T00:37:30Z clone_verified
+Oct 05 02:37:30 claude flock[37867]: 2026-10-05T00:37:30Z quiescing_display
+Oct 05 02:37:31 claude flock[37867]: 2026-10-05T00:37:31Z detaching_nvidia_aux_modules
+Oct 05 02:37:32 claude flock[37867]: 2026-10-05T00:37:32Z binding_vfio
+Oct 05 02:37:32 claude flock[37867]: 2026-10-05T00:37:32Z vfio_bound
+Oct 05 02:37:32 claude flock[37867]: 2026-10-05T00:37:32Z windows_running
+Oct 05 02:46:07 claude flock[37867]: 2026-10-05T00:46:07Z restoring_host
+Oct 05 02:46:09 claude flock[37867]: 2026-10-05T00:46:09Z host_restored
+Oct 05 02:46:09 claude systemd[1]: kf-vfio-b297-20261005.service: Deactivated successfully.
+Oct 05 02:46:09 claude systemd[1]: kf-vfio-b297-20261005.service: Consumed 7min 39.478s CPU time over 11min 53.336s wall clock time, 25.5G memory peak.
+NVIDIA GeForce RTX 4070, 595.91.07, 445 MiB

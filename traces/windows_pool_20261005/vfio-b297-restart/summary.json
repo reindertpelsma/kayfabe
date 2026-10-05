@@ -1,0 +1,18 @@
+{
+  "windows_driver": "580.88",
+  "gpu": "RTX4070 AD104",
+  "complete": false,
+  "observer_records": 3704,
+  "trace_text_sha256": "cf209143850d4baff71c615601edb32fb080ab7c8eba091c47bb98c47f4e10b7",
+  "original_capture_sha256": "906b792c35d3c8277af80d65a715d1376b644fa64bcacf66b5e601302613ed8c",
+  "b297_allocations_observed": 0,
+  "query_2080121f_observed": 0,
+  "control_census": {
+    "0x20801111:request:0x0": 23,
+    "0x20801111:reply:0x0": 23
+  },
+  "control_declared_sizes": [
+    40
+  ],
+  "source": "Fresh passive observer before controlled PnP restart; prefix missed for both queue allocations"
+}

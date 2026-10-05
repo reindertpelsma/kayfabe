@@ -1,0 +1,10 @@
+{
+  "time_utc": "2026-10-05T00:41:06.608646+00:00",
+  "script": "/data/kayfabe-runtime/windows-pool-20261005/vfio-b297-recipes/stop-export.ps1",
+  "script_sha256": "1d7dcc1c74af2652fda5903d6ac2e9bf5562d593483f507180fe892dbb89dab0",
+  "exitcode": 0,
+  "pinned_host_key": true,
+  "publickey_only": true,
+  "agent_forwarding": false,
+  "private_key_stayed_on_controller": true
+}

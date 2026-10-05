@@ -1,0 +1,55 @@
+{
+    "time":  "2026-10-05T00:45:19.5206854Z",
+    "display":  [
+                    {
+                        "Status":  "Error",
+                        "Problem":  10,
+                        "InstanceId":  "PCI\\VEN_1234\u0026DEV_1111\u0026SUBSYS_11001AF4\u0026REV_02\\3\u0026267A616A\u00260\u002648"
+                    },
+                    {
+                        "Status":  "OK",
+                        "Problem":  0,
+                        "InstanceId":  "PCI\\VEN_10DE\u0026DEV_2786\u0026SUBSYS_40EE1458\u0026REV_A1\\3\u0026267A616A\u00260\u002630"
+                    }
+                ],
+    "observer":  "Stopped",
+    "task":  "Disabled",
+    "records":  {
+                    "schema":  "kayfabe-gsp-observer/1",
+                    "complete":  false,
+                    "scanned_bytes":  294088015872,
+                    "scan_passes":  34,
+                    "candidates":  139,
+                    "attached_tables":  2,
+                    "read_failures":  0,
+                    "unstable_snapshots":  344,
+                    "invalid_elements":  18663623,
+                    "recorded":  3704,
+                    "dropped":  0,
+                    "sequence_gaps":  0,
+                    "buffered_bytes":  0
+                },
+    "collector_exit":  {
+                           "time":  "2026-10-05T00:41:01.4693796Z",
+                           "exit_code":  0
+                       },
+    "restart":  {
+                    "time":  "2026-10-05T00:40:33.5943710Z",
+                    "restart_exit":  null,
+                    "smi_exit":  0,
+                    "after":  [
+                                  {
+                                      "Status":  "OK",
+                                      "Problem":  0,
+                                      "InstanceId":  "PCI\\VEN_10DE\u0026DEV_2786\u0026SUBSYS_40EE1458\u0026REV_A1\\3\u0026267A616A\u00260\u002630"
+                                  }
+                              ]
+                }
+}
+
+Driver Version                            : 580.88
+CUDA Version                              : 13.0
+    Product Name                          : NVIDIA GeForce RTX 4070
+    GSP Firmware Version                  : 580.65.05
+
+

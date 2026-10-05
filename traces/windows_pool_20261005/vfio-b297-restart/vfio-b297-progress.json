@@ -1,0 +1,10 @@
+{
+  "time_utc": "2026-10-05T00:39:16.673103+00:00",
+  "script": "/data/kayfabe-runtime/windows-pool-20261005/vfio-b297-recipes/progress.ps1",
+  "script_sha256": "f91bbd182ee8b5e014b7986c6346b87d4b2fd3e37a9912dbb675da292075e5f2",
+  "exitcode": 0,
+  "pinned_host_key": true,
+  "publickey_only": true,
+  "agent_forwarding": false,
+  "private_key_stayed_on_controller": true
+}
