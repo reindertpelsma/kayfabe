@@ -25,6 +25,8 @@ parser.add_argument('--private-translated-space', action='store_true',
                     help='enable experimental P1/P2 isolated Translated address space')
 parser.add_argument('--sw-runlist-probe', action='store_true',
                     help='enable diagnostic metadata-only software-runlist allocation')
+parser.add_argument('--memory-list-probe', action='store_true',
+                    help='enable experimental contiguous guest-RAM registration')
 parser.add_argument('--gop', action='store_true',
                     help='enable Kayfabe virtual UEFI boot display for this run')
 parser.add_argument('--only-kayfabe-display', action='store_true',
@@ -77,15 +79,18 @@ with open('/tmp/kayfabe-fastguest.lock', 'a') as lock:
  env.pop('KF3_TIMER_MAP', None)
  env.pop('KF3_TSPACE', None)
  env.pop('KF3_SW_RUNLIST_PROBE', None)
+ env.pop('KF3_MEMORY_LIST_PROBE', None)
  if args.pool_probe: env['KF3_GFX_POOL_PROBE'] = '1'
  if args.timer_map: env['KF3_TIMER_MAP'] = '1'
  if args.private_translated_space: env['KF3_TSPACE'] = '1'
  if args.sw_runlist_probe: env['KF3_SW_RUNLIST_PROBE'] = '1'
+ if args.memory_list_probe: env['KF3_MEMORY_LIST_PROBE'] = '1'
  (work/'command.json').write_text(json.dumps({
      'revision': args.revision, 'argv': cmd, 'pool_probe': args.pool_probe,
      'timer_map': args.timer_map,
      'private_translated_space': args.private_translated_space,
      'sw_runlist_probe': args.sw_runlist_probe,
+     'memory_list_probe': args.memory_list_probe,
      'gop': args.gop,
      'only_kayfabe_display': args.only_kayfabe_display,
      'time_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
