@@ -3,13 +3,26 @@
 **STATUS: RESEARCH, 2026-10-05.** Branch `codex/windows-pool-2026-10-05`.
 No successful Windows-through-Kayfabe GPU workload is claimed here yet.
 
-**Latest experiment H, 2026-10-05:** the opt-in metadata-only runlist allocation
+**Latest experiments H/I, 2026-10-05:** the opt-in metadata-only runlist allocation
 probe at `89618256` passes both previously blocked `0xb297` allocations. Windows
 then sends `ALLOC_MEMORY` (RPC function 4), refused, followed by control
 `0x20801111`, also refused, and teardown. The second refusal may be cleanup after
 the first; its position alone does not establish causality. Windows remains
 Code 43, with no GPU channel births. See [probe-h](probe-h/) and the comparison
 with E in [rpc-difference.txt](probe-h/rpc-difference.txt).
+
+I at `302f6c9a` adds bounded observation only and reproduces H's 213 RPC lines
+exactly. The refused function-4 request names `NV01_MEMORY_LIST_SYSTEM` (`0x81`),
+length `0x7000` (28 KiB), pageCount 1, flags `0x48002000`, zero pteAdjust/format.
+No PTE/address tail is captured. Public OGKM `memRegisterWithGsp_IMPL` explains
+this as registration of an existing memory descriptor with GSP; the class's
+public header explicitly says it creates descriptors, not new backing memory.
+The later 40-byte `0x20801111` request has a null Memory handle and zero counts,
+consistent with cleanup after the failed registration. This does not establish
+an empty-list success rule. Both requests remain refused; Windows remains
+Code 43 / smi exit 9 with zero GPU-channel births. I shut down cleanly, QEMU exit
+0. The first read-only status connection timed out before the SSH banner; the
+later status capture succeeded. Evidence is in [probe-i](probe-i/).
 
 **2026-10-05 ABI review follow-up:** the query now checks the compiler-measured
 40-byte layout and all six field offsets/widths for the exact configured tag,

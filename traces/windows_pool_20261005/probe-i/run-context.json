@@ -1,0 +1,38 @@
+{
+  "product_revision": "302f6c9ae0b4539d38d36f81fa78d082f27897d6",
+  "runner_revision": "13bf3358",
+  "comparison": "H plus bounded observation only",
+  "host_driver": "595.91.07",
+  "guest_driver": "580.88",
+  "gpu": "RTX 4070 AD104",
+  "vfio": false,
+  "rpc_lines": 213,
+  "rpc_identical_to_H": false,
+  "windows_problem": 43,
+  "nvidia_smi_exit": 9,
+  "qemu_exit": 0,
+  "gpu_channel_births": 0,
+  "first_status_attempt": "SSH banner timeout; no guest command ran",
+  "alloc_memory": {
+    "payload_bytes": 64,
+    "class": "0x81",
+    "flags": "0x48002000",
+    "length_bytes": 28672,
+    "page_count": 1,
+    "pte_adjust": 0,
+    "format": 0,
+    "PTEs_captured": false
+  },
+  "scheduling_raw_u32_le": [
+    "ff008250",
+    "00000000",
+    "00000000",
+    "00000000",
+    "00006000",
+    "00000000",
+    "00000001",
+    "00000000",
+    "00000000",
+    "00000000"
+  ]
+}

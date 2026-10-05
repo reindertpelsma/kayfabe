@@ -1,0 +1,10 @@
+{
+  "time_utc": "2026-10-05T01:18:23.466945+00:00",
+  "script": "/data/kayfabe-runtime/windows-pool-20261005/shutdown.ps1",
+  "script_sha256": "1a615e312d5c8ba48596fcc1016a9406799c77d547f864c4c510802832457a2d",
+  "exitcode": 0,
+  "pinned_host_key": true,
+  "publickey_only": true,
+  "agent_forwarding": false,
+  "private_key_stayed_on_controller": true
+}

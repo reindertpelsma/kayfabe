@@ -50,8 +50,15 @@ master. The older master status below is historical for this checkout.
   213 traced RPCs (E: 208), 215 serviced messages and no channel births. Function
   4 precedes the scheduling refusal; the latter may be cleanup, not the cause.
   H shut down cleanly, QEMU exit 0; evidence is `traces/windows_pool_20261005/probe-h/`.
-  Next: bounded parameter diagnostics, public memory-registration contract and
-  scheduling semantics. No successful scheduling reply is being introduced.
+  Fresh I at `302f6c9a` adds bounded observation only and exactly reproduces H's
+  RPC trace. The new memory request is class `0x81` (public
+  NV01_MEMORY_LIST_SYSTEM), length `0x7000`, pageCount 1, flags `0x48002000`, zero
+  pteAdjust/format. The following scheduling request has a null Memory handle
+  and zero counts, consistent with cleanup. No PTE tail was logged. I also remains
+  Code 43 and shut down cleanly with QEMU exit 0; all Windows bench VMs are off.
+  Next: implement/audit the source-derived guest memory-registration contract,
+  preserving typed ownership, actual memory semantics and all v3 axes. No host
+  privileged allocation or successful scheduling reply has been introduced.
   `maxTSGs=0` means native default capacity, not zero capacity; the probe omits
   native buffers and is explicitly incomplete. See
   `tools/windows-debug-capture/evidence/2026-10-05-nvcd/` for the causal proof and
