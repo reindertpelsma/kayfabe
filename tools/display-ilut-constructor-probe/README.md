@@ -3,6 +3,10 @@
 **STATUS: RESEARCH, 2026-10-05.** Default off, based on the TMO-only experiment
 `b431aeaf`. This cannot provide a working display or demonstrate input-LUT processing.
 
+**Follow-up, 2026-10-05:** M passes the first ILUT constructor and fails at the following TMO
+constructor in the recovered journal. [Experiment N](TMO_SURFACE.md) adds a separate default-off
+TMO surface-loading discriminator while preserving the same immutable all-method refusal.
+
 Windows580.88's pinned per-window constructor rejects a two-buffer descriptor
 when its ILUT surface-loading flag is clear. The caller derives that flag from
 public `PRECOMP_WIN_PIPE_HDR_CAPB_ILUT_SFCLOAD` and unconditionally requests two

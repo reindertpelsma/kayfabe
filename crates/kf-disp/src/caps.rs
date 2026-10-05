@@ -128,6 +128,48 @@ pub fn ilut_constructor_probe_page(
     Ok(p)
 }
 
+/// Constructor-only TMO surface-loading discriminator, layered on the ILUT probe.
+/// Adds only source-defined TMO surface loading, retaining DIRECT and size/count fields.
+/// Must use `Engine::new_constructor_probe`: no TMO methods or LUT work are implemented.
+pub fn tmo_surface_constructor_probe_page(
+    t: &ClassTable,
+    r: &Regs,
+    caps: u32,
+    heads: u32,
+    windows: u32,
+) -> Result<CapsPage, Missing> {
+    let mut p = ilut_constructor_probe_page(t, r, caps, heads, windows)?;
+    let register = "PRECOMP_WIN_PIPE_HDR_CAPD";
+    let name = "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_SFCLOAD";
+    let field = t
+        .f(caps, name)
+        .ok_or_else(|| Missing(format!("NV{caps:04X}_{name}")))?;
+    let yes = t
+        .v(caps, &format!("{name}_TRUE"))
+        .ok_or_else(|| Missing(format!("NV{caps:04X}_{name}_TRUE")))?;
+    let count = t
+        .v(caps, &format!("{register}__SIZE_1"))
+        .filter(|count| windows <= *count && *count as usize <= PAGE / 4)
+        .ok_or_else(|| Missing(format!("NV{caps:04X}_{register}__SIZE_1 bound")))?;
+    let (high, low) = field;
+    if high >= 32 || low != high || yes == 0 || u64::from(yes) >= (1_u64 << (high - low + 1)) {
+        return Err(Missing(format!("NV{caps:04X}_{name} field/value bound")));
+    }
+    for i in 0..windows.min(count) {
+        let off = t
+            .a(caps, register, i)
+            .filter(|off| *off % 4 == 0 && (*off as usize) < PAGE)
+            .ok_or_else(|| Missing(format!("NV{caps:04X}_{register}({i}) page bound")))?;
+        if let Some((_, word)) = p.words.iter_mut().find(|(at, _)| *at == off) {
+            *word = put(*word, field, yes);
+        } else {
+            p.words.push((off, put(0, field, yes)));
+        }
+    }
+    p.words.sort_unstable_by_key(|(off, _)| *off);
+    Ok(p)
+}
+
 /// ★ Author the page for caps class `caps` (the family's `…73`), `heads` heads and `windows` windows.
 ///
 /// # Errors
@@ -249,6 +291,106 @@ pub fn page(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tmo_surface_probe_changes_only_derived_capd_bit_in_every_display_cell() {
+        for version in ["580.65.06", "580.159.04"] {
+            let t = crate::class::for_version(version).unwrap();
+            for row in kf_chip::display::ALL {
+                let r = Regs::for_ip(version, row.ip_version).unwrap();
+                let ordinary = page(t, &r, row.classes.caps, row.heads, row.windows).unwrap();
+                let ilut =
+                    ilut_constructor_probe_page(t, &r, row.classes.caps, row.heads, row.windows)
+                        .unwrap();
+                let probe = tmo_surface_constructor_probe_page(
+                    t,
+                    &r,
+                    row.classes.caps,
+                    row.heads,
+                    row.windows,
+                )
+                .unwrap();
+                let field = t
+                    .f(row.classes.caps, "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_SFCLOAD")
+                    .unwrap();
+                let yes = t
+                    .v(
+                        row.classes.caps,
+                        "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_SFCLOAD_TRUE",
+                    )
+                    .unwrap();
+                let offsets: Vec<_> = (0..row.windows)
+                    .map(|i| {
+                        t.a(row.classes.caps, "PRECOMP_WIN_PIPE_HDR_CAPD", i)
+                            .unwrap()
+                    })
+                    .collect();
+                assert_eq!(probe.base, ilut.base);
+                for offset in (0..PAGE as u32).step_by(4) {
+                    let expected = if offsets.contains(&offset) {
+                        assert_eq!(crate::class::get(ilut.word(offset), field), 0);
+                        put(ilut.word(offset), field, yes)
+                    } else {
+                        ilut.word(offset)
+                    };
+                    assert_eq!(
+                        probe.word(offset),
+                        expected,
+                        "{version}/{:?} {offset:#x}",
+                        row.classes
+                    );
+                }
+                assert_eq!(
+                    ordinary,
+                    page(t, &r, row.classes.caps, row.heads, row.windows).unwrap()
+                );
+                assert_eq!(
+                    ilut,
+                    ilut_constructor_probe_page(t, &r, row.classes.caps, row.heads, row.windows)
+                        .unwrap()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn tmo_surface_probe_refuses_missing_or_invalid_derived_layout() {
+        let raw = include_str!("../data/classes-580.65.06.tsv");
+        let r = Regs::for_ip("580.65.06", kf_chip::display::ADA.ip_version).unwrap();
+        for missing in [
+            "F\tNVC773_PRECOMP_WIN_PIPE_HDR_CAPD_TMO_SFCLOAD\t",
+            "V\tNVC773_PRECOMP_WIN_PIPE_HDR_CAPD_TMO_SFCLOAD_TRUE\t",
+            "A\tNVC773_PRECOMP_WIN_PIPE_HDR_CAPD\t",
+            "V\tNVC773_PRECOMP_WIN_PIPE_HDR_CAPD__SIZE_1\t",
+        ] {
+            let text = raw
+                .lines()
+                .filter(|line| !line.starts_with(missing))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let t = ClassTable::parse(&text);
+            assert!(ilut_constructor_probe_page(&t, &r, 0xC773, 4, 8).is_ok());
+            assert!(
+                tmo_surface_constructor_probe_page(&t, &r, 0xC773, 4, 8).is_err(),
+                "{missing}"
+            );
+        }
+        for extra in [
+            "A\tNVC773_PRECOMP_WIN_PIPE_HDR_CAPD\t4096\t32",
+            "A\tNVC773_PRECOMP_WIN_PIPE_HDR_CAPD\t1933\t32",
+            "V\tNVC773_PRECOMP_WIN_PIPE_HDR_CAPD__SIZE_1\t7",
+            "F\tNVC773_PRECOMP_WIN_PIPE_HDR_CAPD_TMO_SFCLOAD\t32\t32",
+            "F\tNVC773_PRECOMP_WIN_PIPE_HDR_CAPD_TMO_SFCLOAD\t9\t8",
+            "V\tNVC773_PRECOMP_WIN_PIPE_HDR_CAPD_TMO_SFCLOAD_TRUE\t0",
+            "V\tNVC773_PRECOMP_WIN_PIPE_HDR_CAPD_TMO_SFCLOAD_TRUE\t2",
+        ] {
+            let t = ClassTable::parse(&format!("{raw}\n{extra}\n"));
+            assert!(
+                tmo_surface_constructor_probe_page(&t, &r, 0xC773, 4, 8).is_err(),
+                "{extra}"
+            );
+        }
+    }
 
     #[test]
     fn ilut_probe_changes_only_generated_surface_load_bit_in_every_display_cell() {
