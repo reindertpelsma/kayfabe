@@ -527,6 +527,13 @@ impl DisplayPolicy {
 
     fn on_control(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         let req = self.driver.decode_rpc_control(&cmd.payload).ok()?;
+        if req.cmd == 0x73013d || req.cmd == 0x73011d || req.cmd == 0x731369 || req.cmd == 0x73014b || req.cmd == 0x730285 || req.cmd == 0x73012c || req.cmd == 0x730109 {
+            eprintln!("kf-rm: display: Windows hack answering {:#010x}", req.cmd);
+            return Some(Reply {
+                rpc_result: 0,
+                body: req.params.to_vec(),
+            });
+        }
         if !self.claims(req.cmd) {
             return None;
         }
