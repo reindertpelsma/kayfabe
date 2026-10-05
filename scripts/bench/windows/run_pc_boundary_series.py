@@ -49,8 +49,8 @@ def log(message):
 def main():
     ROOT.mkdir(parents=True, exist_ok=True, mode=0o700)
     script = (HERE/'boundary_status.ps1').read_text()
-    for arm, number in [('vfio', 3), ('kayfabe', 1), ('vfio', 4),
-                        ('kayfabe', 2), ('vfio', 5), ('kayfabe', 3)]:
+    for arm, number in [('vfio', 4), ('kayfabe', 1), ('vfio', 5),
+                        ('kayfabe', 2), ('vfio', 6), ('kayfabe', 3)]:
         name = f'boundary-{arm}-{number}'
         local = ROOT/name
         local.mkdir(mode=0o700)
@@ -58,6 +58,7 @@ def main():
         unit = 'kf-'+name
         log('START '+name)
         remote(['systemd-run', '--unit='+unit, '--property=RuntimeMaxSec=900',
+                '--property=KillMode=mixed', '--property=TimeoutStopSec=180',
                 '/usr/bin/python3', '-u', REMOTE+'/boundary-tools/pc_boundary_experiment.py',
                 '--arm', arm, '--run', number, '--no-mmio-trace'])
         started = time.monotonic()

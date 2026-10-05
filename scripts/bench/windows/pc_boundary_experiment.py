@@ -124,6 +124,10 @@ def main():
             if child.returncode:
                 raise RuntimeError(f'QEMU exited {child.returncode}')
         finally:
+            # A controller stop can arrive while a size-limit failure already
+            # unwinds. A second signal must not interrupt ownership restoration.
+            for sig in (signal.SIGTERM, signal.SIGHUP):
+                signal.signal(sig, signal.SIG_IGN)
             if child and child.poll() is None:
                 # The guest disk is a disposable overlay. Never rebind PCI while
                 # QEMU is alive. SIGTERM asks QEMU to perform its normal teardown.
