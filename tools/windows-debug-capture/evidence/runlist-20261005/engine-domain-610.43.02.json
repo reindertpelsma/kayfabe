@@ -1,0 +1,12 @@
+{
+  "public_tag": "610.43.02",
+  "proprietary_object_sha256": "af6dbeebe6b7d4d5ea63fa954796dc78de69cfaa754922a3425f62dab108b859",
+  "public_function": "gpuGetRmEngineType_IMPL",
+  "retail_symbol": "_nv029646rm",
+  "retail_text_offset": "0x556f80",
+  "table_rodata_offset": "0x55954c0",
+  "inputs_compared": "0..84 inclusive",
+  "all_85_match": true,
+  "public_function_sha256": "5e67d107c8f7b7e20d6cc37635702178010ca1b78cda31998ec32e0b1e2f5447",
+  "qualification": "Retail edge branches reviewed by disassembly; only public source was compiled and executed."
+}

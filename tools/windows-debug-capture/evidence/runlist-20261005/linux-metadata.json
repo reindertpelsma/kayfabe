@@ -1,0 +1,303 @@
+{
+  "schema": 2,
+  "nvoc_name_relation": {
+    "public_class_count": 299,
+    "exceptions": [],
+    "value_origin": "compiler-preprocessed generated headers; numeric values compiled",
+    "public_class_pairs_sha256": "d08bfb0516c13d6ff695483e9305b2f9a78f8d8347f43f5a9be1f73d746f6490",
+    "candidate_name": "RunlistApi",
+    "candidate_md5": "f4b771218c13a4ed2ce4b8106ff25038",
+    "qualification": "Name inference from 24-bit hash plus matching semantics; not a published external-class definition or uniqueness proof."
+  },
+  "installers": [
+    {
+      "driver_file_version": "535.309.01",
+      "installer_sha256": "288b4902ea79b017b49a9226a84f7eaa3e6b49ca0146ae50277c2fe19dd39803",
+      "checksum_url": "https://download.nvidia.com/XFree86/Linux-x86_64/535.309.01/NVIDIA-Linux-x86_64-535.309.01.run.sha256sum",
+      "execution": "no installer/object execution; public layout probe only",
+      "compiled_metadata": {
+        "public_commit": "15b1a21dfe4eab54a463a0ea3086823ae35fe02e",
+        "compiler": "cc (Ubuntu 15.2.0-16ubuntu1) 15.2.0",
+        "mode": "x86_64; NV_PRINTF_STRINGS_ALLOWED=0",
+        "layouts": {
+          "RS_RESOURCE_DESC": {
+            "externalClassId": 0,
+            "internalClassId": 4,
+            "pClassInfo": 8,
+            "allocParamSize": 16,
+            "bParamRequired": 20,
+            "bMultiInstance": 21,
+            "bAnyParent": 22,
+            "pParentList": 24,
+            "freePriority": 32,
+            "flags": 36,
+            "sizeof": 56
+          },
+          "NVOC_CLASS_INFO": {
+            "size": 0,
+            "classIdProbe": [
+              0,
+              0,
+              0,
+              0,
+              255,
+              255,
+              255,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "sizeof": 16
+          },
+          "NVOC_EXPORTED_METHOD_DEF": {
+            "pFunc": 0,
+            "flags": 8,
+            "accessRight": 12,
+            "methodId": 16,
+            "paramSize": 20,
+            "pClassInfo": 24,
+            "sizeof": 32
+          }
+        }
+      },
+      "objects": [
+        {
+          "archive_member": "kernel/nvidia/nv-kernel.o_binary",
+          "sha256": "8c753d0898c478c56e22958d35aa271d671b3eb58f45069369b1df19480433f0",
+          "bytes": 64030680,
+          "class_b297": [
+            {
+              "section": ".data",
+              "offset": "0xc1c8",
+              "external_class": "0xb297",
+              "internal_class": "0xf4b771",
+              "alloc_parameter_size": 12,
+              "parameters_required": true,
+              "multi_instance": true,
+              "any_parent": false,
+              "parent_class_ids": [
+                "0x4b01b3"
+              ],
+              "free_priority": 0,
+              "flags": "0x103",
+              "class_info": {
+                "section": ".rodata",
+                "section_index": 5,
+                "offset": 39976192,
+                "symbol": "_nv002246rm",
+                "symbol_size": 40,
+                "object_size": 1056,
+                "class_id": "0xf4b771"
+              }
+            }
+          ],
+          "controls": [
+            {
+              "command": "0x20801111",
+              "parameter_size": 40,
+              "section": ".rodata",
+              "method_id_offset": "0x2624ff0",
+              "flags": "0x2200",
+              "access_right": 0,
+              "function": {
+                "section": ".text",
+                "section_index": 1,
+                "offset": 4443664,
+                "symbol": "_nv046624rm",
+                "symbol_size": 675
+              },
+              "class_info": {
+                "section": ".rodata",
+                "section_index": 5,
+                "offset": 40017792,
+                "symbol": "_nv002259rm",
+                "symbol_size": 40,
+                "object_size": 9896,
+                "class_id": "0x4b01b3"
+              }
+            }
+          ]
+        },
+        {
+          "archive_member": "kernel-open/nvidia/nv-kernel.o_binary",
+          "sha256": "021c7ec28750191ae6d3f4d6a8876973f76275f70f29e336c5be8eb8106c94f3",
+          "bytes": 9970456,
+          "class_b297": [],
+          "controls": []
+        }
+      ]
+    },
+    {
+      "driver_file_version": "610.43.02",
+      "installer_sha256": "3034a054bb4cdf7752ff8dc272564cb105513804bff53538945901b16ca77463",
+      "checksum_url": "https://download.nvidia.com/XFree86/Linux-x86_64/610.43.02/NVIDIA-Linux-x86_64-610.43.02.run.sha256sum",
+      "execution": "no installer/object execution; public layout probe only",
+      "compiled_metadata": {
+        "public_commit": "86856f779971146f807a7ae2a864b4aee147b553",
+        "compiler": "cc (Ubuntu 15.2.0-16ubuntu1) 15.2.0",
+        "mode": "x86_64; NV_PRINTF_STRINGS_ALLOWED=0",
+        "layouts": {
+          "RS_RESOURCE_DESC": {
+            "externalClassId": 0,
+            "internalClassId": 4,
+            "pClassInfo": 8,
+            "allocParamSize": 16,
+            "bParamRequired": 20,
+            "bMultiInstance": 21,
+            "bAnyParent": 22,
+            "pParentList": 24,
+            "freePriority": 32,
+            "flags": 36,
+            "sizeof": 56
+          },
+          "NVOC_CLASS_INFO": {
+            "size": 0,
+            "classIdProbe": [
+              0,
+              0,
+              0,
+              0,
+              255,
+              255,
+              255,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "sizeof": 16
+          },
+          "NVOC_EXPORTED_METHOD_DEF": {
+            "pFunc": 0,
+            "flags": 8,
+            "accessRight": 12,
+            "methodId": 16,
+            "paramSize": 20,
+            "pClassInfo": 24,
+            "sizeof": 32
+          }
+        }
+      },
+      "objects": [
+        {
+          "archive_member": "kernel/nvidia/nv-kernel.o_binary",
+          "sha256": "af6dbeebe6b7d4d5ea63fa954796dc78de69cfaa754922a3425f62dab108b859",
+          "bytes": 120934064,
+          "class_b297": [
+            {
+              "section": ".data",
+              "offset": "0xc030",
+              "external_class": "0xb297",
+              "internal_class": "0xf4b771",
+              "alloc_parameter_size": 12,
+              "parameters_required": true,
+              "multi_instance": true,
+              "any_parent": false,
+              "parent_class_ids": [
+                "0x4b01b3"
+              ],
+              "free_priority": 0,
+              "flags": "0xa153",
+              "class_info": {
+                "section": ".rodata",
+                "section_index": 5,
+                "offset": 91125024,
+                "symbol": "_nv003112rm",
+                "symbol_size": 40,
+                "object_size": 336,
+                "class_id": "0xf4b771"
+              }
+            }
+          ],
+          "controls": [
+            {
+              "command": "0x20801110",
+              "parameter_size": 8,
+              "section": ".rodata",
+              "method_id_offset": "0x56ed6d0",
+              "flags": "0x44",
+              "access_right": 0,
+              "function": {
+                "section": ".text",
+                "section_index": 1,
+                "offset": 12518576,
+                "symbol": "",
+                "symbol_size": 0
+              },
+              "class_info": {
+                "section": ".rodata",
+                "section_index": 5,
+                "offset": 91174368,
+                "symbol": "_nv003128rm",
+                "symbol_size": 40,
+                "object_size": 1776,
+                "class_id": "0x4b01b3"
+              }
+            },
+            {
+              "command": "0x20801111",
+              "parameter_size": 40,
+              "section": ".rodata",
+              "method_id_offset": "0x56ed6f0",
+              "flags": "0x40",
+              "access_right": 0,
+              "function": {
+                "section": ".text",
+                "section_index": 1,
+                "offset": 4922608,
+                "symbol": "_nv055811rm",
+                "symbol_size": 659
+              },
+              "class_info": {
+                "section": ".rodata",
+                "section_index": 5,
+                "offset": 91174368,
+                "symbol": "_nv003128rm",
+                "symbol_size": 40,
+                "object_size": 1776,
+                "class_id": "0x4b01b3"
+              }
+            }
+          ]
+        },
+        {
+          "archive_member": "kernel-open/nvidia/nv-kernel.o_binary",
+          "sha256": "ce8963c3649ef0fd4b3c13fbc6e44ee81fe77473c8cffe82184074f2976e6f75",
+          "bytes": 19223480,
+          "class_b297": [],
+          "controls": [
+            {
+              "command": "0x20801110",
+              "parameter_size": 8,
+              "section": ".rodata",
+              "method_id_offset": "0x826c38",
+              "flags": "0x44",
+              "access_right": 0,
+              "function": null,
+              "class_info": {
+                "section": ".rodata",
+                "section_index": 5,
+                "offset": 8559712,
+                "symbol": "__nvoc_class_def_Subdevice",
+                "symbol_size": 48,
+                "object_size": 1736,
+                "class_id": "0x4b01b3"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
