@@ -2,9 +2,11 @@
 
 **STATUS: RESEARCH, 2026-10-05.** Prepared offline. No PC/QGA/VM/GPU access was performed. PowerShell AST
 and Python compilation pass; journal normalization reproduces all 24 L assertions
-when compared with itself. New transfer/collection orchestration is not yet runtime-tested.
+when compared with itself. The later M attempt preserved its dump, then KD/QGA failed; see the
+[offline recovered result](evidence-m/README.md). A completed end-to-end collection
+is not claimed.
 
-These three committed scripts are byte-identical to the originally prepared
+The original three committed scripts are byte-identical to the originally prepared
 controller recipes; their exact hashes are in [source-sha256.json](source-sha256.json).
 Only sources and documentation are stored here. Dumps, debugger binaries, full
 journal output and the local self-comparison result are deliberately excluded.
@@ -16,7 +18,7 @@ refuses reuse. The source code never initiates a VM, restarts an adapter, or shu
 down a guest.
 
 Trusted inputs used on the original controller:
-- `/data/kayfabe-vfio-gsp-observer-20261005/tools/windows-debug-capture/analyze-dump.ps1`
+- `/PRIVATE/kd-sources/analyze-dump.ps1`
   SHA256 `7373e87e3f2681ccd223ada92f1c561e8f29b147c83c599d3865aa1a2049dc6a`
   Introduced at `4f27aadbdaca65b85f088c3fe0e17e5cd976f469`.
 - `/tmp/kf-kd-reproduced-v4/kf-kd-bundle.zip` (13 MiB)
@@ -117,7 +119,7 @@ Use its strict `h.remote`, `h.guest`, `h.SCP` transport only, serially.
 ## Decode and compare offline
 
 ```sh
-python3 /data/kayfabe-vfio-gsp-observer-20261005/tools/windows-debug-capture/decode-nvcd.py \
+python3 /PRIVATE/nvcd-sources/decode-nvcd.py \
   /tmp/kf-nvcd-schema-public-v1/schema.json /PRIVATE_M/analysis.stdout /PRIVATE_M/nvcd.json \
   --offset 0x1d68 --enumtag-guid 270A33FD-3DA6-460D-BA893C1BAE21E39B
 python3 /data/kayfabe-runtime/windows-pool-20261005/probe-m-recipes/compare-journal.py \
@@ -136,17 +138,28 @@ journal is diagnostic progress, not proof that the remaining display path works.
 ## Reproduce the trusted bundle and validate source
 
 ```sh
-python3 tools/windows-debug-capture/fetch-debugger.py /PRIVATE/kd-bundle
+mkdir -p /PRIVATE/kd-sources /PRIVATE/nvcd-sources
+for name in analyze-dump.ps1 fetch-debugger.py debugger-manifest.json; do
+  git show 4f27aadbdaca65b85f088c3fe0e17e5cd976f469:tools/windows-debug-capture/$name > /PRIVATE/kd-sources/$name
+done
+for name in decode-nvcd.py build-nvcd-schema.sh nvcd-schema.c test_nvcd.py; do
+  git show eafe8a02aa3853c436c63a52ff640cbb167a306b:tools/windows-debug-capture/$name > /PRIVATE/nvcd-sources/$name
+done
+python3 /PRIVATE/kd-sources/fetch-debugger.py /PRIVATE/kd-bundle
+bash /PRIVATE/nvcd-sources/build-nvcd-schema.sh /TRUSTED/ogkm-580.65.06 /PRIVATE/nvcd-schema
 python3 -m py_compile tools/windows-debug-capture/watchdog-m/qga-files.py \
   tools/windows-debug-capture/watchdog-m/compare-journal.py
 ```
 
 The fetcher retrieves pinned official Microsoft CABs and recreates the exact ZIP;
-`7z` is required. The wrapper is [../analyze-dump.ps1](../analyze-dump.ps1), originally
+`7z` is required. The wrapper is [the pinned analyze-dump.ps1](https://github.com/reindertpelsma/kayfabe/blob/4f27aadbdaca65b85f088c3fe0e17e5cd976f469/tools/windows-debug-capture/analyze-dump.ps1), originally
 introduced by `4f27aadbdaca65b85f088c3fe0e17e5cd976f469`. To validate the recipe before
 first use, parse it with PowerShell's `System.Management.Automation.Language.Parser`
-and require zero errors. The transfer and collection orchestration has no Windows
-runtime claim yet; the underlying pinned KD wrapper has the earlier L result.
+and require zero errors. These explicit Git object reads also work on a branch
+where the earlier diagnostic files were not cherry-picked. The decoder and schema
+sources are pinned at
+[`eafe8a02`](https://github.com/reindertpelsma/kayfabe/tree/eafe8a02aa3853c436c63a52ff640cbb167a306b/tools/windows-debug-capture).
+The underlying wrapper passed L; M's partial collection is documented separately.
 
 ## One bounded transport recovery check
 

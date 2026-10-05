@@ -2,5 +2,8 @@
   "collect-m.ps1": "71841024fb138f2b4ce910f1fefb5682108acaf956934b834004bea0f6dae94b",
   "qga-files.py": "6a17782098a2739968a605e2d320f247f6e49096693dc4eb6878f6384c2f6049",
   "compare-journal.py": "07489982e4b9774662ec1a1672f0fc45af75297d296e7e6e1a447849e83560b3",
-  "qga-resync-ping.py": "a26cb53c0e48fbd325ad44d9ce11b3176bca7741e48caeb48133c0b67f58fede"
+  "qga-resync-ping.py": "a26cb53c0e48fbd325ad44d9ce11b3176bca7741e48caeb48133c0b67f58fede",
+  "compare-raw.py": "10e794b09ea0def90482033cffb8d2688c0b251d0482055c86336ae7ba06381f",
+  "test_compare_raw.py": "f09386bbda8ef4aad2cc17dd4f1c0e4d3ac2db0c57b1be0b3f8be1f8ff314867",
+  "inspect-m.py": "f566d5e19f8ae2de72d85e15aed332c1d4d6c28f73c04730d5fbf653a0f26514"
 }
