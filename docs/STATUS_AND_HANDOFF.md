@@ -1,3 +1,14 @@
+**BRANCH NOTE, 2026-10-05:** this checkout is
+`codex/guest-memory-list-probe-20261005`. Tested product code is `fdc991c9`.
+Windows J accepts both checked SYSRAM registrations and advances to display
+initialization; same-build K with the option off returns to the earlier failure.
+Code43 remains. The subsequent construction-only TMO diagnostic lives on
+`codex/windows-tmo-constructor-probe-20261005`, not this branch. All bench VMs are
+stopped; code and reviewed evidence are pushed. Read the
+[latest central handoff](https://github.com/reindertpelsma/kayfabe/blob/f9d32a0e/docs/STATUS_AND_HANDOFF.md)
+and `tools/memory-list-probe/README.md` before continuing. The older text below
+predates the completed J/K/L experiments; no production merge is implied.
+
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
 **STATUS: LIVE, 2026-10-05 — §0.0 below is the resume point.** ⊘ *The 2026-09-30 paragraph that follows is history:* **(2026-09-30)** Master = the code of **`afb552ea`** (`v3-mc23`: CUDA dynamic parallelism +
