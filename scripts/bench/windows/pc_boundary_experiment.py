@@ -80,7 +80,9 @@ def main():
             cmd[-1] = 'vfio-pci,host=0000:01:00.0,bus=pci.0,addr=0x6.0,multifunction=on'+suffix
             cmd += ['-device', 'vfio-pci,host=0000:01:00.1,bus=pci.0,addr=0x6.1']
             if not a.no_mmio_trace:
-                (work/'trace-events').write_text('vfio_region_read\nvfio_region_write\nvfio_pci_read_config\nvfio_pci_write_config\n')
+                # Polling reads exhausted the first pilot's 256MiB bound before
+                # collection. Capture writes/config plus a separate caps snapshot.
+                (work/'trace-events').write_text('vfio_region_write\nvfio_pci_read_config\nvfio_pci_write_config\n')
                 cmd += ['-trace', f'events={work}/trace-events,file={work}/mmio.log']
             state = {'schema_version': 1, 'before': before, 'qemu_command': cmd}
         env = dict(os.environ)
@@ -94,6 +96,7 @@ def main():
                     qemu_sha256=digest(qemu), firmware_sha256=digest(work/'OVMF_VARS.fd'),
                     flags={flag: env.get(flag) for flag in FLAGS},
                     mmio_trace=a.arm == 'vfio' and not a.no_mmio_trace,
+                    mmio_read_coverage='not traced; capability page snapshot only',
                     time_utc=datetime.datetime.now(datetime.timezone.utc).isoformat())
         (work/'command.json').write_text(json.dumps(meta, indent=2)+'\n')
         child = None
