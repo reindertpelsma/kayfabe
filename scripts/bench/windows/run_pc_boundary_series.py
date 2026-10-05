@@ -51,10 +51,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--first-vfio', type=int, choices=range(1, 8), default=5)
     parser.add_argument('--first-kayfabe', type=int, choices=range(1, 8), default=1)
+    parser.add_argument('--pairs', type=int, choices=range(1, 4), default=3)
     args = parser.parse_args()
     ROOT.mkdir(parents=True, exist_ok=True, mode=0o700)
     script = (HERE/'boundary_status.ps1').read_text()
-    series = [(arm, first+i) for i in range(3)
+    series = [(arm, first+i) for i in range(args.pairs)
               for arm, first in [('vfio', args.first_vfio), ('kayfabe', args.first_kayfabe)]]
     for arm, number in series:
         name = f'boundary-{arm}-{number}'
@@ -102,7 +103,9 @@ def main():
             capture = remote(['python3', REMOTE+'/boundary-tools/capture_display_caps.py', work])
             (local/'capture.stdout').write_text(capture.stdout)
             log(name+' status='+str(status['nvidia_smi']['exit_code'])+' caps='+capture.stdout.strip())
-            fetch(work, local, ['command.json', 'display-caps.bin', 'display-caps.json'])
+            caps = json.loads(capture.stdout)
+            names = ['display-caps.bin', 'display-caps.json'] if caps['available'] else ['display-caps-unavailable.json']
+            fetch(work, local, ['command.json']+names)
             guest(work, '& shutdown.exe /s /t 0; if ($LASTEXITCODE) { exit $LASTEXITCODE }')
             deadline = time.monotonic()+120
             while remote(['systemctl', 'is-active', unit], check=False).stdout.strip() == 'active':

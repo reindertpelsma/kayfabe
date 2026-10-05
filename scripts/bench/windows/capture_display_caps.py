@@ -31,6 +31,12 @@ def main():
             raise RuntimeError('Expected one NVIDIA GPU in PCI slot 6.0')
         dev = devices[0]
         bars = [r for r in dev['regions'] if r.get('bar') == 0 and r['type'] == 'memory']
+        if len(bars) == 1 and bars[0]['address'] == -1:
+            meta = dict(schema=1, available=False, pci=dev,
+                        note='BAR0 decoding disabled at sampling time; no page read was attempted')
+            (work/'display-caps-unavailable.json').write_text(json.dumps(meta, indent=2)+'\n')
+            print(json.dumps({'available': False, 'reason': meta['note']}))
+            return
         if len(bars) != 1 or bars[0]['address'] <= 0 or bars[0]['size'] < 0x641000:
             raise RuntimeError('Display capability page is outside assigned BAR0')
         address = bars[0]['address']+0x640000
@@ -44,7 +50,7 @@ def main():
                     sha256=hashlib.sha256(data).hexdigest(),
                     note='One snapshot after startup; no claim of observing every guest read')
         (work/'display-caps.json').write_text(json.dumps(meta, indent=2)+'\n')
-        print(json.dumps({'sha256': meta['sha256'], 'bytes': len(data)}))
+        print(json.dumps({'available': True, 'sha256': meta['sha256'], 'bytes': len(data)}))
     finally:
         s.close()
 
