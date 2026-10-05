@@ -1,0 +1,21 @@
+{
+  "product_revision": "d2c7ca1b",
+  "driver_sha256": "31c79cce80b573e21647ace8d1a2b65697f992e7f86196f89e30af477b1bd47c",
+  "dump_sha256": "d1fd05107c458a985cd0dc1f3e341aceded78a1fccca3b0360d2e058ad14928e",
+  "dump_bytes": 343710,
+  "original_and_preserved_dump_match": true,
+  "kd_metadata_seconds": 180,
+  "kd_signature_entries": 19,
+  "all_recorded_signatures_valid": true,
+  "kd_stdout_bytes": 204441,
+  "kd_stdout_sha256": "48e1a97e9eb3855670c790228f0ee31ce0dd2df21063019d7e82055981f2cc3f",
+  "kd_stderr_bytes": 0,
+  "pipe_error_1450_occurrences": 5957,
+  "has_bugcheck_analysis": false,
+  "has_stack_text": false,
+  "has_completion_marker": false,
+  "result_json_recovered": false,
+  "kd_analysis_complete": false,
+  "clean_windows_shutdown_verified": false,
+  "raw_journal_comparison_available": true
+}
