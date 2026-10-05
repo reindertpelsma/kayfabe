@@ -1,0 +1,13 @@
+PROBE_IDENTITY Uid:	65534	65534	65534	65534 CapEff:	0000000000000000 gpu_minor=0
+PROBE_DEVICE driver=595.91.07 arch=(400, 4, 161) bdf=0000:01:00.0 mode=instrumentation-self-test
+kf-host: channel birth h=0xcafe000b engine=0x9 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=not-held
+kf-host: channel birth h=0xcafe0014 engine=0x9 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=not-held
+BASELINE space=0xcafe0004 Observation { fence: true, ce: true, error: ErrorNotification { except_type: 0, engine_type: 0, status: 0, timestamp: 0 }, word: 2009224280, get: 1, elapsed_ms: 1 }
+BASELINE space=0xcafe000d Observation { fence: true, ce: true, error: ErrorNotification { except_type: 0, engine_type: 0, status: 0, timestamp: 0 }, word: 2285743015, get: 1, elapsed_ms: 0 }
+ALIAS_POSITIVE base=0xf000010000 Observation { fence: true, ce: true, error: ErrorNotification { except_type: 0, engine_type: 0, status: 0, timestamp: 0 }, word: 2009224280, get: 2, elapsed_ms: 0 }
+WINDOW_OBSERVED target=0xf000015000 expected=Fault Observation { fence: false, ce: false, error: ErrorNotification { except_type: 31, engine_type: 1, status: 65535, timestamp: 1791159907143485632 }, word: 2448434598, get: 3, elapsed_ms: 4 }
+BASELINE space=0xcafe000d Observation { fence: true, ce: true, error: ErrorNotification { except_type: 0, engine_type: 0, status: 0, timestamp: 0 }, word: 2285743015, get: 2, elapsed_ms: 0 }
+WINDOW_FINAL Observation { fence: false, ce: false, error: ErrorNotification { except_type: 31, engine_type: 1, status: 65535, timestamp: 1791159907143485632 }, word: 2448434598, get: 3, elapsed_ms: 4 }
+WINDOW_CHECK baseline=true neighbor_after=true source_unchanged=true bounded_read=4
+WINDOW_CLEANUP=PASS
+WINDOW_PROBE_VERDICT=FAIL
