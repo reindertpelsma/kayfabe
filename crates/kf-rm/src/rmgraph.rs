@@ -357,6 +357,9 @@ impl HandleRef {
 /// The Axis-A adapter decodes real wire structs into this.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct AllocFacts {
+    /// Default-off diagnostic metadata, owned by this resource's ordinary graph lifetime.
+    /// Only the explicitly gated object policy constructs it after checking live parents.
+    pub software_runlist_probe: Option<SoftwareRunlistProbe>,
     /// Declared VASpace handle (`hVASpace`), if the object names one
     /// (TSG, CtxShare, Channel). `None` models `hVASpace=0` (GSP-managed).
     pub h_vaspace: Option<HObject>,
@@ -482,6 +485,17 @@ pub struct AllocFacts {
     /// narrowed; `channel_engine` remains the only reading the core acts on. `None` is
     /// exactly `channel_engine`'s `None` — *"could not read it"*, never *"declared GR"*.
     pub channel_engine_type: Option<u32>,
+}
+
+/// No addresses or storage: just the declared engine and checked parent incarnations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SoftwareRunlistProbe {
+    /// Declared NV2080 engine type, present in this device's advertised engine caps.
+    pub engine_type: u32,
+    /// Live owning Subdevice at allocation time (never a recyclable handle alone).
+    pub subdevice: ResourceKey,
+    /// Live same-client Device at allocation time.
+    pub device: ResourceKey,
 }
 
 /// ★★★ **The GPFIFO ring a channel declared, verbatim** — `gpFifoOffset` /
@@ -1526,7 +1540,11 @@ impl RmGraph {
                     incarnation: 0,
                     parent,
                     class,
-                    kind: self.classify(class),
+                    kind: if facts.software_runlist_probe.is_some() {
+                        ObjectKind::SoftwareRunlistProbe
+                    } else {
+                        self.classify(class)
+                    },
                     facts,
                 };
                 // ★ G9 (§12.21): a `Device` may only name a physical GPU this device was
@@ -2222,6 +2240,15 @@ impl RmGraph {
     pub fn node(&self, key: NodeKey) -> Option<&RmNode> {
         let id = self.handles.get(&key)?.res();
         self.resources.get(&id).map(|r| &r.node)
+    }
+
+    /// A live allocation, excluding aliases even when they reuse an old origin value.
+    pub(crate) fn allocated_node(&self, key: NodeKey) -> Option<&RmNode> {
+        let handle = self.handles.get(&key)?;
+        if !handle.is_origin() {
+            return None;
+        }
+        self.resources.get(&handle.res()).map(|r| &r.node)
     }
 
     /// ★ The Device→[`GpuId`] derivation (`multi_gpu_and_mig.md` item 1): resolve

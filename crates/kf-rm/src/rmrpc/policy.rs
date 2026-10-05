@@ -219,6 +219,16 @@ impl Faulted for ObjectsRefusal {
 /// ★★★ **The object model, as the seam a later crate implements.** Narrow on purpose: see
 /// this module's header for what the old eleven-method `ObjectModel` became.
 pub trait RmObjects: Send {
+    /// Explicit diagnostic seam; object implementations refuse unless they support
+    /// the bounded graph-only metadata operation. Never delegates to a host alloc.
+    fn software_runlist_probe(
+        &mut self,
+        _request: crate::sw_runlist_probe::Declaration,
+    ) -> Result<RmEvent, ObjectsRefusal> {
+        Err(ObjectsRefusal::NotModelled {
+            what: "software-runlist allocation diagnostic unavailable",
+        })
+    }
     /// Apply one declared protocol fact. `params` is the alloc's own params window (empty for
     /// every other event), so an implementor making a host twin has the guest's declaration
     /// without re-decoding the wire.
@@ -257,6 +267,12 @@ impl GraphObjects {
 }
 
 impl RmObjects for GraphObjects {
+    fn software_runlist_probe(
+        &mut self,
+        request: crate::sw_runlist_probe::Declaration,
+    ) -> Result<RmEvent, ObjectsRefusal> {
+        crate::sw_runlist_probe::allocate(&mut self.graph, request)
+    }
     fn apply(&mut self, ev: RmEvent, _params: &[u8]) -> Result<(), ObjectsRefusal> {
         self.graph.apply(ev).map_err(ObjectsRefusal::Graph)
     }
@@ -270,6 +286,7 @@ impl RmObjects for GraphObjects {
 
 /// The shared half of [`GraphPolicy`] and [`ObjectPolicy`]: reassemble → translate → apply.
 struct Bridge {
+    sw_runlist_probe: Option<crate::sw_runlist_probe::Probe>,
     abi: DriverAbiTable,
     guest_os: GuestOs,
     reasm: Reassembler,
@@ -286,6 +303,7 @@ struct Bridge {
 impl Bridge {
     fn new(abi: DriverAbiTable, guest_os: GuestOs, limits: ReasmLimits) -> Bridge {
         Bridge {
+            sw_runlist_probe: None,
             abi,
             guest_os,
             reasm: Reassembler::with_limits(limits),
@@ -311,7 +329,17 @@ impl Bridge {
                 Reassembled::Held => return Ok(Translation::Held),
                 Reassembled::Complete(full) => full,
             };
-            let t = translate(abi, guest_os, whole)?;
+            let probe_request = self.sw_runlist_probe.as_ref().and_then(|p| p.decode(whole));
+            let is_probe = probe_request.is_some();
+            let t = if let Some(request) = probe_request {
+                Translation::Event(
+                    objects
+                        .software_runlist_probe(request?)
+                        .map_err(BridgeRefusal::Objects)?,
+                )
+            } else {
+                translate(abi, guest_os, whole)?
+            };
             match t {
                 Translation::Event(ev) => {
                     let params = if matches!(ev, RmEvent::Alloc { .. }) {
@@ -319,7 +347,9 @@ impl Bridge {
                     } else {
                         &[]
                     };
-                    objects.apply(ev, params).map_err(BridgeRefusal::Objects)?;
+                    if !is_probe {
+                        objects.apply(ev, params).map_err(BridgeRefusal::Objects)?;
+                    }
                     if let Some(accepted) = &mut self.accepted {
                         accepted(whole);
                     }
@@ -514,6 +544,10 @@ pub const OBJECT_VERBS: &[kf_gsp::RpcFunction] = &[
 ];
 
 impl ObjectPolicy {
+    pub(crate) fn with_sw_runlist_probe(mut self, probe: crate::sw_runlist_probe::Probe) -> Self {
+        self.bridge.sw_runlist_probe = Some(probe);
+        self
+    }
     /// Attach the display registry at the acceptance boundary, after reassembly and
     /// `RmObjects::apply`, never at a speculative/held RPC reply. This observer cannot
     /// answer or change an object verdict.

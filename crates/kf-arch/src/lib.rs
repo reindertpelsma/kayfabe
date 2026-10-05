@@ -145,6 +145,10 @@ pub enum ObjectKind {
     Device,
     /// Subdevice node (parent = device).
     Subdevice,
+    /// Default-off diagnostic: an unscheduled, guest-owned software-runlist name.
+    /// No native capacity, backing, scheduling, interrupt or completion is promised.
+    /// This is not a hardware engine class or a complete RunlistApi implementation.
+    SoftwareRunlistProbe,
     /// A GPU virtual address space (`FERMI_VASPACE_A`-shaped, parent = device).
     /// ★ THE MEMORY BOUNDARY: once bound, it owns a PDB and the address plane
     /// keys on it (never on `Proc`).

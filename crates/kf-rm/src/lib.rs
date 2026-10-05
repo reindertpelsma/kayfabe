@@ -31,6 +31,7 @@ pub mod rmrpc;
 pub mod rpc;
 pub mod staticinfo;
 pub mod sticky;
+pub mod sw_runlist_probe;
 pub mod sweep;
 pub mod sysmembar;
 pub mod unserviced;
@@ -465,6 +466,17 @@ pub fn served_chain(
         static_info = static_info.with_name(n, sn);
     }
     let mut chain: Vec<Box<dyn kf_gsp::CommandPolicy>> = Vec::new();
+    if std::env::var("KF3_SW_RUNLIST_PROBE").as_deref() == Ok("1")
+        && let Some(policy) = objects.take()
+    {
+        let (probe, observer) =
+            sw_runlist_probe::Probe::new(driver, authored::engine_caps(&host.engines));
+        objects = Some(policy.with_sw_runlist_probe(probe));
+        chain.push(Box::new(observer));
+        eprintln!(
+            "kf-rm: EXPERIMENT software-runlist allocation metadata only; native backing and scheduling are NOT implemented"
+        );
+    }
     // ★ EXPERIMENT x11-dispsw: one switch, read off the display seat, sets BOTH halves — the query
     // answered and the alloc twinned (or refused) — so neither can be on without the other.
     // ⊘ Without a channel plane there is nothing to twin with, so the object is not offered at all
