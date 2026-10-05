@@ -85,7 +85,10 @@ master. The older master status below is historical for this checkout.
   chain, being analysed before further policy changes. Reviewed evidence:
   `traces/windows_pool_20261005/probe-j/`; raw dump/journal remain private on the
   controller under `/data/kayfabe-runtime/windows-pool-20261005/probe-j/private-kd/`.
-  A same-revision default-off comparison K is in progress.
+  The same-revision default-off comparison **K** returns to213 traced/215
+  serviced RPCs, refused function4 and no display-resource creation. It also
+  shut down cleanly. This isolates the registration flag as the source of J's
+  progress. See `traces/windows_pool_20261005/probe-k/`.
 - **Linux oracle:** native open595.91.07/RTX4070 accepts the ordinary class3e
   SYSTEM-memory allocation with REGISTER_MEMDESC_TO_PHYS_RM set, from UID65534,
   all capabilities zero and NoNewPrivs1. Both ordinary and registered28KiB

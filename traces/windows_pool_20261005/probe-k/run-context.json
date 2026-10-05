@@ -1,0 +1,12 @@
+{
+  "product_revision": "fdc991c9d3fd51dab005beda2487365661a3db25",
+  "runner_revision": "152afe7b",
+  "comparison": "same build and options as J, memory_list_probe disabled",
+  "fresh_overlay": true,
+  "rpc_trace_lines": 213,
+  "same_rpc_trace_as_i": false,
+  "code43": true,
+  "nvidia_smi_exit": 9,
+  "gpu_channel_births": 0,
+  "qemu_exit": 0
+}

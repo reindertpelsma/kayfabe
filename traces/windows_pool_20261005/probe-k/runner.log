@@ -1,0 +1,3 @@
+Formatting '/var/lib/kf-windows-20261005/probe-k/windows.qcow2', fmt=qcow2 cluster_size=65536 extended_l2=off compression_type=zlib size=161061273600 backing_file=/var/lib/kf-windows-20261005/baseline/windows.qcow2 backing_fmt=qcow2 lazy_refcounts=off refcount_bits=16
+KAYFABE_WINDOWS_START probe-k
+KAYFABE_WINDOWS_EXIT=0

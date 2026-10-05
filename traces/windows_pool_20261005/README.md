@@ -8,7 +8,9 @@ No successful Windows-through-Kayfabe GPU workload is claimed here yet.
 allocation:363 traced RPCs versus213 in I. Code43 remains; no GPU channels or
 display methods execute. The fresh live dump contains a new failure chain under
 analysis. J shut down cleanly. See [J evidence and limits](probe-j/README.md).
-The same-revision default-off comparison K is in progress.
+The [same-revision default-off comparison K](probe-k/README.md) returns to213
+traced RPCs and refuses registration, isolating the effect of that flag. K also
+shut down cleanly.
 
 **Earlier experiments H/I, 2026-10-05:** the opt-in metadata-only runlist allocation
 probe at `89618256` passes both previously blocked `0xb297` allocations. Windows
