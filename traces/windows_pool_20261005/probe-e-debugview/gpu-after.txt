@@ -1,0 +1,82 @@
+﻿
+
+Class                       : Display
+FriendlyName                : Microsoft Basic Display Adapter
+InstanceId                  : PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\3&267A616A&0&48
+Problem                     : CM_PROB_FAILED_START
+ConfigManagerErrorCode      : CM_PROB_FAILED_START
+ProblemDescription          : 
+Caption                     : Microsoft Basic Display Adapter
+Description                 : Microsoft Basic Display Adapter
+InstallDate                 : 
+Name                        : Microsoft Basic Display Adapter
+Status                      : Error
+Availability                : 
+ConfigManagerUserConfig     : False
+CreationClassName           : Win32_PnPEntity
+DeviceID                    : PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\3&267A616A&0&48
+ErrorCleared                : 
+ErrorDescription            : 
+LastErrorCode               : 
+PNPDeviceID                 : PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\3&267A616A&0&48
+PowerManagementCapabilities : 
+PowerManagementSupported    : 
+StatusInfo                  : 
+SystemCreationClassName     : Win32_ComputerSystem
+SystemName                  : VASTWIN
+ClassGuid                   : {4d36e968-e325-11ce-bfc1-08002be10318}
+CompatibleID                : {PCI\VEN_1234&DEV_1111&REV_02, PCI\VEN_1234&DEV_1111, 
+                              PCI\VEN_1234&CC_030000, PCI\VEN_1234&CC_0300...}
+HardwareID                  : {PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02, 
+                              PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4, 
+                              PCI\VEN_1234&DEV_1111&CC_030000, PCI\VEN_1234&DEV_1111&CC_0300}
+Manufacturer                : (Standard display types)
+PNPClass                    : Display
+Present                     : True
+Service                     : BasicDisplay
+PSComputerName              : 
+CimClass                    : ROOT/cimv2:Win32_PnPEntity
+CimInstanceProperties       : {Caption, Description, InstallDate, Name...}
+CimSystemProperties         : Microsoft.Management.Infrastructure.CimSystemProperties
+
+Class                       : Display
+FriendlyName                : NVIDIA GeForce RTX 4070
+InstanceId                  : PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&267A616A&0&30
+Problem                     : CM_PROB_FAILED_POST_START
+ConfigManagerErrorCode      : CM_PROB_FAILED_POST_START
+ProblemDescription          : 
+Caption                     : NVIDIA GeForce RTX 4070
+Description                 : NVIDIA GeForce RTX 4070
+InstallDate                 : 
+Name                        : NVIDIA GeForce RTX 4070
+Status                      : Error
+Availability                : 
+ConfigManagerUserConfig     : False
+CreationClassName           : Win32_PnPEntity
+DeviceID                    : PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&267A616A&0&30
+ErrorCleared                : 
+ErrorDescription            : 
+LastErrorCode               : 
+PNPDeviceID                 : PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&267A616A&0&30
+PowerManagementCapabilities : 
+PowerManagementSupported    : 
+StatusInfo                  : 
+SystemCreationClassName     : Win32_ComputerSystem
+SystemName                  : VASTWIN
+ClassGuid                   : {4d36e968-e325-11ce-bfc1-08002be10318}
+CompatibleID                : {PCI\VEN_10DE&DEV_2786&REV_A1, PCI\VEN_10DE&DEV_2786, 
+                              PCI\VEN_10DE&CC_030000, PCI\VEN_10DE&CC_0300...}
+HardwareID                  : {PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1, 
+                              PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458, 
+                              PCI\VEN_10DE&DEV_2786&CC_030000, PCI\VEN_10DE&DEV_2786&CC_0300}
+Manufacturer                : NVIDIA
+PNPClass                    : Display
+Present                     : True
+Service                     : nvlddmkm
+PSComputerName              : 
+CimClass                    : ROOT/cimv2:Win32_PnPEntity
+CimInstanceProperties       : {Caption, Description, InstallDate, Name...}
+CimSystemProperties         : Microsoft.Management.Infrastructure.CimSystemProperties
+
+
+

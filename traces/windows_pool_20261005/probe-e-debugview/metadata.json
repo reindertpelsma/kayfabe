@@ -1,0 +1,13 @@
+﻿{
+    "action":  "Capture",
+    "utc":  "2026-10-04T23:52:43.5977047Z",
+    "tool":  {
+                 "sha256":  "7954a8bbeb1f650bb5d2b8c4c6b642fd4585319d2092433ca841c7d672a4634b",
+                 "signature":  "Valid",
+                 "signer":  "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
+                 "thumbprint":  "1D77A9B9E8FE2075D9AD15123257FB90DB0DA4A1",
+                 "version":  "5.02"
+             },
+    "seconds":  90,
+    "restartAdapter":  true
+}

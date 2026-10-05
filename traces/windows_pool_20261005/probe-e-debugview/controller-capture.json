@@ -1,0 +1,10 @@
+{
+  "time_utc": "2026-10-04T23:54:15.303481+00:00",
+  "script": "/data/kayfabe-runtime/windows-pool-20261005/debugview-capture.ps1",
+  "script_sha256": "9bd1aadbf1b0ee035ccea26233bb30d66f61c36a350c1edcd410a7a694481b71",
+  "exitcode": 0,
+  "pinned_host_key": true,
+  "publickey_only": true,
+  "agent_forwarding": false,
+  "private_key_stayed_on_controller": true
+}

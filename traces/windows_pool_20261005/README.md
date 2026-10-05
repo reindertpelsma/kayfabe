@@ -136,3 +136,45 @@ full command, QEMU/serial logs, normal status and additional device properties.
 The latter script exits 1 when no matching event-log entries are found; device
 property queries themselves succeeded. No missing-event output establishes an
 absence of an internal NVIDIA error.
+
+## Probe E: current master plus private Translated spaces
+
+Unlike A–D, this binary comes from integration branch
+`codex/p1p2-integration-2026-10-05`, product revision
+`e71e4a8b21671d14b89c25602e78b687e8463333`, runner revision `0880e340`.
+It includes current master `906a76a4`, the full P1/P2 branch, the Windows pool
+experiment and timer mapping. All three opt-ins are enabled. QEMU 10.2.4 built
+successfully; the initial build needed `traces/driver_matrix` added to the bench's
+sparse checkout. No product guard was bypassed.
+
+The fresh overlay still reports Code 43 / nvidia-smi exit 9. All 208 traced RPC
+lines match C and D exactly (`probe-e-initial/rpc-comparison.json`), with 210
+serviced messages and zero GPU channel births. The logs report
+`tspace[built=yes]`; this does **not** test channel isolation because no guest
+GPU channel is born. The exact-revision hardware gates and adversarial isolation
+probes remain separate requirements. `probe-e-initial/` is a snapshot before any
+debug-tool installation or adapter restart; QEMU was still running.
+
+### Kernel diagnostics on E's disposable overlay
+
+Microsoft-signed DebugView CLI 5.02 captured a bounded 90-second kernel stream
+while `pnputil /restart-device` restarted the sole NVIDIA adapter. Both commands
+returned zero. This produced another GSP initialization sequence and retained
+Code 43. `probe-e-debugview/` contains the capture, adapter status, tool identity
+and exit records. `kernel.csv` is the tool's tab-separated log despite the suffix;
+`capture.stdout` contains CSV output. No NVIDIA driver binary or product policy
+was changed.
+
+The stream records NVIDIA startup and WER creating a WATCHDOG live dump. WER's
+classification is `0x1b0`, parameter 1 `2`, parameter 2 `0xffffffffc000009a`.
+Microsoft documents this as **video miniport StartDevice failure**, with the
+second parameter holding NTSTATUS; it is a diagnostic live dump, not a system
+bugcheck ([reference](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-0x1b0--video-miniport-failed-livedump)).
+`0xc000009a` is `STATUS_INSUFFICIENT_RESOURCES`. This identifies the reported
+failure class; it does **not** identify the failing allocation, prove physical
+RAM exhaustion, or establish which RPC response caused it. The captured NVIDIA
+messages contain no more precise RM error.
+
+Both the initial-start dump and restart dump are preserved privately on the
+controller; only hashes/sizes and selected WER classification fields are public.
+Raw dumps and the machine's complete WER inventory are deliberately excluded.

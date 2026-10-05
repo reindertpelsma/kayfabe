@@ -1,0 +1,5 @@
+﻿{
+    "exit":  0,
+    "stdout":  "Microsoft PnP Utility\r\n\r\nRestarting device:         PCI\\VEN_10DE\u0026DEV_2786\u0026SUBSYS_40EE1458\u0026REV_A1\\3\u0026267a616a\u00260\u002630\r\nDevice restarted successfully.\r\n\r\n",
+    "prefix":  "C:\\ProgramData\\KayfabeDebugView\\run-20261004T2352435658653Z\\restart"
+}

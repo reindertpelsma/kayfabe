@@ -1,0 +1,8 @@
+{
+  "product_revision": "e71e4a8b21671d14b89c25602e78b687e8463333",
+  "runner_revision": "0880e340",
+  "snapshot_scope": "Initial fresh boot, before DebugView installation and NVIDIA restart diagnostics",
+  "guest_still_running_at_snapshot": true,
+  "qemu_version": "10.2.4",
+  "private_translated_space": true
+}

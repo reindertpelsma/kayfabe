@@ -1,0 +1,10 @@
+{
+  "WATCHDOG-20261004-2352.dmp": {
+    "bytes": 349876,
+    "sha256": "1c41a65b727800af16f87ee3bc35aa74babbc4358ce7c5a1eec358f37b37274f"
+  },
+  "WATCHDOG-20261004-2348.dmp": {
+    "bytes": 343034,
+    "sha256": "e438426d1c36df3e48a68d1ea286bb44f35571d508f56ea69ffd1c50f5cab77a"
+  }
+}

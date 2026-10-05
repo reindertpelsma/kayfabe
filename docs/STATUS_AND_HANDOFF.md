@@ -5,7 +5,7 @@
 master. The older master status below is historical for this checkout.
 
 - Windows 580.88 on the borrowed RTX 4070 PC (Linux host 595.91.07) still reports
-  Code 43 through Kayfabe. Fresh A/B/C/D runs are saved in
+  Code 43 through Kayfabe. Fresh A/B/C/D/E runs are saved in
   `traces/windows_pool_20261005/`: answering the pool query advances initialization;
   accepting timer allocation alone does not. No Windows GPU workload has passed.
 - `535e7df9` removes the one-driver query gate in favor of exact compiled layout
@@ -21,9 +21,19 @@ master. The older master status below is historical for this checkout.
 - Read `docs/design/V3_WINDOWS_POOL_AUDIT_20261005.md` before integration. The
   old Windows base inherits S1-21 and lacks master's USER-channel correction.
   `codex/p1p2-integration-2026-10-05` combines current master with the full private
-  Translated-space branch and is integrating Windows separately. P1/P2 remains
+  Translated-space branch and Windows/timer work. Fresh E at product `e71e4a8b`
+  enables all three opt-ins but still has the identical 208-line RPC trace and
+  no channel births. P1/P2 remains
   opt-in until its exact-revision hardware/isolation probes pass. No master merge
   or whole-branch security claim is authorized by the boot experiments.
+- E's signed DebugView capture and successful adapter restart found WER live
+  dump `0x1b0`: StartDevice failed, `STATUS_INSUFFICIENT_RESOURCES`. This is not
+  proof of RAM exhaustion or a specific failed RPC. Two dumps are saved privately
+  at `/data/kayfabe-runtime/windows-pool-20261005/private-dumps/`; reviewed text
+  evidence is in `traces/windows_pool_20261005/probe-e-debugview/`. Dump analysis
+  is in progress. E remains running on the PC for these diagnostics; root owns
+  the sole GPU bench slot. Preserve the immutable fixture and shut E down cleanly
+  before another hardware job.
 - Code and text evidence are pushed. The PC (`172.22.1.20`) is disposable and
   shared by serial GPU jobs only. Vast rentals 54049598 and 54159260 were retired
   after saving evidence on `codex/vast-retirement-2026-10-05` (`67ca8133`). Only

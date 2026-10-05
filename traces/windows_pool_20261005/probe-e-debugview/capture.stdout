@@ -1,0 +1,30 @@
+[TRACE] Cli_StartDriver: entry, g_IsAmd64=0
+[TRACE] Cli_StartDriver: OpenDeviceDriver('DBGV') failed, GetLastError=2
+[TRACE] Cli_StartDriver: trying LoadDeviceDriver from cwd: 'C:\Users\vast\Dbgv.sys'
+[TRACE] Cli_StartDriver: LoadDeviceDriver from cwd failed, GetLastError=2
+[TRACE] Cli_StartDriver: extracting resource to cwd: 'C:\Users\vast\Dbgv.sys'
+[TRACE] Cli_StartDriver: resource name: 'RCDBGSYS'
+[TRACE] Cli_StartDriver: extract to cwd succeeded
+[TRACE] Cli_StartDriver: calling LoadDeviceDriver('DBGV', 'C:\Users\vast\Dbgv.sys')
+[TRACE] Cli_StartDriver: LoadDeviceDriver from cwd succeeded
+1,"0.306892",,"nvLDDMkm: "
+2,"0.306907",,"Driver Registry Path = '\REGISTRY\MACHINE\SYSTEM\ControlSet001\Services\nvlddmkm'"
+3,"0.306914",," "
+4,"0.341152",,"nvAdapter: "
+5,"0.341160",," "
+6,"0.341167",,"nvAdapter: "
+7,"0.341175",,"                   ***** CNvLAdapter* ffffe78b58323000 -> DriverModel is 0x3200 ******"
+8,"0.341182",," "
+9,"0.341189",,"nvAdapter: "
+10,"0.341197",," "
+11,"0.348137",,"nvLDDMkm: "
+12,"0.348147",,"Device Registry Path = '\REGISTRY\MACHINE\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001'"
+13,"0.348154",," "
+14,"0.590701",,"WERKERNELHOST: WerpCheckPolicy: Requested Policy is 1 "
+15,"0.590717",,"WERKERNELHOST: WerpCheckPolicy: Granting requested policy 1"
+16,"0.598167",,"WERKERNELHOST: WerLiveKernelCreateReport: returning reportHandle FFFFC60D0703ED30 Policy 1"
+17,"0.599197",,"WERKERNELHOST: WerpCreateDumpFile - created file handle FFFFFFFF80001128, name \SystemRoot\LiveKernelReports\WATCHDOG\WATCHDOG-20261004-2352.dmp"
+18,"0.599207",,"WERKERNELHOST: WerLiveKernelOpenDumpFileExt: returning dump handle FFFFFFFF80001128, report reportHandle FFFFC60D0703ED30"
+19,"0.715034",,"WERKERNELHOST: WerpCloseHandle: ZwClose(FFFFFFFF80001834) returned 0x0"
+20,"0.715043",,"WERKERNELHOST: Deleting WerContext FFFFC60D0703ED30"
+21,"87.027937",,"[0004:00c4]CcFlushCachePriv: PreProcess returned FALSE, nothing to do (SOP=FFFFE78B55EAD2B8, IoStatus=0x0)"
