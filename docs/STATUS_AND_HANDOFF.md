@@ -11,7 +11,7 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-05 (supersedes every older entry in §0 where they differ)
 
-**Windows boundary investigation, 2026-10-05 14:08 UTC (current priority):**
+**Windows boundary investigation, 2026-10-05 14:26 UTC (current priority):**
 `codex/windows-boundary-comparison-20261005`, worktree
 `/data/kayfabe-boundary-20261005`, holds the comparison harness and reviewed evidence.
 Product baseline **`b431aeaf`** remains experimental, with pool/timer/translated-space/
@@ -29,8 +29,10 @@ under Kayfabe is claimed, and nothing from this experiment is promoted to master
   successful pool-size query pair. All 47 Kayfabe declined/nonzero control IDs
   occur natively: 41 succeed somewhere in each native recording, six also fail
   natively. This is neither a causal verdict nor a list to implement: parameters,
-  objects and virtual/physical display topology are not equivalent. Sampling and
-  attachment-generation limits remain explicit. Raw captures stay private.
+  objects and virtual/physical display topology are not equivalent. K6/K7 now
+  complete the same-executable three-per-arm cohort: K5/6/7 have identical
+  normalized 365-RPC order. Sampling and attachment-generation limits remain
+  explicit. Raw captures stay private.
 - [Source/pinned-driver constructor analysis](../tools/windows-boundary-compare/CONSTRUCTOR.md)
   identifies an ILUT two-buffer constraint incompatible with the baseline's zero
   surface-loading capability. Probe **M**, product **`d2c7ca1b`** on
@@ -38,14 +40,19 @@ under Kayfabe is claimed, and nothing from this experiment is promoted to master
   ILUT surface-loading declaration while preserving blanket display-method
   refusal. It is an intentionally incomplete diagnostic declaration, never a
   production feature promise. One M boot still reports Code 43 and 365 RPCs;
-  whether the first constructor failure moved is not yet established.
+  the [validated raw journal](../tools/windows-debug-capture/watchdog-m/evidence-m/README.md)
+  proves the first constructor check passed and failure moved to the second
+  TMO descriptor constructor (saved assertion `16e97f4` → `16e97c6`). Only one
+  of 24 assertions differs. The exact inner failing guard is not observed.
 - M's QGA connection stopped responding during offline dump analysis in Windows.
   One bounded framing reset failed. QEMU was stopped through QMP; clean Windows
   shutdown is not established. The stopped overlay was mounted read-only, and
   its fresh WATCHDOG dump plus partial debugger output were recovered and hashed
   on the controller. The debugger output contains pipe-resource errors rather
   than a completed analysis. Do not call this a successful collection run.
-  Host GPU restoration and service exit zero are verified.
+  Host GPU restoration and service exit zero are verified. A read-only recovery
+  helper reproduced the identical dump hash after a bounded NBD-capacity wait;
+  timeout/interrupted daemon startup requires manual cleanup verification.
 
 Private runtime evidence lives under
 `/data/kayfabe-runtime/windows-boundary-20261005/`, especially
@@ -60,10 +67,15 @@ No copied native capability/size tables or additional host-control forwarding we
 introduced. Driver/family-wide product compatibility is not established by this
 single Windows580.88/AD104 fixture.
 
-Next: decode M's preserved journal if possible, distinguish the initial guard from
-later constructor failures, and finish K6/K7 with the same executable as the three
-native captures. Keep speculative capability changes on isolated default-off
-branches. The following integration/candidate descriptions remain background;
+Next: isolated **N**, product **`9312854d`** on
+`codex/windows-tmo-surface-constructor-probe-20261005`, adds only source-derived
+TMO surface-loading declaration relative to M and forces the same method refusal.
+96 unit tests, QEMU compile check and independent review passed; borrowed-PC
+build receipt is saved. `boundary-kayfabe-9` is the first runtime experiment.
+[Its static dataflow](../tools/windows-boundary-compare/M_DATAFLOW.md) identifies
+a pointer-shape mismatch, distinct from ILUT's two-buffer guard. Recover and
+compare the fresh N dump after shutdown; no N runtime success is claimed yet.
+Keep speculative capability changes on isolated default-off branches. The following integration/candidate descriptions remain background;
 older instructions to park Windows and old rental inventories are superseded by
 the owner's current Windows priority and current recorded inventory.
 
