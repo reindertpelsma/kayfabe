@@ -174,6 +174,48 @@ pub fn tmo_surface_constructor_probe_page(
 ///
 /// # Errors
 /// [`Missing`] naming the first name the derived tables lack — never a default.
+/// Constructor-only OLUT surface-loading discriminator, layered on the TMO probe.
+/// Adds only source-defined OLUT surface loading.
+/// Must use `Engine::new_constructor_probe`: no methods or LUT work are implemented.
+pub fn olut_constructor_probe_page(
+    t: &ClassTable,
+    r: &Regs,
+    caps: u32,
+    heads: u32,
+    windows: u32,
+) -> Result<CapsPage, Missing> {
+    let mut p = tmo_surface_constructor_probe_page(t, r, caps, heads, windows)?;
+    let register = "POSTCOMP_HEAD_HDR_CAPB";
+    let name = "POSTCOMP_HEAD_HDR_CAPB_OLUT_SFCLOAD";
+    let field = t
+        .f(caps, name)
+        .ok_or_else(|| Missing(format!("NV{caps:04X}_{name}")))?;
+    let yes = t
+        .v(caps, &format!("{name}_TRUE"))
+        .ok_or_else(|| Missing(format!("NV{caps:04X}_{name}_TRUE")))?;
+    let count = t
+        .v(caps, &format!("{register}__SIZE_1"))
+        .filter(|count| heads <= *count && *count as usize <= PAGE / 4)
+        .ok_or_else(|| Missing(format!("NV{caps:04X}_{register}__SIZE_1 bound")))?;
+    let (high, low) = field;
+    if high >= 32 || low != high || yes == 0 || u64::from(yes) >= (1_u64 << (high - low + 1)) {
+        return Err(Missing(format!("NV{caps:04X}_{name} field/value bound")));
+    }
+    for i in 0..heads.min(count) {
+        let off = t
+            .a(caps, register, i)
+            .filter(|off| *off % 4 == 0 && (*off as usize) < PAGE)
+            .ok_or_else(|| Missing(format!("NV{caps:04X}_{register}({i}) page bound")))?;
+        if let Some((_, word)) = p.words.iter_mut().find(|(at, _)| *at == off) {
+            *word = put(*word, field, yes);
+        } else {
+            p.words.push((off, put(0, field, yes)));
+        }
+    }
+    p.words.sort_unstable_by_key(|(off, _)| *off);
+    Ok(p)
+}
+
 pub fn page(
     t: &ClassTable,
     r: &Regs,

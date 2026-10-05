@@ -1338,7 +1338,8 @@ impl DisplayPlane {
         let classes = kf_disp::model::Classes::of(row);
         let vocab = Vocab::resolve(t, &classes, &regs)
             .map_err(|e| format!("display=on: method vocabulary: {} is not derived", e.0))?;
-        let tmo_surface_constructor_probe =
+        let olut_constructor_probe = std::env::var("KF3_DISPLAY_OLUT_CONSTRUCTOR_PROBE").is_ok_and(|v| v == "1");
+        let tmo_surface_constructor_probe = olut_constructor_probe ||
             std::env::var("KF3_DISPLAY_TMO_SURFACE_CONSTRUCTOR_PROBE").is_ok_and(|v| v == "1");
         let ilut_constructor_probe = tmo_surface_constructor_probe
             || std::env::var("KF3_DISPLAY_ILUT_CONSTRUCTOR_PROBE").is_ok_and(|v| v == "1");
@@ -1346,7 +1347,9 @@ impl DisplayPlane {
         // setting ILUT alone must never publish these caps with a normal engine.
         let constructor_probe = ilut_constructor_probe
             || std::env::var("KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE").is_ok_and(|v| v == "1");
-        let caps_author = if tmo_surface_constructor_probe {
+        let caps_author = if olut_constructor_probe {
+            kf_disp::caps::olut_constructor_probe_page
+        } else if tmo_surface_constructor_probe {
             kf_disp::caps::tmo_surface_constructor_probe_page
         } else if ilut_constructor_probe {
             kf_disp::caps::ilut_constructor_probe_page
@@ -1399,7 +1402,7 @@ impl DisplayPlane {
             .map_err(|e| format!("display=on: store import into the display context: {e}"))?;
         let engine = if constructor_probe {
             eprintln!(
-                "kf3: EXPERIMENT display constructor probe: TMO advertised, ILUT surface loading={ilut_constructor_probe}, TMO surface loading={tmo_surface_constructor_probe}; ALL display methods refused before execution"
+                "kf3: EXPERIMENT display constructor probe: TMO advertised, ILUT surface loading={ilut_constructor_probe}, TMO surface loading={tmo_surface_constructor_probe}, OLUT surface loading={olut_constructor_probe}; ALL display methods refused before execution"
             );
             Engine::new_constructor_probe(vocab, row.heads, row.windows)
         } else {
