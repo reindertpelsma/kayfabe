@@ -72,6 +72,78 @@ fn pb() -> Option<PbLoc> {
     })
 }
 
+#[test]
+fn constructor_probe_never_decodes_arms_or_completes_dma_or_pio() {
+    let r = Regs::for_ip("580.159.04", 0x0401_0000).unwrap();
+    let mut e = Engine::new_constructor_probe(Vocab::resolve(t(), &classes(), &r).unwrap(), 4, 8);
+    for kind in [
+        ChannelKind::Core,
+        ChannelKind::Window,
+        ChannelKind::WindowImm,
+        ChannelKind::Cursor,
+    ] {
+        let n = e.alloc(kind, 0, CLIENT, 1, pb(), 0).unwrap();
+        let mut ring = Ring::new();
+        ring.m(e.vocab.update_of(kind), 0);
+        let s = if kind == ChannelKind::Cursor {
+            e.cursor_write(0, e.vocab.update_of(kind), 0, &mut |_| panic!("no acquire"))
+        } else {
+            e.step(n, &ring.bytes(), ring.put(), &mut |_| panic!("no acquire"))
+        };
+        assert!(
+            matches!(s.effects.as_slice(), [Effect::Exception { chn, at: 0, .. }] if *chn == n)
+        );
+        assert_eq!(s.gets, vec![(n, 1, 0)]);
+        let c = e.chans[n as usize].as_ref().unwrap();
+        assert!(
+            c.queue.is_empty() && c.assy.iter().all(|v| *v == 0) && c.armed.iter().all(|v| *v == 0)
+        );
+        assert_eq!(c.decoded, 0);
+        e.free(kind, 0);
+        e.alloc(kind, 0, CLIENT, 2, pb(), 0).unwrap();
+        let s = e.step(n, &ring.bytes(), ring.put(), &mut |_| panic!("no acquire"));
+        assert!(matches!(s.effects.as_slice(), [Effect::Exception { .. }]));
+        assert_eq!(s.gets, vec![(n, 2, 0)]);
+    }
+    for _ in 0..10000 {
+        assert!(
+            e.cursor_write(0, 0, 123, &mut |_| panic!("no acquire"))
+                .effects
+                .is_empty()
+        );
+    }
+    let c = e.chans[ChannelKind::Cursor.channel_number(0) as usize]
+        .as_ref()
+        .unwrap();
+    assert!(c.queue.is_empty());
+    assert_eq!((e.methods, e.updates), (0, 0));
+    assert!(
+        e.vblank(0, &mut |_| panic!("no acquire"))
+            .effects
+            .is_empty()
+    );
+    assert!(
+        e.poll_acquires(&mut |_| panic!("no acquire"))
+            .effects
+            .is_empty()
+    );
+}
+
+#[test]
+fn halted_cursor_does_not_accumulate_more_pio() {
+    let mut e = engine();
+    let n = e.alloc(ChannelKind::Cursor, 0, CLIENT, 1, None, 0).unwrap();
+    e.chans[n as usize].as_mut().unwrap().halted = true;
+    for _ in 0..10000 {
+        assert!(
+            e.cursor_write(0, 0, 123, &mut |_| panic!("no acquire"))
+                .effects
+                .is_empty()
+        );
+    }
+    assert!(e.chans[n as usize].as_ref().unwrap().queue.is_empty());
+}
+
 /// Core notifier: SET_CONTEXT_DMA_NOTIFIER, SET_NOTIFIER_CONTROL(offset idx, WRITE_AWAKEN, NOTIFY).
 fn core_notifier(r: &mut Ring, handle: u32, idx: u32) {
     r.m(m(CORE, "SET_CONTEXT_DMA_NOTIFIER"), handle);

@@ -1338,7 +1338,14 @@ impl DisplayPlane {
         let classes = kf_disp::model::Classes::of(row);
         let vocab = Vocab::resolve(t, &classes, &regs)
             .map_err(|e| format!("display=on: method vocabulary: {} is not derived", e.0))?;
-        let caps = kf_disp::caps::page(t, &regs, row.classes.caps, row.heads, row.windows)
+        let constructor_probe =
+            std::env::var("KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE").is_ok_and(|v| v == "1");
+        let caps_author = if constructor_probe {
+            kf_disp::caps::constructor_probe_page
+        } else {
+            kf_disp::caps::page
+        };
+        let caps = caps_author(t, &regs, row.classes.caps, row.heads, row.windows)
             .map_err(|e| format!("display=on: caps page: {}", e.0))?;
         let layout = Layout::from_regs(&regs)
             .ok_or("display=on: the instance-memory layout is not derived")?;
@@ -1380,7 +1387,14 @@ impl DisplayPlane {
             .map_err(|e| format!("display=on: the display plane's GPU context on {bdf}: {e}"))?;
         gpu.import_store(store_fd, store_bytes)
             .map_err(|e| format!("display=on: store import into the display context: {e}"))?;
-        let engine = Engine::new(vocab, row.heads, row.windows);
+        let engine = if constructor_probe {
+            eprintln!(
+                "kf3: EXPERIMENT display TMO constructor probe: capability advertised; ALL display methods refused before execution"
+            );
+            Engine::new_constructor_probe(vocab, row.heads, row.windows)
+        } else {
+            Engine::new(vocab, row.heads, row.windows)
+        };
         let scan = ScanVocab::resolve(t, classes.window, classes.window_imm, classes.core);
         let formats = ScanFormats::resolve(t, classes.window);
         let cursor_vocab = kf_disp::engine::CursorVocab::resolve(t, classes.core, classes.cursor);

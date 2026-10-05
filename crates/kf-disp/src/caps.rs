@@ -52,6 +52,39 @@ impl CapsPage {
     }
 }
 
+/// Constructor-only diagnostic: advertise the source-defined TMO capability.
+/// Must be paired with `Engine::new_constructor_probe`, which refuses every
+/// display method. This is not a tone-mapping implementation.
+pub fn constructor_probe_page(
+    t: &ClassTable,
+    r: &Regs,
+    caps: u32,
+    heads: u32,
+    windows: u32,
+) -> Result<CapsPage, Missing> {
+    let mut p = page(t, r, caps, heads, windows)?;
+    let name = "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT";
+    let field = t
+        .f(caps, name)
+        .ok_or_else(|| Missing(format!("NV{caps:04X}_{name}")))?;
+    let yes = t
+        .v(caps, &format!("{name}_TRUE"))
+        .ok_or_else(|| Missing(format!("NV{caps:04X}_{name}_TRUE")))?;
+    for i in 0..windows {
+        let off = t
+            .a(caps, "PRECOMP_WIN_PIPE_HDR_CAPA", i)
+            .ok_or_else(|| Missing(format!("NV{caps:04X}_PRECOMP_WIN_PIPE_HDR_CAPA({i})")))?;
+        // The ordinary author already validated this word's alignment and bounds.
+        let (_, word) = p
+            .words
+            .iter_mut()
+            .find(|(at, _)| *at == off)
+            .ok_or_else(|| Missing(format!("existing caps word {off:#x}")))?;
+        *word = put(*word, field, yes);
+    }
+    Ok(p)
+}
+
 /// ★ Author the page for caps class `caps` (the family's `…73`), `heads` heads and `windows` windows.
 ///
 /// # Errors
@@ -173,6 +206,57 @@ pub fn page(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn constructor_probe_changes_only_derived_tmo_fields_in_every_display_cell() {
+        for version in ["580.65.06", "580.159.04"] {
+            let t = crate::class::for_version(version).unwrap();
+            for row in kf_chip::display::ALL {
+                let r = Regs::for_ip(version, row.ip_version).unwrap();
+                let normal = page(t, &r, row.classes.caps, row.heads, row.windows).unwrap();
+                let probe = constructor_probe_page(t, &r, row.classes.caps, row.heads, row.windows)
+                    .unwrap();
+                let field = t
+                    .f(row.classes.caps, "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT")
+                    .unwrap();
+                let yes = t
+                    .v(
+                        row.classes.caps,
+                        "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT_TRUE",
+                    )
+                    .unwrap();
+                let mut restored = probe.clone();
+                for i in 0..row.windows {
+                    let off = t
+                        .a(row.classes.caps, "PRECOMP_WIN_PIPE_HDR_CAPA", i)
+                        .unwrap();
+                    assert_eq!(crate::class::get(normal.word(off), field), 0);
+                    assert_eq!(crate::class::get(probe.word(off), field), yes);
+                    let (_, word) = restored
+                        .words
+                        .iter_mut()
+                        .find(|(at, _)| *at == off)
+                        .unwrap();
+                    *word = put(*word, field, 0);
+                }
+                assert_eq!(normal, restored);
+            }
+        }
+    }
+
+    #[test]
+    fn constructor_probe_refuses_missing_capability_semantics() {
+        let raw = include_str!("../data/classes-580.65.06.tsv");
+        let missing = raw
+            .lines()
+            .filter(|l| !l.contains("TMO_PRESENT_TRUE"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let t = ClassTable::parse(&missing);
+        let r = Regs::for_ip("580.65.06", kf_chip::display::ADA.ip_version).unwrap();
+        assert!(page(&t, &r, 0xC773, 4, 8).is_ok());
+        assert!(constructor_probe_page(&t, &r, 0xC773, 4, 8).is_err());
+    }
 
     fn ga10x() -> CapsPage {
         let t = crate::class::for_version("580.159.04").unwrap();

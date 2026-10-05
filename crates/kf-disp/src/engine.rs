@@ -468,6 +468,8 @@ pub struct PaceCounts {
 #[derive(Debug)]
 pub struct Engine {
     vocab: Vocab,
+    /// Immutable construction diagnostic; every method ingress refuses.
+    constructor_probe: bool,
     heads: u32,
     windows: u32,
     chans: Vec<Option<Chan>>,
@@ -496,6 +498,7 @@ impl Engine {
     pub fn new(vocab: Vocab, heads: u32, windows: u32) -> Engine {
         Engine {
             vocab,
+            constructor_probe: false,
             heads: heads.min(8),
             windows: windows.min(32),
             chans: (0..CHANNELS).map(|_| None).collect(),
@@ -507,6 +510,32 @@ impl Engine {
             presented: [false; 8],
             pace: [PaceCounts::default(); 8],
         }
+    }
+
+    /// Construction-only diagnostic. No display method can execute or complete.
+    /// There is deliberately no switch for an already running engine.
+    #[must_use]
+    pub fn new_constructor_probe(vocab: Vocab, heads: u32, windows: u32) -> Engine {
+        let mut engine = Self::new(vocab, heads, windows);
+        engine.constructor_probe = true;
+        engine
+    }
+
+    fn refuse_constructor_method(&mut self, chn: u32) -> Step {
+        let mut st = Step::default();
+        if let Some(c) = self.chans.get_mut(chn as usize).and_then(Option::as_mut) {
+            if !c.halted {
+                c.halted = true;
+                self.exceptions += 1;
+                st.effects.push(Effect::Exception {
+                    chn,
+                    at: c.get,
+                    what: "constructor-only probe refuses all display methods".into(),
+                });
+            }
+            st.gets.push((chn, c.life, c.get));
+        }
+        st
     }
 
     /// The channel number of `(kind, instance)` if the display has it.
@@ -566,6 +595,9 @@ impl Engine {
         put: u32,
         acquired: &mut dyn FnMut(&Acquire) -> bool,
     ) -> Step {
+        if self.constructor_probe {
+            return self.refuse_constructor_method(chn);
+        }
         let mut st = Step::default();
         self.decode(chn, pb, put, &mut st);
         self.run(&mut st, acquired);
@@ -585,8 +617,14 @@ impl Engine {
         let Some(chn) = self.channel_number(ChannelKind::Cursor, head) else {
             return st;
         };
+        if self.constructor_probe {
+            return self.refuse_constructor_method(chn);
+        }
         let space = self.vocab.other_space;
         if let Some(c) = self.chans[chn as usize].as_mut() {
+            if c.halted {
+                return st;
+            }
             if !off.is_multiple_of(4) || off >= space {
                 self.exceptions += 1;
                 st.effects.push(Effect::Exception {
