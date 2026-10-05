@@ -531,7 +531,11 @@ impl DisplayPolicy {
             eprintln!("kf-rm: display: Windows hack answering {:#010x}", req.cmd);
             return Some(Reply {
                 rpc_result: 0,
-                body: req.params.to_vec(),
+                body: {
+                let mut b = cmd.payload.clone();
+                b[0x10..0x14].copy_from_slice(&0u32.to_le_bytes());
+                b
+            },
             });
         }
         if !self.claims(req.cmd) {
