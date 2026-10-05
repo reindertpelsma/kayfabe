@@ -124,6 +124,54 @@ pub fn ilut_constructor_probe_page(
             p.words.push((off, put(0, field, yes)));
         }
     }
+
+    // Enable ILUT, TMO, and OLUT SFCLOAD if the fields exist.
+    // 1. ILUT (PRECOMP_WIN_PIPE_HDR_CAPB)
+    if let Some(field) = t.f(caps, "PRECOMP_WIN_PIPE_HDR_CAPB_ILUT_SFCLOAD") {
+        if let Some(yes) = t.v(caps, "PRECOMP_WIN_PIPE_HDR_CAPB_ILUT_SFCLOAD_TRUE") {
+            let count = t.v(caps, "PRECOMP_WIN_PIPE_HDR_CAPB__SIZE_1").unwrap_or(0);
+            for i in 0..windows.min(count) {
+                if let Some(off) = t.a(caps, "PRECOMP_WIN_PIPE_HDR_CAPB", i) {
+                    if let Some((_, word)) = p.words.iter_mut().find(|(at, _)| *at == off) {
+                        *word = put(*word, field, yes);
+                    } else {
+                        p.words.push((off, put(0, field, yes)));
+                    }
+                }
+            }
+        }
+    }
+    // 2. TMO (PRECOMP_WIN_PIPE_HDR_CAPB_TMO_SFCLOAD)
+    if let Some(field) = t.f(caps, "PRECOMP_WIN_PIPE_HDR_CAPB_TMO_SFCLOAD") {
+        if let Some(yes) = t.v(caps, "PRECOMP_WIN_PIPE_HDR_CAPB_TMO_SFCLOAD_TRUE") {
+            let count = t.v(caps, "PRECOMP_WIN_PIPE_HDR_CAPB__SIZE_1").unwrap_or(0);
+            for i in 0..windows.min(count) {
+                if let Some(off) = t.a(caps, "PRECOMP_WIN_PIPE_HDR_CAPB", i) {
+                    if let Some((_, word)) = p.words.iter_mut().find(|(at, _)| *at == off) {
+                        *word = put(*word, field, yes);
+                    } else {
+                        p.words.push((off, put(0, field, yes)));
+                    }
+                }
+            }
+        }
+    }
+    // 3. OLUT (POSTCOMP_HEAD_HDR_CAPB_OLUT_SFCLOAD)
+    if let Some(field) = t.f(caps, "POSTCOMP_HEAD_HDR_CAPB_OLUT_SFCLOAD") {
+        if let Some(yes) = t.v(caps, "POSTCOMP_HEAD_HDR_CAPB_OLUT_SFCLOAD_TRUE") {
+            let count = t.v(caps, "POSTCOMP_HEAD_HDR_CAPB__SIZE_1").unwrap_or(0);
+            for i in 0..heads.min(count) {
+                if let Some(off) = t.a(caps, "POSTCOMP_HEAD_HDR_CAPB", i) {
+                    if let Some((_, word)) = p.words.iter_mut().find(|(at, _)| *at == off) {
+                        *word = put(*word, field, yes);
+                    } else {
+                        p.words.push((off, put(0, field, yes)));
+                    }
+                }
+            }
+        }
+    }
+
     p.words.sort_unstable_by_key(|(off, _)| *off);
     Ok(p)
 }
@@ -166,6 +214,54 @@ pub fn tmo_surface_constructor_probe_page(
             p.words.push((off, put(0, field, yes)));
         }
     }
+
+    // Enable ILUT, TMO, and OLUT SFCLOAD if the fields exist.
+    // 1. ILUT (PRECOMP_WIN_PIPE_HDR_CAPB)
+    if let Some(field) = t.f(caps, "PRECOMP_WIN_PIPE_HDR_CAPB_ILUT_SFCLOAD") {
+        if let Some(yes) = t.v(caps, "PRECOMP_WIN_PIPE_HDR_CAPB_ILUT_SFCLOAD_TRUE") {
+            let count = t.v(caps, "PRECOMP_WIN_PIPE_HDR_CAPB__SIZE_1").unwrap_or(0);
+            for i in 0..windows.min(count) {
+                if let Some(off) = t.a(caps, "PRECOMP_WIN_PIPE_HDR_CAPB", i) {
+                    if let Some((_, word)) = p.words.iter_mut().find(|(at, _)| *at == off) {
+                        *word = put(*word, field, yes);
+                    } else {
+                        p.words.push((off, put(0, field, yes)));
+                    }
+                }
+            }
+        }
+    }
+    // 2. TMO (PRECOMP_WIN_PIPE_HDR_CAPB_TMO_SFCLOAD)
+    if let Some(field) = t.f(caps, "PRECOMP_WIN_PIPE_HDR_CAPB_TMO_SFCLOAD") {
+        if let Some(yes) = t.v(caps, "PRECOMP_WIN_PIPE_HDR_CAPB_TMO_SFCLOAD_TRUE") {
+            let count = t.v(caps, "PRECOMP_WIN_PIPE_HDR_CAPB__SIZE_1").unwrap_or(0);
+            for i in 0..windows.min(count) {
+                if let Some(off) = t.a(caps, "PRECOMP_WIN_PIPE_HDR_CAPB", i) {
+                    if let Some((_, word)) = p.words.iter_mut().find(|(at, _)| *at == off) {
+                        *word = put(*word, field, yes);
+                    } else {
+                        p.words.push((off, put(0, field, yes)));
+                    }
+                }
+            }
+        }
+    }
+    // 3. OLUT (POSTCOMP_HEAD_HDR_CAPB_OLUT_SFCLOAD)
+    if let Some(field) = t.f(caps, "POSTCOMP_HEAD_HDR_CAPB_OLUT_SFCLOAD") {
+        if let Some(yes) = t.v(caps, "POSTCOMP_HEAD_HDR_CAPB_OLUT_SFCLOAD_TRUE") {
+            let count = t.v(caps, "POSTCOMP_HEAD_HDR_CAPB__SIZE_1").unwrap_or(0);
+            for i in 0..heads.min(count) {
+                if let Some(off) = t.a(caps, "POSTCOMP_HEAD_HDR_CAPB", i) {
+                    if let Some((_, word)) = p.words.iter_mut().find(|(at, _)| *at == off) {
+                        *word = put(*word, field, yes);
+                    } else {
+                        p.words.push((off, put(0, field, yes)));
+                    }
+                }
+            }
+        }
+    }
+
     p.words.sort_unstable_by_key(|(off, _)| *off);
     Ok(p)
 }
@@ -212,6 +308,54 @@ pub fn olut_constructor_probe_page(
             p.words.push((off, put(0, field, yes)));
         }
     }
+
+    // Enable ILUT, TMO, and OLUT SFCLOAD if the fields exist.
+    // 1. ILUT (PRECOMP_WIN_PIPE_HDR_CAPB)
+    if let Some(field) = t.f(caps, "PRECOMP_WIN_PIPE_HDR_CAPB_ILUT_SFCLOAD") {
+        if let Some(yes) = t.v(caps, "PRECOMP_WIN_PIPE_HDR_CAPB_ILUT_SFCLOAD_TRUE") {
+            let count = t.v(caps, "PRECOMP_WIN_PIPE_HDR_CAPB__SIZE_1").unwrap_or(0);
+            for i in 0..windows.min(count) {
+                if let Some(off) = t.a(caps, "PRECOMP_WIN_PIPE_HDR_CAPB", i) {
+                    if let Some((_, word)) = p.words.iter_mut().find(|(at, _)| *at == off) {
+                        *word = put(*word, field, yes);
+                    } else {
+                        p.words.push((off, put(0, field, yes)));
+                    }
+                }
+            }
+        }
+    }
+    // 2. TMO (PRECOMP_WIN_PIPE_HDR_CAPB_TMO_SFCLOAD)
+    if let Some(field) = t.f(caps, "PRECOMP_WIN_PIPE_HDR_CAPB_TMO_SFCLOAD") {
+        if let Some(yes) = t.v(caps, "PRECOMP_WIN_PIPE_HDR_CAPB_TMO_SFCLOAD_TRUE") {
+            let count = t.v(caps, "PRECOMP_WIN_PIPE_HDR_CAPB__SIZE_1").unwrap_or(0);
+            for i in 0..windows.min(count) {
+                if let Some(off) = t.a(caps, "PRECOMP_WIN_PIPE_HDR_CAPB", i) {
+                    if let Some((_, word)) = p.words.iter_mut().find(|(at, _)| *at == off) {
+                        *word = put(*word, field, yes);
+                    } else {
+                        p.words.push((off, put(0, field, yes)));
+                    }
+                }
+            }
+        }
+    }
+    // 3. OLUT (POSTCOMP_HEAD_HDR_CAPB_OLUT_SFCLOAD)
+    if let Some(field) = t.f(caps, "POSTCOMP_HEAD_HDR_CAPB_OLUT_SFCLOAD") {
+        if let Some(yes) = t.v(caps, "POSTCOMP_HEAD_HDR_CAPB_OLUT_SFCLOAD_TRUE") {
+            let count = t.v(caps, "POSTCOMP_HEAD_HDR_CAPB__SIZE_1").unwrap_or(0);
+            for i in 0..heads.min(count) {
+                if let Some(off) = t.a(caps, "POSTCOMP_HEAD_HDR_CAPB", i) {
+                    if let Some((_, word)) = p.words.iter_mut().find(|(at, _)| *at == off) {
+                        *word = put(*word, field, yes);
+                    } else {
+                        p.words.push((off, put(0, field, yes)));
+                    }
+                }
+            }
+        }
+    }
+
     p.words.sort_unstable_by_key(|(off, _)| *off);
     Ok(p)
 }
