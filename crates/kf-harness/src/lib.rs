@@ -5,6 +5,7 @@
 
 pub mod publish;
 pub mod tables;
+pub mod window_probe;
 
 use kf_abi::submit::{SET_OBJECT, ce, method_header_inc};
 

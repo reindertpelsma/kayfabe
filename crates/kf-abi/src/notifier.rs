@@ -63,7 +63,7 @@ use kf_arch::UserdMem;
 use kf_arch::fault::ErrorNotifier;
 use kf_arch::ids::EngineKind;
 
-use crate::wire::{AbiError, u32_at, u64_at};
+use crate::wire::{AbiError, u16_at, u32_at, u64_at};
 
 /// `sizeof(NvNotification)` == `sizeof(NOTIFICATION)` — the record this port writes.
 pub const NOTIFICATION_SIZE: usize = 16;
@@ -111,6 +111,20 @@ pub struct ErrorNotification {
 }
 
 impl ErrorNotification {
+    /// Read a complete hardware-written record. The caller must observe status last / acquire
+    /// before taking this snapshot; decoding bytes does not itself synchronize with the GPU.
+    ///
+    /// # Errors
+    /// An incomplete record, including a truncated final status word.
+    pub fn decode(bytes: &[u8]) -> Result<Self, AbiError> {
+        Ok(Self {
+            timestamp: u64_at(bytes, 0)?,
+            except_type: u32_at(bytes, 8)?,
+            engine_type: u16_at(bytes, 12)?,
+            status: u16_at(bytes, NOTIFICATION_STATUS_OFF)?,
+        })
+    }
+
     /// The bytes a caller must publish **first**: everything except the status.
     ///
     /// See the module docs — status-last is RM's own order and it is what makes the
