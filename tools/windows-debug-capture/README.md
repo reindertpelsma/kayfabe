@@ -174,7 +174,10 @@ KD exited zero, and the wrapper's semantic analysis check passed. Controller out
 preserved privately under `/data/kayfabe-runtime/windows-pool-20261005/kd-v4/` for review before
 publication. That validated wrapper had SHA256
 `ada467b61279ee14ab3633a3bd7af7891de66dcfd600d432189cd18b02dc102e`; the only later command
-addition is `.enumtag`, whose target result is pending. A separate fresh controller fetch
+addition is `.enumtag`, which also passed on the target. Its private NVIDIA tag can be
+decoded using the [compiler-derived NVCD research tools](evidence/2026-10-05-nvcd/README.md).
+That investigation identifies the refused class `0xb297` allocation on the saved
+StartDevice failure path; its safe semantics remain to be established. A separate fresh controller fetch
 reproduced the pinned ZIP byte-for-byte.
 
 | Artifact | SHA256 |
