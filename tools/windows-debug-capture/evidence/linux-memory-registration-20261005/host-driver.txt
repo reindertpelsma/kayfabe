@@ -1,0 +1,3 @@
+driver_version=595.91.07
+product_name=NVIDIA GeForce RTX 4070
+gsp_firmware_version=595.91.07

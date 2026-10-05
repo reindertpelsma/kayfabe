@@ -10,6 +10,8 @@ succeeded as UID/EUID 65534, with all five capability sets zero and
 every allocation and explicit free returned `NV_OK`. The registration flag was
 preserved in the returned attributes. See [native.log](native.log) and
 [context.json](context.json) for the exact source/build/header identities.
+The subsequent [host check](host-driver.txt) reports GSP firmware 595.91.07 and
+the same driver/GPU. It does not replace the missing per-call RPC trace.
 
 | Statement | Evidence and limit |
 | --- | --- |
