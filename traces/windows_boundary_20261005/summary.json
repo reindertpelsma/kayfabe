@@ -1,0 +1,463 @@
+{
+  "date": "2026-10-05",
+  "experiment": {
+    "baseline_sha256": "9ff194d31f0a871757fd436f14ab0da2e1e8a6360dc36bb925c12af12a64f85c",
+    "driver_file_version": "32.0.15.8088",
+    "driver_hash": "31c79cce80b573e21647ace8d1a2b65697f992e7f86196f89e30af477b1bd47c",
+    "firmware_code_bytes": 3653632,
+    "firmware_code_measurement_note": "Controller measurement during K4, after V5/V6/V7/K2/K3; not independently recorded for each run.",
+    "firmware_code_sha256_later_measurement": "a5708766c49ee39db0f4e7e53d73376e2dbc0d45bf12501c0977c48412bf8902",
+    "gpu": "RTX4070",
+    "initial_uefi_vars_sha256": "4a09148a02665b072071523206a1c9b9c16624413dafb85106e3f8d202db74da",
+    "os_version": "10.0.26100",
+    "qemu_revision": "b431aeaf9fca5d78b451754c0de7b8dbbe9d7652",
+    "qemu_sha256": "1918611a188fccad0e8568633a18d5667243133706afc32a17483c11e0f18cab",
+    "windows_driver": "580.88"
+  },
+  "kayfabe_rpc": {
+    "first_order_differences": [
+      {
+        "first_difference": 173,
+        "reference": "boundary-kayfabe-2",
+        "reference_event": {
+          "control_status": null,
+          "direction": "completed",
+          "function": 76,
+          "selector": "0x00730245",
+          "selector_kind": "control",
+          "status": "0x00000000"
+        },
+        "run": "boundary-kayfabe-3",
+        "run_event": {
+          "control_status": null,
+          "direction": "completed",
+          "function": 76,
+          "selector": "0x0073011d",
+          "selector_kind": "control",
+          "status": null
+        }
+      },
+      {
+        "first_difference": 173,
+        "reference": "boundary-kayfabe-2",
+        "reference_event": {
+          "control_status": null,
+          "direction": "completed",
+          "function": 76,
+          "selector": "0x00730245",
+          "selector_kind": "control",
+          "status": "0x00000000"
+        },
+        "run": "boundary-kayfabe-4",
+        "run_event": {
+          "control_status": null,
+          "direction": "completed",
+          "function": 76,
+          "selector": "0x0073011d",
+          "selector_kind": "control",
+          "status": null
+        }
+      }
+    ],
+    "function_status_counts": [
+      {
+        "counts": {
+          "boundary-kayfabe-2": 1,
+          "boundary-kayfabe-3": 1,
+          "boundary-kayfabe-4": 1
+        },
+        "function": 1,
+        "status": "0x00000000"
+      },
+      {
+        "counts": {
+          "boundary-kayfabe-2": 2,
+          "boundary-kayfabe-3": 2,
+          "boundary-kayfabe-4": 2
+        },
+        "function": 4,
+        "status": "0x00000000"
+      },
+      {
+        "counts": {
+          "boundary-kayfabe-2": 60,
+          "boundary-kayfabe-3": 60,
+          "boundary-kayfabe-4": 60
+        },
+        "function": 10,
+        "status": "0x00000000"
+      },
+      {
+        "counts": {
+          "boundary-kayfabe-2": 1,
+          "boundary-kayfabe-3": 1,
+          "boundary-kayfabe-4": 1
+        },
+        "function": 47,
+        "status": "0x00000000"
+      },
+      {
+        "counts": {
+          "boundary-kayfabe-2": 1,
+          "boundary-kayfabe-3": 1,
+          "boundary-kayfabe-4": 1
+        },
+        "function": 65,
+        "status": "0x00000000"
+      },
+      {
+        "counts": {
+          "boundary-kayfabe-2": 2,
+          "boundary-kayfabe-3": 2,
+          "boundary-kayfabe-4": 2
+        },
+        "function": 70,
+        "status": "0x00000000"
+      },
+      {
+        "counts": {
+          "boundary-kayfabe-2": 61,
+          "boundary-kayfabe-3": 61,
+          "boundary-kayfabe-4": 61
+        },
+        "function": 76,
+        "status": null
+      },
+      {
+        "counts": {
+          "boundary-kayfabe-2": 177,
+          "boundary-kayfabe-3": 177,
+          "boundary-kayfabe-4": 177
+        },
+        "function": 76,
+        "status": "0x00000000"
+      },
+      {
+        "counts": {
+          "boundary-kayfabe-2": 2,
+          "boundary-kayfabe-3": 2,
+          "boundary-kayfabe-4": 2
+        },
+        "function": 76,
+        "status": "0x00000056"
+      },
+      {
+        "counts": {
+          "boundary-kayfabe-2": 58,
+          "boundary-kayfabe-3": 58,
+          "boundary-kayfabe-4": 58
+        },
+        "function": 103,
+        "status": "0x00000000"
+      }
+    ],
+    "identical_normalized_order": false,
+    "observations": 3,
+    "observed_query_order_173_through_176": {
+      "boundary-kayfabe-2": [
+        {
+          "control": "0x00730245",
+          "function": 76,
+          "index": 173,
+          "result": "0x00000000"
+        },
+        {
+          "control": "0x0073011d",
+          "function": 76,
+          "index": 174,
+          "result": null
+        },
+        {
+          "control": "0x0073012c",
+          "function": 76,
+          "index": 175,
+          "result": null
+        },
+        {
+          "control": "0x0073010b",
+          "function": 76,
+          "index": 176,
+          "result": "0x00000000"
+        }
+      ],
+      "boundary-kayfabe-3": [
+        {
+          "control": "0x0073011d",
+          "function": 76,
+          "index": 173,
+          "result": null
+        },
+        {
+          "control": "0x00730245",
+          "function": 76,
+          "index": 174,
+          "result": "0x00000000"
+        },
+        {
+          "control": "0x0073010b",
+          "function": 76,
+          "index": 175,
+          "result": "0x00000000"
+        },
+        {
+          "control": "0x0073012c",
+          "function": 76,
+          "index": 176,
+          "result": null
+        }
+      ],
+      "boundary-kayfabe-4": [
+        {
+          "control": "0x0073011d",
+          "function": 76,
+          "index": 173,
+          "result": null
+        },
+        {
+          "control": "0x00730245",
+          "function": 76,
+          "index": 174,
+          "result": "0x00000000"
+        },
+        {
+          "control": "0x0073010b",
+          "function": 76,
+          "index": 175,
+          "result": "0x00000000"
+        },
+        {
+          "control": "0x0073012c",
+          "function": 76,
+          "index": 176,
+          "result": null
+        }
+      ]
+    },
+    "variable_count_rows": 0
+  },
+  "limitations": [
+    "No native RPC coverage in this cohort; no cross-arm RPC comparison.",
+    "Kayfabe caps unavailable after Code43 disables PCI BAR decoding; no zero page or authored page substituted.",
+    "Native repeated caps stability establishes this cohort only; not all dies/drivers or correctness.",
+    "Local display-query order variation is preserved without causal/noise classification.",
+    "Firmware-code hash was measured once during K4; initial UEFI variables hash is per-run metadata.",
+    "K2 used the same helpers manually after caps-unavailable handling was fixed; collection is not entirely automatic.",
+    "Full normalized reports, raw logs and full capability tables stay private."
+  ],
+  "native_caps": {
+    "annotation_table_sha256": "0f434f1b996054f1832fd15087e26881d8565df75c641806a7d98cbc39cb5449",
+    "class_id": "C773",
+    "distinct_page_hashes": 1,
+    "observations": 3,
+    "states": {
+      "stable": 1024
+    },
+    "words_per_snapshot": 1024
+  },
+  "normalization": "function, direction, selector-kind, control/class selector, outer status, inner status; excludes numeric handles/sequence/timestamps",
+  "private_manifest_sha256": "a8ed290f38733b0ca07d3d86a465e71a21f9a5e18950c5995840f64a55826d88",
+  "runs": [
+    {
+      "arm": "vfio",
+      "artifact_sha256": {
+        "command.json": "71f8c419ae129184c56fbe7886ab05393e57c6cc5151af0ee26787535e247146",
+        "complete.json": "b36e0c3232e83c03e9db82c3120673a3387e4774e74093aa01e842d30d9974bb",
+        "display-caps.bin": "7cc7a2692d92d155e3c50a0f9554671feffdc63e043925084239ff1bee8f0c55",
+        "display-caps.json": "092603ee72cf612e9307fd08f1879df46ea3b969cd75c8cca5f91e5180d8ebea",
+        "host-health.txt": "d03530293e87de2afe9deb904ac41bd07cc35ee103b685917816128a738f58e2",
+        "qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "serial.log": "cd936ec25d2e3c9880abc8b4579fcb4c026b174945930b2a7a48ac31723f3e08",
+        "status.json": "1a1c863062f5ff574a51f159fef139b3c5175cf92bbc15cc6e7669ea4de43607",
+        "unit-result.txt": "2e53c1060c795356d29fa8abee67dad2afd83357dbe4f719dc4ad7b0150f690c",
+        "vfio-state.json": "9c750dcfabfc5ae17a6e67cd3438345d7f93c7ca2a04f499b10a2c2ef29db90a"
+      },
+      "caps": {
+        "bytes": 4096,
+        "sha256": "7cc7a2692d92d155e3c50a0f9554671feffdc63e043925084239ff1bee8f0c55"
+      },
+      "collection_note": "automated series controller",
+      "flags": {
+        "KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE": null,
+        "KF3_GFX_POOL_PROBE": null,
+        "KF3_MEMORY_LIST_PROBE": null,
+        "KF3_SW_RUNLIST_PROBE": null,
+        "KF3_TIMER_MAP": null,
+        "KF3_TSPACE": null
+      },
+      "gpu_problem_code": 0,
+      "id": "boundary-vfio-5",
+      "nvidia_smi_exit": 0,
+      "rpc": null,
+      "status_uptime_seconds": 101.162
+    },
+    {
+      "arm": "kayfabe",
+      "artifact_sha256": {
+        "command.json": "86446bc3ed301a658f9bc6a756e4e14263c6ced868337f78a905200c12205a71",
+        "complete.json": "4f5746f68b3b9aaec8963adea3b3cacab102346b243e23319a54de014a5054e8",
+        "display-caps-unavailable.json": "599110191324037c3b042cf1b791024cd7c6a40b7612331724a6fbee1268c8af",
+        "host-health.txt": "d03530293e87de2afe9deb904ac41bd07cc35ee103b685917816128a738f58e2",
+        "qemu.log": "14f35233d2b93336732e516012be2f28cd0a905e6e5e5f92229ff2ad69a5f89a",
+        "serial.log": "cd936ec25d2e3c9880abc8b4579fcb4c026b174945930b2a7a48ac31723f3e08",
+        "status.json": "7574fe514f2f1fa50b1adc2cf8d9750eeb6e15f8f4ae7a46ae430119dd1e40c1",
+        "unit-result.txt": "2e53c1060c795356d29fa8abee67dad2afd83357dbe4f719dc4ad7b0150f690c"
+      },
+      "caps": null,
+      "collection_note": "Manually collected using same controller helpers after unavailable BAR0 finding.",
+      "flags": {
+        "KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE": "1",
+        "KF3_GFX_POOL_PROBE": "1",
+        "KF3_MEMORY_LIST_PROBE": "1",
+        "KF3_SW_RUNLIST_PROBE": "1",
+        "KF3_TIMER_MAP": "1",
+        "KF3_TSPACE": "1"
+      },
+      "gpu_problem_code": 43,
+      "id": "boundary-kayfabe-2",
+      "nvidia_smi_exit": 9,
+      "rpc": {
+        "event_status_rows": 136,
+        "log_sha256": "14f35233d2b93336732e516012be2f28cd0a905e6e5e5f92229ff2ad69a5f89a",
+        "records": 365,
+        "selector_status_multiset_sha256": "d710d887ea59bc374e484965c53fa32c94ab2f6407ea782ef2466968eef14289",
+        "sequence_sha256": "38a1cacdc8b0ddb61832d61e6371fab73e294ffd271abb1b7642f34cb29c7aed"
+      },
+      "status_uptime_seconds": 127.71
+    },
+    {
+      "arm": "vfio",
+      "artifact_sha256": {
+        "command.json": "babf37d9356db783a59de8bf9e8651c2d8299f4d0e4a3d3dd47238db4b016244",
+        "complete.json": "f0b6b71b5f8e73bd90fa92e1785b84aacd6dd541b5de093429eb1dc97356a246",
+        "display-caps.bin": "7cc7a2692d92d155e3c50a0f9554671feffdc63e043925084239ff1bee8f0c55",
+        "display-caps.json": "092603ee72cf612e9307fd08f1879df46ea3b969cd75c8cca5f91e5180d8ebea",
+        "host-health.txt": "d03530293e87de2afe9deb904ac41bd07cc35ee103b685917816128a738f58e2",
+        "qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "serial.log": "cd936ec25d2e3c9880abc8b4579fcb4c026b174945930b2a7a48ac31723f3e08",
+        "status.json": "a943eb8322d3dc05d078c20708f14245564b76a8756cffdff4156883b95075c9",
+        "unit-result.txt": "2e53c1060c795356d29fa8abee67dad2afd83357dbe4f719dc4ad7b0150f690c",
+        "vfio-state.json": "6cefaf600387fdebf73bd3079762a56e247069db6dcc9a78e917e048b3b21def"
+      },
+      "caps": {
+        "bytes": 4096,
+        "sha256": "7cc7a2692d92d155e3c50a0f9554671feffdc63e043925084239ff1bee8f0c55"
+      },
+      "collection_note": "automated series controller",
+      "flags": {
+        "KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE": null,
+        "KF3_GFX_POOL_PROBE": null,
+        "KF3_MEMORY_LIST_PROBE": null,
+        "KF3_SW_RUNLIST_PROBE": null,
+        "KF3_TIMER_MAP": null,
+        "KF3_TSPACE": null
+      },
+      "gpu_problem_code": 0,
+      "id": "boundary-vfio-6",
+      "nvidia_smi_exit": 0,
+      "rpc": null,
+      "status_uptime_seconds": 90.322
+    },
+    {
+      "arm": "kayfabe",
+      "artifact_sha256": {
+        "command.json": "16e3f6c15f0d1e83a1ee071092a1e56ffc627be92c1ae9674ccbcbb512fc87b5",
+        "complete.json": "e021293da21829e3a8545bfab54314bc208baf8374f4d653bc63847ea45a01c0",
+        "display-caps-unavailable.json": "599110191324037c3b042cf1b791024cd7c6a40b7612331724a6fbee1268c8af",
+        "host-health.txt": "d03530293e87de2afe9deb904ac41bd07cc35ee103b685917816128a738f58e2",
+        "qemu.log": "99d3ce7d7cc7dcf95371315503885ad1458b669449d7e5e3996f81b0452c3bf2",
+        "serial.log": "cd936ec25d2e3c9880abc8b4579fcb4c026b174945930b2a7a48ac31723f3e08",
+        "status.json": "0dd72f22a9659b68a4b0d399741883a9c76c4b9fbbabe30b6a87d28d08861de2",
+        "unit-result.txt": "2e53c1060c795356d29fa8abee67dad2afd83357dbe4f719dc4ad7b0150f690c"
+      },
+      "caps": null,
+      "collection_note": "automated series controller",
+      "flags": {
+        "KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE": "1",
+        "KF3_GFX_POOL_PROBE": "1",
+        "KF3_MEMORY_LIST_PROBE": "1",
+        "KF3_SW_RUNLIST_PROBE": "1",
+        "KF3_TIMER_MAP": "1",
+        "KF3_TSPACE": "1"
+      },
+      "gpu_problem_code": 43,
+      "id": "boundary-kayfabe-3",
+      "nvidia_smi_exit": 9,
+      "rpc": {
+        "event_status_rows": 136,
+        "log_sha256": "99d3ce7d7cc7dcf95371315503885ad1458b669449d7e5e3996f81b0452c3bf2",
+        "records": 365,
+        "selector_status_multiset_sha256": "d710d887ea59bc374e484965c53fa32c94ab2f6407ea782ef2466968eef14289",
+        "sequence_sha256": "fc0a0e5aff1287f64181ad14de577ba31e035d9597c4e7ccc787f672185a97c3"
+      },
+      "status_uptime_seconds": 99.26
+    },
+    {
+      "arm": "vfio",
+      "artifact_sha256": {
+        "command.json": "166360cd9b4ee1e189c693523a9c7db3ab9d81d641352b4f0271969db4764478",
+        "complete.json": "0afbaa27181ba0ec54782488f0af974e7a3e9b9baf132dbf33ab57beeadb340e",
+        "display-caps.bin": "7cc7a2692d92d155e3c50a0f9554671feffdc63e043925084239ff1bee8f0c55",
+        "display-caps.json": "092603ee72cf612e9307fd08f1879df46ea3b969cd75c8cca5f91e5180d8ebea",
+        "host-health.txt": "d03530293e87de2afe9deb904ac41bd07cc35ee103b685917816128a738f58e2",
+        "qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "serial.log": "cd936ec25d2e3c9880abc8b4579fcb4c026b174945930b2a7a48ac31723f3e08",
+        "status.json": "e54f8fdb35d021b2e4832b9baa6231bb4ba47938da3af9539e9e0cef5a286bf0",
+        "unit-result.txt": "2e53c1060c795356d29fa8abee67dad2afd83357dbe4f719dc4ad7b0150f690c",
+        "vfio-state.json": "aab822ab8f50453d432df369d280600afa16da532c34dc2e2d596b09d6a3536b"
+      },
+      "caps": {
+        "bytes": 4096,
+        "sha256": "7cc7a2692d92d155e3c50a0f9554671feffdc63e043925084239ff1bee8f0c55"
+      },
+      "collection_note": "automated series controller",
+      "flags": {
+        "KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE": null,
+        "KF3_GFX_POOL_PROBE": null,
+        "KF3_MEMORY_LIST_PROBE": null,
+        "KF3_SW_RUNLIST_PROBE": null,
+        "KF3_TIMER_MAP": null,
+        "KF3_TSPACE": null
+      },
+      "gpu_problem_code": 0,
+      "id": "boundary-vfio-7",
+      "nvidia_smi_exit": 0,
+      "rpc": null,
+      "status_uptime_seconds": 91.828
+    },
+    {
+      "arm": "kayfabe",
+      "artifact_sha256": {
+        "command.json": "3a5dde598254ab71fecf90e1a5b8fac77d94096fcbbea566f71a6fcfa63b455a",
+        "complete.json": "0f12b2576657a3c8181b21869c4af44a4c28851cac0b5f33e52cbbc4a101b88e",
+        "display-caps-unavailable.json": "599110191324037c3b042cf1b791024cd7c6a40b7612331724a6fbee1268c8af",
+        "host-health.txt": "d03530293e87de2afe9deb904ac41bd07cc35ee103b685917816128a738f58e2",
+        "qemu.log": "e781791f69a405bbbf9b04f035c43d3fc37ab60194ae21eed73dd42ab21b42c8",
+        "serial.log": "cd936ec25d2e3c9880abc8b4579fcb4c026b174945930b2a7a48ac31723f3e08",
+        "status.json": "479a85dc63c941c9d149dd08b8bf73d5c44504557db05533df4173f0b94a9097",
+        "unit-result.txt": "2e53c1060c795356d29fa8abee67dad2afd83357dbe4f719dc4ad7b0150f690c"
+      },
+      "caps": null,
+      "collection_note": "automated series controller",
+      "flags": {
+        "KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE": "1",
+        "KF3_GFX_POOL_PROBE": "1",
+        "KF3_MEMORY_LIST_PROBE": "1",
+        "KF3_SW_RUNLIST_PROBE": "1",
+        "KF3_TIMER_MAP": "1",
+        "KF3_TSPACE": "1"
+      },
+      "gpu_problem_code": 43,
+      "id": "boundary-kayfabe-4",
+      "nvidia_smi_exit": 9,
+      "rpc": {
+        "event_status_rows": 136,
+        "log_sha256": "e781791f69a405bbbf9b04f035c43d3fc37ab60194ae21eed73dd42ab21b42c8",
+        "records": 365,
+        "selector_status_multiset_sha256": "d710d887ea59bc374e484965c53fa32c94ab2f6407ea782ef2466968eef14289",
+        "sequence_sha256": "fc0a0e5aff1287f64181ad14de577ba31e035d9597c4e7ccc787f672185a97c3"
+      },
+      "status_uptime_seconds": 98.841
+    }
+  ],
+  "schema": "kayfabe-reviewed-boundary-summary/1"
+}
