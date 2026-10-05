@@ -94,6 +94,7 @@ int main(int argc, char **argv)
     if (alloc(ctl, client, client, &device, NV01_DEVICE_0,
               &device_params, sizeof(device_params))) goto free_client;
     NV_MEMORY_ALLOCATION_PARAMS params = {0};
+    params.owner = client;
     params.type = NVOS32_TYPE_IMAGE;
     params.size = 0x7000;
     params.attr = DRF_DEF(OS32, _ATTR, _LOCATION, _PCI) |
