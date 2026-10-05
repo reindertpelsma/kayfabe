@@ -4,6 +4,11 @@
 No product changes, capability enablement, GPU jobs or captured per-die tables. This narrows
 experiment L's failure; it does not implement input-LUT or tone-mapping behavior.
 
+**Follow-up, 2026-10-05:** M's recovered journal advances past the first ILUT constructor and
+fails at the second TMO constructor. [M dataflow audit](M_DATAFLOW.md) follows the authored page
+and the distinct TMO pointer-shape condition. The ILUT two-buffer analysis below remains valid;
+it must not be copied to TMO, whose descriptor requests one buffer.
+
 ## Concrete discriminator: ILUT surface loading and buffer count
 
 Windows 580.88 constructs the first per-window descriptor from
