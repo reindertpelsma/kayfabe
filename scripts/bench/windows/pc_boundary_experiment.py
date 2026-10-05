@@ -14,6 +14,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import subprocess
@@ -24,6 +25,7 @@ REVISION = 'b431aeaf9fca5d78b451754c0de7b8dbbe9d7652'
 FLAGS = ('KF3_GFX_POOL_PROBE', 'KF3_TIMER_MAP', 'KF3_TSPACE',
          'KF3_SW_RUNLIST_PROBE', 'KF3_MEMORY_LIST_PROBE',
          'KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE')
+ILUT_FLAG = 'KF3_DISPLAY_ILUT_CONSTRUCTOR_PROBE'
 
 
 def digest(path):
@@ -47,16 +49,27 @@ def stop_child(child):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--arm', choices=('vfio', 'kayfabe'), required=True)
-    p.add_argument('--run', type=int, choices=range(1, 10), required=True)
+    p.add_argument('--run', type=int, choices=range(1, 100), required=True)
     p.add_argument('--max-seconds', type=int, default=600)
     p.add_argument('--no-mmio-trace', action='store_true')
+    p.add_argument('--product-revision', default=REVISION)
+    p.add_argument('--qemu-revision', help='Immutable artifact revision; defaults to product revision')
+    p.add_argument('--gsp-observer', action='store_true')
+    p.add_argument('--ilut-probe', action='store_true')
     a = p.parse_args()
     if os.geteuid() or not 60 <= a.max_seconds <= 1800:
         p.error('Require root and a 60..1800 second runtime bound')
+    artifact = a.qemu_revision or a.product_revision
+    if not all(re.fullmatch('[0-9a-f]{40}', x) for x in (artifact, a.product_revision)):
+        p.error('Require full source revisions for product and QEMU artifact')
+    if a.gsp_observer and (a.arm != 'vfio' or not a.no_mmio_trace):
+        p.error('Narrow GSP observer requires VFIO without generic MMIO tracing')
+    if a.ilut_probe and a.arm != 'kayfabe':
+        p.error('ILUT construction probe is only a Kayfabe arm')
     os.umask(0o077)
     name = f'boundary-{a.arm}-{a.run}'
     work = BASE/name
-    qemu = BASE/'kf3-bins'/REVISION[:8]/'qemu-system-x86_64'
+    qemu = BASE/'kf3-bins'/artifact[:8]/'qemu-system-x86_64'
     baseline = BASE/'baseline/windows.qcow2'
     template = json.loads((BASE/'probe-l/command.json').read_text())
     if template['revision'] != REVISION:
@@ -72,8 +85,9 @@ def main():
         old = str(BASE/'probe-l')
         cmd = [s.replace(old, str(work)).replace('kayfabe-windows-probe-l', name)
                for s in template['argv']]
-        if cmd[0] != str(qemu) or not cmd[-1].startswith('kf3-gpu,'):
+        if cmd[0] != str(BASE/'kf3-bins'/REVISION[:8]/'qemu-system-x86_64') or not cmd[-1].startswith('kf3-gpu,'):
             raise RuntimeError('Unexpected pinned QEMU command')
+        cmd[0] = str(qemu)
         vfio = None
         state = None
         journal = work/'vfio-state.json'
@@ -103,6 +117,10 @@ def main():
             before = vfio.inventory()
             vfio.require_profile(before['devices'], before['amd'])
             suffix = '' if a.no_mmio_trace else ',x-no-mmap=on'
+            if a.gsp_observer:
+                suffix = (f',x-gsp-observer={work}/gsp.jsonl,x-no-kvm-intx=on,'
+                          'x-no-kvm-msi=on,x-no-kvm-msix=on,x-no-kvm-ioeventfd=on,'
+                          'x-no-vfio-ioeventfd=on,enable-migration=off')
             cmd[-1] = 'vfio-pci,host=0000:01:00.0,bus=pci.0,addr=0x6.0,multifunction=on'+suffix
             cmd += ['-device', 'vfio-pci,host=0000:01:00.1,bus=pci.0,addr=0x6.1']
             if not a.no_mmio_trace:
@@ -112,15 +130,19 @@ def main():
                 cmd += ['-trace', f'events={work}/trace-events,file={work}/mmio.log']
             state = {'schema_version': 1, 'before': before, 'qemu_command': cmd}
         env = dict(os.environ)
-        for flag in FLAGS:
+        for flag in (*FLAGS, ILUT_FLAG):
             env.pop(flag, None)
         env['KF3_RPC_TRACE'] = '1'
         if a.arm == 'kayfabe':
             env.update({flag: '1' for flag in FLAGS})
-        meta = dict(schema=1, arm=a.arm, run=a.run, revision=REVISION,
+            if a.ilut_probe:
+                env[ILUT_FLAG] = '1'
+        meta = dict(schema=1, arm=a.arm, run=a.run, revision=a.product_revision,
+                    qemu_artifact_revision=artifact, runner_sha256=digest(Path(__file__)),
+                    gsp_observer=a.gsp_observer,
                     argv=cmd, baseline=str(baseline), baseline_sha256=digest(baseline),
                     qemu_sha256=digest(qemu), firmware_sha256=digest(work/'OVMF_VARS.fd'),
-                    flags={flag: env.get(flag) for flag in FLAGS},
+                    flags={flag: env.get(flag) for flag in (*FLAGS, ILUT_FLAG)},
                     mmio_trace=a.arm == 'vfio' and not a.no_mmio_trace,
                     mmio_read_coverage='not traced; capability page snapshot only',
                     time_utc=datetime.datetime.now(datetime.timezone.utc).isoformat())
@@ -144,7 +166,7 @@ def main():
             deadline = time.monotonic()+a.max_seconds
             while child.poll() is None:
                 oversized = any(path.exists() and path.stat().st_size > 256*1024**2
-                                for path in (work/'mmio.log', work/'qemu.log', work/'serial.log'))
+                                for path in (work/'mmio.log', work/'qemu.log', work/'serial.log', work/'gsp.jsonl'))
                 if time.monotonic() >= deadline or oversized:
                     raise RuntimeError('Diagnostic runtime or trace-size bound reached')
                 time.sleep(1)

@@ -49,9 +49,13 @@ def log(message):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--first-vfio', type=int, choices=range(1, 8), default=5)
-    parser.add_argument('--first-kayfabe', type=int, choices=range(1, 8), default=1)
+    parser.add_argument('--first-vfio', type=int, choices=range(1, 98), default=5)
+    parser.add_argument('--first-kayfabe', type=int, choices=range(1, 98), default=1)
     parser.add_argument('--pairs', type=int, choices=range(1, 4), default=3)
+    parser.add_argument('--product-revision')
+    parser.add_argument('--qemu-revision')
+    parser.add_argument('--gsp-observer', action='store_true')
+    parser.add_argument('--ilut-probe', action='store_true')
     args = parser.parse_args()
     ROOT.mkdir(parents=True, exist_ok=True, mode=0o700)
     script = (HERE/'boundary_status.ps1').read_text()
@@ -66,10 +70,18 @@ def main():
         log('START '+name)
         started = time.monotonic()
         try:
+            extra = []
+            for key in ('product_revision', 'qemu_revision'):
+                if getattr(args, key):
+                    extra += ['--'+key.replace('_', '-'), getattr(args, key)]
+            if args.gsp_observer and arm == 'vfio':
+                extra += ['--gsp-observer']
+            if args.ilut_probe and arm == 'kayfabe':
+                extra += ['--ilut-probe']
             remote(['systemd-run', '--unit='+unit, '--property=RuntimeMaxSec=900',
                     '--property=KillMode=mixed', '--property=TimeoutStopSec=180',
                     '/usr/bin/python3', '-u', REMOTE+'/boundary-tools/pc_boundary_experiment.py',
-                    '--arm', arm, '--run', number, '--no-mmio-trace'])
+                    '--arm', arm, '--run', number, '--no-mmio-trace']+extra)
             deadline = time.monotonic()+300
             while True:
                 ready = remote(['python3', REMOTE+'/boundary-tools/qmp.py', work+'/qga.sock',
@@ -119,6 +131,8 @@ def main():
             fetch(work, local, ['qemu.log', 'serial.log'])
             if arm == 'vfio':
                 fetch(work, local, ['vfio-state.json'])
+                if args.gsp_observer:
+                    fetch(work, local, ['gsp.jsonl'])
             health = remote(['nvidia-smi', '--query-gpu=name,driver_version', '--format=csv,noheader'])
             (local/'host-health.txt').write_text(health.stdout)
             (local/'complete.json').write_text(json.dumps(dict(complete=True, elapsed=time.monotonic()-started))+'\n')
