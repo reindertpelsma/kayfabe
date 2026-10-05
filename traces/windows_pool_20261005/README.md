@@ -188,3 +188,25 @@ check. Microsoft symbols resolve the failure-report path through
 the same `0x1b0 / 2 / 0xc000009a` classification, but has no NVIDIA-internal failing
 call frame. Its bucket names the reporter in dxgkrnl, not a proven dxgkrnl defect.
 The debugger calls the kernel Windows 10; the fixture is Windows 11 build 26100.
+
+## Probes F and G: virtual boot display comparisons
+
+Both use product `e71e4a8b21671d14b89c25602e78b687e8463333` and fresh overlays,
+with the same pool, timer and private-space opt-ins as E. F (runner `56b0caeb`)
+enables the source-built virtual GOP and retains auxiliary VGA. G (runner
+`3dd15da4`) enables GOP and removes auxiliary VGA. Each still reports Code 43,
+nvidia-smi exit 9, no GPU channel births, and exactly the same 208 RPC trace
+lines as E. Both guests shut down cleanly; QEMU exit 0 means orderly shutdown.
+
+F's Kayfabe head displayed the TianoCore logo and Windows Boot Manager text,
+confirming firmware GOP execution. Kayfabe later logs `no console adopted` in
+both runs. This does not establish why Windows does not adopt the console.
+G's old auxiliary VGA appears only as an absent PnP device (problem 45).
+The logs, commands and Windows status are in `probe-f/` and `probe-g/`.
+
+The newer private NVIDIA journal analysis identifies a separate, concrete
+StartDevice failure path: refused allocation of class `0xb297` propagates to
+`STATUS_INSUFFICIENT_RESOURCES`. The earlier golden-context rejection is not
+established as fatal. Preserve that distinction when interpreting these display
+experiments; no allocation policy was changed for F or G. Reproducible reviewed
+causal evidence is being prepared on the Windows diagnostics branch.

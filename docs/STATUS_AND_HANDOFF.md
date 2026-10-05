@@ -31,9 +31,13 @@ master. The older master status below is historical for this checkout.
   proof of RAM exhaustion or a specific failed RPC. Two dumps are saved privately
   at `/data/kayfabe-runtime/windows-pool-20261005/private-dumps/`; reviewed text
   evidence is in `traces/windows_pool_20261005/probe-e-debugview/`. Dump analysis
-  is in progress. E remains running on the PC for these diagnostics; root owns
-  the sole GPU bench slot. Preserve the immutable fixture and shut E down cleanly
-  before another hardware job.
+  is in progress. E, F and G have shut down cleanly. F enabled the virtual GOP; G also removed
+  auxiliary VGA. Both still produced exactly the same 208 RPC lines and Code 43.
+  Reviewed NVIDIA journal/disassembly analysis now ties the StartDevice failure
+  directly to refused class `0xb297`; golden promotion is an earlier tolerated
+  failure, not the established root cause. Source/contract research is in progress.
+  Root owns the serial GPU slot for a fresh matched VFIO comparison; preserve the
+  immutable fixtures and restore Linux GPU binding afterward.
 - Code and text evidence are pushed. The PC (`172.22.1.20`) is disposable and
   shared by serial GPU jobs only. Vast rentals 54049598 and 54159260 were retired
   after saving evidence on `codex/vast-retirement-2026-10-05` (`67ca8133`). Only

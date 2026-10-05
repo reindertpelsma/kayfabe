@@ -1,0 +1,10 @@
+{
+  "product_revision": "e71e4a8b21671d14b89c25602e78b687e8463333",
+  "runner_revision": "56b0caeb",
+  "comparison": "E plus virtual GOP enabled; auxiliary VGA retained",
+  "rpc_rows": 208,
+  "rpc_trace_lines_equal_e": true,
+  "clean_qemu_exit": 0,
+  "gop_image": "embedded unsigned source-built kf-gop; virtual Secure Boot disabled",
+  "observed_screen": "Kayfabe head shows TianoCore logo and Windows Boot Manager messages; does not establish Windows console adoption"
+}
