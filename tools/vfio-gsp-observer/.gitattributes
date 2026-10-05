@@ -1,0 +1,2 @@
+# Unified diff data includes a required context marker on empty source lines.
+integration.patch whitespace=-blank-at-eol

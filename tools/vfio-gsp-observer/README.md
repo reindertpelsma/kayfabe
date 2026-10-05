@@ -1,7 +1,8 @@
 # VFIO GSP bootstrap observer
 
-**STATUS: DESIGN-ONLY, 2026-10-05.** This directory specifies a diagnostic-only
-QEMU 10.2.4 observer. No native GPU runtime result or complete-prefix claim exists.
+**STATUS: RESEARCH, 2026-10-05.** This directory implements an opt-in diagnostic
+QEMU 10.2.4 observer. Local compilation and GPU-free tests pass; no native GPU
+runtime result or complete-prefix claim exists.
 It changes neither Kayfabe product semantics nor a guest/GPU queue pointer.
 
 ## Why the existing capture misses initialization
@@ -31,7 +32,7 @@ QEMU upstream tag `v10.2.4` resolves to
 | region.c | `49f6e06bdba3e3bfa57650d36d5bb9bc28681cc5c957b087fb3b220314d58240` |
 | pci.h | `73498496a8790b41df6becc8e1cb8ae6e5e86bec561a714e282f15e93e4cba74` |
 
-The proposed profile is compiler-derived from OGKM 580.65.06, commit
+The implemented profile is compiler-derived from OGKM 580.65.06, commit
 `307159f2623d3bf45feb9177bd2da52ffbc5ddf9`:
 
 1. `kernel_gsp_tu102.c:kgspProgramLibosBootArgsAddr_TU102` writes the physical/DMA
@@ -57,17 +58,20 @@ The proposed profile is compiler-derived from OGKM 580.65.06, commit
 6. Sample status messages before userspace INTx/MSI/MSI-X injection, and at GSP
    interrupt-status/acknowledgment MMIO boundaries. QEMU already exposes
    `x-no-kvm-intx`, `x-no-kvm-msi`, `x-no-kvm-msix` and `x-no-kvm-ioeventfd`.
-   Require these and `x-no-mmap` explicitly; otherwise IRQFD or mmap can bypass
-   the observer. No automatic change to those device options is proposed.
+   Require these plus `x-no-vfio-ioeventfd=on` and `enable-migration=off`
+   explicitly. With `x-gsp-observer` present the patch skips mmap for BAR0 only;
+   BAR1/BAR2 retain their mappings. Global `x-no-mmap` is unnecessary.
 
 Every guest-memory read must translate through the device address space and
-reject anything outside ordinary guest RAM before touching bytes. Never read
+reject anything outside ordinary guest RAM before touching bytes, including
+RAM-device mappings, ROM, protected RAM and guest-memfd regions. VFIO BAR mappings
+have QEMU's RAM flag too, so the separate RAM-device rejection is essential. Never read
 MMIO through the memory helper or log host pointers. Guest-IOMMU configurations
 without a validated DMA translation profile are refused.
 
 ## Bounds and output requirements
 
-The proposed first implementation supports one explicitly selected NVIDIA VFIO
+This implementation supports one explicitly selected NVIDIA VFIO
 PCI device, one 4096-byte page table, at most 512 unique pages, at most 1 MiB per
 queue, and ordinary unencrypted RPC version `0x03000000`. Queue elements and
 checksums use the already-tested Windows observer parser. Larger/unknown layouts
@@ -77,22 +81,104 @@ Callbacks do bounded RAM copies into preallocated memory. They never write a
 file, allocate per message, sleep, or wait for the output worker. A bounded SPSC
 FIFO sends record bytes to a background writer; FIFO saturation, output cap,
 unstable DMA snapshots and malformed records have separate counters. Output is
-created exclusively, has an explicit byte/record cap, and is drained on clean
-device teardown. Disk errors mark the result failed. A killed QEMU can leave a
-truncated trace; strict decoding must refuse it rather than count it complete.
+created exclusively with mode 0600 and no final symlink following. Limits are
+32 MiB FIFO, 64 MiB reconstructed KGWT bytes including header, 100,000 records,
+and 300 seconds from device realization. JSONL hex and metadata expand the file
+beyond 64 MiB (bounded below 192 MiB). The duration is checked on observation
+triggers; it does not terminate QEMU. There is no general MMIO log.
+
+Hot unplug is blocked while this profile is active. Normal QEMU exit stops the
+producer and drains the writer. A kill can leave a truncated trace. Disk errors
+are reported on QEMU stderr; a final flush/close error can occur after the footer
+was formatted, so accepting evidence requires both strict decoding and a clean
+QEMU exit receipt without the observer-output error. `file_export_complete`
+means exported records survived framing/hash checks, never complete GPU history.
 
 Use monotonically increasing observation timestamps, device identity, queue
 generation and trigger provenance. Every generation starts with an unknown
 prefix. Preserve both transport and RPC sequences; Windows commonly uses RPC
 sequence zero, so it is not a unique transaction identifier. Reset/reuse must
-not pair an old reply with a new allocation at the same address.
+not pair an old reply with a new allocation at the same address. The VFIO device
+reset hook invalidates attachment; a new valid mailbox chain increments the
+generation. Reset/resume paths that do not publish a new mailbox chain are not
+covered. Prefix flags are retained even when the first observed sequence is zero.
 
 Even with all hooks active, GPU DMA proceeds independently of guest CPU
 execution. An interrupt may announce several messages, polling may consume
 without a fresh interrupt, and a DMA snapshot can be unstable. Accept only
 stable checked records; a first sequence of zero and zero observed gaps are
 evidence of coverage, not a mathematical proof of completeness. Save an
-uninstrumented health result to detect observer-induced failure/timeout.
+uninstrumented health result to detect observer-induced failure/timeout. Each
+callback may copy up to roughly 4 MiB of RAM and runs with the BQL, so timing
+perturbation is material despite the absence of file I/O or waits in that path.
+The inherited `invalid_elements` counter includes empty/stale non-message slots
+examined again on later snapshots; it is not a malformed-submitted-RPC count.
+
+## Apply, build and decode
+
+Use a separate QEMU checkout/build directory. This installer hash-checks the five
+upstream VFIO source files and `VERSION`; unrelated changes such as kf3 additions
+are allowed. It refuses existing observer files. It neither builds nor replaces
+an executable. The patch and own source files are separate intentionally.
+
+```sh
+python3 tools/vfio-gsp-observer/apply.py /path/to/qemu-10.2.4 --check
+python3 tools/vfio-gsp-observer/apply.py /path/to/qemu-10.2.4
+# Configure the separate build with the same options as the comparison baseline.
+ninja -C /path/to/qemu-10.2.4/build qemu-system-x86_64
+```
+
+Add these options only to the selected NVIDIA graphics function, with a fresh
+output path whose parent already exists. This first profile rejects guest-IOMMU,
+mdev, migration and big-endian configurations.
+
+```text
+-device vfio-pci,host=0000:01:00.0,x-gsp-observer=/fresh/run/gsp.jsonl,x-no-kvm-intx=on,x-no-kvm-msi=on,x-no-kvm-msix=on,x-no-kvm-ioeventfd=on,x-no-vfio-ioeventfd=on,enable-migration=off
+```
+
+Keep the exact source revision, executable hash, QEMU command, host PCI identity,
+Windows/driver/firmware versions, fixture hash, and phase timestamps beside the
+trace. Use QMP quit after the bounded workload, preserve stderr and process exit,
+then decode. Do not infer readiness merely from file creation: output is buffered.
+
+```sh
+python3 tools/vfio-gsp-observer/decode.py /fresh/run/gsp.jsonl --jsonl > /fresh/run/decoded.json
+# --all-records preserves the full decoded payloads and generation/trigger metadata.
+# --require-query-pair exits 4 unless one unambiguous successful pool pair exists.
+```
+
+Trigger ids are 1 bootstrap mailbox, 2 command doorbell, 3 host interrupt before
+injection, and 4 GSP interrupt-status/ack MMIO. `source_sha256` covers canonical
+KGWT header/records/payloads. `observations_sha256` additionally inserts two
+little-endian uint64 words (generation, trigger) before each record. The supplied
+decoder checks both, preserves metadata and never pairs across generations.
+Checksums detect corruption; they do not establish capture completeness.
+
+## Local validation and provenance
+
+Portable queue parsing and the binary record ABI are copied from this project's
+Windows observer at `572411c1`, without NVIDIA implementation code. `decode.py`
+starts from that revision and adds VFIO metadata validation/generation pairing.
+The new bootstrap path uses compiler-derived public layouts in `layout-580.json`.
+`check-layout.py` checks TU102 and GA102 against the pinned OGKM revision.
+
+```sh
+tools/vfio-gsp-observer/test.sh
+python3 tools/vfio-gsp-observer/check-layout.py /path/to/ogkm-580.65.06
+python3 tools/vfio-gsp-observer/tests/test_apply.py /path/to/qemu-10.2.4
+ninja -C /path/to/qemu-10.2.4/build libqom.a
+python3 tools/vfio-gsp-observer/tests/test_writer.py /path/to/qemu-10.2.4/build
+```
+
+On 2026-10-05, GCC and Clang ASan/UBSan core tests passed; the exact upstream
+QEMU 10.2.4 x86_64 system target compiled and linked locally. The production
+writer test exceeds the FIFO size, verifies 6,500 payloads through wrap/drain,
+checks both hashes and strict decoding, refuses metadata corruption/truncation,
+and exercises `/dev/full`, both output caps, saturation and the final-stop race.
+It uses real QEMU memory predicates against ordinary, RAM-device, ROM, non-RAM,
+protected and guest-memfd region states. This is not a live address-space/PCI test.
+Installer tests cover hash mismatch, existing-file refusal, successful application
+and preservation of unrelated source changes. No GPU runtime result is implied.
 
 ## Matched-run comparison
 
