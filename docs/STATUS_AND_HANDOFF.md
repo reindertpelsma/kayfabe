@@ -36,16 +36,28 @@ master. The older master status below is historical for this checkout.
   Reviewed NVIDIA journal/disassembly analysis now ties the StartDevice failure
   directly to refused class `0xb297`; golden promotion is an earlier tolerated
   failure, not the established root cause. Source/contract research is in progress.
-  Root owns the serial GPU slot for a fresh matched VFIO comparison; preserve the
-  immutable fixtures and restore Linux GPU binding afterward.
+  The matched VFIO restart comparison captured 3,704 records, including 23
+  successful scheduling-control pairs, but again missed the allocation prefix.
+  It is saved under `traces/windows_pool_20261005/vfio-b297-restart/`; Windows
+  shut down and the supervisor restored the Linux GPU driver/display. All Windows
+  bench VMs are stopped. The raw trace is preserved privately on the controller.
+  A bounded allocation-only diagnostic is in progress on
+  `codex/windows-runlist-allocation-probe-20261005`, based on `e71e4a8b`.
+  Scheduling remains refused. `maxTSGs=0` means native default capacity, not
+  zero capacity. See `tools/windows-debug-capture/evidence/2026-10-05-nvcd/`
+  for the causal proof and Windows usage; proprietary Linux source research
+  is on `codex/windows-runlist-source-2026-10-05`.
 - Code and text evidence are pushed. The PC (`172.22.1.20`) is disposable and
   shared by serial GPU jobs only. Vast rentals 54049598 and 54159260 were retired
-  after saving evidence on `codex/vast-retirement-2026-10-05` (`67ca8133`). Only
-  54213526 remains for the untouched fresh Windows-template test; verify native
-  Windows and CUDA from PowerShell, preserve text evidence, then retire it.
-- `vast-windows` main is frozen at `6d8e66f`. Installer improvements are on
-  `codex/template-followups-2026-10-05`; do not replace the ongoing fresh test or
-  promote those changes before the requested later test.
+  after saving evidence on `codex/vast-retirement-2026-10-05` (`67ca8133`). Rental
+  54213526 subsequently passed the untouched fresh template, native Windows,
+  SSH and a real CUDA kernel on each of its two RTX 5090s. It was retired after
+  saving the evidence. Zero Vast rentals remain as of 2026-10-05 00:48:59 UTC.
+- `vast-windows` runtime remains frozen at `6d8e66f`; docs-only main updates
+  `5cebab4`/`30c6ce7` record the successful fresh template and retirement. The
+  copy-ready template ReadMe/name/description are updated in the repo and `/root`.
+  Installer improvements stay on `codex/template-followups-2026-10-05` at
+  `a2a3a63`; do not promote them before the requested later fresh-template test.
 
 **STATUS: LIVE, 2026-09-30.** Master = the code of **`afb552ea`** (`v3-mc23`: CUDA dynamic parallelism +
 the guest-RAM-object race fix + everything below), which passed the full merge bar (§0 first entry), plus
