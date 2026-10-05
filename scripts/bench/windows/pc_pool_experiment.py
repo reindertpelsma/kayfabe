@@ -25,8 +25,12 @@ parser.add_argument('--private-translated-space', action='store_true',
                     help='enable experimental P1/P2 isolated Translated address space')
 parser.add_argument('--gop', action='store_true',
                     help='enable Kayfabe virtual UEFI boot display for this run')
+parser.add_argument('--only-kayfabe-display', action='store_true',
+                    help='omit the auxiliary VGA adapter (requires --gop)')
 parser.add_argument('--base', type=Path, default=Path('/var/lib/kf-windows-20261005'))
 args = parser.parse_args()
+if args.only_kayfabe_display and not args.gop:
+    parser.error('--only-kayfabe-display requires --gop')
 if not re.fullmatch('[0-9a-f]{8,40}', args.revision):
     parser.error('revision must identify the immutable build')
 if not re.fullmatch('[a-z0-9-]{1,64}', args.name):
@@ -63,6 +67,9 @@ with open('/tmp/kayfabe-fastguest.lock', 'a') as lock:
  '-global','i440FX-pcihost.pci-hole64-size=32G',
  '-device','kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,display=on,guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0']
  if args.gop: cmd[-1] += ',gop=on'
+ if args.only_kayfabe_display:
+  auxiliary = cmd.index('VGA,addr=0x9')
+  del cmd[auxiliary-1:auxiliary+1]
  env = dict(os.environ, KF3_RPC_TRACE='1')
  env.pop('KF3_GFX_POOL_PROBE', None)
  env.pop('KF3_TIMER_MAP', None)
@@ -75,6 +82,7 @@ with open('/tmp/kayfabe-fastguest.lock', 'a') as lock:
      'timer_map': args.timer_map,
      'private_translated_space': args.private_translated_space,
      'gop': args.gop,
+     'only_kayfabe_display': args.only_kayfabe_display,
      'time_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
      'backing_image': str(source), 'vfio': False,
  }, indent=2)+'\n')
