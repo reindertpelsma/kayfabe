@@ -178,3 +178,13 @@ messages contain no more precise RM error.
 Both the initial-start dump and restart dump are preserved privately on the
 controller; only hashes/sizes and selected WER classification fields are public.
 Raw dumps and the machine's complete WER inventory are deliberately excluded.
+
+`probe-e-kd/` contains Microsoft's KD analysis of the initial-start dump, using
+the pinned SDK bundle and bounded wrapper in `tools/windows-debug-capture/`.
+All 19 bundled PE files passed Microsoft Authenticode verification before use;
+the command finished in 18 seconds and passed the explicit analysis-output
+check. Microsoft symbols resolve the failure-report path through
+`dxgkrnl!DpiFdoStartAdapter` and `DxgCreateLiveDumpWithDriverBlob`. The dump records
+the same `0x1b0 / 2 / 0xc000009a` classification, but has no NVIDIA-internal failing
+call frame. Its bucket names the reporter in dxgkrnl, not a proven dxgkrnl defect.
+The debugger calls the kernel Windows 10; the fixture is Windows 11 build 26100.

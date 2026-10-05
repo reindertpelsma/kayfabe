@@ -1,0 +1,261 @@
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+   EnableRedirectToChakraJsProvider : false
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.062 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.000 seconds
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 0
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+
+Microsoft (R) Windows Debugger Version 10.0.28000.2526 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [C:\Windows\LiveKernelReports\WATCHDOG\WATCHDOG-20261004-2348.dmp]
+Mini Kernel Dump File: Only registers and stack trace are available
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+Deferred                                       srv*C:\ProgramData\KayfabeKD\symbols*https://msdl.microsoft.com/download/symbols
+Symbol search path is: srv*C:\ProgramData\KayfabeKD\symbols*https://msdl.microsoft.com/download/symbols
+Executable search path is: 
+Windows 10 Kernel Version 26100 MP (8 procs) Free x64
+Product: WinNt, suite: TerminalServer SingleUserTS
+Kernel base = 0xfffff803`97200000 PsLoadedModuleList = 0xfffff803`980f4770
+Debug session time: Sun Oct  4 23:48:51.183 2026 (UTC + 0:00)
+System Uptime: 0 days 0:00:18.993
+Loading Kernel Symbols
+...............................................................
+................................................................
+
+Loading User Symbols
+PEB is paged out (Peb.Ldr = 000000a8`821c1018).  Type ".hh dbgerr001" for details
+Mini Kernel Dump does not contain unloaded driver list
+For analysis of this file, run !analyze -v
+4: kd> .symfix C:\ProgramData\KayfabeKD\symbols
+4: kd> .sympath
+Symbol search path is: srv*
+Expanded Symbol search path is: SRV*C:\ProgramData\KayfabeKD\symbols*https://msdl.microsoft.com/download/symbols
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+Deferred                                       srv*
+4: kd> .reload /f nt
+4: kd> .reload /f dxgkrnl.sys
+4: kd> .reload /f watchdog.sys
+4: kd> .load C:\ProgramData\KayfabeKD\run-20261005T0011175941255Z\tools\x64\winext\ext.dll
+4: kd> .chain
+Extension DLL search Path:
+    C:\ProgramData\KayfabeKD\run-20261005T0011175941255Z\tools\x64\winext;C:\ProgramData\KayfabeKD\run-20261005T0011175941255Z\tools\x64\winxp;C:\ProgramData\KayfabeKD\run-20261005T0011175941255Z\tools\x64;C:\ProgramData\KayfabeKD\run-20261005T0011175941255Z\tools\x64\WINXP;C:\ProgramData\KayfabeKD\run-20261005T0011175941255Z\tools\x64\winext;C:\ProgramData\KayfabeKD\run-20261005T0011175941255Z\tools\x64\winext\arcade;C:\ProgramData\KayfabeKD\run-20261005T0011175941255Z\tools\x64\pri;C:\ProgramData\KayfabeKD\run-20261005T0011175941255Z\tools\x64;C:\Users\vast\AppData\Local\Dbg\EngineExtensions;C:\ProgramData\KayfabeKD\run-20261005T0011175941255Z\tools\x64;C:\Program Files\OpenSSH\;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\;C:\Users\vast\AppData\Local\Microsoft\WindowsApps;
+Extension DLL chain:
+    C:\ProgramData\KayfabeKD\run-20261005T0011175941255Z\tools\x64\winext\ext.dll: image 1.2506.23.01, API 1.0.0, built Mon Jun 23 17:52:00 2025
+        [path: C:\ProgramData\KayfabeKD\run-20261005T0011175941255Z\tools\x64\winext\ext.dll]
+    dbghelp: image 10.0.28000.2526, API 10.0.6, 
+        [path: C:\ProgramData\KayfabeKD\run-20261005T0011175941255Z\tools\x64\dbghelp.dll]
+    exts: image 10.0.28000.2526, API 1.0.0, 
+        [path: C:\ProgramData\KayfabeKD\run-20261005T0011175941255Z\tools\x64\winxp\exts.dll]
+    kext: image 10.0.28000.2526, API 1.0.0, 
+        [path: C:\ProgramData\KayfabeKD\run-20261005T0011175941255Z\tools\x64\winext\kext.dll]
+    kdexts: image 10.0.28000.2526, API 1.0.0, 
+        [path: C:\ProgramData\KayfabeKD\run-20261005T0011175941255Z\tools\x64\winxp\kdexts.dll]
+4: kd> .bugcheck
+Bugcheck code 000001B0
+Arguments 00000000`00000002 ffffffff`c000009a 00000000`00000100 fffff803`2e574f10
+4: kd> !ext.analyze -v
+Loading Kernel Symbols
+...............................................................
+................................................................
+
+Loading User Symbols
+PEB is paged out (Peb.Ldr = 000000a8`821c1018).  Type ".hh dbgerr001" for details
+Mini Kernel Dump does not contain unloaded driver list
+*******************************************************************************
+*                                                                             *
+*                        Bugcheck Analysis                                    *
+*                                                                             *
+*******************************************************************************
+
+VIDEO_MINIPORT_FAILED_LIVEDUMP (1b0)
+The DXGKRNL detected a problem and has captured a live dump to collect debug information.
+(This code can never be used for a real BugCheck; it is used to identify live dumps.)
+Livedumps triggered by dxgkrnl when a miniport driver failed
+Arguments:
+Arg1: 0000000000000002, Start device failed
+Arg2: ffffffffc000009a, NTSTATUS
+Arg3: 0000000000000100, Reserved
+Arg4: fffff8032e574f10, Reserved
+
+Debugging Details:
+------------------
+
+Mini Kernel Dump does not contain unloaded driver list
+Mini Kernel Dump does not contain unloaded driver list
+
+KEY_VALUES_STRING: 1
+
+    Key  : Analysis.CPU.mSec
+    Value: 1000
+
+    Key  : Analysis.Elapsed.mSec
+    Value: 14476
+
+    Key  : Analysis.IO.Other.Mb
+    Value: 6
+
+    Key  : Analysis.IO.Read.Mb
+    Value: 0
+
+    Key  : Analysis.IO.Write.Mb
+    Value: 12
+
+    Key  : Analysis.Init.CPU.mSec
+    Value: 375
+
+    Key  : Analysis.Init.Elapsed.mSec
+    Value: 2781
+
+    Key  : Analysis.Memory.CommitPeak.Mb
+    Value: 91
+
+    Key  : Analysis.Version.DbgEng
+    Value: 10.0.28000.2526
+
+    Key  : Analysis.Version.Description
+    Value: 10.2506.23.01 amd64fre
+
+    Key  : Analysis.Version.Ext
+    Value: 1.2506.23.1
+
+    Key  : Bugcheck.Code.LegacyAPI
+    Value: 0x1b0
+
+    Key  : Bugcheck.Code.TargetModel
+    Value: 0x1b0
+
+    Key  : Dump.Attributes.AsUlong
+    Value: 0x18
+
+    Key  : Dump.Attributes.KernelGeneratedTriageDump
+    Value: 1
+
+    Key  : Failure.Bucket
+    Value: LKD_0x1B0_dxgkrnl!DxgCreateLiveDumpWithDriverBlob
+
+    Key  : Failure.Hash
+    Value: {a6956ab6-031b-39a9-c903-4f792be352d4}
+
+
+BUGCHECK_CODE:  1b0
+
+BUGCHECK_P1: 2
+
+BUGCHECK_P2: ffffffffc000009a
+
+BUGCHECK_P3: 100
+
+BUGCHECK_P4: fffff8032e574f10
+
+FILE_IN_CAB:  WATCHDOG-20261004-2348.dmp
+
+DUMP_FILE_ATTRIBUTES: 0x18
+  Kernel Generated Triage Dump
+  Live Generated Dump
+
+FAULTING_THREAD:  ffffe78b582d3080
+
+PROCESS_NAME:  csrss.exe
+
+STACK_TEXT:  
+ffffc287`cfd26cb0 fffff803`2a8e7128     : ffffe78b`58a1c2f0 00000000`00000000 00000000`00000000 00000000`00000002 : watchdog!WdpDbgCaptureTriageDump+0xe6
+ffffc287`cfd26d20 fffff803`2a8e3b48     : ffffc60d`01bb6c00 00000000`000001b0 00000000`00000002 ffffc287`cfd26e50 : watchdog!WdDbgReportRecreate+0x108
+ffffc287`cfd26d80 fffff803`2a57d1f4     : ffffc60d`01bb6c10 ffffc287`cfd26e60 ffffe78b`5561f360 ffffffff`c000009a : watchdog!WdDbgReportCreate+0x58
+ffffc287`cfd26df0 fffff803`2a60fdbd     : 00000000`00000100 ffffe78b`589b3180 ffffc60d`01bb6c10 ffffe78b`55f328f0 : dxgkrnl!DxgCreateLiveDumpWithDriverBlob+0x154
+ffffc287`cfd26e80 fffff803`2a610b5d     : 00000000`00000000 00000000`00000000 ffffe78b`589b3180 00000000`00000000 : dxgkrnl!DpiFdoStartAdapter+0x1d25
+ffffc287`cfd27080 fffff803`2a6107e0     : ffffe78b`589b3180 ffffc287`cfd271d0 00000000`00000000 ffffe78b`55f328f0 : dxgkrnl!DpiFdoStartNonLdaAdapter+0x85
+ffffc287`cfd270d0 fffff803`2a610103     : fffff803`2c8bfdb0 00000000`00000001 00000000`00000000 00000000`00000000 : dxgkrnl!DpiFdoStartAdapterThreadImpl+0x604
+ffffc287`cfd27250 fffff803`2a7bf257     : fffff803`2a533a00 00000000`00000000 00000000`00000000 00000000`00000000 : dxgkrnl!DpiFdoStartAdapterThread+0x33
+ffffc287`cfd27280 fffff803`2a7bee6a     : ffffffff`fffffffd 00000000`00000000 00000000`00000000 fffff803`2a8e8076 : dxgkrnl!DpiSessionCreateCallback+0x6b
+ffffc287`cfd272c0 fffff803`2a8e442a     : 00000000`00000000 00000000`000000e8 00000000`00000000 00000000`000000e8 : dxgkrnl!DxgkNotifySessionStateChange+0x5a
+ffffc287`cfd27310 fffff803`2c554077     : 00000000`00000000 fffff803`2c8bfdb0 ffffc287`cfd27370 fffff803`2c55553d : watchdog!SMgrNotifySessionChange+0x4a
+ffffc287`cfd27340 fffff803`2c754903     : 000001c5`031069d4 00000000`000000ec fffff803`2c8bfda8 fffff803`2c8bfdb0 : win32k!SysEntrySMgrNotifySessionChange+0x17
+ffffc287`cfd27370 fffff803`2c754895     : 00000000`00000040 00000000`00000000 00000000`00000000 00000000`000000e8 : win32kbase!SysEntrySMgrNotifySessionChange+0x33
+ffffc287`cfd273a0 fffff803`2c754081     : 00000000`00000010 00000000`00050282 ffffc287`cfd273f8 00000000`00000018 : win32kbase!DrvNotifySessionStateChange+0x45
+ffffc287`cfd273d0 fffff803`2c7b1a3a     : 00000000`00000001 00000000`00000001 00000000`00000000 00000000`00000000 : win32kbase!InitializeGreCSRSS+0xd
+ffffc287`cfd27400 fffff803`2c554d64     : 00000000`000000ec ffffc287`cfd27520 00000000`00000001 00000000`00000030 : win32kbase!Win32kBaseUserInitialize+0x29a
+ffffc287`cfd27470 fffff803`97886658     : ffffe78b`582d3080 00000000`00000030 ffffe78b`582d3080 00000000`00000001 : win32k!NtUserInitialize+0x34
+ffffc287`cfd274a0 00007ff9`ca6aa5d4     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : nt!KiSystemServiceCopyEnd+0x28
+000000a8`81f4f6d8 00000000`00000000     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : 0x00007ff9`ca6aa5d4
+
+
+SYMBOL_NAME:  dxgkrnl!DxgCreateLiveDumpWithDriverBlob+154
+
+MODULE_NAME: dxgkrnl
+
+IMAGE_NAME:  dxgkrnl.sys
+
+IMAGE_VERSION:  10.0.26100.1591
+
+STACK_COMMAND: .process /r /p 0xffffe78b582d1080; .thread 0xffffe78b582d3080 ; kb
+
+BUCKET_ID_FUNC_OFFSET:  154
+
+FAILURE_BUCKET_ID:  LKD_0x1B0_dxgkrnl!DxgCreateLiveDumpWithDriverBlob
+
+OSPLATFORM_TYPE:  x64
+
+OSNAME:  Windows 10
+
+FAILURE_ID_HASH:  {a6956ab6-031b-39a9-c903-4f792be352d4}
+
+Followup:     MachineOwner
+---------
+
+4: kd> lmvm nvlddmkm
+start             end                 module name
+fffff803`2cd90000 fffff803`338f0000   nvlddmkm   (deferred)             
+    Image path: nvlddmkm.sys
+    Image name: nvlddmkm.sys
+    Timestamp:        Sun Jul 27 07:15:07 2025 (6885D1FB)
+    CheckSum:         06962791
+    ImageSize:        06B60000
+    Translations:     0000.04b0 0000.04e4 0409.04b0 0409.04e4
+    Information from resource tables:
+4: kd> kv
+Child-SP          RetAddr               : Args to Child                                                           : Call Site
+ffffc287`cfd26cb0 fffff803`2a8e7128     : ffffe78b`58a1c2f0 00000000`00000000 00000000`00000000 00000000`00000002 : watchdog!WdpDbgCaptureTriageDump+0xe6
+ffffc287`cfd26d20 fffff803`2a8e3b48     : ffffc60d`01bb6c00 00000000`000001b0 00000000`00000002 ffffc287`cfd26e50 : watchdog!WdDbgReportRecreate+0x108
+ffffc287`cfd26d80 fffff803`2a57d1f4     : ffffc60d`01bb6c10 ffffc287`cfd26e60 ffffe78b`5561f360 ffffffff`c000009a : watchdog!WdDbgReportCreate+0x58
+ffffc287`cfd26df0 fffff803`2a60fdbd     : 00000000`00000100 ffffe78b`589b3180 ffffc60d`01bb6c10 ffffe78b`55f328f0 : dxgkrnl!DxgCreateLiveDumpWithDriverBlob+0x154
+ffffc287`cfd26e80 fffff803`2a610b5d     : 00000000`00000000 00000000`00000000 ffffe78b`589b3180 00000000`00000000 : dxgkrnl!DpiFdoStartAdapter+0x1d25
+ffffc287`cfd27080 fffff803`2a6107e0     : ffffe78b`589b3180 ffffc287`cfd271d0 00000000`00000000 ffffe78b`55f328f0 : dxgkrnl!DpiFdoStartNonLdaAdapter+0x85
+ffffc287`cfd270d0 fffff803`2a610103     : fffff803`2c8bfdb0 00000000`00000001 00000000`00000000 00000000`00000000 : dxgkrnl!DpiFdoStartAdapterThreadImpl+0x604
+ffffc287`cfd27250 fffff803`2a7bf257     : fffff803`2a533a00 00000000`00000000 00000000`00000000 00000000`00000000 : dxgkrnl!DpiFdoStartAdapterThread+0x33
+ffffc287`cfd27280 fffff803`2a7bee6a     : ffffffff`fffffffd 00000000`00000000 00000000`00000000 fffff803`2a8e8076 : dxgkrnl!DpiSessionCreateCallback+0x6b
+ffffc287`cfd272c0 fffff803`2a8e442a     : 00000000`00000000 00000000`000000e8 00000000`00000000 00000000`000000e8 : dxgkrnl!DxgkNotifySessionStateChange+0x5a
+ffffc287`cfd27310 fffff803`2c554077     : 00000000`00000000 fffff803`2c8bfdb0 ffffc287`cfd27370 fffff803`2c55553d : watchdog!SMgrNotifySessionChange+0x4a
+ffffc287`cfd27340 fffff803`2c754903     : 000001c5`031069d4 00000000`000000ec fffff803`2c8bfda8 fffff803`2c8bfdb0 : win32k!SysEntrySMgrNotifySessionChange+0x17
+ffffc287`cfd27370 fffff803`2c754895     : 00000000`00000040 00000000`00000000 00000000`00000000 00000000`000000e8 : win32kbase!SysEntrySMgrNotifySessionChange+0x33
+ffffc287`cfd273a0 fffff803`2c754081     : 00000000`00000010 00000000`00050282 ffffc287`cfd273f8 00000000`00000018 : win32kbase!DrvNotifySessionStateChange+0x45
+ffffc287`cfd273d0 fffff803`2c7b1a3a     : 00000000`00000001 00000000`00000001 00000000`00000000 00000000`00000000 : win32kbase!InitializeGreCSRSS+0xd
+ffffc287`cfd27400 fffff803`2c554d64     : 00000000`000000ec ffffc287`cfd27520 00000000`00000001 00000000`00000030 : win32kbase!Win32kBaseUserInitialize+0x29a
+ffffc287`cfd27470 fffff803`97886658     : ffffe78b`582d3080 00000000`00000030 ffffe78b`582d3080 00000000`00000001 : win32k!NtUserInitialize+0x34
+ffffc287`cfd274a0 00007ff9`ca6aa5d4     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : nt!KiSystemServiceCopyEnd+0x28 (TrapFrame @ ffffc287`cfd274a0)
+000000a8`81f4f6d8 00000000`00000000     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : 0x00007ff9`ca6aa5d4
+4: kd> .echo KAYFABE_KD_COMMANDS_FINISHED
+KAYFABE_KD_COMMANDS_FINISHED
+4: kd> q
+quit:

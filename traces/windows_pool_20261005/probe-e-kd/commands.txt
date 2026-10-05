@@ -1,0 +1,13 @@
+.symfix C:\ProgramData\KayfabeKD\symbols
+.sympath
+.reload /f nt
+.reload /f dxgkrnl.sys
+.reload /f watchdog.sys
+.load C:\ProgramData\KayfabeKD\run-20261005T0011175941255Z\tools\x64\winext\ext.dll
+.chain
+.bugcheck
+!ext.analyze -v
+lmvm nvlddmkm
+kv
+.echo KAYFABE_KD_COMMANDS_FINISHED
+q

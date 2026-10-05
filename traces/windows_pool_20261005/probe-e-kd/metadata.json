@@ -1,0 +1,138 @@
+﻿{
+    "utc":  "2026-10-05T00:11:18.5651542Z",
+    "dump":  "C:\\Windows\\LiveKernelReports\\WATCHDOG\\WATCHDOG-20261004-2348.dmp",
+    "dumpSize":  343034,
+    "dumpSha256":  "E438426D1C36DF3E48A68D1EA286BB44F35571D508F56EA69FFD1C50F5CAB77A",
+    "seconds":  240,
+    "commands":  [
+                     ".symfix C:\\ProgramData\\KayfabeKD\\symbols",
+                     ".sympath",
+                     ".reload /f nt",
+                     ".reload /f dxgkrnl.sys",
+                     ".reload /f watchdog.sys",
+                     ".load C:\\ProgramData\\KayfabeKD\\run-20261005T0011175941255Z\\tools\\x64\\winext\\ext.dll",
+                     ".chain",
+                     ".bugcheck",
+                     "!ext.analyze -v",
+                     "lmvm nvlddmkm",
+                     "kv",
+                     ".echo KAYFABE_KD_COMMANDS_FINISHED",
+                     "q"
+                 ],
+    "signatures":  [
+                       {
+                           "path":  "x64/dbgcore.dll",
+                           "sha256":  "588270938328d8d0da916e807212812603d1e7a2582c1907be59cf6aaaf9b293",
+                           "signature":  "Valid",
+                           "signer":  "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+                       },
+                       {
+                           "path":  "x64/dbghelp.dll",
+                           "sha256":  "f1f6998a4095cb48217ff975cbb9161be2bc8297f5e4f3a15818c2a9fcaef3be",
+                           "signature":  "Valid",
+                           "signer":  "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+                       },
+                       {
+                           "path":  "x64/msdia140.dll",
+                           "sha256":  "24b92917b0aff26db5cf328dc3f340a98901ed46382aa470314ef45bf6ea35d3",
+                           "signature":  "Valid",
+                           "signer":  "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+                       },
+                       {
+                           "path":  "x64/symsrv.dll",
+                           "sha256":  "cc7578d281098ccff8d94c17732f8e02d3484c9e46dbee10d3292a7931ff0e90",
+                           "signature":  "Valid",
+                           "signer":  "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+                       },
+                       {
+                           "path":  "x64/api-ms-win-eventing-provider-l1-1-0.dll",
+                           "sha256":  "26a5491bfd91cf88f35109e3b19140f9bfb128d69ea4e71a0d0e8a2b55746569",
+                           "signature":  "Valid",
+                           "signer":  "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+                       },
+                       {
+                           "path":  "x64/api-ms-win-core-errorhandling-l1-1-1.dll",
+                           "sha256":  "18478788ab3e29e518af7bc09fec7c10c2e9af2cc006a316f792190418af6221",
+                           "signature":  "Valid",
+                           "signer":  "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+                       },
+                       {
+                           "path":  "x64/api-ms-win-core-sysinfo-l1-2-0.dll",
+                           "sha256":  "79926f1f142fad456effb91163b873387f51f4f7005dd8eec39870a5ae141e24",
+                           "signature":  "Valid",
+                           "signer":  "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+                       },
+                       {
+                           "path":  "x64/api-ms-win-core-com-l1-1-0.dll",
+                           "sha256":  "c71d5e44e8b2c61244c8f87cdc6a5b7b42212b2ea678c12ea2ac156382578e8c",
+                           "signature":  "Valid",
+                           "signer":  "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+                       },
+                       {
+                           "path":  "x64/dbgeng.dll",
+                           "sha256":  "8a28bc42c8fed644ce760501dfde39ddae793d91fd18f467ad8cfb10cb7c3b2b",
+                           "signature":  "Valid",
+                           "signer":  "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+                       },
+                       {
+                           "path":  "x64/DbgModel.dll",
+                           "sha256":  "ae20d5b5b6bf0840de1449a96f2393f3f0c80257a3d4a53a067290ae6b1aafd4",
+                           "signature":  "Valid",
+                           "signer":  "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+                       },
+                       {
+                           "path":  "x64/cdb.exe",
+                           "sha256":  "506d1fd7ad306f6f53d8d157375a03a8368446923def9457cdfb2e3214054376",
+                           "signature":  "Valid",
+                           "signer":  "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+                       },
+                       {
+                           "path":  "x64/kd.exe",
+                           "sha256":  "30bb44fe1c3911bf5e43cf685d931097cbaa72bb2ff272eae9b0e016ee5c2ac9",
+                           "signature":  "Valid",
+                           "signer":  "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+                       },
+                       {
+                           "path":  "x64/winext/ext.dll",
+                           "sha256":  "3937821d2b6c7b8f42fa968691efea00435f8967787f1840aed262cbf3d7e0a8",
+                           "signature":  "Valid",
+                           "signer":  "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+                       },
+                       {
+                           "path":  "x64/winxp/wow64exts.dll",
+                           "sha256":  "e519a8ce5081ddae7372b45b9d1b806413af8fe89fa11e39b1acee10fc689a3c",
+                           "signature":  "Valid",
+                           "signer":  "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+                       },
+                       {
+                           "path":  "x64/winxp/kdexts.dll",
+                           "sha256":  "db454df22369cbf49ff1c5bbe0085eae33d56800bf893666461c4fa9247acb7a",
+                           "signature":  "Valid",
+                           "signer":  "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+                       },
+                       {
+                           "path":  "x64/winext/DbgEngCoreDMExt.dll",
+                           "sha256":  "7ea06797b8980f4b7b4d30b534a6cda94d6dfc66595147688147b77bc9d7fb55",
+                           "signature":  "Valid",
+                           "signer":  "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+                       },
+                       {
+                           "path":  "x64/winxp/exts.dll",
+                           "sha256":  "901b3a2023766e4dc3dbed3681b4c9ee864a7b141b07e22ff17213188abc1f7a",
+                           "signature":  "Valid",
+                           "signer":  "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+                       },
+                       {
+                           "path":  "x64/winext/kext.dll",
+                           "sha256":  "1d8bdd5f78de7d868c247fd354b90d7cbd8f7b99d691b5edc2ce075f2f49b7f8",
+                           "signature":  "Valid",
+                           "signer":  "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+                       },
+                       {
+                           "path":  "x64/winext/Microsoft.Diagnostics.Analysis.Utilities.dll",
+                           "sha256":  "ed9c98ad8e2e16a3178f8828762040fbdc020b72adafaaa711bee8e7500aee91",
+                           "signature":  "Valid",
+                           "signer":  "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+                       }
+                   ]
+}
