@@ -5,7 +5,7 @@ analysis of the trusted Windows 580.88 retail driver. No product modification,
 feature admission, GPU execution, or success stub is made by this investigation.
 
 At product revision `fdc991c9`, Windows J accepted both previously failing fn4
-SYSRAM registrations and advanced from 213 to 363 serviced RPC records. It still
+SYSRAM registrations and advanced from 213 to 363 traced RPC records (215 to 365 serviced messages). It still
 reported Code 43 and no GPU channel births. Its fresh live dump recorded
 `StartDevice` failure `STATUS_INSUFFICIENT_RESOURCES` (`0xc000009a`). This status
 is an explicit generic error assignment in the driver, not proof of exhausted RAM.

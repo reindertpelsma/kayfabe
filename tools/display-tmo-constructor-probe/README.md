@@ -3,6 +3,14 @@
 **STATUS: RESEARCH, 2026-10-05.** Default off. This experiment cannot provide a
 working display or demonstrate tone mapping.
 
+**Measured follow-up:** Windows L on exact code `b431aeaf` passed all three
+previous allocation helpers, including J's TMO-buffer helper, then failed in a
+later per-window constructor. Code43 remains; GPU-channel births and display
+methods are zero. The method refusal was not reached by that hardware run.
+Windows shut down cleanly. [Reviewed evidence](https://github.com/reindertpelsma/kayfabe/blob/f9d32a0e/traces/windows_pool_20261005/probe-l/README.md)
+contains the fresh dump result and limits. No production tone-mapping support is
+established.
+
 Windows J passes both checked SYSRAM registrations, then fails display
 initialization. Its [journal and pinned retail branch analysis](../windows-debug-capture/evidence/2026-10-05-startdevice-j.md)
 strongly suggest a zero-sized TMO buffer: Kayfabe advertises no window with the

@@ -1,3 +1,14 @@
+**BRANCH NOTE, 2026-10-05:** this checkout is
+`codex/windows-tmo-constructor-probe-20261005`. Tested product code is `b431aeaf`;
+later commits only update evidence/docs. Windows L still reports Code43 but
+passes J's TMO-buffer helper and reaches a later per-window constructor failure.
+All display methods are deliberately refused in this construction-only mode.
+No production feature/merge or working-Windows claim is made. All bench VMs are
+stopped; code and reviewed evidence are pushed. Read the
+[latest central handoff](https://github.com/reindertpelsma/kayfabe/blob/f9d32a0e/docs/STATUS_AND_HANDOFF.md)
+and `tools/display-tmo-constructor-probe/README.md` before continuing. The older
+status text below predates this branch's final experiment.
+
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
 **STATUS: LIVE, 2026-10-05 — §0.0 below is the resume point.** ⊘ *The 2026-09-30 paragraph that follows is history:* **(2026-09-30)** Master = the code of **`afb552ea`** (`v3-mc23`: CUDA dynamic parallelism +
