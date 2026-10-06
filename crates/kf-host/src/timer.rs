@@ -21,12 +21,15 @@ pub struct TimerWindow<'a> {
 }
 
 impl TimerWindow<'_> {
+    /// Host-queried BAR0 offset of this timer page.
     pub fn bar0_base(&self) -> u32 {
         self.base
     }
+    /// Validated register layout for the host driver's exact version.
     pub fn layout(&self) -> kf_abi::timer::TimerLayout {
         self.layout
     }
+    /// The owned read-only mapping, valid while this timer window lives.
     pub fn view(&self) -> HostSpan {
         self.region
             .as_ref()

@@ -233,7 +233,7 @@ mod tests {
                 (48, 0x20000),
             ] {
                 let mut b = request();
-                b[off..off + 4].copy_from_slice(&(value as u32).to_le_bytes());
+                b[off..off + 4].copy_from_slice(&value.to_le_bytes());
                 assert!(c.decode(&b).is_none(), "off={off} value={value}");
             }
             for (off, value) in [

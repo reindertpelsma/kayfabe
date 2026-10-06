@@ -87,7 +87,7 @@ impl Probe {
                 .ok_or_else(|| refusal("software-runlist probe: unsupported layout"))?;
             if self
                 .logged
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+                .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
                     (n < 16).then(|| n + 1)
                 })
                 .is_ok()
@@ -180,11 +180,11 @@ impl IdentityObserver {
                 request.cmd
             )
             .ok()?;
-            for (index, word) in params.chunks_exact(4).enumerate() {
+            for (index, word) in params.as_chunks::<4>().0.iter().enumerate() {
                 if index != 0 {
                     record.push(',');
                 }
-                write!(record, "{:08x}", u32::from_le_bytes(word.try_into().ok()?)).ok()?;
+                write!(record, "{:08x}", u32::from_le_bytes(*word)).ok()?;
             }
             record.push(']');
         } else if let RpcFunction::Other(code) = cmd.function {

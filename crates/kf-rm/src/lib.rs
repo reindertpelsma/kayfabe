@@ -25,6 +25,7 @@ pub mod hostfacts;
 pub mod hostquery;
 pub mod inert;
 pub mod inittables;
+pub mod memory_list;
 pub mod osevent;
 pub mod rmgraph;
 pub mod rmrpc;
@@ -32,7 +33,6 @@ pub mod rpc;
 pub mod staticinfo;
 pub mod sticky;
 pub mod sw_runlist_probe;
-pub mod memory_list;
 pub mod sweep;
 pub mod sysmembar;
 pub mod unserviced;
@@ -482,7 +482,9 @@ pub fn served_chain(
         && let Some(policy) = objects.take()
     {
         objects = Some(policy.with_memory_list_probe());
-        eprintln!("kf-rm: EXPERIMENT contiguous SYSRAM descriptors backed by checked guest RAM; no scheduling");
+        eprintln!(
+            "kf-rm: EXPERIMENT contiguous SYSRAM descriptors backed by checked guest RAM; no scheduling"
+        );
     }
     // ★ EXPERIMENT x11-dispsw: one switch, read off the display seat, sets BOTH halves — the query
     // answered and the alloc twinned (or refused) — so neither can be on without the other.

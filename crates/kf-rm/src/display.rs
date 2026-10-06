@@ -527,17 +527,6 @@ impl DisplayPolicy {
 
     fn on_control(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         let req = self.driver.decode_rpc_control(&cmd.payload).ok()?;
-        if req.cmd == 0x73013d || req.cmd == 0x73011d || req.cmd == 0x731369 || req.cmd == 0x73014b || req.cmd == 0x730285 || req.cmd == 0x73012c || req.cmd == 0x730109 {
-            eprintln!("kf-rm: display: Windows hack answering {:#010x}", req.cmd);
-            return Some(Reply {
-                rpc_result: 0,
-                body: {
-                let mut b = cmd.payload.clone();
-                b[0x10..0x14].copy_from_slice(&0u32.to_le_bytes());
-                b
-            },
-            });
-        }
         if !self.claims(req.cmd) {
             return None;
         }
@@ -1114,6 +1103,32 @@ mod tests {
         let m0 = m0_policy();
         assert!(M0_CONTROLS.iter().all(|c| m0.claims(*c)));
         assert!(!m0.claims(0x0073_0101) && !m0.claims(kf_disp::model::CHANNEL_PUSHBUFFER));
+    }
+
+    /// Unsupported Windows controls must reach the normal refusal policy even with
+    /// a malformed or serialized request. Returning OK here would leave query
+    /// outputs untouched and acknowledge actions the display model never performed.
+    #[test]
+    fn unsupported_windows_controls_never_get_a_success_reply() {
+        let mut p = policy();
+        for cmd in [
+            0x0073_013d,
+            0x0073_011d,
+            0x0073_1369,
+            0x0073_014b,
+            0x0073_0285,
+            0x0073_012c,
+            0x0073_0109,
+        ] {
+            assert!(!p.claims(cmd), "no implementation for {cmd:#010x}");
+            for flags in [0, 1 << 1] {
+                let request = control(cmd, flags, &[0xa5; 16]);
+                assert!(p.respond(&request).is_none(), "{cmd:#010x}, flags={flags}");
+                let mut short = control(cmd, flags, &[]);
+                short.payload[16..20].copy_from_slice(&64u32.to_le_bytes());
+                assert!(p.respond(&short).is_none(), "short {cmd:#010x}");
+            }
+        }
     }
 
     /// ★ Step (1): the FINN refusal set IS the claim set. Every control the model claims, arriving

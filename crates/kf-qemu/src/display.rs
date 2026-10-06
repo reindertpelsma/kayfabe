@@ -1338,9 +1338,10 @@ impl DisplayPlane {
         let classes = kf_disp::model::Classes::of(row);
         let vocab = Vocab::resolve(t, &classes, &regs)
             .map_err(|e| format!("display=on: method vocabulary: {} is not derived", e.0))?;
-        let olut_constructor_probe = std::env::var("KF3_DISPLAY_OLUT_CONSTRUCTOR_PROBE").is_ok_and(|v| v == "1");
-        let tmo_surface_constructor_probe = olut_constructor_probe ||
-            std::env::var("KF3_DISPLAY_TMO_SURFACE_CONSTRUCTOR_PROBE").is_ok_and(|v| v == "1");
+        let olut_constructor_probe =
+            std::env::var("KF3_DISPLAY_OLUT_CONSTRUCTOR_PROBE").is_ok_and(|v| v == "1");
+        let tmo_surface_constructor_probe = olut_constructor_probe
+            || std::env::var("KF3_DISPLAY_TMO_SURFACE_CONSTRUCTOR_PROBE").is_ok_and(|v| v == "1");
         let ilut_constructor_probe = tmo_surface_constructor_probe
             || std::env::var("KF3_DISPLAY_ILUT_CONSTRUCTOR_PROBE").is_ok_and(|v| v == "1");
         // ILUT always includes TMO construction and the blanket method refusal;
@@ -3252,8 +3253,8 @@ impl ScanState {
             return;
         }
         // plan every window (each bounded by its own context DMA) before the GPU sees one
-        let planned = self.plan(shown, &dp.formats, (w, h), n, |client, handle, chn| {
-            io.resolve(client, handle, chn)
+        let planned = self.plan(shown, &dp.formats, (w, h), n, |so| {
+            io.resolve(so.client, so.handle, so.chn)
         });
         for e in &planned.refused {
             self.refuse(dp, e);
@@ -3509,7 +3510,7 @@ impl ScanState {
         formats: &ScanFormats,
         (w, h): (u32, u32),
         n: u64,
-        mut resolve: impl FnMut(u32, u32, u32) -> Result<CtxDma, String>,
+        mut resolve: impl FnMut(&kf_disp::engine::Scanout) -> Result<CtxDma, String>,
     ) -> Planned {
         let mut p = Planned::default();
         let windows: &[kf_disp::engine::Scanout] = match shown {
@@ -3528,13 +3529,8 @@ impl ScanState {
             Shown::Blank(_) => &[],
         };
         for so in windows {
-            let planned = self.latched.resolve(so, || resolve(so.client, so.handle, so.chn)).and_then(|dma| {
-                let ilut_dma = if so.ilut_dma != 0 {
-                    Some(resolve(so.client, so.ilut_dma, so.chn)?)
-                } else {
-                    None
-                };
-                kf_disp::scanout::plan_layer(so, &dma, ilut_dma.as_ref(), formats, w, h).map_err(|r| r.0)
+            let planned = self.latched.resolve(so, || resolve(so)).and_then(|dma| {
+                kf_disp::scanout::plan_layer(so, &dma, formats, w, h).map_err(|r| r.0)
             });
             match planned {
                 Ok(Some(l)) => {
@@ -3821,11 +3817,6 @@ mod tests {
             k2: 0,
             src_factor: 0,
             dst_factor: 0,
-            ilut_dma: 0,
-            ilut_offset: 0,
-            ilut_control: 0,
-            ilut_winim_hi: 0,
-            ilut_winim_lo: 0,
         }
     }
 

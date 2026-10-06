@@ -1,3 +1,4 @@
+//! Compare complete capability policies with their audited source fixtures.
 #[path = "support/capability_snapshot.rs"]
 mod capability_snapshot;
 

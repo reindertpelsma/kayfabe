@@ -244,6 +244,10 @@ pub trait Faulted {
 /// promote join) is cut.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[must_use]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "one bounded Copy protocol event per RPC; boxing would remove the Copy value interface"
+)]
 pub enum Translation {
     /// One declared protocol fact, to be handed to [`RmObjects::apply`].
     ///
@@ -283,6 +287,8 @@ pub enum Translation {
     /// PDB at all.
     PageDir(PageDirStatement),
 }
+
+const _: () = assert!(std::mem::size_of::<Translation>() <= 512);
 
 /// ★ The guest's statement of a VA space's page-directory root, as decoded from the wire.
 ///

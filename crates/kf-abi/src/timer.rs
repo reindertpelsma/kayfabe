@@ -1,14 +1,18 @@
 //! Native timer view: compiled host/guest ABI cells, never a captured die offset.
 use crate::{DriverVersion, generated::matrix as m};
 
+/// Unprivileged control querying the host's timer register offset.
 pub const REGISTER_OFFSET: u32 =
     m::CTRL_CMDS_NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET.everywhere_u32();
 
 /// The SDK register view, independently measured at each driver tag.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TimerLayout {
+    /// Byte length of the source-defined register view.
     pub register_bytes: u64,
+    /// Offset of the low 32-bit timestamp word within the view.
     pub time_low: u64,
+    /// Offset of the high 32-bit timestamp word within the view.
     pub time_high: u64,
 }
 

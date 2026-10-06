@@ -660,6 +660,10 @@ pub struct GpFifoRing {
 /// One abstract RM protocol event. Produced by the ABI adapter (or a test),
 /// consumed by [`RmGraph::apply`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "fixed-size Copy protocol facts stay inline; the compile-time size bound below limits their cost"
+)]
 pub enum RmEvent {
     /// `RM_ALLOC`: create `handle` of `class` under `parent` in `client`'s
     /// namespace. Allocating the client root itself uses `parent == handle`.
@@ -701,6 +705,9 @@ pub enum RmEvent {
         handle: HObject,
     },
 }
+
+// Adding protocol facts must not silently turn every free/dup into a large copy.
+const _: () = assert!(std::mem::size_of::<RmEvent>() <= 512);
 
 /// One node of the graph — the resolved *payload* of a resource, reported at its
 /// stable origin key. (The set of handles that reference it lives on [`Resource`].)

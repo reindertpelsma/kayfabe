@@ -1336,12 +1336,6 @@ pub struct Scanout {
     pub src_factor: u32,
     /// `DST_COLOR_FACTOR_NO_MATCH_SELECT`.
     pub dst_factor: u32,
-
-    pub ilut_dma: u32,
-    pub ilut_offset: u32,
-    pub ilut_control: u32,
-    pub ilut_winim_hi: u32,
-    pub ilut_winim_lo: u32,
 }
 
 /// ★ What a head shows: its composition space and every enabled window, BACK TO FRONT.
@@ -1377,13 +1371,6 @@ pub struct ScanVocab {
     point_out: (u32, (u8, u8), (u8, u8)),
     /// Core `HEAD_SET_VIEWPORT_SIZE_IN(head)`: base, stride, width, height.
     viewport_in: (u32, u32, (u8, u8), (u8, u8)),
-    
-    // ILUT (Input LUT)
-    ilut_dma: Option<u32>,
-    ilut_offset: Option<u32>,
-    ilut_control: Option<u32>,
-    ilut_winim_hi: Option<u32>,
-    ilut_winim_lo: Option<u32>,
 }
 
 /// A method's offset and two `(hi, lo)` fields of its data word — e.g. `SET_SIZE`'s `_WIDTH` and
@@ -1456,11 +1443,6 @@ impl ScanVocab {
                     t.f(core, "HEAD_SET_VIEWPORT_SIZE_IN_HEIGHT")?,
                 )
             },
-            ilut_dma: t.v(win, "SET_CONTEXT_DMA_ILUT"),
-            ilut_offset: t.v(win, "SET_OFFSET_ILUT"),
-            ilut_control: t.v(win, "SET_ILUT_CONTROL"),
-            ilut_winim_hi: t.v(winim, "SET_SURFACE_ADDRESS_HI_ILUT"),
-            ilut_winim_lo: t.v(winim, "SET_SURFACE_ADDRESS_LO_ILUT"),
         })
     }
 }
@@ -1548,12 +1530,6 @@ impl Engine {
                 k2: fld(alpha, sv.comp_alpha.2),
                 src_factor: fld(factor, sv.comp_factor.1),
                 dst_factor: fld(factor, sv.comp_factor.2),
-                
-                ilut_dma: sv.ilut_dma.map_or(0, |m| c.armed(m)),
-                ilut_offset: sv.ilut_offset.map_or(0, |m| c.armed(m)),
-                ilut_control: sv.ilut_control.map_or(0, |m| c.armed(m)),
-                ilut_winim_hi: sv.ilut_winim_hi.map_or(0, |m| imm.map_or(0, |i| i.armed(m))),
-                ilut_winim_lo: sv.ilut_winim_lo.map_or(0, |m| imm.map_or(0, |i| i.armed(m))),
             })
         }
     }

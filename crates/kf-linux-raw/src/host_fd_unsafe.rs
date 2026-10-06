@@ -815,15 +815,15 @@ mod tests {
                 .sealed_against_shrinking()
         );
         assert!(!Carrier::DmaBuf.sealed_against_shrinking());
-        let dir = std::env::current_dir().unwrap().join(format!("kfu-carrier-{}", std::process::id()));
-        std::fs::write(&dir, b"not a frame").expect("a regular file");
-        let file = std::fs::File::open(&dir).expect("open");
+        // A tmpfs file supports F_GET_SEALS too, so neither TMPDIR nor the
+        // checkout is necessarily a non-shmem fixture. procfs provides a regular
+        // file that cannot carry seals, without writing into either directory.
+        let file = std::fs::File::open("/proc/version").expect("a procfs regular file");
         assert_eq!(
             fd_carrier(file.as_fd()),
             Ok(Carrier::Neither),
             "a regular file"
         );
-        std::fs::remove_file(&dir).ok();
         let null = std::fs::File::open("/dev/null").expect("/dev/null");
         assert_eq!(
             fd_carrier(null.as_fd()),
