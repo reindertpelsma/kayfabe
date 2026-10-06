@@ -3,18 +3,22 @@
 mod capability_snapshot;
 
 #[test]
-fn pre_535_extension_policies_change_only_by_the_audited_timer_allocation() {
+fn pre_535_extension_policies_change_only_by_the_audited_software_constructors() {
     // Full IDs, names, provenance, denials and decision outputs; equal counts are insufficient.
     // See traces/capability_535_545_audit_20260928/README.md for baseline provenance.
-    // Preserve the historical fixture. The only later delta is NV01_TIMER,
+    // Preserve the historical fixture. Later deltas are NV01_TIMER and the
+    // source-audited Deferred API software constructor at580+; no controls added.
+    // NV01_TIMER is
     // audited from OGKM in traces/windows_pool_20261005/timer-source-audit.tsv.
     // Pin its complete row and compare every other decision byte-for-byte.
     const TIMER: &str =
         "CLASS 00000004 NV01_TIMER Mode2Rpc => Listed { name: \"NV01_TIMER\", origin: Mode2Rpc }\n";
+    const DEFERRED: &str = "CLASS 00005080 NV50_DEFERRED_API_CLASS Mode2Rpc => Listed { name: \"NV50_DEFERRED_API_CLASS\", origin: Mode2Rpc }\n";
     let current = capability_snapshot::existing_policy_snapshot();
     assert_eq!(current.matches(TIMER).count(), 8);
+    assert_eq!(current.matches(DEFERRED).count(), 2);
     assert_eq!(
-        current.replace(TIMER, ""),
+        current.replace(TIMER, "").replace(DEFERRED, ""),
         include_str!("fixtures/capability_550_610_before_535.txt")
     );
 }
@@ -80,6 +84,18 @@ fn legacy_shared_groups_match_each_versions_compiled_headers() {
         );
         for row in checked {
             assert_eq!(values.get(row.name), Some(&row.cmd), "{tag}: {}", row.name);
+        }
+    }
+}
+
+#[test]
+fn deferred_api_constructor_admission_does_not_authorize_deferred_execution_controls() {
+    use kf_abi::capability::ALL_BOUNDARIES;
+    use kf_arch::ids::ControlCmd;
+    for table in ALL_BOUNDARIES {
+        // ctrl5080.h: NULL, deprecated registration, remove, V2 registration, internal registration.
+        for cmd in [0x50800000, 0x50800101, 0x50800102, 0x50800103, 0x50800104] {
+            assert!(!table.control(ControlCmd(cmd)).is_permitted());
         }
     }
 }

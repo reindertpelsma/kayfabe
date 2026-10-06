@@ -1529,6 +1529,14 @@ pub(crate) static CLASSES_FROM_570_86_15: &[ClassEntry] = &[
 ];
 
 pub(crate) static CLASSES_FROM_580_65_06: &[ClassEntry] = &[
+    // OGKM580 deferred_api.c:237: constructor is bounded software-object bookkeeping.
+    // Admission covers that constructor only; deferred controls and queue methods must
+    // obtain their own execution support and never reach host RM as raw guest bytes.
+    ClassEntry {
+        class: crate::generated::classes::NV50_DEFERRED_API_CLASS,
+        name: "NV50_DEFERRED_API_CLASS",
+        origin: Origin::Mode2Rpc,
+    },
     ClassEntry {
         class: 0x0000ceb7,
         name: "NVCEB7_VIDEO_ENCODER",
@@ -2532,7 +2540,12 @@ mod tests {
             // ★ +18 on 2026-09-27 (v3-display): the display classes joined the SHARED floor, so
             // every boundary's class count moves by the same 18.
             // +1 on 2026-10-05: source-audited NV01_TIMER allocation bookkeeping.
-            assert_eq!(t.all_classes().count(), *n_cls + 18 + 1, "{label} classes");
+            // +1 at580+ on2026-10-07: source-audited Deferred API constructor.
+            assert_eq!(
+                t.all_classes().count(),
+                *n_cls + 18 + 1 + usize::from(*a >= 580),
+                "{label} classes"
+            );
             let mut got: Vec<&str> = t
                 .own_controls
                 .iter()
@@ -3120,7 +3133,11 @@ mod tests {
             92 + 18 + 1,
             "classes at 570"
         );
-        assert_eq!(bench().all_classes().count(), 94 + 18 + 1, "classes at 580");
+        assert_eq!(
+            bench().all_classes().count(),
+            94 + 18 + 1 + 1,
+            "classes at 580"
+        );
         assert_eq!(bench().all_denied_controls().count(), 10, "denied controls");
         assert_eq!(bench().all_denied_classes().count(), 3, "denied classes");
     }
@@ -3254,7 +3271,8 @@ mod tests {
         // and compute objects) are mapped one layer up, from `kf_chip`'s generated sets
         // (`kf_rm::chanlink::alloc_shape`), and are not counted by this sweep.
         // 17 → 18 on 2026-10-05: NV01_TIMER (no allocation parameters or GPU work).
-        assert_eq!(seen, 18, "the port decodes eighteen classes today");
+        // 18 → 19 on2026-10-07: Deferred API software-object notification policy.
+        assert_eq!(seen, 19, "the port decodes nineteen classes today");
         // The sweep must really have covered a class the table refuses, or it proves
         // nothing about the table.
         assert!(

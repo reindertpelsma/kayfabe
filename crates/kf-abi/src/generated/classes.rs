@@ -53,6 +53,11 @@
 
 use crate::wire::{AbiError, Field, StructLayout, u8_at, u32_at, u64_at};
 
+/// Deferred API software object; constructor stores notification policy. No GPU engine twin.
+///
+/// ogkm `src/common/sdk/nvidia/inc/class/cl5080.h`.
+pub const NV50_DEFERRED_API_CLASS: u32 = 0x5080;
+
 /// `NV01_ROOT` — the client-root class; its alloc params are
 /// [`Nv0000AllocParameters`].
 ///
@@ -404,6 +409,105 @@ pub const HOPPER_CHANNEL_GPFIFO_A: u32 = 0xc86f;
 ///
 /// ogkm `src/common/sdk/nvidia/inc/class/clc8b5.h`.
 pub const HOPPER_DMA_COPY_A: u32 = 0xc8b5;
+
+/// `NV5080_ALLOC_PARAMS` — ogkm `src/common/sdk/nvidia/inc/class/cl5080.h:40`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Nv5080AllocParams {
+    /// `NvBool notifyCompletion` @ +0 (src/common/sdk/nvidia/inc/class/cl5080.h:42).
+    pub notify_completion: u8,
+}
+
+impl Nv5080AllocParams {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "NV5080_ALLOC_PARAMS";
+    /// `sizeof(NV5080_ALLOC_PARAMS)`, generator-computed and asserted against rustc below.
+    pub const SIZE: usize = 1;
+    /// `alignof(NV5080_ALLOC_PARAMS)`.
+    pub const ALIGN: usize = 1;
+    /// The generator's field-by-field layout.
+    pub const LAYOUT: StructLayout = StructLayout {
+        c_name: "NV5080_ALLOC_PARAMS",
+        size: 1,
+        align: 1,
+        fields: &[Field {
+            c_name: "notifyCompletion",
+            rust_name: "notify_completion",
+            offset: 0,
+            width: 1,
+        }],
+    };
+
+    /// rustc's own offsets for the same fields, in the same order.
+    pub const RUSTC_OFFSETS: &'static [(&'static str, usize)] = &[(
+        "notify_completion",
+        core::mem::offset_of!(Nv5080AllocParams, notify_completion),
+    )];
+
+    /// Decode from a little-endian byte image of `NV5080_ALLOC_PARAMS`.
+    ///
+    /// Accepts a buffer of at least [`Self::SIZE`] bytes and ignores anything
+    /// past it (a longer buffer is a legitimate newer-ABI image, or a flexible
+    /// array tail). A SHORTER buffer is refused loudly — silently zero-extending
+    /// a truncated struct is the `abi_struct_truncation` bug class verbatim.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn decode(bytes: &[u8]) -> Result<Self, AbiError> {
+        if bytes.len() < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: bytes.len(),
+            });
+        }
+        Ok(Self {
+            notify_completion: u8_at(bytes, 0)?,
+        })
+    }
+
+    /// Write this value back over a little-endian byte image, in place.
+    ///
+    /// Writes **only** the declared fields; padding bytes and any trailing
+    /// payload are left exactly as found. That is deliberate: the C-era
+    /// `writeback_bug_pattern` was a sanitizer that rewrote a whole struct and
+    /// so handed CUDA its own scratch state back. A writer that cannot touch a
+    /// byte it does not name cannot reproduce it.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
+        let len = bytes.len();
+        if len < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: len,
+            });
+        }
+        {
+            let src = self.notify_completion.to_le_bytes();
+            bytes
+                .get_mut(0..1)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        Ok(())
+    }
+}
+
+// The generator's layout vs rustc's, asserted at COMPILE time.
+const _: () = {
+    assert!(core::mem::size_of::<Nv5080AllocParams>() == Nv5080AllocParams::SIZE);
+    assert!(core::mem::align_of::<Nv5080AllocParams>() == Nv5080AllocParams::ALIGN);
+    assert!(core::mem::offset_of!(Nv5080AllocParams, notify_completion) == 0);
+};
 
 /// `NV0000_ALLOC_PARAMETERS` — ogkm `src/common/sdk/nvidia/inc/class/cl0000.h:47`.
 #[repr(C)]
@@ -1281,6 +1385,7 @@ const _: () = {
 /// Every struct this module generates, in declaration order — the enumerated-vs-
 /// exercised coverage surface (`mode2_abi_agnostic_layer.md` §2.3, rule 2).
 pub const STRUCTS: &[&StructLayout] = &[
+    &Nv5080AllocParams::LAYOUT,
     &Nv0000AllocParameters::LAYOUT,
     &Nv0080AllocParameters::LAYOUT,
     &NvChannelGroupAllocationParameters::LAYOUT,
@@ -1291,6 +1396,7 @@ pub const STRUCTS: &[&StructLayout] = &[
 /// crate's tests walk this so the agreement is also a RUNTIME assertion the
 /// mutation gate can see.
 pub const RUSTC_OFFSETS: &[(&str, &[(&str, usize)])] = &[
+    ("NV5080_ALLOC_PARAMS", Nv5080AllocParams::RUSTC_OFFSETS),
     (
         "NV0000_ALLOC_PARAMETERS",
         Nv0000AllocParameters::RUSTC_OFFSETS,

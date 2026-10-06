@@ -25,6 +25,9 @@ and full612 kf-rm tests pass. Run17 at5348fccf verifies the captured class82
 FBMEM request returns0; COPY2 births but class5080 still refuses, no submissions.
 Code43/smi9 persist. Next: Deferred API software-object constructor and its
 queue-triggered control protocol; do not fake its execution or completion.
+The source-backed constructor is now implemented with optional notification
+policy and channel-parent lifetime checks;1172 ABI/RM tests pass. Hardware boot
+pending; queued controls/methods remain unsupported and no completion is forged.
 
 
 **Windows allocation investigation, 2026-10-07:** bounded diagnostic run14 at

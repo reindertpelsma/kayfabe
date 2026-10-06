@@ -400,6 +400,8 @@ pub struct AllocFacts {
     pub device_instance: Option<u32>,
     /// Full declared Device sharing/mode facts; guest names, never host authority.
     pub device_alloc: Option<kf_abi::view::DeviceAllocFacts>,
+    /// Deferred API object notification policy; pending execution is not implied.
+    pub deferred_api_notify: Option<bool>,
     /// ★ The privilege a **Client** root declares about itself (`processID` on
     /// `NV0000_ALLOC_PARAMETERS`, decoded by the ABI seam into a [`ClientKind`]) —
     /// THE decision-#14 grouping discriminator (`l1_concurrency.md` §12.27).

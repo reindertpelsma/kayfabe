@@ -1371,6 +1371,37 @@ fn translate_alloc(
         AllocParams::ClientRoot => {
             return Err(BridgeRefusal::UnmappedAllocClass { class: h.class });
         }
+        AllocParams::DeferredApi => {
+            // Public constructor accepts absent optional params; present params must be
+            // exactly the compiled shape. Only the two independently audited guest cells.
+            let version = abi.driver_version();
+            if !["580.65.06", "580.159.04"].contains(&version.to_string().as_str()) {
+                return Err(BridgeRefusal::Objects(ObjectsRefusal::NotModelled {
+                    what: "deferred API constructor: unaudited guest contract",
+                }));
+            }
+            let notify = if params.is_empty() {
+                false
+            } else {
+                use kf_abi::generated::classes::Nv5080AllocParams as P;
+                if params.len() != P::SIZE {
+                    return Err(BridgeRefusal::Objects(ObjectsRefusal::NotModelled {
+                        what: "deferred API constructor: invalid optional params size",
+                    }));
+                }
+                let p = P::decode(params)?;
+                if p.notify_completion > 1 {
+                    return Err(BridgeRefusal::Objects(ObjectsRefusal::NotModelled {
+                        what: "deferred API constructor: invalid notification boolean",
+                    }));
+                }
+                p.notify_completion != 0
+            };
+            AllocFacts {
+                deferred_api_notify: Some(notify),
+                ..Default::default()
+            }
+        }
         AllocParams::Device => AllocFacts {
             // ★ Required, not optional. `deviceId` is a mandatory field of
             // `NV0080_ALLOC_PARAMETERS`, so a real Device always declares one, and the

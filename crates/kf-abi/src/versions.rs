@@ -1379,6 +1379,7 @@ impl DriverAbiTable {
             return Some(AllocParams::ClientRoot);
         }
         match class.0 {
+            classes::NV50_DEFERRED_API_CLASS if self.capabilities().alloc_class(class).is_permitted() => Some(AllocParams::DeferredApi),
             classes::NV01_DEVICE_0 => Some(AllocParams::Device),
             classes::KEPLER_CHANNEL_GROUP_A => Some(AllocParams::Tsg),
             classes::FERMI_CONTEXT_SHARE_A => Some(AllocParams::CtxShare),
@@ -2091,6 +2092,8 @@ pub enum AllocParams {
     /// See that constant for the RM call chain that makes such an alloc appear, publish a
     /// page-directory root, and then be freed again.
     VaSpace,
+    /// Optional NV5080_ALLOC_PARAMS notification policy for a Deferred API object.
+    DeferredApi,
     /// A mapped class whose params declare nothing the object model reads.
     NoDeclaredFacts,
 }

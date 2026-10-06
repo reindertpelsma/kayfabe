@@ -389,6 +389,11 @@ milestone and a half-populated one is worse than none, because a missing entry
 reads as `None` = \"class not in this version\" rather than \"nobody has done it\".",
         structs: &[
             StructReq {
+                header: "src/common/sdk/nvidia/inc/class/cl5080.h",
+                name: "NV5080_ALLOC_PARAMS",
+                fam_align: None,
+            },
+            StructReq {
                 header: CL0000_H,
                 name: "NV0000_ALLOC_PARAMETERS",
                 fam_align: None,
@@ -410,6 +415,13 @@ reads as `None` = \"class not in this version\" rather than \"nobody has done it
             },
         ],
         consts: &[
+            ConstReq {
+                header: "src/common/sdk/nvidia/inc/class/cl5080.h",
+                c_name: "NV50_DEFERRED_API_CLASS",
+                rust_name: "NV50_DEFERRED_API_CLASS",
+                rust_ty: "u32",
+                doc: "Deferred API software object; constructor stores notification policy. No GPU engine twin.",
+            },
             ConstReq {
                 header: CL0000_H,
                 c_name: "NV01_ROOT",

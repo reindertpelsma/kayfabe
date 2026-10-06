@@ -116,3 +116,42 @@ remains. COPY2 is born as before. Class5080 construction still returns0x56;
 COPY2 retires without submissions, and Windows remains Code43/smi9. No display
 UPDATE/scanout is reached. This removes a real registration failure without
 claiming that it was the sole Windows initialization blocker.
+
+Run17 [fresh recovery](run17-recovery.log) and
+[journal comparison](run17-watchdog-comparison.json):24 assertions, first18 and
+last5 match run16; the intervening hint e23660 is replaced by1961253 with a
+different immediate caller. The earlier1a103e6 remains; the linked comparison
+records this journal-path difference. Names/types or exact RPC causality are not inferred.
+
+## Third repair: Deferred API software-object constructor
+
+The new wall is class5080 allocation under COPY2. Public source constructor
+`defapiConstruct_IMPL` at deferred_api.c:237 merely stores optional notification
+policy on a ChannelDescendant; the base software object owns an initially empty
+DeferredApiList. Its destructor isolates from its channel and deletes pending
+entries. The580.65.06 and580.159.04 deferred_api.c files are byte-identical:
+SHA2567f1691356d5d39afb64decd1c730b664ea7d979c93adc3a96856d6c96f2c43b0.
+Their cl5080.h headers are also identical: optional NV5080_ALLOC_PARAMS is one
+NvBool, notifyCompletion. Generated class/layout facts come from that header.
+
+This iteration implements only creation of the software object: original live
+channel parent required, no host engine twin, exact optional size/boolean,
+notification policy retained as graph facts, graph quotas, idempotent retry,
+conflicting retry refusal and channel-subtree destruction. The two audited guest
+ABI contracts are explicit; other contracts refuse constructor decoding. The
+capability row's origin is Mode2Rpc, not an unverified nvproxy claim.
+
+Deferred controls register actions to be performed later, not a request to run
+an action immediately. Source deferred_api.c:682 exposes methods100 (NOP) and200
+(execute named pending API); V2/internal controls use a bounded API bundle of
+allowed command types, and WAIT_FOR_TLB_FLUSH can postpone completion. Those
+controls/methods are not implemented by this constructor change and continue to
+refuse. No pending action, notification, GPU work or completion is fabricated.
+The next fresh Windows boot will identify which part is actually requested.
+
+Constructor validation:1172 tests across kf-abi and kf-rm pass, including the
+independent C-compiler layout oracle, two constructor lifecycle tests, complete
+historical capability snapshot comparison after only the two pinned constructor
+additions, and proof that deferred controls remain denied. Targeted Clippy across
+kf-abi/kf-rm/kf-qemu reports zero new debt (208 existing). Formatting/diff checks
+pass. [Compiled layout evidence](deferred-compiled-layouts.json).

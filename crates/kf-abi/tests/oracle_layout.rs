@@ -118,12 +118,13 @@ fn the_generators_layout_equals_rustcs_for_every_generated_struct() {
     // silently-widened generator slice a red test rather than a bigger green number.
     // ★ 20 -> 21 and 141 -> 149: `rpc_post_event_v17_00` and its 8 fields, added at
     // §16.76 for the os-event wakeup (`crate::postevent`).
-    assert_eq!(checked_structs, 21, "the slice is 21 generated structs");
+    // 21 -> 22 and149 -> 150: optional Deferred API notification boolean.
+    assert_eq!(checked_structs, 22, "the slice is 22 generated structs");
     // 4+7+11+8+7+7+9 (nvos) + 4+9+5+3 (classes) + 7+7 (ctrl) + 8+12 (rpc)
     // + 4+2+17+5+5 (vbios). The first draft of this line said 66 and the test
     // caught it — which is the point of asserting the count rather than trusting
     // the loop ran.
-    assert_eq!(checked_fields, 149, "…with 149 fields between them");
+    assert_eq!(checked_fields, 150, "…with 150 fields between them");
 }
 
 /// The transcribed layout gets the same treatment. A hand-written table that
@@ -1037,6 +1038,7 @@ fn every_generated_struct_is_covered_by_an_oracle_assertion() {
         "NVOS64_PARAMETERS",
         "NV0000_ALLOC_PARAMETERS",
         "NV0080_ALLOC_PARAMETERS",
+        "NV5080_ALLOC_PARAMS",
         "NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS",
         "NV_CTXSHARE_ALLOCATION_PARAMETERS",
         "NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS",
@@ -1294,4 +1296,19 @@ fn the_bench_driver_declares_no_queue_geometry_and_the_table_supplies_it() {
         40,
         "32 bytes of the four common fields plus the one geometry field we read",
     );
+}
+
+/// Independent C compiler at both audited source revisions; no nvproxy/C-artifact
+/// transcription of this software-only class is available. Facts and emitter are
+/// in traces/windows_code43_walls_20261007/deferred-compiled-layouts.json.
+#[test]
+fn deferred_api_optional_params_match_public_c_compiler() {
+    assert_layout(
+        &classes::Nv5080AllocParams::LAYOUT,
+        1,
+        &[("notify_completion", 0)],
+        "public C compiler at580.65.06 and580.159.04",
+    );
+    assert_eq!(classes::Nv5080AllocParams::ALIGN, 1);
+    assert_eq!(classes::NV50_DEFERRED_API_CLASS, 0x5080);
 }

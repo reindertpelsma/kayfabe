@@ -219,7 +219,7 @@ impl Faulted for ObjectsRefusal {
 /// ★★★ **The object model, as the seam a later crate implements.** Narrow on purpose: see
 /// this module's header for what the old eleven-method `ObjectModel` became.
 pub trait RmObjects: Send {
-    /// Explicit checked SYSRAM registration seam. Default implementations refuse.
+    /// Explicit checked RAM/FB registration seam. Default implementations refuse.
     fn memory_list(
         &mut self,
         _request: kf_abi::memory_list::Declaration,
@@ -334,6 +334,25 @@ impl RmObjects for GraphObjects {
         crate::sw_runlist_probe::allocate(&mut self.graph, request)
     }
     fn apply(&mut self, ev: RmEvent, _params: &[u8]) -> Result<(), ObjectsRefusal> {
+        if let RmEvent::Alloc {
+            client,
+            parent,
+            facts,
+            ..
+        } = ev
+            && facts.deferred_api_notify.is_some()
+        {
+            let key = crate::rmgraph::NodeKey::new(client, parent);
+            if !self
+                .graph
+                .allocated_node(key)
+                .is_some_and(|n| matches!(n.kind, kf_arch::ObjectKind::Channel { .. }))
+            {
+                return Err(ObjectsRefusal::NotModelled {
+                    what: "deferred API constructor: parent is not an original live channel",
+                });
+            }
+        }
         self.graph.apply(ev).map_err(ObjectsRefusal::Graph)
     }
 
