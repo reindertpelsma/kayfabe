@@ -104,3 +104,15 @@ Second-repair local validation:18 focused MemoryList tests across ABI, RM, QEMU
 and the full policy chain pass; all612 kf-rm tests pass. Clippy across kf-abi,
 kf-rm and kf-qemu reports zero new debt (208 existing). Formatting/diff checks
 pass. Hardware result pending until a fresh source-pinned Windows boot.
+
+## Run17: FBMEM registration wall removed, Code43 persists
+
+Product/QEMU5348fccfc6469c8b1c2782122b1ea29efd209edf; gates9/9 with11/11
+USER births. [Command](run17-command.json), [status](run17-status.json),
+[trace](run17-qemu.log.gz), [excerpt](run17-requests.log),
+[completion](run17-complete.json), [host health](run17-host-health.txt).
+The exact captured class82 FBMEM registration now returns0; no fn4 refusal
+remains. COPY2 is born as before. Class5080 construction still returns0x56;
+COPY2 retires without submissions, and Windows remains Code43/smi9. No display
+UPDATE/scanout is reached. This removes a real registration failure without
+claiming that it was the sole Windows initialization blocker.

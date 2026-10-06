@@ -1,0 +1,11 @@
+kf-rm: EXPERIMENT software-runlist diagnostic function=4 ALLOC_MEMORY payload_bytes=64 prefix_only=true hClient=0xc1d00002 hDevice=0xff010000 hMemory=0xff000100 hClass=0x81 flags=0x48002000 pteAdjust=0x0 format=0x0 length=0x7000 pageCount=0x1 raw_descriptor_u64_le=[0000000000010000,0000000000239948]; observation only
+kf-rm: rpc-trace fn=4 Other(4) seq=0  result=0x0
+kf-rm: EXPERIMENT software-runlist diagnostic function=4 ALLOC_MEMORY payload_bytes=64 prefix_only=true hClient=0xc1d00002 hDevice=0xff010000 hMemory=0xff000104 hClass=0x81 flags=0x48002000 pteAdjust=0x0 format=0x0 length=0x7000 pageCount=0x1 raw_descriptor_u64_le=[0000000000010000,0000000000239900]; observation only
+kf-rm: rpc-trace fn=4 Other(4) seq=0  result=0x0
+kf-rm: EXPERIMENT software-runlist diagnostic function=4 ALLOC_MEMORY payload_bytes=64 prefix_only=true hClient=0xc1d00002 hDevice=0xff030000 hMemory=0xcaf0000c hClass=0x82 flags=0x48040200 pteAdjust=0x0 format=0x0 length=0x20000 pageCount=0x1 raw_descriptor_u64_le=[0000000000010000,00000000000ea6e0]; observation only
+kf-rm: rpc-trace fn=4 Other(4) seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0080170e client=0xc1d00012 object=0xff010000 result=none
+kf3: act birth translated: chan 0xc1d00012:0xff040000 BORN Translated: token 0x801 -> host 0x1002e in VasKey(13965662457344034928) gpfifo=0x12024b000x16384 userd=Some(Sysmem { base: 9555083264, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B fast=off (2510 us, off the GSP lock)
+kf-rm: RPC-REFUSED #1 AllocClassNotPermitted { class: 20608, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x5080 client=0xc1d00012 parent=0xff040000 handle=0xff1fe010 result=0x56
+kf3: DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x1002e fast=0

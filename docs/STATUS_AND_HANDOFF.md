@@ -21,7 +21,10 @@ FIFO latency query also still refuse. No initialization success claim.
 [Iteration record](../traces/windows_code43_walls_20261007/README.md).
 The second change adds checked FBMEM registration for audited580.65.06 and
 580.159.04 guest contracts, scoped to the VM's usable FB heap; focused18 tests
-and full612 kf-rm tests pass. Windows rerun pending; class5080 remains unsupported.
+and full612 kf-rm tests pass. Run17 at5348fccf verifies the captured class82
+FBMEM request returns0; COPY2 births but class5080 still refuses, no submissions.
+Code43/smi9 persist. Next: Deferred API software-object constructor and its
+queue-triggered control protocol; do not fake its execution or completion.
 
 
 **Windows allocation investigation, 2026-10-07:** bounded diagnostic run14 at
