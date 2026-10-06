@@ -11,7 +11,12 @@ pub const LUT_BYTES: u64 = (4 + 1025) * 8;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Binding {
     /// Turing through Ada: byte offset inside a context DMA.
-    Dma { handle: u32, offset: u64 },
+    Dma {
+        /// Guest context-DMA handle, resolved with the owning client/channel.
+        handle: u32,
+        /// Byte offset inside the resolved context DMA.
+        offset: u64,
+    },
     /// GB20x: physical video-memory address. Other targets are refused.
     Vidmem(u64),
 }
@@ -42,18 +47,22 @@ impl Binding {
 /// DIRECT10, unmirrored, fixed-size table, plus optional interpolation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Lut {
+    /// Context-DMA or physical video-memory source.
     pub binding: Binding,
+    /// Interpolate between adjacent entries instead of taking the lower entry.
     pub interpolate: bool,
 }
 
 /// An output transform: signed coefficients stored in the class's encoded S5.14 format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Output {
+    /// Output table, or bypass when disabled.
     pub lut: Option<Lut>,
     /// Encoded coefficients have two trailing zeros, so decode by dividing by 65536.
     pub matrix: [i32; 12],
 }
 
+/// Identity matrix in the coefficient word's encoded units.
 pub const IDENTITY: [i32; 12] = [65536, 0, 0, 0, 0, 65536, 0, 0, 0, 0, 65536, 0];
 
 #[derive(Debug, Clone, Copy)]
@@ -221,7 +230,7 @@ pub fn input(
     }
     let a = Address::resolve(t, c, None, "ILUT", 0).ok_or("missing ILUT vocabulary")?;
     let binding = a.read(&read)?;
-    if fmt != IDENTITY.map(|v| v as u32) && !(binding.is_none() && fmt == [0; 12]) {
+    if fmt != IDENTITY.map(|v| v as u32) {
         return Err("nonidentity FMT is outside SDR subset");
     }
     let ctl = Control::resolve(t, c, None, "SET_ILUT_CONTROL").ok_or("missing ILUT control")?;

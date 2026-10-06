@@ -1,0 +1,19 @@
+{
+  "schema": "kayfabe-sdr-curve/1",
+  "source_revision": "c9135eea3c8e7ce59d46089fc8808f1e0bf77f81",
+  "qemu_sha256": "6dab7c86fb6db4f3b01a59008c385b65f438121786ef9e58ff0220f1fc9500d5",
+  "dimensions": [
+    1920,
+    1080
+  ],
+  "kms_blob_entries": 1024,
+  "checked_components": 6220800,
+  "mismatched_components": 0,
+  "max_error": 0,
+  "restored_identical": true,
+  "output_changed": true,
+  "expected_sha256": "b4f9ab518b23186a703ac9a8fb0cc09a690b0a2639dd2789c6f2132b419ad946",
+  "actual_sha256": "b4f9ab518b23186a703ac9a8fb0cc09a690b0a2639dd2789c6f2132b419ad946",
+  "oracle": "OGKM GetLUTIndex: UNORM8 << 2; OLUT high 8 bits; actual KMS blob",
+  "limitation": "One opaque RGB8888 Linux SDR cell; no physical post-LUT capture"
+}

@@ -52,11 +52,36 @@ const COLOR_LUT_BYTES: usize = (4 + 1025) * 8;
 /// A bounded source span; the table is copied device-to-device before it is used.
 #[derive(Debug, Clone, Copy)]
 pub struct ColorLut {
+    /// Byte offset into the imported store, bounded again at the GPU binding.
     pub src: u64,
+    /// Interpolate between entries instead of selecting the lower entry.
     pub interpolate: bool,
     /// Worker-authored identity of the armed binding. A new UPDATE/free/reallocation
     /// changes it even if the guest reuses the same store address.
     pub token: u64,
+}
+
+/// Synthetic SDR fixture for the hardware oracle; all bytes are host-authored.
+pub struct ColorFixture<'a> {
+    /// RGB8888 pixels.
+    pub surface: &'a [u8],
+    /// 8232-byte FP16 input table with its header and endpoint.
+    pub input: &'a [u8],
+    /// 8232-byte fixed-point output table with its header and endpoint.
+    pub output: &'a [u8],
+    /// Source rectangle and blend parameters.
+    pub layer: &'a ComposeLayer,
+    /// Encoded output CSC coefficients.
+    pub matrix: &'a [i32; 12],
+    /// Output dimensions.
+    pub size: (u32, u32),
+    /// Exercise fractional output indices.
+    pub interpolate: bool,
+    /// Mutate the synthetic input source after its snapshot was consumed, then
+    /// compose again to check retention. Never modifies guest memory.
+    pub mutate_input: Option<&'a [u8]>,
+    /// After mutation, explicitly rearm the input to require a fresh snapshot.
+    pub rearm: bool,
 }
 
 /// ★ An imported display slot — a VRAM frame object kayfabe allocated itself (never guest
@@ -1093,22 +1118,25 @@ impl DisplayGpu {
     /// Hardware oracle on synthetic fixtures only. The temporary store contains no
     /// guest data; table bytes are uploaded, snapshotted and transformed on the GPU.
     /// A rejected FP16 table returns an error before any fixture pixels are read.
-    pub fn selftest_color(
-        &mut self,
-        surface: &[u8],
-        input: &[u8],
-        output: &[u8],
-        layer: &ComposeLayer,
-        matrix: &[i32; 12],
-        w: u32,
-        h: u32,
-    ) -> Result<Vec<u8>, CudaError> {
+    pub fn selftest_color(&mut self, fixture: &ColorFixture<'_>) -> Result<Vec<u8>, CudaError> {
         let what = "DisplayGpu::selftest_color";
+        let ColorFixture {
+            surface,
+            input,
+            output,
+            layer,
+            matrix,
+            size: (w, h),
+            ..
+        } = *fixture;
         if input.len() != COLOR_LUT_BYTES
             || output.len() != COLOR_LUT_BYTES
             || surface.is_empty()
-            || surface.len() % 8 != 0
+            || !surface.len().is_multiple_of(8)
             || layer.extent > surface.len() as u64
+            || fixture
+                .mutate_input
+                .is_some_and(|b| b.len() != COLOR_LUT_BYTES)
         {
             return Err(refused(what, "synthetic fixture extent".into()));
         }
@@ -1137,12 +1165,29 @@ impl DisplayGpu {
                 w,
                 h,
             )?;
+            if let Some(new) = fixture.mutate_input {
+                self.cu.ctx_synchronize()?;
+                self.cu
+                    .memcpy_h2d(scratch + surface.len() as u64, new, what)?;
+                self.color_begin(w, h)?;
+                self.color_layer(
+                    0,
+                    &l,
+                    Some(ColorLut {
+                        src: surface.len() as u64,
+                        interpolate: false,
+                        token: if fixture.rearm { 3 } else { 1 },
+                    }),
+                    w,
+                    h,
+                )?;
+            }
             self.color_output(
                 w,
                 h,
                 Some(ColorLut {
                     src: (surface.len() + input.len()) as u64,
-                    interpolate: false,
+                    interpolate: fixture.interpolate,
                     token: 2,
                 }),
                 matrix,
