@@ -35,7 +35,9 @@ implemented;101 kf-qemu tests pass, zero new Clippy debt. Run19 at f6aa9d2e
 applies4000us on the actual owned host group; a06c0103 returns0 and watchdog
 hint e38498 disappears. Code43/smi9 persist. Next: kernel GR channels are
 acknowledged without birth, then GPU_PROMOTE_CTX refuses. Capture exact inline
-promotion entries before implementing a real owned unprivileged GR context;
+promotion entries before implementing a real owned unprivileged GR context.
+The default-off observer is implemented with16 records of at most16 entries;
+615 kf-rm tests pass, zero new Clippy debt. Diagnostic run20 pending;
 queued Deferred API controls/methods remain unsupported; no completion is forged.
 
 

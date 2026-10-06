@@ -384,6 +384,35 @@ fn trace_line(
     );
 }
 
+// Fixed inline parameter decode only: no GPU/guest-memory lookup and no reply mutation.
+// The record count is separately bounded by ControlCensus, even under hostile retries.
+fn promotion_record(
+    driver: &DriverAbiTable,
+    cmd: &RpcCommand,
+    req: &kf_abi::view::RpcControlReq,
+) -> Option<String> {
+    use kf_abi::generated::ctrl::Nv2080CtrlGpuPromoteCtxBufferEntry as Entry;
+    use kf_abi::transcribed::Nv2080CtrlGpuPromoteCtxParamsHeader as Header;
+    if req.cmd != crate::chanlink::PROMOTE_CTX {
+        return None;
+    }
+    let end = req.params_at.checked_add(req.params_size as usize)?;
+    let params = cmd.payload.get(req.params_at..end)?;
+    if params.len() != Header::PARAMS_SIZE {
+        return None;
+    }
+    let p = driver.decode_promote_ctx(params).ok()?;
+    let mut entries = Vec::with_capacity(p.len());
+    for i in 0..p.len() {
+        let at = Header::SIZE + i * Entry::SIZE;
+        entries.push(Entry::decode(params.get(at..at + Entry::SIZE)?).ok()?);
+    }
+    Some(format!(
+        "kf-rm: promote-facts envelope={:#x}:{:#x} channel={:#x}:{:#x} engine={:#x} entries={entries:x?}",
+        req.client, req.object, p.h_chan_client, p.h_object, p.engine_type
+    ))
+}
+
 /// The observing wrapper: decodes the control header, forwards to the inner policy, and
 /// records what came back — **unchanged**.
 ///
@@ -394,13 +423,32 @@ pub struct ControlCensus<P> {
     driver: DriverAbiTable,
     log: ControlCensusLog,
     inner: P,
+    promotion_records_left: u8,
 }
 
 impl<P: CommandPolicy> ControlCensus<P> {
     /// Wrap `inner`, writing into `log`.
     #[must_use]
     pub fn new(driver: DriverAbiTable, log: ControlCensusLog, inner: P) -> ControlCensus<P> {
-        ControlCensus { driver, log, inner }
+        ControlCensus {
+            driver,
+            log,
+            inner,
+            promotion_records_left: 16,
+        }
+    }
+
+    fn take_promotion_record(
+        &mut self,
+        cmd: &RpcCommand,
+        req: Option<&kf_abi::view::RpcControlReq>,
+    ) -> Option<String> {
+        if self.promotion_records_left == 0 {
+            return None;
+        }
+        let record = promotion_record(&self.driver, cmd, req?)?;
+        self.promotion_records_left -= 1;
+        Some(record)
     }
 }
 
@@ -426,6 +474,9 @@ impl<P: CommandPolicy> CommandPolicy for ControlCensus<P> {
         let reply = self.inner.respond(cmd);
         if rpc_trace() {
             trace_line(&self.driver, cmd, req.as_ref(), reply.as_ref());
+            if let Some(record) = self.take_promotion_record(cmd, req.as_ref()) {
+                eprintln!("{record}");
+            }
         }
         if let Some(req) = req {
             if let Some(r) = &reply {
@@ -479,3 +530,76 @@ kf_util::assert_send_sync!(
     CensusSnapshot,
     ControlCensusLog
 );
+
+#[cfg(test)]
+mod promotion_tests {
+    use super::*;
+
+    struct Decline;
+    impl CommandPolicy for Decline {
+        fn respond(&mut self, _: &RpcCommand) -> Option<Reply> {
+            None
+        }
+    }
+
+    #[test]
+    fn bounded_inline_observer_retains_initialize_flags_and_both_namespaces() {
+        use kf_abi::generated::ctrl::Nv2080CtrlGpuPromoteCtxBufferEntry as Entry;
+        use kf_abi::transcribed::Nv2080CtrlGpuPromoteCtxParamsHeader as Header;
+        let driver = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+        let mut params = vec![0; Header::PARAMS_SIZE];
+        for (at, value) in [
+            (core::mem::offset_of!(Header, engine_type), 1u32),
+            (core::mem::offset_of!(Header, h_chan_client), 0x2222),
+            (core::mem::offset_of!(Header, h_object), 0x3333),
+            (core::mem::offset_of!(Header, entry_count), 1),
+        ] {
+            params[at..at + 4].copy_from_slice(&value.to_le_bytes());
+        }
+        // Initialize-only entries need no virtual mapping. This is a numeric
+        // descriptor in the inline payload; its address cannot trigger a read.
+        let at = Header::SIZE;
+        params[at..at + 8].copy_from_slice(&0xffff_ffff_ffff_0000u64.to_le_bytes());
+        params[at + 16..at + 24].copy_from_slice(&0x1000u64.to_le_bytes());
+        params[at + core::mem::offset_of!(Entry, b_initialize)] = 1;
+        params[at + core::mem::offset_of!(Entry, b_nonmapped)] = 1;
+        let mut payload = vec![0; kf_abi::view::RpcControlReq::HEADER];
+        payload[0..4].copy_from_slice(&0x1111u32.to_le_bytes());
+        payload[8..12].copy_from_slice(&crate::chanlink::PROMOTE_CTX.to_le_bytes());
+        payload[16..20].copy_from_slice(&(params.len() as u32).to_le_bytes());
+        payload.extend(params);
+        let mut cmd = RpcCommand {
+            function: RpcFunction::RmControl,
+            code: 76,
+            sequence: 1,
+            payload,
+            elements: 1,
+            delivered: Vec::new(),
+        };
+        let req = driver.decode_rpc_control(&cmd.payload).unwrap();
+        let mut observer = ControlCensus::new(driver, ControlCensusLog::default(), Decline);
+        let before = cmd.clone();
+        for _ in 0..16 {
+            let record = observer.take_promotion_record(&cmd, Some(&req)).unwrap();
+            assert!(record.contains("envelope=0x1111:0x0 channel=0x2222:0x3333 engine=0x1"));
+            assert!(record.contains("gpu_phys_addr: ffffffffffff0000"));
+            assert!(record.contains("b_initialize: 1, b_nonmapped: 1"));
+        }
+        assert!(observer.take_promotion_record(&cmd, Some(&req)).is_none());
+        assert_eq!(cmd.payload, before.payload);
+        assert!(observer.respond(&cmd).is_none());
+        cmd.payload.pop();
+        assert!(promotion_record(&driver, &cmd, &req).is_none());
+        // Neither extra parameters nor an over-budget entry count is logged.
+        cmd.payload = before.payload.clone();
+        cmd.payload.push(0);
+        let mut extra = req;
+        extra.params_size += 1;
+        assert!(promotion_record(&driver, &cmd, &extra).is_none());
+        cmd.payload = before.payload.clone();
+        cmd.payload[req.params_at + core::mem::offset_of!(Header, entry_count)
+            ..req.params_at + core::mem::offset_of!(Header, entry_count) + 4]
+            .copy_from_slice(&17u32.to_le_bytes());
+        assert!(promotion_record(&driver, &cmd, &req).is_none());
+    }
+}

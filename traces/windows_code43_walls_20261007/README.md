@@ -225,3 +225,9 @@ Next diagnostic records the fixed inline entries (maximum16 per request,
 16 records per VM) under the existing default-off KF3_RPC_TRACE flag.
 It uses the generated entry layout and bounded decoded header, never follows
 a guest pointer, and changes no reply/admission/execution.
+
+Promotion observer validation: all615 kf-rm tests pass. The new hostile-wire
+regression retains both namespaces and raw initialize/nonmapped flags, never
+dereferences a numeric physical address, exhausts its16-record budget, and
+rejects truncation, extra parameters and an entry count beyond the source
+bound. Targeted RM/QEMU Clippy reports zero new debt (207 existing).
