@@ -149,7 +149,7 @@ pub enum ObjectKind {
     /// No native capacity, backing, scheduling, interrupt or completion is promised.
     /// This is not a hardware engine class or a complete RunlistApi implementation.
     SoftwareRunlistProbe,
-    /// A validated existing guest SYSRAM descriptor; no generic GPU Memory capabilities.
+    /// A validated existing guest RAM or framebuffer descriptor; no generic GPU Memory capabilities.
     GuestMemoryList,
     /// A GPU virtual address space (`FERMI_VASPACE_A`-shaped, parent = device).
     /// ★ THE MEMORY BOUNDARY: once bound, it owns a PDB and the address plane

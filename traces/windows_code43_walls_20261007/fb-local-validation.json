@@ -1,0 +1,17 @@
+{
+  "revision": "5348fccfc6469c8b1c2782122b1ea29efd209edf",
+  "kf_rm_passed": 612,
+  "kf_rm_failed": 0,
+  "focused_memory_tests": 18,
+  "clippy": {
+    "packages": [
+      "kf-abi",
+      "kf-rm",
+      "kf-qemu"
+    ],
+    "existing": 208,
+    "new": 0
+  },
+  "fmt": "pass",
+  "claims_new": 0
+}
