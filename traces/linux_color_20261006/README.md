@@ -1,6 +1,6 @@
 # Linux compositor and KMS color audit
 
-**STATUS: RESEARCH, 2026-10-06 — experiment in progress.**
+**STATUS: LIVE, 2026-10-06 — Linux compositor/color result and limits.**
 
 Product source `8bbcd7f3b50a1cfc1bf0f01f0c580527ce7848c0` is the repaired
 Windows branch plus an opt-in, engine-lifetime-bounded DMA method diagnostic.
@@ -47,11 +47,39 @@ why a bounded identity subset can preserve ordinary images while ignoring an
 arbitrary output curve cannot implement its advertised effect. It does not
 establish Windows' minimum requirements or general LUT equivalence.
 
-A separate guest-only fault control now tests compositor behavior when KMS
-actually refuses a nonzero gamma update; that run remains in progress.
+A separate guest-only fault control tests compositor behavior when KMS
+actually refuses a nonzero gamma update; its result follows below.
 
 Fault-control run C was invalid: no rejection marker appeared and the nonidentity
 KMS blob was installed (`run-c-inactive-fault.log`). libdrm calls its own
 `drmIoctl` directly, so the first interposer did not affect it. The revised
 control hooks libc `ioctl` and emits an explicit armed/rejection marker;
 the runner requires that rejection marker for a valid failure-control result.
+
+Run D is the valid refusal control (`run-d-summary.json`, `run-d-refusal.log`):
+the interposer rejects the nonzero GAMMA_LUT atomic TEST_ONLY request with
+EOPNOTSUPP. wlsunset receives `zwlr_gamma_control_v1.failed()`, KMS retains its
+null gamma blob, and the fixed client remains displayed pixel-exact through
+all three snapshots. Sway continues displaying the image; it does not supply a
+shader replacement for the rejected output gamma. The VM exits0 cleanly.
+This tests client/compositor degradation for a KMS failure, not a new product
+refusal policy, and not Windows' behavior.
+
+Interpretation: ordinary SDR images can work with the current default identity
+color states. LUTs are used during image composition, and the tested output
+adjustment is not working. Refusing an optional color feature need not break
+this Linux desktop. Under OWNER_RULINGS §H, a future production subset must
+express absent capabilities or named refusal for unsupported actions; it must
+not silently acknowledge arbitrary transforms. Physical host monitor settings
+remain the host compositor's responsibility. None of this requires declaring
+full general LUT emulation a prerequisite for Windows startup.
+
+Validation of the diagnostic source at `8bbcd7f3`: kf-disp unit/integration
+tests108/0, Clippy new0, exact Rust/C rebuild. Product source GitHub CI
+`37460961228` passes. Method logging is default-off and capped at65536 DMA
+writes per engine lifetime; free/reallocate cannot replenish the budget. The
+nonzero final budgets in both summaries exclude truncation of these runs.
+No merge-bar/application claim; master remains `906a76a4`. Full private
+run data/overlays stay under `/var/lib/kf-linux-color-20261006/` on the borrowed
+PC; local text/PPM data copies are under `/data/kayfabe-runtime/linux-color-20261006/`.
+No rental was created; no guest remains running; host595.91.07 is healthy.

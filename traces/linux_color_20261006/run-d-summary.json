@@ -1,0 +1,218 @@
+{
+  "schema": "kayfabe-linux-color-audit/1",
+  "manifest": {
+    "source_revision": "8bbcd7f3b50a1cfc1bf0f01f0c580527ce7848c0",
+    "qemu_sha256": "1b94b06e95e357eb506e4f584c8bf9ebcd3c9b0a77dcedf72a888351d172bd62",
+    "command": [
+      "/var/lib/kf-windows-20261005/kf3-bins/8bbcd7f3/qemu-system-x86_64",
+      "-machine",
+      "q35,accel=kvm",
+      "-cpu",
+      "host",
+      "-bios",
+      "/usr/share/seabios/bios-256k.bin",
+      "-m",
+      "6G",
+      "-smp",
+      "6",
+      "-object",
+      "memory-backend-memfd,id=ram,size=6G,share=on",
+      "-machine",
+      "memory-backend=ram",
+      "-vga",
+      "none",
+      "-device",
+      "kf3-gpu,guest-driver=580.159.04,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on",
+      "-display",
+      "none",
+      "-drive",
+      "if=virtio,file=/var/lib/kf-linux-color-20261006/compositor-d-refuse/guest.qcow2,format=qcow2",
+      "-netdev",
+      "user,id=n0,hostfwd=tcp:127.0.0.1:2244-:22",
+      "-device",
+      "virtio-net-pci,netdev=n0,romfile=",
+      "-serial",
+      "file:/var/lib/kf-linux-color-20261006/compositor-d-refuse/serial.log",
+      "-qmp",
+      "unix:/var/lib/kf-linux-color-20261006/compositor-d-refuse/qmp.sock,server=on,wait=off",
+      "-msg",
+      "timestamp=on"
+    ],
+    "harness_sha256": "9a28a4d643b6d7a97b0be568b674354e3e8babfab84a9619dff5c86b4b30fc75",
+    "guest_gamma_fault": true,
+    "flags": {
+      "KF3_DISPLAY_METHOD_TRACE": "1"
+    },
+    "scope": "AD104 / Linux580.159.04"
+  },
+  "events": [
+    {
+      "label": "start",
+      "utc": "2026-10-06T12:17:34.717471+00:00"
+    },
+    {
+      "label": "driver",
+      "utc": "2026-10-06T12:17:44.234090+00:00"
+    },
+    {
+      "label": "copy-color_properties",
+      "utc": "2026-10-06T12:17:45.141341+00:00"
+    },
+    {
+      "label": "copy-reject_gamma",
+      "utc": "2026-10-06T12:17:45.267863+00:00"
+    },
+    {
+      "label": "copy-wl_scene",
+      "utc": "2026-10-06T12:17:45.396610+00:00"
+    },
+    {
+      "label": "build-clients",
+      "utc": "2026-10-06T12:17:45.528826+00:00"
+    },
+    {
+      "label": "kms-before",
+      "utc": "2026-10-06T12:17:45.893937+00:00"
+    },
+    {
+      "label": "weston-start",
+      "utc": "2026-10-06T12:17:46.024316+00:00"
+    },
+    {
+      "label": "weston-scene",
+      "utc": "2026-10-06T12:17:51.169023+00:00"
+    },
+    {
+      "label": "weston-scene",
+      "utc": "2026-10-06T12:17:56.300912+00:00"
+    },
+    {
+      "label": "weston-result",
+      "utc": "2026-10-06T12:17:56.330216+00:00"
+    },
+    {
+      "label": "weston-stop",
+      "utc": "2026-10-06T12:17:56.471617+00:00"
+    },
+    {
+      "label": "sway-start",
+      "utc": "2026-10-06T12:17:59.636110+00:00"
+    },
+    {
+      "label": "sway-scene",
+      "utc": "2026-10-06T12:18:06.780374+00:00"
+    },
+    {
+      "label": "sway-before",
+      "utc": "2026-10-06T12:18:11.911983+00:00"
+    },
+    {
+      "label": "sway-before",
+      "utc": "2026-10-06T12:18:11.930361+00:00"
+    },
+    {
+      "label": "warm-start",
+      "utc": "2026-10-06T12:18:12.076127+00:00"
+    },
+    {
+      "label": "sway-warm",
+      "utc": "2026-10-06T12:18:17.203888+00:00"
+    },
+    {
+      "label": "sway-warm",
+      "utc": "2026-10-06T12:18:17.213063+00:00"
+    },
+    {
+      "label": "warm-stop",
+      "utc": "2026-10-06T12:18:17.342256+00:00"
+    },
+    {
+      "label": "sway-restored",
+      "utc": "2026-10-06T12:18:20.477504+00:00"
+    },
+    {
+      "label": "sway-restored",
+      "utc": "2026-10-06T12:18:20.496881+00:00"
+    },
+    {
+      "label": "dmesg-after",
+      "utc": "2026-10-06T12:18:20.630775+00:00"
+    },
+    {
+      "label": "stop",
+      "utc": "2026-10-06T12:18:20.764732+00:00"
+    },
+    {
+      "label": "exit-0",
+      "utc": "2026-10-06T12:18:26.113879+00:00"
+    }
+  ],
+  "client_rgba_fnv": "ad584bcbbd263ea5",
+  "screenshots": {
+    "sway-before": {
+      "sha256": "856320f2970d3b445b30f948faf5c28cde26c96f369628e68ad746bf953bfc69",
+      "scene_rgba_fnv": "ad584bcbbd263ea5",
+      "scene_matches_client": true
+    },
+    "sway-warm": {
+      "sha256": "856320f2970d3b445b30f948faf5c28cde26c96f369628e68ad746bf953bfc69",
+      "scene_rgba_fnv": "ad584bcbbd263ea5",
+      "scene_matches_client": true
+    },
+    "sway-restored": {
+      "sha256": "856320f2970d3b445b30f948faf5c28cde26c96f369628e68ad746bf953bfc69",
+      "scene_rgba_fnv": "ad584bcbbd263ea5",
+      "scene_matches_client": true
+    }
+  },
+  "all_three_outputs_identical": true,
+  "gamma_before": [
+    "name=GAMMA_LUT value=0",
+    "name=GAMMA_LUT value=0",
+    "name=GAMMA_LUT value=0",
+    "name=GAMMA_LUT value=0"
+  ],
+  "gamma_warm": [
+    "name=GAMMA_LUT value=0",
+    "name=GAMMA_LUT value=0",
+    "name=GAMMA_LUT value=0",
+    "name=GAMMA_LUT value=0"
+  ],
+  "gamma_restored": [
+    "name=GAMMA_LUT value=0",
+    "name=GAMMA_LUT value=0",
+    "name=GAMMA_LUT value=0",
+    "name=GAMMA_LUT value=0"
+  ],
+  "protocol_failure_event": true,
+  "injected_kms_failure": true,
+  "generated_table_sha256": "df65880cf9ae8f111c536bc353affbe44765b9a541358d3b24e5def227eeefcf",
+  "color_method_value_counts": {
+    "NVC67E_SET_ILUT_CONTROL": {
+      "0x40508": 78
+    },
+    "NVC67E_SET_CONTEXT_DMA_ILUT": {
+      "0x10086": 78
+    },
+    "NVC67E_SET_OFFSET_ILUT": {
+      "0x0": 78
+    },
+    "NVC77D_HEAD_SET_OLUT_CONTROL(3)": {
+      "0x40508": 4
+    },
+    "NVC77D_HEAD_SET_CONTEXT_DMA_OLUT(3)": {
+      "0x10086": 4
+    },
+    "NVC77D_HEAD_SET_OFFSET_OLUT(3)": {
+      "0x21": 4
+    }
+  },
+  "method_records": 37574,
+  "trace_budget_remaining": 27962,
+  "limits": [
+    "One AD104/580.159.04 guest cell; SDR fixed XRGB scene.",
+    "Native shader/client control and KMS readback do not capture physical post-LUT pixels.",
+    "Warm control tests output gamma, not arbitrary input LUT/HDR transformations."
+  ],
+  "fault_source_sha256": "53742fc8d3ca2f121672f0534b8e593575cfe197aaee4c5b0d542c318c35a759"
+}

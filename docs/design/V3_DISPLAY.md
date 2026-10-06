@@ -1,5 +1,23 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+**STATUS: LIVE, 2026-10-06 — color support clarification.** The verification
+claims below remain scoped to their named lanes; they do not qualify arbitrary
+LUT/color transforms. Linux guest open580.159.04 on AD104, product `8bbcd7f3`
+(repaired Windows branch plus bounded diagnostic), runs Weston13 and Sway1.9
+with NVIDIA rendering. The fixed SDR scene reaches the virtual console
+pixel-exact. OGKM binds real default identity ILUT/OLUT surfaces in that path.
+A custom KMS output gamma table is accepted but leaves console pixels unchanged.
+In a separate guest-only KMS-refusal control, Sway keeps the image displayed and
+the gamma-control client receives failure; it supplies no shader replacement.
+Evidence and limitations: [`traces/linux_color_20261006/README.md`](../../traces/linux_color_20261006/README.md).
+These results allow investigation of a bounded identity SDR subset; they do
+not prove its general equivalence or Windows compatibility. Optional color
+features may be withheld/refused under OWNER_RULINGS §H. Guest-local LUT state
+is distinct from the physical host monitor's settings, and is not inherently
+privileged. Constructor declarations and successful UPDATEs alone are not color
+implementation evidence. No product capability/refusal policy is changed by
+this diagnostic.
+
 **STATUS: VERIFIED, 2026-10-04 — candidate 2 product `9d82f259`, KF3 ABI 18:**
 master candidate 1 plus broker/maxfps, HMP AioContext fix and asynchronous console
 cursor update. Exact-source GPU merge bar passes; host apps 71/71 and guest

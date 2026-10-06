@@ -11,6 +11,25 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-06
 
+**Latest owner-directed test:** `codex/linux-color-oracle-20261006`, diagnostic
+product `8bbcd7f3`, follows the Antigravity repair. Linux guest open580.159.04
+on the borrowed AD104 runs Weston13 and Sway1.9 with NVIDIA rendering. The
+fixed SDR image reaches the console pixel-exact and matches the native client's
+RGBA hash. OGKM binds identity input/output LUTs during ordinary composition.
+A 2501K KMS gamma blob is accepted but ignored by the virtual output; all three
+screenshots are identical. A separate guest-only KMS refusal makes the gamma
+client fail while Sway preserves the image, without a shader replacement.
+Evidence: [Linux color audit](../traces/linux_color_20261006/README.md).
+
+The next Windows investigation should identify its actual methods and the
+smallest correct identity/disabled SDR subset; full arbitrary LUT support is
+not yet established as a startup requirement. Unsupported actions must remain
+absent/refused under §H, never successful no-ops. M/N/O remain construction-only
+and off by default. No Windows success or master promotion. No VM remains
+running, host GPU healthy, no rental created.
+
+The earlier Antigravity repair and Windows constructor result follow:
+
 The owner resumed work and requested review/repair of Antigravity's changes.
 Branch `codex/antigravity-review-20261006`, product repair `e294fbe1`, source
 `4cb9e609` after comment/CI corrections, removes fabricated Windows control
@@ -32,8 +51,9 @@ Outer NVCD remains one byte short, so its checksum cannot be validated. The gues
 shut down cleanly, supervisor exit zero, RTX 4070 healthy, no VM or NBD attachment
 remains. Sanitized evidence is in the review directory; raw private controller
 evidence is under `/data/kayfabe-runtime/windows-boundary-20261005/`.
-Next: the independently reviewed production LUT/color plan, actual GPU processing
-and completion/lifetime tests. Constructor declarations alone are insufficient.
+Next (refined by the Linux result above): review the production LUT/color plan
+and establish the supported subset with completion/lifetime tests. Constructor
+declarations alone are insufficient.
 No rentals were created. Preserve overlays until fresh evidence is durable.
 The previous session's Windows priority and constructor analysis are recorded in
 `codex/windows-boundary-comparison-20261005` at `fba14de6`, including

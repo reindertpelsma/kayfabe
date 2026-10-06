@@ -1,0 +1,243 @@
+COLOR_READER uid=1000 driver=nvidia-drm master=0
+COLOR_CRTC id=60 active=1 gamma_size=1024
+COLOR_PROPERTY object=60 type=3435973836 name=NV_CRTC_REGAMMA_TF value=0
+COLOR_PROPERTY object=60 type=3435973836 name=NV_CRTC_REGAMMA_LUT value=0
+COLOR_PROPERTY object=60 type=3435973836 name=NV_CRTC_REGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=60 type=3435973836 name=DEGAMMA_LUT value=0
+COLOR_PROPERTY object=60 type=3435973836 name=DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=60 type=3435973836 name=CTM value=0
+COLOR_PROPERTY object=60 type=3435973836 name=GAMMA_LUT value=0
+COLOR_PROPERTY object=60 type=3435973836 name=GAMMA_LUT_SIZE value=1024
+COLOR_CRTC id=79 active=0 gamma_size=1024
+COLOR_PROPERTY object=79 type=3435973836 name=NV_CRTC_REGAMMA_TF value=0
+COLOR_PROPERTY object=79 type=3435973836 name=NV_CRTC_REGAMMA_LUT value=0
+COLOR_PROPERTY object=79 type=3435973836 name=NV_CRTC_REGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=79 type=3435973836 name=DEGAMMA_LUT value=0
+COLOR_PROPERTY object=79 type=3435973836 name=DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=79 type=3435973836 name=CTM value=0
+COLOR_PROPERTY object=79 type=3435973836 name=GAMMA_LUT value=0
+COLOR_PROPERTY object=79 type=3435973836 name=GAMMA_LUT_SIZE value=1024
+COLOR_CRTC id=98 active=0 gamma_size=1024
+COLOR_PROPERTY object=98 type=3435973836 name=NV_CRTC_REGAMMA_TF value=0
+COLOR_PROPERTY object=98 type=3435973836 name=NV_CRTC_REGAMMA_LUT value=0
+COLOR_PROPERTY object=98 type=3435973836 name=NV_CRTC_REGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=98 type=3435973836 name=DEGAMMA_LUT value=0
+COLOR_PROPERTY object=98 type=3435973836 name=DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=98 type=3435973836 name=CTM value=0
+COLOR_PROPERTY object=98 type=3435973836 name=GAMMA_LUT value=0
+COLOR_PROPERTY object=98 type=3435973836 name=GAMMA_LUT_SIZE value=1024
+COLOR_CRTC id=117 active=0 gamma_size=1024
+COLOR_PROPERTY object=117 type=3435973836 name=NV_CRTC_REGAMMA_TF value=0
+COLOR_PROPERTY object=117 type=3435973836 name=NV_CRTC_REGAMMA_LUT value=0
+COLOR_PROPERTY object=117 type=3435973836 name=NV_CRTC_REGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=117 type=3435973836 name=DEGAMMA_LUT value=0
+COLOR_PROPERTY object=117 type=3435973836 name=DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=117 type=3435973836 name=CTM value=0
+COLOR_PROPERTY object=117 type=3435973836 name=GAMMA_LUT value=0
+COLOR_PROPERTY object=117 type=3435973836 name=GAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=49 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=49 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=49 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=49 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=49 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=61 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=61 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=61 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=61 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=61 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=68 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=68 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=68 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=68 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=68 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=80 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=80 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=80 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=80 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=80 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=87 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=87 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=87 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=87 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=87 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=99 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=99 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=99 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=99 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=99 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=106 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=106 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=106 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=106 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=106 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=118 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=118 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=118 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=118 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=118 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+[4261136.307]  -> wl_display@1.get_registry(new id wl_registry@2)
+[4261136.320]  -> wl_display@1.sync(new id wl_callback@3)
+[4261136.378] wl_display@1.delete_id(3)
+[4261136.383] wl_registry@2.global(1, "wl_shm", 1)
+[4261136.386] wl_registry@2.global(2, "wl_drm", 2)
+[4261136.390] wl_registry@2.global(3, "zwp_linux_dmabuf_v1", 4)
+[4261136.394] wl_registry@2.global(4, "wl_compositor", 6)
+[4261136.397] wl_registry@2.global(5, "wl_subcompositor", 1)
+[4261136.399] wl_registry@2.global(6, "wl_data_device_manager", 3)
+[4261136.401] wl_registry@2.global(7, "zwlr_gamma_control_manager_v1", 1)
+[4261136.404]  -> wl_registry@2.bind(7, "zwlr_gamma_control_manager_v1", 1, new id [unknown]@4)
+[4261136.406] wl_registry@2.global(8, "zxdg_output_manager_v1", 3)
+[4261136.408] wl_registry@2.global(9, "ext_idle_notifier_v1", 1)
+[4261136.410] wl_registry@2.global(10, "zwp_idle_inhibit_manager_v1", 1)
+[4261136.412] wl_registry@2.global(11, "zwlr_layer_shell_v1", 4)
+[4261136.413] wl_registry@2.global(12, "xdg_wm_base", 2)
+[4261136.415] wl_registry@2.global(13, "zwp_tablet_manager_v2", 1)
+[4261136.416] wl_registry@2.global(14, "org_kde_kwin_server_decoration_manager", 1)
+[4261136.418] wl_registry@2.global(15, "zxdg_decoration_manager_v1", 1)
+[4261136.420] wl_registry@2.global(16, "zwp_relative_pointer_manager_v1", 1)
+[4261136.421] wl_registry@2.global(17, "zwp_pointer_constraints_v1", 1)
+[4261136.423] wl_registry@2.global(18, "wp_presentation", 1)
+[4261136.425] wl_registry@2.global(19, "zwlr_output_manager_v1", 4)
+[4261136.426] wl_registry@2.global(20, "zwlr_output_power_manager_v1", 1)
+[4261136.428] wl_registry@2.global(21, "zwp_input_method_manager_v2", 1)
+[4261136.430] wl_registry@2.global(22, "zwp_text_input_manager_v3", 1)
+[4261136.431] wl_registry@2.global(23, "zwlr_foreign_toplevel_manager_v1", 3)
+[4261136.433] wl_registry@2.global(24, "ext_session_lock_manager_v1", 1)
+[4261136.435] wl_registry@2.global(25, "wp_drm_lease_device_v1", 1)
+[4261136.436] wl_registry@2.global(26, "zwlr_export_dmabuf_manager_v1", 1)
+[4261136.438] wl_registry@2.global(27, "zwlr_screencopy_manager_v1", 3)
+[4261136.439] wl_registry@2.global(28, "zwlr_data_control_manager_v1", 2)
+[4261136.441] wl_registry@2.global(29, "wp_security_context_manager_v1", 1)
+[4261136.443] wl_registry@2.global(30, "wp_viewporter", 1)
+[4261136.444] wl_registry@2.global(31, "wp_single_pixel_buffer_manager_v1", 1)
+[4261136.446] wl_registry@2.global(32, "wp_content_type_manager_v1", 1)
+[4261136.448] wl_registry@2.global(33, "wp_fractional_scale_manager_v1", 1)
+[4261136.449] wl_registry@2.global(34, "zxdg_exporter_v1", 1)
+[4261136.451] wl_registry@2.global(35, "zxdg_importer_v1", 1)
+[4261136.452] wl_registry@2.global(36, "zxdg_exporter_v2", 1)
+[4261136.454] wl_registry@2.global(37, "zxdg_importer_v2", 1)
+[4261136.456] wl_registry@2.global(38, "xdg_activation_v1", 1)
+[4261136.457] wl_registry@2.global(39, "wp_cursor_shape_manager_v1", 1)
+[4261136.459] wl_registry@2.global(40, "zwp_virtual_keyboard_manager_v1", 1)
+[4261136.461] wl_registry@2.global(41, "zwlr_virtual_pointer_manager_v1", 2)
+[4261136.462] wl_registry@2.global(42, "zwlr_input_inhibit_manager_v1", 1)
+[4261136.464] wl_registry@2.global(43, "zwp_keyboard_shortcuts_inhibit_manager_v1", 1)
+[4261136.465] wl_registry@2.global(44, "zwp_pointer_gestures_v1", 3)
+[4261136.467] wl_registry@2.global(45, "wl_seat", 8)
+[4261136.469] wl_registry@2.global(46, "zwp_primary_selection_device_manager_v1", 1)
+[4261136.470] wl_registry@2.global(47, "wl_output", 4)
+registry: adding output 47
+[4261136.473]  -> wl_registry@2.bind(47, "wl_output", 1, new id [unknown]@5)
+[4261136.476]  -> zwlr_gamma_control_manager_v1@4.get_gamma_control(new id zwlr_gamma_control_v1@6, wl_output@5)
+[4261136.477] wl_callback@3.done(7)
+[4261136.480]  -> wl_display@1.sync(new id wl_callback@3)
+[4261136.532] wl_display@1.delete_id(3)
+[4261136.535] zwlr_gamma_control_v1@6.gamma_size(1024)
+[4261136.586] wl_callback@3.done(7)
+calculated sun trajectory: dawn 05:20, sunrise 05:56, sunset 17:39, dusk 18:15
+setting temperature on output '47' to 2501 K
+[4261136.675]  -> zwlr_gamma_control_v1@6.set_gamma(fd 7)
+[4261137.138] zwlr_gamma_control_v1@6.failed()
+gamma control of output 47 failed
+[4261137.144]  -> zwlr_gamma_control_v1@6.destroy()
+setting temperature on output '47' to 2501 K
+00:00:02.150 [INFO] [sway/commands.c:404] After replacement: xwayland disable
+COLOR_FAULT armed guest-only ioctl control
+00:00:02.158 [INFO] [sway/realtime.c:35] Failed to set scheduling priority to 1
+00:00:02.158 [INFO] [sway/server.c:384] Starting backend on wayland display 'wayland-1'
+00:00:02.158 [DEBUG] [wlr] [backend/libinput/backend.c:88] Starting libinput backend
+00:00:02.163 [DEBUG] [wlr] [backend/libinput/events.c:70] Adding Power Button [0:1]
+00:00:02.163 [DEBUG] [sway/input/input-manager.c:234] adding device: '0:1:Power_Button'
+00:00:02.163 [DEBUG] [sway/input/input-manager.c:184] no fallback seat config - creating default
+00:00:02.163 [DEBUG] [sway/config/seat.c:60] Merging on top of existing seat config
+00:00:02.163 [DEBUG] [sway/config/seat.c:83] Config stored for seat seat0
+00:00:02.163 [DEBUG] [sway/input/input-manager.c:636] applying seat config for seat seat0
+00:00:02.163 [DEBUG] [sway/input/seat.c:974] adding device 0:1:Power_Button to seat seat0
+00:00:02.165 [DEBUG] [sway/input/keyboard.c:908] Created keyboard group 0x575d69cf33e0
+00:00:02.165 [DEBUG] [sway/input/keyboard.c:931] Adding keyboard 0:1:Power_Button to group 0x575d69cf33e0
+00:00:02.168 [DEBUG] [wlr] [backend/libinput/events.c:70] Adding AT Translated Set 2 keyboard [1:1]
+00:00:02.168 [DEBUG] [sway/input/input-manager.c:234] adding device: '1:1:AT_Translated_Set_2_keyboard'
+00:00:02.168 [DEBUG] [sway/input/seat.c:974] adding device 1:1:AT_Translated_Set_2_keyboard to seat seat0
+00:00:02.171 [DEBUG] [sway/input/keyboard.c:883] Adding keyboard 1:1:AT_Translated_Set_2_keyboard to group 0x575d69cf33e0
+00:00:02.171 [DEBUG] [wlr] [backend/libinput/events.c:70] Adding VirtualPS/2 VMware VMMouse [2:19]
+00:00:02.171 [DEBUG] [sway/input/input-manager.c:234] adding device: '2:19:VirtualPS/2_VMware_VMMouse'
+00:00:02.171 [DEBUG] [sway/input/seat.c:974] adding device 2:19:VirtualPS/2_VMware_VMMouse to seat seat0
+00:00:02.171 [DEBUG] [sway/input/seat.c:722] Applying input mapping to 2:19:VirtualPS/2_VMware_VMMouse
+00:00:02.171 [DEBUG] [wlr] [backend/libinput/events.c:70] Adding VirtualPS/2 VMware VMMouse [2:19]
+00:00:02.171 [DEBUG] [sway/input/input-manager.c:234] adding device: '2:19:VirtualPS/2_VMware_VMMouse'
+00:00:02.171 [DEBUG] [sway/input/seat.c:974] adding device 2:19:VirtualPS/2_VMware_VMMouse to seat seat0
+00:00:02.171 [DEBUG] [sway/input/seat.c:722] Applying input mapping to 2:19:VirtualPS/2_VMware_VMMouse
+00:00:02.171 [DEBUG] [wlr] [backend/libinput/backend.c:129] libinput successfully initialized
+00:00:02.171 [INFO] [wlr] [backend/drm/drm.c:1547] Scanning DRM connectors on /dev/dri/card0
+00:00:02.173 [INFO] [wlr] [backend/drm/drm.c:1598] Found connector 'DVI-D-1'
+00:00:02.173 [INFO] [wlr] [backend/drm/drm.c:1623] 'DVI-D-1' connected
+00:00:02.173 [DEBUG] [wlr] [backend/drm/drm.c:1418] Current CRTC: 60
+00:00:02.173 [INFO] [wlr] [backend/drm/drm.c:1432] Detected modes:
+00:00:02.173 [INFO] [wlr] [backend/drm/drm.c:1459]   1920x1080 @ 60.000 Hz (preferred)
+00:00:02.173 [INFO] [wlr] [backend/drm/drm.c:1459]   1680x1050 @ 59.954 Hz 
+00:00:02.173 [INFO] [wlr] [backend/drm/drm.c:1459]   1600x900 @ 60.000 Hz 
+00:00:02.173 [INFO] [wlr] [backend/drm/drm.c:1459]   1280x1024 @ 60.020 Hz 
+00:00:02.173 [INFO] [wlr] [backend/drm/drm.c:1459]   1024x768 @ 60.004 Hz 
+00:00:02.173 [INFO] [wlr] [backend/drm/drm.c:1459]   800x600 @ 60.317 Hz 
+00:00:02.173 [INFO] [wlr] [backend/drm/drm.c:1459]   640x480 @ 59.940 Hz 
+00:00:02.173 [INFO] [wlr] [backend/drm/drm.c:1479] Physical size: 250x250
+00:00:02.173 [DEBUG] [wlr] [backend/drm/drm.c:1211] Reallocating CRTCs
+00:00:02.173 [DEBUG] [wlr] [backend/drm/drm.c:1222] State before reallocation:
+00:00:02.173 [DEBUG] [wlr] [backend/drm/drm.c:1236]   'DVI-D-1': crtc=0 status=connected want_crtc=1
+00:00:02.173 [DEBUG] [wlr] [backend/drm/drm.c:1285] State after reallocation:
+00:00:02.173 [DEBUG] [wlr] [backend/drm/drm.c:1289]   'DVI-D-1': crtc=0
+00:00:02.173 [INFO] [wlr] [backend/drm/drm.c:1659] connector DVI-D-1: Requesting modeset
+00:00:02.173 [DEBUG] [sway/desktop/output.c:1019] New output 0x575d69d01390: DVI-D-1 (non-desktop: 0)
+00:00:02.173 [DEBUG] [sway/config/output.c:401] Turning on output DVI-D-1
+00:00:02.173 [DEBUG] [sway/config/output.c:414] Set preferred mode
+00:00:02.173 [DEBUG] [wlr] [types/output/render.c:168] Attaching empty buffer to output for modeset
+00:00:02.173 [DEBUG] [wlr] [types/output/swapchain.c:27] Choosing primary buffer format XR24 (0x34325258) for output 'DVI-D-1'
+00:00:02.173 [DEBUG] [wlr] [types/output/swapchain.c:96] Testing swapchain for output 'DVI-D-1'
+00:00:02.173 [DEBUG] [wlr] [render/swapchain.c:106] Allocating new swapchain buffer
+00:00:02.173 [DEBUG] [wlr] [render/allocator/gbm.c:145] Allocated 1920x1080 GBM buffer with format XR24 (0x34325258), modifier BLOCK_LINEAR_2D,HEIGHT=4,KIND=6,GEN=2,SECTOR=1,COMPRESSION=0 (0x0300000000606014)
+00:00:02.176 [DEBUG] [wlr] [render/gles2/renderer.c:159] Created GL FBO for buffer 1920x1080
+00:00:02.177 [DEBUG] [sway/config/output.c:448] Auto-detected output transform: 0
+00:00:02.177 [DEBUG] [sway/config/output.c:473] Auto-detected output scale: 1.000000
+00:00:02.177 [DEBUG] [sway/config/output.c:520] Committing output DVI-D-1
+00:00:02.177 [DEBUG] [wlr] [types/output/render.c:168] Attaching empty buffer to output for modeset
+00:00:02.177 [INFO] [wlr] [backend/drm/drm.c:782] connector DVI-D-1: Modesetting with 1920x1080 @ 60.000 Hz
+00:00:02.185 [DEBUG] [wlr] [xcursor/wlr_xcursor.c:225] Loaded cursor theme 'default' at size 24 (59 available cursors)
+00:00:02.185 [DEBUG] [wlr] [types/output/render.c:235] Failed to pick output format
+00:00:02.185 [DEBUG] [wlr] [types/output/cursor.c:294] Failed to pick cursor format
+00:00:02.185 [DEBUG] [wlr] [types/output/cursor.c:373] Failed to render cursor buffer
+00:00:02.185 [DEBUG] [wlr] [types/output/cursor.c:458] Falling back to software cursor on output 'DVI-D-1'
+00:00:02.185 [DEBUG] [sway/tree/workspace.c:277] Workspace: Generating new workspace name for output DVI-D-1
+00:00:02.185 [DEBUG] [sway/tree/output.c:127] Creating default workspace 1
+00:00:02.185 [DEBUG] [sway/tree/workspace.c:65] Adding workspace 1 for output DVI-D-1
+00:00:02.185 [DEBUG] [sway/desktop/layer_shell.c:229] Usable area changed, rearranging output
+00:00:02.185 [DEBUG] [sway/tree/arrange.c:263] Usable area for ws: 1920x1080@0,0
+00:00:02.185 [DEBUG] [sway/tree/arrange.c:297] Arranging workspace '1' at 0.000000, 0.000000
+00:00:02.185 [DEBUG] [sway/tree/arrange.c:263] Usable area for ws: 1920x1080@0,0
+00:00:02.185 [DEBUG] [sway/tree/arrange.c:297] Arranging workspace '1' at 0.000000, 0.000000
+00:00:02.185 [DEBUG] [sway/input/seat.c:722] Applying input mapping to 2:19:VirtualPS/2_VMware_VMMouse
+00:00:02.185 [DEBUG] [sway/input/seat.c:722] Applying input mapping to 2:19:VirtualPS/2_VMware_VMMouse
+00:00:02.185 [DEBUG] [sway/desktop/transaction.c:398] Transaction 0x575d69d05430 committing with 2 instructions
+00:00:02.185 [DEBUG] [sway/desktop/transaction.c:294] Applying transaction 0x575d69d05430
+00:00:02.185 [INFO] [wlr] [backend/headless/backend.c:17] Starting headless backend
+00:00:02.185 [INFO] [sway/server.c:396] Running compositor on wayland display 'wayland-1'
+00:00:02.185 [DEBUG] [wlr] [render/swapchain.c:106] Allocating new swapchain buffer
+00:00:02.186 [DEBUG] [wlr] [render/allocator/gbm.c:145] Allocated 1920x1080 GBM buffer with format XR24 (0x34325258), modifier BLOCK_LINEAR_2D,HEIGHT=4,KIND=6,GEN=2,SECTOR=1,COMPRESSION=0 (0x0300000000606014)
+00:00:02.187 [DEBUG] [wlr] [render/gles2/renderer.c:159] Created GL FBO for buffer 1920x1080
+2026-10-06 12:18:02 - [main.c:293] Found config * for output DVI-D-1 (KFB kayfabe 0x00000001)
+00:00:02.188 [DEBUG] [wlr] [types/wlr_compositor.c:692] New wlr_surface 0x575d69c84e50 (res 0x575d69bfdd50)
+00:00:02.188 [DEBUG] [wlr] [types/wlr_layer_shell_v1.c:460] new layer_surface 0x575d69c891e0 (res 0x575d69bfd0f0)
+00:00:02.188 [DEBUG] [sway/desktop/layer_shell.c:646] new layer surface: namespace wallpaper layer 0 anchor 15 size 0x0 margin 0,0,0,0,
+00:00:06.119 [DEBUG] [wlr] [types/wlr_compositor.c:692] New wlr_surface 0x575d69d88790 (res 0x575d69d18410)
+00:00:06.119 [DEBUG] [wlr] [types/xdg_shell/wlr_xdg_surface.c:388] new xdg_surface 0x575d69d642c0 (res 0x575d69d192b0)
+00:00:06.119 [DEBUG] [sway/desktop/xdg_shell.c:530] New xdg_shell toplevel title='gset' app_id='gset'
+00:00:06.289 [DEBUG] [sway/tree/view.c:421] View 0x575d69d88b40 updated CSD to 1
+00:00:06.289 [DEBUG] [sway/tree/arrange.c:263] Usable area for ws: 1920x1080@0,0
+00:00:06.289 [DEBUG] [sway/tree/arrange.c:297] Arranging workspace '1' at 0.000000, 0.000000
+00:00:06.289 [DEBUG] [sway/tree/arrange.c:77] Arranging 0x7ffe2a9d24d0 horizontally
+00:00:06.289 [DEBUG] [sway/desktop/transaction.c:398] Transaction 0x575d69ce71a0 committing with 3 instructions
+00:00:06.489 [DEBUG] [sway/desktop/transaction.c:356] Transaction 0x575d69ce71a0 timed out (1 waiting)
+00:00:06.489 [DEBUG] [sway/desktop/transaction.c:294] Applying transaction 0x575d69ce71a0
+00:00:06.489 [DEBUG] [sway/tree/container.c:1320] Container 0x575d69c86ab0 entered output 0x575d69d021d0
+COLOR_FAULT reject GAMMA_LUT prop=28 flags=256
+00:00:11.412 [DEBUG] [wlr] [backend/drm/atomic.c:73] connector DVI-D-1: Atomic commit failed: Operation not supported
+00:00:11.412 [DEBUG] [wlr] [backend/drm/atomic.c:77] (Atomic commit flags: ATOMIC_TEST_ONLY)
