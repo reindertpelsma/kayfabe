@@ -474,6 +474,7 @@ pub struct HostRm {
     views: [std::sync::atomic::AtomicU64; 3],
     usermode: Result<UsermodeWindow, RmError>,
     classes: Box<dyn HostClasses>,
+    supported_class_ids: Vec<u32>,
     /// `MC_GET_ARCH_INFO` as the host answered it: `(architecture, implementation, revision)`.
     arch_info: (u32, u32, u32),
     /// ★ The host GPU this session is bound to, as the frontend's `CARD_INFO` states it for
@@ -559,6 +560,7 @@ impl HostRm {
             version,
             abi,
             classes,
+            supported_class_ids: Vec::new(),
             armed: Mutex::new(std::collections::BTreeSet::new()),
             arch_info: (0, 0, 0),
             card: CardInfo::default(),
@@ -721,6 +723,7 @@ impl HostRm {
         )?;
         let conn = HostRm {
             classes,
+            supported_class_ids: host_classes,
             arch_info,
             ..conn
         };
@@ -2077,6 +2080,12 @@ impl HostRm {
     #[must_use]
     pub fn arch_info(&self) -> (u32, u32, u32) {
         self.arch_info
+    }
+
+    /// Bounded class list returned by this host's unprivileged GET_CLASSLIST_V2.
+    #[must_use]
+    pub fn supported_class_ids(&self) -> &[u32] {
+        &self.supported_class_ids
     }
 
     /// The host driver version string this session gated on (the driver-version axis).

@@ -328,6 +328,24 @@ ClassC56F channel ff040003 is acknowledged without birth. Its subsequent legacy
 Falcon-context promotion declares VA1203cd000 +4KiB, entryCount0 and engine13;
 it refuses0x56 because no owned twin exists. This is a distinct video-context
 constructor/lifetime gap, not a malformed nine-entry GR request. A newly reached
-0080170f control also refuses; decode it before assigning causality. Next:
+0080170f control also refuses; it is FIFO_SET_CHANNEL_PROPERTIES
+(`ctrl0080fifo.h:219-290`), whose individual payload still needs decoding. Next:
 actual owned unprivileged NVDEC context, independently tested on bare metal
 before enabling its guest path; no unsupported codec work may be completed.
+
+Run21 [fresh watchdog recovery](run21-watchdog-recovery.log) verifies read-only
+disk access and cleanup. The [journal comparison](run21-watchdog-comparison.json)
+retains the independent L reference and pinned Windows driver identity; its outer
+NVCD envelope remains one byte short, so no complete checksum claim is made.
+
+## Native NVDEC context increment (guest path not enabled yet)
+
+HostRing now constructs an actual decoder object on its USER NVDEC channel,
+choosing a class from the generated family set intersected with this host's
+bounded unprivileged class-list response. Object construction performs host
+Falcon allocation/promotion; no guest context address reaches the host.
+Decoder rings refuse every nonempty public submission before PB writes;
+only their private authored FIFO fence can be queued. The native
+`kf-nvdec-context` oracle checks ownership, codec-selector refusal, actual GPU
+fence completion and channel/ring release. Hardware execution pending.
+GPU-free host/channel tests:134 passed; oracle compiles; Clippy new0.
