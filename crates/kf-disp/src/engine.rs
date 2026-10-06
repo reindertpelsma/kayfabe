@@ -42,6 +42,8 @@ pub const CHANNELS: usize = crate::ports::NUM_CHANNELS;
 /// ★ Hostile guest: the most decoded-but-unapplied writes a channel may hold (a 4 KiB ring holds at
 /// most 1023; the rest is a PUT that ignored GET).
 pub const MAX_QUEUE: usize = 4096;
+/// Host-enabled diagnostic ceiling per engine lifetime, including repeated writes.
+pub const MAX_METHOD_TRACE: u32 = 65_536;
 
 /// Where a DMA channel's pushbuffer lives (`INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -481,6 +483,8 @@ pub struct Engine {
     pub exceptions: u64,
     /// Emit [`Effect::Trace`] lines (update arrivals, groups, latches).
     pub trace: bool,
+    method_trace_remaining: u32,
+    method_trace_configured: bool,
     /// ★ D1 (`OWNER_RULINGS.md` §M, 2026-10-04): a TEARING (immediate) flip on an active head that
     /// already presented since the head's last tick waits for the next one, so async flips count
     /// against the cap too. In kayfabe a flip copies a finished buffer, so it never tears; the gate
@@ -506,9 +510,20 @@ impl Engine {
             methods: 0,
             exceptions: 0,
             trace: false,
+            method_trace_remaining: 0,
+            method_trace_configured: false,
             tear_gate: true,
             presented: [false; 8],
             pace: [PaceCounts::default(); 8],
+        }
+    }
+
+    /// Enable a bounded method diagnostic before any guest work. It cannot be replenished
+    /// after a method or update executes, or by freeing/reallocating a channel.
+    pub fn trace_methods(&mut self, budget: u32) {
+        if self.methods == 0 && self.updates == 0 && !self.method_trace_configured {
+            self.method_trace_configured = true;
+            self.method_trace_remaining = budget.min(MAX_METHOD_TRACE);
         }
     }
 
@@ -799,6 +814,13 @@ impl Engine {
                     ),
                 });
                 return any;
+            }
+            if self.method_trace_remaining > 0 {
+                self.method_trace_remaining -= 1;
+                st.effects.push(Effect::Trace(format!(
+                    "METHOD chn={n} kind={:?} method={m:#x} data={:#x} remaining={}",
+                    c.kind, l.write.data, self.method_trace_remaining
+                )));
             }
             if m == update {
                 let ilk = interlock_set(&vocab, c, l.write.data);

@@ -73,6 +73,35 @@ fn pb() -> Option<PbLoc> {
 }
 
 #[test]
+fn method_diagnostic_is_off_by_default_and_cannot_be_replenished() {
+    for budget in [0, 2] {
+        let mut e = engine();
+        e.trace_methods(budget);
+        let n = e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0).unwrap();
+        let mut ring = Ring::new();
+        ring.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), 0)
+            .m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), 0)
+            .m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), 0);
+        let s = e.step(n, &ring.bytes(), ring.put(), &mut all_ok);
+        assert_eq!(
+            s.effects
+                .iter()
+                .filter(|x| matches!(x, Effect::Trace(_)))
+                .count(),
+            budget as usize
+        );
+        assert_eq!(e.methods, 3);
+        assert_eq!(e.method_trace_remaining, 0);
+        e.free(ChannelKind::Window, 0);
+        e.trace_methods(MAX_METHOD_TRACE);
+        assert_eq!(e.method_trace_remaining, 0);
+    }
+    let mut e = engine();
+    e.trace_methods(u32::MAX);
+    assert_eq!(e.method_trace_remaining, MAX_METHOD_TRACE);
+}
+
+#[test]
 fn constructor_probe_never_decodes_arms_or_completes_dma_or_pio() {
     let r = Regs::for_ip("580.159.04", 0x0401_0000).unwrap();
     let mut e = Engine::new_constructor_probe(Vocab::resolve(t(), &classes(), &r).unwrap(), 4, 8);

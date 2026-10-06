@@ -1850,6 +1850,10 @@ impl Device {
         }
         let trace = std::env::var("KF3_DISPLAY_TRACE").is_ok_and(|v| v == "1");
         engine.trace = trace;
+        if std::env::var("KF3_DISPLAY_METHOD_TRACE").is_ok_and(|v| v == "1") {
+            engine.trace_methods(kf_disp::engine::MAX_METHOD_TRACE);
+            eprintln!("kf3: display: bounded METHOD diagnostic enabled (65536 DMA writes maximum)");
+        }
         eprintln!(
             "kf3: display worker up — engine {} heads / {} windows, caps page published",
             dp.map.heads, dp.map.windows
