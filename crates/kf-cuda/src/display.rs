@@ -13,7 +13,8 @@
 //! walk must never wait on a scanout copy.
 
 use crate::driver_unsafe::{
-    CUdeviceptr, CompletionFd, CtxHandle, Cuda, CudaError, Func, PinnedBuf, StreamHandle,
+    CUdeviceptr, CompletionFd, CtxHandle, Cuda, CudaError, EventHandle, Func, PinnedBuf,
+    StreamHandle,
 };
 
 /// ★ The display plane's kernels, hand-written PTX (`cuda/display/kf_scanout.ptx`), JIT-compiled at
@@ -43,6 +44,17 @@ pub static SUM_PTX: &[u8] = include_bytes!("../../../cuda/display/kf_sum.ptx");
 pub const SUM_ENTRY: &str = "kf_sum";
 /// Threads per checksum CTA (one CTA per row).
 pub const SUM_THREADS: u32 = 256;
+
+/// Real SDR colour kernels, generated from the committed CUDA source.
+pub static COLOR_PTX: &[u8] = include_bytes!("../../../cuda/display/kf_color.ptx");
+const COLOR_LUT_BYTES: usize = (4 + 1025) * 8;
+
+/// A bounded source span; the table is copied device-to-device before it is used.
+#[derive(Debug, Clone, Copy)]
+pub struct ColorLut {
+    pub src: u64,
+    pub interpolate: bool,
+}
 
 /// ★ An imported display slot — a VRAM frame object kayfabe allocated itself (never guest
 /// memory), named by its index here; its device pointer and length never leave [`DisplayGpu`].
@@ -138,6 +150,13 @@ pub struct DisplayGpu {
     /// Its row sums: the device buffer (zeroed before each launch), the page-locked copy the worker
     /// reads after the completion, and the rows both hold. Grown, never shrunk.
     sums: Option<(CUdeviceptr, PinnedBuf, usize)>,
+    color: Result<[Func; 3], String>,
+    color_frame: Option<(CUdeviceptr, usize)>,
+    /// Fixed slots: 32 windows plus one output LUT. Never sized from a guest word.
+    color_luts: Option<CUdeviceptr>,
+    color_status: Option<(CUdeviceptr, PinnedBuf)>,
+    color_event: EventHandle,
+    color_recorded: bool,
 }
 
 /// ★ One page-locked host frame buffer the display console reads (M2). Its address crosses to the
@@ -327,6 +346,19 @@ impl DisplayGpu {
             .module_load(&sum_ptx)
             .and_then(|m| cu.module_function(m, SUM_ENTRY))
             .map_err(|e| format!("the checksum kernel did not load: {e}"));
+        let mut color_ptx = COLOR_PTX.to_vec();
+        color_ptx.push(0);
+        let color = cu
+            .module_load(&color_ptx)
+            .and_then(|m| {
+                Ok([
+                    cu.module_function(m, "kf_color_compose")?,
+                    cu.module_function(m, "kf_color_output")?,
+                    cu.module_function(m, "kf_color_validate")?,
+                ])
+            })
+            .map_err(|e| format!("the SDR colour kernels did not load: {e}"));
+        let color_event = cu.event_create()?;
         Ok(DisplayGpu {
             cu,
             ctx,
@@ -340,6 +372,12 @@ impl DisplayGpu {
             slots: Vec::new(),
             sum,
             sums: None,
+            color,
+            color_frame: None,
+            color_luts: None,
+            color_status: None,
+            color_event,
+            color_recorded: false,
         })
     }
 
@@ -560,6 +598,204 @@ impl DisplayGpu {
         let n = usize::try_from(l.extent).map_err(|_| refused(what, format!("{l:?}")))?;
         let src = self.at(l.src, n, what)?;
         self.launch_compose(src, l, w, h, what)
+    }
+
+    /// Begin a colour composition, retaining FP16 values in an FP32 container until output.
+    /// All operations are on the display worker's stream, away from the vCPU.
+    pub fn color_begin(&mut self, w: u32, h: u32) -> Result<(), CudaError> {
+        self.color_recorded = false;
+        let what = "DisplayGpu::color_begin";
+        self.color.as_ref().map_err(|e| refused(what, e.clone()))?;
+        self.compose_begin(w, h)?;
+        let n = w as usize * h as usize * 16;
+        if self.color_frame.is_none_or(|(_, len)| len < n) {
+            if let Some((p, _)) = self.color_frame.take() {
+                self.cu.ctx_synchronize()?;
+                self.cu.mem_free(p);
+            }
+            self.color_frame = Some((self.cu.mem_alloc_zeroed(n, what)?, n));
+        }
+        if self.color_luts.is_none() {
+            self.color_luts = Some(self.cu.mem_alloc_zeroed(33 * COLOR_LUT_BYTES, what)?);
+        }
+        if self.color_status.is_none() {
+            let dev = self.cu.mem_alloc_zeroed(4, what)?;
+            match self.cu.pinned_alloc(4, what) {
+                Ok(host) => self.color_status = Some((dev, host)),
+                Err(e) => {
+                    self.cu.mem_free(dev);
+                    return Err(e);
+                }
+            }
+        }
+        let (frame, _) = self
+            .color_frame
+            .ok_or_else(|| refused(what, "missing colour frame".into()))?;
+        let (status, _) = self
+            .color_status
+            .as_ref()
+            .ok_or_else(|| refused(what, "missing colour status".into()))?;
+        self.cu.memset_d8_async(self.stream, *status, 0, 4, what)?;
+        self.cu.memset_d8_async(self.stream, frame, 0, n, what)
+    }
+
+    fn color_snapshot(
+        &self,
+        slot: u32,
+        lut: Option<ColorLut>,
+        input: bool,
+    ) -> Result<CUdeviceptr, CudaError> {
+        let what = "DisplayGpu::color_snapshot";
+        let Some(lut) = lut else {
+            return Ok(0);
+        };
+        if slot > 32 {
+            return Err(refused(what, "LUT slot outside fixed allocation".into()));
+        }
+        let src = self.at(lut.src, COLOR_LUT_BYTES, what)?;
+        let base = self
+            .color_luts
+            .ok_or_else(|| refused(what, "no LUT allocation".into()))?;
+        let dst = base + u64::from(slot) * COLOR_LUT_BYTES as u64;
+        self.cu
+            .memcpy_d2d_async(self.stream, dst, src, COLOR_LUT_BYTES, what)?;
+        if input {
+            let f = self.color.as_ref().map_err(|e| refused(what, e.clone()))?[2];
+            let status = self
+                .color_status
+                .as_ref()
+                .ok_or_else(|| refused(what, "no validation status".into()))?
+                .0;
+            let mut args = vec![dst.to_le_bytes().to_vec(), status.to_le_bytes().to_vec()];
+            self.cu
+                .launch_args(self.stream, f, 5, 256, 0, &mut args, what)?;
+        }
+        Ok(dst)
+    }
+
+    /// Snapshot and compose one RGB8888 window using its FP16 input table.
+    pub fn color_layer(
+        &self,
+        slot: u32,
+        l: &ComposeLayer,
+        lut: Option<ColorLut>,
+        w: u32,
+        h: u32,
+    ) -> Result<(), CudaError> {
+        let what = "DisplayGpu::color_layer";
+        l.check(w, h).map_err(|e| refused(what, e))?;
+        if slot >= 32 || l.flags & 8 != 0 {
+            return Err(refused(
+                what,
+                "window slot or XOR outside SDR subset".into(),
+            ));
+        }
+        let src = self.at(
+            l.src,
+            usize::try_from(l.extent).map_err(|_| refused(what, "layer extent".into()))?,
+            what,
+        )?;
+        let bytes = u64::from(w) * u64::from(h) * 16;
+        let (dst, len) = self
+            .color_frame
+            .ok_or_else(|| refused(what, "no colour frame".into()))?;
+        if bytes > len as u64 {
+            return Err(refused(what, "colour frame is too small".into()));
+        }
+        let p = self.color_snapshot(slot, lut, true)?;
+        let f = self.color.as_ref().map_err(|e| refused(what, e.clone()))?[0];
+        let u = |v: u32| v.to_le_bytes().to_vec();
+        let i = |v: i32| v.to_le_bytes().to_vec();
+        let mut args = vec![
+            src.to_le_bytes().to_vec(),
+            dst.to_le_bytes().to_vec(),
+            u(u32::from(l.block_linear)),
+            u(l.pitch),
+            u(l.block_height_log2),
+            u(l.x0_bytes),
+            u(l.y0),
+            u(l.width),
+            u(l.ox),
+            u(l.oy),
+            u(w),
+            u(h),
+            u(l.flags),
+            i(l.a_s),
+            i(l.b_s),
+            i(l.a_d),
+            i(l.b_d),
+            p.to_le_bytes().to_vec(),
+            u(u32::from(lut.is_some_and(|v| v.interpolate))),
+        ];
+        self.cu
+            .launch_args(self.stream, f, l.rows, 256, 0, &mut args, what)
+    }
+
+    /// Apply the authored CSC coefficients and the fixed-point output table to the full head.
+    /// The validation result is copied back on this same stream, before the frame's signal.
+    pub fn color_output(
+        &mut self,
+        w: u32,
+        h: u32,
+        lut: Option<ColorLut>,
+        matrix: &[i32; 12],
+    ) -> Result<(), CudaError> {
+        let what = "DisplayGpu::color_output";
+        let (src, slen) = self
+            .color_frame
+            .ok_or_else(|| refused(what, "no colour frame".into()))?;
+        let (dst, dlen) = self
+            .staging
+            .ok_or_else(|| refused(what, "no output frame".into()))?;
+        let pixels = u64::from(w) * u64::from(h);
+        if w == 0 || h == 0 || pixels * 16 > slen as u64 || pixels * 4 > dlen as u64 {
+            return Err(refused(what, "colour output exceeds frame".into()));
+        }
+        let p = self.color_snapshot(32, lut, false)?;
+        let f = self.color.as_ref().map_err(|e| refused(what, e.clone()))?[1];
+        let mut args = vec![
+            src.to_le_bytes().to_vec(),
+            dst.to_le_bytes().to_vec(),
+            w.to_le_bytes().to_vec(),
+            p.to_le_bytes().to_vec(),
+            u32::from(lut.is_some_and(|v| v.interpolate))
+                .to_le_bytes()
+                .to_vec(),
+            matrix.iter().flat_map(|v| v.to_le_bytes()).collect(),
+        ];
+        self.cu
+            .launch_args(self.stream, f, h, 256, 0, &mut args, what)?;
+        let (dev, host) = self
+            .color_status
+            .as_ref()
+            .ok_or_else(|| refused(what, "no validation status".into()))?;
+        self.cu
+            .memcpy_d2h_async(self.stream, host, 0, *dev, 4, what)?;
+        self.cu.event_record(self.color_event, self.stream)?;
+        self.color_recorded = true;
+        Ok(())
+    }
+
+    /// Read only after the actual GPU completion signal. Never exposes LUT bytes to the CPU.
+    pub fn color_verdict(&self) -> Result<(), String> {
+        if !self.color_recorded
+            || !self
+                .cu
+                .event_query(self.color_event)
+                .map_err(|e| e.to_string())?
+        {
+            return Err("colour validation has not completed on the GPU".into());
+        }
+        let (_, host) = self
+            .color_status
+            .as_ref()
+            .ok_or("no colour validation result")?;
+        let b = host.read(0, 4);
+        if b == [0, 0, 0, 0] {
+            Ok(())
+        } else {
+            Err("input LUT has non-SDR FP16 entries".into())
+        }
     }
 
     /// ★ End the composition: the staging frame is copied into `dst` (tight, `w * 4` bytes a row),
@@ -928,11 +1164,21 @@ impl Drop for DisplayGpu {
     fn drop(&mut self) {
         // the stream drains (every queued host signal with it) before the context goes
         self.cu.stream_destroy(self.stream);
+        self.cu.event_destroy(self.color_event);
         if let Some((p, _)) = self.staging.take() {
             self.cu.mem_free(p);
         }
         // the checksum's page-locked half is the context's, reclaimed with it
         if let Some((p, _, _)) = self.sums.take() {
+            self.cu.mem_free(p);
+        }
+        if let Some((p, _)) = self.color_frame.take() {
+            self.cu.mem_free(p);
+        }
+        if let Some(p) = self.color_luts.take() {
+            self.cu.mem_free(p);
+        }
+        if let Some((p, _)) = self.color_status.take() {
             self.cu.mem_free(p);
         }
         self.cu.ctx_destroy(self.ctx);

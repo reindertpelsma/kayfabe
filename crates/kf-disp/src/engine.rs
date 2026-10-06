@@ -601,6 +601,21 @@ impl Engine {
         self.chans.get(chn as usize)?.as_ref().map(|c| c.life)
     }
 
+    /// The owning client of a live channel, for bounded colour DMA resolution.
+    #[must_use]
+    pub fn client(&self, chn: u32) -> Option<u32> {
+        self.chans.get(chn as usize)?.as_ref().map(|c| c.client)
+    }
+
+    /// A GPU scanout failure stops the display engine without publishing successful
+    /// notifiers, semaphore releases, or GETs. Reset/free may discard the stopped channels.
+    pub fn halt_scanout(&mut self) {
+        for c in self.chans.iter_mut().flatten() {
+            c.halted = true;
+            c.queue.clear();
+        }
+    }
+
     /// ★ Feed channel `chn` the pushbuffer bytes `pb` (its whole ring) up to `put`, and run every
     /// channel whose update became ready. `acquired` answers an acquire against guest memory.
     pub fn step(

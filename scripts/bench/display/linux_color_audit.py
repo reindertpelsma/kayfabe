@@ -26,6 +26,7 @@ def main():
     p.add_argument('--revision', required=True)
     p.add_argument('--port', type=int, default=2244)
     p.add_argument('--reject-gamma', action='store_true', help='Guest-only KMS failure control')
+    p.add_argument('--sdr-color', action='store_true', help='Enable the real bounded SDR GPU colour path')
     a = p.parse_args()
     if len(a.revision) != 40 or not all(x in '0123456789abcdef' for x in a.revision):
         p.error('A full product revision is required')
@@ -90,12 +91,14 @@ def main():
            '-msg', 'timestamp=on']
     env = {k: v for k, v in os.environ.items() if not k.startswith('KF3_')}
     env['KF3_DISPLAY_METHOD_TRACE'] = '1'
+    if a.sdr_color:
+        env['KF3_DISPLAY_SDR_COLOR'] = '1'
     sha = hashlib.sha256(a.qemu.read_bytes()).hexdigest()
     (a.out / 'manifest.json').write_text(json.dumps(dict(
         source_revision=a.revision, qemu_sha256=sha, command=cmd,
         harness_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         guest_gamma_fault=a.reject_gamma,
-        flags={'KF3_DISPLAY_METHOD_TRACE': '1'}, scope='AD104 / Linux580.159.04'), indent=2)+'\n')
+        flags={k:v for k,v in env.items() if k.startswith('KF3_')}, scope='AD104 / Linux580.159.04'), indent=2)+'\n')
     mark('start')
     with open(a.out / 'qemu.log', 'wb') as log:
         vm = subprocess.Popen(cmd, env=env, stdout=log, stderr=subprocess.STDOUT)

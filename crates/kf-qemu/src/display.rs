@@ -1235,6 +1235,9 @@ pub struct DisplayPlane {
     /// The window-class methods a scanout reads (`None`: the family's windows name surfaces by
     /// address — no console yet, M5).
     scan: Option<ScanVocab>,
+    /// Bounded SDR colour implementation, enabled for verification independently of
+    /// constructor probes. Those probes still refuse all display methods.
+    sdr_color: Option<(&'static kf_disp::class::ClassTable, u32, u32)>,
     /// ★ Display step 3d: the cursor methods the composition's top layer reads (`None`: the
     /// family's table lacks one — its cursor is not composed).
     cursor_vocab: Option<kf_disp::engine::CursorVocab>,
@@ -1450,6 +1453,11 @@ impl DisplayPlane {
             console,
             broker,
             scan,
+            sdr_color: (std::env::var("KF3_DISPLAY_SDR_COLOR").as_deref() == Ok("1")).then_some((
+                t,
+                classes.window,
+                classes.core,
+            )),
             cursor_vocab,
             ui_request: AtomicU64::new(0),
             formats,
@@ -2285,7 +2293,7 @@ impl Device {
                 scan.serve_now(dp);
             }
             if scan.want && scan.inflight.is_none() {
-                scan.start(&mut io, shown.as_ref(), cursor.as_ref(), false);
+                scan.start(&mut io, &engine, shown.as_ref(), cursor.as_ref(), false);
             } else if scan.nonflip.due(
                 console_tick,
                 watched,
@@ -2293,7 +2301,13 @@ impl Device {
                 scan.inflight.is_none(),
                 scan.want || scan.barrier > scan.started,
             ) {
-                scan.start(&mut io, shown.as_ref(), cursor.as_ref(), true);
+                scan.start(&mut io, &engine, shown.as_ref(), cursor.as_ref(), true);
+            }
+            if scan.failed {
+                // No synthetic success after rejected colour state or work sent to the GPU.
+                // Clear bounded pending effects and stop decoding, keeping published GETs.
+                queue.clear();
+                engine.halt_scanout();
             }
             // 7. completions, IN ORDER — each after the state it reports and the copy it follows
             while queue.front().is_some_and(|q| q.need <= scan.done) {
@@ -2624,7 +2638,7 @@ struct Queued {
     item: Item,
 }
 
-/// How long a scanout copy may take before the flips behind it stop waiting for it.
+/// How long a scanout copy may take before the display stops without forged completion.
 const STUCK_COPY: Duration = Duration::from_secs(2);
 
 /// A frame the console shows up to 1080p fits here; a larger mode grows the slot once, to the max.
@@ -2643,6 +2657,8 @@ fn cursor_composed(mode: CursorMode, want: Option<&CursorWant>) -> bool {
 /// plane's own stream; its completion is the `cuLaunchHostFunc` signal queued after it.
 #[derive(Default)]
 struct ScanState {
+    /// A failed GPU/colour operation cannot release its queued successful completions.
+    failed: bool,
     /// Copies started and completed; a flip of the console window makes every completion after it
     /// wait for copy `started + 1` — the first one that starts after the flip latched.
     started: u64,
@@ -2717,6 +2733,7 @@ enum Phase {
 /// frame. Only those backings are published as holding the frame.
 #[derive(Debug, Clone, Copy)]
 struct Inflight {
+    color: bool,
     n: u64,
     phase: Phase,
     slot: usize,
@@ -2969,6 +2986,19 @@ impl ScanState {
             return;
         };
         let dp = io.dp;
+        if f.color {
+            let verdict = io
+                .gpu
+                .as_ref()
+                .ok_or_else(|| "colour GPU disappeared".to_owned())
+                .and_then(DisplayGpu::color_verdict);
+            if let Err(e) = verdict {
+                self.refuse(dp, &e);
+                self.failed = true;
+                self.serve_now(dp);
+                return;
+            }
+        }
         let digest = ScanState::digest_of(io, &f);
         if f.phase == Phase::Check {
             if self.want || self.barrier > self.started {
@@ -3085,15 +3115,15 @@ impl ScanState {
         ))
     }
 
-    /// ⊘ A copy whose completion never came (a CUDA fault loses the host signal): after
-    /// [`STUCK_COPY`] the flips behind it complete anyway — a display that stops is worse than a
-    /// console that misses a frame. The slot is not published.
+    /// A lost GPU completion stops the display. Neither the slot nor successful guest
+    /// completion is published; a timeout is not evidence that GPU work completed.
     fn give_up_if_stuck(&mut self, dp: &DisplayPlane) {
-        if let Some(Inflight { n, t0: t, req, .. }) = self.inflight
+        if let Some(Inflight { n, t0: t, .. }) = self.inflight
             && t.elapsed() > STUCK_COPY
         {
             self.inflight = None;
-            self.finish(dp, n, req);
+            self.failed = true;
+            self.serve_now(dp);
             self.refuse(dp, &format!("copy {n} did not complete in {STUCK_COPY:?}"));
         }
     }
@@ -3222,10 +3252,15 @@ impl ScanState {
     fn start(
         &mut self,
         io: &mut Io<'_>,
+        engine: &Engine,
         shown: Option<&Shown>,
         cursor: Option<&kf_disp::engine::CursorScan>,
         check: bool,
     ) {
+        if self.failed {
+            self.serve_now(io.dp);
+            return;
+        }
         if !check {
             self.want = false;
         }
@@ -3241,6 +3276,12 @@ impl ScanState {
             self.finish(dp, n, req);
             return;
         };
+        // A preserving free retains the already transformed console frame; it must not
+        // read a freed LUT/handle or compose the old windows without their colour program.
+        if dp.sdr_color.is_some() && matches!(shown, Shown::Preserved(..)) {
+            self.finish(dp, n, req);
+            return;
+        }
         if let Some(Err(e)) = &self.bl_ok {
             let e = format!("the compose kernel failed its self-test ({e})");
             self.refuse(dp, &e);
@@ -3263,6 +3304,59 @@ impl ScanState {
         for e in &planned.refused {
             self.refuse(dp, e);
         }
+        let color = if let (Some((t, win, core)), Shown::Armed(comp)) = (dp.sdr_color, shown) {
+            let program = (|| -> Result<_, String> {
+                if !planned.refused.is_empty() {
+                    return Err("colour frame has refused windows".into());
+                }
+                let resolve_lut =
+                    |io: &mut Io<'_>, client, chn, lut: Option<kf_disp::color::Lut>| {
+                        lut.map(|l| {
+                            let dma = match l.binding {
+                                kf_disp::color::Binding::Dma { handle, .. } => {
+                                    Some(io.resolve(client, handle, chn)?)
+                                }
+                                kf_disp::color::Binding::Vidmem(_) => None,
+                            };
+                            Ok::<_, String>(kf_cuda::display::ColorLut {
+                                src: l.binding.span(dma.as_ref()).map_err(str::to_owned)?,
+                                interpolate: l.interpolate,
+                            })
+                        })
+                        .transpose()
+                    };
+                let mut inputs = Vec::new();
+                for so in &comp.layers {
+                    let lut = kf_disp::color::input(t, win, |m| {
+                        engine.armed(ChannelKind::Window, so.window, m).unwrap_or(0)
+                    })
+                    .map_err(str::to_owned)?;
+                    inputs.push(resolve_lut(io, so.client, so.chn, lut)?);
+                }
+                let out = kf_disp::color::output(t, core, comp.head, |m| {
+                    engine.armed(ChannelKind::Core, 0, m).unwrap_or(0)
+                })
+                .map_err(str::to_owned)?;
+                let lut = resolve_lut(
+                    io,
+                    engine.client(0).ok_or("no core colour client")?,
+                    0,
+                    out.lut,
+                )?;
+                Ok((inputs, lut, out.matrix))
+            })();
+            match program {
+                Ok(p) => Some(p),
+                Err(e) => {
+                    self.refuse(dp, &format!("SDR colour program: {e}"));
+                    self.failed = true;
+                    self.serve_now(dp);
+                    return;
+                }
+            }
+        } else {
+            None
+        };
         let mut layers = planned.layers.clone();
         // ★ §O: with a cursor-capable broker the guest's cursor image is read (a GPU copy into a
         // buffer kf owns) and posted to the relay; in hover it is then left out of the frame —
@@ -3294,18 +3388,37 @@ impl ScanState {
             self.finish(dp, n, req);
             return;
         };
-        let composed = gpu
-            .compose_begin(w, h)
-            .map_err(|e| format!("composition {w}x{h}: {e}"))
-            .and_then(|()| {
-                layers.iter().try_for_each(|l| {
-                    gpu.compose_layer(&compose_layer(l), w, h)
-                        .map_err(|e| format!("window {}: {e}", l.window))
-                })
-            });
+        let composed =
+            if let Some((inputs, out, matrix)) = &color {
+                gpu.color_begin(w, h)
+                    .and_then(|()| {
+                        planned.layers.iter().zip(inputs).enumerate().try_for_each(
+                            |(i, (l, lut))| {
+                                gpu.color_layer(i as u32, &compose_layer(l), *lut, w, h)
+                            },
+                        )
+                    })
+                    .and_then(|()| gpu.color_output(w, h, *out, matrix))
+                    .and_then(|()| {
+                        layers[planned.layers.len()..]
+                            .iter()
+                            .try_for_each(|l| gpu.compose_layer(&compose_layer(l), w, h))
+                    })
+                    .map_err(|e| format!("SDR composition {w}x{h}: {e}"))
+            } else {
+                gpu.compose_begin(w, h)
+                    .map_err(|e| format!("composition {w}x{h}: {e}"))
+                    .and_then(|()| {
+                        layers.iter().try_for_each(|l| {
+                            gpu.compose_layer(&compose_layer(l), w, h)
+                                .map_err(|e| format!("window {}: {e}", l.window))
+                        })
+                    })
+            };
         if let Err(e) = composed {
             self.refuse(dp, &e);
-            self.finish(dp, n, req);
+            self.failed = true;
+            self.serve_now(dp);
             return;
         }
         // ★ §8.16: the change detector, queued behind the composition (a refusal costs only the
@@ -3314,6 +3427,7 @@ impl ScanState {
         // Preserve the bounded window plans, without the independently managed cursor.
         self.copied(shown, &planned, (w, h));
         let f = Inflight {
+            color: color.is_some(),
             n,
             phase: Phase::Check,
             slot: 0,
@@ -3331,7 +3445,8 @@ impl ScanState {
                 Ok(()) => self.inflight = Some(f),
                 Err(e) => {
                     self.refuse(dp, &format!("the completion signal: {e}"));
-                    self.finish(dp, n, req);
+                    self.failed = true;
+                    self.serve_now(dp);
                 }
             }
             return;
@@ -3386,18 +3501,34 @@ impl ScanState {
     /// chose into a free slot, then the completion signal; [`ScanState::completed`] publishes it.
     fn send(&mut self, io: &mut Io<'_>, f: &Inflight, p: &SendPlan) {
         let dp = io.dp;
-        let (n, req, (w, h)) = (f.n, f.req, f.wh);
+        let (w, h) = f.wh;
         let plan = p.plan;
         let ring = dp.console.ring().clone();
-        if plan.none() {
-            // nobody can be shown this frame: the flips behind it still complete
-            self.finish(dp, n, req);
-            return;
-        }
         let Some(gpu) = io.gpu.as_mut() else {
-            self.finish(dp, n, req);
+            self.failed = true;
+            self.serve_now(dp);
             return;
         };
+        if plan.none() {
+            // Composition already reached the GPU. Even without a consumer, wait
+            // for its real signal before completing the flip.
+            match gpu.compose_signal() {
+                Ok(()) => {
+                    self.inflight = Some(Inflight {
+                        phase: Phase::Send,
+                        d2h: false,
+                        vram: None,
+                        ..*f
+                    })
+                }
+                Err(e) => {
+                    self.refuse(dp, &format!("unpublished frame signal: {e}"));
+                    self.failed = true;
+                    self.serve_now(dp);
+                }
+            }
+            return;
+        }
         // the pack takes the eligible free slot the broker gave back longest ago (a RELEASE is
         // not GPU-idle); otherwise any free slot
         let picked = if plan.pack {
@@ -3411,7 +3542,8 @@ impl ScanState {
                 dp,
                 "no free frame slot (the frame ring's cap argument broke)",
             );
-            self.finish(dp, n, req);
+            self.failed = true;
+            self.serve_now(dp);
             return;
         };
         let need = w as usize * h as usize * 4;
@@ -3442,14 +3574,16 @@ impl ScanState {
                 }
                 Err(e) => {
                     self.refuse(dp, &format!("a {cap:#x}-byte console frame: {e}"));
-                    self.finish(dp, n, req);
+                    self.failed = true;
+                    self.serve_now(dp);
                     return;
                 }
             }
         }
         let frame = if plan.d2h {
             let Some(f) = self.frames[slot].as_ref() else {
-                self.finish(dp, n, req);
+                self.failed = true;
+                self.serve_now(dp);
                 return;
             };
             Some(f)
@@ -3499,7 +3633,8 @@ impl ScanState {
             }
             Err(e) => {
                 self.refuse(dp, &e);
-                self.finish(dp, n, req);
+                self.failed = true;
+                self.serve_now(dp);
             }
         }
     }
