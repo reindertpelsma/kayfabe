@@ -46,7 +46,7 @@ traps, worker ticks, CPU timer emulation or forged GPU completion are added.
 The host/guest `Nv01TimerMap` layouts and query parameters are compiled separately at
 each exact tag. Unknown or incompatible layouts fail closed. The query resolves the GPU-die
 axis; the native host alloc/map permission supplies the hardware capability gate. Available
-layouts currently match across every measured tag; ABI coverage is not Windows hardware coverage.
+layouts currently match across every compiled tag; ABI coverage is not Windows hardware coverage.
 
 `TimerWindow` owns its RM object, mmap and unmap cookie. On ordinary drop it unmaps the CPU view,
 releases RM's view, then frees its object; failed opens release resources. The QEMU Device, like
