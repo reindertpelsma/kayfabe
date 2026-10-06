@@ -28,12 +28,17 @@ def main():
     a = p.parse_args()
     if len(a.revision) != 40 or not all(x in '0123456789abcdef' for x in a.revision):
         p.error('A full product revision is required')
+    here = Path(__file__).resolve().parent
+    if subprocess.run(['git', '-C', str(here), 'cat-file', '-e', a.revision+'^{commit}'],
+                      capture_output=True).returncode:
+        p.error('Product revision must name an existing source commit')
+    if a.qemu.parent.name != a.revision[:8]:
+        p.error('QEMU must be the immutable binary for the named revision')
     if subprocess.run(['pgrep', '-x', 'qemu-system-x86'], capture_output=True).returncode == 0:
         p.error('Another VM is running; hardware work is serial')
     lock = open('/tmp/kayfabe-fastguest.lock', 'w')
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     a.out.mkdir(mode=0o700, parents=True, exist_ok=False)
-    here = Path(__file__).resolve().parent
     ssh = ['ssh', '-i', str(a.key), '-p', str(a.port), '-o', 'BatchMode=yes',
            '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null',
            '-o', 'LogLevel=ERROR', '-o', 'ConnectTimeout=5', 'ubuntu@127.0.0.1']
@@ -87,6 +92,7 @@ def main():
     sha = hashlib.sha256(a.qemu.read_bytes()).hexdigest()
     (a.out / 'manifest.json').write_text(json.dumps(dict(
         source_revision=a.revision, qemu_sha256=sha, command=cmd,
+        harness_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         flags={'KF3_DISPLAY_METHOD_TRACE': '1'}, scope='AD104 / Linux580.159.04'), indent=2)+'\n')
     mark('start')
     with open(a.out / 'qemu.log', 'wb') as log:
@@ -100,7 +106,7 @@ def main():
             else: raise TimeoutError('Guest SSH')
             guest('driver', 'sudo rmmod nvidia_drm nvidia_modeset 2>/dev/null || true; '
                   'sudo modprobe nvidia-drm modeset=1 fbdev=1; '
-                  'cat /sys/module/nvidia_drm/parameters/modeset; '
+                  'sudo cat /sys/module/nvidia_drm/parameters/modeset; '
                   'nvidia-smi --query-gpu=name,driver_version --format=csv,noheader; '
                   'modetest -M nvidia-drm -c -p', timeout=120)
             sources = ['color_properties.c', '../gfxset/src/wl_scene.c']
@@ -123,24 +129,30 @@ def main():
                   "nohup /home/ubuntu/color/wl_scene 60 >/tmp/kfcolor-weston-scene.log 2>&1 &'")
             time.sleep(5)
             shot('weston-scene')
-            guest('weston-result', 'cat /tmp/kfcolor-weston-scene.log; '
+            result = guest('weston-result', 'cat /tmp/kfcolor-weston-scene.log; '
                   'sudo cat /tmp/kfcolor-weston.log; ~/color/color_properties /dev/dri/card0')
+            if b'WL_SCENE_READY' not in result.stdout or b'GL renderer: NVIDIA' not in result.stdout:
+                raise RuntimeError('Weston GPU scene did not become ready')
             guest('weston-stop', 'sudo pkill -x wl_scene || true; sudo pkill -x weston || true')
             time.sleep(3)
             guest('sway-start', "mkdir -p ~/color/runtime; chmod 700 ~/color/runtime; "
                   "printf 'output * bg #203040 solid_color\\ndefault_border none\\n"
                   "seat seat0 hide_cursor 100\\nxwayland disable\\n' > ~/color/sway.conf; "
-                  "sudo sh -c 'SEATD_VTBOUND=0 nohup seatd -s /run/kfcolor-seatd.sock -g video "
+                  "sudo systemctl stop seatd; "
+                  "sudo sh -c 'SEATD_VTBOUND=0 nohup seatd -g video "
                   ">/tmp/kfcolor-seatd.log 2>&1 &' ; sleep 1; "
-                  "XDG_RUNTIME_DIR=/home/ubuntu/color/runtime LIBSEAT_BACKEND=seatd SEATD_SOCK=/run/kfcolor-seatd.sock "
+                  "XDG_RUNTIME_DIR=/home/ubuntu/color/runtime LIBSEAT_BACKEND=seatd SEATD_SOCK=/run/seatd.sock "
                   "nohup sway --unsupported-gpu -d -D noscanout -c ~/color/sway.conf >/tmp/kfcolor-sway.log 2>&1 &")
             time.sleep(6)
             wl = 'XDG_RUNTIME_DIR=/home/ubuntu/color/runtime WAYLAND_DISPLAY=wayland-1 '
             guest('sway-scene', wl+'nohup ~/color/wl_scene 180 >/tmp/kfcolor-sway-scene.log 2>&1 &')
             time.sleep(5)
             shot('sway-before')
-            guest('sway-before', 'cat /tmp/kfcolor-sway-scene.log; '
-                  '~/color/color_properties /dev/dri/card0; tail -n 120 /tmp/kfcolor-sway.log')
+            result = guest('sway-before', 'cat /tmp/kfcolor-sway-scene.log; '
+                  '~/color/color_properties /dev/dri/card0; tail -n 120 /tmp/kfcolor-sway.log; '
+                  'sudo cat /tmp/kfcolor-seatd.log; pgrep -x sway')
+            if b'WL_SCENE_READY' not in result.stdout:
+                raise RuntimeError('Sway scene did not become ready; gamma experiment is invalid')
             guest('warm-start', wl+'WAYLAND_DEBUG=1 nohup wlsunset -t 2500 -T 2501 -l 0 -L 0 '
                   '>/tmp/kfcolor-wlsunset.log 2>&1 &')
             time.sleep(5)
