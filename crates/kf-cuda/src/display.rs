@@ -966,12 +966,12 @@ impl DisplayGpu {
         if b == [0, 0, 0, 0] {
             Ok(())
         } else {
-            Err(if b[0] & 4 != 0 {
-                "CSC program produced nonfinite FP16"
+            Err(if b[0] & 1 != 0 {
+                "input LUT has non-SDR FP16 entries"
             } else if b[0] & 2 != 0 {
                 "TMO LUT has unsupported VSS header or unequal intensity channels"
             } else {
-                "input LUT has non-SDR FP16 entries"
+                "CSC program produced nonfinite FP16"
             }
             .into())
         }
