@@ -1,6 +1,6 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-**STATUS: LIVE, 2026-10-05 — §0.0 below is the resume point.** ⊘ *The 2026-09-30 paragraph that follows is history:* **(2026-09-30)** Master = the code of **`afb552ea`** (`v3-mc23`: CUDA dynamic parallelism +
+**STATUS: LIVE, 2026-10-06 — §0.0 below is the resume point.** ⊘ *The 2026-09-30 paragraph that follows is history:* **(2026-09-30)** Master = the code of **`afb552ea`** (`v3-mc23`: CUDA dynamic parallelism +
 the guest-RAM-object race fix + everything below), which passed the full merge bar (§0 first entry), plus
 evidence and documentation. The single entry point for resuming work without any chat history. Decisions
 live in `docs/OWNER_RULINGS.md` (doorbell refinements of 2026-09-30 in §D); per-topic detail in the design
@@ -9,7 +9,37 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
-### 0.0 ★ RESUME HERE — 2026-10-05 (supersedes every older entry in §0 where they differ)
+### 0.0 ★ RESUME HERE — 2026-10-06
+
+The owner resumed work and requested review/repair of Antigravity's changes.
+Branch `codex/antigravity-review-20261006`, product repair `e294fbe1`, source
+`4cb9e609` after comment/CI corrections, removes fabricated Windows control
+success, restores isolated default-off LUT probes and removes the incomplete
+CPU-reference-only ILUT path. Both original histories are backed up on GitHub.
+The generated method vocabulary is retained and reproduced from OGKM.
+
+Validation so far: 2,262 v3 tests at `e294fbe1`, Clippy with zero new warnings,
+format check, all 14 fast CI gates, and exact `4cb9e609` real GPU gates 9/9
+(11/11 USER births) plus the Rust/C QEMU 10.2.4 rebuild on the borrowed RTX 4070.
+No promotion or full merge-bar/application claim. Master/v3 remain `906a76a4`.
+See [review and evidence](../traces/antigravity_review_20261006/README.md).
+
+The controlled O Windows run `boundary-kayfabe-10` completed: Code 43 /
+`nvidia-smi` exit 9 remains, but 455 RPCs (N: 365) now reach the probe's explicit
+display-method refusals. The fresh dump's first changed assertion moved from
+`0x16e9967` to `0x1a103e6`; the first 17 of 24 complete saved assertions match N.
+Outer NVCD remains one byte short, so its checksum cannot be validated. The guest
+shut down cleanly, supervisor exit zero, RTX 4070 healthy, no VM or NBD attachment
+remains. Sanitized evidence is in the review directory; raw private controller
+evidence is under `/data/kayfabe-runtime/windows-boundary-20261005/`.
+Next: the independently reviewed production LUT/color plan, actual GPU processing
+and completion/lifetime tests. Constructor declarations alone are insufficient.
+No rentals were created. Preserve overlays until fresh evidence is durable.
+The previous session's Windows priority and constructor analysis are recorded in
+`codex/windows-boundary-comparison-20261005` at `fba14de6`, including
+`docs/handoff/2026-10-05-WINDOWS-PAUSE.md`; the owner's resume revokes that pause.
+
+### 0.0 Historical resumption — 2026-10-05 (superseded by the 2026-10-06 entry above)
 
 **Experimental integration, not promoted:** `codex/p1p2-integration-2026-10-05`,
 worktree `/tmp/kayfabe-p1p2-integration-20261005`, combines master `906a76a4`,

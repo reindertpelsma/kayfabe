@@ -1,0 +1,100 @@
+--- a/scripts/bench/windows/pc_boundary_experiment.py
++++ b/scripts/bench/windows/pc_boundary_experiment.py
+@@ -27,6 +27,7 @@
+          'KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE')
+ ILUT_FLAG = 'KF3_DISPLAY_ILUT_CONSTRUCTOR_PROBE'
+ TMO_SURFACE_FLAG = 'KF3_DISPLAY_TMO_SURFACE_CONSTRUCTOR_PROBE'
++OLUT_FLAG = 'KF3_DISPLAY_OLUT_CONSTRUCTOR_PROBE'
+ 
+ 
+ def digest(path):
+@@ -58,6 +59,7 @@
+     p.add_argument('--gsp-observer', action='store_true')
+     p.add_argument('--ilut-probe', action='store_true')
+     p.add_argument('--tmo-surface-probe', action='store_true')
++    p.add_argument('--olut-probe', action='store_true')
+     a = p.parse_args()
+     if os.geteuid() or not 60 <= a.max_seconds <= 1800:
+         p.error('Require root and a 60..1800 second runtime bound')
+@@ -66,7 +68,7 @@
+         p.error('Require full source revisions for product and QEMU artifact')
+     if a.gsp_observer and (a.arm != 'vfio' or not a.no_mmio_trace):
+         p.error('Narrow GSP observer requires VFIO without generic MMIO tracing')
+-    if (a.ilut_probe or a.tmo_surface_probe) and a.arm != 'kayfabe':
++    if (a.ilut_probe or a.tmo_surface_probe or a.olut_probe) and a.arm != 'kayfabe':
+         p.error('Display construction probes require a Kayfabe arm')
+     os.umask(0o077)
+     name = f'boundary-{a.arm}-{a.run}'
+@@ -132,7 +134,7 @@
+                 cmd += ['-trace', f'events={work}/trace-events,file={work}/mmio.log']
+             state = {'schema_version': 1, 'before': before, 'qemu_command': cmd}
+         env = dict(os.environ)
+-        for flag in (*FLAGS, ILUT_FLAG, TMO_SURFACE_FLAG):
++        for flag in (*FLAGS, ILUT_FLAG, TMO_SURFACE_FLAG, OLUT_FLAG):
+             env.pop(flag, None)
+         env['KF3_RPC_TRACE'] = '1'
+         if a.arm == 'kayfabe':
+@@ -141,6 +143,8 @@
+                 env[ILUT_FLAG] = '1'
+             if a.tmo_surface_probe:
+                 env[TMO_SURFACE_FLAG] = '1'
++            if a.olut_probe:
++                env[OLUT_FLAG] = '1'
+         meta = dict(schema=1, arm=a.arm, run=a.run, revision=a.product_revision,
+                     qemu_artifact_revision=artifact, runner_sha256=digest(Path(__file__)),
+                     gsp_observer=a.gsp_observer,
+@@ -148,7 +152,7 @@
+                     qemu_sha256=digest(qemu),
+                     initial_uefi_vars_sha256=digest(work/'OVMF_VARS.fd'),
+                     firmware_code_sha256=digest(Path('/usr/share/OVMF/OVMF_CODE_4M.fd')),
+-                    flags={flag: env.get(flag) for flag in (*FLAGS, ILUT_FLAG, TMO_SURFACE_FLAG)},
++                    flags={flag: env.get(flag) for flag in (*FLAGS, ILUT_FLAG, TMO_SURFACE_FLAG, OLUT_FLAG)},
+                     mmio_trace=a.arm == 'vfio' and not a.no_mmio_trace,
+                     mmio_read_coverage='not traced; capability page snapshot only',
+                     time_utc=datetime.datetime.now(datetime.timezone.utc).isoformat())
+--- a/scripts/bench/windows/run_pc_boundary_series.py
++++ b/scripts/bench/windows/run_pc_boundary_series.py
+@@ -32,7 +32,7 @@
+ 
+ def guest(work, script):
+     encoded = base64.b64encode(script.encode('utf-16-le')).decode()
+-    return remote(['python3', REMOTE+'/boundary-tools/qmp.py', work+'/qga.sock',
++    return remote(['python3', REMOTE+'/review-tools-20261006/qmp.py', work+'/qga.sock',
+                    'qga-exec', r'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe', '-NoProfile', '-NonInteractive',
+                    '-EncodedCommand', encoded], timeout=150)
+ 
+@@ -58,6 +58,7 @@
+     parser.add_argument('--gsp-observer', action='store_true')
+     parser.add_argument('--ilut-probe', action='store_true')
+     parser.add_argument('--tmo-surface-probe', action='store_true')
++    parser.add_argument('--olut-probe', action='store_true')
+     args = parser.parse_args()
+     ROOT.mkdir(parents=True, exist_ok=True, mode=0o700)
+     script = (HERE/'boundary_status.ps1').read_text()
+@@ -83,13 +84,15 @@
+                 extra += ['--ilut-probe']
+             if args.tmo_surface_probe and arm == 'kayfabe':
+                 extra += ['--tmo-surface-probe']
++            if args.olut_probe and arm == 'kayfabe':
++                extra += ['--olut-probe']
+             remote(['systemd-run', '--unit='+unit, '--property=RuntimeMaxSec=900',
+                     '--property=KillMode=mixed', '--property=TimeoutStopSec=180',
+-                    '/usr/bin/python3', '-u', REMOTE+'/boundary-tools/pc_boundary_experiment.py',
++                    '/usr/bin/python3', '-u', REMOTE+'/review-tools-20261006/pc_boundary_experiment.py',
+                     '--arm', arm, '--run', number, '--no-mmio-trace']+extra)
+             deadline = time.monotonic()+300
+             while True:
+-                ready = remote(['python3', REMOTE+'/boundary-tools/qmp.py', work+'/qga.sock',
++                ready = remote(['python3', REMOTE+'/review-tools-20261006/qmp.py', work+'/qga.sock',
+                                 'qga-ping'], timeout=20, check=False)
+                 if ready.returncode == 0:
+                     break
+@@ -117,7 +120,7 @@
+                 previous = outcome
+                 observation += 1
+                 time.sleep(10)
+-            capture = remote(['python3', REMOTE+'/boundary-tools/capture_display_caps.py', work])
++            capture = remote(['python3', REMOTE+'/review-tools-20261006/capture_display_caps.py', work])
+             (local/'capture.stdout').write_text(capture.stdout)
+             log(name+' status='+str(status['nvidia_smi']['exit_code'])+' caps='+capture.stdout.strip())
+             caps = json.loads(capture.stdout)

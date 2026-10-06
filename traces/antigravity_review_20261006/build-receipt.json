@@ -1,0 +1,16 @@
+{
+  "source_revision": "4cb9e6098e44570b9a28df54a0f98109d1df9734",
+  "tracked_tree_clean": true,
+  "qemu_version": "10.2.4",
+  "qemu_sha256": "3cbd67edc2a9d07331bebfbad8c032ddfc3c41741f4bd27737ffc9e7674f1854",
+  "rust_archive_sha256": "be093e2091ee67793b396e9529d3c396d67b20ec4ee81f450bdd0db652fa3312",
+  "configure_flags": "--target-list=x86_64-softmmu --disable-docs --disable-tools --disable-guest-agent --disable-werror --enable-slirp --enable-vnc --enable-pixman --disable-gtk --disable-sdl --disable-curses --disable-libssh --disable-vde --enable-tpm --without-default-features --enable-kvm --enable-system",
+  "device_source_sha256": {
+    "kf3.h": "31b8361ee7f4a9c8010d81f8f0f2e8e2a63afff0fe34444bad0336c746c626a7",
+    "kf3_guest_ram.h": "6a4f6cecffcabe979837bf8d630647891adeca3cd9e2c044027438b8881da248",
+    "kf3_gop.h": "d499ed57ddecf161bb6137fa4650ac500a7bad26c1df5e5a19b3d5e148556238",
+    "kf3.c": "b3f539f8db667bb01b6b7215385cc4ead4b1c5cba66f6ae4e1898562bddd39e6"
+  },
+  "observer_patch_sha256": "f3f8d86c0a622cd1a8ef87f1daa1b7f1a64c29520622e5642086d72c68fb3e2c",
+  "observer_enabled_in_windows_run": false
+}

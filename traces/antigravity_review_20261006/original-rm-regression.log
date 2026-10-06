@@ -1,0 +1,211 @@
+
+running 1 test
+test display::tests::unsupported_windows_controls_never_get_a_success_reply ... FAILED
+
+failures:
+
+---- display::tests::unsupported_windows_controls_never_get_a_success_reply stdout ----
+kf-rm: display: Windows hack answering 0x0073013d
+
+thread 'display::tests::unsupported_windows_controls_never_get_a_success_reply' (565225) panicked at crates/kf-rm/src/display.rs:1137:17:
+0x0073013d, flags=0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    display::tests::unsupported_windows_controls_never_get_a_success_reply
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 63 filtered out; finished in 0.00s
+
+   Compiling kf-util v0.1.0 (/var/lib/kf-windows-20261005/kayfabe-review-mutant-20261006/crates/kf-util)
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1150:5
+     |
+1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1432:5
+     |
+1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-util/src/lockwitness.rs:193:5
+    |
+193 |     pub fn is_vcpu() -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+   Compiling kf-arch v0.1.0 (/var/lib/kf-windows-20261005/kayfabe-review-mutant-20261006/crates/kf-arch)
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:814:5
+    |
+814 | /     fn on_read(
+815 | |         &self,
+816 | |         _model: &dyn GspModel,
+817 | |         _bar: u8,
+...   |
+820 | |         _state: &ArchBootState,
+821 | |     ) -> Option<u64> {
+    | |____________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:943:5
+    |
+943 |     fn libos_region_layout(&self) -> LibosRegionLayout;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+   Compiling kf-abi v0.1.0 (/var/lib/kf-windows-20261005/kayfabe-review-mutant-20261006/crates/kf-abi)
+   Compiling kf-trace v0.1.0 (/var/lib/kf-windows-20261005/kayfabe-review-mutant-20261006/crates/kf-trace)
+warning: `kf-arch` (lib) generated 2 warnings
+warning: `kf-util` (lib) generated 3 warnings
+warning: missing documentation for a constant
+ --> crates/kf-abi/src/timer.rs:4:1
+  |
+4 | pub const REGISTER_OFFSET: u32 =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/timer.rs:10:5
+   |
+10 |     pub register_bytes: u64,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/timer.rs:11:5
+   |
+11 |     pub time_low: u64,
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/timer.rs:12:5
+   |
+12 |     pub time_high: u64,
+   |     ^^^^^^^^^^^^^^^^^^
+
+   Compiling kf-gsp v0.1.0 (/var/lib/kf-windows-20261005/kayfabe-review-mutant-20261006/crates/kf-gsp)
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:2510:5
+     |
+2510 |     pub fn release_held(&mut self, ram: &mut dyn GuestRam) -> Result<usize, GspFault> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:2628:5
+     |
+2628 | /     pub fn post_event(
+2629 | |         &mut self,
+2630 | |         ram: &mut dyn GuestRam,
+2631 | |         rpc: &OutgoingRpc,
+2632 | |     ) -> Result<(), GspFault> {
+     | |_____________________________^
+
+   Compiling kf-chip v0.1.0 (/var/lib/kf-windows-20261005/kayfabe-review-mutant-20261006/crates/kf-chip)
+warning: `kf-gsp` (lib) generated 2 warnings
+warning: `kf-abi` (lib) generated 4 warnings
+   Compiling kf-disp v0.1.0 (/var/lib/kf-windows-20261005/kayfabe-review-mutant-20261006/crates/kf-disp)
+warning: missing documentation for a function
+   --> crates/kf-disp/src/caps.rs:363:1
+    |
+363 | / pub fn page(
+364 | |     t: &ClassTable,
+365 | |     r: &Regs,
+366 | |     caps: u32,
+367 | |     heads: u32,
+368 | |     windows: u32,
+369 | | ) -> Result<CapsPage, Missing> {
+    | |______________________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a struct field
+    --> crates/kf-disp/src/engine.rs:1340:5
+     |
+1340 |     pub ilut_dma: u32,
+     |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+    --> crates/kf-disp/src/engine.rs:1341:5
+     |
+1341 |     pub ilut_offset: u32,
+     |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+    --> crates/kf-disp/src/engine.rs:1342:5
+     |
+1342 |     pub ilut_control: u32,
+     |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+    --> crates/kf-disp/src/engine.rs:1343:5
+     |
+1343 |     pub ilut_winim_hi: u32,
+     |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+    --> crates/kf-disp/src/engine.rs:1344:5
+     |
+1344 |     pub ilut_winim_lo: u32,
+     |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates/kf-disp/src/scanout.rs:371:1
+    |
+371 | pub struct IlutPlan {
+    | ^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-disp` (lib) generated 7 warnings
+   Compiling kf-rm v0.1.0 (/var/lib/kf-windows-20261005/kayfabe-review-mutant-20261006/crates/kf-rm)
+warning: unused import: `kf_abi::submit as s`
+   --> crates/kf-rm/src/authored.rs:452:9
+    |
+452 |     use kf_abi::submit as s;
+    |         ^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u8>::fetch_update`: renamed to `try_update` for consistency
+  --> crates/kf-rm/src/sw_runlist_probe.rs:90:18
+   |
+90 |                 .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+   |                  ^^^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+   |
+90 -                 .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+90 +                 .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+   |
+
+warning: missing documentation for a function
+  --> crates/kf-rm/src/rpc.rs:84:1
+   |
+84 | pub fn name_of(function: u32) -> Option<&'static str> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a constant
+   --> crates/kf-rm/src/rpc.rs:135:1
+    |
+135 | pub const CONTROLS: [(u32, ControlDisposition); 33] = [
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-rm/src/rpc.rs:201:1
+    |
+201 | pub fn control_disposition(cmd: u32) -> ControlDisposition {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-rm` (lib test) generated 5 warnings (run `cargo fix --lib -p kf-rm --tests` to apply 2 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.27s
+     Running unittests src/lib.rs (/var/lib/kf-windows-20261005/review-mutant-target-20261006/debug/deps/kf_rm-d91ab4e3e88e13fc)
+error: test failed, to rerun pass `-p kf-rm --lib`
