@@ -49,3 +49,9 @@ establish Windows' minimum requirements or general LUT equivalence.
 
 A separate guest-only fault control now tests compositor behavior when KMS
 actually refuses a nonzero gamma update; that run remains in progress.
+
+Fault-control run C was invalid: no rejection marker appeared and the nonidentity
+KMS blob was installed (`run-c-inactive-fault.log`). libdrm calls its own
+`drmIoctl` directly, so the first interposer did not affect it. The revised
+control hooks libc `ioctl` and emits an explicit armed/rejection marker;
+the runner requires that rejection marker for a valid failure-control result.

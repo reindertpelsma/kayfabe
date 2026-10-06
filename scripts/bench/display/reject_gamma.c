@@ -6,6 +6,7 @@
 #include <dlfcn.h>
 #include <errno.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 #include <xf86drm.h>
@@ -29,12 +30,22 @@ static uint32_t gamma_property(int fd)
     return id;
 }
 
-int drmIoctl(int fd, unsigned long request, void *arg)
+static int (*next_ioctl)(int, unsigned long, ...);
+
+__attribute__((constructor)) static void arm(void)
 {
-    static int (*next)(int, unsigned long, void *);
+    next_ioctl = dlsym(RTLD_NEXT, "ioctl");
+    fprintf(stderr, "COLOR_FAULT armed guest-only ioctl control\n");
+}
+
+int ioctl(int fd, unsigned long request, ...)
+{
+    va_list ap;
+    va_start(ap, request);
+    void *arg = va_arg(ap, void *);
+    va_end(ap);
     static unsigned logs;
-    if (!next) next = dlsym(RTLD_NEXT, "drmIoctl");
-    if (!next) { errno = ENOSYS; return -1; }
+    if (!next_ioctl) { errno = ENOSYS; return -1; }
     if (request == DRM_IOCTL_MODE_ATOMIC && arg) {
         const struct drm_mode_atomic *a = arg;
         if (a->count_objs <= 256 && a->count_props_ptr && a->props_ptr && a->prop_values_ptr) {
@@ -46,8 +57,10 @@ int drmIoctl(int fd, unsigned long request, void *arg)
                 if (counts[i] > 256 || k + counts[i] > 4096) break;
                 for (uint32_t j = 0; j < counts[i]; j++, k++) {
                     if (gamma && props[k] == gamma && values[k]) {
-                        if (logs++ < 8)
+                        if (logs < 8) {
+                            logs++;
                             fprintf(stderr, "COLOR_FAULT reject GAMMA_LUT prop=%u flags=%u\n", gamma, a->flags);
+                        }
                         errno = EOPNOTSUPP;
                         return -1;
                     }
@@ -55,5 +68,5 @@ int drmIoctl(int fd, unsigned long request, void *arg)
             }
         }
     }
-    return next(fd, request, arg);
+    return next_ioctl(fd, request, arg);
 }

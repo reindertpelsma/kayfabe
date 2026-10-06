@@ -161,13 +161,16 @@ def main():
                   '>/tmp/kfcolor-wlsunset.log 2>&1 &')
             time.sleep(5)
             shot('sway-warm')
-            guest('sway-warm', '~/color/color_properties /dev/dri/card0; '
+            result = guest('sway-warm', '~/color/color_properties /dev/dri/card0; '
                   'cat /tmp/kfcolor-wlsunset.log; tail -n 100 /tmp/kfcolor-sway.log')
+            if a.reject_gamma and b'COLOR_FAULT reject GAMMA_LUT' not in result.stdout:
+                raise RuntimeError('KMS failure control was not exercised; result is invalid')
             guest('warm-stop', 'pkill -x wlsunset || true')
             time.sleep(3)
             shot('sway-restored')
             guest('sway-restored', '~/color/color_properties /dev/dri/card0; '
-                  'cat /tmp/kfcolor-sway-scene.log; tail -n 80 /tmp/kfcolor-sway.log')
+                  'cat /tmp/kfcolor-sway-scene.log; tail -n 80 /tmp/kfcolor-sway.log; '
+                  'pgrep -x sway; pgrep -x wl_scene')
         finally:
             try:
                 guest('dmesg-after', 'sudo dmesg', check=False)
