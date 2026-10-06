@@ -53,7 +53,8 @@ impl CapsPage {
 }
 
 /// Capabilities for the opt-in SDR path: one DIRECT10 table per stage,
-/// surface loading and no active TMO. Sizes are implementation limits, not board facts.
+/// surface loading and one bounded linear TMO with no chroma correction.
+/// Sizes are implementation limits, not board facts.
 /// Physical-address families omit legacy OLUT capability fields; no other
 /// family's field is substituted for them.
 pub fn sdr_page(
@@ -109,6 +110,39 @@ pub fn sdr_page(
             if let Some((_, v)) = p.words.iter_mut().find(|(at, _)| *at == off) {
                 *v = word;
             } else if word != 0 {
+                p.words.push((off, word));
+            }
+        }
+    }
+    for i in 0..windows {
+        for (register, values) in [
+            ("PRECOMP_WIN_PIPE_HDR_CAPA", vec![("TMO_PRESENT", 1)]),
+            (
+                "PRECOMP_WIN_PIPE_HDR_CAPD",
+                vec![("TMO_LOGSZ", 10), ("TMO_LOGNR", 0), ("TMO_SFCLOAD", 1)],
+            ),
+        ] {
+            let off = t
+                .a(caps, register, i)
+                .filter(|n| *n % 4 == 0 && (*n as usize) < PAGE)
+                .ok_or_else(|| Missing(format!("NV{caps:04X}_{register}({i})")))?;
+            let mut word = p.word(off);
+            for (suffix, value) in values {
+                let name = format!("{register}_{suffix}");
+                let f = t.f(caps, &name).ok_or_else(|| Missing(name.clone()))?;
+                if f.0 >= 32 || f.1 > f.0 || u64::from(value) >= (1_u64 << (f.0 - f.1 + 1)) {
+                    return Err(Missing(format!("{name} value bound")));
+                }
+                if suffix.ends_with("PRESENT") || suffix.ends_with("SFCLOAD") {
+                    t.v(caps, &format!("{name}_TRUE"))
+                        .filter(|v| *v == value)
+                        .ok_or_else(|| Missing(name.clone()))?;
+                }
+                word = put(word, f, value);
+            }
+            if let Some((_, v)) = p.words.iter_mut().find(|(at, _)| *at == off) {
+                *v = word;
+            } else {
                 p.words.push((off, word));
             }
         }
@@ -398,7 +432,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn sdr_caps_declare_real_table_limits_without_tmo_in_every_cell() {
+    fn sdr_caps_declare_real_table_limits_with_tmo_in_every_cell() {
         for version in ["580.65.06", "580.159.04"] {
             let t = crate::class::for_version(version).unwrap();
             for row in kf_chip::display::ALL {
@@ -424,7 +458,7 @@ mod tests {
                             a,
                             t.f(c, "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT").unwrap()
                         ),
-                        0
+                        1
                     );
                 }
                 if t.f(c, "POSTCOMP_HEAD_HDR_CAPB_OLUT_SFCLOAD").is_some() {

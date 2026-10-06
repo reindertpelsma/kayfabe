@@ -855,14 +855,14 @@ impl LatchedDmas {
 /// A resolved colour binding belongs to one armed channel incarnation. Unlike the
 /// framebuffer cache, its token also names the immutable GPU snapshot of the LUT.
 struct ColorDmas {
-    slots: [Option<(ColorKey, kf_cuda::display::ColorLut)>; 33],
+    slots: [Option<(ColorKey, kf_cuda::display::ColorLut)>; 65],
     next: u64,
 }
 
 impl Default for ColorDmas {
     fn default() -> Self {
         Self {
-            slots: [None; 33],
+            slots: [None; 65],
             next: 0,
         }
     }
@@ -875,6 +875,11 @@ impl ColorDmas {
         if let Some(s) = self.slots.get_mut(slot) {
             *s = None;
         }
+    }
+
+    fn forget_window(&mut self, window: usize) {
+        self.forget(window);
+        self.forget(32 + window);
     }
 
     fn resolve(
@@ -2091,9 +2096,9 @@ impl Device {
                         }
                         if kind == ChannelKind::Window {
                             scan.latched.forget(instance);
-                            scan.colors.forget(instance as usize);
+                            scan.colors.forget_window(instance as usize);
                         } else if kind == ChannelKind::Core {
-                            scan.colors.forget(32);
+                            scan.colors.forget(64);
                         }
                         if let Some(chn) = engine.alloc(kind, instance, client, life, loc, offset) {
                             let base = dp.map.user_base(kind, instance);
@@ -2118,9 +2123,9 @@ impl Device {
                         held.channel_freed(preserve, scan.last_plan.as_ref());
                         if kind == ChannelKind::Window {
                             scan.latched.forget(instance);
-                            scan.colors.forget(instance as usize);
+                            scan.colors.forget_window(instance as usize);
                         } else if kind == ChannelKind::Core {
-                            scan.colors.forget(32);
+                            scan.colors.forget(64);
                         }
                         engine.free(kind, instance);
                         self.display_chan_status(kind, instance, None);
@@ -2341,12 +2346,12 @@ impl Device {
                     // Output colour belongs to the core update, not a window flip.
                     scan.barrier = scan.started + 1;
                     scan.want = true;
-                    scan.colors.forget(32);
+                    scan.colors.forget(64);
                 }
                 if let Effect::Latched { window } = &e {
                     // ★ the window's ARMED state changed: its next copy resolves it afresh
                     scan.latched.forget(*window);
-                    scan.colors.forget(*window as usize);
+                    scan.colors.forget_window(*window as usize);
                     if let Some(Shown::Armed(c)) = &shown
                         && c.layers.iter().any(|l| l.window == *window)
                     {
@@ -3421,14 +3426,46 @@ impl ScanState {
                     let life = engine
                         .generation(so.chn)
                         .ok_or("no colour window incarnation")?;
-                    inputs.push(self.colors.resolve(
+                    let pipeline = kf_disp::color::pipeline(
+                        t,
+                        win,
+                        |m| engine.armed(ChannelKind::Window, so.window, m).unwrap_or(0),
+                        engine
+                            .armed_inline(so.window)
+                            .ok_or("missing armed inline tables")?,
+                    )
+                    .map_err(str::to_owned)?;
+                    let tmo = self.colors.resolve(
+                        32 + so.window as usize,
+                        so.client,
+                        so.chn,
+                        life,
+                        pipeline.tmo,
+                        |handle| io.resolve(so.client, handle, so.chn),
+                    )?;
+                    let program = kf_cuda::display::ColorPipeline {
+                        matrices: pipeline.matrices,
+                        segments: std::array::from_fn(|i| {
+                            pipeline.inline[i]
+                                .as_ref()
+                                .map_or([0; 64], |p| p.segments.map(|v| u32::from(v.unwrap_or(0))))
+                        }),
+                        entries: std::array::from_fn(|i| {
+                            pipeline.inline[i]
+                                .as_ref()
+                                .map_or([0; 1025], |p| p.entries.map(|v| u32::from(v.unwrap_or(0))))
+                        }),
+                        enable: pipeline.inline.each_ref().map(Option::is_some),
+                    };
+                    let input = self.colors.resolve(
                         so.window as usize,
                         so.client,
                         so.chn,
                         life,
                         lut,
                         |handle| io.resolve(so.client, handle, so.chn),
-                    )?);
+                    )?;
+                    inputs.push((input, tmo, program));
                 }
                 let out = kf_disp::color::output(t, core, comp.head, |m| {
                     engine.armed(ChannelKind::Core, 0, m).unwrap_or(0)
@@ -3438,7 +3475,7 @@ impl ScanState {
                 let life = engine.generation(0).ok_or("no core colour incarnation")?;
                 let lut = self
                     .colors
-                    .resolve(32, client, 0, life, out.lut, |handle| {
+                    .resolve(64, client, 0, life, out.lut, |handle| {
                         io.resolve(client, handle, 0)
                     })?;
                 Ok((inputs, lut, out.matrix))
@@ -3486,30 +3523,41 @@ impl ScanState {
             self.finish(dp, n, req);
             return;
         };
-        let composed = if let Some((inputs, out, matrix)) = &color {
-            gpu.color_begin(w, h)
-                .and_then(|()| {
-                    planned.layers.iter().zip(inputs).try_for_each(|(l, lut)| {
-                        gpu.color_layer(l.window, &compose_layer(l), *lut, w, h)
+        let composed =
+            if let Some((inputs, out, matrix)) = &color {
+                gpu.color_begin(w, h)
+                    .and_then(|()| {
+                        planned.layers.iter().zip(inputs).try_for_each(
+                            |(l, (lut, tmo, program))| {
+                                gpu.color_pipeline_layer(
+                                    l.window,
+                                    &compose_layer(l),
+                                    *lut,
+                                    *tmo,
+                                    Some(program),
+                                    w,
+                                    h,
+                                )
+                            },
+                        )
                     })
-                })
-                .and_then(|()| gpu.color_output(w, h, *out, matrix))
-                .and_then(|()| {
-                    layers[planned.layers.len()..]
-                        .iter()
-                        .try_for_each(|l| gpu.compose_layer(&compose_layer(l), w, h))
-                })
-                .map_err(|e| format!("SDR composition {w}x{h}: {e}"))
-        } else {
-            gpu.compose_begin(w, h)
-                .map_err(|e| format!("composition {w}x{h}: {e}"))
-                .and_then(|()| {
-                    layers.iter().try_for_each(|l| {
-                        gpu.compose_layer(&compose_layer(l), w, h)
-                            .map_err(|e| format!("window {}: {e}", l.window))
+                    .and_then(|()| gpu.color_output(w, h, *out, matrix))
+                    .and_then(|()| {
+                        layers[planned.layers.len()..]
+                            .iter()
+                            .try_for_each(|l| gpu.compose_layer(&compose_layer(l), w, h))
                     })
-                })
-        };
+                    .map_err(|e| format!("SDR composition {w}x{h}: {e}"))
+            } else {
+                gpu.compose_begin(w, h)
+                    .map_err(|e| format!("composition {w}x{h}: {e}"))
+                    .and_then(|()| {
+                        layers.iter().try_for_each(|l| {
+                            gpu.compose_layer(&compose_layer(l), w, h)
+                                .map_err(|e| format!("window {}: {e}", l.window))
+                        })
+                    })
+            };
         if let Err(e) = composed {
             self.refuse(dp, &e);
             self.failed = true;

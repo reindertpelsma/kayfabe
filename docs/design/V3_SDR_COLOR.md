@@ -4,7 +4,13 @@
 `codex/sdr-lut-20261006`, opt-in `KF3_DISPLAY_SDR_COLOR=1`; not promoted to master.
 The Linux result below is a real GPU transform, not a constructor capability probe.
 
-## Implemented subset
+**Implementation continuation, 2026-10-06:** the owner requested real TMO and
+its capability declaration. [TMO work under test](V3_TMO_COLOR.md) supersedes
+the TMO/active-input-CSC exclusions below for the new opt-in implementation.
+Its hardware qualification is pending; the previously verified SDR result
+remains attached to product `2aa8b92d`.
+
+## SDR subset at product `2aa8b92d`
 
 RGB8888 windows, identity FMT, disabled input CSC and TMO, unmirrored DIRECT10
 FP16 ILUT (four header entries plus 1025 entries), FP16 blend, OCSC0 matrix,

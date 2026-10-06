@@ -1059,3 +1059,48 @@ fn a_group_parked_on_a_head_that_goes_idle_latches() {
     assert!(e.waiting(1) && e.acquire_pending());
     assert_eq!(latched(&e.poll_acquires(&mut all_ok)), vec![0]);
 }
+
+#[test]
+fn indexed_color_tables_latch_all_entries_and_reset_with_channel_lifetime() {
+    let mut e = engine();
+    let n = e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0).unwrap();
+    let entry = m(WIN, "SET_CSC0LUT_ENTRY");
+    let idx = fl(WIN, "SET_CSC0LUT_ENTRY_IDX");
+    let value = fl(WIN, "SET_CSC0LUT_ENTRY_VALUE");
+    let mut ring = Ring::new();
+    ring.m(entry, put(put(0, idx, 0), value, 12))
+        .m(entry, put(put(0, idx, 1), value, 20));
+    e.step(n, &ring.bytes(), ring.put(), &mut all_ok);
+    assert_eq!(e.armed_inline(0).unwrap()[0].entries[0], None);
+    ring.m(m(WIN, "UPDATE"), 0);
+    e.step(n, &ring.bytes(), ring.put(), &mut all_ok);
+    assert_eq!(
+        e.armed_inline(0).unwrap()[0].entries[..2],
+        [Some(12), Some(20)]
+    );
+    ring.m(entry, put(put(0, idx, 0), value, 30));
+    e.step(n, &ring.bytes(), ring.put(), &mut all_ok);
+    assert_eq!(e.armed_inline(0).unwrap()[0].entries[0], Some(12));
+    e.free(ChannelKind::Window, 0);
+    e.alloc(ChannelKind::Window, 0, CLIENT, 2, pb(), 0).unwrap();
+    assert_eq!(e.armed_inline(0).unwrap()[0].entries[0], None);
+}
+
+#[test]
+fn indexed_color_table_overflow_stops_before_update() {
+    let mut e = engine();
+    let n = e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0).unwrap();
+    let mut ring = Ring::new();
+    ring.m(
+        m(WIN, "SET_CSC1LUT_ENTRY"),
+        put(0, fl(WIN, "SET_CSC1LUT_ENTRY_IDX"), 1025),
+    )
+    .m(m(WIN, "UPDATE"), 0);
+    let step = e.step(n, &ring.bytes(), ring.put(), &mut all_ok);
+    assert!(
+        step.effects
+            .iter()
+            .any(|e| matches!(e, Effect::Exception { .. }))
+    );
+    assert_eq!(e.updates, 0);
+}

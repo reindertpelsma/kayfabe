@@ -200,6 +200,7 @@ pub struct Vocab {
     n_offset: (u8, u8),
     n_notify: (u8, u8),
     // window
+    w_color_inline: Vec<InlineMethod>,
     w_update: u32,
     w_update_ilk_winim: (u8, u8),
     w_ctxdma_notifier: u32,
@@ -236,6 +237,8 @@ pub struct Vocab {
     k_ilk_core: Option<(u8, u8)>,
     k_window_interlock: u32,
 }
+
+type InlineMethod = (u32, usize, bool, (u8, u8), (u8, u8));
 
 /// Why a vocabulary could not be resolved (the missing name).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -303,6 +306,22 @@ impl Vocab {
             n_mode_awaken: v(core, "SET_NOTIFIER_CONTROL_MODE_WRITE_AWAKEN")?,
             n_offset: f(core, "SET_NOTIFIER_CONTROL_OFFSET")?,
             n_notify: f(core, "SET_NOTIFIER_CONTROL_NOTIFY")?,
+            w_color_inline: (0..2)
+                .flat_map(|stage| [true, false].map(move |entry| (stage, entry)))
+                .map(|(stage, entry)| {
+                    let name = format!(
+                        "SET_CSC{stage}LUT_{}",
+                        if entry { "ENTRY" } else { "SEGMENT_SIZE" }
+                    );
+                    Ok((
+                        v(c.window, &name)?,
+                        stage,
+                        entry,
+                        f(c.window, &format!("{name}_IDX"))?,
+                        f(c.window, &format!("{name}_VALUE"))?,
+                    ))
+                })
+                .collect::<Result<_, Unresolved>>()?,
             w_update: v(win, "UPDATE")?,
             w_update_ilk_winim: f(win, "UPDATE_INTERLOCK_WITH_WIN_IMM")?,
             w_ctxdma_notifier: v(win, "SET_CONTEXT_DMA_NOTIFIER")?,
@@ -403,6 +422,8 @@ struct Chan {
     /// Where decoding stopped (the next undecoded byte).
     decoded: u32,
     queue: VecDeque<Located>,
+    assy_inline: Option<Box<[crate::color::InlineLut; 2]>>,
+    armed_inline: Option<Box<[crate::color::InlineLut; 2]>>,
     assy: Vec<u32>,
     armed: Vec<u32>,
     stage: Stage,
@@ -429,6 +450,10 @@ impl Chan {
             get: offset,
             decoded: offset,
             queue: VecDeque::new(),
+            assy_inline: (kind == ChannelKind::Window)
+                .then(|| Box::new(std::array::from_fn(|_| crate::color::InlineLut::default()))),
+            armed_inline: (kind == ChannelKind::Window)
+                .then(|| Box::new(std::array::from_fn(|_| crate::color::InlineLut::default()))),
             assy: vec![0; words],
             armed: vec![0; words],
             stage: Stage::Running,
@@ -852,6 +877,41 @@ impl Engine {
                 }
                 return any;
             }
+            if c.kind == ChannelKind::Window {
+                for &(method, stage, entry, idx, value) in &vocab.w_color_inline {
+                    if method != m {
+                        continue;
+                    }
+                    let index = fld(l.write.data, idx) as usize;
+                    let data = fld(l.write.data, value);
+                    let table =
+                        &mut c.assy_inline.as_mut().expect("window inline allocation")[stage];
+                    let valid = if entry {
+                        table
+                            .entries
+                            .get_mut(index)
+                            .map(|slot| *slot = Some(data as u16))
+                            .is_some()
+                    } else {
+                        table
+                            .segments
+                            .get_mut(index)
+                            .map(|slot| *slot = Some(data as u8))
+                            .is_some()
+                    };
+                    if !valid {
+                        c.halted = true;
+                        c.get = l.header;
+                        self.exceptions += 1;
+                        st.effects.push(Effect::Exception {
+                            chn: n,
+                            at: l.header,
+                            what: "inline CSC LUT index outside fixed extent".into(),
+                        });
+                        return any;
+                    }
+                }
+            }
             c.assy[(m / 4) as usize] = l.write.data;
             self.methods += 1;
             c.queue.pop_front();
@@ -1169,6 +1229,9 @@ impl Engine {
                 changed.push(((i * 4) as u32, *a));
             }
         }
+        if let (Some(assy), Some(armed)) = (&c.assy_inline, &mut c.armed_inline) {
+            armed.clone_from(assy);
+        }
         self.updates += 1;
         // 2. the completions it asked for — only now that the state is armed
         match c.kind {
@@ -1283,6 +1346,13 @@ impl Engine {
     pub fn armed(&self, kind: ChannelKind, instance: u32, m: u32) -> Option<u32> {
         let n = self.channel_number(kind, instance)?;
         Some(self.chans[n as usize].as_ref()?.armed(m))
+    }
+
+    /// Indexed tables from the same armed window incarnation as its method bank.
+    #[must_use]
+    pub fn armed_inline(&self, window: u32) -> Option<&[crate::color::InlineLut; 2]> {
+        let n = self.channel_number(ChannelKind::Window, window)?;
+        self.chans[n as usize].as_ref()?.armed_inline.as_deref()
     }
 
     /// Is channel `chn` stopped at an update (busy even with nothing left to decode)?

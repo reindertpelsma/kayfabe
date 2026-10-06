@@ -185,44 +185,12 @@ impl Control {
     }
 }
 
-/// Resolve and decode one window from its armed bank. Active CSC/TMO and nonidentity FMT
-/// are deliberately outside the first SDR subset; never silently turn them into identity.
+/// Decode the FP16 input table. The surrounding stages are decoded by `pipeline`.
 pub fn input(
     t: &ClassTable,
     c: u32,
     read: impl Fn(u32) -> u32,
 ) -> Result<Option<Lut>, &'static str> {
-    for name in [
-        "SET_CSC00CONTROL",
-        "SET_CSC01CONTROL",
-        "SET_CSC10CONTROL",
-        "SET_CSC11CONTROL",
-        "SET_CSC0LUT_CONTROL",
-        "SET_CSC1LUT_CONTROL",
-    ] {
-        let m = t.v(c, name).ok_or("missing input CSC vocabulary")?;
-        let enable = t
-            .f(c, &format!("{name}_ENABLE"))
-            .ok_or("missing input CSC enable")?;
-        if get(read(m), enable) != 0 {
-            return Err("active input CSC is outside SDR subset");
-        }
-    }
-    let tmo = Address::resolve(
-        t,
-        c,
-        None,
-        if t.v(c, "SET_CONTEXT_DMA_TMO").is_some() {
-            "TMO"
-        } else {
-            "TMO_LUT"
-        },
-        8,
-    )
-    .ok_or("missing TMO vocabulary")?;
-    if tmo.read(&read)?.is_some() {
-        return Err("active TMO is outside SDR subset");
-    }
     let mut fmt = [0; 12];
     for (i, v) in fmt.iter_mut().enumerate() {
         let name = format!("SET_FMT_COEFFICIENT_C{}{}", i / 4, i % 4);
@@ -235,6 +203,198 @@ pub fn input(
     }
     let ctl = Control::resolve(t, c, None, "SET_ILUT_CONTROL").ok_or("missing ILUT control")?;
     binding.map(|b| ctl.read(b, &read)).transpose()
+}
+
+/// An indexed inline CSC table. Fixed extents never depend on guest data.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InlineLut {
+    /// Log2 samples per segment: 33 logarithmic input or 64 linear output segments.
+    pub segments: [Option<u8>; 64],
+    /// UNORM16 CSC0 or FP16 CSC1 entries, including the interpolation endpoint.
+    pub entries: [Option<u16>; 1025],
+}
+impl Default for InlineLut {
+    fn default() -> Self {
+        Self {
+            segments: [None; 64],
+            entries: [None; 1025],
+        }
+    }
+}
+
+/// The stages surrounding TMO, in hardware order CSC00, CSC01, CSC10, CSC11.
+#[derive(Debug, Clone)]
+pub struct Pipeline {
+    /// Signed S5.14 coefficients in the source's encoded S5.16 units.
+    pub matrices: [[i32; 12]; 4],
+    /// CSC0 logarithmic FP16-to-UNORM16 and CSC1 linear UNORM16-to-FP16 LUTs.
+    pub inline: [Option<InlineLut>; 2],
+    /// Linear 64-segment UNORM16 intensity curve, or bypass.
+    pub tmo: Option<Lut>,
+}
+
+/// Decode a fully armed program, refusing unsupported controls and incomplete tables.
+pub fn pipeline(
+    t: &ClassTable,
+    c: u32,
+    read: impl Fn(u32) -> u32,
+    inline: &[InlineLut; 2],
+) -> Result<Pipeline, &'static str> {
+    let mut p = Pipeline {
+        matrices: [IDENTITY; 4],
+        inline: [None, None],
+        tmo: None,
+    };
+    for (stage, matrix) in p.matrices.iter_mut().enumerate() {
+        let name = format!("SET_CSC{}{}CONTROL", stage / 2, stage % 2);
+        let ctl = read(t.v(c, &name).ok_or("missing CSC control")?);
+        let enable = t
+            .f(c, &format!("{name}_ENABLE"))
+            .ok_or("missing CSC enable")?;
+        let mask = ((1_u32 << (enable.0 - enable.1 + 1)) - 1) << enable.1;
+        if ctl & !mask != 0 {
+            return Err("unsupported CSC control bits");
+        }
+        if get(ctl, enable) == 0 {
+            continue;
+        }
+        for (i, v) in matrix.iter_mut().enumerate() {
+            let n = format!(
+                "SET_CSC{}{}COEFFICIENT_C{}{}",
+                stage / 2,
+                stage % 2,
+                i / 4,
+                i % 4
+            );
+            let f = t
+                .f(c, &format!("{n}_VALUE"))
+                .ok_or("missing CSC coefficient field")?;
+            let bits = u32::from(f.0 - f.1 + 1);
+            let raw = read(t.v(c, &n).ok_or("missing CSC coefficient")?);
+            let word = get(raw, f);
+            if raw != word << f.1 {
+                return Err("unsupported CSC coefficient bits");
+            }
+            *v = ((word << (32 - bits)) as i32) >> (32 - bits);
+        }
+    }
+    for (stage, table) in inline.iter().enumerate() {
+        let name = format!("SET_CSC{stage}LUT_CONTROL");
+        let ctl = read(t.v(c, &name).ok_or("missing CSC LUT control")?);
+        let en = t
+            .f(c, &format!("{name}_ENABLE"))
+            .ok_or("missing CSC LUT enable")?;
+        let interp = t
+            .f(c, &format!("{name}_INTERPOLATE"))
+            .ok_or("missing CSC LUT interpolation")?;
+        let mirror = t
+            .f(c, &format!("{name}_MIRROR"))
+            .ok_or("missing CSC LUT mirror")?;
+        let supported = (1 << en.1) | (1 << interp.1);
+        if ctl & !supported != 0 || get(ctl, mirror) != 0 {
+            return Err("unsupported CSC LUT control");
+        }
+        if get(ctl, en) == 0 {
+            continue;
+        }
+        if get(ctl, interp) != 1 {
+            return Err("CSC LUT interpolation required");
+        }
+        let count = if stage == 0 { 33 } else { 64 };
+        let mut entries = 0_usize;
+        for seg in &table.segments[..count] {
+            let log = seg.ok_or("CSC LUT segment uninitialized")?;
+            if log > 7 {
+                return Err("CSC LUT segment out of range");
+            }
+            entries += 1_usize << log;
+        }
+        if entries > 1024 || table.entries[..=entries].iter().any(Option::is_none) {
+            return Err("CSC LUT incomplete or exceeds fixed extent");
+        }
+        // CSC1 outputs FP16. No infinities, NaNs or negatives may reach composition.
+        if stage == 1
+            && table.entries[..=entries]
+                .iter()
+                .any(|v| v.is_some_and(|h| h >= 0x7c00))
+        {
+            return Err("CSC1 LUT requires finite nonnegative FP16");
+        }
+        p.inline[stage] = Some(table.clone());
+    }
+    let name = if t.v(c, "SET_CONTEXT_DMA_TMO").is_some() {
+        "TMO"
+    } else {
+        "TMO_LUT"
+    };
+    let address = Address::resolve(t, c, None, name, 8).ok_or("missing TMO vocabulary")?;
+    if let Some(binding) = address.read(&read)? {
+        let ctl = read(t.v(c, "SET_TMO_CONTROL").ok_or("missing TMO control")?);
+        let field = |n: &str| {
+            t.f(c, &format!("SET_TMO_CONTROL_{n}"))
+                .ok_or("missing TMO field")
+        };
+        let size = field("SIZE")?;
+        let interp = field("INTERPOLATE")?;
+        let sat = field("SAT_MODE")?;
+        let mask = |f: (u8, u8)| (u32::MAX >> (31 - f.0 + f.1)) << f.1;
+        if get(ctl, size) != 1029
+            || get(ctl, sat) != 2
+            || ctl & !(mask(size) | mask(interp) | mask(sat)) != 0
+        {
+            return Err("TMO requires linear 1029-entry no-correction program");
+        }
+        // OGKM TMO_LUT_SETTINGS_NO_CORRECTION. Other chroma correction policies refuse.
+        for (method, fields) in [
+            ("SET_TMO_LOW_INTENSITY_ZONE", vec![("END", 1280)]),
+            (
+                "SET_TMO_LOW_INTENSITY_VALUE",
+                vec![
+                    ("LIN_WEIGHT", 256),
+                    ("NON_LIN_WEIGHT", 256),
+                    ("THRESHOLD", 255),
+                ],
+            ),
+            (
+                "SET_TMO_MEDIUM_INTENSITY_ZONE",
+                vec![("START", 4960), ("END", 4961)],
+            ),
+            (
+                "SET_TMO_MEDIUM_INTENSITY_VALUE",
+                vec![
+                    ("LIN_WEIGHT", 256),
+                    ("NON_LIN_WEIGHT", 256),
+                    ("THRESHOLD", 255),
+                ],
+            ),
+            ("SET_TMO_HIGH_INTENSITY_ZONE", vec![("START", 10640)]),
+            (
+                "SET_TMO_HIGH_INTENSITY_VALUE",
+                vec![
+                    ("LIN_WEIGHT", 256),
+                    ("NON_LIN_WEIGHT", 256),
+                    ("THRESHOLD", 255),
+                ],
+            ),
+        ] {
+            let word = read(t.v(c, method).ok_or("missing TMO zone method")?);
+            let mut expected = 0;
+            for (suffix, value) in fields {
+                let f = t
+                    .f(c, &format!("{method}_{suffix}"))
+                    .ok_or("missing TMO zone field")?;
+                expected = crate::class::put(expected, f, value);
+            }
+            if word != expected {
+                return Err("TMO chroma correction outside supported subset");
+            }
+        }
+        p.tmo = Some(Lut {
+            binding,
+            interpolate: get(ctl, interp) != 0,
+        });
+    }
+    Ok(p)
 }
 
 /// Decode one head. Core class arrays, including GB20x's different stride, are derived.
@@ -480,5 +640,106 @@ mod tests {
             input(&ClassTable::default(), 0xc67e, |_| 0).is_err(),
             "missing vocabulary fails closed"
         );
+    }
+    #[test]
+    fn tmo_controls_and_bindings_decode_in_every_family_and_refuse_other_chroma_policies() {
+        for version in ["580.65.06", "580.159.04"] {
+            let t = crate::class::for_version(version).unwrap();
+            for c in [0xc57e, 0xc67e, 0xca7e] {
+                let mut b = HashMap::new();
+                let name = if t.v(c, "SET_CONTEXT_DMA_TMO").is_some() {
+                    "TMO"
+                } else {
+                    "TMO_LUT"
+                };
+                bind(&mut b, t, c, None, name, 0x20);
+                let ctl = crate::class::put(
+                    crate::class::put(1, t.f(c, "SET_TMO_CONTROL_SIZE").unwrap(), 1029),
+                    t.f(c, "SET_TMO_CONTROL_SAT_MODE").unwrap(),
+                    2,
+                );
+                set(&mut b, t, c, "SET_TMO_CONTROL", None, ctl);
+                for (method, fields) in [
+                    ("SET_TMO_LOW_INTENSITY_ZONE", vec![("END", 1280)]),
+                    (
+                        "SET_TMO_LOW_INTENSITY_VALUE",
+                        vec![
+                            ("LIN_WEIGHT", 256),
+                            ("NON_LIN_WEIGHT", 256),
+                            ("THRESHOLD", 255),
+                        ],
+                    ),
+                    (
+                        "SET_TMO_MEDIUM_INTENSITY_ZONE",
+                        vec![("START", 4960), ("END", 4961)],
+                    ),
+                    (
+                        "SET_TMO_MEDIUM_INTENSITY_VALUE",
+                        vec![
+                            ("LIN_WEIGHT", 256),
+                            ("NON_LIN_WEIGHT", 256),
+                            ("THRESHOLD", 255),
+                        ],
+                    ),
+                    ("SET_TMO_HIGH_INTENSITY_ZONE", vec![("START", 10640)]),
+                    (
+                        "SET_TMO_HIGH_INTENSITY_VALUE",
+                        vec![
+                            ("LIN_WEIGHT", 256),
+                            ("NON_LIN_WEIGHT", 256),
+                            ("THRESHOLD", 255),
+                        ],
+                    ),
+                ] {
+                    let v = fields.into_iter().fold(0, |word, (suffix, value)| {
+                        crate::class::put(
+                            word,
+                            t.f(c, &format!("{method}_{suffix}")).unwrap(),
+                            value,
+                        )
+                    });
+                    set(&mut b, t, c, method, None, v);
+                }
+                let tables = std::array::from_fn(|_| InlineLut::default());
+                let p = pipeline(t, c, |m| b.get(&m).copied().unwrap_or(0), &tables).unwrap();
+                assert!(p.tmo.unwrap().interpolate);
+                if c != 0xca7e {
+                    assert_eq!(
+                        p.tmo.unwrap().binding,
+                        Binding::Dma {
+                            handle: 0x123,
+                            offset: 0x2000
+                        }
+                    );
+                }
+                set(
+                    &mut b,
+                    t,
+                    c,
+                    "SET_TMO_CONTROL",
+                    None,
+                    ctl ^ (1 << t.f(c, "SET_TMO_CONTROL_SAT_MODE").unwrap().1),
+                );
+                assert!(pipeline(t, c, |m| b.get(&m).copied().unwrap_or(0), &tables).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn inline_program_requires_complete_bounded_initialized_tables() {
+        let t = crate::class::for_version("580.159.04").unwrap();
+        let c = 0xc67e;
+        let mut b = HashMap::new();
+        set(&mut b, t, c, "SET_CSC1LUT_CONTROL", None, 17);
+        let mut tables = std::array::from_fn(|_| InlineLut::default());
+        assert!(pipeline(t, c, |m| b.get(&m).copied().unwrap_or(0), &tables).is_err());
+        tables[1].segments.fill(Some(0));
+        tables[1].entries[..65].fill(Some(0));
+        assert!(pipeline(t, c, |m| b.get(&m).copied().unwrap_or(0), &tables).is_ok());
+        tables[1].entries[2] = Some(0x7c00);
+        assert!(pipeline(t, c, |m| b.get(&m).copied().unwrap_or(0), &tables).is_err());
+        tables[1].entries[2] = Some(0);
+        tables[1].segments.fill(Some(7));
+        assert!(pipeline(t, c, |m| b.get(&m).copied().unwrap_or(0), &tables).is_err());
     }
 }

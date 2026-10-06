@@ -61,6 +61,79 @@ pub struct ColorLut {
     pub token: u64,
 }
 
+/// Bounded register-authored CSC program uploaded to a fixed per-window allocation.
+/// This is program data, not a CPU read or transform of guest pixels/LUT memory.
+#[derive(Debug, Clone)]
+pub struct ColorPipeline {
+    /// CSC00, CSC01, CSC10, CSC11 encoded signed coefficients.
+    pub matrices: [[i32; 12]; 4],
+    /// Two fixed segment arrays: 33 logarithmic / 64 linear segments.
+    pub segments: [[u32; 64]; 2],
+    /// Two fixed entry arrays, with their interpolation endpoint.
+    pub entries: [[u32; 1025]; 2],
+    /// Enabled inline table stages.
+    pub enable: [bool; 2],
+}
+const COLOR_PIPELINE_BYTES: usize = (4 * 12 + 2 * 64 + 2 * 1025 + 2) * 4;
+
+impl ColorPipeline {
+    fn bytes(&self) -> Result<Vec<u8>, String> {
+        for stage in 0..2 {
+            if !self.enable[stage] {
+                continue;
+            }
+            let count = if stage == 0 { 33 } else { 64 };
+            let mut entries = 0_usize;
+            for &log in &self.segments[stage][..count] {
+                if log > 7 {
+                    return Err("CSC segment outside fixed bound".into());
+                }
+                entries += 1_usize << log;
+            }
+            if entries > 1024
+                || self.entries[stage][..=entries]
+                    .iter()
+                    .any(|&v| v > 65535 || (stage == 1 && v >= 0x7c00))
+            {
+                return Err("CSC table exceeds fixed extent or format".into());
+            }
+        }
+        let mut bytes = Vec::with_capacity(COLOR_PIPELINE_BYTES);
+        for matrix in &self.matrices {
+            for v in matrix {
+                bytes.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        for table in &self.segments {
+            for v in table {
+                bytes.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        for table in &self.entries {
+            for v in table {
+                bytes.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        for enabled in self.enable {
+            bytes.extend_from_slice(&u32::from(enabled).to_le_bytes());
+        }
+        Ok(bytes)
+    }
+}
+
+/// Synthetic tone fixture; uploaded only to a private scratch store for the oracle.
+#[derive(Clone, Copy)]
+pub struct ColorTone<'a> {
+    /// Fixed UNORM16 intensity table, including VSS header and endpoint.
+    pub table: &'a [u8],
+    /// Register-authored CSC program.
+    pub pipeline: &'a ColorPipeline,
+    /// Change the source after its first snapshot to test immutable retention.
+    pub mutate: Option<&'a [u8]>,
+    /// Rearm after mutation instead of retaining the first snapshot.
+    pub rearm: bool,
+}
+
 /// Synthetic SDR fixture for the hardware oracle; all bytes are host-authored.
 pub struct ColorFixture<'a> {
     /// RGB8888 pixels.
@@ -82,6 +155,8 @@ pub struct ColorFixture<'a> {
     pub mutate_input: Option<&'a [u8]>,
     /// After mutation, explicitly rearm the input to require a fresh snapshot.
     pub rearm: bool,
+    /// Optional pre-composition tone stage.
+    pub tone: Option<ColorTone<'a>>,
 }
 
 /// ★ An imported display slot — a VRAM frame object kayfabe allocated itself (never guest
@@ -178,14 +253,15 @@ pub struct DisplayGpu {
     /// Its row sums: the device buffer (zeroed before each launch), the page-locked copy the worker
     /// reads after the completion, and the rows both hold. Grown, never shrunk.
     sums: Option<(CUdeviceptr, PinnedBuf, usize)>,
-    color: Result<[Func; 3], String>,
+    color: Result<[Func; 4], String>,
     color_frame: Option<(CUdeviceptr, usize)>,
-    /// Fixed slots: 32 windows plus one output LUT. Never sized from a guest word.
+    /// Fixed slots: 32 ILUTs, 32 TMO tables and one OLUT. Never guest-sized.
     color_luts: Option<CUdeviceptr>,
+    color_pipelines: Option<CUdeviceptr>,
     color_status: Option<(CUdeviceptr, PinnedBuf)>,
     color_event: EventHandle,
     color_recorded: bool,
-    color_snapshots: [Option<ColorLut>; 33],
+    color_snapshots: [Option<ColorLut>; 65],
 }
 
 /// ★ One page-locked host frame buffer the display console reads (M2). Its address crosses to the
@@ -384,6 +460,7 @@ impl DisplayGpu {
                     cu.module_function(m, "kf_color_compose")?,
                     cu.module_function(m, "kf_color_output")?,
                     cu.module_function(m, "kf_color_validate")?,
+                    cu.module_function(m, "kf_tmo_validate")?,
                 ])
             })
             .map_err(|e| format!("the SDR colour kernels did not load: {e}"));
@@ -404,10 +481,11 @@ impl DisplayGpu {
             color,
             color_frame: None,
             color_luts: None,
+            color_pipelines: None,
             color_status: None,
             color_event,
             color_recorded: false,
-            color_snapshots: [None; 33],
+            color_snapshots: [None; 65],
         })
     }
 
@@ -652,7 +730,10 @@ impl DisplayGpu {
             self.color_frame = Some((self.cu.mem_alloc_zeroed(n, what)?, n));
         }
         if self.color_luts.is_none() {
-            self.color_luts = Some(self.cu.mem_alloc_zeroed(33 * COLOR_LUT_BYTES, what)?);
+            self.color_luts = Some(self.cu.mem_alloc_zeroed(65 * COLOR_LUT_BYTES, what)?);
+        }
+        if self.color_pipelines.is_none() {
+            self.color_pipelines = Some(self.cu.mem_alloc_zeroed(32 * COLOR_PIPELINE_BYTES, what)?);
         }
         if self.color_status.is_none() {
             let dev = self.cu.mem_alloc_zeroed(4, what)?;
@@ -685,7 +766,7 @@ impl DisplayGpu {
         let Some(lut) = lut else {
             return Ok(0);
         };
-        if slot > 32 {
+        if slot > 64 {
             return Err(refused(what, "LUT slot outside fixed allocation".into()));
         }
         let src = self.at(lut.src, COLOR_LUT_BYTES, what)?;
@@ -716,11 +797,28 @@ impl DisplayGpu {
     }
 
     /// Snapshot and compose one RGB8888 window using its FP16 input table.
+    /// Convenience entry for SDR fixtures with the remaining stages bypassed.
     pub fn color_layer(
         &mut self,
         slot: u32,
         l: &ComposeLayer,
         lut: Option<ColorLut>,
+        w: u32,
+        h: u32,
+    ) -> Result<(), CudaError> {
+        self.color_pipeline_layer(slot, l, lut, None, None, w, h)
+    }
+
+    /// Run the complete authored pre-composition program on the GPU. TMO snapshots
+    /// use separate slots; no source reread or fabricated GPU completion is introduced.
+    #[allow(clippy::too_many_arguments)]
+    pub fn color_pipeline_layer(
+        &mut self,
+        slot: u32,
+        l: &ComposeLayer,
+        lut: Option<ColorLut>,
+        tmo: Option<ColorLut>,
+        pipeline: Option<&ColorPipeline>,
         w: u32,
         h: u32,
     ) -> Result<(), CudaError> {
@@ -745,6 +843,29 @@ impl DisplayGpu {
             return Err(refused(what, "colour frame is too small".into()));
         }
         let p = self.color_snapshot(slot, lut, true)?;
+        let tone = self.color_snapshot(32 + slot, tmo, false)?;
+        if tmo.is_some() {
+            let f = self.color.as_ref().map_err(|e| refused(what, e.clone()))?[3];
+            let status = self
+                .color_status
+                .as_ref()
+                .ok_or_else(|| refused(what, "missing status".into()))?
+                .0;
+            let mut args = vec![tone.to_le_bytes().to_vec(), status.to_le_bytes().to_vec()];
+            self.cu
+                .launch_args(self.stream, f, 5, 256, 0, &mut args, what)?;
+        }
+        let program = if let Some(pipeline) = pipeline {
+            let bytes = pipeline.bytes().map_err(|e| refused(what, e))?;
+            let address = self
+                .color_pipelines
+                .ok_or_else(|| refused(what, "missing pipeline allocation".into()))?
+                + u64::from(slot) * COLOR_PIPELINE_BYTES as u64;
+            self.cu.memcpy_h2d(address, &bytes, what)?;
+            address
+        } else {
+            0
+        };
         let f = self.color.as_ref().map_err(|e| refused(what, e.clone()))?[0];
         let u = |v: u32| v.to_le_bytes().to_vec();
         let i = |v: i32| v.to_le_bytes().to_vec();
@@ -768,6 +889,15 @@ impl DisplayGpu {
             i(l.b_d),
             p.to_le_bytes().to_vec(),
             u(u32::from(lut.is_some_and(|v| v.interpolate))),
+            tone.to_le_bytes().to_vec(),
+            u(u32::from(tmo.is_some_and(|v| v.interpolate))),
+            program.to_le_bytes().to_vec(),
+            self.color_status
+                .as_ref()
+                .ok_or_else(|| refused(what, "missing status".into()))?
+                .0
+                .to_le_bytes()
+                .to_vec(),
         ];
         self.cu
             .launch_args(self.stream, f, l.rows, 256, 0, &mut args, what)
@@ -793,7 +923,7 @@ impl DisplayGpu {
         if w == 0 || h == 0 || pixels * 16 > slen as u64 || pixels * 4 > dlen as u64 {
             return Err(refused(what, "colour output exceeds frame".into()));
         }
-        let p = self.color_snapshot(32, lut, false)?;
+        let p = self.color_snapshot(64, lut, false)?;
         let f = self.color.as_ref().map_err(|e| refused(what, e.clone()))?[1];
         let mut args = vec![
             src.to_le_bytes().to_vec(),
@@ -836,7 +966,14 @@ impl DisplayGpu {
         if b == [0, 0, 0, 0] {
             Ok(())
         } else {
-            Err("input LUT has non-SDR FP16 entries".into())
+            Err(if b[0] & 4 != 0 {
+                "CSC program produced nonfinite FP16"
+            } else if b[0] & 2 != 0 {
+                "TMO LUT has unsupported VSS header or unequal intensity channels"
+            } else {
+                "input LUT has non-SDR FP16 entries"
+            }
+            .into())
         }
     }
 
@@ -1134,6 +1271,10 @@ impl DisplayGpu {
             || surface.is_empty()
             || !surface.len().is_multiple_of(8)
             || layer.extent > surface.len() as u64
+            || fixture.tone.is_some_and(|t| {
+                t.table.len() != COLOR_LUT_BYTES
+                    || t.mutate.is_some_and(|v| v.len() != COLOR_LUT_BYTES)
+            })
             || fixture
                 .mutate_input
                 .is_some_and(|b| b.len() != COLOR_LUT_BYTES)
@@ -1146,6 +1287,10 @@ impl DisplayGpu {
         let mut image = surface.to_vec();
         image.extend_from_slice(input);
         image.extend_from_slice(output);
+        let tone_src = image.len() as u64;
+        if let Some(tone) = fixture.tone {
+            image.extend_from_slice(tone.table);
+        }
         let scratch = self.cu.mem_alloc_zeroed(image.len(), what)?;
         let keep = self.store.replace((scratch, image.len() as u64));
         self.color_snapshots.fill(None);
@@ -1154,17 +1299,45 @@ impl DisplayGpu {
             self.color_begin(w, h)?;
             let mut l = *layer;
             l.src = 0;
-            self.color_layer(
+            let input_lut = Some(ColorLut {
+                src: surface.len() as u64,
+                interpolate: false,
+                token: 1,
+            });
+            let tone_lut = fixture.tone.map(|_| ColorLut {
+                src: tone_src,
+                interpolate: true,
+                token: 4,
+            });
+            self.color_pipeline_layer(
                 0,
                 &l,
-                Some(ColorLut {
-                    src: surface.len() as u64,
-                    interpolate: false,
-                    token: 1,
-                }),
+                input_lut,
+                tone_lut,
+                fixture.tone.map(|t| t.pipeline),
                 w,
                 h,
             )?;
+            if let Some(tone) = fixture.tone
+                && let Some(new) = tone.mutate
+            {
+                self.cu.ctx_synchronize()?;
+                self.cu.memcpy_h2d(scratch + tone_src, new, what)?;
+                self.color_begin(w, h)?;
+                self.color_pipeline_layer(
+                    0,
+                    &l,
+                    input_lut,
+                    Some(ColorLut {
+                        src: tone_src,
+                        interpolate: true,
+                        token: if tone.rearm { 5 } else { 4 },
+                    }),
+                    Some(tone.pipeline),
+                    w,
+                    h,
+                )?;
+            }
             if let Some(new) = fixture.mutate_input {
                 self.cu.ctx_synchronize()?;
                 self.cu
@@ -1327,6 +1500,9 @@ impl Drop for DisplayGpu {
         if let Some(p) = self.color_luts.take() {
             self.cu.mem_free(p);
         }
+        if let Some(p) = self.color_pipelines.take() {
+            self.cu.mem_free(p);
+        }
         if let Some((p, _)) = self.color_status.take() {
             self.cu.mem_free(p);
         }
@@ -1365,7 +1541,17 @@ mod tests {
         let mut compose = vec![".u64 .ptr .align 1", ".u64 .ptr .align 1"];
         compose.extend([".u32"; 15]);
         compose.extend([".u64 .ptr .align 1", ".u32"]);
+        compose.extend([
+            ".u64 .ptr .align 1",
+            ".u32",
+            ".u64 .ptr .align 1",
+            ".u64 .ptr .align 1",
+        ]);
         assert_eq!(types("kf_color_compose"), compose);
+        assert_eq!(
+            types("kf_tmo_validate"),
+            [".u64 .ptr .align 1", ".u64 .ptr .align 1"]
+        );
         assert_eq!(
             types("kf_color_validate"),
             [".u64 .ptr .align 1", ".u64 .ptr .align 1"]

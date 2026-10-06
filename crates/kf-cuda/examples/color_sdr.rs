@@ -53,6 +53,7 @@ fn main() -> Result<(), String> {
         interpolate: false,
         mutate_input: None,
         rearm: false,
+        tone: None,
     };
     let pixels = gpu.selftest_color(&fixture).map_err(|e| e.to_string())?;
     assert!(
