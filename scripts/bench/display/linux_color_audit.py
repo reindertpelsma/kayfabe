@@ -1,0 +1,169 @@
+#!/usr/bin/env python3
+"""Bounded, serial Linux compositor/color experiment on a prepared private overlay.
+
+Run on the GPU host. --base is a powered-off guest with NVIDIA 580.159.04,
+Weston/Sway/seatd/wlsunset, Vulkan tools, and Wayland/DRM development packages.
+No host display settings are changed. All screenshots are of the guest console.
+"""
+import argparse
+import datetime
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import socket
+import subprocess
+import time
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--qemu', type=Path, required=True)
+    p.add_argument('--base', type=Path, required=True)
+    p.add_argument('--out', type=Path, required=True)
+    p.add_argument('--key', type=Path, required=True)
+    p.add_argument('--revision', required=True)
+    p.add_argument('--port', type=int, default=2244)
+    a = p.parse_args()
+    if len(a.revision) != 40 or not all(x in '0123456789abcdef' for x in a.revision):
+        p.error('A full product revision is required')
+    if subprocess.run(['pgrep', '-x', 'qemu-system-x86'], capture_output=True).returncode == 0:
+        p.error('Another VM is running; hardware work is serial')
+    lock = open('/tmp/kayfabe-fastguest.lock', 'w')
+    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    a.out.mkdir(mode=0o700, parents=True, exist_ok=False)
+    here = Path(__file__).resolve().parent
+    ssh = ['ssh', '-i', str(a.key), '-p', str(a.port), '-o', 'BatchMode=yes',
+           '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null',
+           '-o', 'LogLevel=ERROR', '-o', 'ConnectTimeout=5', 'ubuntu@127.0.0.1']
+    events = []
+
+    def mark(label):
+        event = dict(label=label, utc=datetime.datetime.now(datetime.timezone.utc).isoformat())
+        events.append(event)
+        (a.out / 'events.json').write_text(json.dumps(events, indent=2) + '\n')
+        print('COLOR_EVENT', event, flush=True)
+
+    def guest(label, command, timeout=60, check=True, data=None):
+        mark(label)
+        r = subprocess.run(ssh + [command], input=data, capture_output=True, timeout=timeout)
+        (a.out / (label + '.log')).write_bytes(r.stdout + r.stderr)
+        if check and r.returncode:
+            raise RuntimeError(f'{label}: guest exit {r.returncode}; see log')
+        return r
+
+    def shot(label):
+        mark(label)
+        with socket.socket(socket.AF_UNIX) as s:
+            s.settimeout(10)
+            s.connect(str(a.out / 'qmp.sock'))
+            f = s.makefile('rwb')
+            f.readline()
+            for command in [dict(execute='qmp_capabilities'),
+                            dict(execute='screendump', arguments=dict(
+                                filename=str(a.out / (label + '.ppm')), device='kf0'))]:
+                f.write((json.dumps(command) + '\n').encode()); f.flush()
+                while True:
+                    reply = json.loads(f.readline())
+                    if 'error' in reply: raise RuntimeError(reply)
+                    if 'return' in reply: break
+
+    subprocess.run(['qemu-img', 'create', '-f', 'qcow2', '-F', 'qcow2', '-b',
+                    str(a.base), str(a.out / 'guest.qcow2')], check=True)
+    cmd = [str(a.qemu), '-machine', 'q35,accel=kvm', '-cpu', 'host',
+           '-bios', '/usr/share/seabios/bios-256k.bin', '-m', '6G', '-smp', '6',
+           '-object', 'memory-backend-memfd,id=ram,size=6G,share=on',
+           '-machine', 'memory-backend=ram', '-vga', 'none', '-device',
+           'kf3-gpu,guest-driver=580.159.04,fb-mb=4096,bar1-size=134217728,'
+           'bar2-size=33554432,id=kf0,display=on', '-display', 'none',
+           '-drive', f'if=virtio,file={a.out}/guest.qcow2,format=qcow2',
+           '-netdev', f'user,id=n0,hostfwd=tcp:127.0.0.1:{a.port}-:22',
+           '-device', 'virtio-net-pci,netdev=n0,romfile=', '-serial',
+           f'file:{a.out}/serial.log', '-qmp', f'unix:{a.out}/qmp.sock,server=on,wait=off',
+           '-msg', 'timestamp=on']
+    env = {k: v for k, v in os.environ.items() if not k.startswith('KF3_')}
+    env['KF3_DISPLAY_METHOD_TRACE'] = '1'
+    sha = hashlib.sha256(a.qemu.read_bytes()).hexdigest()
+    (a.out / 'manifest.json').write_text(json.dumps(dict(
+        source_revision=a.revision, qemu_sha256=sha, command=cmd,
+        flags={'KF3_DISPLAY_METHOD_TRACE': '1'}, scope='AD104 / Linux580.159.04'), indent=2)+'\n')
+    mark('start')
+    with open(a.out / 'qemu.log', 'wb') as log:
+        vm = subprocess.Popen(cmd, env=env, stdout=log, stderr=subprocess.STDOUT)
+        try:
+            deadline = time.monotonic()+120
+            while time.monotonic() < deadline:
+                if vm.poll() is not None: raise RuntimeError('VM exited before SSH')
+                if subprocess.run(ssh+['true'], capture_output=True, timeout=8).returncode == 0: break
+                time.sleep(2)
+            else: raise TimeoutError('Guest SSH')
+            guest('driver', 'sudo rmmod nvidia_drm nvidia_modeset 2>/dev/null || true; '
+                  'sudo modprobe nvidia-drm modeset=1 fbdev=1; '
+                  'cat /sys/module/nvidia_drm/parameters/modeset; '
+                  'nvidia-smi --query-gpu=name,driver_version --format=csv,noheader; '
+                  'modetest -M nvidia-drm -c -p', timeout=120)
+            sources = ['color_properties.c', '../gfxset/src/wl_scene.c']
+            for relative in sources:
+                path = (here / relative).resolve()
+                guest('copy-'+path.stem, 'mkdir -p ~/color; cat > ~/color/'+path.name,
+                      data=path.read_bytes())
+            guest('build-clients', 'cd ~/color; '
+                  'wayland-scanner client-header /usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml xdg-shell-client-protocol.h && '
+                  'wayland-scanner private-code /usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml xdg-shell-protocol.c && '
+                  'gcc -O2 -Wall -Wextra -Werror -o color_properties color_properties.c $(pkg-config --cflags --libs libdrm) && '
+                  'gcc -O2 -Wall -o wl_scene wl_scene.c xdg-shell-protocol.c -lwayland-client -lwayland-egl -lEGL -lGLESv2')
+            guest('kms-before', '~/color/color_properties /dev/dri/card0')
+            guest('weston-start', "sudo mkdir -m 755 /run/kfcolorw; "
+                  "sudo sh -c 'XDG_RUNTIME_DIR=/run/kfcolorw LIBSEAT_BACKEND=builtin nohup weston "
+                  "--backend=drm --continue-without-input --socket=kfcolor --log=/tmp/kfcolor-weston.log "
+                  ">/tmp/kfcolor-weston.out 2>&1 &'")
+            time.sleep(5)
+            guest('weston-scene', "sudo sh -c 'XDG_RUNTIME_DIR=/run/kfcolorw WAYLAND_DISPLAY=kfcolor "
+                  "nohup /home/ubuntu/color/wl_scene 60 >/tmp/kfcolor-weston-scene.log 2>&1 &'")
+            time.sleep(5)
+            shot('weston-scene')
+            guest('weston-result', 'cat /tmp/kfcolor-weston-scene.log; '
+                  'sudo cat /tmp/kfcolor-weston.log; ~/color/color_properties /dev/dri/card0')
+            guest('weston-stop', 'sudo pkill -x wl_scene || true; sudo pkill -x weston || true')
+            time.sleep(3)
+            guest('sway-start', "mkdir -p ~/color/runtime; chmod 700 ~/color/runtime; "
+                  "printf 'output * bg #203040 solid_color\\ndefault_border none\\n"
+                  "seat seat0 hide_cursor 100\\nxwayland disable\\n' > ~/color/sway.conf; "
+                  "sudo sh -c 'SEATD_VTBOUND=0 nohup seatd -s /run/kfcolor-seatd.sock -g video "
+                  ">/tmp/kfcolor-seatd.log 2>&1 &' ; sleep 1; "
+                  "XDG_RUNTIME_DIR=/home/ubuntu/color/runtime LIBSEAT_BACKEND=seatd SEATD_SOCK=/run/kfcolor-seatd.sock "
+                  "nohup sway --unsupported-gpu -d -D noscanout -c ~/color/sway.conf >/tmp/kfcolor-sway.log 2>&1 &")
+            time.sleep(6)
+            wl = 'XDG_RUNTIME_DIR=/home/ubuntu/color/runtime WAYLAND_DISPLAY=wayland-1 '
+            guest('sway-scene', wl+'nohup ~/color/wl_scene 180 >/tmp/kfcolor-sway-scene.log 2>&1 &')
+            time.sleep(5)
+            shot('sway-before')
+            guest('sway-before', 'cat /tmp/kfcolor-sway-scene.log; '
+                  '~/color/color_properties /dev/dri/card0; tail -n 120 /tmp/kfcolor-sway.log')
+            guest('warm-start', wl+'WAYLAND_DEBUG=1 nohup wlsunset -t 2500 -T 2501 -l 0 -L 0 '
+                  '>/tmp/kfcolor-wlsunset.log 2>&1 &')
+            time.sleep(5)
+            shot('sway-warm')
+            guest('sway-warm', '~/color/color_properties /dev/dri/card0; '
+                  'cat /tmp/kfcolor-wlsunset.log; tail -n 100 /tmp/kfcolor-sway.log')
+            guest('warm-stop', 'pkill -x wlsunset || true')
+            time.sleep(3)
+            shot('sway-restored')
+            guest('sway-restored', '~/color/color_properties /dev/dri/card0; '
+                  'cat /tmp/kfcolor-sway-scene.log; tail -n 80 /tmp/kfcolor-sway.log')
+        finally:
+            try:
+                guest('dmesg-after', 'sudo dmesg', check=False)
+                guest('stop', 'pkill -x wlsunset || true; pkill -x wl_scene || true; '
+                      'pkill -x sway || true; sudo pkill -x weston || true; sudo poweroff', check=False)
+                vm.wait(timeout=45)
+            except (subprocess.TimeoutExpired, OSError):
+                vm.terminate()
+                try: vm.wait(timeout=15)
+                except subprocess.TimeoutExpired: vm.kill(); vm.wait()
+            mark('exit-'+str(vm.returncode))
+
+
+if __name__ == '__main__':
+    main()
