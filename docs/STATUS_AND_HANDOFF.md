@@ -18,7 +18,9 @@ Linux open580.159.04 on borrowed RTX 4070 runs Weston and Sway. A 2501K
 KMS curve changes output with **zero error in all 6,220,800 RGB components**;
 restoration is byte-identical, with no compositor gamma failure. Six GPU colour
 fixtures and 9/9 GPU gates (11/11 USER births) pass. Workspace tests, formatting,
-zero-new-debt Clippy and product CI pass. No master promotion/full app claim.
+zero-new-debt Clippy and product CI pass. Matched open580.159.04 fast guest
+passes 30/30; the frozen native grader refuses host595.91.07 before running arms,
+so this is not the full hardware merge bar. No master promotion/full app claim.
 [Implementation and limitations](design/V3_SDR_COLOR.md),
 [evidence](../traces/sdr_lut_20261006/README.md).
 
@@ -32,7 +34,7 @@ Complete dump records remain usable; outer NVCD is one byte short.
 Borrowed-host source/target/evidence: `/var/lib/kf-sdr-lut-20261006/`;
 controller private evidence: `/data/kayfabe-runtime/sdr-lut-20261006/`.
 All code/evidence checkpoints are committed and pushed. Master/v3 stay
-`906a76a4`; no rental created.
+`906a76a4`; all owned VMs exited, NBD disconnected, host GPU healthy, no rental created.
 
 **Historical Linux diagnostic (superseded by real SDR implementation above):**
 

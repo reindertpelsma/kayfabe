@@ -51,7 +51,15 @@ passed. The frozen raw client and fast-guest image rebuild successfully.
 Its native 30-arm baseline refuses this host driver at R2 because its frozen
 encoders support only 580.x: **0/30, all before any arm ran**. This is a
 harness/driver-version limitation, not a passing hardware merge bar. No host
-module downgrade was attempted. Guest regression results follow when complete.
+module downgrade was attempted. The matched 580.159.04 fast guest passes **30/30**, zero failures/crashes/not-run,
+exit zero at the same product/binary. This is a general regression with SDR
+opt-in off, alongside the separate opt-in Linux/GPU fixtures above.
+[Fast suite](fast-suite-2aa8.log), [native version refusal](native-grader-version-refusal.log),
+[quality receipt](quality.json). The first fast attempt omitted the guest-driver
+property and therefore mismatched the rebuilt driver; it was stopped after the
+R1 refusal was identified, then corrected and rerun. No native parity claim
+follows from the matched guest result. All owned VMs exited, NBD is disconnected,
+and the host GPU remains healthy.
 
 Scope: one opaque RGB8888 Linux SDR cell. Unsupported input CSC, nonidentity
 FMT, OCSC1, active TMO, segmented/mirrored LUTs, nonunity normalization and HDR

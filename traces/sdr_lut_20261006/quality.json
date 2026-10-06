@@ -1,0 +1,71 @@
+{
+  "schema": "kayfabe-sdr-quality/1",
+  "source_revision": "2aa8b92de6c6ab158f9bc8e788be792408a074a3",
+  "workspace": {
+    "command": "cargo test --workspace --locked",
+    "passed": 4171,
+    "ignored": 9,
+    "failed": 0,
+    "exit_code": 0
+  },
+  "format": {
+    "command": "cargo fmt --all -- --check",
+    "exit_code": 0
+  },
+  "clippy": {
+    "existing_debt": 415,
+    "new": 0,
+    "resolved": 7,
+    "exit_code": 0
+  },
+  "gpu": {
+    "gates_passed": 9,
+    "gates_failed": 0,
+    "user_births": 11,
+    "fixtures_passed": 6
+  },
+  "builds": {
+    "qemu": "10.2.4 Rust/C build passed",
+    "raw_client": "cargo build --release --locked -p kayfabe-rm-ladder --bin kayfabe-rm-ladder passed",
+    "fastguest": "Rebuilt from frozen guest image and new raw client; kernel 6.8.0-142-generic / open580.159.04"
+  },
+  "native_raw_client": {
+    "arms": 30,
+    "passed": 0,
+    "failed": 30,
+    "stage": "R2 host driver version",
+    "reason": "Frozen 580.x-only encoders refuse host 595.91.07; no arm executed"
+  },
+  "guest_setup_control": {
+    "initial": "Default device guest-driver580.65.06 mismatched rebuilt guest open580.159.04; R1 openat errno5, stopped after identifying mismatch.",
+    "corrected": "KF3_DEV_EXTRA=guest-driver=580.159.04",
+    "pilot": "--timer PASS, client rc0"
+  },
+  "ci": {
+    "product_run": 37468780443,
+    "product_conclusion": "success",
+    "prior_evidence_run": 37469128490,
+    "prior_evidence_conclusion": "success"
+  },
+  "scope": "Opt-in SDR research; no full merge-bar, application matrix or master promotion claim.",
+  "guest_raw_client": {
+    "arms": 30,
+    "passed": 30,
+    "failed": 0,
+    "crashed": 0,
+    "notrun": 0,
+    "exit_code": 0,
+    "driver": "open580.159.04",
+    "sdr_flag": false,
+    "qemu_sha256": "4bf444aeb1aa0b82312c201b7441a89d9c892eb638e255af3eac8a88e0e82c55",
+    "device_extra": "guest-driver=580.159.04",
+    "suite_log_sha256": "fa3f3d9abb069bcfa819d672628d2db1e9e58655c8b46dce50e798cd3e4c6bd7",
+    "scope": "General fast-guest regression at default display flags; does not qualify native/guest parity on the unsupported native grader driver."
+  },
+  "cleanup": {
+    "no_vm_running": true,
+    "nbd_disconnected": true,
+    "host_gpu": "NVIDIA GeForce RTX4070 / 595.91.07 healthy",
+    "rental_created": false
+  }
+}

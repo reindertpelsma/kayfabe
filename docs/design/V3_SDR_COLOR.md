@@ -75,7 +75,10 @@ consuming the changed table, fractional OLUT interpolation, and rejection of
 infinity/NaN/negative/HDR input entries. GPU gates pass 9/9 with 11/11 USER
 channel births. Workspace tests and formatting pass, Clippy has zero new debt,
 and source CI [37468780443](https://github.com/reindertpelsma/kayfabe/actions/runs/37468780443)
-passes. Native KMS readback and native shader control do not capture physical
+passes. The rebuilt matched open580.159.04 fast guest passes 30/30 at the
+same source/binary with default display flags. The native frozen raw client
+refuses host595.91.07 before executing any arm; no full merge bar is claimed.
+Native KMS readback and native shader control do not capture physical
 post-LUT pixels; no native post-LUT parity claim is made.
 
 The opt-in page declares one DIRECT10 ILUT/OLUT with surface loading and
