@@ -4,7 +4,47 @@
 rendering and output gamma do not establish that a tone-mapping buffer exists.
 The new `linux_color_audit.py --sdr-color --require-tmo` experiment runs a
 stock Linux580.159.04 guest with Sway, on an immutable product binary.
-The hardware result is pending at this checkpoint; no TMO success is claimed.
+**Run B: FAIL**, product `2aa8b92de6c6ab158f9bc8e788be792408a074a3`,
+harness `8316cb612040c0123539de512560f4ea8a5eb26d`, immutable QEMU SHA256
+`4bf444aeb1aa0b82312c201b7441a89d9c892eb638e255af3eac8a88e0e82c55`.
+Borrowed RTX 4070 AD104, host open595.91.07/kernel7.0.0-34, guest
+open580.159.04/kernel6.8.0-142. No TMO success or Windows fix is claimed.
+
+[Strict verdict](linux-b-tmo-verdict.json): active primary plane 49 has no
+`NV_PLANE_TMO_LUT`. Three requests are rejected by the guest adapter with
+EOPNOTSUPP at TEST_ONLY, before a kernel TMO submission. Zero real TMO atomic
+commits, zero nonzero TMO bindings and zero TMO control words are recorded.
+The capture trace has 19,913 method records and 45,623 remaining budget, so an
+exhausted trace does not explain the absence. The scene callback still succeeds;
+all three console captures have identical RGB SHA256
+`9449c5353875d3b003b607a478df9e6303feb0216c34719564a549f8a597340f`.
+This is the skipped-stage case the owner's stricter test was intended to catch.
+The runner exits 1; the VM shuts down with exit 0. Restoration is byte-exact,
+with no scanout refusal. [Host health](host-health.log) records the connected
+DP-1 output, live GNOME, responsive GPU, no VM and no NBD attachment.
+
+The [native read-only control](native-tmo-properties.log) exposes
+`NV_PLANE_TMO_LUT` and size 1024 on four host planes, read as uid1000/master0.
+No native TMO curve was submitted and no host display setting changed.
+The host and guest driver/kernel versions differ: this is an API-availability
+control, not matched native TMO processing or pixel parity. OGKM580 attaches the
+property conditionally on extended properties and `supportsICtCp`; this run
+does not capture the live value of that resource capability.
+
+The first diagnostic run A was not a qualified result: the adapter initially
+used an incorrect unprefixed property name, and the checker expected a window
+FREE method absent from the class. Both were corrected before fresh run B.
+Run B independently retains the complete KMS color-property listing and grades
+end to end without that instrumentation error.
+
+[Manifest](linux-b-manifest.json), [events](linux-b-events.json),
+[runner](linux-b-runner.log), [provenance/hashes](linux-b-provenance.json),
+[KMS baseline](linux-b-kms-before.log), compressed full Sway phase logs and
+capture-time/full QEMU traces are committed here. Console PPMs and raw guest
+logs are retained privately under `/data/kayfabe-runtime/tmo-stage-20261006/`.
+The product binary was unchanged; only the diagnostic harness was rebuilt.
+Five GPU-free checker cases, Python compilation and C `-Wall -Wextra -Werror`
+compilation pass; these validate the harness, not an implemented TMO stage.
 
 The guest-only `request_tmo.c` adapter requests a fixed 1024-entry zero-intensity
 UNORM16 LUT on the active primary plane in Sway's real atomic submission.

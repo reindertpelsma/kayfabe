@@ -18,9 +18,10 @@ processing in this cell; it is not inferred from an accepted ioctl.
 requirement that the TMO buffer be present. Run C has zero TMO binding writes.
 Linux can skip that stage when it is declared absent, independently of the
 successful gamma transform. The updated audit records this stage coverage.
-The next gate must explicitly request the plane `NV_PLANE_TMO_LUT` and require a real
-binding, GPU completion and transformed pixels; missing or skipped TMO is a
-failed gate. This experiment remains outstanding.
+The [explicit TMO test](../tmo_stage_20261006/README.md) has now run and fails:
+the guest exposes no plane TMO property, accepts no TMO commit and binds no tone
+buffer. The compositor still renders identical pixels. The broader positive
+TMO objective remains outstanding; no unsupported capability was enabled.
 
 - [Final Linux run C](linux-c-summary.json), [independent pixel check](linux-c-pixel-oracle.json).
 - Earlier source controls: [A](linux-a-summary.json), [B](linux-b-summary.json), [B pixel check](linux-b-pixel-oracle.json).

@@ -24,13 +24,19 @@ so this is not the full hardware merge bar. No master promotion/full app claim.
 [Implementation and limitations](design/V3_SDR_COLOR.md),
 [evidence](../traces/sdr_lut_20261006/README.md).
 
-**Owner clarification (2026-10-06):** the intended Linux oracle must also
-establish the TMO buffer, not merely prevent output-gamma fallback. The existing
-Linux result only qualifies OLUT; it has zero TMO binding writes and leaves
-TMO absent. Next, use Linux's direct plane `NV_PLANE_TMO_LUT` route and require a real
-binding, bounded GPU processing/completion and pixel oracle. Treat missing or
-skipped TMO as failure of that acceptance gate. Do not equate ordinary SDR
-rendering or a working gamma LUT with TMO presence.
+**Owner-directed strict TMO test (2026-10-06): FAIL.** The corrected Linux
+harness `8316cb61` runs against unchanged product `2aa8b92d`. The active primary
+plane exposes no `NV_PLANE_TMO_LUT`; the guest adapter rejects three TEST_ONLY
+requests before kernel submission. Zero real TMO commits/bindings/control words;
+all three console captures are identical despite a ready compositor callback.
+The strict checker returns 1; VM exit is 0, restoration is byte-exact and host
+GNOME/GPU remain healthy. An unprivileged read-only native control exposes the
+property on host595.91.07, but no native TMO operation was performed and the
+driver/kernel versions differ. [Evidence and limits](../traces/tmo_stage_20261006/README.md).
+This catches the skipped stage the owner wanted ruled out; the broader positive
+TMO objective remains unmet. Next, derive the actual ICtCp/TMO capability and
+implement bounded GPU TMO before advertising it or retesting Windows. Ordinary
+SDR rendering and working gamma do not establish a TMO buffer.
 
 Windows run 12 with implemented DIRECT10 surface-loading declarations still
 has Code 43 / smi exit 9 and zero display methods. Its fresh dump reaches

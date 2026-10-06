@@ -57,9 +57,15 @@ or rule out skipping TMO. OGKM `nvNeedsTmoLut()` explicitly returns false for
 absent TMO (and for ordinary SDR lacking HDR metadata). Direct plane `NV_PLANE_TMO_LUT`
 requests are a separate driver path: `nvidia-drm-crtc.c` builds a UNORM16 linear
 VSS table through `create_drm_tmo_surface()` and marks the TMO configuration
-changed. This route is the next Linux experiment, not a completed result.
+changed. The direct test has now run and **fails**: corrected harness `8316cb61`,
+unchanged product `2aa8b92d`, no plane TMO property, zero accepted TMO commits,
+zero bindings/control words and identical before/requested/restored images.
+The guest adapter rejects before kernel submission; compositor success does
+not qualify TMO. [Run B evidence](../../traces/tmo_stage_20261006/README.md)
+records native read-only property availability and its version/parity limits.
+The broader positive TMO objective remains unmet.
 
-The next acceptance gate must require the TMO property/request, an actual
+The strict acceptance gate requires the TMO property/request, an actual
 nonzero binding, bounded table consumption, real GPU completion and the
 expected changed/restored pixels. A missing property, an absent capability,
 a skipped stage or successful ordinary rendering must fail that gate. Run C
