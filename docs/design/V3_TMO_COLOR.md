@@ -44,8 +44,10 @@ The GPU performs the matrices and interpolation. TMO applies to intensity
 (the middle component in OGKM's Ct/I/Cp ordering), not independent RGB gamma.
 Variable per-zone sample counts are decoded and bounded on the GPU.
 Only OGKM's `TMO_LUT_SETTINGS_NO_CORRECTION` controls are currently supported. Other chroma
-policies refuse. TMO is a 64-segment linear UNORM16 table with a 1025-entry
-endpoint and four header entries; headers whose sample count exceeds/mismatches the fixed table or unequal intensity
+policies refuse. TMO is a 64-segment linear UNORM16 table with 65..1025 sample
+entries including the endpoint, plus four header entries. The register-authored
+extent bounds both the DMA span and GPU snapshot copy; allocations retain the
+fixed maximum size. Headers whose sample count exceeds/mismatches that declared extent or unequal intensity
 channels are rejected on the GPU against the same immutable snapshot used for
 processing. Existing input-table FP16 validation remains in force.
 

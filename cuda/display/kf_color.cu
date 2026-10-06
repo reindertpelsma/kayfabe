@@ -89,7 +89,7 @@ DEV float lookup(const H *lut, float x, U channel, U interpolate, U input) {
  * power-of-two sample count. Every actual read is independently bounded even
  * when the validation kernel has rejected a hostile header.
  */
-DEV float tone_lookup(const H *lut, float x, U interpolate) {
+DEV float tone_lookup(const H *lut, float x, U interpolate, U entries) {
     float position = sat(x)*64.0f;
     U zone = (U)position;
     if (zone > 63) zone=63;
@@ -104,7 +104,7 @@ DEV float tone_lookup(const H *lut, float x, U interpolate) {
     U local=(U)fraction;
     if (local >= count) local=count-1;
     U index=base+local;
-    if (index >= 1024) return 0;
+    if (entries < 65 || entries > 1025 || index >= entries-1) return 0;
     float a=lut[(index+4)*4+1]/65536.0f;
     float b=lut[(index+5)*4+1]/65536.0f;
     return interpolate ? a+(b-a)*(fraction-local) : a;
@@ -129,7 +129,7 @@ extern "C" __attribute__((global)) void kf_color_validate(const H *lut, U *statu
  * equal intensity channels and finite UNORM entries. Unsupported headers fail
  * before publication; they never select a guest-controlled read extent.
  */
-extern "C" __attribute__((global)) void kf_tmo_validate(const H *lut, U *status) {
+extern "C" __attribute__((global)) void kf_tmo_validate(const H *lut, U entries, U *status) {
     U i = __nvvm_read_ptx_sreg_ctaid_x()*256u + __nvvm_read_ptx_sreg_tid_x();
     if (i == 0) {
         U samples=0;
@@ -137,9 +137,9 @@ extern "C" __attribute__((global)) void kf_tmo_validate(const H *lut, U *status)
             Q header=((const Q *)lut)[seg/16];
             samples += 1u << ((header >> ((seg%16)*3)) & 7);
         }
-        if (samples != 1024) __nvvm_atom_or_gen_i((int *)status, 2);
+        if (entries < 65 || entries > 1025 || samples + 1 != entries) __nvvm_atom_or_gen_i((int *)status, 2);
     }
-    if (i < 1025u) {
+    if (i < entries && i < 1025u) {
         const H *entry = lut + (i+4)*4;
         if (entry[0] != entry[1] || entry[1] != entry[2])
             __nvvm_atom_or_gen_i((int *)status, 2);
@@ -149,7 +149,7 @@ extern "C" __attribute__((global)) void kf_tmo_validate(const H *lut, U *status)
 extern "C" __attribute__((global)) void kf_color_compose(
     const U *src, float *dst, U layout, U pitch, U bh, U x0b, U y0,
     U width, U ox, U oy, U fw, U fh, U flags, int as, int bs, int ad, int bd,
-    const H *lut, U interpolate, const H *tmo, U tmo_interpolate, const Pipeline *pipeline, U *status) {
+    const H *lut, U interpolate, const H *tmo, U tmo_interpolate, U tmo_entries, const Pipeline *pipeline, U *status) {
     U row = __nvvm_read_ptx_sreg_ctaid_x();
     for (U x = __nvvm_read_ptx_sreg_tid_x(); x < width; x += 256) {
         U dx = ox + x, dy = oy + row;
@@ -187,7 +187,7 @@ extern "C" __attribute__((global)) void kf_color_compose(
         /* Hardware orders components Ct, I, Cp. NO_CORRECTION keeps Ct/Cp.
          * A tone curve is NOT three independent RGB gamma lookups.
          */
-        if (tmo) v[1] = tone_lookup(tmo, v[1], tmo_interpolate);
+        if (tmo) v[1] = tone_lookup(tmo, v[1], tmo_interpolate, tmo_entries);
         if (pipeline) {
             matrix_apply(&pipeline->matrices[2], v, pipeline->enable[1]);
             if (pipeline->enable[1]) for (U c=0; c<3; ++c) v[c] = fp16(inline_lookup(pipeline,1,v[c]));

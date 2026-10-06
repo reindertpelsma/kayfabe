@@ -52,6 +52,8 @@ const COLOR_LUT_BYTES: usize = (4 + 1025) * 8;
 /// A bounded source span; the table is copied device-to-device before it is used.
 #[derive(Debug, Clone, Copy)]
 pub struct ColorLut {
+    /// Authored sample count including endpoint, bounded by the fixed allocation.
+    pub entries: u32,
     /// Byte offset into the imported store, bounded again at the GPU binding.
     pub src: u64,
     /// Interpolate between entries instead of selecting the lower entry.
@@ -769,17 +771,24 @@ impl DisplayGpu {
         if slot > 64 {
             return Err(refused(what, "LUT slot outside fixed allocation".into()));
         }
-        let src = self.at(lut.src, COLOR_LUT_BYTES, what)?;
+        if !(65..=1025).contains(&lut.entries) || ((input || slot == 64) && lut.entries != 1025) {
+            return Err(refused(
+                what,
+                "LUT sample count outside supported extent".into(),
+            ));
+        }
+        let bytes = (lut.entries as usize + 4) * 8;
+        let src = self.at(lut.src, bytes, what)?;
         let base = self
             .color_luts
             .ok_or_else(|| refused(what, "no LUT allocation".into()))?;
         let dst = base + u64::from(slot) * COLOR_LUT_BYTES as u64;
-        let key = (lut.src, lut.interpolate, lut.token);
+        let key = (lut.src, lut.interpolate, lut.token, lut.entries);
         if self.color_snapshots[slot as usize]
-            .is_none_or(|old| (old.src, old.interpolate, old.token) != key)
+            .is_none_or(|old| (old.src, old.interpolate, old.token, old.entries) != key)
         {
             self.cu
-                .memcpy_d2d_async(self.stream, dst, src, COLOR_LUT_BYTES, what)?;
+                .memcpy_d2d_async(self.stream, dst, src, bytes, what)?;
             self.color_snapshots[slot as usize] = Some(lut);
         }
         if input {
@@ -844,14 +853,18 @@ impl DisplayGpu {
         }
         let p = self.color_snapshot(slot, lut, true)?;
         let tone = self.color_snapshot(32 + slot, tmo, false)?;
-        if tmo.is_some() {
+        if let Some(tmo) = tmo {
             let f = self.color.as_ref().map_err(|e| refused(what, e.clone()))?[3];
             let status = self
                 .color_status
                 .as_ref()
                 .ok_or_else(|| refused(what, "missing status".into()))?
                 .0;
-            let mut args = vec![tone.to_le_bytes().to_vec(), status.to_le_bytes().to_vec()];
+            let mut args = vec![
+                tone.to_le_bytes().to_vec(),
+                tmo.entries.to_le_bytes().to_vec(),
+                status.to_le_bytes().to_vec(),
+            ];
             self.cu
                 .launch_args(self.stream, f, 5, 256, 0, &mut args, what)?;
         }
@@ -891,6 +904,7 @@ impl DisplayGpu {
             u(u32::from(lut.is_some_and(|v| v.interpolate))),
             tone.to_le_bytes().to_vec(),
             u(u32::from(tmo.is_some_and(|v| v.interpolate))),
+            u(tmo.map_or(0, |v| v.entries)),
             program.to_le_bytes().to_vec(),
             self.color_status
                 .as_ref()
@@ -1272,8 +1286,9 @@ impl DisplayGpu {
             || !surface.len().is_multiple_of(8)
             || layer.extent > surface.len() as u64
             || fixture.tone.is_some_and(|t| {
-                t.table.len() != COLOR_LUT_BYTES
-                    || t.mutate.is_some_and(|v| v.len() != COLOR_LUT_BYTES)
+                !(69 * 8..=COLOR_LUT_BYTES).contains(&t.table.len())
+                    || !t.table.len().is_multiple_of(8)
+                    || t.mutate.is_some_and(|v| v.len() != t.table.len())
             })
             || fixture
                 .mutate_input
@@ -1300,11 +1315,13 @@ impl DisplayGpu {
             let mut l = *layer;
             l.src = 0;
             let input_lut = Some(ColorLut {
+                entries: 1025,
                 src: surface.len() as u64,
                 interpolate: false,
                 token: 1,
             });
-            let tone_lut = fixture.tone.map(|_| ColorLut {
+            let tone_lut = fixture.tone.map(|t| ColorLut {
+                entries: (t.table.len() / 8 - 4) as u32,
                 src: tone_src,
                 interpolate: true,
                 token: 4,
@@ -1329,6 +1346,7 @@ impl DisplayGpu {
                     &l,
                     input_lut,
                     Some(ColorLut {
+                        entries: (tone.table.len() / 8 - 4) as u32,
                         src: tone_src,
                         interpolate: true,
                         token: if tone.rearm { 5 } else { 4 },
@@ -1347,6 +1365,7 @@ impl DisplayGpu {
                     0,
                     &l,
                     Some(ColorLut {
+                        entries: 1025,
                         src: surface.len() as u64,
                         interpolate: false,
                         token: if fixture.rearm { 3 } else { 1 },
@@ -1359,6 +1378,7 @@ impl DisplayGpu {
                 w,
                 h,
                 Some(ColorLut {
+                    entries: 1025,
                     src: (surface.len() + input.len()) as u64,
                     interpolate: fixture.interpolate,
                     token: 2,
@@ -1544,13 +1564,14 @@ mod tests {
         compose.extend([
             ".u64 .ptr .align 1",
             ".u32",
+            ".u32",
             ".u64 .ptr .align 1",
             ".u64 .ptr .align 1",
         ]);
         assert_eq!(types("kf_color_compose"), compose);
         assert_eq!(
             types("kf_tmo_validate"),
-            [".u64 .ptr .align 1", ".u64 .ptr .align 1"]
+            [".u64 .ptr .align 1", ".u32", ".u64 .ptr .align 1"]
         );
         assert_eq!(
             types("kf_color_validate"),

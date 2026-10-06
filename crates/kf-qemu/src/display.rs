@@ -909,12 +909,16 @@ impl ColorDmas {
             kf_disp::color::Binding::Dma { handle, .. } => Some(fresh(handle)?),
             kf_disp::color::Binding::Vidmem(_) => None,
         };
-        let src = lut.binding.span(dma.as_ref()).map_err(str::to_owned)?;
+        let src = lut
+            .binding
+            .span_bytes(dma.as_ref(), (u64::from(lut.entries) + 4) * 8)
+            .map_err(str::to_owned)?;
         self.next = self
             .next
             .checked_add(1)
             .ok_or("colour binding token exhausted")?;
         let resolved = kf_cuda::display::ColorLut {
+            entries: lut.entries,
             src,
             interpolate: lut.interpolate,
             token: self.next,
@@ -3866,6 +3870,7 @@ mod tests {
         use kf_disp::color::{Binding, LUT_BYTES, Lut};
         let mut cache = ColorDmas::default();
         let lut = Some(Lut {
+            entries: 1025,
             binding: Binding::Dma {
                 handle: 9,
                 offset: 256,

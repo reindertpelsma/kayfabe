@@ -24,9 +24,17 @@ pub enum Binding {
 impl Binding {
     /// Bound every header and endpoint byte, including checked address arithmetic.
     pub fn span(self, dma: Option<&CtxDma>) -> Result<u64, &'static str> {
+        self.span_bytes(dma, LUT_BYTES)
+    }
+
+    /// Resolve a bounded authored table extent, including the header and endpoint.
+    pub fn span_bytes(self, dma: Option<&CtxDma>, bytes: u64) -> Result<u64, &'static str> {
+        if !(40..=LUT_BYTES).contains(&bytes) || !bytes.is_multiple_of(8) {
+            return Err("LUT extent outside fixed bound");
+        }
         let addr = match self {
             Self::Vidmem(addr) => addr
-                .checked_add(LUT_BYTES)
+                .checked_add(bytes)
                 .map(|_| addr)
                 .ok_or("LUT address overflow"),
             Self::Dma { offset, .. } => {
@@ -34,7 +42,7 @@ impl Binding {
                 if d.target != Target::Vidmem || d.block_linear {
                     return Err("LUT requires linear video memory");
                 }
-                d.span(offset, LUT_BYTES).ok_or("LUT exceeds context DMA")
+                d.span(offset, bytes).ok_or("LUT exceeds context DMA")
             }
         }?;
         if addr & 7 != 0 {
@@ -44,9 +52,11 @@ impl Binding {
     }
 }
 
-/// DIRECT10, unmirrored, fixed-size table, plus optional interpolation.
+/// Bounded LUT binding: direct input/output table or segmented linear tone table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Lut {
+    /// Number of sample entries, including the endpoint, excluding four header entries.
+    pub entries: u32,
     /// Context-DMA or physical video-memory source.
     pub binding: Binding,
     /// Interpolate between adjacent entries instead of taking the lower entry.
@@ -179,6 +189,7 @@ impl Control {
             return Err("LUT requires 1029-entry unmirrored DIRECT10");
         }
         Ok(Lut {
+            entries: 1025,
             binding,
             interpolate: get(v, self.interpolate) != 0,
         })
@@ -338,11 +349,11 @@ pub fn pipeline(
         let interp = field("INTERPOLATE")?;
         let sat = field("SAT_MODE")?;
         let mask = |f: (u8, u8)| (u32::MAX >> (31 - f.0 + f.1)) << f.1;
-        if get(ctl, size) != 1029
+        if !(69..=1029).contains(&get(ctl, size))
             || get(ctl, sat) != 2
             || ctl & !(mask(size) | mask(interp) | mask(sat)) != 0
         {
-            return Err("TMO requires linear 1029-entry no-correction program");
+            return Err("TMO requires bounded linear no-correction program");
         }
         // OGKM TMO_LUT_SETTINGS_NO_CORRECTION. Other chroma correction policies refuse.
         for (method, fields) in [
@@ -390,6 +401,7 @@ pub fn pipeline(
             }
         }
         p.tmo = Some(Lut {
+            entries: get(ctl, size) - 4,
             binding,
             interpolate: get(ctl, interp) != 0,
         });
@@ -711,6 +723,29 @@ mod tests {
                             offset: 0x2000
                         }
                     );
+                }
+                for size in [69, 261, 1029] {
+                    set(
+                        &mut b,
+                        t,
+                        c,
+                        "SET_TMO_CONTROL",
+                        None,
+                        crate::class::put(ctl, t.f(c, "SET_TMO_CONTROL_SIZE").unwrap(), size),
+                    );
+                    let p = pipeline(t, c, |m| b.get(&m).copied().unwrap_or(0), &tables).unwrap();
+                    assert_eq!(p.tmo.unwrap().entries, size - 4);
+                }
+                for size in [0, 68, 1030, 2047] {
+                    set(
+                        &mut b,
+                        t,
+                        c,
+                        "SET_TMO_CONTROL",
+                        None,
+                        crate::class::put(ctl, t.f(c, "SET_TMO_CONTROL_SIZE").unwrap(), size),
+                    );
+                    assert!(pipeline(t, c, |m| b.get(&m).copied().unwrap_or(0), &tables).is_err());
                 }
                 set(
                     &mut b,

@@ -182,6 +182,47 @@ fn main() -> Result<(), String> {
     println!(
         "TMO_GPU variable_segment_header PASS nonuniform first zone samples index2, not fixed index4"
     );
+    // 64 zones with one sample each: exact minimum table extent, including endpoint.
+    let mut compact = vec![0_u8; 69 * 8];
+    for entry in compact[32..].chunks_exact_mut(8) {
+        entry[..6].copy_from_slice(&[0, 64, 0, 64, 0, 64]);
+    }
+    let pixels = run(
+        &mut gpu,
+        &ColorFixture {
+            tone: Some(ColorTone {
+                table: &compact,
+                pipeline: &bypass,
+                ..tone
+            }),
+            ..fixture
+        },
+    )?;
+    assert!(
+        pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|p| *p == [128, 64, 128, 255]),
+        "compact tone pixels: {pixels:?}"
+    );
+    println!("TMO_GPU compact_table PASS 65 sample entries, exact 552-byte source extent");
+    let mut invalid_compact = compact.clone();
+    invalid_compact[0] = 7; // Header demands more samples than the declared source extent.
+    let error = run(
+        &mut gpu,
+        &ColorFixture {
+            tone: Some(ColorTone {
+                table: &invalid_compact,
+                pipeline: &bypass,
+                ..tone
+            }),
+            ..fixture
+        },
+    )
+    .unwrap_err();
+    assert!(error.contains("TMO LUT"), "wrong compact refusal: {error}");
+    println!("TMO_GPU compact_bounds PASS hostile header refuses within authored extent");
     for bad in [0, 1, 2] {
         let mut invalid = zero.clone();
         if bad == 0 {
