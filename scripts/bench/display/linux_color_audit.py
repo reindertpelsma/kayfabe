@@ -25,6 +25,7 @@ def main():
     p.add_argument('--key', type=Path, required=True)
     p.add_argument('--revision', required=True)
     p.add_argument('--port', type=int, default=2244)
+    p.add_argument('--reject-gamma', action='store_true', help='Guest-only KMS failure control')
     a = p.parse_args()
     if len(a.revision) != 40 or not all(x in '0123456789abcdef' for x in a.revision):
         p.error('A full product revision is required')
@@ -93,6 +94,7 @@ def main():
     (a.out / 'manifest.json').write_text(json.dumps(dict(
         source_revision=a.revision, qemu_sha256=sha, command=cmd,
         harness_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        guest_gamma_fault=a.reject_gamma,
         flags={'KF3_DISPLAY_METHOD_TRACE': '1'}, scope='AD104 / Linux580.159.04'), indent=2)+'\n')
     mark('start')
     with open(a.out / 'qemu.log', 'wb') as log:
@@ -109,7 +111,7 @@ def main():
                   'sudo cat /sys/module/nvidia_drm/parameters/modeset; '
                   'nvidia-smi --query-gpu=name,driver_version --format=csv,noheader; '
                   'modetest -M nvidia-drm -c -p', timeout=120)
-            sources = ['color_properties.c', '../gfxset/src/wl_scene.c']
+            sources = ['color_properties.c', 'reject_gamma.c', '../gfxset/src/wl_scene.c']
             for relative in sources:
                 path = (here / relative).resolve()
                 guest('copy-'+path.stem, 'mkdir -p ~/color; cat > ~/color/'+path.name,
@@ -118,6 +120,7 @@ def main():
                   'wayland-scanner client-header /usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml xdg-shell-client-protocol.h && '
                   'wayland-scanner private-code /usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml xdg-shell-protocol.c && '
                   'gcc -O2 -Wall -Wextra -Werror -o color_properties color_properties.c $(pkg-config --cflags --libs libdrm) && '
+                  'gcc -O2 -Wall -Wextra -Werror -shared -fPIC -o reject_gamma.so reject_gamma.c $(pkg-config --cflags --libs libdrm) -ldl && '
                   'gcc -O2 -Wall -o wl_scene wl_scene.c xdg-shell-protocol.c -lwayland-client -lwayland-egl -lEGL -lGLESv2')
             guest('kms-before', '~/color/color_properties /dev/dri/card0')
             guest('weston-start', "sudo mkdir -m 755 /run/kfcolorw; "
@@ -135,6 +138,7 @@ def main():
                 raise RuntimeError('Weston GPU scene did not become ready')
             guest('weston-stop', 'sudo pkill -x wl_scene || true; sudo pkill -x weston || true')
             time.sleep(3)
+            preload = 'LD_PRELOAD=/home/ubuntu/color/reject_gamma.so ' if a.reject_gamma else ''
             guest('sway-start', "mkdir -p ~/color/runtime; chmod 700 ~/color/runtime; "
                   "printf 'output * bg #203040 solid_color\\ndefault_border none\\n"
                   "seat seat0 hide_cursor 100\\nxwayland disable\\n' > ~/color/sway.conf; "
@@ -142,7 +146,7 @@ def main():
                   "sudo sh -c 'SEATD_VTBOUND=0 nohup seatd -g video "
                   ">/tmp/kfcolor-seatd.log 2>&1 &' ; sleep 1; "
                   "XDG_RUNTIME_DIR=/home/ubuntu/color/runtime LIBSEAT_BACKEND=seatd SEATD_SOCK=/run/seatd.sock "
-                  "nohup sway --unsupported-gpu -d -D noscanout -c ~/color/sway.conf >/tmp/kfcolor-sway.log 2>&1 &")
+                  + preload + "nohup sway --unsupported-gpu -d -D noscanout -c ~/color/sway.conf >/tmp/kfcolor-sway.log 2>&1 &")
             time.sleep(6)
             wl = 'XDG_RUNTIME_DIR=/home/ubuntu/color/runtime WAYLAND_DISPLAY=wayland-1 '
             guest('sway-scene', wl+'nohup ~/color/wl_scene 180 >/tmp/kfcolor-sway-scene.log 2>&1 &')
