@@ -91,8 +91,8 @@ the first changed saved assertion moves from `0x169d836` to `0x1a103e6`.
 Chroma policies beyond OGKM's no-correction program remain unresolved: the
 public class fields provide bit widths, while this OGKM version only programs
 the no-correction constant. No transfer equation for SAT_MODE and the weighted
-zones has been established. DIRECT8 and segmented ILUT/OLUT remain separate
-implementation work; acknowledging these limits does not close the owner goal.
+zones has been established. The later DIRECT8 checkpoint below removes that format refusal. Segmented
+ILUT/OLUT remains implementation work; these limits do not close the owner goal.
 
 ## DIRECT8 implementation checkpoint, 2026-10-06
 
@@ -104,4 +104,6 @@ input with distinct index255 values and a compact output ramp. Segmented
 ILUT/OLUT and chroma-correction policies remain open. Nouveau's
 [window implementation](https://github.com/torvalds/linux/blob/master/drivers/gpu/drm/nouveau/dispnv50/wndwc57e.c)
 independently uses DIRECT8 for 256 entries and adds four header entries and an
-interpolation endpoint. This source checkpoint is not yet a hardware claim.
+interpolation endpoint. At product `00220cc6`, all eight SDR GPU fixtures pass on the borrowed RTX4070,
+including both compact-index tests ([log](../../traces/tmo_stage_20261006/direct8-00220-color-sdr.log)).
+This is a synthetic GPU result; no native DIRECT8 display parity claim.

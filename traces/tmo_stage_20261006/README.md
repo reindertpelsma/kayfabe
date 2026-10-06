@@ -134,3 +134,16 @@ outer payload is one byte short, so only complete saved records are compared;
 no checksum-valid claim or live-local inference. This establishes a changed
 initialization boundary, not that Windows now works or that TMO was its only
 blocker. Raw dump/driver binaries remain private.
+
+The strict Linux stage-presence experiment also passes run D at `8dde9b51`
+and run E at `00220cc6`, after the variable table and DIRECT8 changes.
+[Run D verdict](linux-d-tmo-verdict.json) and [run E verdict](linux-e-tmo-verdict.json)
+retain source revisions and immutable QEMU hashes; each run has matching
+manifest, events, complete compressed method/compositor logs and a clean VM
+exit record. Run E again retains the zero curve, accepts real atomic commits,
+arms the tone buffer, produces black output and restores the baseline bytes.
+[DIRECT8 SDR oracle](direct8-00220-color-sdr.log) passes eight categories;
+[TMO regression](direct8-00220-color-tmo.log) passes eight categories.
+The variable-table product's [gates](tmo-8dde-gates.log) pass 9/9 with 11 USER
+births; [DIRECT8 QEMU build](direct8-00220-build.log) records its source artifact.
+Segmented ILUT/OLUT, mirrored tables and non-neutral chroma policies remain open.

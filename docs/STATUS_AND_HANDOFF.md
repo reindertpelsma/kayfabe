@@ -25,7 +25,9 @@ changes after the same first 17 assertions: `0x169d836` is replaced by
 `0x1a103e6`; no interpretation as an NV_STATUS or completed initialization.
 Product `8dde9b51` additionally executes variable tone segments and 65..1025
 sample tables; GPU fixtures pass, including exact compact extents and hostile
-header rejection. Broader DIRECT8/segmented input/output and chroma policies
+header rejection. Product `00220cc6` adds real DIRECT8 input/output lookup; all eight SDR GPU
+fixtures pass on the borrowed host; strict Linux run E passes again.
+Broader segmented input/output and chroma policies
 still need implementation and independent semantics/oracles.
 The identified absent-TMO fallback lives in NVKMS,
 whose build documents Unix sharing; its Windows use is not established.
