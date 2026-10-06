@@ -854,10 +854,18 @@ impl LatchedDmas {
 
 /// A resolved colour binding belongs to one armed channel incarnation. Unlike the
 /// framebuffer cache, its token also names the immutable GPU snapshot of the LUT.
-#[derive(Default)]
 struct ColorDmas {
     slots: [Option<(ColorKey, kf_cuda::display::ColorLut)>; 33],
     next: u64,
+}
+
+impl Default for ColorDmas {
+    fn default() -> Self {
+        Self {
+            slots: [None; 33],
+            next: 0,
+        }
+    }
 }
 
 type ColorKey = (u32, u32, u32, kf_disp::color::Lut);
