@@ -34,7 +34,8 @@ changed fatal path: helper `0x169d836` before buffer allocation/map operations.
 Pinned static driver code strongly identifies a zero-size TMO descriptor when
 TMO_PRESENT is absent; the live descriptor size was not recovered. Complete
 saved records are readable; the outer NVCD is one byte short and its checksum
-cannot be validated. Read-only NBD/NTFS recovery verified cleanup. Raw dumps,
+cannot be validated. Run 12 at revision `2aa8b92d` used read-only NBD/NTFS
+recovery; its receipt records verified cleanup. Raw dumps,
 Windows driver bytes and loaded pointers remain private.
 
 Reproduce the bounded static correspondence with the
