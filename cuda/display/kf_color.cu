@@ -85,6 +85,31 @@ DEV float lookup(const H *lut, float x, U channel, U interpolate, U input) {
     return interpolate ? fa + (fb - fa) * (pos - i) : fa;
 }
 
+/* The tone table has 64 equal input zones, each with a header-defined
+ * power-of-two sample count. Every actual read is independently bounded even
+ * when the validation kernel has rejected a hostile header.
+ */
+DEV float tone_lookup(const H *lut, float x, U interpolate) {
+    float position = sat(x)*64.0f;
+    U zone = (U)position;
+    if (zone > 63) zone=63;
+    U base=0;
+    for (U seg=0; seg<zone; ++seg) {
+        Q header=((const Q *)lut)[seg/16];
+        base += 1u << ((header >> ((seg%16)*3)) & 7);
+    }
+    Q header=((const Q *)lut)[zone/16];
+    U count=1u << ((header >> ((zone%16)*3)) & 7);
+    float fraction=(position-zone)*count;
+    U local=(U)fraction;
+    if (local >= count) local=count-1;
+    U index=base+local;
+    if (index >= 1024) return 0;
+    float a=lut[(index+4)*4+1]/65536.0f;
+    float b=lut[(index+5)*4+1]/65536.0f;
+    return interpolate ? a+(b-a)*(fraction-local) : a;
+}
+
 /* Validate the actual immutable snapshot the kernels use, never a CPU reread.
  * Only SDR FP16 values [0,1] are accepted. Reserved padding/header are not sampled.
  * Invalid content sets a bounded status word; publication and completion stop.
@@ -100,16 +125,19 @@ extern "C" __attribute__((global)) void kf_color_validate(const H *lut, U *statu
     }
 }
 
-/* Validate the immutable tone snapshot: fixed 64-segment linear VSS header,
+/* Validate the immutable tone snapshot: 64-zone linear VSS with bounded per-zone sample counts,
  * equal intensity channels and finite UNORM entries. Unsupported headers fail
  * before publication; they never select a guest-controlled read extent.
  */
 extern "C" __attribute__((global)) void kf_tmo_validate(const H *lut, U *status) {
     U i = __nvvm_read_ptx_sreg_ctaid_x()*256u + __nvvm_read_ptx_sreg_tid_x();
-    if (i < 64u) {
-        Q header = ((const Q *)lut)[i/16];
-        if (((header >> ((i%16)*3)) & 7) != 4)
-            __nvvm_atom_or_gen_i((int *)status, 2);
+    if (i == 0) {
+        U samples=0;
+        for (U seg=0; seg<64; ++seg) {
+            Q header=((const Q *)lut)[seg/16];
+            samples += 1u << ((header >> ((seg%16)*3)) & 7);
+        }
+        if (samples != 1024) __nvvm_atom_or_gen_i((int *)status, 2);
     }
     if (i < 1025u) {
         const H *entry = lut + (i+4)*4;
@@ -159,7 +187,7 @@ extern "C" __attribute__((global)) void kf_color_compose(
         /* Hardware orders components Ct, I, Cp. NO_CORRECTION keeps Ct/Cp.
          * A tone curve is NOT three independent RGB gamma lookups.
          */
-        if (tmo) v[1] = lookup(tmo, v[1], 1, tmo_interpolate, 0);
+        if (tmo) v[1] = tone_lookup(tmo, v[1], tmo_interpolate);
         if (pipeline) {
             matrix_apply(&pipeline->matrices[2], v, pipeline->enable[1]);
             if (pipeline->enable[1]) for (U c=0; c<3; ++c) v[c] = fp16(inline_lookup(pipeline,1,v[c]));

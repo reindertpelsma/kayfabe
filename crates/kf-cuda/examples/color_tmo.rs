@@ -152,12 +152,44 @@ fn main() -> Result<(), String> {
             .all(|p| *p == [255, 255, 255, 255])
     );
     println!("TMO_GPU rearm_snapshot PASS fresh token consumes white curve");
-    for bad in [0, 1] {
+    let mut segmented = zero.clone();
+    let mut header = u64::from_le_bytes(segmented[..8].try_into().unwrap());
+    header = (header & !0x1ff) | 3 | (3 << 3) | (5 << 6);
+    segmented[..8].copy_from_slice(&header.to_le_bytes());
+    let tiny_input = table(0x1c00); // exact FP16 1/256: first zone, fraction 1/4.
+    segmented[(4 + 2) * 8..(4 + 2) * 8 + 6].copy_from_slice(&[0, 64, 0, 64, 0, 64]);
+    segmented[(4 + 4) * 8..(4 + 4) * 8 + 6].copy_from_slice(&[0, 192, 0, 192, 0, 192]);
+    let pixels = run(
+        &mut gpu,
+        &ColorFixture {
+            input: &tiny_input,
+            tone: Some(ColorTone {
+                table: &segmented,
+                pipeline: &bypass,
+                ..tone
+            }),
+            ..fixture
+        },
+    )?;
+    assert!(
+        pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|p| *p == [1, 64, 1, 255]),
+        "variable segment pixels: {pixels:?}"
+    );
+    println!(
+        "TMO_GPU variable_segment_header PASS nonuniform first zone samples index2, not fixed index4"
+    );
+    for bad in [0, 1, 2] {
         let mut invalid = zero.clone();
         if bad == 0 {
             invalid[0] = 0;
-        } else {
+        } else if bad == 1 {
             invalid[32] = 1;
+        } else {
+            invalid[..32].fill(255);
         }
         let error = run(
             &mut gpu,

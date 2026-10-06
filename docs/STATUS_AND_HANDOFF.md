@@ -22,7 +22,7 @@ must also gain real processing; this checkpoint is not the intended endpoint.
 Windows retest is in flight. The identified absent-TMO fallback lives in NVKMS,
 whose build documents Unix sharing; its Windows use is not established.
 
-The previously verified SDR product and missing-capability test follow:
+The earlier SDR product `2aa8b92d` and missing-capability test follow:
 
 **Latest owner-directed implementation:** branch `codex/sdr-lut-20261006`,
 product `2aa8b92de6c6ab158f9bc8e788be792408a074a3`, real bounded GPU SDR

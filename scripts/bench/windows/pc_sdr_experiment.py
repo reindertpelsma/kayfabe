@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Run the audited fresh-overlay Windows harness with real SDR colour, keeping
-active TMO and constructor-only display probes disabled. Uses its ordinary CLI.
+"""Run the audited fresh-overlay Windows harness with real GPU colour.
+Constructor-only display probes stay disabled; the named product revision
+controls the implemented colour stages. Uses its ordinary CLI.
 Only the Kayfabe arm is allowed; this never detaches the physical host display.
 """
 import hashlib
