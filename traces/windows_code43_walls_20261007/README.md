@@ -231,3 +231,23 @@ regression retains both namespaces and raw initialize/nonmapped flags, never
 dereferences a numeric physical address, exhausts its16-record budget, and
 rejects truncation, extra parameters and an entry count beyond the source
 bound. Targeted RM/QEMU Clippy reports zero new debt (207 existing).
+
+## Run20: exact missing-kernel-GR promotion entries
+
+Product/QEMU bf909e1affb5cdbcb3a7f1d87fbff44642ebf166; [gates](promote-observer-gates.log)
+9/9,11/11 USER births; [build](promote-observer-build.log), [command](run20-command.json),
+[status](run20-status.json), [trace](run20-qemu.log.gz), [inline entries](run20-requests.log),
+[completion](run20-complete.json), [host health](run20-host-health.txt).
+The observer records two requests, with nine entries each, and no reply change.
+Both fail on the missing kernel-GR twin, rather than a decoder error. MAIN(0),
+PATCH(2), FECS_EVENT(9) and privilege map(11) have PA+VA+size and initialize=1.
+Bundle/pagepool/attribute/RTV(3..6) carry only VA, with size/PA/initialize=0.
+Unrestricted privilege map(10) is initialize-only/nonmapped. Initialized ids
+are0/2/9/10/11; mapped ids0/2/3/4/5/6/9/11. PhysAttr4 is VIDMEM plus
+GPU_CACHEABLE_NO; PhysAttr5 is coherent system memory plus GPU_CACHEABLE_NO.
+Source: ctrl2080gpu.h:892..933 and kernel_graphics_context.c:1690..1950,
+OGKM580.65.06 commit307159f2623d3bf45feb9177bd2da52ffbc5ddf9.
+This explains the declared buffers, without assuming a Windows-only consumer.
+Windows remains Code43/smi9 with no display UPDATE/scanout or GPU submission.
+Next: real owned unprivileged GR context and Translated CE work on its runlist,
+first tested on bare metal; promotion must require that context, per owner rulingB.

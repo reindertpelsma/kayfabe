@@ -37,7 +37,11 @@ hint e38498 disappears. Code43/smi9 persist. Next: kernel GR channels are
 acknowledged without birth, then GPU_PROMOTE_CTX refuses. Capture exact inline
 promotion entries before implementing a real owned unprivileged GR context.
 The default-off observer is implemented with16 records of at most16 entries;
-615 kf-rm tests pass, zero new Clippy debt. Diagnostic run20 pending;
+615 kf-rm tests pass, zero new Clippy debt. Run20 at bf909e1a captures both
+nine-entry requests: main/patch/FECS/maps initialize, four entries only carry VA.
+The payload decodes; the missing real kernel-GR twin refuses promotion. Next:
+owned unprivileged GR context and actual Translated CE work on that runlist,
+with bare-metal validation before another guest test;
 queued Deferred API controls/methods remain unsupported; no completion is forged.
 
 
