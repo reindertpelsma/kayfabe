@@ -11,6 +11,12 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-07
 
+**Active Code43 iteration, 2026-10-07:** owner requests continued repair one wall
+at a time. The first change resolves the declared Device-shared default VA for
+COPY2; bounded same-GPU relationships and revocation tests pass (611 kf-rm tests).
+Windows rerun/evidence pending; do not infer initialization success.
+[Iteration record](../traces/windows_code43_walls_20261007/README.md).
+
 **Windows allocation investigation, 2026-10-07:** bounded diagnostic run14 at
 `b928ab4c` captures the complete single-inline memory descriptor: class82
 FBMEM registration, flags48040200, direct PFN0xea6e0, 128KiB. Its shape is not

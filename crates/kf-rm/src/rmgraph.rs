@@ -398,6 +398,8 @@ pub struct AllocFacts {
     /// Device; an object under an un-instanced Device has no resolvable target —
     /// MISS at use, never a default-GPU0 guess).
     pub device_instance: Option<u32>,
+    /// Full declared Device sharing/mode facts; guest names, never host authority.
+    pub device_alloc: Option<kf_abi::view::DeviceAllocFacts>,
     /// ★ The privilege a **Client** root declares about itself (`processID` on
     /// `NV0000_ALLOC_PARAMETERS`, decoded by the ABI seam into a [`ClientKind`]) —
     /// THE decision-#14 grouping discriminator (`l1_concurrency.md` §12.27).

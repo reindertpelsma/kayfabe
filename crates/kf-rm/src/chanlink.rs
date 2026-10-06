@@ -150,7 +150,7 @@ pub struct ChannelAlloc {
     /// neither is known (refused by name at birth).
     pub vaspace: Option<u32>,
     /// ★ v3-gfx: the client whose namespace holds [`Self::vaspace`] — the channel's own, unless
-    /// the VA space it names is a `DUP_OBJECT` alias, in which case the ORIGINAL's (the one the
+    /// the VA space it names is a `DUP_OBJECT` alias or a shared Device default; then the ORIGINAL's (the one the
     /// page-directory statement named). `[measured vgfx 2026-09-26]` the Vulkan UMD allocs the VA
     /// space in a probe client and dups it into its device; its context share names the dup.
     pub vaspace_client: u32,
@@ -460,6 +460,14 @@ pub enum ChanAnswer {
 /// plane performs the act on its own thread (P5b) — the reply waits, the drainer does not.
 pub type ChanSink = std::sync::Arc<dyn Fn(ChanStatement) -> ChanAnswer + Send + Sync>;
 
+#[derive(Debug, Clone, Copy)]
+struct DeviceVaDeclaration {
+    facts: kf_abi::view::DeviceAllocFacts,
+    // Bound to the live target declaration at Device allocation; never rebound on handle reuse.
+    share: Option<(u32, u32)>,
+    revoked: bool,
+}
+
 /// ★★★ The link. Seated at the FRONT of the chain (ahead of the object seat, which terminates
 /// `GSP_RM_ALLOC`/`GSP_RM_FREE`, and of the ledger, which would record the controls unserviced).
 pub struct ChannelPolicy {
@@ -468,6 +476,8 @@ pub struct ChannelPolicy {
     sink: ChanSink,
     /// Clients that declared the kernel sentinel pid.
     kernel_clients: std::collections::BTreeSet<u32>,
+    /// Bounded Device declarations and validated same-GPU client-share edges.
+    devices: std::collections::BTreeMap<(u32, u32), DeviceVaDeclaration>,
     /// `(hClient, parent)` → the first `FERMI_VASPACE_A` allocated under it.
     vas_under: std::collections::BTreeMap<(u32, u32), u32>,
     /// `hClient` → every VA-space object a page-directory statement named in it. ★ The fallback for
@@ -508,6 +518,7 @@ impl ChannelPolicy {
             guest_os,
             sink,
             kernel_clients: Default::default(),
+            devices: Default::default(),
             vas_under: Default::default(),
             vas_stated: Default::default(),
             tsgs: Default::default(),
@@ -646,6 +657,52 @@ impl ChannelPolicy {
             };
         }
         match alloc_shape(&self.abi, h.class) {
+            Some(AllocParams::Device) => {
+                let params = crate::rmrpc::alloc_params_window(&self.abi, body)?;
+                let facts = self.abi.decode_device_alloc_facts(params).ok()?;
+                let key = (h.client, h.handle);
+                if self.devices.contains_key(&key) {
+                    return Some(Self::refusal(
+                        NV_ERR_INVALID_ARGUMENT,
+                        "duplicate Device declaration",
+                        cmd,
+                    ));
+                }
+                if self.devices.len() >= crate::rmgraph::MAX_LIVE_HANDLES {
+                    return Some(Self::refusal(
+                        0x1a,
+                        "Device declaration budget exhausted",
+                        cmd,
+                    ));
+                }
+                let external = facts.h_client_share != 0 && facts.h_client_share != h.client;
+                let share = if external {
+                    // OGKM deviceInitClientShare resolves by device instance in hClientShare,
+                    // not by copying a guest target handle into a host namespace.
+                    let mut candidates = self
+                        .devices
+                        .range((facts.h_client_share, 0)..=(facts.h_client_share, u32::MAX))
+                        .filter(|(_, d)| !d.revoked && d.facts.device_id == facts.device_id)
+                        .map(|(key, _)| *key);
+                    let first = candidates.next();
+                    if candidates.next().is_none() {
+                        first
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                self.devices.insert(
+                    key,
+                    DeviceVaDeclaration {
+                        facts,
+                        share,
+                        revoked: external && share.is_none(),
+                    },
+                );
+                return None;
+            }
             Some(AllocParams::VaSpace) => {
                 self.vas_objects.insert((h.client, h.handle));
                 let first = *self
@@ -712,17 +769,6 @@ impl ChannelPolicy {
         let tsg = self.tsgs.get(&(h.client, h.parent)).copied();
         // The device the channel hangs off: its parent, or its group's parent.
         let device = tsg.map_or(h.parent, |t| t.0);
-        let default_vas = |me: &Self| {
-            // The device's default VAS: allocated under the parent device, or else the ONE VA
-            // space this client ever stated a page directory for. Two candidates and no alloc to
-            // decide between them is refused by name at birth (`None`).
-            me.vas_under.get(&(h.client, device)).copied().or_else(|| {
-                let set = me.vas_stated.get(&h.client)?;
-                (set.len() == 1)
-                    .then(|| set.iter().next().copied())
-                    .flatten()
-            })
-        };
         let ctx_vas = self
             .abi
             .decode_channel_alloc_facts(params)
@@ -733,15 +779,15 @@ impl ChannelPolicy {
                     .flatten()
             });
         let vaspace = if f.h_vaspace != 0 {
-            Some(f.h_vaspace)
+            Some((h.client, f.h_vaspace))
         } else if let Some(v) = ctx_vas.filter(|v| *v != 0) {
-            Some(v)
+            Some((h.client, v))
         } else if let Some(v) = tsg.map(|t| t.1).filter(|v| *v != 0) {
             // ★ P5b: a group member's VA space is the GROUP's (`kernel_channel.c` takes it from
             // the TSG when the channel names none).
-            Some(v)
+            Some((h.client, v))
         } else {
-            default_vas(self)
+            self.device_default_va(h.client, device)
         };
         // ★ P5b: `ENGINE_TYPE_NULL` names the group's engine (libcuda's CE channels).
         let engine_type = match self.abi.decode_channel_engine_type(params).ok().flatten() {
@@ -751,8 +797,8 @@ impl ChannelPolicy {
         let privilege = self.abi.decode_channel_privilege(params).ok().flatten();
         // ★ v3-gfx: a dup'd VA space is the ORIGINAL object (`DUP_OBJECT` aliases, it does not copy).
         let (vaspace_client, vaspace) = match vaspace {
-            Some(v) => {
-                let (c, v) = self.vas_canonical(h.client, v);
+            Some((c, v)) => {
+                let (c, v) = self.vas_canonical(c, v);
                 (c, Some(v))
             }
             None => (h.client, None),
@@ -1335,6 +1381,51 @@ impl ChannelPolicy {
         }
     }
 
+    /// Resolve only declared Device sharing, with bounded traversal and no cross-GPU fallback.
+    fn device_default_va(&self, client: u32, device: u32) -> Option<(u32, u32)> {
+        use kf_abi::generated::nvos::{
+            NV_DEVICE_ALLOCATION_VAMODE_OPTIONAL_MULTIPLE_VASPACES,
+            NV_DEVICE_ALLOCATION_VAMODE_SINGLE_VASPACE,
+        };
+        let mut key = (client, device);
+        if let Some(d) = self.devices.get(&key)
+            && !matches!(
+                d.facts.va_mode,
+                NV_DEVICE_ALLOCATION_VAMODE_OPTIONAL_MULTIPLE_VASPACES
+                    | NV_DEVICE_ALLOCATION_VAMODE_SINGLE_VASPACE
+            )
+        {
+            return None;
+        }
+        let mut visited = std::collections::BTreeSet::new();
+        for _ in 0..32 {
+            if !visited.insert(key) {
+                return None;
+            }
+            if let Some(d) = self.devices.get(&key) {
+                if d.revoked {
+                    return None;
+                }
+                if let Some(target) = d.share {
+                    let target_decl = self.devices.get(&target)?;
+                    if target_decl.facts.device_id != d.facts.device_id {
+                        return None;
+                    }
+                    key = target;
+                    continue;
+                }
+            }
+            let handle = self.vas_under.get(&key).copied().or_else(|| {
+                let set = self.vas_stated.get(&key.0)?;
+                (set.len() == 1)
+                    .then(|| set.iter().next().copied())
+                    .flatten()
+            })?;
+            return Some(self.vas_canonical(key.0, handle));
+        }
+        None
+    }
+
     /// ★ v3-gfx: the VA-space object `(client, handle)` names — itself, or the original a dup aliases.
     fn vas_canonical(&self, client: u32, handle: u32) -> (u32, u32) {
         self.vas_aliases
@@ -1356,6 +1447,19 @@ impl ChannelPolicy {
     fn on_free(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         let f = self.abi.decode_free(&cmd.payload).ok()?;
         let (client, object) = (f.client, f.handle);
+        // Device share bindings cannot silently attach to a replacement target with reused handles.
+        let removed: std::collections::BTreeSet<_> = self
+            .devices
+            .keys()
+            .copied()
+            .filter(|(c, d)| *c == client && (object == client || *d == object))
+            .collect();
+        self.devices.retain(|key, _| !removed.contains(key));
+        for d in self.devices.values_mut() {
+            if d.share.is_some_and(|target| removed.contains(&target)) {
+                d.revoked = true;
+            }
+        }
         // ★ v3-gfx: an alias's (or its client's) free drops the NAME. The original's own free
         // keeps its aliases: RM refcounts the object, and the dup still holds it.
         self.vas_aliases
@@ -1548,6 +1652,134 @@ impl CommandPolicy for ChannelPolicy {
 
 #[cfg(test)]
 mod tests {
+
+    fn device_declaration(
+        client: u32,
+        handle: u32,
+        instance: u32,
+        share: u32,
+        mode: u32,
+    ) -> RpcCommand {
+        use kf_abi::generated::classes::Nv0080AllocParameters as P;
+        let mut p = vec![0; P::SIZE];
+        for (at, value) in [
+            (core::mem::offset_of!(P, device_id), instance),
+            (core::mem::offset_of!(P, h_client_share), share),
+            (core::mem::offset_of!(P, va_mode), mode),
+        ] {
+            p[at..at + 4].copy_from_slice(&value.to_le_bytes());
+        }
+        let mut payload: Vec<_> = [
+            client,
+            client,
+            handle,
+            kf_abi::generated::classes::NV01_DEVICE_0,
+            0,
+            p.len() as u32,
+            0,
+            0,
+        ]
+        .into_iter()
+        .flat_map(u32::to_le_bytes)
+        .collect();
+        payload.extend(p);
+        RpcCommand {
+            function: RpcFunction::RmAlloc,
+            code: 103,
+            sequence: 1,
+            payload,
+            elements: 1,
+            delivered: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn device_shared_default_uses_the_target_namespace_and_revokes_on_target_free() {
+        use kf_abi::generated::nvos::*;
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+        let mut link = ChannelPolicy::new(
+            abi,
+            kf_abi::GuestOs::Windows,
+            std::sync::Arc::new(|_| ChanAnswer::NotOurs),
+        );
+        let mode = NV_DEVICE_ALLOCATION_VAMODE_OPTIONAL_MULTIPLE_VASPACES;
+        // Distinct Device handle values: sharing is by GPU instance, not target handle guessing.
+        assert!(
+            link.respond(&device_declaration(2, 10, 0, 2, mode))
+                .is_none()
+        );
+        assert!(
+            link.respond(&device_declaration(12, 20, 0, 2, mode))
+                .is_none()
+        );
+        link.vas_under.insert((2, 10), 870);
+        link.vas_under.insert((12, 20), 999); // must not override explicit sharing
+        assert_eq!(link.device_default_va(12, 20), Some((2, 870)));
+        // A transient VA handle is not the owning Device; it does not revoke the share.
+        let free = |client: u32, object: u32| RpcCommand {
+            function: RpcFunction::Free,
+            code: 10,
+            sequence: 1,
+            payload: [client, 0, object, 0]
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect(),
+            elements: 1,
+            delivered: Vec::new(),
+        };
+        link.respond(&free(2, 870));
+        assert_eq!(link.device_default_va(12, 20), Some((2, 870)));
+        link.respond(&free(2, 10));
+        assert_eq!(link.device_default_va(12, 20), None);
+        link.respond(&device_declaration(2, 10, 0, 2, mode));
+        link.vas_under.insert((2, 10), 871);
+        assert_eq!(
+            link.device_default_va(12, 20),
+            None,
+            "handle reuse must not revive a revoked share"
+        );
+    }
+
+    #[test]
+    fn device_default_refuses_missing_cross_gpu_private_and_cyclic_shares() {
+        use kf_abi::generated::nvos::*;
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+        let mut link = ChannelPolicy::new(
+            abi,
+            kf_abi::GuestOs::Windows,
+            std::sync::Arc::new(|_| ChanAnswer::NotOurs),
+        );
+        let mode = NV_DEVICE_ALLOCATION_VAMODE_OPTIONAL_MULTIPLE_VASPACES;
+        link.respond(&device_declaration(2, 10, 1, 2, mode));
+        link.vas_under.insert((2, 10), 870);
+        link.respond(&device_declaration(12, 20, 0, 2, mode));
+        link.vas_under.insert((12, 20), 999);
+        assert_eq!(
+            link.device_default_va(12, 20),
+            None,
+            "no cross-GPU or local fallback"
+        );
+        link.respond(&device_declaration(13, 21, 0, 99, mode));
+        assert_eq!(link.device_default_va(13, 21), None);
+        link.respond(&device_declaration(
+            14,
+            22,
+            1,
+            2,
+            NV_DEVICE_ALLOCATION_VAMODE_MULTIPLE_VASPACES,
+        ));
+        assert_eq!(link.device_default_va(14, 22), None, "explicit VA required");
+        link.respond(&device_declaration(
+            15,
+            23,
+            1,
+            2,
+            NV_DEVICE_ALLOCATION_VAMODE_SINGLE_VASPACE,
+        ));
+        assert_eq!(link.device_default_va(15, 23), Some((2, 870)));
+        link.devices.get_mut(&(2, 10)).unwrap().share = Some((15, 23));
+        assert_eq!(link.device_default_va(15, 23), None, "cycle must terminate");
+    }
     use super::*;
 
     /// `[cap1b]` the PMA scrubber's channel declared `flags = 0x00a00120` (chid 1); the global

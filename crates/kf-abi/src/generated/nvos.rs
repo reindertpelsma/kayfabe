@@ -29,6 +29,21 @@
 
 use crate::wire::{AbiError, Field, StructLayout, u32_at, u64_at};
 
+/// Device permits an implicit default VA space.
+///
+/// ogkm `src/common/sdk/nvidia/inc/nvos.h`.
+pub const NV_DEVICE_ALLOCATION_VAMODE_OPTIONAL_MULTIPLE_VASPACES: u32 = 0x0;
+
+/// Device uses its single default VA space.
+///
+/// ogkm `src/common/sdk/nvidia/inc/nvos.h`.
+pub const NV_DEVICE_ALLOCATION_VAMODE_SINGLE_VASPACE: u32 = 0x1;
+
+/// Device requires an explicit VA space.
+///
+/// ogkm `src/common/sdk/nvidia/inc/nvos.h`.
+pub const NV_DEVICE_ALLOCATION_VAMODE_MULTIPLE_VASPACES: u32 = 0x2;
+
 /// `NV_ESC_RM_FREE` — ioctl NR carrying [`Nvos00Parameters`].
 ///
 /// ogkm `src/nvidia/arch/nvalloc/unix/include/nv_escape.h`.

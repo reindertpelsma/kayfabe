@@ -1377,6 +1377,7 @@ fn translate_alloc(
             // core refuses to route an object whose Device ancestor declared none rather
             // than defaulting it to GPU 0 (`RmGraph::gpu_of`).
             device_instance: Some(abi.decode_device_alloc_facts(params)?.device_id),
+            device_alloc: Some(abi.decode_device_alloc_facts(params)?),
             ..Default::default()
         },
         AllocParams::Tsg => {

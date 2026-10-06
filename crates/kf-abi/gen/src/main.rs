@@ -274,6 +274,27 @@ and is NOT in this file, because the vendored ogkm tree is a single snapshot
         ],
         consts: &[
             ConstReq {
+                header: NVOS_H,
+                c_name: "NV_DEVICE_ALLOCATION_VAMODE_OPTIONAL_MULTIPLE_VASPACES",
+                rust_name: "NV_DEVICE_ALLOCATION_VAMODE_OPTIONAL_MULTIPLE_VASPACES",
+                rust_ty: "u32",
+                doc: "Device permits an implicit default VA space.",
+            },
+            ConstReq {
+                header: NVOS_H,
+                c_name: "NV_DEVICE_ALLOCATION_VAMODE_SINGLE_VASPACE",
+                rust_name: "NV_DEVICE_ALLOCATION_VAMODE_SINGLE_VASPACE",
+                rust_ty: "u32",
+                doc: "Device uses its single default VA space.",
+            },
+            ConstReq {
+                header: NVOS_H,
+                c_name: "NV_DEVICE_ALLOCATION_VAMODE_MULTIPLE_VASPACES",
+                rust_name: "NV_DEVICE_ALLOCATION_VAMODE_MULTIPLE_VASPACES",
+                rust_ty: "u32",
+                doc: "Device requires an explicit VA space.",
+            },
+            ConstReq {
                 header: NV_ESCAPE_H,
                 c_name: "NV_ESC_RM_FREE",
                 rust_name: "NV_ESC_RM_FREE",

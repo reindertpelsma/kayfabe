@@ -244,6 +244,7 @@ fn a_client_roots_wire_parent_and_handle_are_ignored_whatever_they_say() {
             class: ClassId(w::NV01_DEVICE_0),
             facts: AllocFacts {
                 device_instance: Some(0),
+                device_alloc: Some(kf_abi::view::DeviceAllocFacts::default()),
                 ..Default::default()
             },
         })),
@@ -2098,6 +2099,10 @@ fn scenario_compute() -> Scenario {
         ref_classes::DEVICE,
         AllocFacts {
             device_instance: Some(cp::DEVICE_INSTANCE),
+            device_alloc: Some(kf_abi::view::DeviceAllocFacts {
+                device_id: cp::DEVICE_INSTANCE,
+                ..Default::default()
+            }),
             ..Default::default()
         },
     ))
@@ -2366,11 +2371,16 @@ fn every_class_in_the_table_decodes_its_declared_facts_and_only_those() {
             w::NV01_DEVICE_0,
             AllocFacts {
                 device_instance: Some(3),
+                device_alloc: Some(kf_abi::view::DeviceAllocFacts {
+                    device_id: 3,
+                    h_client_share: 0xbeef,
+                    va_mode: 7,
+                    ..Default::default()
+                }),
                 ..Default::default()
             }
         ),
-        "Device: `deviceId` @ +0 and nothing else — `hClientShare` and `vaMode` are set \
-         here precisely so a decoder that read one of them fails",
+        "Device retains its routing and sharing declarations exactly; invalid mode is not normalized",
     );
     // ★★★★ §16.28 — THIS ROW USED TO ASSERT `AllocFacts::default()`, justified as *"its
     // params are geometry, and a decoder that invented a fact from them would be inventing
@@ -4819,6 +4829,10 @@ fn push_process_events(s: &mut Scenario, client: u32, pid: u32, dev: u32, vas: u
         class: ref_classes::DEVICE,
         facts: AllocFacts {
             device_instance: Some(cp::DEVICE_INSTANCE),
+            device_alloc: Some(kf_abi::view::DeviceAllocFacts {
+                device_id: cp::DEVICE_INSTANCE,
+                ..Default::default()
+            }),
             ..Default::default()
         },
     })
