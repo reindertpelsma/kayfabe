@@ -2247,6 +2247,14 @@ impl Device {
             }
             scan.nonflip.request(dp.console.refresh_requested());
             for e in effects {
+                if dp.sdr_color.is_some()
+                    && matches!(e, Effect::CoreArmed(_))
+                    && matches!(shown, Some(Shown::Armed(_)))
+                {
+                    // Output colour belongs to the core update, not a window flip.
+                    scan.barrier = scan.started + 1;
+                    scan.want = true;
+                }
                 if let Effect::Latched { window } = &e {
                     // ★ the window's ARMED state changed: its next copy resolves it afresh
                     scan.latched.forget(*window);

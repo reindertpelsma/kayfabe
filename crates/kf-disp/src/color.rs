@@ -156,9 +156,12 @@ impl Control {
     }
     fn read(self, binding: Binding, read: &impl Fn(u32) -> u32) -> Result<Lut, &'static str> {
         let v = read(self.method);
+        let mask = |(hi, lo): (u8, u8)| (u32::MAX >> (31 - hi + lo)) << lo;
+        let supported = mask(self.size) | mask(self.mode) | mask(self.interpolate);
         if get(v, self.size) != 1029
             || get(v, self.mode) != self.direct10
             || get(v, self.mirror) != 0
+            || v & !supported != 0
         {
             return Err("LUT requires 1029-entry unmirrored DIRECT10");
         }
@@ -212,12 +215,13 @@ pub fn input(
         let name = format!("SET_FMT_COEFFICIENT_C{}{}", i / 4, i % 4);
         *v = read(t.v(c, &name).ok_or("missing FMT vocabulary")?);
     }
-    if fmt != IDENTITY.map(|v| v as u32) && fmt != [0; 12] {
+    let a = Address::resolve(t, c, None, "ILUT", 0).ok_or("missing ILUT vocabulary")?;
+    let binding = a.read(&read)?;
+    if fmt != IDENTITY.map(|v| v as u32) && !(binding.is_none() && fmt == [0; 12]) {
         return Err("nonidentity FMT is outside SDR subset");
     }
-    let a = Address::resolve(t, c, None, "ILUT", 0).ok_or("missing ILUT vocabulary")?;
     let ctl = Control::resolve(t, c, None, "SET_ILUT_CONTROL").ok_or("missing ILUT control")?;
-    a.read(&read)?.map(|b| ctl.read(b, &read)).transpose()
+    binding.map(|b| ctl.read(b, &read)).transpose()
 }
 
 /// Decode one head. Core class arrays, including GB20x's different stride, are derived.
@@ -263,4 +267,205 @@ pub fn output(
         }
     }
     Ok(Output { lut, matrix })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn word(t: &ClassTable, c: u32, name: &str, head: Option<u32>) -> u32 {
+        head.map_or_else(|| t.v(c, name), |h| t.a(c, name, h))
+            .unwrap()
+    }
+    fn set(
+        b: &mut HashMap<u32, u32>,
+        t: &ClassTable,
+        c: u32,
+        name: &str,
+        head: Option<u32>,
+        v: u32,
+    ) {
+        b.insert(word(t, c, name, head), v);
+    }
+    fn control(t: &ClassTable, c: u32, n: &str, interp: bool) -> u32 {
+        crate::class::put(
+            crate::class::put(
+                u32::from(interp),
+                t.f(c, &format!("{n}_MODE")).unwrap(),
+                t.v(c, &format!("{n}_MODE_DIRECT10")).unwrap(),
+            ),
+            t.f(c, &format!("{n}_SIZE")).unwrap(),
+            1029,
+        )
+    }
+    fn bind(b: &mut HashMap<u32, u32>, t: &ClassTable, c: u32, h: Option<u32>, n: &str, off: u32) {
+        let p = if h.is_some() { "HEAD_" } else { "" };
+        let dma = format!("{p}SET_CONTEXT_DMA_{n}");
+        if h.map_or_else(|| t.v(c, &dma), |h| t.a(c, &dma, h))
+            .is_some()
+        {
+            set(b, t, c, &dma, h, 0x123);
+            set(b, t, c, &format!("{p}SET_OFFSET_{n}"), h, off);
+        } else {
+            let lo = format!("{p}SET_SURFACE_ADDRESS_LO_{n}");
+            let v = crate::class::put(
+                0x12340,
+                t.f(c, &format!("{lo}_TARGET")).unwrap(),
+                t.v(c, &format!("{lo}_TARGET_PHYSICAL_NVM")).unwrap(),
+            ) | 1;
+            set(b, t, c, &lo, h, v);
+            set(b, t, c, &format!("{p}SET_SURFACE_ADDRESS_HI_{n}"), h, 1);
+        }
+    }
+
+    #[test]
+    fn every_family_and_table_decodes_real_bindings_and_units() {
+        for version in ["580.65.06", "580.159.04"] {
+            let t = crate::class::for_version(version).unwrap();
+            for (win, core) in [
+                (0xc57e, 0xc57d),
+                (0xc67e, 0xc67d),
+                (0xc67e, 0xc77d),
+                (0xca7e, 0xca7d),
+            ] {
+                let mut b = HashMap::new();
+                for (i, v) in IDENTITY.iter().enumerate() {
+                    set(
+                        &mut b,
+                        t,
+                        win,
+                        &format!("SET_FMT_COEFFICIENT_C{}{}", i / 4, i % 4),
+                        None,
+                        *v as u32,
+                    );
+                }
+                bind(&mut b, t, win, None, "ILUT", 0x101);
+                set(
+                    &mut b,
+                    t,
+                    win,
+                    "SET_ILUT_CONTROL",
+                    None,
+                    control(t, win, "SET_ILUT_CONTROL", false),
+                );
+                let i = input(t, win, |m| b.get(&m).copied().unwrap_or(0))
+                    .unwrap()
+                    .unwrap();
+                if win != 0xca7e {
+                    assert_eq!(
+                        i.binding,
+                        Binding::Dma {
+                            handle: 0x123,
+                            offset: 0x101
+                        },
+                        "ILUT offset is bytes"
+                    );
+                } else {
+                    assert_eq!(i.binding, Binding::Vidmem(0x100012340));
+                }
+                assert!(!i.interpolate);
+                bind(&mut b, t, core, Some(3), "OLUT", 0x21);
+                set(
+                    &mut b,
+                    t,
+                    core,
+                    "HEAD_SET_OLUT_CONTROL",
+                    Some(3),
+                    control(t, core, "HEAD_SET_OLUT_CONTROL", true),
+                );
+                set(
+                    &mut b,
+                    t,
+                    core,
+                    "HEAD_SET_OLUT_FP_NORM_SCALE",
+                    Some(3),
+                    u32::MAX,
+                );
+                let o = output(t, core, 3, |m| b.get(&m).copied().unwrap_or(0)).unwrap();
+                assert!(o.lut.unwrap().interpolate);
+                if core != 0xca7d {
+                    assert_eq!(
+                        o.lut.unwrap().binding,
+                        Binding::Dma {
+                            handle: 0x123,
+                            offset: 0x2100
+                        }
+                    );
+                }
+                assert_eq!(o.matrix, IDENTITY);
+                set(
+                    &mut b,
+                    t,
+                    win,
+                    "SET_ILUT_CONTROL",
+                    None,
+                    control(t, win, "SET_ILUT_CONTROL", false) | 2,
+                );
+                assert!(
+                    input(t, win, |m| b.get(&m).copied().unwrap_or(0)).is_err(),
+                    "mirror is not silently accepted"
+                );
+                set(&mut b, t, core, "HEAD_SET_OLUT_FP_NORM_SCALE", Some(3), 1);
+                assert!(output(t, core, 3, |m| b.get(&m).copied().unwrap_or(0)).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn lut_bounds_include_header_endpoint_and_refuse_system_memory() {
+        let b = Binding::Dma {
+            handle: 1,
+            offset: 256,
+        };
+        let mut d = CtxDma {
+            target: Target::Vidmem,
+            base: 4096,
+            limit: 4096 + 256 + LUT_BYTES - 1,
+            block_linear: false,
+            writable: false,
+        };
+        assert_eq!(b.span(Some(&d)), Ok(4352));
+        d.limit -= 1;
+        assert!(b.span(Some(&d)).is_err());
+        d.limit += 1;
+        d.target = Target::Sysmem;
+        assert!(b.span(Some(&d)).is_err());
+        assert!(Binding::Vidmem(u64::MAX - 4).span(None).is_err());
+    }
+
+    #[test]
+    fn ocsc_signed_coefficients_and_rounding_bias_are_preserved() {
+        let t = crate::class::for_version("580.159.04").unwrap();
+        let c = 0xc77d;
+        let mut b = HashMap::new();
+        set(&mut b, t, c, "HEAD_SET_OCSC0CONTROL", Some(3), 1);
+        for (i, v) in IDENTITY.iter().enumerate() {
+            set(
+                &mut b,
+                t,
+                c,
+                &format!("HEAD_SET_OCSC0COEFFICIENT_C{}{}", i / 4, i % 4),
+                Some(3),
+                *v as u32,
+            );
+        }
+        set(&mut b, t, c, "HEAD_SET_OCSC0COEFFICIENT_C03", Some(3), 32);
+        set(
+            &mut b,
+            t,
+            c,
+            "HEAD_SET_OCSC0COEFFICIENT_C01",
+            Some(3),
+            (-65536i32) as u32 & 0x1fffff,
+        );
+        let o = output(t, c, 3, |m| b.get(&m).copied().unwrap_or(0)).unwrap();
+        assert_eq!((o.matrix[1], o.matrix[3]), (-65536, 32));
+        set(&mut b, t, c, "HEAD_SET_OCSC1CONTROL", Some(3), 1);
+        assert!(output(t, c, 3, |m| b.get(&m).copied().unwrap_or(0)).is_err());
+        assert!(
+            input(&ClassTable::default(), 0xc67e, |_| 0).is_err(),
+            "missing vocabulary fails closed"
+        );
+    }
 }

@@ -1189,6 +1189,45 @@ impl Drop for DisplayGpu {
 mod tests {
     use super::*;
 
+    #[test]
+    fn color_ptx_matches_its_source_and_launch_abi() {
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        for b in include_bytes!("../../../cuda/display/kf_color.cu") {
+            h = (h ^ u64::from(*b)).wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        let ptx = std::str::from_utf8(COLOR_PTX).unwrap();
+        assert!(ptx.is_ascii());
+        assert!(ptx.contains(&format!("// source fnv1a64: {h:016x}")));
+        let types = |name| {
+            ptx.split(&format!(".visible .entry {name}("))
+                .nth(1)
+                .unwrap()
+                .split(')')
+                .next()
+                .unwrap()
+                .split(',')
+                .map(|p| {
+                    let w: Vec<_> = p.split_whitespace().collect();
+                    w[1..w.len() - 1].join(" ")
+                })
+                .collect::<Vec<_>>()
+        };
+        // clang spells signed C ints as .u32; all are passed as four-byte bit patterns.
+        let mut compose = vec![".u64", ".u64"];
+        compose.extend([".u32"; 15]);
+        compose.extend([".u64", ".u32"]);
+        assert_eq!(types("kf_color_compose"), compose);
+        assert_eq!(types("kf_color_validate"), [".u64", ".u64"]);
+        assert_eq!(
+            types("kf_color_output"),
+            [".u64", ".u64", ".u32", ".u64", ".u32", ".align 4 .b8"]
+        );
+        assert!(
+            ptx.contains("kf_color_output_param_5[48]"),
+            "twelve encoded matrix coefficients"
+        );
+    }
+
     /// ⊘ The compose launch passes EIGHTEEN by-value parameters (two u64, twelve u32, four s32) in
     /// this order; the PTX entry must declare exactly those — a drift is a wild pointer on the GPU.
     #[test]
