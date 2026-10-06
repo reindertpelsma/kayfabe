@@ -12,7 +12,7 @@
 
 use crate::ring::{GuestMemory, Next, RingRefusal, TranslatedRing};
 use crate::translated::{IsCeClass, Window};
-use kf_abi::submit::{ENGINE_TYPE_COPY0, USERD_GP_GET, USERD_GP_PUT};
+use kf_abi::submit::{ENGINE_TYPE_COPY0, ENGINE_TYPE_GRAPHICS, USERD_GP_GET, USERD_GP_PUT};
 use kf_linux_raw::HostOffset as At;
 use std::collections::VecDeque;
 
@@ -161,10 +161,37 @@ pub struct HostRing {
     /// ★ P1+P2 inc D: where the regions sit and how they are mapped.
     layout: RingLayout,
     chan: kf_host::Channel,
+    // A graphics-runlist ring owns a real host GR context and routes all of its
+    // authored CE work through the channel header's CE subchannel.
+    gr_context: Option<(u32, u32)>,
     head: u64,
     put: u32,
     seq: u32,
     live: VecDeque<Region>,
+}
+
+// Only normalized incrementing streams enter a graphics-runlist host ring.
+// Caller bounds the segment to half its owned PB before reaching this helper.
+fn route_graphics_ce(words: &[u32]) -> Result<Vec<u32>, String> {
+    use kf_abi::submit::{MethodForm, method_header_decode, method_header_inc};
+    let sub = kf_abi::generated::classes::NVA06F_SUBCHANNEL_COPY_ENGINE;
+    let mut out = words.to_vec();
+    let mut at = 0usize;
+    while at < words.len() {
+        let h = method_header_decode(words[at]).ok_or("GR CE route: invalid header")?;
+        if h.form != MethodForm::Incrementing {
+            return Err("GR CE route: segment is not normalized incrementing methods".into());
+        }
+        let end = at
+            .checked_add(1)
+            .and_then(|a| a.checked_add(h.arg_words))
+            .filter(|&e| e <= words.len())
+            .ok_or("GR CE route: truncated arguments")?;
+        out[at] = method_header_inc(sub, h.method, h.arg_words as u32)
+            .ok_or("GR CE route: header cannot be authored")?;
+        at = end;
+    }
+    Ok(out)
 }
 
 impl HostRing {
@@ -355,14 +382,36 @@ impl HostRing {
             va,
             layout,
             chan,
+            gr_context: None,
             head: 0,
             put: 0,
             seq: 0,
             live: VecDeque::new(),
         };
-        let tail = rm
-            .alloc_ce_object(chan, engine)
-            .map_err(|e| format!("ce object: {e:?}"))
+        let ce_engine = if engine == ENGINE_TYPE_GRAPHICS {
+            (0..20)
+                .filter_map(crate::passthrough::copy_engine_type)
+                .find(|&e| rm.ce_is_grce(e) == Ok(true))
+                .ok_or_else(|| {
+                    "no host graphics copy engine for a graphics-runlist ring".to_string()
+                })
+        } else {
+            Ok(engine)
+        };
+        let tail = ce_engine
+            .and_then(|ce| {
+                rm.alloc_ce_object(chan, ce)
+                    .map_err(|e| format!("ce object: {e:?}"))
+            })
+            .and_then(|_| {
+                if engine == ENGINE_TYPE_GRAPHICS {
+                    let object = rm
+                        .alloc_compute_object(chan)
+                        .map_err(|e| format!("owned GR context: {e:?}"))?;
+                    ring.gr_context = Some(object);
+                }
+                Ok(())
+            })
             .and_then(|_| rm.schedule(chan).map_err(|e| format!("schedule: {e:?}")))
             .and_then(|()| {
                 ring.cpu()?
@@ -444,6 +493,12 @@ impl HostRing {
         self.chan
     }
 
+    /// The owned compute object that constructed this ring's real GR context.
+    #[must_use]
+    pub fn gr_context(&self) -> Option<(u32, u32)> {
+        self.gr_context
+    }
+
     /// The last fence sequence the engine released.
     ///
     /// # Errors
@@ -480,6 +535,15 @@ impl HostRing {
                 "segment of {n} bytes exceeds half the host pushbuffer"
             ));
         }
+        // T-mode/Translated output is normalized incrementing methods, never a
+        // guest GPFIFO. On a GR runlist CE routes through its dedicated subchannel.
+        // Validate the entire segment before any store, preserving every datum.
+        let routed = if self.gr_context.is_some() {
+            Some(route_graphics_ce(words)?)
+        } else {
+            None
+        };
+        let words = routed.as_deref().unwrap_or(words);
         if self.live.len() + usize::from(reserve > 0) >= MAX_IN_FLIGHT {
             return Ok(Err(Busy));
         }
@@ -1161,5 +1225,50 @@ impl TranslatedChannel {
             }
         }
         Ok(outcome)
+    }
+}
+
+#[cfg(test)]
+mod graphics_route_tests {
+    use super::route_graphics_ce;
+    use kf_abi::submit::{fifo, method_header_decode, method_header_inc};
+
+    #[test]
+    fn routing_changes_only_headers_including_native_completion_tail() {
+        let mut words = vec![
+            method_header_inc(0, 0, 1).unwrap(),
+            0xc7b5,
+            method_header_inc(2, 0x400, 2).unwrap(),
+            0x20010000,
+            0xdeadbeef,
+        ];
+        words.extend(super::fence_words(0x120000000, 0x1234).unwrap());
+        let routed = route_graphics_ce(&words).unwrap();
+        let sub = kf_abi::generated::classes::NVA06F_SUBCHANNEL_COPY_ENGINE;
+        let mut at = 0;
+        while at < words.len() {
+            let before = method_header_decode(words[at]).unwrap();
+            let after = method_header_decode(routed[at]).unwrap();
+            assert_eq!(after.subchannel, sub);
+            assert_eq!(after.method, before.method);
+            assert_eq!(after.arg_words, before.arg_words);
+            let end = at + 1 + before.arg_words;
+            assert_eq!(routed[at + 1..end], words[at + 1..end]);
+            at = end;
+        }
+        // Real RELEASE_WFI ordering and notification survive the routing.
+        assert!(
+            routed.contains(&(fifo::SEM_EXECUTE_RELEASE_32BIT | fifo::SEM_EXECUTE_RELEASE_WFI_EN))
+        );
+        assert_eq!(routed.len(), words.len());
+    }
+
+    #[test]
+    fn unsupported_or_partial_stream_is_never_routed() {
+        let valid = method_header_inc(0, 0x400, 2).unwrap();
+        assert!(route_graphics_ce(&[valid, 1]).is_err());
+        assert!(route_graphics_ce(&[6 << 29]).is_err());
+        assert!(route_graphics_ce(&[3 << 29]).is_err()); // immediate, not normalized
+        assert_eq!(route_graphics_ce(&[]).unwrap(), Vec::<u32>::new());
     }
 }

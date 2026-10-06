@@ -442,7 +442,23 @@ fn run(l: &mut Checks) -> Result<(), String> {
         format!("{mapped} runs"),
     );
     let done = kf_chan::completions::Completions::open(&rm, 64)?;
-    let host = HostRing::new(&rm, space)?;
+    // Additional bare-metal oracle arm: the same physical/virtual copies,
+    // split ordering and native guest semaphore on a real owned GR context.
+    let host = if std::env::var_os("KF_GATE3_GRAPHICS").is_some_and(|v| v == "1") {
+        let h = HostRing::on_engine(&rm, space, kf_abi::submit::ENGINE_TYPE_GRAPHICS)?;
+        l.check(
+            "graphics_runlist_has_real_owned_context",
+            h.gr_context().is_some(),
+            format!(
+                "host={:#x} context={:x?}",
+                h.channel().token,
+                h.gr_context()
+            ),
+        );
+        h
+    } else {
+        HostRing::new(&rm, space)?
+    };
     let poller = Poller::create().map_err(|e| format!("epoll: {e:?}"))?;
     poller
         .watch(done.event_fd(), 1)

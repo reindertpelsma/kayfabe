@@ -251,3 +251,28 @@ This explains the declared buffers, without assuming a Windows-only consumer.
 Windows remains Code43/smi9 with no display UPDATE/scanout or GPU submission.
 Next: real owned unprivileged GR context and Translated CE work on its runlist,
 first tested on bare metal; promotion must require that context, per owner rulingB.
+
+## Fifth repair, first increment: bare-metal GR-runlist CE execution
+
+HostRing now supports a graphics-runlist ring with a real owned compute object
+(and hence a host-constructed GR context). It selects a graphics copy engine
+from live unprivileged host CE capabilities, instead of assuming a per-die
+index. The channel header's dedicated copy subchannel is generated from
+cla06fsubch.h; all normalized command headers are routed there while every
+argument remains identical, including RELEASE_WFI completion and NSI.
+Unsupported forms/truncated arguments refuse before any host PB store. Segment
+length remains bounded to half the owned ring's PB. The ordinary async-CE
+ring is unchanged. Guest kernel-GR admission/promotion is not enabled yet.
+
+Additional native arm: KF_GATE3_GRAPHICS=1 runs the existing physical/sysmem/
+virtual copy, remap-at-split, native guest semaphore and hostile-entry checks
+on this ring, and checks that an actual host GR object exists. This establishes
+execution before a Windows boot. Source580.65.06 kernel_ce_context.c:110..154
+requires a COPY engine affinity even on a GR channel; cla06fsubch.h defines its
+CE routing. The context constructor uses the existing authored unprivileged
+compute-object verb and generated family class, never guest context bytes.
+
+Local ABI/channel validation: 645 tests pass, including two route regressions
+for unchanged arguments/native ordering and rejection before partial routing.
+The gate3 harness compiles. Clippy and formatting/diff checks pass; hardware
+result pending.

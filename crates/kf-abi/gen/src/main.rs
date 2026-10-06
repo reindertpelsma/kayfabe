@@ -416,6 +416,13 @@ reads as `None` = \"class not in this version\" rather than \"nobody has done it
         ],
         consts: &[
             ConstReq {
+                header: "src/common/sdk/nvidia/inc/class/cla06fsubch.h",
+                c_name: "NVA06F_SUBCHANNEL_COPY_ENGINE",
+                rust_name: "NVA06F_SUBCHANNEL_COPY_ENGINE",
+                rust_ty: "u32",
+                doc: "Graphics-runlist copy-engine subchannel; generated from the shared channel header.",
+            },
+            ConstReq {
                 header: "src/common/sdk/nvidia/inc/class/cl5080.h",
                 c_name: "NV50_DEFERRED_API_CLASS",
                 rust_name: "NV50_DEFERRED_API_CLASS",

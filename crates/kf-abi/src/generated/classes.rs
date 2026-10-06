@@ -53,6 +53,11 @@
 
 use crate::wire::{AbiError, Field, StructLayout, u8_at, u32_at, u64_at};
 
+/// Graphics-runlist copy-engine subchannel; generated from the shared channel header.
+///
+/// ogkm `src/common/sdk/nvidia/inc/class/cla06fsubch.h`.
+pub const NVA06F_SUBCHANNEL_COPY_ENGINE: u32 = 0x4;
+
 /// Deferred API software object; constructor stores notification policy. No GPU engine twin.
 ///
 /// ogkm `src/common/sdk/nvidia/inc/class/cl5080.h`.
