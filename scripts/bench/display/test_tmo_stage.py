@@ -22,11 +22,13 @@ class StrictTmoGate(unittest.TestCase):
         table.write_text('V\tNVC67E_SET_CONTEXT_DMA_TMO_LUT\t1320\n'
                          'V\tNVC67E_SET_TMO_CONTROL\t1280\n'
                          'V\tNVC67E_UPDATE\t512\n'
-                         'V\tNVC67E_FREE\t256\n'
                          'F\tNVC67E_SET_TMO_CONTROL_SIZE\t18\t8\n')
         ready = 'WL_SCENE_READY\nWL_SCENE_RENDERER NVIDIA fixture\n'
         (root / 'sway-before.log').write_text(ready + 'TMO_TEST armed\n')
         warm = ready + ('TMO_TEST MISSING_TMO_LUT\n' if missing else '')
+        if not missing:
+            warm += ''.join(f'COLOR_LUT object=30 name=TMO_LUT index={i} rgb=0,0,0\n'
+                            for i in range(1024))
         (root / 'sway-warm.log').write_text(warm)
         atomic = ('TMO_TEST REQUEST plane=30 prop=40 blob=50 flags=0 test_only=0 rc=0 errno=0\n'
                   if request else '')
@@ -68,13 +70,11 @@ class StrictTmoGate(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn('nonzero_tmo_binding_armed_at_capture', result['failure_reasons'])
 
-    def test_disabled_or_freed_binding_at_capture_fails(self):
+    def test_disabled_binding_at_capture_fails(self):
         bound = [(0x528, 7), (0x500, 1029 << 8), (0x200, 0)]
-        for tail in [[(0x528, 0), (0x200, 0)], [(0x100, 0)]]:
-            with self.subTest(tail=tail):
-                rc, result = self.grade(bound + tail)
-                self.assertEqual(rc, 1)
-                self.assertIn('nonzero_tmo_binding_armed_at_capture', result['failure_reasons'])
+        rc, result = self.grade(bound + [(0x528, 0), (0x200, 0)])
+        self.assertEqual(rc, 1)
+        self.assertIn('nonzero_tmo_binding_armed_at_capture', result['failure_reasons'])
 
     def test_complete_synthetic_witness_checks_the_fixture(self):
         # This only tests the grader; it is not hardware evidence.

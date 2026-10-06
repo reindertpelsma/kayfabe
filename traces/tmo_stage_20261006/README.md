@@ -26,7 +26,7 @@ Missing/skipped stages fail the experiment, even if the compositor stays alive.
 The grayscale zero-intensity fixture is a narrow processing witness; it does not
 qualify general TMO/HDR or native post-LUT parity. `test_tmo_stage.py` has five
 GPU-free tests, including false-positive controls for successful ioctls without
-bindings, unarmed bindings, disabled/freed bindings and missing properties.
+bindings, unarmed bindings, disabled bindings and missing properties.
 Its synthetic positive case only tests the checker, not a hardware result.
 
 Primary source path: OGKM580.159.04 `nvidia-drm-crtc.c` exposes `TMO_LUT` in the

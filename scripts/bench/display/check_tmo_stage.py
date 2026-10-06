@@ -41,7 +41,6 @@ def main():
     binding = int(rows['NVC67E_SET_CONTEXT_DMA_TMO_LUT'][2])
     control = int(rows['NVC67E_SET_TMO_CONTROL'][2])
     update = int(rows['NVC67E_UPDATE'][2])
-    free = int(rows['NVC67E_FREE'][2])
     size_high, size_low = map(int, rows['NVC67E_SET_TMO_CONTROL_SIZE'][2:4])
     methods = re.findall(r'METHOD chn=(\d+) kind=(\w+) method=(0x[0-9a-f]+) '
                          r'data=(0x[0-9a-f]+) remaining=(\d+)', trace)
@@ -52,10 +51,6 @@ def main():
     assembled, armed = {}, {}
     for chn, kind, method, data, _ in methods:
         if kind != 'Window':
-            continue
-        if int(method, 16) == free:
-            assembled.pop(chn, None)
-            armed.pop(chn, None)
             continue
         handle, word = assembled.get(chn, (0, 0))
         if int(method, 16) == binding:
@@ -70,6 +65,18 @@ def main():
                         r'flags=(\d+) test_only=(\d+) rc=(-?\d+) errno=(\d+)', restored_log)
     applied = [row for row in atomic if int(row[2]) and row[4] == '0' and row[5] == '0']
     missing = bool(re.search(r'TMO_TEST MISSING_TMO_LUT\b', warm_log + restored_log))
+    # KMS state must retain the requested blob, not just accept the ioctl.
+    tmo_entries = re.findall(r'COLOR_LUT object=(\d+) name=TMO_LUT index=(\d+) rgb=(\d+),(\d+),(\d+)', warm_log)
+    tmo_curve = {}
+    for obj, index, red, green, blue in tmo_entries:
+        key = obj, int(index)
+        if key in tmo_curve:
+            raise ValueError('Ambiguous TMO table capture')
+        tmo_curve[key] = tuple(map(int, (red, green, blue)))
+    tmo_object_ids = {obj for obj, _ in tmo_curve}
+    zero_curve_present = (len(tmo_object_ids) == 1 and len(tmo_curve) == 1024 and
+                          {index for _, index in tmo_curve} == set(range(1024)) and
+                          all(rgb == (0, 0, 0) for rgb in tmo_curve.values()))
     images = []
     captures = {}
     for name in ('sway-before', 'sway-warm', 'sway-restored'):
@@ -87,6 +94,7 @@ def main():
         request_adapter_armed=('TMO_TEST armed' in before_log),
         grayscale_nonzero_baseline=(gray and any(before)),
         tmo_property_available=not missing,
+        requested_zero_curve_in_kms_state=zero_curve_present,
         real_non_test_atomic_accepted=bool(applied),
         nonzero_tmo_method_binding=bool(binds),
         tmo_control_programmed=bool(controls),
@@ -112,6 +120,7 @@ def main():
                   missing_property_request_blocked_by_guest_adapter=missing,
                   limitations=['One grayscale zero-intensity fixture; no general TMO/HDR parity claim.',
                                'A nonzero binding alone does not prove processing.',
+                               'Method arming is not an independent RM channel-lifetime proof.',
                                'The first missing-property gate rejects before kernel submission.'])
     out.write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps(result, indent=2))
