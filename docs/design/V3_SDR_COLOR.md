@@ -59,11 +59,44 @@ Warm output differs; restoration is byte-for-byte identical. The protocol has no
 failed event. [Run A summary](../../traces/sdr_lut_20261006/linux-a-summary.json)
 records revision, binary hash, bounded trace budget, screenshots and KMS properties.
 
-Run A precedes the armed-snapshot retention change. Exact full-pixel comparison
-against the KMS curve, synthetic nonidentity ILUT/OLUT GPU fixtures, adversarial
-table/lifetime tests, a repeat with the final source, and Windows startup comparison
-are in progress. Native KMS readback and native shader control do not capture
-physical post-LUT pixels; no native post-LUT parity claim is made.
+Run A precedes armed-snapshot retention. Runs B and C include retained GPU
+snapshots; C uses final product source `2aa8b92de6c6ab158f9bc8e788be792408a074a3`,
+including strict identity FMT and real DIRECT10 capability declarations.
+The independent checker compares the actual 1024-entry KMS ramp with **all
+6,220,800 RGB components** in the 1920×1080 console capture: zero mismatches,
+maximum error zero. Before/restored captures are byte-identical and the
+nonidentity curve changes the output without a gamma protocol failure.
+[Run C](../../traces/sdr_lut_20261006/linux-c-summary.json),
+[pixel oracle](../../traces/sdr_lut_20261006/linux-c-pixel-oracle.json).
+
+Six real GPU fixtures pass at the same source: nonidentity FP16 ILUT,
+nonidentity unsigned OLUT, mutation retaining the armed snapshot, rearming
+consuming the changed table, fractional OLUT interpolation, and rejection of
+infinity/NaN/negative/HDR input entries. GPU gates pass 9/9 with 11/11 USER
+channel births. Workspace tests and formatting pass, Clippy has zero new debt,
+and source CI [37468780443](https://github.com/reindertpelsma/kayfabe/actions/runs/37468780443)
+passes. Native KMS readback and native shader control do not capture physical
+post-LUT pixels; no native post-LUT parity claim is made.
+
+The opt-in page declares one DIRECT10 ILUT/OLUT with surface loading and
+1024 address intervals; it does not claim unsupported TMO. Blackwell uses its
+own source-defined physical binding vocabulary, omitting absent legacy output
+capability fields. Constructor probes cannot be combined with this real path.
+
+Windows controls 11 (before these declarations) and 12 (after) both stop with
+Code 43, nvidia-smi exit 9, 363 RPC records and **zero display methods**. Thus
+neither exercises these kernels. Run 12's fresh WATCHDOG dump reaches helper
+`0x169d836`, followed by the display initialization failure chain, rather than
+probe O's later `0x1a103e6` method-refusal path. Pinned static code strongly
+identifies a zero-sized TMO descriptor when TMO_PRESENT is absent; no live size
+was captured. The two-buffer ILUT constructor guard is not the current fatal
+saved assertion. The complete saved assertions are readable, but the outer NVCD
+is one byte short and its checksum cannot be validated.
+[Windows run 12](../../traces/sdr_lut_20261006/windows-12-summary.json),
+[fresh dump summary](../../traces/sdr_lut_20261006/windows-12-watchdog-summary.json),
+[source dataflow](https://github.com/reindertpelsma/kayfabe/blob/fba14de6/tools/windows-debug-capture/evidence/2026-10-05-startdevice-j.md).
+A next implementation would need real bounded TMO behavior or a supported
+initialization path avoiding it; advertising TMO alone is not a fix.
 
 Constructor probes remain separate and refuse all methods. This implementation
 does not advertise active TMO processing merely to pass a Windows constructor

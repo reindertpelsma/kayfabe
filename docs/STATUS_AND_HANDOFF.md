@@ -11,6 +11,31 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-06
 
+**Latest owner-directed implementation:** branch `codex/sdr-lut-20261006`,
+product `2aa8b92de6c6ab158f9bc8e788be792408a074a3`, real bounded GPU SDR
+ILUT/OLUT processing under `KF3_DISPLAY_SDR_COLOR=1` (default off).
+Linux open580.159.04 on borrowed RTX 4070 runs Weston and Sway. A 2501K
+KMS curve changes output with **zero error in all 6,220,800 RGB components**;
+restoration is byte-identical, with no compositor gamma failure. Six GPU colour
+fixtures and 9/9 GPU gates (11/11 USER births) pass. Workspace tests, formatting,
+zero-new-debt Clippy and product CI pass. No master promotion/full app claim.
+[Implementation and limitations](design/V3_SDR_COLOR.md),
+[evidence](../traces/sdr_lut_20261006/README.md).
+
+Windows run 12 with implemented DIRECT10 surface-loading declarations still
+has Code 43 / smi exit 9 and zero display methods. Its fresh dump reaches
+`0x169d836`: the display-buffer precondition path, statically pointing to a
+zero-sized TMO descriptor with TMO absent (no live size captured). Do not
+reintroduce a fake TMO capability. Next Windows work needs a supported path
+avoiding TMO or real bounded TMO processing, with further walls possible.
+Complete dump records remain usable; outer NVCD is one byte short.
+Borrowed-host source/target/evidence: `/var/lib/kf-sdr-lut-20261006/`;
+controller private evidence: `/data/kayfabe-runtime/sdr-lut-20261006/`.
+All code/evidence checkpoints are committed and pushed. Master/v3 stay
+`906a76a4`; no rental created.
+
+**Historical Linux diagnostic (superseded by real SDR implementation above):**
+
 **Latest owner-directed test:** `codex/linux-color-oracle-20261006`, diagnostic
 product `8bbcd7f3`, follows the Antigravity repair. Linux guest open580.159.04
 on the borrowed AD104 runs Weston13 and Sway1.9 with NVIDIA rendering. The

@@ -1,5 +1,18 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+**STATUS: LIVE, 2026-10-06 — bounded SDR implementation update.** Branch
+`codex/sdr-lut-20261006`, product `2aa8b92de6c6ab158f9bc8e788be792408a074a3`,
+adds opt-in GPU ILUT/OLUT processing and truthful DIRECT10 declarations.
+Linux AD104/open580.159.04 applies a nonidentity KMS gamma ramp with exact
+agreement across 6,220,800 RGB components; removing it restores the original
+frame. Windows still fails before submitting any display methods, with a fresh
+saved display-buffer precondition failure pointing to absent TMO.
+[Scope, lifetime/completion policy and evidence](V3_SDR_COLOR.md).
+Default behavior and master promotion remain unchanged; this does not qualify
+HDR, active TMO, arbitrary colour pipelines or Windows compatibility.
+
+**Historical diagnostic below, superseded for opt-in SDR by the update above.**
+
 **STATUS: LIVE, 2026-10-06 — color support clarification.** The verification
 claims below remain scoped to their named lanes; they do not qualify arbitrary
 LUT/color transforms. Linux guest open580.159.04 on AD104, product `8bbcd7f3`
