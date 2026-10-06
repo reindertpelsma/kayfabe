@@ -19,7 +19,7 @@ pub enum Binding {
 impl Binding {
     /// Bound every header and endpoint byte, including checked address arithmetic.
     pub fn span(self, dma: Option<&CtxDma>) -> Result<u64, &'static str> {
-        match self {
+        let addr = match self {
             Self::Vidmem(addr) => addr
                 .checked_add(LUT_BYTES)
                 .map(|_| addr)
@@ -31,7 +31,11 @@ impl Binding {
                 }
                 d.span(offset, LUT_BYTES).ok_or("LUT exceeds context DMA")
             }
+        }?;
+        if addr & 7 != 0 {
+            return Err("LUT entry address is misaligned");
         }
+        Ok(addr)
     }
 }
 

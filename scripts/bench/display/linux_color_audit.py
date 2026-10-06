@@ -156,7 +156,7 @@ def main():
             time.sleep(5)
             shot('sway-before')
             result = guest('sway-before', 'cat /tmp/kfcolor-sway-scene.log; '
-                  '~/color/color_properties /dev/dri/card0; tail -n 120 /tmp/kfcolor-sway.log; '
+                  '~/color/color_properties /dev/dri/card0 --dump-lut; tail -n 120 /tmp/kfcolor-sway.log; '
                   'sudo cat /tmp/kfcolor-seatd.log; pgrep -x sway')
             if b'WL_SCENE_READY' not in result.stdout:
                 raise RuntimeError('Sway scene did not become ready; gamma experiment is invalid')
@@ -164,14 +164,14 @@ def main():
                   '>/tmp/kfcolor-wlsunset.log 2>&1 &')
             time.sleep(5)
             shot('sway-warm')
-            result = guest('sway-warm', '~/color/color_properties /dev/dri/card0; '
+            result = guest('sway-warm', '~/color/color_properties /dev/dri/card0 --dump-lut; '
                   'cat /tmp/kfcolor-wlsunset.log; tail -n 100 /tmp/kfcolor-sway.log')
             if a.reject_gamma and b'COLOR_FAULT reject GAMMA_LUT' not in result.stdout:
                 raise RuntimeError('KMS failure control was not exercised; result is invalid')
             guest('warm-stop', 'pkill -x wlsunset || true')
             time.sleep(3)
             shot('sway-restored')
-            guest('sway-restored', '~/color/color_properties /dev/dri/card0; '
+            guest('sway-restored', '~/color/color_properties /dev/dri/card0 --dump-lut; '
                   'cat /tmp/kfcolor-sway-scene.log; tail -n 80 /tmp/kfcolor-sway.log; '
                   'pgrep -x sway; pgrep -x wl_scene')
         finally:

@@ -54,6 +54,9 @@ const COLOR_LUT_BYTES: usize = (4 + 1025) * 8;
 pub struct ColorLut {
     pub src: u64,
     pub interpolate: bool,
+    /// Worker-authored identity of the armed binding. A new UPDATE/free/reallocation
+    /// changes it even if the guest reuses the same store address.
+    pub token: u64,
 }
 
 /// ★ An imported display slot — a VRAM frame object kayfabe allocated itself (never guest
@@ -157,6 +160,7 @@ pub struct DisplayGpu {
     color_status: Option<(CUdeviceptr, PinnedBuf)>,
     color_event: EventHandle,
     color_recorded: bool,
+    color_snapshots: [Option<ColorLut>; 33],
 }
 
 /// ★ One page-locked host frame buffer the display console reads (M2). Its address crosses to the
@@ -378,6 +382,7 @@ impl DisplayGpu {
             color_status: None,
             color_event,
             color_recorded: false,
+            color_snapshots: [None; 33],
         })
     }
 
@@ -605,6 +610,12 @@ impl DisplayGpu {
     pub fn color_begin(&mut self, w: u32, h: u32) -> Result<(), CudaError> {
         self.color_recorded = false;
         let what = "DisplayGpu::color_begin";
+        if u64::from(w) * u64::from(h) > 3840 * 2160 {
+            return Err(refused(
+                what,
+                "SDR frame exceeds fixed 4K pixel ceiling".into(),
+            ));
+        }
         self.color.as_ref().map_err(|e| refused(what, e.clone()))?;
         self.compose_begin(w, h)?;
         let n = w as usize * h as usize * 16;
@@ -640,7 +651,7 @@ impl DisplayGpu {
     }
 
     fn color_snapshot(
-        &self,
+        &mut self,
         slot: u32,
         lut: Option<ColorLut>,
         input: bool,
@@ -657,8 +668,14 @@ impl DisplayGpu {
             .color_luts
             .ok_or_else(|| refused(what, "no LUT allocation".into()))?;
         let dst = base + u64::from(slot) * COLOR_LUT_BYTES as u64;
-        self.cu
-            .memcpy_d2d_async(self.stream, dst, src, COLOR_LUT_BYTES, what)?;
+        let key = (lut.src, lut.interpolate, lut.token);
+        if self.color_snapshots[slot as usize]
+            .is_none_or(|old| (old.src, old.interpolate, old.token) != key)
+        {
+            self.cu
+                .memcpy_d2d_async(self.stream, dst, src, COLOR_LUT_BYTES, what)?;
+            self.color_snapshots[slot as usize] = Some(lut);
+        }
         if input {
             let f = self.color.as_ref().map_err(|e| refused(what, e.clone()))?[2];
             let status = self
@@ -675,7 +692,7 @@ impl DisplayGpu {
 
     /// Snapshot and compose one RGB8888 window using its FP16 input table.
     pub fn color_layer(
-        &self,
+        &mut self,
         slot: u32,
         l: &ComposeLayer,
         lut: Option<ColorLut>,
@@ -1071,6 +1088,93 @@ impl DisplayGpu {
         })();
         self.cu.mem_free(scratch);
         out
+    }
+
+    /// Hardware oracle on synthetic fixtures only. The temporary store contains no
+    /// guest data; table bytes are uploaded, snapshotted and transformed on the GPU.
+    /// A rejected FP16 table returns an error before any fixture pixels are read.
+    pub fn selftest_color(
+        &mut self,
+        surface: &[u8],
+        input: &[u8],
+        output: &[u8],
+        layer: &ComposeLayer,
+        matrix: &[i32; 12],
+        w: u32,
+        h: u32,
+    ) -> Result<Vec<u8>, CudaError> {
+        let what = "DisplayGpu::selftest_color";
+        if input.len() != COLOR_LUT_BYTES
+            || output.len() != COLOR_LUT_BYTES
+            || surface.is_empty()
+            || surface.len() % 8 != 0
+            || layer.extent > surface.len() as u64
+        {
+            return Err(refused(what, "synthetic fixture extent".into()));
+        }
+        layer.check(w, h).map_err(|e| refused(what, e))?;
+        self.make_current()?;
+        self.cu.ctx_synchronize()?;
+        let mut image = surface.to_vec();
+        image.extend_from_slice(input);
+        image.extend_from_slice(output);
+        let scratch = self.cu.mem_alloc_zeroed(image.len(), what)?;
+        let keep = self.store.replace((scratch, image.len() as u64));
+        self.color_snapshots.fill(None);
+        let run = (|| {
+            self.cu.memcpy_h2d(scratch, &image, what)?;
+            self.color_begin(w, h)?;
+            let mut l = *layer;
+            l.src = 0;
+            self.color_layer(
+                0,
+                &l,
+                Some(ColorLut {
+                    src: surface.len() as u64,
+                    interpolate: false,
+                    token: 1,
+                }),
+                w,
+                h,
+            )?;
+            self.color_output(
+                w,
+                h,
+                Some(ColorLut {
+                    src: (surface.len() + input.len()) as u64,
+                    interpolate: false,
+                    token: 2,
+                }),
+                matrix,
+            )?;
+            self.cu.ctx_synchronize()?;
+            self.color_verdict().map_err(|e| refused(what, e))?;
+            let frame = self.frame(w as usize * h as usize * 4)?;
+            let copy = self.compose_to_host(w, h, &frame);
+            let drained = self.cu.ctx_synchronize();
+            if drained.is_err() {
+                // A queued DMA may still name this pinned memory; keep it until
+                // context destruction rather than freeing it on a lost completion.
+                std::mem::forget(frame);
+                drained?;
+                unreachable!();
+            }
+            let bytes = copy.map(|()| frame.read(0, frame.len()));
+            let freed = self.release_frame(frame);
+            let bytes = bytes?;
+            freed?;
+            Ok(bytes)
+        })();
+        let drained = self.cu.ctx_synchronize();
+        self.store = keep;
+        self.color_snapshots.fill(None);
+        // On a CUDA fault retain the scratch allocation until context destruction.
+        if drained.is_ok() {
+            self.cu.mem_free(scratch);
+        }
+        let bytes = run?;
+        drained?;
+        Ok(bytes)
     }
 
     /// Make this context current on the calling thread (the worker calls it once, at its top).

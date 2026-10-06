@@ -10,7 +10,7 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
-static void inspect(int fd, uint32_t id, uint32_t type)
+static void inspect(int fd, uint32_t id, uint32_t type, int dump)
 {
     drmModeObjectPropertiesPtr props = drmModeObjectGetProperties(fd, id, type);
     if (!props) return;
@@ -32,6 +32,11 @@ static void inspect(int fd, uint32_t id, uint32_t type)
                         printf(" entries=%zu midpoint=%u,%u,%u endpoint=%u,%u,%u", n,
                                lut[n/2].red, lut[n/2].green, lut[n/2].blue,
                                lut[n-1].red, lut[n-1].green, lut[n-1].blue);
+                        if (dump && n <= 1025) {
+                            for (size_t j = 0; j < n; j++)
+                                printf("\nCOLOR_LUT object=%u name=%s index=%zu rgb=%u,%u,%u", id,
+                                       p->name, j, lut[j].red, lut[j].green, lut[j].blue);
+                        }
                     }
                 }
                 if (b) drmModeFreePropertyBlob(b);
@@ -45,7 +50,7 @@ static void inspect(int fd, uint32_t id, uint32_t type)
 
 int main(int argc, char **argv)
 {
-    if (argc != 2) return 2;
+    if (argc != 2 && (argc != 3 || strcmp(argv[2], "--dump-lut"))) return 2;
     int fd = open(argv[1], O_RDWR | O_CLOEXEC);
     if (fd < 0) { fprintf(stderr, "open: %s\n", strerror(errno)); return 3; }
     drmVersionPtr ver = drmGetVersion(fd);
@@ -61,11 +66,11 @@ int main(int argc, char **argv)
         printf("COLOR_CRTC id=%u active=%d gamma_size=%d\n", res->crtcs[i],
                c ? c->mode_valid : 0, c ? c->gamma_size : 0);
         if (c) drmModeFreeCrtc(c);
-        inspect(fd, res->crtcs[i], DRM_MODE_OBJECT_CRTC);
+        inspect(fd, res->crtcs[i], DRM_MODE_OBJECT_CRTC, argc == 3);
     }
     drmModePlaneResPtr planes = drmModeGetPlaneResources(fd);
     for (uint32_t i = 0; planes && i < planes->count_planes; i++)
-        inspect(fd, planes->planes[i], DRM_MODE_OBJECT_PLANE);
+        inspect(fd, planes->planes[i], DRM_MODE_OBJECT_PLANE, argc == 3);
     if (planes) drmModeFreePlaneResources(planes);
     drmModeFreeResources(res);
     close(fd);

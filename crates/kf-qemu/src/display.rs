@@ -852,6 +852,65 @@ impl LatchedDmas {
     }
 }
 
+/// A resolved colour binding belongs to one armed channel incarnation. Unlike the
+/// framebuffer cache, its token also names the immutable GPU snapshot of the LUT.
+#[derive(Default)]
+struct ColorDmas {
+    slots: [Option<(ColorKey, kf_cuda::display::ColorLut)>; 33],
+    next: u64,
+}
+
+type ColorKey = (u32, u32, u32, kf_disp::color::Lut);
+
+impl ColorDmas {
+    fn forget(&mut self, slot: usize) {
+        if let Some(s) = self.slots.get_mut(slot) {
+            *s = None;
+        }
+    }
+
+    fn resolve(
+        &mut self,
+        slot: usize,
+        client: u32,
+        chn: u32,
+        life: u32,
+        lut: Option<kf_disp::color::Lut>,
+        fresh: impl FnOnce(u32) -> Result<CtxDma, String>,
+    ) -> Result<Option<kf_cuda::display::ColorLut>, String> {
+        let s = self
+            .slots
+            .get_mut(slot)
+            .ok_or("colour slot outside fixed allocation")?;
+        let Some(lut) = lut else {
+            *s = None;
+            return Ok(None);
+        };
+        let key = (client, chn, life, lut);
+        if let Some((old, resolved)) = *s
+            && old == key
+        {
+            return Ok(Some(resolved));
+        }
+        let dma = match lut.binding {
+            kf_disp::color::Binding::Dma { handle, .. } => Some(fresh(handle)?),
+            kf_disp::color::Binding::Vidmem(_) => None,
+        };
+        let src = lut.binding.span(dma.as_ref()).map_err(str::to_owned)?;
+        self.next = self
+            .next
+            .checked_add(1)
+            .ok_or("colour binding token exhausted")?;
+        let resolved = kf_cuda::display::ColorLut {
+            src,
+            interpolate: lut.interpolate,
+            token: self.next,
+        };
+        *s = Some((key, resolved));
+        Ok(Some(resolved))
+    }
+}
+
 /// ★ The layers one scanout copy composes, and the windows it refused (by name).
 #[derive(Debug, Default)]
 struct Planned {
@@ -1977,6 +2036,7 @@ impl Device {
                         io.inst = Some(im);
                         // a new instance memory voids every resolution made from the old one
                         scan.latched = LatchedDmas::default();
+                        scan.colors.slots.fill(None);
                         // ⊘ The guest never zeroes instance memory (`disp_inst_mem.c:170-201`): a stale
                         // hash entry from an earlier driver life would resolve. Zeroed by the GPU.
                         if im.addr_space == 2
@@ -2010,6 +2070,9 @@ impl Device {
                         }
                         if kind == ChannelKind::Window {
                             scan.latched.forget(instance);
+                            scan.colors.forget(instance as usize);
+                        } else if kind == ChannelKind::Core {
+                            scan.colors.forget(32);
                         }
                         if let Some(chn) = engine.alloc(kind, instance, client, life, loc, offset) {
                             let base = dp.map.user_base(kind, instance);
@@ -2034,6 +2097,9 @@ impl Device {
                         held.channel_freed(preserve, scan.last_plan.as_ref());
                         if kind == ChannelKind::Window {
                             scan.latched.forget(instance);
+                            scan.colors.forget(instance as usize);
+                        } else if kind == ChannelKind::Core {
+                            scan.colors.forget(32);
                         }
                         engine.free(kind, instance);
                         self.display_chan_status(kind, instance, None);
@@ -2254,10 +2320,12 @@ impl Device {
                     // Output colour belongs to the core update, not a window flip.
                     scan.barrier = scan.started + 1;
                     scan.want = true;
+                    scan.colors.forget(32);
                 }
                 if let Effect::Latched { window } = &e {
                     // ★ the window's ARMED state changed: its next copy resolves it afresh
                     scan.latched.forget(*window);
+                    scan.colors.forget(*window as usize);
                     if let Some(Shown::Armed(c)) = &shown
                         && c.layers.iter().any(|l| l.window == *window)
                     {
@@ -2707,6 +2775,7 @@ struct ScanState {
     last_plan: Option<(Vec<LayerPlan>, (u32, u32))>,
     /// ★ 2026-10-04: each window's context DMA as its ARMED state resolved it ([`LatchedDmas`]).
     latched: LatchedDmas,
+    colors: ColorDmas,
     /// ★ The GPU-copy rung's worker half (§8.11).
     vram: Option<VramWorker>,
     /// ★ §O: the cursor mode the last pass saw (a change recomposes) …
@@ -3317,40 +3386,40 @@ impl ScanState {
                 if !planned.refused.is_empty() {
                     return Err("colour frame has refused windows".into());
                 }
-                let resolve_lut =
-                    |io: &mut Io<'_>, client, chn, lut: Option<kf_disp::color::Lut>| {
-                        lut.map(|l| {
-                            let dma = match l.binding {
-                                kf_disp::color::Binding::Dma { handle, .. } => {
-                                    Some(io.resolve(client, handle, chn)?)
-                                }
-                                kf_disp::color::Binding::Vidmem(_) => None,
-                            };
-                            Ok::<_, String>(kf_cuda::display::ColorLut {
-                                src: l.binding.span(dma.as_ref()).map_err(str::to_owned)?,
-                                interpolate: l.interpolate,
-                            })
-                        })
-                        .transpose()
-                    };
                 let mut inputs = Vec::new();
-                for so in &comp.layers {
+                for layer in &planned.layers {
+                    let so = comp
+                        .layers
+                        .iter()
+                        .find(|so| so.window == layer.window)
+                        .ok_or("colour layer has no armed window")?;
                     let lut = kf_disp::color::input(t, win, |m| {
                         engine.armed(ChannelKind::Window, so.window, m).unwrap_or(0)
                     })
                     .map_err(str::to_owned)?;
-                    inputs.push(resolve_lut(io, so.client, so.chn, lut)?);
+                    let life = engine
+                        .generation(so.chn)
+                        .ok_or("no colour window incarnation")?;
+                    inputs.push(self.colors.resolve(
+                        so.window as usize,
+                        so.client,
+                        so.chn,
+                        life,
+                        lut,
+                        |handle| io.resolve(so.client, handle, so.chn),
+                    )?);
                 }
                 let out = kf_disp::color::output(t, core, comp.head, |m| {
                     engine.armed(ChannelKind::Core, 0, m).unwrap_or(0)
                 })
                 .map_err(str::to_owned)?;
-                let lut = resolve_lut(
-                    io,
-                    engine.client(0).ok_or("no core colour client")?,
-                    0,
-                    out.lut,
-                )?;
+                let client = engine.client(0).ok_or("no core colour client")?;
+                let life = engine.generation(0).ok_or("no core colour incarnation")?;
+                let lut = self
+                    .colors
+                    .resolve(32, client, 0, life, out.lut, |handle| {
+                        io.resolve(client, handle, 0)
+                    })?;
                 Ok((inputs, lut, out.matrix))
             })();
             match program {
@@ -3396,33 +3465,30 @@ impl ScanState {
             self.finish(dp, n, req);
             return;
         };
-        let composed =
-            if let Some((inputs, out, matrix)) = &color {
-                gpu.color_begin(w, h)
-                    .and_then(|()| {
-                        planned.layers.iter().zip(inputs).enumerate().try_for_each(
-                            |(i, (l, lut))| {
-                                gpu.color_layer(i as u32, &compose_layer(l), *lut, w, h)
-                            },
-                        )
+        let composed = if let Some((inputs, out, matrix)) = &color {
+            gpu.color_begin(w, h)
+                .and_then(|()| {
+                    planned.layers.iter().zip(inputs).try_for_each(|(l, lut)| {
+                        gpu.color_layer(l.window, &compose_layer(l), *lut, w, h)
                     })
-                    .and_then(|()| gpu.color_output(w, h, *out, matrix))
-                    .and_then(|()| {
-                        layers[planned.layers.len()..]
-                            .iter()
-                            .try_for_each(|l| gpu.compose_layer(&compose_layer(l), w, h))
+                })
+                .and_then(|()| gpu.color_output(w, h, *out, matrix))
+                .and_then(|()| {
+                    layers[planned.layers.len()..]
+                        .iter()
+                        .try_for_each(|l| gpu.compose_layer(&compose_layer(l), w, h))
+                })
+                .map_err(|e| format!("SDR composition {w}x{h}: {e}"))
+        } else {
+            gpu.compose_begin(w, h)
+                .map_err(|e| format!("composition {w}x{h}: {e}"))
+                .and_then(|()| {
+                    layers.iter().try_for_each(|l| {
+                        gpu.compose_layer(&compose_layer(l), w, h)
+                            .map_err(|e| format!("window {}: {e}", l.window))
                     })
-                    .map_err(|e| format!("SDR composition {w}x{h}: {e}"))
-            } else {
-                gpu.compose_begin(w, h)
-                    .map_err(|e| format!("composition {w}x{h}: {e}"))
-                    .and_then(|()| {
-                        layers.iter().try_for_each(|l| {
-                            gpu.compose_layer(&compose_layer(l), w, h)
-                                .map_err(|e| format!("window {}: {e}", l.window))
-                        })
-                    })
-            };
+                })
+        };
         if let Err(e) = composed {
             self.refuse(dp, &e);
             self.failed = true;
@@ -3725,6 +3791,59 @@ impl ScanState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn color_snapshot_binding_survives_unbind_but_not_update_or_incarnation_change() {
+        use kf_disp::color::{Binding, LUT_BYTES, Lut};
+        let mut cache = ColorDmas::default();
+        let lut = Some(Lut {
+            binding: Binding::Dma {
+                handle: 9,
+                offset: 256,
+            },
+            interpolate: false,
+        });
+        let dma = CtxDma {
+            target: Target::Vidmem,
+            base: 4096,
+            limit: 4096 + 256 + LUT_BYTES - 1,
+            block_linear: false,
+            writable: false,
+        };
+        let first = cache
+            .resolve(0, 7, 1, 42, lut, |_| Ok(dma))
+            .unwrap()
+            .unwrap();
+        let kept = cache
+            .resolve(0, 7, 1, 42, lut, |_| Err("unbound".into()))
+            .unwrap()
+            .unwrap();
+        assert_eq!((first.src, first.token), (kept.src, kept.token));
+        assert!(
+            cache
+                .resolve(0, 7, 1, 43, lut, |_| Err("new channel".into()))
+                .is_err()
+        );
+        cache.forget(0);
+        assert!(
+            cache
+                .resolve(0, 7, 1, 42, lut, |_| Err("new UPDATE".into()))
+                .is_err()
+        );
+        let next = cache
+            .resolve(0, 7, 1, 42, lut, |_| Ok(dma))
+            .unwrap()
+            .unwrap();
+        assert!(next.token > first.token);
+        cache
+            .resolve(0, 7, 1, 42, None, |_| unreachable!())
+            .unwrap();
+        assert!(
+            cache
+                .resolve(0, 7, 1, 42, lut, |_| Err("disabled then re-enabled".into()))
+                .is_err()
+        );
+    }
 
     /// ★ §O: the worker's hover/grab switch. Without a cursor-capable broker (nothing read) and under
     /// grab the cursor is composed; in hover it is left out unless the host cannot show it.
