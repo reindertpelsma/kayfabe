@@ -57,3 +57,11 @@ the channel is retired with forwarded=0 and submissions=0. Windows retains
 Code43/smi9; display still reaches8330 methods but zero UPDATEs/scanouts.
 The FBMEM registration and FIFO latency-buffer query still refuse. No exact
 RPC-to-Windows-assertion causal claim is made.
+
+Fresh run16 watchdog [recovery](run16-recovery.log) and
+[comparison](run16-watchdog-comparison.json):24 saved assertions, first21 identical
+to run13; tail hints change from3901fd/391f76/1a1267d to1a1267d/1a3704b/1959d9f.
+The earlier1a103e6 assertion is still inside the matching prefix. This does not
+prove which RPC caused the tail assertions. The outer NVCD remains one byte
+short; complete journal records are usable, no valid-checksum claim. Recovery
+verified read-only NBD/NTFS and cleanup; raw dump remains private.
