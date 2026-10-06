@@ -196,8 +196,8 @@ impl IdentityObserver {
             if u64::from(code) != function || cmd.payload.len() < cell.alloc_memory_size {
                 return None;
             }
-            // Source-known fixed scalar prefix only. The PTE descriptor/tail is
-            // deliberately omitted: this does not validate/implement its semantics.
+            // Source-known scalar prefix. The exact one-inline-entry case also gets
+            // a bounded raw observation below; neither observation admits semantics.
             write!(
                 record,
                 "function={code} ALLOC_MEMORY payload_bytes={} prefix_only=true",
@@ -212,6 +212,21 @@ impl IdentityObserver {
                     _ => return None,
                 };
                 write!(record, " {name}={value:#x}").ok()?;
+            }
+            // Exact single-inline-entry record only: two bounded words, no guest-sized
+            // tail or indirection read. Observation does not admit or dereference it.
+            if cmd.payload.len() == cell.alloc_memory_size.checked_add(8)? {
+                let start = cell.alloc_memory_size.checked_sub(8)?;
+                let words = cmd.payload.get(start..)?.as_chunks::<8>().0;
+                if let [descriptor, entry] = words {
+                    write!(
+                        record,
+                        " raw_descriptor_u64_le=[{:016x},{:016x}]",
+                        u64::from_le_bytes(*descriptor),
+                        u64::from_le_bytes(*entry)
+                    )
+                    .ok()?;
+                }
             }
         } else {
             return None;
@@ -452,6 +467,25 @@ mod tests {
         cmd.payload.resize(56, 0);
         cmd.function = RpcFunction::Other(5);
         assert!(observer.request_observation(&cmd).is_none());
+    }
+
+    #[test]
+    fn alloc_memory_single_entry_observation_is_bounded_and_does_not_admit_it() {
+        let (_, mut observer, _) = fixture();
+        let mut payload = vec![0; 64];
+        payload[48..56].copy_from_slice(&0x10000_u64.to_le_bytes());
+        payload[56..64].copy_from_slice(&0x123456_u64.to_le_bytes());
+        let cmd = command(RpcFunction::Other(4), payload);
+        let before = cmd.clone();
+        let record = observer.request_observation(&cmd).unwrap();
+        assert!(record.contains("raw_descriptor_u64_le=[0000000000010000,0000000000123456]"));
+        assert!(record.len() < 450);
+        assert!(observer.respond(&cmd).is_none());
+        assert_eq!(cmd, before);
+        let mut extended = cmd;
+        extended.payload.push(0xff);
+        let record = observer.request_observation(&extended).unwrap();
+        assert!(!record.contains("raw_descriptor"));
     }
 
     #[test]
