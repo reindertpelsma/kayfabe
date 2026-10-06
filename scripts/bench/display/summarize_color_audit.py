@@ -60,6 +60,20 @@ def main():
         counts = collections.Counter(data for _, k, m, data, _ in methods
                                      if k == kind and int(m, 16) == offset)
         if counts: colors[name] = dict(counts)
+    # A successful gamma request only covers OLUT. In particular, no TMO
+    # methods means no TMO exercise, even when ordinary rendering succeeds.
+    tmo_binding_method = int(rows['NVC67E_SET_CONTEXT_DMA_TMO_LUT'][2])
+    tmo_bindings = [data for _, kind, method, data, _ in methods
+                    if kind == 'Window' and int(method, 16) == tmo_binding_method]
+    tmo_nonzero = sum(int(data, 16) != 0 for data in tmo_bindings)
+    stage_coverage = dict(
+        tmo_binding_writes=len(tmo_bindings),
+        tmo_nonzero_binding_writes=tmo_nonzero,
+        tmo_processing_proven=False,
+        tmo_assessment=('binding observed; needs completion and pixel oracle'
+                        if tmo_nonzero else 'not exercised'),
+        scope='KMS output gamma exercise does not establish TMO buffer presence',
+    )
     def gamma(name):
         text = (run/(name+'.log')).read_text()
         return re.findall(r'name=GAMMA_LUT value=\d+(?: bytes=\d+ entries=\d+ '
@@ -73,7 +87,8 @@ def main():
                   protocol_failure_event=bool(re.search(r'zwlr_gamma_control_v1@\d+\.failed\(', warm)),
                   injected_kms_failure=('COLOR_FAULT reject GAMMA_LUT' in warm),
                   generated_table_sha256=hashlib.sha256(table.read_bytes()).hexdigest(),
-                  color_method_value_counts=colors, method_records=len(methods),
+                  color_method_value_counts=colors, color_stage_coverage=stage_coverage,
+                  method_records=len(methods),
                   trace_budget_remaining=int(methods[-1][4]) if methods else None,
                   limits=['One AD104/580.159.04 guest cell; SDR fixed XRGB scene.',
                           'Native shader/client control and KMS readback do not capture physical post-LUT pixels.',

@@ -14,6 +14,14 @@ RGB components**, zero mismatches and zero maximum error. Removing the ramp
 restores the original bytes. This establishes actual nonidentity output LUT
 processing in this cell; it is not inferred from an accepted ioctl.
 
+**Scope correction, 2026-10-06:** this does not satisfy the owner's broader
+requirement that the TMO buffer be present. Run C has zero TMO binding writes.
+Linux can skip that stage when it is declared absent, independently of the
+successful gamma transform. The updated audit records this stage coverage.
+The next gate must explicitly request the plane `TMO_LUT` and require a real
+binding, GPU completion and transformed pixels; missing or skipped TMO is a
+failed gate. This experiment remains outstanding.
+
 - [Final Linux run C](linux-c-summary.json), [independent pixel check](linux-c-pixel-oracle.json).
 - Earlier source controls: [A](linux-a-summary.json), [B](linux-b-summary.json), [B pixel check](linux-b-pixel-oracle.json).
 - [Real GPU fixtures](color-gpu-2aa8.log): nonidentity FP16 input, unsigned output,

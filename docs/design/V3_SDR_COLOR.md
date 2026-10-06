@@ -51,6 +51,21 @@ policy currently requires a new display-device lifetime to resume.
 
 ## Evidence and remaining validation
 
+**Owner's broader Linux-oracle objective, clarified 2026-10-06:** the gamma
+exercise below proves OLUT processing only. It does not establish a TMO buffer
+or rule out skipping TMO. OGKM `nvNeedsTmoLut()` explicitly returns false for
+absent TMO (and for ordinary SDR lacking HDR metadata). Direct plane `TMO_LUT`
+requests are a separate driver path: `nvidia-drm-crtc.c` builds a UNORM16 linear
+VSS table through `create_drm_tmo_surface()` and marks the TMO configuration
+changed. This route is the next Linux experiment, not a completed result.
+
+The next acceptance gate must require the TMO property/request, an actual
+nonzero binding, bounded table consumption, real GPU completion and the
+expected changed/restored pixels. A missing property, an absent capability,
+a skipped stage or successful ordinary rendering must fail that gate. Run C
+has zero TMO binding writes, so its successful gamma test cannot satisfy the
+broader objective. No unsupported TMO capability is enabled by this clarification.
+
 Linux run A, source `92bd40d6306ac40b5226501ab32c7e7d0858239a`, RTX 4070 AD104,
 host 595.91.07, Linux guest 580.159.04: Weston and Sway draw the fixed scene.
 Sway's unprivileged gamma-control client applies a 2501 K output curve through

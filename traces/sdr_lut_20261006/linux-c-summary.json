@@ -210,6 +210,13 @@
       "0x21": 7
     }
   },
+  "color_stage_coverage": {
+    "tmo_binding_writes": 0,
+    "tmo_nonzero_binding_writes": 0,
+    "tmo_processing_proven": false,
+    "tmo_assessment": "not exercised",
+    "scope": "KMS output gamma exercise does not establish TMO buffer presence"
+  },
   "method_records": 37663,
   "trace_budget_remaining": 27873,
   "limits": [
