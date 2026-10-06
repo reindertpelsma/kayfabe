@@ -354,8 +354,23 @@ fn trace_line(
         RpcFunction::RmAlloc => driver.decode_rpc_alloc(&cmd.payload).map_or_else(
             |_| "class=undecodable".to_owned(),
             |a| {
+                let facts = crate::rmrpc::alloc_params_window(driver, cmd.wire_body())
+                    .and_then(
+                        |params| match crate::chanlink::alloc_shape(driver, a.class) {
+                            Some(kf_abi::AllocParams::Device) => driver
+                                .decode_device_alloc_facts(params)
+                                .ok()
+                                .map(|f| format!(" device_facts={f:x?}")),
+                            Some(kf_abi::AllocParams::Tsg) => driver
+                                .decode_tsg_alloc_facts(params)
+                                .ok()
+                                .map(|f| format!(" tsg_facts={f:x?}")),
+                            _ => None,
+                        },
+                    )
+                    .unwrap_or_default();
                 format!(
-                    "class={:#06x} client={:#x} parent={:#x} handle={:#x}",
+                    "class={:#06x} client={:#x} parent={:#x} handle={:#x}{facts}",
                     a.class, a.client, a.parent, a.handle
                 )
             },
