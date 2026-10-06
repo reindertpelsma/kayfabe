@@ -11,11 +11,11 @@ fn table(rgb: [u16; 3]) -> Vec<u8> {
     bytes
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), String> {
     let bdf = std::env::args()
         .nth(1)
         .ok_or("usage: color_sdr <host PCI BDF>")?;
-    let mut gpu = DisplayGpu::bring_up_on(&bdf)?;
+    let mut gpu = DisplayGpu::bring_up_on(&bdf).map_err(|e| e.to_string())?;
     let l = ComposeLayer {
         src: 0,
         extent: 32,
@@ -43,11 +43,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             identity.extend_from_slice(&v.to_le_bytes());
         }
     }
-    let pixels = gpu.selftest_color(&surface, &input, &identity, &l, &matrix, 8, 1)?;
+    let pixels = gpu
+        .selftest_color(&surface, &input, &identity, &l, &matrix, 8, 1)
+        .map_err(|e| e.to_string())?;
     assert!(pixels.chunks_exact(4).all(|p| p == [0, 255, 128, 255]));
     println!("COLOR_GPU input_fp16_nonidentity PASS pixels=8 expected_rgb=128,255,0");
     let output = table([0, 32768, 65535]);
-    let pixels = gpu.selftest_color(&surface, &input, &output, &l, &matrix, 8, 1)?;
+    let pixels = gpu
+        .selftest_color(&surface, &input, &output, &l, &matrix, 8, 1)
+        .map_err(|e| e.to_string())?;
     assert!(pixels.chunks_exact(4).all(|p| p == [255, 128, 0, 255]));
     println!("COLOR_GPU output_unorm_nonidentity PASS pixels=8 expected_rgb=0,128,255");
     for invalid in [0x7c00, 0x7e00, 0xbc00, 0x4000] {
