@@ -1,0 +1,190 @@
+WL_SCENE_SIZE 512x384
+WL_SCENE_EGL_VENDOR NVIDIA
+WL_SCENE_RENDERER NVIDIA GeForce RTX 4070/PCIe/SSE2
+WL_SCENE_HASH ad584bcbbd263ea5
+WL_SCENE_DISTINCT 8
+WL_SCENE_GLERR 0x0
+WL_SCENE_READY
+Date: 2026-10-06 UTC
+[12:12:49.047] weston 13.0.0
+               https://wayland.freedesktop.org
+               Bug reports to: https://gitlab.freedesktop.org/wayland/weston/issues/
+               Build: 13.0.0
+[12:12:49.047] Command line: weston --backend=drm --continue-without-input --socket=kfcolor --log=/tmp/kfcolor-weston.log
+[12:12:49.047] OS: Linux, 6.8.0-142-generic, #142-Ubuntu SMP PREEMPT_DYNAMIC Wed Sep  2 14:24:27 UTC 2026, x86_64
+[12:12:49.047] Flight recorder: enabled
+[12:12:49.047] warning: XDG_RUNTIME_DIR "/run/kfcolorw" is not configured
+correctly.  Unix access mode must be 0700 (current mode is 0755),
+and must be owned by the user UID 0 (current owner is UID 0).
+Refer to your distribution on how to get it, or
+http://www.freedesktop.org/wiki/Specifications/basedir-spec
+on how to implement it.
+[12:12:49.047] Starting with no config file.
+[12:12:49.048] Output repaint window is 7 ms maximum.
+[12:12:49.048] Loading module '/usr/lib/x86_64-linux-gnu/libweston-13/drm-backend.so'
+[12:12:49.050] initializing drm backend
+[12:12:49.050] Trying libseat launcher...
+[12:12:49.050] [seatd/seat.c:39] Created VT-bound seat seat0
+[12:12:49.050] [seatd/server.c:145] New client connected (pid: 1351, uid: 0, gid: 0)
+[12:12:49.050] [libseat/backend/seatd.c:633] Started embedded seatd
+[12:12:49.050] [seatd/seat.c:170] Added client 1 to seat0
+[12:12:49.050] [seatd/seat.c:480] Opened client 1 on seat0
+[12:12:49.050] [libseat/libseat.c:62] Seat opened with backend 'builtin'
+[12:12:49.051] [libseat/backend/seatd.c:212] Enabling seat
+[12:12:49.051] libseat: session control granted
+[12:12:49.051] using /dev/dri/card0
+[12:12:49.051] DRM: supports atomic modesetting
+[12:12:49.051] DRM: supports GBM modifiers
+[12:12:49.051] DRM: does not support async page flipping
+[12:12:49.051] DRM: supports picture aspect ratio
+[12:12:49.053] Loading module '/usr/lib/x86_64-linux-gnu/libweston-13/gl-renderer.so'
+[12:12:49.541] Using rendering device: /dev/dri/renderD128
+[12:12:49.541] EGL version: 1.5
+[12:12:49.541] EGL vendor: NVIDIA
+[12:12:49.541] EGL client APIs: OpenGL_ES OpenGL
+[12:12:49.541] EGL features:
+               EGL Wayland extension: yes
+               context priority: yes
+               buffer age: yes
+               partial update: yes
+               swap buffers with damage: yes
+               configless context: yes
+               surfaceless context: yes
+               dmabuf support: modifiers
+[12:12:49.616] GL version: OpenGL ES 3.2 NVIDIA 580.159.04
+[12:12:49.616] GLSL version: OpenGL ES GLSL ES 3.20
+[12:12:49.616] GL vendor: NVIDIA Corporation
+[12:12:49.616] GL renderer: NVIDIA GeForce RTX 4070/PCIe/SSE2
+[12:12:49.698] GL ES 3.2 - renderer features:
+               read-back format: ARGB8888
+               glReadPixels supports y-flip: no
+               wl_shm 10 bpc formats: yes
+               wl_shm 16 bpc formats: yes
+               wl_shm half-float formats: no
+               internal R and RG formats: yes
+               OES_EGL_image_external: yes
+[12:12:49.698] Using GL renderer
+[12:12:49.704] event0  - Power Button: is tagged by udev as: Keyboard
+[12:12:49.704] event0  - Power Button: device is a keyboard
+[12:12:49.705] event1  - AT Translated Set 2 keyboard: is tagged by udev as: Keyboard
+[12:12:49.705] event1  - AT Translated Set 2 keyboard: device is a keyboard
+[12:12:49.706] event3  - VirtualPS/2 VMware VMMouse: is tagged by udev as: Mouse
+[12:12:49.706] event3  - VirtualPS/2 VMware VMMouse: device is a pointer
+[12:12:49.707] event2  - VirtualPS/2 VMware VMMouse: is tagged by udev as: Mouse
+[12:12:49.707] event2  - VirtualPS/2 VMware VMMouse: device is a pointer
+[12:12:49.712] libinput: configuring device "Power Button".
+[12:12:49.712] libinput: configuring device "AT Translated Set 2 keyboard".
+[12:12:49.712] libinput: configuring device "VirtualPS/2 VMware VMMouse".
+[12:12:49.712] libinput: configuring device "VirtualPS/2 VMware VMMouse".
+[12:12:49.712] input device event2 has no enabled output associated (none named), skipping calibration for now.
+[12:12:49.714] DRM: head 'DVI-D-1' found, connector 126 is connected, EDID make 'KFB', model 'kayfabe', serial '1'
+               Supported EOTF modes: SDR
+[12:12:49.714] Registered plugin API 'weston_drm_output_api_v1' of size 40
+[12:12:49.714] Registered plugin API 'weston_drm_virtual_output_api_v2' of size 48
+[12:12:49.714] Color manager: no-op
+[12:12:49.714] Output 'DVI-D-1' attempts EOTF mode: SDR
+[12:12:49.714] Output 'DVI-D-1' using color profile: stock sRGB color profile
+[12:12:49.714] Chosen EGL config details: id:  24 rgba: 8 8 8 0 buf: 24 dep:  0 stcl: 0 int: 0-1 type: win|pbf vis_id: XRGB8888 (0x34325258)
+[12:12:49.717] Output DVI-D-1 (crtc 60) video modes:
+               1920x1080@60.0, preferred, current, 148.5 MHz
+               1680x1050@60.0, 146.2 MHz
+               1600x900@60.0, 108.0 MHz
+               1280x1024@60.0, 108.0 MHz
+               1024x768@60.0, 65.0 MHz
+               800x600@60.3, 40.0 MHz
+               640x480@59.9, 25.2 MHz
+[12:12:49.718] associating input device event0 with output DVI-D-1 (none by udev)
+[12:12:49.718] associating input device event1 with output DVI-D-1 (none by udev)
+[12:12:49.718] associating input device event3 with output DVI-D-1 (none by udev)
+[12:12:49.718] associating input device event2 with output DVI-D-1 (none by udev)
+[12:12:49.718] Output 'DVI-D-1' enabled with head(s) DVI-D-1
+[12:12:49.718] Compositor capabilities:
+               arbitrary surface rotation: yes
+               screen capture uses y-flip: yes
+               cursor planes: yes
+               arbitrary resolutions: no
+               view mask clipping: yes
+               explicit sync: yes
+               color operations: no
+               presentation clock: CLOCK_MONOTONIC, id 1
+               presentation clock resolution: 0.000000001 s
+[12:12:49.718] Loading module '/usr/lib/x86_64-linux-gnu/weston/desktop-shell.so'
+[12:12:49.719] launching '/usr/libexec/weston-keyboard'
+[12:12:49.720] launching '/usr/libexec/weston-desktop-shell'
+COLOR_READER uid=1000 driver=nvidia-drm master=0
+COLOR_CRTC id=60 active=1 gamma_size=1024
+COLOR_PROPERTY object=60 type=3435973836 name=NV_CRTC_REGAMMA_TF value=0
+COLOR_PROPERTY object=60 type=3435973836 name=NV_CRTC_REGAMMA_LUT value=0
+COLOR_PROPERTY object=60 type=3435973836 name=NV_CRTC_REGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=60 type=3435973836 name=DEGAMMA_LUT value=0
+COLOR_PROPERTY object=60 type=3435973836 name=DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=60 type=3435973836 name=CTM value=0
+COLOR_PROPERTY object=60 type=3435973836 name=GAMMA_LUT value=0
+COLOR_PROPERTY object=60 type=3435973836 name=GAMMA_LUT_SIZE value=1024
+COLOR_CRTC id=79 active=0 gamma_size=1024
+COLOR_PROPERTY object=79 type=3435973836 name=NV_CRTC_REGAMMA_TF value=0
+COLOR_PROPERTY object=79 type=3435973836 name=NV_CRTC_REGAMMA_LUT value=0
+COLOR_PROPERTY object=79 type=3435973836 name=NV_CRTC_REGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=79 type=3435973836 name=DEGAMMA_LUT value=0
+COLOR_PROPERTY object=79 type=3435973836 name=DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=79 type=3435973836 name=CTM value=0
+COLOR_PROPERTY object=79 type=3435973836 name=GAMMA_LUT value=0
+COLOR_PROPERTY object=79 type=3435973836 name=GAMMA_LUT_SIZE value=1024
+COLOR_CRTC id=98 active=0 gamma_size=1024
+COLOR_PROPERTY object=98 type=3435973836 name=NV_CRTC_REGAMMA_TF value=0
+COLOR_PROPERTY object=98 type=3435973836 name=NV_CRTC_REGAMMA_LUT value=0
+COLOR_PROPERTY object=98 type=3435973836 name=NV_CRTC_REGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=98 type=3435973836 name=DEGAMMA_LUT value=0
+COLOR_PROPERTY object=98 type=3435973836 name=DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=98 type=3435973836 name=CTM value=0
+COLOR_PROPERTY object=98 type=3435973836 name=GAMMA_LUT value=0
+COLOR_PROPERTY object=98 type=3435973836 name=GAMMA_LUT_SIZE value=1024
+COLOR_CRTC id=117 active=0 gamma_size=1024
+COLOR_PROPERTY object=117 type=3435973836 name=NV_CRTC_REGAMMA_TF value=0
+COLOR_PROPERTY object=117 type=3435973836 name=NV_CRTC_REGAMMA_LUT value=0
+COLOR_PROPERTY object=117 type=3435973836 name=NV_CRTC_REGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=117 type=3435973836 name=DEGAMMA_LUT value=0
+COLOR_PROPERTY object=117 type=3435973836 name=DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=117 type=3435973836 name=CTM value=0
+COLOR_PROPERTY object=117 type=3435973836 name=GAMMA_LUT value=0
+COLOR_PROPERTY object=117 type=3435973836 name=GAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=49 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=49 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=49 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=49 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=49 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=61 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=61 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=61 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=61 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=61 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=68 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=68 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=68 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=68 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=68 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=80 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=80 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=80 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=80 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=80 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=87 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=87 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=87 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=87 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=87 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=99 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=99 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=99 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=99 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=99 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=106 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=106 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=106 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=106 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=106 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=118 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=118 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=118 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=118 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=118 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
