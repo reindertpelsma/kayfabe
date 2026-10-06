@@ -1982,7 +1982,7 @@ impl ChanPlane {
                 )
             }
             ChanStatement::Timeslice { client, object, us } => {
-                let twins: Vec<kf_host::Channel> = self
+                let mut twins: Vec<kf_host::Channel> = self
                     .pt
                     .lock()
                     .map(|m| {
@@ -1992,13 +1992,46 @@ impl ChanPlane {
                             .collect()
                     })
                     .unwrap_or_default();
-                if twins.is_empty() {
+                // A guest TSG can contain Translated channels as well as passthrough
+                // twins. Resolve its members in this client's namespace, then use
+                // only our owned host channels. No host call or wait holds these locks.
+                let translated: Vec<u32> = self
+                    .by_obj
+                    .lock()
+                    .map(|m| {
+                        m.iter()
+                            .filter(|(k, _)| k.0 == client)
+                            .map(|(_, ht)| *ht)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if twins.is_empty() && translated.is_empty() {
                     return ChanAnswer::NotOurs;
                 }
                 self.defer(
                     "timeslice",
                     Box::new(move |me: &ChanPlane| {
+                        // Slot resolution runs on the act thread as well: it must
+                        // not contend with a pump while the GSP drainer is locked.
+                        for ht in translated {
+                            if let Some(slot) = me.slot(ht)
+                                && let Ok(g) = slot.lock()
+                                && g.tsg == Some(object)
+                                && g.dead.is_none()
+                            {
+                                twins.push(g.chan.host().channel());
+                            }
+                        }
+                        if twins.is_empty() {
+                            return Err((NV_ERR_INVALID_STATE, format!(
+                                "{client:#x}:{object:#x} SET_TIMESLICE: no live owned group member"
+                            )));
+                        }
+                        let mut groups_done = std::collections::HashSet::new();
                         for c in &twins {
+                            if !groups_done.insert(c.tsg) {
+                                continue;
+                            }
                             me.rm.set_timeslice(*c, us).map_err(|e| {
                                 (
                                     NV_ERR_INVALID_ARGUMENT,
@@ -2008,7 +2041,7 @@ impl ChanPlane {
                         }
                         Ok(format!(
                             "{client:#x}:{object:#x} SET_TIMESLICE {us} us on {} twin group(s)",
-                            twins.len()
+                            groups_done.len()
                         ))
                     }),
                 )

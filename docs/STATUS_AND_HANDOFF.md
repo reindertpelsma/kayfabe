@@ -30,7 +30,8 @@ policy and channel-parent lifetime checks;1172 ABI/RM tests pass. Run18 at
 c34d8dac returns0 for both class5080 constructors, then engine allocation and
 group scheduling succeed. Newly reached a06c0103 SET_TIMESLICE refuses because
 the handler only resolves passthrough group members. Next: apply the authored
-host control to Translated members off the GSP lock. Code43/smi9 persist;
+host control to Translated members off the GSP lock. This handler change is now
+implemented;101 kf-qemu tests pass, zero new Clippy debt. Run19 pending. Code43/smi9 persist;
 queued Deferred API controls/methods remain unsupported; no completion is forged.
 
 

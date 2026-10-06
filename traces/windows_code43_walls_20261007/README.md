@@ -178,3 +178,22 @@ retain24 assertions with the first21 matching run17. The tail hints change to
 e38498/e37654/304308. The earlier1a103e6 remains. This records a later path
 without assigning symbols/types or asserting RPC causality. The outer NVCD is
 still one byte short; the complete records are usable, no checksum claim.
+
+## Fourth repair: Translated channel-group timeslice
+
+Run18 reaches a06c0103 after engine-object construction. The existing RM decoder
+already requires exactly eight bytes and decodes the public NvU64 timesliceUs.
+The QEMU handler now also considers Translated channels in the original client
+namespace and resolves their live TSG membership on the act thread. It invokes
+the existing host set_timeslice verb on each distinct owned host group; guest
+handles and raw control bytes are never sent to the host. Missing/dead members
+refuse; a host error becomes the reply error. Host RM performs the scheduling
+change and validates/rounds the quantum. No GPU completion is invented, and
+no slot lock is held across a host call. Passthrough groups retain their path
+with duplicate host-group controls removed.
+
+Source: OGKM580.65.06 ctrla06c.h:129..150 and
+kernel_channel_group_api.c:1296..1364, commit307159f2623d3bf45feb9177bd2da52ffbc5ddf9.
+Local validation: all101 kf-qemu tests pass; Clippy reports zero new debt
+(197 existing in the targeted report). Formatting and diff checks pass.
+Hardware result pending until the source-pinned run19.
