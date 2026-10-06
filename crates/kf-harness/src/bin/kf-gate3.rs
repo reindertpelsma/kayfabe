@@ -218,7 +218,13 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let dev = DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
     let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes)
         .map_err(|e| e.to_string())?;
-    let ce_class = rm.ce_class_id();
+    let ce_class = match std::env::var("KF_GATE3_CE_CLASS") {
+        Ok(c) => u32::from_str_radix(c.trim_start_matches("0x"), 16)
+            .ok()
+            .filter(|&c| is_ce(c))
+            .ok_or("KF_GATE3_CE_CLASS is not a source-derived CE class")?,
+        Err(_) => rm.ce_class_id(),
+    };
     let res = rm
         .reserve_gpga(STORE_BYTES)
         .map_err(|e| format!("reserve: {e:?}"))?;

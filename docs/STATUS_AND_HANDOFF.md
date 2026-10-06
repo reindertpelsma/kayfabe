@@ -41,7 +41,11 @@ The default-off observer is implemented with16 records of at most16 entries;
 nine-entry requests: main/patch/FECS/maps initialize, four entries only carry VA.
 The payload decodes; the missing real kernel-GR twin refuses promotion. Next:
 owned unprivileged GR context and actual Translated CE work on that runlist,
-with bare-metal validation before another guest test;
+with bare-metal validation before another guest test. Native b7ef3e56 passes
+all gate3 copy/split/GPU-completion checks on a real GR context. Kernel-GR
+admission is now implemented behind KF3_KERNEL_GR_CE plus TSPACE, with promotion
+requiring the actual owned context. Compatible CE-class native arm and Windows
+run21 pending; arbitrary kernel GR methods/software execution still refuse;
 queued Deferred API controls/methods remain unsupported; no completion is forged.
 
 

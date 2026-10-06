@@ -1,0 +1,25 @@
+NATIVE_GR_CE_START rev=b7ef3e5685319ca087ce73a5c01569083f977b9c dirty=0
+kf-cuda: cuda thread posture thread=main cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+MEASURE identity_window base=0x1fffff0000000 bytes=0x10000000 us=52 (GROWS_DOWN, read back)
+MEASURE ram_window base=0x1ffffec000000 bytes=0x4000000 us=29434
+CHECK windows_distinct PASS fb=0x1fffff0000000 ram=0x1ffffec000000
+MEASURE publish_boot diff_runs=1 mapped=1 unmapped=0 refused=0 us=252
+CHECK kernel_vas_published PASS 1 runs
+kf-host: channel birth h=0xcafe000d engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=not-held
+CHECK graphics_runlist_has_real_owned_context PASS host=0x1b context=Some((cafe000f, c9c0))
+MEASURE publish_at_split diff_runs=1 mapped=1 unmapped=0 refused=0 us=203
+MEASURE translated fetched=3 submissions=3 splits=1 wakes=3 pumps=4 us=377
+CHECK forwarded_per_token PASS fetched=3 submissions=3
+CHECK fill_zeroed_by_engine PASS FILL all zero (was 0xAB)
+CHECK phys_copy_by_engine PASS DST == SRC pattern
+CHECK split_walked_the_named_root PASS walks=[Some(1000000)] root=0x1000000
+CHECK virtual_copy_after_split PASS DST2 == NEW pattern (read through VA_NEW)
+CHECK sysmem_to_fb_by_engine PASS DST3 == guest-RAM R_SRC pattern
+CHECK fb_to_sysmem_by_engine PASS guest-RAM R_DST == SRC pattern
+CHECK guest_semaphore_written_natively PASS sem=0x5c0b0003 want=0x5c0b0003
+CHECK gp_get_authored_on_completion PASS guest GP_GET=3
+CHECK hostile_entry_refused_by_name PASS Err(Ring(Rewrite { gp: 3, why: PeerOperand }))
+CHECK hostile_entry_not_retired PASS guest GP_GET=3
+GATE3_VERDICT=PASS
+NATIVE_GR_CE_EXIT rc=0
+NVIDIA GeForce RTX 4070, 595.91.07, 41

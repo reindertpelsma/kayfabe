@@ -608,6 +608,8 @@ struct Slot {
     mirror: Mirror,
     userd: UserdView,
     guest_idx: u32,
+    guest_engine: u32,
+    ctx: CtxBind,
     scheduled: bool,
     dead: Option<String>,
     /// Serves (doorbells + completion rings that reached this channel).
@@ -637,6 +639,13 @@ struct Slot {
     /// ★ P1+P2 inc A: the channel's count-only total already summed into
     /// [`ChanPlane::inca_counted`].
     inca_seen: u64,
+}
+
+// Experiment on this branch: kernel GR channels run only authored CE work in
+// the private T-space, with a real host-owned GR context. Default off.
+fn kernel_gr_ce() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_KERNEL_GR_CE").is_some_and(|v| v == "1"))
 }
 
 /// ★ P1+P2 inc D (§7.13) — **`KF3_NEGCTL_STALE_BIND=1`**, the stale-bind counter's POSITIVE
@@ -1778,6 +1787,16 @@ impl ChanPlane {
                     .ok()
                     .and_then(|m| m.get(&(client, object)).copied())
                 {
+                    if engine_type == kf_abi::submit::ENGINE_TYPE_GRAPHICS {
+                        return self.defer("bind translated GR", Box::new(move |me: &ChanPlane| {
+                            let slot = me.slot(ht).ok_or_else(|| (NV_ERR_INVALID_STATE, "GR slot gone".into()))?;
+                            let g = slot.lock().map_err(|_| (NV_ERR_INVALID_STATE, "GR slot poisoned".into()))?;
+                            if g.guest_engine != engine_type || g.chan.host().gr_context().is_none() || g.dead.is_some() {
+                                return Err((NV_ERR_INVALID_STATE, "BIND has no owned GR context".into()));
+                            }
+                            Ok(format!("{client:#x}:{object:#x} BIND GR satisfied by owned host {ht:#x}"))
+                        }));
+                    }
                     // ★ The guest's statement that this channel runs on a copy engine. Our twin's
                     // host TSG was bound to OUR engine at birth; a bind to anything but a copy
                     // engine contradicts the Translated route and is refused by name.
@@ -2401,6 +2420,25 @@ impl ChanPlane {
         with_va: u32,
         entries: u32,
     ) -> ChanAnswer {
+        if let Some(ht) = self.translated_of(client, object) {
+            return self.defer("promote translated GR", Box::new(move |me: &ChanPlane| {
+                let slot = me.slot(ht).ok_or_else(|| (NV_ERR_INVALID_STATE, "GR slot gone".into()))?;
+                let mut g = slot.lock().map_err(|_| (NV_ERR_INVALID_STATE, "GR slot poisoned".into()))?;
+                let context = g.chan.host().gr_context();
+                if engine_type != kf_abi::submit::ENGINE_TYPE_GRAPHICS
+                    || g.guest_engine != engine_type || context.is_none() || g.dead.is_some()
+                {
+                    return Err((NV_ERR_INVALID_ARGUMENT, "GPU_PROMOTE_CTX has no matching owned GR context".into()));
+                }
+                // Owner ruling B: the actual host context was created at birth,
+                // before this statement. No guest PA, VA or context byte is used.
+                g.ctx.initialized |= initialize;
+                g.ctx.va_bound |= with_va;
+                g.ctx.bound |= with_va != 0;
+                g.ctx.promotes += 1;
+                Ok(format!("{client:#x}:{object:#x} GPU_PROMOTE_CTX satisfied by Translated GR host {ht:#x} context={context:x?} entries={entries} init_ids={initialize:#x} va_ids={with_va:#x} bound={} — no guest buffer touched", g.ctx.bound))
+            }));
+        }
         let Some((engine, ht)) = self
             .pt
             .lock()
@@ -2501,6 +2539,27 @@ impl ChanPlane {
     /// `GPFIFO_SCHEDULE` disable, an authored verb), so that promise is the host's, and the
     /// binding is recorded UNBOUND.
     fn evict_ctx(&self, client: u32, object: u32, engine_type: u32) -> ChanAnswer {
+        if let Some(ht) = self.translated_of(client, object) {
+            return self.defer("evict translated GR", Box::new(move |me: &ChanPlane| {
+                let slot = me.slot(ht).ok_or_else(|| (NV_ERR_INVALID_STATE, "GR slot gone".into()))?;
+                let host = {
+                    let g = slot.lock().map_err(|_| (NV_ERR_INVALID_STATE, "GR slot poisoned".into()))?;
+                    if engine_type != kf_abi::submit::ENGINE_TYPE_GRAPHICS
+                        || g.guest_engine != engine_type || g.chan.host().gr_context().is_none()
+                    {
+                        return Err((NV_ERR_INVALID_ARGUMENT, "GPU_EVICT_CTX has no matching owned GR context".into()));
+                    }
+                    g.chan.host().channel()
+                };
+                me.rm.schedule_enable(host, false).map_err(|e| (NV_ERR_INVALID_STATE, format!("GR host {ht:#x} evict: {e:?}")))?;
+                let mut g = slot.lock().map_err(|_| (NV_ERR_INVALID_STATE, "GR slot poisoned".into()))?;
+                g.scheduled = false;
+                g.ctx.bound = false;
+                g.ctx.va_bound = 0;
+                g.ctx.evicts += 1;
+                Ok(format!("{client:#x}:{object:#x} GPU_EVICT_CTX: Translated GR host {ht:#x} off runlist, context UNBOUND"))
+            }));
+        }
         let Some((engine, chan)) = self
             .pt
             .lock()
@@ -3259,7 +3318,11 @@ impl ChanPlane {
             ChanAnswer::Refused { status, why }
         };
         let passthrough = !a.kernel_client;
-        if a.kernel_client && !is_copy_engine(engine) {
+        let kernel_gr = a.kernel_client
+            && engine == kf_abi::submit::ENGINE_TYPE_GRAPHICS
+            && kernel_gr_ce()
+            && crate::tspace::enabled();
+        if a.kernel_client && !is_copy_engine(engine) && !kernel_gr {
             eprintln!(
                 "kf3: chan {:#x}:{:#x} class={:#x} engine={engine:#x} kernel=true vaspace={:x?} chid={:x?} — a KERNEL non-CE channel: not born (kernel GR is P7)",
                 a.client, a.handle, a.class, a.vaspace, a.chid
@@ -3635,7 +3698,7 @@ impl ChanPlane {
                     None
                 };
                 let host = match ts {
-                    Some(t) => t.ring(me.rm, me.host_ce).map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, e)))?,
+                    Some(t) => t.ring(me.rm, if kernel_gr { kf_abi::submit::ENGINE_TYPE_GRAPHICS } else { me.host_ce }).map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, e)))?,
                     None => {
                         // ★ P6b: OUR ring goes in OUR region of the space, never where RM's allocator (the
                         // guest's own allocator) would put it — `crate::mem::RING_REGION_BASE`.
@@ -3695,6 +3758,8 @@ impl ChanPlane {
                     mirror,
                     userd,
                     guest_idx: idx,
+                    guest_engine: engine,
+                    ctx: CtxBind::default(),
                     scheduled: false,
                     dead: None,
                     serves: 0,

@@ -157,6 +157,13 @@ kf3: DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=4 emulated=0 forwarde
     it reads is the FECS event buffer, which it fills with `0xde` itself, `fecs_event_list.c:1545`);
     arm A's `0x40` is the guest's OWN `kchannelIsSchedulable` (`kernel_channel.c:2200-2206`, before
     the RPC), flipped by the `bIsContextBound` our `NV_OK` lets it set. Full citations on `CtxBind`.
+    **2026-10-07 experimental correction:** the Code43 branch adds a private-T-space
+    graphics-runlist CE channel with a real host GR context under `KF3_KERNEL_GR_CE=1`.
+    Native b7ef3e56 passes gate3's copies/split/GPU-completion checks; guest admission
+    and the compatible-class arm await their separate source-pinned boots. Promotion
+    requires that context; unsupported kernel GR/software work still refuses.
+    [Iteration/evidence](../../traces/windows_code43_walls_20261007/README.md).
+    The following non-birth statement remains the default-off path.
     ⊘ RM's golden-image channel (kernel GR, `0xbaba0045`) is not born (kernel GR is P7), so its
     promote stays the FSM's named refusal, as before. Non-GSP guests: `V3_NON_GSP_CTX.md`.
 23. ✔ **FIXED by v3-chanctl (`bda5dc39`) — see the v3-chanctl status block below.** ⊘ It was not a

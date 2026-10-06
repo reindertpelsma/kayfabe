@@ -164,6 +164,7 @@ pub struct HostRing {
     // A graphics-runlist ring owns a real host GR context and routes all of its
     // authored CE work through the channel header's CE subchannel.
     gr_context: Option<(u32, u32)>,
+    ce_class: u32,
     head: u64,
     put: u32,
     seq: u32,
@@ -172,7 +173,7 @@ pub struct HostRing {
 
 // Only normalized incrementing streams enter a graphics-runlist host ring.
 // Caller bounds the segment to half its owned PB before reaching this helper.
-fn route_graphics_ce(words: &[u32]) -> Result<Vec<u32>, String> {
+fn route_graphics_ce(words: &[u32], ce_class: u32) -> Result<Vec<u32>, String> {
     use kf_abi::submit::{MethodForm, method_header_decode, method_header_inc};
     let sub = kf_abi::generated::classes::NVA06F_SUBCHANNEL_COPY_ENGINE;
     let mut out = words.to_vec();
@@ -187,6 +188,14 @@ fn route_graphics_ce(words: &[u32]) -> Result<Vec<u32>, String> {
             .and_then(|a| a.checked_add(h.arg_words))
             .filter(|&e| e <= words.len())
             .ok_or("GR CE route: truncated arguments")?;
+        if h.method == kf_abi::submit::SET_OBJECT && h.arg_words != 0 {
+            if h.arg_words != 1 || !kf_chip::is_any_dma_copy_class(words[at + 1]) {
+                return Err("GR CE route: SET_OBJECT is not one admitted CE class".into());
+            }
+            // The guest's compatible CE class selects OUR allocated host CE
+            // object. It does not name a guest/host handle or allocate an engine.
+            out[at + 1] = ce_class;
+        }
         out[at] = method_header_inc(sub, h.method, h.arg_words as u32)
             .ok_or("GR CE route: header cannot be authored")?;
         at = end;
@@ -383,6 +392,7 @@ impl HostRing {
             layout,
             chan,
             gr_context: None,
+            ce_class: rm.ce_class_id(),
             head: 0,
             put: 0,
             seq: 0,
@@ -539,7 +549,7 @@ impl HostRing {
         // guest GPFIFO. On a GR runlist CE routes through its dedicated subchannel.
         // Validate the entire segment before any store, preserving every datum.
         let routed = if self.gr_context.is_some() {
-            Some(route_graphics_ce(words)?)
+            Some(route_graphics_ce(words, self.ce_class)?)
         } else {
             None
         };
@@ -1243,7 +1253,7 @@ mod graphics_route_tests {
             0xdeadbeef,
         ];
         words.extend(super::fence_words(0x120000000, 0x1234).unwrap());
-        let routed = route_graphics_ce(&words).unwrap();
+        let routed = route_graphics_ce(&words, 0xc9b5).unwrap();
         let sub = kf_abi::generated::classes::NVA06F_SUBCHANNEL_COPY_ENGINE;
         let mut at = 0;
         while at < words.len() {
@@ -1253,7 +1263,11 @@ mod graphics_route_tests {
             assert_eq!(after.method, before.method);
             assert_eq!(after.arg_words, before.arg_words);
             let end = at + 1 + before.arg_words;
-            assert_eq!(routed[at + 1..end], words[at + 1..end]);
+            if before.method == 0 {
+                assert_eq!(routed[at + 1], 0xc9b5);
+            } else {
+                assert_eq!(routed[at + 1..end], words[at + 1..end]);
+            }
             at = end;
         }
         // Real RELEASE_WFI ordering and notification survive the routing.
@@ -1266,9 +1280,13 @@ mod graphics_route_tests {
     #[test]
     fn unsupported_or_partial_stream_is_never_routed() {
         let valid = method_header_inc(0, 0x400, 2).unwrap();
-        assert!(route_graphics_ce(&[valid, 1]).is_err());
-        assert!(route_graphics_ce(&[6 << 29]).is_err());
-        assert!(route_graphics_ce(&[3 << 29]).is_err()); // immediate, not normalized
-        assert_eq!(route_graphics_ce(&[]).unwrap(), Vec::<u32>::new());
+        assert!(route_graphics_ce(&[valid, 1], 0xc9b5).is_err());
+        assert!(route_graphics_ce(&[6 << 29], 0xc9b5).is_err());
+        assert!(route_graphics_ce(&[3 << 29], 0xc9b5).is_err()); // immediate, not normalized
+        assert_eq!(route_graphics_ce(&[], 0xc9b5).unwrap(), Vec::<u32>::new());
+        assert!(route_graphics_ce(&[method_header_inc(0, 0, 1).unwrap(), 0xc797], 0xc9b5).is_err());
+        assert!(
+            route_graphics_ce(&[method_header_inc(0, 0, 2).unwrap(), 0xc7b5, 1], 0xc9b5).is_err()
+        );
     }
 }

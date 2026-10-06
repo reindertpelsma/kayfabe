@@ -259,7 +259,8 @@ HostRing now supports a graphics-runlist ring with a real owned compute object
 from live unprivileged host CE capabilities, instead of assuming a per-die
 index. The channel header's dedicated copy subchannel is generated from
 cla06fsubch.h; all normalized command headers are routed there while every
-argument remains identical, including RELEASE_WFI completion and NSI.
+operand remains identical, including RELEASE_WFI completion and NSI. The next
+increment translates a compatible CE SET_OBJECT selector to the actual host class.
 Unsupported forms/truncated arguments refuse before any host PB store. Segment
 length remains bounded to half the owned ring's PB. The ordinary async-CE
 ring is unchanged. Guest kernel-GR admission/promotion is not enabled yet.
@@ -276,3 +277,29 @@ Local ABI/channel validation: 645 tests pass, including two route regressions
 for unchanged arguments/native ordering and rejection before partial routing.
 The gate3 harness compiles. Clippy and formatting/diff checks pass; hardware
 result pending.
+
+### Native result and kernel-GR admission increment
+
+Native source b7ef3e5685319ca087ce73a5c01569083f977b9c: [gates](gr-ce-native-gates.log)
+9/9,11/11 USER births; [graphics-runlist arm](gr-ce-native.log) passes every
+gate3 check, including the actual owned GR context, native physical/sysmem/virtual
+copies, remap-at-split, GPU semaphore and rejection without hostile retirement.
+The host remains healthy. This arm precedes guest kernel-GR admission.
+
+The next increment admits kernel GR channels only under KF3_KERNEL_GR_CE=1
+and KF3_TSPACE=1, both on this experiment branch. Default admission is unchanged.
+They get an actual unprivileged graphics-runlist ring and owned host context
+at allocation, with the ordinary bounded slot, USERD and lifetime checks.
+Promotion/engine bind requires the matching live context and retains guest
+context state; it does not read/write guest context buffers or replay addresses.
+Eviction performs an actual host runlist disable before replying, retaining
+the owned context for later scheduling. This follows owner rulingB's host-owned
+context substitution; Windows buffer read-back semantics remain an experiment.
+
+GPU execution is limited to the existing Translated CE/host-method protocol;
+arbitrary kernel GR methods and unsupported software methods still refuse.
+No kernel shader/3D execution or Deferred API execution support is claimed.
+The additional compatible-class arm sets the source-defined guest CE selector
+and routes it to the host's allocated CE class. SET_OBJECT admits only one
+source-derived CE class; foreign classes and wider writes refuse. Other data
+is unchanged. Native validation of that increment and Windows run21 pending.
