@@ -75,7 +75,9 @@ remain the host compositor's responsibility. None of this requires declaring
 full general LUT emulation a prerequisite for Windows startup.
 
 Validation of the diagnostic source at `8bbcd7f3`: kf-disp unit/integration
-tests108/0, Clippy new0, exact Rust/C rebuild. Product source GitHub CI
+tests108/0, Clippy new0, exact Rust/C rebuild (`logic-tests.log`, `clippy.log`,
+`build.log`). GPU gates9/9 with11/11 USER births (`gpu-gates.log`); all14
+fast gates clean (`ci-gates.log`). Product source GitHub CI
 `37460961228` passes. Method logging is default-off and capped at65536 DMA
 writes per engine lifetime; free/reallocate cannot replenish the budget. The
 nonzero final budgets in both summaries exclude truncation of these runs.
