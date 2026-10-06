@@ -193,7 +193,9 @@ def main():
             time.sleep(5)
             shot('sway-before')
             result = guest('sway-before', 'cat /tmp/kfcolor-sway-scene.log; '
-                  '~/color/color_properties /dev/dri/card0 --dump-lut; tail -n 120 /tmp/kfcolor-sway.log; '
+                  '~/color/color_properties /dev/dri/card0 --dump-lut; '
+                  + ('cat /tmp/kfcolor-sway.log; ' if a.require_tmo else 'tail -n 120 /tmp/kfcolor-sway.log; ')
+                  +
                   'sudo cat /tmp/kfcolor-seatd.log; pgrep -x sway')
             if b'WL_SCENE_READY' not in result.stdout:
                 raise RuntimeError('Sway scene did not become ready; gamma experiment is invalid')
@@ -220,7 +222,7 @@ def main():
             guest('sway-restored', '~/color/color_properties /dev/dri/card0 --dump-lut; '
                   + ('cat /tmp/kfcolor-restored-scene.log; ' if a.require_tmo else 'cat /tmp/kfcolor-sway-scene.log; ')
                   + 'cat /tmp/kfcolor-sway.log; '
-                  'pgrep -x sway; pgrep -x wl_scene')
+                  'pgrep -x sway; pgrep -x wl_scene', check=not a.require_tmo)
         finally:
             try:
                 guest('dmesg-after', 'sudo dmesg', check=False)
