@@ -310,3 +310,24 @@ the actual host CE object. [Gates](kernel-gr-gates.log) pass9/9 with11/11 USER
 births; [immutable build](kernel-gr-build.log). Local188 channel/QEMU tests pass,
 with zero new Clippy debt (197 existing); gate3/route Clippy also has zero new
 debt. Windows run21 now uses this source-pinned binary and records the new flag.
+
+## Run21: kernel-GR contexts exist, real GPU work begins, NVDEC wall follows
+
+Product/QEMU3fd6fc39513edf8581dfba16f5887d0d4d7a0b36; [command](run21-command.json),
+[status](run21-status.json), [trace](run21-qemu.log.gz), [excerpt](run21-requests.log),
+[completion](run21-complete.json), [host health](run21-host-health.txt).
+Both captured kernel-GR channels now birth with actual USER host rings/contexts
+and their promotions return0, with initialized/bound state retained. This also
+lets the RM-internal scrubber execute two real GPU submissions and advance
+GP_GET to2. Five Translated births, zero poisoned/contended serves or refused
+acts; every released T-space ring slot is recovered. Windows still has
+Code43/smi9 and zero display UPDATEs/scanouts.
+
+The next missing channel is kernel NVDEC0, engine13 (`cl2080_notification.h:301`).
+ClassC56F channel ff040003 is acknowledged without birth. Its subsequent legacy
+Falcon-context promotion declares VA1203cd000 +4KiB, entryCount0 and engine13;
+it refuses0x56 because no owned twin exists. This is a distinct video-context
+constructor/lifetime gap, not a malformed nine-entry GR request. A newly reached
+0080170f control also refuses; decode it before assigning causality. Next:
+actual owned unprivileged NVDEC context, independently tested on bare metal
+before enabling its guest path; no unsupported codec work may be completed.

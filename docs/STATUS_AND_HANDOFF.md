@@ -45,7 +45,12 @@ with bare-metal validation before another guest test. Native b7ef3e56 passes
 all gate3 copy/split/GPU-completion checks on a real GR context. Kernel-GR
 admission is now implemented behind KF3_KERNEL_GR_CE plus TSPACE, with promotion
 requiring the actual owned context. Compatible CE-class native arm and Windows
-run21 pending; arbitrary kernel GR methods/software execution still refuse;
+run21 at3fd6fc39 births/promotes both kernel-GR channels and executes two real
+RM-scrubber GPU submissions with GP_GET2. Code43 persists. Next missing birth:
+kernel NVDEC0/engine13 channel ff040003; legacy Falcon-context promotion
+(VA1203cd000 +4KiB, entryCount0) returns0x56. The newly reached0080170f channel-properties control
+also refuses. Next: a real owned unprivileged NVDEC context with bare-metal
+validation. Arbitrary kernel GR/software/codec execution remains unsupported;
 queued Deferred API controls/methods remain unsupported; no completion is forged.
 
 
