@@ -41,3 +41,19 @@ remaining gaps; this iteration changes neither.
 Local validation before the first hardware boot: all611 kf-rm tests pass,
 including12 channel-link tests. Targeted kf-rm/kf-qemu Clippy reports zero new
 debt (207 existing); formatting, diff and documentation claims checks pass.
+
+## Run16: VA wall removed, Code43 persists
+
+Product/QEMU `c30ee9106f7c434abcd359080f4fbfeb39b8f141`; GPU gates9/9,
+11/11 USER births. [Command](run16-command.json), [settled status](run16-status.json),
+[trace](run16-qemu.log.gz), [excerpt](run16-requests.log),
+[clean completion](run16-complete.json), [host health](run16-host-health.txt).
+
+The COPY2 allocation now returns0 and creates an actual Translated host channel
+with PRIVILEGED_CHANNEL=0 and privilege=USER, on canonical VA
+c1d00002:ff000870. No mirror/birth refusal remains for that request. The next
+allocation, NV50_DEFERRED_API_CLASS=0x5080 under the new channel, returns0x56;
+the channel is retired with forwarded=0 and submissions=0. Windows retains
+Code43/smi9; display still reaches8330 methods but zero UPDATEs/scanouts.
+The FBMEM registration and FIFO latency-buffer query still refuse. No exact
+RPC-to-Windows-assertion causal claim is made.

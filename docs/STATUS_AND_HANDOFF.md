@@ -14,7 +14,10 @@ fix this file. Entries below the first are dated history.
 **Active Code43 iteration, 2026-10-07:** owner requests continued repair one wall
 at a time. The first change resolves the declared Device-shared default VA for
 COPY2; bounded same-GPU relationships and revocation tests pass (611 kf-rm tests).
-Windows rerun/evidence pending; do not infer initialization success.
+Run16 at c30ee910 verifies COPY2 birth on the canonical shared VA with a real
+USER host channel. The next allocation, class5080 deferred API, refuses; Windows
+retires COPY2 with zero submissions. Code43/smi9 persist. FBMEM registration and
+FIFO latency query also still refuse. No initialization success claim.
 [Iteration record](../traces/windows_code43_walls_20261007/README.md).
 
 **Windows allocation investigation, 2026-10-07:** bounded diagnostic run14 at
