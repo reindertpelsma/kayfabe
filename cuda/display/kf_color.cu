@@ -74,10 +74,11 @@ DEV float inline_lookup(const Pipeline *p, U stage, float x) {
 }
 
 
-DEV float lookup(const H *lut, float x, U channel, U interpolate, U input) {
-    float pos = sat(x) * 1024.0f;
+DEV float lookup(const H *lut, float x, U channel, U interpolate, U input, U entries) {
+    if (entries != 257 && entries != 1025) return 0;
+    float pos = sat(x) * (entries-1);
     U i = (U)pos;
-    if (i > 1023) i = 1023;
+    if (i > entries-2) i = entries-2;
     H a = lut[(i + 4) * 4 + channel];
     H b = lut[(i + 5) * 4 + channel];
     float fa = input ? half_float(a) : a / 65536.0f;
@@ -114,9 +115,9 @@ DEV float tone_lookup(const H *lut, float x, U interpolate, U entries) {
  * Only SDR FP16 values [0,1] are accepted. Reserved padding/header are not sampled.
  * Invalid content sets a bounded status word; publication and completion stop.
  */
-extern "C" __attribute__((global)) void kf_color_validate(const H *lut, U *status) {
+extern "C" __attribute__((global)) void kf_color_validate(const H *lut, U entries, U *status) {
     U i = __nvvm_read_ptx_sreg_ctaid_x() * 256u + __nvvm_read_ptx_sreg_tid_x();
-    if (i < 1025u) {
+    if (i < entries && i < 1025u) {
         for (U c = 0; c < 3; ++c) {
             H h = lut[(i + 4) * 4 + c];
             if ((h & 0x8000u) || h > 0x3c00u)
@@ -149,7 +150,7 @@ extern "C" __attribute__((global)) void kf_tmo_validate(const H *lut, U entries,
 extern "C" __attribute__((global)) void kf_color_compose(
     const U *src, float *dst, U layout, U pitch, U bh, U x0b, U y0,
     U width, U ox, U oy, U fw, U fh, U flags, int as, int bs, int ad, int bd,
-    const H *lut, U interpolate, const H *tmo, U tmo_interpolate, U tmo_entries, const Pipeline *pipeline, U *status) {
+    const H *lut, U interpolate, U input_entries, const H *tmo, U tmo_interpolate, U tmo_entries, const Pipeline *pipeline, U *status) {
     U row = __nvvm_read_ptx_sreg_ctaid_x();
     for (U x = __nvvm_read_ptx_sreg_tid_x(); x < width; x += 256) {
         U dx = ox + x, dy = oy + row;
@@ -176,8 +177,8 @@ extern "C" __attribute__((global)) void kf_color_compose(
         Q d = ((Q)dy * fw + dx) * 4;
         float v[3];
         for (U c=0; c<3; ++c) {
-            U i = cs[c] << 2;
-            v[c] = lut ? lookup(lut, i / 1024.0f, c, interpolate, 1) : fp16(cs[c]/255.0f);
+            U i = input_entries == 257 ? cs[c] : cs[c] << 2;
+            v[c] = lut ? lookup(lut, i / (float)(input_entries-1), c, interpolate, 1, input_entries) : fp16(cs[c]/255.0f);
         }
         if (pipeline) {
             matrix_apply(&pipeline->matrices[0], v, 0);
@@ -205,7 +206,7 @@ extern "C" __attribute__((global)) void kf_color_compose(
 }
 
 extern "C" __attribute__((global)) void kf_color_output(
-    const float *src, U *dst, U width, const H *lut, U interpolate, Matrix matrix) {
+    const float *src, U *dst, U width, const H *lut, U interpolate, Matrix matrix, U entries) {
     U row = __nvvm_read_ptx_sreg_ctaid_x();
     for (U x = __nvvm_read_ptx_sreg_tid_x(); x < width; x += 256) {
         Q p = (Q)row * width + x;
@@ -213,7 +214,7 @@ extern "C" __attribute__((global)) void kf_color_output(
         for (U c = 0; c < 3; ++c) {
             const int *m = matrix.v + c * 4;
             float v = src[p * 4] * (m[0] / 65536.0f) + src[p * 4 + 1] * (m[1] / 65536.0f) + src[p * 4 + 2] * (m[2] / 65536.0f) + m[3] / 65536.0f;
-            v = lut ? lookup(lut, v, c, interpolate, 0) : sat(v);
+            v = lut ? lookup(lut, v, c, interpolate, 0, entries) : sat(v);
             U q = (U)(sat(v) * 256.0f);
             if (q > 255) q = 255;
             packed |= q << (16 - 8 * c);

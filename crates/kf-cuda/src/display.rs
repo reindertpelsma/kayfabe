@@ -140,9 +140,9 @@ pub struct ColorTone<'a> {
 pub struct ColorFixture<'a> {
     /// RGB8888 pixels.
     pub surface: &'a [u8],
-    /// 8232-byte FP16 input table with its header and endpoint.
+    /// DIRECT8/DIRECT10 FP16 input table with its header and endpoint.
     pub input: &'a [u8],
-    /// 8232-byte fixed-point output table with its header and endpoint.
+    /// DIRECT8/DIRECT10 fixed-point output table with its header and endpoint.
     pub output: &'a [u8],
     /// Source rectangle and blend parameters.
     pub layer: &'a ComposeLayer,
@@ -771,7 +771,9 @@ impl DisplayGpu {
         if slot > 64 {
             return Err(refused(what, "LUT slot outside fixed allocation".into()));
         }
-        if !(65..=1025).contains(&lut.entries) || ((input || slot == 64) && lut.entries != 1025) {
+        if !(65..=1025).contains(&lut.entries)
+            || ((input || slot == 64) && ![257, 1025].contains(&lut.entries))
+        {
             return Err(refused(
                 what,
                 "LUT sample count outside supported extent".into(),
@@ -798,7 +800,11 @@ impl DisplayGpu {
                 .as_ref()
                 .ok_or_else(|| refused(what, "no validation status".into()))?
                 .0;
-            let mut args = vec![dst.to_le_bytes().to_vec(), status.to_le_bytes().to_vec()];
+            let mut args = vec![
+                dst.to_le_bytes().to_vec(),
+                lut.entries.to_le_bytes().to_vec(),
+                status.to_le_bytes().to_vec(),
+            ];
             self.cu
                 .launch_args(self.stream, f, 5, 256, 0, &mut args, what)?;
         }
@@ -902,6 +908,7 @@ impl DisplayGpu {
             i(l.b_d),
             p.to_le_bytes().to_vec(),
             u(u32::from(lut.is_some_and(|v| v.interpolate))),
+            u(lut.map_or(0, |v| v.entries)),
             tone.to_le_bytes().to_vec(),
             u(u32::from(tmo.is_some_and(|v| v.interpolate))),
             u(tmo.map_or(0, |v| v.entries)),
@@ -948,6 +955,7 @@ impl DisplayGpu {
                 .to_le_bytes()
                 .to_vec(),
             matrix.iter().flat_map(|v| v.to_le_bytes()).collect(),
+            lut.map_or(0, |v| v.entries).to_le_bytes().to_vec(),
         ];
         self.cu
             .launch_args(self.stream, f, h, 256, 0, &mut args, what)?;
@@ -1280,8 +1288,8 @@ impl DisplayGpu {
             size: (w, h),
             ..
         } = *fixture;
-        if input.len() != COLOR_LUT_BYTES
-            || output.len() != COLOR_LUT_BYTES
+        if ![261 * 8, COLOR_LUT_BYTES].contains(&input.len())
+            || ![261 * 8, COLOR_LUT_BYTES].contains(&output.len())
             || surface.is_empty()
             || !surface.len().is_multiple_of(8)
             || layer.extent > surface.len() as u64
@@ -1290,9 +1298,7 @@ impl DisplayGpu {
                     || !t.table.len().is_multiple_of(8)
                     || t.mutate.is_some_and(|v| v.len() != t.table.len())
             })
-            || fixture
-                .mutate_input
-                .is_some_and(|b| b.len() != COLOR_LUT_BYTES)
+            || fixture.mutate_input.is_some_and(|b| b.len() != input.len())
         {
             return Err(refused(what, "synthetic fixture extent".into()));
         }
@@ -1315,7 +1321,7 @@ impl DisplayGpu {
             let mut l = *layer;
             l.src = 0;
             let input_lut = Some(ColorLut {
-                entries: 1025,
+                entries: (input.len() / 8 - 4) as u32,
                 src: surface.len() as u64,
                 interpolate: false,
                 token: 1,
@@ -1365,7 +1371,7 @@ impl DisplayGpu {
                     0,
                     &l,
                     Some(ColorLut {
-                        entries: 1025,
+                        entries: (input.len() / 8 - 4) as u32,
                         src: surface.len() as u64,
                         interpolate: false,
                         token: if fixture.rearm { 3 } else { 1 },
@@ -1378,7 +1384,7 @@ impl DisplayGpu {
                 w,
                 h,
                 Some(ColorLut {
-                    entries: 1025,
+                    entries: (output.len() / 8 - 4) as u32,
                     src: (surface.len() + input.len()) as u64,
                     interpolate: fixture.interpolate,
                     token: 2,
@@ -1560,7 +1566,7 @@ mod tests {
         // clang spells signed C ints as .u32; all are passed as four-byte bit patterns.
         let mut compose = vec![".u64 .ptr .align 1", ".u64 .ptr .align 1"];
         compose.extend([".u32"; 15]);
-        compose.extend([".u64 .ptr .align 1", ".u32"]);
+        compose.extend([".u64 .ptr .align 1", ".u32", ".u32"]);
         compose.extend([
             ".u64 .ptr .align 1",
             ".u32",
@@ -1575,7 +1581,7 @@ mod tests {
         );
         assert_eq!(
             types("kf_color_validate"),
-            [".u64 .ptr .align 1", ".u64 .ptr .align 1"]
+            [".u64 .ptr .align 1", ".u32", ".u64 .ptr .align 1"]
         );
         assert_eq!(
             types("kf_color_output"),
@@ -1585,7 +1591,8 @@ mod tests {
                 ".u32",
                 ".u64 .ptr .align 1",
                 ".u32",
-                ".align 4 .b8"
+                ".align 4 .b8",
+                ".u32"
             ]
         );
         assert!(

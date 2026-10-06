@@ -18,10 +18,11 @@ processing in this cell; it is not inferred from an accepted ioctl.
 requirement that the TMO buffer be present. Run C has zero TMO binding writes.
 Linux can skip that stage when it is declared absent, independently of the
 successful gamma transform. The updated audit records this stage coverage.
-The [explicit TMO test](../tmo_stage_20261006/README.md) has now run and fails:
-the guest exposes no plane TMO property, accepts no TMO commit and binds no tone
-buffer. The compositor still renders identical pixels. The broader positive
-TMO objective remains outstanding; no unsupported capability was enabled.
+**Later correction:** the [explicit TMO test](../tmo_stage_20261006/README.md)
+passes run C at product `74cd590c`, with an armed tone buffer and real black
+output/restoration. The original missing-capability run B at `2aa8b92d` failed:
+no plane TMO property, no accepted TMO commit, no tone buffer and identical
+compositor pixels. Broader formats/chroma processing remains outstanding.
 
 - [Final Linux run C](linux-c-summary.json), [independent pixel check](linux-c-pixel-oracle.json).
 - Earlier source controls: [A](linux-a-summary.json), [B](linux-b-summary.json), [B pixel check](linux-b-pixel-oracle.json).

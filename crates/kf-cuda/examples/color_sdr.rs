@@ -64,6 +64,48 @@ fn main() -> Result<(), String> {
             .all(|p| *p == [0, 255, 128, 255])
     );
     println!("COLOR_GPU input_fp16_nonidentity PASS pixels=8 expected_rgb=128,255,0");
+    let mut compact_input = vec![0_u8; 261 * 8];
+    for (c, value) in [0x3800_u16, 0x3400, 0x3a00].into_iter().enumerate() {
+        compact_input[(4 + 255) * 8 + c * 2..(4 + 255) * 8 + c * 2 + 2]
+            .copy_from_slice(&value.to_le_bytes());
+    }
+    let pixels = gpu
+        .selftest_color(&ColorFixture {
+            input: &compact_input,
+            ..fixture
+        })
+        .map_err(|e| e.to_string())?;
+    assert!(
+        pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|p| *p == [192, 64, 128, 255]),
+        "DIRECT8 input index255: {pixels:?}"
+    );
+    println!("COLOR_GPU direct8_input PASS exact 2088-byte table, white selects index255");
+    let mut compact_output = vec![0_u8; 32];
+    for i in 0..257_u16 {
+        for v in [i.min(255) << 8; 3].into_iter().chain([0]) {
+            compact_output.extend_from_slice(&v.to_le_bytes());
+        }
+    }
+    let pixels = gpu
+        .selftest_color(&ColorFixture {
+            input: &compact_input,
+            output: &compact_output,
+            ..fixture
+        })
+        .map_err(|e| e.to_string())?;
+    assert!(
+        pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|p| *p == [192, 64, 128, 255]),
+        "DIRECT8 output indices: {pixels:?}"
+    );
+    println!("COLOR_GPU direct8_output PASS compact ramp indexes 128,64,192");
     let output = table([0, 32768, 65535]);
     let pixels = gpu
         .selftest_color(&ColorFixture {

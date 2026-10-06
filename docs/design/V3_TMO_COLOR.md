@@ -80,3 +80,28 @@ A Linux pass must show accepted real KMS submission, a retained curve, a nonzero
 armed TMO binding at capture, changed zero-intensity output and byte-identical
 restoration. A compositor callback alone cannot pass. After real processing is
 qualified, retest Windows; additional initialization walls remain possible.
+
+## 2026-10-06 extension evidence
+
+At product `8dde9b51d`, the real-GPU oracle passes nonuniform segments, compact
+65-sample tone tables, malicious extent mismatch and existing SDR/TMO fixtures.
+[Evidence](../../traces/tmo_stage_20261006/README.md) includes the Windows run13
+result at `74cd590c`: Code43 persists with 8,330 methods but no UPDATE/scanout;
+the first changed saved assertion moves from `0x169d836` to `0x1a103e6`.
+Chroma policies beyond OGKM's no-correction program remain unresolved: the
+public class fields provide bit widths, while this OGKM version only programs
+the no-correction constant. No transfer equation for SAT_MODE and the weighted
+zones has been established. DIRECT8 and segmented ILUT/OLUT remain separate
+implementation work; acknowledging these limits does not close the owner goal.
+
+## DIRECT8 implementation checkpoint, 2026-10-06
+
+The next source extension decodes DIRECT8 with 257 samples (256 plus endpoint)
+and a 261-entry/2088-byte total extent. DIRECT10 retains 1025 samples. GPU
+lookup and validation receive the authored count; input UNORM8 selects its byte
+index in DIRECT8 rather than shifting to ten bits. GPU fixtures use a compact
+input with distinct index255 values and a compact output ramp. Segmented
+ILUT/OLUT and chroma-correction policies remain open. Nouveau's
+[window implementation](https://github.com/torvalds/linux/blob/master/drivers/gpu/drm/nouveau/dispnv50/wndwc57e.c)
+independently uses DIRECT8 for 256 entries and adds four header entries and an
+interpolation endpoint. This source checkpoint is not yet a hardware claim.

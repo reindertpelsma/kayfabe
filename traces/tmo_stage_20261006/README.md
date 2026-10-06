@@ -110,3 +110,27 @@ ICtCp pipeline and builds its linear VSS table in `create_drm_tmo_surface()`.
 `nvkms-kapi.c::AssignLayerLutConfig()` only forwards TMO when the layer supports
 it. `nvkms-evo.c::nvNeedsTmoLut()` can skip absent TMO independently of OLUT.
 These are source reads, not evidence of active tone mapping in a guest.
+
+## Variable table extension and Windows retest
+
+Product `8dde9b51d` on the same borrowed RTX4070 passes all eight GPU tone
+fixture categories ([log](tmo-8dde-color-tmo.log)) and six existing SDR fixtures
+([log](tmo-8dde-color-sdr.log)). These add a nonuniform-segment lookup with an
+independent expected pixel, a minimum 65-sample/552-byte source table and a
+malformed compact header rejection. The snapshot allocation remains fixed;
+copy and lookup extents follow the bounded register-authored sample count.
+This is a synthetic GPU qualification, not native display-chroma parity.
+
+Windows run13 uses product `74cd590c`, constructor probes off, same pinned
+580.88 driver and baseline. [Command](windows-13-command.json),
+[status](windows-13-status.json), [full trace](windows-13-qemu.log.gz),
+[recovery receipt](windows-13-receipt.json) and
+[labelled watchdog comparison](windows-13-watchdog-comparison.json) are retained.
+Code43 and nvidia-smi exit9 persist. It reaches 8,330 display methods, zero
+UPDATEs/scanouts, and changes after the same first17 assertions compared with
+SDR run12: first changed hint `0x169d836` becomes `0x1a103e6`. The fresh dump
+mtime is after this run's start; the linked receipt records NBD cleanup. Its NVCD
+outer payload is one byte short, so only complete saved records are compared;
+no checksum-valid claim or live-local inference. This establishes a changed
+initialization boundary, not that Windows now works or that TMO was its only
+blocker. Raw dump/driver binaries remain private.

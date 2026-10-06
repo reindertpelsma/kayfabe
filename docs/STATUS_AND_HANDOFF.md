@@ -19,7 +19,15 @@ buffer, black transformed output and exact restoration. SDR/TMO GPU fixtures,
 [Source scope](design/V3_TMO_COLOR.md), [evidence](../traces/tmo_stage_20261006/README.md).
 The owner clarified that broader table formats and chroma-correction controls
 must also gain real processing; this checkpoint is not the intended endpoint.
-Windows retest is in flight. The identified absent-TMO fallback lives in NVKMS,
+Windows run13 at `74cd590c` still reports Code43, but reaches 8,330 display
+methods (zero UPDATEs/scanouts) rather than zero methods. Its fresh watchdog
+changes after the same first 17 assertions: `0x169d836` is replaced by
+`0x1a103e6`; no interpretation as an NV_STATUS or completed initialization.
+Product `8dde9b51` additionally executes variable tone segments and 65..1025
+sample tables; GPU fixtures pass, including exact compact extents and hostile
+header rejection. Broader DIRECT8/segmented input/output and chroma policies
+still need implementation and independent semantics/oracles.
+The identified absent-TMO fallback lives in NVKMS,
 whose build documents Unix sharing; its Windows use is not established.
 
 The earlier SDR product `2aa8b92d` and missing-capability test follow:

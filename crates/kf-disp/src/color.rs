@@ -162,6 +162,7 @@ struct Control {
     size: (u8, u8),
     mode: (u8, u8),
     direct10: u32,
+    direct8: u32,
     interpolate: (u8, u8),
     mirror: (u8, u8),
 }
@@ -173,6 +174,7 @@ impl Control {
             size: t.f(c, &format!("{name}_SIZE"))?,
             mode: t.f(c, &format!("{name}_MODE"))?,
             direct10: t.v(c, &format!("{name}_MODE_DIRECT10"))?,
+            direct8: t.v(c, &format!("{name}_MODE_DIRECT8"))?,
             interpolate: t.f(c, &format!("{name}_INTERPOLATE"))?,
             mirror: t.f(c, &format!("{name}_MIRROR"))?,
         })
@@ -181,15 +183,18 @@ impl Control {
         let v = read(self.method);
         let mask = |(hi, lo): (u8, u8)| (u32::MAX >> (31 - hi + lo)) << lo;
         let supported = mask(self.size) | mask(self.mode) | mask(self.interpolate);
-        if get(v, self.size) != 1029
-            || get(v, self.mode) != self.direct10
-            || get(v, self.mirror) != 0
-            || v & !supported != 0
-        {
-            return Err("LUT requires 1029-entry unmirrored DIRECT10");
+        let entries = if get(v, self.mode) == self.direct10 {
+            1025
+        } else if get(v, self.mode) == self.direct8 {
+            257
+        } else {
+            return Err("LUT segmented mode requires a separate transfer program");
+        };
+        if get(v, self.size) != entries + 4 || get(v, self.mirror) != 0 || v & !supported != 0 {
+            return Err("LUT requires matching unmirrored DIRECT8 or DIRECT10 extent");
         }
         Ok(Lut {
-            entries: 1025,
+            entries,
             binding,
             interpolate: get(v, self.interpolate) != 0,
         })
@@ -550,6 +555,41 @@ mod tests {
                     assert_eq!(i.binding, Binding::Vidmem(0x100012340));
                 }
                 assert!(!i.interpolate);
+                let direct8 = crate::class::put(
+                    crate::class::put(
+                        0,
+                        t.f(win, "SET_ILUT_CONTROL_MODE").unwrap(),
+                        t.v(win, "SET_ILUT_CONTROL_MODE_DIRECT8").unwrap(),
+                    ),
+                    t.f(win, "SET_ILUT_CONTROL_SIZE").unwrap(),
+                    261,
+                );
+                set(&mut b, t, win, "SET_ILUT_CONTROL", None, direct8);
+                assert_eq!(
+                    input(t, win, |m| b.get(&m).copied().unwrap_or(0))
+                        .unwrap()
+                        .unwrap()
+                        .entries,
+                    257
+                );
+                set(
+                    &mut b,
+                    t,
+                    win,
+                    "SET_ILUT_CONTROL",
+                    None,
+                    crate::class::put(direct8, t.f(win, "SET_ILUT_CONTROL_SIZE").unwrap(), 1029),
+                );
+                assert!(input(t, win, |m| b.get(&m).copied().unwrap_or(0)).is_err());
+                set(
+                    &mut b,
+                    t,
+                    win,
+                    "SET_ILUT_CONTROL",
+                    None,
+                    control(t, win, "SET_ILUT_CONTROL", false),
+                );
+
                 bind(&mut b, t, core, Some(3), "OLUT", 0x21);
                 set(
                     &mut b,
