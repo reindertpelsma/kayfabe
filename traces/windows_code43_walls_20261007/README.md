@@ -155,3 +155,26 @@ historical capability snapshot comparison after only the two pinned constructor
 additions, and proof that deferred controls remain denied. Targeted Clippy across
 kf-abi/kf-rm/kf-qemu reports zero new debt (208 existing). Formatting/diff checks
 pass. [Compiled layout evidence](deferred-compiled-layouts.json).
+
+## Run18: Deferred constructor wall removed, Code43 persists
+
+Product/QEMU c34d8dac7f6c52cf1db638f5f7b19e65b087f6bf; [gates](defapi-gates.log)
+9/9 with11/11 USER births; [build](defapi-build.log). [Command](run18-command.json),
+[status](run18-status.json), [trace](run18-qemu.log.gz), [excerpt](run18-requests.log),
+[completion](run18-complete.json), [host health](run18-host-health.txt).
+Both captured class5080 constructors now return0; COPY2 also allocates its
+C7B5 engine object and successfully schedules its group. The newly reached
+SET_TIMESLICE control a06c0103 returns0x56 on clientc1d00012/groupff0e0000.
+The existing handler only resolves passthrough group members, so it misses
+this Translated channel. The shared OGKM handler at kernel_channel_group_api.c:1296
+RPCs the scheduling change and records the requested quantum only on success.
+Next repair must apply the existing authored unprivileged host control to the
+owned Translated channel's group, on the act thread. The run18 trace does not establish that the timeslice refusal causes Code43;
+its next group-schedule request succeeds.
+Windows remains Code43/smi9; zero display UPDATEs/scanouts and no GPU submissions.
+
+Run18 [fresh recovery](run18-recovery.log) and [journal comparison](run18-watchdog-comparison.json)
+retain24 assertions with the first21 matching run17. The tail hints change to
+e38498/e37654/304308. The earlier1a103e6 remains. This records a later path
+without assigning symbols/types or asserting RPC causality. The outer NVCD is
+still one byte short; the complete records are usable, no checksum claim.

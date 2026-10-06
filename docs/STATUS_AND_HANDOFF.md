@@ -26,8 +26,12 @@ FBMEM request returns0; COPY2 births but class5080 still refuses, no submissions
 Code43/smi9 persist. Next: Deferred API software-object constructor and its
 queue-triggered control protocol; do not fake its execution or completion.
 The source-backed constructor is now implemented with optional notification
-policy and channel-parent lifetime checks;1172 ABI/RM tests pass. Hardware boot
-pending; queued controls/methods remain unsupported and no completion is forged.
+policy and channel-parent lifetime checks;1172 ABI/RM tests pass. Run18 at
+c34d8dac returns0 for both class5080 constructors, then engine allocation and
+group scheduling succeed. Newly reached a06c0103 SET_TIMESLICE refuses because
+the handler only resolves passthrough group members. Next: apply the authored
+host control to Translated members off the GSP lock. Code43/smi9 persist;
+queued Deferred API controls/methods remain unsupported; no completion is forged.
 
 
 **Windows allocation investigation, 2026-10-07:** bounded diagnostic run14 at
