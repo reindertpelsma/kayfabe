@@ -1,4 +1,4 @@
-//! GfxP pool query wire contract, checked against each measured OGKM driver tag.
+//! GfxP pool query wire contract, checked against each compiler-derived OGKM driver layout.
 //!
 //! The experimental encoder describes a VIRTUAL pool used only by guest-kernel
 //! bookkeeping. These are not NVIDIA's physical pool dimensions. No captured

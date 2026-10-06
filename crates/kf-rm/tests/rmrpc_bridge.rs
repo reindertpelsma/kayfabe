@@ -7222,10 +7222,10 @@ fn timer_allocation_keeps_transport_guards_and_does_not_admit_unknown_classes() 
         Err(BridgeRefusal::AllocClassNotPermitted { class: 0xb297, .. })
     ));
 
-    // The source audit covers each measured tag. It grants a graph object, never
+    // The source audit covers each compiled tag. It grants a graph object, never
     // an engine object; hardware families cannot change this resource class.
     for version in kf_abi::generated::matrix::MEASURED {
-        // Measured is broader than supported: 615 uses an encrypted queue layout
+        // Compiler coverage is broader than supported: 615 uses an encrypted queue layout
         // this branch deliberately refuses. Do not weaken that guard for the test.
         if (version.major, version.minor, version.patch) == (615, 71, 9) {
             assert!(matches!(

@@ -102,7 +102,7 @@ def main():
     o.append("    (path, FieldAt { off, size, elem })\n}\n\n")
     o.append("const fn r<T>(first: DriverVersion, last: DriverVersion, value: Option<T>) -> Run<T> {\n")
     o.append("    Run { first, last, value }\n}\n\n")
-    o.append(f"/// Every ogkm tag the committed sweep measured, ascending ({len(tags)} tags).\n")
+    o.append(f"/// Every ogkm tag compiled by the committed source sweep, ascending ({len(tags)} tags).\n")
     o.append("pub const MEASURED: &[DriverVersion] = &[\n")
     for t in tags:
         o.append(f"    {ver(t)}, // {t}\n")

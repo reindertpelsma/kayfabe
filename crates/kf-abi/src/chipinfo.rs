@@ -236,7 +236,7 @@ pub struct ChipInfoRow {
     /// The register groups this chip names. See [`RegBaseRow`] — an omission is a
     /// refusal, not a gap.
     pub reg_bases: &'static [RegBaseRow],
-    /// Optional live host mapping, supplied only after the composition root has verified its
+    /// Optional live host mapping, supplied only after the composition root has checked its
     /// backing, guest layout and BAR bounds. Not a captured per-die register address.
     pub timer_reg_base: Option<u32>,
 }

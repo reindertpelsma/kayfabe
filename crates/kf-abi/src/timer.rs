@@ -5,7 +5,7 @@ use crate::{DriverVersion, generated::matrix as m};
 pub const REGISTER_OFFSET: u32 =
     m::CTRL_CMDS_NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET.everywhere_u32();
 
-/// The SDK register view, independently measured at each driver tag.
+/// The SDK register view, independently compiled at each driver tag.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TimerLayout {
     /// Byte length of the source-defined register view.

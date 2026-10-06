@@ -2298,7 +2298,7 @@ pub const NV01_TIMER_MAP_SIZE: u64 = 0x414;
 
 /// `NV01_TIMER` — `ogkm-580: src/common/sdk/nvidia/inc/class/cl0004.h:32`.
 ///
-/// Measured at every driver tag, including classes with no allocation parameters.
+/// Compiler-derived at every driver tag, including classes with no allocation parameters.
 pub const NV01_TIMER: u32 = crate::generated::matrix::CLASS_IDS_NV01_TIMER.everywhere_u32();
 
 /// `NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET` —

@@ -27,7 +27,7 @@ const fn r<T>(first: DriverVersion, last: DriverVersion, value: Option<T>) -> Ru
     Run { first, last, value }
 }
 
-/// Every ogkm tag the committed sweep measured, ascending (30 tags).
+/// Every ogkm tag compiled by the committed source sweep, ascending (30 tags).
 pub const MEASURED: &[DriverVersion] = &[
     v(535, 309, 1), // 535.309.01
     v(545, 23, 8),  // 545.23.08

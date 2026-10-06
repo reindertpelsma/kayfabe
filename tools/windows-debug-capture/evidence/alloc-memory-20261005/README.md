@@ -23,7 +23,7 @@ dispatcher that translates this wire record to allocation parameters. It also
 does not establish unprivileged host-callability or runtime Linux coverage.
 
 [compiler-layouts.json](compiler-layouts.json) records 13 explicit public tags,
-their dereferenced commits, source Git blob IDs, compiler identity, measured
+their dereferenced commits, source Git blob IDs, compiler identity, compiler-derived
 offsets, bitfield masks, constants, and reviewed flag fields. The
 [C probe](../../alloc-memory-layout.c) compiles the declarations, initializes
 the real bitfields, and copies their bytes. No C values or layouts are parsed
@@ -43,7 +43,7 @@ Measurements target little-endian x86-64. They establish these declared wire
 facts, not firmware behavior on every OS/driver/family combination. GPU family
 and die do not enter the inspected producer's encoding decisions. A product
 implementation still needs explicit guest-driver rows and architecture-valid
-guest RAM authority; a measured layout must not imply a supported behavior.
+guest RAM authority; a compiler-derived layout must not imply a supported behavior.
 
 The older runlist evidence called annotated tag IDs `15b1a21d...` (535.309.01)
 and `86856f77...` (610.43.02) public commits. Those identify the correct source
@@ -53,7 +53,7 @@ trees through tag dereference; the actual commits are `9756a4df...` and
 ## Wire record and page meaning
 
 Offsets are relative to the RPC payload, excluding the common RPC header.
-All 13 measured tags have this layout for `rpc_alloc_memory_v13_01` and its
+All 13 compiler-derived tags have this layout for `rpc_alloc_memory_v13_01` and its
 current alias. Declaration:
 [g_rpc-structures.h](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/nvidia/generated/g_rpc-structures.h#L79).
 
@@ -101,7 +101,7 @@ does not use a returned address or returned PFN array.
 ## Driver compatibility: identical layout, different behavior
 
 This table is a source review, not inference from the compiler layout. The
-flag mask is the union of fields measured by this audit, not a permission to
+flag mask is the union of fields compiler-derived by this audit, not a permission to
 accept all field values or all effects.
 
 | Public tag | Reviewed NVOS02 field mask | GSP producer for contiguous memory | Relevant receiver source |
@@ -177,7 +177,7 @@ kinds require their own layout/access semantics.
 The 13 ABI measurements contain nine positive compressed-contiguous source
 rows. That is sufficient for a diagnostic which admits exactly those rows and
 refuses unknown cells; it is not full coverage of Kayfabe's driver matrix.
-Extending to the remaining measured driver tags requires both compilation and
+Extending to the remaining compiler-derived driver tags requires both compilation and
 behavioral review, because the 560/565 transition demonstrates why matching
 headers alone are insufficient. No unsupported cell may inherit the nearest
 version's behavior. The registration is wholly guest-side and adds no host RM
@@ -190,8 +190,8 @@ The observed `0x48002000` decodes through the compiled public definitions as
 CONTIGUOUS, PCI/system memory, WRITE_COMBINE, REGISTER_MEMDESC_TO_PHYS_RM true,
 and MAPPING_NO_MAP. GPU cacheability, kernel-mapping request, NISO display,
 user/device read-only, peer override, syncpoint, and protection fields are zero.
-The registration bit is absent from the measured 535 and 550 headers; memory
-protection is also absent from the measured 515 header. Unknown bits and invalid
+The registration bit is absent from the compiler-derived 535 and 550 headers; memory
+protection is also absent from the compiler-derived 515 header. Unknown bits and invalid
 enum values must fail closed under the selected row.
 [nvos.h](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/nvos.h#L190)
 

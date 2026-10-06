@@ -43,7 +43,7 @@ host work. The timer page has its own disposition and FFI view; it cannot accide
 usermode window at a different within-page offset. BAR1/BAR2 behavior is unchanged; no timer read
 traps, worker ticks, CPU timer emulation or forged GPU completion are added.
 
-The host/guest `Nv01TimerMap` layouts and query parameters are compiler-measured separately at
+The host/guest `Nv01TimerMap` layouts and query parameters are compiled separately at
 each exact tag. Unknown or incompatible layouts fail closed. The query resolves the GPU-die
 axis; the native host alloc/map permission supplies the hardware capability gate. Available
 layouts currently match across every measured tag; ABI coverage is not Windows hardware coverage.

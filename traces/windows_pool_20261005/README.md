@@ -101,7 +101,7 @@ clean guest shutdown; files are in `probe-c/`.
 The timer change passed 1185 ABI/RM/chip tests, including a complete comparison
 with the prior capability table: exactly the timer allocation row was added at
 each boundary; control decisions are unchanged. The original baseline fixture
-is preserved. The source audit spans all 30 measured tags (535 through 615);
+is preserved. The source audit spans all 30 compiler-derived tags (535 through 615);
 the 615 encrypted-queue transport remains intentionally unsupported.
 
 A source-derived next hypothesis is the register mapping: Kayfabe currently

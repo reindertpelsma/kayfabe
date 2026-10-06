@@ -63,7 +63,7 @@ impl Drop for TimerWindow<'_> {
 }
 
 impl HostRm {
-    /// Open a PTIMER register view using the host driver's exact measured SDK layout and the
+    /// Open a PTIMER register view using the host driver's exact compiler-derived SDK layout and the
     /// GPU's NON_PRIVILEGED offset query. This runs during realize, before any vCPU exists.
     /// Only a 4 KiB host page is supported: larger host pages would expose extra registers.
     pub fn open_timer(&self) -> Result<TimerWindow<'_>, RmError> {

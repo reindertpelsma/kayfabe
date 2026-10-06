@@ -275,7 +275,7 @@ pub fn memory_map(
 }
 
 impl MemoryMap {
-    /// Carve a verified live timer page out of a shadow region. Refuse unaligned, overflowing,
+    /// Carve a checked live timer page out of a shadow region. Refuse unaligned, overflowing,
     /// outside-BAR or overlapping special ranges, before the VMM can install any mapping.
     pub fn with_timer(mut self, base: u64) -> Result<Self, &'static str> {
         let end = base.checked_add(PAGE).ok_or("timer page overflow")?;

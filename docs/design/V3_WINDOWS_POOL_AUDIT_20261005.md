@@ -32,7 +32,7 @@ own validation; line references describe the audited baseline.
 | Blocker for product integration | Every mirrored address space still receives the framebuffer and guest-RAM identity windows | Existing base, S1-21; not introduced by this delta | Integrate Windows work onto the branch that fixes private Translated spaces before claiming hostile-guest isolation |
 | Blocker for enabling pool support by default | Successful QUERY_SIZE returns invented geometry without a pool lifecycle or demonstrated replacement for pooled preemption | Deliberately incomplete experiment | Keep host opt-in and research status; prove guest userspace behavior and actual host preemption semantics before enabling |
 | Correctness prerequisite for timer mapping | Timer allocation success does not create a running PTIMER view | New allocation plus an existing missing mapping | Do not publish TIMER regBases until a real, safe register backing exists |
-| Compatibility correction | Committed query uses a one-version equality gate; the timer class ID is a hand-written constant despite an existing generated value | New usage | Use measured layout/profile data and the generated class constant; preserve unknown-version refusal |
+| Compatibility correction | Committed query uses a one-version equality gate; the timer class ID is a hand-written constant despite an existing generated value | New usage | Use compiler-derived layout/profile data and the generated class constant; preserve unknown-version refusal |
 | Audit-method correction | Timer source checker parses C with regular expressions and string splitting | Research tool | Replace with a compiler/parser-based check or clearly mark as a textual spot-check, not semantic proof |
 | Protocol incompleteness | Timer parent type and single-instance rule are not enforced | New inert class in existing graph semantics | Document now; enforce before any timer operation can act on backing or schedule an event |
 | Reliability follow-up | Every query prints one diagnostic line | New diagnostic surface, existing S1-86 class of issue | Rate-limit or count/summarize before general deployment |
@@ -104,7 +104,7 @@ resource entry also specifies a Subdevice parent and one instance per parent;
 the first two observations do not erase those resource-server constraints or
 the behavior of inherited classes. The experiment does not reproduce those
 parent/singleton restrictions. With the new class inert, this is a protocol
-fidelity gap, not a demonstrated host-memory escape. Before acting on a timer,
+fidelity gap, not evidence of a host-memory escape. Before acting on a timer,
 validate its live origin, parent Subdevice, namespace, and lifecycle.
 
 `tmrapiGetRegBaseOffsetAndSize_IMPL` independently asks for `NV_REG_BASE_TIMER`.
