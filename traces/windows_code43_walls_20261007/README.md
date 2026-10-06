@@ -348,4 +348,19 @@ Decoder rings refuse every nonempty public submission before PB writes;
 only their private authored FIFO fence can be queued. The native
 `kf-nvdec-context` oracle checks ownership, codec-selector refusal, actual GPU
 fence completion and channel/ring release. Hardware execution pending.
-GPU-free host/channel tests:134 passed; oracle compiles; Clippy new0.
+GPU-free host/channel tests:114 passed; oracle compiles; Clippy new0.
+
+Native source7152d1a8448715071cdb244daf5f672f48d85568 on the borrowed4070/
+open595.91.07: [decoder oracle](nvdec-native.log) constructs USER engine13
+channel and ownedC9B0 object, refuses a codec selector, then its real GPU fence
+reaches seq1. Channel free and all ring mappings/view/object releases succeed;
+host display remains enabled. This gates the default-off experimental guest
+`KF3_KERNEL_NVDEC_CTX=1` path, limited to private T-space and an actually owned
+matching context. Promotion accepts decoder entryCount0 only; codec/CE work
+remains refused before host PB writes.
+
+Guest increment validation:111 QEMU tests passed; Clippy new0. The existing
+bounded inline observer also records up to16 combined promotion/property
+requests:0080170f requires an exact16-byte inline scalar payload, never follows
+an address, and changes no reply. Two observer tests pass, including truncated/
+extra-size refusal and record-budget exhaustion. Windows run22 pending.

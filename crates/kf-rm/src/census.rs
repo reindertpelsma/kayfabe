@@ -393,6 +393,22 @@ fn promotion_record(
 ) -> Option<String> {
     use kf_abi::generated::ctrl::Nv2080CtrlGpuPromoteCtxBufferEntry as Entry;
     use kf_abi::transcribed::Nv2080CtrlGpuPromoteCtxParamsHeader as Header;
+    // ctrl0080fifo.h:293-297 at the guest contract tag: three inline
+    // scalar fields, exactly 16 bytes. Observation only, never a host verb.
+    if req.cmd == 0x0080_170f {
+        let end = req.params_at.checked_add(req.params_size as usize)?;
+        let params = cmd.payload.get(req.params_at..end)?;
+        if params.len() != 16 {
+            return None;
+        }
+        let channel = u32::from_le_bytes(params[0..4].try_into().ok()?);
+        let property = u32::from_le_bytes(params[4..8].try_into().ok()?);
+        let value = u64::from_le_bytes(params[8..16].try_into().ok()?);
+        return Some(format!(
+            "kf-rm: channel-property-facts envelope={:#x}:{:#x} channel={channel:#x} property={property:#x} value={value:#x}",
+            req.client, req.object
+        ));
+    }
     if req.cmd != crate::chanlink::PROMOTE_CTX {
         return None;
     }
@@ -540,6 +556,39 @@ mod promotion_tests {
         fn respond(&mut self, _: &RpcCommand) -> Option<Reply> {
             None
         }
+    }
+
+    #[test]
+    fn inline_channel_property_observer_is_exact_and_bounded() {
+        let driver = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+        let mut payload = vec![0; kf_abi::view::RpcControlReq::HEADER];
+        payload[8..12].copy_from_slice(&0x0080_170fu32.to_le_bytes());
+        payload[16..20].copy_from_slice(&16u32.to_le_bytes());
+        payload.extend(0x1234u32.to_le_bytes());
+        payload.extend(2u32.to_le_bytes());
+        payload.extend(u64::MAX.to_le_bytes());
+        let mut cmd = RpcCommand {
+            function: RpcFunction::RmControl,
+            code: 76,
+            sequence: 0,
+            payload,
+            elements: 1,
+            delivered: Vec::new(),
+        };
+        let req = driver.decode_rpc_control(&cmd.payload).unwrap();
+        let mut observer = ControlCensus::new(driver, ControlCensusLog::default(), Decline);
+        for _ in 0..16 {
+            let record = observer.take_promotion_record(&cmd, Some(&req)).unwrap();
+            assert!(record.contains("channel=0x1234 property=0x2 value=0xffffffffffffffff"));
+        }
+        assert!(observer.take_promotion_record(&cmd, Some(&req)).is_none());
+        cmd.payload.pop();
+        assert!(promotion_record(&driver, &cmd, &req).is_none());
+        cmd.payload.push(0xff);
+        cmd.payload.push(0xff);
+        cmd.payload[16..20].copy_from_slice(&17u32.to_le_bytes());
+        let req = driver.decode_rpc_control(&cmd.payload).unwrap();
+        assert!(promotion_record(&driver, &cmd, &req).is_none());
     }
 
     #[test]

@@ -164,6 +164,14 @@ kf3: DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=4 emulated=0 forwarde
     requires that context; unsupported kernel GR/software work still refuses.
     [Iteration/evidence](../../traces/windows_code43_walls_20261007/README.md).
     The following non-birth statement remains the default-off path.
+    **2026-10-07 experimental decoder correction:** `KF3_KERNEL_NVDEC_CTX=1`
+    plus private T-space also births kernel NVDEC channels as USER host rings,
+    constructing a real decoder object before promotion. The native oracle at
+    `7152d1a8` completes a real GPU fence on engine13; decoder/CE submissions
+    still refuse before PB writes. Matching-context promotion with entryCount0,
+    bind and real runlist eviction are conditional on actual owned host context.
+    Evidence: `traces/windows_code43_walls_20261007/nvdec-native.log`.
+
     ⊘ RM's golden-image channel (kernel GR, `0xbaba0045`) is not born (kernel GR is P7), so its
     promote stays the FSM's named refusal, as before. Non-GSP guests: `V3_NON_GSP_CTX.md`.
 23. ✔ **FIXED by v3-chanctl (`bda5dc39`) — see the v3-chanctl status block below.** ⊘ It was not a

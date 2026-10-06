@@ -1,0 +1,8 @@
+START revision=7152d1a8448715071cdb244daf5f672f48d85568 dirty=0
+kf-host: channel birth h=0xcafe0008 engine=0x13 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+NVDEC_CONTEXT driver=595.91.07 arch=(190, 4, a1) context=Some((cafe0009, c9b0, 13)) channel=Channel { tsg: cafe0007, chan: cafe0008, token: 30007 }
+NVDEC_CODEC_NEGATIVE=REFUSED
+NVDEC_FENCE seq=1 completed=1
+NVDEC_RELEASE Some("ring 0x120000000 released: cpu unmapped, view ok unmap ok free ok")
+NVDEC_CONTEXT_VERDICT=PASS
+EXIT 0
