@@ -1,6 +1,6 @@
 # Bounded pre-composition tone mapping
 
-**STATUS: RESEARCH, 2026-10-06 — implementation checkpoint, hardware unqualified.**
+**STATUS: RESEARCH, 2026-10-06 — direct Linux zero-intensity fixture qualified at `74cd590c`; broader work incomplete.**
 Owner-directed continuation on `codex/sdr-lut-20261006`, within the existing
 opt-in `KF3_DISPLAY_SDR_COLOR=1`; default remains off. No Windows success,
 master promotion, full HDR or physical post-LUT parity claim.
@@ -54,7 +54,16 @@ incarnation and UPDATE invalidate tone snapshots independently of the input
 LUT. The existing real GPU completion barrier holds publication, notifiers and
 GET advancement; no CPU pixel transform or forged completion is introduced.
 
-## Verification required
+## Current evidence and remaining verification
+
+Product `74cd590cec952e1b206d54532345ba0d481d0cd4` passes the strict Linux TMO
+fixture: a retained zero curve, accepted real atomic commits, nonzero TMO armed
+at capture, black transformed output and byte-identical restoration. GPU SDR
+and TMO fixtures and 9/9 gates (11/11 USER births) pass.
+[Evidence and limits](../../traces/tmo_stage_20261006/README.md). This result does
+not complete broader table-format/chroma controls or establish Windows behavior.
+
+## Verification procedure
 
 GPU-free planner/engine tests and synthetic GPU fixtures precede the strict
 `linux_color_audit.py --sdr-color --require-tmo` run. The fixture constants are

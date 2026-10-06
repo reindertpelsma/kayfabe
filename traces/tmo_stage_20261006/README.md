@@ -4,6 +4,42 @@
 rendering and output gamma do not establish that a tone-mapping buffer exists.
 The new `linux_color_audit.py --sdr-color --require-tmo` experiment runs a
 stock Linux580.159.04 guest with Sway, on an immutable product binary.
+**Run C: PASS for the direct zero-intensity fixture**, product and harness
+`74cd590cec952e1b206d54532345ba0d481d0cd4`, QEMU SHA256
+`72f2d50d0b4a93330cd359119cbcf2ffff487bc311fde5439e3ca6baaa185937`.
+The [strict verdict](linux-c-tmo-verdict.json) passes every check: property
+available on plane49, retained 1024-entry zero curve, three accepted real atomic
+commits, three nonzero TMO bindings (`0x10099`/`0x1009c`) and matching control
+`0x40509`. Window7 remains armed at capture, with 45,272 trace budget remaining.
+The requested output is all black; removing the curve restores the baseline
+RGB bytes exactly. No scanout refusal. This establishes the owner's explicit
+Linux stage-presence/processing fixture, not general HDR/native pixel parity.
+
+The register pipeline and tone snapshots now execute on the GPU. Six existing
+SDR fixtures pass in [SDR GPU log](tmo-74cd-color-sdr.log); five tone-fixture
+categories pass in [TMO GPU log](tmo-74cd-color-tmo.log), including intensity-only
+behavior, the full source-derived PQ/CSC program, snapshot retention/rearm and
+invalid-table rejection. [GPU gates](tmo-74cd-gates.log) pass 9/9, with 11/11 USER
+births; [QEMU build](tmo-74cd-build.log) records the immutable binary. The first
+synthetic run at `82328c29` found a diagnostic-priority regression: invalid input
+set both input-invalid and derived-nonfinite verdict bits. `74cd590c` reports the
+primary table failure; the rerun above passes. No success no-op was introduced.
+
+[Manifest](linux-c-manifest.json), [events](linux-c-events.json),
+[provenance/hashes](linux-c-provenance.json), [runner](tmo-c-runner.log), complete
+compressed Sway phase logs and capture-time/full method traces are retained.
+The requested RGB hash is
+`1f56bd4f609fab80a2b9cce7487d5c08de2768476849e1353881ca748d8d3b6a`;
+before/restored both retain the run B baseline hash below.
+
+**Broader work remains:** the owner explicitly wants table-format and chroma
+control refusals replaced with real processing. This current no-chroma-correction
+TMO checkpoint is not completion of that scope. Windows behavior remains a
+separate test; the absence fallback identified in NVKMS is documented as Unix
+code, not established as shared Windows behavior.
+
+The earlier missing-capability result follows for comparison:
+
 **Run B: FAIL**, product `2aa8b92de6c6ab158f9bc8e788be792408a074a3`,
 harness `8316cb612040c0123539de512560f4ea8a5eb26d`, immutable QEMU SHA256
 `4bf444aeb1aa0b82312c201b7441a89d9c892eb638e255af3eac8a88e0e82c55`.

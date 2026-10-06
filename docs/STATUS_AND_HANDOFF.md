@@ -11,6 +11,19 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-06
 
+**Latest checkpoint, 2026-10-06:** product `74cd590c` implements GPU TMO and
+indexed CSC tables under the existing opt-in colour flag. The strict Linux
+TMO run C passes: retained curve, accepted atomic requests, nonzero armed tone
+buffer, black transformed output and exact restoration. SDR/TMO GPU fixtures,
+9/9 GPU gates and 11/11 USER births pass; no promotion or full HDR parity claim.
+[Source scope](design/V3_TMO_COLOR.md), [evidence](../traces/tmo_stage_20261006/README.md).
+The owner clarified that broader table formats and chroma-correction controls
+must also gain real processing; this checkpoint is not the intended endpoint.
+Windows retest is in flight. The identified absent-TMO fallback lives in NVKMS,
+whose build documents Unix sharing; its Windows use is not established.
+
+The previously verified SDR product and missing-capability test follow:
+
 **Latest owner-directed implementation:** branch `codex/sdr-lut-20261006`,
 product `2aa8b92de6c6ab158f9bc8e788be792408a074a3`, real bounded GPU SDR
 ILUT/OLUT processing under `KF3_DISPLAY_SDR_COLOR=1` (default off).
