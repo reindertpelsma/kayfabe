@@ -303,3 +303,10 @@ The additional compatible-class arm sets the source-defined guest CE selector
 and routes it to the host's allocated CE class. SET_OBJECT admits only one
 source-derived CE class; foreign classes and wider writes refuse. Other data
 is unchanged. Native validation of that increment and Windows run21 pending.
+
+Native compatible-class result at3fd6fc39513edf8581dfba16f5887d0d4d7a0b36:
+[arm](gr-ce-compat-native.log) passes all gate3 checks with guest C7B5 selecting
+the actual host CE object. [Gates](kernel-gr-gates.log) pass9/9 with11/11 USER
+births; [immutable build](kernel-gr-build.log). Local188 channel/QEMU tests pass,
+with zero new Clippy debt (197 existing); gate3/route Clippy also has zero new
+debt. Windows run21 now uses this source-pinned binary and records the new flag.
