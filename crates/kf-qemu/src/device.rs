@@ -800,6 +800,7 @@ impl Device {
         // census, the memory inbox, the channel plane) is the SAME across a rebuild — only the
         // links that read layouts are new.
         let build = {
+            let memory_list_fb = layout.clone();
             let x11_dispsw = cfg.x11_dispsw;
             let (board, host, chain_logs, census, inbox, console) = (
                 board.clone(),
@@ -815,7 +816,8 @@ impl Device {
                     kf_abi::GuestOs::Linux,
                     Box::new(
                         kf_rm::rmrpc::GraphObjects::new(family)
-                            .with_guest_ram(std::sync::Arc::new(crate::mem::MemoryListRam(ram))),
+                            .with_guest_ram(std::sync::Arc::new(crate::mem::MemoryListRam(ram)))
+                            .with_guest_framebuffer(memory_list_fb.clone()),
                     ),
                     kf_rm::rmrpc::ReasmLimits::default(),
                 );

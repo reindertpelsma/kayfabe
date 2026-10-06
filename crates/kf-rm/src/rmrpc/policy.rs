@@ -265,6 +265,7 @@ pub struct GraphObjects {
     /// The graph.
     pub graph: RmGraph,
     ram: Option<std::sync::Arc<dyn crate::memory_list::GuestRamAuthority>>,
+    fb: Option<kf_chip::bar0::FbLayout>,
 }
 
 impl GraphObjects {
@@ -275,6 +276,12 @@ impl GraphObjects {
         ram: std::sync::Arc<dyn crate::memory_list::GuestRamAuthority>,
     ) -> Self {
         self.ram = Some(ram);
+        self
+    }
+    /// Attach this VM's immutable framebuffer layout; only usable store spans may register.
+    #[must_use]
+    pub fn with_guest_framebuffer(mut self, layout: kf_chip::bar0::FbLayout) -> Self {
+        self.fb = Some(layout);
         self
     }
     /// Bounded future-consumer read, requiring a live graph object and RAM generation.
@@ -302,6 +309,7 @@ impl GraphObjects {
         GraphObjects {
             graph: RmGraph::new(family),
             ram: None,
+            fb: None,
         }
     }
 }
@@ -311,7 +319,12 @@ impl RmObjects for GraphObjects {
         &mut self,
         request: kf_abi::memory_list::Declaration,
     ) -> Result<RmEvent, ObjectsRefusal> {
-        crate::memory_list::allocate(&mut self.graph, self.ram.as_ref(), request)
+        crate::memory_list::allocate(
+            &mut self.graph,
+            self.ram.as_ref(),
+            self.fb.as_ref(),
+            request,
+        )
     }
 
     fn software_runlist_probe(

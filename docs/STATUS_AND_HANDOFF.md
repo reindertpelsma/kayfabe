@@ -19,6 +19,10 @@ USER host channel. The next allocation, class5080 deferred API, refuses; Windows
 retires COPY2 with zero submissions. Code43/smi9 persist. FBMEM registration and
 FIFO latency query also still refuse. No initialization success claim.
 [Iteration record](../traces/windows_code43_walls_20261007/README.md).
+The second change adds checked FBMEM registration for audited580.65.06 and
+580.159.04 guest contracts, scoped to the VM's usable FB heap; focused18 tests
+and full612 kf-rm tests pass. Windows rerun pending; class5080 remains unsupported.
+
 
 **Windows allocation investigation, 2026-10-07:** bounded diagnostic run14 at
 `b928ab4c` captures the complete single-inline memory descriptor: class82

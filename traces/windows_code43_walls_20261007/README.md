@@ -63,5 +63,44 @@ Fresh run16 watchdog [recovery](run16-recovery.log) and
 to run13; tail hints change from3901fd/391f76/1a1267d to1a1267d/1a3704b/1959d9f.
 The earlier1a103e6 assertion is still inside the matching prefix. This does not
 prove which RPC caused the tail assertions. The outer NVCD remains one byte
-short; complete journal records are usable, no valid-checksum claim. Recovery
-verified read-only NBD/NTFS and cleanup; raw dump remains private.
+short; complete journal records are usable, no valid-checksum claim. The linked
+run16 recovery receipt records read-only NBD/NTFS and cleanup; raw dump remains private.
+
+## Second repair: bounded framebuffer MemoryList registration
+
+The function4 request registers class82, flags48040200, one direct PFN ea6e0,
+length128KiB. Its span ea6e0000..ea700000 lies in the VM's usable framebuffer
+heap. The former SYSRAM-only class/location/flag decoder refused it.
+
+FBMEM admission is explicit on the audited580.65.06 and580.159.04 guest contracts;
+other rows retain SYSTEM-only admission. Class, location and GPU-cache mask come
+from the existing public C compiler artifacts. The decoder still requires an
+exact direct one-PFN descriptor, contiguous pitch storage, safe arithmetic and
+reviewed flags. A separate backing tag prevents video PFNs from reaching guest
+RAM topology or CPU-copy authority. SYSTEM cannot name VIDMEM and FBMEM cannot
+name PCI RAM. Original flags are retained; registration creates no new mapping.
+
+The object seat validates the live original Device/Subdevice/Client ancestry,
+then checks the whole page-rounded span in one unreserved heap region of this
+VM's immutable FbLayout. It registers a typed graph resource referencing that
+existing storage, with the same parent/device lifetime, quota, duplicate and
+free semantics as SYSTEM registration. Firmware carveouts, overflow and outside
+store ranges refuse without mutation. No host PFN is forwarded. FB descriptors
+mint no RAM generation/CPU-access token; future GPU consumers require their own
+checked resource resolution. This is object registration, not a GPU submission.
+
+Source580.65.06 mem_list.c SHA256
+689ca84a853980d1d119a5ccb0853e28d3f21da95aabe3668a9e0ab31992d334;
+580.159.04 commitb81d58ee0224d1d290bef1c080592b619e184042, fileSHA256
+23bf31c98430f6ed76fbfcf034c90e5a337b205a4c92667a55346f58c996e87b.
+The only file difference is an extra HW-resource reference increment at740 for
+a nonzero source HW-resource handle, which this function4 subset does not carry.
+The shared FBMEM branch validates one contiguous PFN and extent against the
+Device FB heap before constructing the memory resource (lines418..530).
+This is source-backed constructor coverage, not proof that public GSP dispatcher
+code or Windows binary internals are available.
+
+Second-repair local validation:18 focused MemoryList tests across ABI, RM, QEMU
+and the full policy chain pass; all612 kf-rm tests pass. Clippy across kf-abi,
+kf-rm and kf-qemu reports zero new debt (208 existing). Formatting/diff checks
+pass. Hardware result pending until a fresh source-pinned Windows boot.

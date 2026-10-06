@@ -25,6 +25,8 @@ for row in rows:
     mask=0
     for name in ['PHYSICALITY','LOCATION','COHERENCY','REGISTER_MEMDESC_TO_PHYS_RM','MAPPING']: mask |= flags[name]['mask']
     out += [f'// {row["tag"]}: public source commit {row["commit"]}', 'Cell {', f'version: crate::DriverVersion {{ {version} }},', f'function: {c["NV_VGPU_MSG_FUNCTION_ALLOC_MEMORY"]}, class: {c["NV01_MEMORY_LIST_SYSTEM"]},',
+            f'fb_class: '+(f'Some({c["NV01_MEMORY_LIST_FBMEM"]})' if row['tag'] in {'580.65.06', '580.159.04'} else 'None')+',',
+            f'fb_location: {enum("LOCATION_VIDMEM")}, gpu_cache_mask: {flags["GPU_CACHEABLE"]["mask"]},',
             f'size: {r["size"]+c["NV_VGPU_PTE_64_SIZE"]},',
             'offsets: ['+', '.join(str(r[x]) for x in ['hClient','hDevice','hMemory','hClass','flags','pteAdjust','format','length','pageCount','pteDesc'])+'],',
             f'pte: {r["pteDesc"]+p["pte_pde"]}, idr_mask: {p["idr"]}, reserved_mask: {p["reserved1"]}, count_mask: {p["length"]}, idr_none: {c["NV_VGPU_PTEDESC_IDR_NONE"]},',

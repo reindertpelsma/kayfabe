@@ -4,6 +4,14 @@
 implements the bounded descriptor contract below; it does not implement software
 runlist scheduling or establish Windows boot success.
 
+**Extension, 2026-10-07:** the same opt-in registration path now additionally
+supports source-audited contiguous pitch-linear FBMEM on guest contracts580.65.06
+and580.159.04. The earlier SYSRAM-only statements below describe the original
+subset; FBMEM uses a separate backing tag and immutable VM framebuffer layout,
+not RAM topology/CPU-copy authority. [Implementation and validation](../../traces/windows_code43_walls_20261007/README.md).
+Normal RM_ALLOC capabilities remain unchanged; no GPU work or completion is
+introduced by memory-object registration.
+
 `KF3_MEMORY_LIST_PROBE=1` independently enables function `ALLOC_MEMORY` only for
 named public-source guest contracts. The request declares an existing guest RAM
 range; Kayfabe creates no host GPU allocation, executes no GPU work, changes no

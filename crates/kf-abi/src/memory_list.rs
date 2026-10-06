@@ -1,4 +1,4 @@
-//! Public-source contract for the bounded contiguous SYSRAM ALLOC_MEMORY subset.
+//! Public-source contract for bounded contiguous SYSRAM and audited FBMEM registration.
 //! ABI equality is insufficient: only individually audited compressed-PTE producers
 //! and MemoryList consumers have cells. No host-driver or GPU-family assumptions.
 
@@ -22,6 +22,9 @@ pub struct Cell {
     version: crate::DriverVersion,
     function: u32,
     class: u32,
+    fb_class: Option<u32>,
+    fb_location: u32,
+    gpu_cache_mask: u32,
     size: usize,
     offsets: [usize; 10],
     pte: usize,
@@ -43,6 +46,15 @@ pub struct Cell {
     mappings: [u32; 3],
 }
 
+/// Registration backing, derived from the admitted class and location together.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Backing {
+    /// Real guest RAM validated by the VMM's topology authority.
+    Ram,
+    /// Existing guest framebuffer store, bounded to its usable heap.
+    Framebuffer,
+}
+
 /// Exact decoded declaration. Addresses are guest DMA addresses, never host PFNs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Declaration {
@@ -52,13 +64,15 @@ pub struct Declaration {
     pub parent: u32,
     /// New memory handle.
     pub handle: u32,
-    /// Source-defined SYSTEM MemoryList class.
+    /// Source-defined SYSTEM or explicitly source-audited FBMEM MemoryList class.
     pub class: u32,
+    /// Which trusted authority must validate this descriptor.
+    pub backing: Backing,
     /// All admitted original flags, retained for exact idempotence and future policy.
     pub flags: u32,
     /// Base of the supplied guest physical page.
     pub page_base: u64,
-    /// Full page-rounded range that must be current writable guest RAM.
+    /// Full page-rounded range validated by its backing-specific authority.
     pub span: u64,
     /// Offset of logical byte zero within the supplied page.
     pub adjustment: u32,
@@ -77,7 +91,7 @@ impl Cell {
     pub fn function(&self) -> u32 {
         self.function
     }
-    /// Decode the exact one-inline-PFN linear SYSRAM subset. No memory is accessed.
+    /// Decode one-inline-PFN linear SYSTEM or audited FBMEM registration; no contents accessed.
     #[must_use]
     pub fn decode(&self, body: &[u8]) -> Option<Declaration> {
         if body.len() != self.size {
@@ -109,12 +123,23 @@ impl Cell {
         let adjustment = u32_at(adjust)?;
         let length = u64_at(length)?;
         let desc = u32_at(descriptor)?;
-        if flags & !self.allowed_flags != 0
+        let raw_class = u32_at(class)?;
+        let backing = if raw_class == self.class {
+            Backing::Ram
+        } else if self.fb_class == Some(raw_class) {
+            Backing::Framebuffer
+        } else {
+            return None;
+        };
+        let (location, allowed_flags) = match backing {
+            Backing::Ram => (self.pci, self.allowed_flags),
+            Backing::Framebuffer => (self.fb_location, self.allowed_flags | self.gpu_cache_mask),
+        };
+        if flags & !allowed_flags != 0
             || self.physicality.get(flags) != self.contiguous
-            || self.location.get(flags) != self.pci
+            || self.location.get(flags) != location
             || !self.caches.contains(&self.cache.get(flags))
             || !self.mappings.contains(&self.mapping.get(flags))
-            || u32_at(class)? != self.class
             || u32_at(format)? != self.pitch
             || u32_at(count)? != 1
             || desc & self.idr_mask != self.idr_none
@@ -137,7 +162,8 @@ impl Cell {
             client: u32_at(client)?,
             parent: u32_at(parent)?,
             handle: u32_at(handle)?,
-            class: self.class,
+            class: raw_class,
+            backing,
             flags,
             page_base,
             span,
@@ -177,6 +203,30 @@ mod tests {
         b[56..64].copy_from_slice(&2u64.to_le_bytes());
         b
     }
+    #[test]
+    fn memory_list_framebuffer_specimen_requires_audited_class_and_vidmem_location() {
+        let mut b = request();
+        b[12..16].copy_from_slice(&0x82u32.to_le_bytes());
+        b[16..20].copy_from_slice(&0x48040200u32.to_le_bytes());
+        b[32..40].copy_from_slice(&0x20000u64.to_le_bytes());
+        b[56..64].copy_from_slice(&0xea6e0u64.to_le_bytes());
+        for c in generated::CELLS {
+            if ["580.65.06", "580.159.04"].contains(&c.version.to_string().as_str()) {
+                let d = c.decode(&b).unwrap();
+                assert_eq!(d.backing, Backing::Framebuffer);
+                assert_eq!((d.page_base, d.span), (0xea6e0000, 0x20000));
+                let mut bad = b.clone();
+                bad[12..16].copy_from_slice(&0x81u32.to_le_bytes());
+                assert!(c.decode(&bad).is_none(), "SYSTEM cannot name video memory");
+                bad = b.clone();
+                bad[16..20].copy_from_slice(&0x48040000u32.to_le_bytes());
+                assert!(c.decode(&bad).is_none(), "FBMEM cannot name PCI RAM");
+            } else {
+                assert!(c.decode(&b).is_none(), "unaudited FB constructor row");
+            }
+        }
+    }
+
     #[test]
     fn memory_list_all_named_contracts_decode_independent_c_specimen() {
         for c in generated::CELLS {

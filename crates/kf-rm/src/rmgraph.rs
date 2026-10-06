@@ -367,7 +367,7 @@ impl HandleRef {
 /// The Axis-A adapter decodes real wire structs into this.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct AllocFacts {
-    /// Checked SYSRAM registration, minted only by the explicit RAM-authority seam.
+    /// Checked memory registration, minted only by the backing-specific authority.
     pub guest_memory_list: Option<crate::memory_list::RegisteredMemory>,
     /// Default-off diagnostic metadata, owned by this resource's ordinary graph lifetime.
     /// Only the explicitly gated object policy constructs it after checking live parents.

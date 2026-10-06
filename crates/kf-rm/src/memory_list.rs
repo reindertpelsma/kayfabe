@@ -1,4 +1,4 @@
-//! Default-off SYSRAM MemoryList registration: a typed view of existing guest RAM.
+//! Default-off MemoryList registration: typed references to existing guest RAM or FB.
 //! There is no new backing allocation, host RM action, scheduler or completion.
 
 use crate::rmgraph::{AllocFacts, NodeKey, ResourceKey, RmEvent, RmGraph};
@@ -66,9 +66,9 @@ fn refuse(what: &'static str) -> ObjectsRefusal {
 pub(crate) fn allocate(
     graph: &mut RmGraph,
     ram: Option<&Arc<dyn GuestRamAuthority>>,
+    fb: Option<&kf_chip::bar0::FbLayout>,
     d: kf_abi::memory_list::Declaration,
 ) -> Result<RmEvent, ObjectsRefusal> {
-    let ram = ram.ok_or_else(|| refuse("memory-list: no guest RAM authority"))?;
     let client = HClient(d.client);
     let parent_key = NodeKey::new(client, HObject(d.parent));
     let reject_parent = || refuse("memory-list: missing/wrong/foreign parent");
@@ -96,10 +96,23 @@ pub(crate) fn allocate(
         base: d.page_base,
         length: d.span,
     };
-    let generation = ram
-        .validate(span)
-        .filter(|g| *g != 0)
-        .ok_or_else(|| refuse("memory-list: range is not current writable guest RAM"))?;
+    let generation = match d.backing {
+        kf_abi::memory_list::Backing::Ram => ram
+            .ok_or_else(|| refuse("memory-list: no guest RAM authority"))?
+            .validate(span)
+            .filter(|g| *g != 0)
+            .ok_or_else(|| refuse("memory-list: range is not current writable guest RAM"))?,
+        kf_abi::memory_list::Backing::Framebuffer => {
+            if !fb.is_some_and(|f| f.in_usable_heap(span.base, span.length)) {
+                return Err(refuse(
+                    "memory-list: framebuffer span outside owned usable heap",
+                ));
+            }
+            // Store/layout is immutable for this graph's device lifetime. No RAM token
+            // or CPU-access authority is minted for an FB descriptor.
+            0
+        }
+    };
     let event = RmEvent::Alloc {
         client,
         parent: HObject(d.parent),
@@ -127,6 +140,9 @@ fn lookup(graph: &RmGraph, key: NodeKey) -> Option<RegisteredMemory> {
         return None;
     }
     let memory = n.facts.guest_memory_list?;
+    if memory.declaration.backing != kf_abi::memory_list::Backing::Ram {
+        return None;
+    }
     // A dup can keep a resource alive, but it cannot resurrect its destroyed parent
     // or substitute a new Device at a recycled numeric handle.
     if !graph.lifetime_is_live(memory.parent_lifetime)
@@ -266,6 +282,7 @@ mod tests {
             parent: 2,
             handle: 4,
             class: 0x81,
+            backing: kf_abi::memory_list::Backing::Ram,
             flags: 0x48002000,
             page_base: 0x2000,
             span: 0x8000,
@@ -274,6 +291,49 @@ mod tests {
         };
         (objects, ram, d)
     }
+    #[test]
+    fn memory_list_framebuffer_registration_is_heap_bounded_and_never_cpu_ram_access() {
+        let (mut objects, ram, mut d) = fixture(kf_chip::Family::Ada);
+        let layout = kf_chip::bar0::fb_layout(1 << 30).unwrap();
+        objects = objects.with_guest_framebuffer(layout.clone());
+        d.class = 0x82;
+        d.backing = kf_abi::memory_list::Backing::Framebuffer;
+        d.flags = 0x48040200;
+        let event = objects.memory_list(d).unwrap();
+        assert_eq!(
+            objects.memory_list(d).unwrap(),
+            event,
+            "same registration is idempotent"
+        );
+        let key = NodeKey::new(HClient(d.client), HObject(d.handle));
+        assert_eq!(
+            objects.graph.node(key).unwrap().kind,
+            ObjectKind::GuestMemoryList
+        );
+        assert!(!objects.read_memory_list(key, 0, &mut [0; 1]));
+        assert!(!objects.write_memory_list(key, 0, &[1]));
+        assert_eq!(
+            ram.0.lock().unwrap().2,
+            0,
+            "FB spans never route to RAM copies"
+        );
+        let before = objects.graph.nodes().count();
+        for base in [layout.carve(), layout.fb_length, u64::MAX] {
+            assert!(
+                objects
+                    .memory_list(kf_abi::memory_list::Declaration {
+                        handle: 5,
+                        page_base: base,
+                        ..d
+                    })
+                    .is_err()
+            );
+            assert_eq!(objects.graph.nodes().count(), before);
+        }
+        let (mut no_fb, _, _) = fixture(kf_chip::Family::Ada);
+        assert!(no_fb.memory_list(d).is_err(), "trusted FB layout required");
+    }
+
     #[test]
     fn memory_list_registration_reads_nothing_and_access_has_logical_bounds() {
         for family in [
