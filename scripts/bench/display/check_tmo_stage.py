@@ -66,7 +66,7 @@ def main():
     applied = [row for row in atomic if int(row[2]) and row[4] == '0' and row[5] == '0']
     missing = bool(re.search(r'TMO_TEST MISSING_TMO_LUT\b', warm_log + restored_log))
     # KMS state must retain the requested blob, not just accept the ioctl.
-    tmo_entries = re.findall(r'COLOR_LUT object=(\d+) name=TMO_LUT index=(\d+) rgb=(\d+),(\d+),(\d+)', warm_log)
+    tmo_entries = re.findall(r'COLOR_LUT object=(\d+) name=NV_PLANE_TMO_LUT index=(\d+) rgb=(\d+),(\d+),(\d+)', warm_log)
     tmo_curve = {}
     for obj, index, red, green, blue in tmo_entries:
         key = obj, int(index)

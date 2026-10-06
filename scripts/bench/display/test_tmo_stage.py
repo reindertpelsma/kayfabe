@@ -27,7 +27,7 @@ class StrictTmoGate(unittest.TestCase):
         (root / 'sway-before.log').write_text(ready + 'TMO_TEST armed\n')
         warm = ready + ('TMO_TEST MISSING_TMO_LUT\n' if missing else '')
         if not missing:
-            warm += ''.join(f'COLOR_LUT object=30 name=TMO_LUT index={i} rgb=0,0,0\n'
+            warm += ''.join(f'COLOR_LUT object=30 name=NV_PLANE_TMO_LUT index={i} rgb=0,0,0\n'
                             for i in range(1024))
         (root / 'sway-warm.log').write_text(warm)
         atomic = ('TMO_TEST REQUEST plane=30 prop=40 blob=50 flags=0 test_only=0 rc=0 errno=0\n'

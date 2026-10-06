@@ -27,7 +27,7 @@ so this is not the full hardware merge bar. No master promotion/full app claim.
 **Owner clarification (2026-10-06):** the intended Linux oracle must also
 establish the TMO buffer, not merely prevent output-gamma fallback. The existing
 Linux result only qualifies OLUT; it has zero TMO binding writes and leaves
-TMO absent. Next, use Linux's direct plane `TMO_LUT` route and require a real
+TMO absent. Next, use Linux's direct plane `NV_PLANE_TMO_LUT` route and require a real
 binding, bounded GPU processing/completion and pixel oracle. Treat missing or
 skipped TMO as failure of that acceptance gate. Do not equate ordinary SDR
 rendering or a working gamma LUT with TMO presence.

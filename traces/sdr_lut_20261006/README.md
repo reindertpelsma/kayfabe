@@ -18,7 +18,7 @@ processing in this cell; it is not inferred from an accepted ioctl.
 requirement that the TMO buffer be present. Run C has zero TMO binding writes.
 Linux can skip that stage when it is declared absent, independently of the
 successful gamma transform. The updated audit records this stage coverage.
-The next gate must explicitly request the plane `TMO_LUT` and require a real
+The next gate must explicitly request the plane `NV_PLANE_TMO_LUT` and require a real
 binding, GPU completion and transformed pixels; missing or skipped TMO is a
 failed gate. This experiment remains outstanding.
 

@@ -1,7 +1,7 @@
 /* Guest-only explicit KMS TMO experiment. Loaded into Sway, never the host/VMM.
  * A fixed zero-intensity 1024-entry UNORM16 curve is requested on its active
  * primary plane. The stock NVIDIA driver owns conversion/allocation/submission.
- * Missing TMO_LUT is an error, never a request to use a shader substitute.
+ * Missing NV_PLANE_TMO_LUT is an error, never a request to use a shader substitute.
  * Control file: /home/ubuntu/color/tmo-mode = off / on / restore.
  */
 #define _GNU_SOURCE
@@ -65,7 +65,7 @@ static int primary(int fd, uint32_t object, uint32_t *tmo, uint32_t *fb,
         drmModePropertyPtr p = drmModeGetProperty(fd, ps->props[i]);
         if (!p) continue;
         if (!strcmp(p->name, "type") && ps->prop_values[i] == DRM_PLANE_TYPE_PRIMARY) yes = 1;
-        if (!strcmp(p->name, "TMO_LUT")) *tmo = p->prop_id;
+        if (!strcmp(p->name, "NV_PLANE_TMO_LUT")) *tmo = p->prop_id;
         if (!strcmp(p->name, "FB_ID")) { *fb = p->prop_id; *current_fb = ps->prop_values[i]; }
         drmModeFreeProperty(p);
     }

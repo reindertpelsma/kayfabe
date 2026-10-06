@@ -9,7 +9,7 @@ The hardware result is pending at this checkpoint; no TMO success is claimed.
 The guest-only `request_tmo.c` adapter requests a fixed 1024-entry zero-intensity
 UNORM16 LUT on the active primary plane in Sway's real atomic submission.
 It uses the stock driver's exposed property identifiers and blob API. It does
-not change a shader or implement TMO. Missing `TMO_LUT` is an explicit adapter
+not change a shader or implement TMO. Missing `NV_PLANE_TMO_LUT` is an explicit adapter
 error before kernel submission; it is never replaced with ordinary rendering.
 The diagnostic is not loaded into the host or VMM, and no host output is changed.
 
@@ -29,7 +29,7 @@ GPU-free tests, including false-positive controls for successful ioctls without
 bindings, unarmed bindings, disabled bindings and missing properties.
 Its synthetic positive case only tests the checker, not a hardware result.
 
-Primary source path: OGKM580.159.04 `nvidia-drm-crtc.c` exposes `TMO_LUT` in the
+Primary source path: OGKM580.159.04 `nvidia-drm-crtc.c` exposes `NV_PLANE_TMO_LUT` in the
 ICtCp pipeline and builds its linear VSS table in `create_drm_tmo_surface()`.
 `nvkms-kapi.c::AssignLayerLutConfig()` only forwards TMO when the layer supports
 it. `nvkms-evo.c::nvNeedsTmoLut()` can skip absent TMO independently of OLUT.

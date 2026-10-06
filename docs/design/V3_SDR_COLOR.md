@@ -54,7 +54,7 @@ policy currently requires a new display-device lifetime to resume.
 **Owner's broader Linux-oracle objective, clarified 2026-10-06:** the gamma
 exercise below proves OLUT processing only. It does not establish a TMO buffer
 or rule out skipping TMO. OGKM `nvNeedsTmoLut()` explicitly returns false for
-absent TMO (and for ordinary SDR lacking HDR metadata). Direct plane `TMO_LUT`
+absent TMO (and for ordinary SDR lacking HDR metadata). Direct plane `NV_PLANE_TMO_LUT`
 requests are a separate driver path: `nvidia-drm-crtc.c` builds a UNORM16 linear
 VSS table through `create_drm_tmo_surface()` and marks the TMO configuration
 changed. This route is the next Linux experiment, not a completed result.
