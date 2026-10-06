@@ -1,6 +1,6 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-**STATUS: LIVE, 2026-10-06 — §0.0 below is the resume point.** ⊘ *The 2026-09-30 paragraph that follows is history:* **(2026-09-30)** Master = the code of **`afb552ea`** (`v3-mc23`: CUDA dynamic parallelism +
+**STATUS: LIVE, 2026-10-07 — §0.0 below is the resume point.** ⊘ *The 2026-09-30 paragraph that follows is history:* **(2026-09-30)** Master = the code of **`afb552ea`** (`v3-mc23`: CUDA dynamic parallelism +
 the guest-RAM-object race fix + everything below), which passed the full merge bar (§0 first entry), plus
 evidence and documentation. The single entry point for resuming work without any chat history. Decisions
 live in `docs/OWNER_RULINGS.md` (doorbell refinements of 2026-09-30 in §D); per-topic detail in the design
@@ -9,7 +9,19 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
-### 0.0 ★ RESUME HERE — 2026-10-06
+### 0.0 ★ RESUME HERE — 2026-10-07
+
+**Windows allocation investigation, 2026-10-07:** bounded diagnostic run14 at
+`b928ab4c` captures the complete single-inline memory descriptor: class82
+FBMEM registration, flags48040200, direct PFN0xea6e0, 128KiB. Its shape is not
+malformed; our SYSRAM-only decoder rejects class/location/GPU-cacheability.
+Run15 at `b6336577` captures the failing COPY2 channel Device share explicitly:
+client c1d00012 shares c1d00002's Device default, vaMode0; our channel resolver
+drops that relation and returns INVALID_STATE before any host channel creation.
+The adjacent 0080170e query is FIFO latency-buffer sizing, also unsupported.
+Code43 persists; run14 retains the same24 saved assertions as run13. This is
+source-backed diagnosis, not a functional repair or proof tying either RPC to
+assertion1a103e6. [Exact decodings/evidence](../traces/windows_exact_decode_20261007/README.md).
 
 **Latest checkpoint, 2026-10-06:** product `74cd590c` implements GPU TMO and
 indexed CSC tables under the existing opt-in colour flag. The strict Linux

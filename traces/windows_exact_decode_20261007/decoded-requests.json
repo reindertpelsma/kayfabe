@@ -1,0 +1,74 @@
+{
+  "schema": "kayfabe-windows-exact-memory-channel/1",
+  "revision": "b6336577b5e9628f60a7a543518426ac9637a5f1",
+  "memory": {
+    "function": 4,
+    "client": "0xc1d00002",
+    "parent": "0xff030000",
+    "handle": "0xcaf0000c",
+    "class_name": "NV01_MEMORY_LIST_FBMEM",
+    "class_id": "0x82",
+    "flags": "0x48040200",
+    "length": 131072,
+    "adjustment": 0,
+    "kind": 0,
+    "page_count": 1,
+    "descriptor": {
+      "idr": 0,
+      "reserved": 0,
+      "length": 1,
+      "pfn": "0xea6e0"
+    },
+    "framebuffer_span": [
+      "0xea6e0000",
+      "0xea700000"
+    ],
+    "refusal_status": "0x56",
+    "failed_requirements": [
+      "class must be SYSTEM 0x81",
+      "location must be PCI",
+      "GPU_CACHEABLE outside admitted flags"
+    ]
+  },
+  "channel": {
+    "function": 103,
+    "class_name": "AMPERE_CHANNEL_GPFIFO_A",
+    "class_id": "0xc56f",
+    "client": "0xc1d00012",
+    "handle": "0xff040000",
+    "tsg": "0xff0e0000",
+    "device": "0xff010000",
+    "engine": "COPY2",
+    "engine_type": "0xb",
+    "ring_va": "0x12024b000",
+    "entries": 16384,
+    "ring_bytes": 131072,
+    "h_vaspace": 0,
+    "h_context_share": 0,
+    "flags": "0x200120",
+    "userd": {
+      "target": "SYSMEM",
+      "base": "0x239871000",
+      "bytes": 512
+    },
+    "privilege": "KERNEL",
+    "refusal_status": "0x40",
+    "reason": "no VA space resolved",
+    "host_channel_attempted": false
+  },
+  "device_share": {
+    "h_client_share": "0xc1d00002",
+    "h_target_client": "0xc1d00002",
+    "h_target_device": "0xff010000",
+    "flags": "0x38",
+    "va_space_size": 1099511627776,
+    "va_mode": 0,
+    "va_mode_name": "OPTIONAL_MULTIPLE_VASPACES",
+    "recorded_target_default_va": "0xff000870"
+  },
+  "limits": [
+    "Observed request and source semantics; no functional repair.",
+    "No live assertion locals or proven RPC-to-assertion mapping.",
+    "Memory object and channel share a client relationship, not a proven same-buffer dependency."
+  ]
+}
