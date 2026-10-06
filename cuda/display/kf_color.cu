@@ -65,8 +65,8 @@ extern "C" __attribute__((global)) void kf_color_compose(
         U p = *(const U *)((const unsigned char *)src + off);
         U red = (p >> 16) & 255, green = (p >> 8) & 255, blue = p & 255;
         if (flags & 2) { U t = red; red = blue; blue = t; }
-        /* UNORM8 -> UNORM10 bit replication. Default ILUT uses i/1023 FP16;
-         * converting an 8-bit source by i/255 directly skips the hardware index.
+        /* GetLUTIndex() shifts UNORM8 left two bits. nvUnorm10ToFp16()
+         * divides by 1024, so the default table returns component/256.
          */
         U cs[3] = { red, green, blue };
         U alpha = (flags & 1) ? p >> 24 : 255;
@@ -76,7 +76,7 @@ extern "C" __attribute__((global)) void kf_color_compose(
         fd = fd < 0 ? 0 : (fd > 255 ? 255 : fd);
         Q d = ((Q)dy * fw + dx) * 4;
         for (U c = 0; c < 3; ++c) {
-            U i = (cs[c] << 2) | (cs[c] >> 6);
+            U i = cs[c] << 2;
             float v = lut ? lookup(lut, i / 1024.0f, c, interpolate, 1) : fp16(cs[c] / 255.0f);
             dst[d + c] = (flags & 4) ? v : fp16(v * (fs / 255.0f) + dst[d + c] * (fd / 255.0f));
         }
@@ -94,7 +94,8 @@ extern "C" __attribute__((global)) void kf_color_output(
             const int *m = matrix.v + c * 4;
             float v = src[p * 4] * (m[0] / 65536.0f) + src[p * 4 + 1] * (m[1] / 65536.0f) + src[p * 4 + 2] * (m[2] / 65536.0f) + m[3] / 65536.0f;
             v = lut ? lookup(lut, v, c, interpolate, 0) : sat(v);
-            U q = (U)(sat(v) * 255.0f + 0.5f);
+            U q = (U)(sat(v) * 256.0f);
+            if (q > 255) q = 255;
             packed |= q << (16 - 8 * c);
         }
         dst[p] = packed;
