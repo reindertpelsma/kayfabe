@@ -1429,8 +1429,25 @@ impl DisplayPlane {
         } else {
             kf_disp::caps::page
         };
-        let caps = caps_author(t, &regs, row.classes.caps, row.heads, row.windows)
-            .map_err(|e| format!("display=on: caps page: {}", e.0))?;
+        let sdr_color = std::env::var("KF3_DISPLAY_SDR_COLOR").as_deref() == Ok("1");
+        if sdr_color && constructor_probe {
+            return Err(
+                "display=on: SDR processing cannot be combined with constructor-only probes".into(),
+            );
+        }
+        let caps = if sdr_color {
+            kf_disp::caps::sdr_page(
+                t,
+                &regs,
+                row.classes.caps,
+                classes.core,
+                row.heads,
+                row.windows,
+            )
+        } else {
+            caps_author(t, &regs, row.classes.caps, row.heads, row.windows)
+        }
+        .map_err(|e| format!("display=on: caps page: {}", e.0))?;
         let layout = Layout::from_regs(&regs)
             .ok_or("display=on: the instance-memory layout is not derived")?;
         let map = RegMap::resolve(&regs, t, row)?;
@@ -1520,11 +1537,7 @@ impl DisplayPlane {
             console,
             broker,
             scan,
-            sdr_color: (std::env::var("KF3_DISPLAY_SDR_COLOR").as_deref() == Ok("1")).then_some((
-                t,
-                classes.window,
-                classes.core,
-            )),
+            sdr_color: sdr_color.then_some((t, classes.window, classes.core)),
             cursor_vocab,
             ui_request: AtomicU64::new(0),
             formats,

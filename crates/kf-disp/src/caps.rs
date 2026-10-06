@@ -52,6 +52,71 @@ impl CapsPage {
     }
 }
 
+/// Capabilities for the opt-in SDR path: one DIRECT10 table per stage,
+/// surface loading and no active TMO. Sizes are implementation limits, not board facts.
+/// Physical-address families omit legacy OLUT capability fields; no other
+/// family's field is substituted for them.
+pub fn sdr_page(
+    t: &ClassTable,
+    r: &Regs,
+    caps: u32,
+    core: u32,
+    heads: u32,
+    windows: u32,
+) -> Result<CapsPage, Missing> {
+    let mut p = page(t, r, caps, heads, windows)?;
+    let physical_output = t.a(core, "HEAD_SET_SURFACE_ADDRESS_LO_OLUT", 0).is_some();
+    for (register, stage, count) in [
+        ("PRECOMP_WIN_PIPE_HDR_CAPB", "ILUT", windows),
+        ("POSTCOMP_HEAD_HDR_CAPB", "OLUT", heads),
+    ] {
+        if physical_output
+            && stage == "OLUT"
+            && t.f(caps, "POSTCOMP_HEAD_HDR_CAPB_OLUT_LOGSZ").is_none()
+        {
+            continue;
+        }
+        let max = t
+            .v(caps, &format!("{register}__SIZE_1"))
+            .filter(|n| count <= *n && *n as usize <= PAGE / 4)
+            .ok_or_else(|| Missing(format!("NV{caps:04X}_{register} count")))?;
+        for i in 0..count.min(max) {
+            let off = t
+                .a(caps, register, i)
+                .filter(|n| *n % 4 == 0 && (*n as usize) < PAGE)
+                .ok_or_else(|| Missing(format!("NV{caps:04X}_{register}({i})")))?;
+            let mut word = p.word(off);
+            for (suffix, value) in [("LOGSZ", 10), ("LOGNR", 0), ("DIRECT", 1), ("SFCLOAD", 1)] {
+                let name = format!("{register}_{stage}_{suffix}");
+                let field = t
+                    .f(caps, &name)
+                    .ok_or_else(|| Missing(format!("NV{caps:04X}_{name}")))?;
+                if field.0 >= 32
+                    || field.1 > field.0
+                    || u64::from(value) >= (1_u64 << (field.0 - field.1 + 1))
+                {
+                    return Err(Missing(format!("NV{caps:04X}_{name} value bound")));
+                }
+                let value = if suffix == "DIRECT" || suffix == "SFCLOAD" {
+                    t.v(caps, &format!("{name}_TRUE"))
+                        .filter(|v| *v == value)
+                        .ok_or_else(|| Missing(format!("NV{caps:04X}_{name}_TRUE")))?
+                } else {
+                    value
+                };
+                word = put(word, field, value);
+            }
+            if let Some((_, v)) = p.words.iter_mut().find(|(at, _)| *at == off) {
+                *v = word;
+            } else if word != 0 {
+                p.words.push((off, word));
+            }
+        }
+    }
+    p.words.sort_unstable_by_key(|(off, _)| *off);
+    Ok(p)
+}
+
 /// Constructor-only diagnostic: advertise the source-defined TMO capability.
 /// Must be paired with `Engine::new_constructor_probe`, which refuses every
 /// display method. This is not a tone-mapping implementation.
@@ -331,6 +396,64 @@ pub fn page(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sdr_caps_declare_real_table_limits_without_tmo_in_every_cell() {
+        for version in ["580.65.06", "580.159.04"] {
+            let t = crate::class::for_version(version).unwrap();
+            for row in kf_chip::display::ALL {
+                let r = Regs::for_ip(version, row.ip_version).unwrap();
+                let c = row.classes.caps;
+                let p = sdr_page(t, &r, c, row.classes.core, row.heads, row.windows).unwrap();
+                for i in 0..row.windows {
+                    let word = p.word(t.a(c, "PRECOMP_WIN_PIPE_HDR_CAPB", i).unwrap());
+                    for (suffix, v) in [("LOGSZ", 10), ("LOGNR", 0), ("DIRECT", 1), ("SFCLOAD", 1)]
+                    {
+                        assert_eq!(
+                            crate::class::get(
+                                word,
+                                t.f(c, &format!("PRECOMP_WIN_PIPE_HDR_CAPB_ILUT_{suffix}"))
+                                    .unwrap()
+                            ),
+                            v
+                        );
+                    }
+                    let a = p.word(t.a(c, "PRECOMP_WIN_PIPE_HDR_CAPA", i).unwrap());
+                    assert_eq!(
+                        crate::class::get(
+                            a,
+                            t.f(c, "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT").unwrap()
+                        ),
+                        0
+                    );
+                }
+                if t.f(c, "POSTCOMP_HEAD_HDR_CAPB_OLUT_SFCLOAD").is_some() {
+                    for h in 0..row.heads {
+                        let word = p.word(t.a(c, "POSTCOMP_HEAD_HDR_CAPB", h).unwrap());
+                        assert_eq!(
+                            crate::class::get(
+                                word,
+                                t.f(c, "POSTCOMP_HEAD_HDR_CAPB_OLUT_LOGSZ").unwrap()
+                            ),
+                            10
+                        );
+                        assert_eq!(
+                            crate::class::get(
+                                word,
+                                t.f(c, "POSTCOMP_HEAD_HDR_CAPB_OLUT_SFCLOAD").unwrap()
+                            ),
+                            1
+                        );
+                    }
+                } else {
+                    assert!(
+                        t.a(row.classes.core, "HEAD_SET_SURFACE_ADDRESS_LO_OLUT", 0)
+                            .is_some()
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn olut_probe_changes_only_its_surface_load_bit_in_every_display_cell() {
