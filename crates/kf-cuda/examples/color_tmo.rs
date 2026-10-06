@@ -184,7 +184,7 @@ fn main() -> Result<(), String> {
     );
     // 64 zones with one sample each: exact minimum table extent, including endpoint.
     let mut compact = vec![0_u8; 69 * 8];
-    for entry in compact[32..].chunks_exact_mut(8) {
+    for entry in compact[32..].as_chunks_mut::<8>().0 {
         entry[..6].copy_from_slice(&[0, 64, 0, 64, 0, 64]);
     }
     let pixels = run(
