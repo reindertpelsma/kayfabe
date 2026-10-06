@@ -357,11 +357,11 @@ fn trace_line(
                 let facts = crate::rmrpc::alloc_params_window(driver, cmd.wire_body())
                     .and_then(
                         |params| match crate::chanlink::alloc_shape(driver, a.class) {
-                            Some(kf_abi::AllocParams::Device) => driver
+                            Some(kf_abi::versions::AllocParams::Device) => driver
                                 .decode_device_alloc_facts(params)
                                 .ok()
                                 .map(|f| format!(" device_facts={f:x?}")),
-                            Some(kf_abi::AllocParams::Tsg) => driver
+                            Some(kf_abi::versions::AllocParams::Tsg) => driver
                                 .decode_tsg_alloc_facts(params)
                                 .ok()
                                 .map(|f| format!(" tsg_facts={f:x?}")),
