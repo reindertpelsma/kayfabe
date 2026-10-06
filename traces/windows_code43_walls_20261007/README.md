@@ -197,3 +197,31 @@ kernel_channel_group_api.c:1296..1364, commit307159f2623d3bf45feb9177bd2da52ffbc
 Local validation: all101 kf-qemu tests pass; Clippy reports zero new debt
 (197 existing in the targeted report). Formatting and diff checks pass.
 Hardware result pending until the source-pinned run19.
+
+## Run19: real timeslice control succeeds, Code43 persists
+
+Product/QEMU f6aa9d2e0e16b08873f7e7fb0272fc45d2ddaced; [gates](timeslice-gates.log)
+9/9 with11/11 USER births; [build](timeslice-build.log). [Command](run19-command.json),
+[status](run19-status.json), [trace](run19-qemu.log.gz), [excerpt](run19-requests.log),
+[completion](run19-complete.json), [host health](run19-host-health.txt).
+SET_TIMESLICE requests4000us and the actual host control succeeds in207us on
+one owned host group, off the GSP lock. The guest reads0 and schedules COPY2.
+No a06c0103 refusal remains. Windows still reports Code43/smi9; no display
+UPDATE/scanout or GPU submission.
+
+Run19 [fresh recovery](run19-recovery.log) and [journal comparison](run19-watchdog-comparison.json)
+retain24 assertions. The first21 match run18, but hint e38498 disappears;
+e37654/304308 remain and1a1267d appears at the tail. Offline inspection of the
+pinned580.88 driver places e38498 immediately after a failed Boolean call
+with a nonzero scheduling quantum; the successful4000us host request plus
+its disappearance support associating this hint with SET_TIMESLICE. This
+does not assign an NV_STATUS type or claim it caused Code43.
+
+Both boots also show a larger existing gap: kernel GR channels baba0045 and
+ff040001 are acknowledged without a birth, then GPU_PROMOTE_CTX refuses
+because no owned twin exists. They must gain an actual owned unprivileged
+context, and any submitted work must execute with real GPU completion.
+Next diagnostic records the fixed inline entries (maximum16 per request,
+16 records per VM) under the existing default-off KF3_RPC_TRACE flag.
+It uses the generated entry layout and bounded decoded header, never follows
+a guest pointer, and changes no reply/admission/execution.
