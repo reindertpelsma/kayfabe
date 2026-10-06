@@ -1213,14 +1213,24 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         // clang spells signed C ints as .u32; all are passed as four-byte bit patterns.
-        let mut compose = vec![".u64", ".u64"];
+        let mut compose = vec![".u64 .ptr .align 1", ".u64 .ptr .align 1"];
         compose.extend([".u32"; 15]);
-        compose.extend([".u64", ".u32"]);
+        compose.extend([".u64 .ptr .align 1", ".u32"]);
         assert_eq!(types("kf_color_compose"), compose);
-        assert_eq!(types("kf_color_validate"), [".u64", ".u64"]);
+        assert_eq!(
+            types("kf_color_validate"),
+            [".u64 .ptr .align 1", ".u64 .ptr .align 1"]
+        );
         assert_eq!(
             types("kf_color_output"),
-            [".u64", ".u64", ".u32", ".u64", ".u32", ".align 4 .b8"]
+            [
+                ".u64 .ptr .align 1",
+                ".u64 .ptr .align 1",
+                ".u32",
+                ".u64 .ptr .align 1",
+                ".u32",
+                ".align 4 .b8"
+            ]
         );
         assert!(
             ptx.contains("kf_color_output_param_5[48]"),
