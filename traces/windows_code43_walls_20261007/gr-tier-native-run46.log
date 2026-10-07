@@ -1,0 +1,35 @@
+NATIVE_GR_TIER_START 2026-10-07T20:26:47+02:00 tag=run46 rev=065447edefea76da11cce226511df475448fa080 dirty=0
+QEMU_PROCS=0
+NVIDIA GeForce RTX 4070, 595.91.07, P2, 40, Enabled
+XID_BEFORE=5
+kf-cuda: cuda thread posture thread=main cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+MEASURE tspace fb=0x120000000+0x4000000 ram=0x124000000+0x1000000 rings=0xff00000000
+kf-host: channel birth h=0xcafe000b engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=not-held
+CHECK host_channel_asserted_user PASS Ok(BirthPrivilege { reply_flags: 128 }) chan=Channel { tsg: cafe000a, chan: cafe000b, token: 1b, born_user: Some(BirthPrivilege { reply_flags: 80 }) }
+kf-chan: GR tier admitted host channel 0xcafe000b (token 0x1b) reply_flags=0x00000080 privilege=USER objects=[(902d, cafe000e), (a140, cafe000f), (c997, cafe0010), (c9c0, cafe000d)]
+CHECK gr_tier_objects_allocated PASS Ok([(902d, cafe000e), (a140, cafe000f), (c997, cafe0010), (c9c0, cafe000d)]) context=Some((cafe000d, c9c0))
+MEASURE completion_edges before doorbell: fifo_event_mthd=false gr0=false; after: fifo_event_mthd=true gr0=false
+MEASURE gr_translated fetched=2 submissions=2 gr_methods=25 us=405864
+CHECK gr_segment_reauthored PASS gr_methods=25 inert_binds=1
+CHECK guest_semaphore_written_by_engine PASS sem=0x6a0b0001 want=0x6a0b0001
+CHECK 3d_report_semaphore_written_by_engine PASS sem3d=0x6a0b0003 want=0x6a0b0003
+CHECK gp_get_written_by_engine PASS guest GP_GET=2 cpu_stores=0 engine=(true, 1)
+CHECK completion_wakes_session_fd PASS fifo_event_mthd=true gr0=false
+CHECK hostile_notifier_address_refused_by_name PASS Err(Bind(VirtualUnresolved { va: 21474836480, at: 21474836480 }))
+CHECK hostile_entry_not_retired PASS guest GP_GET=2
+kf-host: channel birth h=0xcafe0015 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=not-held
+MEASURE ce_completion_edges host CE2: before doorbell: fifo_event_mthd=false ce=false; after: fifo_event_mthd=true ce=false
+CHECK ce_inert_bind_completes_on_engine PASS sem=0x6a0b0002 want=0x6a0b0002 gp_get=Some(1) inert_binds=1
+CHECK ce_completion_wakes_worker_fds PASS before: fifo_event_mthd=false ce=false; after: fifo_event_mthd=true ce=false
+kf3: ring REFUSED segment gp 1 va 0x120232000 (2 words) InertSubchannelMethod { subch: 5, method: 256, value: 1 }; first words: 2001a040 00000000
+CHECK inert_subchannel_method_refused_by_name PASS Err(Ring(Rewrite { gp: 1, why: InertSubchannelMethod { subch: 5, method: 256, value: 1 } }))
+CHECK resources_released PASS Ok(()) Some("ring 0xff00000000 released: cpu unmapped, view ok unmap ok free ok") | Ok(()) Some("ring 0xff00100000 released: cpu unmapped, view ok unmap ok free ok")
+GR_TIER_VERDICT=PASS
+ORACLE_RC=0
+XID_AFTER=5
+[81771.651232] NVRM: Xid (PCI:0000:01:00): 31, pid=646496, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+[81774.685234] NVRM: Xid (PCI:0000:01:00): 31, pid=646496, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+[81804.206323] NVRM: Xid (PCI:0000:01:00): 31, pid=647347, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+NVIDIA GeForce RTX 4070, 595.91.07, P5, 39, Enabled
+GNOME_SHELL=2
+NATIVE_GR_TIER_EXIT 2026-10-07T20:26:52+02:00

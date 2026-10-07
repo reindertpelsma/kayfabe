@@ -2491,3 +2491,74 @@ list) that sets `KF3_SW_RUNLIST_HOST_OWNED=1`. Same binary as run45 (452848f6).
   then fetches any work is recorded (run45: Windows never gave it a GP_PUT).
 - *Prediction:* the TDRs and the 0x116 do not stop, because the first GR channel still dies at the
   ruling-4 software method.
+
+### Run46 result (task B, flag on): the submits are answered, Windows takes a different course, and a third GR channel dies first; bugcheck 0x116 earlier
+
+Product/QEMU 065447edefea76da11cce226511df475448fa080 (code = 452848f6), `kf3-bins/065447ed`, flags as
+run45 plus `KF3_SW_RUNLIST_HOST_OWNED=1` (recorded in [command](run46-command.json)); started
+2026-10-07 18:27 UTC. [trace](run46-qemu.log.gz), [requests](run46-requests.log),
+[gates, replay checks, oracle and build](run46-gates-build.txt) (9/9, 11/11 USER births, GR tier PASS,
+Xid 5 before and after; [oracle log](gr-tier-native-run46.log)), [controller error](run46-controller-error.txt),
+[unit journal](run46-failure-journal.txt), [bugcheck header](run46-bugcheck.json),
+[Windows events](run46-evtx.txt), [host after](run46-host-after.txt). Host afterwards: no QEMU, NBD
+disconnected, display enabled, P8, Xid 5 (unchanged).
+
+**Measured (run46 at 065447ed, 2026-10-07):**
+- *B-answer: supported.* Six `SW-RUNLIST HOST-OWNED 0x20801111 … NV_OK, request echoed` answers; the
+  control is no longer refused (`abort_point.py`: rpcs=1129, teardown_at=717, last `fn76/c3700104`
+  result 0).
+- *B-run:* every Translated BORN line says `scheduled_at_birth=true`. The second GR channel
+  (c1d00024, token 0xd) still receives no GP_PUT before the end.
+- **Windows takes a different course:** after the answered submits it creates a new client set
+  (c1d00025, whose server-context-only PDE copy names its level at `phys=0xea41c000`) and a THIRD
+  kernel GR channel (c1d00027:ff04000c, token 0xe, its own TSG, GR tier). Its first segment (GP 0,
+  10 words) starts directly with two 3D report-semaphore writes on subchannel 0 —
+  `200406c0 1 20244000 1 10000004` and `200406c0 1 20244010 1 00000004` — with NO `SET_OBJECT` on
+  that channel; the rewriter refuses it `NoCeObject { subch: 0, method: 0x1B00 }` (subchannel 0 has no
+  bound class in that ring) and the channel dies. (Its `D` words would also be refused by batch 3:
+  `FLUSH_DISABLE` is set, and the second asks for `STRUCTURE_SIZE_FOUR_WORDS`.) The first GR channel
+  (token 0x3) ran only GP 0 this time, so the ruling-4 software method was not reached.
+- The guest agent never became ready: **bugcheck 0x116** with different parameters
+  (`0xffffb58455460050`, `0xfffff80769184930`, `0xffffffffc000009a` = STATUS_INSUFFICIENT_RESOURCES,
+  `0x4`); no status sample, no display event in the System log.
+
+**Falsifier outcomes.** *B-answer: supported. B-run:* the gate opens; no second-GR-channel work was
+measured. *Prediction* (no TDR stop): held, but the cause measured in run46 is the third GR channel's
+unbound subchannel, not the software method.
+
+**Inferred, not tested.** A channel whose first work uses subchannel 0 without a `SET_OBJECT` relies
+on a binding it did not push: the plausible source is the GR context it was promoted with (the FE's
+subchannel-to-class state is part of the context image Windows initialised), which kayfabe's per-ring
+rewriter cannot see. Not pursued: it only appears on the path that option (b) opens, which the owner
+has not approved.
+
+## Stop: owner decisions are needed (2026-10-07, after run46)
+
+Runs 44-46 used 3 of this loop's 8 runs. Host healthy after each (Xid 5 unchanged).
+
+**A (done, verified).** Root cause of run43's empty VA space: the walk kernel treated a VIDMEM PDE
+whose address is 0 as "no sub-table"; Windows moves a kernel VA space's shift-29 level to FB 0
+(measured `phys=0x0` in runs 44-46). Fixed per OGKM (`gmmu_trace.c:111-134`, `mmu_trace.h:32`),
+VER2 and VER3 alike; kf-gate9 replay per format plus known-positive, CUDA-suite case, GPU-free
+fixture tests. The copy channel now lives (1356 GP entries in run44/45) and **the adapter reads
+ConfigManagerErrorCode 0 with `nvidia-smi` exit 0 at the first status samples (runs 44 and 45) — not
+a pass**: bugcheck 0x116 follows within ~1 min.
+
+**GR batch 3 (done, native-validated):** the 3D report-semaphore release (run45: no death there).
+
+**Decision 1 — the software method on the inert subchannel (blocks without B).** Windows' kernel GR
+channel, after each 3D release and its host ACQUIRE, writes method `0x200` = `0x4000000N` (N = 2, 3,
+5, 6, 8, 9: steps with the release payloads) on software subchannel 5, bound to the non-class value 1
+(run44 words above). Ruling §S GR item 4 says refuse it by name; the refusal kills the channel and
+leads to TDR → 0x116 (runs 44-45). No public layout or handler is known for it. Options: (i) keep
+refusing (Windows cannot pass); (ii) accept the bind's later methods silently with no effect (the
+same "inferred hardware behaviour" class as the bind itself; never touches the host or the GPU);
+(iii) treat them as a software method the host-side RM would service, which needs a semantics we do
+not have. (ii) is the only one implementable now.
+
+**Decision 2 — B, the software-runlist submit (`0x20801111`).** Option (b) is implemented, default off
+(`KF3_SW_RUNLIST_HOST_OWNED`, AWAITING OWNER CONFIRMATION). With it, Windows takes a further path whose
+third GR channel uses an unbound subchannel 0 (inferred: bound by its promoted context image), and
+0x116 comes earlier with STATUS_INSUFFICIENT_RESOURCES. (a)/(b)/(c) remain the owner's call.
+
+No privileged verb, emulated channel or fault handling was used or is proposed.

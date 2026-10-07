@@ -1,0 +1,1 @@
+/var/lib/kf-windows-20261005/boundary-kayfabe-46/qemu.log	rpcs=1129	teardown_at=717	last=fn76/c3700104 	result=0x0

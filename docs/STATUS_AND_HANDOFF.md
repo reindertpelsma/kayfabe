@@ -11,6 +11,20 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-07
 
+**Runs 44-46, 2026-10-07 (branch `claude/code43-mem-20261007`; answers the next paragraph's "memory
+plane, next measurement").** Run43's empty VA space was a walk-kernel bug: a VIDMEM PDE with address
+0 was skipped as "no sub-table", and Windows moves a kernel VA space's shift-29 level to FB 0
+(measured `phys=0x0`). Fixed per OGKM (`gmmu_trace.c:111-134`, `mmu_trace.h:32`; VER2 and VER3), with a
+kf-gate9 replay per format, a CUDA-suite case and fixture tests (the VER2 fixtures' `big_pde(0)` was a
+present table at FB 0). The kernel copy channel now lives, and **in runs 44-45 the adapter reads
+Code 0 and `nvidia-smi` exits 0 at the first status samples, then bugchecks 0x116** (no pass claimed).
+GR-tier batch 3 (the 3D report-semaphore release, native-validated) moved the GR death to the ruling-4
+software method on subchannel 5 (run45, as predicted). Task B (software-runlist submit as host-owned
+scheduling, `KF3_SW_RUNLIST_HOST_OWNED`, default off, AWAITING OWNER CONFIRMATION) ran once (run46):
+answered, Windows takes a further path and a third GR channel dies on an unbound subchannel; 0x116
+earlier. **Stopped for two owner decisions** (the inert-subchannel software method `0x200`; B).
+[Runs 44-46 and the stop](../traces/windows_code43_walls_20261007/README.md#stop-owner-decisions-are-needed-2026-10-07-after-run46).
+
 **Runs 38-43, 2026-10-07 (branch `claude/code43-stubs-20261007`; answers the next paragraph's
 "stopped for an owner decision" on the 13 queries, under the coordinator's relay of the owner's §S
 statement).** A bisect (runs 38-41) found the minimal set: `0x2081010d` alone moves StartDevice past
