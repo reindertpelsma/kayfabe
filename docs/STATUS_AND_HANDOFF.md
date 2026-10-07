@@ -7,7 +7,7 @@ without any chat history. Decisions live in `docs/OWNER_RULINGS.md`; per-topic d
 named below. ⊘ When this file and a design doc disagree, the design doc's dated STATUS wins — then fix
 this file.
 
-## 0. Where work paused (2026-09-27, ~00:05 CEST) — resume here
+## 0. Current resumption (2026-09-28) — start here
 
 - **2026-09-28 owner decisions:** 535/545 capability extension approved, subject to the independent
   audit and exact-revision merge bar; **b3 patched host nvidia-uvm selected, full native host CUDA
@@ -23,6 +23,23 @@ this file.
   from this workspace on 2026-09-28. Prepare the protocol locally; do not label a Vast KVM VM as a
   non-nested host. No physical-host session or display was changed. Paguro's retained Windows VM
   on instance `53076605` is running and reserved for the separate Paguro chat.
+- **Allowlist audit complete:** full 550–610 before/after policy comparison plus compiler-derived
+  checks for all 16 admitted controls from the previously unchecked shared groups. Both the
+  pre-change golden and the two header fixtures were independently regenerated on the trusted
+  development host with byte-identical results. Final merge bar at `61c49f14` is in progress;
+  see `traces/capability_535_545_audit_20260928/README.md` for exact revisions and limitations.
+- **Doorbell work is mechanism evidence, not production acceleration:** the GPU-free KVM probe
+  verifies token-matched ioeventfd and unmatched MMIO fallback on a read-only memslot. No timers
+  or intentional batching delay; initially accelerate passthrough only, retaining the existing
+  translated/emulated ordering and real-GPU completion paths. See `design/V3_DOORBELL_BASELINE.md`.
+- **UVM next:** finish the checked registration/lifetime proof described in
+  `design/V3_UVM_B3_IMPLEMENTATION.md`, then build the bounded host-only experiment. No b3 patch
+  has been loaded. In particular, a UVM channel-memory reference alone does not prevent hardware
+  state from being detached and freed; delayed userspace replies need explicit invalidation.
+- **Boxes:** `53080587` (GTX 1660 SUPER) was retired after rechecking all 493 saved evidence
+  hashes and its recovered source tree. Retained: `53004208` (RTX 3060, current verification and
+  next Kayfabe tests) and `53076605` (Paguro Windows). No new rentals. Combined listed rate is
+  approximately $0.5203/hour before additional fees; preserve evidence before any retirement.
 - **Historical pause notes below are superseded by this resumption.** mc21 was promoted to
   `8ab92bf4`; older "awaiting promotion", "all boxes being destroyed", and open-choice lines below
   describe earlier points in the campaign, not current actions.
@@ -81,7 +98,16 @@ new bar; this is not a current-run test claim.
 | Hardware boundary | every hardware constant pinned to ogkm headers by 43 GPU-free tests; generator `tools/derive_hwref.sh` | `design/V3_HW_BOUNDARY_INVENTORY.md` |
 | Pre-v3 tree | archived under `archive/`; 16 `kayfabe-*` crates kept only because the 30-arm grader uses them | `archive/README.md` |
 
-## 2. Branches with work not on master (as of this writing)
+## 2. Remaining work and historical branches
+
+The recovery inventory linked in §0 is authoritative for the unmerged Claude/Turing work.
+Do not restart completed investigations from the historical table below. The current scoped
+candidate is `codex/allowlist-535-545-audit`; its policy extension is approved and independently
+audited, not held for an unanswered owner decision. The 30-commit Claude line and recovered Turing
+line remain separately preserved and need integration/testing; their old results are not a
+combined-head certification. CDP child execution and display step 1 remain substantive follow-ups.
+
+Historical branch table from the earlier pause:
 
 | Branch | What it is | State / what it needs |
 |---|---|---|
@@ -95,16 +121,16 @@ new bar; this is not a current-run test claim.
 
 ### 3.1 The 535/545 capability allowlist (`a50265f8` on `v3-drivers`) — approved
 
-The owner approved the scoped extension and the recommended audit/test work. Independently check
-the shared groups not covered by the header sweep and compare the full resolved 550+ policies,
-including names/IDs and rule/deny behavior, rather than only equal entry counts. Merge only after
-the exact candidate passes the normal bar. `ee35ca4a` below older references was a pre-rebase name.
+The owner approved the scoped extension and the recommended audit/test work. The shared groups
+not covered by the original header sweep have now been checked; the full resolved 550+ policies,
+including names/IDs and rule/deny behavior, match the pre-change baseline. Merge only after
+the exact candidate passes the normal bar. `ee35ca4a` in older references was a pre-rebase name.
 
 Ports nvproxy's v535_104_05 / v545_23_06 capability rows so those guests get a capability surface
 instead of a realize refusal. Existing tables are unchanged (pinned by test). Review points: every
 withheld entry is also measured absent from that version's headers; `NVC36F_CTRL_GET_CLASS_ENGINEID` is
-allowed at 535/545 (as at 550); several shared-floor rows (`NV00FD`, `NV9096`, `NV906F`, `NV208F`,
-`NV90E6`, conf-compute, semaphore surface) come from nvproxy alone. Full table:
+allowed at 535/545 (as at 550); the shared-floor rows (`NV00FD`, `NV9096`, `NV906F`, `NV208F`,
+`NV90E6`, conf-compute, semaphore surface) now also have exact-tag NVIDIA compiler evidence. Full table:
 `design/V3_DRIVER_MATRIX.md` §8.2 ruling 5.
 
 ### 3.2 UVM demand paging — route and next experiment

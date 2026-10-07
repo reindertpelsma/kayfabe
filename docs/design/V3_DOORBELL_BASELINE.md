@@ -41,6 +41,10 @@ rewriter, real GPU submissions, fence-based retirement and wake/requeue protocol
 this experiment does not replace them. Kernel channels are explicitly forbidden from the
 emulated route (`kf_core::channel::Submission::kernel_channels_are_never_emulated`). Therefore
 "translated and emulated are both kernel traffic" is not the routing rule.
+More precisely, current kf3 creates **no `Emulated` channels**: the generic route/state-machine
+tests exercise it, but `kf-qemu/src/device.rs:run_emulated` is empty and `forge_completion`
+explicitly refuses because no such channel exists. Do not describe that generic route as an
+implemented, hardware-verified production backend. Existing register/GSP emulation is separate.
 
 High-frequency application submissions make passthrough the first target. Lower translated trap
 volume is a workload hypothesis, not a guarantee: allocations, scrubbing, migration and future
