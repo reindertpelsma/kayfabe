@@ -1419,7 +1419,8 @@ impl ChanPlane {
         let lce = host_ce - kf_abi::submit::ENGINE_TYPE_COPY0;
         completions.also(rm, kf_host::event::notifier_ce(lce))?;
         // ★ GR tier: a kernel-GR ring's fence tail NSI wakes FIFO_EVENT_MTHD, and NOT the GR0
-        // notifier (measured 2026-10-07 by `kf-gr-tier`, `completion_edges`), so nothing is added.
+        // notifier (measured 2026-10-07 by `kf-gr-tier` at 01870988, `completion_edges`:
+        // `traces/windows_code43_walls_20261007/gr-tier-native-run32.log`), so nothing is added.
         eprintln!(
             "kf3: channel plane: Translated rings on host COPY{lce} (engine {host_ce:#x}); completions on FIFO_EVENT_MTHD + CE{lce}"
         );

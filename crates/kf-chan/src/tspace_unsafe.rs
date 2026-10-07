@@ -490,6 +490,28 @@ pub fn put_host_sem_execute(
     Ok(())
 }
 
+/// ★ GR tier (batch 2): emit a 40-bit ADDRESS register pair — `upper` (`ADDRESS_UPPER` 7:0) then
+/// `upper + 4` (`ADDRESS_LOWER` 31:0) on `sub` — from a window address validated for at least
+/// `need` bytes. Refused unless it fits, is 4-byte aligned and lies below 2^40.
+///
+/// # Errors
+/// [`PerimeterRefusal::Sem40`] or [`PerimeterRefusal::Footprint`].
+pub fn put_gr_address(
+    out: &mut Vec<u32>,
+    sub: u32,
+    upper: u32,
+    a: WindowAddr,
+    need: u64,
+) -> Result<(), PerimeterRefusal> {
+    if a.addr >= VA_LIMIT_40 || a.addr & 3 != 0 {
+        return Err(PerimeterRefusal::Sem40 { va: a.addr });
+    }
+    fits("gr address", need, a)?;
+    put(out, sub, upper, ((a.addr >> 32) as u32) & 0xFF);
+    put(out, sub, upper + 4, (a.addr & 0xFFFF_FFFF) as u32);
+    Ok(())
+}
+
 /// `NV906F_SEMAPHOREA` … `_D` (`ogkm-580: src/common/sdk/nvidia/inc/class/cl906f.h:78-81`).
 const HOST_SEMAPHORE_A: u32 = 0x10;
 const HOST_SEMAPHORE_B: u32 = 0x14;

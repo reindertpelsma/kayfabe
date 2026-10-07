@@ -248,6 +248,18 @@ pub enum Ir {
     Launch(Box<CeLaunch>),
     /// A host semaphore operation.
     HostSem(HostSem),
+    /// ★ GR tier (batch 2): an ADDRESS register pair on a graphics subchannel — the guest VA the
+    /// engine may write `bytes` at, resolved at bind and emitted by the perimeter.
+    GrAddress {
+        /// The subchannel.
+        sub: u32,
+        /// The upper register's method.
+        upper: u32,
+        /// The guest VA.
+        va: u64,
+        /// The bytes the engine may write there.
+        bytes: u64,
+    },
     /// The guest invalidated a VA space here (a split; `None` = `PDB_ALL`).
     Invalidate {
         /// The named root.
@@ -297,6 +309,8 @@ pub struct TState {
     pub inert_binds: u64,
     /// GR-tier methods re-authored over the channel's life (for the log).
     pub gr_methods: u64,
+    /// ★ GR tier (batch 2): each GR subchannel's last `ADDRESS_UPPER` (held until its lower word).
+    pub gr_addr_hi: [u32; 4],
 }
 
 /// ★ Owner rulings 2026-10-07 (`OWNER_RULINGS.md` §S, items 1-4): what a Translated channel's
@@ -304,7 +318,7 @@ pub struct TState {
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct GrConfig {
     /// The ring is on the GRAPHICS runlist and its host channel holds a host object of each class
-    /// in [`crate::grtables::GrClass::ALL`]: `SET_OBJECT` of such a class on subchannel 0-3 binds
+    /// the tier admits ([`crate::grtables::GrClass`]): `SET_OBJECT` of such a class on subchannel 0-3 binds
     /// it, and that subchannel's methods are re-authored from [`crate::grtables`].
     pub tier: bool,
     /// A `SET_OBJECT` on a software subchannel (5-7) of a value no family lists as a class is
@@ -560,7 +574,24 @@ fn gr_write(
                 what,
             })?;
             st.gr_methods += 1;
-            words_ir(out, &[(sub, row.method, word)]);
+            match row.field {
+                crate::grtables::Field::AddressUpper8 => {
+                    // Held: emitted (as a window address) with its lower word.
+                    if let Some(h) = st.gr_addr_hi.get_mut(sub as usize) {
+                        *h = word;
+                    }
+                }
+                crate::grtables::Field::AddressLower32 { upper, bytes } => {
+                    let hi = st.gr_addr_hi.get(sub as usize).copied().unwrap_or(0);
+                    out.push(Ir::GrAddress {
+                        sub,
+                        upper,
+                        va: (u64::from(hi) << 32) | u64::from(word),
+                        bytes,
+                    });
+                }
+                _ => words_ir(out, &[(sub, row.method, word)]),
+            }
             Ok(())
         }
     }
@@ -610,9 +641,7 @@ fn host(
                     what: "SET_OBJECT beyond NVCLASS (15:0)",
                 });
             }
-            if st.gr.tier
-                && let Some(gc) = crate::grtables::GrClass::of_class(class)
-            {
+            if st.gr.tier && crate::grtables::GrClass::of_class(class).is_some() {
                 // ★ GR tier: a graphics object on a GR hardware subchannel. Subchannel 4 is the
                 // GR runlist's fixed copy-engine subchannel (`NVA06F_SUBCHANNEL_COPY_ENGINE`,
                 // `cla06fsubch.h`), 5-7 are software: neither may hold one.
@@ -620,10 +649,14 @@ fn host(
                     .gr_subch
                     .get_mut(sub as usize)
                     .ok_or(Refusal::GrSubchannel { subch: sub, class })?;
-                *slot = gc.id();
-                // ★ Authored: the class alone. The host ring holds a host object of it, allocated
-                // at birth from the fixed allowlist (never from this word).
-                words_ir(out, &[(sub, 0, gc.id())]);
+                // ★ Authored: the class alone. The host ring must hold a host object of it,
+                // allocated at birth from the allowlist (never from this word); its router refuses
+                // a class it holds none of.
+                *slot = class;
+                if let Some(h) = st.gr_addr_hi.get_mut(sub as usize) {
+                    *h = 0;
+                }
+                words_ir(out, &[(sub, 0, class)]);
                 return Ok(());
             }
             if st.gr.inert_sw_subch
@@ -1049,6 +1082,19 @@ pub fn bind(ir: &Ir, rows: &dyn Rows, w: &TWindows, out: &mut Vec<u32>) -> Resul
             Ok(0)
         }
         Ir::Invalidate { .. } => Ok(0),
+        Ir::GrAddress {
+            sub,
+            upper,
+            va,
+            bytes,
+        } => {
+            // ★ Validated as a guest VA of this channel's space (one writable row), inside the
+            // VM's windows, then emitted only by the perimeter.
+            let a = sema_addr(*va, *bytes, true, false, rows, w)?;
+            crate::tspace_unsafe::put_gr_address(out, *sub, *upper, a, *bytes)
+                .map_err(perimeter)?;
+            Ok(0)
+        }
         Ir::HostSem(h) => {
             bind_host_sem(h, rows, w, out)?;
             Ok(0)

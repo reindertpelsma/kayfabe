@@ -2,17 +2,19 @@
 //! ★★★ **Native oracle for the kernel-GR tier** (owner rulings 2026-10-07, `OWNER_RULINGS.md` §S:
 //! "native first", before any Windows run). Bare metal, no QEMU, no guest.
 //!
-//! The harness plays a guest kernel's GR channel exactly as Windows drove it in run31: its GPFIFO,
+//! The harness plays a guest kernel's GR channel exactly as Windows drove it in run32: its GPFIFO,
 //! pushbuffer, semaphore and USERD live in the store at the guest's kernel VAs (`0x1_2023_0000`,
-//! so the segment's own `SEM_ADDR` words, `0x1_2023_b000`, are used unchanged). The words are run31's
-//! logged 32, then a semaphore release. It checks, on the real GPU:
+//! so the segment's own `SEM_ADDR` and notifier words, `0x1_2023_b000` and `0x1_2023_b3a0`, are
+//! used unchanged). GP 0 is run32's whole 46-word segment, GP 1 a semaphore release. It checks, on
+//! the real GPU:
 //!
-//! - the host channel is born USER and the tier's assertion admits it; host objects of
-//!   `FERMI_TWOD_A` and `KEPLER_INLINE_TO_MEMORY_B` exist on it;
+//! - the host channel is born USER and the tier's assertion admits it; host objects of the
+//!   family's 2D, inline-to-memory and 3D classes (from kf-chip's generated sets) exist on it;
 //! - T-mode re-authors the segment and the ENGINE completes it: the guest semaphore is written
 //!   natively, the guest's `GP_GET` is written by the engine (the CPU store count stays 0);
 //! - which host events wake on that completion (`FIFO_EVENT_MTHD` and GR0, measured separately);
-//! - a hostile entry (`LOAD_MME_INSTRUCTION_RAM`) is refused by name and not retired;
+//! - a hostile entry (a 3D notifier address no placement row covers) is refused by name at bind
+//!   and not retired;
 //! - run31's CE segment (software subchannel 5 bound to 1) completes on a CE T-mode ring with the
 //!   inert-bind rule, and a later software method on subchannel 5 is refused by name;
 //! - everything is released (channel, ring object, mapping, CPU view).
@@ -84,6 +86,24 @@ const RUN31_GR: [u32; 32] = [
     1,
     0,
     1,
+];
+/// Run32's GR segment's last 14 words (46 in all): CE on 4, the 3D and compute objects on 0 and 1
+/// with their notifier address, software subchannel 5 bound to 1.
+const RUN32_GR_TAIL: [u32; 14] = [
+    0x2001_8000,
+    0x0000_c7b5,
+    0x2001_0000,
+    0x0000_c997,
+    0x2002_0041,
+    0x0000_0001,
+    0x2023_b3a0,
+    0x2001_2000,
+    0x0000_c9c0,
+    0x2002_2041,
+    0x0000_0001,
+    0x2023_b3a0,
+    0x2001_a000,
+    0x0000_0001,
 ];
 /// Run31's CE segment (c1d00013:ff040000, GP 0), all 7 words.
 const RUN31_CE: [u32; 7] = [
@@ -320,10 +340,13 @@ fn run(l: &mut Checks) -> Result<(), String> {
         off: CHAN,
         gp_get_cpu_stores: Cell::new(0),
     };
+    // GP 0: run32's whole 46-word segment, unchanged (it releases nothing: GP_GET is its
+    // completion). GP 1: a semaphore release. GP 2 (hostile): a 3D notifier address no row covers.
     let mut gp0 = RUN31_GR.to_vec();
-    gp0.extend(release(P1));
-    let gp1 = m(3, 0x0118, &[0]); // NV902D_LOAD_MME_INSTRUCTION_RAM — hostile
-    stage(&walk, CHAN, VA_CHAN, &[&gp0, &gp1])?;
+    gp0.extend_from_slice(&RUN32_GR_TAIL);
+    let gp1 = release(P1);
+    let gp2 = m(0, 0x0104, &[0x5, 0]);
+    stage(&walk, CHAN, VA_CHAN, &[&gp0, &gp1, &gp2])?;
     walk.write_store(CHAN + SEM_GR, &0u32.to_le_bytes())
         .map_err(|e| e.to_string())?;
 
@@ -347,7 +370,16 @@ fn run(l: &mut Checks) -> Result<(), String> {
         .unwrap_or_default();
     l.check(
         "gr_tier_objects_allocated",
-        classes == [0x902d, 0xa140],
+        {
+            use kf_chan::grtables::GrClass as G;
+            classes.iter().map(|&c| G::of_class(c)).collect::<Vec<_>>()
+                == [
+                    Some(G::TwoD),
+                    Some(G::InlineToMemory),
+                    Some(G::ThreeD),
+                    Some(G::Compute),
+                ]
+        },
         format!("{objects:x?} context={:x?}", host.gr_context()),
     );
     let gp_get_at = win
@@ -372,7 +404,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let idle35 = ready_within(done.event_fd(), 200)?;
     let idle_gr0 = ready_within(gr0.as_fd(), 200)?;
 
-    put(&walk, CHAN, 1)?;
+    put(&walk, CHAN, 2)?;
     let t0 = std::time::Instant::now();
     let pump = |chan: &mut TranslatedChannel, g: &Guest| {
         chan.pump(
@@ -395,7 +427,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         ),
     );
     let deadline = t0 + std::time::Duration::from_secs(3);
-    while !(state == Pumped::Caught && chan.last_gp_get() == Some(1))
+    while !(state == Pumped::Caught && chan.last_gp_get() == Some(2))
         && std::time::Instant::now() < deadline
     {
         let _ = ready_within(gr0.as_fd(), 100)?;
@@ -412,8 +444,12 @@ fn run(l: &mut Checks) -> Result<(), String> {
     );
     l.check(
         "gr_segment_reauthored",
-        chan.gr_counts().0 == 17,
-        format!("gr_methods={}", chan.gr_counts().0),
+        chan.gr_counts().0 == 21 && chan.gr_counts().1 == 1,
+        format!(
+            "gr_methods={} inert_binds={}",
+            chan.gr_counts().0,
+            chan.gr_counts().1
+        ),
     );
     let sem = word(&walk, CHAN + SEM_GR)?;
     l.check(
@@ -424,7 +460,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let gp_get = word(&walk, CHAN + USERD + kf_abi::submit::USERD_GP_GET)?;
     l.check(
         "gp_get_written_by_engine",
-        gp_get == 1 && g.gp_get_cpu_stores.get() == 0 && chan.gpu_gp_get() == (true, 1),
+        gp_get == 2 && g.gp_get_cpu_stores.get() == 0 && chan.gpu_gp_get().0,
         format!(
             "guest GP_GET={gp_get} cpu_stores={} engine={:?}",
             g.gp_get_cpu_stores.get(),
@@ -440,22 +476,26 @@ fn run(l: &mut Checks) -> Result<(), String> {
         format!("fifo_event_mthd={woke35} gr0={woke_gr0}"),
     );
 
-    // Hostile: GP 1 must be refused by name, and GP_GET must not move.
-    put(&walk, CHAN, 2)?;
+    // Hostile: GP 2 must be refused by name at bind, and GP_GET must not move.
+    put(&walk, CHAN, 3)?;
     let r = pump(&mut chan, &g);
     let named = matches!(
         &r,
-        Err(kf_chan::host::ChanError::Ring(RingRefusal::Rewrite {
-            gp: 1,
-            why: Refusal::GrMethod { method: 0x118, name, .. }
-        })) if name.contains("LOAD_MME")
+        Err(kf_chan::host::ChanError::Bind(Refusal::VirtualUnresolved {
+            va: 0x5_0000_0000,
+            ..
+        }))
     );
-    l.check("hostile_mme_refused_by_name", named, format!("{r:?}"));
+    l.check(
+        "hostile_notifier_address_refused_by_name",
+        named,
+        format!("{r:?}"),
+    );
     std::thread::sleep(std::time::Duration::from_millis(50));
     let gp_get = word(&walk, CHAN + USERD + kf_abi::submit::USERD_GP_GET)?;
     l.check(
         "hostile_entry_not_retired",
-        gp_get == 1,
+        gp_get == 2,
         format!("guest GP_GET={gp_get}"),
     );
 

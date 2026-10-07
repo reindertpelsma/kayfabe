@@ -3045,9 +3045,11 @@ impl HostOps for Device {
     fn run_translated(&self, host_token: u32, _up_to_seq: u64) -> bool {
         let r = self.chans.serve(host_token);
         // ★ GR tier (owner requirement 2026-10-07): the host's non-stall event woke this pump
-        // (`FIFO_EVENT_MTHD`, measured: GR0's notifier does not fire for the ring's NSI), and the
-        // pump found entries the ENGINE retired — its GP_GET and the guest's semaphores are already
-        // in guest memory. Relay it to the guest's GR0 vector, here on the worker, never a vCPU.
+        // (`FIFO_EVENT_MTHD`; measured at 01870988, `gr-tier-native-run32.log`: GR0's notifier does
+        // not fire for the ring's NSI), and the pump found entries the ENGINE retired — its GP_GET
+        // and the guest's semaphores are already in guest memory. Relay it to the guest's GR0
+        // vector, here on the worker, never a vCPU. ⊘ The relay itself is NOT yet measured: no
+        // run has retired GR-tier work in a guest (run32's GR segment was refused).
         if let Some((v, name, n, rings)) = self.chans.take_gr_relay() {
             self.latch_and_deliver(v);
             // Bounded: the first 16 relays, then each power of two.

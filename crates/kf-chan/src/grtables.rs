@@ -11,7 +11,9 @@
 //! - a row admits ONE method and names the field rule its argument must satisfy; the word emitted is
 //!   rebuilt from the decoded fields, never the guest's word copied;
 //! - the rows are exactly the methods a run has OBSERVED and the native oracle has validated on
-//!   bare metal (ruling 3). A method no row admits is refused BY NAME and kills only that channel:
+//!   bare metal (ruling 3): the 17 2D rows by `kf-gr-tier` at 01870988
+//!   (`traces/windows_code43_walls_20261007/gr-tier-native-run32.log`), the 3D/compute notifier rows
+//!   by the batch-2 oracle log named in that README. A method no row admits is refused BY NAME and kills only that channel:
 //!   privileged state, address registers and triggers under their class-header names
 //!   ([`TWOD_REFUSED`]), everything else as "not in the allowlist".
 //!
@@ -24,10 +26,10 @@
 //! later, its address register must go through the T-mode address perimeter
 //! ([`crate::tspace_unsafe`]) like a CE operand, with a footprint bound — never a row here.
 
-/// `FERMI_TWOD_A` (`cl902d.h:27`).
-pub const FERMI_TWOD_A: u32 = 0x902D;
-/// `KEPLER_INLINE_TO_MEMORY_B` (`cla140.h:27`).
-pub const KEPLER_INLINE_TO_MEMORY_B: u32 = 0xA140;
+// ⊘ Audit fix 2026-10-07 (BLOCKER 2): no class id is written here. Every id comes from kf-chip's
+// generated per-family sets (`kf_chip::classes`): `twod`, `inline_to_memory` (Blackwell's is its
+// own, 0xCD40), `threed`, `compute`. The 2D method table below is `cl902d.h`'s layout; a test pins
+// that every family's generated 2D set is exactly the class that header defines.
 
 /// A graphics class the GR tier knows a table for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -36,37 +38,50 @@ pub enum GrClass {
     TwoD,
     /// `KEPLER_INLINE_TO_MEMORY_B`.
     InlineToMemory,
+    /// ★ Batch 2 (run32): a family's 3D class (`ADA_A` 0xC997 on Ada), any family kf-chip lists.
+    ThreeD,
+    /// ★ Batch 2 (run32): a family's compute class (`ADA_COMPUTE_A` 0xC9C0 on Ada).
+    Compute,
 }
 
 impl GrClass {
-    /// Every class the tier has a table for.
-    pub const ALL: [GrClass; 2] = [GrClass::TwoD, GrClass::InlineToMemory];
+    /// The kinds a GR-tier ring holds a host object of, allocated at admission, each on its own.
+    /// (Compute is the ring's own GR-context object.)
+    pub const ALLOCATED: [GrClass; 3] = [GrClass::TwoD, GrClass::InlineToMemory, GrClass::ThreeD];
 
-    /// The tier's class for `class`, or `None`.
+    /// The tier's class for `class` — its kind in ANY family's generated set — or `None`.
     #[must_use]
-    pub const fn of_class(class: u32) -> Option<GrClass> {
-        match class {
-            FERMI_TWOD_A => Some(GrClass::TwoD),
-            KEPLER_INLINE_TO_MEMORY_B => Some(GrClass::InlineToMemory),
-            _ => None,
-        }
+    pub fn of_class(class: u32) -> Option<GrClass> {
+        kf_chip::Family::ALL.iter().find_map(|f| {
+            match kf_chip::classes::classes_for(*f).kind_of(class)? {
+                kf_chip::classes::Kind::TwoD => Some(GrClass::TwoD),
+                kf_chip::classes::Kind::InlineToMemory => Some(GrClass::InlineToMemory),
+                kf_chip::classes::Kind::ThreeD => Some(GrClass::ThreeD),
+                kf_chip::classes::Kind::Compute => Some(GrClass::Compute),
+                _ => None,
+            }
+        })
     }
 
-    /// The class id.
+    /// The kf-chip kind.
     #[must_use]
-    pub const fn id(self) -> u32 {
+    pub const fn kind(self) -> kf_chip::classes::Kind {
         match self {
-            GrClass::TwoD => FERMI_TWOD_A,
-            GrClass::InlineToMemory => KEPLER_INLINE_TO_MEMORY_B,
+            GrClass::TwoD => kf_chip::classes::Kind::TwoD,
+            GrClass::InlineToMemory => kf_chip::classes::Kind::InlineToMemory,
+            GrClass::ThreeD => kf_chip::classes::Kind::ThreeD,
+            GrClass::Compute => kf_chip::classes::Kind::Compute,
         }
     }
 
-    /// The class-header name.
+    /// What the kind is called in a refusal.
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
-            GrClass::TwoD => "FERMI_TWOD_A",
-            GrClass::InlineToMemory => "KEPLER_INLINE_TO_MEMORY_B",
+            GrClass::TwoD => "the 2D class",
+            GrClass::InlineToMemory => "the inline-to-memory class",
+            GrClass::ThreeD => "the 3D class",
+            GrClass::Compute => "the compute class",
         }
     }
 }
@@ -80,7 +95,47 @@ pub enum Field {
     OneOf(&'static [u32]),
     /// `V` 31:0: the whole word is the one named field (a coordinate or a fixed-point scale).
     Word,
+    /// ★ An ADDRESS register's upper bits (`ADDRESS_UPPER` 7:0) — held, never emitted as written.
+    AddressUpper8,
+    /// ★ The same address's lower word (`ADDRESS_LOWER` 31:0): the decoder pairs it with the upper
+    /// bits into a guest VA of `bytes` written bytes, which the binder resolves through the
+    /// placement rows into a window address and the address perimeter emits.
+    AddressLower32 {
+        /// The upper register's method.
+        upper: u32,
+        /// The bytes the engine may write there.
+        bytes: u64,
+    },
 }
+
+/// `NV*97/C0_SET_NOTIFY_A/B` and `NOTIFY` (`ogkm-580.65.06: clc997.h:41-50`; the compute layout
+/// from `clc7c0.h:41-50`, because OGKM's `clc9c0.h` names only the class id, line 27 — INFERRED to
+/// be unchanged for `ADA_COMPUTE_A`, as it is for every compute class header OGKM does carry).
+/// A `NOTIFY` writes one 16-byte `NvNotification` there; NOTIFY itself is not admitted.
+const NOTIFY_BYTES: u64 = 16;
+
+/// ★ Batch 2 (run32): the 3D and compute classes, admitted: exactly the two methods Windows'
+/// kernel GR channel sent on each — the notifier address, validated and re-authored.
+pub const NOTIFY_ALLOWED: [Row; 2] = [
+    row(0x0104, "SET_NOTIFY_A", Field::AddressUpper8),
+    row(
+        0x0108,
+        "SET_NOTIFY_B",
+        Field::AddressLower32 {
+            upper: 0x0104,
+            bytes: NOTIFY_BYTES,
+        },
+    ),
+];
+
+/// ★ 3D/compute methods refused under their names (`clc997.h`, `clc7c0.h`, line of the define).
+pub const NOTIFY_CLASS_REFUSED: [(u32, u32, &str); 5] = [
+    (0x010C, 0x010C, "NOTIFY (the notifier write trigger)"), // :47
+    (0x0114, 0x0120, "LOAD_MME_* (macro engine programming)"), // :55
+    (0x0124, 0x0124, "SET_MME_SHADOW_RAM_CONTROL"),
+    (0x0140, 0x0140, "PM_TRIGGER"),
+    (0x3800, 0x3FFC, "CALL_MME_MACRO / CALL_MME_DATA"),
+];
 
 /// One admitted method.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -198,10 +253,22 @@ pub fn gr_method(class: GrClass, method: u32) -> Disposition {
             {
                 return Disposition::Refused(name);
             }
-            Disposition::Refused("not in the FERMI_TWOD_A allowlist")
+            Disposition::Refused("not in the 2D (cl902d.h) allowlist")
         }
         GrClass::InlineToMemory => {
-            Disposition::Refused("not in the KEPLER_INLINE_TO_MEMORY_B allowlist (none admitted)")
+            Disposition::Refused("not in the inline-to-memory allowlist (none admitted)")
+        }
+        GrClass::ThreeD | GrClass::Compute => {
+            if let Some(r) = NOTIFY_ALLOWED.iter().find(|r| r.method == method) {
+                return Disposition::Allowed(*r);
+            }
+            if let Some(&(_, _, name)) = NOTIFY_CLASS_REFUSED
+                .iter()
+                .find(|&&(lo, hi, _)| (lo..=hi).contains(&method))
+            {
+                return Disposition::Refused(name);
+            }
+            Disposition::Refused("not in the 3D/compute allowlist")
         }
     }
 }
@@ -224,6 +291,18 @@ pub fn reauthor(r: &Row, v: u32) -> Result<u32, &'static str> {
             .find(|&x| x == v)
             .ok_or("a value the class header does not name"),
         Field::Word => Ok(u32::from_le_bytes(v.to_le_bytes())),
+        Field::AddressUpper8 => {
+            if v & !0xFF != 0 {
+                return Err("ADDRESS_UPPER beyond 7:0");
+            }
+            Ok(v)
+        }
+        Field::AddressLower32 { .. } => {
+            if v & 3 != 0 {
+                return Err("ADDRESS_LOWER below 4-byte alignment");
+            }
+            Ok(v)
+        }
     }
 }
 
@@ -305,10 +384,55 @@ mod tests {
     }
 
     #[test]
+    fn batch2_admits_only_the_notifier_address_on_3d_and_compute() {
+        assert_eq!(GrClass::of_class(0xC997), Some(GrClass::ThreeD));
+        assert_eq!(GrClass::of_class(0xC9C0), Some(GrClass::Compute));
+        assert_eq!(GrClass::of_class(0xC7B5), None);
+        for c in [GrClass::ThreeD, GrClass::Compute] {
+            for m in (0x100..0x4000u32).step_by(4) {
+                let allowed = matches!(gr_method(c, m), Disposition::Allowed(_));
+                assert_eq!(allowed, m == 0x104 || m == 0x108, "{m:#x}");
+            }
+            assert!(matches!(gr_method(c, 0x10c), Disposition::Refused(n) if n.contains("NOTIFY")));
+        }
+        assert!(reauthor(&NOTIFY_ALLOWED[0], 0x100).is_err());
+        assert!(reauthor(&NOTIFY_ALLOWED[1], 0x2023_b3a2).is_err());
+        assert_eq!(reauthor(&NOTIFY_ALLOWED[1], 0x2023_b3a0), Ok(0x2023_b3a0));
+    }
+
+    #[test]
     fn the_inert_rule_knows_engine_classes() {
         assert!(!is_known_class(1)); // NV01_ROOT_NON_PRIV, Windows' sub-5 value
         assert!(is_known_class(0xc7b5));
-        assert!(is_known_class(FERMI_TWOD_A));
-        assert!(is_known_class(KEPLER_INLINE_TO_MEMORY_B));
+        let ada = kf_chip::classes::classes_for(kf_chip::Family::Ada);
+        assert!(is_known_class(ada.twod[0]));
+        assert!(is_known_class(ada.inline_to_memory[0]));
+    }
+
+    /// The 2D table is `cl902d.h`'s layout: every family's generated 2D set must be exactly the
+    /// class that header defines (the generated `class_ids:FERMI_TWOD_A` row), and every family's
+    /// inline-to-memory class is recognised on its own (Blackwell's included).
+    #[test]
+    fn class_ids_are_derived_from_the_generated_family_sets() {
+        let header: Vec<u32> = kf_abi::generated::matrix::CLASS_IDS_FERMI_TWOD_A
+            .runs
+            .iter()
+            .filter_map(|r| r.value)
+            .filter_map(|v| u32::try_from(v).ok())
+            .collect();
+        assert!(!header.is_empty());
+        for f in kf_chip::Family::ALL {
+            let set = kf_chip::classes::classes_for(f);
+            for &c in set.twod {
+                assert!(header.contains(&c), "{f:?} 2D {c:#x}");
+                assert_eq!(GrClass::of_class(c), Some(GrClass::TwoD));
+            }
+            for &c in set.inline_to_memory {
+                assert_eq!(GrClass::of_class(c), Some(GrClass::InlineToMemory), "{f:?}");
+            }
+            for &c in set.threed {
+                assert_eq!(GrClass::of_class(c), Some(GrClass::ThreeD), "{f:?}");
+            }
+        }
     }
 }

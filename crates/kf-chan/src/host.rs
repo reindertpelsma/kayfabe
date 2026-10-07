@@ -579,7 +579,7 @@ impl HostRing {
     /// ★★★ **The kernel-GR tier's admission** (owner rulings 2026-10-07, `OWNER_RULINGS.md` §S
     /// items 1-2): on a graphics-runlist ring that owns a real GR context, assert the host channel
     /// is USER ([`kf_host::Channel::assert_user`]) — refusing otherwise — then allocate one host
-    /// object of each class in [`crate::grtables::GrClass::ALL`] that this host family lists AND
+    /// object of each family-invariant class ([`crate::grtables::GrClass::FIXED`]) and of the family 3D class that this host family lists AND
     /// host RM reports supported. The classes come from the fixed allowlist, never from guest
     /// bytes. Returns `(class, handle)` of each. On an error nothing is admitted (objects already
     /// made stay owned by the channel and are freed with it).
@@ -598,24 +598,33 @@ impl HostRing {
         let family = kf_chip::Family::from_arch(arch, imp)
             .map_err(|e| format!("GR tier REFUSED: host family: {e:?}"))?;
         let set = kf_chip::classes::classes_for(family);
+        let supported = rm.supported_class_ids();
+        // ★ Audit fix (BLOCKER 2): each kind on its own, its class from the host family's generated
+        // set (the newest one host RM supports). A kind the host cannot offer is refused LOUDLY and
+        // skipped; a guest SET_OBJECT of it then finds no host object and is refused by the router.
         let mut made = Vec::new();
-        for gc in crate::grtables::GrClass::ALL {
-            let class = gc.id();
-            let listed = set.kind_of(class).is_some_and(|k| {
-                matches!(
-                    k,
-                    kf_chip::classes::Kind::TwoD | kf_chip::classes::Kind::InlineToMemory
-                )
-            });
-            if !listed || !rm.supported_class_ids().contains(&class) {
-                return Err(format!(
-                    "GR tier REFUSED: host family {family:?} does not offer {} ({class:#06x})",
+        for gc in crate::grtables::GrClass::ALLOCATED {
+            let Some(&class) = set
+                .of_kind(gc.kind())
+                .iter()
+                .rev()
+                .find(|c| supported.contains(c))
+            else {
+                eprintln!(
+                    "kf-chan: ⊘ GR tier: host family {family:?} offers no supported {} — not admitted",
                     gc.name()
-                ));
+                );
+                continue;
+            };
+            match rm.alloc_engine_object(self.chan, class, None) {
+                Ok(h) => made.push((class, h)),
+                Err(e) => eprintln!(
+                    "kf-chan: ⊘ GR tier: {} {class:#06x} REFUSED by the host ({e:?}) — not admitted",
+                    gc.name()
+                ),
             }
-            let h = rm
-                .alloc_engine_object(self.chan, class, None)
-                .map_err(|e| format!("GR tier REFUSED: {} object: {e:?}", gc.name()))?;
+        }
+        if let Some((h, class)) = self.gr_context {
             made.push((class, h));
         }
         eprintln!(

@@ -154,12 +154,21 @@ fn hostile_gr_words_are_refused_by_name() {
         })
     );
     assert_eq!(
-        case(&[h(1, 0, 1), 0xc997]),
+        case(&[h(1, 0, 1), 0xc9b0]),
         Err(Refusal::ForeignClass {
             subch: 1,
-            class: 0xc997
+            class: 0xc9b0
         })
     );
+    // A notifier address must be 4-byte aligned, and its upper word is 7:0.
+    assert!(matches!(
+        case(&[h(0, 0, 1), 0xc997, h(0, 0x104, 2), 1, 0x2023_b3a2]),
+        Err(Refusal::GrField { method: 0x108, .. })
+    ));
+    assert!(matches!(
+        case(&[h(0, 0, 1), 0xc997, h(0, 0x104, 1), 0x100]),
+        Err(Refusal::GrField { method: 0x104, .. })
+    ));
     // Rebinding a GR subchannel to a CE class returns it to the CE path.
     let ir = case(&[h(3, 0, 1), 0xc7b5]).expect("CE rebind");
     assert_eq!(words(&ir).last(), Some(&(3, 0, 0xc7b5)));
@@ -196,4 +205,96 @@ fn run31_ce_segment_binds_subchannel_5_inertly_and_refuses_its_methods() {
             class: 0x902d
         })
     );
+}
+
+/// Run32's GR segment (c1d00015:ff040001, GP 0): its last 14 words, as logged (46 in all).
+const RUN32_GR_TAIL: [u32; 14] = [
+    0x2001_8000,
+    0x0000_c7b5,
+    0x2001_0000,
+    0x0000_c997,
+    0x2002_0041,
+    0x0000_0001,
+    0x2023_b3a0,
+    0x2001_2000,
+    0x0000_c9c0,
+    0x2002_2041,
+    0x0000_0001,
+    0x2023_b3a0,
+    0x2001_a000,
+    0x0000_0001,
+];
+
+/// One placement row: `[0x1_2020_0000, +1 MiB)` → store offset `0x10_0000`, read-write.
+struct OneRow;
+impl super::Rows for OneRow {
+    fn resolve(&self, va: u64, len: u64) -> Result<Vec<super::Span>, u64> {
+        let (lo, n) = (0x1_2020_0000u64, 0x10_0000u64);
+        if va < lo || va + len > lo + n {
+            return Err(va);
+        }
+        Ok(vec![super::Span {
+            ram: false,
+            off: 0x10_0000 + (va - lo),
+            len,
+            perm: kf_host::MapPerm::READ_WRITE,
+        }])
+    }
+    fn dma_to_file_range(&self, _: u64, _: u64) -> Option<u64> {
+        None
+    }
+}
+
+#[test]
+fn run32_gr_segment_binds_its_notifier_addresses_through_the_windows() {
+    let mut seg = RUN31_GR.to_vec();
+    seg.extend_from_slice(&RUN32_GR_TAIL);
+    assert_eq!(seg.len(), 46);
+    let mut s = st(true, true);
+    let ir = decode(&seg, is_ce, &mut s, None).expect("admitted");
+    let addrs: Vec<(u32, u64, u64)> = ir
+        .iter()
+        .filter_map(|i| match i {
+            Ir::GrAddress { sub, va, bytes, .. } => Some((*sub, *va, *bytes)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(addrs, vec![(0, 0x1_2023_b3a0, 16), (1, 0x1_2023_b3a0, 16)]);
+    assert_eq!(s.gr_subch, [0xc997, 0xc9c0, 0xa140, 0x902d]);
+    assert_eq!(s.inert_binds, 1);
+    assert_eq!(s.gr_methods, 21);
+    let w = crate::tspace_unsafe::TWindows::new(
+        (0x10_0000_0000, 0x1000_0000),
+        (0x20_0000_0000, 0x100_0000),
+        1 << 40,
+    )
+    .expect("windows");
+    let mut out = Vec::new();
+    for i in &ir {
+        super::bind(i, &OneRow, &w, &mut out).expect("bound");
+    }
+    // The notifier address emitted is the window address of the guest's row, never the VA.
+    let want = 0x10_0000_0000u64 + 0x10_0000 + (0x1_2023_b3a0 - 0x1_2020_0000);
+    let pos = out
+        .iter()
+        .position(|&x| x == method_header_inc(0, 0x104, 1).expect("header"))
+        .expect("SET_NOTIFY_A emitted");
+    assert_eq!(out[pos + 1], (want >> 32) as u32);
+    assert_eq!(
+        out[pos + 2],
+        method_header_inc(0, 0x108, 1).expect("header")
+    );
+    assert_eq!(out[pos + 3], (want & 0xFFFF_FFFF) as u32);
+    assert!(!out.contains(&0x2023_b3a0));
+    // An address no row covers is refused at bind, by name.
+    let bad = Ir::GrAddress {
+        sub: 0,
+        upper: 0x104,
+        va: 0x5_0000_0000,
+        bytes: 16,
+    };
+    assert!(matches!(
+        super::bind(&bad, &OneRow, &w, &mut Vec::new()),
+        Err(Refusal::VirtualUnresolved { .. })
+    ));
 }
