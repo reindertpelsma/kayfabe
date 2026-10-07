@@ -720,19 +720,27 @@ impl DisplayRegistry {
     /// binds the event to that object — RM's `eventInit(…, hParentClient, hSrcResource, …)` then
     /// `registerEventNotification` on it (`ogkm-580.65.06: event.c:116-120, 187-194`;
     /// `hParentClient == 0` means the allocating client, `:66-73`). That binding is what
-    /// `NV0073_CTRL_CMD_EVENT_SET_NOTIFICATION` checks. Only the two handles `hParentClient` (+0)
-    /// and `hSrcResource` (+4) of `NV0005_ALLOC_PARAMETERS` (`cl0005.h:40-47`) are read; `data` (+16,
-    /// a guest pointer) is never touched. The event's handle and client are the RPC header's.
+    /// `NV0073_CTRL_CMD_EVENT_SET_NOTIFICATION` checks.
+    ///
+    /// ★ Correction (2026-10-07, after run28): the notifier resource is the alloc's **`hParent`**,
+    /// not the guest's `hSrcResource`. RM overwrites `hSrcResource` with `hParent` before the
+    /// event is constructed (`rmapiFixupAllocParams`, `ogkm-580.65.06` and `ogkm-580.159.04`:
+    /// `src/nvidia/src/kernel/rmapi/rmapi_specific.c:71`; `ogkm-610`: same line). A GSP client
+    /// sends `hSrcResource = 0`: `NV_RM_RPC_ALLOC_EVENT` zero-fills `NV0005_ALLOC_PARAMETERS`,
+    /// sets only `hParentClient`, `hClass`, `notifyIndex` and `data = 0`, and allocates under
+    /// `hNotifierResource` (`ogkm-580.65.06: src/nvidia/inc/kernel/vgpu/rpc.h:337-356`). Run28
+    /// read `hSrcResource`, bound nothing, and refused the first NV0073 enable with
+    /// INVALID_STATE. Only `hParentClient` (+0) of `NV0005_ALLOC_PARAMETERS` (`cl0005.h:40-47`)
+    /// is read; `data` (+16, a guest pointer) is never touched. The event's handle, client and
+    /// parent are the RPC header's.
     fn on_display_event_bind(&mut self, client: u32, event: u32, parent: u32, body: &[u8]) {
         let Some(params) = crate::rmrpc::alloc_params_window(&self.driver, body) else {
             return;
         };
-        let word = |at: usize| {
-            params
-                .get(at..at + 4)
-                .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
-        };
-        let (Some(parent_client), Some(src)) = (word(0), word(4)) else {
+        let Some(parent_client) = params
+            .get(0..4)
+            .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        else {
             return;
         };
         let owner = if parent_client == 0 {
@@ -741,17 +749,10 @@ impl DisplayRegistry {
             parent_client
         };
         // ⊘ Only a same-client binding is modelled: a cross-client notifier (hParentClient naming
-        // another client) is left unbound, so its EVENT_SET_NOTIFICATION is refused.
+        // another client; RM then re-parents the event under the client, `rmapi_specific.c:73-75`)
+        // is left unbound, so its EVENT_SET_NOTIFICATION is refused.
+        let src = parent;
         if owner != client || !self.objects.contains_key(&(client, src)) {
-            // ★ 2026-10-07 (run28): diagnostic only — the two handles, never `data`. Run28's
-            // Windows NV0073 EVENT_SET_NOTIFICATION found no binding for an event allocated
-            // under the display-common object; this line says which handle disagreed.
-            if self.objects.contains_key(&(client, parent)) {
-                eprintln!(
-                    "kf-rm: display: event {client:#x}:{event:#x} under display object {parent:#x} NOT \
-                     bound: hParentClient={parent_client:#x} hSrcResource={src:#x}"
-                );
-            }
             return;
         }
         if !lock(&self.model).bind_display_event(client, src, event) {

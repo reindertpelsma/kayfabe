@@ -171,18 +171,28 @@ fn the_vfio_sequence_after_the_run24_abort_point_is_served() {
         NV_OK,
         "0x78 under the subdevice"
     );
+    // ★ Run28 correction: a GSP client sends `hSrcResource = 0` and `hParentClient` = its own
+    // client (`NV_RM_RPC_ALLOC_EVENT`, `rpc.h:337-356`); RM binds to the alloc's `hParent`
+    // (`rmapi_specific.c:71`). The guest's `hSrcResource` must not matter.
+    let mut gsp_client_params = event_params(0, 0);
+    gsp_client_params[0..4].copy_from_slice(&CLIENT.to_le_bytes());
     assert_eq!(
         status(
             &mut *c,
-            &alloc(
-                DISP_COMMON,
-                0xff06_0070,
-                0x78,
-                &event_params(DISP_COMMON, 0)
-            )
+            &alloc(DISP_COMMON, 0xff06_0070, 0x78, &gsp_client_params)
         ),
         NV_OK,
         "0x78 under NV04_DISPLAY_COMMON"
+    );
+    // A second display-common event whose `hSrcResource` names the subdevice: RM still binds it
+    // to its `hParent` (vfio-10 RPC 2559, hEvent ff1400f0, enabled for notifier 2 at 2560).
+    assert_eq!(
+        status(
+            &mut *c,
+            &alloc(DISP_COMMON, 0xff14_00f0, 0x78, &event_params(SUBDEVICE, 0))
+        ),
+        NV_OK,
+        "second 0x78 under NV04_DISPLAY_COMMON"
     );
 
     // 2b. The 23 subdevice notifier armings, in VFIO order (vfio-10 RPCs 2518-2566, all
@@ -223,7 +233,14 @@ fn the_vfio_sequence_after_the_run24_abort_point_is_served() {
     assert_eq!(
         params(
             &mut *c,
-            &control(DISP_COMMON, set, &words(&[0, 0xff06_0040, 2, 2]))
+            &control(DISP_COMMON, set, &words(&[0, 0xff14_00f0, 2, 2]))
+        ),
+        Ok(words(&[0, 0xff14_00f0, 2, 2]))
+    );
+    assert_eq!(
+        params(
+            &mut *c,
+            &control(DISP_COMMON, set, &words(&[0, 0xff06_0040, 3, 2]))
         ),
         Err(NV_ERR_INVALID_STATE)
     );

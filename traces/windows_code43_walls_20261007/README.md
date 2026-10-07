@@ -956,3 +956,37 @@ occurred before teardown. PERF_GET_POWERSTATE (VFIO 2571) was not reached.
    (2575), DP_AUXCH_CTRL (2581; refuse as not-DP?).
 4. *Needs owner rule plus real implementation, later (VFIO 3307 onwards):* FIFO_DISABLE_CHANNELS
    preempt, per §S.
+
+## Ninth repair: the display-event binding uses the alloc's hParent (run29 setup)
+
+**Cause, derived from source (no boot needed).** RM never uses the guest's `hSrcResource` for an
+event: `rmapiFixupAllocParams` overwrites it with the alloc's `hParent` before the event is
+constructed (`ogkm-580.65.06` and `ogkm-580.159.04`, `src/nvidia/src/kernel/rmapi/rmapi_specific.c:71`;
+`ogkm-610` same line). A GSP client sends `hSrcResource = 0` anyway: `NV_RM_RPC_ALLOC_EVENT`
+zero-fills `NV0005_ALLOC_PARAMETERS`, sets only `hParentClient`, `hClass`, `notifyIndex` and
+`data = 0`, and allocates under `hNotifierResource` (`ogkm-580.65.06: src/nvidia/inc/kernel/vgpu/rpc.h:337-356`).
+kayfabe read `hSrcResource`, found no display object `(c1d00002, 0)`, bound nothing, and refused
+the enable at VFIO 2558 with INVALID_STATE. *Inferred, not measured:* the observer exports
+carry no alloc params (allocs are captured as 32-byte headers), so the value Windows sent was
+not seen; the source path above says it is 0, and the RPC header's parent (ff0a0000) is in the
+run28 trace. The unrun diagnostic line from 73bec71a is removed; the fix makes it moot.
+
+**Change.** `kf_rm::display` binds an accepted `NV01_EVENT_KERNEL_CALLBACK(_EX)` alloc to the
+RPC header's `hParent` when that is a remembered display object, for `hParentClient` equal to 0
+or the allocating client (cross-client stays unbound, as before). Only `hParentClient` is read
+from the params. The batch test now sends the GSP-client shape (`hSrcResource = 0`) and a
+second event (vfio-10 2559/2560, ff1400f0, notifier 2). kf-rm 622 tests pass, Clippy new 0,
+rustfmt clean, ci_gates clean.
+
+**Not added in this batch (and why).** DFP_ASSIGN_SOR (VFIO 2575): kayfabe advertises no
+crossbar (`SYSTEM_GET_CAPS_V2` clear) and NVKMS skips the call in that case
+(`nvkms-evo.c:5603-5606`); the physical answer for a no-crossbar GPU is not in OGKM (the
+handler is GSP-only, `g_disp_objs_nvoc.c` flags 0x44), so it stays refused. `0x007302a3`
+(VFIO 2572) is in no OGKM header or NVOC export table (580.65.06, 580.159.04, 595.84, 610);
+the real GSP answered OK with 12 zero bytes in and out. Its semantics are not derivable, so it
+stays refused; if that refusal is fatal it becomes an owner item.
+
+**Falsifier, stated before run29:** the hypothesis "run28's abort was kayfabe's own
+hSrcResource misread" is wrong if `0x00730301` on ff0a0000 still returns 0x40, or if the abort
+point stays at VFIO index ≤ 2560. **Prediction:** both NV0073 enables return 0 and the abort
+moves to a later display control (0x007302a3 at 2572 is the first candidate kayfabe refuses).
