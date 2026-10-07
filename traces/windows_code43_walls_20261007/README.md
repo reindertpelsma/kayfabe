@@ -499,7 +499,7 @@ emulated. The next refusal is NV2080_CTRL_CMD_GET_RC_RECOVERY (0x2080220e,
 (see the analysis below).
 
 [Fresh watchdog recovery](run24-watchdog-recovery.log) used the audited read-only
-NBD/NTFS tool after the supervisor stopped, and cleanup was verified. The dump
+NBD/NTFS tool after the supervisor stopped, and cleanup was verified (2026-10-07). The dump
 mtime is 23 s after experiment start. The [comparison](run24-watchdog-comparison.json)
 shows all 24 assertions identical to run23 and run22. The outer NVCD is still
 one byte short, so no checksum claim is made. The raw dump remains private on
@@ -529,6 +529,17 @@ Every repair moved the abort point forward. About 50 other refusals earlier in
 each boot are tolerated, and the real GSP itself returns 24 non-OK statuses
 before this point (for example 0x20800a87 and 0x20800b05 both return 0x56).
 So a refusal is fatal only at specific StartDevice call sites.
+
+> **Correction, 2026-10-07 (batch after run24; [details](#sixth-repair-startdevice-batch-after-get_rc_recovery)).**
+> The paragraph below reads `rcEnable` at the wrong offset. From 575 on, the
+> `rpc_gsp_rm_control` header is 40 bytes and `params` starts at body offset 40
+> (`kf_abi::versions`, measured layout); offset 36 is `reserved0`, which is always zero. Read at
+> offset 40, the physical GSP answered **`rcEnable=1` (ENABLED)** at index 2515 in
+> vfio-8, vfio-9 and vfio-10 alike. Windows then sent **`SET_RC_RECOVERY(ENABLED)`**.
+> The GET request carried uninitialised stack bytes (vfio-10: `0x4da066c8`). So
+> "DISABLED, matching the VFIO reply" is false. DISABLED matches only the `_VF`
+> HAL, which is what a vGPU guest receives. The class-0x78 and
+> EVENT_SET_NOTIFICATION parts of the paragraph are correct.
 
 **VFIO at the same point.** In all three VFIO boots, GET_RC_RECOVERY is at RPC
 index 2515. The physical GSP answers with status 0 and `rcEnable=0`
@@ -563,7 +574,9 @@ source-backed support be implemented in batches instead of one wall per boot.
    BAR0 or timing difference has been needed to explain it. Not ruled out for
    later walls.
 
-**Next experiment (proposed, not implemented).** Give 0x2080220e/0x2080220d a
+**Next experiment (proposed, not implemented).** *(Superseded 2026-10-07: implemented as
+part of the [sixth repair](#sixth-repair-startdevice-batch-after-get_rc_recovery). The
+"matching the VFIO reply" reason below is wrong; see the correction above.)* Give 0x2080220e/0x2080220d a
 VM-scoped, source-backed implementation. GET reports the VM's own RC-recovery
 setting, initially DISABLED (matching the VFIO reply and the `_VF` HAL). SET
 records DISABLED and refuses ENABLED unless kayfabe implements RC recovery for
@@ -572,3 +585,50 @@ Then boot run25 and check the predicted outcome: the teardown moves past VFIO
 index 2516, and the new abort RPC is one of the forecast entries (most likely
 class 0x78 or an NV0073 control). If the abort is anywhere else, hypothesis 1
 needs revisiting.
+
+## Sixth repair: StartDevice batch after GET_RC_RECOVERY
+
+This batch takes the first forecast entries in VFIO order. Each one is answered
+from OGKM-backed semantics or refused by name. Nothing reaches the host GPU,
+and no display state or completion is invented.
+
+| VFIO index | RPC | kayfabe answer | source |
+|---|---|---|---|
+| 2515 | GET_RC_RECOVERY 0x2080220e | `rcEnable=DISABLED`, the VM's own setting | `_VF` HAL, `kernel_rc_ctrl.c:321-329` (580.65.06) |
+| 2516 | SET_RC_RECOVERY 0x2080220d | DISABLED → OK; ENABLED → 0x56; other values → 0x1f | `ctrl2080rc.h:251-269`; the `_VF` body returns OK for any value (`g_subdevice_nvoc.h:7788-7790`), so kayfabe is stricter |
+| 2517… | alloc NV01_EVENT_KERNEL_CALLBACK 0x78 (×25) | object-graph edge; params never decoded | `resource_list.h:2200-2210`, same `NV0005_ALLOC_PARAMETERS` as 0x7e |
+| 2558/2560 | NV0073 EVENT_SET_NOTIFICATION 0x00730301 | per-object action table with RM's checks (no event list, out-of-range notifier or subdevice, unbound hEvent, double enable) | `disp_objs.c:629-700`, `event_notification.c:1101-1129` |
+| 2571 | PERF_GET_POWERSTATE 0x2080205a | `AC` | `_VF` HAL, `kern_perf_ctrl.c:293-308` |
+
+Code: `kf_rm::vfguest` (new chain link), the 0x78 capability row at 580.65.06+,
+`kf_disp` display-event bindings (bounded to 64 objects × 32 events, retired on
+FREE and on GSP re-init), and re-derived display layouts
+(`tools/derive_display_layouts.sh`, which now has 5 more facts per version).
+Tests: kf-abi 558, kf-chip 71, kf-disp 119, kf-rm 621 (including
+`tests/code43_startdevice_batch.rs`, which runs the VFIO sequence through the
+whole chain), kf-qemu 101. Clippy new 0. rustfmt is clean.
+
+**What this batch does not claim.**
+- *RC recovery.* kayfabe reports DISABLED because it performs no robust-channel
+  recovery for the VM. The real GSP reported ENABLED (see the correction above),
+  and the host's own setting is PRIVILEGED (flag 0x4 of 0x40154), so an
+  unprivileged host client cannot read it. If Windows insists on
+  `SET(ENABLED)`, kayfabe refuses it, and the next decision is the owner's
+  (see below).
+- *Events.* The 0x78 registrations and the enabled NV0073 notifiers 1 and 2 are
+  bookkeeping. kayfabe posts no event for them. That is accurate as long as the
+  virtual display raises no such notifier.
+- *Unreached display controls.* SYSTEM_GET_ACTIVE (0x0073010c) and
+  NVC372 IS_MODE_POSSIBLE (0xc3720101) were already claimed by the display
+  model. They are "never-seen" in the forecast only because no boot reached them.
+
+**Left refused in this batch (each needs semantics that do not exist yet).**
+`0x007302a3` (not named in the 580.65.06 headers), DFP_ASSIGN_SOR
+`0x00731152`, DP_AUXCH_CTRL `0x00731341` (the virtual connector is DVI-D, not DP),
+PSR_GET_SR_PANEL_INFO, DP_GET_LINK_CONFIG, `0x00730282` (the real GSP returns
+0x56 here too), NV5070 IMP_SET_GET_PARAMETER, DFP_SET_ELD_AUDIO_CAPS, and the
+later perf/thermal groups.
+
+**Prediction for run25.** The teardown moves past VFIO index 2516. If Windows
+echoes the GET value, it sends SET(DISABLED), which is accepted. If it always
+sends SET(ENABLED), run25 aborts at 0x2080220d with 0x56.

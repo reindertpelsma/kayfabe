@@ -473,6 +473,13 @@ reads as `None` = \"class not in this version\" rather than \"nobody has done it
             },
             ConstReq {
                 header: NVOS_H,
+                c_name: "NV01_EVENT_KERNEL_CALLBACK",
+                rust_name: "NV01_EVENT_KERNEL_CALLBACK",
+                rust_ty: "u32",
+                doc: "`NV01_EVENT_KERNEL_CALLBACK` — the deprecated sibling of\n[`NV01_EVENT_KERNEL_CALLBACK_EX`] that the Windows kernel driver allocates during\nStartDevice (`[measured]` 2026-10-05 VFIO boots vfio-8/9/10, RTX 4070: 25 allocations right after\n`SET_RC_RECOVERY`, parents Subdevice and NV04_DISPLAY_COMMON, every one `NV_OK`).\n\n★ Same `NV0005_ALLOC_PARAMETERS` (`RS_REQUIRED`, `ogkm-580: resource_list.h:2200-2210`)\nand the same `NvP64 data` guest-kernel callback pointer, so the same boundary: no\nstruct is mirrored and the class reaches the object model as an EDGE only.",
+            },
+            ConstReq {
+                header: NVOS_H,
                 c_name: "NV01_EVENT_KERNEL_CALLBACK_EX",
                 rust_name: "NV01_EVENT_KERNEL_CALLBACK_EX",
                 rust_ty: "u32",

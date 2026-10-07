@@ -1504,9 +1504,13 @@ impl DriverAbiTable {
             //   *"its params are never read, so a hostile one is bytes we do not look
             //   at"* (`kayfabe_rmrpc::translate_alloc`) — is exactly the property wanted
             //   here, and it is the strong reading of this arm rather than the weak one.
-            classes::NV20_SUBDEVICE_0 | classes::NV01_EVENT_KERNEL_CALLBACK_EX => {
-                Some(AllocParams::NoDeclaredFacts)
-            }
+            // - `NV01_EVENT_KERNEL_CALLBACK` (2026-10-07) is the deprecated sibling with the
+            //   same `NV0005_ALLOC_PARAMETERS` and the same guest pointer, so the same
+            //   reading. Whether a version may allocate it at all is the capability gate's
+            //   question (`translate_alloc` asks it first), not this table's.
+            classes::NV20_SUBDEVICE_0
+            | classes::NV01_EVENT_KERNEL_CALLBACK_EX
+            | classes::NV01_EVENT_KERNEL_CALLBACK => Some(AllocParams::NoDeclaredFacts),
             // ★★★★★ §16.76 — `NV01_EVENT_OS_EVENT` (`0x79`), and this row is a **liveness**
             // row rather than a completeness one.
             //

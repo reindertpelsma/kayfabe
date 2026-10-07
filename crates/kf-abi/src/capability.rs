@@ -1529,6 +1529,18 @@ pub(crate) static CLASSES_FROM_570_86_15: &[ClassEntry] = &[
 ];
 
 pub(crate) static CLASSES_FROM_580_65_06: &[ClassEntry] = &[
+    // 2026-10-07 (Windows Code43 batch after run24): the Windows kernel driver's StartDevice
+    // allocates 25 of these right after SET_RC_RECOVERY ([measured] VFIO vfio-8/9/10, each
+    // NV_OK). Same NV0005_ALLOC_PARAMETERS as NV01_EVENT_KERNEL_CALLBACK_EX
+    // (OGKM580 resource_list.h:2200-2210, RS_REQUIRED, RS_ANY_PARENT); `data` is a guest-kernel
+    // callback pointer, so the params are never decoded (`AllocParams::NoDeclaredFacts`).
+    // Admission is an object-graph edge only: nothing is forwarded to the host and no event is
+    // posted for it. Measured on the 580.65.06 Windows twin only, hence this row.
+    ClassEntry {
+        class: crate::generated::classes::NV01_EVENT_KERNEL_CALLBACK,
+        name: "NV01_EVENT_KERNEL_CALLBACK",
+        origin: Origin::Mode2Rpc,
+    },
     // OGKM580 deferred_api.c:237: constructor is bounded software-object bookkeeping.
     // Admission covers that constructor only; deferred controls and queue methods must
     // obtain their own execution support and never reach host RM as raw guest bytes.
@@ -2541,9 +2553,10 @@ mod tests {
             // every boundary's class count moves by the same 18.
             // +1 on 2026-10-05: source-audited NV01_TIMER allocation bookkeeping.
             // +1 at580+ on2026-10-07: source-audited Deferred API constructor.
+            // +1 more at 580+ on 2026-10-07: NV01_EVENT_KERNEL_CALLBACK (Windows StartDevice).
             assert_eq!(
                 t.all_classes().count(),
-                *n_cls + 18 + 1 + usize::from(*a >= 580),
+                *n_cls + 18 + 1 + 2 * usize::from(*a >= 580),
                 "{label} classes"
             );
             let mut got: Vec<&str> = t
@@ -3135,7 +3148,7 @@ mod tests {
         );
         assert_eq!(
             bench().all_classes().count(),
-            94 + 18 + 1 + 1,
+            94 + 18 + 1 + 1 + 1,
             "classes at 580"
         );
         assert_eq!(bench().all_denied_controls().count(), 10, "denied controls");
@@ -3272,7 +3285,8 @@ mod tests {
         // (`kf_rm::chanlink::alloc_shape`), and are not counted by this sweep.
         // 17 → 18 on 2026-10-05: NV01_TIMER (no allocation parameters or GPU work).
         // 18 → 19 on2026-10-07: Deferred API software-object notification policy.
-        assert_eq!(seen, 19, "the port decodes nineteen classes today");
+        // 19 → 20 on 2026-10-07: NV01_EVENT_KERNEL_CALLBACK, an edge whose params are never read.
+        assert_eq!(seen, 20, "the port maps twenty classes today");
         // The sweep must really have covered a class the table refuses, or it proves
         // nothing about the table.
         assert!(

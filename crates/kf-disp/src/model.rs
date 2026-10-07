@@ -120,6 +120,12 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
     ("NVC370_CTRL_CMD_GET_LOCKPINS_CAPS", "lockpins"),
     ("NVC370_CTRL_CMD_SET_SWAPRDY_GPIO_WAR", "echo"),
     ("NVC372_CTRL_CMD_IS_MODE_POSSIBLE", "mode_possible"),
+    // ★ 2026-10-07 (Windows Code43 batch): ROUTE_TO_PHYSICAL on NV04_DISPLAY_COMMON. The Windows
+    // driver binds two NV01_EVENT_KERNEL_CALLBACK handles to its display-common object and enables
+    // notifiers 1 and 2 REPEAT ([measured] VFIO vfio-10, RPCs 2557-2560). Answered from the
+    // object's own action table, with `dispapiCtrlCmdEventSetNotification_IMPL`'s checks
+    // (`disp_objs.c:629-700`); no notifier is ever raised by this display.
+    ("NV0073_CTRL_CMD_EVENT_SET_NOTIFICATION", "event_notify"),
     // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): ROUTE_TO_PHYSICAL (`g_disp_objs_nvoc.c`, flags
     // 0x40), so it reaches us. NVKMS sends PRESERVE_HW before freeing each channel after it restored
     // the console (`nvkms-rm.c:2990-3017`): the display keeps scanning the console through the free.
@@ -170,6 +176,30 @@ pub const NOTIFIERS_HOTPLUG: u32 = 1;
 pub const EVENT_CLIENT_RM: u32 = 0x0400_0000;
 /// The most hotplug registrations remembered (NVKMS makes one per GPU it drives).
 pub const MAX_HOTPLUG_REGISTRATIONS: usize = 4;
+
+/// ★ Hostile guest: the most display objects whose bound events the model remembers
+/// ([`DisplayModel::bind_display_event`]). `[measured]` 2026-10-05 VFIO boot vfio-10: Windows binds two
+/// events to one `NV04_DISPLAY_COMMON`. Past the bound a binding is not kept and the guest's later
+/// `EVENT_SET_NOTIFICATION` for it is refused `NV_ERR_INVALID_STATE`, exactly as for an unbound one.
+pub const MAX_EVENT_OBJECTS: usize = 64;
+/// ★ Hostile guest: the most events remembered per display object.
+pub const MAX_EVENTS_PER_OBJECT: usize = 32;
+/// `NV_ERR_INVALID_STATE` — `dispapiCtrlCmdEventSetNotification_IMPL`'s answer for an object with no
+/// bound event, an unbound `hEvent`, or an enable of an already-enabled notifier.
+pub const NV_ERR_INVALID_STATE: u32 = 0x40;
+/// `NV0073_NOTIFIERS_MAXCOUNT` (`cl0073.h:37`) — the per-object action table's length. Checked
+/// against the derived constant at answer time; a layout without it refuses the control.
+const NV0073_NOTIFIERS: usize = 6;
+
+/// ★ Windows Code43 batch, 2026-10-07: one display object's bound `NV01_EVENT*` handles and its
+/// `pNotifyActions` table (`disp_objs.c:130-160`, every entry `ACTION_DISABLE` at construction).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DisplayEvents {
+    /// The `hEvent`s bound to this object (accepted allocs whose parent it is).
+    pub events: BTreeSet<u32>,
+    /// `pNotifyActions[subdevice 0][event]`.
+    pub actions: [u32; NV0073_NOTIFIERS],
+}
 
 /// ★ 3c: a live `NV01_EVENT_KERNEL_CALLBACK_EX` registration for `NV2080_NOTIFIERS_HOTPLUG` — the
 /// `(hClient, hEvent)` a hotplug `POST_EVENT` is addressed to. Retired on the FREE of the event, its
@@ -413,6 +443,10 @@ pub struct DisplayModel {
     pub pending_plug: u32,
     /// ★ 3c: the live hotplug registrations (at most [`MAX_HOTPLUG_REGISTRATIONS`]).
     pub hotplug: Vec<HotplugRegistration>,
+    /// ★ Bound events and notifier actions by display object `(client, handle)` (at most
+    /// [`MAX_EVENT_OBJECTS`]). ⊘ Bookkeeping only: this display raises no NV0073 notifier, so no
+    /// event is ever posted for these (`NV0073_CTRL_CMD_EVENT_SET_NOTIFICATION` answers).
+    pub display_events: BTreeMap<(u32, u32), DisplayEvents>,
     /// ★ `NV5070_CTRL_CMD_SET_RMFREE_FLAGS` PRESERVE_HW marks, by the display object the control
     /// named — `(client, DispObject handle)`, at most [`MAX_RMFREE_MARKS`].
     /// ⊘ CORRECTED 2026-10-03 (the review of `v3-gop-unload`): this was ONE flag for the whole model,
@@ -490,6 +524,7 @@ impl DisplayModel {
             display_sw_offered: false,
             pending_plug: 0,
             hotplug: Vec::new(),
+            display_events: BTreeMap::new(),
             rmfree_marks: BTreeSet::new(),
             rmfree_spent: BTreeSet::new(),
         }
@@ -556,6 +591,55 @@ impl DisplayModel {
     pub fn retire_all_hotplug(&mut self) -> usize {
         let n = self.hotplug.len();
         self.hotplug.clear();
+        n
+    }
+
+    /// ★ Record an ACCEPTED `GSP_RM_ALLOC` of an `NV01_EVENT*` handle `event` whose parent is the
+    /// display object `(client, parent)` — RM's `registerEventNotification` on that object
+    /// (`event.c:185-194`). Returns whether it is now remembered (bounded by [`MAX_EVENT_OBJECTS`]
+    /// and [`MAX_EVENTS_PER_OBJECT`]; a repeated handle is not added twice).
+    pub fn bind_display_event(&mut self, client: u32, parent: u32, event: u32) -> bool {
+        let key = (client, parent);
+        if !self.display_events.contains_key(&key) && self.display_events.len() >= MAX_EVENT_OBJECTS
+        {
+            return false;
+        }
+        let o = self.display_events.entry(key).or_default();
+        if o.events.contains(&event) {
+            return true;
+        }
+        if o.events.len() >= MAX_EVENTS_PER_OBJECT {
+            return false;
+        }
+        o.events.insert(event);
+        true
+    }
+
+    /// ★ An accepted FREE of `handle` under `client` (the whole client when equal): a freed event
+    /// is unbound, a freed display object loses its table with its events. Returns how many
+    /// bindings went.
+    pub fn retire_display_events(&mut self, client: u32, handle: u32) -> usize {
+        let mut gone = 0;
+        self.display_events.retain(|&(c, o), d| {
+            if c != client {
+                return true;
+            }
+            if handle == client || o == handle {
+                gone += d.events.len();
+                return false;
+            }
+            if d.events.remove(&handle) {
+                gone += 1;
+            }
+            true
+        });
+        gone
+    }
+
+    /// ★ A GSP re-init: every binding of the previous driver life is dead.
+    pub fn retire_all_display_events(&mut self) -> usize {
+        let n = self.display_events.values().map(|d| d.events.len()).sum();
+        self.display_events.clear();
         n
     }
 
@@ -1044,6 +1128,56 @@ impl DisplayModel {
                     return Err(NV_ERR_INSUFFICIENT_RESOURCES);
                 } else {
                     self.rmfree_marks.insert(at);
+                }
+                Ok(p.buf)
+            }
+            "event_notify" => {
+                // `dispapiCtrlCmdEventSetNotification_IMPL` (`ogkm-580.65.06: disp_objs.c:629-700`),
+                // in its order: no event list -> INVALID_STATE; event >= numNotifiers or
+                // subDeviceInstance >= 1 (one subdevice, `gpumgrGetSubDeviceMaxValuePlus1`) ->
+                // INVALID_ARGUMENT; SINGLE/REPEAT from a non-DISABLED state -> INVALID_STATE; an
+                // hEvent not bound to this object -> INVALID_STATE (`bindEventNotificationToSubdevice`,
+                // `event_notification.c:1101-1129`); any other action -> INVALID_ARGUMENT.
+                let p = self.view("NV0073_CTRL_EVENT_SET_NOTIFICATION_PARAMS", params)?;
+                if l.konst("NV0073_NOTIFIERS_MAXCOUNT") != Some(NV0073_NOTIFIERS as u64) {
+                    return Err(NV_ERR_NOT_SUPPORTED);
+                }
+                let (disable, single, repeat) = (
+                    k("NV0073_CTRL_EVENT_SET_NOTIFICATION_ACTION_DISABLE")?,
+                    k("NV0073_CTRL_EVENT_SET_NOTIFICATION_ACTION_SINGLE")?,
+                    k("NV0073_CTRL_EVENT_SET_NOTIFICATION_ACTION_REPEAT")?,
+                );
+                let field = |m: &str| p.get(m).ok_or(NV_ERR_INVALID_ARGUMENT);
+                let (sub, h_event, event, action) = (
+                    field("subDeviceInstance")?,
+                    field("hEvent")?,
+                    field("event")?,
+                    field("action")?,
+                );
+                let at = target.ok_or(NV_ERR_INVALID_OBJECT)?;
+                let Some(o) = self.display_events.get_mut(&at) else {
+                    return Err(NV_ERR_INVALID_STATE);
+                };
+                let Ok(event) = usize::try_from(event) else {
+                    return Err(NV_ERR_INVALID_ARGUMENT);
+                };
+                if event >= NV0073_NOTIFIERS || sub >= 1 {
+                    return Err(NV_ERR_INVALID_ARGUMENT);
+                }
+                let action32 = u32::try_from(action).map_err(|_| NV_ERR_INVALID_ARGUMENT)?;
+                if action == single || action == repeat {
+                    if u64::from(o.actions[event]) != disable {
+                        return Err(NV_ERR_INVALID_STATE);
+                    }
+                    let h = u32::try_from(h_event).map_err(|_| NV_ERR_INVALID_STATE)?;
+                    if !o.events.contains(&h) {
+                        return Err(NV_ERR_INVALID_STATE);
+                    }
+                    o.actions[event] = action32;
+                } else if action == disable {
+                    o.actions[event] = action32;
+                } else {
+                    return Err(NV_ERR_INVALID_ARGUMENT);
                 }
                 Ok(p.buf)
             }
@@ -1617,7 +1751,8 @@ mod tests {
         let m = model();
         let set = m.claimed();
         assert_eq!(set.len(), INTERNAL_CONTROLS.len() + NAMED_CONTROLS.len());
-        assert_eq!(set.len(), 41);
+        // 41 → 42 on 2026-10-07: NV0073_CTRL_CMD_EVENT_SET_NOTIFICATION (Windows StartDevice).
+        assert_eq!(set.len(), 42);
         let distinct: std::collections::BTreeSet<u32> = set.iter().copied().collect();
         assert_eq!(distinct.len(), set.len(), "no id twice");
         assert!(set.iter().all(|c| m.claims(*c)));
@@ -1805,5 +1940,139 @@ mod tests {
         assert_eq!(m.retire_hotplug(3, 31), 1, "the event's own FREE");
         assert_eq!(m.retire_all_hotplug(), MAX_HOTPLUG_REGISTRATIONS - 1);
         assert_eq!(m.hotplug_target(), None);
+    }
+
+    fn event_notify(
+        m: &mut DisplayModel,
+        at: (u32, u32),
+        sub: u32,
+        h_event: u32,
+        event: u32,
+        action: u32,
+    ) -> Result<Vec<u8>, u32> {
+        let k = cmd(m, "NV0073_CTRL_CMD_EVENT_SET_NOTIFICATION");
+        let mut q = Params::new(
+            m.layouts(),
+            "NV0073_CTRL_EVENT_SET_NOTIFICATION_PARAMS",
+            &[0; 16],
+        )
+        .expect("derived");
+        q.set("subDeviceInstance", sub.into());
+        q.set("hEvent", h_event.into());
+        q.set("event", event.into());
+        q.set("action", action.into());
+        m.control_on(at.0, at.1, k, &q.buf).expect("claimed")
+    }
+
+    /// ★ The Windows sequence (VFIO vfio-10 RPCs 2557-2560): two events bound to one display-common
+    /// object, notifiers 1 and 2 enabled REPEAT — answered NV_OK with the request's own bytes, for
+    /// both derived driver versions.
+    #[test]
+    fn windows_display_event_registration_is_answered_from_the_objects_table() {
+        for v in ["580.65.06", "580.159.04"] {
+            let mut m = DisplayModel::new(
+                &kf_chip::display::ADA,
+                vec![Monitor::default_1080p()],
+                crate::layout::for_version(v).expect("layouts"),
+            );
+            let at = (0xc1d0_0002, 0xff0a_0000);
+            assert!(m.bind_display_event(at.0, at.1, 0xff06_0070));
+            assert!(m.bind_display_event(at.0, at.1, 0xff14_00f0));
+            let r = event_notify(&mut m, at, 0, 0xff06_0070, 1, 2).expect("REPEAT on 1");
+            assert_eq!(
+                r,
+                [0u32, 0xff06_0070, 1, 2]
+                    .iter()
+                    .flat_map(|w| w.to_le_bytes())
+                    .collect::<Vec<u8>>()
+            );
+            event_notify(&mut m, at, 0, 0xff14_00f0, 2, 2).expect("REPEAT on 2");
+            assert_eq!(m.display_events[&at].actions, [0, 2, 2, 0, 0, 0], "{v}");
+        }
+    }
+
+    /// ⊘ RM's checks, in RM's order, and none of them changes the table.
+    #[test]
+    fn display_event_notification_refuses_what_rm_refuses() {
+        let mut m = model();
+        let at = (7, 0x73);
+        // No event bound to the object at all: INVALID_STATE, even for DISABLE.
+        assert_eq!(
+            event_notify(&mut m, at, 0, 0x5, 1, 0),
+            Err(NV_ERR_INVALID_STATE)
+        );
+        assert!(m.bind_display_event(7, 0x73, 0x5));
+        // Out-of-range notifier and subdevice instance.
+        assert_eq!(
+            event_notify(&mut m, at, 0, 0x5, 6, 1),
+            Err(NV_ERR_INVALID_ARGUMENT)
+        );
+        assert_eq!(
+            event_notify(&mut m, at, 0, 0x5, u32::MAX, 1),
+            Err(NV_ERR_INVALID_ARGUMENT)
+        );
+        assert_eq!(
+            event_notify(&mut m, at, 1, 0x5, 1, 1),
+            Err(NV_ERR_INVALID_ARGUMENT)
+        );
+        // An hEvent that is not bound to THIS object (another object's, or nobody's).
+        assert!(m.bind_display_event(7, 0x74, 0x6));
+        assert_eq!(
+            event_notify(&mut m, at, 0, 0x6, 1, 1),
+            Err(NV_ERR_INVALID_STATE)
+        );
+        // Unknown action.
+        assert_eq!(
+            event_notify(&mut m, at, 0, 0x5, 1, 3),
+            Err(NV_ERR_INVALID_ARGUMENT)
+        );
+        assert_eq!(m.display_events[&at].actions, [0; 6]);
+        // Enable twice: the second is INVALID_STATE; DISABLE then re-enable succeeds.
+        event_notify(&mut m, at, 0, 0x5, 1, 1).expect("SINGLE");
+        assert_eq!(
+            event_notify(&mut m, at, 0, 0x5, 1, 2),
+            Err(NV_ERR_INVALID_STATE)
+        );
+        event_notify(&mut m, at, 0, 0x5, 1, 0).expect("DISABLE");
+        event_notify(&mut m, at, 0, 0x5, 1, 2).expect("REPEAT");
+        // Without a target object the control cannot name a table.
+        let k = cmd(&m, "NV0073_CTRL_CMD_EVENT_SET_NOTIFICATION");
+        assert_eq!(m.control(k, &[0; 16]), Some(Err(NV_ERR_INVALID_OBJECT)));
+        // A wrong params size is refused before anything is read.
+        assert_eq!(
+            m.control_on(7, 0x73, k, &[0; 12]),
+            Some(Err(NV_ERR_INVALID_ARGUMENT))
+        );
+    }
+
+    /// ⊘ Bindings are bounded and retired: by the event's FREE, the object's FREE, the client's
+    /// FREE, and a GSP re-init.
+    #[test]
+    fn display_event_bindings_are_bounded_and_retired() {
+        let mut m = model();
+        for o in 0..MAX_EVENT_OBJECTS as u32 {
+            assert!(m.bind_display_event(1, 0x1000 + o, 0x10));
+        }
+        assert!(!m.bind_display_event(1, 0x9999, 0x10), "object bound");
+        for e in 1..MAX_EVENTS_PER_OBJECT as u32 {
+            assert!(m.bind_display_event(1, 0x1000, 0x10 + e));
+        }
+        assert!(!m.bind_display_event(1, 0x1000, 0xffff), "per-object bound");
+        assert!(m.bind_display_event(1, 0x1000, 0x10), "a repeat is not new");
+        assert_eq!(m.retire_display_events(1, 0x11), 1, "the event's own FREE");
+        assert_eq!(
+            m.retire_display_events(1, 0x1000),
+            MAX_EVENTS_PER_OBJECT - 1,
+            "the object's FREE takes its events"
+        );
+        assert_eq!(m.retire_display_events(2, 0x1001), 0, "another client");
+        assert_eq!(
+            m.retire_display_events(1, 1),
+            MAX_EVENT_OBJECTS - 1,
+            "the client's FREE"
+        );
+        assert!(m.bind_display_event(3, 0x73, 0x5));
+        assert_eq!(m.retire_all_display_events(), 1);
+        assert!(m.display_events.is_empty());
     }
 }

@@ -36,6 +36,7 @@ pub mod sw_runlist_probe;
 pub mod sweep;
 pub mod sysmembar;
 pub mod unserviced;
+pub mod vfguest;
 pub mod zbc;
 
 pub use hostfacts::HostFacts;
@@ -538,10 +539,13 @@ pub fn served_chain(
         )));
         chain.push(Box::new(barpde::BarPdePolicy::new(sink)));
     }
-    chain.extend::<[Box<dyn kf_gsp::CommandPolicy>; 7]>([
+    chain.extend::<[Box<dyn kf_gsp::CommandPolicy>; 8]>([
         // ★ v3-gfx: the per-VM ZBC table — claims only `0x9096xxxx` controls, answers them from
         // its own state and never forwards (`zbc.rs`).
         Box::new(zbc::ZbcPolicy::new(driver, host.zbc_table_sizes)),
+        // ★ 2026-10-07: RC-recovery GET/SET and the power source, answered per VM as the vGPU
+        // guest HAL answers them; never forwarded (`vfguest.rs`).
+        Box::new(vfguest::VfGuestPolicy::new(driver)),
         Box::new(kf_gsp::Observing(Box::new(
             faultbuffer::FaultBufferRecorder::new(driver, fault_buffer),
         ))),

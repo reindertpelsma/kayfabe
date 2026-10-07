@@ -11,6 +11,14 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-07
 
+**StartDevice batch, 2026-10-07 (corrects the next paragraph).** The VFIO
+GSP actually answered `rcEnable=ENABLED`, and Windows then sent
+`SET_RC_RECOVERY(ENABLED)`. The earlier decode read the reserved word at offset 36,
+not `params` at offset 40. The batch (`kf_rm::vfguest`, the class-0x78 edge,
+NV0073 EVENT_SET_NOTIFICATION, PERF_GET_POWERSTATE) answers as the `_VF` vGPU-guest
+HAL does: GET reports DISABLED, SET(DISABLED) is accepted and SET(ENABLED) is refused.
+Run25 tests it. [Batch and run25](../traces/windows_code43_walls_20261007/README.md#sixth-repair-startdevice-batch-after-get_rc_recovery).
+
 **Code43 cause analysis, 2026-10-07 (corrects the paragraph below).** Run24 at
 a6f84d0d births and promotes OFA0. Code43/smi9 is verified and the 24 assertions
 are unchanged. Reading the unchanged list as "the walls are not the cause" is

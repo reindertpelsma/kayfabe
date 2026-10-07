@@ -14,11 +14,17 @@ fn pre_535_extension_policies_change_only_by_the_audited_software_constructors()
     const TIMER: &str =
         "CLASS 00000004 NV01_TIMER Mode2Rpc => Listed { name: \"NV01_TIMER\", origin: Mode2Rpc }\n";
     const DEFERRED: &str = "CLASS 00005080 NV50_DEFERRED_API_CLASS Mode2Rpc => Listed { name: \"NV50_DEFERRED_API_CLASS\", origin: Mode2Rpc }\n";
+    // 2026-10-07: NV01_EVENT_KERNEL_CALLBACK at 580+ (Windows StartDevice), an edge only.
+    const KCALLBACK: &str = "CLASS 00000078 NV01_EVENT_KERNEL_CALLBACK Mode2Rpc => Listed { name: \"NV01_EVENT_KERNEL_CALLBACK\", origin: Mode2Rpc }\n";
     let current = capability_snapshot::existing_policy_snapshot();
     assert_eq!(current.matches(TIMER).count(), 8);
     assert_eq!(current.matches(DEFERRED).count(), 2);
+    assert_eq!(current.matches(KCALLBACK).count(), 2);
     assert_eq!(
-        current.replace(TIMER, "").replace(DEFERRED, ""),
+        current
+            .replace(TIMER, "")
+            .replace(DEFERRED, "")
+            .replace(KCALLBACK, ""),
         include_str!("fixtures/capability_550_610_before_535.txt")
     );
 }

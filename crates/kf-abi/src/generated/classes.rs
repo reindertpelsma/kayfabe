@@ -144,6 +144,18 @@ pub const NV2081_BINAPI: u32 = 0x2081;
 /// ogkm `src/common/sdk/nvidia/inc/nvos.h`.
 pub const NV01_EVENT_OS_EVENT: u32 = 0x79;
 
+/// `NV01_EVENT_KERNEL_CALLBACK` — the deprecated sibling of
+/// [`NV01_EVENT_KERNEL_CALLBACK_EX`] that the Windows kernel driver allocates during
+/// StartDevice (`[measured]` 2026-10-05 VFIO boots vfio-8/9/10, RTX 4070: 25 allocations right after
+/// `SET_RC_RECOVERY`, parents Subdevice and NV04_DISPLAY_COMMON, every one `NV_OK`).
+///
+/// ★ Same `NV0005_ALLOC_PARAMETERS` (`RS_REQUIRED`, `ogkm-580: resource_list.h:2200-2210`)
+/// and the same `NvP64 data` guest-kernel callback pointer, so the same boundary: no
+/// struct is mirrored and the class reaches the object model as an EDGE only.
+///
+/// ogkm `src/common/sdk/nvidia/inc/nvos.h`.
+pub const NV01_EVENT_KERNEL_CALLBACK: u32 = 0x78;
+
 /// `NV01_EVENT_KERNEL_CALLBACK_EX` — the event class the guest's own KERNEL
 /// RM allocates during adapter init (`[measured]`, the 2026-08-01 boot: it is the
 /// fourth and last class `rpcRmApiAlloc_GSP` asks for before `RmInitAdapter`

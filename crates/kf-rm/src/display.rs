@@ -174,6 +174,20 @@ fn finish(s: Settle) {
     }
 }
 
+/// Whether `class` is an `NV01_EVENT*` class: `NV01_EVENT` (`cl0005.h:35`) or one of the three
+/// kinds sharing its `NV0005_ALLOC_PARAMETERS` (`nvos.h:387-390`).
+#[must_use]
+pub fn is_event_class(class: u32) -> bool {
+    use kf_abi::generated::classes as c;
+    [
+        0x0000_0005,
+        c::NV01_EVENT_KERNEL_CALLBACK,
+        c::NV01_EVENT_OS_EVENT,
+        c::NV01_EVENT_KERNEL_CALLBACK_EX,
+    ]
+    .contains(&class)
+}
+
 /// ★ Is `class` one of the display objects the guest's kernel allocates and RPCs to us — on any
 /// family (the ids are unique across families; the capability table refuses a family's classes
 /// to another family's guest before this is asked).
@@ -597,8 +611,11 @@ impl DisplayRegistry {
         let Ok(h) = self.driver.decode_rpc_alloc(body) else {
             return;
         };
-        if h.class == kf_abi::generated::classes::NV01_EVENT_KERNEL_CALLBACK_EX {
-            self.on_event_alloc(h.client, h.handle, h.parent, body);
+        if is_event_class(h.class) {
+            if h.class == kf_abi::generated::classes::NV01_EVENT_KERNEL_CALLBACK_EX {
+                self.on_event_alloc(h.client, h.handle, h.parent, body);
+            }
+            self.on_display_event_bind(h.client, h.handle, body);
             return;
         }
         if !is_display_class(h.class) {
@@ -688,6 +705,43 @@ impl DisplayRegistry {
         );
     }
 
+    /// ★ 2026-10-07: an accepted event alloc whose NOTIFIER resource is a remembered display object
+    /// binds the event to that object — RM's `eventInit(…, hParentClient, hSrcResource, …)` then
+    /// `registerEventNotification` on it (`ogkm-580.65.06: event.c:116-120, 187-194`;
+    /// `hParentClient == 0` means the allocating client, `:66-73`). That binding is what
+    /// `NV0073_CTRL_CMD_EVENT_SET_NOTIFICATION` checks. Only the two handles `hParentClient` (+0)
+    /// and `hSrcResource` (+4) of `NV0005_ALLOC_PARAMETERS` (`cl0005.h:40-47`) are read; `data` (+16,
+    /// a guest pointer) is never touched. The event's handle and client are the RPC header's.
+    fn on_display_event_bind(&mut self, client: u32, event: u32, body: &[u8]) {
+        let Some(params) = crate::rmrpc::alloc_params_window(&self.driver, body) else {
+            return;
+        };
+        let word = |at: usize| {
+            params
+                .get(at..at + 4)
+                .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        };
+        let (Some(parent_client), Some(src)) = (word(0), word(4)) else {
+            return;
+        };
+        let owner = if parent_client == 0 {
+            client
+        } else {
+            parent_client
+        };
+        // ⊘ Only a same-client binding is modelled: a cross-client notifier (hParentClient naming
+        // another client) is left unbound, so its EVENT_SET_NOTIFICATION is refused.
+        if owner != client || !self.objects.contains_key(&(client, src)) {
+            return;
+        }
+        if !lock(&self.model).bind_display_event(client, src, event) {
+            eprintln!(
+                "kf-rm: display: event {client:#x}:{event:#x} on display object {src:#x} NOT bound \
+                 (too many bindings); its EVENT_SET_NOTIFICATION will be refused"
+            );
+        }
+    }
+
     /// The object `root` of `client` and every remembered display object below it.
     fn subtree(&self, client: u32, root: u32) -> BTreeSet<u32> {
         let mut dead = BTreeSet::from([root]);
@@ -736,6 +790,15 @@ impl DisplayRegistry {
                 eprintln!(
                     "kf-rm: display: hotplug registration retired by the FREE of {client:#x}:{object:#x}"
                 );
+            }
+            // A free of the event, of a display object (with its subtree) or of the client unbinds.
+            if object == client {
+                g.retire_display_events(client, client);
+            } else {
+                g.retire_display_events(client, object);
+                for h in &gone {
+                    g.retire_display_events(client, *h);
+                }
             }
             if object == client {
                 g.free_client(client);
@@ -807,7 +870,15 @@ impl CommandPolicy for DisplayPolicy {
             // registration of the previous life a dead pair (§40 Tier B). Observed, never answered.
             RpcFunction::SetGuestSystemInfo => {
                 if let Some(m) = &self.model {
-                    let n = lock(m).retire_all_hotplug();
+                    let (n, e) = {
+                        let mut g = lock(m);
+                        (g.retire_all_hotplug(), g.retire_all_display_events())
+                    };
+                    if e > 0 {
+                        eprintln!(
+                            "kf-rm: display: GSP re-init — {e} display event binding(s) retired"
+                        );
+                    }
                     if n > 0 {
                         eprintln!(
                             "kf-rm: display: GSP re-init — {n} hotplug registration(s) retired"
@@ -1147,7 +1218,7 @@ mod tests {
             .collect();
         assert_eq!(
             claimed.len(),
-            35 + 6,
+            36 + 6, // +1 on 2026-10-07: NV0073 EVENT_SET_NOTIFICATION
             "the NVKMS bring-up set (with the console pair, the display-SW object's query, the \
              internal hotplug state and SET_RMFREE_FLAGS) and the six internal controls"
         );

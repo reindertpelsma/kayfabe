@@ -126,7 +126,9 @@ impl ClassSet {
             nv::NV01_ROOT | nv::NV01_ROOT_CLIENT => return ObjectKind::Client,
             nv::NV01_DEVICE_0 => return ObjectKind::Device,
             nv::NV20_SUBDEVICE_0 => return ObjectKind::Subdevice,
-            nv::NV01_EVENT_KERNEL_CALLBACK_EX => return ObjectKind::Event,
+            nv::NV01_EVENT_KERNEL_CALLBACK_EX | nv::NV01_EVENT_KERNEL_CALLBACK => {
+                return ObjectKind::Event;
+            }
             nv::FERMI_VASPACE_A => return ObjectKind::VaSpace,
             nv::KEPLER_CHANNEL_GROUP_A => return ObjectKind::Tsg,
             nv::FERMI_CONTEXT_SHARE_A => return ObjectKind::CtxShare,
