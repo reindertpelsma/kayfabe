@@ -10,6 +10,7 @@ using System.Runtime.InteropServices;
 public static class KfD3D {
   [DllImport("dxgi.dll")] static extern int CreateDXGIFactory1(ref Guid riid, out IntPtr ppv);
   [DllImport("d3d12.dll")] static extern int D3D12CreateDevice(IntPtr adapter, int level, ref Guid riid, out IntPtr dev);
+  [DllImport("d3d11.dll")] static extern int D3D11CreateDevice(IntPtr adapter, int driverType, IntPtr sw, uint flags, IntPtr levels, uint nlevels, uint sdk, out IntPtr dev, out int level, out IntPtr ctx);
   [DllImport("kernel32.dll")] static extern IntPtr CreateEvent(IntPtr a, bool manual, bool init, string name);
   [DllImport("kernel32.dll")] static extern uint WaitForSingleObject(IntPtr h, uint ms);
   [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int Fn1(IntPtr self, uint a, out IntPtr p);
@@ -29,15 +30,17 @@ public static class KfD3D {
     Guid fac = new Guid("770aae78-f26f-4dba-a829-253c83d1b387"), dev = new Guid("189819f1-1db6-4b57-be54-1821339b85f7"),
          que = new Guid("0ec870a6-5d7e-4c22-8cfc-5baae07616ed"), fen = new Guid("0a753dcf-c4d8-4b91-adf6-be5a60d95a76");
     IntPtr f; int hr = CreateDXGIFactory1(ref fac, out f); P("CreateDXGIFactory1 0x" + hr.ToString("x8")); if (hr != 0) return;
-    IntPtr nv = IntPtr.Zero;
+    IntPtr nv = IntPtr.Zero, soft = IntPtr.Zero;
     for (uint i = 0; i < 8; i++) {
       IntPtr a; hr = D<Fn1>(f, 12)(f, i, out a); if (hr != 0) break;
       byte[] d = new byte[312]; D<FnDesc1>(a, 10)(a, d);
       string name = System.Text.Encoding.Unicode.GetString(d, 0, 256).Split('\0')[0]; uint ven = BitConverter.ToUInt32(d, 256);
       P("adapter " + i + " vendor 0x" + ven.ToString("x4") + " " + name + " dedicated " + (BitConverter.ToUInt64(d, 272) >> 20) + " MB");
-      if (ven == 0x10de && nv == IntPtr.Zero) nv = a; else Rel(a);
+      if (ven == 0x10de && nv == IntPtr.Zero) nv = a; else if (ven == 0x1414 && soft == IntPtr.Zero) soft = a; else Rel(a);
     }
     if (nv == IntPtr.Zero) { P("no NVIDIA adapter"); return; }
+    if (soft != IntPtr.Zero) { IntPtr sd; hr = D3D12CreateDevice(soft, 0xb000, ref dev, out sd); P("control D3D12CreateDevice(Basic Render Driver, 11_0) 0x" + hr.ToString("x8")); }
+    { IntPtr d11, c11; int lv; hr = D3D11CreateDevice(nv, 0, IntPtr.Zero, 0, IntPtr.Zero, 0, 7, out d11, out lv, out c11); P("D3D11CreateDevice(NVIDIA, hardware) 0x" + hr.ToString("x8") + " feature level 0x" + lv.ToString("x")); }
     IntPtr dv; hr = D3D12CreateDevice(nv, 0xb000, ref dev, out dv); P("D3D12CreateDevice(11_0) 0x" + hr.ToString("x8")); if (hr != 0) return;
     foreach (int type in new int[] { 0, 3 }) {
       string tn = type == 0 ? "DIRECT" : "COPY";

@@ -2770,3 +2770,55 @@ Code != 0 or an `nvidia-smi` failure appears afterwards. Prediction: uncertain; 
 failure is a method the GR allowlist does not carry (the 3D/compute binds of the user GR channel) or a
 refused-by-name deferred command (§29.3). A refusal names the next wall and goes to the owner if it
 needs a decision.
+
+### Run50 result: a D3D device on the NVIDIA adapter cannot be created (`0x8876017c`), and nothing new reaches the RM when it fails
+
+Product/QEMU `621310b3` (code `83881ecc`), flags as run47, one 330 s boot driven by hand through QGA
+(`--max-seconds 1500`, ACPI shutdown, QEMU exit 0). Probe: `scripts/bench/windows/d3d12_signal_probe.ps1`
+(it compiled first time). [Probe and `nvidia-smi` output](run50-probe-output.txt), [trace](run50-qemu.log.gz),
+[requests](run50-requests.log), [abort](run50-abort.txt), [command](run50-command.json),
+[bugcheck recovery](run50-bugcheck.json), [offline events](run50-evtx.txt), [host after](run50-host-after.txt).
+Host afterwards: no QEMU, NBD disconnected, display enabled, P8, Xid 61 (unchanged).
+
+**Measured (run50 at 621310b3, 2026-10-08):**
+- The guest runs as SYSTEM in session 0; **no interactive user session exists** (`quser`: "No User exists").
+- DXGI lists the NVIDIA adapter (vendor 0x10de, "dedicated 3748 MB") and the Basic Render Driver.
+- **`D3D12CreateDevice(NVIDIA, 11_0)` returns `0x8876017c`; `D3D11CreateDevice(NVIDIA, hardware)` returns the
+  same.** `0x8876017c` is `D3DERR_OUTOFVIDEOMEMORY` (`MAKE_D3DHRESULT(380)`; inferred decode from the D3D9
+  header, not from a log). **Control: `D3D12CreateDevice` on the Basic Render Driver returns 0**, so the probe
+  and its HRESULT handling are sound. No queue, fence or Signal was reached, so H-signal is untested.
+- Trace window of one failing call (1056 log lines): 25 RmAlloc, 25 Free, 41 RmControl; **no control and no
+  class that the pre-probe boot had not already used; no non-zero result among the traced RmAlloc/Free;**
+  one user GR channel (token `0xe`, host `0x3b`) is born, its GPU_PROMOTE_CTX satisfied, scheduled, the
+  kernel GR channel (token `0x3`) runs INITIALIZE/PROMOTE/EVICT on it (all `DONE`), and it is freed with
+  `forwarded=0`, `dead=None`. (A refused control is logged once per id, so repeats are silent; the
+  `result=none` controls are the same ones the idle boot sends.) 0 `DEAD`.
+- `nvidia-smi --query-gpu`: `memory.total`, `memory.used`, `memory.free`, `pstate`, `utilization.gpu`,
+  `power.draw` all `[N/A]`; `temperature.gpu` 0; `Win32_VideoController.AdapterRAM` 0. `nvidia-smi -q -d
+  MEMORY`: FB Total/Used/Free `N/A`; **BAR1 Total 128 MiB, Used 100 MiB, Free 28 MiB**. (The host's own
+  GPU: FB 12282 MiB, BAR1 16384 MiB.)
+- Both runs 47-50 never saw a TDR or bugcheck.
+- An ETW capture of the guest's DxgKrnl provider (2653 events) could not be decoded: the manifest is not in
+  the guest, only numeric task ids. Not pursued.
+
+**Candidate causes of the D3D failure (none tested yet; inferred only).**
+1. *FB info refused.* The guest's `FB_GET_INFO_V2` (`0x20801303`) is refused (`W349REFUSE ... encoder
+   UnmeasuredIndex { index: 1 }` = `COMPRESSION_SIZE`; `0x20801823` likewise at index 24), which would
+   explain NVML's FB `N/A` and `AdapterRAM 0`; a UMD that sees no video memory could report out-of-video-memory.
+2. *BAR1 pressure.* 28 MiB of the harness's 128 MiB BAR1 (`win_vm.sh`; the device default is 256 MiB, the host
+   GPU has 16 GiB) are free after boot.
+Falsifiers are set in each candidate's own run; the owner's per-field mapping measurement (run51) comes first
+because it tells which refused control feeds the memory fields.
+
+## Run51 setup: per-field `nvidia-smi` measurement (owner request, relayed by the coordinator)
+
+Question: which refused GSP control feeds each of `pstate`, `utilization.gpu`, `memory.used`,
+`memory.total`, with `name` as the baseline. Same binary `621310b3` and flags as run47-50, BAR1 unchanged (128
+MiB: this boot measures the current state, it does not change it). One boot by hand through QGA: for each
+field, `nvidia-smi --query-gpu=<field> --format=csv,noheader` run twice, the qemu log line numbers recorded
+before and after, and the `rpc-trace fn=76` lines (command and result) in each window listed; plus an equal
+idle window with no query as the noise baseline. A control counts as "fed by the field" only if it appears in
+both runs of that field and not in the baseline `name` windows nor in the idle windows.
+**Falsifier:** if a field's windows hold no refused control that the baseline lacks, the `[N/A]` is not a
+refused-RPC effect (then the owner's premise is wrong for that field and the cause is NVML/driver-side).
+Nothing is served in this run; the mapping goes to the owner with a per-control recommendation.
