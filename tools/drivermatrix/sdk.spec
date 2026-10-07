@@ -13,4 +13,7 @@ typedefs  nvos_params                 sdk  nvtypes.h,nvos.h                     
 macros    nv2080_engine_type          sdk  nvtypes.h,class/cl2080_notification.h                               NV2080_ENGINE_TYPE_[A-Z0-9_]+
 macros    nv2080_notifiers            sdk  nvtypes.h,class/cl2080_notification.h                               NV2080_NOTIFIERS_[A-Z0-9_]+
 macros    ctrl_limits                 sdk  nvtypes.h,ctrl/*.h,ctrl/*/*.h   (NV0000|NV0080|NV2080|NVA06F|NVA06C|NVC36F|NV90F1)_CTRL_[A-Z0-9_]*(MAX|SIZE|COUNT|INDEX)[A-Z0-9_]*
+# 2026-10-07 (Windows Code43): control ids spelled without `_CMD_`, and the enumerated values the
+# served FIFO/PERF controls compare against (`kf_rm::chanlink`, `kf_rm::vfguest`).
+macros    ctrl_values                 sdk  nvtypes.h,ctrl/*.h,ctrl/*/*.h   (NV0080_CTRL_DMA_SET_DEFAULT_VASPACE|NV0080_CTRL_FIFO_SET_CHANNEL_PROPERTIES_[A-Z0-9_]+|NV2080_CTRL_PERF_POWER_SOURCE_[A-Z0-9_]+)
 macros    intr_consts                 sdk  nvtypes.h,ctrl/ctrl2080/ctrl2080mc.h,?ctrl/ctrl2080/ctrl2080internal.h   NV2080_INTR_[A-Z0-9_]+

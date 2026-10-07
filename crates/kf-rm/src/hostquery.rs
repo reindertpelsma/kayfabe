@@ -461,6 +461,57 @@ pub fn query_gss_replay(host: &mut dyn HostControls) -> Vec<kf_abi::gssreplay::A
     out
 }
 
+/// ★ 2026-10-07 `fifo_latency` — the host's `NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE`
+/// (NON_PRIVILEGED, ROUTE_TO_PHYSICAL: the host's GSP answers it, `kf_abi::fifoctl`) on kayfabe's
+/// own host DEVICE, once per engine the device advertises (the host's `GET_ENGINES_V2` types that
+/// [`classify_engine`] keeps), with requests we author at the bench layout (the host carry moves
+/// them to the host's own). An engine the host refuses is left out, and the guest's request for it
+/// is then refused as the `_VF` body refuses an engine its table lacks.
+pub fn query_fifo_latency(host: &mut dyn HostControls) -> Vec<kf_abi::fifoctl::LatencyRow> {
+    let Some(layout) = kf_abi::fifoctl::LatencyLayout::at(kf_abi::versions::BENCH_DRIVER) else {
+        eprintln!(
+            "kf3: host facts: FIFO_GET_LATENCY_BUFFER_SIZE has no measured layout at the bench version — not served"
+        );
+        return Vec::new();
+    };
+    let types = match ask(
+        host,
+        hostfacts::NV2080_CTRL_CMD_GPU_GET_ENGINES_V2,
+        zeroed(hostfacts::GET_ENGINES_V2_PARAMS_SIZE),
+    )
+    .ok()
+    .and_then(|list| hostfacts::derive_engine_list(&list).ok())
+    {
+        Some(t) => t,
+        None => {
+            eprintln!("kf3: host facts: no host engine list — FIFO latency buffers not served");
+            return Vec::new();
+        }
+    };
+    let mut out = Vec::new();
+    for t in types.into_iter().filter(|t| classify_engine(*t).is_some()) {
+        let mut p = layout.request(t);
+        match host.device_control(layout.cmd, &mut p) {
+            Ok(()) => match layout.reply(t, &p) {
+                Some(row) => out.push(row),
+                None => eprintln!(
+                    "kf3: host facts: FIFO latency buffer for engine {t:#x}: reply names another engine — not served"
+                ),
+            },
+            Err(e) => eprintln!(
+                "kf3: host facts: FIFO latency buffer for engine {t:#x} refused by the host ({e:?}) — not served"
+            ),
+        }
+    }
+    eprintln!(
+        "kf3: host facts: FIFO latency buffers (engine, gp, pb) from the host: {:x?}",
+        out.iter()
+            .map(|r| (r.engine_id, r.gp_entries, r.pb_entries))
+            .collect::<Vec<_>>()
+    );
+    out
+}
+
 /// ★ `video_caps` — the host's `MSENC_GET_CAPS_V2` (instance 0; the id is documented ignored) and
 /// `BSP_GET_CAPS_V2` for every advertised decoder instance, asked on the host DEVICE with requests
 /// we author (`kf_abi::videocaps`). A refused one is left out (the guest's is then refused).
@@ -1688,6 +1739,7 @@ pub fn query_host_facts(
         .as_deref()
         .map(|k| query_video_caps(host, k))
         .unwrap_or_default();
+    let fifo_latency = query_fifo_latency(host);
 
     let mut refusals = Vec::new();
     macro_rules! take {
@@ -1836,6 +1888,7 @@ pub fn query_host_facts(
             perf_level_info_v2,
             gss_replay,
             video_caps,
+            fifo_latency,
         }),
         _ => Err(HostFactsRefused { refusals }),
     }

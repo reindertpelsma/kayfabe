@@ -1984,6 +1984,49 @@ impl CommandPolicy for InitTablePolicy {
                 }
             }
         }
+        // ★ 2026-10-07 (Windows run34): `NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE`, answered with
+        // the HOST's own reply for the guest's engine (asked at realize, `kf_abi::fifoctl`), the
+        // command id and layout at the GUEST's measured version. An engine the host gave no row for
+        // is refused with INVALID_ARGUMENT, as the `_VF` body refuses one its table lacks
+        // (`ogkm-580.159.04: kernel_fifo_ctrl.c:983-1008`).
+        if let Some(layout) = kf_abi::fifoctl::LatencyLayout::at(self.driver.driver_version())
+            && req.cmd == layout.cmd
+            && !kf_abi::rpc_params_are_serialized(req.rmapi_rpc_flags)
+        {
+            let ps = req.params_size as usize;
+            if cmd.payload.len() >= req.params_at + ps {
+                let mut params = cmd.payload[req.params_at..req.params_at + ps].to_vec();
+                let mut body = cmd.payload.clone();
+                return Some(
+                    match kf_abi::fifoctl::answer(&layout, &self.host.fifo_latency, &mut params) {
+                        Ok(row) => {
+                            eprintln!(
+                                "kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine {:#x}: gp={:#x} pb={:#x} (the host's answer)",
+                                row.engine_id, row.gp_entries, row.pb_entries
+                            );
+                            let st = self.driver.rm_control_wire().status_off;
+                            if let Some(w) = body.get_mut(st..st + 4) {
+                                w.copy_from_slice(&NV_OK.to_le_bytes());
+                            }
+                            body[req.params_at..req.params_at + ps].copy_from_slice(&params);
+                            Reply {
+                                rpc_result: NV_OK,
+                                body,
+                            }
+                        }
+                        Err(why) => {
+                            eprintln!(
+                                "kf3: FIFO_GET_LATENCY_BUFFER_SIZE REFUSED (INVALID_ARGUMENT): {why:?}"
+                            );
+                            Reply {
+                                rpc_result: kf_abi::fifoctl::NV_ERR_INVALID_ARGUMENT,
+                                body,
+                            }
+                        }
+                    },
+                );
+            }
+        }
         let want = WantedTable::from_cmd(req.cmd)?;
 
         // A FINN-serialized payload is not the flat struct these encoders produce. Neither

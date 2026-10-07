@@ -112,6 +112,7 @@ pub mod falconinfo;
 pub mod faultbuffer;
 pub mod fbinfo;
 pub mod fifochannels;
+pub mod fifoctl;
 pub mod fmbpromote;
 pub mod fmbsize;
 pub mod generated;

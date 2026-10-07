@@ -531,6 +531,13 @@ pub static HOST_CONTROLS: &[HostControl] = &[
         0x0080_1909,
         NV0080_CTRL_PERF_CUDA_LIMIT_CONTROL_PARAMS
     ),
+    // ★ 2026-10-07: NON_PRIVILEGED (`g_device_nvoc.c` flags 0x50048), asked at realize per
+    // advertised engine on kayfabe's own host Device (`kf_abi::fifoctl`).
+    hc!(
+        "NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE",
+        0x0080_170e,
+        NV0080_CTRL_FIFO_GET_LATENCY_BUFFER_SIZE_PARAMS
+    ),
     HostControl {
         name: "NV0080_CTRL_CMD_MSENC_GET_CAPS_V2",
         cmd: 0x0080_1b02,

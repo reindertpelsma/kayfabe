@@ -1362,3 +1362,61 @@ stops here. Ranked hypotheses (none tested):
    taken on kayfabe runs, so this is unmeasured. An MMIO/doorbell trace of the 3 ms window would
    decide it.
 4. *(Low.)* The relayed GR0 interrupt itself (vector 0, raised once) confuses the guest's ISR.
+
+## Thirteenth repair: the paging client's FIFO controls, answered for real (run34 setup)
+
+Branch `claude/code43-lat-20261007`, from `d7d4bbb5`. Hypothesis 1 of run33's list.
+
+**What the reference does (measured in vfio-10, the 2026-10-05 VFIO boot on the RTX 4070, decoded
+with the 580 control header: params at body offset 40).** Every new Windows kernel client asks `NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE`
+(`0x0080170e`) once, and some then send `NV0080_CTRL_CMD_FIFO_SET_CHANNEL_PROPERTIES` (`0x0080170f`)
+for the channel they just allocated. The real GSP answers all of them with 0:
+
+| VFIO | client | request | reply |
+|---|---|---|---|
+| 2363, 2416, 2445, 2855, 2883 | c1d00013/16/19/21/24 | `engineID 0xb` (COPY2) | `gpEntries 0x20, pbEntries 0xe00` |
+| 2382, 2897, 2937, … | c1d00015/25/28 | `engineID 0x1` (GR0) | `0x240, 0x2880` |
+| 2433, 2459, 2471, 2483, 2496, 2508 | c1d00018/1a/1b/1c/1d/1e | `0x13`, `0x26`, `0x1c`, `0x1c`, `0x33`, `0x1c` | `0x20, 0x80` each |
+| 3076, 3218, … | c1d0002c/30 | `0xc` (COPY3) | `0x20, 0xe00` |
+| 2421, 2489, **2860**, 2913 | c1d00016/1c/21/25 | `hChannel` ff040002/07/0a/0c, property 0 (`ENGINETIMESLICEINMICROSECONDS`), value 4000/4000/4000/1000 | the request echoed |
+
+kayfabe left every one unserviced (refused). The refusals before 2855 were tolerated; the paging
+client's pair (VFIO 2855 and 2860; kayfabe's c1d00020) is the last pair before the abort.
+
+**OGKM (580.159.04, identical declarations in 580.65.06 `ctrl0080fifo.h:189-307`).** Both controls
+are `ROUTE_TO_PHYSICAL` and `NON_PRIVILEGED` (`g_device_nvoc.c:640-669`, flags `0x50048` and
+`0x10248`), so a GSP client has no body for them and a host USER client may issue them. The only
+open body is the vGPU guest's `deviceCtrlCmdFifoGetLatencyBufferSize_VF`
+(`src/nvidia/src/kernel/gpu/fifo/kernel_fifo_ctrl.c:983-1008`): a table lookup by `engineID`,
+`NV_ERR_INVALID_ARGUMENT` for an engine the table lacks. `SET_CHANNEL_PROPERTIES` has no open body
+(`deviceCtrlCmdFifoSetChannelProperties_IMPL` is only declared, `g_device_nvoc.h:1105`).
+
+**Change.**
+- *Generated, not typed.* The driver matrix now measures both command ids, both params structs,
+  the property value `ENGINETIMESLICEINMICROSECONDS`, and (for the audit items below)
+  `SET/GET_RC_RECOVERY`, `RC_RECOVERY_DISABLED/ENABLED`, `PERF_GET_POWERSTATE`,
+  `PERF_POWER_SOURCE_AC` and `DMA_SET_DEFAULT_VASPACE` with their params (`tools/drivermatrix`:
+  `consumed.txt`, a `ctrl_values` line in `sdk.spec`; full 30-tag `regen.sh`). `kf_abi::fifoctl`
+  reads ids and layouts at the guest's version; `kf_abi::hostabi` lists the latency control for the
+  host carry.
+- *`0x0080170e` from a host fact.* At realize kayfabe asks the host's own
+  `FIFO_GET_LATENCY_BUFFER_SIZE` on its host Device for every engine it advertises (the host's
+  `GET_ENGINES_V2` types; NON_PRIVILEGED; the host's GSP answers). `kf_rm::inittables` answers the
+  guest with the host's row for the guest's `engineID` (the `_VF` body's lookup) and
+  `NV_ERR_INVALID_ARGUMENT` for an engine without a host row. The realize log line
+  `kf3: host facts: FIFO latency buffers` shows the host rows.
+- *`0x0080170f` as a real timeslice.* `kf_rm::chanlink` carries property 0 only, as
+  `ChanStatement::ChannelTimeslice`; `kf-qemu` resolves `hChannel` in the caller's client to its
+  owned host channel (passthrough twin or Translated ring) and applies the host's
+  `NVA06C_CTRL_CMD_SET_TIMESLICE` to that channel's own host group on the act thread (the run19
+  verb; unprivileged, nothing taken from guest bytes but the value, which host RM bounds). The reply
+  (the request echoed, as vfio-10) is held until that host act returns. The capability gate asked is
+  the host verb's (`a06c0103`); **no allowlist entry was added**. Other properties stay unserviced.
+
+**Falsifier, stated before run34.** Hypothesis 1: the abort right after the paging channel's
+`GPFIFO_SCHEDULE` (VFIO 2861) follows from the unanswered `0x0080170e`/`0x0080170f` of that client.
+It is wrong if, in run34, kayfabe's `0x0080170e` for c1d00020 returns 0 with the host's row and its
+`0x0080170f` returns 0 after a logged host `SET_TIMESLICE` on that channel's group, and the abort
+still sits at VFIO ≤ 2866 (teardown within ~5 RPCs of `GPFIFO_SCHEDULE`). **Prediction:** the
+abort moves past 2861 (vfio-10's next RPCs are subdevice perf controls `0x2080852e/30/2a` at
+2862-2864). The result will keep what is seen apart from what is inferred.

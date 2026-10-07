@@ -535,6 +535,7 @@ pub fn host_facts() -> HostFacts {
         vbios_version: Some((0x9418_0000, 0x00)),
         perf_level_info_v2: Some(perf_level_info_v2()),
         gss_replay: Vec::new(),
+        fifo_latency: Vec::new(),
         video_caps: Vec::new(),
     }
 }

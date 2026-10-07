@@ -2149,6 +2149,61 @@ impl ChanPlane {
                     }),
                 )
             }
+            // ★ 2026-10-07 (Windows run34): `SET_CHANNEL_PROPERTIES` engine timeslice on ONE guest
+            // channel — the host's `SET_TIMESLICE` on that channel's own host group (passthrough
+            // twin or Translated ring), the same unprivileged verb as the TSG arm above. Resolved
+            // in this client's namespace only; no host call or wait holds these locks.
+            ChanStatement::ChannelTimeslice {
+                client,
+                channel,
+                us,
+            } => {
+                let twin: Option<kf_host::Channel> = self
+                    .pt
+                    .lock()
+                    .ok()
+                    .and_then(|m| m.get(&(client, channel)).map(|v| v.chan));
+                let translated: Option<u32> = self
+                    .by_obj
+                    .lock()
+                    .ok()
+                    .and_then(|m| m.get(&(client, channel)).copied());
+                if twin.is_none() && translated.is_none() {
+                    return ChanAnswer::NotOurs;
+                }
+                self.defer(
+                    "channel timeslice",
+                    Box::new(move |me: &ChanPlane| {
+                        let c = twin
+                            .or_else(|| {
+                                let slot = me.slot(translated?)?;
+                                let g = slot.lock().ok()?;
+                                g.dead.is_none().then(|| g.chan.host().channel())
+                            })
+                            .ok_or_else(|| {
+                                (
+                                    NV_ERR_INVALID_STATE,
+                                    format!(
+                                        "{client:#x}:{channel:#x} SET_CHANNEL_PROPERTIES timeslice: no live owned host channel"
+                                    ),
+                                )
+                            })?;
+                        me.rm.set_timeslice(c, us).map_err(|e| {
+                            (
+                                NV_ERR_INVALID_ARGUMENT,
+                                format!(
+                                    "twin host {:#x} SET_TIMESLICE {us} (SET_CHANNEL_PROPERTIES): {e:?}",
+                                    c.token
+                                ),
+                            )
+                        })?;
+                        Ok(format!(
+                            "{client:#x}:{channel:#x} SET_CHANNEL_PROPERTIES ENGINE_TIMESLICE {us} us on host group {:#x} (twin {:#x})",
+                            c.tsg, c.token
+                        ))
+                    }),
+                )
+            }
             ChanStatement::CudaLimit {
                 client,
                 device,

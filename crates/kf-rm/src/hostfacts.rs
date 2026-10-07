@@ -156,6 +156,9 @@ pub struct HostFacts {
     /// ★ The host's `MSENC_GET_CAPS_V2` / `BSP_GET_CAPS_V2` tables for the advertised video
     /// engines (`kf_abi::videocaps`).
     pub video_caps: Vec<kf_abi::videocaps::CapsAnswer>,
+    /// ★ 2026-10-07: the host's `FIFO_GET_LATENCY_BUFFER_SIZE` answer per advertised engine
+    /// (`kf_abi::fifoctl`); an engine the host refused is absent (the guest's is then refused).
+    pub fifo_latency: Vec<kf_abi::fifoctl::LatencyRow>,
 }
 
 /// Where a fact comes from.
@@ -423,6 +426,13 @@ pub const PROVENANCE: &[(&str, Source)] = &[
         Source::HostControl {
             cmd: 0x0080_1c02,
             name: "MSENC_GET_CAPS_V2 0x801b02 / BSP_GET_CAPS_V2 0x801c02 on the host DEVICE, per advertised instance (kf_abi::videocaps)",
+        },
+    ),
+    (
+        "fifo_latency",
+        Source::HostControl {
+            cmd: 0x0080_170e,
+            name: "FIFO_GET_LATENCY_BUFFER_SIZE on the host DEVICE (NON_PRIVILEGED, routed to the host's GSP), per advertised engine (kf_abi::fifoctl)",
         },
     ),
     (

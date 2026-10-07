@@ -308,6 +308,18 @@ pub enum ChanStatement {
         /// `timesliceUs`.
         us: u64,
     },
+    /// ★ 2026-10-07 (Windows run34): `NV0080_CTRL_CMD_FIFO_SET_CHANNEL_PROPERTIES` with property
+    /// `ENGINETIMESLICEINMICROSECONDS` on ONE channel (`kf_abi::fifoctl`). The plane applies it as
+    /// the host's `NVA06C_CTRL_CMD_SET_TIMESLICE` on that channel's own host group — the same
+    /// unprivileged verb as [`ChanStatement::Timeslice`]; never forwarded, never a privileged verb.
+    ChannelTimeslice {
+        /// `hClient` (the envelope's; `hChannel` is in its namespace).
+        client: u32,
+        /// `hChannel`.
+        channel: u32,
+        /// `value` — the timeslice in µs.
+        us: u64,
+    },
     /// ★ w827: the guest Device `(client, device)` turned its CUDA limit on/off.
     CudaLimit {
         /// `hClient`.
@@ -515,6 +527,9 @@ pub struct ChannelPolicy {
     /// default (`deviceGetDefaultVASpace`, `device_share.c:322-347`). A second set on such a Device
     /// is refused as RM refuses it (`device_share.c:390-394`).
     device_vas_bound: std::collections::BTreeSet<(u32, u32)>,
+    /// ★ 2026-10-07: `SET_CHANNEL_PROPERTIES` at the guest's measured version (`None` where the
+    /// matrix has no layout for it: the control then stays unserviced, as before).
+    chan_props: Option<kf_abi::fifoctl::ChannelPropsLayout>,
     /// The deferred outcome of the command last carried (`CommandPolicy::defers`).
     pending: Option<kf_gsp::Deferred>,
     /// Statements carried.
@@ -531,6 +546,7 @@ impl ChannelPolicy {
     /// A link for one guest driver's wire.
     #[must_use]
     pub fn new(abi: DriverAbiTable, guest_os: kf_abi::GuestOs, sink: ChanSink) -> ChannelPolicy {
+        let chan_props = kf_abi::fifoctl::ChannelPropsLayout::at(abi.driver_version());
         ChannelPolicy {
             abi,
             guest_os,
@@ -545,6 +561,7 @@ impl ChannelPolicy {
             vas_aliases: Default::default(),
             vas_parents: Default::default(),
             device_vas_bound: Default::default(),
+            chan_props,
             pending: None,
             carried: 0,
             refused: 0,
@@ -929,6 +946,9 @@ impl ChannelPolicy {
         }
         if h.cmd == SET_DEFAULT_VASPACE {
             return self.set_default_vaspace(cmd, &h);
+        }
+        if self.chan_props.is_some_and(|l| l.cmd == h.cmd) {
+            return self.set_channel_properties(cmd, &h);
         }
         let Some(params) = h
             .params_at
@@ -1487,6 +1507,57 @@ impl ChannelPolicy {
         })
     }
 
+    /// ★ 2026-10-07 (Windows run34): `NV0080_CTRL_CMD_FIFO_SET_CHANNEL_PROPERTIES`. Only the
+    /// engine-timeslice property is carried ([`ChanStatement::ChannelTimeslice`]); the plane applies
+    /// it as a real `SET_TIMESLICE` on the channel's own host group and the reply is held until
+    /// that host act resolves (the `[IN]` params echoed, as vfio-10 2860 answers). The other
+    /// properties (PBDMA timeslice, timeslice disable, and the VERIF-ONLY context resets,
+    /// `ctrl0080fifo.h:219-288`) stay unserviced. ⊘ The host verb is `NVA06C_CTRL_CMD_SET_TIMESLICE`,
+    /// so this boundary's allowlist is asked for THAT control: nothing new is admitted.
+    fn set_channel_properties(
+        &mut self,
+        cmd: &RpcCommand,
+        h: &kf_abi::view::RpcControlReq,
+    ) -> Option<Reply> {
+        let layout = self.chan_props?;
+        let params = h
+            .params_at
+            .checked_add(h.params_size as usize)
+            .and_then(|e| cmd.payload.get(h.params_at..e))?;
+        let Some(p) = layout.decode(params) else {
+            return Some(Self::refusal(
+                NV_ERR_INVALID_ARGUMENT,
+                &format!(
+                    "SET_CHANNEL_PROPERTIES params are {} bytes, not {}",
+                    params.len(),
+                    layout.size
+                ),
+                cmd,
+            ));
+        };
+        if p.property != layout.engine_timeslice_us {
+            eprintln!(
+                "kf-rm: chanlink: SET_CHANNEL_PROPERTIES {:#x}:{:#x} property {:#x} is not served (only ENGINETIMESLICEINMICROSECONDS)",
+                h.client, p.channel, p.property
+            );
+            return None;
+        }
+        if !self
+            .abi
+            .capabilities()
+            .control(kf_arch::ids::ControlCmd(TSG_SET_TIMESLICE))
+            .is_permitted()
+        {
+            return None;
+        }
+        let st = ChanStatement::ChannelTimeslice {
+            client: h.client,
+            channel: p.channel,
+            us: p.value,
+        };
+        self.carry_control_statement(st, cmd, h)
+    }
+
     /// Resolve only declared Device sharing, with bounded traversal and no cross-GPU fallback.
     fn device_default_va(&self, client: u32, device: u32) -> Option<(u32, u32)> {
         use kf_abi::generated::nvos::{
@@ -1846,6 +1917,81 @@ mod tests {
             elements: 1,
             delivered: Vec::new(),
         }
+    }
+
+    fn control_on(client: u32, object: u32, ctrl: u32, params: &[u8]) -> RpcCommand {
+        let mut c = set_default(client, object, params);
+        c.payload[8..12].copy_from_slice(&ctrl.to_le_bytes());
+        c
+    }
+
+    /// ★ 2026-10-07 (Windows run34, vfio-10 RPC 2860): `SET_CHANNEL_PROPERTIES` engine timeslice is
+    /// carried as a [`ChanStatement::ChannelTimeslice`] on the named channel and answered only by
+    /// the plane's act; other properties and channels the plane does not own stay unserviced.
+    #[test]
+    fn set_channel_properties_carries_only_the_engine_timeslice() {
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+        let layout = kf_abi::fifoctl::ChannelPropsLayout::at(abi.driver_version()).unwrap();
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let s2 = seen.clone();
+        let mut link = ChannelPolicy::new(
+            abi,
+            kf_abi::GuestOs::Windows,
+            std::sync::Arc::new(move |st| {
+                let ours = matches!(st, ChanStatement::ChannelTimeslice { channel, .. } if channel == 0xff04_000a);
+                s2.lock().unwrap().push(st);
+                if ours {
+                    ChanAnswer::Done
+                } else {
+                    ChanAnswer::NotOurs
+                }
+            }),
+        );
+        let (client, dev) = (0xc1d0_0021, 0xff02_0000);
+        // The vfio-10 2860 request bytes: hChannel ff04000a, property 0, value 0xfa0.
+        let vfio = [
+            0x0a, 0x00, 0x04, 0xff, 0, 0, 0, 0, 0xa0, 0x0f, 0, 0, 0, 0, 0, 0,
+        ];
+        let ok = link
+            .respond(&control_on(client, dev, layout.cmd, &vfio))
+            .expect("carried");
+        assert_eq!(ok.rpc_result, 0);
+        assert_eq!(
+            &ok.body[40..56],
+            &vfio,
+            "the [IN] params echoed, as vfio-10 replies"
+        );
+        assert_eq!(
+            seen.lock().unwrap().last(),
+            Some(&ChanStatement::ChannelTimeslice {
+                client,
+                channel: 0xff04_000a,
+                us: 4000
+            })
+        );
+        // A channel the plane does not own: not this link's.
+        let mut other = vfio;
+        other[0] = 0x0b;
+        assert!(
+            link.respond(&control_on(client, dev, layout.cmd, &other))
+                .is_none()
+        );
+        // PBDMA timeslice (property 1): not served, nothing carried.
+        let before = seen.lock().unwrap().len();
+        let mut pbdma = vfio;
+        pbdma[4] = 1;
+        assert!(
+            link.respond(&control_on(client, dev, layout.cmd, &pbdma))
+                .is_none()
+        );
+        assert_eq!(seen.lock().unwrap().len(), before);
+        // A params block of another size is refused by name.
+        assert_eq!(
+            link.respond(&control_on(client, dev, layout.cmd, &vfio[..12]))
+                .unwrap()
+                .rpc_result,
+            0x1f
+        );
     }
 
     /// ★ 2026-10-07 (Windows run29, vfio-10 RPCs 2844-2846): RM's checks for

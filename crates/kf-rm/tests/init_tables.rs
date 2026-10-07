@@ -736,3 +736,34 @@ fn bios_get_info_v2_is_the_hosts_version_or_refused() {
         "no host version: refused as before"
     );
 }
+
+/// ★ 2026-10-07 (Windows run34): `NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE` is the HOST's row
+/// for the guest's `engineID` (`[measured vfio-10 2855]` COPY2: gp 0x20, pb 0xe00), at the
+/// guest's measured layout; an engine the host gave no row for is INVALID_ARGUMENT, as the `_VF`
+/// body refuses one its table lacks (`kernel_fifo_ctrl.c:983-1008`).
+#[test]
+fn fifo_latency_buffer_size_is_the_hosts_row_or_invalid_argument() {
+    let abi = kf_rm::abi::gsp_abi_for(kf_abi::versions::BENCH_DRIVER).expect("wire table");
+    let layout = kf_abi::fifoctl::LatencyLayout::at(kf_abi::versions::BENCH_DRIVER).unwrap();
+    let mut host = ga106::host_facts();
+    host.fifo_latency = vec![kf_abi::fifoctl::LatencyRow {
+        engine_id: 0xb,
+        gp_entries: 0x20,
+        pb_entries: 0xe00,
+    }];
+    let mut p = InitTablePolicy::new(ga106::board(), std::sync::Arc::new(host), abi.driver);
+    let ask = |engine: u32| {
+        let mut c = command(layout.cmd, layout.size);
+        c.payload[40..40 + layout.size].copy_from_slice(&layout.request(engine));
+        c
+    };
+    let r = p.respond(&ask(0xb)).expect("answered");
+    assert_eq!(r.rpc_result, 0);
+    assert_eq!(
+        &r.body[40..52],
+        &[0x0b, 0, 0, 0, 0x20, 0, 0, 0, 0x00, 0x0e, 0, 0],
+        "the vfio-10 2855 reply shape"
+    );
+    let r = p.respond(&ask(0x1)).expect("answered");
+    assert_eq!(r.rpc_result, 0x1f, "no host row for GR0 here");
+}

@@ -225,6 +225,7 @@ fn every_host_fact_states_where_it_comes_from() {
         perf_level_info_v2: _,
         gss_replay: _,
         video_caps: _,
+        fifo_latency: _,
     } = ga106::host_facts();
     let fields = [
         "family",
@@ -263,6 +264,7 @@ fn every_host_fact_states_where_it_comes_from() {
         "perf_level_info_v2",
         "gss_replay",
         "video_caps",
+        "fifo_latency",
     ];
     for f in fields {
         let n = hostfacts::PROVENANCE
