@@ -2596,7 +2596,7 @@ in the VFIO reference); `NV50_DEFERRED_API ... ADMITTED ... classID Some(1)`; th
   absent (then Windows never registered, and the handles are not what the inference says).
 - *Not falsifying, but recorded:* if the trigger runs and the channel then dies elsewhere, that is
   the next wall (H-defer holds for the method, not for the course).
-- *Abort point:* measured with `abort_point.py` against vfio-8/9/10 (4085 GSP messages); run45's was
+- *Abort point:* computed with `abort_point.py` against vfio-8/9/10 (4085 GSP messages); run45's was
   rpcs=6225, teardown_at=659, last `fn76/20801111` refused. Prediction: if the GR channel keeps
   running, Windows reaches the software-runlist submit (`0x20801111`, refused with the flag off) or
   a further wall; the 0x116 may move or may not. The adapter state and bugcheck are recorded either
@@ -2807,10 +2807,10 @@ Host afterwards: no QEMU, NBD disconnected, display enabled, P8, Xid 61 (unchang
    explain NVML's FB `N/A` and `AdapterRAM 0`; a UMD that sees no video memory could report out-of-video-memory.
 2. *BAR1 pressure.* 28 MiB of the harness's 128 MiB BAR1 (`win_vm.sh`; the device default is 256 MiB, the host
    GPU has 16 GiB) are free after boot.
-Falsifiers are set in each candidate's own run; the owner's per-field mapping measurement (run51) comes first
-because it tells which refused control feeds the memory fields.
+Falsifiers are set in each candidate's own run; the owner's per-field mapping probe (run51) comes first
+because it tells which refused control feeds the memory fields (a probe, not a repair).
 
-## Run51 setup: per-field `nvidia-smi` measurement (owner request, relayed by the coordinator)
+## Run51 setup: per-field `nvidia-smi` request probe (owner request, relayed by the coordinator)
 
 Question: which refused GSP control feeds each of `pstate`, `utilization.gpu`, `memory.used`,
 `memory.total`, with `name` as the baseline. Same binary `621310b3` and flags as run47-50, BAR1 unchanged (128
@@ -2823,7 +2823,7 @@ both runs of that field and not in the baseline `name` windows nor in the idle w
 refused-RPC effect (then the owner's premise is wrong for that field and the cause is NVML/driver-side).
 Nothing is served in this run; the mapping goes to the owner with a per-control recommendation.
 
-### Run51 result (owner question): which refused control feeds which `nvidia-smi` field — measured
+### Run51 result (owner question): which refused control feeds which `nvidia-smi` field
 
 Product/QEMU `621310b3`, flags as run47, BAR1 128 MiB (unchanged); one 5-minute boot by hand, ACPI shutdown,
 QEMU exit 0, no `DEAD`, host afterwards unchanged (Xid 61, no QEMU, NBD disconnected, P8).
@@ -2832,7 +2832,7 @@ counts before/after each query; the distinct `rpc-trace` requests, `Free` exclud
 repetitions interleaved with an idle window. [Data](run51-fields.json), [trace](run51-qemu.log.gz),
 [command](run51-command.json), [host after](run51-host-after.txt).
 
-**Measured.** An idle window of 5 s holds **0 requests** (clean noise floor). `name` (baseline) is identical in
+**Measured (run51 at 621310b3, 2026-10-08).** An idle window of 5 s holds **0 requests** (clean noise floor). `name` (baseline) is identical in
 both repetitions: 11 requests (RmAlloc 0x0000, 0x0070, 0x0073, 0x0080, 0x2080, 0x9096, 0x90f1; RmControl
 `0x00801812`, `0x20809064`, `0x90f10106` served; `0x20809004` refused). Added over the baseline, present in both
 repetitions of the field and absent in `name` and idle:
@@ -2848,7 +2848,7 @@ repetitions of the field and absent in `name` and idle:
 `rpc-trace` result column prints `none` for exactly these. Repeats of a refusal are silent, so the windows
 are read from `rpc-trace`, not from the refusal records.)
 
-**Consequences (measured, then inferred).**
+**Consequences (run51 at 621310b3: first measured, then inferred).**
 - *Measured:* `memory.used` and `memory.total` send nothing beyond what `name` sends, so **their `[N/A]` is not
   caused by a control only that query sends.** The `name` set contains one refused control, `0x20809004`
   (GSS-legacy, 1544-byte params, 39 times in the run). `FB_GET_INFO_V2` (`0x20801303`) and `BUS_GET_INFO_V2`
@@ -2870,7 +2870,7 @@ Flag words from `ogkm-580.65.06 g_subdevice_nvoc.c` (bits from `control.h:170-31
 | `0x20810108` + alloc class `0x2081` | `NV2081_BINAPI` `binapiControl_IMPL`: the export table has 0 entries, the payload is forwarded verbatim, "direction undecidable" (classification TSV) | none known | refused; the class alloc is served | **unknown semantics: do not decide**; same sources as above |
 | `0x20809004` (baseline of every query) | GSS-legacy, 1544-byte params, no header | n/a | refused `0x56` | unknown semantics; it is in the `name` baseline, so NVML tolerates the refusal |
 | `0x20801303` FB_GET_INFO_V2 | `NV2080_CTRL_CMD_FB_GET_INFO_V2` (`ctrl2080fb.h`; list of up to 0x80 index/data pairs) | `0x10118`: NON_PRIVILEGED, GPU_LOCK_DEVICE_ONLY, API_LOCK_READONLY, GSP_PLUGIN_FOR_VGPU_GSP (not ROUTE_TO_PHYSICAL) | **served truthfully for the cuInit shape** (bus width, RAM type, FBP count and mask, L2 size, LTC and LTS counts, host-derived through `kf_abi::fbinfo` / `hostquery::query_forwarded_fb_info`); any other index refuses the whole request by name | Windows asks at least `COMPRESSION_SIZE` (index 1). Strongest candidate for implementation (unprivileged, public layout, host-derivable), but the guest-visible values (total FB = the VM's `fb-mb`, not the host's 12 GiB) are a design decision: owner |
-| `0x20801823` BUS_GET_INFO_V2 | `NV2080_CTRL_CMD_BUS_GET_INFO_V2` (`ctrl2080bus.h:588`) | `0x10118`: NON_PRIVILEGED | served for the measured Linux shapes; Windows adds index 24 `PCIE_ASLM_STATUS` | same pattern as FB info: derivable, needs a per-index policy |
+| `0x20801823` BUS_GET_INFO_V2 | `NV2080_CTRL_CMD_BUS_GET_INFO_V2` (`ctrl2080bus.h:588`) | `0x10118`: NON_PRIVILEGED | served for the Linux request shapes `businfo.rs` lists (GA106 sweep rows cited there); Windows adds index 24 `PCIE_ASLM_STATUS` | same pattern as FB info: derivable, needs a per-index policy |
 
 **Falsifier outcome.** For `pstate` and `utilization.gpu` the added requests exist and are refused: the owner's
 premise holds. For `memory.used` and `memory.total` it is **falsified as a per-query effect** (no added
