@@ -2034,7 +2034,7 @@ have no public name or layout in any local OGKM tree.
 ## Bisect step 4 (run41 setup)
 
 `BISECT_STEP = [0x2081010d]` (the `NV2081` binary-API interface, `FINN_NV2081_BINAPI_INTERFACE_ID`
-`0x208101`, OGKM 580.65.06 `cl2081.h:425`; message 0x0d and its zero-byte params have no public
+`0x208101`, OGKM 580.65.06 `src/common/sdk/nvidia/inc/g_finn_rm_api.h:425`; message 0x0d and its zero-byte params have no public
 definition).
 
 **Falsifiers, stated before run41.**
