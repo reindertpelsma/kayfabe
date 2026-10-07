@@ -254,17 +254,21 @@ impl GrUnit {
             _compute: compute,
             defapi: None,
         };
-        // Bind the compute class on its hardware subchannel, so the channel has a real context
-        // before we ask it to do anything else (matches `kf_chan::host::HostRing`'s own sequence
-        // for a graphics-runlist ring).
+        // Schedule the channel onto its runlist FIRST — an unscheduled channel's PBDMA never
+        // fetches a GPFIFO entry at all, doorbell or not. (Measured 2026-10-07: submitting before
+        // scheduling just timed out with no Xid, nothing fetched — a harness bug, not a hardware
+        // refusal; fixed here.)
+        if let Err(e) = u.rm.schedule(chan) {
+            u.free();
+            return Err(format!("schedule: {e:?}"));
+        }
+        // THEN bind the compute class on its hardware subchannel, so the channel has a real
+        // context before we ask it to do anything else (matches `kf_chan::host::HostRing`'s own
+        // sequence for a graphics-runlist ring).
         let hdr = method_header_inc(SUBCH_GR, SET_OBJECT, 1).ok_or("SET_OBJECT header")?;
         if let Err(e) = u.submit(&[hdr, compute.1]) {
             u.free();
             return Err(format!("bind compute object: {e}"));
-        }
-        if let Err(e) = u.rm.schedule(chan) {
-            u.free();
-            return Err(format!("schedule: {e:?}"));
         }
         Ok(u)
     }
