@@ -2384,3 +2384,39 @@ released, Windows' scheduler times out, the reset re-creates the channel, it die
 the second failed recovery is fatal. The aliasing PD2 entry is what the hardware would also walk (the
 aperture is the validity), so mirroring it is correct by construction; why Windows points PD2[4] at
 the level is not known.
+
+## GR tier batch 3: the 3D report-semaphore release (run45 setup)
+
+Run44's wall is the GR tier's own allowlist (§S GR ruling, item 2: one class/method set at a time,
+native first). **Change (product, under the existing `KF3_KERNEL_GR_WORK` tier):**
+`kf_chan::grtables` admits `SET_REPORT_SEMAPHORE_A/B/C/D` (`0x1B00-0x1B0C`) on the 3D class:
+`A`/`B` as an address pair (`AddressUpper8` / `AddressLower32`, 4 bytes), resolved through the
+placement rows and emitted by the perimeter like the notifier; `C` the payload word; `D` re-authored
+only as a plain one-word RELEASE (`STRUCTURE_SIZE_ONE_WORD`, `REPORT_NONE`, a named
+`PIPELINE_LOCATION`, `RELEASE` 4:4 carried; operation, report, reduction, trap, awaken,
+flush-disable and every unnamed bit refused by name; `clc997.h:3913-4010`). A family row by hand:
+the offsets and every `D` field are identical in the public TURING_A, AMPERE_A/B, ADA_A and HOPPER_A
+headers (`clc597/c697/c797/c997/cb97.h`, compared 2026-10-07); BLACKWELL_A/B's headers name only the
+class id, so the rows are refused there by name. Compute and 2D keep their tables.
+- Unit tests: `D` (run44's word and named variants pass; eleven hostile variants refused); rows only
+  for the 3D class of the header families; `tmode_gr_tests` replays run44's 39-word segment: the
+  release is admitted (one `GrAddress` `0x1_2028_6060`, 4 bytes) and the segment then stops, by
+  name, at `InertSubchannelMethod { subch: 5, method: 0x200, value: 1 }` (ruling 4).
+- Native oracle (`kf-gr-tier`, before the run): GP 1 now starts with run44's release
+  (`D = 0x1000_f010`) and the oracle checks the 3D engine wrote the payload at the guest VA
+  (`3d_report_semaphore_written_by_engine`) and that 25 GR words were re-authored.
+
+**What the segment does next (read from run44's words, 2026-10-07).** After the release, a host
+semaphore ACQUIRE on the same address waits for the payload, then `0x2001a080 0x4000000N`: one
+method `0x200` on software subchannel 5, which run32's segment bound to the non-class value 1. Ruling
+4 (§S GR ruling) says: refuse every later software method on that subchannel by name. So this batch
+is predicted to move the GR channel's death by 19 words, not to remove it.
+
+**Falsifiers, stated before run45.**
+- *H-sem: the 3D release is now executed.* Supported if no GR channel dies at method `0x1B00`-`0x1B0C`
+  and the first GR death names `InertSubchannelMethod { subch: 5, method: 0x200 }`. Falsified if a GR
+  channel still dies at `0x1B00`-`0x1B0C` (a `GrField` on `D` names which field) or at its address
+  (`VirtualUnresolved`).
+- *Native:* `kf-gr-tier` PASS with the new check.
+- *Prediction:* TDR and bugcheck 0x116 recur (the channel still dies, at the software method);
+  the adapter still reads OK at the first status samples.

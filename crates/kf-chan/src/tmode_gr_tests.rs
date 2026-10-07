@@ -298,3 +298,97 @@ fn run32_gr_segment_binds_its_notifier_addresses_through_the_windows() {
         Err(Refusal::VirtualUnresolved { .. })
     ));
 }
+
+/// Run44's refused GR segment (c1d00015:ff040001, GP 1, 39 words, as logged), on a channel whose
+/// run32 segment bound 3D on 0, compute on 1, I2M on 2, 2D on 3 and software subchannel 5 to 1.
+const RUN44_GR_GP1: [u32; 39] = [
+    0x2005_0017,
+    0x2023_b2e0,
+    0x0000_0001,
+    0x0000_0002,
+    0x0000_0000,
+    0x0000_1000,
+    0x2001_4000,
+    0x0000_a140,
+    0x2004_06c0,
+    0x0000_0001,
+    0x2028_6060,
+    0x0000_0001,
+    0x1000_f010,
+    0x2005_0017,
+    0x2028_6060,
+    0x0000_0001,
+    0x0000_0001,
+    0x0000_0000,
+    0x0000_0000,
+    0x2001_a080,
+    0x4000_0002,
+    0x2004_06c0,
+    0x0000_0001,
+    0x2028_6060,
+    0x0000_0002,
+    0x1000_f010,
+    0x2005_0017,
+    0x2028_6060,
+    0x0000_0001,
+    0x0000_0002,
+    0x0000_0000,
+    0x0000_0000,
+    0x2001_a080,
+    0x4000_0003,
+    0x2004_06c0,
+    0x0000_0001,
+    0x2023_b300,
+    0x0000_0003,
+    0x1000_f010,
+];
+
+/// ★ Batch 3 (run44): the 3D report-semaphore release is admitted — address validated and emitted
+/// through the windows, `D` re-authored — and the segment's NEXT method, a software method on
+/// subchannel 5 (bound to the non-class value 1), is refused by name under ruling 4. This pins the
+/// prediction for the next run: the GR channel dies there, not at `0x1B00`.
+#[test]
+fn run44_gr_segment_admits_the_3d_report_semaphore_and_stops_at_the_software_method() {
+    let mut s = st(true, true);
+    let mut seg = RUN31_GR.to_vec();
+    seg.extend_from_slice(&RUN32_GR_TAIL);
+    decode(&seg, is_ce, &mut s, None).expect("run32 segment");
+    assert_eq!(s.gr_subch, [0xc997, 0xc9c0, 0xa140, 0x902d]);
+    let before = s.gr_methods;
+    // The first 13 words: host semaphore acquire, I2M rebind, the 3D release — admitted.
+    let ir = decode(&RUN44_GR_GP1[..13], is_ce, &mut s.clone(), None).expect("admitted");
+    let addrs: Vec<(u32, u32, u64, u64)> = ir
+        .iter()
+        .filter_map(|i| match i {
+            Ir::GrAddress {
+                sub,
+                upper,
+                va,
+                bytes,
+            } => Some((*sub, *upper, *va, *bytes)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(addrs, vec![(0, 0x1B00, 0x1_2028_6060, 4)]);
+    let w = words(&ir);
+    assert!(w.contains(&(0, 0x1B08, 1)), "payload C re-authored: {w:x?}");
+    assert!(
+        w.contains(&(0, 0x1B0C, 0x1000_f010)),
+        "trigger D re-authored: {w:x?}"
+    );
+    // The whole segment: refused at word 19, the software method on subchannel 5.
+    let r = decode(&RUN44_GR_GP1, is_ce, &mut s, None);
+    assert_eq!(
+        r,
+        Err(Refusal::InertSubchannelMethod {
+            subch: 5,
+            method: 0x200,
+            value: 1
+        })
+    );
+    assert_eq!(
+        s.gr_methods - before,
+        4,
+        "A, B, C, D admitted once before the refusal"
+    );
+}

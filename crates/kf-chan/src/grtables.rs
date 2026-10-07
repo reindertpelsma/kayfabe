@@ -106,6 +106,10 @@ pub enum Field {
         /// The bytes the engine may write there.
         bytes: u64,
     },
+    /// ★ Batch 3 (run44): `SET_REPORT_SEMAPHORE_D`, the trigger. Admitted only as a one-word
+    /// RELEASE of the payload with no report, reduction, trap or awaken — see
+    /// [`reauthor_report_semaphore_d`].
+    ReportSemaphoreD,
 }
 
 /// `NV*97/C0_SET_NOTIFY_A/B` and `NOTIFY` (`ogkm-580.65.06: clc997.h:41-50`; the compute layout
@@ -127,6 +131,107 @@ pub const NOTIFY_ALLOWED: [Row; 2] = [
         },
     ),
 ];
+
+/// ★ Batch 3 (run44, 2026-10-07): the 3D class's report-semaphore release, exactly as Windows'
+/// kernel GR channel sent it (`traces/windows_code43_walls_20261007/README.md`, "Run44 result":
+/// `200406c0 00000001 20286060 <payload> 1000f010`, a 4-word incrementing write on the 3D
+/// subchannel). `NVC997_SET_REPORT_SEMAPHORE_A/B/C/D` (`ogkm-580.65.06:
+/// src/common/sdk/nvidia/inc/class/clc997.h:3913-3922`): `A` `OFFSET_UPPER` 7:0, `B` `OFFSET_LOWER`
+/// 31:0, `C` `PAYLOAD` 31:0, `D` the trigger. The engine writes the payload (one word: `D` must say
+/// `STRUCTURE_SIZE_ONE_WORD`) at `A:B`, which is resolved through the placement rows like a
+/// notifier. It is the completion of Windows' GR work, written by the real engine (§S item 7).
+///
+/// ⊘ A family row, by hand (allowed: `AGENTS.md`, *Derive, never capture*): the method offsets and
+/// every `D` field are identical in the public `TURING_A`, `AMPERE_A`, `AMPERE_B`, `ADA_A` and
+/// `HOPPER_A` headers (`clc597.h`, `clc697.h`, `clc797.h`, `clc997.h`, `clcb97.h`, compared field by
+/// field 2026-10-07); `BLACKWELL_A/B`'s (`clcd97.h`, `clce97.h`) name only the class id, so the rows
+/// are not admitted there.
+pub const REPORT_SEMAPHORE_FAMILIES: [kf_chip::Family; 4] = [
+    kf_chip::Family::Turing,
+    kf_chip::Family::Ampere,
+    kf_chip::Family::Ada,
+    kf_chip::Family::Hopper,
+];
+
+/// The payload word the engine writes for a `STRUCTURE_SIZE_ONE_WORD` report.
+const REPORT_SEMAPHORE_BYTES: u64 = 4;
+
+/// Batch 3's rows (3D class only; see [`REPORT_SEMAPHORE_FAMILIES`]).
+pub const REPORT_SEMAPHORE_ALLOWED: [Row; 4] = [
+    row(0x1B00, "SET_REPORT_SEMAPHORE_A", Field::AddressUpper8),
+    row(
+        0x1B04,
+        "SET_REPORT_SEMAPHORE_B",
+        Field::AddressLower32 {
+            upper: 0x1B00,
+            bytes: REPORT_SEMAPHORE_BYTES,
+        },
+    ),
+    row(0x1B08, "SET_REPORT_SEMAPHORE_C", Field::Word),
+    row(0x1B0C, "SET_REPORT_SEMAPHORE_D", Field::ReportSemaphoreD),
+];
+
+/// `SET_REPORT_SEMAPHORE_D` fields (`clc997.h:3923-4010`).
+mod semd {
+    /// `RELEASE` 4:4: after all preceding reads (0) or writes (1) complete — both admitted.
+    pub const RELEASE: u32 = 1 << 4;
+    /// `PIPELINE_LOCATION` 15:12.
+    pub const PIPELINE_SHIFT: u32 = 12;
+    /// Its mask.
+    pub const PIPELINE_MASK: u32 = 0xF << PIPELINE_SHIFT;
+    /// The named `PIPELINE_LOCATION` values (`:3935-3946`): NONE, DATA_ASSEMBLER, VERTEX_SHADER,
+    /// VPC, STREAMING_OUTPUT, GEOMETRY_SHADER, ZCULL, TESSELATION_INIT_SHADER, TESSELATION_SHADER,
+    /// PIXEL_SHADER, DEPTH_TEST, ALL.
+    pub const PIPELINE_NAMED: [u32; 12] =
+        [0x0, 0x1, 0x2, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xA, 0xC, 0xF];
+    /// `STRUCTURE_SIZE` 28:28 = `ONE_WORD` (`:3985-3987`).
+    pub const ONE_WORD: u32 = 1 << 28;
+}
+
+/// Re-author `SET_REPORT_SEMAPHORE_D`: admitted only as `OPERATION_RELEASE` (1:0 = 0) of one word
+/// (`STRUCTURE_SIZE_ONE_WORD`), `REPORT_NONE` (27:23), with `FLUSH_DISABLE`, `REDUCTION_ENABLE`,
+/// `SUB_REPORT`, `ACQUIRE`, `REDUCTION_OP`, `COMPARISON`, `REDUCTION_FORMAT`, `CONDITIONAL_TRAP`,
+/// `AWAKEN_ENABLE`, `REPORT_DWORD_NUMBER` and every unnamed bit zero; `RELEASE` (4:4) and a named
+/// `PIPELINE_LOCATION` (15:12) are carried. The word is rebuilt from those two fields.
+///
+/// # Errors
+/// Any other operation, size, report, reduction, trap, awaken, or an unnamed bit.
+pub fn reauthor_report_semaphore_d(v: u32) -> Result<u32, &'static str> {
+    if v & semd::ONE_WORD == 0 {
+        return Err("SET_REPORT_SEMAPHORE_D: only STRUCTURE_SIZE_ONE_WORD is admitted");
+    }
+    if v & !(semd::RELEASE | semd::PIPELINE_MASK | semd::ONE_WORD) != 0 {
+        return Err(
+            "SET_REPORT_SEMAPHORE_D: only a plain one-word RELEASE (no report, reduction, trap, awaken, flush-disable) is admitted",
+        );
+    }
+    let pipe = (v & semd::PIPELINE_MASK) >> semd::PIPELINE_SHIFT;
+    if !semd::PIPELINE_NAMED.contains(&pipe) {
+        return Err("SET_REPORT_SEMAPHORE_D: a PIPELINE_LOCATION the class header does not name");
+    }
+    Ok((v & semd::RELEASE) | (pipe << semd::PIPELINE_SHIFT) | semd::ONE_WORD)
+}
+
+/// ★ Batch 3: the disposition of a report-semaphore method on graphics class `class`, or `None` when
+/// `method` is not one of [`REPORT_SEMAPHORE_ALLOWED`] or `class` is not a 3D class (the caller then
+/// asks [`gr_method`]).
+#[must_use]
+pub fn report_semaphore(class: u32, method: u32) -> Option<Disposition> {
+    let row = REPORT_SEMAPHORE_ALLOWED
+        .iter()
+        .find(|r| r.method == method)?;
+    let family = kf_chip::Family::ALL
+        .iter()
+        .copied()
+        .find(|f| kf_chip::classes::classes_for(*f).threed.contains(&class))?;
+    Some(if REPORT_SEMAPHORE_FAMILIES.contains(&family) {
+        Disposition::Allowed(*row)
+    } else {
+        Disposition::Refused(
+            "SET_REPORT_SEMAPHORE_* (this family's public 3D header does not define it)",
+        )
+    })
+}
 
 /// ★ 3D/compute methods refused under their names (`clc997.h`, `clc7c0.h`, line of the define).
 pub const NOTIFY_CLASS_REFUSED: [(u32, u32, &str); 5] = [
@@ -303,6 +408,7 @@ pub fn reauthor(r: &Row, v: u32) -> Result<u32, &'static str> {
             }
             Ok(v)
         }
+        Field::ReportSemaphoreD => reauthor_report_semaphore_d(v),
     }
 }
 
@@ -346,6 +452,64 @@ mod tests {
                 Disposition::Refused(_)
             ));
         }
+    }
+
+    /// ★ Batch 3 (run44): exactly the observed `D` form and its named variants pass; everything
+    /// that is not a plain one-word release is refused.
+    #[test]
+    fn report_semaphore_d_is_a_plain_one_word_release_only() {
+        assert_eq!(reauthor_report_semaphore_d(0x1000_f010), Ok(0x1000_f010));
+        assert_eq!(reauthor_report_semaphore_d(0x1000_0000), Ok(0x1000_0000));
+        for bad in [
+            0x1000_f011u32, // OPERATION_ACQUIRE
+            0x1000_f013,    // OPERATION_TRAP
+            0x0000_f010,    // STRUCTURE_SIZE_FOUR_WORDS
+            0x1080_f010,    // REPORT 27:23 != NONE
+            0x1010_f010,    // AWAKEN_ENABLE
+            0x1008_f010,    // CONDITIONAL_TRAP
+            0x1000_f018,    // REDUCTION_ENABLE
+            0x1000_f014,    // FLUSH_DISABLE
+            0x1040_f010,    // bit 22, unnamed
+            0x3000_f010,    // bit 29, unnamed
+            0x1000_3010,    // PIPELINE_LOCATION 3, unnamed
+        ] {
+            assert!(reauthor_report_semaphore_d(bad).is_err(), "{bad:#x}");
+        }
+    }
+
+    #[test]
+    fn report_semaphore_rows_are_the_3d_class_of_the_header_families_only() {
+        for f in kf_chip::Family::ALL {
+            let set = kf_chip::classes::classes_for(f);
+            for &c in set.threed {
+                let d = report_semaphore(c, 0x1B0C);
+                if REPORT_SEMAPHORE_FAMILIES.contains(&f) {
+                    assert!(matches!(d, Some(Disposition::Allowed(_))), "{c:#x}");
+                } else {
+                    assert!(matches!(d, Some(Disposition::Refused(_))), "{c:#x}");
+                }
+            }
+            // Not a 3D class: the per-kind tables decide (no report-semaphore row).
+            for &c in set.compute.iter().chain(set.twod) {
+                assert!(report_semaphore(c, 0x1B00).is_none(), "{c:#x}");
+            }
+        }
+        // Neighbours of the rows are not admitted by them.
+        let ada = kf_chip::classes::classes_for(kf_chip::Family::Ada).threed[0];
+        assert!(report_semaphore(ada, 0x1B10).is_none());
+        assert!(report_semaphore(ada, 0x1AFC).is_none());
+        assert!(matches!(
+            gr_method(GrClass::ThreeD, 0x1B10),
+            Disposition::Refused(_)
+        ));
+        // The address halves carry the one-word footprint.
+        assert_eq!(
+            REPORT_SEMAPHORE_ALLOWED[1].field,
+            Field::AddressLower32 {
+                upper: 0x1B00,
+                bytes: 4
+            }
+        );
     }
 
     #[test]

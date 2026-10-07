@@ -547,7 +547,8 @@ fn one(
 
 /// ★ GR tier: one method on a subchannel bound to graphics `class` — admitted only by a row of
 /// [`crate::grtables`], its argument re-authored from the row's field; anything else is refused by
-/// name (ruling 2). No row carries an address, so nothing here reaches memory.
+/// name (ruling 2). An address row only becomes an [`Ir::GrAddress`], which the binder validates
+/// against the placement rows and the perimeter emits; nothing here reaches memory.
 fn gr_write(
     out: &mut Vec<Ir>,
     st: &mut TState,
@@ -556,9 +557,10 @@ fn gr_write(
     m: u32,
     v: u32,
 ) -> Result<(), Refusal> {
-    use crate::grtables::{Disposition, GrClass, gr_method, reauthor};
+    use crate::grtables::{Disposition, GrClass, gr_method, reauthor, report_semaphore};
     let gc = GrClass::of_class(class).ok_or(Refusal::ForeignClass { subch: sub, class })?;
-    match gr_method(gc, m) {
+    // ★ Batch 3: the 3D report-semaphore rows are per family (the class id decides), the rest per kind.
+    match report_semaphore(class, m).unwrap_or_else(|| gr_method(gc, m)) {
         Disposition::Refused(name) => Err(Refusal::GrMethod {
             class,
             subch: sub,

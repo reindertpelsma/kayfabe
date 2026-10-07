@@ -12,6 +12,9 @@
 //!   family's 2D, inline-to-memory and 3D classes (from kf-chip's generated sets) exist on it;
 //! - T-mode re-authors the segment and the ENGINE completes it: the guest semaphore is written
 //!   natively, the guest's `GP_GET` is written by the engine (the CPU store count stays 0);
+//! - ★ batch 3 (run44): GP 1 starts with run44's 3D report-semaphore release
+//!   (`SET_REPORT_SEMAPHORE_A..D`, `D = 0x1000_f010`), and the 3D engine writes its payload at the
+//!   guest VA through the validated window address;
 //! - which host events wake on that completion (`FIFO_EVENT_MTHD` and GR0, measured separately);
 //! - a hostile entry (a 3D notifier address no placement row covers) is refused by name at bind
 //!   and not retired;
@@ -48,6 +51,9 @@ const SEG: u64 = 0x1000;
 /// Run31's semaphore offsets: GR `0x1_2023_b000`, CE `0x1_2023_b060`.
 const SEM_GR: u64 = 0xb000;
 const SEM_CE: u64 = 0xb060;
+/// ★ Batch 3 (run44): the 3D report semaphore's word, at a VA of the same guest page.
+const SEM_3D: u64 = 0xb100;
+const P3: u32 = 0x6A0B_0003;
 const USERD: u64 = 0xc000;
 /// A second channel's memory (the CE ring), at its own VA.
 const CHAN2: u64 = 0x0200_0000;
@@ -144,6 +150,22 @@ fn release(payload: u32) -> Vec<u32> {
         &[fifo::SEM_EXECUTE_RELEASE_32BIT | fifo::SEM_EXECUTE_RELEASE_WFI_EN],
     ));
     v
+}
+
+/// ★ Batch 3 (run44): the 3D class's report-semaphore release Windows sends on subchannel 0 —
+/// `SET_REPORT_SEMAPHORE_A..D` (`clc997.h:3913-3922`) with run44's exact `D` word `0x1000_f010`
+/// (one-word RELEASE after all writes, pipeline ALL).
+fn report_release(va: u64, payload: u32) -> Vec<u32> {
+    m(
+        0,
+        0x1B00,
+        &[
+            (va >> 32) as u32,
+            (va & 0xFFFF_FFFF) as u32,
+            payload,
+            0x1000_f010,
+        ],
+    )
 }
 
 /// One guest channel's placement: `[va, va+bytes)` → store offset `off`.
@@ -347,10 +369,14 @@ fn run(l: &mut Checks) -> Result<(), String> {
     // completion). GP 1: a semaphore release. GP 2 (hostile): a 3D notifier address no row covers.
     let mut gp0 = RUN31_GR.to_vec();
     gp0.extend_from_slice(&RUN32_GR_TAIL);
-    let gp1 = release(P1);
+    // ★ Batch 3: GP 1 is run44's 3D report-semaphore release first, then the host release.
+    let mut gp1 = report_release(VA_CHAN + SEM_3D, P3);
+    gp1.extend(release(P1));
     let gp2 = m(0, 0x0104, &[0x5, 0]);
     stage(&walk, CHAN, VA_CHAN, &[&gp0, &gp1, &gp2])?;
     walk.write_store(CHAN + SEM_GR, &0u32.to_le_bytes())
+        .map_err(|e| e.to_string())?;
+    walk.write_store(CHAN + SEM_3D, &0u32.to_le_bytes())
         .map_err(|e| e.to_string())?;
 
     let mut host = HostRing::on_engine_layout(
@@ -447,7 +473,8 @@ fn run(l: &mut Checks) -> Result<(), String> {
     );
     l.check(
         "gr_segment_reauthored",
-        chan.gr_counts().0 == 21 && chan.gr_counts().1 == 1,
+        // 17 2D + 2×2 notifier words (run32) + 4 report-semaphore words (batch 3, run44).
+        chan.gr_counts().0 == 25 && chan.gr_counts().1 == 1,
         format!(
             "gr_methods={} inert_binds={}",
             chan.gr_counts().0,
@@ -459,6 +486,14 @@ fn run(l: &mut Checks) -> Result<(), String> {
         "guest_semaphore_written_by_engine",
         sem == P1,
         format!("sem={sem:#x} want={P1:#x}"),
+    );
+    // ★ Batch 3: the 3D engine wrote the report semaphore's payload at the guest VA (through the
+    // validated window address), before the host release that follows it in the same entry.
+    let sem3d = word(&walk, CHAN + SEM_3D)?;
+    l.check(
+        "3d_report_semaphore_written_by_engine",
+        sem3d == P3,
+        format!("sem3d={sem3d:#x} want={P3:#x}"),
     );
     let gp_get = word(&walk, CHAN + USERD + kf_abi::submit::USERD_GP_GET)?;
     l.check(
