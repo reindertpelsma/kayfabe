@@ -453,7 +453,108 @@ fn run_phase(p: &str, who: Privilege) -> Result<(), String> {
         "f5" => f5(),
         "f6" => f6(),
         "f3-child" => f3_child(),
+        "wedge1" => wedge1_two_ordinary(),
+        "wedge2" => wedge2_two_tlb_triggers(),
+        "wedge3" => wedge3_fail_then_tlb(who),
         other => Err(format!("unknown phase {other}")),
+    }
+}
+
+/// Wedge diagnosis, step 1 (H2 falsifier): two fence-only ("ordinary") submissions on a FRESH
+/// channel, no 5080 object touched at all. EXPECTED before running: both complete — the ring
+/// mechanics (slot reuse, GPFIFO wrap, fence value, USERD `GP_PUT`) are the same ones P0 already
+/// exercised twice successfully (bind + fire). A failure here is H2 and stops everything else.
+fn wedge1_two_ordinary() -> Result<(), String> {
+    let mut u = GrUnit::open()?;
+    u.submit(&[]).map_err(|e| format!("submit #1 (ordinary): {e}"))?;
+    println!("DF2_WEDGE1_SUBMIT1=OK");
+    let r2 = u.submit(&[]);
+    println!("DF2_WEDGE1_SUBMIT2={}", if r2.is_ok() { "OK" } else { "BLOCKED" });
+    u.free();
+    match r2 {
+        Ok(()) => {
+            println!("DF2_WEDGE1=PASS(H2 refuted: two ordinary submissions both complete)");
+            Ok(())
+        }
+        Err(e) => {
+            println!("DF2_WEDGE1=FAIL(H2 SUPPORTED: {e})");
+            Err(format!("H2: {e}"))
+        }
+    }
+}
+
+/// Wedge diagnosis, step 2 (H3 falsifier, run only if step 1 passed): two `DMA_INVALIDATE_TLB`
+/// triggers back to back (both `NON_PRIVILEGED`, both expected to succeed). EXPECTED: both
+/// complete. A wedge on the second, with step 1 clean, is H3 (a trigger in general needs a
+/// further step the next submission never gets).
+fn wedge2_two_tlb_triggers() -> Result<(), String> {
+    let mut u = GrUnit::open()?;
+    u.alloc_5080()?;
+    u.bind_5080(SUBCH_SW).map_err(|e| format!("bind 5080: {e}"))?;
+    println!("DF2_WEDGE2_BIND=OK");
+    let va_extra = [(4usize, u.space.space)];
+    let h1 = 0x5252_7001;
+    u.register(h1, model::CMD_DMA_INVALIDATE_TLB, model::FLAGS_DELETE_IMPLICIT, &va_extra)
+        .map_err(|e| format!("register h1: {e:?}"))?;
+    let f1 = u.fire(SUBCH_SW, h1);
+    println!("DF2_WEDGE2_TRIGGER1={}", if f1.is_ok() { "OK" } else { "BLOCKED" });
+    f1.as_ref().map_err(|e| format!("trigger 1: {e}"))?;
+    let h2 = 0x5252_7002;
+    u.register(h2, model::CMD_DMA_INVALIDATE_TLB, model::FLAGS_DELETE_IMPLICIT, &va_extra)
+        .map_err(|e| format!("register h2: {e:?}"))?;
+    let f2 = u.fire(SUBCH_SW, h2);
+    println!("DF2_WEDGE2_TRIGGER2={}", if f2.is_ok() { "OK" } else { "BLOCKED" });
+    let out = f2.as_ref().map(|_| ()).map_err(|e| e.clone());
+    u.free();
+    match out {
+        Ok(()) => {
+            println!("DF2_WEDGE2=PASS(H3 refuted: two successful TLB triggers both complete)");
+            Ok(())
+        }
+        Err(e) => {
+            println!("DF2_WEDGE2=FAIL(H3 SUPPORTED: second trigger blocked: {e})");
+            Err(format!("H3: {e}"))
+        }
+    }
+}
+
+/// Wedge diagnosis, step 3 (H1 falsifier, run only if steps 1-2 passed): a trigger whose stored
+/// control is expected to FAIL (a `PRIVILEGED` command as non-root, or `GPU_EVICT_CTX` as root —
+/// `UserRoot` is not `Kernel`), followed by a plain `DMA_INVALIDATE_TLB` trigger. EXPECTED: this
+/// reproduces the "eight" phase's wedge on the TLB trigger that follows the failing one.
+fn wedge3_fail_then_tlb(who: Privilege) -> Result<(), String> {
+    let fail_cmd = if who == Privilege::UserRoot {
+        model::CMD_GPU_EVICT_CTX
+    } else {
+        model::CMD_GPU_INITIALIZE_CTX
+    };
+    let mut u = GrUnit::open()?;
+    u.alloc_5080()?;
+    u.bind_5080(SUBCH_SW).map_err(|e| format!("bind 5080: {e}"))?;
+    println!("DF2_WEDGE3_BIND=OK who={who:?} fail_cmd={}", model::cmd_name(fail_cmd));
+    let h1 = 0x5252_8001;
+    u.register(h1, fail_cmd, model::FLAGS_DELETE_IMPLICIT, &[])
+        .map_err(|e| format!("register failing cmd: {e:?}"))?;
+    let f1 = u.fire(SUBCH_SW, h1);
+    println!("DF2_WEDGE3_TRIGGER1(expected-fail-status)={}", if f1.is_ok() { "COMPLETED" } else { "BLOCKED" });
+    f1.as_ref().map_err(|e| format!("trigger 1 (the failing one) itself blocked: {e}"))?;
+    let va_extra = [(4usize, u.space.space)];
+    let h2 = 0x5252_8002;
+    u.register(h2, model::CMD_DMA_INVALIDATE_TLB, model::FLAGS_DELETE_IMPLICIT, &va_extra)
+        .map_err(|e| format!("register TLB: {e:?}"))?;
+    let f2 = u.fire(SUBCH_SW, h2);
+    println!("DF2_WEDGE3_TRIGGER2(tlb)={}", if f2.is_ok() { "OK" } else { "BLOCKED" });
+    let out = f2.as_ref().map(|_| ()).map_err(|e| e.clone());
+    u.free();
+    match out {
+        Ok(()) => {
+            println!("DF2_WEDGE3=PASS(the TLB trigger after a failing one still completes)");
+            Ok(())
+        }
+        Err(e) => {
+            println!("DF2_WEDGE3=FAIL(H1 SUPPORTED: a failing trigger's result wedges the next: {e})");
+            Err(format!("H1: {e}"))
+        }
     }
 }
 
