@@ -631,4 +631,58 @@ later perf/thermal groups.
 
 **Prediction for run25.** The teardown moves past VFIO index 2516. If Windows
 echoes the GET value, it sends SET(DISABLED), which is accepted. If it always
-sends SET(ENABLED), run25 aborts at 0x2080220d with 0x56.
+sends SET(ENABLED), run25 aborts at 0x2080220d with 0x56. *(Outcome 2026-10-07: the second branch; see [run25](#run25-get_rc_recovery-is-served-windows-insists-on-set_rc_recoveryenabled).)*
+
+## Run25: GET_RC_RECOVERY is served; Windows insists on SET_RC_RECOVERY(ENABLED)
+
+Product/QEMU 3b436488c3476446f26c620bd91077d23f382fb5 (see [command](run25-command.json));
+[status](run25-status.json), [trace](run25-qemu.log.gz), [requests](run25-requests.log),
+[completion](run25-complete.json), [host health](run25-host-health.txt),
+[unit result](run25-unit-result.txt), [9/9 gates](run25-gates.log) (11/11 USER births),
+[immutable build](run25-build.log) (`kf3-bins/3b436488`). Run on 2026-10-07 at
+08:46-08:49 UTC: one VM, serial, same baseline and flags as run24. The controller
+saw two identical status samples at 98 s of uptime. The NVIDIA adapter has
+ConfigManagerErrorCode 43 and nvidia-smi exits 9, so Code43 persists. No
+initialization success is claimed. The guest shut down cleanly and the unit
+result is success. Afterwards the host RTX 4070 on 595.91.07 had its display
+enabled, was in P8, logged no Xid since the build started, ran no QEMU, and had
+NBD disconnected.
+
+**Abort point** (`abort_point.py points`, appended to
+[the table](abort-points-run13-24.txt)): 696 RPCs, teardown at 449, last RPC
+`SET_RC_RECOVERY` 0x2080220d → 0x56. It moved by exactly one RPC.
+`GET_RC_RECOVERY` now returns 0 with `rcEnable=DISABLED`. The next RPC is
+`SET_RC_RECOVERY`, which `kf_rm::vfguest` refuses with 0x56. That status is
+returned only for `rcEnable=ENABLED`: a malformed size or value returns 0x1f.
+So Windows sent ENABLED even though GET had reported DISABLED. It does not echo
+the GET value. This matches the second branch of the prediction above.
+Everything else matches run24: 11 Translated births, and the distinct refusal set is run24's with
+0x2080220e replaced by 0x2080220d. No 0x78 allocation or NV0073 event control was reached (they
+follow SET in the VFIO order). The [watchdog recovery](run25-watchdog-recovery.log)
+(read-only NBD/NTFS, cleanup verified 2026-10-07) found a fresh dump 10 s after
+experiment start. No assertion comparison was made: the 4 KiB journal cannot
+show a late wall (see the correction at the top).
+
+**Owner decision needed: what SET_RC_RECOVERY(ENABLED) may return.** The
+StartDevice path needs it to succeed. These are the options, none of them
+implemented:
+
+1. *Accept it with no effect, as the `_VF` HAL does* (`g_subdevice_nvoc.h:7788-7790`
+   returns OK for any value, and GET keeps reporting DISABLED). This is NVIDIA's
+   own vGPU-guest behaviour. It is also a SET that is acknowledged and then
+   ignored, which the "no faked success" rule normally forbids.
+2. *Report and accept ENABLED as a derived fact.* The VM's channels are
+   host-RM channels, and host RM performs robust-channel recovery on them. But
+   the host's setting is a PRIVILEGED control (0x40154 includes 0x4), so an
+   unprivileged client cannot read it. "ENABLED" would then be inferred, not
+   derived.
+3. *Implement per-VM RC recovery* for the VM's own channels: fault → channel
+   reset → guest notification. Then ENABLED becomes true. This is a large
+   piece of work.
+
+**After this decision (no further owner input needed):** the 25 class-0x78
+allocations and the NV0073 EVENT_SET_NOTIFICATION pair are already served by
+this batch and are covered by `tests/code43_startdevice_batch.rs`.
+PERF_GET_POWERSTATE (AC) is next. SYSTEM_GET_ACTIVE and IS_MODE_POSSIBLE are
+already claimed. The first refusals after those in VFIO order are 0x007302a3,
+DFP_ASSIGN_SOR and DP_AUXCH_CTRL (see the sixth repair's "left refused" list).

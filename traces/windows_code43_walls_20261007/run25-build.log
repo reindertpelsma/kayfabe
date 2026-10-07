@@ -1,0 +1,8 @@
+HEAD is now at 3b436488c Answer the StartDevice RPCs after GET_RC_RECOVERY from vGPU-guest semantics
+V3_GATES_START 2026-10-07T10:45:33+02:00
+V3_GATES_SUMMARY pass=9 fail=0
+V3_GATES_BIRTHS births=11 user=11 refused=0 ok=1
+V3_GATES_EXIT pass=9 fail=0 births_ok=1 2026-10-07T10:45:50+02:00
+== kf3 build: QEMU 10.2.4 rev 3b436488
+== archive 2026-10-07 10:46:01.374880478 +0200 (cargo succeeded: current for this revision by cargo's fingerprints)
+KF3_BUILT /var/lib/kf-windows-20261005/kf3-bins/3b436488/qemu-system-x86_64 rev=3b436488 mtime=2026-10-07 10:46:06.276839456 +0200 (shared build dir /var/lib/kf-windows-20261005/qemu-build-kf3)
