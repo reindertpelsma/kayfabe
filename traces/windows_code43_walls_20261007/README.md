@@ -2961,3 +2961,86 @@ binary built at this branch's tip gives the list that an exposure table needs.
    table.
 
 Branch `claude/code43-deferred-20261008`; evidence for runs 47-52 in this directory.
+
+# Loop 2026-10-08 (second session), branch `claude/code43-d3d-20261008`: why does D3D device creation say out-of-video-memory?
+
+(Continues at run 53. Binary and guest as in runs 47-52 unless a setup says otherwise. Every run states its
+hypothesis and falsifier before it starts. `[measured]` = read from a file or a guest/host output; `[inferred]`
+= reasoning, not yet tested.)
+
+## Reference measured before any boot: what Windows asks the real GSP for FB info (vfio-8/9/10)
+
+`scripts/bench/windows/gsp_info_scan.py` over the three VFIO observer captures (`gsp.jsonl` on the host;
+output [vfio8-9-10-fb-bus-info.txt](vfio8-9-10-fb-bus-info.txt)). `[measured]` In all three, Windows 580.88
+sends **one** `FB_GET_INFO_V2` (`0x20801303`) with **19 indices** at queue sequence 121 and the real GSP answers
+it with status 0 (reply at sequence 124); later only single-index `BUS_WIDTH` requests (0xb). Indices and
+the real RTX 4070's (host die, 12 GiB) reply, names from `ctrl2080fb.h`:
+
+| idx | ogkm name | reply | kind |
+|---|---|---|---|
+| 0x01 | COMPRESSION_SIZE | 0xffff0000 | hardware config |
+| 0x02 | DRAM_PAGE_STRIDE | 0xc000 | hardware config |
+| 0x04 | PARTITION_COUNT | 3 | hardware config |
+| 0x0b | BUS_WIDTH | 0xc0 | hardware config |
+| 0x0c | RAM_CFG | 1 | hardware config |
+| 0x0d | RAM_TYPE | 0x12 (GDDR6X) | hardware config |
+| 0x14 | PARTITION_MASK (_0) | 7 | hardware config |
+| 0x19 | FBP_COUNT | 3 | hardware config |
+| 0x1a | FBP_MASK | 7 | hardware config |
+| 0x1b | L2CACHE_SIZE | 0x2400000 | hardware config |
+| 0x1c | MEMORYINFO_VENDOR_ID | 0xf | hardware config |
+| 0x21 | TRAINIG_2T | 0 | hardware config |
+| 0x22 | LTC_COUNT | 6 | hardware config |
+| 0x23 | LTS_COUNT | 0x12 | hardware config |
+| 0x25 | PSEUDO_CHANNEL_MODE | 0 | hardware config |
+| 0x2b | LTC_MASK (_0) | 0x3f | hardware config |
+| 0x35 | ECC_STATUS_SIZE | 2 | hardware config |
+| 0x37 | PARTITION_MASK_1 | 0 | hardware config |
+| 0x38 | LTC_MASK_1 | 0 | hardware config |
+
+`[measured]` **None of the 19 is a size or a free/used count** (no TOTAL_RAM_SIZE 0x08, HEAP_SIZE 0x09, USABLE_RAM_SIZE
+0x20, BAR1_AVAIL 0x1d): Windows learns the memory sizes elsewhere (the GSP static info it receives at init),
+not from this request. `[inferred]` kayfabe serves 10 of the 19 today (`HostFacts::forwarded_fb_info` plus
+`forwarded_fb_extra`: 0x0b, 0x0d, 0x19, 0x1a, 0x1b, 0x22, 0x23, and PARTITION_COUNT/_MASK, LTC_MASK) and refuses
+the whole request on the first of the nine others (0x01 COMPRESSION_SIZE, the first it meets), which agrees with
+run50's `UnmeasuredIndex { index: 1 }`; the log line added in the previous session records the list that
+actually arrives (run 53).
+
+## Run53 setup: measure the guest's video-memory view (H-seg) and record the FB index list (H-fb); nothing is served
+
+Binary: this branch's tip at the time of the boot (it carries the `W349REFUSE-LIST` log line; the product code is
+otherwise run47's `83881ecc`), flags as run47 (`KF3_DEFERRED_API=1`, software-runlist flag off), BAR1 128 MiB
+(the harness default). One boot by hand through QGA (`qga_run_ps.py`). The probe is
+`scripts/bench/windows/video_memory_probe.ps1` (read-only, `Add-Type` + P/Invoke): per DXGI adapter `GetDesc1`
+(`DedicatedVideoMemory`, `DedicatedSystemMemory`, `SharedSystemMemory`), `IDXGIAdapter3::QueryVideoMemoryInfo`
+(Budget, CurrentUsage, AvailableForReservation, CurrentReservation; LOCAL and NON_LOCAL), D3DKMT
+`GETSEGMENTSIZE` / `DRIVERVERSION` / `ADAPTERTYPE`, `D3DKMTCreateDevice` (a bare kernel WDDM device),
+`D3D12CreateDevice` at 11_0/12_0/12_1/12_2 and `D3D11CreateDevice` on the NVIDIA adapter (the Basic Render
+Driver as control), `Win32_VideoController.AdapterRAM` and the display class key's `HardwareInformation.*`.
+The qemu.log line numbers before and after the probe delimit its RM traffic.
+
+**H-seg (inferred, owner-lead's guess):** dxgkrnl's video memory manager holds zero or tiny segment sizes or a tiny
+budget for the NVIDIA adapter, so any allocation exceeds it. *Prediction if true:* `LOCAL Budget` (or
+`DedicatedVideoMemory` from `GETSEGMENTSIZE`) below 256 MiB. *Falsifier (fixed now):* `LOCAL Budget` >= 2048 MiB
+(half of the 4096 MiB store `fb-mb=4096` that the device presents) **and** `GETSEGMENTSIZE` DedicatedVideoMemory >=
+3 GiB. Between the two: not supported, not falsified, reported as such. `[measured, run50]` DXGI already shows
+`DedicatedVideoMemory` 3748 MB, i.e. 348 MB below the store; that difference alone does not decide anything
+(a segment reserve is expected) and is not the criterion.
+
+**H-kmt-device (inferred):** the failure is in the user-mode driver or later, not in dxgkrnl's creation of a kernel
+device. *Prediction if true:* `D3DKMTCreateDevice` returns 0 (`STATUS_SUCCESS`) on the NVIDIA LUID. *Falsifier:*
+`D3DKMTCreateDevice` fails (then the kernel/KMD path is the failing layer, and H-alloc's kernel side is where to look).
+
+**H-fb (inferred):** the refused `FB_GET_INFO_V2` of the boot makes the driver's memory configuration incomplete.
+*This run only measures it:* the full requested list (`W349REFUSE-LIST`) is compared with the 19 of the reference.
+*Falsifier of "the arriving list is the reference's list":* any index outside the 19 above, or fewer than 19.
+The causal test (serve all 19 truthfully and re-probe) is run 54, only if this run's list and the exposure table
+below are clean; its own falsifier is written then: *H-fb is falsified if the D3D devices still fail with
+`0x8876017c` after the whole request is answered.*
+
+**H-alloc (inferred):** the failing step is a kernel allocation that never reaches the RM. *Falsifier:* RM traffic
+(RmAlloc/RmControl not already seen in the idle window) during the probe's creation calls. `[measured, run50]` no
+new request appears in the failing window, which already argues for H-alloc-compatible behaviour; the run re-measures
+it with the kernel-device step separated.
+
+Host-state check before and after (`pgrep -a qemu`, display, P8, Xid count) as in runs 47-52.
