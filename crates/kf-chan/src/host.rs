@@ -164,7 +164,7 @@ pub struct HostRing {
     // A graphics-runlist ring owns a real host GR context and routes all of its
     // authored CE work through the channel header's CE subchannel.
     gr_context: Option<(u32, u32)>,
-    nvdec_context: Option<(u32, u32, u32)>,
+    video_context: Option<(u32, u32, u32)>,
     ce_class: u32,
     head: u64,
     put: u32,
@@ -393,7 +393,7 @@ impl HostRing {
             layout,
             chan,
             gr_context: None,
-            nvdec_context: None,
+            video_context: None,
             ce_class: rm.ce_class_id(),
             head: 0,
             put: 0,
@@ -401,22 +401,28 @@ impl HostRing {
             live: VecDeque::new(),
         };
         let tail = (|| {
-            if let Some(index) = kf_abi::submit::nvdec_index_of_engine_type(engine) {
+            let video = kf_abi::submit::nvdec_index_of_engine_type(engine)
+                .map(|i| (i, false))
+                .or_else(|| kf_abi::submit::nvenc_index_of_engine_type(engine).map(|i| (i, true)));
+            if let Some((index, encode)) = video {
                 let (arch, imp, _) = rm.arch_info();
                 let family = kf_chip::Family::from_arch(arch, imp)
-                    .map_err(|e| format!("NVDEC family: {e:?}"))?;
-                let class = family
-                    .classes()
-                    .video_decoder
+                    .map_err(|e| format!("video family: {e:?}"))?;
+                let classes = if encode {
+                    family.classes().video_encoder
+                } else {
+                    family.classes().video_decoder
+                };
+                let class = classes
                     .iter()
                     .rev()
                     .copied()
                     .find(|c| rm.supported_class_ids().contains(c))
-                    .ok_or("no source-derived NVDEC class in the actual host class list")?;
+                    .ok_or("no source-derived video class in the actual host class list")?;
                 let object = rm
                     .alloc_video_object(chan, class, index)
-                    .map_err(|e| format!("owned NVDEC context: {e:?}"))?;
-                ring.nvdec_context = Some((object, class, engine));
+                    .map_err(|e| format!("owned video context: {e:?}"))?;
+                ring.video_context = Some((object, class, engine));
             } else {
                 let ce_engine = if engine == ENGINE_TYPE_GRAPHICS {
                     (0..20)
@@ -521,17 +527,17 @@ impl HostRing {
         self.gr_context
     }
 
-    /// Real owned decoder object and engine whose constructor promoted a Falcon context.
+    /// Real owned video object and engine whose constructor promoted a Falcon context.
     #[must_use]
-    pub fn nvdec_context(&self) -> Option<(u32, u32, u32)> {
-        self.nvdec_context
+    pub fn video_context(&self) -> Option<(u32, u32, u32)> {
+        self.video_context
     }
 
     /// Whether this ring already owns a real context on the specified engine.
     #[must_use]
     pub fn owns_context(&self, engine: u32) -> bool {
         (engine == ENGINE_TYPE_GRAPHICS && self.gr_context.is_some())
-            || self.nvdec_context.is_some_and(|(_, _, e)| e == engine)
+            || self.video_context.is_some_and(|(_, _, e)| e == engine)
     }
 
     /// The last fence sequence the engine released.
@@ -554,10 +560,10 @@ impl HostRing {
     /// # Errors
     /// `Ok(Err(Busy))` when there is no free space until a completion; `Err` for a store failure.
     pub fn push(&mut self, words: &[u32]) -> Result<Result<(), Busy>, String> {
-        // No codec or CE execution is admitted on the experimental decoder ring.
+        // No codec or CE execution is admitted on the experimental video ring.
         // Its private fence remains authored here, never supplied by the guest.
-        if self.nvdec_context.is_some() && !words.is_empty() {
-            return Err("NVDEC ring: codec/CE submission is not implemented".into());
+        if self.video_context.is_some() && !words.is_empty() {
+            return Err("video ring: codec/CE submission is not implemented".into());
         }
         self.push_inner(words, TAIL_BYTES)
     }

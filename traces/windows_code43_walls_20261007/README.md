@@ -364,3 +364,13 @@ bounded inline observer also records up to16 combined promotion/property
 requests:0080170f requires an exact16-byte inline scalar payload, never follows
 an address, and changes no reply. Two observer tests pass, including truncated/
 extra-size refusal and record-budget exhaustion. Windows run22 pending.
+
+## Native NVENC context increment (guest path not enabled yet)
+
+The native decoder oracle additionally selects NVENC0 with KF_NVENC_CONTEXT=1.
+HostRing's owned video context selects generated decoder/encoder family classes
+intersected with the actual host's class list and authors its engine index.
+All nonempty public submissions still refuse before PB writes; host-only FIFO
+fence execution and release are the native oracle. Hardware NVENC pending.
+Channel tests87 passed and the extended native oracle compiles; Clippy new0.
+Full RM suite after the bounded property observer:616 passed.

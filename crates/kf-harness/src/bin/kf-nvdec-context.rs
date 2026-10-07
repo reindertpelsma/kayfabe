@@ -5,9 +5,9 @@ use kf_linux_raw::DevDir;
 
 fn main() {
     match run() {
-        Ok(()) => println!("NVDEC_CONTEXT_VERDICT=PASS"),
+        Ok(()) => println!("VIDEO_CONTEXT_VERDICT=PASS"),
         Err(e) => {
-            eprintln!("NVDEC_CONTEXT_VERDICT=FAIL {e}");
+            eprintln!("VIDEO_CONTEXT_VERDICT=FAIL {e}");
             std::process::exit(1);
         }
     }
@@ -20,13 +20,17 @@ fn run() -> Result<(), String> {
     let space = rm
         .alloc_vaspace_bare()
         .map_err(|e| format!("space: {e:?}"))?;
-    let engine = kf_abi::submit::engine_type_nvdec(0).ok_or("NVDEC0 engine")?;
+    let engine = if std::env::var_os("KF_NVENC_CONTEXT").is_some_and(|v| v == "1") {
+        kf_abi::submit::engine_type_nvenc(0).ok_or("NVENC0 engine")?
+    } else {
+        kf_abi::submit::engine_type_nvdec(0).ok_or("NVDEC0 engine")?
+    };
     let mut ring = HostRing::on_engine(&rm, space, engine)?;
     println!(
-        "NVDEC_CONTEXT driver={} arch={:x?} context={:x?} channel={:x?}",
+        "VIDEO_CONTEXT driver={} arch={:x?} context={:x?} channel={:x?}",
         rm.driver_version(),
         rm.arch_info(),
-        ring.nvdec_context(),
+        ring.video_context(),
         ring.channel()
     );
     let result = (|| {
@@ -37,18 +41,18 @@ fn run() -> Result<(), String> {
         let selector = [
             kf_abi::submit::method_header_inc(0, kf_abi::submit::SET_OBJECT, 1)
                 .ok_or("selector header")?,
-            ring.nvdec_context().ok_or("no context")?.1,
+            ring.video_context().ok_or("no context")?.1,
         ];
         if ring.push(&selector).is_ok() {
             return Err("codec submission was admitted".into());
         }
-        println!("NVDEC_CODEC_NEGATIVE=REFUSED");
+        println!("VIDEO_CODEC_NEGATIVE=REFUSED");
         let seq = ring.fence(&rm)?.map_err(|_| "fence busy")?;
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         loop {
             let done = ring.completed()?;
             if done == seq {
-                println!("NVDEC_FENCE seq={seq} completed={done}");
+                println!("VIDEO_FENCE seq={seq} completed={done}");
                 break;
             }
             if std::time::Instant::now() >= deadline {
@@ -61,7 +65,7 @@ fn run() -> Result<(), String> {
     let freed = rm
         .free_channel(ring.channel())
         .map_err(|e| format!("free channel: {e:?}"));
-    println!("NVDEC_RELEASE {:?}", ring.release(&rm));
+    println!("VIDEO_RELEASE {:?}", ring.release(&rm));
     rm.free_vaspace(space);
     result.and(freed)
 }

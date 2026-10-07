@@ -2433,7 +2433,7 @@ impl ChanPlane {
                 let slot = me.slot(ht).ok_or_else(|| (NV_ERR_INVALID_STATE, "GR slot gone".into()))?;
                 let mut g = slot.lock().map_err(|_| (NV_ERR_INVALID_STATE, "GR slot poisoned".into()))?;
                 let context = g.chan.host().gr_context();
-                let decoder = g.chan.host().nvdec_context();
+                let decoder = g.chan.host().video_context();
                 if g.guest_engine != engine_type || !g.chan.host().owns_context(engine_type) || g.dead.is_some()
                     || (decoder.is_some() && entries != 0)
                 {
