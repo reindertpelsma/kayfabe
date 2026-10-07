@@ -1,0 +1,38 @@
+NATIVE_GR_TIER_START 2026-10-08T00:28:13+02:00 tag=run47 rev=621310b3a96dc0cc9ede45ac07e37551f97ecbda dirty=0
+QEMU_PROCS=0
+NVIDIA GeForce RTX 4070, 595.91.07, P2, 43, Enabled
+XID_BEFORE=61
+kf-cuda: cuda thread posture thread=main cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+MEASURE tspace fb=0x120000000+0x4000000 ram=0x124000000+0x1000000 rings=0xff00000000
+kf-host: channel birth h=0xcafe000b engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=not-held
+CHECK host_channel_asserted_user PASS Ok(BirthPrivilege { reply_flags: 128 }) chan=Channel { tsg: cafe000a, chan: cafe000b, token: 1b, born_user: Some(BirthPrivilege { reply_flags: 80 }) }
+kf-chan: GR tier admitted host channel 0xcafe000b (token 0x1b) reply_flags=0x00000080 privilege=USER objects=[(902d, cafe000e), (a140, cafe000f), (c997, cafe0010), (c9c0, cafe000d)]
+CHECK gr_tier_objects_allocated PASS Ok([(902d, cafe000e), (a140, cafe000f), (c997, cafe0010), (c9c0, cafe000d)]) context=Some((cafe000d, c9c0))
+MEASURE completion_edges before doorbell: fifo_event_mthd=false gr0=false; after: fifo_event_mthd=true gr0=false
+MEASURE gr_translated fetched=2 submissions=2 gr_methods=25 us=400567
+CHECK gr_segment_reauthored PASS gr_methods=25 inert_binds=1
+CHECK guest_semaphore_written_by_engine PASS sem=0x6a0b0001 want=0x6a0b0001
+CHECK 3d_report_semaphore_written_by_engine PASS sem3d=0x6a0b0003 want=0x6a0b0003
+CHECK gp_get_written_by_engine PASS guest GP_GET=2 cpu_stores=0 engine=(true, 1)
+CHECK completion_wakes_session_fd PASS fifo_event_mthd=true gr0=false
+CHECK hostile_notifier_address_refused_by_name PASS Err(Bind(VirtualUnresolved { va: 21474836480, at: 21474836480 }))
+CHECK hostile_entry_not_retired PASS guest GP_GET=2
+kf-host: channel birth h=0xcafe0015 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=not-held
+MEASURE ce_completion_edges host CE2: before doorbell: fifo_event_mthd=false ce=false; after: fifo_event_mthd=true ce=false
+CHECK ce_inert_bind_completes_on_engine PASS sem=0x6a0b0002 want=0x6a0b0002 gp_get=Some(1) inert_binds=1
+CHECK ce_completion_wakes_worker_fds PASS before: fifo_event_mthd=false ce=false; after: fifo_event_mthd=true ce=false
+kf3: ring REFUSED segment gp 1 va 0x120232000 (2 words) InertSubchannelMethod { subch: 5, method: 256, value: 1 }; first words: 2001a040 00000000
+CHECK inert_subchannel_method_refused_by_name PASS Err(Ring(Rewrite { gp: 1, why: InertSubchannelMethod { subch: 5, method: 256, value: 1 } }))
+kf-host: channel birth h=0xcafe001a engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=not-held
+CHECK gate_holds_the_engine_until_released PASS fence 1: after 300 ms unreleased completed=0 (blocked=true); release Ok(()); passed=true in 0 us; gate word=Some(1)
+CHECK gate_revoked_with_its_ring PASS Ok(()) Some("ring 0xff00200000 released: cpu unmapped, view ok unmap ok free ok")
+CHECK resources_released PASS Ok(()) Some("ring 0xff00000000 released: cpu unmapped, view ok unmap ok free ok") | Ok(()) Some("ring 0xff00100000 released: cpu unmapped, view ok unmap ok free ok")
+GR_TIER_VERDICT=PASS
+ORACLE_RC=0
+XID_AFTER=61
+[183636.838995] NVRM: Xid (PCI:0000:01:00): 32, pid=1378546, name=kf-deferred-ora, channel 0x00000007 intr 00800000
+[183996.639534] NVRM: Xid (PCI:0000:01:00): 32, pid=1414177, name=kf-deferred-ora, channel 0x00000007 intr 00800000
+[184033.873207] NVRM: Xid (PCI:0000:01:00): 32, pid=1419206, name=kf-deferred-ora, channel 0x00000007 intr 00800000
+NVIDIA GeForce RTX 4070, 595.91.07, P5, 41, Enabled
+GNOME_SHELL=2
+NATIVE_GR_TIER_EXIT 2026-10-08T00:28:17+02:00

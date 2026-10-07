@@ -2601,3 +2601,67 @@ in the VFIO reference); `NV50_DEFERRED_API ... ADMITTED ... classID Some(1)`; th
   running, Windows reaches the software-runlist submit (`0x20801111`, refused with the flag off) or
   a further wall; the 0x116 may move or may not. The adapter state and bugcheck are recorded either
   way. No pass is claimed unless nvidia-smi works with Code 0 and no 0x116/0x119 follows.
+
+### Run47 result: the deferred API is served, no channel dies, and the guest stays healthy for the whole 163 s sampled
+
+Product/QEMU `621310b3` (code = `83881ecc`; the commit adds this README's setup only), `kf3-bins/621310b3`,
+flags as in the setup above (`KF3_DEFERRED_API=1`, software-runlist flag OFF); started 2026-10-07
+22:30 UTC. Controller: `systemd-run`, `pc_sdr_experiment.py --arm kayfabe --run 47 --no-mmio-trace
+--max-seconds 210 --deferred-api`; the unit's exit 1 is the runner's own 210 s bound (SIGTERM to
+QEMU at the bound, not a crash). [command](run47-command.json), [trace](run47-qemu.log.gz),
+[requests](run47-requests.log), [abort](run47-abort.txt), [gates, oracle and build](run47-gates-build.txt)
+(9/9, 11/11 USER births, GR tier PASS, Xid 61 before and after;
+[oracle log](gr-tier-native-run47.log)), [16 status samples](run47-status/) (sampler
+`scripts/bench/windows/qga_status_sampler.py`, QGA `guest-exec`), [sampler log](run47-sampler.out),
+[bugcheck recovery](run47-bugcheck.json), [Windows events](run47-evtx.txt),
+[host before](run47-host-before.txt) and [after](run47-host-after.txt). Host afterwards: no QEMU, NBD
+disconnected, display enabled, P8, Xid 61 (unchanged).
+
+**Measured (run47 at 621310b3, 2026-10-08):**
+- *Registrations (H-defer's first part): supported.* `kf-rm: DEFERRED-API 0x50800101 on
+  0xc1d00015:0xff1fe010` served three times with status 0x0 and 584-byte params: `hApiHandle`
+  `0x40000002` (cmd `0x2080012d` = GPU_INITIALIZE_CTX), `0x40000003` (`0x2080012b` = GPU_PROMOTE_CTX) and
+  **`0x40000004` (`0x2080012c` = GPU_EVICT_CTX)**. The third is new: §29.1 and the previous agent's
+  prediction named only the first two; the EVICT bundle was not in the runs' prediction and is a real
+  host act (below). 14 `NV50_DEFERRED_API ... ADMITTED ... classID Some(1)` lines, all on Translated
+  channels.
+- *Trigger (second part): supported.* `DEFERRED-API trigger token 0x3 subch 5 value 0x1 method 0x200` for
+  all three handles, each followed by `DONE`: INITIALIZE_CTX and PROMOTE_CTX "satisfied by each twin"
+  (ruling B) for the target `0xc1d0002b:0xff0e0000` (host twin `3b`), then `EvictCtx` as the direct act:
+  "host ring(s) off the runlist, context UNBOUND" on that user TSG's host twin. No refusal line, 27
+  `DEFERRED-API` lines in all.
+- **H-defer is NOT falsified:** zero `DEAD`, zero `dead=Some(..)` in any channel's stats line
+  (8 `RETIRED` lines, all `dead=None`), no software-method refusal. The wall of runs 44/45 is gone.
+- *Guest state:* all 16 samples (uptime 10-163 s, every ~10 s): the NVIDIA adapter
+  `ConfigManagerErrorCode 0`, `Status OK`; `nvidia-smi` exit 0 (`NVIDIA GeForce RTX 4070, 580.88`). The
+  Basic Display adapter stays at code 10 (the VGA stand-in). No bugcheck header in the pagefile
+  (`valid false, all_zero true`), no 0x116/0x119 observed. Total RPCs 2111 (run45 looped to 6225
+  through restart cycles); no restart cycle is visible.
+- *Abort point:* `abort_point.py points` still prints `last fn76/20801111 refused` at `teardown_at=659`.
+  That figure is the same in runs 44-47 because it is the first run of >=20 consecutive Free RPCs, an
+  early prelude event; with no TDR cycle it no longer measures where StartDevice gives up (the
+  adapter starts, so the criterion of "abort point" is superseded by the guest-side state below).
+  The refused `0x20801111` is tolerated by Windows when it comes there (the flag is off).
+
+**Not measured / caveats.** The Windows System log recovered offline contains no display-driver event,
+but QEMU was SIGTERM-killed at the bound, so the guest had not flushed its log: absence in that file is
+not evidence (run48 fixes this with a guest-side live query and an ACPI shutdown). 163 s of uptime is
+the whole sampled window; nothing is claimed for longer. The GR work Windows does after the three
+deferred methods was not measured here (no further GR forwards visible in the retirement lines);
+whether an idle desktop is all that ran is not established.
+
+## Run48 setup: the same binary and flags, 600 s, live event log, clean shutdown
+
+Same binary `kf3-bins/621310b3` and flags as run47; `--max-seconds 720`; the sampler v2
+(`qga_status_sampler2.py`) adds the System-log events since boot (nvlddmkm, Display, Kernel-Power,
+BugCheck, WHEA, Kernel-PnP) to every sample and issues an ACPI power-down after 600 s so the guest
+flushes its log.
+
+**Hypothesis H-stable (stated before the run).** The goal criteria hold at 600 s of uptime: the NVIDIA
+adapter reads Code 0 in every sample, `nvidia-smi` exits 0 in every sample, and the live System log has
+no Display 4101 (TDR), nvlddmkm error, Kernel-Power 41 or BugCheck 1001 event.
+**Falsifier:** any one sample with Code != 0 or `nvidia-smi` failing; any 4101/1001/41 event or an
+nvlddmkm error/warning event in any sample; a guest that stops answering the sampler (QGA timeout) before
+the power-down; or a `dead=Some` / `DEAD` / `REFUSED` of a channel method in the trace.
+Prediction: holds (run47: 16/16 clean to 163 s). If it falsifies, the sample that shows the first event
+and the trace line beside it name the next wall.

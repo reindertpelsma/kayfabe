@@ -1,0 +1,1 @@
+/var/lib/kf-windows-20261005/boundary-kayfabe-47/qemu.log	rpcs=2111	teardown_at=659	last=fn76/20801111 	result=refused(unserviced)
