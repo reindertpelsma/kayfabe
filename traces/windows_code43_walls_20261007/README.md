@@ -2522,9 +2522,9 @@ disconnected, display enabled, P8, Xid 5 (unchanged).
   (`0xffffb58455460050`, `0xfffff80769184930`, `0xffffffffc000009a` = STATUS_INSUFFICIENT_RESOURCES,
   `0x4`); no status sample, no display event in the System log.
 
-**Falsifier outcomes.** *B-answer: supported. B-run:* the gate opens; no second-GR-channel work was
-measured. *Prediction* (no TDR stop): held, but the cause measured in run46 is the third GR channel's
-unbound subchannel, not the software method.
+**Falsifier outcomes.** *B-answer: supported. B-run:* the gate opens; the second GR channel got no
+work (run46 at 065447ed, 2026-10-07). *Prediction* (no TDR stop): held, but the cause (run46 at
+065447ed, 2026-10-07) is the third GR channel's unbound subchannel, not the software method.
 
 **Inferred, not tested.** A channel whose first work uses subchannel 0 without a `SET_OBJECT` relies
 on a binding it did not push: the plausible source is the GR context it was promoted with (the FE's
@@ -2536,7 +2536,7 @@ has not approved.
 
 Runs 44-46 used 3 of this loop's 8 runs. Host healthy after each (Xid 5 unchanged).
 
-**A (done, verified).** Root cause of run43's empty VA space: the walk kernel treated a VIDMEM PDE
+**A (done; runs 44-46 at a7a6108e/452848f6/065447ed, 2026-10-07).** Run43's empty VA space: the walk kernel treated a VIDMEM PDE
 whose address is 0 as "no sub-table"; Windows moves a kernel VA space's shift-29 level to FB 0
 (measured `phys=0x0` in runs 44-46). Fixed per OGKM (`gmmu_trace.c:111-134`, `mmu_trace.h:32`),
 VER2 and VER3 alike; kf-gate9 replay per format plus known-positive, CUDA-suite case, GPU-free
