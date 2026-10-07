@@ -65,7 +65,8 @@
 //! this run's scope" rather than claimed as a verified real effect.
 
 use kf_abi::submit::{SET_OBJECT, USERD_GP_PUT, method_header_inc};
-use kf_chan::host::{LEGACY_LAYOUT, fence_words, ring_gp_entry};
+use kf_chan::host::LEGACY_LAYOUT;
+use kf_chan::tspace_unsafe::{fence_words, ring_gp_entry};
 use kf_harness::deferred_model::{self as model, Privilege};
 use kf_host::{HostRm, RmError, VaSpace};
 use kf_linux_raw::DevDir;
