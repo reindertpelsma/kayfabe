@@ -830,3 +830,61 @@ display setup.
 4. *Then, already implemented and not yet reached:* the remaining 0x78 allocations, NV0073
    EVENT_SET_NOTIFICATION, PERF_GET_POWERSTATE, SYSTEM_GET_ACTIVE and IS_MODE_POSSIBLE.
    *Needs new semantics:* 0x007302a3, DFP_ASSIGN_SOR, DP_AUXCH_CTRL.
+
+## What the real GSP posts: VFIO event census (no boot; 2026-10-07)
+
+> ⊘ *Corrects the seventh repair's table (2026-10-07):* 34 HDCP_STATUS_CHANGE and 45
+> AUDIO_HDCP_REQUEST are **posted** by the real GSP (see below). They are withdrawn from
+> "absent on the virtual display" and refused pending the owner's decision. The indices 12, 23,
+> 24, 26, 120 and 122 listed there as refused are now accepted, on the evidence below.
+
+**Method.** `scripts/bench/windows/vfio_events.py` reads the existing gsp-observer exports of
+vfio-8, vfio-9 and vfio-10. It uses abort_point.py's de-duplication and request indexing, so
+the indices below are VFIO RPC indices. It decodes every GSP-initiated message, including
+POST_EVENT 0x1003 (`rpc_post_event_v17_00`, `g_rpc-structures.h:1545-1556`), and every arming.
+Outputs: [vfio8](vfio8-gsp-events.txt), [vfio9](vfio9-gsp-events.txt),
+[vfio10](vfio10-gsp-events.txt). Limitation: the exports cover the boot up to the end of
+capture (about 4,090 RPCs, no dropped records, no sequence gaps). Events after capture ends,
+and events about hardware the boots never exercised, cannot appear.
+
+**Measured (VFIO boots of 2026-10-05, RTX 4070), identical in all three unless a count is given.** The GSP-initiated messages
+were GSP_INIT_DONE x1, RUN_CPU_SEQUENCER x1, UCODE_LIBOS_PRINT x2, POST_NOCAT_RECORD x3/x15/x11
+(vfio-9/8/10) and POST_EVENT x15/x24/x24. Every POST_EVENT is a list post
+(`bNotifyList=1`, hClient c1d00002):
+
+| index | count (vfio-8/9/10) | first post (vfio-10 after_rpc) | data |
+|---|---|---|---|
+| 45 AUDIO_HDCP_REQUEST | 1/1/1 | 3119 (vfio-8: 3152, vfio-9: 3147) | eventData `00020000 00000000` (display 0x200), hEvent ff0f0000 |
+| 139 RUNLIST_PREEMPT_COMPLETE | 20/11/20 | 3308, then bursts at 4043-4068 | 8-byte eventData of guest kernel addresses (`…8dd5ffff`), hEvent ff0620a0 |
+| 33 PSTATE_CHANGE | 2/2/2 | 3560 and 3564 (vfio-8/9: 3556 and 3560) | data 0x20, then 0x100; 12-byte eventData whose last word equals `data` |
+| 34 HDCP_STATUS_CHANGE | 1/1/1 | 4071 (vfio-8: 4078, vfio-9: 4073) | eventData `00020000 04000000` (display 0x200, value 4), hEvent ff150100 |
+
+**Never posted in any of the three boots although armed:** 1 HOTPLUG, 2, 4, 7, 12 GRAPHICS,
+23/24/26 CE0/CE1/CE3, 35, 43, 44, 113, 118 POWER_EVENT, **120 HOTPLUG_PROCESSING_COMPLETE**,
+**122 RESERVED122**, 157, 158, 178, 182, 194 and 197. No hotplug was posted, so these boots
+cannot show whether a processing-complete follows one. That question remains open (inferred
+gap, not measured).
+
+**Armings from 2518 to the first NV0073 display control (2567)**, all with action 2 (REPEAT)
+and identical in all three boots: NV2080 at 2518 44, 2520 43, 2522 113, 2524 120, 2526 4,
+2528 33, 2530 139, 2532 157, 2534 197, 2536 122, 2538 158, 2540 2, 2542 26, 2544 12, 2546 23,
+2548 24, 2550 1, 2552 7, 2554 45, 2556 34, 2562 118, 2564 178, 2566 182. NV0073: 2558 event 1
+(hEvent ff060070) and 2560 event 2 (hEvent ff1400f0).
+
+**Applied (no boot):** every never-posted index in that set is accepted, with this evidence
+cited per row (`RULED_NOTIFIERS`, class `NeverPostedByRealGsp`): 12, 23, 24, 26, 120 and 122
+are new. 33, 139, 45 and 34 are refused. Tests 1471 pass, Clippy new 0, rustfmt clean.
+
+**Decision items (the GSP posts these; no producer is invented):**
+1. **33 PSTATE_CHANGE** (armed at 2528): two posts, data 0x20 then 0x100. These look like
+   P-state transitions of the physical GPU; the interpretation is inferred. A real source
+   would be host P-state events relayed from kayfabe's own unprivileged host subdevice.
+2. **139 RUNLIST_PREEMPT_COMPLETE** (armed at 2530): 11-20 posts. The eventData is a guest
+   kernel pointer, presumably the preempt request's own handle (inferred). The source would be
+   the VM's own channels' preempt completions on the host.
+3. **45 AUDIO_HDCP_REQUEST and 34 HDCP_STATUS_CHANGE** (armed at 2554 and 2556): one post each,
+   both for display 0x200, a real HDMI/DP sink. On kayfabe's DVI-D virtual display these
+   either stay absent (an owner call) or need HDCP and audio semantics.
+
+**Run28 not started:** the remaining set is not fully covered by never-posted indices (33 and
+139 come first, at 2528 and 2530), so condition (c) is not met.

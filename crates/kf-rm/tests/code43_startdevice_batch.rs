@@ -186,13 +186,14 @@ fn the_vfio_sequence_after_the_run24_abort_point_is_served() {
     );
 
     // 2b. The 23 subdevice notifier armings, in VFIO order (vfio-10 RPCs 2518-2566, all
-    //     REPEAT): accepted exactly where owner ruling §S classifies the index, refused where the
-    //     event concerns real GPU work or cannot be posted from kayfabe's own state.
+    //     REPEAT): accepted where owner ruling §S classifies the index (including every index the
+    //     real GSP never posted in vfio-8/9/10), refused where the real GSP does post it.
     let windows_order = [
         44u32, 43, 113, 120, 4, 33, 139, 157, 197, 122, 158, 2, 26, 12, 23, 24, 1, 7, 45, 34, 118,
         178, 182,
     ];
-    let refused = [120u32, 33, 139, 122, 26, 12, 23, 24];
+    // Refused: the four indices the real GSP posts in vfio-8/9/10 (owner decision pending).
+    let refused = [33u32, 139, 45, 34];
     for ev in windows_order {
         let got = params(
             &mut *c,

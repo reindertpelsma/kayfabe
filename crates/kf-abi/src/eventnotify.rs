@@ -482,6 +482,11 @@ pub enum RuledClass {
     /// is a DVI-D, single-link TMDS output: `kf_disp::model` answers `CONNECTOR_DATA_TYPE_DVI_D`
     /// and `OR_PROTOCOL_SOR_SINGLE_TMDS_A`), so it cannot occur. Any guest-RM producer is noted.
     AbsentOnVirtualDisplay,
+    /// §S, evidence-backed (2026-10-07): in all three Code43-free VFIO boots (vfio-8/9/10, RTX
+    /// 4070, Windows 580.88; `traces/windows_code43_walls_20261007/vfio*-gsp-events.txt`) the real
+    /// GSP posted ZERO `POST_EVENT`s with this index across the whole captured boot, although
+    /// Windows armed it. So a silent arming answers exactly as the real GSP behaved there.
+    NeverPostedByRealGsp,
     /// §S.2: implemented for real. kayfabe posts the event from its own state (the
     /// virtual monitor), to a live registration whose notify index names it.
     PostedByDisplayPlane,
@@ -489,12 +494,14 @@ pub enum RuledClass {
 
 /// ★★★ **The notifier indices the Windows kernel driver arms in StartDevice, accepted under owner
 /// ruling §S (2026-10-07)** — `[measured]` 2026-10-05 VFIO boot vfio-10, RTX 4070: 23 armings (all
-/// REPEAT) right after the class-0x78 event allocations. Every row says which of the three
-/// treatments applies and why. The rest of that set stays REFUSED, because it concerns real GPU
-/// work or an event kayfabe cannot yet post: 120 HOTPLUG_PROCESSING_COMPLETE (no producer anywhere
-/// in OGKM, so its timing and data are unknown), 33 PSTATE_CHANGE, 139 RUNLIST_PREEMPT_COMPLETE,
-/// 12 GRAPHICS, 23/24/26 CE0/CE1/CE3 (none derived from host events yet), and 122 RESERVED122 (no
-/// defined meaning).
+/// REPEAT) right after the class-0x78 event allocations. Every row says which treatment applies
+/// and why.
+///
+/// ⊘ *Corrected 2026-10-07 (after run27, from the VFIO GSP event exports):* the real GSP DOES post
+/// four of the armed indices in those boots: 33 PSTATE_CHANGE (x2), 34 HDCP_STATUS_CHANGE (x1),
+/// 45 AUDIO_HDCP_REQUEST (x1) and 139 RUNLIST_PREEMPT_COMPLETE (x11-x20). They stay REFUSED until
+/// the owner decides (34 and 45 had been accepted as "absent on the virtual display" and are
+/// withdrawn). Every other armed index was never posted and is accepted.
 pub const RULED_NOTIFIERS: &[RuledNotifier] = &[
     RuledNotifier {
         index: 1,
@@ -528,10 +535,47 @@ pub const RULED_NOTIFIERS: &[RuledNotifier] = &[
               (ogkm-580: disp_common_kern_ctrl_minimal.c:259)",
     },
     RuledNotifier {
-        index: 34,
-        class: RuledClass::AbsentOnVirtualDisplay,
-        why: "NV2080_NOTIFIERS_HDCP_STATUS_CHANGE (ogkm-580: cl2080_notification.h:71): the virtual \
-              display has no HDCP engine and no OGKM producer exists; HDCP state never changes",
+        index: 12,
+        class: RuledClass::NeverPostedByRealGsp,
+        why: "NV2080_NOTIFIERS_GRAPHICS (ogkm-580: cl2080_notification.h:48): armed REPEAT at \
+              VFIO index 2544 and never posted by the real GSP in vfio-8/9/10, a boot in which \
+              graphics work ran",
+    },
+    RuledNotifier {
+        index: 23,
+        class: RuledClass::NeverPostedByRealGsp,
+        why: "NV2080_NOTIFIERS_CE0 (ogkm-580: cl2080_notification.h:60): armed REPEAT at VFIO index \
+              2546, never posted by the real GSP in vfio-8/9/10 (engine-type mapping \
+              ogkm-580: event_notification.c:485)",
+    },
+    RuledNotifier {
+        index: 24,
+        class: RuledClass::NeverPostedByRealGsp,
+        why: "NV2080_NOTIFIERS_CE1 (ogkm-580: cl2080_notification.h:61): armed REPEAT at VFIO index \
+              2548, never posted by the real GSP in vfio-8/9/10 (engine-type mapping \
+              ogkm-580: event_notification.c:488)",
+    },
+    RuledNotifier {
+        index: 26,
+        class: RuledClass::NeverPostedByRealGsp,
+        why: "NV2080_NOTIFIERS_CE3 (ogkm-580: cl2080_notification.h:63): armed REPEAT at VFIO index \
+              2542, never posted by the real GSP in vfio-8/9/10 (engine-type mapping \
+              ogkm-580: event_notification.c:494)",
+    },
+    RuledNotifier {
+        index: 120,
+        class: RuledClass::NeverPostedByRealGsp,
+        why: "NV2080_NOTIFIERS_HOTPLUG_PROCESSING_COMPLETE (ogkm-580: cl2080_notification.h:158): \
+              armed REPEAT at VFIO index 2524, never posted in vfio-8/9/10. No hotplug happened in \
+              those boots either (no index-1 post), so this does not show what follows a hotplug. \
+              OGKM has no producer, so kayfabe posts none; if a hotplug does happen, this event \
+              remains a known gap",
+    },
+    RuledNotifier {
+        index: 122,
+        class: RuledClass::NeverPostedByRealGsp,
+        why: "NV2080_NOTIFIERS_RESERVED122 (ogkm-580: cl2080_notification.h:160): armed REPEAT at \
+              VFIO index 2536, never posted by the real GSP in vfio-8/9/10; no OGKM producer",
     },
     RuledNotifier {
         index: 43,
@@ -544,12 +588,6 @@ pub const RULED_NOTIFIERS: &[RuledNotifier] = &[
         class: RuledClass::Stub,
         why: "NV2080_NOTIFIERS_THERMAL_DIAG_ZONE (ogkm-580: cl2080_notification.h:82): thermal \
               diagnostics of the physical board; no OGKM producer. Host management",
-    },
-    RuledNotifier {
-        index: 45,
-        class: RuledClass::AbsentOnVirtualDisplay,
-        why: "NV2080_NOTIFIERS_AUDIO_HDCP_REQUEST (ogkm-580: cl2080_notification.h:83): audio over \
-              the display link; a DVI-D output carries no audio and no OGKM producer exists",
     },
     RuledNotifier {
         index: 113,

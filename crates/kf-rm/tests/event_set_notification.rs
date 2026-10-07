@@ -822,7 +822,9 @@ fn the_ruled_list_is_pinned_cited_disjoint_and_served() {
     let indices: Vec<u32> = RULED_NOTIFIERS.iter().map(|n| n.index).collect();
     assert_eq!(
         indices,
-        vec![1, 2, 4, 7, 34, 43, 44, 45, 113, 157, 158, 178, 182, 197]
+        vec![
+            1, 2, 4, 7, 12, 23, 24, 26, 120, 122, 43, 44, 113, 157, 158, 178, 182, 197
+        ]
     );
     let mut p = policy();
     for n in RULED_NOTIFIERS {
@@ -845,8 +847,8 @@ fn the_ruled_list_is_pinned_cited_disjoint_and_served() {
             n.index
         );
     }
-    // Real-GPU-work events and the unpostable HOTPLUG_PROCESSING_COMPLETE stay refused.
-    for ev in [120u32, 33, 139, 122, 26, 12, 23, 24] {
+    // The indices the real GSP DID post in vfio-8/9/10 stay refused pending the owner's decision.
+    for ev in [33u32, 34, 45, 139] {
         assert_ne!(
             p.respond(&arming_of(ev)).expect("claimed").rpc_result,
             0,

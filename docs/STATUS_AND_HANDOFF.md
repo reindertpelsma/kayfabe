@@ -31,7 +31,11 @@ Owner ruling §S (2026-10-07, `OWNER_RULINGS.md`) is applied at 4448be53: RC rec
 stub (ENABLED), the notifier family is classified per index, and hotplug is real for Windows.
 Run27 still shows Code43. The abort is at VFIO index 2524, the arming of 120
 HOTPLUG_PROCESSING_COMPLETE, which has no OGKM producer. That needs an owner decision or
-semantics, followed by real-host-event notifiers (PSTATE, CE, GRAPHICS, runlist preempt). [Batch and run25](../traces/windows_code43_walls_20261007/README.md#sixth-repair-startdevice-batch-after-get_rc_recovery).
+semantics, followed by real-host-event notifiers (PSTATE, CE, GRAPHICS, runlist preempt).
+VFIO event census (no boot): the real GSP posts only 33 PSTATE_CHANGE, 34/45 (HDCP/audio
+for display 0x200) and 139 RUNLIST_PREEMPT_COMPLETE. Every other armed index, 120 and 122
+included, is never posted and is now accepted silently. 33 and 139 (armed at 2528 and 2530)
+are owner decision items; run28 is on hold. [Batch and run25](../traces/windows_code43_walls_20261007/README.md#sixth-repair-startdevice-batch-after-get_rc_recovery).
 
 **Code43 cause analysis, 2026-10-07 (corrects the paragraph below).** Run24 at
 a6f84d0d births and promotes OFA0. Code43/smi9 is verified and the 24 assertions

@@ -1,0 +1,54 @@
+# /data/kayfabe-runtime/windows-boundary-20261005/boundary-vfio-8/decoded.json: 4092 request RPCs, 43 GSP-initiated messages
+# GSP-initiated functions: 0x1001x1, 0x1002x1, 0x1003x24, 0x100cx2, 0x1020x15
+POST_EVENT after_rpc=3152 notifyIndex=45 hClient=0xc1d00002 hEvent=0xff0f0000 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=0002000000000000
+POST_EVENT after_rpc=3360 notifyIndex=139 hClient=0xc1d00002 hEvent=0xff0620a0 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=e0eaa5c904b3ffff
+POST_EVENT after_rpc=3360 notifyIndex=139 hClient=0xc1d00002 hEvent=0xff0620a0 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=402aa6c904b3ffff
+POST_EVENT after_rpc=3556 notifyIndex=33 hClient=0xc1d00002 hEvent=0xff060006 data=0x20 info16=0x0 status=0x0 list=1 size=12 eventData=7fa5db18a052332820000000
+POST_EVENT after_rpc=3560 notifyIndex=33 hClient=0xc1d00002 hEvent=0xff060006 data=0x100 info16=0x0 status=0x0 list=1 size=12 eventData=7fa5db18e02c796900010000
+POST_EVENT after_rpc=4049 notifyIndex=139 hClient=0xc1d00002 hEvent=0xff0620a0 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=e0eaa5c904b3ffff
+POST_EVENT after_rpc=4050 notifyIndex=139 hClient=0xc1d00002 hEvent=0xff0620a0 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=402aa6c904b3ffff
+POST_EVENT after_rpc=4051 notifyIndex=139 hClient=0xc1d00002 hEvent=0xff0620a0 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=f04c4ac304b3ffff
+POST_EVENT after_rpc=4053 notifyIndex=139 hClient=0xc1d00002 hEvent=0xff0620a0 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=703de1c704b3ffff
+POST_EVENT after_rpc=4053 notifyIndex=139 hClient=0xc1d00002 hEvent=0xff0620a0 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=107810c704b3ffff
+POST_EVENT after_rpc=4055 notifyIndex=139 hClient=0xc1d00002 hEvent=0xff0620a0 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=7021a4c904b3ffff
+POST_EVENT after_rpc=4055 notifyIndex=139 hClient=0xc1d00002 hEvent=0xff0620a0 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=e071a4c904b3ffff
+POST_EVENT after_rpc=4057 notifyIndex=139 hClient=0xc1d00002 hEvent=0xff0620a0 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=e0284bc904b3ffff
+POST_EVENT after_rpc=4057 notifyIndex=139 hClient=0xc1d00002 hEvent=0xff0620a0 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=e0124cc904b3ffff
+POST_EVENT after_rpc=4067 notifyIndex=139 hClient=0xc1d00002 hEvent=0xff0620a0 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=e0eaa5c904b3ffff
+POST_EVENT after_rpc=4068 notifyIndex=139 hClient=0xc1d00002 hEvent=0xff0620a0 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=402aa6c904b3ffff
+POST_EVENT after_rpc=4069 notifyIndex=139 hClient=0xc1d00002 hEvent=0xff0620a0 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=f04c4ac304b3ffff
+POST_EVENT after_rpc=4070 notifyIndex=139 hClient=0xc1d00002 hEvent=0xff0620a0 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=703de1c704b3ffff
+POST_EVENT after_rpc=4071 notifyIndex=139 hClient=0xc1d00002 hEvent=0xff0620a0 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=107810c704b3ffff
+POST_EVENT after_rpc=4073 notifyIndex=139 hClient=0xc1d00002 hEvent=0xff0620a0 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=7021a4c904b3ffff
+POST_EVENT after_rpc=4073 notifyIndex=139 hClient=0xc1d00002 hEvent=0xff0620a0 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=e071a4c904b3ffff
+POST_EVENT after_rpc=4075 notifyIndex=139 hClient=0xc1d00002 hEvent=0xff0620a0 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=e0284bc904b3ffff
+POST_EVENT after_rpc=4075 notifyIndex=139 hClient=0xc1d00002 hEvent=0xff0620a0 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=e0124cc904b3ffff
+POST_EVENT after_rpc=4078 notifyIndex=34 hClient=0xc1d00002 hEvent=0xff150100 data=0x0 info16=0x0 status=0x0 list=1 size=8 eventData=0002000004000000
+ARM2080 rpc=2518 event=44 action=2
+ARM2080 rpc=2520 event=43 action=2
+ARM2080 rpc=2522 event=113 action=2
+ARM2080 rpc=2524 event=120 action=2
+ARM2080 rpc=2526 event=4 action=2
+ARM2080 rpc=2528 event=33 action=2
+ARM2080 rpc=2530 event=139 action=2
+ARM2080 rpc=2532 event=157 action=2
+ARM2080 rpc=2534 event=197 action=2
+ARM2080 rpc=2536 event=122 action=2
+ARM2080 rpc=2538 event=158 action=2
+ARM2080 rpc=2540 event=2 action=2
+ARM2080 rpc=2542 event=26 action=2
+ARM2080 rpc=2544 event=12 action=2
+ARM2080 rpc=2546 event=23 action=2
+ARM2080 rpc=2548 event=24 action=2
+ARM2080 rpc=2550 event=1 action=2
+ARM2080 rpc=2552 event=7 action=2
+ARM2080 rpc=2554 event=45 action=2
+ARM2080 rpc=2556 event=34 action=2
+ARM0073 rpc=2558 sub=0 hEvent=0xff060070 event=1 action=2
+ARM0073 rpc=2560 sub=0 hEvent=0xff1400f0 event=2 action=2
+ARM2080 rpc=2562 event=118 action=2
+ARM2080 rpc=2564 event=178 action=2
+ARM2080 rpc=2566 event=182 action=2
+# NV2080 indices armed (whole boot): {1: 1, 2: 1, 4: 1, 7: 1, 12: 1, 23: 1, 24: 1, 26: 1, 33: 1, 34: 1, 35: 1, 43: 1, 44: 1, 45: 1, 113: 1, 118: 1, 120: 1, 122: 1, 139: 1, 157: 1, 158: 1, 178: 1, 182: 1, 194: 1, 197: 1}
+# indices posted (whole boot): {33: 2, 34: 1, 45: 1, 139: 20}
+# armed, never posted: [1, 2, 4, 7, 12, 23, 24, 26, 35, 43, 44, 113, 118, 120, 122, 157, 158, 178, 182, 194, 197]
