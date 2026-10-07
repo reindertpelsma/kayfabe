@@ -1,0 +1,8 @@
+HEAD is now at 8208effee DIAGNOSTIC: optionally report and accept RC recovery ENABLED for run26
+V3_GATES_START 2026-10-07T12:18:00+02:00
+V3_GATES_SUMMARY pass=9 fail=0
+V3_GATES_BIRTHS births=11 user=11 refused=0 ok=1
+V3_GATES_EXIT pass=9 fail=0 births_ok=1 2026-10-07T12:18:08+02:00
+== kf3 build: QEMU 10.2.4 rev 8208effe
+== archive 2026-10-07 12:18:17.862657261 +0200 (cargo succeeded: current for this revision by cargo's fingerprints)
+KF3_BUILT /var/lib/kf-windows-20261005/kf3-bins/8208effe/qemu-system-x86_64 rev=8208effe mtime=2026-10-07 12:18:22.769629647 +0200 (shared build dir /var/lib/kf-windows-20261005/qemu-build-kf3)

@@ -702,3 +702,56 @@ With the flag off, behaviour is unchanged. The runner adds the flag only with
 NV0073 events, power state) is worth keeping only if the abort moves well past
 VFIO index 2518. That index is the first 0x78 allocation plus its
 EVENT_SET_NOTIFICATION.
+
+### Run26 result (DIAGNOSTIC; falsifier triggered for now)
+
+Product/QEMU 8208effee6b020c421e3673c877856da252e6aca, `kf3-bins/8208effe`, run on
+2026-10-07 at 10:18-10:21 UTC. [command](run26-command.json) (`flags` records
+`KF3_RC_RECOVERY_ENABLED_DIAG: "1"`), [status](run26-status.json),
+[trace](run26-qemu.log.gz), [requests](run26-requests.log),
+[completion](run26-complete.json), [host health](run26-host-health.txt),
+[unit result](run26-unit-result.txt), [9/9 gates](run26-gates.log) (11/11 USER
+births), [build](run26-build.log), [watchdog recovery](run26-watchdog-recovery.log)
+(cleanup verified 2026-10-07). After 98 s of uptime the NVIDIA adapter has
+ConfigManagerErrorCode 43 and nvidia-smi exits 9, so Code43 persists. No
+initialization success is claimed. Afterwards the host was healthy: display
+enabled, P8, no Xid, no QEMU, NBD disconnected.
+
+**Abort point:** 699 RPCs, teardown at 451. The last RPC is
+`NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION` 0x20800301 → 0x56. The sequence was:
+GET (now ENABLED) 0x0, SET(ENABLED) 0x0, the first class-0x78 alloc 0x0
+(handle ff060040, parent the subdevice), and then the first notifier arming,
+which was refused. That is **VFIO index 2518**, so the abort moved exactly to
+the falsifier's line and no further. The other 24 0x78 allocations, the NV0073
+event notifications (2558/2560), PERF_GET_POWERSTATE (2571) and every display
+control were **not reached**. The distinct refusal set is run25's with
+0x2080220d replaced by 0x20800301.
+
+**Cause.** The `0x20800301` handler accepts a notifier index only if
+`kf_abi::eventnotify` can argue for it as silent, delivered or guest-raised.
+Index 0x2c (44, THERMAL_DIAG_ZONE) has no such argument. The VFIO boot then arms
+23 indices, all REPEAT, in this order: 44 THERMAL_DIAG_ZONE, 43 COOLER_DIAG_ZONE,
+113 STEREO_EMITTER_DETECTION, 120 HOTPLUG_PROCESSING_COMPLETE, 4 THERMAL_HW,
+33 PSTATE_CHANGE, 139 RUNLIST_PREEMPT_COMPLETE, 157 UCODE_RESET, 197 GPU_RC_RESET,
+122 RESERVED122, 158 PLATFORM_POWER_MODE_CHANGE, 2 POWER_CONNECTOR, 26 CE3,
+12 GRAPHICS, 23 CE0, 24 CE1, 1 HOTPLUG, 7 DP_IRQ, 45 AUDIO_HDCP_REQUEST,
+34 HDCP_STATUS_CHANGE, 118 POWER_EVENT, 178 HDMI_FRL_RETRAINING_REQUEST and
+182 AUX_POWER_STATE_CHANGE.
+
+**Next walls, ranked by what each needs:**
+- *Derivable now* (a source-backed "cannot occur on this virtual device"
+  argument per index; add rows to `SILENT_NOTIFIERS`): thermal/cooler diag
+  zones, stereo emitter, power connector, platform power mode, HDCP/audio-HDCP,
+  HDMI FRL, DP_IRQ (the virtual connector is DVI), aux power. Each needs its
+  own OGKM citation for who raises it.
+- *Needs owner decision:* GPU_RC_RESET (197) and UCODE_RESET (157). They depend
+  on the RC-recovery question, and arming them while recovery is diagnostic-only
+  would promise events that never come. Also HOTPLUG (1) and
+  HOTPLUG_PROCESSING_COMPLETE (120): the virtual monitor can be resized (display
+  step 3c), so these are not silent.
+- *Needs new semantics* (events that do occur on real work): CE0/CE1/CE3 and
+  GRAPHICS non-stall notifiers, RUNLIST_PREEMPT_COMPLETE, PSTATE_CHANGE and
+  POWER_EVENT. Either kayfabe delivers them, or the guest raises them itself
+  (`GUEST_RAISED_NOTIFIERS`), which has to be shown per index. After these
+  come PERF_GET_POWERSTATE (served) and the display walls listed in the sixth
+  repair.
