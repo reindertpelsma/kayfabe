@@ -52,6 +52,23 @@ is frozen (see *Layout*).
   - A correction is folded into its parent, **above** the text it corrects.
   - A supersession is recorded **in** the superseded text, not only in its successor.
 
+## Working rules — hypotheses, models, sessions
+
+- **Correctness before cost.** A wrong hypothesis or a week spent on something irrelevant costs far more
+  than tokens. Never downgrade a model for work whose wrong answer would redirect the effort.
+- **Models by risk.** Hypothesis work, decoding unknown semantics, root-cause hunts and anything that feeds
+  an owner decision run on the strongest model. Cheaper models only do mechanical work with checkable
+  output (evidence collection, formatting, running a script, grep sweeps).
+- **Every hypothesis states its falsifier before the run:** the result that would prove it wrong. Report the
+  result either way. Keep *measured* and *inferred* apart; an inference is never written as evidence.
+  (Precedent: "the 24 watchdog assertions never change, so the walls are irrelevant" was an inference. The
+  journal holds exactly 24 records, so it could not change; the walls were the abort points.)
+- **Time-box open-ended wall-clearing.** Batch the known walls per run, then stop and compare against the VFIO
+  reference before continuing; never walk one wall per boot indefinitely.
+- **Fresh session from `docs/STATUS_AND_HANDOFF.md`** instead of dragging a long chat: past ~150-200k
+  tokens of context, resume in a new session. Filter big logs on the host; do not print them; read big
+  files by range.
+
 ## Verification — what "green" means
 
 - GPU-free: `cargo test -p kf-<crate>` for the `kf-*` crates.
