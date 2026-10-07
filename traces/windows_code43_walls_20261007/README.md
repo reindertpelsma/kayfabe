@@ -1456,3 +1456,49 @@ reference's reply shape (the latency row byte-identical to vfio-10's; the timesl
 and the abort stays at VFIO 2861. Hypothesis 1 is wrong as the cause. *Inferred, not tested:* the
 earlier refusals of the same controls were tolerated for the same reason — Windows does not check
 them at this step.
+
+## Fourteenth repair: Translated copy-engine completions relayed to the guest's CE vector (run35 setup)
+
+Hypothesis 2 of run33's list, next because run34 falsified hypothesis 1.
+
+**What was missing (read in the code at 893fac67).** Only GR-tier rings relayed a completion to a
+guest vector (`ChanPlane::take_gr_relay`). A Translated copy-engine ring — Windows' kernel CE
+channel (token 0x802, guest COPY2) and the paging channel — authors the guest's `GP_GET` after its
+host fence is reached, and the guest never got an interrupt for it. Passthrough twins have their own
+relay (`EngineEvent::live`), which Translated births never count.
+
+**Change** (default off, `KF3_TRANSLATED_CE_RELAY=1`; the Windows runner's flag list gains it):
+- When a Translated ring on a guest copy engine (`is_copy_engine(guest_engine)`, not GR tier) is
+  pumped and its `GP_GET` advanced — which the pump does only for entries whose HOST fence was
+  reached (no forged completion) — the plane counts a pending relay on the `EngineEvent` of the
+  ring's own guest engine. The worker, right after `serve`, raises that engine's guest vector
+  (`latch_and_deliver`) and logs `kf3: NSI RELAY … -> guest CEn vector v: a Translated copy-engine
+  ring retired work after its host fence (relay #n)` (the first 16, then each power of two). The
+  same path as the GR0 relay: on the worker, never on a vCPU, no lock a vCPU takes is held.
+- *Wake path (read in the code):* the worker passes until no token is served, then parks in
+  `epoll` (50 ms re-check) on its eventfd and the session fd, which carries `FIFO_EVENT_MTHD` and
+  the host CE's own non-stall notifier (`ChanPlane::new`, `Completions::also`). A completion
+  re-rings the in-flight channels' tokens, the pump sees the fence, and the relay follows.
+- *Native oracle extended* (`kf-gr-tier`): on the CE T-mode arm it now measures, each on its own fd,
+  whether the CE ring's completion raises `FIFO_EVENT_MTHD` and/or the host CE notifier, and checks
+  that at least one of the fds kf3's worker parks on fires (`ce_completion_wakes_worker_fds`). The
+  guest-vector relay itself needs the VMM; that is run35's evidence.
+
+**Also in this revision (audit SHOULD-FIX 3 and 5; no answer changes, pinned by tests).**
+`RULED_NOTIFIERS` rows name the generated `nv2080_notifiers` runs and are resolved at the guest's
+version (`is_ruled_notifier(version, index)`; at 535.309.01 `AUX_POWER_STATE_CHANGE` is 0xb4 and
+`GPU_RC_RESET` is absent). `kf_rm::vfguest` takes the RC-recovery and power-state ids, params sizes
+and values from the driver matrix and the status offset from `rm_control_wire().status_off`
+(`VfGuestIds`); `kf_rm::chanlink` takes `SET_DEFAULT_VASPACE`'s id and size from the matrix
+(`DefaultVaspaceCtl`). `PERF_GET_POWERSTATE`'s `AC` is recorded in `OWNER_RULINGS.md` §S as a stub
+*assumed* from the power ruling, owner to confirm. The capability allowlist change in
+`kf-abi/src/capability.rs:1531-1543` (`NV01_EVENT_KERNEL_CALLBACK` for every guest) is untouched
+and **still needs owner review before any merge**.
+
+**Falsifier, stated before run35.** Hypothesis 2: the abort right after the paging channel's
+`GPFIFO_SCHEDULE` follows from the guest never receiving an interrupt for its Translated CE work.
+It is wrong if, in run35, an `NSI RELAY … guest CE… vector` line is logged for the kernel CE
+channel's retired work (token 0x802 retires GP 0, as in runs 32-34), the MSI is raised (not held),
+and the abort still sits at VFIO ≤ 2866. If no CE relay is logged (for example, the guest engine has
+no vector in the served table), the falsifier is undecided and the run says why. **Prediction:** a
+CE relay is logged and the abort moves past 2861.

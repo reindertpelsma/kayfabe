@@ -818,7 +818,15 @@ fn the_ruled_list_is_pinned_cited_disjoint_and_served() {
     use kf_abi::eventnotify::{
         RULED_NOTIFIERS, is_delivered_notifier, is_guest_raised_notifier, is_silent_notifier,
     };
-    let indices: Vec<u32> = RULED_NOTIFIERS.iter().map(|n| n.index).collect();
+    // ★ 2026-10-07 (audit S2): the rows name generated per-version runs; at the bench version they
+    // resolve to the indices the ruling was made on.
+    let indices: Vec<u32> = RULED_NOTIFIERS
+        .iter()
+        .map(|n| {
+            n.index_at(BENCH_DRIVER)
+                .expect("every ruled notifier exists at the bench")
+        })
+        .collect();
     assert_eq!(
         indices,
         vec![
@@ -827,26 +835,35 @@ fn the_ruled_list_is_pinned_cited_disjoint_and_served() {
         ]
     );
     let mut p = policy();
-    for n in RULED_NOTIFIERS {
+    for (n, index) in RULED_NOTIFIERS.iter().zip(indices) {
         assert!(
             n.why.contains("ogkm-580:"),
-            "notifier {} cites nothing",
-            n.index
+            "notifier {index} cites nothing"
         );
         assert!(
-            !is_silent_notifier(n.index)
-                && !is_delivered_notifier(n.index)
-                && !is_guest_raised_notifier(n.index),
-            "notifier {} is on two lists",
-            n.index
+            !is_silent_notifier(index)
+                && !is_delivered_notifier(index)
+                && !is_guest_raised_notifier(index),
+            "notifier {index} is on two lists"
         );
         assert_eq!(
-            p.respond(&arming_of(n.index)).expect("served").rpc_result,
+            p.respond(&arming_of(index)).expect("served").rpc_result,
             0,
-            "notifier {} is ruled and must be served",
-            n.index
+            "notifier {index} is ruled and must be served"
         );
     }
+    // The version axis: at 535.309.01 AUX_POWER_STATE_CHANGE is 0xb4 (not 0xb6) and GPU_RC_RESET
+    // does not exist, so neither 0xb6 nor 0xc5 is ruled there (generated `nv2080_notifiers` runs).
+    let v535 = kf_abi::DriverVersion {
+        major: 535,
+        minor: 309,
+        patch: 1,
+    };
+    assert!(kf_abi::eventnotify::is_ruled_notifier(v535, 0xb4));
+    assert!(!kf_abi::eventnotify::is_ruled_notifier(v535, 0xb6));
+    assert!(!kf_abi::eventnotify::is_ruled_notifier(v535, 0xc5));
+    assert!(kf_abi::eventnotify::is_ruled_notifier(BENCH_DRIVER, 0xb6));
+    assert!(kf_abi::eventnotify::is_ruled_notifier(BENCH_DRIVER, 0xc5));
     // An index on no list (THERMAL_SW, FULL_SCREEN_CHANGE) stays refused.
     for ev in [3u32, 5] {
         assert_ne!(

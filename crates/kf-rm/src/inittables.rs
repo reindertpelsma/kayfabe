@@ -2414,7 +2414,7 @@ impl CommandPolicy for InitTablePolicy {
                     && !eventnotify::is_guest_raised_notifier(reg.event)
                     // ★ 2026-10-07, owner ruling §S: stub / absent-on-virtual-display / posted
                     // by the display plane (`RULED_NOTIFIERS`, every row with its argument).
-                    && !eventnotify::is_ruled_notifier(reg.event)
+                    && !eventnotify::is_ruled_notifier(self.driver.driver_version(), reg.event)
                     && !self.probe_arm.contains(reg.event)
                 {
                     return refuse();

@@ -65,7 +65,39 @@ const NV_ERR_INVALID_OBJECT_HANDLE: u32 = 0x33;
 /// allocating that Device's `FERMI_VASPACE_A` (vfio-10 RPC 2846). Answered from this link's own
 /// Device/VA-space records; nothing reaches the host (the default only decides which VA space a
 /// later `hVASpace = 0` channel resolves to, [`ChannelPolicy::device_default_va`]).
-pub const SET_DEFAULT_VASPACE: u32 = 0x0080_1812;
+///
+/// ★ 2026-10-07 (audit S5): the id and `sizeof(NV0080_CTRL_DMA_SET_DEFAULT_VASPACE_PARAMS)` are
+/// read at the guest's version from the driver matrix (`ctrl_values:NV0080_CTRL_DMA_SET_DEFAULT_VASPACE`
+/// — the SDK spells this id without `_CMD_` — and the params' measured layout), not typed here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DefaultVaspaceCtl {
+    /// `NV0080_CTRL_DMA_SET_DEFAULT_VASPACE` at the version.
+    pub cmd: u32,
+    /// `sizeof(NV0080_CTRL_DMA_SET_DEFAULT_VASPACE_PARAMS)`.
+    pub size: usize,
+    /// `hVASpace`'s offset.
+    pub vas_off: usize,
+}
+
+impl DefaultVaspaceCtl {
+    /// The control at `version`; `None` where the matrix does not measure it.
+    #[must_use]
+    pub fn at(version: kf_abi::DriverVersion) -> Option<DefaultVaspaceCtl> {
+        use kf_abi::generated::matrix as m;
+        let l =
+            kf_abi::matrix::Resolved::of(&m::NV0080_CTRL_DMA_SET_DEFAULT_VASPACE_PARAMS, version)
+                .ok()?;
+        let vas = l.need("hVASpace").ok()?;
+        (vas.bytes()? == 4).then_some(())?;
+        Some(DefaultVaspaceCtl {
+            cmd: m::CTRL_VALUES_NV0080_CTRL_DMA_SET_DEFAULT_VASPACE
+                .at_u32(version)
+                .ok()??,
+            size: l.size(),
+            vas_off: vas.off(),
+        })
+    }
+}
 /// `GT200_DEBUGGER` (`ogkm-580: resource_list.h:186-196`, parent `Device`,
 /// `NV83DE_ALLOC_PARAMETERS` required).
 pub const GT200_DEBUGGER: u32 = 0x83de;
@@ -530,6 +562,8 @@ pub struct ChannelPolicy {
     /// ★ 2026-10-07: `SET_CHANNEL_PROPERTIES` at the guest's measured version (`None` where the
     /// matrix has no layout for it: the control then stays unserviced, as before).
     chan_props: Option<kf_abi::fifoctl::ChannelPropsLayout>,
+    /// ★ 2026-10-07: `SET_DEFAULT_VASPACE` at the guest's measured version.
+    default_vas: Option<DefaultVaspaceCtl>,
     /// The deferred outcome of the command last carried (`CommandPolicy::defers`).
     pending: Option<kf_gsp::Deferred>,
     /// Statements carried.
@@ -547,6 +581,7 @@ impl ChannelPolicy {
     #[must_use]
     pub fn new(abi: DriverAbiTable, guest_os: kf_abi::GuestOs, sink: ChanSink) -> ChannelPolicy {
         let chan_props = kf_abi::fifoctl::ChannelPropsLayout::at(abi.driver_version());
+        let default_vas = DefaultVaspaceCtl::at(abi.driver_version());
         ChannelPolicy {
             abi,
             guest_os,
@@ -562,6 +597,7 @@ impl ChannelPolicy {
             vas_parents: Default::default(),
             device_vas_bound: Default::default(),
             chan_props,
+            default_vas,
             pending: None,
             carried: 0,
             refused: 0,
@@ -944,8 +980,8 @@ impl ChannelPolicy {
             self.vas_objects.insert((st.client.0, st.vaspace.0));
             return None;
         }
-        if h.cmd == SET_DEFAULT_VASPACE {
-            return self.set_default_vaspace(cmd, &h);
+        if let Some(d) = self.default_vas.filter(|d| d.cmd == h.cmd) {
+            return self.set_default_vaspace(cmd, &h, d);
         }
         if self.chan_props.is_some_and(|l| l.cmd == h.cmd) {
             return self.set_channel_properties(cmd, &h);
@@ -1445,25 +1481,27 @@ impl ChannelPolicy {
         &mut self,
         cmd: &RpcCommand,
         h: &kf_abi::view::RpcControlReq,
+        ctl: DefaultVaspaceCtl,
     ) -> Option<Reply> {
         let device = (h.client, h.object);
         if !self.devices.contains_key(&device) {
             return None;
         }
-        // `sizeof(NV0080_CTRL_DMA_SET_DEFAULT_VASPACE_PARAMS)` — one `NvHandle`.
-        let p = (h.params_size == 4)
+        // `sizeof(NV0080_CTRL_DMA_SET_DEFAULT_VASPACE_PARAMS)` — one `NvHandle` (driver matrix).
+        let p = (h.params_size as usize == ctl.size)
             .then(|| {
                 h.params_at
-                    .checked_add(4)
+                    .checked_add(ctl.size)
                     .and_then(|e| cmd.payload.get(h.params_at..e))
             })
-            .flatten();
+            .flatten()
+            .and_then(|p| p.get(ctl.vas_off..ctl.vas_off + 4));
         let Some(p) = p else {
             return Some(Self::refusal(
                 NV_ERR_INVALID_ARGUMENT,
                 &format!(
-                    "SET_DEFAULT_VASPACE params are {} bytes, not 4",
-                    h.params_size
+                    "SET_DEFAULT_VASPACE params are {} bytes, not {}",
+                    h.params_size, ctl.size
                 ),
                 cmd,
             ));
@@ -1906,7 +1944,8 @@ mod tests {
         let mut payload = vec![0u8; 40 + params.len()];
         payload[0..4].copy_from_slice(&client.to_le_bytes());
         payload[4..8].copy_from_slice(&device.to_le_bytes());
-        payload[8..12].copy_from_slice(&SET_DEFAULT_VASPACE.to_le_bytes());
+        let ctl = DefaultVaspaceCtl::at(kf_abi::versions::BENCH_DRIVER).expect("measured");
+        payload[8..12].copy_from_slice(&ctl.cmd.to_le_bytes());
         payload[16..20].copy_from_slice(&(params.len() as u32).to_le_bytes());
         payload[40..].copy_from_slice(params);
         RpcCommand {
@@ -1992,6 +2031,28 @@ mod tests {
                 .rpc_result,
             0x1f
         );
+    }
+
+    /// ★ The generated id and size are the SDK's (`ctrl0080dma.h:772-778` at ogkm-580.159.04) at
+    /// both audited guest contracts.
+    #[test]
+    fn set_default_vaspace_id_and_size_are_generated() {
+        let v580_65_06 = kf_abi::DriverVersion {
+            major: 580,
+            minor: 65,
+            patch: 6,
+        };
+        for v in [v580_65_06, kf_abi::versions::BENCH_DRIVER] {
+            assert_eq!(
+                DefaultVaspaceCtl::at(v),
+                Some(DefaultVaspaceCtl {
+                    cmd: 0x0080_1812,
+                    size: 4,
+                    vas_off: 0
+                }),
+                "{v}"
+            );
+        }
     }
 
     /// ★ 2026-10-07 (Windows run29, vfio-10 RPCs 2844-2846): RM's checks for

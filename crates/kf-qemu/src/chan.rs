@@ -222,6 +222,11 @@ pub struct EngineEvent {
     pub tlive: AtomicU64,
     /// Wakes relayed to the guest while a Translated GR-tier ring was live.
     pub trelays: AtomicU64,
+    /// ★ 2026-10-07 (`KF3_TRANSLATED_CE_RELAY`): Translated copy-engine pumps on this (guest)
+    /// engine that found entries retired after their host fence, not yet relayed.
+    pub cpending: AtomicU64,
+    /// Relays raised on this engine's guest vector for Translated copy-engine work.
+    pub crelays: AtomicU64,
 }
 
 /// A CE class id on ANY family — the class tables are generated per family and class ids are
@@ -672,6 +677,16 @@ fn kernel_gr_work() -> bool {
 fn sw_subch_inert() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("KF3_SW_SUBCH_INERT").is_some_and(|v| v == "1"))
+}
+
+// ★ 2026-10-07 (hypothesis 2 after run34; `OWNER_RULINGS.md` §S item 7): a Translated
+// COPY-ENGINE ring's completion is relayed to the guest's vector of the ring's own guest engine
+// (CEn), exactly as the GR tier relays GR0: only when the pump found entries retired after their
+// HOST fence was reached (the guest's GP_GET and semaphores are already written), on the worker,
+// never on a vCPU or under a lock a vCPU takes. Default off.
+fn translated_ce_relay() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_TRANSLATED_CE_RELAY").is_some_and(|v| v == "1"))
 }
 
 // Experimental decoder context ownership only; codec submissions still refuse.
@@ -1496,6 +1511,8 @@ impl ChanPlane {
                 raised: AtomicU64::new(0),
                 tlive: AtomicU64::new(0),
                 trelays: AtomicU64::new(0),
+                cpending: AtomicU64::new(0),
+                crelays: AtomicU64::new(0),
             });
         }
         eprintln!(
@@ -1699,6 +1716,21 @@ impl ChanPlane {
         e.raised.fetch_add(1, Ordering::Relaxed);
         let n = e.trelays.fetch_add(1, Ordering::Relaxed) + 1;
         Some((v, e.name.as_str(), n, e.tlive.load(Ordering::Relaxed)))
+    }
+
+    /// ★ 2026-10-07 (`KF3_TRANSLATED_CE_RELAY`): for each guest copy engine whose Translated rings
+    /// retired fenced work since the last call, `f(vector, engine name, relay number)`. Called by the
+    /// worker right after [`ChanPlane::serve`]; an engine with no guest vector is counted, not raised.
+    pub fn for_each_ce_relay(&self, mut f: impl FnMut(u32, &str, u64)) {
+        for e in &self.engines {
+            if e.cpending.swap(0, Ordering::AcqRel) == 0 {
+                continue;
+            }
+            let Some(v) = e.vector else { continue };
+            e.raised.fetch_add(1, Ordering::Relaxed);
+            let n = e.crelays.fetch_add(1, Ordering::Relaxed) + 1;
+            f(v, e.name.as_str(), n);
+        }
     }
 
     /// ★ GR tier: a Translated GR-tier ring on `engine_type` came up / went away.
@@ -4450,6 +4482,21 @@ impl ChanPlane {
             is_any_ce_class,
             &win,
         );
+        if !g.gr_tier
+            && translated_ce_relay()
+            && is_copy_engine(g.guest_engine)
+            && g.chan.last_gp_get() != gp_before
+        {
+            // ★ The pump authored GP_GET only for entries whose host fence was REACHED (never a
+            // forged completion): relay that to the guest's own CE vector.
+            if let Some(e) = self
+                .engines
+                .iter()
+                .find(|e| e.engine_type == g.guest_engine)
+            {
+                e.cpending.fetch_add(1, Ordering::Release);
+            }
+        }
         if g.gr_tier && g.chan.last_gp_get() != gp_before {
             // The engine wrote GP_GET (and the guest's semaphores) before this fence's NSI.
             self.gr_relay.fetch_add(1, Ordering::Release);

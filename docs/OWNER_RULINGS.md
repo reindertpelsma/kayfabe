@@ -691,3 +691,13 @@ kernel GR channel, plus a software-subchannel bind on its kernel CE channel.
    interrupt plane maps GR0 and the other engines). For the GR tier, verify and report both, include
    them in the native validation and in the README of the first run that executes GR work, and fix
    the relay before relying on it if it is missing.
+
+**§S applied to `PERF_GET_POWERSTATE` (2026-10-07) — ASSUMED from the power ruling, owner to
+confirm.** `NV2080_CTRL_CMD_PERF_GET_POWERSTATE` (`0x2080205a`) answers `NV2080_CTRL_PERF_POWER_SOURCE_AC`
+(`kf_rm::vfguest`). This is treated as a §S.1 stub under item 6's "power … stays host-owned": the
+answer is the vGPU-guest body's constant (`subdeviceCtrlCmdPerfGetPowerstate_VF`,
+`ogkm-580.65.06: src/nvidia/src/kernel/gpu/perf/kern_perf_ctrl.c:293-308`), never a host reading,
+and nothing reaches the host. §S.1 also says queries in a stubbed area are "refused or reported
+absent", which an `AC` answer is not; the classification is the coordinator's reading of the
+ruling (compliance audit `2026-10-07-code43-gr-derive-compliance.md` S6), **not an owner
+decision**. If the owner rules otherwise, the control is refused instead.

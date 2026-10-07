@@ -3059,6 +3059,16 @@ impl HostOps for Device {
                 );
             }
         }
+        // ★ 2026-10-07 (`KF3_TRANSLATED_CE_RELAY`, default off): the same relay for a Translated
+        // copy-engine ring, to the vector of the ring's own guest engine, after its host fence.
+        self.chans.for_each_ce_relay(|v, name, n| {
+            self.latch_and_deliver(v);
+            if n <= 16 || n.is_power_of_two() {
+                eprintln!(
+                    "kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest {name} vector {v}: a Translated copy-engine ring retired work after its host fence (relay #{n})"
+                );
+            }
+        });
         r
     }
     fn run_emulated(&self, _host_token: u32, _up_to_seq: u64) {}

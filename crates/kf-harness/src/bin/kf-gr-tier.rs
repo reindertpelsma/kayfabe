@@ -17,6 +17,9 @@
 //!   and not retired;
 //! - run31's CE segment (software subchannel 5 bound to 1) completes on a CE T-mode ring with the
 //!   inert-bind rule, and a later software method on subchannel 5 is refused by name;
+//! - ★ 2026-10-07 (`KF3_TRANSLATED_CE_RELAY`): that CE completion wakes one of the fds kf3's worker
+//!   parks on (`FIFO_EVENT_MTHD`, the host CE's non-stall notifier; measured separately) — the wake
+//!   that lets the worker relay it to the guest's CE vector;
 //! - everything is released (channel, ring object, mapping, CPU view).
 //!
 //! It does NOT check the guest-vector relay (no VMM here); that is the Windows run's evidence.
@@ -528,9 +531,34 @@ fn run(l: &mut Checks) -> Result<(), String> {
     });
     let mut chan2 = TranslatedChannel::new(ring2, host2, 2);
     chan2.set_tspace(win, false);
+    // ★ 2026-10-07 (`KF3_TRANSLATED_CE_RELAY`): the wake path a CE ring's completion takes in kf3.
+    // kf3's worker parks on the session fd, which carries FIFO_EVENT_MTHD and the host CE's own
+    // non-stall notifier (`ChanPlane::new`, `Completions::also`); each is measured on its own fd
+    // here. A poll consumes a dataless event's readiness, so the "before" poll clears the GR arm's.
+    let lce = host_ce - kf_abi::submit::ENGINE_TYPE_COPY0;
+    let ce_fd = rm.open_event_fd().map_err(|e| format!("ce fd: {e:?}"))?;
+    rm.alloc_os_event(
+        rm.subdevice(),
+        kf_host::event::notifier_ce(lce),
+        true,
+        &ce_fd,
+    )
+    .map_err(|e| format!("ce event: {e:?}"))?;
+    rm.arm_repeat(kf_host::event::notifier_ce(lce))
+        .map_err(|e| format!("ce arm: {e:?}"))?;
+    let idle35_ce = ready_within(done.event_fd(), 200)?;
+    let idle_ce = ready_within(ce_fd.as_fd(), 200)?;
     put(&walk, CHAN2, 1)?;
     let t1 = std::time::Instant::now();
     let mut st2 = pump(&mut chan2, &g2).map_err(|e| format!("ce pump: {e:?}"))?;
+    let woke35_ce = ready_within(done.event_fd(), 1000)?;
+    let woke_ce = ready_within(ce_fd.as_fd(), 300)?;
+    l.measure(
+        "ce_completion_edges",
+        format!(
+            "host CE{lce}: before doorbell: fifo_event_mthd={idle35_ce} ce={idle_ce}; after: fifo_event_mthd={woke35_ce} ce={woke_ce}"
+        ),
+    );
     while !(st2 == Pumped::Caught && chan2.last_gp_get() == Some(1))
         && t1.elapsed() < std::time::Duration::from_secs(3)
     {
@@ -545,6 +573,15 @@ fn run(l: &mut Checks) -> Result<(), String> {
             "sem={sem2:#x} want={P2:#x} gp_get={:?} inert_binds={}",
             chan2.last_gp_get(),
             chan2.gr_counts().1
+        ),
+    );
+    // The relay is decided by the worker that this edge wakes: without it a CE completion would be
+    // seen (and relayed) only at the next doorbell or after the worker's 50 ms park.
+    l.check(
+        "ce_completion_wakes_worker_fds",
+        !idle35_ce && !idle_ce && (woke35_ce || woke_ce),
+        format!(
+            "before: fifo_event_mthd={idle35_ce} ce={idle_ce}; after: fifo_event_mthd={woke35_ce} ce={woke_ce}"
         ),
     );
     put(&walk, CHAN2, 2)?;

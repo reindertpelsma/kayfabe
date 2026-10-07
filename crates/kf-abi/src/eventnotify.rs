@@ -506,7 +506,7 @@ pub enum RuledClass {
 /// withdrawn). Every other armed index was never posted and is accepted.
 pub const RULED_NOTIFIERS: &[RuledNotifier] = &[
     RuledNotifier {
-        index: 1,
+        notifier: &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_HOTPLUG,
         class: RuledClass::PostedByDisplayPlane,
         why: "NV2080_NOTIFIERS_HOTPLUG (ogkm-580: cl2080_notification.h:37). The virtual monitor can \
               be resized (display step 3c, kf_disp::model::DisplayModel::set_monitor); kf-qemu's \
@@ -517,19 +517,19 @@ pub const RULED_NOTIFIERS: &[RuledNotifier] = &[
               is no monitor, so no hotplug can occur",
     },
     RuledNotifier {
-        index: 2,
+        notifier: &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_POWER_CONNECTOR,
         class: RuledClass::Stub,
         why: "NV2080_NOTIFIERS_POWER_CONNECTOR (ogkm-580: cl2080_notification.h:38): the auxiliary \
               power-connector state of a physical board. Host board management, no guest effect",
     },
     RuledNotifier {
-        index: 4,
+        notifier: &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_THERMAL_HW,
         class: RuledClass::Stub,
         why: "NV2080_NOTIFIERS_THERMAL_HW (ogkm-580: cl2080_notification.h:40): hardware thermal \
               slowdown of the physical board. Host management; guest thermal queries stay refused",
     },
     RuledNotifier {
-        index: 7,
+        notifier: &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_DP_IRQ,
         class: RuledClass::AbsentOnVirtualDisplay,
         why: "NV2080_NOTIFIERS_DP_IRQ (ogkm-580: cl2080_notification.h:43): a DisplayPort short \
               pulse. The virtual connector is DVI-D/TMDS, so there is no DP sink. The only guest-RM \
@@ -537,35 +537,36 @@ pub const RULED_NOTIFIERS: &[RuledNotifier] = &[
               (ogkm-580: disp_common_kern_ctrl_minimal.c:259)",
     },
     RuledNotifier {
-        index: 12,
+        notifier: &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_GRAPHICS,
         class: RuledClass::NeverPostedByRealGsp,
         why: "NV2080_NOTIFIERS_GRAPHICS (ogkm-580: cl2080_notification.h:48): armed REPEAT at \
               VFIO index 2544 and never posted by the real GSP in vfio-8/9/10, a boot in which \
               graphics work ran",
     },
     RuledNotifier {
-        index: 23,
+        notifier: &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE0,
         class: RuledClass::NeverPostedByRealGsp,
         why: "NV2080_NOTIFIERS_CE0 (ogkm-580: cl2080_notification.h:60): armed REPEAT at VFIO index \
               2546, never posted by the real GSP in vfio-8/9/10 (engine-type mapping \
               ogkm-580: event_notification.c:485)",
     },
     RuledNotifier {
-        index: 24,
+        notifier: &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE1,
         class: RuledClass::NeverPostedByRealGsp,
         why: "NV2080_NOTIFIERS_CE1 (ogkm-580: cl2080_notification.h:61): armed REPEAT at VFIO index \
               2548, never posted by the real GSP in vfio-8/9/10 (engine-type mapping \
               ogkm-580: event_notification.c:488)",
     },
     RuledNotifier {
-        index: 26,
+        notifier: &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE3,
         class: RuledClass::NeverPostedByRealGsp,
         why: "NV2080_NOTIFIERS_CE3 (ogkm-580: cl2080_notification.h:63): armed REPEAT at VFIO index \
               2542, never posted by the real GSP in vfio-8/9/10 (engine-type mapping \
               ogkm-580: event_notification.c:494)",
     },
     RuledNotifier {
-        index: 120,
+        notifier:
+            &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_HOTPLUG_PROCESSING_COMPLETE,
         class: RuledClass::NeverPostedByRealGsp,
         why: "NV2080_NOTIFIERS_HOTPLUG_PROCESSING_COMPLETE (ogkm-580: cl2080_notification.h:158): \
               armed REPEAT at VFIO index 2524, never posted in vfio-8/9/10. No hotplug happened in \
@@ -574,13 +575,13 @@ pub const RULED_NOTIFIERS: &[RuledNotifier] = &[
               remains a known gap",
     },
     RuledNotifier {
-        index: 122,
+        notifier: &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_RESERVED122,
         class: RuledClass::NeverPostedByRealGsp,
         why: "NV2080_NOTIFIERS_RESERVED122 (ogkm-580: cl2080_notification.h:160): armed REPEAT at \
               VFIO index 2536, never posted by the real GSP in vfio-8/9/10; no OGKM producer",
     },
     RuledNotifier {
-        index: 33,
+        notifier: &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_PSTATE_CHANGE,
         class: RuledClass::Stub,
         why: "NV2080_NOTIFIERS_PSTATE_CHANGE (ogkm-580: cl2080_notification.h:70). Owner ruling \
               §S, 2026-10-07: a no-op, because the host does power management. Armed silently and \
@@ -588,7 +589,7 @@ pub const RULED_NOTIFIERS: &[RuledNotifier] = &[
               0x100); kayfabe has no P-state of its own to report",
     },
     RuledNotifier {
-        index: 34,
+        notifier: &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_HDCP_STATUS_CHANGE,
         class: RuledClass::Stub,
         why: "NV2080_NOTIFIERS_HDCP_STATUS_CHANGE (ogkm-580: cl2080_notification.h:71). Owner \
               ruling §S, 2026-10-07: there is no HDCP and none can be forwarded; armed silently, \
@@ -598,14 +599,15 @@ pub const RULED_NOTIFIERS: &[RuledNotifier] = &[
               and DFP_UPDATE_DYNAMIC_DFP_CACHE (bHdcpCapable) is refused",
     },
     RuledNotifier {
-        index: 45,
+        notifier: &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_AUDIO_HDCP_REQUEST,
         class: RuledClass::Stub,
         why: "NV2080_NOTIFIERS_AUDIO_HDCP_REQUEST (ogkm-580: cl2080_notification.h:83). Owner \
               ruling §S, 2026-10-07: no HDCP, no audio on the DVI-D output; armed silently, never \
               posted. The same coherent absence as index 34 applies",
     },
     RuledNotifier {
-        index: 139,
+        notifier:
+            &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_RUNLIST_PREEMPT_COMPLETE,
         class: RuledClass::Stub,
         why: "NV2080_NOTIFIERS_RUNLIST_PREEMPT_COMPLETE (ogkm-580: cl2080_notification.h:178). \
               Owner ruling §S, 2026-10-07: armed silently now. In vfio-8/9/10 the GSP posts it \
@@ -615,33 +617,35 @@ pub const RULED_NOTIFIERS: &[RuledNotifier] = &[
               of the VM's own channel group, posting only the host's real completion",
     },
     RuledNotifier {
-        index: 43,
+        notifier: &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_COOLER_DIAG_ZONE,
         class: RuledClass::Stub,
         why: "NV2080_NOTIFIERS_COOLER_DIAG_ZONE (ogkm-580: cl2080_notification.h:81): fan/cooler \
               diagnostics of the physical board; no OGKM producer. Host management",
     },
     RuledNotifier {
-        index: 44,
+        notifier: &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_THERMAL_DIAG_ZONE,
         class: RuledClass::Stub,
         why: "NV2080_NOTIFIERS_THERMAL_DIAG_ZONE (ogkm-580: cl2080_notification.h:82): thermal \
               diagnostics of the physical board; no OGKM producer. Host management",
     },
     RuledNotifier {
-        index: 113,
+        notifier:
+            &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_STEREO_EMITTER_DETECTION,
         class: RuledClass::AbsentOnVirtualDisplay,
         why: "NV2080_NOTIFIERS_STEREO_EMITTER_DETECTION (ogkm-580: cl2080_notification.h:151): a \
               3D-stereo emitter on the board's stereo connector; the virtual display has none and \
               no OGKM producer exists",
     },
     RuledNotifier {
-        index: 157,
+        notifier: &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_UCODE_RESET,
         class: RuledClass::Stub,
         why: "NV2080_NOTIFIERS_UCODE_RESET (ogkm-580: cl2080_notification.h:198): GSP/ucode reset \
               handling. Its producer is the guest's own CPU-RM (ogkm-580: kernel_gsp.c:2469), \
               so the arming is bookkeeping; kayfabe resets no ucode",
     },
     RuledNotifier {
-        index: 158,
+        notifier:
+            &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_PLATFORM_POWER_MODE_CHANGE,
         class: RuledClass::Stub,
         why: "NV2080_NOTIFIERS_PLATFORM_POWER_MODE_CHANGE (ogkm-580: cl2080_notification.h:199): \
               platform (ACPI) power mode. Its producer is the guest's own CPU-RM platform request \
@@ -649,20 +653,22 @@ pub const RULED_NOTIFIERS: &[RuledNotifier] = &[
               touched",
     },
     RuledNotifier {
-        index: 178,
+        notifier:
+            &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_HDMI_FRL_RETRAINING_REQUEST,
         class: RuledClass::AbsentOnVirtualDisplay,
         why: "NV2080_NOTIFIERS_HDMI_FRL_RETRAINING_REQUEST (ogkm-580: cl2080_notification.h:219): \
               HDMI 2.1 fixed-rate-link training; the DVI-D/TMDS output has no FRL and no OGKM \
               producer exists",
     },
     RuledNotifier {
-        index: 182,
+        notifier:
+            &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_AUX_POWER_STATE_CHANGE,
         class: RuledClass::Stub,
         why: "NV2080_NOTIFIERS_AUX_POWER_STATE_CHANGE (ogkm-580: cl2080_notification.h:223): \
               auxiliary power state of the physical board; no OGKM producer. Host management",
     },
     RuledNotifier {
-        index: 197,
+        notifier: &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_GPU_RC_RESET,
         class: RuledClass::Stub,
         why: "NV2080_NOTIFIERS_GPU_RC_RESET (ogkm-580: cl2080_notification.h:238): RC reset policy, \
               which goes with the RC-recovery stub (kf_rm::vfguest). Its producer is the guest's own \
@@ -671,20 +677,37 @@ pub const RULED_NOTIFIERS: &[RuledNotifier] = &[
 ];
 
 /// One row of [`RULED_NOTIFIERS`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// ★ 2026-10-07 (audit `2026-10-07-code43-gr-derive-compliance.md` S2): a row names its notifier by
+/// the GENERATED per-version runs (`crate::generated::matrix`, measured per ogkm tag), not by a
+/// bare index — the indices move across versions (`AUX_POWER_STATE_CHANGE` is `0xb4` at 535.309.01
+/// and `0xb6` from 545.23.08; `GPU_RC_RESET` exists only from 575.51.02).
+#[derive(Debug, Clone, Copy)]
 pub struct RuledNotifier {
-    /// The `NV2080_NOTIFIERS_*` index.
-    pub index: u32,
+    /// The `NV2080_NOTIFIERS_*` name's generated value runs (one per ogkm tag range).
+    pub notifier: &'static crate::matrix::ValueRuns,
     /// The ruling's treatment.
     pub class: RuledClass,
     /// The source-backed argument.
     pub why: &'static str,
 }
 
-/// Whether `index` is accepted under owner ruling §S — see [`RULED_NOTIFIERS`].
+impl RuledNotifier {
+    /// The row's index at the guest's driver `version`; `None` where the notifier does not exist
+    /// there or the version is not measured (the arming is then refused as before the ruling).
+    #[must_use]
+    pub fn index_at(&self, version: crate::DriverVersion) -> Option<u32> {
+        self.notifier.at_u32(version).ok().flatten()
+    }
+}
+
+/// Whether `index` is accepted under owner ruling §S at the guest's driver `version` — see
+/// [`RULED_NOTIFIERS`].
 #[must_use]
-pub fn is_ruled_notifier(index: u32) -> bool {
-    RULED_NOTIFIERS.iter().any(|n| n.index == index)
+pub fn is_ruled_notifier(version: crate::DriverVersion, index: u32) -> bool {
+    RULED_NOTIFIERS
+        .iter()
+        .any(|n| n.index_at(version) == Some(index))
 }
 
 /// One row of [`GUEST_RAISED_NOTIFIERS`] — an index, and where the guest's own RM raises it.
