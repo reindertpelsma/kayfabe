@@ -2961,3 +2961,157 @@ binary built at this branch's tip gives the list that an exposure table needs.
    table.
 
 Branch `claude/code43-deferred-20261008`; evidence for runs 47-52 in this directory.
+
+# Loop 2026-10-08 (second session), branch `claude/code43-d3d-20261008`: why does D3D device creation say out-of-video-memory?
+
+(Continues at run 53. Binary and guest as in runs 47-52 unless a setup says otherwise. Every run states its
+hypothesis and falsifier before it starts. `[measured]` = read from a file or a guest/host output; `[inferred]`
+= reasoning, not yet tested.)
+
+## Reference measured before any boot: what Windows asks the real GSP for FB info (vfio-8/9/10)
+
+`scripts/bench/windows/gsp_info_scan.py` over the three VFIO observer captures (`gsp.jsonl` on the host;
+output [vfio8-9-10-fb-bus-info.txt](vfio8-9-10-fb-bus-info.txt)). `[measured]` In all three, Windows 580.88
+sends **one** `FB_GET_INFO_V2` (`0x20801303`) with **19 indices** at queue sequence 121 and the real GSP answers
+it with status 0 (reply at sequence 124); later only single-index `BUS_WIDTH` requests (0xb). Indices and
+the real RTX 4070's (host die, 12 GiB) reply, names from `ctrl2080fb.h`:
+
+| idx | ogkm name | reply | kind |
+|---|---|---|---|
+| 0x01 | COMPRESSION_SIZE | 0xffff0000 | hardware config |
+| 0x02 | DRAM_PAGE_STRIDE | 0xc000 | hardware config |
+| 0x04 | PARTITION_COUNT | 3 | hardware config |
+| 0x0b | BUS_WIDTH | 0xc0 | hardware config |
+| 0x0c | RAM_CFG | 1 | hardware config |
+| 0x0d | RAM_TYPE | 0x12 (GDDR6X) | hardware config |
+| 0x14 | PARTITION_MASK (_0) | 7 | hardware config |
+| 0x19 | FBP_COUNT | 3 | hardware config |
+| 0x1a | FBP_MASK | 7 | hardware config |
+| 0x1b | L2CACHE_SIZE | 0x2400000 | hardware config |
+| 0x1c | MEMORYINFO_VENDOR_ID | 0xf | hardware config |
+| 0x21 | TRAINIG_2T | 0 | hardware config |
+| 0x22 | LTC_COUNT | 6 | hardware config |
+| 0x23 | LTS_COUNT | 0x12 | hardware config |
+| 0x25 | PSEUDO_CHANNEL_MODE | 0 | hardware config |
+| 0x2b | LTC_MASK (_0) | 0x3f | hardware config |
+| 0x35 | ECC_STATUS_SIZE | 2 | hardware config |
+| 0x37 | PARTITION_MASK_1 | 0 | hardware config |
+| 0x38 | LTC_MASK_1 | 0 | hardware config |
+
+`[measured]` **None of the 19 is a size or a free/used count** (no TOTAL_RAM_SIZE 0x08, HEAP_SIZE 0x09, USABLE_RAM_SIZE
+0x20, BAR1_AVAIL 0x1d): Windows learns the memory sizes elsewhere (the GSP static info it receives at init),
+not from this request. `[measured in code, hostquery.rs]` kayfabe serves **12 of the 19** today (`FORWARDED_FB_INFO_INDICES`: 0x0b, 0x0d,
+0x19, 0x1a, 0x1b, 0x22, 0x23; `FORWARDED_FB_EXTRA_INDICES`: 0x04, 0x14, 0x37, 0x2b, 0x38) and refuses the whole request on the first
+of the **seven** others: 0x01 COMPRESSION_SIZE, 0x02 DRAM_PAGE_STRIDE, 0x0c RAM_CFG, 0x1c MEMORYINFO_VENDOR_ID, 0x21 TRAINIG_2T,
+0x25 PSEUDO_CHANNEL_MODE, 0x35 ECC_STATUS_SIZE. (An earlier draft of this paragraph said 10 of 19; the code says 12.) Run 53 logged the list
+that actually arrives.
+
+## Run53 setup: measure the guest's video-memory view (H-seg) and record the FB index list (H-fb); nothing is served
+
+Binary: this branch's tip at the time of the boot (it carries the `W349REFUSE-LIST` log line; the product code is
+otherwise run47's `83881ecc`), flags as run47 (`KF3_DEFERRED_API=1`, software-runlist flag off), BAR1 128 MiB
+(the harness default). One boot by hand through QGA (`qga_run_ps.py`). The probe is
+`scripts/bench/windows/video_memory_probe.ps1` (read-only, `Add-Type` + P/Invoke): per DXGI adapter `GetDesc1`
+(`DedicatedVideoMemory`, `DedicatedSystemMemory`, `SharedSystemMemory`), `IDXGIAdapter3::QueryVideoMemoryInfo`
+(Budget, CurrentUsage, AvailableForReservation, CurrentReservation; LOCAL and NON_LOCAL), D3DKMT
+`GETSEGMENTSIZE` / `DRIVERVERSION` / `ADAPTERTYPE`, `D3DKMTCreateDevice` (a bare kernel WDDM device),
+`D3D12CreateDevice` at 11_0/12_0/12_1/12_2 and `D3D11CreateDevice` on the NVIDIA adapter (the Basic Render
+Driver as control), `Win32_VideoController.AdapterRAM` and the display class key's `HardwareInformation.*`.
+The qemu.log line numbers before and after the probe delimit its RM traffic.
+
+**H-seg (inferred, owner-lead's guess):** dxgkrnl's video memory manager holds zero or tiny segment sizes or a tiny
+budget for the NVIDIA adapter, so any allocation exceeds it. *Prediction if true:* `LOCAL Budget` (or
+`DedicatedVideoMemory` from `GETSEGMENTSIZE`) below 256 MiB. *Falsifier (fixed now):* `LOCAL Budget` >= 2048 MiB
+(half of the 4096 MiB store `fb-mb=4096` that the device presents) **and** `GETSEGMENTSIZE` DedicatedVideoMemory >=
+3 GiB. Between the two: not supported, not falsified, reported as such. `[measured, run50]` DXGI already shows
+`DedicatedVideoMemory` 3748 MB, i.e. 348 MB below the store; that difference alone does not decide anything
+(a segment reserve is expected) and is not the criterion.
+
+**H-kmt-device (inferred):** the failure is in the user-mode driver or later, not in dxgkrnl's creation of a kernel
+device. *Prediction if true:* `D3DKMTCreateDevice` returns 0 (`STATUS_SUCCESS`) on the NVIDIA LUID. *Falsifier:*
+`D3DKMTCreateDevice` fails (then the kernel/KMD path is the failing layer, and H-alloc's kernel side is where to look).
+
+**H-fb (inferred):** the refused `FB_GET_INFO_V2` of the boot makes the driver's memory configuration incomplete.
+*This run only measures it:* the full requested list (`W349REFUSE-LIST`) is compared with the 19 of the reference.
+*Falsifier of "the arriving list is the reference's list":* any index outside the 19 above, or fewer than 19.
+The causal test (serve all 19 truthfully and re-probe) is run 54, only if this run's list and the exposure table
+below are clean; its own falsifier is written then: *H-fb is falsified if the D3D devices still fail with
+`0x8876017c` after the whole request is answered.*
+
+**H-alloc (inferred):** the failing step is a kernel allocation that never reaches the RM. *Falsifier:* RM traffic
+(RmAlloc/RmControl not already seen in the idle window) during the probe's creation calls. `[measured, run50]` no
+new request appears in the failing window, which already argues for H-alloc-compatible behaviour; the run re-measures
+it with the kernel-device step separated.
+
+Host-state check before and after (`pgrep -a qemu`, display, P8, Xid count) as in runs 47-52.
+
+### Run53 result: H-seg FALSIFIED; a kernel WDDM device is created; the FB list equals the reference; the last RM requests before every failed create are two refused `GR_CTXSW_PREEMPTION_BIND`
+
+Binary `kf3-bins/80169b57` (this branch at the setup commit; product code = run47's `83881ecc` plus the diagnostic log line), flags
+as run47 (`KF3_DEFERRED_API=1`), BAR1 128 MiB, started 2026-10-08 01:33 CEST, ended by the runner's 900 s bound (SIGTERM, not a crash).
+Host afterwards: no QEMU, no NBD device in use, GPU on the `nvidia` driver (595.91.07), display enabled, P8, Xid 61 (unchanged).
+[command](run53-command.json), [trace](run53-qemu.log.gz), [requests](run53-requests.log), [probe output](run53-probe-output.txt),
+[RM window of the probe](run53-probe-window.log), [display probe](run53-display-probe.txt), [host after](run53-host-after.txt).
+The probe compiled first time (`video_memory_probe.ps1`). No `DEAD`, no `dead=Some`.
+
+**Measured (guest, `video_memory_probe.ps1`, NVIDIA adapter):**
+- `GetDesc1`: DedicatedVideoMemory 3748 MB, DedicatedSystemMemory 0, SharedSystemMemory 4092 MB; `D3DKMTQueryAdapterInfo GETSEGMENTSIZE`
+  returns the same three numbers (status 0).
+- `QueryVideoMemoryInfo` LOCAL: Budget 3185 MB, CurrentUsage 0, AvailableForReservation 1686 MB; NON_LOCAL: Budget 3683 MB. Unchanged after the
+  failed creates.
+- `D3DKMTCreateDevice` on the NVIDIA LUID: **NTSTATUS 0** (and `DestroyDevice` 0): dxgkrnl and the kernel-mode driver create a WDDM device.
+- `D3D12CreateDevice(NVIDIA)` at 11_0, 12_0, 12_1, 12_2 and `D3D11CreateDevice(NVIDIA)`: all `0x8876017c`; the Basic Render Driver control: 0.
+- `Win32_VideoController` NVIDIA: `AdapterRAM` 0; display class key `HardwareInformation.MemorySize` 0 and `qwMemorySize` 0 (written by the NVIDIA
+  kernel driver, not by dxgkrnl). ADAPTERTYPE flags 0x313.
+- `W349REFUSE-LIST`: FB_GET_INFO_V2 requested indices (decimal in the log) `[1,2,4,11,12,13,20,25,26,27,28,33,34,35,37,43,53,55,56]` = hex
+  0x01 0x02 0x04 0x0b 0x0c 0x0d 0x14 0x19 0x1a 0x1b 0x1c 0x21 0x22 0x23 0x25 0x2b 0x35 0x37 0x38 = **exactly the 19 of vfio-8/9/10**;
+  BUS_GET_INFO_V2: `[0x18]` (the real GSP answers 0x18 too, `vfio8-9-10-fb-bus-info.txt`).
+- RM window of the probe (3644 log lines, five failing creates). Each create attempt, in the same order every time: client, device, subdevice,
+  VA space, `GET_LATENCY_BUFFER_SIZE`, TSG (0xa06c), 0x9067, channel 0xc56f, 0x5080, 0xc7b5, 0xa140, 0x902d, 0xc997, 0xc9c0, TSG schedule, three
+  `0x50800101` registrations, then **two `NV2080_CTRL_CMD_GR_CTXSW_PREEMPTION_BIND` (`0x20801211`) — both refused (`0x56`) — and immediately the Free
+  of everything**. 10 such refusals in 5 attempts. In vfio-10 the same control is sent twice per channel (params 112 bytes, flags 2 with buffer VAs,
+  then flags 1) and the real GSP answers status 0 (`gsp_info_scan.py`-style scan, cmdscan of vfio-10, 16 records = 8 requests + 8 replies).
+  The other refused controls in the window (`0x20800a3a`, `0x20809004`, `0x2080b201`, `0x2080a618/a619`, `0x2080852e/f`, `0x2080853a/b`) also occur
+  inside the creates too (`0x20800a3a` four times per attempt) or at the probe's start; the last two requests before the Free storm are `0x20801211` in all five attempts (the first attempt's tail is shown at lines 855 and 885 of the window log).
+
+**Falsifier outcomes.**
+- **H-seg: FALSIFIED** by the pre-stated criterion (Budget 3185 MB >= 2048 MB and Dedicated 3748 MB >= 3 GiB). The segment sizes and the budget are sane.
+- **H-kmt-device: SUPPORTED** (`D3DKMTCreateDevice` = 0): the kernel device exists; the failure is after it (user-mode driver or later).
+- **H-fb (list part): the arriving list equals the reference's 19** (not falsified); the causal part is NOT tested (nothing served this run).
+  `[measured]` the 19 hold no size or usage count, so the FB-info refusal cannot be what makes the budget wrong (the budget is fine). It could still
+  matter for the NVIDIA driver's own `qwMemorySize`/NVML values, which are 0/N/A: untested.
+- **H-alloc: not supported as stated.** The failing creates DO reach the RM (about 15 allocs and 15 controls each, all served except the refusals).
+  This corrects run50's reading ("nothing new reaches the RM" was about *new* requests, not about none).
+
+**Inferred (not tested): H-preempt-bind.** The UMD's device creation ends in the refused `GR_CTXSW_PREEMPTION_BIND` and tears everything down; the real
+GSP accepts it. The OOVM HRESULT is then the UMD's mapping of a failed setup step. *Falsifier for tomorrow:* with the control answered the way the
+real GSP answers it (status 0, and a real, host-authored bind or an owner-approved policy), `D3D12CreateDevice` still returns `0x8876017c`, or the
+last request before the Free storm is another one. ogkm layout: `NV2080_CTRL_GR_CTXSW_PREEMPTION_BIND_PARAMS` {flags, hClient, hChannel,
+vMemPtrs[], gfxpPreemptMode, cilpPreemptMode, grRouteInfo}, flags NON_PRIVILEGED. kayfabe refuses it by name today (`kf-qemu/src/defapi.rs:30`,
+THE_TRANSLATED_PLANE section 29: "preemption buffers at guest VAs"). The decision it needs: real host-authored bind on the VM's host twin
+(validated VAs, enum modes, own handles; native oracle first, ruling S.3) versus an owner-ruled policy (preemption mode is host-owned, section S.6).
+Not served; nothing half-done is on this branch.
+
+**Display (owner question, same boot; measured only, no display code changed).** [probe](run53-display-probe.txt)
+- `Win32_VideoController`: *Microsoft Basic Display Adapter* (PCI 1234:1111, the QEMU std VGA) Status Error, **Code 10**
+  (`CM_PROB_FAILED_START`); *NVIDIA GeForce RTX 4070* Status OK, Code 0. Both have empty `CurrentHorizontalResolution`/`VerticalResolution`/`CurrentRefreshRate`.
+- A monitor exists: `WmiMonitorID` count 1, instance `DISPLAY\KFB0001`, Active True, manufacturer `KFB` ("kayfabe" EDID, 1920x1080 at 60 Hz in the
+  device log); `WmiMonitorBasicDisplayParams` 1 (digital, 25x25 cm), `WmiMonitorListedSupportedSourceModes` 1 with 7 modes; `Get-PnpDevice -Class Monitor`:
+  'Generic Monitor (kayfabe)' Status OK Present True (4 other monitor entries are absent history). `Win32_DesktopMonitor`: 'Generic PnP Monitor' (KFB0001).
+  `[inferred]` the monitor sits on the NVIDIA adapter (the Basic Display Adapter has Code 10 and no output); WMI does not state the parent adapter.
+- `GetDisplayConfigBufferSizes` (ALL / ACTIVE / DATABASE) from the SYSTEM session 0: 0 paths, 0 modes (session 0 has no desktop; not a statement about a user session).
+- Screen: [kayfabe console](run53-screendump-kf0.png) (QMP `screendump device=kf0`, 640x480) shows the kayfabe placeholder **"Guest has not initialized the
+  display (yet)."**; [std VGA](run53-screendump-stdvga.png) shows the frozen firmware boot screen (TianoCore, "starting Windows Boot Manager"). The device log at +50 ms:
+  "the console shows NOTHING yet (no head has scanned a window) (core channel FREE)".
+- Requests: NV04_DISPLAY_COMMON (0x0073) allocated 14 times, display class `0xc770` once and `0xc372` once; no 0x5070/0x9170 family. NV0073 controls
+  served: 0x010c x40, 0x0102, 0x0245, 0x028b, 0x0250, 0x010b, 0x0108, 0x1140/1142, 0x0301, 0x0101 and others; **refused (`0x56`): 0x0288 x8, 0x0285 x5, 0x0280,
+  0x012c, 0x0128, 0x02a3, 0x1369, 0x014b, 0x013d, 0x011d, 0x0109**. The bounded method diagnostic recorded **8330 display methods** (Core 810, Window 7520, channels 0-8; the
+  most frequent 0x588, 0x4a8, 0x584, 0x4a4 on the window channels): Windows does submit core and window channel methods, but the console had not shown a scanned frame.
+- So: the NVIDIA adapter and a kayfabe monitor are visible to Windows; the Basic Display stand-in is Code 10; **no frame from the NVIDIA display reached the kayfabe console**
+  at the time of the capture (about 5 min after boot). Whether any head was ever armed was not read from device state beyond that log line.
+
+**Next hypothesis to test first (tomorrow).** H-preempt-bind above. Order: (1) owner chooses real bind vs policy for `GR_CTXSW_PREEMPTION_BIND` (flags 2 and 1;
+exposure table: the reply carries no field, only the status; the request carries guest VAs, to be validated inside the VM's VA space); (2) native oracle check of the
+host-authored bind; (3) one Windows run with the probe (`video_memory_probe.ps1`), comparing the last request before the Free storm. Independent and cheap: serve the 7 missing
+FB indices (all `hardware config`, vfio values in `vfio8-9-10-fb-bus-info.txt`) through `FORWARDED_FB_EXTRA_INDICES` (hostquery.rs, one array) with the validation test; it
+tests the `qwMemorySize` 0 / NVML N/A symptom, not the budget. Not done: either change.
