@@ -893,8 +893,19 @@ whether its reason still holds before relying on it (see the top of this file).
 - A byte scan of the NVIDIA userspace (595.91.07 on the host; 610.43.02 CUDA compat) finds none of
   the four control ids `0x50800101..104` in libcuda, OpenCL, NVENC, NVML, NVCUVID, the GL/EGL/GLX
   cores, Vulkan SC, `nvidia-smi` or the MPS server; positive controls (`GPU_GET_GID_INFO`,
-  `GR_GET_INFO`, `BUS_GET_INFO_V2`) hit. 580.x libraries and the Windows user-mode driver were not
-  scanned.
+  `GR_GET_INFO`, `BUS_GET_INFO_V2`) hit. 580.x Linux libraries were not scanned.
+- The same scan on the Windows 580.88 driver package (`DriverVer 32.0.15.8088`, `nv_dispi.inf_amd64_fe5f369669db2f36`
+  in the baseline Windows image, 103 files; read-only, static presence only): `nvcuda64.dll`,
+  `nvcuda32.dll`, `nvopencl*.dll`, `nvml.dll`, `nvcuvid*.dll` contain **none** of the four ids, so the
+  Windows CUDA user-mode path does not register deferred entries. **But the Windows graphics user-mode
+  driver does contain them:** `nvwgf2umx.dll` has `DEFERRED_API_V2` (`0x50800103`) x10 and
+  `nvdxdlkernels.dll` has all four plus `DMA_INVALIDATE_TLB` and `GPU_PROMOTE_CTX`. `nvlddmkm.sys`
+  (the positive control for this scan) has all four, `DMA_INVALIDATE_TLB` x7, `GPU_PROMOTE_CTX` x9
+  and `GR_CTXSW_ZCULL_BIND` x6. `REMOVE_API` (`0x50800102`) alone also appears in `NvPresent64.dll` x26,
+  `nvoglv64.dll`, `nvcudadebugger.dll` and others with no registration id beside it; that is not
+  taken as use of the class (inferred: an unrelated constant). The earlier statement that Windows
+  uses the class only from its kernel driver is therefore wrong for D3D; how the UMD's ids reach the
+  RM (through the kernel driver) and on which channel kind is not measured.
 - Of the eight commands the trigger can run, `DMA_INVALIDATE_TLB`, `GR_CTXSW_ZCULL_BIND`,
   `GR_CTXSW_PM_BIND`, `GR_CTXSW_PREEMPTION_BIND` are `NON_PRIVILEGED`; `GPU_PROMOTE_CTX`,
   `GPU_INITIALIZE_CTX`, `FIFO_UPDATE_CHANNEL_INFO` are `PRIVILEGED`; `GPU_EVICT_CTX` is kernel-only
