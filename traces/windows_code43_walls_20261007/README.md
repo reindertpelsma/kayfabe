@@ -429,3 +429,25 @@ already authors OFA's12-byte `{size, prohibitMultipleInstances, engineInstance}`
 (`nvos.h:3011-3016`); decoder and OFA have identical scalar layouts. No guest
 address/parameter is forwarded and every nonempty public submission refuses.
 Channel tests87 pass, native oracle compiles, Clippy new0. Hardware OFA pending.
+
+## Run23: both NVENC1 promotions succeed; OFA0 is next
+
+Product/QEMUe462194d (full revision in [command](run23-command.json));
+[status](run23-status.json), [trace](run23-qemu.log.gz),
+[requests](run23-requests.log), [completion](run23-complete.json),
+[host health](run23-host-health.txt), [9/9 gates](run23-gates.log),
+[immutable build](run23-build.log). Code43/smi9 persist; BAR0 disabled at sampling.
+
+Clients c1d0001a/ff040005 and c1d0001b/ff040006 both birth real USER NVENC1
+channels and ownC9B7 contexts. Both legacy Falcon promotions return0. Nine
+Translated channels birth; the same two real scrubber GPU submissions complete.
+No decoder/encoder work is submitted or emulated. The newly reached kernel
+OFA0/engine33 clientc1d0001c/ff040007 has no birth path; its Falcon promotion
+(entryCount0, guest VA120537000 +4KiB) refuses0x56. Native OFA context/fence
+oracle precedes any new guest admission. A second0080170f request sets the
+new NVENC1 channel ff040006 engine timeslice to4000us; it also still refuses.
+
+Run23 [fresh watchdog recovery](run23-watchdog-recovery.log) confirms read-only
+access and cleanup. The [comparison](run23-watchdog-comparison.json) retains
+all24 complete assertions identical to run22, despite further RPC progress;
+outer NVCD still one byte short, no valid checksum claim.

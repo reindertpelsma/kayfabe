@@ -51,12 +51,18 @@ kernel NVDEC0/engine13 channel ff040003; legacy Falcon-context promotion
 (VA1203cd000 +4KiB, entryCount0) returns0x56. The newly reached0080170f channel-properties control
 also refuses. Native7152d1a8 now constructs a real USER NVDEC0/C9B0 context,
 completes its GPU fence and releases all resources. Guestb52da0c7 adds default-off
-KF3_KERNEL_NVDEC_CTX with TSPACE and requires actual context ownership;111 QEMU
+KF3_KERNEL_NVDEC_CTX with TSPACE and requires actual context ownership;101 QEMU
 tests pass, zero new Clippy debt. Run22 atb52da0c7 births/promotes NVDEC0;
 seven Translated births, two real GPU submissions, Code43/smi9 persist. Next:
 NVENC1/engine1c clientc1d0001a/ff040005 missing birth and Falcon promotion
 returns0x56. The property observer decodes0080170f as COPY2 engine timeslice
-4000us; that independent setter still refuses. Native NVENC oracle pending. Arbitrary kernel GR/software/codec execution remains unsupported;
+4000us; that independent setter still refuses. Native e465d356 NVENC1 USER context/fence/release passes; guest e462194d
+adds default-off KF3_KERNEL_NVENC_CTX plus TSPACE.101 QEMU tests pass, zero new
+Clippy debt. Run23 at e462194d births/promotes both NVENC1 channels, nine
+Translated births, same two real GPU submissions. Code43/smi9 persist. Next:
+OFA0/engine33 clientc1d0001c/ff040007 has no birth and Falcon promotion refuses.
+Native OFA oracle pending. A second4000us channel-timeslice setter also refuses. NVENC0 native bind refused, and is not
+substituted for the requested NVENC1 instance. Arbitrary kernel GR/software/codec execution remains unsupported;
 queued Deferred API controls/methods remain unsupported; no completion is forged.
 
 
