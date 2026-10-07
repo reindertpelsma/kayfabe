@@ -136,3 +136,139 @@ fn deferred_api_constructor_refuses_wrong_parent_shape_and_conflicting_retry() {
         Some(false)
     );
 }
+
+// ★ OWNER_RULINGS §U (2026-10-07): the registration controls, served from the object graph's
+// per-object tables through the object seat — what the real GSP answered in VFIO 8/9/10.
+
+fn control(client: u32, object: u32, cmd: u32, params: &[u8]) -> RpcCommand {
+    let abi = versions::table_for(versions::BENCH_DRIVER).unwrap();
+    let w = abi.rm_control_wire();
+    let mut payload = vec![0u8; w.params_off + params.len()];
+    payload[0..4].copy_from_slice(&client.to_le_bytes());
+    payload[4..8].copy_from_slice(&object.to_le_bytes());
+    payload[8..12].copy_from_slice(&cmd.to_le_bytes());
+    payload[w.params_size_off..w.params_size_off + 4]
+        .copy_from_slice(&(params.len() as u32).to_le_bytes());
+    payload[w.params_off..].copy_from_slice(params);
+    RpcCommand {
+        function: RpcFunction::RmControl,
+        code: 76,
+        sequence: 1,
+        payload,
+        elements: 1,
+        delivered: Vec::new(),
+    }
+}
+
+fn v1(handle: u32, cmd: u32, flags: u32) -> Vec<u8> {
+    let mut p = vec![0u8; 584];
+    p[0..4].copy_from_slice(&handle.to_le_bytes());
+    p[4..8].copy_from_slice(&cmd.to_le_bytes());
+    p[8..12].copy_from_slice(&flags.to_le_bytes());
+    p
+}
+
+fn seat() -> (rmrpc::ObjectPolicy, std::sync::Arc<kf_rm::defapi::Registry>) {
+    use kf_gsp::CommandPolicy;
+    let reg = std::sync::Arc::new(kf_rm::defapi::Registry::new(
+        kf_rm::defapi::Bounds::default(),
+    ));
+    let o = objects().with_deferred_api(reg.clone());
+    let abi = versions::table_for(versions::BENCH_DRIVER).unwrap();
+    let mut p = rmrpc::ObjectPolicy::over(
+        abi,
+        GuestOs::Windows,
+        Box::new(o),
+        rmrpc::ReasmLimits::default(),
+    );
+    // The 5080 object, as Windows allocates it: `paramsSize` 0 under its channel.
+    let r = p.respond(&command(3, &[])).expect("alloc answered");
+    assert_eq!(r.rpc_result, 0);
+    (p, reg)
+}
+
+#[test]
+fn registration_controls_are_served_from_the_objects_own_table() {
+    use kf_gsp::CommandPolicy;
+    let (mut p, reg) = seat();
+    let key = kf_rm::defapi::ObjKey {
+        client: 1,
+        object: 4,
+    };
+    // VFIO 10 idx 3066: echoed, NV_OK.
+    let c = control(1, 4, 0x5080_0101, &v1(0x4000_0002, 0x2080_012d, 0));
+    let r = p.respond(&c).expect("served");
+    assert_eq!(r.rpc_result, 0);
+    assert_eq!(r.body, c.payload, "the params come back unchanged");
+    assert_eq!(reg.entries(key).len(), 1);
+    // Duplicate on the object, a live handle of the client (the channel, 3), 0, hClient.
+    for h in [0x4000_0002, 3, 0, 1] {
+        let r = p.respond(&control(1, 4, 0x5080_0101, &v1(h, 0x2080_012b, 0)));
+        assert_eq!(r.unwrap().rpc_result, 0x33, "{h:#x}");
+    }
+    // `_INTERNAL` (the V2 params, same size here) registers too; a wrong size does not.
+    assert_eq!(
+        p.respond(&control(1, 4, 0x5080_0104, &v1(9, 0x2080_2502, 0)))
+            .unwrap()
+            .rpc_result,
+        0
+    );
+    assert_eq!(
+        p.respond(&control(1, 4, 0x5080_0101, &[0u8; 100]))
+            .unwrap()
+            .rpc_result,
+        0x3a
+    );
+    // A control naming the CHANNEL (not a 5080 object) is refused by handle.
+    assert_eq!(
+        p.respond(&control(1, 3, 0x5080_0101, &v1(5, 0, 0)))
+            .unwrap()
+            .rpc_result,
+        0x33
+    );
+    // `_REMOVE_API`: NV_OK, then NV_ERR_GENERIC.
+    let rm = |p: &mut rmrpc::ObjectPolicy| {
+        p.respond(&control(1, 4, 0x5080_0102, &9u32.to_le_bytes()))
+            .unwrap()
+            .rpc_result
+    };
+    assert_eq!(rm(&mut p), 0);
+    assert_eq!(rm(&mut p), 0xffff);
+    // The channel's free takes the object and its table.
+    use kf_gsp::RpcCommand as C;
+    let free = C {
+        function: RpcFunction::Free,
+        code: 10,
+        sequence: 1,
+        payload: [1u32, 2, 3, 0]
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect(),
+        elements: 1,
+        delivered: Vec::new(),
+    };
+    let _ = p.respond(&free);
+    assert!(
+        reg.entries(key).is_empty(),
+        "defapiDestruct: the tree goes with the object"
+    );
+    assert_eq!(reg.stats().0, 0);
+}
+
+/// Without a registry (a seat built as before), a 5080 control falls through untouched.
+#[test]
+fn without_tables_the_control_falls_through() {
+    use kf_gsp::CommandPolicy;
+    let abi = versions::table_for(versions::BENCH_DRIVER).unwrap();
+    let mut p = rmrpc::ObjectPolicy::over(
+        abi,
+        GuestOs::Windows,
+        Box::new(objects()),
+        rmrpc::ReasmLimits::default(),
+    );
+    assert!(p.respond(&command(3, &[])).is_some());
+    assert!(
+        p.respond(&control(1, 4, 0x5080_0101, &v1(2, 0, 0)))
+            .is_none()
+    );
+}

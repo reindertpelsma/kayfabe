@@ -57,6 +57,15 @@ pub enum Next {
     },
     /// Nothing to do: the cursor has reached the guest's `GP_PUT`.
     Idle,
+    /// ★ OWNER_RULINGS §U: a software method on a subchannel bound to one of the channel's own
+    /// software objects. Like a split: everything before it must COMPLETE before its action runs,
+    /// and nothing after it is fetched into the host ring until the action is done.
+    Sw {
+        /// The call.
+        call: crate::tmode::SwCall,
+        /// The guest `GP_GET` to author once the action is done, if the call ended its entry.
+        retires: Option<u32>,
+    },
     /// ★ P1+P2 inc D (T-mode, `V3_P1P2_TSPACE.md` §3.5): UNBOUND work — the runner binds each item
     /// against the placement rows when it pushes it ([`crate::tmode::push_bound`]).
     Bind {
@@ -227,6 +236,12 @@ impl TranslatedRing {
             .map_or((0, 0), |(st, _)| (st.gr_methods, st.inert_binds))
     }
 
+    /// ★ OWNER_RULINGS §U: software-object binds accepted so far (T-mode only).
+    #[must_use]
+    pub fn swobj_binds(&self) -> u64 {
+        self.tmode.as_deref().map_or(0, |(st, _)| st.swobj_binds)
+    }
+
     /// ★ P1+P2 inc A (review fix 2026-10-04): refuse — not only count — what inc A refuses by name
     /// ([`CeState::strict`]). A T-mode ring is always strict.
     pub fn set_strict(&mut self, strict: bool) {
@@ -249,19 +264,24 @@ impl TranslatedRing {
     fn next_t(&mut self) -> Option<Next> {
         let (_, q) = self.tmode.as_deref_mut()?;
         let first = q.pop_front()?;
+        let split_retires = |q: &VecDeque<crate::tmode::Ir>, p: &mut Option<u32>| {
+            if q.is_empty() { p.take() } else { None }
+        };
         if let crate::tmode::Ir::Invalidate { pdb } = first {
-            let retires = if q.is_empty() {
-                self.pending_retires.take()
-            } else {
-                None
-            };
+            let retires = split_retires(q, &mut self.pending_retires);
             return Some(Next::Walk { pdb, retires });
         }
+        if let crate::tmode::Ir::SwMethod(call) = first {
+            let retires = split_retires(q, &mut self.pending_retires);
+            return Some(Next::Sw { call, retires });
+        }
         let mut ir = vec![first];
-        while q
-            .front()
-            .is_some_and(|x| !matches!(x, crate::tmode::Ir::Invalidate { .. }))
-        {
+        while q.front().is_some_and(|x| {
+            !matches!(
+                x,
+                crate::tmode::Ir::Invalidate { .. } | crate::tmode::Ir::SwMethod(_)
+            )
+        }) {
             if let Some(x) = q.pop_front() {
                 ir.push(x);
             }

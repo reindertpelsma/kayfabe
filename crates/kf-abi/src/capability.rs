@@ -1871,6 +1871,37 @@ pub(crate) static CONTROLS_FROM_575_51_02: &[ControlEntry] = &[
     },
 ];
 
+/// ★ OWNER_RULINGS §U (2026-10-07): the class-5080 registration controls, at the boundary that
+/// admits the class ([`CLASSES_FROM_580_65_06`]). `_DEFERRED_API`, `_REMOVE_API` and
+/// `_DEFERRED_API_INTERNAL` are ROUTE_TO_PHYSICAL (`g_deferred_api_nvoc.c:183-230`, flags
+/// `0x50048`/`0x50048`/`0x500c8`), so a guest RM sends them to the GSP; `_V2` (`0x10008`) is the
+/// guest RM's own and reaches the GSP only as `_INTERNAL`. `[measured: the 2026-10-05 VFIO boots 8/9/10, Windows
+/// 580.88]` `0x50800101` ×8, each `NV_OK`. They only fill or empty a per-object table
+/// (`kf_rm::defapi`); nothing is forwarded to the host, and the trigger (`0x200`) is served on
+/// Translated channels only, by host-authored equivalents (§U.1).
+pub(crate) static CONTROLS_FROM_580_65_06: &[ControlEntry] = &[
+    ControlEntry {
+        cmd: 0x50800101,
+        name: "NV5080_CTRL_CMD_DEFERRED_API",
+        origin: Origin::Mode2Rpc,
+    },
+    ControlEntry {
+        cmd: 0x50800102,
+        name: "NV5080_CTRL_CMD_REMOVE_API",
+        origin: Origin::Mode2Rpc,
+    },
+    ControlEntry {
+        cmd: 0x50800103,
+        name: "NV5080_CTRL_CMD_DEFERRED_API_V2",
+        origin: Origin::Mode2Rpc,
+    },
+    ControlEntry {
+        cmd: 0x50800104,
+        name: "NV5080_CTRL_CMD_DEFERRED_API_INTERNAL",
+        origin: Origin::Mode2Rpc,
+    },
+];
+
 /// The floor every boundary stands on — see [`SharedCapabilities`].
 pub static SHARED_CAPS: SharedCapabilities = SharedCapabilities {
     controls: CONTROLS_SHARED,
@@ -2026,6 +2057,7 @@ pub static CAPS_580_65_06: CapabilityTable = CapabilityTable {
         CONTROLS_FROM_550_90_07,
         CONTROLS_FROM_560_28_03,
         CONTROLS_FROM_575_51_02,
+        CONTROLS_FROM_580_65_06,
     ],
     own_classes: &[
         CLASSES_FROM_550_40_07,
@@ -2051,6 +2083,7 @@ pub static CAPS_610_43_02: CapabilityTable = CapabilityTable {
         CONTROLS_FROM_550_90_07,
         CONTROLS_FROM_560_28_03,
         CONTROLS_FROM_575_51_02,
+        CONTROLS_FROM_580_65_06,
     ],
     own_classes: &[
         CLASSES_FROM_550_40_07,
@@ -2505,7 +2538,7 @@ mod tests {
             (
                 "580.65.06",
                 (580, 65, 6),
-                166,
+                170,
                 94,
                 &[
                     "NV0000_CTRL_CMD_GPU_ASYNC_ATTACH_ID",
@@ -2517,6 +2550,10 @@ mod tests {
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
                     "NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE",
                     "NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2",
+                    "NV5080_CTRL_CMD_DEFERRED_API",
+                    "NV5080_CTRL_CMD_DEFERRED_API_INTERNAL",
+                    "NV5080_CTRL_CMD_DEFERRED_API_V2",
+                    "NV5080_CTRL_CMD_REMOVE_API",
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
                     "NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL",
                 ],
@@ -2524,7 +2561,7 @@ mod tests {
             (
                 "610.43.02",
                 (610, 43, 2),
-                166,
+                170,
                 94,
                 &[
                     "NV0000_CTRL_CMD_GPU_ASYNC_ATTACH_ID",
@@ -2536,6 +2573,10 @@ mod tests {
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
                     "NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE",
                     "NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2",
+                    "NV5080_CTRL_CMD_DEFERRED_API",
+                    "NV5080_CTRL_CMD_DEFERRED_API_INTERNAL",
+                    "NV5080_CTRL_CMD_DEFERRED_API_V2",
+                    "NV5080_CTRL_CMD_REMOVE_API",
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
                     "NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL",
                 ],
@@ -3127,7 +3168,7 @@ mod tests {
         // ⚠ The number the reader will expect to see move is `0x00801909`'s, and it does
         // not: that id was already admitted and **cannot be served** (not
         // `ROUTE_TO_PHYSICAL`). See `submit::PERF_CUDA_LIMIT_THE_ID_THAT_ARRIVES`.
-        assert_eq!(bench().all_controls().count(), 166, "controls"); // +1 v3-promote: GPU_EVICT_CTX
+        assert_eq!(bench().all_controls().count(), 170, "controls"); // +1 v3-promote: GPU_EVICT_CTX; +4 §U: the 5080 controls
         // ★ +18 on 2026-09-27 (v3-display): the display classes the guest's KERNEL allocates and
         // RPCs to us (`NVC372_DISPLAY_SW`, the C57x/C67x/C77x/CA7x display objects and their
         // core/window/window-immediate/cursor channels). SHARED, so every boundary moves by 18.
@@ -3175,7 +3216,9 @@ mod tests {
         // already on the list and is unchanged by this rung.
         // ★ 9 → 10 on 2026-09-25 (v3-promote): `NV2080_CTRL_CMD_GPU_EVICT_CTX`, the kernel-only
         // unbind counterpart of `GPU_PROMOTE_CTX` (see its row).
-        assert_eq!(n(Origin::Mode2Rpc), 10);
+        // ★ 10 → 14 on 2026-10-07 (OWNER_RULINGS §U): the four class-5080 controls — the guest's
+        // CPU-RM RPCs `_DEFERRED_API`, `_REMOVE_API` and `_INTERNAL` (ROUTE_TO_PHYSICAL).
+        assert_eq!(n(Origin::Mode2Rpc), 14);
         assert_eq!(n(Origin::Empirical), 5);
         // ★ 148 → 149 on 2026-08-14 (w292): `0x83de0309` came back to the allowlist with
         // its ORIGINAL provenance. It really is an nvproxy row — gVisor permits it because

@@ -2,7 +2,7 @@
 //! ★ Owner rulings 2026-10-07 — the kernel-GR tier and the software-subchannel rule, on the exact
 //! words Windows sent in run31 (`traces/windows_code43_walls_20261007/README.md`, run31).
 
-use super::{GrConfig, Ir, TState, decode};
+use super::{GrConfig, Ir, SwCall, TState, decode};
 use crate::translated::Refusal;
 use kf_abi::submit::method_header_inc;
 
@@ -62,6 +62,7 @@ fn st(tier: bool, inert: bool) -> TState {
         gr: GrConfig {
             tier,
             inert_sw_subch: inert,
+            deferred_api: false,
         },
         ..TState::default()
     }
@@ -391,4 +392,56 @@ fn run44_gr_segment_admits_the_3d_report_semaphore_and_stops_at_the_software_met
         4,
         "A, B, C, D admitted once before the refusal"
     );
+}
+
+/// ★ OWNER_RULINGS §U (`KF3_DEFERRED_API`): the same run44 segment with the deferred-API path on —
+/// subchannel 5's value 1 names the channel's first software object (the 5080, `[measured: the
+/// 2026-10-05 VFIO boots 8/9/10]` always its first `ENG_SW` child), so the method is not refused in the decoder: it is a
+/// [`Ir::SwMethod`] split carrying the guest's `hApiHandle` (`0x40000002`, the handle VFIO
+/// registered first on that object), and the words after it decode on.
+#[test]
+fn run44_gr_segment_with_the_deferred_api_splits_at_the_software_method() {
+    let mut s = st(true, true);
+    s.gr.deferred_api = true;
+    let mut seg = RUN31_GR.to_vec();
+    seg.extend_from_slice(&RUN32_GR_TAIL);
+    decode(&seg, is_ce, &mut s, None).expect("run32 segment");
+    assert_eq!(
+        s.swobj_subch,
+        1 << 5,
+        "subchannel 5 is a software-object subchannel"
+    );
+    assert_eq!(
+        s.inert_subch, 0,
+        "not inert: the deferred path takes precedence"
+    );
+    let ir = decode(&RUN44_GR_GP1, is_ce, &mut s, None).expect("no refusal in the decoder");
+    let calls: Vec<SwCall> = ir
+        .iter()
+        .filter_map(|i| match i {
+            Ir::SwMethod(c) => Some(*c),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        calls,
+        vec![
+            SwCall {
+                sub: 5,
+                value: 1,
+                method: 0x200,
+                data: 0x4000_0002
+            },
+            SwCall {
+                sub: 5,
+                value: 1,
+                method: 0x200,
+                data: 0x4000_0003
+            }
+        ]
+    );
+    // A SET_OBJECT to a real class clears it; a CE class on 5 stays refused as before.
+    let mut t = s;
+    decode(&[0x2001_a000, 0x0000_c7b5], is_ce, &mut t, None).ok();
+    assert_eq!(t.swobj_subch, 0);
 }

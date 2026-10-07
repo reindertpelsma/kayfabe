@@ -17,6 +17,7 @@ pub mod authored;
 pub mod barpde;
 pub mod census;
 pub mod chanlink;
+pub mod defapi;
 pub mod display;
 pub mod faultbuffer;
 pub mod fecstrace;

@@ -105,6 +105,7 @@ pub mod cepce;
 pub mod chipinfo;
 pub mod confcompute;
 pub mod cudartinit;
+pub mod defapi;
 pub mod deviceinfo;
 pub mod drmnv;
 pub mod eventnotify;

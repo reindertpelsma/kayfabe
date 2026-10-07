@@ -1839,6 +1839,15 @@ impl Bar1Target {
 /// The manager the VA thread owns.
 pub type Manager = VaManager<GpuWalker, Target>;
 
+/// ★ What a split walks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SplitTarget {
+    /// A guest `MEM_OP` invalidate's root (`None` = `PDB_ALL`).
+    Pdb(Option<u64>),
+    /// ★ OWNER_RULINGS §U.2: the triggering channel's OWN space (a deferred TLB invalidate).
+    Space(kf_mem::vasmgr::VasKey),
+}
+
 /// ★ The drainer → VA-manager inbox for the guest's address-space statements, with the two
 /// counters that decide when their held replies may go: `received` (the drainer, as it enqueues)
 /// and `settled` (the VA thread, once everything received so far is applied and no walk is in
@@ -1858,8 +1867,11 @@ pub struct Inbox {
     settled: AtomicU64,
     /// The VA thread's wake.
     pub wake: Notifier,
-    /// ★ P6: `MEM_OP` splits a Translated channel asked for — `(ticket, guest token, pdb)`.
-    splits: Mutex<Vec<(u64, u32, Option<u64>)>>,
+    /// ★ P6: `MEM_OP` splits a Translated channel asked for — `(ticket, guest token, target)`.
+    splits: Mutex<Vec<(u64, u32, SplitTarget)>>,
+    /// ★ OWNER_RULINGS §U.2: the host gate a split opens once it is committed — ticket →
+    /// `(the ring's gate, the payload its acquire waits for)`.
+    gates: Mutex<std::collections::HashMap<u64, (kf_chan::host::Gate, u32)>>,
     /// ★ P6: tickets the VA thread took and has not finished — ticket → guest token.
     split_tokens: Mutex<std::collections::HashMap<u64, u32>>,
     /// ★ P6: finished splits waiting for their channel's next pump.
@@ -1889,6 +1901,7 @@ impl Inbox {
             settled: AtomicU64::new(0),
             wake: Notifier::create().map_err(|e| format!("eventfd: {e:?}"))?,
             splits: Mutex::new(Vec::new()),
+            gates: Mutex::new(std::collections::HashMap::new()),
             split_tokens: Mutex::new(std::collections::HashMap::new()),
             split_results: Mutex::new(std::collections::HashMap::new()),
             next_ticket: AtomicU64::new(1),
@@ -1957,14 +1970,40 @@ impl Inbox {
             );
         }
         if let Ok(mut q) = self.splits.lock() {
-            q.push((t, token, pdb));
+            q.push((t, token, SplitTarget::Pdb(pdb)));
         }
         let _ = self.wake.signal();
         t
     }
 
-    /// ★ P6, the VA thread: the splits requested since the last call, `(ticket, pdb)`.
-    pub fn take_split_requests(&self) -> Vec<(u64, Option<u64>)> {
+    /// ★★ OWNER_RULINGS §U.2, a WORKER: channel `token` reached a deferred `DMA_INVALIDATE_TLB`;
+    /// its prior work completed and the host ring now holds an acquire of `payload` on `gate`.
+    /// Ask the VA thread to walk the channel's OWN space `key` (the guest's handles in the entry are
+    /// ignored) and — only after the diff is committed and the host invalidate landed — store
+    /// `payload` ([`Inbox::finish_split`]). Returns the ticket to poll. ⊘ Never waits.
+    pub fn request_gated_split(
+        &self,
+        token: u32,
+        key: kf_mem::vasmgr::VasKey,
+        gate: kf_chan::host::Gate,
+        payload: u32,
+    ) -> u64 {
+        let t = self.next_ticket.fetch_add(1, Ordering::Relaxed);
+        eprintln!(
+            "kf3: GATE ticket={t} by channel token {token:#x}: walk {key:?}, then release payload {payload}"
+        );
+        if let Ok(mut g) = self.gates.lock() {
+            g.insert(t, (gate, payload));
+        }
+        if let Ok(mut q) = self.splits.lock() {
+            q.push((t, token, SplitTarget::Space(key)));
+        }
+        let _ = self.wake.signal();
+        t
+    }
+
+    /// ★ P6, the VA thread: the splits requested since the last call, `(ticket, target)`.
+    pub fn take_split_requests(&self) -> Vec<(u64, SplitTarget)> {
         let taken = self
             .splits
             .lock()
@@ -1979,7 +2018,25 @@ impl Inbox {
     }
 
     /// ★ P6, the VA thread: `ticket` finished. Returns the guest token to ring.
+    ///
+    /// ★★ §U.2: a gated split's gate is RELEASED here — on the VA thread, after the walk's diff was
+    /// applied and its host invalidate landed (the caller takes finished splits only after
+    /// `on_walk_ready`), and BEFORE the outcome is published, so the channel that polls `Ok` finds
+    /// its gate open. A failed split never releases it (the channel dies at its poll); a release
+    /// that fails (the ring is gone) turns the outcome into that failure.
     pub fn finish_split(&self, ticket: u64, r: Result<(), String>) -> Option<u32> {
+        let gate = self.gates.lock().ok().and_then(|mut g| g.remove(&ticket));
+        let r = match (r, gate) {
+            (Ok(()), Some((g, payload))) => g
+                .release(payload)
+                .map(|()| {
+                    eprintln!(
+                        "kf3: GATE ticket={ticket} RELEASED payload {payload} after the commit"
+                    );
+                })
+                .map_err(|e| format!("gate release: {e}")),
+            (r, _) => r,
+        };
         if let Ok(mut m) = self.split_results.lock() {
             m.insert(ticket, r);
         }
@@ -3350,6 +3407,43 @@ mod tests {
         inbox.wait_walk(9);
         assert_eq!(inbox.take_walk_waiters(), vec![5, 9]);
         assert!(inbox.take_walk_waiters().is_empty());
+    }
+
+    /// ★★ OWNER_RULINGS §U.2: a gated split opens its gate only on success, only at its finish (on
+    /// the VA thread, after the commit), and before its outcome is published; a failed split never
+    /// opens it; a released ring turns the release into a failure.
+    #[test]
+    fn a_gated_split_releases_its_gate_only_after_a_successful_finish() {
+        let inbox = Inbox::new().expect("inbox");
+        let key = kf_mem::vasmgr::VasKey(0x1234);
+        let g = kf_chan::host::Gate::scratch().expect("scratch gate");
+        let t = inbox.request_gated_split(7, key, g.clone(), 5);
+        assert_eq!(g.value(), Some(0), "requested: closed");
+        let taken = inbox.take_split_requests();
+        assert_eq!(taken, vec![(t, SplitTarget::Space(key))]);
+        assert_eq!(g.value(), Some(0), "taken (walking): still closed");
+        assert_eq!(inbox.split_result(t), None, "no outcome before the finish");
+        assert_eq!(inbox.finish_split(t, Ok(())), Some(7));
+        assert_eq!(g.value(), Some(5), "released at the finish");
+        assert_eq!(inbox.split_result(t), Some(Ok(())));
+        // A failed split never opens its gate.
+        let t2 = inbox.request_gated_split(7, key, g.clone(), 6);
+        let _ = inbox.take_split_requests();
+        let _ = inbox.finish_split(t2, Err("walk refused".into()));
+        assert_eq!(g.value(), Some(5));
+        assert!(inbox.split_result(t2).unwrap().is_err());
+        // A ring released before its gate opened: the outcome is that failure.
+        let t3 = inbox.request_gated_split(7, key, g.clone(), 7);
+        let _ = inbox.take_split_requests();
+        g.revoke_for_test();
+        let _ = inbox.finish_split(t3, Ok(()));
+        assert!(
+            inbox
+                .split_result(t3)
+                .unwrap()
+                .unwrap_err()
+                .contains("released")
+        );
     }
 
     /// A host that counts every window map and places it where RM placed `GROWS_DOWN` windows.

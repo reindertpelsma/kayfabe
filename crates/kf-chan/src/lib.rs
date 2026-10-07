@@ -20,6 +20,7 @@ pub mod grtables;
 pub mod host;
 pub mod passthrough;
 pub mod ring;
+pub mod swmethod;
 pub mod tmode;
 pub mod translated;
 pub mod tspace_unsafe;

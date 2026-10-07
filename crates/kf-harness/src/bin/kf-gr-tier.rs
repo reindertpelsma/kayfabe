@@ -23,6 +23,9 @@
 //! - ★ 2026-10-07 (`KF3_TRANSLATED_CE_RELAY`): that CE completion wakes one of the fds kf3's worker
 //!   parks on (`FIFO_EVENT_MTHD`, the host CE's non-stall notifier; measured separately) — the wake
 //!   that lets the worker relay it to the guest's CE vector;
+//! - ★ OWNER_RULINGS §U.2 (2026-10-07): the host GATE of a deferred TLB invalidate — an equality
+//!   acquire on a ring's own gate word holds the engine until another thread stores the payload
+//!   (the VA-manager thread's role), and a released ring revokes its gate;
 //! - everything is released (channel, ring object, mapping, CPU view).
 //!
 //! It does NOT check the guest-vector relay (no VMM here); that is the Windows run's evidence.
@@ -418,6 +421,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
     ring.set_gr(GrConfig {
         tier: true,
         inert_sw_subch: true,
+        deferred_api: false,
     });
     let mut chan = TranslatedChannel::new(ring, host, 1);
     chan.set_tspace(win, false);
@@ -563,6 +567,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
     ring2.set_gr(GrConfig {
         tier: false,
         inert_sw_subch: true,
+        deferred_api: false,
     });
     let mut chan2 = TranslatedChannel::new(ring2, host2, 2);
     chan2.set_tspace(win, false);
@@ -635,6 +640,58 @@ fn run(l: &mut Checks) -> Result<(), String> {
             }))
         ),
         format!("{r2:?}"),
+    );
+
+    // ── ★ OWNER_RULINGS §U.2: the host GATE, native ──────────────────────────────────────────
+    // An equality acquire on a ring's own gate word, authored by the perimeter, then a fence: the
+    // engine must HOLD there until another thread (the VA-manager thread's role) stores the
+    // payload, and pass right after. Falsified if the fence completes before the store, or never
+    // after it.
+    let mut gring = HostRing::on_engine_layout(
+        &rm,
+        space,
+        host_ce,
+        Some(region_base + 2 * kf_chan::host::RING_BYTES),
+        kf_chan::host::TSPACE_LAYOUT,
+    )?;
+    let gate = gring.gate();
+    let payload = kf_chan::swmethod::next_gate(0);
+    let gw = kf_chan::tspace_unsafe::gate_acquire_words(gring.gate_va(), payload)
+        .ok_or("gate words: VA above 2^40")?;
+    gring.push(&gw)?.map_err(|_| "gate push: busy")?;
+    let gseq = gring.fence(&rm)?.map_err(|_| "gate fence: busy")?;
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    let held = gring.completed()?;
+    let blocked = !kf_chan::host::reached(held, gseq);
+    let releaser = {
+        let g = gate.clone();
+        std::thread::spawn(move || g.release(payload))
+    };
+    let released = releaser.join().map_err(|_| "releaser panicked")?;
+    let t_rel = std::time::Instant::now();
+    let mut passed = false;
+    while t_rel.elapsed() < std::time::Duration::from_secs(2) {
+        if kf_chan::host::reached(gring.completed()?, gseq) {
+            passed = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    l.check(
+        "gate_holds_the_engine_until_released",
+        blocked && released.is_ok() && passed,
+        format!(
+            "fence {gseq}: after 300 ms unreleased completed={held} (blocked={blocked}); release {released:?}; passed={passed} in {} us; gate word={:?}",
+            t_rel.elapsed().as_micros(),
+            gate.value()
+        ),
+    );
+    let gch = rm.free_channel(gring.channel());
+    let grel = gring.release(&rm);
+    l.check(
+        "gate_revoked_with_its_ring",
+        gate.release(payload + 1).is_err() && gate.value().is_none(),
+        format!("{gch:?} {grel:?}"),
     );
 
     // ── release: channels, ring objects, mappings, CPU views ────────────────────────────────

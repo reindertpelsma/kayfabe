@@ -690,6 +690,12 @@ impl Device {
                 token_fmt,
             )?));
         chans.start()?;
+        // ★ OWNER_RULINGS §U: the VM's deferred-API tables — filled by the object seat (the guest's
+        // class-5080 registration controls), read by the channel plane at the trigger.
+        let defapi_reg = std::sync::Arc::new(kf_rm::defapi::Registry::new(
+            kf_rm::defapi::Bounds::default(),
+        ));
+        chans.set_deferred_api(defapi_reg.clone());
         // ★ The served chain (census → sticky guard → init tables, static info, guest sys info,
         // inert, the object seat, the unserviced ledger). The object seat is the host-free graph
         // (`GraphObjects`): it answers ALLOC/FREE/DUP from the object model and refuses every
@@ -802,13 +808,14 @@ impl Device {
         let build = {
             let memory_list_fb = layout.clone();
             let x11_dispsw = cfg.x11_dispsw;
-            let (board, host, chain_logs, census, inbox, console) = (
+            let (board, host, chain_logs, census, inbox, console, defapi_reg) = (
                 board.clone(),
                 host.clone(),
                 chain_logs.clone(),
                 census.clone(),
                 inbox.clone(),
                 console.clone(),
+                defapi_reg.clone(),
             );
             Box::new(move |t: kf_abi::versions::DriverAbiTable| {
                 let objects = kf_rm::rmrpc::ObjectPolicy::over(
@@ -817,7 +824,8 @@ impl Device {
                     Box::new(
                         kf_rm::rmrpc::GraphObjects::new(family)
                             .with_guest_ram(std::sync::Arc::new(crate::mem::MemoryListRam(ram)))
-                            .with_guest_framebuffer(memory_list_fb.clone()),
+                            .with_guest_framebuffer(memory_list_fb.clone())
+                            .with_deferred_api(defapi_reg.clone()),
                     ),
                     kf_rm::rmrpc::ReasmLimits::default(),
                 );
@@ -1873,8 +1881,13 @@ impl Device {
             }
             // ★ P6: a Translated channel's `MEM_OP` split — walked with the invalidates, never a
             // wait on the worker that asked.
-            for (ticket, pdb) in self.mem.inbox.take_split_requests() {
-                m.on_split(pdb, ticket, trigger);
+            for (ticket, target) in self.mem.inbox.take_split_requests() {
+                match target {
+                    crate::mem::SplitTarget::Pdb(pdb) => m.on_split(pdb, ticket, trigger),
+                    // ★ §U.2: a deferred TLB invalidate — the channel's own space; its gate is
+                    // released by `finish_split` below, after the walk's commit.
+                    crate::mem::SplitTarget::Space(key) => m.on_split_space(key, ticket, trigger),
+                }
             }
             let r = m.on_walk_ready(trigger);
             // ★ Ruling 2026-09-26 (5): a BAR1 doorbell overlay the main loop has now made live (or

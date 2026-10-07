@@ -265,6 +265,24 @@ pub enum Ir {
         /// The named root.
         pdb: Option<u64>,
     },
+    /// ★ OWNER_RULINGS §U: a method on a software subchannel bound to one of the channel's own
+    /// software objects (a split: the runner resolves it, nothing is bound or emitted for it).
+    SwMethod(SwCall),
+}
+
+/// ★ OWNER_RULINGS §U — one software method, as the guest wrote it: on bare metal a PBDMA
+/// software-method interrupt that the GSP serves for the object `SET_OBJECT` bound by number.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SwCall {
+    /// The subchannel (5-7).
+    pub sub: u32,
+    /// The value the subchannel was bound to: the channel's software classID of the object
+    /// (`kchannelRegisterChild`, `ogkm-580: kernel_channel.c:3408-3453`).
+    pub value: u32,
+    /// The method.
+    pub method: u32,
+    /// Its data (for `NV5080` `0x200`: the `hApiHandle`).
+    pub data: u32,
 }
 
 /// ★ The channel state T-mode decodes against — one per channel, carried across segments.
@@ -309,6 +327,12 @@ pub struct TState {
     pub inert_binds: u64,
     /// GR-tier methods re-authored over the channel's life (for the log).
     pub gr_methods: u64,
+    /// ★ OWNER_RULINGS §U: software subchannels bound to a value that names one of the channel's
+    /// own software objects (resolved by the runner at the method; the value is in
+    /// [`TState::inert_value`]). Only with [`GrConfig::deferred_api`].
+    pub swobj_subch: u8,
+    /// Software-object binds accepted over the channel's life (for the log).
+    pub swobj_binds: u64,
     /// ★ GR tier (batch 2): each GR subchannel's last `ADDRESS_UPPER` (held until its lower word).
     pub gr_addr_hi: [u32; 4],
 }
@@ -324,6 +348,11 @@ pub struct GrConfig {
     /// A `SET_OBJECT` on a software subchannel (5-7) of a value no family lists as a class is
     /// accepted silently (inferred hardware behaviour: stored, later methods trap to RM).
     pub inert_sw_subch: bool,
+    /// ★ OWNER_RULINGS §U (`KF3_DEFERRED_API`): such a value is the channel's software classID of
+    /// one of its own software objects (`kchannelGetClassEngineID_GM107`, `kernel_channel_gm107.c:
+    /// 72-82`) — its methods become [`Ir::SwMethod`] splits the runner serves (class 5080) or
+    /// refuses by name. Takes precedence over `inert_sw_subch`.
+    pub deferred_api: bool,
 }
 
 #[cfg(test)]
@@ -454,6 +483,16 @@ fn one(
         } else {
             Err(Refusal::SwMethod { method: m })
         };
+    }
+    if st.swobj_subch & bit != 0 {
+        // ★ §U: served (or refused by name) by the runner against the channel's own objects.
+        out.push(Ir::SwMethod(SwCall {
+            sub,
+            value: st.inert_value[(sub & 7) as usize],
+            method: m,
+            data: v,
+        }));
+        return Ok(());
     }
     if st.inert_subch & bit != 0 {
         // ★ Ruling 4: a software method on a subchannel bound to a non-class value. On bare metal
@@ -633,6 +672,7 @@ fn host(
             let class = v & NVCLASS_MASK;
             st.sw_subch &= !bit;
             st.inert_subch &= !bit;
+            st.swobj_subch &= !bit;
             if let Some(c) = st.gr_subch.get_mut(sub as usize) {
                 *c = 0;
             }
@@ -659,6 +699,18 @@ fn host(
                     *h = 0;
                 }
                 words_ir(out, &[(sub, 0, class)]);
+                return Ok(());
+            }
+            if st.gr.deferred_api
+                && sub > 4
+                && class != GP100_UVM_SW
+                && !is_ce(class)
+                && !crate::grtables::is_known_class(class)
+            {
+                // ★ §U: a software object of this channel, named by its number; nothing emitted.
+                st.swobj_subch |= bit;
+                st.inert_value[(sub & 7) as usize] = class;
+                st.swobj_binds += 1;
                 return Ok(());
             }
             if st.gr.inert_sw_subch
@@ -1083,7 +1135,7 @@ pub fn bind(ir: &Ir, rows: &dyn Rows, w: &TWindows, out: &mut Vec<u32>) -> Resul
             }
             Ok(0)
         }
-        Ir::Invalidate { .. } => Ok(0),
+        Ir::Invalidate { .. } | Ir::SwMethod(_) => Ok(0),
         Ir::GrAddress {
             sub,
             upper,
@@ -1307,7 +1359,7 @@ pub fn chunk(
     let mut pieces: Vec<Vec<u32>> = Vec::new();
     let mut cur: Vec<u32> = Vec::new();
     for it in items {
-        if matches!(it, Ir::Invalidate { .. }) {
+        if matches!(it, Ir::Invalidate { .. } | Ir::SwMethod(_)) {
             if !cur.is_empty() {
                 pieces.push(std::mem::take(&mut cur));
             }

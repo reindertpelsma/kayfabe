@@ -572,7 +572,9 @@ fn maplog_want(w: &Want) -> String {
             r.inval.raw,
             at.elapsed().as_micros()
         ),
-        Want::Split { pdb, ticket } => format!("split ticket={ticket} pdb={pdb:x?}"),
+        Want::Split { pdb, ticket, key } => {
+            format!("split ticket={ticket} pdb={pdb:x?} space={key:?}")
+        }
         Want::Root(k) => format!("root {k:?}"),
     }
 }
@@ -621,6 +623,9 @@ enum Want {
         pdb: Option<u64>,
         /// The caller's ticket.
         ticket: u64,
+        /// ★ OWNER_RULINGS §U.2: walk exactly this space instead (a deferred TLB invalidate names
+        /// the triggering channel's own space; `pdb` is then `None` and ignored).
+        key: Option<VasKey>,
     },
 }
 
@@ -1056,14 +1061,43 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             eprintln!(
                 "kf3: maplog t={:.6} ARRIVE {} (inflight walk: {})",
                 crate::maplog::t(),
-                maplog_want(&Want::Split { pdb, ticket }),
+                maplog_want(&Want::Split {
+                    pdb,
+                    ticket,
+                    key: None
+                }),
                 self.inflight
                     .as_ref()
                     .map_or("none".to_string(), |b| format!("#{}", b.id))
             );
         }
         self.stats.splits += 1;
-        self.pending.push(Want::Split { pdb, ticket });
+        self.pending.push(Want::Split {
+            pdb,
+            ticket,
+            key: None,
+        });
+        self.pump(trigger);
+    }
+
+    /// ★★ OWNER_RULINGS §U.2: a deferred TLB invalidate's split — walk and apply exactly `key`
+    /// (the triggering channel's own space), then report `ticket` done through
+    /// [`VaManager::take_splits`]. A space with no root has nothing to be stale: done at once.
+    pub fn on_split_space(&mut self, key: VasKey, ticket: u64, trigger: &Trigger) {
+        let w = Want::Split {
+            pdb: None,
+            ticket,
+            key: Some(key),
+        };
+        if crate::maplog::on() {
+            eprintln!(
+                "kf3: maplog t={:.6} ARRIVE {}",
+                crate::maplog::t(),
+                maplog_want(&w)
+            );
+        }
+        self.stats.splits += 1;
+        self.pending.push(w);
         self.pump(trigger);
     }
 
@@ -1112,10 +1146,13 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 Want::Invalidate(r, _) if r.inval.pdb_aperture == PdbAperture::Sysmem => Vec::new(),
                 Want::Invalidate(r, _) => self.table.keys_for_pdb(r.inval.pdb),
                 Want::Root(k) => self.table.root(k).map(|_| vec![k]).unwrap_or_default(),
+                Want::Split { key: Some(k), .. } => {
+                    self.table.root(k).map(|_| vec![k]).unwrap_or_default()
+                }
                 Want::Split { pdb: None, .. } => self.table.rooted(),
                 Want::Split { pdb: Some(p), .. } => self.table.keys_for_pdb(p),
             };
-            if let Want::Split { ticket, pdb } = w
+            if let Want::Split { ticket, pdb, .. } = w
                 && keys.is_empty()
             {
                 // Nothing of ours is under that root: nothing can be stale.
@@ -1487,7 +1524,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         for (w, keys, at) in &batch.wants {
             let bad = keys.iter().find(|k| failed.contains(k));
             let again = keys.iter().any(|k| partial.contains(k));
-            if let Want::Split { ticket, pdb } = w {
+            if let Want::Split { ticket, pdb, .. } = w {
                 // ★★★ v3-mapfix — A SPLIT FAILS ONLY ON A REFUSAL THAT IS NOT MERE ABSENCE.
                 // `[measured 670bd310 nb1, UnifiedMemoryStreams]` ONE refused 64 KiB map in ONE
                 // process's space failed the split of the guest's UVM kernel channel (token 3,

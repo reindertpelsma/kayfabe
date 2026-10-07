@@ -252,6 +252,20 @@ pub trait RmObjects: Send {
     /// # Errors
     /// [`ObjectsRefusal`], by name.
     fn page_dir(&mut self, st: PageDirStatement) -> Result<(), ObjectsRefusal>;
+
+    /// ★ OWNER_RULINGS §U: a class-5080 registration control (`ctl`) on `(client, object)` —
+    /// the status the GSP answers, or `None` when this seat holds no deferred-API tables (the
+    /// control then falls through and is refused as before). Default: no tables.
+    fn deferred_api(
+        &mut self,
+        _abi: &kf_abi::defapi::DefApiAbi,
+        _client: u32,
+        _object: u32,
+        _ctl: kf_abi::defapi::Control,
+        _params: &[u8],
+    ) -> Option<u32> {
+        None
+    }
 }
 
 /// ★ The host-free [`RmObjects`]: the object graph alone.
@@ -266,6 +280,9 @@ pub struct GraphObjects {
     pub graph: RmGraph,
     ram: Option<std::sync::Arc<dyn crate::memory_list::GuestRamAuthority>>,
     fb: Option<kf_chip::bar0::FbLayout>,
+    /// ★ OWNER_RULINGS §U: the VM's deferred-API tables (shared with the channel plane, which
+    /// looks entries up at the trigger). `None`: 5080 controls fall through, refused as before.
+    deferred: Option<std::sync::Arc<crate::defapi::Registry>>,
 }
 
 impl GraphObjects {
@@ -310,7 +327,51 @@ impl GraphObjects {
             graph: RmGraph::new(family),
             ram: None,
             fb: None,
+            deferred: None,
         }
+    }
+
+    /// ★ OWNER_RULINGS §U: serve the class-5080 registration controls into `registry` (the
+    /// device's one registry, shared with the channel plane).
+    #[must_use]
+    pub fn with_deferred_api(mut self, registry: std::sync::Arc<crate::defapi::Registry>) -> Self {
+        self.deferred = Some(registry);
+        self
+    }
+
+    /// The graph half of [`RmObjects::apply`].
+    fn apply_graph(&mut self, ev: RmEvent, _params: &[u8]) -> Result<(), ObjectsRefusal> {
+        if let RmEvent::Alloc {
+            client,
+            parent,
+            facts,
+            ..
+        } = ev
+            && facts.deferred_api_notify.is_some()
+        {
+            let key = crate::rmgraph::NodeKey::new(client, parent);
+            if !self
+                .graph
+                .allocated_node(key)
+                .is_some_and(|n| matches!(n.kind, kf_arch::ObjectKind::Channel { .. }))
+            {
+                return Err(ObjectsRefusal::NotModelled {
+                    what: "deferred API constructor: parent is not an original live channel",
+                });
+            }
+        }
+        self.graph.apply(ev).map_err(ObjectsRefusal::Graph)
+    }
+
+    /// `key` is a live `NV50_DEFERRED_API_CLASS` object whose parent is a live channel.
+    fn is_deferred_api_object(&self, key: crate::rmgraph::NodeKey) -> bool {
+        self.graph.allocated_node(key).is_some_and(|n| {
+            n.class.0 == kf_abi::generated::classes::NV50_DEFERRED_API_CLASS
+                && self
+                    .graph
+                    .allocated_node(crate::rmgraph::NodeKey::new(key.client, n.parent))
+                    .is_some_and(|p| matches!(p.kind, kf_arch::ObjectKind::Channel { .. }))
+        })
     }
 }
 
@@ -333,27 +394,56 @@ impl RmObjects for GraphObjects {
     ) -> Result<RmEvent, ObjectsRefusal> {
         crate::sw_runlist_probe::allocate(&mut self.graph, request)
     }
-    fn apply(&mut self, ev: RmEvent, _params: &[u8]) -> Result<(), ObjectsRefusal> {
-        if let RmEvent::Alloc {
-            client,
-            parent,
-            facts,
-            ..
-        } = ev
-            && facts.deferred_api_notify.is_some()
-        {
-            let key = crate::rmgraph::NodeKey::new(client, parent);
-            if !self
-                .graph
-                .allocated_node(key)
-                .is_some_and(|n| matches!(n.kind, kf_arch::ObjectKind::Channel { .. }))
-            {
-                return Err(ObjectsRefusal::NotModelled {
-                    what: "deferred API constructor: parent is not an original live channel",
-                });
-            }
+    fn deferred_api(
+        &mut self,
+        abi: &kf_abi::defapi::DefApiAbi,
+        client: u32,
+        object: u32,
+        ctl: kf_abi::defapi::Control,
+        params: &[u8],
+    ) -> Option<u32> {
+        let reg = self.deferred.clone()?;
+        let key = crate::rmgraph::NodeKey::new(
+            kf_arch::ids::HClient(client),
+            kf_arch::ids::HObject(object),
+        );
+        // A control on anything but a live 5080 object: the handle names no such object
+        // (`resControlLookup` never reaches the 5080 body).
+        if !self.is_deferred_api_object(key) {
+            return Some(kf_abi::defapi::NV_ERR_INVALID_OBJECT_HANDLE);
         }
-        self.graph.apply(ev).map_err(ObjectsRefusal::Graph)
+        let graph = &self.graph;
+        Some(crate::defapi::serve(
+            &reg,
+            abi,
+            crate::defapi::ObjKey { client, object },
+            ctl,
+            params,
+            |h| {
+                graph
+                    .node(crate::rmgraph::NodeKey::new(
+                        kf_arch::ids::HClient(client),
+                        kf_arch::ids::HObject(h),
+                    ))
+                    .is_some()
+            },
+        ))
+    }
+
+    fn apply(&mut self, ev: RmEvent, params: &[u8]) -> Result<(), ObjectsRefusal> {
+        let freed = matches!(ev, RmEvent::Free { .. });
+        let r = self.apply_graph(ev, params);
+        if freed && let Some(reg) = self.deferred.clone() {
+            // ★ `defapiDestruct_IMPL`: a 5080 object freed (itself, its channel, its client)
+            // takes its whole tree with it.
+            reg.prune(|k| {
+                self.is_deferred_api_object(crate::rmgraph::NodeKey::new(
+                    kf_arch::ids::HClient(k.client),
+                    kf_arch::ids::HObject(k.object),
+                ))
+            });
+        }
+        r
     }
 
     fn page_dir(&mut self, _st: PageDirStatement) -> Result<(), ObjectsRefusal> {
@@ -628,6 +718,11 @@ fn refusal_reply(r: BridgeRefusal) -> Reply {
 pub struct ObjectPolicy {
     bridge: Bridge,
     objects: Box<dyn RmObjects>,
+    /// ★ OWNER_RULINGS §U: the deferred-API surface at the served version (`None` where the
+    /// matrix does not measure it — its controls then fall through, refused as before).
+    defapi: Option<kf_abi::defapi::DefApiAbi>,
+    /// 5080 controls served (for the bounded log).
+    defapi_served: u64,
 }
 
 /// The RPC functions [`ObjectPolicy`] claims. **Closed, and public, so a test can quantify
@@ -674,7 +769,74 @@ impl ObjectPolicy {
         ObjectPolicy {
             bridge: Bridge::new(*abi, guest_os, limits),
             objects,
+            defapi: kf_abi::defapi::DefApiAbi::at(abi.driver_version()),
+            defapi_served: 0,
         }
+    }
+
+    /// ★ OWNER_RULINGS §U — a class-5080 registration control, served from the object graph's
+    /// tables (`crate::defapi`): `NV_OK` with the params echoed (what the real GSP answered
+    /// `[measured: the 2026-10-05 VFIO boots 8/9/10]`), or the real body's status. `None`: not a 5080 control this seat
+    /// serves (no tables, not permitted at this boundary) — it falls through as before.
+    fn deferred_api_control(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        let abi = self.defapi?;
+        let h = self.bridge.abi.decode_rpc_control(&cmd.payload).ok()?;
+        let ctl = abi.control(h.cmd)?;
+        if !self
+            .bridge
+            .abi
+            .capabilities()
+            .control(kf_arch::ids::ControlCmd(h.cmd))
+            .is_permitted()
+        {
+            return None;
+        }
+        let refuse = |status: u32| Reply {
+            rpc_result: status,
+            body: Vec::new(),
+        };
+        // A serialized envelope carries no flat params struct to decode.
+        if kf_abi::rpc_params_are_serialized(h.rmapi_rpc_flags) {
+            return Some(refuse(kf_abi::defapi::NV_ERR_NOT_SUPPORTED));
+        }
+        let Some(params) = h
+            .params_at
+            .checked_add(h.params_size as usize)
+            .and_then(|e| cmd.payload.get(h.params_at..e))
+        else {
+            return Some(refuse(kf_abi::defapi::NV_ERR_INVALID_PARAM_STRUCT));
+        };
+        let status = self
+            .objects
+            .deferred_api(&abi, h.client, h.object, ctl, params)?;
+        self.defapi_served += 1;
+        if self.defapi_served <= 256 {
+            let handle = params
+                .get(0..4)
+                .map_or(0, |b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+            let inner = params
+                .get(4..8)
+                .map_or(0, |b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+            eprintln!(
+                "kf-rm: DEFERRED-API {:#010x} on {:#x}:{:#x} hApiHandle={handle:#x} cmd={inner:#x} psz={} -> {status:#x}",
+                h.cmd,
+                h.client,
+                h.object,
+                params.len()
+            );
+        }
+        if status != kf_abi::defapi::NV_OK {
+            return Some(refuse(status));
+        }
+        let mut body = cmd.payload.clone();
+        let st = self.bridge.abi.rm_control_wire().status_off;
+        if let Some(w) = body.get_mut(st..st + 4) {
+            w.copy_from_slice(&kf_abi::defapi::NV_OK.to_le_bytes());
+        }
+        Some(Reply {
+            rpc_result: kf_abi::defapi::NV_OK,
+            body,
+        })
     }
 
     /// Whether this link claims `f`.
@@ -718,6 +880,11 @@ impl core::fmt::Debug for ObjectPolicy {
 
 impl CommandPolicy for ObjectPolicy {
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        if cmd.function == kf_gsp::RpcFunction::RmControl
+            && let Some(r) = self.deferred_api_control(cmd)
+        {
+            return Some(r);
+        }
         let memory = self.bridge.memory_list_probe
             && kf_abi::memory_list::cell(self.bridge.abi.driver_version())
                 .is_some_and(|c| cmd.function == kf_gsp::RpcFunction::Other(c.function()));

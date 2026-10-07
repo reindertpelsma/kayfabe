@@ -147,8 +147,12 @@ struct RingOwned {
 /// ★ A copy-engine host channel we own. Its completions reach the worker through the SESSION's one
 /// completion fd ([`crate::completions::Completions`]), never an fd of its own.
 pub struct HostRing {
-    /// `None` once [`HostRing::release`] has unmapped it.
-    cpu: Option<kf_linux_raw::VolatileRegion>,
+    /// `None` once [`HostRing::release`] has unmapped it. ★ §U: shared (never cloned out of this
+    /// ring except into [`Gate`], which [`HostRing::release`] revokes BEFORE dropping this one, so
+    /// the mapping still goes before its aperture is given back).
+    cpu: Option<std::sync::Arc<kf_linux_raw::VolatileRegion>>,
+    /// ★ OWNER_RULINGS §U.2: this ring's gate word — [`GATE_OFF`] into the fence region.
+    gate: Gate,
     _node: kf_linux_raw::CharDevice,
     /// ★ v3-appfix J: what the ring OWNS on the host, so [`HostRing::release`] can give it back —
     /// the device-local object, its CPU view's release cookie, and the space it is mapped in.
@@ -435,8 +439,11 @@ impl HostRing {
                 return Err(format!("birth: {e:?}"));
             }
         };
+        let cpu = std::sync::Arc::new(cpu);
+        let gate = Gate::over(cpu.clone(), layout.fence_off + GATE_OFF);
         let mut ring = HostRing {
             cpu: Some(cpu),
+            gate,
             _node: node,
             owned: Some(owned),
             va,
@@ -498,6 +505,9 @@ impl HostRing {
             }
             rm.schedule(chan).map_err(|e| format!("schedule: {e:?}"))?;
             ring.cpu()?
+                .store_u32(At::new(layout.fence_off + GATE_OFF), 0)
+                .map_err(|e| format!("{e:?}"))?;
+            ring.cpu()?
                 .store_u32(At::new(layout.fence_off), 0)
                 .map_err(|e| format!("{e:?}"))
         })();
@@ -511,7 +521,7 @@ impl HostRing {
 
     fn cpu(&self) -> Result<&kf_linux_raw::VolatileRegion, String> {
         self.cpu
-            .as_ref()
+            .as_deref()
             .ok_or_else(|| "host ring already released (no CPU mapping)".to_string())
     }
 
@@ -524,6 +534,9 @@ impl HostRing {
     /// is used after this refuses every store/load by name (no mapping).
     pub fn release(&mut self, rm: &kf_host::HostRm) -> Option<String> {
         let o = self.owned.take()?;
+        // ★ §U: the gate's share of the mapping goes first (no VA-thread store after this), so
+        // dropping ours below is the munmap.
+        self.gate.revoke();
         // Drop the CPU mapping (munmap) before the view's aperture is given back.
         self.cpu = None;
         let view = rm.release_cpu_view(kf_host::CpuViewRelease {
@@ -574,6 +587,18 @@ impl HostRing {
     #[must_use]
     pub fn channel(&self) -> kf_host::Channel {
         self.chan
+    }
+
+    /// ★ OWNER_RULINGS §U.2: this ring's gate (a handle the VA-manager thread may hold).
+    #[must_use]
+    pub fn gate(&self) -> Gate {
+        self.gate.clone()
+    }
+
+    /// ★ The gate word's VA in the ring's own space (inside the fence map).
+    #[must_use]
+    pub fn gate_va(&self) -> u64 {
+        self.va + self.layout.fence_off + GATE_OFF
     }
 
     /// ★★★ **The kernel-GR tier's admission** (owner rulings 2026-10-07, `OWNER_RULINGS.md` §S
@@ -809,6 +834,92 @@ impl HostRing {
     }
 }
 
+/// ★ OWNER_RULINGS §U.2: the gate word's offset into the ring's fence region (the fence word is
+/// at 0; both regions of [`LEGACY_LAYOUT`] and [`TSPACE_LAYOUT`] are read-write GPU maps of at
+/// least 16 KiB). One aligned word, kayfabe's own memory: never a window address.
+pub const GATE_OFF: u64 = 0x40;
+
+/// ★★ OWNER_RULINGS §U.2 — **a ring's host gate word, as the VA-manager thread holds it.**
+///
+/// The runner puts an equality ACQUIRE of a payload on this word into the stream kayfabe writes
+/// ([`crate::tspace_unsafe::gate_acquire_words`]); the VA-manager thread [`Gate::release`]s it —
+/// stores the payload — once the diff the trigger asked for is committed and the host invalidate
+/// has landed. ⊘ No vCPU and no worker ever waits on it: the ENGINE does, in our own channel.
+///
+/// Lifetime: the ring [`Gate::revoke`]s it before it unmaps (`HostRing::release`), under the same
+/// mutex a release takes, so a store can never reach a mapping whose aperture was given back.
+#[derive(Debug, Clone)]
+pub struct Gate(std::sync::Arc<GateCell>);
+
+#[derive(Debug)]
+struct GateCell {
+    view: std::sync::Mutex<Option<std::sync::Arc<kf_linux_raw::VolatileRegion>>>,
+    off: u64,
+}
+
+impl Gate {
+    fn over(view: std::sync::Arc<kf_linux_raw::VolatileRegion>, off: u64) -> Gate {
+        Gate(std::sync::Arc::new(GateCell {
+            view: std::sync::Mutex::new(Some(view)),
+            off,
+        }))
+    }
+
+    /// ★ The VA-manager thread, after its commit: store `payload`, opening the gate.
+    ///
+    /// # Errors
+    /// The ring was released (its channel is gone), or the store failed.
+    pub fn release(&self, payload: u32) -> Result<(), String> {
+        let g = self
+            .0
+            .view
+            .lock()
+            .map_err(|_| "gate poisoned".to_string())?;
+        let v = g
+            .as_ref()
+            .ok_or("the ring was released before its gate opened")?;
+        // Everything the commit wrote (host RM's ioctls returned) is ordered before the store.
+        kf_linux_raw::release_fence();
+        v.store_u32(At::new(self.0.off), payload)
+            .map_err(|e| format!("gate store: {e:?}"))
+    }
+
+    /// ★ A gate over private scratch memory (no GPU) — for the VA-manager thread's own tests and
+    /// models: the release/revoke protocol is the same.
+    ///
+    /// # Errors
+    /// The scratch mapping failed.
+    pub fn scratch() -> Result<Gate, String> {
+        let page = kf_linux_raw::HostPageSize::query();
+        let r = kf_linux_raw::VolatileRegion::map(
+            kf_linux_raw::Backing::PrivateAnonymous,
+            page.bytes(),
+            kf_linux_raw::CachePolicy::WriteBack,
+            page,
+        )
+        .map_err(|e| format!("scratch gate: {e:?}"))?;
+        Ok(Gate::over(std::sync::Arc::new(r), GATE_OFF))
+    }
+
+    /// Revoke it as the ring's release does (tests).
+    pub fn revoke_for_test(&self) {
+        self.revoke();
+    }
+
+    /// The word now (`None` once revoked) — diagnostics.
+    #[must_use]
+    pub fn value(&self) -> Option<u32> {
+        let g = self.0.view.lock().ok()?;
+        g.as_ref()?.load_u32(At::new(self.0.off)).ok()
+    }
+
+    fn revoke(&self) {
+        if let Ok(mut g) = self.0.view.lock() {
+            *g = None;
+        }
+    }
+}
+
 /// `NV2080_NOTIFIERS_FIFO_EVENT_MTHD` — the host NSI method's edge.
 pub const FIFO_EVENT_MTHD: u32 = 35;
 
@@ -889,6 +1000,51 @@ pub trait Publisher {
     /// # Errors
     /// A failed walk or a refused publish.
     fn invalidated(&mut self, pdb: Option<u64>) -> Result<Split, String>;
+
+    /// ★ OWNER_RULINGS §U: what the channel's own software object makes of `call` — decided when
+    /// the runner reaches it. Default: no software object serves anything (refused by name).
+    ///
+    /// # Errors
+    /// Refused by name: the channel dies (on hardware: an RC of the channel, Xid 32).
+    fn sw_classify(
+        &mut self,
+        call: &crate::tmode::SwCall,
+    ) -> Result<crate::swmethod::SwKind, String> {
+        Err(format!(
+            "software method {:#x} on subchannel {} (bound to {:#x}): no software object serves it",
+            call.method, call.sub, call.value
+        ))
+    }
+
+    /// ★ §U: start the action of `call` (its prior work has completed). `gate`: the ring's gate and
+    /// the payload the runner put an acquire of into the stream — the VA-manager thread releases it
+    /// after its commit. Never a wait.
+    ///
+    /// # Errors
+    /// Refused by name: the channel dies.
+    fn sw_start(
+        &mut self,
+        call: &crate::tmode::SwCall,
+        gate: Option<(Gate, u32)>,
+    ) -> Result<(), String> {
+        let _ = gate;
+        Err(format!(
+            "software method {:#x}: no action to start",
+            call.method
+        ))
+    }
+
+    /// ★ §U: the started action's outcome — `Pending` until it is done (its completion rings the
+    /// channel's token).
+    ///
+    /// # Errors
+    /// The action's refusal, by name: the channel dies.
+    fn sw_poll(&mut self, call: &crate::tmode::SwCall) -> Result<Split, String> {
+        Err(format!(
+            "software method {:#x}: no action running",
+            call.method
+        ))
+    }
 }
 
 /// Why a Translated channel stopped. It is dead after any of these.
@@ -904,6 +1060,8 @@ pub enum ChanError {
     Publish(String),
     /// ★ P1+P2 inc D: T-mode refused an item at bind, by name.
     Bind(crate::translated::Refusal),
+    /// ★ OWNER_RULINGS §U: a software method refused, or its action failed — by name.
+    Sw(String),
 }
 
 /// What a pump did.
@@ -971,6 +1129,12 @@ pub struct TranslatedChannel {
     gpu_gp_get: Option<crate::tspace_unsafe::WindowAddr>,
     /// GP_GET releases queued for the engine.
     gpu_gp_get_releases: u64,
+    /// ★ OWNER_RULINGS §U: the software method the channel is stopped at, if any.
+    sw: Option<crate::swmethod::SwSuspend>,
+    /// The last gate payload this ring used ([`crate::swmethod::next_gate`]).
+    gate_seq: u32,
+    /// Software methods served: `(no-ops, actions, gated actions)`.
+    sw_counts: (u64, u64, u64),
 }
 
 /// ★ Review fix 2026-10-04 (§3.5): what a stash with an unresolved operand waits on.
@@ -1088,7 +1252,24 @@ impl TranslatedChannel {
             acquire_seq: None,
             unresolved: None,
             waits: UnresolvedCounts::default(),
+            sw: None,
+            gate_seq: 0,
+            sw_counts: (0, 0, 0),
         }
+    }
+
+    /// ★ §U: software methods served `(no-ops, actions, gated actions)`, and the channel's
+    /// software-object binds.
+    #[must_use]
+    pub fn sw_counts(&self) -> (u64, u64, u64, u64) {
+        let (n, a, g) = self.sw_counts;
+        (n, a, g, self.ring.swobj_binds())
+    }
+
+    /// ★ §U: the channel is stopped at a software method.
+    #[must_use]
+    pub fn at_sw_method(&self) -> Option<crate::tmode::SwCall> {
+        self.sw.map(|s| s.call)
     }
 
     /// ★ P1+P2 inc D: run in T-mode against the T-space's windows — every item the ring hands out
@@ -1301,7 +1482,11 @@ impl TranslatedChannel {
         if let Some(g) = newest {
             self.author(userd, g)?;
         }
-        if self.host.idle() && self.retire.is_empty() && self.suspended.is_none() {
+        if self.host.idle()
+            && self.retire.is_empty()
+            && self.suspended.is_none()
+            && self.sw.is_none()
+        {
             // Nothing of ours is in flight: completions need not ring us. Only the BUSY owner
             // clears, so this cannot race a mark by another thread.
             done_edge.clear(self.token);
@@ -1323,6 +1508,65 @@ impl TranslatedChannel {
                     carried = Some(g);
                 } else {
                     self.author(userd, g)?;
+                }
+            }
+        }
+        if let Some(sw) = self.sw.as_mut() {
+            let call = sw.call;
+            let step = sw
+                .step(done, || match publisher.sw_poll(&call) {
+                    Ok(Split::Pending) => None,
+                    Ok(Split::Done) => Some(Ok(())),
+                    Err(e) => Some(Err(e)),
+                })
+                .map_err(ChanError::Sw)?;
+            match step {
+                crate::swmethod::SwStep::Wait | crate::swmethod::SwStep::Running => {
+                    return Ok(Pumped::Waiting);
+                }
+                crate::swmethod::SwStep::Start { gate } => {
+                    let g = match gate {
+                        Some(n) => {
+                            // ★ §U.2: the gate goes INTO our stream behind the drained work; the
+                            // engine stops there until the VA thread stores `n` after its commit.
+                            let words =
+                                crate::tspace_unsafe::gate_acquire_words(self.host.gate_va(), n)
+                                    .ok_or_else(|| ChanError::Host("gate VA above 2^40".into()))?;
+                            if self.host.push(&words).map_err(ChanError::Host)?.is_err() {
+                                return Err(ChanError::Host(
+                                    "no room for the gate on a drained ring".into(),
+                                ));
+                            }
+                            done_edge.mark(self.token); // BEFORE the doorbell
+                            match self
+                                .host
+                                .fence_releasing(rm, None)
+                                .map_err(ChanError::Host)?
+                            {
+                                Ok(seq) => self.fenced(seq),
+                                Err(Busy) => {
+                                    return Err(ChanError::Host(
+                                        "no room for the gate's fence on a drained ring".into(),
+                                    ));
+                                }
+                            }
+                            self.sw_counts.2 += 1;
+                            Some((self.host.gate(), n))
+                        }
+                        None => None,
+                    };
+                    publisher.sw_start(&call, g).map_err(ChanError::Sw)?;
+                    return Ok(Pumped::Waiting);
+                }
+                crate::swmethod::SwStep::Resume { retires } => {
+                    self.sw = None;
+                    if let Some(g) = retires {
+                        if self.gpu_gp_get.is_some() {
+                            carried = carried.or(Some(g));
+                        } else {
+                            self.author(userd, g)?;
+                        }
+                    }
                 }
             }
         }
@@ -1414,6 +1658,59 @@ impl TranslatedChannel {
                     }
                     if retires.is_some() {
                         last_retire = retires;
+                    }
+                }
+                Next::Sw { call, retires } => {
+                    // ★ §U: classified when the runner reaches it, as the PBDMA would.
+                    match publisher.sw_classify(&call).map_err(ChanError::Sw)? {
+                        crate::swmethod::SwKind::Nop => {
+                            self.sw_counts.0 += 1;
+                            if retires.is_some() {
+                                last_retire = retires;
+                            }
+                        }
+                        crate::swmethod::SwKind::Act { gate } => {
+                            // Like a split: everything before it is fenced and must COMPLETE.
+                            done_edge.mark(self.token); // BEFORE the doorbell
+                            let rel = self.release_for(last_retire);
+                            match self
+                                .host
+                                .fence_releasing(rm, rel)
+                                .map_err(ChanError::Host)?
+                            {
+                                Ok(seq) => {
+                                    self.fenced(seq);
+                                    let g0 = last_retire.take();
+                                    if let Some(g) = g0 {
+                                        self.retire.push_back((seq, g));
+                                    }
+                                    if let Some(p) = self.probe.as_mut() {
+                                        p.submitted(
+                                            seq,
+                                            g0,
+                                            self.ring.take_releases(),
+                                            self.ring.take_launches(),
+                                        );
+                                    }
+                                    let gate = gate.then(|| {
+                                        self.gate_seq = crate::swmethod::next_gate(self.gate_seq);
+                                        self.gate_seq
+                                    });
+                                    self.sw_counts.1 += 1;
+                                    self.sw = Some(crate::swmethod::SwSuspend::new(
+                                        call, retires, seq, gate,
+                                    ));
+                                    return Ok(Pumped::Waiting);
+                                }
+                                Err(Busy) => {
+                                    if rel.is_some() {
+                                        self.gpu_gp_get_releases -= 1;
+                                    }
+                                    self.stash = Some(Next::Sw { call, retires });
+                                    break Pumped::Waiting;
+                                }
+                            }
+                        }
                     }
                 }
                 Next::Walk { pdb, retires } => {

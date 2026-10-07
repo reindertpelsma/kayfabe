@@ -82,6 +82,7 @@ fn a_split_holds_the_rest_of_its_segment_and_retirement_follows_the_last_piece()
             Next::Walk { pdb, retires } => format!("W{pdb:x?}{retires:?}"),
             Next::Idle => "I".into(),
             Next::Bind { .. } => "B".into(),
+            Next::Sw { .. } => "X".into(),
         })
         .collect();
     assert_eq!(
@@ -587,6 +588,9 @@ fn a_tmode_ring_hands_out_unbound_work_and_splits() {
             Next::Idle => break,
             Next::Bind { ir, retires } => shape.push(format!("bind{}:{retires:?}", ir.len())),
             Next::Walk { pdb, retires } => shape.push(format!("walk{pdb:x?}:{retires:?}")),
+            Next::Sw { call, retires } => {
+                shape.push(format!("sw{:#x}:{retires:?}", call.method));
+            }
             Next::Submit { words, retires } => {
                 shape.push(format!("submit{}:{retires:?}", words.len()))
             }

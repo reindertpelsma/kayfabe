@@ -563,8 +563,138 @@ struct VaSplit<'a> {
     token: u32,
     ticket: &'a mut Option<u64>,
     requested: &'a mut u64,
+    /// ★ OWNER_RULINGS §U: the software methods of this channel.
+    sw: SwCtx<'a>,
+}
+
+/// ★ OWNER_RULINGS §U: what a channel's pump needs to serve its software methods.
+struct SwCtx<'a> {
+    plane: &'a ChanPlane,
+    /// The channel's host token (its software objects are keyed by it).
+    ht: u32,
+    /// The channel's own VA space (a deferred TLB invalidate walks exactly this).
+    space: VasKey,
+    st: &'a mut SwSlot,
+}
+
+/// ★ OWNER_RULINGS §U: an act's outcome, set by the act thread and taken by the channel's pump.
+type SwCell = Arc<Mutex<Option<Result<String, String>>>>;
+
+/// ★ OWNER_RULINGS §U: the software method a channel is stopped at — what was planned, and the
+/// action's handle (a VA-thread ticket, or an act's outcome cell).
+#[derive(Default)]
+struct SwSlot {
+    planned: Option<crate::defapi::Planned>,
+    ticket: Option<u64>,
+    cell: Option<SwCell>,
 }
 impl Publisher for VaSplit<'_> {
+    fn sw_classify(
+        &mut self,
+        call: &kf_chan::tmode::SwCall,
+    ) -> Result<kf_chan::swmethod::SwKind, String> {
+        let p = self.sw.plane;
+        let reg = p
+            .defapi_reg
+            .get()
+            .ok_or("software method: the deferred-API tables are not attached")?;
+        let objs = p
+            .sw_objs
+            .lock()
+            .ok()
+            .and_then(|m| m.get(&self.sw.ht).cloned());
+        let (kind, planned) = crate::defapi::classify(objs.as_ref(), reg, call)?;
+        self.sw.st.planned = planned;
+        Ok(kind)
+    }
+
+    fn sw_start(
+        &mut self,
+        call: &kf_chan::tmode::SwCall,
+        gate: Option<(kf_chan::host::Gate, u32)>,
+    ) -> Result<(), String> {
+        let planned = self
+            .sw
+            .st
+            .planned
+            .clone()
+            .ok_or("software method started with nothing planned")?;
+        let p = self.sw.plane;
+        p.defapi_triggers.fetch_add(1, Ordering::Relaxed);
+        eprintln!(
+            "kf3: DEFERRED-API trigger token {:#x} subch {} value {:#x} method {:#x} hApiHandle {:#x} on {:#x}:{:#x} cmd {:#x}: {:?}",
+            self.token,
+            call.sub,
+            call.value,
+            call.method,
+            call.data,
+            planned.key.client,
+            planned.key.object,
+            planned.entry.cmd,
+            planned.entry.decoded
+        );
+        if let kf_abi::defapi::Bundle::InvalidateTlb { vaspace } = planned.entry.decoded {
+            let (g, payload) =
+                gate.ok_or("deferred DMA_INVALIDATE_TLB started without its gate")?;
+            // ★ §U.2: the guest's hClientVA/hDeviceVA/hVASpace are ignored: our OWN space.
+            eprintln!(
+                "kf3: DEFERRED-API token {:#x}: DMA_INVALIDATE_TLB (guest hVASpace {vaspace:#x} ignored) -> gate payload {payload} on the channel's own space {:?}",
+                self.token, self.sw.space
+            );
+            self.sw.st.ticket =
+                Some(
+                    self.inbox
+                        .request_gated_split(self.token, self.sw.space, g, payload),
+                );
+            return Ok(());
+        }
+        let cell: SwCell = Arc::default();
+        self.sw.st.cell = Some(cell.clone());
+        p.deferred_ctx_act(planned, cell, self.token)
+    }
+
+    fn sw_poll(&mut self, _call: &kf_chan::tmode::SwCall) -> Result<Split, String> {
+        let st = &mut *self.sw.st;
+        let Some(planned) = st.planned.clone() else {
+            return Err("software method polled with nothing planned".into());
+        };
+        let outcome = if let Some(t) = st.ticket {
+            match self.inbox.split_result(t) {
+                None => return Ok(Split::Pending),
+                Some(r) => r.map(|()| "gate released after the commit".to_string()),
+            }
+        } else if let Some(c) = &st.cell {
+            match c.lock().ok().and_then(|mut g| g.take()) {
+                None => return Ok(Split::Pending),
+                Some(r) => r,
+            }
+        } else {
+            return Err("software method polled before it was started".into());
+        };
+        *st = SwSlot::default();
+        let tlb = matches!(
+            planned.entry.decoded,
+            kf_abi::defapi::Bundle::InvalidateTlb { .. }
+        );
+        if let Some(reg) = self.sw.plane.defapi_reg.get() {
+            // The trigger's cleanup, whatever the outcome (`deferred_api.c:653-670`).
+            reg.executed(planned.key, planned.entry.handle, tlb && outcome.is_ok());
+        }
+        match outcome {
+            Ok(line) => {
+                eprintln!(
+                    "kf3: DEFERRED-API token {:#x} hApiHandle {:#x} DONE: {line}",
+                    self.token, planned.entry.handle
+                );
+                Ok(Split::Done)
+            }
+            Err(e) => Err(format!(
+                "deferred API hApiHandle {:#x} cmd {:#x}: {e}",
+                planned.entry.handle, planned.entry.cmd
+            )),
+        }
+    }
+
     fn invalidated(&mut self, pdb: Option<u64>) -> Result<Split, String> {
         let Some(t) = *self.ticket else {
             *self.ticket = Some(self.inbox.request_split(self.token, pdb));
@@ -660,6 +790,8 @@ struct Slot {
     /// The error notifier the guest declared at allocation (`errorNotifierMem`), kept for the
     /// default-off `KF3_BAR0_TRACE` dump only — a Translated ring arms no notifier.
     err_notifier: Option<kf_arch::fault::ErrorNotifier>,
+    /// ★ OWNER_RULINGS §U: the software method the channel is stopped at.
+    sw: SwSlot,
 }
 
 // Experiment on this branch: kernel GR channels run only authored CE work in
@@ -685,6 +817,16 @@ fn kernel_gr_work() -> bool {
 fn sw_subch_inert() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("KF3_SW_SUBCH_INERT").is_some_and(|v| v == "1"))
+}
+
+// ★ OWNER_RULINGS §U (2026-10-07): on a T-mode Translated ring, a SET_OBJECT on a software
+// subchannel names one of the channel's own software objects by number; methods there are served
+// by the deferred-API path (class 5080: host-authored equivalents) or refused by name. Default off
+// until native-validated; the class-5080 admission (Translated-only) and its registration controls
+// are served regardless.
+fn deferred_api_trigger() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_DEFERRED_API").is_some_and(|v| v == "1"))
 }
 
 // ★ 2026-10-07 (hypothesis 2 after run34; `OWNER_RULINGS.md` §S item 7): a Translated
@@ -1179,6 +1321,12 @@ pub struct ChanPlane {
     slots: RwLock<HashMap<u32, Arc<Mutex<Slot>>>>,
     /// `(hClient, hObject)` → host token.
     by_obj: Mutex<HashMap<(u32, u32), u32>>,
+    /// ★ OWNER_RULINGS §U: each Translated channel's software objects, by host token.
+    sw_objs: Mutex<HashMap<u32, crate::defapi::SwObjs>>,
+    /// ★ OWNER_RULINGS §U: the VM's deferred-API tables (the object seat's), once attached.
+    defapi_reg: std::sync::OnceLock<Arc<kf_rm::defapi::Registry>>,
+    /// Deferred-API triggers started.
+    pub defapi_triggers: AtomicU64,
     /// ★ v3-promote: a Translated channel's group / parent / device (what a guest free can name).
     scopes: Mutex<HashMap<(u32, u32), ChanScope>>,
     /// The worker eventfd (a schedule that finds work pending wakes one).
@@ -1565,6 +1713,9 @@ impl ChanPlane {
             caps: Mutex::new(VmCaps::from_declared(64, 64, 64, 64)),
             slots: RwLock::new(HashMap::new()),
             by_obj: Mutex::new(HashMap::new()),
+            sw_objs: Mutex::new(HashMap::new()),
+            defapi_reg: std::sync::OnceLock::new(),
+            defapi_triggers: AtomicU64::new(0),
             scopes: Mutex::new(HashMap::new()),
             wake,
             contended: AtomicU64::new(0),
@@ -2020,12 +2171,24 @@ impl ChanPlane {
                 client,
                 parent,
                 handle,
-            } => self.display_sw(client, parent, handle),
+            } => {
+                // ★ §U: the guest numbered it on its channel, whatever happens to it next.
+                self.number_translated_sw(client, parent, kf_rm::chanlink::GF100_DISP_SW, None);
+                self.display_sw(client, parent, handle)
+            }
             ChanStatement::SoftwareObject {
                 client,
                 parent,
                 class,
-            } => self.software_object(client, parent, class),
+            } => {
+                self.number_translated_sw(client, parent, class, None);
+                self.software_object(client, parent, class)
+            }
+            ChanStatement::DeferredApiObject {
+                client,
+                parent,
+                handle,
+            } => self.deferred_api_object(client, parent, handle),
             ChanStatement::DebuggerExceptionMask {
                 client,
                 object,
@@ -3042,6 +3205,199 @@ impl ChanPlane {
     /// object under a channel (`kf_rm::chanlink::OTHER_ENG_SW_CHANNEL_CLASSES`). Never twinned — but
     /// the guest numbered it, so the twin's mirror advances and the channel's next display-SW twin
     /// is repaid up to the guest's number. Observed only: the link ignores the answer.
+    /// ★ OWNER_RULINGS §U: attach the VM's deferred-API tables (the object seat's registry).
+    pub fn set_deferred_api(&self, reg: Arc<kf_rm::defapi::Registry>) {
+        let _ = self.defapi_reg.set(reg);
+    }
+
+    /// ★ §U: the host token of the Translated channel `(client, parent)`, if it is one.
+    fn translated_ht(&self, client: u32, parent: u32) -> Option<u32> {
+        self.by_obj
+            .lock()
+            .ok()
+            .and_then(|m| m.get(&(client, parent)).copied())
+    }
+
+    /// ★ §U: the guest gave an `ENG_SW` child of `(client, parent)` the channel's next software
+    /// classID: mirror it when that channel is one of our Translated ones.
+    fn number_translated_sw(
+        &self,
+        client: u32,
+        parent: u32,
+        class: u32,
+        handle: Option<u32>,
+    ) -> Option<u16> {
+        let ht = self.translated_ht(client, parent)?;
+        let mut m = self.sw_objs.lock().ok()?;
+        let o = m.get_mut(&ht)?;
+        let n = o.number(class, handle);
+        eprintln!(
+            "kf3: chan {client:#x}:{parent:#x} (host {ht:#x}): class {class:#x} handle {handle:x?} took software classID {n:?}"
+        );
+        n
+    }
+
+    /// ★★ OWNER_RULINGS §U.1: an `NV50_DEFERRED_API_CLASS` alloc — admitted (and numbered) under a
+    /// Translated channel, refused `NV_ERR_NOT_SUPPORTED` under a Passthrough twin.
+    fn deferred_api_object(&self, client: u32, parent: u32, handle: u32) -> ChanAnswer {
+        let passthrough = self
+            .pt
+            .lock()
+            .is_ok_and(|m| m.contains_key(&(client, parent)));
+        if passthrough {
+            // The guest numbered it anyway: keep the twin's display-SW mirror equal.
+            let _ = register_other_sw(&self.pt, (client, parent));
+        }
+        let ht = self.translated_ht(client, parent);
+        let verdict = {
+            let mut m = self.sw_objs.lock();
+            let objs = match (&mut m, ht) {
+                (Ok(m), Some(h)) => m.get_mut(&h),
+                _ => None,
+            };
+            crate::defapi::admit(objs, passthrough, client, parent, handle)
+        };
+        match verdict {
+            crate::defapi::Admission::Admitted(n) => {
+                eprintln!(
+                    "kf3: chan {client:#x}:{parent:#x}: NV50_DEFERRED_API {handle:#x} ADMITTED on Translated host {:#x}, software classID {n:?} (OWNER_RULINGS §U.1)",
+                    ht.unwrap_or(0)
+                );
+                ChanAnswer::Done
+            }
+            crate::defapi::Admission::Refused(status, why) => ChanAnswer::Refused { status, why },
+        }
+    }
+
+    /// ★★ OWNER_RULINGS §U: a deferred INITIALIZE/PROMOTE/EVICT — on the plane's act thread (it
+    /// takes other channels' slot locks and, for an evict, a host verb); its outcome goes to `cell`
+    /// and the triggering channel's token `ring` is rung. Never a wait on the worker.
+    ///
+    /// # Errors
+    /// The act thread is not running.
+    fn deferred_ctx_act(
+        &self,
+        planned: crate::defapi::Planned,
+        cell: SwCell,
+        ring: u32,
+    ) -> Result<(), String> {
+        let act: Act = Box::new(move |me: &ChanPlane| {
+            let r = me.deferred_ctx(&planned);
+            if let Ok(mut c) = cell.lock() {
+                *c = Some(r.clone().map_err(|(st, why)| format!("{why} ({st:#x})")));
+            }
+            if me.plane.ring_internal(ring) {
+                let _ = me.wake.signal();
+            }
+            r
+        });
+        let sent = self.acts.lock().ok().and_then(|a| {
+            a.as_ref().map(|tx| {
+                tx.send((act, kf_gsp::Deferred::new(), "deferred API context"))
+                    .is_ok()
+            })
+        });
+        if sent == Some(true) {
+            Ok(())
+        } else {
+            Err("deferred API context: the act thread is not running".into())
+        }
+    }
+
+    /// The act's body: resolve the bundle's `(hChanClient, hObject)` to our Translated channels
+    /// (the channel, or every member of the TSG it names), judge by the direct path's predicate,
+    /// and perform the effect.
+    fn deferred_ctx(&self, planned: &crate::defapi::Planned) -> Result<String, (u32, String)> {
+        let (chan_client, object) = match planned.entry.decoded {
+            kf_abi::defapi::Bundle::InitializeCtx {
+                chan_client,
+                object,
+                ..
+            }
+            | kf_abi::defapi::Bundle::PromoteCtx {
+                chan_client,
+                object,
+                ..
+            }
+            | kf_abi::defapi::Bundle::EvictCtx {
+                chan_client,
+                object,
+                ..
+            } => (chan_client, object),
+            _ => return Err((NV_ERR_INVALID_ARGUMENT, "not a context command".into())),
+        };
+        let named: Vec<u32> = {
+            let scopes = self
+                .scopes
+                .lock()
+                .map_err(|_| (NV_ERR_INVALID_STATE, "scopes poisoned".to_string()))?;
+            let by_obj = self
+                .by_obj
+                .lock()
+                .map_err(|_| (NV_ERR_INVALID_STATE, "by_obj poisoned".to_string()))?;
+            scopes
+                .iter()
+                .filter(|((c, h), sc)| {
+                    *c == chan_client && (*h == object || sc.tsg == Some(object))
+                })
+                .filter_map(|(k, _)| by_obj.get(k).copied())
+                .collect()
+        };
+        let mut targets = Vec::new();
+        for ht in &named {
+            let Some(slot) = self.slot(*ht) else { continue };
+            let g = slot
+                .lock()
+                .map_err(|_| (NV_ERR_INVALID_STATE, "slot poisoned".to_string()))?;
+            targets.push(crate::defapi::Target {
+                ht: *ht,
+                engine: g.guest_engine,
+                owns_context: g.chan.host().owns_context(g.guest_engine),
+                dead: g.dead.is_some(),
+            });
+        }
+        let (effect, hit) = crate::defapi::ctx_verdict(&planned.entry.decoded, &targets)
+            .map_err(|why| (NV_ERR_INVALID_ARGUMENT, why))?;
+        for ht in &hit {
+            let Some(slot) = self.slot(*ht) else { continue };
+            match effect {
+                crate::defapi::CtxEffect::Satisfied => {
+                    let mut g = slot
+                        .lock()
+                        .map_err(|_| (NV_ERR_INVALID_STATE, "slot poisoned".to_string()))?;
+                    g.ctx.promotes += 1;
+                }
+                crate::defapi::CtxEffect::Evict => {
+                    let host = slot
+                        .lock()
+                        .map_err(|_| (NV_ERR_INVALID_STATE, "slot poisoned".to_string()))?
+                        .chan
+                        .host()
+                        .channel();
+                    self.rm.schedule_enable(host, false).map_err(|e| {
+                        (NV_ERR_INVALID_STATE, format!("host {ht:#x} evict: {e:?}"))
+                    })?;
+                    let mut g = slot
+                        .lock()
+                        .map_err(|_| (NV_ERR_INVALID_STATE, "slot poisoned".to_string()))?;
+                    g.scheduled = false;
+                    g.ctx.bound = false;
+                    g.ctx.va_bound = 0;
+                    g.ctx.evicts += 1;
+                }
+            }
+        }
+        Ok(format!(
+            "{:?} on {chan_client:#x}:{object:#x} -> Translated host(s) {hit:x?}: {} (owner ruling B / §U; no guest buffer touched)",
+            planned.entry.decoded,
+            match effect {
+                crate::defapi::CtxEffect::Satisfied =>
+                    "satisfied by each twin's own host context, created and golden-initialised by host RM at its birth",
+                crate::defapi::CtxEffect::Evict => "host ring(s) off the runlist, context UNBOUND",
+            }
+        ))
+    }
+
     fn software_object(&self, client: u32, parent: u32, class: u32) -> ChanAnswer {
         if let Some(n) = register_other_sw(&self.pt, (client, parent)) {
             self.dispsw.other_sw.fetch_add(1, Ordering::Relaxed);
@@ -3142,6 +3498,19 @@ impl ChanPlane {
     }
 
     fn free(&self, client: u32, object: u32) -> ChanAnswer {
+        // ★ §U: a freed 5080 names nothing any more; a freed channel's numbering goes with it.
+        if let (Ok(mut m), Ok(scopes)) = (self.sw_objs.lock(), self.scopes.lock()) {
+            m.retain(|_, o| {
+                let gone = scopes
+                    .get(&o.owner)
+                    .is_some_and(|sc| sc.freed_by(o.owner, client, object))
+                    || (o.owner.0 == client && (o.owner.1 == object || object == client));
+                if !gone && o.owner.0 == client {
+                    o.forget(object);
+                }
+                !gone
+            });
+        }
         // ★ w827: debugger sessions go FIRST — freed by name, by their device, or by their client,
         // or because the GR object they are bound to is about to go with its twin.
         let doomed_twin_objs: Vec<u32> = self
@@ -3966,6 +4335,7 @@ impl ChanPlane {
                 let gr_cfg = kf_chan::tmode::GrConfig {
                     tier: gr_tier,
                     inert_sw_subch: sw_subch_inert(),
+                    deferred_api: deferred_api_trigger(),
                 };
                 let mut chan = match ts {
                     Some(t) => {
@@ -4046,7 +4416,12 @@ impl ChanPlane {
                     inca_seen: 0,
                     gr_tier,
                     err_notifier: a.error_notifier,
+                    sw: SwSlot::default(),
                 };
+                // ★ §U: a fresh software numbering (a host token may be reused).
+                if let Ok(mut m) = me.sw_objs.lock() {
+                    m.insert(ht, crate::defapi::SwObjs::new((a.client, a.handle)));
+                }
                 if gr_tier {
                     me.engine_tlive(engine, true);
                 }
@@ -4578,6 +4953,12 @@ impl ChanPlane {
             token: g.guest_idx,
             ticket: &mut g.split,
             requested: &mut g.splits,
+            sw: SwCtx {
+                plane: self,
+                ht,
+                space: g.key,
+                st: &mut g.sw,
+            },
         };
         let gp_before = g.chan.last_gp_get();
         let r = g.chan.pump(
@@ -4710,6 +5091,8 @@ impl ChanPlane {
                 ChanError::Publish(p) => format!("split: {p}"),
                 // ★ P1+P2 inc D: T-mode refused an item at bind, by name.
                 ChanError::Bind(r) => format!("tspace bind: {} {r:x?}", r.reason()),
+                // ★ §U: a software method refused, or its host-authored action failed.
+                ChanError::Sw(w) => format!("software method: {w}"),
             };
             eprintln!(
                 "kf3: chan token {:#x} ({:?}) DEAD: {why}",

@@ -16,10 +16,27 @@ fn pre_535_extension_policies_change_only_by_the_audited_software_constructors()
     const DEFERRED: &str = "CLASS 00005080 NV50_DEFERRED_API_CLASS Mode2Rpc => Listed { name: \"NV50_DEFERRED_API_CLASS\", origin: Mode2Rpc }\n";
     // 2026-10-07: NV01_EVENT_KERNEL_CALLBACK at 580+ (Windows StartDevice), an edge only.
     const KCALLBACK: &str = "CLASS 00000078 NV01_EVENT_KERNEL_CALLBACK Mode2Rpc => Listed { name: \"NV01_EVENT_KERNEL_CALLBACK\", origin: Mode2Rpc }\n";
-    let current = capability_snapshot::existing_policy_snapshot();
+    // 2026-10-07 (OWNER_RULINGS §U): the four class-5080 registration controls at 580+, the only
+    // controls added since the fixture — pinned row by row, then removed like the classes.
+    let ctl = |cmd: u32, name: &str| {
+        format!(
+            "CONTROL {cmd:08x} {name} Mode2Rpc => Listed {{ name: \"{name}\", origin: Mode2Rpc }}\n"
+        )
+    };
+    let controls = [
+        ctl(0x5080_0101, "NV5080_CTRL_CMD_DEFERRED_API"),
+        ctl(0x5080_0102, "NV5080_CTRL_CMD_REMOVE_API"),
+        ctl(0x5080_0103, "NV5080_CTRL_CMD_DEFERRED_API_V2"),
+        ctl(0x5080_0104, "NV5080_CTRL_CMD_DEFERRED_API_INTERNAL"),
+    ];
+    let mut current = capability_snapshot::existing_policy_snapshot();
     assert_eq!(current.matches(TIMER).count(), 8);
     assert_eq!(current.matches(DEFERRED).count(), 2);
     assert_eq!(current.matches(KCALLBACK).count(), 2);
+    for c in &controls {
+        assert_eq!(current.matches(c.as_str()).count(), 2, "{c}");
+        current = current.replace(c.as_str(), "");
+    }
     assert_eq!(
         current
             .replace(TIMER, "")
@@ -94,14 +111,24 @@ fn legacy_shared_groups_match_each_versions_compiled_headers() {
     }
 }
 
+/// ★ OWNER_RULINGS §U (2026-10-07, supersedes the constructor-only admission above it in
+/// history): at the boundaries that admit class 5080 (580+), its four registration controls are
+/// permitted — they only fill or empty a per-object table (`kf_rm::defapi`); the trigger is served
+/// on Translated channels only. `NULL` (`0x50800000`) stays refused, and so does every control
+/// below 580, where the class itself is not admitted.
 #[test]
-fn deferred_api_constructor_admission_does_not_authorize_deferred_execution_controls() {
+fn deferred_api_controls_are_admitted_exactly_where_the_class_is() {
     use kf_abi::capability::ALL_BOUNDARIES;
-    use kf_arch::ids::ControlCmd;
+    use kf_arch::ids::{ClassId, ControlCmd};
     for table in ALL_BOUNDARIES {
-        // ctrl5080.h: NULL, deprecated registration, remove, V2 registration, internal registration.
-        for cmd in [0x50800000, 0x50800101, 0x50800102, 0x50800103, 0x50800104] {
-            assert!(!table.control(ControlCmd(cmd)).is_permitted());
+        let class = table.alloc_class(ClassId(0x5080)).is_permitted();
+        assert!(!table.control(ControlCmd(0x5080_0000)).is_permitted());
+        for cmd in [0x50800101, 0x50800102, 0x50800103, 0x50800104] {
+            assert_eq!(
+                table.control(ControlCmd(cmd)).is_permitted(),
+                class,
+                "{cmd:#x}"
+            );
         }
     }
 }

@@ -12,6 +12,7 @@ pub mod bar1phys;
 pub mod broker;
 pub mod cardbudget;
 pub mod chan;
+pub mod defapi;
 pub mod device;
 pub mod display;
 pub mod dispsw;

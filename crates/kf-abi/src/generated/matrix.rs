@@ -6426,6 +6426,29 @@ pub const NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_PARAMS: StructRuns = StructRuns
     ],
 };
 
+const NV2080_CTRL_FIFO_UPDATE_CHANNEL_INFO_PARAMS_L0: Layout = Layout {
+    size: 32,
+    fields: &[
+        f("gpFifoEntries", 12, 4, 0),
+        f("gpFifoOffset", 16, 8, 0),
+        f("hChannel", 4, 4, 0),
+        f("hClient", 0, 4, 0),
+        f("hUserdMemory", 8, 4, 0),
+        f("userdOffset", 24, 8, 0),
+    ],
+};
+/// `NV2080_CTRL_FIFO_UPDATE_CHANNEL_INFO_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_FIFO_UPDATE_CHANNEL_INFO_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_FIFO_UPDATE_CHANNEL_INFO_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&NV2080_CTRL_FIFO_UPDATE_CHANNEL_INFO_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
+    ],
+};
+
 const NV2080_CTRL_GPU_EVICT_CTX_PARAMS_L0: Layout = Layout {
     size: 20,
     fields: &[
@@ -6686,6 +6709,34 @@ pub const NV2080_CTRL_GPU_GET_SHORT_NAME_STRING_PARAMS: StructRuns = StructRuns 
     ],
 };
 
+const NV2080_CTRL_GPU_INITIALIZE_CTX_PARAMS_L0: Layout = Layout {
+    size: 56,
+    fields: &[
+        f("ChID", 8, 4, 0),
+        f("engineType", 0, 4, 0),
+        f("hChanClient", 12, 4, 0),
+        f("hClient", 4, 4, 0),
+        f("hDmaHandle", 36, 4, 0),
+        f("hObject", 16, 4, 0),
+        f("hVirtMemory", 20, 4, 0),
+        f("index", 40, 4, 0),
+        f("physAddress", 24, 8, 0),
+        f("physAttr", 32, 4, 0),
+        f("size", 48, 8, 0),
+    ],
+};
+/// `NV2080_CTRL_GPU_INITIALIZE_CTX_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_GPU_INITIALIZE_CTX_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_GPU_INITIALIZE_CTX_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&NV2080_CTRL_GPU_INITIALIZE_CTX_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
+    ],
+};
+
 const NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS_L0: Layout = Layout {
     size: 560,
     fields: &[
@@ -6902,6 +6953,75 @@ pub const NV2080_CTRL_GRMGR_GET_GR_FS_INFO_PARAMS: StructRuns = StructRuns {
             v(615, 71, 9),
             Some(&NV2080_CTRL_GRMGR_GET_GR_FS_INFO_PARAMS_L1),
         ), // 580.65.06 … 615.71.09
+    ],
+};
+
+const NV2080_CTRL_GR_CTXSW_PM_BIND_PARAMS_L0: Layout = Layout {
+    size: 40,
+    fields: &[
+        f("grRouteInfo", 24, 16, 0),
+        f("grRouteInfo.flags", 24, 4, 0),
+        f("grRouteInfo.route", 32, 8, 0),
+        f("hChannel", 4, 4, 0),
+        f("hClient", 0, 4, 0),
+        f("pmMode", 16, 4, 0),
+        f("vMemPtr", 8, 8, 0),
+    ],
+};
+/// `NV2080_CTRL_GR_CTXSW_PM_BIND_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_GR_CTXSW_PM_BIND_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_GR_CTXSW_PM_BIND_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&NV2080_CTRL_GR_CTXSW_PM_BIND_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
+    ],
+};
+
+const NV2080_CTRL_GR_CTXSW_PREEMPTION_BIND_PARAMS_L0: Layout = Layout {
+    size: 104,
+    fields: &[
+        f("cilpPreemptMode", 84, 4, 0),
+        f("flags", 0, 4, 0),
+        f("gfxpPreemptMode", 80, 4, 0),
+        f("grRouteInfo", 88, 16, 0),
+        f("grRouteInfo.flags", 88, 4, 0),
+        f("grRouteInfo.route", 96, 8, 0),
+        f("hChannel", 8, 4, 0),
+        f("hClient", 4, 4, 0),
+        f("vMemPtrs", 16, 64, 8),
+    ],
+};
+const NV2080_CTRL_GR_CTXSW_PREEMPTION_BIND_PARAMS_L1: Layout = Layout {
+    size: 112,
+    fields: &[
+        f("cilpPreemptMode", 92, 4, 0),
+        f("flags", 0, 4, 0),
+        f("gfxpPreemptMode", 88, 4, 0),
+        f("grRouteInfo", 96, 16, 0),
+        f("grRouteInfo.flags", 96, 4, 0),
+        f("grRouteInfo.route", 104, 8, 0),
+        f("hChannel", 8, 4, 0),
+        f("hClient", 4, 4, 0),
+        f("vMemPtrs", 16, 72, 8),
+    ],
+};
+/// `NV2080_CTRL_GR_CTXSW_PREEMPTION_BIND_PARAMS` — 2 distinct consumed layout(s) over 2 run(s).
+pub const NV2080_CTRL_GR_CTXSW_PREEMPTION_BIND_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_GR_CTXSW_PREEMPTION_BIND_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(560, 28, 3),
+            Some(&NV2080_CTRL_GR_CTXSW_PREEMPTION_BIND_PARAMS_L0),
+        ), // 535.309.01 … 560.28.03
+        r(
+            v(565, 57, 1),
+            v(615, 71, 9),
+            Some(&NV2080_CTRL_GR_CTXSW_PREEMPTION_BIND_PARAMS_L1),
+        ), // 565.57.01 … 615.71.09
     ],
 };
 
@@ -8741,6 +8861,789 @@ pub const NV2080_CTRL_TIMER_GET_REGISTER_OFFSET_PARAMS: StructRuns = StructRuns 
             v(535, 309, 1),
             v(615, 71, 9),
             Some(&NV2080_CTRL_TIMER_GET_REGISTER_OFFSET_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
+    ],
+};
+
+const NV5080_CTRL_DEFERRED_API_PARAMS_L0: Layout = Layout {
+    size: 584,
+    fields: &[
+        f("api_bundle", 24, 560, 0),
+        f("api_bundle.CacheAllocPolicy", 24, 8, 0),
+        f("api_bundle.CacheAllocPolicy.allocPolicy", 28, 4, 0),
+        f("api_bundle.CacheAllocPolicy.engine", 24, 4, 0),
+        f("api_bundle.CachePromotePolicy", 24, 8, 0),
+        f("api_bundle.CachePromotePolicy.engine", 24, 4, 0),
+        f("api_bundle.CachePromotePolicy.promotionPolicy", 28, 4, 0),
+        f("api_bundle.EvictCtx", 24, 20, 0),
+        f("api_bundle.EvictCtx.ChID", 32, 4, 0),
+        f("api_bundle.EvictCtx.engineType", 24, 4, 0),
+        f("api_bundle.EvictCtx.hChanClient", 36, 4, 0),
+        f("api_bundle.EvictCtx.hClient", 28, 4, 0),
+        f("api_bundle.EvictCtx.hObject", 40, 4, 0),
+        f("api_bundle.FillPteMem", 24, 96, 0),
+        f("api_bundle.FillPteMem.comprInfo", 44, 12, 0),
+        f(
+            "api_bundle.FillPteMem.comprInfo.compTagStartOffset",
+            52,
+            4,
+            0,
+        ),
+        f("api_bundle.FillPteMem.comprInfo.fbKind", 44, 4, 0),
+        f("api_bundle.FillPteMem.comprInfo.sysKind", 48, 4, 0),
+        f("api_bundle.FillPteMem.flags", 100, 4, 0),
+        f("api_bundle.FillPteMem.gpuAddr", 64, 8, 0),
+        f("api_bundle.FillPteMem.hSrcVASpace", 104, 4, 0),
+        f("api_bundle.FillPteMem.hTgtVASpace", 108, 4, 0),
+        f("api_bundle.FillPteMem.hwResource", 28, 16, 0),
+        f("api_bundle.FillPteMem.hwResource.hClient", 28, 4, 0),
+        f("api_bundle.FillPteMem.hwResource.hDevice", 32, 4, 0),
+        f("api_bundle.FillPteMem.hwResource.hMemory", 36, 4, 0),
+        f("api_bundle.FillPteMem.hwResource.subDeviceId", 40, 4, 0),
+        f("api_bundle.FillPteMem.offset", 56, 8, 0),
+        f("api_bundle.FillPteMem.pageArray", 72, 8, 0),
+        f("api_bundle.FillPteMem.pageCount", 24, 4, 0),
+        f("api_bundle.FillPteMem.pageSize", 92, 4, 0),
+        f("api_bundle.FillPteMem.peerId", 112, 4, 0),
+        f("api_bundle.FillPteMem.pteMem", 80, 8, 0),
+        f("api_bundle.FillPteMem.pteMemPfn", 88, 4, 0),
+        f("api_bundle.FillPteMem.startPageIndex", 96, 4, 0),
+        f("api_bundle.InitCtx", 24, 56, 0),
+        f("api_bundle.InitCtx.ChID", 32, 4, 0),
+        f("api_bundle.InitCtx.engineType", 24, 4, 0),
+        f("api_bundle.InitCtx.hChanClient", 36, 4, 0),
+        f("api_bundle.InitCtx.hClient", 28, 4, 0),
+        f("api_bundle.InitCtx.hDmaHandle", 60, 4, 0),
+        f("api_bundle.InitCtx.hObject", 40, 4, 0),
+        f("api_bundle.InitCtx.hVirtMemory", 44, 4, 0),
+        f("api_bundle.InitCtx.index", 64, 4, 0),
+        f("api_bundle.InitCtx.physAddress", 48, 8, 0),
+        f("api_bundle.InitCtx.physAttr", 56, 4, 0),
+        f("api_bundle.InitCtx.size", 72, 8, 0),
+        f("api_bundle.InvalidateTlb", 24, 16, 0),
+        f("api_bundle.InvalidateTlb.engine", 32, 4, 0),
+        f("api_bundle.InvalidateTlb.hClient", 24, 4, 0),
+        f("api_bundle.InvalidateTlb.hDevice", 28, 4, 0),
+        f("api_bundle.InvalidateTlb.hVASpace", 36, 4, 0),
+        f("api_bundle.PmCtxsw", 24, 40, 0),
+        f("api_bundle.PmCtxsw.grRouteInfo", 48, 16, 0),
+        f("api_bundle.PmCtxsw.grRouteInfo.flags", 48, 4, 0),
+        f("api_bundle.PmCtxsw.grRouteInfo.route", 56, 8, 0),
+        f("api_bundle.PmCtxsw.hChannel", 28, 4, 0),
+        f("api_bundle.PmCtxsw.hClient", 24, 4, 0),
+        f("api_bundle.PmCtxsw.pmMode", 40, 4, 0),
+        f("api_bundle.PmCtxsw.vMemPtr", 32, 8, 0),
+        f("api_bundle.PreemptionCtxsw", 24, 104, 0),
+        f("api_bundle.PreemptionCtxsw.cilpPreemptMode", 108, 4, 0),
+        f("api_bundle.PreemptionCtxsw.flags", 24, 4, 0),
+        f("api_bundle.PreemptionCtxsw.gfxpPreemptMode", 104, 4, 0),
+        f("api_bundle.PreemptionCtxsw.grRouteInfo", 112, 16, 0),
+        f("api_bundle.PreemptionCtxsw.grRouteInfo.flags", 112, 4, 0),
+        f("api_bundle.PreemptionCtxsw.grRouteInfo.route", 120, 8, 0),
+        f("api_bundle.PreemptionCtxsw.hChannel", 32, 4, 0),
+        f("api_bundle.PreemptionCtxsw.hClient", 28, 4, 0),
+        f("api_bundle.PreemptionCtxsw.vMemPtrs", 40, 64, 8),
+        f("api_bundle.PromoteCtx", 24, 560, 0),
+        f("api_bundle.PromoteCtx.ChID", 32, 4, 0),
+        f("api_bundle.PromoteCtx.engineType", 24, 4, 0),
+        f("api_bundle.PromoteCtx.entryCount", 64, 4, 0),
+        f("api_bundle.PromoteCtx.hChanClient", 36, 4, 0),
+        f("api_bundle.PromoteCtx.hClient", 28, 4, 0),
+        f("api_bundle.PromoteCtx.hObject", 40, 4, 0),
+        f("api_bundle.PromoteCtx.hVirtMemory", 44, 4, 0),
+        f("api_bundle.PromoteCtx.promoteEntry", 72, 512, 32),
+        f("api_bundle.PromoteCtx.promoteEntry[]", 72, 32, 0),
+        f(
+            "api_bundle.PromoteCtx.promoteEntry[].bInitialize",
+            102,
+            1,
+            0,
+        ),
+        f("api_bundle.PromoteCtx.promoteEntry[].bNonmapped", 103, 1, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].bufferId", 100, 2, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].gpuPhysAddr", 72, 8, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].gpuVirtAddr", 80, 8, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].physAttr", 96, 4, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].size", 88, 8, 0),
+        f("api_bundle.PromoteCtx.size", 56, 8, 0),
+        f("api_bundle.PromoteCtx.virtAddress", 48, 8, 0),
+        f("api_bundle.ZcullCtxsw", 24, 24, 0),
+        f("api_bundle.ZcullCtxsw.hChannel", 28, 4, 0),
+        f("api_bundle.ZcullCtxsw.hClient", 24, 4, 0),
+        f("api_bundle.ZcullCtxsw.vMemPtr", 32, 8, 0),
+        f("api_bundle.ZcullCtxsw.zcullMode", 40, 4, 0),
+        f("cmd", 4, 4, 0),
+        f("flags", 8, 4, 0),
+        f("hApiHandle", 0, 4, 0),
+        f("hClientVA", 12, 4, 0),
+        f("hDeviceVA", 16, 4, 0),
+    ],
+};
+const NV5080_CTRL_DEFERRED_API_PARAMS_L1: Layout = Layout {
+    size: 584,
+    fields: &[
+        f("api_bundle", 24, 560, 0),
+        f("api_bundle.EvictCtx", 24, 20, 0),
+        f("api_bundle.EvictCtx.ChID", 32, 4, 0),
+        f("api_bundle.EvictCtx.engineType", 24, 4, 0),
+        f("api_bundle.EvictCtx.hChanClient", 36, 4, 0),
+        f("api_bundle.EvictCtx.hClient", 28, 4, 0),
+        f("api_bundle.EvictCtx.hObject", 40, 4, 0),
+        f("api_bundle.FillPteMem", 24, 96, 0),
+        f("api_bundle.FillPteMem.comprInfo", 44, 12, 0),
+        f(
+            "api_bundle.FillPteMem.comprInfo.compTagStartOffset",
+            52,
+            4,
+            0,
+        ),
+        f("api_bundle.FillPteMem.comprInfo.fbKind", 44, 4, 0),
+        f("api_bundle.FillPteMem.comprInfo.sysKind", 48, 4, 0),
+        f("api_bundle.FillPteMem.flags", 100, 4, 0),
+        f("api_bundle.FillPteMem.gpuAddr", 64, 8, 0),
+        f("api_bundle.FillPteMem.hSrcVASpace", 104, 4, 0),
+        f("api_bundle.FillPteMem.hTgtVASpace", 108, 4, 0),
+        f("api_bundle.FillPteMem.hwResource", 28, 16, 0),
+        f("api_bundle.FillPteMem.hwResource.hClient", 28, 4, 0),
+        f("api_bundle.FillPteMem.hwResource.hDevice", 32, 4, 0),
+        f("api_bundle.FillPteMem.hwResource.hMemory", 36, 4, 0),
+        f("api_bundle.FillPteMem.hwResource.subDeviceId", 40, 4, 0),
+        f("api_bundle.FillPteMem.offset", 56, 8, 0),
+        f("api_bundle.FillPteMem.pageArray", 72, 8, 0),
+        f("api_bundle.FillPteMem.pageCount", 24, 4, 0),
+        f("api_bundle.FillPteMem.pageSize", 92, 4, 0),
+        f("api_bundle.FillPteMem.peerId", 112, 4, 0),
+        f("api_bundle.FillPteMem.pteMem", 80, 8, 0),
+        f("api_bundle.FillPteMem.pteMemPfn", 88, 4, 0),
+        f("api_bundle.FillPteMem.startPageIndex", 96, 4, 0),
+        f("api_bundle.InitCtx", 24, 56, 0),
+        f("api_bundle.InitCtx.ChID", 32, 4, 0),
+        f("api_bundle.InitCtx.engineType", 24, 4, 0),
+        f("api_bundle.InitCtx.hChanClient", 36, 4, 0),
+        f("api_bundle.InitCtx.hClient", 28, 4, 0),
+        f("api_bundle.InitCtx.hDmaHandle", 60, 4, 0),
+        f("api_bundle.InitCtx.hObject", 40, 4, 0),
+        f("api_bundle.InitCtx.hVirtMemory", 44, 4, 0),
+        f("api_bundle.InitCtx.index", 64, 4, 0),
+        f("api_bundle.InitCtx.physAddress", 48, 8, 0),
+        f("api_bundle.InitCtx.physAttr", 56, 4, 0),
+        f("api_bundle.InitCtx.size", 72, 8, 0),
+        f("api_bundle.InvalidateTlb", 24, 16, 0),
+        f("api_bundle.InvalidateTlb.engine", 32, 4, 0),
+        f("api_bundle.InvalidateTlb.hClient", 24, 4, 0),
+        f("api_bundle.InvalidateTlb.hDevice", 28, 4, 0),
+        f("api_bundle.InvalidateTlb.hVASpace", 36, 4, 0),
+        f("api_bundle.PmCtxsw", 24, 40, 0),
+        f("api_bundle.PmCtxsw.grRouteInfo", 48, 16, 0),
+        f("api_bundle.PmCtxsw.grRouteInfo.flags", 48, 4, 0),
+        f("api_bundle.PmCtxsw.grRouteInfo.route", 56, 8, 0),
+        f("api_bundle.PmCtxsw.hChannel", 28, 4, 0),
+        f("api_bundle.PmCtxsw.hClient", 24, 4, 0),
+        f("api_bundle.PmCtxsw.pmMode", 40, 4, 0),
+        f("api_bundle.PmCtxsw.vMemPtr", 32, 8, 0),
+        f("api_bundle.PreemptionCtxsw", 24, 112, 0),
+        f("api_bundle.PreemptionCtxsw.cilpPreemptMode", 116, 4, 0),
+        f("api_bundle.PreemptionCtxsw.flags", 24, 4, 0),
+        f("api_bundle.PreemptionCtxsw.gfxpPreemptMode", 112, 4, 0),
+        f("api_bundle.PreemptionCtxsw.grRouteInfo", 120, 16, 0),
+        f("api_bundle.PreemptionCtxsw.grRouteInfo.flags", 120, 4, 0),
+        f("api_bundle.PreemptionCtxsw.grRouteInfo.route", 128, 8, 0),
+        f("api_bundle.PreemptionCtxsw.hChannel", 32, 4, 0),
+        f("api_bundle.PreemptionCtxsw.hClient", 28, 4, 0),
+        f("api_bundle.PreemptionCtxsw.vMemPtrs", 40, 72, 8),
+        f("api_bundle.PromoteCtx", 24, 560, 0),
+        f("api_bundle.PromoteCtx.ChID", 32, 4, 0),
+        f("api_bundle.PromoteCtx.engineType", 24, 4, 0),
+        f("api_bundle.PromoteCtx.entryCount", 64, 4, 0),
+        f("api_bundle.PromoteCtx.hChanClient", 36, 4, 0),
+        f("api_bundle.PromoteCtx.hClient", 28, 4, 0),
+        f("api_bundle.PromoteCtx.hObject", 40, 4, 0),
+        f("api_bundle.PromoteCtx.hVirtMemory", 44, 4, 0),
+        f("api_bundle.PromoteCtx.promoteEntry", 72, 512, 32),
+        f("api_bundle.PromoteCtx.promoteEntry[]", 72, 32, 0),
+        f(
+            "api_bundle.PromoteCtx.promoteEntry[].bInitialize",
+            102,
+            1,
+            0,
+        ),
+        f("api_bundle.PromoteCtx.promoteEntry[].bNonmapped", 103, 1, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].bufferId", 100, 2, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].gpuPhysAddr", 72, 8, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].gpuVirtAddr", 80, 8, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].physAttr", 96, 4, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].size", 88, 8, 0),
+        f("api_bundle.PromoteCtx.size", 56, 8, 0),
+        f("api_bundle.PromoteCtx.virtAddress", 48, 8, 0),
+        f("api_bundle.ZcullCtxsw", 24, 24, 0),
+        f("api_bundle.ZcullCtxsw.hChannel", 28, 4, 0),
+        f("api_bundle.ZcullCtxsw.hClient", 24, 4, 0),
+        f("api_bundle.ZcullCtxsw.vMemPtr", 32, 8, 0),
+        f("api_bundle.ZcullCtxsw.zcullMode", 40, 4, 0),
+        f("cmd", 4, 4, 0),
+        f("flags", 8, 4, 0),
+        f("hApiHandle", 0, 4, 0),
+        f("hClientVA", 12, 4, 0),
+        f("hDeviceVA", 16, 4, 0),
+    ],
+};
+const NV5080_CTRL_DEFERRED_API_PARAMS_L2: Layout = Layout {
+    size: 584,
+    fields: &[
+        f("api_bundle", 24, 560, 0),
+        f("api_bundle.EvictCtx", 24, 20, 0),
+        f("api_bundle.EvictCtx.ChID", 32, 4, 0),
+        f("api_bundle.EvictCtx.engineType", 24, 4, 0),
+        f("api_bundle.EvictCtx.hChanClient", 36, 4, 0),
+        f("api_bundle.EvictCtx.hClient", 28, 4, 0),
+        f("api_bundle.EvictCtx.hObject", 40, 4, 0),
+        f("api_bundle.FillPteMem", 24, 104, 0),
+        f("api_bundle.FillPteMem.comprInfo", 44, 12, 0),
+        f(
+            "api_bundle.FillPteMem.comprInfo.compTagStartOffset",
+            52,
+            4,
+            0,
+        ),
+        f("api_bundle.FillPteMem.comprInfo.fbKind", 44, 4, 0),
+        f("api_bundle.FillPteMem.comprInfo.sysKind", 48, 4, 0),
+        f("api_bundle.FillPteMem.flags", 104, 8, 0),
+        f("api_bundle.FillPteMem.gpuAddr", 64, 8, 0),
+        f("api_bundle.FillPteMem.hSrcVASpace", 112, 4, 0),
+        f("api_bundle.FillPteMem.hTgtVASpace", 116, 4, 0),
+        f("api_bundle.FillPteMem.hwResource", 28, 16, 0),
+        f("api_bundle.FillPteMem.hwResource.hClient", 28, 4, 0),
+        f("api_bundle.FillPteMem.hwResource.hDevice", 32, 4, 0),
+        f("api_bundle.FillPteMem.hwResource.hMemory", 36, 4, 0),
+        f("api_bundle.FillPteMem.hwResource.subDeviceId", 40, 4, 0),
+        f("api_bundle.FillPteMem.offset", 56, 8, 0),
+        f("api_bundle.FillPteMem.pageArray", 72, 8, 0),
+        f("api_bundle.FillPteMem.pageCount", 24, 4, 0),
+        f("api_bundle.FillPteMem.pageSize", 92, 4, 0),
+        f("api_bundle.FillPteMem.peerId", 120, 4, 0),
+        f("api_bundle.FillPteMem.pteMem", 80, 8, 0),
+        f("api_bundle.FillPteMem.pteMemPfn", 88, 4, 0),
+        f("api_bundle.FillPteMem.startPageIndex", 96, 4, 0),
+        f("api_bundle.InitCtx", 24, 56, 0),
+        f("api_bundle.InitCtx.ChID", 32, 4, 0),
+        f("api_bundle.InitCtx.engineType", 24, 4, 0),
+        f("api_bundle.InitCtx.hChanClient", 36, 4, 0),
+        f("api_bundle.InitCtx.hClient", 28, 4, 0),
+        f("api_bundle.InitCtx.hDmaHandle", 60, 4, 0),
+        f("api_bundle.InitCtx.hObject", 40, 4, 0),
+        f("api_bundle.InitCtx.hVirtMemory", 44, 4, 0),
+        f("api_bundle.InitCtx.index", 64, 4, 0),
+        f("api_bundle.InitCtx.physAddress", 48, 8, 0),
+        f("api_bundle.InitCtx.physAttr", 56, 4, 0),
+        f("api_bundle.InitCtx.size", 72, 8, 0),
+        f("api_bundle.InvalidateTlb", 24, 16, 0),
+        f("api_bundle.InvalidateTlb.engine", 32, 4, 0),
+        f("api_bundle.InvalidateTlb.hClient", 24, 4, 0),
+        f("api_bundle.InvalidateTlb.hDevice", 28, 4, 0),
+        f("api_bundle.InvalidateTlb.hVASpace", 36, 4, 0),
+        f("api_bundle.PmCtxsw", 24, 40, 0),
+        f("api_bundle.PmCtxsw.grRouteInfo", 48, 16, 0),
+        f("api_bundle.PmCtxsw.grRouteInfo.flags", 48, 4, 0),
+        f("api_bundle.PmCtxsw.grRouteInfo.route", 56, 8, 0),
+        f("api_bundle.PmCtxsw.hChannel", 28, 4, 0),
+        f("api_bundle.PmCtxsw.hClient", 24, 4, 0),
+        f("api_bundle.PmCtxsw.pmMode", 40, 4, 0),
+        f("api_bundle.PmCtxsw.vMemPtr", 32, 8, 0),
+        f("api_bundle.PreemptionCtxsw", 24, 112, 0),
+        f("api_bundle.PreemptionCtxsw.cilpPreemptMode", 116, 4, 0),
+        f("api_bundle.PreemptionCtxsw.flags", 24, 4, 0),
+        f("api_bundle.PreemptionCtxsw.gfxpPreemptMode", 112, 4, 0),
+        f("api_bundle.PreemptionCtxsw.grRouteInfo", 120, 16, 0),
+        f("api_bundle.PreemptionCtxsw.grRouteInfo.flags", 120, 4, 0),
+        f("api_bundle.PreemptionCtxsw.grRouteInfo.route", 128, 8, 0),
+        f("api_bundle.PreemptionCtxsw.hChannel", 32, 4, 0),
+        f("api_bundle.PreemptionCtxsw.hClient", 28, 4, 0),
+        f("api_bundle.PreemptionCtxsw.vMemPtrs", 40, 72, 8),
+        f("api_bundle.PromoteCtx", 24, 560, 0),
+        f("api_bundle.PromoteCtx.ChID", 32, 4, 0),
+        f("api_bundle.PromoteCtx.engineType", 24, 4, 0),
+        f("api_bundle.PromoteCtx.entryCount", 64, 4, 0),
+        f("api_bundle.PromoteCtx.hChanClient", 36, 4, 0),
+        f("api_bundle.PromoteCtx.hClient", 28, 4, 0),
+        f("api_bundle.PromoteCtx.hObject", 40, 4, 0),
+        f("api_bundle.PromoteCtx.hVirtMemory", 44, 4, 0),
+        f("api_bundle.PromoteCtx.promoteEntry", 72, 512, 32),
+        f("api_bundle.PromoteCtx.promoteEntry[]", 72, 32, 0),
+        f(
+            "api_bundle.PromoteCtx.promoteEntry[].bInitialize",
+            102,
+            1,
+            0,
+        ),
+        f("api_bundle.PromoteCtx.promoteEntry[].bNonmapped", 103, 1, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].bufferId", 100, 2, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].gpuPhysAddr", 72, 8, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].gpuVirtAddr", 80, 8, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].physAttr", 96, 4, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].size", 88, 8, 0),
+        f("api_bundle.PromoteCtx.size", 56, 8, 0),
+        f("api_bundle.PromoteCtx.virtAddress", 48, 8, 0),
+        f("api_bundle.ZcullCtxsw", 24, 24, 0),
+        f("api_bundle.ZcullCtxsw.hChannel", 28, 4, 0),
+        f("api_bundle.ZcullCtxsw.hClient", 24, 4, 0),
+        f("api_bundle.ZcullCtxsw.vMemPtr", 32, 8, 0),
+        f("api_bundle.ZcullCtxsw.zcullMode", 40, 4, 0),
+        f("cmd", 4, 4, 0),
+        f("flags", 8, 4, 0),
+        f("hApiHandle", 0, 4, 0),
+        f("hClientVA", 12, 4, 0),
+        f("hDeviceVA", 16, 4, 0),
+    ],
+};
+/// `NV5080_CTRL_DEFERRED_API_PARAMS` — 3 distinct consumed layout(s) over 3 run(s).
+pub const NV5080_CTRL_DEFERRED_API_PARAMS: StructRuns = StructRuns {
+    name: "NV5080_CTRL_DEFERRED_API_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(560, 28, 3),
+            Some(&NV5080_CTRL_DEFERRED_API_PARAMS_L0),
+        ), // 535.309.01 … 560.28.03
+        r(
+            v(565, 57, 1),
+            v(570, 148, 8),
+            Some(&NV5080_CTRL_DEFERRED_API_PARAMS_L1),
+        ), // 565.57.01 … 570.148.08
+        r(
+            v(575, 51, 2),
+            v(615, 71, 9),
+            Some(&NV5080_CTRL_DEFERRED_API_PARAMS_L2),
+        ), // 575.51.02 … 615.71.09
+    ],
+};
+
+const NV5080_CTRL_DEFERRED_API_V2_PARAMS_L0: Layout = Layout {
+    size: 584,
+    fields: &[
+        f("api_bundle", 24, 560, 0),
+        f("api_bundle.CacheAllocPolicy", 24, 92, 0),
+        f("api_bundle.CacheAllocPolicy.count", 24, 4, 0),
+        f("api_bundle.CacheAllocPolicy.entry", 28, 88, 8),
+        f("api_bundle.CacheAllocPolicy.entry[]", 28, 8, 0),
+        f("api_bundle.CacheAllocPolicy.entry[].allocPolicy", 32, 4, 0),
+        f("api_bundle.CacheAllocPolicy.entry[].client", 28, 4, 0),
+        f("api_bundle.CachePromotePolicy", 24, 8, 0),
+        f("api_bundle.CachePromotePolicy.engine", 24, 4, 0),
+        f("api_bundle.CachePromotePolicy.promotionPolicy", 28, 4, 0),
+        f("api_bundle.ChannelInfoUpdate", 24, 32, 0),
+        f("api_bundle.ChannelInfoUpdate.gpFifoEntries", 36, 4, 0),
+        f("api_bundle.ChannelInfoUpdate.gpFifoOffset", 40, 8, 0),
+        f("api_bundle.ChannelInfoUpdate.hChannel", 28, 4, 0),
+        f("api_bundle.ChannelInfoUpdate.hClient", 24, 4, 0),
+        f("api_bundle.ChannelInfoUpdate.hUserdMemory", 32, 4, 0),
+        f("api_bundle.ChannelInfoUpdate.userdOffset", 48, 8, 0),
+        f("api_bundle.DisableChannels", 24, 536, 0),
+        f("api_bundle.DisableChannels.bDisable", 24, 1, 0),
+        f(
+            "api_bundle.DisableChannels.bOnlyDisableScheduling",
+            32,
+            1,
+            0,
+        ),
+        f("api_bundle.DisableChannels.bRewindGpPut", 33, 1, 0),
+        f("api_bundle.DisableChannels.hChannelList", 304, 256, 4),
+        f("api_bundle.DisableChannels.hClientList", 48, 256, 4),
+        f("api_bundle.DisableChannels.numChannels", 28, 4, 0),
+        f("api_bundle.DisableChannels.pRunlistPreemptEvent", 40, 8, 0),
+        f("api_bundle.EvictCtx", 24, 20, 0),
+        f("api_bundle.EvictCtx.ChID", 32, 4, 0),
+        f("api_bundle.EvictCtx.engineType", 24, 4, 0),
+        f("api_bundle.EvictCtx.hChanClient", 36, 4, 0),
+        f("api_bundle.EvictCtx.hClient", 28, 4, 0),
+        f("api_bundle.EvictCtx.hObject", 40, 4, 0),
+        f("api_bundle.FillPteMem", 24, 96, 0),
+        f("api_bundle.FillPteMem.comprInfo", 44, 12, 0),
+        f(
+            "api_bundle.FillPteMem.comprInfo.compTagStartOffset",
+            52,
+            4,
+            0,
+        ),
+        f("api_bundle.FillPteMem.comprInfo.fbKind", 44, 4, 0),
+        f("api_bundle.FillPteMem.comprInfo.sysKind", 48, 4, 0),
+        f("api_bundle.FillPteMem.flags", 100, 4, 0),
+        f("api_bundle.FillPteMem.gpuAddr", 64, 8, 0),
+        f("api_bundle.FillPteMem.hSrcVASpace", 104, 4, 0),
+        f("api_bundle.FillPteMem.hTgtVASpace", 108, 4, 0),
+        f("api_bundle.FillPteMem.hwResource", 28, 16, 0),
+        f("api_bundle.FillPteMem.hwResource.hClient", 28, 4, 0),
+        f("api_bundle.FillPteMem.hwResource.hDevice", 32, 4, 0),
+        f("api_bundle.FillPteMem.hwResource.hMemory", 36, 4, 0),
+        f("api_bundle.FillPteMem.hwResource.subDeviceId", 40, 4, 0),
+        f("api_bundle.FillPteMem.offset", 56, 8, 0),
+        f("api_bundle.FillPteMem.pageArray", 72, 8, 0),
+        f("api_bundle.FillPteMem.pageCount", 24, 4, 0),
+        f("api_bundle.FillPteMem.pageSize", 92, 4, 0),
+        f("api_bundle.FillPteMem.peerId", 112, 4, 0),
+        f("api_bundle.FillPteMem.pteMem", 80, 8, 0),
+        f("api_bundle.FillPteMem.pteMemPfn", 88, 4, 0),
+        f("api_bundle.FillPteMem.startPageIndex", 96, 4, 0),
+        f("api_bundle.InitCtx", 24, 56, 0),
+        f("api_bundle.InitCtx.ChID", 32, 4, 0),
+        f("api_bundle.InitCtx.engineType", 24, 4, 0),
+        f("api_bundle.InitCtx.hChanClient", 36, 4, 0),
+        f("api_bundle.InitCtx.hClient", 28, 4, 0),
+        f("api_bundle.InitCtx.hDmaHandle", 60, 4, 0),
+        f("api_bundle.InitCtx.hObject", 40, 4, 0),
+        f("api_bundle.InitCtx.hVirtMemory", 44, 4, 0),
+        f("api_bundle.InitCtx.index", 64, 4, 0),
+        f("api_bundle.InitCtx.physAddress", 48, 8, 0),
+        f("api_bundle.InitCtx.physAttr", 56, 4, 0),
+        f("api_bundle.InitCtx.size", 72, 8, 0),
+        f("api_bundle.InvalidateTlb", 24, 16, 0),
+        f("api_bundle.InvalidateTlb.engine", 32, 4, 0),
+        f("api_bundle.InvalidateTlb.hClient", 24, 4, 0),
+        f("api_bundle.InvalidateTlb.hDevice", 28, 4, 0),
+        f("api_bundle.InvalidateTlb.hVASpace", 36, 4, 0),
+        f("api_bundle.PmCtxsw", 24, 40, 0),
+        f("api_bundle.PmCtxsw.grRouteInfo", 48, 16, 0),
+        f("api_bundle.PmCtxsw.grRouteInfo.flags", 48, 4, 0),
+        f("api_bundle.PmCtxsw.grRouteInfo.route", 56, 8, 0),
+        f("api_bundle.PmCtxsw.hChannel", 28, 4, 0),
+        f("api_bundle.PmCtxsw.hClient", 24, 4, 0),
+        f("api_bundle.PmCtxsw.pmMode", 40, 4, 0),
+        f("api_bundle.PmCtxsw.vMemPtr", 32, 8, 0),
+        f("api_bundle.PreemptionCtxsw", 24, 104, 0),
+        f("api_bundle.PreemptionCtxsw.cilpPreemptMode", 108, 4, 0),
+        f("api_bundle.PreemptionCtxsw.flags", 24, 4, 0),
+        f("api_bundle.PreemptionCtxsw.gfxpPreemptMode", 104, 4, 0),
+        f("api_bundle.PreemptionCtxsw.grRouteInfo", 112, 16, 0),
+        f("api_bundle.PreemptionCtxsw.grRouteInfo.flags", 112, 4, 0),
+        f("api_bundle.PreemptionCtxsw.grRouteInfo.route", 120, 8, 0),
+        f("api_bundle.PreemptionCtxsw.hChannel", 32, 4, 0),
+        f("api_bundle.PreemptionCtxsw.hClient", 28, 4, 0),
+        f("api_bundle.PreemptionCtxsw.vMemPtrs", 40, 64, 8),
+        f("api_bundle.PromoteCtx", 24, 560, 0),
+        f("api_bundle.PromoteCtx.ChID", 32, 4, 0),
+        f("api_bundle.PromoteCtx.engineType", 24, 4, 0),
+        f("api_bundle.PromoteCtx.entryCount", 64, 4, 0),
+        f("api_bundle.PromoteCtx.hChanClient", 36, 4, 0),
+        f("api_bundle.PromoteCtx.hClient", 28, 4, 0),
+        f("api_bundle.PromoteCtx.hObject", 40, 4, 0),
+        f("api_bundle.PromoteCtx.hVirtMemory", 44, 4, 0),
+        f("api_bundle.PromoteCtx.promoteEntry", 72, 512, 32),
+        f("api_bundle.PromoteCtx.promoteEntry[]", 72, 32, 0),
+        f(
+            "api_bundle.PromoteCtx.promoteEntry[].bInitialize",
+            102,
+            1,
+            0,
+        ),
+        f("api_bundle.PromoteCtx.promoteEntry[].bNonmapped", 103, 1, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].bufferId", 100, 2, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].gpuPhysAddr", 72, 8, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].gpuVirtAddr", 80, 8, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].physAttr", 96, 4, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].size", 88, 8, 0),
+        f("api_bundle.PromoteCtx.size", 56, 8, 0),
+        f("api_bundle.PromoteCtx.virtAddress", 48, 8, 0),
+        f("api_bundle.ZcullCtxsw", 24, 24, 0),
+        f("api_bundle.ZcullCtxsw.hChannel", 28, 4, 0),
+        f("api_bundle.ZcullCtxsw.hClient", 24, 4, 0),
+        f("api_bundle.ZcullCtxsw.vMemPtr", 32, 8, 0),
+        f("api_bundle.ZcullCtxsw.zcullMode", 40, 4, 0),
+        f("cmd", 4, 4, 0),
+        f("flags", 8, 4, 0),
+        f("hApiHandle", 0, 4, 0),
+        f("hClientVA", 12, 4, 0),
+        f("hDeviceVA", 16, 4, 0),
+    ],
+};
+const NV5080_CTRL_DEFERRED_API_V2_PARAMS_L1: Layout = Layout {
+    size: 584,
+    fields: &[
+        f("api_bundle", 24, 560, 0),
+        f("api_bundle.ChannelInfoUpdate", 24, 32, 0),
+        f("api_bundle.ChannelInfoUpdate.gpFifoEntries", 36, 4, 0),
+        f("api_bundle.ChannelInfoUpdate.gpFifoOffset", 40, 8, 0),
+        f("api_bundle.ChannelInfoUpdate.hChannel", 28, 4, 0),
+        f("api_bundle.ChannelInfoUpdate.hClient", 24, 4, 0),
+        f("api_bundle.ChannelInfoUpdate.hUserdMemory", 32, 4, 0),
+        f("api_bundle.ChannelInfoUpdate.userdOffset", 48, 8, 0),
+        f("api_bundle.DisableChannels", 24, 536, 0),
+        f("api_bundle.DisableChannels.bDisable", 24, 1, 0),
+        f(
+            "api_bundle.DisableChannels.bOnlyDisableScheduling",
+            32,
+            1,
+            0,
+        ),
+        f("api_bundle.DisableChannels.bRewindGpPut", 33, 1, 0),
+        f("api_bundle.DisableChannels.hChannelList", 304, 256, 4),
+        f("api_bundle.DisableChannels.hClientList", 48, 256, 4),
+        f("api_bundle.DisableChannels.numChannels", 28, 4, 0),
+        f("api_bundle.DisableChannels.pRunlistPreemptEvent", 40, 8, 0),
+        f("api_bundle.EvictCtx", 24, 20, 0),
+        f("api_bundle.EvictCtx.ChID", 32, 4, 0),
+        f("api_bundle.EvictCtx.engineType", 24, 4, 0),
+        f("api_bundle.EvictCtx.hChanClient", 36, 4, 0),
+        f("api_bundle.EvictCtx.hClient", 28, 4, 0),
+        f("api_bundle.EvictCtx.hObject", 40, 4, 0),
+        f("api_bundle.FillPteMem", 24, 96, 0),
+        f("api_bundle.FillPteMem.comprInfo", 44, 12, 0),
+        f(
+            "api_bundle.FillPteMem.comprInfo.compTagStartOffset",
+            52,
+            4,
+            0,
+        ),
+        f("api_bundle.FillPteMem.comprInfo.fbKind", 44, 4, 0),
+        f("api_bundle.FillPteMem.comprInfo.sysKind", 48, 4, 0),
+        f("api_bundle.FillPteMem.flags", 100, 4, 0),
+        f("api_bundle.FillPteMem.gpuAddr", 64, 8, 0),
+        f("api_bundle.FillPteMem.hSrcVASpace", 104, 4, 0),
+        f("api_bundle.FillPteMem.hTgtVASpace", 108, 4, 0),
+        f("api_bundle.FillPteMem.hwResource", 28, 16, 0),
+        f("api_bundle.FillPteMem.hwResource.hClient", 28, 4, 0),
+        f("api_bundle.FillPteMem.hwResource.hDevice", 32, 4, 0),
+        f("api_bundle.FillPteMem.hwResource.hMemory", 36, 4, 0),
+        f("api_bundle.FillPteMem.hwResource.subDeviceId", 40, 4, 0),
+        f("api_bundle.FillPteMem.offset", 56, 8, 0),
+        f("api_bundle.FillPteMem.pageArray", 72, 8, 0),
+        f("api_bundle.FillPteMem.pageCount", 24, 4, 0),
+        f("api_bundle.FillPteMem.pageSize", 92, 4, 0),
+        f("api_bundle.FillPteMem.peerId", 112, 4, 0),
+        f("api_bundle.FillPteMem.pteMem", 80, 8, 0),
+        f("api_bundle.FillPteMem.pteMemPfn", 88, 4, 0),
+        f("api_bundle.FillPteMem.startPageIndex", 96, 4, 0),
+        f("api_bundle.InitCtx", 24, 56, 0),
+        f("api_bundle.InitCtx.ChID", 32, 4, 0),
+        f("api_bundle.InitCtx.engineType", 24, 4, 0),
+        f("api_bundle.InitCtx.hChanClient", 36, 4, 0),
+        f("api_bundle.InitCtx.hClient", 28, 4, 0),
+        f("api_bundle.InitCtx.hDmaHandle", 60, 4, 0),
+        f("api_bundle.InitCtx.hObject", 40, 4, 0),
+        f("api_bundle.InitCtx.hVirtMemory", 44, 4, 0),
+        f("api_bundle.InitCtx.index", 64, 4, 0),
+        f("api_bundle.InitCtx.physAddress", 48, 8, 0),
+        f("api_bundle.InitCtx.physAttr", 56, 4, 0),
+        f("api_bundle.InitCtx.size", 72, 8, 0),
+        f("api_bundle.InvalidateTlb", 24, 16, 0),
+        f("api_bundle.InvalidateTlb.engine", 32, 4, 0),
+        f("api_bundle.InvalidateTlb.hClient", 24, 4, 0),
+        f("api_bundle.InvalidateTlb.hDevice", 28, 4, 0),
+        f("api_bundle.InvalidateTlb.hVASpace", 36, 4, 0),
+        f("api_bundle.PmCtxsw", 24, 40, 0),
+        f("api_bundle.PmCtxsw.grRouteInfo", 48, 16, 0),
+        f("api_bundle.PmCtxsw.grRouteInfo.flags", 48, 4, 0),
+        f("api_bundle.PmCtxsw.grRouteInfo.route", 56, 8, 0),
+        f("api_bundle.PmCtxsw.hChannel", 28, 4, 0),
+        f("api_bundle.PmCtxsw.hClient", 24, 4, 0),
+        f("api_bundle.PmCtxsw.pmMode", 40, 4, 0),
+        f("api_bundle.PmCtxsw.vMemPtr", 32, 8, 0),
+        f("api_bundle.PreemptionCtxsw", 24, 112, 0),
+        f("api_bundle.PreemptionCtxsw.cilpPreemptMode", 116, 4, 0),
+        f("api_bundle.PreemptionCtxsw.flags", 24, 4, 0),
+        f("api_bundle.PreemptionCtxsw.gfxpPreemptMode", 112, 4, 0),
+        f("api_bundle.PreemptionCtxsw.grRouteInfo", 120, 16, 0),
+        f("api_bundle.PreemptionCtxsw.grRouteInfo.flags", 120, 4, 0),
+        f("api_bundle.PreemptionCtxsw.grRouteInfo.route", 128, 8, 0),
+        f("api_bundle.PreemptionCtxsw.hChannel", 32, 4, 0),
+        f("api_bundle.PreemptionCtxsw.hClient", 28, 4, 0),
+        f("api_bundle.PreemptionCtxsw.vMemPtrs", 40, 72, 8),
+        f("api_bundle.PromoteCtx", 24, 560, 0),
+        f("api_bundle.PromoteCtx.ChID", 32, 4, 0),
+        f("api_bundle.PromoteCtx.engineType", 24, 4, 0),
+        f("api_bundle.PromoteCtx.entryCount", 64, 4, 0),
+        f("api_bundle.PromoteCtx.hChanClient", 36, 4, 0),
+        f("api_bundle.PromoteCtx.hClient", 28, 4, 0),
+        f("api_bundle.PromoteCtx.hObject", 40, 4, 0),
+        f("api_bundle.PromoteCtx.hVirtMemory", 44, 4, 0),
+        f("api_bundle.PromoteCtx.promoteEntry", 72, 512, 32),
+        f("api_bundle.PromoteCtx.promoteEntry[]", 72, 32, 0),
+        f(
+            "api_bundle.PromoteCtx.promoteEntry[].bInitialize",
+            102,
+            1,
+            0,
+        ),
+        f("api_bundle.PromoteCtx.promoteEntry[].bNonmapped", 103, 1, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].bufferId", 100, 2, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].gpuPhysAddr", 72, 8, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].gpuVirtAddr", 80, 8, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].physAttr", 96, 4, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].size", 88, 8, 0),
+        f("api_bundle.PromoteCtx.size", 56, 8, 0),
+        f("api_bundle.PromoteCtx.virtAddress", 48, 8, 0),
+        f("api_bundle.ZcullCtxsw", 24, 24, 0),
+        f("api_bundle.ZcullCtxsw.hChannel", 28, 4, 0),
+        f("api_bundle.ZcullCtxsw.hClient", 24, 4, 0),
+        f("api_bundle.ZcullCtxsw.vMemPtr", 32, 8, 0),
+        f("api_bundle.ZcullCtxsw.zcullMode", 40, 4, 0),
+        f("cmd", 4, 4, 0),
+        f("flags", 8, 4, 0),
+        f("hApiHandle", 0, 4, 0),
+        f("hClientVA", 12, 4, 0),
+        f("hDeviceVA", 16, 4, 0),
+    ],
+};
+const NV5080_CTRL_DEFERRED_API_V2_PARAMS_L2: Layout = Layout {
+    size: 584,
+    fields: &[
+        f("api_bundle", 24, 560, 0),
+        f("api_bundle.ChannelInfoUpdate", 24, 32, 0),
+        f("api_bundle.ChannelInfoUpdate.gpFifoEntries", 36, 4, 0),
+        f("api_bundle.ChannelInfoUpdate.gpFifoOffset", 40, 8, 0),
+        f("api_bundle.ChannelInfoUpdate.hChannel", 28, 4, 0),
+        f("api_bundle.ChannelInfoUpdate.hClient", 24, 4, 0),
+        f("api_bundle.ChannelInfoUpdate.hUserdMemory", 32, 4, 0),
+        f("api_bundle.ChannelInfoUpdate.userdOffset", 48, 8, 0),
+        f("api_bundle.DisableChannels", 24, 536, 0),
+        f("api_bundle.DisableChannels.bDisable", 24, 1, 0),
+        f(
+            "api_bundle.DisableChannels.bOnlyDisableScheduling",
+            32,
+            1,
+            0,
+        ),
+        f("api_bundle.DisableChannels.bRewindGpPut", 33, 1, 0),
+        f("api_bundle.DisableChannels.hChannelList", 304, 256, 4),
+        f("api_bundle.DisableChannels.hClientList", 48, 256, 4),
+        f("api_bundle.DisableChannels.numChannels", 28, 4, 0),
+        f("api_bundle.DisableChannels.pRunlistPreemptEvent", 40, 8, 0),
+        f("api_bundle.EvictCtx", 24, 20, 0),
+        f("api_bundle.EvictCtx.ChID", 32, 4, 0),
+        f("api_bundle.EvictCtx.engineType", 24, 4, 0),
+        f("api_bundle.EvictCtx.hChanClient", 36, 4, 0),
+        f("api_bundle.EvictCtx.hClient", 28, 4, 0),
+        f("api_bundle.EvictCtx.hObject", 40, 4, 0),
+        f("api_bundle.FillPteMem", 24, 104, 0),
+        f("api_bundle.FillPteMem.comprInfo", 44, 12, 0),
+        f(
+            "api_bundle.FillPteMem.comprInfo.compTagStartOffset",
+            52,
+            4,
+            0,
+        ),
+        f("api_bundle.FillPteMem.comprInfo.fbKind", 44, 4, 0),
+        f("api_bundle.FillPteMem.comprInfo.sysKind", 48, 4, 0),
+        f("api_bundle.FillPteMem.flags", 104, 8, 0),
+        f("api_bundle.FillPteMem.gpuAddr", 64, 8, 0),
+        f("api_bundle.FillPteMem.hSrcVASpace", 112, 4, 0),
+        f("api_bundle.FillPteMem.hTgtVASpace", 116, 4, 0),
+        f("api_bundle.FillPteMem.hwResource", 28, 16, 0),
+        f("api_bundle.FillPteMem.hwResource.hClient", 28, 4, 0),
+        f("api_bundle.FillPteMem.hwResource.hDevice", 32, 4, 0),
+        f("api_bundle.FillPteMem.hwResource.hMemory", 36, 4, 0),
+        f("api_bundle.FillPteMem.hwResource.subDeviceId", 40, 4, 0),
+        f("api_bundle.FillPteMem.offset", 56, 8, 0),
+        f("api_bundle.FillPteMem.pageArray", 72, 8, 0),
+        f("api_bundle.FillPteMem.pageCount", 24, 4, 0),
+        f("api_bundle.FillPteMem.pageSize", 92, 4, 0),
+        f("api_bundle.FillPteMem.peerId", 120, 4, 0),
+        f("api_bundle.FillPteMem.pteMem", 80, 8, 0),
+        f("api_bundle.FillPteMem.pteMemPfn", 88, 4, 0),
+        f("api_bundle.FillPteMem.startPageIndex", 96, 4, 0),
+        f("api_bundle.InitCtx", 24, 56, 0),
+        f("api_bundle.InitCtx.ChID", 32, 4, 0),
+        f("api_bundle.InitCtx.engineType", 24, 4, 0),
+        f("api_bundle.InitCtx.hChanClient", 36, 4, 0),
+        f("api_bundle.InitCtx.hClient", 28, 4, 0),
+        f("api_bundle.InitCtx.hDmaHandle", 60, 4, 0),
+        f("api_bundle.InitCtx.hObject", 40, 4, 0),
+        f("api_bundle.InitCtx.hVirtMemory", 44, 4, 0),
+        f("api_bundle.InitCtx.index", 64, 4, 0),
+        f("api_bundle.InitCtx.physAddress", 48, 8, 0),
+        f("api_bundle.InitCtx.physAttr", 56, 4, 0),
+        f("api_bundle.InitCtx.size", 72, 8, 0),
+        f("api_bundle.InvalidateTlb", 24, 16, 0),
+        f("api_bundle.InvalidateTlb.engine", 32, 4, 0),
+        f("api_bundle.InvalidateTlb.hClient", 24, 4, 0),
+        f("api_bundle.InvalidateTlb.hDevice", 28, 4, 0),
+        f("api_bundle.InvalidateTlb.hVASpace", 36, 4, 0),
+        f("api_bundle.PmCtxsw", 24, 40, 0),
+        f("api_bundle.PmCtxsw.grRouteInfo", 48, 16, 0),
+        f("api_bundle.PmCtxsw.grRouteInfo.flags", 48, 4, 0),
+        f("api_bundle.PmCtxsw.grRouteInfo.route", 56, 8, 0),
+        f("api_bundle.PmCtxsw.hChannel", 28, 4, 0),
+        f("api_bundle.PmCtxsw.hClient", 24, 4, 0),
+        f("api_bundle.PmCtxsw.pmMode", 40, 4, 0),
+        f("api_bundle.PmCtxsw.vMemPtr", 32, 8, 0),
+        f("api_bundle.PreemptionCtxsw", 24, 112, 0),
+        f("api_bundle.PreemptionCtxsw.cilpPreemptMode", 116, 4, 0),
+        f("api_bundle.PreemptionCtxsw.flags", 24, 4, 0),
+        f("api_bundle.PreemptionCtxsw.gfxpPreemptMode", 112, 4, 0),
+        f("api_bundle.PreemptionCtxsw.grRouteInfo", 120, 16, 0),
+        f("api_bundle.PreemptionCtxsw.grRouteInfo.flags", 120, 4, 0),
+        f("api_bundle.PreemptionCtxsw.grRouteInfo.route", 128, 8, 0),
+        f("api_bundle.PreemptionCtxsw.hChannel", 32, 4, 0),
+        f("api_bundle.PreemptionCtxsw.hClient", 28, 4, 0),
+        f("api_bundle.PreemptionCtxsw.vMemPtrs", 40, 72, 8),
+        f("api_bundle.PromoteCtx", 24, 560, 0),
+        f("api_bundle.PromoteCtx.ChID", 32, 4, 0),
+        f("api_bundle.PromoteCtx.engineType", 24, 4, 0),
+        f("api_bundle.PromoteCtx.entryCount", 64, 4, 0),
+        f("api_bundle.PromoteCtx.hChanClient", 36, 4, 0),
+        f("api_bundle.PromoteCtx.hClient", 28, 4, 0),
+        f("api_bundle.PromoteCtx.hObject", 40, 4, 0),
+        f("api_bundle.PromoteCtx.hVirtMemory", 44, 4, 0),
+        f("api_bundle.PromoteCtx.promoteEntry", 72, 512, 32),
+        f("api_bundle.PromoteCtx.promoteEntry[]", 72, 32, 0),
+        f(
+            "api_bundle.PromoteCtx.promoteEntry[].bInitialize",
+            102,
+            1,
+            0,
+        ),
+        f("api_bundle.PromoteCtx.promoteEntry[].bNonmapped", 103, 1, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].bufferId", 100, 2, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].gpuPhysAddr", 72, 8, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].gpuVirtAddr", 80, 8, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].physAttr", 96, 4, 0),
+        f("api_bundle.PromoteCtx.promoteEntry[].size", 88, 8, 0),
+        f("api_bundle.PromoteCtx.size", 56, 8, 0),
+        f("api_bundle.PromoteCtx.virtAddress", 48, 8, 0),
+        f("api_bundle.ZcullCtxsw", 24, 24, 0),
+        f("api_bundle.ZcullCtxsw.hChannel", 28, 4, 0),
+        f("api_bundle.ZcullCtxsw.hClient", 24, 4, 0),
+        f("api_bundle.ZcullCtxsw.vMemPtr", 32, 8, 0),
+        f("api_bundle.ZcullCtxsw.zcullMode", 40, 4, 0),
+        f("cmd", 4, 4, 0),
+        f("flags", 8, 4, 0),
+        f("hApiHandle", 0, 4, 0),
+        f("hClientVA", 12, 4, 0),
+        f("hDeviceVA", 16, 4, 0),
+    ],
+};
+/// `NV5080_CTRL_DEFERRED_API_V2_PARAMS` — 3 distinct consumed layout(s) over 3 run(s).
+pub const NV5080_CTRL_DEFERRED_API_V2_PARAMS: StructRuns = StructRuns {
+    name: "NV5080_CTRL_DEFERRED_API_V2_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(560, 28, 3),
+            Some(&NV5080_CTRL_DEFERRED_API_V2_PARAMS_L0),
+        ), // 535.309.01 … 560.28.03
+        r(
+            v(565, 57, 1),
+            v(570, 148, 8),
+            Some(&NV5080_CTRL_DEFERRED_API_V2_PARAMS_L1),
+        ), // 565.57.01 … 570.148.08
+        r(
+            v(575, 51, 2),
+            v(615, 71, 9),
+            Some(&NV5080_CTRL_DEFERRED_API_V2_PARAMS_L2),
+        ), // 575.51.02 … 615.71.09
+    ],
+};
+
+const NV5080_CTRL_REMOVE_API_PARAMS_L0: Layout = Layout {
+    size: 4,
+    fields: &[f("hApiHandle", 0, 4, 0)],
+};
+/// `NV5080_CTRL_REMOVE_API_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV5080_CTRL_REMOVE_API_PARAMS: StructRuns = StructRuns {
+    name: "NV5080_CTRL_REMOVE_API_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&NV5080_CTRL_REMOVE_API_PARAMS_L0),
         ), // 535.309.01 … 615.71.09
     ],
 };
@@ -13641,6 +14544,14 @@ pub const CTRL_CMDS_NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE: ValueRuns = Valu
     ],
 };
 
+/// `ctrl_cmds:NV2080_CTRL_CMD_FIFO_UPDATE_CHANNEL_INFO`
+pub const CTRL_CMDS_NV2080_CTRL_CMD_FIFO_UPDATE_CHANNEL_INFO: ValueRuns = ValueRuns {
+    name: "ctrl_cmds:NV2080_CTRL_CMD_FIFO_UPDATE_CHANNEL_INFO",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x20801116)), // 535.309.01 … 615.71.09
+    ],
+};
+
 /// `ctrl_cmds:NV2080_CTRL_CMD_GET_RC_RECOVERY`
 pub const CTRL_CMDS_NV2080_CTRL_CMD_GET_RC_RECOVERY: ValueRuns = ValueRuns {
     name: "ctrl_cmds:NV2080_CTRL_CMD_GET_RC_RECOVERY",
@@ -13706,6 +14617,14 @@ pub const CTRL_CMDS_NV2080_CTRL_CMD_GPU_GET_SHORT_NAME_STRING: ValueRuns = Value
     ],
 };
 
+/// `ctrl_cmds:NV2080_CTRL_CMD_GPU_INITIALIZE_CTX`
+pub const CTRL_CMDS_NV2080_CTRL_CMD_GPU_INITIALIZE_CTX: ValueRuns = ValueRuns {
+    name: "ctrl_cmds:NV2080_CTRL_CMD_GPU_INITIALIZE_CTX",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x2080012d)), // 535.309.01 … 615.71.09
+    ],
+};
+
 /// `ctrl_cmds:NV2080_CTRL_CMD_GPU_PROMOTE_CTX`
 pub const CTRL_CMDS_NV2080_CTRL_CMD_GPU_PROMOTE_CTX: ValueRuns = ValueRuns {
     name: "ctrl_cmds:NV2080_CTRL_CMD_GPU_PROMOTE_CTX",
@@ -13719,6 +14638,22 @@ pub const CTRL_CMDS_NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO: ValueRuns = ValueRuns 
     name: "ctrl_cmds:NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO",
     runs: &[
         r(v(535, 309, 1), v(615, 71, 9), Some(0x20803801)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `ctrl_cmds:NV2080_CTRL_CMD_GR_CTXSW_PM_BIND`
+pub const CTRL_CMDS_NV2080_CTRL_CMD_GR_CTXSW_PM_BIND: ValueRuns = ValueRuns {
+    name: "ctrl_cmds:NV2080_CTRL_CMD_GR_CTXSW_PM_BIND",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x20801209)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `ctrl_cmds:NV2080_CTRL_CMD_GR_CTXSW_PREEMPTION_BIND`
+pub const CTRL_CMDS_NV2080_CTRL_CMD_GR_CTXSW_PREEMPTION_BIND: ValueRuns = ValueRuns {
+    name: "ctrl_cmds:NV2080_CTRL_CMD_GR_CTXSW_PREEMPTION_BIND",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x20801211)), // 535.309.01 … 615.71.09
     ],
 };
 
@@ -14184,6 +15119,73 @@ pub const CTRL_CMDS_NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET: ValueRuns = Value
     name: "ctrl_cmds:NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET",
     runs: &[
         r(v(535, 309, 1), v(615, 71, 9), Some(0x20800404)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `ctrl_cmds:NV5080_CTRL_CMD_DEFERRED_API`
+pub const CTRL_CMDS_NV5080_CTRL_CMD_DEFERRED_API: ValueRuns = ValueRuns {
+    name: "ctrl_cmds:NV5080_CTRL_CMD_DEFERRED_API",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x50800101)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `ctrl_cmds:NV5080_CTRL_CMD_DEFERRED_API_FLAGS_DELETE_EXPLICIT`
+pub const CTRL_CMDS_NV5080_CTRL_CMD_DEFERRED_API_FLAGS_DELETE_EXPLICIT: ValueRuns = ValueRuns {
+    name: "ctrl_cmds:NV5080_CTRL_CMD_DEFERRED_API_FLAGS_DELETE_EXPLICIT",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x1)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `ctrl_cmds:NV5080_CTRL_CMD_DEFERRED_API_FLAGS_DELETE_IMPLICIT`
+pub const CTRL_CMDS_NV5080_CTRL_CMD_DEFERRED_API_FLAGS_DELETE_IMPLICIT: ValueRuns = ValueRuns {
+    name: "ctrl_cmds:NV5080_CTRL_CMD_DEFERRED_API_FLAGS_DELETE_IMPLICIT",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `ctrl_cmds:NV5080_CTRL_CMD_DEFERRED_API_FLAGS_WAIT_FOR_TLB_FLUSH_FALSE`
+pub const CTRL_CMDS_NV5080_CTRL_CMD_DEFERRED_API_FLAGS_WAIT_FOR_TLB_FLUSH_FALSE: ValueRuns =
+    ValueRuns {
+        name: "ctrl_cmds:NV5080_CTRL_CMD_DEFERRED_API_FLAGS_WAIT_FOR_TLB_FLUSH_FALSE",
+        runs: &[
+            r(v(535, 309, 1), v(615, 71, 9), Some(0x0)), // 535.309.01 … 615.71.09
+        ],
+    };
+
+/// `ctrl_cmds:NV5080_CTRL_CMD_DEFERRED_API_FLAGS_WAIT_FOR_TLB_FLUSH_TRUE`
+pub const CTRL_CMDS_NV5080_CTRL_CMD_DEFERRED_API_FLAGS_WAIT_FOR_TLB_FLUSH_TRUE: ValueRuns =
+    ValueRuns {
+        name: "ctrl_cmds:NV5080_CTRL_CMD_DEFERRED_API_FLAGS_WAIT_FOR_TLB_FLUSH_TRUE",
+        runs: &[
+            r(v(535, 309, 1), v(615, 71, 9), Some(0x1)), // 535.309.01 … 615.71.09
+        ],
+    };
+
+/// `ctrl_cmds:NV5080_CTRL_CMD_DEFERRED_API_INTERNAL`
+pub const CTRL_CMDS_NV5080_CTRL_CMD_DEFERRED_API_INTERNAL: ValueRuns = ValueRuns {
+    name: "ctrl_cmds:NV5080_CTRL_CMD_DEFERRED_API_INTERNAL",
+    runs: &[
+        r(v(535, 309, 1), v(550, 90, 7), None), // 535.309.01 … 550.90.07
+        r(v(555, 42, 2), v(615, 71, 9), Some(0x50800104)), // 555.42.02 … 615.71.09
+    ],
+};
+
+/// `ctrl_cmds:NV5080_CTRL_CMD_DEFERRED_API_V2`
+pub const CTRL_CMDS_NV5080_CTRL_CMD_DEFERRED_API_V2: ValueRuns = ValueRuns {
+    name: "ctrl_cmds:NV5080_CTRL_CMD_DEFERRED_API_V2",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x50800103)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `ctrl_cmds:NV5080_CTRL_CMD_REMOVE_API`
+pub const CTRL_CMDS_NV5080_CTRL_CMD_REMOVE_API: ValueRuns = ValueRuns {
+    name: "ctrl_cmds:NV5080_CTRL_CMD_REMOVE_API",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x50800102)), // 535.309.01 … 615.71.09
     ],
 };
 
@@ -28674,6 +29676,38 @@ pub const NV2080_NOTIFIERS_NV2080_NOTIFIERS_XUSB_PPC_CONNECTED: ValueRuns = Valu
     ],
 };
 
+/// `nv5080_flags_delete_hi:nv5080_flags_delete_hi`
+pub const NV5080_FLAGS_DELETE_HI_NV5080_FLAGS_DELETE_HI: ValueRuns = ValueRuns {
+    name: "nv5080_flags_delete_hi:nv5080_flags_delete_hi",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `nv5080_flags_delete_lo:nv5080_flags_delete_lo`
+pub const NV5080_FLAGS_DELETE_LO_NV5080_FLAGS_DELETE_LO: ValueRuns = ValueRuns {
+    name: "nv5080_flags_delete_lo:nv5080_flags_delete_lo",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `nv5080_flags_wait_tlb_hi:nv5080_flags_wait_tlb_hi`
+pub const NV5080_FLAGS_WAIT_TLB_HI_NV5080_FLAGS_WAIT_TLB_HI: ValueRuns = ValueRuns {
+    name: "nv5080_flags_wait_tlb_hi:nv5080_flags_wait_tlb_hi",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x1)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `nv5080_flags_wait_tlb_lo:nv5080_flags_wait_tlb_lo`
+pub const NV5080_FLAGS_WAIT_TLB_LO_NV5080_FLAGS_WAIT_TLB_LO: ValueRuns = ValueRuns {
+    name: "nv5080_flags_wait_tlb_lo:nv5080_flags_wait_tlb_lo",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x1)), // 535.309.01 … 615.71.09
+    ],
+};
+
 /// `nv_escapes:NV_ESC_RM_ACCESS_REGISTRY`
 pub const NV_ESCAPES_NV_ESC_RM_ACCESS_REGISTRY: ValueRuns = ValueRuns {
     name: "nv_escapes:NV_ESC_RM_ACCESS_REGISTRY",
@@ -33028,6 +34062,7 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &NV2080_CTRL_FIFO_CHANNEL_PREEMPTIVE_REMOVAL_PARAMS,
     &NV2080_CTRL_FIFO_DISABLE_CHANNELS_PARAMS,
     &NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_PARAMS,
+    &NV2080_CTRL_FIFO_UPDATE_CHANNEL_INFO_PARAMS,
     &NV2080_CTRL_GPU_EVICT_CTX_PARAMS,
     &NV2080_CTRL_GPU_GET_CONSTRUCTED_FALCON_INFO_PARAMS,
     &NV2080_CTRL_GPU_GET_ENGINES_V2_PARAMS,
@@ -33035,8 +34070,11 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &NV2080_CTRL_GPU_GET_NAME_STRING_PARAMS,
     &NV2080_CTRL_GPU_GET_PES_INFO_PARAMS,
     &NV2080_CTRL_GPU_GET_SHORT_NAME_STRING_PARAMS,
+    &NV2080_CTRL_GPU_INITIALIZE_CTX_PARAMS,
     &NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS,
     &NV2080_CTRL_GRMGR_GET_GR_FS_INFO_PARAMS,
+    &NV2080_CTRL_GR_CTXSW_PM_BIND_PARAMS,
+    &NV2080_CTRL_GR_CTXSW_PREEMPTION_BIND_PARAMS,
     &NV2080_CTRL_GR_CTXSW_ZCULL_BIND_PARAMS,
     &NV2080_CTRL_GR_GET_CAPS_V2_PARAMS,
     &NV2080_CTRL_GR_GET_ENGINE_CONTEXT_PROPERTIES_PARAMS,
@@ -33090,6 +34128,9 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &NV2080_CTRL_PERF_GET_POWERSTATE_PARAMS,
     &NV2080_CTRL_RC_GET_WATCHDOG_INFO_PARAMS,
     &NV2080_CTRL_TIMER_GET_REGISTER_OFFSET_PARAMS,
+    &NV5080_CTRL_DEFERRED_API_PARAMS,
+    &NV5080_CTRL_DEFERRED_API_V2_PARAMS,
+    &NV5080_CTRL_REMOVE_API_PARAMS,
     &NV83DE_ALLOC_PARAMETERS,
     &NV83DE_CTRL_DEBUG_SET_EXCEPTION_MASK_PARAMS,
     &NV9072_ALLOCATION_PARAMETERS,
@@ -33453,6 +34494,7 @@ pub const ALL_VALUES: &[&ValueRuns] = &[
     &CTRL_CMDS_NV2080_CTRL_CMD_FIFO_CHANNEL_PREEMPTIVE_REMOVAL,
     &CTRL_CMDS_NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS,
     &CTRL_CMDS_NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE,
+    &CTRL_CMDS_NV2080_CTRL_CMD_FIFO_UPDATE_CHANNEL_INFO,
     &CTRL_CMDS_NV2080_CTRL_CMD_GET_RC_RECOVERY,
     &CTRL_CMDS_NV2080_CTRL_CMD_GPU_EVICT_CTX,
     &CTRL_CMDS_NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO,
@@ -33461,8 +34503,11 @@ pub const ALL_VALUES: &[&ValueRuns] = &[
     &CTRL_CMDS_NV2080_CTRL_CMD_GPU_GET_NAME_STRING,
     &CTRL_CMDS_NV2080_CTRL_CMD_GPU_GET_PES_INFO,
     &CTRL_CMDS_NV2080_CTRL_CMD_GPU_GET_SHORT_NAME_STRING,
+    &CTRL_CMDS_NV2080_CTRL_CMD_GPU_INITIALIZE_CTX,
     &CTRL_CMDS_NV2080_CTRL_CMD_GPU_PROMOTE_CTX,
     &CTRL_CMDS_NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO,
+    &CTRL_CMDS_NV2080_CTRL_CMD_GR_CTXSW_PM_BIND,
+    &CTRL_CMDS_NV2080_CTRL_CMD_GR_CTXSW_PREEMPTION_BIND,
     &CTRL_CMDS_NV2080_CTRL_CMD_GR_CTXSW_ZCULL_BIND,
     &CTRL_CMDS_NV2080_CTRL_CMD_GR_GET_CAPS_V2,
     &CTRL_CMDS_NV2080_CTRL_CMD_GR_GET_ENGINE_CONTEXT_PROPERTIES,
@@ -33519,6 +34564,14 @@ pub const ALL_VALUES: &[&ValueRuns] = &[
     &CTRL_CMDS_NV2080_CTRL_CMD_RC_RECOVERY_ENABLED,
     &CTRL_CMDS_NV2080_CTRL_CMD_SET_RC_RECOVERY,
     &CTRL_CMDS_NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET,
+    &CTRL_CMDS_NV5080_CTRL_CMD_DEFERRED_API,
+    &CTRL_CMDS_NV5080_CTRL_CMD_DEFERRED_API_FLAGS_DELETE_EXPLICIT,
+    &CTRL_CMDS_NV5080_CTRL_CMD_DEFERRED_API_FLAGS_DELETE_IMPLICIT,
+    &CTRL_CMDS_NV5080_CTRL_CMD_DEFERRED_API_FLAGS_WAIT_FOR_TLB_FLUSH_FALSE,
+    &CTRL_CMDS_NV5080_CTRL_CMD_DEFERRED_API_FLAGS_WAIT_FOR_TLB_FLUSH_TRUE,
+    &CTRL_CMDS_NV5080_CTRL_CMD_DEFERRED_API_INTERNAL,
+    &CTRL_CMDS_NV5080_CTRL_CMD_DEFERRED_API_V2,
+    &CTRL_CMDS_NV5080_CTRL_CMD_REMOVE_API,
     &CTRL_CMDS_NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK,
     &CTRL_CMDS_NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
     &CTRL_CMDS_NVA06C_CTRL_CMD_BIND,
@@ -35198,6 +36251,10 @@ pub const ALL_VALUES: &[&ValueRuns] = &[
     &NV2080_NOTIFIERS_NV2080_NOTIFIERS_VRR_SET_TIMEOUT,
     &NV2080_NOTIFIERS_NV2080_NOTIFIERS_WORKLOAD_MODULATION_CHANGE,
     &NV2080_NOTIFIERS_NV2080_NOTIFIERS_XUSB_PPC_CONNECTED,
+    &NV5080_FLAGS_DELETE_HI_NV5080_FLAGS_DELETE_HI,
+    &NV5080_FLAGS_DELETE_LO_NV5080_FLAGS_DELETE_LO,
+    &NV5080_FLAGS_WAIT_TLB_HI_NV5080_FLAGS_WAIT_TLB_HI,
+    &NV5080_FLAGS_WAIT_TLB_LO_NV5080_FLAGS_WAIT_TLB_LO,
     &NV_ESCAPES_NV_ESC_RM_ACCESS_REGISTRY,
     &NV_ESCAPES_NV_ESC_RM_ADD_VBLANK_CALLBACK,
     &NV_ESCAPES_NV_ESC_RM_ALLOC,

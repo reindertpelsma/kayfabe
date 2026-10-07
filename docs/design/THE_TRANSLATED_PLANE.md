@@ -17,6 +17,13 @@ host VAS we create"* (ruling `8ecad812`, 2026-09-22) is **SUPERSEDED** by owner 
 design is §28 (the T-space). ⚠ The code still follows the 2026-09-22 ruling by default until
 `KF3_TSPACE` goes default-on (`V3_P1P2_TSPACE.md` §8, inc E).
 
+⊘ **AMENDED 2026-10-08 (OWNER_RULINGS §U, the deferred API):** a Translated channel now has a
+THIRD split point besides the `MEM_OP` invalidate of §24.2 and the T-mode bind waits: a method on a
+software subchannel bound to one of the channel's own software objects (class 5080,
+`NV50_DEFERRED_API_CLASS`), served by host-authored equivalents — the deferred TLB invalidate as a
+host GATE in the stream kayfabe writes. Design, what is real, what is refused and what is
+unverified: §29. The class itself is Translated-only; a Passthrough channel is never read.
+
 ---
 
 ## §1 — The problem this solves, stated as the measurement
@@ -1053,6 +1060,10 @@ so they leave in ONE cutover commit, each after its replacement is measured.
 
 ### §24.2 — The Translated channel (kernel CE: RM's CeUtils scrub, UVM), and why it is NOT a decoder
 
+⊘ **CORRECTED 2026-10-08 (§29):** "rewrites exactly two things" and "two splits" no longer hold —
+a software method on a subchannel bound to the channel's own 5080 object (behind
+`KF3_DEFERRED_API`) is a third split, served by host-authored actions and never forwarded.
+
 ⊘ The CPU executor decodes every method and resolves every operand through the table. The
 Translated channel does **neither**. It copies the guest's GP entries and pushbuffer segments
 into **our own** host channel and rewrites exactly two things:
@@ -1204,3 +1215,83 @@ a 4 KiB tail, so no page of it reaches the carve-out.
   arithmetic (physical) — §3 of `V3_P1P2_TSPACE.md`.
 - **Mirrors carry no window and no ring** (inc D): a twin's space holds only rows derived from the
   guest's page tables, at user privilege, bounded below the carve-out — `THE_CONSTRAINTS.md` §58.
+
+## §29 — Software methods and the deferred API on a Translated channel (OWNER_RULINGS §U)
+
+**STATUS: LIVE, 2026-10-08.** Implemented on `claude/deferred-translated-20261007`; the trigger is
+behind `KF3_DEFERRED_API=1` (default OFF until a Windows run shows it); the class admission and the
+registration controls are served unconditionally. GPU-free tests pass; the host gate's native check
+is in `kf-gr-tier` (§29.5). No Windows run has exercised any of it.
+
+### §29.1 — What the guest does `[measured: the 2026-10-05 VFIO boots 8/9/10, Windows 580.88]`
+
+- Every Windows channel's first `ENG_SW` child is a 5080 object, allocated with `paramsSize` 0;
+  no other software class is allocated. The guest's CPU-RM numbers software children per channel
+  from 1 (`ogkm-580: kernel_channel.c:3408-3453`) and names them in `SET_OBJECT` by that number
+  (`kernel_channel_gm107.c:72-82`) — runs 31-46 bind subchannel 5 to `1`.
+- Only `NV5080_CTRL_CMD_DEFERRED_API` (`0x50800101`, V1 params, 584 bytes) reaches the GSP, eight
+  times per boot, all on the kernel GR channel's object (`c1d00015/ff1fe010`), answered `NV_OK` with
+  the params echoed. The bundles are `GPU_INITIALIZE_CTX` (physAddress, `PRESERVE_CTX` clear) and
+  `GPU_PROMOTE_CTX` in the legacy `(virtAddress 0x11000.., size 0xdc300)` shape, `entryCount` 0,
+  for a USER GR TSG (`hChanClient c1d0002b.., hObject ff0e0000`), one pair per TSG. No
+  `DMA_INVALIDATE_TLB`, no `_V2`/`_INTERNAL`/`_REMOVE_API`.
+- Kayfabe runs 44/45 (2026-10-07): the kernel GR channel writes `0x200` = `0x40000002`, `0x40000003`
+  on subchannel 5 — the handles VFIO registers first — right after its 3D release and a host acquire
+  on it; kayfabe had refused both registrations (`0x56`).
+
+### §29.2 — The path, end to end
+
+| step | where | what |
+|---|---|---|
+| alloc | `kf_rm::chanlink` → `kf_qemu::defapi::admit` | 5080 under a **Translated** channel: admitted, numbered on the channel; under a **Passthrough** twin: `NV_ERR_NOT_SUPPORTED` (§U.1); other `ENG_SW` children are numbered too (observed even with x11-dispsw off) |
+| registration | `ObjectPolicy` → `kf_rm::defapi::Registry` | `0x50800101/0102/0103/0104` decoded at the guest's matrix layout (`kf_abi::defapi`, gcc + DWARF per tag); `deferred_api.c`'s checks and statuses: handle 0 / hClient / FW range `[0xc9f00000, +0x80000)` / a live handle of the client / a duplicate on the object → `0x33`; wrong size → `0x3a`; REMOVE of an absent handle → `0xffff`; kayfabe's bounds (64 per object, 256 per client, 1024 per VM) → `0x51`; the inner cmd is never checked here |
+| `SET_OBJECT` 5-7 | `kf_chan::tmode` | a non-class value on a software subchannel names a software object of the channel (`KF3_DEFERRED_API`; else ruling 4's inert bind) |
+| method | `kf_chan::host::pump` → `kf_qemu::defapi::classify` | `0x100-0x103` NOP; `0x200-0x203` looks `data` up in THAT object's table; anything else, an unknown number, a non-5080 object or an unknown handle: the channel dies by name |
+| drain | `kf_chan::swmethod::SwSuspend` | everything before the method is fenced; nothing after it is fetched until the action is done |
+| action | act thread / VA thread | §29.3 |
+| cleanup | `Registry::executed` | executed + implicit delete (or WAIT_FOR_TLB_FLUSH counted), whatever the outcome — `deferred_api.c:653-670` |
+
+### §29.3 — The eight commands
+
+| command | served as | status |
+|---|---|---|
+| `DMA_INVALIDATE_TLB` | the host GATE: an equality acquire (`ACQUIRE_SWITCH_TSG`) on the ring's own gate word, pushed behind the drain fence; the VA-manager thread walks the channel's OWN space, applies the diff (its batch ends in the host invalidate), and only then stores the payload; the runner binds what follows after it reports done. The guest's `hClientVA`/`hDeviceVA`/`hVASpace` are ignored (§U.2) | REAL (model-tested; native gate check §29.5) — never sent by Windows 580.88 |
+| `GPU_INITIALIZE_CTX` | satisfied by each target twin's own host context (ruling B: host RM created and golden-initialised it at birth); the target is the named channel, or every member of the named TSG on that engine, and must own a live context | REAL as ruling B's stub; `PRESERVE_CTX` (context migration) REFUSED |
+| `GPU_PROMOTE_CTX` | satisfied by the twin (ruling B), legacy `(virtAddress, size)` shape | REAL as ruling B's stub; `hVirtMemory` and entry lists REFUSED (no producer measured) |
+| `GPU_EVICT_CTX` | the direct path's act: target host ring(s) off the runlist, context UNBOUND | REAL |
+| `FIFO_UPDATE_CHANNEL_INFO` | — | REFUSED: no unprivileged host verb re-points a channel's USERD/GPFIFO |
+| `GR_CTXSW_ZCULL_BIND` | — | REFUSED: the direct path serves Passthrough twins only (VA identity); a T-space twin maps no guest VA |
+| `GR_CTXSW_PM_BIND` | — | REFUSED: same reason, and no PM feature |
+| `GR_CTXSW_PREEMPTION_BIND` | — | REFUSED: same reason |
+| anything else | — | `NV_ERR_INVALID_ARGUMENT`; the entry is consumed and the channel dies |
+
+### §29.4 — Why the gate is in the stream (§U.2)
+
+The doorbell is not a synchronization boundary; ordering exists only in streams kayfabe writes. The
+gate stops OUR engine at the method's position; the VA thread opens it from its own commit point
+(`kf_qemu::mem::Inbox::finish_split`, after `on_walk_ready` applied and invalidated). Nothing blocks
+on a vCPU or a worker; no completion is forged (the engine passes the acquire only after the store).
+Because T-mode binds at push, the runner also writes nothing after the method until the action is
+done, so every later operand resolves against the committed rows. The model test
+(`kf_chan::swmethod::model`) runs the real stage machine over the real authored words against a
+simulated engine and VA thread in 2000 schedules: the walk never starts before the work ordered
+before the method executed, the gate is stored only after the commit, the engine passes the acquire
+only after the store, no later work executes before the commit, and later work is bound only after
+it. A mutation that starts the action before the drain fence fails it (2026-10-08).
+
+### §29.5 — What is measured, what is inferred, what is open
+
+- **Measured (GPU-free, 2026-10-08, `cargo test`):** the matrix layout of the V1 params is the 584
+  bytes the VFIO boots carried; the VFIO bundles decode to the INITIALIZE/PROMOTE above; table
+  semantics, the gate's Inbox protocol and the model, in `crates/kf-{abi,rm,chan,qemu}`.
+- **Native:** `kf-gr-tier`'s `gate_holds_the_engine_until_released` (an unreleased gate holds a fence
+  300 ms; another thread's store releases it) and `gate_revoked_with_its_ring` — see the handoff
+  (`STATUS_AND_HANDOFF.md` §0.0) for whether it ran.
+- **Inferred, not measured:** that the GSP records kernel privilege for an RPC'd registration (no
+  dispatch depends on it); that an unknown-handle `0x200` with a 5080 bound RCs the channel on
+  hardware (F7a/F8 measured only a stray one with none bound, 2026-10-07); that Windows reads nothing
+  back from the context buffers its deferred INITIALIZE names (ruling B's reasoning was for the Linux
+  CPU-RM).
+- **Open for the owner:** ruling B applied to the deferred INITIALIZE/PROMOTE ("golden context is
+  guest-kernel-only"); `PRESERVE_CTX` (migration) has no twin equivalent; the GR ctxsw binds and
+  `FIFO_UPDATE_CHANNEL_INFO` are refused.

@@ -478,6 +478,19 @@ pub enum ChanStatement {
         /// The class.
         class: u32,
     },
+    /// ★ OWNER_RULINGS §U.1 (2026-10-07): an `NV50_DEFERRED_API_CLASS` object allocated under a
+    /// channel. The class is TRANSLATED-ONLY: the plane admits it under a Translated channel (and
+    /// records the software classID the guest gave it, so a later `SET_OBJECT` names it), refuses
+    /// it `NV_ERR_NOT_SUPPORTED` under a Passthrough twin, and declines a channel it does not run
+    /// (refused the same way). Asked BEFORE the object seat makes the graph node.
+    DeferredApiObject {
+        /// `hClient`.
+        client: u32,
+        /// The channel (`hParent`).
+        parent: u32,
+        /// The object's handle.
+        handle: u32,
+    },
     /// An object was freed (maybe one of ours).
     Free {
         /// `hClient`.
@@ -656,7 +669,14 @@ impl ChannelPolicy {
         // ★ x11-dispsw (review 2026-10-03, MEDIUM): ASKED BEFORE the boundary below, which refuses
         // three of these classes — the guest numbered the object before it asked us, refused or
         // not. Observed only: the answer is ignored and the alloc goes on exactly as before.
-        if self.display_sw_twins && OTHER_ENG_SW_CHANNEL_CLASSES.contains(&h.class) {
+        // ★ OWNER_RULINGS §U (2026-10-07): observed with the switch OFF too — a Translated channel's
+        // software numbering must follow every `ENG_SW` child (the 5080 that a later `SET_OBJECT`
+        // names by number comes after them); `GF100_DISP_SW` is one of them when it is not carried
+        // by its own statement. The 5080 itself is numbered by its own statement below.
+        if h.class != kf_abi::generated::classes::NV50_DEFERRED_API_CLASS
+            && (OTHER_ENG_SW_CHANNEL_CLASSES.contains(&h.class)
+                || (!self.display_sw_twins && h.class == GF100_DISP_SW))
+        {
             let _ = (self.sink)(ChanStatement::SoftwareObject {
                 client: h.client,
                 parent: h.parent,
@@ -673,6 +693,33 @@ impl ChannelPolicy {
             .is_permitted()
         {
             return None;
+        }
+        // ★ OWNER_RULINGS §U.1: class 5080 is Translated-only. The plane admits it (Done → the object
+        // seat makes the node) or it is refused here, before any node exists.
+        if h.class == kf_abi::generated::classes::NV50_DEFERRED_API_CLASS {
+            let st = ChanStatement::DeferredApiObject {
+                client: h.client,
+                parent: h.parent,
+                handle: h.handle,
+            };
+            return match (self.sink)(st) {
+                ChanAnswer::Done | ChanAnswer::Token(_) => None,
+                ChanAnswer::Refused { status, why } => {
+                    self.refused += 1;
+                    Some(Self::refusal(status, &why, cmd))
+                }
+                ChanAnswer::NotOurs | ChanAnswer::Deferred(_) => {
+                    self.refused += 1;
+                    Some(Self::refusal(
+                        NV_ERR_NOT_SUPPORTED,
+                        &format!(
+                            "NV50_DEFERRED_API_CLASS {:#x}:{:#x} under channel {:#x}: no Translated channel of ours (OWNER_RULINGS §U.1: Translated-only)",
+                            h.client, h.handle, h.parent
+                        ),
+                        cmd,
+                    ))
+                }
+            };
         }
         if h.class == GT200_DEBUGGER {
             let w = |p: &[u8], i: usize| {
@@ -2731,15 +2778,26 @@ mod tests {
                 delivered: Vec::new(),
             }
         };
-        // OFF: nothing is carried, the chain answers as before
+        // OFF: nothing is carried, the chain answers as before — ★ §U: the alloc is only OBSERVED
+        // (the Translated numbering follows it), never carried.
         let mut off = ChannelPolicy::new(abi, kf_abi::GuestOs::Linux, sink(&seen, &answer));
         assert!(off.respond(&alloc(&hostile)).is_none());
         assert!(
             off.defers(&alloc(&hostile)).is_none(),
             "nothing is held off"
         );
-        assert!(seen.lock().unwrap().is_empty(), "no statement off");
+        assert!(
+            seen.lock().unwrap().iter().all(|st| matches!(
+                st,
+                ChanStatement::SoftwareObject {
+                    class: GF100_DISP_SW,
+                    ..
+                }
+            )),
+            "only the observation off"
+        );
         assert_eq!((off.carried, off.refused), (0, 0));
+        seen.lock().unwrap().clear();
         let off_explicit = ChannelPolicy::new(abi, kf_abi::GuestOs::Linux, sink(&seen, &answer))
             .with_display_sw_twins(false);
         assert!(!off_explicit.display_sw_twins);
@@ -2827,15 +2885,21 @@ mod tests {
         let mut off = ChannelPolicy::new(abi, kf_abi::GuestOs::Linux, sink.clone());
         let mut on =
             ChannelPolicy::new(abi, kf_abi::GuestOs::Linux, sink).with_display_sw_twins(true);
-        for (i, class) in OTHER_ENG_SW_CHANNEL_CLASSES.into_iter().enumerate() {
+        for (i, class) in OTHER_ENG_SW_CHANNEL_CLASSES
+            .into_iter()
+            .filter(|&c| c != kf_abi::generated::classes::NV50_DEFERRED_API_CLASS)
+            .enumerate()
+        {
             let cmd = alloc(class, 0xcafe_7000 + i as u32);
             let before = seen.lock().unwrap().len();
             let off_reply = off.respond(&cmd);
+            // ★ §U: observed with the switch OFF too (the Translated numbering follows it).
             assert_eq!(
                 seen.lock().unwrap().len(),
-                before,
-                "{class:#x}: OFF says nothing"
+                before + 1,
+                "{class:#x}: OFF observes it once"
             );
+            let before = seen.lock().unwrap().len();
             let on_reply = on.respond(&cmd);
             assert_eq!(on_reply, off_reply, "{class:#x}: ON answers as OFF does");
             assert!(on.defers(&cmd).is_none(), "{class:#x}: nothing held");
@@ -2855,13 +2919,37 @@ mod tests {
             (0, 0),
             "observed, never carried or refused"
         );
-        // GF100_DISP_SW itself is NOT a SoftwareObject: it is carried by its own statement.
+        // GF100_DISP_SW itself is NOT a SoftwareObject when ON: it is carried by its own
+        // statement. OFF (§U) it is observed as one.
         let before = seen.lock().unwrap().len();
         let _ = on.respond(&alloc(GF100_DISP_SW, 0xcafe_9072));
         assert!(matches!(
             seen.lock().unwrap()[before..],
             [ChanStatement::DisplaySw { .. }]
         ));
+        let before = seen.lock().unwrap().len();
+        let _ = off.respond(&alloc(GF100_DISP_SW, 0xcafe_9073));
+        assert!(matches!(
+            seen.lock().unwrap()[before..],
+            [ChanStatement::SoftwareObject {
+                class: GF100_DISP_SW,
+                ..
+            }]
+        ));
+        // ★ §U.1: the 5080 is ASKED (its own statement), ON or OFF; a refusing plane refuses it.
+        for p in [&mut off, &mut on] {
+            let before = seen.lock().unwrap().len();
+            let r = p.respond(&alloc(0x5080, 0xcafe_5080)).expect("refused");
+            assert_eq!(r.rpc_result, 0x40, "the plane's refusal is the guest's");
+            assert_eq!(
+                seen.lock().unwrap()[before..],
+                [ChanStatement::DeferredApiObject {
+                    client: c,
+                    parent: ch,
+                    handle: 0xcafe_5080
+                }]
+            );
+        }
     }
 
     #[test]
