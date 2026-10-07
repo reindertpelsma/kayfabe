@@ -472,9 +472,13 @@ fn f3_cross_client() -> Result<(), String> {
 /// F4 — a user client registers PRIVILEGED/kernel cmds and fires them: must fail at
 /// trigger with no effect. Registration is NOT expected to check the cmd.
 fn f4_no_escalation() -> Result<(), String> {
-    let mut u = Unit::open()?;
+    // Registration half only: does a NON-ROOT client's register of a PRIVILEGED/kernel cmd
+    // succeed (source says the inner cmd is NOT checked at registration)? The trigger half
+    // (dispatch fails with the registrant's user privLevel) needs a GR/compute channel the
+    // 5080 object can be bound on; on this CE channel SET_OBJECT halts (see DF_P0), so the
+    // dispatch-time check is INFERRED from ogkm, not measured here.
+    let u = Unit::open()?;
     let d = u.alloc_5080(SUBCH_A)?;
-    u.bind(&d)?;
     let cmds = [
         ("GPU_PROMOTE_CTX", CMD_GPU_PROMOTE_CTX),
         ("GPU_INITIALIZE_CTX", CMD_GPU_INITIALIZE_CTX),
@@ -484,40 +488,22 @@ fn f4_no_escalation() -> Result<(), String> {
     let euid = euid();
     for (name, cmd) in cmds {
         let h = 0x5151_4000 + cmd;
-        let reg = u.register(&d, h, cmd, FLAGS_DELETE_IMPLICIT);
+        let reg = u.register(&d, h, cmd, FLAGS_DELETE_EXPLICIT);
         let reg_status = match &reg {
             Ok(()) => "OK".to_string(),
             Err(e) => format!("{:?}", status_of(e)),
         };
-        // Fire regardless; a registered privileged entry should fail at dispatch.
-        // The channel staying alive and the entry being consumed-with-failure is the pass.
-        let fired = if reg.is_ok() { u.fire(d.subch, h).is_ok() } else { false };
-        // After firing, is the entry gone (consumed) and did the channel survive?
-        let consumed = if reg.is_ok() {
-            match u.is_registered(&d, h) {
-                Ok(present) => {
-                    if present {
-                        let _ = u.remove(&d, h);
-                    }
-                    !present
-                }
-                Err(_) => false, // channel/object died ⇒ cannot probe
-            }
-        } else {
-            false
-        };
+        if reg.is_ok() {
+            let _ = u.remove(&d, h);
+        }
         println!(
-            "DF_F4_CMD name={name} cmd={cmd:#x} euid={euid} register={reg_status} fired_ok={fired} entry_consumed={consumed}"
+            "DF_F4_CMD name={name} cmd={cmd:#x} euid={euid} register={reg_status}"
         );
     }
-    // Did the client/channel survive the whole sequence?
-    let survived = u.alloc_5080(SUBCH_B).is_ok();
     u.free();
-    let pass = euid != 0 && survived;
     println!(
-        "DF_F4={} evidence=non-root({}) privileged-cmds-registered-and-fired channel_survived={survived}",
-        if pass { "MEASURED(see DF_F4_CMD lines)" } else { "CHECK(run as non-root)" },
-        euid != 0
+        "DF_F4={} evidence=non-root(euid={euid}) registration-of-privileged-cmds (trigger-side blocked: see DF_P0; dispatch-privilege INFERRED from ogkm)",
+        if euid != 0 { "MEASURED(registration-half; see DF_F4_CMD)" } else { "CHECK(run as non-root)" }
     );
     Ok(())
 }
@@ -688,28 +674,38 @@ fn f7a_arbitrary_handles() -> Result<(), String> {
 /// F7b — a dedicated host client per guest gives its own handle namespace: a handle
 /// that collides in client-1 registers fine in a fresh client-2.
 fn f7b_dedicated_client() -> Result<(), String> {
+    // The real question: do two independent host RM clients have independent handle
+    // namespaces, so the SAME guest-chosen H registers in each? Register one arbitrary,
+    // non-structural handle in two independent clients; both should succeed. (kf-host mints
+    // identical STRUCTURAL handles per client, so a structural handle collides in both — a
+    // test artifact, reported separately, not evidence against independence.)
+    let shared_h = 0x4000_0000u32; // arbitrary, outside every reserved range, non-structural
     let u1 = Unit::open()?;
     let d1 = u1.alloc_5080(SUBCH_A)?;
-    // Pick a handle equal to one of u1's own live resources (rejected in u1).
-    let collide = u1.ring.channel().chan;
-    let in_u1 = u1.register(&d1, collide, CMD_DMA_INVALIDATE_TLB, FLAGS_DELETE_EXPLICIT);
-    let u1_reject = in_u1.is_err();
-    if in_u1.is_ok() {
-        let _ = u1.remove(&d1, collide);
-    }
-    // Fresh client-2: the same numeric handle is just a number in a different namespace.
+    let in_u1 = u1.register(&d1, shared_h, CMD_DMA_INVALIDATE_TLB, FLAGS_DELETE_EXPLICIT);
+    let u1_ok = in_u1.is_ok();
+    // Keep u1's entry LIVE while client-2 registers the same number, to show no cross-client
+    // namespace conflict (independent btrees, independent handle tables).
     let u2 = Unit::open()?;
     let d2 = u2.alloc_5080(SUBCH_A)?;
-    let in_u2 = u2.register(&d2, collide, CMD_DMA_INVALIDATE_TLB, FLAGS_DELETE_EXPLICIT);
+    let in_u2 = u2.register(&d2, shared_h, CMD_DMA_INVALIDATE_TLB, FLAGS_DELETE_EXPLICIT);
     let u2_ok = in_u2.is_ok();
+    // The structural-collision artifact, for completeness.
+    let structural = u1.ring.channel().chan;
+    let struct_reject = u1
+        .register(&d1, structural, CMD_DMA_INVALIDATE_TLB, FLAGS_DELETE_EXPLICIT)
+        .is_err();
+    if in_u1.is_ok() {
+        let _ = u1.remove(&d1, shared_h);
+    }
     if in_u2.is_ok() {
-        let _ = u2.remove(&d2, collide);
+        let _ = u2.remove(&d2, shared_h);
     }
     u1.free();
     u2.free();
     println!(
-        "DF_F7B={} evidence=handle={collide:#x} rejected_in_owning_client={u1_reject} accepted_in_dedicated_client={u2_ok}",
-        if u2_ok { "MEASURED(dedicated-namespace-registers-it)" } else { "CHECK" }
+        "DF_F7B={} evidence=handle={shared_h:#x} registered_in_client1={u1_ok} registered_in_client2_concurrently={u2_ok} (artifact: own-structural-handle rejected={struct_reject})",
+        if u1_ok && u2_ok { "MEASURED(independent-namespaces)" } else { "CHECK" }
     );
     Ok(())
 }
