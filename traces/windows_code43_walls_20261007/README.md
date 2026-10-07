@@ -1591,7 +1591,7 @@ only, vfio-1 traced reads too. The runner killed both at its 256 MiB trace bound
 window: vfio-1 holds **2932** writes of the GSP command-queue head (BAR0 `0x110c00`, one per RPC
 request). No new VFIO boot was needed.
 
-**Alignment (measured; the tool is [`mmio_window.py`](../../scripts/bench/windows/mmio_window.py)).**
+**Alignment (measured in vfio-1 and vfio-10, both booted 2026-10-05 on the RTX 4070; the tool is [`mmio_window.py`](../../scripts/bench/windows/mmio_window.py)).**
 Head ordinal N (1-based) in vfio-1 is RPC index N of vfio-10's observer (`abort_point.py`'s
 indexing). In vfio-10, `0x0070` allocations at 2848, 2876 and 2930 are each followed by a
 `0x9096` allocation. In vfio-1, the only three ~16 400-line BAR3 bursts of heads 2840-2932 fall in
@@ -1601,7 +1601,7 @@ Per-interval summary of heads 2300-2932: [vfio1-mmio-2300-2932-summary.txt](vfio
 every non-display BAR0 register read or written there, with up to 8 values:
 [vfio1-mmio-2300-2932-registers.txt](vfio1-mmio-2300-2932-registers.txt).
 
-**The window (measured, vfio-1, between head 2861 — `GPFIFO_SCHEDULE` of c1d00021's paging channel
+**The window (measured in vfio-1, 2026-10-05, RTX 4070, between head 2861 — `GPFIFO_SCHEDULE` of c1d00021's paging channel
 ff04000a — and head 2862).** 356 accesses, all of them the RPC handshake: 175 reads of `0x110094`,
 174 reads of `0xb81010`, and 7 interrupt-tree writes (`0xb81208/210/408/410/608/610`). There is no
 other BAR0 read, no doorbell (`0xbb0090`), no PTIMER read (`0x9400`, `0xbb0080`), and no BAR1 or BAR3
@@ -1610,7 +1610,7 @@ In the interval before the schedule (after head 2860, `SET_CHANNEL_PROPERTIES`),
 4 KiB page through BAR3, writes two PTE words and issues one MMU invalidate. In the interval before
 that (after head 2859, the `0xc7b5` alloc), it writes 410 bytes through BAR3 with 6 invalidates.
 
-**The kernel-channel doorbells (measured).** In heads 2300-2932 the usermode doorbell (`0xbb0090`)
+**The kernel-channel doorbells (measured in vfio-1, 2026-10-05).** In heads 2300-2932 the usermode doorbell (`0xbb0090`)
 is written twice, both after head 2567 (values `0x3`/`0xe`/`0x10002`/`0x1000d` across the run): the
 two kernel channels' first work, which matches kayfabe's first rings near VFIO 2566.
 
@@ -1664,7 +1664,7 @@ paging channel's window, which is closed by the first `Free`.
   values. Supported if it contains a read that neither has. That read is then the candidate, to be
   compared with OGKM and the VFIO value.
 - *Hypothesis 2 (the new channel's USERD or error notifier holds a state Windows rejects).* The dump
-  is a measurement, not a test. Hypothesis 2 is weakened if USERD shows `GP_PUT = GP_GET = 0` with
+  (taken in run36, 2026-10-07) is a measurement, not a test. Hypothesis 2 is weakened if USERD shows `GP_PUT = GP_GET = 0` with
   nothing else written and the error notifier's `status` is 0. Before any change it would have to be
   compared with what OGKM's GSP-RM writes at allocation or schedule time.
 - *Prediction:* the abort stays at VFIO 2861 (the run changes no answer). If it moves, the trap's
