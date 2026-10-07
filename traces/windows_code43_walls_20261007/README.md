@@ -1780,3 +1780,77 @@ past VFIO 2861: the next RPCs would be the THERMAL legacy queries `0x2080852e`/`
 `0x2080852a`, which kayfabe would then refuse or answer, or something later. It is **weakened** if
 the answers are logged and the abort stays at VFIO 2861. If the abort moves EARLIER, a zero answer
 broke something the refusal did not, and the run names it. *Prediction:* the abort moves past 2861.
+
+### Run37 result (DIAGNOSTIC): StartDevice gets past the paging channel; the guest then bugchecks 0x119 on a command submission
+
+Product/QEMU fd636c98eff3b4998e32dd8e42b3085d7cc80fab, `kf3-bins/fd636c98`, flags as run36 plus
+`KF3_DIAG_ZERO_OK=1`; started 2026-10-07 16:22 UTC. [command](run37-command.json),
+[trace](run37-qemu.log.gz), [requests](run37-requests.log) (`DIAG-ZERO-OK`, refusals, windows),
+[gates and build](run37-gates-build.txt) (9/9, 11/11 USER births), [native oracle](gr-tier-native-run37.log)
+(GR tier PASS, Xid count 5 before and after), [controller error](run37-controller-error.txt),
+[unit journal](run37-failure-journal.txt), [host after](run37-host-after.txt). Host afterwards: no
+QEMU, NBD disconnected, display enabled, P8, Xid count unchanged (5).
+
+**Measured (seen in run37 at fd636c98):**
+- All 13 listed controls were answered `NV_OK` with zeroed params (14 answers: `0x2080a801` twice),
+  logged `DIAG-ZERO-OK #1-#14`.
+- **The abort moved.** After the paging channel's `GPFIFO_SCHEDULE` (VFIO 2861), Windows went on.
+  It sent the THERMAL legacy queries `0x2080852e` and `0x2080852a`. kayfabe left both unserviced,
+  and Windows tolerated that; `0x20808530` was not sent. Windows then created clients c1d00021-c1d00026
+  (vfio-10's c1d00022-c1d00027), a second VA space with `SET_DEFAULT_VASPACE`, a TSG copy channel
+  (token 0x80c: two submissions retired by the engine, `GP_GET` 2, CE2 relays #4-#5) and a TSG GR
+  channel (token 0xd: GR tier admitted, `GPU_PROMOTE_CTX` satisfied, never rung). 620 RPCs, **no
+  teardown**. The last RPC is the `0x9096` alloc of c1d00026, which is **VFIO 2931**. Aligned with
+  `difflib`, the 74 RPCs from VFIO 2857 match vfio-10, except six extra `0x00730245` display
+  controls and the missing `0x20808530`.
+- Refusals in that stretch that vfio-10 answers with status 0: `0x2080852e` and `0x2080852a`;
+  `NV2080_CTRL_CMD_INTERNAL_GR_GET_FECS_TRACE_HW_ENABLE` `0x20800a38` (4×, one after each GR object
+  alloc; OGKM 580.65.06 `ctrl2080internal.h`); `0x20801111`, the software-runlist control that the
+  `KF3_SW_RUNLIST_PROBE` experiment only observes; and the second `FERMI_VASPACE_A`
+  `COPY_SERVER_RESERVED_PDES` (`0x90f10106`) on c1d00021's new VA space. kayfabe refuses that last
+  one with 0x56; vfio-10 answers OK for the same second range on c1d00022.
+- QEMU exited (status 0) 22 s after the boundary start, because the guest reset and the runner's
+  `-action reboot=shutdown` turns a reset into an exit. The guest agent never answered, and the
+  controller recorded `FAILED … Guest agent did not become ready` (the unit itself succeeded).
+- **Crash dump header** in the run's `pagefile.sys`, read through the read-only NBD procedure. The
+  baseline's and run36's pagefile headers are all zero. `PAGEDU64`, build 26100,
+  **BugCheckCode `0x119`** (VIDEO_SCHEDULER_INTERNAL_ERROR), parameters `0x2`, `0xC000000D`
+  (STATUS_INVALID_PARAMETER), `0xffff968132ef72f0`, `0xffffbd87208840a0`.
+- vfio-1's doorbells in the same stretch (`0xbb0090`): `0x1000d` after head 2895, `0xe` after 2917
+  and `0x1000d` after 2918. The first WDDM submissions come with ~1 MB of BAR1 writes and 2068 MMU
+  invalidates after head 2918.
+
+**Falsifier outcome: hypothesis 5 supported.** With zero `NV_OK` answers to the 13 refused
+power/thermal/perf/clock queries, the teardown after VFIO 2861 does not happen. *Not measured:*
+which of the 13 is needed. They were not bisected.
+
+**Inferred, not tested:**
+- Bugcheck 0x119 means dxgkrnl's scheduler was running, so StartDevice completed this time. By
+  Microsoft's documentation, parameter 1 = 2 is "the driver failed upon the submission of a
+  command", and parameter 2 is the driver's status. That reading is quoted from memory and was not
+  re-checked in this session.
+- Ranked candidates for the submission failure:
+  1. *(Highest.)* The software-runlist control `0x20801111`. vfio-10 sends it at 2914 for the new GR
+     channel, which gets no `GPFIFO_SCHEDULE`. In vfio-1 the GR channel (chid 0xe) is rung after
+     2917. kayfabe leaves `0x20801111` unserviced, so that channel is never on a runlist the guest
+     driver believes in.
+  2. The refused second `COPY_SERVER_RESERVED_PDES`.
+  3. `INTERNAL_GR_GET_FECS_TRACE_HW_ENABLE` unserviced.
+
+## Stop: an owner decision is needed (2026-10-07, after run37)
+
+Runs 36-37 used 2 of the 10 runs this loop allows. The stop condition "an owner decision is needed"
+holds. Run38 is not taken.
+1. **The 13 power/thermal/perf/clock queries** (`diagzero.rs` lists them with names and sizes). §S
+   makes power, thermal and P-state host-owned stubs: "refused or reported absent, never filled
+   with invented values". Measured: refusal stops StartDevice at VFIO 2861, and zero-filled
+   `NV_OK` lets it complete. Nine of the 13 have no public layout (closed legacy GSS or `0x2081`
+   controls), so "reported absent" cannot be derived from OGKM for them. Options: (a) zero `NV_OK`
+   as the stub's "reported absent" for these queries; (b) ask the host's own GSP with
+   kayfabe-authored params (impossible for the closed layouts without capturing them); (c) keep
+   refusing, which leaves Code43. A bisect (1-4 diagnostic runs) would shrink the set before the
+   decision.
+2. **The next wall is design work, not a single answer.** The guest's software runlist
+   (`0x20801111`), plus the second reserved-PDE copy and the FECS-trace query, stand between
+   StartDevice and the first successful WDDM submission. Today the software runlist is an
+   observation-only experiment (`KF3_SW_RUNLIST_PROBE`).

@@ -11,6 +11,22 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-07
 
+**Runs 36-37, 2026-10-07 (branch `claude/code43-trace-20261007`). This answers the next
+paragraph's "proposed bounded BAR0 trace run", which the owner approved (`OWNER_RULINGS.md` §S
+exception).** No boot was needed for the reference: vfio-1's MMIO trace aligns with vfio-10's RPC
+index and shows only the RPC handshake after the paging channel's `GPFIFO_SCHEDULE` (VFIO 2861).
+DIAGNOSTIC run36 at 68c5879f (`KF3_BAR0_TRACE`, default off) shows the same in kayfabe. The
+window before the first `Free` holds no BAR0 read at all, USERD is zero and no error notifier is
+declared, so hypotheses 1 and 2 are out. Abort unchanged. DIAGNOSTIC run37 at fd636c98
+(`KF3_DIAG_ZERO_OK`, default off) answers 13 refused power/thermal/perf/clock queries with zero
+`NV_OK`. **StartDevice then gets past VFIO 2861 to VFIO 2931**, and the guest **bugchecks 0x119**
+(VIDEO_SCHEDULER_INTERNAL_ERROR, parameters 2 and `0xC000000D`, read from the run's pagefile
+header) on its first command submission. Top candidate for the next wall: the unserviced
+software-runlist control `0x20801111`. **Stopped for an owner decision:** how §S's power/thermal
+stub answers these queries (nine have no public layout), and the software-runlist design. Host
+healthy after both runs (Xid 5 unchanged).
+[Runs 36-37 and the stop](../traces/windows_code43_walls_20261007/README.md#stop-an-owner-decision-is-needed-2026-10-07-after-run37).
+
 **Runs 34-35, 2026-10-07 (branch `claude/code43-lat-20261007`; answers the next paragraph's "top
 hypothesis", which run34 falsified).** Run34 at 0c74f4fc answers `0x0080170e` from the host's own
 `FIFO_GET_LATENCY_BUFFER_SIZE` (realize-time, per advertised engine; the rows equal vfio-10's) and
