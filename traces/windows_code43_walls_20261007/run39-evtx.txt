@@ -1,0 +1,1 @@
+System.evtx of boundary-kayfabe-39 (read-only NBD via recover_bugcheck.py); display-driver events since 2026-10-07 16:56:41

@@ -52,9 +52,9 @@ pub const DIAG_ZERO_OK: &[(u32, &str)] = &[
 /// ★ BISECT (2026-10-07; `traces/windows_code43_walls_20261007/README.md`, "Bisect").
 /// The subset of [`DIAG_ZERO_OK`] this build answers. Run38 answered the three controls Windows
 /// sends right before it creates the paging channel (`0x2080a801`, `0x2081010d`, `0x2080a630`;
-/// run36 RPCs 520-522, vfio-10 2834-2836) and the abort moved past VFIO 2861. Run39: `0x2080a801`
-/// alone (both of its occurrences, run36 RPCs 152 and 520).
-pub const BISECT_STEP: &[u32] = &[0x2080_a801];
+/// run36 RPCs 520-522, vfio-10 2834-2836) and the abort moved past VFIO 2861. Run39 answered
+/// `0x2080a801` alone and the abort stayed at 2861. Run40: `0x2080a630` alone.
+pub const BISECT_STEP: &[u32] = &[0x2080_a630];
 
 /// Whether `KF3_DIAG_ZERO_OK=1` is set (read once).
 #[must_use]

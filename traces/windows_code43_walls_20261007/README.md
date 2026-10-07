@@ -1971,3 +1971,35 @@ No answer changes besides the bisect.
   T-space resolver instead.
 - *Prediction:* the abort moves past 2861 (`0x2080a801` is the one control of the trio sent both
   early and late).
+
+### Run39 result: `0x2080a801` alone does not pass VFIO 2861 (H-a801 falsified)
+
+Product/QEMU 7eb96b9885199438fa17e12ffe47aee42d1093a9, `kf3-bins/7eb96b98`, flags as run38 plus
+`KF3_MAPLOG=1`; started 2026-10-07 16:56 UTC. [command](run39-command.json), [trace](run39-qemu.log.gz),
+[requests](run39-requests.log), [status](run39-status.json), [unit result](run39-unit-result.txt),
+[gates, oracle and build](run39-gates-build.txt) (9/9, 11/11 USER births, GR tier PASS, Xid 5 before
+and after; [oracle log](gr-tier-native-run39.log)), [bugcheck header](run39-bugcheck.json),
+[Windows events](run39-evtx.txt), [host after](run39-host-after.txt). Host afterwards: no QEMU, NBD
+disconnected, display enabled, P8, Xid 5 (unchanged).
+
+**Measured (run39 at 7eb96b98, 2026-10-07):** `DIAG-ZERO-OK` answers `0x2080a801` twice and nothing
+else. `abort_point.py`: rpcs=858, teardown_at=544, last `fn76/a06f0103` (`GPFIFO_SCHEDULE` of the
+paging channel) result 0: **the abort is back at VFIO 2861**, as in run36. After 92 s:
+ConfigManagerErrorCode 43, nvidia-smi exit 9. No bugcheck (pagefile header all zero), no display
+event in the System log. The copy channel of run38 is never reached, so the maplog and the new
+death message measure nothing this run.
+
+**Falsifier outcome: H-a801 falsified.** With run38: `0x2081010d` or `0x2080a630` is needed.
+
+## Bisect step 3 (run40 setup)
+
+`BISECT_STEP = [0x2080a630]` (PMGR legacy, 1160 B), chosen over `0x2081010d` because the stage
+that fails is the power/thermal one and PMGR is the power manager (inferred; a coin-toss guard:
+whichever singleton is tried, one more run settles the other). Everything else as run39
+(`KF3_MAPLOG` stays on for the copy-channel death if the abort moves).
+
+**Falsifiers, stated before run40.**
+- *H-a630: `0x2080a630` alone is the needed answer.* Supported if the abort moves past VFIO 2861.
+  Falsified if it stays: then `0x2081010d` is needed (alone or with one of the other two), and
+  step 4 answers `0x2081010d` alone.
+- *Placement (a reading of run40, 2026-10-07, not a test):* as stated for run39.

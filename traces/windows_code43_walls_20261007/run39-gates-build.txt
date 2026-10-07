@@ -1,0 +1,13 @@
+RUN39_BUILD_START 2026-10-07T18:55:12+02:00
+7eb96b988 Record run38 (late trio passes VFIO 2861; PDE copy served; TDR on a dead kernel copy channel); set up run39
+DIRTY=0
+V3_GATES_SUMMARY pass=9 fail=0
+V3_GATES_BIRTHS births=11 user=11 refused=0 ok=1
+V3_GATES_EXIT pass=9 fail=0 births_ok=1 2026-10-07T18:55:20+02:00
+XID_BEFORE=5
+GR_TIER_VERDICT=PASS
+ORACLE_RC=0
+XID_AFTER=5
+[3/4] Linking target qemu-system-x86_64
+KF3_BUILT /var/lib/kf-windows-20261005/kf3-bins/7eb96b98/qemu-system-x86_64 rev=7eb96b98 mtime=2026-10-07 18:55:35.085299411 +0200 (shared build dir /var/lib/kf-windows-20261005/qemu-build-kf3)
+RUN39_BUILD_EXIT 0 2026-10-07T18:55:35+02:00
