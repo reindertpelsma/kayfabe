@@ -78,12 +78,18 @@ pub const PARAMS_SIZE: usize = 4;
 pub enum RcRecovery {
     /// No robust-channel recovery is performed on the VM's behalf.
     Disabled,
+    /// ⚠ DIAGNOSTIC ONLY (`KF3_RC_RECOVERY_ENABLED_DIAG=1`, default off): `ENABLED` is reported and
+    /// accepted although kayfabe performs NO per-VM robust-channel recovery and nothing reaches the
+    /// host. It exists only to measure how far Windows StartDevice gets past `SET_RC_RECOVERY`
+    /// (owner request, 2026-10-07, run26). It is a known-false answer and must not be merged.
+    EnabledDiagnostic,
 }
 
 impl RcRecovery {
     fn wire(self) -> u32 {
         match self {
             RcRecovery::Disabled => RC_RECOVERY_DISABLED,
+            RcRecovery::EnabledDiagnostic => RC_RECOVERY_ENABLED,
         }
     }
 }
@@ -93,7 +99,9 @@ impl RcRecovery {
 pub struct VfGuestPolicy {
     driver: kf_abi::versions::DriverAbiTable,
     rc: RcRecovery,
-    /// `SET_RC_RECOVERY(DISABLED)` accepted.
+    /// ⚠ DIAGNOSTIC: accept and report `ENABLED` ([`RcRecovery::EnabledDiagnostic`]).
+    diag_enabled: bool,
+    /// `SET_RC_RECOVERY` accepted.
     pub rc_sets: u64,
     /// `SET_RC_RECOVERY` refused (ENABLED, an unknown value, or a malformed envelope).
     pub rc_refused: u64,
@@ -106,9 +114,21 @@ impl VfGuestPolicy {
         VfGuestPolicy {
             driver,
             rc: RcRecovery::Disabled,
+            diag_enabled: false,
             rc_sets: 0,
             rc_refused: 0,
         }
+    }
+
+    /// ⚠ DIAGNOSTIC ONLY (run26): the VM starts reporting `ENABLED` (what the passthrough GSP
+    /// answered in vfio-8/9/10) and `SET_RC_RECOVERY(ENABLED)` is accepted. No recovery is
+    /// performed and nothing reaches the host; the answer is knowingly not backed by kayfabe
+    /// behaviour. Selected only by `KF3_RC_RECOVERY_ENABLED_DIAG=1` (`crate::served_chain`).
+    #[must_use]
+    pub fn with_enabled_diagnostic(mut self) -> VfGuestPolicy {
+        self.diag_enabled = true;
+        self.rc = RcRecovery::EnabledDiagnostic;
+        self
     }
 
     /// The VM's current RC-recovery setting.
@@ -145,6 +165,12 @@ impl VfGuestPolicy {
             SET_RC_RECOVERY => match u32::from_le_bytes(word) {
                 RC_RECOVERY_DISABLED => {
                     self.rc = RcRecovery::Disabled;
+                    self.rc_sets += 1;
+                    Ok(word.to_vec())
+                }
+                // ⚠ DIAGNOSTIC (run26): accepted only with the default-off flag, no effect.
+                RC_RECOVERY_ENABLED if self.diag_enabled => {
+                    self.rc = RcRecovery::EnabledDiagnostic;
                     self.rc_sets += 1;
                     Ok(word.to_vec())
                 }
@@ -303,6 +329,34 @@ mod tests {
             params_of(&mut p, &control(GET_RC_RECOVERY, &[0; 4], 4, 0)),
             Ok(RC_RECOVERY_DISABLED)
         );
+    }
+
+    /// ⚠ DIAGNOSTIC (run26): with the flag, GET reports ENABLED, SET accepts both values and
+    /// still refuses others with INVALID_ARGUMENT; without it nothing changes (tested above).
+    #[test]
+    fn diagnostic_mode_reports_and_accepts_enabled_only_when_selected() {
+        let mut p = VfGuestPolicy::new(abi()).with_enabled_diagnostic();
+        assert_eq!(
+            params_of(&mut p, &control(GET_RC_RECOVERY, &[0; 4], 4, 0)),
+            Ok(RC_RECOVERY_ENABLED)
+        );
+        assert_eq!(
+            params_of(&mut p, &control(SET_RC_RECOVERY, &1u32.to_le_bytes(), 4, 0)),
+            Ok(RC_RECOVERY_ENABLED)
+        );
+        assert_eq!(
+            params_of(&mut p, &control(SET_RC_RECOVERY, &0u32.to_le_bytes(), 4, 0)),
+            Ok(RC_RECOVERY_DISABLED)
+        );
+        assert_eq!(
+            params_of(&mut p, &control(GET_RC_RECOVERY, &[0; 4], 4, 0)),
+            Ok(RC_RECOVERY_DISABLED)
+        );
+        assert_eq!(
+            params_of(&mut p, &control(SET_RC_RECOVERY, &2u32.to_le_bytes(), 4, 0)),
+            Err(NV_ERR_INVALID_ARGUMENT)
+        );
+        assert_eq!((p.rc_sets, p.rc_refused), (2, 1));
     }
 
     /// ⊘ Hostile envelopes: a wrong `paramsSize` (short, long, zero, huge), a declared window past

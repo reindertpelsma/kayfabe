@@ -686,3 +686,19 @@ this batch and are covered by `tests/code43_startdevice_batch.rs`.
 PERF_GET_POWERSTATE (AC) is next. SYSTEM_GET_ACTIVE and IS_MODE_POSSIBLE are
 already claimed. The first refusals after those in VFIO order are 0x007302a3,
 DFP_ASSIGN_SOR and DP_AUXCH_CTRL (see the sixth repair's "left refused" list).
+
+## DIAGNOSTIC run26: RC recovery reported and accepted as ENABLED
+
+**DIAGNOSTIC, not a repair. Owner request, 2026-10-07.** The default-off flag
+`KF3_RC_RECOVERY_ENABLED_DIAG=1` (`kf_rm::vfguest::RcRecovery::EnabledDiagnostic`)
+makes GET report ENABLED, as the passthrough GSP did. SET then accepts both
+ENABLED and DISABLED, and any other value still gets 0x1f. kayfabe performs no
+per-VM recovery and nothing reaches the host, so ENABLED is knowingly unbacked.
+With the flag off, behaviour is unchanged. The runner adds the flag only with
+`pc_sdr_experiment.py --rc-recovery-enabled-diag`, and records it in
+`command.json`. This setting must not be merged turned on.
+
+**Falsifier, stated before the run:** the 2026-10-07 batch (class-0x78 edges,
+NV0073 events, power state) is worth keeping only if the abort moves well past
+VFIO index 2518. That index is the first 0x78 allocation plus its
+EVENT_SET_NOTIFICATION.
