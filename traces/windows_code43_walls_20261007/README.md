@@ -359,7 +359,7 @@ host display remains enabled. This gates the default-off experimental guest
 matching context. Promotion accepts decoder entryCount0 only; codec/CE work
 remains refused before host PB writes.
 
-Guest increment validation:111 QEMU tests passed; Clippy new0. The existing
+Guest increment validation:101 QEMU tests passed; Clippy new0. The existing
 bounded inline observer also records up to16 combined promotion/property
 requests:0080170f requires an exact16-byte inline scalar payload, never follows
 an address, and changes no reply. Two observer tests pass, including truncated/
@@ -418,4 +418,14 @@ active. This gates experimental KF3_KERNEL_NVENC_CTX=1 with private T-space;
 matching owned-context checks and refusal of all codec/CE submissions are shared
 with the decoder path. Windows run23 pending.
 
-NVENC guest increment:111 QEMU tests passed; Clippy new0.
+NVENC guest increment:101 QEMU tests passed; Clippy new0.
+
+## Native OFA context increment (guest path not enabled yet)
+
+The native oracle selects bounded OFA0..1 with KF_OFA_CONTEXT_INDEX.
+HostRing selects optical-flow classes from the generated family set intersected
+with this host's actual class list. The existing passthrough allocation helper
+already authors OFA's12-byte `{size, prohibitMultipleInstances, engineInstance}`
+(`nvos.h:3011-3016`); decoder and OFA have identical scalar layouts. No guest
+address/parameter is forwarded and every nonempty public submission refuses.
+Channel tests87 pass, native oracle compiles, Clippy new0. Hardware OFA pending.

@@ -401,18 +401,21 @@ impl HostRing {
             live: VecDeque::new(),
         };
         let tail = (|| {
+            use kf_chip::classes::Kind;
             let video = kf_abi::submit::nvdec_index_of_engine_type(engine)
-                .map(|i| (i, false))
-                .or_else(|| kf_abi::submit::nvenc_index_of_engine_type(engine).map(|i| (i, true)));
-            if let Some((index, encode)) = video {
+                .map(|i| (i, Kind::VideoDecoder))
+                .or_else(|| {
+                    kf_abi::submit::nvenc_index_of_engine_type(engine)
+                        .map(|i| (i, Kind::VideoEncoder))
+                })
+                .or_else(|| {
+                    kf_abi::submit::ofa_index_of_engine_type(engine).map(|i| (i, Kind::OpticalFlow))
+                });
+            if let Some((index, kind)) = video {
                 let (arch, imp, _) = rm.arch_info();
                 let family = kf_chip::Family::from_arch(arch, imp)
                     .map_err(|e| format!("video family: {e:?}"))?;
-                let classes = if encode {
-                    family.classes().video_encoder
-                } else {
-                    family.classes().video_decoder
-                };
+                let classes = family.classes().of_kind(kind);
                 let class = classes
                     .iter()
                     .rev()

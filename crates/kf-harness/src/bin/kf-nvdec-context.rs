@@ -20,13 +20,21 @@ fn run() -> Result<(), String> {
     let space = rm
         .alloc_vaspace_bare()
         .map_err(|e| format!("space: {e:?}"))?;
-    let engine = match std::env::var("KF_NVENC_CONTEXT_INDEX") {
-        Ok(s) => s
+    let nvenc = std::env::var("KF_NVENC_CONTEXT_INDEX").ok();
+    let ofa = std::env::var("KF_OFA_CONTEXT_INDEX").ok();
+    let engine = match (nvenc, ofa) {
+        (Some(s), None) => s
             .parse::<u32>()
             .ok()
             .and_then(kf_abi::submit::engine_type_nvenc)
             .ok_or("KF_NVENC_CONTEXT_INDEX must select NVENC0..3")?,
-        Err(_) => kf_abi::submit::engine_type_nvdec(0).ok_or("NVDEC0 engine")?,
+        (None, Some(s)) => s
+            .parse::<u32>()
+            .ok()
+            .and_then(kf_abi::submit::engine_type_ofa)
+            .ok_or("KF_OFA_CONTEXT_INDEX must select OFA0..1")?,
+        (None, None) => kf_abi::submit::engine_type_nvdec(0).ok_or("NVDEC0 engine")?,
+        _ => return Err("select one video engine kind".into()),
     };
     let mut ring = HostRing::on_engine(&rm, space, engine)?;
     println!(
