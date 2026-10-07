@@ -34,6 +34,7 @@ pub mod rmrpc;
 pub mod rpc;
 pub mod staticinfo;
 pub mod sticky;
+pub mod sw_runlist_host;
 pub mod sw_runlist_probe;
 pub mod sweep;
 pub mod sysmembar;
@@ -487,6 +488,18 @@ pub fn served_chain(
     // FECS-trace query is answered "disabled" (`fecstrace.rs`).
     chain.push(Box::new(hoststub::HostStubPolicy::new(driver)));
     chain.push(Box::new(fecstrace::FecsTracePolicy::new(driver)));
+    // ⚠ AWAITING OWNER CONFIRMATION (default off): the software-runlist submit as host-owned
+    // scheduling, option (b) — `sw_runlist_host.rs`. kf-qemu opens every kernel channel at birth
+    // under the same flag.
+    if sw_runlist_host::enabled() {
+        chain.push(Box::new(sw_runlist_host::SwRunlistHostOwnedPolicy::new(
+            driver,
+        )));
+        eprintln!(
+            "kf-rm: {}=1: software-runlist submits answered NV_OK and ignored; kernel channels scheduled at birth — AWAITING OWNER CONFIRMATION",
+            sw_runlist_host::FLAG
+        );
+    }
     if std::env::var("KF3_MEMORY_LIST_PROBE").as_deref() == Ok("1")
         && let Some(policy) = objects.take()
     {

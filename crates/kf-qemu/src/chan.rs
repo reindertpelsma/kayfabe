@@ -773,6 +773,17 @@ fn shadow_windows(carve: u64, ram_len: Option<u64>) -> Option<kf_chan::tspace_un
 /// `KF3_TSHADOW=1`, which runs the census with the shadow): every Translated channel counts what it
 /// fetches and dumps one `TCENSUS` line at free. Default OFF; read once. Count-only: nothing the
 /// rewriter emits changes.
+/// ⚠ AWAITING OWNER CONFIRMATION (default off, `KF3_SW_RUNLIST_HOST_OWNED=1`): software-runlist
+/// option (b), host-owned scheduling (`kf_rm::sw_runlist_host`). A Translated (kernel) channel's
+/// host ring is scheduled on the host at birth already (`kf_chan::host`); with the flag on, the
+/// guest-side gate is opened at birth too, so the channel runs whether or not the guest ever
+/// schedules it (Windows schedules its second graphics TSG only through `0x20801111`). The guest's
+/// own `GPFIFO_SCHEDULE(false)`, STOP and EVICT still close it.
+fn sw_runlist_host_owned() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(kf_rm::sw_runlist_host::enabled)
+}
+
 fn tcensus_on() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
@@ -4018,7 +4029,8 @@ impl ChanPlane {
                     guest_idx: idx,
                     guest_engine: engine,
                     ctx: CtxBind::default(),
-                    scheduled: false,
+                    // ⚠ Host-owned scheduling (default off, awaiting owner confirmation).
+                    scheduled: sw_runlist_host_owned(),
                     dead: None,
                     serves: 0,
                     last_put: None,
@@ -4052,7 +4064,7 @@ impl ChanPlane {
                 // transport changes — the drainer stamps RUNG and wakes a worker, as the trap did.
                 let fast = me.fast_register(idx, runlist, chid);
                 Ok(format!(
-                    "chan {:#x}:{:#x} BORN Translated: token {idx:#x} -> host {ht:#x} in {key:?} gpfifo={:#x}x{entries} userd={:?} engine={engine:#x} tsg={:x?} kernel_by={} ring_va={ring_va:#x} userd_at_birth(GP_PUT,GP_GET)={userd_at_birth:?} zeroed={zeroed}B gr_tier={gr_tier} gp_get_by_engine={} sw_subch_inert={} {fast}",
+                    "chan {:#x}:{:#x} BORN Translated: token {idx:#x} -> host {ht:#x} in {key:?} gpfifo={:#x}x{entries} userd={:?} engine={engine:#x} tsg={:x?} kernel_by={} ring_va={ring_va:#x} userd_at_birth(GP_PUT,GP_GET)={userd_at_birth:?} zeroed={zeroed}B gr_tier={gr_tier} gp_get_by_engine={} sw_subch_inert={} scheduled_at_birth={} {fast}",
                     a.client,
                     a.handle,
                     a.gpfifo_va,
@@ -4060,7 +4072,8 @@ impl ChanPlane {
                     a.tsg,
                     kernel_by(&a),
                     gr_gp_get.is_some(),
-                    gr_cfg.inert_sw_subch
+                    gr_cfg.inert_sw_subch,
+                    sw_runlist_host_owned()
                 ))
             }),
         )

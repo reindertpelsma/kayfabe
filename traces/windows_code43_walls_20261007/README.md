@@ -2420,3 +2420,22 @@ is predicted to move the GR channel's death by 19 words, not to remove it.
 - *Native:* `kf-gr-tier` PASS with the new check.
 - *Prediction:* TDR and bugcheck 0x116 recur (the channel still dies, at the software method);
   the adapter still reads OK at the first status samples.
+
+## Task B, default off: the software-runlist submit as host-owned scheduling (awaiting owner confirmation)
+
+⚠ **AWAITING OWNER CONFIRMATION.** The owner has not chosen among options (a), (b), (c) of the
+2026-10-07 stop above; the controller recommended (b) for one experiment behind a new default-off
+flag. `KF3_SW_RUNLIST_HOST_OWNED=1` (`kf_rm::sw_runlist_host`, `kf_qemu::chan`):
+- kf-rm answers the retail control `0x20801111` `NV_OK` with the 40-byte request echoed (vfio-10's
+  answer), only after the guest declared the Windows 580.88 identity of the `sw_runlist` cell, only
+  at the exact params size, never for a serialized envelope; its contents are IGNORED: no field is
+  decoded, the guest's runlist buffer is never read, nothing reaches the host.
+- kf-qemu opens every Translated (kernel) channel's guest-side gate at birth (`scheduled = true`).
+  Its host ring is already scheduled on the host at birth by kayfabe's own unprivileged
+  `GPFIFO_SCHEDULE` of its own group (`kf_chan::host` ring birth), so a kernel channel then runs
+  whether or not Windows ever schedules it; the guest's `GPFIFO_SCHEDULE(false)`, STOP and EVICT
+  still close it. The BORN line logs `scheduled_at_birth`.
+- No privileged verb, no new emulated channel, nothing forwarded from guest bytes. Windows'
+  ordering, timeslices and removals have no effect: that is the semantic for the owner to accept
+  or reject. Unit tests: identity gate, exact size, serialized and neighbour controls refused, the
+  request echoed.
