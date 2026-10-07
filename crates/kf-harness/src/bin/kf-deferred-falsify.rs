@@ -95,6 +95,8 @@ fn defer_params(h: u32, cmd: u32, flags: u32, h_vaspace: u32) -> [u8; DEFERRED_V
 struct Def {
     handle: u32,
     class_engine: u32,
+    class_id: u32,
+    engine_id: u32,
     subch: u32,
 }
 
@@ -136,7 +138,9 @@ impl Unit {
             .raw_control_native(self.ring.channel().chan, kf_host::channel::NV906F_CTRL_GET_CLASS_ENGINEID, &mut p)
             .map_err(|e| format!("class_engine_id: {e:?}"))?;
         let class_engine = u32::from_le_bytes([p[4], p[5], p[6], p[7]]);
-        Ok(Def { handle, class_engine, subch })
+        let class_id = u32::from_le_bytes([p[8], p[9], p[10], p[11]]);
+        let engine_id = u32::from_le_bytes([p[12], p[13], p[14], p[15]]);
+        Ok(Def { handle, class_engine, class_id, engine_id, subch })
     }
 
     /// Bind the object to its subchannel (SET_OBJECT), submitted and fenced once.
@@ -284,7 +288,10 @@ fn p0_positive_control() -> Result<(), String> {
     };
     println!("DF_P0_BAREFENCE empty_submit_ok={bare} bare_fence_completed={bare_fence}");
     let d = u.alloc_5080(SUBCH_A)?;
-    println!("DF_P0_CLASSENGINE object={:#x} class_engine={:#x} subch={}", d.handle, d.class_engine, d.subch);
+    println!(
+        "DF_P0_CLASSENGINE object={:#x} class_engine={:#x} class_id={:#x} engine_id={:#x} subch={}",
+        d.handle, d.class_engine, d.class_id, d.engine_id, d.subch
+    );
     // DIAGNOSTIC 2: SET_OBJECT alone (bind) — does it halt the channel?
     let bind_ok = u.bind(&d).is_ok();
     println!("DF_P0_SETOBJECT bind_fence_ok={bind_ok}");
@@ -367,7 +374,13 @@ fn f2_cross_channel() -> Result<(), String> {
         p[0..4].copy_from_slice(&handle.to_le_bytes());
         rm.raw_control_native(ring.channel().chan, kf_host::channel::NV906F_CTRL_GET_CLASS_ENGINEID, &mut p)
             .map_err(|e| format!("class_engine_id: {e:?}"))?;
-        Ok(Def { handle, class_engine: u32::from_le_bytes([p[4], p[5], p[6], p[7]]), subch })
+        Ok(Def {
+            handle,
+            class_engine: u32::from_le_bytes([p[4], p[5], p[6], p[7]]),
+            class_id: u32::from_le_bytes([p[8], p[9], p[10], p[11]]),
+            engine_id: u32::from_le_bytes([p[12], p[13], p[14], p[15]]),
+            subch,
+        })
     };
     let a = alloc(&ring_a, SUBCH_A)?;
     let b = alloc(&ring_b, SUBCH_A)?;
@@ -514,7 +527,6 @@ fn f5_garbage_handles() -> Result<(), String> {
     // A bystander channel/object in a SEPARATE client that must stay alive throughout.
     let mut victim = Unit::open()?;
     let vd = victim.alloc_5080(SUBCH_A)?;
-    victim.bind(&vd)?;
     let vh = 0x5151_5099;
     victim
         .register(&vd, vh, CMD_DMA_INVALIDATE_TLB, FLAGS_DELETE_EXPLICIT)
@@ -708,7 +720,6 @@ fn f8_no_object() -> Result<(), String> {
     // A bystander in a separate client that must stay alive.
     let mut victim = Unit::open()?;
     let vd = victim.alloc_5080(SUBCH_A)?;
-    victim.bind(&vd)?;
     let vh = 0x5151_8099;
     victim
         .register(&vd, vh, CMD_DMA_INVALIDATE_TLB, FLAGS_DELETE_EXPLICIT)
