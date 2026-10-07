@@ -72,7 +72,11 @@ and the per-client host MMU fault above.
 1. **No traps in BAR1, BAR2 or PRAMIN.**
 2. **Only WRITE traps in BAR0**, PRAMIN excepted. (Read traps in BAR0 are already shown
    unnecessary.)
-3. **Multiple concurrent workers in isolates, with multiple parallel transactions.**
+3. ⊘ *SUPERSEDED 2026-09-20 (owner): isolates were removed. v3 is one process with no isolate
+   children (`docs/OWNER_RULINGS.md` §T.13; `THE_ARCHITECTURE_v3.md:169`), and its parallel
+   work runs on worker threads in that process (`THE_ARCHITECTURE_v3.md` §1). The text below is
+   kept as written.*
+   **Multiple concurrent workers in isolates, with multiple parallel transactions.**
 4. **All traps sub-millisecond.** The PRAMIN base re-point may be longer — it is the one
    sanctioned expensive trap (`the_write_trap_contract.md`).
 5. **The new DoorbellTable wired.**
@@ -110,7 +114,10 @@ and the per-client host MMU fault above.
     files named `*_unsafe.rs`: `kf-linux-raw` (OS adapter), `kf-qemu` (the QEMU FFI) and `kf-cuda`
     (the dynamically loaded CUDA driver). Host addresses cross safe code only as the opaque
     `kf_linux_raw::HostSpan`, backend fds only as `kf_qemu::raw_unsafe::BackendFd` (`e7b7f28d`).
-14. **Isolates can have multiple threads** executing several CUDA operations in parallel, as
+14. ⊘ *SUPERSEDED 2026-09-20 (owner): isolates were removed. v3 is one process with no isolate
+    children (`docs/OWNER_RULINGS.md` §T.13; `THE_ARCHITECTURE_v3.md:169`). The text below is
+    kept as written.*
+    **Isolates can have multiple threads** executing several CUDA operations in parallel, as
     `nvkvm-pv` does.
 15. **The two vidmem worlds are disjoint** — see below.
 16. **Memslots are a SETUP thing, not a runtime one.** Reserve VMM ranges for BAR0/1/2 **once**,
@@ -324,7 +331,11 @@ and the per-client host MMU fault above.
 > pre-leg-B channel — the guest advances `GP_PUT` in its own page and RM reads ours. ⇒ the raw
 > client is **predicted not to pass** on this arm. The three ways out are tabled in
 > `SINGLE_STORE_PLAN.md`'s w745 block; picking one is B1-shaped and is the owner's.
-26. **★★★ THE OWNERSHIP SPLIT — the isolate borrows, the scratchpad holds** (owner,
+26. ⊘ *SUPERSEDED 2026-09-20 (owner): isolates were removed, and the scratchpad process with
+    them. v3 is one process with no isolate children and no scratchpad process
+    (`docs/OWNER_RULINGS.md` §T.13; `THE_ARCHITECTURE_v3.md:169`). The ownership split below
+    describes the deleted design and is kept as written.*
+    **★★★ THE OWNERSHIP SPLIT — the isolate borrows, the scratchpad holds** (owner,
     2026-09-15). *"All memory is held by the scratchpad, the userspace isolates only borrow
     from it."*
 
