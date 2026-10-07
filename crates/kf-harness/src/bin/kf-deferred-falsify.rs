@@ -7,23 +7,23 @@
 //! `traces/deferred_api_falsify_20261007/README.md`, written BEFORE the first run.
 //! Summary of the falsifiers this binary measures:
 //!
-//! - P0  POSITIVE CONTROL. A handle registered on object O and triggered by 0x200
-//!       on O's own subchannel MUST read back as executed (re-register succeeds).
-//!       No cross-* "PASS" below is trustworthy unless P0 passes: it proves the
-//!       0x200 encoding actually fires the handler on this chip/driver.
-//! - F1  cross-object, same channel/client: entry on O_A is NOT run by 0x200 on O_B.
-//! - F2  cross-channel, same client: fired from another channel's pushbuffer.
-//! - F3  cross-client: fired by a different RM client.
-//! - F4  no escalation: a user client that registers a PRIVILEGED/kernel cmd and
-//!       fires it gets a failure at trigger and no effect (run as a non-root user).
-//! - F5  garbage handles: unregistered handles never execute; record blast radius.
-//! - F6  rate/DoS: a tight EXPLICIT-delete loop vs an equivalent ordinary-method
-//!       spam, both against a baseline.
+//! - P0 POSITIVE CONTROL. A handle registered on object O and triggered by 0x200 on
+//!   O's own subchannel MUST read back as executed (re-register succeeds). No cross-*
+//!   "PASS" below is trustworthy unless P0 passes: it proves the 0x200 encoding fires
+//!   the handler on this chip/driver.
+//! - F1 cross-object, same channel/client: entry on O_A is NOT run by 0x200 on O_B.
+//! - F2 cross-channel, same client: fired from another channel's pushbuffer.
+//! - F3 cross-client: fired by a different RM client.
+//! - F4 no escalation: a user client that registers a PRIVILEGED/kernel cmd and fires
+//!   it gets a failure at trigger and no effect (run as a non-root user).
+//! - F5 garbage handles: unregistered handles never execute; record blast radius.
+//! - F6 rate/DoS: a tight EXPLICIT-delete loop vs an equivalent ordinary-method spam,
+//!   both against a baseline.
 //! - F7a arbitrary-handle registrability: which hApiHandle values a host client can
-//!       register (0, 1, 0x40000000+N, 0xffffffff, 0xcafe0000-range, own handles).
+//!   register (0, 1, 0x40000000+N, 0xffffffff, 0xcafe0000-range, own handles).
 //! - F7b a dedicated host client per guest gives its own handle namespace.
-//! - F8  a stray 0x200 (and a SET_OBJECT for class 0x5080) in a channel with NO
-//!       5080 object — the case that matters if we simply refuse 5080 on Passthrough.
+//! - F8 a stray 0x200 (and a SET_OBJECT for class 0x5080) in a channel with NO 5080
+//!   object — the case that matters if we simply refuse 5080 on Passthrough.
 //!
 //! Observable (DELETE_IMPLICIT): "executed" == re-registering the same handle now
 //! SUCCEEDS; "untouched" == re-register fails with INVALID_OBJECT_HANDLE (0x33).
@@ -271,20 +271,20 @@ fn p0_positive_control() -> Result<(), String> {
     // DIAGNOSTIC 1: a bare fence (no methods pushed) must complete — proves the ring works.
     let bare = u.submit(&[]).is_ok();
     // submit(&[]) is a no-op push; force a real bare fence instead:
-    let bare_fence = {
-        let r = match u.ring.fence(&u.rm) {
-            Ok(Ok(seq)) => {
-                let dl = std::time::Instant::now() + std::time::Duration::from_secs(5);
-                let mut done = false;
-                while std::time::Instant::now() < dl {
-                    if u.ring.completed().unwrap_or(0) == seq { done = true; break; }
-                    std::thread::sleep(std::time::Duration::from_millis(1));
+    let bare_fence = match u.ring.fence(&u.rm) {
+        Ok(Ok(seq)) => {
+            let dl = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            let mut done = false;
+            while std::time::Instant::now() < dl {
+                if u.ring.completed().unwrap_or(0) == seq {
+                    done = true;
+                    break;
                 }
-                done
+                std::thread::sleep(std::time::Duration::from_millis(1));
             }
-            _ => false,
-        };
-        r
+            done
+        }
+        _ => false,
     };
     println!("DF_P0_BAREFENCE empty_submit_ok={bare} bare_fence_completed={bare_fence}");
     let d = u.alloc_5080(SUBCH_A)?;
@@ -449,7 +449,7 @@ fn submit_on(ring: &mut HostRing, rm: &HostRm, words: &[u32]) -> Result<(), Stri
 
 /// F3 — entry on client-1's object must not be run by 0x200 on client-2's object.
 fn f3_cross_client() -> Result<(), String> {
-    let mut u1 = Unit::open()?;
+    let u1 = Unit::open()?;
     let mut u2 = Unit::open()?; // a second, independent RM client (distinct hClient)
     let a = u1.alloc_5080(SUBCH_A)?;
     let b = u2.alloc_5080(SUBCH_A)?;
@@ -511,7 +511,7 @@ fn f4_no_escalation() -> Result<(), String> {
 /// F5 — unregistered/garbage handles never execute; record blast radius.
 fn f5_garbage_handles() -> Result<(), String> {
     // A bystander channel/object in a SEPARATE client that must stay alive throughout.
-    let mut victim = Unit::open()?;
+    let victim = Unit::open()?;
     let vd = victim.alloc_5080(SUBCH_A)?;
     let vh = 0x5151_5099;
     victim
@@ -714,7 +714,7 @@ fn f7b_dedicated_client() -> Result<(), String> {
 /// object. The fallback case if we simply refuse 5080 allocs on Passthrough.
 fn f8_no_object() -> Result<(), String> {
     // A bystander in a separate client that must stay alive.
-    let mut victim = Unit::open()?;
+    let victim = Unit::open()?;
     let vd = victim.alloc_5080(SUBCH_A)?;
     let vh = 0x5151_8099;
     victim
