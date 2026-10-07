@@ -15,6 +15,11 @@ def main():
         raise SystemExit('Require --arm kayfabe')
     if any(x in sys.argv for x in ('--ilut-probe', '--tmo-surface-probe', '--olut-probe')):
         raise SystemExit('Constructor-only probes cannot be combined with real colour')
+    # ⚠ 2026-10-07: the software-runlist host-owned scheduling experiment (option (b), AWAITING OWNER
+    # CONFIRMATION; `kf_rm::sw_runlist_host`) is opt-in per run and never part of the default list.
+    sw_runlist = '--sw-runlist-host-owned' in sys.argv
+    if sw_runlist:
+        sys.argv.remove('--sw-runlist-host-owned')
     path = Path('/var/lib/kf-windows-20261005/boundary-tools/pc_boundary_experiment.py')
     expected = 'dea3b1a1693b9a60b9514b7cc3cc4f89047469008227f3c35b87ad7096973944'
     if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
@@ -24,7 +29,8 @@ def main():
     spec.loader.exec_module(module)
     # Its existing manifest records every flag and its supervisor owns teardown.
     module.FLAGS = tuple(f for f in module.FLAGS if f != 'KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE') + (
-        'KF3_DISPLAY_SDR_COLOR', 'KF3_DISPLAY_METHOD_TRACE', 'KF3_KERNEL_GR_CE', 'KF3_KERNEL_NVDEC_CTX', 'KF3_KERNEL_NVENC_CTX', 'KF3_KERNEL_OFA_CTX', 'KF3_KERNEL_GR_WORK', 'KF3_SW_SUBCH_INERT', 'KF3_TRANSLATED_CE_RELAY', 'KF3_BAR0_TRACE', 'KF3_MAPLOG')
+        'KF3_DISPLAY_SDR_COLOR', 'KF3_DISPLAY_METHOD_TRACE', 'KF3_KERNEL_GR_CE', 'KF3_KERNEL_NVDEC_CTX', 'KF3_KERNEL_NVENC_CTX', 'KF3_KERNEL_OFA_CTX', 'KF3_KERNEL_GR_WORK', 'KF3_SW_SUBCH_INERT', 'KF3_TRANSLATED_CE_RELAY', 'KF3_BAR0_TRACE', 'KF3_MAPLOG') + (
+        ('KF3_SW_RUNLIST_HOST_OWNED',) if sw_runlist else ())
     module.main()
 
 

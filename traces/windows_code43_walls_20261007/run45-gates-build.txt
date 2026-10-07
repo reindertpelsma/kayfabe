@@ -1,0 +1,19 @@
+RUN45_BUILD_START 2026-10-07T20:19:37+02:00
+452848f6f Add the default-off software-runlist host-owned scheduling flag (awaiting owner confirmation)
+DIRTY=0
+V3_GATES_SUMMARY pass=9 fail=0
+V3_GATES_BIRTHS births=11 user=11 refused=0 ok=1
+V3_GATES_EXIT pass=9 fail=0 births_ok=1 2026-10-07T20:19:47+02:00
+XID_BEFORE=5
+GR_TIER_VERDICT=PASS
+ORACLE_RC=0
+XID_AFTER=5
+[3/4] Linking target qemu-system-x86_64
+KF3_BUILT /var/lib/kf-windows-20261005/kf3-bins/452848f6/qemu-system-x86_64 rev=452848f6 mtime=2026-10-07 20:20:01.756077447 +0200 (shared build dir /var/lib/kf-windows-20261005/qemu-build-kf3)
+RUN45_BUILD_EXIT 0 2026-10-07T20:20:01+02:00
+--- kf-gate9 replay checks (windows45-gates.log)
+CHECK ver2_level_move_to_fb0_is_quiet PASS first walk 7 MAP runs (model 7, all MAP true); settled quiet true; after the move 0 runs (0 UNMAP), refusals=0 mask=0x0
+CHECK ver2_level_move_known_positive_empty_level_unmaps_all PASS 7 UNMAP of 7 placements (7 runs)
+CHECK ver3_level_move_to_fb0_is_quiet PASS first walk 7 MAP runs (model 7, all MAP true); settled quiet true; after the move 0 runs (0 UNMAP), refusals=0 mask=0x0
+CHECK ver3_level_move_known_positive_empty_level_unmaps_all PASS 7 UNMAP of 7 placements (7 runs)
+GATE9_VERDICT=PASS

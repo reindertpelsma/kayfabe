@@ -2439,3 +2439,55 @@ flag. `KF3_SW_RUNLIST_HOST_OWNED=1` (`kf_rm::sw_runlist_host`, `kf_qemu::chan`):
   ordering, timeslices and removals have no effect: that is the semantic for the owner to accept
   or reject. Unit tests: identity gate, exact size, serialized and neighbour controls refused, the
   request echoed.
+
+### Run45 result: the 3D release is executed; the GR channel now dies at the ruling-4 software method, as predicted
+
+Product/QEMU 452848f6fd4a21517e0759d70a1b762606939722, `kf3-bins/452848f6`, flags as run44 (the
+software-runlist flag is compiled in and OFF); started 2026-10-07 18:22 UTC. [command](run45-command.json),
+[trace](run45-qemu.log.gz), [requests](run45-requests.log), status samples at
+[uptime 31 s](run45-status-uptime31s.json) and [48 s](run45-status-uptime48s.json),
+[gates, replay checks, oracle and build](run45-gates-build.txt) (9/9, 11/11 USER births, GR tier PASS
+with `3d_report_semaphore_written_by_engine` (payload `0x6a0b0003` written by the 3D engine) and 25
+re-authored GR words, Xid 5 before and after; [oracle log](gr-tier-native-run45.log)),
+[controller error](run45-controller-error.txt), [unit journal](run45-failure-journal.txt),
+[bugcheck header](run45-bugcheck.json), [Windows events](run45-evtx.txt), [host after](run45-host-after.txt).
+Host afterwards: no QEMU, NBD disconnected, display enabled, P8, Xid 5 (unchanged). Host checks at
+910e9515 (code = 452848f6): kf-chan, kf-harness, kf-rm, kf-qemu tests pass, rustfmt clean,
+`ci_gates.sh` 0, Clippy 267 = base 267 (43148668), no new signature.
+
+**Measured (run45 at 452848f6, 2026-10-07):**
+- **No GR channel dies at `0x1B00`-`0x1B0C`.** Every GR death (four adapter starts this run) is
+  `InertSubchannelMethod { subch: 5, method: 0x200, value: 1 }` at GP 1, word 19 of the same 39-word
+  segment: the release and its host ACQUIRE passed the rewriter.
+- The adapter again reads OK: at uptime 31 s and 48 s, ConfigManagerErrorCode 0, `nvidia-smi`
+  exit 0 (`NVIDIA GeForce RTX 4070, 580.88`). The moved level is at `phys=0x0` again and the copy
+  channel lives (token 0x80b: 1356 GP entries, 182 submissions).
+- Then **bugcheck 0x116** again (pagefile header; parameters `0xffffc1855fb90010`,
+  `0xfffff8034c154580`, `0x0`, `0xd`); no display event in the System log; host healthy.
+- The second GR channel (c1d00024 / c1d0004d) is born each start but never gets a GP_PUT from
+  Windows (`put=None`, `fwd=0`) before the first GR channel dies.
+
+**Falsifier outcomes.** *H-sem: supported* (the death moved by exactly the predicted 19 words, to the
+predicted refusal). *Native:* PASS. *Prediction* (0x116 recurs, OK at the first samples): held.
+
+**What this leaves (read, 2026-10-07).** The wall is now the §S GR ruling's item 4 itself: Windows
+writes method `0x200` with `0x4000000N` (N = 2, 3, 5, 6, … — a counter that steps with the 3D
+release payloads) on software subchannel 5, which it bound to the non-class value 1; the ruling
+says refuse such methods by name, and the refusal kills the channel, so Windows' first GR work never
+retires and its scheduler times out. What the hardware does with a method on a software
+subchannel (a PBDMA software-method interrupt to the GSP) and what the GSP does with this one are
+not public. Changing the rule is the owner's decision (below, after run46).
+
+## Task B's one run (run46 setup)
+
+The runner gains an opt-in `--sw-runlist-host-owned` (`pc_sdr_experiment.py`; never in the default
+list) that sets `KF3_SW_RUNLIST_HOST_OWNED=1`. Same binary as run45 (452848f6).
+
+**Falsifiers, stated before run46 (a reading of the experiment, not a product claim).**
+- *B-answer:* `SW-RUNLIST HOST-OWNED` answers appear and `0x20801111` is no longer refused
+  (`abort_point.py`'s last RPC changes). Falsified if it is still refused (the identity gate or the
+  size did not apply; the log says which).
+- *B-run:* every Translated BORN line says `scheduled_at_birth=true`; whether the second GR channel
+  then fetches any work is recorded (run45: Windows never gave it a GP_PUT).
+- *Prediction:* the TDRs and the 0x116 do not stop, because the first GR channel still dies at the
+  ruling-4 software method.
