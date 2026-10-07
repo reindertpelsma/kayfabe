@@ -278,14 +278,13 @@ fn a_legal_notifier_this_device_cannot_promise_silence_for_is_refused() {
     // everything else is refused.
     //
     // ⊘ 2026-10-07: index 1 (HOTPLUG) is now accepted under owner ruling §S (the display plane
-    // posts it, `RULED_NOTIFIERS`), so this test uses index 33 (PSTATE_CHANGE), a real-GPU-work
-    // event that is still refused. The paragraph below is otherwise unchanged.
+    // posts it, `RULED_NOTIFIERS`), so this test uses index 3 (THERMAL_SW), which no list admits. The paragraph below is otherwise unchanged.
     // ⊘ Index 1 is a perfectly legal notifier and the decoder accepts it. What refuses it is
     // policy, and that is the point: widening the rule to "anything below MAXCOUNT" would
     // quietly cover fault and completion notifiers whose silence is a hang nobody can
     // attribute.
     let reg = EventSetNotification {
-        event: 33,
+        event: 3,
         action: ACTION_REPEAT,
         notify_state: false,
         info32: 0,
@@ -823,7 +822,8 @@ fn the_ruled_list_is_pinned_cited_disjoint_and_served() {
     assert_eq!(
         indices,
         vec![
-            1, 2, 4, 7, 12, 23, 24, 26, 120, 122, 43, 44, 113, 157, 158, 178, 182, 197
+            1, 2, 4, 7, 12, 23, 24, 26, 120, 122, 33, 34, 45, 139, 43, 44, 113, 157, 158, 178, 182,
+            197
         ]
     );
     let mut p = policy();
@@ -847,8 +847,8 @@ fn the_ruled_list_is_pinned_cited_disjoint_and_served() {
             n.index
         );
     }
-    // The indices the real GSP DID post in vfio-8/9/10 stay refused pending the owner's decision.
-    for ev in [33u32, 34, 45, 139] {
+    // An index on no list (THERMAL_SW, FULL_SCREEN_CHANGE) stays refused.
+    for ev in [3u32, 5] {
         assert_ne!(
             p.respond(&arming_of(ev)).expect("claimed").rpc_result,
             0,

@@ -497,6 +497,8 @@ pub enum RuledClass {
 /// REPEAT) right after the class-0x78 event allocations. Every row says which treatment applies
 /// and why.
 ///
+/// ⊘ *Superseded 2026-10-07 by owner rulings §S (33, 34, 45, 139 are now silent arms; see their
+/// rows). The paragraph below is the state before those rulings.*
 /// ⊘ *Corrected 2026-10-07 (after run27, from the VFIO GSP event exports):* the real GSP DOES post
 /// four of the armed indices in those boots: 33 PSTATE_CHANGE (x2), 34 HDCP_STATUS_CHANGE (x1),
 /// 45 AUDIO_HDCP_REQUEST (x1) and 139 RUNLIST_PREEMPT_COMPLETE (x11-x20). They stay REFUSED until
@@ -576,6 +578,41 @@ pub const RULED_NOTIFIERS: &[RuledNotifier] = &[
         class: RuledClass::NeverPostedByRealGsp,
         why: "NV2080_NOTIFIERS_RESERVED122 (ogkm-580: cl2080_notification.h:160): armed REPEAT at \
               VFIO index 2536, never posted by the real GSP in vfio-8/9/10; no OGKM producer",
+    },
+    RuledNotifier {
+        index: 33,
+        class: RuledClass::Stub,
+        why: "NV2080_NOTIFIERS_PSTATE_CHANGE (ogkm-580: cl2080_notification.h:70). Owner ruling \
+              §S, 2026-10-07: a no-op, because the host does power management. Armed silently and \
+              never posted. The real GSP posted it twice in each of vfio-8/9/10 (data 0x20, then \
+              0x100); kayfabe has no P-state of its own to report",
+    },
+    RuledNotifier {
+        index: 34,
+        class: RuledClass::Stub,
+        why: "NV2080_NOTIFIERS_HDCP_STATUS_CHANGE (ogkm-580: cl2080_notification.h:71). Owner \
+              ruling §S, 2026-10-07: there is no HDCP and none can be forwarded; armed silently, \
+              never posted. The guest is told so coherently: GET_CAPS_V2 clears \
+              KSV_SRM_VALIDATION_SUPPORTED (ogkm-580: ctrl0073system.h:51-55), DFP_GET_INFO \
+              reports single-link TMDS (DVI), NV40_I2C (DDC, where Bcaps would be read) is denied, \
+              and DFP_UPDATE_DYNAMIC_DFP_CACHE (bHdcpCapable) is refused",
+    },
+    RuledNotifier {
+        index: 45,
+        class: RuledClass::Stub,
+        why: "NV2080_NOTIFIERS_AUDIO_HDCP_REQUEST (ogkm-580: cl2080_notification.h:83). Owner \
+              ruling §S, 2026-10-07: no HDCP, no audio on the DVI-D output; armed silently, never \
+              posted. The same coherent absence as index 34 applies",
+    },
+    RuledNotifier {
+        index: 139,
+        class: RuledClass::Stub,
+        why: "NV2080_NOTIFIERS_RUNLIST_PREEMPT_COMPLETE (ogkm-580: cl2080_notification.h:178). \
+              Owner ruling §S, 2026-10-07: armed silently now. In vfio-8/9/10 the GSP posts it \
+              only after NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS with a pRunlistPreemptEvent, and \
+              the eventData is that pointer (first at VFIO index 3307, after display setup). \
+              That control is not served yet. When it is, it must be a real unprivileged preempt \
+              of the VM's own channel group, posting only the host's real completion",
     },
     RuledNotifier {
         index: 43,

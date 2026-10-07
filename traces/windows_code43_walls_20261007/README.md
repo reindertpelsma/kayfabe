@@ -888,3 +888,31 @@ are new. 33, 139, 45 and 34 are refused. Tests 1471 pass, Clippy new 0, rustfmt 
 
 **Run28 not started:** the remaining set is not fully covered by never-posted indices (33 and
 139 come first, at 2528 and 2530), so condition (c) is not met.
+
+## Eighth repair: owner rulings for 33, 34, 45 and 139; run28 setup
+
+> ⊘ *Supersedes the census section's "decision items" (2026-10-07):* the owner ruled on all
+> four (`docs/OWNER_RULINGS.md` §S). They are now silent arms (`RULED_NOTIFIERS`, class `Stub`,
+> each row citing the ruling and the VFIO evidence), so every arming Windows sends between
+> 2518 and 2566 is accepted.
+
+- **33 PSTATE_CHANGE:** a no-op (the host does power management). Armed, never posted.
+- **34 and 45 (HDCP):** armed and never posted. The guest sees no HDCP consistently:
+  GET_CAPS_V2's capsTbl is all zero, so KSV_SRM_VALIDATION_SUPPORTED is clear
+  (`ctrl0073system.h:51-55`). DFP_GET_INFO reports single-link TMDS (DVI). NV40_I2C, the DDC
+  path where Bcaps would be read, is a denied class. DFP_UPDATE_DYNAMIC_DFP_CACHE, which
+  carries `bHdcpCapable`, is unclaimed and refused (it appears at VFIO 2983).
+- **139 RUNLIST_PREEMPT_COMPLETE:** armed silently. **Preempt-type controls in the VFIO
+  sequence** (`vfio_events.py`/seqscan over vfio-10): `NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS`
+  0x2080110b with `bDisable=1`, one channel and a `pRunlistPreemptEvent` guest pointer, first
+  at **3307**. The GSP posts 139 with eventData equal to that pointer (after 3308). It re-enables
+  at 3309-3310 and bursts at 4041-4067, between display controls (0x00731359 at 4068), so the
+  bursts are not teardown frees. `GR_CTXSW_PREEMPTION_BIND` 0x20801211 first appears at 3068. No
+  `NVA06C_CTRL_CMD_PREEMPT` 0xa06c0105 is sent. **No preempt control is issued before display
+  setup (2558)**, so none is served in this batch; this is logged rather than implemented.
+
+Tests 1471 pass, Clippy new 0, rustfmt clean.
+
+**Falsifier, stated before run28:** worthwhile only if the abort reaches the NV0073 display
+controls (VFIO index ≥ 2558). The run log will list every preempt-type control Windows sends
+and its result.

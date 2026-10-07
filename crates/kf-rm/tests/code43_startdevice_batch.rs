@@ -192,8 +192,8 @@ fn the_vfio_sequence_after_the_run24_abort_point_is_served() {
         44u32, 43, 113, 120, 4, 33, 139, 157, 197, 122, 158, 2, 26, 12, 23, 24, 1, 7, 45, 34, 118,
         178, 182,
     ];
-    // Refused: the four indices the real GSP posts in vfio-8/9/10 (owner decision pending).
-    let refused = [33u32, 139, 45, 34];
+    // Owner rulings §S (2026-10-07): every index Windows arms here is accepted.
+    let refused: [u32; 0] = [];
     for ev in windows_order {
         let got = params(
             &mut *c,

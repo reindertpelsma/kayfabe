@@ -646,3 +646,15 @@ Code43 work (`traces/windows_code43_walls_20261007/README.md`, runs 25-27). It r
    event about real GPU work (copy-engine or graphics completions, runlist preemption, P-state or
    power events) is accepted only if it is derived from real host events.
 
+
+**§S applied to specific notifiers (owner, 2026-10-07, after the VFIO event census).** These
+are the four indices the real GSP does post in vfio-8/9/10:
+- **PSTATE_CHANGE (33):** a no-op. The host does power management. Arm silently, never post.
+- **HDCP_STATUS_CHANGE (34) and AUDIO_HDCP_REQUEST (45):** there is no HDCP, and none can be
+  forwarded. Arm silently and never post. Every HDCP-related answer reports it as absent or
+  unsupported, consistently.
+- **RUNLIST_PREEMPT_COMPLETE (139):** the host driver does real preemption. Arm silently for
+  now. If Windows issues the preempt control (in the VFIO boots: FIFO_DISABLE_CHANNELS with a
+  `pRunlistPreemptEvent`, first at RPC index 3307), serve it only as a real unprivileged
+  preempt of the VM's own channel group, and post the completion only from the host's real
+  completion. Never invent one.
