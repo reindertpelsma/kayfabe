@@ -2003,3 +2003,43 @@ whichever singleton is tried, one more run settles the other). Everything else a
   Falsified if it stays: then `0x2081010d` is needed (alone or with one of the other two), and
   step 4 answers `0x2081010d` alone.
 - *Placement (a reading of run40, 2026-10-07, not a test):* as stated for run39.
+
+### Run40 result: `0x2080a630` alone does not pass VFIO 2861 (H-a630 falsified)
+
+Product/QEMU c8fa737ee2bb6667480d5da3392891595cb040f7, `kf3-bins/c8fa737e`, flags as run39; started
+2026-10-07 17:00 UTC. [command](run40-command.json), [trace](run40-qemu.log.gz),
+[requests](run40-requests.log), [status](run40-status.json), [unit result](run40-unit-result.txt),
+[gates, oracle and build](run40-gates-build.txt) (9/9, 11/11 USER births, GR tier PASS, Xid 5 before
+and after; [oracle log](gr-tier-native-run40.log)), [bugcheck header](run40-bugcheck.json),
+[Windows events](run40-evtx.txt), [host after](run40-host-after.txt). Host afterwards: no QEMU, NBD
+disconnected, display enabled, P8, Xid 5 (unchanged).
+
+**Measured (run40 at c8fa737e, 2026-10-07):** one `DIAG-ZERO-OK` answer (`0x2080a630`).
+`abort_point.py`: rpcs=858, teardown_at=544, last `fn76/a06f0103` result 0 — **VFIO 2861 again**.
+After the status settled: ConfigManagerErrorCode 43, nvidia-smi exit 9. No bugcheck, no display
+event in the System log.
+
+**Falsifier outcome: H-a630 falsified.** With runs 38-39: `0x2081010d` is needed, alone or with
+`0x2080a801` or `0x2080a630`.
+
+**What the bisect already settles about the coordinator's 2026-10-07 note (four of the 13 have
+public layouts).** `0x2080205b` `PERF_SET_POWERSTATE`, `0x20802068` `PERF_GET_CURRENT_PSTATE`,
+`0x20802801` `LPWR_DIFR_CTRL` and `0x00800106` `BIF_GET_PCIE_POWER_CONTROL_MASK` are in OGKM
+580.65.06 (`ctrl2080perf.h:162`, `:885`; `ctrl2080lpwr.h:42`; `ctrl0080bif.h:137`). All four are
+early controls, and run38 passed VFIO 2861 with them unserviced (measured, run38 at 0e8a3dd5,
+2026-10-07). So they are outside the minimal set: the product stub answers none of them, and no
+zero-filled reply is shipped for them. The minimal set lies inside the late trio, whose three ids
+have no public name or layout in any local OGKM tree.
+
+## Bisect step 4 (run41 setup)
+
+`BISECT_STEP = [0x2081010d]` (the `NV2081` binary-API interface, `FINN_NV2081_BINAPI_INTERFACE_ID`
+`0x208101`, OGKM 580.65.06 `cl2081.h:425`; message 0x0d and its zero-byte params have no public
+definition).
+
+**Falsifiers, stated before run41.**
+- *H-2081010d: `0x2081010d` alone is the needed answer.* Supported if the abort moves past VFIO
+  2861. Falsified if it stays: then the minimal set is `0x2081010d` plus `0x2080a801` or
+  `0x2080a630`, and this would be the third consecutive run that does not move the abort, so the
+  loop stops (stop rule) and reports.
+- *Placement (a reading of run41, 2026-10-07, not a test):* as stated for run39.

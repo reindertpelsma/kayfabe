@@ -1,0 +1,13 @@
+RUN40_BUILD_START 2026-10-07T19:00:21+02:00
+c8fa737ee Record run39 (0x2080a801 alone stays at VFIO 2861); set up bisect step 3 (0x2080a630)
+DIRTY=0
+V3_GATES_SUMMARY pass=9 fail=0
+V3_GATES_BIRTHS births=11 user=11 refused=0 ok=1
+V3_GATES_EXIT pass=9 fail=0 births_ok=1 2026-10-07T19:00:30+02:00
+XID_BEFORE=5
+GR_TIER_VERDICT=PASS
+ORACLE_RC=0
+XID_AFTER=5
+[3/4] Linking target qemu-system-x86_64
+KF3_BUILT /var/lib/kf-windows-20261005/kf3-bins/c8fa737e/qemu-system-x86_64 rev=c8fa737e mtime=2026-10-07 19:00:44.114487386 +0200 (shared build dir /var/lib/kf-windows-20261005/qemu-build-kf3)
+RUN40_BUILD_EXIT 0 2026-10-07T19:00:44+02:00
