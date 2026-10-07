@@ -2376,8 +2376,8 @@ kf-rm tests pass, rustfmt clean, `ci_gates.sh` 0, Clippy 260 = base 260 (6003d79
 
 **Falsifier outcomes.** *H-zero: supported* (`phys=0x0`; the walk no longer empties the space; the
 copy channel does not die). *Native:* both replays and both known-positives PASS. *Prediction*
-"the TDRs do not all stop" held, but the measured cause is the GR channel's refused 3D semaphore
-release, not (shown) the unscheduled second GR channel.
+"the TDRs do not all stop" held, but the cause seen (run44 at a7a6108e, 2026-10-07) is the GR
+channel's refused 3D semaphore release, not (shown) the unscheduled second GR channel.
 
 **Inferred, not tested.** The TDR and the 0x116 follow from the dead GR channel: its semaphore is never
 released, Windows' scheduler times out, the reset re-creates the channel, it dies the same way, and
