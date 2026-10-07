@@ -52,7 +52,7 @@ impl Binding {
     }
 }
 
-/// Bounded LUT binding: direct input/output table or segmented linear tone table.
+/// Bounded LUT binding: direct or segmented (VSS) input/output table, or segmented tone table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Lut {
     /// Number of sample entries, including the endpoint, excluding four header entries.
@@ -61,7 +61,16 @@ pub struct Lut {
     pub binding: Binding,
     /// Interpolate between adjacent entries instead of taking the lower entry.
     pub interpolate: bool,
+    /// Variable segment sizes (VSS): the GPU reads per-segment sample counts from the
+    /// table's own header snapshot. ILUT segments are 64 linear, OLUT 33 logarithmic
+    /// and TMO 64 linear (`nvkms-evo3.c` `FillLUTCaps`). Never selects an extent.
+    pub segmented: bool,
 }
+
+/// Linear input segments of the source-defined VSS ILUT (`nvkms-evo3.c` `SetHDRLayerCaps`).
+pub const ILUT_SEGMENTS: u32 = 64;
+/// Logarithmic output segments of the source-defined VSS OLUT (`hasUnorm16OLUT` caps).
+pub const OLUT_SEGMENTS: u32 = 33;
 
 /// An output transform: signed coefficients stored in the class's encoded S5.14 format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,6 +79,10 @@ pub struct Output {
     pub lut: Option<Lut>,
     /// Encoded coefficients have two trailing zeros, so decode by dividing by 65536.
     pub matrix: [i32; 12],
+    /// OLUT input normalization, a UNORM32 multiplier where `u32::MAX` is 1.0.
+    /// `nvidia-drm-crtc.c` writes `0xffffffff / regamma_divisor`; NVKMS writes
+    /// `0xffffffff / 125` for its [0,125] PQ path. Bounded to [0,1] by construction.
+    pub norm: u32,
 }
 
 /// Identity matrix in the coefficient word's encoded units.
@@ -163,6 +176,7 @@ struct Control {
     mode: (u8, u8),
     direct10: u32,
     direct8: u32,
+    segmented: u32,
     interpolate: (u8, u8),
     mirror: (u8, u8),
 }
@@ -175,28 +189,49 @@ impl Control {
             mode: t.f(c, &format!("{name}_MODE"))?,
             direct10: t.v(c, &format!("{name}_MODE_DIRECT10"))?,
             direct8: t.v(c, &format!("{name}_MODE_DIRECT8"))?,
+            segmented: t.v(c, &format!("{name}_MODE_SEGMENTED"))?,
             interpolate: t.f(c, &format!("{name}_INTERPOLATE"))?,
             mirror: t.f(c, &format!("{name}_MIRROR"))?,
         })
     }
-    fn read(self, binding: Binding, read: &impl Fn(u32) -> u32) -> Result<Lut, &'static str> {
+    /// `segments` is the stage's fixed VSS segment count; it bounds only the smallest
+    /// extent. The header-declared sample sum is checked on the GPU snapshot.
+    fn read(
+        self,
+        binding: Binding,
+        segments: u32,
+        read: &impl Fn(u32) -> u32,
+    ) -> Result<Lut, &'static str> {
         let v = read(self.method);
         let mask = |(hi, lo): (u8, u8)| (u32::MAX >> (31 - hi + lo)) << lo;
         let supported = mask(self.size) | mask(self.mode) | mask(self.interpolate);
-        let entries = if get(v, self.mode) == self.direct10 {
+        if get(v, self.mirror) != 0 || v & !supported != 0 {
+            return Err("LUT mirror or reserved control bits are outside the subset");
+        }
+        let size = get(v, self.size);
+        let mode = get(v, self.mode);
+        let entries = if mode == self.direct10 {
             1025
-        } else if get(v, self.mode) == self.direct8 {
+        } else if mode == self.direct8 {
             257
+        } else if mode == self.segmented {
+            // At least one interval per segment plus the endpoint; the fixed slot caps it.
+            let entries = size.saturating_sub(4);
+            if !(segments + 1..=1025).contains(&entries) {
+                return Err("segmented LUT extent outside fixed bound");
+            }
+            entries
         } else {
-            return Err("LUT segmented mode requires a separate transfer program");
+            return Err("LUT mode is not source-defined");
         };
-        if get(v, self.size) != entries + 4 || get(v, self.mirror) != 0 || v & !supported != 0 {
-            return Err("LUT requires matching unmirrored DIRECT8 or DIRECT10 extent");
+        if size != entries + 4 {
+            return Err("LUT requires matching DIRECT8 or DIRECT10 extent");
         }
         Ok(Lut {
             entries,
             binding,
             interpolate: get(v, self.interpolate) != 0,
+            segmented: mode == self.segmented,
         })
     }
 }
@@ -218,7 +253,9 @@ pub fn input(
         return Err("nonidentity FMT is outside SDR subset");
     }
     let ctl = Control::resolve(t, c, None, "SET_ILUT_CONTROL").ok_or("missing ILUT control")?;
-    binding.map(|b| ctl.read(b, &read)).transpose()
+    binding
+        .map(|b| ctl.read(b, ILUT_SEGMENTS, &read))
+        .transpose()
 }
 
 /// An indexed inline CSC table. Fixed extents never depend on guest data.
@@ -354,13 +391,17 @@ pub fn pipeline(
         let interp = field("INTERPOLATE")?;
         let sat = field("SAT_MODE")?;
         let mask = |f: (u8, u8)| (u32::MAX >> (31 - f.0 + f.1)) << f.1;
+        // SAT_MODE of OGKM's TMO_LUT_SETTINGS_NO_CORRECTION is 2 at 580.159.04
+        // (nvkms-evo3.c:540) and 595.84, and 3 at 610.43.02 (nvkms-evo3.c:630). Both
+        // label the program "No color correction", with identical zones and weights.
         if !(69..=1029).contains(&get(ctl, size))
-            || get(ctl, sat) != 2
+            || ![2, 3].contains(&get(ctl, sat))
             || ctl & !(mask(size) | mask(interp) | mask(sat)) != 0
         {
             return Err("TMO requires bounded linear no-correction program");
         }
-        // OGKM TMO_LUT_SETTINGS_NO_CORRECTION. Other chroma correction policies refuse.
+        // The NO_CORRECTION zones and weights. No source defines the transfer of any
+        // other chroma-correction program, so those refuse rather than run unprocessed.
         for (method, fields) in [
             ("SET_TMO_LOW_INTENSITY_ZONE", vec![("END", 1280)]),
             (
@@ -409,6 +450,7 @@ pub fn pipeline(
             entries: get(ctl, size) - 4,
             binding,
             interpolate: get(ctl, interp) != 0,
+            segmented: true,
         });
     }
     Ok(p)
@@ -424,7 +466,10 @@ pub fn output(
     let a = Address::resolve(t, c, Some(head), "OLUT", 8).ok_or("missing OLUT vocabulary")?;
     let ctl = Control::resolve(t, c, Some(head), "HEAD_SET_OLUT_CONTROL")
         .ok_or("missing OLUT control")?;
-    let lut = a.read(&read)?.map(|b| ctl.read(b, &read)).transpose()?;
+    let lut = a
+        .read(&read)?
+        .map(|b| ctl.read(b, OLUT_SEGMENTS, &read))
+        .transpose()?;
     let mut matrix = IDENTITY;
     for stage in [0, 1] {
         let name = format!("HEAD_SET_OCSC{stage}CONTROL");
@@ -448,15 +493,13 @@ pub fn output(
             *v = ((word << (32 - bits)) as i32) >> (32 - bits);
         }
     }
-    if lut.is_some() {
-        let norm = t
-            .a(c, "HEAD_SET_OLUT_FP_NORM_SCALE", head)
-            .ok_or("missing OLUT normalization")?;
-        if read(norm) != u32::MAX {
-            return Err("nonunity OLUT normalization is outside SDR subset");
-        }
-    }
-    Ok(Output { lut, matrix })
+    let norm = t
+        .a(c, "HEAD_SET_OLUT_FP_NORM_SCALE", head)
+        .ok_or("missing OLUT normalization")?;
+    // The scale normalizes the OLUT's input. A bypassed OLUT keeps the earlier
+    // behavior (no scale): nouveau's clear path leaves the method unwritten (0).
+    let norm = if lut.is_some() { read(norm) } else { u32::MAX };
+    Ok(Output { lut, matrix, norm })
 }
 
 #[cfg(test)]
@@ -632,7 +675,101 @@ mod tests {
                     "mirror is not silently accepted"
                 );
                 set(&mut b, t, core, "HEAD_SET_OLUT_FP_NORM_SCALE", Some(3), 1);
-                assert!(output(t, core, 3, |m| b.get(&m).copied().unwrap_or(0)).is_err());
+                let o = output(t, core, 3, |m| b.get(&m).copied().unwrap_or(0)).unwrap();
+                assert_eq!(o.norm, 1, "the normalization reaches the GPU program");
+                if core != 0xca7d {
+                    set(&mut b, t, core, "HEAD_SET_CONTEXT_DMA_OLUT", Some(3), 0);
+                } else {
+                    set(
+                        &mut b,
+                        t,
+                        core,
+                        "HEAD_SET_SURFACE_ADDRESS_LO_OLUT",
+                        Some(3),
+                        0,
+                    );
+                }
+                let o = output(t, core, 3, |m| b.get(&m).copied().unwrap_or(0)).unwrap();
+                assert_eq!((o.lut, o.norm), (None, u32::MAX), "bypass applies no scale");
+            }
+        }
+    }
+
+    /// OGKM's own VSS programs: PQ EOTF ILUT `SIZE = 4 + 507 + 1` (`nvkms-evo3.c:4534`)
+    /// and PQ OETF OLUT `SIZE = 4 + 336 + 1` (`nvkms-evo3.c:5302`, `:5484`).
+    #[test]
+    fn segmented_tables_decode_bounded_extents_in_every_family() {
+        let segmented = |t: &ClassTable, c: u32, n: &str, size: u32, extra: u32| {
+            let v = crate::class::put(
+                1 | extra,
+                t.f(c, &format!("{n}_MODE")).unwrap(),
+                t.v(c, &format!("{n}_MODE_SEGMENTED")).unwrap(),
+            );
+            crate::class::put(v, t.f(c, &format!("{n}_SIZE")).unwrap(), size)
+        };
+        for version in ["580.65.06", "580.159.04"] {
+            let t = crate::class::for_version(version).unwrap();
+            for (win, core) in [
+                (0xc57e, 0xc57d),
+                (0xc67e, 0xc67d),
+                (0xc67e, 0xc77d),
+                (0xca7e, 0xca7d),
+            ] {
+                let mut b = HashMap::new();
+                for (i, v) in IDENTITY.iter().enumerate() {
+                    let n = format!("SET_FMT_COEFFICIENT_C{}{}", i / 4, i % 4);
+                    set(&mut b, t, win, &n, None, *v as u32);
+                }
+                bind(&mut b, t, win, None, "ILUT", 0x100);
+                bind(&mut b, t, core, Some(1), "OLUT", 0x1);
+                set(
+                    &mut b,
+                    t,
+                    core,
+                    "HEAD_SET_OLUT_FP_NORM_SCALE",
+                    Some(1),
+                    u32::MAX / 125,
+                );
+                let n = "SET_ILUT_CONTROL";
+                for (size, entries) in [(512, Some(508)), (69, Some(65)), (1029, Some(1025))]
+                    .into_iter()
+                    .chain([(68, None), (1030, None), (2047, None), (0, None)])
+                {
+                    set(&mut b, t, win, n, None, segmented(t, win, n, size, 0));
+                    let i = input(t, win, |m| b.get(&m).copied().unwrap_or(0));
+                    assert_eq!(
+                        i.ok()
+                            .flatten()
+                            .map(|l| (l.entries, l.segmented, l.interpolate)),
+                        entries.map(|e| (e, true, true)),
+                        "{version} {win:x} ILUT size {size}"
+                    );
+                }
+                set(&mut b, t, win, n, None, segmented(t, win, n, 512, 2));
+                assert!(
+                    input(t, win, |m| b.get(&m).copied().unwrap_or(0)).is_err(),
+                    "mirrored segmented ILUT has no source-defined transfer"
+                );
+                let n = "HEAD_SET_OLUT_CONTROL";
+                for (size, entries) in [(341, Some(337)), (38, Some(34)), (1029, Some(1025))]
+                    .into_iter()
+                    .chain([(37, None), (1030, None)])
+                {
+                    set(&mut b, t, core, n, Some(1), segmented(t, core, n, size, 0));
+                    let o = output(t, core, 1, |m| b.get(&m).copied().unwrap_or(0));
+                    assert_eq!(
+                        o.ok()
+                            .and_then(|o| o.lut.map(|l| (l.entries, l.segmented, o.norm))),
+                        entries.map(|e| (e, true, u32::MAX / 125)),
+                        "{version} {core:x} OLUT size {size}"
+                    );
+                }
+                let mode = t.f(core, "HEAD_SET_OLUT_CONTROL_MODE").unwrap();
+                set(&mut b, t, core, n, Some(1), crate::class::put(0, mode, 3));
+                assert!(
+                    output(t, core, 1, |m| b.get(&m).copied().unwrap_or(0)).is_err(),
+                    "mode 3 is not source-defined"
+                );
             }
         }
     }
@@ -787,15 +924,33 @@ mod tests {
                     );
                     assert!(pipeline(t, c, |m| b.get(&m).copied().unwrap_or(0), &tables).is_err());
                 }
-                set(
-                    &mut b,
-                    t,
-                    c,
-                    "SET_TMO_CONTROL",
-                    None,
-                    ctl ^ (1 << t.f(c, "SET_TMO_CONTROL_SAT_MODE").unwrap().1),
+                let sat = t.f(c, "SET_TMO_CONTROL_SAT_MODE").unwrap();
+                // 610.43.02's NO_CORRECTION SAT_MODE; 0 and 1 have no source-defined program.
+                for (mode, ok) in [(3, true), (0, false), (1, false)] {
+                    set(
+                        &mut b,
+                        t,
+                        c,
+                        "SET_TMO_CONTROL",
+                        None,
+                        crate::class::put(ctl, sat, mode),
+                    );
+                    assert_eq!(
+                        pipeline(t, c, |m| b.get(&m).copied().unwrap_or(0), &tables).is_ok(),
+                        ok,
+                        "SAT_MODE {mode}"
+                    );
+                }
+                set(&mut b, t, c, "SET_TMO_CONTROL", None, ctl);
+                let low = t.v(c, "SET_TMO_LOW_INTENSITY_VALUE").unwrap();
+                let weight = t.f(c, "SET_TMO_LOW_INTENSITY_VALUE_LIN_WEIGHT").unwrap();
+                let word = b[&low];
+                b.insert(low, crate::class::put(word, weight, 255));
+                assert!(
+                    pipeline(t, c, |m| b.get(&m).copied().unwrap_or(0), &tables).is_err(),
+                    "a chroma weight without source-defined semantics refuses"
                 );
-                assert!(pipeline(t, c, |m| b.get(&m).copied().unwrap_or(0), &tables).is_err());
+                b.insert(low, word);
             }
         }
     }

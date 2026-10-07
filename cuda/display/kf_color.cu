@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
- * Bounded SDR: RGB8888 -> DIRECT10 FP16 ILUT -> FP16 blend -> OCSC0 ->
- * DIRECT10 unsigned fixed-point OLUT -> RGB8888. LUT snapshots contain four
- * header entries and 1025 RGB/padding entries; no segmented or mirrored mode.
+ * Bounded colour: RGB8888 -> DIRECT8/DIRECT10/segmented FP16 ILUT -> FP16
+ * blend -> OCSC0 -> FP normalization -> DIRECT8/DIRECT10/segmented unsigned
+ * fixed-point OLUT -> RGB8888. LUT snapshots contain four header entries and
+ * at most 1025 RGB/padding entries; no mirrored mode.
  * All buffer extents are checked by DisplayGpu before launching any kernel.
  */
 #define DEV static __attribute__((device))
@@ -86,6 +87,47 @@ DEV float lookup(const H *lut, float x, U channel, U interpolate, U input, U ent
     return interpolate ? fa + (fb - fa) * (pos - i) : fa;
 }
 
+/* Segmented (VSS) ILUT/OLUT, nvkms-evo3.c FillLUTCaps: the FP16 ILUT has 64
+ * linear segments over [0,1]; the UNORM16 OLUT has 33 logarithmic segments,
+ * segment 0 = [0,2^-32] and segment k = [2^(k-33), 2^(k-32)], so 1.0 is the
+ * top (OGKM's PQ OETF table fits this domain; see V3_TMO_COLOR.md). Each
+ * segment holds 2^n intervals from the snapshot's 3-bit header fields. Every
+ * read is bounded by the authored extent, even for a header that
+ * kf_vss_validate rejects.
+ */
+DEV U vss_count(const H *lut, U seg) {
+    Q header = ((const Q *)lut)[seg/16];
+    return 1u << ((header >> ((seg%16)*3)) & 7);
+}
+DEV float vss_lookup(const H *lut, float x, U channel, U interpolate, U entries, U logarithmic) {
+    x = sat(x);
+    U seg;
+    float low, high;
+    if (logarithmic) {
+        for (seg = 0; seg < 32 && !(x < power2((int)seg - 32)); ++seg) {}
+        low = seg ? power2((int)seg - 33) : 0;
+        high = power2((int)seg - 32);
+    } else {
+        seg = (U)(x * 64.0f);
+        if (seg > 63) seg = 63;
+        low = seg / 64.0f;
+        high = (seg + 1) / 64.0f;
+    }
+    U base = 0;
+    for (U s = 0; s < seg; ++s) base += vss_count(lut, s);
+    U count = vss_count(lut, seg);
+    float fraction = sat((x - low) / (high - low)) * count;
+    U local = (U)fraction;
+    if (local >= count) local = count - 1;
+    U index = base + local;
+    if (entries < 2 || entries > 1025 || index >= entries - 1) return 0;
+    H a = lut[(index + 4) * 4 + channel];
+    H b = lut[(index + 5) * 4 + channel];
+    float fa = logarithmic ? a / 65536.0f : half_float(a);
+    float fb = logarithmic ? b / 65536.0f : half_float(b);
+    return interpolate ? fa + (fb - fa) * (fraction - local) : fa;
+}
+
 /* The tone table has 64 equal input zones, each with a header-defined
  * power-of-two sample count. Every actual read is independently bounded even
  * when the validation kernel has rejected a hostile header.
@@ -147,10 +189,34 @@ extern "C" __attribute__((global)) void kf_tmo_validate(const H *lut, U entries,
     }
 }
 
+/* Validate an immutable segmented ILUT/OLUT snapshot: the header's summed
+ * intervals plus the endpoint must fit the register-authored extent (OGKM's
+ * PQ programs author one spare entry beyond it). FP16 input entries must be
+ * nonnegative and at most 128.0 (0x5800): the top of the logarithmic domain
+ * before normalization, covering NVKMS's [0,125] PQ EOTF table, never an
+ * infinity or NaN. UNORM16 output entries are bounded by their format.
+ */
+extern "C" __attribute__((global)) void kf_vss_validate(const H *lut, U entries, U segments, U fp16, U *status) {
+    U i = __nvvm_read_ptx_sreg_ctaid_x()*256u + __nvvm_read_ptx_sreg_tid_x();
+    if (i == 0) {
+        U intervals = 0;
+        for (U seg = 0; seg < segments && seg < 64; ++seg) intervals += vss_count(lut, seg);
+        if (segments > 64 || entries > 1025 || intervals + 1 > entries)
+            __nvvm_atom_or_gen_i((int *)status, 8);
+    }
+    if (fp16 && i < entries && i < 1025u) {
+        for (U c = 0; c < 3; ++c) {
+            H h = lut[(i + 4) * 4 + c];
+            if ((h & 0x8000u) || h > 0x5800u)
+                __nvvm_atom_or_gen_i((int *)status, 16);
+        }
+    }
+}
+
 extern "C" __attribute__((global)) void kf_color_compose(
     const U *src, float *dst, U layout, U pitch, U bh, U x0b, U y0,
     U width, U ox, U oy, U fw, U fh, U flags, int as, int bs, int ad, int bd,
-    const H *lut, U interpolate, U input_entries, const H *tmo, U tmo_interpolate, U tmo_entries, const Pipeline *pipeline, U *status) {
+    const H *lut, U interpolate, U input_entries, U input_segmented, const H *tmo, U tmo_interpolate, U tmo_entries, const Pipeline *pipeline, U *status) {
     U row = __nvvm_read_ptx_sreg_ctaid_x();
     for (U x = __nvvm_read_ptx_sreg_tid_x(); x < width; x += 256) {
         U dx = ox + x, dy = oy + row;
@@ -176,9 +242,14 @@ extern "C" __attribute__((global)) void kf_color_compose(
         fd = fd < 0 ? 0 : (fd > 255 ? 255 : fd);
         Q d = ((Q)dy * fw + dx) * 4;
         float v[3];
+        /* A segmented ILUT takes the same UNORM10 position as DIRECT10,
+         * (component << 2) / 1024, so a 16-interval-per-segment table equals it.
+         */
         for (U c=0; c<3; ++c) {
-            U i = input_entries == 257 ? cs[c] : cs[c] << 2;
-            v[c] = lut ? lookup(lut, i / (float)(input_entries-1), c, interpolate, 1, input_entries) : fp16(cs[c]/255.0f);
+            U i = input_entries == 257 && !input_segmented ? cs[c] : cs[c] << 2;
+            if (!lut) v[c] = fp16(cs[c]/255.0f);
+            else if (input_segmented) v[c] = vss_lookup(lut, i / 1024.0f, c, interpolate, input_entries, 0);
+            else v[c] = lookup(lut, i / (float)(input_entries-1), c, interpolate, 1, input_entries);
         }
         if (pipeline) {
             matrix_apply(&pipeline->matrices[0], v, 0);
@@ -206,15 +277,22 @@ extern "C" __attribute__((global)) void kf_color_compose(
 }
 
 extern "C" __attribute__((global)) void kf_color_output(
-    const float *src, U *dst, U width, const H *lut, U interpolate, Matrix matrix, U entries) {
+    const float *src, U *dst, U width, const H *lut, U interpolate, Matrix matrix, U entries,
+    U segmented, U norm) {
     U row = __nvvm_read_ptx_sreg_ctaid_x();
+    /* HEAD_SET_OLUT_FP_NORM_SCALE: UNORM32, 0xffffffff is 1.0 (nvidia-drm
+     * writes 0xffffffff / regamma_divisor). It scales only the OLUT input.
+     */
+    float scale = norm == 0xffffffffu ? 1.0f : (float)norm / 4294967295.0f;
     for (U x = __nvvm_read_ptx_sreg_tid_x(); x < width; x += 256) {
         Q p = (Q)row * width + x;
         U packed = 0xff000000u;
         for (U c = 0; c < 3; ++c) {
             const int *m = matrix.v + c * 4;
             float v = src[p * 4] * (m[0] / 65536.0f) + src[p * 4 + 1] * (m[1] / 65536.0f) + src[p * 4 + 2] * (m[2] / 65536.0f) + m[3] / 65536.0f;
-            v = lut ? lookup(lut, v, c, interpolate, 0, entries) : sat(v);
+            if (!lut) v = sat(v);
+            else if (segmented) v = vss_lookup(lut, v * scale, c, interpolate, entries, 1);
+            else v = lookup(lut, v * scale, c, interpolate, 0, entries);
             U q = (U)(sat(v) * 256.0f);
             if (q > 255) q = 255;
             packed |= q << (16 - 8 * c);

@@ -61,7 +61,14 @@ pub struct ColorLut {
     /// Worker-authored identity of the armed binding. A new UPDATE/free/reallocation
     /// changes it even if the guest reuses the same store address.
     pub token: u64,
+    /// Segmented (VSS): the GPU reads per-segment interval counts from the snapshot's
+    /// header, bounded by `entries`. Tone tables are always segmented.
+    pub segmented: bool,
 }
+
+/// Fixed segment counts of the source-defined VSS input and output tables.
+const VSS_INPUT_SEGMENTS: u32 = 64;
+const VSS_OUTPUT_SEGMENTS: u32 = 33;
 
 /// Bounded register-authored CSC program uploaded to a fixed per-window allocation.
 /// This is program data, not a CPU read or transform of guest pixels/LUT memory.
@@ -159,6 +166,12 @@ pub struct ColorFixture<'a> {
     pub rearm: bool,
     /// Optional pre-composition tone stage.
     pub tone: Option<ColorTone<'a>>,
+    /// The input table is segmented (64 linear VSS segments) instead of DIRECT8/10.
+    pub input_segmented: bool,
+    /// The output table is segmented (33 logarithmic VSS segments).
+    pub output_segmented: bool,
+    /// OLUT input normalization, UNORM32 (`u32::MAX` is 1.0).
+    pub norm: u32,
 }
 
 /// ★ An imported display slot — a VRAM frame object kayfabe allocated itself (never guest
@@ -255,7 +268,7 @@ pub struct DisplayGpu {
     /// Its row sums: the device buffer (zeroed before each launch), the page-locked copy the worker
     /// reads after the completion, and the rows both hold. Grown, never shrunk.
     sums: Option<(CUdeviceptr, PinnedBuf, usize)>,
-    color: Result<[Func; 4], String>,
+    color: Result<[Func; 5], String>,
     color_frame: Option<(CUdeviceptr, usize)>,
     /// Fixed slots: 32 ILUTs, 32 TMO tables and one OLUT. Never guest-sized.
     color_luts: Option<CUdeviceptr>,
@@ -463,6 +476,7 @@ impl DisplayGpu {
                     cu.module_function(m, "kf_color_output")?,
                     cu.module_function(m, "kf_color_validate")?,
                     cu.module_function(m, "kf_tmo_validate")?,
+                    cu.module_function(m, "kf_vss_validate")?,
                 ])
             })
             .map_err(|e| format!("the SDR colour kernels did not load: {e}"));
@@ -771,9 +785,18 @@ impl DisplayGpu {
         if slot > 64 {
             return Err(refused(what, "LUT slot outside fixed allocation".into()));
         }
-        if !(65..=1025).contains(&lut.entries)
-            || ((input || slot == 64) && ![257, 1025].contains(&lut.entries))
-        {
+        let tone = !input && slot != 64;
+        let segments = match (input, tone) {
+            (true, _) => VSS_INPUT_SEGMENTS,
+            (false, true) => 64,
+            (false, false) => VSS_OUTPUT_SEGMENTS,
+        };
+        let supported = if lut.segmented {
+            (segments + 1..=1025).contains(&lut.entries)
+        } else {
+            !tone && [257, 1025].contains(&lut.entries)
+        };
+        if !supported || (tone && !lut.segmented) {
             return Err(refused(
                 what,
                 "LUT sample count outside supported extent".into(),
@@ -785,16 +808,29 @@ impl DisplayGpu {
             .color_luts
             .ok_or_else(|| refused(what, "no LUT allocation".into()))?;
         let dst = base + u64::from(slot) * COLOR_LUT_BYTES as u64;
-        let key = (lut.src, lut.interpolate, lut.token, lut.entries);
-        if self.color_snapshots[slot as usize]
-            .is_none_or(|old| (old.src, old.interpolate, old.token, old.entries) != key)
-        {
+        let key = (
+            lut.src,
+            lut.interpolate,
+            lut.token,
+            lut.entries,
+            lut.segmented,
+        );
+        if self.color_snapshots[slot as usize].is_none_or(|old| {
+            (
+                old.src,
+                old.interpolate,
+                old.token,
+                old.entries,
+                old.segmented,
+            ) != key
+        }) {
             self.cu
                 .memcpy_d2d_async(self.stream, dst, src, bytes, what)?;
             self.color_snapshots[slot as usize] = Some(lut);
         }
-        if input {
-            let f = self.color.as_ref().map_err(|e| refused(what, e.clone()))?[2];
+        // Tone snapshots are validated by the layer launch; every other table here,
+        // on the same immutable snapshot the lookup uses.
+        if !tone && (input || lut.segmented) {
             let status = self
                 .color_status
                 .as_ref()
@@ -803,8 +839,15 @@ impl DisplayGpu {
             let mut args = vec![
                 dst.to_le_bytes().to_vec(),
                 lut.entries.to_le_bytes().to_vec(),
-                status.to_le_bytes().to_vec(),
             ];
+            let f = if lut.segmented {
+                args.push(segments.to_le_bytes().to_vec());
+                args.push(u32::from(input).to_le_bytes().to_vec());
+                self.color.as_ref().map_err(|e| refused(what, e.clone()))?[4]
+            } else {
+                self.color.as_ref().map_err(|e| refused(what, e.clone()))?[2]
+            };
+            args.push(status.to_le_bytes().to_vec());
             self.cu
                 .launch_args(self.stream, f, 5, 256, 0, &mut args, what)?;
         }
@@ -909,6 +952,7 @@ impl DisplayGpu {
             p.to_le_bytes().to_vec(),
             u(u32::from(lut.is_some_and(|v| v.interpolate))),
             u(lut.map_or(0, |v| v.entries)),
+            u(u32::from(lut.is_some_and(|v| v.segmented))),
             tone.to_le_bytes().to_vec(),
             u(u32::from(tmo.is_some_and(|v| v.interpolate))),
             u(tmo.map_or(0, |v| v.entries)),
@@ -924,7 +968,8 @@ impl DisplayGpu {
             .launch_args(self.stream, f, l.rows, 256, 0, &mut args, what)
     }
 
-    /// Apply the authored CSC coefficients and the fixed-point output table to the full head.
+    /// Apply the authored CSC coefficients, the OLUT input normalization (UNORM32,
+    /// `u32::MAX` is 1.0) and the fixed-point output table to the full head.
     /// The validation result is copied back on this same stream, before the frame's signal.
     pub fn color_output(
         &mut self,
@@ -932,6 +977,7 @@ impl DisplayGpu {
         h: u32,
         lut: Option<ColorLut>,
         matrix: &[i32; 12],
+        norm: u32,
     ) -> Result<(), CudaError> {
         let what = "DisplayGpu::color_output";
         let (src, slen) = self
@@ -956,6 +1002,10 @@ impl DisplayGpu {
                 .to_vec(),
             matrix.iter().flat_map(|v| v.to_le_bytes()).collect(),
             lut.map_or(0, |v| v.entries).to_le_bytes().to_vec(),
+            u32::from(lut.is_some_and(|v| v.segmented))
+                .to_le_bytes()
+                .to_vec(),
+            norm.to_le_bytes().to_vec(),
         ];
         self.cu
             .launch_args(self.stream, f, h, 256, 0, &mut args, what)?;
@@ -992,6 +1042,10 @@ impl DisplayGpu {
                 "input LUT has non-SDR FP16 entries"
             } else if b[0] & 2 != 0 {
                 "TMO LUT has unsupported VSS header or unequal intensity channels"
+            } else if b[0] & 8 != 0 {
+                "segmented LUT header exceeds its authored extent"
+            } else if b[0] & 16 != 0 {
+                "segmented input LUT has negative, nonfinite or >128 FP16 entries"
             } else {
                 "CSC program produced nonfinite FP16"
             }
@@ -1288,8 +1342,16 @@ impl DisplayGpu {
             size: (w, h),
             ..
         } = *fixture;
-        if ![261 * 8, COLOR_LUT_BYTES].contains(&input.len())
-            || ![261 * 8, COLOR_LUT_BYTES].contains(&output.len())
+        let extent = |table: &[u8], segmented: bool, segments: u32| {
+            if segmented {
+                table.len().is_multiple_of(8)
+                    && ((segments as usize + 5) * 8..=COLOR_LUT_BYTES).contains(&table.len())
+            } else {
+                [261 * 8, COLOR_LUT_BYTES].contains(&table.len())
+            }
+        };
+        if !extent(input, fixture.input_segmented, VSS_INPUT_SEGMENTS)
+            || !extent(output, fixture.output_segmented, VSS_OUTPUT_SEGMENTS)
             || surface.is_empty()
             || !surface.len().is_multiple_of(8)
             || layer.extent > surface.len() as u64
@@ -1320,17 +1382,20 @@ impl DisplayGpu {
             self.color_begin(w, h)?;
             let mut l = *layer;
             l.src = 0;
+            // NVKMS interpolates every segmented table it programs (nvkms-evo3.c:4709).
             let input_lut = Some(ColorLut {
                 entries: (input.len() / 8 - 4) as u32,
                 src: surface.len() as u64,
-                interpolate: false,
+                interpolate: fixture.input_segmented,
                 token: 1,
+                segmented: fixture.input_segmented,
             });
             let tone_lut = fixture.tone.map(|t| ColorLut {
                 entries: (t.table.len() / 8 - 4) as u32,
                 src: tone_src,
                 interpolate: true,
                 token: 4,
+                segmented: true,
             });
             self.color_pipeline_layer(
                 0,
@@ -1356,6 +1421,7 @@ impl DisplayGpu {
                         src: tone_src,
                         interpolate: true,
                         token: if tone.rearm { 5 } else { 4 },
+                        segmented: true,
                     }),
                     Some(tone.pipeline),
                     w,
@@ -1373,8 +1439,9 @@ impl DisplayGpu {
                     Some(ColorLut {
                         entries: (input.len() / 8 - 4) as u32,
                         src: surface.len() as u64,
-                        interpolate: false,
+                        interpolate: fixture.input_segmented,
                         token: if fixture.rearm { 3 } else { 1 },
+                        segmented: fixture.input_segmented,
                     }),
                     w,
                     h,
@@ -1388,8 +1455,10 @@ impl DisplayGpu {
                     src: (surface.len() + input.len()) as u64,
                     interpolate: fixture.interpolate,
                     token: 2,
+                    segmented: fixture.output_segmented,
                 }),
                 matrix,
+                fixture.norm,
             )?;
             self.cu.ctx_synchronize()?;
             self.color_verdict().map_err(|e| refused(what, e))?;
@@ -1566,7 +1635,7 @@ mod tests {
         // clang spells signed C ints as .u32; all are passed as four-byte bit patterns.
         let mut compose = vec![".u64 .ptr .align 1", ".u64 .ptr .align 1"];
         compose.extend([".u32"; 15]);
-        compose.extend([".u64 .ptr .align 1", ".u32", ".u32"]);
+        compose.extend([".u64 .ptr .align 1", ".u32", ".u32", ".u32"]);
         compose.extend([
             ".u64 .ptr .align 1",
             ".u32",
@@ -1584,6 +1653,16 @@ mod tests {
             [".u64 .ptr .align 1", ".u32", ".u64 .ptr .align 1"]
         );
         assert_eq!(
+            types("kf_vss_validate"),
+            [
+                ".u64 .ptr .align 1",
+                ".u32",
+                ".u32",
+                ".u32",
+                ".u64 .ptr .align 1"
+            ]
+        );
+        assert_eq!(
             types("kf_color_output"),
             [
                 ".u64 .ptr .align 1",
@@ -1592,6 +1671,8 @@ mod tests {
                 ".u64 .ptr .align 1",
                 ".u32",
                 ".align 4 .b8",
+                ".u32",
+                ".u32",
                 ".u32"
             ]
         );

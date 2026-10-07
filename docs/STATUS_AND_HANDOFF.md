@@ -11,6 +11,14 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-07
 
+**Colour, 2026-10-07 (GPU-free, branch `claude/colour-chroma-20261007`):** segmented
+ILUT (64 linear) and OLUT (33 logarithmic) tables, the OLUT FP normalization and 610's
+no-correction SAT_MODE 3 now decode and run as GPU lookups under the existing opt-in
+flag; GPU validation bounds every header-derived read. Domains are inferred and checked
+against analytic ST 2084 with OGKM's PQ tables. The GPU fixture `color_vss` is **unrun**.
+Arbitrary chroma correction still refuses: no source transfer exists (owner decision).
+[Inventory, limits, next steps](design/V3_TMO_COLOR.md).
+
 **Active Code43 iteration, 2026-10-07:** owner requests continued repair one wall
 at a time. The first change resolves the declared Device-shared default VA for
 COPY2; bounded same-GPU relationships and revocation tests pass (611 kf-rm tests).

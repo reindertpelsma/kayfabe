@@ -1,6 +1,6 @@
 # Bounded SDR colour scanout
 
-**STATUS: RESEARCH, 2026-10-06.** Implemented on branch
+**STATUS: RESEARCH, 2026-10-06 (partly superseded 2026-10-07, see below).** Implemented on branch
 `codex/sdr-lut-20261006`, opt-in `KF3_DISPLAY_SDR_COLOR=1`; not promoted to master.
 The Linux result below is a real GPU transform, not a constructor capability probe.
 
@@ -9,6 +9,11 @@ its capability declaration. [TMO work under test](V3_TMO_COLOR.md) supersedes
 the TMO/active-input-CSC exclusions below for the new opt-in implementation.
 Its hardware qualification is pending; the previously verified SDR result
 remains attached to product `2aa8b92d`.
+
+**Partly superseded, 2026-10-07:** the refusals below of segmented tables and
+nonunity OLUT normalization are lifted on `claude/colour-chroma-20261007` by real GPU
+lookups ([V3_TMO_COLOR.md](V3_TMO_COLOR.md), 2026-10-07 section). That work is GPU-free
+only; its hardware fixture is unrun. Mirror modes and active OCSC1 remain refused.
 
 ## SDR subset at product `2aa8b92d`
 

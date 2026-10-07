@@ -82,6 +82,9 @@ fn main() -> Result<(), String> {
             mutate: None,
             rearm: false,
         }),
+        input_segmented: false,
+        output_segmented: false,
+        norm: u32::MAX,
     };
     let run = |gpu: &mut DisplayGpu, f: &ColorFixture<'_>| {
         gpu.selftest_color(f).map_err(|e| e.to_string())

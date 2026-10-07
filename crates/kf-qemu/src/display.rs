@@ -922,6 +922,7 @@ impl ColorDmas {
             src,
             interpolate: lut.interpolate,
             token: self.next,
+            segmented: lut.segmented,
         };
         *s = Some((key, resolved));
         Ok(Some(resolved))
@@ -3482,7 +3483,7 @@ impl ScanState {
                     .resolve(64, client, 0, life, out.lut, |handle| {
                         io.resolve(client, handle, 0)
                     })?;
-                Ok((inputs, lut, out.matrix))
+                Ok((inputs, lut, out.matrix, out.norm))
             })();
             match program {
                 Ok(p) => Some(p),
@@ -3528,7 +3529,7 @@ impl ScanState {
             return;
         };
         let composed =
-            if let Some((inputs, out, matrix)) = &color {
+            if let Some((inputs, out, matrix, norm)) = &color {
                 gpu.color_begin(w, h)
                     .and_then(|()| {
                         planned.layers.iter().zip(inputs).try_for_each(
@@ -3545,7 +3546,7 @@ impl ScanState {
                             },
                         )
                     })
-                    .and_then(|()| gpu.color_output(w, h, *out, matrix))
+                    .and_then(|()| gpu.color_output(w, h, *out, matrix, *norm))
                     .and_then(|()| {
                         layers[planned.layers.len()..]
                             .iter()
@@ -3876,6 +3877,7 @@ mod tests {
                 offset: 256,
             },
             interpolate: false,
+            segmented: false,
         });
         let dma = CtxDma {
             target: Target::Vidmem,
@@ -3916,6 +3918,23 @@ mod tests {
             cache
                 .resolve(0, 7, 1, 42, lut, |_| Err("disabled then re-enabled".into()))
                 .is_err()
+        );
+        let direct = cache
+            .resolve(0, 7, 1, 42, lut, |_| Ok(dma))
+            .unwrap()
+            .unwrap();
+        let vss = lut.map(|l| Lut {
+            entries: 508,
+            segmented: true,
+            ..l
+        });
+        let seg = cache
+            .resolve(0, 7, 1, 42, vss, |_| Ok(dma))
+            .unwrap()
+            .unwrap();
+        assert!(
+            seg.segmented && seg.entries == 508 && seg.token > direct.token,
+            "a mode change is a new armed snapshot, never the old table reinterpreted"
         );
     }
 

@@ -54,6 +54,9 @@ fn main() -> Result<(), String> {
         mutate_input: None,
         rearm: false,
         tone: None,
+        input_segmented: false,
+        output_segmented: false,
+        norm: u32::MAX,
     };
     let pixels = gpu.selftest_color(&fixture).map_err(|e| e.to_string())?;
     assert!(
