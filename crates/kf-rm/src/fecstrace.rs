@@ -121,7 +121,7 @@ mod tests {
 
     #[test]
     fn the_default_route_is_answered_disabled_and_nothing_else_is_answered() {
-        let Some(w) = windows_abi() else { return };
+        let w = windows_abi().expect("580.65.06 has a wire table");
         let mut p = FecsTracePolicy::new(w);
         let l = p.layout.expect("measured at 580.65.06");
         // The guest's own request in vfio-10 (2026-10-05, RPC 2904): zero route, bEnable 0x68

@@ -2135,3 +2135,49 @@ one. `KF3_MAPLOG` stays on.
   new line says "same rows: false" (a stale mirror) or "same rows: true" with 0 rows (cleared).
 - *Prediction:* the abort passes VFIO 2861; the copy channel dies again and a TDR follows
   (nothing here repairs it).
+
+### Run42 result: the product stub reproduces the bisect; FECS answered; the copy channel's mirror is the live one, emptied
+
+Product/QEMU c53554788421d5b4045f75e975e958764e1106b4, `kf3-bins/c5355478`, flags as run41 without
+`KF3_DIAG_ZERO_OK` (removed); started 2026-10-07 17:23 UTC. [command](run42-command.json),
+[trace](run42-qemu.log.gz), [requests](run42-requests.log), [gates, oracle and build](run42-gates-build.txt)
+(9/9, 11/11 USER births, GR tier PASS, Xid 5 before and after; [oracle log](gr-tier-native-run42.log)),
+[controller error](run42-controller-error.txt), [unit journal](run42-failure-journal.txt),
+[bugcheck header](run42-bugcheck.json), [Windows events](run42-evtx.txt), [host after](run42-host-after.txt).
+Host afterwards: no QEMU, NBD disconnected, display enabled, P8, Xid 5 (unchanged). Host checks at
+c5355478: kf-abi, kf-rm, kf-qemu tests pass, rustfmt clean, `ci_gates.sh` 0, Clippy 258 = base 258,
+no new signature.
+
+**Measured (run42 at c5355478, 2026-10-07):**
+- One `HOST-STUB 0x2081010d` answer (RPC 526, the only time Windows sent it), no `DIAG-ZERO-OK`
+  line. **The abort passes VFIO 2861**: `abort_point.py` rpcs=2631, teardown_at=653, last
+  `fn76/20801111` (unserviced) — run41's course, with nine more RPCs (below).
+- `0x20800a38` answered 31 times (`bEnable = NV_FALSE`). After each, Windows sends exactly one SET,
+  `0x20800a3a` (`SET_FECS_TRACE_WR_OFFSET`), 27 times, left unserviced; it never sends `0x20800a39`
+  or `0x20800a37`, so `fecsBufferReset` returns at its first SET, as read. No teardown follows any
+  of them.
+- The kernel copy channel dies again at GP entry 2 (`rows=0`), and the new line says: **the
+  channel's mirror IS the plane's live mirror for its key** (same rows map, host space 0xcafe0063),
+  and that map is empty. Two TDR cycles follow (System log 17:24:36 UTC), no bugcheck; Code43/smi
+  **not measured** (the status script timed out again).
+
+**Falsifier outcomes.** *A: supported* (the generated, identity-gated stub alone moves Windows past
+VFIO 2861). *C (FECS): supported, harmless:* answered, and the one refused SET per answer is
+tolerated. *Death mirror:* "cleared, not stale" — the walker's rows for the space were emptied after
+the walker had placed the ring.
+
+## A row-commit diagnostic for the copy channel's death (run43 setup)
+
+No answer changes. On a channel's death kf3 now also prints the mirror's row-log epoch and its last
+eight commits (`RowsLog::recent`, error path only; unit-tested): every insert or removal of a row
+commits its range under the rows' write lock, so the last commits name the change that emptied the
+map, or show that nothing committed (a writer that bypasses the log). `KF3_MAPLOG` stays on. The
+hoststub/fecstrace unit tests now fail instead of skipping if the 580.65.06 wire table is missing.
+
+**Falsifiers, stated before run43 (a reading of run43, 2026-10-07, not a test of a repair).**
+- *H-cut: a range unmap (`unmap_range`/`cut_rows`) or a whole-space retire emptied the rows.*
+  Supported if the last commits before the death cover the ring's VA (0x200c4000) with a range
+  removal. Falsified if the last commit touching it is the walk's insert at walk #248's time.
+- *H-bypass: the rows were replaced or cleared without a commit.* Supported if the epoch is
+  non-zero, the last commits do not cover 0x200c4000, and the map is still empty.
+- *Prediction:* the abort passes VFIO 2861 and the copy channel dies as in runs 38-42.

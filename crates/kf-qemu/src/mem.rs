@@ -797,6 +797,23 @@ impl RowsLog {
         self.epoch.load(Ordering::Acquire)
     }
 
+    /// ★ 2026-10-07 (diagnostic, error path only): the last `n` commits, as `(epoch, lo, hi, ms
+    /// ago)`, newest last — which change took a dead channel's rows away.
+    #[must_use]
+    pub fn recent(&self, n: usize) -> Vec<(u64, u64, u64, u128)> {
+        let Ok(l) = self.log.lock() else {
+            return Vec::new();
+        };
+        let mut v: Vec<_> = l
+            .iter()
+            .rev()
+            .take(n)
+            .map(|(e, lo, hi, at)| (*e, *lo, *hi, at.elapsed().as_millis()))
+            .collect();
+        v.reverse();
+        v
+    }
+
     /// The earliest commit after `epoch` touching `[va, va+len)`, and when it landed.
     #[must_use]
     pub fn changed_since(&self, epoch: u64, va: u64, len: u64) -> kf_chan::tmode::Changed {
@@ -3072,6 +3089,19 @@ pub fn apply_statement(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The last commits of a rows log, newest last.
+    #[test]
+    fn a_rows_log_names_its_last_commits() {
+        let log = RowsLog::default();
+        assert!(log.recent(4).is_empty());
+        for i in 0..6u64 {
+            log.commit(i * 0x1000, i * 0x1000 + 0x1000);
+        }
+        let r: Vec<(u64, u64, u64)> = log.recent(2).iter().map(|c| (c.0, c.1, c.2)).collect();
+        assert_eq!(r, vec![(5, 0x4000, 0x5000), (6, 0x5000, 0x6000)]);
+        assert_eq!(log.epoch(), 6);
+    }
 
     /// The death message names the rows around an unplaced VA, or says there are none.
     #[test]

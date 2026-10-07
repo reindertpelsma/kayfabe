@@ -4715,10 +4715,12 @@ impl ChanPlane {
                 })
             });
             eprintln!(
-                "kf3: chan token {:#x} death mirror: own space={:#x} rows={}; plane's mirror for the key now (same rows, space, rows): {plane_now:?}",
+                "kf3: chan token {:#x} death mirror: own space={:#x} rows={} log_epoch={} last row commits (epoch, lo, hi, ms ago)={:x?}; plane's mirror for the key now (same rows, space, rows): {plane_now:?}",
                 g.guest_idx,
                 g.mirror.space.space,
-                g.mirror.rows.read().map_or(usize::MAX, |r| r.len())
+                g.mirror.rows.read().map_or(usize::MAX, |r| r.len()),
+                g.mirror.log.epoch(),
+                g.mirror.log.recent(8)
             );
             g.dead = Some(why);
             self.completions.clear(g.guest_idx);

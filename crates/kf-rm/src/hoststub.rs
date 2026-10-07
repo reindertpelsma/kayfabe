@@ -173,7 +173,7 @@ mod tests {
 
     #[test]
     fn a_declared_identity_arms_the_cell_and_a_changed_one_revokes_it() {
-        let Some(w) = windows_abi() else { return };
+        let w = windows_abi().expect("580.65.06 has a wire table");
         let mut p = HostStubPolicy::new(w);
         assert!(
             p.respond(&identity(&w, "580.88")).is_none(),
@@ -194,7 +194,7 @@ mod tests {
 
     #[test]
     fn without_a_declared_identity_the_cell_is_inert() {
-        let Some(w) = windows_abi() else { return };
+        let w = windows_abi().expect("580.65.06 has a wire table");
         let mut p = HostStubPolicy::new(w);
         assert!(p.cell.is_some(), "580.65.06 has the Windows 580.88 cell");
         assert!(p.respond(&control(&w, 0x2081_010d, &[], 0)).is_none());
@@ -203,7 +203,7 @@ mod tests {
 
     #[test]
     fn with_the_identity_only_the_generated_control_at_its_size_is_answered() {
-        let Some(w) = windows_abi() else { return };
+        let w = windows_abi().expect("580.65.06 has a wire table");
         let mut p = HostStubPolicy::new(w);
         p.identity = true;
         let r = p
