@@ -53,7 +53,6 @@ const BUNDLE_OFF: usize = 24;
 
 // ─── inner deferred commands (ogkm-580 ctrl2080*.h) ───
 const CMD_DMA_INVALIDATE_TLB: u32 = 0x2080_2502; // NON_PRIVILEGED
-const CMD_GR_CTXSW_ZCULL_BIND: u32 = 0x2080_1208; // NON_PRIVILEGED
 const CMD_GPU_PROMOTE_CTX: u32 = 0x2080_012b; // PRIVILEGED
 const CMD_GPU_INITIALIZE_CTX: u32 = 0x2080_012d; // PRIVILEGED
 const CMD_GPU_EVICT_CTX: u32 = 0x2080_012c; // kernel-only
@@ -134,7 +133,7 @@ impl Unit {
         let mut p = [0u8; 16];
         p[0..4].copy_from_slice(&handle.to_le_bytes());
         self.rm
-            .raw_control(self.ring.channel().chan, kf_host::NV906F_CTRL_GET_CLASS_ENGINEID, &mut p)
+            .raw_control(self.ring.channel().chan, kf_host::channel::NV906F_CTRL_GET_CLASS_ENGINEID, &mut p)
             .map_err(|e| format!("class_engine_id: {e:?}"))?;
         let class_engine = u32::from_le_bytes([p[4], p[5], p[6], p[7]]);
         Ok(Def { handle, class_engine, subch })
@@ -340,7 +339,7 @@ fn f2_cross_channel() -> Result<(), String> {
         rm.remember(handle, ring.channel().chan);
         let mut p = [0u8; 16];
         p[0..4].copy_from_slice(&handle.to_le_bytes());
-        rm.raw_control(ring.channel().chan, kf_host::NV906F_CTRL_GET_CLASS_ENGINEID, &mut p)
+        rm.raw_control(ring.channel().chan, kf_host::channel::NV906F_CTRL_GET_CLASS_ENGINEID, &mut p)
             .map_err(|e| format!("class_engine_id: {e:?}"))?;
         Ok(Def { handle, class_engine: u32::from_le_bytes([p[4], p[5], p[6], p[7]]), subch })
     };
@@ -718,19 +717,19 @@ fn f8_no_object() -> Result<(), String> {
         let hdr = kf_abi::submit::method_header_inc(SUBCH_B, kf_abi::submit::SET_OBJECT, 1)
             .ok_or("SET_OBJECT header")?;
         let r = u.submit(&[hdr, NV50_DEFERRED_API_CLASS]);
+        let set_ok = r.is_ok();
         println!(
-            "DF_F8_SETOBJECT class=0x5080 no_object_allocated submit_ok={} detail={}",
-            r.is_ok(),
+            "DF_F8_SETOBJECT class=0x5080 no_object_allocated submit_ok={set_ok} detail={}",
             r.err().unwrap_or_default()
         );
-        if r.is_ok() {
+        if set_ok {
             let r2 = u.fire(SUBCH_B, 0x5151_8002);
+            let fire_ok = r2.is_ok();
             println!(
-                "DF_F8_SETOBJECT_THEN_FIRE fire_ok={} detail={}",
-                r2.is_ok(),
+                "DF_F8_SETOBJECT_THEN_FIRE fire_ok={fire_ok} detail={}",
                 r2.err().unwrap_or_default()
             );
-            if r2.is_err() {
+            if !fire_ok {
                 alive = false;
             }
         } else {
