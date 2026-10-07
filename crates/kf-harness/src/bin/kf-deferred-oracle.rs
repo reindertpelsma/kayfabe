@@ -616,15 +616,19 @@ fn p0() -> Result<(), String> {
 /// gate refuses before any parameter is touched; a root run reaching the handler is reported as
 /// "gate passed, operational effect out of this run's scope" — see the module docs).
 fn eight(who: Privilege) -> Result<(), String> {
-    let mut u = GrUnit::open()?;
-    u.alloc_5080()?;
-    u.bind_5080(SUBCH_SW)?;
-    let va_extra = vec![(4usize, u.space.space)];
+    // ★ H3 (measured 2026-10-07, `wedge2`/`wedge3`): a channel's PBDMA does not take a SECOND
+    // GPFIFO entry after ANY software-method (0x200) trigger, success or failure alike — no Xid,
+    // just silence. So ONE FRESH CHANNEL PER COMMAND, never a shared one across triggers. This is
+    // the Translated implementation's load-bearing fact: a Translated ring that fires 0x200 more
+    // than once per channel will hang the same way, with nothing to see in dmesg.
     for cmd in model::EIGHT.iter().copied().chain([0x2080_dead]) {
         let name = model::cmd_name(cmd);
         let h = 0x5252_1000 + (cmd & 0xff);
+        let mut u = GrUnit::open()?;
+        u.alloc_5080()?;
+        u.bind_5080(SUBCH_SW)?; // the ring's ONLY other submission on this channel (ordinary)
         let extra: Vec<(usize, u32)> = if cmd == model::CMD_DMA_INVALIDATE_TLB {
-            va_extra.clone()
+            vec![(4usize, u.space.space)]
         } else {
             Vec::new()
         };
@@ -632,12 +636,13 @@ fn eight(who: Privilege) -> Result<(), String> {
         let reg_status = reg.as_ref().err().and_then(status_of);
         println!("DF2_EIGHT_REG cmd={name} euid={} register={:?} status={reg_status:?}", euid(), reg.is_ok());
         if reg.is_err() {
+            u.free();
             continue;
         }
-        let fired = u.fire(SUBCH_SW, h);
+        let fired = u.fire(SUBCH_SW, h); // this channel's ONE trigger
         match fired {
             Ok(()) => {
-                let consumed = !u.is_registered(h)?;
+                let consumed = !u.is_registered(h)?; // a control call, not a ring submission
                 let want = model::expected_status(cmd, who);
                 println!(
                     "DF2_EIGHT_TRIGGER cmd={name} who={who:?} consumed={consumed} want_status={want:#x} \
@@ -665,12 +670,16 @@ fn eight(who: Privilege) -> Result<(), String> {
                 }
             }
             Err(e) => {
+                // Unexpected per H3's own falsifier (this channel's FIRST and only trigger) —
+                // stop the sweep rather than press on into more commands.
                 println!("DF2_EIGHT_TRIGGER cmd={name} who={who:?} BLOCKED={e}");
                 let _ = u.remove(h);
+                u.free();
+                return Err(format!("cmd {name}: first trigger on a fresh channel blocked: {e}"));
             }
         }
+        u.free();
     }
-    u.free();
     Ok(())
 }
 
@@ -797,26 +806,28 @@ fn f5() -> Result<(), String> {
         .register(vh, model::CMD_DMA_INVALIDATE_TLB, model::FLAGS_DELETE_IMPLICIT, &[])
         .map_err(|e| format!("register victim entry: {e:?}"))?;
 
-    let mut firer = GrUnit::open()?;
-    firer.alloc_5080()?;
-    firer.bind_5080(SUBCH_SW)?;
+    // ★ H3: a fresh firer channel per stray handle — one trigger is all any channel takes.
     for (name, h) in [
         ("zero", 0u32),
         ("one", 1u32),
         ("0x40000000", 0x4000_0000u32),
         ("0xffffffff", 0xFFFF_FFFFu32),
     ] {
+        let mut firer = GrUnit::open()?;
+        firer.alloc_5080()?;
+        firer.bind_5080(SUBCH_SW)?;
         match firer.fire(SUBCH_SW, h) {
             Ok(()) => println!("DF2_F5_STRAY case={name} handle={h:#x} fire_ok=true"),
             Err(e) => {
                 println!("DF2_F5_STRAY case={name} handle={h:#x} fire_ok=false detail={e}");
-                // The firing channel may now be dead; stop firing more on it (owner rule: do not
-                // retry/loop past an unpredicted failure).
-                break;
+                // Unexpected per H3 (this channel's one and only trigger) — stop the whole phase.
+                firer.free();
+                victim.free();
+                return Err(format!("stray handle {name}: first trigger on a fresh channel blocked: {e}"));
             }
         }
+        firer.free();
     }
-    firer.free();
     let still = victim.is_registered(vh)?;
     if !still {
         let _ = victim.remove(vh);
@@ -829,9 +840,15 @@ fn f5() -> Result<(), String> {
     if still { Ok(()) } else { Err("F5 falsified".into()) }
 }
 
-/// F6 — rate: a short, wall-clock-capped loop of valid EXPLICIT-delete `DMA_INVALIDATE_TLB`
-/// triggers, measured against an equal-duration loop of ordinary semaphore-release submissions,
-/// both against a no-contention baseline. Each leg runs for `KF_DF2_F6_MS` (default 1500 ms).
+/// F6 — rate, REVISED under H3 (measured in `wedge2`/`wedge3`: a channel takes exactly ONE
+/// software-method trigger, ever). A "tight loop of triggers" on one channel is therefore not
+/// something a client can do at all — each trigger needs its own fresh channel. That changes
+/// what this phase can honestly measure: not "does spamming triggers degrade a bystander
+/// channel" (the original ask), but "what does a full one-shot deferred-API round trip
+/// (birth..free) cost, against an ordinary method reused on one warm channel, both against a
+/// no-contention baseline" — reported as MEASURED COUNTS, with no pass/fail verdict, because the
+/// two legs are no longer doing comparable work and a threshold here would claim more than the
+/// numbers support. Each leg runs for `KF_DF2_F6_MS` (default 1500 ms).
 fn f6() -> Result<(), String> {
     let cap_ms: u64 = std::env::var("KF_DF2_F6_MS")
         .ok()
@@ -840,61 +857,59 @@ fn f6() -> Result<(), String> {
     let cap = std::time::Duration::from_millis(cap_ms);
 
     let mut baseline = GrUnit::open()?;
-    let (b_count, b_elapsed) = run_submits_for(&mut baseline, cap, None)?;
+    let (b_count, b_elapsed) = run_ordinary_for(&mut baseline, cap)?;
     baseline.free();
     println!("DF2_F6_BASELINE submits={b_count} elapsed_ms={}", b_elapsed.as_millis());
 
     let mut ordinary = GrUnit::open()?;
-    let (o_count, o_elapsed) = run_submits_for(&mut ordinary, cap, None)?;
+    let (o_count, o_elapsed) = run_ordinary_for(&mut ordinary, cap)?;
     ordinary.free();
     println!("DF2_F6_ORDINARY submits={o_count} elapsed_ms={}", o_elapsed.as_millis());
 
-    let mut deferred = GrUnit::open()?;
-    deferred.alloc_5080()?;
-    deferred.bind_5080(SUBCH_SW)?;
-    let (d_count, d_elapsed) = run_submits_for(&mut deferred, cap, Some(()))?;
-    deferred.free();
-    println!("DF2_F6_DEFERRED submits={d_count} elapsed_ms={}", d_elapsed.as_millis());
+    let (d_count, d_elapsed) = run_deferred_fresh_per_round(cap)?;
+    println!("DF2_F6_DEFERRED_FRESH_CHANNEL_PER_TRIGGER submits={d_count} elapsed_ms={}", d_elapsed.as_millis());
 
     let o_rate = o_count as f64 / o_elapsed.as_secs_f64().max(1e-9);
     let d_rate = d_count as f64 / d_elapsed.as_secs_f64().max(1e-9);
     let b_rate = b_count as f64 / b_elapsed.as_secs_f64().max(1e-9);
-    // PASS = the deferred-API rate is not disproportionately worse than the ordinary-method rate,
-    // both relative to the uncontended baseline. "Disproportionate" is read as "less than half the
-    // ordinary rate's fraction of baseline" — a coarse, stated threshold, not a tight SLA.
-    let o_frac = o_rate / b_rate.max(1e-9);
-    let d_frac = d_rate / b_rate.max(1e-9);
-    let pass = d_frac >= o_frac / 2.0;
     println!(
-        "DF2_F6={} baseline_rate={b_rate:.0}/s ordinary_rate={o_rate:.0}/s \
-         ({:.2}x baseline) deferred_rate={d_rate:.0}/s ({:.2}x baseline)",
-        if pass { "PASS" } else { "FAIL(disproportionate degradation)" },
-        o_frac,
-        d_frac
+        "DF2_F6=MEASURED(not a pass/fail — see the phase docs) baseline_rate={b_rate:.0}/s \
+         ordinary_rate={o_rate:.0}/s deferred_fresh_channel_rate={d_rate:.0}/s \
+         ({:.1}x slower than ordinary, entirely channel-birth cost under H3, not contention)",
+        o_rate / d_rate.max(1e-9)
     );
-    if pass { Ok(()) } else { Err("F6 falsified".into()) }
+    Ok(())
 }
 
-/// Submit either a plain semaphore-release-shaped no-op (`deferred = None`) or a registered
-/// EXPLICIT-delete `DMA_INVALIDATE_TLB` trigger (`deferred = Some(())`, re-registering it each
-/// round so the loop always has a live entry to fire) in a tight loop until `cap` elapses.
-/// Returns `(submits, elapsed)`.
-fn run_submits_for(u: &mut GrUnit, cap: std::time::Duration, deferred: Option<()>) -> Result<(u32, std::time::Duration), String> {
-    let va_extra = vec![(4usize, u.space.space)];
+/// A plain semaphore-release-shaped no-op in a tight loop on ONE warm channel until `cap`
+/// elapses (ordinary submissions do not wedge — `wedge1`). Returns `(submits, elapsed)`.
+fn run_ordinary_for(u: &mut GrUnit, cap: std::time::Duration) -> Result<(u32, std::time::Duration), String> {
     let mut n = 0u32;
     let t0 = std::time::Instant::now();
     while t0.elapsed() < cap {
-        if deferred.is_some() {
-            let h = 0x5252_6000u32.wrapping_add(n);
-            u.register(h, model::CMD_DMA_INVALIDATE_TLB, model::FLAGS_DELETE_EXPLICIT, &va_extra)
-                .map_err(|e| format!("F6 register round {n}: {e:?}"))?;
-            u.fire(SUBCH_SW, h)?;
-            let _ = u.remove(h);
-        } else {
-            // An ordinary method of the same shape as the fence tail alone: just submit (fence
-            // itself already issues a semaphore release + non-stall interrupt).
-            u.submit(&[])?;
-        }
+        u.submit(&[])?;
+        n += 1;
+    }
+    Ok((n, t0.elapsed()))
+}
+
+/// H3: one fresh channel per deferred-API trigger — open, bind, register, fire (EXPLICIT-delete,
+/// so no implicit cleanup races the explicit `remove`), free, repeat until `cap` elapses. Bails
+/// (reporting what round) on the first unexpected failure rather than looping past it.
+fn run_deferred_fresh_per_round(cap: std::time::Duration) -> Result<(u32, std::time::Duration), String> {
+    let mut n = 0u32;
+    let t0 = std::time::Instant::now();
+    while t0.elapsed() < cap {
+        let mut u = GrUnit::open()?;
+        u.alloc_5080()?;
+        u.bind_5080(SUBCH_SW)?;
+        let h = 0x5252_9000u32.wrapping_add(n);
+        let extra = [(4usize, u.space.space)];
+        u.register(h, model::CMD_DMA_INVALIDATE_TLB, model::FLAGS_DELETE_EXPLICIT, &extra)
+            .map_err(|e| format!("F6 deferred round {n} register: {e:?}"))?;
+        u.fire(SUBCH_SW, h).map_err(|e| format!("F6 deferred round {n} trigger: {e}"))?;
+        let _ = u.remove(h);
+        u.free();
         n += 1;
     }
     Ok((n, t0.elapsed()))
