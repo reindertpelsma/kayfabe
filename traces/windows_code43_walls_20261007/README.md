@@ -2181,3 +2181,88 @@ hoststub/fecstrace unit tests now fail instead of skipping if the 580.65.06 wire
 - *H-bypass: the rows were replaced or cleared without a commit.* Supported if the epoch is
   non-zero, the last commits do not cover 0x200c4000, and the map is still empty.
 - *Prediction:* the abort passes VFIO 2861 and the copy channel dies as in runs 38-42.
+
+### Run43 result: one walk empties the copy channel's VA space right before Windows' server-context-only PDE copy
+
+Product/QEMU 5f201b8ae5fe680d2c4358c11ea47a34a672e756, `kf3-bins/5f201b8a`, flags as run42; started
+2026-10-07 17:30 UTC. [command](run43-command.json), [trace](run43-qemu.log.gz),
+[requests](run43-requests.log), [the walk](run43-walk2192.txt), [gates, oracle and build](run43-gates-build.txt)
+(9/9, 11/11 USER births, GR tier PASS, Xid 5 before and after; [oracle log](gr-tier-native-run43.log)),
+[controller error](run43-controller-error.txt), [bugcheck header](run43-bugcheck.json),
+[Windows events](run43-evtx.txt), [host after](run43-host-after.txt). Host afterwards: no QEMU, NBD
+disconnected, display enabled, P8, Xid 5 (unchanged).
+
+**Measured (run43 at 5f201b8a, 2026-10-07):**
+- Same course as run42 (`abort_point.py` rpcs=2629, teardown_at=653, last `fn76/20801111`); TDR
+  cycles in the System log; no bugcheck; Code43/smi **not measured** (status script timeout).
+- The death line: the copy channel's mirror (host space 0xcafe0063) has 0 rows; its row log's last
+  commits are four range removals 57 ms before the death, covering `[0x20002000, 0x2024f000)`,
+  `[0x20250000, 0x20370000)`, `[0x24000000, 0x265f0000)` and `[0x3fdf0000, 0x3fff1000)`.
+- The maplog names them: **walk #2192**, triggered by the guest's `ALL_VA` invalidate of
+  c1d00021's root `0xefa38000` (hub_only=false), UNMAPs all 22 rows of the space (`APPLIED +0 -22`),
+  the ring `0x200c4000` included. The next RPC is Windows' server-context-only
+  `COPY_SERVER_RESERVED_PDES` on that VA space (answered 0). Every removed row lies in
+  `[0x20000000, 0x40000000)`: one entry of the page-shift-29 level, the level whose instance that
+  copy names (one level, shift 29, now at FB 0x3200000; decoded from vfio-10's same call). In the
+  BAR1 space Windows maps three 64 KiB pages just before (walks #2187-#2191).
+
+**Inferred, not tested.** Windows moves its shift-29 page-directory level of that VA space to a new
+instance at FB 0x3200000, points the parent at it, invalidates, and tells the GSP (the WAR). The GSP
+only swaps its server walker's pointer (`mmuWalkModifyLevelInstance(…, bCopyEntries=NV_FALSE,
+bUpdatePde=NV_FALSE, …)`, `ogkm-580.65.06: gpu_vaspace.c:4534-4541`,
+`mmu_walk_migrate.c:30-171`). On real hardware the GPU walks the new level, which the client filled.
+kayfabe's walk at that invalidate finds no valid entry under it, so it unmaps everything and the
+copy channel dies at its next GP fetch. Why the walk sees an empty level is open: the new level's
+contents not yet visible in kayfabe's store when the walk reads it, the walk reading a cached old
+instance, or a level at FB 0x3200000 being outside what the walker reads. This is kayfabe's own
+memory plane, an unprivileged area: no owner decision is needed to continue it. The next
+measurement is the walk's PDE chain for VA 0x200c4000 at that invalidate (level addresses and entry
+values).
+
+## Stop: an owner decision is needed for the software runlist; the bisect and C are done (2026-10-07, after run43)
+
+Runs 38-43 used 6 of this loop's 10 runs.
+
+**A (done).** Minimal set `{0x2081010d}` (runs 38-41), shipped as the generated, identity-gated
+`kf_rm::hoststub` (run42 verified it reproduces the bisect). §S entry in `docs/OWNER_RULINGS.md`:
+ASSUMED, owner to confirm; the retail export row says the control is NON_PRIVILEGED and its area is
+not shown to be power. The 12 other controls stay refused; the four with public layouts are among
+them, so no invented reply is shipped for them.
+
+**C (done).** The second `COPY_SERVER_RESERVED_PDES` is served (run38). `0x20800a38` is answered
+"disabled" (run42); its one SET is refused and tolerated.
+
+**D.** Bugcheck per run (pagefile header, `recover_bugcheck.py`): run37 0x119; runs 38-43 none.
+Windows now runs well past StartDevice, but goes into TDR cycles (nvlddmkm event 153 in runs 38, 41,
+42, 43), and the guest stops answering the status script within 150 s, so ConfigManagerErrorCode
+and nvidia-smi were last measured in runs 39-40 (7eb96b98, c8fa737e; 2026-10-07): 43 / exit 9, abort at VFIO 2861. **No success is
+claimed.**
+
+**B: `0x20801111`, the software-runlist submit — the decision (data, 2026-10-07).**
+- What it is (read): no OGKM name or layout; neighbour `0x20801110` is public in OGKM 610.43.02
+  (`FIFO_CONFIG_CTXSW_TIMEOUT`). The pinned retail Windows 580.88 export row (file offset 0xec9de0):
+  `paramSize 40`, flags `0x40` = `ROUTE_TO_PHYSICAL` only, i.e. kernel-privileged by default
+  (`control.h:170-178`). The proprietary Linux 535/610 handlers (repo evidence at `8223efc9`,
+  `tools/windows-debug-capture/evidence/runlist-20261005/README.md`) resolve the `0xb297` runlist
+  object and a Memory object from the params, read 12-byte records and a 16-bit index list from that
+  memory, and call the scheduler: it submits a guest-built runlist.
+- What Windows sends (vfio-10, 2026-10-05): at 2400, 2914, 2957, … ; request and reply are the same
+  40 bytes, status 0. Run41/42 raw words: `[ff008250, 0, ff000100, 1|2, 0x6000, 1|2, 1, 0, 0, 0]`
+  (runlist handle, runlist buffer memory, count, offset 0x6000, …). The second GR TSG (c1d00024)
+  gets no `GPFIFO_SCHEDULE` in either vfio-10 or kayfabe: only this control puts it on a runlist.
+- What kayfabe does today: `KF3_SW_RUNLIST_PROBE` logs the raw words and leaves the control
+  unserviced (0x56 to the guest); the first GR channel runs anyway because it also gets
+  `GPFIFO_SCHEDULE`.
+- **Options.** (a) Decode the 40 bytes and the guest's 12-byte records from its runlist buffer
+  (bounded, hostile input), map each record to the VM's own Translated TSG, and enable exactly those
+  host twins with the host's unprivileged `GPFIFO_SCHEDULE` on the VM's own groups; answer after the
+  host acts. Needs the owner to accept a layout known only from proprietary-driver disassembly
+  (refuse-rather-than-guess). (b) Treat runlist submission as host-owned scheduling under §S: answer
+  `NV_OK`, and enable every live Translated kernel TSG's host twin at birth, ignoring the guest's
+  runlist contents (no closed layout parsed; Windows' ordering and removals have no effect). (c)
+  Keep refusing: the second GR channel never runs, so Windows' first GR submission cannot complete.
+- Neither (a) nor (b) needs a privileged host verb or a new emulated channel; both forward nothing
+  from guest bytes. The choice is about semantics, so it is the owner's.
+
+**Next without an owner decision:** the memory-plane wall above (walk #2192 empties the space). It
+probably comes before `0x20801111` matters: the copy channel dies first.

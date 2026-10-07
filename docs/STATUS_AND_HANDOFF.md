@@ -11,6 +11,25 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-07
 
+**Runs 38-43, 2026-10-07 (branch `claude/code43-stubs-20261007`; answers the next paragraph's
+"stopped for an owner decision" on the 13 queries, under the coordinator's relay of the owner's §S
+statement).** A bisect (runs 38-41) found the minimal set: `0x2081010d` alone moves StartDevice past
+VFIO 2861; the other 12, including the four with public layouts, are not needed and stay refused.
+It ships default on as `kf_rm::hoststub`: its id is generated from OGKM's
+`FINN_NV2081_BINAPI_INTERFACE_ID` plus a message number confirmed by the pinned retail driver's
+export row (`tools/windows-ctrl-export/derive.py`), gated on the guest's declared Windows 580.88
+identity; `KF3_DIAG_ZERO_OK` is removed. `OWNER_RULINGS.md` §S records it as ASSUMED, owner to
+confirm: the retail flags say the control is NON_PRIVILEGED. Also served: the server-context-only
+`COPY_SERVER_RESERVED_PDES` (OGKM `gpu_vaspace.c:4418-4427`) and the FECS-trace query as "disabled"
+(driver matrix regen). Windows now gets past VFIO 2931 without a bugcheck, but kayfabe kills its
+kernel copy channel and nvlddmkm logs TDR cycles (runs 38-43). Run43 measured why the channel dies:
+an `ALL_VA` walk right before Windows' PDE-level move empties the whole VA space (kayfabe's memory
+plane, no decision needed; next measurement named in the README). **Stopped for an owner decision:**
+the software-runlist submit `0x20801111`, options (a)/(b)/(c) in the README. Code43/smi were last
+measured in runs 39-40 (43 / exit 9); since run38 the guest is in TDR cycles and the status script
+times out. Host healthy after every run (Xid 5 unchanged).
+[Runs 38-43 and the stop](../traces/windows_code43_walls_20261007/README.md#stop-an-owner-decision-is-needed-for-the-software-runlist-the-bisect-and-c-are-done-2026-10-07-after-run43).
+
 **Runs 36-37, 2026-10-07 (branch `claude/code43-trace-20261007`). This answers the next
 paragraph's "proposed bounded BAR0 trace run", which the owner approved (`OWNER_RULINGS.md` §S
 exception).** No boot was needed for the reference: vfio-1's MMIO trace aligns with vfio-10's RPC
