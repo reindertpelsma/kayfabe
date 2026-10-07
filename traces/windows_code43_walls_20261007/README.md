@@ -1669,3 +1669,90 @@ paging channel's window, which is closed by the first `Free`.
   compared with what OGKM's GSP-RM writes at allocation or schedule time.
 - *Prediction:* the abort stays at VFIO 2861 (the run changes no answer). If it moves, the trap's
   timing changed the guest's behaviour, and that is recorded as the result.
+
+### Run36 result (DIAGNOSTIC): the paging channel's window holds no BAR0 read; USERD is zero, no error notifier
+
+Product/QEMU 68c5879fc6b8600c6d045f6234f2d8cc128f8bfa, `kf3-bins/68c5879f`, flags as run35 plus
+`KF3_BAR0_TRACE=1`; run on 2026-10-07 at 16:04-16:06 UTC. [command](run36-command.json),
+[status](run36-status.json), [trace](run36-qemu.log.gz), [requests](run36-requests.log) (every
+`BAR0-TRACE` line), [completion](run36-complete.json), [host health](run36-host-health.txt),
+[host after](run36-host-after.txt), [unit result](run36-unit-result.txt),
+[9/9 gates](run36-gates.log) (11/11 USER births), [build](run36-build.log),
+[native oracle](gr-tier-native-run36.log) (GR tier PASS, Xid count 5 before and after),
+[watchdog recovery](run36-watchdog-recovery.log) (cleanup verified). After 98 s:
+ConfigManagerErrorCode 43, nvidia-smi exit 9. Host afterwards: no QEMU, NBD disconnected, display
+enabled, P8, Xid count unchanged (5).
+
+**Measured (seen in run36 at 68c5879f):**
+- **Abort point unchanged:** 858 RPCs, teardown at 544, last RPC `GPFIFO_SCHEDULE` of
+  c1d00020/ff040009 returning 0 (VFIO 2861).
+- Eleven windows opened, one per Translated kernel-channel schedule, and the read trap flipped 22
+  times. Window #1 (RM's own scrubber channel) closed before its bottom half ran. Windows #2-#9
+  (the kernel channels of c1d00013 … c1d0001c, each accepted by Windows) hold 15 accesses each (8 for
+  #3): two interrupt-mask groups and the next RPC's queue-head write. Each group is 7 writes:
+  `LEAF_EN_SET(2)=0x101`, `LEAF_EN_SET(4)=0xc10007a`, `TOP_EN_SET=0xfffffffe`,
+  `LEAF_EN_CLEAR(2)=0x101`, `LEAF_EN_CLEAR(4)=0xffffffff`, `TOP_EN_CLEAR=0x8`,
+  `LEAF_EN_SET(4)=0x4000000` (`kf_trap::cpuintr` offsets). **None of them holds a BAR0 read.**
+- Window #10 (after c1d0001d's schedule, closed by an `RmControl`) holds the guest's interrupt
+  self-test: `CPU_INTR_LEAF_TRIGGER` (`0xb81640`) = `0x81`. Then come reads of the PCI-config
+  mirror's MSI control (`0x088068`) = **0** and MSI-X header (`0x0880c8`) = **0**, then the leaf and
+  top reads and their clears. In vfio-1 the same self-test is at head 2515, where `0x088068` reads
+  `0x00817805` (MSI enabled); `0x0880c8` read `0x00050011` at head 55 (MSI-X present, disabled).
+- **Window #11 (the paging channel, closed by the first `Free`): 29 accesses, all writes. Four
+  interrupt-mask groups, then the `Free`'s queue-head write. No BAR0 read.**
+- One-time dump at that `Free`: the channel's USERD words 0-63 are all `00000000` (`scheduled=true
+  serves=1 last_put=Some(0)`); error notifier: **none declared** by the channel's allocation.
+- Windows' own record (event logs read from the run's overlay after the VM stopped, read-only NBD
+  and NTFS, the watchdog-recovery procedure; private copies on the host):
+  `Microsoft-Windows-DxgKrnl-Admin` event 549, GraphicsVendorId 4318 (0x10DE), Status `0xC0000001`
+  (STATUS_UNSUCCESSFUL), FailureReason 1; event 457 "Start Device Failed", Status `0xC0000001`. The
+  System log holds no nvlddmkm error event.
+- Limits of the trace: a read between the reply's publication and the bottom half's ROMD flip (an
+  untimed, short interval) is not recorded. The usermode passthrough page (`0xbb0000`, the doorbell
+  and usermode timer) and the host timer page are never trapped. The vfio-1 window reads none of
+  their registers either.
+
+**Falsifier outcomes.**
+- *Hypothesis 1 (a BAR0 read in the window returns a value Windows rejects): falsified.* The
+  window closed by the first `Free` contains no BAR0 read at all, like the accepted windows #2-#9.
+- *Hypothesis 2 (USERD or error notifier state): weakened.* USERD holds `GP_PUT = GP_GET = 0` and
+  nothing else, which is what the guest's own CPU-RM writes for a sysmem USERD: `memset` 0 of
+  `NV_RAMUSERD_CHAN_SIZE` (`kfifoSetupUserD_GM107`, `ogkm-580: src/nvidia/src/kernel/gpu/fifo/arch/maxwell/kernel_fifo_gm107.c:797-808`,
+  called for sysmem USERD on a GSP client at `ogkm-580: src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:2323-2336`;
+  both read in OGKM 580.65.06). The channel declares no error notifier, so none can hold an error.
+- *Prediction held:* the abort did not move (the trace changes no answer).
+
+**What the interrupt groups suggest (inferred, not tested).** Per RPC, an accepted window shows two
+mask groups in kayfabe and one in vfio-1. The abort window shows four. That fits one extra
+GPU-locked RM entry without an RPC before the `Free`: for example a free of an object that needs no
+RPC, or a local query. So Windows decides to tear down right after `GPFIFO_SCHEDULE` returns, with
+no MMIO and no RPC in between. It decides from state it already holds, which includes everything
+kayfabe answered earlier.
+
+## Hypothesis 5: a refused query consumed later (2026-10-07, after run36)
+
+**Measured (run36 at 68c5879f against vfio-10, aligned with `difflib` on (function, control/class)).**
+- From the GR kernel channel's creation to the abort, the two RPC streams match except for three
+  divergences. (1) vfio-10 creates a SEC2 (`0x26`) kernel channel (c1d0001a, 2454-2465), which
+  kayfabe does not advertise. (2) vfio-10 arms notifier 34 (HDCP), which kayfabe reports absent
+  under §S. (3) vfio-10 runs about 250 more display controls: DP AUX, ELD, `IS_MODE_POSSIBLE`.
+  kayfabe answers IMP as bypassed (run30). From VFIO 2834 on, the last 28 RPCs before the abort
+  are identical.
+- In run36 the guest's own clients leave **29 distinct controls unserviced that the real GSP
+  answers with status 0** in vfio-10. Six more are refused by both or are absent from vfio-10. In
+  the power/thermal/perf/clock area: `0x20808524` (THERMAL, legacy, 4-byte params), `0x2080a70a`
+  (POWER, legacy), `0x2080a630` (PMGR, legacy, 1160 B), `0x2080a801` (LPWR, legacy, 1028 B),
+  `0x2080a060` (PERF, legacy), `0x20809004` (CLK, legacy, 1544 B), `0x20810108` and `0x2081010d`
+  (the `0x2081` binary-API class), `PERF_SET_POWERSTATE` `0x2080205b`,
+  `PERF_GET_CURRENT_PSTATE` `0x20802068`, `LPWR_DIFR_CTRL` `0x20802801`, `0x20802806` (LPWR),
+  `BIF_GET_PCIE_POWER_CONTROL_MASK` `0x00800106`. The names come from OGKM 580.65.06 where it has
+  them. Interface numbers are from `ctrl2080base.h:46` (`0x85` = THERMAL legacy non-privileged)
+  and the same file's other rows.
+- In vfio-10, the RPCs that come right after the abort point (2862-2864) are THERMAL legacy queries
+  on c1d00002: `0x2080852e`, `0x20808530`, `0x2080852a`.
+
+**Hypothesis 5 (inferred, medium):** StartDevice's stage after the paging channel is thermal and
+power initialisation. It consumes the results of earlier power, thermal or perf queries that kayfabe
+refused. The refusals were tolerated when they happened, which is why the abort-point rule ("the
+teardown follows the first refusal not tolerated") never named them. The stage then fails before it
+sends its first RPC.
