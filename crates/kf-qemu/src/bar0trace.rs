@@ -287,7 +287,11 @@ pub fn render(c: &Closed, closed_by: &str) -> Vec<String> {
             r.off,
             r.width,
             r.value,
-            if n > 1 { format!(" x{n}") } else { String::new() }
+            if n > 1 {
+                format!(" x{n}")
+            } else {
+                String::new()
+            }
         ));
         i += n;
     }
@@ -352,7 +356,10 @@ mod tests {
         t.schedule_served(C);
         t.after_publish();
         t.note(rd(0x88068, 5), true);
-        assert_eq!(t.take_closed().map(|c| (c.window, c.records.len())), Some((2, 1)));
+        assert_eq!(
+            t.take_closed().map(|c| (c.window, c.records.len())),
+            Some((2, 1))
+        );
     }
 
     #[test]

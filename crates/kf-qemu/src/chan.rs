@@ -2821,12 +2821,11 @@ impl ChanPlane {
             "kf3: chan {client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} (token {idx:#x}, host {ht:#x})"
         );
         if enable {
-            self.bar0trace
-                .schedule_served(crate::bar0trace::TraceChan {
-                    client,
-                    object,
-                    host: ht,
-                });
+            self.bar0trace.schedule_served(crate::bar0trace::TraceChan {
+                client,
+                object,
+                host: ht,
+            });
         }
         // Work the guest queued before scheduling is picked up now.
         if enable && self.plane.ring_internal(idx) {
@@ -4209,7 +4208,10 @@ impl ChanPlane {
     /// the traced channel's USERD and the four words of its error notifier, as they are when the
     /// guest's teardown starts. Reads only; nothing is written or forwarded.
     pub fn bar0trace_dump(&self, t: crate::bar0trace::TraceChan) -> Vec<String> {
-        let tag = format!("kf3: BAR0-TRACE dump chan {:#x}:{:#x} (host {:#x})", t.client, t.object, t.host);
+        let tag = format!(
+            "kf3: BAR0-TRACE dump chan {:#x}:{:#x} (host {:#x})",
+            t.client, t.object, t.host
+        );
         let Some(slot) = self.slot(t.host) else {
             return vec![format!("{tag}: no Translated slot (already retired?)")];
         };
@@ -4251,7 +4253,10 @@ impl ChanPlane {
                     },
                 ),
             Some(kf_arch::fault::ErrorNotifier::Framebuffer { off }) => {
-                match self.userd_view(Some(kf_arch::UserdMem::Framebuffer { base: off, size: 16 })) {
+                match self.userd_view(Some(kf_arch::UserdMem::Framebuffer {
+                    base: off,
+                    size: 16,
+                })) {
                     Ok(v) => {
                         let s = format!("framebuffer +{off:#x}: {}", words(&|o| v.load(o), 4));
                         if let UserdView::Store { cookie, .. } = &v {
@@ -4265,7 +4270,9 @@ impl ChanPlane {
                     Err(e) => format!("framebuffer +{off:#x}: no view ({e})"),
                 }
             }
-            Some(kf_arch::fault::ErrorNotifier::Unreachable) => "in an aperture we cannot name".to_string(),
+            Some(kf_arch::fault::ErrorNotifier::Unreachable) => {
+                "in an aperture we cannot name".to_string()
+            }
         };
         out.push(format!("{tag}: error notifier {notifier}"));
         out

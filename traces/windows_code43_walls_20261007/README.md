@@ -1066,6 +1066,13 @@ class: 1 }`, and GR channel c1d00015:ff040001 (token 0x3, engine 1) with `Foreig
 class: 0xa140 }` (KEPLER_INLINE_TO_MEMORY_B). The Translated route accepts only copy-engine classes
 and `GP100_UVM_SW` (`kf_chan::translated`, `tmode`).
 
+> **Correction, 2026-10-07 (after run35; [the VFIO MMIO reference](#the-vfio-mmio-reference-of-the-window-no-boot-2026-10-07)).**
+> The observer export's own header gives `qpc_frequency` 1 000 000 000 (`boundary-vfio-10/gsp.jsonl`,
+> line 1), so the ticks below are nanoseconds, not 10 MHz units: RPCs here arrive every 0.3-0.6 ms,
+> and 2861 → 2862 takes **13.0 ms**, not 1.3 s. "It does GPU work there" is also wrong: the vfio-1
+> MMIO trace of the same RPC interval shows no doorbell, BAR1 or BAR3 access at all, only the RPC
+> handshake.
+
 **Timing in vfio-10 (observer QPC, unit assumed 10 MHz; relative values only).** RPCs in this
 stretch arrive every 30-60 ms, but between 2861 (this GPFIFO_SCHEDULE) and 2862 the real driver spends
 about 1.3 s without any RPC: it does GPU work there. In run30 the teardown starts within about
@@ -1571,3 +1578,94 @@ in time and count, no answer changes, nothing forwarded. Its output names hypoth
 logged once) would cover hypothesis 2 in the same run. The equivalent VFIO-arm trace (the audited
 runner's MMIO mode, `x-no-mmap`) would give the reference window if the kayfabe trace is not
 conclusive.
+
+## The VFIO MMIO reference of the window (no boot, 2026-10-07)
+
+Branch `claude/code43-trace-20261007`, from `1b505412`. Step 1 of the owner's plan of 2026-10-07:
+before spending a boot, look for a VFIO BAR0 trace of the same window.
+
+**What exists (measured on 172.22.1.20, `/var/lib/kf-windows-20261005/`).** vfio-8/9/10 carry the
+GSP observer and no MMIO trace (the runner refuses the two together). vfio-1 and vfio-2 (2026-10-05,
+`x-no-mmap=on`, QEMU `-trace vfio_region_read/write`) carry an MMIO trace; vfio-2 traced writes
+only, vfio-1 traced reads too. The runner killed both at its 256 MiB trace bound, but only after the
+window: vfio-1 holds **2932** writes of the GSP command-queue head (BAR0 `0x110c00`, one per RPC
+request). No new VFIO boot was needed.
+
+**Alignment (measured; the tool is [`mmio_window.py`](../../scripts/bench/windows/mmio_window.py)).**
+Head ordinal N (1-based) in vfio-1 is RPC index N of vfio-10's observer (`abort_point.py`'s
+indexing). In vfio-10, `0x0070` allocations at 2848, 2876 and 2930 are each followed by a
+`0x9096` allocation. In vfio-1, the only three ~16 400-line BAR3 bursts of heads 2840-2932 fall in
+exactly the intervals after heads 2848, 2876 and 2930: page-table writes through BAR3 plus four MMU
+invalidates each. The spacing (28, 54) is irregular, so a shifted alignment would not match it.
+Per-interval summary of heads 2300-2932: [vfio1-mmio-2300-2932-summary.txt](vfio1-mmio-2300-2932-summary.txt);
+every non-display BAR0 register read or written there, with up to 8 values:
+[vfio1-mmio-2300-2932-registers.txt](vfio1-mmio-2300-2932-registers.txt).
+
+**The window (measured, vfio-1, between head 2861 — `GPFIFO_SCHEDULE` of c1d00021's paging channel
+ff04000a — and head 2862).** 356 accesses, all of them the RPC handshake: 175 reads of `0x110094`,
+174 reads of `0xb81010`, and 7 interrupt-tree writes (`0xb81208/210/408/410/608/610`). There is no
+other BAR0 read, no doorbell (`0xbb0090`), no PTIMER read (`0x9400`, `0xbb0080`), and no BAR1 or BAR3
+access at all. The next RPCs (2862-2864, perf controls on c1d00002) follow 13.0 ms later in vfio-10.
+In the interval before the schedule (after head 2860, `SET_CHANNEL_PROPERTIES`), Windows clears one
+4 KiB page through BAR3, writes two PTE words and issues one MMU invalidate. In the interval before
+that (after head 2859, the `0xc7b5` alloc), it writes 410 bytes through BAR3 with 6 invalidates.
+
+**The kernel-channel doorbells (measured).** In heads 2300-2932 the usermode doorbell (`0xbb0090`)
+is written twice, both after head 2567 (values `0x3`/`0xe`/`0x10002`/`0x1000d` across the run): the
+two kernel channels' first work, which matches kayfabe's first rings near VFIO 2566.
+
+**What this says about hypothesis 1 (inferred).** In the reference, Windows reads no BAR0 register
+in the window except the RPC handshake. For a BAR0 read to be the cause on kayfabe, it must be either
+a read the reference never makes (an error path taken earlier), or a handshake read (`0x110094`,
+`0xb81010`, the interrupt leaves) whose kayfabe value differs. Only a kayfabe trace of the same window
+can tell. Hypothesis 1 drops from medium-high to medium; hypotheses 2 and 3 (guest memory that the
+CPU reads, which no MMIO trace shows) rise relatively.
+
+**Also seen (measured, not pursued yet).** vfio-10 has one more kernel client than kayfabe in this
+stretch: c1d0001a with a channel on engine `0x26` (`NV2080_ENGINE_TYPE_SEC2`, OGKM 580.65.06
+`cl2080_notification.h:323`), scheduled at VFIO 2465. kayfabe advertises no SEC2 engine (the host's
+`GET_ENGINES_V2` list in run34's realize log has no 0x26), so the guest never creates that client,
+and kayfabe's client numbers from there on are one lower than vfio-10's (kayfabe c1d00020 is vfio
+c1d00021).
+
+## DIAGNOSTIC run36: the approved BAR0 trace of the post-schedule windows (setup)
+
+**Owner approval, 2026-10-07** (`docs/OWNER_RULINGS.md` §S, "§S exception: a diagnostic BAR0-read
+trap"): default off, bounded at 4096 accesses, only from a guest-kernel channel's `GPFIFO_SCHEDULE`
+to the first `Free`, logging every BAR0 read and write plus the doorbell writes, and a one-time dump
+of 64 words of the new channel's USERD and its error notifier.
+
+**Change (diagnostic only; `KF3_BAR0_TRACE=1`, the runner's flag list gains it).**
+- `crates/kf-qemu/src/bar0trace.rs`: a window is armed when the served chain answers a Translated
+  guest-kernel channel's `GPFIFO_SCHEDULE` (enable). It opens on the drainer right after the reply
+  is published, and closes on the vCPU at the guest's next queue-head write (the next RPC), or at the
+  cap. While a window is open, every BAR0 read (with the value served) and every BAR0 write (the
+  usermode doorbell included) is recorded in a preallocated lock-free ring. The drainer prints the
+  window, with the function of the RPC that closed it, as `kf3: BAR0-TRACE …` lines; consecutive
+  identical records are collapsed with a count. When that RPC is the first `Free`, it also dumps 64
+  USERD words and the 4-word error notifier of the window's channel once (`kf3: BAR0-TRACE dump`).
+  The cap is 4096 records per run; once it is reached, no window opens again.
+- `qemu/hw/misc/kf3/kf3.c` (KF3 ABI 21, `kf3_set_read_trap`): a main-loop bottom half turns ROMD
+  off on the shadow pieces (their reads then exit to `kf3_bar0_read`) and back on. The usermode and
+  timer passthrough pages and PRAMIN are never trapped. `Device::bar0_read` answers a non-hole read
+  from the same shadow bytes ROMD would have shown, so no answer changes.
+- With the flag off, reads never exit: the only addition on the vCPU path is one atomic load per
+  trapped write. kf-qemu tests 106 pass (5 new in `bar0trace`), Clippy new 0. The unsafe ratchet
+  moves 61 → 67 (the read-trap verb's FFI, itemised in `.github/workflows/ci.yml`).
+
+**Every kernel-channel schedule opens a window**, about ten per boot. The earlier windows end at
+their next RPC, and Windows continued after each of them, so they are the accepted baseline for the
+paging channel's window, which is closed by the first `Free`.
+
+**Falsifiers, stated before run36.**
+- *Hypothesis 1 (a BAR0 read in the window returns a value Windows rejects).* Wrong if the window
+  closed by the first `Free` contains no BAR0 read except registers that the vfio-1 window also reads
+  (`0x110094`, `0xb81010`) or that the accepted windows of the same boot also read with the same
+  values. Supported if it contains a read that neither has. That read is then the candidate, to be
+  compared with OGKM and the VFIO value.
+- *Hypothesis 2 (the new channel's USERD or error notifier holds a state Windows rejects).* The dump
+  is a measurement, not a test. Hypothesis 2 is weakened if USERD shows `GP_PUT = GP_GET = 0` with
+  nothing else written and the error notifier's `status` is 0. Before any change it would have to be
+  compared with what OGKM's GSP-RM writes at allocation or schedule time.
+- *Prediction:* the abort stays at VFIO 2861 (the run changes no answer). If it moves, the trap's
+  timing changed the guest's behaviour, and that is recorded as the result.

@@ -1,0 +1,636 @@
+# vfio-1 (boundary-vfio-1, 2026-10-05, x-no-mmap + vfio_region_read/write trace, terminated by the 256 MiB trace bound)
+# per GSP command-queue-head write ordinal N (1-based; aligns with the vfio-10 observer RPC index N, see README): BAR0/BAR1/BAR3 accesses between head N and head N+1
+# bar0-poll/intr = reads of 0x110094 and 0xb81010 plus writes in 0xb81200-0xb816ff (the RPC wait handshake); display registers (0x68xxxx-0x69xxxx, 0x6fxxxx) are counted, not listed
+after head 2300: bar0-poll/intr=90
+after head 2301: bar0-poll/intr=17
+after head 2302: bar0-poll/intr=90
+after head 2303: bar0-poll/intr=13
+after head 2304: bar0-poll/intr=92
+after head 2305: bar0-poll/intr=17
+after head 2306: bar0-poll/intr=85
+after head 2307: bar0-poll/intr=17
+after head 2308: bar0-poll/intr=729
+after head 2309: bar0-poll/intr=17
+after head 2310: bar0-poll/intr=83
+after head 2311: bar0-poll/intr=15
+after head 2312: bar0-poll/intr=73
+after head 2313: bar0-poll/intr=17
+after head 2314: bar0 R 000000=3, bar, display-regs=126
+after head 2315: bar0 R b830b0=4, bar0 W b830a0=2, bar0 W b830a4=2, bar0 W b830b0=2, bar0-poll/intr=114, region1 W 29xxxx=4096, region3 R fexxxx=13, region3 W 5xxxx=64, region3 W fdxxxx=21
+after head 2316: bar0-poll/intr=21
+after head 2317: bar0-poll/intr=28
+after head 2318: bar0-poll/intr=28
+after head 2319: bar0 R bb0080=1, bar0 R bb0084=2, bar0-poll/intr=44
+after head 2320: bar0-poll/intr=21
+after head 2321: bar0-poll/intr=30
+after head 2322: bar0-poll/intr=28
+after head 2323: bar0 R bb0080=1, bar0 R bb0084=2, bar0-poll/intr=42
+after head 2324: bar0-poll/intr=21
+after head 2325: bar0-poll/intr=28
+after head 2326: bar0-poll/intr=28
+after head 2327: bar0 R bb0080=1, bar0 R bb0084=2, bar0-poll/intr=44
+after head 2328: bar0-poll/intr=23
+after head 2329: bar0-poll/intr=28
+after head 2330: bar0-poll/intr=26
+after head 2331: bar0 R bb0080=1, bar0 R bb0084=2, bar0-poll/intr=42
+after head 2332: bar0-poll/intr=19
+after head 2333: bar0-poll/intr=30
+after head 2334: bar0-poll/intr=20
+after head 2335: bar0 R bb0080=1, bar0 R bb0084=2, bar0-poll/intr=42
+after head 2336: bar0-poll/intr=19
+after head 2337: bar0-poll/intr=30
+after head 2338: bar0-poll/intr=28
+after head 2339: bar0 R bb0080=1, bar0 R bb0084=2, bar0-poll/intr=42
+after head 2340: bar0-poll/intr=21
+after head 2341: bar0-poll/intr=28
+after head 2342: bar0-poll/intr=30
+after head 2343: bar0 R bb0080=1, bar0 R bb0084=2, bar0-poll/intr=42
+after head 2344: bar0-poll/intr=21
+after head 2345: bar0-poll/intr=28
+after head 2346: bar0-poll/intr=30
+after head 2347: bar0 R bb0080=1, bar0 R bb0084=2, bar0-poll/intr=51, region1 W 29xxxx=4096, display-regs=4
+after head 2348: bar0-poll/intr=26
+after head 2349: bar0-poll/intr=20, display-regs=4
+after head 2350: bar0-poll/intr=22
+after head 2351: bar0-poll/intr=24, display-regs=4
+after head 2352: bar0-poll/intr=24
+after head 2353: bar0-poll/intr=20, display-regs=4
+after head 2354: bar0-poll/intr=24
+after head 2355: bar0 R b830b0=6, bar0 W b830a0=3, bar0 W b830a4=3, bar0 W b830b0=3, bar0-poll/intr=45, region1 W 2axxxx=65536, region3 R fexxxx=6, region3 W 5xxxx=96, display-regs=48
+after head 2356: bar0 R b830b0=6, bar0 W b830a0=3, bar0 W b830a4=3, bar0 W b830b0=3, bar0-poll/intr=45, region3 R fexxxx=8, region3 W 5xxxx=162, region3 W 6xxxx=258, region3 W fexxxx=2
+after head 2357: bar0-poll/intr=30
+after head 2358: bar0 R b830b0=14, bar0 W b830a0=7, bar0 W b830a4=7, bar0 W b830b0=7, bar0-poll/intr=155, region1 W 2cxxxx=8232, region3 R fexxxx=21, region3 W 5xxxx=2050, region3 W 6xxxx=100
+after head 2359: bar0-poll/intr=23
+after head 2360: bar0-poll/intr=26
+after head 2361: bar0-poll/intr=28
+after head 2362: bar0-poll/intr=28
+after head 2363: bar0-poll/intr=20
+after head 2364: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=49, region3 R fexxxx=2, region3 W 5xxxx=86
+after head 2365: bar0-poll/intr=17
+after head 2366: bar0-poll/intr=39
+after head 2367: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=49, region3 R fexxxx=2, region3 W 6xxxx=4096, region3 W fexxxx=2
+after head 2368: bar0-poll/intr=103
+after head 2369: bar0-poll/intr=43
+after head 2370: bar0-poll/intr=42
+after head 2371: bar0-poll/intr=26
+after head 2372: bar0-poll/intr=45
+after head 2373: bar0-poll/intr=21
+after head 2374: bar0-poll/intr=30
+after head 2375: bar0-poll/intr=30
+after head 2376: bar0-poll/intr=30
+after head 2377: bar0-poll/intr=33
+after head 2378: bar0-poll/intr=19
+after head 2379: bar0-poll/intr=30
+after head 2380: bar0-poll/intr=28
+after head 2381: bar0-poll/intr=28
+after head 2382: bar0-poll/intr=30
+after head 2383: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=45, region3 R fexxxx=2, region3 W 5xxxx=54
+after head 2384: bar0-poll/intr=17
+after head 2385: bar0-poll/intr=41
+after head 2386: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=33, region3 R fexxxx=2, region3 W 6xxxx=4096, region3 W fexxxx=2
+after head 2387: bar0 R 000000=1, bar0-poll/intr=91
+after head 2388: bar0-poll/intr=39
+after head 2389: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=35, region3 R fexxxx=2, region3 W 5xxxx=32
+after head 2390: bar0 R b830b0=56, bar0 W b830a0=28, bar0 W b830a4=28, bar0 W b830b0=28, bar0-poll/intr=17, region3 R fexxxx=98, region3 W 5xxxx=1140, region3 W 6xxxx=4076, region3 W 7xxxx=2558, region3 W fexxxx=42
+after head 2391: bar0-poll/intr=39
+after head 2392: bar0-poll/intr=233
+after head 2393: bar0-poll/intr=19
+after head 2394: bar0-poll/intr=81
+after head 2395: bar0-poll/intr=17
+after head 2396: bar0-poll/intr=67
+after head 2397: bar0-poll/intr=17
+after head 2398: bar0-poll/intr=80, region1 W 35xxxx=4
+after head 2399: bar0-poll/intr=26
+after head 2400: bar0-poll/intr=30
+after head 2401: bar0-poll/intr=56
+after head 2402: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=42, region3 R fexxxx=3, region3 W 5xxxx=1280, region3 W 6xxxx=20
+after head 2403: bar0-poll/intr=24
+after head 2404: bar0-poll/intr=35
+after head 2405: bar0-poll/intr=26
+after head 2406: bar0 R b830b0=8, bar0 W b830a0=4, bar0 W b830a4=4, bar0 W b830b0=4, bar0-poll/intr=25, region3 R fexxxx=12, region3 W 7xxxx=16422, region3 W fexxxx=8
+after head 2407: bar0-poll/intr=71, region3 R fexxxx=3, region3 W 7xxxx=24
+after head 2408: bar0-poll/intr=32
+after head 2409: bar0 R b830b0=8, bar0 W b830a0=4, bar0 W b830a4=4, bar0 W b830b0=4, bar0-poll/intr=23, region3 R fexxxx=12, region3 W 7xxxx=16422, region3 W fexxxx=8
+after head 2410: bar0-poll/intr=55, region3 R fexxxx=3, region3 W 7xxxx=24
+after head 2411: bar0-poll/intr=37
+after head 2412: bar0-poll/intr=21
+after head 2413: bar0-poll/intr=28
+after head 2414: bar0-poll/intr=26
+after head 2415: bar0-poll/intr=28
+after head 2416: bar0-poll/intr=26
+after head 2417: bar0 R b830b0=4, bar0 W b830a0=2, bar0 W b830a4=2, bar0 W b830b0=2, bar0-poll/intr=54, region3 R fexxxx=6, region3 W 5xxxx=2, region3 W 6xxxx=24, region3 W 7xxxx=4182, region3 W fexxxx=2
+after head 2418: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=22, region3 R fexxxx=2, region3 W 7xxxx=4096, region3 W fexxxx=2
+after head 2419: bar0-poll/intr=112
+after head 2420: bar0-poll/intr=37
+after head 2421: bar0-poll/intr=42
+after head 2422: bar0-poll/intr=30
+after head 2423: bar0-poll/intr=41
+after head 2424: bar0-poll/intr=23
+after head 2425: bar0-poll/intr=28
+after head 2426: bar0-poll/intr=28
+after head 2427: bar0-poll/intr=32
+after head 2428: bar0-poll/intr=35
+after head 2429: bar0-poll/intr=21
+after head 2430: bar0-poll/intr=28
+after head 2431: bar0-poll/intr=28
+after head 2432: bar0-poll/intr=28
+after head 2433: bar0-poll/intr=28
+after head 2434: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=54, region3 R fexxxx=3, region3 W 6xxxx=16, region3 W 7xxxx=14
+after head 2435: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=24, region3 R fexxxx=2, region3 W 7xxxx=4096, region3 W fexxxx=2
+after head 2436: bar0-poll/intr=110
+after head 2437: bar0 R b830b0=4, bar0 W b830a0=2, bar0 W b830a4=2, bar0 W b830b0=2, bar0-poll/intr=39, region3 R fexxxx=6, region3 W 5xxxx=2, region3 W 6xxxx=8, region3 W 7xxxx=4113, region3 W fexxxx=2
+after head 2438: bar0-poll/intr=241
+after head 2439: bar0-poll/intr=56
+after head 2440: bar0-poll/intr=45
+after head 2441: bar0-poll/intr=23
+after head 2442: bar0-poll/intr=28
+after head 2443: bar0-poll/intr=28
+after head 2444: bar0-poll/intr=28
+after head 2445: bar0-poll/intr=30
+after head 2446: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=43, region3 R fexxxx=3, region3 W 6xxxx=8, region3 W 7xxxx=14
+after head 2447: bar0-poll/intr=17
+after head 2448: bar0-poll/intr=39
+after head 2449: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=33, region3 R fexxxx=2, region3 W 7xxxx=4096, region3 W fexxxx=2
+after head 2450: bar0-poll/intr=91
+after head 2451: bar0-poll/intr=39
+after head 2452: bar0-poll/intr=42
+after head 2453: bar0-poll/intr=26
+after head 2454: bar0-poll/intr=41
+after head 2455: bar0-poll/intr=23
+after head 2456: bar0-poll/intr=28
+after head 2457: bar0-poll/intr=28
+after head 2458: bar0-poll/intr=28
+after head 2459: bar0-poll/intr=28
+after head 2460: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=54, region3 R fexxxx=3, region3 W 6xxxx=8, region3 W 7xxxx=14
+after head 2461: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=24, region3 R fexxxx=2, region3 W 7xxxx=4096, region3 W fexxxx=2
+after head 2462: bar0-poll/intr=102
+after head 2463: bar0 R b830b0=4, bar0 W b830a0=2, bar0 W b830a4=2, bar0 W b830b0=2, bar0-poll/intr=39, region3 R fexxxx=5, region3 W 6xxxx=2, region3 W 7xxxx=8320, region3 W 8xxxx=57344, region3 W fexxxx=32
+after head 2464: bar0-poll/intr=31
+after head 2465: bar0 R 000000=1, bar0-poll/intr=60
+after head 2466: bar0-poll/intr=43
+after head 2467: bar0-poll/intr=21
+after head 2468: bar0-poll/intr=30
+after head 2469: bar0-poll/intr=28
+after head 2470: bar0-poll/intr=30
+after head 2471: bar0-poll/intr=28
+after head 2472: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=54, region3 R fexxxx=3, region3 W 6xxxx=8, region3 W 7xxxx=14
+after head 2473: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=24, region3 R fexxxx=2, region3 W 8xxxx=4096, region3 W fexxxx=2
+after head 2474: bar0-poll/intr=122
+after head 2475: bar0 R b830b0=4, bar0 W b830a0=2, bar0 W b830a4=2, bar0 W b830b0=2, bar0-poll/intr=39, region3 R fexxxx=6, region3 W 5xxxx=2, region3 W 6xxxx=8, region3 W 8xxxx=4113, region3 W fexxxx=2
+after head 2476: bar0-poll/intr=159
+after head 2477: bar0-poll/intr=54
+after head 2478: bar0-poll/intr=43
+after head 2479: bar0-poll/intr=23
+after head 2480: bar0-poll/intr=28
+after head 2481: bar0-poll/intr=28
+after head 2482: bar0-poll/intr=28
+after head 2483: bar0-poll/intr=28
+after head 2484: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=54, region3 R fexxxx=3, region3 W 6xxxx=8, region3 W 7xxxx=14
+after head 2485: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=24, region3 R fexxxx=2, region3 W 9xxxx=4096, region3 W fexxxx=2
+after head 2486: bar0-poll/intr=114
+after head 2487: bar0 R b830b0=4, bar0 W b830a0=2, bar0 W b830a4=2, bar0 W b830b0=2, bar0-poll/intr=39, region3 R fexxxx=6, region3 W 6xxxx=8, region3 W 7xxxx=2, region3 W 9xxxx=4113, region3 W fexxxx=2
+after head 2488: bar0-poll/intr=33
+after head 2489: bar0-poll/intr=62
+after head 2490: bar0-poll/intr=28
+after head 2491: bar0-poll/intr=43
+after head 2492: bar0-poll/intr=23
+after head 2493: bar0-poll/intr=28
+after head 2494: bar0-poll/intr=28
+after head 2495: bar0-poll/intr=28
+after head 2496: bar0-poll/intr=28
+after head 2497: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=66, region3 R fexxxx=3, region3 W 6xxxx=16, region3 W 7xxxx=14
+after head 2498: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=24, region3 R fexxxx=2, region3 W 9xxxx=4096, region3 W fexxxx=2
+after head 2499: bar0-poll/intr=104
+after head 2500: bar0 R b830b0=4, bar0 W b830a0=2, bar0 W b830a4=2, bar0 W b830b0=2, bar0-poll/intr=39, region3 R fexxxx=6, region3 W 6xxxx=8, region3 W 7xxxx=2, region3 W 9xxxx=4113, region3 W fexxxx=2
+after head 2501: bar0-poll/intr=155
+after head 2502: bar0-poll/intr=54
+after head 2503: bar0-poll/intr=47
+after head 2504: bar0-poll/intr=21
+after head 2505: bar0-poll/intr=26
+after head 2506: bar0-poll/intr=30
+after head 2507: bar0-poll/intr=30
+after head 2508: bar0-poll/intr=28
+after head 2509: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=52, region3 R fexxxx=3, region3 W 6xxxx=8, region3 W 7xxxx=14
+after head 2510: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=24, region3 R fexxxx=2, region3 W 9xxxx=4096, region3 W fexxxx=2
+after head 2511: bar0-poll/intr=98
+after head 2512: bar0 R b830b0=4, bar0 W b830a0=2, bar0 W b830a4=2, bar0 W b830b0=2, bar0-poll/intr=39, region3 R fexxxx=6, region3 W 6xxxx=8, region3 W 7xxxx=2, region3 W 9xxxx=4113, region3 W fexxxx=2
+after head 2513: bar0-poll/intr=31
+after head 2514: bar0-poll/intr=60
+after head 2515: bar0 R 000000=1, bar0 R 088068=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=85
+after head 2516: bar0-poll/intr=26
+after head 2517: bar0-poll/intr=31
+after head 2518: bar0-poll/intr=30
+after head 2519: bar0-poll/intr=24
+after head 2520: bar0-poll/intr=28
+after head 2521: bar0-poll/intr=24
+after head 2522: bar0-poll/intr=28
+after head 2523: bar0-poll/intr=20
+after head 2524: bar0-poll/intr=26
+after head 2525: bar0-poll/intr=24
+after head 2526: bar0-poll/intr=26
+after head 2527: bar0-poll/intr=30
+after head 2528: bar0-poll/intr=28
+after head 2529: bar0-poll/intr=22
+after head 2530: bar0-poll/intr=28
+after head 2531: bar0-poll/intr=22
+after head 2532: bar0-poll/intr=26
+after head 2533: bar0-poll/intr=24
+after head 2534: bar0-poll/intr=28
+after head 2535: bar0-poll/intr=24
+after head 2536: bar0-poll/intr=28
+after head 2537: bar0-poll/intr=22
+after head 2538: bar0-poll/intr=26
+after head 2539: bar0-poll/intr=24
+after head 2540: bar0-poll/intr=26
+after head 2541: bar0-poll/intr=24
+after head 2542: bar0-poll/intr=30
+after head 2543: bar0-poll/intr=22
+after head 2544: bar0-poll/intr=30
+after head 2545: bar0-poll/intr=24
+after head 2546: bar0-poll/intr=28
+after head 2547: bar0-poll/intr=24
+after head 2548: bar0-poll/intr=28
+after head 2549: bar0-poll/intr=24
+after head 2550: bar0-poll/intr=26
+after head 2551: bar0-poll/intr=24
+after head 2552: bar0-poll/intr=28
+after head 2553: bar0-poll/intr=24
+after head 2554: bar0-poll/intr=28
+after head 2555: bar0-poll/intr=24
+after head 2556: bar0-poll/intr=28
+after head 2557: bar0-poll/intr=24
+after head 2558: bar0-poll/intr=28
+after head 2559: bar0-poll/intr=26
+after head 2560: bar0-poll/intr=28
+after head 2561: bar0-poll/intr=50
+after head 2562: bar0-poll/intr=28
+after head 2563: bar0-poll/intr=24
+after head 2564: bar0-poll/intr=28
+after head 2565: bar0-poll/intr=24
+after head 2566: bar0-poll/intr=26
+after head 2567: bar0 W bb0090=2, bar0-poll/intr=24
+after head 2568: bar0-poll/intr=44, display-regs=1
+after head 2569: bar0-poll/intr=32
+after head 2570: bar0-poll/intr=14
+after head 2571: bar0-poll/intr=24
+after head 2572: bar0-poll/intr=24
+after head 2573: bar0-poll/intr=34, display-regs=1
+after head 2574: bar0-poll/intr=24
+after head 2575: bar0-poll/intr=24
+after head 2576: bar0-poll/intr=44, display-regs=11
+after head 2577: bar0-poll/intr=24
+after head 2578: bar0-poll/intr=24
+after head 2579: bar0-poll/intr=24, region1 W 2xxxx=3
+after head 2580: bar0-poll/intr=24
+after head 2581: bar0-poll/intr=26
+after head 2582: bar0-poll/intr=30
+after head 2583: bar0-poll/intr=60
+after head 2584: bar0-poll/intr=60
+after head 2585: bar0-poll/intr=134
+after head 2586: bar0-poll/intr=52
+after head 2587: bar0-poll/intr=64
+after head 2588: bar0-poll/intr=124
+after head 2589: bar0-poll/intr=58
+after head 2590: bar0-poll/intr=58
+after head 2591: bar0-poll/intr=52
+after head 2592: bar0-poll/intr=60
+after head 2593: bar0-poll/intr=24
+after head 2594: bar0-poll/intr=24
+after head 2595: bar0-poll/intr=74
+after head 2596: bar0-poll/intr=68
+after head 2597: bar0-poll/intr=26
+after head 2598: bar0-poll/intr=48
+after head 2599: bar0-poll/intr=58
+after head 2600: bar0-poll/intr=58
+after head 2601: bar0-poll/intr=68
+after head 2602: bar0-poll/intr=68
+after head 2603: bar0-poll/intr=68
+after head 2604: bar0-poll/intr=60
+after head 2605: bar0-poll/intr=68
+after head 2606: bar0-poll/intr=66
+after head 2607: bar0-poll/intr=68
+after head 2608: bar0-poll/intr=68
+after head 2609: bar0-poll/intr=50
+after head 2610: bar0-poll/intr=68
+after head 2611: bar0-poll/intr=68
+after head 2612: bar0-poll/intr=68
+after head 2613: bar0-poll/intr=68
+after head 2614: bar0-poll/intr=68
+after head 2615: bar0-poll/intr=60
+after head 2616: bar0-poll/intr=68
+after head 2617: bar0-poll/intr=68
+after head 2618: bar0-poll/intr=60
+after head 2619: bar0-poll/intr=38
+after head 2620: bar0-poll/intr=58
+after head 2621: bar0-poll/intr=60
+after head 2622: bar0-poll/intr=58
+after head 2623: bar0-poll/intr=62
+after head 2624: bar0-poll/intr=60
+after head 2625: bar0-poll/intr=58
+after head 2626: bar0-poll/intr=52
+after head 2627: bar0-poll/intr=60
+after head 2628: bar0-poll/intr=60
+after head 2629: bar0-poll/intr=58
+after head 2630: bar0-poll/intr=24
+after head 2631: bar0-poll/intr=50
+after head 2632: bar0-poll/intr=26
+after head 2633: bar0-poll/intr=24
+after head 2634: bar0-poll/intr=20
+after head 2635: bar0-poll/intr=26
+after head 2636: bar0-poll/intr=124
+after head 2637: bar0-poll/intr=60
+after head 2638: bar0-poll/intr=64
+after head 2639: bar0-poll/intr=58
+after head 2640: bar0-poll/intr=52
+after head 2641: bar0-poll/intr=26
+after head 2642: bar0-poll/intr=20
+after head 2643: bar0-poll/intr=36
+after head 2644: bar0-poll/intr=18
+after head 2645: bar0-poll/intr=26
+after head 2646: bar0-poll/intr=24
+after head 2647: bar0-poll/intr=26, display-regs=4
+after head 2648: bar0-poll/intr=1410
+after head 2649: bar0-poll/intr=26, display-regs=1
+after head 2650: bar0-poll/intr=200, display-regs=1
+after head 2651: bar0-poll/intr=62, display-regs=1
+after head 2652: bar0-poll/intr=70, display-regs=1
+after head 2653: bar0-poll/intr=70, display-regs=1
+after head 2654: bar0-poll/intr=68, display-regs=1
+after head 2655: bar0-poll/intr=96, display-regs=1
+after head 2656: bar0-poll/intr=92, display-regs=1
+after head 2657: bar0-poll/intr=94, display-regs=1
+after head 2658: bar0-poll/intr=294, display-regs=1
+after head 2659: bar0-poll/intr=202, display-regs=1
+after head 2660: bar0-poll/intr=72, display-regs=1
+after head 2661: bar0-poll/intr=72, display-regs=1
+after head 2662: bar0-poll/intr=70, display-regs=1
+after head 2663: bar0-poll/intr=68, display-regs=1
+after head 2664: bar0-poll/intr=36, display-regs=14
+after head 2665: bar0-poll/intr=42, display-regs=14
+after head 2666: bar0-poll/intr=62, display-regs=14
+after head 2667: bar0-poll/intr=50, display-regs=14
+after head 2668: bar0-poll/intr=50, display-regs=14
+after head 2669: bar0-poll/intr=54, display-regs=14
+after head 2670: bar0-poll/intr=34, display-regs=14
+after head 2671: bar0-poll/intr=36, display-regs=14
+after head 2672: bar0-poll/intr=36, display-regs=14
+after head 2673: bar0-poll/intr=32, display-regs=14
+after head 2674: bar0-poll/intr=30, display-regs=14
+after head 2675: bar0-poll/intr=30, display-regs=14
+after head 2676: bar0-poll/intr=32, display-regs=14
+after head 2677: bar0-poll/intr=48, display-regs=14
+after head 2678: bar0-poll/intr=34, display-regs=14
+after head 2679: bar0-poll/intr=36, display-regs=14
+after head 2680: bar0-poll/intr=34, display-regs=14
+after head 2681: bar0-poll/intr=38, display-regs=42
+after head 2682: bar0-poll/intr=36, display-regs=14
+after head 2683: bar0-poll/intr=50, display-regs=14
+after head 2684: bar0-poll/intr=36, display-regs=42
+after head 2685: bar0-poll/intr=48, display-regs=14
+after head 2686: bar0-poll/intr=50, display-regs=14
+after head 2687: bar0-poll/intr=34, display-regs=28
+after head 2688: bar0-poll/intr=50, display-regs=14
+after head 2689: bar0-poll/intr=48, display-regs=14
+after head 2690: bar0-poll/intr=44, display-regs=13
+after head 2691: bar0-poll/intr=34
+after head 2692: bar0-poll/intr=26
+after head 2693: bar0-poll/intr=60
+after head 2694: bar0-poll/intr=24
+after head 2695: bar0-poll/intr=22
+after head 2696: bar0-poll/intr=32
+after head 2697: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=54
+after head 2698: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=42
+after head 2699: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=42
+after head 2700: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=60
+after head 2701: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=46
+after head 2702: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=56
+after head 2703: bar0 R 000000=2, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=56
+after head 2704: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=56
+after head 2705: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=54
+after head 2706: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=54
+after head 2707: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=34
+after head 2708: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=56
+after head 2709: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=56
+after head 2710: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=54
+after head 2711: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=40
+after head 2712: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=56
+after head 2713: bar0-poll/intr=46
+after head 2714: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=38
+after head 2715: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=40
+after head 2716: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=40
+after head 2717: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=42
+after head 2718: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=56
+after head 2719: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=32
+after head 2720: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=42
+after head 2721: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=50
+after head 2722: bar0-poll/intr=56
+after head 2723: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=42
+after head 2724: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=54
+after head 2725: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=56
+after head 2726: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=58, display-regs=1
+after head 2727: bar0-poll/intr=130, display-regs=2
+after head 2728: bar0-poll/intr=72, display-regs=2
+after head 2729: bar0-poll/intr=68, display-regs=2
+after head 2730: bar0-poll/intr=68, display-regs=1
+after head 2731: bar0-poll/intr=96, display-regs=1
+after head 2732: bar0-poll/intr=32, display-regs=7
+after head 2733: bar0-poll/intr=34, display-regs=1
+after head 2734: bar0-poll/intr=36, display-regs=7
+after head 2735: bar0-poll/intr=36, display-regs=1
+after head 2736: bar0-poll/intr=36, display-regs=7
+after head 2737: bar0-poll/intr=36, display-regs=1
+after head 2738: bar0-poll/intr=36, display-regs=7
+after head 2739: bar0-poll/intr=36, display-regs=1
+after head 2740: bar0-poll/intr=36, display-regs=7
+after head 2741: bar0-poll/intr=52, display-regs=1
+after head 2742: bar0-poll/intr=34, display-regs=7
+after head 2743: bar0-poll/intr=34, display-regs=1
+after head 2744: bar0-poll/intr=34, display-regs=7
+after head 2745: bar0-poll/intr=36, display-regs=1
+after head 2746: bar0-poll/intr=36, display-regs=7
+after head 2747: bar0-poll/intr=36, display-regs=1
+after head 2748: bar0-poll/intr=26, display-regs=7
+after head 2749: bar0-poll/intr=36, display-regs=1
+after head 2750: bar0-poll/intr=36, display-regs=7
+after head 2751: bar0-poll/intr=36, display-regs=1
+after head 2752: bar0-poll/intr=34, display-regs=7
+after head 2753: bar0-poll/intr=36, display-regs=1
+after head 2754: bar0-poll/intr=34, display-regs=7
+after head 2755: bar0-poll/intr=36, display-regs=1
+after head 2756: bar0-poll/intr=36, display-regs=7
+after head 2757: bar0-poll/intr=52, display-regs=1
+after head 2758: bar0-poll/intr=34, display-regs=7
+after head 2759: bar0-poll/intr=34, display-regs=1
+after head 2760: bar0-poll/intr=34, display-regs=7
+after head 2761: bar0-poll/intr=36, display-regs=1
+after head 2762: bar0-poll/intr=34, display-regs=7
+after head 2763: bar0-poll/intr=36, display-regs=1
+after head 2764: bar0-poll/intr=30, display-regs=7
+after head 2765: bar0-poll/intr=36, display-regs=1
+after head 2766: bar0-poll/intr=34, display-regs=7
+after head 2767: bar0-poll/intr=36, display-regs=1
+after head 2768: bar0-poll/intr=34, display-regs=7
+after head 2769: bar0-poll/intr=36, display-regs=1
+after head 2770: bar0-poll/intr=34, display-regs=7
+after head 2771: bar0-poll/intr=36, display-regs=1
+after head 2772: bar0-poll/intr=36, display-regs=7
+after head 2773: bar0-poll/intr=34, display-regs=1
+after head 2774: bar0-poll/intr=36, display-regs=7
+after head 2775: bar0-poll/intr=36, display-regs=1
+after head 2776: bar0-poll/intr=36, display-regs=7
+after head 2777: bar0-poll/intr=36, display-regs=1
+after head 2778: bar0-poll/intr=36, display-regs=7
+after head 2779: bar0-poll/intr=36, display-regs=1
+after head 2780: bar0-poll/intr=36, display-regs=7
+after head 2781: bar0-poll/intr=52, display-regs=1
+after head 2782: bar0-poll/intr=34, display-regs=7
+after head 2783: bar0-poll/intr=36, display-regs=1
+after head 2784: bar0-poll/intr=36, display-regs=7
+after head 2785: bar0-poll/intr=36, display-regs=1
+after head 2786: bar0-poll/intr=36, display-regs=7
+after head 2787: bar0-poll/intr=36, display-regs=1
+after head 2788: bar0-poll/intr=36, display-regs=7
+after head 2789: bar0-poll/intr=36, display-regs=1
+after head 2790: bar0-poll/intr=36, display-regs=7
+after head 2791: bar0-poll/intr=36, display-regs=1
+after head 2792: bar0-poll/intr=36, display-regs=7
+after head 2793: bar0-poll/intr=36, display-regs=1
+after head 2794: bar0-poll/intr=34, display-regs=7
+after head 2795: bar0-poll/intr=36, display-regs=1
+after head 2796: bar0-poll/intr=34, display-regs=7
+after head 2797: bar0-poll/intr=52, display-regs=1
+after head 2798: bar0-poll/intr=36, display-regs=7
+after head 2799: bar0-poll/intr=34, display-regs=1
+after head 2800: bar0-poll/intr=36, display-regs=7
+after head 2801: bar0-poll/intr=36, display-regs=1
+after head 2802: bar0-poll/intr=36, display-regs=7
+after head 2803: bar0-poll/intr=36, display-regs=1
+after head 2804: bar0-poll/intr=36, display-regs=7
+after head 2805: bar0-poll/intr=36, display-regs=1
+after head 2806: bar0-poll/intr=36, display-regs=7
+after head 2807: bar0-poll/intr=36, display-regs=1
+after head 2808: bar0-poll/intr=34, display-regs=7
+after head 2809: bar0-poll/intr=36, display-regs=1
+after head 2810: bar0-poll/intr=34, display-regs=7
+after head 2811: bar0-poll/intr=36, display-regs=1
+after head 2812: bar0-poll/intr=36, display-regs=7
+after head 2813: bar0-poll/intr=36, display-regs=1
+after head 2814: bar0-poll/intr=36, display-regs=7
+after head 2815: bar0-poll/intr=36, display-regs=1
+after head 2816: bar0-poll/intr=38, display-regs=7
+after head 2817: bar0-poll/intr=44, display-regs=1
+after head 2818: bar0-poll/intr=36, display-regs=7
+after head 2819: bar0-poll/intr=36, display-regs=1
+after head 2820: bar0-poll/intr=32, display-regs=7
+after head 2821: bar0-poll/intr=36, display-regs=1
+after head 2822: bar0-poll/intr=38, display-regs=7
+after head 2823: bar0-poll/intr=44, display-regs=1
+after head 2824: bar0-poll/intr=36, display-regs=7
+after head 2825: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=56, display-regs=1
+after head 2826: bar0-poll/intr=36, display-regs=7
+after head 2827: bar0-poll/intr=34, display-regs=1
+after head 2828: bar0-poll/intr=34, display-regs=7
+after head 2829: bar0-poll/intr=36, display-regs=1
+after head 2830: bar0-poll/intr=34, display-regs=7
+after head 2831: bar0-poll/intr=34, display-regs=1
+after head 2832: bar0-poll/intr=36, display-regs=7
+after head 2833: bar0-poll/intr=32, display-regs=1
+after head 2834: bar0-poll/intr=34, display-regs=7
+after head 2835: bar0-poll/intr=36, display-regs=1
+after head 2836: bar0-poll/intr=36, display-regs=7
+after head 2837: bar0-poll/intr=43
+after head 2838: bar0 R 000000=1, bar0 R 110008=2, bar0 R 111528=2, bar0 R 11152c=2, bar0 R b81008=3, bar0 R b8100c=3, bar0 R b81014=3, bar0 R b81018=3, bar0 R b8101c=3, bar0 W 110004=1, bar0 W 1103e8=1, bar0-poll/intr=38, region1 W 2axxxx=20, region1 W 2dxxxx=8032, region1 W 2exxxx=8144, region1 W 2fxxxx=8048, region1 W 30xxxx=8192, region1 W 31xxxx=8192, region1 W 32xxxx=8192, region1 W 33xxxx=8192, region1 W 34xxxx=8192, region1 W 35xxxx=4784
+after head 2839: bar0-poll/intr=40
+after head 2840: bar0-poll/intr=55
+after head 2841: bar0-poll/intr=37
+after head 2842: bar0-poll/intr=20
+after head 2843: bar0-poll/intr=37
+after head 2844: bar0-poll/intr=23
+after head 2845: bar0-poll/intr=28
+after head 2846: bar0-poll/intr=28
+after head 2847: bar0-poll/intr=28
+after head 2848: bar0 R b830b0=8, bar0 W b830a0=4, bar0 W b830a4=4, bar0 W b830b0=4, bar0-poll/intr=29, region3 R fexxxx=12, region3 W 9xxxx=16422, region3 W fexxxx=8
+after head 2849: bar0-poll/intr=60
+after head 2850: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=35, region3 R fexxxx=3, region3 W 9xxxx=4098, region3 W fexxxx=2
+after head 2851: bar0-poll/intr=28
+after head 2852: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=47, region3 R fexxxx=3, region3 W 9xxxx=4098, region3 W fexxxx=2
+after head 2853: bar0-poll/intr=145
+after head 2854: bar0-poll/intr=45
+after head 2855: bar0-poll/intr=54
+after head 2856: bar0-poll/intr=36
+after head 2857: bar0-poll/intr=44
+after head 2858: bar0-poll/intr=20
+after head 2859: bar0 R b830b0=12, bar0 W b830a0=6, bar0 W b830a4=6, bar0 W b830b0=6, bar0-poll/intr=286, region3 R fexxxx=12, region3 W 9xxxx=410
+after head 2860: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=116, region3 R fexxxx=2, region3 W 9xxxx=4096, region3 W fexxxx=2
+after head 2861: bar0-poll/intr=356
+after head 2862: bar0-poll/intr=65
+after head 2863: bar0-poll/intr=46
+after head 2864: bar0-poll/intr=142
+after head 2865: bar0-poll/intr=117
+after head 2866: bar0-poll/intr=140
+after head 2867: bar0-poll/intr=48
+after head 2868: bar0-poll/intr=50
+after head 2869: bar0-poll/intr=133
+after head 2870: bar0-poll/intr=66
+after head 2871: bar0-poll/intr=49
+after head 2872: bar0-poll/intr=17
+after head 2873: bar0-poll/intr=30
+after head 2874: bar0-poll/intr=28
+after head 2875: bar0-poll/intr=38
+after head 2876: bar0 R b830b0=8, bar0 W b830a0=4, bar0 W b830a4=4, bar0 W b830b0=4, bar0-poll/intr=63, region3 R fexxxx=12, region3 W 9xxxx=12326, region3 W axxxx=4096, region3 W fexxxx=8
+after head 2877: bar0 R 000000=1, bar0-poll/intr=178
+after head 2878: bar0-poll/intr=32
+after head 2879: bar0-poll/intr=40
+after head 2880: bar0 R b830b0=4, bar0 W b830a0=2, bar0 W b830a4=2, bar0 W b830b0=2, bar0-poll/intr=49, region3 R fexxxx=6, region3 W 9xxxx=2, region3 W axxxx=8194, region3 W fexxxx=4
+after head 2881: bar0-poll/intr=39
+after head 2882: bar0-poll/intr=123
+after head 2883: bar0-poll/intr=68
+after head 2884: bar0-poll/intr=38
+after head 2885: bar0-poll/intr=36
+after head 2886: bar0-poll/intr=28
+after head 2887: bar0 R b830b0=12, bar0 W b830a0=6, bar0 W b830a4=6, bar0 W b830b0=6, bar0-poll/intr=183, region3 R fexxxx=12, region3 W axxxx=474
+after head 2888: bar0-poll/intr=87
+after head 2889: bar0-poll/intr=153
+after head 2890: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=59, region3 R fexxxx=2, region3 W axxxx=4096, region3 W fexxxx=2
+after head 2891: bar0-poll/intr=361
+after head 2892: bar0-poll/intr=95
+after head 2893: bar0-poll/intr=50
+after head 2894: bar0-poll/intr=134
+after head 2895: bar0 W bb0090=1, bar0-poll/intr=123
+after head 2896: bar0-poll/intr=107
+after head 2897: bar0-poll/intr=56
+after head 2898: bar0-poll/intr=38
+after head 2899: bar0-poll/intr=46
+after head 2900: bar0-poll/intr=30
+after head 2901: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=58, region3 R fexxxx=2, region3 W axxxx=86
+after head 2902: bar0-poll/intr=23
+after head 2903: bar0-poll/intr=81
+after head 2904: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=35, region3 R fexxxx=2, region3 W axxxx=4096, region3 W fexxxx=2
+after head 2905: bar0-poll/intr=211
+after head 2906: bar0-poll/intr=53
+after head 2907: bar0 R b830b0=2, bar0 W b830a0=1, bar0 W b830a4=1, bar0 W b830b0=1, bar0-poll/intr=41, region3 R fexxxx=2, region3 W axxxx=32
+after head 2908: bar0 R b830b0=56, bar0 W b830a0=28, bar0 W b830a4=28, bar0 W b830b0=28, bar0-poll/intr=21, region3 R fexxxx=100, region3 W axxxx=10208, region3 W bxxxx=3198, region3 W fexxxx=42
+after head 2909: bar0-poll/intr=71
+after head 2910: bar0-poll/intr=189
+after head 2911: bar0-poll/intr=21
+after head 2912: bar0-poll/intr=87
+after head 2913: bar0-poll/intr=17
+after head 2914: bar0-poll/intr=69
+after head 2915: bar0-poll/intr=13
+after head 2916: bar0-poll/intr=78, region1 W 35xxxx=4
+after head 2917: bar0 W bb0090=1, bar0-poll/intr=36
+after head 2918: bar0 R 000000=5, bar0 R b830b0=4136, bar0 W b830a0=2068, bar0 W b830a4=2068, bar0 W b830b0=2068, bar0 W bb0090=1, bar0-poll/intr=28966, region1 R 3fe37xxxx=2, region1 W 36xxxx=283714, region1 W 3fe36xxxx=4, region1 W 3fe38xxxx=2, region3 R fexxxx=10307, region3 W 1xxxx=2, region3 W 5xxxx=131584, region3 W 6xxxx=32896, region3 W axxxx=4, region3 W bxxxx=9546, region3 W fexxxx=6
+after head 2919: bar0 R 009400=2, bar0 R 009410=4, bar0 R b830b0=16, bar0 W b830a0=8, bar0 W b830a4=8, bar0 W b830b0=8, bar0-poll/intr=267, region1 W 36xxxx=1042, region3 R fexxxx=34, region3 W 5xxxx=320, region3 W 6xxxx=80, region3 W bxxxx=6
+after head 2920: bar0-poll/intr=110
+after head 2921: bar0-poll/intr=44
+after head 2922: bar0-poll/intr=993, display-regs=6
+after head 2923: bar0-poll/intr=131
+after head 2924: bar0-poll/intr=66
+after head 2925: bar0-poll/intr=45
+after head 2926: bar0-poll/intr=25
+after head 2927: bar0-poll/intr=28
+after head 2928: bar0-poll/intr=28
+after head 2929: bar0-poll/intr=38
+after head 2930: bar0 R b830b0=8, bar0 W b830a0=4, bar0 W b830a4=4, bar0 W b830b0=4, bar0-poll/intr=53, region3 R fexxxx=12, region3 W bxxxx=12326, region3 W cxxxx=4096, region3 W fexxxx=8
+after head 2931: bar0 R 000000=1, bar0-poll/intr=178
+after head 2932: bar0 R b830b0=16, bar0 W b830a0=8, bar0 W b830a4=8, bar0 W b830b0=8, bar0-poll/intr=28, region3 R fexxxx=22, region3 W bxxxx=14, region3 W cxxxx=29440, region3 W fexxxx=16
