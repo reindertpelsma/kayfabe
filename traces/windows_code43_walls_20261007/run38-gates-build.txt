@@ -1,0 +1,13 @@
+RUN38_BUILD_START 2026-10-07T18:44:31+02:00
+0e8a3dd53 Attribute the run38 setup's measured claim to its runs and dates
+DIRTY=0
+V3_GATES_SUMMARY pass=9 fail=0
+V3_GATES_BIRTHS births=11 user=11 refused=0 ok=1
+V3_GATES_EXIT pass=9 fail=0 births_ok=1 2026-10-07T18:44:44+02:00
+XID_BEFORE=5
+GR_TIER_VERDICT=PASS
+ORACLE_RC=0
+XID_AFTER=5
+[3/4] Linking target qemu-system-x86_64
+KF3_BUILT /var/lib/kf-windows-20261005/kf3-bins/0e8a3dd5/qemu-system-x86_64 rev=0e8a3dd5 mtime=2026-10-07 18:44:58.956995900 +0200 (shared build dir /var/lib/kf-windows-20261005/qemu-build-kf3)
+RUN38_BUILD_EXIT 0 2026-10-07T18:44:58+02:00

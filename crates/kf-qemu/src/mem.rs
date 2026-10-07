@@ -734,6 +734,31 @@ pub fn resolve_placed_prefix(rows: &PlacedRows, va: u64) -> Option<(bool, u64, u
     (va < end).then(|| (ram, off + (va - start), end - va))
 }
 
+/// ★ 2026-10-07 (Windows Code43, run38: a kernel copy channel died reading GP entry 2 of a ring
+/// whose entries 0 and 1 it had read): the rows next to an unplaced `va`, for the death message —
+/// the nearest row starting at or below `va` and the next one above, plus the row count. Read
+/// once, on the error path only.
+#[must_use]
+pub fn describe_neighbours(rows: &PlacedRows, va: u64) -> String {
+    let Ok(r) = rows.read() else {
+        return "rows poisoned".into();
+    };
+    let below = r
+        .range(..=va)
+        .next_back()
+        .map(|(s, (l, _, ram, _))| format!("{s:#x}+{l:#x}{}", if *ram { " ram" } else { "" }));
+    let above = r
+        .range(va.saturating_add(1)..)
+        .next()
+        .map(|(s, (l, _, ram, _))| format!("{s:#x}+{l:#x}{}", if *ram { " ram" } else { "" }));
+    format!(
+        "rows={} below={} above={}",
+        r.len(),
+        below.as_deref().unwrap_or("none"),
+        above.as_deref().unwrap_or("none")
+    )
+}
+
 /// One placement row: `(len, backing offset, in guest RAM, the guest leaf's permission)` — see
 /// [`PlacedRows`]. ★ P1+P2 inc C (`V3_P1P2_TSPACE.md` §3.4): the permission is what the T-mode
 /// resolver refuses a write, release or reduction through.
@@ -3047,6 +3072,26 @@ pub fn apply_statement(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The death message names the rows around an unplaced VA, or says there are none.
+    #[test]
+    fn neighbours_of_an_unplaced_va_are_named() {
+        let rows: PlacedRows = PlacedRows::default();
+        assert_eq!(
+            describe_neighbours(&rows, 0x2000),
+            "rows=0 below=none above=none"
+        );
+        {
+            let mut w = rows.write().unwrap();
+            w.insert(0x1000, (0x1000, 0, true, kf_host::MapPerm::READ_WRITE));
+            w.insert(0x5000, (0x2000, 0, false, kf_host::MapPerm::READ_WRITE));
+        }
+        assert_eq!(
+            describe_neighbours(&rows, 0x2010),
+            "rows=2 below=0x1000+0x1000 ram above=0x5000+0x2000"
+        );
+        assert!(resolve_placed_prefix(&rows, 0x2010).is_none());
+    }
 
     /// ★ `traces/v3_cifix/`: a "not registered yet" answer is returned, never cached; the first
     /// time the precondition holds, the build runs with exactly the value it saw, and its result

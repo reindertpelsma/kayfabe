@@ -513,8 +513,13 @@ impl GuestMemory for Mem<'_> {
         let mut done = 0u64;
         while done < len {
             let at_va = va + done;
-            let (ram, off, avail) = resolve_placed_prefix(&self.mirror.rows, at_va)
-                .ok_or_else(|| format!("{va:#x}+{len:#x}: {at_va:#x} not placed by us"))?;
+            let (ram, off, avail) =
+                resolve_placed_prefix(&self.mirror.rows, at_va).ok_or_else(|| {
+                    format!(
+                        "{va:#x}+{len:#x}: {at_va:#x} not placed by us ({})",
+                        crate::mem::describe_neighbours(&self.mirror.rows, at_va)
+                    )
+                })?;
             let n = avail.min(len - done);
             if !ram {
                 // ★ P6 (Q3): a vidmem GPFIFO / pushbuffer (UVM's default GPFIFO) is read through a

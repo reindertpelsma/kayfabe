@@ -1905,3 +1905,69 @@ server's own walker for the server-RM-owned VA (`:4492-4543`); vfio-10 answers 0
   same call is still refused. Whether the bugcheck 0x119 changes is recorded, not predicted.
 - *Prediction:* the abort moves past 2861 (the late trio is sent right before the stage that
   failed).
+
+### Run38 result: the late trio is enough to pass VFIO 2861; the PDE copy is served; a TDR follows a dead kernel copy channel
+
+Product/QEMU 0e8a3dd535b9eb0664b219e0ba4e467dcaaaaa97, `kf3-bins/0e8a3dd5`, flags as run37 (`KF3_DIAG_ZERO_OK=1`
+now answers only `BISECT_STEP`); started 2026-10-07 16:45 UTC on 172.22.1.20 (RTX 4070, host 595.91.07).
+[command](run38-command.json), [trace](run38-qemu.log.gz), [requests](run38-requests.log),
+[gates, oracle and build](run38-gates-build.txt) (9/9, 11/11 USER births, GR tier PASS, Xid 5 before
+and after; [oracle log](gr-tier-native-run38.log)), [controller error](run38-controller-error.txt),
+[unit journal](run38-failure-journal.txt), [bugcheck header](run38-bugcheck.json),
+[Windows events](run38-evtx.txt), [host after](run38-host-after.txt). Host afterwards: no QEMU, NBD
+disconnected, display enabled, P8, Xid count unchanged (5).
+
+**Measured (run38 at 0e8a3dd5, 2026-10-07):**
+- `DIAG-ZERO-OK` answers: exactly the three ids, four answers (`0x2080a801` twice).
+- **The abort moved past VFIO 2861** with only those three answered: the THERMAL legacy queries
+  `0x2080852e`/`0x2080852a` follow (RPCs 548-549), as in run37.
+- **The second `COPY_SERVER_RESERVED_PDES` on c1d00021's new VA space returns 0** (RPC 600, the
+  server-context-only form), where run37 refused it with 0x56. Windows then creates c1d00025/26 and
+  the `0x9096` alloc (VFIO 2931), as in run37.
+- **New wall, kayfabe's own:** right after that, the kernel copy channel (c1d00023, token 0x80c,
+  host 0x10039; it had retired two submissions, CE2 relays #4-#5) is killed by kayfabe:
+  `DEAD: ring: Read { gp: 2, va: 0x200c4010, why: "0x200c4010+0x8: 0x200c4010 not placed by us" }`,
+  `REFUSED-AND-POISONED (§7)`. The address is GP entry 2 of the channel's own ring
+  (`gpfifo=0x200c4000`), in the same 4 KiB page as entries 0 and 1, which were read. No walk of that
+  VA space is logged between the second submission and the death, and the invalidate count (2204)
+  equals run37's, so this log cannot say when or why the row went.
+- Then Windows sends performance/thermal queries kayfabe leaves unserviced (`0x20809064` served,
+  `0x20809004`, `0x2080b201`, `0x2080852e`, `0x2080852f`, `0x2080a618`, `0x2080a619`, `0x2080853a`,
+  `0x2080853b`), frees 11 objects, sends `0x20801111` twice (unserviced), and tears down: 53 `Free`s
+  (`abort_point.py`: rpcs=2607, teardown_at=644, last `fn76/20801111`, refused). Windows then
+  re-initialises the adapter twice more (clients from c1d00028 and from c1d00050); each cycle's new
+  kernel copy channel (token 0x80b) dies the same way at GP entry 1 (`0x200c4008`).
+- Windows' System log (read-only, `recover_bugcheck.py`): nvlddmkm event 153 *"Resetting TDR
+  occurred on GPUID:6"*, *"Reset TDR …"*, *"Restarting TDR …"* at 16:46:15 UTC. The pagefile dump
+  header is all zero: **no bugcheck** this run (run37's 0x119 did not recur). The guest agent
+  answered a ping, but the status script timed out after 150 s, so ConfigManagerErrorCode and
+  nvidia-smi were **not measured**; the controller stopped the unit at 16:48:49.
+
+**Falsifier outcomes.**
+- *H-late: supported.* The three late answers alone move the abort past VFIO 2861.
+- *The PDE repair: supported.* The call is answered 0 and Windows goes past VFIO 2915 (to 2931).
+- *Prediction held.*
+
+**Inferred, not tested.** The TDR follows from the dead copy channel: Windows' work on it can never
+complete, so its scheduler times out. In vfio-1 the same stretch rings the doorbell `0x1000d` after
+head 2895 and `0xe`/`0x1000d` after 2917-2918, so the reference's kernel channels keep running. The
+`0x20801111` refusals after the frees are runlist updates of the teardown, not its cause.
+
+## Bisect step 2, and a placement diagnostic (run39 setup)
+
+**Bisect step 2 (diagnostic):** `BISECT_STEP = [0x2080a801]` (both occurrences). **Diagnostic for the
+new wall:** `KF3_MAPLOG=1` (the existing VA-plane timeline, `kf_mem::maplog`, default off) is added
+to the runner's flag list, and the ring-read death message now names the placement rows around the
+unplaced address (`kf_qemu::mem::describe_neighbours`, error path only; a unit test pins the format).
+No answer changes besides the bisect.
+
+**Falsifiers, stated before run39.**
+- *Bisect, H-a801: `0x2080a801` alone is the needed answer.* Supported if the abort moves past VFIO
+  2861 with only `0x2080a801` answered. Falsified if it stays at 2861: then `0x2081010d` or
+  `0x2080a630` is needed (step 3 answers those two).
+- *Placement (a reading of run39, 2026-10-07, not a test):* if the copy channel dies again, the maplog shows which
+  walk or root change removed the row of `0x200c4000`, or shows that none did. If no walk removed
+  it, the hypothesis "a walk diff retired the ring's row" is falsified and the death is in the
+  T-space resolver instead.
+- *Prediction:* the abort moves past 2861 (`0x2080a801` is the one control of the trio sent both
+  early and late).
