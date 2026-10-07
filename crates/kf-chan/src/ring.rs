@@ -117,6 +117,29 @@ pub enum RingRefusal {
     },
 }
 
+/// ★ DIAGNOSTIC (2026-10-07, Windows run30): the most words of a refused segment logged. A
+/// refusal kills the channel ([`RingRefusal`] is terminal for the ring), so this runs at most once
+/// per channel and prints at most this many guest words: bounded however the guest writes.
+const REFUSED_SEGMENT_LOG_WORDS: usize = 32;
+
+/// A rewrite refusal of the segment at GP index `gp`, logged with the segment's first
+/// [`REFUSED_SEGMENT_LOG_WORDS`] words. Run30 showed Windows' first submissions on its kernel CE and
+/// GR channels refused as `ForeignClass` (subchannel 5 "class 1", subchannel 2 class `0xa140`);
+/// which methods the guest sent is the evidence an owner decision on kernel GR work needs.
+fn refused_segment(gp: u32, va: u64, words: &[u32], why: Refusal) -> RingRefusal {
+    let head: Vec<String> = words
+        .iter()
+        .take(REFUSED_SEGMENT_LOG_WORDS)
+        .map(|w| format!("{w:08x}"))
+        .collect();
+    eprintln!(
+        "kf3: ring REFUSED segment gp {gp} va {va:#x} ({} words) {why:?}; first words: {}",
+        words.len(),
+        head.join(" ")
+    );
+    RingRefusal::Rewrite { gp, why }
+}
+
 /// ★ One guest kernel channel's ring, as the Translated runner sees it.
 #[derive(Debug)]
 pub struct TranslatedRing {
@@ -389,7 +412,7 @@ impl TranslatedRing {
             if let Some((st, q)) = self.tmode.as_deref_mut() {
                 // ★ T-mode: decoded to unbound IR, bound by the runner at push (§3.5).
                 let ir = crate::tmode::decode(&words, is_ce, st, self.census.as_deref_mut())
-                    .map_err(|why| RingRefusal::Rewrite { gp, why })?;
+                    .map_err(|why| refused_segment(gp, e.gpu_va, &words, why))?;
                 q.extend(ir);
                 continue;
             }
@@ -399,7 +422,7 @@ impl TranslatedRing {
             }
             let pieces =
                 rewrite_counted(&words, is_ce, &mut self.st, w, self.census.as_deref_mut())
-                    .map_err(|why| RingRefusal::Rewrite { gp, why })?;
+                    .map_err(|why| refused_segment(gp, e.gpu_va, &words, why))?;
             self.pending.extend(pieces);
         }
     }

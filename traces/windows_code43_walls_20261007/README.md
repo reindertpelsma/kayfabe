@@ -1008,7 +1008,7 @@ returned 0. **Abort point:** 857 RPCs, teardown at 554 (was 489). The last RPC i
 (unserviced), right after that Device's `FERMI_VASPACE_A` ff000850 and its
 `COPY_SERVER_RESERVED_PDES`: **VFIO index 2846**, 288 indices past run28.
 
-**Measured on the way (tolerated refusals).** `0x007302a3` (VFIO 2572) was refused and tolerated.
+**Seen in run29 at 23dbc5b7 (tolerated refusals).** `0x007302a3` (VFIO 2572) was refused and tolerated.
 IS_MODE_POSSIBLE was never called; instead `NV5070_CTRL_CMD_IMP_SET_GET_PARAMETER` 0x50700118
 was sent 26 times, all refused (VFIO sends it once, at 2645, as a GET of IMP_ENABLE, then 156
 IS_MODE_POSSIBLE). 0x00730128 and 0x0073012c (VRR_DISPLAY_INFO), the thermal/perf group 0x2080a801,
@@ -1039,3 +1039,57 @@ SET_DEFAULT_VASPACE" is wrong if SET_DEFAULT_VASPACE returns 0 and the abort sta
 or if SET_DEFAULT_VASPACE is refused by one of RM's checks (that would show kayfabe's VA-space
 model disagrees with the guest's). **Prediction:** the new client's channels are born (VFIO
 2857-2891, already served in earlier runs), and the abort moves to a later wall.
+
+### Run30 result: SET_DEFAULT_VASPACE served; the teardown now follows a SUCCESSFUL control (VFIO 2861)
+
+Product/QEMU 0fc7a7dba988ed392e05c7b5d913c8b60e24e0b8, `kf3-bins/0fc7a7db`, run on 2026-10-07 at
+12:40-12:43 UTC. [command](run30-command.json), [status](run30-status.json),
+[trace](run30-qemu.log.gz), [requests](run30-requests.log), [completion](run30-complete.json),
+[host health](run30-host-health.txt), [unit result](run30-unit-result.txt),
+[9/9 gates](run30-gates.log) (11/11 USER births), [build](run30-build.log),
+[watchdog recovery](run30-watchdog-recovery.log) (cleanup verified). After 97 s of uptime: Code43,
+nvidia-smi exit 9. Host afterwards: display enabled, P8, no Xid, no QEMU, NBD disconnected.
+
+**Falsifier not triggered.** SET_DEFAULT_VASPACE returned 0 on c1d0001e:ff020000. IMP_SET_GET_PARAMETER
+was sent once (as in VFIO) and answered IMP_ENABLE = FALSE; Windows then sent no IS_MODE_POSSIBLE.
+The next client c1d00020 shares c1d0001e's VA space; its kernel CE channel ff040009 (engine 0xb) is
+born Translated, its 5080 and C7B5 objects return 0, SET_CHANNEL_PROPERTIES (4000 us) is refused as
+in every earlier run, and `GPFIFO_SCHEDULE` returns 0: **VFIO index 2861**, 15 indices past run29.
+**Teardown starts right after that successful control** (858 RPCs, teardown at 544): for the first
+time the abort does not follow a refusal. No doorbell was rung on the new channel (submissions 0).
+
+**New evidence (run29 and run30 alike, not seen before run29).** Right after the last subdevice
+armings (about VFIO 2566), Windows rings its two kernel channels for the first time, and kayfabe's
+Translated rewriter refuses both first segments, killing the channels (no work runs, nothing is
+forged): CE channel c1d00013:ff040000 (token 0x802, engine 0xb) with `ForeignClass { subch: 5,
+class: 1 }`, and GR channel c1d00015:ff040001 (token 0x3, engine 1) with `ForeignClass { subch: 2,
+class: 0xa140 }` (KEPLER_INLINE_TO_MEMORY_B). The Translated route accepts only copy-engine classes
+and `GP100_UVM_SW` (`kf_chan::translated`, `tmode`).
+
+**Timing in vfio-10 (observer QPC, unit assumed 10 MHz; relative values only).** RPCs in this
+stretch arrive every 30-60 ms, but between 2861 (this GPFIFO_SCHEDULE) and 2862 the real driver spends
+about 1.3 s without any RPC: it does GPU work there. In run30 the teardown starts within about
+30 ms of the refused segments' channel deaths and immediately after 2861.
+
+**Ranked hypotheses for the run30 abort (all inferred, none tested yet):**
+1. *(High.)* Windows waits at that point for the work it submitted on its kernel CE and GR channels;
+   kayfabe killed both channels, so the fences never complete (or the channels report an error),
+   and StartDevice fails. Executing that work needs the Translated route to run Windows' kernel GR
+   work (I2M at least) and whatever CE "class 1" is, on the real GPU.
+2. *(Medium.)* The CE refusal `class: 1` is kayfabe misreading Windows' pushbuffer (a header form or
+   subchannel convention it does not decode), which would be a kayfabe defect.
+3. *(Low.)* A refused tolerated control on the new client (FIFO_GET_LATENCY_BUFFER_SIZE 0x0080170e,
+   FIFO_SET_CHANNEL_PROPERTIES 0x0080170f) is checked late. Both were refused identically for
+   c1d00016's channel earlier in the same boot, and that boot continued.
+
+## DIAGNOSTIC run31: the refused kernel-channel segments, word by word
+
+**Change (diagnostic only, bounded):** `kf_chan::ring` logs a refused segment's GP index, VA, length
+and first 32 words when the rewriter refuses it. A refusal is terminal for the ring, so each channel
+logs at most once. No behaviour changes. kf-chan 87 tests pass, Clippy new 0, ci_gates clean.
+
+**Falsifier, stated before run31:** hypothesis 2 is wrong if the logged words decode, by the
+class headers, to a well-formed `SET_OBJECT` naming a non-copy class (then "class 1" is Windows' own
+value and the refusal is correct). Hypothesis 1 is weakened if the run31 abort happens somewhere
+other than right after the paging channel's GPFIFO_SCHEDULE (VFIO 2861) while the same two
+refusals recur.
