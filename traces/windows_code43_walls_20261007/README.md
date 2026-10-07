@@ -1420,3 +1420,39 @@ It is wrong if, in run34, kayfabe's `0x0080170e` for c1d00020 returns 0 with the
 still sits at VFIO ≤ 2866 (teardown within ~5 RPCs of `GPFIFO_SCHEDULE`). **Prediction:** the
 abort moves past 2861 (vfio-10's next RPCs are subdevice perf controls `0x2080852e/30/2a` at
 2862-2864). The result will keep what is seen apart from what is inferred.
+
+### Run34 result: both controls served from the host; the abort does not move (falsifier triggered)
+
+Product/QEMU 0c74f4fc952fedf97aa2366ab189d1e482024d0f, `kf3-bins/0c74f4fc`, flags as run33; run on
+2026-10-07 at 14:28-14:31 UTC. [command](run34-command.json), [status](run34-status.json),
+[trace](run34-qemu.log.gz), [requests](run34-requests.log), [completion](run34-complete.json),
+[host health](run34-host-health.txt), [host after](run34-host-after.txt),
+[unit result](run34-unit-result.txt), [9/9 gates](run34-gates.log) (11/11 USER births),
+[build](run34-build.log), [native oracle](gr-tier-native-run34.log) (GR tier unchanged, PASS, Xid
+count 5 before and after), [watchdog recovery](run34-watchdog-recovery.log) (cleanup verified).
+After 99 s: the NVIDIA adapter has ConfigManagerErrorCode 43 and nvidia-smi exits 9. Host
+afterwards: no QEMU, NBD disconnected, display enabled, P8, Xid count unchanged (5).
+
+**Measured (seen in run34 at 0c74f4fc):**
+- At realize the host answered `FIFO_GET_LATENCY_BUFFER_SIZE` for all nine advertised engines:
+  `(engine, gp, pb)` = `(1, 0x240, 0x2880)`, `(9, 0x240, 0x2880)`, `(0xa, 0x240, 0x2000)`,
+  `(0xb, 0x20, 0xe00)`, `(0xc, 0x20, 0xe00)`, `(0x13, 0x20, 0x80)`, `(0x1c, 0x20, 0x80)`,
+  `(0x22, 0x20, 0x80)`, `(0x33, 0x20, 0x80)`. Where vfio-10 asked the same engine the values are
+  identical (0xb, 0xc, 0x1, 0x13, 0x1c, 0x33).
+- All ten guest `0x0080170e` requests returned 0 with the host's row, the paging client's
+  included (c1d00020, engine 0xb: `gp 0x20, pb 0xe00`, the vfio-10 2855 reply). None was refused.
+- All three guest `0x0080170f` requests (property 0, 4000 µs; c1d00016/ff040002, c1d0001b/ff040006,
+  c1d00020/ff040009) returned 0 after the host `SET_TIMESLICE` on the channel's own host group
+  (`act channel timeslice … on host group 0xcafe0060 (twin 0x10038) (222 us, off the GSP lock)`
+  for the paging channel), reply held until then.
+- Kernel CE (0x802) and GR (0x3) channels retired their first work as in run33; one `NSI RELAY` to
+  GR0.
+- **Abort point unchanged:** 858 RPCs, teardown at 544, last RPC `GPFIFO_SCHEDULE` of
+  c1d00020/ff040009 returning 0 (VFIO 2861). The paging channel was never rung (`submissions=0
+  last_put=Some(0)`) and is freed by the third `Free` of the teardown.
+
+**Falsifier outcome: triggered.** Both controls of the paging client now return 0 with the
+reference's reply shape (the latency row byte-identical to vfio-10's; the timeslice a real host act),
+and the abort stays at VFIO 2861. Hypothesis 1 is wrong as the cause. *Inferred, not tested:* the
+earlier refusals of the same controls were tolerated for the same reason — Windows does not check
+them at this step.
