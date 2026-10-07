@@ -1573,6 +1573,24 @@ fn refuse_named(cmd: u32, why: &dyn std::fmt::Debug) -> Option<Reply> {
     refuse()
 }
 
+/// ★ 2026-10-08 (run51 follow-up, diagnostic only): the indices an info-list request names, for the
+/// refusal log. The owner's decision to answer the Windows `FB_GET_INFO_V2` / `BUS_GET_INFO_V2` needs the
+/// WHOLE list before any exposure table can be written (`UnmeasuredIndex` names only the first). The
+/// decode is the bounded one the answerers use (count <= the ogkm list size, fixed-size buffer); a
+/// hostile count or a short buffer yields the error text, never a panic and never an allocation beyond
+/// the list size. Nothing here changes an answer.
+fn info_index_list(params: &[u8], fb: bool) -> String {
+    let pairs = if fb {
+        kf_abi::fbinfo::decode_fb_info_pairs(params).map_err(|e| e.to_string())
+    } else {
+        kf_abi::businfo::decode_bus_info_pairs(params).map_err(|e| e.to_string())
+    };
+    match pairs {
+        Ok(p) => format!("{:?}", p.iter().map(|&(i, _)| i).collect::<Vec<_>>()),
+        Err(e) => format!("undecodable: {e}"),
+    }
+}
+
 /// ★★★ The served controls whose encoder output may be CARRIED to another version's layout by
 /// the measured transcoder (`kf_abi::matrix::transcode`, `V3_DRIVER_MATRIX.md` §4.5), and the
 /// array paths that may drop data at a shrinking version (index-keyed lists the guest cannot
@@ -2751,7 +2769,17 @@ impl CommandPolicy for InitTablePolicy {
                     &answers,
                 ) {
                     Ok(p) => p,
-                    Err(e) => return refuse_named(req.cmd, &e),
+                    Err(e) => {
+                        eprintln!(
+                            "W349REFUSE-LIST cmd={:#010x} requested_indices={}",
+                            req.cmd,
+                            info_index_list(
+                                &cmd.payload[at..at + kf_abi::businfo::BUS_GET_INFO_V2_PARAMS_SIZE],
+                                false
+                            )
+                        );
+                        return refuse_named(req.cmd, &e);
+                    }
                 }
             }
             // ★★★ The third request-editing arm, and the first whose REFUSAL is itself a
@@ -2816,7 +2844,17 @@ impl CommandPolicy for InitTablePolicy {
                     &answers,
                 ) {
                     Ok(p) => p,
-                    Err(e) => return refuse_named(req.cmd, &e),
+                    Err(e) => {
+                        eprintln!(
+                            "W349REFUSE-LIST cmd={:#010x} requested_indices={}",
+                            req.cmd,
+                            info_index_list(
+                                &cmd.payload[at..at + kf_abi::fbinfo::FB_GET_INFO_V2_PARAMS_SIZE],
+                                true
+                            )
+                        );
+                        return refuse_named(req.cmd, &e);
+                    }
                 }
             }
             // ★★★ The FIRST arm that does not read the request at all. Every other reply
@@ -3195,5 +3233,41 @@ pub fn layout_differs_from_bench(c_type: &str, version: kf_abi::DriverVersion) -
         (Some(g), Some(b)) if g == b => None,
         (Some(g), _) => Some(g.size()),
         (None, _) => Some(0),
+    }
+}
+
+#[cfg(test)]
+mod info_index_list_tests {
+    use super::info_index_list;
+
+    #[test]
+    fn lists_the_indices_of_a_valid_fb_request() {
+        let req = kf_abi::fbinfo::build_request(&[(1, 0), (8, 0), (0x2e, 0)]);
+        assert_eq!(info_index_list(&req, true), "[1, 8, 46]");
+    }
+
+    #[test]
+    fn lists_the_indices_of_a_valid_bus_request() {
+        let req = kf_abi::businfo::build_request(&[(0x18, 0), (0x2d, 0)]);
+        assert_eq!(info_index_list(&req, false), "[24, 45]");
+    }
+
+    #[test]
+    fn hostile_counts_and_short_buffers_are_text_not_panics() {
+        for fb in [true, false] {
+            let size = if fb {
+                kf_abi::fbinfo::FB_GET_INFO_V2_PARAMS_SIZE
+            } else {
+                kf_abi::businfo::BUS_GET_INFO_V2_PARAMS_SIZE
+            };
+            for count in [0u32, 0x81, 0x35, u32::MAX, 0x1000_0000] {
+                let mut req = vec![0u8; size];
+                req[..4].copy_from_slice(&count.to_le_bytes());
+                let text = info_index_list(&req, fb);
+                assert!(text.starts_with("undecodable") || text.starts_with('['), "{text}");
+            }
+            assert!(info_index_list(&[1, 0, 0, 0], fb).starts_with("undecodable"));
+            assert!(info_index_list(&[], fb).starts_with("undecodable"));
+        }
     }
 }
