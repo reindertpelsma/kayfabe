@@ -1093,3 +1093,50 @@ class headers, to a well-formed `SET_OBJECT` naming a non-copy class (then "clas
 value and the refusal is correct). Hypothesis 1 is weakened if the run31 abort happens somewhere
 other than right after the paging channel's GPFIFO_SCHEDULE (VFIO 2861) while the same two
 refusals recur.
+
+### Run31 result (DIAGNOSTIC): Windows' first kernel-channel work is real 2D/I2M GR work plus a software-subchannel bind
+
+Product/QEMU c15c2628a50c78473290a6e202a2e5ad2bd86bc7, `kf3-bins/c15c2628`, run on 2026-10-07 at
+12:52-12:55 UTC. [command](run31-command.json), [status](run31-status.json),
+[trace](run31-qemu.log.gz), [requests](run31-requests.log), [completion](run31-complete.json),
+[host health](run31-host-health.txt), [unit result](run31-unit-result.txt),
+[9/9 gates](run31-gates.log) (11/11 USER births), [build](run31-build.log),
+[watchdog recovery](run31-watchdog-recovery.log) (cleanup verified). After 97 s of uptime: Code43,
+nvidia-smi exit 9. Host afterwards: display enabled, P8, no Xid, no QEMU, NBD disconnected.
+
+**Abort point:** identical to run30: 858 RPCs, teardown at 544, right after the successful
+`GPFIFO_SCHEDULE` of c1d00020's paging channel (VFIO 2861). The same two refusals recur first.
+
+**The refused segments, decoded with the NVC56F method-header layout** (`clc56f.h`: address 11:0,
+subchannel 15:13, count 28:16, sec-op 31:29; seen in run31 at c15c2628):
+
+- *CE channel c1d00013:ff040000* (token 0x802, engine 0xb), GP 0, 7 words
+  `20020017 2023b060 00000001 20018000 0000c7b5 2001a000 00000001`: SEM_ADDR_LO/HI =
+  0x1_2023b060; `SET_OBJECT` subchannel 4 = 0xc7b5 (AMPERE_DMA_COPY_B); `SET_OBJECT` subchannel 5
+  = 0x0001. Subchannel 5 is a software subchannel; 0x0001 is `NV01_ROOT_NON_PRIV` in the SDK
+  (`cl0001.h`), not an engine class. The segment sends no method to subchannel 5.
+- *GR channel c1d00015:ff040001* (token 0x3, engine 1), GP 0, 46 words, first 32:
+  `20020017 2023b000 00000001 20014000 0000a140 20016000 0000902d 20016222 00000001 200160a4
+  00000000 200160a7 00000000 200160ab 00000003 20016201 000000cf 20046210 00000000 00000001
+  00000000 00000001 20046214 00000000 00000000 00000000 00000000 20046230 00000000 00000001
+  00000000 00000001`: SEM_ADDR = 0x1_2023b000; `SET_OBJECT` subchannel 2 = 0xa140
+  (KEPLER_INLINE_TO_MEMORY_B), subchannel 3 = 0x902d (FERMI_TWOD_A), then 2D-engine state
+  methods on subchannel 3. This is graphics work, not a copy.
+
+**Falsifier outcome.** Hypothesis 2 is wrong: "class 1" is Windows' own `SET_OBJECT` value, read
+correctly. Hypothesis 1 is not weakened: the abort is again right after VFIO 2861, after the same
+two refusals.
+
+**Where this stops (owner decision needed).** Moving on means executing Windows' kernel-channel
+work on the real GPU. The Translated route (`kf_chan::translated`, `tmode`) is built for copy-engine
+kernel work only (RM's scrubber, UVM) and refuses every other class by design. Two things are
+needed, and neither is covered by a ruling:
+1. **Kernel GR work** (FERMI_TWOD_A and KEPLER_INLINE_TO_MEMORY_B here; 3D or compute may follow)
+   from a guest *kernel* channel, run on kayfabe's unprivileged host twin in the guest-kernel mirror
+   VA space. This is a new Translated tier: per-class method vocabularies, and checks that every
+   operand is a virtual address in the mirror space (the 2D and I2M classes take virtual surface
+   offsets).
+2. **A `SET_OBJECT` of a non-engine value on a software subchannel** (5-7). Real hardware stores it
+   and traps later methods to RM as software methods. Consuming the bind and refusing any later
+   software method by name would match that. That hardware behaviour is inferred; no run has
+   tested it.

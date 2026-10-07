@@ -11,6 +11,19 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-07
 
+**Code43 loop, runs 29-31, 2026-10-07 (branch `claude/code43-loop-20261007`; corrects the next
+paragraph's "run29 needs a go-ahead").** Run29 at 23dbc5b7 binds display events to the alloc's
+`hParent`, as RM's fixup does (`rmapi_specific.c:71`). Both NV0073 enables succeed, and the abort
+moves from VFIO 2558 to 2846 (DMA_SET_DEFAULT_VASPACE). Run30 at 0fc7a7db serves that control,
+answers IMP as bypassed, and answers SYSTEM_GET_HOTPLUG_STATE and the internal
+ACPI and modeset notifications. Its abort is at VFIO 2861, right after a successful
+GPFIFO_SCHEDULE. Diagnostic run31 at c15c2628 reproduces it and logs why Windows' first
+kernel-channel work dies in kayfabe's Translated rewriter. The GR channel runs FERMI_TWOD_A and
+KEPLER_INLINE_TO_MEMORY_B work. The CE channel binds software subchannel 5 to value 1. Code43 and smi
+exit 9 persist; host healthy after every run. **Stopped for an owner decision:** whether, and how,
+kayfabe executes guest-kernel GR work on the host twin (a new Translated tier), and how it treats a
+software-subchannel bind. [Runs 29-31](../traces/windows_code43_walls_20261007/README.md#ninth-repair-the-display-event-binding-uses-the-allocs-hparent-run29-setup).
+
 **StartDevice batch, 2026-10-07 (corrects the next paragraph).** The VFIO
 GSP actually answered `rcEnable=ENABLED`, and Windows then sent
 `SET_RC_RECOVERY(ENABLED)`. The earlier decode read the reserved word at offset 36,
