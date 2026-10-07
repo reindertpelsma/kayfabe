@@ -658,3 +658,36 @@ are the four indices the real GSP does post in vfio-8/9/10:
   `pRunlistPreemptEvent`, first at RPC index 3307), serve it only as a real unprivileged
   preempt of the VM's own channel group, and post the completion only from the host's real
   completion. Never invent one.
+
+**§S applied to guest-kernel GR work (owner, 2026-10-07, relayed by the coordinator after runs
+29-31; `traces/windows_code43_walls_20261007/README.md`, run31 and the GR-tier sections).**
+Windows' first kernel-channel work is FERMI_TWOD_A and KEPLER_INLINE_TO_MEMORY_B methods on its
+kernel GR channel, plus a software-subchannel bind on its kernel CE channel.
+1. **Unprivileged host channel only.** Kernel-GR work may run for real only on an UNPRIVILEGED
+   USER host channel with access to the VM's mirrored guest memory and VA space. No privileged host
+   channel, no privileged RM verb, no host action taken from guest bytes. At birth the host channel
+   is verified and asserted USER, and the birth is refused otherwise (tested).
+2. **Re-author from an allowlist.** The rewriter re-authors host methods from a per-class allowlist
+   (starting with exactly the observed 2D and I2M methods; one class/method set at a time). It
+   never copies guest pushbuffer words. Every address operand is validated as a virtual address
+   inside the VM's space. A method outside the allowlist, a privileged-state method, and any
+   unbounded read or emit is refused by name and kills only that channel. Hostile guest, guest root
+   included. Default-off flag until proven.
+3. **Native first.** Each new class/method set is validated on the borrowed host with the native
+   oracle (real GPU completion, resources freed, host display healthy) before any Windows run.
+   Strictly serial, one VM or oracle at a time.
+4. **Software subchannel bound to a non-class value** (5-7): accept the bind silently and refuse any
+   later software method on that subchannel by name (logged). The hardware behaviour this matches
+   is inferred, not tested.
+5. **No forged completion.** Completions come only from real GPU work on the host channel. No CPU
+   executor for GPU work.
+6. **Standing rules.** Power, thermal, process, preempt and P-state stay host-owned stubs; no HDCP;
+   faults depend on the UVM plan (stop and report if reached); FIFO_DISABLE_CHANNELS preempt, when
+   reached, only as a real unprivileged preempt of the VM's own channel group; no new emulated
+   kernel channel without telling the owner.
+7. **Completion data and interrupts (added the same day).** GPU completion data must come from the
+   real GPU writing GP_GET and semaphores into guest-visible memory (kayfabe is not in the
+   completion path). Completion interrupts are relayed host non-stall event → guest vector (the
+   interrupt plane maps GR0 and the other engines). For the GR tier, verify and report both, include
+   them in the native validation and in the README of the first run that executes GR work, and fix
+   the relay before relying on it if it is missing.

@@ -1140,3 +1140,50 @@ needed, and neither is covered by a ruling:
    and traps later methods to RM as software methods. Consuming the bind and refusing any later
    software method by name would match that. That hardware behaviour is inferred; no run has
    tested it.
+
+## Eleventh repair: the kernel-GR tier and the software-subchannel rule (run32 setup)
+
+**Owner rulings 2026-10-07** (`docs/OWNER_RULINGS.md` §S, "§S applied to guest-kernel GR work"):
+kernel-GR work may run for real on an unprivileged USER host channel only; the rewriter re-authors
+host methods from a per-class allowlist and never copies guest words; native validation comes
+first; a software-subchannel bind to a non-class value is accepted and its later methods are
+refused; GPU completion data comes from the GPU; completion interrupts are relayed host event →
+guest vector.
+
+**Change** (all default off; `KF3_KERNEL_GR_WORK=1` needs `KF3_KERNEL_GR_CE=1` and
+`KF3_TSPACE=1`; `KF3_SW_SUBCH_INERT=1` is separate):
+- *USER assertion.* `kf_host::Channel` now carries the birth stamp RM's reply gave
+  (`born_user`, set only by the birth path, which already clears `CAP_SYS_ADMIN` for the call and
+  reads `PRIVILEGED_CHANNEL` and the `internalFlags` level back). `Channel::assert_user` refuses a
+  channel with no stamp or a privileged one; `HostRing::admit_gr_tier` calls it first and refuses
+  the tier by name otherwise (unit test `the_gr_tier_assertion_admits_only_a_user_birth_stamp`).
+- *Host objects from a fixed allowlist.* The same admission allocates one host object of
+  `FERMI_TWOD_A` (0x902d) and `KEPLER_INLINE_TO_MEMORY_B` (0xa140) on the kernel-GR ring, each only
+  if the host family lists it and host RM reports it supported. Nothing about it comes from guest
+  bytes.
+- *Re-authoring* (`kf_chan::grtables`, T-mode decoder). A `SET_OBJECT` of one of those classes on
+  hardware subchannel 0-3 binds it (subchannel 4, the GR runlist's CE subchannel, and 5-7 are
+  refused by name: `GrSubchannel`). Methods on a bound subchannel are admitted only by a row:
+  exactly the 17 `FERMI_TWOD_A` state methods of run31's segment, each with its field rule from
+  `ogkm-580.65.06: src/common/sdk/nvidia/inc/class/cl902d.h` (537-540, 555-558, 572-580, 815-832,
+  868-890, 935-938, 960-970; byte-identical in 580.159.04). The emitted word is rebuilt from the
+  decoded field. No I2M method is admitted (OGKM's `cla140.h` names only the class id). Privileged
+  or address state (MME programming, PM trigger, instrumentation, notify, render enable,
+  `SET_DST/SRC_OFFSET`, falcon methods, MME calls) and the triggers (`PIXELS_FROM_MEMORY_SRC_Y0_INT`,
+  `PIXELS_FROM_CPU_DATA`) are refused under their header names (`GrMethod`); anything else as "not
+  in the allowlist". A refusal kills only that channel. No admitted row carries an address.
+- *Software subchannel rule.* With `KF3_SW_SUBCH_INERT`, `SET_OBJECT` on subchannel 5-7 of a value
+  no family lists as a class (Windows sends 1, `NV01_ROOT_NON_PRIV`) is stored and nothing is
+  emitted; a later method at or above 0x100 there is refused as `InertSubchannelMethod`.
+  **Inferred, untested:** that real hardware stores the bind and traps later methods to RM.
+- *GPU-written GP_GET.* On a GR-tier ring the fence tail that retires guest entry `g` starts with a
+  host `SEM_EXECUTE` RELEASE (32-bit, `RELEASE_WFI`) of `g` at the T-space window address of the
+  guest USERD's GP_GET word; the CPU never stores GP_GET for that channel.
+- *Interrupt relay.* Read in the code before this change: a Translated ring's completion never
+  raised a guest interrupt. The engine-event relay is gated on live Passthrough twins
+  (`device.rs` `on_other`, `EngineEvent::live`), and Translated births never count. Measured by the
+  native oracle below: the GR ring's fence NSI wakes `FIFO_EVENT_MTHD` (kf3's session completion fd)
+  and not the GR0 notifier. So the relay is driven from the pump: when a GR-tier pump finds entries
+  the engine retired, the worker raises the guest's GR0 vector (`kf3: NSI RELAY …` log line, first
+  16 then each power of two). Nothing runs on a vCPU or under a lock a vCPU takes.
+- The refused-segment log now shows up to 128 words (run31's GR segment had 46; 14 were unseen).

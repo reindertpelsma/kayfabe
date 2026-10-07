@@ -152,6 +152,35 @@ pub struct Channel {
     pub chan: u32,
     /// The work-submit token its doorbell carries.
     pub token: u32,
+    /// ★ What RM stamped at birth, read from the alloc reply by [`birth_privilege`] — `Some` only
+    /// for a channel [`HostRm::birth_member`] created (so `born_user` USER-checked it). `None` for
+    /// a value assembled elsewhere (a test literal), which [`Channel::assert_user`] refuses.
+    pub born_user: Option<BirthPrivilege>,
+}
+
+/// Why [`Channel::assert_user`] refused a channel.
+pub const CHANNEL_NOT_BORN_USER: &str =
+    "the host channel carries no USER birth stamp from the birth path";
+/// Why [`Channel::assert_user`] refused a channel whose stamp reads privileged.
+pub const CHANNEL_STAMP_PRIVILEGED: &str =
+    "the host channel's birth reply has PRIVILEGED_CHANNEL set";
+
+impl Channel {
+    /// ★★★ Owner ruling 2026-10-07 (§S item 1): guest-kernel work beyond copy-engine scrubbing
+    /// (the kernel-GR tier) runs only on a host channel that is verifiably USER. `Ok` with RM's
+    /// stamp when the channel came out of the birth path (`crate::birth::born_user`: the alloc ran
+    /// with `CAP_SYS_ADMIN` cleared and the reply's `PRIVILEGED_CHANNEL` and `internalFlags`
+    /// level were read back as USER) and the stamp still reads USER; refused by name otherwise.
+    ///
+    /// # Errors
+    /// [`CHANNEL_NOT_BORN_USER`] or [`CHANNEL_STAMP_PRIVILEGED`].
+    pub fn assert_user(&self) -> Result<BirthPrivilege, &'static str> {
+        let p = self.born_user.ok_or(CHANNEL_NOT_BORN_USER)?;
+        if p.reply_flags & NVOS04_FLAGS_PRIVILEGED_CHANNEL_TRUE != 0 {
+            return Err(CHANNEL_STAMP_PRIVILEGED);
+        }
+        Ok(p)
+    }
 }
 
 /// Where a channel's ring and USERD live — always the caller's decision.
@@ -858,6 +887,7 @@ impl HostRm {
             tsg,
             chan,
             token: u32::from_le_bytes(token),
+            born_user: Some(born.privilege),
         })
     }
 
@@ -1719,6 +1749,27 @@ mod privilege_tests {
                 Ok(BirthPrivilege { reply_flags: flags })
             );
         }
+    }
+
+    /// ★★★ Owner ruling 2026-10-07 (§S item 1): the kernel-GR tier's assertion refuses a channel
+    /// with no birth-path stamp, or whose stamp reads privileged, and admits a USER stamp.
+    #[test]
+    fn the_gr_tier_assertion_admits_only_a_user_birth_stamp() {
+        let c = |born_user| super::Channel {
+            tsg: 1,
+            chan: 2,
+            token: 3,
+            born_user,
+        };
+        assert_eq!(c(None).assert_user(), Err(super::CHANNEL_NOT_BORN_USER));
+        for flags in [0x20, 0xa0, 0x0040_00a0] {
+            assert_eq!(
+                c(Some(BirthPrivilege { reply_flags: flags })).assert_user(),
+                Err(super::CHANNEL_STAMP_PRIVILEGED)
+            );
+        }
+        let ok = BirthPrivilege { reply_flags: 0x80 };
+        assert_eq!(c(Some(ok)).assert_user(), Ok(ok));
     }
 
     /// The reply's `internalFlags` PRIVILEGE field (1:0, at +244 on 580) must read USER too.

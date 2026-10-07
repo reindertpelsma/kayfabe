@@ -282,7 +282,39 @@ pub struct TState {
     mem_op_a: u32,
     mem_op_b: u32,
     mem_op_c: u32,
+    /// ★ The kernel-GR tier and the software-subchannel rule (owner rulings 2026-10-07): which
+    /// extensions this channel's decoder applies. Both off by default ([`GrConfig::default`]).
+    pub gr: GrConfig,
+    /// ★ GR tier: the graphics class each hardware subchannel 0-3 is bound to (0 = none; such a
+    /// subchannel reaches the CE as before).
+    pub gr_subch: [u32; 4],
+    /// ★ Software subchannels (5-7) bound to a value that is not an engine class — accepted
+    /// silently; any later method of theirs at or above `0x100` is refused by name.
+    pub inert_subch: u8,
+    /// The value each inert subchannel was bound to (for the refusal's name).
+    pub inert_value: [u32; 8],
+    /// Inert binds accepted over the channel's life (for the log).
+    pub inert_binds: u64,
+    /// GR-tier methods re-authored over the channel's life (for the log).
+    pub gr_methods: u64,
 }
+
+/// ★ Owner rulings 2026-10-07 (`OWNER_RULINGS.md` §S, items 1-4): what a Translated channel's
+/// T-mode decoder may do beyond copy-engine work. Default: nothing.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct GrConfig {
+    /// The ring is on the GRAPHICS runlist and its host channel holds a host object of each class
+    /// in [`crate::grtables::GrClass::ALL`]: `SET_OBJECT` of such a class on subchannel 0-3 binds
+    /// it, and that subchannel's methods are re-authored from [`crate::grtables`].
+    pub tier: bool,
+    /// A `SET_OBJECT` on a software subchannel (5-7) of a value no family lists as a class is
+    /// accepted silently (inferred hardware behaviour: stored, later methods trap to RM).
+    pub inert_sw_subch: bool,
+}
+
+#[cfg(test)]
+#[path = "tmode_gr_tests.rs"]
+mod gr_tier_tests;
 
 /// `MEM_OP_D_OPERATION` values (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:182-193`).
 const OP_MEMBAR: u32 = 5;
@@ -409,6 +441,20 @@ fn one(
             Err(Refusal::SwMethod { method: m })
         };
     }
+    if st.inert_subch & bit != 0 {
+        // ★ Ruling 4: a software method on a subchannel bound to a non-class value. On bare metal
+        // it would trap to the guest's RM; nothing on our host channel may run it.
+        return Err(Refusal::InertSubchannelMethod {
+            subch: sub,
+            method: m,
+            value: st.inert_value[(sub & 7) as usize],
+        });
+    }
+    if let Some(&class) = st.gr_subch.get(sub as usize)
+        && class != 0
+    {
+        return gr_write(out, st, sub, class, m, v);
+    }
     if sub > 4 {
         return Err(Refusal::UnboundSubchannel {
             subch: sub,
@@ -485,6 +531,41 @@ fn one(
     Ok(())
 }
 
+/// ★ GR tier: one method on a subchannel bound to graphics `class` — admitted only by a row of
+/// [`crate::grtables`], its argument re-authored from the row's field; anything else is refused by
+/// name (ruling 2). No row carries an address, so nothing here reaches memory.
+fn gr_write(
+    out: &mut Vec<Ir>,
+    st: &mut TState,
+    sub: u32,
+    class: u32,
+    m: u32,
+    v: u32,
+) -> Result<(), Refusal> {
+    use crate::grtables::{Disposition, GrClass, gr_method, reauthor};
+    let gc = GrClass::of_class(class).ok_or(Refusal::ForeignClass { subch: sub, class })?;
+    match gr_method(gc, m) {
+        Disposition::Refused(name) => Err(Refusal::GrMethod {
+            class,
+            subch: sub,
+            method: m,
+            name,
+        }),
+        Disposition::Allowed(row) => {
+            let word = reauthor(&row, v).map_err(|what| Refusal::GrField {
+                class,
+                method: m,
+                word: v,
+                name: row.name,
+                what,
+            })?;
+            st.gr_methods += 1;
+            words_ir(out, &[(sub, row.method, word)]);
+            Ok(())
+        }
+    }
+}
+
 const fn tier_class(t: Tier) -> u32 {
     match t {
         Tier::C5b5 => 0xC5B5,
@@ -518,12 +599,44 @@ fn host(
         HostMethod::SetObject => {
             let class = v & NVCLASS_MASK;
             st.sw_subch &= !bit;
+            st.inert_subch &= !bit;
+            if let Some(c) = st.gr_subch.get_mut(sub as usize) {
+                *c = 0;
+            }
             if v & !NVCLASS_MASK != 0 {
                 return Err(Refusal::FieldValue {
                     method: m,
                     word: v,
                     what: "SET_OBJECT beyond NVCLASS (15:0)",
                 });
+            }
+            if st.gr.tier
+                && let Some(gc) = crate::grtables::GrClass::of_class(class)
+            {
+                // ★ GR tier: a graphics object on a GR hardware subchannel. Subchannel 4 is the
+                // GR runlist's fixed copy-engine subchannel (`NVA06F_SUBCHANNEL_COPY_ENGINE`,
+                // `cla06fsubch.h`), 5-7 are software: neither may hold one.
+                let slot = st
+                    .gr_subch
+                    .get_mut(sub as usize)
+                    .ok_or(Refusal::GrSubchannel { subch: sub, class })?;
+                *slot = gc.id();
+                // ★ Authored: the class alone. The host ring holds a host object of it, allocated
+                // at birth from the fixed allowlist (never from this word).
+                words_ir(out, &[(sub, 0, gc.id())]);
+                return Ok(());
+            }
+            if st.gr.inert_sw_subch
+                && sub > 4
+                && class != GP100_UVM_SW
+                && !is_ce(class)
+                && !crate::grtables::is_known_class(class)
+            {
+                // ★ Ruling 4 (inferred, untested): stored, nothing emitted; its methods refuse.
+                st.inert_subch |= bit;
+                st.inert_value[(sub & 7) as usize] = class;
+                st.inert_binds += 1;
+                return Ok(());
             }
             if is_ce(class) {
                 let tier =

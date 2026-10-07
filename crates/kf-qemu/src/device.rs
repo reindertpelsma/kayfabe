@@ -3043,7 +3043,21 @@ impl HostOps for Device {
         let _ = self.rm.doorbell(host_token);
     }
     fn run_translated(&self, host_token: u32, _up_to_seq: u64) -> bool {
-        self.chans.serve(host_token)
+        let r = self.chans.serve(host_token);
+        // ★ GR tier (owner requirement 2026-10-07): the host's non-stall event woke this pump
+        // (`FIFO_EVENT_MTHD`, measured: GR0's notifier does not fire for the ring's NSI), and the
+        // pump found entries the ENGINE retired — its GP_GET and the guest's semaphores are already
+        // in guest memory. Relay it to the guest's GR0 vector, here on the worker, never a vCPU.
+        if let Some((v, name, n, rings)) = self.chans.take_gr_relay() {
+            self.latch_and_deliver(v);
+            // Bounded: the first 16 relays, then each power of two.
+            if n <= 16 || n.is_power_of_two() {
+                eprintln!(
+                    "kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest {name} vector {v}: a Translated GR-tier ring retired engine-written work (rings={rings}, relay #{n})"
+                );
+            }
+        }
+        r
     }
     fn run_emulated(&self, _host_token: u32, _up_to_seq: u64) {}
     fn apply_register(&self, bar: u8, offset: u32, value: u64, _width: u8) {

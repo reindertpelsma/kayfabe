@@ -16,6 +16,7 @@
 pub mod census;
 pub mod completions;
 pub mod dbfast;
+pub mod grtables;
 pub mod host;
 pub mod passthrough;
 pub mod ring;

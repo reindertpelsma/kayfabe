@@ -602,6 +602,49 @@ pub enum Refusal {
         /// What was refused.
         what: &'static str,
     },
+    /// ★ GR tier (owner ruling 2026-10-07): a method on a graphics subchannel no row of
+    /// [`crate::grtables`] admits — privileged state, an address, a trigger, or simply unobserved.
+    GrMethod {
+        /// The bound class.
+        class: u32,
+        /// The subchannel.
+        subch: u32,
+        /// The method.
+        method: u32,
+        /// Its class-header name, or why it is not admitted.
+        name: &'static str,
+    },
+    /// ★ GR tier: an admitted method whose argument breaks its field rule.
+    GrField {
+        /// The bound class.
+        class: u32,
+        /// The method.
+        method: u32,
+        /// The word.
+        word: u32,
+        /// The method's name.
+        name: &'static str,
+        /// What was refused.
+        what: &'static str,
+    },
+    /// ★ GR tier: a graphics class bound on subchannel 4 (the GR runlist's copy-engine
+    /// subchannel) or a software subchannel.
+    GrSubchannel {
+        /// The subchannel.
+        subch: u32,
+        /// The class.
+        class: u32,
+    },
+    /// ★ Owner ruling 4 (2026-10-07): a method at or above `0x100` on a software subchannel the
+    /// guest bound to a value that is not an engine class.
+    InertSubchannelMethod {
+        /// The subchannel.
+        subch: u32,
+        /// The method.
+        method: u32,
+        /// The value it was bound to.
+        value: u32,
+    },
 }
 
 impl Refusal {
@@ -638,6 +681,10 @@ impl Refusal {
             Refusal::TooManyPieces { .. } => "too_many_pieces",
             Refusal::Footprint { .. } => "footprint",
             Refusal::Perimeter { .. } => "perimeter",
+            Refusal::GrMethod { .. } => "gr_method",
+            Refusal::GrField { .. } => "gr_field",
+            Refusal::GrSubchannel { .. } => "gr_subchannel",
+            Refusal::InertSubchannelMethod { .. } => "inert_subchannel_method",
         }
     }
 }

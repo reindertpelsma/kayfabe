@@ -216,6 +216,12 @@ pub struct EngineEvent {
     pub wakes: AtomicU64,
     /// Wakes raised to the guest.
     pub raised: AtomicU64,
+    /// ★ GR tier (2026-10-07): live Translated kernel-GR rings on this engine whose completions
+    /// are the guest's work (their fence tail's `NON_STALL_INTERRUPT` follows the engine's own
+    /// writes of the guest's semaphores and `GP_GET`).
+    pub tlive: AtomicU64,
+    /// Wakes relayed to the guest while a Translated GR-tier ring was live.
+    pub trelays: AtomicU64,
 }
 
 /// A CE class id on ANY family — the class tables are generated per family and class ids are
@@ -639,6 +645,8 @@ struct Slot {
     /// ★ P1+P2 inc A: the channel's count-only total already summed into
     /// [`ChanPlane::inca_counted`].
     inca_seen: u64,
+    /// ★ GR tier (2026-10-07): born with the kernel-GR tier (its engine's `tlive` counts it).
+    gr_tier: bool,
 }
 
 // Experiment on this branch: kernel GR channels run only authored CE work in
@@ -646,6 +654,24 @@ struct Slot {
 fn kernel_gr_ce() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("KF3_KERNEL_GR_CE").is_some_and(|v| v == "1"))
+}
+
+// ★ Owner rulings 2026-10-07 (`OWNER_RULINGS.md` §S items 1-6): the kernel-GR tier. With
+// `KF3_KERNEL_GR_CE` and T-mode, a guest-kernel GR channel's host ring also holds host objects of
+// the allowlisted graphics classes (`kf_chan::grtables`) after a USER assertion, its decoder
+// re-authors their admitted methods, the ENGINE writes the guest's GP_GET, its completions wake
+// the plane on GR0 and are relayed to the guest's GR0 vector. Default off.
+fn kernel_gr_work() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_KERNEL_GR_WORK").is_some_and(|v| v == "1"))
+}
+
+// ★ Owner ruling 2026-10-07 (§S item 4): on a T-mode Translated ring, a SET_OBJECT on a software
+// subchannel (5-7) of a value no family lists as a class is accepted silently; any later software
+// method there is refused by name. The hardware behaviour is INFERRED, not tested. Default off.
+fn sw_subch_inert() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_SW_SUBCH_INERT").is_some_and(|v| v == "1"))
 }
 
 // Experimental decoder context ownership only; codec submissions still refuse.
@@ -1094,6 +1120,9 @@ fn heap_gate(
 
 /// ★★★ The channel plane.
 pub struct ChanPlane {
+    /// ★ GR tier (2026-10-07): GR-tier pumps that retired engine-written work since the worker
+    /// last relayed it to the guest's GR0 vector ([`ChanPlane::take_gr_relay`]).
+    gr_relay: AtomicU64,
     rm: &'static HostRm,
     plane: &'static Plane<'static>,
     store: u32,
@@ -1389,6 +1418,8 @@ impl ChanPlane {
         let completions = Completions::open(rm, tokens)?;
         let lce = host_ce - kf_abi::submit::ENGINE_TYPE_COPY0;
         completions.also(rm, kf_host::event::notifier_ce(lce))?;
+        // ★ GR tier: a kernel-GR ring's fence tail NSI wakes FIFO_EVENT_MTHD, and NOT the GR0
+        // notifier (measured 2026-10-07 by `kf-gr-tier`, `completion_edges`), so nothing is added.
         eprintln!(
             "kf3: channel plane: Translated rings on host COPY{lce} (engine {host_ce:#x}); completions on FIFO_EVENT_MTHD + CE{lce}"
         );
@@ -1462,6 +1493,8 @@ impl ChanPlane {
                 live: AtomicU64::new(0),
                 wakes: AtomicU64::new(0),
                 raised: AtomicU64::new(0),
+                tlive: AtomicU64::new(0),
+                trelays: AtomicU64::new(0),
             });
         }
         eprintln!(
@@ -1477,6 +1510,7 @@ impl ChanPlane {
             .open_event_fd()
             .map_err(|e| format!("RC event fd: {e:?}"))?;
         Ok(ChanPlane {
+            gr_relay: AtomicU64::new(0),
             rm,
             plane,
             store,
@@ -1647,6 +1681,35 @@ impl ChanPlane {
             .get(idx as usize)
             .map_or(0, |c| c.swap(0, Ordering::Relaxed));
         (r, f)
+    }
+
+    /// ★ GR tier: the guest vector to raise because a GR-tier pump retired engine-written work
+    /// since the last call — `(vector, engine name, relay number, live GR-tier rings)`, or `None`.
+    /// Called by the worker right after [`ChanPlane::serve`].
+    pub fn take_gr_relay(&self) -> Option<(u32, &str, u64, u64)> {
+        if self.gr_relay.swap(0, Ordering::AcqRel) == 0 {
+            return None;
+        }
+        let e = self
+            .engines
+            .iter()
+            .find(|e| e.engine_type == kf_abi::submit::ENGINE_TYPE_GRAPHICS)?;
+        let v = e.vector?;
+        e.raised.fetch_add(1, Ordering::Relaxed);
+        let n = e.trelays.fetch_add(1, Ordering::Relaxed) + 1;
+        Some((v, e.name.as_str(), n, e.tlive.load(Ordering::Relaxed)))
+    }
+
+    /// ★ GR tier: a Translated GR-tier ring on `engine_type` came up / went away.
+    fn engine_tlive(&self, engine_type: u32, up: bool) {
+        if let Some(e) = self.engines.iter().find(|e| e.engine_type == engine_type) {
+            // Only a slot that counted itself up (`Slot::gr_tier`) counts down: never below 0.
+            if up {
+                e.tlive.fetch_add(1, Ordering::Relaxed);
+            } else {
+                e.tlive.fetch_sub(1, Ordering::Relaxed);
+            }
+        }
     }
 
     fn engine_live(&self, engine_type: u32, up: bool) {
@@ -3746,16 +3809,66 @@ impl ChanPlane {
                             .map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("host ring: {e}"))))?
                     }
                 };
+                let mut host = host;
                 let ht = host.channel().token;
                 let ring_va = host.va();
+                // ★★★ GR tier (owner rulings 2026-10-07): USER assertion, then the allowlisted host
+                // objects — refused by name, the ring freed, the birth refused, on any failure.
+                let gr_tier = kernel_gr && kernel_gr_work();
+                let gr_gp_get = if gr_tier {
+                    let at = ts.and_then(|t| match a.userd {
+                        Some(kf_arch::UserdMem::Framebuffer { base, .. }) => {
+                            t.windows().fb(base + kf_abi::submit::USERD_GP_GET, 4)
+                        }
+                        Some(kf_arch::UserdMem::Sysmem { base, .. }) => me
+                            .ram
+                            .dma_to_file_range(base + kf_abi::submit::USERD_GP_GET, 4)
+                            .and_then(|off| t.windows().ram(off, 4)),
+                        _ => None,
+                    });
+                    let admitted = host.admit_gr_tier(me.rm).and_then(|objects| {
+                        at.map(|at| (objects, at)).ok_or_else(|| {
+                            "GR tier REFUSED: the guest USERD's GP_GET word is in no T-space window".to_string()
+                        })
+                    });
+                    match admitted {
+                        Ok((_, at)) => Some(at),
+                        Err(e) => {
+                            let _ = me.rm.free_channel(host.channel());
+                            let released = host.release(me.rm).is_some_and(|l| !l.contains("REFUSED"));
+                            if let Some(t) = ts {
+                                t.give_ring(ring_va, released);
+                            }
+                            return Err(fail((NV_ERR_INSUFFICIENT_RESOURCES, e)));
+                        }
+                    }
+                } else {
+                    None
+                };
+                let gr_cfg = kf_chan::tmode::GrConfig {
+                    tier: gr_tier,
+                    inert_sw_subch: sw_subch_inert(),
+                };
                 let mut chan = match ts {
                     Some(t) => {
-                        let mut c = TranslatedChannel::new(TranslatedRing::new_tmode(a.gpfifo_va, entries, 0), host, idx);
+                        let mut ring = TranslatedRing::new_tmode(a.gpfifo_va, entries, 0);
+                        ring.set_gr(gr_cfg);
+                        let mut c = TranslatedChannel::new(ring, host, idx);
                         c.set_tspace(t.windows(), negctl_stale_bind());
                         c
                     }
                     None => TranslatedChannel::new(TranslatedRing::new(a.gpfifo_va, entries, 0), host, idx),
                 };
+                if let Some(at) = gr_gp_get
+                    && let Err(e) = chan.set_gpu_gp_get(at)
+                {
+                    let _ = me.rm.free_channel(chan.host().channel());
+                    let released = chan.release_host(me.rm).is_some_and(|l| !l.contains("REFUSED"));
+                    if let Some(t) = ts {
+                        t.give_ring(ring_va, released);
+                    }
+                    return Err(fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("GR tier REFUSED: {e}"))));
+                }
                 chan.set_probe(completion_probe_ms().is_some());
                 chan.set_census(tcensus_on());
                 // ★ P1+P2 inc A (review fix 2026-10-04): count-only on the default path, refusing
@@ -3812,7 +3925,11 @@ impl ChanPlane {
                     probe: ProbeRec::default(),
                     tspace_ring: ts.is_some(),
                     inca_seen: 0,
+                    gr_tier,
                 };
+                if gr_tier {
+                    me.engine_tlive(engine, true);
+                }
                 if let Ok(mut s) = me.slots.write() {
                     s.insert(ht, Arc::new(Mutex::new(slot)));
                 }
@@ -3827,13 +3944,15 @@ impl ChanPlane {
                 // transport changes — the drainer stamps RUNG and wakes a worker, as the trap did.
                 let fast = me.fast_register(idx, runlist, chid);
                 Ok(format!(
-                    "chan {:#x}:{:#x} BORN Translated: token {idx:#x} -> host {ht:#x} in {key:?} gpfifo={:#x}x{entries} userd={:?} engine={engine:#x} tsg={:x?} kernel_by={} ring_va={ring_va:#x} userd_at_birth(GP_PUT,GP_GET)={userd_at_birth:?} zeroed={zeroed}B {fast}",
+                    "chan {:#x}:{:#x} BORN Translated: token {idx:#x} -> host {ht:#x} in {key:?} gpfifo={:#x}x{entries} userd={:?} engine={engine:#x} tsg={:x?} kernel_by={} ring_va={ring_va:#x} userd_at_birth(GP_PUT,GP_GET)={userd_at_birth:?} zeroed={zeroed}B gr_tier={gr_tier} gp_get_by_engine={} sw_subch_inert={} {fast}",
                     a.client,
                     a.handle,
                     a.gpfifo_va,
                     a.userd,
                     a.tsg,
-                    kernel_by(&a)
+                    kernel_by(&a),
+                    gr_gp_get.is_some(),
+                    gr_cfg.inert_sw_subch
                 ))
             }),
         )
@@ -4042,6 +4161,9 @@ impl ChanPlane {
         }
         .and_then(|idx| self.dbfast.deregister(idx));
         let Ok(mut g) = slot.lock() else { return };
+        if g.gr_tier {
+            self.engine_tlive(g.guest_engine, false);
+        }
         // §5.2: free waits out BUSY. The slot lock is held, so no worker is inside the pump — but
         // one may still hold the TOKEN for a moment after it: retry on the act thread (never a
         // lock the drainer holds), bounded, and name a token that stays stranded.
@@ -4166,7 +4288,7 @@ impl ChanPlane {
             );
         }
         eprintln!(
-            "kf3: chan token {:#x} (host {ht:#x}) RETIRED, forwarded={} submissions={} splits={}/{} serves={} last_put={:?} gp_get={:?} store_views={armed} privilege={:?} dead={:?} inca=[{}]",
+            "kf3: chan token {:#x} (host {ht:#x}) RETIRED, forwarded={} submissions={} splits={}/{} serves={} last_put={:?} gp_get={:?} store_views={armed} privilege={:?} dead={:?} inca=[{}] gr_tier={} gr[methods={} inert_binds={} objects={:x?}] gp_get_by_engine={:?}",
             g.guest_idx,
             g.chan.counts().0,
             g.chan.counts().1,
@@ -4177,7 +4299,12 @@ impl ChanPlane {
             g.chan.last_gp_get(),
             g.privilege,
             g.dead,
-            g.chan.inca().line()
+            g.chan.inca().line(),
+            g.gr_tier,
+            g.chan.gr_counts().0,
+            g.chan.gr_counts().1,
+            g.chan.host().gr_objects(),
+            g.chan.gpu_gp_get()
         );
     }
 
@@ -4257,6 +4384,7 @@ impl ChanPlane {
             ticket: &mut g.split,
             requested: &mut g.splits,
         };
+        let gp_before = g.chan.last_gp_get();
         let r = g.chan.pump(
             self.rm,
             &self.completions,
@@ -4266,6 +4394,10 @@ impl ChanPlane {
             is_any_ce_class,
             &win,
         );
+        if g.gr_tier && g.chan.last_gp_get() != gp_before {
+            // The engine wrote GP_GET (and the guest's semaphores) before this fence's NSI.
+            self.gr_relay.fetch_add(1, Ordering::Release);
+        }
         // ★ Review fix 2026-10-04 (§3.5): a stash waiting for a pending walk is rung by the VA
         // thread once it is idle again.
         if g.chan.waiting_on_walk() {
@@ -4590,6 +4722,7 @@ mod dispsw_tests {
                 tsg: token,
                 chan: token,
                 token,
+                born_user: None,
             },
             idx: token,
             tsg: None,

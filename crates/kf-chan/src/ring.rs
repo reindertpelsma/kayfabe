@@ -120,7 +120,9 @@ pub enum RingRefusal {
 /// ★ DIAGNOSTIC (2026-10-07, Windows run30): the most words of a refused segment logged. A
 /// refusal kills the channel ([`RingRefusal`] is terminal for the ring), so this runs at most once
 /// per channel and prints at most this many guest words: bounded however the guest writes.
-const REFUSED_SEGMENT_LOG_WORDS: usize = 32;
+/// ⊘ 2026-10-07 (run32 setup): raised from 32 to 128 — run31's GR segment had 46 words and the
+/// last 14 were not seen. Still bounded per channel (one refusal kills the ring).
+const REFUSED_SEGMENT_LOG_WORDS: usize = 128;
 
 /// A rewrite refusal of the segment at GP index `gp`, logged with the segment's first
 /// [`REFUSED_SEGMENT_LOG_WORDS`] words. Run30 showed Windows' first submissions on its kernel CE and
@@ -207,6 +209,22 @@ impl TranslatedRing {
         // T-mode refuses by name whatever the default path counts (§3.7).
         r.st.strict = true;
         r
+    }
+
+    /// ★ Owner rulings 2026-10-07: the kernel-GR tier and the software-subchannel rule for this
+    /// T-mode ring ([`crate::tmode::GrConfig`]). No effect on a ring that is not in T-mode.
+    pub fn set_gr(&mut self, gr: crate::tmode::GrConfig) {
+        if let Some((st, _)) = self.tmode.as_deref_mut() {
+            st.gr = gr;
+        }
+    }
+
+    /// `(GR-tier methods re-authored, inert software-subchannel binds)` so far (T-mode only).
+    #[must_use]
+    pub fn gr_counts(&self) -> (u64, u64) {
+        self.tmode
+            .as_deref()
+            .map_or((0, 0), |(st, _)| (st.gr_methods, st.inert_binds))
     }
 
     /// ★ P1+P2 inc A (review fix 2026-10-04): refuse — not only count — what inc A refuses by name

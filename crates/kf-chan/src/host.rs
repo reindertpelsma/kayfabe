@@ -164,6 +164,11 @@ pub struct HostRing {
     // A graphics-runlist ring owns a real host GR context and routes all of its
     // authored CE work through the channel header's CE subchannel.
     gr_context: Option<(u32, u32)>,
+    /// ★ GR tier: `(class, host handle)` of each graphics object [`HostRing::admit_gr_tier`]
+    /// allocated (empty: the tier is off on this ring).
+    gr_objects: Vec<(u32, u32)>,
+    /// ★ GR tier: host subchannels an authored `SET_OBJECT` bound to one of `gr_objects`.
+    gr_subch: u8,
     video_context: Option<(u32, u32, u32)>,
     ce_class: u32,
     head: u64,
@@ -174,7 +179,18 @@ pub struct HostRing {
 
 // Only normalized incrementing streams enter a graphics-runlist host ring.
 // Caller bounds the segment to half its owned PB before reaching this helper.
-fn route_graphics_ce(words: &[u32], ce_class: u32) -> Result<Vec<u32>, String> {
+//
+// ★ GR tier (owner rulings 2026-10-07): a `SET_OBJECT` of a graphics class this ring holds a host
+// object of (`gr_classes`, allocated at birth by `HostRing::admit_gr_tier`) on hardware subchannel
+// 0-3 keeps its subchannel, and that subchannel's later methods (at or above 0x100) keep it too;
+// `gr_subch` carries those bindings across pushes (the caller commits it only after a push that
+// stored the words). Everything else routes to the CE subchannel as before.
+fn route_graphics_ce(
+    words: &[u32],
+    ce_class: u32,
+    gr_classes: &[u32],
+    gr_subch: &mut u8,
+) -> Result<Vec<u32>, String> {
     use kf_abi::submit::{MethodForm, method_header_decode, method_header_inc};
     let sub = kf_abi::generated::classes::NVA06F_SUBCHANNEL_COPY_ENGINE;
     let mut out = words.to_vec();
@@ -189,19 +205,53 @@ fn route_graphics_ce(words: &[u32], ce_class: u32) -> Result<Vec<u32>, String> {
             .and_then(|a| a.checked_add(h.arg_words))
             .filter(|&e| e <= words.len())
             .ok_or("GR CE route: truncated arguments")?;
+        let bit = 1u8 << (h.subchannel & 7);
+        let mut to = sub;
         if h.method == kf_abi::submit::SET_OBJECT && h.arg_words != 0 {
-            if h.arg_words != 1 || !kf_chip::is_any_dma_copy_class(words[at + 1]) {
-                return Err("GR CE route: SET_OBJECT is not one admitted CE class".into());
+            if h.arg_words != 1 {
+                return Err("GR CE route: SET_OBJECT is not one admitted class".into());
             }
-            // The guest's compatible CE class selects OUR allocated host CE
-            // object. It does not name a guest/host handle or allocate an engine.
-            out[at + 1] = ce_class;
+            let class = words[at + 1];
+            if h.subchannel < sub && gr_classes.contains(&class) {
+                // A graphics object this ring holds: the class itself, on its own subchannel.
+                *gr_subch |= bit;
+                to = h.subchannel;
+            } else if kf_chip::is_any_dma_copy_class(class) {
+                // The guest's compatible CE class selects OUR allocated host CE
+                // object. It does not name a guest/host handle or allocate an engine.
+                *gr_subch &= !bit;
+                out[at + 1] = ce_class;
+            } else {
+                return Err("GR CE route: SET_OBJECT is not one admitted class".into());
+            }
+        } else if h.method >= 0x100 && h.subchannel < sub && *gr_subch & bit != 0 {
+            to = h.subchannel;
         }
-        out[at] = method_header_inc(sub, h.method, h.arg_words as u32)
+        out[at] = method_header_inc(to, h.method, h.arg_words as u32)
             .ok_or("GR CE route: header cannot be authored")?;
         at = end;
     }
     Ok(out)
+}
+
+/// The host release that has the ENGINE write a guest `GP_GET`: `SEM_EXECUTE` `RELEASE`, 32-bit,
+/// `RELEASE_WFI`, through the address perimeter (40-bit form, as the completion tail).
+fn gp_get_release(
+    out: &mut Vec<u32>,
+    at: crate::tspace_unsafe::WindowAddr,
+    payload: u32,
+) -> Result<(), String> {
+    let op = crate::ttables::SemExecute {
+        op: 1,
+        switch_tsg: false,
+        release_wfi: true,
+        payload_64: false,
+        timestamp: false,
+        reduction: 0,
+        unsigned: false,
+    };
+    crate::tspace_unsafe::put_host_sem_execute(out, 0, at, (payload, 0), &op, false)
+        .map_err(|e| format!("GP_GET release refused by the perimeter: {e:?}"))
 }
 
 impl HostRing {
@@ -393,6 +443,8 @@ impl HostRing {
             layout,
             chan,
             gr_context: None,
+            gr_objects: Vec::new(),
+            gr_subch: 0,
             video_context: None,
             ce_class: rm.ce_class_id(),
             head: 0,
@@ -524,6 +576,63 @@ impl HostRing {
         self.chan
     }
 
+    /// ★★★ **The kernel-GR tier's admission** (owner rulings 2026-10-07, `OWNER_RULINGS.md` §S
+    /// items 1-2): on a graphics-runlist ring that owns a real GR context, assert the host channel
+    /// is USER ([`kf_host::Channel::assert_user`]) — refusing otherwise — then allocate one host
+    /// object of each class in [`crate::grtables::GrClass::ALL`] that this host family lists AND
+    /// host RM reports supported. The classes come from the fixed allowlist, never from guest
+    /// bytes. Returns `(class, handle)` of each. On an error nothing is admitted (objects already
+    /// made stay owned by the channel and are freed with it).
+    ///
+    /// # Errors
+    /// Not a GR ring, not USER, a class the host lacks, or the host's refusal — by name.
+    pub fn admit_gr_tier(&mut self, rm: &kf_host::HostRm) -> Result<Vec<(u32, u32)>, String> {
+        let stamp = self
+            .chan
+            .assert_user()
+            .map_err(|why| format!("GR tier REFUSED: {why}"))?;
+        if self.gr_context.is_none() {
+            return Err("GR tier REFUSED: the ring owns no real GR context".into());
+        }
+        let (arch, imp, _) = rm.arch_info();
+        let family = kf_chip::Family::from_arch(arch, imp)
+            .map_err(|e| format!("GR tier REFUSED: host family: {e:?}"))?;
+        let set = kf_chip::classes::classes_for(family);
+        let mut made = Vec::new();
+        for gc in crate::grtables::GrClass::ALL {
+            let class = gc.id();
+            let listed = set.kind_of(class).is_some_and(|k| {
+                matches!(
+                    k,
+                    kf_chip::classes::Kind::TwoD | kf_chip::classes::Kind::InlineToMemory
+                )
+            });
+            if !listed || !rm.supported_class_ids().contains(&class) {
+                return Err(format!(
+                    "GR tier REFUSED: host family {family:?} does not offer {} ({class:#06x})",
+                    gc.name()
+                ));
+            }
+            let h = rm
+                .alloc_engine_object(self.chan, class, None)
+                .map_err(|e| format!("GR tier REFUSED: {} object: {e:?}", gc.name()))?;
+            made.push((class, h));
+        }
+        eprintln!(
+            "kf-chan: GR tier admitted host channel {:#x} (token {:#x}) reply_flags={:#010x} \
+             privilege=USER objects={made:x?}",
+            self.chan.chan, self.chan.token, stamp.reply_flags
+        );
+        self.gr_objects.clone_from(&made);
+        Ok(made)
+    }
+
+    /// ★ GR tier: the graphics objects [`HostRing::admit_gr_tier`] allocated (empty when off).
+    #[must_use]
+    pub fn gr_objects(&self) -> &[(u32, u32)] {
+        &self.gr_objects
+    }
+
     /// The owned compute object that constructed this ring's real GR context.
     #[must_use]
     pub fn gr_context(&self) -> Option<(u32, u32)> {
@@ -587,8 +696,15 @@ impl HostRing {
         // T-mode/Translated output is normalized incrementing methods, never a
         // guest GPFIFO. On a GR runlist CE routes through its dedicated subchannel.
         // Validate the entire segment before any store, preserving every datum.
+        let mut gr_subch = self.gr_subch;
         let routed = if self.gr_context.is_some() {
-            Some(route_graphics_ce(words, self.ce_class)?)
+            let classes: Vec<u32> = self.gr_objects.iter().map(|&(c, _)| c).collect();
+            Some(route_graphics_ce(
+                words,
+                self.ce_class,
+                &classes,
+                &mut gr_subch,
+            )?)
         } else {
             None
         };
@@ -627,6 +743,8 @@ impl HostRing {
             .map_err(|e| format!("{e:?}"))?;
         self.put = self.put.wrapping_add(1);
         self.head = start + n;
+        // The bindings the stored words made are now the ring's.
+        self.gr_subch = gr_subch;
         // Covered by the NEXT fence.
         self.live.push_back(Region {
             start,
@@ -642,8 +760,28 @@ impl HostRing {
     /// # Errors
     /// `Ok(Err(Busy))` when the tail itself has no room; `Err` for a store/doorbell failure.
     pub fn fence(&mut self, rm: &kf_host::HostRm) -> Result<Result<u32, Busy>, String> {
+        self.fence_releasing(rm, None)
+    }
+
+    /// ★ [`HostRing::fence`], with the completion tail preceded by one host release the GPU
+    /// performs: `payload` written at `at` (a window address the T-space validated) with
+    /// `RELEASE_WFI`, so it lands only after all work before it, and before the tail's own
+    /// release and `NON_STALL_INTERRUPT`. Used to have the ENGINE write a Translated channel's
+    /// guest `GP_GET` (owner requirement 2026-10-07: kayfabe is not in the completion path).
+    ///
+    /// # Errors
+    /// As [`HostRing::fence`]; a release the perimeter refuses.
+    pub fn fence_releasing(
+        &mut self,
+        rm: &kf_host::HostRm,
+        release: Option<(crate::tspace_unsafe::WindowAddr, u32)>,
+    ) -> Result<Result<u32, Busy>, String> {
         let seq = self.seq.wrapping_add(1);
-        let words = fence_words(self.va + self.layout.fence_off, seq).ok_or("fence encode")?;
+        let mut words = Vec::new();
+        if let Some((at, payload)) = release {
+            gp_get_release(&mut words, at, payload)?;
+        }
+        words.extend(fence_words(self.va + self.layout.fence_off, seq).ok_or("fence encode")?);
         if let Err(b) = self.push_inner(&words, 0)? {
             return Ok(Err(b));
         }
@@ -818,6 +956,12 @@ pub struct TranslatedChannel {
     unresolved: Option<WaitOn>,
     /// Unresolved-operand waits, and refusals, counted.
     pub waits: UnresolvedCounts,
+    /// ★ GR tier (owner requirement 2026-10-07): the guest `GP_GET` word's window address. When
+    /// `Some`, the ENGINE writes `GP_GET` (a release in each retiring fence's tail) and kayfabe's
+    /// CPU never stores it.
+    gpu_gp_get: Option<crate::tspace_unsafe::WindowAddr>,
+    /// GP_GET releases queued for the engine.
+    gpu_gp_get_releases: u64,
 }
 
 /// ★ Review fix 2026-10-04 (§3.5): what a stash with an unresolved operand waits on.
@@ -928,6 +1072,8 @@ impl TranslatedChannel {
             probe: None,
             tspace: None,
             stale: crate::tmode::StaleBind::default(),
+            gpu_gp_get: None,
+            gpu_gp_get_releases: 0,
             bound: Vec::new(),
             acquire_unfenced: false,
             acquire_seq: None,
@@ -1047,10 +1193,41 @@ impl TranslatedChannel {
         self.host.release(rm)
     }
 
+    /// `(GR-tier methods re-authored, inert software-subchannel binds)` (T-mode only).
+    #[must_use]
+    pub fn gr_counts(&self) -> (u64, u64) {
+        self.ring.gr_counts()
+    }
+
     /// `(guest GP entries fetched, host submissions, walks at splits)`.
     #[must_use]
     pub fn counts(&self) -> (u64, u64, u64) {
         (self.ring.entries_fetched(), self.submissions, self.walks)
+    }
+
+    /// ★ GR tier: have the ENGINE write the guest's `GP_GET` at `at` (the window address of the
+    /// guest USERD's `GP_GET` word) — the CPU stops storing it. Checked against the perimeter now.
+    ///
+    /// # Errors
+    /// The perimeter refuses the address.
+    pub fn set_gpu_gp_get(&mut self, at: crate::tspace_unsafe::WindowAddr) -> Result<(), String> {
+        gp_get_release(&mut Vec::new(), at, 0)?;
+        self.gpu_gp_get = Some(at);
+        Ok(())
+    }
+
+    /// `(GP_GET written by the engine, releases queued)`.
+    #[must_use]
+    pub fn gpu_gp_get(&self) -> (bool, u64) {
+        (self.gpu_gp_get.is_some(), self.gpu_gp_get_releases)
+    }
+
+    /// The release for retiring guest entry `g`, when the engine writes `GP_GET`.
+    fn release_for(&mut self, g: Option<u32>) -> Option<(crate::tspace_unsafe::WindowAddr, u32)> {
+        let at = self.gpu_gp_get?;
+        let g = g?;
+        self.gpu_gp_get_releases += 1;
+        Some((at, g))
     }
 
     /// The last `GP_GET` authored to the guest.
@@ -1073,7 +1250,10 @@ impl TranslatedChannel {
     }
 
     fn author(&mut self, userd: &mut dyn GuestUserd, g: u32) -> Result<(), ChanError> {
-        userd.set_gp_get(g).map_err(ChanError::Userd)?;
+        if self.gpu_gp_get.is_none() {
+            userd.set_gp_get(g).map_err(ChanError::Userd)?;
+        }
+        // With `gpu_gp_get` the engine wrote `g` in the fence tail this completion covers.
         self.last_gp_get = Some(g);
         Ok(())
     }
@@ -1117,6 +1297,7 @@ impl TranslatedChannel {
             // clears, so this cannot race a mark by another thread.
             done_edge.clear(self.token);
         }
+        let mut carried = None;
         if let Some((seq, pdb, retires)) = self.suspended {
             if !reached(done, seq) {
                 return Ok(Pumped::Waiting);
@@ -1128,12 +1309,17 @@ impl TranslatedChannel {
             self.walks += 1;
             self.suspended = None;
             if let Some(g) = retires {
-                self.author(userd, g)?;
+                if self.gpu_gp_get.is_some() {
+                    // The engine writes it: queued as the next fence's release.
+                    carried = Some(g);
+                } else {
+                    self.author(userd, g)?;
+                }
             }
         }
         let gp_put = userd.gp_put().map_err(ChanError::Userd)?;
         let mut pushed = false;
-        let mut last_retire = None;
+        let mut last_retire = carried;
         let outcome = loop {
             let next = match self.stash.take() {
                 Some(n) => n,
@@ -1225,7 +1411,12 @@ impl TranslatedChannel {
                     // Everything before the split must COMPLETE before the walk: the guest may
                     // have written the very page tables it is invalidating with that work.
                     done_edge.mark(self.token); // BEFORE the doorbell — see `completions`
-                    match self.host.fence(rm).map_err(ChanError::Host)? {
+                    let rel = self.release_for(last_retire);
+                    match self
+                        .host
+                        .fence_releasing(rm, rel)
+                        .map_err(ChanError::Host)?
+                    {
                         Ok(seq) => {
                             self.fenced(seq);
                             let g0 = last_retire.take();
@@ -1244,6 +1435,9 @@ impl TranslatedChannel {
                             return Ok(Pumped::Waiting);
                         }
                         Err(Busy) => {
+                            if rel.is_some() {
+                                self.gpu_gp_get_releases -= 1;
+                            }
                             self.stash = Some(Next::Walk { pdb, retires });
                             break Pumped::Waiting;
                         }
@@ -1253,7 +1447,12 @@ impl TranslatedChannel {
         };
         if pushed || last_retire.is_some() {
             done_edge.mark(self.token); // BEFORE the doorbell — see `completions`
-            match self.host.fence(rm).map_err(ChanError::Host)? {
+            let rel = self.release_for(last_retire);
+            match self
+                .host
+                .fence_releasing(rm, rel)
+                .map_err(ChanError::Host)?
+            {
                 Ok(seq) => {
                     self.fenced(seq);
                     if let Some(g) = last_retire {
@@ -1292,7 +1491,7 @@ mod graphics_route_tests {
             0xdeadbeef,
         ];
         words.extend(super::fence_words(0x120000000, 0x1234).unwrap());
-        let routed = route_graphics_ce(&words, 0xc9b5).unwrap();
+        let routed = route_graphics_ce(&words, 0xc9b5, &[], &mut 0).unwrap();
         let sub = kf_abi::generated::classes::NVA06F_SUBCHANNEL_COPY_ENGINE;
         let mut at = 0;
         while at < words.len() {
@@ -1316,16 +1515,93 @@ mod graphics_route_tests {
         assert_eq!(routed.len(), words.len());
     }
 
+    /// ★ GR tier: a graphics object the ring holds keeps its subchannel, and so do its methods,
+    /// across pushes; CE work and host methods still go to the CE subchannel; a graphics class
+    /// the ring holds no object of is refused.
+    #[test]
+    fn gr_tier_objects_keep_their_subchannel_across_pushes() {
+        let h = |s, m, n| method_header_inc(s, m, n).unwrap();
+        let held = [0x902d, 0xa140];
+        let mut mask = 0u8;
+        let first = [h(3, 0, 1), 0x902d, h(2, 0, 1), 0xa140, h(0, 0, 1), 0xc7b5];
+        let r = route_graphics_ce(&first, 0xc9b5, &held, &mut mask).unwrap();
+        let sub = |w: u32| method_header_decode(w).unwrap().subchannel;
+        assert_eq!((sub(r[0]), r[1]), (3, 0x902d));
+        assert_eq!((sub(r[2]), r[3]), (2, 0xa140));
+        assert_eq!((sub(r[4]), r[5]), (4, 0xc9b5));
+        assert_eq!(mask, 0b1100);
+        // A later push: 2D state on 3 stays on 3; a host method on 3 and CE work go to 4.
+        let later = [h(3, 0x2ac, 1), 3, h(3, 0x78, 1), 0, h(0, 0x400, 1), 1];
+        let r = route_graphics_ce(&later, 0xc9b5, &held, &mut mask).unwrap();
+        assert_eq!([sub(r[0]), sub(r[2]), sub(r[4])], [3, 4, 4]);
+        // Rebinding 3 to a CE class clears it.
+        let rebind = [h(3, 0, 1), 0xc7b5, h(3, 0x400, 1), 1];
+        let r = route_graphics_ce(&rebind, 0xc9b5, &held, &mut mask).unwrap();
+        assert_eq!([sub(r[0]), sub(r[2])], [4, 4]);
+        assert_eq!(mask, 0b0100);
+        // A graphics class without a host object, or on subchannel 4, is refused.
+        assert!(route_graphics_ce(&[h(1, 0, 1), 0x902d], 0xc9b5, &[], &mut 0).is_err());
+        assert!(route_graphics_ce(&[h(4, 0, 1), 0x902d], 0xc9b5, &held, &mut 0).is_err());
+    }
+
+    /// ★ GR tier: the engine's `GP_GET` write is a 32-bit `RELEASE_WFI` of the retired entry at the
+    /// window address of the guest USERD's `GP_GET` word, nothing else.
+    #[test]
+    fn the_gp_get_release_is_one_wfi_release_of_the_entry() {
+        let w = crate::tspace_unsafe::TWindows::new(
+            (0x10_0000_0000, 0x1000_0000),
+            (0x20_0000_0000, 0x100_0000),
+            1 << 40,
+        )
+        .unwrap();
+        let at = w.fb(0x3_0000 + kf_abi::submit::USERD_GP_GET, 4).unwrap();
+        let mut v = Vec::new();
+        super::gp_get_release(&mut v, at, 7).unwrap();
+        let addr = at.get();
+        assert_eq!(
+            v,
+            vec![
+                method_header_inc(0, fifo::SEM_ADDR_LO, 1).unwrap(),
+                (addr & 0xFFFF_FFFC) as u32,
+                method_header_inc(0, fifo::SEM_ADDR_HI, 1).unwrap(),
+                (addr >> 32) as u32,
+                method_header_inc(0, fifo::SEM_PAYLOAD_LO, 1).unwrap(),
+                7,
+                method_header_inc(0, fifo::SEM_PAYLOAD_HI, 1).unwrap(),
+                0,
+                method_header_inc(0, fifo::SEM_EXECUTE, 1).unwrap(),
+                fifo::SEM_EXECUTE_RELEASE_32BIT | fifo::SEM_EXECUTE_RELEASE_WFI_EN,
+            ]
+        );
+    }
+
     #[test]
     fn unsupported_or_partial_stream_is_never_routed() {
         let valid = method_header_inc(0, 0x400, 2).unwrap();
-        assert!(route_graphics_ce(&[valid, 1], 0xc9b5).is_err());
-        assert!(route_graphics_ce(&[6 << 29], 0xc9b5).is_err());
-        assert!(route_graphics_ce(&[3 << 29], 0xc9b5).is_err()); // immediate, not normalized
-        assert_eq!(route_graphics_ce(&[], 0xc9b5).unwrap(), Vec::<u32>::new());
-        assert!(route_graphics_ce(&[method_header_inc(0, 0, 1).unwrap(), 0xc797], 0xc9b5).is_err());
+        assert!(route_graphics_ce(&[valid, 1], 0xc9b5, &[], &mut 0).is_err());
+        assert!(route_graphics_ce(&[6 << 29], 0xc9b5, &[], &mut 0).is_err());
+        assert!(route_graphics_ce(&[3 << 29], 0xc9b5, &[], &mut 0).is_err()); // immediate, not normalized
+        assert_eq!(
+            route_graphics_ce(&[], 0xc9b5, &[], &mut 0).unwrap(),
+            Vec::<u32>::new()
+        );
         assert!(
-            route_graphics_ce(&[method_header_inc(0, 0, 2).unwrap(), 0xc7b5, 1], 0xc9b5).is_err()
+            route_graphics_ce(
+                &[method_header_inc(0, 0, 1).unwrap(), 0xc797],
+                0xc9b5,
+                &[],
+                &mut 0
+            )
+            .is_err()
+        );
+        assert!(
+            route_graphics_ce(
+                &[method_header_inc(0, 0, 2).unwrap(), 0xc7b5, 1],
+                0xc9b5,
+                &[],
+                &mut 0
+            )
+            .is_err()
         );
     }
 }
