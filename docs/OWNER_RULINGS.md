@@ -1,6 +1,6 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-09-30 (evening).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-10-07 (§S added; earlier rulings dated in place).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
@@ -211,6 +211,10 @@ citation: ask whether its reason still holds before relying on it.
     never faked.
   - A stub answers the way a GPU without the feature answers: capability absent, or not permitted.
     It never answers `OK` to an action; that is the forged-completion trap of 2026-09-26.
+    ⊘ *Refined 2026-10-07 by §S:* a privileged host-management action with no compute or
+    display effect on the guest (RC-recovery policy, notifier arming for thermal or power
+    events, for example) may be accepted silently, with a coherent "feature absent" state.
+    GPU work that reached hardware is still never forged.
   - Read in ogkm-580 the same day:
     - The **debugger** is open to unprivileged users for their own processes
       (`ogkm-580: src/nvidia/src/kernel/gpu/gr/kernel_sm_debugger_session.c:270-301`). kayfabe
@@ -622,4 +626,23 @@ citation: ask whether its reason still holds before relying on it.
 - **Testing before master** (owner, the same day): *"before you merge to master, test it works"*, *"on
   real hardware"*. Code reaches master only after CI and a merge bar on a box with a real NVIDIA GPU,
   at the exact commit, plus that change's own hardware tests. Docs-only commits are tested by CI.
+
+## S. Privileged host management: stub; unprivileged features: implement; GPU work: never forge (2026-10-07)
+
+**STATUS: LIVE, 2026-10-07.** Binding owner ruling, relayed by the coordinator during the Windows
+Code43 work (`traces/windows_code43_walls_20261007/README.md`, runs 25-27). It refines §H.
+
+1. **Stub.** A privileged host-management action that is not compute and has no display or compute
+   effect on the guest may be accepted or armed silently. It keeps a coherent "feature absent"
+   state and never touches the host. Examples: RC-recovery policy (`SET/GET_RC_RECOVERY`), and
+   arming notifiers for thermal or cooler diag zones, the power connector, platform power mode, aux
+   power, GPU RC reset and ucode reset. Guest queries in the same area stay coherent with the stub:
+   refused or reported absent, never filled with invented values.
+2. **Implement for real.** Anything kayfabe can do with unprivileged host access is implemented,
+   not stubbed: LUTs, timeslice, display colour, and the virtual monitor including hotplug and
+   resize. An event about such a feature is armed only if kayfabe can post it from its own
+   state. Otherwise the gap is reported.
+3. **Never forge.** GPU work that reached the hardware is never forged (§A.3, unchanged). An
+   event about real GPU work (copy-engine or graphics completions, runlist preemption, P-state or
+   power events) is accepted only if it is derived from real host events.
 

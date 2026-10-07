@@ -539,23 +539,13 @@ pub fn served_chain(
         )));
         chain.push(Box::new(barpde::BarPdePolicy::new(sink)));
     }
-    let mut vf_guest = vfguest::VfGuestPolicy::new(driver);
-    // ⚠ DIAGNOSTIC ONLY (owner request 2026-10-07, run26; default off, never to be merged on):
-    // report and accept RC recovery ENABLED with no per-VM recovery behind it.
-    if std::env::var("KF3_RC_RECOVERY_ENABLED_DIAG").as_deref() == Ok("1") {
-        vf_guest = vf_guest.with_enabled_diagnostic();
-        eprintln!(
-            "kf-rm: DIAGNOSTIC KF3_RC_RECOVERY_ENABLED_DIAG: RC recovery reported/accepted ENABLED; \
-             NO per-VM recovery is implemented and nothing reaches the host"
-        );
-    }
     chain.extend::<[Box<dyn kf_gsp::CommandPolicy>; 8]>([
         // ★ v3-gfx: the per-VM ZBC table — claims only `0x9096xxxx` controls, answers them from
         // its own state and never forwards (`zbc.rs`).
         Box::new(zbc::ZbcPolicy::new(driver, host.zbc_table_sizes)),
-        // ★ 2026-10-07: RC-recovery GET/SET and the power source, answered per VM as the vGPU
-        // guest HAL answers them; never forwarded (`vfguest.rs`).
-        Box::new(vf_guest),
+        // ★ 2026-10-07: RC-recovery GET/SET (a stub under owner ruling §S) and the power source,
+        // answered per VM; never forwarded (`vfguest.rs`).
+        Box::new(vfguest::VfGuestPolicy::new(driver)),
         Box::new(kf_gsp::Observing(Box::new(
             faultbuffer::FaultBufferRecorder::new(driver, fault_buffer),
         ))),

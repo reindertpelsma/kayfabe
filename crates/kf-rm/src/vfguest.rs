@@ -1,5 +1,12 @@
-//! ★ Windows Code43 batch, 2026-10-07 — **subdevice controls answered the way NVIDIA's own
-//! virtual-GPU guest RM answers them** (the `_VF` HAL), per VM and never forwarded.
+//! ★ Windows Code43 batch, 2026-10-07 — **subdevice controls answered per VM and never
+//! forwarded**: RC-recovery policy as a STUB under owner ruling §S (`docs/OWNER_RULINGS.md`,
+//! 2026-10-07), and the power source the way NVIDIA's own virtual-GPU guest RM answers it.
+//!
+//! ⊘ *Superseded 2026-10-07 (owner ruling §S, after DIAGNOSTIC run26):* the table row and the
+//! "RC recovery" bullet below describe the earlier DISABLED-only answer. RC recovery is now a
+//! stub: GET reports the VM's recorded setting, which starts ENABLED (what the passthrough GSP
+//! answered in vfio-8/9/10); SET records ENABLED or DISABLED; any other value is 0x1f. No
+//! robust-channel recovery is performed for the VM by this link and nothing reaches the host.
 //!
 //! ## Why these, and why this answer
 //!
@@ -78,18 +85,17 @@ pub const PARAMS_SIZE: usize = 4;
 pub enum RcRecovery {
     /// No robust-channel recovery is performed on the VM's behalf.
     Disabled,
-    /// ⚠ DIAGNOSTIC ONLY (`KF3_RC_RECOVERY_ENABLED_DIAG=1`, default off): `ENABLED` is reported and
-    /// accepted although kayfabe performs NO per-VM robust-channel recovery and nothing reaches the
-    /// host. It exists only to measure how far Windows StartDevice gets past `SET_RC_RECOVERY`
-    /// (owner request, 2026-10-07, run26). It is a known-false answer and must not be merged.
-    EnabledDiagnostic,
+    /// ⚠ STUB under owner ruling §S (2026-10-07): the guest's recorded policy is ENABLED. kayfabe
+    /// performs no per-VM robust-channel recovery on its account and touches no host policy; the
+    /// setting is privileged host management with no compute or display effect on the guest.
+    Enabled,
 }
 
 impl RcRecovery {
     fn wire(self) -> u32 {
         match self {
             RcRecovery::Disabled => RC_RECOVERY_DISABLED,
-            RcRecovery::EnabledDiagnostic => RC_RECOVERY_ENABLED,
+            RcRecovery::Enabled => RC_RECOVERY_ENABLED,
         }
     }
 }
@@ -99,8 +105,6 @@ impl RcRecovery {
 pub struct VfGuestPolicy {
     driver: kf_abi::versions::DriverAbiTable,
     rc: RcRecovery,
-    /// ⚠ DIAGNOSTIC: accept and report `ENABLED` ([`RcRecovery::EnabledDiagnostic`]).
-    diag_enabled: bool,
     /// `SET_RC_RECOVERY` accepted.
     pub rc_sets: u64,
     /// `SET_RC_RECOVERY` refused (ENABLED, an unknown value, or a malformed envelope).
@@ -108,27 +112,15 @@ pub struct VfGuestPolicy {
 }
 
 impl VfGuestPolicy {
-    /// A fresh per-VM link: RC recovery `DISABLED`.
+    /// A fresh per-VM link: RC recovery recorded `ENABLED` (stub, owner ruling §S).
     #[must_use]
     pub fn new(driver: kf_abi::versions::DriverAbiTable) -> VfGuestPolicy {
         VfGuestPolicy {
             driver,
-            rc: RcRecovery::Disabled,
-            diag_enabled: false,
+            rc: RcRecovery::Enabled,
             rc_sets: 0,
             rc_refused: 0,
         }
-    }
-
-    /// ⚠ DIAGNOSTIC ONLY (run26): the VM starts reporting `ENABLED` (what the passthrough GSP
-    /// answered in vfio-8/9/10) and `SET_RC_RECOVERY(ENABLED)` is accepted. No recovery is
-    /// performed and nothing reaches the host; the answer is knowingly not backed by kayfabe
-    /// behaviour. Selected only by `KF3_RC_RECOVERY_ENABLED_DIAG=1` (`crate::served_chain`).
-    #[must_use]
-    pub fn with_enabled_diagnostic(mut self) -> VfGuestPolicy {
-        self.diag_enabled = true;
-        self.rc = RcRecovery::EnabledDiagnostic;
-        self
     }
 
     /// The VM's current RC-recovery setting.
@@ -148,7 +140,7 @@ impl VfGuestPolicy {
     ///
     /// # Errors
     /// `NV_ERR_INVALID_ARGUMENT` for a params size other than four bytes or an `rcEnable` that is
-    /// neither value; `NV_ERR_NOT_SUPPORTED` for `SET_RC_RECOVERY(ENABLED)` and any other control.
+    /// neither value; `NV_ERR_NOT_SUPPORTED` for any other control.
     pub fn answer(&mut self, cmd: u32, params: &[u8]) -> Result<Vec<u8>, u32> {
         if !Self::claims(cmd) {
             return Err(NV_ERR_NOT_SUPPORTED);
@@ -168,15 +160,11 @@ impl VfGuestPolicy {
                     self.rc_sets += 1;
                     Ok(word.to_vec())
                 }
-                // ⚠ DIAGNOSTIC (run26): accepted only with the default-off flag, no effect.
-                RC_RECOVERY_ENABLED if self.diag_enabled => {
-                    self.rc = RcRecovery::EnabledDiagnostic;
+                // ⚠ STUB (owner ruling §S): recorded, no host action, no recovery promised.
+                RC_RECOVERY_ENABLED => {
+                    self.rc = RcRecovery::Enabled;
                     self.rc_sets += 1;
                     Ok(word.to_vec())
-                }
-                RC_RECOVERY_ENABLED => {
-                    self.rc_refused += 1;
-                    Err(NV_ERR_NOT_SUPPORTED)
                 }
                 _ => {
                     self.rc_refused += 1;
@@ -278,66 +266,15 @@ mod tests {
         Ok(u32::from_le_bytes(r.body[at..at + 4].try_into().unwrap()))
     }
 
-    /// ★ The VFIO sequence, answered as the VF HAL does: GET reports DISABLED whatever the guest's
-    /// uninitialised input word was (vfio-10 sent 0x4da066c8), SET(DISABLED) is accepted, a second
-    /// GET still reads DISABLED, and the power source is AC.
+    /// ★ The VFIO sequence under the stub (owner ruling §S): GET reports ENABLED whatever the
+    /// guest's uninitialised input word was (vfio-10 sent 0x4da066c8), SET(ENABLED) is recorded,
+    /// SET(DISABLED) is recorded and read back, and the power source is AC.
     #[test]
-    fn get_reports_disabled_set_disabled_is_accepted_and_power_is_ac() {
+    fn rc_recovery_stub_records_both_values_and_power_is_ac() {
         let mut p = VfGuestPolicy::new(abi());
         let garbage = 0x4da0_66c8u32.to_le_bytes();
         assert_eq!(
             params_of(&mut p, &control(GET_RC_RECOVERY, &garbage, 4, 0)),
-            Ok(RC_RECOVERY_DISABLED)
-        );
-        assert_eq!(
-            params_of(&mut p, &control(SET_RC_RECOVERY, &[0; 4], 4, 0)),
-            Ok(RC_RECOVERY_DISABLED)
-        );
-        assert_eq!(
-            params_of(&mut p, &control(GET_RC_RECOVERY, &[0xff; 4], 4, 0)),
-            Ok(RC_RECOVERY_DISABLED)
-        );
-        assert_eq!(p.rc_sets, 1);
-        assert_eq!(p.rc_recovery(), RcRecovery::Disabled);
-        assert_eq!(
-            params_of(&mut p, &control(PERF_GET_POWERSTATE, &[0xff; 4], 4, 0)),
-            Ok(POWER_SOURCE_AC)
-        );
-    }
-
-    /// ⊘ ENABLED is refused NOT_SUPPORTED and changes nothing; any other value is
-    /// INVALID_ARGUMENT; the next GET still reports DISABLED.
-    #[test]
-    fn set_enabled_and_unknown_values_are_refused_and_change_nothing() {
-        let mut p = VfGuestPolicy::new(abi());
-        assert_eq!(
-            params_of(
-                &mut p,
-                &control(SET_RC_RECOVERY, &RC_RECOVERY_ENABLED.to_le_bytes(), 4, 0)
-            ),
-            Err(NV_ERR_NOT_SUPPORTED)
-        );
-        for v in [2u32, 0x8000_0000, u32::MAX] {
-            assert_eq!(
-                params_of(&mut p, &control(SET_RC_RECOVERY, &v.to_le_bytes(), 4, 0)),
-                Err(NV_ERR_INVALID_ARGUMENT)
-            );
-        }
-        assert_eq!(p.rc_refused, 4);
-        assert_eq!(p.rc_sets, 0);
-        assert_eq!(
-            params_of(&mut p, &control(GET_RC_RECOVERY, &[0; 4], 4, 0)),
-            Ok(RC_RECOVERY_DISABLED)
-        );
-    }
-
-    /// ⚠ DIAGNOSTIC (run26): with the flag, GET reports ENABLED, SET accepts both values and
-    /// still refuses others with INVALID_ARGUMENT; without it nothing changes (tested above).
-    #[test]
-    fn diagnostic_mode_reports_and_accepts_enabled_only_when_selected() {
-        let mut p = VfGuestPolicy::new(abi()).with_enabled_diagnostic();
-        assert_eq!(
-            params_of(&mut p, &control(GET_RC_RECOVERY, &[0; 4], 4, 0)),
             Ok(RC_RECOVERY_ENABLED)
         );
         assert_eq!(
@@ -349,14 +286,32 @@ mod tests {
             Ok(RC_RECOVERY_DISABLED)
         );
         assert_eq!(
-            params_of(&mut p, &control(GET_RC_RECOVERY, &[0; 4], 4, 0)),
+            params_of(&mut p, &control(GET_RC_RECOVERY, &[0xff; 4], 4, 0)),
             Ok(RC_RECOVERY_DISABLED)
         );
+        assert_eq!(p.rc_recovery(), RcRecovery::Disabled);
+        assert_eq!(p.rc_sets, 2);
         assert_eq!(
-            params_of(&mut p, &control(SET_RC_RECOVERY, &2u32.to_le_bytes(), 4, 0)),
-            Err(NV_ERR_INVALID_ARGUMENT)
+            params_of(&mut p, &control(PERF_GET_POWERSTATE, &[0xff; 4], 4, 0)),
+            Ok(POWER_SOURCE_AC)
         );
-        assert_eq!((p.rc_sets, p.rc_refused), (2, 1));
+    }
+
+    /// ⊘ Values other than ENABLED/DISABLED are INVALID_ARGUMENT and change nothing.
+    #[test]
+    fn unknown_values_are_refused_and_change_nothing() {
+        let mut p = VfGuestPolicy::new(abi());
+        for v in [2u32, 0x8000_0000, u32::MAX] {
+            assert_eq!(
+                params_of(&mut p, &control(SET_RC_RECOVERY, &v.to_le_bytes(), 4, 0)),
+                Err(NV_ERR_INVALID_ARGUMENT)
+            );
+        }
+        assert_eq!((p.rc_refused, p.rc_sets), (3, 0));
+        assert_eq!(
+            params_of(&mut p, &control(GET_RC_RECOVERY, &[0; 4], 4, 0)),
+            Ok(RC_RECOVERY_ENABLED)
+        );
     }
 
     /// ⊘ Hostile envelopes: a wrong `paramsSize` (short, long, zero, huge), a declared window past
@@ -393,7 +348,7 @@ mod tests {
         let mut short = control(GET_RC_RECOVERY, &[0; 4], 4, 0);
         short.payload.truncate(10);
         assert!(p.respond(&short).is_none());
-        assert_eq!(p.rc_recovery(), RcRecovery::Disabled);
+        assert_eq!(p.rc_recovery(), RcRecovery::Enabled);
     }
 
     /// The link claims exactly its three controls and nothing of another function.

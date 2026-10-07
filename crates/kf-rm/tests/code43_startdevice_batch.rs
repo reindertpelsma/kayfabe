@@ -19,7 +19,7 @@ use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
 
 const PARAMS_AT: usize = 40;
 const NV_OK: u32 = 0;
-const NV_ERR_NOT_SUPPORTED: u32 = 0x56;
+const NV_ERR_INVALID_ARGUMENT: u32 = 0x1f;
 const NV_ERR_INVALID_STATE: u32 = 0x40;
 const CLIENT: u32 = 0xc1d0_0002;
 const DEVICE: u32 = 0xff01_0000;
@@ -144,22 +144,22 @@ fn the_vfio_sequence_after_the_run24_abort_point_is_served() {
     let mut c = chain(&log);
     objects(&mut *c);
 
-    // 1. RC recovery: GET reports DISABLED whatever the guest's input word, SET(DISABLED) is OK,
-    //    SET(ENABLED) is refused NOT_SUPPORTED.
+    // 1. RC recovery (stub, owner ruling §S): GET reports ENABLED whatever the guest's input
+    //    word, SET(ENABLED) is recorded (the VFIO sequence), a third value is refused 0x1f.
     assert_eq!(
         params(
             &mut *c,
             &control(SUBDEVICE, 0x2080_220e, &words(&[0x4da0_66c8]))
         ),
-        Ok(words(&[0]))
-    );
-    assert_eq!(
-        params(&mut *c, &control(SUBDEVICE, 0x2080_220d, &words(&[0]))),
-        Ok(words(&[0]))
+        Ok(words(&[1]))
     );
     assert_eq!(
         params(&mut *c, &control(SUBDEVICE, 0x2080_220d, &words(&[1]))),
-        Err(NV_ERR_NOT_SUPPORTED)
+        Ok(words(&[1]))
+    );
+    assert_eq!(
+        params(&mut *c, &control(SUBDEVICE, 0x2080_220d, &words(&[2]))),
+        Err(NV_ERR_INVALID_ARGUMENT)
     );
 
     // 2. Event objects under the subdevice and the display-common object.
@@ -184,6 +184,30 @@ fn the_vfio_sequence_after_the_run24_abort_point_is_served() {
         NV_OK,
         "0x78 under NV04_DISPLAY_COMMON"
     );
+
+    // 2b. The 23 subdevice notifier armings, in VFIO order (vfio-10 RPCs 2518-2566, all
+    //     REPEAT): accepted exactly where owner ruling §S classifies the index, refused where the
+    //     event concerns real GPU work or cannot be posted from kayfabe's own state.
+    let windows_order = [
+        44u32, 43, 113, 120, 4, 33, 139, 157, 197, 122, 158, 2, 26, 12, 23, 24, 1, 7, 45, 34, 118,
+        178, 182,
+    ];
+    let refused = [120u32, 33, 139, 122, 26, 12, 23, 24];
+    for ev in windows_order {
+        let got = params(
+            &mut *c,
+            &control(SUBDEVICE, 0x2080_0301, &words(&[ev, 2, 0, 0, 0])),
+        );
+        if refused.contains(&ev) {
+            assert_eq!(got, Err(0x56), "notifier {ev} must stay refused");
+        } else {
+            assert_eq!(
+                got,
+                Ok(words(&[ev, 2, 0, 0, 0])),
+                "notifier {ev} is accepted under the ruling"
+            );
+        }
+    }
 
     // 3. The display-common notifier: the bound event is enabled; an event bound to the
     //    subdevice is not bound here and is refused as RM refuses it.

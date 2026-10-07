@@ -755,3 +755,42 @@ Index 0x2c (44, THERMAL_DIAG_ZONE) has no such argument. The VFIO boot then arms
   (`GUEST_RAISED_NOTIFIERS`), which has to be shown per index. After these
   come PERF_GET_POWERSTATE (served) and the display walls listed in the sixth
   repair.
+
+## Seventh repair: owner ruling §S applied (RC-recovery stub, the notifier family, real hotplug)
+
+> ⊘ *Supersedes the DIAGNOSTIC flag above (2026-10-07):* `KF3_RC_RECOVERY_ENABLED_DIAG` and
+> the runner's `--rc-recovery-enabled-diag` option are removed. RC recovery is now a stub under
+> owner ruling §S (`docs/OWNER_RULINGS.md`), not a diagnostic.
+
+Owner ruling §S (2026-10-07) has three parts. Privileged host management with no compute or
+display effect is stubbed. Unprivileged features, including the virtual monitor and its
+hotplug, are implemented for real. GPU work is never forged. Applied as follows:
+
+- **RC recovery (stub).** GET reports the VM's recorded setting, which starts ENABLED, the
+  value the passthrough GSP gave. SET records ENABLED or DISABLED; any other value returns 0x1f.
+  There is no host action and no per-VM recovery behind it (`kf_rm::vfguest`).
+- **`0x20800301` notifier arming.** These are the 23 indices of vfio-10's RPCs 2518-2566.
+  `kf_abi::eventnotify::RULED_NOTIFIERS` gives each accepted index its source citation:
+
+  | treatment | indices |
+  |---|---|
+  | stub (§S.1) | 2 POWER_CONNECTOR, 4 THERMAL_HW, 43 COOLER_DIAG_ZONE, 44 THERMAL_DIAG_ZONE, 157 UCODE_RESET (raised by the guest's own CPU-RM at `kernel_gsp.c:2469`), 158 PLATFORM_POWER_MODE_CHANGE (raised by the guest's CPU-RM at `platform_request_handler_ctrl.c:2129`), 182 AUX_POWER_STATE_CHANGE, 197 GPU_RC_RESET (raised by the guest's CPU-RM at `kernel_rc_callback.c:360`) |
+  | absent on the virtual DVI-D/TMDS display | 7 DP_IRQ, 34 HDCP_STATUS_CHANGE, 45 AUDIO_HDCP_REQUEST, 113 STEREO_EMITTER_DETECTION, 178 HDMI_FRL_RETRAINING_REQUEST |
+  | real, posted by the display plane (§S.2) | 1 HOTPLUG: the class-0x78 event whose notify index is HOTPLUG now registers as the hotplug target, so a monitor resize posts a list `POST_EVENT` to it (fanned out at `kernel_gsp.c:514-522`) |
+  | already accepted as raised by the guest | 118 POWER_EVENT |
+  | **refused** (next walls) | 120 HOTPLUG_PROCESSING_COMPLETE (no producer anywhere in OGKM, so kayfabe cannot post it from its own state), 33 PSTATE_CHANGE, 139 RUNLIST_PREEMPT_COMPLETE, 12 GRAPHICS, 23/24/26 CE0/CE1/CE3 (none derived from real host events yet), 122 RESERVED122 (no defined meaning) |
+- **NV0073 notifiers 1 and 2** (display common): kayfabe mirrors RM's own handler, which
+  accepts any index below 6. The open headers name none of 1-4, and this display raises none of
+  them.
+- **Guest thermal and power queries** are not answered by any kayfabe link (they stay
+  refused), so they agree with the stubs. PERF_GET_POWERSTATE reports AC, the `_VF` value.
+
+Tests: 1471 across kf-abi, kf-chip, kf-disp, kf-rm and kf-qemu, including the Windows arming
+order in `tests/code43_startdevice_batch.rs` and the pinned ruled list. Clippy new 0,
+rustfmt clean, ci_gates clean.
+
+**Falsifier, stated before run27:** this batch is worthwhile only if the abort moves well past
+VFIO index 2518 into display setup (the NV0073 controls and IS_MODE_POSSIBLE, 2558 onwards).
+**Prediction:** the fourth arming, HOTPLUG_PROCESSING_COMPLETE at VFIO index 2524, is refused.
+If Windows treats that refusal as fatal like the first, run27 aborts there and the falsifier
+holds again, until 120 has a source-backed producer.

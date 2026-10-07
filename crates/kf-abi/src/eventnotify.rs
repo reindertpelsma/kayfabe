@@ -470,6 +470,148 @@ pub const GUEST_RAISED_NOTIFIERS: &[GuestRaisedNotifier] = &[
     },
 ];
 
+/// How an index on [`RULED_NOTIFIERS`] is accepted (owner ruling §S, 2026-10-07,
+/// `docs/OWNER_RULINGS.md`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuledClass {
+    /// §S.1: privileged host management with no compute or display effect on the guest. The
+    /// arming is accepted silently and kayfabe never raises the event: the feature is absent on
+    /// this device, and the guest queries in the same area stay refused or absent.
+    Stub,
+    /// The event concerns a display feature the virtual display does not have (its only connector
+    /// is a DVI-D, single-link TMDS output: `kf_disp::model` answers `CONNECTOR_DATA_TYPE_DVI_D`
+    /// and `OR_PROTOCOL_SOR_SINGLE_TMDS_A`), so it cannot occur. Any guest-RM producer is noted.
+    AbsentOnVirtualDisplay,
+    /// §S.2: implemented for real. kayfabe posts the event from its own state (the
+    /// virtual monitor), to a live registration whose notify index names it.
+    PostedByDisplayPlane,
+}
+
+/// ★★★ **The notifier indices the Windows kernel driver arms in StartDevice, accepted under owner
+/// ruling §S (2026-10-07)** — `[measured]` 2026-10-05 VFIO boot vfio-10, RTX 4070: 23 armings (all
+/// REPEAT) right after the class-0x78 event allocations. Every row says which of the three
+/// treatments applies and why. The rest of that set stays REFUSED, because it concerns real GPU
+/// work or an event kayfabe cannot yet post: 120 HOTPLUG_PROCESSING_COMPLETE (no producer anywhere
+/// in OGKM, so its timing and data are unknown), 33 PSTATE_CHANGE, 139 RUNLIST_PREEMPT_COMPLETE,
+/// 12 GRAPHICS, 23/24/26 CE0/CE1/CE3 (none derived from host events yet), and 122 RESERVED122 (no
+/// defined meaning).
+pub const RULED_NOTIFIERS: &[RuledNotifier] = &[
+    RuledNotifier {
+        index: 1,
+        class: RuledClass::PostedByDisplayPlane,
+        why: "NV2080_NOTIFIERS_HOTPLUG (ogkm-580: cl2080_notification.h:37). The virtual monitor can \
+              be resized (display step 3c, kf_disp::model::DisplayModel::set_monitor); kf-qemu's \
+              deliver_hotplug then posts a LIST POST_EVENT with this index to a live registration \
+              (kf_rm::display registers an accepted NV01_EVENT_KERNEL_CALLBACK[_EX] whose notifyIndex \
+              names HOTPLUG). The guest's _kgspRpcPostEvent fans it out with gpuNotifySubDeviceEvent \
+              (ogkm-580: kernel_gsp.c:514-522), gated by this arming. Without the display plane there \
+              is no monitor, so no hotplug can occur",
+    },
+    RuledNotifier {
+        index: 2,
+        class: RuledClass::Stub,
+        why: "NV2080_NOTIFIERS_POWER_CONNECTOR (ogkm-580: cl2080_notification.h:38): the auxiliary \
+              power-connector state of a physical board. Host board management, no guest effect",
+    },
+    RuledNotifier {
+        index: 4,
+        class: RuledClass::Stub,
+        why: "NV2080_NOTIFIERS_THERMAL_HW (ogkm-580: cl2080_notification.h:40): hardware thermal \
+              slowdown of the physical board. Host management; guest thermal queries stay refused",
+    },
+    RuledNotifier {
+        index: 7,
+        class: RuledClass::AbsentOnVirtualDisplay,
+        why: "NV2080_NOTIFIERS_DP_IRQ (ogkm-580: cl2080_notification.h:43): a DisplayPort short \
+              pulse. The virtual connector is DVI-D/TMDS, so there is no DP sink. The only guest-RM \
+              producer is the guest's own DP_GENERATE_FAKE_INTERRUPT control \
+              (ogkm-580: disp_common_kern_ctrl_minimal.c:259)",
+    },
+    RuledNotifier {
+        index: 34,
+        class: RuledClass::AbsentOnVirtualDisplay,
+        why: "NV2080_NOTIFIERS_HDCP_STATUS_CHANGE (ogkm-580: cl2080_notification.h:71): the virtual \
+              display has no HDCP engine and no OGKM producer exists; HDCP state never changes",
+    },
+    RuledNotifier {
+        index: 43,
+        class: RuledClass::Stub,
+        why: "NV2080_NOTIFIERS_COOLER_DIAG_ZONE (ogkm-580: cl2080_notification.h:81): fan/cooler \
+              diagnostics of the physical board; no OGKM producer. Host management",
+    },
+    RuledNotifier {
+        index: 44,
+        class: RuledClass::Stub,
+        why: "NV2080_NOTIFIERS_THERMAL_DIAG_ZONE (ogkm-580: cl2080_notification.h:82): thermal \
+              diagnostics of the physical board; no OGKM producer. Host management",
+    },
+    RuledNotifier {
+        index: 45,
+        class: RuledClass::AbsentOnVirtualDisplay,
+        why: "NV2080_NOTIFIERS_AUDIO_HDCP_REQUEST (ogkm-580: cl2080_notification.h:83): audio over \
+              the display link; a DVI-D output carries no audio and no OGKM producer exists",
+    },
+    RuledNotifier {
+        index: 113,
+        class: RuledClass::AbsentOnVirtualDisplay,
+        why: "NV2080_NOTIFIERS_STEREO_EMITTER_DETECTION (ogkm-580: cl2080_notification.h:151): a \
+              3D-stereo emitter on the board's stereo connector; the virtual display has none and \
+              no OGKM producer exists",
+    },
+    RuledNotifier {
+        index: 157,
+        class: RuledClass::Stub,
+        why: "NV2080_NOTIFIERS_UCODE_RESET (ogkm-580: cl2080_notification.h:198): GSP/ucode reset \
+              handling. Its producer is the guest's own CPU-RM (ogkm-580: kernel_gsp.c:2469), \
+              so the arming is bookkeeping; kayfabe resets no ucode",
+    },
+    RuledNotifier {
+        index: 158,
+        class: RuledClass::Stub,
+        why: "NV2080_NOTIFIERS_PLATFORM_POWER_MODE_CHANGE (ogkm-580: cl2080_notification.h:199): \
+              platform (ACPI) power mode. Its producer is the guest's own CPU-RM platform request \
+              handler (ogkm-580: platform_request_handler_ctrl.c:2129); host power policy is never \
+              touched",
+    },
+    RuledNotifier {
+        index: 178,
+        class: RuledClass::AbsentOnVirtualDisplay,
+        why: "NV2080_NOTIFIERS_HDMI_FRL_RETRAINING_REQUEST (ogkm-580: cl2080_notification.h:219): \
+              HDMI 2.1 fixed-rate-link training; the DVI-D/TMDS output has no FRL and no OGKM \
+              producer exists",
+    },
+    RuledNotifier {
+        index: 182,
+        class: RuledClass::Stub,
+        why: "NV2080_NOTIFIERS_AUX_POWER_STATE_CHANGE (ogkm-580: cl2080_notification.h:223): \
+              auxiliary power state of the physical board; no OGKM producer. Host management",
+    },
+    RuledNotifier {
+        index: 197,
+        class: RuledClass::Stub,
+        why: "NV2080_NOTIFIERS_GPU_RC_RESET (ogkm-580: cl2080_notification.h:238): RC reset policy, \
+              which goes with the RC-recovery stub (kf_rm::vfguest). Its producer is the guest's own \
+              CPU-RM (ogkm-580: kernel_rc_callback.c:360)",
+    },
+];
+
+/// One row of [`RULED_NOTIFIERS`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RuledNotifier {
+    /// The `NV2080_NOTIFIERS_*` index.
+    pub index: u32,
+    /// The ruling's treatment.
+    pub class: RuledClass,
+    /// The source-backed argument.
+    pub why: &'static str,
+}
+
+/// Whether `index` is accepted under owner ruling §S — see [`RULED_NOTIFIERS`].
+#[must_use]
+pub fn is_ruled_notifier(index: u32) -> bool {
+    RULED_NOTIFIERS.iter().any(|n| n.index == index)
+}
+
 /// One row of [`GUEST_RAISED_NOTIFIERS`] — an index, and where the guest's own RM raises it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GuestRaisedNotifier {

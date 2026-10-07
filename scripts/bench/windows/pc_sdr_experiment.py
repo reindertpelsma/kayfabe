@@ -25,10 +25,6 @@ def main():
     # Its existing manifest records every flag and its supervisor owns teardown.
     module.FLAGS = tuple(f for f in module.FLAGS if f != 'KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE') + (
         'KF3_DISPLAY_SDR_COLOR', 'KF3_DISPLAY_METHOD_TRACE', 'KF3_KERNEL_GR_CE', 'KF3_KERNEL_NVDEC_CTX', 'KF3_KERNEL_NVENC_CTX', 'KF3_KERNEL_OFA_CTX')
-    # DIAGNOSTIC ONLY (run26, 2026-10-07): opt-in; recorded in command.json's flags like the rest.
-    if '--rc-recovery-enabled-diag' in sys.argv:
-        sys.argv.remove('--rc-recovery-enabled-diag')
-        module.FLAGS += ('KF3_RC_RECOVERY_ENABLED_DIAG',)
     module.main()
 
 

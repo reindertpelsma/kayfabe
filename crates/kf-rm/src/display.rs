@@ -174,6 +174,10 @@ fn finish(s: Settle) {
     }
 }
 
+/// The notify-index bits of `NV0005_ALLOC_PARAMETERS.notifyIndex`; bits 26..31 are the
+/// `NV01_EVENT_*` flags (`ogkm-580: nvos.h:418-436`).
+const NOTIFY_INDEX_MASK: u32 = 0x03ff_ffff;
+
 /// Whether `class` is an `NV01_EVENT*` class: `NV01_EVENT` (`cl0005.h:35`) or one of the three
 /// kinds sharing its `NV0005_ALLOC_PARAMETERS` (`nvos.h:387-390`).
 #[must_use]
@@ -612,7 +616,9 @@ impl DisplayRegistry {
             return;
         };
         if is_event_class(h.class) {
-            if h.class == kf_abi::generated::classes::NV01_EVENT_KERNEL_CALLBACK_EX {
+            if h.class == kf_abi::generated::classes::NV01_EVENT_KERNEL_CALLBACK_EX
+                || h.class == kf_abi::generated::classes::NV01_EVENT_KERNEL_CALLBACK
+            {
                 self.on_event_alloc(h.client, h.handle, h.parent, body);
             }
             self.on_display_event_bind(h.client, h.handle, body);
@@ -687,7 +693,12 @@ impl DisplayRegistry {
         else {
             return;
         };
-        if idx != kf_disp::model::NOTIFIERS_HOTPLUG | kf_disp::model::EVENT_CLIENT_RM {
+        // ★ 2026-10-07 (owner ruling §S.2, hotplug implemented for real): the INDEX is what
+        // `gpuNotifySubDeviceEvent` matches (`ogkm-580: kernel_gsp.c:514-522` fans a list post out to
+        // every event whose notify index is HOTPLUG). The top six bits are flags (`nvos.h:418-436`:
+        // BROADCAST … CLIENT_RM), so NVKMS's `HOTPLUG | CLIENT_RM` (0x7e) and the Windows driver's
+        // class-0x78 HOTPLUG event both register; any other index does not.
+        if idx & NOTIFY_INDEX_MASK != kf_disp::model::NOTIFIERS_HOTPLUG {
             return;
         }
         let kept = lock(&self.model).register_hotplug(kf_disp::model::HotplugRegistration {
@@ -1375,6 +1386,12 @@ mod tests {
         assert_eq!(target(&shared), None, "retired by its own FREE");
         registry.observe(&alloc(c, sub, 0xe0, 0x7e, &ev(1 | 0x0400_0000)));
         assert!(target(&shared).is_some());
+        // ★ 2026-10-07 (owner ruling §S.2): the Windows driver's class-0x78 HOTPLUG event, without
+        // CLIENT_RM, registers too, and is the newest target; a flagged non-hotplug index does not.
+        registry.observe(&alloc(c, sub, 0xe3, 0x78, &ev(1)));
+        registry.observe(&alloc(c, sub, 0xe4, 0x78, &ev(0x2c | 0x0800_0000)));
+        assert_eq!(target(&shared), Some((c, 0xe3, sub)));
+        assert_eq!(shared.lock().unwrap().hotplug.len(), 2);
         assert!(
             p.respond(&rpc(RpcFunction::SetGuestSystemInfo, vec![0; 64]))
                 .is_none(),

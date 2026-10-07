@@ -277,12 +277,15 @@ fn a_legal_notifier_this_device_cannot_promise_silence_for_is_refused() {
     // property of the control. `SILENT_NOTIFIERS` carries the argument;
     // everything else is refused.
     //
+    // ⊘ 2026-10-07: index 1 (HOTPLUG) is now accepted under owner ruling §S (the display plane
+    // posts it, `RULED_NOTIFIERS`), so this test uses index 33 (PSTATE_CHANGE), a real-GPU-work
+    // event that is still refused. The paragraph below is otherwise unchanged.
     // ⊘ Index 1 is a perfectly legal notifier and the decoder accepts it. What refuses it is
     // policy, and that is the point: widening the rule to "anything below MAXCOUNT" would
     // quietly cover fault and completion notifiers whose silence is a hang nobody can
     // attribute.
     let reg = EventSetNotification {
-        event: 1,
+        event: 33,
         action: ACTION_REPEAT,
         notify_state: false,
         info32: 0,
@@ -807,4 +810,47 @@ fn the_guest_raised_list_is_exactly_nvmls_event_set_and_the_shipping_policy_serv
     }
     // RM's transition rule still holds for them: REPEAT over REPEAT is refused.
     assert_ne!(p.respond(&arming_of(37)).expect("claimed").rpc_result, 0);
+}
+
+/// ★ Owner ruling §S (2026-10-07): the ruled list is pinned, every row cites the tree and is on
+/// no other list, and the shipping policy serves every row.
+#[test]
+fn the_ruled_list_is_pinned_cited_disjoint_and_served() {
+    use kf_abi::eventnotify::{
+        RULED_NOTIFIERS, is_delivered_notifier, is_guest_raised_notifier, is_silent_notifier,
+    };
+    let indices: Vec<u32> = RULED_NOTIFIERS.iter().map(|n| n.index).collect();
+    assert_eq!(
+        indices,
+        vec![1, 2, 4, 7, 34, 43, 44, 45, 113, 157, 158, 178, 182, 197]
+    );
+    let mut p = policy();
+    for n in RULED_NOTIFIERS {
+        assert!(
+            n.why.contains("ogkm-580:"),
+            "notifier {} cites nothing",
+            n.index
+        );
+        assert!(
+            !is_silent_notifier(n.index)
+                && !is_delivered_notifier(n.index)
+                && !is_guest_raised_notifier(n.index),
+            "notifier {} is on two lists",
+            n.index
+        );
+        assert_eq!(
+            p.respond(&arming_of(n.index)).expect("served").rpc_result,
+            0,
+            "notifier {} is ruled and must be served",
+            n.index
+        );
+    }
+    // Real-GPU-work events and the unpostable HOTPLUG_PROCESSING_COMPLETE stay refused.
+    for ev in [120u32, 33, 139, 122, 26, 12, 23, 24] {
+        assert_ne!(
+            p.respond(&arming_of(ev)).expect("claimed").rpc_result,
+            0,
+            "{ev}"
+        );
+    }
 }
