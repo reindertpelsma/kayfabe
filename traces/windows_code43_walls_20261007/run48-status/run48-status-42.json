@@ -1,0 +1,32 @@
+{
+    "time_utc":  "2026-10-07T22:45:16.2213346Z",
+    "uptime_seconds":  510.7258045,
+    "display":  [
+                    {
+                        "Name":  "Microsoft Basic Display Adapter",
+                        "PNPDeviceID":  "PCI\\VEN_1234\u0026DEV_1111\u0026SUBSYS_11001AF4\u0026REV_02\\3\u0026267A616A\u00260\u002648",
+                        "ConfigManagerErrorCode":  10,
+                        "Status":  "Error"
+                    },
+                    {
+                        "Name":  "NVIDIA GeForce RTX 4070",
+                        "PNPDeviceID":  "PCI\\VEN_10DE\u0026DEV_2786\u0026SUBSYS_40EE1458\u0026REV_A1\\3\u0026267A616A\u00260\u002630",
+                        "ConfigManagerErrorCode":  0,
+                        "Status":  "OK"
+                    }
+                ],
+    "nvidia_smi":  {
+                       "available":  true,
+                       "exit_code":  0,
+                       "stdout":  "NVIDIA GeForce RTX 4070, 580.88, [N/A], [N/A], [N/A]\r\n"
+                   },
+    "events":  [
+                   {
+                       "TimeCreated":  "\/Date(1791412606702)\/",
+                       "ProviderName":  "Microsoft-Windows-Kernel-Power",
+                       "Id":  172,
+                       "LevelDisplayName":  "Information",
+                       "Msg":  "Connectivity state in standby: Disconnected, Reason: NIC compliance"
+                   }
+               ]
+}

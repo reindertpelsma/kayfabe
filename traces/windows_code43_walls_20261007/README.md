@@ -2623,8 +2623,8 @@ disconnected, display enabled, P8, Xid 61 (unchanged).
   `0x40000002` (cmd `0x2080012d` = GPU_INITIALIZE_CTX), `0x40000003` (`0x2080012b` = GPU_PROMOTE_CTX) and
   **`0x40000004` (`0x2080012c` = GPU_EVICT_CTX)**. The third is new: §29.1 and the previous agent's
   prediction named only the first two; the EVICT bundle was not in the runs' prediction and is a real
-  host act (below). 14 `NV50_DEFERRED_API ... ADMITTED ... classID Some(1)` lines, all on Translated
-  channels.
+  host act (below). 19 `NV50_DEFERRED_API ... ADMITTED ... classID Some(1)` lines (one per Translated channel alloc;
+  Passthrough channels admit none).
 - *Trigger (second part): supported.* `DEFERRED-API trigger token 0x3 subch 5 value 0x1 method 0x200` for
   all three handles, each followed by `DONE`: INITIALIZE_CTX and PROMOTE_CTX "satisfied by each twin"
   (ruling B) for the target `0xc1d0002b:0xff0e0000` (host twin `3b`), then `EvictCtx` as the direct act:
@@ -2665,3 +2665,58 @@ nvlddmkm error/warning event in any sample; a guest that stops answering the sam
 the power-down; or a `dead=Some` / `DEAD` / `REFUSED` of a channel method in the trace.
 Prediction: holds (run47: 16/16 clean to 163 s). If it falsifies, the sample that shows the first event
 and the trace line beside it name the next wall.
+
+### Run48 result: H-stable holds — 46 clean samples to 559 s of guest uptime, a clean ACPI shutdown, no event
+
+Product/QEMU `621310b3` (code `83881ecc`), flags as run47, `--max-seconds 720`; started 2026-10-07 22:36 UTC;
+the guest was powered down by ACPI after the 600 s window and QEMU exited 0 (`BOUNDARY_EXIT ... 0`).
+[command](run48-command.json), [trace](run48-qemu.log.gz), [requests](run48-requests.log),
+[abort](run48-abort.txt), [46 status samples](run48-status/) (`qga_status_sampler2.py`),
+[sampler log](run48-sampler.out), [bugcheck recovery](run48-bugcheck.json), [offline Windows
+events](run48-evtx.txt), [host after](run48-host-after.txt). Host afterwards: no QEMU, NBD disconnected,
+display enabled, P8, Xid 61 (unchanged).
+
+**Measured (run48 at 621310b3, 2026-10-08):**
+- **All 46 samples (uptime 11 s to 559 s, ~12 s apart): the NVIDIA adapter `ConfigManagerErrorCode 0`
+  (`Status OK`); `nvidia-smi` exit 0 (`NVIDIA GeForce RTX 4070, 580.88`).** The live System-log query
+  (events since boot from nvlddmkm, Display, Kernel-Power, BugCheck, WHEA, Kernel-PnP, or ids 4101/1001/41)
+  returned exactly one event in every sample: Kernel-Power 172 "Connectivity state in standby:
+  Disconnected, Reason: NIC compliance" (Information; the user-mode network stand-in). No 4101, no 1001,
+  no 41, no nvlddmkm event.
+- The offline System.evtx (recovered after the clean shutdown, so flushed) holds no display-driver
+  event since the run's start; the pagefile has no bugcheck header (`all_zero`); no minidump.
+- Trace: 15 `DEFERRED-API trigger` lines, 15 `DONE`, 0 refusals; 0 `DEAD`, 0 `dead=Some`; the GSP's
+  suspend sequence ran at the shutdown (`Running -> Suspending -> Halted`). Total RPCs 4538 (run47:
+  2111 in 163 s); 66 distinct GSP controls were refused over the run (`GSP REFUSED`, `0x56`), none of
+  which the guest answered with a TDR or a Code 43.
+- `nvidia-smi --query-gpu=name,driver_version,pstate,utilization.gpu,memory.used` printed the name and
+  version, and **`[N/A]` for `pstate`, `utilization.gpu` and `memory.used`** in every sample (measured
+  output). The `[N/A]` fields correspond to NVML queries the RM answers by refusal (the 66 refusals
+  include `fn76/0x2080a801` and `0x2080a630`, which the run39-40 bisect found unneeded for StartDevice);
+  which refused control feeds which field was not tested.
+
+**Falsifier outcomes.** *H-stable: supported* (no sample with Code != 0 or `nvidia-smi` failing; no
+4101/1001/41/nvlddmkm event; no QGA timeout before the power-down; no `DEAD`/`dead=Some`). The goal's
+three criteria (adapter without Code 43, `nvidia-smi` works, no 0x116/0x119 bugcheck) are met for this
+one idle 560 s run. Not a pass claim yet: one run, idle guest, no GPU workload, `nvidia-smi` fields
+N/A. `abort_point.py points` still prints `last fn76/20801111 refused`, `teardown_at=659` (the same early
+prelude figure as runs 44-47; see run47's note: it no longer measures an abort).
+
+## Run49 setup: a D3D device user on the NVIDIA adapter (dxdiag), same binary and flags
+
+Same binary `kf3-bins/621310b3` and flags as run47/48. The sampler v2 runs `dxdiag /t` once at 90 s of
+sampling (QGA `guest-exec` as SYSTEM, hidden; `dxdiag` creates D3D9, D3D11 and D3D12 devices on every
+adapter through the user-mode driver and records the driver model, feature levels and test results) and
+stores the matching lines in `run49-dxdiag.txt`. The window is 420 s, then ACPI power-down.
+This probes the first real graphics-API client after the idle desktop; it is not a conformance test.
+
+**Hypothesis H-d3d (stated before the run).** A D3D device user on the NVIDIA adapter completes (exit
+code 0, the NVIDIA adapter listed with a driver model and feature levels, `No problems found` or only
+unrelated notes) and the guest stays free of TDR/bugcheck, Code 0, `nvidia-smi` exit 0 in every
+sample. **Falsifier:** `dxdiag` times out or reports a problem for the NVIDIA device; any 4101/1001/41
+or nvlddmkm event; Code != 0; `dead=Some`/`DEAD`/a channel-method refusal in the trace; or a QGA timeout
+before the power-down. Prediction: uncertain, and that is the point. Windows has so far only run the
+kernel GR channel's three deferred bundles plus one 3D release; the D3D UMD contains the deferred ids
+(OWNER_RULINGS §U's scan), so the first user GR channel work may exercise the refused-by-name deferred
+commands (the GR ctxsw binds, `PRESERVE_CTX`, `FIFO_UPDATE_CHANNEL_INFO`) or 3D methods that
+`KF3_KERNEL_GR_WORK`'s allowlist does not carry. A death names the next wall.
