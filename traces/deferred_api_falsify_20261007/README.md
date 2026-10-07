@@ -101,6 +101,87 @@ real hardware. Report the result EITHER WAY.
 - If ANY Fk FAILS → **H is TRUE / partially TRUE** (a blocker). State exactly
   which channel kinds (Passthrough / Translated) are affected and how.
 
-## Results
+## Results (run 2026-10-07, commit `756ba678`, driver 595.91.07, RTX 4070)
 
-_(appended after the run; see `results.txt` for the filtered raw logs.)_
+Raw evidence: `results.txt` (DF_* lines + host dmesg Xid/NVRM lines). The suite ran
+as non-root user `vmmtest2` (euid 1001), sharing the GPU with the live host
+desktop (nvidia-smi 340 MiB / 0 %, unchanged before and after).
+
+### What blocked the trigger half (be explicit)
+
+The native probe allocates a real 5080 object (MEASURED `class_id=0x5080`,
+`engine_id=0x22` = the SW engine) under a **COPY0 (CE) channel** built by
+`kf_chan::HostRing::new`. A **bare fence on that channel completes**
+(`DF_P0_BAREFENCE bare_fence_completed=true`), so the ring works. But
+`SET_OBJECT` naming the 5080 object's `classEngineID` (=0x1) on that CE channel
+**halts the channel with Xid 32** (`DF_P0_SETOBJECT bind_fence_ok=false`): the SW
+engine is not on the COPY0 runlist, so the method is rejected by the host PBDMA.
+⇒ Every phase that must *trigger* a registered entry (P0, F1, F2, F3, the trigger
+side of F5, F6) is **NOT MEASURED** here. Triggering needs the 5080 object on a
+GR/compute-capable channel (a GR-context channel — heavier; the clear next step).
+This is a harness limitation, **not** an RM refusal of registration.
+
+### Per-falsifier outcome
+
+| F | Status | Evidence |
+|---|--------|----------|
+| **F7a** arbitrary-handle registrability | **MEASURED — registers verbatim** | A host client registers almost any `hApiHandle`: 1, 0x40000000(+N), 0xffffffff, 0xcafe0000, even the auto-generator-range 0xcaf00000. REJECTED (all as `INVALID_OBJECT_HANDLE` 0x33): `0`, `0xcafe0001` (== this client's hClient), the FW-reserved range `0xc9f00000` ([0xc9f00000,0xc9f7ffff]), and the client's own live resource handles (channel/tsg/vaspace/5080 object). Matches ogkm `clientValidateNewResourceHandle` exactly. |
+| **F7b** dedicated client ⇒ own namespace | **MEASURED — independent** | The same arbitrary handle `0x40000000` registers in two independent clients *concurrently* (`registered_in_client1=true registered_in_client2_concurrently=true`). (Artifact: kf-host mints identical *structural* handles per client, so a structural handle collides in both — reported, not a real negative.) |
+| **F4** no escalation | **REGISTRATION MEASURED / dispatch INFERRED** | As non-root (euid 1001): `GPU_PROMOTE_CTX`, `GPU_INITIALIZE_CTX`, `GPU_EVICT_CTX` **register OK** (inner cmd not checked at registration — confirms ogkm). `FIFO_UPDATE_CHANNEL_INFO` is **rejected at registration** (0x33) because its V2 handler validates the bundle's `hClient`/`hUserdMemory` (ogkm `deferred_api.c:356`, seen in dmesg). The dispatch-time privilege gate (entry runs with the registrant's recorded user privLevel ⇒ privileged control fails) is **INFERRED** from ogkm (`deferred_api.c:575` + `serverControl_Prologue`), not measured (trigger blocked). |
+| **F8** stray 0x200 / SET_OBJECT 0x5080, no object | **MEASURED — self-harm only** | Firing 0x200 on an unbound subchannel (no 5080 object) → **Xid 32 on the firing channel only**, channel RC'd/dead (`last_alive=false`); the firing *client* recovers (`firing_channel_recovered=true`); a concurrent bystander client's registered entry is **untouched** and the client **alive** (`victim_untouched=true victim_alive=true`). Directly supports the "refuse 5080 on Passthrough" fallback being safe. |
+| **F1/F2/F3** cross-object/channel/client | **NOT MEASURED (trigger blocked) — INFERRED isolated** | ogkm: the entry btree is **per-OBJECT** (`deferred_api.c:104`); the 0x200 handler looks up Data only in *that* object's list (`:129`, unknown ⇒ `INVALID_DATA`); and it dispatches on the registrant object's **own** client/subdevice (`:556 RES_GET_CLIENT`) with the registrant's privLevel (`:575`). Cross-object/channel/client execution is structurally impossible — but this is INFERRED, not measured on hardware. |
+| **F5** garbage handles | **Isolation MEASURED (via F8) / lookup INFERRED** | Bystander isolation is shown by F8. "Unknown handle ⇒ no execute, entry untouched, `INVALID_DATA`" is INFERRED from `deferred_api.c:129-135`. |
+| **F6** rate/DoS | **NOT MEASURED (trigger blocked)** | Needs a working trigger on a GR/compute channel. |
+
+### Host-kernel signals from the provoked failures (coordinator's question)
+
+All MEASURED from host dmesg (`results.txt`) / nvidia-smi:
+
+1. **Exact code + component.** Every malformed-pushbuffer failure → **Xid 32**
+   ("Invalid or corrupted push buffer stream", PBDMA), logged by **kernel RM**
+   (`NVRM: Xid (PCI:0000:01:00): 32, name=kf-deferred-fal, channel 0x…,
+   intr1 80000000`). Control-level failures (bad bundle hClient, duplicate/unknown
+   handle) are kernel-RM soft checks `nvCheckOkFailedNoLog … INVALID_OBJECT_HANDLE
+   (0x33) @ deferred_api.c:356/:388`; `:388` is the V2 handler forwarding to GSP via
+   `DEFERRED_API_INTERNAL`. No GSP-only crash.
+2. **Channel fate.** The faulted channel is **RC'd / killed** (fence never completes;
+   `last_alive=false`). The host RM **continues**. Re-enabling the *same* channel was
+   not tested (INFERRED: stays in RC until freed); the client recovers by allocating a
+   fresh channel/object (`firing_channel_recovered=true`).
+3. **Blast radius.** Firing channel only. A concurrent bystander **client** (its
+   registered entry and its liveness) is unaffected; the **host desktop** (gnome-shell
+   et al. sharing the GPU) kept running; nvidia-smi 340 MiB/0 % before and after.
+4. **Latency.** Xid is logged essentially when the PBDMA processes the bad method
+   (paired lines ~1.5 ms apart); the 5 s cadence between events is the probe's own
+   poll-timeout, not Xid latency.
+5. **MMU fault / nvidia-uvm.** **None.** Only Xid 32 (PBDMA); no Xid 31 or any MMU
+   fault, nothing replayable, nothing reaching nvidia-uvm.
+
+So the host kernel module **does** get an actionable exception (the Xid 32 interrupt
++ RC) and **resumes from it** (RCs the one channel, keeps serving everyone else).
+
+### Verdict on H
+
+- **The owner's REFINED core worry — "the host cannot hold an entry under exactly the
+  guest-chosen, unremappable handle H" — is FALSE (MEASURED).** A host RM client
+  registers the guest's chosen H *verbatim* (F7a), registration is a control call to
+  the emulated GSP so H is known before use (not pulled from an untranslated ring), and
+  a dedicated host client per guest gives an independent handle namespace (F7b). The
+  only values a client cannot register are `0`, its own `hClient`, the FW-reserved range
+  `[0xc9f00000,0xc9f7ffff]`, and its own live resource handles — all of which kayfabe
+  controls and which the guest's identical restrict range forbids it from choosing too.
+  **No ring translation of the handle is needed.**
+- **The ORIGINAL cross-object/channel/client/escalation worry (F1–F4) is INFERRED
+  FALSE** on a strong ogkm basis (per-object btree, dispatch on the registrant's own
+  client/subdevice with the registrant's privLevel), but is **NOT MEASURED** on this
+  host: the SW-method trigger needs the 5080 object on a GR/compute-capable channel,
+  and on a CE channel `SET_OBJECT` halts with Xid 32. Closing this gap (a GR-context
+  channel) is the one remaining measurement.
+
+### Channel kinds affected (if any)
+
+On the measured axes, **neither Passthrough nor Translated is shown to be a blocker.**
+Residual, self-harm-only risk (MEASURED via F8): a guest 0x200 that is malformed, or a
+SET_OBJECT of a SW class on an incompatible channel, Xid-32-RCs **its own** channel —
+consistent with owner ruling Q11 (self-harm, not inducible across isolation). This is
+identical to any other bad pushbuffer method a Passthrough guest can already send.

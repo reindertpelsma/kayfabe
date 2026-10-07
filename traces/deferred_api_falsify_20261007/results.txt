@@ -1,0 +1,74 @@
+# Deferred-API falsification — raw run evidence
+# host=root@172.22.1.20 driver=595.91.07 gpu=RTX4070(Ada, AD104) commit=756ba678
+# nvidia-smi before and after: 340 MiB, 0% (host desktop shared the GPU throughout; unchanged)
+# Xid count before run: 39
+
+=== DF_* result lines ===
+DF_RUN_START 2026-10-07T21:03:48Z epoch=1791407028.219332580 commit=756ba678 host-driver=595.91.07 gpu=RTX4070 user=vmmtest2
+DF_START euid=1001 phase=all driver=595.91.07
+DF_P0_BAREFENCE empty_submit_ok=true bare_fence_completed=true
+DF_P0_CLASSENGINE object=0xcafe000a class_engine=0x1 class_id=0x5080 engine_id=0x22 subch=1
+DF_P0_SETOBJECT bind_fence_ok=false
+DF_P0=BLOCKED SET_OBJECT(5080) halted the channel — binding a software object this way is refused/faults
+DF_F1=BLOCKED fence timeout seq=1
+DF_F2=BLOCKED fence timeout seq=1
+DF_F3=BLOCKED fence timeout seq=1
+DF_F4_CMD name=GPU_PROMOTE_CTX cmd=0x2080012b euid=1001 register=OK
+DF_F4_CMD name=GPU_INITIALIZE_CTX cmd=0x2080012d euid=1001 register=OK
+DF_F4_CMD name=FIFO_UPDATE_CHANNEL_INFO cmd=0x20801116 euid=1001 register=Some(51)
+DF_F4_CMD name=GPU_EVICT_CTX cmd=0x2080012c euid=1001 register=OK
+DF_F4=MEASURED(registration-half; see DF_F4_CMD) evidence=non-root(euid=1001) registration-of-privileged-cmds (trigger-side blocked: see DF_P0; dispatch-privilege INFERRED from ogkm)
+DF_F5=BLOCKED fence timeout seq=1
+DF_F6=BLOCKED fence timeout seq=1
+DF_F7A_HANDLE name=zero handle=0x0 result=REJECTED status=INVALID_OBJECT_HANDLE
+DF_F7A_HANDLE name=one handle=0x1 result=REGISTERED status=-
+DF_F7A_HANDLE name=0x40000000 handle=0x40000000 result=REGISTERED status=-
+DF_F7A_HANDLE name=0x40000005 handle=0x40000005 result=REGISTERED status=-
+DF_F7A_HANDLE name=0xffffffff handle=0xffffffff result=REGISTERED status=-
+DF_F7A_HANDLE name=0xcafe0000 handle=0xcafe0000 result=REGISTERED status=-
+DF_F7A_HANDLE name=0xcafe0001 handle=0xcafe0001 result=REJECTED status=INVALID_OBJECT_HANDLE
+DF_F7A_HANDLE name=fw_range_0xc9f00000 handle=0xc9f00000 result=REJECTED status=INVALID_OBJECT_HANDLE
+DF_F7A_HANDLE name=gen_range_0xcaf00000 handle=0xcaf00000 result=REGISTERED status=-
+DF_F7A_HANDLE name=own_channel handle=0xcafe0008 result=REJECTED status=INVALID_OBJECT_HANDLE
+DF_F7A_HANDLE name=own_tsg handle=0xcafe0007 result=REJECTED status=INVALID_OBJECT_HANDLE
+DF_F7A_HANDLE name=own_vaspace handle=0xcafe0004 result=REJECTED status=INVALID_OBJECT_HANDLE
+DF_F7A_HANDLE name=own_5080_object handle=0xcafe000a result=REJECTED status=INVALID_OBJECT_HANDLE
+DF_F7A_HANDLE name=0x40000100+0 handle=0x40000100 result=REGISTERED status=-
+DF_F7A_HANDLE name=0x40000100+1 handle=0x40000101 result=REGISTERED status=-
+DF_F7A_HANDLE name=0x40000100+2 handle=0x40000102 result=REGISTERED status=-
+DF_F7A_HANDLE name=0x40000100+3 handle=0x40000103 result=REGISTERED status=-
+DF_F7A_HANDLE name=0x40000100+4 handle=0x40000104 result=REGISTERED status=-
+DF_F7A=MEASURED evidence=see DF_F7A_HANDLE lines
+DF_F7B=MEASURED(independent-namespaces) evidence=handle=0x40000000 registered_in_client1=true registered_in_client2_concurrently=true (artifact: own-structural-handle rejected=true)
+DF_F8_STRAY case=handle_zero handle=0x0 fire_ok=false detail=fence timeout seq=1
+DF_F8_STRAY case=plausible_handle handle=0x51518001 skipped=channel-dead
+DF_F8_STRAY case=other_handle handle=0x40000001 skipped=channel-dead
+DF_F8=MEASURED(victim-isolated; see DF_F8_* for firing-channel fate) evidence=no-5080-object stray-0x200+SETOBJECT firing_channel_recovered=true last_alive=false victim_untouched=true victim_alive=true
+DF_DONE fail=true
+DF_RUN_END epoch=1791407063.438225625
+
+=== host dmesg during run (NVRM/Xid/deferred_api), monotonic ts ===
+[179491.563029] NVRM: Xid (PCI:0000:01:00): 32, pid=1223904, name=kf-deferred-fal, channel 0x00000007 intr0 00000000 intr1 80000000
+[179491.564544] NVRM: Xid (PCI:0000:01:00): 32, pid=1223904, name=kf-deferred-fal, channel 0x00000007 intr0 00000000 intr1 80000000
+[179496.572402] NVRM: Xid (PCI:0000:01:00): 32, pid=1223904, name=kf-deferred-fal, channel 0x00000007 intr0 00000000 intr1 80000000
+[179496.573847] NVRM: Xid (PCI:0000:01:00): 32, pid=1223904, name=kf-deferred-fal, channel 0x00000007 intr0 00000000 intr1 80000000
+[179501.584956] NVRM: Xid (PCI:0000:01:00): 32, pid=1223904, name=kf-deferred-fal, channel 0x00000008 intr0 00000000 intr1 80000000
+[179501.586430] NVRM: Xid (PCI:0000:01:00): 32, pid=1223904, name=kf-deferred-fal, channel 0x00000008 intr0 00000000 intr1 80000000
+[179506.600165] NVRM: Xid (PCI:0000:01:00): 32, pid=1223904, name=kf-deferred-fal, channel 0x00000008 intr0 00000000 intr1 80000000
+[179506.601641] NVRM: Xid (PCI:0000:01:00): 32, pid=1223904, name=kf-deferred-fal, channel 0x00000008 intr0 00000000 intr1 80000000
+[179511.611173] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Object handle is not valid [NV_ERR_INVALID_OBJECT_HANDLE] (0x00000033) returned from serverGetClientUnderLock(&g_resServ, pParams->hClient, &pClient) @ deferred_api.c:356
+[179511.626122] NVRM: Xid (PCI:0000:01:00): 32, pid=1223904, name=kf-deferred-fal, channel 0x00000008 intr0 00000000 intr1 80000000
+[179511.627543] NVRM: Xid (PCI:0000:01:00): 32, pid=1223904, name=kf-deferred-fal, channel 0x00000008 intr0 00000000 intr1 80000000
+[179516.637972] NVRM: Xid (PCI:0000:01:00): 32, pid=1223904, name=kf-deferred-fal, channel 0x00000007 intr0 00000000 intr1 80000000
+[179516.639505] NVRM: Xid (PCI:0000:01:00): 32, pid=1223904, name=kf-deferred-fal, channel 0x00000007 intr0 00000000 intr1 80000000
+[179521.645678] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Object handle is not valid [NV_ERR_INVALID_OBJECT_HANDLE] (0x00000033) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pDeferredApiObj), RES_GET_HANDLE(pDeferredApiObj), NV5080_CTRL_CMD_DEFERRED_API_INTERNAL, pDeferredApi, sizeof(*pDeferredApi)) @ deferred_api.c:388
+[179521.648199] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Object handle is not valid [NV_ERR_INVALID_OBJECT_HANDLE] (0x00000033) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pDeferredApiObj), RES_GET_HANDLE(pDeferredApiObj), NV5080_CTRL_CMD_DEFERRED_API_INTERNAL, pDeferredApi, sizeof(*pDeferredApi)) @ deferred_api.c:388
+[179521.648416] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Object handle is not valid [NV_ERR_INVALID_OBJECT_HANDLE] (0x00000033) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pDeferredApiObj), RES_GET_HANDLE(pDeferredApiObj), NV5080_CTRL_CMD_DEFERRED_API_INTERNAL, pDeferredApi, sizeof(*pDeferredApi)) @ deferred_api.c:388
+[179521.649102] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Object handle is not valid [NV_ERR_INVALID_OBJECT_HANDLE] (0x00000033) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pDeferredApiObj), RES_GET_HANDLE(pDeferredApiObj), NV5080_CTRL_CMD_DEFERRED_API_INTERNAL, pDeferredApi, sizeof(*pDeferredApi)) @ deferred_api.c:388
+[179521.649320] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Object handle is not valid [NV_ERR_INVALID_OBJECT_HANDLE] (0x00000033) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pDeferredApiObj), RES_GET_HANDLE(pDeferredApiObj), NV5080_CTRL_CMD_DEFERRED_API_INTERNAL, pDeferredApi, sizeof(*pDeferredApi)) @ deferred_api.c:388
+[179521.649541] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Object handle is not valid [NV_ERR_INVALID_OBJECT_HANDLE] (0x00000033) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pDeferredApiObj), RES_GET_HANDLE(pDeferredApiObj), NV5080_CTRL_CMD_DEFERRED_API_INTERNAL, pDeferredApi, sizeof(*pDeferredApi)) @ deferred_api.c:388
+[179521.649763] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Object handle is not valid [NV_ERR_INVALID_OBJECT_HANDLE] (0x00000033) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pDeferredApiObj), RES_GET_HANDLE(pDeferredApiObj), NV5080_CTRL_CMD_DEFERRED_API_INTERNAL, pDeferredApi, sizeof(*pDeferredApi)) @ deferred_api.c:388
+[179521.665729] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Object handle is not valid [NV_ERR_INVALID_OBJECT_HANDLE] (0x00000033) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pDeferredApiObj), RES_GET_HANDLE(pDeferredApiObj), NV5080_CTRL_CMD_DEFERRED_API_INTERNAL, pDeferredApi, sizeof(*pDeferredApi)) @ deferred_api.c:388
+[179521.683549] NVRM: Xid (PCI:0000:01:00): 32, pid=1223904, name=kf-deferred-fal, channel 0x00000008 intr0 00000000 intr1 80000000
+[179521.685068] NVRM: Xid (PCI:0000:01:00): 32, pid=1223904, name=kf-deferred-fal, channel 0x00000008 intr0 00000000 intr1 80000000
+[179526.686152] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Object handle is not valid [NV_ERR_INVALID_OBJECT_HANDLE] (0x00000033) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pDeferredApiObj), RES_GET_HANDLE(pDeferredApiObj), NV5080_CTRL_CMD_DEFERRED_API_INTERNAL, pDeferredApi, sizeof(*pDeferredApi)) @ deferred_api.c:388
