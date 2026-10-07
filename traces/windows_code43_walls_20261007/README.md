@@ -1502,3 +1502,72 @@ channel's retired work (token 0x802 retires GP 0, as in runs 32-34), the MSI is 
 and the abort still sits at VFIO ≤ 2866. If no CE relay is logged (for example, the guest engine has
 no vector in the served table), the falsifier is undecided and the run says why. **Prediction:** a
 CE relay is logged and the abort moves past 2861.
+
+### Run35 result: CE completions reach the guest's CE2 vector; the abort does not move (falsifier triggered)
+
+Product/QEMU d1b6cfdde5f6027decfb81c7a9b71ea3f91d3a4e, `kf3-bins/d1b6cfdd`, flags as run34 plus
+`KF3_TRANSLATED_CE_RELAY=1`; run on 2026-10-07 at 14:41-14:44 UTC. [command](run35-command.json),
+[status](run35-status.json), [trace](run35-qemu.log.gz), [requests](run35-requests.log),
+[completion](run35-complete.json), [host health](run35-host-health.txt),
+[host after](run35-host-after.txt), [unit result](run35-unit-result.txt),
+[9/9 gates](run35-gates.log) (11/11 USER births), [build](run35-build.log),
+[native oracle](gr-tier-native-run35.log), [watchdog recovery](run35-watchdog-recovery.log)
+(cleanup verified). After 98 s: ConfigManagerErrorCode 43, nvidia-smi exit 9. Host afterwards: no
+QEMU, NBD disconnected, display enabled, P8, Xid count unchanged (5).
+
+**Native oracle at d1b6cfdd, before run35 (seen there):** the CE T-mode ring's completion raises
+`FIFO_EVENT_MTHD` and not the host CE2 notifier (`ce_completion_edges`); the check that one of the
+worker's fds fires passes; GR tier PASS as before; Xid count 5 before and after.
+
+**Measured (seen in run35 at d1b6cfdd):**
+- Three CE relays to the guest's CE2 vector (vector 1): #1 and #2 for RM's internal scrubber ring
+  (c1e00008:0x2, token 0x801) at boot, #3 for Windows' kernel CE channel (token 0x802) right after
+  the last subdevice armings, next to the GR0 relay. Status line `nsi=[GR0:291/1raised
+  CE2:3/3raised]`, `irq[… raised=6 held=0]`: every MSI was signalled, none held.
+- 0x0080170e/0x0080170f served as in run34.
+- **Abort point unchanged:** 858 RPCs, teardown at 544, last RPC `GPFIFO_SCHEDULE` of
+  c1d00020/ff040009 returning 0 (VFIO 2861); the paging channel never rung; the third `Free` of the
+  teardown frees it.
+
+**Falsifier outcome: triggered.** The kernel CE work's completion now reaches the guest as a CE2
+interrupt (after the host fence, on the worker) and the abort stays at VFIO 2861. Hypothesis 2 is
+wrong as the cause. Whether the guest's ISR consumed the interrupts is not observable here.
+
+## Stop: two runs after A and B moved the abort by 0 indices (2026-10-07)
+
+Runs 34 and 35 each removed one candidate cause and the abort stayed at VFIO 2861 both times
+(runs 30-35: six runs at the same point). Per the stop rule the loop stops here. Everything kayfabe
+answers in the RPC stream up to 2861 now matches vfio-10's status; the teardown begins about 3 ms
+after a SUCCESSFUL `GPFIFO_SCHEDULE`, with no RPC, doorbell or submission on the new channel in
+between. So the deciding event is outside the RPC stream.
+
+**What the teardown order says.** Seen in runs 33-35: the third `Free` of the teardown frees the
+paging channel ff040009 (its `TSPACE-RETIRE` follows it). Inferred (the `Free` trace carries no
+handles): the first two are its only children, the 0x5080 and 0xc7b5 objects — Windows abandons
+the paging channel it has just scheduled. In vfio-10 the same point is followed
+by ~1.3 s of GPU work with no RPC (run30's timing note).
+
+**Ranked hypotheses outside the RPC stream (all inferred, none tested):**
+1. *(Medium-high.)* A BAR0 read by Windows' KMD in that ~3 ms (after scheduling, before first use
+   of the paging channel) returns a value it rejects: a PTIMER, `NV_PMC`/boot, usermode, or FIFO/
+   runlist/CHRAM status register that kayfabe's BAR0 model answers from its shadow (BAR0 reads do
+   not trap, so no kayfabe log can show it).
+2. *(Medium.)* Guest-visible state of the new channel read by the CPU: its USERD (sysmem, 512 bytes;
+   `GP_GET`/`GP_PUT`/reference words) or its error notifier, which a Translated birth leaves as the
+   guest wrote it and which the real GSP may initialise at schedule time.
+3. *(Medium-low.)* A wait on earlier kernel-channel work that completed with a different value: the
+   CE (0x802) and GR (0x3) first segments complete on the engine with GP_GET only (no semaphore
+   release in the CE segment); Windows may instead check a semaphore or timestamp value written by
+   later entries it expected to have run.
+4. *(Low.)* The relayed interrupts themselves (GR0 once, CE2 three times) are read by the guest's
+   ISR through interrupt-leaf registers whose state kayfabe models differently from the GSP.
+
+**Proposed ONE bounded MMIO trace run (needs a go-ahead; diagnostic only, default off).** A kf3
+diagnostic that, from the `GPFIFO_SCHEDULE` of the last kernel client's channel until the first
+following `Free` (or 4096 accesses, whichever is first), makes BAR0 reads trap and logs every BAR0
+read and write (offset, width, value returned or written) plus any usermode-doorbell write. Bounded
+in time and count, no answer changes, nothing forwarded. Its output names hypothesis 1's register
+(or rules hypothesis 1 out); a USERD/error-notifier dump at the same `GPFIFO_SCHEDULE` (64 words,
+logged once) would cover hypothesis 2 in the same run. The equivalent VFIO-arm trace (the audited
+runner's MMIO mode, `x-no-mmap`) would give the reference window if the kayfabe trace is not
+conclusive.

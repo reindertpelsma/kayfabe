@@ -11,6 +11,19 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-07
 
+**Runs 34-35, 2026-10-07 (branch `claude/code43-lat-20261007`; answers the next paragraph's "top
+hypothesis", which run34 falsified).** Run34 at 0c74f4fc answers `0x0080170e` from the host's own
+`FIFO_GET_LATENCY_BUFFER_SIZE` (realize-time, per advertised engine; the rows equal vfio-10's) and
+`0x0080170f` as a real host `SET_TIMESLICE` on the channel's own group; run35 at d1b6cfdd adds a
+default-off relay of Translated copy-engine completions to the guest's CE vector
+(`KF3_TRANSLATED_CE_RELAY`; three CE2 relays raised, none held). Both runs: Code43/smi9, abort still
+at VFIO 2861, so the loop **stopped by the two-runs rule** with ranked hypotheses outside the RPC
+stream and ONE proposed bounded BAR0 read/write trace run (needs a go-ahead). Audit SHOULD-FIX 3/5
+done (ids, sizes, values and notifier indices from the driver matrix, which now measures them);
+`PERF_GET_POWERSTATE` AC recorded in `OWNER_RULINGS.md` §S as *assumed*, owner to confirm; the
+capability allowlist change (`capability.rs:1531-1543`) still needs owner review. Host healthy after
+every run. [Runs 34-35 and the stop](../traces/windows_code43_walls_20261007/README.md#thirteenth-repair-the-paging-clients-fifo-controls-answered-for-real-run34-setup).
+
 **Kernel-GR tier, runs 32-33, 2026-10-07 (branch `claude/code43-gr-20261007`; supersedes the
 next paragraph's "stopped for an owner decision", which the owner answered: `OWNER_RULINGS.md`
 §S, guest-kernel GR work).** Default-off `KF3_KERNEL_GR_WORK` runs Windows' kernel-GR work on a
