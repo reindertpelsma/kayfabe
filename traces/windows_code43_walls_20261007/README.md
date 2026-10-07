@@ -2888,3 +2888,22 @@ adapter still returns `0x8876017c`. If it succeeds, the probe's queue/fence step
 (H-signal's own falsifiers from run50 apply). Also recorded: whether nvidia-smi's BAR1 line and the boot
 change, and any guest-side event. A BAR1 size is a harness choice, not code; the design note
 (`V3_P4_PORT_MAP.md` 2.3(d)) already says the default should derive from the host's BAR1.
+
+### Run52 result: H-bar1 FALSIFIED — with a 1 GiB BAR1 the D3D hardware device still fails with `0x8876017c`
+
+Product/QEMU `621310b3` (code `83881ecc`), flags as run47 plus `--bar1-mb 1024` (command.json argv:
+`bar1-size=1073741824`); wrapper at `8054475b`. One boot by hand, ACPI shutdown, QEMU exit 0, 0 `DEAD`, 15
+deferred-API triggers (all served), host afterwards unchanged (Xid 61, no QEMU, NBD disconnected, P8).
+[Probe and smi output](run52-probe-output.txt), [trace](run52-qemu.log.gz), [command](run52-command.json),
+[bugcheck recovery](run52-bugcheck.json), [host after](run52-host-after.txt).
+
+**Measured (run52 at 621310b3, 2026-10-08):**
+- `D3D11CreateDevice(NVIDIA, hardware)` and `D3D12CreateDevice(NVIDIA, 11_0)`: **`0x8876017c`, as at 128 MiB**;
+  the Basic Render Driver control still succeeds. **H-bar1 is falsified** (a 1 GiB BAR1 does not change the result).
+- `nvidia-smi -q -d MEMORY`: **BAR1 Total 1024 MiB, Used 996 MiB, Free 28 MiB** (run50 at 128 MiB: 128 / 100 /
+  28). "Free" is the same 28 MiB at both sizes and "Used" is total minus 28 MiB, so the BAR1 usage line is not
+  a measurement of use: it behaves as a fixed 28 MiB reserve (inferred from the two values; the code that
+  produces it was not read). FB memory stays `N/A`.
+- Candidate 2 of run50 is gone. Candidate 1 (FB info, `0x20801303`/`AdapterRAM 0`) is still untested, and
+  run51 showed the memory fields do not depend on a query-time control, so the D3D failure may sit in boot-time
+  state rather than in a request in the failing call's window (run50: nothing new reaches the RM there).

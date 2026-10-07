@@ -1,0 +1,55 @@
+## probe
+PROBE whoami nt authority\system
+PROBE session 0
+PROBE CreateDXGIFactory1 0x00000000
+PROBE adapter 0 vendor 0x10de NVIDIA GeForce RTX 4070 dedicated 3748 MB
+PROBE adapter 1 vendor 0x1414 Microsoft Basic Render Driver dedicated 0 MB
+PROBE control D3D12CreateDevice(Basic Render Driver, 11_0) 0x00000000
+PROBE D3D11CreateDevice(NVIDIA, hardware) 0x8876017c feature level 0x0
+PROBE D3D12CreateDevice(11_0) 0x8876017c
+QX_RC=0
+## smi
+--- query
+name, memory.total [MiB], memory.used [MiB], memory.free [MiB], pstate, utilization.gpu [%], temperature.gpu, power.draw [W], clocks.current.graphics [MHz], pci.bus_id, uuid, vbios_version, display_active
+NVIDIA GeForce RTX 4070, [N/A], [N/A], [N/A], [N/A], [N/A], 0, [N/A], 0 MHz, 00000000:00:06.0, GPU-0528a85e-ee9a-a53c-3e44-e5e88ef747cd, 95.04.3e.08.be, Disabled
+
+--- -q MEMORY
+
+==============NVSMI LOG==============
+
+Timestamp                                 : Wed Oct  7 23:14:23 2026
+Driver Version                            : 580.88
+CUDA Version                              : 13.0
+
+Attached GPUs                             : 1
+GPU 00000000:00:06.0
+    FB Memory Usage
+        Total                             : N/A
+        Reserved                          : N/A
+        Used                              : N/A
+        Free                              : N/A
+    BAR1 Memory Usage
+        Total                             : 1024 MiB
+        Used                              : 996 MiB
+        Free                              : 28 MiB
+    Conf Compute Protected Memory Usage
+        Total                             : N/A
+        Used                              : N/A
+        Free                              : N/A
+
+
+--- Win32_VideoController
+
+
+Name                        : NVIDIA GeForce RTX 4070
+AdapterRAM                  : 0
+DriverVersion               : 32.0.15.8088
+VideoProcessor              : NVIDIA GeForce RTX 4070
+CurrentHorizontalResolution : 
+
+
+
+
+--- dxgkrnl operational events
+
+QX_RC=1
