@@ -3264,7 +3264,10 @@ mod info_index_list_tests {
                 let mut req = vec![0u8; size];
                 req[..4].copy_from_slice(&count.to_le_bytes());
                 let text = info_index_list(&req, fb);
-                assert!(text.starts_with("undecodable") || text.starts_with('['), "{text}");
+                assert!(
+                    text.starts_with("undecodable") || text.starts_with('['),
+                    "{text}"
+                );
             }
             assert!(info_index_list(&[1, 0, 0, 0], fb).starts_with("undecodable"));
             assert!(info_index_list(&[], fb).starts_with("undecodable"));
