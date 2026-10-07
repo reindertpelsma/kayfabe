@@ -264,8 +264,34 @@ fn run_phase(p: &str) -> Result<(), String> {
 /// P0 — positive control: a handle fired on its OWN object must read back executed.
 fn p0_positive_control() -> Result<(), String> {
     let mut u = Unit::open()?;
+    // DIAGNOSTIC 1: a bare fence (no methods pushed) must complete — proves the ring works.
+    let bare = u.submit(&[]).is_ok();
+    // submit(&[]) is a no-op push; force a real bare fence instead:
+    let bare_fence = {
+        let r = match u.ring.fence(&u.rm) {
+            Ok(Ok(seq)) => {
+                let dl = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                let mut done = false;
+                while std::time::Instant::now() < dl {
+                    if u.ring.completed().unwrap_or(0) == seq { done = true; break; }
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+                done
+            }
+            _ => false,
+        };
+        r
+    };
+    println!("DF_P0_BAREFENCE empty_submit_ok={bare} bare_fence_completed={bare_fence}");
     let d = u.alloc_5080(SUBCH_A)?;
-    u.bind(&d)?;
+    println!("DF_P0_CLASSENGINE object={:#x} class_engine={:#x} subch={}", d.handle, d.class_engine, d.subch);
+    // DIAGNOSTIC 2: SET_OBJECT alone (bind) — does it halt the channel?
+    let bind_ok = u.bind(&d).is_ok();
+    println!("DF_P0_SETOBJECT bind_fence_ok={bind_ok}");
+    if !bind_ok {
+        u.free();
+        return Err("SET_OBJECT(5080) halted the channel — binding a software object this way is refused/faults".into());
+    }
     let h = 0x5151_0001;
     // First confirm registration works and the param size is right.
     match u.register(&d, h, CMD_DMA_INVALIDATE_TLB, FLAGS_DELETE_IMPLICIT) {
