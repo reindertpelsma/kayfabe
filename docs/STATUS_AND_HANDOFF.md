@@ -11,6 +11,22 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-07
 
+**Kernel-GR tier, runs 32-33, 2026-10-07 (branch `claude/code43-gr-20261007`; supersedes the
+next paragraph's "stopped for an owner decision", which the owner answered: `OWNER_RULINGS.md`
+§S, guest-kernel GR work).** Default-off `KF3_KERNEL_GR_WORK` runs Windows' kernel-GR work on a
+USER host channel (asserted at birth, tested), re-authored from per-class allowlists whose class
+ids come from kf-chip's generated sets: 17 2D state methods and the 3D/compute `SET_NOTIFY`
+address (resolved through the placement rows into the T-space windows). The engine writes the
+guest's GP_GET, and completions are relayed to the guest's GR0 vector. `KF3_SW_SUBCH_INERT`
+accepts a software-subchannel bind to a non-class value and refuses its later methods; the
+hardware behaviour this matches is inferred. The native oracle `kf-gr-tier` passed before each
+run. Run33 at 9b178991: both kernel channels' first work completes on the engine, `NSI RELAY` to
+GR0 is logged and the MSI is raised (not held). Code43/smi9 persist, and the abort stays at
+VFIO 2861 (runs 31-33). **Stopped by the three-runs rule.** Top hypothesis: the paging client's
+`0x0080170e`/`0x0080170f` stay unserviced (VFIO returns 0 at 2855/2860), and the teardown starts
+~3 ms after `GPFIFO_SCHEDULE`. Owner open questions from the compliance audit are listed in the
+README. [Runs 32-33](../traces/windows_code43_walls_20261007/README.md#eleventh-repair-the-kernel-gr-tier-and-the-software-subchannel-rule-run32-setup).
+
 **Code43 loop, runs 29-31, 2026-10-07 (branch `claude/code43-loop-20261007`; corrects the next
 paragraph's "run29 needs a go-ahead").** Run29 at 23dbc5b7 binds display events to the alloc's
 `hParent`, as RM's fixup does (`rmapi_specific.c:71`). Both NV0073 enables succeed, and the abort

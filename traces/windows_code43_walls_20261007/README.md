@@ -1312,3 +1312,53 @@ kernel GR work not completing. It is wrong if run33's GR channel retires GP 0
 VFIO ≤ 2866. **Prediction:** the GR channel retires its first segment, the guest's GR0 vector is
 raised (`NSI RELAY`), and the abort moves past 2861 — or the GR channel is refused by name at a
 later segment, naming the next method set.
+
+### Run33 result: both kernel channels' first work completes on the engine; the abort does not move (falsifier triggered)
+
+Product/QEMU 9b1789912b6ea7a7d8fa722f4a85125a44eee4e1, `kf3-bins/9b178991`, flags as run32; run on
+2026-10-07 at 13:52-13:55 UTC. [command](run33-command.json), [status](run33-status.json),
+[trace](run33-qemu.log.gz), [requests](run33-requests.log), [completion](run33-complete.json),
+[host health](run33-host-health.txt), [unit result](run33-unit-result.txt),
+[9/9 gates](run33-gates.log) (11/11 USER births), [build](run33-build.log),
+[native oracle](gr-tier-native-run33.log), [watchdog recovery](run33-watchdog-recovery.log)
+(cleanup verified). After 97 s: Code43, nvidia-smi exit 9. Host afterwards: no QEMU, no NBD
+attached, display enabled, P8, Xid count unchanged (5).
+
+**Measured (seen in run33 at 9b178991):**
+- GR channel c1d00015:ff040001 (token 0x3) on a USER host channel with objects 0x902d, 0xa140,
+  0xc997 and 0xc9c0: its whole 46-word segment was re-authored (`gr[methods=21 inert_binds=1]`)
+  and retired by the engine: `forwarded=1 submissions=1 gp_get=Some(1)
+  gp_get_by_engine=(true, 1)`. No refusal.
+- The completion was relayed: `kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest GR0 vector
+  0 … relay #1`. The status line shows `nsi=[GR0:290/1raised …]` and `irq[… raised=2 held=0]`, so
+  the MSI was signalled, not held by a cleared enable. Whether the guest's handler consumed it is
+  not observable here.
+- CE channel c1d00013:ff040000 (token 0x802): inert subchannel-5 bind, retired as in run32.
+- **Abort point unchanged:** 858 RPCs, teardown at 544, last RPC `GPFIFO_SCHEDULE` of
+  c1d00020's paging channel ff040009, returning 0 (VFIO 2861). The first `Free` follows it within
+  about 3 ms (`mem t=8.33s` → `8.34s`).
+
+**Falsifier outcome: triggered.** Windows' first kernel GR and CE work both completed on the
+engine, with engine-written GP_GET and a relayed GR0 interrupt, and the abort stayed at VFIO
+2861. The hypothesis "the abort follows from kayfabe killing that work" is wrong as the sole cause.
+
+**Three consecutive runs (31, 32, 33) end at VFIO 2861.** Per the loop's stop rule this iteration
+stops here. Ranked hypotheses (none tested):
+1. *(High, in the RPC stream.)* The paging channel's own controls. Right before 2861, client
+   c1d00020 sends `0x0080170e` (FIFO latency-buffer size query) and `0x0080170f`
+   (SET_CHANNEL_PROPERTIES, property 0 = timeslice 4000 µs for ff040009); kayfabe leaves both
+   UNSERVICED. In vfio-10 both return 0 at indices 2855 and 2860 for the same client. Windows may
+   check those results only after scheduling, and the teardown starts ~3 ms after
+   `GPFIFO_SCHEDULE`, too soon for a timeout. The same refusals were tolerated for c1d00016's
+   channel earlier, but that is a different channel role. Next step under §S.2 (timeslice is
+   "implement for real"): apply the timeslice as a real unprivileged host control on the twin's
+   group (run19 did this for `a06c0103`) and answer the latency-buffer query from a host fact.
+2. *(Medium, outside the RPC stream.)* Interrupt delivery for Translated CE work. Translated CE
+   rings still raise no guest interrupt (only the GR tier relays), and the guest's CE non-stall
+   notifiers 12/23/24/26 are never delivered (audit SHOULD-FIX 4). A WDDM paging fence waiting on
+   a CE interrupt would fail, but ~3 ms is short for a wait.
+3. *(Medium-low, outside the RPC stream.)* A BAR0/BAR1 access right after scheduling: the paging
+   channel's USERD read through BAR1, the usermode doorbell, or a PTIMER read. No MMIO trace is
+   taken on kayfabe runs, so this is unmeasured. An MMIO/doorbell trace of the 3 ms window would
+   decide it.
+4. *(Low.)* The relayed GR0 interrupt itself (vector 0, raised once) confuses the guest's ISR.
