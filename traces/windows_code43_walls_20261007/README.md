@@ -1843,7 +1843,7 @@ Runs 36-37 used 2 of the 10 runs this loop allows. The stop condition "an owner 
 holds. Run38 is not taken.
 1. **The 13 power/thermal/perf/clock queries** (`diagzero.rs` lists them with names and sizes). §S
    makes power, thermal and P-state host-owned stubs: "refused or reported absent, never filled
-   with invented values". Measured: refusal stops StartDevice at VFIO 2861, and zero-filled
+   with invented values". Measured in runs 36-37 (2026-10-07): refusal stops StartDevice at VFIO 2861, and zero-filled
    `NV_OK` lets it complete. Nine of the 13 have no public layout (closed legacy GSS or `0x2081`
    controls), so "reported absent" cannot be derived from OGKM for them. Options: (a) zero `NV_OK`
    as the stub's "reported absent" for these queries; (b) ask the host's own GSP with
