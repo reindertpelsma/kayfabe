@@ -115,6 +115,7 @@ mod tests {
             minor: 65,
             patch: 6,
         })
+        .ok()
         .copied()
     }
 
