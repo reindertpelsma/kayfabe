@@ -1862,7 +1862,7 @@ Branch `claude/code43-stubs-20261007`, from `1fd82ed2`, 2026-10-07. The owner's 
 only the minimal set Windows needs. This section starts the bisect of run37's 13 answers and
 batches one product repair that acts only after VFIO 2861.
 
-**What the RPC streams say before any run (measured, run36/run37 against vfio-10).**
+**What the RPC streams say before any run (measured in run36 and run37 at 68c5879f and fd636c98, both 2026-10-07, against vfio-10 of 2026-10-05).**
 - All 13 controls are sent before the abort in both runs, at the same RPC indices: ten early
   (run36 RPCs 110-166; vfio-10 116-205) and three late, `0x2080a801` (a second time), `0x2081010d`
   and `0x2080a630` (run36 RPCs 520-522; vfio-10 2834-2836), 22 RPCs before the paging client.
