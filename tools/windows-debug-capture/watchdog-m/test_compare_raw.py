@@ -12,6 +12,8 @@ base=0xffff800000100000
 
 def fixture():
     data=bytearray(16384);data[:8]=b'PAGEDU64'
+    struct.pack_into('<I',data,56,0x1b0)
+    struct.pack_into('<3Q',data,64,2,0xffffffffc000009a,0x100)
     text='nvlddmkm.sys\0'.encode('utf-16le');name=0x1004;record=0x200
     struct.pack_into('<I',data,name-4,len(text)//2-1);data[name:name+len(text)]=text
     struct.pack_into('<I',data,record,name-4)
@@ -38,4 +40,18 @@ for data in (b'not-a-dump',fixture(),fixture()+b'NVCD'+b'NVCD'):
     try:r.decode(data,schema,NeverDecode())
     except ValueError:pass
     else:raise AssertionError('invalid dump/NVCD envelope accepted')
-print('Raw dump profile bounds, identity, ambiguity and NVCD envelope rejection tests passed')
+expected=dict(bugcheck_code='0x1b0',bugcheck_parameters_1_to_3=['0x2','0xffffffffc000009a','0x100'])
+assert r.bugcheck_profile(fixture())==expected
+data=fixture();struct.pack_into('<Q',data,88,base)
+assert r.bugcheck_profile(data)==expected  # parameter4 is never exported
+for offset,fmt,value in ((56,'<I',0x50),(64,'<Q',base),(72,'<Q',base),(80,'<Q',base)):
+    data=fixture();struct.pack_into(fmt,data,offset,value)
+    for check in (r.bugcheck_profile,lambda d:r.decode(d,schema,NeverDecode())):
+        try:check(data)
+        except ValueError as e:assert str(e)=='unsupported bugcheck scalar profile'
+        else:raise AssertionError('unexpected or pointer-bearing bugcheck accepted')
+assert r.ordinal_differences([1],[1,2])==[dict(ordinal=1,L=None,M=2)]
+assert r.ordinal_differences([1,2],[1])==[dict(ordinal=1,L=2,M=None)]
+assert r.ordinal_differences([1,2],[1,3])==[dict(ordinal=1,L=2,M=3)]
+assert r.ordinal_differences([],[])==[]
+print('Raw dump bounds, identity, ambiguity, NVCD envelope, bugcheck privacy and unmatched-tail tests passed')

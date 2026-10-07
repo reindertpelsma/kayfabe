@@ -17,6 +17,17 @@ import struct
 DRIVER_SHA='31c79cce80b573e21647ace8d1a2b65697f992e7f86196f89e30af477b1bd47c'
 DECODER_SHA='a9c7b3f5abea4f27fceeb2b48574d4c17e8e9bb397127acade48d65ae50a10a7'
 SCHEMA_SHA='47aae92da4e4872693b399f75ceff2c66ff01b0a519d8532c07eee61f609fc42'
+BUGCHECK_PROFILE=(0x1b0,2,0xffffffffc000009a,0x100)
+
+def bugcheck_profile(data):
+    # Public WinDumpHeader64 offsets; the checked values are this experiment's
+    # known scalar profile. Other bugchecks can put kernel pointers in params1-3.
+    # Never echo rejected values, and never export parameter4.
+    if data[:8]!=b'PAGEDU64' or len(data)<8192: raise ValueError('not supported PAGE/DU64 dump')
+    code=struct.unpack_from('<I',data,56)[0]
+    params=struct.unpack_from('<3Q',data,64)
+    if (code,*params)!=BUGCHECK_PROFILE: raise ValueError('unsupported bugcheck scalar profile')
+    return dict(bugcheck_code=hex(code),bugcheck_parameters_1_to_3=[hex(x) for x in params])
 
 def read(path, limit, digest=None):
     with path.open('rb') as source: data=source.read(limit+1)
@@ -65,7 +76,7 @@ def module(data, pe):
     return candidates[0]
 
 def decode(data, schema, decoder):
-    if data[:8]!=b'PAGEDU64' or len(data)<8192: raise ValueError('not supported PAGE/DU64 dump')
+    bugcheck_profile(data)
     offsets=hits(data,struct.pack('<I',schema['constants']['NVCD_SIGNATURE']))
     if len(offsets)!=1: raise ValueError('not one NVCD signature')
     return decoder.decode_nvcd(data,schema,offsets[0])
@@ -86,6 +97,15 @@ def assertions(decoded, base, end):
         elif isinstance(value,list):
             for child in value: walk(child,depth+1)
     walk(decoded);return result
+
+def ordinal_differences(left, right):
+    # Missing tails are explicit, not silently dropped by zip().
+    result=[]
+    for i in range(max(len(left),len(right))):
+        a=left[i] if i<len(left) else None
+        b=right[i] if i<len(right) else None
+        if a!=b: result.append(dict(ordinal=i,L=a,M=b))
+    return result
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
@@ -111,21 +131,17 @@ def main():
         if left!=right:break
         equal_prefix+=1
     output=dict(profile='Windows580.88-PAGE-DU64-L-M-20261005',driver_sha256=DRIVER_SHA,
+                comparison_schema='kayfabe-watchdog-ordinal-comparison/2',
                 l_raw_matches_kd_journal=True,l_module_range_matches_kd=True,
-                identical_assertion_prefix=equal_prefix, differences=[])
+                identical_assertion_prefix=equal_prefix, differences=ordinal_differences(*rows),
+                assertion_counts_equal=len(rows[0])==len(rows[1]))
     for label,data,entry,journal,records in zip(('L','M'),dumps,entries,decoded,rows):
-        # WinDumpHeader64 offsets compiled from pinned QEMU10.2.4 public header;
-        # parameter4 is a kernel pointer and deliberately omitted from output.
-        code=struct.unpack_from('<I',data,56)[0]
-        params=struct.unpack_from('<3Q',data,64)
         output[label]=dict(dump_sha256=hashlib.sha256(data).hexdigest(),dump_bytes=len(data),
             module_record_file_offset=hex(entry[2]),module_name_file_offset=hex(entry[3]),
-            pe_identity={k:hex(v) for k,v in pe.items()},bugcheck_code=hex(code),
-            bugcheck_parameters_1_to_3=[hex(x) for x in params],nvcd=journal['nvcd'],
+            pe_identity={k:hex(v) for k,v in pe.items()},**bugcheck_profile(data),nvcd=journal['nvcd'],
             assertions=len(records),trailing_assertion_chain=records[17:])
-    for i,(left,right) in enumerate(zip(*rows)):
-        if left!=right: output['differences'].append(dict(ordinal=i,L=left,M=right))
     output['limits']=['No independent successful KD analysis for M.',
+      'Only the exact reviewed bugcheck scalar profile is accepted; parameter4 is never exported.',
       'Module recognizer is a checked profile, not a general documented Windows dump reader.',
       'One missing outer NVCD byte prevents whole-NVCD checksum verification.',
       'No live descriptor locals; assertion level is not NV_STATUS.']
