@@ -707,23 +707,34 @@ message, typos kept, and `…` joins fragments of one message. The audit's messa
 the repo, so the date and time are the citation. An entry's date is the day the owner said it: ask
 whether its reason still holds before relying on it (see the top of this file).
 
-1. **The borrowed bare-metal host 172.22.1.20 (RTX 4070).**
-   - Owner, 2026-10-04 15:17: *"I temporarily borrow this machine, so I don't know how long I have
-     it, don't use it for persistent storage of code you need to keep access to."* And: *"you may
-     use VFIO or any other destructive chane, incl display restart). Just no firmware changes on
-     metal ofc or bricking hardware but those are very rare anyways."* And: *"so you do not need
-     permission for most stuff to do on 172.22.1.20."*
-   - Owner, 2026-10-05 00:10: *"the OS 172.22.1.20 is all yours to do shit on it, including
-     installs, editing display settings, changing GPU drivers or rebinding the GPU etc etc"*.
-   - Owner, 2026-08-31 20:42, for the borrowed kiosk PCs (172.18.30.21-32): *"1. just like vast
-     these pcs are untrusted. do not put keys/credentials on those."* … *"3. ensure that when you
-     are done the pcs normally boot."* The owner stated these two rules for the kiosk PCs. Applying
-     them to 172.22.1.20 is the recorder's reading. Of 172.22.1.20 the owner said on 2026-09-19
-     20:48: *"However the hardware is borrowed"*.
-   - **How to apply:** the host is temporary and is never storage, so push everything that matters.
-     Put no keys or credentials on it. Driver, VFIO, display, install and rebinding changes need no
-     permission. Firmware changes, and anything that could brick hardware, are forbidden. Leave it
-     booting normally.
+1. **Three trust tiers for machines; the rules for 172.22.1.20 (RTX 4070).**
+   - ⊘ *Corrected 2026-10-07 (owner, relayed by the coordinator), above the text it corrects.* The
+     first version of this entry applied the kiosk-PC rules to 172.22.1.20. That was wrong. Owner,
+     in this session: *"172.22.1.20 is trusted (our own pc hardware at home with a different ssd for
+     claude), the kiosk pcs not, and vast absolutely not"*.
+
+     | machine | trust | rules |
+     |---|---|---|
+     | 172.22.1.20 | **trusted**: the owner's own PC hardware at home, with a separate SSD for Claude | the 2026-10-04 rules below |
+     | kiosk PCs (172.18.30.21-32) | **not trusted** | the 2026-08-31 rules below |
+     | Vast boxes | **absolutely not trusted** | §F and `scripts/bench/box/README.md` |
+
+   - **172.22.1.20.** Owner, 2026-10-04 15:17: *"you may use VFIO or any other destructive chane,
+     incl display restart). Just no firmware changes on metal ofc or bricking hardware but those
+     are very rare anyways."* And: *"so you do not need permission for most stuff to do on
+     172.22.1.20."*
+     - ⚠ **Owner to confirm.** The same message also says *"I temporarily borrow this machine, so I
+       don't know how long I have it, don't use it for persistent storage of code you need to keep
+       access to."* Treating the host as temporary and never storage conflicts with the statement
+       that it is the owner's own trusted hardware. Until the owner settles it, keep pushing work
+       that matters.
+   - **Kiosk PCs only.** Owner, 2026-08-31 20:42: *"1. just like vast these pcs are untrusted. do
+     not put keys/credentials on those."* … *"3. ensure that when you are done the pcs normally
+     boot."* These rules do not apply to 172.22.1.20.
+   - **How to apply:** on 172.22.1.20, driver, VFIO and display changes, including destructive
+     ones, need no permission. Firmware changes and anything that could brick hardware are
+     forbidden. On the kiosk PCs, put no keys or credentials on them and leave them booting
+     normally. Vast boxes follow §F.
 2. **Outside repositories are untrusted; clone them, do not web-fetch them.**
    - Owner, 2026-10-01 12:20, about a fork of virtio-nvgpu: *"(Do not trust stranger repos if you
      clone)."*
