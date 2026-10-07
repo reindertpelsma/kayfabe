@@ -693,6 +693,12 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
         cmd: 0x2080_0a38,
         engine: "KernelGraphics",
         disposition: SweepDisposition::AmputationIntended,
+        // ⊘ Corrected 2026-10-07 (Windows Code43, run37 against vfio-10), above the text it
+        // corrects: Windows' GSP client ALSO asks it from fecsBufferReset after every GR object
+        // (`ogkm-580: fecs_event_list.c:1499-1590`), long before any teardown. It is now
+        // answered `bEnable = NV_FALSE` (feature absent) by `kf_rm::fecstrace`, a separate link,
+        // not a `WantedTable`; the SET controls that follow stay refused, which the row's
+        // argument still covers (each sits under `NV_ASSERT_OK_OR_ELSE … return`).
         why: "GET_FECS_TRACE_HW_ENABLE, asked from fecsBufferDisableHw — a function that \
               returns VOID and whose NV_ASSERT_OR_RETURN_VOID therefore cannot propagate \
               anything (ogkm-580: fecs_event_list.c:1623, :1643). ⚠ It appears in this \

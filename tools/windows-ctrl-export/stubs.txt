@@ -1,0 +1,10 @@
+# stubs.txt — the host-owned stub set for Windows guests (`kf_abi::hoststub`, `kf_rm::hoststub`).
+# One line per control: <OGKM FINN interface macro> <message number> <reason tag>.
+# ★ The message number is the only non-public part of each id. It is listed here, once, with the
+# evidence that selected it; derive.py composes the id from the OGKM interface value and refuses
+# it unless the pinned retail driver exports it exactly once.
+#
+# 0x2081010d — the minimal set of the run38-41 bisect (2026-10-07,
+# traces/windows_code43_walls_20261007/README.md, "Run41 result"): answering it alone moves
+# Windows past VFIO 2861. Stubbed under OWNER_RULINGS §S as ASSUMED, owner to confirm.
+FINN_NV2081_BINAPI_INTERFACE_ID 0x0d bisect-run38-41

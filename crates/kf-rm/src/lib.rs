@@ -17,13 +17,14 @@ pub mod authored;
 pub mod barpde;
 pub mod census;
 pub mod chanlink;
-pub mod diagzero;
 pub mod display;
 pub mod faultbuffer;
+pub mod fecstrace;
 mod gfxpool_probe;
 pub mod guestsysinfo;
 pub mod hostfacts;
 pub mod hostquery;
+pub mod hoststub;
 pub mod inert;
 pub mod inittables;
 pub mod memory_list;
@@ -480,6 +481,12 @@ pub fn served_chain(
             "kf-rm: EXPERIMENT software-runlist allocation metadata only; native backing and scheduling are NOT implemented"
         );
     }
+    // ★ 2026-10-07 (Windows Code43): two links that claim only their own generated ids, so their
+    // place only has to be ahead of every link that might shadow them. The host-owned stub watches
+    // fn1 for its Windows-build identity (`hoststub.rs`, §S ASSUMED, owner to confirm); the
+    // FECS-trace query is answered "disabled" (`fecstrace.rs`).
+    chain.push(Box::new(hoststub::HostStubPolicy::new(driver)));
+    chain.push(Box::new(fecstrace::FecsTracePolicy::new(driver)));
     if std::env::var("KF3_MEMORY_LIST_PROBE").as_deref() == Ok("1")
         && let Some(policy) = objects.take()
     {
@@ -562,17 +569,6 @@ pub fn served_chain(
     ]);
     if let Some(objects) = objects {
         chain.push(Box::new(objects));
-    }
-    // ★ DIAGNOSTIC, default off (`KF3_DIAG_ZERO_OK=1`; `diagzero.rs`, Windows Code43 hypothesis 5):
-    // just before the ledger, so it answers only what every link above declined.
-    if diagzero::enabled() {
-        eprintln!(
-            "kf-rm: DIAGNOSTIC KF3_DIAG_ZERO_OK: {} of {} unserviced power/thermal/perf/clock controls answered NV_OK with zeroed params (bisect step {:#x?}; never a product answer)",
-            diagzero::BISECT_STEP.len(),
-            diagzero::DIAG_ZERO_OK.len(),
-            diagzero::BISECT_STEP
-        );
-        chain.push(Box::new(diagzero::DiagZeroOk::new(driver)));
     }
     chain.push(Box::new(unserviced::UnservicedLedger::new(
         driver, unserviced,

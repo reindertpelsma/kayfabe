@@ -727,3 +727,28 @@ B").** An explicit, scoped exception to "only BAR0 writes trap" (`AGENTS.md`, Ru
 Implemented as `crates/kf-qemu/src/bar0trace.rs` (ABI 21's `kf3_set_read_trap`). A window there
 closes at the next RPC's queue-head write, so each window lies inside the approved interval.
 
+
+**§S applied to `0x2081010d` (2026-10-07) — ASSUMED from the owner's 2026-10-07 statement that
+privileged non-compute actions can be stubbed; owner to confirm.** Owner, 2026-10-07 (relayed by the
+coordinator): *"Most actions that are not compute, privileged actions can be stubbed."* and *"All about
+power control, thermal and process, preempt management is host"*.
+- **What is stubbed.** Exactly one control: `0x2081010d`, answered `NV_OK` for a Windows 580.88 guest
+  (`kf_rm::hoststub`, default on; the default-off `KF3_DIAG_ZERO_OK` diagnostic is removed). Its id is
+  generated (`kf_abi::hoststub`, `tools/windows-ctrl-export/derive.py`): the interface from OGKM
+  580.65.06 `FINN_NV2081_BINAPI_INTERFACE_ID` (`g_finn_rm_api.h:425`), the message number 0x0d from the
+  bisect, `paramSize 0` and flags from the control's export row in the pinned retail driver.
+- **Why only this one.** Runs 36-41 (2026-10-07, `traces/windows_code43_walls_20261007/README.md`)
+  answered 13 refused power/thermal/perf/clock-area queries with zero-filled `NV_OK` and bisected
+  them: `0x2081010d` alone is sufficient for StartDevice to pass VFIO 2861; the other twelve are not
+  needed and stay refused. The four with public layouts (`0x2080205b`, `0x20802068`, `0x20802801`,
+  `0x00800106`) are among the twelve, so no invented or zero-filled reply is shipped for them.
+- **What the answer claims.** Nothing but the status: the control has zero params, so "zero-filled"
+  invents no value. Nine of the thirteen had no public layout at all; for this one even the meaning is
+  not public. A web search (2026-10-07) found no public layout. vfio-10's reply bytes exist and are
+  not shipped as a captured table (derive-never-capture).
+- ⚠ **For the owner.** The retail export row says the control is `NON_PRIVILEGED |
+  ROUTE_TO_VGPU_HOST | GSP_PLUGIN_FOR_VGPU_GSP` (flags `0x10208`), and its area (`NV2081` binary API)
+  is not shown to be power, thermal or P-state. So "privileged host management" is an assumption about
+  its purpose, not a reading of it. Options: (a) keep the stub; (b) issue it on kayfabe's own host
+  objects for real (it is non-privileged, but its effect on the host GPU is unknown); (c) refuse it,
+  which returns Windows to Code43 at VFIO 2861.

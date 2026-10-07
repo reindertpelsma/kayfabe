@@ -4702,6 +4702,24 @@ impl ChanPlane {
                 "kf3: chan token {:#x} ({:?}) DEAD: {why}",
                 g.guest_idx, g.key
             );
+            // ★ 2026-10-07 (Windows Code43, run41: a kernel copy channel died with an EMPTY rows
+            // map although the walker had mapped its ring into that space): is the channel's
+            // mirror still the plane's mirror for its key? Error path only; never waits.
+            let plane_now = self.mirrors.try_lock().ok().map(|m| {
+                m.get(&g.key).map(|now| {
+                    (
+                        std::sync::Arc::ptr_eq(&now.rows, &g.mirror.rows),
+                        now.space.space,
+                        now.rows.read().map_or(usize::MAX, |r| r.len()),
+                    )
+                })
+            });
+            eprintln!(
+                "kf3: chan token {:#x} death mirror: own space={:#x} rows={}; plane's mirror for the key now (same rows, space, rows): {plane_now:?}",
+                g.guest_idx,
+                g.mirror.space.space,
+                g.mirror.rows.read().map_or(usize::MAX, |r| r.len())
+            );
             g.dead = Some(why);
             self.completions.clear(g.guest_idx);
         }
