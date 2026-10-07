@@ -1561,6 +1561,26 @@ pub fn query_vbios_version(host: &mut dyn HostControls) -> Result<Option<(u32, u
         .and_then(|r| hostfacts::derive_vbios_version(&r).ok()))
 }
 
+/// ★ `host_gid` — the host GPU's own UUID (`GPU_GET_GID_INFO`, binary SHA-1, `0x2080014a`,
+/// NON_PRIVILEGED).
+///
+/// ⊘ **Never refuses realize** (like `vbios_version`): a host refusal OR a reply that does not
+/// decode is `None`, and only a `gpu-uuid=auto|host` that needs it then refuses, by name
+/// ([`crate::gpuuid::GpuUuidError::HostUuidUnavailable`]).
+///
+/// # Errors
+/// None today; the `Result` keeps the query's shape.
+pub fn query_host_gid(
+    host: &mut dyn HostControls,
+) -> Result<Option<kf_abi::gspstaticinfo::GpuGid>, FieldCause> {
+    use kf_abi::gspstaticinfo as g;
+    let mut req = zeroed(g::GID_INFO_SIZE);
+    put32(&mut req, 4, g::GID_FLAGS_SHA1_BINARY);
+    Ok(ask(host, g::NV2080_CTRL_CMD_GPU_GET_GID_INFO, req)
+        .ok()
+        .and_then(|r| hostfacts::derive_host_gid(&r).ok()))
+}
+
 /// ★ `perf_level_info_v2` — libcudart's `PERF_GET_LEVEL_INFO_V2` question, asked of the host
 /// once (`0x2080200b`, NON_PRIVILEGED). ⊘ A host REFUSAL is a value here (`None`), not a realize
 /// failure: it is exactly what host userspace would be told, and the guest's identical ask is
@@ -1732,6 +1752,7 @@ pub fn query_host_facts(
     let gpu_name = query_gpu_name(host);
     let gpu_short_name = query_gpu_short_name(host);
     let vbios_version = query_vbios_version(host);
+    let host_gid = query_host_gid(host);
     let perf_level_info_v2 = query_perf_level_info_v2(host);
     let gss_replay = query_gss_replay(host);
     let gr_sm_issue_rate_modifier = query_gr_sm_issue_rate_modifier(host);
@@ -1784,6 +1805,7 @@ pub fn query_host_facts(
     let gpu_name = take!(gpu_name);
     let gpu_short_name = take!(gpu_short_name);
     let vbios_version = take!(vbios_version);
+    let host_gid = take!(host_gid);
     let perf_level_info_v2 = take!(perf_level_info_v2);
 
     match (
@@ -1814,6 +1836,7 @@ pub fn query_host_facts(
         gpu_name,
         gpu_short_name,
         vbios_version,
+        host_gid,
         perf_level_info_v2,
     ) {
         (
@@ -1844,6 +1867,7 @@ pub fn query_host_facts(
             Some(gpu_name),
             Some(gpu_short_name),
             Some(vbios_version),
+            Some(host_gid),
             Some(perf_level_info_v2),
         ) if refusals.is_empty() => Ok(HostFacts {
             family,
@@ -1885,6 +1909,7 @@ pub fn query_host_facts(
             gpu_name: Some(gpu_name),
             gpu_short_name: Some(gpu_short_name),
             vbios_version,
+            host_gid,
             perf_level_info_v2,
             gss_replay,
             video_caps,

@@ -23,6 +23,7 @@
 //!   that one asks *what do I hold*, this one asks *where am I*. Together they are the
 //!   mechanism behind `INLINE-SAFE` clauses (a)/(b)/(c)
 //!   (`docs/design/blocking_and_completion_model.md` §1).
+//! - [`sha256`] — dependency-free SHA-256 (FIPS 180-4), for identities that must not collide.
 //! - [`lockwitness`] — the per-thread lock witness invariant **R1** is asserted with
 //!   (`l1_concurrency.md` §3.3). It lives at the bottom of the graph because the
 //!   counter is *maintained* by the L1 guard wrappers but *asserted* at the isolate
@@ -34,6 +35,7 @@ pub mod interval_map;
 pub mod leafwitness;
 pub mod lock;
 pub mod lockwitness;
+pub mod sha256;
 pub mod time;
 pub mod trapwitness;
 

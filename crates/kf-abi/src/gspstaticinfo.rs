@@ -74,7 +74,7 @@ const GID_DATA_SIZE: usize = 256;
 
 /// `sizeof(NV2080_CTRL_GPU_GET_GID_INFO_PARAMS)`: `index`, `flags`, `length`, `data[256]`
 /// (`ogkm-580: ctrl2080gpu.h:1785-1790`).
-const GID_INFO_SIZE: usize = 12 + GID_DATA_SIZE;
+pub const GID_INFO_SIZE: usize = 12 + GID_DATA_SIZE;
 
 /// `RM_SHA1_GID_SIZE` — how many bytes of `gidInfo.data[]` are the GPU's UUID
 /// (`ogkm-580: src/nvidia/inc/kernel/gpu/gpu_uuid.h:30-34`, *"uses the first 16 bytes"*).
@@ -96,7 +96,12 @@ pub const GID_DATA_OFF: usize = GID_INFO_OFF + 12;
 /// `index = 0`, `flags = 2`, `length = 0x10` at exactly these offsets. This is a row
 /// **with a body**, which is the half of that capture set `CLAUDE.md` records as
 /// trustworthy byte-for-byte.
-const GID_FLAGS_SHA1_BINARY: u32 = 0x2;
+pub const GID_FLAGS_SHA1_BINARY: u32 = 0x2;
+
+/// `NV2080_CTRL_CMD_GPU_GET_GID_INFO` — the control the HOST is asked for its own GPU's UUID
+/// (non-privileged: it is in the nvproxy allow-list, `capability.rs`). Request: `index = 0`,
+/// `flags = ` [`GID_FLAGS_SHA1_BINARY`]; reply: `length = 16`, `data[0..16]`.
+pub const NV2080_CTRL_CMD_GPU_GET_GID_INFO: u32 = 0x2080_014a;
 
 /// `sizeof(NV2080_CTRL_BIOS_GET_SKU_INFO_PARAMS)` (`ogkm-580: ctrl2080bios.h:376-386`):
 /// `BoardID` u32, `chipSKU[9]`, `chipSKUMod[5]`, u32 `skuConfigVersion` (3 bytes of
@@ -435,11 +440,24 @@ pub struct FbRegion {
 /// identity*, and the only properties claimed for it are determinism, non-zeroness, and
 /// distinctness for distinct seeds.
 ///
-/// ⚠ **Scope, stated because it is a real limit and not a rounding error.** The seed the
-/// device uses today is its own chip row, so two nvkvm GPUs presented to one guest from
-/// the same chip row would carry the **same** UUID. That is wrong and it is known: the
-/// fix is a per-device `gpu-uuid` declaration from the VMM, [`GpuGid::from_bytes`] is the
-/// door it comes through, and until it exists this port is single-GPU on this axis.
+/// ★ **Scope (resolved 2026-10-08 for the device, narrowed for everything else).** A UUID that
+/// is a function of the chip row alone collides: two nvkvm GPUs of one row, in one VM or in two,
+/// would carry the same one, and orchestrators and cluster tools that key on the GPU id fail
+/// on that (this is a COLLISION problem; it is not about hiding the host GPU). So the kf3
+/// device no longer lets the chip row decide: its `gpu-uuid` property resolves ONE per-VM,
+/// per-device value (`kf_rm::gpuuid`: `auto` = a domain-separated SHA-256 over the VM's identity,
+/// the host GPU's UUID and the device's slot; `random`; `host`; or an explicit value), and it
+/// arrives here through [`GpuGid::from_bytes`] / [`GpuGid::parse`]. [`GpuGid::derive`] below
+/// remains the fallback of a policy built without a declared value (every GPU-free test, and a
+/// board whose `gpu_gid` is `None`), and it is still per chip row — which is exactly why the
+/// device never uses it.
+///
+/// ⊘ Still open: the UUID the guest reads is not NVIDIA's (the closed physical RM's SHA-1 over
+/// the ECID); nothing is claimed beyond determinism, non-zeroness and distinctness. A guest
+/// that hands its UUID back to the host (UVM's `UvmGpuMappingAttributes`, `GET_UUID_FROM_GPU_ID`
+/// on a host client) is not translated anywhere in v3 today — no v3 path carries a guest UUID
+/// to the host (`rg -i uuid crates/kf-*`, 2026-10-08), and the day one does it must map the
+/// guest value to the host's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GpuGid([u8; RM_SHA1_GID_SIZE]);
 
@@ -456,6 +474,23 @@ impl GpuGid {
             i += 1;
         }
         None
+    }
+
+    /// Parse the text form of a UUID — `GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` (what
+    /// `nvidia-smi -L` prints, [`GpuGid`]'s `Display`), the same without the `GPU-` prefix, or
+    /// 32 bare hex digits. Hex digits of either case; nothing else is accepted — no spaces, no
+    /// newline, no `0x`, no sign, no other prefix, no trailing text.
+    ///
+    /// The input is length-checked before it is looked at, so a hostile property string costs
+    /// a constant amount of work.
+    ///
+    /// # Errors
+    /// [`GpuGidTextError`], by kind; [`GpuGidTextError::AllZero`] for the one value the guest
+    /// reads as *"not initialized"*.
+    pub fn parse(text: &str) -> Result<GpuGid, GpuGidTextError> {
+        let body = text.strip_prefix("GPU-").unwrap_or(text);
+        let bytes = parse_uuid_body(text.len(), body)?;
+        GpuGid::from_bytes(bytes).ok_or(GpuGidTextError::AllZero)
     }
 
     /// The wire bytes, for [`encode_gsp_static_info`].
@@ -501,6 +536,115 @@ impl GpuGid {
         }
         GpuGid(out)
     }
+}
+
+impl core::fmt::Display for GpuGid {
+    /// `GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`, lowercase — the form `nvidia-smi -L` and
+    /// NVML print, and what [`GpuGid::parse`] reads back.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("GPU-")?;
+        write_uuid_body(f, &self.0)
+    }
+}
+
+/// Why a UUID text was refused ([`GpuGid::parse`], [`parse_uuid_text`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuGidTextError {
+    /// Longer than any accepted form (`GPU-` plus 36 characters = 40); `len` is the input's.
+    TooLong {
+        /// The input's length in bytes.
+        len: usize,
+    },
+    /// Not 32 hex digits, nor the 8-4-4-4-12 dashed form of 36 characters.
+    BadLength {
+        /// The length of the body (after any `GPU-`), in bytes.
+        len: usize,
+    },
+    /// A byte that is not an ASCII hex digit (or a dash outside the 8-4-4-4-12 positions).
+    BadChar {
+        /// Byte offset within the body (after any `GPU-`).
+        at: usize,
+    },
+    /// All 16 bytes zero — the value the guest reads as *"GSP static info not initialized"*.
+    AllZero,
+}
+
+impl core::fmt::Display for GpuGidTextError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            GpuGidTextError::TooLong { len } => {
+                write!(f, "{len} bytes is longer than any UUID form (at most 40)")
+            }
+            GpuGidTextError::BadLength { len } => write!(
+                f,
+                "{len} characters is neither 32 hex digits nor the 36-character 8-4-4-4-12 form"
+            ),
+            GpuGidTextError::BadChar { at } => write!(
+                f,
+                "byte {at} is not a hex digit (or a dash outside the 8-4-4-4-12 positions)"
+            ),
+            GpuGidTextError::AllZero => f.write_str(
+                "all-zero is the value the guest driver reads as \"not initialized\" and fails on",
+            ),
+        }
+    }
+}
+
+/// The longest accepted text: `GPU-` plus the 36-character dashed form.
+const MAX_UUID_TEXT: usize = 4 + 36;
+
+/// Parse a bare UUID text (no `GPU-` prefix): 32 hex digits or the dashed 8-4-4-4-12 form.
+/// Unlike [`GpuGid::parse`] the all-zero value is returned, not refused — a caller that
+/// treats it as *"unset"* (QEMU's `-uuid` default) needs to see it.
+///
+/// # Errors
+/// [`GpuGidTextError`] other than `AllZero`.
+pub fn parse_uuid_text(text: &str) -> Result<[u8; RM_SHA1_GID_SIZE], GpuGidTextError> {
+    parse_uuid_body(text.len(), text)
+}
+
+fn parse_uuid_body(
+    whole_len: usize,
+    body: &str,
+) -> Result<[u8; RM_SHA1_GID_SIZE], GpuGidTextError> {
+    if whole_len > MAX_UUID_TEXT {
+        return Err(GpuGidTextError::TooLong { len: whole_len });
+    }
+    let b = body.as_bytes();
+    let dashed = match b.len() {
+        32 => false,
+        36 => true,
+        len => return Err(GpuGidTextError::BadLength { len }),
+    };
+    let mut out = [0u8; RM_SHA1_GID_SIZE];
+    let mut nibbles = 0usize;
+    for (at, c) in b.iter().enumerate() {
+        if dashed && matches!(at, 8 | 13 | 18 | 23) {
+            if *c != b'-' {
+                return Err(GpuGidTextError::BadChar { at });
+            }
+            continue;
+        }
+        let v = match c {
+            b'0'..=b'9' => c - b'0',
+            b'a'..=b'f' => c - b'a' + 10,
+            b'A'..=b'F' => c - b'A' + 10,
+            _ => return Err(GpuGidTextError::BadChar { at }),
+        };
+        out[nibbles / 2] |= v << (4 * (1 - nibbles % 2));
+        nibbles += 1;
+    }
+    Ok(out)
+}
+
+fn write_uuid_body(f: &mut core::fmt::Formatter<'_>, bytes: &[u8; RM_SHA1_GID_SIZE]) -> core::fmt::Result {
+    for (i, b) in bytes.iter().enumerate() {
+        if matches!(i, 4 | 6 | 8 | 10) {
+            f.write_str("-")?;
+        }
+        write!(f, "{b:02x}")?;
+    }
+    Ok(())
 }
 
 /// The static facts this port is willing to state about one GPU.
@@ -1068,6 +1212,116 @@ mod tests {
         // The empty seed is a real caller (a chip row of all zeros) and must still be
         // non-zero on the wire.
         assert!(GpuGid::derive(&[]).as_bytes().iter().any(|b| *b != 0));
+    }
+
+    /// The text form round-trips, in the exact shape `nvidia-smi -L` prints, and every
+    /// accepted spelling of one value is the same value.
+    #[test]
+    fn text_form_round_trips_and_accepts_every_spelling() {
+        let bytes: [u8; RM_SHA1_GID_SIZE] = [
+            0x51, 0xb0, 0x86, 0x78, 0x78, 0x28, 0x40, 0x15, 0x19, 0x62, 0xa6, 0x5a, 0x7a, 0x48,
+            0x8e, 0x3c,
+        ];
+        let gid = GpuGid::from_bytes(bytes).expect("non-zero");
+        let text = "GPU-51b08678-7828-4015-1962-a65a7a488e3c";
+        assert_eq!(std::format!("{gid}"), text);
+        assert_eq!(GpuGid::parse(text), Ok(gid));
+        assert_eq!(GpuGid::parse("51b08678-7828-4015-1962-a65a7a488e3c"), Ok(gid));
+        assert_eq!(GpuGid::parse("51b08678782840151962a65a7a488e3c"), Ok(gid));
+        assert_eq!(GpuGid::parse("GPU-51B08678-7828-4015-1962-A65A7A488E3C"), Ok(gid));
+        // Every byte value survives (nibble order, not just "some hex").
+        for b in 0u8..=255 {
+            let mut v = [0x5au8; RM_SHA1_GID_SIZE];
+            v[7] = b;
+            v[15] = !b;
+            let g = GpuGid::from_bytes(v).expect("non-zero");
+            assert_eq!(GpuGid::parse(&std::format!("{g}")), Ok(g), "{b:#x}");
+        }
+    }
+
+    /// Hostile property strings are refused by kind, and cheaply: the length gate is first.
+    #[test]
+    fn text_form_refuses_everything_else() {
+        let good = "GPU-51b08678-7828-4015-1962-a65a7a488e3c";
+        assert!(GpuGid::parse(good).is_ok());
+        let cases: &[(&str, GpuGidTextError)] = &[
+            ("", GpuGidTextError::BadLength { len: 0 }),
+            ("GPU-", GpuGidTextError::BadLength { len: 0 }),
+            ("auto", GpuGidTextError::BadLength { len: 4 }),
+            // trailing newline / space / NUL: the shell-quoting accidents
+            (
+                "GPU-51b08678-7828-4015-1962-a65a7a488e3c\n",
+                GpuGidTextError::TooLong { len: 41 },
+            ),
+            (
+                "51b08678-7828-4015-1962-a65a7a488e3c ",
+                GpuGidTextError::BadLength { len: 37 },
+            ),
+            (
+                "51b08678-7828-4015-1962-a65a7a488e3\0",
+                GpuGidTextError::BadChar { at: 35 },
+            ),
+            // dashes in the wrong place
+            (
+                "51b086787-828-4015-1962-a65a7a488e3c",
+                GpuGidTextError::BadChar { at: 8 },
+            ),
+            (
+                "51b08678-7828-4015-1962a65a7a488e3c-",
+                GpuGidTextError::BadChar { at: 23 },
+            ),
+            // not hex
+            (
+                "GPU-51b08678-7828-4015-1962-a65a7a488e3g",
+                GpuGidTextError::BadChar { at: 35 },
+            ),
+            (
+                "0x51b0867878284015 1962a65a7a488e3c",
+                GpuGidTextError::BadLength { len: 35 },
+            ),
+            (
+                "+1b08678782840151962a65a7a488e3c",
+                GpuGidTextError::BadChar { at: 0 },
+            ),
+            // other prefixes, and a lowercase one, are not spellings of this
+            (
+                "gpu-51b08678-7828-4015-1962-a65a7a488e3c",
+                GpuGidTextError::BadLength { len: 40 },
+            ),
+            (
+                "MIG-51b08678-7828-4015-1962-a65a7a488e3c",
+                GpuGidTextError::BadLength { len: 40 },
+            ),
+            // non-ASCII must not panic on a char boundary
+            (
+                "GPU-51b08678-7828-4015-1962-a65a7a488e\u{e9}",
+                GpuGidTextError::BadChar { at: 34 },
+            ),
+        ];
+        for (text, want) in cases {
+            assert_eq!(GpuGid::parse(text), Err(*want), "{text:?}");
+        }
+        // Long input is refused before it is examined.
+        let long = "a".repeat(1 << 20);
+        assert_eq!(GpuGid::parse(&long), Err(GpuGidTextError::TooLong { len: 1 << 20 }));
+    }
+
+    /// All-zero is refused in every spelling; `parse_uuid_text` returns it so a caller can treat
+    /// it as "unset".
+    #[test]
+    fn text_form_refuses_all_zero() {
+        for z in [
+            "GPU-00000000-0000-0000-0000-000000000000",
+            "00000000-0000-0000-0000-000000000000",
+            "00000000000000000000000000000000",
+        ] {
+            assert_eq!(GpuGid::parse(z), Err(GpuGidTextError::AllZero), "{z}");
+        }
+        assert_eq!(
+            parse_uuid_text("00000000-0000-0000-0000-000000000000"),
+            Ok([0u8; RM_SHA1_GID_SIZE])
+        );
+        assert!(parse_uuid_text("GPU-00000000-0000-0000-0000-000000000000").is_err());
     }
 
     #[test]

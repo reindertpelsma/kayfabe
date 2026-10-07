@@ -47,7 +47,10 @@ use std::os::unix::ffi::OsStrExt as _;
 /// [`kf3_timer_view`] to ABI 19; the old Windows branch called its narrower surface 13.
 /// 21 (2026-10-07): ABI 20 plus the default-off `KF3_BAR0_TRACE` diagnostic's read-trap verb
 /// ([`kf3_set_read_trap`], `crate::raw_unsafe::ReadTrapFn`).
-pub const KF3_ABI: u32 = 21;
+/// 22 (2026-10-08, `claude/gpu-uuid-per-vm-20261008`): ABI 21 plus the per-VM GPU UUID —
+/// [`kf3_realize`] gains `gpu_uuid`, `vm_id` (both nullable strings) and `pci_devfn` after
+/// `gop_efi`.
+pub const KF3_ABI: u32 = 22;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -114,7 +117,7 @@ pub extern "C" fn kf3_abi_version() -> u32 {
 /// Realize the device and start its register drainer. Returns 0 and a handle, or -1 with a message.
 ///
 /// # Safety
-/// `guest_driver` and `gop_efi` are each null or a NUL-terminated string; `out` is writable; `err`
+/// `guest_driver`, `gop_efi`, `gpu_uuid` and `vm_id` are each null or a NUL-terminated string; `out` is writable; `err`
 /// is null or writable for `err_len` bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn kf3_realize(
@@ -129,6 +132,9 @@ pub unsafe extern "C" fn kf3_realize(
     display_broker: u32,
     display_max_fps: u32,
     gop_efi: *const c_char,
+    gpu_uuid: *const c_char,
+    vm_id: *const c_char,
+    pci_devfn: u32,
     out: *mut *mut c_void,
     err: *mut c_char,
     err_len: usize,
@@ -139,7 +145,7 @@ pub unsafe extern "C" fn kf3_realize(
         if p.is_null() {
             return None;
         }
-        // SAFETY: `p` is `guest_driver` or `gop_efi`, each of which the caller promises is null
+        // SAFETY: `p` is `guest_driver`, `gop_efi`, `gpu_uuid` or `vm_id`, each of which the caller promises is null
         // (returned above) or a NUL-terminated string.
         Some(unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned()).filter(|s| !s.is_empty())
     };
@@ -152,6 +158,8 @@ pub unsafe extern "C" fn kf3_realize(
     };
     let guest = text(guest_driver);
     let gop_efi = text(gop_efi);
+    let gpu_uuid = text(gpu_uuid);
+    let vm_id = text(vm_id);
     let cfg = Config {
         gpu_minor,
         fb_mb,
@@ -165,6 +173,9 @@ pub unsafe extern "C" fn kf3_realize(
         display_broker_vram: vram.unwrap_or_default(),
         display_max_fps,
         gop_efi,
+        gpu_uuid,
+        vm_id,
+        pci_devfn,
     };
     match Device::realize(&cfg) {
         Ok(d) => {

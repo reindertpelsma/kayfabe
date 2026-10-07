@@ -144,6 +144,11 @@ pub struct HostFacts {
     /// `None` = the host did not answer: **cosmetic, so never a realize failure** — the ROM carries
     /// `kf_abi::vbios::NEUTRAL_VBIOS_VERSION` and the guest's ask is refused, as before.
     pub vbios_version: Option<(u32, u8)>,
+    /// ★ The HOST GPU's own UUID (`GPU_GET_GID_INFO`, SHA-1 binary, `0x2080014a`, unprivileged) —
+    /// an INPUT to the guest's per-VM UUID (`crate::gpuuid`: `auto` hashes it, `host` serves it),
+    /// never served as it is unless `gpu-uuid=host`. `None` = the host did not answer; then
+    /// `auto` and `host` refuse by name and `random` / an explicit value still work.
+    pub host_gid: Option<kf_abi::gspstaticinfo::GpuGid>,
     /// ★ The host's reply to libcudart's `PERF_GET_LEVEL_INFO_V2` question
     /// (`kf_abi::cudartinit::perf_level_info_v2_request`, `0x2080200b`, NON_PRIVILEGED), asked
     /// once at realize. `None` = the host refused it, and the guest's identical ask is refused
@@ -415,6 +420,13 @@ pub const PROVENANCE: &[(&str, Source)] = &[
         },
     ),
     (
+        "host_gid",
+        Source::HostControl {
+            cmd: 0x2080_014a,
+            name: "GPU_GET_GID_INFO [flags FORMAT_BINARY|TYPE_SHA1] (an input to the per-VM UUID; a host that does not answer = None: gpu-uuid=auto/host then refuse by name)",
+        },
+    ),
+    (
         "perf_level_info_v2",
         Source::HostControl {
             cmd: 0x2080_200b,
@@ -586,6 +598,31 @@ pub fn derive_vbios_version(reply: &[u8]) -> Result<(u32, u8), FactRefusal> {
         why: "OEM revision wider than the ROM's byte",
     })?;
     Ok((rev, oem))
+}
+
+/// ★ `host_gid` from a `GPU_GET_GID_INFO` reply asked `index = 0`, `flags =
+/// kf_abi::gspstaticinfo::GID_FLAGS_SHA1_BINARY`: `length` must be [`RM_SHA1_GID_SIZE`] and
+/// `data[0..16]` non-zero.
+///
+/// # Errors
+/// [`FactRefusal::ShortReply`]; [`FactRefusal::Unservable`] for a length other than 16 or an
+/// all-zero UUID.
+pub fn derive_host_gid(reply: &[u8]) -> Result<kf_abi::gspstaticinfo::GpuGid, FactRefusal> {
+    use kf_abi::gspstaticinfo as g;
+    let cmd = g::NV2080_CTRL_CMD_GPU_GET_GID_INFO;
+    need(cmd, reply, g::GID_INFO_SIZE)?;
+    if le32(reply, 8) != Some(g::RM_SHA1_GID_SIZE as u32) {
+        return Err(FactRefusal::Unservable {
+            cmd,
+            why: "the host's GID length is not the 16 bytes of a binary SHA-1 UUID",
+        });
+    }
+    let mut b = [0u8; g::RM_SHA1_GID_SIZE];
+    b.copy_from_slice(&reply[12..12 + g::RM_SHA1_GID_SIZE]);
+    g::GpuGid::from_bytes(b).ok_or(FactRefusal::Unservable {
+        cmd,
+        why: "the host's GPU UUID is all-zero",
+    })
 }
 
 /// ★ The GSP feature mask from the host's `GSP_GET_FEATURES` reply (word 0).

@@ -19,6 +19,7 @@ pub mod dispsw;
 pub mod ffi_unsafe;
 pub mod gop;
 pub mod gpucopy;
+pub mod gpuuid;
 pub mod hostfacts;
 pub mod mem;
 pub mod prof;

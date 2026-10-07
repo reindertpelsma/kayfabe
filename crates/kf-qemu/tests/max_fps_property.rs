@@ -20,6 +20,9 @@ fn config(display: bool, display_max_fps: u32) -> Config {
         gop: false,
         gop_efi: None,
         display_max_fps,
+        gpu_uuid: None,
+        vm_id: None,
+        pci_devfn: 0,
     }
 }
 
