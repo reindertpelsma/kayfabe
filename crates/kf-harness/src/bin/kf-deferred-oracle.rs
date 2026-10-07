@@ -146,8 +146,9 @@ struct GrUnit {
     chan: kf_host::Channel,
     put: u32,
     seq: u32,
-    /// `(handle, class)` of the compute object this ring's GR context runs.
-    compute: (u32, u32),
+    /// `(handle, class)` of the compute object this ring's GR context runs. Kept for the
+    /// lifetime of the channel (freed with it); read only at construction.
+    _compute: (u32, u32),
     /// `(handle, class_engine, class_id, engine_id)` of the one 5080 object this ring owns.
     defapi: Option<(u32, u32, u32, u32)>,
 }
@@ -250,7 +251,7 @@ impl GrUnit {
             chan,
             put: 0,
             seq: 0,
-            compute,
+            _compute: compute,
             defapi: None,
         };
         // Bind the compute class on its hardware subchannel, so the channel has a real context
