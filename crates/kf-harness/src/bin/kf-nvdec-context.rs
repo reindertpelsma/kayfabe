@@ -20,10 +20,13 @@ fn run() -> Result<(), String> {
     let space = rm
         .alloc_vaspace_bare()
         .map_err(|e| format!("space: {e:?}"))?;
-    let engine = if std::env::var_os("KF_NVENC_CONTEXT").is_some_and(|v| v == "1") {
-        kf_abi::submit::engine_type_nvenc(0).ok_or("NVENC0 engine")?
-    } else {
-        kf_abi::submit::engine_type_nvdec(0).ok_or("NVDEC0 engine")?
+    let engine = match std::env::var("KF_NVENC_CONTEXT_INDEX") {
+        Ok(s) => s
+            .parse::<u32>()
+            .ok()
+            .and_then(kf_abi::submit::engine_type_nvenc)
+            .ok_or("KF_NVENC_CONTEXT_INDEX must select NVENC0..3")?,
+        Err(_) => kf_abi::submit::engine_type_nvdec(0).ok_or("NVDEC0 engine")?,
     };
     let mut ring = HostRing::on_engine(&rm, space, engine)?;
     println!(

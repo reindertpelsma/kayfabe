@@ -1,0 +1,4 @@
+START revision=203a96170ea86ff4a0203b867cf744b2e8b6e33d dirty=0
+kf-host: channel birth h=0xcafe0008 engine=0x1b reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+VIDEO_CONTEXT_VERDICT=FAIL birth: Other(87)
+EXIT 1

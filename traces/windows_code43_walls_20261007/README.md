@@ -374,3 +374,38 @@ All nonempty public submissions still refuse before PB writes; host-only FIFO
 fence execution and release are the native oracle. Hardware NVENC pending.
 Channel tests87 passed and the extended native oracle compiles; Clippy new0.
 Full RM suite after the bounded property observer:616 passed.
+
+## Run22: NVDEC promotion succeeds; next Falcon context is NVENC1
+
+Product/QEMUb52da0c7 (full identity in [command](run22-command.json));
+[status](run22-status.json), [trace](run22-qemu.log.gz),
+[requests](run22-requests.log), [completion](run22-complete.json),
+[host health](run22-host-health.txt), [9/9 gates](run22-gates.log),
+[immutable build](run22-build.log). Code43/smi9 persist; BAR0 decoding is
+already disabled at sampling time, so capability capture attempts no page read.
+The exact source identifier is retained in command and build records.
+
+NVDEC0 clientc1d00018/ff040003 births as an actual USER host channel with owned
+C9B0 object, then legacy Falcon GPU_PROMOTE_CTX returns0. Its kernel guest
+context VA1203cd000 +4KiB is never used on the host. Seven Translated channels
+birth; two actual scrubber GPU submissions complete, GP_GET2. Decoder retires
+with no submissions, no dead state and no codec completion is authored.
+
+Next: clientc1d0001a/ff040005 kernel engine1c = NVENC1 has no birth path;
+its legacy Falcon promotion carries VA1203ce000 +4KiB, entryCount0, and
+returns0x56. Native owned encoder construction/fence oracle is next.
+The scalar property observer captures0080170f on clientc1d00016's COPY2 channel
+ff040002: property0 ENGINE_TIMESLICE_IN_MICROSECONDS, value0xfa0 =4000.
+This independent channel-specific timeslice still refuses; no causal claim
+about the current Code43 outcome follows from that refusal alone.
+
+Run22 [fresh watchdog recovery](run22-watchdog-recovery.log) verifies read-only
+access and cleanup; [journal comparison](run22-watchdog-comparison.json) retains
+all24 complete assertions identical to run21 despite the further NVDEC RPC
+progress. The outer NVCD envelope is still one byte short; no valid checksum
+or journal-only causal assignment is asserted.
+
+Native203a9617 NVENC0 test: USER allocation succeeds but host bind refuses
+Other(87). The Windows request is NVENC1, not NVENC0 (`cl2080_notification.h:313`).
+The oracle now takes a bounded explicit KF_NVENC_CONTEXT_INDEX selecting0..3;
+probe the requested instance1 next. No guest NVENC admission yet.
