@@ -1296,3 +1296,19 @@ leaves the engine's notifier address on the old backing, which is still inside t
 - Still to do in code (SHOULD-FIX 3 and 5): key `RULED_NOTIFIERS` by driver version from the
   generated tables, and take `vfguest.rs`'s status offset and control ids/sizes from the generated
   tables.
+
+**Native oracle at 9b178991, before run33** ([log](gr-tier-native-run33.log); 9/9 gates, 11/11
+USER births). Measured: objects of the derived classes 0x902d, 0xa140, 0xc997 and the context's
+0xc9c0 on a USER channel; run32's whole 46-word segment unchanged plus a release: 21 GR methods
+re-authored (both notifier addresses through the windows), subchannel 5 inert, completed by the
+engine (guest semaphore and guest GP_GET = 2 written by the engine, zero CPU stores); completion
+on `FIFO_EVENT_MTHD`, not GR0; a 3D notifier address no row covers refused at bind
+(`VirtualUnresolved`) with GP_GET unmoved; the CE inert arm as before; everything released. Xid
+count unchanged (5); display active. Not covered: the guest-vector relay.
+
+**Falsifier, stated before run33.** Hypothesis: the abort at VFIO 2861 follows from Windows' first
+kernel GR work not completing. It is wrong if run33's GR channel retires GP 0
+(`gp_get_by_engine=(true, n≥1)` on token 0x3, an `NSI RELAY` line) and the abort still sits at
+VFIO ≤ 2866. **Prediction:** the GR channel retires its first segment, the guest's GR0 vector is
+raised (`NSI RELAY`), and the abort moves past 2861 — or the GR channel is refused by name at a
+later segment, naming the next method set.
