@@ -11,6 +11,17 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-07
 
+**Windows loop, 2026-10-08 (branch `claude/code43-deferred-20261008`, runs 47-52, code `83881ecc`; [record](../traces/windows_code43_walls_20261007/README.md#stop-loop-2026-10-08-after-6-hardware-runs-runs-47-52-owner-decisions-waiting)).**
+With `KF3_DEFERRED_API=1` the software-method wall of runs 44-46 is gone: Windows registers INITIALIZE_CTX,
+PROMOTE_CTX and EVICT_CTX per user GR TSG, all triggers are `DONE` (69 in run49), no channel dies, and the guest
+keeps the NVIDIA adapter at Code 0 and `nvidia-smi` at exit 0 with no TDR/bugcheck for 559 s (run48, 46 samples),
+through a clean ACPI shutdown. Idle guest only; not a pass claim. **Next wall:** D3D11/D3D12 hardware device
+creation returns `D3DERR_OUTOFVIDEOMEMORY` (`0x8876017c`), also with a 1 GiB BAR1 (BAR1 falsified, run52); NVML
+FB fields are `N/A`. Prepared: the FB/BUS info refusal now logs the whole requested index list (one boot of a
+tip build records what Windows asks). **Owner:** EVICT_CTX is a real act on the host twin; pstate, RUSD and the
+utilization extras are not served (reasons in the record); the memory fields do not depend on a query-time control.
+Task B (`KF3_SW_RUNLIST_HOST_OWNED`) was not needed and stays off.
+
 **Deferred API, Translated-only (OWNER_RULINGS §U), 2026-10-08 (branch
 `claude/deferred-translated-20261007`, code `83881ecc`; answers the next paragraph's decision 1
 for the case it really is).** The "inert" software method `0x200` on subchannel 5 is

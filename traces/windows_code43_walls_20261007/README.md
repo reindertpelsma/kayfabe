@@ -2907,3 +2907,57 @@ deferred-API triggers (all served), host afterwards unchanged (Xid 61, no QEMU, 
 - Candidate 2 of run50 is gone. Candidate 1 (FB info, `0x20801303`/`AdapterRAM 0`) is still untested, and
   run51 showed the memory fields do not depend on a query-time control, so the D3D failure may sit in boot-time
   state rather than in a request in the failing call's window (run50: nothing new reaches the RM there).
+
+## Stop: loop 2026-10-08 after 6 hardware runs (runs 47-52), owner decisions waiting
+
+Runs 47-52 used the loop's six hardware runs (host healthy after each: Xid 61 unchanged, no QEMU, NBD
+disconnected, P8). Code under test throughout: `83881ecc` (binary `kf3-bins/621310b3`, a docs-only descendant).
+Later commits on this branch change only a diagnostic log line (`W349REFUSE-LIST`), tests, the runner wrapper
+(`--bar1-mb`) and docs; that binary was not booted.
+
+**What moved.** The wall of runs 44-46 (the software method `0x200` on the kernel GR channel's subchannel 5)
+is gone: with `KF3_DEFERRED_API=1` the three bundles Windows registers (INITIALIZE_CTX, PROMOTE_CTX and, newly
+seen, EVICT_CTX) are triggered and `DONE`, 69 triggers in run49 and 0 refusals. In runs 47, 48, 49 and 52 the
+guest reached the end of every window with the NVIDIA adapter at Code 0 and `nvidia-smi` exit 0 (46 samples
+to 559 s in run48), no TDR, no bugcheck, no `DEAD`. That meets the goal's three criteria for an idle guest in
+one configuration; it is not a pass claim (idle desktop, no GPU workload succeeded, `nvidia-smi` fields
+partly `N/A`, no repeat on a second boot of a clean image beyond runs 47-49/52 which all behaved alike).
+Comparison with the VFIO reference: `abort_point.py` no longer discriminates (its `teardown_at=659` is an early
+prelude figure in runs 44-52); `forecast` needs the decoded VFIO observer export, which is not on the host, so
+the comparison made here is guest-side state, not RPC-sequence distance.
+
+**The current wall (not in the goal's three criteria, but the next real gap).** A D3D hardware device cannot be
+created: `D3D11CreateDevice` and `D3D12CreateDevice` on the NVIDIA adapter return `0x8876017c`
+(`D3DERR_OUTOFVIDEOMEMORY`, inferred decode), also with a 1 GiB BAR1 (run50 at 128 MiB, run52 at 1 GiB); the
+software adapter succeeds; nothing new reaches the RM during the failing call (run50). NVML shows FB total, used
+and free as `N/A`, `AdapterRAM` 0. Untested candidate: the FB info (`0x20801303`) refused at boot with index 1;
+which indices Windows asks is not recorded yet (only the first unmeasured one is logged). **Next step prepared:**
+the refusal now logs the whole requested index list (`W349REFUSE-LIST`, GPU-free tests pass); one boot of a
+binary built at this branch's tip gives the list that an exposure table needs.
+
+**Owner decisions / answers waiting.**
+1. *Ruling B on the deferred bundles.* INITIALIZE_CTX and PROMOTE_CTX are satisfied by the twin's own context;
+   **EVICT_CTX is a real act on the user TSG's host twin** (host ring(s) off the runlist, context unbound),
+   triggered by the kernel GR channel right after PROMOTE. It ran 69 times in run49 with no ill effect. Please
+   confirm it is intended (§U / ruling B), and that Windows never reading the context buffer back is acceptable
+   (still inferred; the D3D failure keeps that open).
+2. *`pstate` (`0x20802068`, unprivileged, `{currPstate}`).* Not served. The host's P-state is a tenant-visible
+   quantity (class d of the owner's exposure rule), so a value must be a documented constant or this guest's own
+   accounting, and none exists. Options: (a) keep refused (`N/A`); (b) a documented constant (which?); (c) serve
+   the host's P-state (not recommended). Waiting for a value rule.
+3. *RUSD (`0x20800afe`/`0x20800aff`, flags `0xc0`: INTERNAL, kernel-only).* Privileged-looking; not served. A
+   stub does not remove the `N/A`; filling the page means kayfabe authoring telemetry into guest memory.
+4. *`utilization.gpu` extras (`0x2080a097`, `0x20810108` + class `0x2081`).* Unknown semantics (GSS-legacy and
+   BINAPI have no ogkm layout); not served and not decided. `0x00800294` (brand caps, unprivileged, a bitmask,
+   host-derivable) can be served truthfully, but whether it feeds `utilization.gpu` is untested.
+5. *Memory fields.* Run51 shows `memory.used`/`memory.total` add no request over `name`, so serving a control
+   will not by itself change them; per the coordinator's rule total must be the store size and used/free this
+   guest's own accounting. No FB used/free accounting for the Windows path was found in this loop; if the list
+   from the next boot asks for such indices, that gap is the answer to report, not a host number.
+6. *Software-runlist submit (`KF3_SW_RUNLIST_HOST_OWNED`, task B).* Not used in runs 47-52, and not needed for the
+   idle state above (the refused `0x20801111` is tolerated). Still awaiting owner confirmation; keep off.
+7. *Exposure tables and the single-field re-run* (owner message, rules 2, 4, 5) are not delivered, because no
+   control was served: items 2-5 above are the reasons. The per-field mapping and ogkm layouts are in run51's
+   table.
+
+Branch `claude/code43-deferred-20261008`; evidence for runs 47-52 in this directory.
