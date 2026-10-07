@@ -57,6 +57,15 @@ pub const DISABLE_CHANNELS: u32 = kf_abi::submit::NV2080_CTRL_CMD_FIFO_DISABLE_C
 pub const TSG_PREEMPT: u32 = kf_abi::submit::NVA06C_CTRL_CMD_PREEMPT;
 /// `NV_ERR_INSUFFICIENT_PERMISSIONS`.
 const NV_ERR_INSUFFICIENT_PERMISSIONS: u32 = 0x1b;
+/// `NV_ERR_INVALID_OBJECT_HANDLE` (`nvstatuscodes.h:80`).
+const NV_ERR_INVALID_OBJECT_HANDLE: u32 = 0x33;
+/// ★ 2026-10-07 (Windows run29): `NV0080_CTRL_DMA_SET_DEFAULT_VASPACE` (`ogkm-580.65.06:
+/// ctrl0080dma.h:748-778`) — `{NvHandle hVASpace}`, `[IN]`: make an allocated address-space
+/// object the Device's default. Windows sends it for each new kernel client's Device right after
+/// allocating that Device's `FERMI_VASPACE_A` (vfio-10 RPC 2846). Answered from this link's own
+/// Device/VA-space records; nothing reaches the host (the default only decides which VA space a
+/// later `hVASpace = 0` channel resolves to, [`ChannelPolicy::device_default_va`]).
+pub const SET_DEFAULT_VASPACE: u32 = 0x0080_1812;
 /// `GT200_DEBUGGER` (`ogkm-580: resource_list.h:186-196`, parent `Device`,
 /// `NV83DE_ALLOC_PARAMETERS` required).
 pub const GT200_DEBUGGER: u32 = 0x83de;
@@ -497,6 +506,15 @@ pub struct ChannelPolicy {
     /// ORIGINAL — the same relation `barpde::PageDirPolicy` keeps, needed here because a channel
     /// (via its context share) may name the alias while the root was stated for the original.
     vas_aliases: std::collections::BTreeMap<(u32, u32), (u32, u32)>,
+    /// ★ 2026-10-07: `(hClient, hVASpace)` → the `hParent` it was allocated under — the check
+    /// `serverutilGetResourceRefWithParent(client, device, hVASpace, VaSpaceApi)` makes
+    /// (`device_share.c:376-386`).
+    vas_parents: std::collections::BTreeMap<(u32, u32), u32>,
+    /// ★ 2026-10-07: Devices whose RM `pVASpace` is set: by `SET_DEFAULT_VASPACE`, or because a
+    /// `FERMI_VASPACE_A` with `index = GPU_DEVICE` acquired (and so lazily created) the Device's
+    /// default (`deviceGetDefaultVASpace`, `device_share.c:322-347`). A second set on such a Device
+    /// is refused as RM refuses it (`device_share.c:390-394`).
+    device_vas_bound: std::collections::BTreeSet<(u32, u32)>,
     /// The deferred outcome of the command last carried (`CommandPolicy::defers`).
     pending: Option<kf_gsp::Deferred>,
     /// Statements carried.
@@ -525,6 +543,8 @@ impl ChannelPolicy {
             ctxshares: Default::default(),
             vas_objects: Default::default(),
             vas_aliases: Default::default(),
+            vas_parents: Default::default(),
+            device_vas_bound: Default::default(),
             pending: None,
             carried: 0,
             refused: 0,
@@ -705,6 +725,15 @@ impl ChannelPolicy {
             }
             Some(AllocParams::VaSpace) => {
                 self.vas_objects.insert((h.client, h.handle));
+                self.vas_parents.insert((h.client, h.handle), h.parent);
+                // `index = GPU_DEVICE` acquires the parent Device's default, creating it if needed.
+                if crate::rmrpc::alloc_params_window(&self.abi, body)
+                    .and_then(|p| self.abi.decode_vaspace_index(p))
+                    == Some(kf_abi::bringup::NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE)
+                    && self.devices.contains_key(&(h.client, h.parent))
+                {
+                    self.device_vas_bound.insert((h.client, h.parent));
+                }
                 let first = *self
                     .vas_under
                     .entry((h.client, h.parent))
@@ -897,6 +926,9 @@ impl ChannelPolicy {
                 .insert(st.vaspace.0);
             self.vas_objects.insert((st.client.0, st.vaspace.0));
             return None;
+        }
+        if h.cmd == SET_DEFAULT_VASPACE {
+            return self.set_default_vaspace(cmd, &h);
         }
         let Some(params) = h
             .params_at
@@ -1381,6 +1413,80 @@ impl ChannelPolicy {
         }
     }
 
+    /// ★ 2026-10-07: `NV0080_CTRL_DMA_SET_DEFAULT_VASPACE` on a Device this link knows, with RM's
+    /// checks in RM's order (`deviceSetDefaultVASpace_IMPL`, `ogkm-580.65.06:
+    /// src/nvidia/src/kernel/gpu/device_share.c:363-400`): a null handle is INVALID_ARGUMENT; a
+    /// handle that is not a VA-space object allocated under this Device is INVALID_OBJECT_HANDLE;
+    /// a Device that already has a VA space is INVALID_OBJECT_HANDLE. Otherwise the VA space
+    /// becomes the Device's default and the `[IN]` params are echoed (the vfio-10 reply at 2846
+    /// is the request's own four bytes). A control on an object that is not a known Device is not
+    /// this link's (`None`).
+    fn set_default_vaspace(
+        &mut self,
+        cmd: &RpcCommand,
+        h: &kf_abi::view::RpcControlReq,
+    ) -> Option<Reply> {
+        let device = (h.client, h.object);
+        if !self.devices.contains_key(&device) {
+            return None;
+        }
+        // `sizeof(NV0080_CTRL_DMA_SET_DEFAULT_VASPACE_PARAMS)` — one `NvHandle`.
+        let p = (h.params_size == 4)
+            .then(|| {
+                h.params_at
+                    .checked_add(4)
+                    .and_then(|e| cmd.payload.get(h.params_at..e))
+            })
+            .flatten();
+        let Some(p) = p else {
+            return Some(Self::refusal(
+                NV_ERR_INVALID_ARGUMENT,
+                &format!(
+                    "SET_DEFAULT_VASPACE params are {} bytes, not 4",
+                    h.params_size
+                ),
+                cmd,
+            ));
+        };
+        let vas = u32::from_le_bytes([p[0], p[1], p[2], p[3]]);
+        if vas == 0 {
+            return Some(Self::refusal(
+                NV_ERR_INVALID_ARGUMENT,
+                "SET_DEFAULT_VASPACE names the null handle",
+                cmd,
+            ));
+        }
+        if self.vas_parents.get(&(h.client, vas)) != Some(&h.object) {
+            return Some(Self::refusal(
+                NV_ERR_INVALID_OBJECT_HANDLE,
+                &format!(
+                    "SET_DEFAULT_VASPACE {:#x}:{vas:#x} is not a VA space under Device {:#x}",
+                    h.client, h.object
+                ),
+                cmd,
+            ));
+        }
+        if !self.device_vas_bound.insert(device) {
+            return Some(Self::refusal(
+                NV_ERR_INVALID_OBJECT_HANDLE,
+                &format!(
+                    "SET_DEFAULT_VASPACE: Device {:#x}:{:#x} already has a VA space",
+                    h.client, h.object
+                ),
+                cmd,
+            ));
+        }
+        self.vas_under.insert(device, vas);
+        eprintln!(
+            "kf-rm: chanlink: Device {:#x}:{:#x} default VA space set to {vas:#x} (SET_DEFAULT_VASPACE)",
+            h.client, h.object
+        );
+        Some(Reply {
+            rpc_result: NV_OK,
+            body: cmd.payload.clone(),
+        })
+    }
+
     /// Resolve only declared Device sharing, with bounded traversal and no cross-GPU fallback.
     fn device_default_va(&self, client: u32, device: u32) -> Option<(u32, u32)> {
         use kf_abi::generated::nvos::{
@@ -1455,6 +1561,9 @@ impl ChannelPolicy {
             .filter(|(c, d)| *c == client && (object == client || *d == object))
             .collect();
         self.devices.retain(|key, _| !removed.contains(key));
+        self.device_vas_bound.retain(|key| !removed.contains(key));
+        self.vas_parents
+            .retain(|&(c, h), _| !(c == client && (object == client || h == object)));
         for d in self.devices.values_mut() {
             if d.share.is_some_and(|target| removed.contains(&target)) {
                 d.revoked = true;
@@ -1691,6 +1800,157 @@ mod tests {
             elements: 1,
             delivered: Vec::new(),
         }
+    }
+
+    /// A `FERMI_VASPACE_A` alloc of `client:handle` under `parent`, `index` first in its params.
+    fn vaspace_alloc(client: u32, parent: u32, handle: u32, index: u32) -> RpcCommand {
+        let payload: Vec<_> = [
+            client,
+            parent,
+            handle,
+            kf_abi::generated::classes::FERMI_VASPACE_A,
+            0,
+            8,
+            0,
+            0,
+            index,
+            0,
+        ]
+        .into_iter()
+        .flat_map(u32::to_le_bytes)
+        .collect();
+        RpcCommand {
+            function: RpcFunction::RmAlloc,
+            code: 103,
+            sequence: 1,
+            payload,
+            elements: 1,
+            delivered: Vec::new(),
+        }
+    }
+
+    /// `NV0080_CTRL_DMA_SET_DEFAULT_VASPACE` on `client:device` naming `vas` (params at +40, the
+    /// 575+ control header).
+    fn set_default(client: u32, device: u32, params: &[u8]) -> RpcCommand {
+        let mut payload = vec![0u8; 40 + params.len()];
+        payload[0..4].copy_from_slice(&client.to_le_bytes());
+        payload[4..8].copy_from_slice(&device.to_le_bytes());
+        payload[8..12].copy_from_slice(&SET_DEFAULT_VASPACE.to_le_bytes());
+        payload[16..20].copy_from_slice(&(params.len() as u32).to_le_bytes());
+        payload[40..].copy_from_slice(params);
+        RpcCommand {
+            function: RpcFunction::RmControl,
+            code: 76,
+            sequence: 1,
+            payload,
+            elements: 1,
+            delivered: Vec::new(),
+        }
+    }
+
+    /// ★ 2026-10-07 (Windows run29, vfio-10 RPCs 2844-2846): RM's checks for
+    /// `SET_DEFAULT_VASPACE`, in order, and the default it sets.
+    #[test]
+    fn set_default_vaspace_follows_rm_checks_and_sets_the_device_default() {
+        use kf_abi::generated::nvos::*;
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+        let mut link = ChannelPolicy::new(
+            abi,
+            kf_abi::GuestOs::Windows,
+            std::sync::Arc::new(|_| ChanAnswer::NotOurs),
+        );
+        let mode = NV_DEVICE_ALLOCATION_VAMODE_OPTIONAL_MULTIPLE_VASPACES;
+        let (client, dev, other) = (0xc1d0_001e, 0xff02_0000, 0xff02_0001);
+        assert!(
+            link.respond(&device_declaration(client, dev, 0, client, mode))
+                .is_none()
+        );
+        assert!(
+            link.respond(&device_declaration(client, other, 0, client, mode))
+                .is_none()
+        );
+        assert!(
+            link.respond(&vaspace_alloc(client, dev, 0xff00_0850, 0))
+                .is_none()
+        );
+        assert!(
+            link.respond(&vaspace_alloc(client, other, 0xff00_0860, 0))
+                .is_none()
+        );
+        let status = |link: &mut ChannelPolicy, cmd: &RpcCommand| {
+            link.respond(cmd).expect("this link answers it").rpc_result
+        };
+        // Not a known Device: not this link's.
+        assert!(
+            link.respond(&set_default(
+                client,
+                0xff03_0000,
+                &0xff00_0850u32.to_le_bytes()
+            ))
+            .is_none()
+        );
+        // Wrong size, null handle, a VA space under another Device, an unknown handle.
+        assert_eq!(status(&mut link, &set_default(client, dev, &[0; 8])), 0x1f);
+        assert_eq!(status(&mut link, &set_default(client, dev, &[0; 4])), 0x1f);
+        let words = |w: u32| w.to_le_bytes();
+        assert_eq!(
+            status(&mut link, &set_default(client, dev, &words(0xff00_0860))),
+            0x33
+        );
+        assert_eq!(
+            status(&mut link, &set_default(client, dev, &words(0xff00_0999))),
+            0x33
+        );
+        // The vfio-10 shape: accepted, echoed, and it is now the Device's default.
+        let ok = link
+            .respond(&set_default(client, dev, &words(0xff00_0850)))
+            .unwrap();
+        assert_eq!(ok.rpc_result, 0);
+        assert_eq!(&ok.body[40..44], &words(0xff00_0850));
+        assert_eq!(
+            link.device_default_va(client, dev),
+            Some((client, 0xff00_0850))
+        );
+        // RM: "succeed only if there is already no VASPACE associated with the device".
+        assert_eq!(
+            status(&mut link, &set_default(client, dev, &words(0xff00_0850))),
+            0x33
+        );
+        // A Device whose default was acquired (index = GPU_DEVICE) already has one.
+        let gpu_device = kf_abi::bringup::NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE;
+        assert!(
+            link.respond(&vaspace_alloc(client, other, 0xff00_0870, gpu_device))
+                .is_none()
+        );
+        assert_eq!(
+            status(&mut link, &set_default(client, other, &words(0xff00_0860))),
+            0x33
+        );
+        // The Device's free forgets it; a new Device under the same handle starts clean.
+        let free = RpcCommand {
+            function: RpcFunction::Free,
+            code: 10,
+            sequence: 1,
+            payload: [client, 0, dev, 0]
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect(),
+            elements: 1,
+            delivered: Vec::new(),
+        };
+        link.respond(&free);
+        assert!(
+            link.respond(&device_declaration(client, dev, 0, client, mode))
+                .is_none()
+        );
+        assert!(
+            link.respond(&vaspace_alloc(client, dev, 0xff00_0880, 0))
+                .is_none()
+        );
+        assert_eq!(
+            status(&mut link, &set_default(client, dev, &words(0xff00_0880))),
+            0
+        );
     }
 
     #[test]

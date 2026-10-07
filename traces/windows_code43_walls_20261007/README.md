@@ -990,3 +990,52 @@ stays refused; if that refusal is fatal it becomes an owner item.
 hSrcResource misread" is wrong if `0x00730301` on ff0a0000 still returns 0x40, or if the abort
 point stays at VFIO index ≤ 2560. **Prediction:** both NV0073 enables return 0 and the abort
 moves to a later display control (0x007302a3 at 2572 is the first candidate kayfabe refuses).
+
+### Run29 result: the hypothesis holds; display setup passes and the abort moves to VFIO 2846
+
+Product/QEMU 23dbc5b7182ecd072c8b004e8cfaadcf176d603e, `kf3-bins/23dbc5b7`, run on 2026-10-07 at
+12:24-12:27 UTC. [command](run29-command.json), [status](run29-status.json),
+[trace](run29-qemu.log.gz), [requests](run29-requests.log), [completion](run29-complete.json),
+[host health](run29-host-health.txt), [unit result](run29-unit-result.txt),
+[9/9 gates](run29-gates.log) (11/11 USER births), [build](run29-build.log),
+[watchdog recovery](run29-watchdog-recovery.log) (cleanup verified). After 97 s of uptime the
+NVIDIA adapter has ConfigManagerErrorCode 43 and nvidia-smi exits 9: Code43 persists. Host
+afterwards: display enabled, P8, no Xid in the last 30 min, no QEMU, NBD disconnected.
+
+**Falsifier not triggered.** Both NV0073 enables on ff0a0000 (hEvents ff060070 and ff1400f0)
+returned 0. **Abort point:** 857 RPCs, teardown at 554 (was 489). The last RPC is
+`NV0080_CTRL_DMA_SET_DEFAULT_VASPACE` 0x00801812 on Device c1d0001e:ff020000, refused
+(unserviced), right after that Device's `FERMI_VASPACE_A` ff000850 and its
+`COPY_SERVER_RESERVED_PDES`: **VFIO index 2846**, 288 indices past run28.
+
+**Measured on the way (tolerated refusals).** `0x007302a3` (VFIO 2572) was refused and tolerated.
+IS_MODE_POSSIBLE was never called; instead `NV5070_CTRL_CMD_IMP_SET_GET_PARAMETER` 0x50700118
+was sent 26 times, all refused (VFIO sends it once, at 2645, as a GET of IMP_ENABLE, then 156
+IS_MODE_POSSIBLE). 0x00730128 and 0x0073012c (VRR_DISPLAY_INFO), the thermal/perf group 0x2080a801,
+0x2081010d, 0x2080a630, and the display-path DP/HDCP/audio controls of the VFIO DP monitor were
+not needed by the DVI path. No preempt-type control was sent.
+
+## Tenth repair: SET_DEFAULT_VASPACE and the next display controls (run30 setup)
+
+| VFIO index | RPC | kayfabe answer | source |
+|---|---|---|---|
+| 2846 (×11) | `NV0080_CTRL_DMA_SET_DEFAULT_VASPACE` 0x00801812 | RM's checks in order: null → 0x1f; not a VA space whose parent is this Device → 0x33; Device already has a VA space (set before, or acquired by an `index = GPU_DEVICE` VA-space alloc) → 0x33; otherwise the VA space becomes the Device's default (`kf_rm::chanlink`), params echoed (the vfio-10 reply is the request's 4 bytes). No host action: the default only decides what a later `hVASpace = 0` channel resolves to. | `device_share.c:363-400`, `dma.c:856-885`, `ctrl0080dma.h:748-778` (580.65.06) |
+| 2645 | `NV5070_CTRL_CMD_IMP_SET_GET_PARAMETER` 0x50700118 | GET of IMP_ENABLE → FALSE; every other index/operation stays NOT_SUPPORTED | `ctrl5070chnc.h:934-1100`: FALSE means "all Is Mode Possible queries are answered with 'mode is possible'", which is what kayfabe's IS_MODE_POSSIBLE does. The real GPU answered TRUE (it runs IMP). |
+| 2916 | `INTERNAL_DISPLAY_ACPI_SUBSYSTEM_ACTIVATED` 0x20800af0 | OK, no params, no effect | "initializes display ACPI child devices" (`ctrl2080internal.h:3519-3526`); the virtual display has none |
+| 2917 | `NV0073_CTRL_CMD_SYSTEM_GET_HOTPLUG_STATE` 0x0073010a | lid open; `hotplugAfterEdidMask` = every display of the device | `ctrl0073system.h:476-528`. Measured: the real GPU answered all its displays (0x7f00). Inferred: the physical side counts only its own EDID reads. |
+| 2978 / 2982 | `INTERNAL_DISPLAY_PRE/POST_MODESET` 0x20800af1/2 | OK, no params, no effect | display bandwidth arbitration around a modeset (`kern_disp.c:1850-1890`): memory power management, host-owned, a §S.1 stub |
+
+Layouts and command ids are re-derived (`tools/derive_display_layouts.sh`, 580.65.06 and
+580.159.04). kf-disp + kf-rm 743 tests pass, Clippy new 0, rustfmt and ci_gates clean.
+
+**Left refused (no derivable semantics, or owner rulings say absent):** `0x007302a3`, `0x00730128`,
+`0x0073117a`, `0x00730122`, `0x007302a5`, `0x00731368` (in no OGKM header or NVOC table);
+`0x00730280` GET_HDCP_STATE and `0x00730282` HDCP_CTRL (no HDCP, §S); DFP_SET_ELD_AUDIO_CAPS
+(a DVI sink has no audio); the THERMAL legacy group `0x208085xx` (host-owned, §S.1, queries stay
+refused); DFP_ASSIGN_SOR (no crossbar).
+
+**Falsifier, stated before run30:** the hypothesis "the run29 abort is the unserviced
+SET_DEFAULT_VASPACE" is wrong if SET_DEFAULT_VASPACE returns 0 and the abort stays at VFIO ≤ 2846,
+or if SET_DEFAULT_VASPACE is refused by one of RM's checks (that would show kayfabe's VA-space
+model disagrees with the guest's). **Prediction:** the new client's channels are born (VFIO
+2857-2891, already served in earlier runs), and the abort moves to a later wall.

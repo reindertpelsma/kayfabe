@@ -14,3 +14,4 @@ run25-qemu.log.gz	rpcs=696	teardown_at=449	last=fn76/2080220d NV2080_CTRL_CMD_SE
 run26-qemu.log.gz	rpcs=699	teardown_at=451	last=fn76/20800301 NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION	result=0x56
 run27-qemu.log.gz	rpcs=711	teardown_at=457	last=fn76/20800301 NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION	result=0x56
 run28-qemu.log.gz	rpcs=775	teardown_at=489	last=fn76/00730301 NV0073_CTRL_CMD_EVENT_SET_NOTIFICATION	result=0x40
+run29-qemu.log.gz	rpcs=857	teardown_at=554	last=fn76/00801812 NV0080_CTRL_DMA_SET_DEFAULT_VASPACE	result=refused(unserviced)

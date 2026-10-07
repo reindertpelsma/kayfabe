@@ -126,6 +126,35 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
     // object's own action table, with `dispapiCtrlCmdEventSetNotification_IMPL`'s checks
     // (`disp_objs.c:629-700`); no notifier is ever raised by this display.
     ("NV0073_CTRL_CMD_EVENT_SET_NOTIFICATION", "event_notify"),
+    // ★ 2026-10-07 (Windows run29): `IMP_SET_GET_PARAMETER` (`ctrl5070chnc.h:934-1100`). Only GET of
+    // `IMP_ENABLE` is answered: FALSE, because this display bypasses IMP — "all Is Mode Possible
+    // queries are answered with 'mode is possible'" is exactly `mode_possible` below. Every other
+    // index (ASR/MSCG/stutter/mclk-switch: memory power features, host-owned under owner ruling
+    // §S) and every SET/RESET stays refused NOT_SUPPORTED. [measured] vfio-10 RPC 2645: GET of
+    // index 1 on head 0 (the real GPU answered TRUE: it runs IMP).
+    ("NV5070_CTRL_CMD_IMP_SET_GET_PARAMETER", "imp_param"),
+    // ★ 2026-10-07 (Windows run29): `SYSTEM_GET_HOTPLUG_STATE` (`ctrl0073system.h:476-528`, flags
+    // 0x48 ROUTE_TO_PHYSICAL). Lid open (a desktop monitor). `hotplugAfterEdidMask` lists every
+    // display of this device: [measured] vfio-10 RPC 2917 answered every supported display (0x7f00)
+    // although the guest had read the active one's EDID; that the physical side counts only its OWN
+    // EDID reads, which this device never makes, is [inferred].
+    (
+        "NV0073_CTRL_CMD_SYSTEM_GET_HOTPLUG_STATE",
+        "hotplug_after_edid",
+    ),
+    // ★ 2026-10-07 (Windows run29): three parameterless INTERNAL notifications the guest's CPU-RM
+    // sends physical RM ([measured] vfio-10 RPCs 2916, 2978, 2982, internal client c2000006).
+    // ACPI_SUBSYSTEM_ACTIVATED "intializes display ACPI child devices" (`ctrl2080internal.h:3519-3526`):
+    // this display has none, so there is nothing to initialise. PRE/POST_MODESET bracket a modeset
+    // for display bandwidth arbitration (`kern_disp.c:1850-1890`, the ICC/mclk floor): memory power
+    // management, host-owned and stubbed under owner ruling §S.1; the virtual display needs no
+    // bandwidth floor. No host action; accepted with no effect.
+    (
+        "NV2080_CTRL_CMD_INTERNAL_DISPLAY_ACPI_SUBSYSTEM_ACTIVATED",
+        "no_params",
+    ),
+    ("NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_MODESET", "no_params"),
+    ("NV2080_CTRL_CMD_INTERNAL_DISPLAY_POST_MODESET", "no_params"),
     // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): ROUTE_TO_PHYSICAL (`g_disp_objs_nvoc.c`, flags
     // 0x40), so it reaches us. NVKMS sends PRESERVE_HW before freeing each channel after it restored
     // the console (`nvkms-rm.c:2990-3017`): the display keeps scanning the console through the free.
@@ -779,6 +808,40 @@ impl DisplayModel {
         match kind {
             "echo" => Ok(params.to_vec()),
             "not_supported" => Err(NV_ERR_NOT_SUPPORTED),
+            // A control that takes no parameters (paramsSize 0 in vfio-10, 2026-10-05, RPCs 2916,
+            // 2978 and 2982): anything else is not this control's shape.
+            "no_params" => {
+                if params.is_empty() {
+                    Ok(Vec::new())
+                } else {
+                    Err(NV_ERR_INVALID_ARGUMENT)
+                }
+            }
+            "imp_param" => {
+                let mut p = self.view("NV5070_CTRL_IMP_SET_GET_PARAMETER_PARAMS", params)?;
+                let get = k("NV5070_CTRL_IMP_SET_GET_PARAMETER_OPERATION_GET")?;
+                let imp_enable = k("NV5070_CTRL_IMP_SET_GET_PARAMETER_INDEX_IMP_ENABLE")?;
+                if p.get("base.subdeviceIndex").unwrap_or(u64::MAX) != 0 {
+                    return Err(NV_ERR_INVALID_ARGUMENT);
+                }
+                if p.get("operation") != Some(get) || p.get("index") != Some(imp_enable) {
+                    return Err(NV_ERR_NOT_SUPPORTED);
+                }
+                p.set("value", 0);
+                Ok(p.buf)
+            }
+            "hotplug_after_edid" => {
+                let mut p = self.view("NV0073_CTRL_SYSTEM_GET_HOTPLUG_STATE_PARAMS", params)?;
+                if p.get("subDeviceInstance").unwrap_or(u64::MAX) != 0 {
+                    return Err(NV_ERR_INVALID_ARGUMENT);
+                }
+                p.set(
+                    "flags",
+                    k("NV0073_CTRL_SYSTEM_GET_HOTPLUG_STATE_FLAGS_LID_OPEN")?,
+                );
+                p.set("hotplugAfterEdidMask", u64::from(self.all_displays()));
+                Ok(p.buf)
+            }
             "ip_version" => {
                 if params.len() != 4 {
                     return Err(NV_ERR_INVALID_ARGUMENT);
@@ -1752,7 +1815,9 @@ mod tests {
         let set = m.claimed();
         assert_eq!(set.len(), INTERNAL_CONTROLS.len() + NAMED_CONTROLS.len());
         // 41 → 42 on 2026-10-07: NV0073_CTRL_CMD_EVENT_SET_NOTIFICATION (Windows StartDevice).
-        assert_eq!(set.len(), 42);
+        // 42 → 47 the same day (Windows run29): IMP_SET_GET_PARAMETER, SYSTEM_GET_HOTPLUG_STATE,
+        // INTERNAL_DISPLAY_ACPI_SUBSYSTEM_ACTIVATED and INTERNAL_DISPLAY_PRE/POST_MODESET.
+        assert_eq!(set.len(), 47);
         let distinct: std::collections::BTreeSet<u32> = set.iter().copied().collect();
         assert_eq!(distinct.len(), set.len(), "no id twice");
         assert!(set.iter().all(|c| m.claims(*c)));
@@ -1940,6 +2005,74 @@ mod tests {
         assert_eq!(m.retire_hotplug(3, 31), 1, "the event's own FREE");
         assert_eq!(m.retire_all_hotplug(), MAX_HOTPLUG_REGISTRATIONS - 1);
         assert_eq!(m.hotplug_target(), None);
+    }
+
+    /// ★ 2026-10-07 (Windows run29): the VFIO shapes of IMP_SET_GET_PARAMETER (vfio-10 2645),
+    /// SYSTEM_GET_HOTPLUG_STATE (2917) and the parameterless internal notifications (2916, 2978,
+    /// 2982), for both derived driver versions.
+    #[test]
+    fn windows_imp_hotplug_state_and_modeset_notifications() {
+        for v in ["580.65.06", "580.159.04"] {
+            let mut m = DisplayModel::new(
+                &kf_chip::display::AMPERE,
+                vec![Monitor::default_1080p()],
+                crate::layout::for_version(v).expect("layouts"),
+            );
+            let words = |w: &[u32]| -> Vec<u8> { w.iter().flat_map(|x| x.to_le_bytes()).collect() };
+            // IMP_ENABLE GET → FALSE (IMP bypassed: every mode is possible here).
+            let imp = cmd(&m, "NV5070_CTRL_CMD_IMP_SET_GET_PARAMETER");
+            assert_eq!(
+                m.control(imp, &words(&[0, 1, 0, 0, 0, 0])),
+                Some(Ok(words(&[0, 1, 0, 0, 0, 0]))),
+                "{v}"
+            );
+            assert_eq!(
+                m.control(imp, &words(&[0, 1, 0, 0, 0, 7])),
+                Some(Ok(words(&[0, 1, 0, 0, 0, 0])))
+            );
+            // Other indices, SET, a second subdevice, a short struct: refused.
+            assert_eq!(
+                m.control(imp, &words(&[0, 2, 0, 0, 0, 0])),
+                Some(Err(NV_ERR_NOT_SUPPORTED))
+            );
+            assert_eq!(
+                m.control(imp, &words(&[0, 1, 0, 0, 1, 1])),
+                Some(Err(NV_ERR_NOT_SUPPORTED))
+            );
+            assert_eq!(
+                m.control(imp, &words(&[1, 1, 0, 0, 0, 0])),
+                Some(Err(NV_ERR_INVALID_ARGUMENT))
+            );
+            assert_eq!(
+                m.control(imp, &words(&[0, 1, 0])),
+                Some(Err(NV_ERR_INVALID_ARGUMENT))
+            );
+            // Hotplug state: lid open, every display of the device listed.
+            let hp = cmd(&m, "NV0073_CTRL_CMD_SYSTEM_GET_HOTPLUG_STATE");
+            assert_eq!(
+                m.control(hp, &[0; 12]),
+                Some(Ok(words(&[0, 0, 0x100]))),
+                "{v}"
+            );
+            assert_eq!(
+                m.control(hp, &words(&[1, 0, 0])),
+                Some(Err(NV_ERR_INVALID_ARGUMENT))
+            );
+            // The three internal notifications take no parameters.
+            for n in [
+                "NV2080_CTRL_CMD_INTERNAL_DISPLAY_ACPI_SUBSYSTEM_ACTIVATED",
+                "NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_MODESET",
+                "NV2080_CTRL_CMD_INTERNAL_DISPLAY_POST_MODESET",
+            ] {
+                let c = cmd(&m, n);
+                assert_eq!(m.control(c, &[]), Some(Ok(Vec::new())), "{n}");
+                assert_eq!(
+                    m.control(c, &[0; 4]),
+                    Some(Err(NV_ERR_INVALID_ARGUMENT)),
+                    "{n}"
+                );
+            }
+        }
     }
 
     fn event_notify(

@@ -1,0 +1,100 @@
+kf3: GSP REFUSED fn76/0x20800a87=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800aff=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800aaf=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00800292=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a80=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802a0f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080017e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a30=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a2e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b03=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b05=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a3f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: act birth translated: chan 0xc1e00007:0xbaba0045 BORN Translated: token 0x1 -> host 0x2e in VasKey(13970166077300801602) gpfifo=0x0x32 userd=Some(Framebuffer { base: 4020568064, size: 512 }) engine=0x1 tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B fast=off (3860 us, off the GSP lock)
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1e00007:0xcaf00001 params=560 rpc_flags=0x0
+kf3: act promote translated context: 0xc1e00007:0xbaba0045 GPU_PROMOTE_CTX satisfied by Translated host 0x2e GR=Some((cafe0025, c9c0)) VIDEO=None entries=9 init_ids=0xe05 va_ids=0xa7d bound=true — no guest buffer touched (1 us, off the GSP lock)
+kf3: chan token 0x1 (host 0x2e) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=0 last_put=None gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0]
+kf3: act birth translated: chan 0xc1e00008:0x2 BORN Translated: token 0x801 -> host 0x1002e in VasKey(13970166078463016970) gpfifo=0x220064000x4096 userd=Some(Framebuffer { base: 4019388416, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B fast=off (2481 us, off the GSP lock)
+kf3: GSP REFUSED fn76/0x2080013f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20809004=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801303=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00801306=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20810108=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801823=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800ab8=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800173=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802a12=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800160=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080012f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802806=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x0073013d=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080205b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a060=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802068=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00800106=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a70a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a02f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x208081ea=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20808524=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00731369=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x0073014b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730285=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x0073011d=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x0073012c=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730109=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a38=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801110=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080080b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730288=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801220=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801222=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x0080170e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: act birth translated: chan 0xc1d00013:0xff040000 BORN Translated: token 0x802 -> host 0x1002f in VasKey(13965662457344034928) gpfifo=0x12024b000x16384 userd=Some(Sysmem { base: 9555640320, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ring_va=0xff00100000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B fast=off (2397 us, off the GSP lock)
+kf3: act timeslice: 0xc1d00013:0xff0e0000 SET_TIMESLICE 4000 us on 1 twin group(s) (210 us, off the GSP lock)
+kf3: act birth translated: chan 0xc1d00015:0xff040001 BORN Translated: token 0x3 -> host 0x30 in VasKey(13965662457344034928) gpfifo=0x120276000x8192 userd=Some(Sysmem { base: 9555640832, size: 512 }) engine=0x1 tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ring_va=0xff00200000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B fast=off (3352 us, off the GSP lock)
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d00015:0xff030000 params=560 rpc_flags=0x0
+kf3: act promote translated context: 0xc1d00015:0xff040001 GPU_PROMOTE_CTX satisfied by Translated host 0x30 GR=Some((cafe0034, c9c0)) VIDEO=None entries=8 init_ids=0x5 va_ids=0xa7d bound=true — no guest buffer touched (1 us, off the GSP lock)
+kf3: act timeslice: 0xc1d00015:0xff0e0000 SET_TIMESLICE 1000 us on 1 twin group(s) (223 us, off the GSP lock)
+kf3: GSP REFUSED fn76/0x20801111=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: act birth translated: chan 0xc1d00016:0xff040002 BORN Translated: token 0x804 -> host 0x10031 in VasKey(13965662457344034928) gpfifo=0x1204f0000x16384 userd=Some(Sysmem { base: 9555641344, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL ring_va=0xff00300000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B fast=off (2161 us, off the GSP lock)
+kf-rm: channel-property-facts envelope=0xc1d00016:0xff020000 channel=0xff040002 property=0x0 value=0xfa0
+kf3: GSP REFUSED fn76/0x0080170f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: act birth translated: chan 0xc1d00018:0xff040003 BORN Translated: token 0x1805 -> host 0x30032 in VasKey(13965662457344034928) gpfifo=0x120299000x2048 userd=Some(Sysmem { base: 9555641856, size: 512 }) engine=0x13 tsg=None kernel_by=PRIVILEGE=KERNEL ring_va=0xff00400000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B fast=off (2321 us, off the GSP lock)
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d00018:0xff030000 params=560 rpc_flags=0x0
+kf3: act promote translated context: 0xc1d00018:0xff040003 GPU_PROMOTE_CTX satisfied by Translated host 0x30032 GR=None VIDEO=Some((cafe003d, c9b0, 13)) entries=0 init_ids=0x0 va_ids=0x0 bound=false — no guest buffer touched (1 us, off the GSP lock)
+kf3: act birth translated: chan 0xc1d00019:0xff040004 BORN Translated: token 0x806 -> host 0x10033 in VasKey(13965662457344034928) gpfifo=0x12051b000x2048 userd=Some(Sysmem { base: 9555642368, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ring_va=0xff00500000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B fast=off (2074 us, off the GSP lock)
+kf3: act timeslice: 0xc1d00019:0xff0e0000 SET_TIMESLICE 4000 us on 1 twin group(s) (203 us, off the GSP lock)
+kf3: act birth translated: chan 0xc1d0001a:0xff040005 BORN Translated: token 0x2007 -> host 0xc0034 in VasKey(13965662457344034928) gpfifo=0x120522000x2048 userd=Some(Sysmem { base: 9555642880, size: 512 }) engine=0x1c tsg=None kernel_by=PRIVILEGE=KERNEL ring_va=0xff00600000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B fast=off (2255 us, off the GSP lock)
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d0001a:0xff030000 params=560 rpc_flags=0x0
+kf3: act promote translated context: 0xc1d0001a:0xff040005 GPU_PROMOTE_CTX satisfied by Translated host 0xc0034 GR=None VIDEO=Some((cafe0046, c9b7, 1c)) entries=0 init_ids=0x0 va_ids=0x0 bound=false — no guest buffer touched (0 us, off the GSP lock)
+kf3: act birth translated: chan 0xc1d0001b:0xff040006 BORN Translated: token 0x2008 -> host 0xc0035 in VasKey(13965662457344034928) gpfifo=0x120529000x2048 userd=Some(Sysmem { base: 9555643392, size: 512 }) engine=0x1c tsg=None kernel_by=PRIVILEGE=KERNEL ring_va=0xff00700000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B fast=off (2306 us, off the GSP lock)
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d0001b:0xff030000 params=560 rpc_flags=0x0
+kf3: act promote translated context: 0xc1d0001b:0xff040006 GPU_PROMOTE_CTX satisfied by Translated host 0xc0035 GR=None VIDEO=Some((cafe004b, c9b7, 1c)) entries=0 init_ids=0x0 va_ids=0x0 bound=false — no guest buffer touched (0 us, off the GSP lock)
+kf-rm: channel-property-facts envelope=0xc1d0001b:0xff020000 channel=0xff040006 property=0x0 value=0xfa0
+kf3: act birth translated: chan 0xc1d0001c:0xff040007 BORN Translated: token 0x2809 -> host 0x50036 in VasKey(13965662457344034928) gpfifo=0x120530000x2048 userd=Some(Sysmem { base: 9555643904, size: 512 }) engine=0x33 tsg=None kernel_by=PRIVILEGE=KERNEL ring_va=0xff00800000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B fast=off (2285 us, off the GSP lock)
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d0001c:0xff030000 params=560 rpc_flags=0x0
+kf3: act promote translated context: 0xc1d0001c:0xff040007 GPU_PROMOTE_CTX satisfied by Translated host 0x50036 GR=None VIDEO=Some((cafe0050, c9fa, 33)) entries=0 init_ids=0x0 va_ids=0x0 bound=false — no guest buffer touched (0 us, off the GSP lock)
+kf3: act birth translated: chan 0xc1d0001d:0xff040008 BORN Translated: token 0x200a -> host 0xc0037 in VasKey(13965662457344034928) gpfifo=0x120538000x2048 userd=Some(Sysmem { base: 9554890752, size: 512 }) engine=0x1c tsg=None kernel_by=PRIVILEGE=KERNEL ring_va=0xff00900000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B fast=off (2233 us, off the GSP lock)
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d0001d:0xff030000 params=560 rpc_flags=0x0
+kf3: act promote translated context: 0xc1d0001d:0xff040008 GPU_PROMOTE_CTX satisfied by Translated host 0xc0037 GR=None VIDEO=Some((cafe0055, c9b7, 1c)) entries=0 init_ids=0x0 va_ids=0x0 bound=false — no guest buffer touched (0 us, off the GSP lock)
+kf-rm: display: hotplug event 0xc1d00002:0xff060070 (parent 0xff0a0000) registered
+kf3: GSP REFUSED fn76/0x007302a3=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730128=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x50700118=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2081010d=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a630=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00801812=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: chan token 0x1805 (host 0x30032) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0]
+kf3: chan token 0x806 (host 0x10033) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0]
+kf3: chan token 0x2007 (host 0xc0034) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0]
+kf3: chan token 0x2008 (host 0xc0035) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0]
+kf3: chan token 0x2809 (host 0x50036) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0]
+kf3: chan token 0x200a (host 0xc0037) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0]
+kf3: chan token 0x802 (host 0x1002f) RETIRED, forwarded=1 submissions=0 splits=0/0 serves=2 last_put=Some(1) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=Some("ring: Rewrite { gp: 0, why: ForeignClass { subch: 5, class: 1 } }") inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0]
+kf3: chan token 0x3 (host 0x30) RETIRED, forwarded=1 submissions=0 splits=0/0 serves=2 last_put=Some(1) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=Some("ring: Rewrite { gp: 0, why: ForeignClass { subch: 2, class: 41280 } }") inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0]
+kf3: chan token 0x804 (host 0x10031) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0]
+kf-rm: display: hotplug registration retired by the FREE of 0xc1d00002:0xff060070
+kf3: chan token 0x801 (host 0x1002e) RETIRED, forwarded=2 submissions=2 splits=0/0 serves=5 last_put=Some(2) gp_get=Some(2) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0]
