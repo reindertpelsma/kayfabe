@@ -1139,6 +1139,20 @@ impl HostRm {
         }
     }
 
+    /// ★ NATIVE-TEST ESCAPE — issue a control with `payload` exactly as given, bypassing the
+    /// [`Self::raw_control`] carry/ABI-interval guard. This exists ONLY for native measurement
+    /// harnesses (`kf-harness` bins) that supply a driver-stable finn layout they transcribed
+    /// themselves, on a host driver outside kayfabe's validated encoder interval. **No production
+    /// path calls it**, and it must not be wired into one: production controls go through
+    /// [`Self::raw_control`], which keeps the guard. (`claude/deferred-falsify-20261007`; owner
+    /// review before any wider use.)
+    ///
+    /// # Errors
+    /// The host's refusal, or an encode/decode failure.
+    pub fn raw_control_native(&self, object: u32, cmd: u32, payload: &mut [u8]) -> Result<(), RmError> {
+        self.raw_control_exact(object, cmd, payload)
+    }
+
     /// The control ioctl with `payload` exactly as given (already at the host's layout).
     fn raw_control_exact(&self, object: u32, cmd: u32, payload: &mut [u8]) -> Result<(), RmError> {
         let mut arg = [0u8; Nvos54Parameters::SIZE];

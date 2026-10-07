@@ -133,7 +133,7 @@ impl Unit {
         let mut p = [0u8; 16];
         p[0..4].copy_from_slice(&handle.to_le_bytes());
         self.rm
-            .raw_control(self.ring.channel().chan, kf_host::channel::NV906F_CTRL_GET_CLASS_ENGINEID, &mut p)
+            .raw_control_native(self.ring.channel().chan, kf_host::channel::NV906F_CTRL_GET_CLASS_ENGINEID, &mut p)
             .map_err(|e| format!("class_engine_id: {e:?}"))?;
         let class_engine = u32::from_le_bytes([p[4], p[5], p[6], p[7]]);
         Ok(Def { handle, class_engine, subch })
@@ -178,12 +178,12 @@ impl Unit {
     fn register(&self, d: &Def, h: u32, cmd: u32, flags: u32) -> Result<(), RmError> {
         let mut p = defer_params(h, cmd, flags, self.space.space);
         self.rm
-            .raw_control(d.handle, NV5080_CTRL_CMD_DEFERRED_API_V2, &mut p)
+            .raw_control_native(d.handle, NV5080_CTRL_CMD_DEFERRED_API_V2, &mut p)
     }
 
     fn remove(&self, d: &Def, h: u32) -> Result<(), RmError> {
         let mut p = h.to_le_bytes();
-        self.rm.raw_control(d.handle, NV5080_CTRL_CMD_REMOVE_API, &mut p)
+        self.rm.raw_control_native(d.handle, NV5080_CTRL_CMD_REMOVE_API, &mut p)
     }
 
     /// Non-destructive probe: is `h` still registered on `d`?
@@ -339,7 +339,7 @@ fn f2_cross_channel() -> Result<(), String> {
         rm.remember(handle, ring.channel().chan);
         let mut p = [0u8; 16];
         p[0..4].copy_from_slice(&handle.to_le_bytes());
-        rm.raw_control(ring.channel().chan, kf_host::channel::NV906F_CTRL_GET_CLASS_ENGINEID, &mut p)
+        rm.raw_control_native(ring.channel().chan, kf_host::channel::NV906F_CTRL_GET_CLASS_ENGINEID, &mut p)
             .map_err(|e| format!("class_engine_id: {e:?}"))?;
         Ok(Def { handle, class_engine: u32::from_le_bytes([p[4], p[5], p[6], p[7]]), subch })
     };
@@ -354,24 +354,24 @@ fn f2_cross_channel() -> Result<(), String> {
     bind(&mut ring_b, &b)?;
     let h = 0x5151_2001;
     let mut pa = defer_params(h, CMD_DMA_INVALIDATE_TLB, FLAGS_DELETE_IMPLICIT, space_a.space);
-    rm.raw_control(a.handle, NV5080_CTRL_CMD_DEFERRED_API_V2, &mut pa)
+    rm.raw_control_native(a.handle, NV5080_CTRL_CMD_DEFERRED_API_V2, &mut pa)
         .map_err(|e| format!("register on A: {e:?}"))?;
     // fire 0x200(h) on channel B
     let hdr = kf_abi::submit::method_header_inc(b.subch, SW_TRIGGER_METHOD, 1).ok_or("0x200 header")?;
     submit_on(&mut ring_b, &rm, &[hdr, h])?;
     // probe A
     let mut probe = defer_params(h, CMD_DMA_INVALIDATE_TLB, FLAGS_DELETE_EXPLICIT, space_a.space);
-    let still = match rm.raw_control(a.handle, NV5080_CTRL_CMD_DEFERRED_API_V2, &mut probe) {
+    let still = match rm.raw_control_native(a.handle, NV5080_CTRL_CMD_DEFERRED_API_V2, &mut probe) {
         Err(e) if status_of(&e) == Some(NV_ERR_INVALID_OBJECT_HANDLE) => true,
         Ok(()) => {
             let mut rp = h.to_le_bytes();
-            let _ = rm.raw_control(a.handle, NV5080_CTRL_CMD_REMOVE_API, &mut rp);
+            let _ = rm.raw_control_native(a.handle, NV5080_CTRL_CMD_REMOVE_API, &mut rp);
             false
         }
         Err(e) => return Err(format!("probe: {e:?}")),
     };
     let mut rp = h.to_le_bytes();
-    let _ = rm.raw_control(a.handle, NV5080_CTRL_CMD_REMOVE_API, &mut rp);
+    let _ = rm.raw_control_native(a.handle, NV5080_CTRL_CMD_REMOVE_API, &mut rp);
     // teardown
     let _ = ring_b.release(&rm);
     let _ = rm.free_channel(ring_b.channel());
