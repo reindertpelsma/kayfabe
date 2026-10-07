@@ -2331,3 +2331,56 @@ space lies under that one entry).
 - *Native:* `kf-gate9` must pass both new replay checks and both known-positives (9/9 gates).
 - *Recorded, not predicted:* whether the TDR cycles stop. Prediction: they do not all stop, because
   the second GR channel (c1d00024) is still never scheduled (`0x20801111` refused, task B).
+
+### Run44 result: the level at FB 0 is walked, the copy channel lives, and the adapter reports OK until a GR-tier refusal leads to TDR and bugcheck 0x116
+
+Product/QEMU a7a6108e65cdb98edc3b37519bbd04019f378926, `kf3-bins/a7a6108e`, flags as run43; started
+2026-10-07 17:57 UTC on 172.22.1.20 (RTX 4070, host 595.91.07). [command](run44-command.json),
+[trace](run44-qemu.log.gz), [requests](run44-requests.log), status samples at
+[uptime 13 s](run44-status-uptime13s.json) and [50 s](run44-status-uptime50s.json),
+[gates, replay checks, oracle and build](run44-gates-build.txt) (9/9, 11/11 USER births, both
+`level_move` replays and both known-positives PASS, GR tier PASS, Xid 5 before and after;
+[oracle log](gr-tier-native-run44.log)), [controller error](run44-controller-error.txt),
+[unit journal](run44-failure-journal.txt), [bugcheck header](run44-bugcheck.json),
+[Windows events](run44-evtx.txt), [host after](run44-host-after.txt). Host afterwards: no QEMU, NBD
+disconnected, display enabled, P8, Xid 5 (unchanged). Host checks at a7a6108e: kf-cuda, kf-harness,
+kf-rm tests pass, rustfmt clean, `ci_gates.sh` 0, Clippy 260 = base 260 (6003d790), no new signature.
+
+**Measured (run44 at a7a6108e, 2026-10-07):**
+- **The moved level is at FB 0:** `server-context-only PDE copy client=0xc1d00021 vaspace=0xff000850
+  page_size=0x1000 levels=[shift29 phys=0x0 size=0x1000 ap=1]` at both adapter starts that reach it
+  (log lines 20498 and 43979; each call prints the line twice — the translation runs twice per call).
+- **The walk at that invalidate (walk #2192 again) keeps the space:** `APPLIED +59 -0`. All 22 rows
+  of run43 stay; the new rows are Windows' new mappings at `0x6000_0000…` (PD1 index 3) and the
+  same rows again at `0x100_xxxx_xxxx`: a second PD2 entry (index 4) resolves to the same level at
+  FB 0. No walk of the run carried a refusal.
+- **The kernel copy channel lives:** no "not placed by us" death. The second start's copy channel
+  (token 0x80b) forwarded 1356 GP entries in 182 submissions.
+- **The adapter reports OK for the first time in this loop:** at guest uptime 13 s and 50 s the
+  NVIDIA RTX 4070 has ConfigManagerErrorCode 0, Status OK, and `nvidia-smi` exits 0 printing
+  `NVIDIA GeForce RTX 4070, 580.88` (the Microsoft Basic Display Adapter reports code 10).
+- **The next wall (kayfabe's own, the GR tier's allowlist):** the kernel GR channel (token 0x3,
+  c1d00015:ff040001) is killed 3.2 s after the first driver walk: `GrMethod { class: 0xC997 (ADA_A),
+  subch: 0, method: 0x1B00, "not in the 3D/compute allowlist" }`. Decoded from the segment's first
+  words (`200406c0 00000001 20286060 00000001 1000f010`): a 4-word incrementing write of
+  `SET_REPORT_SEMAPHORE_A..D` (`ogkm-580.65.06: src/common/sdk/nvidia/inc/class/clc997.h:3913-3922`):
+  address `0x1_2028_6060`, payload 1, D = `RELEASE`, `RELEASE_AFTER_ALL_PRECEEDING_WRITES_COMPLETE`,
+  pipeline location `ALL`, `STRUCTURE_SIZE` bit 28 set (`:3923-3990`). It is the completion of
+  Windows' first GR work. Windows then re-initialises the adapter (a second client set from
+  c1e00037), whose GR channel dies the same way 10.1 s after the first walk.
+- `0x20801111` is still refused (task B not applied); `abort_point.py`: rpcs=6225, teardown_at=659,
+  last `fn76/20801111` (unserviced).
+- After the 50 s sample the guest agent's socket closed. Pagefile header: **bugcheck 0x116**
+  (`VIDEO_TDR_FAILURE`, parameters `0xffff80849bde9010`, `0xfffff8063b1a4580`, `0x0`, `0xd`). The
+  System log holds no display event since the start (inferred: the crash came before it was flushed).
+
+**Falsifier outcomes.** *H-zero: supported* (`phys=0x0`; the walk no longer empties the space; the
+copy channel does not die). *Native:* both replays and both known-positives PASS. *Prediction*
+"the TDRs do not all stop" held, but the measured cause is the GR channel's refused 3D semaphore
+release, not (shown) the unscheduled second GR channel.
+
+**Inferred, not tested.** The TDR and the 0x116 follow from the dead GR channel: its semaphore is never
+released, Windows' scheduler times out, the reset re-creates the channel, it dies the same way, and
+the second failed recovery is fatal. The aliasing PD2 entry is what the hardware would also walk (the
+aperture is the validity), so mirroring it is correct by construction; why Windows points PD2[4] at
+the level is not known.

@@ -1,0 +1,28 @@
+{
+    "time_utc":  "2026-10-07T17:57:45.7844761Z",
+    "uptime_seconds":  13.293575599999999,
+    "os_version":  "10.0.26100",
+    "driver_sha256":  "31c79cce80b573e21647ace8d1a2b65697f992e7f86196f89e30af477b1bd47c",
+    "driver_file_version":  "32.0.15.8088",
+    "display":  [
+                    {
+                        "Name":  "Microsoft Basic Display Adapter",
+                        "PNPDeviceID":  "PCI\\VEN_1234\u0026DEV_1111\u0026SUBSYS_11001AF4\u0026REV_02\\3\u0026267A616A\u00260\u002648",
+                        "ConfigManagerErrorCode":  10,
+                        "Status":  "Error"
+                    },
+                    {
+                        "Name":  "NVIDIA GeForce RTX 4070",
+                        "PNPDeviceID":  "PCI\\VEN_10DE\u0026DEV_2786\u0026SUBSYS_40EE1458\u0026REV_A1\\3\u0026267A616A\u00260\u002630",
+                        "ConfigManagerErrorCode":  0,
+                        "Status":  "OK"
+                    }
+                ],
+    "nvidia_smi":  {
+                       "available":  true,
+                       "exit_code":  0,
+                       "stdout":  "NVIDIA GeForce RTX 4070, 580.88\r\n",
+                       "stderr":  "",
+                       "timed_out":  false
+                   }
+}
