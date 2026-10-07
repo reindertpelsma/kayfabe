@@ -11,6 +11,21 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-07
 
+**Windows loop, 2026-10-08 second session (branch `claude/code43-d3d-20261008`, run 53, binary `kf3-bins/80169b57`; [record](../traces/windows_code43_walls_20261007/README.md#run53-result-h-seg-falsified-a-kernel-wddm-device-is-created-the-fb-list-equals-the-reference-the-last-rm-requests-before-every-failed-create-are-two-refused-gr_ctxsw_preemption_bind)).**
+One run of the six. **Measured:** the NVIDIA adapter's video memory is sane in the guest (DedicatedVideoMemory 3748 MB, LOCAL Budget 3185 MB;
+H-seg FALSIFIED); `D3DKMTCreateDevice` succeeds (the kernel WDDM device exists); `D3D11/12CreateDevice` still return `0x8876017c` at every feature
+level; the FB_GET_INFO_V2 index list Windows sends equals vfio-8/9/10's 19 indices (kayfabe answers 12, refuses on the first of 7; none of the
+19 is a size); in all five failing creates the last two RM requests before the Free of everything are the **refused `GR_CTXSW_PREEMPTION_BIND`
+(`0x20801211`)**, which the real GSP answers with status 0 twice per channel. `AdapterRAM`, `qwMemorySize` and NVML memory are 0/N/A (untested why).
+**Inferred, test first tomorrow (H-preempt-bind):** answering that control the way the real GSP does makes device creation go further.
+It needs an owner choice (real host-authored bind on the VM's host twin, validated VAs, native oracle first, versus an owner-ruled
+"preemption is host-owned" policy). Nothing was served; no new control is half-done on the branch. Cheap and independent: serve the 7 missing FB
+indices (hardware-config facts, values in `traces/windows_code43_walls_20261007/vfio8-9-10-fb-bus-info.txt`) via `FORWARDED_FB_EXTRA_INDICES`.
+**Display (owner question, measured):** the NVIDIA adapter is Code 0 and a kayfabe monitor (`KFB0001`, active, 7 listed modes) is present; the Basic Display
+stand-in is Code 10; 8330 Core/Window display methods were submitted, but the kayfabe console still shows "Guest has not initialized the display (yet)".
+Host left clean (no QEMU, driver `nvidia`, display enabled, Xid 61). Note: this checkout (`/workspace/kayfabe`) is shared with the per-VM-UUID agent
+(its branch is checked out there); this loop works in the worktree `/workspace/kayfabe-d3d`.
+
 **Windows loop, 2026-10-08 (branch `claude/code43-deferred-20261008`, runs 47-52, code `83881ecc`; [record](../traces/windows_code43_walls_20261007/README.md#stop-loop-2026-10-08-after-6-hardware-runs-runs-47-52-owner-decisions-waiting)).**
 With `KF3_DEFERRED_API=1` the software-method wall of runs 44-46 is gone: Windows registers INITIALIZE_CTX,
 PROMOTE_CTX and EVICT_CTX per user GR TSG, all triggers are `DONE` (69 in run49), no channel dies, and the guest

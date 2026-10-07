@@ -1,0 +1,3 @@
+no qemu
+NVIDIA GeForce RTX 4070, 595.91.07, P8, 46, Enabled, 340 MiB
+XID=61
