@@ -171,6 +171,9 @@ kf3: DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=4 emulated=0 forwarde
     still refuse before PB writes. Matching-context promotion with entryCount0,
     bind and real runlist eviction are conditional on actual owned host context.
     Evidence: `traces/windows_code43_walls_20261007/nvdec-native.log`.
+    Experimental `KF3_KERNEL_NVENC_CTX=1` extends the same owned-context-only
+    contract to encoders; native NVENC1/engine1c at `e465d356` completes its GPU
+    fence (`traces/windows_code43_walls_20261007/nvenc1-native.log`).
 
     ⊘ RM's golden-image channel (kernel GR, `0xbaba0045`) is not born (kernel GR is P7), so its
     promote stays the FSM's named refusal, as before. Non-GSP guests: `V3_NON_GSP_CTX.md`.

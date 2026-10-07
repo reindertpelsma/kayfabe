@@ -654,6 +654,11 @@ fn kernel_nvdec_ctx() -> bool {
     *ON.get_or_init(|| std::env::var_os("KF3_KERNEL_NVDEC_CTX").is_some_and(|v| v == "1"))
 }
 
+fn kernel_nvenc_ctx() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_KERNEL_NVENC_CTX").is_some_and(|v| v == "1"))
+}
+
 /// ★ P1+P2 inc D (§7.13) — **`KF3_NEGCTL_STALE_BIND=1`**, the stale-bind counter's POSITIVE
 /// CONTROL: every recorded resolution is perturbed, so `stale_binds=` must move on a box run that
 /// retires any T-mode work. Default OFF; read once. Never set in production.
@@ -1795,6 +1800,7 @@ impl ChanPlane {
                 {
                     if engine_type == kf_abi::submit::ENGINE_TYPE_GRAPHICS
                         || kf_abi::submit::nvdec_index_of_engine_type(engine_type).is_some()
+                        || kf_abi::submit::nvenc_index_of_engine_type(engine_type).is_some()
                     {
                         return self.defer("bind translated context", Box::new(move |me: &ChanPlane| {
                             let slot = me.slot(ht).ok_or_else(|| (NV_ERR_INVALID_STATE, "GR slot gone".into()))?;
@@ -2433,11 +2439,11 @@ impl ChanPlane {
                 let slot = me.slot(ht).ok_or_else(|| (NV_ERR_INVALID_STATE, "GR slot gone".into()))?;
                 let mut g = slot.lock().map_err(|_| (NV_ERR_INVALID_STATE, "GR slot poisoned".into()))?;
                 let context = g.chan.host().gr_context();
-                let decoder = g.chan.host().video_context();
+                let video = g.chan.host().video_context();
                 if g.guest_engine != engine_type || !g.chan.host().owns_context(engine_type) || g.dead.is_some()
-                    || (decoder.is_some() && entries != 0)
+                    || (video.is_some() && entries != 0)
                 {
-                    return Err((NV_ERR_INVALID_ARGUMENT, "GPU_PROMOTE_CTX has no matching owned context or invalid decoder entries".into()));
+                    return Err((NV_ERR_INVALID_ARGUMENT, "GPU_PROMOTE_CTX has no matching owned context or invalid video entries".into()));
                 }
                 // Owner ruling B: the actual host context was created at birth,
                 // before this statement. No guest PA, VA or context byte is used.
@@ -2445,7 +2451,7 @@ impl ChanPlane {
                 g.ctx.va_bound |= with_va;
                 g.ctx.bound |= with_va != 0;
                 g.ctx.promotes += 1;
-                Ok(format!("{client:#x}:{object:#x} GPU_PROMOTE_CTX satisfied by Translated host {ht:#x} GR={context:x?} NVDEC={decoder:x?} entries={entries} init_ids={initialize:#x} va_ids={with_va:#x} bound={} — no guest buffer touched", g.ctx.bound))
+                Ok(format!("{client:#x}:{object:#x} GPU_PROMOTE_CTX satisfied by Translated host {ht:#x} GR={context:x?} VIDEO={video:x?} entries={entries} init_ids={initialize:#x} va_ids={with_va:#x} bound={} — no guest buffer touched", g.ctx.bound))
             }));
         }
         let Some((engine, ht)) = self
@@ -2454,8 +2460,8 @@ impl ChanPlane {
             .ok()
             .and_then(|m| m.get(&(client, object)).map(|v| (v.engine, v.chan.token)))
         else {
-            // A Translated (kernel CE) channel has no GR context and never promotes; a kernel GR
-            // channel (RM's golden-image channel) is not born (P7) — both stay the FSM's refusal.
+            // A channel without an owned host context stays the FSM's refusal.
+            // Experimental kernel GR/NVDEC/NVENC paths require successful birth first.
             eprintln!(
                 "kf3: chan {client:#x}:{object:#x} GPU_PROMOTE_CTX: no passthrough twin — not ours (entries={entries})"
             );
@@ -3334,7 +3340,16 @@ impl ChanPlane {
             && kf_abi::submit::nvdec_index_of_engine_type(engine).is_some()
             && kernel_nvdec_ctx()
             && crate::tspace::enabled();
-        if a.kernel_client && !is_copy_engine(engine) && !kernel_gr && !kernel_nvdec {
+        let kernel_nvenc = a.kernel_client
+            && kf_abi::submit::nvenc_index_of_engine_type(engine).is_some()
+            && kernel_nvenc_ctx()
+            && crate::tspace::enabled();
+        if a.kernel_client
+            && !is_copy_engine(engine)
+            && !kernel_gr
+            && !kernel_nvdec
+            && !kernel_nvenc
+        {
             eprintln!(
                 "kf3: chan {:#x}:{:#x} class={:#x} engine={engine:#x} kernel=true vaspace={:x?} chid={:x?} — a KERNEL non-CE channel: not born (kernel GR is P7)",
                 a.client, a.handle, a.class, a.vaspace, a.chid
@@ -3710,7 +3725,7 @@ impl ChanPlane {
                     None
                 };
                 let host = match ts {
-                    Some(t) => t.ring(me.rm, if kernel_gr || kernel_nvdec { engine } else { me.host_ce }).map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, e)))?,
+                    Some(t) => t.ring(me.rm, if kernel_gr || kernel_nvdec || kernel_nvenc { engine } else { me.host_ce }).map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, e)))?,
                     None => {
                         // ★ P6b: OUR ring goes in OUR region of the space, never where RM's allocator (the
                         // guest's own allocator) would put it — `crate::mem::RING_REGION_BASE`.

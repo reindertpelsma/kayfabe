@@ -409,3 +409,13 @@ Native203a9617 NVENC0 test: USER allocation succeeds but host bind refuses
 Other(87). The Windows request is NVENC1, not NVENC0 (`cl2080_notification.h:313`).
 The oracle now takes a bounded explicit KF_NVENC_CONTEXT_INDEX selecting0..3;
 probe the requested instance1 next. No guest NVENC admission yet.
+
+Native sourcee465d35625d7b13893285ab51df3d879c47ffb96 probes the exact
+NVENC1/engine1c instance: [native oracle](nvenc1-native.log) constructs a USER
+channel and actual ownedC9B7 object, rejects codec selection, completes GPU
+fence seq1, then frees its channel and every ring resource. Host display remains
+active. This gates experimental KF3_KERNEL_NVENC_CTX=1 with private T-space;
+matching owned-context checks and refusal of all codec/CE submissions are shared
+with the decoder path. Windows run23 pending.
+
+NVENC guest increment:111 QEMU tests passed; Clippy new0.
