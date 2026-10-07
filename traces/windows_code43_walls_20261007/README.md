@@ -2562,3 +2562,42 @@ third GR channel uses an unbound subchannel 0 (inferred: bound by its promoted c
 0x116 comes earlier with STATUS_INSUFFICIENT_RESOURCES. (a)/(b)/(c) remain the owner's call.
 
 No privileged verb, emulated channel or fault handling was used or is proposed.
+
+# Loop 2026-10-08 (branch `claude/code43-deferred-20261008`, from `9852ab34`)
+
+Starts from the stop above. Code under test is `83881ecc` (the Translated deferred API, OWNER_RULINGS
+§U, `THE_TRANSLATED_PLANE.md` §29); `9852ab34` adds docs and the runner flag only. Hardware only on
+the trusted host (172.22.1.20 class, §T.1), strictly serial, host built and run under
+`/var/lib/kf-code43-mem-20261007` (its `loop-build.sh`, `post.sh`, `native.sh`), never built locally.
+
+## Run47 setup: the deferred API on, run45's flags, software-runlist flag OFF
+
+Flags: run45's list (`KF3_GFX_POOL_PROBE`, `KF3_TIMER_MAP`, `KF3_TSPACE`, `KF3_SW_RUNLIST_PROBE`,
+`KF3_MEMORY_LIST_PROBE`, `KF3_DISPLAY_SDR_COLOR`, `KF3_DISPLAY_METHOD_TRACE`, `KF3_KERNEL_GR_CE`,
+`KF3_KERNEL_NVDEC_CTX`, `KF3_KERNEL_NVENC_CTX`, `KF3_KERNEL_OFA_CTX`, `KF3_KERNEL_GR_WORK`,
+`KF3_SW_SUBCH_INERT`, `KF3_TRANSLATED_CE_RELAY`, `KF3_BAR0_TRACE`, `KF3_MAPLOG`) plus
+**`KF3_DEFERRED_API=1`** (runner: `--deferred-api`). `KF3_SW_RUNLIST_HOST_OWNED` stays unset (it is
+awaiting owner confirmation; a labelled experiment later, not in this run).
+
+**Hypothesis H-defer (stated before the run).** Runs 44/45 die because the kernel GR channel's
+software method `0x200` (data `0x40000002/03`) on subchannel 5 is refused by name (`SW_SUBCH_INERT`,
+ruling 4). Inferred (not measured on a Windows run): subchannel 5 is bound to Windows' first 5080
+child, and `0x40000002/03` are the handles of the two deferred bundles it registered with
+`0x50800101` (INITIALIZE_CTX, PROMOTE_CTX). With the registrations served and the trigger on, the
+method is serviced by the twin's own host context (ruling B) and the channel continues.
+
+**Predicted log lines.** `kf-rm: DEFERRED-API 0x50800101 ... -> 0x0` (registrations, eight per boot
+in the VFIO reference); `NV50_DEFERRED_API ... ADMITTED ... classID Some(1)`; then
+`DEFERRED-API trigger token ...` and `... DONE: satisfied by each twin ...`.
+
+**Falsifiers, written before the guest starts.**
+- *H-defer is FALSIFIED* if a GR channel again dies with `DEAD: software method: ...` (the 0x200 was
+  still refused), or if any `DEFERRED-API` line is a refusal, or if the registrations are refused or
+  absent (then Windows never registered, and the handles are not what the inference says).
+- *Not falsifying, but recorded:* if the trigger runs and the channel then dies elsewhere, that is
+  the next wall (H-defer holds for the method, not for the course).
+- *Abort point:* measured with `abort_point.py` against vfio-8/9/10 (4085 GSP messages); run45's was
+  rpcs=6225, teardown_at=659, last `fn76/20801111` refused. Prediction: if the GR channel keeps
+  running, Windows reaches the software-runlist submit (`0x20801111`, refused with the flag off) or
+  a further wall; the 0x116 may move or may not. The adapter state and bugcheck are recorded either
+  way. No pass is claimed unless nvidia-smi works with Code 0 and no 0x116/0x119 follows.
