@@ -2266,3 +2266,68 @@ claimed.**
 
 **Next without an owner decision:** the memory-plane wall above (walk #2192 empties the space). It
 probably comes before `0x20801111` matters: the copy channel dies first.
+
+## Memory plane: a directory level at FB offset 0 was walked as "no sub-table" (run44 setup)
+
+Branch `claude/code43-mem-20261007`, from `6003d790`, 2026-10-07. Task A of the loop (no owner
+decision needed): why walk #2192 (run43) found nothing under c1d00021's VA space and removed all 22
+rows.
+
+**What run43 already shows (measured, run43 at 5f201b8a, re-read 2026-10-07).**
+- The pattern is identical in all three adapter starts of run43 (walks #2192, #4477, #6801; the
+  copy channel dies after each): in the BAR1 space (root `0xf1cac000`) Windows maps FB
+  `0xefa30000` (the 64 KiB holding that space's directory tables; the root is `0xefa38000`) twice,
+  then **FB `0x0`** (`va=0x6380000 … at=0x0`, walks #2191/#4476/#6800); the next invalidate is the
+  `ALL_VA` one of c1d00021's space, whose walk unmaps every row (`+0 -22`, `-24`, `-23`); the next
+  RPC is the server-context-only `COPY_SERVER_RESERVED_PDES` (one shift-29 level); then the three
+  BAR1 mappings are removed. FB 0 is ordinary guest heap here (walk #82 maps
+  `0x120000000+0xefc00000 at=0x0` in another space).
+- No walk of the run carried a refusal (`walk report carried refusals` never logged). So the level
+  was not refused (OOB, unaligned, foreign aperture): the walk read it as absent.
+
+**The defect (read, 2026-10-07).** Every walk path of the walk kernel had a second presence test
+besides the aperture: a sub-table address of 0 was "a null pointer, not a sub-table", skipped with
+no refusal (`cuda/walk/kf_walk.cu` at 6003d790: lines 547 and 626/633 in the serial walk, 1764 and
+1785/1795 in the parallel walk). The rule was kayfabe's own (carried from the pre-v3 C emulator and
+`kayfabe-mmu`'s walker), not the hardware's: for a PDE the aperture alone is the validity, and RM's
+own software walker returns the PDE address whenever the aperture is not INVALID
+(`ogkm-580.65.06: src/nvidia/src/kernel/gpu/mmu/gmmu_trace.c:111-134`); its "no address" sentinel is
+`0xf` because "All base addresses are aligned and 0xf is unaligned"
+(`src/nvidia/inc/kernel/gpu/mmu/mmu_trace.h:32`). VER2 (Pascal-Ada: `kern_gmmu_fmt_gm10x.c:165-182`,
+`_PDE_APERTURE_INVALID`) and VER3 (Hopper, Blackwell: `kern_gmmu_fmt_gh10x.c:132-158`, aperture +
+PCF + address, no valid bit) both say so, and the walk kernel decodes both from the one format
+descriptor, so the fix is per format, not Ada-specific.
+
+**Inferred, tested by run44:** Windows put the moved shift-29 level (VER2 PD1, the instance whose
+entry 1 covers `[0x2000_0000, 0x4000_0000)`) at FB 0, CPU-wrote it through the BAR1 mapping of FB 0,
+repointed its parent and invalidated. The walk dropped the whole subtree, so the diff protocol
+correctly unmapped every placement under it: that is why **all 22** rows went (every row of the
+space lies under that one entry).
+
+**Changes (product, default on — a correctness fix, no flag).**
+- `cuda/walk/kf_walk.cu`: the six zero-address skips are removed; a correction block
+  (`KF_PDE_ADDR_ZERO_IS_A_TABLE`) above `kf_dir_present` cites the source. A present, aligned,
+  in-window table at 0 is walked like any other; hostile input is bounded exactly as before (I1
+  nesting, budget, the window check). `kf_walk.ptx` regenerated with NVRTC 12.2.140 (`make_ptx.py`;
+  the committed PTX at 6003d790 was first reproduced byte for byte).
+- Fixtures: the VER2 builders wrote a dual PDE's unused big half as `big_pde(0)`, which is a
+  PRESENT big-page table at FB 0, read as absent only because of the defect. They now write
+  `_APERTURE_INVALID` (`kf_cuda::synth::DUAL_HALF_ABSENT`; `kf-harness` `Tree`), as the VER3
+  builder already did.
+- Regression tests: `kf-gate9` gains a run43 replay per format (`ver2/ver3_level_move_to_fb0_is_quiet`:
+  rows under one PD1 entry, walk and acknowledge, move PD1 to FB 0 and repoint, the next diff must be
+  empty with no refusal; plus a known-positive: the level at 0 emptied must UNMAP every placement).
+  The CUDA suite gains `diff/move_directory_level_to_gpga0_is_quiet`. GPU-free unit tests: the
+  harness's level-move helper (VER2 and VER3) and the fixtures' INVALID big half.
+- Diagnostic (kf-rm, logged only for the rare server-context-only form): `kf-rm: server-context-only
+  PDE copy … levels=[shiftN phys=… size=… ap=…]`, so the moved instance's address is measured.
+
+**Falsifiers, stated before run44.**
+- *H-zero: the moved level is at FB 0 and the null rule hid it.* Supported if the new line shows the
+  shift-29 level at `phys=0x0` and the `ALL_VA` walk of c1d00021's space right before it no longer
+  unmaps the space (no `-22`-style `APPLIED`), and the kernel copy channel (token 0x80c) does not die
+  with "not placed by us". Falsified if `phys` is not 0 (then the null rule did not hide this level),
+  or if it is 0 and the walk still empties the space.
+- *Native:* `kf-gate9` must pass both new replay checks and both known-positives (9/9 gates).
+- *Recorded, not predicted:* whether the TDR cycles stop. Prediction: they do not all stop, because
+  the second GR channel (c1d00024) is still never scheduled (`0x20801111` refused, task B).

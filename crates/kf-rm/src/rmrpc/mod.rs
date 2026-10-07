@@ -1830,6 +1830,28 @@ fn translate_published_pdes(
     // re-encodes it), and no page-directory statement is made. Added 2026-10-07 (run37
     // refused it with 0x56 where vfio-10 answers `NV_OK`).
     if pdes.is_server_context_only() {
+        // ★ 2026-10-07 (run44 setup): name the level instance the guest moved, so the walk
+        // that follows can be read against it (run43: the space's ALL_VA walk right before this
+        // call found nothing under the moved level). Bounded: at most GMMU_FMT_MAX_LEVELS rows,
+        // and only for this rare form.
+        let n = (pdes.num_levels as usize).min(pdes.levels.len());
+        let levels: Vec<String> = pdes.levels[..n]
+            .iter()
+            .map(|v| {
+                format!(
+                    "shift{} phys={:#x} size={:#x} ap={}",
+                    v.page_shift, v.phys_address, v.size, v.aperture
+                )
+            })
+            .collect();
+        eprintln!(
+            "kf-rm: server-context-only PDE copy client={:#x} vaspace={:#x} page_size={:#x} \
+             levels=[{}] (inert)",
+            client.0,
+            vaspace.0,
+            pdes.page_size,
+            levels.join(", ")
+        );
         return Ok(Translation::Inert);
     }
     let root = pdes.root();

@@ -65,6 +65,20 @@ fn main() {
     ) {
         l.check("ver2_growth_run", false, e);
     }
+    // ★ 2026-10-07: Windows run43's walk #2192, replayed per format (KF_PDE_ADDR_ZERO_IS_A_TABLE).
+    for (tag, v3) in [("ver2", false), ("ver3", true)] {
+        if let Err(e) = level_move_replay(&mut l, tag, v3) {
+            l.check(
+                if v3 {
+                    "ver3_level_move_run"
+                } else {
+                    "ver2_level_move_run"
+                },
+                false,
+                e,
+            );
+        }
+    }
     if let Err(e) = throughput(&mut l) {
         l.check("throughput_run", false, e);
     }
@@ -101,6 +115,13 @@ impl GuestTree {
         match self {
             GuestTree::V2(t) => t.unmap4k(va),
             GuestTree::V3(t) => t.unmap4k(va),
+        }
+    }
+    /// Move the shift-29 level on `va`'s path to `new_at`; returns its bytes ([`Tree::move_pd1`]).
+    fn move_pd1(&mut self, va: u64, new_at: u64) -> Option<Vec<u8>> {
+        match self {
+            GuestTree::V2(t) => t.move_pd1(va, new_at),
+            GuestTree::V3(t) => t.move_pd1(va, new_at),
         }
     }
     fn root(&self) -> u64 {
@@ -475,6 +496,134 @@ fn differential(
             format!("{census}"),
         );
     }
+    k.release(img);
+    Ok(())
+}
+
+/// ★ 2026-10-07 — Windows run43's walk #2192, replayed on the GPU (`KF_PDE_ADDR_ZERO_IS_A_TABLE`
+/// in `cuda/walk/kf_walk.cu`). A guest kernel VA space's rows lie under one 512 MiB entry of the
+/// shift-29 level (run43: 22 rows in `[0x2000_0000, 0x4000_0000)`); the guest moves that level to a
+/// new instance at FB offset 0, repoints the parent and invalidates. No translation changed, so once
+/// the first walk is acknowledged the walk after the move must be an EMPTY diff with no refusal.
+/// Under the old "a zero sub-table address is null" rule it UNMAPped every row, silently.
+/// ⊘ Known-positive in the same arm: the instance at 0 then zeroed must UNMAP every placement, so
+/// the empty diff above is not merely a walker that reports nothing.
+fn level_move_replay(l: &mut Checks, tag: &str, v3: bool) -> Result<(), String> {
+    let fmt = if v3 {
+        kf_format_ver3()
+    } else {
+        kf_format_ver2()
+    };
+    let cfg = WalkCfg {
+        table_version: fmt.table_version,
+        ..WalkCfg::default()
+    };
+    let mut k = WalkKernel::bring_up_on(
+        cfg,
+        fmt,
+        kf_cuda::walk::WalkDevice::PciBusId(&kf_harness::gate_bdf()?),
+    )
+    .map_err(|e| format!("{tag}: {e}"))?;
+    let img = k.upload(&vec![0u8; IMG_BYTES]).map_err(|e| e.to_string())?;
+    let mut t = GuestTree::new(v3, PT_A);
+    // run43's shape: the ring page, its neighbours, and rows far apart under the same PD1 entry.
+    let vas: [u64; 7] = [
+        0x2000_2000,
+        0x200c_4000,
+        0x200c_5000,
+        0x2024_7000,
+        0x2400_0000,
+        0x3fdf_0000,
+        0x3ffd_6000,
+    ];
+    let mut pages: BTreeMap<u64, (u64, bool, u32)> = BTreeMap::new();
+    for (i, &va) in vas.iter().enumerate() {
+        let (at, sys) = (DATA + 2 * (i as u64) * PAGE, i % 3 == 1);
+        t.map(va, at, sys, 0, &fmt);
+        pages.insert(va, (at, sys, 0));
+    }
+    write_tree(&k, &img, &t)?;
+    let entries = [WalkEntry {
+        pdb: t.root(),
+        slot: 3,
+    }];
+    let walk = |k: &mut WalkKernel, what: &str| -> Result<kf_cuda::Report, String> {
+        let rep = k
+            .refresh_image(&img, &entries)
+            .map_err(|e| format!("{tag} {what}: {e}"))?;
+        rep.validate().map_err(|e| format!("{tag} {what}: {e}"))?;
+        rep.require_diff()
+            .map_err(|e| format!("{tag} {what}: {e}"))?;
+        Ok(rep)
+    };
+    let first = walk(&mut k, "first walk")?;
+    let want = walk_of(&pages).len();
+    let all_maps = first.runs.iter().all(|r| r.op == KFWR_OP_MAP);
+    let n1 = first.runs.len();
+    k.ack(first.header.generation, vec![KFWR_ACK_APPLIED; n1])
+        .map_err(|e| e.to_string())?;
+    let settled = walk(&mut k, "settled walk")?;
+    // (Nothing to acknowledge: an empty report has no verdicts to stage.)
+    let settled_quiet = settled.runs.is_empty();
+    // ── the move: the level's bytes go to FB 0, the parent names 0, the old instance is zero ──
+    let level = t
+        .move_pd1(vas[0], 0)
+        .ok_or_else(|| format!("{tag}: the tree has no PD1 on {:#x}", vas[0]))?;
+    k.write_image(&img, 0, &level).map_err(|e| e.to_string())?;
+    write_tree(&k, &img, &t)?;
+    let moved = walk(&mut k, "walk after the move")?;
+    l.check(
+        if v3 {
+            "ver3_level_move_to_fb0_is_quiet"
+        } else {
+            "ver2_level_move_to_fb0_is_quiet"
+        },
+        all_maps
+            && n1 == want
+            && settled_quiet
+            && moved.runs.is_empty()
+            && moved.header.refusals == 0
+            && !moved.truncated(),
+        format!(
+            "first walk {n1} MAP runs (model {want}, all MAP {all_maps}); settled quiet {settled_quiet}; \
+             after the move {} runs ({} UNMAP), refusals={} mask={:#x}",
+            moved.runs.len(),
+            moved
+                .runs
+                .iter()
+                .filter(|r| r.op == KFWR_OP_UNMAP)
+                .count(),
+            moved.header.refusals,
+            moved.header.refuse_mask
+        ),
+    );
+    k.ack(
+        moved.header.generation,
+        vec![KFWR_ACK_APPLIED; moved.runs.len()],
+    )
+    .map_err(|e| e.to_string())?;
+    // ── known-positive: the instance at 0 emptied — every placement must go ──
+    k.write_image(&img, 0, &vec![0u8; level.len()])
+        .map_err(|e| e.to_string())?;
+    let gone = walk(&mut k, "walk after emptying the level")?;
+    let unmaps = gone.runs.iter().filter(|r| r.op == KFWR_OP_UNMAP).count();
+    l.check(
+        if v3 {
+            "ver3_level_move_known_positive_empty_level_unmaps_all"
+        } else {
+            "ver2_level_move_known_positive_empty_level_unmaps_all"
+        },
+        unmaps == n1 && gone.runs.len() == n1,
+        format!(
+            "{unmaps} UNMAP of {n1} placements ({} runs)",
+            gone.runs.len()
+        ),
+    );
+    k.ack(
+        gone.header.generation,
+        vec![KFWR_ACK_APPLIED; gone.runs.len()],
+    )
+    .map_err(|e| e.to_string())?;
     k.release(img);
     Ok(())
 }

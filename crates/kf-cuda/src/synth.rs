@@ -153,9 +153,23 @@ pub fn vis(va: u64) -> usize {
     ((va >> 12) & 511) as usize
 }
 
+/// The empty half of a dual PDE: `_APERTURE_INVALID` (0), i.e. *"no sub-table"*.
+///
+/// ⊘ Added 2026-10-07. The VER2 fixtures used to write `big_pde(0)` here — aperture
+/// `VIDEO_MEMORY`, address 0 — which on the hardware is a PRESENT big-page table at FB offset 0
+/// (the aperture is the validity: `ogkm-580.65.06: src/nvidia/src/kernel/gpu/mmu/gmmu_trace.c:111-134`).
+/// It only read as "absent" because the walk kernel treated a zero sub-table address as null,
+/// which it no longer does (`cuda/walk/kf_walk.cu`, `KF_PDE_ADDR_ZERO_IS_A_TABLE`). The VER3
+/// builder already wrote 0 ([`ver3::dual_small`]).
+pub const DUAL_HALF_ABSENT: u64 = 0;
+
 /// A bump-allocated buffer standing in for GPGA.
 ///
-/// ⊘ **Offset 0 is never handed out.** Both decoders treat a zero child pointer as *"no
+/// ⊘ Corrected 2026-10-07, above the text it corrects: the walk kernel no longer treats a zero
+/// child pointer as absent (`KF_PDE_ADDR_ZERO_IS_A_TABLE`), so a table at offset 0 is walked
+/// like any other. The bump allocator still never hands out offset 0; a fixture that wants a
+/// table there (kf-gate9's level-move replay) places it explicitly.
+/// Old text: **Offset 0 is never handed out.** Both decoders treat a zero child pointer as *"no
 /// sub-table"* (`kayfabe-mmu/src/walker.rs`'s `if e.next != 0`, and the C at
 /// `nvkvm_gpu_emul.c:8615`), so a table placed there would be invisible rather than wrong —
 /// the worst kind of test fixture.
@@ -291,8 +305,9 @@ pub fn contiguous_small_pages_at(
     img.put64(pd3 + 8 * vi3(va_base) as u64, pde(pd2));
     img.put64(pd2 + 8 * vi2(va_base) as u64, pde(pd1));
     img.put64(pd1 + 8 * vi1(va_base) as u64, pde(pd0));
-    // The dual entry is 16 bytes: [big half, small half]. Only the small half is used here.
-    img.put64(pd0 + 16 * vi0(va_base) as u64, big_pde(0));
+    // The dual entry is 16 bytes: [big half, small half]. Only the small half is used here; the
+    // big half is INVALID (not `big_pde(0)`, which is a present table at FB 0).
+    img.put64(pd0 + 16 * vi0(va_base) as u64, DUAL_HALF_ABSENT);
     img.put64(pd0 + 16 * vi0(va_base) as u64 + 8, pde(small));
 
     for i in 0..pages {
@@ -321,4 +336,36 @@ pub fn contiguous_small_pages_at(
             len: pages * 4096,
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// ⊘ 2026-10-07: the fixture's dual PDE leaves its big half INVALID — `big_pde(0)` would be a
+    /// present big-page table at FB 0 to the hardware and to the walk kernel.
+    #[test]
+    fn the_fixture_big_half_is_invalid_not_a_table_at_zero() {
+        let va = 0x1_2000_0000u64;
+        let (img, root, _) = contiguous_small_pages(va, 4, 0x4000_0000);
+        let rd = |off: u64| {
+            let o = usize::try_from(off - img.origin).unwrap();
+            u64::from_le_bytes(img.mem[o..o + 8].try_into().unwrap())
+        };
+        let child = |e: u64| ((e >> ver2::ADDR_LO) & mask(ver2::ADDR_BITS)) << 12;
+        let pd2 = child(rd(root + 8 * vi3(va) as u64));
+        let pd1 = child(rd(pd2 + 8 * vi2(va) as u64));
+        let pd0 = child(rd(pd1 + 8 * vi1(va) as u64));
+        assert_eq!(rd(pd0 + 16 * vi0(va) as u64), DUAL_HALF_ABSENT);
+        assert_ne!(
+            rd(pd0 + 16 * vi0(va) as u64 + 8),
+            0,
+            "the small half is present"
+        );
+        assert_ne!(
+            big_pde(0),
+            DUAL_HALF_ABSENT,
+            "big_pde(0) is a PRESENT entry"
+        );
+    }
 }

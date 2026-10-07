@@ -288,7 +288,22 @@ __device__ __forceinline__ uint64_t kf_ps_bytes_of(const KfFormat &F, uint32_t f
  * SKETCH that proves the seam's shape, never as support.
  */
 
-/* Is this directory entry a pointer to a sub-table at all? */
+/* Is this directory entry a pointer to a sub-table at all?
+ *
+ * ⊘⊘⊘ KF_PDE_ADDR_ZERO_IS_A_TABLE — corrected 2026-10-07 (Windows Code43, run43), above the
+ * rule it corrects. Every walk path here used to add a second test, "a sub-table address of 0
+ * is a null pointer, not a sub-table", and skipped the entry WITHOUT a refusal. That rule is
+ * kayfabe's own (carried from the pre-v3 C emulator), not the hardware's: the aperture alone
+ * is the validity. RM's own software walker returns the PDE's address whenever the aperture is
+ * not INVALID (`ogkm-580.65.06: src/nvidia/src/kernel/gpu/mmu/gmmu_trace.c:111-134`), and its
+ * "no address" sentinel is 0xf precisely because 0 is a real one ("All base addresses are
+ * aligned and 0xf is unaligned", `src/nvidia/inc/kernel/gpu/mmu/mmu_trace.h:32`). FB offset 0
+ * is ordinary heap in a kayfabe guest. `[measured run43, 5f201b8a]` Windows 580.88 moves a
+ * kernel VA space's shift-29 directory level (VER2 PD1) to a new instance right after it
+ * BAR1-maps FB 0x0 (three times, once per adapter start); the next ALL_VA walk of that space
+ * found nothing under it and unmapped all 22 rows, and the kernel copy channel died at its
+ * next GP fetch. Now a present, in-window, aligned sub-table at 0 is walked like any other.
+ * Format-generic: VER2 and VER3 use the same paths (every family first-class). */
 __device__ __forceinline__ bool kf_dir_present(const KfFormat &F, uint64_t raw,
                                                uint32_t apc, bool leaf_capable)
 {
@@ -543,8 +558,8 @@ __device__ __forceinline__ uint32_t kf_dir_step(KfCtx &c, uint32_t k, uint64_t t
         return KF_STEP_SKIP;
     }
     if (F.pde_ap_map[apc] != KFWR_AP_VIDMEM) { c.refuse |= KFWR_R_FOREIGN_AP; c.refusals++; return KF_STEP_SKIP; }
+    /* ⊘⊘⊘ 2026-10-07 — ADDRESS 0 IS A TABLE (KF_PDE_ADDR_ZERO_IS_A_TABLE, below). */
     uint64_t next = kf_addr(F, raw, apc);
-    if (next == 0ull) return KF_STEP_SKIP;
     uint64_t cb = (uint64_t)F.dir[k + 1].entries * F.dir[k + 1].entry_bytes;
     if (!kf_table_ok(c, next, cb, cb)) return KF_STEP_SKIP;
     *child = next;
@@ -623,14 +638,14 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb)
                             if (F.pde_ap_map[aps] != KFWR_AP_VIDMEM) { c.refuse |= KFWR_R_FOREIGN_AP; c.refusals++; }
                             else {
                                 pts = kf_addr(F, hi16, aps);
-                                has_s = (pts != 0ull) && kf_table_ok(c, pts, sb, sb);
+                                has_s = kf_table_ok(c, pts, sb, sb);   /* 0 is a table: see below */
                             }
                         } else if (kf_slot_sparse(F, hi16)) c.sparse++;
                         if (kf_dir_present(F, lo16, apb, D.leaf_ps != KF_PS_NONE)) {
                             if (F.pde_ap_map[apb] != KFWR_AP_VIDMEM) { c.refuse |= KFWR_R_FOREIGN_AP; c.refusals++; }
                             else {
                                 ptb = kf_big_addr(F, lo16, apb);
-                                has_b = (ptb != 0ull) && kf_table_ok(c, ptb, bb, bb);
+                                has_b = kf_table_ok(c, ptb, bb, bb);   /* 0 is a table: see below */
                             }
                         } else if (kf_slot_sparse(F, lo16)) {
                             /* ogkm `_gmmuIsInvalidPdeOk`: an INVALID big half with VOL set
@@ -1760,8 +1775,7 @@ __device__ __forceinline__ bool kf_par_decode_slot(const KfArgs &a, uint32_t lev
             return false;
         }
         const uint64_t cb = (uint64_t)F.dir[level + 1u].entries * F.dir[level + 1u].entry_bytes;
-        const uint64_t nx = kf_addr(F, lo16, apc);
-        if (nx == 0ull) return false;          /* a null sub-table pointer is not a sub-table */
+        const uint64_t nx = kf_addr(F, lo16, apc);   /* 0 is a table: KF_PDE_ADDR_ZERO_IS_A_TABLE */
         if (!kf_win_table_ok(a.win, nx, cb, cb)) {
             if (census) kf_par_refuse_in(d, (nx & (cb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB, e.pdb);
             return false;
@@ -1781,21 +1795,17 @@ __device__ __forceinline__ bool kf_par_decode_slot(const KfArgs &a, uint32_t lev
     if (kf_dir_present(F, hi16, aps, false)) {
         if (F.pde_ap_map[aps] != KFWR_AP_VIDMEM) { if (census) kf_par_refuse_in(d, KFWR_R_FOREIGN_AP, e.pdb); }
         else {
-            pts = kf_addr(F, hi16, aps);
-            if (pts != 0ull) {
-                if (kf_win_table_ok(a.win, pts, sb, sb)) has |= 1u;
-                else if (census) kf_par_refuse_in(d, (pts & (sb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB, e.pdb);
-            }
+            pts = kf_addr(F, hi16, aps);   /* 0 is a table: KF_PDE_ADDR_ZERO_IS_A_TABLE */
+            if (kf_win_table_ok(a.win, pts, sb, sb)) has |= 1u;
+            else if (census) kf_par_refuse_in(d, (pts & (sb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB, e.pdb);
         }
     } else if (census && kf_slot_sparse(F, hi16)) atomicAdd(&d->sparse_slots, 1u);
     if (kf_dir_present(F, lo16, apb, L.leaf_ps != KF_PS_NONE)) {
         if (F.pde_ap_map[apb] != KFWR_AP_VIDMEM) { if (census) kf_par_refuse_in(d, KFWR_R_FOREIGN_AP, e.pdb); }
         else {
-            ptb = kf_big_addr(F, lo16, apb);
-            if (ptb != 0ull) {
-                if (kf_win_table_ok(a.win, ptb, bb, bb)) has |= 2u;
-                else if (census) kf_par_refuse_in(d, (ptb & (bb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB, e.pdb);
-            }
+            ptb = kf_big_addr(F, lo16, apb);   /* 0 is a table: KF_PDE_ADDR_ZERO_IS_A_TABLE */
+            if (kf_win_table_ok(a.win, ptb, bb, bb)) has |= 2u;
+            else if (census) kf_par_refuse_in(d, (ptb & (bb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB, e.pdb);
         }
     } else if (kf_slot_sparse(F, lo16)) {
         /* An INVALID, sparse big half vetoes the small table (see the serial walk). */

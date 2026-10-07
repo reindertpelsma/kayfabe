@@ -85,7 +85,12 @@ struct Gpga {
 
     explicit Gpga(size_t bytes) : mem(bytes, 0), bump(4096) {}
 
-    /* ⊘ Offset 0 is never handed out: the walker treats a zero child pointer as
+    /* ⊘ Corrected 2026-10-07, above the text it corrects: the walker no longer treats a
+     * zero child pointer as "no sub-table" (KF_PDE_ADDR_ZERO_IS_A_TABLE in kf_walk.cu; the
+     * hardware's rule is the aperture alone). Offset 0 is still not handed out by the bump
+     * allocator, so a case that wants a table at GPGA 0 places it there explicitly
+     * (diff/move_directory_level_to_gpga0_is_quiet).
+     * Old text: Offset 0 is never handed out: the walker treats a zero child pointer as
      * "no sub-table", matching kayfabe-mmu/src/walker.rs (`if e.next != 0`) and
      * the C (`nvkvm_gpu_emul.c:8615`). */
     uint64_t alloc(uint64_t bytes, uint64_t align)

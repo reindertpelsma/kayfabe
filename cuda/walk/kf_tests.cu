@@ -956,6 +956,33 @@ static void t_diff_move_page_table_is_quiet(void)
     if (g_fails_here) dump(f);
 }
 
+/* ★ 2026-10-07 — the replay of Windows run43's walk #2192 (KF_PDE_ADDR_ZERO_IS_A_TABLE in
+ * kf_walk.cu). The guest moves a DIRECTORY level (PD1, the shift-29 level) to a new instance at
+ * GPGA 0, repoints its parent and invalidates. No translation changed, so the diff must be
+ * EMPTY. Under the old "a zero child is a null pointer" rule the whole subtree vanished without
+ * a refusal and every placement under it was UNMAPped (run43: all 22 rows of the kernel copy
+ * channel's space). Both halves of a dual PDE at 0 are covered by the gate-9 replay. */
+static void t_diff_move_directory_level_to_gpga0_is_quiet(void)
+{
+    Fix f(16u << 20, cfg_default());
+    Tree t(f.g);
+    for (uint32_t i = 0; i < 8; i++) t.map4k(VP(i), GP(i));
+    t.map4k(VBASE + (1ull << 21), 0x900000ull);
+    settle(f, t, 2);
+    const uint64_t old_pd1 = t.pd1(VBASE, false);
+    const uint64_t pd2 = t.pd2(VBASE, false);
+    CHECK(old_pd1 != 0 && pd2 != 0);
+    memcpy(f.g.mem.data(), f.g.mem.data() + old_pd1, 4096);   /* GPGA 0 was never handed out */
+    memset(f.g.mem.data() + old_pd1, 0, 4096);
+    f.g.u64(pd2 + (uint64_t)vi2(VBASE) * 8) = kfb_pde(0);
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    validate(f);
+    CHECK_EQ(f.hdr.refusals, 0);
+    CHECK_EQ(f.hdr.run_count, 0);
+    if (g_fails_here) dump(f);
+}
+
 /* One run spanning two leaf tables (the task-boundary join): the full walk is
  * ONE run. `make check-coalesce-negative` breaks the join and requires this to fail. */
 static void t_one_run_across_page_tables(void)
@@ -2437,6 +2464,7 @@ static const Case CASES[] = {
     { "diff/reset_empties_the_slot",            t_diff_reset_empties_the_slot },
     { "diff/partial_and_overflow",              t_diff_partial_and_overflow },
     { "diff/move_page_table_is_quiet",          t_diff_move_page_table_is_quiet },
+    { "diff/move_directory_level_to_gpga0_is_quiet", t_diff_move_directory_level_to_gpga0_is_quiet },
     { "correctness/one_run_across_page_tables", t_one_run_across_page_tables },
 
     { "hostile/self_cycle",                     t_hostile_self_cycle },
