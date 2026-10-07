@@ -1,0 +1,29 @@
+DXDIAG_EXIT=0
+Display Tab 1: No problems found.
+Input Tab: No problems found.
+Direct3D:    0/4 (retail)
+DirectDraw:  0/4 (retail)
+Card name: NVIDIA GeForce RTX 4070
+Display Memory: 7840 MB
+Driver Version: 32.0.15.8088
+DDI Version: unknown
+Feature Levels:
+Driver Model: WDDM 3.2
+AGP Status: Enabled
+Card name: Microsoft Basic Display Adapter
+Display Memory: Unknown
+Driver Version: 10.0.26100.1
+DDI Version: unknown
+Feature Levels: Unknown
+Driver Model: Unknown
+AGP Status: Enabled
+Driver Version:
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows Media Foundation\ByteStreamHandlers]
+.am?, {EFE6208A-0A2C-49FA-8A01-3768B559B6DA}, MF AMRNB Media Source ByteStreamHandler
+.amr, {EFE6208A-0A2C-49FA-8A01-3768B559B6DA}, MF AMRNB Media Source ByteStreamHandler, Preferred
+.dvr-ms, {A8721937-E2FB-4D7A-A9EE-4EB08C890B6E}, MF SBE Source ByteStreamHandler
+.flac, {0E41CFB8-0506-40F4-A516-77CC23642D91}, MF FLAC Media Source ByteStreamHandler, Preferred
+audio/flac, {0E41CFB8-0506-40F4-A516-77CC23642D91}, MF FLAC Media Source ByteStreamHandler, Preferred
+audio/x-flac, {0E41CFB8-0506-40F4-A516-77CC23642D91}, MF FLAC Media Source ByteStreamHandler, Preferred
+
+RC=0

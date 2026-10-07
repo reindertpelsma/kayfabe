@@ -4,12 +4,13 @@
 Per attempt: display adapters (ConfigManagerErrorCode), nvidia-smi, and the System-log events since boot
 from nvlddmkm / Display / Kernel-Power / BugCheck / WHEA / Kernel-PnP (counts and first lines).
 At the end of the window: ACPI power-down so the guest flushes its logs (QMP system_powerdown).
-usage: qga_status_sampler2.py RUN OUTDIR SECONDS [DXDIAG_AT_SECONDS]
+usage: qga_status_sampler2.py RUN OUTDIR SECONDS [WORKLOAD_AT_SECONDS [POWERSHELL_FILE]]
 With DXDIAG_AT_SECONDS the sampler runs `dxdiag /t` once at that time (a light D3D9/11/12 device user on the
 NVIDIA adapter through the user-mode driver) and stores the matching lines in run<N>-dxdiag.txt."""
 import subprocess, sys, time, json, os, pathlib
 run, out, total = sys.argv[1], pathlib.Path(sys.argv[2]), float(sys.argv[3])
 dxat = float(sys.argv[4]) if len(sys.argv) > 4 else None
+wlfile = sys.argv[5] if len(sys.argv) > 5 else None   # a PowerShell file run instead of dxdiag
 rd = f'/var/lib/kf-windows-20261005/boundary-kayfabe-{run}'
 sock, qmps = rd + '/qga.sock', rd + '/qmp.sock'
 qmp = '/var/lib/kf-windows-20261005/boundary-tools/qmp.py'
@@ -43,13 +44,14 @@ if(Test-Path $f){ Select-String -Path $f -Pattern 'Card name|Driver Version|DDI 
 '''
 def dxdiag():
     t = time.time()
+    script = open(wlfile).read() if wlfile else DX
     try:
-        pr = subprocess.run(['timeout', '260', 'python3', qmp, sock, 'qga-exec', 'powershell.exe', '-NoProfile', '-Command', DX],
+        pr = subprocess.run(['timeout', '260', 'python3', qmp, sock, 'qga-exec', 'powershell.exe', '-NoProfile', '-Command', script],
                             capture_output=True, text=True, timeout=270)
         txt = pr.stdout + ('\nSTDERR ' + pr.stderr[-300:] if pr.stderr else '') + f'\nRC={pr.returncode}'
     except subprocess.TimeoutExpired:
         txt = 'sampler timeout'
-    (out / f'run{run}-dxdiag.txt').write_text(txt)
+    (out / f'run{run}-{"workload" if wlfile else "dxdiag"}.txt').write_text(txt)
     print('DXDIAG', f'{time.time()-t:.0f}s', len(txt), flush=True)
 start = time.time(); k = 0; dxdone = False
 print('SAMPLER_START', time.strftime('%FT%T'), flush=True)

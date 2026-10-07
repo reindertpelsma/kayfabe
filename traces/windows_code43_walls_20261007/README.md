@@ -2681,7 +2681,7 @@ display enabled, P8, Xid 61 (unchanged).
   (`Status OK`); `nvidia-smi` exit 0 (`NVIDIA GeForce RTX 4070, 580.88`).** The live System-log query
   (events since boot from nvlddmkm, Display, Kernel-Power, BugCheck, WHEA, Kernel-PnP, or ids 4101/1001/41)
   returned exactly one event in every sample: Kernel-Power 172 "Connectivity state in standby:
-  Disconnected, Reason: NIC compliance" (Information; the user-mode network stand-in). No 4101, no 1001,
+  Disconnected, Reason: NIC compliance" (Information). No 4101, no 1001,
   no 41, no nvlddmkm event.
 - The offline System.evtx (recovered after the clean shutdown, so flushed) holds no display-driver
   event since the run's start; the pagefile has no bugcheck header (`all_zero`); no minidump.
@@ -2720,3 +2720,53 @@ kernel GR channel's three deferred bundles plus one 3D release; the D3D UMD cont
 (OWNER_RULINGS §U's scan), so the first user GR channel work may exercise the refused-by-name deferred
 commands (the GR ctxsw binds, `PRESERVE_CTX`, `FIFO_UPDATE_CHANNEL_INFO`) or 3D methods that
 `KF3_KERNEL_GR_WORK`'s allowlist does not carry. A death names the next wall.
+
+### Run49 result: the guest stays clean through dxdiag, and the deferred API is exercised 23 times; the probe itself is inconclusive about device creation
+
+Product/QEMU `621310b3` (code `83881ecc`), flags as run47, `--max-seconds 800`; started 2026-10-07 22:47 UTC;
+clean ACPI shutdown, QEMU exit 0. [command](run49-command.json), [trace](run49-qemu.log.gz),
+[requests](run49-requests.log), [abort](run49-abort.txt), [30 status samples](run49-status/),
+[dxdiag lines](run49-dxdiag.txt), [sampler log](run49-sampler.out), [bugcheck recovery](run49-bugcheck.json),
+[offline Windows events](run49-evtx.txt), [host after](run49-host-after.txt). Host afterwards: no QEMU,
+NBD disconnected, display enabled, P8, Xid 61 (unchanged).
+
+**Measured (run49 at 621310b3, 2026-10-08):**
+- 30/30 samples clean: NVIDIA Code 0, `nvidia-smi` exit 0, only the Kernel-Power 172 information event
+  (checked by script: 0 anomalous). No 4101/1001/41, no bugcheck header, no display-driver event in the
+  offline log, 0 `DEAD`/`dead=Some`.
+- `dxdiag /t` (SYSTEM via QGA, hidden): exit 0 in 15 s, "Display Tab 1: No problems found", NVIDIA GeForce
+  RTX 4070, `Driver Model: WDDM 3.2`, `Display Memory: 7840 MB`, driver 32.0.15.8088; **`Feature Levels:` empty
+  and `DDI Version: unknown`** for the NVIDIA adapter (and `Unknown` for the Basic Display adapter).
+- The deferred API is exercised far more than idle: **23 triples** (INITIALIZE_CTX, PROMOTE_CTX, EVICT_CTX
+  registered and triggered) against 5 in run48's 600 s idle; 69 triggers, 69 `DONE`, 0 refusals. The 18
+  extra triples appeared in the window of the `dxdiag` run (inferred as caused by it: user GR TSGs
+  created by the D3D user-mode driver; the correlation by time was not separated from other desktop
+  activity).
+- One host channel retired with real work: token `0x801` (host `0x1002e`, a CE channel), `forwarded=2
+  submissions=2`, `gp_get=Some(2)`.
+
+**Falsifier outcomes.** H-d3d as written required the NVIDIA adapter listed *with feature levels*: that
+part is **not met** (empty), so H-d3d is not supported as stated; the guest-side and trace parts hold
+(no TDR, no death, Code 0, smi 0). What the empty fields mean (dxdiag creating its devices in session 0
+without a desktop, or a failed device creation) was not discriminated. Run50 replaces the probe with one
+whose result cannot be read two ways.
+
+## Run50 setup: a D3D12 queue Signal plus a fence wait (real GPU work), one boot, guest-side iteration
+
+Same binary `kf3-bins/621310b3` and flags as run47. One long boot (`--max-seconds 1500`) in which the
+probe `scripts/bench/windows/d3d12_signal_probe.ps1` is run through QGA by hand and, if it fails to
+compile (no compiler is available to test it off-guest), corrected inside the same boot; those are
+guest-side edits to a test script, not new kayfabe walls, and each execution is recorded. The probe
+finds the NVIDIA adapter through DXGI, creates a D3D12 device, a DIRECT queue and a COPY queue, and on
+each queue signals a fence three times and waits for each (20 s timeout): a semaphore release that the
+GPU must execute and the completion path must report.
+
+**Hypothesis H-signal (stated before the run).** Both queues' fences reach their values (`SIGNALED`),
+i.e. Windows submits real GR and CE work through its kernel channels, the rewriter admits it, the GPU
+executes it, and the completion reaches the guest; the guest stays free of TDR/bugcheck and Code 0.
+**Falsifier:** `D3D12CreateDevice`/`CreateCommandQueue` fails (HRESULT recorded), a wait times out
+(`TIMEOUT`), a channel dies (`DEAD`, `dead=Some`, a named refusal in the trace), or a 4101/1001/41 event,
+Code != 0 or an `nvidia-smi` failure appears afterwards. Prediction: uncertain; the likeliest first
+failure is a method the GR allowlist does not carry (the 3D/compute binds of the user GR channel) or a
+refused-by-name deferred command (§29.3). A refusal names the next wall and goes to the owner if it
+needs a decision.
