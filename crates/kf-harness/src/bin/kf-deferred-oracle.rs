@@ -255,20 +255,27 @@ impl GrUnit {
             defapi: None,
         };
         // Schedule the channel onto its runlist FIRST — an unscheduled channel's PBDMA never
-        // fetches a GPFIFO entry at all, doorbell or not. (Measured 2026-10-07: submitting before
-        // scheduling just timed out with no Xid, nothing fetched — a harness bug, not a hardware
-        // refusal; fixed here.)
+        // fetches a GPFIFO entry at all, doorbell or not. (Measured 2026-10-07 run 1: submitting
+        // before scheduling just timed out with no Xid, nothing fetched — a harness bug, not a
+        // hardware refusal; fixed here.)
         if let Err(e) = u.rm.schedule(chan) {
             u.free();
             return Err(format!("schedule: {e:?}"));
         }
-        // THEN bind the compute class on its hardware subchannel, so the channel has a real
-        // context before we ask it to do anything else (matches `kf_chan::host::HostRing`'s own
-        // sequence for a graphics-runlist ring).
-        let hdr = method_header_inc(SUBCH_GR, SET_OBJECT, 1).ok_or("SET_OBJECT header")?;
-        if let Err(e) = u.submit(&[hdr, compute.1]) {
-            u.free();
-            return Err(format!("bind compute object: {e}"));
+        // ⊘ Measured 2026-10-07 run 2: binding the compute class on subchannel 0 here (before
+        // touching the 5080 object at all) faulted with Xid 13 "Graphics Exception: Class 0xc9c0
+        // Subchannel 0x0 Mismatch" (self-harm only — the bystander desktop and GPU state were
+        // unaffected; see `traces/` for the full line). That bind was this binary's own
+        // precaution, not something the task needs: `birth_channel` already typed the channel
+        // `ENGINE_TYPE_GRAPHICS`, which is what puts it on the GR runlist. So it is skipped,
+        // default off behind `KF_DF2_BIND_COMPUTE=1`, and the 5080 bind is tried on a channel
+        // whose subchannel 0 was never touched by any `SET_OBJECT` at all.
+        if std::env::var_os("KF_DF2_BIND_COMPUTE").as_deref() == Some(std::ffi::OsStr::new("1")) {
+            let hdr = method_header_inc(SUBCH_GR, SET_OBJECT, 1).ok_or("SET_OBJECT header")?;
+            if let Err(e) = u.submit(&[hdr, compute.1]) {
+                u.free();
+                return Err(format!("bind compute object: {e}"));
+            }
         }
         Ok(u)
     }
