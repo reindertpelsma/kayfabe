@@ -1187,3 +1187,23 @@ guest vector.
   the engine retired, the worker raises the guest's GR0 vector (`kf3: NSI RELAY …` log line, first
   16 then each power of two). Nothing runs on a vCPU or under a lock a vCPU takes.
 - The refused-segment log now shows up to 128 words (run31's GR segment had 46; 14 were unseen).
+
+**Native oracle first** (`kf-gr-tier`, bare metal, no QEMU; results in the next subsection, at the
+product revision). It plays Windows' kernel GR channel with run31's 32 logged words unchanged
+(their `SEM_ADDR` included) plus a semaphore release, then a hostile `LOAD_MME_INSTRUCTION_RAM`;
+and run31's CE segment on a CE T-mode ring with the inert rule, then a software method on
+subchannel 5. It checks the USER assertion, the two host objects, engine completion (guest
+semaphore and guest GP_GET written by the engine, zero CPU GP_GET stores), which host edge the
+completion raises, named refusals with GP_GET unmoved, and full release. It cannot check the
+guest-vector relay (no VMM): that is run32's evidence.
+
+**Falsifier, stated before run32.** Hypothesis: the abort at VFIO 2861 follows from kayfabe killing
+Windows' first kernel-channel work. It is wrong if, in run32, both channels' first segments are
+executed by the engine (the GR channel retires its GP 0 with `gp_get_by_engine`, the CE channel
+binds subchannel 5 inertly and retires its GP 0) and the abort still sits at VFIO ≤ 2866 (within
+~5 indices of 2861). **Prediction:** the 14 unseen GR words carry methods outside the 17-method
+allowlist, so the GR channel is refused by name at its first unadmitted method (now logged with up
+to 128 words), the abort stays near 2861, and the run names the next 2D/I2M method set. In that
+case the falsifier is not decided, and the next batch is that method set (native oracle first).
+If the GR segment does retire, run32 must show `NSI RELAY` lines for GR0 and the abort moving past
+2861.
