@@ -1207,3 +1207,92 @@ to 128 words), the abort stays near 2861, and the run names the next 2D/I2M meth
 case the falsifier is not decided, and the next batch is that method set (native oracle first).
 If the GR segment does retire, run32 must show `NSI RELAY` lines for GR0 and the abort moving past
 2861.
+
+### Native oracle result, before run32 (`kf-gr-tier` at 01870988)
+
+> **Correction, 2026-10-07 (compliance audit `docs/audits/2026-10-07-code43-gr-derive-compliance.md`
+> on `claude/audit-derive-20261007`, BLOCKER 1).** The subsection promised above was missing when
+> run32's commits were pushed, and the oracle's log was not in git. What happened, in order: the
+> oracle ran on a dirty tree (two shake-out runs, the first failing its GR0-edge check, which was
+> then turned into a measurement), then at the clean product revision 01870988 by
+> `loop-build.sh` at 15:32:46 local, before run32's VM started (15:34). Its log is now committed:
+> [gr-tier-native-run32.log](gr-tier-native-run32.log). What it does not cover is stated below.
+
+Bare metal, borrowed RTX 4070, host 595.91.07, no QEMU, exclusive GPU lock; Xid count 5 before
+and after (all five predate this session); display active, P8 → P5 during the run.
+- **Measured:** host channel born USER and `assert_user` admits it; host objects 0x902d and
+  0xa140 allocated; run31's 32 words re-authored (17 GR methods) and completed by the engine:
+  guest semaphore `0x6a0b0001` written by the engine, guest GP_GET = 1 written by the engine with
+  zero CPU stores; the completion raised `FIFO_EVENT_MTHD` (kf3's session fd) and **not** the GR0
+  notifier; a hostile `LOAD_MME_INSTRUCTION_RAM` refused by name with GP_GET unmoved; run31's CE
+  segment completed on a CE T-mode ring with subchannel 5 bound inertly, and a later method on
+  subchannel 5 refused as `InertSubchannelMethod`; both rings, objects, mappings and CPU views
+  released.
+- **Not covered:** the guest-vector relay (no VMM in the oracle), and any GR work beyond run31's
+  32 words.
+
+### Run32 result: the GR segment's last 14 words bind 3D and compute objects; abort unchanged (VFIO 2861)
+
+Product/QEMU 01870988bc7fe1d64e00164ffd24368d3e1ac63c, `kf3-bins/01870988`, flags as run31 plus
+`KF3_KERNEL_GR_WORK=1` and `KF3_SW_SUBCH_INERT=1`; run on 2026-10-07 at 13:33-13:36 UTC.
+[command](run32-command.json), [status](run32-status.json), [trace](run32-qemu.log.gz),
+[requests](run32-requests.log), [completion](run32-complete.json),
+[host health](run32-host-health.txt), [unit result](run32-unit-result.txt),
+[9/9 gates](run32-gates.log) (11/11 USER births), [build](run32-build.log),
+[watchdog recovery](run32-watchdog-recovery.log) (cleanup verified, NBD disconnected). After 97 s:
+the NVIDIA adapter has ConfigManagerErrorCode 43 and nvidia-smi exits 9. Host afterwards: no
+QEMU, no NBD attached, display enabled, P8, Xid count unchanged (5).
+
+**Measured (seen in run32 at 01870988):**
+- Both kernel-GR channels were admitted to the tier (`kf-chan: GR tier admitted … privilege=USER
+  objects=[(902d, …), (a140, …)]`), and every Translated birth logged `sw_subch_inert=true`.
+- **CE channel c1d00013:ff040000** (token 0x802): the subchannel-5 bind was accepted inertly
+  (`inert_binds=1`), and the segment ran on the engine: `forwarded=1 submissions=1 gp_get=Some(1)`.
+  This is the first time this channel's work completed.
+- **GR channel c1d00015:ff040001** (token 0x3): the 17 2D methods were re-authored, then the
+  segment was refused at word 35, `ForeignClass { subch: 0, class: 0xc997 }`. All 46 words are
+  now logged. The 14 unseen words are: `SET_OBJECT` on subchannel 4 = 0xc7b5 (CE), on 0 = 0xc997
+  (ADA_A, 3D), `SET_NOTIFY_A/B` on 0 = (1, 0x2023b3a0), `SET_OBJECT` on 1 = 0xc9c0
+  (ADA_COMPUTE_A), `SET_NOTIFY_A/B` on 1 = (1, 0x2023b3a0), `SET_OBJECT` on 5 = 1. The segment
+  releases no semaphore: its completion is GP_GET alone.
+- No `NSI RELAY` line (no GR-tier work retired). **Abort point unchanged:** 858 RPCs, teardown at
+  544, last RPC `GPFIFO_SCHEDULE` 0xa06f0103 returning 0 — identical to runs 30-31 (VFIO 2861).
+
+**Falsifier outcome: not decided.** As predicted, the GR channel was refused at its first
+unadmitted item (a 3D `SET_OBJECT`, not a 2D method), so its first work did not run; the CE
+channel's did. The abort did not move, which only says that executing the CE channel's segment
+alone is not enough.
+
+## Twelfth repair: 3D and compute notifier addresses on the GR tier, audit fixes (run33 setup)
+
+**Audit fixes first** (BLOCKER 2): the tier no longer types a class id. `GrClass::of_class` takes
+every kind (2D, inline-to-memory, 3D, compute) from kf-chip's generated per-family sets, and a test
+pins that every family's 2D class is the one `cl902d.h` defines (generated `class_ids:FERMI_TWOD_A`).
+`admit_gr_tier` admits each kind on its own from the host family's set (Blackwell's
+inline-to-memory class 0xcd40 included) and refuses a kind the host lacks loudly, without failing
+the others. The 2D and inline-to-memory method allowlists are unchanged.
+
+**Batch 2 (exactly run32's 14 new words).** The family 3D class gets a host object too (the
+compute object is the ring's GR-context object). On a 3D or compute subchannel only
+`SET_NOTIFY_A` (`ADDRESS_UPPER` 7:0) and `SET_NOTIFY_B` (`ADDRESS_LOWER` 31:0, 4-byte aligned) are
+admitted (`ogkm-580.65.06: clc997.h:41-45`; compute from `clc7c0.h:41-45`, because OGKM's
+`clc9c0.h` names only the class id at line 27 — that ADA_COMPUTE_A keeps the layout is
+**inferred**). The pair is an address: the decoder emits `Ir::GrAddress` with the guest VA, the
+binder resolves it through the channel's placement rows (one writable row, 16 bytes, the size of
+one `NvNotification`) into a T-space window address, and only the address perimeter
+(`tspace_unsafe::put_gr_address`) emits the two words. An address no row covers is refused by
+name (`VirtualUnresolved`). `NOTIFY` (0x10c), the trigger that would write there, stays refused,
+as do MME programming, `PM_TRIGGER` and MME calls. Inferred, not tested: a later remap of that VA
+leaves the engine's notifier address on the old backing, which is still inside this VM's windows.
+
+**Open questions for the owner (audit SHOULD-FIX 4 and 5, not acted on).**
+- Notifiers 12, 23, 24 and 26 are accepted silently on the strength of a three-boot capture on one
+  RTX 4070. In OGKM the guest's own interrupt handlers raise them (`kernel_ce.c:702`,
+  `kernel_graphics.c:2631`), and Translated CE rings have no relay that would deliver them, so
+  they are never delivered. That needs a ruling against §S.3.
+- `PERF_GET_POWERSTATE` answers "AC" (`kf_rm::vfguest`, line 174) without a ruling.
+- The capability allowlist change in `kf-abi/src/capability.rs:1531-1543` (admits `NV01_EVENT_KERNEL_CALLBACK` for every guest) needs owner review
+  before any merge.
+- Still to do in code (SHOULD-FIX 3 and 5): key `RULED_NOTIFIERS` by driver version from the
+  generated tables, and take `vfguest.rs`'s status offset and control ids/sizes from the generated
+  tables.
