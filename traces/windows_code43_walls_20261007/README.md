@@ -2965,13 +2965,13 @@ Branch `claude/code43-deferred-20261008`; evidence for runs 47-52 in this direct
 # Loop 2026-10-08 (second session), branch `claude/code43-d3d-20261008`: why does D3D device creation say out-of-video-memory?
 
 (Continues at run 53. Binary and guest as in runs 47-52 unless a setup says otherwise. Every run states its
-hypothesis and falsifier before it starts. `[measured]` = read from a file or a guest/host output; `[inferred]`
+hypothesis and falsifier before it starts. `[measured, runN]` = read from a file or a guest/host output; `[inferred]`
 = reasoning, not yet tested.)
 
-## Reference measured before any boot: what Windows asks the real GSP for FB info (vfio-8/9/10)
+## Reference read from the VFIO traces (vfio-8/9/10) before any boot: what Windows asks the real GSP for FB info (vfio-8/9/10)
 
 `scripts/bench/windows/gsp_info_scan.py` over the three VFIO observer captures (`gsp.jsonl` on the host;
-output [vfio8-9-10-fb-bus-info.txt](vfio8-9-10-fb-bus-info.txt)). `[measured]` In all three, Windows 580.88
+output [vfio8-9-10-fb-bus-info.txt](vfio8-9-10-fb-bus-info.txt)). `[measured, vfio-8/9/10]` In all three, Windows 580.88
 sends **one** `FB_GET_INFO_V2` (`0x20801303`) with **19 indices** at queue sequence 121 and the real GSP answers
 it with status 0 (reply at sequence 124); later only single-index `BUS_WIDTH` requests (0xb). Indices and
 the real RTX 4070's (host die, 12 GiB) reply, names from `ctrl2080fb.h`:
@@ -2998,7 +2998,7 @@ the real RTX 4070's (host die, 12 GiB) reply, names from `ctrl2080fb.h`:
 | 0x37 | PARTITION_MASK_1 | 0 | hardware config |
 | 0x38 | LTC_MASK_1 | 0 | hardware config |
 
-`[measured]` **None of the 19 is a size or a free/used count** (no TOTAL_RAM_SIZE 0x08, HEAP_SIZE 0x09, USABLE_RAM_SIZE
+`[measured, vfio-8/9/10]` **None of the 19 is a size or a free/used count** (no TOTAL_RAM_SIZE 0x08, HEAP_SIZE 0x09, USABLE_RAM_SIZE
 0x20, BAR1_AVAIL 0x1d): Windows learns the memory sizes elsewhere (the GSP static info it receives at init),
 not from this request. `[measured in code, hostquery.rs]` kayfabe serves **12 of the 19** today (`FORWARDED_FB_INFO_INDICES`: 0x0b, 0x0d,
 0x19, 0x1a, 0x1b, 0x22, 0x23; `FORWARDED_FB_EXTRA_INDICES`: 0x04, 0x14, 0x37, 0x2b, 0x38) and refuses the whole request on the first
@@ -3054,7 +3054,7 @@ Host afterwards: no QEMU, no NBD device in use, GPU on the `nvidia` driver (595.
 [RM window of the probe](run53-probe-window.log), [display probe](run53-display-probe.txt), [host after](run53-host-after.txt).
 The probe compiled first time (`video_memory_probe.ps1`). No `DEAD`, no `dead=Some`.
 
-**Measured (guest, `video_memory_probe.ps1`, NVIDIA adapter):**
+**Measured (run53, guest, `video_memory_probe.ps1`, NVIDIA adapter):**
 - `GetDesc1`: DedicatedVideoMemory 3748 MB, DedicatedSystemMemory 0, SharedSystemMemory 4092 MB; `D3DKMTQueryAdapterInfo GETSEGMENTSIZE`
   returns the same three numbers (status 0).
 - `QueryVideoMemoryInfo` LOCAL: Budget 3185 MB, CurrentUsage 0, AvailableForReservation 1686 MB; NON_LOCAL: Budget 3683 MB. Unchanged after the
@@ -3078,7 +3078,7 @@ The probe compiled first time (`video_memory_probe.ps1`). No `DEAD`, no `dead=So
 - **H-seg: FALSIFIED** by the pre-stated criterion (Budget 3185 MB >= 2048 MB and Dedicated 3748 MB >= 3 GiB). The segment sizes and the budget are sane.
 - **H-kmt-device: SUPPORTED** (`D3DKMTCreateDevice` = 0): the kernel device exists; the failure is after it (user-mode driver or later).
 - **H-fb (list part): the arriving list equals the reference's 19** (not falsified); the causal part is NOT tested (nothing served this run).
-  `[measured]` the 19 hold no size or usage count, so the FB-info refusal cannot be what makes the budget wrong (the budget is fine). It could still
+  `[measured, vfio-8/9/10]` the 19 hold no size or usage count, so the FB-info refusal cannot be what makes the budget wrong (the budget is fine). It could still
   matter for the NVIDIA driver's own `qwMemorySize`/NVML values, which are 0/N/A: untested.
 - **H-alloc: not supported as stated.** The failing creates DO reach the RM (about 15 allocs and 15 controls each, all served except the refusals).
   This corrects run50's reading ("nothing new reaches the RM" was about *new* requests, not about none).
