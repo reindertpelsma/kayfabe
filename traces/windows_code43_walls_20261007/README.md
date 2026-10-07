@@ -1854,3 +1854,54 @@ holds. Run38 is not taken.
    (`0x20801111`), plus the second reserved-PDE copy and the FECS-trace query, stand between
    StartDevice and the first successful WDDM submission. Today the software runlist is an
    observation-only experiment (`KF3_SW_RUNLIST_PROBE`).
+
+## Bisect of the 13 zero answers, step 1, plus the server-context-only PDE copy (run38 setup)
+
+Branch `claude/code43-stubs-20261007`, from `1fd82ed2`, 2026-10-07. The owner's rulings of 2026-10-07
+(relayed by the coordinator): privileged, non-compute host-management queries may be stubbed, but
+only the minimal set Windows needs. This section starts the bisect of run37's 13 answers and
+batches one product repair that acts only after VFIO 2861.
+
+**What the RPC streams say before any run (measured, run36/run37 against vfio-10).**
+- All 13 controls are sent before the abort in both runs, at the same RPC indices: ten early
+  (run36 RPCs 110-166; vfio-10 116-205) and three late, `0x2080a801` (a second time), `0x2081010d`
+  and `0x2080a630` (run36 RPCs 520-522; vfio-10 2834-2836), 22 RPCs before the paging client.
+- The only other difference between run36 and run37 before the abort is ONE extra RPC in run37:
+  right after `0x20809004` (CLK legacy 0x04) is answered, Windows sends `0x2080a0a7` (PERF legacy;
+  kayfabe leaves it unserviced, vfio-10 sends it at 117 and answers 0). So Windows reads
+  `0x20809004`'s answer. That does not make it the needed one.
+
+**Bisect step 1 (diagnostic, `KF3_DIAG_ZERO_OK=1`, `diagzero.rs` `BISECT_STEP`).** Only the
+three late controls are answered `NV_OK` with zeroed params; the other ten are left unserviced as
+in run36. `0x2080a801` is answered at both of its occurrences (one id).
+
+**Product repair (default on): the server-context-only reserved-PDE copy.** In run37 the second
+`COPY_SERVER_RESERVED_PDES` (`0x90f10106`) on c1d00021's VA space was refused with 0x56. Decoded from
+vfio-10's request at 2915 (the same call on c1d00022): `pageSize` 0x1000, `virtAddrLo` 1,
+`virtAddrHi` 0, one level, physical 0x3200000, size 0x1000, video memory, page shift 29. OGKM names
+this form: *"BUG 4580145 WAR: make sure only GSP's context is updated; caller is WAR if (AddrHi <
+AddrLo)"* (`ogkm-580.65.06: src/nvidia/src/kernel/mem_mgr/gpu_vaspace.c:4418-4425`). On the GSP
+platform it skips the reservation (`:4477-4484`) and only swaps that level's backing in the
+server's own walker for the server-RM-owned VA (`:4492-4543`); vfio-10 answers 0.
+- `kf_abi::gvaspacepdes` no longer refuses an inverted range as malformed. It decodes it, skips
+  only the two reservation-alignment rules, and names the form (`is_server_context_only`). The
+  level-count, page-size and zero-level-size rules still refuse.
+- `kf_rm::rmrpc::translate_published_pdes`: that form is `Translation::Inert`. No page-directory
+  statement is made (its `levels[0]` is a PD level, not the root), and the init-table link answers
+  `NV_OK` with the re-encoded request. kayfabe keeps no server walker; the deeper levels of an
+  ordinary publication are dropped for the same reason.
+- Tests: `kf-abi` `gvaspace_pdes` (the vfio-10 shape decodes, is not a root, re-encodes; its
+  other rules still refuse), `kf-rm` `gvas_publication` (through the served chain: `NV_OK`, the
+  re-encoded body, no statement reaches the memory plane, nothing held).
+
+**Falsifiers, stated before run38.**
+- *Bisect, H-late: the needed answers are among the three late controls.* Supported if the run
+  logs `DIAG-ZERO-OK` for exactly those three ids and the abort moves past VFIO 2861 (no teardown
+  after the paging channel's `GPFIFO_SCHEDULE`; THERMAL legacy `0x2080852e`/`0x2080852a` follow).
+  Falsified if the abort stays at VFIO 2861: then at least one of the ten early controls is
+  needed (step 2 answers the ten early ones alone).
+- *The PDE repair:* only testable if the abort moves. Then it is supported if the second
+  `0x90f10106` on the new VA space returns 0 and Windows goes past VFIO 2915; falsified if the
+  same call is still refused. Whether the bugcheck 0x119 changes is recorded, not predicted.
+- *Prediction:* the abort moves past 2861 (the late trio is sent right before the stage that
+  failed).

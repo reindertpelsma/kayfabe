@@ -49,6 +49,12 @@ pub const DIAG_ZERO_OK: &[(u32, &str)] = &[
     ),
 ];
 
+/// ★ BISECT (2026-10-07, run38; `traces/windows_code43_walls_20261007/README.md`, "Bisect").
+/// The subset of [`DIAG_ZERO_OK`] this build answers. Run38: the three controls Windows sends
+/// right before it creates the paging channel (run36 RPCs 520-522, vfio-10 2834-2836).
+/// `0x2080a801` is also sent early (run36 RPC 152), and that occurrence is answered too.
+pub const BISECT_STEP: &[u32] = &[0x2080_a801, 0x2081_010d, 0x2080_a630];
+
 /// Whether `KF3_DIAG_ZERO_OK=1` is set (read once).
 #[must_use]
 pub fn enabled() -> bool {
@@ -73,9 +79,12 @@ impl DiagZeroOk {
         }
     }
 
-    /// The listed name of `cmd`, if it is in the set.
+    /// The listed name of `cmd`, if it is in the set AND in this bisect step's half.
     #[must_use]
     pub fn listed(cmd: u32) -> Option<&'static str> {
+        if !BISECT_STEP.contains(&cmd) {
+            return None;
+        }
         DIAG_ZERO_OK
             .iter()
             .find(|(c, _)| *c == cmd)
@@ -144,8 +153,14 @@ mod tests {
     }
 
     #[test]
-    fn only_listed_controls_are_named() {
-        assert!(DiagZeroOk::listed(0x2080_8524).is_some());
+    fn only_listed_controls_of_this_bisect_step_are_named() {
+        for c in BISECT_STEP {
+            assert!(DIAG_ZERO_OK.iter().any(|(d, _)| d == c), "{c:#x}");
+            assert!(DiagZeroOk::listed(*c).is_some());
+        }
+        for (c, _) in DIAG_ZERO_OK {
+            assert_eq!(DiagZeroOk::listed(*c).is_some(), BISECT_STEP.contains(c));
+        }
         assert!(DiagZeroOk::listed(0x2080_852e).is_none());
         assert!(DiagZeroOk::listed(0x2080_1220).is_none());
     }
@@ -181,13 +196,13 @@ mod tests {
         let mut p = DiagZeroOk::new(abi());
         let w = abi().rm_control_wire();
         let r = p
-            .respond(&control(0x2080_8524, &[0xab; 4], 0))
+            .respond(&control(BISECT_STEP[0], &[0xab; 4], 0))
             .expect("listed");
         assert_eq!(r.rpc_result, NV_OK);
         assert_eq!(&r.body[w.status_off..w.status_off + 4], &[0; 4]);
         assert_eq!(&r.body[w.params_off..], &[0; 4]);
         assert!(p.respond(&control(0x2080_852e, &[0xab; 4], 0)).is_none());
-        let mut free = control(0x2080_8524, &[0; 4], 0);
+        let mut free = control(BISECT_STEP[0], &[0; 4], 0);
         free.function = RpcFunction::Free;
         assert!(p.respond(&free).is_none());
     }

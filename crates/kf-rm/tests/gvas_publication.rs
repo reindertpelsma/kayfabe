@@ -231,3 +231,60 @@ fn with_the_memory_plane_seated_every_statement_is_carried_and_held() {
     let _ = chain.respond(&other);
     assert!(!chain.holds_for_refresh(&other));
 }
+
+/// ★ The server-context-only publication (`virtAddrHi < virtAddrLo`; OGKM 580.65.06
+/// `gpu_vaspace.c:4418-4427`), in the shape Windows 580.88 sent as its second publication on one
+/// VA space (vfio-10, RPC 2915: one level of page shift 29 at a video-memory address). Before
+/// 2026-10-07 the chain refused it with 0x56 (run37). Now: answered `NV_OK` with
+/// `InitTablePolicy`'s re-encoded body, and NO page-directory statement reaches the memory
+/// plane, because its `levels[0]` is not a root.
+#[test]
+fn a_server_context_only_publication_is_answered_and_states_no_root() {
+    use kf_rm::barpde::MemStatement;
+    let got: std::sync::Arc<std::sync::Mutex<Vec<MemStatement>>> = std::sync::Arc::default();
+    let g = got.clone();
+    let mut chain = kf_rm::served_policy(
+        ga106::board(),
+        ga106::host(),
+        driver(),
+        kf_rm::ChainLogs::default(),
+        kf_rm::census::ControlCensusLog::new(),
+        kf_rm::ObjectLinks {
+            objects: None,
+            memory: Some(kf_rm::MemoryLink {
+                sink: std::sync::Arc::new(move |s| g.lock().unwrap().push(s)),
+                guest_os: kf_abi::GuestOs::Windows,
+            }),
+            channels: None,
+            display: None,
+            console: None,
+        },
+    );
+    let mut b = vec![0u8; COPY_SERVER_RESERVED_PDES_PARAMS_SIZE];
+    b[0x08..0x10].copy_from_slice(&0x1000u64.to_le_bytes());
+    b[0x10..0x18].copy_from_slice(&1u64.to_le_bytes());
+    b[0x20..0x24].copy_from_slice(&1u32.to_le_bytes());
+    b[0x28..0x30].copy_from_slice(&0x320_0000u64.to_le_bytes());
+    b[0x30..0x38].copy_from_slice(&0x1000u64.to_le_bytes());
+    b[0x38..0x3c].copy_from_slice(&kf_abi::gvaspacepdes::GMMU_APERTURE_VIDEO.to_le_bytes());
+    b[0x3c] = 29;
+    let cmd = control_command(
+        0xc1d0_0021,
+        0xff00_0850,
+        NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+        &b,
+    );
+    let r = chain.respond(&cmd).expect("answered");
+    assert_eq!(r.rpc_result, 0, "the real GSP answers NV_OK");
+    assert_eq!(
+        &r.body[PARAMS_AT..],
+        &b[..],
+        "the re-encode is the request's own fields"
+    );
+    assert!(got.lock().unwrap().is_empty(), "no root is stated");
+    assert!(!chain.holds_for_refresh(&cmd), "nothing to reconcile");
+    assert!(matches!(
+        kf_rm::rmrpc::translate(&driver(), kf_abi::GuestOs::Windows, &cmd),
+        Ok(kf_rm::rmrpc::Translation::Inert)
+    ));
+}

@@ -1821,6 +1821,17 @@ fn translate_published_pdes(
     // was shorter than the size the guest declared.
     let pdes = kf_abi::gvaspacepdes::decode_server_reserved_pdes(params)
         .map_err(|err| BridgeRefusal::PublishedPdesMalformed { cmd, err })?;
+    // ★ The server-context-only form states no root (its `levels[0]` is a PD level; see
+    // `ServerReservedPdes::is_server_context_only`). The real GSP only swaps that level's
+    // backing in its own server walker for the server-RM-owned VA
+    // (`ogkm-580.65.06: gpu_vaspace.c:4418-4427, 4492-4543`). kayfabe keeps no server
+    // walker — the deeper levels of an ordinary publication are dropped above for the same
+    // reason — so the form is known and inert: answered `NV_OK` (the init-table link
+    // re-encodes it), and no page-directory statement is made. Added 2026-10-07 (run37
+    // refused it with 0x56 where vfio-10 answers `NV_OK`).
+    if pdes.is_server_context_only() {
+        return Ok(Translation::Inert);
+    }
     let root = pdes.root();
     // ★★★ THE FORK. `GMMU_APERTURE_VIDEO` is the only value whose address is a framebuffer
     // offset, which is what `Pdb` is documented to be. Everything else — sysmem (measured

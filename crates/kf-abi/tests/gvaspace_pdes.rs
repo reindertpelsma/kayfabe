@@ -202,13 +202,19 @@ fn a_publication_that_contradicts_its_own_abi_is_refused() {
             page_size: 1 << 21
         })
     );
-    // An inverted range. Checked BEFORE alignment, so the reported fault is the real one.
+    // ⊘ Corrected 2026-10-07: an inverted range is NOT refused. It is the server-context-only
+    // form (`gpu_vaspace.c:4418-4425`), whose range OGKM never uses, so neither alignment rule
+    // applies to it either.
     assert_eq!(
         mutated(|b| b[0x18..0x20].copy_from_slice(&0u64.to_le_bytes())),
-        Err(ServerReservedPdesError::RangeInverted {
-            lo: 0x1_0000_0000,
-            hi: 0
-        })
+        Ok(())
+    );
+    assert_eq!(
+        mutated(|b| {
+            b[0x10..0x18].copy_from_slice(&1u64.to_le_bytes());
+            b[0x18..0x20].copy_from_slice(&0u64.to_le_bytes());
+        }),
+        Ok(())
     );
     // A meaningful level of zero bytes.
     assert_eq!(
@@ -242,6 +248,46 @@ fn an_unrepresentable_upper_bound_is_refused_rather_than_wrapped() {
             hi: u64::MAX,
             page_size: 1 << 21
         })
+    );
+}
+
+/// ★ The server-context-only form (`virtAddrHi < virtAddrLo`, OGKM 580.65.06
+/// `gpu_vaspace.c:4418-4425`), in the shape Windows 580.88 sent it in vfio-10 (2026-10-05,
+/// RTX 4070, RPC index 2915: `pageSize` 4 KiB, `lo` 1, `hi` 0, one level of page shift 29 in
+/// video memory). It decodes, is recognised as that form, and re-encodes to its own bytes.
+#[test]
+fn the_server_context_only_form_decodes_and_is_not_a_root() {
+    let mut b = vec![0u8; COPY_SERVER_RESERVED_PDES_PARAMS_SIZE];
+    b[0x08..0x10].copy_from_slice(&0x1000u64.to_le_bytes());
+    b[0x10..0x18].copy_from_slice(&1u64.to_le_bytes());
+    b[0x18..0x20].copy_from_slice(&0u64.to_le_bytes());
+    b[0x20..0x24].copy_from_slice(&1u32.to_le_bytes());
+    b[0x28..0x30].copy_from_slice(&0x320_0000u64.to_le_bytes());
+    b[0x30..0x38].copy_from_slice(&0x1000u64.to_le_bytes());
+    b[0x38..0x3c].copy_from_slice(&kf_abi::gvaspacepdes::GMMU_APERTURE_VIDEO.to_le_bytes());
+    b[0x3c] = 29;
+    let p = decode_server_reserved_pdes(&b).expect("the WAR form is well-formed");
+    assert!(p.is_server_context_only());
+    assert_eq!(p.levels[0].page_shift, 29);
+    assert_eq!(encode_server_reserved_pdes(&p), b);
+    // The ordinary publication is not that form.
+    assert!(
+        !decode_server_reserved_pdes(&oracle())
+            .unwrap()
+            .is_server_context_only()
+    );
+    // Its other rules still hold: zero levels, and a level of zero bytes, are refused.
+    let mut z = b.clone();
+    z[0x20..0x24].copy_from_slice(&0u32.to_le_bytes());
+    assert_eq!(
+        decode_server_reserved_pdes(&z).unwrap_err(),
+        ServerReservedPdesError::LevelCountOutOfRange { got: 0 }
+    );
+    let mut z = b;
+    z[0x30..0x38].fill(0);
+    assert_eq!(
+        decode_server_reserved_pdes(&z).unwrap_err(),
+        ServerReservedPdesError::ZeroLevelSize { level: 0 }
     );
 }
 

@@ -258,6 +258,26 @@ impl ServerReservedPdes {
     pub fn root(&self) -> PdeLevel {
         self.levels[0]
     }
+
+    /// ★ **The server-context-only form: `virtAddrHi < virtAddrLo`.** Added 2026-10-07
+    /// (Windows Code43, run37: vfio-10's second publication on one VA space at RPC 2915).
+    ///
+    /// OGKM names it: *"BUG 4580145 WAR: make sure only GSP's context is updated; caller is
+    /// WAR if (AddrHi < AddrLo)"* (`ogkm-580.65.06: src/nvidia/src/kernel/mem_mgr/gpu_vaspace.c:4418-4425`).
+    /// On the GSP platform such a call is NOT the early `NV_OK`: it reaches
+    /// `gvaspaceCopyServerReservedPdes_IMPL`, which skips the reservation (`:4477-4484`, the
+    /// range is not a range) and only swaps the backing of the named level instances in the
+    /// SERVER's own walker for the server-RM-owned VA (`:4492-4543`). So:
+    ///
+    /// - `levels[0]` of this form is **not the root**. vfio-10's capture (2026-10-05, RTX
+    ///   4070, Windows 580.88) carries one level of page shift 29 — a PD level, not the
+    ///   shift-47 root — so it must never become a page-directory statement.
+    /// - the alignment rules of `ctrl90f1.h:290-296` describe a reservation range and are not
+    ///   checked for it, because OGKM does not use the range.
+    #[must_use]
+    pub fn is_server_context_only(&self) -> bool {
+        self.virt_addr_hi < self.virt_addr_lo
+    }
 }
 
 /// Why a publication was refused.
@@ -300,13 +320,6 @@ pub enum ServerReservedPdesError {
         /// The `pageSize` that `hi + 1` is required to be aligned to.
         page_size: u64,
     },
-    /// `virtAddrHi < virtAddrLo` — an empty or inverted range.
-    RangeInverted {
-        /// The `virtAddrLo` the guest wrote.
-        lo: u64,
-        /// The `virtAddrHi` the guest wrote.
-        hi: u64,
-    },
     /// A meaningful level has `size == 0`. A page-directory level of zero bytes is a
     /// publication of nothing at an address.
     ZeroLevelSize {
@@ -340,13 +353,13 @@ pub fn decode_server_reserved_pdes(
     }
     let virt_addr_lo = rd64(buf, O_VIRT_ADDR_LO);
     let virt_addr_hi = rd64(buf, O_VIRT_ADDR_HI);
-    if virt_addr_hi < virt_addr_lo {
-        return Err(ServerReservedPdesError::RangeInverted {
-            lo: virt_addr_lo,
-            hi: virt_addr_hi,
-        });
-    }
-    if !virt_addr_lo.is_multiple_of(page_size) {
+    // ⊘ An inverted range is the server-context-only form, not a malformed one: see
+    // [`ServerReservedPdes::is_server_context_only`]. ⊘ Corrected 2026-10-07: this used to be
+    // refused as `RangeInverted`, which made kayfabe answer 0x56 where the real GSP answers
+    // `NV_OK` (run37 against vfio-10). Its range is unused by OGKM, so only the
+    // reservation's alignment rules are skipped; every other rule below still applies.
+    let reserves = virt_addr_hi >= virt_addr_lo;
+    if reserves && !virt_addr_lo.is_multiple_of(page_size) {
         return Err(ServerReservedPdesError::VirtAddrLoMisaligned {
             lo: virt_addr_lo,
             page_size,
@@ -355,18 +368,20 @@ pub fn decode_server_reserved_pdes(
     // ⚠ `hi + 1`, not `hi`: `virtAddrHi` is the LAST address in the range, so it is the
     // exclusive end that must be aligned. Reading `hi % page_size == 0` would reject every
     // legal publication and accept none — and it is the natural misreading.
-    let hi_end =
-        virt_addr_hi
-            .checked_add(1)
-            .ok_or(ServerReservedPdesError::VirtAddrHiMisaligned {
+    if reserves {
+        let hi_end =
+            virt_addr_hi
+                .checked_add(1)
+                .ok_or(ServerReservedPdesError::VirtAddrHiMisaligned {
+                    hi: virt_addr_hi,
+                    page_size,
+                })?;
+        if !hi_end.is_multiple_of(page_size) {
+            return Err(ServerReservedPdesError::VirtAddrHiMisaligned {
                 hi: virt_addr_hi,
                 page_size,
-            })?;
-    if !hi_end.is_multiple_of(page_size) {
-        return Err(ServerReservedPdesError::VirtAddrHiMisaligned {
-            hi: virt_addr_hi,
-            page_size,
-        });
+            });
+        }
     }
     let num_levels = rd32(buf, O_NUM_LEVELS);
     if num_levels == 0 || num_levels as usize > GMMU_FMT_MAX_LEVELS {
