@@ -173,6 +173,43 @@ impl OverlayHook {
     }
 }
 
+/// ★ DIAGNOSTIC (`KF3_BAR0_TRACE`, owner-approved 2026-10-07, `crate::bar0trace`): the C device's
+/// BAR0 read-trap verb — `on` = 1 requests ROMD off on every shadow piece (their reads exit and are
+/// answered from the same shadow), 0 restores ROMD. ⊘ Never waits: it stores the wish and schedules
+/// a main-loop bottom half that applies it under the BQL. Called only from the register drainer.
+pub type ReadTrapFn = unsafe extern "C" fn(opaque: *mut core::ffi::c_void, on: u32);
+
+/// The registered read-trap verb and its opaque device pointer.
+#[derive(Debug, Clone, Copy)]
+pub struct ReadTrapHook {
+    f: ReadTrapFn,
+    opaque: *mut core::ffi::c_void,
+}
+
+// SAFETY: `opaque` is the C device's state, which lives for the process; the verb only stores an
+// atomic and schedules a bottom half, both thread-safe.
+unsafe impl Send for ReadTrapHook {}
+// SAFETY: as above.
+unsafe impl Sync for ReadTrapHook {}
+
+impl ReadTrapHook {
+    /// Adopt the C device's verb.
+    ///
+    /// # Safety
+    /// `f` must be callable from any non-vCPU thread with `opaque` for the process's lifetime, and
+    /// must not block.
+    #[must_use]
+    pub unsafe fn adopt(f: ReadTrapFn, opaque: *mut core::ffi::c_void) -> ReadTrapHook {
+        ReadTrapHook { f, opaque }
+    }
+
+    /// Request the trap on or off.
+    pub fn request(&self, on: bool) {
+        // SAFETY: the contract `adopt` was given.
+        unsafe { (self.f)(self.opaque, u32::from(on)) }
+    }
+}
+
 /// ★ 2026-09-30 — the C device's `KVM_IOEVENTFD` verb (`docs/design/V3_DOORBELL_IOEVENTFD.md`):
 /// assign (`assign` = 1) or deassign one `len`-byte `DATAMATCH` MMIO ioeventfd for `datamatch` at
 /// guest-physical `gpa`, signalling `fd`. Returns 0, or the kernel's negative errno. Thread-safe

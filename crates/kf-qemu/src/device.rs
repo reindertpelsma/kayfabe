@@ -1232,6 +1232,35 @@ impl Device {
     /// their auto-increment needs the boot sequence's state, which lives under the GSP lock a vCPU
     /// may not take (named open item, unchanged by w828).
     pub fn bar0_read(&self, off: u64, width: u8) -> u64 {
+        let v = self.bar0_read_served(off, width);
+        // ★ DIAGNOSTIC (`KF3_BAR0_TRACE`, default off): one atomic load when off.
+        self.chans.bar0trace.note(
+            crate::bar0trace::Access {
+                write: false,
+                off,
+                width,
+                value: v,
+            },
+            false,
+        );
+        v
+    }
+
+    /// A shadow piece read through the read exit (`KF3_BAR0_TRACE` only — ROMD serves it
+    /// otherwise): exactly the bytes ROMD would have shown. 0 when no piece covers it.
+    fn shadow_read(&self, off: u64, width: u8) -> u64 {
+        let n = match width {
+            1 | 2 | 4 | 8 => usize::from(width),
+            _ => 4,
+        };
+        let mut b = [0u8; 8];
+        match self.piece_for(off) {
+            Some((p, rel)) if p.mem.read_into(rel, &mut b[..n]) => u64::from_le_bytes(b),
+            _ => 0,
+        }
+    }
+
+    fn bar0_read_served(&self, off: u64, width: u8) -> u64 {
         use kf_trap::cacheop::{TokenRead, completed_word, start_token, token_read};
         self.counters.read_exits.fetch_add(1, Ordering::Relaxed);
         if width == 4 {
@@ -1262,7 +1291,8 @@ impl Device {
             .iter()
             .find(|h| (h.base..h.base + kf_trap::memmap::PAGE).contains(&off))
         else {
-            return 0;
+            // Not a hole: a shadow piece whose ROMD the `KF3_BAR0_TRACE` diagnostic turned off.
+            return self.shadow_read(off, width);
         };
         let aligned = off & !3;
         let lo = h.word(aligned).map_or(0, |w| w.load(Ordering::Acquire));
@@ -1284,6 +1314,17 @@ impl Device {
     /// back what was written, as hardware does), the plane's trap, and at most one eventfd write
     /// when a waiter is parked. ⊘ Never blocks, never services.
     pub fn bar0_write(&self, off: u64, val: u64, width: u8) {
+        // ★ DIAGNOSTIC (`KF3_BAR0_TRACE`, default off): one atomic load when off. The next RPC's
+        // queue-head write closes an open window.
+        self.chans.bar0trace.note(
+            crate::bar0trace::Access {
+                write: true,
+                off,
+                width,
+                value: val,
+            },
+            off == self.qhead_off,
+        );
         if !crate::prof::on() {
             return self.bar0_write_inner(off, val, width);
         }
@@ -2556,6 +2597,21 @@ impl Device {
 
     fn log_report(&self, r: &kf_gsp::ServiceReport) {
         for c in &r.commands {
+            // ★ DIAGNOSTIC (`KF3_BAR0_TRACE`, default off): the RPC after a traced window names
+            // what closed it; at the first `Free`, the window's channel memory is dumped once.
+            if let Some(w) = self.chans.bar0trace.take_closed() {
+                for l in crate::bar0trace::render(&w, &format!("{:?}", c.function)) {
+                    eprintln!("{l}");
+                }
+                if c.function == kf_gsp::RpcFunction::Free
+                    && let Some(t) = w.chan
+                    && self.chans.bar0trace.take_dump()
+                {
+                    for l in self.chans.bar0trace_dump(t) {
+                        eprintln!("{l}");
+                    }
+                }
+            }
             eprintln!("kf3: GSP rpc {:?} seq={}", c.function, c.sequence);
             if c.function == kf_gsp::RpcFunction::UnloadingGuestDriver {
                 self.observe_unloading(c);
@@ -3193,6 +3249,9 @@ impl HostOps for Device {
         log_fresh_refusals(&mut g.fsm);
         let t_pub = if prof { crate::prof::now_ns() } else { 0 };
         self.publish(g);
+        // ★ DIAGNOSTIC (`KF3_BAR0_TRACE`, default off): a window armed by a served schedule opens
+        // now that its reply is published.
+        self.chans.bar0trace.after_publish();
         if prof {
             let done = crate::prof::now_ns();
             self.prof.publish.add(done.saturating_sub(t_pub));

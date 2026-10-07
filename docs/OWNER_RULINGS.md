@@ -1,6 +1,6 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-10-07 (§S added; earlier rulings dated in place).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-10-07 (§S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
@@ -175,6 +175,10 @@ citation: ask whether its reason still holds before relying on it.
   **Superseded 2026-09-29:** the owner authorized retiring the Paguro Windows box after saving
   any unique work; retention is no longer required. The /dev/sdb SSD is
   spare workspace; regenerate/download caches, builds and VM images rather than lose unique work.
+- **Public repository: which addresses may be committed (owner, 2026-10-07, relayed by the
+  coordinator).** Private LAN addresses, Vast instance ids and Vast IP addresses may appear in commits.
+  The owner's home public IP and any Scaleway public IP of the controller must NEVER be committed.
+  Scan every diff for non-private IP addresses before pushing.
 
 ## G. Licence (2026-10-02)
 
@@ -692,6 +696,10 @@ kernel GR channel, plus a software-subchannel bind on its kernel CE channel.
    them in the native validation and in the README of the first run that executes GR work, and fix
    the relay before relying on it if it is missing.
 
+⊘ *Confirmed by the owner 2026-10-07 (relayed by the coordinator), above the text it settles:* the
+`PERF_GET_POWERSTATE` `AC` stub is fine as it is. The entry below is no longer an assumption; its
+"owner to confirm" and "not an owner decision" are answered by this line.
+
 **§S applied to `PERF_GET_POWERSTATE` (2026-10-07) — ASSUMED from the power ruling, owner to
 confirm.** `NV2080_CTRL_CMD_PERF_GET_POWERSTATE` (`0x2080205a`) answers `NV2080_CTRL_PERF_POWER_SOURCE_AC`
 (`kf_rm::vfguest`). This is treated as a §S.1 stub under item 6's "power … stays host-owned": the
@@ -701,3 +709,21 @@ and nothing reaches the host. §S.1 also says queries in a stubbed area are "ref
 absent", which an `AC` answer is not; the classification is the coordinator's reading of the
 ruling (compliance audit `2026-10-07-code43-gr-derive-compliance.md` S6), **not an owner
 decision**. If the owner rules otherwise, the control is refused instead.
+
+**§S exception: a diagnostic BAR0-read trap (owner APPROVED 2026-10-07, relayed by the coordinator
+after the run35 stop; `traces/windows_code43_walls_20261007/README.md`, "Stop: two runs after A and
+B").** An explicit, scoped exception to "only BAR0 writes trap" (`AGENTS.md`, Rules;
+`design/THE_CONSTRAINTS.md`):
+1. **Default off.** Behind a flag (`KF3_BAR0_TRACE=1`). With the flag off, production behaviour is
+   unchanged: BAR0 reads never exit.
+2. **Scoped.** Reads trap only from a guest-kernel channel's `GPFIFO_SCHEDULE` (the last one before
+   the teardown is the one that matters) to the first following `Free`.
+3. **Bounded.** At most 4096 accesses recorded per run.
+4. **What it logs.** Every BAR0 read (with the value served) and write in that window, doorbell
+   writes included, plus a one-time dump of 64 words of the new channel's USERD and its error
+   notifier.
+5. **Nothing else changes.** A trapped read is answered with the value the untrapped read would
+   have returned; nothing is forwarded to the host.
+Implemented as `crates/kf-qemu/src/bar0trace.rs` (ABI 21's `kf3_set_read_trap`). A window there
+closes at the next RPC's queue-head write, so each window lies inside the approved interval.
+

@@ -7,6 +7,7 @@
 //!
 //! The `unsafe` surface is two files: [`raw_unsafe`] (memory QEMU owns) and [`ffi_unsafe`].
 
+pub mod bar0trace;
 pub mod bar1phys;
 pub mod broker;
 pub mod cardbudget;

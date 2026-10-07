@@ -100,6 +100,7 @@ typedef struct Kf3Piece {
     struct Kf3State *s;
     uint64_t base;
     MemoryRegion mr;
+    bool shadow;   /* a shadow ROM device (how 1): the only pieces the KF3_BAR0_TRACE trap toggles */
 } Kf3Piece;
 
 /* One BAR1 usermode-view overlay: an ALIAS of the 64 KiB usermode ROM device, re-pointed and
@@ -188,6 +189,13 @@ struct Kf3State {
      * waits on a worker that cannot answer. Main loop only. */
     int refresh_fd;
     QEMUTimer *refresh_timer;
+    /* ★ ABI 21, DIAGNOSTIC (KF3_BAR0_TRACE, default off; OWNER_RULINGS.md sec. S, 2026-10-07): the
+     * BAR0 read trap. Rust's drainer stores the wish and schedules the bottom half; the bottom half
+     * flips ROMD on the shadow pieces under the BQL. Never used with the flag off. */
+    QEMUBH *read_trap_bh;
+    bool read_trap_want;             /* qatomic: the drainer's latest wish */
+    bool read_trap_on;               /* main loop only: what is applied */
+    uint64_t read_trap_flips;
 };
 
 /* ── BAR0 ───────────────────────────────────────────────────────────────────────────────── */
@@ -319,12 +327,48 @@ static bool kf3_bar0_build(Kf3State *s, uint64_t size, Error **errp)
                 return false;
             }
             memory_region_set_dirty(&p->mr, 0, r->len);
+            p->shadow = true;
         }
         memory_region_enable_lockless_io(&p->mr);
         memory_region_add_subregion(&s->bar0, r->base, &p->mr);
     }
     kf3_shadow_seal(s->h);
     return true;
+}
+
+/* ── ★ ABI 21, DIAGNOSTIC: the BAR0 read trap (KF3_BAR0_TRACE, default off) ─────────────────
+ * OWNER_RULINGS.md sec. S (2026-10-07): a scoped, bounded exception to "BAR0 reads never exit".
+ * ROMD off on a shadow piece routes its reads to kf3_piece_read -> kf3_bar0_read, which answers
+ * from the same shadow RAM ROMD reads; the answer does not change. Rust decides when (the window
+ * after a guest-kernel channel's GPFIFO_SCHEDULE, capped) and records the accesses. */
+static void kf3_read_trap_bh(void *opaque)
+{
+    Kf3State *s = opaque;
+    bool on = qatomic_read(&s->read_trap_want);
+    unsigned i;
+
+    if (on == s->read_trap_on) {
+        return;
+    }
+    memory_region_transaction_begin();
+    for (i = 0; i < s->n_pieces; i++) {
+        if (s->pieces[i].shadow) {
+            memory_region_rom_device_set_romd(&s->pieces[i].mr, !on);
+        }
+    }
+    memory_region_transaction_commit();
+    s->read_trap_on = on;
+    s->read_trap_flips++;
+    info_report("kf3: BAR0-TRACE read trap %s (flip %" PRIu64 ")", on ? "ON" : "OFF", s->read_trap_flips);
+}
+
+/* Rust's ReadTrapFn — the register drainer, never a vCPU. Never waits. */
+static void kf3_read_trap(void *opaque, uint32_t on)
+{
+    Kf3State *s = opaque;
+
+    qatomic_set(&s->read_trap_want, on != 0);
+    qemu_bh_schedule(s->read_trap_bh);
 }
 
 /* ── w827 trap bench: the most dummy trap possible ──────────────────────────────────────────
@@ -1350,6 +1394,12 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         goto fail;
     }
     pci_register_bar(pci, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->bar0);
+    /* ★ ABI 21: the diagnostic read-trap verb (Rust calls it only with KF3_BAR0_TRACE=1). */
+    s->read_trap_bh = qemu_bh_new(kf3_read_trap_bh, s);
+    if (kf3_set_read_trap(s->h, kf3_read_trap, s) != 0) {
+        error_setg(errp, "kf3: Rust refused the BAR0 read-trap verb");
+        goto fail;
+    }
 
     if (!kf3_bar_build(s, 1, &s->bar1, s->bar1_size, errp) ||
         !kf3_bar_build(s, 2, &s->bar2, s->bar2_size, errp)) {

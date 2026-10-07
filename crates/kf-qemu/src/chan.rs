@@ -652,6 +652,9 @@ struct Slot {
     inca_seen: u64,
     /// ★ GR tier (2026-10-07): born with the kernel-GR tier (its engine's `tlive` counts it).
     gr_tier: bool,
+    /// The error notifier the guest declared at allocation (`errorNotifierMem`), kept for the
+    /// default-off `KF3_BAR0_TRACE` dump only — a Translated ring arms no notifier.
+    err_notifier: Option<kf_arch::fault::ErrorNotifier>,
 }
 
 // Experiment on this branch: kernel GR channels run only authored CE work in
@@ -1138,6 +1141,9 @@ pub struct ChanPlane {
     /// ★ GR tier (2026-10-07): GR-tier pumps that retired engine-written work since the worker
     /// last relayed it to the guest's GR0 vector ([`ChanPlane::take_gr_relay`]).
     gr_relay: AtomicU64,
+    /// ★ DIAGNOSTIC (`KF3_BAR0_TRACE`, default off; owner-approved 2026-10-07): the bounded BAR0
+    /// trace of the window after a guest-kernel channel's `GPFIFO_SCHEDULE` ([`crate::bar0trace`]).
+    pub bar0trace: crate::bar0trace::Bar0Trace,
     rm: &'static HostRm,
     plane: &'static Plane<'static>,
     store: u32,
@@ -1529,6 +1535,7 @@ impl ChanPlane {
             .map_err(|e| format!("RC event fd: {e:?}"))?;
         Ok(ChanPlane {
             gr_relay: AtomicU64::new(0),
+            bar0trace: crate::bar0trace::Bar0Trace::from_env(),
             rm,
             plane,
             store,
@@ -2813,6 +2820,14 @@ impl ChanPlane {
         eprintln!(
             "kf3: chan {client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} (token {idx:#x}, host {ht:#x})"
         );
+        if enable {
+            self.bar0trace
+                .schedule_served(crate::bar0trace::TraceChan {
+                    client,
+                    object,
+                    host: ht,
+                });
+        }
         // Work the guest queued before scheduling is picked up now.
         if enable && self.plane.ring_internal(idx) {
             let _ = self.wake.signal();
@@ -4014,6 +4029,7 @@ impl ChanPlane {
                     tspace_ring: ts.is_some(),
                     inca_seen: 0,
                     gr_tier,
+                    err_notifier: a.error_notifier,
                 };
                 if gr_tier {
                     me.engine_tlive(engine, true);
@@ -4187,6 +4203,72 @@ impl ChanPlane {
             back.append(&mut q);
             *q = back;
         }
+    }
+
+    /// ★ DIAGNOSTIC (`KF3_BAR0_TRACE`, default off; drainer, once per run): the first 64 words of
+    /// the traced channel's USERD and the four words of its error notifier, as they are when the
+    /// guest's teardown starts. Reads only; nothing is written or forwarded.
+    pub fn bar0trace_dump(&self, t: crate::bar0trace::TraceChan) -> Vec<String> {
+        let tag = format!("kf3: BAR0-TRACE dump chan {:#x}:{:#x} (host {:#x})", t.client, t.object, t.host);
+        let Some(slot) = self.slot(t.host) else {
+            return vec![format!("{tag}: no Translated slot (already retired?)")];
+        };
+        let Ok(g) = slot.lock() else {
+            return vec![format!("{tag}: slot poisoned")];
+        };
+        let words = |f: &dyn Fn(u64) -> Result<u32, String>, n: u64| -> String {
+            (0..n)
+                .map(|i| f(4 * i).map_or_else(|e| format!("?({e})"), |v| format!("{v:08x}")))
+                .collect::<Vec<_>>()
+                .join(" ")
+        };
+        let mut out = vec![format!(
+            "{tag}: USERD[0..64] (token {:#x}, scheduled={} serves={} last_put={:?}): {}",
+            g.guest_idx,
+            g.scheduled,
+            g.serves,
+            g.last_put,
+            words(&|o| g.userd.load(o), 64)
+        )];
+        let notifier = match g.err_notifier {
+            None => "none declared".to_string(),
+            Some(kf_arch::fault::ErrorNotifier::Sysmem { gpa }) => self
+                .ram
+                .dma_to_file_range(gpa, 16)
+                .and_then(|off| self.ram.at_file_offset(off, 16))
+                .map_or_else(
+                    || format!("sysmem @{gpa:#x}: no guest RAM"),
+                    |(mem, at)| {
+                        format!(
+                            "sysmem @{gpa:#x}: {}",
+                            words(
+                                &|o| mem
+                                    .load_u32(at + o as usize)
+                                    .ok_or_else(|| "load".to_string()),
+                                4
+                            )
+                        )
+                    },
+                ),
+            Some(kf_arch::fault::ErrorNotifier::Framebuffer { off }) => {
+                match self.userd_view(Some(kf_arch::UserdMem::Framebuffer { base: off, size: 16 })) {
+                    Ok(v) => {
+                        let s = format!("framebuffer +{off:#x}: {}", words(&|o| v.load(o), 4));
+                        if let UserdView::Store { cookie, .. } = &v {
+                            let _ = self.rm.release_cpu_view(kf_host::CpuViewRelease {
+                                h_memory: self.store,
+                                p_linear_address: *cookie,
+                            });
+                        }
+                        s
+                    }
+                    Err(e) => format!("framebuffer +{off:#x}: no view ({e})"),
+                }
+            }
+            Some(kf_arch::fault::ErrorNotifier::Unreachable) => "in an aperture we cannot name".to_string(),
+        };
+        out.push(format!("{tag}: error notifier {notifier}"));
+        out
     }
 
     /// The guest's USERD, reached through a CPU view WE arm now (off the vCPU).

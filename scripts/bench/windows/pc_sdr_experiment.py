@@ -24,7 +24,7 @@ def main():
     spec.loader.exec_module(module)
     # Its existing manifest records every flag and its supervisor owns teardown.
     module.FLAGS = tuple(f for f in module.FLAGS if f != 'KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE') + (
-        'KF3_DISPLAY_SDR_COLOR', 'KF3_DISPLAY_METHOD_TRACE', 'KF3_KERNEL_GR_CE', 'KF3_KERNEL_NVDEC_CTX', 'KF3_KERNEL_NVENC_CTX', 'KF3_KERNEL_OFA_CTX', 'KF3_KERNEL_GR_WORK', 'KF3_SW_SUBCH_INERT', 'KF3_TRANSLATED_CE_RELAY')
+        'KF3_DISPLAY_SDR_COLOR', 'KF3_DISPLAY_METHOD_TRACE', 'KF3_KERNEL_GR_CE', 'KF3_KERNEL_NVDEC_CTX', 'KF3_KERNEL_NVENC_CTX', 'KF3_KERNEL_OFA_CTX', 'KF3_KERNEL_GR_WORK', 'KF3_SW_SUBCH_INERT', 'KF3_TRANSLATED_CE_RELAY', 'KF3_BAR0_TRACE')
     module.main()
 
 

@@ -40,7 +40,10 @@
  * display_max_fps, retaining every ABI-18 display/broker entry point. */
 /* 20 (2026-10-05): ABI 19 plus HostTimer disposition and kf3_timer_view.
  * The narrow Windows timer branch used 13; it cannot name this combined surface. */
-#define KF3_ABI 20
+/* 21 (2026-10-07, claude/code43-trace-20261007): ABI 20 plus the default-off KF3_BAR0_TRACE
+ * diagnostic's read-trap verb (Kf3ReadTrapFn, kf3_set_read_trap; OWNER_RULINGS.md sec. S, the
+ * diagnostic BAR0-read trap exception). */
+#define KF3_ABI 21
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -136,6 +139,12 @@ int32_t kf3_bar1_follows_guest(void *h);
 int32_t kf3_set_bar1_overlay(void *h, Kf3OverlayFn f, void *opaque, uint32_t slots);
 void kf3_bar1_overlay_done(void *h, uint64_t seq, int32_t rc);
 void kf3_bar1_usermode_write(void *h, uint64_t vf_rel, uint64_t val, uint32_t width);
+/* ★ ABI 21, DIAGNOSTIC (KF3_BAR0_TRACE, default off; OWNER_RULINGS.md sec. S, 2026-10-07): the
+ * device's BAR0 read-trap verb. on = 1: ROMD off on every shadow piece (their reads exit to
+ * kf3_bar0_read, which answers from the same shadow); 0: ROMD back on. Never waits: it schedules a
+ * main-loop bottom half. Rust calls it only from the register drainer, only with the flag on. */
+typedef void (*Kf3ReadTrapFn)(void *opaque, uint32_t on);
+int32_t kf3_set_read_trap(void *h, Kf3ReadTrapFn f, void *opaque);
 /* ★ ABI 10 (v3-display2's 9): the newest display frame, for the console's gfx_update (main thread);
  * -1 = none yet. */
 int32_t kf3_display_frame(void *h, Kf3Frame *out);

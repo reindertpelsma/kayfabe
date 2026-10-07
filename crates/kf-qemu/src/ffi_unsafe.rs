@@ -45,7 +45,9 @@ use std::os::unix::ffi::OsStrExt as _;
 /// after display_max_fps, retaining every ABI-18 display/broker entry point.
 /// 20 (2026-10-05): the optional read-only host timer mapping adds HostTimer and
 /// [`kf3_timer_view`] to ABI 19; the old Windows branch called its narrower surface 13.
-pub const KF3_ABI: u32 = 20;
+/// 21 (2026-10-07): ABI 20 plus the default-off `KF3_BAR0_TRACE` diagnostic's read-trap verb
+/// ([`kf3_set_read_trap`], `crate::raw_unsafe::ReadTrapFn`).
+pub const KF3_ABI: u32 = 21;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -357,7 +359,8 @@ pub extern "C" fn kf3_bar0_write(h: *mut c_void, off: u64, val: u64, width: u32)
 }
 
 /// ★ w828: a BAR0 READ exit — reached only for a `Disposition::Hole` page (a register whose read
-/// has a side effect). Lock-free; never blocks.
+/// has a side effect), and, while the default-off `KF3_BAR0_TRACE` diagnostic holds a window open,
+/// for the shadow pieces (answered from the same shadow). Lock-free; never blocks.
 #[unsafe(no_mangle)]
 pub extern "C" fn kf3_bar0_read(h: *mut c_void, off: u64, width: u32) -> u64 {
     dev(h).map_or(0, |d| d.bar0_read(off, u8::try_from(width).unwrap_or(4)))
@@ -527,6 +530,31 @@ pub unsafe extern "C" fn kf3_set_bar1_overlay(
     // SAFETY: forwarded from this function's contract.
     let hook = unsafe { crate::raw_unsafe::OverlayHook::adopt(f, opaque) };
     if d.bar1_overlay.set(hook, slots as usize) {
+        0
+    } else {
+        -1
+    }
+}
+
+/// ★ DIAGNOSTIC (`KF3_BAR0_TRACE`, `crate::bar0trace`): register the C device's BAR0 read-trap
+/// verb. Returns 0 (registered; it is called only while the flag is on), or -1 (bad handle, null
+/// verb, or already registered).
+///
+/// # Safety
+/// `f` must be callable from any non-vCPU thread with `opaque` for the process's lifetime and must
+/// not block (it schedules a main-loop bottom half).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_set_read_trap(
+    h: *mut c_void,
+    f: Option<crate::raw_unsafe::ReadTrapFn>,
+    opaque: *mut c_void,
+) -> i32 {
+    let (Some(d), Some(f)) = (dev(h), f) else {
+        return -1;
+    };
+    // SAFETY: forwarded from this function's contract.
+    let hook = unsafe { crate::raw_unsafe::ReadTrapHook::adopt(f, opaque) };
+    if d.chans.bar0trace.set_hook(hook) {
         0
     } else {
         -1
