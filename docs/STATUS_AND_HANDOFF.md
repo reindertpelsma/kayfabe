@@ -1,6 +1,6 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-**STATUS: LIVE, 2026-10-07 — §0.0 below is the resume point.** ⊘ *The 2026-09-30 paragraph that follows is history:* **(2026-09-30)** Master = the code of **`afb552ea`** (`v3-mc23`: CUDA dynamic parallelism +
+**STATUS: LIVE, 2026-10-08 — §0.0 below is the resume point.** ⊘ *The 2026-09-30 paragraph that follows is history:* **(2026-09-30)** Master = the code of **`afb552ea`** (`v3-mc23`: CUDA dynamic parallelism +
 the guest-RAM-object race fix + everything below), which passed the full merge bar (§0 first entry), plus
 evidence and documentation. The single entry point for resuming work without any chat history. Decisions
 live in `docs/OWNER_RULINGS.md` (doorbell refinements of 2026-09-30 in §D); per-topic detail in the design
@@ -10,6 +10,38 @@ fix this file. Entries below the first are dated history.
 ## 0. Current resumption — start here
 
 ### 0.0 ★ RESUME HERE — 2026-10-07
+
+**Deferred API, Translated-only (OWNER_RULINGS §U), 2026-10-08 (branch
+`claude/deferred-translated-20261007`, code `83881ecc`; answers the next paragraph's decision 1
+for the case it really is).** The "inert" software method `0x200` on subchannel 5 is
+`NV50_DEFERRED_API`'s trigger: `[measured: the 2026-10-05 VFIO boots 8/9/10]` every Windows channel's
+first software child is a 5080 (so `SET_OBJECT` value 1 names it), Windows registers only
+`0x50800101` (584-byte V1 params, `NV_OK` echoed) on its kernel GR channel's object — deferred
+`GPU_INITIALIZE_CTX` + legacy-shape `GPU_PROMOTE_CTX` for each user GR TSG — and runs 44/45's `0x200`
+data (`0x40000002/03`) are the handles VFIO registers first; kayfabe had refused both registrations.
+Built (design and the real/refused/unverified list: `THE_TRANSLATED_PLANE.md` §29):
+- **Real, unconditional:** class 5080 admitted only under Translated channels (Passthrough:
+  `NOT_SUPPORTED`, §U.1) and numbered per channel; the four registration controls served from
+  per-object tables with `deferred_api.c`'s statuses (`kf_rm::defapi`), layouts from the driver
+  matrix (regenerated: NV5080 params, bundle members, ids, flag bits).
+- **Real behind `KF3_DEFERRED_API=1` (default off):** the trigger. INITIALIZE/PROMOTE satisfied by
+  the target twin's own host context (ruling B), EVICT as the direct act, `DMA_INVALIDATE_TLB` as a
+  host gate in kayfabe's stream released by the VA-manager thread after its commit (model test over
+  the real words; never sent by Windows 580.88).
+- **Refused by name, for the owner:** `PRESERVE_CTX` (context migration), promote entry lists /
+  `hVirtMemory`, the GR ctxsw ZCULL/PM/PREEMPTION binds, `FIFO_UPDATE_CHANNEL_INFO`; an unknown
+  handle, method or object number kills the channel (the hardware RCs it — inferred with a 5080
+  bound).
+- **GPU-free (at `83881ecc`, 2026-10-08):** kf-abi, kf-rm, kf-chan, kf-mem, kf-qemu, kf-harness —
+  1533 passed, 0 failed; Clippy new debt 0; `ci_gates.sh` 14/14. **Native (RTX 4070, host
+  595.91.07, 2026-10-08, `83881ecc` dirty=0):** v3 gates 9/9, 11/11 USER births; `kf-gr-tier` PASS
+  including `gate_holds_the_engine_until_released` (an unreleased gate held its fence 300 ms; another
+  thread's store opened it) and `gate_revoked_with_its_ring`; no new Xid (dmesg 61 before and after).
+  [Evidence](../traces/deferred_api_translated_20261008/). The Windows runner gains an opt-in
+  `--deferred-api` (`scripts/bench/windows/pc_sdr_experiment.py`).
+- **Next (the Windows loop):** run with `KF3_DEFERRED_API=1` beside run45's flags; predicted: the
+  kernel GR channel passes both `0x200`s (log `DEFERRED-API trigger … DONE`), and the next wall is
+  further on. Falsified if a GR death names the software method again or a `DEFERRED-API` refusal.
 
 **Runs 44-46, 2026-10-07 (branch `claude/code43-mem-20261007`; answers the next paragraph's "memory
 plane, next measurement").** Run43's empty VA space was a walk-kernel bug: a VIDMEM PDE with address

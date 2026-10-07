@@ -1284,9 +1284,11 @@ it. A mutation that starts the action before the drain fence fails it (2026-10-0
 - **Measured (GPU-free, 2026-10-08, `cargo test`):** the matrix layout of the V1 params is the 584
   bytes the VFIO boots carried; the VFIO bundles decode to the INITIALIZE/PROMOTE above; table
   semantics, the gate's Inbox protocol and the model, in `crates/kf-{abi,rm,chan,qemu}`.
-- **Native:** `kf-gr-tier`'s `gate_holds_the_engine_until_released` (an unreleased gate holds a fence
-  300 ms; another thread's store releases it) and `gate_revoked_with_its_ring` — see the handoff
-  (`STATUS_AND_HANDOFF.md` §0.0) for whether it ran.
+- **Measured (native, RTX 4070, host 595.91.07, 2026-10-08, commit `83881ecc`):** `kf-gr-tier`'s
+  `gate_holds_the_engine_until_released` PASS — an unreleased gate held its fence 300 ms and another
+  thread's store opened it — and `gate_revoked_with_its_ring` PASS; v3 gates 9/9
+  (`traces/deferred_api_translated_20261008/`). That is the engine side of the gate on a CE ring; a
+  GR ring's gate and the VA thread's release from a real walk are exercised only by a Windows run.
 - **Inferred, not measured:** that the GSP records kernel privilege for an RPC'd registration (no
   dispatch depends on it); that an unknown-handle `0x200` with a 5080 bound RCs the channel on
   hardware (F7a/F8 measured only a stray one with none bound, 2026-10-07); that Windows reads nothing
