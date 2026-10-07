@@ -1,0 +1,60 @@
+Oct 03 16:31:23 ubuntu systemd[1]: lightdm.service: Main process exited, code=exited, status=1/FAILURE
+Oct 03 16:31:23 ubuntu systemd[1]: lightdm.service: Failed with result 'exit-code'.
+Oct 03 16:31:23 ubuntu systemd[1]: lightdm.service: Consumed 3.907s CPU time.
+Oct 03 16:31:23 ubuntu systemd[1]: lightdm.service: Scheduled restart job, restart counter is at 18.
+Oct 03 16:31:23 ubuntu systemd[1]: Starting lightdm.service - Light Display Manager...
+Oct 03 16:31:23 ubuntu systemd[1]: Started lightdm.service - Light Display Manager.
+Oct 03 16:31:31 ubuntu systemd[1]: lightdm.service: Main process exited, code=exited, status=1/FAILURE
+Oct 03 16:31:31 ubuntu systemd[1]: lightdm.service: Failed with result 'exit-code'.
+Oct 03 16:31:31 ubuntu systemd[1]: lightdm.service: Consumed 3.640s CPU time.
+Oct 03 16:31:32 ubuntu systemd[1]: lightdm.service: Scheduled restart job, restart counter is at 19.
+Oct 03 16:31:32 ubuntu systemd[1]: Starting lightdm.service - Light Display Manager...
+Oct 03 16:31:32 ubuntu systemd[1]: Started lightdm.service - Light Display Manager.
+Oct 03 16:31:40 ubuntu systemd[1]: lightdm.service: Main process exited, code=exited, status=1/FAILURE
+Oct 03 16:31:40 ubuntu systemd[1]: lightdm.service: Failed with result 'exit-code'.
+Oct 03 16:31:40 ubuntu systemd[1]: lightdm.service: Consumed 3.862s CPU time.
+Oct 03 16:31:40 ubuntu systemd[1]: lightdm.service: Scheduled restart job, restart counter is at 20.
+Oct 03 16:31:40 ubuntu systemd[1]: Starting lightdm.service - Light Display Manager...
+Oct 03 16:31:41 ubuntu systemd[1]: Started lightdm.service - Light Display Manager.
+Oct 03 16:31:49 ubuntu systemd[1]: lightdm.service: Main process exited, code=exited, status=1/FAILURE
+Oct 03 16:31:49 ubuntu systemd[1]: lightdm.service: Failed with result 'exit-code'.
+Oct 03 16:31:49 ubuntu systemd[1]: lightdm.service: Consumed 3.575s CPU time.
+Oct 03 16:31:49 ubuntu systemd[1]: lightdm.service: Scheduled restart job, restart counter is at 21.
+Oct 03 16:31:49 ubuntu systemd[1]: Starting lightdm.service - Light Display Manager...
+Oct 03 16:31:49 ubuntu systemd[1]: Started lightdm.service - Light Display Manager.
+Oct 03 16:31:57 ubuntu systemd[1]: lightdm.service: Main process exited, code=exited, status=1/FAILURE
+Oct 03 16:31:57 ubuntu systemd[1]: lightdm.service: Failed with result 'exit-code'.
+Oct 03 16:31:57 ubuntu systemd[1]: lightdm.service: Consumed 3.566s CPU time.
+Oct 03 16:31:57 ubuntu systemd[1]: lightdm.service: Scheduled restart job, restart counter is at 22.
+Oct 03 16:31:57 ubuntu systemd[1]: Starting lightdm.service - Light Display Manager...
+Oct 03 16:31:58 ubuntu systemd[1]: Started lightdm.service - Light Display Manager.
+Oct 03 16:32:06 ubuntu systemd[1]: lightdm.service: Main process exited, code=exited, status=1/FAILURE
+Oct 03 16:32:06 ubuntu systemd[1]: lightdm.service: Failed with result 'exit-code'.
+Oct 03 16:32:06 ubuntu systemd[1]: lightdm.service: Consumed 3.535s CPU time.
+Oct 03 16:32:06 ubuntu systemd[1]: lightdm.service: Scheduled restart job, restart counter is at 23.
+Oct 03 16:32:06 ubuntu systemd[1]: Starting lightdm.service - Light Display Manager...
+Oct 03 16:32:06 ubuntu systemd[1]: Started lightdm.service - Light Display Manager.
+Oct 03 16:32:14 ubuntu systemd[1]: lightdm.service: Main process exited, code=exited, status=1/FAILURE
+Oct 03 16:32:14 ubuntu systemd[1]: lightdm.service: Failed with result 'exit-code'.
+Oct 03 16:32:14 ubuntu systemd[1]: lightdm.service: Consumed 3.899s CPU time.
+Oct 03 16:32:15 ubuntu systemd[1]: lightdm.service: Scheduled restart job, restart counter is at 24.
+Oct 03 16:32:15 ubuntu systemd[1]: Starting lightdm.service - Light Display Manager...
+Oct 03 16:32:15 ubuntu systemd[1]: Started lightdm.service - Light Display Manager.
+Oct 03 16:32:23 ubuntu systemd[1]: lightdm.service: Main process exited, code=exited, status=1/FAILURE
+Oct 03 16:32:23 ubuntu systemd[1]: lightdm.service: Failed with result 'exit-code'.
+Oct 03 16:32:23 ubuntu systemd[1]: lightdm.service: Consumed 3.678s CPU time.
+Oct 03 16:32:23 ubuntu systemd[1]: lightdm.service: Scheduled restart job, restart counter is at 25.
+Oct 03 16:32:23 ubuntu systemd[1]: Starting lightdm.service - Light Display Manager...
+Oct 03 16:32:23 ubuntu systemd[1]: Started lightdm.service - Light Display Manager.
+Oct 03 16:32:31 ubuntu systemd[1]: lightdm.service: Main process exited, code=exited, status=1/FAILURE
+Oct 03 16:32:31 ubuntu systemd[1]: lightdm.service: Failed with result 'exit-code'.
+Oct 03 16:32:31 ubuntu systemd[1]: lightdm.service: Consumed 3.682s CPU time.
+Oct 03 16:32:32 ubuntu systemd[1]: lightdm.service: Scheduled restart job, restart counter is at 26.
+Oct 03 16:32:32 ubuntu systemd[1]: Starting lightdm.service - Light Display Manager...
+Oct 03 16:32:32 ubuntu systemd[1]: Started lightdm.service - Light Display Manager.
+Oct 03 16:32:40 ubuntu systemd[1]: lightdm.service: Main process exited, code=exited, status=1/FAILURE
+Oct 03 16:32:40 ubuntu systemd[1]: lightdm.service: Failed with result 'exit-code'.
+Oct 03 16:32:40 ubuntu systemd[1]: lightdm.service: Consumed 3.783s CPU time.
+Oct 03 16:32:40 ubuntu systemd[1]: lightdm.service: Scheduled restart job, restart counter is at 27.
+Oct 03 16:32:40 ubuntu systemd[1]: Starting lightdm.service - Light Display Manager...
+Oct 03 16:32:40 ubuntu systemd[1]: Started lightdm.service - Light Display Manager.

@@ -1,0 +1,31 @@
+=== e0_isolate_witness tag=r1ctl1 at 2026-08-02T23:44:00+00:00 ===
+REV_UNDER_TEST=e7268444bf77c68d0ae6e7590f4c9d4995b48162
+TREE_DIRTY_FILES=0
+KAYFABE_ISOLATES=<unset>
+qemu binary: -rwxr-xr-x 1 root root 85745848 Aug  2 23:41 /workspace/bench/qemu-build/qemu-system-x86_64
+archive rev embedded in the qemu binary:
+  kayfabe-rev:e7268444bf77c68d0ae6e7590f4c9d4995b48162
+host gpu: NVIDIA GeForce RTX 3060, 580.159.04
+archive rev == source rev
+
+=== boot_capture phases (t+ seconds from witness start) ===
+t+0    [boot_capture:r1ctl1] booting (extra args: none)
+t+35   [boot_capture:r1ctl1] guest is up after 35s
+t+36   [boot_capture:r1ctl1] module unloaded and ring buffer cleared; loading cold
+t+37   [boot_capture:r1ctl1] opening the device (this is what runs RmInitAdapter)
+t+44   [boot_capture:r1ctl1] captured 26 dmesg lines, 22 NVRM, 3 adapter → /workspace/bench/run_r1ctl1_dmesg.log
+t+44   [boot_capture:r1ctl1] --- the verdict lines ---
+t+44   [   30.074659] NVRM: RmInitNvDevice: *** Cannot load state into the device
+t+44   [   30.074663] NVRM: RmInitAdapter: RmInitNvDevice failed, bailing out of RmInitAdapter
+t+44   [   31.169099] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0xffff:1249)
+t+44   [boot_capture:r1ctl1] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+t+65   [boot_capture:r1ctl1] done. serial=/workspace/bench/run_r1ctl1_serial.log qemu=/workspace/bench/run_r1ctl1_qemu.log dmesg=/workspace/bench/run_r1ctl1_dmesg.log probe=/workspace/bench/run_r1ctl1_probe.log
+=== summary ===
+boot_capture rc: 0
+isolate-child samples: 0   (0 = never seen alive)
+distinct isolate-child pids: 0
+plane->RmMode mapping check: ok
+E0b lazy-spawn check: not applicable (plane=unset spawns nothing by design)
+=== E1: the device's own isolate-plane census (from /workspace/bench/run_r1ctl1_qemu.log) ===
+  qemu-system-x86_64: info: nvkvm: isolates: 1 materialized, 1 live, 1 refusing (1 no-plane, 0 spawn-failed)
+  qemu-system-x86_64: info: nvkvm:   isolate refusal [no-plane] this build has no forwarding plane: the object model accepts protocol facts and no host verb can be issued

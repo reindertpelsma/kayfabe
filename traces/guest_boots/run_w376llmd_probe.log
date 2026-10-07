@@ -1,0 +1,81 @@
+=== boot_capture tag=w376llmd at 2026-09-06T02:33:49+00:00 ===
+=== source revision: bf9683a ===
+=== qemu binary: -rwxr-xr-x 1 root root 88573728 Sep  6 02:33 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:bf9683a53c3a76421a79f41248243e4d3dcfb373 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=b16b5a22da708e68
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Sun Sep  6 02:34:01 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  ERR!                           Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /  12288MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep  6 02:34 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep  6 02:34 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep  6 02:33 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep  6 02:33 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep  6 02:33 .
+drwxr-xr-x 18 root root   4000 Sep  6 02:34 ..
+cr--------  1 root root 240, 1 Sep  6 02:33 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep  6 02:33 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/llm_hook.sh at 2026-09-06T02:34:04+00:00 ===
+=== ★★★★★ LLM ON THE EMULATED GPU  ntok=16 ===
+--- guest preconditions (an absence here attributes the failure to the IMAGE) ---
+RUNNER_PRESENT=yes
+VENV_PRESENT=yes
+SMI=[Unknown Error]
+--- generate on device=cuda ---
+    LLM_DEVICE=cuda
+    TORCH_CUDA_AVAILABLE=True
+    TORCH_DEV_COUNT=1
+    Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+    [transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+    Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:   0%|          | 1/290 [00:17<1:25:17, 17.71s/it]Loading weights:  63%|██████▎   | 183/290 [00:17<00:07, 14.56it/s]Loading weights: 100%|██████████| 290/290 [00:23<00:00, 12.10it/s]
+    LLM_EXC=RuntimeError: CUDA error: CUBLAS_STATUS_NOT_SUPPORTED when calling `cublasLtMatmulAlgoGetHeuristic( ltHandle, computeDesc.descriptor(), Adesc.descriptor(), Bdesc.descriptor(), Cdesc.descriptor(), Cdesc.descriptor(), preference.descriptor(), 1, &heuristicResult, &returnedResult)`
+    LLM_TEXT=
+    LLM_OK=0
+    LLM_TOKENS=0
+    LLM_MS=-1.0
+    LLM_RC=1
+
+=== ★★★★★ THE VERDICT, stated once, in the pre-registered vocabulary
+    (B) reached the GPU and the GPU leg FAILED: LLM_EXC=RuntimeError: CUDA error: CUBLAS_STATUS_NOT_SUPPORTED when calling `cublasLtMatmulAlgoGetHeuristic( ltHandle, computeDesc.descriptor(), Adesc.descriptor(), Bdesc.descriptor(), Cdesc.descriptor(), Cdesc.descriptor(), preference.descriptor(), 1, &heuristicResult, &returnedResult)`
+        ★ the most diagnostic outcome available.
+LLM_TOKENS_GRADE=0
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 34 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=114
+GUEST_DMESG_AFTER_NVRM=111
+GUEST_DMESG_WORKLOAD_DELTA=80
+=== HOST dmesg delta for this boot (watermark 709 → 711) ===
+HOST_DMESG_LINES=2
+HOST_DMESG_NVRM=2
+HOST_DMESG_XID=1

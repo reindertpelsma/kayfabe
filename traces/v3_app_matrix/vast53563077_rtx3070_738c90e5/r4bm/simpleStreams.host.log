@@ -1,0 +1,25 @@
+=== simpleStreams side=host start=2026-09-30T18:47:04+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/simpleStreams
+[ simpleStreams ]
+
+Device synchronization method set to = 0 (Automatic Blocking)
+Setting reps to 100 to demonstrate steady state
+
+> GPU Device 0: "Ampere" with compute capability 8.6
+
+Device: <NVIDIA GeForce RTX 3070> canMapHostMemory: Yes
+> CUDA Capable: SM 8.6 hardware
+> 46 Multiprocessor(s) x 128 (Cores/Multiprocessor) = 5888 (Cores)
+> scale_factor = 1.0000
+> array_size   = 16777216
+
+> Using CPU/GPU Device Synchronization method (cudaDeviceScheduleAuto)
+> mmap() allocating 64.00 Mbytes (generic page-aligned system memory)
+> cudaHostRegister() registering 64.00 Mbytes of generic allocated system memory
+
+Starting Test
+memcopy:	2.83
+kernel:		0.48
+non-streamed:	2.89
+4 streams:	2.67
+-------------------------------
+=== end rc=0 secs=3 2026-09-30T18:47:07+00:00

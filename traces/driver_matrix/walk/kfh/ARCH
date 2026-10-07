@@ -1,0 +1,9 @@
+# The die of this box's GPU, for queue-log rows written before sweep.sh put `arch=` on every row
+# (scripts/drivermatrix/matrix_table.py reads the first non-comment line). Recorded 2026-09-28 from
+# the box's own evidence, not a lookup table:
+#   - vast 52788835: every gates log here prints `GPU=NVIDIA GeForce RTX 3080 Ti, <host driver>`
+#     (gates/v3_gates_*.log), and the bare-metal cup2 logs `name=NVIDIA GeForce RTX 3080 Ti`,
+#     `compute=8.6` (nvdiff.tar.xz: nvdiff/cup2_bare_h*.log) — an Ampere GA10x part;
+#   - the walk README (traces/driver_matrix/walk/README.md) and V3_DRIVER_MATRIX.md record it as
+#     RTX 3080 Ti, GA102. Its PCI device id is not in the committed evidence.
+GA102

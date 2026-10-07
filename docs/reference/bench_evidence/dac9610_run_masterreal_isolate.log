@@ -1,0 +1,15 @@
+=== e0_isolate_witness tag=masterreal at 2026-08-03T00:11:14+00:00 ===
+REV_UNDER_TEST=dac961021f50d068b2d2d4db7b3822215e9b923c
+TREE_DIRTY_FILES=0
+KAYFABE_ISOLATES=real
+qemu binary: -rwxr-xr-x 1 root root 85728048 Aug  3 00:10 /workspace/bench/qemu-build/qemu-system-x86_64
+archive rev embedded in the qemu binary:
+  kayfabe-rev:dac961021f50d068b2d2d4db7b3822215e9b923c
+host gpu: NVIDIA GeForce RTX 3060, 580.159.04
+archive rev == source rev
+
+=== boot_capture phases (t+ seconds from witness start) ===
+t+0    [boot_capture:masterreal] booting (extra args: none)
+t+28   [boot_capture:masterreal] guest is up after 28s
+t+29   [boot_capture:masterreal] module unloaded and ring buffer cleared; loading cold
+t+30   [boot_capture:masterreal] opening the device (this is what runs RmInitAdapter)

@@ -1,0 +1,132 @@
+BRK_LANE_START run brkA5 kf=c38032f3 2026-10-03T21:52:21+00:00
+BRK_REVS kf3=c38032f331c36f030083f66c971dbd330fe608ef broker=9cb736fa7dcfeeaf67e82c4416db91705bfd544d
+BRK_SESSION_LOCKED=no
+BRK_BROKER pid=197418 socket=up args=[] bin=/opt/nvkvm-broker/nvkvm-display-broker sha256=16bc3bd42d764306
+[boot_capture:brkA5] BINARY kf3-bin-rev:c38032f3  (/workspace/bench/kf3-bins/c38032f3/qemu-system-x86_64)  ⇒ every claim from this boot cites THIS revision
+[boot_capture:brkA5] host dmesg watermark: 805 lines
+[boot_capture:brkA5] booting (extra args: -vga none -device virtio-keyboard-pci -device virtio-tablet-pci,display=kf0,head=0 -device virtio-mouse-pci)
+== kf3 binary: /workspace/bench/kf3-bins/c38032f3/qemu-system-x86_64 (rev c38032f3)  device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,display-broker=/run/user/1000/nvkvm/display.sock,display-broker-uid=1000
+[boot_capture:brkA5] guest is up after 35s
+[boot_capture:brkA5] module unloaded and ring buffer cleared; loading cold
+[boot_capture:brkA5] opening the device (this is what runs RmInitAdapter)
+[boot_capture:brkA5] captured 28 dmesg lines, 25 NVRM, 0 adapter → /workspace/bench/run_brkA5_dmesg.log
+[boot_capture:brkA5] --- the verdict lines ---
+[boot_capture:brkA5] running POST_CAPTURE_HOOK: /root/kayfabe/scripts/bench/display/broker_hook.sh
+[boot_capture:brkA5] hook finished: rc=0
+[boot_capture:brkA5] guest dmesg after workload: 84 lines (64 NVRM), delta 56 → /workspace/bench/run_brkA5_dmesg_after.log
+[boot_capture:brkA5] host dmesg delta: 0 lines, 0
+0 NVRM, 0
+0 Xid → /workspace/bench/run_brkA5_hostdmesg.log
+[boot_capture:brkA5] pre-poweroff guest command: sudo systemctl stop lightdm; sudo sync; echo s | sudo tee /proc/sysrq-trigger >/dev/null; sleep 1; echo u | sudo tee /proc/sysrq-trigger >/dev/null; sleep 1
+[boot_capture:brkA5] pre-poweroff rc=0
+[boot_capture:brkA5] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:brkA5] guest did not power down in 30s (a wedged vcpu cannot); asking QEMU to quit on /workspace/bench/run_brkA5.mon
+[boot_capture:brkA5] census present (kf3):
+    kf3: family=Ampere phase=Running trapped=48510 applied=3149 refused=4 serviced=1279 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=928 walks=943/943 cleared=928 superseded=0 named_missed=2 unreconciled=0 mapped=2603 unmapped=2325 clipped=0x0 held=0 vmm_overlaps=0 priv_wit
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x1004f fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x1004e fast=0
+    DOORBELL-LEDGER tok=0x00000004 route=passthrough rung=2 emulated=0 forwarded=2 host=0x51 trap=2 fast=0
+    DOORBELL-LEDGER tok=0x00000003 route=passthrough rung=13 emulated=0 forwarded=13 host=0x50 trap=13 fast=0
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x10053 trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20054 trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x52 trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x10053 trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20054 trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x52 trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x10053 trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20054 trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x52 trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x10053 trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20054 trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x52 trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00000004 route=passthrough rung=10 emulated=0 forwarded=10 host=0x51 trap=10 fast=0
+    DOORBELL-LEDGER tok=0x00000003 route=passthrough rung=1002 emulated=0 forwarded=1002 host=0x50 trap=1002 fast=0
+[boot_capture:brkA5] evidence carried into the repo: /root/kayfabe/traces/guest_boots/run_brkA5_{qemu,dmesg,probe,hostdmesg}.log
+[boot_capture:brkA5] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+[boot_capture:brkA5]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+[boot_capture:brkA5] done. serial=/workspace/bench/run_brkA5_serial.log qemu=/workspace/bench/run_brkA5_qemu.log dmesg=/workspace/bench/run_brkA5_dmesg.log dmesg_after=/workspace/bench/run_brkA5_dmesg_after.log probe=/workspace/bench/run_brkA5_probe.log hostdmesg=/workspace/bench/run_brkA5_hostdmesg.log
+scripts/bench/display/broker_lane.sh: line 59: 197418 Killed                  runuser -u "$SU" -- env DISPLAY="$XD" XAUTHORITY="$XA" "$B" --socket "$SOCK" --backend x11 --persist --verbose ${BROKER_ARGS:-} > "$OUT/broker.log" 2>&1
+BRK_BROKERS_LEFT=0
+BRK_RELAY 59 lines; rungs:       2 frames go as a GPU copy in host VRAM        2 frames go as a LINEAR dma-buf        1 frames go as shared memory only 
+BRK_RELAY_LINE kf3: broker: GPU-copy rung possible — render node renderD128 (226:128), nvidia-drm gpu_id 0x7, modifier 0x0300000000606014, slot attributes s1-nvkms-offscreen
+BRK_RELAY_LINE kf3: broker: connected to /run/user/1000/nvkvm/display.sock, capabilities 0xfff — no /dev/udmabuf here, so frames go as shared memory only
+BRK_RELAY_LINE kf3: broker: grab off
+BRK_RELAY_LINE kf3: broker: the compositor renders on this GPU: the GPU-copy rung may be used
+BRK_RELAY_LINE kf3: broker: guest cursor: the HOST pointer shows it (hover; not composed)
+BRK_RELAY_LINE kf3: broker: the display CAN show XR24 modifier 0x0300000000606014
+BRK_RELAY_LINE kf3: broker: frames go as a LINEAR dma-buf (udmabuf, zero-copy for the broker)
+BRK_RELAY_LINE kf3: broker: the display CANNOT show XR24 modifier 0x0000000000000000
+BRK_RELAY_LINE kf3: broker: frames go as a GPU copy in host VRAM (a block-linear dma-buf, modifier 0x0300000000606014; no byte crosses PCIe, nothing of the guest's is exported)
+BRK_RELAY_LINE kf3: broker: the display imported a GPU-copy frame (its RELEASE came back)
+BRK_RELAY_LINE kf3: broker: guest cursor image 256x256 hot 0,0 sent (1 so far)
+BRK_RELAY_LINE kf3: broker: guest cursor image 256x256 hot 3,1 sent (2 so far)
+BRK_RELAY_LINE kf3: broker: guest cursor image 256x256 hot 11,11 sent (3 so far)
+BRK_RELAY_LINE kf3: broker: grab ON
+BRK_RELAY_LINE kf3: broker: guest cursor: composed into the frame (grabbed; the broker hides its own image)
+BRK_RELAY_LINE kf3: broker: grab off
+BRK_RELAY_LINE kf3: broker: guest cursor: the HOST pointer shows it (hover; not composed)
+BRK_RELAY_LINE kf3: broker: guest cursor: composed into the frame (no broker)
+BRK_RELAY_LINE kf3: broker: connected to /run/user/1000/nvkvm/display.sock, capabilities 0xfff
+BRK_RELAY_LINE kf3: broker: frames go as a LINEAR dma-buf (udmabuf, zero-copy for the broker)
+BRK_RELAY_LINE kf3: broker: grab off
+BRK_RELAY_LINE kf3: broker: the compositor renders on this GPU: the GPU-copy rung may be used
+BRK_RELAY_LINE kf3: broker: guest cursor: the HOST pointer shows it (hover; not composed)
+BRK_RELAY_LINE kf3: broker: guest cursor image 256x256 hot 11,11 sent (4 so far)
+BRK_RELAY_LINE kf3: broker: the display CAN show XR24 modifier 0x0300000000606014
+BRK_RELAY_LINE kf3: broker: the display CANNOT show XR24 modifier 0x0000000000000000
+BRK_RELAY_LINE kf3: broker: frames go as a GPU copy in host VRAM (a block-linear dma-buf, modifier 0x0300000000606014; no byte crosses PCIe, nothing of the guest's is exported)
+BRK_RELAY_LINE kf3: broker: the display imported a GPU-copy frame (its RELEASE came back)
+BRK_STATUS broker[up=1 sent=3912 gpucopy=3910 gpucopy_backoffs=0 dropped=0 uncommitted=0 recovered=0 releases=3899 unknown_releases=10 reclaims=14 blocked=193 backstops=20 reconnects=1 failed_attempts=2 peer_refused=0 cursor=hover cursor_sets=4 cursor_hides=2 cursor_shows=1 cursor_refused=0]
+BRK_DISP scanout_d2h=463 scanout_pack=4120 pack_skipped=1 display_vram_mib=50
+BRK_DISP host_cursor_reads=2325 host_cursor_refused=0
+BRK_REFUSED_LINE 2026-10-03T21:52:24.371310Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,display-broker=/run/user/1000/nvkvm/display.sock,display-broker-uid=
+BRK_REFUSED_LINE kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconci
+BRK_REFUSED_LINE kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconci
+BRK_REFUSED_LINE kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconci
+BRK_REFUSED_LINE kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconci
+BRK_REFUSED_LINE kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconci
+BRK_REFUSED_LINE kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconci
+BRK_REFUSED_LINE kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconci
+BRK_HOOK_START 2026-10-03T21:53:07+00:00
+BRK_GUEST_KMS rc=0  nodes=[by-path card0 renderD128 ]
+BRK_RELAY_CONNECTED 1 GPU_COPY_PROBE=[kf3: broker: GPU-copy rung possible — render node renderD128 (226:128), nvidia-drm gpu_id 0x7, modifier 0x0300000000606014, slot attributes s1-nvkms-offscreen]
+BRK_EV_DEVICE broker=[nvkvm-broker: the X server renders on DRM device 226:128 (render node)] relay=[kf3: broker: the compositor renders on this GPU: the GPU-copy rung may be used] host_nodes=[/dev/dri/card0=e2:0 /dev/dri/renderD128=e2:80 ]
+BRK_GUEST_DESKTOP=yes session=cinnamon busid=PCI:0:2:0 (rc=0 )
+BRK_RUNGS       1 frames go as a GPU copy in host VRAM        1 frames go as a LINEAR dma-buf        1 frames go as shared memory only 
+BRK_RUNG_LINE kf3: broker: the compositor renders on this GPU: the GPU-copy rung may be used
+BRK_RUNG_LINE kf3: broker: the display CAN show XR24 modifier 0x0300000000606014
+BRK_RUNG_LINE kf3: broker: the display CANNOT show XR24 modifier 0x0000000000000000
+BRK_RUNG_LINE kf3: broker: the display imported a GPU-copy frame (its RELEASE came back)
+BRK_WINDOW id=[54525952]
+BRK_WINDOW active=[54525952] (must be the window above)
+BRK_WINDOW geometry=1024x768+0+0 root=[ dimensions: 1024x768 pixels (347x260 millimeters)]
+BRK_MODE_LINES guest cursor: the HOST pointer shows it (hover; not composed)|
+BRK_HOST_HOVER CURSOR w=256 h=256 hot=3,1 serial=39 name=[] visible_px=254 bbox_rel_hot=-1,-1,14,22 fnv_rel_hot=0x977b1b1340901adb
+BRK_GUEST_POINTER 47 7
+BRK_GUEST_CURSOR CURSOR w=24 h=24 hot=3,1 serial=8 name=[left_ptr] visible_px=254 bbox_rel_hot=-1,-1,14,22 fnv_rel_hot=0x1da6c2469055d3aa
+BRK_HOVER_CURSOR_COMPARE visible_a=254 visible_b=254 max_channel_diff=48
+BRK_HOST_VS_GUEST hover size_mismatch 640x480 vs 1024x768 (the broker fullscreen against the guest frame; the host shot has no pointer, the frame no cursor in hover)
+BRK_MAP frame=1024x695 window=1024x768+0+0 guest_pointer=47,7 -> host 47,7
+BRK_HOST_CROSS CURSOR w=256 h=256 hot=11,11 serial=40 name=[] visible_px=281 bbox_rel_hot=-11,-11,11,12 fnv_rel_hot=0xf6108d49685ef58f
+BRK_GUEST_CROSS CURSOR w=24 h=24 hot=11,11 serial=9 name=[crosshair] visible_px=281 bbox_rel_hot=-11,-11,11,12 fnv_rel_hot=0x548443b1d42e7d42
+BRK_CROSS_CURSOR_COMPARE visible_a=281 visible_b=281 max_channel_diff=52
+BRK_CROSS_SETS guest cursor image 256x256 hot 0,0 sent (1 so far)|guest cursor image 256x256 hot 3,1 sent (2 so far)|guest cursor image 256x256 hot 11,11 sent (3 so far)| xsetroot=[rc=0 ]
+BRK_CROSS_MAP guest_pointer=79,29 -> host 79,32
+BRK_HOST_HIDDEN CURSOR w=1 h=1 hot=0,0 serial=37 name=[] visible_px=0 bbox_rel_hot=none fnv_rel_hot=none
+BRK_HOST_AFTER_HIDE CURSOR w=256 h=256 hot=11,11 serial=40 name=[] visible_px=281 bbox_rel_hot=-11,-11,11,12 fnv_rel_hot=0xf6108d49685ef58f
+BRK_HIDE_GUEST CURSOR_HIDDEN for 10 s CURSOR_SHOWN 
+BRK_HIDE_RELAY 0 relay lines, host_cursor_refusals=0
+BRK_GRAB_ON grab ON|guest cursor: composed into the frame (grabbed; the broker hides its own image)|
+BRK_HOST_GRAB CURSOR w=1 h=1 hot=0,0 serial=37 name=[] visible_px=0 bbox_rel_hot=none fnv_rel_hot=none
+BRK_GRAB_FRAME_DIFF host_hover_vs_host_grab_px=76 console_hover_vs_grab_px=0 (the composed cursor near the guest pointer; the host shot is what the broker shows — the console's frames are fresh only on the host-memory rungs)
+BRK_GRAB_MOVE guest_pointer=79 29 -> 119 56 host_moved_cursor_px=76 console_moved_cursor_px=0
+BRK_GRAB_OFF grab off|guest cursor: the HOST pointer shows it (hover; not composed)|
+BRK_HOST_AFTER_GRAB CURSOR w=256 h=256 hot=11,11 serial=40 name=[] visible_px=281 bbox_rel_hot=-11,-11,11,12 fnv_rel_hot=0xf6108d49685ef58f
+BRK_AFTER_GRAB host_hover_vs_host_after_grab_px=0 (hover again: no cursor in the frame)
+BRK_E3_STOP broker=197421 guest=[ALIVE] glxgears_while_stopped=[425 frames in 5.0 seconds = 84.808 FPS] took_ms=6888
+BRK_E3_KILL9 connected to /run/user/1000/nvkvm/display.sock, capabilities 0xfff|re-sent geometry 1024x695 and the last frame to the new broker|reconnected to the display broker (reconnect #1)|
+BRK_E3_AFTER_RESTART guest=[ALIVE] window=[54525952]
+BRK_E5_FDS  312 /dev/nvidiaN; 63 anon_inode:[eventfd]; 11 (deleted); 10 /dmabuf:; 7 anon_inode:[eventpoll]; 6 pipe:[N]; 6 anon_inode:kvm-vcpu:N; 6 anon_inode:kvm-vcpu-stats:N; 5 /dev/nvidiactl; 3 socket:[N]; 2 /workspace/bench/run_brkAN_qemu.log; 2 /dev/nvidia-uvm;
+BRK_E5_VRAM 197489, 8728 MiB;
+BRK_HOOK_DONE 2026-10-03T21:55:00+00:00
+BRK_LANE_EXIT rc=0 2026-10-03T21:55:40+00:00

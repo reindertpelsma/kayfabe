@@ -1,0 +1,989 @@
+//! ★ CONCURRENCY STRESS (decision #17): the multi-vCPU reality, simulated hard.
+//!
+//! The core WILL be invoked concurrently from multiple vCPUs — different guest
+//! processes ringing doorbells / allocating / mapping simultaneously. Safe Rust +
+//! `#![forbid(unsafe_code)]` already make a core data race *unrepresentable*
+//! (compile-time-asserted `Send + Sync`, see `kayfabe_util::assert_send_sync!` at the
+//! bottom of every logic crate); what these tests prove is the other half of the
+//! contract: **under a realistic caller-provided synchronization strategy, the
+//! core's invariants hold across hundreds of thousands of interleaved ops** — no
+//! panic, no corruption, no cross-proc leak, completion conservation, consistent
+//! final state.
+//!
+//! The modeled strategy is the realistic one from the contract (`kayfabe-core` crate
+//! docs): a **device-global `RwLock`** for RmGraph/routing/delivery mutation +
+//! concurrent lock-free reads, and **split per-`Proc` `&mut` borrows** for the
+//! per-proc planes (the #14-isolation-as-parallelism payoff).
+//!
+//! ## Lock ordering (the harness's, deadlock-freedom by construction)
+//!
+//! The harness owns four locks. Their acquisition order is total and one-way:
+//!
+//! ```text
+//!   gpu (RwLock)  →  recorder (Mutex, also taken by mocks UNDER gpu)  →  counters
+//! ```
+//!
+//! Rules the code below obeys (and any edit must keep obeying):
+//!
+//! 1. **Never acquire `gpu` while holding `recorder` or a counter lock.** The mock
+//!    isolates lock `recorder` *while the caller holds `gpu` for writing* (every
+//!    recorded verb), so taking `gpu` under `recorder` would be a classic
+//!    inverted-order deadlock.
+//! 2. **Every guard is dropped before the next lock in a checkpoint** — drains use
+//!    explicit scopes, no `lock()` temporaries spanning further acquisitions.
+//! 3. **No lock is held across [`BreakableBarrier::wait`] or a thread join.**
+//!
+//! ## Bounded termination (the M4b lesson)
+//!
+//! A prior draft of this suite sized the soak at 150k ops/thread (2.4M total).
+//! That was NOT a deadlock — all 16 workers kept making progress — but a debug
+//! build pushing 2.4M acquisitions through one contended `RwLock` (plus ~7% full
+//! RmGraph re-projections, serialized) needs minutes, which reads as a hang under
+//! any sane CI timeout. The rules now: **iteration counts are fixed and sized to
+//! seconds** (measured: the soak ≈ 15 s debug on a 16-way box), every thread is
+//! joined, and every test arms a [`watchdog`] that aborts the process loudly if a
+//! regression ever makes it wedge — a future hang fails fast instead of eating the
+//! suite's timeout.
+//!
+//! ## Race detection (CI ceiling)
+//!
+//! The suite runs green on stable (the floor). For runtime race detection, run it
+//! under ThreadSanitizer on nightly (requires `rust-src`):
+//!
+//! ```text
+//! KAYFABE_SLOW=1 KAYFABE_STRESS_WATCHDOG_SECS=900 RUSTFLAGS="-Zsanitizer=thread" \
+//!     cargo +nightly test -p kayfabe-tests --test concurrency_stress \
+//!     -Zbuild-std --target x86_64-unknown-linux-gnu -- --test-threads=1
+//! ```
+//!
+//! (`KAYFABE_SLOW=1` because the big soak is gated — a TSan run must include it.
+//! CI runs this nightly: the `tsan` job in `.github/workflows/ci.yml`.)
+//!
+//! Expected result: zero TSan reports (the core has no atomics, no lock-free paths,
+//! no interior mutability — hence no `loom` tests either; if a lock-free path is
+//! ever introduced, add a `loom` model for it alongside this file).
+
+#![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
+
+use kayfabe_arch::ids::GpuId;
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::{Condvar, Mutex, PoisonError, RwLock};
+use std::thread;
+use std::time::Duration;
+
+use kayfabe_arch::ids::{GpuVa, HClient, HObject, Pdb, VChid};
+use kayfabe_completion::OsEventRef;
+use kayfabe_core::ProcId;
+use kayfabe_core::gpa::GpaSpace;
+use kayfabe_core::gpu::{Gpu, Proc};
+use kayfabe_core::rmgraph::RmEvent;
+use kayfabe_fwd::{gate_working_set, handle_doorbell, publish_backing, resolve};
+use kayfabe_mocks::{MockArch, MockIsolateFactory, RmVerb, SharedRecorder};
+use kayfabe_tests::{Guarded, Scenario, identical_handles};
+use kayfabe_util::Instant;
+
+/// Simulated vCPU threads hammering one shared device.
+const N_THREADS: usize = 16;
+/// Ops per thread in the big soak (total = `N_THREADS * OPS_PER_THREAD` = 160k).
+/// Sized to seconds, not minutes (see "Bounded termination" above): ≈15 s debug.
+const OPS_PER_THREAD: usize = 10_000;
+/// Guest processes sharing the device (each the #14 shape: identical handles).
+const N_PROCS: usize = 8;
+
+/// Bounded termination for every test in this file — see [`kayfabe_mocks::watchdog`].
+///
+/// ★ This used to be a hand-copied local definition, one of **ten** identical ones, and
+/// every one of them announced its abort with `eprintln!` — which libtest's inherited
+/// output capture buffers and `abort()` then discards, so a wedged test reported a bare
+/// `SIGABRT` and nothing else — measured 2026-07-31 with a standalone `cargo test` probe
+/// whose watchdog thread wrote the same text twice, once via `eprintln!` (nothing reached
+/// the log) and once to a real fd 2 (all of it did). The shared one writes its diagnostic,
+/// including every thread's kernel wait channel, to a real descriptor;
+/// `kayfabe_mocks::watchdog::the_diagnostic_reaches_a_real_descriptor` is the test that
+/// fails if that stops being true.
+use kayfabe_mocks::watchdog;
+
+/// Per-proc PDB (distinct — THE memory-boundary identity).
+fn pdb_of(i: usize) -> Pdb {
+    Pdb(0x3400_0000 + (i as u64) * 0x1_0000)
+}
+/// Per-proc GR/CE vChids (distinct — THE exec-plane identity).
+fn gr_vchid(i: usize) -> VChid {
+    VChid(0x100 + i as u16)
+}
+fn ce_vchid(i: usize) -> VChid {
+    VChid(0x200 + i as u16)
+}
+/// Per-proc memory-object handles (identical values across procs — keyed by
+/// `(client, handle)`, so this is deliberately the hostile #14 shape).
+const MEM_HANDLES: [HObject; 4] = [
+    HObject(0x6000_0000),
+    HObject(0x6000_0001),
+    HObject(0x6000_0002),
+    HObject(0x6000_0003),
+];
+
+/// Build the shared device: `n` guest processes with IDENTICAL guest handles,
+/// DISTINCT PDBs/vChids, plus per-proc memory objects for RM-map churn.
+fn stress_gpu(n: usize) -> (Guarded<Gpu>, SharedRecorder) {
+    let arch = std::sync::Arc::new(MockArch::new());
+    let (factory, recorder) = MockIsolateFactory::new();
+    // Sparse reservations: arenas cost address space, not RAM — be generous.
+    let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
+    let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");
+
+    let mut s = Scenario::new();
+    for i in 0..n {
+        let client = HClient(0xA0 + i as u32);
+        s.compute_process(
+            client,
+            pdb_of(i),
+            identical_handles(gr_vchid(i).0, ce_vchid(i).0),
+        );
+        for (k, &h) in MEM_HANDLES.iter().enumerate() {
+            // Declared backing, distinct per (proc, object).
+            let phys = 0x9_0000_0000 + (i as u64) * 0x1000_0000 + (k as u64) * 0x10_0000;
+            s.memory(client, HObject(0x5c00_0001), h, phys);
+        }
+    }
+    for ev in s.events {
+        gpu.apply(ev).expect("scenario applies cleanly");
+    }
+    assert_eq!(gpu.procs.len(), n);
+    // ★★★★ **#177's GATE — the guest must ASK for a channel to be schedulable before it
+    // may ring it**, and this setup is the guest.
+    //
+    // `[measured 2026-08-09, `bc53173`, 5/5 deterministic]` without this loop every
+    // doorbell arm below refused `FwdFault::NotScheduled { chan: ChanId(0), vchid:
+    // VChid(258) }` — the first proc the RNG happened to pick, so it looked like a race
+    // and was not one. `plan_doorbell` gates on `proc.exec.requested`, which is written
+    // ONLY by `Gpu::schedule_channel` (the guest's own `0xa06f0103`), and
+    // `Scenario::compute_process` emits `Alloc`/`SetPageDir` and nothing else. So this
+    // test asserted a doorbell would be served on a channel nobody ever asked to schedule.
+    //
+    // ⊘ **The GATE is right; this SETUP was stale.** `3ab1305` (#177, 2026-08-03) added
+    // the gate deliberately, so the `NV_OK` for `0xa06f0103` would have something to
+    // perform. Every other test that needs a live doorbell already calls
+    // `schedule_channel` (`gpfifo_schedule.rs`, `l1_mean.rs`, `t0_subset_free.rs`,
+    // `l1_verb_seam.rs`, `t0_subset_free.rs`); this one was simply never updated.
+    //
+    // ★★★ And note WHY it survived five days: `skip_slow!` above means a plain
+    // `cargo test --workspace` never runs this test and reports green. A skipped oracle
+    // kills the guard — the gated set has to be run, and its exit code read.
+    for i in 0..n {
+        let client = HClient(0xA0 + i as u32);
+        let h = identical_handles(gr_vchid(i).0, ce_vchid(i).0);
+        for chan in [h.gr_channel, h.ce_channel] {
+            gpu.schedule_channel(client, chan, true)
+                .expect("the guest's own 0xa06f0103 is accepted for a live channel");
+        }
+    }
+    (
+        Guarded::new("concurrency_stress::stress_gpu", gpu, recorder.clone()),
+        recorder,
+    )
+}
+
+/// Tiny deterministic per-thread RNG (xorshift64*) — reproducible interleavings
+/// *per thread*; the cross-thread schedule is the OS's, which is the point.
+struct Rng(u64);
+impl Rng {
+    fn next(&mut self) -> u64 {
+        let mut x = self.0;
+        x ^= x >> 12;
+        x ^= x << 25;
+        x ^= x >> 27;
+        self.0 = x;
+        x.wrapping_mul(0x2545_F491_4F6C_DD1D)
+    }
+}
+
+/// Assert a recorded verb only touches ITS OWN isolate's namespace (the mock mints
+/// handles as `(iso+1) << 32 | n` and channel tokens as `(iso+1) << 20 | n`, so any
+/// cross-proc leak through the core would be visible right here).
+fn assert_verb_in_namespace(iso: kayfabe_isolate::IsolateId, verb: &RmVerb) {
+    let ns = u64::from(iso.proc()) + 1;
+    // ★ N3 — an isolate is a `(proc, GPU)` pair, so containment is checked on BOTH
+    // halves, and against the handle's own recorded provenance as well as the mock's
+    // value lanes. Checking only `>> 32` (the proc lane) passed for every handle a
+    // proc's OTHER GPU minted.
+    let own = |h: kayfabe_isolate::HostHandle| {
+        assert_eq!(
+            (h.raw() >> 32, (h.raw() >> 24) & 0xff),
+            (ns, u64::from(iso.gpu().0)),
+            "handle {h:?} leaked across isolates (ns {ns}, {:?})",
+            iso.gpu()
+        );
+        assert_eq!(
+            h.isolate(),
+            iso,
+            "handle {h:?} was recorded on {iso:?}'s log but minted in another namespace"
+        );
+    };
+    match *verb {
+        RmVerb::Alloc { parent, handle, .. } => {
+            if parent != kayfabe_isolate::HostHandle::NULL {
+                own(parent);
+            }
+            own(handle);
+        }
+        RmVerb::AllocEngineObject { chan, handle, .. } => {
+            own(chan);
+            own(handle);
+        }
+        RmVerb::AllocVaSpace { handle }
+        | RmVerb::AllocSysmem { handle, .. }
+        | RmVerb::AllocVidmem { handle, .. } => own(handle),
+        RmVerb::AllocChannel {
+            vas,
+            handle,
+            token,
+            engine: _,
+            hosting: _,
+            // ⊘ Destructured with no `..`, so leg A2's new field had to be named here. The
+            // handle inside it IS namespace-relevant — it is the joined window a channel was
+            // born over — and it is owned by the same isolate by construction: the adapter
+            // refuses any object it did not mint by joining (`RING_NOT_A_JOINED_WINDOW`).
+            adopt: _,
+            // ⊘ Destructured with no `..` for leg A2's reason, so w288's field had to be
+            // named here too. The handle inside it is namespace-relevant — it is the
+            // `OS_DESCRIPTOR` over the guest's own notifier pages — and it is owned by the
+            // same isolate by construction: `describe_guest_ram` mints it on the very
+            // backend the channel is then born on.
+            err_notifier: _,
+        } => {
+            own(vas);
+            own(handle);
+            assert_eq!(token >> 20, ns, "host token leaked across isolates");
+        }
+        RmVerb::Schedule { chan } => own(chan),
+        RmVerb::MapGpuVa { vas, memory, .. } => {
+            own(vas);
+            own(memory);
+        }
+        RmVerb::UnmapGpuVa { vas, .. } => own(vas),
+        RmVerb::RingDoorbell { token } => {
+            assert_eq!(token >> 20, ns, "doorbell token leaked across isolates");
+        }
+        RmVerb::Free { obj } => own(obj),
+        RmVerb::Control { obj, .. } => own(obj),
+        // A copy-engine sub-copy names the host VAS it runs in, and nothing else that
+        // could cross a namespace: its addresses are guest numbers by address identity.
+        RmVerb::CeCopy { vas, .. } => own(vas),
+        // ★ A fabricated-aperture read names NO handle at all — that is why it is not a
+        // `VerbPlan` and why the foreign-handle gate has nothing to check on it. Its
+        // containment is the isolate's own aperture mapping, one layer down, not a
+        // namespace-scoped value this sweep could inspect.
+        RmVerb::FbRead { .. } => {}
+        // ★★ An export names a handle only on the arm that REFUSES — the device class,
+        // whose object is checked before the refusal. The token it mints on the other arm
+        // is namespaced like a handle, so a backing minted in one isolate and presented on
+        // another is visible here rather than plausible.
+        RmVerb::ExportBacking { source, token, .. } => {
+            if let kayfabe_isolate::ExportSource::HostDeviceMemory { memory } = source {
+                own(memory);
+            }
+            if let Some(token) = token {
+                assert_eq!(token >> 32, ns, "an export token leaked across isolates");
+            }
+        }
+        // ★★★ A guest-RAM mapping names ONE handle — the isolate's own name for it — and
+        // that is exactly what this sweep must check: guest RAM is the one resource whose
+        // cross-isolate reach would be a real escalation rather than untidiness (isolate A
+        // mapping guest process B's pages, and the guest kernel's, is a privilege the
+        // client process could never have had).
+        //
+        // ⊘ The `offset`/`len` are NOT checked here and must not be: they are guest-physical
+        // numbers the VMM derived, not namespace-scoped values, and two isolates legitimately
+        // naming the same guest page is the VMM's decision to make, not this sweep's.
+        RmVerb::MapGuestRam { region, .. } | RmVerb::UnmapGuestRam { region, .. } => own(region),
+        // ★★★ The `OS_DESCRIPTOR` over guest RAM names TWO handles and both are checked:
+        // the mapping it was built from and the RM object it minted. The second one is the
+        // one that matters most here — it is a real host object that PINS guest pages for
+        // the GPU, so an object minted in one isolate's namespace and presented on another
+        // is the same escalation the mapping itself would be, arriving one verb later.
+        RmVerb::DescribeGuestRam { region, memory, .. } => {
+            own(region);
+            own(memory);
+        }
+        // ★★★★★ A join names the host VAS it places into, and mints a namespaced backing
+        // token. ⊘ `at` and `phys` are NOT checked and must not be: the first is a guest VA
+        // by address identity and the second is an emulated-framebuffer address the VMM
+        // derived — neither is namespace-scoped, and two isolates legitimately naming one
+        // guest address is the VMM's decision, exactly as for `MapGuestRam`.
+        RmVerb::JoinFbLeaf { vas, token, .. } => {
+            own(vas);
+            if let Some(token) = token {
+                assert_eq!(token >> 32, ns, "a join token leaked across isolates");
+            }
+        }
+        // ★★★ w380 — an alias names the host VAS it places into and mints NO token. ⊘ The
+        // absent token is the assertion, not an omission: an alias that minted one would have
+        // minted a second memory for a frame that already has one.
+        RmVerb::AliasFbLeaf { vas, .. } => own(vas),
+    }
+}
+
+/// Full-device consistency sweep: everything derivable must agree, all per-proc
+/// state must be disjoint. Called under exclusive access at checkpoints + at the end.
+fn assert_device_consistent(gpu: &Gpu) {
+    // Arenas pairwise disjoint (system included) — the #14 collision class.
+    let mut ranges: Vec<_> = gpu
+        .procs
+        .values()
+        .map(|p| p.arenas[&GpuId::ZERO].range.clone())
+        .collect();
+    ranges.push(gpu.system.arenas[&GpuId::ZERO].range.clone());
+    for (i, a) in ranges.iter().enumerate() {
+        for b in ranges.iter().skip(i + 1) {
+            assert!(
+                a.end <= b.start || b.end <= a.start,
+                "arena overlap: {a:?} vs {b:?}"
+            );
+        }
+    }
+    // Routing maps agree with the procs they point at.
+    for (&(gpu_t, pdb), &pid) in &gpu.spine.by_pdb {
+        let p = gpu.procs.get(&pid).expect("by_pdb points at a live proc");
+        assert!(
+            p.vas_by_pdb(gpu_t, pdb).is_some(),
+            "by_pdb[{pdb:?}] → proc without that Vas"
+        );
+    }
+    for (&(_gpu_t, vchid), &(pid, cid)) in &gpu.spine.by_vchid {
+        let p = gpu.procs.get(&pid).expect("by_vchid points at a live proc");
+        let c = p
+            .channels
+            .get(&cid)
+            .expect("by_vchid points at a live channel");
+        assert_eq!(
+            c.vchid, vchid,
+            "channel's vChid disagrees with its routing key"
+        );
+    }
+    for p in gpu.procs.values() {
+        // Exec state refers only to live channels.
+        for cid in &p.exec.scheduled {
+            assert!(
+                p.channels.contains_key(cid),
+                "scheduled ghost channel {cid:?}"
+            );
+        }
+        // Isolate session == ProcId by construction.
+        assert_eq!(
+            p.isolates[&GpuId::ZERO].id(),
+            kayfabe_isolate::IsolateId::new(p.id.0, GpuId::ZERO),
+            "isolate session != (ProcId, GpuId)"
+        );
+        for (&(gpu_t, _origin), vas) in &p.vases {
+            let pdb = vas.pdb.expect("the fixture's VAS declares a base");
+            assert_eq!(vas.gpu, gpu_t);
+            // Host-published bindings landed in THIS proc's arena; every RPC-bound
+            // VA is genuinely in the table.
+            for (va, len, b) in vas.table.iter() {
+                assert!(len > 0);
+                if b.host_va().is_some() {
+                    assert!(
+                        p.arenas[&GpuId::ZERO].range.contains(&b.phys()),
+                        "published phys {:#x} outside {:?}'s arena {:?}",
+                        b.phys(),
+                        p.id,
+                        p.arenas[&GpuId::ZERO].range
+                    );
+                }
+                let _ = va;
+            }
+            for &va in &vas.rpc_bound {
+                assert!(
+                    vas.table.resolve(pdb, GpuVa(va)).is_ok(),
+                    "rpc_bound VA {va:#x} missing from the table"
+                );
+            }
+        }
+    }
+}
+
+/// ★ The soak: `N_THREADS` simulated vCPUs drive one shared `Gpu` through the
+/// intended synchronization (device-global `RwLock`) with a realistic mixed op
+/// stream — doorbells, backing publications, RM map/unmap churn, completion
+/// observe/pump/poll/drain, and lock-free concurrent reads — for 160k interleaved
+/// ops (bounded; ≈15 s debug). Invariants are asserted continuously (reads), at
+/// periodic verb-log drains (namespace containment), and in a final full sweep
+/// (consistency + completion conservation).
+#[test]
+fn stress_multi_vcpu_interleaved_ops() {
+    // The one long test in this file (measured ≈20 s debug; the other three are
+    // ≈1 s each) — gated so the every-push fast path stays fast. The nightly
+    // `slow` CI job and every TSan run set KAYFABE_SLOW=1 (a TSan pass that
+    // skipped THIS test would be the race ceiling in name only).
+    kayfabe_tests::skip_slow!("stress_multi_vcpu_interleaved_ops");
+    let _wd = watchdog(
+        "stress_multi_vcpu_interleaved_ops",
+        Duration::from_secs(120),
+    );
+    let (gpu, recorder) = stress_gpu(N_PROCS);
+    let pids: Vec<ProcId> = gpu.procs.keys().copied().collect();
+    let gpu = RwLock::new(gpu);
+    // Merged across threads at the end: every event observed / every event delivered.
+    let observed = Mutex::new(BTreeSet::<OsEventRef>::new());
+    let delivered = Mutex::new(BTreeSet::<OsEventRef>::new());
+    let verbs_checked = Mutex::new(0usize);
+
+    thread::scope(|s| {
+        for tid in 0..N_THREADS {
+            let gpu = &gpu;
+            let recorder = &recorder;
+            let pids = &pids;
+            let observed = &observed;
+            let delivered = &delivered;
+            let verbs_checked = &verbs_checked;
+            s.spawn(move || {
+                let mut rng = Rng(0x9E37_79B9_7F4A_7C15 ^ ((tid as u64 + 1) << 32));
+                // Per-(thread, proc) local state: publish lanes + RM-map lanes are
+                // thread-disjoint so concurrent mutation exercises the CORE, not
+                // artificial VA collisions (which are separately tested as loud).
+                let mut publish_cnt = [0u64; N_PROCS];
+                let mut last_pub: [Option<(GpuVa, u64, u64)>; N_PROCS] = [None; N_PROCS];
+                let mut rm_mapped = [false; N_PROCS];
+                let mut ev_seq = 0u64;
+                let mut local_observed = BTreeSet::new();
+                let mut local_delivered = BTreeSet::new();
+
+                for op in 0..OPS_PER_THREAD {
+                    let i = (rng.next() % N_PROCS as u64) as usize;
+                    let pid = pids[i];
+                    let pdb = pdb_of(i);
+                    match rng.next() % 100 {
+                        // ---- concurrent lock-free reads (&Gpu) --------------------
+                        0..=34 => {
+                            let g = gpu.read().unwrap();
+                            if let Some((va, gpa, host_va)) = last_pub[i] {
+                                let (b, off) = resolve(&g, GpuId::ZERO, pdb, GpuVa(va.0 + 0x40))
+                                    .expect("published VA resolves");
+                                assert_eq!(off, 0x40);
+                                assert_eq!(
+                                    b.phys(),
+                                    gpa,
+                                    "resolve returned another proc's backing"
+                                );
+                                assert_eq!(b.host_va(), Some(host_va));
+                                gate_working_set(
+                                    &g,
+                                    pid,
+                                    g.spine.by_vchid[&(GpuId::ZERO, gr_vchid(i))].1,
+                                    &[va],
+                                )
+                                .expect("published working set passes the ring-gate");
+                            } else {
+                                // Routing reads are always available.
+                                assert_eq!(g.spine.by_pdb[&(GpuId::ZERO, pdb)], pid);
+                                assert_eq!(g.spine.by_vchid[&(GpuId::ZERO, gr_vchid(i))].0, pid);
+                            }
+                        }
+                        // ---- doorbells (exec-plane demux) -------------------------
+                        35..=64 => {
+                            let vchid = if rng.next().is_multiple_of(2) {
+                                gr_vchid(i)
+                            } else {
+                                ce_vchid(i)
+                            };
+                            let mut g = gpu.write().unwrap();
+                            let out = handle_doorbell(
+                                &mut g,
+                                GpuId::ZERO,
+                                MockArch::token_for(vchid),
+                                &[],
+                            )
+                            .expect("doorbell routes");
+                            assert_eq!(out.proc, pid, "doorbell demuxed to the wrong proc");
+                            assert_eq!(
+                                out.host_token >> 20,
+                                u64::from(pid.0) + 1,
+                                "host token from another proc's isolate"
+                            );
+                        }
+                        // ---- backing publication (address plane, per-proc) --------
+                        65..=84 => {
+                            let va = GpuVa(
+                                0x40_0000_0000
+                                    + (tid as u64) * 0x1_0000_0000
+                                    + publish_cnt[i] * 0x1000,
+                            );
+                            let mut g = gpu.write().unwrap();
+                            let p = g.procs.get_mut(&pid).expect("live proc");
+                            let out =
+                                publish_backing(p, GpuId::ZERO, pdb, va, 0x1000).expect("publish");
+                            assert!(
+                                p.arenas[&GpuId::ZERO].range.contains(&out.gpa),
+                                "GPA {:#x} escaped {pid:?}'s arena",
+                                out.gpa
+                            );
+                            publish_cnt[i] += 1;
+                            last_pub[i] = Some((va, out.gpa, out.host_va));
+                        }
+                        // ---- completion plane: observe/pump/poll/drain ------------
+                        85..=92 => {
+                            let ev = OsEventRef(
+                                ((tid as u64 + 1) << 48) | (u64::from(pid.0) << 40) | ev_seq,
+                            );
+                            ev_seq += 1;
+                            let mut g = gpu.write().unwrap();
+                            g.procs
+                                .get_mut(&pid)
+                                .unwrap()
+                                .completion
+                                .observe(ev)
+                                .unwrap();
+                            local_observed.insert(ev);
+                            let batch = match rng.next() % 3 {
+                                0 => g.pump_completions(GpuId::ZERO),
+                                1 => g.completion_poll(GpuId::ZERO, pid, Instant(op as u64)),
+                                _ => {
+                                    g.completions_drained(GpuId::ZERO);
+                                    g.pump_completions(GpuId::ZERO)
+                                }
+                            };
+                            if let Some(b) = batch {
+                                local_delivered.extend(b.events);
+                            }
+                        }
+                        // ---- RM map/unmap churn through the graph (apply) ---------
+                        _ => {
+                            let client = HClient(0xA0 + i as u32);
+                            let va = GpuVa(0x80_0000_0000 + (tid as u64) * 0x1_0000_0000);
+                            let ev = if rm_mapped[i] {
+                                RmEvent::Unmap {
+                                    client,
+                                    vaspace: HObject(0x5c00_0010),
+                                    va,
+                                }
+                            } else {
+                                RmEvent::MapMemoryDma {
+                                    client,
+                                    vaspace: HObject(0x5c00_0010),
+                                    memory: MEM_HANDLES[tid % MEM_HANDLES.len()],
+                                    va,
+                                    offset: 0,
+                                    len: 0x2000,
+                                }
+                            };
+                            rm_mapped[i] = !rm_mapped[i];
+                            gpu.write().unwrap().apply(ev).expect("map churn applies");
+                        }
+                    }
+
+                    // Periodic checkpoint: drain the global verb log (bounds memory,
+                    // models a consumer) and assert per-isolate namespace containment.
+                    // LOCK ORDER (see module docs): each guard is scoped and dropped
+                    // before the next acquisition — recorder, then counters, then a
+                    // fresh `gpu` read. Never `gpu` under `recorder`.
+                    if (op + 1).is_multiple_of(4096) {
+                        // ★ §12.35 — `compact()`, not `mem::take(&mut rec.log)`. The
+                        // bare take also destroyed the conservation ledger, so the whole
+                        // run's live host state read back as dangling; `compact` folds
+                        // the drained prefix into the recorder's carried accounting
+                        // first, and the memory bound is unchanged.
+                        let drained = recorder.lock().unwrap().compact();
+                        for (iso, verb) in &drained {
+                            assert_verb_in_namespace(*iso, verb);
+                        }
+                        *verbs_checked.lock().unwrap() += drained.len();
+                        if tid == 0 {
+                            assert_device_consistent(&gpu.read().unwrap());
+                        }
+                    }
+                }
+                observed.lock().unwrap().append(&mut local_observed);
+                delivered.lock().unwrap().append(&mut local_delivered);
+            });
+        }
+    });
+
+    // ---- final sweep under exclusive access -------------------------------------
+    let mut gpu = gpu.into_inner().unwrap();
+    let mut observed = observed.into_inner().unwrap();
+    let mut delivered = delivered.into_inner().unwrap();
+
+    // Flush the completion plane: open the gate, post every straggler, drain.
+    // Bounded: each iteration drains what the previous one posted; `pending` only
+    // shrinks once the workers are joined, so this exits within two passes.
+    loop {
+        gpu.completions_drained(GpuId::ZERO);
+        match gpu.pump_completions(GpuId::ZERO) {
+            Some(b) => delivered.extend(b.events),
+            None => break,
+        }
+    }
+    // Conservation: exactly the observed events were delivered — nothing forged,
+    // nothing lost (re-posts are idempotent set-wise).
+    assert_eq!(
+        delivered,
+        std::mem::take(&mut observed),
+        "completion conservation"
+    );
+    // Ack everything delivered; every queue must then be provably empty.
+    let acked: Vec<OsEventRef> = delivered.into_iter().collect();
+    for p in gpu.procs.values_mut() {
+        for &e in &acked {
+            p.completion.ack(e);
+        }
+        assert!(
+            !p.completion.has_outstanding(),
+            "queue not empty after full ack"
+        );
+    }
+
+    // Full consistency sweep + the remaining verb-log tail.
+    assert_device_consistent(&gpu);
+    let tail = recorder.lock().unwrap().compact();
+    for (iso, verb) in &tail {
+        assert_verb_in_namespace(*iso, verb);
+    }
+    let total = *verbs_checked.lock().unwrap() + tail.len();
+    // The soak was real: at least half the ops issued a host verb (doorbells ring
+    // every time; publications alloc+map every time).
+    assert!(
+        total > N_THREADS * OPS_PER_THREAD / 2,
+        "soak was real: {total} host verbs is too few"
+    );
+}
+
+/// ★★ **A two-party rendezvous that BREAKS when a party dies** — `std::sync::Barrier`
+/// with the one property it lacks, and the reason `per_proc_parallelism_two_procs_no_
+/// shared_lock` no longer hangs when a thread fails an assertion.
+///
+/// `Barrier::wait` has exactly one way out: everybody arrives. It is not poisoned by a
+/// panic the way a `Mutex` is, so a partner that dies before reaching the rendezvous
+/// leaves the survivor parked in `futex_do_wait` with nothing in the system able to wake
+/// it. Measured with an induced failure in thread A: thread B wedged on the mid-work
+/// barrier, the main thread wedged joining it, 0.4 % CPU, and libtest had printed nothing
+/// but `running 1 test` — the assertion that actually failed was invisible, because a
+/// captured panic is flushed only when the test ends. The 60 s watchdog turns that into a
+/// process `abort()`, which is a crash rather than a red test naming a line.
+///
+/// The rendezvous semantics are **unchanged and unweakened**: `wait` still returns only
+/// once all `parties` have arrived, so the "both threads are mid-mutation" claim the test
+/// rests on is exactly as strong as it was. What is added is a second exit — a *broken*
+/// barrier — which panics instead of blocking, so the survivor unwinds, the scope joins,
+/// and the ORIGINAL failure is the one that gets reported.
+struct BreakableBarrier {
+    st: Mutex<BarrierState>,
+    cv: Condvar,
+    parties: usize,
+}
+
+#[derive(Default)]
+struct BarrierState {
+    /// Parties currently parked in this generation.
+    waiting: usize,
+    /// Bumped when a rendezvous completes — the predicate waiters wake on, so a
+    /// party that arrives late for generation *n* cannot be woken by generation *n+1*.
+    generation: u64,
+    /// Set by [`BreakOnPanic`]: some party is unwinding and will never arrive.
+    broken: bool,
+}
+
+impl BreakableBarrier {
+    fn new(parties: usize) -> Self {
+        BreakableBarrier {
+            st: Mutex::new(BarrierState::default()),
+            cv: Condvar::new(),
+            parties,
+        }
+    }
+
+    /// Rendezvous with the other parties.
+    ///
+    /// # Panics
+    /// If the barrier is broken — i.e. another party died rather than arriving. That is
+    /// never the *first* failure of a run, only the consequence of one, so the message
+    /// says so and points at the partner's own panic.
+    ///
+    /// Poison is tolerated rather than re-panicked throughout: a poisoned state mutex
+    /// means a party already panicked while inside `wait`, which is a failure that is
+    /// already being reported, and a second panic here would only bury it.
+    fn wait(&self) {
+        let mut g = self.st.lock().unwrap_or_else(PoisonError::into_inner);
+        let epoch = g.generation;
+        if !g.broken {
+            g.waiting += 1;
+            if g.waiting == self.parties {
+                g.waiting = 0;
+                g.generation = epoch.wrapping_add(1);
+                self.cv.notify_all();
+                return;
+            }
+            while g.generation == epoch && !g.broken {
+                g = self.cv.wait(g).unwrap_or_else(PoisonError::into_inner);
+            }
+        }
+        // Released BEFORE the assert, so a broken barrier does not also poison itself.
+        let arrived = g.generation != epoch;
+        drop(g);
+        assert!(
+            arrived,
+            "the rendezvous was BROKEN: another party unwound instead of arriving. This \
+             is not the original failure — look above for the partner thread's own panic, \
+             which is the one that matters. Reported here rather than blocking forever, \
+             because a `Barrier` a dead partner never reaches has no other exit"
+        );
+    }
+
+    /// Wake every parked party and refuse all future rendezvous.
+    fn break_now(&self) {
+        let mut g = self.st.lock().unwrap_or_else(PoisonError::into_inner);
+        g.broken = true;
+        self.cv.notify_all();
+    }
+}
+
+/// ★ Break the barrier if — and only if — this thread is leaving by unwinding.
+///
+/// Armed as the **first statement** of each party's body, so the break covers every
+/// assertion after it. Conditional on [`thread::panicking`] rather than unconditional
+/// because "broken" is a *terminal* state here: a party that finished its work normally
+/// has not failed anybody, and a barrier that broke itself on a clean exit would refuse a
+/// later rendezvous that is entitled to succeed.
+///
+/// ★ R1 (`l1_concurrency.md` §3.3): this `Drop` calls only [`BreakableBarrier::break_now`],
+/// which takes the barrier's own **unranked** `std::sync::Mutex`, sets a bool and
+/// notifies — no blocking call, no syscall door, no `lockwitness` rank, and it never
+/// waits on the parties it wakes. This test drives `Proc` directly rather than through
+/// `SharedDevice`, so no ranked lock is taken on these threads at all; and any
+/// `MutexGuard` live at a panic point is created *after* this guard and therefore drops
+/// first, so `break_now` always runs lock-free.
+struct BreakOnPanic<'a>(&'a BreakableBarrier);
+
+impl Drop for BreakOnPanic<'_> {
+    fn drop(&mut self) {
+        if thread::panicking() {
+            self.0.break_now();
+        }
+    }
+}
+
+/// ★ The architectural payoff, proven at the type level AND temporally: two threads
+/// mutate DIFFERENT procs **simultaneously with no shared lock** — disjoint `&mut
+/// Proc` borrows out of `Gpu::procs` (the borrow checker is the proof of soundness;
+/// the mid-work barrier is the proof of temporal overlap: it can only be passed
+/// while BOTH threads are inside their per-proc mutation streams).
+#[test]
+fn per_proc_parallelism_two_procs_no_shared_lock() {
+    let _wd = watchdog(
+        "per_proc_parallelism_two_procs_no_shared_lock",
+        Duration::from_secs(60),
+    );
+    const PUBLISHES: u64 = 20_000;
+    let (mut gpu, _rec) = stress_gpu(2);
+    let barrier = BreakableBarrier::new(2);
+
+    let mut procs = gpu.procs.values_mut();
+    let pa: &mut Proc = procs.next().expect("proc A");
+    let pb: &mut Proc = procs.next().expect("proc B");
+
+    let work = |p: &mut Proc, barrier: &BreakableBarrier| {
+        // ★ FIRST statement, before either `wait` below: a party that unwinds past a
+        // rendezvous it owed the other one must say so, or the survivor blocks forever
+        // in a `Barrier` nothing can wake. See `BreakOnPanic` for the R1 argument.
+        let _brk = BreakOnPanic(barrier);
+        // ⊘ w555 — the key is the RM object now; `publish_backing` still takes a base, so
+        // the fixture reads the base off the space it picked.
+        let v = p.vases.values().next().expect("compute Vas");
+        let (gpu_t, pdb) = (v.gpu, v.pdb.expect("the fixture's VAS declares a base"));
+        barrier.wait(); // start together
+        let mut published = Vec::with_capacity(PUBLISHES as usize);
+        for k in 0..PUBLISHES {
+            // IDENTICAL guest VAs in both procs — the #14 shape, in parallel.
+            let va = GpuVa(0x2_0020_0000 + k * 0x1000);
+            let out = publish_backing(p, gpu_t, pdb, va, 0x1000).expect("publish");
+            published.push(out);
+            if k == PUBLISHES / 2 {
+                // Both threads must be mid-mutation for anyone to pass this point.
+                barrier.wait();
+            }
+        }
+        published
+    };
+
+    let (pub_a, pub_b) = thread::scope(|s| {
+        let ta = s.spawn(|| work(pa, &barrier));
+        let tb = s.spawn(|| work(pb, &barrier));
+        (ta.join().expect("A clean"), tb.join().expect("B clean"))
+    });
+
+    // Identical guest VAs → fully disjoint GPAs and disjoint host BACKING.
+    let gpas_a: BTreeSet<u64> = pub_a.iter().map(|p| p.gpa).collect();
+    let gpas_b: BTreeSet<u64> = pub_b.iter().map(|p| p.gpa).collect();
+    assert_eq!(gpas_a.len() as u64, PUBLISHES, "no GPA reuse within A");
+    assert!(gpas_a.is_disjoint(&gpas_b), "GPA overlap across procs");
+    // ★★★ #102 — corrected. This used to require the two host-VA SETS to be disjoint,
+    // which under address identity is the opposite of correct: the two threads publish
+    // the SAME guest VAs, so the host VA sets are necessarily EQUAL. What must be
+    // disjoint is the host state behind them — different memory objects, minted in
+    // different isolates, mapped into different host VASes.
+    let hva_a: BTreeSet<u64> = pub_a.iter().map(|p| p.host_va).collect();
+    let hva_b: BTreeSet<u64> = pub_b.iter().map(|p| p.host_va).collect();
+    assert_eq!(
+        hva_a, hva_b,
+        "identical guest VAs are host-mapped at identical host VAs (address identity)"
+    );
+    let mem_a: BTreeSet<_> = pub_a.iter().map(|p| p.memory).collect();
+    let mem_b: BTreeSet<_> = pub_b.iter().map(|p| p.memory).collect();
+    assert_eq!(
+        mem_a.len() as u64,
+        PUBLISHES,
+        "no host-object reuse within A"
+    );
+    assert!(
+        mem_a.is_disjoint(&mem_b),
+        "host backing overlap across procs — THE #14 hazard, asserted as itself"
+    );
+
+    // Each proc's host VAS came from its OWN isolate (namespace = ProcId + 1).
+    for p in gpu.procs.values() {
+        let vas = p.vases.values().next().unwrap();
+        let hvas = vas.host_vas.expect("materialized");
+        assert_eq!(
+            hvas.raw() >> 32,
+            u64::from(p.id.0) + 1,
+            "host VAS from a foreign isolate"
+        );
+    }
+    assert_device_consistent(&gpu);
+}
+
+/// SAME-proc ops must serialize — and stay exact under arbitrary interleaving:
+/// four threads share ONE proc behind a mutex (the caller-provided exclusivity the
+/// contract requires for `&mut`); the arena bump, the address table, and the
+/// isolate's host mappings must come out byte-exact, with zero double-allocations.
+///
+/// (This test caught a real mock bug: `MockRmBackend::map_gpu_va` OR-ed its per-VAS
+/// lane over a bump counter and minted duplicate host VAs after 2^16 pages. ★ That
+/// minting scheme no longer exists — under `#102` the mock places mappings where it is
+/// told — and the successor property lives in
+/// `mock_rm_map_gpu_va_places_exactly_where_asked_and_collides_only_within_one_vas`.)
+#[test]
+fn same_proc_interleaving_is_exact() {
+    let _wd = watchdog("same_proc_interleaving_is_exact", Duration::from_secs(60));
+    const THREADS: u64 = 4;
+    const PER_THREAD: u64 = 25_000;
+    let (mut gpu, _rec) = stress_gpu(1);
+    let pid = *gpu.procs.keys().next().unwrap();
+    let proc = gpu
+        .procs
+        .remove(&pid)
+        .expect("take the proc out for direct sharding");
+    let v = proc.vases.values().next().unwrap();
+    let (gpu_t, pdb) = (v.gpu, v.pdb.expect("the fixture's VAS declares a base"));
+    let arena_start = proc.arenas[&GpuId::ZERO].range.start;
+    let shared = Mutex::new(proc);
+
+    thread::scope(|s| {
+        for tid in 0..THREADS {
+            let shared = &shared;
+            s.spawn(move || {
+                for k in 0..PER_THREAD {
+                    let va = GpuVa(0x40_0000_0000 + tid * 0x1_0000_0000 + k * 0x1000);
+                    let mut p = shared.lock().unwrap();
+                    let out = publish_backing(&mut p, gpu_t, pdb, va, 0x1000).expect("publish");
+                    assert!(p.arenas[&GpuId::ZERO].range.contains(&out.gpa));
+                }
+            });
+        }
+    });
+
+    // ★ §12.35: put the proc BACK before the guard runs. This test shards it out of the
+    // device to get direct `&mut Proc` access; a proc parked outside `Gpu::procs` is
+    // invisible to `reachable_objects`, so leaving it there would report 100 000 correctly
+    // held backings as unaccounted. Restoring it is not a workaround — the sharded proc is
+    // the device's, and the audit's question is about the device.
+    gpu.procs.insert(pid, shared.into_inner().unwrap());
+    let p = &gpu.procs[&pid];
+    let vas = &p.vas_by_pdb(GpuId::ZERO, pdb).expect("the VAS exists");
+    let total = THREADS * PER_THREAD;
+    // The bump allocator is exact: every alloc distinct, cursor advanced exactly.
+    let gpas: BTreeSet<u64> = vas.table.iter().map(|(_, _, b)| b.phys()).collect();
+    assert_eq!(gpas.len() as u64, total, "duplicate GPA under interleaving");
+    assert_eq!(*gpas.iter().next().unwrap(), arena_start);
+    assert_eq!(
+        *gpas.iter().next_back().unwrap(),
+        arena_start + (total - 1) * 0x1000
+    );
+    assert_eq!(
+        vas.table.iter().count() as u64,
+        total,
+        "a binding per publish"
+    );
+    // Every host VA is distinct and from THIS proc's isolate.
+    let hvas: BTreeSet<u64> = vas
+        .table
+        .iter()
+        .filter_map(|(_, _, b)| b.host_va())
+        .collect();
+    assert_eq!(
+        hvas.len() as u64,
+        total,
+        "duplicate host VA under interleaving"
+    );
+}
+
+/// Concurrent readers share `&Gpu` across threads with NO lock at all — the direct
+/// runtime witness of `Gpu: Sync` (and, by moving the device into and out of the
+/// worker scope, of `Gpu: Send`): a million lock-free resolves + ring-gates racing
+/// each other, all agreeing with the pre-published truth.
+#[test]
+fn lock_free_concurrent_reads_share_the_gpu() {
+    let _wd = watchdog(
+        "lock_free_concurrent_reads_share_the_gpu",
+        Duration::from_secs(60),
+    );
+    const READERS: usize = 8;
+    const READS: usize = 125_000;
+    let (mut gpu, _rec) = stress_gpu(4);
+    let pids: Vec<ProcId> = gpu.procs.keys().copied().collect();
+
+    // Publish a truth set: 64 VAs per proc.
+    let mut truth: BTreeMap<(usize, u64), (u64, u64)> = BTreeMap::new();
+    for (i, &pid) in pids.iter().enumerate() {
+        for k in 0..64u64 {
+            let va = 0x2_0020_0000 + k * 0x1000;
+            let p = gpu.procs.get_mut(&pid).unwrap();
+            let out =
+                publish_backing(p, GpuId::ZERO, pdb_of(i), GpuVa(va), 0x1000).expect("publish");
+            truth.insert((i, va), (out.gpa, out.host_va));
+        }
+    }
+
+    // `Gpu: Send` witness — move it to a worker thread and back.
+    let gpu = thread::spawn(move || gpu)
+        .join()
+        .expect("Gpu crosses threads");
+
+    let gpu_ref = &gpu;
+    let truth = &truth;
+    let pids = &pids;
+    thread::scope(|s| {
+        for tid in 0..READERS {
+            s.spawn(move || {
+                let mut rng = Rng(0xDEAD_BEEF ^ ((tid as u64 + 1) << 40));
+                for _ in 0..READS {
+                    let i = (rng.next() % 4) as usize;
+                    let k = rng.next() % 64;
+                    let va = 0x2_0020_0000 + k * 0x1000;
+                    let (gpa, host_va) = truth[&(i, va)];
+                    let (b, off) =
+                        resolve(gpu_ref, GpuId::ZERO, pdb_of(i), GpuVa(va + 0x10)).expect("hit");
+                    assert_eq!((b.phys(), b.host_va(), off), (gpa, Some(host_va), 0x10));
+                    let (pid, cid) = gpu_ref.spine.by_vchid[&(GpuId::ZERO, gr_vchid(i))];
+                    assert_eq!(pid, pids[i]);
+                    gate_working_set(gpu_ref, pid, cid, &[GpuVa(va)]).expect("gate passes");
+                    // A miss is still a loud fault under concurrency, never a guess.
+                    assert!(
+                        resolve(gpu_ref, GpuId::ZERO, pdb_of(i), GpuVa(0xdead_0000_0000)).is_err()
+                    );
+                }
+            });
+        }
+    });
+    assert_device_consistent(&gpu);
+}

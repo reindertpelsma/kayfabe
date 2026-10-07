@@ -1,0 +1,126 @@
+info  RMLADDER ARGV     = [--uvm-mean]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00127
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+info  W392D config        = gpu 0 threads 4 p1_rounds 4 nonce 0x4755481d euid 0
+info  W392D the bar       = EVERY row must be ✔. ⊘ A row this build cannot drive is a FAIL BY NAME and holds the whole client red — it does not drop out of the grade
+ok    W392D main lane     = channel ring at 0x0000008000000000, scratch at 0x0000008040000000 — the engine can be asked questions
+--- W392D P1: the RM mapping path, 4 rounds at one VA ---
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #4 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #4 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+    P1 → ✔ VERIFIED over 4 round(s)
+--- W392D STALE RACE: remap one VA between two LIVE objects ---
+    w392d stale: A pattern=0x73c618ef  B pattern=0x15728553  VA=0x00000080c0000000
+kayfabe-isolate: DOORBELL-STORE #5 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #5 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #6 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #6 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+    STALE RACE → ✔ VERIFIED over 2 round(s)
+--- W392D P2: nvidia-uvm publishes the mapping, 4 rounds at one VA ---
+ok    W392D P2 vaspace    = 0xcafe0010 registered with nvidia-uvm — its page directory is now UVM's page tree
+ok    W392D P2 ring       = UVM published the ring object at 0x0000009000000000
+ok    W392D P2 channel    = COPY(2) bound to the UVM-owned space,              runlist 8 (token 0x0008000b) — NOT the graphics runlist
+kayfabe-isolate: DOORBELL-STORE #7 host_token=0x0008000b runlist=8 chid=11 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #7 host_token=0x0008000b ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #8 host_token=0x0008000b runlist=8 chid=11 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #8 host_token=0x0008000b ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #9 host_token=0x0008000b runlist=8 chid=11 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #9 host_token=0x0008000b ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #10 host_token=0x0008000b runlist=8 chid=11 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #10 host_token=0x0008000b ★★★ WROTE — the store instruction executed
+--- W392D P3: the RPC bind (GPU_PROMOTE_CTX), with its negative control ---
+ok    W392D P3 GR channel = 0xcafe001b in the UVM-owned space, token 0x0000000c (runlist 0)
+ok    W392D P3 gr object  = the compute object allocated — the channel now has a context
+★     W392D P3 arm A      = schedule REFUSED 0x40 BEFORE the promote — the negative control fired, so arm C's success is attributable to the RPC bind and to nothing else
+ok    W392D P3 arm B      = UVM_REGISTER_CHANNEL accepted — the channel's context buffers were mapped at 0x0000009200000000 and PROMOTED over RPC
+★★★   W392D P3 arm C      = the SAME schedule call now SUCCEEDS. ⇒ the RPC-carried bind is what made this channel executable
+kayfabe-isolate: DOORBELL-STORE #11 host_token=0x0008000b runlist=8 chid=11 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #11 host_token=0x0008000b ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #12 host_token=0x0008000b runlist=8 chid=11 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #12 host_token=0x0008000b ★★★ WROTE — the store instruction executed
+ok    W392D P3 arm D0   = a CE WRITE to 0x0000009140000000 landed                              and read back 0x57455250 ⇒ the mapping accepts engine writes, so a                              GR fault at this VA indicts the GR channel's OWN page-directory                              binding (VEID/instance block), not the mapping
+kayfabe-isolate: DOORBELL-STORE #13 host_token=0x0000000c runlist=0 chid=12 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #13 host_token=0x0000000c ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #14 host_token=0x0008000b runlist=8 chid=11 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #14 host_token=0x0008000b ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #15 host_token=0x0000000c runlist=0 chid=12 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #15 host_token=0x0000000c ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #16 host_token=0x0008000b runlist=8 chid=11 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #16 host_token=0x0008000b ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #17 host_token=0x0000000c runlist=0 chid=12 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #17 host_token=0x0000000c ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #18 host_token=0x0008000b runlist=8 chid=11 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #18 host_token=0x0008000b ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #19 host_token=0x0000000c runlist=0 chid=12 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #19 host_token=0x0000000c ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #20 host_token=0x0008000b runlist=8 chid=11 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #20 host_token=0x0008000b ★★★ WROTE — the store instruction executed
+    P2 → ✔ VERIFIED over 4 round(s)
+    P3 → ✔ VERIFIED over 4 round(s)
+--- W392D THREADS: 4 workers, ONE shared VA space, a window each ---
+kayfabe-isolate: DOORBELL-STORE #21 host_token=0x00000008 runlist=0 chid=8 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #21 host_token=0x00000008 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #22 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #22 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #24 host_token=0x00000007 runlist=0 chid=7 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #24 host_token=0x00000007 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #23 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #23 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #25 host_token=0x00000008 runlist=0 chid=8 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #25 host_token=0x00000008 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #26 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #26 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #27 host_token=0x00000007 runlist=0 chid=7 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #27 host_token=0x00000007 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #28 host_token=0x00000008 runlist=0 chid=8 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #28 host_token=0x00000008 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #29 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #29 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #30 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #30 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #31 host_token=0x00000007 runlist=0 chid=7 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #31 host_token=0x00000007 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #32 host_token=0x00000008 runlist=0 chid=8 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #32 host_token=0x00000008 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #33 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #33 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #34 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #34 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #35 host_token=0x00000007 runlist=0 chid=7 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #35 host_token=0x00000007 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #36 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #36 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #37 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #37 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #38 host_token=0x00000008 runlist=0 chid=8 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #38 host_token=0x00000008 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #39 host_token=0x00000007 runlist=0 chid=7 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #39 host_token=0x00000007 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #40 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #40 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #41 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #41 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #42 host_token=0x00000008 runlist=0 chid=8 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #42 host_token=0x00000008 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #43 host_token=0x00000007 runlist=0 chid=7 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #43 host_token=0x00000007 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #44 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #44 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+    THREADS → 4/4 clean, 6 overlapping pair(s) of graded intervals
+=== ★★★★★ w392d LEDGER — every row must be ✔ for a PASS ===
+    P1 rm-invalidate  ✔ VERIFIED over 4 round(s)
+    P2 uvm-memop      ✔ VERIFIED over 4 round(s)
+    P3 rpc-bind       ✔ VERIFIED over 4 round(s)
+    STALE RACE        ✔ VERIFIED over 2 round(s)
+    THREADS           4 of 4 verified ✔
+    W392D_OUTCOME=(P) ★★★★★ PASS — all three paths content-verified,
+        the stale-mapping race came out right, and it was concurrent.
+info  W392D falsifier    = NOT RUN (pass --mean-falsify). ⊘ The ledger's ✔ rows are therefore un-negative-controlled ON THIS RUN
+done — w392d mean client only

@@ -1,0 +1,2 @@
+dbfast[ON regs=2 placed=2/256 sites=1 doorbells=11119029 wakes=11101328 rang=11099287 handed=2041 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=2996/11107569 max_batch=2 wake_to_deliver[n=11101328 p50=1.3us p99=2.8us max=2708.9us]
+device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,doorbell-ioeventfd=on

@@ -1,0 +1,48 @@
+[package]
+name = "kayfabe-linux-raw"
+description = "The ONE audited raw-OS adapter: host mappings, the host page size, and the bounded region objects everything above manipulates instead of pointers. Linux-only, no business logic (l1_os_shell.md §4)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+# ★ Test-only escape hatch for `HostPageSize::forced` (l1_os_shell.md §5.2 item 1/3).
+# Unit tests get it from `cfg(test)`; this feature is what an INTEGRATION harness will
+# enable to run the shell suite at a forced 64 KiB on an x86 runner. Nothing enables it
+# today, and a shipping build must not: a forced page size that disagrees with the
+# kernel's is exactly the misalignment the newtype exists to prevent.
+force-host-page-size = []
+
+[dependencies]
+libc = "0.2"
+# The R1 lock witness lives at the bottom of the graph precisely so a crate that
+# cannot depend on `kayfabe-rt` can still assert it (l1_os_shell.md §4.5, §12.8).
+kayfabe-util.workspace = true
+
+[dev-dependencies]
+trybuild = "1.0"
+# ★ Dev-only, and its ONLY job is trybuild row 9: proving that no `Gpa` ⇄
+# `HostOffset` conversion exists. A negative about two types needs both types in
+# scope; this crate has no other use for the guest-address vocabulary and must
+# never acquire one (§4.7 — no business logic).
+kayfabe-arch.workspace = true
+
+# ★ DELIBERATELY NOT `[lints] workspace = true` — l1_os_shell.md §4.1.
+#
+# The workspace declares `unsafe_code = "forbid"`, and `forbid` cannot be relaxed by an
+# `allow` inside the crate; that is the entire point of `forbid`. So the ONE crate that
+# needs the relaxation must omit the inheritance block and restate the lints itself.
+#
+# That creates a silent opt-out for the whole workspace — any future crate that merely
+# forgets `[lints] workspace = true` loses `forbid` with no diagnostic. CI gate A
+# (`.github/workflows/ci.yml`) closes it: every `crates/*/Cargo.toml` EXCEPT this one must
+# inherit. Gate B pins containment to this crate's `src/`; gate C pins the `*_unsafe.rs`
+# file naming; the ratchet pins the block count. Four cheap greps, no allowlist anywhere.
+[lints.rust]
+unsafe_code = "allow"
+missing_docs = "warn"
+
+[lints.clippy]
+# Every relaxation carries a `// SAFETY:` naming its invariant and who guarantees it,
+# or the build fails. This is what makes the §11 exit-gate review tractable at all.
+undocumented_unsafe_blocks = "deny"

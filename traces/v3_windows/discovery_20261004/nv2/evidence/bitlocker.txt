@@ -1,0 +1,30 @@
+
+
+VolumeStatus         : FullyDecrypted
+ProtectionStatus     : Off
+EncryptionPercentage : 0
+EncryptionMethod     : None
+
+
+
+BitLocker Drive Encryption: Configuration Tool version 10.0.26100
+Copyright (C) 2013 Microsoft Corporation. All rights reserved.
+
+Volume C: [Windows]
+[OS Volume]
+
+    Size:                 79.05 GB
+    BitLocker Version:    None
+    Conversion Status:    Fully Decrypted
+    Percentage Encrypted: 0.0%
+    Encryption Method:    None
+    Protection Status:    Protection Off
+    Lock Status:          Unlocked
+    Identification Field: None
+    Key Protectors:       None Found
+
+
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\BitLocker
+    PreventDeviceEncryption    REG_DWORD    0x1
+
+

@@ -1,0 +1,23 @@
+      6 kf3: VasKey(13970166536862302274) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+      6 kf3: VasKey(13970166485322694722) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+      6 kf3: VasKey(13970166433783087170) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+      6 kf3: VasKey(13970166382243479618) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+      6 kf3: VasKey(13970166330703872066) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+      6 kf3: VasKey(13970166279164264514) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+      6 kf3: VasKey(13970166227624656962) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+      6 kf3: VasKey(13970166176085049410) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+      6 kf3: VasKey(13970166124545441858) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+      6 kf3: VasKey(13970166077300801602) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+      4 kf3: VasKey(13970166588401909826) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+      1 kf3: permission policy: READ_ONLY+VOLATILE carried to the host map, PRIVILEGED leaves withheld from user twins, ATOMIC_DISABLE not carried (KF3_CARRY_ATOMIC_DISABLE=1 enables it once fault delivery ex
+      1 kf3: VasKey(13965662490830308848) is a guest-KERNEL space (Translated chan 0xc1d0000a:0xcaf005fd): privileged leaves are mirrored here
+      1 kf3: VasKey(13965662490830308696) is a guest-KERNEL space (Translated chan 0xc1d0000a:0xcaf00565): privileged leaves are mirrored here
+      1 kf3: VasKey(13965662490830308544) is a guest-KERNEL space (Translated chan 0xc1d0000a:0xcaf004cd): privileged leaves are mirrored here
+      1 kf3: VasKey(13965662490830308392) is a guest-KERNEL space (Translated chan 0xc1d0000a:0xcaf00435): privileged leaves are mirrored here
+      1 kf3: VasKey(13965662490830308240) is a guest-KERNEL space (Translated chan 0xc1d0000a:0xcaf0039d): privileged leaves are mirrored here
+      1 kf3: VasKey(13965662490830308089) is a guest-KERNEL space (Translated chan 0xc1d0000a:0xcaf00306): privileged leaves are mirrored here
+      1 kf3: VasKey(13965662490830307938) is a guest-KERNEL space (Translated chan 0xc1d0000a:0xcaf0026f): privileged leaves are mirrored here
+      1 kf3: VasKey(13965662490830307787) is a guest-KERNEL space (Translated chan 0xc1d0000a:0xcaf001d8): privileged leaves are mirrored here
+      1 kf3: VasKey(13965662490830307636) is a guest-KERNEL space (Translated chan 0xc1d0000a:0xcaf00141): privileged leaves are mirrored here
+      1 kf3: VasKey(13965662490830307485) is a guest-KERNEL space (Translated chan 0xc1d0000a:0xcaf000aa): privileged leaves are mirrored here
+      1 kf3: VasKey(13965662490830307333) is a guest-KERNEL space (Translated chan 0xc1d0000a:0xcaf00012): privileged leaves are mirrored here

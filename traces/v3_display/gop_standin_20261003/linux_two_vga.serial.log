@@ -1,0 +1,65 @@
+KFLINUX begin 7.0.0-34-generic
+KFLINUX dmesg [    0.000000] Command line: initrd=initrd console=ttyS0 loglevel=7 panic=-1 fbcon=nodefer
+KFLINUX dmesg [    0.012429] Kernel command line: initrd=initrd console=ttyS0 loglevel=7 panic=-1 fbcon=nodefer
+KFLINUX dmesg [    1.659375] pci 0000:00:02.0: vgaarb: setting as boot VGA device
+KFLINUX dmesg [    1.659389] pci 0000:00:02.0: vgaarb: bridge control possible
+KFLINUX dmesg [    1.659391] pci 0000:00:02.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
+KFLINUX dmesg [    1.659440] pci 0000:00:03.0: vgaarb: setting as boot VGA device (overriding previous)
+KFLINUX dmesg [    1.659452] pci 0000:00:03.0: vgaarb: bridge control possible
+KFLINUX dmesg [    1.659453] pci 0000:00:03.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
+KFLINUX dmesg [    1.659466] vgaarb: loaded
+KFLINUX dmesg [    1.953101] simple-framebuffer simple-framebuffer.0: [drm] Registered 1 planes with drm panic
+KFLINUX dmesg [    1.956994] [drm] Initialized simpledrm 1.0.0 for simple-framebuffer.0 on minor 0
+KFLINUX dmesg [    1.992142] simple-framebuffer simple-framebuffer.0: [drm] fb0: simpledrmdrmfb frame buffer device
+KFLINUX iomem 00000000-00000fff : Reserved
+KFLINUX iomem 00001000-0009ffff : System RAM
+KFLINUX iomem 000a0000-000bffff : PCI Bus 0000:00
+KFLINUX iomem 000f0000-000fffff : System ROM
+KFLINUX iomem 00100000-007fffff : System RAM
+KFLINUX iomem 00800000-00807fff : ACPI Non-volatile Storage
+KFLINUX iomem 00808000-0080afff : System RAM
+KFLINUX iomem 0080b000-0080bfff : ACPI Non-volatile Storage
+KFLINUX iomem 0080c000-00813fff : System RAM
+KFLINUX iomem 00814000-008fffff : ACPI Non-volatile Storage
+KFLINUX iomem 00900000-1d85efff : System RAM
+KFLINUX iomem   15a00000-1713ff6f : Kernel code
+KFLINUX iomem   17200000-1825efff : Kernel rodata
+KFLINUX iomem   18400000-188d637f : Kernel data
+KFLINUX iomem   18e48000-193fffff : Kernel bss
+KFLINUX iomem 1d85f000-1d867fff : Reserved
+KFLINUX iomem 1d868000-1ed3efff : System RAM
+KFLINUX iomem 1ed3f000-1edfffff : Reserved
+KFLINUX iomem 1ee00000-1f8ecfff : System RAM
+KFLINUX iomem 1f8ed000-1fb6cfff : Reserved
+KFLINUX iomem 1fb6d000-1fb7efff : ACPI Tables
+KFLINUX iomem 1fb7f000-1fbfefff : ACPI Non-volatile Storage
+KFLINUX iomem 1fbff000-1fef3fff : System RAM
+KFLINUX iomem 1fef4000-1ff77fff : Reserved
+KFLINUX iomem 1ff78000-1fffffff : ACPI Non-volatile Storage
+KFLINUX iomem 20000000-dfffffff : PCI Bus 0000:00
+KFLINUX iomem   80000000-80ffffff : 0000:00:02.0
+KFLINUX iomem   81000000-81ffffff : 0000:00:03.0
+KFLINUX iomem     81000000-812d8fff : BOOTFB
+KFLINUX iomem       81000000-812d8fff : simpledrm
+KFLINUX iomem   82000000-82003fff : 0000:00:03.0
+KFLINUX iomem   82004000-82007fff : 0000:00:02.0
+KFLINUX iomem   8200c000-8200cfff : 0000:00:1f.2
+KFLINUX iomem e0000000-efffffff : PCI ECAM 0000 [bus 00-ff]
+KFLINUX iomem   e0000000-efffffff : Reserved
+KFLINUX iomem     e0000000-efffffff : PNP0C01:00
+KFLINUX iomem f0000000-febfffff : PCI Bus 0000:00
+KFLINUX iomem fec00000-fec003ff : IOAPIC 0
+KFLINUX iomem fed00000-fed003ff : HPET 0
+KFLINUX iomem   fed00000-fed003ff : PNP0103:00
+KFLINUX iomem feffc000-feffffff : Reserved
+KFLINUX iomem 100000000-8ffffffff : PCI Bus 0000:00
+KFLINUX iomem fd00000000-ffffffffff : Reserved
+KFLINUX pci 0000:00:02.0 class=0x030000 vendor=0x1002 device=0x5046 boot_vga=0 command=0x0007 bar0=0x0000000080000000-0x0000000080ffffff
+KFLINUX pci 0000:00:03.0 class=0x030000 vendor=0x1002 device=0x5046 boot_vga=1 command=0x0007 bar0=0x0000000081000000-0x0000000081ffffff
+KFLINUX sysfb /sys/devices/pci0000:00/0000:00:03.0/simple-framebuffer.0 driver=simple-framebuffer
+KFLINUX fb0 name=simpledrmdrmfb
+KFLINUX fb0 virtual_size=1152,648
+KFLINUX fb0 stride=4608
+KFLINUX fb0 bits_per_pixel=32
+KFLINUX fb0 drawn
+KFLINUX end

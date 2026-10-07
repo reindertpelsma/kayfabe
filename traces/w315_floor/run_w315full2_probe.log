@@ -1,0 +1,258 @@
+=== boot_capture tag=w315full2 at 2026-08-14T15:48:41+00:00 ===
+=== source revision: 9196b8fa ===
+=== qemu binary: -rwxr-xr-x 1 root root 88110120 Aug 14 15:48 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:9196b8fa2507f1a7879ae5ad808cc1808880348a 
+=== BUILD_REV.txt says (informational, NOT authoritative): 28cf456
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /workspace/kayfabe_w315/scripts/bench/boot_nvkvm.sh  sha256=a1daa5c4c557180f
+    used: /workspace/kayfabe_w315/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Fri Aug 14 15:48:52 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  ERR!                           Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /  12288MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Aug 14 15:48 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Aug 14 15:48 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Aug 14 15:48 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Aug 14 15:48 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Aug 14 15:48 .
+drwxr-xr-x 18 root root   4000 Aug 14 15:48 ..
+cr--------  1 root root 240, 1 Aug 14 15:48 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Aug 14 15:48 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /workspace/kayfabe_w315/scripts/bench/cup8bench_hook.sh at 2026-08-14T15:48:56+00:00 ===
+BENCH_ONLY=measure
+=== source (md5 — a run cannot silently be a different copy) ===
+    /workspace/kayfabe_w315/scripts/bench/cup8bench.c          411 lines  md5 4696109cf0bf64c3bedaf90a9dc13e93
+BENCH_SRC_MD5=4696109cf0bf64c3bedaf90a9dc13e93
+    ★ THE SAME FILE the native arm builds — w311_native.sh copies THIS path. The md5 is
+      printed by both arms so 'same source' is a comparison, not a template sentence.
+BENCH_PARAMS sizes=512 iters=12 batch=10 verify=1
+
+=== ★★★ GUEST PRECONDITION 1 — the PTX JIT (cuModuleLoadData needs it) ===
+    /usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so
+    /usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.1
+    /usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.580.159.04
+BENCH_JIT_PRESENT=yes
+
+=== ★★ GUEST PRECONDITION 2 — HOST-SIDE RAM. cup8bench mallocs 3 x N^2 x 4 per size ===
+    ⊘ At N=2048 that is 48 MiB of GUEST RAM. If malloc fails it prints 'OOM host' and
+      exits 1 — a GUEST-IMAGE failure, not our address plane.
+                   total        used        free      shared  buff/cache   available
+    Mem:            1967         317        1374           0         420        1649
+BENCH_GUEST_MEMFREE_MB=1376
+
+=== push + build in the guest ===
+    ⊘ cup8bench.c does NOT include <cuda.h>: it declares the Driver-API entry points it
+      uses, so guest and host build it with the same one-line gcc invocation. That is
+      what makes the two arms comparable at all.
+BENCH_GCC_RC=0
+BENCH_GUEST_SRC_MD5=4696109cf0bf64c3bedaf90a9dc13e93
+
+=== launch [measure] DETACHED under its own 1100s timeout ===
+    LAUNCHED pid=1789
+    STARTED 2026-08-14T15:49:00+00:00 epoch=1786722540
+=== waiting for [measure] terminator — deadline 1220s from now ===
+    [+0s] BENCH_MODE=MEASURE
+    [+8s] ok   cuDeviceGet(&d,0)
+    [+22s] ITER N=512 i=11 launch_ms=115.817 submit_ms=92.661 sync_ms=23.156 t0_mono_ms=55725.739 verified=yes bad=0
+    [+28s] ★ terminator present
+BENCH_measure_TERMINATOR_SEEN=yes
+BENCH_measure_HOOK_WAITED_S=28
+BENCH_measure_WALL_S=29
+BENCH_measure_RC=0
+
+=== ★ [measure] FULL OUTPUT, verbatim (⚠ INDENTED — the graded lines below are NOT) ===
+    BENCH_BUILD sizes=[512] iters=12 batch=10 verify_every=1 nolaunch=0
+    BENCH_CLOCK_ORIGIN mono_ms=32676.443 real_ms=1786722540339.950
+    BENCH_MODE=MEASURE
+    ok   cuInit(0)
+    BENCH_INIT_MS=6447.07
+    ok   cuDeviceGetCount(&nd)
+    ok   cuDeviceGet(&d,0)
+    BENCH_DEVICE=[]
+    ok   cuCtxCreate_v2(&ctx,0,d)
+    BENCH_CTX_MS=12582.27
+    ok   cuModuleLoadData(&mod,PTX)
+    BENCH_MODULE_MS=96.86
+    ok   cuModuleGetFunction(&fn,mod,"mm")
+    
+    BENCH_SIZE_BEGIN N=512 per_matrix_MiB=1 device_MiB=3
+    B512_ALLOC_MS=10.92
+    B512_PTRS=A:0x7df232200000,B:0x7df232300000,C:0x7df232400000
+    B512_H2D_MS=178.83  (2 x 1 MiB)
+    B512_GRID=(32,32)x(16,16)
+    ITER N=512 i=0 launch_ms=116.148 submit_ms=92.964 sync_ms=23.184 t0_mono_ms=52364.595 verified=yes bad=0
+    ITER N=512 i=1 launch_ms=124.830 submit_ms=101.547 sync_ms=23.283 t0_mono_ms=52687.282 verified=yes bad=0
+    ITER N=512 i=2 launch_ms=122.278 submit_ms=99.126 sync_ms=23.152 t0_mono_ms=53016.768 verified=yes bad=0
+    ITER N=512 i=3 launch_ms=114.925 submit_ms=91.446 sync_ms=23.479 t0_mono_ms=53328.639 verified=yes bad=0
+    ITER N=512 i=4 launch_ms=123.602 submit_ms=100.726 sync_ms=22.876 t0_mono_ms=53624.880 verified=yes bad=0
+    ITER N=512 i=5 launch_ms=114.011 submit_ms=91.044 sync_ms=22.967 t0_mono_ms=53940.286 verified=yes bad=0
+    ITER N=512 i=6 launch_ms=112.889 submit_ms=90.317 sync_ms=22.572 t0_mono_ms=54232.986 verified=yes bad=0
+    ITER N=512 i=7 launch_ms=108.856 submit_ms=85.834 sync_ms=23.022 t0_mono_ms=54539.915 verified=yes bad=0
+    ITER N=512 i=8 launch_ms=118.668 submit_ms=95.926 sync_ms=22.742 t0_mono_ms=54825.398 verified=yes bad=0
+    ITER N=512 i=9 launch_ms=116.909 submit_ms=93.977 sync_ms=22.932 t0_mono_ms=55111.918 verified=yes bad=0
+    ITER N=512 i=10 launch_ms=121.820 submit_ms=99.165 sync_ms=22.655 t0_mono_ms=55415.655 verified=yes bad=0
+    ITER N=512 i=11 launch_ms=115.817 submit_ms=92.661 sync_ms=23.156 t0_mono_ms=55725.739 verified=yes bad=0
+    
+    B512_N=512
+    B512_ITERS=12
+    B512_FIRST_MS=116.148
+    B512_MEDIAN_MS=116.909
+    B512_P90_MS=123.602
+    B512_MIN_MS=108.856
+    B512_MAX_MS=124.830
+    B512_MEAN_MS=117.691
+    B512_GFLOPS=2.296
+    B512_BATCH=10
+    B512_BATCH_TOTAL_MS=964.822
+    B512_BATCH_PER_LAUNCH_MS=96.482
+    B512_BATCH_GFLOPS=2.782
+    B512_BATCH_BAD=0
+    B512_H2D_MS=178.828
+    B512_D2H_MED_MS=89.591
+    B512_ALLOC_MS2=10.918
+    B512_SUBMIT_MED_MS=93.977
+    B512_SYNC_MED_MS=22.967
+    B512_SUBMIT_MAX_MS=101.547
+    B512_SYNC_MAX_MS=23.479
+    B512_WINDOW_MONO_MS=52364.595..55841.556
+    B512_BAD=0
+    B512_MAXERR=0
+    BSUM N=512 iters=12 first_ms=116.148 med_ms=116.909 p90_ms=123.602 min_ms=108.856 max_ms=124.830 gflops=2.296 batch_per_launch_ms=96.482 batch_gflops=2.782 h2d_ms=178.828 d2h_med_ms=89.591 submit_med_ms=93.977 sync_med_ms=22.967 bad=0 maxerr=0
+    BENCH_SIZE_END N=512
+    BENCH_CLOCK_END mono_ms=57081.120 real_ms=1786722565188.207
+    
+    BENCH_SIZES_DONE=1
+    BENCH_TOTAL_BAD=0
+    BENCH_VERDICT: PASS (every timed iteration verified)
+    DONE
+BENCH_MEASURE_OUT_BYTES=2793
+
+=== ★★★★★ THE GUEST METRICS — anchored, one line per measured quantity ===
+GUEST_B512_ALLOC_MS=10.92
+GUEST_B512_PTRS=A:0x7df232200000,B:0x7df232300000,C:0x7df232400000
+GUEST_B512_H2D_MS=178.83  (2 x 1 MiB)
+GUEST_B512_GRID=(32,32)x(16,16)
+GUEST_B512_N=512
+GUEST_B512_ITERS=12
+GUEST_B512_FIRST_MS=116.148
+GUEST_B512_MEDIAN_MS=116.909
+GUEST_B512_P90_MS=123.602
+GUEST_B512_MIN_MS=108.856
+GUEST_B512_MAX_MS=124.830
+GUEST_B512_MEAN_MS=117.691
+GUEST_B512_GFLOPS=2.296
+GUEST_B512_BATCH=10
+GUEST_B512_BATCH_TOTAL_MS=964.822
+GUEST_B512_BATCH_PER_LAUNCH_MS=96.482
+GUEST_B512_BATCH_GFLOPS=2.782
+GUEST_B512_BATCH_BAD=0
+GUEST_B512_H2D_MS=178.828
+GUEST_B512_D2H_MED_MS=89.591
+GUEST_B512_ALLOC_MS2=10.918
+GUEST_B512_SUBMIT_MED_MS=93.977
+GUEST_B512_SYNC_MED_MS=22.967
+GUEST_B512_SUBMIT_MAX_MS=101.547
+GUEST_B512_SYNC_MAX_MS=23.479
+GUEST_B512_WINDOW_MONO_MS=52364.595..55841.556
+GUEST_B512_BAD=0
+GUEST_B512_MAXERR=0
+GUEST_BSUM N=512 iters=12 first_ms=116.148 med_ms=116.909 p90_ms=123.602 min_ms=108.856 max_ms=124.830 gflops=2.296 batch_per_launch_ms=96.482 batch_gflops=2.782 h2d_ms=178.828 d2h_med_ms=89.591 submit_med_ms=93.977 sync_med_ms=22.967 bad=0 maxerr=0
+GUEST_BENCH_DEVICE=[]
+GUEST_BENCH_INIT_MS=6447.07
+GUEST_BENCH_CTX_MS=12582.27
+GUEST_BENCH_MODULE_MS=96.86
+GUEST_BENCH_TOTAL_BAD=0
+GUEST_BENCH_VERDICT=PASS (every timed iteration verified)
+GUEST_SIZES_DONE=1
+    ⊘ GUEST_SIZES_DONE counts sizes that reached their own summary. A size that was cut
+      off by the deadline is UNMEASURED — it is not a slow measurement, it is none.
+
+=== ★ THE STAGE LADDER — how far it got (furthest ✔ before the first ✘ is the wall) ===
+    ✔ BENCH_MODE
+    ✔ BENCH_INIT_MS
+    ✔ BENCH_DEVICE
+    ✔ BENCH_CTX_MS
+    ✔ BENCH_MODULE_MS
+    ✔ BENCH_SIZE_BEGIN
+    ✔ B512_H2D_MS
+    ✔ ITER N=512
+    ✔ BSUM N=512
+    ✘ BSUM N=1024
+    ✘ BSUM N=2048
+    ✔ BENCH_TOTAL_BAD
+    ✔ DONE
+    ⊘ ALL ✘ means the output file is empty — a state that needs its own check, NOT 'not yet'.
+=== ★ the FAIL line, if the workload named its own failure ===
+
+=== ⊘ NEGATIVE CONTROL SKIPPED (KAYFABE_BENCH_ONLY=measure) — the measurement above
+    is UNGUARDED by construction. Say so; do not report it as guarded.
+GUEST_NEGCTRL_TOTAL_BAD=SKIPPED_BY_ARM
+
+=== ★ guest dmesg tail (NVRM/Xid land here, not in the serial log) ===
+    [   58.159250] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+    [   58.160414] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+    [   58.160828] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+    [   58.162017] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+    [   58.162309] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+    [   58.163480] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+    [   58.163713] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+    [   58.164394] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+    [   58.164647] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+    [   58.165350] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+    [   58.165604] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+    [   58.166288] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+    [   58.166475] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+    [   58.167284] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+    [   58.167472] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+    [   58.168232] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+    [   58.168421] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+    [   58.401609] NVRM: kgmmuClientShadowFaultBufferUnregister_IMPL: Unregistering non-replayable fault buffer failed (status=0x00000056), proceeding...
+    [   58.402598] NVRM: kgmmuFaultBufferReplayableDestroy_IMPL: Unregistering Replayable Fault buffer failed (status=0x00000056), proceeding...
+    [   58.403724] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+    [   58.511785] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d0000c; hObject=0x5c000072; paramsStatus=0x00000000; status=0x00000056
+    [   58.511793] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_client.c:844
+    [   58.511873] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:259
+    [   58.511911] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:1375
+    [   61.810407] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00014; hObject=0xcaf00002; paramsStatus=0x00000000; status=0x00000056
+    [   61.810416] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_client.c:844
+    [   61.810468] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:259
+    [   61.810711] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:1375
+    [   61.812751] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+    [   62.755843] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+GUEST_XID_COUNT=0
+=== cup8bench hook DONE ===
+HOOK_RC=0
+=== HOST dmesg delta for this boot (watermark 3226 → 3226) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

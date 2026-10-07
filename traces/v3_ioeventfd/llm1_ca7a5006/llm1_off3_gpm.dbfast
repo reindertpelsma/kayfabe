@@ -1,0 +1,2 @@
+dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us]
+device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0

@@ -1,0 +1,159 @@
+2026-08-11T03:39:08.229461Z qemu-system-x86_64: -device nvkvm-gpu,bar1-size=268435456,bar2-size=33554432,id=kf0: info: nvkvm: presenting 10de:2504 class 030000 rev a1 subsys 1462:397d (8 interrupt vectors)
+kayfabe: memfd census — name="memory-backend-memfd" bytes=2147483648 shared_mapped=true (listed at fd 15, reported only: this number MOVED between two physical benches and is never matched on)
+kayfabe: memfd census — name="displaysurface" bytes=1228800 shared_mapped=true (listed at fd 23, reported only: this number MOVED between two physical benches and is never matched on)
+kayfabe: memfd census — name="kayfabe-isolate" bytes=721568 shared_mapped=false (listed at fd 24, reported only: this number MOVED between two physical benches and is never matched on)
+kayfabe: ★★★ GUEST-RAM CROSSING ARMED — adopted the hypervisor's memory-backend-memfd block, 2147483648 bytes, dev=1 ino=1593846. Every isolate this factory spawns is granted a view of it at a fixed descriptor number; nothing is mapped until a grant says so. ⊘ The size is an EXTENT, not a LAYOUT — where in the guest's physical space these bytes appear is stated separately, by the hypervisor's own topology callbacks, and is reported when the memory plane attaches.
+kayfabe: EXECUTORS isolate_plane=real ce_executor=host ⇒ local_ce_is_the_only_executor=false
+kayfabe: RING-VIDMEM KAYFABE_RING_VIDMEM=<unset> ⇒ route B OFF (default)
+kayfabe: ★★★ GUEST-RAM LAYOUT AT MEMORY PLANE ATTACH, AS THE HYPERVISOR STATED IT — dev=1 ino=1593846: 0 contiguous run(s) totalling 0 bytes, out of 0 stated section(s) LIVE over all backing files (0 live run(s) for this block). Section funnel: 0 reported -> 0 classified RAM -> 0 carried a backing file, 0 later withdrawn. ⊘ Every run below arrived on a topology callback; NOTHING here is derived from the machine type or from `-m`, and a guest-physical address outside these runs is refused by name rather than assumed to be its own file offset. ⚠ This is ONE INSTANT: the listener is registered on the device's bus-master address space, which is empty until the guest enables bus mastering, so an empty report here is a statement about WHEN it was taken and not about the machine.
+kayfabe: ⊘⊘ ZERO RUNS, and the crossing IS armed — the descriptor was adopted and 0 section(s) stated a run, but none named this block. ★ Where it broke: nothing yet, and at THIS instant that is expected rather than broken — the guest has not enabled bus mastering, so the address space this device listens on is still empty. Read the END OF RUN report instead. Nothing can be mapped until this joins; an empty layout refuses every address, which is correct and is not progress.
+kayfabe:   (no backing file stated any run at all, so there is nothing to have matched against)
+kayfabe: COMPLETION-OBSERVER started — one thread, one epoll, one armed counter source. ⊘ It READS the addresses the guest declared and can write none of them.
+2026-08-11T03:39:08.367847Z qemu-system-x86_64: info: nvkvm: memory plane realized (bar0=0xfd000000 bar1=0xe0000000 bar2=0xf0000000, register plane has guest memory=yes)
+2026-08-11T03:39:51.324029Z qemu-system-x86_64: warning: nvkvm: the emulated GSP asked for its STATUS-QUEUE interrupt and this device does not deliver that one. It is the archive's own service cadence, not a guest waiting on anything: delivering it would send one message per doorbell with nothing pending behind it. A guest that BLOCKS on a REGISTERED os-event IS woken — that path latches the GSP engine's stall vector and delivers; see the "os-events" lines in this report for whether it fired.
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1e00005 parent=0x2 params=8B → REFUSED NoVas(ChanId(0)) [seen=1 forwarded=0]
+
+thread '<unnamed>' (2093824) panicked at crates/kayfabe-util/src/lockwitness.rs:152:5:
+R1 no-blocking-under-lock violation (l1_concurrency.md §3.3): issuing a host RM verb while holding rank(s) [0] — a blocking call may only be made with ZERO ranked locks held; drop every guard, round-trip on the checked-out worker, then re-acquire and RE-VALIDATE (R5).
+stack backtrace:
+   0:     0x6278d3226e58 - std[1e3c4ec04c5261a9]::backtrace_rs::backtrace::libunwind::trace
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/../../backtrace/src/backtrace/libunwind.rs:117:9
+   1:     0x6278d3226e58 - std[1e3c4ec04c5261a9]::backtrace_rs::backtrace::trace_unsynchronized::<std[1e3c4ec04c5261a9]::sys::backtrace::_print_fmt::{closure#1}>
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/../../backtrace/src/backtrace/mod.rs:66:14
+   2:     0x6278d3226e58 - std[1e3c4ec04c5261a9]::sys::backtrace::_print_fmt
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/sys/backtrace.rs:74:9
+   3:     0x6278d3226e58 - <<std[1e3c4ec04c5261a9]::sys::backtrace::BacktraceLock>::print::DisplayBacktrace as core[37f591cfbe66b0b1]::fmt::Display>::fmt
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/sys/backtrace.rs:44:26
+   4:     0x6278d3267f9a - <core[37f591cfbe66b0b1]::fmt::rt::Argument>::fmt
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/fmt/rt.rs:152:76
+   5:     0x6278d3267f9a - core[37f591cfbe66b0b1]::fmt::write
+   6:     0x6278d3238e32 - std[1e3c4ec04c5261a9]::io::default_write_fmt::<std[1e3c4ec04c5261a9]::sys::stdio::unix::Stderr>
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/io/mod.rs:622:11
+   7:     0x6278d3238e32 - <std[1e3c4ec04c5261a9]::sys::stdio::unix::Stderr as std[1e3c4ec04c5261a9]::io::Write>::write_fmt
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/io/mod.rs:1977:13
+   8:     0x6278d31f7b4a - <std[1e3c4ec04c5261a9]::sys::backtrace::BacktraceLock>::print
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/sys/backtrace.rs:47:9
+   9:     0x6278d31f7b4a - std[1e3c4ec04c5261a9]::panicking::default_hook::{closure#0}
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:292:27
+  10:     0x6278d321951c - std[1e3c4ec04c5261a9]::panicking::default_hook
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:319:9
+  11:     0x6278d32196db - std[1e3c4ec04c5261a9]::panicking::panic_with_hook
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:825:13
+  12:     0x6278d31f7c02 - std[1e3c4ec04c5261a9]::panicking::panic_handler::{closure#0}
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:698:13
+  13:     0x6278d31ec369 - std[1e3c4ec04c5261a9]::sys::backtrace::__rust_end_short_backtrace::<std[1e3c4ec04c5261a9]::panicking::panic_handler::{closure#0}, !>
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/sys/backtrace.rs:182:18
+  14:     0x6278d31f917d - __rustc[6ef78fba13ac776c]::rust_begin_unwind
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:689:5
+  15:     0x6278d2b11e6c - core[37f591cfbe66b0b1]::panicking::panic_fmt
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/panicking.rs:80:14
+  16:     0x6278d31e17dd - kayfabe_util[c256b84727ab1a03]::lockwitness::assert_lock_free
+  17:     0x6278d31ca72e - <kayfabe_isolate[2204ff8adb09daac]::Worker>::execute
+  18:     0x6278d30bbd52 - <kayfabe_rt[17a198c98a15b6cf]::device::SharedDevice>::forward_engine_object_by_parent
+  19:     0x6278d3290154 - <kayfabe_qemu_raw[b0a637f8f97e30d0]::shim::SharedObjectModel as kayfabe_rmrpc[689364c0bf95b2d6]::policy::ObjectModel>::forward_engine_object
+  20:     0x6278d32f11b3 - <kayfabe_rmrpc[689364c0bf95b2d6]::policy::Bridge>::deliver
+  21:     0x6278d32f308e - <kayfabe_rmrpc[689364c0bf95b2d6]::policy::ObjectPolicy as kayfabe_gsp[5547ee33a35d9131]::boot::CommandPolicy>::respond
+  22:     0x6278d31b68b9 - <kayfabe_gsp[5547ee33a35d9131]::boot::PolicyChain as kayfabe_gsp[5547ee33a35d9131]::boot::CommandPolicy>::respond
+  23:     0x6278d31a29b8 - <kayfabe_device[abf018a2788c8ef8]::sticky::StickyAnswerGuard as kayfabe_gsp[5547ee33a35d9131]::boot::CommandPolicy>::respond
+  24:     0x6278d31aa306 - <kayfabe_device[abf018a2788c8ef8]::census::ControlCensus<kayfabe_device[abf018a2788c8ef8]::sticky::StickyAnswerGuard> as kayfabe_gsp[5547ee33a35d9131]::boot::CommandPolicy>::respond
+  25:     0x6278d31b5680 - <kayfabe_gsp[5547ee33a35d9131]::boot::GspFsm>::service_command_queue
+  26:     0x6278d31b3bda - <kayfabe_gsp[5547ee33a35d9131]::boot::GspFsm>::mmio_write_with
+  27:     0x6278d31981c3 - <kayfabe_device[abf018a2788c8ef8]::plane::RegPlane>::write
+  28:     0x6278d3094870 - kayfabe_shim_regs_write
+  29:     0x6278d2c1b1c7 - nvkvm_trap_write
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/hw/misc/nvkvm/nvkvm.c:387:5
+  30:     0x6278d2d3f5df - memory_region_write_accessor
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/memory.c:491:5
+  31:     0x6278d2d40f7b - access_with_adjusted_size
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/memory.c:567:18
+  32:     0x6278d2d41eac - memory_region_dispatch_write
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/memory.c:1554:13
+  33:     0x6278d2d4a0cd - flatview_write_continue_step
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/physmem.c:3269:18
+  34:     0x6278d2d4a2db - flatview_write_continue
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/physmem.c:3299:19
+  35:     0x6278d2d4a2db - flatview_write
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/physmem.c:3330:12
+  36:     0x6278d2d4d949 - address_space_write
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/physmem.c:3450:18
+  37:     0x6278d2d4d949 - address_space_rw
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/physmem.c:3460:16
+  38:     0x6278d2efe456 - kvm_cpu_exec
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/accel/kvm/kvm-all.c:3248:13
+  39:     0x6278d2eff6f5 - kvm_vcpu_thread_fn
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/accel/kvm/kvm-accel-ops.c:53:17
+  40:     0x6278d3062fc1 - qemu_thread_start
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/util/qemu-thread-posix.c:393:9
+  41:     0x7ecec1894a83 - <unknown>
+  42:     0x7ecec1926890 - <unknown>
+  43:                0x0 - <unknown>
+
+thread '<unnamed>' (2093824) panicked at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/panicking.rs:225:5:
+panic in a function that cannot unwind
+stack backtrace:
+   0:     0x6278d3226e58 - std[1e3c4ec04c5261a9]::backtrace_rs::backtrace::libunwind::trace
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/../../backtrace/src/backtrace/libunwind.rs:117:9
+   1:     0x6278d3226e58 - std[1e3c4ec04c5261a9]::backtrace_rs::backtrace::trace_unsynchronized::<std[1e3c4ec04c5261a9]::sys::backtrace::_print_fmt::{closure#1}>
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/../../backtrace/src/backtrace/mod.rs:66:14
+   2:     0x6278d3226e58 - std[1e3c4ec04c5261a9]::sys::backtrace::_print_fmt
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/sys/backtrace.rs:74:9
+   3:     0x6278d3226e58 - <<std[1e3c4ec04c5261a9]::sys::backtrace::BacktraceLock>::print::DisplayBacktrace as core[37f591cfbe66b0b1]::fmt::Display>::fmt
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/sys/backtrace.rs:44:26
+   4:     0x6278d3267f9a - <core[37f591cfbe66b0b1]::fmt::rt::Argument>::fmt
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/fmt/rt.rs:152:76
+   5:     0x6278d3267f9a - core[37f591cfbe66b0b1]::fmt::write
+   6:     0x6278d3238e32 - std[1e3c4ec04c5261a9]::io::default_write_fmt::<std[1e3c4ec04c5261a9]::sys::stdio::unix::Stderr>
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/io/mod.rs:622:11
+   7:     0x6278d3238e32 - <std[1e3c4ec04c5261a9]::sys::stdio::unix::Stderr as std[1e3c4ec04c5261a9]::io::Write>::write_fmt
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/io/mod.rs:1977:13
+   8:     0x6278d31f7b4a - <std[1e3c4ec04c5261a9]::sys::backtrace::BacktraceLock>::print
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/sys/backtrace.rs:47:9
+   9:     0x6278d31f7b4a - std[1e3c4ec04c5261a9]::panicking::default_hook::{closure#0}
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:292:27
+  10:     0x6278d321951c - std[1e3c4ec04c5261a9]::panicking::default_hook
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:319:9
+  11:     0x6278d32196db - std[1e3c4ec04c5261a9]::panicking::panic_with_hook
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:825:13
+  12:     0x6278d31f7c34 - std[1e3c4ec04c5261a9]::panicking::panic_handler::{closure#0}
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:691:13
+  13:     0x6278d31ec369 - std[1e3c4ec04c5261a9]::sys::backtrace::__rust_end_short_backtrace::<std[1e3c4ec04c5261a9]::panicking::panic_handler::{closure#0}, !>
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/sys/backtrace.rs:182:18
+  14:     0x6278d31f917d - __rustc[6ef78fba13ac776c]::rust_begin_unwind
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:689:5
+  15:     0x6278d2b11c5d - core[37f591cfbe66b0b1]::panicking::panic_nounwind_fmt::runtime
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/panicking.rs:122:22
+  16:     0x6278d2b11c5d - core[37f591cfbe66b0b1]::panicking::panic_nounwind_fmt
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/intrinsics/mod.rs:2450:9
+  17:     0x6278d2b11b9b - core[37f591cfbe66b0b1]::panicking::panic_nounwind
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/panicking.rs:225:5
+  18:     0x6278d2b11d67 - core[37f591cfbe66b0b1]::panicking::panic_cannot_unwind
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/panicking.rs:337:5
+  19:     0x6278d3094b36 - kayfabe_shim_regs_write
+  20:     0x6278d2c1b1c7 - nvkvm_trap_write
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/hw/misc/nvkvm/nvkvm.c:387:5
+  21:     0x6278d2d3f5df - memory_region_write_accessor
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/memory.c:491:5
+  22:     0x6278d2d40f7b - access_with_adjusted_size
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/memory.c:567:18
+  23:     0x6278d2d41eac - memory_region_dispatch_write
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/memory.c:1554:13
+  24:     0x6278d2d4a0cd - flatview_write_continue_step
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/physmem.c:3269:18
+  25:     0x6278d2d4a2db - flatview_write_continue
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/physmem.c:3299:19
+  26:     0x6278d2d4a2db - flatview_write
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/physmem.c:3330:12
+  27:     0x6278d2d4d949 - address_space_write
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/physmem.c:3450:18
+  28:     0x6278d2d4d949 - address_space_rw
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/physmem.c:3460:16
+  29:     0x6278d2efe456 - kvm_cpu_exec
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/accel/kvm/kvm-all.c:3248:13
+  30:     0x6278d2eff6f5 - kvm_vcpu_thread_fn
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/accel/kvm/kvm-accel-ops.c:53:17
+  31:     0x6278d3062fc1 - qemu_thread_start
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/util/qemu-thread-posix.c:393:9
+  32:     0x7ecec1894a83 - <unknown>
+  33:     0x7ecec1926890 - <unknown>
+  34:                0x0 - <unknown>
+thread caused non-unwinding panic. aborting.

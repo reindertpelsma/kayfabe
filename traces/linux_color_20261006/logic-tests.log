@@ -1,0 +1,200 @@
+   Compiling kf-util v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-util)
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1150:5
+     |
+1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1432:5
+     |
+1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-util/src/lockwitness.rs:193:5
+    |
+193 |     pub fn is_vcpu() -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+   Compiling kf-arch v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-arch)
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:814:5
+    |
+814 | /     fn on_read(
+815 | |         &self,
+816 | |         _model: &dyn GspModel,
+817 | |         _bar: u8,
+...   |
+820 | |         _state: &ArchBootState,
+821 | |     ) -> Option<u64> {
+    | |____________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:943:5
+    |
+943 |     fn libos_region_layout(&self) -> LibosRegionLayout;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+   Compiling kf-abi v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-abi)
+warning: `kf-arch` (lib) generated 2 warnings
+warning: `kf-util` (lib) generated 3 warnings
+   Compiling kf-gsp v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-gsp)
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:2510:5
+     |
+2510 |     pub fn release_held(&mut self, ram: &mut dyn GuestRam) -> Result<usize, GspFault> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:2628:5
+     |
+2628 | /     pub fn post_event(
+2629 | |         &mut self,
+2630 | |         ram: &mut dyn GuestRam,
+2631 | |         rpc: &OutgoingRpc,
+2632 | |     ) -> Result<(), GspFault> {
+     | |_____________________________^
+
+   Compiling kf-chip v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-chip)
+warning: `kf-gsp` (lib) generated 2 warnings
+   Compiling kf-disp v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-disp)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.74s
+     Running unittests src/lib.rs (/var/lib/kf-linux-color-20261006/target/debug/deps/kf_disp-4d2eb5c4978224d2)
+
+running 99 tests
+test edid::tests::a_cap_below_60_lists_no_60hz_mode ... ok
+test edid::tests::a_window_becomes_a_monitor_fitted_under_the_connector ... ok
+test edid::tests::above_60hz_the_rate_yields_not_the_size ... ok
+test edid::tests::cvt_rb_timings_are_about_60hz_and_bounded ... ok
+test edid::tests::the_default_edid_is_valid_and_its_preferred_timing_round_trips ... ok
+test edid::tests::the_unset_edid_is_byte_identical ... ok
+test engine::tests::acquire_modes ... ok
+test edid::tests::every_authored_edid_honours_its_cap ... ok
+test class::tests::the_derived_methods_are_the_headers ... ok
+test caps::tests::nvkms_reads_four_heads_eight_windows_and_real_clocks ... ok
+test engine::tests::flips_without_an_active_head_latch_at_once ... ok
+test engine::tests::cursor_pio_updates_arm ... ok
+test engine::tests::a_non_tearing_flip_waits_for_vblank_and_its_acquire ... ok
+test engine::tests::an_interlocked_group_waits_for_every_member ... ok
+test engine::tests::an_unallocated_interlock_target_does_not_block ... ok
+test engine::tests::a_head_cursor_is_scanned_from_the_core_and_its_pio_point ... ok
+test engine::tests::a_head_scans_out_its_lowest_enabled_window ... ok
+test engine::tests::a_jump_only_pass_moves_get_to_its_target ... ok
+test engine::tests::a_head_composes_its_windows_back_to_front ... ok
+test engine::tests::a_core_update_arms_then_notifies ... ok
+test engine::tests::a_running_head_lights_the_sor_that_names_it ... ok
+test engine::tests::hostile_streams_stop_the_channel_by_name ... ok
+test engine::tests::method_diagnostic_is_off_by_default_and_cannot_be_replenished ... ok
+test engine::tests::init_methods_are_consumed_through_the_wrap ... ok
+test engine::tests::a_second_tearing_flip_waits_for_the_vblank ... ok
+test inst::tests::hostile_instance_memory_is_refused_bounded ... ok
+test engine::tests::a_group_parked_on_a_head_that_goes_idle_latches ... ok
+test engine::tests::the_flip_event_is_raised_only_for_a_window_that_was_active ... ok
+test engine::tests::presents_count_one_per_latch_including_core_groups ... ok
+test inst::tests::bound_ctxdmas_resolve_and_collisions_probe ... ok
+test layout::tests::the_bench_layouts_parse_and_agree_with_the_headers ... ok
+test model::tests::hotplug_registrations_retire_with_their_objects ... ok
+test engine::tests::constructor_probe_never_decodes_arms_or_completes_dma_or_pio ... ok
+test model::tests::the_nvkms_bringup_conversation_describes_one_dvi_monitor ... ok
+test model::tests::set_edid_shadows_and_clears_and_bad_sizes_are_refused ... ok
+test model::tests::get_active_reports_the_display_the_armed_state_lights ... ok
+test pace::tests::a_screendump_is_served_by_a_copy_that_started_after_it ... ok
+test model::tests::a_new_monitor_is_reported_once_by_the_internal_hotplug_state ... ok
+test model::tests::channel_registry_and_idle_state ... ok
+test model::tests::x11_dispsw_answers_the_display_sw_query_and_off_refuses_it ... ok
+test pace::tests::config_check_refuses_by_name ... ok
+test pace::tests::meter_over ... ok
+test pace::tests::non_flip_copies_follow_d2 ... ok
+test model::tests::preserve_hw_is_the_display_objects_and_lasts_for_the_free_it_was_set_for ... ok
+test pace::tests::on_heads_keeps_phase_under_the_clamp ... ok
+test pace::tests::paced_period_is_the_slower_of_raster_and_bound ... ok
+test pace::tests::preferred_and_cap_tables ... ok
+test pace::tests::the_fragment_carries_every_path ... ok
+test ports::tests::events_are_w1c_and_the_summary_registers_are_derived ... ok
+test pace::tests::pacer_synthetic_time ... ok
+test pace::tests::the_checksum_sees_a_pixel_a_move_and_a_row_swap ... ok
+test model::tests::rmfree_marks_are_bounded ... ok
+test model::tests::guest_stated_keys_are_bounded_and_the_statement_queue_is_capped ... ok
+test caps::tests::constructor_probe_refuses_missing_capability_semantics ... ok
+test pushbuf::tests::writes_know_their_group ... ok
+test regs::tests::nothing_is_guessed ... ok
+test regs::tests::ga10x_registers_are_the_headers ... ok
+test ports::tests::idle_is_get_equals_put_and_generations_fence_old_lives ... ok
+test scanout::tests::a_1080p_pitch_surface_is_one_tight_copy ... ok
+test scanout::tests::a_block_linear_surface_is_planned_as_whole_blocks ... ok
+test scanout::tests::a_boot_geometry_past_its_bounds_is_refused_by_name ... ok
+test scanout::tests::a_cursor_inside_the_frame_is_a_premultiplied_pitch_layer_at_its_point ... ok
+test pushbuf::tests::methods_decode_in_order_and_get_reaches_put ... ok
+test scanout::tests::a_cursor_is_clipped_on_every_edge ... ok
+test scanout::tests::a_cursor_the_kernel_cannot_compose_is_refused_by_name ... ok
+test pushbuf::tests::jumps_wrap_and_every_malformed_stream_stops_bounded ... ok
+test engine::tests::halted_cursor_does_not_accumulate_more_pio ... ok
+test scanout::tests::a_viewport_inside_a_larger_surface_keeps_the_surface_pitch ... ok
+test scanout::tests::an_xor_cursor_is_an_xor_layer_and_an_unknown_mode_is_refused ... ok
+test scanout::tests::console_formats_are_the_derived_values ... ok
+test scanout::tests::a_cursor_the_host_cannot_show_is_refused_by_name ... ok
+test scanout::tests::every_hostile_rectangle_is_refused_by_name ... ok
+test scanout::tests::layers_are_positioned_clipped_and_blended ... ok
+test scanout::tests::the_block_linear_reference_is_the_nvidia_gob_swizzle ... ok
+test scanout::tests::the_boot_layer_is_one_opaque_pitch_copy_of_store_zero ... ok
+test scanout::tests::the_composition_line_is_bounded_however_the_guest_alternates ... ok
+test scanout::tests::the_host_cursor_is_the_whole_image_wherever_the_point_is ... ok
+test scanout::tests::the_hot_spot_is_the_pointer_minus_the_images_top_left ... ok
+test scanout::tests::the_reference_composes_xor_blend_and_opaque_pixels_as_worked_by_hand ... ok
+test vramslot::tests::any_permutation_inverts_and_a_bad_layout_is_refused ... ok
+test scanout::tests::the_composition_word_names_its_nvkms_mode_and_the_census_reads_the_pixels ... ok
+test vramslot::tests::every_slot_shape_passes_the_brokers_bounds ... ok
+test scanout::tests::a_wholly_transparent_cursor_is_no_host_cursor ... ok
+test vramslot::tests::slot_max_is_the_largest_slot_any_accepted_frame_needs ... ok
+test scanout::tests::every_nvkms_cursor_blend_becomes_premultiplied_argb ... ok
+test vramslot::tests::the_pack_reference_places_pixels_and_zeroes_padding ... ok
+test regs::tests::a_lineage_never_redefines_a_name ... ok
+test layout::tests::the_580_65_06_tables_are_derived_and_are_the_bench_rows ... ok
+test caps::tests::constructor_probe_changes_only_derived_tmo_fields_in_every_display_cell ... ok
+test scanout::tests::the_block_linear_reference_is_a_bijection ... ok
+test caps::tests::tmo_surface_probe_changes_only_derived_capd_bit_in_every_display_cell ... ok
+test caps::tests::olut_probe_changes_only_its_surface_load_bit_in_every_display_cell ... ok
+test caps::tests::ilut_probe_changes_only_generated_surface_load_bit_in_every_display_cell ... ok
+test vramslot::tests::the_chunk_origin_inverts_bl_offset_exactly ... ok
+test caps::tests::ilut_probe_refuses_missing_or_invalid_derived_layout ... ok
+test caps::tests::olut_probe_refuses_missing_or_invalid_derived_layout ... ok
+test caps::tests::tmo_surface_probe_refuses_missing_or_invalid_derived_layout ... ok
+test vramslot::tests::the_ga106_layout_is_bl_offset ... ok
+test model::tests::the_claim_set_is_enumerable_and_exact ... ok
+
+test result: ok. 99 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+     Running tests/bl_pack_kernel.rs (/var/lib/kf-linux-color-20261006/target/debug/deps/bl_pack_kernel-855de1636e4292eb)
+
+running 2 tests
+test the_comparison_catches_a_wrong_layout ... ok
+test the_pack_kernel_writes_the_reference_slot ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+     Running tests/compose_kernel.rs (/var/lib/kf-linux-color-20261006/target/debug/deps/compose_kernel-c8fbf40d68bfd37e)
+
+running 7 tests
+test the_sum_kernel_reads_only_its_frame ... ok
+test the_interpreter_refuses_what_it_does_not_model ... ok
+test the_kernel_clips_at_the_frame_and_reads_only_its_extent ... ok
+test the_sum_kernel_is_the_reference_checksum ... ok
+test the_kernel_xors_the_colour_into_what_lies_below ... ok
+test the_kernel_composes_pitch_layers_as_the_reference_does ... ok
+test the_kernel_reads_block_linear_surfaces_as_the_reference_does ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.45s
+
+   Doc-tests kf_disp
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

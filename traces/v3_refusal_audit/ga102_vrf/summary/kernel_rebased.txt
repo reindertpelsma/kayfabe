@@ -1,0 +1,73 @@
+blocksync          38 refusals, 24 rows
+clpeak             38 refusals, 24 rows
+cup2               38 refusals, 24 rows
+deviceQuery        45 refusals, 25 rows
+llama_gen          38 refusals, 24 rows
+nvidia_smi         191 refusals, 55 rows
+torch_correct      38 refusals, 24 rows
+vkpeak             557 refusals, 23 rows
+== kernel-side rows by workload
+  fn76  0x20800a87 st=0x56  NV2080_CTRL_CMD_INTERNAL_NVLINK_GET_NVLINK_DEVICE_INFO     blocksync:1 clpeak:1 cup2:1 deviceQuery:1 llama_gen:1 nvidia_smi:3 torch_correct:1 vkpeak:1
+  fn76  0x20800a4b st=0x56  NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_IP_VERSION            blocksync:1 clpeak:1 cup2:1 deviceQuery:1 llama_gen:1 nvidia_smi:3 torch_correct:1 vkpeak:1
+  fn76  0x20800afe st=0x56  NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA             blocksync:2 clpeak:2 cup2:2 deviceQuery:3 llama_gen:2 nvidia_smi:6 torch_correct:2 vkpeak:2
+  fn76  0x20800aff st=0x56  NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL    blocksync:1 clpeak:1 cup2:1 deviceQuery:1 llama_gen:1 nvidia_smi:13 torch_correct:1 vkpeak:1
+  fn76  0x20800a80 st=0x56  NV2080_CTRL_CMD_INTERNAL_PERF_GPU_BOOST_SYNC_GET_INFO      blocksync:2 clpeak:2 cup2:2 deviceQuery:2 llama_gen:2 nvidia_smi:6 torch_correct:2 vkpeak:2
+  fn76  0x20802a0f st=0x56  NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE    blocksync:1 clpeak:1 cup2:1 deviceQuery:1 llama_gen:1 nvidia_smi:3 torch_correct:1 vkpeak:1
+  fn76  0x2080017e st=0x56  NV2080_CTRL_CMD_GPU_GET_VMMU_SEGMENT_SIZE                  blocksync:1 clpeak:1 cup2:1 deviceQuery:1 llama_gen:1 nvidia_smi:3 torch_correct:1 vkpeak:1
+  fn76  0x20800a30 st=0x56  NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_PPC_MASKS          blocksync:1 clpeak:1 cup2:1 deviceQuery:1 llama_gen:1 nvidia_smi:3 torch_correct:1 vkpeak:1
+  fn76  0x20800a2e st=0x56  NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_ROP_INFO           blocksync:1 clpeak:1 cup2:1 deviceQuery:1 llama_gen:1 nvidia_smi:3 torch_correct:1 vkpeak:1
+  fn76  0x20800b03 st=0x56  NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODI blocksync:1 clpeak:1 cup2:1 deviceQuery:1 llama_gen:1 nvidia_smi:3 torch_correct:1 vkpeak:1
+  fn76  0x20800b05 st=0x56  NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_SM_ISSUE_THROTTLE_ blocksync:1 clpeak:1 cup2:1 deviceQuery:1 llama_gen:1 nvidia_smi:3 torch_correct:1 vkpeak:1
+  fn76  0x20800a3f st=0x56  NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_FECS_TRACE_DEFINES blocksync:1 clpeak:1 cup2:1 deviceQuery:1 llama_gen:1 nvidia_smi:3 torch_correct:1 vkpeak:1
+  fn76  0x2080012b st=0x56  NV2080_CTRL_CMD_GPU_PROMOTE_CTX                            blocksync:1 clpeak:1 cup2:1 deviceQuery:2 llama_gen:1 nvidia_smi:3 torch_correct:1 vkpeak:1
+  fn76  0x2080013f st=0x56  NV2080_CTRL_CMD_GPU_GET_OEM_BOARD_INFO                     blocksync:1 clpeak:1 cup2:1 deviceQuery:2 llama_gen:1 nvidia_smi:6 torch_correct:1 vkpeak:1
+  fn103 0x0000c36f st=0x56  class 0x0000c36f                                           blocksync:1 clpeak:1 cup2:1 deviceQuery:2 llama_gen:1 nvidia_smi:3 torch_correct:1 vkpeak:1
+  fn103 0x0000402c st=0x56  class 0x0000402c                                           blocksync:1 clpeak:1 cup2:1 deviceQuery:2 llama_gen:1 nvidia_smi:3 torch_correct:1 vkpeak:1
+  fn76  0x20800a38 st=0x56  NV2080_CTRL_CMD_INTERNAL_GR_GET_FECS_TRACE_HW_ENABLE       blocksync:1 clpeak:1 cup2:1 deviceQuery:2 llama_gen:1 nvidia_smi:3 torch_correct:1 vkpeak:1
+  fn76  0x2080012f st=0x56  NV2080_CTRL_CMD_GPU_QUERY_ECC_STATUS                       blocksync:2 clpeak:2 cup2:2 deviceQuery:2 llama_gen:2 nvidia_smi:2 torch_correct:2 vkpeak:2
+  fn76  0x20810108 st=0x56  ?                                                          blocksync:1 clpeak:1 cup2:1 deviceQuery:1 llama_gen:1 nvidia_smi:4 torch_correct:1
+  fn76  0x20802a12 st=0x56  NV2080_CTRL_CMD_CE_IS_DECOMP_LCE_ENABLED                   blocksync:12 clpeak:12 cup2:12 deviceQuery:12 llama_gen:12 torch_correct:12 vkpeak:176
+  fn76  0x20800a9a st=0x56  NV2080_CTRL_CMD_INTERNAL_PERF_BOOST_SET_2X                 blocksync:1 clpeak:1 cup2:1 deviceQuery:1 llama_gen:1 torch_correct:1 vkpeak:32
+  fn76  0x20800a9e st=0x56  NV2080_CTRL_CMD_INTERNAL_GMMU_UNREGISTER_CLIENT_SHADOW_FAU blocksync:1 clpeak:1 cup2:1 deviceQuery:1 llama_gen:1 torch_correct:1
+  fn76  0x20800a9c st=0x56  NV2080_CTRL_CMD_INTERNAL_GMMU_UNREGISTER_FAULT_BUFFER      blocksync:1 clpeak:1 cup2:1 deviceQuery:1 llama_gen:1 torch_correct:1
+  fn76  0x20800a1e st=0x56  NV2080_CTRL_CMD_INTERNAL_UVM_UNREGISTER_ACCESS_CNTR_BUFFER blocksync:1 clpeak:1 cup2:1 deviceQuery:1 llama_gen:1 torch_correct:1
+  fn76  0x20800ab8 st=0x56  NV2080_CTRL_CMD_INTERNAL_GET_PCIE_P2P_CAPS                 deviceQuery:1
+  fn76  0x00800294 st=0x56  NV0080_CTRL_CMD_GPU_GET_BRAND_CAPS                         nvidia_smi:3
+  fn76  0x20810110 st=0x56  ?                                                          nvidia_smi:13
+  fn76  0x2080014b st=0x56  NV2080_CTRL_CMD_GPU_GET_INFOROM_OBJECT_VERSION             nvidia_smi:15
+  fn76  0x20800157 st=0x56  NV2080_CTRL_CMD_GPU_QUERY_INFOROM_ECC_SUPPORT              nvidia_smi:3
+  fn76  0x20801357 st=0x56  NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT   nvidia_smi:3
+  fn76  0x2080852e st=0x56  ?                                                          nvidia_smi:3
+  fn76  0x20808513 st=0x56  NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2_PHYSICAL         nvidia_smi:3
+  fn76  0x20802068 st=0x56  NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE                    nvidia_smi:7
+  fn76  0x2080a618 st=0x56  ?                                                          nvidia_smi:3
+  fn76  0x2080a612 st=0x56  ?                                                          nvidia_smi:3
+  fn76  0x2080a097 st=0x56  ?                                                          nvidia_smi:7
+  fn103 0x0000208f st=0x56  class 0x0000208f                                           nvidia_smi:3
+  fn76  0x20810111 st=0x56  ?                                                          nvidia_smi:1
+  fn76  0x20800102 st=0x56  NV2080_CTRL_CMD_GPU_GET_INFO_V2                            nvidia_smi:1
+  fn76  0x208001a4 st=0x56  NV2080_CTRL_CMD_GPU_GET_CHIP_DETAILS                       nvidia_smi:1
+  fn76  0x20803083 st=0x56  NV2080_CTRL_CMD_NVLINK_GET_PLATFORM_INFO                   nvidia_smi:1
+  fn76  0x20800156 st=0x56  NV2080_CTRL_CMD_GPU_GET_INFOROM_IMAGE_VERSION              nvidia_smi:1
+  fn103 0x000090e7 st=0x56  class 0x000090e7                                           nvidia_smi:1
+  fn76  0x20801813 st=0x56  NV2080_CTRL_CMD_BUS_GET_PEX_COUNTERS                       nvidia_smi:2
+  fn76  0x20801819 st=0x56  NV2080_CTRL_CMD_BUS_GET_PEX_UTIL_COUNTERS                  nvidia_smi:2
+  fn76  0x20801829 st=0x56  NV2080_CTRL_CMD_BUS_GET_PCIE_REQ_ATOMICS_CAPS              nvidia_smi:1
+  fn76  0x20801830 st=0x56  NV2080_CTRL_CMD_BUS_GET_PCIE_CPL_ATOMICS_CAPS              nvidia_smi:1
+  fn76  0x2080a080 st=0x56  ?                                                          nvidia_smi:1
+  fn76  0x20808546 st=0x56  ?                                                          nvidia_smi:18
+  fn76  0x20809038 st=0x56  ?                                                          nvidia_smi:1
+  fn76  0x20802087 st=0x56  NV2080_CTRL_CMD_PERF_GET_VID_ENG_PERFMON_SAMPLE            nvidia_smi:4
+  fn76  0x20803401 st=0x56  NV2080_CTRL_CMD_ECC_GET_VOLATILE_COUNTS                    nvidia_smi:1
+  fn76  0x20803404 st=0x56  NV2080_CTRL_CMD_ECC_GET_REPAIR_STATUS                      nvidia_smi:1
+  fn76  0x20801322 st=0x56  NV2080_CTRL_CMD_FB_GET_OFFLINED_PAGES                      nvidia_smi:1
+  fn76  0x20801344 st=0x56  NV2080_CTRL_CMD_FB_GET_REMAPPED_ROWS                       nvidia_smi:1
+  fn76  0x2080852a st=0x56  ?                                                          nvidia_smi:1
+  fn76  0x20808536 st=0x56  ?                                                          nvidia_smi:1
+  fn76  0x2080a63c st=0x56  ?                                                          nvidia_smi:1
+  fn76  0x2080a0f2 st=0x56  ?                                                          nvidia_smi:1
+  fn76  0x20809004 st=0x56  ?                                                          nvidia_smi:4
+  fn76  0x2080a0a7 st=0x56  ?                                                          nvidia_smi:1
+  fn76  0x20810107 st=0x56  ?                                                          vkpeak:1
+  fn76  0x20801210 st=0x56  NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE               vkpeak:3
+  fn76  0x2080a0d1 st=0x56  ?                                                          vkpeak:324

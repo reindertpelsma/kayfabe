@@ -1,0 +1,12 @@
+== HOST MODE: kernel 6.8.0-59-generic, modules from /lib/modules/6.8.0-59-generic
+== modules taken from the host (with closure): 6
+==   ecc.ko
+==   nvidia.ko
+==   nvidia-uvm.ko
+==   wmi.ko
+==   video.ko
+==   nvidia-modeset.ko
+== firmware taken from the host: 252 file(s)
+== built: /workspace/bench/fastguest/vmlinuz  15M
+== built: /workspace/bench/fastguest/initrd.cpio.gz  154M
+== kernel release: 6.8.0-59-generic

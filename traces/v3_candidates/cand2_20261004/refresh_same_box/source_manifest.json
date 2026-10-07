@@ -1,0 +1,68 @@
+[
+  {
+    "source": "/root/prov/c2refresh_vmb.log",
+    "source_size": 3428,
+    "source_sha256": "ce5c9597d89211d6a367f9ac62971382f5eadec3de44860ab824524aee91eff8",
+    "saved": "root/prov/c2refresh_vmb.log"
+  },
+  {
+    "source": "/workspace/bench/display/c2refresh_vmb/hmp_green.json",
+    "source_size": 267,
+    "source_sha256": "62d21dd6576cf404971aaefb8ab175d17ae119f468a63d204383a1e4ae07d726",
+    "saved": "workspace/bench/display/c2refresh_vmb/hmp_green.json"
+  },
+  {
+    "source": "/workspace/bench/display/c2refresh_vmb/hmp_red.json",
+    "source_size": 283,
+    "source_sha256": "f0214b3ce953b75a01a904308ef228ee494f23a9055ec38815d8f234b985f6df",
+    "saved": "workspace/bench/display/c2refresh_vmb/hmp_red.json"
+  },
+  {
+    "source": "/workspace/bench/display/c2refresh_vmb/qmp_blue.json",
+    "source_size": 283,
+    "source_sha256": "6b0ee5e0b9dd6696db16c80cb28ff294260cb901f41957a95057e94842cd64b4",
+    "saved": "workspace/bench/display/c2refresh_vmb/qmp_blue.json"
+  },
+  {
+    "source": "/workspace/bench/run_c2refresh_vmb_dmesg.log",
+    "source_size": 4724,
+    "source_sha256": "2e2be555b1bc4b5f245ecdfbd2db629251c141a875de2d97ca1593e98713ddfd",
+    "saved": "workspace/bench/run_c2refresh_vmb_dmesg.log"
+  },
+  {
+    "source": "/workspace/bench/run_c2refresh_vmb_dmesg_after.log",
+    "source_size": 9266,
+    "source_sha256": "2ce7c4b6279463c2e53e46778a9dc49226e2d59b1720b774b301b5e6a66682ef",
+    "saved": "workspace/bench/run_c2refresh_vmb_dmesg_after.log"
+  },
+  {
+    "source": "/workspace/bench/run_c2refresh_vmb_hostdmesg.log",
+    "source_size": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved": "workspace/bench/run_c2refresh_vmb_hostdmesg.log"
+  },
+  {
+    "source": "/workspace/bench/run_c2refresh_vmb_probe.log",
+    "source_size": 4423,
+    "source_sha256": "5297e235f42ff1ef5f8dea70fe18f508bb2b15691452e3ee4d73b4c6680f5568",
+    "saved": "workspace/bench/run_c2refresh_vmb_probe.log"
+  },
+  {
+    "source": "/workspace/bench/run_c2refresh_vmb_qemu.log",
+    "source_size": 233208,
+    "source_sha256": "87d362b489352cfa916af632f6402fa87696df363ff3ea6af03ae0a1b71736fc",
+    "saved": "workspace/bench/run_c2refresh_vmb_qemu.log.gz"
+  },
+  {
+    "source": "/workspace/bench/run_c2refresh_vmb_rev.txt",
+    "source_size": 21,
+    "source_sha256": "c7c927a0763dd4206adb4622c12a7a72fed4e21568a7974a34ddf0b0fba4ca73",
+    "saved": "workspace/bench/run_c2refresh_vmb_rev.txt"
+  },
+  {
+    "source": "/workspace/bench/run_c2refresh_vmb_serial.log",
+    "source_size": 79372,
+    "source_sha256": "e81148b5b914af9d01e9247d77232f2c0f80179e7fa3d3b3dfa9f0b378876ddd",
+    "saved": "workspace/bench/run_c2refresh_vmb_serial.log"
+  }
+]

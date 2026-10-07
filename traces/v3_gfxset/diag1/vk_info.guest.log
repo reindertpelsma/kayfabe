@@ -1,0 +1,17 @@
+=== vk_info side=guest start=2026-09-26T18:19:44+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+vulkan ICD: /etc/vulkan/icd.d/nvidia_icd.json only
+	apiVersion         = 1.4.312
+	driverVersion      = 580.159.4.0
+	deviceName         = NVIDIA GeForce RTX 3070
+	driverID           = DRIVER_ID_NVIDIA_PROPRIETARY
+	conformanceVersion = 1.4.1.3
+GSET_DIG side=guest item=vk_info key=device val=NVIDIA_GeForce_RTX_3070
+GSET_DIG side=guest item=vk_info key=vk_extensions val=6dd993f09dd30d7d
+GSET_DIG side=guest item=vk_info key=vk_features val=d4127c69ea095f4a
+GSET_DIG side=guest item=vk_info key=vk_properties val=3dad137d1dbce753
+GSET_DIG side=guest item=vk_info key=vk_formats val=979a41104bb1f1d0
+GSET_DIG side=guest item=vk_info key=vk_queueFamiliesProperties val=8374e587e4b5cb45
+GSET_VAL side=guest item=vk_info key=vk_ext_count val=251
+GSET_VAL side=guest item=vk_info key=vk_heaps val=-
+GSET_OK
+=== end rc=0 secs=2 2026-09-26T18:19:47+00:00

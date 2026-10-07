@@ -1,0 +1,33 @@
+VIDEO_LANE_START 2026-09-26T04:33:48+00:00 host=ubuntu ff=5d3a9e6bf0e894a3 compact=0
+driver=580.159.04
+src rc=0 secs=0.35
+src.yuv md5=aa19742c214909f82d8da93847de2155 bytes=124416000
+enc_h264 rc=0 secs=2.96
+enc_h264.bit md5=90ba39a7843738db144b27e17ecbc5ac bytes=1933646
+swdec_h264 rc=0 secs=0.60
+swdec_h264.yuv md5=5382f3c9b1723a149dcaa44f43d17d66 frames=90
+psnr_h264 PSNR y:51.536032 u:49.252275 v:49.767867 average:50.747592
+enc_hevc rc=0 secs=2.92
+enc_hevc.bit md5=54665faef94363aacc10daf304e47b5d bytes=1951664
+swdec_hevc rc=0 secs=0.62
+swdec_hevc.yuv md5=cc5f1138ef1bf2002c99320f83085d8f frames=90
+psnr_hevc PSNR y:51.220817 u:48.615103 v:49.088162 average:50.277185
+enc_x264 rc=0 secs=2.84
+enc_x264.bit md5=dd1503ccb53c9ec084f9b4fd9480592a
+swdec_x264 rc=0 secs=0.62
+swdec_x264.yuv md5=0b3eaa0f159c2ff6f4a4bf4708e189cb
+hwdec_h264 rc=0 secs=3.29
+hwdec_h264.yuv md5=5382f3c9b1723a149dcaa44f43d17d66 bitexact_vs_sw=YES
+cuvid_h264 rc=0 secs=2.94
+cuvid_h264.yuv md5=5382f3c9b1723a149dcaa44f43d17d66 bitexact_vs_sw=YES
+hwdec_hevc rc=0 secs=2.85
+hwdec_hevc.yuv md5=cc5f1138ef1bf2002c99320f83085d8f bitexact_vs_sw=YES
+cuvid_hevc rc=0 secs=3.06
+cuvid_hevc.yuv md5=cc5f1138ef1bf2002c99320f83085d8f bitexact_vs_sw=YES
+hwdec_x264 rc=0 secs=3.30
+hwdec_x264.yuv md5=0b3eaa0f159c2ff6f4a4bf4708e189cb bitexact_vs_sw=YES
+cuvid_x264 rc=0 secs=3.29
+cuvid_x264.yuv md5=0b3eaa0f159c2ff6f4a4bf4708e189cb bitexact_vs_sw=YES
+perf_nvenc_1080p rc=0 secs=3.26
+perf_nvenc_1080p fps=106 
+VIDEO_LANE_END rc=0 2026-09-26T04:34:30+00:00

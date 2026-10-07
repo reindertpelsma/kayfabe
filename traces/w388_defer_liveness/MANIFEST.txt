@@ -1,0 +1,55 @@
+w388 E2 — IS A DEFERRED PTE LIVE WITHOUT AN INVALIDATE?  ANSWER: NO (verdict B)
+================================================================================
+Measured 2026-09-07, bare metal, no guest.
+
+PROVENANCE
+  host        vast.ai contract 50166700, label kayfabe-w389-blockage-coverage
+  GPU         NVIDIA GeForce RTX 3060 (GA106)
+  driver      580.159.03  ⚠ CLOSED kernel module (the reference traces are OPEN
+              580.173.02, and the C artifact bench was OPEN 580.159.04). Testing on
+              the closed module is ADDITIONAL driver-axis coverage, not a defect.
+  binary      kayfabe-rm-ladder, x86_64-unknown-linux-musl, --gpu 0 --defer-liveness
+  runs        2 (dl_r1.log, defer_liveness_r2.log) — identical verdicts
+
+THE QUESTION
+  NVOS46_FLAGS_DEFER_TLB_INVALIDATION (bit 31) lets a client map and skip the
+  invalidate (the gate at virt_mem_allocator_gm107.c:2610-2615 is not taken).
+  (A) a TLB miss walks and picks up the fresh PTE  => silent maps WORK, real hole
+  (B) the fresh PTE is NOT live until an invalidate => DEFER is a BATCHING CONTRACT
+      and either the invalidate arrives (we see it) or the guest broke only itself
+
+★ THE PRIMING STEP IS THE EXPERIMENT. Without it a pass means "nothing was ever
+  cached", which is PHYSICALLY IDENTICAL to "fresh VA, the walk picks it up" and
+  cannot distinguish A from B. Each arm therefore FAULTS the sparse VA first, so
+  the final touch tests EVICTION rather than FIRST-FILL. All three primes faulted.
+
+THE RESULT
+  arm                          prime    copy   rescue
+  PLAIN (rig control)          faulted  LIVE   —
+  DEFER (the question)         faulted  DEAD   LIVE (after invalidate)
+  DEFER+INVALIDATE (known-pos) faulted  LIVE   —
+  DEFER_PRIME_FAULTS=3/3   DEFER_RIGCTL=PASS   DEFER_NEGCTL=PASS
+  DEFER_LIVENESS=B
+
+★ THE RESCUE IS THE ATTRIBUTION. GET_PTE_INFO refused as predicted
+  (rmStatus=0x7e — RMCTRL_FLAGS_RM_TEST_ONLY_CODE), so the PTE could not be read.
+  Instead: the deferred copy was DEAD, an invalidate was issued, and THE SAME COPY
+  ON THE SAME VA LANDED. That proves the PTE was in memory all along — written
+  correctly, invisible to the MMU until the invalidate. Stronger than the oracle
+  it replaced.
+
+★ The primes were observed IN-BAND: except=0x1f (Xid 31) via the RM event path,
+  not by grepping dmesg. (Container dmesg carries no host kernel messages.)
+
+WHAT IT SETTLES
+  - DEFER is a BATCHING CONTRACT, not a licence. A guest that defers and never
+    invalidates gets no working mapping. => the silent map is NOT a correctness
+    hole, for CUDA or for a hostile guest.
+  - Negative caching is answered empirically: the MMU DID cache the primed
+    non-present entry and it survived the deferred map. Which is why RM and UVM
+    both invalidate on every upgrade — uvm_mmu.c:805-808 keeping tlb_invalidate_all
+    on a pure upgrade is REQUIRED, not belt-and-braces.
+
+⊘ SCOPE, as the rung prints it: leaf PTE, small-page table, GA10x MMU regime, ONE
+  board, VIRT_READ, one copy engine. NOT a statement about big/huge pages, about
+  page-directory entries, about writes, or about any other MMU generation.

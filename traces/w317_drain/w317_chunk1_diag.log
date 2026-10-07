@@ -1,0 +1,31 @@
+=== W317 CHUNK1 DIAG START 2026-08-14T16:34:08+00:00 tree=/workspace/kf-w317 tag=w317c1diag
+=== base HEAD=7f2266d751a000ea3c6911574355b6110691d10f
+9815:pub const RETIRED_DRAIN_CHUNK: usize = 1;
+On branch w317-chunk1-diag
+Untracked files:
+  (use "git=== ★ THE ANSWER ===
+    CUP3    = [CUP3_VAL=43] [CUP3_RC=0]
+    EVERY DRAIN-TIMING line (each a new max):
+      DRAIN-TIMING max_drain_us=40068 disposed=231 residue=0 turns=231 budget_hit=true
+      DRAIN-TIMING max_drain_us=40111 disposed=316 residue=0 turns=316 budget_hit=true
+      DRAIN-TIMING max_drain_us=40117 disposed=361 residue=0 turns=361 budget_hit=true
+      DRAIN-TIMING max_drain_us=40794 disposed=353 residue=0 turns=353 budget_hit=true
+      DRAIN-TIMING max_drain_us=43260 disposed=13 residue=0 turns=13 budget_hit=true
+    max_reap_us = [25897]
+    DRAIN-DEFER: DRAIN-DEFER deferred_for_drain=1 still_retired=1 DRAIN-DEFER deferred_for_drain=0 still_retired=0 
+=== restored HEAD=8339f73987e2cba2b831138869e4da04e22ee9ed  dirt=[]
+=== W317 CHUNK1 DIAG EXIT status=0 2026-08-14T16:36:17+00:00
+_hostdmesg.log
+	traces/guest_boots/run_w317r331_probe.log
+	traces/guest_boots/run_w317r331_qemu.log
+	traces/guest_boots/run_w317r332_dmesg.log
+	traces/guest_boots/run_w317r332_hostdmesg.log
+	traces/guest_boots/run_w317r332_probe.log
+	traces/guest_boots/run_w317r332_qemu.log
+	traces/guest_boots/run_w317r333_dmesg.log
+	traces/guest_boots/run_w317r333_hostdmesg.log
+	traces/guest_boots/run_w317r333_probe.log
+	traces/guest_boots/run_w317r333_qemu.log
+
+nothing added to commit but untracked files present (use "git add" to track)
+=== W317 CHUNK1 DIAG TERMINATOR rc=0 2026-08-14T16:36:17+00:00

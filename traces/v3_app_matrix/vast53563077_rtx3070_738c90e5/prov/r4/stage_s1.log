@@ -1,0 +1,96 @@
+S1_START 2026-09-30T18:46:45+00:00 rev=738c90e5
+NVIDIA GeForce RTX 3070, 580.159.04, 8192 MiB, Disabled
+STEP apps_host START 2026-09-30T18:46:47+00:00
+STEP apps_host RC=0 2026-09-30T19:03:27+00:00
+  apps_host| APPRES side=host app=hashcat verdict=PASS rc=0 secs=18 quiet=1 note=warn:[33mThis means that hashcat cannot use the full parallel power of your device(s).[0m
+  apps_host| APPRES side=host app=blender_cycles verdict=PASS rc=0 secs=9 quiet=0 note=-
+  apps_host| APPRES side=host app=geekbench_gpu verdict=PASS rc=0 secs=62 quiet=0 note=warn: unknown error (internal code 35)
+  apps_host| [apps_matrix 2026-09-30T19:03:27+00:00] HOST_DONE 71 pass / 74 rows
+APPRES side=host app=geekbench_gpu verdict=PASS rc=0 secs=62 quiet=0 note=warn: unknown error (internal code 35)
+[apps_matrix 2026-09-30T19:03:27+00:00] HOST_DONE 71 pass / 74 rows
+STEP gset_host1 START 2026-09-30T19:03:27+00:00
+STEP gset_host1 RC=0 2026-09-30T19:30:29+00:00
+  gset_host1| GSET_RES side=host item=blender_workbench verdict=PASS rc=0 secs=2 note=- host_xid=0
+  gset_host1| GSET_RES side=host item=blender_eevee_vulkan verdict=PASS rc=0 secs=8 note=- host_xid=0
+  gset_host1| [gset-host 19:30:28] HOST_DONE 38 pass / 38 rows
+  gset_host1| hostroot: DOWN
+GSET_HOST2_ITEMS=pv_validate_vk pv_validate_gl pv_vk_rt_ext vk_ofa pv_vk_create_device vk_info egl_offscreen gl_micro pv_fbo_formats pv_egl_dmabuf_export pv_dmabuf_import pv_xiso_sharing pv_signal_restart_export pv_gbm_egl_import pv_gbmprobe_gbmshot weston_headless weston_client_diff sway_screencap glmark2 pv_nvenc_nvdec_fps video_nvenc_nvdec vk_compute vk_render egl_render gl_info glx_vgl ff_cuda ff_vulkan ff_opencl ff_placebo blender_cycles_cuda blender_cycles_optix blender_eevee blender_workbench blender_eevee_vulkan 
+STEP gset_host2 START 2026-09-30T19:30:29+00:00
+STEP gset_host2 RC=0 2026-09-30T19:44:44+00:00
+  gset_host2| GSET_RES side=host item=blender_workbench verdict=PASS rc=0 secs=1 note=- host_xid=0
+  gset_host2| GSET_RES side=host item=blender_eevee_vulkan verdict=PASS rc=0 secs=7 note=- host_xid=0
+  gset_host2| [gset-host 19:44:44] HOST_DONE 35 pass / 35 rows
+  gset_host2| hostroot: DOWN
+GSET_BM1 38/38 GSET_BM2 35/35 host_xid1=0 host_xid2=0
+STEP nd_h1 START 2026-09-30T19:44:44+00:00
+STEP nd_h1 RC=0 2026-09-30T19:44:52+00:00
+  nd_h1| GSET_RES side=host item=blender_cycles_cuda verdict=PASS rc=0 secs=3 note=warn:BLENDER_OK CYCLES CUDA gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h1| GSET_RES side=host item=blender_cycles_optix verdict=PASS rc=0 secs=4 note=warn:BLENDER_OK CYCLES OPTIX gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h1| [gset-host 19:44:52] HOST_DONE 2 pass / 2 rows
+  nd_h1| hostroot: DOWN
+STEP nd_h2 START 2026-09-30T19:44:52+00:00
+STEP nd_h2 RC=2 2026-09-30T19:44:52+00:00
+  nd_h2| [gset-host 19:44:52] host nvidia-drm modeset=Y dri=by-path card0 renderD128  nodes=/dev/nvidia-modeset /dev/nvidia-uvm /dev/nvidia-uvm-tools /dev/nvidia0 /dev/nvidiactl  /dev/nvidia-caps: nvidia-cap1 nvidia-cap2 
+  nd_h2| hostroot: ⊘ /dev/nbd1p1 never appeared
+STEP nd_h3 START 2026-09-30T19:44:52+00:00
+STEP nd_h3 RC=0 2026-09-30T19:44:59+00:00
+  nd_h3| GSET_RES side=host item=blender_cycles_cuda verdict=PASS rc=0 secs=3 note=warn:BLENDER_OK CYCLES CUDA gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h3| GSET_RES side=host item=blender_cycles_optix verdict=PASS rc=0 secs=3 note=warn:BLENDER_OK CYCLES OPTIX gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h3| [gset-host 19:44:59] HOST_DONE 2 pass / 2 rows
+  nd_h3| hostroot: DOWN
+STEP nd_h4 START 2026-09-30T19:44:59+00:00
+STEP nd_h4 RC=0 2026-09-30T19:45:06+00:00
+  nd_h4| GSET_RES side=host item=blender_cycles_cuda verdict=PASS rc=0 secs=3 note=warn:BLENDER_OK CYCLES CUDA gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h4| GSET_RES side=host item=blender_cycles_optix verdict=PASS rc=0 secs=3 note=warn:BLENDER_OK CYCLES OPTIX gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h4| [gset-host 19:45:06] HOST_DONE 2 pass / 2 rows
+  nd_h4| hostroot: DOWN
+STEP nd_h5 START 2026-09-30T19:45:06+00:00
+STEP nd_h5 RC=0 2026-09-30T19:45:14+00:00
+  nd_h5| GSET_RES side=host item=blender_cycles_cuda verdict=PASS rc=0 secs=3 note=warn:BLENDER_OK CYCLES CUDA gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h5| GSET_RES side=host item=blender_cycles_optix verdict=PASS rc=0 secs=3 note=warn:BLENDER_OK CYCLES OPTIX gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h5| [gset-host 19:45:14] HOST_DONE 2 pass / 2 rows
+  nd_h5| hostroot: DOWN
+STEP nd_h6 START 2026-09-30T19:45:14+00:00
+STEP nd_h6 RC=0 2026-09-30T19:45:21+00:00
+  nd_h6| GSET_RES side=host item=blender_cycles_cuda verdict=PASS rc=0 secs=3 note=warn:BLENDER_OK CYCLES CUDA gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h6| GSET_RES side=host item=blender_cycles_optix verdict=PASS rc=0 secs=3 note=warn:BLENDER_OK CYCLES OPTIX gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h6| [gset-host 19:45:21] HOST_DONE 2 pass / 2 rows
+  nd_h6| hostroot: DOWN
+STEP nd_h7 START 2026-09-30T19:45:21+00:00
+STEP nd_h7 RC=0 2026-09-30T19:45:28+00:00
+  nd_h7| GSET_RES side=host item=blender_cycles_cuda verdict=PASS rc=0 secs=3 note=warn:BLENDER_OK CYCLES CUDA gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h7| GSET_RES side=host item=blender_cycles_optix verdict=PASS rc=0 secs=4 note=warn:BLENDER_OK CYCLES OPTIX gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h7| [gset-host 19:45:28] HOST_DONE 2 pass / 2 rows
+  nd_h7| hostroot: DOWN
+STEP nd_h8 START 2026-09-30T19:45:28+00:00
+STEP nd_h8 RC=0 2026-09-30T19:45:35+00:00
+  nd_h8| GSET_RES side=host item=blender_cycles_cuda verdict=PASS rc=0 secs=3 note=warn:BLENDER_OK CYCLES CUDA gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h8| GSET_RES side=host item=blender_cycles_optix verdict=PASS rc=0 secs=3 note=warn:BLENDER_OK CYCLES OPTIX gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h8| [gset-host 19:45:35] HOST_DONE 2 pass / 2 rows
+  nd_h8| hostroot: DOWN
+STEP nd_h9 START 2026-09-30T19:45:35+00:00
+STEP nd_h9 RC=0 2026-09-30T19:45:43+00:00
+  nd_h9| GSET_RES side=host item=blender_cycles_cuda verdict=PASS rc=0 secs=3 note=warn:BLENDER_OK CYCLES CUDA gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h9| GSET_RES side=host item=blender_cycles_optix verdict=PASS rc=0 secs=4 note=warn:BLENDER_OK CYCLES OPTIX gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h9| [gset-host 19:45:43] HOST_DONE 2 pass / 2 rows
+  nd_h9| hostroot: DOWN
+STEP nd_h10 START 2026-09-30T19:45:43+00:00
+STEP nd_h10 RC=0 2026-09-30T19:45:50+00:00
+  nd_h10| GSET_RES side=host item=blender_cycles_cuda verdict=PASS rc=0 secs=3 note=warn:BLENDER_OK CYCLES CUDA gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h10| GSET_RES side=host item=blender_cycles_optix verdict=PASS rc=0 secs=3 note=warn:BLENDER_OK CYCLES OPTIX gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h10| [gset-host 19:45:50] HOST_DONE 2 pass / 2 rows
+  nd_h10| hostroot: DOWN
+STEP nd_h11 START 2026-09-30T19:45:50+00:00
+STEP nd_h11 RC=0 2026-09-30T19:45:57+00:00
+  nd_h11| GSET_RES side=host item=blender_cycles_cuda verdict=PASS rc=0 secs=2 note=warn:BLENDER_OK CYCLES CUDA gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h11| GSET_RES side=host item=blender_cycles_optix verdict=PASS rc=0 secs=3 note=warn:BLENDER_OK CYCLES OPTIX gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h11| [gset-host 19:45:57] HOST_DONE 2 pass / 2 rows
+  nd_h11| hostroot: DOWN
+STEP nd_h12 START 2026-09-30T19:45:57+00:00
+STEP nd_h12 RC=0 2026-09-30T19:46:04+00:00
+  nd_h12| GSET_RES side=host item=blender_cycles_cuda verdict=PASS rc=0 secs=3 note=warn:BLENDER_OK CYCLES CUDA gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h12| GSET_RES side=host item=blender_cycles_optix verdict=PASS rc=0 secs=3 note=warn:BLENDER_OK CYCLES OPTIX gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+  nd_h12| [gset-host 19:46:04] HOST_DONE 2 pass / 2 rows
+  nd_h12| hostroot: DOWN
+ND 22/22
+S1_EXIT rc=0 2026-09-30T19:46:05+00:00

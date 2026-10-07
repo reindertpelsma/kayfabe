@@ -1,0 +1,17 @@
+START 2026-08-12T15:53:53Z host=ubuntu uid=0
+ENV driver=NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+ENV gpu=NVIDIA GeForce RTX 3060, 00000000:00:07.0
+ENV prog_md5=59e0d34675b49eea7335ce9053e48d8b shim_md5=f4bbadc8a0a072c859990a162e4bde87
+ENV dmesg_lines_at_start=1014
+BUILD ok 8 symbols gated
+---- stage faultce ----
+BYST running pid=1046289
+PROG faultce rc=139  (⚠ a fault stage is EXPECTED to end in a failing CUDA call; rc is not the verdict)
+DMESG faultce new_lines=2 xid_lines=0
+VERDICT  VERDICT (absent)
+FAULT    FAULT (absent)
+VICTIM   VICTIM_STATE (absent)
+BYST_IN  (absent)
+BYST_X   BYSTANDER_XPROC iters=4276758 fails=0 -> ALIVE
+XID      (no Xid line)
+EXIT rc=0

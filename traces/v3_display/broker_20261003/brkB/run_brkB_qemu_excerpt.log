@@ -1,0 +1,384 @@
+2026-10-03T21:37:32.105207Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,display-broker=/run/user/1000/nvkvm/display.sock,display-broker-uid=1000,display-broker-vram=off: info: kf3: display console registered (head 0 of kf0)
+2026-10-03T21:37:32.105345Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,display-broker=/run/user/1000/nvkvm/display.sock,display-broker-uid=1000,display-broker-vram=off: info: kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=0 sked=0/0held fn70=0 roots=0 root_moves=0 stmts=0/0 refused=0 pramin_repoints=0 pramin_miss=0 last_miss=0x0 pramin_worst_us=0 (map 0 mmap 0) pramin_maps=0 pramin_mmaps=0 inline_opens=0 reaped=0 cache_ops=0 sysmembars=0 root_unsets=0] mirrors=0 reused=0 prewarmed=0 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=0 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=0 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[] served=0 parks=2 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=1 released=0 refused=0 held=1] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=0 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=0 scanout_refused=0 scanout_avg_us=0 scanout_max_us=0] scanout_no_slot=0 scanout_d2h=0 scanout_pack=0 pack_skipped=0 display_vram_mib=0 host_cursor_reads=0 host_cursor_refused=0 broker[up=0 sent=0 gpucopy=0 gpucopy_backoffs=0 dropped=0 uncommitted=0 recovered=0 releases=0 unknown_releases=0 reclaims=0 blocked=0 backstops=0 reconnects=0 failed_attempts=0 peer_refused=0 cursor=composed cursor_sets=0 cursor_hides=0 cursor_shows=0 cursor_refused=0] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[] gsp_refusals[total=0 distinct=0 []] (BAR0 pieces=5)
+kf3: display plane ON — virtual NVDisplay for GA102 GA103 GA104 GA106 GA107 (IP 0x04010000, display class 0xc670, 4 heads)
+kf3: broker: display-broker-vram=off — host-memory rungs only
+kf3: broker: /dev/udmabuf opened — frames can go as a dma-buf (rungs 1 and 1b)
+kf3: display plane built — derived registers, caps page, engine vocabulary, GPU context on 0000:00:07.0
+2026-10-03T21:37:32.105207Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,display-broker=/run/user/1000/nvkvm/display.sock,display-broker-uid=1000,display-broker-vram=off: info: kf3: display console registered (head 0 of kf0)
+kf3: broker: relay to /run/user/1000/nvkvm/display.sock (brokers accepted: uid 0, QEMU's effective uid at each connect, display-broker-uid 1000); no clipboard
+2026-10-03T21:37:32.105307Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,display-broker=/run/user/1000/nvkvm/display.sock,display-broker-uid=1000,display-broker-vram=off: info: kf3: display broker relay on /run/user/1000/nvkvm/display.sock (input goes to this device's console)
+kf3: display: compose kernel self-test PASSED
+kf3: display worker up — engine 4 heads / 8 windows, caps page published
+kf3: broker: connected to /run/user/1000/nvkvm/display.sock, capabilities 0xfff — no /dev/udmabuf here, so frames go as shared memory only
+kf3: broker: broker window is now 1024x695
+kf3: broker: window active
+kf3: broker: grab off
+kf3: broker: guest cursor: the HOST pointer shows it (hover; not composed)
+2026-10-03T21:37:32.129146Z qemu-system-x86_64: info: kf3: broker: pointing device -> #4 QEMU Virtio Tablet (absolute)
+kf3: display: +50 ms the console shows NOTHING yet (no head has scanned a window) (core channel FREE)
+kf3: display: resize 1024x695 -> monitor 1024x695 on display 0x100; no hotplug registration (the next probe reads it)
+kf3: display: InstMem(InstMem { phys: 8316977152, size: 65536, addr_space: 2 })
+kf3: display: InstMem(InstMem { phys: 8316977152, size: 65536, addr_space: 2 })
+kf-rm: display: hotplug event 0xc1d0000c:0x1000e (parent 0x10002) registered
+kf3: display: ChannelAllocated { kind: Core, instance: 0, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5063233536, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 0, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5063225344, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 0, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5063217152, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 1, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5063208960, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 1, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5063196672, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 2, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5063188480, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 2, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5063180288, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 3, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5063168000, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 3, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5063159808, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 4, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5063151616, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 4, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5063135232, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 5, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5063127040, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 5, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5063118848, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 6, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5063106560, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 6, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5063098368, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 7, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5063081984, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 7, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5063073792, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 0, offset: 0, client: 3251634188, pb: None, life: 1 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 1, offset: 0, client: 3251634188, pb: None, life: 1 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 2, offset: 0, client: 3251634188, pb: None, life: 1 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 3, offset: 0, client: 3251634188, pb: None, life: 1 }
+kf3: display: head 0 idle raster 0x0 period 0 us
+kf3: display: head 1 idle raster 0x0 period 0 us
+kf3: display: head 2 idle raster 0x0 period 0 us
+kf3: display: head 3 ACTIVE raster 1184x715 period 16680 us
+kf3: display: 1 updates completed, 14532 methods
+kf3: display: +45375 ms the console shows head 3 1024x695: [window 6 iso 0x1008f+0x0 1024x695 pitch 64 fmt 0xe6] (core channel allocated)
+kf3: display: 5 updates completed, 15379 methods
+kf3: broker: guest resolution is now 1024x695
+kf3: broker: frames go as a LINEAR dma-buf (udmabuf, zero-copy for the broker)
+kf3: broker: the display CANNOT show XR24 modifier 0x0000000000000000
+kf3: broker: reclaimed frame slot 0: the display refused its format
+kf3: display: 6 updates completed, 15438 methods
+kf3: broker: frames go as shared memory (F_SHM) — an X11 broker accepts it only with --present-mode=shm, and a refusal is not reported back
+kf3: display: 7 updates completed, 15497 methods
+kf3: display: 8 updates completed, 15556 methods
+kf3: display: 9 updates completed, 15615 methods
+kf3: display: 10 updates completed, 15674 methods
+kf3: display: 11 updates completed, 15733 methods
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (2 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (3 reclaimed so far)
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (4 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (5 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (6 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (7 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (8 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (9 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (10 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (11 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (12 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (13 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (14 reclaimed so far)
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (15 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (16 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (17 reclaimed so far)
+kf3: display: 12 updates completed, 15792 methods
+kf3: display: 13 updates completed, 15851 methods
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (18 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (19 reclaimed so far)
+kf3: display: 14 updates completed, 15910 methods
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (20 reclaimed so far)
+kf3: display: +55482 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+kf3: display: 17 updates completed, 15973 methods
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (21 reclaimed so far)
+kf3: display: +55733 ms the console shows BLACK 1024x695 (the scanout shown is lost: a lit head has had no window past the hold) (core channel allocated)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (22 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (23 reclaimed so far)
+kf3: display: +58883 ms the console shows head 3 1024x695: [window 6 iso 0x10091+0x0 1024x695 pitch 64 fmt 0xe6] (core channel allocated)
+kf3: display: 20 updates completed, 106539 methods
+kf3: broker: reclaimed frame slot 0: no RELEASE 2458 ms after its commit, and a newer frame was committed (24 reclaimed so far)
+kf3: display: 21 updates completed, 106564 methods
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (25 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (26 reclaimed so far)
+kf3: display: +60151 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+kf3: display: 24 updates completed, 109179 methods
+kf3: display: 25 updates completed, 112685 methods
+kf3: display: +60401 ms the console shows BLACK 1024x695 (the scanout shown is lost: a lit head has had no window past the hold) (core channel allocated)
+kf3: display: +60437 ms the console shows head 3 1024x695: [window 6 iso 0x10091+0x0 1024x695 pitch 64 fmt 0xe6] (core channel allocated)
+kf3: display: 28 updates completed, 158853 methods
+kf3: display: 29 updates completed, 158876 methods
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (27 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (28 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (29 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (30 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (31 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (32 reclaimed so far)
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (33 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (34 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (35 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (36 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (37 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (38 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (39 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (40 reclaimed so far)
+kf3: display: 30 updates completed, 158879 methods
+kf3: display: 31 updates completed, 158890 methods
+kf3: broker: guest cursor image 256x256 hot 0,0 sent (1 so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (41 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (42 reclaimed so far)
+kf3: display: 32 updates completed, 158891 methods
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (43 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (44 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (45 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (46 reclaimed so far)
+kf3: display: 33 updates completed, 158892 methods
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (47 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (48 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (49 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (50 reclaimed so far)
+kf3: display: 34 updates completed, 158893 methods
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (51 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (52 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (53 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (54 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (55 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (56 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (57 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (58 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (59 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (60 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (61 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (62 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (63 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (64 reclaimed so far)
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (65 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (66 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (67 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (68 reclaimed so far)
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (69 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (70 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (71 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (72 reclaimed so far)
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (73 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (74 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (75 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (76 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (77 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (78 reclaimed so far)
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (79 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (80 reclaimed so far)
+kf3: broker: reclaimed frame slot 4: no RELEASE 1000 ms after its commit, and a newer frame was committed (81 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (82 reclaimed so far)
+kf3: broker: broker window is now 1024x768
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (83 reclaimed so far)
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (84 reclaimed so far)
+kf3: display: resize 1024x768 -> monitor 1024x768 on display 0x100; hotplug queued
+kf3: display: hotplug posted for display 0x100 to 0xc1d0000c:0x1000e
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (85 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (86 reclaimed so far)
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (87 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (88 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (89 reclaimed so far)
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (90 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (91 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (92 reclaimed so far)
+kf3: display: 35 updates completed, 158894 methods
+kf3: broker: reclaimed frame slot 4: no RELEASE 1000 ms after its commit, and a newer frame was committed (93 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (94 reclaimed so far)
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (95 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (96 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (97 reclaimed so far)
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (98 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (99 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (100 reclaimed so far)
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (101 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (102 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (103 reclaimed so far)
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (104 reclaimed so far)
+kf3: broker: reclaimed frame slot 4: no RELEASE 1000 ms after its commit, and a newer frame was committed (105 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (106 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (107 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (108 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (109 reclaimed so far)
+kf3: display: 36 updates completed, 158895 methods
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (110 reclaimed so far)
+kf3: broker: guest cursor image 256x256 hot 0,0 sent (2 so far)
+kf3: broker: reclaimed frame slot 4: no RELEASE 1000 ms after its commit, and a newer frame was committed (111 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (112 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (113 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (114 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (115 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (116 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (117 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (118 reclaimed so far)
+kf3: broker: reclaimed frame slot 4: no RELEASE 1000 ms after its commit, and a newer frame was committed (119 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (120 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (121 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (122 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (123 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (124 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (125 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (126 reclaimed so far)
+kf3: display: 37 updates completed, 158906 methods
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (127 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (128 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (129 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (130 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (131 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (132 reclaimed so far)
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (133 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (134 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (135 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (136 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (137 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (138 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (139 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (140 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (141 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (142 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (143 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (144 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (145 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (146 reclaimed so far)
+kf3: display: 38 updates completed, 158907 methods
+kf3: display: 39 updates completed, 158918 methods
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (147 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (148 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (149 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (150 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (151 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (152 reclaimed so far)
+kf3: broker: grab ON
+kf3: broker: guest cursor: composed into the frame (grabbed; the broker hides its own image)
+2026-10-03T21:39:35.636596Z qemu-system-x86_64: info: kf3: broker: pointing device -> #5 QEMU Virtio Mouse (relative)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (153 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (154 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (155 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (156 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (157 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (158 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (159 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (160 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (161 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (162 reclaimed so far)
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (163 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (164 reclaimed so far)
+kf3: display: 40 updates completed, 158919 methods
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (165 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (166 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (167 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (168 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (169 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (170 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (171 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (172 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (173 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (174 reclaimed so far)
+kf3: broker: grab off
+kf3: broker: guest cursor: the HOST pointer shows it (hover; not composed)
+2026-10-03T21:39:46.453075Z qemu-system-x86_64: info: kf3: broker: pointing device -> #4 QEMU Virtio Tablet (absolute)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (175 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (176 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (177 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (178 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (179 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (180 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (181 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (182 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (183 reclaimed so far)
+kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (184 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (185 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (186 reclaimed so far)
+kf3: broker: reclaimed frame slot 4: no RELEASE 1000 ms after its commit, and a newer frame was committed (187 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (188 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (189 reclaimed so far)
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (190 reclaimed so far)
+kf3: broker: reclaimed frame slot 4: no RELEASE 1000 ms after its commit, and a newer frame was committed (191 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (192 reclaimed so far)
+kf3: display: 41 updates completed, 158930 methods
+kf3: display: +143275 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+kf3: display: 44 updates completed, 159445 methods
+kf3: display: 45 updates completed, 163423 methods
+kf3: display: 46 updates completed, 171636 methods
+kf3: display: +143356 ms the console shows head 3 1024x695: [window 6 iso 0x1008f+0x0 1024x695 pitch 64 fmt 0xe6] (core channel allocated)
+kf3: display: 49 updates completed, 171954 methods
+kf3: display: 50 updates completed, 173335 methods
+kf3: display: 51 updates completed, 173394 methods
+kf3: display: 52 updates completed, 173453 methods
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (193 reclaimed so far)
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (194 reclaimed so far)
+kf3: broker: reclaimed frame slot 4: no RELEASE 1000 ms after its commit, and a newer frame was committed (195 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (196 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (197 reclaimed so far)
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (198 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (199 reclaimed so far)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (200 reclaimed so far)
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (201 reclaimed so far)
+kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (202 reclaimed so far)
+kf3: display: +148580 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+kf3: display: 54 updates completed, 173512 methods
+kf3: display: +148831 ms the console shows BLACK 1024x695 (the scanout shown is lost: a lit head has had no window past the hold) (core channel allocated)
+kf3: broker: reclaimed frame slot 1: no RELEASE 1000 ms after its commit, and a newer frame was committed (203 reclaimed so far)
+kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (204 reclaimed so far)
+kf3: display: 57 updates completed, 173575 methods
+kf3: display: 58 updates completed, 176592 methods
+kf3: display: ChannelFreed { kind: Cursor, instance: 0, preserve: false }
+kf3: display: ChannelFreed { kind: Cursor, instance: 1, preserve: false }
+kf3: display: ChannelFreed { kind: Cursor, instance: 2, preserve: false }
+kf3: display: ChannelFreed { kind: Cursor, instance: 3, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 0, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 0, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 1, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 1, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 2, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 2, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 3, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 3, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 4, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 4, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 5, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 5, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 6, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 6, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 7, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 7, preserve: false }
+kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+kf3: display: ChannelAllocated { kind: Core, instance: 0, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5063241728, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Window, instance: 0, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5063094272, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 0, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5063118848, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Window, instance: 1, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5063143424, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 1, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4378845184, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Window, instance: 2, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5076291584, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 2, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4347334656, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Window, instance: 3, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4346957824, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 3, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4369629184, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Window, instance: 4, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4369616896, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 4, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4399734784, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Window, instance: 5, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4447809536, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 5, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4403208192, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Window, instance: 6, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4401422336, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 6, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4378783744, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Window, instance: 7, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4384120832, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 7, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4335386624, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 0, offset: 0, client: 3251634188, pb: None, life: 3 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 1, offset: 0, client: 3251634188, pb: None, life: 3 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 2, offset: 0, client: 3251634188, pb: None, life: 3 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 3, offset: 0, client: 3251634188, pb: None, life: 3 }
+kf3: display: 59 updates completed, 187986 methods
+kf3: display: ChannelFreed { kind: Cursor, instance: 0, preserve: false }
+kf3: display: ChannelFreed { kind: Cursor, instance: 1, preserve: false }
+kf3: display: ChannelFreed { kind: Cursor, instance: 2, preserve: false }
+kf3: display: ChannelFreed { kind: Cursor, instance: 3, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 0, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 0, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 1, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 1, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 2, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 2, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 3, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 3, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 4, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 4, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 5, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 5, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 6, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 6, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 7, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 7, preserve: false }
+kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+kf-rm: display: hotplug registration retired by the FREE of 0xc1d0000c:0x1000e
+=== the last status line (device exit) ===
+kf3: family=Ampere phase=Running trapped=31840 applied=3017 refused=4 serviced=1153 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=755 walks=769/769 cleared=755 superseded=0 named_missed=2 unreconciled=0 mapped=2072 unmapped=1902 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=856 priv_withheld_bytes=0x73a3c000 priv_mirrored=12 sked=0/0held fn70=3 roots=13 root_moves=0 stmts=35/35 refused=0 pramin_repoints=38 pramin_miss=0 last_miss=0x0 pramin_worst_us=341 (map 247 mmap 75) pramin_maps=38 pramin_mmaps=38 inline_opens=0 reaped=37 cache_ops=8 sysmembars=9 root_unsets=0] mirrors=3 reused=10 prewarmed=3 mirror_avg_us=333654 mirror_max_us=353603 vat[invals=0 arrive->clear_avg_us=0 max_us=227539 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=16 host_calls=0] chan[births=4 pt_births=10 acts=64/0refused worst_act_us=4663 nsi=[GR0:794/468raised CE2:76/0raised CE3:2977/2raised] served=158 parks=8651 host_rings=75 contended=0 poisoned=0 tokens=[0x801:fwd=80,subs=80,serves=147,put=Some(80),gp_get=Some(80) 0x802:fwd=2,subs=2,serves=5,put=Some(2),gp_get=Some(2)]] views[armed=531 released=366 refused=0 held=165] rc[armed=10 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=24873 raised=507 held=0 oor=0] disp[writes=765 puts=724 methods=173512 updates=54 notifies=25 releases=0 vblanks=6316 irqs=21 exceptions=0 refused=0 scanouts=2979 scanout_refused=0 scanout_avg_us=503 scanout_max_us=3376] scanout_no_slot=0 scanout_d2h=2979 scanout_pack=0 pack_skipped=0 display_vram_mib=0 host_cursor_reads=1953 host_cursor_refused=0 broker[up=1 sent=205 gpucopy=0 gpucopy_backoffs=0 dropped=0 uncommitted=0 recovered=0 releases=0 unknown_releases=0 reclaims=204 blocked=3590 backstops=91 reconnects=0 failed_attempts=0 peer_refused=0 cursor=hover cursor_sets=2 cursor_hides=2 cursor_shows=1 cursor_refused=0] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x00800294,0x20810108,0x2080014b,0x20800157,0x20801357,0x2080852e,0x20808513,0x20802068,0x2080a618,0x2080a612,0x2080a097,0x20800a38,0x20802a12,0x0073013d,0x20802801,0x00730293,0x00731144,0x0073012c,0x20810103,0x2080012f,0x20809019,0x2080a0a4,0x20800153,0x2080a088,0x20808524,0x20810107,0x20800a9a] gsp_refusals[total=135 distinct=46 [fn76/0x20800a87=0x56x2 fn76/0x20800afe=0x56x3 fn76/0x20800aff=0x56x5 fn76/0x20800a80=0x56x4 fn76/0x20802a0f=0x56x2 fn76/0x2080017e=0x56x2 fn76/0x20800a30=0x56x2 fn76/0x20800a2e=0x56x2 fn76/0x20800b03=0x56x2 fn76/0x20800b05=0x56x2 fn76/0x20800a3f=0x56x2 fn76/0x2080012b=0x56x2 fn76/0x2080013f=0x56x2 fn103/0x0000c36f=0x56x2 fn103/0x0000402c=0x56x2 fn76/0x00800294=0x56x1 fn76/0x20810108=0x56x1 fn76/0x2080014b=0x56x5 fn76/0x20800157=0x56x1 fn76/0x20801357=0x56x1 fn76/0x2080852e=0x56x2 fn76/0x20808513=0x56x2 fn76/0x20802068=0x56x1 fn76/0x2080a618=0x56x1 fn76/0x2080a612=0x56x1 fn76/0x2080a097=0x56x1 fn103/0x0000208f=0x56x1 fn76/0x20800a38=0x56x1 fn76/0x20802a12=0x56x24 fn76/0x20800301=0x56x3 fn76/0x0073013d=0x56x1 fn76/0x20802801=0x56x1 fn76/0x00730291=0x56x8 fn76/0x00730293=0x56x1 fn76/0x00731144=0x56x7 fn76/0x0073012c=0x56x7 fn76/0x20810103=0x56x1 fn76/0x2080012f=0x56x6 fn76/0x20809019=0x56x1 fn76/0x2080a0a4=0x56x1 fn76/0x20800153=0x56x2 fn76/0x2080a088=0x56x1 fn76/0x20808524=0x56x1 fn76/0x20800a5d=0x56x10 fn76/0x20810107=0x56x3 fn76/0x20800a9a=0x56x2]]

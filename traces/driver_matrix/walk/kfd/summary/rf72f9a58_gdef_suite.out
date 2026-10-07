@@ -1,0 +1,67 @@
+FAST_SUITE_STARTED=2026-09-26T16:38:14+00:00 arms=30 budget=180s
+rev=f72f9a58
+ARM                          VERDICT   secs  why
+--timer                      NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=timer verdict=NOTRUN secs=- client_ms=?
+--engines                    NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=engines verdict=NOTRUN secs=- client_ms=?
+--doorbell-census            NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=doorbell-census verdict=NOTRUN secs=- client_ms=?
+--gpu-info-sweep             NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=gpu-info-sweep verdict=NOTRUN secs=- client_ms=?
+--bus-info-sweep             NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=bus-info-sweep verdict=NOTRUN secs=- client_ms=?
+--concurrency                NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=concurrency verdict=NOTRUN secs=- client_ms=?
+--defer-liveness             NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=defer-liveness verdict=NOTRUN secs=- client_ms=?
+--blockage-coverage          NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=blockage-coverage verdict=NOTRUN secs=- client_ms=?
+--alias-two-vas              NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=alias-two-vas verdict=NOTRUN secs=- client_ms=?
+--alias-unmap-observe        NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=alias-unmap-observe verdict=NOTRUN secs=- client_ms=?
+--map-propagation            NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=map-propagation verdict=NOTRUN secs=- client_ms=?
+--late-map-race              NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=late-map-race verdict=NOTRUN secs=- client_ms=?
+--missing-page-fault         NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=missing-page-fault verdict=NOTRUN secs=- client_ms=?
+--uvm-invalidate             NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=uvm-invalidate verdict=NOTRUN secs=- client_ms=?
+--uvm-mean                   NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=uvm-mean verdict=NOTRUN secs=- client_ms=?
+--executor-vas               NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=executor-vas verdict=NOTRUN secs=- client_ms=?
+--guest-ring-channel         NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=guest-ring-channel verdict=NOTRUN secs=- client_ms=?
+--dictated-ring              NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=dictated-ring verdict=NOTRUN secs=- client_ms=?
+--dictated-ring-negative     NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=dictated-ring-negative verdict=NOTRUN secs=- client_ms=?
+--ce-client                  NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=ce-client verdict=NOTRUN secs=- client_ms=?
+--ce-client-guest-ram        NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=ce-client-guest-ram verdict=NOTRUN secs=- client_ms=?
+--guest-ram-pin              NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=guest-ram-pin verdict=NOTRUN secs=- client_ms=?
+--bar1-crossing              NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=bar1-crossing verdict=NOTRUN secs=- client_ms=?
+--atomics-probe              NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=atomics-probe verdict=NOTRUN secs=- client_ms=?
+--pce-mask-probe             NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=pce-mask-probe verdict=NOTRUN secs=- client_ms=?
+--gpga-reserve-probe         NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=gpga-reserve-probe verdict=NOTRUN secs=- client_ms=?
+--map-stress                 NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=map-stress verdict=NOTRUN secs=- client_ms=?
+--concurrent-fuzz            NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=concurrent-fuzz verdict=NOTRUN secs=- client_ms=?
+--cross-client-leak          NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=cross-client-leak verdict=NOTRUN secs=- client_ms=?
+--rpc-mixed-allocs           NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=rpc-mixed-allocs verdict=NOTRUN secs=- client_ms=?
+
+FAST_SUITE_PASS=0 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=30 ARMS=30
+FAST_SUITE_RC=2
+⊘ 30 arm(s) NEVER RAN — this is not a measurement. Fix the precondition and re-run.

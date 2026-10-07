@@ -1,0 +1,74 @@
+v3-adasys — why kayfabe's v3 gates 3 and 4 failed on an RTX 4070 container box (V3_DRIVER_MATRIX
+§8.2 ruling 4, "an open environment-or-Ada question"). ANSWERED 2026-09-26: a KAYFABE BUG, not the
+box and not Ada. Evidence in this directory; every run carries its revision.
+
+1. BARE METAL FIRST (stock software only) — tools/hostmem_check.cu, 22 checks, each direction verified
+   independently: pageable, pinned (cudaMallocHost), zero-copy (cudaHostAllocMapped, a kernel reading and
+   writing host memory), write-combined, cudaHostRegister over malloc, cudaHostRegister over a MAP_SHARED
+   memfd (kayfabe's exact backing), cuStreamWriteValue32 into registered memfd memory and a kernel flag
+   write, both polled by the CPU without a sync.
+   - vast machine 19053 (ASRock B550 Pro4, Ryzen 9 5900X, host kernel 6.8.0-124, host driver 580.159.04,
+     no iommu= on the cmdline, 0 IOMMU groups), container boxes, bare metal:
+       RTX 4070 0000:04:00.0 (behind the B550 chipset, x4; the GPU the original failing box held): 22/22
+       RTX 4070 0000:06:00.0 (CPU root port 00:03.1, x16):                                          22/22
+     No kernel log in a container (dmesg_restrict=1, no CAP_SYSLOG).
+   - KVM-template VM (RTX 4060 Ti AD106 passthrough, host EPYC 7K62, guest kernel 6.8.0-59, 580.159.04):
+     22/22; dmesg: "iommu: Default domain type: Translated", 0 IOMMU groups in the VM, NO Xid / fault /
+     DMAR / AMD-Vi / AER line in the whole boot (rtx4060ti_kvm_vm/dmesg_full_after_tests.txt).
+
+2. KAYFABE on the same GPUs (scripts/bench/v3_gates.sh):
+   - master 59cc98a9: 7/9 on BOTH 4070s — gate 3 sysmem_to_fb_by_engine + fb_to_sysmem_by_engine, gate 4
+     channel_retired_and_released x3 (sem=0 in guest RAM). Identical to the original finding.
+   - gate3_diag.txt: the engine's read of guest RAM returned all zeros while the CPU reads the pattern back;
+     its write to guest RAM landed at the right offset and nowhere else (when it was visible at all).
+   - KVM VM (4060 Ti): master 9/9, fix 9/9, no kernel-log line during either run.
+
+3. MECHANISM (source + measurement):
+   - kf-host mapped every OS-descriptor (guest-RAM) object with NV_ESC_RM_MAP_MEMORY_DMA flags lacking
+     NVOS46_FLAGS_CACHE_SNOOP_ENABLE (field 4:4; its ZERO value is _DISABLE, nvos.h:1992-1994).
+   - RM: an OS descriptor's memdesc leaves cpuCacheSnoop = DEFER_TO_MAP (enum 0, g_mem_desc_nvoc.h:667),
+     so dmaAllocMapping takes it from the map flags (virt_mem_allocator_gm107.c:430-446) and writes
+     SYS_COH only if set, else SYS_NONCOH (:1338-1350). 535.216.03/570.86.15: same, read straight off
+     the bit (:294/:1010, :303/:1029). SYS_NONCOH = the GPU issues PCIe No-Snoop requests.
+   - Stock CUDA never takes that path. MEASURED (rtx4070_gpu0_0400_b550_chipset/
+     cudahostregister_ioctl_path.txt, strace of tools/regpath.cu): cudaHostRegister is
+     NV_ESC_RM_ALLOC_MEMORY (the same OS descriptor kayfabe allocates) + UVM_CREATE_EXTERNAL_RANGE +
+     UVM_MAP_EXTERNAL_ALLOCATION, and NO NV_ESC_RM_MAP_MEMORY_DMA. UVM writes those PTEs from
+     nvUvmInterfaceGetExternalAllocPtes (uvm_map_external.c:187), whose aperture is
+     nvGpuOpsGetExternalAllocAperture (nv_gpu_ops.c:3543) = SYS_COH on every non-fully-coherent
+     platform (:3625). RM's own NVOS46 helper sets the bit on every map too ("Always enable snooping
+     as that's what's needed for sysmem allocations and it's ignored for vidmem", :5130-5132).
+   - On bare metal RM ENABLES the GPU's PCIe Enable-No-Snoop (kernel_bif.c:473-477) unless the chipset is
+     marked not capable; for a PASSTHROUGH GPU it clears it (chipset_pcie.c:965-970) — measured
+     "DevCtl: ... NoSnoop-" in the VM. The Ryzen/B550 host honours No-Snoop: the engine reads DRAM under
+     the CPU's dirty lines and writes under its stale ones. That is why only bare metal failed.
+   - CAUSAL A/B (snoop_ab_gpu*.log): ONE binary at 59cc98a9, only bit 4 toggled by env: gates 3+4 PASS
+     10/10 with it, FAIL 10/10 without it, on each 4070. In the VM (nsab.out) the no-snoop arm passes
+     even after setting Enable-No-Snoop again with setpci: the VM host keeps DMA coherent regardless,
+     so no VM run could ever have shown this.
+
+4. FIX (branch v3-adasys, f63caee8): kf_host::nvos46_map_flags() composes the flags word of every map
+   and always sets NVOS46_FLAGS_CACHE_SNOOP_ENABLE; unit test that it is set on every combination and
+   moves no other bit. Gates at f63caee8: 9/9 on both 4070s (bare metal) and 9/9 in the VM.
+
+5. MERGE BAR on a GA10x box (rtx3090_ga102_kvm_mergebar/, KVM-template VM, RTX 3090 GA102, host
+   580.159.04, bench provisioned at the branch; kf3 QEMU built at 2f71f662):
+   - v3 gates at 2f71f662: 9/9.
+   - KF_DEVICE=kf3 fast_suite.sh adasys_fix 180: FAST_SUITE_PASS=30 FAIL=0 CRASH=0 NOTRUN=0, RC=0.
+     Kernel log during gates+suite: 5x Xid 31 (CE0 MMU fault), timestamps inside --defer-liveness (4)
+     and --missing-page-fault (1), arms that fault on purpose, both PASS; plus RM teardown lines
+     (knvlinkCoreShutdownDeviceLinks x97, "Requested object not found" asserts x45) — not baselined
+     at master on this box.
+   - crate tests (cargo test --workspace --no-fail-fast): 3483 passed / 5 failed / 1 ignored at
+     2f71f662. Four failing targets fail IDENTICALLY at the base 59cc98a9 on the same box (basecmp.out)
+     and live in crates that do not depend on kf-host or kf-abi: kayfabe-abi truncated_row_reads
+     (0x20800a34 / 0x20800b03 referenced without a reliance statement) and three kayfabe-isolate-host
+     census tests reading src/bin/rmladder.rs, which no longer exists there. The fifth was a one-off
+     execve ETXTBSY in kayfabe-linux-raw's spawn test; 5/5 green on rerun at both revisions.
+   - clippy -D warnings stops in kf-util (not touched) on rust 1.98.1 lints at base and fix alike;
+     without -D, no finding in any line this branch changed.
+
+6. NOT covered here: kayfabe-isolate-host (the old plane, used only by kayfabe-rm-ladder) has its own
+   NVOS46 map calls without the bit (rm.rs:1598, :4661) — out of v3's path, not changed. Whether a given
+   bare-metal host honours No-Snoop is platform-specific (IOMMU force-coherent, chipset quirk lists); the
+   RTX 5080 container box that passed 9/9 before the fix was not re-examined.

@@ -1,0 +1,13 @@
+STAGE dev
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+devices=1
+ok   cuDeviceGet(&d, 0)
+ok   cuDeviceGetName(nm, sizeof(nm), d)
+name=NVIDIA GeForce RTX 3060
+ok   cuDeviceGetAttribute(&maj, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, d)
+ok   cuDeviceGetAttribute(&min, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, d)
+compute=8.6
+ok   cuDeviceTotalMem(&tot, d)
+totalMem=11959 MiB
+DONE

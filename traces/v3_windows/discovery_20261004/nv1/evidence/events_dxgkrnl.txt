@@ -1,0 +1,12 @@
+== Microsoft-Windows-DxgKrnl-Admin
+
+
+TimeCreated      : 10/4/2026 1:37:03 AM
+Id               : 549
+LevelDisplayName : Error
+Message          : Adapter start failed for VendorId (0x10DE) failed with the status (Insufficient system resources exist to complete the API.), reason (StartAdapter_DdiStartDeviceFailed)
+
+
+
+== Microsoft-Windows-DxgKrnl-Operational
+

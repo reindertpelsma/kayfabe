@@ -1,0 +1,16 @@
+# kf-gate3 at 59cc98a9 + the throwaway print in tools/g3diag.py (not committed code), box 52821735,
+# RTX 4070 at 0000:06:00.0, KF_GATE_GPU=1, 2026-09-26. Verbatim output lines:
+CHECK sysmem_to_fb_by_engine FAIL DST3 == guest-RAM R_SRC pattern
+CHECK fb_to_sysmem_by_engine PASS guest-RAM R_DST == SRC pattern
+DIAG DST3 bad_words=16384/16384 first4=[00000000, 00000000, 00000000, 00000000] want4=[5a5a0000, 5a5a0001, 5a5a0002, 5a5a0003]
+DIAG R_SRC_cpu_readback_ok=true
+DIAG R_DST bad_words=0/16384 first4=[c0de0000, c0de0001, c0de0002, c0de0003]
+DIAG R_DST_after_500ms bad_words=0
+DIAG SRC_pattern_word0 0xc0de0000 found_in_guest_ram_at=[200000]
+DIAG guest_ram_nonzero_words=32768 (R_SRC holds 16384 by the CPU)
+DIAG DST3_word0=0x0 nonzero_words=0
+GATE3_VERDICT=FAIL
+# Reading: the engine's read of guest RAM returned zeros although the CPU reads the pattern back
+# (a non-snooped read under the CPU's dirty lines); this run's engine write to guest RAM landed
+# (the write direction is timing-dependent: it fails when the CPU still holds a stale line —
+# 4 of 5 runs in snoop_ab_gpu1.log). The write landed at R_DST and nowhere else: addressing is right.

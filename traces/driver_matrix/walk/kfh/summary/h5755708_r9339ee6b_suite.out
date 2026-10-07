@@ -1,0 +1,66 @@
+FAST_SUITE_STARTED=2026-09-26T19:27:44+00:00 arms=30 budget=180s
+rev=9339ee6b
+ARM                          VERDICT   secs  why
+--timer                      TIMEOUT   182s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=timer verdict=TIMEOUT secs=182 client_ms=?
+--engines                    TIMEOUT   181s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=engines verdict=TIMEOUT secs=181 client_ms=?
+--doorbell-census            TIMEOUT   181s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=doorbell-census verdict=TIMEOUT secs=181 client_ms=?
+--gpu-info-sweep             TIMEOUT   182s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=gpu-info-sweep verdict=TIMEOUT secs=182 client_ms=?
+--bus-info-sweep             TIMEOUT   181s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=bus-info-sweep verdict=TIMEOUT secs=181 client_ms=?
+--concurrency                TIMEOUT   182s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=concurrency verdict=TIMEOUT secs=182 client_ms=?
+--defer-liveness             TIMEOUT   181s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=defer-liveness verdict=TIMEOUT secs=181 client_ms=?
+--blockage-coverage          TIMEOUT   181s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=blockage-coverage verdict=TIMEOUT secs=181 client_ms=?
+--alias-two-vas              TIMEOUT   182s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=alias-two-vas verdict=TIMEOUT secs=182 client_ms=?
+--alias-unmap-observe        TIMEOUT   182s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=alias-unmap-observe verdict=TIMEOUT secs=182 client_ms=?
+--map-propagation            TIMEOUT   181s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=map-propagation verdict=TIMEOUT secs=181 client_ms=?
+--late-map-race              TIMEOUT   182s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=late-map-race verdict=TIMEOUT secs=182 client_ms=?
+--missing-page-fault         TIMEOUT   181s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=missing-page-fault verdict=TIMEOUT secs=181 client_ms=?
+--uvm-invalidate             TIMEOUT   182s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=uvm-invalidate verdict=TIMEOUT secs=182 client_ms=?
+--uvm-mean                   TIMEOUT   181s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=uvm-mean verdict=TIMEOUT secs=181 client_ms=?
+--executor-vas               TIMEOUT   181s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=executor-vas verdict=TIMEOUT secs=181 client_ms=?
+--guest-ring-channel         TIMEOUT   182s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=guest-ring-channel verdict=TIMEOUT secs=182 client_ms=?
+--dictated-ring              TIMEOUT   181s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=dictated-ring verdict=TIMEOUT secs=181 client_ms=?
+--dictated-ring-negative     TIMEOUT   181s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=dictated-ring-negative verdict=TIMEOUT secs=181 client_ms=?
+--ce-client                  TIMEOUT   181s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=ce-client verdict=TIMEOUT secs=181 client_ms=?
+--ce-client-guest-ram        TIMEOUT   182s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=ce-client-guest-ram verdict=TIMEOUT secs=182 client_ms=?
+--guest-ram-pin              TIMEOUT   181s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=guest-ram-pin verdict=TIMEOUT secs=181 client_ms=?
+--bar1-crossing              TIMEOUT   181s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=bar1-crossing verdict=TIMEOUT secs=181 client_ms=?
+--atomics-probe              TIMEOUT   182s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=atomics-probe verdict=TIMEOUT secs=182 client_ms=?
+--pce-mask-probe             TIMEOUT   182s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=pce-mask-probe verdict=TIMEOUT secs=182 client_ms=?
+--gpga-reserve-probe         TIMEOUT   181s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=gpga-reserve-probe verdict=TIMEOUT secs=181 client_ms=?
+--map-stress                 TIMEOUT   181s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=map-stress verdict=TIMEOUT secs=181 client_ms=?
+--concurrent-fuzz            TIMEOUT   182s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=concurrent-fuzz verdict=TIMEOUT secs=182 client_ms=?
+--cross-client-leak          TIMEOUT   181s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=cross-client-leak verdict=TIMEOUT secs=181 client_ms=?
+--rpc-mixed-allocs           TIMEOUT   182s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=rpc-mixed-allocs verdict=TIMEOUT secs=182 client_ms=?
+
+FAST_SUITE_PASS=0 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=30 NOTRUN=0 ARMS=30
+FAST_SUITE_RC=1

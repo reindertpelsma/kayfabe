@@ -1,0 +1,31 @@
+# DISTILLED BOOT LOG — only the lines this tree gates on.
+# source: traces/guest_boots/run_rawguest_qemu.log (5.0M full), distilled 2026-09-18T20:27:55+00:00
+2026-09-18T12:05:17.295212Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a87
+2026-09-18T12:05:17.295233Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a4b
+2026-09-18T12:05:17.295254Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800afe
+2026-09-18T12:05:17.295275Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800aff
+2026-09-18T12:05:17.295296Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a70
+2026-09-18T12:05:17.295317Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a80
+2026-09-18T12:05:17.295338Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20802a0f
+2026-09-18T12:05:17.295359Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080017e
+2026-09-18T12:05:17.295379Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a30
+2026-09-18T12:05:17.295400Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a2c
+2026-09-18T12:05:17.295421Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a2e
+2026-09-18T12:05:17.295442Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a34
+2026-09-18T12:05:17.295463Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800b03
+2026-09-18T12:05:17.295484Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800b05
+2026-09-18T12:05:17.295505Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a3f
+2026-09-18T12:05:17.295526Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080013f
+2026-09-18T12:05:17.295554Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x402c0101
+2026-09-18T12:05:17.295576Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x00800294
+2026-09-18T12:05:17.295597Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20810110
+2026-09-18T12:05:17.295618Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080014b
+2026-09-18T12:05:17.295639Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800157
+2026-09-18T12:05:17.295660Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20801357
+2026-09-18T12:05:17.295681Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080852e
+2026-09-18T12:05:17.295702Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20808513
+2026-09-18T12:05:17.295723Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20802068
+2026-09-18T12:05:17.295744Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080a618
+2026-09-18T12:05:17.295765Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080a612
+2026-09-18T12:05:17.295786Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x208f1105
+2026-09-18T12:05:17.295826Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a38

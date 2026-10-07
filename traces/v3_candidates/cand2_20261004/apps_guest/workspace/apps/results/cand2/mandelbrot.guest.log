@@ -1,0 +1,4 @@
+=== mandelbrot side=guest start=2026-10-04T11:58:10+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/mandelbrot
+METRIC mandelbrot_Mpix_iter_s 2690399.9
+CHECK ok
+=== end rc=0 secs=2 2026-10-04T11:58:13+00:00

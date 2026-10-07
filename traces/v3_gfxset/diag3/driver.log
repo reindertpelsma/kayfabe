@@ -1,0 +1,29 @@
+DIAG_START 2026-09-26T18:33:08+00:00 items=[ff_vulkan_init vk_ofa vk_info ff_vulkan pv_validate_vk video_nvenc_nvdec]
+REV=88dc8778
+KF3_RC=0 KF3_BUILT /workspace/bench/kf3-bins/88dc8778/qemu-system-x86_64 rev=88dc8778 mtime=2026-09-26 18:33:30.753382982 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+[gset-suite 2026-09-26T18:33:30+00:00] GSET_SUITE_STARTED run=diag3 rev=88dc8778
+GSET_RES side=host item=ff_vulkan_init verdict=PASS rc=0 secs=1 note=warn:[in#0/lavfi @ 0x57d7f6ea4840] Input stream #0:0 (video): 5 packets read (2120 bytes); 4 frames decoded; 0 decode errors;  host_xid=0
+GSET_RES side=host item=vk_ofa verdict=PASS rc=0 secs=0 note=- host_xid=0
+GSET_RES side=host item=vk_info verdict=PASS rc=0 secs=1 note=- host_xid=0
+GSET_RES side=host item=ff_vulkan verdict=PASS rc=0 secs=10 note=- host_xid=0
+GSET_RES side=host item=pv_validate_vk verdict=PASS rc=0 secs=0 note=- host_xid=0
+GSET_RES side=host item=video_nvenc_nvdec verdict=PASS rc=0 secs=14 note=- host_xid=0
+[gset-host 18:34:01] HOST_DONE 6 pass / 6 rows
+[gset-suite 2026-09-26T18:34:01+00:00] kf3 binary: /workspace/bench/kf3-bins/88dc8778/qemu-system-x86_64  items: ff_vulkan_init vk_ofa vk_info ff_vulkan pv_validate_vk video_nvenc_nvdec
+[gset-suite 2026-09-26T18:36:54+00:00] boot gs_diag3_b1 rc=0 items=[ff_vulkan_init vk_ofa vk_info ff_vulkan pv_validate_vk video_nvenc_nvdec] :: /workspace/bench/run_gs_diag3_b1_probe.log:GSET_HOOK tag=gs_diag3_b1 items=[ff_vulkan_init vk_ofa vk_info ff_vulkan pv_validate_vk video_nvenc_nvdec] guest=NVIDIA GeForce RTX 3070, 580.159.04, Disabled /workspace/bench/r
+### /workspace/gfxset/results/diag3
+
+| item | bare metal | guest | digests vs bare metal | verdict | detail |
+|---|---|---|---|---|---|
+| ff_vulkan_init | PASS | PASS (batched) | 1/1 match | **PASS** |  |
+| vk_ofa | PASS | PASS (batched) | 2/2 match | **PASS** |  |
+| vk_info | PASS | PASS (batched) | 6/6 match | **PASS** |  |
+| ff_vulkan | PASS | PASS (batched) | 9/9 match | **PASS** |  |
+| pv_validate_vk | PASS | PASS (batched) | 2/2 match | **PASS** |  |
+| video_nvenc_nvdec | PASS | PASS (batched) | 13/13 match | **PASS** |  |
+
+PASS: 6
+GSET_SUITE_SUMMARY pass=6/6 notrun_host=0
+[gset-suite 2026-09-26T18:36:54+00:00] GSET_SUITE_VERDICT=PASS (pass=6/6) rev=88dc8778
+[gset-suite 2026-09-26T18:36:54+00:00] GSET_SUITE_EXIT=2026-09-26T18:36:54+00:00
+RUN_EXIT rc=0 2026-09-26T18:36:54+00:00

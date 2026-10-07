@@ -1,0 +1,28 @@
+qemu-system-x86_64: -device nvkvm-gpu,bar1-size=268435456,bar2-size=33554432,id=kf0: info: nvkvm: presenting 10de:2504 class 030000 rev a1 subsys 1462:397d (8 interrupt vectors)
+qemu-system-x86_64: info: nvkvm: memory plane realized (bar0=0xfd000000 bar1=0xe0000000 bar2=0xf0000000, register plane has guest memory=yes)
+qemu-system-x86_64: warning: nvkvm: the emulated GSP asked for its STATUS-QUEUE interrupt and this device does not deliver that one. The guest's own interrupt trigger IS delivered; this is the GSP-engine stall vector, which needs a pending bit in the interrupt tree first. A guest that BLOCKS on a status-queue event will not be woken by us — the boot path polls instead.
+qemu-system-x86_64: info: nvkvm: registers: 3630 reads / 56309 writes (chip-constant 38, rom 2316, gsp 341r/397w, UNCLAIMED 761r/762w), faults 0, guest-RAM refusals 0, interrupt requests dropped 91
+qemu-system-x86_64: info: nvkvm: interrupts: 0 vectors delivered, 0 undeliverable (guest had not enabled the table), 91 status-queue requests dropped
+qemu-system-x86_64: info: nvkvm: framebuffer: 122 reads / 55106 writes served through the BAR0 moving window (26 window register reads / 22 writes), fb refusals 0, translated-window drops 0r/0w, resident 155648 bytes
+qemu-system-x86_64: info: nvkvm: BAR2 (translated): 111 reads / 21128 writes resolved through the GMMU, 0 REFUSED by name; roots published 2 (0 bodies refused), BAR2 root entry 0x0
+qemu-system-x86_64: info: nvkvm: commands: 92 decoded, 20 UNSERVICED (refused by name; the guest logs these quietly, which is why they are here), 17 distinct
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a87
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a4b
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800afe
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800aff
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a70
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a80
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20802a0f
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080017e
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a30
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a2c
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a2e
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a34
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800b03
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800b05
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a3f
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0xa06f0103
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a38
+qemu-system-x86_64: info: nvkvm: bridge refusals: 0 total, 0 distinct (these ANSWER the command and so never reach the unserviced list)
+qemu-system-x86_64: info: nvkvm: isolates: 1 materialized, 1 live, 1 refusing (1 no-plane, 0 spawn-failed)
+qemu-system-x86_64: info: nvkvm:   isolate refusal [no-plane] this build has no forwarding plane: the object model accepts protocol facts and no host verb can be issued

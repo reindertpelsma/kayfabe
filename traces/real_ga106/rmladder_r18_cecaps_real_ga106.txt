@@ -1,0 +1,15 @@
+# R18 CE caps probe — real GA106 GPU-d0913685, host driver 580.159.04 Open
+# REV_UNDER_TEST=6f8239835
+# nvidia-smi -L: GPU 0: NVIDIA GeForce RTX 3060 (UUID: GPU-d0913685-1ec0-805a-e319-43a901a0e1ff)
+# H1 0x20802a0b (flags 0x101d0 = GPU_LOCK_DEVICE_ONLY|ROUTE_TO_PHYSICAL|INTERNAL|API_LOCK_READONLY|GSP_PLUGIN_FOR_VGPU_GSP,
+#    NO PRIVILEGED and NO NON_PRIVILEGED bit => KERNEL_PRIVILEGED) is UNREACHABLE from usermode.
+# H2 0x20802a0a (flags 0x10108, carries NON_PRIVILEGED 0x8) is reachable and answers NV_OK.
+# H3 the 0xCD seed CANNOT survive on 0x20802a0a: subdeviceCtrlCmdCeGetAllCaps_IMPL portMemSets
+#    the whole params struct to zero (ogkm-580: kernel_ce_shared.c:311) BEFORE it forwards.
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00211
+ok    R6 hSubdevice      = 0xcafe0002
+info  R18 ctrl probe      = 2 control(s) on the subdevice
+info  R18 0x20802a0b    = refused Other(86) (no value measured)
+★     R18 0x20802a0a    = NV_OK, 136 bytes: e303e303e203e2030000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f00000000000000   (u32[0] = 65209315 / 0x3e303e3)
+done — probe only

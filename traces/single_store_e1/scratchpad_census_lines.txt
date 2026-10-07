@@ -1,0 +1,11 @@
+### e1ctl
+SCRATCHPAD AT REALIZE: arm=off up=false pool=0 reservation=DISARMED RESERVED_MB=0 ⇒ no VM-lifetime isolate; the advertised framebuffer is the compile-time one (set KAYFABE_SCRATCHPAD=on to arm)
+SCRATCHPAD AT END OF RUN: arm=off up=false pool=0 reservation=DISARMED RESERVED_MB=0 ⇒ no VM-lifetime isolate; the advertised framebuffer is the compile-time one (set KAYFABE_SCRATCHPAD=on to arm)
+### e1full
+SCRATCHPAD AT REALIZE: arm=on up=true proc=4294967295 gpu=0 pool=4 reservation=HELD RESERVED_MB=11904 spawn_ms=1742.508 probe_ms=1273.747 reserve_ms=14.561 ⇒ the VM's video memory is ONE host RM object
+SCRATCHPAD FB-SIZE derived_from_reservation=11904 MiB                      compiled=12288 MiB fb_length=0x2e8000000 ⇒ the guest is told what                      the host actually gave us
+SCRATCHPAD AT END OF RUN: arm=on up=true proc=4294967295 gpu=0 pool=4 reservation=HELD RESERVED_MB=11904 spawn_ms=1742.508 probe_ms=1273.747 reserve_ms=14.561 ⇒ the VM's video memory is ONE host RM object
+### e1req
+SCRATCHPAD AT REALIZE: arm=require up=true proc=4294967295 gpu=0 pool=4 reservation=HELD RESERVED_MB=4096 spawn_ms=1727.905 probe_ms=15.515 reserve_ms=3.428 ⇒ the VM's video memory is ONE host RM object
+SCRATCHPAD FB-SIZE derived_from_reservation=4096 MiB                      compiled=12288 MiB fb_length=0x100000000 ⇒ the guest is told what                      the host actually gave us
+SCRATCHPAD AT END OF RUN: arm=require up=true proc=4294967295 gpu=0 pool=4 reservation=HELD RESERVED_MB=4096 spawn_ms=1727.905 probe_ms=15.515 reserve_ms=3.428 ⇒ the VM's video memory is ONE host RM object

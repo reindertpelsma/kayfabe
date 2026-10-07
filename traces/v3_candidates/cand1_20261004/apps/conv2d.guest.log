@@ -1,0 +1,4 @@
+=== conv2d side=guest start=2026-10-04T03:10:36+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/conv2d
+METRIC conv2d_GFLOPs 1181.8
+CHECK ok
+=== end rc=0 secs=4 2026-10-04T03:10:40+00:00

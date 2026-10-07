@@ -1,0 +1,39 @@
+START 2026-09-30T10:20:01+00:00
+REV b8b73d4a
+KF3_RC=0
+[3/3] Linking target qemu-system-x86_64
+KF3_BUILT /workspace/bench/kf3-bins/b8b73d4a/qemu-system-x86_64 rev=b8b73d4a mtime=2026-09-30 10:20:28.898710018 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+DISPLAY_LANE_START tag=m1a rev=b8b73d4a 2026-09-30T10:20:28+00:00
+[boot_capture:m1a] BINARY kf3-bin-rev:b8b73d4a  (/workspace/bench/kf3-bins/b8b73d4a/qemu-system-x86_64)  ⇒ every claim from this boot cites THIS revision
+[boot_capture:m1a] host dmesg watermark: 795 lines
+[boot_capture:m1a] booting (extra args: -vga none -vnc 127.0.0.1:0)
+== kf3 binary: /workspace/bench/kf3-bins/b8b73d4a/qemu-system-x86_64 (rev b8b73d4a)  device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on
+[boot_capture:m1a] guest is up after 38s
+[boot_capture:m1a] module unloaded and ring buffer cleared; loading cold
+[boot_capture:m1a] opening the device (this is what runs RmInitAdapter)
+[boot_capture:m1a] captured 28 dmesg lines, 25 NVRM, 0 adapter → /workspace/bench/run_m1a_dmesg.log
+[boot_capture:m1a] --- the verdict lines ---
+[boot_capture:m1a] running POST_CAPTURE_HOOK: /root/kayfabe/scripts/bench/display/hook.sh
+[boot_capture:m1a] hook finished: rc=0
+[boot_capture:m1a] guest dmesg after workload: 89 lines (45 NVRM), delta 61 → /workspace/bench/run_m1a_dmesg_after.log
+[boot_capture:m1a] host dmesg delta: 0 lines, 0
+0 NVRM, 0
+0 Xid → /workspace/bench/run_m1a_hostdmesg.log
+[boot_capture:m1a] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:m1a] guest did not power down in 30s (a wedged vcpu cannot); asking QEMU to quit on /workspace/bench/run_m1a.mon
+[boot_capture:m1a] census present (kf3):
+    kf3: family=Ampere phase=Running trapped=10409 applied=2339 refused=4 serviced=485 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=257 walks=267/267 cleared=257 superseded=0 named_missed=2 unreconciled=0 mapped=226 unmapped=104 clipped=0x0 held=0 vmm_overlaps=0 priv_withhe
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10029
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10028
+[boot_capture:m1a] evidence carried into the repo: /root/kayfabe/traces/guest_boots/run_m1a_{qemu,dmesg,probe,hostdmesg}.log
+[boot_capture:m1a] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+[boot_capture:m1a]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+[boot_capture:m1a] done. serial=/workspace/bench/run_m1a_serial.log qemu=/workspace/bench/run_m1a_qemu.log dmesg=/workspace/bench/run_m1a_dmesg.log dmesg_after=/workspace/bench/run_m1a_dmesg_after.log probe=/workspace/bench/run_m1a_probe.log hostdmesg=/workspace/bench/run_m1a_hostdmesg.log
+DISPLAY_PROBE_BUILD=ok
+DISPLAY_DRM_MODPROBE 
+DISPLAY_DRM_NODES by-path card0 renderD128 
+DISPLAY_DRM_DMESG_LINES=49 displayless=0
+DISPLAY_CONNECTED=no card=/dev/dri/card0
+DISPLAY_LANE_EXIT rc=0 2026-09-30T10:24:27+00:00
+LANE_RC=0
+EXIT 2026-09-30T10:24:27+00:00

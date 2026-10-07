@@ -1,0 +1,107 @@
+START 2026-10-04T01:04:28+00:00
+DISPLAY_DONE_SEEN EXIT rc=0 2026-10-04T01:05:11+00:00
+MASTER_WT 789dee9f0be7c43b314782c8e7c658f748c850fa dirty=0
+MASTER_BIN 88911496 2026-10-03 20:01:41.568805185 +0000 sha256=4ec998a8114a64ae
+CAND_BIN 89509312 2026-10-03 22:40:59.785292853 +0000 sha256=01da8ddccfbd6737
+RUN b5r1 lane_rc=3 bin=kf3-bin-rev:8a682f1b window=[2026-10-04 01:05:33 .. 2026-10-04 01:09:52] host_xid_journal=0
+DISPLAY_B5A2_SESSION up=yes start_up=120.55 arm_epoch=1791076085 rc=0  shot=[1920x1080 nonblack=86/1000 md5=689cf0f998cd] xorg=[3887 /usr/lib/xorg/Xorg -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch] xorg_log=fresh x_driver=[(II) NVIDIA(0): Creating default Display
+DISPLAY_B5_JUDGE B5A2_SESSION PASS expected=[up on Xorg with the NVIDIA X driver (a fresh Xorg.0.log)] observed=[up=yes xorg=running xorg_log=fresh nvidia_driver=yes]
+DISPLAY_B5A2_AFTER_SESSION stop_up=139.90 rc=0  shot=[1920x1080 nonblack=0/1000 md5=311265f5f5d9] changed_from_session=yes (expected: yes — the text console)
+DISPLAY_B5_JUDGE B5A2_AFTER_SESSION PASS expected=[changed_from_session=yes (the text console is back)] observed=[changed_from_session=yes]
+DISPLAY_B5A2_CONSOLE_AFTER_SESSION up=186.54 before=[1920x1080 nonblack=0/1000 md5=311265f5f5d9] after=[1920x1080 nonblack=0/1000 md5=311265f5f5d9] changed=no (expected: changed=yes)
+DISPLAY_B5_JUDGE B5A2_CONSOLE FAIL expected=[changed=yes (the console keeps updating after the session)] observed=[changed=no]
+DISPLAY_B5A2_DEVICE console_shows=[+152140 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the han|+152141 ms the console shows head 3 1920x1080: [window 6 iso 0x1008f+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocat
+DISPLAY_B5_JUDGE B5A2_PRESERVED FAIL expected=[kf3 kept the console NVKMS restored (the PRESERVED scanout)] observed=[lines=0]
+DISPLAY_B5_VERDICT FAIL arms=14 failed=2 B5C=PASS B5C2=PASS B5C3=PASS B5A_SESSION=PASS B5A_AFTER_SESSION=PASS B5A_CONSOLE=PASS B5A2_SESSION=PASS B5A2_AFTER_SESSION=PASS B5A2_CONSOLE=FAIL B5A2_PRESERVED=FAIL B5B_FBCON=PASS B5B_AFTER_RMMOD=PASS B5B_DEVICE=PASS B5_TEARDOWNS=PASS
+  QEMU ctxdma_refused=1 preserved=0 black_no_head=1
+  kf3: display: +152140 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+  kf3: display: +152141 ms the console shows head 3 1920x1080: [window 6 iso 0x1008f+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+  kf3: display: +169007 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+  kf3: display: +169046 ms the console shows head 3 1920x1080: [window 6 iso 0x10088+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+  kf3: display: scanout REFUSED context DMA 0x10088 on channel 7: NotBound
+  kf3: display: +169392 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+  kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: true }
+  kf3: display: +169412 ms the console shows BLACK 1920x1080 (the scanout shown is lost: no head is lit) (core channel FREE)
+  kf3: display: +219076 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+  kf3: display: +219079 ms the console shows head 3 1920x1080: [window 6 iso 0x10088+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+  kf3: display: +230554 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+  kf3: display: +230804 ms the console shows BLACK 1920x1080 (the scanout shown is lost: a lit head has had no window past the hold) (core channel allocated)
+  kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+  kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+RUN b5m1 lane_rc=3 bin=kf3-bin-rev:d4c3767b window=[2026-10-04 01:09:57 .. 2026-10-04 01:13:48] host_xid_journal=0
+DISPLAY_B5A2_SESSION up=yes start_up=119.14 arm_epoch=1791076351 rc=0  shot=[1920x1080 nonblack=86/1000 md5=689cf0f998cd] xorg=[3890 /usr/lib/xorg/Xorg -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch] xorg_log=fresh x_driver=[(II) NVIDIA(0): Creating default Display
+DISPLAY_B5_JUDGE B5A2_SESSION PASS expected=[up on Xorg with the NVIDIA X driver (a fresh Xorg.0.log)] observed=[up=yes xorg=running xorg_log=fresh nvidia_driver=yes]
+DISPLAY_B5A2_AFTER_SESSION stop_up=138.66 rc=0  shot=[1920x1080 nonblack=0/1000 md5=311265f5f5d9] changed_from_session=yes (expected: yes — the text console)
+DISPLAY_B5_JUDGE B5A2_AFTER_SESSION PASS expected=[changed_from_session=yes (the text console is back)] observed=[changed_from_session=yes]
+DISPLAY_B5A2_CONSOLE_AFTER_SESSION up=155.62 before=[1920x1080 nonblack=0/1000 md5=311265f5f5d9] after=[1920x1080 nonblack=0/1000 md5=311265f5f5d9] changed=no (expected: changed=yes)
+DISPLAY_B5_JUDGE B5A2_CONSOLE FAIL expected=[changed=yes (the console keeps updating after the session)] observed=[changed=no]
+DISPLAY_B5A2_DEVICE console_shows=[+151713 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the han|+151714 ms the console shows head 3 1920x1080: [window 6 iso 0x1008f+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocat
+DISPLAY_B5_JUDGE B5A2_PRESERVED FAIL expected=[kf3 kept the console NVKMS restored (the PRESERVED scanout)] observed=[lines=0]
+DISPLAY_B5_VERDICT FAIL arms=14 failed=2 B5C=PASS B5C2=PASS B5C3=PASS B5A_SESSION=PASS B5A_AFTER_SESSION=PASS B5A_CONSOLE=PASS B5A2_SESSION=PASS B5A2_AFTER_SESSION=PASS B5A2_CONSOLE=FAIL B5A2_PRESERVED=FAIL B5B_FBCON=PASS B5B_AFTER_RMMOD=PASS B5B_DEVICE=PASS B5_TEARDOWNS=PASS
+  QEMU ctxdma_refused=1 preserved=0 black_no_head=1
+  kf3: display: +151713 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+  kf3: display: +151714 ms the console shows head 3 1920x1080: [window 6 iso 0x1008f+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+  kf3: display: +168718 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+  kf3: display: +168762 ms the console shows head 3 1920x1080: [window 6 iso 0x10088+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+  kf3: display: scanout REFUSED context DMA 0x10088 on channel 7: NotBound
+  kf3: display: +169150 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+  kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: true }
+  kf3: display: +169171 ms the console shows BLACK 1920x1080 (the scanout shown is lost: no head is lit) (core channel FREE)
+  kf3: display: +188822 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+  kf3: display: +188831 ms the console shows head 3 1920x1080: [window 6 iso 0x10088+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+  kf3: display: +200378 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+  kf3: display: +200629 ms the console shows BLACK 1920x1080 (the scanout shown is lost: a lit head has had no window past the hold) (core channel allocated)
+  kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+  kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+RUN b5r2 lane_rc=3 bin=kf3-bin-rev:8a682f1b window=[2026-10-04 01:13:53 .. 2026-10-04 01:18:19] host_xid_journal=0
+DISPLAY_B5A2_SESSION up=yes start_up=121.22 arm_epoch=1791076592 rc=0  shot=[1920x1080 nonblack=86/1000 md5=689cf0f998cd] xorg=[3891 /usr/lib/xorg/Xorg -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch] xorg_log=fresh x_driver=[(II) NVIDIA(0): Creating default Display
+DISPLAY_B5_JUDGE B5A2_SESSION PASS expected=[up on Xorg with the NVIDIA X driver (a fresh Xorg.0.log)] observed=[up=yes xorg=running xorg_log=fresh nvidia_driver=yes]
+DISPLAY_B5A2_AFTER_SESSION stop_up=140.55 rc=0  shot=[1920x1080 nonblack=0/1000 md5=311265f5f5d9] changed_from_session=yes (expected: yes — the text console)
+DISPLAY_B5_JUDGE B5A2_AFTER_SESSION PASS expected=[changed_from_session=yes (the text console is back)] observed=[changed_from_session=yes]
+DISPLAY_B5A2_CONSOLE_AFTER_SESSION up=187.50 before=[1920x1080 nonblack=0/1000 md5=311265f5f5d9] after=[1920x1080 nonblack=0/1000 md5=311265f5f5d9] changed=no (expected: changed=yes)
+DISPLAY_B5_JUDGE B5A2_CONSOLE FAIL expected=[changed=yes (the console keeps updating after the session)] observed=[changed=no]
+DISPLAY_B5A2_DEVICE console_shows=[+156856 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the han|+156857 ms the console shows head 3 1920x1080: [window 6 iso 0x1008f+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocat
+DISPLAY_B5_JUDGE B5A2_PRESERVED FAIL expected=[kf3 kept the console NVKMS restored (the PRESERVED scanout)] observed=[lines=0]
+DISPLAY_B5_VERDICT FAIL arms=14 failed=2 B5C=PASS B5C2=PASS B5C3=PASS B5A_SESSION=PASS B5A_AFTER_SESSION=PASS B5A_CONSOLE=PASS B5A2_SESSION=PASS B5A2_AFTER_SESSION=PASS B5A2_CONSOLE=FAIL B5A2_PRESERVED=FAIL B5B_FBCON=PASS B5B_AFTER_RMMOD=PASS B5B_DEVICE=PASS B5_TEARDOWNS=PASS
+  QEMU ctxdma_refused=1 preserved=0 black_no_head=1
+  kf3: display: +156856 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+  kf3: display: +156857 ms the console shows head 3 1920x1080: [window 6 iso 0x1008f+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+  kf3: display: +173672 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+  kf3: display: +173713 ms the console shows head 3 1920x1080: [window 6 iso 0x10088+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+  kf3: display: scanout REFUSED context DMA 0x10088 on channel 7: NotBound
+  kf3: display: +174086 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+  kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: true }
+  kf3: display: +174107 ms the console shows BLACK 1920x1080 (the scanout shown is lost: no head is lit) (core channel FREE)
+  kf3: display: +223836 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+  kf3: display: +223846 ms the console shows head 3 1920x1080: [window 6 iso 0x10088+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+  kf3: display: +235427 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+  kf3: display: +235678 ms the console shows BLACK 1920x1080 (the scanout shown is lost: a lit head has had no window past the hold) (core channel allocated)
+  kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+  kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+RUN b5m2 lane_rc=3 bin=kf3-bin-rev:d4c3767b window=[2026-10-04 01:18:24 .. 2026-10-04 01:22:43] host_xid_journal=0
+DISPLAY_B5A2_SESSION up=yes start_up=119.72 arm_epoch=1791076856 rc=0  shot=[1920x1080 nonblack=86/1000 md5=689cf0f998cd] xorg=[3896 /usr/lib/xorg/Xorg -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch] xorg_log=fresh x_driver=[(II) NVIDIA(0): Creating default Display
+DISPLAY_B5_JUDGE B5A2_SESSION PASS expected=[up on Xorg with the NVIDIA X driver (a fresh Xorg.0.log)] observed=[up=yes xorg=running xorg_log=fresh nvidia_driver=yes]
+DISPLAY_B5A2_AFTER_SESSION stop_up=139.23 rc=0  shot=[1920x1080 nonblack=0/1000 md5=311265f5f5d9] changed_from_session=yes (expected: yes — the text console)
+DISPLAY_B5_JUDGE B5A2_AFTER_SESSION PASS expected=[changed_from_session=yes (the text console is back)] observed=[changed_from_session=yes]
+DISPLAY_B5A2_CONSOLE_AFTER_SESSION up=185.39 before=[1920x1080 nonblack=0/1000 md5=311265f5f5d9] after=[1920x1080 nonblack=0/1000 md5=311265f5f5d9] changed=no (expected: changed=yes)
+DISPLAY_B5_JUDGE B5A2_CONSOLE FAIL expected=[changed=yes (the console keeps updating after the session)] observed=[changed=no]
+DISPLAY_B5A2_DEVICE console_shows=[+150873 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the han|+150874 ms the console shows head 3 1920x1080: [window 6 iso 0x1008f+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocat
+DISPLAY_B5_JUDGE B5A2_PRESERVED FAIL expected=[kf3 kept the console NVKMS restored (the PRESERVED scanout)] observed=[lines=0]
+DISPLAY_B5_VERDICT FAIL arms=14 failed=2 B5C=PASS B5C2=PASS B5C3=PASS B5A_SESSION=PASS B5A_AFTER_SESSION=PASS B5A_CONSOLE=PASS B5A2_SESSION=PASS B5A2_AFTER_SESSION=PASS B5A2_CONSOLE=FAIL B5A2_PRESERVED=FAIL B5B_FBCON=PASS B5B_AFTER_RMMOD=PASS B5B_DEVICE=PASS B5_TEARDOWNS=PASS
+  QEMU ctxdma_refused=1 preserved=0 black_no_head=1
+  kf3: display: +150873 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+  kf3: display: +150874 ms the console shows head 3 1920x1080: [window 6 iso 0x1008f+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+  kf3: display: +167866 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+  kf3: display: +167908 ms the console shows head 3 1920x1080: [window 6 iso 0x10088+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+  kf3: display: scanout REFUSED context DMA 0x10088 on channel 7: NotBound
+  kf3: display: +168291 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+  kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: true }
+  kf3: display: +168312 ms the console shows BLACK 1920x1080 (the scanout shown is lost: no head is lit) (core channel FREE)
+  kf3: display: +217330 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+  kf3: display: +217337 ms the console shows head 3 1920x1080: [window 6 iso 0x10088+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+  kf3: display: +228934 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+  kf3: display: +229185 ms the console shows BLACK 1920x1080 (the scanout shown is lost: a lit head has had no window past the hold) (core channel allocated)
+  kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+  kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+B5AB_DONE
+EXIT rc=0 2026-10-04T01:22:48+00:00

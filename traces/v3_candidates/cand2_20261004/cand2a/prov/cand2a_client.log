@@ -1,0 +1,688 @@
+warning: missing documentation for a function
+    --> crates/kayfabe-util/src/lock.rs:1150:5
+     |
+1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+    --> crates/kayfabe-util/src/lock.rs:1432:5
+     |
+1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kayfabe-util/src/lockwitness.rs:193:5
+    |
+193 |     pub fn is_vcpu() -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kayfabe-arch/src/gsp.rs:699:5
+    |
+699 | /     fn on_read(
+700 | |         &self,
+701 | |         _model: &dyn GspModel,
+702 | |         _bar: u8,
+...   |
+705 | |         _state: &ArchBootState,
+706 | |     ) -> Option<u64> {
+    | |____________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a constant
+  --> crates/kayfabe-linux-raw/src/arena_unsafe.rs:72:1
+   |
+72 | pub const ARENA_EXHAUSTED: &str = "the framebuffer page arena is exhausted: every 4 KiB index \
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for an associated function
+   --> crates/kayfabe-linux-raw/src/arena_unsafe.rs:161:5
+    |
+161 |     pub fn create(page: HostPageSize) -> Result<Self, RawError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kayfabe-linux-raw/src/mapping_unsafe.rs:977:5
+    |
+977 |     pub fn load_u32(&self, offset: HostOffset) -> Result<u32, RawError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: direct cast of function item into an integer
+   --> crates/kayfabe-linux-raw/src/signal_unsafe.rs:415:57
+    |
+415 |                     libc::signal(STALL_SIGNAL, on_stall as libc::sighandler_t);
+    |                                                         ^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(function_casts_as_integer)]` on by default
+help: first cast to a pointer `as *const ()`
+    |
+415 |                     libc::signal(STALL_SIGNAL, on_stall as *const () as libc::sighandler_t);
+    |                                                         ++++++++++++
+
+warning: missing documentation for a struct
+    --> crates/kayfabe-isolate/src/lib.rs:1182:1
+     |
+1182 | pub struct BareVaSpace {
+     | ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a trait
+    --> crates/kayfabe-isolate/src/lib.rs:1189:1
+     |
+1189 | pub trait RmBackend: Send + Sync {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates/kayfabe-isolate/src/lib.rs:1587:5
+     |
+1587 |     fn cuda_walk_report(&mut self) -> Result<String, RmError> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a module
+    --> crates/kayfabe-isolate/src/lib.rs:3245:1
+     |
+3245 | pub mod verbcost {
+     | ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kayfabe-mmu/src/refresh.rs:72:12
+   |
+72 |     Leaf { phys: u64, aperture: Aperture },
+   |            ^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a struct field
+  --> crates/kayfabe-mmu/src/refresh.rs:72:23
+   |
+72 |     Leaf { phys: u64, aperture: Aperture },
+   |                       ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kayfabe-mmu/src/refresh.rs:87:5
+   |
+87 |     pub va: u64,
+   |     ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kayfabe-mmu/src/refresh.rs:88:5
+   |
+88 |     pub phys: u64,
+   |     ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kayfabe-mmu/src/refresh.rs:100:5
+    |
+100 |     pub unmapped: u64,
+    |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kayfabe-mmu/src/refresh.rs:101:5
+    |
+101 |     pub mapped: u64,
+    |     ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kayfabe-mmu/src/refresh.rs:102:5
+    |
+102 |     pub rechecked: u64,
+    |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kayfabe-mmu/src/refresh.rs:112:14
+    |
+112 |     Mapped { phys: u64, aperture: Aperture },
+    |              ^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kayfabe-mmu/src/refresh.rs:112:25
+    |
+112 |     Mapped { phys: u64, aperture: Aperture },
+    |                         ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates/kayfabe-mmu/src/refresh.rs:157:5
+    |
+157 |     pub fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kayfabe-mmu/src/refresh.rs:168:5
+    |
+168 |     pub fn get(&self, page: u64, slot: usize) -> Pte {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates/kayfabe-mmu/src/refresh.rs:184:5
+    |
+184 |     pub fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kayfabe-mmu/src/walker.rs:824:1
+    |
+824 | / pub fn decode_subtree(
+825 | |     fmt: &dyn GmmuFmt,
+826 | |     fb: &mut dyn FbRead,
+827 | |     root: PtPage,
+828 | |     budget: u32,
+829 | | ) -> Result<SubtreeDecode, WalkFault> {
+    | |_____________________________________^
+
+warning: missing documentation for a method
+    --> crates/kayfabe-gsp/src/boot.rs:2020:5
+     |
+2020 |     pub fn release_held(&mut self, ram: &mut dyn GuestRam) -> Result<usize, GspFault> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+    --> crates/kayfabe-gsp/src/boot.rs:2047:5
+     |
+2047 | /     pub fn post_event(
+2048 | |         &mut self,
+2049 | |         ram: &mut dyn GuestRam,
+2050 | |         rpc: &OutgoingRpc,
+2051 | |     ) -> Result<(), GspFault> {
+     | |_____________________________^
+
+warning: unused attribute
+   --> crates/kayfabe-device/src/cpuintr.rs:220:1
+    |
+220 | #[must_use]
+    | ^^^^^^^^^^^ help: remove this attribute
+    |
+note: attribute also specified here
+   --> crates/kayfabe-device/src/cpuintr.rs:207:1
+    |
+207 | #[must_use]
+    | ^^^^^^^^^^^
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+    = note: `#[warn(unused_attributes)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused attribute
+    --> crates/kayfabe-device/src/plane.rs:4742:5
+     |
+4742 |     #[must_use]
+     |     ^^^^^^^^^^^ help: remove this attribute
+     |
+note: attribute also specified here
+    --> crates/kayfabe-device/src/plane.rs:4719:5
+     |
+4719 |     #[must_use]
+     |     ^^^^^^^^^^^
+     = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+
+warning: unused attribute
+    --> crates/kayfabe-device/src/plane.rs:4828:5
+     |
+4828 |     #[must_use]
+     |     ^^^^^^^^^^^ help: remove this attribute
+     |
+note: attribute also specified here
+    --> crates/kayfabe-device/src/plane.rs:4809:5
+     |
+4809 |     #[must_use]
+     |     ^^^^^^^^^^^
+     = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+
+warning: unused attribute
+    --> crates/kayfabe-device/src/plane.rs:5434:5
+     |
+5434 |     #[must_use]
+     |     ^^^^^^^^^^^ help: remove this attribute
+     |
+note: attribute also specified here
+    --> crates/kayfabe-device/src/plane.rs:5416:5
+     |
+5416 |     #[must_use]
+     |     ^^^^^^^^^^^
+     = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+
+warning: unused attribute
+    --> crates/kayfabe-device/src/plane.rs:5453:5
+     |
+5453 |     #[must_use]
+     |     ^^^^^^^^^^^ help: remove this attribute
+     |
+note: attribute also specified here
+    --> crates/kayfabe-device/src/plane.rs:5416:5
+     |
+5416 |     #[must_use]
+     |     ^^^^^^^^^^^
+     = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+
+warning: unused attribute
+    --> crates/kayfabe-device/src/plane.rs:5465:5
+     |
+5465 |     #[must_use]
+     |     ^^^^^^^^^^^ help: remove this attribute
+     |
+note: attribute also specified here
+    --> crates/kayfabe-device/src/plane.rs:5416:5
+     |
+5416 |     #[must_use]
+     |     ^^^^^^^^^^^
+     = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+
+warning: value assigned to `g` is never read
+   --> crates/kayfabe-device/src/gpgaview.rs:263:9
+    |
+263 |         g.live = false;
+    |         ^^^^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+    --> crates/kayfabe-device/src/plane.rs:4212:13
+     |
+4212 |         let mut st = self.state.lock();
+     |             ----^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `st`
+    --> crates/kayfabe-device/src/plane.rs:4212:13
+     |
+4212 |         let mut st = self.state.lock();
+     |             ^^^^^^ help: if this is intentional, prefix it with an underscore: `_st`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+    --> crates/kayfabe-device/src/plane.rs:4497:13
+     |
+4497 |         let mut st = self.state.lock();
+     |             ----^^
+     |             |
+     |             help: remove this `mut`
+
+warning: unused variable: `st`
+    --> crates/kayfabe-device/src/plane.rs:4497:13
+     |
+4497 |         let mut st = self.state.lock();
+     |             ^^^^^^ help: if this is intentional, prefix it with an underscore: `_st`
+
+warning: variable does not need to be mutable
+    --> crates/kayfabe-device/src/plane.rs:6330:13
+     |
+6330 |         let mut st = self.state.lock();
+     |             ----^^
+     |             |
+     |             help: remove this `mut`
+
+warning: constant `WPR2_LO_UP` is never used
+   --> crates/kayfabe-device/src/ga10x.rs:280:7
+    |
+280 | const WPR2_LO_UP: u64 = wpr2_reg(frts_offset());
+    |       ^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `WPR2_HI_UP` is never used
+   --> crates/kayfabe-device/src/ga10x.rs:284:7
+    |
+284 | const WPR2_HI_UP: u64 = wpr2_reg(gsp_fw_wpr_end());
+    |       ^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kayfabe-device/src/cpuintr.rs:243:1
+    |
+243 | pub fn decode(off: u64) -> Option<CpuIntrReg> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a struct field
+  --> crates/kayfabe-device/src/dbtable.rs:42:19
+   |
+42 |     Passthrough { host_token: u64 },
+   |                   ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kayfabe-device/src/dbtable.rs:44:16
+   |
+44 |     Emulated { chan: u64 },
+   |                ^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kayfabe-device/src/dropped.rs:84:5
+   |
+84 |     pub fn take_full_rescan(&self) -> bool {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kayfabe-device/src/dropped.rs:94:5
+   |
+94 |     pub fn take_emulated_sweep(&self) -> bool {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a static
+    --> crates/kayfabe-device/src/ga10x.rs:1859:1
+     |
+1859 | pub static GA106: ChipProfile = ChipProfile {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kayfabe-device/src/gpgaview.rs:165:5
+    |
+165 |     pub space: ViewSpace,
+    |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kayfabe-device/src/gpgaview.rs:166:5
+    |
+166 |     pub at: u64,
+    |     ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kayfabe-device/src/gpgaview.rs:167:5
+    |
+167 |     pub len: u64,
+    |     ^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates/kayfabe-device/src/gpgaview.rs:200:5
+    |
+200 |     pub fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+    --> crates/kayfabe-device/src/plane.rs:1076:1
+     |
+1076 | pub const BAR2_UNROOTED: &str = "the guest has not published a root page-directory entry for this aperture \
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates/kayfabe-device/src/plane.rs:3196:5
+     |
+3196 |     pub fn set_fb(&self, fb: Box<dyn FbStore>) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates/kayfabe-device/src/plane.rs:3256:5
+     |
+3256 |     pub fn set_fb_mirror(&self, port: std::sync::Arc<dyn FbMirrorPort>) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates/kayfabe-device/src/plane.rs:4838:5
+     |
+4838 |     pub fn pramin_span(&self) -> Option<(u64, u64)> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates/kayfabe-device/src/plane.rs:4859:5
+     |
+4859 |     pub fn counters(&self) -> Counters {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates/kayfabe-device/src/plane.rs:5490:5
+     |
+5490 |     pub fn os_event_census(&self) -> String {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates/kayfabe-device/src/plane.rs:5504:5
+     |
+5504 |     pub fn intr_census(&self) -> String {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates/kayfabe-device/src/plane.rs:5528:5
+     |
+5528 |     pub fn pending_command_doorbells(&self) -> u32 {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates/kayfabe-device/src/plane.rs:5568:5
+     |
+5568 |     pub fn release_held_replies(&self) -> Result<usize, kayfabe_gsp::GspFault> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates/kayfabe-device/src/plane.rs:5581:5
+     |
+5581 |     pub fn phase(&self) -> kayfabe_gsp::BootPhase {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates/kayfabe-device/src/plane.rs:6964:5
+     |
+6964 |     pub fn account_doorbell_report(&self, token: u64, report: &DoorbellReport) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates/kayfabe-device/src/pubqueue.rs:205:1
+    |
+205 | pub struct MapPublication {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `IMPOSSIBLE_CONVERSION` and `NOT_ON_THIS_RUNG`
+   --> crates/kayfabe-isolate-host/src/rm.rs:580:59
+    |
+580 |         ABI_DECODE_FAILED, ABI_ENCODE_FAILED, CharDevice, IMPOSSIBLE_CONVERSION,
+    |                                                           ^^^^^^^^^^^^^^^^^^^^^
+581 |         IOCTL_NUMBER_UNBUILDABLE, Indirect, NOT_ON_THIS_RUNG, NV_ESC_RM_ALLOC, NV_IOCTL_MAGIC,
+    |                                             ^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `IMPOSSIBLE_CONVERSION` and `NOT_ON_THIS_RUNG`
+   --> crates/kayfabe-isolate-host/src/rm.rs:946:9
+    |
+946 |         IMPOSSIBLE_CONVERSION,
+    |         ^^^^^^^^^^^^^^^^^^^^^
+...
+949 |         NOT_ON_THIS_RUNG,
+    |         ^^^^^^^^^^^^^^^^
+
+warning: unused variable: `slice`
+   --> crates/kayfabe-isolate-host/src/listobj.rs:615:71
+    |
+615 | fn cross_client(rm: &mut HostRmBackend, gpu: u32, parent: HostHandle, slice: HostHandle) {
+    |                                                                       ^^^^^ help: if this is intentional, prefix it with an underscore: `_slice`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+     --> crates/kayfabe-isolate-host/src/rm.rs:13517:13
+      |
+13517 |         let mut alloc =
+      |             ----^^^^^
+      |             |
+      |             help: remove this `mut`
+      |
+      = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: methods `release_birth_space` and `birth_space_census` are never used
+    --> crates/kayfabe-isolate-host/src/rm.rs:4262:8
+     |
+3318 | impl RmConnection {
+     | ----------------- methods in this implementation
+...
+4262 |     fn release_birth_space(&self, isolate_client: u32, space: u32) -> Option<(u32, u32)> {
+     |        ^^^^^^^^^^^^^^^^^^^
+...
+4279 |     fn birth_space_census(&self) -> (usize, usize) {
+     |        ^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `minted_by` is never used
+   --> crates/kayfabe-isolate-host/src/rm.rs:893:23
+    |
+863 |     impl HandedClient {
+    |     ----------------- method in this implementation
+...
+893 |         pub(super) fn minted_by(self) -> u32 {
+    |                       ^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates/kayfabe-isolate-host/src/export.rs:135:1
+    |
+135 | pub struct ChildExports {
+    | ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+    --> crates/kayfabe-isolate-host/src/rm.rs:5165:5
+     |
+5165 |     pub fn import_object_from_fd(&self, fd: i32) -> Result<u32, RmError> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates/kayfabe-isolate-host/src/rm.rs:5211:5
+     |
+5211 |     pub fn reserve_gpga(&self, len: u64) -> Result<u32, RmError> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+    --> crates/kayfabe-isolate-host/src/rm.rs:6592:5
+     |
+6592 |     pub object_bytes: u64,
+     |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+    --> crates/kayfabe-isolate-host/src/rm.rs:6593:5
+     |
+6593 |     pub tile_bytes: u64,
+     |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+    --> crates/kayfabe-isolate-host/src/rm.rs:6594:5
+     |
+6594 |     pub base: u64,
+     |     ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+    --> crates/kayfabe-isolate-host/src/rm.rs:6597:5
+     |
+6597 |     pub total_ms: u128,
+     |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates/kayfabe-isolate-host/src/rm.rs:6609:5
+     |
+6609 |     pub fn landed(&self) -> usize {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+    --> crates/kayfabe-isolate-host/src/rm.rs:6673:1
+     |
+6673 | pub struct CeEvidence {
+     | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates/kayfabe-isolate-host/src/rm.rs:7680:5
+     |
+7680 | /     pub fn read_words_independently(
+7681 | |         &self,
+7682 | |         memory: HostHandle,
+7683 | |         len: u64,
+7684 | |         offsets: &[u64],
+7685 | |     ) -> Result<Vec<u32>, RmError> {
+     | |__________________________________^
+
+warning: missing documentation for a method
+     --> crates/kayfabe-isolate-host/src/rm.rs:13675:5
+      |
+13675 |     pub fn largest_mappable_mb(&mut self, start_mb: u64) -> Vec<(u64, Result<u64, String>)> {
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+     --> crates/kayfabe-isolate-host/src/rm.rs:14117:5
+      |
+14117 | /     pub fn prove_identity_window(
+14118 | |         &mut self,
+14119 | |         bytes: u64,
+14120 | |         bases: &[u64],
+14121 | |     ) -> Result<IdentityWindowEvidence, RmError> {
+      | |________________________________________________^
+
+warning: missing documentation for a method
+     --> crates/kayfabe-isolate-host/src/rm.rs:14218:5
+      |
+14218 |     pub fn prove_ce_copy(&mut self, vas: HostHandle, pattern: u32) -> Result<CeEvidence, RmError> {
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused doc comment
+     --> crates/kayfabe-rm-ladder/src/main.rs:14772:5
+      |
+14772 | /     /// ★ `--guest-ram-at <hex>` — dictate the operands' GPU VA. `None` = RM places them, the
+14773 | |     /// committed behaviour. `[measured w419]` R34 passes in the guest at RM's own placement
+14774 | |     /// (`0x1_2000_0000`); the LLM faults at `0x7cac_3360_0000`, which is where CUDA's unified
+14775 | |     /// addressing puts a device pointer. This is how those two are compared.
+      | |_____________________________________________________________________________^
+14776 |       let mut guest_ram_at: Option<u64> = None;
+      |       ----------------------------------------- rustdoc does not generate documentation for statements
+      |
+      = help: use `//` for a plain comment
+      = note: `#[warn(unused_doc_comments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused doc comment
+     --> crates/kayfabe-rm-ladder/src/main.rs:14777:5
+      |
+14777 | /     /// ★ `--guest-ram-dst-vidmem` — put the DESTINATION in device memory, which is the real
+14778 | |     /// H2D shape. `[measured w416-w419]` the LLM's fault is a copy engine WRITING its
+14779 | |     /// destination, and `.to('cuda')` uploads guest RAM into vidmem. With both operands in
+14780 | |     /// sysmem, R34's engine never writes to vidmem at all.
+      | |___________________________________________________________^
+14781 |       let mut guest_ram_dst_vidmem = false;
+      |       ------------------------------------- rustdoc does not generate documentation for statements
+      |
+      = help: use `//` for a plain comment
+
+warning: unused import: `ClassId`
+     --> crates/kayfabe-rm-ladder/src/main.rs:17322:29
+      |
+17322 |     use kayfabe_arch::ids::{ClassId, GpuId, GpuVa};
+      |                             ^^^^^^^
+      |
+      = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `bases`
+    --> crates/kayfabe-rm-ladder/src/main.rs:5917:9
+     |
+5917 |     let bases: Vec<u64> = vec![
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_bases`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable `persistence` is assigned to, but never used
+     --> crates/kayfabe-rm-ladder/src/main.rs:14702:9
+      |
+14702 |     let mut persistence = true;
+      |         ^^^^^^^^^^^^^^^
+      |
+      = note: consider using `_persistence` instead
+
+warning: value assigned to `persistence` is never read
+     --> crates/kayfabe-rm-ladder/src/main.rs:14906:35
+      |
+14906 |             "--no-persistence" => persistence = false,
+      |                                   ^^^^^^^^^^^^^^^^^^^
+      |
+      = help: maybe it is overwritten before being read?
+      = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `P2_COPY_ENGINE` is never used
+     --> crates/kayfabe-rm-ladder/src/main.rs:18033:11
+      |
+18033 |     const P2_COPY_ENGINE: u32 = 2;
+      |           ^^^^^^^^^^^^^^
+      |
+      = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+

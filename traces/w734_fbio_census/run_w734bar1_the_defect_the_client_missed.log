@@ -1,0 +1,4 @@
+kayfabe: GUEST-BAR1 KAYFABE_GUEST_BAR1_MB=128 MiB row_moved=true advertised=0x8000000 ⇒ ★ §w727's knob, wired. A 128 MiB-BAR1 GA106 is a REAL hardware configuration — a different truthful board, not a lie (§22). ⚠ `-device nvkvm-gpu,bar1-size=134217728` must match, or realize refuses by name.
+kayfabe: GUEST-BAR1 KAYFABE_GUEST_BAR1_MB=128 MiB row_moved=true advertised=0x8000000 ⇒ ★ §w727's knob, wired. A 128 MiB-BAR1 GA106 is a REAL hardware configuration — a different truthful board, not a lie (§22). ⚠ `-device nvkvm-gpu,bar1-size=134217728` must match, or realize refuses by name.
+BAR1-BUDGET host_bar1=256 MiB at 0000:00:07.0 advertised_guest_bar1=256 MiB headroom=16 MiB ⇒ ⊘⊘ DOES NOT FIT — 256 MiB advertised + 16 MiB headroom > 256 MiB host. ★ §22(b): we CHOOSE the left-hand side. Advertising 128 MiB leaves 128 MiB of headroom 
+    W392D_GUEST_OUTCOME=(P) ★★★★★ THE FALSIFIER SURVIVES — the SAME client that

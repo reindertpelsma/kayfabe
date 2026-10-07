@@ -1,0 +1,310 @@
+START 2026-09-30T11:10:33+00:00 tag=dbl1 steps=suite_on,exit,ladder,gpufree rev=43293417 nproc=11 kernel=6.8.0-59-generic (NESTED: a vast KVM guest)
+DBL_SUITE_ON_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+DBL_ARM alias-two-vas dbfast[ON regs=3 placed=3/256 sites=1 doorbells=3 wakes=3 rang=1 handed=2 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/199 max_batch=1 wake_to_deliver[n=3 p50=14 pt_ledger=[t0f3]
+DBL_ARM alias-unmap-observe dbfast[ON regs=0 placed=0/256 sites=1 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0u pt_ledger=[t0f3]
+DBL_ARM atomics-probe dbfast[ON regs=1 placed=1/256 sites=1 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/39 max_batch=0 wake_to_deliver[n=0 p50=0.0 pt_ledger=[]
+DBL_ARM bar1-crossing dbfast[ON regs=1 placed=1/256 sites=1 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/33 max_batch=0 wake_to_deliver[n=0 p50=0.0 pt_ledger=[]
+DBL_ARM blockage-coverage dbfast[ON regs=1 placed=1/256 sites=1 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/31 max_batch=0 wake_to_deliver[n=0 p50=0.0 pt_ledger=[t0f1 t0f1]
+DBL_ARM bus-info-sweep dbfast[ON regs=2 placed=2/256 sites=1 doorbells=2 wakes=2 rang=0 handed=2 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/346 max_batch=1 wake_to_deliver[n=2 p50=5. pt_ledger=[]
+DBL_ARM ce-client-guest-ram dbfast[ON regs=3 placed=3/256 sites=1 doorbells=5 wakes=5 rang=1 handed=4 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/1843 max_batch=1 wake_to_deliver[n=5 p50=2 pt_ledger=[t0f1]
+DBL_ARM ce-client dbfast[ON regs=2 placed=2/256 sites=1 doorbells=2 wakes=2 rang=0 handed=2 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/68 max_batch=1 wake_to_deliver[n=2 p50=8.2 pt_ledger=[t0f1]
+DBL_ARM concurrency dbfast[ON regs=2 placed=2/256 sites=1 doorbells=834 wakes=833 rang=3 handed=830 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=1/39295 max_batch=1 wake_to_deliver[n= pt_ledger=[t0f1 t0f0 t0f1 t0f1]
+DBL_ARM concurrent-fuzz dbfast[ON regs=11 placed=11/256 sites=1 doorbells=811 wakes=811 rang=366 handed=445 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=1/1644 max_batch=2 wake_to_deliver pt_ledger=[t0f17 t0f16 t0f26 t0f20 t0f26 t0f16 t0f20 t0f17 t0f20 t0f16 t0f26 t0f26 t0f17 t0f20 t0f20 t0f26 t0f16 t0f26 t0f17 t0f17 t0f26 t0f26 t0f20 t0f20 t0f20]
+DBL_ARM cross-client-leak dbfast[ON regs=3 placed=3/256 sites=1 doorbells=3 wakes=3 rang=1 handed=2 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/207 max_batch=1 wake_to_deliver[n=3 p50=7. pt_ledger=[t0f2 t0f1]
+DBL_ARM defer-liveness dbfast[ON regs=5 placed=5/256 sites=1 doorbells=35 wakes=33 rang=11 handed=22 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/702 max_batch=1 wake_to_deliver[n=33 p pt_ledger=[t0f1 t0f2 t0f1 t0f3 t0f2 t0f1 t0f1 t0f2 t0f1]
+DBL_ARM dictated-ring-negative dbfast[ON regs=0 placed=0/256 sites=1 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0u pt_ledger=[]
+DBL_ARM dictated-ring dbfast[ON regs=0 placed=0/256 sites=1 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0u pt_ledger=[t0f1]
+DBL_ARM doorbell-census dbfast[ON regs=2 placed=2/256 sites=1 doorbells=26 wakes=25 rang=0 handed=25 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=1/552 max_batch=1 wake_to_deliver[n=25 p5 pt_ledger=[t0f0 t0f0 t0f0 t0f0 t0f0 t0f0 t0f0 t0f0 t0f0 t0f0 t0f0 t0f0]
+DBL_ARM engines dbfast[ON regs=2 placed=2/256 sites=1 doorbells=34 wakes=32 rang=2 handed=30 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=1/656 max_batch=1 wake_to_deliver[n=32 p5 pt_ledger=[t0f0 t0f0 t0f0 t0f0 t0f0 t0f1 t0f0 t0f1 t0f1]
+DBL_ARM executor-vas dbfast[ON regs=2 placed=2/256 sites=1 doorbells=2 wakes=2 rang=0 handed=2 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/166 max_batch=1 wake_to_deliver[n=2 p50=7. pt_ledger=[t0f1]
+DBL_ARM gpga-reserve-probe dbfast[ON regs=2 placed=2/256 sites=1 doorbells=8 wakes=5 rang=0 handed=5 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/1487 max_batch=1 wake_to_deliver[n=5 p50=3 pt_ledger=[]
+DBL_ARM gpu-info-sweep dbfast[ON regs=2 placed=2/256 sites=1 doorbells=2 wakes=2 rang=0 handed=2 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/86 max_batch=1 wake_to_deliver[n=2 p50=6.7 pt_ledger=[]
+DBL_ARM guest-ram-pin dbfast[ON regs=2 placed=2/256 sites=1 doorbells=2 wakes=2 rang=0 handed=2 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/126 max_batch=1 wake_to_deliver[n=2 p50=5. pt_ledger=[]
+DBL_ARM guest-ring-channel dbfast[ON regs=2 placed=2/256 sites=1 doorbells=2 wakes=2 rang=0 handed=2 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/118 max_batch=1 wake_to_deliver[n=2 p50=9. pt_ledger=[t0f0 t0f0]
+DBL_ARM late-map-race dbfast[ON regs=0 placed=0/256 sites=1 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0u pt_ledger=[t0f1 t0f1]
+DBL_ARM map-propagation dbfast[ON regs=2 placed=2/256 sites=1 doorbells=2 wakes=2 rang=0 handed=2 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/87 max_batch=1 wake_to_deliver[n=2 p50=5.6 pt_ledger=[]
+DBL_ARM map-stress dbfast[ON regs=0 placed=0/256 sites=1 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0u pt_ledger=[t0f186]
+DBL_ARM missing-page-fault dbfast[ON regs=4 placed=4/256 sites=1 doorbells=4 wakes=4 rang=2 handed=2 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/253 max_batch=1 wake_to_deliver[n=4 p50=9. pt_ledger=[t0f1 t0f2]
+DBL_ARM pce-mask-probe dbfast[ON regs=1 placed=1/256 sites=1 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/30 max_batch=0 wake_to_deliver[n=0 p50=0.0 pt_ledger=[]
+DBL_ARM rpc-mixed-allocs dbfast[ON regs=1 placed=1/256 sites=1 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/30 max_batch=0 wake_to_deliver[n=0 p50=0.0 pt_ledger=[t0f36]
+DBL_ARM timer dbfast[ON regs=2 placed=2/256 sites=1 doorbells=2 wakes=2 rang=0 handed=2 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/79 max_batch=1 wake_to_deliver[n=2 p50=9.2 pt_ledger=[]
+DBL_ARM uvm-invalidate dbfast[ON regs=2 placed=2/256 sites=1 doorbells=2 wakes=2 rang=0 handed=2 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/205 max_batch=1 wake_to_deliver[n=2 p50=7. pt_ledger=[]
+DBL_ARM uvm-mean dbfast[ON regs=6 placed=6/256 sites=1 doorbells=111 wakes=107 rang=20 handed=87 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=1/620 max_batch=1 wake_to_deliver[n=10 pt_ledger=[t0f4 t0f10 t0f6 t0f6 t0f6 t0f6 t0f6]
+DBL_EXIT_on_RC=0
+DBL_EXIT mode=on DBX_START 2026-09-30T11:28:27+00:00 probe=0x007f07ff stores=200000 extra=doorbell-ioeventfd=on,dummy-bar=on
+DBL_EXIT mode=on DBX_BDF=0000:00:03.0
+DBL_EXIT mode=on DBX_probe_r1 off=0xbb0090 value=0x007f07ff stores=200000 batch=100 p50_ns=15706 p90_ns=16474 p99_ns=20156 mean_ns=15879 max_ns=33449
+DBL_EXIT mode=on DBX_unknown_r1 off=0xbb0090 value=0x007f07fe stores=200000 batch=100 p50_ns=17512 p90_ns=17845 p99_ns=20900 mean_ns=17616 max_ns=33657
+DBL_EXIT mode=on DBX_probe_r2 off=0xbb0090 value=0x007f07ff stores=200000 batch=100 p50_ns=15706 p90_ns=16479 p99_ns=20318 mean_ns=15938 max_ns=25984
+DBL_EXIT mode=on DBX_unknown_r2 off=0xbb0090 value=0x007f07fe stores=200000 batch=100 p50_ns=17449 p90_ns=17700 p99_ns=18651 mean_ns=17467 max_ns=24067
+DBL_EXIT mode=on DBX_probe_r3 off=0xbb0090 value=0x007f07ff stores=200000 batch=100 p50_ns=15767 p90_ns=16522 p99_ns=19430 mean_ns=15704 max_ns=24221
+DBL_EXIT mode=on DBX_unknown_r3 off=0xbb0090 value=0x007f07fe stores=200000 batch=100 p50_ns=20394 p90_ns=20751 p99_ns=21601 mean_ns=20472 max_ns=32515
+DBL_EXIT mode=on DBX_dummy_lockless off=0x8000 value=0x00000001 stores=200000 batch=100 p50_ns=18882 p90_ns=19560 p99_ns=22061 mean_ns=19064 max_ns=32289
+DBL_EXIT mode=on DBX_dummy_bql off=0x9000 value=0x00000001 stores=200000 batch=100 p50_ns=19176 p90_ns=20185 p99_ns=23835 mean_ns=19438 max_ns=36950
+DBL_EXIT mode=on DBX_dummy_ioeventfd off=0xa000 value=0x00000001 stores=200000 batch=100 p50_ns=11731 p90_ns=12201 p99_ns=12810 mean_ns=11835 max_ns=24780
+DBL_EXIT mode=on DBX_DONE 2026-09-30T11:29:04+00:00
+DBL_EXIT mode=on dbfast[ON regs=1 placed=1/256 sites=1 doorbells=606002 wakes=511456 rang=0 handed=2 absorbed=606000 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=6620/507832 max_batch=1 wake_to_deliver[n=511456 p50=1.5us p99=2.8us max=145.6us]
+DBL_EXIT mode=on dbfast[ON regs=1 placed=1/256 sites=1 doorbells=606002 wakes=511456 rang=0 handed=2 absorbed=606000 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=6620/507872 max_batch=1 wake_to_deliver[n=511456 p50=1.5us p99=2.8us max=145.6us]
+DBL_EXIT_off_RC=0
+DBL_EXIT mode=off DBX_START 2026-09-30T11:29:50+00:00 probe=0x007f07ff stores=200000 extra=dummy-bar=on
+DBL_EXIT mode=off DBX_BDF=0000:00:03.0
+DBL_EXIT mode=off DBX_probe_r1 off=0xbb0090 value=0x007f07ff stores=200000 batch=100 p50_ns=20363 p90_ns=20669 p99_ns=21569 mean_ns=20418 max_ns=32381
+DBL_EXIT mode=off DBX_unknown_r1 off=0xbb0090 value=0x007f07fe stores=200000 batch=100 p50_ns=20411 p90_ns=20837 p99_ns=26551 mean_ns=20624 max_ns=35717
+DBL_EXIT mode=off DBX_probe_r2 off=0xbb0090 value=0x007f07ff stores=200000 batch=100 p50_ns=20398 p90_ns=20753 p99_ns=22700 mean_ns=20500 max_ns=28915
+DBL_EXIT mode=off DBX_unknown_r2 off=0xbb0090 value=0x007f07fe stores=200000 batch=100 p50_ns=20988 p90_ns=21444 p99_ns=22427 mean_ns=21063 max_ns=23779
+DBL_EXIT mode=off DBX_probe_r3 off=0xbb0090 value=0x007f07ff stores=200000 batch=100 p50_ns=17372 p90_ns=17673 p99_ns=18128 mean_ns=17395 max_ns=19362
+DBL_EXIT mode=off DBX_unknown_r3 off=0xbb0090 value=0x007f07fe stores=200000 batch=100 p50_ns=20461 p90_ns=20739 p99_ns=21128 mean_ns=20522 max_ns=38975
+DBL_EXIT mode=off DBX_dummy_lockless off=0x8000 value=0x00000001 stores=200000 batch=100 p50_ns=18913 p90_ns=19135 p99_ns=21343 mean_ns=18975 max_ns=34044
+DBL_EXIT mode=off DBX_dummy_bql off=0x9000 value=0x00000001 stores=200000 batch=100 p50_ns=19436 p90_ns=19817 p99_ns=20525 mean_ns=19497 max_ns=37143
+DBL_EXIT mode=off DBX_dummy_ioeventfd off=0xa000 value=0x00000001 stores=200000 batch=100 p50_ns=11929 p90_ns=12255 p99_ns=13556 mean_ns=12023 max_ns=19776
+DBL_EXIT mode=off DBX_DONE 2026-09-30T11:30:30+00:00
+DBL_EXIT mode=off dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us]
+DBL_EXIT mode=off dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us]
+DBL_LADDER_off_RC=0
+DBL_LADDER mode=off CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10446 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f195 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f111 0x00000812:e0f1 0x00000811:e0f1 0x00000810
+DBL_LADDER mode=off CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10511 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f197 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f117 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x0000
+DBL_LADDER mode=off CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=7 trapped=10580 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f201 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f116 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0
+DBL_LADDER mode=off CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=6 trapped=11159 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f203 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x000000
+DBL_LADDER mode=off CL_BENCH mode=guest rep=1 GUEST_BSUM N=16 iters=20 first_ms=0.054 med_ms=0.037 p90_ms=0.051 min_ms=0.034 max_ms=0.067 gflops=0.221 batch_per_launch_ms=0.030 batch_gflops=0.278 h2d_ms=1.959 d2h_med_ms=0.040 submit_med_ms=0.030 sync_med_ms=0.005 sync_cpu_med_ms=0.004 sync_offcpu_med_ms=0.001 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.034 bad=0 maxerr=0
+DBL_LADDER mode=off CL_BENCH mode=guest rep=1 GUEST_BSUM N=2048 iters=20 first_ms=23.562 med_ms=22.315 p90_ms=23.528 min_ms=22.073 max_ms=23.544 gflops=769.889 batch_per_launch_ms=22.115 batch_gflops=776.830 h2d_ms=4.610 d2h_med_ms=3.646 submit_med_ms=0.034 sync_med_ms=22.281 sync_cpu_med_ms=22.281 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.038 bad=0 maxerr=0
+DBL_LADDER mode=off CL_BENCH mode=guest rep=1 GUEST_BENCH_INIT_MS=3149.49
+DBL_LADDER mode=off CL_BENCH mode=guest rep=1 GUEST_BENCH_CTX_MS=892.90
+DBL_LADDER mode=off CL_BENCH mode=guest rep=1 GUEST_BENCH_MODULE_MS=182.31
+DBL_LADDER mode=off run_cl_dbl1_off_cup2_1_qemu.log dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10018 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=1 host=0x1001c fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1 host=0x1001b fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=195 host=0x1001a fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=1 emulated=0 forwarded=1 host=0x25 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1 emulated=0 forwarded=1 host=0x24 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=1 emulated=0 forwarded=1 host=0x23 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=1 emulated=0 forwarded=1 host=0x22 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=1 emulated=0 forwarded=1 host=0x21 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=1 emulated=0 forwarded=1 host=0x20 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=1 emulated=0 forwarded=1 host=0x1f trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=111 emulated=0 forwarded=111 host=0x1e trap=111 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10029 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10028 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10027 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=96 emulated=0 forwarded=96 host=0x10026 trap=96 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002d trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002c trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002b trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=2 emulated=0 forwarded=2 host=0x2002a trap=2 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=49 host=0x10018 fast=0
+DBL_LADDER mode=off run_cl_dbl1_off_cup3_1_qemu.log dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10018 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=1 host=0x1001c fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1 host=0x1001b fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=197 host=0x1001a fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=1 emulated=0 forwarded=1 host=0x25 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1 emulated=0 forwarded=1 host=0x24 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=1 emulated=0 forwarded=1 host=0x23 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=1 emulated=0 forwarded=1 host=0x22 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=1 emulated=0 forwarded=1 host=0x21 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=1 emulated=0 forwarded=1 host=0x20 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=1 emulated=0 forwarded=1 host=0x1f trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=117 emulated=0 forwarded=117 host=0x1e trap=117 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10029 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10028 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10027 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=96 emulated=0 forwarded=96 host=0x10026 trap=96 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002d trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002c trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002b trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=2 emulated=0 forwarded=2 host=0x2002a trap=2 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=49 host=0x10018 fast=0
+DBL_LADDER mode=off run_cl_dbl1_off_cup8_1_qemu.log dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10018 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=1 host=0x1001c fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1 host=0x1001b fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=201 host=0x1001a fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=1 emulated=0 forwarded=1 host=0x25 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1 emulated=0 forwarded=1 host=0x24 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=1 emulated=0 forwarded=1 host=0x23 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=1 emulated=0 forwarded=1 host=0x22 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=1 emulated=0 forwarded=1 host=0x21 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=1 emulated=0 forwarded=1 host=0x20 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=1 emulated=0 forwarded=1 host=0x1f trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=116 emulated=0 forwarded=116 host=0x1e trap=116 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10029 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10028 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10027 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=128 emulated=0 forwarded=128 host=0x10026 trap=128 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002d trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002c trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002b trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=17 emulated=0 forwarded=17 host=0x2002a trap=17 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=51 host=0x10018 fast=0
+DBL_LADDER mode=off run_cl_dbl1_off_cup8bench_1_qemu.log dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10018 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=1 host=0x1001c fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1 host=0x1001b fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=203 host=0x1001a fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=1 emulated=0 forwarded=1 host=0x25 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1 emulated=0 forwarded=1 host=0x24 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=1 emulated=0 forwarded=1 host=0x23 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=1 emulated=0 forwarded=1 host=0x22 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=1 emulated=0 forwarded=1 host=0x21 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=1 emulated=0 forwarded=1 host=0x20 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=1 emulated=0 forwarded=1 host=0x1f trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=218 emulated=0 forwarded=218 host=0x1e trap=218 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10029 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10028 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10027 trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=128 emulated=0 forwarded=128 host=0x10026 trap=128 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002d trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002c trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002b trap=1 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=358 emulated=0 forwarded=358 host=0x2002a trap=358 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+DBL_LEDGER mode=off DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=52 host=0x10018 fast=0
+DBL_LADDER_on_RC=0
+DBL_LADDER mode=on CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10007 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f195 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f111 0x00000812:e0f1 0x00000811:e0f1 0x00000810
+DBL_LADDER mode=on CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=9998 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f195 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f117 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001
+DBL_LADDER mode=on CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=5 trapped=10103 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f202 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f116 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0
+DBL_LADDER mode=on CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=6 trapped=10169 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f201 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x000000
+DBL_LADDER mode=on CL_BENCH mode=guest rep=1 GUEST_BSUM N=16 iters=20 first_ms=0.075 med_ms=0.044 p90_ms=0.053 min_ms=0.044 max_ms=0.072 gflops=0.184 batch_per_launch_ms=0.023 batch_gflops=0.359 h2d_ms=3.485 d2h_med_ms=0.046 submit_med_ms=0.026 sync_med_ms=0.019 sync_cpu_med_ms=0.018 sync_offcpu_med_ms=0.001 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.028 bad=0 maxerr=0
+DBL_LADDER mode=on CL_BENCH mode=guest rep=1 GUEST_BSUM N=2048 iters=20 first_ms=23.635 med_ms=22.308 p90_ms=23.591 min_ms=22.175 max_ms=23.668 gflops=770.136 batch_per_launch_ms=22.184 batch_gflops=774.424 h2d_ms=6.128 d2h_med_ms=4.362 submit_med_ms=0.033 sync_med_ms=22.274 sync_cpu_med_ms=22.274 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.038 bad=0 maxerr=0
+DBL_LADDER mode=on CL_BENCH mode=guest rep=1 GUEST_BENCH_INIT_MS=3069.30
+DBL_LADDER mode=on CL_BENCH mode=guest rep=1 GUEST_BENCH_CTX_MS=870.49
+DBL_LADDER mode=on CL_BENCH mode=guest rep=1 GUEST_BENCH_MODULE_MS=2.19
+DBL_LADDER mode=on run_cl_dbl1_on_cup2_1_qemu.log dbfast[ON regs=0 placed=0/256 sites=1 doorbells=473 wakes=341 rang=142 handed=199 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=32/2055 max_batch=2 wake_to_deliver[n=341 p50=7.2us p99=
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=2 fast_wakes=2 fast_forwarded=2 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10018 fast=0 fast_wakes=0 fast_forwarded=0 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=1 host=0x1001c fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1 host=0x1001b fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=195 host=0x1001a fast=195 fast_wakes=153 fast_forwarded=195 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=1 emulated=0 forwarded=1 host=0x25 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1 emulated=0 forwarded=1 host=0x24 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=1 emulated=0 forwarded=1 host=0x23 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=1 emulated=0 forwarded=1 host=0x22 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=1 emulated=0 forwarded=1 host=0x21 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=1 emulated=0 forwarded=1 host=0x20 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=1 emulated=0 forwarded=1 host=0x1f trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=111 emulated=0 forwarded=111 host=0x1e trap=0 fast=111 fast_wakes=70 fast_forwarded=111 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10029 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10028 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10027 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=96 emulated=0 forwarded=96 host=0x10026 trap=0 fast=96 fast_wakes=57 fast_forwarded=96 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002d trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002c trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002b trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=2 emulated=0 forwarded=2 host=0x2002a trap=0 fast=2 fast_wakes=2 fast_forwarded=2 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=2 fast_wakes=2 fast_forwarded=2 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=49 host=0x10018 fast=49 fast_wakes=39 fast_forwarded=49 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LADDER mode=on run_cl_dbl1_on_cup3_1_qemu.log dbfast[ON regs=0 placed=0/256 sites=1 doorbells=479 wakes=382 rang=170 handed=212 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=44/2094 max_batch=1 wake_to_deliver[n=382 p50=6.1us p99=
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=2 fast_wakes=2 fast_forwarded=2 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10018 fast=0 fast_wakes=0 fast_forwarded=0 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=1 host=0x1001c fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1 host=0x1001b fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=195 host=0x1001a fast=195 fast_wakes=169 fast_forwarded=195 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=1 emulated=0 forwarded=1 host=0x25 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1 emulated=0 forwarded=1 host=0x24 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=1 emulated=0 forwarded=1 host=0x23 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=1 emulated=0 forwarded=1 host=0x22 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=1 emulated=0 forwarded=1 host=0x21 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=1 emulated=0 forwarded=1 host=0x20 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=1 emulated=0 forwarded=1 host=0x1f trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=117 emulated=0 forwarded=117 host=0x1e trap=0 fast=117 fast_wakes=86 fast_forwarded=117 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10029 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10028 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10027 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=96 emulated=0 forwarded=96 host=0x10026 trap=0 fast=96 fast_wakes=69 fast_forwarded=96 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002d trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002c trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002b trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=2 emulated=0 forwarded=2 host=0x2002a trap=0 fast=2 fast_wakes=2 fast_forwarded=2 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=2 fast_wakes=2 fast_forwarded=2 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=49 host=0x10018 fast=49 fast_wakes=36 fast_forwarded=49 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LADDER mode=on run_cl_dbl1_on_cup8_1_qemu.log dbfast[ON regs=0 placed=0/256 sites=1 doorbells=534 wakes=401 rang=204 handed=197 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=28/2133 max_batch=2 wake_to_deliver[n=401 p50=7.2us p99=
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=2 fast_wakes=2 fast_forwarded=2 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10018 fast=0 fast_wakes=0 fast_forwarded=0 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=1 host=0x1001c fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1 host=0x1001b fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=202 host=0x1001a fast=202 fast_wakes=153 fast_forwarded=202 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=1 emulated=0 forwarded=1 host=0x25 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1 emulated=0 forwarded=1 host=0x24 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=1 emulated=0 forwarded=1 host=0x23 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=1 emulated=0 forwarded=1 host=0x22 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=1 emulated=0 forwarded=1 host=0x21 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=1 emulated=0 forwarded=1 host=0x20 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=1 emulated=0 forwarded=1 host=0x1f trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=116 emulated=0 forwarded=116 host=0x1e trap=0 fast=116 fast_wakes=72 fast_forwarded=116 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10029 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10028 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10027 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=128 emulated=0 forwarded=128 host=0x10026 trap=0 fast=128 fast_wakes=103 fast_forwarded=128 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002d trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002c trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002b trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=17 emulated=0 forwarded=17 host=0x2002a trap=0 fast=17 fast_wakes=16 fast_forwarded=17 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=2 fast_wakes=2 fast_forwarded=2 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=51 host=0x10018 fast=51 fast_wakes=37 fast_forwarded=51 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LADDER mode=on run_cl_dbl1_on_cup8bench_1_qemu.log dbfast[ON regs=0 placed=0/256 sites=1 doorbells=977 wakes=805 rang=593 handed=212 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=23/2551 max_batch=2 wake_to_deliver[n=805 p50=5.1us p99=
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=2 fast_wakes=2 fast_forwarded=2 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10018 fast=0 fast_wakes=0 fast_forwarded=0 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=1 host=0x1001c fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1 host=0x1001b fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=201 host=0x1001a fast=201 fast_wakes=160 fast_forwarded=201 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=1 emulated=0 forwarded=1 host=0x25 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1 emulated=0 forwarded=1 host=0x24 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=1 emulated=0 forwarded=1 host=0x23 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=1 emulated=0 forwarded=1 host=0x22 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=1 emulated=0 forwarded=1 host=0x21 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=1 emulated=0 forwarded=1 host=0x20 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=1 emulated=0 forwarded=1 host=0x1f trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=218 emulated=0 forwarded=218 host=0x1e trap=0 fast=218 fast_wakes=150 fast_forwarded=218 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10029 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10028 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10027 trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=128 emulated=0 forwarded=128 host=0x10026 trap=0 fast=128 fast_wakes=93 fast_forwarded=128 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002d trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002c trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002b trap=0 fast=1 fast_wakes=1 fast_forwarded=1 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=358 emulated=0 forwarded=358 host=0x2002a trap=0 fast=358 fast_wakes=337 fast_forwarded=358 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=2 fast_wakes=2 fast_forwarded=2 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_LEDGER mode=on DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=52 host=0x10018 fast=52 fast_wakes=45 fast_forwarded=52 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+DBL_GPUFREE_TESTS_RC=0
+KVM-GATE: RAN every_token_refused_by_the_kernel_the_fd_limit_or_the_budget_still_works_through_the_trap
+EXHAUST kernel: MMIO bus full after 1000 coalesced zones (+ 6 ioeventfds held)
+EXHAUST fds: refused 6 registrations after 1009 extra descriptors
+EXHAUST budget: 6 placed, 6 refused and trapped — dbfast[ON regs=12 placed=6/6 sites=1 doorbells=6 wakes=6 rang=6 handed=0 absorbed=0 refused(budget=6 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=1/1 max_batch=6 wake_to_deliver[n=6 p50=12.3us p99=17.9us max=17.9us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]]
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+KVM-GATE: RAN churning_births_and_frees_never_lose_a_store_or_ring_the_wrong_twin
+KVM-GATE: RAN registered_tokens_skip_the_exit_and_everything_else_traps_in_order
+.CHURN value=0x00000003 trapped=4050 eventfd=15950 total=20000 of 20000
+CHURN value=0x000d0004 trapped=3660 eventfd=16340 total=20000 of 20000
+CHURN rounds=1406 wall=602.590441ms fast_rings=15068 trap_late_rings=0 (the trap's own load→ring window) counters: dbfast[ON regs=0 placed=0/64 sites=1 doorbells=32290 wakes=32001 rang=15068 handed=15434 absorbed=1509 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=2 wake_to_deliver[n=32001 p50=2.8us p99=18.4us max=142.7us] ack_wait[n=2814 p50=30.7us p99=61.4us max=232.9us]]
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s
+DBL_GPUFREE_BENCH_RC=0
+DBFAST-BENCH A: ns per guest doorbell store, 40000 stores in a loop (wall time of the vCPU loop / 40000)
+  others_registered  trapped_ns  ioeventfd_ns  ratio  deliveries  stores/delivery
+                  0       17767         13201    1.3       31663              1.3
+                 15       17510         14228    1.2       28746              1.4
+                127       21215         18393    1.2       37811              1.1
+                511       33720         31690    1.1       39914              1.0
+.DBFAST-BENCH B: eventfd signal -> drainer delivery, 3000 doorbells one at a time, 20-400 us apart
+  scenario                                   p50_us   p99_us   max_us  reg_writes_applied
+  idle drainer (no register traffic)            45.7     92.2    290.5  0
+  2k reg writes/s, 20 us apply (~4% busy)       40.0     67.3    102.2  1985
+  10k reg writes/s, 20 us apply (~20% busy)     12.8     23.5    756.4  9345
+  10k reg writes/s, 60 us apply (~60% busy)     18.6     62.5    160.1  9709
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.81s
+EXIT rc=0 2026-09-30T11:41:18+00:00

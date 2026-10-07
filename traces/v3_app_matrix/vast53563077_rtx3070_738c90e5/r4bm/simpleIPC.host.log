@@ -1,0 +1,6 @@
+=== simpleIPC side=host start=2026-09-30T18:47:23+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/simpleIPC
+Process 0: Starting on device 0...
+Step 0 done
+Process 0: verifying...
+Process 0 complete!
+=== end rc=0 secs=2 2026-09-30T18:47:25+00:00

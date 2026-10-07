@@ -1,0 +1,86 @@
+=== boot_capture tag=rm_before_283a5304 at 2026-09-26T11:03:01+00:00 ===
+=== source revision: 283a5304 ===
+=== qemu binary: -rwxr-xr-x 1 root root 96551176 Sep 26 11:02 /workspace/bench/kf3-bins/283a5304/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:1da1425e5984d3db27424e10f0cab284e3b34ada 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=7454bf433c1d9212
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Sat Sep 26 11:03:09 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3060        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep 26 11:03 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep 26 11:03 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep 26 11:03 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep 26 11:03 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep 26 11:03 .
+drwxr-xr-x 18 root root   4000 Sep 26 11:03 ..
+cr--------  1 root root 240, 1 Sep 26 11:03 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep 26 11:03 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/readmostly_hook.sh at 2026-09-26T11:03:11+00:00 ===
+READMOSTLY_HOOK_START 2026-09-26T11:03:11+00:00 tag=rm_before_283a5304 rev=283a5304 bin_md5=4ab506fcd9319a3e4e73bf774c0a317c
+=== mode reprefetch 2026-09-26T11:03:11+00:00
+CHECK reprefetch ok bad=0
+RM_RC=0
+--- guest NVRM Xid lines new in this mode:
+--- HOST Xid lines new in this mode:
+=== mode gpuwrite 2026-09-26T11:03:17+00:00
+CHECK gpuwrite FAIL bad=1048576
+RM_RC=1
+--- guest NVRM Xid lines new in this mode:
+--- HOST Xid lines new in this mode:
+=== mode downgrade 2026-09-26T11:03:20+00:00
+CHECK downgrade FAIL bad=1048576
+RM_RC=1
+--- guest NVRM Xid lines new in this mode:
+--- HOST Xid lines new in this mode:
+=== mode fault 2026-09-26T11:03:23+00:00
+CHECK fault FAIL gpu_sum(&h) -> 719 (unspecified launch failure)
+RM_RC=2
+--- guest NVRM Xid lines new in this mode:
+--- HOST Xid lines new in this mode:
+[ 1257.206357] NVRM: Xid (PCI:0000:00:07): 31, pid=98474, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x73e0_e4000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+=== mode reprefetch 2026-09-26T11:03:27+00:00
+CHECK reprefetch ok bad=0
+RM_RC=0
+--- guest NVRM Xid lines new in this mode:
+--- HOST Xid lines new in this mode:
+READMOSTLY_HOOK_DONE 2026-09-26T11:03:31+00:00
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 28 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=149
+GUEST_DMESG_AFTER_NVRM=145
+GUEST_DMESG_WORKLOAD_DELTA=121
+=== HOST dmesg delta for this boot (watermark 736 → 738) ===
+HOST_DMESG_LINES=2
+HOST_DMESG_NVRM=2
+HOST_DMESG_XID=1

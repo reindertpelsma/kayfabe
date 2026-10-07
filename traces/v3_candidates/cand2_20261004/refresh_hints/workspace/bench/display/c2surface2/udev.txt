@@ -1,0 +1,2 @@
+monitor will print the received events for:
+KERNEL - the kernel uevent

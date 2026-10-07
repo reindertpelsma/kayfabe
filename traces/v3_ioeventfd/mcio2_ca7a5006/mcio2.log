@@ -1,0 +1,14 @@
+START 2026-09-30T11:42:05+00:00
+Preparing worktree (detached HEAD ca7a5006)
+HEAD is now at ca7a5006 evidence(doorbell): ON/OFF lane at 43293417 — thin ON 30/30, ladder ON 4/4 = OFF 4/4, exit costs; LLM pair script
+HEAD=ca7a5006bb85dcd3df00553a31e177b56b227ae6 CHECKOUT=/workspace/bench/verify-worktrees/mcio2.YTUr7a
+TESTS passed 1701 failed 0
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/ca7a5006/qemu-system-x86_64 rev=ca7a5006 mtime=2026-09-30 11:45:50.830152168 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+FG_RC=0
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+EXIT rc=0 2026-09-30T12:07:22+00:00

@@ -1,0 +1,15 @@
+=== w313 INERT GATE — ablation = [KAYFABE_DIRTY_GATE_PUBLISH=on KAYFABE_DIRTY_GATE_WITNESS=on]  tag=g2  repo=/workspace/kayfabe_w318 2026-08-14T16:51:28+00:00
+--- arm 1/2: GR/COMPUTE (cup3)
+--- arm 2/2: RAW CE (R33 arm 1, via the w309 crit1 harness, arm=fresh)
+--- grading BOTH:
+=== ★★★★★ TWO-WORKLOAD INERTNESS GATE (w313) — BOTH PLANES OR NO VERDICT
+    workload 1  GR/COMPUTE  cup3 (libcuda, a real GR launch)   log=[/workspace/bench/run_g2cup3_probe.log] 12973 bytes
+                known-positive '^CUP3_VAL=43'  => [FIRED]
+    workload 2  RAW CE      R33 arm 1 (no libcuda, own VAS)    log=[/workspace/bench/run_g2r33_probe.log] 24334 bytes
+                known-positive '★     R33 arm 1 COPY'  => [FIRED]
+    ⊘ FIRED = the known-positive is present · RAN-BUT-ABSENT = the workload reached its
+      own terminator and did NOT fire (a finding about the RELAXATION) · UNTERMINATED =
+      the log stops early, empty or truncated (a finding about the HARNESS) · NOLOG.
+W313 INERT-GATE VERDICT = INERT-ON-BOTH-PLANES
+    ⚠ SCOPED: inert for the GR/compute plane and the raw-CE plane AS THIS TREE
+      EXERCISES THEM. Display, NVENC and multi-process are UNMEASURED, not inert.

@@ -1,0 +1,45 @@
+=== PROBE RUN: KAYFABE_PROBE_ARM_NOTIFIER=35. NOT A RUNG. Reachability only. ===
+[   26.171856] nvidia-nvlink: Nvlink Core is being initialized, major device number 239
+
+[   26.190037] nvidia 0000:00:03.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=none:owns=io+mem
+[   26.199966] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   27.881185] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   27.881695] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   29.013780] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   29.079388] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   29.079614] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   29.079703] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   33.624627] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2886
+[   33.624733] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kchannelBindToRunlist(pKernelChannel, localRmEngineType, engineDesc) @ kernel_channel.c:3230
+[   33.624839] NVRM: _memmgrMemUtilsScrubInitScheduleChannel: Unable to bind Channel, status: 56
+[   33.624846] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _memmgrMemUtilsScrubInitScheduleChannel(pGpu, pChannel) @ mem_utils.c:2006
+[   33.624935] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from memmgrMemUtilsChannelSchedulingSetup(pGpu, pMemoryManager, pChannel) @ mem_utils_gm107.c:1027
+[   34.655987] NVRM: nvAssertFailedNoLog: Assertion failed: !pMemDesc->_pInternalMapping @ mem_desc.c:1663
+[   34.656107] NVRM: nvAssertFailedNoLog: Assertion failed: !pMemDesc->_pInternalMapping @ mem_desc.c:1663
+[   34.657128] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ ce_utils.c:304
+[   34.657224] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from objCreate(&pMemoryManager->pCeUtils, pMemoryManager, CeUtils, ENG_GET_GPU(pMemoryManager), pKernelMIGGPUInstance, &ceUtilsParams) @ mem_mgr.c:4155
+[   34.657397] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from memmgrInitCeUtils(pMemoryManager, NV_FALSE, NV_TRUE) @ mem_mgr.c:526
+[   34.657503] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   34.663224] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00007; hParent=0x31415903; hObject=0x3141590f; hClass=0x00000070; paramsSize=0x00000018; paramsStatus=0x00000000; status=0x00000056
+[   34.877939] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00007; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000000; status=0x00000056
+[   35.005775] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   35.049992] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   35.050666] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00007; hObject=0x31415900; paramsStatus=0x00000000; status=0x00000056
+[   35.078395] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   35.078400] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   35.078402] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   35.078404] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   35.080892] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00007; hObject=0x3141590f; paramsStatus=0x00000000; status=0x00000056
+[   35.080899] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ mem.c:180
+[   35.093013] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000000; status=0x00000056
+[   35.096136] NVRM: RmRegisterGpudb: Failed to get UUID
+[   35.096792] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00008; hObject=0xcaf00002; paramsStatus=0x00000000; status=0x00000056
+[   35.096798] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_client.c:844
+[   35.096884] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:259
+[   35.097378] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:1375
+[   35.309226] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[   35.309484] NVRM: nvAssertFailedNoLog: Assertion failed: listCount(&pKernelBus->virtualBar2[gfid].usedMapList) == 0 @ kern_bus_vbar2.c:346
+[   36.175398] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+[   36.186561] NVRM: nvAssertFailedNoLog: Assertion failed: listCount(&pKernelBus->virtualBar2[gfid].usedMapList) == 0 @ kern_bus_vbar2.c:346
+[   36.186888] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x43:0x59:2239)
+[   36.189072] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0

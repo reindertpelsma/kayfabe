@@ -1,0 +1,67 @@
+Q3_START 2026-09-26T17:09:49+00:00 rev=47348e3b host=580.159.04
+CLIENT_RC=0
+KF3_BUILD_RC=0 KF3_BUILT /workspace/bench/kf3-bins/47348e3b/qemu-system-x86_64 rev=47348e3b mtime=2026-09-26 17:10:22.509317966 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+TESTS_RC=0 passed=1533 failed=0
+V3_GATES_SUMMARY pass=9 fail=0
+FG_DEFAULT_RC=0
+MATRIX_ROW host=580.159.04 guest=default rev=47348e3b FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+GUEST_WALK_START 2026-09-26T17:28:04+00:00 guest=580.105.08 host=580.159.04 rev=47348e3b
+thin guest: == GUEST DRIVER 580.105.08 from /workspace/drivers/580.105.08 (the host keeps its own)
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+MATRIX_ROW host=580.159.04 guest=580.105.08 rev=47348e3b thin=30/30 ladder=-
+GUEST_WALK_EXIT 2026-09-26T17:43:38+00:00
+RESELECT arm=--timer FAST_VERDICT=PASS | kf-rm: guest driver RE-SELECTED at fn 1: 580.159.04 (defaulted) -> 580.105.08 (the guest's own; pre-fn-1 surface identical)
+RESELECT arm=--engines FAST_VERDICT=PASS | kf-rm: guest driver RE-SELECTED at fn 1: 580.159.04 (defaulted) -> 580.105.08 (the guest's own; pre-fn-1 surface identical)
+RESELECT arm=--ce-client FAST_VERDICT=PASS | kf-rm: guest driver RE-SELECTED at fn 1: 580.159.04 (defaulted) -> 580.105.08 (the guest's own; pre-fn-1 surface identical)
+FAILPOINT guest=575.57.08 host=580.159.04 rev=47348e3b verdict=FAST_VERDICT=CRASH (budget 120s exceeded — a timeout IS a crash) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only]
+FAILPOINT guest=575.51.03 host=580.159.04 rev=47348e3b verdict=FAST_VERDICT=CRASH (budget 120s exceeded — a timeout IS a crash) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only]
+FAILPOINT guest=570.148.08 host=580.159.04 rev=47348e3b verdict=FAST_VERDICT=CRASH (budget 120s exceeded — a timeout IS a crash) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only]
+FAILPOINT guest=570.124.06 host=580.159.04 rev=47348e3b verdict=FAST_VERDICT=CRASH (budget 120s exceeded — a timeout IS a crash) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only]
+FAILPOINT guest=565.57.01 host=580.159.04 rev=47348e3b verdict=FAST_VERDICT=CRASH (budget 120s exceeded — a timeout IS a crash) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only]
+FAILPOINT guest=550.54.14 host=580.159.04 rev=47348e3b verdict=FAST_VERDICT=CRASH (budget 120s exceeded — a timeout IS a crash) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only]
+FAILPOINT guest=535.309.01 host=580.159.04 rev=47348e3b verdict=FAST_VERDICT=CRASH (the serial log is EMPTY — QEMU wrote nothing at all) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only]
+FAILPOINT guest=590.48.01 host=580.159.04 rev=47348e3b verdict=FAST_VERDICT=FAIL (raw client rc=1) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only]
+FAILPOINT guest=595.84 host=580.159.04 rev=47348e3b verdict=FAST_VERDICT=FAIL (raw client rc=1) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only]
+FAILPOINT guest=610.57.04 host=580.159.04 rev=47348e3b verdict=FAST_VERDICT=FAIL (raw client rc=1) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only]
+Q3_FAILPOINTS_EXIT 2026-09-26T18:06:04+00:00
+LADDER host=580.159.04 guest=default rev=47348e3b 4/4
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10440
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10483
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=5 trapped=10629
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=5 trapped=11167
+LADDER host=580.159.04 guest=580.105.08 rev=47348e3b 4/4
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10466
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10478
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=4 trapped=10575
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=4 trapped=11046
+thin guest: == GUEST DRIVER 580.65.06 from /workspace/drivers/580.65.06 (the host keeps its own)
+FAST_SUITE_PASS=28 FAST_SUITE_FAIL=2 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAST_CELL_ARM arm=concurrency verdict=FAIL secs=21 client_ms=5590
+FAST_CELL_ARM arm=uvm-mean verdict=FAIL secs=18 client_ms=2179
+MATRIX_ROW host=580.159.04 guest=580.65.06 rev=47348e3b thin=28/30 ladder=-
+GUEST_WALK_EXIT 2026-09-26T18:33:01+00:00
+GUEST_WALK_START 2026-09-26T18:33:03+00:00 guest=580.95.05 host=580.159.04 rev=47348e3b
+thin guest: == GUEST DRIVER 580.95.05 from /workspace/drivers/580.95.05 (the host keeps its own)
+FAST_SUITE_PASS=29 FAST_SUITE_FAIL=1 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAST_CELL_ARM arm=rpc-mixed-allocs verdict=FAIL secs=18 client_ms=2459
+MATRIX_ROW host=580.159.04 guest=580.95.05 rev=47348e3b thin=29/30 ladder=-
+GUEST_WALK_EXIT 2026-09-26T18:48:40+00:00
+GUEST_WALK_START 2026-09-26T18:48:43+00:00 guest=580.126.09 host=580.159.04 rev=47348e3b
+thin guest: == GUEST DRIVER 580.126.09 from /workspace/drivers/580.126.09 (the host keeps its own)
+FAST_SUITE_PASS=29 FAST_SUITE_FAIL=1 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAST_CELL_ARM arm=pce-mask-probe verdict=FAIL secs=17 client_ms=1920
+MATRIX_ROW host=580.159.04 guest=580.126.09 rev=47348e3b thin=29/30 ladder=-
+GUEST_WALK_EXIT 2026-09-26T19:04:14+00:00
+GUEST_WALK_START 2026-09-26T19:04:16+00:00 guest=580.173.02 host=580.159.04 rev=47348e3b
+thin guest: == GUEST DRIVER 580.173.02 from /workspace/drivers/580.173.02 (the host keeps its own)
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+MATRIX_ROW host=580.159.04 guest=580.173.02 rev=47348e3b thin=30/30 ladder=-
+GUEST_WALK_EXIT 2026-09-26T19:19:52+00:00
+FAST_SUITE_PASS=27 FAST_SUITE_FAIL=3 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAST_CELL_ARM arm=concurrency verdict=FAIL secs=17 client_ms=2070
+FAST_CELL_ARM arm=late-map-race verdict=FAIL secs=26 client_ms=9650
+FAST_CELL_ARM arm=executor-vas verdict=FAIL secs=26 client_ms=9799
+MATRIX_ROW host=580.159.04 guest=580.178.04 rev=47348e3b thin=27/30 ladder=-
+GUEST_WALK_EXIT 2026-09-26T19:35:34+00:00
+INITFLAKE boots=213 adapter_failures=6: fast_r47348e3b_g58012609_pce-mask-probe_ttyS0.log fast_r47348e3b_g58017804_concurrency_ttyS0.log fast_r47348e3b_g58017804_executor-vas_ttyS0.log fast_r47348e3b_g58017804_late-map-race_ttyS0.log fast_r47348e3b_g5806506_concurrency_ttyS0.log fast_r47348e3b_g5806506_uvm-mean_ttyS0.log 
+Q3_EXIT 2026-09-26T19:35:34+00:00

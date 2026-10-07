@@ -1,0 +1,10 @@
+START 2026-10-03T21:16:24+00:00 rev=1d71f3db
+KF3_RC=0 KF3_BUILT /workspace/bench/kf3-bins/1d71f3db/qemu-system-x86_64 rev=1d71f3db mtime=2026-10-03 21:17:04.005707746 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+CENSUS_RC=0
+FAST_VERDICT=PASS (21s)
+CHANOBS_SUMMARY config=walker libcuda_channels=16 libcuda_user=16 libcuda_admin=0 libcuda_unmeasured=0 kfhost_channels=2 kfhost_user=2 kfhost_admin=0 kfhost_unmeasured=0
+FAST_VERDICT=PASS (21s)
+CHANOBS_SUMMARY config=display libcuda_channels=32 libcuda_user=32 libcuda_admin=0 libcuda_unmeasured=0 kfhost_channels=2 kfhost_user=2 kfhost_admin=0 kfhost_unmeasured=0
+FAST_VERDICT=FAIL (raw client rc=1)
+CHANOBS_SUMMARY config=negctl libcuda_channels=16 libcuda_user=16 libcuda_admin=0 libcuda_unmeasured=0 kfhost_channels=1 kfhost_user=0 kfhost_admin=1 kfhost_unmeasured=0
+EXIT rc=0 2026-10-03T21:18:23+00:00

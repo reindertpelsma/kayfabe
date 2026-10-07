@@ -1,0 +1,95 @@
+### R22 BUS_GET_INFO_V2 sweep, run 1 (IDLE), 2026-08-08T20:50:58Z
+### box: ubuntu, driver NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+### repo rev: 4e79a140f35eb2741bd620bba2bf129db5abb551
+--- host link state BEFORE ---
+current_link_speed   2.5 GT/s PCIe
+max_link_speed       8.0 GT/s PCIe
+current_link_width   16
+max_link_width       16
+uuid, pcie.link.gen.current, pcie.link.gen.max, pcie.link.gen.gpucurrent, pcie.link.gen.gpumax, pcie.link.width.current
+GPU-d0913685-1ec0-805a-e319-43a901a0e1ff, 1, 3, 1, 4, 16
+--- rmladder ---
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00174
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=4e79a140f35eb2741bd620bba2bf129db5abb551
+info  R22 businfo sweep   = 52 indices x 1 call each, 420-byte params, tail seeded 0xCD
+info  R22 legend          = idx status data   (the port serves 0x2d ONLY)
+★     R22 0x00  NV_OK      data=0x00000003 (3)  echo=0x00000000  tail=untouched
+★     R22 0x01  NV_OK      data=0x0000006b (107)  echo=0x00000001  tail=untouched
+★     R22 0x02  NV_OK      data=0x00000000 (0)  echo=0x00000002  tail=untouched
+★     R22 0x03  NV_OK      data=0x00453d03 (4537603)  echo=0x00000003  tail=untouched
+★     R22 0x04  NV_OK      data=0x00000000 (0)  echo=0x00000004  tail=untouched
+★     R22 0x05  NV_OK      data=0x00453d03 (4537603)  echo=0x00000005  tail=untouched
+★     R22 0x06  NV_OK      data=0x00000000 (0)  echo=0x00000006  tail=untouched
+★     R22 0x07  NV_OK      data=0x11010140 (285278528)  echo=0x00000007  tail=untouched
+★     R22 0x08  NV_OK      data=0x00000000 (0)  echo=0x00000008  tail=untouched
+★     R22 0x09  NV_OK      data=0x11010140 (285278528)  echo=0x00000009  tail=untouched
+★     R22 0x0a  NV_OK      data=0x00000000 (0)  echo=0x0000000a  tail=untouched
+★     R22 0x0b  NV_OK      data=0x00000005 (5)  echo=0x0000000b  tail=untouched
+★     R22 0x0c  NV_OK      data=0x00000005 (5)  echo=0x0000000c  tail=untouched
+★     R22 0x0d  NV_OK      data=0x20000000 (536870912)  echo=0x0000000d  tail=untouched
+★     R22 0x0e  NV_OK      data=0x00000002 (2)  echo=0x0000000e  tail=untouched
+★     R22 0x0f  NV_OK      data=0x00000000 (0)  echo=0x0000000f  tail=untouched
+★     R22 0x10  NV_OK      data=0x00000007 (7)  echo=0x00000010  tail=untouched
+★     R22 0x11  NV_OK      data=0x00000001 (1)  echo=0x00000011  tail=untouched
+★     R22 0x12  NV_OK      data=0x00000000 (0)  echo=0x00000012  tail=untouched
+★     R22 0x13  NV_OK      data=0x00000003 (3)  echo=0x00000013  tail=untouched
+★     R22 0x14  NV_OK      data=0x00302000 (3153920)  echo=0x00000014  tail=untouched
+★     R22 0x15  NV_OK      data=0x00170000 (1507328)  echo=0x00000015  tail=untouched
+★     R22 0x16  NV_OK      data=0x00453d03 (4537603)  echo=0x00000016  tail=untouched
+★     R22 0x17  NV_OK      data=0x11010140 (285278528)  echo=0x00000017  tail=untouched
+★     R22 0x18  NV_OK      data=0x00000009 (9)  echo=0x00000018  tail=untouched
+★     R22 0x19  NV_OK      data=0x00000000 (0)  echo=0x00000019  tail=untouched
+★     R22 0x1a  NV_OK      data=0x00000000 (0)  echo=0x0000001a  tail=untouched
+★     R22 0x1b  NV_OK      data=0x00000001 (1)  echo=0x0000001b  tail=untouched
+★     R22 0x1c  NV_OK      data=0x00000e8c (3724)  echo=0x0000001c  tail=untouched
+★     R22 0x1d  NV_OK      data=0x0000003b (59)  echo=0x0000001d  tail=untouched
+★     R22 0x1e  NV_OK      data=0x0000000c (12)  echo=0x0000001e  tail=untouched
+★     R22 0x1f  NV_OK      data=0x00000000 (0)  echo=0x0000001f  tail=untouched
+★     R22 0x20  NV_OK      data=0x00000000 (0)  echo=0x00000020  tail=untouched
+★     R22 0x21  NV_OK      data=0x00000000 (0)  echo=0x00000021  tail=untouched
+★     R22 0x22  NV_OK      data=0x00000000 (0)  echo=0x00000022  tail=untouched
+★     R22 0x23  NV_OK      data=0x00000000 (0)  echo=0x00000023  tail=untouched
+★     R22 0x24  NV_OK      data=0x0000ffff (65535)  echo=0x00000024  tail=untouched
+★     R22 0x25  NV_OK      data=0x00000000 (0)  echo=0x00000025  tail=untouched
+★     R22 0x26  NV_OK      data=0x00000000 (0)  echo=0x00000026  tail=untouched
+★     R22 0x27  NV_OK      data=0x00000000 (0)  echo=0x00000027  tail=untouched
+★     R22 0x28  NV_OK      data=0x00000000 (0)  echo=0x00000028  tail=untouched
+★     R22 0x29  NV_OK      data=0x00000000 (0)  echo=0x00000029  tail=untouched
+★     R22 0x2a  NV_OK      data=0x00000000 (0)  echo=0x0000002a  tail=untouched
+★     R22 0x2b  NV_OK      data=0x00000000 (0)  echo=0x0000002b  tail=untouched
+★     R22 0x2c  NV_OK      data=0x00000000 (0)  echo=0x0000002c  tail=untouched
+★     R22 0x2d  NV_OK      data=0x00302000 (3153920)  echo=0x0000002d  tail=untouched
+★     R22 0x2e  NV_OK      data=0x00000003 (3)  echo=0x0000002e  tail=untouched
+★     R22 0x2f  NV_OK      data=0x00302000 (3153920)  echo=0x0000002f  tail=untouched
+★     R22 0x30  NV_OK      data=0x00302000 (3153920)  echo=0x00000030  tail=untouched
+★     R22 0x31  NV_OK      data=0x00000001 (1)  echo=0x00000031  tail=untouched
+★     R22 0x32  NV_OK      data=0x00000000 (0)  echo=0x00000032  tail=untouched
+★     R22 0x33  NV_OK      data=0x00000000 (0)  echo=0x00000033  tail=untouched
+★     R22 libcuda:44     = NV_OK  0x00=0x00000003 0x02=0x00000000 0x0b=0x00000005 
+★     R22 libcuda:46     = NV_OK  0x0f=0x00000000 0x10=0x00000007 0x2c=0x00000000 0x2d=0x00302000 0x03=0x00453d03 0x06=0x00000000 
+info  R22 0x2d x16        = is PCIE_GEN_INFO a constant? (H1) or link state? (H2)
+★     R22 0x2d #0       = 0x00302000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen1 GPU_GEN=gen4 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #1       = 0x00302000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen1 GPU_GEN=gen4 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #2       = 0x00302000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen1 GPU_GEN=gen4 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #3       = 0x00302000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen1 GPU_GEN=gen4 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #4       = 0x00302000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen1 GPU_GEN=gen4 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #5       = 0x00302000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen1 GPU_GEN=gen4 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #6       = 0x00302000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen1 GPU_GEN=gen4 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #7       = 0x00302000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen1 GPU_GEN=gen4 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #8       = 0x00302000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen1 GPU_GEN=gen4 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #9       = 0x00302000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen1 GPU_GEN=gen4 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #10      = 0x00302000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen1 GPU_GEN=gen4 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #11      = 0x00302000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen1 GPU_GEN=gen4 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #12      = 0x00302000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen1 GPU_GEN=gen4 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #13      = 0x00302000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen1 GPU_GEN=gen4 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #14      = 0x00302000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen1 GPU_GEN=gen4 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #15      = 0x00302000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen1 GPU_GEN=gen4 SPEED_CHANGES=0 hi31_25=0x0
+info  R22 0x2d distinct   = 1 value(s): 0x00302000 
+done — bus-info sweep only
+LADDER_RC=0
+--- host link state AFTER ---
+current_link_speed   2.5 GT/s PCIe
+max_link_speed       8.0 GT/s PCIe
+1

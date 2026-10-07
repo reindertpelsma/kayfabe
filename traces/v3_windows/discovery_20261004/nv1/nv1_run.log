@@ -1,0 +1,8 @@
+[2026-10-04T00:51:34Z] REFUSED: kfwin is in use by another win_vm.sh
+[2026-10-04T01:02:08Z] OVERLAY_CREATED disk/nv1.qcow2 over base.qcow2
+[2026-10-04T01:02:08Z] waiting for the GPU lock /tmp/kayfabe-fastguest.lock (GPU work is strictly serial)
+[2026-10-04T01:02:11Z] WINVM_RUN_START tag=nv1 repo_rev=b98bdbec kf3=on qemu=/workspace/bench/kf3-bins/b98bdbec/qemu-system-x86_64 host_driver=580.159.04 overlay=nv1 arm=A guest_driver=580.65.06 gop_efi=/workspace/winvm/secureboot/kf-gop.b98bdbec.signed.efi sha256(gop_efi)=f754ab7400d658a1
+[2026-10-04T01:02:11Z] kf3 device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/winvm/secureboot/kf-gop.b98bdbec.signed.efi,id=kf0,guest-driver=580.65.06
+[2026-10-04T01:02:13Z] QEMU_START tag=nv1 boot=1 pid=136284 log=logs/nv1_b1_qemu.log
+[2026-10-04T01:53:12Z] WINVM_BOOT_END boot=1 rc=0 reason=guest-shutdown kf3_lines=2067 host_xid=0
+[2026-10-04T01:53:12Z] WINVM_RUN_END tag=nv1 boots=1 reason=guest-shutdown

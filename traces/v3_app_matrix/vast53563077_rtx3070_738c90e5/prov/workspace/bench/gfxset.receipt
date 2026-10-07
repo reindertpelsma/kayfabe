@@ -1,0 +1,7 @@
+GSET_PROVISIONED=yes
+date=2026-09-30T18:46:39+00:00
+image=/workspace/bench/guest.qcow2
+build_failures=0
+kernel_before=6.8.0-142-generic
+kernel_after=6.8.0-142-generic
+provisioner_rev=738c90e5

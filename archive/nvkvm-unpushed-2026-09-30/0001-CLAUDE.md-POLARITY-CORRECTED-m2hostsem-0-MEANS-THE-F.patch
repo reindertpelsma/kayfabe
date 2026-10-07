@@ -1,0 +1,80 @@
+From dd37778b1cd249d60c90000af083bafbeaabdb9f Mon Sep 17 00:00:00 2001
+From: reindertpelsma <reindert.pelsma@gmail.com>
+Date: Fri, 14 Aug 2026 21:05:49 +0200
+Subject: [PATCH] =?UTF-8?q?=E2=8A=98=E2=8A=98=E2=8A=98=20CLAUDE.md:=20POLA?=
+ =?UTF-8?q?RITY=20CORRECTED=20=E2=80=94=20m2hostsem=3D0=20MEANS=20THE=20FO?=
+ =?UTF-8?q?RGE=20IS=20*ON*,=20and=20this=20file=20had=20it=20backwards=20f?=
+ =?UTF-8?q?or=20the=20whole=20campaign?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Verified against this repo's own source:
+  bool hostonly = s->m2exec && s->m2hostsem && nvkvm_m2_is_user_ce(s, s->chan_client);
+  (src/qemu/nvkvm_gpu_emul.c:5555)
+⇒ m2hostsem gates HOST OWNERSHIP of the semaphore, NOT the forge. m2hostsem=0 ⇒
+hostonly == false ⇒ THE CPU FORGE RUNS.
+⊘ And nvkvm_m2_is_user_ce can NEVER be a GR client (:7855 guards it explicitly), so
+on the COMPUTE plane hostonly is false AT EVERY FLAG SETTING and the software
+completion write at :5726 is UNCONDITIONAL.
+
+★ SCOPE THE CORRECTION — it is narrower than it looks. This does NOT refute that the
+host GR engine EXECUTED the guest's pushbuffer. It refutes the INFERENCE that the C's
+guest therefore WAITED ON HARDWARE for its completion: it read a value the CPU had
+already written.
+⇒ The C remains an oracle for GR ENGINE EXECUTION and is NOT an oracle for the
+COMPLETION PATH.
+
+⚠ Same class as the miscitation this file already records: A FLAG'S NAME READ AS ITS
+PREDICATE. Read the definition site, not the name.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01YW25X2fg3Pr2vEgZkWh46K
+---
+ CLAUDE.md | 30 ++++++++++++++++++++++++++----
+ 1 file changed, 26 insertions(+), 4 deletions(-)
+
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 08a3213..dae5bad 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -47,10 +47,32 @@ no amount of Rust-side testing can.
+ > **`m2fwd=1  m2exec=1  m2hostsem=0  m2cefwd=0  m2cexec=0`**
+ > ⇒ ⊘ **`m2cefwd=0`.** The claim below that it is *"the flag on every green run"* is **contradicted
+ > by the trace's own header.**
+-> ⇒ ★ **`m2exec=1`** — the execution plane was **ON**, and **`m2hostsem=0`** — the host-semaphore
+-> forge was **OFF**. The C's `SET_REPORT_SEMAPHORE` CPU-forge exists (`:6544-6573`) and **wrote
+-> nothing to the completion page in the green runs**. **The real host GR engine executed the
+-> guest's ctx-init pushbuffer and wrote `0x2_0440fff0` itself.**
++> ⇒ ★ **`m2exec=1`** — the execution plane was **ON**.
++>
++> > ### ⊘⊘⊘ POLARITY CORRECTED 2026-08-14 (w316) — **`m2hostsem=0` MEANS THE FORGE IS *ON*, NOT
++> > ### OFF, AND THIS FILE HAD IT BACKWARDS FOR THE WHOLE CAMPAIGN.**
++> > Verified against this repo's own source:
++> > `bool hostonly = s->m2exec && s->m2hostsem && nvkvm_m2_is_user_ce(s, s->chan_client);`
++> > (`src/qemu/nvkvm_gpu_emul.c:5555`). ⇒ **`m2hostsem` gates HOST OWNERSHIP of the semaphore, not
++> > the forge.** `m2hostsem=0` ⇒ `hostonly == false` ⇒ **the CPU forge runs.**
++> > ⊘ And `nvkvm_m2_is_user_ce` **can never be a GR client** — `:7855` guards it explicitly — so on
++> > the **compute plane** `hostonly` is false **at every flag setting**, and the software completion
++> > write at `:5726` is **UNCONDITIONAL**. The C measured its own consequence and said so:
++> > `event≈0ms`, *"H2 REFUTED — the sema is written in software during the doorbell trap."*
++> >
++> > ★ **SCOPE THE CORRECTION, because it is narrower than it looks.** This does **NOT** refute
++> > w275's finding that the **host GR engine executed** the guest's pushbuffer — that stands. What
++> > it refutes is the **inference** that the C's guest therefore **WAITED ON HARDWARE** for its
++> > completion. It did not: it read a value the CPU had already written.
++> > ⇒ **The C remains an oracle for GR ENGINE EXECUTION and is NOT an oracle for the COMPLETION
++> > PATH** — which is exactly the distinction the block below was written to draw, applied one
++> > level deeper than it was drawn.
++> > ⚠ **Same class as the citation error this file already records above:** a flag's *name*
++> > (`hostsem`) read as its *predicate*. `m2cefwd`/`m2cexec` were confused for a day here on
++> > identical grounds. **Read the definition site, not the name.**
++>
++> The C's `SET_REPORT_SEMAPHORE` CPU-forge exists (`:6544-6573`), and per the correction above it
++> **is the writer on the compute plane**, not a dormant path.
+ > ⇒ ★★★ **So the C IS an oracle for GR engine execution** — precisely what the block below says it
+ > is *"no oracle at all"* for. The `:4228` forge is real but is scoped to the **kernel CeUtils
+ > scrubber channels** and explicitly excludes user GR/CE channels.
+-- 
+2.53.0
+

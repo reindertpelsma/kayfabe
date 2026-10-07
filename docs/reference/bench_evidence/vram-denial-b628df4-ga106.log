@@ -1,0 +1,33 @@
+### gpu: NVIDIA GeForce RTX 3060, 580.159.04, 12288 MiB
+### 2026-08-02T00:16:46Z
+
+=== A. BASELINE — victim on an empty GPU
+[victim] ctx-create t=1.88
+[victim] ctx-ok t=2.07
+[victim] OK bad=0 kernel_ms=0.0 total_s=2.07
+   rc=0
+   free: 0 MiB, 11910 MiB
+
+=== B. the hog takes everything it can
+[hog] ctx-create t=1.84
+[hog] ctx-ok t=2.02
+[hog] took 11776 MiB in 46 chunks, holding 45 s t=2.03
+   gpu now: 11890 MiB, 20 MiB
+
+=== C. ★ can a second tenant get on the device at all?
+[victim] ctx-create t=0.03
+FAIL cuCtxCreate rc=2 (CUDA_ERROR_OUT_OF_MEMORY) t=0.28
+   rc=20 wall=.297062676s <== DENIED, but with a NAMED error (see above)
+[victim] ctx-create t=0.02
+FAIL cuCtxCreate rc=2 (CUDA_ERROR_OUT_OF_MEMORY) t=0.27
+   rc=20 wall=.285168796s <== DENIED, but with a NAMED error (see above)
+
+=== D. AFTERMATH — hog releases
+   gpu: 0 MiB, 11910 MiB
+   victim again:
+[victim] ctx-create t=1.81
+[victim] ctx-ok t=2.00
+[victim] OK bad=0 kernel_ms=0.0 total_s=2.00
+   rc=0
+   Xid total: 3
+### done 2026-08-02T00:17:48Z

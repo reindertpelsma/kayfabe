@@ -1,0 +1,18 @@
+[2026-10-03T23:45:57+00:00] guest up, kernel 6.8.0-142-generic — phase all
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+PROBE_BUILD_OK
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+WARNING: Unable to determine the path to install the libglvnd EGL vendor library config files. Check that you have pkg-config and the libglvnd development libraries installed, or specify a path with --glvnd-egl-config-path.
+
+NVRUN_X_RC=0
+DISPLAY_LANE_PROVISIONED=yes
+phase=all
+date=2026-10-03T23:51:18+00:00
+control=/usr/bin/modetest /usr/bin/kmscube /usr/bin/weston /usr/bin/Xorg /usr/sbin/lightdm /usr/bin/cinnamon-session /usr/bin/xdotool /usr/bin/import /usr/bin/mpv /usr/bin/glxinfo /usr/bin/vkcube PROBE=yes
+/usr/lib/xorg/modules/drivers/nvidia_drv.so /usr/share/X11/xorg.conf.d/nvidia-drm-outputclass.conf 
+kernel_before=6.8.0-142-generic
+kernel_after=6.8.0-142-generic
+provisioner_rev=8a682f1b
+[2026-10-03T23:52:18+00:00] GUEST_DISPLAY_DONE rc=0

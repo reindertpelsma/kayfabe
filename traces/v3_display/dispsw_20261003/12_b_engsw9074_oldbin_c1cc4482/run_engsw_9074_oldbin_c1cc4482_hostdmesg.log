@@ -1,0 +1,27 @@
+[ 9477.008380] NVRM: GPU at PCI:0000:00:08: GPU-e36737d2-9080-9fc2-b9d4-a959768aade6
+[ 9477.008399] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9477.592447] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9478.079964] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9478.555619] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9479.017685] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9479.490379] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9479.958881] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9480.428834] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9480.898724] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9481.364990] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9481.836221] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9482.332686] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9482.807557] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9483.262460] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9483.730622] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9484.207450] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9484.703664] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9485.199041] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9485.670815] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9486.147052] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9486.622300] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9487.091282] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9487.596130] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9488.094512] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x0000002c intr 00800000
+[ 9490.557667] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x00000032 intr 00800000
+[ 9490.558952] NVRM: Xid (PCI:0000:00:08): 32, pid=120112, name=qemu-system-x86, channel 0x00000032 intr 00800000

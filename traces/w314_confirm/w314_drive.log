@@ -1,0 +1,208 @@
+=== W314 DRIVE START 2026-08-14T15:12:36+00:00 pid=3016572 host=ubuntu
+=== HEAD=28882ec27e25ded008ea7991396be3c982f45ccc
+=== dirty=[]
+=== no stale qemu
+=== TWO-WORKLOAD INERT GATE (boots BOTH arms) 2026-08-14T15:12:40+00:00
+=== w313 INERT GATE — ablation = []  tag=w314  repo=/workspace/kayfabe_w314 2026-08-14T15:12:40+00:00
+--- arm 1/2: GR/COMPUTE (cup3)
+--- arm 2/2: RAW CE (R33 arm 1, via the w309 crit1 harness, arm=fresh)
+--- grading BOTH:
+=== ★★★★★ TWO-WORKLOAD INERTNESS GATE (w313) — BOTH PLANES OR NO VERDICT
+    workload 1  GR/COMPUTE  cup3 (libcuda, a real GR launch)   log=[/workspace/bench/run_w314cup3_probe.log] 13590 bytes
+                known-positive '^CUP3_VAL=43'  => [RAN-BUT-ABSENT]
+    workload 2  RAW CE      R33 arm 1 (no libcuda, own VAS)    log=[/workspace/bench/run_w314r33_probe.log] 24377 bytes
+                known-positive '★     R33 arm 1 COPY'  => [FIRED]
+    ⊘ FIRED = the known-positive is present · RAN-BUT-ABSENT = the workload reached its
+      own terminator and did NOT fire (a finding about the RELAXATION) · UNTERMINATED =
+      the log stops early, empty or truncated (a finding about the HARNESS) · NOLOG.
+W313 INERT-GATE VERDICT = NOT-INERT
+    ⇒ the GR/COMPUTE plane broke: cup3 ran and did not return 43.
+    ⊘ This is exactly w304's blind spot when only ONE of these two is asked: the
+      other plane passed, and a one-workload gate reported that as inert.
+=== GATE RC=1 2026-08-14T15:17:07+00:00
+
+=== W314 GRADE arm 1 (cup3, GR/COMPUTE)
+================================================================================
+=== ★★★★★ w314 — CONFIRMING w310's PIN RELEASE. Criteria A–G, as w310 wrote them.
+===     tag=w314cup3   2026-08-14T15:17:07+00:00
+================================================================================
+    inputs, with sizes — ⊘ a truncated artefact reads as PRESENT and looks healthier
+    than an empty one, so the size is part of the evidence:
+      qemu     = /workspace/bench/run_w314cup3_qemu.log  [494698 bytes]
+      probe    = /workspace/bench/run_w314cup3_probe.log  [13590 bytes]
+      hostdmsg = /workspace/bench/run_w314cup3_hostdmesg.log  [228 bytes]   (a per-boot DELTA: 0 bytes is the normal green)
+      guestdmg = /workspace/bench/run_w314cup3_dmesg.log  [5379 bytes]
+      serial   = /workspace/bench/run_w314cup3_serial.log  [70654 bytes]
+
+=== (A) ^CUP3_VAL=43 — first compute must survive the release
+    ^ANCHORED CUP3_VAL = [⊘ NO LINE BEGINS WITH CUP3_VAL= — UNMEASURED, ⊘ NOT 0]
+    ^ANCHORED CUP3_RC  = [CUP3_RC=1]
+    UNANCHORED, for contrast = [CUP3_VAL= ]
+    (A) ⊘ UNMEASURED — the value line never printed. ⊘ NOT a failure value, NOT 0.
+
+=== (B) scripts/bench/regression_check_e.sh — Xid=0, drain ran and pinned (a FLOOR),
+===     MUST-be-0 invariants. ⊘ host_rows printed, NEVER graded.
+=== (E) ADDRESS-PLANE REGRESSION CHECK  [w304 rewrite]
+    (E1) Xid = 1                          ✘ REGRESSION
+           [516296.923776] NVRM: Xid (PCI:0000:00:07): 31, pid=3018050, name=memfd:kayfabe-i, channel 0x02000015, intr 00000000. MMU Fault: ENGINE CE3 HUBCLIENT_CE1 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+    (E2) drain ran: ★DRAINED rows=16  Σpinned=13313  max_single=11810   ✔ PASS
+    (E3) pass invariants: NOT ARMABLE=0  host_isolates=NO=0  sum_ok=false=0   ✔ PASS
+    --- host_rows: ⊘ REPORTED, NEVER GRADED. w298/ptsweep returned ^CUP3_VAL=43 with
+        ZERO HOST-PUBLISHED lines, so any host_rows assertion fails on a correct result.
+        HOST-PUBLISHED lines = 17   (0 means the line never printed — unmeasured, not zero)
+        host_rows=0 of 0
+        host_rows=0 of 21
+        host_rows=0 of 6254
+        host_rows=1 of 13348
+        host_rows=11839 of 13348
+        host_rows=13342 of 13348
+=== (E) VERDICT = 1 (0 pass · 1 REGRESSION · 2 unmeasured)
+    (B) exit=1 ✘ REGRESSION
+
+=== (C) ★ kayfabe: PIN-RELEASE released=N with N > 0 — THE NON-VACUITY.
+===     ⊘ ABSENT ≠ ZERO. w310's own text: the line prints only on CHANGE, from
+===     Spine::pin_reclaim_gone, so a boot whose CUDA proc never exits legitimately
+===     never prints it — UNMEASURED for this rung, not a pass and not a zero.
+    PIN-RELEASE lines = [1]
+      kayfabe: PIN-RELEASE released=13313 refused_no_host_vas=0 rows_deduped=13313 ⇒ that many guest-RAM `OS_DESCRIPTOR`s freed, GPU VAs unmapped and isolate `mmap` windows `munmap`ed at VAS dea
+      th, instead of held until QEMU exits
+    (C) ✔ PASS — max released=13313  (graded as a FLOOR, never as a number)
+
+=== (D) guest dmesg: non-empty, contains NVRM, and carries NO soft lockup / NO RCU stall.
+===     ★ This is the clause-(b) INSTRUMENT for w303's unbounded BQL disposal (§5).
+    guest dmesg bytes = 5379   NVRM lines = 31   stall-signature lines = 0
+    (D) ✔ PASS — no soft lockup, no RCU stall, driver output present.
+        ⚠ SCOPED: 'bounded IN PRACTICE on this workload', NOT 'bounded'.
+
+=== (E) refused_no_host_vas=0 on the same line — a non-zero contradicts
+===     commit_pin_guest_ram's own invariant and is a finding in its own right.
+    every distinct reading = [refused_no_host_vas=0 ]
+    (E) ✔ PASS — max refused_no_host_vas=0
+
+=== (F) NO NEW Xid CLASSES vs the previous green boot. ⊘ CLASSES, not counts —
+===     a_count_cannot_see_a_substitution: a count cannot see a substitution.
+===     Baseline: traces/w297_cup3/run_w297cup3_dmesg.log carries ZERO Xid, and w313's
+===     green boots the same. The baseline class set is therefore EMPTY.
+      run_w314cup3_hostdmesg.log: Xid lines = 1
+                1 ACCESS_TYPE_VIRT_WRITE
+                1 ENGINE CE3
+                1 FAULT_PDE
+                1 HUBCLIENT_CE1
+                1 Xid (PCI:0000:00:07): 31
+      run_w314cup3_dmesg.log: Xid lines = 0
+    (F) ✘ FAIL — Xid classes present that the baseline does not carry (baseline = {}).
+
+=== (G) REAP and PIN-RELEASE both present, or both absent — they are driven from the
+===     same edge and the same teardown. One without the other = half-wired.
+    REAP lines = [2]   PIN-RELEASE lines = [1]
+      kayfabe: REAP reaped=1 still_retired=0 ⇒ each reaped proc's staged host `Release` verbs went out and its isolate child was reaped
+      kayfabe: REAP reaped=1 still_retired=0 ⇒ each reaped proc's staged host `Release` verbs went out and its isolate child was reaped
+    (G) ✔ PASS — both present.
+
+=== ★★★ THE DISPOSAL TIMING — w303's armed reap put an UNBOUNDED disposal inside
+===     Regs::write, under the QEMU BQL. §5 of the design derives ~3 s by ARITHMETIC
+===     (host_rows 12818 × ~240 us) against scrubberDestruct's 4 000 000 us. This is
+===     the MEASUREMENT. ⊘ It is NOT graded — it is the number the next rung needs.
+    REAP-TIMING lines = [2]
+      kayfabe: REAP-TIMING max_reap_us=54 reaped=0
+      kayfabe: REAP-TIMING max_reap_us=2217468 reaped=1
+    ★ LONGEST BLOCKING DISPOSAL = 2217468 us
+      = 2217.468 ms = 55.4% of the 4 000 ms scrubberDestruct budget
+
+=== ★★★★★ w314 VERDICT = 1   (0 ALL PASS · 1 FAILED · 2 UNMEASURED)
+    ⊘ 2 IS NOT A PASS.
+=== A-G VERDICT cup3 = 1
+
+=== W314 GRADE arm 2 (R33 arm 1, RAW CE)
+================================================================================
+=== ★★★★★ w314 — CONFIRMING w310's PIN RELEASE. Criteria A–G, as w310 wrote them.
+===     tag=w314r33   2026-08-14T15:17:07+00:00
+================================================================================
+    inputs, with sizes — ⊘ a truncated artefact reads as PRESENT and looks healthier
+    than an empty one, so the size is part of the evidence:
+      qemu     = /workspace/bench/run_w314r33_qemu.log  [91130 bytes]
+      probe    = /workspace/bench/run_w314r33_probe.log  [24377 bytes]
+      hostdmsg = /workspace/bench/run_w314r33_hostdmesg.log  [227 bytes]   (a per-boot DELTA: 0 bytes is the normal green)
+      guestdmg = /workspace/bench/run_w314r33_dmesg.log  [5379 bytes]
+      serial   = /workspace/bench/run_w314r33_serial.log  [71601 bytes]
+
+=== (A) ^CUP3_VAL=43 — first compute must survive the release
+    ^ANCHORED CUP3_VAL = [⊘ NO LINE BEGINS WITH CUP3_VAL= — UNMEASURED, ⊘ NOT 0]
+    ^ANCHORED CUP3_RC  = [⊘ NO TERMINATOR]
+    UNANCHORED, for contrast = []
+    (A) ⊘ UNMEASURED — the value line never printed. ⊘ NOT a failure value, NOT 0.
+
+=== (B) scripts/bench/regression_check_e.sh — Xid=0, drain ran and pinned (a FLOOR),
+===     MUST-be-0 invariants. ⊘ host_rows printed, NEVER graded.
+=== (E) ADDRESS-PLANE REGRESSION CHECK  [w304 rewrite]
+    (E1) Xid = 1                          ✘ REGRESSION
+           [516424.272258] NVRM: Xid (PCI:0000:00:07): 31, pid=3020120, name=memfd:kayfabe-i, channel 0x00000007, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x7_00100000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    (E2) drain DID NOT RUN OR PINNED NOTHING: ★DRAINED rows=2  Σpinned=0   ✘ REGRESSION
+         ⊘ the whole-VAS publication is the half that carries the address plane (w298 arm 13).
+    (E3) pass invariants: NOT ARMABLE=0  host_isolates=NO=0  sum_ok=false=0   ✔ PASS
+    --- host_rows: ⊘ REPORTED, NEVER GRADED. w298/ptsweep returned ^CUP3_VAL=43 with
+        ZERO HOST-PUBLISHED lines, so any host_rows assertion fails on a correct result.
+        HOST-PUBLISHED lines = 3   (0 means the line never printed — unmeasured, not zero)
+        host_rows=0 of 0
+        host_rows=0 of 2
+        host_rows=0 of 6254
+        host_rows=1 of 3
+        host_rows=3 of 3
+=== (E) VERDICT = 1 (0 pass · 1 REGRESSION · 2 unmeasured)
+    (B) exit=1 ✘ REGRESSION
+
+=== (C) ★ kayfabe: PIN-RELEASE released=N with N > 0 — THE NON-VACUITY.
+===     ⊘ ABSENT ≠ ZERO. w310's own text: the line prints only on CHANGE, from
+===     Spine::pin_reclaim_gone, so a boot whose CUDA proc never exits legitimately
+===     never prints it — UNMEASURED for this rung, not a pass and not a zero.
+    PIN-RELEASE lines = [0]
+    (C) ⊘ UNMEASURED — the line is ABSENT. The release did not reach production on
+        this boot; report it as the finding (pre-registration B), never as released=0.
+
+=== (D) guest dmesg: non-empty, contains NVRM, and carries NO soft lockup / NO RCU stall.
+===     ★ This is the clause-(b) INSTRUMENT for w303's unbounded BQL disposal (§5).
+    guest dmesg bytes = 5379   NVRM lines = 31   stall-signature lines = 0
+    (D) ✔ PASS — no soft lockup, no RCU stall, driver output present.
+        ⚠ SCOPED: 'bounded IN PRACTICE on this workload', NOT 'bounded'.
+
+=== (E) refused_no_host_vas=0 on the same line — a non-zero contradicts
+===     commit_pin_guest_ram's own invariant and is a finding in its own right.
+    (E) ⊘ UNMEASURED — no PIN-RELEASE line to read it from.
+
+=== (F) NO NEW Xid CLASSES vs the previous green boot. ⊘ CLASSES, not counts —
+===     a_count_cannot_see_a_substitution: a count cannot see a substitution.
+===     Baseline: traces/w297_cup3/run_w297cup3_dmesg.log carries ZERO Xid, and w313's
+===     green boots the same. The baseline class set is therefore EMPTY.
+      run_w314r33_hostdmesg.log: Xid lines = 1
+                1 ACCESS_TYPE_VIRT_READ
+                1 ENGINE CE0
+                1 FAULT_PTE
+                1 HUBCLIENT_CE1
+                1 Xid (PCI:0000:00:07): 31
+      run_w314r33_dmesg.log: Xid lines = 0
+    (F) ✘ FAIL — Xid classes present that the baseline does not carry (baseline = {}).
+
+=== (G) REAP and PIN-RELEASE both present, or both absent — they are driven from the
+===     same edge and the same teardown. One without the other = half-wired.
+    REAP lines = [2]   PIN-RELEASE lines = [0]
+      kayfabe: REAP reaped=1 still_retired=0 ⇒ each reaped proc's staged host `Release` verbs went out and its isolate child was reaped
+      kayfabe: REAP reaped=1 still_retired=0 ⇒ each reaped proc's staged host `Release` verbs went out and its isolate child was reaped
+    (G) ✘ FAIL — one without the other: the mechanism is half-wired.
+
+=== ★★★ THE DISPOSAL TIMING — w303's armed reap put an UNBOUNDED disposal inside
+===     Regs::write, under the QEMU BQL. §5 of the design derives ~3 s by ARITHMETIC
+===     (host_rows 12818 × ~240 us) against scrubberDestruct's 4 000 000 us. This is
+===     the MEASUREMENT. ⊘ It is NOT graded — it is the number the next rung needs.
+    REAP-TIMING lines = [3]
+      kayfabe: REAP-TIMING max_reap_us=62 reaped=0
+      kayfabe: REAP-TIMING max_reap_us=393 reaped=0
+      kayfabe: REAP-TIMING max_reap_us=23856 reaped=1
+    ★ LONGEST BLOCKING DISPOSAL = 23856 us
+      = 23.856 ms = 0.6% of the 4 000 ms scrubberDestruct budget
+
+=== ★★★★★ w314 VERDICT = 1   (0 ALL PASS · 1 FAILED · 2 UNMEASURED)
+    ⊘ 2 IS NOT A PASS.
+=== A-G VERDICT r33 = 1  (⊘ criterion A is CUP3-ONLY: r33 does not run cup3, so its
+===   (A) reads UNMEASURED BY CONSTRUCTION and must not be read as a failure)
+=== W314 DRIVE EXIT status=0 2026-08-14T15:17:07+00:00
+=== W314 DRIVE TERMINATOR rc=0 2026-08-14T15:17:07+00:00

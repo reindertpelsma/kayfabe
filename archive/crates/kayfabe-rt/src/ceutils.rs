@@ -1,0 +1,2576 @@
+//! ★★★ **E10e item (c) — THE SHELL DRIVER for a VAS-less CeUtils submission**
+//! (`execution_plane_increments.md` §14.15, the four obstacles).
+//!
+//! One guest doorbell on the GSP-managed CeUtils channel becomes: walk the ring, read the
+//! GPFIFO entry, walk and read the pushbuffer it names, decode the methods against the
+//! chip's own codec, partition each `LAUNCH_DMA`'s operands, run the `Ours` sub-copies on
+//! the CPU, and only then release the finishPayload the guest is spinning on.
+//!
+//! # ⊘ Why this glue is here and not in `kayfabe_fwd::apply_pushbuffer`
+//!
+//! `apply_pushbuffer` runs inside `SharedDevice::route_act` — under the device read lock
+//! **and** the issuing proc's mutex. The resolution this channel needs comes from
+//! [`kayfabe_device::RegPlane`], and `[src]` the plane's command-policy chain already calls
+//! into the core *under the plane's own mutex* (`kayfabe_rmrpc::policy::Bridge` is boxed
+//! into `PlaneState::policy`). So **plane→core is the established lock order**, and
+//! resolving from inside the core's act phase would be its inversion — a guest-buildable
+//! ABBA (`l1_os_shell.md` §6.3), constructed on purpose.
+//!
+//! ⇒ The driver runs off `DoorbellPort::ring`, which `RegPlane::write` documents as being
+//! called with **no plane lock held**, and takes the two in the sanctioned order: the core
+//! first (routing the token to its channel's declared facts, then releasing), the plane
+//! second (one [`kayfabe_device::RegPlane::ce_session`] for the whole submission).
+//!
+//! # The four obstacles, and where each is closed
+//!
+//! 1. *"Nothing in the adapter calls the parse/forward path"* — [`run_submission`] is that
+//!    caller, and the adapter hands it a `&mut dyn Vmm` it now holds.
+//! 2. *"The two consumers want an `AddressTable`; this channel has no `Vas`"* —
+//!    [`WalkOperands`], the second implementation of `kayfabe_fwd::OperandResolver`. ⊘ Not
+//!    a TLB fill: nothing here is stored, so §7 rule 6 is satisfied rather than argued
+//!    against.
+//! 3. *"`RegPlane` holds both stores under one lock … `cpu_ce` takes `&mut dyn Vmm`"* —
+//!    taken the owner's second way: **the driver runs where the `Vmm` is and the plane
+//!    hands out its store**. `cpu_ce`'s signature is unchanged, so its `raise_irq` works
+//!    through the real `Vmm` and needs no new port.
+//! 4. *"The decode needs a per-channel `MethodState`"* — and it is **per-channel**, held by
+//!    the adapter beside the ring cursor and handed back in [`CeUtilsRun::state`]. ⚠ It was
+//!    submission-local until `s21_dbf853a_cup2`, on a claim that was true of RM's CeUtils
+//!    pushbuffer and false of UVM's; see [`run_submission`] for the measurement.
+//!
+//! # ⊘ What this must never do
+//!
+//! Report a served doorbell over work that did not happen (§14.8). Every arm that cannot
+//! do the work refuses **by name** and writes no completion: an operand run that is not
+//! ours to execute, a walk that misses, a store that refuses, a decode that produced no
+//! launch. A submission is served only when its bytes moved.
+
+use kayfabe_arch::ids::GpuVa;
+use kayfabe_arch::{
+    CpuOperand, CpuPlane, PlaneAddr, PushMethod, PushbufferAbi, Residency, ResidencyOracle,
+};
+use kayfabe_device::CePlane;
+use kayfabe_device::ceresolve::CeResolve;
+use kayfabe_fwd::{
+    CeSpan, DeclaredResidency, FwdFault, MAX_PUSH_RANGE_BYTES, MAX_PUSH_TOTAL_BYTES,
+    OperandResolver, OperandRun, Representability, partition_ce,
+};
+use kayfabe_isolate::CeExecutor;
+use kayfabe_vmm::{Vmm, VmmError};
+
+/// ★ Re-exported so the adapter that must **keep** a channel's accumulator between
+/// doorbells names the same type this driver decodes against, without taking a dependency
+/// on Axis-B to hold one value. ⊘ One description of the engine's method state, two
+/// holders — the shape `CeUtilsChannel` already uses for the channel's declared facts.
+pub use kayfabe_arch::MethodState;
+
+/// ★★ **How many GPFIFO entries one doorbell may consume.**
+///
+/// `[src]` `ogkm-580: ce_utils_sizes.h:27` — a CeUtils channel's ring is `NUM_COPY_BLOCKS`
+/// = 4096 entries, and `[src] channel_utils.c:403-443` RM submits **one** block per
+/// `channelFillGpFifo`. So a doorbell that appeared to bring thousands of new entries would
+/// be a guest doing something this channel's own driver never does; the cap keeps a hostile
+/// ring from turning one MMIO write into 4096 copies before anything can refuse.
+const MAX_ENTRIES_PER_DOORBELL: u32 = 8;
+
+/// ★ How many GPFIFO entries the cap has left behind, and how many doorbells did so. See the
+/// count site for why a non-zero value is a HANG in the guest rather than a deferral.
+static STRANDED_TOTAL: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static STRANDED_EVENTS: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+/// The FIRST stranding, identified. ⊘ The first is the one that matters: it is the doorbell whose
+/// remainder the guest is still waiting on, and every later one is downstream of it.
+static FIRST_RING: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static FIRST_GP_PUT: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static FIRST_TOOK: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static FIRST_STRANDED: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+
+/// ★★★★★ **w743 — THE PRE-FLIGHT'S CENSUS.** ⊘ Five numbers and not one flag: *"the
+/// pre-flight never ran"*, *"it ran and everything was already armed"* and *"it ran and
+/// refused"* are three findings with three different fixes, and a boolean spells them the
+/// same way. `PREFLIGHT_PASSES == 0` on the `device` arm means the arm never executed and no
+/// other number below is interpretable.
+static PREFLIGHT_PASSES: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static PREFLIGHT_PROBED: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static PREFLIGHT_UNARMED: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static PREFLIGHT_BLOCKED: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static PREFLIGHT_TRUNCATED: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+
+/// `(passes, probed, unarmed, blocked, truncated)` — the pre-flight's lifetime census.
+///
+/// - `passes` — submissions that reached the pre-flight at all (i.e. the store has a byte
+///   port). **Zero on the `arena` control arm, by construction.**
+/// - `probed` — ranges asked about.
+/// - `unarmed` — ranges that were not servable; each recorded its demand.
+/// - `blocked` — submissions refused by the pre-flight. ★ Every one of these is a refusal
+///   that **moved nothing**, so `blocked` should be matched by an equal rise in
+///   `CE-SUBMIT-ARM trips=` and NOT in `blocked_by_progress=`.
+/// - `truncated` — operands whose probe hit [`crate::cpu_ce::PREFLIGHT_CHUNKS_MAX`]. ⊘ A
+///   non-zero value means at least one submission's atomicity was **not** proved.
+#[must_use]
+pub fn preflight_census() -> (u64, u64, u64, u64, u64) {
+    use core::sync::atomic::Ordering::Relaxed;
+    (
+        PREFLIGHT_PASSES.load(Relaxed),
+        PREFLIGHT_PROBED.load(Relaxed),
+        PREFLIGHT_UNARMED.load(Relaxed),
+        PREFLIGHT_BLOCKED.load(Relaxed),
+        PREFLIGHT_TRUNCATED.load(Relaxed),
+    )
+}
+
+/// `(ring_va, gp_put, took, stranded)` of the FIRST stranding, or all zeros if none.
+#[must_use]
+pub fn first_stranded() -> (u64, u64, u64, u64) {
+    use core::sync::atomic::Ordering::Relaxed;
+    (
+        FIRST_RING.load(Relaxed),
+        FIRST_GP_PUT.load(Relaxed),
+        FIRST_TOOK.load(Relaxed),
+        FIRST_STRANDED.load(Relaxed),
+    )
+}
+
+/// `(events, entries)` the per-doorbell cap has stranded. ⊘ Reported at teardown so a boot can
+/// say whether the cap's stated assumption held for the guest actually under test.
+#[must_use]
+pub fn stranded_census() -> (u64, u64) {
+    (
+        STRANDED_EVENTS.load(core::sync::atomic::Ordering::Relaxed),
+        STRANDED_TOTAL.load(core::sync::atomic::Ordering::Relaxed),
+    )
+}
+
+/// The GPFIFO ring size a CeUtils channel declares, in entries — used only to wrap the
+/// cursor. `[src]` `ogkm-580: ce_utils_sizes.h:27` (`NUM_COPY_BLOCKS`).
+///
+/// # ⚠ w386 — WHAT THIS SUBSTITUTION ACTUALLY IS, AND WHY IT IS STILL HERE
+///
+/// **Investigated 2026-08-14, not changed** — the finding is recorded because the constant's
+/// name reads like a convenience and it is not one.
+///
+/// ★ **It is a divide-by-zero guard first and a modulus second.** `entries` is the divisor in
+/// `cursor.next % entries` three lines into both walks; with `ring_entries == 0` that is an
+/// integer division by zero — a **panic on a vCPU thread beneath the VMM's global lock**, which is a worse
+/// outcome than any wrong index. So it cannot simply be deleted.
+///
+/// ⊘ **Can it fire?** The decode is all-or-nothing: `decode_channel_alloc_facts` refuses a
+/// short buffer with `AbiError::Truncated` rather than zero-extending, so a failed decode
+/// yields no `gp_fifo_ring` at all — and the shim's `facts.ring_va?` then returns before
+/// [`run_submission`] is reached. ⇒ reaching this line requires the guest to have declared
+/// `gpFifoEntries == 0` **verbatim**, on a channel that also declared a ring VA and routed to
+/// `Ce`. That shape is **not present in any boot in `traces/`**; the one documented
+/// zero-ring channel (the driver's golden context, `[src] ogkm-580:
+/// kernel_graphics.c:2420-2424`) is **GR**, which `shell_disposition` refuses or hands to the
+/// core before the CE walk. ⚠ It is nonetheless **guest-reachable in principle** — the value
+/// is copied verbatim out of the guest's alloc params and nothing on the shell path validates
+/// it — and the observer walk below has the wider exposure, because it *does* run on the GR
+/// paths where the zero-ring channel lives.
+///
+/// ★ **What it would take to make it a named refusal.** Very little, and it has a precedent:
+/// the isolate already refuses `gp_fifo_entries == 0` **by name** at channel birth
+/// (`RING_ENTRIES_REFUSED`, `kayfabe-isolate-host/src/rm.rs`), *"because it is the ONE number
+/// in the guest's declaration this file cannot pass through: it is the modulus of
+/// `submit_entry`'s wrap"* — the identical argument, one plane over. The shell needs a
+/// `FwdFault::RingEntriesUndeclared` raised where this substitution stands, before any `%`.
+/// ⊘ **Not done here** because it is a second behaviour change on the same walk in the same
+/// rung, and it cannot be graded by the hardware arm this branch is written for: it would fire
+/// on channels this campaign has never observed, so a boot cannot tell a correct refusal from
+/// one that newly wedged something. It wants its own rung and its own falsifier.
+///
+/// ⚠ And note the failure mode if `ring_entries` is merely **wrong** rather than zero — the
+/// substitution cannot help there at all. The modulus is wrong, reads land at indices the
+/// guest never uses, and `RingBroughtNoEntry` then reports the **substituted** `entries`
+/// rather than the declared one. w386's `RingProducerCursorOutOfRange` now catches the
+/// sub-case where `GP_PUT` and this number disagree, which is the first check of any kind this
+/// value has ever had.
+const RING_ENTRIES_FALLBACK: u32 = 4096;
+
+/// One GPFIFO entry's stride in bytes, from the crate that owns NVIDIA's wire facts.
+/// ⊘ Only the STRIDE — the entry's *meaning* is decoded by the arch's own
+/// [`PushbufferAbi::gpfifo_entries`], never by a second decoder here.
+/// w825 — how many 50 µs re-reads an all-zero GP entry below `GP_PUT` gets before the
+/// doorbell is refused (≈ 10 ms). See `run_submission_body`'s gather loop.
+const GP_ENTRY_VISIBILITY_SPINS: u32 = 200;
+
+const GP_ENTRY_SIZE: usize = kayfabe_abi::submit::GP_ENTRY_SIZE as usize;
+
+/// ★★★ **How far this channel's ring has been consumed** — the per-channel GPFIFO read
+/// cursor, owned by the adapter, passed in **by value** and handed back only on success
+/// (see [`CeUtilsRun::cursor`]).
+///
+/// # ⊘⊘⊘ CORRECTED 2026-08-14 (w386) — THIS BLOCK USED TO SAY "A CURSOR RATHER THAN A READ
+/// # OF `GP_PUT`", AND BOTH HALVES OF THAT ANSWER WERE WRONG BY THE TIME IT WAS WRITTEN.
+///
+/// It said the port *"does not know where this channel's USERD lives"* and therefore let the
+/// **ring's own encoding** answer *"how many entries are new"* — an unwritten entry is zero
+/// and `kayfabe_abi::submit::gp_entry_decode` returns `None` for it (`submit.rs:1257`),
+/// because RM zero-initialises the channel buffer (`TRANSFER_FLAGS_SHADOW_INIT_MEM`,
+/// `[src] ogkm-580: channel_utils.c:471-476`).
+///
+/// ⊘ **The premise expired.** `kayfabe_core::rmgraph::DeclaredUserd` carries the physical
+/// placement the guest's own CPU-RM resolved *before the RPC*, and the shim reads this
+/// channel's `USERD GP_PUT` out of it. The producer cursor is available and is now passed in
+/// as [`CeUtilsChannel::gp_put`].
+///
+/// ⊘⊘ **And the reasoning was unsound even on its own terms.** The zero-terminator holds for
+/// the ring's **FIRST LAP ONLY**. Once the guest has written every slot once, no zero slot
+/// remains anywhere in the ring, ever again — the walk's stop condition never fires, and it
+/// runs to [`MAX_ENTRIES_PER_DOORBELL`] over **stale** entries from the previous lap.
+///
+/// ⚠ It bites at slot `N-1`, not after the lap: slot `N-1`'s forward neighbour is slot `0`,
+/// which lap 1 already wrote. `[measured 2026-08-13, w384, real GA106 Mode-2 guest,
+/// `KAYFABE_CE_EXECUTOR=local`]` a 64-entry ring wedged at `first_stall_at=63` and a
+/// 32-entry ring at `first_stall_at=31`, both pre-registered before the run — the wedge
+/// tracks the ring's own modulus, which is exactly this arithmetic. Reproduced with no GPU
+/// at `tests/tests/e10e_ceutils_doorbell.rs`,
+/// `every_doorbell_of_two_full_laps_consumes_exactly_the_entry_the_guest_wrote`.
+///
+/// ⊘⊘⊘ **AND THE LINE BELOW WAS FLATLY FALSE, WHICH IS WHY IT IS QUOTED RATHER THAN
+/// DELETED:** *"the cursor is what makes re-execution impossible"*. Past the wrap the cursor
+/// makes re-execution **certain**: the measured 8-entry reproduction consumed all 8 slots,
+/// re-ran seven retired `LAUNCH_DMA`s, wrote **eight** completions, and came back to the
+/// index it started from — so every later doorbell re-walks the whole ring forever. A memset
+/// re-run is idempotent; a *completion* re-released for a copy that already retired is a
+/// signal for work that did not happen on this doorbell, and a **stale payload** landing on
+/// the word the guest polls is the owner's standing rule violated outright: a completion may
+/// only be sent if the state observable after it is the state the guest intended.
+///
+/// ⇒ The cursor now answers only what it can honestly answer — *"which entries have we
+/// already run"* — and the guest's own `GP_PUT` answers *"where does new work end"*.
+///
+/// ★ `[measured 2026-08-08, boot run_p35_84d857d]` corroborates the arithmetic from the
+/// other side: RM writes the entry at `lastSubmittedEntry` (0 on a fresh channel) pointing
+/// at method block `putIndex = lastSubmittedEntry + 1`, so the first submission's entry
+/// names `pbGpuVA + 1 × CE_METHOD_SIZE_PER_BLOCK` = `pbGpuVA + 0x64` — and the device
+/// printed exactly `gp0=0x420000064+0x60`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct GpCursor {
+    /// The next ring entry index to read.
+    pub next: u32,
+}
+
+/// The declared facts one CeUtils submission is addressed by — the `(hClient, hVASpace)`
+/// pair the guest's publication is keyed on, plus the ring it declared.
+///
+/// ★ All four come off the **one** graph node that declared them (the channel's own
+/// `RM_ALLOC`), via `SharedDevice::ce_channel_facts`, so they cannot be two projections
+/// that disagree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CeUtilsChannel {
+    /// The owning `hClient`.
+    pub client: u32,
+    /// The `hVASpace` handle the channel named — `[measured]` equal to the `hObject` of
+    /// the publication carrying this channel's page-directory root (§14.11's two-sided
+    /// join).
+    pub vaspace: u32,
+    /// The GPFIFO ring's GPU virtual address (`pbGpuVA + channelPbSize`).
+    pub ring_va: u64,
+    /// How many entries the ring declares.
+    pub ring_entries: u32,
+    /// ★★★★★ **w386 — THE GUEST'S OWN PRODUCER CURSOR: `USERD GP_PUT`**, the index one past
+    /// the last GPFIFO entry the guest wrote (`[src] ogkm-580: channel_utils.c:523`,
+    /// `MEM_WR32(&pControlGPFifo->GPPut, putIndex)`, with `putIndex = lastSubmittedEntry + 1`
+    /// at `:406`).
+    ///
+    /// ⊘ **`None` is refused, not fallen back on** — see
+    /// [`kayfabe_fwd::FwdFault::RingProducerCursorUnknown`] for the whole argument and for
+    /// the boot logs that say it should not fire. The one-line version: without this number
+    /// there is no local signal separating *"eight new entries"* from *"one new and seven
+    /// retired"*, and guessing wrong re-releases a stale semaphore payload.
+    ///
+    /// ⚠ It is a **declared** fact like every other field here: the guest wrote it, we read
+    /// it. It is not a claim that any engine fetched anything.
+    pub gp_put: Option<u32>,
+}
+
+/// What one served submission did. Every number is something that **happened**, so a report
+/// built from it cannot say more than the work did.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CeUtilsRun {
+    /// ★★★★★ **GPFIFO entries this pass could NOT take, because the per-doorbell cap stopped
+    /// the walk with `GP_PUT` still ahead (w707).**
+    ///
+    /// ⊘ Non-zero means **the guest is owed another pass**. The cap's own comment says the
+    /// remainder is left *"for its next doorbell"* — true for CeUtils, which rings per block, and
+    /// **false for UVM**, which rings ONCE for a whole burst and then waits.
+    ///
+    /// `[measured w707]` the stack of the hung thread:
+    /// `uvm_spin_loop <- uvm_tracker_wait`, with `GPFIFO-STRANDED events=1 entries=12
+    /// ring=0x121010000 gp_put=35 took=8`. UVM was waiting for semaphore releases that the
+    /// stranded pushes would have written. ⇒ a caller that ignores this field reproduces that
+    /// hang exactly.
+    pub stranded: u32,
+    /// GPFIFO entries consumed.
+    pub entries: usize,
+    /// Method `(header, args)` pairs decoded across those entries.
+    pub methods: usize,
+    /// `LAUNCH_DMA`s the codec fired.
+    pub launches: usize,
+    /// ★★★ How many of [`CeUtilsRun::launches`] moved **no bytes** — a
+    /// [`PushMethod::CeRelease`], i.e. `DATA_TRANSFER_TYPE == NONE`.
+    ///
+    /// ⊘ Reported separately so `describe()` cannot let a submission that only released
+    /// read as one that copied. `launches == releases` with `bytes == 0` is an honest and
+    /// complete serving of UVM's `channel_init` push — and it must be distinguishable from
+    /// a copy whose bytes we lost.
+    pub releases: usize,
+    /// Sub-copies the partition produced.
+    pub spans: usize,
+    /// Bytes actually moved by the CPU executor.
+    pub bytes: u64,
+    /// ★★★★★ **OWNER RULE, 2026-09-09, MADE MEASURABLE: which STORE each byte went to.**
+    ///
+    /// > *"A CE thats between fake fb and CPU ram or between fake fb is expected and
+    /// > intended to be a memcpy. But anything kayfabe knows its a Device D then it should
+    /// > be a CE."*
+    ///
+    /// The rule is already enforced twice — [`CpuPlane`] has no variant naming real device
+    /// memory, and [`CeSpan::dst_place`] is `None` for a device destination, which
+    /// `execute_ours` refuses by name as `CpuCeStraddle` rather than guessing a store. But
+    /// **both of those are arguments from types**, and a boot printed neither. A rule whose
+    /// only witness is that the code could not express its violation is a rule nobody is
+    /// measuring: it holds until a third plane is added, and then it fails silently.
+    ///
+    /// These two counters make each served submission SAY which store it wrote, so
+    /// `fb + guest_ram == bytes` is checkable per record and any future plane shows up as
+    /// bytes that belong to neither.
+    /// ⊘ Destination only. The source plane is a separate question and is not claimed here.
+    pub dst_bytes_fb: u64,
+    /// Bytes written to guest system memory — see [`CeUtilsRun::dst_bytes_fb`].
+    pub dst_bytes_guest_ram: u64,
+    /// finishPayload semaphores written, after the bytes.
+    pub completions: usize,
+    /// ★ w743 — what this submission's pre-flight found. [`CePreflight::probed`] is `0` when
+    /// the store has no byte port (the `arena` arm), which is *"not asked"* and not
+    /// *"nothing was missing"*.
+    pub preflight: crate::cpu_ce::CePreflight,
+    /// ★★★★★ **Completions RESOLVED but NOT YET WRITTEN** — populated only under
+    /// [`ReleaseTiming::Deferred`], and the caller owes every one of them.
+    ///
+    /// Owner, 2026-09-10: *"You should only return from a TLB invalidate, the RPC map call
+    /// or the kernel emulated channel for UVM after the PTE/PDB page table refresh function
+    /// finished."* The **kernel emulated channel for UVM** is this executor: UVM writes its
+    /// page tables through `LAUNCH_DMA`s served here and then waits on the release that
+    /// follows them. Writing that release inline — as [`run_submission`] does — hands UVM its
+    /// completion BEFORE anything has re-read the tables it just wrote, and the next engine
+    /// the guest rings walks host tables that do not yet describe the mapping (`FAULT_PDE`).
+    ///
+    /// ⊘ These are `ResolvedRelease`s, minted by `resolve_releases` from the guest's own
+    /// pushbuffer and its own page tables — deferring them changes WHEN the guest sees them,
+    /// never WHAT it sees. Nothing here forges a completion: a caller that drops this vector
+    /// has lost a completion the guest is waiting for, which is why the shim writes them
+    /// unconditionally after its refresh and reports the count.
+    pub deferred_releases: Vec<crate::cpu_ce::ResolvedRelease>,
+    /// ★ Where the **last** completion landed — its VA, its plane and its plane address.
+    /// Carried so a boot can state the `#12` question's answer instead of implying it.
+    pub completion_at: Option<(GpuVa, CpuPlane, u64)>,
+    /// ★★★ **The ring cursor AFTER this submission** — the caller's next `next`.
+    ///
+    /// ⊘ Returned in the success value rather than advanced through a `&mut`, and that is
+    /// the discipline rather than the style: a cursor advanced by a submission that then
+    /// refused would skip the entry it could not run, turning one loud failure into a
+    /// **silently dropped copy** (`#13`'s `CE-DROP` by another route). Here a refusal
+    /// carries no cursor at all, so there is nothing for a caller to commit by accident.
+    pub cursor: GpCursor,
+    /// ★★★★ **The channel's method accumulator AFTER this submission** — the engine state
+    /// the guest's own `SET_OBJECT` and operand writes left behind.
+    ///
+    /// ⊘ Handed back in the success value for exactly [`CeUtilsRun::cursor`]'s reason, and
+    /// it is the same reason twice: a refusal must leave the channel where it was, so the
+    /// guest's retry re-latches from the same point rather than running against half of a
+    /// submission we did not finish. See [`run_submission`] for the boot in which rebuilding
+    /// this per doorbell made every UVM push decode to nothing.
+    pub state: MethodState,
+}
+
+impl CeUtilsRun {
+    /// ★★★ One line naming **what happened**, for the boot report.
+    ///
+    /// ⊘ It is built here rather than in the adapter for a reason that has bitten this
+    /// project: the adapter would have to name the plane a completion landed in, and
+    /// `#12`'s whole lesson is about that word. Formatting it beside the fields keeps the
+    /// aperture letter and the address that produced it in one place — `V` = this device's
+    /// emulated framebuffer, `S` = guest RAM — matching
+    /// `kayfabe_device::ceresolve::CeResolve::tag`'s vocabulary exactly, so a doorbell line
+    /// and an addressing probe in the same boot can be read against each other.
+    #[must_use]
+    pub fn describe(&self) -> String {
+        format!(
+            "cpu-ce: {} gp, {} methods, {} launch ({} release-only), {} span, {} B \
+             (dst V:{} B S:{} B{}), {} sem{}{}",
+            self.entries,
+            self.methods,
+            self.launches,
+            self.releases,
+            self.spans,
+            self.bytes,
+            self.dst_bytes_fb,
+            self.dst_bytes_guest_ram,
+            // ⊘ The identity, stated in the line itself rather than left to the reader. A
+            // byte in neither store is the owner's rule being violated, and it must be
+            // impossible to read this line and not see it.
+            if self.dst_bytes_fb + self.dst_bytes_guest_ram == self.bytes {
+                String::new()
+            } else {
+                format!(
+                    " ⊘⊘ UNACCOUNTED {} B — a destination in NEITHER store",
+                    self.bytes
+                        .saturating_sub(self.dst_bytes_fb + self.dst_bytes_guest_ram)
+                )
+            },
+            self.completions,
+            if self.deferred_releases.is_empty() {
+                String::new()
+            } else {
+                format!(" deferred_releases={}", self.deferred_releases.len())
+            },
+            self.completion_at
+                .map_or_else(String::new, |(va, plane, phys)| format!(
+                    " fin va=0x{:x} -> {}:0x{phys:x}",
+                    va.0,
+                    match plane {
+                        CpuPlane::Fb => "V",
+                        CpuPlane::GuestRam => "S",
+                    }
+                ))
+        )
+    }
+}
+
+/// A submission this driver would not serve, with the walk's own finding when it has one.
+///
+/// ⊘ Two fields rather than a flattened sentence: `fault` is the stable, matchable name a
+/// test asserts on, and `detail` is the resolver's whole answer — the level an `Unmapped`
+/// failed at, the aperture a root claimed — which `FwdFault` is `Copy` and cannot hold.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CeUtilsRefusal {
+    /// The named fault.
+    pub fault: FwdFault,
+    /// The walk's finding and the address it was asked about, when the refusal came from a
+    /// resolution.
+    pub detail: Option<(GpuVa, CeResolve)>,
+    /// ★★★★★ **w740 — WHAT THIS SUBMISSION HAD ALREADY DONE WHEN IT REFUSED.**
+    ///
+    /// The single question a caller must answer before it may run the same doorbell again:
+    /// **re-running a submission that already executed a launch re-executes that launch and
+    /// re-releases its payload.** ⊘ A `bool` would not do — the three counters are what make
+    /// a zero readable as *"nothing happened"* rather than as *"nobody looked"*, which is
+    /// this tree's most expensive recurring shape.
+    ///
+    /// ⚠ Filled by [`run_submission_timed`] from the run's own accumulator on every error
+    /// path, so it cannot disagree with what the driver did. A refusal minted by
+    /// [`CeUtilsRefusal::plain`] outside that function carries [`CeProgress::NONE`], which is
+    /// the conservative value only because such refusals are raised before any execution.
+    pub progress: CeProgress,
+}
+
+/// ★★★ **w740 — how far one refused submission got.** See [`CeUtilsRefusal::progress`].
+///
+/// ⊘ Not `Option<…>`: *"it refused with no progress"* and *"nobody recorded progress"* have
+/// opposite consequences for a retry, and an `Option` spells them the same way.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CeProgress {
+    /// `LAUNCH_DMA`s this submission **DECODED**.
+    ///
+    /// ⊘⊘⊘ **NOT "executed", and the difference is the whole reason this field is not the
+    /// gate.** `run.launches` is incremented the moment a launch decodes — *before* its
+    /// operands are walked and long before a byte moves — so `launches == 1, bytes == 0` is
+    /// the commonest refusal shape there is: a walk that failed on the first launch's own
+    /// destination. That is **exactly** the shape w740's retry exists to re-run.
+    ///
+    /// ⚠ `[caught by a test, before any boot]` my first draft of [`Self::may_re_run`] was
+    /// `*self == NONE`, which uses this field — and
+    /// `a_refusal_before_any_launch_reports_no_progress_and_is_therefore_re_runnable`
+    /// failed with `launches: 1`. Shipped, the gate would have been **closed on every real
+    /// case**, the boot would have failed identically, and the honest report would have
+    /// read *"the retry never fired"* with nothing pointing at why.
+    pub launches: usize,
+    /// Bytes this submission moved before refusing, as the driver counted them.
+    ///
+    /// ⚠ It can UNDER-report: `execute_ours_spans` walks its spans in order and returns on
+    /// the first failure, having possibly written earlier ones, and `run.bytes` is bumped
+    /// only after the whole call returns `Ok`. ⇒ `bytes == 0` does not prove no byte moved.
+    /// It is still in the gate, as the conservative half — see [`Self::may_re_run`].
+    pub bytes: u64,
+    /// ★★★ **THE COUNTER THE GATE IS REALLY ABOUT.** Completion payloads written, plus any
+    /// deferred to the caller — **both count**, because a deferred release is one the caller
+    /// has been handed and owes the guest.
+    pub completions: usize,
+}
+
+impl CeProgress {
+    /// Nothing decoded, nothing moved, nothing released.
+    pub const NONE: CeProgress = CeProgress {
+        launches: 0,
+        bytes: 0,
+        completions: 0,
+    };
+
+    /// ★★★★★ **Is re-running this submission from the same cursor safe?**
+    ///
+    /// `bytes == 0 && completions == 0`. ⊘ [`Self::launches`] is deliberately **not** in the
+    /// test — see its docs for the defect that taught that, which a test caught before this
+    /// ever reached hardware.
+    ///
+    /// # Why `completions` is the real question
+    ///
+    /// A re-run replays the whole submission from the unadvanced cursor. Replaying the
+    /// *data movement* of a CE sub-copy is idempotent — same source, same destination, same
+    /// length, and the guest is blocked in `channelWaitForFinishPayload` on a payload we
+    /// have not written. Replaying a *release* is not: the guest would see submission `n`
+    /// complete twice and, past a wrap, a **stale** payload land over a newer one. That is
+    /// `[measured w386]`'s defect, and it is the one thing this must never reproduce.
+    ///
+    /// # Why `bytes` is in the test anyway
+    ///
+    /// Conservatism, not necessity. The idempotence argument above is sound for every shape
+    /// this driver decodes today, but it is an argument, and `bytes > 0` costs us only the
+    /// multi-launch case — which RM's CeUtils channel does not produce (`[src] ogkm-580:
+    /// channel_utils.c:403-443`, one block per `channelFillGpFifo`). ⇒ pay the argument
+    /// nothing and keep the retry scoped to submissions that provably did nothing.
+    #[must_use]
+    pub fn may_re_run(&self) -> bool {
+        self.bytes == 0 && self.completions == 0
+    }
+}
+
+impl CeUtilsRefusal {
+    /// A bare fault with no resolution behind it.
+    fn plain(fault: FwdFault) -> CeUtilsRefusal {
+        CeUtilsRefusal {
+            fault,
+            detail: None,
+            progress: CeProgress::NONE,
+        }
+    }
+
+    /// One line for a boot report: the fault, and the walk's own sentence when there is one.
+    #[must_use]
+    pub fn describe(&self) -> String {
+        match &self.detail {
+            None => format!("{:?}", self.fault),
+            Some((va, r)) => format!("{:?} at va=0x{:x}: {}", self.fault, va.0, r.describe()),
+        }
+    }
+}
+
+/// Map a guest-RAM refusal to the named fault — the same split `kayfabe_fwd`'s own
+/// `guest_read` makes, so a device-aimed address and an unbacked one stay distinguishable.
+fn ram_fault(e: VmmError) -> FwdFault {
+    match e {
+        VmmError::NonRamGpa { gpa } => FwdFault::NonRamGpa { gpa },
+        VmmError::BadGpa { gpa } => FwdFault::GpaRead { gpa },
+        _ => FwdFault::GpaRead { gpa: u64::MAX },
+    }
+}
+
+/// ★★★ **The second implementation of [`OperandResolver`]: the guest's own page-table
+/// walk**, from the root the guest published, on the demand the session was opened with.
+///
+/// # ⊘ Nothing is stored, and that is the whole of the owner's ruling
+///
+/// `gmmu_publication_discipline.md` §7 rule 6 is *"never cache the walk — the result is
+/// valid for this fault only"*, and rule 7 (*"serialise against the observed invalidate"*)
+/// is **vacuous here**: §5 measured both invalidate transports at zero on this path, so a
+/// cache would have nothing to clear it. Every question this resolver is asked descends the
+/// tree again. That is what a TLB does and what the address plane's blessed staleness
+/// already permits.
+///
+/// # Every resolution is `Fabricated`, and that is a measurement not a default
+///
+/// `[measured 2026-08-08, boot run_p35_84d857d]` nothing on this channel is host-published
+/// — there is no `Binding::host`, because there is no `Vas` and never was. So every run is
+/// `Representability::Fabricated` ⇒ `CeExecutor::Ours` ⇒ the shell CPU executor, which is
+/// exactly `ce_executor_tree.md`'s STEP 2 answer for two CPU-reachable operands.
+pub struct WalkOperands<'a, 'p> {
+    ce: &'a mut CePlane<'p>,
+    /// Where the last refusing resolution is recorded, so the driver can report the walk's
+    /// whole finding beside the `Copy` fault. ⊘ Written **only** on a refusal.
+    last: &'a mut Option<(GpuVa, CeResolve)>,
+}
+
+impl core::fmt::Debug for WalkOperands<'_, '_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("WalkOperands").finish_non_exhaustive()
+    }
+}
+
+impl<'a, 'p> WalkOperands<'a, 'p> {
+    /// A resolver over one open CE session.
+    pub fn new(
+        ce: &'a mut CePlane<'p>,
+        last: &'a mut Option<(GpuVa, CeResolve)>,
+    ) -> WalkOperands<'a, 'p> {
+        WalkOperands { ce, last }
+    }
+
+    /// Resolve one VA to `(plane address, residency, bytes left in its leaf page, the
+    /// LEAF itself)`, or refuse by name having recorded the finding.
+    ///
+    /// ★ The leaf rides out of the SAME walk that produced the address. ⊘ It is not
+    /// recoverable afterwards: a consumer holding only `phys` would have to assume a page
+    /// size to find the leaf's base, and assuming one is how a 4 KiB entry gets treated as
+    /// a 2 MiB one and a neighbour's memory joins the range.
+    fn resolve_one(
+        &mut self,
+        va: u64,
+    ) -> Result<(CpuOperand, u64, crate::completion_watch::FbLeaf), FwdFault> {
+        let r = self.ce.resolve(va);
+        let CeResolve::Resolved {
+            phys,
+            aperture,
+            page_size,
+            ..
+        } = r
+        else {
+            *self.last = Some((GpuVa(va), r));
+            return Err(FwdFault::CeWalk {
+                va: GpuVa(va),
+                kind: r.kind(),
+            });
+        };
+        // ⊘ ASKED, not computed here — the same oracle the table-backed resolver consults,
+        // so a walked operand and a bound one can never come to disagree about where one
+        // aperture's bytes live. A peer leaf has no CPU plane and is refused by name.
+        let residency: Residency = DeclaredResidency
+            .residency_of_aperture(aperture, phys)
+            .ok_or(FwdFault::CePeerOperand { addr: phys })?;
+        // How much of this leaf remains. A page's low bits are shared by the VA and its
+        // backing (a mapping is page-granular), so the offset within the page is the VA's.
+        let left = page_size - (va & (page_size - 1));
+        // The leaf, from the same three numbers. A mapping is page-granular, so the VA's
+        // offset within its page IS the backing's — which is what makes both bases
+        // recoverable without a second walk.
+        let within = va & (page_size - 1);
+        let leaf = crate::completion_watch::FbLeaf {
+            va: va - within,
+            len: page_size,
+            phys: phys - within,
+        };
+        Ok((
+            CpuOperand {
+                residency,
+                addr: PlaneAddr(phys),
+            },
+            left,
+            leaf,
+        ))
+    }
+}
+
+impl OperandResolver for WalkOperands<'_, '_> {
+    fn resolve_runs(&mut self, addr: GpuVa, len: u64) -> Result<Vec<OperandRun>, FwdFault> {
+        // Clip rather than wrap, exactly as `AddressTable::spans` does: a copy that ran off
+        // the top of the address space must not reach a mapping at the bottom.
+        let end = (u128::from(addr.0) + u128::from(len)).min(1u128 << 64);
+        let eff = (end - u128::from(addr.0)) as u64;
+        let mut out: Vec<OperandRun> = Vec::new();
+        let mut off = 0u64;
+        while off < eff {
+            let va = addr.0 + off;
+            let (op, left, _leaf) = self.resolve_one(va)?;
+            let take = left.min(eff - off);
+            debug_assert!(take > 0, "a walk step must consume bytes");
+            // Merge with the previous run when the backing is genuinely contiguous — same
+            // store, same ownership, and the plane address continuing exactly. ⊘ Equality
+            // of `Residency` alone is NOT enough (§14.15's second correction): two leaves
+            // sharing an aperture but not adjacent would merge into one instruction and the
+            // executor would write past the end of the first.
+            if let Some(prev) = out.last_mut()
+                && prev.2 == Representability::Fabricated
+                && prev.3.is_some_and(|p| {
+                    p.residency == op.residency && p.addr.offset(prev.1) == op.addr
+                })
+            {
+                prev.1 += take;
+            } else {
+                out.push((va, take, Representability::Fabricated, Some(op)));
+            }
+            off += take;
+        }
+        Ok(out)
+    }
+
+    fn resolve_word(&mut self, addr: GpuVa) -> Result<CpuOperand, FwdFault> {
+        // ⊘ A four-byte release must not straddle a page: if it did, one half would land in
+        // a different backing and the guest would poll a torn word forever. The leaf's
+        // remaining length is checked rather than assumed.
+        let (op, left, _leaf) = self.resolve_one(addr.0)?;
+        if left < 4 {
+            return Err(FwdFault::CeWalk {
+                va: addr,
+                kind: "SemaphoreStraddlesPage",
+            });
+        }
+        Ok(op)
+    }
+}
+
+/// Read `buf.len()` bytes at GPU virtual address `va`, re-resolving at every leaf boundary
+/// and routing each piece to the store its **own leaf's aperture** names.
+///
+/// ⊘ The aperture is the router and it is not optional: a vidmem leaf is an offset into
+/// this device's framebuffer and a sysmem leaf is a guest-physical address, two number
+/// spaces that collide freely (`§8.2.3`'s measured warning: at 8 GiB a GPU VA is itself a
+/// legal GPA). Serving one out of the other's store is the silent-wrong-bytes failure the
+/// whole address plane exists to refuse.
+fn read_va(
+    ce: &mut CePlane<'_>,
+    vmm: &mut dyn Vmm,
+    last: &mut Option<(GpuVa, CeResolve)>,
+    va: u64,
+    buf: &mut [u8],
+) -> Result<(), FwdFault> {
+    let mut at = 0usize;
+    while at < buf.len() {
+        let here = va + at as u64;
+        let (op, left, _leaf) = WalkOperands::new(ce, last).resolve_one(here)?;
+        let take = (left as usize).min(buf.len() - at);
+        match op.residency.plane {
+            CpuPlane::Fb => ce
+                .fb()
+                .read(op.addr.0, &mut buf[at..at + take])
+                .map_err(|e| FwdFault::CpuCeFb {
+                    phys: e.phys,
+                    why: e.why,
+                })?,
+            CpuPlane::GuestRam => vmm
+                .gpa_read(op.addr.0, &mut buf[at..at + take])
+                .map_err(ram_fault)?,
+        }
+        at += take;
+    }
+    Ok(())
+}
+
+/// ★★★ **Serve ONE guest doorbell on a VAS-less CeUtils channel.**
+///
+/// `ce` is an open [`kayfabe_device::RegPlane::ce_session`] for this channel's
+/// `(hClient, hVASpace)`; `pb` is the chip's own pushbuffer codec — the same one the core
+/// decodes every other channel with, not a second copy; `vmm` is the shell's guest-memory
+/// port, which is where every sysmem operand of this channel lives
+/// (`[measured 2026-08-08, boot run_p35_84d857d]`: ring, pushbuffer and finishPayload all
+/// resolved to guest RAM).
+///
+/// # ★★★★ The `MethodState` is PER-CHANNEL, and it was submission-local until it walled
+///
+/// The engine's method accumulator is per-**channel** in hardware. This driver used to
+/// start a fresh one per doorbell, on a reason that was true and insufficient: `[src]
+/// ogkm-580: channel_utils.c:806-990` builds each **CeUtils** block whole —
+/// `channelPushMemoryProperties`, the remap registers, `LINE_LENGTH_IN`, the semaphore
+/// registers and `LAUNCH_DMA` — into one method block, every time, inheriting no operand.
+/// So a per-doorbell reset is equivalent *for that one driver*, and the old comment here
+/// named the exception itself: *"a channel whose driver latches once and fires many times
+/// would need the per-channel state."*
+///
+/// ⊘ **UVM is that driver, and it is the one at the wall.** `[measured 2026-08-09, boot
+/// s21_dbf853a_cup2]` the refused submission framed cleanly into seven methods —
+/// `sub4/m0x400/n4` (the operand quad), `sub4/m0x418=0x20` (`LINE_LENGTH_IN`, 32 bytes),
+/// `sub4/m0x300` (`LAUNCH_DMA`), `sub4/m0x240/n3` (the semaphore triple), `sub4/m0x300`
+/// again — and carried **no `SET_OBJECT`**. UVM binds the CE class once, in
+/// `channel_init`'s first push, and fires on `NVA06F_SUBCHANNEL_COPY_ENGINE = 4` forever
+/// after. `MethodState::subchannel_speaks`' unbound arm requires the class to be bound
+/// **somewhere in this state** (`kayfabe-arch/src/lib.rs:1234`), so a state rebuilt per
+/// doorbell answers `false` for every push after the first: `ce_launch` returned `None`,
+/// all seven methods decoded `Opaque`, and the submission reported no launch at all.
+///
+/// ⇒ the state is passed **in** and handed back in [`CeUtilsRun::state`], on exactly the
+/// same commit-on-success discipline as [`CeUtilsRun::cursor`]: a refused submission
+/// mutates nothing, so the guest's own retry re-reads and re-latches from where it was.
+/// ⊘ This is not a relaxation — nothing is inferred that the guest did not write. It is
+/// the *removal* of an amnesia our own decoder invented; the codec's un-latched refusals
+/// (`§14.14`) still refuse every operand the guest genuinely never wrote.
+///
+/// # Errors
+/// [`CeUtilsRefusal`], always by name. ⊘ No completion is written on any error path, and no
+/// interrupt is raised — a doorbell that could not do the work must not look like one that
+/// did (§14.8).
+pub fn run_submission(
+    ce: &mut CePlane<'_>,
+    pb: &dyn PushbufferAbi,
+    vmm: &mut dyn Vmm,
+    chan: CeUtilsChannel,
+    cursor: GpCursor,
+    state: MethodState,
+) -> Result<CeUtilsRun, CeUtilsRefusal> {
+    run_submission_timed(ce, pb, vmm, chan, cursor, state, ReleaseTiming::Inline)
+}
+
+/// ★★★★★ **When the guest gets to SEE each completion this submission releases.**
+///
+/// A real copy engine writes a release when the work before it retires; nothing in between
+/// re-reads the page tables that work may have written. This executor is different in one
+/// way that matters: the work it serves for UVM's kernel channel IS page-table writes, and
+/// the mapping those writes describe must reach the host GPU before the guest — released by
+/// the completion — rings an engine at it. See [`CeUtilsRun::deferred_releases`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReleaseTiming {
+    /// Write every release as it is decoded — the executor's original behaviour.
+    Inline,
+    /// Resolve every release and hand it back in [`CeUtilsRun::deferred_releases`] for the
+    /// caller to write **after** its page-table refresh. The bytes of every `LAUNCH_DMA`
+    /// still move here; only the completion words wait.
+    Deferred,
+}
+
+/// [`run_submission`] with every release DEFERRED — see [`ReleaseTiming::Deferred`].
+///
+/// ⚠ The caller owes `run.deferred_releases` to the guest. A path that takes this and does
+/// not write them has stranded a waiter on a completion that will never come.
+pub fn run_submission_deferring_releases(
+    ce: &mut CePlane<'_>,
+    pb: &dyn PushbufferAbi,
+    vmm: &mut dyn Vmm,
+    chan: CeUtilsChannel,
+    cursor: GpCursor,
+    state: MethodState,
+) -> Result<CeUtilsRun, CeUtilsRefusal> {
+    run_submission_timed(ce, pb, vmm, chan, cursor, state, ReleaseTiming::Deferred)
+}
+
+/// ★★★★★ **w740 — the one seam that fills [`CeUtilsRefusal::progress`].**
+///
+/// The body below refuses in eleven places and every one of them is a `?` or an early
+/// `return`; threading the accumulator into each would be eleven chances for one of them to
+/// say *"nothing happened"* over a launch that did. ⇒ the accumulator is the body's `&mut`
+/// parameter, and **this** function is the only writer of `progress`, from the very object
+/// the driver was updating as it went.
+///
+/// ⊘ It is not a convenience wrapper: without it a caller has no sound basis to re-run a
+/// refused doorbell, and `SINGLE_STORE_PLAN.md`'s w735 table names exactly that gap —
+/// *"a store refusal comes back as `refused(..)` — the submission is **dropped, not
+/// requeued**"*.
+fn run_submission_timed(
+    ce: &mut CePlane<'_>,
+    pb: &dyn PushbufferAbi,
+    vmm: &mut dyn Vmm,
+    chan: CeUtilsChannel,
+    cursor: GpCursor,
+    state: MethodState,
+    timing: ReleaseTiming,
+) -> Result<CeUtilsRun, CeUtilsRefusal> {
+    let mut run = CeUtilsRun {
+        cursor,
+        state,
+        ..CeUtilsRun::default()
+    };
+    match run_submission_body(ce, pb, vmm, chan, cursor, state, timing, &mut run) {
+        Ok(()) => Ok(run),
+        Err(mut refusal) => {
+            refusal.progress = CeProgress {
+                launches: run.launches,
+                bytes: run.bytes,
+                // ⚠ A DEFERRED release counts as a completion: the caller has been handed it
+                // and owes it to the guest, so re-running would resolve it a second time.
+                completions: run.completions + run.deferred_releases.len(),
+            };
+            Err(refusal)
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_submission_body(
+    ce: &mut CePlane<'_>,
+    pb: &dyn PushbufferAbi,
+    vmm: &mut dyn Vmm,
+    chan: CeUtilsChannel,
+    cursor: GpCursor,
+    state: MethodState,
+    timing: ReleaseTiming,
+    run: &mut CeUtilsRun,
+) -> Result<(), CeUtilsRefusal> {
+    let mut last: Option<(GpuVa, CeResolve)> = None;
+    let entries = if chan.ring_entries == 0 {
+        RING_ENTRIES_FALLBACK
+    } else {
+        chan.ring_entries
+    };
+    // ★ WHICH submission this doorbell is about, latched before the loop advances the
+    // cursor. Carried into every refusal below so a reader is never left to assume entry 0.
+    let start_index = cursor.next % entries;
+
+    // ---- 0. THE PRODUCER CURSOR — the guest's own `USERD GP_PUT`. ----------------------
+    //
+    // ⊘⊘ **REFUSED WHEN ABSENT, NEVER FALLEN BACK ON.** See this function's `GpCursor` docs
+    // and `FwdFault::RingProducerCursorUnknown` for the whole argument: the zero-terminator
+    // this replaced is sound for the ring's first lap only, and "degrading" to it past the
+    // wrap re-executes retired launches and re-releases their payloads. `[measured w386]`
+    // an 8-entry ring at slot 7 consumed all 8 and wrote 8 completions.
+    let Some(gp_put) = chan.gp_put else {
+        return Err(CeUtilsRefusal::plain(FwdFault::RingProducerCursorUnknown {
+            ring_va: GpuVa(chan.ring_va),
+            index: start_index,
+            entries,
+        }));
+    };
+    // ⊘ A cursor outside the ring is a JOIN defect of ours, reported as its own fact — see
+    // the variant. ⚠ Never wrapped into range: `gp_put % entries` would turn a disagreement
+    // between two of our own projections into a plausible index, which is the shape this
+    // campaign names "an absence wearing a number's clothes".
+    if gp_put >= entries {
+        return Err(CeUtilsRefusal::plain(
+            FwdFault::RingProducerCursorOutOfRange {
+                ring_va: GpuVa(chan.ring_va),
+                gp_put,
+                entries,
+            },
+        ));
+    }
+
+    // ---- 1. THE RING. Read from our cursor UP TO the guest's producer cursor. ----------
+    //
+    // ★★★ **The walk is modular, so it is the two-segment wrapped walk without being written
+    // as two loops.** Consumer at 7, producer at 2, ring of 8 ⇒ `7, 0, 1`, stop. ⊘ The stop
+    // test is at the TOP of the body, so `idx == gp_put` on entry means *nothing is new* and
+    // the loop gathers nothing — which falls through to `RingBroughtNoEntry` below, exactly
+    // as the zero entry used to.
+    //
+    // ⚠ `MAX_ENTRIES_PER_DOORBELL` is still here and still means what it meant (see the
+    // constant): it is the **hostile-ring cap**, not the stop condition. A guest that
+    // advanced `GP_PUT` by more than the cap leaves the remainder for its next doorbell.
+    let mut ranges: Vec<kayfabe_arch::PushRange> = Vec::new();
+    for _ in 0..MAX_ENTRIES_PER_DOORBELL {
+        let idx = run.cursor.next % entries;
+        if idx == gp_put {
+            break;
+        }
+        let at = chan
+            .ring_va
+            .wrapping_add(u64::from(idx) * GP_ENTRY_SIZE as u64);
+        let mut raw = [0u8; GP_ENTRY_SIZE];
+        read_va(ce, vmm, &mut last, at, &mut raw).map_err(|f| CeUtilsRefusal {
+            fault: f,
+            detail: last,
+            progress: CeProgress::NONE,
+        })?;
+        // ⊘ The ENTRY IS DECODED BY THE ARCH, not here: `PushbufferAbi::gpfifo_entries` is
+        // the same codec `kayfabe_fwd::pushbuffer_ranges` uses for every other channel, and
+        // a second decoder in the shell would be two descriptions of one wire format. Only
+        // the entry's *stride* comes from `kayfabe_abi`, because indexing the ring needs a
+        // byte offset and no `PushbufferAbi` method hands one out.
+        //
+        // ⊘ This `break` is NO LONGER THE STOP CONDITION and its meaning has changed with
+        // it. `GP_PUT` said there is an entry here; it decoded to nothing. That is a
+        // disagreement between the guest's own two writes, not "the ring is empty". It stays
+        // a `break` rather than a new refusal because the walk is now strictly narrower than
+        // the one that shipped, and nothing gathered still lands on `RingBroughtNoEntry`
+        // below — a widening here would be the only way to make this change able to serve
+        // something the old code refused.
+        // ★★★★★ w825 — an entry BELOW `GP_PUT` that reads as all-zero is one the guest has
+        // published a cursor for and whose bytes are not visible to this reader YET: the
+        // guest writes the ring through its BAR1 view, we read through another view of the
+        // same vidmem. `[measured w825cup3d]` RM's kernel CE channel rang once for entries
+        // up to PUT=70; gp[63] read as zero here, the doorbell was refused with the cursor
+        // unmoved, the guest never rang again, and `UVM_REGISTER_GPU` hung — while the SAME
+        // entry read `0x12001af1c+0xb8` at teardown. Re-read briefly (worker thread only).
+        let mut spins = 0u32;
+        // ⊘ Never on a vCPU / inside a trap: there a refusal is the only legal answer.
+        let may_wait = !(kayfabe_util::lockwitness::on_vcpu_thread()
+            || kayfabe_util::trapwitness::in_trap());
+        while may_wait && raw == [0u8; GP_ENTRY_SIZE] && spins < GP_ENTRY_VISIBILITY_SPINS {
+            std::thread::sleep(std::time::Duration::from_micros(50));
+            spins += 1;
+            read_va(ce, vmm, &mut last, at, &mut raw).map_err(|f| CeUtilsRefusal {
+                fault: f,
+                detail: last,
+                progress: CeProgress::NONE,
+            })?;
+        }
+        let Some(r) = pb.gpfifo_entries(&raw).into_iter().next() else {
+            if raw != [0u8; GP_ENTRY_SIZE] {
+                // ★ A NON-zero entry with length 0 is a CONTROL entry (a NOP): the engine
+                // consumes it and moves on, and so do we. ⊘ Stopping here stranded every
+                // entry behind it.
+                run.cursor.next = run.cursor.next.wrapping_add(1) % entries;
+                run.entries += 1;
+                continue;
+            }
+            break;
+        };
+        ranges.push(r);
+        run.cursor.next = run.cursor.next.wrapping_add(1) % entries;
+        run.entries += 1;
+    }
+    // ★★★★★ **STRANDED ENTRIES — the cap's stated consequence, COUNTED (w705).**
+    //
+    // The comment above says it plainly: *"A guest that advanced `GP_PUT` by more than the cap
+    // leaves the remainder for its next doorbell."* ⊘ That is sound for **CeUtils**, which rings
+    // once per block — and it is an assumption about the GUEST, never checked against the guest
+    // actually under test.
+    //
+    // ⚠ **UVM does not ring again.** `uvm_map_external_allocation` submits every page-table
+    // init and `copy_ptes` push for the range back-to-back, rings ONCE, and then waits in
+    // `uvm_tracker_wait` for every push's semaphore. `[measured w704]` maps of 2 MiB (one or two
+    // entries) return; the first 48 MiB map — ~50 entries in one burst — never returns. If we
+    // take 8 and leave 42, UVM waits forever for releases that will never be written, which is
+    // exactly the observed shape: no fault, no Xid, no refusal, kernel CPU burning in a spin.
+    //
+    // ⊘ This counts; it does not change behaviour. A fix belongs where the cap's PURPOSE is
+    // preserved — bounded work per pass, with a CONTINUATION so the remainder is drained by us
+    // rather than waited on by the guest — and that is not a change to make before the number
+    // says stranding is real.
+    {
+        let stranded = (gp_put + entries - (run.cursor.next % entries)) % entries;
+        run.stranded = stranded;
+        if stranded > 0 {
+            STRANDED_TOTAL.fetch_add(u64::from(stranded), core::sync::atomic::Ordering::Relaxed);
+            let n = STRANDED_EVENTS.fetch_add(1, core::sync::atomic::Ordering::Relaxed) + 1;
+            // ⊘⊘ **CARRIED IN ATOMICS, NOT PRINTED HERE (w705b).** The first version used
+            // `eprintln!` behind `#[cfg(feature = "std")]` — which is NOT enabled for this crate
+            // in the shipping shim, so the counter incremented and **every identifying detail
+            // was compiled away**. `[measured w705]` the census read `events=1 entries=13` with
+            // not one detail line to say WHICH channel. ⇒ a `cfg` that silences an instrument is
+            // the same defect as a branch nothing takes: the number survived, the meaning did
+            // not. The shim (which has `std`) prints these.
+            if n == 1 {
+                FIRST_RING.store(chan.ring_va, core::sync::atomic::Ordering::Relaxed);
+                FIRST_GP_PUT.store(u64::from(gp_put), core::sync::atomic::Ordering::Relaxed);
+                FIRST_TOOK.store(run.entries as u64, core::sync::atomic::Ordering::Relaxed);
+                FIRST_STRANDED.store(u64::from(stranded), core::sync::atomic::Ordering::Relaxed);
+            }
+        }
+    }
+    // ⊘ A doorbell that brought no readable entry is NOT served. The guest rang for work;
+    // if we found none, saying "served" is exactly §14.8's silent no-op.
+    //
+    // ★★★ And it is named for WHAT HAPPENED. This used to raise
+    // `FwdFault::PushTooFragmented { len: 0 }` — a bound of ours on how many address-table
+    // spans one range may cut into — for a case in which there is no range to cut. `[measured
+    // 2026-08-09, boots `uvm2_d0fbac0` / `scan1_00865a7` / `vaspan_994bbdc`]` four boots read
+    // their wall as a fragmentation limit that was never reached. A wrong name is a false
+    // diagnosis with a fix attached, which is worse than none.
+    if ranges.is_empty() {
+        return Err(CeUtilsRefusal::plain(FwdFault::RingBroughtNoEntry {
+            ring_va: GpuVa(chan.ring_va),
+            index: start_index,
+            entries,
+        }));
+    }
+
+    // ---- 2. THE METHOD WORDS, bounded per range and in total (boundary-1). -------------
+    let mut methods: Vec<(u32, Vec<u32>)> = Vec::new();
+    let mut total = 0usize;
+    for r in &ranges {
+        if total >= MAX_PUSH_TOTAL_BYTES {
+            break;
+        }
+        let len = (r.len as usize)
+            .min(MAX_PUSH_RANGE_BYTES)
+            .min(MAX_PUSH_TOTAL_BYTES - total);
+        let mut buf = vec![0u8; len];
+        read_va(ce, vmm, &mut last, r.va.0, &mut buf).map_err(|f| CeUtilsRefusal {
+            fault: f,
+            detail: last,
+            progress: CeProgress::NONE,
+        })?;
+        methods.extend(decode_methods(pb, &buf));
+        total += len;
+    }
+    run.methods = methods.len();
+
+    // ---- 3. DECODE the run against the chip's own codec. -------------------------------
+    // ⊘ Against the CHANNEL's accumulator, carried in and handed back — see this function's
+    // docs for the boot in which rebuilding it per doorbell made every UVM push decode to
+    // nothing.
+    let decoded = pb.decode_run(&mut run.state, &methods);
+
+    // ★★★★ THE CENSUS OF WHAT DECODED, taken BEFORE the execute loop consumes `decoded`.
+    //
+    // ⊘ Its only consumer is the `launches == 0` refusal below, and it exists because that
+    // refusal used to throw every one of these facts away and report the literal
+    // `ClassId(0)` instead (`FwdFault::SubmissionDecodedNoWork` carries the full account).
+    // A submission that read no method words, one that read words the codec recognized
+    // nothing in, and one that decoded a `SET_OBJECT` for some other engine are three
+    // different findings that produced one identical line in the boot report.
+    let opaque = u32::try_from(
+        decoded
+            .iter()
+            .filter(|m| matches!(m, PushMethod::Opaque))
+            .count(),
+    )
+    .unwrap_or(u32::MAX);
+    // ⊘ The LAST `SET_OBJECT` in the block, because that is the one in force when the
+    // methods after it are interpreted — the same order the engine applies them in.
+    let set_object = decoded.iter().rev().find_map(|m| match m {
+        PushMethod::SetObject { class } => Some(*class),
+        _ => None,
+    });
+
+    // ★★★ §16.24's TRIPWIRE, and it bites BEFORE the execute loop below — deliberately.
+    //
+    // The admission of `GP100_UVM_SW` was bounded by *"this port raises no fault for UVM to
+    // cancel"*. A fault method in these bytes is that bound expiring, and the one thing
+    // that must NOT happen then is for the copies beside it to run while the cancel is
+    // walked past: that would leave UVM believing a fault it tracks was cancelled, which is
+    // a wrong answer rather than a missing one. So the whole submission is refused, by a
+    // name that says which assumption failed, before a single byte moves.
+    //
+    // ⚠ Placed here rather than inside the loop so it cannot be reached *after* a partial
+    // execution — the ordering property, not just the refusal, is what makes it safe.
+    if let Some(method) = decoded.iter().find_map(|m| match m {
+        PushMethod::UvmSwFaultMethod { method } => Some(*method),
+        _ => None,
+    }) {
+        return Err(CeUtilsRefusal {
+            fault: FwdFault::UvmFaultMethodWithoutFaultDelivery { method },
+            detail: last,
+            progress: CeProgress::NONE,
+        });
+    }
+
+    // ---- 3b. ★★★★★ w743 — THE PRE-FLIGHT. **NOTHING MOVES UNTIL EVERY VIEW IS ARMED.** --
+    //
+    // # ⊘⊘⊘ THE CASE A RETRY STRUCTURALLY CANNOT FIX, and why this is the shape of the fix
+    //
+    // `[measured w740]` `blocked_by_progress=68` against `trips=10`; `[measured w742]` `3`
+    // against `37`, with `gave_up=1`. Those refusals had **already moved bytes or released a
+    // payload**, so [`CeProgress::may_re_run`] closes — correctly — and the guest's copy never
+    // retires. The loop below is where that happens: it walks the decoded methods in order and
+    // each iteration executes its launch and then defers its release, so a later launch that
+    // misses a framebuffer view refuses a submission that is already half-done.
+    //
+    // ⇒ Ask FIRST, touch SECOND. This pass resolves the same operands the loop will, asks the
+    // store's byte port whether each range is servable **without touching one**, and records the
+    // demand for every range that is not. If anything was missing the whole submission is
+    // refused with `progress = NONE` — nothing decoded-and-executed, nothing released — so the
+    // shim's bounded arm-then-retry (`CE_SUBMIT_ARM_RETRIES`) drains **once** and re-runs into a
+    // fully armed store.
+    //
+    // # ⊘ Why the arming is not done BEFORE the session, which was the other candidate shape
+    //
+    // Because these operands are not knowable there. Every address in this pass comes out of a
+    // walk of the **guest's own page tables**, which live in the framebuffer and are read
+    // through `ce` — i.e. under the plane lock `RegPlane::ce_session_with_root` holds for its
+    // whole closure. A pre-session arm would have to walk first, and walking is the thing that
+    // needs the lock. ⇒ the earliest point at which the operand set exists is **here**, and the
+    // property that actually matters — *no byte moves until every view is armed* — is a property
+    // of the ORDER, not of the lock.
+    //
+    // # ⊘ What it deliberately does NOT do
+    //
+    // A launch whose **walk** refuses is not this pass's business: it is refused by the loop
+    // below, by name, and it already reports `progress = NONE` when it is the first one. A walk
+    // refusal here is *skipped* so the remaining launches still get their demand recorded — one
+    // drain for the submission instead of one per launch.
+    //
+    // ⊘ **Inert on the `arena` control arm by construction**: `FbStore::demand_port` answers
+    // `None` there, `want_ours_spans` returns `probed == 0` without resolving anything, and this
+    // whole block costs one `Option` test.
+    if ce.fb().demand_port().is_some() {
+        let mut pre = crate::cpu_ce::CePreflight::default();
+        for m in &decoded {
+            match *m {
+                PushMethod::CeRelease { completion, .. } => {
+                    let resolved = {
+                        let mut ops = WalkOperands::new(ce, &mut last);
+                        crate::cpu_ce::resolve_releases(&mut ops, &[completion])
+                    };
+                    if let Ok(rs) = resolved {
+                        pre.merge(crate::cpu_ce::want_releases(ce.fb(), &rs));
+                    }
+                }
+                PushMethod::CeLaunchDma {
+                    dst,
+                    src,
+                    len,
+                    dst_is_virtual,
+                    src_is_virtual,
+                    dst_target,
+                    src_target,
+                    work,
+                    completion,
+                } => {
+                    let spans = {
+                        let mut ops = WalkOperands::new(ce, &mut last);
+                        partition_ce(
+                            &mut ops,
+                            dst,
+                            dst_is_virtual,
+                            dst_target,
+                            src,
+                            src_is_virtual,
+                            src_target,
+                            len,
+                            work,
+                        )
+                    };
+                    if let Ok(spans) = spans {
+                        pre.merge(crate::cpu_ce::want_ours_spans(ce.fb(), &spans));
+                    }
+                    if let Some(c) = completion {
+                        let resolved = {
+                            let mut ops = WalkOperands::new(ce, &mut last);
+                            crate::cpu_ce::resolve_releases(&mut ops, &[c])
+                        };
+                        if let Ok(rs) = resolved {
+                            pre.merge(crate::cpu_ce::want_releases(ce.fb(), &rs));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        run.preflight = pre;
+        PREFLIGHT_PASSES.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+        PREFLIGHT_PROBED.fetch_add(pre.probed as u64, core::sync::atomic::Ordering::Relaxed);
+        PREFLIGHT_UNARMED.fetch_add(pre.unarmed as u64, core::sync::atomic::Ordering::Relaxed);
+        PREFLIGHT_TRUNCATED.fetch_add(pre.truncated as u64, core::sync::atomic::Ordering::Relaxed);
+        if let Some(at) = pre.first_missing {
+            PREFLIGHT_BLOCKED.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+            // ⊘ `progress` is left at `NONE` by `run_submission_timed`'s own accumulator
+            // BECAUSE NOTHING HAS RUN: `run.launches`, `run.bytes`, `run.completions` and
+            // `run.deferred_releases` are all still at their entry values, and the loop below
+            // has not been entered. That is the claim this whole block exists to make true,
+            // and `a_preflight_refusal_moves_nothing_and_is_therefore_re_runnable` asserts it.
+            return Err(CeUtilsRefusal {
+                fault: FwdFault::CpuCeFb {
+                    phys: at,
+                    why: crate::cpu_ce::PREFLIGHT_NOT_ARMED,
+                },
+                detail: last,
+                progress: CeProgress::NONE,
+            });
+        }
+    }
+
+    // ---- 4. EXECUTE each launch, then release its completion. ---------------------------
+    for m in decoded {
+        // ★★★ **A launch that transfers nothing and exists only to release** — and it is
+        // EXECUTED here, in decode order, alongside the copies.
+        //
+        // # ⊘ Why this is not the forged completion this whole file refuses
+        //
+        // A forgery advances a payload for work that **did not run**. `DATA_TRANSFER_TYPE ==
+        // NONE` is the guest saying there is no work: the engine moves zero bytes, so
+        // writing the payload is not a claim *about* a copy — it **is** the entire act the
+        // guest asked the engine to perform. ⊘ Contrast the `SemRelease` arm below, which
+        // stays unacted-on for the opposite reason: that word is the *host*-FIFO semaphore
+        // beside a real copy, and advancing it would report on a transfer.
+        //
+        // ⚠ It is inside the same loop, in the same order, so a release that follows a copy
+        // in one ring is still written **after** that copy's bytes. Hoisting these would
+        // reorder a fence the guest set (`ogkm-580: uvm_channel.c:1055-1060`).
+        //
+        // `[measured 2026-08-09, boots fmb1/msr1 at 319d29a]` `cuInit` hangs in
+        // `uvm_push_end_and_wait`; the push it waits on is `channel_init`'s and contains
+        // exactly one of these and nothing else.
+        if let PushMethod::CeRelease { completion, .. } = m {
+            run.launches += 1;
+            run.releases += 1;
+            let resolved = {
+                let mut ops = WalkOperands::new(ce, &mut last);
+                crate::cpu_ce::resolve_releases(&mut ops, &[completion]).map_err(|f| {
+                    CeUtilsRefusal {
+                        fault: f,
+                        detail: last,
+                        progress: CeProgress::NONE,
+                    }
+                })?
+            };
+            if let Some(r) = resolved.first() {
+                run.completion_at = Some((r.va, r.op.residency.plane, r.op.addr.0));
+            }
+            // ★★★ §16.66 — the timestamp source, sampled HERE, once, at the moment this
+            // release retires. ⊘ Not hoisted above the loop: a run may carry several
+            // releases and hardware stamps each with the time IT completed, so one sample
+            // shared across a run would report a single instant for a sequence of events —
+            // the same shape as an end-of-boot census answering a lifetime question.
+            if timing == ReleaseTiming::Deferred {
+                run.deferred_releases.extend(resolved);
+                continue;
+            }
+            let now_ns = ce.now_ns();
+            run.completions +=
+                crate::cpu_ce::write_resolved_completion(ce.fb(), vmm, &resolved, Some(now_ns))
+                    .map_err(CeUtilsRefusal::plain)?;
+            continue;
+        }
+        let PushMethod::CeLaunchDma {
+            dst,
+            src,
+            len,
+            dst_is_virtual,
+            src_is_virtual,
+            dst_target,
+            src_target,
+            work,
+            completion,
+        } = m
+        else {
+            // Everything else on this channel is state the codec already consumed
+            // (`SetObject`, the latching runs) or something we do not model. ⊘ A
+            // `SemRelease` is deliberately NOT acted on here: it is the *host* semaphore
+            // four bytes below the finishPayload (§14.15), and advancing it would satisfy
+            // our own counters while the guest spins on the word above it.
+            continue;
+        };
+        run.launches += 1;
+        let spans: Vec<CeSpan> = {
+            let mut ops = WalkOperands::new(ce, &mut last);
+            partition_ce(
+                &mut ops,
+                dst,
+                dst_is_virtual,
+                dst_target,
+                src,
+                src_is_virtual,
+                src_target,
+                len,
+                work,
+            )
+            .map_err(|f| CeUtilsRefusal {
+                fault: f,
+                detail: last,
+                progress: CeProgress::NONE,
+            })?
+        };
+        // ⊘ THE §14.8 GUARD. `execute_ours_spans` SKIPS a `HostCe` sub-copy — it is the
+        // isolate's — and this driver has no isolate path. A silent skip here would move
+        // some bytes, release the semaphore and report a completion over a copy that was
+        // only partly done, which is the exact shape this increment exists not to produce.
+        if let Some(bad) = spans.iter().find(|s| s.sub.by != CeExecutor::Ours) {
+            return Err(CeUtilsRefusal::plain(FwdFault::CpuCeStraddle {
+                dst: bad.sub.dst,
+                dst_end: true,
+            }));
+        }
+        run.spans += spans.len();
+        crate::cpu_ce::execute_ours_spans(ce.fb(), vmm, &spans).map_err(CeUtilsRefusal::plain)?;
+        run.bytes += spans.iter().map(|s| s.sub.len).sum::<u64>();
+        // ★ Attribute those bytes to the store that received them. `dst_place` is `None`
+        // exactly for a destination this executor cannot reach — real device memory — and
+        // `execute_ours` has already refused such a span above, so a span reaching here
+        // always has a plane. Counting it anyway (rather than asserting) keeps the witness
+        // honest if that ever stops being true: the bytes would then be in NEITHER counter
+        // and the `fb + guest_ram == bytes` identity would break loudly.
+        for sp in &spans {
+            match sp.dst_place.map(|o| o.residency.plane) {
+                Some(CpuPlane::Fb) => run.dst_bytes_fb += sp.sub.len,
+                Some(CpuPlane::GuestRam) => run.dst_bytes_guest_ram += sp.sub.len,
+                None => {}
+            }
+        }
+
+        // ---- 5. SIGNAL, and only now. --------------------------------------------------
+        //
+        // ⊘ `completion` is the **finishPayload** — the engine-class `SET_SEMAPHORE_A/B/
+        // PAYLOAD` release carried INSIDE the launch (§14.15), at `pbGpuVA +
+        // finishPayloadOffset`. `[measured 2026-08-08]` that is guest RAM `0x2f2c_b004` on
+        // the walling channel, four bytes ABOVE the host-FIFO semaphore at `…b000` that
+        // `PushMethod::SemRelease` decodes. `channelWaitForFinishPayload` spins on the
+        // former. Advancing the latter would log a completion, satisfy our counters and
+        // leave the guest spinning forever.
+        let Some(c) = completion else {
+            continue;
+        };
+        let resolved = {
+            let mut ops = WalkOperands::new(ce, &mut last);
+            crate::cpu_ce::resolve_releases(&mut ops, &[c]).map_err(|f| CeUtilsRefusal {
+                fault: f,
+                detail: last,
+                progress: CeProgress::NONE,
+            })?
+        };
+        if let Some(r) = resolved.first() {
+            run.completion_at = Some((r.va, r.op.residency.plane, r.op.addr.0));
+        }
+        if timing == ReleaseTiming::Deferred {
+            run.deferred_releases.extend(resolved);
+            continue;
+        }
+        let now_ns = ce.now_ns();
+        run.completions +=
+            crate::cpu_ce::write_resolved_completion(ce.fb(), vmm, &resolved, Some(now_ns))
+                .map_err(CeUtilsRefusal::plain)?;
+    }
+
+    // ⊘ A submission that decoded no launch moved no byte. It is not served.
+    //
+    // ★★★★ AND IT IS NAMED FOR WHAT HAPPENED. This used to raise
+    // `FwdFault::NotAnEngine(kayfabe_arch::ids::ClassId(0))` — an engine-class-lookup
+    // failure, with the class written **as a literal on this line**, for a path that never
+    // looks a class up. `[measured 2026-08-09, boot s19_1dfde1b_cup2]` the boot report read
+    // `NotAnEngine(ClassId(0))` and sent its reader to find who was supposed to supply the
+    // class. Nobody was: `route_engine_object` is the only site that resolves one, and it
+    // is not on the doorbell path. ⊘ Same defect as the `PushTooFragmented { len: 0 }` that
+    // `RingBroughtNoEntry` replaced, one layer later — a borrowed variant whose argument
+    // then had to be invented, and an invented argument reads exactly like a measurement.
+    if run.launches == 0 {
+        return Err(CeUtilsRefusal::plain(FwdFault::SubmissionDecodedNoWork {
+            entries: u32::try_from(run.entries).unwrap_or(u32::MAX),
+            index: start_index,
+            methods: u32::try_from(run.methods).unwrap_or(u32::MAX),
+            opaque,
+            set_object,
+        }));
+    }
+    Ok(())
+}
+
+/// Decode a byte range of method words into `(header, args)` pairs against `pb`. Total on
+/// any input — a truncated or hostile range yields fewer methods, never a panic and never
+/// an unbounded read.
+///
+/// ⊘ The same shape as `kayfabe_fwd`'s own private `decode_methods`, over the codec
+/// directly rather than over an `Arch`, because this driver holds the codec and not the
+/// spine. The framing rule — advance past at least the header, so a bogus count cannot
+/// stall — is the property both must have and is asserted here in its own test.
+fn decode_methods(pb: &dyn PushbufferAbi, bytes: &[u8]) -> Vec<(u32, Vec<u32>)> {
+    let words: Vec<u32> = bytes
+        .chunks_exact(4)
+        .map(|w| u32::from_le_bytes(w.try_into().expect("4 bytes")))
+        .collect();
+    let mut out = Vec::new();
+    let mut i = 0usize;
+    while i < words.len() {
+        let header = words[i];
+        let nargs = pb.method_len(header);
+        let start = i + 1;
+        let end = start.saturating_add(nargs).min(words.len());
+        out.push((header, words[start..end].to_vec()));
+        i = end.max(i + 1);
+    }
+    out
+}
+
+kayfabe_util::assert_send_sync!(GpCursor, CeUtilsChannel, CeUtilsRun, CeUtilsRefusal);
+
+// =====================================================================================
+// ★★★★★ §16.79 — THE METHOD STREAM, READ AND NOT INTERPRETED
+// =====================================================================================
+
+/// What one bounded look at a submission's ring produced. ⊘ Numbers and words only — this
+/// struct carries no interpretation of any of them.
+struct ReadMethods {
+    ranges: Vec<kayfabe_arch::PushRange>,
+    methods: Vec<(u32, Vec<u32>)>,
+    total: usize,
+    entries: u32,
+    start_index: u32,
+    /// The walk's last refusing resolution, kept so a caller that resolves a further address
+    /// out of these methods reuses **the same** resolver state rather than opening a second.
+    last: Option<(GpuVa, CeResolve)>,
+}
+
+/// ★★ **The one ring read + method decode both readers share.**
+///
+/// ⊘ Extracted rather than copied. [`dump_submission_methods`] and
+/// [`observe_declared_completion`] look at the same bytes for different reasons, and two
+/// copies of this loop would be two descriptions of the wire that agree until they do not —
+/// which is the failure this campaign has paid for more than any other.
+fn read_submission_methods(
+    ce: &mut CePlane<'_>,
+    pb: &dyn PushbufferAbi,
+    vmm: &mut dyn Vmm,
+    chan: CeUtilsChannel,
+    cursor: GpCursor,
+) -> Result<ReadMethods, CeUtilsRefusal> {
+    let mut last: Option<(GpuVa, CeResolve)> = None;
+    let entries = if chan.ring_entries == 0 {
+        RING_ENTRIES_FALLBACK
+    } else {
+        chan.ring_entries
+    };
+    let start_index = cursor.next % entries;
+    let mut next = cursor.next;
+
+    // ---- 1. THE RING — the same read, the same arch decoder, as `run_submission`. -------
+    //
+    // ★★ **w386 — bounded by `GP_PUT` when the channel has one, and NOT refused when it does
+    // not.** This is deliberately the opposite policy to [`run_submission`]'s, and the
+    // asymmetry is the point rather than an oversight: that function **releases semaphores**,
+    // so a stale entry there is a completion for work that did not happen; this one reads
+    // bytes into a report and acts on nothing, so a stale entry here is at worst a wrong line
+    // in a log — and refusing would blind the observer on exactly the channels whose failure
+    // it exists to describe. ⊘ The bound is still applied when available, because a narrower
+    // observation is a better one.
+    let mut ranges: Vec<kayfabe_arch::PushRange> = Vec::new();
+    for _ in 0..MAX_ENTRIES_PER_DOORBELL {
+        let idx = next % entries;
+        if chan.gp_put.is_some_and(|p| p < entries && p == idx) {
+            break;
+        }
+        let at = chan
+            .ring_va
+            .wrapping_add(u64::from(idx) * GP_ENTRY_SIZE as u64);
+        let mut raw = [0u8; GP_ENTRY_SIZE];
+        read_va(ce, vmm, &mut last, at, &mut raw).map_err(|f| CeUtilsRefusal {
+            fault: f,
+            detail: last,
+            progress: CeProgress::NONE,
+        })?;
+        let Some(r) = pb.gpfifo_entries(&raw).into_iter().next() else {
+            break;
+        };
+        ranges.push(r);
+        next = next.wrapping_add(1) % entries;
+    }
+    if ranges.is_empty() {
+        return Err(CeUtilsRefusal::plain(FwdFault::RingBroughtNoEntry {
+            ring_va: GpuVa(chan.ring_va),
+            index: start_index,
+            entries,
+        }));
+    }
+
+    // ---- 2. THE METHOD WORDS — bounded exactly as the executor's are. -------------------
+    let mut methods: Vec<(u32, Vec<u32>)> = Vec::new();
+    let mut total = 0usize;
+    for r in &ranges {
+        if total >= MAX_PUSH_TOTAL_BYTES {
+            break;
+        }
+        let len = (r.len as usize)
+            .min(MAX_PUSH_RANGE_BYTES)
+            .min(MAX_PUSH_TOTAL_BYTES - total);
+        let mut buf = vec![0u8; len];
+        read_va(ce, vmm, &mut last, r.va.0, &mut buf).map_err(|f| CeUtilsRefusal {
+            fault: f,
+            detail: last,
+            progress: CeProgress::NONE,
+        })?;
+        methods.extend(decode_methods(pb, &buf));
+        total += len;
+    }
+    Ok(ReadMethods {
+        ranges,
+        methods,
+        total,
+        entries,
+        start_index,
+        last,
+    })
+}
+
+/// ★★★ What ONE read of a GR submission established. Returned whole rather than as a tuple
+/// so the census and the completion can never be attributed to two different reads.
+#[derive(Debug, Clone)]
+pub struct ObservedSubmission {
+    /// The completion the guest declared, and where its address landed.
+    pub declared: (
+        crate::completion_watch::DeclaredCompletion,
+        crate::completion_watch::Site,
+    ),
+    /// ★★★★★ **Every OTHER 64-bit address these bytes name, and where each one landed** —
+    /// see [`census_gr_addresses`] for what the number is for and what it is not.
+    pub census: Vec<(
+        crate::completion_watch::AddressOperand,
+        crate::completion_watch::Site,
+    )>,
+    /// Guest-authored MME instruction dwords in this submission. See
+    /// [`crate::completion_watch::LOAD_MME_INSTRUCTION_RAM`] for why this number, and not
+    /// any list of decoded methods, is what bounds a method allowlist.
+    pub mme_dwords: usize,
+}
+
+/// ★★★★★ **THE DECLARE HALF OF THE COMPLETION OBSERVER** — decode the completion this
+/// submission declares, and resolve its address **once**, here, on the thread that already
+/// holds the locks a resolution needs.
+///
+/// Returns `Ok(None)` when the submission declares no report semaphore at all — which is a
+/// fact about the guest's bytes, not a failure, and is what every CE-only push answers.
+///
+/// # ⊘ What this function may NOT do, by construction
+///
+/// It performs **reads only**. It writes no memory, raises no interrupt, advances no cursor
+/// and moves no engine. The `Site` it hands back is a *statement about where the address
+/// went*, and [`crate::completion_watch::Site::Unresolved`] is a first-class answer carrying
+/// the walk's own name for the refusal — never a zero, never a retry against a second
+/// resolver.
+///
+/// # ⚠ The dependency this function makes visible rather than fakes
+///
+/// A declared VA that the address table cannot bind resolves to
+/// [`crate::completion_watch::Site::Unresolved`] and the observer then reads **nothing**.
+/// That is the correct outcome and it names the missing plane; a completion observer that
+/// papered over it with a fabricated page would be observing its own fabrication.
+///
+/// # Errors
+/// [`CeUtilsRefusal`] if the ring or the pushbuffer itself could not be read — i.e. the
+/// same refusals [`dump_submission_methods`] reports, from the same read.
+pub fn observe_declared_completion(
+    ce: &mut CePlane<'_>,
+    pb: &dyn PushbufferAbi,
+    vmm: &mut dyn Vmm,
+    chan: CeUtilsChannel,
+    cursor: GpCursor,
+) -> Result<Option<ObservedSubmission>, CeUtilsRefusal> {
+    let mut look = read_submission_methods(ce, pb, vmm, chan, cursor)?;
+    let Some(decl) = crate::completion_watch::decode_report_semaphore(&look.methods) else {
+        return Ok(None);
+    };
+    // ★ The SAME resolver state the ring read used — `last` carries forward — so the site
+    // and the ring cannot come from two different walks of two different instants.
+    let site = match WalkOperands::new(ce, &mut look.last).resolve_one(decl.va.0) {
+        Ok((op, _left, leaf)) => match op.residency.plane {
+            CpuPlane::GuestRam => crate::completion_watch::Site::GuestRam { gpa: op.addr.0 },
+            CpuPlane::Fb => crate::completion_watch::Site::Framebuffer {
+                phys: op.addr.0,
+                leaf,
+            },
+        },
+        Err(fault) => crate::completion_watch::Site::Unresolved(match &look.last {
+            Some((va, r)) => format!("{fault:?} at va=0x{:x}: {}", va.0, r.kind()),
+            None => format!("{fault:?}"),
+        }),
+    };
+    // ★★★★★ THE ADDRESS CENSUS, on the SAME read and the SAME walk. ⊘ Deliberately not a
+    // second `read_submission_methods`: two reads of one ring at two instants are two
+    // descriptions of the wire that agree until they do not, which is the failure this
+    // campaign has paid for more than any other.
+    let (operands, mme_dwords) = crate::completion_watch::decode_address_operands(&look.methods);
+    let census = resolve_operands(ce, &mut look.last, operands);
+    Ok(Some(ObservedSubmission {
+        declared: (decl, site),
+        census,
+        mme_dwords,
+    }))
+}
+
+/// ★★★ What ONE read of a **copy-engine** submission established about where its release
+/// lands. Returned whole rather than as a bare `Vec`, so *"nothing decoded"* and *"a launch
+/// decoded and released nothing"* can never arrive as the same empty list.
+#[derive(Debug, Clone, Default)]
+pub struct CeReleaseTargets {
+    /// Every distinct GPU VA a `LAUNCH_DMA` in this submission will write its payload to, in
+    /// decode order. ⊘ **The guest's own operand**, straight out of the chip codec's
+    /// `SET_SEMAPHORE_A`/`_B` decode — never a remembered address.
+    pub vas: Vec<GpuVa>,
+    /// How many `(header, args)` pairs the read produced. `0` means the pushbuffer was empty
+    /// or unreadable, which is a different fact from *"it carried no release"*.
+    pub methods: usize,
+    /// How many decoded methods were launches at all (`CeLaunchDma` + `CeRelease`).
+    pub launches: usize,
+    /// How many decoded methods the codec did not model. ★ Printed beside `launches`,
+    /// because `methods > 0, launches = 0, opaque = methods` is *"another engine's bytes"*
+    /// while `opaque = 0` is *"we framed the headers wrong"* — opposite bugs, one empty list.
+    pub opaque: usize,
+}
+
+/// ★★★★★ **THE COMPLETION PIN'S SECOND SOURCE — the semaphore VA THIS channel's own
+/// pushbuffer names, read at THIS doorbell.**
+///
+/// # ★★★ Why it exists: an ordering race, measured
+///
+/// `[measured 2026-08-12, w267_on, real GA106]` the completion pin's only source was
+/// [`crate::completion_watch::WatchList::declared_sites`], which the **GrCompute** doorbells
+/// populate, while the pin is triggered by a **Ce** doorbell — and nothing orders those. Four
+/// of eight copy-engine doorbells arrived before any GR channel had declared, printed
+/// `NO PAGE TO PIN`, and their four channels then took `Xid 31 … ACCESS_TYPE_VIRT_WRITE` at
+/// the semaphore page while the four that pinned wrote a complete timestamped report. The
+/// split was 4/4 with no exceptions.
+///
+/// ⇒ The fix is a source that **cannot** be late, because it is in the bytes the doorbell is
+/// about: a copy-engine channel that rings has already written its own
+/// `SET_SEMAPHORE_A`/`_B`/`_PAYLOAD`.
+///
+/// # ⊘⊘ What this is NOT — and it is the one way this rung could go badly wrong
+///
+/// It is **not** a remembered `0x2_0440f000`. An address recalled from a previous boot and
+/// then read out of guest RAM is the `cap2b` class this project keeps as a fixture — 378 GSP
+/// elements parsed out of arbitrary guest memory and answered `NV_OK`. Every VA here comes
+/// from the guest's own method stream, read at this doorbell, decoded by the **chip's own**
+/// codec ([`kayfabe_arch::PushbufferAbi::decode_run`]) rather than by a second parser written
+/// for this call site.
+///
+/// It is also **not** a widening of the completion watch. The caller pins with these VAs; it
+/// never declares them. A `SET_SEMAPHORE` release is the copy engine's own completion and the
+/// guest does not poll it, so an `OBSERVED` verdict on one would mean nothing and read as
+/// everything (`w267` RESULT §5.3).
+///
+/// # ⊘ It advances nothing
+///
+/// Reads only: the cursor is taken by value and never written back, the [`MethodState`] is a
+/// **copy** of the channel's accumulator (the type is `Copy`) so a decode here cannot latch
+/// state a later execute would see, and no memory is written. It is the same read
+/// [`observe_declared_completion`] performs one class over.
+///
+/// # Errors
+/// [`CeUtilsRefusal`] if the ring or the pushbuffer could not be read — the same refusals
+/// [`dump_submission_methods`] reports, from the same read.
+pub fn observe_ce_release_targets(
+    ce: &mut CePlane<'_>,
+    pb: &dyn PushbufferAbi,
+    vmm: &mut dyn Vmm,
+    chan: CeUtilsChannel,
+    cursor: GpCursor,
+    state: MethodState,
+) -> Result<CeReleaseTargets, CeUtilsRefusal> {
+    let look = read_submission_methods(ce, pb, vmm, chan, cursor)?;
+    // ⊘ A COPY of the channel's accumulator, mutated locally and dropped. See the docs above:
+    // an observer that advanced the shared state would change what a later execute decodes.
+    let mut st = state;
+    let decoded = pb.decode_run(&mut st, &look.methods);
+    Ok(release_targets_of(&decoded, look.methods.len()))
+}
+
+/// The pure half of [`observe_ce_release_targets`] — everything after the read.
+///
+/// ⊘ Extracted so the collection rule can be tested without a `CePlane`, a `Vmm` or a guest:
+/// the read is the part that needs a machine, and it is not the part that has a rule in it.
+#[must_use]
+pub fn release_targets_of(decoded: &[PushMethod], methods: usize) -> CeReleaseTargets {
+    let mut out = CeReleaseTargets {
+        methods,
+        ..CeReleaseTargets::default()
+    };
+    for m in decoded {
+        match m {
+            PushMethod::Opaque => out.opaque += 1,
+            // ⊘ A launch is counted whether or not it names a release. *"The engine was asked
+            // to do something"* and *"it was asked to signal somewhere"* are different facts,
+            // and a caller that saw only the VA list could not tell an empty list caused by
+            // *no launch* from one caused by *a launch with `SEMAPHORE_TYPE = NONE`*.
+            PushMethod::CeLaunchDma { completion, .. } => {
+                out.launches += 1;
+                if let Some(c) = completion
+                    && !out.vas.contains(&c.addr)
+                {
+                    out.vas.push(c.addr);
+                }
+            }
+            PushMethod::CeRelease { completion, .. } => {
+                out.launches += 1;
+                if !out.vas.contains(&completion.addr) {
+                    out.vas.push(completion.addr);
+                }
+            }
+            // ⊘ `SemRelease` is deliberately NOT here. It is the **host-FIFO** semaphore, four
+            // bytes from the engine-class one, and `CeCompletion`'s own docs call that
+            // distinction a trap. Pinning the page a host-FIFO release names would be pinning
+            // a different address for a different reason and calling it the same source.
+            _ => {}
+        }
+    }
+    out
+}
+
+/// ★★★ One address range a `LAUNCH_DMA` will touch, as the guest's own operands stated it.
+///
+/// ⊘ Carried as `(va, len, write)` rather than as a bare page set because the three facts are
+/// read by different decisions: the **extent** decides how many pages a pin must place (a copy
+/// longer than a page faults on its later pages too), and the **direction** is the only thing
+/// that can attribute a surviving `Xid`'s `ACCESS_TYPE` after both classes have been pinned.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CeOperandExtent {
+    /// The GPU VA the operand names — the guest's own `OFFSET_OUT_*`/`OFFSET_IN_*` pair.
+    pub va: GpuVa,
+    /// How many bytes the engine will touch from `va`, as
+    /// [`kayfabe_arch::PushMethod::CeLaunchDma::len`] states it.
+    pub len: u64,
+    /// `true` for a **destination** (`ACCESS_TYPE_VIRT_WRITE`), `false` for a **source**.
+    pub write: bool,
+}
+
+/// ★★★★★ What ONE read of a copy-engine submission established about the **pages its launches
+/// will dereference** — the plane the release-target source cannot see.
+///
+/// ⊘ Returned whole rather than as a bare `Vec`, for [`CeReleaseTargets`]' reason: *"nothing
+/// decoded"*, *"a launch decoded and named no virtual operand"* and *"every operand was
+/// physical"* are three different facts and must never arrive as the same empty list.
+#[derive(Debug, Clone, Default)]
+pub struct CeOperandTargets {
+    /// Every virtual operand extent, in decode order, destinations first within each launch.
+    pub extents: Vec<CeOperandExtent>,
+    /// How many `(header, args)` pairs the read produced.
+    pub methods: usize,
+    /// How many decoded methods were launches at all (`CeLaunchDma` + `CeRelease`).
+    pub launches: usize,
+    /// How many decoded methods the codec did not model. See [`CeReleaseTargets::opaque`] for
+    /// why this is printed beside `launches` rather than inferred from it.
+    pub opaque: usize,
+    /// ★ How many launches carried **no addressable operand at all** — every
+    /// [`kayfabe_arch::PushMethod::CeRelease`], which is `DATA_TRANSFER_TYPE == NONE`.
+    /// ⊘ `launches > 0, extents = [], release_only = launches` is *"this submission only
+    /// signals"*; `release_only = 0` with an empty list is *"every operand was physical"*.
+    /// Opposite facts, and a pin pass that saw only the list could not tell them apart.
+    pub release_only: usize,
+    /// How many operands were **physical** (`dst_is_virtual`/`src_is_virtual` false) and so
+    /// name no VA this pass may pin. ⚠ Counted rather than dropped silently: a physical
+    /// destination is a real thing the guest can ask for, and it is a different reason for an
+    /// empty list than *"nothing decoded"*.
+    pub physical: usize,
+}
+
+/// The pure half of [`observe_ce_operand_targets`] — everything after the read.
+///
+/// ⊘ Extracted for [`release_targets_of`]'s reason: the read is the part that needs a machine
+/// and it is not the part that has a rule in it.
+///
+/// # ★★★ The rule, and each clause is a refusal
+///
+/// - **Only `CeLaunchDma`.** A [`kayfabe_arch::PushMethod::CeRelease`] moves zero bytes and
+///   has no operands at all (its own docs: it *"never writes `OFFSET_OUT_UPPER`/`_LOWER`"*);
+///   its address is the **release** plane's, already served by [`release_targets_of`], and
+///   folding it in here would pin one page twice under two names.
+/// - **Only VIRTUAL operands.** A physical `dst`/`src` is not a VA and resolving it through a
+///   per-VAS address table would be reinterpreting one number as another — the refusal
+///   `pin_ring_guest_ram` makes by name when a binding lands in the framebuffer.
+/// - **No source for a fill or a scrub.** [`kayfabe_arch::CeWork::Fill`]/`Scrub` have no
+///   source operand at all; the codec sets `src = 0` explicitly and says so, and reporting
+///   that zero as an address to pin would put a page at VA `0` in the census.
+/// - **A zero-length launch names nothing.** `len == 0` touches no byte, so it names no page.
+#[must_use]
+pub fn operand_targets_of(decoded: &[PushMethod], methods: usize) -> CeOperandTargets {
+    let mut out = CeOperandTargets {
+        methods,
+        ..CeOperandTargets::default()
+    };
+    for m in decoded {
+        match m {
+            PushMethod::Opaque => out.opaque += 1,
+            PushMethod::CeRelease { .. } => {
+                out.launches += 1;
+                out.release_only += 1;
+            }
+            PushMethod::CeLaunchDma {
+                dst,
+                src,
+                len,
+                dst_is_virtual,
+                src_is_virtual,
+                work,
+                ..
+            } => {
+                out.launches += 1;
+                if *len == 0 {
+                    continue;
+                }
+                if *dst_is_virtual {
+                    out.extents.push(CeOperandExtent {
+                        va: *dst,
+                        len: *len,
+                        write: true,
+                    });
+                } else {
+                    out.physical += 1;
+                }
+                // ⊘ `CeWork::Copy` is the ONLY kind with a source. See the codec's own
+                // comment at `Ga10xPushbuffer::ce_launch`: a memset's source slots are never
+                // latched, so `src` is a deliberate, documented zero — not an address.
+                if matches!(work, kayfabe_arch::CeWork::Copy) {
+                    if *src_is_virtual {
+                        out.extents.push(CeOperandExtent {
+                            va: *src,
+                            len: *len,
+                            write: false,
+                        });
+                    } else {
+                        out.physical += 1;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// ★★★★★ **THE PIN'S FOURTH SOURCE — the pages THIS channel's own `LAUNCH_DMA` operands
+/// name, read at THIS doorbell.**
+///
+/// # ★★★ Why it exists: one address, named by hardware and by nothing of ours
+///
+/// `[measured 2026-08-12, w268_pass / w269_pass / w269b_pass, three consecutive armed boots,
+/// real GA106]` the guest's first substantive copy-engine work — chan 8's **second**
+/// submission, `methods=11 launches=3` over two GPFIFO entries — takes
+/// `Xid 31 ENGINE CE2 HUBCLIENT_CE0 FAULT_PTE ACCESS_TYPE_VIRT_WRITE @ 0x2_04420000`, and
+/// `w268` §3.2 measured that **no source in this device has ever named that page**
+/// (`grep -c 4420000` = 0). The same submission's own `SET_SEMAPHORE_A`/`_B` names
+/// `0x2_0440ff70` (`run_w268_pass_qemu.log:980`) — the slot `w269` measured `cuCtxCreate`
+/// polling for the value `2` while it holds `1`. **A submission that faults never reaches its
+/// release.**
+///
+/// ⇒ The gap is structural, not an oversight: the three existing pin sources are the channel's
+/// **ring**, its **GPFIFO entries' pushbuffers** and its **release targets**, and none of them
+/// is a copy *operand*. The one census that decodes operands
+/// ([`crate::completion_watch::decode_address_operands`]) refuses every write on a subchannel
+/// not bound to `AMPERE_COMPUTE_B`, so a copy engine's `OFFSET_OUT_*` is invisible to it **by
+/// construction**.
+///
+/// # ⊘⊘ What this is NOT — the one way this rung could go badly wrong
+///
+/// It is **not** a remembered `0x2_04420000`. That literal appears nowhere in this function,
+/// nowhere in its caller, and nowhere in the pin. Every VA comes from the guest's own method
+/// stream, read at this doorbell, framed by [`kayfabe_abi::submit`] and decoded by the
+/// **chip's own** codec — the `cap2b` discipline [`observe_ce_release_targets`] states at
+/// length and this function inherits whole.
+///
+/// # ⊘ It advances nothing
+///
+/// Reads only, exactly as [`observe_ce_release_targets`]: the cursor is taken by value and
+/// never written back and the [`MethodState`] is a **copy** of the channel's accumulator, so a
+/// decode here cannot latch state a later execute would see.
+///
+/// ⚠ **It performs its OWN read**, and that is deliberate rather than accidental: this pass is
+/// separately armed, so it must be able to run when the release-target pass is not, and a row
+/// that reported numbers taken from another pass's read would be describing a ring at an
+/// instant it did not sample. Both rows print their own `methods=`, so a disagreement between
+/// two reads of one ring is **visible** rather than silently averaged.
+///
+/// # Errors
+/// [`CeUtilsRefusal`] if the ring or the pushbuffer could not be read — the same refusals
+/// [`dump_submission_methods`] reports, from the same read.
+pub fn observe_ce_operand_targets(
+    ce: &mut CePlane<'_>,
+    pb: &dyn PushbufferAbi,
+    vmm: &mut dyn Vmm,
+    chan: CeUtilsChannel,
+    cursor: GpCursor,
+    state: MethodState,
+) -> Result<CeOperandTargets, CeUtilsRefusal> {
+    let look = read_submission_methods(ce, pb, vmm, chan, cursor)?;
+    // ⊘ A COPY of the channel's accumulator, mutated locally and dropped.
+    let mut st = state;
+    let decoded = pb.decode_run(&mut st, &look.methods);
+    Ok(operand_targets_of(&decoded, look.methods.len()))
+}
+
+/// ★★★★★ **THE SECOND JOIN SOURCE — resolve ONE stated VA to the leaf that carries it.**
+///
+/// # ⊘ Why this is not `census_gr_addresses` with a list of one
+///
+/// The census answers *"where do the addresses the METHODS dereference land"*. This answers
+/// *"where does an address the CHANNEL ITSELF declared land"* — the GPFIFO ring being the
+/// only one that matters today. `[measured 2026-08-11, w260]` the census joined framebuffer
+/// leaves `0x400000` / `0x600000` / `0x800000` and **never** the ring's leaf at `0x1000000`,
+/// because **a ring is not an operand of the methods it carries**. No amount of operand
+/// decoding reaches it; it needs a second source, and this is that source's resolver.
+///
+/// # ★★★ It reads NO ring byte, and that is what keeps opacity a property rather than a rule
+///
+/// This is a page-table walk of one address. It does not read the GPFIFO, does not fetch a
+/// pushbuffer, decodes no method and classifies nothing. ⊘ A caller may therefore run it on
+/// a path that must never depend on the guest's bytes being parseable — which is precisely
+/// the path the channel's birth is on.
+///
+/// Returns the [`crate::completion_watch::Site`] always (so a refusal carries the walk's own
+/// name for itself) and the leaf **only** when the address landed in the framebuffer — the
+/// one plane [`crate::FbLeafBacking::Joined`] can join.
+pub fn resolve_leaf_of(
+    ce: &mut CePlane<'_>,
+    va: u64,
+) -> (
+    crate::completion_watch::Site,
+    Option<crate::completion_watch::FbLeaf>,
+) {
+    let mut last = None;
+    match WalkOperands::new(ce, &mut last).resolve_one(va) {
+        Ok((r, _left, leaf)) => match r.residency.plane {
+            // ⊘ A ring in guest RAM is a REAL and served case (`run_w226a_qemu.log` measured
+            // `LEAF@0x420064000 -> SysmemCoherent`), and it is not this source's to join: the
+            // guest-RAM pin owns that plane. Answering `None` here is the honest split, not a
+            // miss — `guest_ring_adoption.md` §4 item 1's *"both planes occur, in one boot
+            // family, and which one a ring is in cannot be inferred from its engine."*
+            CpuPlane::GuestRam => (
+                crate::completion_watch::Site::GuestRam { gpa: r.addr.0 },
+                None,
+            ),
+            CpuPlane::Fb => (
+                crate::completion_watch::Site::Framebuffer {
+                    phys: r.addr.0,
+                    leaf,
+                },
+                Some(leaf),
+            ),
+        },
+        // ⊘ `Unresolved` is a first-class answer ABOUT THE ADDRESS TABLE — here it means
+        // *"the guest has not bound its own ring yet at the instant we asked"*, which is a
+        // TIMING fact and must never be read as *"the channel declared no ring"*.
+        Err(fault) => (
+            crate::completion_watch::Site::Unresolved(match &last {
+                Some((va, r)) => format!("{fault:?} at va=0x{:x}: {}", va.0, r.kind()),
+                None => format!("{fault:?}"),
+            }),
+            None,
+        ),
+    }
+}
+
+/// Resolve each named operand through the walk that is already in flight.
+fn resolve_operands(
+    ce: &mut CePlane<'_>,
+    last: &mut Option<(GpuVa, CeResolve)>,
+    operands: Vec<crate::completion_watch::AddressOperand>,
+) -> Vec<(
+    crate::completion_watch::AddressOperand,
+    crate::completion_watch::Site,
+)> {
+    let mut out = Vec::with_capacity(operands.len());
+    for op in operands {
+        let site = match WalkOperands::new(ce, last).resolve_one(op.va.0) {
+            Ok((r, _left, leaf)) => match r.residency.plane {
+                CpuPlane::GuestRam => crate::completion_watch::Site::GuestRam { gpa: r.addr.0 },
+                CpuPlane::Fb => crate::completion_watch::Site::Framebuffer {
+                    phys: r.addr.0,
+                    leaf,
+                },
+            },
+            // ⊘ `Unresolved` is a first-class answer ABOUT THE ADDRESS TABLE and must never
+            // be read as "the guest named nothing there".
+            Err(fault) => crate::completion_watch::Site::Unresolved(match &*last {
+                Some((va, r)) => format!("{fault:?} at va=0x{:x}: {}", va.0, r.kind()),
+                None => format!("{fault:?}"),
+            }),
+        };
+        out.push((op, site));
+    }
+    out
+}
+
+/// ★★★★★ **THE ADDRESS CENSUS — resolve EVERY address this GR submission names, not just
+/// the one the guest polls.**
+///
+/// # ⊘ Why this exists, and it is a scoping instrument rather than a step toward execution
+///
+/// `[measured 2026-08-10, boots `w226b_534e1b3_cup2` and `w227a_c5f251d_control`]` the
+/// completion observer proved **one** thing about the address plane: guest VA
+/// `0x2_0440fff0` binds, `site=GuestRam`. That refuted four rungs of `RING-VA-UNBOUND` for
+/// that address — and it is one address out of the seventeen the class can name.
+///
+/// The open question is `S1`: may the host GR engine execute the guest's pushbuffer? The
+/// honest form of that question is **not** *"can we route the doorbell"*; it is *"is there a
+/// host VA space in which every address these bytes can dereference lands in this guest's
+/// own memory, and nothing else does"*. `docs/design/gr_execution_boundary.md` argues that
+/// the VA space is the **only** boundary available (§2: `LOAD_MME_INSTRUCTION_RAM` defeats
+/// any method-level allowlist, because the MME's output is *methods*). ⇒ The size of that
+/// gap is a **measurable number**, and this function measures it: how many of the operands
+/// the guest actually names does our table bind today?
+///
+/// ★ An argument about a wall, replaced by a count at the guest's own addresses. Same move
+/// the observer made for the completion, one register file wider.
+///
+/// # ⊘ What it may NOT do, by construction
+///
+/// Reads only. It resolves addresses and reports where they went; it advances no cursor,
+/// writes no memory, produces no plan and lowers nothing to a host verb. Knowing where an
+/// address lands is not permission to let an engine dereference it.
+///
+/// Returns `(operands, mme_instruction_dwords)`; the operand list is empty when the
+/// submission binds no compute class at all, which is a fact about the guest's bytes.
+///
+/// # Errors
+/// [`CeUtilsRefusal`] when the ring or a pushbuffer range will not resolve — the same walk
+/// and the same names as [`run_submission`]'s.
+pub fn census_gr_addresses(
+    ce: &mut CePlane<'_>,
+    pb: &dyn PushbufferAbi,
+    vmm: &mut dyn Vmm,
+    chan: CeUtilsChannel,
+    cursor: GpCursor,
+) -> Result<
+    (
+        Vec<(
+            crate::completion_watch::AddressOperand,
+            crate::completion_watch::Site,
+        )>,
+        usize,
+    ),
+    CeUtilsRefusal,
+> {
+    let mut look = read_submission_methods(ce, pb, vmm, chan, cursor)?;
+    let (operands, mme_dwords) = crate::completion_watch::decode_address_operands(&look.methods);
+    Ok((resolve_operands(ce, &mut look.last, operands), mme_dwords))
+}
+
+/// ★★★★★ **Dump the raw method headers of the submission this doorbell is about, WITHOUT
+/// deciding what any of them mean.**
+///
+/// # Why this exists, and why it is not [`run_submission`]
+///
+/// `[measured 2026-08-10, boots `w215_79ed443_ctl` / `w216_f5f55ad_mcbudget`]` `cuCtxCreate`
+/// waits on GrCompute channel token `0x00000007` and rings it 86 times, while `cup2`
+/// performs **zero kernel launches** — no `cuModuleLoad`, no PTX, nothing to execute. Two
+/// readings fit: the traffic is user compute, or it is **golden-context initialisation**
+/// (context-buffer setup and a report semaphore). They ask for completely different rungs,
+/// and ⊘ **the channel's class cannot tell them apart** — `AMPERE_COMPUTE_B` is allocated
+/// during context creation whether or not anything is ever launched.
+///
+/// Only the method stream can. [`run_submission`] cannot be asked: it is the CE executor's
+/// reader, it decodes against the CE codec, and on a GR ring every method comes back
+/// [`kayfabe_arch::PushMethod::Opaque`] by class gating — *"no launch found"* out of a
+/// decoder that could not have found one is not evidence.
+///
+/// # ⊘ What this function refuses to do
+///
+/// It does **not** decode, classify, or name a single method. It reports the header word,
+/// the method address the header carries, and the argument words — as numbers. A reader
+/// joins them to `clc7c0.h` offline. ⊘ That is the whole discipline: a dump that said
+/// "SET_OBJECT" would be this port's opinion about a GR class it has no codec for, and the
+/// question being asked is precisely whether our opinion of this stream is right.
+///
+/// It advances nothing: `cursor` is taken by value and no state is written back, so calling
+/// this on a doorbell the port then refuses leaves the channel exactly as it was.
+///
+/// # Errors
+/// [`CeUtilsRefusal`] when the ring or a pushbuffer range will not resolve — the same walk,
+/// the same names, as [`run_submission`]'s.
+pub fn dump_submission_methods(
+    ce: &mut CePlane<'_>,
+    pb: &dyn PushbufferAbi,
+    vmm: &mut dyn Vmm,
+    chan: CeUtilsChannel,
+    cursor: GpCursor,
+    max_methods: usize,
+) -> Result<String, CeUtilsRefusal> {
+    let ReadMethods {
+        ranges,
+        methods,
+        total,
+        entries,
+        start_index,
+        ..
+    } = read_submission_methods(ce, pb, vmm, chan, cursor)?;
+
+    // ---- 3. THE REPORT — numbers only. -------------------------------------------------
+    let mut out = format!(
+        "ring=0x{:x} idx={start_index} entries={entries} ranges={} methods={} bytes={total}",
+        chan.ring_va,
+        ranges.len(),
+        methods.len(),
+    );
+    for r in &ranges {
+        out.push_str(&format!(" | range va=0x{:x} len={}", r.va.0, r.len));
+    }
+    for (n, (header, args)) in methods.iter().take(max_methods).enumerate() {
+        // ★ The method ADDRESS as the class headers write it: the header's low 13 bits are
+        // the address in dwords, so `<< 2` is the byte offset a `clc7c0.h` `#define` states.
+        // ⊘ Arithmetic on the header, not an interpretation of it — the only claim here is
+        // that this arch packs the address in those bits, which `PushbufferAbi::method_len`
+        // already relies on to walk the stream at all.
+        let addr = (header & 0x1fff) << 2;
+        // ★★★★★ §16.79.2 — THE SUBCHANNEL, and omitting it was a real defect in this
+        // dump's first run. A method address means nothing on its own: the address space is
+        // **per subchannel**, and the subchannel is bound by whichever `SET_OBJECT` came
+        // before. `[measured 2026-08-10, boot w218_cb6adcc_grfull]` this very pushbuffer
+        // binds `AMPERE_COMPUTE_B` to subchannel 1 and `AMPERE_DMA_COPY_B` to subchannel 4
+        // in one stream, and the two class headers COLLIDE on the addresses it uses most:
+        // `NVC7C0_SET_CWD_REF_COUNTER = 0x0248` is `NVC7B5_SET_SEMAPHORE_PAYLOAD`, and
+        // `NVC7C0_INVALIDATE_TEXTURE_HEADER_CACHE_NO_WFI = 0x0244` is
+        // `NVC7B5_SET_SEMAPHORE_B`. ⊘ A reader handed `addr=0x0248` and no subchannel cannot
+        // tell a compute counter from a copy-engine semaphore payload — which is the single
+        // most dangerous confusion available on this wire.
+        let subch = (header >> 13) & 0x7;
+        let count = (header >> 16) & 0x1fff;
+        let secop = header >> 29;
+        out.push_str(&format!(
+            "\n      m[{n:03}] hdr=0x{header:08x} sub={subch} addr=0x{addr:04x} count={count} secop={secop} args=["
+        ));
+        for (i, a) in args.iter().take(8).enumerate() {
+            out.push_str(&format!("{}0x{a:08x}", if i == 0 { "" } else { "," }));
+        }
+        if args.len() > 8 {
+            out.push_str(&format!(",..+{}", args.len() - 8));
+        }
+        out.push(']');
+    }
+    if methods.len() > max_methods {
+        out.push_str(&format!(
+            "\n      ⊘ BOUNDED-DUMP: {} further method(s) not shown",
+            methods.len() - max_methods
+        ));
+    }
+    Ok(out)
+}
+
+#[cfg(test)]
+mod release_target_tests {
+    use super::{PushMethod, release_targets_of};
+    use kayfabe_arch::ids::{ClassId, GpuVa};
+    use kayfabe_arch::{CeCompletion, CeSemStructure, CeWork, PhysTarget};
+
+    /// The shape `w267` measured on all eight copy-engine channels, as a decoded run:
+    /// `SET_OBJECT(0xc7b5)` + `SET_SEMAPHORE_A/B/PAYLOAD` + `LAUNCH_DMA = 0x14`, which the
+    /// chip codec turns into exactly one [`PushMethod::CeRelease`].
+    fn release_at(va: u64) -> PushMethod {
+        PushMethod::CeRelease {
+            completion: CeCompletion {
+                addr: GpuVa(va),
+                payload: 1,
+                structure: CeSemStructure::FourWord,
+                payload_bytes: 4,
+            },
+            flush: true,
+        }
+    }
+
+    /// ★★★★★ **THE ROW THE ORDERING FIX RESTS ON.** The pin's second source must recover the
+    /// page from the guest's own release operand — the same `0x2_0440ff70` the four pinned
+    /// channels wrote a timestamped report into, and the same page the four unpinned ones
+    /// took `Xid 31 … VIRT_WRITE` at.
+    #[test]
+    fn a_release_only_submission_names_its_own_semaphore_page() {
+        let got = release_targets_of(
+            &[
+                PushMethod::SetObject {
+                    class: ClassId(0xc7b5),
+                },
+                release_at(0x2_0440_ff70),
+            ],
+            3,
+        );
+        assert_eq!(
+            got.vas,
+            vec![GpuVa(0x2_0440_ff70)],
+            "the guest's own SET_SEMAPHORE_A/B operand is the whole source: {got:?}"
+        );
+        assert_eq!(got.launches, 1, "a release IS a launch: {got:?}");
+        assert_eq!(
+            got.methods, 3,
+            "the read's own count is carried through: {got:?}"
+        );
+    }
+
+    /// ⊘ Eight channels declare eight VAs at a 16-byte stride and they are ONE page. The
+    /// de-duplication that makes that one pin lives in the caller, but this function must not
+    /// hand the same VA out twice — a repeated address would inflate every count read off it.
+    #[test]
+    fn one_address_named_twice_is_one_target() {
+        let got = release_targets_of(&[release_at(0x2_0440_ff70), release_at(0x2_0440_ff70)], 6);
+        assert_eq!(got.vas.len(), 1, "de-duplicated on the VA: {got:?}");
+        assert_eq!(got.launches, 2, "⊘ but BOTH launches are counted: {got:?}");
+    }
+
+    /// ★★★ **A launch that names no release is a launch.** ⊘ Without this the caller could
+    /// not tell an empty VA list caused by *no work at all* from one caused by
+    /// `SEMAPHORE_TYPE = NONE` — and only the first is a statement about the ordering race.
+    #[test]
+    fn a_launch_without_a_release_is_counted_and_names_nothing() {
+        let got = release_targets_of(
+            &[PushMethod::CeLaunchDma {
+                dst: GpuVa(0x1000),
+                src: GpuVa(0x2000),
+                len: 64,
+                dst_is_virtual: true,
+                src_is_virtual: true,
+                dst_target: PhysTarget::LocalFb,
+                src_target: PhysTarget::LocalFb,
+                work: CeWork::Copy,
+                completion: None,
+            }],
+            4,
+        );
+        assert!(got.vas.is_empty(), "nothing to pin: {got:?}");
+        assert_eq!(
+            got.launches, 1,
+            "but the engine WAS asked to do something: {got:?}"
+        );
+    }
+
+    /// ⊘ **The host-FIFO semaphore is NOT this source.** It is four bytes from the
+    /// engine-class one and `CeCompletion`'s own docs call the distinction a trap; pinning
+    /// the page it names would be a different address pinned for a different reason under the
+    /// same label.
+    #[test]
+    fn the_host_fifo_semaphore_is_not_a_release_target() {
+        let got = release_targets_of(
+            &[PushMethod::SemRelease {
+                addr: GpuVa(0x2_0440_f004),
+                payload: 1,
+            }],
+            2,
+        );
+        assert!(
+            got.vas.is_empty(),
+            "SemRelease is the FIFO's, not the engine's: {got:?}"
+        );
+        assert_eq!(got.launches, 0, "and it is not a launch: {got:?}");
+    }
+
+    /// ⊘ The non-vacuity row: a stream the codec modelled nothing in reports `opaque` rather
+    /// than an empty list with no explanation. `methods > 0, launches = 0, opaque = methods`
+    /// is *"another engine's bytes"*; `opaque = 0` would be *"we framed the headers wrong"*.
+    #[test]
+    fn an_unmodelled_stream_says_so_rather_than_looking_empty() {
+        let got = release_targets_of(&[PushMethod::Opaque, PushMethod::Opaque], 2);
+        assert!(got.vas.is_empty());
+        assert_eq!(
+            got.opaque, 2,
+            "the shape of the nothing is reported: {got:?}"
+        );
+        assert_eq!(got.launches, 0);
+    }
+}
+
+#[cfg(test)]
+mod operand_target_tests {
+    use super::{PushMethod, operand_targets_of};
+    use kayfabe_arch::ids::{ClassId, GpuVa};
+    use kayfabe_arch::{CeCompletion, CeSemStructure, CeWork, PhysTarget};
+
+    /// A copy, with every operand knob a caller can turn.
+    #[allow(clippy::fn_params_excessive_bools)]
+    fn copy(dst: u64, src: u64, len: u64, dstv: bool, srcv: bool, work: CeWork) -> PushMethod {
+        PushMethod::CeLaunchDma {
+            dst: GpuVa(dst),
+            src: GpuVa(src),
+            len,
+            dst_is_virtual: dstv,
+            src_is_virtual: srcv,
+            dst_target: PhysTarget::LocalFb,
+            src_target: PhysTarget::LocalFb,
+            work,
+            completion: None,
+        }
+    }
+
+    /// ★★★★★ **THE ROW THIS RUNG RESTS ON.** A copy names its destination, and the
+    /// destination is the plane the release-target source cannot see. ⊘ The VA here is
+    /// arbitrary and deliberately **not** `0x2_04420000`: the mechanism must not contain the
+    /// address it is meant to discover.
+    #[test]
+    fn a_copy_names_its_destination_and_its_source() {
+        let got = operand_targets_of(
+            &[copy(
+                0x2_1234_5000,
+                0x2_9999_0000,
+                4096,
+                true,
+                true,
+                CeWork::Copy,
+            )],
+            5,
+        );
+        assert_eq!(got.extents.len(), 2, "destination AND source: {got:?}");
+        assert!(
+            got.extents[0].write && got.extents[0].va == GpuVa(0x2_1234_5000),
+            "the destination is first and is the WRITE: {got:?}"
+        );
+        assert!(
+            !got.extents[1].write && got.extents[1].va == GpuVa(0x2_9999_0000),
+            "the source is the READ: {got:?}"
+        );
+        assert_eq!(got.launches, 1);
+        assert_eq!(got.physical, 0);
+    }
+
+    /// ⊘ **A release-only submission names NOTHING here, and says which nothing it is.**
+    /// This is the shape all eight CE channels' FIRST submission has (`w267`/`w268`), and it
+    /// must not produce a phantom operand — its address belongs to `release_targets_of`.
+    #[test]
+    fn a_release_only_submission_names_no_operand_and_says_so() {
+        let got = operand_targets_of(
+            &[
+                PushMethod::SetObject {
+                    class: ClassId(0xc7b5),
+                },
+                PushMethod::CeRelease {
+                    completion: CeCompletion {
+                        addr: GpuVa(0x2_0440_ff70),
+                        payload: 1,
+                        structure: CeSemStructure::FourWord,
+                        payload_bytes: 4,
+                    },
+                    flush: true,
+                },
+            ],
+            3,
+        );
+        assert!(got.extents.is_empty(), "no operands to pin: {got:?}");
+        assert_eq!(got.launches, 1, "a release IS a launch: {got:?}");
+        assert_eq!(
+            got.release_only, 1,
+            "⊘ and the empty list is EXPLAINED, not merely empty: {got:?}"
+        );
+    }
+
+    /// ⚠ **A physical operand is counted, never resolved.** It is not a VA, and asking a
+    /// per-VAS address table about it would be reinterpreting one number as another — the
+    /// exact refusal `pin_ring_guest_ram` makes by name.
+    #[test]
+    fn a_physical_operand_is_counted_and_not_pinned() {
+        let got = operand_targets_of(
+            &[copy(0x100_0000, 0x200_0000, 64, false, false, CeWork::Copy)],
+            4,
+        );
+        assert!(got.extents.is_empty(), "neither operand is a VA: {got:?}");
+        assert_eq!(
+            got.physical, 2,
+            "⊘ and BOTH are counted, so the empty list has a reason: {got:?}"
+        );
+        assert_eq!(got.release_only, 0, "this was not a release: {got:?}");
+    }
+
+    /// ⊘ **A fill has no source operand**, and the codec's `src = 0` is a documented
+    /// placeholder rather than an address. Reporting it would put VA `0` in the pin census.
+    #[test]
+    fn a_fill_names_its_destination_and_never_a_source() {
+        let got = operand_targets_of(
+            &[copy(
+                0x2_0500_0000,
+                0,
+                256,
+                true,
+                true,
+                CeWork::Fill { pattern: 0xdead },
+            )],
+            6,
+        );
+        assert_eq!(got.extents.len(), 1, "destination only: {got:?}");
+        assert!(got.extents[0].write);
+        assert_eq!(got.extents[0].va, GpuVa(0x2_0500_0000));
+        assert_eq!(
+            got.physical, 0,
+            "a fill's absent source is not a PHYSICAL source: {got:?}"
+        );
+    }
+
+    /// ⊘ A zero-length launch touches no byte, so it names no page. ⚠ It is still a launch.
+    #[test]
+    fn a_zero_length_launch_names_no_page() {
+        let got = operand_targets_of(
+            &[copy(
+                0x2_1000_0000,
+                0x2_2000_0000,
+                0,
+                true,
+                true,
+                CeWork::Copy,
+            )],
+            4,
+        );
+        assert!(got.extents.is_empty(), "no bytes, no pages: {got:?}");
+        assert_eq!(got.launches, 1, "but the engine WAS asked: {got:?}");
+    }
+
+    /// ⊘ The host-FIFO semaphore is not an operand either — same trap, one plane over.
+    #[test]
+    fn the_host_fifo_semaphore_is_not_an_operand() {
+        let got = operand_targets_of(
+            &[PushMethod::SemRelease {
+                addr: GpuVa(0x2_0440_f004),
+                payload: 1,
+            }],
+            2,
+        );
+        assert!(got.extents.is_empty());
+        assert_eq!(got.launches, 0);
+        assert_eq!(got.release_only, 0);
+    }
+
+    /// ★★ **The shape this rung EXPECTS on the wire**, as the decoder would hand it over:
+    /// chan 8's second submission, `launches = 3` — one real copy plus two releases — where
+    /// only the copy names a page to pin. ⊘ Asserted as a *shape*, not as an address.
+    #[test]
+    fn the_expected_second_submission_shape_yields_one_copy_and_two_releases() {
+        let rel = |va: u64| PushMethod::CeRelease {
+            completion: CeCompletion {
+                addr: GpuVa(va),
+                payload: 2,
+                structure: CeSemStructure::FourWord,
+                payload_bytes: 4,
+            },
+            flush: true,
+        };
+        let got = operand_targets_of(
+            &[
+                PushMethod::SetObject {
+                    class: ClassId(0xc7b5),
+                },
+                copy(
+                    0x2_0442_0000,
+                    0x2_0441_0000,
+                    0x1000,
+                    true,
+                    true,
+                    CeWork::Copy,
+                ),
+                rel(0x2_0440_ff70),
+                PushMethod::Opaque,
+            ],
+            11,
+        );
+        assert_eq!(got.launches, 2, "one copy + one release: {got:?}");
+        assert_eq!(got.release_only, 1);
+        assert_eq!(got.extents.len(), 2, "the copy's two operands: {got:?}");
+        assert_eq!(
+            got.opaque, 1,
+            "the shape of the nothing is reported: {got:?}"
+        );
+        assert_eq!(
+            got.methods, 11,
+            "the read's own count carries through: {got:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod owner_ce_rule_witness {
+    //! ★★★★★ **THE OWNER'S CE RULE, AS A FALSIFIABLE BOOT-TIME ASSERTION.**
+    //!
+    //! Owner, 2026-09-09: *"CE copy should not be a memcpy for any meaningful size if it
+    //! crosses into real GPU memory. A CE thats between fake fb and CPU ram or between fake
+    //! fb is expected and intended to be a memcpy. But anything kayfabe knows its a Device D
+    //! then it should be a CE."*
+    //!
+    //! The rule is enforced in two places already, and **both are arguments from types**:
+    //! [`CpuPlane`] has no variant that names real device memory, and a [`CeSpan`] whose
+    //! `dst_place` is `None` (device memory) is refused by name as `CpuCeStraddle` instead
+    //! of being guessed at. Neither of those prints anything, so no boot has ever *stated*
+    //! that the rule held — it was inferred from the code's inability to express the
+    //! violation. That inference is sound today and expires the moment a third plane exists.
+    //!
+    //! [`CeUtilsRun::describe`] now carries a per-store byte census, and this module exists
+    //! to prove the census can **see a violation**, not merely to watch it agree with itself.
+    use super::*;
+
+    /// The ordinary case: every byte lands in a store, and the line says which.
+    #[test]
+    fn a_served_copy_names_the_store_it_wrote_and_claims_nothing_more() {
+        let run = CeUtilsRun {
+            entries: 1,
+            bytes: 4096,
+            dst_bytes_fb: 4096,
+            ..CeUtilsRun::default()
+        };
+        let line = run.describe();
+        assert!(line.contains("dst V:4096 B S:0 B"), "{line}");
+        assert!(
+            !line.contains("UNACCOUNTED"),
+            "a fully-attributed copy must not raise the alarm: {line}"
+        );
+    }
+
+    /// ★★★ THE DETECTION TEST. A copy whose bytes reached NEITHER store is the owner's rule
+    /// being violated, and the line must say so. ⊘ Today this state is unreachable — the
+    /// executor refuses such a span — which is exactly why the check must be tested
+    /// directly: an assertion that can only ever be exercised by a future regression is
+    /// otherwise never known to work until that regression ships.
+    #[test]
+    fn bytes_that_reached_neither_store_are_named_in_the_line() {
+        let run = CeUtilsRun {
+            entries: 1,
+            bytes: 16 * 1024 * 1024,
+            dst_bytes_fb: 4096,
+            dst_bytes_guest_ram: 0,
+            ..CeUtilsRun::default()
+        };
+        let line = run.describe();
+        assert!(line.contains("UNACCOUNTED"), "{line}");
+        assert!(
+            line.contains(&format!("{} B", 16 * 1024 * 1024 - 4096)),
+            "the line must name HOW MANY bytes went unaccounted, not merely that some did: \
+             {line}"
+        );
+    }
+
+    /// A release-only submission moves no bytes, and must not read as an unaccounted one.
+    /// ⊘ `0 == 0 + 0` is the identity holding, not a vacuous pass — but a naive
+    /// `bytes > fb + ram` check written as `!=` on unsigned arithmetic would have made this
+    /// the noisiest line in every boot.
+    #[test]
+    fn a_release_only_submission_is_not_an_unaccounted_one() {
+        let run = CeUtilsRun {
+            entries: 1,
+            launches: 1,
+            releases: 1,
+            ..CeUtilsRun::default()
+        };
+        assert!(
+            !run.describe().contains("UNACCOUNTED"),
+            "{}",
+            run.describe()
+        );
+    }
+}

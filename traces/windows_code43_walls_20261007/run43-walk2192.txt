@@ -1,0 +1,39 @@
+kf3: maplog t=166765.197434 walk#2189 VasKey(18446744069414584321) root 0xf1cac000 MAP va=0x6370000 len=0x10000 at=0xefa30000 ap=0 kind=0x0 ack=1
+kf3: maplog t=166765.197470 CLEAR inval seq=2180 Cleared (arrive->clear 193 us)
+kf3: maplog t=166765.197603 ARRIVE inval seq=2181 pdb=0xf1cac000/Vidmem all_pdb=false all_va=true hub_only=true raw=0x80010005 age_us=0 (inflight walk: none)
+kf3: maplog t=166765.197625 walk#2190 SUBMIT wants=[{inval seq=2181 pdb=0xf1cac000/Vidmem all_pdb=false all_va=true hub_only=true raw=0x80010005 age_us=13 -> [0xffffffff00000001]}] walked=[0xffffffff00000001=s1@0xf1cac000]
+kf3: maplog t=166765.197751 CLEAR inval seq=2181 Cleared (arrive->clear 139 us)
+kf3: maplog t=166765.197792 ARRIVE inval seq=2182 pdb=0xf1cac000/Vidmem all_pdb=false all_va=true hub_only=true raw=0x80010005 age_us=0 (inflight walk: none)
+kf3: maplog t=166765.197810 walk#2191 SUBMIT wants=[{inval seq=2182 pdb=0xf1cac000/Vidmem all_pdb=false all_va=true hub_only=true raw=0x80010005 age_us=9 -> [0xffffffff00000001]}] walked=[0xffffffff00000001=s1@0xf1cac000]
+kf3: maplog t=166765.197958 walk#2191 VasKey(18446744069414584321) root 0xf1cac000 MAP va=0x6380000 len=0x10000 at=0x0 ap=0 kind=0x0 ack=1
+kf3: maplog t=166765.197987 CLEAR inval seq=2182 Cleared (arrive->clear 186 us)
+kf3: maplog t=166765.198129 ARRIVE inval seq=2183 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=0 (inflight walk: none)
+kf3: maplog t=166765.198150 walk#2192 SUBMIT wants=[{inval seq=2183 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=12 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x20002000 len=0x10000 at=0xea6d0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x20012000 len=0x1000 at=0xea6c0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x20013000 len=0x2000 at=0xea6e0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x20015000 len=0x20000 at=0xea6f0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x20035000 len=0x8f000 at=0xea710000 ap=0 kind=0x0 ack=1
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x200c4000 len=0x5000 at=0x23977b000 ap=3 kind=0x0 ack=1
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x200c9000 len=0x21000 at=0x23975a000 ap=3 kind=0x0 ack=1
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x200ea000 len=0x5000 at=0x239755000 ap=3 kind=0x0 ack=1
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x200ef000 len=0x25000 at=0x239725000 ap=3 kind=0x0 ack=1
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x20114000 len=0x5000 at=0x239720000 ap=3 kind=0x0 ack=1
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x20119000 len=0x1000 at=0x23971f000 ap=3 kind=0x0 ack=1
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x2011a000 len=0x10000 at=0x23994f000 ap=2 kind=0x0 ack=1
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x2012a000 len=0x11d000 at=0xecf66000 ap=0 kind=0x0 ack=1
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x20247000 len=0x5000 at=0xefa2c000 ap=0 kind=0x0 ack=1
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x2024c000 len=0x3000 at=0xefa65000 ap=0 kind=0x0 ack=1
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x3fdf0000 len=0x1000 at=0x21b61a000 ap=3 kind=0x0 ack=1
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x3fdf1000 len=0x1e5000 at=0x21b61b000 ap=3 kind=0x0 ack=1
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x3ffd6000 len=0x1b000 at=0x13c200000 ap=3 kind=0x0 ack=1
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x20250000 len=0x80000 at=0xed1a0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x202d0000 len=0x20000 at=0xef890000 ap=0 kind=0x0 ack=1
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x202f0000 len=0x80000 at=0xef8b0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=166765.198716 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x24000000 len=0x25f0000 at=0xed2a0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=166765.199336 CLEAR inval seq=2183 Cleared (arrive->clear 1198 us)
+kf3: maplog t=166765.199346 APPLIED VasKey(13965662590488021072) +0 -22 host space 0xcafe0063 doorbells []
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x90f10106 client=0xc1d00021 object=0xff000850 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: maplog t=166765.199765 ARRIVE inval seq=2184 pdb=0xf1cac000/Vidmem all_pdb=false all_va=true hub_only=true raw=0x80010005 age_us=0 (inflight walk: none)
+kf3: maplog t=166765.199785 walk#2193 SUBMIT wants=[{inval seq=2184 pdb=0xf1cac000/Vidmem all_pdb=false all_va=true hub_only=true raw=0x80010005 age_us=12 -> [0xffffffff00000001]}] walked=[0xffffffff00000001=s1@0xf1cac000]

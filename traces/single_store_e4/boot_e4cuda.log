@@ -1,0 +1,52 @@
+BOOT_WRAPPER_START 2026-09-14T19:39:32+00:00 tag=e4cuda arm=on cuda=on start_mb=4096
+=== SINGLE-STORE E4 BOOT 2026-09-14T19:39:32+00:00 tag=e4cuda ===
+KAYFABE_SCRATCHPAD=on KAYFABE_SCRATCHPAD_CUDA=on KAYFABE_SCRATCHPAD_START_MB=4096
+POST_CAPTURE_HOOK=/root/kayfabe/scripts/bench/w392d_mean_hook.sh
+BINARY_REV=a608c53c9c9c1742c8e144ca224f9af40508a411 TREE_REV=a608c53c9c9c1742c8e144ca224f9af40508a411
+E4-CONTENT: scratchpad_census=2 cuda_census=2 (either 0 ⇒ an OLDER binary — STOP)
+E4-IMAGE: cuda_image_symbols=1 (0 ⇒ built WITHOUT --features cuda-scratchpad)
+boot_capture rc=5
+--- Q1 THE CLIENT (graded first; everything below is uninterpretable without it) ---
+[client] W392D_GUEST_OUTCOME=(P) ★★★★★ THE FALSIFIER SURVIVES — the SAME client that
+[client] THREADS           8 of 8 verified ✔
+[client] MEAN_FALSIFIER=PASS
+--- ★★★★★ Q2/Q3/Q4/Q5/Q6 THE CUDA CENSUS (both instants; a missing line is UNMEASURED) ---
+E4-CUDA-CENSUS-LINES=2  (expected 2: REALIZE and END OF RUN)
+SCRATCHPAD-CUDA AT REALIZE: CUDA_WALK=NO_CUDA cuda_up=false device="" ptx_bytes=135668 bring_up_ms=0.000 jit_ms=0.000 report_valid=false mapping_matched=false abi_refusal_fired=true report="" probe_relaunch="SKIPPED — CUDA never came up, so there is no context to probe" probe_failed_launch="SKIPPED — CUDA never came up, so there is no context to probe" why="cuInit refused: 304 (CUDA_ERROR_OPERATING_SYSTEM)"
+SCRATCHPAD-CUDA AT END OF RUN: CUDA_WALK=NO_CUDA cuda_up=false device="" ptx_bytes=135668 bring_up_ms=0.000 jit_ms=0.000 report_valid=false mapping_matched=false abi_refusal_fired=true report="" probe_relaunch="SKIPPED — CUDA never came up, so there is no context to probe" probe_failed_launch="SKIPPED — CUDA never came up, so there is no context to probe" why="cuInit refused: 304 (CUDA_ERROR_OPERATING_SYSTEM)"
+E4-CUDA_WALK=NO_CUDA
+E4-ABI_REFUSAL=true
+E4-JIT_MS=0.000
+E4-BRINGUP_MS=0.000
+--- ★★ Q4 THE TWO POST-SANDBOX PROBES (both must begin PASS) ---
+probe_relaunch="SKIPPED — CUDA never came up, so there is no context to probe"
+probe_failed_launch="SKIPPED — CUDA never came up, so there is no context to probe"
+--- ★ the isolate's OWN stderr, in case it died before the parent could ask ---
+kayfabe-isolate: CUDA-WALK PRE-SANDBOX NO_CUDA cuda_up=false device="" bring_up_ms=0.000 jit_ms=0.000 report_valid=false mapping_matched=false abi_refusal_fired=true why="cuInit refused: 304 (CUDA_ERROR_OPERATING_SYSTEM)"
+--- Q2b THE RESERVATION CENSUS (both instants) ---
+E1-CENSUS-LINES=2  (expected 2: REALIZE and END OF RUN)
+SCRATCHPAD AT REALIZE: arm=on up=true proc=4294967295 gpu=0 pool=4 reservation=HELD RESERVED_MB=4096 spawn_ms=1754.459 probe_ms=13.804 reserve_ms=3.133 ⇒ the VM's video memory is ONE host RM object
+SCRATCHPAD AT END OF RUN: arm=on up=true proc=4294967295 gpu=0 pool=4 reservation=HELD RESERVED_MB=4096 spawn_ms=1754.459 probe_ms=13.804 reserve_ms=3.133 ⇒ the VM's video memory is ONE host RM object
+--- Q4 THE ADVERTISED SIZE ---
+SCRATCHPAD FB-SIZE derived_from_reservation=4096 MiB                      compiled=12288 MiB fb_length=0x100000000 ⇒ the guest is told what                      the host actually gave us
+--- the reservation, as one greppable row ---
+E1-RESERVATION=HELD
+E1-RESERVED_MB=4096
+--- Q5 WHAT THE GUEST PAID: the worst trap, beside the spawn we moved off its path ---
+TRAPWITNESS off_trap_claims=565 inline_exceptions=0 worst_trap=22827us at=bar0+0x110c00 slow_traps(>1000us)=1 by_decade[1-10ms=0 10-100ms=1 100ms-1s=0 >1s=0] (target: inline_exceptions=0) 
+SLOW-SITES only proves it is under 1ms. 
+--- the standing constraint rows, so an armed boot can be compared to the control ---
+BAR-MIRROR MECHANISM AT END OF RUN: slots live=0 peak=904 revalidate[runs=1153 kept=680992 removed=2874] quiesce[calls=804 removed=3212] retire_all[calls=0 removed=0] arena[pages live=2415 peak=2415 allocations=4103 span_pages=990381 
+doorbells: 360 arrived, 345 served, 3 REFUSED by name
+HOST_DMESG_XID=1
+--- the guest's OWN first failure (NOT the last line: a re-boot attempt masks it) ---
+[   20.287759] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   22.365903] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   22.366003] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   22.402555] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   22.405218] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   22.405322] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   22.405328] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, N
+[   22.578466] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0x31415903; hObject=0x3141590f; hClass=0x00000070; paramsSize=0x00000018; paramsSta
+=== SINGLE-STORE E4 END 2026-09-14T19:40:49+00:00 tag=e4cuda ===
+BOOT_WRAPPER_EXIT=0 2026-09-14T19:40:49+00:00

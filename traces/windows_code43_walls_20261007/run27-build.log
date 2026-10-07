@@ -1,0 +1,8 @@
+HEAD is now at 4448be539 Apply owner ruling §S: RC-recovery stub, the Windows notifier family, real hotplug
+V3_GATES_START 2026-10-07T13:27:16+02:00
+V3_GATES_SUMMARY pass=9 fail=0
+V3_GATES_BIRTHS births=11 user=11 refused=0 ok=1
+V3_GATES_EXIT pass=9 fail=0 births_ok=1 2026-10-07T13:27:34+02:00
+== kf3 build: QEMU 10.2.4 rev 4448be53
+== archive 2026-10-07 13:27:44.750551076 +0200 (cargo succeeded: current for this revision by cargo's fingerprints)
+KF3_BUILT /var/lib/kf-windows-20261005/kf3-bins/4448be53/qemu-system-x86_64 rev=4448be53 mtime=2026-10-07 13:27:49.627532227 +0200 (shared build dir /var/lib/kf-windows-20261005/qemu-build-kf3)

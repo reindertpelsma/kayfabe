@@ -1,0 +1,10 @@
+nvkvm-gpu[GA106] M5: chan_exec entry[1] pb=0x202c00020 pblen=15 pb_read=ok w0=0x20048100
+nvkvm-gpu[GA106] M5.15 DMAW gpa=0x155ce7100 len=4 v0=0xffffffffabcd1234 site=0x5eeb1568aad2
+nvkvm-gpu[GA106] M5:   COPY[0] src 0x10d9be000(sys)=0xabcd1234 -> dst 0x155ce7100(sys)
+nvkvm-gpu[GA106] M5: CE COPY in=0x704c9e200000(virt) out=0x704ca2800100(virt) bytes=4 const=0x0
+nvkvm-gpu[GA106] M5.15 DMAW gpa=0x155ce7100 len=4 v0=0xffffffffabcd1234 site=0x5eeb1568aad2
+nvkvm-gpu[GA106] M5:   COPY[0] src 0x10d9be000(sys)=0xabcd1234 -> dst 0x155ce7100(sys)
+nvkvm-gpu[GA106] M5: CE COPY in=0x704c9e200000(virt) out=0x704ca2800100(virt) bytes=4 const=0x0
+nvkvm-gpu[GA106] M5.15 DMAW gpa=0x1551d2f30 len=4 v0=0x2 site=0x5eeb15687c44
+nvkvm-gpu[GA106] M5: CE_SEM_RELEASE addr=0x20440ff30 payload=2 redir=0x0
+nvkvm-gpu[GA106] CRASHWIN RD fb=0x422908c sz=4 = 0x1 (HOST-BACKED) gva=0x0

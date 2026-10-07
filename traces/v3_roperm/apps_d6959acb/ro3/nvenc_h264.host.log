@@ -1,0 +1,9 @@
+=== nvenc_h264 side=host start=2026-09-26T17:11:24+00:00 host=ubuntu cmd: ffmpeg -y -hide_banner -nostats -f lavfi -i testsrc=size=1280x720:rate=30:duration=20 -c:v h264_nvenc -preset p4 /opt/apps/out/host/nvenc_h264.mp4 2>&1 | grep -v "^  " | tail -25; ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 /opt/apps/out/host/nvenc_h264.mp4 | sed 's/^/frame= /;s/$/ /'
+Input #0, lavfi, from 'testsrc=size=1280x720:rate=30:duration=20':
+Stream mapping:
+Press [q] to stop, [?] for help
+Output #0, mp4, to '/opt/apps/out/host/nvenc_h264.mp4':
+frame=  600 fps=129 q=12.0 Lsize=     890kB time=00:00:19.86 bitrate= 367.0kbits/s speed=4.26x    
+video:884kB audio:0kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.629203%
+frame= 600 
+=== end rc=0 secs=6 2026-09-26T17:11:30+00:00

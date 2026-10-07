@@ -1,0 +1,117 @@
+dbus-update-activation-environment: setting DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+dbus-update-activation-environment: setting DISPLAY=:0
+dbus-update-activation-environment: setting XAUTHORITY=/home/ubuntu/.Xauthority
+/etc/X11/Xsession.d/30x11-common_xresources: line 16: has_option: command not found
+/etc/X11/Xsession.d/75dbus_dbus-launch: line 9: has_option: command not found
+dbus-update-activation-environment: setting QT_ACCESSIBILITY=1
+/etc/X11/Xsession.d/90x11-common_ssh-agent: line 9: has_option: command not found
+dbus-update-activation-environment: setting SHELL=/bin/bash
+dbus-update-activation-environment: setting QT_ACCESSIBILITY=1
+dbus-update-activation-environment: setting XDG_CONFIG_DIRS=/etc/xdg/xdg-cinnamon:/etc/xdg
+dbus-update-activation-environment: setting LANGUAGE=en
+dbus-update-activation-environment: setting DESKTOP_SESSION=cinnamon
+dbus-update-activation-environment: setting PWD=/home/ubuntu
+dbus-update-activation-environment: setting XDG_SESSION_DESKTOP=cinnamon
+dbus-update-activation-environment: setting LOGNAME=ubuntu
+dbus-update-activation-environment: setting XDG_SESSION_TYPE=x11
+dbus-update-activation-environment: setting GPG_AGENT_INFO=/run/user/1000/gnupg/S.gpg-agent:0:1
+dbus-update-activation-environment: setting XAUTHORITY=/home/ubuntu/.Xauthority
+dbus-update-activation-environment: setting XDG_GREETER_DATA_DIR=/var/lib/lightdm-data/ubuntu
+dbus-update-activation-environment: setting GDM_LANG=en
+dbus-update-activation-environment: setting HOME=/home/ubuntu
+dbus-update-activation-environment: setting LANG=C.UTF-8
+dbus-update-activation-environment: setting XDG_SESSION_CLASS=user
+dbus-update-activation-environment: setting USER=ubuntu
+dbus-update-activation-environment: setting DISPLAY=:0
+dbus-update-activation-environment: setting SHLVL=0
+dbus-update-activation-environment: setting XDG_RUNTIME_DIR=/run/user/1000
+dbus-update-activation-environment: setting XDG_DATA_DIRS=/usr/share/cinnamon:/usr/share/gnome:/usr/local/share:/usr/share:/var/lib/snapd/desktop
+dbus-update-activation-environment: setting PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+dbus-update-activation-environment: setting GDMSESSION=cinnamon
+dbus-update-activation-environment: setting DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+dbus-update-activation-environment: setting _=/usr/bin/dbus-update-activation-environment
+
+** (csd-settings-remap:2759): WARNING **: 18:53:22.665: Skipping schema 'org.gnome.settings-daemon.plugins.xsettings' - doesn't exist
+[cinnamon-settings-daemon-smartcard] Failed to start: no suitable smartcard driver could be found
+[cinnamon-settings-daemon-smartcard] Failed to start: no suitable smartcard driver could be found
+dbus-daemon[2810]: Activating service name='org.a11y.atspi.Registry' requested by ':1.2' (uid=1000 pid=2773 comm="/usr/bin/csd-keyboard" label="unconfined")
+dbus-daemon[2810]: Successfully activated service 'org.a11y.atspi.Registry'
+
+** (csd-color:2776): WARNING **: 18:53:23.369: There is no colord server available
+
+(cinnamon:2954): mutter-WARNING **: 18:53:26.836: Property 'libinput Accel Profile Enabled Default' for device 'VirtualPS/2 VMware VMMouse' returned 3 items, expected 2
+
+(cinnamon:2954): mutter-WARNING **: 18:53:26.837: Property 'libinput Accel Profiles Available' for device 'VirtualPS/2 VMware VMMouse' returned 3 items, expected 2
+
+(cinnamon:2954): mutter-WARNING **: 18:53:26.838: Property 'libinput Accel Profile Enabled' for device 'VirtualPS/2 VMware VMMouse' returned 3 items, expected 2
+
+(cinnamon:2954): mutter-WARNING **: 18:53:26.889: Property 'libinput Accel Profile Enabled Default' for device 'VirtualPS/2 VMware VMMouse' returned 3 items, expected 2
+
+(cinnamon:2954): mutter-WARNING **: 18:53:26.890: Property 'libinput Accel Profiles Available' for device 'VirtualPS/2 VMware VMMouse' returned 3 items, expected 2
+Gjs-Message: 18:53:27.102: Profiler is disabled. Not setting up signals.
+Gjs-Message: 18:53:27.615: JS LOG: About to start Cinnamon (X11 backend)
+Gjs-Message: 18:53:27.693: JS LOG: [LookingGlass/info] Cinnamon.AppSystem.get_default() started in 73 ms
+Gjs-Message: 18:53:27.699: JS LOG: [LookingGlass/info] loading default theme
+Gjs-Message: 18:53:28.089: JS LOG: [LookingGlass/info] loaded at Sat Oct 03 2026 18:53:28 GMT+0000 (Coordinated Universal Time)
+Gjs-Message: 18:53:28.089: JS LOG: Cinnamon started at Sat Oct 03 2026 18:53:28 GMT+0000 (Coordinated Universal Time)
+Gjs-Message: 18:53:28.135: JS LOG: [LookingGlass/info] ExtensionSystem started in 2 ms
+Gjs-Message: 18:53:28.136: JS LOG: [LookingGlass/info] DeskletManager started in 3 ms
+Gjs-Message: 18:53:28.136: JS LOG: [LookingGlass/info] SearchProviderManager started in 3 ms
+
+(cinnamon:2954): mutter-WARNING **: 18:53:28.184: Property 'libinput Accel Profile Enabled Default' for device 'VirtualPS/2 VMware VMMouse' returned 3 items, expected 2
+
+(cinnamon:2954): mutter-WARNING **: 18:53:28.184: Property 'libinput Accel Profiles Available' for device 'VirtualPS/2 VMware VMMouse' returned 3 items, expected 2
+
+** (at-spi2-registryd:2851): WARNING **: 18:53:28.269: Failed to register client: GDBus.Error:org.gnome.SessionManager.AlreadyRegistered: Unable to register client
+
+** (at-spi2-registryd:2851): WARNING **: 18:53:28.269: Unable to register client with session manager
+Gjs-Message: 18:53:28.373: JS LOG: [LookingGlass/info] Role locked: tray
+Gjs-Message: 18:53:28.379: JS LOG: [LookingGlass/info] Loaded applet systray@cinnamon.org in 75 ms
+Gjs-Message: 18:53:28.392: JS LOG: [LookingGlass/info] Loaded applet separator@cinnamon.org in 13 ms
+Gjs-Message: 18:53:28.415: JS LOG: [LookingGlass/info] Loaded applet favorites@cinnamon.org in 23 ms
+Gjs-Message: 18:53:28.454: JS LOG: [LookingGlass/info] Loaded applet cornerbar@cinnamon.org in 39 ms
+Gjs-Message: 18:53:28.515: JS LOG: [LookingGlass/info] Loaded applet keyboard@cinnamon.org in 60 ms
+Gjs-Message: 18:53:28.532: JS LOG: [LookingGlass/info] Loaded applet removable-drives@cinnamon.org in 17 ms
+Gjs-Message: 18:53:28.541: JS LOG: [LookingGlass/info] Loaded applet xapp-status@cinnamon.org in 9 ms
+Gjs-Message: 18:53:28.560: JS LOG: [LookingGlass/info] Role locked: notifications
+
+** (nemo-desktop:3238): WARNING **: 18:53:28.570: Current gtk theme is not known to have nemo support (Adwaita) - checking...
+
+** (nemo-desktop:3238): WARNING **: 18:53:28.675: The theme appears to have no nemo support.  Adding some...
+** Message: 18:53:28.698: nemo-desktop: session is cinnamon, establishing proxy
+Gjs-Message: 18:53:28.722: JS LOG: [LookingGlass/info] Loaded applet notifications@cinnamon.org in 181 ms
+Gjs-Message: 18:53:28.760: JS LOG: [LookingGlass/info] Loaded applet printers@cinnamon.org in 38 ms
+
+(cinnamon:2954): XApp-WARNING **: 18:53:28.797: Could not spawn StatusNotifier watcher (xapp-sn-watcher): Failed to execute child process “/usr/lib/x86_64-linux-gnu/xapps/xapp-sn-watcher” (No such file or directory)
+
+(cinnamon:2954): XApp-WARNING **: 18:53:28.797: Support will be limited to native XAppStatusIcons only
+Gjs-Message: 18:53:28.822: JS LOG: [LookingGlass/info] Loaded applet power@cinnamon.org in 62 ms
+Gjs-Message: 18:53:28.898: JS LOG: [LookingGlass/info] Loaded applet calendar@cinnamon.org in 76 ms
+Gjs-Message: 18:53:28.954: JS LOG: [LookingGlass/info] Role locked: panellauncher
+Gjs-Message: 18:53:28.954: JS LOG: [LookingGlass/info] Role locked: windowattentionhandler
+Gjs-Message: 18:53:28.963: JS LOG: [LookingGlass/info] Loaded applet grouped-window-list@cinnamon.org in 65 ms
+Gjs-Message: 18:53:29.074: JS LOG: [LookingGlass/info] Loaded applet sound@cinnamon.org in 111 ms
+
+** (csd-power:2778): CRITICAL **: 18:53:29.102: abs_to_percentage: assertion 'max > min' failed
+cinnamon-session[2706]: WARNING: t+6.69878s: Detected that screensaver has appeared on the bus
+Gjs-Message: 18:53:29.159: JS LOG: [LookingGlass/info] Loaded applet network@cinnamon.org in 85 ms
+Gjs-Message: 18:53:29.174: JS LOG: [LookingGlass/info] Hiding systray: network
+Gjs-Message: 18:53:29.330: JS LOG: [LookingGlass/info] Loaded applet menu@cinnamon.org in 171 ms
+Gjs-Message: 18:53:29.331: JS LOG: [LookingGlass/info] AppletManager started in 1239 ms
+Gjs-Message: 18:53:29.337: JS LOG: [LookingGlass/info] Cinnamon took 1721 ms to start
+Gjs-Message: 18:53:29.391: JS LOG: Unknown network device type, is 32
+Exception in thread Thread-2 (wait_for_process):
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/threading.py", line 1073, in _bootstrap_inner
+    self.run()
+  File "/usr/lib/python3.12/threading.py", line 1010, in run
+    self._target(*self._args, **self._kwargs)
+  File "/usr/bin/cinnamon-launcher", line 88, in wait_for_process
+    os.execvp(FALLBACK_COMMAND, (FALLBACK_COMMAND,) + FALLBACK_ARGS)
+  File "<frozen os>", line 580, in execvp
+  File "<frozen os>", line 622, in _execvpe
+  File "<frozen os>", line 613, in _execvpe
+FileNotFoundError: [Errno 2] No such file or directory
+/usr/bin/cinnamon-launcher:82: DeprecationWarning: This process (pid=2910) is multi-threaded, use of fork() may lead to deadlocks in the child.
+  self.fb_pid = os.fork()
+cinnamon-session[2706]: WARNING: t+36.71773s: Detected that screensaver has left the bus

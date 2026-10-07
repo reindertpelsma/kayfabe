@@ -1,0 +1,138 @@
+# ALL-PLANE ioctl census (strace, not the LD_PRELOAD tracer) — GA106 0x2503, driver 580.159.03
+NVIDIA GeForce RTX 3060, 580.159.03
+
+## cup2  total ioctls: 476
+    230 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20)
+    100 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2b, 0x30)
+     25 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x4e, 0x38)
+     25 _IOC(_IOC_NONE, 0, 0x49, 0)
+     25 _IOC(_IOC_NONE, 0, 0x21, 0)
+     16 _IOC(_IOC_NONE, 0, 0x1b, 0)
+     10 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xc9, 0x4)
+      9 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x29, 0x10)
+      8 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xce, 0x10)
+      8 _IOC(_IOC_NONE, 0, 0x17, 0)
+      4 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x27, 0x38)
+      2 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xd6, 0x8)
+      2 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xc8, 0x900)
+      1 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xd7, 0x230)
+      1 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x5e, 0x28)
+      1 _IOC(_IOC_NONE, 0, 0x4b, 0)
+      1 _IOC(_IOC_NONE, 0, 0x48, 0)
+      1 _IOC(_IOC_NONE, 0, 0x46, 0)
+      1 _IOC(_IOC_NONE, 0, 0x44, 0)
+      1 _IOC(_IOC_NONE, 0, 0x41, 0)
+      1 _IOC(_IOC_NONE, 0, 0x27, 0)
+      1 _IOC(_IOC_NONE, 0, 0x25, 0)
+      1 _IOC(_IOC_NONE, 0, 0x19, 0)
+      1 _IOC(_IOC_NONE, 0, 0x1, 0x3000)
+
+## cup4  total ioctls: 475
+    229 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20)
+    100 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2b, 0x30)
+     25 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x4e, 0x38)
+     25 _IOC(_IOC_NONE, 0, 0x49, 0)
+     25 _IOC(_IOC_NONE, 0, 0x21, 0)
+     16 _IOC(_IOC_NONE, 0, 0x1b, 0)
+     10 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xc9, 0x4)
+      9 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x29, 0x10)
+      8 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xce, 0x10)
+      8 _IOC(_IOC_NONE, 0, 0x17, 0)
+      4 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x27, 0x38)
+      2 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xd6, 0x8)
+      2 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xc8, 0x900)
+      1 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xd7, 0x230)
+      1 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x5e, 0x28)
+      1 _IOC(_IOC_NONE, 0, 0x4b, 0)
+      1 _IOC(_IOC_NONE, 0, 0x48, 0)
+      1 _IOC(_IOC_NONE, 0, 0x46, 0)
+      1 _IOC(_IOC_NONE, 0, 0x44, 0)
+      1 _IOC(_IOC_NONE, 0, 0x41, 0)
+      1 _IOC(_IOC_NONE, 0, 0x27, 0)
+      1 _IOC(_IOC_NONE, 0, 0x25, 0)
+      1 _IOC(_IOC_NONE, 0, 0x19, 0)
+      1 _IOC(_IOC_NONE, 0, 0x1, 0x3000)
+
+## cup8  total ioctls: 481
+    229 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20)
+    102 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2b, 0x30)
+     27 _IOC(_IOC_NONE, 0, 0x49, 0)
+     27 _IOC(_IOC_NONE, 0, 0x21, 0)
+     25 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x4e, 0x38)
+     16 _IOC(_IOC_NONE, 0, 0x1b, 0)
+     10 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xc9, 0x4)
+      9 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x29, 0x10)
+      8 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xce, 0x10)
+      8 _IOC(_IOC_NONE, 0, 0x17, 0)
+      4 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x27, 0x38)
+      2 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xd6, 0x8)
+      2 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xc8, 0x900)
+      1 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xd7, 0x230)
+      1 _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x5e, 0x28)
+      1 _IOC(_IOC_NONE, 0, 0x4b, 0)
+      1 _IOC(_IOC_NONE, 0, 0x48, 0)
+      1 _IOC(_IOC_NONE, 0, 0x46, 0)
+      1 _IOC(_IOC_NONE, 0, 0x44, 0)
+      1 _IOC(_IOC_NONE, 0, 0x41, 0)
+      1 _IOC(_IOC_NONE, 0, 0x27, 0)
+      1 _IOC(_IOC_NONE, 0, 0x25, 0)
+      1 _IOC(_IOC_NONE, 0, 0x19, 0)
+      1 _IOC(_IOC_NONE, 0, 0x1, 0x3000)
+
+## ioctl count reached at each CUDA-call return (strace ioctl+write interleave)
+### cup2
+   170  ok   cuInit(0)
+   170  ok   cuDeviceGetCount(&n)
+   170  devices=1
+   170  ok   cuDeviceGet(&d,0)
+   171  ok   cuDeviceGetName(nm,256,d)
+   171  name=NVIDIA GeForce RTX 3060
+   171  compute=8.6
+   171  ok   cuDeviceTotalMem(&tot,d)
+   171  totalMem=11909 MiB
+   473  ok   cuCtxCreate(&ctx,0,d)
+   473  CTX OK
+   476  ok   cuMemAlloc(&dp,4096)
+   476  MEMALLOC OK 0x76785a200000
+   476  ok   cuMemcpyHtoD(dp,&hv,4)
+   476  ok   cuMemcpyDtoH(&rv,dp,4)
+
+### cup4
+   170  ok   cuInit(0)
+   170  ok   cuDeviceGetCount(&nd)
+   170  ok   cuDeviceGet(&d,0)
+   472  ok   cuCtxCreate(&ctx,0,d)
+   472  CTX OK
+   472  ok   cuModuleLoadData(&mod,PTX)
+   472  MODULE OK
+   472  FUNC OK
+   475  ok   cuMemAlloc(&dA,sz)
+   475  ok   cuMemAlloc(&dB,sz)
+   475  ok   cuMemAlloc(&dC,sz)
+   475  ok   cuMemcpyHtoD(dA,hA,sz)
+   475  ok   cuMemcpyHtoD(dB,hB,sz)
+   475  ok   cuMemsetD32(dC,0,n*n)
+   475  LAUNCH OK
+   475  ok   cuCtxSynchronize()
+   475  SYNC OK
+   475  ok   cuMemcpyDtoH(hC,dC,sz)
+
+### cup8
+   170  ok   cuInit(0)
+   170  ok   cuDeviceGetCount(&nd)
+   170  ok   cuDeviceGet(&d,0)
+   472  ok   cuCtxCreate(&ctx,0,d)
+   472  CTX OK
+   472  ok   cuModuleLoadData(&mod,PTX)
+   472  MODULE OK
+   472  FUNC OK
+   475  ok   cuMemAlloc(&dA,sz)
+   478  ok   cuMemAlloc(&dB,sz)
+   481  ok   cuMemAlloc(&dC,sz)
+   481  ok   cuMemcpyHtoD(dA,hA,sz)
+   481  ok   cuMemcpyHtoD(dB,hB,sz)
+   481  LAUNCH OK
+   481  ok   cuCtxSynchronize()
+   481  SYNC OK
+   481  ok   cuMemcpyDtoH(hC,dC,sz)
+

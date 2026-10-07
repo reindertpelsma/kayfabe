@@ -1,0 +1,73 @@
+START 2026-10-04T02:22:29+00:00
+REV 0ac157b2fff15294073b95acbe7377a6133ae5aa
+PATCHED
+ crates/kf-chan/tests/dbfast_kvm.rs | 13 ++++++++-----
+ 1 file changed, 8 insertions(+), 5 deletions(-)
+    |                                                 ^^^^^^^^
+
+BIN /workspace/bench/kf-target-flakeexp/debug/deps/dbfast_kvm-042abfaa2d4078a3
+narrow run=1 PASS CHURN_PRE rounds=3669 fast_late=0
+narrow run=2 FAIL CHURN_PRE rounds=4109 fast_late=45
+narrow run=3 FAIL CHURN_PRE rounds=4686 fast_late=1816
+narrow run=4 FAIL CHURN_PRE rounds=4532 fast_late=1307
+narrow run=5 FAIL CHURN_PRE rounds=4855 fast_late=2247
+narrow run=6 PASS CHURN_PRE rounds=3989 fast_late=0
+narrow run=7 FAIL CHURN_PRE rounds=4722 fast_late=1739
+narrow run=8 PASS CHURN_PRE rounds=3654 fast_late=0
+narrow run=9 PASS CHURN_PRE rounds=3844 fast_late=0
+narrow run=10 FAIL CHURN_PRE rounds=4784 fast_late=1940
+narrow run=11 FAIL CHURN_PRE rounds=4602 fast_late=1477
+narrow run=12 FAIL CHURN_PRE rounds=4203 fast_late=379
+narrow run=13 FAIL CHURN_PRE rounds=4366 fast_late=897
+narrow run=14 PASS CHURN_PRE rounds=3588 fast_late=0
+narrow run=15 PASS CHURN_PRE rounds=3806 fast_late=0
+narrow run=16 FAIL CHURN_PRE rounds=4558 fast_late=1502
+narrow run=17 PASS CHURN_PRE rounds=3967 fast_late=0
+narrow run=18 PASS CHURN_PRE rounds=3797 fast_late=0
+narrow run=19 FAIL CHURN_PRE rounds=4117 fast_late=73
+narrow run=20 FAIL CHURN_PRE rounds=4318 fast_late=719
+narrow run=21 PASS CHURN_PRE rounds=3865 fast_late=0
+narrow run=22 PASS CHURN_PRE rounds=3421 fast_late=0
+narrow run=23 PASS CHURN_PRE rounds=3360 fast_late=0
+narrow run=24 PASS CHURN_PRE rounds=2875 fast_late=0
+narrow run=25 FAIL CHURN_PRE rounds=4170 fast_late=283
+narrow run=26 FAIL CHURN_PRE rounds=4679 fast_late=1883
+narrow run=27 PASS CHURN_PRE rounds=3512 fast_late=0
+narrow run=28 FAIL CHURN_PRE rounds=4362 fast_late=888
+narrow run=29 FAIL CHURN_PRE rounds=4767 fast_late=2215
+narrow run=30 PASS CHURN_PRE rounds=3840 fast_late=0
+MODE narrow failed=16/30
+wide run=1 PASS CHURN_PRE rounds=4039 fast_late=0
+wide run=2 PASS CHURN_PRE rounds=4187 fast_late=0
+wide run=3 PASS CHURN_PRE rounds=3907 fast_late=0
+wide run=4 PASS CHURN_PRE rounds=3559 fast_late=0
+wide run=5 PASS CHURN_PRE rounds=3990 fast_late=0
+wide run=6 PASS CHURN_PRE rounds=3904 fast_late=0
+wide run=7 PASS CHURN_PRE rounds=4389 fast_late=0
+wide run=8 PASS CHURN_PRE rounds=3744 fast_late=0
+wide run=9 PASS CHURN_PRE rounds=3673 fast_late=0
+wide run=10 PASS CHURN_PRE rounds=4110 fast_late=0
+wide run=11 PASS CHURN_PRE rounds=3681 fast_late=0
+wide run=12 PASS CHURN_PRE rounds=3266 fast_late=0
+wide run=13 PASS CHURN_PRE rounds=3816 fast_late=0
+wide run=14 PASS CHURN_PRE rounds=4763 fast_late=0
+wide run=15 PASS CHURN_PRE rounds=4528 fast_late=0
+wide run=16 PASS CHURN_PRE rounds=3904 fast_late=0
+wide run=17 PASS CHURN_PRE rounds=4591 fast_late=0
+wide run=18 PASS CHURN_PRE rounds=4681 fast_late=0
+wide run=19 PASS CHURN_PRE rounds=4121 fast_late=0
+wide run=20 PASS CHURN_PRE rounds=3880 fast_late=0
+wide run=21 PASS CHURN_PRE rounds=4597 fast_late=0
+wide run=22 PASS CHURN_PRE rounds=4475 fast_late=0
+wide run=23 PASS CHURN_PRE rounds=4080 fast_late=0
+wide run=24 PASS CHURN_PRE rounds=3473 fast_late=0
+wide run=25 PASS CHURN_PRE rounds=4416 fast_late=0
+wide run=26 PASS CHURN_PRE rounds=3912 fast_late=0
+wide run=27 PASS CHURN_PRE rounds=3568 fast_late=0
+wide run=28 PASS CHURN_PRE rounds=3879 fast_late=0
+wide run=29 PASS CHURN_PRE rounds=3770 fast_late=0
+wide run=30 PASS CHURN_PRE rounds=4427 fast_late=0
+MODE wide failed=0/30
+WORKTREE_REMOVED
+TARGET_REMOVED
+EXIT rc=0 2026-10-04T02:24:41+00:00

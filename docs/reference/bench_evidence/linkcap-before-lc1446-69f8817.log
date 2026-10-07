@@ -1,0 +1,65 @@
+=== boot_capture tag=lc1446_69f8817 at 2026-08-09T03:30:23+00:00 ===
+=== source revision: 69f8817e5 ===
+=== qemu binary: -rwxr-xr-x 1 root root 84647072 Aug  9 03:23 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:69f8817e5d967b796a8619eec0ff72915531c59b 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /workspace/bench/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=92551d70f36ddbef
+    used: /workspace/bench/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Sun Aug  9 03:30:34 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  ERR!                           Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /  12288MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Aug  9 03:30 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Aug  9 03:30 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Aug  9 03:30 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Aug  9 03:30 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Aug  9 03:30 .
+drwxr-xr-x 18 root root   4000 Aug  9 03:30 ..
+cr--------  1 root root 240, 1 Aug  9 03:30 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Aug  9 03:30 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /workspace/bench/kayfabe/scripts/bench/guest_linkcap_probe.sh at 2026-08-09T03:30:39+00:00 ===
+GCC_RC=0
+=== ★★★ (a) BAR0 + 0x88084 — the word RM decodes ===
+BAR0+0x88084 = 0x00000000   NV_XVE_LINK_CAPABILITIES   (RM reads THIS for PCIE_GPU_LINK_CAPS)
+    MAX_SPEED(3:0) = 0  ★ ILLEGAL — this is the 'Unknown PCIe speed' that returns 0x40
+    MAX_WIDTH(9:4) = 0 lanes
+BAR0+0x88088 = 0x00000000   NV_XVE_LINK_CONTROL_STATUS
+BAR0+0x88000 = 0x00000000   NV_XVE_ID (vendor/device)
+BAR0+0x88078 = 0x00000000   NV_XVE_DEVICE_CONTROL_STATUS
+=== (b) the PCIe capability QEMU presents in CONFIG space (a DIFFERENT plane) ===
+LSPCI_RC=0
+setpci: 0000:00:03.0: Instance #0 of Capability 0010 not found - there are no capabilities with that id.
+SETPCI_RC=1
+=== for the record: which device is which ===
+00:03.0 VGA compatible controller [0300]: NVIDIA Corporation GA106 [GeForce RTX 3060 Lite Hash Rate] [10de:2504] (rev a1)
+-rw------- 1 root root 16777216 Aug  9 03:30 /sys/bus/pci/devices/0000:00:03.0/resource0
+HOOK_RC=0

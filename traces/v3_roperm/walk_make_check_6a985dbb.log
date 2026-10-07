@@ -1,0 +1,130 @@
+I2 ok: exactly one dereference site
+I2 ok: exactly one raw pointer cast
+I1 ok: no while loop in kf_walk_one
+I1 ok: no while loop anywhere on the PARALLEL guest-data path
+I1 ok: the parallel walk's depth is a compile-time-bounded launch loop
+I1 ok: 8 parallel loops bounded at compile time by KF_MAX_FRONTIER
+I1 ok: no goto, no recursion
+I1 ok: 6 nested loops, each bounded at compile time by KF_MAX_ENT
+I1 ok: the nesting depth and fan-out caps are #defines, not descriptor fields
+seam ok: no VER2 geometry constants left in the kernel
+I3 ok: the frontier and task caps are loud
+I3 ok: truncation raised from 9 sites
+S39(a) ok: 9 live-GPGA load sites, all distinct offsets -- no double fetch
+S39(c) ok: both emit chokepoints bound the leaf BEFORE they coalesce
+S39(e) ok: refusals are propagated before any early return
+kf_walk.cu:412:60: warning: "/*" within comment [-Wcomment]
+  412 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:412:60: warning: "/*" within comment [-Wcomment]
+  412 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(1960): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+jit ok: PTX-only binary
+.target sm_75
+kf_walk.cu:412:60: warning: "/*" within comment [-Wcomment]
+  412 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:412:60: warning: "/*" within comment [-Wcomment]
+  412 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(1960): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+neg ok: bounds_window_respected fails without the check (rc=1)
+neg ok: pointer_past_end fails without the check (rc=1)
+neg ok: leaf_past_end fails without the check (rc=1)
+neg ok: the control case still passes on the unbroken binary
+kf_walk.cu:412:60: warning: "/*" within comment [-Wcomment]
+  412 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:412:60: warning: "/*" within comment [-Wcomment]
+  412 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(1960): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+kf_walk.cu:412:60: warning: "/*" within comment [-Wcomment]
+  412 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:412:60: warning: "/*" within comment [-Wcomment]
+  412 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(1960): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+coal ok: no leaf coalescer breaks correctness/coalesce_one_run (rc=1)
+coal ok: no leaf coalescer breaks diff/grow_then_shrink too (rc=1)
+coal ok: no task-boundary join breaks correctness/one_run_across_page_tables (rc=1), on:
+    ! correctness/one_run_across_page_tables:193  f.hdr.run_count == want.size()  -- 2 != 1 (0x2 != 0x1)
+coal ok: the control cases still pass on the unbroken binary
+kf_walk.cu:412:60: warning: "/*" within comment [-Wcomment]
+  412 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:412:60: warning: "/*" within comment [-Wcomment]
+  412 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(1960): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+kf_walk.cu:412:60: warning: "/*" within comment [-Wcomment]
+  412 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:412:60: warning: "/*" within comment [-Wcomment]
+  412 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(1960): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+kf_walk.cu:412:60: warning: "/*" within comment [-Wcomment]
+  412 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:412:60: warning: "/*" within comment [-Wcomment]
+  412 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(1960): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+seam ok: addr_local.lo off by one breaks the decode (rc=1), on:
+    ! correctness/kind_joins_run_identity:193  f.hdr.run_count == want.size()  -- 0 != 2 (0x0 != 0x2)
+seam ok: dir[3].va_lo off by one breaks the walk (rc=1), on:
+    ! correctness/kind_joins_run_identity:196  f.rn[i].va == want[i].va  -- 141564011610112 != 141565890658304 (0x80c070a00000 != 0x80c0e0a00000)
+seam ok: an abi_version skew is refused AT LAUNCH (rc=1), on:
+kf_create: format descriptor REFUSED: abi_version
+seam ok: the control passes on the real descriptor
+kf_walk.cu:412:60: warning: "/*" within comment [-Wcomment]
+  412 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:412:60: warning: "/*" within comment [-Wcomment]
+  412 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(1960): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+ver3 ok: the SKETCH is well formed (geometry only -- it has never decoded a table)

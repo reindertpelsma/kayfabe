@@ -1,0 +1,160 @@
+=== boot_capture tag=s52_af255fa_fourword at 2026-08-10T03:44:35+00:00 ===
+=== source revision: af255fa08 ===
+=== qemu binary: -rwxr-xr-x 1 root root 85137776 Aug 10 03:43 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:af255fa089259c5dcb367296b7f3a4d46cb481af 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /workspace/bench/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=92551d70f36ddbef
+    used: /workspace/bench/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Mon Aug 10 03:44:46 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  ERR!                           Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /  12288MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Aug 10 03:44 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Aug 10 03:44 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Aug 10 03:44 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Aug 10 03:44 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Aug 10 03:44 .
+drwxr-xr-x 18 root root   4000 Aug 10 03:44 ..
+cr--------  1 root root 240, 1 Aug 10 03:44 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Aug 10 03:44 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /workspace/bench/kayfabe/scripts/bench/guest_cuinit_wall.sh at 2026-08-10T03:44:50+00:00 ===
+=== sources that will run (md5, so a run cannot silently be the other copy) ===
+    /workspace/bench/cup2.c                                       27 lines  md5 d9f82375ebd54de500aeb7f85ef71efc
+    /workspace/bench/kayfabe/scripts/rpctrace/cuda_ioctl_trace.c   666 lines  md5 4445b1aa81d299eac3863d16862fd887
+    /workspace/bench/kayfabe/scripts/bench/uvm_ioctl_trace.c     173 lines  md5 7be763eeecfbacc92dfa47dcd6e63e7a
+=== push + build inside the guest ===
+GCC_CUP2_RC=0
+GCC_RM_RC=0
+GCC_UVM_RC=0
+=== clear dmesg, then run cup2 under BOTH interposers (detached, deadline 150s) ===
+CLEARED
+LAUNCHED pid=1812
+FAIL cuInit(0) -> unknown error (999)
+CUP2_RC=1
+=== instrument liveness (⊘ an empty trace is evidence of NOTHING, not of no traffic) ===
+OK   /tmp/rmtrace.txt  19 lines
+OK   /tmp/uvm.txt  18 lines
+--- cup2 stderr (where an interposer reports its own failure) ---
+=== ★★★ THE UVM PLANE — rmStatus is the verdict; rc=0 only means DISPATCHED ===
+UVM ioctl fd=12 cmd=0x30000001 nr=1 (UVM_INITIALIZE) arg=0x7ffe64099900
+  ★ UVM_INITIALIZE rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=13 cmd=0x0000004b nr=75 (UNKNOWN — not in the table, size unknown) arg=0x7ffe64099900
+UVM ioctl fd=12 cmd=0x00000027 nr=39 (UVM_PAGEABLE_MEM_ACCESS) arg=0x7ffe64099900
+  ★ UVM_PAGEABLE_MEM_ACCESS rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x30000002 nr=2 (UVM_DEINITIALIZE) arg=(nil)
+=== ★★★ THE UVM PLANE, in full (struct bytes IN and OUT) ===
+UVM ioctl fd=12 cmd=0x30000001 nr=1 (UVM_INITIALIZE) arg=0x7ffe64099900
+    IN 
+      +00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  ★ UVM_INITIALIZE rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=13 cmd=0x0000004b nr=75 (UNKNOWN — not in the table, size unknown) arg=0x7ffe64099900
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000027 nr=39 (UVM_PAGEABLE_MEM_ACCESS) arg=0x7ffe64099900
+    IN 
+      +00: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 01 00 00 00 00 00 00 00
+  ★ UVM_PAGEABLE_MEM_ACCESS rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x30000002 nr=2 (UVM_DEINITIALIZE) arg=(nil)
+  -> rc=0 errno=0
+=== ★★★ THE RM PLANE — every call carrying a NON-ZERO status, in order ===
+17:CTRL cmd=0xcb330101 hClient=0xc1d0000c hObject=0x5c000001 size=6 status=0x0000002f rc=0 in=000000000000 out=000000000000
+=== the RM plane: LAST 25 calls before cuInit gave up ===
+ESC nr=0xd6 len=8 rc=0
+ESC nr=0xc8 len=2304 rc=0
+ALLOC hClass=0x00000000 hRoot=0x00000000 hParent=0x00000000 hObject=0xc1d0000b size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000101 hClient=0xc1d0000b hObject=0xc1d0000b size=40 status=0x00000000 rc=0 in=500000000000000080930964fe7f000030930964fe7f0000e0920964fe7f00000000000000000000 out=500000000000000080930964fe7f000030930964fe7f0000e0920964fe7f0000000000006f244202
+FREE hRoot=0xc1d0000b hParent=0xc1d0000b hObject=0xc1d0000b status=0x00000000 rc=0
+ESC nr=0xd6 len=8 rc=0
+ESC nr=0xc8 len=2304 rc=0
+ALLOC hClass=0x00000000 hRoot=0x00000000 hParent=0x00000000 hObject=0xc1d0000c size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d04 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=0c00d0c10100000004000000 out=0c00d0c10100000004000000
+CTRL cmd=0x00000d04 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=0c00d0c10400000004000400 out=0c00d0c10400000004000400
+ALLOC hClass=0x0000cb33 hRoot=0xc1d0000c hParent=0xc1d0000c hObject=0x5c000001 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x000001f0 hClient=0xc1d0000c hObject=0xc1d0000c size=4 status=0x00000000 rc=0 in=00000000 out=08000000
+CTRL cmd=0x00000214 hClient=0xc1d0000c hObject=0xc1d0000c size=384 status=0x00000000 rc=0 in=0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+CTRL cmd=0x00000a04 hClient=0xc1d0000c hObject=0xc1d0000c size=2244 status=0x00000000 rc=0 in=000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+CTRL cmd=0x00000215 hClient=0xc1d0000c hObject=0xc1d0000c size=132 status=0x00000000 rc=0 in=03000000ffffffff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 out=03000000ffffffff0000000000000000000000
+ESC nr=0xd1 len=12 rc=0
+CTRL cmd=0xcb330101 hClient=0xc1d0000c hObject=0x5c000001 size=6 status=0x0000002f rc=0 in=000000000000 out=000000000000
+FREE hRoot=0xc1d0000c hParent=0xc1d0000c hObject=0x5c000001 status=0x00000000 rc=0
+FREE hRoot=0xc1d0000c hParent=0xc1d0000c hObject=0xc1d0000c status=0x00000000 rc=0
+=== RM plane line count + the MARK lines ===
+19 /tmp/rmtrace.txt
+(no MARK lines)
+=== ★ THE FULL RM PLANE — verbatim, because this file dies with the guest ===
+ESC nr=0xd6 len=8 rc=0
+ESC nr=0xc8 len=2304 rc=0
+ALLOC hClass=0x00000000 hRoot=0x00000000 hParent=0x00000000 hObject=0xc1d0000b size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000101 hClient=0xc1d0000b hObject=0xc1d0000b size=40 status=0x00000000 rc=0 in=500000000000000080930964fe7f000030930964fe7f0000e0920964fe7f00000000000000000000 out=500000000000000080930964fe7f000030930964fe7f0000e0920964fe7f0000000000006f244202
+FREE hRoot=0xc1d0000b hParent=0xc1d0000b hObject=0xc1d0000b status=0x00000000 rc=0
+ESC nr=0xd6 len=8 rc=0
+ESC nr=0xc8 len=2304 rc=0
+ALLOC hClass=0x00000000 hRoot=0x00000000 hParent=0x00000000 hObject=0xc1d0000c size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d04 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=0c00d0c10100000004000000 out=0c00d0c10100000004000000
+CTRL cmd=0x00000d04 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=0c00d0c10400000004000400 out=0c00d0c10400000004000400
+ALLOC hClass=0x0000cb33 hRoot=0xc1d0000c hParent=0xc1d0000c hObject=0x5c000001 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x000001f0 hClient=0xc1d0000c hObject=0xc1d0000c size=4 status=0x00000000 rc=0 in=00000000 out=08000000
+CTRL cmd=0x00000214 hClient=0xc1d0000c hObject=0xc1d0000c size=384 status=0x00000000 rc=0 in=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=03000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff..TRUNC
+CTRL cmd=0x00000a04 hClient=0xc1d0000c hObject=0xc1d0000c size=2244 status=0x00000000 rc=0 in=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC
+CTRL cmd=0x00000215 hClient=0xc1d0000c hObject=0xc1d0000c size=132 status=0x00000000 rc=0 in=03000000ffffffff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 out=03000000ffffffff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+ESC nr=0xd1 len=12 rc=0
+CTRL cmd=0xcb330101 hClient=0xc1d0000c hObject=0x5c000001 size=6 status=0x0000002f rc=0 in=000000000000 out=000000000000
+FREE hRoot=0xc1d0000c hParent=0xc1d0000c hObject=0x5c000001 status=0x00000000 rc=0
+FREE hRoot=0xc1d0000c hParent=0xc1d0000c hObject=0xc1d0000c status=0x00000000 rc=0
+kept: /workspace/bench/run_s52_af255fa_fourword_rmtrace.txt (19 lines)
+kept: /workspace/bench/run_s52_af255fa_fourword_uvm.txt (18 lines)
+=== dmesg produced by cup2 ALONE (ring cleared immediately before it) ===
+[   46.137330] NVRM: GspMsgQueueReceiveStatus: Bad sequence number.  Expected 0 got 190. Possible memory corruption.
+[   46.137341] NVRM: GspMsgQueueReceiveStatus: Bad sequence number.  Expected 0 got 190. Possible memory corruption.
+[   46.137344] NVRM: GspMsgQueueReceiveStatus: Bad sequence number.  Expected 0 got 190. Possible memory corruption.
+[   46.137346] NVRM: GspMsgQueueReceiveStatus: Read failed after 3 retries.
+[   46.137431] NVRM: nvCheckOkFailedNoLog: Check failed: Invalid data passed [NV_ERR_INVALID_DATA] (0x00000025) returned from rpcRecvPoll(pGpu, pRpc, NV_VGPU_MSG_EVENT_GSP_INIT_DONE, 0) @ kernel_gsp.c:5228
+[   46.137437] NVRM: nvAssertOkFailedNoLog: Assertion failed: Invalid data passed [NV_ERR_INVALID_DATA] (0x00000025) returned from kgspWaitForRmInitDone(pGpu, pKernelGsp) @ kernel_gsp_tu102.c:573
+[   46.138062] NVRM: _kgspBootGspRm: unexpected WPR2 already up, cannot proceed with booting GSP
+[   46.138072] NVRM: _kgspBootGspRm: (the GPU is likely in a bad state and may need to be reset)
+[   46.138292] NVRM: RmInitAdapter: Cannot initialize GSP firmware RM
+[   46.140541] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x62:0x40:2028)
+[   46.147344] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0
+[   46.918837] NVRM: _kgspBootGspRm: unexpected WPR2 already up, cannot proceed with booting GSP
+[   46.918852] NVRM: _kgspBootGspRm: (the GPU is likely in a bad state and may need to be reset)
+[   46.919062] NVRM: RmInitAdapter: Cannot initialize GSP firmware RM
+[   46.921356] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x62:0x40:2028)
+[   46.927485] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0
+[   46.942521] NVRM: nvAssertFailedNoLog: Assertion failed: rmapiLockIsOwner() && rmGpuLockIsOwner() @ conf_compute_api.c:78
+=== ★★ is the CE wall ARMED or DORMANT? (one line decides it) ===
+NEITHER LINE PRESENT at this loglevel
+HOOK_RC=0

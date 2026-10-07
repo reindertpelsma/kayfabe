@@ -1,0 +1,11 @@
+=== gl_info side=host start=2026-09-26T17:39:15+00:00 host=ubuntu kernel=6.8.0-59-generic drv=580.159.04
+GL_RENDERER=NVIDIA GeForce RTX 3070/PCIe/SSE2
+GL_VERSION=4.6.0 NVIDIA 580.159.04
+GL_SLV=4.60 NVIDIA
+EXT GL_AMD_multi_draw_indirect
+GSET_DIG side=host item=gl_info key=gl_renderer val=NVIDIA_GeForce_RTX_3070/PCIe/SSE2
+GSET_DIG side=host item=gl_info key=gl_extensions val=91072394c6576e4e
+GSET_DIG side=host item=gl_info key=gl_limits val=72d48d0f94c7d431
+GSET_VAL side=host item=gl_info key=gl_ext_count val=397
+GSET_OK
+=== end rc=0 secs=0 2026-09-26T17:39:15+00:00

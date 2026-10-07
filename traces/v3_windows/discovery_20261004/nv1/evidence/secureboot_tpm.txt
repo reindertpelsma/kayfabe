@@ -1,0 +1,33 @@
+Confirm-SecureBootUEFI=True
+
+
+TpmPresent                : True
+TpmReady                  : True
+TpmEnabled                : True
+TpmActivated              : True
+TpmOwned                  : True
+RestartPending            : False
+ManufacturerId            : 1229081856
+PpiVersion                : 1.3?
+ManufacturerIdTxt         : IBM?
+ManufacturerVersion       : 8217.4131.22.13878??????????????
+ManufacturerVersionFull20 : 8217.4131.22.13878?
+ManagedAuthLevel          : Full
+OwnerAuth                 : htLpzFa81/LG6oUxVNGxcwR1AB8=?
+OwnerClearDisabled        : False
+AutoProvisioning          : Enabled
+LockedOut                 : False
+LockoutHealTime           : 10 minutes
+LockoutCount              : 0
+LockoutMax                : 31
+SelfTest                  : {}
+
+
+
+
+
+PublicKeyHash : 35dfefab5ffb4d718e4a1eeb2725ca014dd963e4e243fca9afdab39845e79cfe
+
+
+
+

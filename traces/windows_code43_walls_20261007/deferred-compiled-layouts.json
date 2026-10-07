@@ -1,0 +1,27 @@
+{
+  "schema": "kayfabe-deferred-constructor-layout/1",
+  "compiler": "cc (Ubuntu 15.2.0-16ubuntu1) 15.2.0",
+  "probe_sha256": "b6d00daf5f26ca682e2e288f602c0dbc9a4d54c0429a87acc0cf636a0fbefd2e",
+  "rows": [
+    {
+      "commit": "307159f2623d3bf45feb9177bd2da52ffbc5ddf9",
+      "header_sha256": "53a03cb1c45a1c81c8ed9337de901d82e05bcf046293ea092b7cc6027adf7ecb",
+      "facts": {
+        "class": 20608,
+        "size": 1,
+        "align": 1,
+        "notifyCompletion": 0
+      }
+    },
+    {
+      "commit": "b81d58ee0224d1d290bef1c080592b619e184042",
+      "header_sha256": "53a03cb1c45a1c81c8ed9337de901d82e05bcf046293ea092b7cc6027adf7ecb",
+      "facts": {
+        "class": 20608,
+        "size": 1,
+        "align": 1,
+        "notifyCompletion": 0
+      }
+    }
+  ]
+}

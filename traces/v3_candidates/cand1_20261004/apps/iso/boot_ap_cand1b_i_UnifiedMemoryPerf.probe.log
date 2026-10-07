@@ -1,0 +1,64 @@
+=== boot_capture tag=ap_cand1b_i_UnifiedMemoryPerf at 2026-10-04T03:32:20+00:00 ===
+=== source revision: 0ac157b2 ===
+=== qemu binary: -rwxr-xr-x 1 root root 89513304 Oct  4 02:23 /workspace/bench/kf3-bins/0ac157b2/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=82f88b7bb676717a
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Sun Oct  4 03:32:27 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3060        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Oct  4 03:32 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Oct  4 03:32 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Oct  4 03:32 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Oct  4 03:32 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Oct  4 03:32 .
+drwxr-xr-x 18 root root   4000 Oct  4 03:32 ..
+cr--------  1 root root 240, 1 Oct  4 03:32 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Oct  4 03:32 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/apps/apps_hook.sh at 2026-10-04T03:32:30+00:00 ===
+APPS_HOOK tag=ap_cand1b_i_UnifiedMemoryPerf apps=[UnifiedMemoryPerf] guest=NVIDIA GeForce RTX 3060, 580.159.04, Disabled
+APPS_GUEST_DRM rc=0 4 
+APPRES side=guest app=UnifiedMemoryPerf verdict=FAIL rc=1 secs=5 quiet=1 note=Running ...CUDA error at matrixMultiplyPerf.cu:435 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(streamToRunOn)"  boot=ap_cand1b_i_UnifiedMemoryPerf guest_xid=0 kf3_lines=1211 kf3_refusals=12
+APPS_HOOK_DONE
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 28 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=100
+GUEST_DMESG_AFTER_NVRM=94
+GUEST_DMESG_WORKLOAD_DELTA=72
+=== HOST dmesg delta for this boot (watermark 1532 → 1530) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

@@ -1,0 +1,233 @@
+START kind=broker tag=c2broker 2026-10-04T11:49:04+00:00
+BRK_LANE_START run c2broker kf=9d82f259 2026-10-04T11:49:04+00:00
+BRK_REVS kf3=9d82f2598d267732c87476da27f501aaabe2c4af broker=9f2fd004c8133a3821fe945e99c5b28a3ccd4be8
+BRK_SESSION_LOCKED=no
+BRK_BROKER pid=108416 socket=up args=[] bin=/opt/nvkvm-broker/nvkvm-display-broker sha256=45b943f45f22bb6b
+BRK_DRI3_RC=0 source=[gbm backend: nvidia allocated 512x512 XR24  stride=2048 offset=0 planes=1   real modifier   0x0300000000606014   advertised as   0x0300000000606014   dma-buf size    1048576 bytes (need >= 1048576)   gbm_bo_map REFUSED (Success) — the buffer holds whatever the   allocator left in it.  The IMPORT is the thing under test;   noise on screen still means the frame arrived. serving the dma-buf on /run]
+BRK_DRI3_SOURCE 512x512 stride=2048 offset=0 fourcc=XR24 modifier=0x0300000000606014 size=1048576
+BRK_DRI3_UDMABUF udmabuf 1048576 bytes
+BRK_DRI3_UDMABUF udmabuf_short 1024000 bytes
+BRK_DRI3_VARIANT own decl=512x512/2048/0/0x0300000000606014 query=1 after=[] frames=19 releases=1 requery=1
+BRK_DRI3_VARIANT pitch+4 decl=512x480/2052/0/0x0300000000606014 query=1 after=[] frames=19 releases=0 requery=1
+BRK_DRI3_VARIANT pitch+64 decl=512x480/2112/0/0x0300000000606014 query=1 after=[] frames=19 releases=0 requery=1
+BRK_DRI3_VARIANT offset+4 decl=512x480/2048/4/0x0300000000606014 query=1 after=[] frames=19 releases=0 requery=1
+BRK_DRI3_VARIANT kind decl=512x512/2048/0/0x0300000000e08014 query=1 after=[] frames=19 releases=1 requery=1
+BRK_DRI3_VARIANT bh0 decl=512x512/2048/0/0x0300000000606010 query=1 after=[] frames=19 releases=1 requery=1
+BRK_DRI3_VARIANT udmabuf decl=512x512/2048/0/0x0300000000606014 query=1 after=[] frames=19 releases=1 requery=1
+BRK_DRI3_VARIANT tail4k decl=512x510/2048/4096/0x0300000000606014 query=1 after=[] frames=19 releases=0 requery=1
+BRK_DRI3_VARIANT tail64k decl=512x480/2048/65536/0x0300000000606014 query=1 after=[] frames=19 releases=0 requery=1
+BRK_DRI3_VARIANT udmabuf_short decl=512x500/2048/0/0x0300000000606014 query=1 after=[] frames=19 releases=0 requery=1
+BRK_DRI3_VARIANT own_again decl=512x512/2048/0/0x0300000000606014 query=1 after=[] frames=19 releases=1 requery=1
+BRK_DRI3_DONE
+BRK_DRI3_BROKER nvkvm-broker: accepted uid 0 gid 0 pid 108432
+BRK_DRI3_BROKER nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 0 rejected; 0 cursor, 0 cursor refused)
+BRK_DRI3_BROKER nvkvm-broker: accepted uid 0 gid 0 pid 108432
+BRK_DRI3_BROKER nvkvm-broker: ERROR: ATTACH: 512x480 stride=2052 modifier 0x0300000000606014: a block-linear pitch must be a whole number of 64-byte GOBs (2052 is not a multiple of 64) — REJECTED
+BRK_DRI3_BROKER nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 1 rejected; 0 cursor, 0 cursor refused)
+BRK_DRI3_BROKER nvkvm-broker: accepted uid 0 gid 0 pid 108432
+BRK_DRI3_BROKER nvkvm-broker: ERROR: ATTACH: 512x480 stride=2112 offset=0 needs 1081344 bytes but the dma-buf is 1048576 — REJECTED (the compositor would read out of bounds); block-linear modifier 0x0300000000606014 stores rows in whole 128-row blocks, so its 480 rows occup
+BRK_DRI3_BROKER nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 1 rejected; 0 cursor, 0 cursor refused)
+BRK_DRI3_BROKER nvkvm-broker: accepted uid 0 gid 0 pid 108432
+BRK_DRI3_BROKER nvkvm-broker: ERROR: ATTACH: 512x480 stride=2048 offset=4 needs 1048580 bytes but the dma-buf is 1048576 — REJECTED (the compositor would read out of bounds); block-linear modifier 0x0300000000606014 stores rows in whole 128-row blocks, so its 480 rows occup
+BRK_DRI3_BROKER nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 1 rejected; 0 cursor, 0 cursor refused)
+BRK_DRI3_BROKER nvkvm-broker: accepted uid 0 gid 0 pid 108432
+BRK_DRI3_BROKER nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 0 rejected; 0 cursor, 0 cursor refused)
+BRK_DRI3_BROKER nvkvm-broker: accepted uid 0 gid 0 pid 108432
+BRK_DRI3_BROKER nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 0 rejected; 0 cursor, 0 cursor refused)
+BRK_DRI3_BROKER nvkvm-broker: accepted uid 0 gid 0 pid 108432
+BRK_DRI3_BROKER nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 0 rejected; 0 cursor, 0 cursor refused)
+BRK_DRI3_BROKER nvkvm-broker: accepted uid 0 gid 0 pid 108432
+BRK_DRI3_BROKER nvkvm-broker: ERROR: ATTACH: 512x510 stride=2048 offset=4096 needs 1052672 bytes but the dma-buf is 1048576 — REJECTED (the compositor would read out of bounds); block-linear modifier 0x0300000000606014 stores rows in whole 128-row blocks, so its 510 rows oc
+BRK_DRI3_BROKER nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 1 rejected; 0 cursor, 0 cursor refused)
+BRK_DRI3_BROKER nvkvm-broker: accepted uid 0 gid 0 pid 108432
+BRK_DRI3_BROKER nvkvm-broker: ERROR: ATTACH: 512x480 stride=2048 offset=65536 needs 1114112 bytes but the dma-buf is 1048576 — REJECTED (the compositor would read out of bounds); block-linear modifier 0x0300000000606014 stores rows in whole 128-row blocks, so its 480 rows o
+BRK_DRI3_BROKER nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 1 rejected; 0 cursor, 0 cursor refused)
+BRK_DRI3_BROKER nvkvm-broker: accepted uid 0 gid 0 pid 108432
+BRK_DRI3_BROKER nvkvm-broker: ERROR: ATTACH: 512x500 stride=2048 offset=0 needs 1048576 bytes but the dma-buf is 1024000 — REJECTED (the compositor would read out of bounds); block-linear modifier 0x0300000000606014 stores rows in whole 128-row blocks, so its 500 rows occup
+BRK_DRI3_BROKER nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 1 rejected; 0 cursor, 0 cursor refused)
+BRK_DRI3_BROKER nvkvm-broker: accepted uid 0 gid 0 pid 108432
+BRK_DRI3_BROKER nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 0 rejected; 0 cursor, 0 cursor refused)
+[boot_capture:c2broker] BINARY kf3-bin-rev:9d82f259  (/workspace/bench/kf3-bins/9d82f259/qemu-system-x86_64)  ⇒ every claim from this boot cites THIS revision
+[boot_capture:c2broker] host dmesg watermark: 815 lines
+[boot_capture:c2broker] booting (extra args: -vga none -device virtio-keyboard-pci -device virtio-tablet-pci,display=kf0,head=0 -device virtio-mouse-pci -vnc 127.0.0.1:7)
+== kf3 binary: /workspace/bench/kf3-bins/9d82f259/qemu-system-x86_64 (rev 9d82f259)  device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,display-broker=/run/user/1000/nvkvm/display.sock,display-broker-uid=1000,gop=on,x11-dispsw=on
+== firmware: OVMF /usr/share/OVMF/OVMF_CODE_4M.fd (vars copy /workspace/bench/run_c2broker_ovmf_vars.fd)
+[boot_capture:c2broker] guest is up after 46s
+[boot_capture:c2broker] module unloaded and ring buffer cleared; loading cold
+[boot_capture:c2broker] opening the device (this is what runs RmInitAdapter)
+[boot_capture:c2broker] captured 28 dmesg lines, 25 NVRM, 0 adapter → /workspace/bench/run_c2broker_dmesg.log
+[boot_capture:c2broker] --- the verdict lines ---
+[boot_capture:c2broker] running POST_CAPTURE_HOOK: /root/kayfabe/scripts/bench/display/broker_hook.sh
+[boot_capture:c2broker] hook finished: rc=0
+[boot_capture:c2broker] guest dmesg after workload: 63 lines (46 NVRM), delta 35 → /workspace/bench/run_c2broker_dmesg_after.log
+[boot_capture:c2broker] host dmesg delta: 4 lines, 0
+0 NVRM, 0
+0 Xid → /workspace/bench/run_c2broker_hostdmesg.log
+[boot_capture:c2broker] pre-poweroff guest command: sudo systemctl stop lightdm 2>/dev/null; sudo sync; echo s | sudo tee /proc/sysrq-trigger >/dev/null; sleep 1; echo u | sudo tee /proc/sysrq-trigger >/dev/null; sleep 1
+[boot_capture:c2broker] pre-poweroff rc=0
+[boot_capture:c2broker] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:c2broker] census present (kf3):
+    kf3: family=Ampere phase=Running trapped=146079 applied=3530 refused=4 serviced=1612 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=1184 walks=1195/1195 cleared=1184 superseded=0 named_missed=6 unreconciled=0 mapped=3486 unmapped=3269 clipped=0x0 held=0 vmm_overlaps=0 pri
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10046 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10045 fast=0
+    DOORBELL-LEDGER tok=0x00000004 route=passthrough rung=2 emulated=0 forwarded=2 host=0x48 trap=2 fast=0
+    DOORBELL-LEDGER tok=0x00000003 route=passthrough rung=13 emulated=0 forwarded=13 host=0x47 trap=13 fast=0
+    DOORBELL-LEDGER tok=0x00000809 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1004d trap=0 fast=0
+    DOORBELL-LEDGER tok=0x0000100a route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004e trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=780 emulated=0 forwarded=780 host=0x4c trap=780 fast=0
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1004a trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004b trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=954 emulated=0 forwarded=954 host=0x49 trap=954 fast=0
+    DOORBELL-LEDGER tok=0x00000004 route=passthrough rung=17 emulated=0 forwarded=17 host=0x48 trap=17 fast=0
+    DOORBELL-LEDGER tok=0x00000003 route=passthrough rung=559 emulated=0 forwarded=559 host=0x47 trap=559 fast=0
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10046 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=155 host=0x10045 fast=0
+[boot_capture:c2broker] evidence carried into the repo: /root/kayfabe/traces/guest_boots/run_c2broker_{qemu,dmesg,probe,hostdmesg}.log
+[boot_capture:c2broker] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+[boot_capture:c2broker]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+[boot_capture:c2broker] done. serial=/workspace/bench/run_c2broker_serial.log qemu=/workspace/bench/run_c2broker_qemu.log dmesg=/workspace/bench/run_c2broker_dmesg.log dmesg_after=/workspace/bench/run_c2broker_dmesg_after.log probe=/workspace/bench/run_c2broker_probe.log hostdmesg=/workspace/bench/run_c2broker_hostdmesg.log
+scripts/bench/display/broker_lane.sh: line 63: 108416 Killed                  runuser -u "$SU" -- env DISPLAY="$XD" XAUTHORITY="$XA" "$B" --socket "$SOCK" --backend x11 --persist --verbose ${BROKER_ARGS:-} > "$OUT/broker.log" 2>&1
+BRK_BROKERS_LEFT=0
+BRK_RELAY 61 lines; rungs:       3 frames go as a GPU copy in host VRAM        1 frames go as a LINEAR dma-buf        1 frames go as shared memory  
+BRK_RELAY_LINE kf3: broker: GPU-copy rung possible — render node renderD128 (226:128), nvidia-drm gpu_id 0x8, modifier 0x0300000000606014, slot attributes s1-nvkms-offscreen
+BRK_RELAY_LINE kf3: broker: connected to /run/user/1000/nvkvm/display.sock, capabilities 0xfff
+BRK_RELAY_LINE kf3: broker: grab off
+BRK_RELAY_LINE kf3: broker: the compositor renders on this GPU: the GPU-copy rung may be used
+BRK_RELAY_LINE kf3: broker: guest cursor: the HOST pointer shows it (hover; not composed)
+BRK_RELAY_LINE kf3: broker: the display CAN show XR24 modifier 0x0300000000606014
+BRK_RELAY_LINE kf3: broker: frames go as a GPU copy in host VRAM (a block-linear dma-buf, modifier 0x0300000000606014; no byte crosses PCIe, nothing of the guest's is exported)
+BRK_RELAY_LINE kf3: broker: the display CANNOT show XR24 modifier 0x0000000000000000
+BRK_RELAY_LINE kf3: broker: the display imported a GPU-copy frame (its RELEASE came back)
+BRK_RELAY_LINE kf3: broker: guest cursor image 256x256 hot 0,0 sent (1 so far)
+BRK_RELAY_LINE kf3: broker: guest cursor image 256x256 hot 3,1 sent (2 so far)
+BRK_RELAY_LINE kf3: broker: guest cursor image 256x256 hot 11,11 sent (3 so far)
+BRK_RELAY_LINE kf3: broker: guest cursor image 256x256 hot 4,8 sent (4 so far)
+BRK_RELAY_LINE kf3: broker: grab ON
+BRK_RELAY_LINE kf3: broker: guest cursor: composed into the frame (grabbed; the broker hides its own image)
+BRK_RELAY_LINE kf3: broker: grab off
+BRK_RELAY_LINE kf3: broker: guest cursor: the HOST pointer shows it (hover; not composed)
+BRK_RELAY_LINE kf3: broker: frames go as shared memory (F_SHM) — an X11 broker accepts it only with --present-mode=shm, and a refusal is not reported back
+BRK_RELAY_LINE kf3: broker: frames go as a GPU copy in host VRAM (a block-linear dma-buf, modifier 0x0300000000606014; no byte crosses PCIe, nothing of the guest's is exported)
+BRK_RELAY_LINE kf3: broker: guest cursor: composed into the frame (no broker)
+BRK_RELAY_LINE kf3: broker: connected to /run/user/1000/nvkvm/display.sock, capabilities 0xfff
+BRK_RELAY_LINE kf3: broker: frames go as a LINEAR dma-buf (udmabuf, zero-copy for the broker)
+BRK_RELAY_LINE kf3: broker: grab off
+BRK_RELAY_LINE kf3: broker: the compositor renders on this GPU: the GPU-copy rung may be used
+BRK_RELAY_LINE kf3: broker: guest cursor: the HOST pointer shows it (hover; not composed)
+BRK_RELAY_LINE kf3: broker: the display CAN show XR24 modifier 0x0300000000606014
+BRK_RELAY_LINE kf3: broker: the display CANNOT show XR24 modifier 0x0000000000000000
+BRK_RELAY_LINE kf3: broker: frames go as a GPU copy in host VRAM (a block-linear dma-buf, modifier 0x0300000000606014; no byte crosses PCIe, nothing of the guest's is exported)
+BRK_RELAY_LINE kf3: broker: the display imported a GPU-copy frame (its RELEASE came back)
+BRK_STATUS broker[up=1 sent=485 gpucopy=482 gpucopy_backoffs=0 dmabuf_trips=0 carrier_refused=0 carrier_unchecked=0 formats_unasked=0 dropped=0 uncommitted=0 recovered=0 releases=473 unknown_releases=9 reclaims=12 blocked=218 backstops=12 reconnects=1 failed_attempts=2 peer_refused=0 cursor=hover cursor_sets=6 cursor_hides=2 cursor_shows=1 cursor_refused=0]
+BRK_COUNTER_GRADE PASS gpucopy=482 carrier_refused=0 dmabuf_trips=0 carrier_unchecked=0 formats_unasked=0
+BRK_DISP scanout_d2h=16 scanout_pack=735 pack_skipped=1 display_vram_mib=50
+BRK_DISP host_cursor_reads=7283 host_cursor_refused=0
+BRK_REFUSED_LINE 2026-10-04T11:50:25.010796Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,display-broker=/run/user/1000/nvkvm/display.sock,display-broker-uid=
+BRK_REFUSED_LINE kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconci
+BRK_REFUSED_LINE kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconci
+BRK_REFUSED_LINE kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconci
+BRK_REFUSED_LINE kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconci
+BRK_REFUSED_LINE kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconci
+BRK_REFUSED_LINE kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconci
+BRK_REFUSED_LINE kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconci
+BRK_SELFTEST       1 kf3: display: compose kernel self-test PASSED
+BRK_SELFTEST       1 kf3: display: pack kernel self-test PASSED (into display VRAM slot 0)
+BRK_FORMAT_LINE kf3: broker: the display CAN show XR24 modifier 0x0300000000606014
+BRK_FORMAT_LINE kf3: broker: the display CANNOT show XR24 modifier 0x0000000000000000
+BRK_FORMAT_LINE kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (1 reclaimed so far)
+BRK_FORMAT_LINE kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (2 reclaimed so far)
+BRK_FORMAT_LINE kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (3 reclaimed so far)
+BRK_FORMAT_LINE kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (4 reclaimed so far)
+BRK_FORMAT_LINE kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (5 reclaimed so far)
+BRK_FORMAT_LINE kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (6 reclaimed so far)
+BRK_FORMAT_LINE kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (7 reclaimed so far)
+BRK_FORMAT_LINE kf3: broker: reclaimed frame slot 2: no RELEASE 1000 ms after its commit, and a newer frame was committed (8 reclaimed so far)
+BRK_FORMAT_LINE kf3: broker: reclaimed frame slot 3: no RELEASE 1000 ms after its commit, and a newer frame was committed (9 reclaimed so far)
+BRK_FORMAT_LINE kf3: broker: reclaimed frame slot 0: no RELEASE 1000 ms after its commit, and a newer frame was committed (10 reclaimed so far)
+BRK_FORMAT_LINE kf3: broker: the display CAN show XR24 modifier 0x0300000000606014
+BRK_FORMAT_LINE kf3: broker: the display CANNOT show XR24 modifier 0x0000000000000000
+BRK_FORMAT_LINE kf3: broker: reclaimed frame slot 0: the display refused its format
+BRK_FORMAT_LINE kf3: broker: reclaimed frame slot 2: the display refused its format
+BRK_BROKER_FORMAT conn1: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn1: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn2: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn2: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn3: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn3: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn4: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn4: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn5: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000e08014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn5: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000e08014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn6: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606010 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn6: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606010 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn7: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn7: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn8: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn8: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn9: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn9: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn10: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn10: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn11: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn11: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn12: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn12: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0000000000000000 (LINEAR) -> NO
+BRK_BROKER_FORMAT conn13: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+BRK_BROKER_FORMAT conn13: nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0000000000000000 (LINEAR) -> NO
+BRK_BROKER_FORMAT conn13: nvkvm-broker: ERROR: ATTACH: fourcc XR24 modifier 0x0000000000000000 (LINEAR) is not advertised by this display.  If the compositor runs on a different GPU than the guest's, no modifier will ever match and a readback/copy 
+BRK_BROKER_FORMAT conn13: nvkvm-broker: ERROR: ATTACH: fourcc XR24 modifier 0x0000000000000000 (LINEAR) is not advertised by this display.  If the compositor runs on a different GPU than the guest's, no modifier will ever match and a readback/copy 
+BRK_HOOK_START 2026-10-04T11:51:20+00:00
+BRK_GUEST_KMS rc=0  nodes=[by-path card1 renderD128 ]
+BRK_RELAY_CONNECTED 1 GPU_COPY_PROBE=[kf3: broker: GPU-copy rung possible — render node renderD128 (226:128), nvidia-drm gpu_id 0x8, modifier 0x0300000000606014, slot attributes s1-nvkms-offscreen]
+BRK_EV_DEVICE broker=[nvkvm-broker: the X server renders on DRM device 226:128 (render node)] relay=[kf3: broker: the compositor renders on this GPU: the GPU-copy rung may be used] host_nodes=[/dev/dri/card0=e2:0 /dev/dri/renderD128=e2:80 ]
+BRK_GUEST_DESKTOP=yes session=cinnamon busid=PCI:0:2:0 (rc=0 )
+BRK_RUNGS       1 frames go as a GPU copy in host VRAM  
+BRK_RUNG_LINE kf3: broker: the compositor renders on this GPU: the GPU-copy rung may be used
+BRK_RUNG_LINE kf3: broker: the display CAN show XR24 modifier 0x0300000000606014
+BRK_RUNG_LINE kf3: broker: the display CANNOT show XR24 modifier 0x0000000000000000
+BRK_RUNG_LINE kf3: broker: the display imported a GPU-copy frame (its RELEASE came back)
+BRK_WINDOW id=[4194304]
+BRK_WINDOW active=[4194304] (must be the window above)
+BRK_WINDOW geometry=1024x768+0+0 root=[ dimensions: 1024x768 pixels (347x260 millimeters)]
+BRK_MODE_LINES guest cursor: the HOST pointer shows it (hover; not composed)|
+BRK_HOST_HOVER CURSOR w=256 h=256 hot=3,1 serial=8 name=[] visible_px=254 bbox_rel_hot=-1,-1,14,22 fnv_rel_hot=0x977b1b1340901adb
+BRK_GUEST_POINTER 47 7
+BRK_GUEST_CURSOR CURSOR w=24 h=24 hot=3,1 serial=8 name=[left_ptr] visible_px=254 bbox_rel_hot=-1,-1,14,22 fnv_rel_hot=0x1da6c2469055d3aa
+BRK_HOVER_CURSOR_COMPARE visible_a=254 visible_b=254 max_channel_diff=48
+BRK_HOST_VS_GUEST hover size_mismatch 1024x695 vs 1024x768 (the broker fullscreen against the guest frame; the host shot has no pointer, the frame no cursor in hover)
+BRK_MAP frame=1024x695 window=1024x768+0+0 guest_pointer=47,7 -> host 47,7
+BRK_HOST_CROSS CURSOR w=256 h=256 hot=11,11 serial=9 name=[] visible_px=281 bbox_rel_hot=-11,-11,11,12 fnv_rel_hot=0xf6108d49685ef58f
+BRK_GUEST_CROSS CURSOR w=24 h=24 hot=11,11 serial=9 name=[crosshair] visible_px=281 bbox_rel_hot=-11,-11,11,12 fnv_rel_hot=0x548443b1d42e7d42
+BRK_CROSS_CURSOR_COMPARE visible_a=281 visible_b=281 max_channel_diff=52
+BRK_CROSS_SETS guest cursor image 256x256 hot 0,0 sent (1 so far)|guest cursor image 256x256 hot 3,1 sent (2 so far)|guest cursor image 256x256 hot 11,11 sent (3 so far)| xsetroot=[rc=0 ]
+BRK_CURSOR_COMPOSITION guest cursor composition 0x072ff = PREMULT_ALPHA (K1 255, cursor factor 2, viewport factor 7, mode 0); its 256x256 pixels: 163 partially transparent, 0 with a colour channel above alpha (consistent with premultiplied pixels) — change 1 (the first 8 are logged, then every 256th)|
+BRK_VNC_HOVER VNC_CURSOR w=256 h=256 hot=11,11 visible_px=281 bbox_rel_hot=-11,-11,11,12 fnv_rel_hot=0xf6108d49685ef58f wire_above_alpha=0
+BRK_VNC_HOVER_CURSOR_COMPARE visible_a=281 visible_b=281 max_channel_diff=52
+BRK_HOST_XTERM CURSOR w=256 h=256 hot=4,8 serial=10 name=[] visible_px=86 bbox_rel_hot=-4,-8,4,7 fnv_rel_hot=0x2d58db0c16d1185b
+BRK_GUEST_XTERM CURSOR w=9 h=16 hot=4,8 serial=10 name=[] visible_px=86 bbox_rel_hot=-4,-8,4,7 fnv_rel_hot=0x2d58db0c16d1185b
+BRK_XTERM_CURSOR_COMPARE visible_a=86 visible_b=86 max_channel_diff=0
+BRK_XTERM_RELAY xsetroot=[rc=0 ] broker: guest cursor image 256x256 hot 4,8 sent (4 so far)|
+BRK_VNC_XTERM VNC_CURSOR w=256 h=256 hot=4,8 visible_px=86 bbox_rel_hot=-4,-8,4,7 fnv_rel_hot=0x2d58db0c16d1185b wire_above_alpha=0
+BRK_CROSS_MAP guest_pointer=79,29 -> host 79,32
+BRK_HOST_HIDDEN CURSOR w=1 h=1 hot=0,0 serial=6 name=[] visible_px=0 bbox_rel_hot=none fnv_rel_hot=none
+BRK_HOST_AFTER_HIDE CURSOR w=256 h=256 hot=11,11 serial=11 name=[] visible_px=281 bbox_rel_hot=-11,-11,11,12 fnv_rel_hot=0xf6108d49685ef58f
+BRK_HIDE_GUEST CURSOR_HIDDEN for 10 s CURSOR_SHOWN 
+BRK_HIDE_RELAY 0 relay lines, host_cursor_refusals=0
+BRK_GRAB_ON grab ON|guest cursor: composed into the frame (grabbed; the broker hides its own image)|
+BRK_HOST_GRAB CURSOR w=1 h=1 hot=0,0 serial=6 name=[] visible_px=0 bbox_rel_hot=none fnv_rel_hot=none
+BRK_VNC_GRAB VNC_CURSOR w=32 h=32 hot=0,0 visible_px=0 bbox_rel_hot=none fnv_rel_hot=none wire_above_alpha=0
+BRK_GRAB_FRAME_DIFF host_hover_vs_host_grab_px=178 console_hover_vs_grab_px=178 (the composed cursor near the guest pointer; the host shot is what the broker shows — the console's frames are fresh only on the host-memory rungs)
+BRK_GRAB_MOVE guest_pointer=79 29 -> 119 56 host_moved_cursor_px=178 console_moved_cursor_px=178
+BRK_GRAB_OFF grab off|guest cursor: the HOST pointer shows it (hover; not composed)|
+BRK_HOST_AFTER_GRAB CURSOR w=256 h=256 hot=11,11 serial=11 name=[] visible_px=281 bbox_rel_hot=-11,-11,11,12 fnv_rel_hot=0xf6108d49685ef58f
+BRK_AFTER_GRAB host_hover_vs_host_after_grab_px=0 (hover again: no cursor in the frame)
+BRK_E3_STOP broker=108419 guest=[ALIVE] glxgears_while_stopped=[] took_ms=8141
+BRK_E3_KILL9 the display broker closed the connection; the display and input are gone for now (429 frames relayed, 0 dropped, 0 attached without a commit, 419 releases, 10 reclaimed). The VM keeps running; reconnecting in the background.|connected to /run/user/1000/nvkvm/display.sock, capabilities 0xfff|re-sent 
+BRK_E3_AFTER_RESTART guest=[ALIVE] window=[4194304]
+BRK_HOLD up to 40s from 2026-10-04T11:53:36+00:00 (touch /workspace/bench/brk/c2broker/release to end it)
+BRK_HOLD_END 2026-10-04T11:53:57+00:00
+BRK_E5_FDS  390 /dev/nvidiaN; 64 anon_inode:[eventfd]; 11 (deleted); 10 /dmabuf:; 7 anon_inode:[eventpoll]; 6 pipe:[N]; 6 anon_inode:kvm-vcpu:N; 6 anon_inode:kvm-vcpu-stats:N; 5 /dev/nvidiactl; 4 socket:[N]; 2 /workspace/bench/run_cNbroker_qemu.log; 2 /dev/nvidia-uvm;
+BRK_E5_VRAM 108826, 8734 MiB;
+BRK_HOOK_DONE 2026-10-04T11:53:57+00:00
+BRK_LANE_EXIT rc=0 2026-10-04T11:54:16+00:00
+EXIT rc=0 2026-10-04T11:54:16+00:00

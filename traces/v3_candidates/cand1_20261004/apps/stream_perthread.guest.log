@@ -1,0 +1,4 @@
+=== stream_perthread side=guest start=2026-10-04T03:12:21+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/stream_probe perthread
+CHECK perthread ok
+STREAM_PROBE_DONE perthread rc=0
+=== end rc=0 secs=8 2026-10-04T03:12:29+00:00

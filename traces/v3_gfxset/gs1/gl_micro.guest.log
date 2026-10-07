@@ -1,0 +1,32 @@
+=== gl_micro side=guest start=2026-09-26T17:49:35+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+gl_decompose: [gl] renderer=NVIDIA GeForce RTX 3070/PCIe/SSE2
+gl_decompose: [gl] version=OpenGL ES 3.2 NVIDIA 580.159.04
+gl_decompose: METRIC drawcall_kcalls_s 11222.6
+gl_decompose: METRIC fill_Gpix_s 153.802
+gl_decompose: METRIC finish_us 59.82
+gl_decompose: METRIC mapwrite_GBs 10.351
+gl_decompose: METRIC bufsub_GBs 7.716
+gl_decompose: METRIC texsub_GBs 9.587
+gl_decompose: METRIC readpix_GBs 6.641
+gl_decompose: CHECK gl_decompose ok
+GSET_VAL side=guest item=gl_micro key=gl_decompose.drawcall_kcalls_s val=11222.6
+GSET_VAL side=guest item=gl_micro key=gl_decompose.fill_Gpix_s val=153.802
+GSET_VAL side=guest item=gl_micro key=gl_decompose.finish_us val=59.82
+GSET_VAL side=guest item=gl_micro key=gl_decompose.mapwrite_GBs val=10.351
+GSET_VAL side=guest item=gl_micro key=gl_decompose.bufsub_GBs val=7.716
+GSET_VAL side=guest item=gl_micro key=gl_decompose.texsub_GBs val=9.587
+GSET_VAL side=guest item=gl_micro key=gl_decompose.readpix_GBs val=6.641
+gl_drawrate: METRIC drawcall_ns 130.8
+gl_drawrate: METRIC drawcall_kcalls_s 7643.0
+gl_drawrate: METRIC drawcall_wall_s 0.026
+GSET_VAL side=guest item=gl_micro key=gl_drawrate.drawcall_ns val=130.8
+GSET_VAL side=guest item=gl_micro key=gl_drawrate.drawcall_kcalls_s val=7643.0
+GSET_VAL side=guest item=gl_micro key=gl_drawrate.drawcall_wall_s val=0.026
+gl_finishrate: METRIC finish_us 60.84
+gl_finishrate: METRIC finish_per_s 16436
+gl_finishrate: METRIC finish_wall_s 1.217
+GSET_VAL side=guest item=gl_micro key=gl_finishrate.finish_us val=60.84
+GSET_VAL side=guest item=gl_micro key=gl_finishrate.finish_per_s val=16436
+GSET_VAL side=guest item=gl_micro key=gl_finishrate.finish_wall_s val=1.217
+GSET_OK
+=== end rc=0 secs=3 2026-09-26T17:49:38+00:00

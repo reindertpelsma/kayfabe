@@ -1,0 +1,17 @@
+NVDP_START 2026-08-12T11:14:14Z host=ubuntu
+gpu_free: no qemu-system-x86, no 2222/2223 listener
+NVIDIA GeForce RTX 3060, 580.159.04, 00000000:00:07.0
+src=/workspace/nvdp/nvdp.c
+src_sha256=403b111c2d2f98075865fb031e611da172c3d166a8e80de56c1b0f53d0d7e958
+gitrev=1e6fc945
+cc=cc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
+perf_event_paranoid was=4 now=1
+NVDP_RUNNING 2026-08-12T11:14:17Z
+dmesg: NVRM/Xid present (119 lines)
+no ENOSPC in this run's logs
+/dev/root       194G   67G  128G  35% /
+nvdp.log bytes=52451 lines=613
+[ 2.512684] === SUMMARY ===
+[ 2.512686]   channels_decoded=16 rm_allocs=100 userd=FOUND ring=FOUND sem=0x20440fff0
+[ 2.512688]   DONE
+NVDP_EXIT rc=0 run=/workspace/nvdp_out/run_20260812T111414Z 2026-08-12T11:14:19Z

@@ -1,0 +1,27 @@
+
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nvlddmkm
+    Type    REG_DWORD    0x1
+    Start    REG_DWORD    0x3
+    ErrorControl    REG_DWORD    0x0
+    Tag    REG_DWORD    0x5
+    ImagePath    REG_EXPAND_SZ    \SystemRoot\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\nvlddmkm.sys
+    Group    REG_SZ    Video
+    DCHUVen    REG_DWORD    0x10de
+    NvProfileUpdateFirstRun    REG_DWORD    0x1
+    Owners    REG_MULTI_SZ    oem7.inf
+    EnableGpuFirmware    REG_DWORD    0x1
+
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nvlddmkm\Global
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nvlddmkm\NGXCore
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nvlddmkm\NvCamera
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nvlddmkm\NVControlPanel2
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nvlddmkm\Parameters
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nvlddmkm\State
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nvlddmkm\Video
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nvlddmkm\Enum
+== class key {4d36e968-e325-11ce-bfc1-08002be10318}\0001
+
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001
+    EnableGpuFirmware    REG_DWORD    0x1
+
+

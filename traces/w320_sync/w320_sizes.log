@@ -1,0 +1,56 @@
+=== ★★★★★ W320 arm=sizes tag=w320sizes 2026-08-14T18:01:49+00:00
+    sizes=[128,512,1024,2048] iters=[12]
+    sweep=[<none>] reps=[]
+    ctx_flags=[0] gate=[on/on]
+    repo=[/workspace/kayfabe_w320] HEAD=[e8be2da5]
+
+================================================================================
+=== ★★★★★ W320 arm=sizes inner_rc=0  2026-08-14T18:03:38+00:00
+================================================================================
+
+=== ★★★ PRECONDITION — the thread-state clock. Without it the split is meaningless.
+    GUEST_TSTATE_AVAILABLE=yes
+    GUEST_BENCH_W320=batch_sweep=[] batch_reps=5 ctx_flags=0x0
+
+=== ★★★★★ THE SYNC BREAKDOWN — one thread, two of its own clocks, and it CLOSES
+    offcpu = wall - cpu, EXACTLY. There is no third term and no residue to distribute.
+    GUEST_BSUM N=128 iters=12 first_ms=4.518 med_ms=4.507 p90_ms=5.308 min_ms=4.233 max_ms=5.685 gflops=0.931 batch_per_launch_ms=6.036 batch_gflops=0.695 h2d_ms=28.579 d2h_med_ms=3.484 submit_med_ms=3.483 sync_med_ms=0.971 sync_cpu_med_ms=0.978 sync_offcpu_med_ms=-0.003 sync_nvcsw_med=0.0 submit_cpu_med_ms=3.483 bad=0 maxerr=0
+    GUEST_BSUM N=512 iters=12 first_ms=26.030 med_ms=26.769 p90_ms=27.962 min_ms=25.722 max_ms=27.967 gflops=10.028 batch_per_launch_ms=27.435 batch_gflops=9.785 h2d_ms=32.025 d2h_med_ms=4.564 submit_med_ms=3.699 sync_med_ms=22.734 sync_cpu_med_ms=22.747 sync_offcpu_med_ms=-0.010 sync_nvcsw_med=0.0 submit_cpu_med_ms=3.704 bad=0 maxerr=0
+    GUEST_BSUM N=1024 iters=12 first_ms=84.020 med_ms=63.847 p90_ms=83.519 min_ms=61.855 max_ms=84.864 gflops=33.635 batch_per_launch_ms=62.428 batch_gflops=34.399 h2d_ms=58.776 d2h_med_ms=16.169 submit_med_ms=4.103 sync_med_ms=59.786 sync_cpu_med_ms=59.805 sync_offcpu_med_ms=-0.002 sync_nvcsw_med=0.0 submit_cpu_med_ms=4.104 bad=0 maxerr=0
+    GUEST_BSUM N=2048 iters=12 first_ms=866.262 med_ms=913.086 p90_ms=935.428 min_ms=877.711 max_ms=938.901 gflops=18.815 batch_per_launch_ms=915.901 batch_gflops=18.757 h2d_ms=274.952 d2h_med_ms=71.839 submit_med_ms=4.373 sync_med_ms=908.966 sync_cpu_med_ms=908.773 sync_offcpu_med_ms=0.189 sync_nvcsw_med=0.0 submit_cpu_med_ms=4.372 bad=0 maxerr=0
+
+=== ★★★★★ THE BATCH SWEEP — the per-LAUNCH term vs the per-SYNC term
+    ⊘ NO SWEEP ROWS. For arm=[sizes] with sweep=[<none>]
+      that is EXPECTED IFF the sweep was disarmed; otherwise it is UNMEASURED.
+
+=== ★ THE PER-ITERATION LINES (the paired values; the identity holds HERE, per line)
+        ITER N=1024 i=11 launch_ms=63.952 submit_ms=4.166 sync_ms=59.786 t0_mono_ms=45552.976 sub_cpu_ms=4.169 syn_cpu_ms=59.805 syn_offcpu_ms=-0.019 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=54.915 syn_stime_ms=4.890 verified=yes bad=0
+        ITER N=2048 i=0 launch_ms=866.262 submit_ms=4.261 sync_ms=862.002 t0_mono_ms=46107.032 sub_cpu_ms=4.267 syn_cpu_ms=861.880 syn_offcpu_ms=0.122 syn_nvcsw=0 syn_nivcsw=7 syn_utime_ms=748.232 syn_stime_ms=113.648 verified=yes bad=0
+        ITER N=2048 i=1 launch_ms=911.260 submit_ms=4.510 sync_ms=906.750 t0_mono_ms=47152.874 sub_cpu_ms=4.501 syn_cpu_ms=906.573 syn_offcpu_ms=0.177 syn_nvcsw=0 syn_nivcsw=6 syn_utime_ms=745.858 syn_stime_ms=160.715 verified=yes bad=0
+        ITER N=2048 i=2 launch_ms=909.847 submit_ms=4.327 sync_ms=905.519 t0_mono_ms=48148.814 sub_cpu_ms=4.322 syn_cpu_ms=905.239 syn_offcpu_ms=0.281 syn_nvcsw=0 syn_nivcsw=5 syn_utime_ms=722.799 syn_stime_ms=182.439 verified=yes bad=0
+        ITER N=2048 i=3 launch_ms=877.711 submit_ms=4.373 sync_ms=873.337 t0_mono_ms=49137.697 sub_cpu_ms=4.370 syn_cpu_ms=873.130 syn_offcpu_ms=0.207 syn_nvcsw=0 syn_nivcsw=7 syn_utime_ms=619.916 syn_stime_ms=253.214 verified=yes bad=0
+        ITER N=2048 i=4 launch_ms=923.033 submit_ms=4.374 sync_ms=918.660 t0_mono_ms=50098.207 sub_cpu_ms=4.378 syn_cpu_ms=918.518 syn_offcpu_ms=0.141 syn_nvcsw=0 syn_nivcsw=3 syn_utime_ms=648.484 syn_stime_ms=270.035 verified=yes bad=0
+        ITER N=2048 i=5 launch_ms=915.053 submit_ms=4.325 sync_ms=910.728 t0_mono_ms=51104.312 sub_cpu_ms=4.328 syn_cpu_ms=910.602 syn_offcpu_ms=0.126 syn_nvcsw=0 syn_nivcsw=6 syn_utime_ms=648.853 syn_stime_ms=261.749 verified=yes bad=0
+        ITER N=2048 i=6 launch_ms=907.744 submit_ms=4.748 sync_ms=902.996 t0_mono_ms=52113.595 sub_cpu_ms=4.751 syn_cpu_ms=902.854 syn_offcpu_ms=0.142 syn_nvcsw=0 syn_nivcsw=4 syn_utime_ms=691.864 syn_stime_ms=210.989 verified=yes bad=0
+        ITER N=2048 i=7 launch_ms=879.555 submit_ms=4.581 sync_ms=874.974 t0_mono_ms=53167.691 sub_cpu_ms=4.581 syn_cpu_ms=874.852 syn_offcpu_ms=0.122 syn_nvcsw=0 syn_nivcsw=6 syn_utime_ms=591.785 syn_stime_ms=283.066 verified=yes bad=0
+        ITER N=2048 i=8 launch_ms=935.428 submit_ms=4.358 sync_ms=931.070 t0_mono_ms=54129.383 sub_cpu_ms=4.363 syn_cpu_ms=930.880 syn_offcpu_ms=0.190 syn_nvcsw=0 syn_nivcsw=6 syn_utime_ms=630.405 syn_stime_ms=300.474 verified=yes bad=0
+        ITER N=2048 i=9 launch_ms=921.357 submit_ms=4.368 sync_ms=916.988 t0_mono_ms=55148.391 sub_cpu_ms=4.372 syn_cpu_ms=916.767 syn_offcpu_ms=0.221 syn_nvcsw=0 syn_nivcsw=7 syn_utime_ms=594.115 syn_stime_ms=322.652 verified=yes bad=0
+        ITER N=2048 i=10 launch_ms=913.086 submit_ms=4.120 sync_ms=908.966 t0_mono_ms=56149.694 sub_cpu_ms=4.122 syn_cpu_ms=908.773 syn_offcpu_ms=0.193 syn_nvcsw=0 syn_nivcsw=5 syn_utime_ms=615.952 syn_stime_ms=292.820 verified=yes bad=0
+        ITER N=2048 i=11 launch_ms=938.901 submit_ms=5.437 sync_ms=933.464 t0_mono_ms=57172.321 sub_cpu_ms=5.443 syn_cpu_ms=933.276 syn_offcpu_ms=0.189 syn_nvcsw=0 syn_nivcsw=6 syn_utime_ms=609.786 syn_stime_ms=323.490 verified=yes bad=0
+        ✔ ITER N=512
+
+=== ★★ CORRECTNESS — never optional, and inverted in the negctrl arm
+    GUEST_BENCH_TOTAL_BAD=0
+    GUEST_BENCH_VERDICT=PASS (every timed iteration verified)
+    GUEST_SIZES_DONE=4
+    GUEST_XID_COUNT=0
+    GUEST_NEGCTRL_TOTAL_BAD=SKIPPED_BY_ARM
+    ⊘ GUEST_NEGCTRL_SWEEP_ROWS ABSENT — UNMEASURED, not 0
+    ⊘ GUEST_NEGCTRL_SWEEP_ROWS_WITH_BAD_0 ABSENT — UNMEASURED, not 0
+
+=== ★ THE HOST SIDE, correlational ONLY (no containment licence during a sync)
+    host_rows      = [host_rows=18312]
+    Xid lines      = [0]
+    await_sem hits = [0]
+    ⊘ These are printed because they are cheap, NOT because anything above rests on them.
+=== W320 arm=sizes DONE rc=0 ===

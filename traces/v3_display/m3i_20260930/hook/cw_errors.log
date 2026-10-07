@@ -1,0 +1,63 @@
+dbus-update-activation-environment: setting XDG_DATA_DIRS=/usr/share/cinnamon-wayland:/usr/share/gnome:/usr/local/share:/usr/share:/var/lib/snapd/desktop
+dbus-update-activation-environment: setting PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+dbus-update-activation-environment: setting GDMSESSION=cinnamon-wayland
+dbus-update-activation-environment: setting DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+dbus-update-activation-environment: setting _=/usr/bin/dbus-update-activation-environment
+Gjs-Message: 12:33:17.989: Profiler is disabled. Not setting up signals.
+Gjs-Message: 12:33:18.397: JS LOG: About to start Cinnamon (Wayland backend)
+Gjs-Message: 12:33:18.480: JS LOG: [LookingGlass/info] Cinnamon.AppSystem.get_default() started in 78 ms
+Gjs-Message: 12:33:18.486: JS LOG: [LookingGlass/info] loading default theme
+Gjs-Message: 12:33:18.566: JS LOG: [LookingGlass/info] Gestures disabled on Wayland
+Gjs-Message: 12:33:19.221: JS LOG: [LookingGlass/info] loaded at Wed Sep 30 2026 12:33:19 GMT+0000 (Coordinated Universal Time)
+Gjs-Message: 12:33:19.221: JS LOG: Cinnamon started at Wed Sep 30 2026 12:33:19 GMT+0000 (Coordinated Universal Time)
+Gjs-Message: 12:33:19.271: JS LOG: [LookingGlass/info] ExtensionSystem started in 2 ms
+Gjs-Message: 12:33:19.272: JS LOG: [LookingGlass/info] DeskletManager started in 4 ms
+Gjs-Message: 12:33:19.272: JS LOG: [LookingGlass/info] SearchProviderManager started in 3 ms
+
+(cinnamon:2548): mutter-CRITICAL **: 12:33:19.293: Failed to init X11 display: Failed to execute child process “/usr/bin/Xwayland” (No such file or directory)
+
+** (csd-settings-remap:2693): WARNING **: 12:33:19.448: Skipping schema 'org.gnome.settings-daemon.plugins.xsettings' - doesn't exist
+Gjs-Message: 12:33:19.464: JS LOG: [LookingGlass/warning] [systray@cinnamon.org]: Extension not compatible with Wayland
+Gjs-Message: 12:33:19.467: JS LOG: [LookingGlass/warning] [keyboard@cinnamon.org]: Extension not compatible with Wayland
+Gjs-Message: 12:33:19.530: JS LOG: [LookingGlass/info] Loaded applet separator@cinnamon.org in 39 ms
+[cinnamon-settings-daemon-smartcard] Failed to start: no suitable smartcard driver could be found
+Gjs-Message: 12:33:19.553: JS LOG: [LookingGlass/info] Loaded applet removable-drives@cinnamon.org in 23 ms
+[cinnamon-settings-daemon-smartcard] Failed to start: no suitable smartcard driver could be found
+Gjs-Message: 12:33:19.571: JS LOG: [LookingGlass/info] Loaded applet favorites@cinnamon.org in 18 ms
+Gjs-Message: 12:33:19.582: JS LOG: [LookingGlass/info] Role locked: notifications
+Gjs-Message: 12:33:19.630: JS LOG: [LookingGlass/info] Loaded applet notifications@cinnamon.org in 59 ms
+Gjs-Message: 12:33:19.676: JS LOG: [LookingGlass/info] Loaded applet printers@cinnamon.org in 46 ms
+Gjs-Message: 12:33:19.721: JS LOG: [LookingGlass/info] Loaded applet xapp-status@cinnamon.org in 44 ms
+Gjs-Message: 12:33:19.744: JS LOG: [LookingGlass/info] Loaded applet cornerbar@cinnamon.org in 23 ms
+Gjs-Message: 12:33:19.817: JS LOG: [LookingGlass/info] Loaded applet calendar@cinnamon.org in 73 ms
+Gjs-Message: 12:33:19.871: JS LOG: [LookingGlass/info] Role locked: panellauncher
+Gjs-Message: 12:33:19.871: JS LOG: [LookingGlass/info] Role locked: windowattentionhandler
+Gjs-Message: 12:33:19.875: JS LOG: [LookingGlass/info] Loaded applet grouped-window-list@cinnamon.org in 58 ms
+
+(cinnamon:2548): XApp-WARNING **: 12:33:19.898: Could not spawn StatusNotifier watcher (xapp-sn-watcher): Failed to execute child process “/usr/lib/x86_64-linux-gnu/xapps/xapp-sn-watcher” (No such file or directory)
+
+(cinnamon:2548): XApp-WARNING **: 12:33:19.898: Support will be limited to native XAppStatusIcons only
+Gjs-Message: 12:33:19.924: JS LOG: [LookingGlass/info] Loaded applet power@cinnamon.org in 48 ms
+Gjs-Message: 12:33:20.011: JS LOG: [LookingGlass/info] Loaded applet sound@cinnamon.org in 87 ms
+Gjs-Message: 12:33:20.069: JS LOG: [LookingGlass/info] Loaded applet network@cinnamon.org in 58 ms
+Gjs-Message: 12:33:20.245: JS LOG: [LookingGlass/info] Loaded applet menu@cinnamon.org in 176 ms
+Gjs-Message: 12:33:20.246: JS LOG: [LookingGlass/info] AppletManager started in 1021 ms
+Gjs-Message: 12:33:20.251: JS LOG: [LookingGlass/info] Cinnamon took 1854 ms to start
+Gjs-Message: 12:33:20.284: JS LOG: Unknown network device type, is 32
+
+(cinnamon:2548): XApp-WARNING **: 12:33:21.368: Switcheroo-control doesn't appear to be running, checking for Ubuntu support...
+Gjs-Message: 12:33:21.368: JS LOG: [LookingGlass/info] GPU offload supported: false
+Gjs-Message: 12:33:23.427: JS LOG: Enabling WindowAttentionHandler
+cinnamon-session[2439]: WARNING: t+34.80888s: Application 'cinnamon-settings-daemon-media-keys.desktop' failed to register before timeout
+cinnamon-session[2439]: WARNING: t+34.80918s: Application 'cinnamon-settings-daemon-background.desktop' failed to register before timeout
+cinnamon-session[2439]: WARNING: t+34.80921s: Application 'cinnamon-settings-daemon-xsettings.desktop' failed to register before timeout
+cinnamon-session[2439]: WARNING: t+34.80922s: Application 'cinnamon-settings-daemon-clipboard.desktop' failed to register before timeout
+cinnamon-session[2439]: WARNING: t+34.80923s: Application 'cinnamon-settings-daemon-keyboard.desktop' failed to register before timeout
+cinnamon-session[2439]: WARNING: t+34.80924s: Application 'cinnamon-settings-daemon-power.desktop' failed to register before timeout
+cinnamon-session[2439]: WARNING: t+34.80925s: Application 'cinnamon-settings-daemon-color.desktop' failed to register before timeout
+Could not parse arguments: Cannot open display: 
+
+(nm-applet:2949): Gtk-CRITICAL **: 12:33:49.785: gtk_widget_get_scale_factor: assertion 'GTK_IS_WIDGET (widget)' failed
+Sep 30 12:33:13 ubuntu systemd[1]: Starting lightdm.service - Light Display Manager...
+Sep 30 12:33:14 ubuntu systemd[1]: Started lightdm.service - Light Display Manager.
+Sep 30 12:33:14 ubuntu lightdm[2432]: pam_unix(lightdm-autologin:session): session opened for user ubuntu(uid=1000) by (uid=0)

@@ -1,0 +1,60 @@
+[  124.864999] nvidia-modeset: Loading NVIDIA UNIX Open Kernel Mode Setting Driver for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:04:37 UTC 2026
+[  124.892658] nvidia-modeset: WARNING: GPU:0: Failed to register display hotplug handler: 0x56
+
+[  124.894594] nvidia-modeset: WARNING: GPU:0: Failed to register DisplayPort interrupt handler: 0x56
+
+[  124.896307] nvidia-modeset: WARNING: GPU:0: Failed to enable HDMI FRL retrain notifications (subdevice: 0) (error: 0x56)
+[  125.273313] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[  125.273338] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _gpushareddataRequestDataPoll(pData, pAllocParams->polledDataMask) @ gpu_user_shared_data.c:95
+[  126.054434] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  129.647798] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  129.649461] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  129.650796] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  129.652899] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  129.915166] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  129.916325] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  129.917351] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  129.918373] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  132.761710] show_signal_msg: 111 callbacks suppressed
+[  132.761769] cinnamon[4129]: segfault at 0 ip 00007a9a9e757f19 sp 00007ffc37a2a960 error 6 in libnvidia-glcore.so.580.159.04[7a9a9e000000+c00000] likely on CPU 0 (core 0, socket 0)
+[  132.761977] Code: e8 0c ee f8 ff 41 89 c0 48 8b 83 40 12 00 00 f6 40 0c 01 74 09 45 85 ff 0f 85 e3 00 00 00 45 31 c9 48 8b 83 80 00 00 00 89 ea <c7> 00 04 c0 04 20 49 03 55 00 48 c1 ea 20 89 50 04 41 03 6d 00 89
+[  143.478094] nvidia-modeset: WARNING: GPU:0: Failed to disable HDMI FRL retrain notifications (subdevice: 0) (error: 0x1)
+[  143.611294] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[  143.647670] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+[  161.775302] [drm] [nvidia-drm] [GPU ID 0x00000002] Loading driver
+[  162.479689] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[  162.480135] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[  162.508962] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[  162.516993] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[  162.518397] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[  162.518412] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[  162.822128] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[  162.823147] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0) @ kernel_graphics.c:2519
+[  162.825696] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[  162.825704] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[  162.825708] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[  162.825711] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[  162.831483] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:508
+[  162.831495] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[  162.849477] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00041; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+[  162.849488] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2827
+[  162.849497] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:940
+[  162.853493] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[  162.858877] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00042; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  162.891674] nvidia-modeset: WARNING: GPU:0: Failed to register display hotplug handler: 0x56
+
+[  162.893605] nvidia-modeset: WARNING: GPU:0: Failed to register DisplayPort interrupt handler: 0x56
+
+[  162.895443] nvidia-modeset: WARNING: GPU:0: Failed to enable HDMI FRL retrain notifications (subdevice: 0) (error: 0x56)
+[  163.290237] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:02.0 on minor 1
+[  163.295608] Console: switching to colour dummy device 80x25
+[  163.304376] nvidia 0000:00:02.0: vgaarb: deactivate vga console
+[  163.381515] fbcon: nvidia-drmdrmfb (fb0) is primary device
+[  163.402468] Console: switching to colour frame buffer device 240x67
+[  163.431314] nvidia 0000:00:02.0: [drm] fb0: nvidia-drmdrmfb frame buffer device
+[  175.000729] Console: switching to colour dummy device 80x25
+[  178.112209] [drm:nv_drm_atomic_commit [nvidia_drm]] *ERROR* [nvidia-drm] [GPU ID 0x00000002] Flip event timeout on head 0
+[  178.141969] [drm] [nvidia-drm] [GPU ID 0x00000002] Unloading driver
+[  178.841409] nvidia-modeset: WARNING: GPU:0: Failed to disable HDMI FRL retrain notifications (subdevice: 0) (error: 0x1)
+[  178.968126] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[  178.989870] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213

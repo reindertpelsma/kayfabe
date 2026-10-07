@@ -1,0 +1,41 @@
+[boot_capture:gs_gs1_i_pv_vk_rt_ext] BINARY kf3-bin-rev:ce20926e  (/workspace/bench/kf3-bins/ce20926e/qemu-system-x86_64)  ⇒ every claim from this boot cites THIS revision
+[boot_capture:gs_gs1_i_pv_vk_rt_ext] host dmesg watermark: 936 lines
+[boot_capture:gs_gs1_i_pv_vk_rt_ext] booting (extra args: none)
+== kf3 binary: /workspace/bench/kf3-bins/ce20926e/qemu-system-x86_64 (rev c179a845)  device: kf3-gpu,fb-mb=6144,bar1-size=134217728,bar2-size=33554432,id=kf0
+[boot_capture:gs_gs1_i_pv_vk_rt_ext] guest is up after 51s
+[boot_capture:gs_gs1_i_pv_vk_rt_ext] module unloaded and ring buffer cleared; loading cold
+[boot_capture:gs_gs1_i_pv_vk_rt_ext] opening the device (this is what runs RmInitAdapter)
+[boot_capture:gs_gs1_i_pv_vk_rt_ext] captured 28 dmesg lines, 25 NVRM, 0 adapter → /workspace/bench/run_gs_gs1_i_pv_vk_rt_ext_dmesg.log
+[boot_capture:gs_gs1_i_pv_vk_rt_ext] --- the verdict lines ---
+[boot_capture:gs_gs1_i_pv_vk_rt_ext] running POST_CAPTURE_HOOK: /root/kayfabe/scripts/bench/gfxset/hook.sh
+[boot_capture:gs_gs1_i_pv_vk_rt_ext] hook finished: rc=0
+[boot_capture:gs_gs1_i_pv_vk_rt_ext] guest dmesg after workload: 73 lines (65 NVRM), delta 45 → /workspace/bench/run_gs_gs1_i_pv_vk_rt_ext_dmesg_after.log
+[boot_capture:gs_gs1_i_pv_vk_rt_ext] host dmesg delta: 0 lines, 0
+0 NVRM, 0
+0 Xid → /workspace/bench/run_gs_gs1_i_pv_vk_rt_ext_hostdmesg.log
+[boot_capture:gs_gs1_i_pv_vk_rt_ext] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:gs_gs1_i_pv_vk_rt_ext] census present (kf3):
+    kf3: family=Ampere phase=Running trapped=25385 applied=4224 refused=6 serviced=1324 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=852 walks=868/868 cleared=852 superseded=0 named_missed=3 unreconciled=0 mapped=2557 unmapped=2339 clipped=0x0 held=0 vmm_overlaps=0 fn70=5 r
+    DOORBELL-LEDGER tok=0x00000002 route=translated emulated=0 forwarded=2 host=0x10019
+    DOORBELL-LEDGER tok=0x00000001 route=translated emulated=0 forwarded=0 host=0x10018
+    DOORBELL-LEDGER tok=0x00000002 route=translated emulated=0 forwarded=4098 host=0x10019
+    DOORBELL-LEDGER tok=0x00000001 route=translated emulated=0 forwarded=0 host=0x10018
+    DOORBELL-LEDGER tok=0x00000004 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1001b
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2001c
+    DOORBELL-LEDGER tok=0x00000003 route=passthrough rung=4 emulated=0 forwarded=4 host=0x1a
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20020
+    DOORBELL-LEDGER tok=0x00000004 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1001b
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2001c
+    DOORBELL-LEDGER tok=0x00000003 route=passthrough rung=4 emulated=0 forwarded=4 host=0x1a
+    DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=7 emulated=0 forwarded=7 host=0x1001e
+    DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2001f
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10020
+    DOORBELL-LEDGER tok=0x00000006 route=passthrough rung=3 emulated=0 forwarded=3 host=0x1d
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=4 emulated=0 forwarded=4 host=0x22
+    DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=8 emulated=0 forwarded=8 host=0x21
+    DOORBELL-LEDGER tok=0x00000002 route=translated emulated=0 forwarded=4098 host=0x10019
+    DOORBELL-LEDGER tok=0x00000001 route=translated emulated=0 forwarded=127 host=0x10018
+[boot_capture:gs_gs1_i_pv_vk_rt_ext] evidence carried into the repo: /root/kayfabe/traces/guest_boots/run_gs_gs1_i_pv_vk_rt_ext_{qemu,dmesg,probe,hostdmesg}.log
+[boot_capture:gs_gs1_i_pv_vk_rt_ext] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+[boot_capture:gs_gs1_i_pv_vk_rt_ext]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+[boot_capture:gs_gs1_i_pv_vk_rt_ext] done. serial=/workspace/bench/run_gs_gs1_i_pv_vk_rt_ext_serial.log qemu=/workspace/bench/run_gs_gs1_i_pv_vk_rt_ext_qemu.log dmesg=/workspace/bench/run_gs_gs1_i_pv_vk_rt_ext_dmesg.log dmesg_after=/workspace/bench/run_gs_gs1_i_pv_vk_rt_ext_dmesg_after.log probe=/workspace/bench/run_gs_gs1_i_pv_vk_rt_ext_probe.log hostdmesg=/workspace/bench/run_gs_gs1_i_pv_vk_rt_ext_hostdmesg.log

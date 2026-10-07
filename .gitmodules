@@ -1,0 +1,23 @@
+# ⊘ REFERENCE SOURCES, NOT LIBRARIES. Nothing here is compiled into kayfabe or linked against.
+# They are the oracles every provenance claim cites (docs/design/THE_CONSTRAINTS.md §50), and they
+# are submodules for exactly one reason: ★ A CITATION WITHOUT A REVISION IS NOT A CITATION.
+#
+# They are deliberately NOT initialised by default — `git clone` of kayfabe stays small.
+# Fetch only what you need, shallow:
+#     git submodule update --init --depth 1 third_party/ogkm
+[submodule "third_party/ogkm"]
+	path = third_party/ogkm
+	url = https://github.com/NVIDIA/open-gpu-kernel-modules
+	shallow = true
+[submodule "third_party/ogkm-580"]
+	path = third_party/ogkm-580
+	url = https://github.com/NVIDIA/open-gpu-kernel-modules
+	shallow = true
+[submodule "third_party/linux"]
+	path = third_party/linux
+	url = https://github.com/torvalds/linux
+	shallow = true
+[submodule "third_party/gvisor"]
+	path = third_party/gvisor
+	url = https://github.com/google/gvisor
+	shallow = true

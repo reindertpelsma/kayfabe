@@ -1,0 +1,32 @@
+[   31.077644] nvidia-modeset: Loading NVIDIA UNIX Open Kernel Mode Setting Driver for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:04:37 UTC 2026
+[   31.089753] [drm] [nvidia-drm] [GPU ID 0x00000002] Loading driver
+[   31.890752] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   31.890872] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   31.916567] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   31.924342] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   31.925620] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   31.925633] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   32.187417] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   32.188131] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0) @ kernel_graphics.c:2519
+[   32.190417] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   32.190422] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   32.190437] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   32.190439] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   32.194884] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:508
+[   32.194891] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   32.209606] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00015; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+[   32.209614] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2827
+[   32.209672] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:940
+[   32.213075] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   32.218230] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00016; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   32.250582] nvidia-modeset: WARNING: GPU:0: Failed to register display hotplug handler: 0x56
+
+[   32.252365] nvidia-modeset: WARNING: GPU:0: Failed to register DisplayPort interrupt handler: 0x56
+
+[   32.254334] nvidia-modeset: WARNING: GPU:0: Failed to enable HDMI FRL retrain notifications (subdevice: 0) (error: 0x56)
+[   32.637162] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:02.0 on minor 0
+[   32.637310] nvidia 0000:00:02.0: vgaarb: deactivate vga console
+[   32.637609] Console: switching to colour dummy device 80x25
+[   32.681714] fbcon: nvidia-drmdrmfb (fb0) is primary device
+[   32.722940] Console: switching to colour frame buffer device 240x67
+[   32.829133] nvidia 0000:00:02.0: [drm] fb0: nvidia-drmdrmfb frame buffer device

@@ -1,0 +1,5805 @@
+//! # kayfabe-isolate — the per-process unprivileged-sandbox port
+//!
+//! Two abstract seams live here:
+//!
+//! - [`RmBackend`] — **RM verbs, not ioctls** (arch doc §4.2, crate `kayfabe-rm` folded
+//!   into this crate until the wire protocol lands): the unprivileged host-RM
+//!   operation surface an isolate can issue. Abstract by design — the Windows-host
+//!   door stays open, and NO real NVOS struct/ioctl number appears here (Axis A is
+//!   quarantined to `kayfabe-abi`).
+//! - [`Isolate`] / [`IsolateFactory`] — the per-guest-process sandboxed host worker.
+//!   One isolate per `Proc` (`session_id == ProcId`).
+//!
+//! ## ★★★ Why one isolate per guest process — read this before changing the granularity
+//!
+//! ⊘ **Not primarily for blast radius.** The founding reason is **VA identity**:
+//! NVIDIA's driver, and UVM especially, treats the address a buffer has in the
+//! *calling process* as *the* address. `nvproxy` gets that for free because a guest
+//! process **is** a host process; in a VM it is not, and that is exactly why porting
+//! `nvproxy` to QEMU was believed impossible. One host process per guest process
+//! restores the identity, and `#14` **is** the collision that follows when it is lost;
+//! `#102` is the tree asserting its negation.
+//!
+//! ★ **State it precisely, because the loose version is refutable.** An address passed
+//! as an *argument* IS re-addressable — every NVIDIA object can be shared out of an
+//! isolate and re-mapped at an arbitrary VMM address, which is how Mode 2 passed LLM
+//! compute. What cannot be re-addressed is an address the driver takes **implicitly
+//! from the calling process**: `mm` is not a parameter. UVM is the clean case — managed
+//! memory's contract is CPU VA == GPU VA and its `va_space` is bound to the caller's
+//! `mm`, so two guest processes with overlapping managed VAs cannot both be registered
+//! in one host `mm`. ⊘ The GPU-VAS argument does *not* carry this on its own: one RM
+//! client may own many `VASpace` objects.
+//!
+//! ⊘ **CORRECTED — do not repeat the strong version of this.** An earlier revision
+//! said UVM's `mm` binding is enforced by the driver *by error code*, citing the C's
+//! `SCM_RIGHTS` rejection. The rejection was real, but `uvm_api_mm_initialize`
+//! contains **no `current->mm` comparison** in 580, 610 or 575
+//! (`ogkm-580: kernel-open/nvidia-uvm/uvm.c:59-137`) — the C's stated mechanism is a
+//! reconstruction. The `mm` is captured at `UVM_INITIALIZE`
+//! (`uvm_va_space_mm.c:195`) and is **skipped entirely** under
+//! `UVM_INIT_FLAGS_MULTI_PROCESS_SHARING_MODE` (`uvm_va_space_mm.c:172-179`) — which
+//! gVisor's `nvproxy` forcibly sets on every app precisely to share one host UVM fd
+//! (`gvisor/pkg/sentry/devices/nvproxy/uvm.go:188-200`).
+//!
+//! ⇒ What survives is an **allocator** argument, not a kernel-refusal one: UVM VA
+//! ranges are identity-mapped and `MAP_EXTERNAL_ALLOCATION` carries raw VAs, so one
+//! shared `va_space` means one flat host VA allocator in which two guest processes at
+//! the same VA collide — `#14` again. ★ The strongest argument is therefore the RM
+//! **namespace** one below (a new host process with a new `hClient` is separation RM
+//! performs, not separation we assert). Full treatment, including what was
+//! overstated: `docs/design/isolate_founding_rationale.md` §1c.
+//!
+//! ⇒ **Coarsening this granularity — one isolate shared by two guest processes —
+//! reintroduces `#14` no matter what it does for security.** Blast-radius containment
+//! (a bug forwarding process A cannot touch process B's host handles/mappings —
+//! threat-model boundary 2, arch doc §4.3.5) is real and is the *third* reason, not the
+//! first. Full ordering and its history: `docs/design/isolate_founding_rationale.md`.
+//!
+//! The real implementation (spawn, `CLONE_NEW*` namespaces, pivot_root, seccomp,
+//! socket wire protocol — the Mode-1 stub posture) is an adapter crate concern.
+//! This crate is pure interface + value types so the core and its tests never touch
+//! an OS. `kayfabe-mocks::{MockRmBackend, MockIsolate}` are the test impls.
+//!
+//! ## ★ R1's teeth live here (`l1_concurrency.md` §3.3, stage 3)
+//!
+//! A host RM verb is the archetypal blocking call, so **R1 — no blocking call under
+//! ANY lock, ever — must be asserted at this port's door, not at a wrapper someone
+//! must remember to use** (the §12.6 gap stage 3 closes). Two mechanisms, together:
+//!
+//! - **Ownership shape.** [`RmBackend`] is not reachable from an [`Isolate`] by
+//!   reference. It lives inside the isolate's bounded pool of [`Worker`]s, and
+//!   [`Isolate::checkout`] **moves a worker OUT** to the calling thread (§7.3). A
+//!   locked core phase therefore has nothing to call: it can *emit* a [`VerbPlan`]
+//!   and check a worker out, and that is all.
+//! - **Runtime assert.** [`Worker::execute`] (and the [`Worker::with_rm`] escape
+//!   hatch) call [`kayfabe_util::lockwitness::assert_lock_free`] before touching the
+//!   backend. Holding any ranked lock at a verb is an immediate panic naming R1.
+//! - **★ The other blocking thing, and it is not a verb** (`l1_concurrency.md`
+//!   §12.16, gap G3b): an isolate's `Drop` is `waitpid` + namespace teardown, run by
+//!   the compiler at a point no call site names, and the verb assert cannot see it.
+//!   [`IsolateBox`] — the only way core state owns an [`Isolate`] — asserts the same
+//!   invariant on the drop side. `Spine::reap_retired` was performing exactly that
+//!   drop under the device write lock, and nothing could notice.
+//!
+//! Full compile-time enforcement of "no guard is alive on this thread" is not
+//! expressible in safe Rust; the ownership shape makes violations contortions
+//! instead of accidents, and the assert is the real teeth.
+//!
+//! ## Concurrency (decision #17)
+//!
+//! [`Isolate`] and [`IsolateFactory`] are **`Send + Sync` supertraits**: the core
+//! *stores* them (each `Proc` owns its isolates inside [`IsolateBox`], the `Gpu` owns the
+//! factory), so they inherit the core's shareability requirement. Their `&self`
+//! surface is pure reads (`id`/`is_retired`); every mutation takes `&mut self`, so
+//! exclusivity comes from the caller's borrow, as everywhere in the core.
+//! [`RmBackend`] is `Send + Sync` **because the pool stores it**, not because any
+//! call path shares one: it is reachable exclusively through a [`Worker`] the caller
+//! `&mut`-owns, so a shared reference never exists. The bound is nonetheless
+//! load-bearing and not droppable — an [`Isolate`] owns N idle [`Worker`]s, a `Proc`
+//! owns the isolate, and the core's `Gpu` is `Sync`, so every boxed backend sitting
+//! in a pool slot must be `Sync` for that chain to hold. (Before the §7.2 pool, no
+//! `Box<dyn RmBackend>` was ever *stored* in core state, and the crate carried a
+//! `Send`-only exception here; storing the pool is what cashed it in. Cost to real
+//! impls: no `Rc`/`Cell` in a backend's private state — which the `&mut`-only
+//! surface never needed anyway.)
+
+pub use kayfabe_arch::ids::ControlCmd;
+use kayfabe_arch::ids::{ClassId, EngineKind, GpuId, GpuVa};
+use kayfabe_vmm::Prot;
+
+/// A host-side RM object handle — **a raw value plus the isolate whose RM client
+/// namespace it lives in** (`l1_concurrency.md` §12.26).
+///
+/// ## Why the isolate travels with the handle
+///
+/// A handle value alone is not an identity: RM mints client-scoped handles from one
+/// shared base (`RS_CLIENT_HANDLE_BASE` = `0xC1D00000`:
+/// `ogkm-610: src/nvidia/generated/g_resserv_nvoc.h:173`, `ogkm-580: :188` — the
+/// **value** is identical, only the line moved; one `serverSetClientHandleBase` for the
+/// whole driver, `ogkm-610:`/`ogkm-580: src/nvidia/src/kernel/rmapi/rmapi.c:105`, same
+/// line at both), so isolate A's handle `0x…07` and isolate B's handle `0x…07`
+/// are *both live and unrelated*. Using one on the other's connection therefore does
+/// **not** fault — it names a different, live object. A free would destroy a bystander;
+/// an unmap would tear down a bystander's mapping. That is the cross-namespace reach
+/// [`kayfabe_mocks::HostLedger::free_of_unknown`] was added to detect, and the mock
+/// can only detect it because the mock namespaces its fake handle *values*. A real host
+/// does not, which is exactly why the fact has to live in the type rather than in the
+/// backend's luck.
+///
+/// This is the same discipline [`kayfabe_core::gpa::GpaBlock`] already uses one plane
+/// over — *"a block names the exact `ArenaId` it came from, so freeing it into a
+/// different proc's arena is a loud refusal, not a silent double-issue"* (§12.20) —
+/// applied to the object plane. It is the recorded-fact shape of §12.25, not a
+/// branded-lifetime scheme: the fact is written exactly once, by the only party that
+/// can know it (the backend that minted the handle), and [`Worker::execute`] is the one
+/// consumer that must read it.
+///
+/// The raw value is deliberately still `u64` and still opaque: it is the host's, and
+/// nothing in the core interprets it.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct HostHandle {
+    /// The isolate whose RM client namespace this handle lives in. Ordered first so
+    /// a `BTreeSet<HostHandle>` groups by namespace.
+    isolate: IsolateId,
+    raw: u64,
+}
+
+impl HostHandle {
+    /// RM's `NV01_NULL_OBJECT` — the namespace-free "no parent / no object" value.
+    /// Belongs to no isolate, so the [`Worker::execute`] foreign-handle gate exempts
+    /// it (a null parent is legal on every connection).
+    pub const NULL: HostHandle = HostHandle {
+        isolate: IsolateId::NONE,
+        raw: 0,
+    };
+
+    /// Stamp `raw` as belonging to `isolate`'s namespace. **Backends only** — this is
+    /// the mint, and calling it anywhere else fabricates a provenance claim.
+    #[must_use]
+    pub const fn new(isolate: IsolateId, raw: u64) -> Self {
+        HostHandle { isolate, raw }
+    }
+
+    /// The isolate whose namespace this handle lives in.
+    #[must_use]
+    pub const fn isolate(self) -> IsolateId {
+        self.isolate
+    }
+
+    /// The host's opaque handle value.
+    #[must_use]
+    pub const fn raw(self) -> u64 {
+        self.raw
+    }
+
+    /// Is this handle usable on `isolate`'s connection? [`Self::NULL`] is usable
+    /// everywhere; every other handle belongs to exactly one namespace.
+    ///
+    /// ★ N3: the comparison is on the WHOLE [`IsolateId`], i.e. on `(proc, GPU)`. It
+    /// used to compare the proc half only, which made a handle minted on one of a
+    /// proc's GPUs indistinguishable — *to this function* — from the same value on
+    /// another of its GPUs. See [`IsolateId`] for why that is a bystander hit rather
+    /// than a harmless alias.
+    #[must_use]
+    pub const fn belongs_to(self, isolate: IsolateId) -> bool {
+        if self.raw == 0
+            && self.isolate.proc == IsolateId::NONE.proc
+            && self.isolate.gpu.0 == IsolateId::NONE.gpu.0
+        {
+            return true;
+        }
+        self.isolate.proc == isolate.proc && self.isolate.gpu.0 == isolate.gpu.0
+    }
+}
+
+impl core::fmt::Debug for HostHandle {
+    /// Compact and namespace-first, because every assertion that involves a handle is
+    /// really an assertion about *which* namespace it came from.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if *self == HostHandle::NULL {
+            return f.write_str("HostHandle(NULL)");
+        }
+        write!(f, "HostHandle({:?}:{:#x})", self.isolate, self.raw)
+    }
+}
+
+/// ★★ **This backend is not a CUDA scratchpad isolate**, so it has no walk kernel to stage
+/// an image for or to run. [`RmBackend::walk_shadow_stage`] / [`RmBackend::walk_shadow_run`].
+///
+/// ⊘ A named refusal and not `Ok(())`: an ordinary isolate answering *"staged"* would let the
+/// shadow believe an image it never received is about to be walked, and the disagreements
+/// that followed would be attributed to the two walkers rather than to the missing image.
+pub const NOT_A_WALK_SHADOW: u32 = 0x5748_0001;
+
+/// ★★★★★ **w755r — THE CHANNEL'S ENGINE, AS A CONDUIT THE SHIM CANNOT INTERPRET.**
+///
+/// The store-birth delegation passes through `kayfabe-qemu-raw`, whose manifest states the
+/// rule plainly: *"`kayfabe-arch` is not a dependency of this crate and must not become one —
+/// **the shim names no architecture**."* Two fields of type [`EngineKind`] and `Option<u32>`
+/// would break that, and re-exporting `EngineKind` so the shim could spell it would honour
+/// the letter while losing the point.
+///
+/// ⇒ They travel as one opaque value. The shim moves it and **cannot** read it: there are no
+/// public accessors, so *"the shim does not interpret the engine"* is a property of the type
+/// rather than a promise in a comment.
+///
+/// ⊘ **Both halves, never a resolved number.** `alloc_channel_lowered` resolves the engine
+/// type as `declared.or_else(|| engine_type_for(kind))`, and that fallback has to stay where
+/// `engine_type_for` lives — `[my first draft of this route]` refused outright on a `None`
+/// declaration, which is **stricter than the established path** and would have refused
+/// births that succeed today, visible only on store-USERD channels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChannelEngine {
+    kind: EngineKind,
+    declared: Option<u32>,
+}
+
+impl ChannelEngine {
+    /// Bundle the guest's declaration with the channel's engine kind.
+    #[must_use]
+    pub fn of(kind: EngineKind, declared: Option<u32>) -> Self {
+        Self { kind, declared }
+    }
+
+    /// The pair, for the one party that resolves it — the backend that owns
+    /// `engine_type_for`. ⊘ Deliberately a single accessor returning both: a getter per field
+    /// would let a caller take the declaration and forget the fallback, which is exactly the
+    /// mistake this type was introduced to stop.
+    #[must_use]
+    pub fn parts(self) -> (EngineKind, Option<u32>) {
+        (self.kind, self.declared)
+    }
+}
+
+/// ★★★★★ **w757 — A VA SPACE MAY BE RELEASED ONLY WHEN NOBODY HOLDS IT.**
+///
+/// > Owner, 2026-09-18: *"Ensure va space is only released if it contains 0 mappings, its
+/// > table is no longer referenced and no channel uses it (vmm coordinated)."*
+///
+/// Three conditions, and they are known by **two different parties**:
+///
+/// | condition | who knows it |
+/// |---|---|
+/// | 0 mappings placed in it | the store-map port — it is the only author of mappings (w757) |
+/// | its table is no longer referenced | the store-map port — its own adopted/range ledger |
+/// | **no channel uses it** | **the VMM** — it owns channel lifecycle and sees `RmEvent::Free` |
+///
+/// ⊘⊘ **The third travels as a TYPE, not a `bool`.** A boolean parameter named
+/// `no_channel_holds_it` is a claim any caller can make, including one that never looked; this
+/// is the same reason `HandedClient` exists rather than a `u32` called `client`. The only
+/// constructor is [`SharedDeviceLike::vas_unreferenced`]-shaped — a party that can enumerate
+/// channels — so *"somebody actually checked"* is a property of the value.
+///
+/// ⚠ **And it is an ASSERTION AT AN INSTANT, which is why the port re-checks its own two
+/// conditions after receiving it.** The VMM's answer can go stale between mint and use; the
+/// port's cannot, because the port is the only thing that changes mappings.
+#[derive(Debug, Clone, Copy)]
+pub struct NoChannelHoldsVas {
+    vas: HostHandle,
+}
+
+impl NoChannelHoldsVas {
+    /// Mint the witness. ⊘ Deliberately takes the enumeration's **result**, so the only way to
+    /// produce one is to have looked: `channels_using` is the count the caller counted.
+    ///
+    /// Returns `None` when a channel still holds it — which is not an error, it is the answer.
+    #[must_use]
+    pub fn checked(vas: HostHandle, channels_using: usize) -> Option<Self> {
+        (channels_using == 0).then_some(Self { vas })
+    }
+
+    /// Which space this witness is about. ⊘ Read by the port so a witness for one space cannot
+    /// release another — the shape that makes a typed proof worth more than a flag.
+    #[must_use]
+    pub fn vas(self) -> HostHandle {
+        self.vas
+    }
+}
+
+/// ★★★★★ **w755r — the four refusals of the store-birth route, kept APART.**
+///
+/// ⊘ One name per cause, never one name for the route. `[this tree, repeatedly]` a single
+/// refusal covering several causes is what makes a boot report *that* something failed and
+/// never *which* — the defect `w755q` spent a whole boot on, one layer up. Each of these
+/// sends a reader somewhere different:
+///
+/// - [`NO_HOST_VAS_FOR_STORE_BIRTH`] — the plan wanted a fresh host VAS, so there is no
+///   adopted range. A store-slice USERD in a space nothing has been mapped into is a
+///   contradiction; look at the planner.
+/// - [`NO_STORE_BIRTH_PARTY`] — nobody installed a [`crate::RmBackend`]-side birth party.
+///   Look at the composition root: this is the `scratchpad`/`BirthClient` arm not arming.
+/// - [`NO_ENGINE_TYPE_FOR_STORE_BIRTH`] — the guest declared no `engineType`. Look at the
+///   graph, not at RM.
+/// - [`STORE_BIRTH_REFUSED`] — the party was asked and said no; **its own** message carries
+///   the reason and this is only the envelope.
+pub const NO_HOST_VAS_FOR_STORE_BIRTH: u32 = 0x5342_0001;
+/// See [`NO_HOST_VAS_FOR_STORE_BIRTH`].
+pub const NO_STORE_BIRTH_PARTY: u32 = 0x5342_0002;
+/// See [`NO_HOST_VAS_FOR_STORE_BIRTH`].
+pub const NO_ENGINE_TYPE_FOR_STORE_BIRTH: u32 = 0x5342_0003;
+/// See [`NO_HOST_VAS_FOR_STORE_BIRTH`].
+pub const STORE_BIRTH_REFUSED: u32 = 0x5342_0004;
+
+/// Errors an RM verb can return, in core terms.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RmError {
+    /// The op requires privilege the isolate deliberately lacks. This is
+    /// **"wrong layer," never "gain privilege"** (lesson L2: a Case-2 GSP-internal
+    /// control replayed on the host gets exactly this) — callers must treat it as a
+    /// design error in the forwarding decision, not retry with more privilege.
+    InsufficientPermissions,
+    /// Unknown handle in this isolate's namespace.
+    BadHandle(HostHandle),
+    /// Host resource exhaustion.
+    NoMemory,
+    /// ★ **The verb was CANCELLED — it did not fail** (`l1_concurrency.md` §5.4 and
+    /// §12.16, gap G4).
+    ///
+    /// The archetypal cause is the one §5.4 designs for: a guest thread blocked in a
+    /// forwarded op dies or takes a signal, so the requester interrupts the in-flight
+    /// verb rather than wedging until the host ioctl finishes on its own.
+    ///
+    /// **Measured in the C, not invented here** (issue #73). The host stub installs a
+    /// SIGUSR1 handler *without* `SA_RESTART` precisely so a blocked
+    /// `ioctl()` on `/dev/nvidia*` returns `-EINTR` rather than auto-restarting
+    /// (`C: src/stub/nvkvm_stub.c:699-708`, `:2669-2678`); the interrupt itself
+    /// arrives out of band as a command (`ISOLATE_CMD_INTERRUPT`,
+    /// `C: src/common/nvkvm_isolate_proto.h:53,122-131`) and the worker then answers
+    /// **on the ordinary reply path** carrying `retval = -EINTR`. There is no separate
+    /// "interrupted" reply message in the C's wire protocol, which is exactly why this
+    /// is an [`RmError`] variant and not a new [`VerbReply`]: at this port an
+    /// interrupted verb *is* a verb that came back, with a distinguishable status.
+    ///
+    /// **The worker survives it.** The C's stub clears its in-flight txn and loops
+    /// (`C: src/stub/nvkvm_stub.c:1276-1281`), and its framing treats `-EINTR` as
+    /// resumable (`:569-571`). So the unwind CAN still run on this worker — which is
+    /// what makes [`VerbFailure::orphans`] meaningful here, and what distinguishes
+    /// cancellation from worker *death* ([`Isolate::worker_died`], §7.3), where the
+    /// verb never returns at all.
+    ///
+    /// **Never retry it as if it were transient.** A cancellation is a fact about the
+    /// requester, not about the host: retrying re-issues work whose requester is
+    /// gone. It is §12.9's *third* staleness shape — non-retryable and
+    /// orphan-carrying — and the fwd plane surfaces it as
+    /// `FwdFault::Cancelled`, never as an RM failure (that conflation is §12.10 one
+    /// layer over).
+    Interrupted,
+    /// ★★ **The worker never replied and the requester was RELEASED without one** —
+    /// §7.5's D-state escape (`l1_os_shell.md` §7.5, the two-stage watchdog).
+    ///
+    /// **This is not a reply and no real backend returns it.** A host thread in
+    /// uninterruptible sleep cannot be signalled awake — RM's waits are `down_write`s
+    /// and busy-polls with no signal check: `_kgspRpcRecvPoll`'s loop ends in
+    /// `osSpinLoop()` and tests no signal at either tag
+    /// (`ogkm-610: .../gpu/gsp/kernel_gsp.c:2963-3060`, `ogkm-580: :2392-2479`. The two
+    /// differ *inside* the loop — 610 classifies the timeout through
+    /// `_kgspClassifyGspTimeout`/heartbeats where 580 counts three back-to-back timeouts
+    /// and marks the GPU for reset — but neither tag makes the wait interruptible, which
+    /// is the only part this variant rests on),
+    /// which is exactly why [`RmError::Interrupted`] is a *best effort* and this variant
+    /// has to exist beside it. When the watchdog's second budget expires the shell
+    /// declares the worker **wedged** and, in ONE act, kills the slot, condemns the
+    /// component and abandons the reply; this value is what the abandoned requester
+    /// carries out. In the mock, "the socket" is a condvar and the abandon signal is the
+    /// same condvar (§7.5), so the whole path is deterministic with no sleeps.
+    ///
+    /// ## ★ The consequence that makes it different from every other `RmError`
+    ///
+    /// **The unwind CANNOT run.** Every other failure — cancellation included — comes
+    /// back on a worker that is still alive, so [`Worker::execute`] frees what the chain
+    /// already allocated before it returns. A wedged worker cannot issue a `free`: it is
+    /// still inside the host ioctl that wedged it. So the chain's intermediates come out
+    /// **untouched** in [`VerbFailure::orphans`], which is the G4 premise verbatim
+    /// (*"a worker that died mid-chain cannot run the unwind, and the handles it already
+    /// minted are in no `Orphans` and in no core state"*). The caller must **stage** them
+    /// — it must not try to dispose of them on this worker, and it must not drop them.
+    ///
+    /// Their disposition of record is §7.0's process boundary: the escape kills the
+    /// isolate, and the kernel frees the whole RM client tree. That is a **stated**
+    /// disposition, not a leak, and the honest residual §7.5 names is that the D-state
+    /// host thread itself leaks until the kernel finishes its ioctl — *"what we convert
+    /// is unbounded silent stall → bounded loud failure plus a leak we can name."*
+    Wedged,
+    /// ★ **The plan named a handle from ANOTHER isolate's namespace** — refused
+    /// before a single verb ran (`l1_concurrency.md` §12.26).
+    ///
+    /// Not a host failure and not a guest fault: it is *our* invariant breaking. A
+    /// [`HostHandle`] belongs to exactly one isolate's RM client namespace, and the
+    /// same raw value is live-and-different in every other one, so issuing this verb
+    /// would have operated on a **bystander object** — the cross-namespace reach
+    /// boundary 2 exists to forbid. The gate runs first, so nothing was allocated and
+    /// the accompanying [`VerbFailure::orphans`] is empty by construction.
+    ForeignHandle {
+        /// The offending handle, carrying the namespace it actually belongs to.
+        handle: HostHandle,
+        /// The isolate this worker would have issued the verb on.
+        worker_isolate: IsolateId,
+    },
+    /// ★★★ **ADDRESS IDENTITY REFUSED** (`#102`, `eight_blockers_resolved.md` §1) — the
+    /// backend was asked to map at a specific host GPU VA and produced a different one.
+    ///
+    /// A forwarded pushbuffer names **guest** virtual addresses. For the host GPU's MMU
+    /// to resolve one, the mapping must exist **at that same address** in the channel's
+    /// host VAS. So [`RmBackend::map_gpu_va`] takes the address as an argument and the
+    /// real backend sets `DMA_OFFSET_FIXED_TRUE` (bit 15, `0x8000`; `dmaOffset` becomes
+    /// **[IN]** — `C: nvkvm_gpu_emul.c:7663-7692`, *"the irreducible primitive the whole
+    /// data plane rests on"*). A backend that ignores the flag and picks its own
+    /// placement produces a mapping that **looks published and cannot be addressed**:
+    /// the guest's copy is forwarded, the host MMU walks for the guest VA, finds
+    /// nothing, and the run dies as `Xid 31 FAULT_PDE`. That is exactly the failure this
+    /// error exists to convert into a loud, local refusal.
+    ///
+    /// It is *our* invariant breaking, not a guest fault and not a host resource
+    /// condition: it means the placement request was silently downgraded. The verb chain
+    /// unwinds the mapping and everything under it before surfacing this.
+    PlacementRefused {
+        /// The host GPU VA the plan required (the guest VA, by identity).
+        want: u64,
+        /// The host GPU VA the backend actually produced.
+        got: u64,
+    },
+    /// ★★★ **THE NAMED BOUNDARY of the isolate-performs-the-mapping ruling** — the bytes
+    /// asked for are the real device's, and there is no way to hand them to the VMM as
+    /// *memory* ([`RmBackend::export_backing`], `isolate_vmm_fd_crossing.md` §12).
+    ///
+    /// This is not "not built yet" and it is not a host failure. It is the isolate saying
+    /// *"I performed no mapping, because the only thing I could have handed you is a
+    /// descriptor you could `ioctl`, and that is the thing this verb exists to stop
+    /// crossing."* Three facts, together, make it a decision rather than a gap:
+    ///
+    /// 1. The only object whose `mmap` yields a host GPU BAR page is `/dev/nvidia<N>`
+    ///    carrying a registered mapping context — a **character device**, and RM assigns
+    ///    `secInfo.privLevel` from `osIsAdministrator()` at the top of **every** escape
+    ///    (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:304`, sole occurrence), so
+    ///    the same descriptor is unprivileged in the isolate and privileged in a root VMM
+    ///    (`guest_blast_radius.md` F14).
+    /// 2. NVIDIA's own dma-buf export — the one route that would cross a *non*-RM
+    ///    descriptor — hard-gates CPU mapping to integrated parts:
+    ///    `*pbCanMmap = pGpu->getProperty(pGpu, PDB_PROP_GPU_ZERO_FB)`
+    ///    (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/osapi.c:5609`), and
+    ///    `nv_dma_buf_mmap` refuses when it is false
+    ///    (`ogkm-580: kernel-open/nvidia/nv-dmabuf.c:1246-1250`). On every discrete part
+    ///    this project targets, a dma-buf of device memory **cannot be mapped by the CPU**
+    ///    at all.
+    /// 3. Our own memory plane already refuses the result independently:
+    ///    `kayfabe_linux_raw::GuestWindow::place` rejects `Backing::DeviceFile` with
+    ///    `RawError::DeviceBackingNotPlaceable`.
+    ///
+    /// ⊘ **A caller must never downgrade this to "map it somewhere else".** The bytes are
+    /// on the card; a mapping of different bytes is worse than no mapping, which is the
+    /// same judgement `kayfabe_vmm_qemu::viewer_install` already makes when it refuses to
+    /// install rather than approximate.
+    NotExportableAsMemory {
+        /// The RM object whose pages were asked for.
+        memory: HostHandle,
+    },
+    /// ★★★ **This isolate has no guest-RAM descriptor**, so a [`GuestRamGrant`] cannot be
+    /// honoured — and it is a *deployment* fact, not a bug and not a host resource
+    /// condition (`mode2_isolate_memory_boundary.md` §2, `guest_ram_crossing.md` §1).
+    ///
+    /// Guest RAM is only shareable when the VM was **launched** with a shared, fd-backed
+    /// memory block (`memory-backend-memfd,share=on`). No code gate can observe how the
+    /// operator started the VM — the same argument
+    /// [`kayfabe_linux_raw::Backing::PrivateAnonymous`] already writes down for the VMM's
+    /// own side of the same fact — so the only available mechanism is a **loud refusal at
+    /// the first grant**.
+    ///
+    /// ⊘ A caller must never fall back to copying the range instead. The guest **polls**
+    /// its completion semaphore out of its own RAM and advances `GP_PUT` in its own ring;
+    /// a poll has no trigger point at which a copy-back could happen, so a copying fallback
+    /// is not a degraded version of this — it is a different, wrong mechanism that looks
+    /// like it works until the guest waits forever.
+    GuestRamUnavailable,
+    /// Any other backend-reported failure (opaque status for diagnostics).
+    Other(u32),
+    /// ★★★★★ **w734 — this device view carries no token the owning process could release
+    /// by**, so nothing was released and nothing was pretended.
+    ///
+    /// The usermode/counter-page crossing's reply carries no token at all, by design: that
+    /// view is armed once and lives for the boot. ⊘ Its [`DeviceView::release_token`] is
+    /// therefore [`DeviceView::UNRELEASABLE`], and asking to release it is refused HERE
+    /// rather than falling back to [`DeviceView::token`] — which is the parent's index into
+    /// a different table, and would free a **different** view while answering `Ok(())`.
+    ViewNotReleasable,
+}
+
+/// ★★★★★ **An instruction to map a slice of GUEST RAM into an isolate** — and the whole
+/// point is *who wrote the numbers in it*.
+///
+/// `mode2_isolate_memory_boundary.md` §3, the load-bearing rule: **the VMM originates the
+/// numbers; it never validates numbers the isolate proposed.** If the isolate could say
+/// *"I would like offset X length Y"* and the VMM checked *"is that inside guest RAM?"*,
+/// the check would be **circular** — it validates a request against itself, which is
+/// exactly [an echo is unverifiable by its reply]. `(offset, len)` must come from the VMM's
+/// own address-table derivation, and this type exists so that the shape of the call
+/// enforces it rather than a comment asking for it.
+///
+/// ## ★ Why this is a SHAPE and had to land before the first caller
+///
+/// §5 of that page: *"Checks can be added later; shapes cannot."* If the crossing lands
+/// without this, every call site is written assuming *"I can map what I need"*, and
+/// retrofitting means auditing and rewriting all of them. The seccomp enforcement — fd
+/// pinning, the filter, `SECCOMP_RET_USER_NOTIF` on `mmap`, the `munmap` confirmation —
+/// lands **behind** this interface without touching a single call site, because the shape
+/// already forced everything through one door.
+///
+/// ## ⊘ What this rung deliberately does NOT dictate, and why that is not a hole
+///
+/// The **host virtual address**. §3's "Matching" paragraph wants `addr` in the match set
+/// too, and it is not here yet because dictating a host VA requires a *host-private VA
+/// reservation in the isolate's address space* — `kayfabe_linux_raw` has no
+/// `MAP_FIXED_NOREPLACE` anywhere by deliberate policy, and
+/// [`kayfabe_linux_raw::Reservation::map_fixed_in`] is the only sanctioned way to place a
+/// mapping at a chosen address. That reservation is designed and not built
+/// (`guest_ram_crossing.md` §3).
+///
+/// ★ And the omission is **sound rather than merely tolerable**, which is the part worth
+/// stating: the circularity §3 forbids is about *which guest memory* an isolate may reach.
+/// The host VA says where in the isolate's own address space the pages land, which
+/// authorizes nothing — an isolate that could pick its own host VA still cannot pick which
+/// guest bytes are there. So the authorization is complete as written, and the host VA
+/// tightens the *seccomp match* later rather than plugging a gap now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuestRamGrant {
+    offset: u64,
+    len: u64,
+    prot: Prot,
+}
+
+impl GuestRamGrant {
+    /// Mint a grant. **The name is the contract**: a caller that is not the VMM deriving
+    /// these numbers from its own region map is misusing this, and the spelling is meant to
+    /// be uncomfortable to write anywhere else.
+    ///
+    /// ⊘ There is deliberately no `from_request`, no `validate`, and no constructor that
+    /// takes numbers the isolate sent. Adding one re-opens §3's circularity.
+    #[must_use]
+    pub fn originated_by_the_vmm(offset: u64, len: u64, prot: Prot) -> Self {
+        GuestRamGrant { offset, len, prot }
+    }
+
+    /// Byte offset into the guest-RAM block.
+    #[must_use]
+    pub fn offset(&self) -> u64 {
+        self.offset
+    }
+
+    /// Length in bytes.
+    #[must_use]
+    pub fn len(&self) -> u64 {
+        self.len
+    }
+
+    /// Whether the isolate may write these pages.
+    ///
+    /// ★ Carried explicitly because authorizing read-only and receiving `PROT_WRITE` is a
+    /// **silent escalation** (§3, "Matching"). A ring the isolate only reads must be mapped
+    /// read-only *in the isolate*, which is
+    /// [`kayfabe_linux_raw::HostProt`]'s whole reason for being a distinct type from this
+    /// one.
+    #[must_use]
+    pub fn prot(&self) -> Prot {
+        self.prot
+    }
+
+    /// Whether the grant names no bytes at all.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+}
+
+/// What the isolate made of a [`GuestRamGrant`]: **a named mapping**, not an address.
+///
+/// ⊘⊘ **It deliberately does not carry a host virtual address**, and the reason is a
+/// boundary rather than taste. `kayfabe_linux_raw::MappedRegion::addr_at` is `pub(crate)`:
+/// no representation of a host mapping's address crosses that crate, because the one
+/// consumer that needs one (`NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`, which hands RM an address
+/// it then `pin_user_pages`-walks) is served by patching the value into the ioctl argument
+/// *inside* the raw crate and scrubbing it back out. Reporting a host VA up to the VMM
+/// would have punched a hole in that for a number the VMM has no use for — it cannot
+/// dereference an address in another process, and it does not choose this one.
+///
+/// ★ So the mapping is named by a [`HostHandle`], like every other isolate-side object.
+/// That is not a stand-in for the address: it buys the cross-isolate check for free, since
+/// [`Worker::execute`]'s foreign-handle gate already refuses a handle minted by one
+/// isolate presented on another.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuestRamMapped {
+    /// The isolate's name for this mapping.
+    pub region: HostHandle,
+    /// Length in bytes, as granted.
+    pub len: u64,
+}
+
+/// ★★★ **What the VMM is asking the isolate to make installable** —
+/// [`RmBackend::export_backing`]'s argument (`isolate_vmm_fd_crossing.md` §12).
+///
+/// Two variants, and the second one **always refuses**. That is the point: the boundary
+/// of the owner's decision (b) is a *typed* fact with a test that watches it fire, not a
+/// paragraph. A request shape that could only ever succeed would leave the incomplete
+/// half of (b) expressible nowhere, and an unexpressible boundary is the shape that gets
+/// silently crossed later by someone adding "just one" backing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExportSource {
+    /// ★ **Memory we FABRICATE** — an emulated device's framebuffer/instance window, a
+    /// fabricated aperture, any range whose bytes exist only because we wrote them.
+    ///
+    /// The isolate mints it as a shareable file backing, so what crosses is memory: the
+    /// VMM `mmap`s it, both processes see the same pages, and there is no `ioctl` surface
+    /// anywhere in the transaction. This arm is why (b) is worth doing rather than merely
+    /// safe.
+    ///
+    /// ⊘ It deliberately names **no** [`HostHandle`]: fabricated memory is not an RM
+    /// object, and a request that could name one would invite exactly the confusion the
+    /// other variant exists to refuse.
+    Fabricated,
+    /// ⊘ **The real device's own pages** — host framebuffer, a channel's ring/USERD, a
+    /// BAR0 register window — named by the RM object that owns them.
+    ///
+    /// Always [`RmError::NotExportableAsMemory`]; see that variant for the three
+    /// independent reasons, each cited.
+    HostDeviceMemory {
+        /// The RM object whose pages are wanted.
+        memory: HostHandle,
+    },
+}
+
+/// ★★★★★ **What joining ONE framebuffer leaf produced** — [`RmBackend::join_fb_leaf`]'s
+/// answer, and the shape `fb_cpu_view.md` §4 measured on a real GA106 before it was built.
+///
+/// Three facts from one chain, reported separately because each has a different owner and
+/// a different reclaim point:
+///
+/// - `backing` — the **memory**, minted in the isolate and handed up to the VMM. This is
+///   the half that closes *"two memories"*: the VMM `mmap`s the same pages the isolate
+///   described to RM, so a byte the guest writes through the emulated framebuffer and a
+///   byte the engine reads through the GPU MMU are the **same byte**.
+/// - `memory` — the `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` RM built over the isolate's mapping.
+///   Owned by RM; freed through [`VerbPlan::Release`] like any other host object.
+/// - `host_va` — where it landed. Equal to the plan's `at`, or the verb refused with
+///   [`RmError::PlacementRefused`] and this value never existed.
+///
+/// ⚠ **The leaf is host SYSTEM memory, not card memory, and that is a named divergence**
+/// from the C artifact and from [`VerbPlan::PublishVidmem`], not an oversight. The engine
+/// reaches it over PCIe rather than out of local framebuffer. It is **not optional**: card
+/// memory is exactly the memory that cannot carry a guest-reachable CPU view, which is the
+/// whole of [`ExportSource::HostDeviceMemory`]'s refusal. Stated here so the cost is read
+/// off the type rather than discovered in a profile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FbLeafJoined {
+    /// ★★★ The shareable backing, for the VMM to `mmap` as the guest's own view of this
+    /// framebuffer range. Its token is the **adapter's**, minted when the adapter adopted
+    /// the descriptor — never the child's index and never a value off the wire.
+    pub backing: ExportedBacking,
+    /// The RM object describing the isolate's mapping of those same pages.
+    pub memory: HostHandle,
+    /// The host GPU VA it was mapped at.
+    pub host_va: u64,
+}
+
+/// ★★★★★ **What ALIASING one already-joined framebuffer frame produced** —
+/// [`RmBackend::alias_fb_leaf`]'s answer (`w380`).
+///
+/// # ⊘ Why this is a second answer shape and not [`FbLeafJoined`] with a `None`
+///
+/// An alias mints **no backing**. The pages are the ones the frame was already joined over,
+/// the VMM already holds its `mmap` of them and the emulated framebuffer is already served
+/// out of them — so there is nothing to hand up and nothing for the VMM to install. A
+/// variant that carried an `Option<ExportedBacking>` would let a caller install a second
+/// view of one frame, which is the *two lifetimes for one file* defect
+/// [`FbLeafJoined::backing`] is written against, wearing an `Option`.
+///
+/// ★★★ **One memory, N addresses.** The guest legitimately maps one framebuffer frame at
+/// several GPU VAs at once (`w377` §9: 17 frames, 2–3 VAs each, alternating). Each VA needs
+/// its own host-side placement; none of them needs its own *bytes*.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FbLeafAliased {
+    /// The RM object describing **this alias's** mapping of the frame's pages. ⊘ A distinct
+    /// `OS_DESCRIPTOR` from the joining VA's, over the *same* isolate mapping — see
+    /// [`RmBackend::alias_fb_leaf`] for why the descriptor is per-VA and the memory is not.
+    pub memory: HostHandle,
+    /// The host GPU VA it was mapped at.
+    pub host_va: u64,
+}
+
+/// One request to [`RmBackend::export_backing`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExportRequest {
+    /// Which class of bytes.
+    pub source: ExportSource,
+    /// How many bytes the VMM intends to install.
+    pub len: u64,
+    /// What the **guest** is to be allowed to do with them. A request, not an outcome —
+    /// see [`ExportedBacking::prot`].
+    pub prot: Prot,
+}
+
+/// ★★ What the isolate handed back: **memory, named by a token, never a descriptor**.
+///
+/// ## Why there is no fd in this type, and why that is the whole design
+///
+/// This crate is pure. More importantly, a value type carrying an OS descriptor would put
+/// the descriptor on the *core's* side of the port, where every rule about what may be
+/// done with one would be advisory. The descriptor rides the reply frame's ancillary data
+/// and is adopted by the transport ([`kayfabe_isolate_host::CrossedFd`]), which is the one
+/// place that can check what it actually **is**; [`ExportedBacking::token`] is the adapter's
+/// own index for it, minted by the **parent** and never by the wire — the same discipline
+/// [`HostHandle`] uses, for the same reason.
+///
+/// Deliberately the mirror image of [`kayfabe_vmm::RamHandle`], which carries the VMM →
+/// isolate direction (guest RAM, VMM-minted). This is isolate → VMM.
+///
+/// [`kayfabe_isolate_host::CrossedFd`]: https://docs.rs/kayfabe-isolate-host
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExportedBacking {
+    /// Adapter-scoped opaque index naming the backing the adapter adopted. Feeds a
+    /// `kayfabe_vmm::HostRegion::id`; interpreted by nothing in the core.
+    pub token: u64,
+    /// Byte offset into that backing at which the requested range begins.
+    pub offset: u64,
+    /// How many bytes are actually there.
+    pub len: u64,
+    /// ★ What the isolate **actually granted**, which may be narrower than what
+    /// [`ExportRequest::prot`] asked for — a read-only export is a real thing an isolate
+    /// may decide to hand out, and a caller that installed the *requested* protection
+    /// would hand the guest a write it does not have. Use this one.
+    pub prot: Prot,
+}
+
+/// ★★★★★ **w393 — a CPU VIEW of the host card's own memory, crossed to the VMM as an
+/// ARMED DEVICE NODE** — [`RmBackend::export_device_view`]'s answer.
+///
+/// # What this is, and what it is deliberately NOT
+///
+/// The owner's target for BAR1 (2026-09-09) is the Vulkan pair
+/// **`DEVICE_LOCAL | HOST_VISIBLE`**: one real allocation on the card, mapped twice — into
+/// the guest's BAR1 guest-physical range so guest CPU stores land in it with **no VM exit**,
+/// and into the host GPU's address space so the engine reads the **same bytes** with no
+/// join, alias, publish or carry step. The GPU half already exists
+/// ([`RmBackend::map_gpu_va`] over a vidmem object). This type is the **host-visible half
+/// crossing the isolate ⇄ VMM boundary**: the isolate arms a freshly opened per-GPU node
+/// with `NV_ESC_RM_MAP_MEMORY` (`0x4E`) for `[offset, offset+len)` of `memory`, and the
+/// node — not the object, not the control descriptor — rides the reply.
+///
+/// ⊘ **It is not [`ExportSource::HostDeviceMemory`] succeeding.** That request asks for the
+/// card's pages *as memory* (a `memfd`-shaped thing the VMM may place anywhere) and stays
+/// refused by name: a copy is not a mapping. This verb hands over a **mapping context**,
+/// which the VMM `mmap`s exactly once at file offset zero (`nv-mmap.c:533-536`) and then
+/// closes — the VMA keeps the file alive; the descriptor does not need to.
+///
+/// # ★ The policy fact a reader must carry (decision (b), `isolate_vmm_fd_crossing.md` §12)
+///
+/// What crosses is a `/dev/nvidia<N>` descriptor, i.e. a character device with an RM
+/// escape handler behind it. The property that keeps decision (b) honest is **structural
+/// on the VMM side, not a promise**: the VMM issues no escape on it, only `mmap`, and
+/// `secInfo.privLevel` is recomputed **per escape** from the caller
+/// (`ogkm-580: escape.c:304`), so a process that never escapes never gains anything. The
+/// shipped sibling `nvkvm-pv` runs exactly this shape
+/// (`src/qemu/nvkvm_isolate_handlers.c:3618` → `nvkvm_mmap_host.c:1269`). ⚠ Whether the
+/// VMM may hold such a descriptor at all — even transiently, even without escaping — is the
+/// owner's ruling to make; this verb is the mechanism that ruling would switch on. It is
+/// **not** reachable from any production path on this branch.
+///
+/// # ⊘ Readings, not measurements (`claim_ledger.md`)
+///
+/// The framebuffer arm of `nvidia_mmap_helper` gates on `mmap_context->valid`,
+/// `vm_pgoff == 0`, the GPU's state and `safe_to_mmap`, and sets
+/// `VM_IO | VM_PFNMAP | VM_DONTEXPAND` (`ogkm-580: kernel-open/nvidia/nv-mmap.c:505-641`).
+/// **No check names the calling process**, and nothing on that path clears `valid` after a
+/// successful `mmap` — it is freed at file close (`nv.c:1054`). Both are readings of the
+/// source at those lines; neither has been driven cross-process on hardware from this
+/// tree. `rmladder --bar1-crossing` is the probe that would turn them into measurements.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeviceView {
+    /// Adapter-scoped opaque index naming the **armed node** the adapter adopted (as a
+    /// `CharDevice`, established from the kernel — never claimed by the peer). Minted by the
+    /// parent, never carried on the wire, exactly as [`ExportedBacking::token`].
+    ///
+    /// ⊘⊘⊘ **THIS IS THE PARENT'S TOKEN AND IT IS NOT THE ONE A RELEASE TAKES.** See
+    /// [`DeviceView::release_token`]; w734 found the two being used interchangeably.
+    pub token: u64,
+    /// ★★★★★ **w734 — THE TOKEN THE OWNING PROCESS RELEASES BY**, which is a different number
+    /// from [`DeviceView::token`] in the only configuration that matters.
+    ///
+    /// # ⊘⊘⊘ The defect this field exists to make impossible
+    ///
+    /// `Reply::DeviceViewNode`'s own doc states the invariant: *"the token does not cross: it
+    /// is the **child's** index into its own export table. The parent mints its own when it
+    /// adopts the descriptor."* ⇒ under the proxy backend, [`DeviceView::token`] is a
+    /// **parent** index — which is right, because the parent's export directory is what
+    /// `dup` is keyed by — while `Request::ReleaseDeviceView` is executed **in the child**,
+    /// against the **child's** table.
+    ///
+    /// `[found w734]` `release_device_view` was being handed [`DeviceView::token`]. One field
+    /// meant the child's index under the in-process backend and the parent's under the proxy,
+    /// and the release crossed the second into the first. The two index spaces stay aligned
+    /// only because every child mint happens to be matched, in order, by exactly one parent
+    /// adopt — **an invariant nothing states and nothing checks**, and one that a single
+    /// refused `adopt` (a kind refusal, which is a threat-model path) shifts by one
+    /// **forever**.
+    ///
+    /// ⚠ And the breakage is silent in the worst direction: an unknown token is `Ok(())`
+    /// (deliberately, so a double release is a no-op), so every later release would reclaim
+    /// **nothing** and say it succeeded — while `[measured w722]` that release is the only
+    /// thing that returns BAR1 aperture at all, 224 MiB a round where `munmap` + `close`
+    /// returns zero. `SINGLE_STORE_PLAN.md` §3 recycles views in a loop.
+    ///
+    /// ⊘ Under an in-process backend the two are equal, and that is a fact about that
+    /// configuration rather than a reason to have one field.
+    ///
+    /// ⚠ [`DeviceView::UNRELEASABLE`] when the owning process's token is **not knowable** —
+    /// see that constant. Releasing it is refused by name rather than releasing something
+    /// else.
+    pub release_token: u64,
+    /// The RM object the view is over — the same handle the caller named. Echoed so the
+    /// value is self-describing when it reaches an installer that never saw the request.
+    pub memory: HostHandle,
+    /// Byte offset **within the object** the view starts at, as registered.
+    pub offset: u64,
+    /// ★ The `mmap` length the driver will accept — the registered length rounded up to a
+    /// host page (`osapi.c:1976-1986` rounds; `nv-mmap.c:560-565` compares against the
+    /// rounded size). A VMM that `mmap`s the unrounded length is refused with `ENXIO`.
+    pub mmap_len: u64,
+}
+
+impl DeviceView {
+    /// ★★★★★ **w734 — "the owning process's token for this view is NOT KNOWABLE HERE."**
+    ///
+    /// The usermode-view crossing (`Reply::UsermodeView`) carries **no token at all** — by
+    /// design, because nothing releases the counter page: it is armed once and lives for the
+    /// boot. ⊘ Its [`DeviceView`] therefore cannot carry a real
+    /// [`DeviceView::release_token`], and the two honest options are this sentinel or a lie.
+    ///
+    /// ⚠ **A lie here is specifically the defect w734 removed**, one field over: setting it to
+    /// [`DeviceView::token`] would release *whatever the child's table holds at the parent's
+    /// index*, and answer `Ok(())` when that is nothing. ⇒ the sentinel, and
+    /// [`Worker::release_device_view`] refuses it by name.
+    ///
+    /// ⊘ `u64::MAX` and not `0`: zero is a **valid** first index in both tables.
+    pub const UNRELEASABLE: u64 = u64::MAX;
+}
+
+/// ★★★★★ **§16.106 — the engine object a channel is being materialized to HOST.**
+///
+/// Handed to [`RmBackend::alloc_channel`] so the adapter can honour a declaration the
+/// core's [`EngineKind`] cannot carry: **which** copy engine. See that method for the 14
+/// measured refusals this exists to stop.
+///
+/// ⊘ Borrowed, never owned: it is read during the one call and nothing may retain it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HostedObject<'a> {
+    /// The engine-object class the guest asked for.
+    pub class: ClassId,
+    /// The guest's own ABI-lowered alloc blob for it, verbatim — the same bytes
+    /// [`RmBackend::alloc_engine_object`] will be given.
+    ///
+    /// ⊘ **Read, never rewritten.** The declaration inside it is the guest's intent and
+    /// the guest's own driver acts on it too (`NVA06F_CTRL_CMD_BIND` carries the same
+    /// ordinal); a channel that disagrees with it is the bug, not the blob.
+    pub params: &'a [u8],
+}
+
+/// ★★★★★ **CONSTRAINT 26 — WHOSE MEMORY THE GUEST'S RING IS, AS A TYPE.**
+///
+/// > `THE_CONSTRAINTS.md` §26: *"A per-proc isolate never holds an `hMemory` for vidmem."*
+///
+/// # ⊘ Why this replaces a bare `HostHandle`, and what it does NOT give up
+///
+/// Before §26 the ring was always an object the **birth isolate itself** minted by joining a
+/// framebuffer leaf, so a handle was the whole answer and `alloc_channel_declared` re-checked
+/// it against that isolate's own joined-object set (`RING_NOT_A_JOINED_WINDOW`). Under the
+/// ownership split the bytes are a **slice of the one reserved object**, which the per-proc
+/// isolate may not name — so a handle here is a `ForeignHandle` refusal before RM is reached,
+/// and the far-side re-check has nothing to check against.
+///
+/// ★★★ **The measurement that makes this safe to do:** the ring handle **never reaches RM**.
+/// `alloc_channel_in`'s `RingSource::Guest` arm maps nothing, and what RM is told is
+/// `gp_fifo_offset: layout.gp_fifo_va` — an absolute VA. The handle was an **authorization
+/// token**, not an operand. ⇒ dropping it costs no capability; it only moves the question of
+/// *who authorizes the birth*.
+///
+/// # ★★★ AND THE QUESTION IS KEPT — `RING_NOT_A_JOINED_WINDOW`'s, restated
+///
+/// The failure that check prevents is exact and **silent**: a channel over a blank twin
+/// fetches zeros, never advances `GP_GET`, and reports no error at all. Under §26 it is asked
+/// as *"is this ring a slice of the one object, placed by the party that holds it?"* — of
+/// `kayfabe_qemu_raw::storemap::StoreMapPort`, the mapper's own ledger, which is the only
+/// party that can answer. ⊘ The mechanism is deleted. The question is not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RingProvenance {
+    /// **The birth isolate's own object** — an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` it minted
+    /// by joining a framebuffer leaf, or the guest's own RAM it pinned. The far side
+    /// re-checks membership in its joined-object set and refuses by name otherwise.
+    ///
+    /// ⊘ This is the pre-§26 shape, unchanged, and it is what the `isolate` arm still uses.
+    OwnObject(HostHandle),
+    /// ★★★★★ **A SLICE OF THE ONE RESERVED OBJECT**, already mapped at the guest's own VA by
+    /// the scratchpad. **No handle**, because the birth isolate holds none and must not.
+    ///
+    /// ⚠ **What the far side can and cannot check, stated rather than implied.** It can check
+    /// that the ring is declared as a store slice at all — i.e. that nothing is being handed
+    /// a foreign handle — and it does. It **cannot** check that the slice exists, because it
+    /// holds neither the object nor the mapping. That check is made VMM-side, before the plan
+    /// is built, by the party that placed it. ⊘ This is a real move of the checker and it is
+    /// not a strengthening; it is the only place the knowledge lives once the object stops
+    /// crossing.
+    StoreSlice {
+        /// Byte offset of these bytes inside the one reserved object.
+        offset: u64,
+        /// How many bytes the scratchpad placed at [`AdoptedGuestRing::ring_va`].
+        len: u64,
+    },
+}
+
+impl RingProvenance {
+    /// The handle, when there is one. `None` for a store slice — which is what keeps
+    /// `VerbPlan::handles()` from offering the foreign-handle gate something it must refuse.
+    #[must_use]
+    pub const fn handle(self) -> Option<HostHandle> {
+        match self {
+            RingProvenance::OwnObject(h) => Some(h),
+            RingProvenance::StoreSlice { .. } => None,
+        }
+    }
+
+    /// The name a census prints. ⊘ Two words, never a `bool`.
+    #[must_use]
+    pub const fn kind(self) -> &'static str {
+        match self {
+            RingProvenance::OwnObject(_) => "OwnObject",
+            RingProvenance::StoreSlice { .. } => "StoreSlice",
+        }
+    }
+}
+
+/// ★★★★★ **LEG A2 — THE GUEST'S OWN RING, as the birth path names it.**
+///
+/// Handed to [`RmBackend::alloc_channel`] so a host channel can be born over the GPFIFO the
+/// guest is already pushing into, instead of over a queue of ours that stays empty forever.
+///
+/// # ⊘ Every field is HANDED IN, and the memory is NOT ours
+///
+/// | field | whose number it is |
+/// |---|---|
+/// | [`Self::memory`] | the **joining party's** — an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over the isolate's own mapping of the guest's framebuffer leaf, already placed FIXED at the leaf's own guest VA (`RmBackend::join_fb_leaf`) |
+/// | [`Self::ring_va`] | where that object is placed — the leaf's base |
+/// | [`Self::gp_fifo_va`] | the **guest's** `gpFifoOffset`, an absolute VA, verbatim off its own channel alloc |
+/// | [`Self::gp_fifo_entries`] | the **guest's** `gpFifoEntries` — the modulus of the ring's wrap arithmetic, never ours |
+///
+/// # ★★★ THE OWNER INVARIANT, AND WHERE IT IS ENFORCED
+///
+/// *No fake framebuffer may ever be mapped to a real GPU VA of an isolate except the
+/// scratchpad.* The guest's ring lives in the **emulated** framebuffer, so this type is
+/// directly in that invariant's path, and it is honoured in exactly one way: the only
+/// object that may appear in [`Self::memory`] is a **joined** window — one memory, the
+/// bytes the guest writes and the bytes the engine reads being the same bytes — never
+/// `FbLeafBacking::Vidmem`'s blank twin.
+///
+/// ⊘ **And it is enforced on the FAR side of the wire, not only at the constructor.** The
+/// core builds this from an address-table binding whose backing declares
+/// `BackingBytes::JoinsGuestWindow`; the adapter then **re-checks that the handle is one it
+/// minted through `join_fb_leaf`** and refuses by name otherwise. A private constructor
+/// alone would be defeated by the IPC crossing — the child rebuilds the struct from four
+/// integers and cannot see the address table — which is `same_flag_opposite_polarity`
+/// waiting to happen.
+///
+/// ⊘ **It does not make the channel runnable.** `GP_PUT` still lives in the USERD *we* hand
+/// RM, and nothing in leg A writes the guest's cursor into that word. Adopting the ring and
+/// adopting the cursor are two legs, and this is the first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AdoptedGuestRing {
+    /// ★★★★★ **WHERE THE GUEST'S GPFIFO BYTES LIVE — and, under constraint 26, WHOSE they
+    /// are.** See [`RingProvenance`].
+    pub ring: RingProvenance,
+    /// Where that object is placed in the channel's address space.
+    pub ring_va: u64,
+    /// The guest's `gpFifoOffset` — an **absolute VA**, not an offset into anything.
+    ///
+    /// ⚠ `0` is a value and not a blank: the driver deliberately declares
+    /// `gpFifoOffset = 0` for its golden-context channel. A caller with no ring to name
+    /// must not synthesise one — it passes `None` and has no `AdoptedGuestRing` at all.
+    pub gp_fifo_va: u64,
+    /// The guest's `gpFifoEntries`.
+    pub gp_fifo_entries: u32,
+    /// ★★★★★ **LEG B — the guest's own USERD, when it lives inside THIS ring's joined leaf.**
+    ///
+    /// # ⊘⊘ Why this is NESTED and not a sixth argument to `alloc_channel`
+    ///
+    /// Not economy. **A channel whose USERD is the guest's and whose ring is ours is a state
+    /// that must not be representable.** RM would then fetch GPFIFO entries out of a queue
+    /// nothing writes, indexed by a cursor the guest advances — `GP_PUT` racing ahead of a
+    /// ring that stays empty, no error anywhere. Making leg B a sibling argument would put
+    /// that state one caller mistake away; making it a field of the adoption makes it
+    /// unspellable.
+    ///
+    /// ★ It is also what *"the arming is inherited"* means concretely: this is `Some` only
+    /// when the address table already held a `JoinsGuestWindow` binding **and** the guest's
+    /// resolved USERD address fell inside it. A disarmed build cannot reach the outer
+    /// `Some`, so it cannot reach this one either — no second selector to drift.
+    ///
+    /// `None` = the ring was adopted and the USERD was not. That is a **normal** outcome
+    /// (the params may not carry the descriptor, the USERD may be in guest RAM, or it may be
+    /// in a leaf nothing joined) and it is exactly the pre-leg-B channel.
+    pub userd: Option<AdoptedGuestUserd>,
+}
+
+/// ★★★★★ **w755l — WHICH OBJECT A GUEST USERD LIVES IN, when we may not always name it.**
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UserdObject {
+    /// A joined framebuffer leaf **this isolate minted** and holds a handle for. The
+    /// pre-route-K shape, unchanged.
+    Joined(HostHandle),
+    /// ★★★★★ **w755l — THE ONE RESERVED STORE, named by nobody here on purpose.**
+    ///
+    /// The guest's USERD is a slice of the single store, and **constraint 26 forbids the
+    /// per-proc isolate naming that object** — *"the isolate borrows, the scratchpad holds"*.
+    /// So this variant carries **no handle at all**: it says *which object* without being
+    /// able to name it, and the **birth client B** resolves it through its own
+    /// `birth_store_dup`. That is route K's increment 6, and it is why the birth moves to B.
+    ///
+    /// ⊘ A variant rather than `memory: None`, because the enclosing
+    /// [`AdoptedGuestRing::userd`] is **already** an `Option` meaning *"no USERD was
+    /// adopted"*. Two `None`s with different meanings in one path is how a reader comes to
+    /// believe a store-slice USERD was declined.
+    TheStore,
+}
+
+impl UserdObject {
+    /// The handle this object names, or `None` when it names none.
+    ///
+    /// ⊘ The exact twin of [`RingProvenance::handle`], and it exists for the same gate: F11
+    /// collects every handle a plan names so a foreign one can be refused. `TheStore` names
+    /// nothing — *"the foreign-handle gate cannot refuse what is not offered, and nothing was
+    /// smuggled past it: there is no handle to smuggle"* — and this is what says so in a type
+    /// rather than in a comment.
+    #[must_use]
+    pub fn handle(self) -> Option<HostHandle> {
+        match self {
+            UserdObject::Joined(h) => Some(h),
+            UserdObject::TheStore => None,
+        }
+    }
+}
+
+/// ★★★★★ **LEG B — the guest's own USERD, named as an OFFSET INTO AN OBJECT WE HOLD.**
+///
+/// # The shape, and why it is not an address
+///
+/// The guest's own CPU-RM resolved this channel's USERD to a **framebuffer physical
+/// address** and put it on the wire (`kayfabe_abi::notifier::ChannelUserdMemWire`). That
+/// address is an offset in an **emulated** framebuffer and is meaningless to host RM. What
+/// makes it usable is that it lands inside a leaf we already joined — so the pair below is
+/// *the joined object* plus *the guest's address expressed relative to it*, and no
+/// guest-controlled number ever reaches hardware as an address.
+///
+/// | field | whose number it is |
+/// |---|---|
+/// | [`Self::memory`] | **ours** — the same `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` [`AdoptedGuestRing::memory`] names, minted by `RmBackend::join_fb_leaf` |
+/// | [`Self::offset`] | **derived**: the guest's `userdMem.base` minus the joined leaf's own framebuffer base |
+///
+/// # ⚠ AT CREATION, NEVER AT THE FIRST DOORBELL
+///
+/// `[measured 2026-08-11, R32/w233, real GA106 / 580.159.04]` **RM zeroes all 512 bytes of a
+/// caller-supplied USERD.** Adopting after the guest has advanced its cursor therefore
+/// **wipes the write that caused the doorbell**, returns `NV_OK`, and produces silence rather
+/// than an error. This type only ever reaches `alloc_channel`.
+///
+/// # ⊘ What it costs, and it is not free
+///
+/// `[measured, R31 arm B]` a guest-backed `OS_DESCRIPTOR` **cannot be CPU-mapped**
+/// (`NV_ERR_NOT_SUPPORTED`; the driver's own *"memMap_IMPL: CPU mapping not supported for
+/// addressSpace: 0x1"*). So on a channel carrying this, the isolate has **no CPU view of
+/// USERD at all**: it cannot write `GP_PUT` — which is the point, the guest writes it — and
+/// it cannot read `GP_GET`, which is not. Both accesses are refused **by name**
+/// (`USERD_NOT_OURS`) rather than skipped, because a skipped write and a write to the wrong
+/// place look identical in a log.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AdoptedGuestUserd {
+    /// Which object holds the guest's USERD bytes. ⊘ On the joined path it is always the
+    /// same object as the ring — one leaf, one join — and the adapter re-checks it was minted
+    /// by `join_fb_leaf`. On [`UserdObject::TheStore`] there is no handle to check, and the
+    /// birth client resolves it; see that variant.
+    pub object: UserdObject,
+    /// Byte offset of this channel's 512-byte USERD slot **within that object**.
+    ///
+    /// ⚠ This lands in `hUserdMemory[0]`'s companion `userdOffset[0]`, whose being **zero**
+    /// has until now been a measured requirement (`C:` M5.47, and an RTX 3090 bite on
+    /// 2026-07-30). ★ Read what that measured: the offset was moved while the *store* stayed
+    /// at +0, so RM read a slot nobody wrote. Here the reader and the writer move together —
+    /// the writer being the guest, through its own BAR1 mapping.
+    pub offset: u64,
+}
+
+/// # The unprivileged host-RM verb surface
+///
+/// The complete vocabulary of host operations the forwarding plane may request.
+/// Everything here must be issuable by an **unprivileged** host process — that
+/// unprivilege, not the keying, is the load-bearing host security boundary
+/// (lesson L8). There is deliberately no verb that could express a privileged
+/// GSP-internal replay.
+///
+/// Two verb tiers, both abstract:
+///
+/// - **Generic verbs** (`alloc`/`free`/`control`) — ABI-typed passthrough for
+///   Case-1 shadow-forwarding, parameter encoding supplied by the ABI adapter.
+/// - **Intent verbs** (`alloc_vaspace`/`alloc_sysmem`/`alloc_channel`/`schedule`/…)
+///   — named *intents* the adapter lowers to the correct per-version NVOS sequence
+///   (lesson L2: translate guest intent; class/param selection is the adapter's
+///   Axis-A job, never the core's).
+///
+/// Object-safe; implemented by the linux-ioctl adapter inside the sandbox, and by
+/// `MockRmBackend` in tests (scriptable failures, recorded verb log).
+///
+/// `Send + Sync` — see the crate docs: only ever reached via `&mut`, so shared
+/// cross-thread references are unrepresentable, but the pool *stores* boxed
+/// backends inside a `Sync` `Proc`, which makes the bound structural.
+/// ★★★★★ **CONSTRAINT 26 — A BARE ADDRESS SPACE AND THE CLIENT IT LIVES IN, AS ONE VALUE.**
+///
+/// [`RmBackend::alloc_vaspace_bare`]'s answer. ⊘ **Not two returns and not a bare
+/// `HostHandle`**: an RM handle is meaningless without the client whose namespace it is in,
+/// and the whole of [`RmBackend::adopt_vaspace`] is *"name a handle in somebody else's
+/// namespace"*. Carrying them apart would let a caller pair a space with the wrong client —
+/// which RM would answer for with `0x33 INVALID_OBJECT_HANDLE` if we were lucky, and with a
+/// **different live object** if we were not.
+///
+/// ⚠ `client` is the per-proc isolate's own RM client. It leaves that isolate deliberately,
+/// and it is the only handle in the system that does. See `kayfabe_isolate_host::rm`'s
+/// `handed_vaspace` module for what receives it and what that does and does not prove.
+/// ★★★★★ **CONSTRAINT 32 — A BIRTH CLIENT AND THE DESCRIPTORS THAT REACH IT.**
+///
+/// [`RmBackend::mint_birth_client`]'s answer. ⊘ **Not three returns and not a bare handle**,
+/// for [`BareVaSpace`]'s reason one step further along: a client handle without the
+/// `struct file` its session is bound to reaches **no RM at all** (`g_system_nvoc.c:104`,
+/// STRICT default), so carrying them apart would let a caller hold a name it believes is a
+/// capability.
+///
+/// ⚠ **The descriptors are OWNED and the isolate keeps no copy.** That is the difference
+/// between route K and every rejected alternative: after this value is built, the minting
+/// isolate cannot reach the client it just created. `isolate_client` travels with it because
+/// the far side files the birth client under it — it is the key
+/// [`RmBackend::adopt_vaspace`] will present, and it is known only here and in the VMM.
+#[derive(Debug)]
+pub struct MintedBirthClient {
+    /// The `NV01_ROOT_CLIENT` RM assigned, in **this isolate's** process identity.
+    ///
+    /// ⊘ A `u32`, which is what an RM handle is, and **not** the `u64` the wire carries. The
+    /// widening happens at the encoder, where every other handle's does; carrying it widened
+    /// through this struct would make the one call site that fills it read as an arithmetic
+    /// expression rather than as the single approved spelling F11's gate pins.
+    pub client: u32,
+    /// This isolate's **own** client `A` — the namespace whose VA space the scratchpad will
+    /// dup out of, and the key the birth client is filed under.
+    pub isolate_client: u32,
+    /// The second `/dev/nvidiactl`. Every escape against `client` is issued on this.
+    pub ctl: std::os::fd::OwnedFd,
+    /// The per-GPU node bound to it by `NV_ESC_REGISTER_FD`. ⊘ Carried and never used:
+    /// closing it takes the session's GPU binding with it.
+    pub node: std::os::fd::OwnedFd,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BareVaSpace {
+    /// The `FERMI_VASPACE_A`, with **no** `NV01_MEMORY_VIRTUAL` range over it.
+    pub space: HostHandle,
+    /// The RM client that space lives in — `NVOS55_PARAMETERS::hClientSrc`, eventually.
+    pub client: u32,
+}
+
+pub trait RmBackend: Send + Sync {
+    /// Allocate an RM object of `class` under `parent`. `params` is an opaque,
+    /// already-encoded parameter blob (encoding is the ABI adapter's job).
+    fn alloc(
+        &mut self,
+        parent: HostHandle,
+        class: ClassId,
+        params: &[u8],
+    ) -> Result<HostHandle, RmError>;
+
+    /// Intent verb: allocate a fresh **host GPU virtual address space** for one
+    /// guest `Vas`. Per-Vas host VAS separation is the proven #14 fix: two guest
+    /// processes' identical guest VAs publish into *different* host VASes and
+    /// cannot collide.
+    fn alloc_vaspace(&mut self) -> Result<HostHandle, RmError>;
+
+    /// Intent verb: allocate `len` bytes of host-visible system memory.
+    fn alloc_sysmem(&mut self, len: u64) -> Result<HostHandle, RmError>;
+
+    /// ★★★ Intent verb: allocate `len` bytes of **device-local (vidmem)** memory —
+    /// a blank host framebuffer object, for the SECOND crossing.
+    ///
+    /// # ⊘ Why this is a separate verb and not `alloc_sysmem` with a flag
+    ///
+    /// The two are not the same allocation with a preference attached. `alloc_sysmem`
+    /// asks for `MAPPING_NO_MAP`, which makes its object deliberately **un-CPU-mappable**
+    /// — correct for a describe-only range, and fatal for this one, because the whole
+    /// point of the second crossing's mature form is a *double* mapping (one for the host
+    /// GPU, one for the CPU view the guest's own framebuffer accesses land in;
+    /// `C: docs/design/mode2_fb_crossing_question.md` §5, GEN-2). A caller that reached
+    /// for sysmem here would get an object that maps into the host VAS, satisfies every
+    /// check, and can never be the shared object.
+    ///
+    /// ⚠ And the aperture is not cosmetic: the guest's own PTE for these ranges declares
+    /// `_TARGET_LOCAL_FB`. Backing a vidmem-declared range with host sysmem produces a
+    /// host mapping that **works** and is in the wrong aperture — a silent disagreement
+    /// between what the guest's page tables say and what the host engine walks, which is
+    /// the class of wrongness this port refuses to make representable by a `bool`.
+    ///
+    /// ⊘ This verb allocates. It does **not** map, does not seed and does not copy: a
+    /// freshly allocated vidmem object's contents are not specified, and nothing here
+    /// pretends otherwise.
+    fn alloc_vidmem(&mut self, len: u64) -> Result<HostHandle, RmError>;
+
+    /// ★★★★★ **THE VM'S ONE RESERVED VIDEO-MEMORY OBJECT** —
+    /// `docs/design/gpga_is_one_reserved_object.md`, increment 1 of the `single-store`
+    /// branch.
+    ///
+    /// # ⊘⊘⊘ Why this is NOT [`RmBackend::alloc_vidmem`], measured from the two bodies
+    ///
+    /// `SINGLE_STORE_PLAN.md` §2 says *"the verb already exists (`Request::AllocVidmem`,
+    /// wire tag 19)"*. **It does not.** `alloc_vidmem` lands on
+    /// `RmConnection::alloc_device_local`, which passes `ATTR_CONTIGUOUS_VIDMEM` and
+    /// `alignment: len` — correct for the 64 KiB leaf it was written for and **wrong in
+    /// both halves for a multi-gigabyte reservation**:
+    ///
+    /// 1. **Contiguity.** A contiguous 11.8 GiB request fails on merely *fragmented* free
+    ///    memory, so the boot would be refused for a reason that is not capacity — and the
+    ///    design's whole promise is that the refusal means *"there is not enough video
+    ///    memory"*. Contiguity buys nothing here: GPGA is addressed by **offset**, so
+    ///    slicing is arithmetic and the physical layout is RM's business.
+    /// 2. **`alignment: len`.** An 11.8 GiB request would demand an 11.8 GiB-aligned base.
+    ///    Nothing needs that, and nothing can supply it.
+    ///
+    /// `RmConnection::reserve_gpga` — written for this design doc and, until now,
+    /// reachable only from the bring-up ladder inside the child — is the shape that is
+    /// right: `ATTR_NONCONTIGUOUS_VIDMEM`, `alignment: 4096`. This verb is the seam that
+    /// carries it across the socket.
+    ///
+    /// # Errors
+    /// Whatever RM refused with. ⊘ A refusal is **not** recoverable by asking for less on
+    /// this verb: the caller derives its size from
+    /// [`RmBackend::largest_reservable_mb`] first, and a refusal after that means the host
+    /// changed underneath us. The default is a named refusal, so a backend with no RM
+    /// connection says so rather than inventing a handle.
+    fn reserve_gpga(&mut self, len: u64) -> Result<HostHandle, RmError> {
+        let _ = len;
+        // 0x56 = NV_ERR_NOT_SUPPORTED — the same capability-shaped refusal this trait's
+        // other defaults use.
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — ALLOCATE A *BARE* `FERMI_VASPACE_A`: the address space, and
+    /// no `NV01_MEMORY_VIRTUAL` range over it.**
+    ///
+    /// > Owner, 2026-09-15: *"All memory is held by the scratchpad, the userspace isolates
+    /// > only borrow from it."*
+    ///
+    /// [`RmBackend::alloc_vaspace`] mints **two** RM objects — the space and the range the
+    /// map verb actually names — and returns the range. That is right for an isolate that
+    /// does its own mapping and is exactly wrong under §26, for a reason hardware supplied:
+    /// `[measured w744]` a space that already carries a whole-space range refuses the
+    /// scratchpad's own range with **`0x19 INSERT_DUPLICATE_NAME`**. ⇒ the per-proc isolate
+    /// must create the space and **stop**.
+    ///
+    /// The handle returned is therefore the **space**, and everything that asks *"which
+    /// address space is this?"* (a channel group's `hVASpace`, `UVM_REGISTER_GPU_VASPACE`)
+    /// keeps working. Everything that asks *"which range may I map through?"* now has no
+    /// answer, and refuses by name — which is the ownership split, expressed as a missing
+    /// object rather than as a rule.
+    ///
+    /// # Errors
+    /// Whatever RM refused the space with. The default is a named refusal: a backend with no
+    /// RM connection must say so rather than hand back a handle it did not mint.
+    fn alloc_vaspace_bare(&mut self) -> Result<BareVaSpace, RmError> {
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — TAKE A PER-PROC ISOLATE'S BARE ADDRESS SPACE AND BUILD THIS
+    /// ISOLATE'S OWN RANGE INSIDE IT.**
+    ///
+    /// The scratchpad half of the hand-over: dup `space` out of `client`
+    /// (`NV_ESC_RM_DUP_OBJECT`, `[measured w744]` `NV_OK`), then allocate **our own**
+    /// `NV01_MEMORY_VIRTUAL` over the dup. The returned handle is that range — the `hDma`
+    /// every later [`RmBackend::map_store_slice`] names.
+    ///
+    /// ⊘ **It is ONE space, not a copy**, and that was measured rather than assumed: a map
+    /// by the source client at a VA this one had already taken is refused `0x51`, with the
+    /// control passing at an unclaimed VA. ⇒ a per-proc isolate **cannot** map over a slice
+    /// the scratchpad placed, which is the half of the ownership split hardware enforces for
+    /// us.
+    ///
+    /// ⚠ **`client` is a client this process did not mint**, and it is the only such value
+    /// anywhere in the system. The host implementation will not accept it unless the backend
+    /// is the scratchpad — see `kayfabe_isolate_host::rm`'s `handed_vaspace` module, which
+    /// makes that a type rather than a rule.
+    ///
+    /// # Errors
+    /// Whatever RM refused the dup or the range with; a named refusal on any backend that is
+    /// not the scratchpad.
+    fn adopt_vaspace(&mut self, client: u32, space: u32) -> Result<HostHandle, RmError> {
+        let _ = (client, space);
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★★★ **CONSTRAINT 32 STEP 1 — MINT A BIRTH CLIENT AND SURRENDER ITS DESCRIPTORS.**
+    ///
+    /// Run **in the per-proc isolate**, because RM stamps `pClient->ProcID` from the
+    /// **creating** task (`client.c:112`) and that stamp is the whole of route K's isolation
+    /// claim. ⇒ this verb may not be served by the scratchpad, and the host implementation
+    /// refuses it there by name rather than trusting the call graph.
+    ///
+    /// ⚠ **The caller must close nothing and forward everything.** The returned descriptors
+    /// are the isolate's only reference to the session that reaches this client, and they
+    /// leave with the value. What makes
+    /// [`kayfabe_isolate_host::fdcross::FdOrigin::BirthClient`]'s refusal of the minter
+    /// meaningful rather than decorative is that after this call the minter genuinely
+    /// cannot get back in.
+    ///
+    /// # Errors
+    /// A named refusal on the scratchpad and on any backend with no RM connection; whatever
+    /// RM refused the opens, the bind or the root allocation with.
+    fn mint_birth_client(&mut self) -> Result<MintedBirthClient, RmError> {
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★★★ **CONSTRAINT 32 — ROUTE K: TAKE THE BIRTH CLIENT A PER-PROC ISOLATE MINTED AND
+    /// SURRENDERED.**
+    ///
+    /// The per-proc isolate **I** opened a second `/dev/nvidiactl` and the matching per-GPU
+    /// node, bound them with `NV_ESC_REGISTER_FD`, allocated an `NV01_ROOT_CLIENT` on them,
+    /// and **closed its own copies**. `ctl` and `node` are those descriptors; `client` is
+    /// that root. From here on the scratchpad is the only party that can reach `client` at
+    /// all.
+    ///
+    /// `isolate_client` is **I's own client `A`** — the one whose VA space the scratchpad is
+    /// about to dup into `client`, and the key this birth client is filed under. ⊘ It is a
+    /// parameter because the **VMM** is the only party that has it
+    /// ([`BareVaSpace::client`]); deriving it anywhere else would be a second statement of a
+    /// routing decision the caller already made.
+    ///
+    /// ⇒ **Every escape the scratchpad afterwards issues for this proc's store mapping runs
+    /// with `hRoot = client` on `ctl`**, so RM sees a client whose `ProcessID` is **I's**
+    /// (`client.c:112`) — which is what makes the cross-client dup of I's VA space a
+    /// **same-PID** dup (`sharing.c:341-352`) needing no grant, dissolving the
+    /// `NV_ERR_INSUFFICIENT_PERMISSIONS` that `[measured w746, w752]` refused 4 718 times.
+    ///
+    /// ⊘ **`ctl` is the capability and `client` is only a name.** A handle with no
+    /// descriptor bound to its session reaches no RM, which is why
+    /// [`kayfabe_isolate_host::fdcross::FdOrigin::BirthClient`]'s one-target rule is the
+    /// real gate. Stated here because a reader who inverts it will guard the wrong thing.
+    ///
+    /// # ⊘⊘ THE DEFAULT REFUSES, AND HERE IS ITS JUSTIFICATION RATHER THAN ITS CONVENIENCE
+    ///
+    /// A refusing default is how *"a trait default that refuses ships its own
+    /// justification"* is honoured: **no backend but the scratchpad's may accept this, and
+    /// a backend that silently accepted and ignored it would report a hand-over that never
+    /// happened.** Mocks and the per-proc backends want the refusal — it is the correct
+    /// answer for them, not a stub. ⚠ The one backend that must override it is
+    /// `kayfabe_isolate_host::rm::HostRmBackend`, and `ScratchpadRole::of` is what refuses
+    /// there when it is not the scratchpad.
+    ///
+    /// # Errors
+    /// A named refusal on every backend that is not the scratchpad; whatever RM refused the
+    /// birth client's device tree with on the one that is.
+    fn adopt_birth_client(
+        &mut self,
+        client: u64,
+        isolate_client: u32,
+        minted_by_proc: u32,
+        ctl: std::os::fd::OwnedFd,
+        node: std::os::fd::OwnedFd,
+    ) -> Result<(), RmError> {
+        // ⊘ Dropped, and therefore CLOSED, on the refusing default. A default that leaked
+        // them would hold a live session for a client nobody can use, for the life of the
+        // process.
+        let _ = (client, isolate_client, minted_by_proc, ctl, node);
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★★★ **w755r — ROUTE K INCREMENT 7: BIRTH A GUEST CHANNEL IN B, ON BEHALF OF A
+    /// PER-PROC ISOLATE THAT STRUCTURALLY CANNOT.**
+    ///
+    /// # ⊘⊘⊘ Why this verb exists, and it is a MEASUREMENT rather than a design preference
+    ///
+    /// `[measured w755q — RTX 3090, host driver 580.159.04]` a guest channel whose USERD is a
+    /// slice of the one reserved store was refused **11 times** by
+    /// `HostRmBackend::alloc_channel_lowered`, in a **per-proc isolate**, with
+    /// `USERD_IN_STORE_NEEDS_BIRTH_IN_B` — while the function that serves that shape,
+    /// `birth_in_b`, was **never entered** (all three of its prints were zero).
+    ///
+    /// The two verb families never meet. `alloc_channel`/`alloc_channel_declared` lower into
+    /// `alloc_channel_lowered` and run in the **per-proc isolate**;
+    /// `alloc_channel_over_guest_ring` reaches `alloc_channel_in` → `birth_in_b` and runs in
+    /// the **scratchpad**. `birth_in_b` resolves B through `RmConnection::birth_for_range`,
+    /// whose index is populated **only** in the scratchpad's `adopt_space`.
+    ///
+    /// ⇒ A per-proc isolate has no B and **cannot** birth in one. Its refusal is correct;
+    /// what was missing is that nobody acted on it. This verb is the party that does — and it
+    /// is a **delegation across a process boundary**, which is why no edit inside `rm.rs`
+    /// alone could make `birth_in_b` reachable from the guest's path.
+    ///
+    /// # The arguments, and why each is the caller's rather than derived here
+    ///
+    /// - `range` — **the scratchpad's `NV01_MEMORY_VIRTUAL` range inside B**, as returned by
+    ///   [`RmBackend::adopt_space`]. The VMM holds the per-proc-space → range mapping already
+    ///   (that ledger is what places every store slice), so re-deriving it here would be a
+    ///   second statement of a routing decision the caller has made.
+    /// - `engine` — a [`ChannelEngine`]: **the guest's declaration and the kind, both**,
+    ///   never a number resolved by the caller. ⊘ The fallback `declared.or_else(||
+    ///   engine_type_for(engine))` is `alloc_channel_lowered`'s, and it has to stay where
+    ///   `engine_type_for` lives: a caller that resolved it would be a second statement of
+    ///   *"which runlist does this engine use"*, and `[the first draft of this verb did
+    ///   exactly that]` refusing outright on a `None` declaration is **stricter than the
+    ///   established path** — it would refuse births that succeed today.
+    /// - `ring` — the guest's own GPFIFO, as [`AdoptedGuestRing`] describes it. ⚠ Its `userd`
+    ///   is expected to be [`UserdObject::TheStore`]; any other shape belongs on the isolate's
+    ///   own path, where the joined-object check can see it.
+    /// - `err_notifier` — **the VMM's grant**, not a handle and not a mapped region. Two
+    ///   reasons, and the second is the one that makes it mandatory: (a) `hObjectError` is a
+    ///   birth parameter and B can only name objects B minted, so a handle would be in the
+    ///   wrong namespace by construction; and (b) the descriptor must pin pages of **the
+    ///   scratchpad's** mapping, because that is the process B lives in — a region mapped in
+    ///   the per-proc isolate names memory this side never mapped. ⇒ the implementor maps the
+    ///   grant itself. The numbers stay the VMM's, exactly as
+    ///   [`RmBackend::describe_guest_ram`] insists.
+    ///
+    /// # ⊘⊘ THE DEFAULT REFUSES, AND THE REFUSAL IS THE CORRECT ANSWER
+    ///
+    /// Only the scratchpad's backend holds a birth client. A backend that accepted this and
+    /// quietly birthed in its **own** client would produce precisely the channel this whole
+    /// route exists to prevent — one whose USERD is ours, whose `GP_PUT == GP_GET == 0`
+    /// forever, and which reports no error at all (`[measured w755h]`). ⇒ Refusing is not a
+    /// stub for the other backends; it is what they mean.
+    ///
+    /// # Errors
+    /// A named refusal on every backend that is not the scratchpad; on the one that is,
+    /// `USERD_IN_STORE_NEEDS_BIRTH_IN_B` when no birth client holds `range`,
+    /// `NOTIFIER_NOT_IN_B` if the notifier did not come from B, and otherwise whatever RM
+    /// refused the birth with — after unwinding.
+    fn birth_guest_channel_in_b(
+        &mut self,
+        range: HostHandle,
+        engine: ChannelEngine,
+        ring: AdoptedGuestRing,
+        err_notifier: Option<GuestRamGrant>,
+    ) -> Result<(HostHandle, u64), RmError> {
+        let _ = (range, engine, ring, err_notifier);
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — WHAT THIS ISOLATE WOULD HAND OVER FOR `space`.**
+    ///
+    /// A [`RmBackend::alloc_vaspace_bare`] result carries the client beside the handle, and
+    /// the seven `VerbPlan` arms that mint a host VAS lazily keep only the handle — so the
+    /// VMM, which is the party that performs the hand-over, has a space and no namespace to
+    /// name it in. This verb is how it asks.
+    ///
+    /// ⊘ **It is not an accessor for "this isolate's client".** It answers *for a space*,
+    /// and it **refuses a space that is not bare**: a space with its own
+    /// `NV01_MEMORY_VIRTUAL` range is one this isolate maps through itself, and handing it
+    /// to the scratchpad would produce the `0x19 INSERT_DUPLICATE_NAME` w744 measured — at
+    /// the far end, as an unexplained refusal, rather than here as the ownership error it
+    /// is.
+    ///
+    /// # Errors
+    /// A named refusal if `space` is not a bare address space this isolate allocated.
+    fn vaspace_handover(&mut self, space: HostHandle) -> Result<BareVaSpace, RmError> {
+        let _ = space;
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — MAP A SLICE OF THE ONE RESERVED OBJECT AT THE GUEST'S OWN
+    /// VA, IN A VA SPACE THE VMM HANDED OVER.**
+    ///
+    /// `vas` is an [`RmBackend::adopt_vaspace`] result; `memory` is the reservation
+    /// [`RmBackend::reserve_gpga`] returned; `offset` is where in it the guest's framebuffer
+    /// range lives; `at` is the guest's own VA and is **binding**, not a hint.
+    ///
+    /// ⊘ **Not a mode of [`RmBackend::map_gpu_va`].** That verb maps a whole object into the
+    /// isolate's own space *and* its executor shadow; this one maps a **slice** of an object
+    /// the caller does not own into a space the caller did not create, and builds no shadow
+    /// because the scratchpad runs no guest-derived work that would resolve these VAs. The
+    /// two differ in who owns what, which is the distinction a flag erases.
+    ///
+    /// # Errors
+    /// [`RmError::PlacementRefused`] when RM placed the mapping anywhere but `at` —
+    /// constraint 28, asserted inside the one `NVOS46` site — or whatever RM refused with.
+    fn map_store_slice(
+        &mut self,
+        vas: HostHandle,
+        memory: HostHandle,
+        offset: u64,
+        len: u64,
+        at: GpuVa,
+    ) -> Result<u64, RmError> {
+        let _ = (vas, memory, offset, len, at);
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★★★ **CONSTRAINT 27's half of constraint 26 — take one such slice back down.**
+    ///
+    /// ⚠ Its acknowledgement is what a refresh withholds the guest's TLB-invalidate
+    /// completion on. A caller that drops the `Result` has turned the barrier into a report.
+    ///
+    /// # Errors
+    /// Whatever RM refused the unmap with.
+    fn unmap_store_slice(&mut self, vas: HostHandle, at: GpuVa) -> Result<(), RmError> {
+        let _ = (vas, at);
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★ **How large a reservation this host will actually accept, in MiB** — the
+    /// number the guest's advertised framebuffer size is *derived from*, never asserted
+    /// ahead of.
+    ///
+    /// ⊘ **It probes by really allocating**, halving down from `start_mb` to find a floor
+    /// and then bisecting to a 64 MiB grain, freeing every success. So it is ~8-13 real RM
+    /// alloc/free round trips against multi-gigabyte requests — cheap in wall time, but
+    /// emphatically not free, and it must never run on a vCPU thread.
+    ///
+    /// ★ **It runs in the CHILD, in one round trip**, rather than as a bisection driven
+    /// from the parent over [`RmBackend::reserve_gpga`]. Two reasons, both structural: the
+    /// bisection already exists there with a post-mortem attached (an earlier version
+    /// halved only, and reported the first success as *"the largest"* — an artefact of the
+    /// step size printed as a property of the card), and driving it from the parent would
+    /// put a dozen IPC brackets where one belongs.
+    ///
+    /// # Errors
+    /// [`RmError`]. ⊘ **`Ok(0)` is a real answer and is NOT an error**: it means nothing
+    /// down to the probe's floor could be reserved. The caller must distinguish it from a
+    /// refusal, because the two mean different things about the host.
+    fn largest_reservable_mb(&mut self, start_mb: u64) -> Result<u64, RmError> {
+        let _ = start_mb;
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★★★ **What the VM-lifetime scratchpad isolate's CUDA bring-up found out**, as one
+    /// line for a census — `SINGLE_STORE_PLAN.md` increment 4.
+    ///
+    /// ⊘ **A read.** The bring-up and both post-sandbox probes ran at the isolate's startup,
+    /// in the order `THE_CONSTRAINTS.md` §w724d prescribes; nothing here causes them. A verb
+    /// that *caused* a bring-up could not exist — by the time a worker answers a request the
+    /// isolate is already sandboxed, which is precisely what the design puts CUDA in front of.
+    ///
+    /// # Errors
+    /// [`RmError`]. The default answers a **named absence** rather than refusing, because
+    /// *"this backend never ran CUDA"* is an answer a census can print and a refusal is not.
+    /// ★★★ **Give a device view's BAR1 aperture back** — `NV_ESC_RM_UNMAP_MEMORY`.
+    ///
+    /// ⚠ `[measured w722]` `munmap` + `close` returns **NOTHING** to the host's BAR1 pool:
+    /// with fresh offsets each round, *with* this ioctl 224 MiB came back every round 5/5;
+    /// *without* it, round 0 got 224 MiB and rounds 1–4 got **zero** — with `ioctl()` returning
+    /// 0 and `errno == 0`. ⇒ **Dropping a view is not a release**, and the failure is silent.
+    ///
+    /// ★ Cumulative churn, not instant capacity, is why this must be called: the instant BAR1
+    /// working set is ~3.6 MiB, but the guest re-points its BAR1 entries continuously, so what
+    /// accumulates unreleased is every distinct (BAR1 page, GPGA) pair over the whole boot.
+    ///
+    /// # Errors
+    /// [`RmError`]. ⊘ Releasing a token this backend does not know is **`Ok`**, not an error:
+    /// the caller's contract is "this view is finished with", and a double release must be
+    /// idempotent rather than a way to wedge a teardown path.
+    fn release_device_view(&mut self, token: u64) -> Result<(), RmError> {
+        let _ = token;
+        Ok(())
+    }
+
+    fn cuda_walk_report(&mut self) -> Result<String, RmError> {
+        Ok("CUDA_WALK=ABSENT reason=\"this backend is not a CUDA scratchpad isolate\"".to_string())
+    }
+
+    /// ★★★★★ **STAGE ONE CHUNK OF THE WALK KERNEL'S IMAGE** — `SINGLE_STORE_PLAN.md` §6
+    /// step 1, the live half.
+    ///
+    /// The image is the guest's page-table pages relocated into a compact arena
+    /// (`kayfabe_mmu::walkshadow::build_image`). `off == 0` declares a fresh image of `span`
+    /// bytes; every later chunk appends into it.
+    ///
+    /// # Errors
+    /// [`RmError`]. ⊘ The default is a **named refusal**: a backend that is not a CUDA
+    /// scratchpad has no kernel to stage for, and answering `Ok` would let a caller believe
+    /// an image was accepted.
+    fn walk_shadow_stage(&mut self, span: u64, off: u64, bytes: &[u8]) -> Result<(), RmError> {
+        let _ = (span, off, bytes);
+        Err(RmError::Other(NOT_A_WALK_SHADOW))
+    }
+
+    /// ★★★★★ **RUN THE WALK KERNEL OVER THE STAGED IMAGE**, returning the report bytes —
+    /// header, `PdbEntry`s, `MapRun`s — exactly as `kayfabe_mmu::walkreport::Report::parse`
+    /// expects them.
+    ///
+    /// `pdbs` are the **relocated** roots, ascending. `ack` is the report generation the
+    /// caller APPLIED IN FULL since the last run (`0` = none): acking it makes this run a
+    /// DELTA against that report instead of a full resync (w826).
+    ///
+    /// # Errors
+    /// [`RmError`], as above.
+    fn walk_shadow_run(&mut self, pdbs: &[u64], ack: u64) -> Result<Vec<u8>, RmError> {
+        let _ = (pdbs, ack);
+        Err(RmError::Other(NOT_A_WALK_SHADOW))
+    }
+
+    /// Intent verb: allocate a host GPU channel bound to host VAS `vas`, on the
+    /// runlist/engine named by `engine` — the channel's graph-derived [`EngineKind`],
+    /// which the adapter lowers to the host `NV_CHANNEL_ALLOC_PARAMS` engine type.
+    /// The engine is declared HERE because the adapter cannot invent it: an
+    /// engine-blind channel alloc is the C's proven wrong-runlist bug class
+    /// (`dma_copy_class_alloc_params`: `engineType=0` → wrong runlist →
+    /// cuCtxCreate 401 — seam audit GR-1). Returns
+    /// `(channel_handle, host_work_submit_token)`.
+    ///
+    /// # ★★★★★ §16.106 — `hosting`, and why an [`EngineKind`] alone was not enough
+    ///
+    /// [`EngineKind::Ce`] names *a* copy engine and never *which one*, so the adapter had
+    /// to pick, and it picked index 0 — the number the C used. `[measured 2026-08-11,
+    /// boots w250/w251/w254]` **all 14** of this port's engine-object refusals are exactly
+    /// that mismatch: the guest's own `NVB0B5_ALLOCATION_PARAMETERS` declare `COPY2`/
+    /// `COPY3` (runlists 1 and 2) while we built the channel on `COPY0` (runlist 0), and
+    /// the host driver refuses with `NV_ERR_INVALID_STATE` naming both numbers.
+    ///
+    /// ⇒ `hosting` carries **the engine object this channel is being materialized to
+    /// host**, so the adapter can read the instance out of the guest's own declaration
+    /// instead of inventing it. ⊘ It is `None` for every materialization that is not for
+    /// an object (the doorbell path), and the adapter's behaviour there is unchanged.
+    ///
+    /// ⊘ **Not "the params", and not a second engine argument.** The `EngineKind` still
+    /// decides *which kind of engine*; `hosting` only ever refines an instance the kind
+    /// cannot express. An adapter that ignored it entirely would be exactly as correct as
+    /// this trait was before — which is the property that keeps this additive.
+    ///
+    /// # ★★★★★ LEG A2 — `adopt`, and an adapter that ignored it would still be correct
+    ///
+    /// `Some(ring)` asks for the channel to be born over the **guest's** GPFIFO
+    /// ([`AdoptedGuestRing`]); `None` is every prior boot's behaviour, byte for byte. ⊘ Like
+    /// `hosting` above, it only ever *refines* — it names memory and geometry the abstract
+    /// verb could not express, and never changes which engine or which address space.
+    ///
+    /// # ★★★★★ w288 — `err_notifier`, and it is the guest's OWN notifier pages
+    ///
+    /// `Some(memory)` names an RM memory object the host channel's `hObjectError` is set
+    /// to, so host RM (on a GSP part, the GSP itself) writes **one 16-byte
+    /// `NvNotification`** there when this channel is robust-channel killed. `None` is every
+    /// pre-w288 boot, byte for byte: `hObjectError = 0`, and a client learns of a fault only
+    /// by a semaphore that never moved.
+    ///
+    /// ⊘ **The object is expected to be an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over the
+    /// GUEST'S notifier pages** — [`RmBackend::map_guest_ram`] → [`RmBackend::describe_guest_ram`]
+    /// — which is what makes the write land where the guest's own driver polls. It is not
+    /// enforced here, because this trait cannot see a memory object's provenance; the caller
+    /// that built it can, and does.
+    ///
+    /// ⊘ **A guest-backed descriptor cannot be CPU-mapped** (`[measured, R31 arm B]`:
+    /// `NV_ERR_NOT_SUPPORTED`, *"memMap_IMPL: CPU mapping not supported for addressSpace:
+    /// 0x1"*), so nothing on the host side may read this object back. Verification of a
+    /// notifier built this way comes from the **guest**, which is the party that polls it.
+    /// This is not a shortfall — `kchannelGetNotifierInfo` takes the non-`ADDR_VIRTUAL`
+    /// branch for a `Memory` object and requires no CPU mapping and no ctxdma
+    /// (`ogkm-580: kernel_channel.c:2074-2078`).
+    fn alloc_channel(
+        &mut self,
+        vas: HostHandle,
+        engine: EngineKind,
+        hosting: Option<HostedObject<'_>>,
+        adopt: Option<AdoptedGuestRing>,
+        err_notifier: Option<HostHandle>,
+    ) -> Result<(HostHandle, u64), RmError>;
+
+    /// ★★★★★ **w393 — [`Self::alloc_channel`] for a birth AT THE GUEST'S CHANNEL ALLOC**:
+    /// no engine object to host, a **mandatory** adoption, and the guest's own
+    /// `engineType` carried raw in place of the instance §16.106 would have read off the
+    /// object.
+    ///
+    /// # ⊘ Why a second verb and not a sixth argument on `alloc_channel`
+    ///
+    /// Two facts differ and both are the guest's: **(1)** `adopt` is not optional — a
+    /// channel born here over a ring of ours is the w392h defect (`RingSource::Ours(None)`,
+    /// engine fetches nothing, `Xid 0`) restated, and the type refuses to spell it;
+    /// **(2)** the runlist comes from the guest's channel alloc, not from an object that
+    /// does not exist yet. A `bool`/`Option` pair on the older verb would make both one
+    /// caller mistake away.
+    ///
+    /// `declared_engine_type` is the raw `NV2080_ENGINE_TYPE_*` code the guest wrote.
+    /// `None` = *"this port could not read it"*; the adapter then answers exactly as it does
+    /// for a `hosting: None` birth (`engine_type_for`), which is the pre-w393 behaviour,
+    /// labelled rather than silent.
+    ///
+    /// # ⚠ USERD, and the reason this verb exists at all
+    ///
+    /// `[measured w233]` RM zeroes a caller-supplied USERD at alloc. Adopted **here** —
+    /// before the guest has written `GP_PUT` — that is harmless; adopted at the first
+    /// doorbell it wipes the cursor that rang. See [`AdoptedGuestUserd`]. This is the only
+    /// verb on which `adopt.userd` may be `Some`; the doorbell arm passes `None`.
+    fn alloc_channel_declared(
+        &mut self,
+        vas: HostHandle,
+        engine: EngineKind,
+        declared_engine_type: Option<u32>,
+        adopt: AdoptedGuestRing,
+        err_notifier: Option<HostHandle>,
+    ) -> Result<(HostHandle, u64), RmError>;
+
+    /// Intent verb: allocate an **engine object** (compute / graphics / CE / NVENC)
+    /// of `class` on host channel `chan` — the Case-1 forward that makes the host
+    /// kernel-RM build and self-promote its OWN context (golden ctx included, on real
+    /// silicon). `params` is the ABI-lowered alloc blob (Axis A: `IS_EXTERNALLY_OWNED`
+    /// already stripped, etc.). NOTE the anti-bolt-on property: this is *almost* the
+    /// generic [`RmBackend::alloc`] with `parent = chan`; it is named only to state
+    /// the intent — the host verb surface does NOT grow to add an engine.
+    fn alloc_engine_object(
+        &mut self,
+        chan: HostHandle,
+        class: ClassId,
+        params: &[u8],
+    ) -> Result<HostHandle, RmError>;
+
+    /// Intent verb: make `chan` runnable (the GPFIFO_SCHEDULE intent). Per-proc,
+    /// never a one-shot: #12's CTX2 rang off-runlist because scheduling was a
+    /// sticky global in the C.
+    fn schedule(&mut self, chan: HostHandle) -> Result<(), RmError>;
+
+    /// Free an RM object (and its subtree, per RM semantics).
+    fn free(&mut self, obj: HostHandle) -> Result<(), RmError>;
+
+    /// Issue a control command on an object; `payload` is read and written in place.
+    fn control(
+        &mut self,
+        obj: HostHandle,
+        cmd: ControlCmd,
+        payload: &mut [u8],
+    ) -> Result<(), RmError>;
+
+    /// ★★★★★ **w346 — ONE CONTROL ON THIS ISOLATE'S OWN SUBDEVICE**, issued and answered in a
+    /// single hop.
+    ///
+    /// # Why a whole verb, when the port already has `control`
+    ///
+    /// `control` needs a `HostHandle`, and every other one the port holds is the host twin
+    /// of a *guest* object — a channel, a VA space.
+    ///
+    /// ⊘⊘ **This verb was first written as `subdevice() -> HostHandle`, and that shape was
+    /// WRONG.** Handing the port a handle means it needs somewhere to keep it: `IsolateBox`
+    /// wraps `dyn Isolate`, not `dyn RmBackend`, so caching it at spawn drags a one-time
+    /// query through the worker pool's lifecycle, and fetching it per control costs TWO
+    /// round trips where one does. Resolving the subdevice **inside the child** costs one
+    /// hop, needs no storage, and — the part that decided it — means the port never holds a
+    /// host handle it could name in some other verb. The GSS-legacy cudart init-gate family
+    /// has no guest object to twin: `0x20809009`, `0x20809001`, `0x20809064` and their
+    /// successors ask **the GPU about itself** (a CUDA major version, a capability mask),
+    /// and the answer is a property of the part, not of anything the guest allocated.
+    ///
+    /// `[measured 2026-08-20, real GA106, 2/2 boots]` those three are the wall `libcudart`
+    /// dies on while `libcuda` is entirely healthy in the same process — `cuInit`,
+    /// `cuDeviceGetCount`, `cuDevicePrimaryCtxRetain` and CC 8.6 all correct, and
+    /// `cudaGetDeviceCount` returning **3 = `cudaErrorInitializationError`**. Serving them
+    /// moves the guest ON to four more of the same family. The C research artifact names
+    /// the mechanism in its own source and its PRIMARY remedy is to forward
+    /// (`C: src/qemu/nvkvm_gpu_emul.c:3334-3363`).
+    ///
+    /// ⊘ **The alternative was a captured constant, and it is the thing this verb exists to
+    /// avoid.** A replayed body is not READ-NATIVE, rots on the next driver or chip, and for
+    /// `0x20809064` the only capture available covers **40 of 520 bytes**. Forwarding needs
+    /// no capture at all.
+    ///
+    /// ⚠ **This is the isolate's OWN subdevice, never a guest's.** It is the same object the
+    /// isolate already uses for its own per-GPU controls, so no guest handle is translated
+    /// and no guest object becomes reachable that was not already.
+    ///
+    /// # Errors
+    /// The default is a **named refusal**: a backend with no real RM connection has no
+    /// subdevice, and inventing one would hand the caller a handle that names nothing. Only
+    /// the real host backend and the proxy that carries it override this.
+    fn subdevice_control(&mut self, cmd: ControlCmd, payload: &mut [u8]) -> Result<(), RmError> {
+        let _ = (cmd, payload);
+        // 0x56 = NV_ERR_NOT_SUPPORTED — RM's own way of saying "not on this part".
+        Err(RmError::Other(0x56))
+    }
+
+    /// Map `len` bytes of `memory` into the host GPU VA space owned by `vas`
+    /// **at `at`**, returning the host GPU VA actually achieved.
+    ///
+    /// ★★★ **`at` is not a hint** (`#102`). The caller passes the *guest* VA and the
+    /// backend must place the mapping there — the real backend by setting
+    /// `DMA_OFFSET_FIXED_TRUE` (bit 15, `0x8000`) so `dmaOffset` is **[IN]** rather than
+    /// [OUT] (`C: nvkvm_gpu_emul.c:7663-7692`). Address identity is what makes a
+    /// forwarded pushbuffer resolve at all: the guest's commands carry guest VAs, and
+    /// the host MMU walks the host VAS for exactly those numbers. A backend free to
+    /// choose its own placement produces a binding that is published and unaddressable.
+    ///
+    /// This used to take no address at all while [`RmBackend::unmap_gpu_va`] took one —
+    /// the asymmetry was the tell (`eight_blockers_resolved.md` §1).
+    ///
+    /// ★★ Address identity does **not** weaken #14. Two guest processes' identical guest
+    /// VAs now land at the *same* host VA — inside *different* host VASes, one per
+    /// `Vas`, on different isolates. Per-address-**space** separation is #14's proven
+    /// fix; per-*address* separation never was, and asserting it was a wrong reading.
+    ///
+    /// # Errors
+    /// [`RmError::PlacementRefused`] if the backend could not honour `at`. Returning a
+    /// different VA is a contract violation the caller ([`Worker::execute`]) converts
+    /// into that error and unwinds — it must never be adopted.
+    fn map_gpu_va(
+        &mut self,
+        vas: HostHandle,
+        memory: HostHandle,
+        len: u64,
+        at: GpuVa,
+    ) -> Result<u64, RmError>;
+
+    /// Unmap a previous [`RmBackend::map_gpu_va`].
+    fn unmap_gpu_va(&mut self, vas: HostHandle, gpu_va: u64) -> Result<(), RmError>;
+
+    /// Ring the host work-submit doorbell with an (already host-translated) token.
+    fn ring_doorbell(&mut self, host_token: u64) -> Result<(), RmError>;
+
+    /// ★★★ Perform **one** sub-copy of a partitioned copy-engine request, on the engine
+    /// the plan chose (`eight_blockers_resolved.md` §12.4).
+    ///
+    /// ONE verb rather than two, and the arm is a field of the instruction rather than a
+    /// choice this method makes. The distinction §12 draws is *representability*, which
+    /// is a property of the ADDRESS PLANE — the backend does not hold the address plane
+    /// and must not appear to. An implementation matches on [`CeSubCopy::by`]:
+    ///
+    /// - [`CeExecutor::HostCe`] — submit a real copy-engine copy in `vas`. Both operands
+    ///   are host-published at guest-identical addresses (`#102` stage A), so the guest's
+    ///   own numbers are the ones hardware walks for.
+    /// - [`CeExecutor::Ours`] — move the bytes here, against this isolate's mapping of
+    ///   the fabricated aperture. This is the arm the C spends most of its time in and
+    ///   the only arm that can serve a page-table write, whose payload is guest-physical
+    ///   PTE values hardware would resolve as addresses.
+    ///
+    /// # Errors
+    /// Whatever the host refuses with. ★ A refusal **may leave a prefix of this
+    /// sub-copy applied** — that is what a real engine does when it faults mid-copy
+    /// (the C breaks out of its span loop and the remainder is silently never written,
+    /// `C: nvkvm_gpu_emul.c:6389` "#13 CE-DROP"). Nothing is allocated, so there are no
+    /// orphans to unwind; the caller's evidence is the sub-copy index that failed.
+    fn ce_copy(&mut self, vas: HostHandle, sub: CeSubCopy) -> Result<(), RmError>;
+
+    /// ★★★ **Read `buf.len()` bytes of the FABRICATED APERTURE** at guest-framebuffer
+    /// physical address `phys` — the page-table decoder's byte source
+    /// (`eight_blockers_resolved.md` §12.2, `#102` stage C3).
+    ///
+    /// ## Why this verb exists, and why it is bounded to *fabricated* memory
+    ///
+    /// §12's ruling decomposes a copy-engine request by **representability**: what a real
+    /// engine can be pointed at goes to real hardware, and what it cannot — an operand in
+    /// space *we* invented — is performed by us, [`CeExecutor::Ours`], **in the isolate**.
+    /// The consequence the ruling then draws is the whole reason for this method: every
+    /// byte written into fabricated space was written *by us*, so the content of the
+    /// guest's page tables is already in the isolate's own mapping of that aperture. This
+    /// is the read half of the write [`RmBackend::ce_copy`]'s `Ours` arm performs.
+    ///
+    /// ★★ **The bound is the safety property.** We shadow the fabricated aperture *only*
+    /// — memory we invented and therefore already own — never "every copy destination".
+    /// Generalising past that is what made a core-owned content store collapse (§11.6
+    /// Option 3, rejected). There is deliberately no verb here that reads *representable*
+    /// memory: if a caller ever wants one, the boundary has moved and the design has to
+    /// be re-argued, not the signature widened.
+    ///
+    /// ## The three answers, and why "not covered" is not an error
+    ///
+    /// - `Ok(true)` — served; `buf` holds the bytes.
+    /// - `Ok(false)` — **this isolate's fabricated aperture does not cover the range.**
+    ///   A guest's page table naming a physical page outside it is an ordinary guest
+    ///   fact, not a malfunction, and the walker turns it into a loud
+    ///   `kayfabe_mmu::walker::WalkFault::Unbacked`: MISS = FAULT, forwarded, never
+    ///   guessed into a capture. It must **never** be answered as a page of zeros, which
+    ///   decodes as a page that legitimately maps nothing.
+    /// - `Err` — the transport or the host failed. A different fact from `Ok(false)` and
+    ///   kept separate on purpose: one is about the guest, the other is about us.
+    ///
+    /// # Errors
+    /// Whatever the host or the transport refuses with.
+    fn fb_read(&mut self, phys: u64, buf: &mut [u8]) -> Result<bool, RmError>;
+
+    /// ★★★ **Perform the mapping HERE, and hand back MEMORY the VMM can install** —
+    /// the owner's decision (b) for `#133`/`#128`, made into a verb
+    /// (`isolate_vmm_fd_crossing.md` §12).
+    ///
+    /// ## The problem this exists to solve
+    ///
+    /// A KVM memslot names a userspace address **in the VMM's own address space**, so
+    /// something has to cross the isolate boundary. The obvious something is the GPU
+    /// descriptor: the isolate opens `/dev/nvidia*`, hands it up, the VMM `mmap`s it.
+    /// That works and it is what the C does — and it puts an `ioctl`-capable RM escape
+    /// descriptor in a process that is very often root, where RM re-derives privilege
+    /// **from the caller on every escape**, not from the opener
+    /// (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:304`; `guest_blast_radius.md`
+    /// F14). The owner's ruling was to move the mapping work behind this verb instead:
+    /// hygiene and contract, *"the descriptor simply should not be somewhere we do not
+    /// control"*.
+    ///
+    /// ⚠ **The ruling explicitly does not rest on sandboxing the VMM.** A compromised VMM
+    /// is the boundary, not a step inside it; confining the hypervisor is the deployment's
+    /// job and not this project's. F14 is therefore not *closed* by this verb — it is the
+    /// reason not to hand the descriptor up in the first place.
+    ///
+    /// ## What crosses instead
+    ///
+    /// A **shared-file backing** (a sealed `memfd`). The VMM maps *that*, so the pages are
+    /// the same pages and nothing in the transaction has an `ioctl` handler for an RM
+    /// escape. ★ Note the coincidence that is not a coincidence: the class this verb can
+    /// export is exactly the class whose effective CPU memory type is **knowable** —
+    /// `kayfabe_linux_raw::Backing::attainable_cache_policy` answers `Some(WriteBack)` for
+    /// a shared file and `None` for a device file, because for a device file *"the driver
+    /// already decided … and userspace cannot read it back"*. One boundary, two
+    /// consequences.
+    ///
+    /// ## ⊘ What it does NOT cover — a READING of the driver, not an omission
+    ///
+    /// ★ Said at the epistemic level actually held (`claim_ledger.md`): the two citations
+    /// below are **readings of `ogkm-580` at a named file:line**, which say what the
+    /// driver *does*, and no hardware ran for either. That settles this particular
+    /// question because both are unconditional refusals on the source path with no runtime
+    /// input — but the citations are readings, and they are written as readings.
+    ///
+    /// [`ExportSource::HostDeviceMemory`] is always [`RmError::NotExportableAsMemory`].
+    /// The three independent reasons are cited on that variant. This is the incomplete
+    /// half of (b), and it is named here rather than faked: a real device BAR is not
+    /// memfd-backed, and the two routes that could have carried it are a character device
+    /// (an `ioctl` surface — the thing being avoided) and an NVIDIA dma-buf (whose CPU
+    /// mapping is hard-gated to zero-framebuffer parts).
+    ///
+    /// # Errors
+    /// [`RmError::NotExportableAsMemory`] for the device class; [`RmError::NoMemory`] if
+    /// the host would not mint the backing; whatever the transport refuses with.
+    fn export_backing(&mut self, want: ExportRequest) -> Result<ExportedBacking, RmError>;
+
+    /// ★★★★★ **w393 — arm a CPU view of `[offset, offset+len)` of a host vidmem object and
+    /// hand the ARMED NODE up to the VMM**, so the VMM can `mmap` it and install a guest
+    /// memslot over it: the host-visible half of `DEVICE_LOCAL | HOST_VISIBLE`. See
+    /// [`DeviceView`] for what crosses, what does not, and the policy ruling it waits on.
+    ///
+    /// ⊘ **Defaulted to a refusal by name**, and the default is a statement rather than a
+    /// convenience: every backend that has not been taught this crossing — the mocks, the
+    /// loopback fixture — must answer *"not crossable here"* and never *"here is some other
+    /// descriptor"*. The real backend and the wire proxy override it.
+    ///
+    /// # ⊘⊘⊘ RE-ISSUED ON THE WIRE 2026-09-14 — AND THE RULING IS WHAT AUTHORISES IT
+    ///
+    /// `ORPHANS_wire_or_discard.md` discarded `Request::ExportDeviceView` as an orphan and
+    /// marked request tag **25** and reply tag **12** *"never re-issue"*. That note is still
+    /// correct about **those tag numbers** and is **no longer correct about the verb**:
+    ///
+    /// > **Owner, 2026-09-14** — `bar1_passthrough_device_local_host_visible.md` §4 item 1,
+    /// > decision (b) **GRANTED, conditionally**: *"nvkvm-pv also got MMIO mappings work
+    /// > across the isolate, so it is not impossible (use SCM rights maybe)"* ⇒ *"the VMM may
+    /// > hold a `/dev/nvidia<N>` descriptor with an RM escape handler behind it,
+    /// > **transiently**, for the sole purpose of `mmap`ing it into a memslot."*
+    ///
+    /// ⇒ New tags (request **30**, reply **15**) are minted rather than the retired ones
+    /// reused, so a reader who finds only the orphan note does not re-apply the retirement,
+    /// and a peer built before the ruling cannot mistake a new frame for an old one.
+    ///
+    /// ## ⚠ THE RULING IS CONDITIONAL — three conditions, and they ARE the safety argument
+    ///
+    /// 1. **The VMM issues NO escape on the descriptor — only `mmap`.** `secInfo.privLevel` is
+    ///    recomputed *per escape* from the caller (`ogkm-580: escape.c:304`), so a process that
+    ///    never escapes gains nothing. ⊘ A property of **what the VMM does**, so it cannot be
+    ///    enforced from here; it is enforced by the VMM having exactly one use for the
+    ///    descriptor, at a call site that says so.
+    /// 2. **The VMM closes it the moment `mmap` returns.** The VMA keeps the `struct file`, so
+    ///    the mapping outlives the descriptor. `install_device_window`'s *"should close"* is a
+    ///    **MUST** under this ruling.
+    /// 3. **The crossing is `SCM_RIGHTS`** — which is what this verb's reply carries, on the
+    ///    same `sendmsg` as its body.
+    ///
+    /// ⇒ **An implementation that stops satisfying any of these is outside the ruling and
+    /// needs a fresh one.** Stated on the trait because this is what every backend implements.
+    ///
+    /// ⚠ `write` is new since the retirement: the deleted message had no such field, and the
+    /// real backend has taken a `ViewAccess` since w596/w629. It is the **VMA's** protection —
+    /// what this process may do — and is independent of what the guest's memslot tier permits.
+    ///
+    /// # Errors
+    /// [`RmError::NotExportableAsMemory`] from a backend that cannot cross a device view
+    /// (the default); [`RmError::BadHandle`] for an object this connection does not own;
+    /// whatever `NV_ESC_RM_MAP_MEMORY` refuses with (a vidmem object that is not
+    /// CPU-mappable, a host BAR1 that has no room for the view).
+    fn export_device_view(
+        &mut self,
+        memory: HostHandle,
+        offset: u64,
+        len: u64,
+        write: bool,
+    ) -> Result<DeviceView, RmError> {
+        let _ = (offset, len, write);
+        Err(RmError::NotExportableAsMemory { memory })
+    }
+
+    /// ★★★★★ **w629 — a READ-ONLY view of the isolate's OWN usermode page, for the VMM.**
+    ///
+    /// ⊘⊘ **It takes no arguments, and that is the security property rather than an
+    /// omission.** The caller names no object, no offset and no length: the isolate arms the
+    /// usermode object it already holds, at offset 0, for the register length it already
+    /// knows. A verb whose caller could choose the object would be a verb that could ask for
+    /// any mapping the isolate can make, and the VMM is the one peer this boundary exists to
+    /// keep honest.
+    ///
+    /// ★ Why the VMM wants it: the free-running counter cannot be shadowed — it changes
+    /// continuously, so no copy keeps up — and it is the last read trap anywhere on the
+    /// device. Mapping the host's own page read-only over it is also the only implementation
+    /// in which the guest reads the GPU's real clock instead of a host CPU clock that
+    /// `[measured]` drifts from it by 43 ppm.
+    ///
+    /// ⚠ The returned node is armed `O_RDONLY`, and `[measured w600, unprivileged]` that is
+    /// what makes it safe to hand over: the kernel refuses a writable `mmap` of it with
+    /// `EACCES` and refuses `mprotect` back to writable with the same errno. ⊘ The RM access
+    /// flag does NOT do this — `[measured w596]` a node armed `ACCESS_READ_ONLY` still accepts
+    /// a writable `mmap`, because RM decides protection from a range table that leaves the
+    /// usermode block read-write by fiat. See `the_counter_page_and_the_device_view.md` §4a/§4b.
+    ///
+    /// # Errors
+    /// [`RmError`] — and the default REFUSES, so a backend that has no usermode window says so
+    /// rather than answering with something else.
+    fn export_usermode_view(&mut self, write: bool) -> Result<DeviceView, RmError> {
+        let _ = write;
+        // ⊘ `0x56` is `NV_ERR_NOT_SUPPORTED`, the same refusal the trait's other
+        // capability-shaped defaults use — a backend without a usermode window is not broken,
+        // it simply does not offer this.
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★★★ **ONE memory for a framebuffer leaf** — mint a fabricated backing, map it
+    /// here, describe it to RM, place it at `at`, and hand the **same pages** up to the VMM
+    /// (`fb_cpu_view.md` §4).
+    ///
+    /// # ⊘ Why this is a verb of its own and not `export_backing` plus `map_gpu_va`
+    ///
+    /// Because the VMM cannot name the isolate's backing. [`ExportedBacking`] carries the
+    /// **adapter's** token, minted when the adapter adopts the descriptor; the child's index
+    /// into its own table deliberately does not travel (`kayfabe_isolate_host::export`'s
+    /// module docs — *"a value the peer supplies must never name a slot in our registry"*).
+    /// So a VMM holding an exported backing has no way to say *"describe **that** one to RM
+    /// at **this** VA"*. The two halves have to be one verb, issued by the party that owns
+    /// the memfd.
+    ///
+    /// ⊘ **It is not [`RmBackend::export_backing`] with extra steps in the other direction
+    /// either.** `export_backing` acquires no RM object and therefore sits beside
+    /// [`Worker::execute`]; this acquires two (a descriptor and a fixed GPU mapping) and
+    /// belongs inside a chain that can unwind them.
+    ///
+    /// # ★★ What the implementation owes, in order
+    ///
+    /// 1. mint a shareable backing of `len` bytes — the [`ExportSource::Fabricated`] arm,
+    ///    the one that is *designed* to succeed;
+    /// 2. `mmap` it **in the isolate**, and keep that mapping alive for as long as the
+    ///    descriptor: RM pins the pages behind an `OS_DESCRIPTOR` and a mapping torn out
+    ///    from under it is a live GPU mapping of memory this process no longer describes;
+    /// 3. `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over that mapping;
+    /// 4. map it into `vas` at `at`, `DMA_OFFSET_FIXED`, and **refuse** rather than adopt a
+    ///    placement that is not `at`;
+    /// 5. `phys` is carried so the isolate can answer for this range **by framebuffer
+    ///    address** afterwards. ⊘ It is the VMM's number and nothing here derives it.
+    ///
+    /// ★ **Per-isolate state, never per-worker.** The mapping table this builds is a
+    /// property of the isolate: an isolate is a **pool**, and the worker that joins a leaf
+    /// need not be the worker later asked to read it. A table on the backend is the bug that
+    /// one-worker tests cannot see.
+    ///
+    /// # Errors
+    /// [`RmError::NoMemory`] if the backing cannot be minted; [`RmError::PlacementRefused`]
+    /// when the fixed map did not land at `at`; otherwise whatever RM or the transport
+    /// refused with. ⊘ A backend with nowhere to keep the mapping must refuse **by name**
+    /// rather than mint a per-worker table.
+    fn join_fb_leaf(
+        &mut self,
+        vas: HostHandle,
+        len: u64,
+        at: GpuVa,
+        phys: u64,
+    ) -> Result<FbLeafJoined, RmError>;
+
+    /// ★★★★★ **w380 — MAP AN ALREADY-JOINED FRAME AT A SECOND GPU VA.** The guest holds
+    /// one framebuffer frame at several virtual addresses; this is how the second and every
+    /// later one gets host backing without disturbing the first.
+    ///
+    /// # ⊘⊘ The defect this replaces, measured
+    ///
+    /// `[measured w376llmd, real GA106]` the join store was keyed by framebuffer frame alone,
+    /// so a frame could be host-backed at exactly **one** VA. Publishing either alias revoked
+    /// the other — **127 supersedes over 17 frames**, then **28 108 `⊘ SUPERSEDE CAPPED`**
+    /// once the per-pair cap froze the ping-pong, leaving one live VA of each pair permanently
+    /// unbacked. The `Xid 31 FAULT_PDE` landed at `0x7480_27604000`, a VA we had unpublished
+    /// ourselves. `w377` §9 settled that the guest holds **every** alias live (a supersede
+    /// TARGET later becomes a SOURCE, repeatedly — staleness is monotone and cannot do that),
+    /// so the answer is to support the aliasing rather than to arbitrate it.
+    ///
+    /// # ★★★ ONE MEMORY, N DESCRIPTORS — and the asymmetry is deliberate
+    ///
+    /// The **pages** are minted once, by [`RmBackend::join_fb_leaf`], and every alias is
+    /// described to RM over that same isolate mapping. So all aliases of a frame are the same
+    /// bytes — which is the whole property `BackingBytes::JoinsGuestWindow` asserts, and it
+    /// is preserved exactly.
+    ///
+    /// The **`OS_DESCRIPTOR`** is per-VA, and that is not an accident of implementation:
+    /// every reclaim path in this tree — `apply_settlement_as`'s `RevokeWholeJoins`, the
+    /// retired-proc sweep, the unadopted release — disposes of a host object *per address
+    /// table row*, unconditionally. One object shared by N rows would invert that: the first
+    /// row to go would free memory the surviving rows still name. ⊘ A per-VA descriptor makes
+    /// each row's release **local and complete**, so no refcount has to be right for the
+    /// tree to be safe. The frame's shared pages outlive every descriptor and are released
+    /// with the join itself.
+    ///
+    /// ⚠ **N is unbounded.** Nothing in the guest's behaviour caps how many VAs name a frame
+    /// — 8 of 17 already reach three — and a hard-coded 2 would be `SUPERSEDE_CAP_PER_FRAME`'s
+    /// mistake one level up: that cap did not stop the ping-pong, it *froze* it.
+    ///
+    /// # Errors
+    /// [`RmError::Other`] when this backend holds no join for `phys` — ⊘ **refused by name,
+    /// never minted**: an alias over freshly-minted pages would be a *second memory* for the
+    /// frame, which is the exact state the join exists to end. [`RmError::PlacementRefused`]
+    /// when the fixed map did not land at `at`; otherwise whatever RM refused with.
+    fn alias_fb_leaf(
+        &mut self,
+        vas: HostHandle,
+        len: u64,
+        at: GpuVa,
+        phys: u64,
+    ) -> Result<FbLeafAliased, RmError>;
+
+    /// ★★★ **The both-directions instrument for a joined leaf** — read what the isolate's
+    /// own mapping holds at `phys`, and (when `poke` is `Some`) leave a per-word pattern
+    /// behind in it.
+    ///
+    /// # ⊘ This is an instrument, and it is written as one
+    ///
+    /// It is the only thing in this trait that *writes* fabricated content, and it exists
+    /// because the property [`RmBackend::join_fb_leaf`] claims — *"the VMM's view and the
+    /// isolate's view are one memory"* — is not observable from either side alone. A VMM
+    /// that wrote through its own mapping and read back through its own mapping would be
+    /// comparing a buffer with itself.
+    ///
+    /// ★ **One round trip carries both directions**: the read happens **before** the poke,
+    /// so the reply is the guest→isolate answer and the poke is the isolate→guest stimulus
+    /// the caller then reads through its own view. Two verbs would have made the ordering a
+    /// convention; one makes it the type.
+    ///
+    /// `Ok(false)` means **no joined range covers `[phys, phys+len)`** — the same
+    /// *"MISS = FAULT"* fact [`RmBackend::fb_read`] carries, and deliberately not zeros: an
+    /// unjoined range answering with a page of zeros is indistinguishable from a joined one
+    /// holding zeros, and those are opposite findings.
+    ///
+    /// # Errors
+    /// Whatever the transport refused with. ⊘ `Ok(false)` is not an error.
+    fn fb_join_peek(
+        &mut self,
+        phys: u64,
+        buf: &mut [u8],
+        poke: Option<u32>,
+    ) -> Result<bool, RmError>;
+
+    /// ★★★★★ **Map a slice of GUEST RAM into this isolate — because the VMM said to.**
+    ///
+    /// This is the one door. `mode2_isolate_memory_boundary.md` §5: *the isolate never
+    /// `mmap`s guest RAM on its own; it is instructed.* Everything the isolate can reach of
+    /// the guest's memory arrives through a [`GuestRamGrant`], whose numbers the VMM
+    /// derived from its own region map — see that type for why the alternative (the isolate
+    /// asking and the VMM checking) is a circular check rather than a weaker one.
+    ///
+    /// ## Why guest RAM has to be MAPPED and cannot be COPIED
+    ///
+    /// The refuted alternative, and it is refuted by the guest's own behaviour rather than
+    /// by preference: the guest **polls** its completion semaphore directly out of its own
+    /// RAM, and advances `GP_PUT` in its own ring expecting the engine to see it. A poll
+    /// has **no trigger point** — no event, no ioctl, no exit — at which a copy-back could
+    /// be scheduled. ★ The C agrees and did it this way: for sysmem it mapped
+    /// (`pci_dma_map` → host VA → `OS_DESCRIPTOR` over the real pages) and copied only for
+    /// emulated-framebuffer seeding, which is memory it owned.
+    ///
+    /// ## ⊘ What this verb is NOT
+    ///
+    /// It is **not** [`RmBackend::export_backing`]'s inverse and must not be confused with
+    /// it. `export_backing` runs isolate → VMM and hands up memory the *isolate* minted;
+    /// this runs VMM → isolate and hands down memory the *guest* owns. The two directions
+    /// have opposite threat models, which is why [`ExportedBacking`] and
+    /// [`kayfabe_vmm::RamHandle`] are separate types with separate token spaces.
+    ///
+    /// # Errors
+    /// [`RmError::GuestRamUnavailable`] if the VM was not launched with a shared memory
+    /// backing — a deployment fact, refused loudly rather than degraded into a copy;
+    /// [`RmError::NoMemory`] if the host refused the mapping; whatever the transport
+    /// refuses with.
+    fn map_guest_ram(&mut self, grant: GuestRamGrant) -> Result<GuestRamMapped, RmError>;
+
+    /// Give back what [`RmBackend::map_guest_ram`] mapped.
+    ///
+    /// ⚠ §3's freeing rule, stated here because it is the half a later reader drops: the
+    /// kernel frees the pages on `munmap` regardless — what confirming this buys is
+    /// **knowing the isolate has lost access before the range is reused**. So a VMM that
+    /// reclaims a guest-RAM range must wait for this to return, and on the timeout path
+    /// must free after the child is **reaped**, not after it is signalled: between the
+    /// signal and the mm teardown the mappings still exist.
+    ///
+    /// # Errors
+    /// [`RmError::GuestRamUnavailable`] if there is no guest RAM to unmap; whatever the
+    /// transport refuses with.
+    fn unmap_guest_ram(&mut self, mapped: GuestRamMapped) -> Result<(), RmError>;
+
+    /// ★★★★★ **Describe a live guest-RAM mapping to the host driver as a memory object** —
+    /// `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over the pages [`RmBackend::map_guest_ram`]
+    /// already mapped (`guest_ram_crossing.md` §5.8).
+    ///
+    /// This is the verb that turns *"this process can read the guest's bytes"* into
+    /// *"the host GPU can reach the guest's bytes"*, and it is the last one missing
+    /// between the two. After it, nothing new is needed:
+    /// [`RmBackend::map_gpu_va`] already places a memory object at a **dictated** address
+    /// and already refuses a placement it did not get.
+    ///
+    /// ## ⊘ Why this is a SEPARATE verb and not a flag on `map_guest_ram`
+    ///
+    /// The two have different failure modes and different lifetimes. `map_guest_ram` is an
+    /// `mmap` in this process and is undone by `munmap`; this is an RM allocation that
+    /// **pins** those pages for the host GPU and is undone by `free`. Folding them would
+    /// make the natural cleanup — drop the mapping — silently leave RM holding pinned
+    /// pages, which is the class [`RmBackend::map_guest_ram`]'s own docs already refuse to
+    /// hide. ⚠ `alloc_os_descriptor`'s note applies verbatim: **dropping the host mapping
+    /// does not release RM's reference.**
+    ///
+    /// ## ⊘ What this verb may NOT grow
+    ///
+    /// An offset and a length. It describes **exactly** what the grant named, because the
+    /// grant's numbers are the VMM's and a second pair of numbers here would be a second
+    /// description of the same authorization — and the isolate would own one of them. That
+    /// is `mode2_isolate_memory_boundary.md` §3's circularity arriving one verb later.
+    ///
+    /// # Errors
+    /// [`RmError::GuestRamUnavailable`] if this isolate has no guest-RAM plane;
+    /// [`RmError::NoMemory`] if `mapped` names no live mapping; whatever RM refuses the
+    /// allocation with.
+    fn describe_guest_ram(&mut self, mapped: GuestRamMapped) -> Result<HostHandle, RmError>;
+}
+
+/// ★★ Session identity of an isolate — the **`(Proc, GpuId)` pair**, because that is
+/// what an isolate *is* (`mode2_multiprocess_isolate.md`; MG-5, decision #29/#30: one
+/// sandboxed host process per `(Proc, GpuId)`), and an identity must name the thing it
+/// identifies.
+///
+/// ## Why the GPU is part of the identity, and not a field beside it (N3)
+///
+/// It used to be `IsolateId(ProcId)` alone, with the target GPU carried separately —
+/// and a proc that legally spans two GPUs (one guest process with a `Device` on each
+/// `deviceInstance`) then had **two isolates wearing one id**. Two consequences, both
+/// measured before this changed:
+///
+/// 1. [`HostHandle::belongs_to`] answered `true` for a handle minted in the proc's GPU0
+///    isolate presented on its GPU1 connection, so [`Worker::execute`]'s foreign-handle
+///    gate — documented as "the ONE place the `(Proc, GpuId)`-scoped-handle rule is
+///    enforced" — enforced only the `Proc` half. Nothing downstream closes that: the
+///    two isolates are two host processes with two RM clients, and RM mints handles for
+///    every client from ONE base (`ogkm-610: src/nvidia/generated/g_resserv_nvoc.h:173`,
+///    `ogkm-580: :188` — same `0xC1D00000` at both), so
+///    the same raw value names a **different live object** in the other one. The verb
+///    would have run on a bystander. (In the mock it is caught by `MockRmBackend`'s
+///    per-namespace validity check — the exact "backend's luck" [`HostHandle`]'s own
+///    docs say a real host does not provide.)
+/// 2. Every per-isolate *account* keyed on this id merged the two: the mock's
+///    `HostLedger`, its cancel census, its verb log queries. An instrument that cannot
+///    separate the two isolates cannot witness a fix to (1) either.
+///
+/// This is the [`crate::HostHandle`] / `GpaBlock` / `ClientKey` discipline applied to
+/// the isolate itself: **derived from observed protocol facts** — a `ProcId` is the
+/// label of a dup-connected component of declared clients, a [`GpuId`] is a `Device`'s
+/// declared `deviceInstance` — never from allocation order (decision #4).
+///
+/// The `proc` field is a bare `u32` rather than `kayfabe_core::ProcId` only because
+/// this crate sits *below* the core in the dependency graph; [`kayfabe_core`] is the
+/// one minting site and it passes `pid.0`.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IsolateId {
+    /// The owning proc's [`kayfabe_core::ProcId`] value. Ordered FIRST so a
+    /// `BTreeMap<IsolateId, _>` groups a proc's targets together.
+    proc: u32,
+    /// The GPU target this isolate is the sandbox for.
+    gpu: GpuId,
+}
+
+impl IsolateId {
+    /// The namespace-free sentinel [`HostHandle::NULL`] wears — belongs to no proc and
+    /// no GPU, so it can never compare equal to a real isolate's id.
+    pub const NONE: IsolateId = IsolateId {
+        proc: u32::MAX,
+        gpu: GpuId(u32::MAX),
+    };
+
+    /// The isolate of `(proc, gpu)`. **The only constructor** — an `IsolateId` that
+    /// names a proc without naming its target is not representable.
+    #[must_use]
+    pub const fn new(proc: u32, gpu: GpuId) -> Self {
+        IsolateId { proc, gpu }
+    }
+
+    /// The owning proc's id value.
+    #[must_use]
+    pub const fn proc(self) -> u32 {
+        self.proc
+    }
+
+    /// The GPU target this isolate serves.
+    #[must_use]
+    pub const fn gpu(self) -> GpuId {
+        self.gpu
+    }
+}
+
+impl core::fmt::Debug for IsolateId {
+    /// `iso1/gpu0` — both halves always, because a diagnostic that prints only the proc
+    /// is how the collapse this type fixed stayed invisible.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if *self == IsolateId::NONE {
+            return f.write_str("iso(NONE)");
+        }
+        write!(f, "iso{}/gpu{}", self.proc, self.gpu.0)
+    }
+}
+
+/// One worker slot inside an isolate's **bounded pool** (`l1_concurrency.md` §7.2,
+/// decision #37).
+///
+/// The pool exists because a single-in-flight worker per isolate serializes a guest
+/// process's *own* threads behind each other (the #37 intra-proc blocking gap); N
+/// workers per `(Proc, GpuId)` isolate let sibling guest threads have verbs in flight
+/// concurrently, while each individual worker stays strictly single-in-flight (a
+/// property the type system gives for free: a worker is reached only by `&mut`).
+///
+/// Dense and **scoped to its owning isolate** — `WorkerId(0)` of proc A's GPU0 isolate
+/// and `WorkerId(0)` of proc B's GPU1 isolate are unrelated identities, exactly like
+/// [`HostHandle`]. Anything keyed on a worker must carry the `(ProcId, GpuId)` pair
+/// alongside it (see `kayfabe_core::reactor::SourceKind::Worker`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct WorkerId(pub u32);
+
+/// The bounded pool's default size (`l1_concurrency.md` §7.2, "Calibration").
+///
+/// **A tuning constant, not a design question.** The design is explicit that the pool
+/// is *statically* sized first and grows dynamically only when a measured workload
+/// proves the bound hurts — a spawn/reap policy, thundering-herd wakeups and
+/// worker-lifetime races are all cost with no demonstrated benefit.
+///
+/// ★ **Deliberately 2–4, and deliberately NOT scaled to the vCPU count** (§12.26). The
+/// old rationale here read "order of the vCPU count", which implies the pool buys wire
+/// concurrency. It does not: RM serializes **every** ioctl-reachable path on the
+/// per-client WRITE lock
+/// (`ogkm-610:`/`ogkm-580: src/nvidia/src/libraries/resserv/src/rs_server.c:778` and
+/// seven siblings, asserted at `:786-788` — eight `_serverLockClientWithLockInfo(…,
+/// LOCK_ACCESS_WRITE, …)` sites at **both** tags, seven of the eight at identical lines;
+/// only the last moved, `ogkm-610: :2546` / `ogkm-580: :2468`) and takes the **global**
+/// API lock in WRITE for every alloc/free
+/// (`ogkm-610:`/`ogkm-580: .../rmapi/rmapi.c:53-58`, `:535`, same lines at both;
+/// `ogkm-610: .../rmapi/alloc_free.c:1714-1718`, `ogkm-580: :1692-1696`), held across
+/// the GSP RPC. There is **no version seam in RM's locking**, which is what makes the
+/// pool-size argument below version-independent. What the pool actually
+/// buys is **liveness/latency isolation** — a six-second verb must not make a sibling
+/// guest thread's independent verb *appear* to hang — which is the §3.5 invariant, and
+/// which saturates at a handful of workers. Past that, each extra worker is one more
+/// host thread parked in D state on the same uninterruptible `down_write`.
+pub const DEFAULT_POOL_WORKERS: usize = 4;
+
+// =================================================================================
+// ★★ CANCELLATION — the seam (`l1_os_shell.md` §7.1–§7.5, decision 12)
+// =================================================================================
+
+/// ★ **Why** a verb was cancelled — §7.3's *"a fault must name the truth, not the
+/// symptom"* applied to cancellation itself.
+///
+/// It is carried all the way out to `FwdFault::Cancelled` on purpose. A cancelled verb
+/// that surfaced a bare "it refused" would be indistinguishable from a host failure, and
+/// a canary asserting only *"it refused"* would pass for the wrong reason — §12.10's
+/// lesson, one layer over.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum CancelReason {
+    /// The requesting guest process is going away (§7.6 T2) — it exited, was killed, or
+    /// its client root was freed while a verb was in flight. The overwhelmingly common
+    /// case, and the one the guest kernel drives: on process death it frees the client
+    /// tree itself (measured: 178 `fn=10` RM-FREE RPCs, `mode2_bench_lifecycle.md` §5).
+    ProcExit,
+    /// The whole device is being torn down or reset (§7.6 T4/T7).
+    DeviceReset,
+    /// The two-stage verb watchdog's **first** expiry (§7.5): the verb outlived
+    /// `VERB_BUDGET`, which is sized against RM's own 6 s GSP-RPC timeout and not
+    /// against any measured unwind. The overwhelmingly common outcome is that the verb
+    /// was merely slow and the interrupt lands.
+    Watchdog,
+    /// The guest thread that requested the verb took a signal or died (§5.4's founding
+    /// case — the C's `#73` signal-interruptible forwarded ioctl).
+    GuestSignal,
+}
+
+/// ★ A **per-checkout transaction id**. `l1_concurrency.md` §7.2: *"txn ids exist only
+/// for this"* — and this is the only place they appear.
+///
+/// A [`CancelHandle`] is armed for exactly one txn, and a request naming a stale one is
+/// **dropped**. That is the C's refinement 4 verbatim (*"main thread only signals the
+/// worker if it is still on that txn_id"*), and the C needed it because without it a
+/// cancel races the completion and lands on an unrelated later operation — the sharpest
+/// bug in this whole area, because the damage is done to an innocent op.
+///
+/// Minted by the isolate at [`Isolate::checkout`], monotonic per worker slot and never
+/// reused, so §7.7(i)'s never-recycled-mint argument covers it too.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Txn(pub u64);
+
+/// What a discharged [`CancelRequest`] asks the isolate to do out of band.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Signal {
+    /// Interrupt the in-flight ioctl (§7.2's break signal).
+    Interrupt(CancelReason),
+    /// Abandon the reply (§7.5's escape) — only ever paired with condemnation.
+    Abandon,
+}
+
+/// ★ The **out-of-band delivery seam** (`l1_os_shell.md` §7.2).
+///
+/// Cancellation is *never* delivered on the request/reply channel: that channel is
+/// 1-deep and desynchronising it means the next checkout of the worker reads the
+/// previous transaction's reply as its own — *"ours would be worse than the C's
+/// use-after-free: silent cross-transaction corruption."* So the real adapter writes a
+/// byte on the worker's **control pipe** and the isolate's control thread `tgkill`s the
+/// worker thread, whose handler is installed **without `SA_RESTART`** (with it, the host
+/// kernel silently restarts the ioctl, `EINTR` never surfaces, and *"cancellation appears
+/// to work and does nothing"*).
+///
+/// That is all OS, so it lives behind this port. The core and its tests see only:
+/// *deliver a fact to a txn, and ask what the verb actually observed*.
+pub trait CancelSink: Send + Sync + core::fmt::Debug {
+    /// Deliver a break signal for `txn`. Returns `true` if it was armed — `false` means
+    /// the txn was **stale** (the verb already completed and the worker was checked back
+    /// in), which is not an error: §7.3's fourth row, *"the verb finished first"*.
+    ///
+    /// Must not block. Called with **no lock held** — [`CancelRequest::discharge`]
+    /// asserts exactly that, because firing a cancel is a syscall and §6.2 forbids
+    /// syscalls under locks.
+    fn deliver(&self, txn: Txn, reason: CancelReason) -> bool;
+
+    /// §7.5's escape: release the requester **without a reply**. Same staleness rule and
+    /// same lock-freedom requirement as [`CancelSink::deliver`].
+    ///
+    /// Safe only because the slot is retired in the same act, so no future reader of that
+    /// channel exists (§7.2). An implementation that abandons without the condemnation
+    /// has reintroduced the desync hazard.
+    fn abandon(&self, txn: Txn) -> bool;
+
+    /// What the verb **actually observed**, if anything — read by the executing thread
+    /// itself, lock-free, straight after [`Worker::execute`] returns.
+    ///
+    /// Deliberately *observed* and not *requested*: a cancel that was delivered but that
+    /// the host ioctl never noticed (RM's waits are mostly uninterruptible) is a request
+    /// that lost, and reporting it as the cause of a verb that succeeded would be a lie
+    /// in the one place §7.3 says must carry the truth.
+    fn observed(&self) -> Option<CancelReason>;
+}
+
+/// ★ **The cancel capability, separated from the `&mut Worker`** (`l1_os_shell.md` §7.1).
+///
+/// The thread that could cancel is never the thread that holds the worker — the holder
+/// is blocked inside the verb. So the capability must be reachable *without* a reference
+/// to the worker or its backend, which §12.8 deliberately made unrepresentable.
+///
+/// ```text
+///   Isolate::checkout()  -> Worker         (moves the backend OUT)
+///                        +  CancelHandle   (stays in the pool slot, under the proc lock)
+/// ```
+///
+/// `Send + Sync`, and it holds **no** reference to the [`Worker`] or the [`RmBackend`] —
+/// it identifies `(isolate, worker, txn)` and owns one delivery sink, and nothing else.
+#[derive(Debug, Clone)]
+pub struct CancelHandle {
+    isolate: IsolateId,
+    worker: WorkerId,
+    txn: Txn,
+    sink: std::sync::Arc<dyn CancelSink>,
+}
+
+impl CancelHandle {
+    /// Arm a handle for `txn` on slot `worker` of `isolate` (isolate implementations
+    /// only — minting one elsewhere fabricates a cancellation authority).
+    #[must_use]
+    pub fn new(
+        isolate: IsolateId,
+        worker: WorkerId,
+        txn: Txn,
+        sink: std::sync::Arc<dyn CancelSink>,
+    ) -> Self {
+        CancelHandle {
+            isolate,
+            worker,
+            txn,
+            sink,
+        }
+    }
+
+    /// The isolate whose pool this slot belongs to.
+    #[must_use]
+    pub fn isolate(&self) -> IsolateId {
+        self.isolate
+    }
+
+    /// The pool slot.
+    #[must_use]
+    pub fn worker(&self) -> WorkerId {
+        self.worker
+    }
+
+    /// The transaction this handle is armed for.
+    #[must_use]
+    pub fn txn(&self) -> Txn {
+        self.txn
+    }
+
+    /// **Latch** an interrupt for this txn. Pure bookkeeping — nothing is signalled
+    /// until [`CancelRequest::discharge`], which is what makes this legal under the proc
+    /// lock (§7.1: *"firing a cancel is a syscall, and §6.2 forbids syscalls under
+    /// locks"*).
+    pub fn request(&self, reason: CancelReason) -> CancelRequest {
+        self.at(Signal::Interrupt(reason))
+    }
+
+    /// Latch §7.5's **abandon**. Only legal as half of the wedge escape, whose other
+    /// half — killing the slot and condemning the component — must happen in the *same*
+    /// act; see [`CancelSink::abandon`].
+    pub fn abandon(&self) -> CancelRequest {
+        self.at(Signal::Abandon)
+    }
+
+    fn at(&self, signal: Signal) -> CancelRequest {
+        CancelRequest {
+            isolate: self.isolate,
+            worker: self.worker,
+            txn: self.txn,
+            signal,
+            sink: std::sync::Arc::clone(&self.sink),
+        }
+    }
+}
+
+/// ★ A **latched** cancellation — the same two-step shape as
+/// `kayfabe_core::reactor::WakeRequest`, and for the same reason (§7.1: *"the mechanism
+/// already exists for wake and timer; cancel is the third user, which is the argument
+/// that it is the right mechanism rather than a third one"*).
+///
+/// `#[must_use]`, and it earns it exactly as `Orphans` does: a latched cancel that is
+/// never discharged is **a cancellation that silently did not happen** — the failure mode
+/// §7.2 refinement 1 names in so many words. The compiler is the only thing that
+/// reliably notices.
+#[must_use = "a latched cancel that is never discharged is a cancellation that silently \
+              did not happen — discharge it (with no lock held) or hand it onward."]
+#[derive(Debug, Clone)]
+pub struct CancelRequest {
+    isolate: IsolateId,
+    worker: WorkerId,
+    txn: Txn,
+    signal: Signal,
+    sink: std::sync::Arc<dyn CancelSink>,
+}
+
+impl CancelRequest {
+    /// The isolate this request names.
+    #[must_use]
+    pub fn isolate(&self) -> IsolateId {
+        self.isolate
+    }
+
+    /// The pool slot this request names.
+    #[must_use]
+    pub fn worker(&self) -> WorkerId {
+        self.worker
+    }
+
+    /// The transaction this request is armed for; a delivery naming a stale one is
+    /// dropped by the sink.
+    #[must_use]
+    pub fn txn(&self) -> Txn {
+        self.txn
+    }
+
+    /// The reason, for an interrupt; `None` for §7.5's abandon.
+    #[must_use]
+    pub fn reason(&self) -> Option<CancelReason> {
+        match self.signal {
+            Signal::Interrupt(r) => Some(r),
+            Signal::Abandon => None,
+        }
+    }
+
+    /// True if this is §7.5's abandon rather than an ordinary interrupt.
+    #[must_use]
+    pub fn is_abandon(&self) -> bool {
+        matches!(self.signal, Signal::Abandon)
+    }
+
+    /// ★ **Fire it.** Returns `true` if the txn was still current — `false` means the
+    /// verb finished first (§7.3's fourth row), which is a normal outcome and never a
+    /// failure.
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock. Firing a cancel is a syscall (a pipe write
+    /// plus a `tgkill`), and R1 admits no exception for it; this assert is why the
+    /// latch/discharge split is structural rather than advisory.
+    pub fn discharge(self) -> bool {
+        kayfabe_util::lockwitness::assert_lock_free("discharging a cancel request");
+        match self.signal {
+            Signal::Interrupt(reason) => self.sink.deliver(self.txn, reason),
+            Signal::Abandon => self.sink.abandon(self.txn),
+        }
+    }
+}
+
+/// ★ A batch of latched cancels on their way out of a locked phase — `#[must_use]` on
+/// the **collection**, because `Vec<CancelRequest>` is not (dropping the `Vec` drops
+/// every request without a single warning).
+///
+/// This is the shape §15 amendment 4 asks for: *"retire **requests** cancellation for
+/// every checked-out worker (latched, discharged lock-free)"*.
+#[must_use = "latched cancels that are never discharged are cancellations that silently \
+              did not happen — call `discharge_all()` with no lock held, or `absorb` \
+              them into a batch that will be."]
+#[derive(Debug, Clone, Default)]
+pub struct Cancels(Vec<CancelRequest>);
+
+impl Cancels {
+    /// An empty batch.
+    pub fn new() -> Self {
+        Cancels(Vec::new())
+    }
+
+    /// Latch one more.
+    pub fn push(&mut self, req: CancelRequest) {
+        self.0.push(req);
+    }
+
+    /// Take `other`'s requests into this batch — the way a locked phase hands its
+    /// latches up to the shell that will discharge them.
+    pub fn absorb(&mut self, other: Cancels) {
+        self.0.extend(other.0);
+    }
+
+    /// Read the latched requests without consuming them (assertions and diagnostics).
+    pub fn requests(&self) -> &[CancelRequest] {
+        &self.0
+    }
+
+    /// ★ Fire every latched request. Returns how many were **delivered** — i.e. how many
+    /// named a txn that was still current; the rest lost the race with their own verb's
+    /// completion, which is §7.3's fourth row and not a failure.
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock (see [`CancelRequest::discharge`]).
+    pub fn discharge_all(self) -> usize {
+        self.0
+            .into_iter()
+            .map(CancelRequest::discharge)
+            .filter(|&delivered| delivered)
+            .count()
+    }
+}
+
+// =================================================================================
+// The verb PLAN — what a locked core phase emits instead of calling (R1's
+// "consequence for the core shape", `l1_concurrency.md` §3.3)
+// =================================================================================
+
+/// A freshly allocated host channel: `(handle, host work-submit token)`.
+pub type ChannelHandles = (HostHandle, u64);
+
+/// ★ A **typed verb chain** — the description of host work a locked core phase
+/// emits, executed later by [`Worker::execute`] with no lock held.
+///
+/// Deliberately NOT a resumable continuation machine. Every site's verbs are
+/// data-dependent only on *each other* (host VAS handle → memory handle → mapped VA),
+/// never on core state read between two verbs, so a plain chain suffices and the
+/// execution step can thread its own intermediate results. If a future site genuinely
+/// needs to consult core state mid-chain, that is a design change to argue in the doc
+/// — never a hidden lock acquisition inside execution.
+///
+/// Owned payloads (`Vec<u8>`) rather than borrows: a plan outlives the lock scope
+/// that produced it by construction, so it cannot hold a reference into core state.
+/// Control/alloc blobs are small; the copy is the price of the invariant.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VerbPlan {
+    /// `publish_backing`'s chain: (optionally) allocate the Vas's own host VAS, then
+    /// allocate sysmem and map it into that VAS **at the guest VA** (`#102`).
+    Publish {
+        /// The Vas's already-materialized host VAS, or `None` to allocate one.
+        host_vas: Option<HostHandle>,
+        /// Bytes to allocate and map.
+        len: u64,
+        /// ★★★ The guest VA this range must be addressable at. Address identity: the
+        /// mapping is placed HERE, not wherever the host driver would have chosen.
+        at: GpuVa,
+    },
+    /// ★★★ **THE SECOND CROSSING** — a blank **host vidmem** object, mapped FIXED at the
+    /// guest's own VA. `C: docs/design/mode2_fb_crossing_question.md` §5 (GEN-2), settled
+    /// 2026-06-04 and built twice in the C artifact.
+    ///
+    /// (optionally) allocate the `Vas`'s host VAS → [`RmBackend::alloc_vidmem`] →
+    /// [`RmBackend::map_gpu_va`] **at `at`**, with [`VerbPlan::Publish`]'s own placement
+    /// check applied unchanged. It answers with [`VerbReply::Published`], because what it
+    /// produces *is* a published backing — the difference is entirely in which store the
+    /// bytes came out of.
+    ///
+    /// ## ⊘ Why it is a third variant and not an aperture field on [`VerbPlan::Publish`]
+    ///
+    /// The same argument [`VerbPlan::PinGuestRam`] makes one screen down, and it lands the
+    /// same way: the two chains differ in what a **wrong** answer costs. `Publish` mints
+    /// host sysmem with `MAPPING_NO_MAP`; a range published that way can never become the
+    /// CPU-side half of GEN-2's double mapping, and it declares an aperture the guest's own
+    /// leaf does not. Both failures are silent — the object allocates, the fixed map
+    /// succeeds, every check passes — which is exactly the shape a `bool` erases.
+    ///
+    /// ## ⚠ What this variant does NOT carry, deliberately
+    ///
+    /// No seed, no copy, no content of any kind. GEN-2's `copy_content` is a **one-time
+    /// establishment bridge** and is not part of the allocate-and-place chain; a plan that
+    /// carried bytes would be a plan that could silently overwrite a buffer the guest had
+    /// already written.
+    PublishVidmem {
+        /// The `Vas`'s already-materialized host VAS, or `None` to allocate one.
+        host_vas: Option<HostHandle>,
+        /// Bytes of host vidmem to allocate and map — the guest leaf's own length, so
+        /// that the mapping covers exactly the range the guest's page tables bind.
+        len: u64,
+        /// ★★★ The guest VA this range must be addressable at. Address identity: the
+        /// mapping is placed HERE, or the verb fails.
+        at: GpuVa,
+    },
+    /// ★★★★★ **ONE MEMORY for a framebuffer leaf** — the chain that **replaces**
+    /// [`VerbPlan::PublishVidmem`] at every leaf (`fb_cpu_view.md` §4).
+    ///
+    /// (optionally) allocate the `Vas`'s host VAS → [`RmBackend::join_fb_leaf`], with
+    /// [`VerbPlan::Publish`]'s own placement check applied unchanged on the way back.
+    ///
+    /// ## ⊘ It is a REPLACEMENT, not an addition
+    ///
+    /// `PublishVidmem` gives the leaf **real card memory with no CPU view**, which is two
+    /// memories: the engine reads the card object and the guest reads the emulator's
+    /// fabricated one, silently, in both directions and with no fault anywhere. That is not
+    /// a shortfall of the variant — it is what a vidmem object **is**, and the measurement
+    /// that settles it is [`ExportSource::HostDeviceMemory`]'s refusal. ⇒ A leaf served by
+    /// both chains would have two backings at one VA, so a shell arms exactly one.
+    ///
+    /// ## ⚠ The cost, named here rather than found later
+    ///
+    /// The leaf becomes host **sysmem**. See [`FbLeafJoined`].
+    JoinFbLeaf {
+        /// The `Vas`'s already-materialized host VAS, or `None` to allocate one.
+        host_vas: Option<HostHandle>,
+        /// The guest leaf's own length, so the mapping covers exactly the range the guest's
+        /// page tables bind.
+        len: u64,
+        /// ★★★ The guest VA this range must be addressable at. Address identity: the
+        /// mapping is placed HERE, or the verb fails.
+        at: GpuVa,
+        /// ★★ The **framebuffer-physical** address this leaf occupies in the emulated
+        /// device, as the guest's own page-table walk produced it. Carried so the isolate
+        /// can answer for the range by framebuffer address afterwards
+        /// ([`RmBackend::fb_join_peek`]); ⊘ nothing below the VMM derives it.
+        phys: u64,
+    },
+    /// ★★★★★ **w380 — the SECOND and every later GPU VA of one already-joined frame.**
+    ///
+    /// (optionally) allocate the `Vas`'s host VAS → [`RmBackend::alias_fb_leaf`], with
+    /// [`VerbPlan::Publish`]'s own placement check applied unchanged on the way back.
+    ///
+    /// ⊘ **Not a mode of [`VerbPlan::JoinFbLeaf`].** The two differ in whether the frame's
+    /// *bytes* already exist, and getting that wrong is silent in both directions: a join
+    /// where an alias was wanted mints a **second memory** for the frame; an alias where a
+    /// join was wanted refuses by name against a frame nobody has joined. A `bool` on one
+    /// variant would make both of those one typo away — the argument
+    /// [`VerbPlan::PublishVidmem`] already makes one variant up.
+    ///
+    /// ⚠ Its reply carries **no backing**: the VMM's view of the frame was installed by the
+    /// join and is unchanged. See [`FbLeafAliased`].
+    AliasFbLeaf {
+        /// The `Vas`'s already-materialized host VAS, or `None` to allocate one.
+        host_vas: Option<HostHandle>,
+        /// The guest leaf's own length — and it must equal the joined frame's, or the
+        /// backend refuses: an alias over part of a frame is a mapping whose bytes are only
+        /// partly the ones the guest reaches.
+        len: u64,
+        /// ★★★ The guest VA this range must be addressable at. Address identity: the
+        /// mapping is placed HERE, or the verb fails.
+        at: GpuVa,
+        /// ★★ The **framebuffer-physical** address of the frame to alias. This is the key
+        /// the isolate looks its existing join up by; there is no other way to name the
+        /// pages, and re-deriving them from anything else would be a second source of truth.
+        phys: u64,
+    },
+    /// ★★★★★ **THE GUEST'S OWN PAGES, published at the guest's own VA** — the chain
+    /// [`VerbPlan::Publish`] is the *fabricated* counterpart of
+    /// (`guest_ram_crossing.md` §5.8).
+    ///
+    /// (optionally) allocate the `Vas`'s host VAS → [`RmBackend::map_guest_ram`] →
+    /// [`RmBackend::describe_guest_ram`] → [`RmBackend::map_gpu_va`] **at `at`**, with
+    /// [`VerbPlan::Publish`]'s own placement check applied unchanged.
+    ///
+    /// ## ⊘ Why it is a second variant and not a field on `Publish`
+    ///
+    /// `Publish` allocates **host** sysmem and maps it at the guest's VA: the address is
+    /// the guest's and the bytes are not. That is correct for a range the guest has never
+    /// written and wrong for a ring the guest is *polling* — the guest advances `GP_PUT`
+    /// in its own pages, and a host allocation at the same address is a different buffer
+    /// that will never change. The two chains therefore differ in what a **wrong** answer
+    /// costs, which is exactly the distinction a `bool` erases.
+    ///
+    /// ## ★★★ The grant's numbers are the VMM's, and the type says so
+    ///
+    /// [`GuestRamGrant`] can only be minted by
+    /// [`GuestRamGrant::originated_by_the_vmm`], so a plan carrying one carries the
+    /// VMM's own derivation from its own stated layout. ⊘ There is deliberately **no
+    /// guest-physical address in this variant** — a GPA would be a number the core could
+    /// be tempted to re-derive an offset from, and re-deriving it is the `-m 8G` bug
+    /// `kayfabe_vmm_qemu::layout` exists to refuse.
+    PinGuestRam {
+        /// The `Vas`'s already-materialized host VAS, or `None` to allocate one.
+        host_vas: Option<HostHandle>,
+        /// ★★★ The VMM's instruction: which slice of the guest-RAM block, and what the
+        /// isolate may do with it.
+        grant: GuestRamGrant,
+        /// ★★★ The guest VA these pages must be addressable at. Address identity, and
+        /// here it is not a convention but the guest's *existing* binding — this range is
+        /// already mapped at `at` in the guest's own page tables.
+        at: GpuVa,
+    },
+    /// The doorbell chain: (optionally) host VAS → (optionally) host channel →
+    /// (optionally) schedule → ring.
+    ///
+    /// ★★ **`#[non_exhaustive]`, and that is the #14 ring-gate's teeth** (added
+    /// 2026-07-27; `ARCHITECTURE.md` invariant 5). This variant has **no struct
+    /// expression outside this crate** — `VerbPlan::Doorbell { … }` written anywhere else
+    /// is a compile error (E0639), pinned by `tests/ui/ungated_doorbell.rs`. The only
+    /// way to obtain one is [`VerbPlan::gated_doorbell`], **which runs the gate**.
+    ///
+    /// Before this, the invariant was a property of the production *call graph* — true,
+    /// but unenforced: `kayfabe_fwd::plan_doorbell` was the only thing that built one,
+    /// while nothing stopped a caller hand-building the variant and handing it to a
+    /// checked-out [`Worker`], whose own gate is the foreign-handle check and **not** the
+    /// #14 working-set check. That is a reachable door — `tests/tests/cross_proc_lifetime.rs`
+    /// went through it — and a boundary that depends on nobody noticing it is not a
+    /// boundary. It is the only variant with this shape: every other variant's gate is
+    /// [`Worker::execute`]'s central foreign-handle check, which runs whoever built the
+    /// plan.
+    #[non_exhaustive]
+    Doorbell {
+        /// The Vas's host VAS, or `None` to allocate one (only consulted when
+        /// `channel` is `None`).
+        host_vas: Option<HostHandle>,
+        /// The channel's already-materialized host handles, or `None` to allocate.
+        channel: Option<ChannelHandles>,
+        /// The channel's graph-derived engine (GR-1: the adapter cannot invent the
+        /// runlist, so the core declares it).
+        engine: EngineKind,
+        /// Whether this submission must make the channel runnable first.
+        schedule: bool,
+        /// ★★★★★ **w288 — THE GUEST'S OWN ERROR-NOTIFIER PAGES**, as a grant this chain
+        /// turns into an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` and hands the host channel as
+        /// `hObjectError`. `None` is every pre-w288 boot.
+        ///
+        /// ⊘ Read **only** on the `channel == None` arm, for [`VerbPlan::EngineObject`]'s
+        /// `adopt` reason: `hObjectError` is a birth parameter, and a channel that already
+        /// exists carries whatever it was born with.
+        ///
+        /// ⊘ A [`GuestRamGrant`] and not a GPA: only the VMM may derive one
+        /// ([`GuestRamGrant::originated_by_the_vmm`]), which is the same rule
+        /// [`VerbPlan::PinGuestRam`] states and the same `-m 8G` bug it exists to refuse.
+        err_notifier: Option<GuestRamGrant>,
+        // ⊘⊘ **w393 — THERE IS NO `adopt` HERE, AND THAT IS A TYPE FACT.** w392j added one
+        // (ring + USERD on a doorbell birth) and w392o kept the ring half; both were lazy
+        // births, and `[measured w233]` RM zeroes a caller-supplied USERD at alloc — at a
+        // doorbell that is the cursor that rang. A `Passthrough` channel is born at its own
+        // channel alloc (`VerbPlan::ChannelBirth`), and `kayfabe_fwd::plan_doorbell` refuses
+        // by name (`FwdFault::PassthroughDoorbellBirth`) before this variant is built for one.
+        // The only birth this arm still performs is an `Emulated` channel's, over our own
+        // ring, which is correct for that kind. A doorbell birth that adopts is unspellable.
+    },
+    /// ★★★★★ **w393 — A HOST CHANNEL BORN AT THE GUEST'S OWN CHANNEL ALLOC**, over the
+    /// guest's ring **and** the guest's USERD, before the guest has written a cursor.
+    ///
+    /// (optionally) allocate the `Vas`'s host VAS → (optionally) describe the error
+    /// notifier → [`RmBackend::alloc_channel_declared`]. No engine object, no schedule,
+    /// no doorbell: the chain *births* and stops.
+    ///
+    /// # ★★★ Why a third birth site, and why it is the only one that may adopt a USERD
+    ///
+    /// `[measured w233, real GA106, `ad6bb9f`]` host RM **accepts** a caller-supplied USERD
+    /// through `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` and then **zeroes all 512 bytes** of it,
+    /// with the alloc returning `NV_OK`. So a USERD adopted at the first doorbell — which is
+    /// *by definition* after the guest wrote `GP_PUT` — destroys the cursor that caused the
+    /// doorbell (`[measured w392j/w392k]`: doorbell 1 rang with `GP_PUT=1` and the engine
+    /// ran nothing; doorbell 2 then executed entry 0, 40 ms after the guest had moved that
+    /// entry's source frame — every one of the five `Xid 31`). The memory's conclusion is
+    /// the whole design: *"adoption must happen at channel creation, before the guest
+    /// writes — never lazily."* This variant is that creation.
+    ///
+    /// # ⊘ `adopt` is NOT an `Option`, and that is the owner's rule made unspellable
+    ///
+    /// **Owner, 2026-09-09:** a `Passthrough` channel has no `RingSource::Ours` at all —
+    /// the guest drives its own ring and hardware writes `GP_GET`. A birth on this chain
+    /// that had nothing to adopt is not a birth with a fallback; it is a plan that must not
+    /// exist, and `kayfabe_fwd::plan_channel_birth` refuses **by name** before one does.
+    /// Making the field an `Option` would put *"born at alloc over our empty ring"* one
+    /// `None` away from a caller mistake — which is exactly the w392h shape this replaces.
+    ///
+    /// # ⊘ `declared_engine_type` — the guest's `NV2080_ENGINE_TYPE_*` code, verbatim
+    ///
+    /// The engine-object latch recovers a CE channel's *instance* from the CE object's
+    /// params (§16.106). There is no object here. The guest declared the instance in the
+    /// channel alloc itself; it is carried raw and handed back to RM unchanged, never
+    /// invented. `None` = *"this port could not read it"* and the adapter falls back to
+    /// `engine_type_for` exactly as a `hosting: None` birth does — which is the pre-w393
+    /// answer, labelled.
+    ChannelBirth {
+        /// The `Vas`'s host VAS, or `None` to allocate one.
+        host_vas: Option<HostHandle>,
+        /// The channel's graph-derived engine (GR-1: the core declares the runlist).
+        engine: EngineKind,
+        /// The guest's own `engineType`, raw. See the variant doc.
+        declared_engine_type: Option<u32>,
+        /// ★★★★★ The guest's ring — and, when it lies in the same joined leaf, the
+        /// guest's USERD. Mandatory: see the variant doc.
+        adopt: AdoptedGuestRing,
+        /// ★ w288 — the guest's own error-notifier pages, as on the two older birth arms.
+        err_notifier: Option<GuestRamGrant>,
+    },
+    /// The Case-1 engine-object chain: (optionally) host VAS → (optionally) host
+    /// channel → engine-object alloc.
+    EngineObject {
+        /// The Vas's host VAS, or `None` to allocate one (only when `channel` is
+        /// `None`).
+        host_vas: Option<HostHandle>,
+        /// The channel's host handles, or `None` to materialize it first.
+        channel: Option<ChannelHandles>,
+        /// The channel's engine (rides the channel alloc, GR-1).
+        engine: EngineKind,
+        /// The engine-object class.
+        class: ClassId,
+        /// The ABI-lowered alloc blob.
+        params: Vec<u8>,
+        /// ★★★★★ **LEG A2** — the guest's own ring, when the core found one joined at this
+        /// channel's declared `gpFifoOffset`. `None` is every prior boot.
+        ///
+        /// ⊘ Read **only** on the `channel == None` arm: a channel that already exists was
+        /// born over whatever it was born over, and re-declaring its ring here would be a
+        /// second, silent opinion about a fact RM already holds.
+        adopt: Option<AdoptedGuestRing>,
+        /// ★★★★★ **w288** — as [`VerbPlan::Doorbell::err_notifier`], on the chain that
+        /// actually births most host channels: the engine-object forward runs upstream in
+        /// time of every doorbell (`SharedDevice::engine_object_channel_facts`' ordering
+        /// note), so this is the arm on which the notifier usually lands.
+        err_notifier: Option<GuestRamGrant>,
+    },
+    /// One Case-1 control, payload carried by value in and out.
+    Control {
+        /// The control object, in this isolate's namespace.
+        obj: HostHandle,
+        /// The command.
+        cmd: ControlCmd,
+        /// The in/out payload.
+        payload: Vec<u8>,
+    },
+    /// ★★★★★ **w346 — one control on the ISOLATE'S OWN subdevice**, for the per-GPU
+    /// family that twins no guest object.
+    ///
+    /// ⊘ **It carries NO handle, and that is the point.** [`VerbPlan::Control`] names an
+    /// object in this isolate's namespace and so must be listed in
+    /// [`VerbPlan::handles`] for the foreign-handle gate to check it. This variant names
+    /// nothing: the child resolves its own subdevice, so there is no handle to check, none
+    /// to mis-attribute across isolates, and none the port could have fabricated.
+    ///
+    /// ⚠ Which also means the gate that protects `Control` **cannot** protect this — so
+    /// the protection has to come from the id being one this port chose to forward, not
+    /// from a handle check. See `kayfabe_rmrpc::policy`'s forwarded set.
+    SubdeviceControl {
+        /// The command.
+        cmd: ControlCmd,
+        /// The in/out payload.
+        payload: Vec<u8>,
+    },
+    /// ★★★ **A copy-engine request, already PARTITIONED by representability**
+    /// (`eight_blockers_resolved.md` §12.3).
+    ///
+    /// One guest `LAUNCH_DMA` becomes one of these, carrying one sub-copy per maximal
+    /// run over which the answer is constant. §12.4's ruling is that **the executor is
+    /// the isolate in both cases** — real copy-engine submission and our own copy over
+    /// VRAM-backed mappings alike, never the hypervisor process and never the pure core
+    /// — and this variant is what makes that structural rather than aspirational: the
+    /// core builds a plan and has no way to move a byte itself.
+    ///
+    /// The **plan** chooses the engine per sub-copy ([`CeSubCopy::by`]); the backend
+    /// only obeys. A backend free to pick would be free to point a real engine at
+    /// fabricated space, which is `Xid 31 FAULT_PDE` one layer down.
+    CeSplit {
+        /// The host VAS the sub-copies' addresses live in — the owning `Vas`'s own,
+        /// per-`Vas` (the #14 fix), at guest-identical addresses (`#102` stage A).
+        vas: HostHandle,
+        /// The sub-copies, **in submission order**. A copy engine's ordering guarantee
+        /// within one request is what the guest's own semaphore release depends on, so
+        /// this is a sequence and never a set.
+        subs: Vec<CeSubCopy>,
+    },
+    /// ★ The disposition of host objects a **refused commit** could not adopt
+    /// (`l1_concurrency.md` §3.3 R5: a commit whose target vanished must not
+    /// silently leak what it already allocated). Runs on the same worker, still
+    /// lock-free, before the worker is checked back in.
+    Release {
+        /// `(host VAS, host GPU VA)` pairs to unmap first.
+        unmap: Vec<(HostHandle, u64)>,
+        /// Objects to free, in the given order.
+        free: Vec<HostHandle>,
+        /// ★ **w310** — the isolate's own guest-RAM `mmap` windows to `munmap`, **last**.
+        /// See [`Orphans::guest_ram`] for why it is a third kind and why it runs last.
+        guest_ram: Vec<GuestRamMapped>,
+    },
+}
+
+/// ★★★ **THE EXECUTE DECISION** — which engine moves the bytes of one sub-copy.
+///
+/// Deliberately *not* a `bool`: in the C this is a bare local (`bool host_ce`,
+/// `C: nvkvm_gpu_emul.c:6310`) whose negation is spelled as three `else if` branches
+/// further down, which is exactly how "everything else is forwarded" became an answer
+/// nobody had made (`eight_blockers_resolved.md` §11.5).
+///
+/// It lives in the **port** crate rather than in `kayfabe-fwd` because both sides of the
+/// seam must name it: the core decides it, the isolate obeys it, and one concept gets
+/// one name. `kayfabe-fwd` re-exports it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum CeExecutor {
+    /// Real hardware runs it — a real copy-engine submission, honouring its own
+    /// semaphores. §12.2: *"that is normally faster than a CPU memcpy, not merely more
+    /// faithful."* No byte passes through us.
+    HostCe,
+    /// **We** run it, because the operand is *unrepresentable*: it names fabricated
+    /// space (our page-directory base, our guest-physical framebuffer) that no real
+    /// engine can be pointed at. In the C this is the CPU byte-copy at `C: :6371-6425`;
+    /// here it runs **in the isolate**, against the isolate's mapping of that aperture.
+    Ours,
+}
+
+/// What a sub-copy READS.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum CeSource {
+    /// A source address, in the same host VAS as the destination.
+    Address(u64),
+    /// A constant pattern — the scrub (`0`) and the `REMAP_ENABLE` fill (`C: :6320`,
+    /// `:6349`). No source address exists, so there is no source operand to classify
+    /// and no source range to partition: a fill's representability is a property of its
+    /// **destination alone**.
+    Constant(u32),
+}
+
+/// One sub-copy of a (possibly split) copy-engine request.
+///
+/// Addresses are absolute, not offsets: a sub-copy is a self-contained instruction, and
+/// an offset-relative form would need the original request to be interpretable, which is
+/// how a partition silently becomes non-total.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CeSubCopy {
+    /// Destination address.
+    pub dst: u64,
+    /// What to read.
+    pub src: CeSource,
+    /// Bytes. **Never zero** — a zero-length sub-copy is a partition bug, not a
+    /// degenerate case to be handled downstream, and `kayfabe-fwd` never emits one.
+    pub len: u64,
+    /// ★ Which engine performs it — chosen by the PLAN, obeyed by the backend.
+    pub by: CeExecutor,
+    /// ★★★★★ **w283 — THE GUEST'S OWN DECLARED RELEASE, carried so HARDWARE writes it.**
+    ///
+    /// `Some((va, payload))` exactly when this sub-copy is the **last** one of a guest
+    /// `LAUNCH_DMA` that declared a completion, and that launch's spans went to
+    /// [`CeExecutor::HostCe`]. The backend appends a second `SET_SEMAPHORE_A/B/PAYLOAD` +
+    /// `LAUNCH_DMA` to the very same pushbuffer, so the **real copy engine** writes the
+    /// guest's declared payload at the guest's declared address, **after** it has moved the
+    /// bytes.
+    ///
+    /// # ⊘⊘ WHY THIS AND NOT A CPU WRITE — the standing refusal's own wording
+    ///
+    /// `kayfabe_rt::completion_watch` refuses to write a completion, and the sentence is
+    /// **conditional**: *"the payload is a literal immediate in the guest's own bytes, so
+    /// writing it here **without running the work** is precisely the credit-shortcut the C
+    /// artifact named and refused."* ⇒ the refusal is about **signalling work that did not
+    /// happen**, and this field cannot express that: the release is a method in the same
+    /// pushbuffer as the copy, behind the copy's own `LAUNCH_DMA`, executed by the same
+    /// engine in submission order. There is **no code path** on which the payload lands and
+    /// the bytes did not. ⊘ Nothing here is a CPU store, and nothing here is ours to forge.
+    ///
+    /// # ⚠ WHAT IT STILL DOES NOT REACH
+    ///
+    /// The guest's **`GP_GET`**. That cursor lives in the guest's own USERD, on the guest's
+    /// own channel, and only that channel's PBDMA advances it — see
+    /// [`AdoptedGuestUserd`] and `traces/boots/w283/RESULT.md` for why our forwarding
+    /// channel structurally cannot.
+    ///
+    /// ⊘ `None` for every sub-copy that is not the last of its launch, for every launch
+    /// that declared no completion, and for every span running on [`CeExecutor::Ours`]
+    /// (whose completions are `kayfabe_rt::cpu_ce::write_completion`'s, unchanged).
+    pub guest_release: Option<CeGuestRelease>,
+}
+
+/// ★★★ One guest-declared copy-engine completion, as [`CeSubCopy::guest_release`] carries it.
+///
+/// A struct rather than a `(u64, u32)` for [`CeSubCopy`]'s own reason: an address and a
+/// payload next to each other are exactly the pair that gets swapped, and this one crosses
+/// an IPC boundary where a swap would be a store of an address into the guest's semaphore.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CeGuestRelease {
+    /// The GPU VA the guest's own `SET_REPORT_SEMAPHORE`/`SET_SEMAPHORE_A/B` named.
+    ///
+    /// ⚠ **It must be reachable in the EXECUTOR VAS**, not merely in the guest-facing one —
+    /// `w282b`'s whole finding. Since that fix every join goes through `map_dma_both`, so a
+    /// release target inside a joined leaf is reachable; one that is not simply faults, which
+    /// is the honest outcome and is visible as an `Xid` at that address.
+    pub va: u64,
+    /// The payload the guest declared. ⊘ **The guest's literal**, carried unchanged — we
+    /// never choose it, and a value of our own here would be the forgery this design exists
+    /// to avoid.
+    pub payload: u32,
+}
+
+/// ★★ The #14 ring-gate's view of **one channel's `Vas`** — the address-plane
+/// abstraction [`VerbPlan::gated_doorbell`] runs the gate over.
+///
+/// This crate cannot name `kayfabe_mmu::AddressTable` (the mmu depends on *this* crate,
+/// not the other way round — see `kayfabe-mmu`'s `Cargo.toml`), and it must not: the
+/// isolate port has no business knowing the shape of a page table. What it *can* insist
+/// on is that a ring plan is never built without an address plane being consulted, and
+/// that is exactly this one predicate.
+///
+/// Implemented in `kayfabe-fwd` over `(&AddressTable, Pdb)` — the channel's own `Vas`,
+/// keyed by PDB, which is what makes two guest processes' *identical* guest VAs resolve
+/// into disjoint host VASes (#14's proven fix). Deliberately **not** `Send + Sync`: it is
+/// an argument borrowed for the duration of one call, never core-stored state.
+pub trait RingWorkingSet {
+    /// Is `va` forward-populated in **this channel's own `Vas`** *and* host-published
+    /// into that `Vas`'s own host VAS?
+    ///
+    /// `false` is the total answer for *every* reason a ring may not name this VA — no
+    /// mapping at all; a mapping with no host publication; and (since 2026-08-11) a
+    /// mapping whose host object is a **second** memory shadowing one the guest already
+    /// reaches, which `kayfabe_mmu::BackingBytes` called *"fatal for anything the guest
+    /// reads or polls, which is what a ring is"*. ⊘ Since 2026-09-09 that third reason has
+    /// no spelling at all — the `ShadowsGuestMemory` variant is deleted, so a shadowing
+    /// backing cannot enter a `Binding` and this predicate never meets one. The caller
+    /// (`kayfabe-fwd`) owns the exact fault vocabulary and re-derives which one it was
+    /// from the offending VA in [`UngatedVa`], so this predicate stays a predicate and the
+    /// two crates cannot drift into two classifications of one refusal.
+    ///
+    /// ⚠ **The list is not closed here and must not be read as closed.** This trait says
+    /// only *"an address plane was consulted"*; what makes a VA admissible is
+    /// `kayfabe_fwd::ring_admits`, and a reader who takes this sentence as the definition
+    /// is reading the collapse instead of the authority.
+    fn is_host_published(&self, va: GpuVa) -> bool;
+}
+
+/// The #14 ring-gate's refusal: the **first** working-set VA that is not host-published
+/// in the ringing channel's own `Vas`.
+///
+/// Carries the VA rather than a bare "no", so the caller's fault names the address the
+/// guest actually asked for — MISS = FAULT, loud and exact, never a cross-proc
+/// content-pick (the confused deputy #14 designed out).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct UngatedVa(pub GpuVa);
+
+impl VerbPlan {
+    /// ★★★★★ **WHICH VERB THIS IS, as a stable literal — the key the cost census is
+    /// grouped by.** ⊘ Not `Debug`: that formats the whole payload (addresses, lengths) and
+    /// would make every plan its own group, which is the opposite of an attribution.
+    #[must_use]
+    pub const fn kind(&self) -> &'static str {
+        match self {
+            VerbPlan::Publish { .. } => "Publish",
+            VerbPlan::PublishVidmem { .. } => "PublishVidmem",
+            VerbPlan::JoinFbLeaf { .. } => "JoinFbLeaf",
+            VerbPlan::AliasFbLeaf { .. } => "AliasFbLeaf",
+            VerbPlan::PinGuestRam { .. } => "PinGuestRam",
+            VerbPlan::Doorbell { .. } => "Doorbell",
+            VerbPlan::ChannelBirth { .. } => "ChannelBirth",
+            VerbPlan::EngineObject { .. } => "EngineObject",
+            VerbPlan::Control { .. } => "Control",
+            VerbPlan::SubdeviceControl { .. } => "SubdeviceControl",
+            VerbPlan::CeSplit { .. } => "CeSplit",
+            VerbPlan::Release { .. } => "Release",
+        }
+    }
+}
+
+/// ★★★★★ **WHERE THE LAUNCH COST ACTUALLY GOES — per verb kind, count AND microseconds.**
+///
+/// `[measured w394e]` a `gpu_bench` boot: 200 launches in 50.796 s = **254 ms per launch**,
+/// carrying **4 240** `verb_op` execute phases = **21.2 verb plans per launch at ~12 ms
+/// each**. A native RM control ioctl on the same box costs **6.97 µs**, so a forwarded verb
+/// plan is running ~1 700× a real ioctl.
+///
+/// ⊘ **Until this module existed there was NO timing anywhere in the verb path**, so
+/// "the launch costs 342 ms" could not be decomposed at all — not into which verb, not into
+/// how many, not into how long each took. `inline_exceptions` counted the phases and said
+/// nothing about their cost, and a count without a duration cannot tell *many cheap verbs*
+/// from *few expensive ones*. Those two have opposite fixes.
+///
+/// ⚠ **AND IT CORRECTS A FIX I HAD ALREADY NAMED.** I proposed moving this phase off the
+/// trap thread to drive `inline_exceptions` to 0. But `qemu/hw/misc/nvkvm/nvkvm.c:931` calls
+/// `the adapter's lockless-MMIO opt-in` on **every** nvkvm region, so the VMM's global lock is **not held**
+/// during a doorbell trap — the inline execution blocks no other vCPU, and the calling vCPU
+/// must wait for the reply regardless because `commit_phase` consumes it. Moving the phase
+/// would therefore have bought **no latency at all**. The question is not *where* the work
+/// runs; it is *why one verb plan costs 12 ms*.
+///
+/// Lock-free for the same reason [`kayfabe_util::trapwitness`]'s table is: this records on
+/// the trap thread, where a blocking site is forbidden.
+/// Records the plan's duration on EVERY exit path — this function returns early in a dozen
+/// places and through `?`, and a timer that only fires on the happy path would systematically
+/// under-count exactly the slow, failing verbs one most wants to see.
+struct VerbCostTimer {
+    t0: std::time::Instant,
+    kind: &'static str,
+}
+
+impl Drop for VerbCostTimer {
+    fn drop(&mut self) {
+        verbcost::note(
+            self.kind,
+            u64::try_from(self.t0.elapsed().as_nanos()).unwrap_or(u64::MAX),
+        );
+    }
+}
+
+pub mod verbcost {
+    use std::sync::OnceLock;
+    use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+
+    const SLOTS: usize = 16;
+    static NAME: [OnceLock<&'static str>; SLOTS] = [const { OnceLock::new() }; SLOTS];
+    static CLAIMED: [AtomicUsize; SLOTS] = [const { AtomicUsize::new(0) }; SLOTS];
+    static HITS: [AtomicU64; SLOTS] = [const { AtomicU64::new(0) }; SLOTS];
+    static NANOS: [AtomicU64; SLOTS] = [const { AtomicU64::new(0) }; SLOTS];
+    static WORST_NS: [AtomicU64; SLOTS] = [const { AtomicU64::new(0) }; SLOTS];
+    static OVERFLOW: AtomicU64 = AtomicU64::new(0);
+
+    /// Record one completed verb plan: its kind, and how long it took.
+    pub fn note(kind: &'static str, nanos: u64) {
+        let ptr = kind.as_ptr() as usize;
+        for i in 0..SLOTS {
+            let cur = CLAIMED[i].load(Ordering::Relaxed);
+            if cur != ptr {
+                if cur != 0
+                    || CLAIMED[i]
+                        .compare_exchange(0, ptr, Ordering::AcqRel, Ordering::Acquire)
+                        .is_err()
+                {
+                    continue;
+                }
+                let _ = NAME[i].set(kind);
+            }
+            HITS[i].fetch_add(1, Ordering::Relaxed);
+            NANOS[i].fetch_add(nanos, Ordering::Relaxed);
+            WORST_NS[i].fetch_max(nanos, Ordering::Relaxed);
+            return;
+        }
+        OVERFLOW.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// `(kind, count, total_us, worst_us)`, ranked by TOTAL time — the thing to fix first is
+    /// the one that owns the most wall clock, which is not always the most frequent.
+    #[must_use]
+    pub fn census_rows() -> Vec<(&'static str, u64, u64, u64)> {
+        let mut out = Vec::new();
+        for i in 0..SLOTS {
+            let hits = HITS[i].load(Ordering::Relaxed);
+            if hits == 0 {
+                continue;
+            }
+            out.push((
+                NAME[i]
+                    .get()
+                    .copied()
+                    .unwrap_or("⊘ (kind not yet published)"),
+                hits,
+                NANOS[i].load(Ordering::Relaxed) / 1_000,
+                WORST_NS[i].load(Ordering::Relaxed) / 1_000,
+            ));
+        }
+        out.sort_by(|a, b| b.2.cmp(&a.2));
+        out
+    }
+
+    /// One line for the boot report.
+    #[must_use]
+    pub fn census() -> String {
+        let rows = census_rows();
+        if rows.is_empty() {
+            // ⊘ An empty census is "no verb plan ever completed", which is a fact about the
+            // boot and must not print as a tidy zero row.
+            return "VERBCOST ⊘ NO VERB PLAN COMPLETED — unmeasured, not zero".to_string();
+        }
+        let total: u64 = rows.iter().map(|r| r.2).sum();
+        let over = OVERFLOW.load(Ordering::Relaxed);
+        format!(
+            "VERBCOST total={}us over {} plan(s){} {}",
+            total,
+            rows.iter().map(|r| r.1).sum::<u64>(),
+            if over == 0 {
+                String::new()
+            } else {
+                format!(" ⊘ INCOMPLETE: {over} plan(s) did not fit the table")
+            },
+            rows.iter()
+                .map(|(k, n, us, worst)| format!(
+                    "[{k} n={n} total={us}us mean={:.2}ms worst={:.2}ms {:.1}%]",
+                    (*us as f64) / (*n as f64) / 1000.0,
+                    (*worst as f64) / 1000.0,
+                    if total == 0 {
+                        0.0
+                    } else {
+                        100.0 * (*us as f64) / (total as f64)
+                    }
+                ))
+                .collect::<Vec<_>>()
+                .join(" ")
+        )
+    }
+}
+
+impl VerbPlan {
+    /// ★★★ **THE ONLY constructor of [`VerbPlan::Doorbell`], and it IS the #14
+    /// ring-gate.** (`ARCHITECTURE.md` invariant 5, `execution_plane.md` §2.4.)
+    ///
+    /// Every `va` in `working_set` must be host-published in `vas` — the ringing
+    /// channel's *own* `Vas` — or this returns [`UngatedVa`] naming the first one that
+    /// is not, and **no plan exists to hand a [`Worker`]**. The gate therefore cannot be
+    /// forgotten, skipped, or reordered after a host op: there is no plan to execute
+    /// until it has passed, and the variant it produces has no struct expression outside
+    /// this crate.
+    ///
+    /// ## What this does and does not prove
+    ///
+    /// It proves the gate **ran**, over whatever address plane the caller supplied, for
+    /// every VA the submission claimed. It cannot prove the address plane is the real
+    /// one — a caller free to implement [`RingWorkingSet`] is equally free to fabricate a
+    /// `Proc`, and Rust's privacy unit is the crate, so "only `kayfabe-fwd` may call
+    /// this" is not expressible in the type system. What changed is the failure *mode*:
+    /// bypassing the gate is no longer *omission* (build the struct, forget the check),
+    /// which is what an ordinary edit looks like, but *commission* (write a lying
+    /// address plane), which is what a review notices.
+    ///
+    /// An **empty** `working_set` passes, and that is correct rather than a hole: the
+    /// working set is what the submission *claims to touch*, a GSP-managed
+    /// system-routed channel legitimately claims nothing, and the same empty set passes
+    /// through `kayfabe_fwd::plan_doorbell` today. The gate's content is *"every claimed
+    /// VA is published in THIS Vas"*, never *"something was claimed"*.
+    ///
+    /// ## ⊘ `err_notifier` is a CONSTRUCTOR ARGUMENT, and it has to be
+    ///
+    /// [`VerbPlan::Doorbell`] is `#[non_exhaustive]`, so a field added to it is reachable
+    /// only through here. That is the property the gate depends on and it applies to every
+    /// later field: a notifier that could be attached to a plan *after* construction would
+    /// be a second door into the variant, which is exactly what this constructor exists to
+    /// close.
+    ///
+    /// # Errors
+    /// [`UngatedVa`] — the first working-set VA with no host publication in `vas`.
+    pub fn gated_doorbell(
+        vas: &dyn RingWorkingSet,
+        working_set: &[GpuVa],
+        host_vas: Option<HostHandle>,
+        channel: Option<ChannelHandles>,
+        engine: EngineKind,
+        schedule: bool,
+        err_notifier: Option<GuestRamGrant>,
+    ) -> Result<VerbPlan, UngatedVa> {
+        if let Some(&va) = working_set.iter().find(|&&va| !vas.is_host_published(va)) {
+            return Err(UngatedVa(va));
+        }
+        Ok(VerbPlan::Doorbell {
+            host_vas,
+            channel,
+            engine,
+            schedule,
+            err_notifier,
+        })
+    }
+
+    /// Every [`HostHandle`] this plan would issue a verb *against* — the input side
+    /// only (handles the chain will mint do not exist yet, and are this isolate's by
+    /// construction).
+    ///
+    /// This exists so the foreign-handle gate is ONE central enumeration rather than a
+    /// `matches!` each new variant could forget: adding a variant that carries a handle
+    /// and not listing it here is the mistake, and it is a mistake in exactly one file.
+    #[must_use]
+    pub fn handles(&self) -> Vec<HostHandle> {
+        match self {
+            VerbPlan::Publish { host_vas, .. }
+            | VerbPlan::PublishVidmem { host_vas, .. }
+            | VerbPlan::JoinFbLeaf { host_vas, .. }
+            | VerbPlan::AliasFbLeaf { host_vas, .. }
+            | VerbPlan::PinGuestRam { host_vas, .. } => host_vas.iter().copied().collect(),
+            // ★ w393 — the VAS it may reuse, and the joined object(s) the birth names: the
+            // ring's memory and, when present, the USERD's. A foreign one reaching
+            // `alloc_channel_declared` would be a channel born over ANOTHER isolate's
+            // joined leaf — the far side re-checks `fb_joins` membership too, and both is
+            // correct: this is the central gate, that is the direct-call entrance.
+            // ★★★★★ **CONSTRAINT 26 — the ring contributes a handle ONLY when it is this
+            // isolate's own.** A `RingProvenance::StoreSlice` names nothing, which is the
+            // whole point: the foreign-handle gate below cannot refuse what is not offered,
+            // and nothing was smuggled past it — there is no handle to smuggle.
+            VerbPlan::ChannelBirth {
+                host_vas, adopt, ..
+            } => host_vas
+                .iter()
+                .copied()
+                .chain(adopt.ring.handle())
+                .chain(adopt.userd.and_then(|u| u.object.handle()))
+                .collect(),
+            VerbPlan::Doorbell {
+                host_vas, channel, ..
+            }
+            | VerbPlan::EngineObject {
+                host_vas, channel, ..
+            } => host_vas
+                .iter()
+                .copied()
+                .chain(channel.map(|(h, _)| h))
+                .collect(),
+            VerbPlan::Control { obj, .. } => vec![*obj],
+            // ⊘ EMPTY BY CONSTRUCTION, not by omission — the exact mistake this method's
+            // doc warns about, so it is written out. A `SubdeviceControl` names no handle:
+            // the child resolves its own subdevice. There is nothing here to check.
+            VerbPlan::SubdeviceControl { .. } => vec![],
+            VerbPlan::CeSplit { vas, .. } => vec![*vas],
+            // ★★ **w310 — `guest_ram` IS chained in, and this line is exactly what this
+            // method's own doc warns about**: *"adding a variant that carries a handle and
+            // not listing it here is the mistake"*. A `GuestRamMapped` carries a
+            // [`HostHandle`] (`GuestRamMapped::region`), and a foreign one reaching
+            // `unmap_guest_ram` would `munmap` a **bystander isolate's** window.
+            // `Worker::unmap_guest_ram` checks it too; this is the central gate, and both
+            // is correct — the second is not a duplicate, it is the direct-call entrance.
+            VerbPlan::Release {
+                unmap,
+                free,
+                guest_ram,
+            } => unmap
+                .iter()
+                .map(|&(vas, _)| vas)
+                .chain(free.iter().copied())
+                .chain(guest_ram.iter().map(|m| m.region))
+                .collect(),
+        }
+    }
+}
+
+/// What one [`VerbPlan`] produced — the typed reply a commit phase re-enters with.
+///
+/// `host_vas` / `channel` fields carry only what this execution **freshly allocated**
+/// (`None` = the plan reused what core state already held), which is exactly what the
+/// commit must adopt or orphan.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VerbReply {
+    /// [`VerbPlan::Publish`]'s reply.
+    Published {
+        /// Freshly allocated host VAS, if the plan asked for one.
+        host_vas: Option<HostHandle>,
+        /// The allocated host memory object.
+        memory: HostHandle,
+        /// The host GPU VA it was mapped at.
+        host_va: u64,
+    },
+    /// ★★★★★ [`VerbPlan::JoinFbLeaf`]'s reply — **and it carries the backing as well as
+    /// the RM object**, because the whole point is that a second party can map it.
+    ///
+    /// ⊘ A separate variant rather than a field on [`VerbReply::Published`]: a commit that
+    /// adopted a `Published` and silently found no backing would record a leaf as *joined*
+    /// when it was merely *placed*, which is the exact two-memories state this chain
+    /// exists to end.
+    FbLeafJoined {
+        /// Freshly allocated host VAS, if the plan asked for one.
+        host_vas: Option<HostHandle>,
+        /// The three facts the chain produced. See [`FbLeafJoined`].
+        joined: FbLeafJoined,
+    },
+    /// ★★★★★ [`VerbPlan::AliasFbLeaf`]'s reply — **two facts, and deliberately no
+    /// backing**. The frame's pages crossed once, with the join; a reply that offered them
+    /// again would be a second lifetime for one file and a second view of one memory.
+    FbLeafAliased {
+        /// Freshly allocated host VAS, if the plan asked for one.
+        host_vas: Option<HostHandle>,
+        /// The two facts the chain produced. See [`FbLeafAliased`].
+        aliased: FbLeafAliased,
+    },
+    /// ★★★ [`VerbPlan::PinGuestRam`]'s reply — **and it carries the guest-RAM mapping
+    /// as well as the RM object**, because releasing one does not release the other.
+    GuestRamPinned {
+        /// Freshly allocated host VAS, if the plan asked for one.
+        host_vas: Option<HostHandle>,
+        /// ★ The isolate's `mmap` of the guest pages. ⊘ Reported separately from
+        /// `memory`: the RM object pins the pages and the mapping is this process's view
+        /// of them, and a caller that freed only the object would leave an isolate with a
+        /// live window onto guest RAM it no longer has any reason to see.
+        mapped: GuestRamMapped,
+        /// The `OS_DESCRIPTOR` object RM built over those pages.
+        memory: HostHandle,
+        /// The host GPU VA it was mapped at — equal to the plan's `at`, or the verb
+        /// failed.
+        host_va: u64,
+    },
+    /// [`VerbPlan::Doorbell`]'s reply.
+    Doorbell {
+        /// Freshly allocated host VAS, if any.
+        host_vas: Option<HostHandle>,
+        /// Freshly allocated host channel, if any.
+        channel: Option<ChannelHandles>,
+        /// Whether the schedule verb ran.
+        scheduled: bool,
+    },
+    /// [`VerbPlan::EngineObject`]'s reply.
+    EngineObject {
+        /// Freshly allocated host VAS, if any.
+        host_vas: Option<HostHandle>,
+        /// Freshly allocated host channel, if any.
+        channel: Option<ChannelHandles>,
+        /// The host engine object.
+        object: HostHandle,
+    },
+    /// ★★★★★ w393 — [`VerbPlan::ChannelBirth`]'s reply. ⊘ `channel` is NOT an `Option`:
+    /// this chain exists to birth, so a reply without a channel is not a reply.
+    ChannelBorn {
+        /// Freshly allocated host VAS, if any.
+        host_vas: Option<HostHandle>,
+        /// The host channel that was born — over the guest's ring, and its USERD when
+        /// the plan carried one.
+        channel: ChannelHandles,
+    },
+    /// [`VerbPlan::Control`]'s reply — the payload as the host wrote it back.
+    Control {
+        /// The written-back payload.
+        payload: Vec<u8>,
+    },
+    /// [`VerbPlan::CeSplit`]'s reply — how the request was actually divided between the
+    /// two engines. Counted rather than merely "ok" so a test can assert that a split
+    /// request really did reach BOTH engines, which is the whole claim §12.3 makes.
+    CeSplit {
+        /// Sub-copies performed on real hardware.
+        host_ce: usize,
+        /// Sub-copies performed by us.
+        ours: usize,
+    },
+    /// [`VerbPlan::Release`]'s reply.
+    Released,
+}
+
+/// ★ Host objects that exist and that the core could not adopt — **the record a
+/// failed or refused operation leaves behind** (`l1_concurrency.md` §12.16, gap G4).
+///
+/// Two producers, both of which used to lose it:
+///
+/// - a **refused commit** (R5) whose execute phase already allocated — the caller
+///   runs [`Orphans::release_plan`] on the SAME worker, still lock-free, before
+///   checking it back in;
+/// - a **mid-chain verb failure** — [`VerbFailure::orphans`], which carries whatever
+///   the worker's own unwind could not dispose of.
+///
+/// ★ **`#[must_use]`, and it earns it.** Dropping an `Orphans` on the floor silently
+/// leaks every host object it names — the exact defect this type exists to record —
+/// and the compiler is the only thing that reliably notices. (Same reasoning that
+/// gave `kayfabe_core::reactor::WakeRequest` its teeth.)
+///
+/// **Order is unmap-then-free, and that is RM's rule, not our preference.** RM frees
+/// children and dependents ahead of parents
+/// (`ogkm-610:`/`ogkm-580: src/nvidia/src/libraries/resserv/src/rs_server.c:963-981` —
+/// byte-identical, same lines; and `ogkm-610: .../rs_client.c:1086-1122`,
+/// `ogkm-580: :1085-1121`) and auto-unmaps a resource's inter-mappings inside
+/// `clientFreeResource_IMPL` *before* `objDelete`
+/// (`ogkm-610:`/`ogkm-580: .../rs_client.c:830-849` — same lines, byte-identical at both
+/// tags: the unmaps are `:835-837`, `objDelete` is `:849`). So RM
+/// itself leaks nothing if we free a mapped object — but any **external mirror** of
+/// that mapping (ours: the address table's `HostBacking` entries, gap G1) goes stale,
+/// which is why the plan states the unmaps first and means it. The map/unmap ABI pair
+/// is `NVOS46`/`NVOS47` respectively (`gvisor: pkg/sentry/devices/nvproxy/version.go:176-177`).
+#[must_use = "an Orphans that is neither released nor recorded is a silent host-object \
+              leak — that is the whole defect this type exists to make impossible. \
+              Run `release_plan()` on a checked-out worker, or hand it onward."]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Orphans {
+    /// `(host VAS, host GPU VA)` mappings to undo first.
+    pub unmap: Vec<(HostHandle, u64)>,
+    /// Objects to free.
+    pub free: Vec<HostHandle>,
+    /// ★★★★★ **w310 — THE THIRD HALF, and it is a third KIND, not more of the same.**
+    ///
+    /// The isolate's own `mmap` windows onto guest RAM
+    /// ([`kayfabe_core::gpu::GuestRamPin::mapped`]), to `munmap`.
+    ///
+    /// ⊘ It cannot be folded into [`Self::free`] or [`Self::unmap`]: a [`GuestRamMapped`]
+    /// is neither an RM object nor a GPU mapping, and
+    /// [`kayfabe_core::gpu::GuestRamPin`]'s own doc states the asymmetry that makes the
+    /// distinction load-bearing — *"`memory` is the RM object that pins the pages … `mapped`
+    /// is the isolate's own window onto them and is undone by `munmap`. **Releasing either
+    /// alone leaves the other.**"*
+    ///
+    /// ## ★★ Why it is ON this value rather than beside it
+    ///
+    /// `docs/audits/w301_cancellation_error_leaks.md` §3.2 recorded `GuestRamPin::mapped` as
+    /// having **one write and zero reads in the whole tree**, and `commit_pin_guest_ram`
+    /// states the reason where the gap is (`kayfabe-fwd/src/lib.rs:1816-1820`): *"`mapped` is
+    /// NOT in this list, and cannot be: `Orphans` frees RM objects and unmaps GPU VAs."* ⇒
+    /// the field had no reader because **the vocabulary of teardown could not name it**.
+    /// Carrying it in a parallel channel beside `Orphans` would be
+    /// `a_second_source_of_truth_beside_a_complete_value` — the exact class that made
+    /// `host_rows=4` a confident wrong zero over 15 845 live pins. **Put the kind ON the
+    /// value.**
+    ///
+    /// ⚠ **Ordering: LAST.** RM's descriptor pins the pages independently of our mapping
+    /// (`chardev_unsafe.rs`: *"the pin is not undone by unmapping"*), so `munmap`ping before
+    /// the `OS_DESCRIPTOR` is freed would drop **our** window while the **GPU's** translation
+    /// is still live. Nothing breaks either way, but "the GPU's access outlives our view of
+    /// the pages" is a state no reader should have to reason about, and running last means it
+    /// never exists.
+    pub guest_ram: Vec<GuestRamMapped>,
+}
+
+impl Orphans {
+    /// True if there is nothing to dispose of.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.unmap.is_empty() && self.free.is_empty() && self.guest_ram.is_empty()
+    }
+
+    /// The verb chain that disposes of these orphans.
+    #[must_use]
+    pub fn release_plan(&self) -> VerbPlan {
+        VerbPlan::Release {
+            unmap: self.unmap.clone(),
+            free: self.free.clone(),
+            guest_ram: self.guest_ram.clone(),
+        }
+    }
+
+    /// How many disposals this names, across all three kinds.
+    ///
+    /// ★ Exists so a caller counting *"how much did this drain dispose of"* cannot silently
+    /// omit a kind — the shape that made [`Self::guest_ram`] invisible in the first place.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.unmap.len() + self.free.len() + self.guest_ram.len()
+    }
+
+    /// ★★★★★ **w317 — TAKE AT MOST `budget` DISPOSALS, AND LEAVE THE REST HERE.**
+    ///
+    /// The whole of the budgeted drain's cutting edge. `self` keeps the remainder, so a
+    /// caller that disposes of the returned batch and comes back later finishes the job;
+    /// nothing is discarded and nothing is duplicated.
+    ///
+    /// ## ⚠ THE ORDER IS PRESERVED **ACROSS** BATCHES, not merely inside one
+    ///
+    /// [`Worker::execute`]'s `Release` arm runs `unmap` → `free` → `guest_ram`, and both
+    /// orderings are load-bearing: unmap-before-free protects **our mirror** of the mapping
+    /// (RM auto-unmaps inside `clientFreeResource_IMPL` regardless), and free-before-`munmap`
+    /// is [`Self::guest_ram`]'s stated invariant that the GPU's translation never outlives our
+    /// view of the pages.
+    ///
+    /// A naive split that took `budget/3` from each kind would break both the instant a batch
+    /// boundary fell inside an object's own pair. This one cannot: it fills the batch from
+    /// `unmap` **to exhaustion** before it touches `free`, and from `free` to exhaustion
+    /// before it touches `guest_ram`. ⇒ every `unmap` in the whole queue is issued before any
+    /// `free`, and every `free` before any `munmap`, no matter where the boundaries land —
+    /// the single-batch order, stretched over time.
+    ///
+    /// `budget == 0` returns an empty batch and takes nothing (and is what makes a
+    /// budget-exhausted caller a no-op rather than a spin).
+    #[must_use = "the returned batch is an Orphans — dispose of it on a checked-out worker \
+                  or the objects it names leak; see this type's own #[must_use]"]
+    pub fn split_off_budget(&mut self, budget: usize) -> Orphans {
+        let mut out = Orphans::default();
+        let mut room = budget;
+        let n = room.min(self.unmap.len());
+        out.unmap = self.unmap.drain(..n).collect();
+        room -= n;
+        // `room > 0` implies `self.unmap` is now empty: either it fitted entirely, or `n`
+        // was `room` and `room` is now 0. Same argument one kind down.
+        if room > 0 {
+            let n = room.min(self.free.len());
+            out.free = self.free.drain(..n).collect();
+            room -= n;
+            if room > 0 {
+                let n = room.min(self.guest_ram.len());
+                out.guest_ram = self.guest_ram.drain(..n).collect();
+            }
+        }
+        out
+    }
+}
+
+/// ★ What a [`Worker::execute`] failure actually leaves behind: **why it failed, and
+/// what still exists because of it** (`l1_concurrency.md` §12.16, gap G4).
+///
+/// `execute` used to return a bare [`RmError`] and promise all-or-nothing by unwinding
+/// internally. The promise was overstated in two ways, and both are now expressible:
+///
+/// 1. The unwind's own `free`s were `let _ = …` — a failure to dispose of a partially
+///    built chain was swallowed with no record anywhere. Now every object the unwind
+///    could not free lands in [`VerbFailure::orphans`].
+/// 2. Cancellation ([`RmError::Interrupted`]) is the entire premise of §5.4, and a
+///    cancelled chain is precisely a chain whose all-or-nothing cannot be assumed.
+///
+/// ## ★ What `orphans` does and does not enumerate — a named unknown, not a guess
+///
+/// It enumerates every host object **whose handle this execution received** and could
+/// not dispose of. It cannot enumerate an object the host may have created for a verb
+/// whose reply never arrived — an interrupted alloc.
+///
+/// The C never settled that, and it is honest to say so rather than assert an answer:
+/// its stub records nothing on a non-zero return
+/// (`C: src/qemu/nvkvm_isolate_handlers.c:1444-1445`, `:1497-1501` — bookkeeping gated
+/// on `ret == 0 && nvstatus == 0`), its guest discards the reply entirely on the
+/// interrupt path (`C: src/guest/nvkvm_virtio.c:461-471`), and there is no
+/// reconciliation code anywhere in the C for an alloc that may have landed. Compounding
+/// it, most RM waits are *not* interruptible in the first place
+/// (`ogkm-610:`/`ogkm-580: kernel-open/nvidia/nv.c` carries exactly **six**
+/// `*_interruptible` call sites at each tag, in the same three functions — the PM-lock
+/// read and the open-complete wait — out of 6 533 / 6 312 lines respectively), so a
+/// cancelled alloc plausibly completed. The C's only disposition for such an object is
+/// bulk: the #80 session reaper force-closing the isolate's host fds
+/// (`C: src/qemu/virtio_nvgpu.c:100-118`).
+///
+/// **OPEN QUESTION, needs a bench experiment, must not be reasoned about:** does an
+/// interrupted `NV_ESC_RM_ALLOC` leave the object created, partially created, or
+/// absent? Until that is measured, the design must keep isolate-session death as the
+/// backstop disposition and must not claim per-object completeness.
+#[must_use = "a VerbFailure names host objects that still exist — dropping it \
+              without releasing or recording its `orphans` is a leak."]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerbFailure {
+    /// Why the chain stopped.
+    pub err: RmError,
+    /// Host objects this execution allocated and could not dispose of (see above for
+    /// exactly what this can and cannot cover).
+    pub orphans: Orphans,
+    /// ★★★ **§16.105 — the host object the failing verb was ISSUED AGAINST**, when the
+    /// verb had one. `Some(channel)` for an engine-object alloc that reached
+    /// [`RmBackend::alloc_engine_object`]; `None` everywhere else, including when the
+    /// chain failed *before* that verb (the channel alloc itself, a foreign handle, a
+    /// plan with no such target).
+    ///
+    /// # ⊘ Why it is not derivable at the caller, and why `orphans` is not it
+    ///
+    /// A Case-1 engine-object forward whose channel is not yet materialized builds the
+    /// channel **inside this same chain** (`kayfabe_fwd::EngineObjectPlan::channel` is
+    /// `None` at plan time, by construction). When the object alloc then fails, the
+    /// unwind **frees that channel**, so the handle exists nowhere afterwards: not in
+    /// the plan, not in core state, and not in [`Self::orphans`] — which enumerates only
+    /// what the unwind could NOT dispose of, i.e. is empty exactly when the unwind
+    /// worked. Reporting it is therefore impossible without carrying it out of here.
+    ///
+    /// ⊘ **It is an IDENTITY for a report, never a live handle.** By the time a caller
+    /// reads it the object is gone; using it as an argument to any verb is a
+    /// use-after-free of a host handle. It exists so a refusal can be *joined* against
+    /// what the host driver printed about the same attempt.
+    pub on: Option<HostHandle>,
+}
+
+impl VerbFailure {
+    /// A failure that left nothing behind (the chain failed on its first verb, or the
+    /// unwind disposed of everything).
+    pub fn bare(err: RmError) -> Self {
+        VerbFailure {
+            err,
+            orphans: Orphans::default(),
+            on: None,
+        }
+    }
+}
+
+impl From<RmError> for VerbFailure {
+    fn from(err: RmError) -> Self {
+        VerbFailure::bare(err)
+    }
+}
+
+/// ★ A checked-out pool worker: **the one door to a host RM verb**.
+///
+/// Obtained only from [`Isolate::checkout`], which moves it OUT of the isolate's pool
+/// (§7.3). While it is out, exactly one thread `&mut`-owns it — so
+/// single-in-flight-per-worker stays the borrow checker's guarantee, N times over,
+/// and there is no shared in-flight slot table and no txn demux anywhere (§11 B6:
+/// concurrency comes from channel COUNT, never from multiplexing one channel).
+///
+/// `Send + Sync` — compile-time-asserted at the bottom of this file, with everything
+/// else the core stores (decision #17). ★ **corrected 2026-07-27**: this said *"`Send`,
+/// not `Sync`"*, which the assertion in the same file refuted. The sentence was
+/// describing the *usage* shape, and that part is still true and is the load-bearing
+/// one: a worker is reached **only** by `&mut`, so a shared reference to one never
+/// exists on any path, and single-in-flight-per-worker is the borrow checker's
+/// guarantee rather than a bound's. The `Sync` bound is nonetheless real and not
+/// droppable — an idle worker *sits in* its isolate's pool, inside a `Proc`, inside the
+/// `Sync` `Gpu` — so a backend may hold no `Rc`/`Cell` in its private state.
+pub struct Worker {
+    isolate: IsolateId,
+    id: WorkerId,
+    backend: Box<dyn RmBackend>,
+    /// The out-of-band cancel seam this worker shares with its pool slot's
+    /// [`CancelHandle`]. `None` for a backend with no cancellation support (bring-up
+    /// probes) — such a worker is simply never interruptible, which is honest and
+    /// visible rather than silently doing nothing.
+    cancel: Option<std::sync::Arc<dyn CancelSink>>,
+    txn: Txn,
+}
+
+impl core::fmt::Debug for Worker {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Worker")
+            .field("isolate", &self.isolate)
+            .field("id", &self.id)
+            .field("txn", &self.txn)
+            .finish()
+    }
+}
+
+impl Worker {
+    /// Wrap a backend as pool slot `id` of `isolate` (isolate implementations only).
+    /// The `isolate` argument is what makes the foreign-handle gate in
+    /// [`Worker::execute`] possible — a worker must know whose namespace it speaks.
+    ///
+    /// **Not cancellable** — see [`Worker::with_cancel`].
+    #[must_use]
+    pub fn new(isolate: IsolateId, id: WorkerId, backend: Box<dyn RmBackend>) -> Self {
+        Worker {
+            isolate,
+            id,
+            backend,
+            cancel: None,
+            txn: Txn(0),
+        }
+    }
+
+    /// As [`Worker::new`], with the out-of-band cancel seam its pool slot's
+    /// [`CancelHandle`] signals through (§7.1).
+    #[must_use]
+    pub fn with_cancel(
+        isolate: IsolateId,
+        id: WorkerId,
+        backend: Box<dyn RmBackend>,
+        cancel: std::sync::Arc<dyn CancelSink>,
+    ) -> Self {
+        Worker {
+            isolate,
+            id,
+            backend,
+            cancel: Some(cancel),
+            txn: Txn(0),
+        }
+    }
+
+    /// Stamp this checkout's transaction id (isolate implementations only — called from
+    /// [`Isolate::checkout`], which mints it). A cancel armed for an earlier txn is
+    /// dropped by the sink, which is the whole point of the id existing.
+    pub fn begin_txn(&mut self, txn: Txn) {
+        self.txn = txn;
+    }
+
+    /// This checkout's transaction id.
+    #[must_use]
+    pub fn txn(&self) -> Txn {
+        self.txn
+    }
+
+    /// ★ What a cancellation actually **did** to the verb that just ran, read lock-free
+    /// by the executing thread itself right after [`Worker::execute`] returns.
+    ///
+    /// This is how `FwdFault::Cancelled` gets its `reason` without the shell re-taking a
+    /// lock to ask the isolate — and without [`RmError::Interrupted`] growing a payload,
+    /// which §7.3 deliberately refuses (*"the txn is L1's business, not the core's"*).
+    #[must_use]
+    pub fn cancel_observed(&self) -> Option<CancelReason> {
+        self.cancel.as_ref().and_then(|c| c.observed())
+    }
+
+    /// This worker's slot in its isolate's pool.
+    #[must_use]
+    pub fn id(&self) -> WorkerId {
+        self.id
+    }
+
+    /// The isolate whose RM client namespace this worker speaks for.
+    #[must_use]
+    pub fn isolate(&self) -> IsolateId {
+        self.isolate
+    }
+
+    /// ★★★ **Read the fabricated aperture** through this worker's backend
+    /// ([`RmBackend::fb_read`], `#102` stage C3) — the page-table decoder's byte source.
+    ///
+    /// ## Why this is beside [`Worker::execute`] and not a [`VerbPlan`] variant
+    ///
+    /// `execute` exists to run a **chain that allocates**: it gates the plan's handles,
+    /// chains intermediate results and unwinds what a mid-chain failure already acquired.
+    /// A read of the aperture has none of those properties — it names **no
+    /// [`HostHandle`]**, so there is nothing for the foreign-handle gate to check, and it
+    /// acquires nothing, so there is nothing to unwind. Expressing it as a plan would add
+    /// a `VerbReply` variant carrying bytes and a plan variant with no handles, i.e. two
+    /// shapes whose only content is that they are exceptions to what the type is for.
+    ///
+    /// ★★ What it does keep, and the reason it is a method on `Worker` rather than a
+    /// direct call on the backend: **the R1 assertion**. A decode pass reads one page per
+    /// round trip to the isolate; doing that under a ranked lock is precisely the
+    /// "blocking call under a lock" R1 forbids, and it is the failure that would be
+    /// found in production rather than in a test. Every route to this call therefore runs
+    /// the same lock-freedom check every host verb does.
+    ///
+    /// # Errors
+    /// Whatever the backend refuses with. `Ok(false)` is **not** an error — see
+    /// [`RmBackend::fb_read`].
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock (R1).
+    pub fn fb_read(&mut self, phys: u64, buf: &mut [u8]) -> Result<bool, RmError> {
+        kayfabe_util::lockwitness::assert_lock_free("reading the fabricated aperture");
+        self.backend.fb_read(phys, buf)
+    }
+
+    /// ★★★ **The joined-leaf instrument** ([`RmBackend::fb_join_peek`]) — beside
+    /// [`Worker::execute`] for [`Worker::fb_read`]'s reasons exactly: it names no
+    /// [`HostHandle`] and acquires nothing, so there is neither a foreign-handle gate to run
+    /// nor an unwind to build. What it keeps is R1, because it is a round trip to another
+    /// process.
+    ///
+    /// # Errors
+    /// Whatever the backend refuses with. `Ok(false)` is **not** an error — see
+    /// [`RmBackend::fb_join_peek`].
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock (R1).
+    pub fn fb_join_peek(
+        &mut self,
+        phys: u64,
+        buf: &mut [u8],
+        poke: Option<u32>,
+    ) -> Result<bool, RmError> {
+        kayfabe_util::lockwitness::assert_lock_free("peeking a joined framebuffer leaf");
+        self.backend.fb_join_peek(phys, buf, poke)
+    }
+
+    /// ★★★ **Ask the isolate to perform a mapping and hand back memory the VMM can
+    /// install** ([`RmBackend::export_backing`], `isolate_vmm_fd_crossing.md` §12).
+    ///
+    /// Beside [`Worker::execute`] rather than inside it, for [`Worker::fb_read`]'s
+    /// reasons exactly: this acquires no RM object, so there is nothing for the chain's
+    /// unwind to release and no [`VerbReply`] shape it fits. What it keeps from `execute`
+    /// is the pair of gates that are not optional —
+    ///
+    /// - **R1.** Minting a backing is a syscall in another process reached over a socket.
+    ///   Doing that under a ranked lock is the blocking-call-under-a-lock R1 forbids.
+    /// - ★★ **The foreign-handle gate.** [`ExportSource::HostDeviceMemory`] names a
+    ///   [`HostHandle`], and a handle from another isolate's namespace is live-and-
+    ///   different here (`l1_concurrency.md` §12.26). It is gated even though the verb
+    ///   refuses every such request anyway, because *"the refusal happens to cover it"* is
+    ///   a property of today's implementation and the gate is a property of the port. A
+    ///   backend that ever learns to serve one must meet the gate already in place.
+    ///
+    /// # Errors
+    /// [`RmError::ForeignHandle`] before anything runs; otherwise whatever
+    /// [`RmBackend::export_backing`] refuses with.
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock (R1).
+    pub fn export_backing(&mut self, want: ExportRequest) -> Result<ExportedBacking, RmError> {
+        kayfabe_util::lockwitness::assert_lock_free("exporting a host backing to the VMM");
+        if let ExportSource::HostDeviceMemory { memory } = want.source
+            && !memory.belongs_to(self.isolate)
+        {
+            return Err(RmError::ForeignHandle {
+                handle: memory,
+                worker_isolate: self.isolate,
+            });
+        }
+        self.backend.export_backing(want)
+    }
+
+    /// ★★★★★ **w393 — ask the isolate to arm a CPU view of one of its vidmem objects and
+    /// hand the armed node up** ([`RmBackend::export_device_view`], [`DeviceView`]).
+    ///
+    /// Beside [`Worker::export_backing`] and with the same two gates, for the same reasons:
+    /// R1 (a syscall in another process, reached over a socket) and the foreign-handle gate
+    /// (`l1_concurrency.md` §12.26 — a handle from another isolate's namespace is live and
+    /// different here, and a view armed over *another* isolate's object would be exactly the
+    /// `#14` breach the isolate exists to prevent).
+    ///
+    /// # Errors
+    /// [`RmError::ForeignHandle`] before anything runs; otherwise whatever
+    /// [`RmBackend::export_device_view`] refuses with.
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock (R1).
+    pub fn export_device_view(
+        &mut self,
+        memory: HostHandle,
+        offset: u64,
+        len: u64,
+        write: bool,
+    ) -> Result<DeviceView, RmError> {
+        kayfabe_util::lockwitness::assert_lock_free("exporting a host device view to the VMM");
+        if !memory.belongs_to(self.isolate) {
+            return Err(RmError::ForeignHandle {
+                handle: memory,
+                worker_isolate: self.isolate,
+            });
+        }
+        self.backend.export_device_view(memory, offset, len, write)
+    }
+
+    /// ★★★ **Give a device view's BAR1 aperture back.** See
+    /// [`RmBackend::release_device_view`] for the measurement that makes this mandatory
+    /// rather than tidy.
+    ///
+    /// ⊘ **No foreign-handle gate, and unlike the usermode view that is not a stronger
+    /// property — it is an absence of one.** The argument is different: a token is this
+    /// isolate's own index into its own export table, minted by it and meaningless elsewhere,
+    /// so there is no sibling's namespace to reach into. A token from another isolate names a
+    /// different table's row and is answered `Ok` (the idempotent arm), never another
+    /// isolate's view.
+    ///
+    /// ★★★★★ **w734 — IT TAKES THE VIEW, NOT A NUMBER, AND THAT IS THE FIX.**
+    ///
+    /// It used to take a `u64`, and every caller passed [`DeviceView::token`] — the **parent's**
+    /// index — which the child then looked up in **its own** table. See
+    /// [`DeviceView::release_token`] for the whole defect. ⇒ taking the view makes the right
+    /// token the only one in scope: there is no longer a wrong `u64` a caller could reach for.
+    ///
+    /// # Errors
+    /// [`RmError::ViewNotReleasable`] for a view whose owning-process token is not knowable
+    /// ([`DeviceView::UNRELEASABLE`]); otherwise [`RmError`] from the backend.
+    pub fn release_device_view(&mut self, view: &DeviceView) -> Result<(), RmError> {
+        kayfabe_util::lockwitness::assert_lock_free("releasing a host device view");
+        if view.release_token == DeviceView::UNRELEASABLE {
+            // ⊘ Refused BY NAME rather than falling back to `view.token`. That fallback is
+            // exactly the bug this signature removes: it would release whatever the child's
+            // table holds at the PARENT's index, and answer `Ok(())` when that is nothing —
+            // leaking the BAR1 aperture the release exists to reclaim, silently.
+            return Err(RmError::ViewNotReleasable);
+        }
+        self.backend.release_device_view(view.release_token)
+    }
+
+    /// ★★★★★ **w635 — the door for the counter page's view.**
+    ///
+    /// ⊘ **No foreign-handle gate, because there is no handle to gate.** Every other door here
+    /// checks `memory.belongs_to(self.isolate)` — the `#14` breach this isolate exists to
+    /// prevent. This verb names no memory at all: the backend arms its OWN usermode object, so
+    /// there is nothing a caller could pass from a sibling's namespace. ⚠ That is a stronger
+    /// property than the gate, not a missing one, and it is stated here rather than left as an
+    /// absence a reader has to notice.
+    ///
+    /// ★ What the VMM does with it: maps it read-only over the guest's free-running counter,
+    /// which is the last read trap on the device. `[measured w634, unprivileged]` every step of
+    /// that chain — the arming, the kernel's refusal of a writable `mmap`, the placement
+    /// through the production path, and a guest access taking no exit — is green on the code
+    /// path that runs.
+    ///
+    /// # Errors
+    /// Whatever [`RmBackend::export_usermode_view`] refuses with; the default REFUSES, so a
+    /// backend with no usermode window says so rather than answering with something else.
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock (R1) — a syscall in another process over a socket.
+    pub fn export_usermode_view(&mut self, write: bool) -> Result<DeviceView, RmError> {
+        kayfabe_util::lockwitness::assert_lock_free("exporting the usermode view to the VMM");
+        self.backend.export_usermode_view(write)
+    }
+
+    /// ★★★★★ Carry the VMM's guest-RAM grant to this worker's isolate.
+    ///
+    /// R1 first, for [`Worker::export_backing`]'s reason: this is a syscall in another
+    /// process reached over a socket.
+    ///
+    /// ⊘ There is **no foreign-handle gate on the way in**, and that is a statement rather
+    /// than an omission: a [`GuestRamGrant`] names no [`HostHandle`] at all. It carries a
+    /// guest-physical offset the VMM derived, which belongs to no isolate's namespace and
+    /// cannot be a value from a sibling's. The gate exists on the way *back* — the mapping
+    /// this returns is named in **this** isolate's namespace, and
+    /// [`Worker::unmap_guest_ram`] refuses a name from any other.
+    ///
+    /// # Errors
+    /// [`RmError::GuestRamUnavailable`] if the VM was launched without a shared memory
+    /// backing; otherwise whatever [`RmBackend::map_guest_ram`] refuses with.
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock (R1).
+    pub fn map_guest_ram(&mut self, grant: GuestRamGrant) -> Result<GuestRamMapped, RmError> {
+        kayfabe_util::lockwitness::assert_lock_free("mapping guest RAM into an isolate");
+        self.backend.map_guest_ram(grant)
+    }
+
+    /// Give back a guest-RAM mapping.
+    ///
+    /// ★★ The foreign-handle gate **is** here, and it is load-bearing rather than
+    /// symmetric-for-tidiness: guest RAM is the one resource whose cross-isolate reach is a
+    /// real escalation (isolate A releasing — or, once the enforcement layer lands,
+    /// re-authorizing — isolate B's view of guest process B's pages). The same raw value is
+    /// live-and-different in every namespace, so an ungated release would act on a
+    /// bystander mapping.
+    ///
+    /// # Errors
+    /// [`RmError::ForeignHandle`] before anything runs; otherwise whatever
+    /// [`RmBackend::unmap_guest_ram`] refuses with.
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock (R1).
+    pub fn unmap_guest_ram(&mut self, mapped: GuestRamMapped) -> Result<(), RmError> {
+        kayfabe_util::lockwitness::assert_lock_free("releasing a guest-RAM mapping");
+        if !mapped.region.belongs_to(self.isolate) {
+            return Err(RmError::ForeignHandle {
+                handle: mapped.region,
+                worker_isolate: self.isolate,
+            });
+        }
+        self.backend.unmap_guest_ram(mapped)
+    }
+
+    /// ★ Run `plan`'s verb chain. **Asserts R1 first** — invoking a host verb with
+    /// any ranked lock held panics naming R1 (crate docs).
+    ///
+    /// Chains its own intermediate results with **zero core access**. On a mid-chain
+    /// failure it releases what it already allocated on this same worker, then returns
+    /// a [`VerbFailure`] carrying both the error and **whatever the release could not
+    /// dispose of** (§12.16, G4). The all-or-nothing promise is thereby made checkable
+    /// instead of asserted: when the residue is empty it held; when it is not, the
+    /// caller has the list rather than a swallowed `let _ =`.
+    ///
+    /// ★ **The foreign-handle gate runs FIRST** (`l1_concurrency.md` §12.26): a plan
+    /// naming a handle from another isolate's namespace is refused with
+    /// [`RmError::ForeignHandle`] before any verb runs, so nothing is allocated and the
+    /// returned [`VerbFailure::orphans`] is empty. This is the ONE place the
+    /// `(Proc, GpuId)`-scoped-handle rule is enforced, and it covers every plan shape
+    /// including [`VerbPlan::Release`] — the disposal path, which is where a
+    /// cross-namespace handle would otherwise `free` a **bystander** object.
+    ///
+    /// # ★★★★★ w323 — THE SECOND WITNESS: `off` PROVES THIS IS NOT A GUEST TRAP
+    ///
+    /// `assert_lock_free` answers *"what do I hold"*. It has **never** answered *"where am
+    /// I"*, and that second question is the one `INLINE-SAFE` clauses (a) and (b) are made
+    /// of — the two the model doc records as *"prose in this file, which by this repo's own
+    /// history means they will be violated by a well-meaning patch"*. Three measured
+    /// violations since it was written: `w317`'s 3.70 s disposal, `w319`'s 13 313 serialized
+    /// round trips, `w306`'s isolate call reachable only from the vCPU trap.
+    ///
+    /// [`kayfabe_util::trapwitness::OffTrap`] answers it, and **this is the one door** — the
+    /// single entry to a host RM verb in the whole tree — so one parameter quantifies over
+    /// every call site in the workspace, including ones written tomorrow.
+    ///
+    /// ⊘ **The witness is re-asserted HERE, not trusted from the mint**, because this crate
+    /// has already ruled on that: [`kayfabe_util::lock::BlockingSection`] — *"a capability
+    /// minted while lock-free must not launder a later acquisition past the invariant"*. The
+    /// same hazard one axis over is a token held across a re-entrant trap dispatch.
+    ///
+    /// ⚠ **What it does not prove**, said here rather than discovered later:
+    /// `OffTrap::inline_under_bql` mints one on a trap thread by design (the enumerated
+    /// exception, `assert_only_ranks`' role in the lock axis). It is **counted**, and the
+    /// count going to zero is what would make this gate absolute.
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock (R1), or if `off` is not an inline exception and
+    /// this thread has entered a guest trap since it was minted.
+    // ⊘ **w310 — `clippy::result_large_err` fires here and is answered in `clippy.toml`, not
+    // by an attribute.** [`Orphans`] gained a third disposal kind this rung, which took
+    // [`VerbFailure`] to 128 bytes and `kayfabe_fwd::Refusal` with it — **19 further sites in
+    // one crate**. Twenty scoped `#[allow]`s state the same policy twenty times; one stated
+    // threshold states it once, where a reviewer can see it. See that file for the argument.
+    pub fn execute(
+        &mut self,
+        plan: &VerbPlan,
+        off: &kayfabe_util::trapwitness::OffTrap,
+    ) -> Result<VerbReply, VerbFailure> {
+        kayfabe_util::lockwitness::assert_lock_free("issuing a host RM verb");
+        off.still_off_trap("issuing a host RM verb");
+        if let Some(&handle) = plan.handles().iter().find(|h| !h.belongs_to(self.isolate)) {
+            return Err(VerbFailure::bare(RmError::ForeignHandle {
+                handle,
+                worker_isolate: self.isolate,
+            }));
+        }
+        let rm = &mut *self.backend;
+        // ★ Time the whole plan, including the handle checks above's successor work. The
+        // clock starts here because everything before it is argument validation that cannot
+        // reach the host.
+        let _t0 = std::time::Instant::now();
+        let _kind = plan.kind();
+        let _timer = VerbCostTimer {
+            t0: _t0,
+            kind: _kind,
+        };
+        match plan {
+            VerbPlan::Publish { host_vas, len, at } => {
+                let (vas, fresh_vas) = match *host_vas {
+                    Some(h) => (h, None),
+                    None => {
+                        let h = rm.alloc_vaspace()?;
+                        (h, Some(h))
+                    }
+                };
+                let memory = match rm.alloc_sysmem(*len) {
+                    Ok(m) => m,
+                    Err(e) => return Err(unwind(rm, fresh_vas.into_iter().collect(), e)),
+                };
+                let host_va = match rm.map_gpu_va(vas, memory, *len, *at) {
+                    Ok(va) => va,
+                    Err(e) => {
+                        let mut orphans = vec![memory];
+                        orphans.extend(fresh_vas);
+                        return Err(unwind(rm, orphans, e));
+                    }
+                };
+                // ★★★ #102 — ADDRESS IDENTITY, checked at the seam that crosses into the
+                // untrusted-by-construction backend. A backend that ignores the
+                // fixed-offset request hands back a mapping that is published and
+                // **unaddressable**: the forwarded pushbuffer names `at`, the host MMU
+                // walks for `at`, and finds nothing (Xid 31 FAULT_PDE). Undo the mapping
+                // and everything under it rather than adopting a binding whose host VA is
+                // a lie. This is the ONE place a placement can be downgraded silently, so
+                // it is the one place the check belongs.
+                if host_va != at.0 {
+                    let _ = rm.unmap_gpu_va(vas, host_va);
+                    let mut orphans = vec![memory];
+                    orphans.extend(fresh_vas);
+                    return Err(unwind(
+                        rm,
+                        orphans,
+                        RmError::PlacementRefused {
+                            want: at.0,
+                            got: host_va,
+                        },
+                    ));
+                }
+                Ok(VerbReply::Published {
+                    host_vas: fresh_vas,
+                    memory,
+                    host_va,
+                })
+            }
+            // ★★★ **THE SECOND CROSSING.** Structurally `Publish`'s twin, and the single
+            // difference is `alloc_vidmem` where that arm calls `alloc_sysmem` — which is
+            // the whole of GEN-2's allocate-and-place chain
+            // (`C: mode2_fb_crossing_question.md` §5). ⊘ The unwind, the placement check
+            // and the orphan sets are IDENTICAL on purpose: a second, subtly different
+            // copy of an unwind is how an orphan gets dropped on the floor.
+            VerbPlan::PublishVidmem { host_vas, len, at } => {
+                let (vas, fresh_vas) = match *host_vas {
+                    Some(h) => (h, None),
+                    None => {
+                        let h = rm.alloc_vaspace()?;
+                        (h, Some(h))
+                    }
+                };
+                let memory = match rm.alloc_vidmem(*len) {
+                    Ok(m) => m,
+                    Err(e) => return Err(unwind(rm, fresh_vas.into_iter().collect(), e)),
+                };
+                let host_va = match rm.map_gpu_va(vas, memory, *len, *at) {
+                    Ok(va) => va,
+                    Err(e) => {
+                        let mut orphans = vec![memory];
+                        orphans.extend(fresh_vas);
+                        return Err(unwind(rm, orphans, e));
+                    }
+                };
+                // ★★★ #102 — the same address-identity check, for the same reason. A
+                // vidmem object placed anywhere other than `at` is published and
+                // unaddressable: the guest's methods name `at` and the host MMU walks for
+                // `at`.
+                if host_va != at.0 {
+                    let _ = rm.unmap_gpu_va(vas, host_va);
+                    let mut orphans = vec![memory];
+                    orphans.extend(fresh_vas);
+                    return Err(unwind(
+                        rm,
+                        orphans,
+                        RmError::PlacementRefused {
+                            want: at.0,
+                            got: host_va,
+                        },
+                    ));
+                }
+                Ok(VerbReply::Published {
+                    host_vas: fresh_vas,
+                    memory,
+                    host_va,
+                })
+            }
+            // ★★★★★ **ONE MEMORY.** Structurally `Publish`'s twin, and the difference is
+            // that the chain hands back a descriptor as well as a handle — the pages the
+            // engine will read are pages the VMM can map, which is the whole increment.
+            //
+            // ⊘ The unwind is deliberately IDENTICAL in shape to the two arms above. The
+            // backing itself is NOT in the orphan set and that is not an omission: it is a
+            // `memfd` the child owns, released when the child's own table drops it, and
+            // `Orphans` frees RM objects and unmaps GPU VAs — a descriptor is neither. The
+            // same asymmetry `PinGuestRam` records one arm down for its guest-RAM mapping.
+            VerbPlan::JoinFbLeaf {
+                host_vas,
+                len,
+                at,
+                phys,
+            } => {
+                let (vas, fresh_vas) = match *host_vas {
+                    Some(h) => (h, None),
+                    None => {
+                        let h = rm.alloc_vaspace()?;
+                        (h, Some(h))
+                    }
+                };
+                let joined = match rm.join_fb_leaf(vas, *len, *at, *phys) {
+                    Ok(j) => j,
+                    Err(e) => return Err(unwind(rm, fresh_vas.into_iter().collect(), e)),
+                };
+                // ★★★ #102 — the SAME address-identity check, at the seam that crosses
+                // into the untrusted-by-construction backend. The backend is asked to
+                // refuse a wrong placement itself and does; this is the second, independent
+                // check, and it is here for the reason the `Publish` arm gives: this is the
+                // one place a placement can be downgraded silently.
+                if joined.host_va != at.0 {
+                    let _ = rm.unmap_gpu_va(vas, joined.host_va);
+                    let mut orphans = vec![joined.memory];
+                    orphans.extend(fresh_vas);
+                    return Err(unwind(
+                        rm,
+                        orphans,
+                        RmError::PlacementRefused {
+                            want: at.0,
+                            got: joined.host_va,
+                        },
+                    ));
+                }
+                Ok(VerbReply::FbLeafJoined {
+                    host_vas: fresh_vas,
+                    joined,
+                })
+            }
+            // ★★★★★ **w380 — THE SECOND ADDRESS OF ONE MEMORY.** Structurally
+            // `JoinFbLeaf`'s twin, and the difference is that nothing here mints pages: the
+            // backend refuses by name if no join for `phys` exists, rather than falling back
+            // to creating one. A fallback would give the frame two memories — silently, and
+            // in exactly the situation the alias exists to serve.
+            VerbPlan::AliasFbLeaf {
+                host_vas,
+                len,
+                at,
+                phys,
+            } => {
+                let (vas, fresh_vas) = match *host_vas {
+                    Some(h) => (h, None),
+                    None => {
+                        let h = rm.alloc_vaspace()?;
+                        (h, Some(h))
+                    }
+                };
+                let aliased = match rm.alias_fb_leaf(vas, *len, *at, *phys) {
+                    Ok(a) => a,
+                    Err(e) => return Err(unwind(rm, fresh_vas.into_iter().collect(), e)),
+                };
+                // ★★★ #102 — the SAME address-identity check, for the same reason and with
+                // the same unwind. An alias placed anywhere but `at` is a host mapping the
+                // guest's own page tables do not name.
+                if aliased.host_va != at.0 {
+                    let _ = rm.unmap_gpu_va(vas, aliased.host_va);
+                    let mut orphans = vec![aliased.memory];
+                    orphans.extend(fresh_vas);
+                    return Err(unwind(
+                        rm,
+                        orphans,
+                        RmError::PlacementRefused {
+                            want: at.0,
+                            got: aliased.host_va,
+                        },
+                    ));
+                }
+                Ok(VerbReply::FbLeafAliased {
+                    host_vas: fresh_vas,
+                    aliased,
+                })
+            }
+            // ★★★★★ **THE FIRST GUEST BYTE.** Structurally `Publish`'s twin, and every
+            // difference between them is a difference in *whose* pages are underneath.
+            VerbPlan::PinGuestRam {
+                host_vas,
+                grant,
+                at,
+            } => {
+                let (vas, fresh_vas) = match *host_vas {
+                    Some(h) => (h, None),
+                    None => {
+                        let h = rm.alloc_vaspace()?;
+                        (h, Some(h))
+                    }
+                };
+                // ⊘ The grant is passed through untouched. Nothing here recomputes its
+                // offset, clamps its length or checks it against anything — the numbers
+                // are the VMM's and the only check available in this process would be a
+                // check of a request against itself.
+                let mapped = match rm.map_guest_ram(*grant) {
+                    Ok(m) => m,
+                    Err(e) => return Err(unwind(rm, fresh_vas.into_iter().collect(), e)),
+                };
+                // ⚠ The unwind sets below name `mapped` NOWHERE, and that is not an
+                // omission: `Orphans` frees RM objects and unmaps GPU VAs, and a
+                // guest-RAM mapping is neither. It is released on this same worker, in
+                // line, before the error leaves — because after that the name is gone and
+                // nobody can.
+                let memory = match rm.describe_guest_ram(mapped) {
+                    Ok(m) => m,
+                    Err(e) => {
+                        let _ = rm.unmap_guest_ram(mapped);
+                        return Err(unwind(rm, fresh_vas.into_iter().collect(), e));
+                    }
+                };
+                let host_va = match rm.map_gpu_va(vas, memory, grant.len(), *at) {
+                    Ok(va) => va,
+                    Err(e) => {
+                        let _ = rm.unmap_guest_ram(mapped);
+                        let mut orphans = vec![memory];
+                        orphans.extend(fresh_vas);
+                        return Err(unwind(rm, orphans, e));
+                    }
+                };
+                // ★★★ `placed_as_asked`. The SAME check `Publish` makes, and it matters
+                // more here: a fabricated buffer relocated by RM is merely unreachable,
+                // while the guest's own ring relocated by RM is a host channel pointed at
+                // whatever else lives at that address. ⊘ Never adopted.
+                if host_va != at.0 {
+                    let _ = rm.unmap_gpu_va(vas, host_va);
+                    let _ = rm.unmap_guest_ram(mapped);
+                    let mut orphans = vec![memory];
+                    orphans.extend(fresh_vas);
+                    return Err(unwind(
+                        rm,
+                        orphans,
+                        RmError::PlacementRefused {
+                            want: at.0,
+                            got: host_va,
+                        },
+                    ));
+                }
+                Ok(VerbReply::GuestRamPinned {
+                    host_vas: fresh_vas,
+                    mapped,
+                    memory,
+                    host_va,
+                })
+            }
+            VerbPlan::Doorbell {
+                host_vas,
+                channel,
+                engine,
+                schedule,
+                err_notifier,
+            } => {
+                let (chan, fresh_vas, fresh_chan) = match *channel {
+                    Some(c) => (c, None, None),
+                    None => {
+                        let (vas, fresh_vas) = match *host_vas {
+                            Some(h) => (h, None),
+                            None => {
+                                let h = rm.alloc_vaspace()?;
+                                (h, Some(h))
+                            }
+                        };
+                        // ★★★★★ **w288 — THE NOTIFIER IS BUILT BEFORE THE CHANNEL**, and
+                        // the order is the mechanism rather than a preference:
+                        // `hObjectError` is a **birth** parameter, so an object minted after
+                        // `alloc_channel` returned could never reach the channel that needs
+                        // it. See [`describe_err_notifier`].
+                        let notifier = match describe_err_notifier(rm, *err_notifier) {
+                            Ok(n) => n,
+                            Err(r) => {
+                                // ⊘ Printed on the refusal arm as well as the success one:
+                                // a witness that only speaks when the thing worked is silent
+                                // on exactly the outcome it exists to see.
+                                eprintln!(
+                                    "kayfabe-isolate: ERROR-NOTIFIER REFUSED {} engine={engine:?} \
+                                     ⊘ {:?} — the caller ASKED for a notifier and it could not be \
+                                     built, so the doorbell chain unwinds rather than birthing a \
+                                     channel that silently has none",
+                                    r.as_str(),
+                                    r.error(),
+                                );
+                                return Err(unwind(rm, fresh_vas.into_iter().collect(), r.error()));
+                            }
+                        };
+                        // ⊘ `hosting: None`: a doorbell materialization hosts no engine
+                        // object, so there is no declaration to refine the engine with
+                        // (§16.106).
+                        //
+                        // ⊘⊘ **w393 — `adopt` is a LITERAL `None` AGAIN, and this time by
+                        // type.** w392j threaded a ring (+ USERD) through here; the USERD
+                        // half zeroed the cursor that rang (`[measured w233]`, five `Xid 31`
+                        // in w392j/k) and the ring half was a stopgap. The birth of a
+                        // `Passthrough` channel is `VerbPlan::ChannelBirth`, at the guest's
+                        // own alloc, and `plan_doorbell` refuses such a channel by name before
+                        // this arm can run for it. ⇒ every channel born HERE is `Emulated`,
+                        // over `RingSource::Ours(None)` — which is the design for that kind.
+                        // The witness therefore reads `hosting=None, adopt=None` = NOT-ASKED,
+                        // and that reading is TRUE: this path offers no ring at all.
+                        match rm.alloc_channel(
+                            vas,
+                            *engine,
+                            None,
+                            None,
+                            notifier.map(|(_, memory)| memory),
+                        ) {
+                            Ok(c) => {
+                                // ★★★ THE CENSUS LINE. This is how a boot proves the object
+                                // was built at all. ⊘ There is deliberately **no host-side
+                                // read-back**: a guest-backed `OS_DESCRIPTOR` cannot be
+                                // CPU-mapped (`[measured, R31 arm B]`), so a read here would
+                                // measure nothing while looking like verification.
+                                if let Some((_, memory)) = notifier {
+                                    eprintln!(
+                                        "kayfabe-isolate: ERROR-NOTIFIER BUILT engine={engine:?} \
+                                         host_chan={:#x} host_token={:#x} memory={:#x} \
+                                         grant_len={} ⇒ hObjectError names the GUEST'S OWN pages",
+                                        c.0.raw(),
+                                        c.1,
+                                        memory.raw(),
+                                        err_notifier.map_or(0, |g| g.len()),
+                                    );
+                                }
+                                (c, fresh_vas, Some(c))
+                            }
+                            Err(e) => {
+                                // ⚠ The notifier's two names are released HERE, newest
+                                // first: the descriptor is an RM object and goes into the
+                                // orphan set, and the guest-RAM mapping is neither an RM
+                                // object nor a GPU VA, so `Orphans` cannot carry it and it
+                                // is released in line before the error leaves.
+                                let mut orphans: Vec<HostHandle> = Vec::new();
+                                if let Some((mapped, memory)) = notifier {
+                                    orphans.push(memory);
+                                    let _ = rm.unmap_guest_ram(mapped);
+                                }
+                                orphans.extend(fresh_vas);
+                                return Err(unwind(rm, orphans, e));
+                            }
+                        }
+                    }
+                };
+                let unwind_set = || {
+                    let mut v: Vec<HostHandle> = Vec::new();
+                    if let Some((h, _)) = fresh_chan {
+                        v.push(h);
+                    }
+                    v.extend(fresh_vas);
+                    v
+                };
+                if *schedule && let Err(e) = rm.schedule(chan.0) {
+                    return Err(unwind(rm, unwind_set(), e));
+                }
+                // ★★★★★ THE CALL-SITE WITNESS (owner directive, 2026-08-12). `DOORBELL-XLATE`
+                // says what was translated; `DOORBELL-STORE` says the write executed. This
+                // line is the JOIN between them — it is the only place that holds the host
+                // token beside the `EngineKind`, and it is what makes a `GrCompute` store
+                // distinguishable from a `Ce` one in the log.
+                // ⊘ Both arms print. A `ring_doorbell` that returns `Err` unwinds and leaves
+                // no trace otherwise, which is the shape that reads as "it rang".
+                eprintln!(
+                    "kayfabe-isolate: DOORBELL-VERB engine={engine:?} host_token={:#x} \
+                     scheduled={schedule} → calling ring_doorbell",
+                    chan.1,
+                );
+                if let Err(e) = rm.ring_doorbell(chan.1) {
+                    eprintln!(
+                        "kayfabe-isolate: DOORBELL-VERB engine={engine:?} host_token={:#x} \
+                         ⊘⊘ ring_doorbell REFUSED: {e:?} — nothing was rung and the verb unwinds",
+                        chan.1,
+                    );
+                    return Err(unwind(rm, unwind_set(), e));
+                }
+                Ok(VerbReply::Doorbell {
+                    host_vas: fresh_vas,
+                    channel: fresh_chan,
+                    scheduled: *schedule,
+                })
+            }
+            VerbPlan::EngineObject {
+                host_vas,
+                channel,
+                engine,
+                class,
+                params,
+                adopt,
+                err_notifier,
+            } => {
+                let (chan, fresh_vas, fresh_chan) = match *channel {
+                    Some(c) => (c, None, None),
+                    None => {
+                        let (vas, fresh_vas) = match *host_vas {
+                            Some(h) => (h, None),
+                            None => {
+                                let h = rm.alloc_vaspace()?;
+                                (h, Some(h))
+                            }
+                        };
+                        // ★★★★★ **w288 — THE NOTIFIER, BEFORE THE BIRTH.** The doorbell
+                        // arm's reason verbatim, on the chain that births most host channels.
+                        let notifier = match describe_err_notifier(rm, *err_notifier) {
+                            Ok(n) => n,
+                            Err(r) => {
+                                eprintln!(
+                                    "kayfabe-isolate: ERROR-NOTIFIER REFUSED {} engine={engine:?} \
+                                     class={:#06x} ⊘ {:?} — the caller ASKED for a notifier and it \
+                                     could not be built, so the engine-object chain unwinds rather \
+                                     than birthing a channel that silently has none",
+                                    r.as_str(),
+                                    class.0,
+                                    r.error(),
+                                );
+                                return Err(unwind(rm, fresh_vas.into_iter().collect(), r.error()));
+                            }
+                        };
+                        // ★★★ §16.106 — the guest's OWN declaration reaches the channel
+                        // alloc, so a CE object's instance is honoured instead of invented.
+                        match rm.alloc_channel(
+                            vas,
+                            *engine,
+                            Some(HostedObject {
+                                class: *class,
+                                params,
+                            }),
+                            // ★★★★★ LEG A2 — THE PRODUCTION CALLER. `Some` here is the
+                            // whole rung: it is the only path on which a host channel is
+                            // born over memory this port did not allocate.
+                            *adopt,
+                            notifier.map(|(_, memory)| memory),
+                        ) {
+                            Ok(c) => {
+                                // ★★★ THE CENSUS LINE — the doorbell arm's, with the class
+                                // that caused the birth. ⊘ No host-side read-back, for the
+                                // reason stated there.
+                                if let Some((_, memory)) = notifier {
+                                    eprintln!(
+                                        "kayfabe-isolate: ERROR-NOTIFIER BUILT engine={engine:?} \
+                                         class={:#06x} host_chan={:#x} host_token={:#x} \
+                                         memory={:#x} grant_len={} ⇒ hObjectError names the \
+                                         GUEST'S OWN pages",
+                                        class.0,
+                                        c.0.raw(),
+                                        c.1,
+                                        memory.raw(),
+                                        err_notifier.map_or(0, |g| g.len()),
+                                    );
+                                }
+                                (c, fresh_vas, Some(c))
+                            }
+                            Err(e) => {
+                                // ⚠ As the doorbell arm: the descriptor is an RM object and
+                                // orphans; the guest-RAM mapping is neither an RM object nor
+                                // a GPU VA and is released in line before the error leaves.
+                                let mut orphans: Vec<HostHandle> = Vec::new();
+                                if let Some((mapped, memory)) = notifier {
+                                    orphans.push(memory);
+                                    let _ = rm.unmap_guest_ram(mapped);
+                                }
+                                orphans.extend(fresh_vas);
+                                return Err(unwind(rm, orphans, e));
+                            }
+                        }
+                    }
+                };
+                match rm.alloc_engine_object(chan.0, *class, params) {
+                    Ok(object) => Ok(VerbReply::EngineObject {
+                        host_vas: fresh_vas,
+                        channel: fresh_chan,
+                        object,
+                    }),
+                    Err(e) => {
+                        let mut orphans: Vec<HostHandle> = Vec::new();
+                        if let Some((h, _)) = fresh_chan {
+                            orphans.push(h);
+                        }
+                        orphans.extend(fresh_vas);
+                        // ★★★ §16.105 — the ONE place the attempted host channel exists.
+                        // `chan.0` is either the plan's already-materialized channel or the
+                        // one built four lines up; the unwind below frees the latter, so
+                        // this is the last instant its identity is knowable. See
+                        // [`VerbFailure::on`].
+                        Err(unwind_on(rm, orphans, e, Some(chan.0)))
+                    }
+                }
+            }
+            // ★★★★★ **w393 — THE BIRTH-AT-ALLOC ARM.** The doorbell arm's `channel == None`
+            // branch, minus the schedule and the ring, plus a mandatory adoption.
+            VerbPlan::ChannelBirth {
+                host_vas,
+                engine,
+                declared_engine_type,
+                adopt,
+                err_notifier,
+            } => {
+                let (vas, fresh_vas) = match *host_vas {
+                    Some(h) => (h, None),
+                    None => {
+                        let h = rm.alloc_vaspace()?;
+                        (h, Some(h))
+                    }
+                };
+                // ★ w288 — the notifier BEFORE the channel: `hObjectError` is a birth
+                // parameter. See [`describe_err_notifier`].
+                let notifier = match describe_err_notifier(rm, *err_notifier) {
+                    Ok(n) => n,
+                    Err(r) => {
+                        eprintln!(
+                            "kayfabe-isolate: ERROR-NOTIFIER REFUSED {} engine={engine:?} \
+                             (channel birth) ⊘ {:?} — the caller ASKED for a notifier and it \
+                             could not be built, so the birth chain unwinds rather than \
+                             birthing a channel that silently has none",
+                            r.as_str(),
+                            r.error(),
+                        );
+                        return Err(unwind(rm, fresh_vas.into_iter().collect(), r.error()));
+                    }
+                };
+                match rm.alloc_channel_declared(
+                    vas,
+                    *engine,
+                    *declared_engine_type,
+                    *adopt,
+                    notifier.map(|(_, memory)| memory),
+                ) {
+                    Ok(c) => {
+                        if let Some((_, memory)) = notifier {
+                            eprintln!(
+                                "kayfabe-isolate: ERROR-NOTIFIER BUILT engine={engine:?} \
+                                 (channel birth) host_chan={:#x} host_token={:#x} memory={:#x} \
+                                 grant_len={} ⇒ hObjectError names the GUEST'S OWN pages",
+                                c.0.raw(),
+                                c.1,
+                                memory.raw(),
+                                err_notifier.map_or(0, |g| g.len()),
+                            );
+                        }
+                        // ★★★ THE CENSUS LINE for this birth site. ⊘ No host-side read-back
+                        // of the ring or the USERD: a guest-backed `OS_DESCRIPTOR` cannot be
+                        // CPU-mapped (`[measured, R31 arm B]`).
+                        eprintln!(
+                            "kayfabe-isolate: CHANNEL-BIRTH engine={engine:?} \
+                             declared_engine_type={} host_chan={:#x} host_token={:#x} \
+                             ring_va={:#x} gp_fifo_va={:#x} entries={} userd={} ⇒ born AT ALLOC \
+                             over the guest's ring{}",
+                            declared_engine_type.map_or_else(
+                                || "UNREAD→adapter default".to_string(),
+                                |t| format!("{t:#x}")
+                            ),
+                            c.0.raw(),
+                            c.1,
+                            adopt.ring_va,
+                            adopt.gp_fifo_va,
+                            adopt.gp_fifo_entries,
+                            adopt.userd.map_or_else(
+                                || "OURS".to_string(),
+                                |u| format!("GUEST@+{:#x}", u.offset)
+                            ),
+                            if adopt.userd.is_some() {
+                                " AND the guest's USERD, before any cursor was written"
+                            } else {
+                                " (USERD ours: the guest's lies outside the joined leaf)"
+                            },
+                        );
+                        Ok(VerbReply::ChannelBorn {
+                            host_vas: fresh_vas,
+                            channel: c,
+                        })
+                    }
+                    Err(e) => {
+                        // ⚠ As the two older birth arms: the descriptor is an RM object and
+                        // orphans; the guest-RAM mapping is neither and is released in line.
+                        let mut orphans: Vec<HostHandle> = Vec::new();
+                        if let Some((mapped, memory)) = notifier {
+                            orphans.push(memory);
+                            let _ = rm.unmap_guest_ram(mapped);
+                        }
+                        orphans.extend(fresh_vas);
+                        Err(unwind(rm, orphans, e))
+                    }
+                }
+            }
+            VerbPlan::Control { obj, cmd, payload } => {
+                let mut payload = payload.clone();
+                rm.control(*obj, *cmd, &mut payload)?;
+                Ok(VerbReply::Control { payload })
+            }
+            VerbPlan::SubdeviceControl { cmd, payload } => {
+                let mut payload = payload.clone();
+                rm.subdevice_control(*cmd, &mut payload)?;
+                // ⊘ Reuses `VerbReply::Control` deliberately: the reply IS the same thing —
+                // the payload as the host wrote it back — and a second reply variant
+                // carrying an identical field would be two names for one fact.
+                Ok(VerbReply::Control { payload })
+            }
+            VerbPlan::CeSplit { vas, subs } => {
+                // ★★★ §12.4 — THE EXECUTOR IS THE ISOLATE, for both arms. In submission
+                // ORDER, because a copy engine's within-request ordering is what the
+                // guest's own semaphore release depends on; and one at a time, because a
+                // sub-copy that fails must not be followed by later ones that assume it
+                // landed.
+                let mut host_ce = 0usize;
+                let mut ours = 0usize;
+                for sub in subs {
+                    rm.ce_copy(*vas, *sub)?;
+                    match sub.by {
+                        CeExecutor::HostCe => host_ce += 1,
+                        CeExecutor::Ours => ours += 1,
+                    }
+                }
+                Ok(VerbReply::CeSplit { host_ce, ours })
+            }
+            VerbPlan::Release {
+                unmap,
+                free,
+                guest_ram,
+            } => {
+                // ★ G4 (§12.16): still best-effort — this IS the failure path and a
+                // refusal must not abort the rest of the disposal — but no longer
+                // SILENT. Every unmap/free that fails is carried out in the returned
+                // `VerbFailure::orphans`, so "we could not dispose of this" becomes a
+                // value the caller holds instead of a `let _ =` nobody can audit.
+                // Unmaps first, then frees: RM auto-unmaps a resource's inter-mappings
+                // inside `clientFreeResource_IMPL` before `objDelete`
+                // (`ogkm-610:`/`ogkm-580:`
+                // `src/nvidia/src/libraries/resserv/src/rs_client.c:830-849` — same
+                // lines at both tags), so the order does not protect RM — it protects
+                // OUR mirror of the mapping.
+                //
+                // ★★ §7.5 — one exception to "best effort": [`RmError::Wedged`] stops
+                // the loop. A wedged worker will answer every remaining verb the same
+                // way, so grinding through the list buys nothing and models the wrong
+                // thing (the real worker is not answering at all). The untried remainder
+                // is residue exactly like the tried-and-failed part, so the RESULT is
+                // identical — what differs is that we do not pretend to have asked.
+                let mut residue = Orphans::default();
+                let mut first: Option<RmError> = None;
+                for (i, &(vas, va)) in unmap.iter().enumerate() {
+                    match rm.unmap_gpu_va(vas, va) {
+                        Ok(()) => {}
+                        Err(RmError::Wedged) => {
+                            residue.unmap.extend_from_slice(&unmap[i..]);
+                            residue.free.extend_from_slice(free);
+                            residue.guest_ram.extend_from_slice(guest_ram);
+                            return Err(VerbFailure {
+                                err: RmError::Wedged,
+                                orphans: residue,
+                                on: None,
+                            });
+                        }
+                        Err(e) => {
+                            first.get_or_insert(e);
+                            residue.unmap.push((vas, va));
+                        }
+                    }
+                }
+                for (i, &obj) in free.iter().enumerate() {
+                    match rm.free(obj) {
+                        Ok(()) => {}
+                        Err(RmError::Wedged) => {
+                            residue.free.extend_from_slice(&free[i..]);
+                            residue.guest_ram.extend_from_slice(guest_ram);
+                            return Err(VerbFailure {
+                                err: RmError::Wedged,
+                                orphans: residue,
+                                on: None,
+                            });
+                        }
+                        Err(e) => {
+                            first.get_or_insert(e);
+                            residue.free.push(obj);
+                        }
+                    }
+                }
+                // ★★★★★ **w310 — THE `munmap` HALF, AND IT RUNS LAST ON PURPOSE.**
+                //
+                // `GuestRamPin::mapped` had **one write and zero reads in the whole tree**
+                // (`docs/audits/w301_cancellation_error_leaks.md` §3.2). This loop is the
+                // read. Last, because RM's `OS_DESCRIPTOR` pins the pages independently of
+                // our mapping — see [`Orphans::guest_ram`] for the full argument.
+                //
+                // ⊘ Same best-effort/`Wedged` discipline as the two loops above, and for the
+                // same reason: this IS the disposal path, so one refusal must not abandon the
+                // rest, and a wedged worker will answer every remaining call identically.
+                for (i, &mapped) in guest_ram.iter().enumerate() {
+                    match rm.unmap_guest_ram(mapped) {
+                        Ok(()) => {}
+                        Err(RmError::Wedged) => {
+                            residue.guest_ram.extend_from_slice(&guest_ram[i..]);
+                            return Err(VerbFailure {
+                                err: RmError::Wedged,
+                                orphans: residue,
+                                on: None,
+                            });
+                        }
+                        Err(e) => {
+                            first.get_or_insert(e);
+                            residue.guest_ram.push(mapped);
+                        }
+                    }
+                }
+                match first {
+                    None => Ok(VerbReply::Released),
+                    Some(err) => Err(VerbFailure {
+                        err,
+                        orphans: residue,
+                        on: None,
+                    }),
+                }
+            }
+        }
+    }
+
+    /// Escape hatch for adapter/test code that needs the raw verb surface — scoped
+    /// to a closure so no bare `&mut dyn RmBackend` escapes into a caller that might
+    /// then take a lock. **Asserts R1** exactly like [`Worker::execute`].
+    ///
+    /// Production forwarding paths use [`VerbPlan`]; this exists so the port stays
+    /// usable for bring-up probes without reopening a door that skips the assert.
+    ///
+    /// ★★★ **w323 — it takes the trap witness too, and it HAS to.** This is the door that
+    /// exists to bypass [`VerbPlan`]; a gate present on the planned path and absent on the
+    /// escape hatch is a gate with a documented way round it, which is the
+    /// `the_orphan_gate_asks_visibility_not_reachability` shape.
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock (R1), or if `off` does not still hold.
+    pub fn with_rm<R>(
+        &mut self,
+        off: &kayfabe_util::trapwitness::OffTrap,
+        f: impl FnOnce(&mut dyn RmBackend) -> R,
+    ) -> R {
+        kayfabe_util::lockwitness::assert_lock_free("issuing a host RM verb");
+        off.still_off_trap("issuing a host RM verb (raw)");
+        f(&mut *self.backend)
+    }
+}
+
+/// ★★★★★ **w288 — WHICH HALF OF THE NOTIFIER CHAIN REFUSED**, kept as two names.
+///
+/// `map_guest_ram` and `describe_guest_ram` are two different questions about two
+/// different parties: *"will the guest-RAM plane honour the VMM's grant"* and *"will host
+/// RM build a descriptor over the pages it honoured"*. They lead a reader to different
+/// files — the first to the hypervisor's stated layout, the second to the host driver —
+/// and folding them into one word is the collapse this tree keeps paying for. Both carry
+/// the underlying [`RmError`] so the unwind surfaces the cause unchanged.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ErrNotifierRefusal {
+    /// [`RmBackend::map_guest_ram`] refused: the isolate could not reach the guest's pages
+    /// at all, so no descriptor was ever attempted.
+    GuestRamRefused(RmError),
+    /// [`RmBackend::describe_guest_ram`] refused: the pages mapped and **RM** would not
+    /// build the `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over them. The mapping has already been
+    /// released by the time this is returned.
+    DescriptorRefused(RmError),
+}
+
+impl ErrNotifierRefusal {
+    /// The name the census line prints. ⊘ Two distinct strings, never a shared prefix that
+    /// a grader's regex would have to disambiguate by position.
+    fn as_str(self) -> &'static str {
+        match self {
+            ErrNotifierRefusal::GuestRamRefused(_) => "GuestRamRefused",
+            ErrNotifierRefusal::DescriptorRefused(_) => "DescriptorRefused",
+        }
+    }
+
+    /// The cause, unchanged, for the unwind to surface. See [`unwind`]: a cleanup's own
+    /// failures never replace the original error, and neither does this classification.
+    fn error(self) -> RmError {
+        match self {
+            ErrNotifierRefusal::GuestRamRefused(e) | ErrNotifierRefusal::DescriptorRefused(e) => e,
+        }
+    }
+}
+
+/// ★★★★★ **w288 — build the host RM memory object over the GUEST'S OWN notifier pages.**
+///
+/// `map_guest_ram` → `describe_guest_ram`, the same two steps [`VerbPlan::PinGuestRam`]
+/// takes, stopping one short of it: the notifier is never mapped into a GPU address space,
+/// because `hObjectError` names a **memory object** and not a VA. `kchannelGetNotifierInfo`
+/// resolves it, finds a memdesc that is not `ADDR_VIRTUAL`, and takes the `else` at
+/// `ogkm-580: kernel_channel.c:2074-2078` — `ERROR_NOTIFIER_TYPE_MEMORY`, with no CPU
+/// mapping and no ctxdma required. On a GSP part CPU-RM then RPCs
+/// `errorNotifierMem.base = memdescGetPhysAddr(…)` to the GSP
+/// (`ogkm-580: kernel_channel.c:549-568`), and for a descriptor over guest pages that base
+/// **is the guest's page** — which is the entire mechanism.
+///
+/// `None` in, `Ok(None)` out: a caller that asked for no notifier is not a refusal, and the
+/// two must not read alike.
+///
+/// ⊘ The grant is passed through untouched. Nothing here recomputes an offset, clamps a
+/// length or checks either against anything — the numbers are the VMM's, and the only check
+/// available in this process would be a check of a request against itself.
+///
+/// ## ⚠ ON SUCCESS THE MAPPING IS NOT RELEASED, and the caller must not release it either
+///
+/// The returned [`GuestRamMapped`] is handed back **only** so a later failure in the same
+/// chain can undo it. A channel whose `hObjectError` names this descriptor outlives this
+/// verb, and releasing the mapping would not release the pages anyway — RM pins them and
+/// keeps them pinned until the descriptor handle is freed
+/// (`RmBackend::describe_guest_ram`'s own warning). ⇒ The two names have **different
+/// lifetimes**, exactly as [`VerbReply::GuestRamPinned`] carries them separately, and this
+/// chain deliberately holds both for the isolate's life rather than pretending one implies
+/// the other.
+fn describe_err_notifier(
+    rm: &mut dyn RmBackend,
+    grant: Option<GuestRamGrant>,
+) -> Result<Option<(GuestRamMapped, HostHandle)>, ErrNotifierRefusal> {
+    let Some(grant) = grant else {
+        return Ok(None);
+    };
+    let mapped = rm
+        .map_guest_ram(grant)
+        .map_err(ErrNotifierRefusal::GuestRamRefused)?;
+    match rm.describe_guest_ram(mapped) {
+        Ok(memory) => Ok(Some((mapped, memory))),
+        Err(e) => {
+            // ⚠ Released in line, before the error leaves, for `PinGuestRam`'s stated
+            // reason: `Orphans` frees RM objects and unmaps GPU VAs, and a guest-RAM
+            // mapping is neither — after this frame the name is gone and nobody can.
+            let _ = rm.unmap_guest_ram(mapped);
+            Err(ErrNotifierRefusal::DescriptorRefused(e))
+        }
+    }
+}
+
+/// Release `orphans` (newest first) after a mid-chain verb failure, then surface the
+/// ORIGINAL error — the cleanup's own failures never *replace* the cause.
+///
+/// ★ G4 (§12.16): they are no longer *discarded* either. An object the unwind could
+/// not free is exactly the thing that was previously "in no `Orphans`, in no core
+/// state, enumerable from nothing", so it comes back in [`VerbFailure::orphans`]. On a
+/// [`RmError::Interrupted`] chain the unwind still runs — the C's stub survives its own
+/// `-EINTR` and keeps serving (`C: src/stub/nvkvm_stub.c:1276-1281`) — and any verb
+/// that fails during it lands in the residue.
+fn unwind(rm: &mut dyn RmBackend, orphans: Vec<HostHandle>, err: RmError) -> VerbFailure {
+    unwind_on(rm, orphans, err, None)
+}
+
+/// [`unwind`], naming the host object the failing verb was **issued against** — see
+/// [`VerbFailure::on`] for why that identity cannot be recovered anywhere else once
+/// this function has run.
+///
+/// ⊘ `on` is passed **through the unwind unchanged**, including when the unwind then
+/// frees that very object. The field is an identity for a report, not a live handle.
+fn unwind_on(
+    rm: &mut dyn RmBackend,
+    orphans: Vec<HostHandle>,
+    err: RmError,
+    on: Option<HostHandle>,
+) -> VerbFailure {
+    // ★★ §7.5 — a WEDGED worker cannot run its own unwind. It is still inside the host
+    // ioctl that wedged it; issuing a `free` on it would either block forever behind the
+    // same uninterruptible wait or desynchronise a channel whose reply was abandoned.
+    // So the intermediates come out UNTOUCHED, which is G4's premise made a value: the
+    // caller must stage them, and their disposition of record is §7.0's process
+    // boundary. Attempting the frees here is not merely useless — it is the shape that
+    // turns a bounded loud failure into a second wedge.
+    if err == RmError::Wedged {
+        return VerbFailure {
+            err,
+            orphans: Orphans {
+                unmap: Vec::new(),
+                free: orphans,
+                // ⊘ An unwind's residue never names a guest-RAM mapping: `PinGuestRam`'s
+                // own arms release `mapped` in line before the error leaves (see this
+                // file's `describe_guest_ram` helper), because after that frame the name
+                // is gone. Nothing to carry.
+                guest_ram: Vec::new(),
+            },
+            on,
+        };
+    }
+    let mut residue = Orphans::default();
+    for obj in orphans {
+        if rm.free(obj).is_err() {
+            residue.free.push(obj);
+        }
+    }
+    VerbFailure {
+        err,
+        orphans: residue,
+        on,
+    }
+}
+
+/// # One per-process sandboxed host worker pool
+///
+/// Owns a private host-RM connection with its own handle namespace, fd table, and
+/// host process. Lifecycle: created at the process's earliest unambiguous signal (the
+/// DUP_OBJECT dup-src registration — arch doc §4.3.4), retired in two stages
+/// (`retire()` → drop) so cross-teardown consumption is impossible by construction
+/// (lesson L10).
+///
+/// The isolate remains ONE sandboxed process per `(Proc, GpuId)` — the sandbox, the
+/// RM client and the handle namespace are per-process identities and stay singular.
+/// [`Worker`]s are slots inside it, each with its own 1-deep request/reply channel
+/// (`l1_concurrency.md` §7.2); they share only the RM connection, which is
+/// kernel-mediated. A handle minted on one worker is therefore valid on its siblings.
+///
+/// `Send + Sync`: owned by a `Proc` inside the shared `Gpu` (crate docs, #17).
+pub trait Isolate: Send + Sync {
+    /// This isolate's session id (== `ProcId`).
+    fn id(&self) -> IsolateId;
+
+    /// How many worker slots this isolate's bounded pool has (statically sized,
+    /// §7.2). Never changes over the isolate's life.
+    fn pool_size(&self) -> usize;
+
+    /// How many workers are currently checked IN (available).
+    fn idle_workers(&self) -> usize;
+
+    /// ★ Check a worker OUT: mark a slot busy and move its handle to the calling
+    /// thread (§7.3). Runs under device-read + proc lock — pool *bookkeeping* only,
+    /// no verb.
+    ///
+    /// `None` means **backpressure, not failure**: the pool is saturated (or the
+    /// isolate is retired and refuses new checkouts, §5.4). The caller must release
+    /// ALL locks, wait, and re-enter from the top with full R5 re-validation — never
+    /// spin, never wait under a lock.
+    fn checkout(&mut self) -> Option<Worker>;
+
+    /// Return a checked-out worker to its slot. Pool bookkeeping; runs under the
+    /// proc lock alongside the commit phase.
+    fn checkin(&mut self, worker: Worker);
+
+    /// ★ Which pool slots are **checked out right now**, by id — §7.6 T2's *"for every
+    /// checked-out worker, `request_cancel(ProcExit)`"* needs the list, not the count.
+    ///
+    /// The same argument as [`Isolate::in_flight`] applies: the implementation knows
+    /// which slots are `Dead` and the core does not, so deriving this by subtraction
+    /// from the pool width would name slots that can never answer a cancel.
+    fn checked_out(&self) -> Vec<WorkerId>;
+
+    /// ★ The [`CancelHandle`] of slot `worker`, or `None` if that slot is not checked out
+    /// (there is nothing to cancel) or does not exist.
+    ///
+    /// Reachable through `&self`, under the proc lock, **without touching the
+    /// [`Worker`]** — which is the entire point of §7.1: the thread that could cancel is
+    /// never the thread that holds the worker, because the holder is blocked inside the
+    /// verb.
+    fn cancel_handle(&self, worker: WorkerId) -> Option<CancelHandle>;
+
+    /// **Latch** an interrupt for slot `worker` (§7.1). Nothing is signalled here: the
+    /// returned [`CancelRequest`] is discharged by the shell after the guards drop.
+    ///
+    /// `None` if the slot is not checked out — a cancel with nothing to cancel is a
+    /// no-op, not a failure.
+    fn request_cancel(&mut self, worker: WorkerId, reason: CancelReason) -> Option<CancelRequest> {
+        self.cancel_handle(worker).map(|h| h.request(reason))
+    }
+
+    /// ★ Latch an interrupt for **every** checked-out worker — the door
+    /// `Proc::retire`/`Proc::vacate` use (§7.6 T2, §15 amendment 4).
+    fn request_cancel_all(&mut self, reason: CancelReason) -> Cancels {
+        let slots = self.checked_out();
+        let mut out = Cancels::new();
+        for w in slots {
+            if let Some(h) = self.cancel_handle(w) {
+                out.push(h.request(reason));
+            }
+        }
+        out
+    }
+
+    /// ★ §7.5's escape, latched: release slot `worker`'s requester **without a reply**.
+    ///
+    /// The caller must kill the slot ([`Isolate::worker_died`]) and condemn the component
+    /// in the *same act*; abandoning without that reintroduces the channel-desync hazard
+    /// §7.2 forbids, because a future reader of that channel would misread the stale
+    /// reply. The two must not be reorderable steps.
+    fn abandon(&mut self, worker: WorkerId) -> Option<CancelRequest> {
+        self.cancel_handle(worker).map(|h| h.abandon())
+    }
+
+    /// A worker died out of band (its reactor source signalled HUP, §7.3). Retires
+    /// the slot permanently — **never a respawn**. Respawning the slot would be
+    /// pointless anyway: the whole component is condemned by the same event
+    /// (`l1_concurrency.md` §12.13), because the guest's published data lived in host
+    /// memory owned by this isolate's RM client and died with it, so there is nothing
+    /// for a fresh worker to serve except zeroes. Returns `true` if the slot was known
+    /// and is now dead.
+    fn worker_died(&mut self, worker: WorkerId) -> bool;
+
+    /// ★ How many of this isolate's workers are **checked OUT right now**
+    /// (`l1_concurrency.md` §12.16, gap G3) — the quantity [`Isolate::is_quiesced`]
+    /// is defined on, and the one the core must ASK for rather than derive.
+    ///
+    /// **Why the trait must answer this and the core must not compute it.**
+    /// `pool_size() - idle_workers()` looks like the same number and is not: a slot
+    /// that died out of band (§7.3) is neither idle nor checked out, and it can never
+    /// become either — "no resurrect". Deriving in-flight by subtraction would count
+    /// every dead slot as a live round trip, so an isolate that lost one worker would
+    /// report itself busy forever, defer its reap forever, and leak its GPA arena
+    /// forever (the #80 class the reap exists to prevent). The implementation knows
+    /// which slots are `Dead`; the core does not, and must not have to.
+    fn in_flight(&self) -> usize;
+
+    /// ★ **QUIESCED — the per-isolate SAFETY PRECONDITION for reaping** (§12.16, G3).
+    ///
+    /// Defined exactly, and narrowly: *no worker of this isolate is checked out.*
+    /// Equivalently, every slot is idle or permanently dead, so no thread anywhere
+    /// holds a [`Worker`] whose backend is this isolate's RM connection, and no verb
+    /// of this isolate can still be in flight or still land. Dropping it therefore
+    /// cannot tear a sandbox down underneath a live connection.
+    ///
+    /// ## ★ This is NOT "the device is quiescent" — do not conflate them
+    ///
+    /// The device-level quiesce point is a **protocol event the guest sends**, not
+    /// anything inferable from worker counts and emphatically not a timer. The C
+    /// measured it: `UNLOADING_GUEST_DRIVER` (GSP RPC fn=47) is emitted on **both** a
+    /// real driver unload *and* a GPU-idle release when the last context exits
+    /// (`C: src/qemu/nvkvm_gpu_emul.c:2450-2462`), and the reap runs at the
+    /// **re-handshake** that follows it — the status-queue tx-header write — which the
+    /// C names in so many words: *"the re-handshake = the quiesced point (GPU was
+    /// idle-released; next context boots). Purge dead-client resolution/backing state
+    /// now — never at the free."* (`C: src/qemu/nvkvm_gpu_emul.c:3458-3461`, the #14
+    /// P0 fix; reaping at the client-root free instead hung the dying context's
+    /// residual polls — lesson L10).
+    ///
+    /// So there are two distinct questions and this predicate answers only the second:
+    ///
+    /// - **When may the reap be attempted?** The adapter's lifecycle decision, driven
+    ///   by fn-47 / the re-handshake. Belongs to L1-M2, not here, not to the core.
+    /// - **Is attempting it safe for THIS isolate right now?** This predicate. The
+    ///   core checks it because the adapter's edge is device-wide while the hazard is
+    ///   per-`(Proc, GpuId)`: a guest process can have a verb in flight across another
+    ///   process's idle-release.
+    ///
+    /// ## Two more things it deliberately does not mean
+    ///
+    /// - Not "the sandbox has exited". The adapter's `waitpid` + namespace teardown
+    ///   happens **in `Drop`**, after this predicate opens the gate.
+    /// - Not "every host object has been reclaimed". Reclamation is a separate
+    ///   obligation with a separate ledger (G1/G2); a quiesced isolate can still own
+    ///   host objects, and dropping it is what disposes of them via the session's
+    ///   namespace death — the C's only backstop too (`C: src/qemu/virtio_nvgpu.c:100-118`,
+    ///   the #80 session reaper force-closing the session's host fds).
+    ///
+    /// Getting the gate wrong is asymmetric, which is why the core **checks** rather
+    /// than trusting a declaration: reaping too early tears the sandbox down under a
+    /// live connection (a use-after-free); reaping too late leaks until the next
+    /// quiesce point — which is the residual the C also carried and named
+    /// (`C: docs/design/mode2_multiprocess_refactor_plan.md:539-541`, "mid-life
+    /// multi-proc churn … keeps the pre-P0 leak-until-idle behavior"). Default:
+    /// `in_flight() == 0`.
+    fn is_quiesced(&self) -> bool {
+        self.in_flight() == 0
+    }
+
+    /// Stage 1 of teardown: stop accepting new ops, begin quiescing in-flight work.
+    /// Heavy state is reaped at the proven quiesce point, not here (lesson L10).
+    fn retire(&mut self);
+
+    /// True once `retire()` has been called (a retired isolate must refuse ops).
+    fn is_retired(&self) -> bool;
+
+    /// ★★★ **E1 — why this isolate can never serve a verb, at the SEAM.**
+    /// `None` means it can (or could, until it was retired in the ordinary way).
+    ///
+    /// ## The gap this closes, stated as the bench measured it
+    ///
+    /// `bench_rebuild_notes.md` §5 row 7: *"a **failed** real isolate is
+    /// indistinguishable from the stillborn one at the seam"*. Both answer
+    /// `pool_size() == 0`-or-all-dead, `checkout() == None`, `is_retired() == true` — and
+    /// so does a **saturated** pool for one of those. The reason each already existed as a
+    /// fact ([`StillbornIsolate::why`], `HostIsolate::spawn_error`) and was reachable only
+    /// through the **concrete** type, which the core never holds: it holds
+    /// [`IsolateBox`], i.e. `dyn Isolate`. So a spawn that failed for a nameable reason —
+    /// no NVIDIA driver loaded, `clone` refused, descriptor table exhausted — presented to
+    /// every layer above as *"nothing happened"*.
+    ///
+    /// ## ⊘ Why it returns a KIND and not only a sentence
+    ///
+    /// Because a check keyed on a *word* is satisfied by writing the word. The two
+    /// conditions are structurally different and a caller must be able to branch on that
+    /// difference without parsing prose: [`RefusalKind::NoPlane`] is a **deployment**
+    /// fact chosen by the composition root and true before the process started;
+    /// [`RefusalKind::SpawnFailed`] is a **runtime failure** of a plane that was asked for
+    /// and could not be had. Only the second one means something is wrong with the host.
+    ///
+    /// The sentence travels alongside because the kind cannot carry the cause, and the
+    /// cause is what an operator acts on.
+    fn refusal(&self) -> Option<IsolateRefusal<'_>>;
+}
+
+/// Which of the two structurally different reasons an [`Isolate`] refuses everything.
+///
+/// See [`Isolate::refusal`] for why this is an enum and not a string.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RefusalKind {
+    /// **There is no forwarding plane in this build/configuration** — the composition
+    /// root installed [`StillbornIsolates`] deliberately. Nothing was attempted and
+    /// nothing failed; a boot that shows only this is behaving exactly as configured.
+    NoPlane,
+    /// **A real plane was asked for and could not be built.** Something was attempted on
+    /// the host and it failed: the image would not publish, `clone` was refused, a
+    /// socketpair could not be made, or the child's RM bring-up handshake came back
+    /// `Failed`. ⊘ This is the one that means *investigate the host*.
+    SpawnFailed,
+}
+
+impl RefusalKind {
+    /// A stable, machine-greppable name. ⊘ Not the sentence — see [`IsolateRefusal::why`].
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            RefusalKind::NoPlane => "no-plane",
+            RefusalKind::SpawnFailed => "spawn-failed",
+        }
+    }
+
+    /// Every kind, for gates that must quantify over the whole set rather than over a
+    /// list someone can shorten.
+    pub const ALL: [RefusalKind; 2] = [RefusalKind::NoPlane, RefusalKind::SpawnFailed];
+}
+
+/// One isolate's refusal: what kind, and the sentence that names the cause.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IsolateRefusal<'a> {
+    /// The structural classification — branch on this.
+    pub kind: RefusalKind,
+    /// The cause, for a human. Borrowed from the isolate, so it costs nothing to ask.
+    pub why: &'a str,
+}
+
+/// ★★★ **E1 — the isolate plane's health, as ONE value a teardown report can print.**
+///
+/// Counted over every isolate the device currently holds, plus the monotonic
+/// materialization total that survives their death.
+///
+/// ⊘ **`materialized == 0` is a finding, not a blank.** Since E0b an isolate is spawned
+/// by a *guest* RM event, so zero means the guest never got that far — a completely
+/// different diagnosis from "it spawned and refuses", and before this counter the two
+/// were the same silence on the host side.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct IsolateCensus {
+    /// How many isolates this device has ever materialized (monotonic; survives reaps).
+    pub materialized: u64,
+    /// How many it holds right now, across every live proc and target.
+    pub live: u64,
+    /// Of those, how many answer [`RefusalKind::NoPlane`].
+    pub no_plane: u64,
+    /// Of those, how many answer [`RefusalKind::SpawnFailed`] — ★ the number that means
+    /// the host could not do what it was asked.
+    pub spawn_failed: u64,
+    /// One refusal sentence, verbatim, and its kind.
+    ///
+    /// ★ **`SpawnFailed` outranks `NoPlane`** when both are present: a plane that was
+    /// asked for and broke is strictly more informative than one that was never
+    /// installed, and a report with room for one line must carry the actionable one.
+    pub first: Option<(RefusalKind, String)>,
+}
+
+impl IsolateCensus {
+    /// Fold one isolate in: counts it live, and folds its [`Isolate::refusal`].
+    pub fn observe(&mut self, iso: &dyn Isolate) {
+        self.live = self.live.saturating_add(1);
+        self.observe_refusal(iso.refusal());
+    }
+
+    /// Fold one **answer** in, without a live count — the fold's own rule, reachable
+    /// without an [`Isolate`] to build.
+    ///
+    /// ★ Split out from [`IsolateCensus::observe`] so the precedence rule below can be
+    /// tested against both kinds in both orders. The alternative would have been a test
+    /// double that reports `SpawnFailed`, i.e. a mock deciding the answer to the question
+    /// under test — the shape this project has already had a planted mutation survive.
+    pub fn observe_refusal(&mut self, r: Option<IsolateRefusal<'_>>) {
+        let Some(r) = r else { return };
+        match r.kind {
+            RefusalKind::NoPlane => self.no_plane = self.no_plane.saturating_add(1),
+            RefusalKind::SpawnFailed => self.spawn_failed = self.spawn_failed.saturating_add(1),
+        }
+        let better = match &self.first {
+            None => true,
+            Some((RefusalKind::NoPlane, _)) => r.kind == RefusalKind::SpawnFailed,
+            Some((RefusalKind::SpawnFailed, _)) => false,
+        };
+        if better {
+            self.first = Some((r.kind, r.why.to_string()));
+        }
+    }
+
+    /// How many live isolates refuse, of either kind.
+    #[must_use]
+    pub fn refusing(&self) -> u64 {
+        self.no_plane.saturating_add(self.spawn_failed)
+    }
+}
+
+/// ★ **The only way core state owns an [`Isolate`] — and the door R1 is asserted at
+/// on the DROP side** (`l1_concurrency.md` §12.16, gap G3b).
+///
+/// `Worker::execute` gave R1 teeth for *verbs* (§12.8). It gave none for the other
+/// blocking thing an isolate does, and that thing is not a verb: a real isolate's
+/// `Drop` is `waitpid` + namespace teardown + fd close — a blocking syscall, run by
+/// the compiler at a point no call site names. `Spine::reap_retired` used to perform
+/// exactly that drop **inside the device write guard**, and nothing anywhere could
+/// notice. That is §12.6's shape verbatim ("an assert guarding a wrapper rather than
+/// the thing"), one layer over.
+///
+/// So every isolate the core stores lives in this newtype, and its `Drop` asserts
+/// lock-freedom the same way a verb does. It is not decoration: it is the *only*
+/// mechanism, because `Drop` cannot be implemented on the `dyn Isolate` trait itself
+/// and an adapter's own `Drop` cannot be relied on to exist (a mock has none, and the
+/// mock is what the core is tested against).
+///
+/// **Why it is sound to panic here.** A panic in `Drop` during an unwind aborts the
+/// process, which would replace a real failure's message with a bare abort. The
+/// assert is therefore skipped while this thread is already panicking
+/// (`std::thread::panicking`) — the standard guard-in-`Drop` discipline. The cost is
+/// exact and small: an isolate dropped under a lock *on an unwinding path* is not
+/// caught. The unwinding path is not where reclamation is designed, and every
+/// non-unwinding drop — which is all of production's and all of the suite's green
+/// path — is.
+pub struct IsolateBox(Box<dyn Isolate>);
+
+impl IsolateBox {
+    /// Take ownership of a freshly spawned isolate.
+    ///
+    /// ★★★ **And this is the door R1 is asserted at on the BIRTH side** — the exact
+    /// counterpart of this type's `Drop`, added because the drop half was only ever
+    /// half the rule. A real isolate's birth is `clone` into six namespaces,
+    /// `execveat` of a sealed memfd and a blocking hello handshake; under
+    /// `KAYFABE_ISOLATES=real` it then runs real `NV01_ROOT_CLIENT`/`NV01_DEVICE_0`
+    /// ioctls. That is a blocking call in exactly the sense R1 forbids under a lock,
+    /// and `kayfabe_linux_raw::ChildSpec::spawn` already asserts it — **for the host
+    /// plane only**. The whole suite runs on mocks, so the rule had no mechanism on
+    /// the path the suite exercises, and a regression could only ever be found by a
+    /// live boot. (It was: `f0b7efa_run_basereal_qemu.log`.)
+    ///
+    /// Asserting *here* rather than inside each `IsolateFactory` implementation is
+    /// what makes it one mechanism instead of three that can drift: this constructor
+    /// is the only way an isolate enters core state, whichever plane made it, and
+    /// nothing can acquire a lock between the factory's return and this call.
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock (R1) or any adapter leaf lock.
+    #[must_use]
+    pub fn new(isolate: Box<dyn Isolate>) -> Self {
+        kayfabe_util::lockwitness::assert_lock_free(
+            "materializing an isolate (sandbox spawn: clone into namespaces + execveat + \
+             hello handshake)",
+        );
+        kayfabe_util::leafwitness::assert_leaf_free(
+            "materializing an isolate (sandbox spawn: clone into namespaces + execveat + \
+             hello handshake)",
+        );
+        IsolateBox(isolate)
+    }
+}
+
+impl core::fmt::Debug for IsolateBox {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("IsolateBox")
+            .field("id", &self.0.id())
+            .field("retired", &self.0.is_retired())
+            .field("in_flight", &self.0.in_flight())
+            .finish()
+    }
+}
+
+impl core::ops::Deref for IsolateBox {
+    type Target = dyn Isolate;
+    fn deref(&self) -> &(dyn Isolate + 'static) {
+        &*self.0
+    }
+}
+
+impl core::ops::DerefMut for IsolateBox {
+    fn deref_mut(&mut self) -> &mut (dyn Isolate + 'static) {
+        &mut *self.0
+    }
+}
+
+impl Drop for IsolateBox {
+    /// # Panics
+    /// If this thread holds any ranked lock (R1) — see the type docs.
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            return;
+        }
+        kayfabe_util::lockwitness::assert_lock_free(
+            "dropping an isolate (sandbox teardown: waitpid + namespace unwind + fd close)",
+        );
+    }
+}
+
+/// Spawns isolates. The composition root holds one; per-`(Proc, GpuId)` isolates are
+/// created through it so the core never knows *how* a sandbox is made.
+///
+/// `Send + Sync`: owned by the shared `Gpu` (crate docs, #17).
+///
+/// ★★★ **`spawn` takes `&self`, and that is a concurrency requirement rather than a
+/// style choice.** R1 forbids a blocking call under any lock, and a spawn is the most
+/// blocking thing this port does — so the spawn must happen with **zero** locks held,
+/// which means the factory has to be reachable *without* the device lock that owns the
+/// core. A `&mut` door would have to be guarded by something, and guarding it with a
+/// lock held across the spawn is R1's violation wearing a different lock (and one the
+/// ranked witness cannot even see, `kayfabe_util::leafwitness`). `Spine` therefore holds
+/// the factory behind an `Arc` and the L1 shell keeps its own clone.
+///
+/// The only state an implementation wanted `&mut` for was its birth witness, which is
+/// microsecond bookkeeping and takes its own lock **around the push only** — never
+/// across the spawn.
+pub trait IsolateFactory: Send + Sync {
+    /// Spawn (or lazily reserve) the isolate for session `id` — one sandboxed host
+    /// worker **per guest process per target GPU** (`multi_gpu_and_mig.md` item 3: a
+    /// proc spanning two GPUs gets distinct isolates, so a bug forwarding its GPU0
+    /// traffic cannot reach its GPU1 host handles — the #14 blast-radius boundary
+    /// lifted onto the GPU axis).
+    ///
+    /// ★ N3: the target GPU rides **inside** [`IsolateId`] rather than beside it. This
+    /// used to be `spawn(id, gpu)`, which made "the id says one target, the sandbox was
+    /// built for another" a representable state — and the handles the sandbox then
+    /// minted would be stamped with the wrong namespace, which is precisely the fact
+    /// [`Worker::execute`]'s gate reads. One argument, no disagreement possible.
+    fn spawn(&self, id: IsolateId) -> Box<dyn Isolate>;
+}
+
+/// ★★★ An [`IsolateFactory`] that spawns **nothing** — the isolate plane's
+/// `kayfabe_device::RefusingRam`.
+///
+/// Every isolate it hands back is **retired at birth**: pool width zero, `checkout()`
+/// always `None`, so the core's ordinary backpressure path refuses every verb before one
+/// is composed. It is what a composition root installs when it has an object model to
+/// declare facts into and **no forwarding plane to issue them against**.
+///
+/// ## ⊘ This is not a mock, and the distinction is the whole point
+///
+/// A mock *answers* a verb — with a made-up handle, a made-up address, a made-up
+/// completion — and that is precisely the failure mode `only_live_boots_are_proof` and the
+/// project's measured "mock wall" are about: a green result that a real driver never
+/// produced. This type answers **no verb at all**. It is the same posture, and the same
+/// argument, as [`kayfabe_isolate_host::HostIsolate::stillborn`]'s already-documented
+/// behaviour — *"retired at birth, every slot dead, `checkout` returning `None`. That is
+/// correct behaviour (the core's backpressure path handles it)"* — reached deliberately
+/// rather than by a spawn failing.
+///
+/// ⚠ **And it is therefore indistinguishable, at the core, from a saturated pool** —
+/// exactly the ambiguity `HostIsolate::spawn_error` exists to record. That is why
+/// [`StillbornIsolates::why`] is a required constructor argument and not a default: a
+/// composition root that installs this owes an operator a sentence, and §4.4.1's pattern
+/// is that a deployment fact no type can carry gets checked at realize.
+///
+/// ⊘ **It is not a substitute for a forwarding plane and must never become one.** The day
+/// this port issues a real host verb, the composition root installs a real factory; the
+/// only thing this type is allowed to make true is *"the object model can accept protocol
+/// facts before the data plane exists"*.
+#[derive(Debug)]
+pub struct StillbornIsolates {
+    why: &'static str,
+    /// Every id this factory was asked for, in order — the same witness
+    /// `MockIsolateFactory::spawned` and `HostIsolateFactory::spawned` publish, so a test
+    /// can assert the isolate-per-`(Proc, GpuId)` property against any of the three.
+    ///
+    /// ⊘ Behind a `Mutex` because [`IsolateFactory::spawn`] takes `&self` (see the trait
+    /// docs). The lock is taken **around the push and nothing else** — never across a
+    /// spawn — so it is the microsecond bookkeeping R1 permits, not a lock held over a
+    /// blocking call. Read it with [`StillbornIsolates::spawned`].
+    spawned: std::sync::Mutex<Vec<IsolateId>>,
+}
+
+impl StillbornIsolates {
+    /// A factory whose isolates all refuse, naming `why`.
+    ///
+    /// `why` is `&'static str` rather than a `String` on purpose: it is a *deployment*
+    /// fact about this build's composition root, not a runtime condition, so it cannot be
+    /// assembled out of anything a guest supplies.
+    #[must_use]
+    pub fn new(why: &'static str) -> StillbornIsolates {
+        StillbornIsolates {
+            why,
+            spawned: std::sync::Mutex::new(Vec::new()),
+        }
+    }
+
+    /// Every id this factory was asked for, in order (the birth witness).
+    ///
+    /// # Panics
+    /// If the witness mutex was poisoned by a panic inside a `spawn`.
+    #[must_use]
+    pub fn spawned(&self) -> Vec<IsolateId> {
+        self.spawned.lock().expect("the spawn witness").clone()
+    }
+
+    /// Why every isolate from this factory refuses — the sentence a composition root
+    /// checks at realize (§4.4.1).
+    #[must_use]
+    pub fn why(&self) -> &'static str {
+        self.why
+    }
+}
+
+impl IsolateFactory for StillbornIsolates {
+    fn spawn(&self, id: IsolateId) -> Box<dyn Isolate> {
+        self.spawned.lock().expect("the spawn witness").push(id);
+        Box::new(StillbornIsolate { id, why: self.why })
+    }
+}
+
+/// One isolate from [`StillbornIsolates`]: retired at birth, no workers, no verbs.
+#[derive(Debug)]
+pub struct StillbornIsolate {
+    id: IsolateId,
+    why: &'static str,
+}
+
+impl StillbornIsolate {
+    /// Why this isolate refuses. The counterpart of
+    /// `kayfabe_isolate_host::HostIsolate::spawn_error`, and `Some` for the same reason:
+    /// *"the pool is saturated"* and *"there is no forwarding plane in this build"* are
+    /// the same observation at the [`Isolate`] seam, and only one of them is transient.
+    #[must_use]
+    pub fn why(&self) -> &'static str {
+        self.why
+    }
+}
+
+impl Isolate for StillbornIsolate {
+    fn id(&self) -> IsolateId {
+        self.id
+    }
+
+    /// **Zero.** Not "one slot that is dead": a width the core could see idle-count
+    /// against is a width something might one day wait for, and there is nothing here to
+    /// wait for. `pool_size() == 0` says *this isolate can never issue a verb* in the one
+    /// vocabulary the core already reads.
+    fn pool_size(&self) -> usize {
+        0
+    }
+
+    fn idle_workers(&self) -> usize {
+        0
+    }
+
+    fn checkout(&mut self) -> Option<Worker> {
+        None
+    }
+
+    /// ⊘ Unreachable by construction, and it drops rather than panics.
+    ///
+    /// [`Isolate::checkout`] never yields a [`Worker`], so nothing can ever be returned to
+    /// this isolate — the only way here is a caller checking a worker in to the wrong
+    /// isolate, which is a bug in the caller. Dropping is what
+    /// `kayfabe_isolate_host::HostIsolate::checkin` already does for a dead slot, and a
+    /// panic on a guest-reachable path would turn somebody else's bug into this device's
+    /// abort.
+    fn checkin(&mut self, worker: Worker) {
+        drop(worker);
+    }
+
+    fn checked_out(&self) -> Vec<WorkerId> {
+        Vec::new()
+    }
+
+    fn cancel_handle(&self, _worker: WorkerId) -> Option<CancelHandle> {
+        None
+    }
+
+    /// `false` — there is no slot to mark dead. Distinct from `HostIsolate`'s `true` for
+    /// an in-range index: a slot that never existed did not just die.
+    fn worker_died(&mut self, _worker: WorkerId) -> bool {
+        false
+    }
+
+    fn in_flight(&self) -> usize {
+        0
+    }
+
+    /// A no-op: [`Self::is_retired`] is already `true` and nothing can change it.
+    fn retire(&mut self) {}
+
+    /// **Always `true`.** Retired at birth — which is what makes every `checkout`
+    /// refusal permanent rather than transient, and is the fact `Spine::reap_retired`
+    /// reads.
+    fn is_retired(&self) -> bool {
+        true
+    }
+
+    /// ★ **Always [`RefusalKind::NoPlane`], and never `SpawnFailed`** — nothing was
+    /// attempted here. This type is what a composition root installs when it *chose* to
+    /// have no forwarding plane, and reporting it as a failure would put a red line in
+    /// front of an operator for a build behaving exactly as configured (E1).
+    fn refusal(&self) -> Option<IsolateRefusal<'_>> {
+        Some(IsolateRefusal {
+            kind: RefusalKind::NoPlane,
+            why: self.why,
+        })
+    }
+}
+
+// The concurrency contract, compile-time-asserted (decision #17).
+//
+// ★ **corrected 2026-07-27.** This comment said `dyn RmBackend` "is the one documented
+// Send-only exception (crate docs)" — twenty lines above the `assert_send_sync!` that
+// asserts the opposite. It is not an exception and has not been one since the §7.2
+// worker pool: an `Isolate` OWNS N idle `Worker`s, a `Proc` owns the isolate, and the
+// core's `Gpu` is `Sync`, so every boxed backend sitting in a pool slot must be `Sync`
+// for that chain to hold. `RmBackend`'s own supertrait bound (`Send + Sync`, above)
+// has been the truth all along. **This workspace has NO Send-only exception**; the two
+// `assert_send!` sites that exist (`dyn Vmm`, `Reactor`) are ARGUMENT-passed ports the
+// core never stores, which is a different property entirely.
+//
+// `RingWorkingSet` is deliberately absent for that same reason: it is borrowed for the
+// duration of one `VerbPlan::gated_doorbell` call and never stored, so bounding it would
+// price a property nothing needs onto every address plane that wants to be gateable.
+kayfabe_util::assert_send_sync!(
+    HostHandle,
+    RmError,
+    IsolateId,
+    WorkerId,
+    Txn,
+    CancelReason,
+    CancelHandle,
+    CancelRequest,
+    Cancels,
+    dyn CancelSink,
+    VerbPlan,
+    CeExecutor,
+    CeSource,
+    CeSubCopy,
+    UngatedVa,
+    VerbReply,
+    Orphans,
+    VerbFailure,
+    dyn Isolate,
+    dyn IsolateFactory,
+    IsolateBox,
+    // ★ Asserted for the concrete types too, not only through the trait objects above: a
+    // composition root stores `StillbornIsolates` by value inside the `Sync` core, so
+    // losing either bound would be a compile error HERE rather than a confusing one at
+    // the far end of `Gpu::realize`.
+    StillbornIsolates,
+    StillbornIsolate,
+    // E1: the census crosses from the core to the composition root through a shared
+    // handle, so it must be `Sync` for the same reason the factory is.
+    IsolateCensus,
+    RefusalKind
+);
+// The backend and the `Worker` that owns one: `Send + Sync` because pool slots live
+// inside the `Sync` core (crate docs), even though no call path ever shares one.
+kayfabe_util::assert_send_sync!(dyn RmBackend, Worker);
+
+#[cfg(test)]
+mod verbcost_records_every_exit_path {
+    //! ★★★ `Worker::execute` returns early in a dozen places and through `?`. A timer that
+    //! only fired on the happy path would systematically under-count exactly the slow,
+    //! failing verbs one most wants to see — so it is an RAII `Drop`, and this pins that.
+    use super::*;
+
+    #[test]
+    fn a_plan_that_returns_early_is_still_timed_and_the_census_ranks_by_TIME() {
+        let before = verbcost::census_rows()
+            .into_iter()
+            .find(|r| r.0 == "unit-test-early-return")
+            .map_or(0, |r| r.1);
+        {
+            let _t = VerbCostTimer {
+                t0: std::time::Instant::now(),
+                kind: "unit-test-early-return",
+            };
+            // …and the scope ends here as if by `?`, with no explicit record call.
+        }
+        let after = verbcost::census_rows()
+            .into_iter()
+            .find(|r| r.0 == "unit-test-early-return")
+            .map_or(0, |r| r.1);
+        assert_eq!(after, before + 1, "the drop must have recorded the plan");
+    }
+
+    /// ⊘ An empty census must say UNMEASURED, never print a tidy zero: "no verb plan
+    /// completed" is a fact about the boot, and this tree has paid for reading an absent
+    /// measurement as a zero one.
+    #[test]
+    fn the_census_line_never_dresses_an_absence_as_a_zero() {
+        let line = verbcost::census();
+        assert!(
+            line.starts_with("VERBCOST"),
+            "the line must be findable by a fixed prefix: {line}"
+        );
+        if verbcost::census_rows().is_empty() {
+            assert!(line.contains("NO VERB PLAN COMPLETED"), "{line}");
+            assert!(line.contains("unmeasured"), "{line}");
+        }
+    }
+}

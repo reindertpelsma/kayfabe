@@ -1,0 +1,123 @@
+GFX_STEPS_START role=host at 2026-09-26T00:24:31+00:00 kernel=6.8.0-59-generic
+GFX_DRIVER=580.159.04
+GFX_S1_MODESET=N
+GFX_S1_DRI=by-path card0 renderD128 
+  dmesg: [  468.827857] nvidia-modeset: Loading NVIDIA UNIX Open Kernel Mode Setting Driver for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:04:37 UTC 2026
+  dmesg: [  468.834415] [drm] [nvidia-drm] [GPU ID 0x00000007] Loading driver
+  dmesg: [  468.835132] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:07.0 on minor 0
+  dmesg: [  468.847300] [drm] [nvidia-drm] [GPU ID 0x00000007] Unloading driver
+  dmesg: [  468.876064] nvidia-modeset: Unloading
+  dmesg: [  532.000542] nvidia-modeset: Loading NVIDIA UNIX Open Kernel Mode Setting Driver for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:04:37 UTC 2026
+  dmesg: [  532.007421] [drm] [nvidia-drm] [GPU ID 0x00000007] Loading driver
+  dmesg: [  532.007802] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:07.0 on minor 0
+GFX_S1=FAIL
+  dri: total 0
+  dri: drwxr-xr-x  3 root root        100 Sep 25 23:09 .
+  dri: drwxr-xr-x 19 root root       4520 Sep 25 23:24 ..
+  dri: drwxr-xr-x  2 root root         80 Sep 25 23:09 by-path
+  dri: crw-rw----  1 root video  226,   0 Sep 25 23:09 card0
+  dri: crw-rw----  1 root render 226, 128 Sep 25 23:09 renderD128
+BUILD_GFX_OK ba6b9be88d18
+GFX_BUILD=OK
+  vulkaninfo: 	apiVersion         = 4211000 (1.4.312)
+  vulkaninfo: 	driverVersion      = 2435301632 (0x9127c100)
+  vulkaninfo: 	deviceType         = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
+  vulkaninfo: 	deviceName         = NVIDIA GeForce RTX 3080 Ti
+  vulkaninfo: 	driverID           = DRIVER_ID_NVIDIA_PROPRIETARY
+  vulkaninfo: 	apiVersion         = 4206847 (1.3.255)
+  vulkaninfo: 	driverVersion      = 1 (0x0001)
+  vulkaninfo: 	deviceType         = PHYSICAL_DEVICE_TYPE_CPU
+  vulkaninfo: 	deviceName         = llvmpipe (LLVM 15.0.7, 256 bits)
+  vulkaninfo: 	driverID           = DRIVER_ID_MESA_LLVMPIPE
+GFX_VULKANINFO_RC=0
+  VK_START mode=compute
+  VK_DEVICE[0]=NVIDIA GeForce RTX 3080 Ti vendor=0x10de type=2 api=1.4.312 driver=0x9127c100
+  VK_DEVICE[1]=llvmpipe (LLVM 15.0.7, 256 bits) vendor=0x10005 type=4 api=1.3.255 driver=0x1
+  VK_STAGE=device_created
+  VKC_N=1048576
+  VKC_HASH=9ef8f95225b2291f
+  VKC_BAD=0
+  VK_DONE rc=0
+VKC_HASH=9ef8f95225b2291f
+VKC_BAD=0
+GFX_VKC_RC=0
+GFX_S2=PASS
+  VK_START mode=render
+  VK_DEVICE[0]=NVIDIA GeForce RTX 3080 Ti vendor=0x10de type=2 api=1.4.312 driver=0x9127c100
+  VK_DEVICE[1]=llvmpipe (LLVM 15.0.7, 256 bits) vendor=0x10005 type=4 api=1.3.255 driver=0x1
+  VK_STAGE=device_created
+  VK_STAGE=pipelines_built
+  VKR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+  VKR_HASH_A=2a4db0673ee94aaf
+  VKR_HASH_Z=0f85f96d2be8e557
+  VKR_HASH_B=a74a7e3fdf3af27b
+  VKR_REF_FAILS=0
+  VK_DONE rc=0
+VKR_HASH_A=2a4db0673ee94aaf
+VKR_HASH_Z=0f85f96d2be8e557
+VKR_HASH_B=a74a7e3fdf3af27b
+VKR_REF_FAILS=0
+GFX_VKR_RC=0
+GFX_S3=PASS
+  eglinfo:     EGL_EXT_platform_base EGL_EXT_device_base EGL_EXT_device_enumeration
+  eglinfo:     EGL_EXT_client_extensions EGL_KHR_debug EGL_KHR_platform_x11
+  eglinfo:     EGL_EXT_platform_x11 EGL_EXT_platform_device
+  eglinfo:     EGL_MESA_platform_surfaceless EGL_EXT_explicit_device
+  eglinfo:     EGL_KHR_platform_wayland EGL_EXT_platform_wayland
+  eglinfo:     EGL_KHR_platform_gbm EGL_MESA_platform_gbm EGL_EXT_platform_xcb
+  eglinfo: GBM platform:
+  eglinfo: EGL vendor string: Mesa Project
+  eglinfo: EGL version string: 1.5
+  eglinfo: Wayland platform:
+  eglinfo: X11 platform:
+  eglinfo: Device platform:
+  eglinfo: EGL vendor string: NVIDIA
+  eglinfo: EGL version string: 1.5
+GFX_EGLINFO_RC=2
+  EGL_START
+  EGL_DEVICE[0] drm=/dev/dri/card0 ext=EGL_NV_device_cuda EGL_EXT_device_drm EGL_EXT_device_drm_render_node EGL_EXT_device_query_name EGL_EXT_device_persistent_id
+  EGL_DISPLAY[0] vendor=NVIDIA version=1.5
+  EGL_DEVICE[1] drm=/dev/dri/card0 ext=EGL_EXT_device_drm EGL_EXT_device_drm_render_node
+  EGL_DEVICE[2] drm=- ext=EGL_MESA_device_software EGL_EXT_device_drm_render_node
+  EGL_RENDERER=NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2
+  EGL_GL_VERSION=4.6.0 NVIDIA 580.159.04
+  EGL_STAGE=context_current
+  EGLR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+  EGLR_HASH_A=2a4db0673ee94aaf
+  EGLR_HASH_Z=d26f0e8bbed2b9bf
+  EGLR_HASH_B=238bd6f6f74e5280
+  EGLR_REF_FAILS=0
+  EGL_DONE rc=0
+EGL_RENDERER=NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2
+EGLR_HASH_A=2a4db0673ee94aaf
+EGLR_HASH_Z=d26f0e8bbed2b9bf
+EGLR_HASH_B=238bd6f6f74e5280
+EGLR_REF_FAILS=0
+GFX_EGLR_RC=0
+GFX_S4=PASS
+  glxinfo: OpenGL vendor string: NVIDIA Corporation
+  glxinfo: OpenGL renderer string: NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2
+  glxinfo: OpenGL core profile version string: 4.6.0 NVIDIA 580.159.04
+  glxinfo: OpenGL core profile shading language version string: 4.60 NVIDIA
+  glxinfo: OpenGL version string: 4.6.0 NVIDIA 580.159.04
+  glxinfo: OpenGL shading language version string: 4.60 NVIDIA
+  glxgears: 6952 frames in 5.0 seconds = 1390.278 FPS
+GFX_S5_RENDERER=NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2
+GFX_S5_FRAMES=6952
+  GLX_START
+  GLX_RENDERER=NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2
+  GLX_GL_VERSION=4.6.0 NVIDIA 580.159.04
+  GLXR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+  GLXR_HASH_A=2a4db0673ee94aaf
+  GLXR_HASH_Z=d26f0e8bbed2b9bf
+  GLXR_HASH_B=238bd6f6f74e5280
+  GLXR_REF_FAILS=0
+  GLX_DONE rc=0
+GLX_RENDERER=NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2
+GLXR_HASH_A=2a4db0673ee94aaf
+GLXR_HASH_Z=d26f0e8bbed2b9bf
+GLXR_HASH_B=238bd6f6f74e5280
+GLXR_REF_FAILS=0
+GFX_GLXR_RC=0
+GFX_S5=PASS
+GFX_STEPS_END role=host at 2026-09-26T00:25:06+00:00

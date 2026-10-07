@@ -1,0 +1,37 @@
+35 nvidiactl 0x2b ALLOC parent=0xa55a0030 new=0xa55a0040 class=0x2081 tail=000000000000000000000000000000000000000000000000
+36 nvidiactl 0x2a CTRL obj=0xa55a0040 cmd=0x20810108 psize=0x3e0 status=0x0
+37 nvidiactl 0x2a CTRL obj=0xa55a0030 cmd=0x20801801 psize=0x10 status=0x0
+38 nvidiactl 0x2a CTRL obj=0xa55a0030 cmd=0x2080012f psize=0x5b8 status=0x56
+39 nvidia0 0xc9 hpost=09000000
+40 nvidia0 0xce hpost=7d00d0c120005aa51200000000000000
+41 nvidia0 0x2b ALLOC parent=0xa55a0030 new=0xa55a0050 class=0x79 tail=000000000000000000000000000000000000000000000000
+42 nvidiactl 0x2a CTRL obj=0xa55a0030 cmd=0x20800301 psize=0x14 status=0x0
+43 nvidia0 0x2b ALLOC parent=0xa55a0030 new=0xa55a0060 class=0x79 tail=000000000000000000000000000000000000000000000000
+44 nvidiactl 0x2a CTRL obj=0xa55a0030 cmd=0x20800301 psize=0x14 status=0x0
+45 nvidia0 0x2b ALLOC parent=0xa55a0030 new=0xa55a0070 class=0x79 tail=000000000000000000000000000000000000000000000000
+46 nvidiactl 0x2a CTRL obj=0xa55a0030 cmd=0x20800301 psize=0x14 status=0x0
+47 nvidia0 0x2b ALLOC parent=0xa55a0030 new=0xa55a0080 class=0x79 tail=000000000000000000000000000000000000000000000000
+48 nvidiactl 0x2a CTRL obj=0xa55a0030 cmd=0x20800301 psize=0x14 status=0x0
+49 nvidia0 0x2b ALLOC parent=0xa55a0030 new=0xa55a0090 class=0x79 tail=000000000000000000000000000000000000000000000000
+50 nvidiactl 0x2a CTRL obj=0xa55a0030 cmd=0x20800301 psize=0x14 status=0x0
+51 nvidia0 0x2b ALLOC parent=0xa55a0030 new=0xa55a00a0 class=0x79 tail=000000000000000000000000000000000000000000000000
+52 nvidiactl 0x2a CTRL obj=0xa55a0030 cmd=0x20800301 psize=0x14 status=0x0
+53 nvidia0 0x2b ALLOC parent=0xa55a0030 new=0xa55a00b0 class=0x79 tail=000000000000000000000000000000000000000000000000
+54 nvidiactl 0x2a CTRL obj=0xa55a0030 cmd=0x20800301 psize=0x14 status=0x0
+55 nvidiactl 0x2a CTRL obj=0xc1d0007d cmd=0x00000101 psize=0x28 status=0x0
+---GUEST
+35 nvidiactl 0x2b ALLOC parent=0xa55a0030 new=0xa55a0040 class=0x2081 tail=000000000000000000000000000000000000000000000000
+36 nvidiactl 0x2a CTRL obj=0xa55a0040 cmd=0x20810108 psize=0x3e0 status=0x56
+37 nvidiactl 0x2a CTRL obj=0xa55a0030 cmd=0x20801801 psize=0x10 status=0x0
+38 nvidiactl 0x2a CTRL obj=0xa55a0030 cmd=0x2080012f psize=0x5b8 status=0x56
+39 nvidia0 0xc9 hpost=09000000
+40 nvidia0 0xce hpost=0b00d0c120005aa51200000000000000
+41 nvidia0 0x2b ALLOC parent=0xa55a0030 new=0xa55a0050 class=0x79 tail=000000000000000000000000000000000000000000000000
+42 nvidiactl 0x2a CTRL obj=0xa55a0030 cmd=0x20800301 psize=0x14 status=0x56
+43 nvidiactl 0x29 FREE parent=0xa55a0030 obj=0xa55a0050 status=0x0
+44 nvidia-uvm 0x2 hpost=
+45 nvidiactl 0x29 FREE parent=0xa55a0020 obj=0xa55a0030 status=0x0
+46 nvidiactl 0x29 FREE parent=0xa55a0020 obj=0x0 status=0x0
+47 nvidiactl 0x29 FREE parent=0xc1d0000b obj=0xa55a0020 status=0x0
+48 nvidiactl 0x2a CTRL obj=0xc1d0000b cmd=0x00000216 psize=0x80 status=0x0
+49 nvidiactl 0x29 FREE parent=0xc1d0000b obj=0xc1d0000b status=0x0

@@ -1,0 +1,62 @@
+# P2 (per-process host isolate) — BANKED 2026-07-19. No code diff; deferred to land WITH P4.
+
+Status: **not implemented standalone.** The tree is green at P1 (single-isolate design:
+ladder green + 2× cup8 both-pass). This file records the intended design and the precise,
+architecturally-grounded blocker that makes standalone P2 a *regression*, per the task's
+escape-hatch discipline ("if a phase can't be made green without regressing the baseline,
+STOP, save the diff/finding, revert so the tree is green, report").
+
+## The blocker (decisive)
+
+P2's job (plan §5) is: give each `NvkvmProc` its own unprivileged host isolate
+(`nvkvm_isolate_create(..., session_id=ordinal, ...)`) and route that process's forwarded
+**control/alloc/map** ioctls to *its* isolate (rows 11–19,26). Kernel/GSP/scrubber → the
+system isolate. Single-process stays byte-identical (one proc + system → the one base
+isolate as today).
+
+But the **execution plane is not isolate-split until P4.** `nvkvm_m2_doorbell_setup`
+(`:7683`) and `nvkvm_m2_exec_doorbell` (`:8644`) ring **one** host doorbell page
+(`s->m2_usermode_qva`, mapped from the *base* isolate's `AMPERE_USERMODE_A`) using the
+first GR channel's token/handles (`s->m2_gr_channel`, `s->m2_gr_token`, `s->m2_doorbell_ready`
+— all singletons; plan rows 23/32, explicitly P4 work). So if P2 places proc[1]'s host
+channels + compute objects in a **separate** host isolate (a separate stub process, separate
+`/dev/nvidia0`, separate host RM), the doorbell ring still hits the **base** isolate's
+usermode page with proc[1]'s token → proc[1]'s host GR channel (in its own isolate) is never
+actually rung → its work never executes.
+
+**Net: standalone P2 regresses the P1 result** (2× `cup8` both-pass), which works *precisely
+because* everything — both procs' control AND execution — shares one isolate, so the single
+doorbell page reaches both procs' host channels. The plan's own row table marks the execution
+state (rows 23/32) as P4; P2's control-plane split and P4's execution-plane split are
+**mutually dependent** for a 2nd process to run on its own isolate. They must land together.
+
+## The intended design (for the P2+P4 combined landing)
+
+The cleanest single-process-byte-identical shape is a **"current isolate context" activated at
+each forwarding dispatch entry**, avoiding a context-pointer thread through ~20 functions:
+
+- Keep the base isolate globals (`m2_iso_id`, `m2_ctl_h`, `m2_gpu_h`, `m2_cmap*`,
+  `m2_maph_next`, `m2_databuf_next`) as the SYSTEM + proc[0] isolate (set in `iso_ensure`).
+- Add `m2_cur_iso_id / m2_cur_ctl_h / m2_cur_gpu_h` + a `m2_cur_cmap` slice pointer,
+  defaulting to the base. Rename the ~17 *use* sites (`nvkvm_isolate_ioctl` /
+  `nvkvm_isolate_open_device` args) from `m2_iso_id`→`m2_cur_iso_id` etc. (mechanical;
+  NOT the `iso_ensure` setup site). Make `nvkvm_m2_client()` operate on `m2_cur_cmap`.
+- Add per-`NvkvmProc`: `iso_id, ctl_h, gpu_h, gpu_fd, gpu_registered, ram_shared,
+  cmap[], cmap_n, cmap_next, maph_next, databuf_next` (lazy-created; `session_id=ordinal`;
+  guest-RAM MAP_FIXED shared into each — the same `NVKVM_M2_STUB_RAMWIN` VA works per
+  separate stub process).
+- `nvkvm_m2_iso_activate(s, hClient)` at the top of each RPC in `service_cmdq` and each
+  channel in `exec_doorbell`: resolve `hClient`→proc (registry, P1); proc[0]/kernel/system →
+  base; proc[k>0] → its isolate + its cmap. Single process → always base → byte-identical
+  by construction (the added `activate` is a no-op that re-points cur_* at the base values).
+- **P4 co-requisite:** make `m2_gr_channel/m2_gr_tsg` (row 23), `m2_usermode_qva`/`m2_gr_token`/
+  `m2_doorbell_ready`, and the ring-pin (row 32) per-`NvkvmProc`, and ring **the doorbell page
+  of the submitting proc's isolate** (selected by the doorbell CHID→proc demux, P1/§1.4). Only
+  then does proc[1]'s work run on its own isolate → 2× both-pass restored on per-proc isolates.
+
+## Security note (unchanged)
+
+The isolate's security = its *unprivilege* + QEMU's host/cross-VM boundary (plan §1.2), which
+one isolate or N preserve identically. Per-proc isolates here are a **blast-radius / robustness**
+structure, not a security requirement — so deferring them to the P2+P4 combined landing loses
+no security property. The P1 single-isolate baseline is fully secure by this model.

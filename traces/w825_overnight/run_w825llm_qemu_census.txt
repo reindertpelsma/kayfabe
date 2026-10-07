@@ -1,0 +1,32 @@
+kayfabe: ENGINE-OBJECT class=0xc7c0 client=0xc1d00017 parent=0x5c000019 params=16B → FORWARDED engine=GrCompute host_object=0xb1470011 materialized_channel=false reused=false [seen=18 forwarded=1 refused=17]
+kayfabe: ENGINE-OBJECT class=0xc7c0 client=0xc1d00017 parent=0x5c00001f params=16B → FORWARDED engine=GrCompute host_object=0xb1470016 materialized_channel=false reused=false [seen=20 forwarded=3 refused=17]
+kayfabe: ENGINE-OBJECT class=0xc7c0 client=0xc1d00017 parent=0x5c000023 params=16B → FORWARDED engine=GrCompute host_object=0xb147001b materialized_channel=false reused=false [seen=22 forwarded=5 refused=17]
+kayfabe: ENGINE-OBJECT class=0xc7c0 client=0xc1d00017 parent=0x5c000027 params=16B → FORWARDED engine=GrCompute host_object=0xb1470020 materialized_channel=false reused=false [seen=24 forwarded=7 refused=17]
+kayfabe: ENGINE-OBJECT class=0xc7c0 client=0xc1d00017 parent=0x5c00002b params=16B → FORWARDED engine=GrCompute host_object=0xb1470025 materialized_channel=false reused=false [seen=26 forwarded=9 refused=17]
+kayfabe: ENGINE-OBJECT class=0xc7c0 client=0xc1d00017 parent=0x5c00002f params=16B → FORWARDED engine=GrCompute host_object=0xb147002a materialized_channel=false reused=false [seen=28 forwarded=11 refused=17]
+kayfabe: ENGINE-OBJECT class=0xc7c0 client=0xc1d00017 parent=0x5c000033 params=16B → FORWARDED engine=GrCompute host_object=0xb147002f materialized_channel=false reused=false [seen=30 forwarded=13 refused=17]
+kayfabe: ENGINE-OBJECT class=0xc7c0 client=0xc1d00017 parent=0x5c000037 params=16B → FORWARDED engine=GrCompute host_object=0xb1470034 materialized_channel=false reused=false [seen=32 forwarded=15 refused=17]
+kayfabe: SCRATCHPAD AT END OF RUN: arm=on up=true proc=4294967295 gpu=0 pool=4 reservation=HELD RESERVED_MB=10240 spawn_ms=2337.413 probe_ms=16.856 reserve_ms=255.264 ⇒ the VM's video memory is ONE host RM object
+kayfabe: DOORBELL-LEDGER tok=0x00000007 passthrough=0 emulated=1 other=0 forwarded=21055
+DOORBELL-LEDGER tok=0x00000008 passthrough=0 emulated=1 other=0 forwarded=1
+DOORBELL-LEDGER tok=0x00000009 passthrough=0 emulated=1 other=0 forwarded=1
+DOORBELL-LEDGER tok=0x0000000a passthrough=0 emulated=1 other=0 forwarded=1
+DOORBELL-LEDGER tok=0x0000000b passthrough=0 emulated=1 other=0 forwarded=1
+DOORBELL-LEDGER tok=0x0000000c passthrough=0 emulated=1 other=0 forwarded=1
+DOORBELL-LEDGER tok=0x0000000d passthrough=0 emulated=1 other=0 forwarded=1
+DOORBELL-LEDGER tok=0x0000000e passthrough=0 emulated=1 other=0 forwarded=1
+DOORBELL-LEDGER tok=0x00010001 passthrough=0 emulated=132 other=0 forwarded=0
+DOORBELL-LEDGER tok=0x00010002 passthrough=0 emulated=8 other=0 forwarded=0
+DOORBELL-LEDGER tok=0x00010003 passthrough=0 emulated=326 other=0 forwarded=0
+DOORBELL-LEDGER tok=0x00010004 passthrough=0 emulated=3 other=0 forwarded=0
+DOORBELL-LEDGER tok=0x0001000f passthrough=0 emulated=1 other=0 forwarded=1151
+DOORBELL-LEDGER tok=0x00010010 passthrough=0 emulated=1 other=0 forwarded=1
+DOORBELL-LEDGER tok=0x00010011 passthrough=0 emulated=1 other=0 forwarded=1
+DOORBELL-LEDGER tok=0x00010012 passthrough=0 emulated=1 other=0 forwarded=1
+DOORBELL-LEDGER tok=0x00020005 passthrough=0 emulated=3 other=0 forwarded=0
+DOORBELL-LEDGER tok=0x00020006 passthrough=0 emulated=3 other=0 forwarded=0
+DOORBELL-LEDGER tok=0x00020013 passthrough=0 emulated=1 other=0 forwarded=36
+DOORBELL-LEDGER tok=0x00020014 passthrough=0 emulated=1 other=0 forwarded=1
+DOORBELL-LEDGER tok=0x00020015 passthrough=0 emulated=1 other=0 forwarded=1
+DOORBELL-LEDGER tok=0x00020016 passthrough=0 emulated=1 other=0 forwarded=1
+DOORBELL-LEDGER tokens=22 dropped=0 ⇒ match a failing rung's token against this list: `forwarded=0` with `emulated>0` means it never went to hardware; `forwarded>0` means it did and the ENGINE did not do the work

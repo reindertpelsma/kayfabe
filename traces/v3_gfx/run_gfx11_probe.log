@@ -1,0 +1,202 @@
+=== boot_capture tag=gfx11 at 2026-09-26T00:38:08+00:00 ===
+=== source revision: 68fb3768 ===
+=== qemu binary: -rwxr-xr-x 1 root root 95912784 Sep 26 00:37 /workspace/bench/kf3-bins/68fb3768-dirty/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:b4008739592c3a22416e573b8e65aaf8525f22a6 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=7454bf433c1d9212
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Sat Sep 26 00:38:15 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3080 Ti     Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep 26 00:38 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep 26 00:38 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep 26 00:38 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep 26 00:38 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep 26 00:38 .
+drwxr-xr-x 18 root root   4000 Sep 26 00:38 ..
+cr--------  1 root root 240, 1 Sep 26 00:38 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep 26 00:38 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/gfx/steps_then_hold_hook.sh at 2026-09-26T00:38:17+00:00 ===
+GFX_HOOK_START 2026-09-26T00:38:18+00:00
+SHIPPED
+GFX_GUEST_RC=0
+  guest| GFX_STEPS_START role=guest at 2026-09-26T00:38:18+00:00 kernel=6.8.0-139-generic
+  guest| GFX_DRIVER=580.159.04
+  guest| GFX_S1_MODESET=Y
+  guest| GFX_S1_DRI=by-path card0 renderD128 
+  guest|   dmesg: [   32.964618] nvidia-modeset: Loading NVIDIA UNIX Open Kernel Mode Setting Driver for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:04:37 UTC 2026
+  guest|   dmesg: [   32.972082] [drm] [nvidia-drm] [GPU ID 0x00000003] Loading driver
+  guest|   dmesg: [   34.062062] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:03.0 on minor 0
+  guest| GFX_S1=PASS
+  guest|   dri: total 0
+  guest|   dri: drwxr-xr-x  3 root root        100 Sep 26 00:38 .
+  guest|   dri: drwxr-xr-x 19 root root       4020 Sep 26 00:38 ..
+  guest|   dri: drwxr-xr-x  2 root root         80 Sep 26 00:38 by-path
+  guest|   dri: crw-rw----  1 root video  226,   0 Sep 26 00:38 card0
+  guest|   dri: crw-rw----  1 root render 226, 128 Sep 26 00:38 renderD128
+  guest| BUILD_GFX_OK ba4331af9705
+  guest| GFX_BUILD=OK
+  guest|   vulkaninfo: 	apiVersion         = 1.4.312
+  guest|   vulkaninfo: 	driverVersion      = 580.159.4.0
+  guest|   vulkaninfo: 	deviceType         = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
+  guest|   vulkaninfo: 	deviceName         = NVIDIA GeForce RTX 3080 Ti
+  guest|   vulkaninfo: 	driverID           = DRIVER_ID_NVIDIA_PROPRIETARY
+  guest|   vulkaninfo: 	apiVersion         = 1.4.318
+  guest|   vulkaninfo: 	driverVersion      = 25.2.8
+  guest|   vulkaninfo: 	deviceType         = PHYSICAL_DEVICE_TYPE_CPU
+  guest|   vulkaninfo: 	deviceName         = llvmpipe (LLVM 20.1.2, 256 bits)
+  guest|   vulkaninfo: 	driverID           = DRIVER_ID_MESA_LLVMPIPE
+  guest| GFX_VULKANINFO_RC=0
+  guest|   VK_START mode=compute
+  guest|   VK_DEVICE[0]=NVIDIA GeForce RTX 3080 Ti vendor=0x10de type=2 api=1.4.312 driver=0x9127c100
+  guest|   VK_DEVICE[1]=llvmpipe (LLVM 20.1.2, 256 bits) vendor=0x10005 type=4 api=1.4.318 driver=0x6402008
+  guest|   VK_STAGE=device_created
+  guest|   VKC_N=1048576
+  guest|   VKC_HASH=9ef8f95225b2291f
+  guest|   VKC_BAD=0
+  guest|   VK_DONE rc=0
+  guest| VKC_HASH=9ef8f95225b2291f
+  guest| VKC_BAD=0
+  guest| GFX_VKC_RC=0
+  guest| GFX_S2=PASS
+  guest|   VK_START mode=render
+  guest|   VK_DEVICE[0]=NVIDIA GeForce RTX 3080 Ti vendor=0x10de type=2 api=1.4.312 driver=0x9127c100
+  guest|   VK_DEVICE[1]=llvmpipe (LLVM 20.1.2, 256 bits) vendor=0x10005 type=4 api=1.4.318 driver=0x6402008
+  guest|   VK_STAGE=device_created
+  guest|   VK_STAGE=pipelines_built
+  guest|   VKR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+  guest|   VKR_HASH_A=2a4db0673ee94aaf
+  guest|   VKR_HASH_Z=0f85f96d2be8e557
+  guest|   VKR_HASH_B=a74a7e3fdf3af27b
+  guest|   VKR_REF_FAILS=0
+  guest|   VK_DONE rc=0
+  guest| VKR_HASH_A=2a4db0673ee94aaf
+  guest| VKR_HASH_Z=0f85f96d2be8e557
+  guest| VKR_HASH_B=a74a7e3fdf3af27b
+  guest| VKR_REF_FAILS=0
+  guest| GFX_VKR_RC=0
+  guest| GFX_S3=PASS
+  guest|   eglinfo: GBM platform:
+  guest|   eglinfo: EGL vendor string: NVIDIA
+  guest|   eglinfo: EGL version string: 1.5
+  guest|   eglinfo: OpenGL core profile vendor: NVIDIA Corporation
+  guest|   eglinfo: OpenGL core profile renderer: NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2
+  guest|   eglinfo: OpenGL compatibility profile vendor: NVIDIA Corporation
+  guest|   eglinfo: OpenGL compatibility profile renderer: NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2
+  guest|   eglinfo: OpenGL ES profile vendor: NVIDIA Corporation
+  guest|   eglinfo: OpenGL ES profile renderer: NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2
+  guest|   eglinfo: Wayland platform:
+  guest|   eglinfo: X11 platform:
+  guest|   eglinfo: Surfaceless platform:
+  guest|   eglinfo: EGL vendor string: NVIDIA
+  guest|   eglinfo: EGL version string: 1.5
+  guest|   eglinfo: OpenGL core profile vendor: NVIDIA Corporation
+  guest|   eglinfo: OpenGL core profile renderer: NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2
+  guest| GFX_EGLINFO_RC=3
+  guest|   EGL_START
+  guest|   EGL_DEVICE[0] drm=/dev/dri/card0 ext=EGL_NV_device_cuda EGL_EXT_device_drm EGL_EXT_device_drm_render_node EGL_EXT_device_query_name EGL_EXT_device_persistent_id
+  guest|   EGL_DISPLAY[0] vendor=NVIDIA version=1.5
+  guest|   EGL_DEVICE[1] drm=/dev/dri/card0 ext=EGL_EXT_device_drm EGL_EXT_device_drm_render_node EGL_EXT_device_query_name EGL_EXT_device_persistent_id
+  guest|   EGL_DEVICE[2] drm=- ext=EGL_MESA_device_software EGL_EXT_device_drm_render_node
+  guest|   EGL_RENDERER=NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2
+  guest|   EGL_GL_VERSION=4.6.0 NVIDIA 580.159.04
+  guest|   EGL_STAGE=context_current
+  guest|   EGLR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+  guest|   EGLR_HASH_A=2a4db0673ee94aaf
+  guest|   EGLR_HASH_Z=d26f0e8bbed2b9bf
+  guest|   EGLR_HASH_B=238bd6f6f74e5280
+  guest|   EGLR_REF_FAILS=0
+  guest|   EGL_DONE rc=0
+  guest| EGL_RENDERER=NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2
+  guest| EGLR_HASH_A=2a4db0673ee94aaf
+  guest| EGLR_HASH_Z=d26f0e8bbed2b9bf
+  guest| EGLR_HASH_B=238bd6f6f74e5280
+  guest| EGLR_REF_FAILS=0
+  guest| GFX_EGLR_RC=0
+  guest| GFX_S4=PASS
+  guest|   glxinfo: OpenGL vendor string: NVIDIA Corporation
+  guest|   glxinfo: OpenGL renderer string: NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2
+  guest|   glxinfo: OpenGL core profile version string: 4.6.0 NVIDIA 580.159.04
+  guest|   glxinfo: OpenGL core profile shading language version string: 4.60 NVIDIA
+  guest|   glxinfo: OpenGL version string: 4.6.0 NVIDIA 580.159.04
+  guest|   glxinfo: OpenGL shading language version string: 4.60 NVIDIA
+  guest|   glxgears: 2450 frames in 5.0 seconds = 489.928 FPS
+  guest|   glxgears: 3086 frames in 5.0 seconds = 616.826 FPS
+  guest| GFX_S5_RENDERER=NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2
+  guest| GFX_S5_FRAMES=2450
+  guest|   GLX_START
+  guest|   GLX_RENDERER=NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2
+  guest|   GLX_GL_VERSION=4.6.0 NVIDIA 580.159.04
+  guest|   GLXR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+  guest|   GLXR_HASH_A=2a4db0673ee94aaf
+  guest|   GLXR_HASH_Z=d26f0e8bbed2b9bf
+  guest|   GLXR_HASH_B=238bd6f6f74e5280
+  guest|   GLXR_REF_FAILS=0
+  guest|   GLX_DONE rc=0
+  guest| GLX_RENDERER=NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2
+  guest| GLXR_HASH_A=2a4db0673ee94aaf
+  guest| GLXR_HASH_Z=d26f0e8bbed2b9bf
+  guest| GLXR_HASH_B=238bd6f6f74e5280
+  guest| GLXR_REF_FAILS=0
+  guest| GFX_GLXR_RC=0
+  guest| GFX_S5=PASS
+  guest| GFX_STEPS_END role=guest at 2026-09-26T00:38:54+00:00
+GFX_S1=PASS
+GFX_S2=PASS
+GFX_S3=PASS
+GFX_S4=PASS
+GFX_S5=PASS
+GFX_CMP_VKC_HASH=MATCH 9ef8f95225b2291f
+GFX_CMP_VKR_HASH_A=MATCH 2a4db0673ee94aaf
+GFX_CMP_VKR_HASH_Z=MATCH 0f85f96d2be8e557
+GFX_CMP_VKR_HASH_B=MATCH a74a7e3fdf3af27b
+GFX_CMP_EGLR_HASH_A=MATCH 2a4db0673ee94aaf
+GFX_CMP_EGLR_HASH_Z=MATCH d26f0e8bbed2b9bf
+GFX_CMP_EGLR_HASH_B=MATCH 238bd6f6f74e5280
+GFX_CMP_GLXR_HASH_A=MATCH 2a4db0673ee94aaf
+GFX_CMP_GLXR_HASH_Z=MATCH d26f0e8bbed2b9bf
+GFX_CMP_GLXR_HASH_B=MATCH 238bd6f6f74e5280
+GFX_HOOK_END 2026-09-26T00:38:55+00:00
+HOLD_START 2026-09-26T00:38:55+00:00 — release with: touch /workspace/bench/release_gfx11
+HOLD_END 2026-09-26T00:39:35+00:00 after 40s
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 28 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=52
+GUEST_DMESG_AFTER_NVRM=44
+GUEST_DMESG_WORKLOAD_DELTA=24
+=== HOST dmesg delta for this boot (watermark 1742 → 1742) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

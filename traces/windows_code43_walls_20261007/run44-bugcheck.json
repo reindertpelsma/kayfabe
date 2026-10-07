@@ -1,0 +1,2 @@
+/dev/nbd0 disconnected
+{"schema": "kayfabe-bugcheck-recovery/1", "run": 44, "disk_access": "read-only NBD and NTFS; supervisor stopped", "pagefile": {"valid": true, "signature": "PAGEDU64", "major": 15, "build": 26100, "machine": "0x8664", "processors": 8, "bugcheck_code": "0x116", "parameters": ["0xffff80849bde9010", "0xfffff8063b1a4580", "0x0", "0xd"]}, "minidump": null, "evtx_copied": ["System.evtx"], "cleanup_verified": true}

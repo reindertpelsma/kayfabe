@@ -1,0 +1,6 @@
+host.res counts {'PASS': 71} verdict_changes []
+guest.res counts {'PASS': 67, 'FAIL': 4} verdict_changes []
+guest_isolated.res counts {'FAIL': 4} verdict_changes []
+Host/guest digests match: 3 ; guest digests unchanged: 3
+Known conjugateGradientUM wrong-answer/success defect persists in both candidates.
+APP_COMPARISON PASS unchanged baseline; not an all-app correctness claim

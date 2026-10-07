@@ -1,0 +1,31 @@
+[package]
+name = "kayfabe-rt"
+description = "The L1 threaded shell (l1_concurrency.md §2/§3, decision #37): the ranked-lock discipline with the asserted R1/R3 invariants, the SharedDevice lock-swap over the core's sharding shape (device RwLock + per-Proc Mutexes, both lock configurations), and the executor inbox. An ADAPTER crate — deliberately outside the hexagonal-boundary grep — but pure std: no OS waiting primitives live here (those are stage 3 / L2)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kayfabe-util.workspace = true
+kayfabe-arch.workspace = true
+kayfabe-abi.workspace = true
+kayfabe-mmu.workspace = true
+kayfabe-completion.workspace = true
+kayfabe-isolate.workspace = true
+kayfabe-vmm.workspace = true
+kayfabe-core.workspace = true
+kayfabe-fwd.workspace = true
+# ★ E10c: the shell CPU CE executor moves bytes into the emulated framebuffer store
+# (`kayfabe_device::FbStore`). rt is an adapter, so this is a peer-adapter dependency, not
+# a hexagonal-boundary crossing; `kayfabe-device` does not depend back on `kayfabe-rt`.
+kayfabe-device.workspace = true
+
+[dev-dependencies]
+kayfabe-mocks.workspace = true
+# ★★★ The single-writer rule's type half — `tests/compile_fail.rs`. Same idiom, and for the
+# same reason, as `kayfabe-isolate`'s ring-gate row: an impossibility asserted only in a doc
+# comment is an unexercised green instrument, and nobody notices when it stops being true.
+trybuild = "1.0"
+
+[lints]
+workspace = true

@@ -1,0 +1,65 @@
+=== w401 TRIGGER BOOT 2026-09-10T16:21:02+00:00 tag=w406 ===
+qemu rev: kayfabe-rev:0118eea3050f4e203f5b7478712c0d6db189050f 
+WRITER-TRIGGER in binary: 2 (0 ⇒ this is the OLD promote-only latch — STOP, do not grade)
+W406-REFRESH in binary: 4 (0 ⇒ the refresh arms are NOT in this binary — STOP, do not grade)
+boot_capture rc=5 (⊘ rc=5 is the evidence-persist check; read the artefacts)
+--- LEDGER tag=w406 ---
+[client] W392D_OUTCOME=(F) ⊘ NOT A PASS — at least one row above is not ✔.
+[client] THREADS           8 of 8 verified ✔
+[client] MEAN_FALSIFIER=PASS
+--- THE LADDER (P1..Pn), which is what this change is graded on ---
+[ladder] P1 → ✔ VERIFIED over 8 round(s)
+[ladder] P2 → ✔ VERIFIED over 8 round(s)
+[ladder] P3 → ⊘ REFUSED at UVM_REGISTER_CHANNEL (GR) — the GPU_PROMOTE_CTX door: UVM_REGISTER_CHANNEL: rmStatus 0x
+[ladder] P1 rm-invalidate  ✔ VERIFIED over 8 round(s)
+[ladder] P2 uvm-memop      ✔ VERIFIED over 8 round(s)
+[ladder] P3 rpc-bind       ⊘ REFUSED at UVM_REGISTER_CHANNEL (GR) — the GPU_PROMOTE_CTX door: UVM_REGISTER_CHANNEL: 
+[ladder] P1 → ✔ VERIFIED over 8 round(s)
+[ladder] P2 → ✔ VERIFIED over 8 round(s)
+[ladder] P3 → ⊘ REFUSED at UVM_REGISTER_CHANNEL (GR) — the GPU_PROMOTE_CTX door: UVM_REGISTER_CHANNEL: rmStatus 0x
+[ladder] P1 rm-invalidate  ✔ VERIFIED over 8 round(s)
+[ladder] P2 uvm-memop      ✔ VERIFIED over 8 round(s)
+[ladder] P3 rpc-bind       ⊘ REFUSED at UVM_REGISTER_CHANNEL (GR) — the GPU_PROMOTE_CTX door: UVM_REGISTER_CHANNEL: 
+--- ★ THE GUEST-SIDE CLIENT, which is the rung the owner asked for ---
+[guest]  W392D_MEAN_CONFIG=threads:8 rounds:8 falsify:on (⊘ client defaults are 4/4)
+[guest]  W392D_GUEST_OUTCOME=(R) ★★★★★ A NAMED GAP — and this is the most valuable
+[guest]  W392D_GUEST_RC=1
+[guest]  MEAN_FALSIFIER=PASS
+[guest]  P1 → ✔ VERIFIED over 8 round(s)
+[guest]  STALE RACE → ✔ VERIFIED over 2 round(s)
+[guest]  P2 → ✔ VERIFIED over 8 round(s)
+[guest]  P3 → ⊘ REFUSED at UVM_REGISTER_CHANNEL (GR) — the GPU_PROMOTE_CTX door: UVM_REGISTER_CHANNEL: rmStatus 
+[guest]  THREADS → 8/8 clean, 28 overlapping pair(s) of graded intervals
+[guest]  P1 rm-invalidate  ✔ VERIFIED over 8 round(s)
+[guest]  P2 uvm-memop      ✔ VERIFIED over 8 round(s)
+[guest]  P3 rpc-bind       ⊘ REFUSED at UVM_REGISTER_CHANNEL (GR) — the GPU_PROMOTE_CTX door: UVM_REGISTER_CHANNEL
+[guest]  STALE RACE        ✔ VERIFIED over 2 round(s)
+[guest]  THREADS           8 of 8 verified ✔
+[guest]  MEAN_FALSIFIER=PASS
+--- ★★★ THE ORDERING, WHICH IS THE WHOLE GRADE ---
+[order]  publish of 0x9140000000 at line NONE;  ring of token 9 at line 4849
+[order]  ⊘ UNMEASURED — one of the two lines is absent; do not grade this boot
+[order]  GR0 fault at 0x91_40000000: 0 (must be 0)
+[order]  CE0 bystander @0xa0_00000000: 1 (present in GREEN runs too)
+--- THE TRIGGER ITSELF ---
+[trig]   RPCMAP-PUBLISH (inline, the fix): 0
+[trig]   RPCBIND-PUBLISH lines: 386
+[trig] RPCBIND-PUBLISH (off-vCPU) vas_changed=1 VAS-PUBLISH token=0x00000001 arm=publish W328SCOPE[arm=all scoped=false target=⊘NONE (no channel fac
+[trig] RPCBIND-PUBLISH (off-vCPU) vas_changed=1 VAS-PUBLISH token=0x00000001 arm=publish W328SCOPE[arm=all scoped=false target=⊘NONE (no channel fac
+[trig] RPCBIND-PUBLISH (off-vCPU) vas_changed=1 VAS-PUBLISH token=0x00000001 arm=publish W328SCOPE[arm=all scoped=false target=⊘NONE (no channel fac
+[trig] RPCBIND-PUBLISH (off-vCPU) vas_changed=1 VAS-PUBLISH token=0x00000001 arm=publish W328SCOPE[arm=all scoped=false target=⊘NONE (no channel fac
+[trig] RPCBIND-PUBLISH (off-vCPU) vas_changed=1 VAS-PUBLISH token=0x00000001 arm=publish W328SCOPE[arm=all scoped=false target=⊘NONE (no channel fac
+[trig] RPCBIND-PUBLISH (off-vCPU) vas_changed=1 VAS-PUBLISH token=0x00000001 arm=publish W328SCOPE[arm=all scoped=false target=⊘NONE (no channel fac
+[trig] RPCBIND-PUBLISH (off-vCPU) vas_changed=1 VAS-PUBLISH token=0x00000001 arm=publish W328SCOPE[arm=all scoped=false target=⊘NONE (no channel fac
+[trig] RPCBIND-PUBLISH (off-vCPU) vas_changed=1 VAS-PUBLISH token=0x00000001 arm=publish W328SCOPE[arm=all scoped=false target=⊘NONE (no channel fac
+[trig]   MMUINVAL-PUBLISH lines: 1178
+[w406]   MMUINVAL-REFRESH firings: 1178  (the TLB-invalidate arm refreshed BEFORE completing)
+[w406]   CE-LOCAL-REFRESH firings: 226  (the UVM emulated channel refreshed BEFORE its release was written)
+[w406]   MMUINVAL-COMPLETE WITHHELD: 0  (a newer trigger arrived mid-refresh; expected 0 — RM serialises)
+[w406]   CE-LOCAL COMPLETION NOT WRITTEN: 0  (must be 0: a stranded waiter)
+[w406]   worst refresh_ms: 65.17  (the guest spins on TRIGGER for this long)
+[w406]   invalidate census: worst_hold_us=21860 over_budget=0 reentrant=0
+[trig]   PROMOTE-BOUND lines:    1
+[xid]    host Xid lines: 1
+[boot]   arming banners: FB-JOIN arm=shared GR-ROUTE arm=passthrough GUEST-RING arm=ring PT-SWEEP arm=on 
+--- END LEDGER tag=w406 ---

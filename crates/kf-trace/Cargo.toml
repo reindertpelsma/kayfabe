@@ -1,0 +1,12 @@
+[package]
+name = "kf-trace"
+description = "v3 wire-plane trace vocabulary (MMIO, guest RAM, IRQ, clock) + positional differential. Oracle-only: never linked into the product."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kf-arch.workspace = true
+
+[lints]
+workspace = true

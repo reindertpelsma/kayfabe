@@ -1,0 +1,186 @@
+=== POST_CAPTURE_HOOK /workspace/bench/strace_hook.sh at 2026-08-09T03:02:24+00:00 ===
+=== push the probe source (it does NOT persist across guest boots) ===
+GCC_RC=0
+=== which strace ===
+/usr/bin/strace
+/usr/bin/strace
+=== run cup2 under strace ===
+FAIL cuInit(0) -> initialization error (3)
+CUP2_RC=1
+=== total lines ===
+447 /tmp/st.txt
+=== every nvidia/dev open ===
+165:1557  openat(AT_FDCWD, "/dev/shm/cuda_injection_path_shm", O_RDWR|O_NOFOLLOW|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+211:1557  openat(AT_FDCWD, "/dev/nvidiactl", O_RDWR) = 8
+233:1557  openat(AT_FDCWD, "/dev/nvidiactl", O_RDWR) = 8
+280:1557  openat(AT_FDCWD, "/dev/nvidia-uvm", O_RDWR|O_CLOEXEC) = 9
+282:1557  openat(AT_FDCWD, "/dev/nvidia-uvm", O_RDWR|O_CLOEXEC) = 10
+300:1557  openat(AT_FDCWD, "/dev/nvidia0", O_RDWR|O_CLOEXEC) = 11
+317:1557  openat(AT_FDCWD, "/dev/nvidia0", O_RDWR|O_CLOEXEC) = 12
+338:1557  openat(AT_FDCWD, "/dev/nvidia0", O_RDWR|O_CLOEXEC) = 13
+361:1557  openat(AT_FDCWD, "/dev/nvidia0", O_RDWR|O_CLOEXEC) = 14
+378:1557  openat(AT_FDCWD, "/dev/nvidia0", O_RDWR|O_CLOEXEC) = 15
+385:1557  openat(AT_FDCWD, "/dev/nvidiactl", O_RDWR|O_CLOEXEC) = 15
+=== ioctl census by fd ===
+     90 ioctl(8
+      4 ioctl(9
+      3 ioctl(14
+      2 ioctl(12
+      1 ioctl(13
+      1 ioctl(10
+=== every FAILING syscall ===
+4:1557  access("/etc/ld.so.preload", R_OK) = -1 ENOENT (No such file or directory)
+165:1557  openat(AT_FDCWD, "/dev/shm/cuda_injection_path_shm", O_RDWR|O_NOFOLLOW|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+166:1557  openat(AT_FDCWD, "/home/ubuntu/.nv/nvidia-application-profile-globals-rc", O_RDONLY) = -1 ENOENT (No such file or directory)
+168:1557  openat(AT_FDCWD, "/home/ubuntu/.nv/nvidia-application-profiles-rc", O_RDONLY) = -1 ENOENT (No such file or directory)
+169:1557  openat(AT_FDCWD, "/home/ubuntu/.nv/nvidia-application-profiles-rc.d", O_RDONLY) = -1 ENOENT (No such file or directory)
+170:1557  openat(AT_FDCWD, "/etc/nvidia/nvidia-application-profiles-rc", O_RDONLY) = -1 ENOENT (No such file or directory)
+171:1557  openat(AT_FDCWD, "/etc/nvidia/nvidia-application-profiles-rc.d/", O_RDONLY) = -1 ENOENT (No such file or directory)
+180:1557  openat(AT_FDCWD, "/usr/share/nvidia/nvidia-application-profiles-rc", O_RDONLY) = -1 ENOENT (No such file or directory)
+192:1557  connect(8, {sa_family=AF_UNIX, sun_path="/tmp/nvidia-mps/control"}, 26) = -1 ENOENT (No such file or directory)
+194:1557  readlink("/proc", 0x7fffb1485910, 1023) = -1 EINVAL (Invalid argument)
+196:1557  readlink("/proc/1557", 0x7fffb1485910, 1023) = -1 EINVAL (Invalid argument)
+198:1557  readlink("/tmp", 0x7fffb1485910, 1023) = -1 EINVAL (Invalid argument)
+199:1557  readlink("/tmp/cup2", 0x7fffb1485910, 1023) = -1 EINVAL (Invalid argument)
+208:1557  unlink("/dev/char/195:255")       = -1 EACCES (Permission denied)
+209:1557  symlink("../nvidiactl", "/dev/char/195:255") = -1 EEXIST (File exists)
+218:1557  stat("/proc/driver/nvidia/gpus/0000:00:03.0/numa_status", 0x7fffb1485eb0) = -1 ENOENT (No such file or directory)
+230:1557  unlink("/dev/char/195:255")       = -1 EACCES (Permission denied)
+231:1557  symlink("../nvidiactl", "/dev/char/195:255") = -1 EEXIST (File exists)
+240:1557  stat("/proc/driver/nvidia/gpus/0000:00:03.0/numa_status", 0x7fffb1486470) = -1 ENOENT (No such file or directory)
+272:1557  unlink("/dev/char/237:0")         = -1 EACCES (Permission denied)
+273:1557  symlink("../nvidia-uvm", "/dev/char/237:0") = -1 EEXIST (File exists)
+277:1557  unlink("/dev/char/237:1")         = -1 EACCES (Permission denied)
+278:1557  symlink("../nvidia-uvm-tools", "/dev/char/237:1") = -1 EEXIST (File exists)
+297:1557  unlink("/dev/char/195:0")         = -1 EACCES (Permission denied)
+298:1557  symlink("../nvidia0", "/dev/char/195:0") = -1 EEXIST (File exists)
+314:1557  unlink("/dev/char/195:0")         = -1 EACCES (Permission denied)
+315:1557  symlink("../nvidia0", "/dev/char/195:0") = -1 EEXIST (File exists)
+335:1557  unlink("/dev/char/195:0")         = -1 EACCES (Permission denied)
+336:1557  symlink("../nvidia0", "/dev/char/195:0") = -1 EEXIST (File exists)
+412:1557  mkdir("/home", 0700)              = -1 EEXIST (File exists)
+413:1557  mkdir("/home/ubuntu", 0700)       = -1 EEXIST (File exists)
+414:1557  mkdir("/home/ubuntu/.nv", 0700)   = -1 EEXIST (File exists)
+415:1557  mkdir("/home/ubuntu/.nv/ComputeCache", 0700) = -1 EEXIST (File exists)
+=== LAST 120 lines ===
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1483730) = 0
+1557  openat(AT_FDCWD, "/proc/driver/nvidia/params", O_RDONLY) = 13
+1557  fstat(13, {st_mode=S_IFREG|0444, st_size=0, ...}) = 0
+1557  read(13, "ResmanDebugLevel: 4294967295\nRmL"..., 1024) = 1013
+1557  close(13)                         = 0
+1557  stat("/dev/nvidia0", {st_mode=S_IFCHR|0666, st_rdev=makedev(0xc3, 0), ...}) = 0
+1557  stat("/dev/nvidia0", {st_mode=S_IFCHR|0666, st_rdev=makedev(0xc3, 0), ...}) = 0
+1557  unlink("/dev/char/195:0")         = -1 EACCES (Permission denied)
+1557  symlink("../nvidia0", "/dev/char/195:0") = -1 EEXIST (File exists)
+1557  stat("/dev/char/195:0", {st_mode=S_IFCHR|0666, st_rdev=makedev(0xc3, 0), ...}) = 0
+1557  openat(AT_FDCWD, "/dev/nvidia0", O_RDWR|O_CLOEXEC) = 13
+1557  fcntl(13, F_GETFD)                = 0x1 (flags FD_CLOEXEC)
+1557  ioctl(13, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xc9, 0x4), 0x7fffb14848b0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2b, 0x30), 0x7fffb14849c0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2b, 0x30), 0x7fffb14849d0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14834b0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1483460) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14837b0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1482e20) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1482610) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1482a10) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14834a0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14836a0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1483380) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1483380) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1483380) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1483380) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1483380) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14830e0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14832a0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1483540) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14836a0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14836a0) = 0
+1557  openat(AT_FDCWD, "/dev/nvidia0", O_RDWR|O_CLOEXEC) = 14
+1557  fcntl(14, F_GETFD)                = 0x1 (flags FD_CLOEXEC)
+1557  ioctl(14, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xc9, 0x4), 0x7fffb1484760) = 0
+1557  ioctl(14, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xce, 0x10), 0x7fffb1484750) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14833b0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14835a0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14835a0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14835a0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14835a0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1483590) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1483510) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb147fdc0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1481a80) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14836d0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14832d0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2b, 0x30), 0x7fffb1484740) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1483510) = 0
+1557  openat(AT_FDCWD, "/dev/nvidia0", O_RDWR|O_CLOEXEC) = 15
+1557  fcntl(15, F_GETFD)                = 0x1 (flags FD_CLOEXEC)
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x4e, 0x38), 0x7fffb14846d0) = 0
+1557  mmap(NULL, 65536, PROT_WRITE, MAP_SHARED, 15, 0) = 0x714551ef1000
+1557  close(15)                         = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2b, 0x30), 0x7fffb14847d0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1483560) = 0
+1557  openat(AT_FDCWD, "/dev/nvidiactl", O_RDWR|O_CLOEXEC) = 15
+1557  fcntl(15, F_GETFD)                = 0x1 (flags FD_CLOEXEC)
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x4e, 0x38), 0x7fffb1484720) = 0
+1557  mmap(NULL, 4096, PROT_READ, MAP_SHARED, 15, 0) = 0x714552004000
+1557  close(15)                         = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1483670) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2b, 0x30), 0x7fffb1484780) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2b, 0x30), 0x7fffb1484780) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14836a0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1483600) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1483600) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1483700) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14835c0) = 0
+1557  openat(AT_FDCWD, "/sys/bus/pci/devices/0000:00:03.0/numa_node", O_RDONLY) = 15
+1557  fstat(15, {st_mode=S_IFREG|0644, st_size=4096, ...}) = 0
+1557  read(15, "-1\n", 4096)            = 3
+1557  close(15)                         = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14838b0) = 0
+1557  mmap(NULL, 100663296, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x71453e000000
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1484a00) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1484a00) = 0
+1557  mmap(NULL, 2699264, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x71454b36c000
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14839d0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14839d0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14842e0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb1480eb0) = 0
+1557  mmap(NULL, 790528, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x71454c13f000
+1557  mkdir("/home", 0700)              = -1 EEXIST (File exists)
+1557  mkdir("/home/ubuntu", 0700)       = -1 EEXIST (File exists)
+1557  mkdir("/home/ubuntu/.nv", 0700)   = -1 EEXIST (File exists)
+1557  mkdir("/home/ubuntu/.nv/ComputeCache", 0700) = -1 EEXIST (File exists)
+1557  sysinfo({uptime=50, loads=[47808, 13184, 4512], totalram=2062852096, freeram=1294237696, sharedram=995328, bufferram=15716352, totalswap=0, freeswap=0, procs=176, totalhigh=0, freehigh=0, mem_unit=1}) = 0
+1557  uname({sysname="Linux", nodename="ubuntu", ...}) = 0
+1557  ioctl(9, _IOC(_IOC_NONE, 0, 0x25, 0), 0x7fffb14862c0) = 0
+1557  munmap(0x71454c13f000, 790528)    = 0
+1557  munmap(0x71453e000000, 100663296) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x4f, 0x20), 0x7fffb14865d0) = 0
+1557  mmap(0x714552004000, 4096, PROT_NONE, MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOUS, 0, 0) = 0x714552004000
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x29, 0x10), 0x7fffb14865d0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x4f, 0x20), 0x7fffb14865d0) = 0
+1557  mmap(0x714551ef1000, 65536, PROT_NONE, MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOUS, 0, 0) = 0x714551ef1000
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x29, 0x10), 0x7fffb14865d0) = 0
+1557  ioctl(14, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xcf, 0x10), 0x7fffb1486600) = 0
+1557  close(14)                         = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x29, 0x10), 0x7fffb14865d0) = 0
+1557  close(13)                         = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x29, 0x10), 0x7fffb14865d0) = 0
+1557  close(12)                         = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffb14854c0) = 0
+1557  close(11)                         = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x29, 0x10), 0x7fffb14866a0) = 0
+1557  ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x29, 0x10), 0x7fffb14866a0) = 0
+1557  close(8)                          = 0
+1557  ioctl(9, _IOC(_IOC_NONE, 0, 0x2, 0x3000), 0) = 0
+1557  close(10)                         = 0
+1557  close(9)                          = 0
+1557  munmap(0x71454b36c000, 2699264)   = 0
+1557  fstat(1, {st_mode=S_IFIFO|0600, st_size=0, ...}) = 0
+1557  write(1, "FAIL cuInit(0) -> initialization"..., 43) = 43
+1557  exit_group(1)                     = ?
+1558  <... poll resumed> <unfinished ...>) = ?
+1558  +++ exited with 1 +++
+1557  +++ exited with 1 +++
+HOOK_RC=0

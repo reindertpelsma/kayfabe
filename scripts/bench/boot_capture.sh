@@ -1,0 +1,561 @@
+#!/usr/bin/env bash
+# ★★★ Boot the bench guest against this port's QOM shim AND PERSIST THE GUEST'S OWN dmesg.
+#
+#   usage: scripts/bench/boot_capture.sh <tag> [-- extra qemu args...]
+#   writes: /workspace/bench/run_<tag>_serial.log   (guest console — QEMU's -serial)
+#           /workspace/bench/run_<tag>_qemu.log     (the device's own stderr report)
+#           /workspace/bench/run_<tag>_dmesg.log    ★ the GUEST DRIVER'S OWN output
+#           /workspace/bench/run_<tag>_hostdmesg.log ★★ the HOST driver's output FOR THIS BOOT
+#           /workspace/bench/run_<tag>_probe.log    (nvidia-smi, /dev nodes, modinfo)
+#
+# ## ★★★ Why this script exists, and what was wrong before it
+#
+# `boot_nvkvm.sh` boots the guest; the NVIDIA driver is then `modprobe`d **over ssh, after
+# boot**, so every `NVRM:` line it emits goes to the *invoking process's* stdout and NOWHERE
+# ELSE. For six consecutive boot rungs on 2026-08-01 that invoking process was an agent, and
+# the transcript is not a file on disk anybody can re-read.
+#
+# ⚠ `[measured]` 2026-08-01, this box: `grep -ci nvrm /workspace/bench/run_*_serial.log`
+# returns **0** for every one of `bar0win`, `evt1`, `l2evict1`, `gmmu1`, `alloc1`, `alloc2` —
+# the serial log carries the *guest console*, and the driver's ring buffer never reaches it
+# because nothing on the console reads it. So `docs/design/boot_measured_2026_08_01.md` cited
+# `RmInitAdapter failed! (0x…)` lines that had **no on-disk source**. The claims were true;
+# the evidence was ephemeral. This script makes the evidence a file, every boot, by default.
+#
+# ## ⊘ A harness that writes an empty file and exits 0 is worse than no harness
+#
+# That is the whole reason for the `verify` phase below. `dmesg` over ssh can fail in at
+# least four ways that all leave a *file* behind — the guest never booted, ssh authenticated
+# but the module was not present, `modprobe` silently no-op'd because the module was already
+# loaded from a previous run, or the driver loaded and printed nothing because it never
+# reached `RmInitAdapter`. Three of the four produce a file that a `[ -f ]` test is happy
+# with. So this script asserts on **content**: non-empty, and containing `NVRM`. If it
+# cannot, it exits non-zero and says which phase failed. ⊘ Never read a green exit from this
+# script as "the boot went well" — it means only "an observation was made and stored".
+#
+# ## Traps encoded inline (each one has cost somebody a cycle)
+#
+# - ★★ `pgrep -x qemu-system-x86_64` **can never match**: `/proc/PID/comm` truncates at 15
+#   characters, so the name to match is `qemu-system-x86`. A "verify none running" built on
+#   the long name passes vacuously and you boot a second QEMU onto the same tap and the same
+#   qcow2. `pgrep -f` is worse — it matches this script's own command line.
+# - ★ The guest needs **~20-25 s** to reach a login prompt and `-serial file:` output **lags**.
+#   A slow boot is not a crash. Hence a poll loop, not a fixed sleep.
+# - ★ The WPR2 state of the emulated GSP only resets on a full QEMU restart, so every clean
+#   run needs a **fresh boot**. This script therefore always powers the guest down at the end
+#   rather than leaving it up for the next caller.
+# - ★ `modprobe nvidia` when the module is already loaded prints nothing and returns 0. The
+#   run is only interpretable from a *cold* module, so this script `rmmod`s first and records
+#   whether it had to.
+# - ★★★ **`modprobe` does not run `RmInitAdapter`.** It registers the PCI driver and prints
+#   one banner line; the adapter is initialised on the first `open()` of `/dev/nvidia0`, and
+#   the node does not even exist until something (`nvidia-smi`, via `nvidia-modprobe`)
+#   creates it. `[measured]` run `master7d16c37`, this script's own FIRST version: it
+#   captured `dmesg` after `modprobe` and got **three lines** — the nvlink banner, a vgaarb
+#   line, and `loading NVIDIA UNIX Open Kernel Module`. That file contains the string `NVRM`,
+#   so the content check passed and the harness exited 0 on a capture with **no adapter
+#   output in it at all**. ⊘ That is precisely the failure mode this script was written to
+#   prevent, reproduced by the script itself on its first run. Hence: the device is opened
+#   BEFORE `dmesg` is read, and the check below is on `RmInitAdapter`, not on `NVRM`.
+set -uo pipefail
+
+BENCH=${BENCH_DIR:-/workspace/bench}
+TAG=${1:?usage: boot_capture.sh <tag> [-- extra qemu args...]}
+shift || true
+[ "${1:-}" = "--" ] && shift
+
+LOG=$BENCH/run_${TAG}
+DMESG=${LOG}_dmesg.log
+DMESG_AFTER=${LOG}_dmesg_after.log
+PROBE=${LOG}_probe.log
+HOSTD=${LOG}_hostdmesg.log
+BOOT_TIMEOUT=${BOOT_TIMEOUT:-150}
+
+# ★★★★★ **STAMP THE BINARY, BY CONTENT, INTO ITS OWN ARTEFACT — w401, 2026-09-10.**
+#
+# Every bench log on this box was written WITHOUT one, and it cost a full day. `P3 rpc-bind`
+# was diagnosed as a regression from a specific commit on the strength of *"run w398c was
+# green"* — and `grep -ao 'kayfabe-rev:[0-9a-f]*'` over every historical `run_*_qemu.log`
+# returns **empty**. There was no green-at-a-revision to regress FROM. Three hypotheses were
+# built on that non-comparison before the clock refuted it: the run credited as the last green
+# ran two minutes after the one credited as the first red, which is less than a boot.
+#
+# ⚠ The stamp is taken from the BINARY'S OWN STRING TABLE, never from `git rev-parse`. The
+# working tree can be any revision while the bench serves a binary built from another — this
+# box did exactly that for weeks (`CLAUDE.md`, "the bench silently served a binary built from
+# 862c7c2"). A stamp derived from the source tree would have looked right the whole time.
+#
+# ⊘ `MISSING` is printed rather than an empty string, and it is not fatal: a boot that cannot
+# name its binary should still run, and should be UNCITABLE rather than silently unattributed.
+QBIN=${QEMU_BIN:-$BENCH/qemu-build/qemu-system-x86_64}
+# ★ w827: KF_DEVICE=kf3 — the per-revision kf3 binary (boot_nvkvm.sh selects the same one).
+if [ "${KF_DEVICE:-kf3}" = kf3 ] && [ -z "${QEMU_BIN:-}" ]; then
+  _kr=$(git -C "$(cd "$(dirname "$0")/../.." && pwd)" rev-parse --short=8 HEAD 2>/dev/null || echo unknown)
+  [ -z "$(git -C "$(cd "$(dirname "$0")/../.." && pwd)" status --porcelain --untracked-files=no 2>/dev/null)" ] || _kr="$_kr-dirty"
+  QBIN=$BENCH/kf3-bins/$_kr/qemu-system-x86_64
+fi
+REV=$(strings "$QBIN" 2>/dev/null | grep -o 'kayfabe-rev:[0-9a-f]\{8,40\}' | sort -u | head -1)
+# ⊘ kf3 carries no stamp; its binary is keyed BY revision in its own path (build_kf3.sh).
+# ⊘ w828: and a `kayfabe-rev:` stamp in a kf3 binary is NOT kf3's — it is the OLD nvkvm device's
+# archive, linked into the same QEMU build dir by whoever built it last. [measured vh3, llm_g1] a
+# kf3 binary built at 53c2bc20 printed `kayfabe-rev:f8cfe8d7…` (the provisioning build's nvkvm
+# archive) under "every claim from this boot cites THIS revision". For kf3 the path IS the stamp.
+if [ "${KF_DEVICE:-kf3}" = kf3 ]; then
+  [ -n "$REV" ] && echo "[boot_capture:$TAG] (the binary's nvkvm-device stamp $REV is NOT kf3's revision)" >&2
+  REV="kf3-bin-rev:$(basename "$(dirname "$QBIN")")"
+fi
+REV=${REV:-kayfabe-rev:MISSING}
+printf '%s\n' "$REV" > "${LOG}_rev.txt"
+
+say() { printf '[boot_capture:%s] %s\n' "$TAG" "$*"; }
+die() { printf '[boot_capture:%s] ★ FAILED (%s): %s\n' "$TAG" "$1" "${*:2}"; exit "${DIE_RC:-2}"; }
+
+say "BINARY $REV  ($QBIN)  ⇒ every claim from this boot cites THIS revision"
+if [ "$REV" = "kayfabe-rev:MISSING" ]; then
+  say "⚠ THIS BOOT CANNOT NAME ITS BINARY. Its result is UNCITABLE as a before/after — do not"
+  say "  compare it against another run to attribute a change to a commit."
+fi
+
+# ---- phase 0: nothing else may own the bench ----------------------------------------
+if pgrep -x qemu-system-x86 >/dev/null 2>&1; then
+  die precondition "a QEMU is already running (pgrep -x qemu-system-x86 matched:" \
+      "$(pgrep -x qemu-system-x86 | tr '\n' ' ')). GPU/bench runs are STRICTLY SERIAL."
+fi
+# ---- WHICH COPY OF THE HELPERS ACTUALLY RUNS -----------------------------------------
+#
+# ★★★ This script used to invoke `$BENCH/boot_nvkvm.sh` and `$BENCH/gssh_nv` — the
+# **box-local** copies — while the repository carries its own versioned ones right beside
+# this file. That is a silent-no-op generator: edit the tree, push, boot, and the boot runs
+# the *other* file.
+#
+# ⊘ It has already fired, and the note recording it is a workaround rather than a fix:
+# `bench_rebuild_notes.md` §"the differential is the instrument" — *"`/workspace/bench/
+# boot_nvkvm.sh` on this box had drifted to `-m 8G` while `scripts/bench/boot_nvkvm.sh` in
+# the tree says `-m 2048`. `boot_capture.sh` runs the bench copy, so the tree's value is not
+# what boots."* A whole memory-size differential was taken by `sed -i` on the box copy.
+#
+# So: the REPO copy wins, and the choice plus a hash of what ran is recorded in the probe log
+# — because a harness that silently picks one of two files is the same defect one level up.
+# `KAYFABE_BENCH_HELPERS=box` forces the old behaviour for a box that genuinely needs a
+# different tap or key; it is an explicit, logged departure rather than an accident.
+HELPERS=${KAYFABE_BENCH_HELPERS:-repo}
+SELFDIR=$(cd "$(dirname "$0")" && pwd)
+pick_helper() {
+  local name=$1 repo="$SELFDIR/$1" box="$BENCH/$1"
+  if [ "$HELPERS" = "repo" ] && [ -x "$repo" ]; then echo "$repo"; return; fi
+  [ -x "$box" ] || die precondition "neither $repo nor $box is an executable $name"
+  echo "$box"
+}
+BOOTER=$(pick_helper boot_nvkvm.sh) || exit $?
+GSSH=$(pick_helper gssh_nv)         || exit $?
+
+# ⊘ Delete the previous run's evidence FIRST. A stale file from an earlier tag reading as
+# this boot's output is the exact failure this script exists to prevent.
+rm -f "$DMESG" "$PROBE" "$HOSTD"
+
+# ---- phase 0b: ★★★ WATERMARK THE HOST'S RING BUFFER --------------------------------------
+#
+# `[measured 2026-08-11, §16.100]` the HOST driver has been diagnosing this port by name for
+# months and no rung ever read it. Our own census prints `REFUSED Rm(Other(64))`; on the same
+# box, at the same instant, `NVRM:` prints *why* — `kfifoRunlistSetId_GM107: Channel has
+# already been assigned a runlist incompatible with this engine`. **241 such pairs had
+# accumulated unread**, because this script captured the GUEST's `dmesg` and nothing else.
+#
+# ★★ A WATERMARK, not a snapshot, and that is the whole design. `dmesg` on a long-lived bench
+# holds every boot the host has ever served, so a raw capture is unattributable — exactly the
+# state that made 241 lines a campaign total rather than a per-boot number. Recording the line
+# count BEFORE the boot makes the delta *this boot's*.
+# ⊘ `dmesg -C` is deliberately NOT used: clearing the host's ring buffer would destroy
+# evidence belonging to whatever else shares this box, and this script is a guest harness with
+# no licence to do that.
+HOST_DMESG_MARK=$(dmesg 2>/dev/null | wc -l)
+say "host dmesg watermark: $HOST_DMESG_MARK lines"
+
+# ---- phase 1: boot ------------------------------------------------------------------
+say "booting (extra args: ${*:-none})"
+"$BOOTER" "$TAG" "$@" &
+QPID=$!
+trap 'kill -9 $QPID 2>/dev/null' EXIT
+
+deadline=$(( $(date +%s) + BOOT_TIMEOUT ))
+up=0
+while [ "$(date +%s)" -lt "$deadline" ]; do
+  if ! kill -0 $QPID 2>/dev/null; then
+    say "QEMU exited early — tail of its own report:"
+    tail -20 "${LOG}_qemu.log" 2>/dev/null
+    die boot "QEMU pid $QPID is gone before ssh came up"
+  fi
+  if "$GSSH" true >/dev/null 2>&1; then up=1; break; fi
+  sleep 3
+done
+[ "$up" -eq 1 ] || die boot \
+  "guest never answered ssh within ${BOOT_TIMEOUT}s. ⊘ Prove the OBSERVER works before
+   calling this a VM failure: a missing ~/.ssh key or a down tap reads identically."
+say "guest is up after $(( BOOT_TIMEOUT - (deadline - $(date +%s)) ))s"
+
+# ---- gq: EVERY guest command past this point gets a deadline AND a liveness check ----
+#
+# ★★★ `[measured]` 2026-08-03. Phase 1 above is careful — a deadline, and `kill -0 $QPID`
+# inside the loop so a dead QEMU is named rather than waited out. **Phases 2 and 3 had
+# neither.** A real-isolate boot at `dac9610` aborted QEMU on the first guest register write
+# (R1 lock violation, `lockwitness.rs:125`), and this script sat at *"opening the device"*
+# for **nine minutes** before I killed it by hand. Every fact needed to diagnose it was
+# already in `${LOG}_qemu.log` — a full Rust backtrace ending in `kayfabe_shim_regs_write`.
+#
+# ⊘ **A harness that hangs reports nothing while looking like it is still working**, which is
+# strictly worse than one that fails: a red run gets read, a hung one gets waited on. Same
+# family as the `pgrep` trap below and as `bench_rebuild_notes.md`'s empty-`dmesg` capture —
+# every waiter gets a deadline, and every deadline names what it was waiting for.
+#
+# ⚠ The liveness check runs FIRST. `timeout` alone would eventually return, but it would
+# return a *guest* failure for what is a *hypervisor* death, and the tag's evidence would say
+# "the driver did not answer" rather than "the device aborted".
+GQ_TIMEOUT=${GQ_TIMEOUT:-90}
+gq() {
+  if ! kill -0 "$QPID" 2>/dev/null; then
+    say "★ QEMU IS GONE (pid $QPID) — the guest cannot answer, and the reason is already"
+    say "  in ${LOG}_qemu.log. Its tail:"
+    tail -30 "${LOG}_qemu.log" 2>/dev/null | sed 's/^/    /'
+    die qemu-died "QEMU exited during phase 2/3. ⊘ This is NOT a guest or driver failure;
+   do not cite this tag as a boot result. Read ${LOG}_qemu.log."
+  fi
+  timeout "$GQ_TIMEOUT" "$GSSH" "$@"
+  local rc=$?
+  if [ "$rc" -eq 124 ]; then
+    if ! kill -0 "$QPID" 2>/dev/null; then
+      say "★ the guest command timed out AND QEMU is gone — tail of its report:"
+      tail -30 "${LOG}_qemu.log" 2>/dev/null | sed 's/^/    /'
+      die qemu-died "QEMU exited while a guest command was in flight. Read ${LOG}_qemu.log."
+    fi
+    say "★ guest command exceeded ${GQ_TIMEOUT}s while QEMU is still alive — a WEDGE, which"
+    say "  is a different fact from a crash and worth keeping: $*"
+  fi
+  return "$rc"
+}
+
+# ---- phase 2: load the driver COLD and capture its ring buffer -----------------------
+{
+  echo "=== boot_capture tag=$TAG at $(date -Is) ==="
+  echo "=== source revision: $(git -C "${REPO:-$(dirname "$0")/../..}" rev-parse --short HEAD 2>/dev/null || echo UNKNOWN) ==="
+  echo "=== qemu binary: $(ls -l "$QBIN" 2>/dev/null) ==="
+  # ★★ The archive revision comes from INSIDE the binary, never from BUILD_REV.txt.
+  # `[measured]` 2026-08-03, vast 46494693: that file named a third revision while the
+  # binary's own stamp named a fourth. A file that claims to record a fact is not the fact.
+  echo "=== archive rev STAMPED IN THE BINARY: $(strings "$QBIN" 2>/dev/null | grep -o 'kayfabe-rev:[0-9a-f]*' | sort -u | tr '\n' ' ')"
+  echo "=== BUILD_REV.txt says (informational, NOT authoritative): $(cat "$BENCH/BUILD_REV.txt" 2>/dev/null | head -1)"
+  # ★★★ WHICH helper files actually ran, with hashes — see the note at the top of phase 0.
+  echo "=== helpers (KAYFABE_BENCH_HELPERS=$HELPERS) ==="
+  for h in "$BOOTER" "$GSSH"; do
+    echo "    used: $h  sha256=$(sha256sum "$h" 2>/dev/null | cut -c1-16)"
+    b="$BENCH/$(basename "$h")"
+    if [ "$h" != "$b" ] && [ -e "$b" ] && ! cmp -s "$h" "$b"; then
+      echo "    ⚠ the box copy $b DIFFERS from the one that ran (sha256=$(sha256sum "$b" 2>/dev/null | cut -c1-16))."
+      echo "      That divergence is exactly what used to run silently; it is now only a note."
+    fi
+  done
+} > "$PROBE"
+
+gq 'lsmod | grep -q "^nvidia " && echo WAS_LOADED || echo WAS_COLD' >> "$PROBE" 2>&1
+gq 'sudo rmmod nvidia_drm nvidia_modeset nvidia_uvm nvidia 2>/dev/null; sudo dmesg -C' >/dev/null 2>&1
+say "module unloaded and ring buffer cleared; loading cold"
+
+gq 'sudo modprobe nvidia; echo MODPROBE_RC=$?' >> "$PROBE" 2>&1
+
+# ★★★ OPEN THE DEVICE. `modprobe` alone only registers the PCI driver; `RmInitAdapter` —
+# the entire subject of every boot rung — runs on the first `open()` of `/dev/nvidia0`, and
+# that node does not exist until `nvidia-modprobe` creates it. `nvidia-smi` does both. This
+# must happen BEFORE the ring buffer is read; the first version of this script read it after
+# `modprobe` and captured three lines of banner.
+say "opening the device (this is what runs RmInitAdapter)"
+{
+  echo "=== nvidia-smi (the device open) ==="
+  gq 'timeout 40 nvidia-smi 2>&1; echo SMI_RC=$?'
+} >> "$PROBE" 2>&1
+
+gq 'sudo dmesg' > "$DMESG" 2>&1
+{
+  echo "=== /dev nodes (AFTER the open — they are created by it) ==="
+  gq 'ls -la /dev/nvidia* 2>&1'
+  echo "=== lsmod ===";       gq 'lsmod | grep nvidia 2>&1'
+} >> "$PROBE" 2>&1
+
+# ---- phase 3: VERIFY THE CAPTURE, before anyone reads it as evidence -----------------
+if [ ! -s "$DMESG" ]; then
+  die capture "$DMESG is EMPTY. The boot may have been fine; the OBSERVATION was not made,
+   and nothing downstream may cite this tag."
+fi
+n_lines=$(wc -l < "$DMESG")
+n_nvrm=$(grep -c 'NVRM' "$DMESG" || true)
+# ★★★ The check is on `RmInitAdapter`, NOT on `NVRM`. The module-load banner is an `NVRM:`
+# line, so an `NVRM`-based check passes on a capture in which the adapter was never touched.
+# `RmInitAdapter` appears on BOTH outcomes — `RmInitAdapter failed!` on failure, and
+# `RmInitAdapter: ...` / the absence of the whole block plus a working `nvidia-smi` on
+# success — so this is the one string whose presence means "the subject was exercised".
+n_adapter=$(grep -c 'RmInitAdapter\|rm_init_adapter' "$DMESG" || true)
+if [ "$n_adapter" -eq 0 ] && ! grep -q 'SMI_RC=0' "$PROBE"; then
+  say "★ $DMESG has $n_lines lines ($n_nvrm NVRM) but NOTHING from RmInitAdapter,"
+  say "  and nvidia-smi did not succeed either. The adapter was never exercised, so this"
+  say "  capture cannot support any claim about where the boot stops. ⊘ Do not cite it."
+  DIE_RC=3 die capture "no adapter output; see $PROBE for MODPROBE_RC / SMI_RC / lsmod"
+fi
+say "captured $n_lines dmesg lines, $n_nvrm NVRM, $n_adapter adapter → $DMESG"
+
+say "--- the verdict lines ---"
+grep -E 'RmInitAdapter|Cannot (load state into|initialize) the device' "$DMESG" | tail -5
+
+# ---- phase 3b: the caller's own experiment, while the guest is still UP --------------
+#
+# ★★★ Added for `execution_plane_increments.md` E2. `boot_capture.sh` powers the guest down
+# at the end (the emulated GSP's WPR2 only resets on a full QEMU restart), so a harness that
+# wants to do anything *to the running guest* has nowhere to stand: by the time this script
+# returns, the machine is gone and the device's teardown report is already written.
+#
+# `POST_CAPTURE_HOOK` is that place. It runs with the guest up, the driver loaded and the
+# device opened — i.e. after everything above has been observed and recorded — and BEFORE
+# the poweroff that flushes the device's own report. Its stdout is appended to the probe
+# log, so whatever it observed is on disk beside everything else.
+#
+# ⊘ Its exit status is recorded and does NOT abort this script: the capture above is already
+# valid evidence, and losing it because an experiment failed would be the opposite of what
+# this file is for. The hook's own harness is what judges the hook.
+if [ -n "${POST_CAPTURE_HOOK:-}" ]; then
+  # boot_nvkvm execs QEMU, so QPID is this boot's actual process, never a global
+  # pgrep winner. Pass its identity to counter-collecting hooks. If a custom box
+  # helper did not exec QEMU, leave starttime empty so counters fail closed.
+  source "$SELFDIR/qemu_identity.sh"
+  QSTART=$(kf_qemu_starttime "$QPID") || QSTART=""
+  say "running POST_CAPTURE_HOOK: $POST_CAPTURE_HOOK"
+  {
+    echo "=== POST_CAPTURE_HOOK $POST_CAPTURE_HOOK at $(date -Is) ==="
+    KF_QEMU_PID="$QPID" KF_QEMU_STARTTIME="$QSTART" "$POST_CAPTURE_HOOK" "$TAG"
+    echo "HOOK_RC=$?"
+  } >> "$PROBE" 2>&1
+  say "hook finished: $(grep -c '^HOOK_RC=0$' "$PROBE" >/dev/null && echo rc=0 || echo 'rc!=0 — see the probe log')"
+fi
+
+# ---- phase 3b2: ★★★★★ THE GUEST'S dmesg **AFTER** THE WORKLOAD ---------------------------
+#
+# ⊘⊘ `[measured 2026-08-20, boots w361..w372]` **THE GUEST CAPTURE HAD THE EXACT DEFECT THE
+# HOST CAPTURE BELOW WAS ALREADY FIXED FOR, AND IT WENT UNNOTICED FOR TWELVE BOOTS.** Phase 3b
+# takes `$DMESG` BEFORE the hook. Every boot w361..w372 therefore wrote a guest dmesg of
+# **5379 bytes, byte-identical, mtime at boot start, last line at 28.99 s uptime** — a file
+# that exists, is freshly named after the boot, and contains **nothing the workload did**.
+# ★ It was read as *"the guest kernel logged nothing during the workloads"* and reported to
+# the owner as a measured fact. It was never measured. Same class as CLAUDE.md's serial-log
+# trap, and as the block below, which says in its own words: *"a capture taken before the hook
+# misses 94 % of exactly what it exists to collect."* The lesson was written down, applied to
+# ONE of the two captures, and the other was left alone.
+#
+# ⊘ **`sudo` is required**: the guest's ssh user is unprivileged and `kernel.dmesg_restrict=1`
+# is on, so a bare `dmesg` returns *"read kernel buffer failed: Operation not permitted"* —
+# which prints ONE line and reads, to a grep for NVRM, exactly like a silent kernel.
+# ⇒ the emptiness assertion below distinguishes "nothing happened" from "nothing was recorded".
+# ⊘ **DO NOT call `gq` unguarded here.** `gq` invokes `die` when QEMU is gone — and a workload
+# that KILLS the guest is precisely the boot whose remaining evidence (phase 3c host dmesg, the
+# census) you most need. An unguarded call would turn "the guest died" into "the harness
+# collected nothing and exited 2". Check liveness first and degrade to UNREADABLE instead.
+if kill -0 "$QPID" 2>/dev/null \
+   && gq 'sudo -n dmesg' > "$DMESG_AFTER" 2>/dev/null && [ -s "$DMESG_AFTER" ]; then
+  a_lines=$(wc -l < "$DMESG_AFTER"); a_nvrm=$(grep -c NVRM "$DMESG_AFTER" || true)
+  b_lines=$(wc -l < "$DMESG" 2>/dev/null || echo 0)
+  {
+    echo "=== GUEST dmesg AFTER the workload (phase 3b captured $b_lines lines BEFORE it) ==="
+    echo "GUEST_DMESG_AFTER_LINES=$a_lines"
+    echo "GUEST_DMESG_AFTER_NVRM=$a_nvrm"
+    echo "GUEST_DMESG_WORKLOAD_DELTA=$(( a_lines - b_lines ))"
+  } >> "$PROBE"
+  say "guest dmesg after workload: $a_lines lines ($a_nvrm NVRM), delta $(( a_lines - b_lines )) → $DMESG_AFTER"
+  # ★ The delta is the whole point of this phase. Zero delta is legitimate ONLY if the hook ran
+  #   nothing that touched the driver; say so loudly rather than letting it pass as normal.
+  if [ "$(( a_lines - b_lines ))" -le 0 ] && [ -n "${POST_CAPTURE_HOOK:-}" ]; then
+    say "⊘ the workload added ZERO guest kernel lines. Either the hook never touched the GPU,"
+    say "  or this capture is not seeing what it thinks it is. Do NOT read it as 'driver silent'."
+  fi
+else
+  echo "GUEST_DMESG_AFTER_LINES=UNREADABLE" >> "$PROBE"
+  say "⊘ the GUEST's dmesg was UNREADABLE after the workload (QEMU gone? sudo? guest down?) —"
+  say "  this boot has NO post-workload guest evidence, and that is a fact about the CAPTURE."
+  say "  ⚠ If QEMU died, the reason is in ${LOG}_qemu.log — the rest of this capture still runs."
+  : > "$DMESG_AFTER"
+fi
+
+# ---- phase 3c: ★★★ THE HOST'S OWN dmesg, FOR THIS BOOT ------------------------------------
+#
+# Everything after the watermark taken in phase 0b. See there for why this exists.
+#
+# ⊘⊘ **AFTER THE HOOK, AND THAT PLACEMENT IS A MEASURED CORRECTION.** `[measured 2026-08-11,
+# boot `w249`]` this block first sat BEFORE phase 3b and captured **3 of 53** host lines: the
+# host driver's engine-object diagnostics are provoked by the WORKLOAD the hook runs, not by
+# the driver load, so a capture taken before the hook misses 94 % of exactly what it exists to
+# collect. ★ The instrument was placed where it could not see the event, and only the
+# validating boot showed it — which is why the validating boot is not optional.
+#
+# ⊘⊘ **THIS FILE IS NOT ASSERTED NON-EMPTY, AND THE DIVERGENCE IS DELIBERATE.** Every other
+# capture in this script is, because for those an empty file means the capture failed. Here
+# **zero host lines is a legitimate and interesting result** — it means this boot provoked no
+# host-driver diagnostic at all — so an emptiness assertion would fail a good boot and, worse,
+# would pressure the next reader into "fixing" a harness that was telling the truth.
+# ★ What IS asserted is that the capture RAN: the watermark exists, `dmesg` was readable, and
+# the line count is **stated in the probe log either way**. That is the same lesson one turn
+# on — *an empty artefact reads as benign, and only inspecting its content distinguishes
+# "nothing happened" from "nothing was recorded"* — answered by making the number explicit
+# rather than by demanding it be non-zero.
+if HOST_NOW=$(dmesg 2>/dev/null | wc -l); then
+  dmesg 2>/dev/null | tail -n +$(( HOST_DMESG_MARK + 1 )) > "$HOSTD"
+  n_host=$(wc -l < "$HOSTD" 2>/dev/null || echo 0)
+  n_hnvrm=$(grep -c NVRM "$HOSTD" 2>/dev/null || echo 0)
+  n_hxid=$(grep -ci xid "$HOSTD" 2>/dev/null || echo 0)
+  {
+    echo "=== HOST dmesg delta for this boot (watermark $HOST_DMESG_MARK → $HOST_NOW) ==="
+    echo "HOST_DMESG_LINES=$n_host"
+    echo "HOST_DMESG_NVRM=$n_hnvrm"
+    echo "HOST_DMESG_XID=$n_hxid"
+  } >> "$PROBE"
+  say "host dmesg delta: $n_host lines, $n_hnvrm NVRM, $n_hxid Xid → $HOSTD"
+else
+  echo "HOST_DMESG_LINES=UNREADABLE" >> "$PROBE"
+  say "★ the HOST's dmesg was UNREADABLE — this boot has no host-side evidence, and that is"
+  say "  a fact about the capture, not about the boot"
+  : > "$HOSTD"
+fi
+
+# ---- phase 4: fresh boot next time, AND THE CENSUS --------------------------------------
+#
+# ★★★ `[measured 2026-08-09, boot `msr1_319d29a`]` — THIS PHASE COULD NOT PRODUCE THE ONE
+# THING THE BOOT WAS RUN FOR, and it looked fine while failing.
+#
+# The device's end-of-run census (counters, the unserviced ledger, and — the point of that
+# boot — `first doorbell refusal … | c=… vas=… ring=…`) is printed from `nvkvm_exit_notify`,
+# registered with `qemu_add_exit_notifier` (`qemu/hw/misc/nvkvm/nvkvm.c:1951, 2161-2162`).
+# An exit notifier runs when QEMU's main loop **returns**. ⊘ `kill -9` does not let it.
+#
+# And `sudo poweroff` cannot be relied on to get there: `cuInit` now HANGS in `uvm_spin_loop`
+# — a BUSY spin in the kernel that takes no signal — so systemd's shutdown blocks on it, the
+# 60 s wait below expires, and the old code went straight to `kill -9`. `run_msr1_*_qemu.log`
+# is **10 lines with no census at all**, from a boot whose only purpose was to read one
+# census line. The harness exited 0.
+#
+# ⊘ The hook that made hanging boots survivable (`cup2_hook_deadline.sh`) says in its own
+# header *"QEMU still exits cleanly through the monitor so the census gets printed"* — and
+# **this script never used the monitor**. A claim about a path that does not exist.
+#
+# ⇒ Three attempts, weakest-first, and the census is ASSERTED rather than hoped for:
+#   1. `poweroff` — the clean guest shutdown, still preferred (it flushes the guest's own fs).
+#   2. `quit` on the QEMU **monitor socket** — QMP/HMP `quit` unwinds the main loop, so the
+#      exit notifier runs and the census IS printed. This is the one that works through a
+#      wedged guest.
+#   3. `kill -9` — the census is already lost by here; it is only reported, never silent.
+MON="${LOG}.mon"
+# ★ 2026-09-30 (v3-display2): an optional guest command run just before the poweroff, with a
+# deadline — a lane whose guest may wedge in its driver teardown (the display plane's) uses it to
+# leave the guest's filesystems clean (sync + emergency remount read-only) BEFORE a poweroff that
+# may not complete, so QEMU's `quit` below never leaves an ext4 journal to replay (the fast guest's
+# `nbd0p1 would not mount`). Unset: unchanged.
+if [ -n "${PRE_POWEROFF_GUEST_CMD:-}" ]; then
+  say "pre-poweroff guest command: $PRE_POWEROFF_GUEST_CMD"
+  timeout 30 "$GSSH" "$PRE_POWEROFF_GUEST_CMD" >/dev/null 2>&1; say "pre-poweroff rc=$?"
+fi
+say "powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)"
+"$GSSH" 'sudo poweroff' >/dev/null 2>&1
+for _ in $(seq 1 15); do kill -0 $QPID 2>/dev/null || break; sleep 2; done
+if kill -0 $QPID 2>/dev/null; then
+  say "guest did not power down in 30s (a wedged vcpu cannot); asking QEMU to quit on $MON"
+  # ⊘ A deadline on the writer too: a monitor whose peer is gone must not become a SECOND
+  # hang inside the teardown of the first. `[bite-checked 2026-08-09 on vh]` `nc -U` against
+  # a python `AF_UNIX` listener delivered the literal bytes `quit` — the instrument was made
+  # to fire before it was relied on. ⚠ `busybox nc` has no `-U`; this needs openbsd-nc or
+  # socat, and says so rather than silently doing nothing.
+  if [ -S "$MON" ]; then
+    if command -v socat >/dev/null 2>&1; then
+      printf 'quit\n' | timeout 10 socat - "UNIX-CONNECT:$MON" >/dev/null 2>&1
+    elif nc -h 2>&1 | grep -q 'U'; then
+      printf 'quit\n' | timeout 10 nc -U "$MON" >/dev/null 2>&1
+    else
+      say "★ no socat and this nc has no -U (busybox?) — cannot reach $MON, census lost"
+    fi
+  else
+    say "★ no monitor socket at $MON — the census will be lost"
+  fi
+  for _ in $(seq 1 15); do kill -0 $QPID 2>/dev/null || break; sleep 1; done
+fi
+if kill -0 $QPID 2>/dev/null; then
+  say "★ QEMU still alive after poweroff AND monitor quit — SIGKILL. ⊘ NO CENSUS in this run."
+  kill -9 $QPID 2>/dev/null
+fi
+trap - EXIT
+wait $QPID 2>/dev/null
+
+# ---- phase 5: ASSERT the census is on disk ------------------------------------------
+#
+# ⊘ A boot whose census is missing must not read as a boot with nothing to report. The
+# counters line is emitted unconditionally by the exit notifier, so its ABSENCE means the
+# notifier never ran — never that the numbers were zero.
+# ★ w827: kf3's end-of-run report is its `kf3: family=… trapped=…` status line (plus the per-token
+# DOORBELL-LEDGER lines printed as each channel is freed), not the old device's `nvkvm: doorbells:`.
+if [ "${KF_DEVICE:-kf3}" = kf3 ] && grep -q 'kf3: family=' "${LOG}_qemu.log" 2>/dev/null; then
+  say "census present (kf3):"
+  grep -a 'kf3: family=' "${LOG}_qemu.log" | tail -1 | cut -c1-300 | sed 's/^/    /'
+  grep -a 'DOORBELL-LEDGER' "${LOG}_qemu.log" | sed 's/^.*DOORBELL-LEDGER/    DOORBELL-LEDGER/'
+elif grep -q 'nvkvm: doorbells:' "${LOG}_qemu.log" 2>/dev/null; then
+  say "census present:"
+  grep -E 'nvkvm: (doorbells:|  first doorbell|  last local)' "${LOG}_qemu.log" | sed 's/^/    /'
+else
+  say "★★★ NO CENSUS in ${LOG}_qemu.log — QEMU never ran its exit notifier."
+  say "  ⊘ Do NOT read the absence of a census line as the absence of the thing it counts."
+  DIE_RC=4 die census "the end-of-run report was never printed; see phase 4 above for which
+   teardown path was taken. Every counter, the unserviced ledger and the first doorbell
+   refusal are unobservable for this tag."
+fi
+
+# ---- phase 6: ★★★ CARRY THE EVIDENCE INTO THE REPOSITORY --------------------------------
+#
+# ★★★ `[measured 2026-08-09]` — **THIS PHASE DID NOT EXIST, AND FOUR BOOTS' EVIDENCE WAS
+# LOST BECAUSE OF IT.** `s23`'s `_qemu.log`, and the whole of `s24` and `s25`, were never in
+# the tree: `git show --stat 18b75e8 a5ede26` shows each `BOOTED` commit touching exactly ONE
+# file, the design doc. The numbers those commits rest on — the wall being ONE channel,
+# `NO-VASPACE-IN-NAMESPACE`, and the `24/9/15` byte-identical invariance that is the whole
+# proof two instruments were observational — described boots nothing in the repository could
+# re-verify.
+#
+# ⊘ **And every phase above had passed.** This script asserts the dmesg is non-empty, that
+# the adapter was exercised, and that the census is on disk — thoroughly, each check bought
+# by a real failure. It simply asserted all of it about `/workspace/bench/`, a directory on
+# a rented box that is deleted with the instance. Its own last line named four bench paths
+# and the repository was not one of them. ⇒ **The harness was run and it does not cover
+# this**; the gap was its SCOPE, not its rigour.
+#
+# ★ Same family as the two traps this file already encodes — the serial log that is not
+# where the driver's output is, and the empty `dmesg` a `[ -f ]` test is happy with. All
+# three are one shape: **the operation succeeds either way, and only an explicit assertion
+# separates "stored" from "stored where anybody will find it later."**
+#
+# ⊘ `_serial.log` is deliberately NOT carried: it is the guest console, ~70 KB per boot, and
+# `grep -ci nvrm` over every one of them returns 0. Committing it would be volume, not
+# evidence. The three that ARE carried are the three every prior boot in `traces/guest_boots/`
+# carries.
+REPO_ROOT=$(cd "$SELFDIR/../.." && pwd)
+BOOTS="$REPO_ROOT/traces/guest_boots"
+if [ -d "$BOOTS" ]; then
+  mkdir -p "$BOOTS"
+  copied=0
+  for f in "${LOG}_qemu.log" "$DMESG" "$DMESG_AFTER" "$PROBE"; do
+    [ -s "$f" ] || { say "★ refusing to carry an EMPTY $f into the repo"; continue; }
+    cp -f "$f" "$BOOTS/$(basename "$f")" && copied=$(( copied + 1 ))
+  done
+  # ★★ The host's dmesg delta is carried SEPARATELY and is allowed to be empty — see phase 3a
+  # for why zero host lines is a result rather than a failure. It is deliberately NOT part of
+  # the 3/3 count below: making it one would resurrect the emptiness assertion by the back door.
+  [ -f "$HOSTD" ] && cp -f "$HOSTD" "$BOOTS/$(basename "$HOSTD")"
+  if [ "$copied" -lt 3 ]; then
+    DIE_RC=5 die persist "only $copied (need 3: qemu, dmesg, probe) evidence files reached $BOOTS. ⊘ A BOOTED claim
+   whose evidence is not in the tree is prose, not a measurement."
+  fi
+  say "evidence carried into the repo: $BOOTS/run_${TAG}_{qemu,dmesg,probe,hostdmesg}.log"
+  say "★ NOW COMMIT THEM. \`git commit -- <path>\` does NOT add untracked files;"
+  say "  run scripts/bench/assert_boot_evidence.sh before claiming BOOTED."
+else
+  say "★ no $BOOTS in this checkout — evidence stays on the box only, and a BOOTED claim"
+  say "  made from this run cannot be re-verified by anyone reading the repository."
+fi
+
+say "done. serial=${LOG}_serial.log qemu=${LOG}_qemu.log dmesg=$DMESG dmesg_after=$DMESG_AFTER probe=$PROBE hostdmesg=$HOSTD"

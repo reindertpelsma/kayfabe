@@ -1,0 +1,14 @@
+
+
+Name                        : NVIDIA GeForce RTX 3060
+PNPDeviceID                 : PCI\VEN_10DE&DEV_2504&SUBSYS_36563842&REV_A1\3&11583659&0&28
+DriverVersion               : 32.0.15.8088
+Status                      : Error
+ConfigManagerErrorCode      : 43
+CurrentHorizontalResolution : 
+CurrentVerticalResolution   : 
+AdapterRAM                  : 0
+
+
+
+

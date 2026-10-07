@@ -1,0 +1,43 @@
+=== vkpeak side=guest start=2026-09-26T17:41:30+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+vulkan ICD: /etc/vulkan/icd.d/nvidia_icd.json only
+device       = NVIDIA GeForce RTX 3070
+
+fp32-scalar  = 15023.70 GFLOPS
+fp32-vec4    = 14881.06 GFLOPS
+
+fp16-scalar  = 22403.22 GFLOPS
+fp16-vec4    = 16473.72 GFLOPS
+fp16-matrix  = 89491.49 GFLOPS
+
+fp64-scalar  = 350.84 GFLOPS
+fp64-vec4    = 351.46 GFLOPS
+
+int32-scalar = 11224.17 GIOPS
+int32-vec4   = 11123.23 GIOPS
+
+int16-scalar = 8950.84 GIOPS
+int16-vec4   = 9174.25 GIOPS
+
+int8-dotprod = 10719.41 GIOPS
+int8-matrix  = 177272.78 GIOPS
+
+bf16-dotprod = 0.00 GFLOPS
+bf16-matrix  = 44634.09 GFLOPS
+GSET_VAL side=guest item=vkpeak key=fp32-scalar val=15023.70GFLOPS
+GSET_VAL side=guest item=vkpeak key=fp32-vec4 val=14881.06GFLOPS
+GSET_VAL side=guest item=vkpeak key=fp16-scalar val=22403.22GFLOPS
+GSET_VAL side=guest item=vkpeak key=fp16-vec4 val=16473.72GFLOPS
+GSET_VAL side=guest item=vkpeak key=fp16-matrix val=89491.49GFLOPS
+GSET_VAL side=guest item=vkpeak key=fp64-scalar val=350.84GFLOPS
+GSET_VAL side=guest item=vkpeak key=fp64-vec4 val=351.46GFLOPS
+GSET_VAL side=guest item=vkpeak key=int32-scalar val=11224.17GIOPS
+GSET_VAL side=guest item=vkpeak key=int32-vec4 val=11123.23GIOPS
+GSET_VAL side=guest item=vkpeak key=int16-scalar val=8950.84GIOPS
+GSET_VAL side=guest item=vkpeak key=int16-vec4 val=9174.25GIOPS
+GSET_VAL side=guest item=vkpeak key=int8-dotprod val=10719.41GIOPS
+GSET_VAL side=guest item=vkpeak key=int8-matrix val=177272.78GIOPS
+GSET_VAL side=guest item=vkpeak key=bf16-dotprod val=0.00GFLOPS
+GSET_VAL side=guest item=vkpeak key=bf16-matrix val=44634.09GFLOPS
+GSET_DIG side=guest item=vkpeak key=testset val=bdd67e26ff44dea1
+GSET_OK
+=== end rc=0 secs=464 2026-09-26T17:49:14+00:00

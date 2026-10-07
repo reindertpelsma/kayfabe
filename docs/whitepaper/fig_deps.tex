@@ -1,0 +1,143 @@
+% ===========================================================================
+% FIGURE — the crate dependency graph, DERIVED from every Cargo.toml in the
+% workspace (crates/*/Cargo.toml + tests/) and cross-checked against
+% Cargo.lock, at 5c367a38. Rows = the depending crate, columns = the crate
+% depended on. Crates are listed in topological order, so the matrix being
+% strictly lower-triangular IS the proof that the graph is acyclic.
+%
+% ★ RE-DERIVED BY SCRIPT at this revision, as at the previous two. The member
+% count is unchanged at 24 and the edge count moved 126 -> 134 (+9 dev-only,
+% unchanged). What DID change is the thing the figure exists to demonstrate:
+% ⊘ THE PREVIOUS REVISION'S ORDER IS NO LONGER TOPOLOGICAL. `qemu-raw` (was
+% row 22) now depends on `shell` (was row 23), so drawn in the old order the
+% matrix would carry one dot ABOVE the diagonal — which reads as a cycle and
+% is not one. shell and qemu-raw are swapped here and the property holds.
+% ⇒ A figure whose correctness is a VISUAL property (lower-triangularity) is
+% exactly the kind that decays silently: the dot would have been one pixel
+% out of place in a 24x24 grid, and nothing in the build would have said so.
+% This is why the edge list is re-derived by script every revision and never
+% edited by hand.
+% ===========================================================================
+\begin{tikzpicture}[x=1mm,y=1mm, font=\sffamily\scriptsize]
+\def\cs{5.2}      % cell size (mm)
+\def\N{24}
+
+% -- crate list in topological order -----------------------------------------
+\def\crates{
+  1/util/L0,
+  2/arch/PORT,
+  3/completion/L0,
+  4/abi/PORT,
+  5/linux-raw/L1,
+  6/vmm/PORT,
+  7/isolate/PORT,
+  8/mmu/L0,
+  9/mocks/TEST,
+  10/trace/PORT,
+  11/vmm-kvm/L1,
+  12/vmm-qemu/L2,
+  13/core/L0,
+  14/gsp/L0,
+  15/chips/L3,
+  16/device/L2,
+  17/fwd/L0,
+  18/rmrpc/L0,
+  19/crec/TEST,
+  20/isolate-host/HOST,
+  21/rt/L1,
+  22/shell/L1,
+  23/qemu-raw/L2,
+  24/tests/TEST}
+
+% -- grid --------------------------------------------------------------------
+\foreach \i in {0,...,\N}{
+  \draw[kfrule, line width=0.25pt] (0,-\i*\cs) -- (\N*\cs,-\i*\cs);
+  \draw[kfrule, line width=0.25pt] (\i*\cs,0) -- (\i*\cs,-\N*\cs);
+}
+% diagonal band (a crate never depends on itself)
+\foreach \i in {1,...,\N}{
+  \fill[black!8] ({(\i-1)*\cs},{-(\i-1)*\cs}) rectangle ({\i*\cs},{-\i*\cs});
+}
+\draw[kfportln, line width=0.7pt] (0,0) -- (\N*\cs,-\N*\cs);
+
+% -- highlight the qemu-raw row: the composition root, and the new consumer ---
+\fill[kfcoreln, opacity=0.10] (0,{-22*\cs}) rectangle ({\N*\cs},{-23*\cs});
+% -- and the rmrpc row, faintly: it is no longer the island ------------------
+\fill[kfshellln, opacity=0.07] (0,{-17*\cs}) rectangle ({\N*\cs},{-18*\cs});
+
+% -- row labels (left) -------------------------------------------------------
+\foreach \i/\n/\g in \crates {
+  \node[anchor=east, font=\sffamily\scriptsize] at (-1.2,{-(\i-0.5)*\cs}) {\n};
+  \node[anchor=east, font=\sffamily\tiny, color=kfgrey] at (-20,{-(\i-0.5)*\cs}) {\g};
+}
+% -- column labels (top, rotated) --------------------------------------------
+\foreach \i/\n/\g in \crates {
+  \node[anchor=west, rotate=60, font=\sffamily\scriptsize] at ({(\i-0.5)*\cs},1.2) {\n};
+}
+
+% -- the edges ---------------------------------------------------------------
+% \dep{row}{col}  = [dependencies]        \dev{row}{col} = [dev-dependencies]
+\def\dep#1#2{\node[circle, fill=kfcoreln, inner sep=0.72mm]
+   at ({(#2-0.5)*\cs},{-(#1-0.5)*\cs}) {};}
+\def\dev#1#2{\node[circle, draw=kfstubln, line width=0.55pt, inner sep=0.6mm]
+   at ({(#2-0.5)*\cs},{-(#1-0.5)*\cs}) {};}
+
+\dep{2}{1}
+\dep{3}{1}
+\dep{4}{1}\dep{4}{2}
+\dep{5}{1}\dev{5}{2}
+\dep{6}{1}\dep{6}{2}
+\dep{7}{1}\dep{7}{2}\dep{7}{6}
+\dep{8}{1}\dep{8}{2}\dep{8}{7}
+\dep{9}{1}\dep{9}{2}\dep{9}{4}\dep{9}{6}\dep{9}{7}
+\dep{10}{1}\dep{10}{2}\dep{10}{3}\dep{10}{6}\dep{10}{7}\dep{10}{8}
+\dep{11}{1}\dep{11}{5}\dep{11}{6}\dev{11}{9}
+\dep{12}{1}\dep{12}{2}\dep{12}{5}\dep{12}{6}\dep{12}{7}\dep{12}{8}\dev{12}{9}
+\dep{13}{1}\dep{13}{2}\dep{13}{3}\dep{13}{7}\dep{13}{8}\dev{13}{9}\dep{13}{10}
+\dep{14}{1}\dep{14}{2}\dep{14}{4}\dep{14}{10}
+\dep{15}{1}\dep{15}{2}\dep{15}{4}\dep{15}{9}\dep{15}{14}
+\dep{16}{1}\dep{16}{2}\dep{16}{4}\dep{16}{8}\dep{16}{10}\dep{16}{14}
+\dep{17}{1}\dep{17}{2}\dep{17}{3}\dep{17}{6}\dep{17}{7}\dep{17}{8}\dep{17}{10}\dep{17}{13}
+\dep{18}{1}\dep{18}{2}\dep{18}{4}\dev{18}{9}\dep{18}{10}\dep{18}{13}\dep{18}{14}\dep{18}{17}
+\dep{19}{1}\dep{19}{2}\dep{19}{4}\dep{19}{9}\dep{19}{10}\dep{19}{14}\dep{19}{16}
+\dep{20}{1}\dep{20}{2}\dep{20}{4}\dep{20}{5}\dep{20}{6}\dep{20}{7}\dep{20}{15}
+\dep{21}{1}\dep{21}{2}\dep{21}{3}\dep{21}{4}\dep{21}{6}\dep{21}{7}\dep{21}{8}\dev{21}{9}\dep{21}{13}\dep{21}{16}\dep{21}{17}
+\dep{22}{1}\dep{22}{5}\dep{22}{13}\dep{22}{21}
+\dep{23}{1}\dev{23}{2}\dep{23}{4}\dep{23}{5}\dep{23}{6}\dep{23}{7}\dep{23}{8}\dev{23}{9}\dep{23}{12}\dep{23}{13}\dep{23}{14}\dep{23}{15}\dep{23}{16}\dep{23}{17}\dep{23}{18}\dep{23}{20}\dep{23}{21}\dep{23}{22}
+\dep{24}{1}\dep{24}{2}\dep{24}{3}\dep{24}{4}\dep{24}{5}\dep{24}{6}\dep{24}{7}\dep{24}{8}\dep{24}{9}\dep{24}{10}\dep{24}{11}\dep{24}{12}\dep{24}{13}\dep{24}{14}\dep{24}{15}\dep{24}{16}\dep{24}{17}\dep{24}{18}\dep{24}{19}\dev{24}{20}\dep{24}{21}\dep{24}{22}
+
+% -- annotations -------------------------------------------------------------
+\draw[ar, kfcoreln] ({11*\cs},{-\N*\cs-7}) -- ({11*\cs},{-22*\cs+1});
+\node[anchor=north, font=\sffamily\tiny, color=kfcoreln, align=center]
+  at ({11*\cs},{-\N*\cs-7})
+  {\textbf{qemu-raw} is the \textbf{composition root} — the widest row in the matrix,\\
+   and the row that ends the island question. It links the \textbf{staticlib} the\\
+   C QOM shim calls, so \textbf{gsp}, \textbf{rmrpc}, \textbf{device}, \textbf{chips} and
+   \textbf{isolate-host}\\ all have a production consumer for the first time.};
+
+\node[anchor=north west, font=\sffamily\scriptsize, align=left]
+  at ({\N*\cs+4},{-1*\cs}) {%
+  \begin{minipage}{46mm}\raggedright\scriptsize
+  \textbf{Reading it.} Row $r$, column $c$ filled $\Rightarrow$ crate $r$ depends on
+  crate $c$. All 126 \code{[dependencies]} edges ({\color{kfcoreln}$\bullet$}) and all
+  9 \code{[dev-dependencies]} edges ({\color{kfstubln}$\circ$}) that are not already
+  hard edges are shown; every \code{kayfabe-} prefix is dropped. \code{fuzz/} is a
+  separate workspace and is excluded, as in both previous revisions.\\[3pt]
+  \textbf{Strictly lower-triangular} in this ordering $\Rightarrow$ the graph is a DAG,
+  dev edges included. \textbf{18 members $\rightarrow$ 24}, and the ordering had to change
+  again: six crates are new, and they are the L2, L3 and host bands.\\[3pt]
+  \textbf{External dependencies, in total:} \code{libc} — a \emph{real} dependency of
+  \code{linux-raw} only, and dev-only in \code{vmm-kvm} and \code{tests} — plus
+  \code{trybuild} (dev-only in \code{isolate} and \code{linux-raw}) and \code{proptest}
+  (dev-only in \code{tests}). \textbf{Twenty-three of the twenty-four} members have no
+  non-dev external dependency at all. \emph{Six crates were added and none of them
+  added a dependency.}\\[3pt]
+  \textbf{The claimed strata still do not survive, and the newest rows make it worse:}
+  \code{mmu} (core) depends on the \code{isolate} \emph{port}; \code{core} and
+  \code{fwd} depend on \code{trace} and \code{vmm}; \code{gsp} and \code{rmrpc} (core)
+  depend on \code{abi} and \code{trace}; and \code{device} (L2) depends on \code{gsp}
+  (L0) while \code{chips} (L3) depends on it too. "Core", "port" and "layer" are one
+  DAG with a purity rule.
+  \end{minipage}};
+
+\end{tikzpicture}

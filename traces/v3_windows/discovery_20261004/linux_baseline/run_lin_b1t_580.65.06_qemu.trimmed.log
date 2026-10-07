@@ -1,0 +1,2438 @@
+# filtered from run_lin_b1t_580.65.06_qemu.log: 45 of 48 status-heartbeat lines dropped (every 30th and the last kept); every other line kept verbatim
+kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only
+kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 1), (20c, 1)]: the background probe was refused or changed the answer — zero-probe bytes only
+kf3: permission policy: READ_ONLY+VOLATILE carried to the host map, PRIVILEGED leaves withheld from user twins, ATOMIC_DISABLE not carried (KF3_CARRY_ATOMIC_DISABLE=1 enables it once fault delivery exists) (key_perm=0x68)
+kf3: host GPU minor=0 bdf=0000:00:08.0 gpuId=0x8 rm_device_instance=0 cuda_device="NVIDIA GeForce RTX 3060" store=8192 MiB
+kf3: guest driver 580.65.06 (guest-driver=); measured ABI: static-info Pre610, element Pre610, init-args FourField, rm-control params@40, vgx Some((43, 19))
+kf3: channel plane: Translated rings on host COPY2 (engine 0xb); completions on FIFO_EVENT_MTHD + CE2
+kf3: interrupt plane: host non-stall events -> guest vectors [GR0->Some(0) CE0->Some(0) CE1->Some(0) CE2->Some(1) CE3->Some(2) NVENC0->Some(4) NVDEC0->Some(3) OFA->Some(5)]
+kf3: display plane ON — virtual NVDisplay for GA102 GA103 GA104 GA106 GA107 (IP 0x04010000, display class 0xc670, 4 heads)
+kf3: display plane built — derived registers, caps page, engine vocabulary, GPU context on 0000:00:08.0
+kf3: boot display ON — option ROM 9728 bytes (10de:2504, KFGP BAR1 +0x0, 1920x1080 pitch 7680, G = 0x7f0000); BAR1 [0, G) seeded with store [0, G), zeroed on the GPU; kf-gop UNSIGNED (embedded)
+kf3: P4 memory plane: store 8192 MiB (imported into the walker), walker pools 236 MiB of host GPU memory (walk pool 1048576 runs, slot pool 2097152 runs (2097152 free), max per space 1048576, slots held 0, grows 0, retries 0, ceilings 0, largest slot 0, largest walk 0), roots bar1=0x1f1cac000 bar2=0x1f3392000, PRAMIN one map+mmap per move, trigger @0xb830b0
+2026-10-04T00:18:37.338989Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,gop=on,guest-driver=580.65.06: info: kf3: boot display option ROM registered: 9728 bytes in a 16384-byte ROM BAR
+2026-10-04T00:18:37.339204Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,gop=on,guest-driver=580.65.06: info: kf3: display console registered (head 0 of kf0)
+2026-10-04T00:18:37.339269Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,gop=on,guest-driver=580.65.06: info: kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=0 sked=0/0held fn70=0 roots=0 root_moves=0 stmts=0/0 refused=0 pramin_repoints=0 pramin_miss=0 last_miss=0x0 pramin_worst_us=0 (map 0 mmap 0) pramin_maps=0 pramin_mmaps=0 inline_opens=0 reaped=0 ca (BAR0 pieces=5)
+kf3: display: compose kernel self-test PASSED
+kf3: display worker up — engine 4 heads / 8 windows, caps page published
+kf3: display: boot layer — store [0, 0x7e9000) as 1920x1080 pitch 7680, shown until the guest arms a head
+kf3: display: +50 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)
+kf3: guest-RAM object 0xcafe0010 over 0x200000000 bytes of the guest memfd
+kf3: mem t=4.671s [1/3] prewarm: spare host space 0xcafe0011 ready before the guest runs — vaspace 2247 us, ram_obj 4435893 us (0xcafe0010+0x200000000), fb_window 573 us, ram_window 180000 us (total 4618734 us)
+kf3: mem t=4.942s [2/3] prewarm: spare host space 0xcafe0015 ready before the guest runs — vaspace 1600 us, ram_obj 0 us (0xcafe0010+0x200000000), fb_window 631 us, ram_window 219093 us (total 221334 us)
+kf3: mem t=5.184s [3/3] prewarm: spare host space 0xcafe0019 ready before the guest runs — vaspace 1715 us, ram_obj 0 us (0xcafe0010+0x200000000), fb_window 516 us, ram_window 189926 us (total 192167 us)
+kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=0 sked=0/0held fn70=0 roots=0 root_moves=0 stmts=0/0 refused=0 pramin_repoints=0 pramin_miss=0 last_miss=0x0 pramin_worst_us=0 (map 0 mmap 0) pramin_maps=0 pramin_mmaps=0 inline_opens=0 reaped=0 cache_ops=0 sysmembars=0 root_unsets=0] mirrors=0 reused=0 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=0 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=0 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[CE3:223/0raised] served=0 parks=2475 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=2 released=0 refused=0 held=2] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=0 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=223 scanout_refused=0 scanout_avg_us=1221 scanout_max_us=1624] boot[frames=223 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[] gsp_refusals[total=0 distinct=0 []]
+kf3: w#0 bar0 @0x100c40 = 0x0 phase=Cold
+kf3: w#1 bar0 @0x100c10 = 0x1038430 phase=Cold
+kf3: w#2 bar0 @0x088080 = 0x10 phase=Cold
+kf3: w#3 bar0 @0x088080 = 0x10 phase=Cold
+kf3: w#4 bar0 @0x110c00 = 0x0 phase=Cold
+kf3: w#5 bar0 @0x110c00 = 0x0 phase=Cold
+kf3: w#6 bar0 @0x1103c0 = 0x1 phase=Cold
+kf3: w#7 bar0 @0x1103c0 = 0x0 phase=Cold
+kf3: w#8 bar0 @0x110084 = 0x176000a1 phase=Cold
+kf3: w#9 bar0 @0x110624 = 0x80 phase=Cold
+kf3: w#10 bar0 @0x11010c = 0x0 phase=Cold
+kf3: w#11 bar0 @0x110600 = 0x5 phase=Cold
+kf3: w#12 bar0 @0x110110 = 0x1075980 phase=Cold
+kf3: w#13 bar0 @0x110128 = 0x0 phase=Cold
+kf3: w#14 bar0 @0x110114 = 0x0 phase=Cold
+kf3: w#15 bar0 @0x11011c = 0x0 phase=Cold
+kf3: w#16 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#17 bar0 @0x110114 = 0x100 phase=Cold
+kf3: w#18 bar0 @0x11011c = 0x100 phase=Cold
+kf3: w#19 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#20 bar0 @0x110114 = 0x200 phase=Cold
+kf3: w#21 bar0 @0x11011c = 0x200 phase=Cold
+kf3: w#22 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#23 bar0 @0x110114 = 0x300 phase=Cold
+kf3: w#24 bar0 @0x11011c = 0x300 phase=Cold
+kf3: w#25 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#26 bar0 @0x110114 = 0x400 phase=Cold
+kf3: w#27 bar0 @0x11011c = 0x400 phase=Cold
+kf3: w#28 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#29 bar0 @0x110114 = 0x500 phase=Cold
+kf3: w#30 bar0 @0x11011c = 0x500 phase=Cold
+kf3: w#31 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#32 bar0 @0x110114 = 0x600 phase=Cold
+kf3: w#33 bar0 @0x11011c = 0x600 phase=Cold
+kf3: w#34 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#35 bar0 @0x110114 = 0x700 phase=Cold
+kf3: w#36 bar0 @0x11011c = 0x700 phase=Cold
+kf3: w#37 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#38 bar0 @0x110114 = 0x800 phase=Cold
+kf3: w#39 bar0 @0x11011c = 0x800 phase=Cold
+kf3: w#40 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#41 bar0 @0x110114 = 0x900 phase=Cold
+kf3: w#42 bar0 @0x11011c = 0x900 phase=Cold
+kf3: w#43 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#44 bar0 @0x110114 = 0xa00 phase=Cold
+kf3: w#45 bar0 @0x11011c = 0xa00 phase=Cold
+kf3: w#46 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#47 bar0 @0x110114 = 0xb00 phase=Cold
+kf3: w#48 bar0 @0x11011c = 0xb00 phase=Cold
+kf3: w#49 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#50 bar0 @0x110114 = 0xc00 phase=Cold
+kf3: w#51 bar0 @0x11011c = 0xc00 phase=Cold
+kf3: w#52 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#53 bar0 @0x110114 = 0xd00 phase=Cold
+kf3: w#54 bar0 @0x11011c = 0xd00 phase=Cold
+kf3: w#55 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#56 bar0 @0x110114 = 0xe00 phase=Cold
+kf3: w#57 bar0 @0x11011c = 0xe00 phase=Cold
+kf3: w#58 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#59 bar0 @0x110114 = 0xf00 phase=Cold
+kf3: w#60 bar0 @0x11011c = 0xf00 phase=Cold
+kf3: w#61 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#62 bar0 @0x110110 = 0x1075990 phase=Cold
+kf3: w#63 bar0 @0x110128 = 0x0 phase=Cold
+kf3: w#64 bar0 @0x110114 = 0x0 phase=Cold
+kf3: w#65 bar0 @0x11011c = 0x0 phase=Cold
+kf3: w#66 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#67 bar0 @0x110114 = 0x100 phase=Cold
+kf3: w#68 bar0 @0x11011c = 0x100 phase=Cold
+kf3: w#69 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#70 bar0 @0x110114 = 0x200 phase=Cold
+kf3: w#71 bar0 @0x11011c = 0x200 phase=Cold
+kf3: w#72 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#73 bar0 @0x110114 = 0x300 phase=Cold
+kf3: w#74 bar0 @0x11011c = 0x300 phase=Cold
+kf3: w#75 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#76 bar0 @0x110114 = 0x400 phase=Cold
+kf3: w#77 bar0 @0x11011c = 0x400 phase=Cold
+kf3: w#78 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#79 bar0 @0x110114 = 0x500 phase=Cold
+kf3: w#80 bar0 @0x11011c = 0x500 phase=Cold
+kf3: w#81 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#82 bar0 @0x110114 = 0x600 phase=Cold
+kf3: w#83 bar0 @0x11011c = 0x600 phase=Cold
+kf3: w#84 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#85 bar0 @0x110114 = 0x700 phase=Cold
+kf3: w#86 bar0 @0x11011c = 0x700 phase=Cold
+kf3: w#87 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#88 bar0 @0x110114 = 0x800 phase=Cold
+kf3: w#89 bar0 @0x11011c = 0x800 phase=Cold
+kf3: w#90 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#91 bar0 @0x110114 = 0x900 phase=Cold
+kf3: w#92 bar0 @0x11011c = 0x900 phase=Cold
+kf3: w#93 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#94 bar0 @0x110114 = 0xa00 phase=Cold
+kf3: w#95 bar0 @0x11011c = 0xa00 phase=Cold
+kf3: w#96 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#97 bar0 @0x110114 = 0xb00 phase=Cold
+kf3: w#98 bar0 @0x11011c = 0xb00 phase=Cold
+kf3: w#99 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#100 bar0 @0x110114 = 0xc00 phase=Cold
+kf3: w#101 bar0 @0x11011c = 0xc00 phase=Cold
+kf3: w#102 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#103 bar0 @0x110114 = 0xd00 phase=Cold
+kf3: w#104 bar0 @0x11011c = 0xd00 phase=Cold
+kf3: w#105 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#106 bar0 @0x110114 = 0xe00 phase=Cold
+kf3: w#107 bar0 @0x11011c = 0xe00 phase=Cold
+kf3: w#108 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#109 bar0 @0x110114 = 0xf00 phase=Cold
+kf3: w#110 bar0 @0x11011c = 0xf00 phase=Cold
+kf3: w#111 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#112 bar0 @0x111210 = 0x800 phase=Cold
+kf3: w#113 bar0 @0x11119c = 0x1 phase=Cold
+kf3: w#114 bar0 @0x111198 = 0x1 phase=Cold
+kf3: w#115 bar0 @0x111180 = 0x1 phase=Cold
+kf3: w#116 bar0 @0x110104 = 0x0 phase=Cold
+kf3: w#117 bar0 @0x110100 = 0x2 phase=Cold
+kf3: GSP phase Cold -> ProtectedRegionUp
+kf3: GSP WPR2 up at the guest's FWSEC-FRTS command: frts_offset=0x1ffe00000 → served WPR2_ADDR_LO=Some(Ok("0x1ffe000"))
+kf3: w#118 bar0 @0x1103c0 = 0x1 phase=ProtectedRegionUp
+kf3: w#119 bar0 @0x1103c0 = 0x0 phase=ProtectedRegionUp
+kf3: w#120 bar0 @0x111668 = 0x111 phase=ProtectedRegionUp
+kf3: w#121 bar0 @0x110040 = 0x37f4000 phase=ProtectedRegionUp
+kf3: w#122 bar0 @0x110044 = 0x1 phase=ProtectedRegionUp
+kayfabe: GSP-PUBLISH gpa=0x127000000 gpa_same=false seq_last=Some(1) cmd_seq=0 ⇒ same_instance=false
+kf-gsp: fn 72 GSP_SET_SYSTEM_INFO seq=0 936 bytes: bGspNocatEnabled=0 at +929 (driver 580.65.06's layout; 1 = a Windows-built RM, THE_WINDOWS_AXIS §7)
+kf3: GSP rpc GspSetSystemInfo seq=0
+kf3: GSP rpc SetRegistry seq=0
+kf3: w#123 bar0 @0x8403c0 = 0x1 phase=ProtectedRegionUp
+kf3: w#124 bar0 @0x8403c0 = 0x0 phase=ProtectedRegionUp
+kf3: w#125 bar0 @0x840084 = 0x176000a1 phase=ProtectedRegionUp
+kf3: w#126 bar0 @0x840624 = 0x80 phase=ProtectedRegionUp
+kf3: w#127 bar0 @0x84010c = 0x0 phase=ProtectedRegionUp
+kf3: w#128 bar0 @0x840600 = 0x5 phase=ProtectedRegionUp
+kf3: w#129 bar0 @0x840110 = 0x123ef00 phase=ProtectedRegionUp
+kf3: w#130 bar0 @0x840128 = 0x0 phase=ProtectedRegionUp
+kf3: w#131 bar0 @0x840114 = 0x0 phase=ProtectedRegionUp
+kf3: w#132 bar0 @0x84011c = 0x100 phase=ProtectedRegionUp
+kf3: w#133 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#134 bar0 @0x840114 = 0x100 phase=ProtectedRegionUp
+kf3: w#135 bar0 @0x84011c = 0x200 phase=ProtectedRegionUp
+kf3: w#136 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#137 bar0 @0x840114 = 0x200 phase=ProtectedRegionUp
+kf3: w#138 bar0 @0x84011c = 0x300 phase=ProtectedRegionUp
+kf3: w#139 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#140 bar0 @0x840114 = 0x300 phase=ProtectedRegionUp
+kf3: w#141 bar0 @0x84011c = 0x400 phase=ProtectedRegionUp
+kf3: w#142 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#143 bar0 @0x840114 = 0x400 phase=ProtectedRegionUp
+kf3: w#144 bar0 @0x84011c = 0x500 phase=ProtectedRegionUp
+kf3: w#145 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#146 bar0 @0x840114 = 0x500 phase=ProtectedRegionUp
+kf3: w#147 bar0 @0x84011c = 0x600 phase=ProtectedRegionUp
+kf3: w#148 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#149 bar0 @0x840114 = 0x600 phase=ProtectedRegionUp
+kf3: w#150 bar0 @0x84011c = 0x700 phase=ProtectedRegionUp
+kf3: w#151 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#152 bar0 @0x840114 = 0x700 phase=ProtectedRegionUp
+kf3: w#153 bar0 @0x84011c = 0x800 phase=ProtectedRegionUp
+kf3: w#154 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#155 bar0 @0x840114 = 0x800 phase=ProtectedRegionUp
+kf3: w#156 bar0 @0x84011c = 0x900 phase=ProtectedRegionUp
+kf3: w#157 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#158 bar0 @0x840114 = 0x900 phase=ProtectedRegionUp
+kf3: w#159 bar0 @0x84011c = 0xa00 phase=ProtectedRegionUp
+kf3: w#160 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#161 bar0 @0x840114 = 0xa00 phase=ProtectedRegionUp
+kf3: w#162 bar0 @0x84011c = 0xb00 phase=ProtectedRegionUp
+kf3: w#163 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#164 bar0 @0x840114 = 0xb00 phase=ProtectedRegionUp
+kf3: w#165 bar0 @0x84011c = 0xc00 phase=ProtectedRegionUp
+kf3: w#166 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#167 bar0 @0x840114 = 0xc00 phase=ProtectedRegionUp
+kf3: w#168 bar0 @0x84011c = 0xd00 phase=ProtectedRegionUp
+kf3: w#169 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#170 bar0 @0x840114 = 0xd00 phase=ProtectedRegionUp
+kf3: w#171 bar0 @0x84011c = 0xe00 phase=ProtectedRegionUp
+kf3: w#172 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#173 bar0 @0x840114 = 0xe00 phase=ProtectedRegionUp
+kf3: w#174 bar0 @0x84011c = 0xf00 phase=ProtectedRegionUp
+kf3: w#175 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#176 bar0 @0x840114 = 0xf00 phase=ProtectedRegionUp
+kf3: w#177 bar0 @0x84011c = 0x1000 phase=ProtectedRegionUp
+kf3: w#178 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#179 bar0 @0x840114 = 0x1000 phase=ProtectedRegionUp
+kf3: w#180 bar0 @0x84011c = 0x1100 phase=ProtectedRegionUp
+kf3: w#181 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#182 bar0 @0x840114 = 0x1100 phase=ProtectedRegionUp
+kf3: w#183 bar0 @0x84011c = 0x1200 phase=ProtectedRegionUp
+kf3: w#184 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#185 bar0 @0x840114 = 0x1200 phase=ProtectedRegionUp
+kf3: w#186 bar0 @0x84011c = 0x1300 phase=ProtectedRegionUp
+kf3: w#187 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#188 bar0 @0x840114 = 0x1300 phase=ProtectedRegionUp
+kf3: w#189 bar0 @0x84011c = 0x1400 phase=ProtectedRegionUp
+kf3: w#190 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#191 bar0 @0x840114 = 0x1400 phase=ProtectedRegionUp
+kf3: w#192 bar0 @0x84011c = 0x1500 phase=ProtectedRegionUp
+kf3: w#193 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#194 bar0 @0x840114 = 0x1500 phase=ProtectedRegionUp
+kf3: w#195 bar0 @0x84011c = 0x1600 phase=ProtectedRegionUp
+kf3: w#196 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#197 bar0 @0x840114 = 0x1600 phase=ProtectedRegionUp
+kf3: w#198 bar0 @0x84011c = 0x1700 phase=ProtectedRegionUp
+kf3: w#199 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#200 bar0 @0x840114 = 0x1700 phase=ProtectedRegionUp
+kf3: w#201 bar0 @0x84011c = 0x1800 phase=ProtectedRegionUp
+kf3: w#202 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#203 bar0 @0x840114 = 0x1800 phase=ProtectedRegionUp
+kf3: w#204 bar0 @0x84011c = 0x1900 phase=ProtectedRegionUp
+kf3: w#205 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#206 bar0 @0x840114 = 0x1900 phase=ProtectedRegionUp
+kf3: w#207 bar0 @0x84011c = 0x1a00 phase=ProtectedRegionUp
+kf3: w#208 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#209 bar0 @0x840114 = 0x1a00 phase=ProtectedRegionUp
+kf3: w#210 bar0 @0x84011c = 0x1b00 phase=ProtectedRegionUp
+kf3: w#211 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#212 bar0 @0x840114 = 0x1b00 phase=ProtectedRegionUp
+kf3: w#213 bar0 @0x84011c = 0x1c00 phase=ProtectedRegionUp
+kf3: w#214 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#215 bar0 @0x840114 = 0x1c00 phase=ProtectedRegionUp
+kf3: w#216 bar0 @0x84011c = 0x1d00 phase=ProtectedRegionUp
+kf3: w#217 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#218 bar0 @0x840114 = 0x1d00 phase=ProtectedRegionUp
+kf3: w#219 bar0 @0x84011c = 0x1e00 phase=ProtectedRegionUp
+kf3: w#220 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#221 bar0 @0x840114 = 0x1e00 phase=ProtectedRegionUp
+kf3: w#222 bar0 @0x84011c = 0x1f00 phase=ProtectedRegionUp
+kf3: w#223 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#224 bar0 @0x840114 = 0x1f00 phase=ProtectedRegionUp
+kf3: w#225 bar0 @0x84011c = 0x2000 phase=ProtectedRegionUp
+kf3: w#226 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#227 bar0 @0x840114 = 0x2000 phase=ProtectedRegionUp
+kf3: w#228 bar0 @0x84011c = 0x2100 phase=ProtectedRegionUp
+kf3: w#229 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#230 bar0 @0x840114 = 0x2100 phase=ProtectedRegionUp
+kf3: w#231 bar0 @0x84011c = 0x2200 phase=ProtectedRegionUp
+kf3: w#232 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#233 bar0 @0x840114 = 0x2200 phase=ProtectedRegionUp
+kf3: w#234 bar0 @0x84011c = 0x2300 phase=ProtectedRegionUp
+kf3: w#235 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#236 bar0 @0x840114 = 0x2300 phase=ProtectedRegionUp
+kf3: w#237 bar0 @0x84011c = 0x2400 phase=ProtectedRegionUp
+kf3: w#238 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#239 bar0 @0x840114 = 0x2400 phase=ProtectedRegionUp
+kf3: w#240 bar0 @0x84011c = 0x2500 phase=ProtectedRegionUp
+kf3: w#241 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#242 bar0 @0x840114 = 0x2500 phase=ProtectedRegionUp
+kf3: w#243 bar0 @0x84011c = 0x2600 phase=ProtectedRegionUp
+kf3: w#244 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#245 bar0 @0x840114 = 0x2600 phase=ProtectedRegionUp
+kf3: w#246 bar0 @0x84011c = 0x2700 phase=ProtectedRegionUp
+kf3: w#247 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#248 bar0 @0x840114 = 0x2700 phase=ProtectedRegionUp
+kf3: w#249 bar0 @0x84011c = 0x2800 phase=ProtectedRegionUp
+kf3: w#250 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#251 bar0 @0x840114 = 0x2800 phase=ProtectedRegionUp
+kf3: w#252 bar0 @0x84011c = 0x2900 phase=ProtectedRegionUp
+kf3: w#253 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#254 bar0 @0x840114 = 0x2900 phase=ProtectedRegionUp
+kf3: w#255 bar0 @0x84011c = 0x2a00 phase=ProtectedRegionUp
+kf3: w#256 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#257 bar0 @0x840114 = 0x2a00 phase=ProtectedRegionUp
+kf3: w#258 bar0 @0x84011c = 0x2b00 phase=ProtectedRegionUp
+kf3: w#259 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#260 bar0 @0x840114 = 0x2b00 phase=ProtectedRegionUp
+kf3: w#261 bar0 @0x84011c = 0x2c00 phase=ProtectedRegionUp
+kf3: w#262 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#263 bar0 @0x840114 = 0x2c00 phase=ProtectedRegionUp
+kf3: w#264 bar0 @0x84011c = 0x2d00 phase=ProtectedRegionUp
+kf3: w#265 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#266 bar0 @0x840114 = 0x2d00 phase=ProtectedRegionUp
+kf3: w#267 bar0 @0x84011c = 0x2e00 phase=ProtectedRegionUp
+kf3: w#268 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#269 bar0 @0x840114 = 0x2e00 phase=ProtectedRegionUp
+kf3: w#270 bar0 @0x84011c = 0x2f00 phase=ProtectedRegionUp
+kf3: w#271 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#272 bar0 @0x840114 = 0x2f00 phase=ProtectedRegionUp
+kf3: w#273 bar0 @0x84011c = 0x3000 phase=ProtectedRegionUp
+kf3: w#274 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#275 bar0 @0x840114 = 0x3000 phase=ProtectedRegionUp
+kf3: w#276 bar0 @0x84011c = 0x3100 phase=ProtectedRegionUp
+kf3: w#277 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#278 bar0 @0x840114 = 0x3100 phase=ProtectedRegionUp
+kf3: w#279 bar0 @0x84011c = 0x3200 phase=ProtectedRegionUp
+kf3: w#280 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#281 bar0 @0x840114 = 0x3200 phase=ProtectedRegionUp
+kf3: w#282 bar0 @0x84011c = 0x3300 phase=ProtectedRegionUp
+kf3: w#283 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#284 bar0 @0x840114 = 0x3300 phase=ProtectedRegionUp
+kf3: w#285 bar0 @0x84011c = 0x3400 phase=ProtectedRegionUp
+kf3: w#286 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#287 bar0 @0x840114 = 0x3400 phase=ProtectedRegionUp
+kf3: w#288 bar0 @0x84011c = 0x3500 phase=ProtectedRegionUp
+kf3: w#289 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#290 bar0 @0x840114 = 0x3500 phase=ProtectedRegionUp
+kf3: w#291 bar0 @0x84011c = 0x3600 phase=ProtectedRegionUp
+kf3: w#292 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#293 bar0 @0x840114 = 0x3600 phase=ProtectedRegionUp
+kf3: w#294 bar0 @0x84011c = 0x3700 phase=ProtectedRegionUp
+kf3: w#295 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#296 bar0 @0x840114 = 0x3700 phase=ProtectedRegionUp
+kf3: w#297 bar0 @0x84011c = 0x3800 phase=ProtectedRegionUp
+kf3: w#298 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#299 bar0 @0x840114 = 0x3800 phase=ProtectedRegionUp
+kf3: w#300 bar0 @0x84011c = 0x3900 phase=ProtectedRegionUp
+kf3: w#301 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#302 bar0 @0x840114 = 0x3900 phase=ProtectedRegionUp
+kf3: w#303 bar0 @0x84011c = 0x3a00 phase=ProtectedRegionUp
+kf3: w#304 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#305 bar0 @0x840114 = 0x3a00 phase=ProtectedRegionUp
+kf3: w#306 bar0 @0x84011c = 0x3b00 phase=ProtectedRegionUp
+kf3: w#307 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#308 bar0 @0x840114 = 0x3b00 phase=ProtectedRegionUp
+kf3: w#309 bar0 @0x84011c = 0x3c00 phase=ProtectedRegionUp
+kf3: w#310 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#311 bar0 @0x840114 = 0x3c00 phase=ProtectedRegionUp
+kf3: w#312 bar0 @0x84011c = 0x3d00 phase=ProtectedRegionUp
+kf3: w#313 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#314 bar0 @0x840114 = 0x3d00 phase=ProtectedRegionUp
+kf3: w#315 bar0 @0x84011c = 0x3e00 phase=ProtectedRegionUp
+kf3: w#316 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#317 bar0 @0x840114 = 0x3e00 phase=ProtectedRegionUp
+kf3: w#318 bar0 @0x84011c = 0x3f00 phase=ProtectedRegionUp
+kf3: w#319 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#320 bar0 @0x840114 = 0x3f00 phase=ProtectedRegionUp
+kf3: w#321 bar0 @0x84011c = 0x4000 phase=ProtectedRegionUp
+kf3: w#322 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#323 bar0 @0x840114 = 0x4000 phase=ProtectedRegionUp
+kf3: w#324 bar0 @0x84011c = 0x4100 phase=ProtectedRegionUp
+kf3: w#325 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#326 bar0 @0x840114 = 0x4100 phase=ProtectedRegionUp
+kf3: w#327 bar0 @0x84011c = 0x4200 phase=ProtectedRegionUp
+kf3: w#328 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#329 bar0 @0x840114 = 0x4200 phase=ProtectedRegionUp
+kf3: w#330 bar0 @0x84011c = 0x4300 phase=ProtectedRegionUp
+kf3: w#331 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#332 bar0 @0x840114 = 0x4300 phase=ProtectedRegionUp
+kf3: w#333 bar0 @0x84011c = 0x4400 phase=ProtectedRegionUp
+kf3: w#334 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#335 bar0 @0x840114 = 0x4400 phase=ProtectedRegionUp
+kf3: w#336 bar0 @0x84011c = 0x4500 phase=ProtectedRegionUp
+kf3: w#337 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#338 bar0 @0x840114 = 0x4500 phase=ProtectedRegionUp
+kf3: w#339 bar0 @0x84011c = 0x4600 phase=ProtectedRegionUp
+kf3: w#340 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#341 bar0 @0x840114 = 0x4600 phase=ProtectedRegionUp
+kf3: w#342 bar0 @0x84011c = 0x4700 phase=ProtectedRegionUp
+kf3: w#343 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#344 bar0 @0x840114 = 0x4700 phase=ProtectedRegionUp
+kf3: w#345 bar0 @0x84011c = 0x4800 phase=ProtectedRegionUp
+kf3: w#346 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#347 bar0 @0x840114 = 0x4800 phase=ProtectedRegionUp
+kf3: w#348 bar0 @0x84011c = 0x4900 phase=ProtectedRegionUp
+kf3: w#349 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#350 bar0 @0x840114 = 0x4900 phase=ProtectedRegionUp
+kf3: w#351 bar0 @0x84011c = 0x4a00 phase=ProtectedRegionUp
+kf3: w#352 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#353 bar0 @0x840114 = 0x4a00 phase=ProtectedRegionUp
+kf3: w#354 bar0 @0x84011c = 0x4b00 phase=ProtectedRegionUp
+kf3: w#355 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#356 bar0 @0x840114 = 0x4b00 phase=ProtectedRegionUp
+kf3: w#357 bar0 @0x84011c = 0x4c00 phase=ProtectedRegionUp
+kf3: w#358 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#359 bar0 @0x840114 = 0x4c00 phase=ProtectedRegionUp
+kf3: w#360 bar0 @0x84011c = 0x4d00 phase=ProtectedRegionUp
+kf3: w#361 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#362 bar0 @0x840114 = 0x4d00 phase=ProtectedRegionUp
+kf3: w#363 bar0 @0x84011c = 0x4e00 phase=ProtectedRegionUp
+kf3: w#364 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#365 bar0 @0x840114 = 0x4e00 phase=ProtectedRegionUp
+kf3: w#366 bar0 @0x84011c = 0x4f00 phase=ProtectedRegionUp
+kf3: w#367 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#368 bar0 @0x840114 = 0x4f00 phase=ProtectedRegionUp
+kf3: w#369 bar0 @0x84011c = 0x5000 phase=ProtectedRegionUp
+kf3: w#370 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#371 bar0 @0x840114 = 0x5000 phase=ProtectedRegionUp
+kf3: w#372 bar0 @0x84011c = 0x5100 phase=ProtectedRegionUp
+kf3: w#373 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#374 bar0 @0x840114 = 0x5100 phase=ProtectedRegionUp
+kf3: w#375 bar0 @0x84011c = 0x5200 phase=ProtectedRegionUp
+kf3: w#376 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#377 bar0 @0x840114 = 0x5200 phase=ProtectedRegionUp
+kf3: w#378 bar0 @0x84011c = 0x5300 phase=ProtectedRegionUp
+kf3: w#379 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#380 bar0 @0x840114 = 0x5300 phase=ProtectedRegionUp
+kf3: w#381 bar0 @0x84011c = 0x5400 phase=ProtectedRegionUp
+kf3: w#382 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#383 bar0 @0x840114 = 0x5400 phase=ProtectedRegionUp
+kf3: w#384 bar0 @0x84011c = 0x5500 phase=ProtectedRegionUp
+kf3: w#385 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#386 bar0 @0x840114 = 0x5500 phase=ProtectedRegionUp
+kf3: w#387 bar0 @0x84011c = 0x5600 phase=ProtectedRegionUp
+kf3: w#388 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#389 bar0 @0x840114 = 0x5600 phase=ProtectedRegionUp
+kf3: w#390 bar0 @0x84011c = 0x5700 phase=ProtectedRegionUp
+kf3: w#391 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#392 bar0 @0x840114 = 0x5700 phase=ProtectedRegionUp
+kf3: w#393 bar0 @0x84011c = 0x5800 phase=ProtectedRegionUp
+kf3: w#394 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#395 bar0 @0x840114 = 0x5800 phase=ProtectedRegionUp
+kf3: w#396 bar0 @0x84011c = 0x5900 phase=ProtectedRegionUp
+kf3: w#397 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#398 bar0 @0x840114 = 0x5900 phase=ProtectedRegionUp
+kf3: w#399 bar0 @0x84011c = 0x5a00 phase=ProtectedRegionUp
+kf3: w#400 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#401 bar0 @0x840114 = 0x5a00 phase=ProtectedRegionUp
+kf3: w#402 bar0 @0x84011c = 0x5b00 phase=ProtectedRegionUp
+kf3: w#403 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#404 bar0 @0x840114 = 0x5b00 phase=ProtectedRegionUp
+kf3: w#405 bar0 @0x84011c = 0x5c00 phase=ProtectedRegionUp
+kf3: w#406 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#407 bar0 @0x840114 = 0x5c00 phase=ProtectedRegionUp
+kf3: w#408 bar0 @0x84011c = 0x5d00 phase=ProtectedRegionUp
+kf3: w#409 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#410 bar0 @0x840114 = 0x5d00 phase=ProtectedRegionUp
+kf3: w#411 bar0 @0x84011c = 0x5e00 phase=ProtectedRegionUp
+kf3: w#412 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#413 bar0 @0x840114 = 0x5e00 phase=ProtectedRegionUp
+kf3: w#414 bar0 @0x84011c = 0x5f00 phase=ProtectedRegionUp
+kf3: w#415 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#416 bar0 @0x840114 = 0x5f00 phase=ProtectedRegionUp
+kf3: w#417 bar0 @0x84011c = 0x6000 phase=ProtectedRegionUp
+kf3: w#418 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#419 bar0 @0x840114 = 0x6000 phase=ProtectedRegionUp
+kf3: w#420 bar0 @0x84011c = 0x6100 phase=ProtectedRegionUp
+kf3: w#421 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#422 bar0 @0x840114 = 0x6100 phase=ProtectedRegionUp
+kf3: w#423 bar0 @0x84011c = 0x6200 phase=ProtectedRegionUp
+kf3: w#424 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#425 bar0 @0x840114 = 0x6200 phase=ProtectedRegionUp
+kf3: w#426 bar0 @0x84011c = 0x6300 phase=ProtectedRegionUp
+kf3: w#427 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#428 bar0 @0x840114 = 0x6300 phase=ProtectedRegionUp
+kf3: w#429 bar0 @0x84011c = 0x6400 phase=ProtectedRegionUp
+kf3: w#430 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#431 bar0 @0x840114 = 0x6400 phase=ProtectedRegionUp
+kf3: w#432 bar0 @0x84011c = 0x6500 phase=ProtectedRegionUp
+kf3: w#433 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#434 bar0 @0x840114 = 0x6500 phase=ProtectedRegionUp
+kf3: w#435 bar0 @0x84011c = 0x6600 phase=ProtectedRegionUp
+kf3: w#436 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#437 bar0 @0x840114 = 0x6600 phase=ProtectedRegionUp
+kf3: w#438 bar0 @0x84011c = 0x6700 phase=ProtectedRegionUp
+kf3: w#439 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#440 bar0 @0x840114 = 0x6700 phase=ProtectedRegionUp
+kf3: w#441 bar0 @0x84011c = 0x6800 phase=ProtectedRegionUp
+kf3: w#442 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#443 bar0 @0x840114 = 0x6800 phase=ProtectedRegionUp
+kf3: w#444 bar0 @0x84011c = 0x6900 phase=ProtectedRegionUp
+kf3: w#445 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#446 bar0 @0x840114 = 0x6900 phase=ProtectedRegionUp
+kf3: w#447 bar0 @0x84011c = 0x6a00 phase=ProtectedRegionUp
+kf3: w#448 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#449 bar0 @0x840114 = 0x6a00 phase=ProtectedRegionUp
+kf3: w#450 bar0 @0x84011c = 0x6b00 phase=ProtectedRegionUp
+kf3: w#451 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#452 bar0 @0x840114 = 0x6b00 phase=ProtectedRegionUp
+kf3: w#453 bar0 @0x84011c = 0x6c00 phase=ProtectedRegionUp
+kf3: w#454 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#455 bar0 @0x840114 = 0x6c00 phase=ProtectedRegionUp
+kf3: w#456 bar0 @0x84011c = 0x6d00 phase=ProtectedRegionUp
+kf3: w#457 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#458 bar0 @0x840114 = 0x6d00 phase=ProtectedRegionUp
+kf3: w#459 bar0 @0x84011c = 0x6e00 phase=ProtectedRegionUp
+kf3: w#460 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#461 bar0 @0x840114 = 0x6e00 phase=ProtectedRegionUp
+kf3: w#462 bar0 @0x84011c = 0x6f00 phase=ProtectedRegionUp
+kf3: w#463 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#464 bar0 @0x840114 = 0x6f00 phase=ProtectedRegionUp
+kf3: w#465 bar0 @0x84011c = 0x7000 phase=ProtectedRegionUp
+kf3: w#466 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#467 bar0 @0x840114 = 0x7000 phase=ProtectedRegionUp
+kf3: w#468 bar0 @0x84011c = 0x7100 phase=ProtectedRegionUp
+kf3: w#469 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#470 bar0 @0x840114 = 0x7100 phase=ProtectedRegionUp
+kf3: w#471 bar0 @0x84011c = 0x7200 phase=ProtectedRegionUp
+kf3: w#472 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#473 bar0 @0x840114 = 0x7200 phase=ProtectedRegionUp
+kf3: w#474 bar0 @0x84011c = 0x7300 phase=ProtectedRegionUp
+kf3: w#475 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#476 bar0 @0x840114 = 0x7300 phase=ProtectedRegionUp
+kf3: w#477 bar0 @0x84011c = 0x7400 phase=ProtectedRegionUp
+kf3: w#478 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#479 bar0 @0x840114 = 0x7400 phase=ProtectedRegionUp
+kf3: w#480 bar0 @0x84011c = 0x7500 phase=ProtectedRegionUp
+kf3: w#481 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#482 bar0 @0x840114 = 0x7500 phase=ProtectedRegionUp
+kf3: w#483 bar0 @0x84011c = 0x7600 phase=ProtectedRegionUp
+kf3: w#484 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#485 bar0 @0x840114 = 0x7600 phase=ProtectedRegionUp
+kf3: w#486 bar0 @0x84011c = 0x7700 phase=ProtectedRegionUp
+kf3: w#487 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#488 bar0 @0x840114 = 0x7700 phase=ProtectedRegionUp
+kf3: w#489 bar0 @0x84011c = 0x7800 phase=ProtectedRegionUp
+kf3: w#490 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#491 bar0 @0x840114 = 0x7800 phase=ProtectedRegionUp
+kf3: w#492 bar0 @0x84011c = 0x7900 phase=ProtectedRegionUp
+kf3: w#493 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#494 bar0 @0x840114 = 0x7900 phase=ProtectedRegionUp
+kf3: w#495 bar0 @0x84011c = 0x7a00 phase=ProtectedRegionUp
+kf3: w#496 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#497 bar0 @0x840114 = 0x7a00 phase=ProtectedRegionUp
+kf3: w#498 bar0 @0x84011c = 0x7b00 phase=ProtectedRegionUp
+kf3: w#499 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#500 bar0 @0x840114 = 0x7b00 phase=ProtectedRegionUp
+kf3: w#501 bar0 @0x84011c = 0x7c00 phase=ProtectedRegionUp
+kf3: w#502 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#503 bar0 @0x840114 = 0x7c00 phase=ProtectedRegionUp
+kf3: w#504 bar0 @0x84011c = 0x7d00 phase=ProtectedRegionUp
+kf3: w#505 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#506 bar0 @0x840114 = 0x7d00 phase=ProtectedRegionUp
+kf3: w#507 bar0 @0x84011c = 0x7e00 phase=ProtectedRegionUp
+kf3: w#508 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#509 bar0 @0x840114 = 0x7e00 phase=ProtectedRegionUp
+kf3: w#510 bar0 @0x84011c = 0x7f00 phase=ProtectedRegionUp
+kf3: w#511 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: GSP phase ProtectedRegionUp -> Booted
+kf-rm: fn 1 SET_GUEST_SYSTEM_INFO: the guest says guestDriverVersion="580.65.06" guestVersion="rel/gpu_drv/r580/r580_78-179" guestTitle="Private r580_78 rel/gpu_drv/r580/r580_78-179 unknown" guestClNum=0 vgx=0x2b.0x13; this device answers as driver 580.65.06
+kf-rm: rpc-trace fn=1 SetGuestSystemInfo seq=0  result=0x0
+kf3: GSP rpc SetGuestSystemInfo seq=0
+kf3: GSP phase Booted -> Running
+kf-rm: GET_GSP_STATIC_INFO: the guest preserves a firmware console of 0x7f0000 bytes (fn 72 seq 0; boot framebuffer G = 0x7f0000): region 0 = [0, 0x7f0000) reserved, the heap starts at 0x7f0000, 3 regions
+kf-rm: rpc-trace fn=65 GetGspStaticInfo seq=0  result=0x0
+kf3: GSP rpc GetGspStaticInfo seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a36 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a41 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x208001b0 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x208001b0 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a87 client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a87=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a40 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801112 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a5c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a1c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801803 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a4b client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: chanlink: client 0xc1e00002 root: kernel=true internal=true
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00002 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00002 parent=0xc1e00002 handle=0xcaf00000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00002 parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0073 client=0xc1e00002 parent=0xcaf00000 handle=0xcaf00002 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800af3 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800aac client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a61 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a61 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a61 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800afe client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800aff client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800aff=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: chanlink: client 0xc1e00003 root: kernel=true internal=true
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00003 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00003 parent=0xc1e00003 handle=0xcaf00000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00003 parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x007e client=0xc1e00003 parent=0xcaf00001 handle=0xcaf00003 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=0xc1e00003 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a59 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=70 UpdateBarPde seq=0  result=0x0
+kayfabe: HELD-REPLY fn=UpdateBarPde depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc UpdateBarPde seq=0
+kf3: mem t=70.836s fn70 Bar2 entry=0x1efbc302 shift=47 -> our root @0x1f3392000, walk scheduled
+kf3: mem t=70.839s walk reconciled [0xffffffff00000002:+0-0r0] completed=[] unreconciled=[]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a70 client=0x0 object=0x0 result=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=70.845s sysmembar #1: host FB_FLUSH_GPU_CACHE(FB_FLUSH_YES) in 388 us
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: mem t=70.847s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(0, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a70 client=0x0 object=0x0 result=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=70.847s sysmembar #2: host FB_FLUSH_GPU_CACHE(FB_FLUSH_YES) in 264 us
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: mem t=70.848s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(1, Cleared)] unreconciled=[]
+kf3: mem t=70.849s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(2, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a6c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a6c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a6c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a01 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800ac6 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800adf client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a49 client=0x0 object=0x0 result=0x0
+kf3: display: InstMem(InstMem { phys: 8316977152, size: 65536, addr_space: 2 })
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a80 client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a80=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a61 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: chanlink: client 0xc1e00004 root: kernel=true internal=true
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00004 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00004 parent=0xc1e00004 handle=0xcaf00000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00004 parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a80 client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: mem t=70.859s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(3, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730151 client=0xc1e00002 object=0xcaf00002 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a0f client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20802a0f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: mem t=70.860s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(4, Cleared)] unreconciled=[]
+kf3: mem t=70.862s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(5, Cleared)] unreconciled=[]
+kf3: mem t=70.863s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(6, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080017e client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080017e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800af3 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=70.865s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(7, Cleared)] unreconciled=[]
+kf3: mem t=70.866s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(8, Cleared)] unreconciled=[]
+kf3: mem t=70.867s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(9, Cleared)] unreconciled=[]
+kf3: mem t=70.868s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(10, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a9f client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=70.869s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(11, Cleared)] unreconciled=[]
+kf3: mem t=70.870s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(12, Cleared)] unreconciled=[]
+kf3: mem t=70.871s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(13, Cleared)] unreconciled=[]
+kf3: mem t=70.872s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(14, Cleared)] unreconciled=[]
+kf3: mem t=70.873s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(16, Cleared)] unreconciled=[]
+kf3: mem t=70.874s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(17, Cleared)] unreconciled=[]
+kf3: mem t=70.875s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(18, Cleared)] unreconciled=[]
+kf3: mem t=70.876s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(19, Cleared)] unreconciled=[]
+kf3: mem t=70.877s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(22, Cleared)] unreconciled=[]
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch
+kf3: mem t=70.879s walk reconciled [0xffffffff00000001:+1-0r0] completed=[(23, Cleared)] unreconciled=[]
+kf3: mem t=70.879s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #1: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf-rm: chanlink: client 0xc1e00005 root: kernel=true internal=true
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00005 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00005 parent=0xc1e00005 handle=0xcaf00000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00005 parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a1f client=0xc1e00005 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a2a client=0xc1e00005 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a26 client=0xc1e00005 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a22 client=0xc1e00005 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a30 client=0xc1e00005 object=0xcaf00001 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a30=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a2c client=0xc1e00005 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a2e client=0xc1e00005 object=0xcaf00001 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a2e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a34 client=0xc1e00005 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800b03 client=0xc1e00005 object=0xcaf00001 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800b03=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800b05 client=0xc1e00005 object=0xcaf00001 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800b05=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a3d client=0xc1e00005 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a3f client=0xc1e00005 object=0xcaf00001 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a3f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a48 client=0xc1e00005 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a32 client=0xc1e00005 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: mem t=70.884s walk reconciled [0xffffffff00000001:+0-0r0] completed=[(24, Cleared)] unreconciled=[]
+kf3: mem t=70.885s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(25, Cleared)] unreconciled=[]
+kf3: mem t=70.886s walk reconciled [0xffffffff00000001:+1-0r0] completed=[(26, Cleared)] unreconciled=[]
+kf-rm: chanlink: client 0xc1e00006 root: kernel=true internal=true
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00006 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00006 parent=0xc1e00006 handle=0xa result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00006 parent=0xa handle=0xb result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: mem t=70.890s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(27, Cleared)] unreconciled=[]
+kf3: mem t=70.891s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(28, Cleared)] unreconciled=[]
+kf3: mem t=70.892s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(29, Cleared)] unreconciled=[]
+kf3: mem t=70.893s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(30, Cleared)] unreconciled=[]
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1e00006:0xc under 0xa (device default for it: 0xc)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x90f1 client=0xc1e00006 parent=0xa handle=0xc result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x90f10106 client=0xc1e00006 object=0xc result=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=70.894s pagedir VasKey(13970166069873082380) root=0x1efba0000 First
+kf3: mem t=70.894s walk reconciled [0xc1e000060000000c:+0-0r0] completed=[] unreconciled=[]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: mem t=70.895s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(31, Cleared)] unreconciled=[]
+kf3: mem t=70.896s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(32, Cleared)] unreconciled=[]
+kf3: mem t=70.897s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(33, Cleared)] unreconciled=[]
+kf-host: map_scattered 109 pieces 0x6d000 bytes: stitch 1205 us, descriptor 382 us, hand view to reaper 165 us, map 150 us
+kf3: mem t=70.900s walk reconciled [0xc1e000060000000c:+109-0r0] completed=[(34, Cleared)] unreconciled=[]
+kf3: mem t=70.904s walk reconciled [0xc1e000060000000c:+1-0r0] completed=[(35, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=70.906s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(36, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc56f client=0xc1e00006 parent=0xa handle=0x2 result=0x0
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=0
+kf3: act birth translated: chan 0xc1e00006:0x2 BORN Translated: token 0x801 -> host 0x10028 in VasKey(13970166069873082380) gpfifo=0x120064000x4096 userd=Some(Framebuffer { base: 8254128128, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B fast=off (4473 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: mem t=70.912s walk reconciled [0xffffffff00000001:+0-0r0] completed=[(37, Cleared)] unreconciled=[]
+kf3: mem t=70.913s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(38, Cleared)] unreconciled=[]
+kf3: mem t=70.914s walk reconciled [0xffffffff00000001:+1-0r0] completed=[(39, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc7b5 client=0xc1e00006 parent=0x2 handle=0x5 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: chan 0xc1e00006:0x2 GPFIFO_SCHEDULE enable=true (token 0x801, host 0x10028)
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xa06f0103 client=0xc1e00006 object=0x2 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x007e client=0xc1e00006 parent=0xb handle=0x6 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=0xc1e00006 object=0xb result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: chan token 0x801: GP_PUT=0 at USERD+0x0+0x8c; non-zero words in its page: []
+kf-rm: chanlink: client 0xc1e00007 root: kernel=true internal=true
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00007 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00007 parent=0xc1e00007 handle=0xb result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00007 parent=0xb handle=0xc result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1e00007:0xa under 0xb (device default for it: 0xa)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x90f1 client=0xc1e00007 parent=0xb handle=0xa result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: mem t=70.917s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(40, Cleared)] unreconciled=[]
+kf3: mem t=70.918s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(41, Cleared)] unreconciled=[]
+kf3: mem t=70.919s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(42, Cleared)] unreconciled=[]
+kf3: mem t=70.920s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(43, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x90f10106 client=0xc1e00007 object=0xa result=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=70.920s pagedir VasKey(13970166074168049674) root=0x1efa67000 First
+kf3: mem t=70.921s walk reconciled [0xc1e000070000000a:+0-0r0] completed=[] unreconciled=[]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: mem t=70.922s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(44, Cleared)] unreconciled=[]
+kf3: mem t=70.923s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(45, Cleared)] unreconciled=[]
+kf3: mem t=70.924s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(46, Cleared)] unreconciled=[]
+kf3: mem t=70.925s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(47, Cleared)] unreconciled=[]
+kf3: mem t=70.926s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(48, Cleared)] unreconciled=[]
+kf3: mem t=70.927s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(49, Cleared)] unreconciled=[]
+kf3: mem t=70.928s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(50, Cleared)] unreconciled=[]
+kf3: mem t=70.929s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(51, Cleared)] unreconciled=[]
+kf3: mem t=70.930s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(52, Cleared)] unreconciled=[]
+kf3: mem t=70.931s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(53, Cleared)] unreconciled=[]
+kf3: mem t=70.932s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(54, Cleared)] unreconciled=[]
+kf3: mem t=70.933s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(55, Cleared)] unreconciled=[]
+kf3: mem t=70.934s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(56, Cleared)] unreconciled=[]
+kf3: mem t=70.935s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(57, Cleared)] unreconciled=[]
+kf3: mem t=70.936s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(58, Cleared)] unreconciled=[]
+kf3: mem t=70.937s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(59, Cleared)] unreconciled=[]
+kf3: mem t=71.115s walk reconciled [0xc1e000070000000a:+3-0r0] completed=[(60, Cleared)] unreconciled=[]
+kf3: mem t=71.118s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(61, Cleared)] unreconciled=[]
+kf3: mem t=71.119s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(62, Cleared)] unreconciled=[]
+kf3: mem t=71.120s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(63, Cleared)] unreconciled=[]
+kf-host: map_scattered 109 pieces 0x6d000 bytes: stitch 554 us, descriptor 191 us, hand view to reaper 12 us, map 108 us
+kf3: mem t=71.122s walk reconciled [0xc1e000070000000a:+109-0r0] completed=[(64, Cleared)] unreconciled=[]
+kf3: mem t=71.125s walk reconciled [0xc1e000070000000a:+1-0r0] completed=[(65, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=71.127s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(66, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc56f client=0xc1e00007 parent=0xb handle=0x2 result=0x0
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=0
+kf3: act birth translated: chan 0xc1e00007:0x2 BORN Translated: token 0x802 -> host 0x10029 in VasKey(13970166074168049674) gpfifo=0x320064000x4096 userd=Some(Framebuffer { base: 8254193664, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B fast=off (3736 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: mem t=71.132s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(67, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc7b5 client=0xc1e00007 parent=0x2 handle=0x5 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: chan 0xc1e00007:0x2 BIND engine=0xb (host 0x10029)
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xa06f0104 client=0xc1e00007 object=0x2 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: chan 0xc1e00007:0x2 GPFIFO_SCHEDULE enable=true (token 0x802, host 0x10029)
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xa06f0103 client=0xc1e00007 object=0x2 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x007e client=0xc1e00007 parent=0xc handle=0x6 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=0xc1e00007 object=0xc result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: chan token 0x802: GP_PUT=0 at USERD+0x0+0x8c; non-zero words in its page: []
+kf3: mem t=71.135s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(68, Cleared)] unreconciled=[]
+kf-rm: chanlink: client 0xc1e00008 root: kernel=true internal=true
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00008 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00008 parent=0xc1e00008 handle=0xcaf00000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00008 parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1e00008:0xbaba0042 under 0xcaf00000 (device default for it: 0xbaba0042)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x90f1 client=0xc1e00008 parent=0xcaf00000 handle=0xbaba0042 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: mem t=71.137s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(69, Cleared)] unreconciled=[]
+kf3: mem t=71.137s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(70, Cleared)] unreconciled=[]
+kf3: mem t=71.138s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(71, Cleared)] unreconciled=[]
+kf3: mem t=71.139s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(72, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x90f10106 client=0xc1e00008 object=0xbaba0042 result=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=71.140s pagedir VasKey(13970166081595768898) root=0x1efa4f000 First
+kf3: mem t=71.140s walk reconciled [0xc1e00008baba0042:+0-0r0] completed=[] unreconciled=[]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: mem t=71.141s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(73, Cleared)] unreconciled=[]
+kf3: mem t=71.142s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(74, Cleared)] unreconciled=[]
+kf3: mem t=71.143s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(75, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=71.145s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(76, Cleared)] unreconciled=[]
+kf3: chan 0xc1e00008:0xbaba0045 class=0xc56f engine=0x1 kernel=true vaspace=Some(baba0042) chid=Some(3) — a KERNEL non-CE channel: not born (kernel GR is P7)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc56f client=0xc1e00008 parent=0xcaf00000 handle=0xbaba0045 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: VasKey(13970166081595768898) root 0x1efa4f000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=71.146s walk reconciled [0xc1e00008baba0042:+1-0r0] completed=[(77, Cleared)] unreconciled=[]
+kf3: VasKey(13970166081595768898) root 0x1efa4f000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=71.147s walk reconciled [0xc1e00008baba0042:+1-0r0] completed=[(78, Cleared)] unreconciled=[]
+kf3: mem t=71.147s walk reconciled [0xc1e00008baba0042:+1-0r0] completed=[(79, Cleared)] unreconciled=[]
+kf3: mem t=71.148s walk reconciled [0xc1e00008baba0042:+1-0r0] completed=[(80, Cleared)] unreconciled=[]
+kf3: VasKey(13970166081595768898) root 0x1efa4f000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=71.149s walk reconciled [0xc1e00008baba0042:+1-0r0] completed=[(81, Cleared)] unreconciled=[]
+kf3: VasKey(13970166081595768898) root 0x1efa4f000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=71.150s walk reconciled [0xc1e00008baba0042:+1-0r0] completed=[(82, Cleared)] unreconciled=[]
+kf3: VasKey(13970166081595768898) root 0x1efa4f000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=71.151s walk reconciled [0xc1e00008baba0042:+1-0r0] completed=[(83, Cleared)] unreconciled=[]
+kf3: mem t=71.151s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(84, Cleared)] unreconciled=[]
+kf3: VasKey(13970166081595768898) root 0x1efa4f000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=71.152s walk reconciled [0xc1e00008baba0042:+1-0r0] completed=[(85, Cleared)] unreconciled=[]
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1e00008:0xcaf00001 params=560 rpc_flags=0x0
+kf3: chan 0xc1e00008:0xbaba0045 GPU_PROMOTE_CTX: no passthrough twin — not ours (entries=9)
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080012b client=0xc1e00008 object=0xcaf00001 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080012b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: mem t=71.153s walk reconciled [0xc1e00008baba0042:+0-1r0] completed=[(86, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: mem t=71.154s walk reconciled [0xc1e00008baba0042:+0-1r0] completed=[(87, Cleared)] unreconciled=[]
+kf3: mem t=71.155s walk reconciled [0xc1e00008baba0042:+0-1r0] completed=[(88, Cleared)] unreconciled=[]
+kf3: mem t=71.156s walk reconciled [0xc1e00008baba0042:+0-1r0] completed=[(89, Cleared)] unreconciled=[]
+kf3: mem t=71.157s walk reconciled [0xc1e00008baba0042:+0-0r0] completed=[(90, Cleared)] unreconciled=[]
+kf3: mem t=71.157s walk reconciled [0xc1e00008baba0042:+0-1r0] completed=[(91, Cleared)] unreconciled=[]
+kf3: mem t=71.158s walk reconciled [0xc1e00008baba0042:+0-1r0] completed=[(92, Cleared)] unreconciled=[]
+kf3: mem t=71.159s walk reconciled [0xc1e00008baba0042:+0-1r0] completed=[(93, Cleared)] unreconciled=[]
+kf3: mem t=71.159s walk reconciled [0xc1e00008baba0042:+0-1r0] completed=[(94, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: mem t=71.159s retire VasKey(13970166081595768898): 0 row(s) unmapped (0 refused) in 2 us, 0 host call(s), host space 0xcafe0011 kept as a spare — host RM over its life: 8 map call(s) (8 per-run, 0 batch(es) x2 carrying 0 runs, 0 batch(es) refused) in 0 ms; 8 unmap call(s) (0 range(s)) + 0 free(s) in 0 ms
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080013f client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080013f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: chanlink: client 0xc1d00009 root: kernel=true internal=false
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1d00009 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1d00009 parent=0xc1d00009 handle=0x31415903 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1d00009 parent=0x31415903 handle=0x31415904 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0070 client=0xc1d00009 parent=0x31415903 handle=0x3141590f result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: mem t=71.167s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(95, Cleared)] unreconciled=[]
+kf3: mem t=71.168s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(96, Cleared)] unreconciled=[]
+kf3: mem t=71.168s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(97, Cleared)] unreconciled=[]
+kf3: mem t=71.169s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(98, Cleared)] unreconciled=[]
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00009:0xcaf00000 under 0x31415903 (device default for it: 0xcaf00000)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x90f1 client=0xc1d00009 parent=0x31415903 handle=0xcaf00000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x90f10106 client=0xc1d00009 object=0xcaf00000 result=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=71.170s pagedir VasKey(13965662486535340032) root=0x1efa4f000 First
+kf3: mem t=71.170s walk reconciled [0xc1d00009caf00000:+0-0r0] completed=[] unreconciled=[]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: mem t=71.171s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(99, Cleared)] unreconciled=[]
+kf3: mem t=71.172s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(100, Cleared)] unreconciled=[]
+kf3: mem t=71.172s walk reconciled [0xc1d00009caf00000:+1-0r0] completed=[(101, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=71.175s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(102, Cleared)] unreconciled=[]
+kf-rm: RPC-REFUSED #1 AllocClassNotPermitted { class: 50031, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc36f client=0xc1d00009 parent=0x31415903 handle=0x31415900 result=0x56
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP REFUSED fn103/0x0000c36f=0x56 (GSP_RM_ALLOC) first_seq=0 — the guest read a non-OK status
+kf3: mem t=71.180s walk reconciled [0xc1d00009caf00000:+0-1r0] completed=[(103, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: mem t=71.181s retire VasKey(13965662486535340032): 0 row(s) unmapped (0 refused) in 1 us, 0 host call(s), host space 0xcafe0011 kept as a spare — host RM over its life: 1 map call(s) (1 per-run, 0 batch(es) x2 carrying 0 runs, 0 batch(es) refused) in 0 ms; 1 unmap call(s) (0 range(s)) + 0 free(s) in 0 ms
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: chanlink: client 0xc1d0000a root: kernel=true internal=false
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1d0000a parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1d0000a parent=0xc1d0000a handle=0xcaf00000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1d0000a parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: RPC-REFUSED #2 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x402c client=0xc1d0000a parent=0xcaf00001 handle=0xcaf00002 result=0x56
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP REFUSED fn103/0x0000402c=0x56 (GSP_RM_ALLOC) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0073 client=0xc1d0000a parent=0xcaf00000 handle=0xcaf00003 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730107 client=0xc1d0000a object=0xcaf00003 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073028b client=0xc1d0000a object=0xcaf00003 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: chanlink: client 0xc1d00001 root: kernel=false internal=false
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1d00001 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1d00001 parent=0xc1d00001 handle=0xa55a0020 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1d00001 parent=0xa55a0020 handle=0xa55a0030 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a4c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800102 client=0xc1d00001 object=0xa55a0030 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00800294 client=0xc1d00001 object=0xa55a0020 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x00800294=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2081 client=0xc1d00001 parent=0xa55a0030 handle=0xa55a0040 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20810108 client=0xc1d00001 object=0xa55a0040 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20810108=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0073 client=0xc1d00001 parent=0xa55a0020 handle=0xa55a0050 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730102 client=0xc1d00001 object=0xa55a0050 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010c client=0xc1d00001 object=0xa55a0050 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010c client=0xc1d00001 object=0xa55a0050 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010c client=0xc1d00001 object=0xa55a0050 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010c client=0xc1d00001 object=0xa55a0050 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080014b client=0xc1d00001 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080014b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800157 client=0xc1d00001 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800157=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080014b client=0xc1d00001 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080014b client=0xc1d00001 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080014b client=0xc1d00001 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080014b client=0xc1d00001 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801357 client=0xc1d00001 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20801357=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+W343GSSCENSUS cmd=0x2080852e params_size=528 params_at=40 payload_len=568
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080852e client=0xc1d00001 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080852e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800aff client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20808513 params_size=1432 params_at=40 payload_len=1472
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808513 client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20808513=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800aff client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802068 client=0xc1d00001 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20802068=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+W343GSSCENSUS cmd=0x2080a618 params_size=8620 params_at=40 payload_len=8660
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a618 client=0xc1d00001 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080a618=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+W343GSSCENSUS cmd=0x2080a612 params_size=11680 params_at=40 payload_len=11720
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a612 client=0xc1d00001 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080a612=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809009 client=0xc1d00001 object=0xa55a0030 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=0xc1d00001 object=0xa55a0030 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=0xc1d00001 object=0xa55a0030 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=0xc1d00001 object=0xa55a0030 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: GSS 0x20809064 answered from the host's realize-time reply
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=0xc1d00001 object=0xa55a0030 result=0x0
+kf3: GSP rpc RmControl seq=0
+W343GSSCENSUS cmd=0x2080a097 params_size=1168 params_at=40 payload_len=1208
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a097 client=0xc1d00001 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080a097=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a4c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a4c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a4c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730102 client=0xc1d00001 object=0xa55a0050 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010c client=0xc1d00001 object=0xa55a0050 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010c client=0xc1d00001 object=0xa55a0050 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010c client=0xc1d00001 object=0xa55a0050 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010c client=0xc1d00001 object=0xa55a0050 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: RPC-REFUSED #3 UnmappedAllocClass { class: 8335 } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x208f client=0xc1d00001 parent=0xa55a0030 handle=0xa55a0070 result=0x56
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP REFUSED fn103/0x0000208f=0x56 (GSP_RM_ALLOC) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10029 fast=0
+kf3: chan token 0x802 (host 0x10029) RETIRED, forwarded=2 submissions=2 splits=0/0 serves=5 last_put=Some(2) gp_get=Some(2) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None
+kf3: act free: 0xc1e00007:0x2: translated host 0x10029 (2805 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: mem t=72.361s walk reconciled [0xc1e000070000000a:+0-3r0] completed=[(104, Cleared)] unreconciled=[]
+kf3: mem t=72.362s walk reconciled [0xc1e000070000000a:+0-0r0] completed=[(105, Cleared)] unreconciled=[]
+kf3: mem t=72.363s walk reconciled [0xc1e000070000000a:+0-109r0] completed=[(106, Cleared)] unreconciled=[]
+kf3: mem t=72.364s walk reconciled [0xc1e000070000000a:+0-0r0] completed=[(107, Cleared)] unreconciled=[]
+kf3: mem t=72.365s walk reconciled [0xc1e000070000000a:+0-1r0] completed=[(108, Cleared)] unreconciled=[]
+kf3: mem t=72.365s walk reconciled [0xc1e000070000000a:+0-0r0] completed=[(109, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: mem t=72.366s retire VasKey(13970166074168049674): 0 row(s) unmapped (0 refused) in 2 us, 0 host call(s), host space 0xcafe0015 kept as a spare — host RM over its life: 6 map call(s) (4 per-run, 1 batch(es) x2 carrying 109 runs, 0 batch(es) refused) in 178 ms; 3 unmap call(s) (2 range(s)) + 1 free(s) in 74 ms
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: mem t=72.368s walk reconciled [0xffffffff00000001:+0-1r0] completed=[(110, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10028 fast=0
+kf3: chan token 0x801 (host 0x10028) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None
+kf3: act free: 0xc1e00006:0x2: translated host 0x10028 (2569 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: mem t=72.373s walk reconciled [0xc1e000060000000c:+0-109r0] completed=[(111, Cleared)] unreconciled=[]
+kf3: mem t=72.374s walk reconciled [0xc1e000060000000c:+0-0r0] completed=[(112, Cleared)] unreconciled=[]
+kf3: mem t=72.375s walk reconciled [0xc1e000060000000c:+0-1r0] completed=[(113, Cleared)] unreconciled=[]
+kf3: mem t=72.376s walk reconciled [0xc1e000060000000c:+0-0r0] completed=[(114, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: mem t=72.377s retire VasKey(13970166069873082380): 0 row(s) unmapped (0 refused) in 2 us, 0 host call(s), host space 0xcafe0019 kept as a spare — host RM over its life: 3 map call(s) (1 per-run, 1 batch(es) x2 carrying 109 runs, 0 batch(es) refused) in 2 ms; 2 unmap call(s) (1 range(s)) + 1 free(s) in 0 ms
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: mem t=72.378s walk reconciled [0xffffffff00000001:+0-1r0] completed=[(115, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a70 client=0x0 object=0x0 result=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=72.379s sysmembar #3: host FB_FLUSH_GPU_CACHE(FB_FLUSH_YES) in 359 us
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a6c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=72.380s walk reconciled [0xffffffff00000001:+0-0r0] completed=[(116, Cleared)] unreconciled=[]
+kf3: mem t=72.383s walk reconciled [0xffffffff00000001:+0-1r0] completed=[(117, Cleared)] unreconciled=[]
+kf3: mem t=72.383s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #6: guest views []; 0x7f0000 bytes show SCRATCH
+kf3: mem t=72.383s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730151 client=0xc1e00002 object=0xcaf00002 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=72.384s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 2) — the guest's RM gave BAR1 up
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a38 client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a38=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=70 UpdateBarPde seq=0  result=0x0
+kayfabe: HELD-REPLY fn=UpdateBarPde depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc UpdateBarPde seq=0
+kf3: mem t=72.405s fn70 Bar2 entry=0x0 shift=47 -> our root @0x1f3392000, walk scheduled
+kf3: mem t=72.418s walk reconciled [0xffffffff00000002:+0-62r0] completed=[] unreconciled=[]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800afe client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=47 UnloadingGuestDriver seq=0  result=0x0
+kf3: GSP rpc UnloadingGuestDriver seq=0
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: GSP phase Running -> Suspending
+kf3: mem t=72.420s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)
+kf3: GSP phase Suspending -> Halted
+kf3: GSP command service REFUSED: QueueNotBound
+kf3: GSP command service REFUSED: QueueNotBound
+kf3: GSP phase Halted -> ProtectedRegionUp
+kf3: GSP WPR2 up at the guest's FWSEC-FRTS command: frts_offset=0x1ffe00000 → served WPR2_ADDR_LO=Some(Ok("0x1ffe000"))
+kayfabe: GSP-PUBLISH gpa=0x129c00000 gpa_same=false seq_last=Some(1) cmd_seq=215 ⇒ same_instance=false
+kf-gsp: fn 72 GSP_SET_SYSTEM_INFO seq=0 936 bytes: bGspNocatEnabled=0 at +929 (driver 580.65.06's layout; 1 = a Windows-built RM, THE_WINDOWS_AXIS §7)
+kf3: GSP rpc GspSetSystemInfo seq=0
+kf3: GSP rpc SetRegistry seq=0
+kf3: GSP phase ProtectedRegionUp -> Booted
+kf-rm: fn 1 SET_GUEST_SYSTEM_INFO: the guest says guestDriverVersion="580.65.06" guestVersion="rel/gpu_drv/r580/r580_78-179" guestTitle="Private r580_78 rel/gpu_drv/r580/r580_78-179 unknown" guestClNum=0 vgx=0x2b.0x13; this device answers as driver 580.65.06
+kf-rm: rpc-trace fn=1 SetGuestSystemInfo seq=0  result=0x0
+kf3: GSP rpc SetGuestSystemInfo seq=0
+kf3: GSP phase Booted -> Running
+kf-rm: GET_GSP_STATIC_INFO: the guest preserves a firmware console of 0x7f0000 bytes (fn 72 seq 0; boot framebuffer G = 0x7f0000): region 0 = [0, 0x7f0000) reserved, the heap starts at 0x7f0000, 3 regions
+kf-rm: rpc-trace fn=65 GetGspStaticInfo seq=0  result=0x0
+kf3: GSP rpc GetGspStaticInfo seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a36 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a41 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x208001b0 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x208001b0 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a87 client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a40 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801112 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a5c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a1c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801803 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a4b client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: chanlink: client 0xc1e0000e root: kernel=true internal=true
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e0000e parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e0000e parent=0xc1e0000e handle=0xcaf00000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e0000e parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0073 client=0xc1e0000e parent=0xcaf00000 handle=0xcaf00002 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800af3 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800aac client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a61 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a61 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a61 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800afe client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800aff client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: chanlink: client 0xc1e0000f root: kernel=true internal=true
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e0000f parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e0000f parent=0xc1e0000f handle=0xcaf00000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e0000f parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x007e client=0xc1e0000f parent=0xcaf00001 handle=0xcaf00003 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=0xc1e0000f object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a59 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=70 UpdateBarPde seq=0  result=0x0
+kayfabe: HELD-REPLY fn=UpdateBarPde depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc UpdateBarPde seq=0
+kf3: mem t=78.426s fn70 Bar2 entry=0x1efbc302 shift=47 -> our root @0x1f3392000, walk scheduled
+kf3: mem t=78.426s walk reconciled [0xffffffff00000002:+0-0r0] completed=[] unreconciled=[]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a70 client=0x0 object=0x0 result=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=78.430s sysmembar #4: host FB_FLUSH_GPU_CACHE(FB_FLUSH_YES) in 337 us
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: mem t=78.431s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(118, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a70 client=0x0 object=0x0 result=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=78.431s sysmembar #5: host FB_FLUSH_GPU_CACHE(FB_FLUSH_YES) in 263 us
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: mem t=78.432s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(119, Cleared)] unreconciled=[]
+kf3: mem t=78.433s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(120, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a6c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a6c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a6c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a01 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800ac6 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800adf client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a49 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: display: InstMem(InstMem { phys: 8316977152, size: 65536, addr_space: 2 })
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a80 client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a61 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: chanlink: client 0xc1e00010 root: kernel=true internal=true
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00010 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00010 parent=0xc1e00010 handle=0xcaf00000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00010 parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a80 client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: mem t=78.444s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(121, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730151 client=0xc1e0000e object=0xcaf00002 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a0f client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: mem t=78.445s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(122, Cleared)] unreconciled=[]
+kf3: mem t=78.446s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(123, Cleared)] unreconciled=[]
+kf3: mem t=78.448s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(124, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080017e client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800af3 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=78.449s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(125, Cleared)] unreconciled=[]
+kf3: mem t=78.450s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(126, Cleared)] unreconciled=[]
+kf3: mem t=78.451s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(127, Cleared)] unreconciled=[]
+kf3: mem t=78.452s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(128, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a9f client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=78.453s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(129, Cleared)] unreconciled=[]
+kf3: mem t=78.454s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(130, Cleared)] unreconciled=[]
+kf3: mem t=78.455s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(131, Cleared)] unreconciled=[]
+kf3: mem t=78.456s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(132, Cleared)] unreconciled=[]
+kf3: mem t=78.457s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(134, Cleared)] unreconciled=[]
+kf3: mem t=78.458s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(135, Cleared)] unreconciled=[]
+kf3: mem t=78.458s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(136, Cleared)] unreconciled=[]
+kf3: mem t=78.459s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(137, Cleared)] unreconciled=[]
+kf3: mem t=78.461s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(140, Cleared)] unreconciled=[]
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch (seed life 2: the guest's RM took BAR1 back after giving it up)
+kf3: mem t=78.462s walk reconciled [0xffffffff00000001:+1-0r0] completed=[(141, Cleared)] unreconciled=[]
+kf3: mem t=78.462s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #7: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf-rm: chanlink: client 0xc1e00011 root: kernel=true internal=true
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00011 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00011 parent=0xc1e00011 handle=0xcaf00000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00011 parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a1f client=0xc1e00011 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a2a client=0xc1e00011 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a26 client=0xc1e00011 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a22 client=0xc1e00011 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a30 client=0xc1e00011 object=0xcaf00001 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a2c client=0xc1e00011 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a2e client=0xc1e00011 object=0xcaf00001 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a34 client=0xc1e00011 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800b03 client=0xc1e00011 object=0xcaf00001 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800b05 client=0xc1e00011 object=0xcaf00001 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a3d client=0xc1e00011 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a3f client=0xc1e00011 object=0xcaf00001 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a48 client=0xc1e00011 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a32 client=0xc1e00011 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: mem t=78.467s walk reconciled [0xffffffff00000001:+0-0r0] completed=[(142, Cleared)] unreconciled=[]
+kf3: mem t=78.467s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(143, Cleared)] unreconciled=[]
+kf3: mem t=78.468s walk reconciled [0xffffffff00000001:+1-0r0] completed=[(144, Cleared)] unreconciled=[]
+kf-rm: chanlink: client 0xc1e00012 root: kernel=true internal=true
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00012 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00012 parent=0xc1e00012 handle=0xa result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00012 parent=0xa handle=0xb result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: mem t=78.472s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(145, Cleared)] unreconciled=[]
+kf3: mem t=78.472s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(146, Cleared)] unreconciled=[]
+kf3: mem t=78.473s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(147, Cleared)] unreconciled=[]
+kf3: mem t=78.474s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(148, Cleared)] unreconciled=[]
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1e00012:0xc under 0xa (device default for it: 0xc)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x90f1 client=0xc1e00012 parent=0xa handle=0xc result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x90f10106 client=0xc1e00012 object=0xc result=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=78.475s pagedir VasKey(13970166121412689932) root=0x1efba0000 First
+kf3: mem t=78.475s walk reconciled [0xc1e000120000000c:+0-0r0] completed=[] unreconciled=[]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: mem t=78.476s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(149, Cleared)] unreconciled=[]
+kf3: mem t=78.477s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(150, Cleared)] unreconciled=[]
+kf3: mem t=78.478s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(151, Cleared)] unreconciled=[]
+kf-host: map_scattered 106 pieces 0x6d000 bytes: stitch 1068 us, descriptor 346 us, hand view to reaper 27 us, map 148 us
+kf3: mem t=78.480s walk reconciled [0xc1e000120000000c:+106-0r0] completed=[(152, Cleared)] unreconciled=[]
+kf3: mem t=78.484s walk reconciled [0xc1e000120000000c:+1-0r0] completed=[(153, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=78.485s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(154, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc56f client=0xc1e00012 parent=0xa handle=0x2 result=0x0
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=0
+kf3: act birth translated: chan 0xc1e00012:0x2 BORN Translated: token 0x801 -> host 0x10028 in VasKey(13970166121412689932) gpfifo=0x120064000x4096 userd=Some(Framebuffer { base: 8254128128, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B fast=off (3896 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: mem t=78.491s walk reconciled [0xffffffff00000001:+0-0r0] completed=[(155, Cleared)] unreconciled=[]
+kf3: mem t=78.491s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(156, Cleared)] unreconciled=[]
+kf3: mem t=78.492s walk reconciled [0xffffffff00000001:+1-0r0] completed=[(157, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc7b5 client=0xc1e00012 parent=0x2 handle=0x5 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: chan 0xc1e00012:0x2 GPFIFO_SCHEDULE enable=true (token 0x801, host 0x10028)
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xa06f0103 client=0xc1e00012 object=0x2 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x007e client=0xc1e00012 parent=0xb handle=0x6 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=0xc1e00012 object=0xb result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: chanlink: client 0xc1e00013 root: kernel=true internal=true
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00013 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: chan token 0x801: GP_PUT=0 at USERD+0x0+0x8c; non-zero words in its page: []
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00013 parent=0xc1e00013 handle=0xb result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00013 parent=0xb handle=0xc result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1e00013:0xa under 0xb (device default for it: 0xa)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x90f1 client=0xc1e00013 parent=0xb handle=0xa result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: mem t=78.495s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(158, Cleared)] unreconciled=[]
+kf3: mem t=78.496s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(159, Cleared)] unreconciled=[]
+kf3: mem t=78.497s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(160, Cleared)] unreconciled=[]
+kf3: mem t=78.498s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(161, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x90f10106 client=0xc1e00013 object=0xa result=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=78.498s pagedir VasKey(13970166125707657226) root=0x1efa67000 First
+kf3: mem t=78.498s walk reconciled [0xc1e000130000000a:+0-0r0] completed=[] unreconciled=[]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: mem t=78.499s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(162, Cleared)] unreconciled=[]
+kf3: mem t=78.500s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(163, Cleared)] unreconciled=[]
+kf3: mem t=78.501s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(164, Cleared)] unreconciled=[]
+kf3: mem t=78.502s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(165, Cleared)] unreconciled=[]
+kf3: mem t=78.503s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(166, Cleared)] unreconciled=[]
+kf3: mem t=78.504s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(167, Cleared)] unreconciled=[]
+kf3: mem t=78.505s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(168, Cleared)] unreconciled=[]
+kf3: mem t=78.506s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(169, Cleared)] unreconciled=[]
+kf3: mem t=78.507s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(170, Cleared)] unreconciled=[]
+kf3: mem t=78.508s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(171, Cleared)] unreconciled=[]
+kf3: mem t=78.509s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(172, Cleared)] unreconciled=[]
+kf3: mem t=78.509s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(173, Cleared)] unreconciled=[]
+kf3: mem t=78.510s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(174, Cleared)] unreconciled=[]
+kf3: mem t=78.511s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(175, Cleared)] unreconciled=[]
+kf3: mem t=78.512s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(176, Cleared)] unreconciled=[]
+kf3: mem t=78.513s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(177, Cleared)] unreconciled=[]
+kf3: mem t=78.688s walk reconciled [0xc1e000130000000a:+3-0r0] completed=[(178, Cleared)] unreconciled=[]
+kf3: mem t=78.692s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(179, Cleared)] unreconciled=[]
+kf3: mem t=78.693s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(180, Cleared)] unreconciled=[]
+kf3: mem t=78.694s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(181, Cleared)] unreconciled=[]
+kf-host: map_scattered 14 pieces 0x6d000 bytes: stitch 93 us, descriptor 149 us, hand view to reaper 13 us, map 91 us
+kf3: mem t=78.696s walk reconciled [0xc1e000130000000a:+14-0r0] completed=[(182, Cleared)] unreconciled=[]
+kf3: mem t=78.698s walk reconciled [0xc1e000130000000a:+1-0r0] completed=[(183, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=78.700s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(184, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc56f client=0xc1e00013 parent=0xb handle=0x2 result=0x0
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=0
+kf3: act birth translated: chan 0xc1e00013:0x2 BORN Translated: token 0x802 -> host 0x10029 in VasKey(13970166125707657226) gpfifo=0x320064000x4096 userd=Some(Framebuffer { base: 8254193664, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(2), Some(2)) zeroed=512B fast=off (4207 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: mem t=78.706s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(185, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc7b5 client=0xc1e00013 parent=0x2 handle=0x5 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: chan 0xc1e00013:0x2 BIND engine=0xb (host 0x10029)
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xa06f0104 client=0xc1e00013 object=0x2 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: chan 0xc1e00013:0x2 GPFIFO_SCHEDULE enable=true (token 0x802, host 0x10029)
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xa06f0103 client=0xc1e00013 object=0x2 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x007e client=0xc1e00013 parent=0xc handle=0x6 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: chan token 0x802: GP_PUT=0 at USERD+0x0+0x8c; non-zero words in its page: []
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=0xc1e00013 object=0xc result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=78.710s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(186, Cleared)] unreconciled=[]
+kf-rm: chanlink: client 0xc1e00014 root: kernel=true internal=true
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00014 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00014 parent=0xc1e00014 handle=0xcaf00000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00014 parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1e00014:0xbaba0042 under 0xcaf00000 (device default for it: 0xbaba0042)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x90f1 client=0xc1e00014 parent=0xcaf00000 handle=0xbaba0042 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: mem t=78.713s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(187, Cleared)] unreconciled=[]
+kf3: mem t=78.714s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(188, Cleared)] unreconciled=[]
+kf3: mem t=78.715s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(189, Cleared)] unreconciled=[]
+kf3: mem t=78.716s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(190, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x90f10106 client=0xc1e00014 object=0xbaba0042 result=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: mem t=78.716s pagedir VasKey(13970166133135376450) root=0x1efa4f000 First
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=78.716s walk reconciled [0xc1e00014baba0042:+0-0r0] completed=[] unreconciled=[]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: mem t=78.718s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(191, Cleared)] unreconciled=[]
+kf3: mem t=78.719s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(192, Cleared)] unreconciled=[]
+kf3: mem t=78.720s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(193, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=78.721s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(194, Cleared)] unreconciled=[]
+kf3: chan 0xc1e00014:0xbaba0045 class=0xc56f engine=0x1 kernel=true vaspace=Some(baba0042) chid=Some(3) — a KERNEL non-CE channel: not born (kernel GR is P7)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc56f client=0xc1e00014 parent=0xcaf00000 handle=0xbaba0045 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: VasKey(13970166133135376450) root 0x1efa4f000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=78.723s walk reconciled [0xc1e00014baba0042:+1-0r0] completed=[(195, Cleared)] unreconciled=[]
+kf3: VasKey(13970166133135376450) root 0x1efa4f000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=78.724s walk reconciled [0xc1e00014baba0042:+1-0r0] completed=[(196, Cleared)] unreconciled=[]
+kf3: mem t=78.725s walk reconciled [0xc1e00014baba0042:+1-0r0] completed=[(197, Cleared)] unreconciled=[]
+kf3: mem t=78.726s walk reconciled [0xc1e00014baba0042:+1-0r0] completed=[(198, Cleared)] unreconciled=[]
+kf3: VasKey(13970166133135376450) root 0x1efa4f000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=78.727s walk reconciled [0xc1e00014baba0042:+1-0r0] completed=[(199, Cleared)] unreconciled=[]
+kf3: VasKey(13970166133135376450) root 0x1efa4f000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=78.728s walk reconciled [0xc1e00014baba0042:+1-0r0] completed=[(200, Cleared)] unreconciled=[]
+kf3: VasKey(13970166133135376450) root 0x1efa4f000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=78.729s walk reconciled [0xc1e00014baba0042:+1-0r0] completed=[(201, Cleared)] unreconciled=[]
+kf3: mem t=78.730s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(202, Cleared)] unreconciled=[]
+kf3: VasKey(13970166133135376450) root 0x1efa4f000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=78.731s walk reconciled [0xc1e00014baba0042:+1-0r0] completed=[(203, Cleared)] unreconciled=[]
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1e00014:0xcaf00001 params=560 rpc_flags=0x0
+kf3: chan 0xc1e00014:0xbaba0045 GPU_PROMOTE_CTX: no passthrough twin — not ours (entries=9)
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080012b client=0xc1e00014 object=0xcaf00001 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: mem t=78.732s walk reconciled [0xc1e00014baba0042:+0-1r0] completed=[(204, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: mem t=78.734s walk reconciled [0xc1e00014baba0042:+0-1r0] completed=[(205, Cleared)] unreconciled=[]
+kf3: mem t=78.734s walk reconciled [0xc1e00014baba0042:+0-1r0] completed=[(206, Cleared)] unreconciled=[]
+kf3: mem t=78.735s walk reconciled [0xc1e00014baba0042:+0-1r0] completed=[(207, Cleared)] unreconciled=[]
+kf3: mem t=78.737s walk reconciled [0xc1e00014baba0042:+0-0r0] completed=[(208, Cleared)] unreconciled=[]
+kf3: mem t=78.738s walk reconciled [0xc1e00014baba0042:+0-1r0] completed=[(209, Cleared)] unreconciled=[]
+kf3: mem t=78.739s walk reconciled [0xc1e00014baba0042:+0-1r0] completed=[(210, Cleared)] unreconciled=[]
+kf3: mem t=78.740s walk reconciled [0xc1e00014baba0042:+0-1r0] completed=[(211, Cleared)] unreconciled=[]
+kf3: mem t=78.741s walk reconciled [0xc1e00014baba0042:+0-1r0] completed=[(212, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: mem t=78.741s retire VasKey(13970166133135376450): 0 row(s) unmapped (0 refused) in 2 us, 0 host call(s), host space 0xcafe0011 kept as a spare — host RM over its life: 8 map call(s) (8 per-run, 0 batch(es) x2 carrying 0 runs, 0 batch(es) refused) in 0 ms; 8 unmap call(s) (0 range(s)) + 0 free(s) in 0 ms
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080013f client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: chanlink: client 0xc1d00015 root: kernel=true internal=false
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1d00015 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1d00015 parent=0xc1d00015 handle=0x31415903 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1d00015 parent=0x31415903 handle=0x31415904 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0070 client=0xc1d00015 parent=0x31415903 handle=0x3141590f result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: mem t=78.751s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(213, Cleared)] unreconciled=[]
+kf3: mem t=78.752s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(214, Cleared)] unreconciled=[]
+kf3: mem t=78.753s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(215, Cleared)] unreconciled=[]
+kf3: mem t=78.754s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(216, Cleared)] unreconciled=[]
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00015:0xcaf00000 under 0x31415903 (device default for it: 0xcaf00000)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x90f1 client=0xc1d00015 parent=0x31415903 handle=0xcaf00000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x90f10106 client=0xc1d00015 object=0xcaf00000 result=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=78.755s pagedir VasKey(13965662538074947584) root=0x1efa4f000 First
+kf3: mem t=78.755s walk reconciled [0xc1d00015caf00000:+0-0r0] completed=[] unreconciled=[]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: mem t=78.756s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(217, Cleared)] unreconciled=[]
+kf3: mem t=78.757s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(218, Cleared)] unreconciled=[]
+kf3: mem t=78.758s walk reconciled [0xc1d00015caf00000:+1-0r0] completed=[(219, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=78.761s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(220, Cleared)] unreconciled=[]
+kf-rm: RPC-REFUSED #4 AllocClassNotPermitted { class: 50031, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc36f client=0xc1d00015 parent=0x31415903 handle=0x31415900 result=0x56
+kf3: GSP rpc RmAlloc seq=0
+kf3: mem t=78.767s walk reconciled [0xc1d00015caf00000:+0-1r0] completed=[(221, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: mem t=78.768s retire VasKey(13965662538074947584): 0 row(s) unmapped (0 refused) in 2 us, 0 host call(s), host space 0xcafe0011 kept as a spare — host RM over its life: 1 map call(s) (1 per-run, 0 batch(es) x2 carrying 0 runs, 0 batch(es) refused) in 0 ms; 1 unmap call(s) (0 range(s)) + 0 free(s) in 0 ms
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: chanlink: client 0xc1d00016 root: kernel=true internal=false
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1d00016 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1d00016 parent=0xc1d00016 handle=0xcaf00000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1d00016 parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: RPC-REFUSED #5 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x402c client=0xc1d00016 parent=0xcaf00001 handle=0xcaf00002 result=0x56
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0073 client=0xc1d00016 parent=0xcaf00000 handle=0xcaf00003 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730107 client=0xc1d00016 object=0xcaf00003 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073028b client=0xc1d00016 object=0xcaf00003 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: chanlink: client 0xc1d00017 root: kernel=true internal=false
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1d00017 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1d00017 parent=0xc1d00017 handle=0x10001 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1d00017 parent=0x10001 handle=0x10002 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: chanlink: client 0xc1d0000c root: kernel=true internal=false
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1d0000c parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1d0000c parent=0xc1d0000c handle=0x10001 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1d0000c parent=0x10001 handle=0x10002 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a12 client=0xc1d0000c object=0x10002 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20802a12=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a12 client=0xc1d0000c object=0x10002 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a12 client=0xc1d0000c object=0x10002 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a12 client=0xc1d0000c object=0x10002 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x007e client=0xc1d0000c parent=0x10002 handle=0x10003 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=0xc1d0000c object=0x10002 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0070 client=0xc1d0000c parent=0x10001 handle=0x10004 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0073 client=0xc1d0000c parent=0x10001 handle=0x1000d result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730101 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730102 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730287 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x007302ad client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073028b client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073028b client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730250 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00731140 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730240 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x007e client=0xc1d0000c parent=0x10002 handle=0x1000e result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=0xc1d0000c object=0x10002 result=0x56
+kf3: GSP rpc RmControl seq=0
+kf3: GSP REFUSED fn76/0x20800301=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x007e client=0xc1d0000c parent=0x10002 handle=0x1000f result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=0xc1d0000c object=0x10002 result=0x56
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073011e client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073028a client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00731142 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc372 client=0xc1d0000c parent=0x10001 handle=0x10010 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a76 client=0xc1d00016 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc670 client=0xc1d0000c parent=0x10001 handle=0x10011 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700709 client=0xc1d0000c object=0x10011 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67d client=0xc1d0000c parent=0x10011 handle=0x10016 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: ChannelAllocated { kind: Core, instance: 0, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5004595200, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: mem t=78.831s walk reconciled [0xffffffff00000002:+1-9r0] completed=[(222, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010c client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010c client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010c client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010c client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3700201 client=0xc1d0000c object=0x10011 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073028a client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00731142 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67e client=0xc1d0000c parent=0x10011 handle=0x1001b result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: ChannelAllocated { kind: Window, instance: 0, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5004582912, limit: 4095, size_enum: 0 }), life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67b client=0xc1d0000c parent=0x10011 handle=0x10020 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 0, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5004574720, limit: 4095, size_enum: 0 }), life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67e client=0xc1d0000c parent=0x10011 handle=0x10025 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: ChannelAllocated { kind: Window, instance: 1, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5004562432, limit: 4095, size_enum: 0 }), life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67b client=0xc1d0000c parent=0x10011 handle=0x1002a result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 1, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5004554240, limit: 4095, size_enum: 0 }), life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67e client=0xc1d0000c parent=0x10011 handle=0x1002f result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: ChannelAllocated { kind: Window, instance: 2, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5004546048, limit: 4095, size_enum: 0 }), life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67b client=0xc1d0000c parent=0x10011 handle=0x10034 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 2, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5004533760, limit: 4095, size_enum: 0 }), life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67e client=0xc1d0000c parent=0x10011 handle=0x10039 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: ChannelAllocated { kind: Window, instance: 3, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5004525568, limit: 4095, size_enum: 0 }), life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67b client=0xc1d0000c parent=0x10011 handle=0x1003e result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 3, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5004513280, limit: 4095, size_enum: 0 }), life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67e client=0xc1d0000c parent=0x10011 handle=0x10043 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: ChannelAllocated { kind: Window, instance: 4, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5004505088, limit: 4095, size_enum: 0 }), life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67b client=0xc1d0000c parent=0x10011 handle=0x10048 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 4, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5004496896, limit: 4095, size_enum: 0 }), life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67e client=0xc1d0000c parent=0x10011 handle=0x1004d result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: ChannelAllocated { kind: Window, instance: 5, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5004484608, limit: 4095, size_enum: 0 }), life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67b client=0xc1d0000c parent=0x10011 handle=0x10052 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 5, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5004476416, limit: 4095, size_enum: 0 }), life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67e client=0xc1d0000c parent=0x10011 handle=0x10057 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: ChannelAllocated { kind: Window, instance: 6, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5004468224, limit: 4095, size_enum: 0 }), life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67b client=0xc1d0000c parent=0x10011 handle=0x1005c result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 6, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5004451840, limit: 4095, size_enum: 0 }), life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67e client=0xc1d0000c parent=0x10011 handle=0x10061 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: ChannelAllocated { kind: Window, instance: 7, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5004443648, limit: 4095, size_enum: 0 }), life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67b client=0xc1d0000c parent=0x10011 handle=0x10066 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 7, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 5004435456, limit: 4095, size_enum: 0 }), life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67a client=0xc1d0000c parent=0x10011 handle=0x10067 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: ChannelAllocated { kind: Cursor, instance: 0, offset: 0, client: 3251634188, pb: None, life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67a client=0xc1d0000c parent=0x10011 handle=0x10068 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: ChannelAllocated { kind: Cursor, instance: 1, offset: 0, client: 3251634188, pb: None, life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67a client=0xc1d0000c parent=0x10011 handle=0x10069 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: ChannelAllocated { kind: Cursor, instance: 2, offset: 0, client: 3251634188, pb: None, life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc67a client=0xc1d0000c parent=0x10011 handle=0x1006a result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: ChannelAllocated { kind: Cursor, instance: 3, offset: 0, client: 3251634188, pb: None, life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730108 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730116 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=78.980s walk reconciled [0xffffffff00000001:+0-0r0] completed=[(223, Cleared)] unreconciled=[]
+kf3: mem t=78.982s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(224, Cleared)] unreconciled=[]
+kf3: mem t=78.984s walk reconciled [0xffffffff00000001:+16-0r0] completed=[(225, Cleared)] unreconciled=[]
+kf3: mem t=78.995s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(226, Cleared)] unreconciled=[]
+kf3: mem t=78.996s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(227, Cleared)] unreconciled=[]
+kf3: mem t=78.997s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(228, Cleared)] unreconciled=[]
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d0000c:0xcaf00000 under 0x10001 (device default for it: 0xcaf00000)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x90f1 client=0xc1d0000c parent=0x10001 handle=0xcaf00000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x90f10106 client=0xc1d0000c object=0xcaf00000 result=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=0
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073013d client=0xc1d0000c object=0x1000d result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x0073013d=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802801 client=0xc1d0000c object=0x10002 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20802801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730108 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730291 client=0xc1d0000c object=0x1000d result=0x56
+kf3: GSP rpc RmControl seq=0
+kf3: GSP REFUSED fn76/0x00730291=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730246 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730245 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730293 client=0xc1d0000c object=0x1000d result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x00730293=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073028a client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00731142 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x007302a7 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730108 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730291 client=0xc1d0000c object=0x1000d result=0x56
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730246 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730245 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=79.291s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #25: guest views []; 0x7f0000 bytes show SCRATCH
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3700104 client=0xc1d0000c object=0x10011 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3700104 client=0xc1d0000c object=0x10011 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3700104 client=0xc1d0000c object=0x10011 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3700104 client=0xc1d0000c object=0x10011 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3700104 client=0xc1d0000c object=0x10011 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3700104 client=0xc1d0000c object=0x10011 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3700104 client=0xc1d0000c object=0x10011 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3700104 client=0xc1d0000c object=0x10011 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3700104 client=0xc1d0000c object=0x10011 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730108 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730291 client=0xc1d0000c object=0x1000d result=0x56
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730246 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730245 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=79.350s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #26: guest views [(0, 7f0000, Some(a00000))]; 0x0 bytes show SCRATCH
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010b client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010b client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=0xc1d0000c object=0x10010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3700104 client=0xc1d0000c object=0x10011 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3700104 client=0xc1d0000c object=0x10011 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3700104 client=0xc1d0000c object=0x10011 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3700104 client=0xc1d0000c object=0x10011 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x007302a4 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3700104 client=0xc1d0000c object=0x10011 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3700202 client=0xc1d0000c object=0x10011 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x007e client=0xc1d0000c parent=0x10057 handle=0x1008f result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x007e client=0xc1d0000c parent=0x10061 handle=0x10090 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: display: the guest armed its first head at +79376 ms — the boot layer is retired after 300 boot frame(s)
+kf3: display: +79376 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: head 0 idle raster 0x0 period 0 us
+kf3: display: head 1 idle raster 0x0 period 0 us
+kf3: display: head 2 idle raster 0x0 period 0 us
+kf3: display: head 3 ACTIVE raster 2200x1125 period 16666 us
+kf3: display: 1 updates completed, 16272 methods
+kf3: display: 2 updates completed, 16275 methods
+kf3: display: +79378 ms the console shows head 3 1920x1080: [window 6 iso 0x1006d+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+kf3: display: 5 updates completed, 16684 methods
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00731144 client=0xc1d0000c object=0x1000d result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x00731144=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073012c client=0xc1d0000c object=0x1000d result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x0073012c=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x007302a4 client=0xc1d0000c object=0x1000d result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: display: 6 updates completed, 16743 methods
+kf3: display: 7 updates completed, 16802 methods
+kf3: display: 8 updates completed, 16861 methods
+kf-rm: chanlink: client 0xc1d00018 root: kernel=false internal=false
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1d00018 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1d00018 parent=0xc1d00018 handle=0xa55a0020 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1d00018 parent=0xa55a0020 handle=0xa55a0030 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800102 client=0xc1d00018 object=0xa55a0030 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00800294 client=0xc1d00018 object=0xa55a0020 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2081 client=0xc1d00018 parent=0xa55a0030 handle=0xa55a0040 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20810108 client=0xc1d00018 object=0xa55a0040 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0073 client=0xc1d00018 parent=0xa55a0020 handle=0xa55a0050 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730108 client=0xc1d00018 object=0xa55a0050 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730102 client=0xc1d00018 object=0xa55a0050 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010c client=0xc1d00018 object=0xa55a0050 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010c client=0xc1d00018 object=0xa55a0050 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010c client=0xc1d00018 object=0xa55a0050 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0073010c client=0xc1d00018 object=0xa55a0050 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a4c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a4c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080013f client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W349REFUSE cmd=0x20800102 why=encoder UnmeasuredForwardedIndex { index: 35 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800102 client=0xc1d00018 object=0xa55a0030 result=0x56
+kf3: GSP rpc RmControl seq=0
+kf3: GSP REFUSED fn76/0x20800102=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800810 client=0xc1d00018 object=0xa55a0030 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080013f client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x208001a4 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x208001a4=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080013f client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20803083 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20803083=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800156 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800156=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080014b client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800157 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080014b client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080014b client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080014b client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080014b client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801357 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: RPC-REFUSED #6 UnmappedAllocClass { class: 37095 } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x90e7 client=0xc1d00018 parent=0xa55a0030 handle=0xa55a0060 result=0x56
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP REFUSED fn103/0x000090e7=0x56 (GSP_RM_ALLOC) first_seq=0 — the guest read a non-OK status
+kf-rm: RPC-REFUSED #7 UnmappedAllocClass { class: 8335 } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x208f client=0xc1d00018 parent=0xa55a0030 handle=0xa55a0070 result=0x56
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20810108 client=0xc1d00018 object=0xa55a0040 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20803601 client=0xc1d00018 object=0xa55a0030 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800aff client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801823 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801823 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801823 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801813 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20801813=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801813 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801819 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20801819=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801819 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801829 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20801829=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801830 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20801830=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+W343GSSCENSUS cmd=0x2080852e params_size=528 params_at=40 payload_len=568
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080852e client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800aff client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802068 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080a080 params_size=52 params_at=40 payload_len=92
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a080 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080a080=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+W343GSSCENSUS cmd=0x20808546 params_size=24 params_at=40 payload_len=64
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808546 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20808546=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+W343GSSCENSUS cmd=0x20808546 params_size=24 params_at=40 payload_len=64
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808546 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20808546 params_size=24 params_at=40 payload_len=64
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808546 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20808546 params_size=24 params_at=40 payload_len=64
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808546 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20808546 params_size=24 params_at=40 payload_len=64
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808546 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20808546 params_size=24 params_at=40 payload_len=64
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808546 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20808546 params_size=24 params_at=40 payload_len=64
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808546 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20808546 params_size=24 params_at=40 payload_len=64
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808546 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20808546 params_size=24 params_at=40 payload_len=64
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808546 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20808546 params_size=24 params_at=40 payload_len=64
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808546 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20808546 params_size=24 params_at=40 payload_len=64
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808546 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20808546 params_size=24 params_at=40 payload_len=64
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808546 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20808546 params_size=24 params_at=40 payload_len=64
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808546 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20808546 params_size=24 params_at=40 payload_len=64
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808546 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20808546 params_size=24 params_at=40 payload_len=64
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808546 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20808546 params_size=24 params_at=40 payload_len=64
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808546 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20808546 params_size=24 params_at=40 payload_len=64
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808546 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20809038 params_size=4 params_at=40 payload_len=44
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809038 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20809038=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a4c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809009 client=0xc1d00018 object=0xa55a0030 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=0xc1d00018 object=0xa55a0030 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=0xc1d00018 object=0xa55a0030 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=0xc1d00018 object=0xa55a0030 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: GSS 0x20809064 answered from the host's realize-time reply
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=0xc1d00018 object=0xa55a0030 result=0x0
+kf3: GSP rpc RmControl seq=0
+W343GSSCENSUS cmd=0x2080a097 params_size=1168 params_at=40 payload_len=1208
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a097 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802087 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20802087=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802087 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802087 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802087 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800aff client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20803401 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20803401=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080012f client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080012f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20803404 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20803404=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801322 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20801322=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801344 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20801344=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800aff client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20808513 params_size=1432 params_at=40 payload_len=1472
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808513 client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080852a params_size=1784 params_at=40 payload_len=1824
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080852a client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080852a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+W343GSSCENSUS cmd=0x20808546 params_size=24 params_at=40 payload_len=64
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808546 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20808536 params_size=1812 params_at=40 payload_len=1852
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808536 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20808536=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+W343GSSCENSUS cmd=0x2080a618 params_size=8620 params_at=40 payload_len=8660
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a618 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080a612 params_size=11680 params_at=40 payload_len=11720
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a612 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080a63c params_size=16 params_at=40 payload_len=56
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a63c client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080a63c=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+W343GSSCENSUS cmd=0x2080a0f2 params_size=96 params_at=40 payload_len=136
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a0f2 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080a0f2=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800aff client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809004 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20809004=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809004 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809004 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809004 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080a084 params_size=4 params_at=40 payload_len=44
+kf3: GSS 0x2080a084 answered from the host's realize-time reply
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a084 client=0xc1d00018 object=0xa55a0030 result=0x0
+kf3: GSP rpc RmControl seq=0
+W343GSSCENSUS cmd=0x2080a0a7 params_size=14988 params_at=40 payload_len=15028
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a0a7 client=0xc1d00018 object=0xa55a0030 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080a0a7=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a4c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: display: 9 updates completed, 16920 methods
+kf3: family=Ampere phase=Running trapped=11117 applied=2466 refused=4 serviced=612 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=285 walks=291/291 cleared=285 superseded=0 named_missed=6 unreconciled=0 mapped=572 unmapped=319 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=12 sked=0/0held fn70=3 roots=9 root_moves=0 stmts=23/23 refused=0 pramin_repoints=38 pramin_miss=0 last_miss=0x0 pramin_worst_us=240 (map 176 mmap 124) pramin_maps=38 pramin_mmaps=38 inline_opens=0 reaped=37 cache_ops=0 sysmembars=5 root_unsets=0] mirrors=0 reused=9 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=178122 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=1 host_calls=0] chan[births=4 pt_births=0 acts=6/0refused worst_act_us=4473 nsi=[GR0:291/0raised CE2:4/0raised CE3:363/0raised] served=12 parks=4168 host_rings=4 contended=0 poisoned=0 tokens=[0x801:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x802:fwd=2,subs=2,serves=5,put=Some(2),gp_get=Some(2)]] views[armed=238 released=121 refused=0 held=117] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=7711 raised=7 held=0 oor=0] disp[writes=77 puts=70 methods=16920 updates=9 notifies=6 releases=0 vblanks=900 irqs=5 exceptions=0 refused=0 scanouts=363 scanout_refused=0 scanout_avg_us=1209 scanout_max_us=1624] boot[frames=300 retired=+79376ms] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x00800294,0x20810108,0x2080014b,0x20800157,0x20801357,0x2080852e,0x20808513,0x20802068,0x2080a618,0x2080a612,0x2080a097,0x20800a38,0x20802a12,0x0073013d,0x20802801,0x00730293,0x00731144,0x0073012c,0x208001a4,0x20803083,0x20800156,0x20801813,0x20801819,0x20801829,0x20801830,0x2080a080,0x20808546,0x20809038,0x20802087,0x20803401,0x2080012f,0x20803404,0x20801322,0x20801344,0x2080852a,0x20808536,0x2080a63c,0x2080a0f2,0x20809004,0x2080a0a7] gsp_refusals[total=140 distinct=60 [fn76/0x20800a87=0x56x2 fn76/0x20800afe=0x56x3 fn76/0x20800aff=0x56x9 fn76/0x20800a80=0x56x4 fn76/0x20802a0f=0x56x2 fn76/0x2080017e=0x56x2 fn76/0x20800a30=0x56x2 fn76/0x20800a2e=0x56x2 fn76/0x20800b03=0x56x2 fn76/0x20800b05=0x56x2 fn76/0x20800a3f=0x56x2 fn76/0x2080012b=0x56x2 fn76/0x2080013f=0x56x5 fn103/0x0000c36f=0x56x2 fn103/0x0000402c=0x56x2 fn76/0x00800294=0x56x2 fn76/0x20810108=0x56x3 fn76/0x2080014b=0x56x10 fn76/0x20800157=0x56x2 fn76/0x20801357=0x56x2 fn76/0x2080852e=0x56x2 fn76/0x20808513=0x56x2 fn76/0x20802068=0x56x2 fn76/0x2080a618=0x56x2 fn76/0x2080a612=0x56x2 fn76/0x2080a097=0x56x2 fn103/0x0000208f=0x56x2 fn76/0x20800a38=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800301=0x56x2 fn76/0x0073013d=0x56x1 fn76/0x20802801=0x56x1 fn76/0x00730291=0x56x3 fn76/0x00730293=0x56x1 fn76/0x00731144=0x56x1 fn76/0x0073012c=0x56x1 fn76/0x20800102=0x56x1 fn76/0x208001a4=0x56x1 fn76/0x20803083=0x56x1 fn76/0x20800156=0x56x1 fn103/0x000090e7=0x56x1 fn76/0x20801813=0x56x2 fn76/0x20801819=0x56x2 fn76/0x20801829=0x56x1 fn76/0x20801830=0x56x1 fn76/0x2080a080=0x56x1 fn76/0x20808546=0x56x18 fn76/0x20809038=0x56x1 fn76/0x20802087=0x56x4 fn76/0x20803401=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x20803404=0x56x1 fn76/0x20801322=0x56x1 fn76/0x20801344=0x56x1 fn76/0x2080852a=0x56x1 fn76/0x20808536=0x56x1 fn76/0x2080a63c=0x56x1 fn76/0x2080a0f2=0x56x1 fn76/0x20809004=0x56x4 fn76/0x2080a0a7=0x56x1]]

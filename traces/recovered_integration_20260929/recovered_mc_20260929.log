@@ -1,0 +1,11 @@
+START 2026-09-29T13:13:20+00:00
+d883d0eb fix(display): publish lifecycle only after object acceptance
+TESTS passed 1683 failed 0
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/d883d0eb/qemu-system-x86_64 rev=d883d0eb mtime=2026-09-29 13:15:28.123116953 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+FG_RC=0
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+EXIT 2026-09-29T13:33:52+00:00

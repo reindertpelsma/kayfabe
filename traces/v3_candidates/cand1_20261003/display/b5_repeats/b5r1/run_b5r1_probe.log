@@ -1,0 +1,93 @@
+=== boot_capture tag=b5r1 at 2026-10-04T01:06:26+00:00 ===
+=== source revision: 8a682f1b ===
+=== qemu binary: -rwxr-xr-x 1 root root 89509312 Oct  3 22:40 /workspace/bench/kf3-bins/8a682f1b/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=82f88b7bb676717a
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Sun Oct  4 01:06:34 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3060        Off |   00000000:00:02.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Oct  4 01:06 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Oct  4 01:06 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Oct  4 01:06 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Oct  4 01:06 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Oct  4 01:06 .
+drwxr-xr-x 19 root root   4040 Oct  4 01:06 ..
+cr--------  1 root root 240, 1 Oct  4 01:06 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Oct  4 01:06 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/display/unload_hook.sh at 2026-10-04T01:06:36+00:00 ===
+DISPLAY_B5_CONSOLE=yes
+DISPLAY_B5C_MODULES nvidia_uvm nvidia  fb=[0 simpledrmdrmfb ]
+DISPLAY_B5C_CUDA_ONLY_CONSOLE up=41.49 before=[1920x1080 nonblack=0/1000 md5=989bb4b207dd] after=[1920x1080 nonblack=4/1000 md5=a6b49e4cec4d] changed=yes (expected: changed=yes)
+DISPLAY_B5_JUDGE B5C PASS expected=[changed=yes] observed=[changed=yes]
+DISPLAY_B5C2_RM_HELD up=58.43 holder=1786 before=[1920x1080 nonblack=4/1000 md5=a6b49e4cec4d] after=[1920x1080 nonblack=7/1000 md5=daab639474c3] changed=yes (expected: changed=yes)
+DISPLAY_B5_JUDGE B5C2 PASS expected=[a holder, changed=yes] observed=[holder=1786 changed=yes]
+DISPLAY_B5C3_AFTER_SECOND_TEARDOWN up=72.98 before=[1920x1080 nonblack=7/1000 md5=5efc6c0a160f] after=[1920x1080 nonblack=7/1000 md5=ec6012b60ce7] changed=yes (expected: changed=yes)
+DISPLAY_B5_JUDGE B5C3 PASS expected=[changed=yes] observed=[changed=yes]
+DISPLAY_B5A_SESSIONS wayland=[cinnamon-wayland] x11=[cinnamon] drm_modeset=not-loaded xorg_conf=[ls: cannot access '/etc/X11/xorg.conf': No such file or directory /etc/X11/xorg.conf.d/: ]
+DISPLAY_B5A_SESSION up=yes start_up=79.07 arm_epoch=1791076043 rc=0  shot=[1920x1080 nonblack=37/1000 md5=af9d6d225e51] xorg=[] xorg_log=absent x_driver=[] modules=[nvidia_uvm nvidia ]
+DISPLAY_B5_JUDGE B5A_SESSION PASS expected=[the Wayland session up, no Xorg (no fresh Xorg.0.log)] observed=[up=yes xorg= xorg_log=absent]
+DISPLAY_B5A_AFTER_SESSION stop_up=101.85 rc=0  shot=[1920x1080 nonblack=7/1000 md5=f6991ddd8037] changed_from_session=yes (expected: yes — the text console)
+DISPLAY_B5_JUDGE B5A_AFTER_SESSION PASS expected=[changed_from_session=yes (the text console is back)] observed=[changed_from_session=yes]
+DISPLAY_B5A_CONSOLE_AFTER_SESSION up=117.47 before=[1920x1080 nonblack=7/1000 md5=f6991ddd8037] after=[1920x1080 nonblack=7/1000 md5=0ebecee9d1d6] changed=yes (expected: changed=yes)
+DISPLAY_B5_JUDGE B5A_CONSOLE PASS expected=[changed=yes (the console keeps updating after the session)] observed=[changed=yes]
+DISPLAY_B5A_DEVICE console_shows=[]
+DISPLAY_B5A2_SESSION up=yes start_up=120.55 arm_epoch=1791076085 rc=0  shot=[1920x1080 nonblack=86/1000 md5=689cf0f998cd] xorg=[3887 /usr/lib/xorg/Xorg -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch] xorg_log=fresh x_driver=[(II) NVIDIA(0): Creating default Display subsection in Screen section|(II) NVIDIA(0): NVIDIA GPU NVIDIA GeForce RTX 3060 (GA106-A) at PCI:0:2:0|(II) NVIDIA(0):     (GPU-0)|] modules=[nvidia_modeset nvidia_uvm nvidia ]
+DISPLAY_B5_JUDGE B5A2_SESSION PASS expected=[up on Xorg with the NVIDIA X driver (a fresh Xorg.0.log)] observed=[up=yes xorg=running xorg_log=fresh nvidia_driver=yes]
+DISPLAY_B5A2_AFTER_SESSION stop_up=139.90 rc=0  shot=[1920x1080 nonblack=0/1000 md5=311265f5f5d9] changed_from_session=yes (expected: yes — the text console)
+DISPLAY_B5_JUDGE B5A2_AFTER_SESSION PASS expected=[changed_from_session=yes (the text console is back)] observed=[changed_from_session=yes]
+DISPLAY_B5A2_CONSOLE_AFTER_SESSION up=186.54 before=[1920x1080 nonblack=0/1000 md5=311265f5f5d9] after=[1920x1080 nonblack=0/1000 md5=311265f5f5d9] changed=no (expected: changed=yes)
+DISPLAY_B5_JUDGE B5A2_CONSOLE FAIL expected=[changed=yes (the console keeps updating after the session)] observed=[changed=no]
+DISPLAY_B5A2_DEVICE console_shows=[+152140 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the han|+152141 ms the console shows head 3 1920x1080: [window 6 iso 0x1008f+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)|+169007 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)|+169046 ms the console shows head 3 1920x1080: [window 6 iso 0x10088+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)|+169392 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)|+169412 ms the console shows BLACK 1920x1080 (the scanout shown is lost: no head is lit) (core channel FREE)|]
+DISPLAY_B5_JUDGE B5A2_PRESERVED FAIL expected=[kf3 kept the console NVKMS restored (the PRESERVED scanout)] observed=[lines=0]
+DISPLAY_B5B_FBCON up=200.89 rc=0  fb=[0 nvidia-drmdrmfb ] shot=[1920x1080 nonblack=3/1000 md5=176c8a943c0f]
+DISPLAY_B5_JUDGE B5B_FBCON PASS expected=[nvidia-drm fbdev loaded (rc=0, nvidia-drmdrmfb), fbcon text shown (nonblack>0)] observed=[rc=0 fb=[0 nvidia-drmdrmfb ] nonblack=3]
+DISPLAY_B5B_AFTER_RMMOD up=201.49 unbound 202.14 1061.57 rc=0 0  shot=[1920x1080 nonblack=0/1000 md5=311265f5f5d9] modules=[nvidia_modeset nvidia_uvm nvidia ] (expected: nonblack=0 — black, as bare metal)
+DISPLAY_B5_JUDGE B5B_AFTER_RMMOD PASS expected=[rmmod rc=0, black (nonblack=0)] observed=[rc=0 nonblack=0]
+DISPLAY_B5_JUDGE B5B_DEVICE PASS expected=[kf3 chose black (the console shows BLACK)] observed=[lines=1]
+DISPLAY_B5_DEVICE_LINES 55
+DISPLAY_B5_JUDGE B5_TEARDOWNS PASS expected=[each PHYSICAL write followed by BAR1 [0, G) shown again, none refused] observed=[physical_writes=5 restored=5 unrestored_or_refused=0]
+DISPLAY_B5_HOOK_DONE
+DISPLAY_B5_VERDICT FAIL arms=14 failed=2 B5C=PASS B5C2=PASS B5C3=PASS B5A_SESSION=PASS B5A_AFTER_SESSION=PASS B5A_CONSOLE=PASS B5A2_SESSION=PASS B5A2_AFTER_SESSION=PASS B5A2_CONSOLE=FAIL B5A2_PRESERVED=FAIL B5B_FBCON=PASS B5B_AFTER_RMMOD=PASS B5B_DEVICE=PASS B5_TEARDOWNS=PASS
+HOOK_RC=1
+=== GUEST dmesg AFTER the workload (phase 3b captured 28 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=150
+GUEST_DMESG_AFTER_NVRM=120
+GUEST_DMESG_WORKLOAD_DELTA=122
+=== HOST dmesg delta for this boot (watermark 1675 → 1674) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

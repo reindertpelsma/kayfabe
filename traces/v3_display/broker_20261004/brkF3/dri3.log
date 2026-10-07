@@ -1,0 +1,15 @@
+DRI3_SOURCE 512x512 stride=2048 offset=0 fourcc=XR24 modifier=0x0300000000606014 size=1048576
+DRI3_UDMABUF udmabuf 1048576 bytes
+DRI3_UDMABUF udmabuf_short 1024000 bytes
+DRI3_VARIANT own decl=512x512/2048/0/0x0300000000606014 query=1 after=[] frames=19 releases=1 requery=1
+DRI3_VARIANT pitch+4 decl=512x480/2052/0/0x0300000000606014 query=1 after=[] frames=19 releases=1 requery=1
+DRI3_VARIANT pitch+64 decl=512x480/2112/0/0x0300000000606014 query=1 after=[] frames=19 releases=1 requery=1
+DRI3_VARIANT offset+4 decl=512x480/2048/4/0x0300000000606014 query=1 after=[] frames=19 releases=1 requery=1
+DRI3_VARIANT kind decl=512x512/2048/0/0x0300000000e08014 query=1 after=[] frames=19 releases=1 requery=1
+DRI3_VARIANT bh0 decl=512x512/2048/0/0x0300000000606010 query=1 after=[] frames=19 releases=1 requery=1
+DRI3_VARIANT udmabuf decl=512x512/2048/0/0x0300000000606014 query=1 after=[] frames=19 releases=1 requery=1
+DRI3_VARIANT tail4k decl=512x510/2048/4096/0x0300000000606014 query=1 after=[] frames=19 releases=1 requery=1
+DRI3_VARIANT tail64k decl=512x480/2048/65536/0x0300000000606014 query=1 after=[] frames=19 releases=1 requery=1
+DRI3_VARIANT udmabuf_short decl=512x500/2048/0/0x0300000000606014 query=1 after=[] frames=19 releases=1 requery=1
+DRI3_VARIANT own_again decl=512x512/2048/0/0x0300000000606014 query=1 after=[] frames=19 releases=1 requery=1
+DRI3_DONE

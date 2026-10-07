@@ -1,0 +1,42 @@
+BATCH3_START 2026-09-26T19:49:35+00:00 rev=dcde8b34 before=30a67f0b
+build before rc=0 KF3_BUILT /workspace/bench/kf3-bins/30a67f0b/qemu-system-x86_64 rev=30a67f0b mtime=2026-09-26 19:50:
+fastguest-580.65.06 rc=0 == GUEST DRIVER 580.65.06 from /workspace/drivers/580.65.06 (the host keeps its own)
+b3_before_cyc bin=30a67f0b rc=0 secs=272 verdict=[FAST_VERDICT=PASS] FASTGUEST: CYCLES_DONE n=150 fails=0 first_fail=0 at 260.60s tok2=[      1 (Some(0), Some(0))     149 (Some(2), Some(2)) ] retired2=[      1 forwarded=2 submissions=2     149 forwarded=4098 submissions=2 ] rminit_failed=0 probe_bad=0
+b3_after_cyc bin=dcde8b34 rc=0 secs=273 verdict=[FAST_VERDICT=PASS] FASTGUEST: CYCLES_DONE n=150 fails=0 first_fail=0 at 261.39s tok2=[      1 (Some(0), Some(0)) zeroed=512B     149 (Some(2), Some(2)) zeroed=512B ] retired2=[    150 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=0
+b3_before_timer_1 bin=30a67f0b rc=0 secs=23 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=0
+b3_after_timer_1 bin=dcde8b34 rc=0 secs=23 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) zeroed=512B ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=0
+b3_before_concurrency_1 bin=30a67f0b rc=0 secs=44 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=8
+b3_after_concurrency_1 bin=dcde8b34 rc=0 secs=43 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) zeroed=512B ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=9
+b3_before_uvm-mean_1 bin=30a67f0b rc=0 secs=25 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=66
+b3_after_uvm-mean_1 bin=dcde8b34 rc=0 secs=26 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) zeroed=512B ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=66
+b3_before_timer_2 bin=30a67f0b rc=0 secs=22 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=0
+b3_after_timer_2 bin=dcde8b34 rc=0 secs=22 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) zeroed=512B ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=0
+b3_before_concurrency_2 bin=30a67f0b rc=0 secs=43 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=4
+b3_after_concurrency_2 bin=dcde8b34 rc=0 secs=43 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) zeroed=512B ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=6
+b3_before_uvm-mean_2 bin=30a67f0b rc=0 secs=25 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=66
+b3_after_uvm-mean_2 bin=dcde8b34 rc=0 secs=26 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) zeroed=512B ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=65
+b3_before_timer_3 bin=30a67f0b rc=0 secs=20 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=0
+b3_after_timer_3 bin=dcde8b34 rc=0 secs=23 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) zeroed=512B ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=0
+b3_before_concurrency_3 bin=30a67f0b rc=0 secs=43 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=5
+b3_after_concurrency_3 bin=dcde8b34 rc=0 secs=44 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) zeroed=512B ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=8
+b3_before_uvm-mean_3 bin=30a67f0b rc=0 secs=25 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=66
+b3_after_uvm-mean_3 bin=dcde8b34 rc=0 secs=21 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) zeroed=512B ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=65
+b3_before_timer_4 bin=30a67f0b rc=0 secs=23 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=0
+b3_after_timer_4 bin=dcde8b34 rc=0 secs=23 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) zeroed=512B ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=0
+b3_before_concurrency_4 bin=30a67f0b rc=0 secs=44 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=10
+b3_after_concurrency_4 bin=dcde8b34 rc=0 secs=44 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) zeroed=512B ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=11
+b3_before_uvm-mean_4 bin=30a67f0b rc=0 secs=25 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=66
+b3_after_uvm-mean_4 bin=dcde8b34 rc=0 secs=26 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) zeroed=512B ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=64
+b3_before_timer_5 bin=30a67f0b rc=0 secs=22 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=0
+b3_after_timer_5 bin=dcde8b34 rc=0 secs=21 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) zeroed=512B ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=0
+b3_before_concurrency_5 bin=30a67f0b rc=0 secs=44 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=10
+b3_after_concurrency_5 bin=dcde8b34 rc=0 secs=44 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) zeroed=512B ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=8
+b3_before_uvm-mean_5 bin=30a67f0b rc=0 secs=24 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=65
+b3_after_uvm-mean_5 bin=dcde8b34 rc=0 secs=25 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) zeroed=512B ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=65
+b3_before_timer_6 bin=30a67f0b rc=0 secs=20 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=0
+b3_after_timer_6 bin=dcde8b34 rc=0 secs=23 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) zeroed=512B ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=0
+b3_before_concurrency_6 bin=30a67f0b rc=0 secs=43 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=5
+b3_after_concurrency_6 bin=dcde8b34 rc=0 secs=44 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) zeroed=512B ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=6
+b3_before_uvm-mean_6 bin=30a67f0b rc=0 secs=25 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=65
+b3_after_uvm-mean_6 bin=dcde8b34 rc=0 secs=23 verdict=[FAST_VERDICT=PASS]  tok2=[      1 (Some(0), Some(0)) zeroed=512B ] retired2=[      1 forwarded=2 submissions=2 ] rminit_failed=0 probe_bad=65
+BATCH3_EXIT 2026-09-26T20:18:03+00:00

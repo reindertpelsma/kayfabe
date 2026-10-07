@@ -1,0 +1,9 @@
+=== simpleCUFFT side=host start=2026-09-30T18:48:10+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/simpleCUFFT
+[simpleCUFFT] is starting...
+GPU Device 0: "Ampere" with compute capability 8.6
+
+Temporary buffer size 8 bytes
+Transforming signal cufftExecC2C
+Launching ComplexPointwiseMulAndScale<<< >>>
+Transforming signal back cufftExecC2C
+=== end rc=0 secs=2 2026-09-30T18:48:12+00:00

@@ -1,0 +1,56 @@
+From 831949948cf5756fbb79dc3c90c61acb55b653fa Mon Sep 17 00:00:00 2001
+From: reindertpelsma <reindert.pelsma@gmail.com>
+Date: Tue, 15 Sep 2026 23:17:17 +0200
+Subject: [PATCH] =?UTF-8?q?=E2=8A=98=E2=8A=98=E2=8A=98=20REFUTED:=20USERD'?=
+ =?UTF-8?q?s=20address=20was=20never=20unobtainable=20=E2=80=94=20the=20co?=
+ =?UTF-8?q?rrection=20belongs=20here=20too?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+§3 concluded the guest's USERD address cannot be had, from a true premise about the INTERFACE
+("named by handle+offset, never by a VA") carried into a false conclusion about the
+INFORMATION. The guest's CPU-RM resolves the handle LOCALLY BEFORE THE RPC -- GSP has no
+client-handle namespace to look one up in -- and ships the PHYSICAL address in the same buffer
+the handle comes out of. NV_CHANNEL_ALLOC_PARAMS carries userdMem beside hUserdMemory[0], and
+the Rust port already parses it as kayfabe_core::rmgraph::DeclaredUserd.
+
+★ And there was never a page-table path to point at: ogkm programs the instance block from
+memdescGetPhysAddr(pUserdSubDeviceMemDesc, AT_GPU, 0), a PHYSICAL address, 4 KiB-attributed,
+which never touches PT*/PD*.
+
+⊘ Two sibling docs reached the same wrong conclusion from the same premise and are corrected in
+the kayfabe tree: leg_b_userd_adoption_blocker.md §1 and traces/boots/w262/RESULT.md §5.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01QEL8AzcqQGC8LHA8q156RY
+---
+ docs/design/userd_is_not_the_ring.md | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/docs/design/userd_is_not_the_ring.md b/docs/design/userd_is_not_the_ring.md
+index 56ef5cb..b77d7ca 100644
+--- a/docs/design/userd_is_not_the_ring.md
++++ b/docs/design/userd_is_not_the_ring.md
+@@ -1,5 +1,18 @@
+ # USERD IS NOT THE RING — adjudicating guest-USERD passthrough
+ 
++> ## ⊘⊘⊘ REFUTED 2026-09-15 — **§3's "unobtainable" is WRONG.** The guest's CPU-RM resolves
++> ## `hUserdMemory` locally BEFORE the RPC and ships the PHYSICAL address in the same buffer.
++> `NV_CHANNEL_ALLOC_PARAMS` carries **`userdMem`** beside the handle, and kayfabe already parses
++> it: `kayfabe_core::rmgraph::DeclaredUserd` (`rmgraph.rs:529`), offset folded in.
++> ⇒ *"named by handle, not by VA"* is a true statement about the **interface**, carried into a
++> false conclusion about the **information**. The address was in the same struct.
++> ★ There was never a VA to find and none was needed: ogkm programs the instance block from
++> `memdescGetPhysAddr(pUserdSubDeviceMemDesc, AT_GPU, 0)` (`kernel_channel_gm107.c:328`) — a
++> PHYSICAL address, 4 KiB-attributed, that never touches PT*/PD*.
++> ⊘ Two sibling documents reached the same wrong conclusion from the same premise:
++> `kayfabe/docs/design/leg_b_userd_adoption_blocker.md` §1 and `kayfabe/traces/boots/w262/RESULT.md` §5.
++
++
+ > ### ⊘⊘ CORRECTION FOLDED IN, 2026-08-12 — §3 IS SUPERSEDED, §1 AND §4 STAND
+ >
+ > **§3 ("USERD IS NAMED PHYSICALLY, THE RING IS NAMED VIRTUALLY") is right about the naming and
+-- 
+2.53.0
+

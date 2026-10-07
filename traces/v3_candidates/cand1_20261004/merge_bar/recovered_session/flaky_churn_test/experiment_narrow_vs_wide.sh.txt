@@ -1,0 +1,63 @@
+#!/bin/bash
+# flakeexp.sh — a MEASUREMENT, not a change to the candidate: a throwaway worktree at 0ac157b2 whose
+# dbfast_kvm churn test (a) prints `rounds` and fast_late before its assertion and (b) with CHURN_WIDE set,
+# gives the two tokens' host twins disjoint namespaces (0xA0000+gen / 0xB0000+gen instead of
+# 0xA000+gen / 0xB000+gen, which collide once the churn passes 4096 rounds). Removed afterwards.
+set -u
+L=/root/prov/cand1b_flakeexp.log
+exec >>"$L" 2>&1
+echo "START $(date -Is)"
+trap 'rc=$?; echo "EXIT rc=$rc $(date -Is)"' EXIT
+export PATH=$PATH:$HOME/.cargo/bin
+W=/workspace/bench/verify-worktrees/flakeexp_0ac157b2; T=/workspace/bench/kf-target-flakeexp
+[ -e $W ] || git -C /root/kayfabe worktree add -q --detach $W 0ac157b2fff15294073b95acbe7377a6133ae5aa
+cd $W || exit 90
+echo "REV $(git rev-parse HEAD)"
+python3 - <<'PY'
+p = "crates/kf-chan/tests/dbfast_kvm.rs"; s = open(p).read()
+old = """    fn host_of(ia: u32, idx: u32, generation: u32) -> u32 {
+        if idx == ia {
+            0xA000 + generation
+        } else {
+            0xB000 + generation
+        }
+    }"""
+new = """    fn host_of(ia: u32, idx: u32, generation: u32) -> u32 {
+        let wide = std::env::var_os("CHURN_WIDE").is_some();
+        let (a, b) = if wide { (0xA_0000, 0xB_0000) } else { (0xA000, 0xB000) };
+        if idx == ia { a + generation } else { b + generation }
+    }"""
+assert s.count(old) == 1; s = s.replace(old, new)
+old2 = """    assert_eq!(
+        sink.fast_late.load(Ordering::Relaxed),
+        0,
+        "no eventfd delivery may ring a freed twin"
+    );"""
+new2 = """    eprintln!(
+        "CHURN_PRE rounds={rounds} fast_late={} wide={}",
+        sink.fast_late.load(Ordering::Relaxed),
+        std::env::var_os("CHURN_WIDE").is_some()
+    );
+""" + old2
+assert s.count(old2) == 1; s = s.replace(old2, new2)
+open(p, "w").write(s)
+print("PATCHED")
+PY
+git diff --stat
+CARGO_TARGET_DIR=$T nice -n 19 cargo test -q -j 4 -p kf-chan --test dbfast_kvm --no-run 2>&1 | tail -2
+BIN=$(ls $T/debug/deps/dbfast_kvm-* | grep -v '\.d$' | head -1); echo "BIN $BIN"
+cd crates/kf-chan
+for mode in narrow wide; do
+  f=0
+  for i in $(seq 1 30); do
+    if [ $mode = wide ]; then out=$(CHURN_WIDE=1 taskset -c 0-3 $BIN --exact churning_births_and_frees_never_lose_a_store_or_ring_the_wrong_twin --nocapture 2>&1)
+    else out=$(taskset -c 0-3 $BIN --exact churning_births_and_frees_never_lose_a_store_or_ring_the_wrong_twin --nocapture 2>&1); fi
+    pre=$(grep -a -o 'CHURN_PRE rounds=[0-9]* fast_late=[0-9]*' <<<"$out")
+    if grep -q "test result: ok" <<<"$out"; then r=PASS; else r=FAIL; f=$((f+1)); fi
+    echo "$mode run=$i $r $pre"
+  done
+  echo "MODE $mode failed=$f/30"
+done
+cd /root
+git -C /root/kayfabe worktree remove --force $W && echo "WORKTREE_REMOVED"
+rm -rf $T && echo "TARGET_REMOVED"

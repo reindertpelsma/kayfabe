@@ -1,0 +1,63 @@
+    Checking kf-util v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-util)
+    Checking kayfabe-util v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kayfabe-util)
+   Compiling serde_core v1.0.229
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.47
+   Compiling zmij v1.0.23
+   Compiling target-triple v1.0.1
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+    Checking kf-arch v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-arch)
+    Checking winnow v1.0.4
+    Checking kayfabe-arch v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kayfabe-arch)
+    Checking kayfabe-completion v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kayfabe-completion)
+    Checking toml_parser v1.1.2+spec-1.1.0
+    Checking kf-abi v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-abi)
+    Checking kayfabe-abi v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kayfabe-abi)
+    Checking kayfabe-vmm v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kayfabe-vmm)
+    Checking kayfabe-isolate v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kayfabe-isolate)
+    Checking itoa v1.0.18
+   Compiling syn v3.0.3
+    Checking memchr v2.8.3
+    Checking kayfabe-mmu v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kayfabe-mmu)
+    Checking toml_writer v1.1.2+spec-1.1.0
+    Checking termcolor v1.4.1
+    Checking glob v0.3.4
+    Checking kf-linux-raw v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-linux-raw)
+    Checking serde_spanned v1.1.1
+    Checking toml_datetime v1.1.1+spec-1.1.0
+    Checking kayfabe-trace v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kayfabe-trace)
+    Checking toml v1.1.3+spec-1.1.0
+    Checking kf-trace v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-trace)
+    Checking kayfabe-gsp v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kayfabe-gsp)
+    Checking kayfabe-doorbell v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kayfabe-doorbell)
+    Checking kf-cuda v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-cuda)
+    Checking kayfabe-device v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kayfabe-device)
+    Checking kayfabe-mocks v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kayfabe-mocks)
+    Checking kayfabe-linux-raw v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kayfabe-linux-raw)
+   Compiling serde_derive v1.0.229
+   Compiling kayfabe-isolate-host v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kayfabe-isolate-host)
+    Checking kayfabe-chips v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kayfabe-chips)
+    Checking kf-oprom v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-oprom)
+    Checking kf-broker v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-broker)
+   Compiling kf-gop-image v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-gop-image)
+    Checking kayfabe-cuda v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kayfabe-cuda)
+    Checking kf-gsp v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-gsp)
+    Checking kf-host v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-host)
+warning: kf-gop-image@0.1.0: embedded boot-display GOP driver: 9216 bytes, x86_64-unknown-uefi
+    Checking trybuild v1.0.118
+    Checking kf-chip v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-chip)
+    Checking kf-disp v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-disp)
+    Checking kf-trap v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-trap)
+    Checking kf-crec v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-crec)
+    Checking kf-core v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-core)
+    Checking kf-mem v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-mem)
+    Checking kf-chan v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-chan)
+    Checking kf-rm v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-rm)
+    Checking kf-harness v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-harness)
+    Checking kf-qemu v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kf-qemu)
+warning: kayfabe-isolate-host@0.1.0: embedded isolate image: 914472 bytes, x86_64-unknown-linux-musl
+    Checking kayfabe-rm-ladder v0.1.0 (/var/lib/kf-linux-color-20261006/source/crates/kayfabe-rm-ladder)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.12s
+clippy: existing-debt=415 new=0 resolved=7

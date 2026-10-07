@@ -1,0 +1,1676 @@
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1150:5
+     |
+1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1432:5
+     |
+1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-util/src/lockwitness.rs:193:5
+    |
+193 |     pub fn is_vcpu() -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-util` (lib) generated 3 warnings
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:814:5
+    |
+814 | /     fn on_read(
+815 | |         &self,
+816 | |         _model: &dyn GspModel,
+817 | |         _bar: u8,
+...   |
+820 | |         _state: &ArchBootState,
+821 | |     ) -> Option<u64> {
+    | |____________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:943:5
+    |
+943 |     fn libos_region_layout(&self) -> LibosRegionLayout;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-arch` (lib) generated 2 warnings
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:2507:5
+     |
+2507 |     pub fn release_held(&mut self, ram: &mut dyn GuestRam) -> Result<usize, GspFault> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:2625:5
+     |
+2625 | /     pub fn post_event(
+2626 | |         &mut self,
+2627 | |         ram: &mut dyn GuestRam,
+2628 | |         rpc: &OutgoingRpc,
+2629 | |     ) -> Result<(), GspFault> {
+     | |_____________________________^
+
+warning: `kf-gsp` (lib) generated 2 warnings
+warning: missing documentation for a method
+    --> crates/kf-linux-raw/src/mapping_unsafe.rs:1181:5
+     |
+1181 |     pub fn load_u32(&self, offset: HostOffset) -> Result<u32, RawError> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: `kf-linux-raw` (lib) generated 1 warning
+warning: value assigned to `prop` is never read
+    --> crates/kf-cuda/src/driver_unsafe.rs:1873:9
+     |
+1873 |         prop.alloc_flags_reserved = [0; 4];
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: maybe it is overwritten before being read?
+     = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/kf-cuda/src/walk.rs:871:13
+    |
+871 |         let mut h: KfDev = crate::driver_unsafe::zeroed();
+    |             ----^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `cuMemUnmap` and `cuMemAddressFree` are never read
+   --> crates/kf-cuda/src/driver_unsafe.rs:253:16
+    |
+120 | pub struct Cuda {
+    |            ---- fields in this struct
+...
+253 |     pub(crate) cuMemUnmap: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
+    |                ^^^^^^^^^^
+254 |     pub(crate) cuMemAddressFree: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
+    |                ^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: missing documentation for a method
+    --> crates/kf-cuda/src/driver_unsafe.rs:1811:5
+     |
+1811 | /     pub fn export_device_allocation(
+1812 | |         &self,
+1813 | |         device: i32,
+1814 | |         bytes: usize,
+1815 | |     ) -> Result<ExportedAllocation, String> {
+     | |___________________________________________^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: function `host_version_gate` is never used
+   --> crates/kf-host/src/lib.rs:305:4
+    |
+305 | fn host_version_gate(reported: Option<&str>) -> Result<String, String> {
+    |    ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `kf-cuda` (lib) generated 4 warnings (run `cargo fix --lib -p kf-cuda` to apply 1 suggestion)
+warning: `kf-host` (lib) generated 1 warning
+warning: missing documentation for a constant
+  --> crates/kf-trap/src/bitmap.rs:23:1
+   |
+23 | pub const N_TOKENS: usize = 1 << TOKEN_BITS;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a constant
+  --> crates/kf-trap/src/bitmap.rs:24:1
+   |
+24 | pub const N_WORDS: usize = N_TOKENS / 64;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates/kf-trap/src/bitmap.rs:25:1
+   |
+25 | pub const N_SUMMARY: usize = N_WORDS / 64;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates/kf-trap/src/bitmap.rs:27:1
+   |
+27 | pub struct RungBitmap {
+   | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates/kf-trap/src/bitmap.rs:54:5
+   |
+54 |     pub fn new() -> RungBitmap {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates/kf-trap/src/memmap.rs:32:1
+   |
+32 | pub const PAGE: u64 = 0x1000;
+   | ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:59:12
+   |
+59 |     Hole { why: &'static str },
+   |            ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:78:5
+   |
+78 |     pub bar: Bar,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:79:5
+   |
+79 |     pub base: u64,
+   |     ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:80:5
+   |
+80 |     pub len: u64,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:81:5
+   |
+81 |     pub how: Disposition,
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:87:5
+   |
+87 |     pub regions: Vec<Region>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:88:5
+   |
+88 |     pub bar0_bytes: u64,
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:89:5
+   |
+89 |     pub bar1_bytes: u64,
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:90:5
+   |
+90 |     pub bar2_bytes: u64,
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-trap/src/model.rs:29:1
+   |
+29 | pub enum S {
+   | ^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-trap/src/model.rs:30:5
+   |
+30 |     Idle,
+   |     ^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-trap/src/model.rs:31:5
+   |
+31 |     Rung,
+   |     ^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-trap/src/model.rs:32:5
+   |
+32 |     Busy,
+   |     ^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-trap/src/model.rs:33:5
+   |
+33 |     BusyRung,
+   |     ^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/ring.rs:44:5
+   |
+44 |     pub bar: u8,
+   |     ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/ring.rs:45:5
+   |
+45 |     pub offset: u32,
+   |     ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/ring.rs:46:5
+   |
+46 |     pub value: u64,
+   |     ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/ring.rs:47:5
+   |
+47 |     pub width: u8,
+   |     ^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-trap/src/ring.rs:51:1
+   |
+51 | pub enum Push {
+   | ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates/kf-trap/src/ring.rs:61:1
+   |
+61 | pub struct PrivRing {
+   | ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates/kf-trap/src/ring.rs:80:5
+   |
+80 |     pub fn new() -> PrivRing {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/ring.rs:179:5
+    |
+179 |     pub fn is_poisoned(&self) -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/ring.rs:183:5
+    |
+183 |     pub fn occupancy(&self) -> usize {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates/kf-trap/src/shadow.rs:41:5
+   |
+41 |     pub const fn new() -> Cell {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-trap/src/shadow.rs:45:5
+   |
+45 |     pub fn read(&self) -> u64 {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-trap/src/shadow.rs:98:1
+   |
+98 | pub enum ClearOutcome {
+   | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates/kf-trap/src/shadow.rs:110:5
+    |
+110 |     pub const fn new() -> Trigger {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/shadow.rs:185:5
+    |
+185 |     pub fn completed(&self) -> u64 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates/kf-trap/src/timer.rs:31:1
+   |
+31 | pub const GA106_BAR0_PAGES: u32 = GA106_BAR0_BYTES >> 12;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates/kf-trap/src/timer.rs:40:1
+   |
+40 | pub const VF_TIME_1: u32 = 0x30084;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/timer.rs:92:5
+   |
+92 |     pub hal: TimerHal,
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+   --> crates/kf-trap/src/token.rs:111:1
+    |
+111 | pub const HOST_TOKEN_MASK: u64 = (1 << HOST_TOKEN_BITS) - 1;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/token.rs:117:5
+    |
+117 |     pub state: State,
+    |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/token.rs:118:5
+    |
+118 |     pub route: Route,
+    |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/token.rs:119:5
+    |
+119 |     pub host_token: u32,
+    |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates/kf-trap/src/token.rs:126:5
+    |
+126 |     pub fn decode(w: u64) -> Token {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/token.rs:135:5
+    |
+135 |     pub fn encode(self) -> u64 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates/kf-trap/src/token.rs:173:5
+    |
+173 |     pub const fn new() -> TokenWord {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/token.rs:178:5
+    |
+178 |     pub fn load(&self) -> Token {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/trap.rs:49:9
+   |
+49 |         readable: bool,
+   |         ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/trap.rs:50:9
+   |
+50 |         semantics: WriteSemantics,
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/trap.rs:61:22
+   |
+61 |     RingHostInline { host_token: u32 },
+   |                      ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/trap.rs:80:5
+   |
+80 |     pub tokens: &'a [TokenWord],
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/trap.rs:81:5
+   |
+81 |     pub bits: &'a RungBitmap,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/trap.rs:85:5
+   |
+85 |     pub drainer_wake: &'a WakeWord,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/trap.rs:86:5
+   |
+86 |     pub ring: &'a PrivRing,
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates/kf-trap/src/trappolicy.rs:75:1
+   |
+75 | pub const PRAMIN_LEN: u64 = 0x0010_0000;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/trappolicy.rs:197:5
+    |
+197 |     pub bar: Bar,
+    |     ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/trappolicy.rs:198:5
+    |
+198 |     pub base: u64,
+    |     ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/trappolicy.rs:199:5
+    |
+199 |     pub len: u64,
+    |     ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/vmm.rs:61:22
+   |
+61 |     RingHostInline { host_token: u32 },
+   |                      ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/vmm.rs:119:5
+    |
+119 |     fn remove_memslot(&self, slot: SlotId) -> Result<(), VmmError>;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/vmm.rs:127:5
+    |
+127 |     fn signal_drainer(&self);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates/kf-trap/src/vmm.rs:137:1
+    |
+137 | pub struct SlotId(pub u32);
+    | ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+   --> crates/kf-trap/src/vmm.rs:140:1
+    |
+140 | pub enum VmmError {
+    | ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates/kf-trap/src/vmm.rs:141:5
+    |
+141 |     BadGpa,
+    |     ^^^^^^
+
+warning: missing documentation for a variant
+   --> crates/kf-trap/src/vmm.rs:142:5
+    |
+142 |     NoSlots,
+    |     ^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates/kf-trap/src/vmm.rs:143:5
+    |
+143 |     Refused,
+    |     ^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/vmm.rs:147:9
+    |
+147 |         bar: u8,
+    |         ^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/vmm.rs:148:9
+    |
+148 |         base: u64,
+    |         ^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/vmm.rs:149:9
+    |
+149 |         len: u64,
+    |         ^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-trap/src/vmm.rs:193:1
+    |
+193 | pub fn store_value(data: &mut [u8], v: u64) {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates/kf-trap/src/wake.rs:26:1
+   |
+26 | pub struct WakeWord(AtomicU64);
+   | ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates/kf-trap/src/wake.rs:42:5
+   |
+42 |     pub const fn new() -> WakeWord {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/wake.rs:104:5
+    |
+104 |     pub fn pollers(&self) -> u64 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-trap` (lib) generated 71 warnings
+warning: kf-gop-image@0.1.0: embedded boot-display GOP driver: 9216 bytes, x86_64-unknown-uefi
+warning: missing documentation for a variant
+  --> crates/kf-core/src/caps.rs:19:5
+   |
+19 |     Channel,
+   |     ^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a variant
+  --> crates/kf-core/src/caps.rs:20:5
+   |
+20 |     EngineObject,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-core/src/caps.rs:21:5
+   |
+21 |     AddressSpace,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-core/src/caps.rs:29:1
+   |
+29 | pub enum Refusal {
+   | ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/caps.rs:31:23
+   |
+31 |     OverDeclaredCap { twin: Twin, cap: u32, asked: u32 },
+   |                       ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/caps.rs:31:35
+   |
+31 |     OverDeclaredCap { twin: Twin, cap: u32, asked: u32 },
+   |                                   ^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/caps.rs:31:45
+   |
+31 |     OverDeclaredCap { twin: Twin, cap: u32, asked: u32 },
+   |                                             ^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-core/src/caps.rs:66:5
+   |
+66 |     pub fn acquire(&mut self, t: Twin) -> Result<(), Refusal> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-core/src/caps.rs:80:5
+   |
+80 |     pub fn release(&mut self, t: Twin) {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-core/src/caps.rs:86:5
+   |
+86 |     pub fn live(&self, t: Twin) -> u32 {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates/kf-core/src/caps.rs:106:5
+    |
+106 |     Backed {
+    |     ^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/caps.rs:107:9
+    |
+107 |         host_offset: u64,
+    |         ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates/kf-core/src/caps.rs:114:1
+    |
+114 | pub struct Aperture {
+    | ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/caps.rs:132:5
+    |
+132 |     pub fn back(&mut self, offset: u64, len: u64) -> Backing {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/caps.rs:145:5
+    |
+145 |     pub fn len(&self) -> u64 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/caps.rs:149:5
+    |
+149 |     pub fn is_empty(&self) -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/caps.rs:153:5
+    |
+153 |     pub fn refusals(&self) -> u64 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-core/src/channel.rs:32:5
+   |
+32 |     AtAllocation,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates/kf-core/src/channel.rs:48:1
+   |
+48 | pub struct Submission {
+   | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/channel.rs:49:5
+   |
+49 |     pub owner: Owner,
+   |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/channel.rs:50:5
+   |
+50 |     pub route: Route,
+   |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/channel.rs:51:5
+   |
+51 |     pub all_operands_translatable: bool,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/channel.rs:103:16
+    |
+103 |     Modelled { operand_words: u8 },
+    |                ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/channel.rs:150:16
+    |
+150 |     TooLarge { want: u64, max: u64 },
+    |                ^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/channel.rs:150:27
+    |
+150 |     TooLarge { want: u64, max: u64 },
+    |                           ^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/channel.rs:158:5
+    |
+158 |     pub fn name(&self) -> &'static str {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-core/src/completion.rs:80:1
+   |
+80 | pub enum Raise {
+   | ^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates/kf-core/src/completion.rs:88:5
+   |
+88 |     pub const fn new() -> EngineIrq {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-core/src/completion.rs:97:5
+   |
+97 |     pub fn arm(&self) {
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/completion.rs:130:5
+    |
+130 |     pub fn mask(&self) {
+    |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/completion.rs:142:5
+    |
+142 |     pub fn retired_count(&self) -> u64 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/leaf.rs:38:5
+   |
+38 |     pub block: u32,
+   |     ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/leaf.rs:39:5
+   |
+39 |     pub offset: u64,
+   |     ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/leaf.rs:40:5
+   |
+40 |     pub len: u64,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-core/src/leaf.rs:44:1
+   |
+44 | pub enum LeafRefusal {
+   | ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-core/src/leaf.rs:85:5
+   |
+85 |     pub fn contains_gpa(&self, gpa: u64) -> bool {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates/kf-core/src/leaf.rs:104:5
+    |
+104 |     pub fn new() -> GuestRamLayout {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/leaf.rs:107:5
+    |
+107 |     pub fn register(&mut self, b: GuestRamBlock) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates/kf-core/src/lifetime.rs:56:1
+   |
+56 | pub const ORDER: [Step; 9] = [
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-core/src/lifetime.rs:69:1
+   |
+69 | pub enum TeardownError {
+   | ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/lifetime.rs:71:18
+   |
+71 |     OutOfOrder { attempted: Step, expected: Step },
+   |                  ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/lifetime.rs:71:35
+   |
+71 |     OutOfOrder { attempted: Step, expected: Step },
+   |                                   ^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates/kf-core/src/lifetime.rs:83:5
+   |
+83 |     pub fn new() -> Teardown {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-core/src/lifetime.rs:87:5
+   |
+87 |     pub fn run(&mut self, s: Step) -> Result<(), TeardownError> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/lifetime.rs:104:5
+    |
+104 |     pub fn complete(&self) -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+   --> crates/kf-core/src/lifetime.rs:120:1
+    |
+120 | pub enum Diff {
+    | ^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates/kf-core/src/plane.rs:122:5
+    |
+122 |     pub const fn new() -> Vmm {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/plane.rs:134:5
+    |
+134 |     pub tokens: Vec<TokenWord>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/plane.rs:135:5
+    |
+135 |     pub bits: RungBitmap,
+    |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/plane.rs:140:5
+    |
+140 |     pub ring: PrivRing,
+    |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/plane.rs:141:5
+    |
+141 |     pub token_mask: u32,
+    |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/plane.rs:262:5
+    |
+262 |     pub fn worker_wake(&self) -> &WakeWord {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-core` (lib) generated 52 warnings
+warning: unused import: `kf_abi::submit as s`
+   --> crates/kf-rm/src/authored.rs:452:9
+    |
+452 |     use kf_abi::submit as s;
+    |         ^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: missing documentation for a function
+  --> crates/kf-rm/src/rpc.rs:84:1
+   |
+84 | pub fn name_of(function: u32) -> Option<&'static str> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a constant
+   --> crates/kf-rm/src/rpc.rs:135:1
+    |
+135 | pub const CONTROLS: [(u32, ControlDisposition); 33] = [
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-rm/src/rpc.rs:201:1
+    |
+201 | pub fn control_disposition(cmd: u32) -> ControlDisposition {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/kf-chan/src/dbfast.rs:504:14
+    |
+504 |             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+504 -             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+504 +             .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+    |
+
+warning: missing documentation for a struct field
+   --> crates/kf-chan/src/translated.rs:386:17
+    |
+386 |     BadHeader { at: usize, word: u32 },
+    |                 ^^^^^^^^^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a struct field
+   --> crates/kf-chan/src/translated.rs:386:28
+    |
+386 |     BadHeader { at: usize, word: u32 },
+    |                            ^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-chan/src/translated.rs:388:17
+    |
+388 |     Truncated { at: usize },
+    |                 ^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-chan/src/translated.rs:392:22
+    |
+392 |     Untranslatable { target: Target, phys: u64, len: u64 },
+    |                      ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-chan/src/translated.rs:392:38
+    |
+392 |     Untranslatable { target: Target, phys: u64, len: u64 },
+    |                                      ^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-chan/src/translated.rs:392:49
+    |
+392 |     Untranslatable { target: Target, phys: u64, len: u64 },
+    |                                                 ^^^^^^^^
+
+warning: `kf-rm` (lib) generated 4 warnings (run `cargo fix --lib -p kf-rm` to apply 1 suggestion)
+warning: `kf-chan` (lib) generated 7 warnings (run `cargo fix --lib -p kf-chan` to apply 1 suggestion)
+warning: missing documentation for a constant
+  --> crates/kf-mem/src/addr.rs:35:1
+   |
+35 | pub const PAGE: u64 = 0x1000;
+   | ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for an enum
+  --> crates/kf-mem/src/store.rs:14:1
+   |
+14 | pub enum StoreRefusal {
+   | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-mem/src/store.rs:17:9
+   |
+17 |         offset: u64,
+   |         ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-mem/src/store.rs:18:9
+   |
+18 |         len: u64,
+   |         ^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-mem/src/store.rs:19:9
+   |
+19 |         object: u64,
+   |         ^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-mem/src/store.rs:21:5
+   |
+21 |     ZeroLength,
+   |     ^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-mem/src/store.rs:25:5
+   |
+25 |     pub fn name(&self) -> &'static str {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates/kf-mem/src/store.rs:41:5
+   |
+41 |     pub fn new(token: HostToken, len: u64) -> Store {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-mem/src/store.rs:44:5
+   |
+44 |     pub fn token(&self) -> HostToken {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-mem/src/store.rs:47:5
+   |
+47 |     pub fn len(&self) -> u64 {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-mem/src/store.rs:50:5
+   |
+50 |     pub fn is_empty(&self) -> bool {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-mem` (lib) generated 11 warnings
+   Compiling kf-qemu v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-qemu)
+warning: `kf-linux-raw` (lib test) generated 1 warning (1 duplicate)
+   Compiling kf-cuda v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-cuda)
+   Compiling kf-broker v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-broker)
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+    --> crates/kf-qemu/src/chan.rs:1405:22
+     |
+1405 |                     .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+     |                      ^^^^^^^^^^^^
+     |
+     = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+     |
+1405 -                     .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+1405 +                     .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+     |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+    --> crates/kf-qemu/src/device.rs:1122:23
+     |
+1122 |             let _ = w.fetch_update(Ordering::AcqRel, Ordering::Acquire, |old| {
+     |                       ^^^^^^^^^^^^
+     |
+help: replace the use of the deprecated method
+     |
+1122 -             let _ = w.fetch_update(Ordering::AcqRel, Ordering::Acquire, |old| {
+1122 +             let _ = w.try_update(Ordering::AcqRel, Ordering::Acquire, |old| {
+     |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+    --> crates/kf-qemu/src/device.rs:3083:10
+     |
+3083 |     left.fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+     |          ^^^^^^^^^^^^
+     |
+help: replace the use of the deprecated method
+     |
+3083 -     left.fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+3083 +     left.try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+     |
+
+warning: missing documentation for the crate
+  --> crates/kf-cuda/tests/synth_origin.rs:1:1
+   |
+ 1 | / use kf_cuda::synth::*;
+ 2 | |
+ 3 | | #[test]
+ 4 | | fn an_image_at_an_origin_names_absolute_addresses_and_rewrites_nothing() {
+...  |
+56 | |     );
+57 | | }
+   | |_^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: `kf-cuda` (test "synth_origin") generated 1 warning
+   Compiling kf-host v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-host)
+warning: `kf-cuda` (lib test) generated 4 warnings (4 duplicates)
+warning: `kf-host` (lib test) generated 1 warning (1 duplicate)
+warning: `kf-qemu` (lib) generated 3 warnings (run `cargo fix --lib -p kf-qemu` to apply 3 suggestions)
+warning: `kf-qemu` (lib test) generated 3 warnings (3 duplicates)
+    Finished `test` profile [unoptimized] target(s) in 6.19s
+     Running unittests src/lib.rs (/data/kf-candidate2-target/debug/deps/kf_broker-0459db6089b52b61)
+
+running 38 tests
+test conn::tests::the_descriptor_rule_refuses_only_what_it_can_name ... ok
+test console::tests::a_cursor_point_round_trips_and_none_is_none ... ok
+test console::tests::the_console_knows_whether_the_frame_it_shows_carries_the_cursor ... ok
+test console::tests::an_update_the_vmm_did_not_apply_is_handed_out_again ... ok
+test console::tests::hover_defines_the_image_once_and_moves_it_per_position ... ok
+test console::tests::defines_are_paced_and_the_newest_state_wins ... ok
+test console::tests::the_pixels_are_premultiplied_argb_words_and_bounded ... ok
+test cursor::tests::hover_leaves_the_cursor_out_of_the_frame_and_grab_composes_it ... ok
+test console::tests::the_image_waits_until_the_console_shows_a_frame_without_the_composed_cursor ... ok
+test cursor::tests::the_hot_spot_follows_a_settled_pointer_and_ignores_a_moving_one ... ok
+test cursor::tests::the_broker_is_sent_a_set_only_when_the_image_or_hot_spot_changes ... ok
+test cursor::tests::the_mailbox_keeps_the_newest_and_never_waits ... ok
+test gpucopy::tests::slots_are_asked_once_per_class_and_never_after_a_refusal ... ok
+test gpucopy::tests::the_plan_packs_for_the_broker_and_copies_to_the_host_only_when_someone_needs_it ... ok
+test gpucopy::tests::the_property_and_the_abi_word_say_the_same_three_things ... ok
+test console::tests::what_the_frame_composes_or_the_guest_hides_is_hidden_on_the_console ... ok
+test link::tests::root_this_process_and_the_property_are_the_broker_uids ... ok
+test link::tests::an_out_of_range_display_broker_uid_is_refused_by_name ... ok
+test slots::tests::a_frame_backing_is_whole_host_pages ... ok
+test slots::tests::a_withdrawn_ring_offers_the_broker_no_slot_again ... ok
+test slots::tests::each_kind_is_offered_and_withdrawn_on_its_own ... ok
+test cursor::tests::the_injected_position_round_trips_through_the_share ... ok
+test slots::tests::installing_backings_checks_freedom_generations_and_identity ... ok
+test slots::tests::requeue_and_clear_on_disconnect ... ok
+test slots::tests::the_fill_target_is_never_held_ready_or_shown ... ok
+test slots::tests::the_cap_argument_holds_with_two_backings ... ok
+test slots::tests::the_lru_fill_takes_the_slot_released_longest_ago ... ok
+test cursor::tests::a_cursor_image_is_bounded_and_its_digest_covers_the_hot_spot ... ok
+test slots::tests::the_word_packs_four_fields_and_starts_empty ... ok
+test slots::tests::vram_backings_are_checked_against_every_identity ... ok
+test slots::tests::three_slots_without_the_broker_is_todays_triple_buffer ... ok
+test wire::tests::every_command_field_lands_at_the_header_offset ... ok
+test slots::tests::with_five_slots_a_fill_target_always_exists_and_the_broker_holds_at_most_two ... ok
+test wire::tests::every_packet_field_lands_at_the_header_offset ... ok
+test wire::tests::the_cursor_record_and_its_bounds_are_the_brokers ... ok
+test wire::tests::the_helpers_zero_everything_they_do_not_name ... ok
+test slots::tests::the_worker_never_picks_a_slot_another_thread_holds ... ok
+test slots::tests::the_harness_catches_the_two_word_ring ... ok
+
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests/broker_loopback.rs (/data/kf-candidate2-target/debug/deps/broker_loopback-52abe2f20cca98c3)
+
+running 8 tests
+test a_broker_that_cannot_prove_a_dma_buf_gets_shared_memory ... ignored, needs KF_BROKER_BIN (nvkvm-pv's broker at badf2d7+), root and /dev/udmabuf
+test a_rejected_attach_is_reclaimed_by_rule ... ignored, needs KF_BROKER_BIN (nvkvm-pv's broker at 368d2db)
+test a_squatter_under_another_uid_is_refused_before_hello ... ignored, needs root
+test a_squatter_who_owns_the_sockets_directory_is_refused ... ignored, needs root
+test a_stopped_broker_never_blocks_the_relay ... ignored, needs KF_BROKER_BIN (nvkvm-pv's broker at 368d2db)
+test linear_udmabuf_frames_release_and_scripted_input ... ignored, needs KF_BROKER_BIN (nvkvm-pv's broker at 368d2db)
+test shm_frames_and_an_shm_replay_after_kill_9 ... ignored, needs KF_BROKER_BIN (nvkvm-pv's broker at 368d2db)
+test the_broker_answers_query_format_for_the_implicit_modifier ... ignored, needs KF_BROKER_BIN (nvkvm-pv's broker at 368d2db)
+
+test result: ok. 0 passed; 0 failed; 8 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/host_cursor.rs (/data/kf-candidate2-target/debug/deps/host_cursor-7aae9b27d7dba51f)
+
+running 11 tests
+test a_broker_that_says_hello_grabbed_starts_composed ... ok
+test a_broker_without_cap_cursor_is_never_sent_one_and_the_cursor_stays_composed ... ok
+test a_reconnect_is_sent_the_cursor_again_and_no_broker_composes ... ok
+test a_full_socket_owes_the_cursor_command_and_sends_it_once_writable ... ok
+test an_injected_absolute_position_reaches_the_cursor_share ... ok
+test hidden_is_a_hide_and_the_held_image_coming_back_is_a_show ... ok
+test grab_composes_and_sends_nothing_and_its_end_sends_what_changed ... ok
+test posts_between_two_entries_coalesce_to_one_set_of_the_newest ... ok
+test the_relay_leaves_the_cursor_pacing_to_the_broker ... ok
+test hover_sends_the_image_once_in_a_memfd_and_again_only_when_it_or_its_hot_spot_changes ... ok
+test a_broker_flipping_its_grab_cannot_flood_the_console_with_cursor_defines ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/proto_mirror.rs (/data/kf-candidate2-target/debug/deps/proto_mirror-6c3a5c92cc219961)
+
+running 5 tests
+test the_header_is_vendored_verbatim_with_its_own_licence ... ok
+test values_ahead_of_the_header_match_the_newer_header_when_given ... ok
+test every_protocol_value_matches_the_header_text_both_ways ... ok
+test values_ahead_of_the_header_are_absent_from_it_and_collide_with_nothing ... ok
+test the_record_layouts_match_the_compiled_header ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/relay_machine.rs (/data/kf-candidate2-target/debug/deps/relay_machine-087b6e5d19661a0c)
+
+running 45 tests
+test a_device_without_the_rung_never_asks_or_sends_it ... ok
+test a_failed_connect_backs_off_200_400_to_5000 ... ok
+test a_dma_buf_frame_refused_by_name_never_trips_the_detector ... ok
+test a_frame_larger_than_its_backing_is_refused_before_the_wire ... ok
+test a_descriptor_that_is_neither_memfd_nor_dma_buf_never_reaches_the_broker ... ok
+test a_frame_without_a_release_is_reclaimed_after_a_second_and_a_newer_commit ... ok
+test a_later_no_downgrades_the_rung_and_reclaims_its_frames ... ok
+test a_compositor_on_another_gpu_gets_no_gpu_copy ... ok
+test a_newer_frame_during_the_replay_commit_restarts_the_replay ... ok
+test a_newer_frame_replaces_an_owed_one ... ok
+test a_later_no_for_the_block_linear_pair_falls_back_and_reclaims ... ok
+test a_short_read_builds_up_to_24_bytes ... ok
+test a_reconnect_forgets_the_connection_and_replays_the_latest_frame ... ok
+test a_proven_descriptor_is_checked_once_per_backing ... ok
+test a_stale_backing_is_never_sent ... ok
+test a_refused_frame_is_logged_at_a_bounded_rate ... ok
+test a_superseded_owed_commit_never_freezes_the_display ... ok
+test a_vram_frame_outside_its_object_or_the_brokers_bounds_is_not_sent ... ok
+test a_withdrawn_ring_sends_the_broker_nothing_not_even_a_replay ... ok
+test a_withdrawal_between_two_sends_refuses_the_frame_and_keeps_the_connection ... ok
+test a_withdrawn_kind_leaves_the_other_rung_working ... ok
+test an_owed_attach_and_an_owed_commit_are_different_debts ... ok
+test an_owed_frame_after_the_withdrawal_is_refused_and_the_connection_stays_up ... ok
+test at_most_64_packets_per_call_and_the_tail_stays_in_the_socket ... ok
+test an_unasked_no_is_recorded_and_its_pair_is_not_sent ... ok
+test hello_must_come_first_with_version_2_and_dmabuf ... ok
+test an_x11_refusal_names_both_alpha_twins_and_both_are_kept ... ok
+test only_root_the_vmms_euid_and_display_broker_uid_are_admitted ... ok
+test input_is_bounded_before_the_vmm_sees_it ... ok
+test pacing_credit_returns_on_frame_release_or_the_backstop ... ok
+test release_matches_the_sent_id_and_ignores_unknown_ones ... ok
+test stop_unwatches_then_closes ... ok
+test rung_1b_is_the_implicit_modifier_after_an_explicit_yes ... ok
+test no_refusal_or_back_off_outlives_its_connection ... ok
+test the_euid_is_read_at_each_connect_after_privileges_are_dropped ... ok
+test the_handshake_has_a_two_second_limit ... ok
+test the_detector_backs_off_retries_and_clears_on_a_release ... ok
+test the_gpu_copy_goes_only_after_an_explicit_yes ... ok
+test the_peer_check_runs_before_any_read ... ok
+test the_replay_is_window_attach_commit_caps_with_the_frames_flags ... ok
+test the_hello_line_claims_shared_memory_only_for_slots_without_a_dma_buf ... ok
+test volunteered_noes_never_push_out_a_no_for_a_pair_the_relay_sends ... ok
+test volunteered_noes_never_push_out_the_relays_own_yes ... ok
+test window_is_sent_only_when_the_size_changes ... ok
+test unacknowledged_dma_buf_frames_back_off_to_shared_memory_and_retry ... ok
+
+test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (/data/kf-candidate2-target/debug/deps/kf_cuda-2d681b60b85ddc56)
+
+running 34 tests
+test abi::tests::a_short_buffer_is_refused_loudly - should panic ... ok
+test abi::tests::the_flags_ranges_are_disjoint_and_each_accessor_reads_its_own ... ok
+test abi::tests::the_report_structs_have_the_headers_documented_layout ... ok
+test capacity::tests::a_new_slot_gets_the_default_and_the_walk_region_covers_it ... ok
+test capacity::tests::a_space_past_the_old_uniform_cap_is_held_after_one_growth ... ok
+test abi::tests::every_report_struct_round_trips_through_its_own_layout ... ok
+test capacity::tests::the_ceilings_refuse_by_name ... ok
+test capacity::tests::release_returns_exactly_what_the_slot_owned_across_a_churn ... ok
+test capacity::tests::the_previous_layout_is_carried_for_the_commit ... ok
+test diffmodel::tests::a_failed_map_is_retried_and_a_successful_one_never_re_emitted ... ok
+test diffmodel::tests::a_diff_that_could_overflow_the_slot_withholds_its_maps ... ok
+test diffmodel::tests::a_first_walk_maps_every_run_and_then_is_quiet ... ok
+test diffmodel::tests::a_partial_downgrade_splits_the_placement_by_permission ... ok
+test diffmodel::tests::a_root_move_keeps_what_the_new_root_still_maps ... ok
+test diffmodel::tests::a_partly_changed_placement_is_unmapped_whole_and_its_rest_remapped ... ok
+test diffmodel::tests::a_held_map_is_committed_held_and_retired_as_held ... ok
+test diffmodel::tests::a_rw_to_ro_downgrade_over_the_same_backing_unmaps_and_remaps ... ok
+test diffmodel::tests::classes_are_diffed_separately ... ok
+test diffmodel::tests::growth_maps_only_the_new_page_and_keeps_the_old_placements ... ok
+test diffmodel::tests::the_key_is_the_hosts_policy ... ok
+test diffmodel::tests::the_named_ranges_compute_the_literal_formulas ... ok
+test display::tests::a_compose_launch_is_bounded_before_it_is_queued ... ok
+test display::tests::a_pack_launch_is_bounded_before_it_is_queued ... ok
+test display::tests::the_compose_kernel_declares_the_parameters_the_launch_passes ... ok
+test display::tests::the_pack_kernel_declares_the_parameters_the_launch_passes ... ok
+test display::tests::the_pack_ptx_was_made_from_the_committed_source ... ok
+test display::tests::the_sum_kernel_declares_the_parameters_the_launch_passes ... ok
+test driver_unsafe::completion_fd_tests::the_host_function_signals_the_fd_and_drain_consumes_it ... ok
+test posture::tests::a_bit_that_cannot_be_cleared_refuses_the_cuda_call ... ok
+CAP-GATE: RAN kf-cuda live_cap_cuda_thread_clears_before_the_first_call (CAP_SYS_ADMIN was in the effective set: the real capset ran)
+test posture::tests::a_root_thread_is_cleared_for_its_life ... ok
+CAP-GATE: RAN kf-cuda live_cap_open_clears_before_dlopen (CAP_SYS_ADMIN was in the effective set: the real capset ran)
+test posture::tests::live_cap_open_clears_before_dlopen ... ok
+test posture::tests::live_cap_cuda_thread_clears_before_the_first_call ... ok
+test diffmodel::tests::random_sequences_hold_every_protocol_property ... ok
+test diffmodel::tests::thirteen_thousand_rows_one_added_per_step_is_one_map_each ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s
+
+     Running tests/cuda_thread_posture.rs (/data/kf-candidate2-target/debug/deps/cuda_thread_posture-758706f26235f098)
+
+running 1 test
+test every_cuda_entry_clears_cap_sys_admin_before_its_foreign_call ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/report_containment.rs (/data/kf-candidate2-target/debug/deps/report_containment-6dc61af0ee22a515)
+
+running 9 tests
+test a_diff_report_is_accepted ... ok
+test a_report_without_the_diff_flag_is_refused ... ok
+test a_run_ending_exactly_at_the_span_is_the_last_legal_page ... ok
+test a_run_wholly_inside_the_span_is_accepted ... ok
+test a_run_past_the_span_is_refused_by_name ... ok
+test a_run_straddling_the_end_is_refused ... ok
+test a_sysmem_run_is_not_bounded_by_the_store_span ... ok
+test a_vidmem_or_peer_run_past_the_span_is_still_refused ... ok
+test an_unmap_is_exempt_because_it_names_no_memory ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/synth_origin.rs (/data/kf-candidate2-target/debug/deps/synth_origin-dd92bc6ec86c1b2d)
+
+running 1 test
+test an_image_at_an_origin_names_absolute_addresses_and_rewrites_nothing ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/walk_abi_matches_the_cu.rs (/data/kf-candidate2-target/debug/deps/walk_abi_matches_the_cu-88b5fa4642537f88)
+
+running 7 tests
+test the_committed_ptx_declares_the_same_kfargs_size ... ok
+test the_committed_ptx_is_turing_targeted ... ok
+test the_report_constants_match_the_header ... ok
+test the_rust_mirror_matches_the_cu_byte_for_byte ... ok
+test the_rust_ver3_descriptor_matches_the_cu_byte_for_byte ... ok
+test every_report_field_decodes_to_what_the_c_compiler_reads ... ok
+test the_rust_ver2_descriptor_matches_the_cu_byte_for_byte ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/walk_never_synchronizes.rs (/data/kf-candidate2-target/debug/deps/walk_never_synchronizes-4b47645690d22490)
+
+running 4 tests
+test the_known_positive_is_found ... ok
+test the_ack_only_stages_a_per_run_verdict ... ok
+test only_the_probe_synchronizes ... ok
+test the_walk_verbs_do_not_synchronize ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/data/kf-candidate2-target/debug/deps/kf_disp-d18e1561e33a4a52)
+
+running 87 tests
+test edid::tests::a_cap_below_60_lists_no_60hz_mode ... ok
+test edid::tests::a_window_becomes_a_monitor_fitted_under_the_connector ... ok
+test edid::tests::above_60hz_the_rate_yields_not_the_size ... ok
+test edid::tests::cvt_rb_timings_are_about_60hz_and_bounded ... ok
+test edid::tests::the_default_edid_is_valid_and_its_preferred_timing_round_trips ... ok
+test edid::tests::the_unset_edid_is_byte_identical ... ok
+test edid::tests::every_authored_edid_honours_its_cap ... ok
+test class::tests::the_derived_methods_are_the_headers ... ok
+test caps::tests::nvkms_reads_four_heads_eight_windows_and_real_clocks ... ok
+test engine::tests::a_core_update_arms_then_notifies ... ok
+test engine::tests::a_head_composes_its_windows_back_to_front ... ok
+test engine::tests::a_head_cursor_is_scanned_from_the_core_and_its_pio_point ... ok
+test engine::tests::a_group_parked_on_a_head_that_goes_idle_latches ... ok
+test engine::tests::a_head_scans_out_its_lowest_enabled_window ... ok
+test engine::tests::a_jump_only_pass_moves_get_to_its_target ... ok
+test engine::tests::a_non_tearing_flip_waits_for_vblank_and_its_acquire ... ok
+test engine::tests::acquire_modes ... ok
+test engine::tests::a_running_head_lights_the_sor_that_names_it ... ok
+test engine::tests::an_unallocated_interlock_target_does_not_block ... ok
+test engine::tests::an_interlocked_group_waits_for_every_member ... ok
+test engine::tests::cursor_pio_updates_arm ... ok
+test engine::tests::a_second_tearing_flip_waits_for_the_vblank ... ok
+test engine::tests::flips_without_an_active_head_latch_at_once ... ok
+test engine::tests::hostile_streams_stop_the_channel_by_name ... ok
+test engine::tests::init_methods_are_consumed_through_the_wrap ... ok
+test inst::tests::hostile_instance_memory_is_refused_bounded ... ok
+test engine::tests::the_flip_event_is_raised_only_for_a_window_that_was_active ... ok
+test inst::tests::bound_ctxdmas_resolve_and_collisions_probe ... ok
+test engine::tests::presents_count_one_per_latch_including_core_groups ... ok
+test layout::tests::the_bench_layouts_parse_and_agree_with_the_headers ... ok
+test model::tests::get_active_reports_the_display_the_armed_state_lights ... ok
+test model::tests::a_new_monitor_is_reported_once_by_the_internal_hotplug_state ... ok
+test model::tests::channel_registry_and_idle_state ... ok
+test model::tests::hotplug_registrations_retire_with_their_objects ... ok
+test model::tests::set_edid_shadows_and_clears_and_bad_sizes_are_refused ... ok
+test model::tests::preserve_hw_is_the_display_objects_and_lasts_for_the_free_it_was_set_for ... ok
+test model::tests::the_nvkms_bringup_conversation_describes_one_dvi_monitor ... ok
+test model::tests::rmfree_marks_are_bounded ... ok
+test pace::tests::a_screendump_is_served_by_a_copy_that_started_after_it ... ok
+test pace::tests::config_check_refuses_by_name ... ok
+test model::tests::x11_dispsw_answers_the_display_sw_query_and_off_refuses_it ... ok
+test pace::tests::meter_over ... ok
+test pace::tests::non_flip_copies_follow_d2 ... ok
+test pace::tests::paced_period_is_the_slower_of_raster_and_bound ... ok
+test pace::tests::on_heads_keeps_phase_under_the_clamp ... ok
+test pace::tests::preferred_and_cap_tables ... ok
+test pace::tests::pacer_synthetic_time ... ok
+test pace::tests::the_checksum_sees_a_pixel_a_move_and_a_row_swap ... ok
+test model::tests::guest_stated_keys_are_bounded_and_the_statement_queue_is_capped ... ok
+test ports::tests::events_are_w1c_and_the_summary_registers_are_derived ... ok
+test pace::tests::the_fragment_carries_every_path ... ok
+test ports::tests::idle_is_get_equals_put_and_generations_fence_old_lives ... ok
+test pushbuf::tests::methods_decode_in_order_and_get_reaches_put ... ok
+test pushbuf::tests::writes_know_their_group ... ok
+test pushbuf::tests::jumps_wrap_and_every_malformed_stream_stops_bounded ... ok
+test regs::tests::ga10x_registers_are_the_headers ... ok
+test regs::tests::nothing_is_guessed ... ok
+test scanout::tests::a_1080p_pitch_surface_is_one_tight_copy ... ok
+test scanout::tests::a_block_linear_surface_is_planned_as_whole_blocks ... ok
+test scanout::tests::a_boot_geometry_past_its_bounds_is_refused_by_name ... ok
+test scanout::tests::a_cursor_inside_the_frame_is_a_premultiplied_pitch_layer_at_its_point ... ok
+test scanout::tests::a_cursor_is_clipped_on_every_edge ... ok
+test scanout::tests::a_cursor_the_kernel_cannot_compose_is_refused_by_name ... ok
+test scanout::tests::a_viewport_inside_a_larger_surface_keeps_the_surface_pitch ... ok
+test scanout::tests::a_cursor_the_host_cannot_show_is_refused_by_name ... ok
+test scanout::tests::a_wholly_transparent_cursor_is_no_host_cursor ... ok
+test scanout::tests::an_xor_cursor_is_an_xor_layer_and_an_unknown_mode_is_refused ... ok
+test scanout::tests::console_formats_are_the_derived_values ... ok
+test scanout::tests::every_hostile_rectangle_is_refused_by_name ... ok
+test scanout::tests::layers_are_positioned_clipped_and_blended ... ok
+test regs::tests::a_lineage_never_redefines_a_name ... ok
+test scanout::tests::the_block_linear_reference_is_the_nvidia_gob_swizzle ... ok
+test scanout::tests::the_boot_layer_is_one_opaque_pitch_copy_of_store_zero ... ok
+test scanout::tests::every_nvkms_cursor_blend_becomes_premultiplied_argb ... ok
+test scanout::tests::the_composition_line_is_bounded_however_the_guest_alternates ... ok
+test scanout::tests::the_host_cursor_is_the_whole_image_wherever_the_point_is ... ok
+test scanout::tests::the_hot_spot_is_the_pointer_minus_the_images_top_left ... ok
+test scanout::tests::the_reference_composes_xor_blend_and_opaque_pixels_as_worked_by_hand ... ok
+test scanout::tests::the_composition_word_names_its_nvkms_mode_and_the_census_reads_the_pixels ... ok
+test vramslot::tests::any_permutation_inverts_and_a_bad_layout_is_refused ... ok
+test vramslot::tests::every_slot_shape_passes_the_brokers_bounds ... ok
+test vramslot::tests::slot_max_is_the_largest_slot_any_accepted_frame_needs ... ok
+test scanout::tests::the_block_linear_reference_is_a_bijection ... ok
+test vramslot::tests::the_pack_reference_places_pixels_and_zeroes_padding ... ok
+test vramslot::tests::the_chunk_origin_inverts_bl_offset_exactly ... ok
+test vramslot::tests::the_ga106_layout_is_bl_offset ... ok
+test model::tests::the_claim_set_is_enumerable_and_exact ... ok
+
+test result: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+
+     Running tests/bl_pack_kernel.rs (/data/kf-candidate2-target/debug/deps/bl_pack_kernel-6667eafb12fd34e0)
+
+running 2 tests
+test the_comparison_catches_a_wrong_layout ... ok
+test the_pack_kernel_writes_the_reference_slot ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+     Running tests/compose_kernel.rs (/data/kf-candidate2-target/debug/deps/compose_kernel-9b7a8a884e4607d7)
+
+running 7 tests
+test the_interpreter_refuses_what_it_does_not_model ... ok
+test the_kernel_clips_at_the_frame_and_reads_only_its_extent ... ok
+test the_kernel_xors_the_colour_into_what_lies_below ... ok
+test the_sum_kernel_reads_only_its_frame ... ok
+test the_sum_kernel_is_the_reference_checksum ... ok
+test the_kernel_composes_pitch_layers_as_the_reference_does ... ok
+test the_kernel_reads_block_linear_surfaces_as_the_reference_does ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.44s
+
+     Running unittests src/lib.rs (/data/kf-candidate2-target/debug/deps/kf_host-5adeab944ece19b6)
+
+running 22 tests
+test birth::tests::a_bracket_that_cannot_clear_issues_nothing ... ok
+test birth::tests::a_privileged_reply_is_refused_and_the_channel_freed ... ok
+test birth::tests::an_alloc_error_is_returned_and_frees_nothing ... CAP-GATE: RAN kf-host live_cap_born_user_issues_without_cap_sys_admin (CAP_SYS_ADMIN was in the effective set: the real capset ran)
+ok
+test birth::tests::a_request_asking_for_privilege_is_refused ... ok
+test birth::tests::a_channel_class_is_refused_outside_the_birth_path ... ok
+test birth::tests::live_cap_born_user_issues_without_cap_sys_admin ... ok
+test birth::tests::the_alloc_runs_without_cap_sys_admin_on_a_root_thread ... ok
+test birth::tests::the_channel_class_universe_is_derived_and_complete ... ok
+test birth::tests::the_negative_control_skips_the_bracket_and_the_reply_check_still_refuses ... ok
+test channel::disp_sw_tests::the_class_id_is_read_from_nvclass_only_for_a_disp_sw_reply ... ok
+test channel::disp_sw_tests::the_authored_disp_sw_params_are_head_0_mask_0_caps_0_at_every_tag ... ok
+test channel::perm_tests::each_permission_sets_exactly_its_nvos46_field ... ok
+test channel::perm_tests::every_map_snoops_the_cpu_cache_and_changes_nothing_else ... ok
+test channel::privilege_tests::a_non_user_internal_level_is_refused ... ok
+test channel::privilege_tests::a_privileged_reply_is_refused_by_name ... ok
+test channel::privilege_tests::a_user_reply_passes_with_any_other_flag ... ok
+test channel::privilege_tests::the_birth_request_never_asks_for_privilege ... ok
+test channel::privilege_tests::the_check_refuses_what_it_cannot_judge ... ok
+test channel::privilege_tests::the_constants_are_the_header_fields ... ok
+test display_slot_tests::only_a_recorded_display_slot_of_a_sane_size_is_exported ... ok
+test kernel_mapping_tests::the_kernel_mapping_bit_is_cleared_whatever_the_caller_sets ... ok
+test kernel_mapping_tests::only_the_one_builder_can_name_the_kernel_mapping_bit ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/channel_birth_bound.rs (/data/kf-candidate2-target/debug/deps/channel_birth_bound-ec82ed9cb82165c3)
+
+running 5 tests
+test born_user_brackets_the_call_and_checks_the_reply ... ok
+test the_scanner_catches_a_planted_unadmitted_alloc ... ok
+test every_alloc_request_is_admitted_first ... ok
+test the_birth_token_is_made_only_by_born_user ... ok
+test birth_member_is_the_one_caller_and_uses_the_live_thread ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running unittests src/lib.rs (/data/kf-candidate2-target/debug/deps/kf_linux_raw-9768762984640d52)
+
+running 159 tests
+test bounds::tests::an_offset_has_no_unchecked_arithmetic_and_refuses_overflow ... ok
+test bounds::tests::checked_span_accepts_exactly_the_inside_of_the_object ... ok
+test bounds::tests::checked_span_refuses_an_overflowing_sum_before_it_compares_the_bound ... ok
+test bounds::tests::checked_span_refuses_zero_length_by_that_exact_variant ... ok
+test bounds::tests::checked_span_refuses_one_byte_past_the_end ... ok
+test cache::tests::an_unadjudicable_backing_accepts_every_policy_and_a_known_one_still_refuses ... ok
+test cache::tests::the_attainable_policy_is_accepted_and_every_other_one_is_refused ... ok
+test cache::tests::the_refusal_says_what_the_caller_would_have_silently_got ... ok
+test capability::tests::a_refused_read_or_clear_never_makes_the_call ... CAP-GATE: RAN okkf-linux-raw live_cap_bracket_clears_effective_for_the_call_and_restores_it
+ (CAP_SYS_ADMIN was in the effective set: the real capset ran)
+CAP-GATE: RAN kf-linux-raw live_cap_bracket_never_touches_another_thread (CAP_SYS_ADMIN was in the effective set: the real capset ran)
+test capability::tests::a_refused_restore_leaves_the_bit_cleared ... ok
+CAP-GATE: RAN kf-linux-raw live_cap_thread_life_clear_is_inherited_and_stays (CAP_SYS_ADMIN was in the effective set: the real capset ran)
+test capability::tests::records_round_trip_and_split_at_bit_32 ... ok
+test capability::tests::live_cap_bracket_never_touches_another_thread ... ok
+test capability::tests::live_cap_bracket_clears_effective_for_the_call_and_restores_it ... ok
+test capability::tests::the_bracket_clears_and_restores_on_a_simulated_root_thread ... ok
+test capability::tests::the_bracket_writes_nothing_when_the_capability_is_not_held ... ok
+test capability::tests::the_thread_life_clear_on_a_simulated_root_thread ... ok
+test census::tests::the_census_counts_at_the_syscall_logs_in_order_and_survives_the_log_being_off ... ok
+test capability::tests::live_cap_thread_life_clear_is_inherited_and_stays ... ok
+test capability::tests::without_effective_clears_one_effective_bit_only ... ok
+test chardev_unsafe::tests::a_described_range_past_the_region_is_refused_at_construction ... ok
+test chardev_unsafe::tests::a_character_device_opens_by_descriptor_relative_name ... ok
+test chardev_unsafe::tests::a_described_region_is_patched_and_scrubbed_like_any_other_pointer ... ok
+test chardev_unsafe::tests::a_missing_node_reports_enoent_exactly ... ok
+test chardev_unsafe::tests::a_nested_pointer_field_that_does_not_fit_its_buffer_is_refused ... ok
+test chardev_unsafe::tests::a_nested_pointer_is_patched_and_scrubbed_at_both_levels ... ok
+test chardev_unsafe::tests::a_pointer_field_that_does_not_fit_the_argument_is_refused ... ok
+test chardev_unsafe::tests::a_legacy_request_number_carrying_no_size_field_is_still_accepted ... ok
+test chardev_unsafe::tests::a_request_whose_size_matches_its_buffer_passes_the_size_check ... ok
+test chardev_unsafe::tests::an_empty_argument_is_refused ... ok
+test chardev_unsafe::tests::an_ioctl_request_that_outsizes_its_buffer_is_refused ... ok
+test chardev_unsafe::tests::an_unbounded_device_directory_really_can_name_its_parent ... ok
+test chardev_unsafe::tests::an_ioctl_under_a_leaf_lock_panics ... ok
+test chardev_unsafe::tests::the_address_is_scrubbed_even_when_the_ioctl_fails ... ok
+test chardev_unsafe::tests::an_unsupported_request_reports_enotty_exactly ... ok
+test chardev_unsafe::tests::two_patches_writing_the_same_bytes_are_refused_not_silently_ordered ... ok
+test chardev_unsafe::tests::the_containment_probe_answers_both_ways ... ok
+test chardev_unsafe::tests::the_patch_writes_a_real_address_before_the_syscall ... ok
+test drm::tests::a_pci_address_is_exactly_the_sysfs_spelling ... ok
+test drm::tests::dev_numbers_split_a_dev_t_like_glibc ... ok
+UDMABUF-GATE: RAN an_unfenced_dma_buf_is_idle_and_a_memfd_is_refused
+test drm::tests::only_the_listed_ioctls_go_out_and_the_import_size_is_checked ... FAILED
+test drm_unsafe::tests::an_unfenced_dma_buf_is_idle_and_a_memfd_is_refused ... ok
+test drm::tests::the_opened_node_must_be_the_device_sysfs_names ... FAILED
+test drm_unsafe::tests::the_uapi_numbers_encode_their_structs ... ok
+test epoll_unsafe::tests::a_hung_up_channel_is_readable_forever_and_yields_nothing_to_read ... ok
+test epoll_unsafe::tests::readiness_is_level_triggered_and_self_clears_only_on_the_drain ... ok
+test epoll_unsafe::tests::the_reported_token_is_the_callers_and_never_the_descriptor ... ok
+test epoll_unsafe::tests::unwatch_removes_the_source_and_a_timeout_is_an_empty_batch ... ok
+test geometry::tests::a_core_geometry_that_is_fine_at_4k_is_refused_at_64k ... ok
+test geometry::tests::align_up_refuses_to_wrap ... ok
+test geometry::tests::alignment_laws_hold_at_every_host_page_size ... ok
+test geometry::tests::require_aligned_names_what_was_misaligned ... ok
+test geometry::tests::pages_spanned_is_a_function_of_the_host_page_size ... ok
+test geometry::tests::the_validation_names_which_of_the_three_quantities_was_wrong ... ok
+test geometry::tests::round_out_widens_a_trap_request_to_whole_host_pages ... ok
+test geometry::tests::the_validation_refuses_an_empty_window_and_a_zero_arena ... ok
+test host_fd_unsafe::tests::a_negative_syscall_return_is_refused_by_exact_errno_and_adopts_nothing ... ok
+test host_fd_unsafe::tests::a_duplicate_of_a_shared_backing_maps_the_same_bytes ... ok
+test host_fd_unsafe::tests::a_notify_signal_is_counted_and_drained_exactly_once ... ok
+test drm::tests::the_render_node_is_found_under_the_pci_function ... ok
+UDMABUF-GATE: RAN a_udmabuf_over_shared_ram_is_a_dma_buf_of_the_same_pages
+test host_fd_unsafe::tests::a_shared_backing_is_sealed_against_shrinking ... ok
+test host_fd_unsafe::tests::descriptor_zero_and_every_other_non_negative_return_is_adopted_unchanged ... ok
+test host_fd_unsafe::tests::a_zero_length_shared_backing_is_refused_by_that_exact_variant ... ok
+test host_fd_unsafe::tests::a_udmabuf_over_shared_ram_is_a_dma_buf_of_the_same_pages ... ok
+UDMABUF-GATE: RAN udmabuf_refuses_an_unsealed_memfd_and_a_misaligned_size
+test host_fd_unsafe::tests::the_named_in_lock_syscall_permits_only_the_ranks_it_declares ... ok
+test host_fd_unsafe::tests::udmabuf_refuses_an_unsealed_memfd_and_a_misaligned_size ... ok
+test host_fd_unsafe::tests::the_brokers_descriptor_proof_tells_shmem_dma_buf_and_neither ... FAILED
+test ioctl::tests::a_payload_too_large_for_the_size_field_is_refused_not_truncated ... ok
+test ioctl::tests::the_direction_bits_are_distinct_and_in_the_top_two_bits ... ok
+test ioctl::tests::truncation_would_have_aliased_a_different_legitimate_request ... ok
+KVM-GATE: RAN a_misaligned_memslot_is_the_kernels_einval_not_our_opiniontest ioctltrace::tests::unset_means_off_and_costs_nothing ... 
+ok
+KVM-GATE: RAN a_real_vm_reports_a_real_memslot_ceiling
+test kvm_unsafe::tests::a_read_only_install_carries_the_kernels_read_only_bit_and_a_writable_one_carries_none ... ok
+test ioctl::tests::nvidia_escapes_encode_to_the_numbers_the_driver_registers ... ok
+KVM-GATE: RAN a_slot_index_past_the_ceiling_is_a_real_kernel_refusal
+KVM-GATE: RAN a_window_installed_as_a_memslot_can_be_read_and_removed
+test kvm_unsafe::tests::a_real_vm_reports_a_real_memslot_ceiling ... ok
+KVM-GATE: RAN overlapping_memslots_are_refused_by_the_kernel
+test kvm_unsafe::tests::a_slot_index_past_the_ceiling_is_a_real_kernel_refusal ... ok
+test kvm_unsafe::tests::a_misaligned_memslot_is_the_kernels_einval_not_our_opinion ... ok
+KVM-GATE: RAN test kvm_unsafe::tests::a_window_installed_as_a_memslot_can_be_read_and_removed ... the_confirmation_accepts_a_real_machineok
+
+test kvm_unsafe::tests::the_ioeventfd_uapi_size_and_flags_are_the_ones_the_kernel_declares ... ok
+test kvm_unsafe::tests::the_confirmation_refuses_a_descriptor_that_is_not_a_machine ... ok
+test kvm_unsafe::tests::the_memslot_uapi_size_is_the_one_the_ioctl_encoding_declares ... ok
+test mapping_unsafe::tests::a_device_backing_cannot_be_placed_inside_a_guest_window ... ok
+test mapping_unsafe::tests::a_mapped_region_round_trips_through_copies_only ... ok
+test mapping_unsafe::tests::a_mapping_length_must_be_whole_host_pages_and_non_zero ... ok
+test mapping_unsafe::tests::a_misaligned_file_offset_is_refused_before_the_syscall ... ok
+test mapping_unsafe::tests::a_placement_id_is_scoped_to_the_reservation_that_minted_it ... ok
+test mapping_unsafe::tests::a_placement_outside_the_reservation_is_refused ... ok
+test mapping_unsafe::tests::a_read_past_the_end_is_out_of_range_by_that_exact_variant ... ok
+test mapping_unsafe::tests::a_refused_cache_policy_consumes_no_placement ... ok
+test mapping_unsafe::tests::a_region_reports_the_cache_policy_it_was_mapped_under ... ok
+test mapping_unsafe::tests::a_reservation_places_disjoint_mappings_by_offset ... ok
+test mapping_unsafe::tests::a_stitched_view_is_the_file_pages_in_the_order_given ... ok
+test mapping_unsafe::tests::a_view_composes_and_re_checks_at_every_step ... ok
+test mapping_unsafe::tests::a_view_of_a_read_only_region_refuses_every_write_before_any_bounds_check ... ok
+test mapping_unsafe::tests::an_overlapping_placement_is_refused_by_that_exact_variant ... ok
+test mapping_unsafe::tests::an_unaligned_or_out_of_range_volatile_access_is_refused ... ok
+test mapping_unsafe::tests::dropping_a_host_mapping_under_a_held_lock_violates_r1 ... ok
+test mapping_unsafe::tests::an_unattainable_cache_policy_is_refused_at_every_mapping_door ... ok
+test mapping_unsafe::tests::mapping_under_a_held_lock_violates_r1 ... ok
+test mapping_unsafe::tests::every_page_backed_backing_attains_write_back_and_only_write_back ... ok
+test mapping_unsafe::tests::two_mappings_of_one_shared_backing_see_each_others_writes ... ok
+test mapping_unsafe::tests::volatile_words_load_and_store_at_both_widths ... ok
+test mapping_unsafe::tests::writing_a_read_only_region_is_refused_before_the_store ... ok
+test kvm_unsafe::tests::overlapping_memslots_are_refused_by_the_kernel ... ok
+test memtype::tests::a_malformed_line_is_loud_rather_than_absent ... ok
+test memtype::tests::a_range_that_is_only_half_system_ram_is_not_system_ram ... ok
+test memtype::tests::an_unknown_effective_type_is_not_a_pass ... ok
+test memtype::tests::an_unstable_reference_settles_nothing_however_extreme_the_subject ... ok
+test memtype::tests::redacted_iomem_does_not_certify_a_page_as_ram ... ok
+test kvm_unsafe::tests::the_confirmation_accepts_a_real_machine ... ok
+test memtype::tests::the_denominator_is_the_slower_pass_so_the_uncached_claim_is_the_conservative_one ... ok
+test memtype::tests::the_bandwidth_witness_is_a_ratio_and_all_three_verdicts_are_reachable ... ok
+test page_size::tests::a_negative_sysconf_report_is_preserved_verbatim_in_the_error ... ok
+test memtype::tests::the_kernels_two_uncached_spellings_stay_distinct_and_both_coarsen_to_uncached ... ok
+test page_size::tests::absurd_page_sizes_are_refused_by_that_exact_variant ... ok
+test page_size::tests::query_reports_a_real_power_of_two_and_caches_it ... ok
+test scratch::tests::a_cover_is_refused_by_argument_before_it_maps_anything ... ok
+test page_size::tests::the_three_test_page_sizes_are_the_arm64_granules ... ok
+test scratch::tests::a_pramin_sized_window_is_its_own_tile_and_every_sink_is_one_mmap ... ok
+test memtype::tests::a_pass_grows_until_it_covers_the_scheduler_averaging_window ... ok
+test scratch::tests::an_unadvised_sink_beside_qemus_advice_never_merges_back ... ok
+test scratch::tests::scratch_aliases_every_tile_length_and_nowhere_else ... ok
+test scratch::tests::a_tiled_scratch_holds_a_guest_that_touches_every_page_to_one_tile ... ok
+test scratch::tests::the_tile_length_follows_the_table ... ok
+test mapping_unsafe::tests::requesting_huge_pages_preserves_every_byte_it_faults_in ... ok
+test signal_unsafe::tests::a_blocked_read_returns_interrupted_and_is_not_restarted ... ok
+test signal_unsafe::tests::installing_the_handler_twice_is_harmless ... ok
+test signal_unsafe::tests::interrupting_a_thread_that_is_not_ours_is_false_not_an_error ... ok
+test signal_unsafe::tests::thread_ids_are_distinct_per_thread_and_stable_within_one ... ok
+test unixsock_unsafe::tests::a_connect_with_no_listener_fails_at_once_with_its_errno ... ok
+test unixsock_unsafe::tests::a_descriptor_sent_to_the_bounded_reader_is_dropped_and_reported ... ok
+test unixsock_unsafe::tests::a_full_backlog_is_eagain_and_never_in_progress ... ok
+test unixsock_unsafe::tests::a_full_socket_refuses_with_eagain_instead_of_blocking ... ok
+test unixsock_unsafe::tests::an_scm_rights_record_round_trips_on_a_socketpair ... ok
+test unixsock_unsafe::tests::peer_credentials_name_this_process ... ok
+test unixsock_unsafe::tests::relative_abstract_empty_and_overlong_paths_are_refused_by_name ... ok
+test unixsock_unsafe::tests::the_effective_uid_is_what_proc_and_so_peercred_say ... ok
+KVM-GATE: RAN a_completed_mmio_load_is_the_value_the_guest_then_stores
+test vcpu_unsafe::tests::a_completed_mmio_load_is_the_value_the_guest_then_stores ... ok
+KVM-GATE: RAN a_guest_executes_out_of_a_file_backed_placement
+test vcpu_unsafe::tests::a_guest_executes_out_of_a_file_backed_placement ... ok
+KVM-GATE: RAN a_guest_reads_the_memslot_we_installed_and_exits_when_it_is_gone
+test scratch::tests::the_old_whole_window_scratch_allocates_the_whole_window_on_reads_alone ... ok
+KVM-GATE: RAN a_guest_store_into_a_read_only_memslot_faults_out_and_never_reaches_the_backing
+test vcpu_unsafe::tests::a_guest_reads_the_memslot_we_installed_and_exits_when_it_is_gone ... ok
+KVM-GATE: RAN an_out_of_range_mmio_completion_width_is_refused_by_that_exact_variant
+test vcpu_unsafe::tests::an_out_of_range_mmio_completion_width_is_refused_by_that_exact_variant ... ok
+KVM-GATE: RAN datamatch_ioeventfd_on_a_read_only_slot_signals_its_token_and_everything_else_exits
+test vcpu_unsafe::tests::datamatch_ioeventfd_on_a_read_only_slot_signals_its_token_and_everything_else_exits ... ok
+test vcpu_unsafe::tests::the_run_head_carries_every_field_the_layout_needs ... ok
+test vcpu_unsafe::tests::the_uapi_struct_sizes_are_the_ones_the_ioctl_encodings_declare ... ok
+test window_unsafe::tests::a_device_view_is_re_pointed_in_place_and_the_old_backing_goes_unreachable ... ok
+test window_unsafe::tests::a_dword_that_straddles_the_end_is_out_of_range ... ok
+test window_unsafe::tests::a_misaligned_or_empty_placement_is_refused_by_exact_variant ... ok
+test window_unsafe::tests::a_placement_that_leaves_the_window_is_refused_by_exact_variant ... ok
+test window_unsafe::tests::a_short_re_point_leaves_the_windows_tail_showing_the_backing_it_replaced ... ok
+KVM-GATE: RAN a_sub_range_memslot_address_advances_by_exactly_its_offset
+test window_unsafe::tests::a_sub_range_memslot_address_advances_by_exactly_its_offset ... ok
+test window_unsafe::tests::a_window_is_readable_everywhere_before_anything_is_placed_in_it ... ok
+test window_unsafe::tests::an_advice_changes_no_byte_and_is_refused_by_argument ... ok
+test window_unsafe::tests::an_aligned_dword_lands_exactly_where_it_was_asked_and_nowhere_else ... ok
+test window_unsafe::tests::an_impossible_window_is_a_real_kernel_refusal_not_a_panic ... ok
+test window_unsafe::tests::an_unaligned_register_store_is_refused_by_name ... ok
+test window_unsafe::tests::restoring_a_placement_yields_zeroes_and_never_a_hole ... ok
+test window_unsafe::tests::two_threads_may_copy_through_one_window_concurrently ... ok
+test vcpu_unsafe::tests::a_guest_store_into_a_read_only_memslot_faults_out_and_never_reaches_the_backing ... ok
+test scratch::tests::tile_pieces_cover_the_range_exactly_and_never_cross_the_tile_end ... ok
+test scratch::tests::a_sink_restores_the_canonical_tiling_after_qemu_has_advised_the_window ... ok
+
+failures:
+
+---- drm::tests::only_the_listed_ioctls_go_out_and_the_import_size_is_checked stdout ----
+
+thread 'drm::tests::only_the_listed_ioctls_go_out_and_the_import_size_is_checked' (699876) panicked at crates/kf-linux-raw/src/drm.rs:497:10:
+called `Result::unwrap()` on an `Err` value: Refused("/tmp/kf-drm-ioctl-699832/renderD128 is not the GPU's render node: sysfs states 1:3, the file is not a character device, 0:0")
+
+---- drm::tests::the_opened_node_must_be_the_device_sysfs_names stdout ----
+
+thread 'drm::tests::the_opened_node_must_be_the_device_sysfs_names' (699877) panicked at crates/kf-linux-raw/src/drm.rs:432:10:
+the file is char 1:3, as stated: Refused("/tmp/kf-drm-dri-699832/renderD128 is not the GPU's render node: sysfs states 1:3, the file is not a character device, 0:0")
+
+---- host_fd_unsafe::tests::the_brokers_descriptor_proof_tells_shmem_dma_buf_and_neither stdout ----
+
+thread 'host_fd_unsafe::tests::the_brokers_descriptor_proof_tells_shmem_dma_buf_and_neither' (699900) panicked at crates/kf-linux-raw/src/host_fd_unsafe.rs:828:9:
+assertion `left == right` failed: a device node
+  left: Ok(Shmem { seals: 1 })
+ right: Ok(Neither)
+
+
+failures:
+    drm::tests::only_the_listed_ioctls_go_out_and_the_import_size_is_checked
+    drm::tests::the_opened_node_must_be_the_device_sysfs_names
+    host_fd_unsafe::tests::the_brokers_descriptor_proof_tells_shmem_dma_buf_and_neither
+
+test result: FAILED. 156 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+
+error: test failed, to rerun pass `-p kf-linux-raw --lib`

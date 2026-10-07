@@ -1,0 +1,4 @@
+=== blackscholes side=host start=2026-09-30T18:48:56+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/blackscholes
+METRIC blackscholes_Mopts 25744.2
+CHECK ok
+=== end rc=0 secs=2 2026-09-30T18:48:58+00:00

@@ -1,0 +1,36 @@
+# ★★★ Workspace clippy configuration.
+#
+# ONE key, and it is a policy statement rather than a suppression.
+#
+# ## `large-error-threshold` — 176 bytes, up from clippy's default 128
+#
+# `clippy::result_large_err` warns when a `Result`'s `Err` variant is big, on the theory that
+# the **Ok** path pays for it. That theory does not hold in this workspace, and the reason is
+# structural rather than convenient:
+#
+# - The two error types it fires on — `kayfabe_isolate::VerbFailure` and
+#   `kayfabe_fwd::Refusal` — both carry a `kayfabe_isolate::Orphans`, which is
+#   `#[must_use]` with the message *"an `Orphans` that is neither released nor recorded is a
+#   silent host-object leak — that is the whole defect this type exists to make impossible."*
+#   **The size IS the payload**: a failure's job here is to hand the caller every host object
+#   it could not dispose of, by value, so the caller must discharge it.
+# - Every function that returns one is a **host RM ioctl round trip** or a plan/commit around
+#   one. A 128-vs-176-byte return is not measurable beside a syscall into `nvidia.ko`.
+# - Clippy's suggested fix is `Box<VerbFailure>`. That adds an allocation on **every failure**
+#   and an indirection to the exact value the teardown discipline needs held by value — worse
+#   on the axis that actually matters here.
+#
+# ⚠ **w310** is where this became necessary: `Orphans` gained a third disposal kind
+# (`guest_ram`, the isolate's own `mmap` window onto guest pages — see
+# `docs/design/guest_ram_pin_release.md`), which took `VerbFailure` from ~104 to 128 bytes and
+# `Refusal` with it. The alternatives measured at that commit were **20 targeted
+# `#[allow]` attributes** (1 in `kayfabe-isolate`, 19 in `kayfabe-fwd`) or boxing `Orphans`
+# across ~48 construction sites. Both are more code and less legible than one stated number.
+#
+# ★ **A LITERAL, NOT A DERIVED VALUE**, for the reason `scripts/ci_gates.sh`'s floor is one:
+# a threshold computed from the thing it checks moves silently when that thing moves. This is
+# a fact someone must consciously change, and a diff that changes it is a diff a reviewer can
+# see. ⊘ It is deliberately NOT far above the current size: 176 leaves room for one more
+# field, not for unbounded growth, so the next `Orphans` kind arrives as a decision rather
+# than as a slide.
+large-error-threshold = 176

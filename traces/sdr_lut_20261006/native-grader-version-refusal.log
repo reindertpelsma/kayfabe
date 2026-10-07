@@ -1,0 +1,2 @@
+info  RMLADDER ARGV     = [--timer]
+FAIL  RM bring-up failed at R2 host driver version: host driver is 595.91.07; kayfabe-isolate-host's encoders emit 580.65.06-era struct layouts (the interval [580.65.06, 581.0.00)) (no layout delta for 595 is transcribed anywhere in this tree, so the offsets we would send are unchecked rather than wrong-and-known); refusing rather than encoding wrong offsets.

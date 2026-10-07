@@ -1,0 +1,28 @@
+qemu-system-x86_64: -device nvkvm-gpu,bar1-size=268435456,bar2-size=33554432,id=kf0: info: nvkvm: presenting 10de:2504 class 030000 rev a1 subsys 1462:397d (8 interrupt vectors)
+qemu-system-x86_64: info: nvkvm: memory plane realized (bar0=0xfd000000 bar1=0xe0000000 bar2=0xf0000000, register plane has guest memory=yes)
+qemu-system-x86_64: warning: nvkvm: the emulated GSP asked for its status-queue interrupt and this device does not deliver vectors yet. The capability exists so the guest's driver can bind; delivery is a later stage. A guest that waits on this event will not be woken by us.
+qemu-system-x86_64: info: nvkvm: registers: 3616 reads / 58443 writes (chip-constant 50, rom 2316, gsp 341r/395w, UNCLAIMED 750r/804w), faults 0, guest-RAM refusals 0, interrupt requests dropped 89
+qemu-system-x86_64: info: nvkvm: framebuffer: 108 reads / 57222 writes served through the BAR0 moving window (27 window register reads / 22 writes), fb refusals 0, translated-window drops 0r/0w, resident 135168 bytes
+qemu-system-x86_64: info: nvkvm: BAR2 (translated): 97 reads / 23244 writes resolved through the GMMU, 0 REFUSED by name; roots published 2 (0 bodies refused), BAR2 root entry 0x0
+qemu-system-x86_64: info: nvkvm: commands: 90 decoded, 24 UNSERVICED (refused by name; the guest logs these quietly, which is why they are here), 20 distinct
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a87
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a4b
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20802a08
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800afe
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800aff
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a70
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a80
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20802a0f
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080017e
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a2a
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a30
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a2c
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a2e
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a34
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800b03
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800b05
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a3f
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x90f10106
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080013f
+qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a38
+qemu-system-x86_64: info: nvkvm: bridge refusals: 0 total, 0 distinct (these ANSWER the command and so never reach the unserviced list)

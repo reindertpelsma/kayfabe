@@ -1,0 +1,8 @@
+date=2026-08-10T14:21:59Z
+uname=Linux nvkvm-guest 6.8.0-136-generic #136-Ubuntu SMP PREEMPT_DYNAMIC Wed Jul  1 21:53:05 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+driver=NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+devnodes=/dev/nvidia-uvm /dev/nvidia-uvm-tools /dev/nvidia0 /dev/nvidiactl  /dev/nvidia-caps: nvidia-cap1 nvidia-cap2 
+libcuda=	libcuda.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libcuda.so.1
+stage=ctx runs=2
+shim_md5=480e45c41de971910918438fb582f167
+prog_md5=7af4c3ec2b702cf04ae00d68a6596c4d

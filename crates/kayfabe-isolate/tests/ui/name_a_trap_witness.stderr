@@ -1,0 +1,11 @@
+error[E0451]: fields `what`, `inline` and `_not_send` of struct `OffTrap` are private
+  --> tests/ui/name_a_trap_witness.rs:9:9
+   |
+ 8 |     let _named = OffTrap {
+   |                  ------- in this type
+ 9 |         what: "I am definitely not on a vCPU",
+   |         ^^^^ private field
+10 |         inline: false,
+   |         ^^^^^^ private field
+11 |         _not_send: std::marker::PhantomData,
+   |         ^^^^^^^^^ private field

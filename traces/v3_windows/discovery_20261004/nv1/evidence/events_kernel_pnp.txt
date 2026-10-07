@@ -1,0 +1,1941 @@
+
+
+TimeCreated : 10/4/2026 1:25:48 AM
+Id          : 410
+Message     : Device DISPLAY\Default_Monitor\1&8713bca&0&UID0 was started.
+              
+              Driver Name: monitor.inf
+              Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318}
+              Service: monitor
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 1:25:48 AM
+Id          : 400
+Message     : Device DISPLAY\Default_Monitor\1&8713bca&0&UID0 was configured.
+              
+              Driver Name: monitor.inf
+              Driver Package ID: monitor.inf_amd64_cf1e3aee79246903
+              Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: NonPnPMonitor.Install
+              Driver Rank: 0xFF0000
+              Matching Device ID: MONITOR\Default_Monitor
+              Outranked Drivers: monitor.inf:*PNP09FF:00FF2000
+              Device Updated: false
+              Parent Device: ROOT\BasicDisplay\0000
+
+TimeCreated : 10/4/2026 1:04:41 AM
+Id          : 410
+Message     : Device PCI\VEN_1AF4&DEV_1000&SUBSYS_00011AF4&REV_00\3&11583659&0&08 was started.
+              
+              Driver Name: oem1.inf
+              Class GUID: {4d36e972-e325-11ce-bfc1-08002be10318}
+              Service: netkvm
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 1:04:25 AM
+Id          : 410
+Message     : Device DISPLAY\KFB0001\4&264ab731&0&UID0 was started.
+              
+              Driver Name: monitor.inf
+              Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318}
+              Service: monitor
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 1:04:22 AM
+Id          : 400
+Message     : Device DISPLAY\KFB0001\4&264ab731&0&UID0 was configured.
+              
+              Driver Name: monitor.inf
+              Driver Package ID: monitor.inf_amd64_cf1e3aee79246903
+              Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: PnPMonitor.Install
+              Driver Rank: 0xFF2000
+              Matching Device ID: *PNP09FF
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: PCI\VEN_10DE&DEV_2504&SUBSYS_36563842&REV_A1\3&11583659&0&28
+
+TimeCreated : 10/4/2026 1:03:46 AM
+Id          : 410
+Message     : Device PCI\VEN_10DE&DEV_2504&SUBSYS_36563842&REV_A1\3&11583659&0&28 was started.
+              
+              Driver Name: display.inf
+              Class GUID: {4d36e968-e325-11ce-bfc1-08002be10318}
+              Service: BasicDisplay
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 1:03:45 AM
+Id          : 400
+Message     : Device PCI\VEN_10DE&DEV_2504&SUBSYS_36563842&REV_A1\3&11583659&0&28 was configured.
+              
+              Driver Name: display.inf
+              Driver Package ID: display.inf_amd64_34a28de3c87d810f
+              Class GUID: {4d36e968-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1
+              Driver Provider: Microsoft
+              Driver Section: MSBDA
+              Driver Rank: 0xFB2006
+              Matching Device ID: PCI\CC_0300
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: ACPI\PNP0A08\0
+
+TimeCreated : 10/4/2026 1:03:45 AM
+Id          : 400
+Message     : Device PCI\VEN_1AF4&DEV_1000&SUBSYS_00011AF4&REV_00\3&11583659&0&08 was configured.
+              
+              Driver Name: oem1.inf
+              Driver Package ID: netkvm.inf_amd64_27809b5556f0001c
+              Class GUID: {4d36e972-e325-11ce-bfc1-08002be10318}
+              Driver Date: 07/22/2026
+              Driver Version: 100.103.104.30200
+              Driver Provider: Red Hat, Inc.
+              Driver Section: kvmnet6.ndi
+              Driver Rank: 0xFF0000
+              Matching Device ID: PCI\VEN_1AF4&DEV_1000&SUBSYS_00011AF4&REV_00
+              Outranked Drivers: oem1.inf:PCI\VEN_1AF4&DEV_1000:00FF3001
+              Device Updated: false
+              Parent Device: ACPI\PNP0A08\0
+
+TimeCreated : 10/4/2026 1:03:30 AM
+Id          : 410
+Message     : Device {6FDE7547-1B65-48ae-B628-80BE62016026}\VIOSerialPort\4&1603b63b&0&01 was started.
+              
+              Driver Name: null
+              Class GUID: {00000000-0000-0000-0000-000000000000}
+              Service: 
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 1:03:30 AM
+Id          : 410
+Message     : Device PCI\VEN_1AF4&DEV_1005&SUBSYS_00041AF4&REV_00\3&11583659&0&18 was started.
+              
+              Driver Name: oem0.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: VirtRng
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 1:03:28 AM
+Id          : 400
+Message     : Device {6FDE7547-1B65-48ae-B628-80BE62016026}\VIOSerialPort\4&1603b63b&0&01 was configured.
+              
+              Driver Name: null
+              Driver Package ID: null
+              Class GUID: {00000000-0000-0000-0000-000000000000}
+              Driver Date: 
+              Driver Version: 
+              Driver Provider: 
+              Driver Section: 
+              Driver Rank: 0x0
+              Matching Device ID: 
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: PCI\VEN_1AF4&DEV_1003&SUBSYS_00031AF4&REV_00\3&11583659&0&10
+
+TimeCreated : 10/4/2026 1:03:28 AM
+Id          : 410
+Message     : Device PCI\VEN_1AF4&DEV_1003&SUBSYS_00031AF4&REV_00\3&11583659&0&10 was started.
+              
+              Driver Name: oem5.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: VirtioSerial
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 1:02:55 AM
+Id          : 410
+Message     : Device STORAGE\Volume\{51d626e7-bf8f-11f1-94ed-806e6f6e6963}#00000013D7500000 was started.
+              
+              Driver Name: volume.inf
+              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Service: volume
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 1:02:55 AM
+Id          : 410
+Message     : Device STORAGE\Volume\{51d626e7-bf8f-11f1-94ed-806e6f6e6963}#0000000013D00000 was started.
+              
+              Driver Name: volume.inf
+              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Service: volume
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 1:02:55 AM
+Id          : 410
+Message     : Device STORAGE\Volume\{51d626e7-bf8f-11f1-94ed-806e6f6e6963}#0000000012D00000 was started.
+              
+              Driver Name: volume.inf
+              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Service: volume
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 1:02:54 AM
+Id          : 410
+Message     : Device STORAGE\Volume\{51d626e7-bf8f-11f1-94ed-806e6f6e6963}#0000000000100000 was started.
+              
+              Driver Name: volume.inf
+              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Service: volume
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 1:02:54 AM
+Id          : 400
+Message     : Device STORAGE\Volume\{51d626e7-bf8f-11f1-94ed-806e6f6e6963}#00000013D7500000 was configured.
+              
+              Driver Name: volume.inf
+              Driver Package ID: volume.inf_amd64_d1ed34e6626fb1bb
+              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1
+              Driver Provider: Microsoft
+              Driver Section: volume_install.NT
+              Driver Rank: 0xFF0000
+              Matching Device ID: STORAGE\Volume
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: ROOT\volmgr\0000
+
+TimeCreated : 10/4/2026 1:02:54 AM
+Id          : 400
+Message     : Device STORAGE\Volume\{51d626e7-bf8f-11f1-94ed-806e6f6e6963}#0000000013D00000 was configured.
+              
+              Driver Name: volume.inf
+              Driver Package ID: volume.inf_amd64_d1ed34e6626fb1bb
+              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1
+              Driver Provider: Microsoft
+              Driver Section: volume_install.NT
+              Driver Rank: 0xFF0000
+              Matching Device ID: STORAGE\Volume
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: ROOT\volmgr\0000
+
+TimeCreated : 10/4/2026 1:02:54 AM
+Id          : 400
+Message     : Device STORAGE\Volume\{51d626e7-bf8f-11f1-94ed-806e6f6e6963}#0000000012D00000 was configured.
+              
+              Driver Name: volume.inf
+              Driver Package ID: volume.inf_amd64_d1ed34e6626fb1bb
+              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1
+              Driver Provider: Microsoft
+              Driver Section: volume_install.NT
+              Driver Rank: 0xFF0000
+              Matching Device ID: STORAGE\Volume
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: ROOT\volmgr\0000
+
+TimeCreated : 10/4/2026 1:02:54 AM
+Id          : 400
+Message     : Device STORAGE\Volume\{51d626e7-bf8f-11f1-94ed-806e6f6e6963}#0000000000100000 was configured.
+              
+              Driver Name: volume.inf
+              Driver Package ID: volume.inf_amd64_d1ed34e6626fb1bb
+              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1
+              Driver Provider: Microsoft
+              Driver Section: volume_install.NT
+              Driver Rank: 0xFF0000
+              Matching Device ID: STORAGE\Volume
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: ROOT\volmgr\0000
+
+TimeCreated : 10/4/2026 1:02:54 AM
+Id          : 410
+Message     : Device SCSI\Disk&Ven_Red_Hat&Prod_VirtIO\4&33df6241&0&000000 was started.
+              
+              Driver Name: disk.inf
+              Class GUID: {4d36e967-e325-11ce-bfc1-08002be10318}
+              Service: disk
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 1:02:54 AM
+Id          : 400
+Message     : Device SCSI\Disk&Ven_Red_Hat&Prod_VirtIO\4&33df6241&0&000000 was configured.
+              
+              Driver Name: disk.inf
+              Driver Package ID: disk.inf_amd64_5fb855b6817525a2
+              Class GUID: {4d36e967-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: disk_install.NT
+              Driver Rank: 0xFF0005
+              Matching Device ID: GenDisk
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: PCI\VEN_1AF4&DEV_1001&SUBSYS_00021AF4&REV_00\3&11583659&0&20
+
+TimeCreated : 10/4/2026 1:02:54 AM
+Id          : 410
+Message     : Device PCI\VEN_1AF4&DEV_1001&SUBSYS_00021AF4&REV_00\3&11583659&0&20 was started.
+              
+              Driver Name: oem6.inf
+              Class GUID: {4d36e97b-e325-11ce-bfc1-08002be10318}
+              Service: viostor
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 1:02:52 AM
+Id          : 430
+Message     : Device PCI\VEN_10DE&DEV_2504&SUBSYS_36563842&REV_A1\3&11583659&0&28 requires further installation.
+
+TimeCreated : 10/4/2026 1:02:52 AM
+Id          : 400
+Message     : Device PCI\VEN_1AF4&DEV_1001&SUBSYS_00021AF4&REV_00\3&11583659&0&20 was configured.
+              
+              Driver Name: oem6.inf
+              Driver Package ID: viostor.inf_amd64_2fc8a27a8c1b757c
+              Class GUID: {4d36e97b-e325-11ce-bfc1-08002be10318}
+              Driver Date: 07/22/2026
+              Driver Version: 100.103.104.30200
+              Driver Provider: Red Hat, Inc.
+              Driver Section: scsi_inst
+              Driver Rank: 0xFF0000
+              Matching Device ID: PCI\VEN_1AF4&DEV_1001&SUBSYS_00021AF4&REV_00
+              Outranked Drivers: oem6.inf:PCI\VEN_1AF4&DEV_1001:00FF3001
+              Device Updated: false
+              Parent Device: ACPI\PNP0A08\0
+
+TimeCreated : 10/4/2026 1:02:52 AM
+Id          : 400
+Message     : Device PCI\VEN_1AF4&DEV_1005&SUBSYS_00041AF4&REV_00\3&11583659&0&18 was configured.
+              
+              Driver Name: oem0.inf
+              Driver Package ID: viorng.inf_amd64_7d9d44898d90e8bd
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 07/22/2026
+              Driver Version: 100.103.104.30200
+              Driver Provider: Red Hat, Inc.
+              Driver Section: VirtRng_Device.NT
+              Driver Rank: 0xFF0000
+              Matching Device ID: PCI\VEN_1AF4&DEV_1005&SUBSYS_00041AF4&REV_00
+              Outranked Drivers: oem0.inf:PCI\VEN_1AF4&DEV_1005:00FF3001
+              Device Updated: false
+              Parent Device: ACPI\PNP0A08\0
+
+TimeCreated : 10/4/2026 1:02:52 AM
+Id          : 400
+Message     : Device PCI\VEN_1AF4&DEV_1003&SUBSYS_00031AF4&REV_00\3&11583659&0&10 was configured.
+              
+              Driver Name: oem5.inf
+              Driver Package ID: vioser.inf_amd64_08573a4e4a751b1e
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 07/22/2026
+              Driver Version: 100.103.104.30200
+              Driver Provider: Red Hat, Inc.
+              Driver Section: VirtioSerial_Device.NT
+              Driver Rank: 0xFF0000
+              Matching Device ID: PCI\VEN_1AF4&DEV_1003&SUBSYS_00031AF4&REV_00
+              Outranked Drivers: oem5.inf:PCI\VEN_1AF4&DEV_1003:00FF3001
+              Device Updated: false
+              Parent Device: ACPI\PNP0A08\0
+
+TimeCreated : 10/4/2026 7:08:15 AM
+Id          : 410
+Message     : Device SWD\PRINTENUM\PrintQueues was started.
+              
+              Driver Name: printqueue.inf
+              Class GUID: {1ed2bbf9-11f0-4084-b21f-ad83a8e6dcdc}
+              Service: 
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:08:15 AM
+Id          : 400
+Message     : Device SWD\PRINTENUM\PrintQueues was configured.
+              
+              Driver Name: printqueue.inf
+              Driver Package ID: printqueue.inf_amd64_044b5f13f940e7c8
+              Class GUID: {1ed2bbf9-11f0-4084-b21f-ad83a8e6dcdc}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1
+              Driver Provider: Microsoft
+              Driver Section: NO_DRV_LOCAL
+              Driver Rank: 0x0
+              Matching Device ID: PRINTENUM\LocalPrintQueue
+              Outranked Drivers: c_swdevice.inf:SWD\GenericRaw:00FF3000
+              Device Updated: false
+              Parent Device: HTREE\ROOT\0
+
+TimeCreated : 10/4/2026 7:08:13 AM
+Id          : 410
+Message     : Device SWD\RADIO\{3DB5895D-CC28-44B3-AD3D-6F01A782B8D2} was started.
+              
+              Driver Name: c_swdevice.inf
+              Class GUID: {62f9c741-b25a-46ce-b54c-9bccce08b6f2}
+              Service: 
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:08:13 AM
+Id          : 400
+Message     : Device SWD\RADIO\{3DB5895D-CC28-44B3-AD3D-6F01A782B8D2} was configured.
+              
+              Driver Name: c_swdevice.inf
+              Driver Package ID: c_swdevice.inf_amd64_845d51425d14f98b
+              Class GUID: {62f9c741-b25a-46ce-b54c-9bccce08b6f2}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1
+              Driver Provider: Microsoft
+              Driver Section: SoftwareDevice
+              Driver Rank: 0xFF3000
+              Matching Device ID: SWD\GenericRaw
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: HTREE\ROOT\0
+
+TimeCreated : 10/4/2026 7:06:36 AM
+Id          : 410
+Message     : Device LPTENUM\MicrosoftRawPort\5&1d62032d&0&LPT1 was started.
+              
+              Driver Name: machine.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: 
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:06:36 AM
+Id          : 400
+Message     : Device LPTENUM\MicrosoftRawPort\5&1d62032d&0&LPT1 was configured.
+              
+              Driver Name: machine.inf
+              Driver Package ID: machine.inf_amd64_d807fc8146278f4c
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: NO_DRV
+              Driver Rank: 0xFF0000
+              Matching Device ID: LPTENUM\MicrosoftRawPort958A
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: ACPI\PNP0400\1
+
+TimeCreated : 10/4/2026 7:06:36 AM
+Id          : 410
+Message     : Device ROOT\KDNIC\0000 was started.
+              
+              Driver Name: kdnic.inf
+              Class GUID: {4d36e972-e325-11ce-bfc1-08002be10318}
+              Service: kdnic
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:06:36 AM
+Id          : 400
+Message     : Device PCI\VEN_8086&DEV_2930&SUBSYS_11001AF4&REV_02\3&11583659&0&FB was configured.
+              
+              Driver Name: machine.inf
+              Driver Package ID: machine.inf_amd64_d807fc8146278f4c
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: NO_DRV
+              Driver Rank: 0xFF2001
+              Matching Device ID: PCI\VEN_8086&DEV_2930
+              Outranked Drivers: oem4.inf:PCI\VEN_8086&DEV_2930&SUBSYS_11001AF4:80FF0001 oem4.inf:PCI\VEN_8086&CC_0C0500:80FF2002 oem4.inf:PCI\VEN_8086&CC_0C05:80FF2003
+              Device Updated: true
+              Parent Device: ACPI\PNP0A08\0
+
+TimeCreated : 10/4/2026 7:06:35 AM
+Id          : 400
+Message     : Device ROOT\KDNIC\0000 was configured.
+              
+              Driver Name: kdnic.inf
+              Driver Package ID: kdnic.inf_amd64_a9d04a55194853d2
+              Class GUID: {4d36e972-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: KdNic.ndi
+              Driver Rank: 0xFF0000
+              Matching Device ID: root\kdnic
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: HTREE\ROOT\0
+
+TimeCreated : 10/4/2026 7:06:35 AM
+Id          : 410
+Message     : Device PCI\VEN_1AF4&DEV_1000&SUBSYS_00011AF4&REV_00\3&11583659&0&10 was started.
+              
+              Driver Name: oem1.inf
+              Class GUID: {4d36e972-e325-11ce-bfc1-08002be10318}
+              Service: netkvm
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:06:34 AM
+Id          : 400
+Message     : Device PCI\VEN_1AF4&DEV_1000&SUBSYS_00011AF4&REV_00\3&11583659&0&10 was configured.
+              
+              Driver Name: oem1.inf
+              Driver Package ID: netkvm.inf_amd64_27809b5556f0001c
+              Class GUID: {4d36e972-e325-11ce-bfc1-08002be10318}
+              Driver Date: 07/22/2026
+              Driver Version: 100.103.104.30200
+              Driver Provider: Red Hat, Inc.
+              Driver Section: kvmnet6.ndi
+              Driver Rank: 0xFF0000
+              Matching Device ID: PCI\VEN_1AF4&DEV_1000&SUBSYS_00011AF4&REV_00
+              Outranked Drivers: oem1.inf:PCI\VEN_1AF4&DEV_1000:00FF3001
+              Device Updated: false
+              Parent Device: ACPI\PNP0A08\0
+
+TimeCreated : 10/4/2026 7:06:13 AM
+Id          : 410
+Message     : Device SWD\MMDEVAPI\MicrosoftGSWavetableSynth was started.
+              
+              Driver Name: c_swdevice.inf
+              Class GUID: {62f9c741-b25a-46ce-b54c-9bccce08b6f2}
+              Service: 
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:06:13 AM
+Id          : 400
+Message     : Device SWD\MMDEVAPI\MicrosoftGSWavetableSynth was configured.
+              
+              Driver Name: c_swdevice.inf
+              Driver Package ID: c_swdevice.inf_amd64_845d51425d14f98b
+              Class GUID: {62f9c741-b25a-46ce-b54c-9bccce08b6f2}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1
+              Driver Provider: Microsoft
+              Driver Section: SoftwareDevice
+              Driver Rank: 0xFF3000
+              Matching Device ID: SWD\GenericRaw
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: HTREE\ROOT\0
+
+TimeCreated : 10/4/2026 7:05:55 AM
+Id          : 410
+Message     : Device STORAGE\Volume\{30e79735-bfca-11f1-94e9-806e6f6e6963}#00000013D7500000 was started.
+              
+              Driver Name: volume.inf
+              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Service: volume
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:05:55 AM
+Id          : 400
+Message     : Device STORAGE\Volume\{30e79735-bfca-11f1-94e9-806e6f6e6963}#00000013D7500000 was configured.
+              
+              Driver Name: volume.inf
+              Driver Package ID: volume.inf_amd64_d1ed34e6626fb1bb
+              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1
+              Driver Provider: Microsoft
+              Driver Section: volume_install.NT
+              Driver Rank: 0xFF0000
+              Matching Device ID: STORAGE\Volume
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: ROOT\VOLMGR\0000
+
+TimeCreated : 10/4/2026 7:04:53 AM
+Id          : 410
+Message     : Device DISPLAY\Default_Monitor\4&27b1e55b&0&UID0 was started.
+              
+              Driver Name: monitor.inf
+              Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318}
+              Service: monitor
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:53 AM
+Id          : 400
+Message     : Device DISPLAY\Default_Monitor\4&27b1e55b&0&UID0 was configured.
+              
+              Driver Name: monitor.inf
+              Driver Package ID: monitor.inf_amd64_cf1e3aee79246903
+              Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: NonPnPMonitor.Install
+              Driver Rank: 0xFF0000
+              Matching Device ID: MONITOR\Default_Monitor
+              Outranked Drivers: monitor.inf:*PNP09FF:00FF2000
+              Device Updated: false
+              Parent Device: PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\3&11583659&0&08
+
+TimeCreated : 10/4/2026 7:04:38 AM
+Id          : 410
+Message     : Device PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\3&11583659&0&08 was started.
+              
+              Driver Name: display.inf
+              Class GUID: {4d36e968-e325-11ce-bfc1-08002be10318}
+              Service: BasicDisplay
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:37 AM
+Id          : 400
+Message     : Device PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\3&11583659&0&08 was configured.
+              
+              Driver Name: display.inf
+              Driver Package ID: display.inf_amd64_34a28de3c87d810f
+              Class GUID: {4d36e968-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1
+              Driver Provider: Microsoft
+              Driver Section: MSBDA
+              Driver Rank: 0xFB2006
+              Matching Device ID: PCI\CC_0300
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: ACPI\PNP0A08\0
+
+TimeCreated : 10/4/2026 7:04:32 AM
+Id          : 410
+Message     : Device {6FDE7547-1B65-48ae-B628-80BE62016026}\VIOSerialPort\4&1893fa96&0&01 was started.
+              
+              Driver Name: null
+              Class GUID: {00000000-0000-0000-0000-000000000000}
+              Service: 
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:32 AM
+Id          : 410
+Message     : Device ACPI\GenuineIntel_-_Intel64_Family_6_Model_79_-_Intel(R)_Xeon(R)_CPU_E5-2673_v4_@_2.30GHz\_7 was started.
+              
+              Driver Name: cpu.inf
+              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Service: intelppm
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:32 AM
+Id          : 410
+Message     : Device ACPI\GenuineIntel_-_Intel64_Family_6_Model_79_-_Intel(R)_Xeon(R)_CPU_E5-2673_v4_@_2.30GHz\_6 was started.
+              
+              Driver Name: cpu.inf
+              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Service: intelppm
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:32 AM
+Id          : 410
+Message     : Device ACPI\GenuineIntel_-_Intel64_Family_6_Model_79_-_Intel(R)_Xeon(R)_CPU_E5-2673_v4_@_2.30GHz\_5 was started.
+              
+              Driver Name: cpu.inf
+              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Service: intelppm
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:32 AM
+Id          : 410
+Message     : Device ACPI\GenuineIntel_-_Intel64_Family_6_Model_79_-_Intel(R)_Xeon(R)_CPU_E5-2673_v4_@_2.30GHz\_4 was started.
+              
+              Driver Name: cpu.inf
+              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Service: intelppm
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:32 AM
+Id          : 410
+Message     : Device ACPI\GenuineIntel_-_Intel64_Family_6_Model_79_-_Intel(R)_Xeon(R)_CPU_E5-2673_v4_@_2.30GHz\_3 was started.
+              
+              Driver Name: cpu.inf
+              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Service: intelppm
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:32 AM
+Id          : 410
+Message     : Device ACPI\GenuineIntel_-_Intel64_Family_6_Model_79_-_Intel(R)_Xeon(R)_CPU_E5-2673_v4_@_2.30GHz\_2 was started.
+              
+              Driver Name: cpu.inf
+              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Service: intelppm
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:32 AM
+Id          : 410
+Message     : Device ACPI\GenuineIntel_-_Intel64_Family_6_Model_79_-_Intel(R)_Xeon(R)_CPU_E5-2673_v4_@_2.30GHz\_1 was started.
+              
+              Driver Name: cpu.inf
+              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Service: intelppm
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:32 AM
+Id          : 410
+Message     : Device ACPI\GenuineIntel_-_Intel64_Family_6_Model_79_-_Intel(R)_Xeon(R)_CPU_E5-2673_v4_@_2.30GHz\_0 was started.
+              
+              Driver Name: cpu.inf
+              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Service: intelppm
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:32 AM
+Id          : 410
+Message     : Device ACPI\QEMU0002\3&11583659&0 was started.
+              
+              Driver Name: oem3.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: FwCfg
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:32 AM
+Id          : 410
+Message     : Device SCSI\CdRom&Ven_QEMU&Prod_QEMU_DVD-ROM\4&35424867&0&020000 was started.
+              
+              Driver Name: cdrom.inf
+              Class GUID: {4d36e965-e325-11ce-bfc1-08002be10318}
+              Service: cdrom
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:32 AM
+Id          : 410
+Message     : Device SCSI\CdRom&Ven_QEMU&Prod_QEMU_DVD-ROM\4&35424867&0&010000 was started.
+              
+              Driver Name: cdrom.inf
+              Class GUID: {4d36e965-e325-11ce-bfc1-08002be10318}
+              Service: cdrom
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:32 AM
+Id          : 410
+Message     : Device SCSI\CdRom&Ven_QEMU&Prod_QEMU_DVD-ROM\4&35424867&0&000000 was started.
+              
+              Driver Name: cdrom.inf
+              Class GUID: {4d36e965-e325-11ce-bfc1-08002be10318}
+              Service: cdrom
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:32 AM
+Id          : 410
+Message     : Device ACPI\PNP0F13\4&22f5829e&0 was started.
+              
+              Driver Name: msmouse.inf
+              Class GUID: {4d36e96f-e325-11ce-bfc1-08002be10318}
+              Service: i8042prt
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:32 AM
+Id          : 410
+Message     : Device ACPI\PNP0303\4&22f5829e&0 was started.
+              
+              Driver Name: keyboard.inf
+              Class GUID: {4d36e96b-e325-11ce-bfc1-08002be10318}
+              Service: i8042prt
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:32 AM
+Id          : 410
+Message     : Device ACPI\QEMU0001\4&22f5829e&0 was started.
+              
+              Driver Name: oem2.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: PVPanic
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:32 AM
+Id          : 410
+Message     : Device PCI\VEN_1AF4&DEV_1005&SUBSYS_00041AF4&REV_00\3&11583659&0&20 was started.
+              
+              Driver Name: oem0.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: VirtRng
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:32 AM
+Id          : 400
+Message     : Device {6FDE7547-1B65-48ae-B628-80BE62016026}\VIOSerialPort\4&1893fa96&0&01 was configured.
+              
+              Driver Name: null
+              Driver Package ID: null
+              Class GUID: {00000000-0000-0000-0000-000000000000}
+              Driver Date: 
+              Driver Version: 
+              Driver Provider: 
+              Driver Section: 
+              Driver Rank: 0x0
+              Matching Device ID: 
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: PCI\VEN_1AF4&DEV_1003&SUBSYS_00031AF4&REV_00\3&11583659&0&18
+
+TimeCreated : 10/4/2026 7:04:32 AM
+Id          : 410
+Message     : Device PCI\VEN_1AF4&DEV_1003&SUBSYS_00031AF4&REV_00\3&11583659&0&18 was started.
+              
+              Driver Name: oem5.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: VirtioSerial
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:31 AM
+Id          : 410
+Message     : Device ACPI\PNP0501\1 was started.
+              
+              Driver Name: msports.inf
+              Class GUID: {4d36e978-e325-11ce-bfc1-08002be10318}
+              Service: Serial
+              Lower Filters: 
+              Upper Filters: serenum
+
+TimeCreated : 10/4/2026 7:04:31 AM
+Id          : 411
+Message     : Device ACPI\PNP0400\1 had a problem starting.
+              
+              Driver Name: msports.inf
+              Class GUID: {4d36e978-e325-11ce-bfc1-08002be10318}
+              Service: Parport
+              Lower Filters: 
+              Upper Filters: 
+              Problem: 0x1F
+              Problem Status: 0xC0000001
+
+TimeCreated : 10/4/2026 7:04:31 AM
+Id          : 410
+Message     : Device ROOT\mssmbios\0000 was started.
+              
+              Driver Name: mssmbios.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: mssmbios
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:31 AM
+Id          : 400
+Message     : Device ROOT\mssmbios\0000 was configured.
+              
+              Driver Name: mssmbios.inf
+              Driver Package ID: mssmbios.inf_amd64_3b543e16c86a5331
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1
+              Driver Provider: Microsoft
+              Driver Section: MSSMBIOS_DRV
+              Driver Rank: 0xFF0000
+              Matching Device ID: ROOT\mssmbios
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: HTREE\ROOT\0
+
+TimeCreated : 10/4/2026 7:04:30 AM
+Id          : 410
+Message     : Device ROOT\BasicRender\0000 was started.
+              
+              Driver Name: basicrender.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: BasicRender
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:30 AM
+Id          : 400
+Message     : Device ROOT\BasicRender\0000 was configured.
+              
+              Driver Name: basicrender.inf
+              Driver Package ID: basicrender.inf_amd64_5a35c75db01c44c7
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: BasicRender
+              Driver Rank: 0xFB0000
+              Matching Device ID: ROOT\BasicRender
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: HTREE\ROOT\0
+
+TimeCreated : 10/4/2026 7:04:30 AM
+Id          : 410
+Message     : Device ROOT\NdisVirtualBus\0000 was started.
+              
+              Driver Name: ndisvirtualbus.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: NdisVirtualBus
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:30 AM
+Id          : 410
+Message     : Device ROOT\UMBUS\0000 was started.
+              
+              Driver Name: umbus.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: umbus
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:30 AM
+Id          : 410
+Message     : Device ROOT\CompositeBus\0000 was started.
+              
+              Driver Name: compositebus.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: CompositeBus
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:30 AM
+Id          : 410
+Message     : Device ROOT\VID\0000 was started.
+              
+              Driver Name: wvid.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: Vid
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:30 AM
+Id          : 410
+Message     : Device ROOT\BasicDisplay\0000 was started.
+              
+              Driver Name: basicdisplay.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: BasicDisplay
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:30 AM
+Id          : 410
+Message     : Device ROOT\RDPBUS\0000 was started.
+              
+              Driver Name: rdpbus.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: rdpbus
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:30 AM
+Id          : 410
+Message     : Device ROOT\SYSTEM\0000 was started.
+              
+              Driver Name: swenum.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: swenum
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:30 AM
+Id          : 400
+Message     : Device ROOT\BasicDisplay\0000 was configured.
+              
+              Driver Name: basicdisplay.inf
+              Driver Package ID: basicdisplay.inf_amd64_a0afd1c1603bc477
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: MSBDD_Fallback
+              Driver Rank: 0xFB0000
+              Matching Device ID: ROOT\BasicDisplay
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: HTREE\ROOT\0
+
+TimeCreated : 10/4/2026 7:04:28 AM
+Id          : 410
+Message     : Device STORAGE\Volume\{30e79735-bfca-11f1-94e9-806e6f6e6963}#0000000013D00000 was started.
+              
+              Driver Name: volume.inf
+              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Service: volume
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:28 AM
+Id          : 410
+Message     : Device STORAGE\Volume\{30e79735-bfca-11f1-94e9-806e6f6e6963}#0000000012D00000 was started.
+              
+              Driver Name: volume.inf
+              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Service: volume
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:28 AM
+Id          : 410
+Message     : Device STORAGE\Volume\{30e79735-bfca-11f1-94e9-806e6f6e6963}#0000000000100000 was started.
+              
+              Driver Name: volume.inf
+              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Service: volume
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:28 AM
+Id          : 400
+Message     : Device STORAGE\Volume\{30e79735-bfca-11f1-94e9-806e6f6e6963}#0000000013D00000 was configured.
+              
+              Driver Name: volume.inf
+              Driver Package ID: volume.inf_amd64_d1ed34e6626fb1bb
+              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1
+              Driver Provider: Microsoft
+              Driver Section: volume_install.NT
+              Driver Rank: 0xFF0000
+              Matching Device ID: STORAGE\Volume
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: ROOT\VOLMGR\0000
+
+TimeCreated : 10/4/2026 7:04:28 AM
+Id          : 400
+Message     : Device STORAGE\Volume\{30e79735-bfca-11f1-94e9-806e6f6e6963}#0000000012D00000 was configured.
+              
+              Driver Name: volume.inf
+              Driver Package ID: volume.inf_amd64_d1ed34e6626fb1bb
+              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1
+              Driver Provider: Microsoft
+              Driver Section: volume_install.NT
+              Driver Rank: 0xFF0000
+              Matching Device ID: STORAGE\Volume
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: ROOT\VOLMGR\0000
+
+TimeCreated : 10/4/2026 7:04:28 AM
+Id          : 400
+Message     : Device STORAGE\Volume\{30e79735-bfca-11f1-94e9-806e6f6e6963}#0000000000100000 was configured.
+              
+              Driver Name: volume.inf
+              Driver Package ID: volume.inf_amd64_d1ed34e6626fb1bb
+              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1
+              Driver Provider: Microsoft
+              Driver Section: volume_install.NT
+              Driver Rank: 0xFF0000
+              Matching Device ID: STORAGE\Volume
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: ROOT\VOLMGR\0000
+
+TimeCreated : 10/4/2026 7:04:28 AM
+Id          : 410
+Message     : Device SCSI\Disk&Ven_Red_Hat&Prod_VirtIO\4&36531897&0&000000 was started.
+              
+              Driver Name: disk.inf
+              Class GUID: {4d36e967-e325-11ce-bfc1-08002be10318}
+              Service: disk
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:28 AM
+Id          : 400
+Message     : Device SCSI\Disk&Ven_Red_Hat&Prod_VirtIO\4&36531897&0&000000 was configured.
+              
+              Driver Name: disk.inf
+              Driver Package ID: disk.inf_amd64_5fb855b6817525a2
+              Class GUID: {4d36e967-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: disk_install.NT
+              Driver Rank: 0xFF0005
+              Matching Device ID: GenDisk
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: PCI\VEN_1AF4&DEV_1001&SUBSYS_00021AF4&REV_00\3&11583659&0&28
+
+TimeCreated : 10/4/2026 7:04:28 AM
+Id          : 410
+Message     : Device PCI\VEN_1AF4&DEV_1001&SUBSYS_00021AF4&REV_00\3&11583659&0&28 was started.
+              
+              Driver Name: oem6.inf
+              Class GUID: {4d36e97b-e325-11ce-bfc1-08002be10318}
+              Service: viostor
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:28 AM
+Id          : 400
+Message     : Device SCSI\CdRom&Ven_QEMU&Prod_QEMU_DVD-ROM\4&35424867&0&020000 was configured.
+              
+              Driver Name: cdrom.inf
+              Driver Package ID: cdrom.inf_amd64_dc7b0d8271e8847c
+              Class GUID: {4d36e965-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: cdrom_install
+              Driver Rank: 0xFF0005
+              Matching Device ID: GenCdRom
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: PCI\VEN_8086&DEV_2922&SUBSYS_11001AF4&REV_02\3&11583659&0&FA
+
+TimeCreated : 10/4/2026 7:04:28 AM
+Id          : 400
+Message     : Device SCSI\CdRom&Ven_QEMU&Prod_QEMU_DVD-ROM\4&35424867&0&010000 was configured.
+              
+              Driver Name: cdrom.inf
+              Driver Package ID: cdrom.inf_amd64_dc7b0d8271e8847c
+              Class GUID: {4d36e965-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: cdrom_install
+              Driver Rank: 0xFF0005
+              Matching Device ID: GenCdRom
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: PCI\VEN_8086&DEV_2922&SUBSYS_11001AF4&REV_02\3&11583659&0&FA
+
+TimeCreated : 10/4/2026 7:04:28 AM
+Id          : 400
+Message     : Device SCSI\CdRom&Ven_QEMU&Prod_QEMU_DVD-ROM\4&35424867&0&000000 was configured.
+              
+              Driver Name: cdrom.inf
+              Driver Package ID: cdrom.inf_amd64_dc7b0d8271e8847c
+              Class GUID: {4d36e965-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: cdrom_install
+              Driver Rank: 0xFF0005
+              Matching Device ID: GenCdRom
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: PCI\VEN_8086&DEV_2922&SUBSYS_11001AF4&REV_02\3&11583659&0&FA
+
+TimeCreated : 10/4/2026 7:04:17 AM
+Id          : 410
+Message     : Device PCI\VEN_8086&DEV_2922&SUBSYS_11001AF4&REV_02\3&11583659&0&FA was started.
+              
+              Driver Name: mshdc.inf
+              Class GUID: {4d36e96a-e325-11ce-bfc1-08002be10318}
+              Service: storahci
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:17 AM
+Id          : 410
+Message     : Device ROOT\VOLMGR\0000 was started.
+              
+              Driver Name: volmgr.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: volmgr
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:17 AM
+Id          : 410
+Message     : Device ROOT\SPACEPORT\0000 was started.
+              
+              Driver Name: spaceport.inf
+              Class GUID: {4d36e97b-e325-11ce-bfc1-08002be10318}
+              Service: spaceport
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:17 AM
+Id          : 400
+Message     : Device ROOT\SPACEPORT\0000 was configured.
+              
+              Driver Name: spaceport.inf
+              Driver Package ID: spaceport.inf_amd64_568a4d8ac6b99147
+              Class GUID: {4d36e97b-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1591
+              Driver Provider: Microsoft
+              Driver Section: Spaceport_Install
+              Driver Rank: 0xFF0000
+              Matching Device ID: Root\Spaceport
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: HTREE\ROOT\0
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 410
+Message     : Device ROOT\vdrvroot\0000 was started.
+              
+              Driver Name: vdrvroot.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: vdrvroot
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 400
+Message     : Device ROOT\vdrvroot\0000 was configured.
+              
+              Driver Name: vdrvroot.inf
+              Driver Package ID: vdrvroot.inf_amd64_f1a4bd2901856b58
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1591
+              Driver Provider: Microsoft
+              Driver Section: VDRVROOT
+              Driver Rank: 0xFF0000
+              Matching Device ID: ROOT\vdrvroot
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: HTREE\ROOT\0
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 410
+Message     : Device ACPI\MSFT0101\1 was started.
+              
+              Driver Name: tpm.inf
+              Class GUID: {d94ee5d8-d189-4994-83d2-f68d7d41b0e6}
+              Service: TPM
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 410
+Message     : Device ACPI\PNP0A06\PCI_Hotplug_resources was started.
+              
+              Driver Name: machine.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: 
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 410
+Message     : Device ACPI\PNP0A06\GPE0_resources was started.
+              
+              Driver Name: machine.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: 
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 410
+Message     : Device ACPI\PNP0A06\CPU_Hotplug_resources was started.
+              
+              Driver Name: machine.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: 
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 410
+Message     : Device ACPI\PNP0A06\SMI_resources was started.
+              
+              Driver Name: machine.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: 
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 410
+Message     : Device ACPI\PNP0B00\4&22f5829e&0 was started.
+              
+              Driver Name: machine.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: 
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 400
+Message     : Device ACPI\PNP0B00\4&22f5829e&0 was configured.
+              
+              Driver Name: machine.inf
+              Driver Package ID: machine.inf_amd64_d807fc8146278f4c
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: NO_DRV_X
+              Driver Rank: 0xFF0002
+              Matching Device ID: *PNP0B00
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: PCI\VEN_8086&DEV_2918&SUBSYS_11001AF4&REV_02\3&11583659&0&F8
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 400
+Message     : Device ACPI\PNP0501\1 was configured.
+              
+              Driver Name: msports.inf
+              Driver Package ID: msports.inf_amd64_bebdc4f4e2cf2459
+              Class GUID: {4d36e978-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: ComPort.NT
+              Driver Rank: 0xFF0002
+              Matching Device ID: *PNP0501
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: PCI\VEN_8086&DEV_2918&SUBSYS_11001AF4&REV_02\3&11583659&0&F8
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 400
+Message     : Device ACPI\PNP0400\1 was configured.
+              
+              Driver Name: msports.inf
+              Driver Package ID: msports.inf_amd64_bebdc4f4e2cf2459
+              Class GUID: {4d36e978-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: LptPort.NT
+              Driver Rank: 0xFF0002
+              Matching Device ID: *PNP0400
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: PCI\VEN_8086&DEV_2918&SUBSYS_11001AF4&REV_02\3&11583659&0&F8
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 400
+Message     : Device ACPI\PNP0F13\4&22f5829e&0 was configured.
+              
+              Driver Name: msmouse.inf
+              Driver Package ID: msmouse.inf_amd64_097bbd709f0c4972
+              Class GUID: {4d36e96f-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: PS2_Inst
+              Driver Rank: 0xFF0002
+              Matching Device ID: *PNP0F13
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: PCI\VEN_8086&DEV_2918&SUBSYS_11001AF4&REV_02\3&11583659&0&F8
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 400
+Message     : Device ACPI\PNP0303\4&22f5829e&0 was configured.
+              
+              Driver Name: keyboard.inf
+              Driver Package ID: keyboard.inf_amd64_a1fe82a86eaecabd
+              Class GUID: {4d36e96b-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: STANDARD_Inst
+              Driver Rank: 0xFF0002
+              Matching Device ID: *PNP0303
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: PCI\VEN_8086&DEV_2918&SUBSYS_11001AF4&REV_02\3&11583659&0&F8
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 400
+Message     : Device ACPI\QEMU0001\4&22f5829e&0 was configured.
+              
+              Driver Name: oem2.inf
+              Driver Package ID: pvpanic.inf_amd64_cc83d17a40c8c9bc
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 07/22/2026
+              Driver Version: 100.103.104.30200
+              Driver Provider: Red Hat, Inc.
+              Driver Section: PVPanic_Device.NT
+              Driver Rank: 0xFF0001
+              Matching Device ID: ACPI\QEMU0001
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: PCI\VEN_8086&DEV_2918&SUBSYS_11001AF4&REV_02\3&11583659&0&F8
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 410
+Message     : Device PCI\VEN_8086&DEV_2918&SUBSYS_11001AF4&REV_02\3&11583659&0&F8 was started.
+              
+              Driver Name: machine.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: msisadrv
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 410
+Message     : Device PCI\VEN_8086&DEV_29C0&SUBSYS_11001AF4&REV_00\3&11583659&0&00 was started.
+              
+              Driver Name: machine.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: 
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 400
+Message     : Device ACPI\QEMU0002\3&11583659&0 was configured.
+              
+              Driver Name: oem3.inf
+              Driver Package ID: fwcfg.inf_amd64_eae304e484876166
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 07/22/2026
+              Driver Version: 100.103.104.30200
+              Driver Provider: Red Hat, Inc.
+              Driver Section: FwCfg_Device.NT
+              Driver Rank: 0xFF0001
+              Matching Device ID: ACPI\QEMU0002
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: ACPI\PNP0A08\0
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 400
+Message     : Device ACPI\PNP0A06\PCI_Hotplug_resources was configured.
+              
+              Driver Name: machine.inf
+              Driver Package ID: machine.inf_amd64_d807fc8146278f4c
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: NO_DRV_X_PNP
+              Driver Rank: 0xFF0002
+              Matching Device ID: *PNP0A06
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: ACPI\PNP0A08\0
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 400
+Message     : Device ACPI\PNP0A06\GPE0_resources was configured.
+              
+              Driver Name: machine.inf
+              Driver Package ID: machine.inf_amd64_d807fc8146278f4c
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: NO_DRV_X_PNP
+              Driver Rank: 0xFF0002
+              Matching Device ID: *PNP0A06
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: ACPI\PNP0A08\0
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 400
+Message     : Device ACPI\PNP0A06\CPU_Hotplug_resources was configured.
+              
+              Driver Name: machine.inf
+              Driver Package ID: machine.inf_amd64_d807fc8146278f4c
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: NO_DRV_X_PNP
+              Driver Rank: 0xFF0002
+              Matching Device ID: *PNP0A06
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: ACPI\PNP0A08\0
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 400
+Message     : Device ACPI\PNP0A06\SMI_resources was configured.
+              
+              Driver Name: machine.inf
+              Driver Package ID: machine.inf_amd64_d807fc8146278f4c
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: NO_DRV_X_PNP
+              Driver Rank: 0xFF0002
+              Matching Device ID: *PNP0A06
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: ACPI\PNP0A08\0
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 400
+Message     : Device PCI\VEN_8086&DEV_2930&SUBSYS_11001AF4&REV_02\3&11583659&0&FB was configured.
+              
+              Driver Name: oem4.inf
+              Driver Package ID: smbus.inf_amd64_5f03787cbdf7a56d
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 04/27/2017
+              Driver Version: 100.0.0.0
+              Driver Provider: Red Hat, Inc.
+              Driver Section: NullInstallSection
+              Driver Rank: 0xFF0001
+              Matching Device ID: PCI\VEN_8086&DEV_2930&SUBSYS_11001AF4
+              Outranked Drivers: machine.inf:PCI\VEN_8086&DEV_2930:00FF2001 oem4.inf:PCI\VEN_8086&CC_0C0500:00FF2002 oem4.inf:PCI\VEN_8086&CC_0C05:00FF2003
+              Device Updated: false
+              Parent Device: ACPI\PNP0A08\0
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 400
+Message     : Device PCI\VEN_8086&DEV_2922&SUBSYS_11001AF4&REV_02\3&11583659&0&FA was configured.
+              
+              Driver Name: mshdc.inf
+              Driver Package ID: mshdc.inf_amd64_f46cfa9aaf1c025c
+              Class GUID: {4d36e96a-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: msahci_Inst
+              Driver Rank: 0xFF2005
+              Matching Device ID: PCI\CC_010601
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: ACPI\PNP0A08\0
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 400
+Message     : Device PCI\VEN_8086&DEV_2918&SUBSYS_11001AF4&REV_02\3&11583659&0&F8 was configured.
+              
+              Driver Name: machine.inf
+              Driver Package ID: machine.inf_amd64_d807fc8146278f4c
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: MSISADRV
+              Driver Rank: 0xFF2001
+              Matching Device ID: PCI\VEN_8086&DEV_2918
+              Outranked Drivers: machine.inf:PCI\CC_0601:00FF2006
+              Device Updated: false
+              Parent Device: ACPI\PNP0A08\0
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 400
+Message     : Device PCI\VEN_1AF4&DEV_1001&SUBSYS_00021AF4&REV_00\3&11583659&0&28 was configured.
+              
+              Driver Name: oem6.inf
+              Driver Package ID: viostor.inf_amd64_2fc8a27a8c1b757c
+              Class GUID: {4d36e97b-e325-11ce-bfc1-08002be10318}
+              Driver Date: 07/22/2026
+              Driver Version: 100.103.104.30200
+              Driver Provider: Red Hat, Inc.
+              Driver Section: scsi_inst
+              Driver Rank: 0xFF0000
+              Matching Device ID: PCI\VEN_1AF4&DEV_1001&SUBSYS_00021AF4&REV_00
+              Outranked Drivers: oem6.inf:PCI\VEN_1AF4&DEV_1001:00FF3001
+              Device Updated: false
+              Parent Device: ACPI\PNP0A08\0
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 400
+Message     : Device PCI\VEN_1AF4&DEV_1005&SUBSYS_00041AF4&REV_00\3&11583659&0&20 was configured.
+              
+              Driver Name: oem0.inf
+              Driver Package ID: viorng.inf_amd64_7d9d44898d90e8bd
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 07/22/2026
+              Driver Version: 100.103.104.30200
+              Driver Provider: Red Hat, Inc.
+              Driver Section: VirtRng_Device.NT
+              Driver Rank: 0xFF0000
+              Matching Device ID: PCI\VEN_1AF4&DEV_1005&SUBSYS_00041AF4&REV_00
+              Outranked Drivers: oem0.inf:PCI\VEN_1AF4&DEV_1005:00FF3001
+              Device Updated: false
+              Parent Device: ACPI\PNP0A08\0
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 400
+Message     : Device PCI\VEN_1AF4&DEV_1003&SUBSYS_00031AF4&REV_00\3&11583659&0&18 was configured.
+              
+              Driver Name: oem5.inf
+              Driver Package ID: vioser.inf_amd64_08573a4e4a751b1e
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 07/22/2026
+              Driver Version: 100.103.104.30200
+              Driver Provider: Red Hat, Inc.
+              Driver Section: VirtioSerial_Device.NT
+              Driver Rank: 0xFF0000
+              Matching Device ID: PCI\VEN_1AF4&DEV_1003&SUBSYS_00031AF4&REV_00
+              Outranked Drivers: oem5.inf:PCI\VEN_1AF4&DEV_1003:00FF3001
+              Device Updated: false
+              Parent Device: ACPI\PNP0A08\0
+
+TimeCreated : 10/4/2026 7:04:16 AM
+Id          : 400
+Message     : Device PCI\VEN_8086&DEV_29C0&SUBSYS_11001AF4&REV_00\3&11583659&0&00 was configured.
+              
+              Driver Name: machine.inf
+              Driver Package ID: machine.inf_amd64_d807fc8146278f4c
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: NO_DRV
+              Driver Rank: 0xFF2001
+              Matching Device ID: PCI\VEN_8086&DEV_29C0
+              Outranked Drivers: machine.inf:PCI\CC_0600:00FF2006
+              Device Updated: false
+              Parent Device: ACPI\PNP0A08\0
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 410
+Message     : Device ACPI\PNP0A08\0 was started.
+              
+              Driver Name: pci.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: pci
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 400
+Message     : Device ACPI\GenuineIntel_-_Intel64_Family_6_Model_79_-_Intel(R)_Xeon(R)_CPU_E5-2673_v4_@_2.30GHz\_7 was configured.
+              
+              Driver Name: cpu.inf
+              Driver Package ID: cpu.inf_amd64_b0f89d78f7d4eadd
+              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Driver Date: 04/21/2009
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: IntelPPM_Inst.NT
+              Driver Rank: 0xFF0004
+              Matching Device ID: ACPI\GenuineIntel_-_Intel64
+              Outranked Drivers: cpu.inf:ACPI\Processor:00FF2000
+              Device Updated: false
+              Parent Device: ACPI\ACPI0010\2&daba3ff&0
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 400
+Message     : Device ACPI\GenuineIntel_-_Intel64_Family_6_Model_79_-_Intel(R)_Xeon(R)_CPU_E5-2673_v4_@_2.30GHz\_6 was configured.
+              
+              Driver Name: cpu.inf
+              Driver Package ID: cpu.inf_amd64_b0f89d78f7d4eadd
+              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Driver Date: 04/21/2009
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: IntelPPM_Inst.NT
+              Driver Rank: 0xFF0004
+              Matching Device ID: ACPI\GenuineIntel_-_Intel64
+              Outranked Drivers: cpu.inf:ACPI\Processor:00FF2000
+              Device Updated: false
+              Parent Device: ACPI\ACPI0010\2&daba3ff&0
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 400
+Message     : Device ACPI\GenuineIntel_-_Intel64_Family_6_Model_79_-_Intel(R)_Xeon(R)_CPU_E5-2673_v4_@_2.30GHz\_5 was configured.
+              
+              Driver Name: cpu.inf
+              Driver Package ID: cpu.inf_amd64_b0f89d78f7d4eadd
+              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Driver Date: 04/21/2009
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: IntelPPM_Inst.NT
+              Driver Rank: 0xFF0004
+              Matching Device ID: ACPI\GenuineIntel_-_Intel64
+              Outranked Drivers: cpu.inf:ACPI\Processor:00FF2000
+              Device Updated: false
+              Parent Device: ACPI\ACPI0010\2&daba3ff&0
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 400
+Message     : Device ACPI\GenuineIntel_-_Intel64_Family_6_Model_79_-_Intel(R)_Xeon(R)_CPU_E5-2673_v4_@_2.30GHz\_4 was configured.
+              
+              Driver Name: cpu.inf
+              Driver Package ID: cpu.inf_amd64_b0f89d78f7d4eadd
+              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Driver Date: 04/21/2009
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: IntelPPM_Inst.NT
+              Driver Rank: 0xFF0004
+              Matching Device ID: ACPI\GenuineIntel_-_Intel64
+              Outranked Drivers: cpu.inf:ACPI\Processor:00FF2000
+              Device Updated: false
+              Parent Device: ACPI\ACPI0010\2&daba3ff&0
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 400
+Message     : Device ACPI\GenuineIntel_-_Intel64_Family_6_Model_79_-_Intel(R)_Xeon(R)_CPU_E5-2673_v4_@_2.30GHz\_3 was configured.
+              
+              Driver Name: cpu.inf
+              Driver Package ID: cpu.inf_amd64_b0f89d78f7d4eadd
+              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Driver Date: 04/21/2009
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: IntelPPM_Inst.NT
+              Driver Rank: 0xFF0004
+              Matching Device ID: ACPI\GenuineIntel_-_Intel64
+              Outranked Drivers: cpu.inf:ACPI\Processor:00FF2000
+              Device Updated: false
+              Parent Device: ACPI\ACPI0010\2&daba3ff&0
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 400
+Message     : Device ACPI\GenuineIntel_-_Intel64_Family_6_Model_79_-_Intel(R)_Xeon(R)_CPU_E5-2673_v4_@_2.30GHz\_2 was configured.
+              
+              Driver Name: cpu.inf
+              Driver Package ID: cpu.inf_amd64_b0f89d78f7d4eadd
+              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Driver Date: 04/21/2009
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: IntelPPM_Inst.NT
+              Driver Rank: 0xFF0004
+              Matching Device ID: ACPI\GenuineIntel_-_Intel64
+              Outranked Drivers: cpu.inf:ACPI\Processor:00FF2000
+              Device Updated: false
+              Parent Device: ACPI\ACPI0010\2&daba3ff&0
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 400
+Message     : Device ACPI\GenuineIntel_-_Intel64_Family_6_Model_79_-_Intel(R)_Xeon(R)_CPU_E5-2673_v4_@_2.30GHz\_1 was configured.
+              
+              Driver Name: cpu.inf
+              Driver Package ID: cpu.inf_amd64_b0f89d78f7d4eadd
+              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Driver Date: 04/21/2009
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: IntelPPM_Inst.NT
+              Driver Rank: 0xFF0004
+              Matching Device ID: ACPI\GenuineIntel_-_Intel64
+              Outranked Drivers: cpu.inf:ACPI\Processor:00FF2000
+              Device Updated: false
+              Parent Device: ACPI\ACPI0010\2&daba3ff&0
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 400
+Message     : Device ACPI\GenuineIntel_-_Intel64_Family_6_Model_79_-_Intel(R)_Xeon(R)_CPU_E5-2673_v4_@_2.30GHz\_0 was configured.
+              
+              Driver Name: cpu.inf
+              Driver Package ID: cpu.inf_amd64_b0f89d78f7d4eadd
+              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Driver Date: 04/21/2009
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: IntelPPM_Inst.NT
+              Driver Rank: 0xFF0004
+              Matching Device ID: ACPI\GenuineIntel_-_Intel64
+              Outranked Drivers: cpu.inf:ACPI\Processor:00FF2000
+              Device Updated: false
+              Parent Device: ACPI\ACPI0010\2&daba3ff&0
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 410
+Message     : Device ACPI\ACPI0010\2&daba3ff&0 was started.
+              
+              Driver Name: machine.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: 
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 410
+Message     : Device ACPI\FixedButton\2&daba3ff&0 was started.
+              
+              Driver Name: machine.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: 
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 400
+Message     : Device ACPI\FixedButton\2&daba3ff&0 was configured.
+              
+              Driver Name: machine.inf
+              Driver Package ID: machine.inf_amd64_d807fc8146278f4c
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: NO_DRV
+              Driver Rank: 0xFF0000
+              Matching Device ID: ACPI\FixedButton
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: ACPI_HAL\PNP0C08\0
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 400
+Message     : Device ACPI\MSFT0101\1 was configured.
+              
+              Driver Name: tpm.inf
+              Driver Package ID: tpm.inf_amd64_781799b99d4537ce
+              Class GUID: {d94ee5d8-d189-4994-83d2-f68d7d41b0e6}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1591
+              Driver Provider: Microsoft
+              Driver Section: Tpm2BaseInstall
+              Driver Rank: 0xFF0001
+              Matching Device ID: ACPI\MSFT0101
+              Outranked Drivers: tpm.inf:*MSFT0101:00FF0002
+              Device Updated: false
+              Parent Device: ACPI_HAL\PNP0C08\0
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 400
+Message     : Device ACPI\ACPI0010\2&daba3ff&0 was configured.
+              
+              Driver Name: machine.inf
+              Driver Package ID: machine.inf_amd64_d807fc8146278f4c
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: NO_DRV_X_PNP
+              Driver Rank: 0xFF0002
+              Matching Device ID: *ACPI0010
+              Outranked Drivers: machine.inf:*PNP0A05:00FF2000
+              Device Updated: false
+              Parent Device: ACPI_HAL\PNP0C08\0
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 400
+Message     : Device ACPI\PNP0103\0 was configured.
+              
+              Driver Name: machine.inf
+              Driver Package ID: machine.inf_amd64_d807fc8146278f4c
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: NO_DRV_HPET
+              Driver Rank: 0xFF0002
+              Matching Device ID: *PNP0103
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: ACPI_HAL\PNP0C08\0
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 400
+Message     : Device ACPI\PNP0C01\2&daba3ff&0 was configured.
+              
+              Driver Name: machine.inf
+              Driver Package ID: machine.inf_amd64_d807fc8146278f4c
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: NO_DRV_MBRES
+              Driver Rank: 0xFF0002
+              Matching Device ID: *PNP0C01
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: ACPI_HAL\PNP0C08\0
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 400
+Message     : Device ACPI\PNP0A08\0 was configured.
+              
+              Driver Name: pci.inf
+              Driver Package ID: pci.inf_amd64_2efa62b081af28ac
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: PCI_ROOT
+              Driver Rank: 0xFF0002
+              Matching Device ID: *PNP0A08
+              Outranked Drivers: pci.inf:*PNP0A03:00FF2000
+              Device Updated: false
+              Parent Device: ACPI_HAL\PNP0C08\0
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 410
+Message     : Device ACPI_HAL\PNP0C08\0 was started.
+              
+              Driver Name: acpi.inf
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Service: ACPI
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 410
+Message     : Device SWD\COMPUTER\MFG_QEMU&PROD_Standard_PC_(Q35_+_ICH9__2009) was started.
+              
+              Driver Name: compdev.inf
+              Class GUID: {4d36e966-e325-11ce-bfc1-08002be10318}
+              Service: 
+              Lower Filters: 
+              Upper Filters: 
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 400
+Message     : Device SWD\COMPUTER\MFG_QEMU&PROD_Standard_PC_(Q35_+_ICH9__2009) was configured.
+              
+              Driver Name: compdev.inf
+              Driver Package ID: compdev.inf_amd64_bea70980d0aa2315
+              Class GUID: {4d36e966-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1
+              Driver Provider: Microsoft
+              Driver Section: CompDev_Install
+              Driver Rank: 0x2000
+              Matching Device ID: COMPUTER\Generic
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: HTREE\ROOT\0
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 400
+Message     : Device ACPI_HAL\PNP0C08\0 was configured.
+              
+              Driver Name: acpi.inf
+              Driver Package ID: acpi.inf_amd64_01ba755f30d016a7
+              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Driver Date: 06/21/2006
+              Driver Version: 10.0.26100.1150
+              Driver Provider: Microsoft
+              Driver Section: ACPI_Inst.NT
+              Driver Rank: 0xFF0001
+              Matching Device ID: *PNP0C08
+              Outranked Drivers: 
+              Device Updated: false
+              Parent Device: ROOT\ACPI_HAL\0000
+
+TimeCreated : 10/4/2026 7:04:15 AM
+Id          : 410
+Message     : Device ROOT\ACPI_HAL\0000 was started.
+              
+              Driver Name: hal.inf
+              Class GUID: {4d36e966-e325-11ce-bfc1-08002be10318}
+              Service: \Driver\ACPI_HAL
+              Lower Filters: 
+              Upper Filters: 
+
+
+
+

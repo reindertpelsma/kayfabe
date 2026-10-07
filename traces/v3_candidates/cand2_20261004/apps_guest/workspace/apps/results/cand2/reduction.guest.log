@@ -1,0 +1,20 @@
+=== reduction side=guest start=2026-10-04T11:56:43+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/reduction
+/opt/apps/bundle/samples/reduction Starting...
+
+GPU Device 0: "Ampere" with compute capability 8.6
+
+Using Device 0: NVIDIA GeForce RTX 3060
+
+Reducing array of type int
+
+16777216 elements
+256 threads (max)
+64 blocks
+
+Reduction, Throughput = 7.6117 GB/s, Time = 0.00882 s, Size = 16777216 Elements, NumDevsUsed = 1, Workgroup = 256
+
+GPU result = 2139353471
+CPU result = 2139353471
+
+Test passed
+=== end rc=0 secs=4 2026-10-04T11:56:47+00:00

@@ -1,0 +1,74 @@
+=== boot_capture tag=brkE1s2 at 2026-10-03T21:50:11+00:00 ===
+=== source revision: 18562ba4 ===
+=== qemu binary: -rwxr-xr-x 1 root root 89623928 Oct  3 21:34 /workspace/bench/kf3-bins/18562ba4/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=82f88b7bb676717a
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Sat Oct  3 21:50:18 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3060        Off |   00000000:00:02.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Oct  3 21:50 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Oct  3 21:50 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Oct  3 21:50 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Oct  3 21:50 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Oct  3 21:50 .
+drwxr-xr-x 18 root root   4000 Oct  3 21:50 ..
+cr--------  1 root root 240, 1 Oct  3 21:50 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Oct  3 21:50 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/display/broker_hook.sh at 2026-10-03T21:50:20+00:00 ===
+BRK_HOOK_START 2026-10-03T21:50:20+00:00
+BRK_GUEST_KMS rc=0  nodes=[by-path card0 renderD128 ]
+BRK_RELAY_CONNECTED 1 GPU_COPY_PROBE=[kf3: broker: GPU-copy rung possible — render node renderD128 (226:128), nvidia-drm gpu_id 0x7, modifier 0x0300000000606014, slot attributes s2-nvkms-scanout]
+BRK_EV_DEVICE broker=[nvkvm-broker: the X server renders on DRM device 226:128 (render node)] relay=[kf3: broker: the compositor renders on this GPU: the GPU-copy rung may be used] host_nodes=[/dev/dri/card0=e2:0 /dev/dri/renderD128=e2:80 ]
+BRK_GUEST_DESKTOP=yes session=cinnamon busid=PCI:0:2:0 (rc=0 )
+BRK_RUNGS       1 frames go as a GPU copy in host VRAM        1 frames go as shared memory only 
+BRK_RUNG_LINE kf3: broker: the compositor renders on this GPU: the GPU-copy rung may be used
+BRK_RUNG_LINE kf3: broker: the display CAN show XR24 modifier 0x0300000000606014
+BRK_RUNG_LINE kf3: broker: the display imported a GPU-copy frame (its RELEASE came back)
+BRK_RUNG_LINE kf3: broker: the display CANNOT show XR24 modifier 0x0000000000000000
+BRK_WINDOW id=[54525952]
+BRK_WINDOW active=[54525952] (must be the window above)
+BRK_WINDOW geometry=1024x768+0+0 root=[ dimensions: 1024x768 pixels (347x260 millimeters)]
+BRK_HOOK_DONE (no cursor experiments)
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 28 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=75
+GUEST_DMESG_AFTER_NVRM=55
+GUEST_DMESG_WORKLOAD_DELTA=47
+=== HOST dmesg delta for this boot (watermark 804 → 804) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

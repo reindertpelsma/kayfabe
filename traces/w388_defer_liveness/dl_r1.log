@@ -1,0 +1,122 @@
+info  RMLADDER ARGV     = [--gpu 0 --defer-liveness]
+ok    R2 version         = "580.159.03"
+ok    R4 hClient         = 0xc1d0f97d
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unknown
+W381_PROBE=launch-dma — ⊘ FIXED for this rung, whatever `--probe-*` asked for: the question is whether a READ through a freshly-written PTE resolves, and a semaphore release cannot ask it
+info  DL defer-liveness  = GPU 0, euid 0 — does a PTE written with NVOS46_FLAGS_DEFER_TLB_INVALIDATION become live with NO invalidate on any transport?
+info  DL the two worlds  = (A) the walk picks the fresh PTE up ⇒ a mapping can go live with nothing observable to a hypervisor; (B) it is not live until an invalidate ⇒ DEFER is a BATCHING contract and the boundary stays observable
+DEFER_SCOPE=leaf-PTE, small-page table, GA10x MMU regime, ONE board, VIRT_READ, one copy engine — ⊘ NOT a statement about big/huge pages, about page-directory entries, about writes, or about any other MMU generation
+ok    DL idle check      = no other process holds a /dev/nvidia* descriptor open
+
+═══ DL ARM PLAIN(rig-control) (slot 0) ═══
+info  DL plan            = guard 0x0000006000000000  V 0x0000006000010000  dst 0x0000006100000000  rings 0x0000005000000000/0x0000005040000000/0x0000005080000000
+ok    DL geometry        = guard and V share ONE 0x200000 directory span (so they share a leaf page table by construction), and every address is under 0x0000010000000000
+ok    DL vaspace         = a FRESH address space for this arm alone
+ok    DL objects         = guard 0x10000 @ 0x0000006000000000 magic 0x6a2d0289, data 0x200000 (mapping 0x10000) magic 0x0def0289, dst 0x10000 @ 0x0000006100000000 sentinel 0xdead0289
+ok    DL channels        = 3 built BEFORE the prime (prime/test/rescue), rings at 0x0000005000000000 0x0000005040000000 0x0000005080000000 — ⊘ none is created after it, because a channel's own ctx-buffer maps each end in an invalidate
+info  DL PDE before guard= PDE_COVERS @ 0x0000006000010000 — ★ expect PDE_ABSENT: it is what makes the guard, and not something else, the thing that instantiated the leaf table
+ok    DL guard map       = 0x10000 @ 0x0000006000000000, page-size flag 4KB — HELD for the whole arm
+ok    DL dst map         = 0x10000 @ 0x0000006100000000
+★     DL PDE before map  = PDE_COVERS @ 0x0000006000010000 — the leaf table EXISTS, so step 6 writes a leaf PTE and allocates no level
+FAULT_MARK=defer_liveness_prime arm=PLAIN(rig-control) va=0x0000006000010000 ⚠ THE HOST dmesg WILL CARRY AN Xid 31 FOR THIS CHANNEL AND IT IS THE POINT
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+info  DL prime copy      = Dead { saw: 3735880329 }
+info  DL prime notifier  = fired=true status=0xffff except_type=0x1f engine=0x0001
+★     DL PRIME           = FAULTED. The MMU walked 0x0000006000010000 and the entry it found was non-present
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+info  DL channel control = test Live, rescue Live
+ok    DL channel control = both surviving channels still land after the prime
+ok    DL map             = 0x10000 @ 0x0000006000010000 asked 0x0000006000010000 DEFER=false PAGE_SIZE=4KB
+info  DL PTE after map   = PTE_UNMEASURED(rmStatus=0x007e) ; PDE after map = PDE_COVERS
+⊘     DL PTE            = UNMEASURED (rmStatus=0x007e) — expected on a release driver: GET_PTE_INFO carries RMCTRL_FLAGS_RM_TEST_ONLY_CODE. ⚠ FALLBACK IN FORCE: the PDE answer above is PAGE-TABLE granularity and does NOT say the leaf is valid, so the attribution moves to the RESCUE at step 10 — invalidate, retry, and a landing there proves the PTE was in memory all along
+info  DL invalidate      = NONE ISSUED BY ANY TRANSPORT — no control, no pushbuffer MEM_OP, nothing. This is the arm's defining property
+kayfabe-isolate: DOORBELL-STORE #4 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #4 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+info  DL test copy       = Live retire=RETIRED 
+info  DL test notifier   = fired=false status=0x0000 except_type=0x0
+
+═══ DL ARM DEFER(the-question) (slot 1) ═══
+info  DL plan            = guard 0x0000006200000000  V 0x0000006200010000  dst 0x0000006300000000  rings 0x0000005200000000/0x0000005240000000/0x0000005280000000
+ok    DL geometry        = guard and V share ONE 0x200000 directory span (so they share a leaf page table by construction), and every address is under 0x0000010000000000
+ok    DL vaspace         = a FRESH address space for this arm alone
+ok    DL objects         = guard 0x10000 @ 0x0000006200000000 magic 0x6a2d0289, data 0x200000 (mapping 0x10000) magic 0x0def0289, dst 0x10000 @ 0x0000006300000000 sentinel 0xdead0289
+ok    DL channels        = 3 built BEFORE the prime (prime/test/rescue), rings at 0x0000005200000000 0x0000005240000000 0x0000005280000000 — ⊘ none is created after it, because a channel's own ctx-buffer maps each end in an invalidate
+info  DL PDE before guard= PDE_COVERS @ 0x0000006200010000 — ★ expect PDE_ABSENT: it is what makes the guard, and not something else, the thing that instantiated the leaf table
+ok    DL guard map       = 0x10000 @ 0x0000006200000000, page-size flag 4KB — HELD for the whole arm
+ok    DL dst map         = 0x10000 @ 0x0000006300000000
+★     DL PDE before map  = PDE_COVERS @ 0x0000006200010000 — the leaf table EXISTS, so step 6 writes a leaf PTE and allocates no level
+FAULT_MARK=defer_liveness_prime arm=DEFER(the-question) va=0x0000006200010000 ⚠ THE HOST dmesg WILL CARRY AN Xid 31 FOR THIS CHANNEL AND IT IS THE POINT
+kayfabe-isolate: DOORBELL-STORE #5 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #5 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+info  DL prime copy      = Dead { saw: 3735880329 }
+info  DL prime notifier  = fired=true status=0xffff except_type=0x1f engine=0x0001
+★     DL PRIME           = FAULTED. The MMU walked 0x0000006200010000 and the entry it found was non-present
+kayfabe-isolate: DOORBELL-STORE #6 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #6 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #7 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #7 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+info  DL channel control = test Live, rescue Live
+ok    DL channel control = both surviving channels still land after the prime
+ok    DL map             = 0x10000 @ 0x0000006200010000 asked 0x0000006200010000 DEFER=true PAGE_SIZE=4KB
+info  DL PTE after map   = PTE_UNMEASURED(rmStatus=0x007e) ; PDE after map = PDE_COVERS
+⊘     DL PTE            = UNMEASURED (rmStatus=0x007e) — expected on a release driver: GET_PTE_INFO carries RMCTRL_FLAGS_RM_TEST_ONLY_CODE. ⚠ FALLBACK IN FORCE: the PDE answer above is PAGE-TABLE granularity and does NOT say the leaf is valid, so the attribution moves to the RESCUE at step 10 — invalidate, retry, and a landing there proves the PTE was in memory all along
+info  DL invalidate      = NONE ISSUED BY ANY TRANSPORT — no control, no pushbuffer MEM_OP, nothing. This is the arm's defining property
+kayfabe-isolate: DOORBELL-STORE #8 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #8 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+info  DL test copy       = Dead { saw: 3735880329 } retire=NOT-RETIRED(sem still 0) 
+info  DL test notifier   = fired=true status=0xffff except_type=0x1f
+info  DL rescue          = the deferred copy was DEAD; issuing the invalidate now and retrying on the third channel, to say WHICH red this is
+ok    DL rescue invalidate = issued, rmStatus=0x0000
+kayfabe-isolate: DOORBELL-STORE #9 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #9 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #10 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #10 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+info  DL rescue copy     = Live retire=RETIRED
+
+═══ DL ARM DEFER+INVALIDATE(known-positive) (slot 2) ═══
+info  DL plan            = guard 0x0000006400000000  V 0x0000006400010000  dst 0x0000006500000000  rings 0x0000005400000000/0x0000005440000000/0x0000005480000000
+ok    DL geometry        = guard and V share ONE 0x200000 directory span (so they share a leaf page table by construction), and every address is under 0x0000010000000000
+ok    DL vaspace         = a FRESH address space for this arm alone
+ok    DL objects         = guard 0x10000 @ 0x0000006400000000 magic 0x6a2d0289, data 0x200000 (mapping 0x10000) magic 0x0def0289, dst 0x10000 @ 0x0000006500000000 sentinel 0xdead0289
+ok    DL channels        = 3 built BEFORE the prime (prime/test/rescue), rings at 0x0000005400000000 0x0000005440000000 0x0000005480000000 — ⊘ none is created after it, because a channel's own ctx-buffer maps each end in an invalidate
+info  DL PDE before guard= PDE_COVERS @ 0x0000006400010000 — ★ expect PDE_ABSENT: it is what makes the guard, and not something else, the thing that instantiated the leaf table
+ok    DL guard map       = 0x10000 @ 0x0000006400000000, page-size flag 4KB — HELD for the whole arm
+ok    DL dst map         = 0x10000 @ 0x0000006500000000
+★     DL PDE before map  = PDE_COVERS @ 0x0000006400010000 — the leaf table EXISTS, so step 6 writes a leaf PTE and allocates no level
+FAULT_MARK=defer_liveness_prime arm=DEFER+INVALIDATE(known-positive) va=0x0000006400010000 ⚠ THE HOST dmesg WILL CARRY AN Xid 31 FOR THIS CHANNEL AND IT IS THE POINT
+kayfabe-isolate: DOORBELL-STORE #11 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #11 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+info  DL prime copy      = Dead { saw: 3735880329 }
+info  DL prime notifier  = fired=true status=0xffff except_type=0x1f engine=0x0001
+★     DL PRIME           = FAULTED. The MMU walked 0x0000006400010000 and the entry it found was non-present
+kayfabe-isolate: DOORBELL-STORE #12 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #12 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #13 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #13 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+info  DL channel control = test Live, rescue Live
+ok    DL channel control = both surviving channels still land after the prime
+ok    DL map             = 0x10000 @ 0x0000006400010000 asked 0x0000006400010000 DEFER=true PAGE_SIZE=4KB
+info  DL PTE after map   = PTE_UNMEASURED(rmStatus=0x007e) ; PDE after map = PDE_COVERS
+⊘     DL PTE            = UNMEASURED (rmStatus=0x007e) — expected on a release driver: GET_PTE_INFO carries RMCTRL_FLAGS_RM_TEST_ONLY_CODE. ⚠ FALLBACK IN FORCE: the PDE answer above is PAGE-TABLE granularity and does NOT say the leaf is valid, so the attribution moves to the RESCUE at step 10 — invalidate, retry, and a landing there proves the PTE was in memory all along
+ok    DL invalidate      = NV2080_CTRL_CMD_DMA_INVALIDATE_TLB issued on the subdevice, hVASpace = this arm's space, rmStatus=0x0000
+kayfabe-isolate: DOORBELL-STORE #14 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #14 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+info  DL test copy       = Live retire=RETIRED 
+info  DL test notifier   = fired=false status=0x0000 except_type=0x0
+
+═══ DL SUMMARY ═══
+info  DL PLAIN(rig-control)               prime_faulted=Some(true) except=Some("0x1f") chan_survived=true pde_before_map=PDE_COVERS pte=PTE_UNMEASURED(rmStatus=0x007e) placed=Some("0x0000006000010000") copy=LIVE rescue=None
+info  DL DEFER(the-question)              prime_faulted=Some(true) except=Some("0x1f") chan_survived=true pde_before_map=PDE_COVERS pte=PTE_UNMEASURED(rmStatus=0x007e) placed=Some("0x0000006200010000") copy=DEAD rescue=Some("LIVE")
+info  DL DEFER+INVALIDATE(known-positive) prime_faulted=Some(true) except=Some("0x1f") chan_survived=true pde_before_map=PDE_COVERS pte=PTE_UNMEASURED(rmStatus=0x007e) placed=Some("0x0000006400010000") copy=LIVE rescue=None
+DEFER_PRIME_FAULTS=3/3
+DEFER_RIGCTL=PASS
+DEFER_NEGCTL=PASS
+DEFER_LIVENESS=B
+RUNGCTL_defer_liveness=PASS
+RUNG_defer_liveness=PASS
+done — w289 defer-liveness rung only

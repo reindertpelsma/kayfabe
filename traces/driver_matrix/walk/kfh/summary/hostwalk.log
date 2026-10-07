@@ -1,0 +1,21 @@
+HOSTWALK_START 2026-09-26T19:23:08+00:00 rev=9339ee6b
+CLIENT_RC=0
+KF3_BUILD_RC=0 KF3_BUILT /workspace/bench/kf3-bins/9339ee6b/qemu-system-x86_64 rev=9339ee6b mtime=2026-09-26 19:23:23.715043645 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+STAGE 580.159.04 rc=0
+FG_580159_RC=0
+SWAP host=575.57.08 rc=0 got=575.57.08 OPEN_MODULE=yes
+BARE host=575.57.08 cup2 rc=0 CE rv=0xabcd1234 want=0xabcd1234 -> PASS records=798 a637=0
+GATES host=575.57.08 V3_GATES_SUMMARY pass=9 fail=0
+MATRIX_ROW host=575.57.08 guest=580.159.04 rev=9339ee6b FAST_SUITE_PASS=0 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=30 NOTRUN=0 ARMS=30
+FAST_CELL_ARM arm=timer verdict=TIMEOUT secs=182 client_ms=?
+FAST_CELL_ARM arm=engines verdict=TIMEOUT secs=181 client_ms=?
+FAST_CELL_ARM arm=doorbell-census verdict=TIMEOUT secs=181 client_ms=?
+FAST_CELL_ARM arm=gpu-info-sweep verdict=TIMEOUT secs=182 client_ms=?
+FAST_CELL_ARM arm=bus-info-sweep verdict=TIMEOUT secs=181 client_ms=?
+    609 kf-host: HOST-ABI REFUSED NVOS46 map: NVOS46_PARAMETERS: host driver 575.57.08 has no ["kindOverride"], and the request sets them — the host cannot be asked this; refusing rather than letting it read the bytes as another field
+     30 kf-host: HOST-ABI REFUSED control 0x2080170f: NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS does not exist at driver 575.57.08 (measured)
+     30 kf-host: HOST-ABI REFUSED control 0x20809064: host control 0x20809064 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 575.57.08 was never measured
+     30 kf-host: HOST-ABI REFUSED control 0x2080a026: host control 0x2080a026 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 575.57.08 was never measured
+     60 kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 575.57.08 was never measured
+LADDER host=575.57.08 guest=580.159.04 rev=9339ee6b 0/4
+HOSTWALK_STOPPED 2026-09-26T21:22:18+00:00 by the agent: every sub-580 host refuses the per-map PTE kind (NVOS46 kindOverride) — fix first

@@ -1,0 +1,799 @@
+//! ★★★ **`UPDATE_BAR_PDE` (fn 70) — the guest hands us its `PDE3[0]` for OUR BAR2 root**
+//! (`V3_P4_PORT_MAP.md` §2.2, §1.1 row 3; `THE_ARCHITECTURE_v3.md` §4.3).
+//!
+//! On the GSP-offload model CPU-RM owns the BAR2 VA range under `PDE3[0]` and the firmware owns
+//! `PDE3[1]`; only the firmware's root is bound to hardware. CPU-RM builds its own tree (through
+//! the PRAMIN window), reads its own `PDE3[0]` back, and sends that eight-byte value for the
+//! firmware to install in slot 0 of **its** root (`kbusPatchBar2Pdb_GSPCLIENT`,
+//! `ogkm-580: kern_bus.c:826-880`) — whose address it took from `bar2PdeBase`. **We are the
+//! firmware**: the root is a page WE declared (`kf_chip::bar0::FbLayout::bar2_pde_base`), and this
+//! link hands the entry to the memory plane, which writes it into that page on the GPU and walks.
+//!
+//! ★ The reply is HELD until that write has landed and the walk reconciled — the RPC-map
+//! synchronisation point (`the_three_synchronization_points` #2; [`kf_gsp::CommandPolicy::
+//! holds_for_refresh`]). `rpcUpdateBarPde_v15_00` waits for it (`_issueRpcAndWait`,
+//! `ogkm-580: rpc.c:9703-9724`), so the guest cannot build on the root before it exists.
+//!
+//! The body decode is copied from the old tree's `kayfabe-device/src/bar2.rs:256-278` (pure; ran
+//! on hardware). Its log (`BarPdeLog`) is not: v3 carries the statement to the plane that acts on
+//! it instead of recording it beside the plane.
+
+use kf_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction};
+
+/// `NV_OK`.
+const NV_OK: u32 = 0;
+/// `NV_ERR_INVALID_ARGUMENT`.
+const NV_ERR_INVALID_ARGUMENT: u32 = 0x0000_001F;
+/// `NV_RPC_UPDATE_PDE_BAR_1` (`ogkm-580: src/nvidia/inc/kernel/vgpu/rpc_headers.h:224-227`).
+pub const BAR_TYPE_1: u32 = 0;
+/// `NV_RPC_UPDATE_PDE_BAR_2`.
+pub const BAR_TYPE_2: u32 = 1;
+/// `offsetof(UpdateBarPde_v15_00, entryValue)` — `barType` is a 4-byte enum and the member is
+/// `NV_ALIGN_BYTES(8)`, so four bytes of padding sit between them
+/// (`ogkm-580: src/nvidia/generated/g_sdk-structures.h:743-748`). ⚠ Packing it at 4 reads the low
+/// half of the entry as the whole value: a plausible root one 4 GiB region away.
+const ENTRY_VALUE_OFF: usize = 8;
+/// `offsetof(UpdateBarPde_v15_00, entryLevelShift)`.
+const ENTRY_LEVEL_SHIFT_OFF: usize = 16;
+/// `sizeof(UpdateBarPde_v15_00)`.
+pub const UPDATE_BAR_PDE_BODY_SIZE: usize = 24;
+
+/// Which bus aperture a root belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BarAperture {
+    /// The framebuffer window.
+    Bar1,
+    /// The instance window.
+    Bar2,
+}
+
+/// ★ One published root entry, whole. `level_shift` travels with it (`pRootFmt->virtAddrBitLo`)
+/// and is the only statement of which level the entry belongs to.
+///
+/// ⚠ **Zero is a real message**: `kbusDestroyBar2GpuVaSpace` publishes `entryValue = 0` to unroot
+/// the aperture on teardown (`ogkm-580: kern_bus_gm107.c:2137`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PublishedPde {
+    /// The aperture.
+    pub bar: BarAperture,
+    /// `entryValue` — eight raw bytes, as the guest read them out of its own directory.
+    pub entry: u64,
+    /// `entryLevelShift`.
+    pub level_shift: u64,
+}
+
+/// Why a body was refused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BarPdeRefusal {
+    /// Shorter than [`UPDATE_BAR_PDE_BODY_SIZE`].
+    ShortBody {
+        /// Bytes that arrived.
+        len: usize,
+    },
+    /// A `barType` outside `{BAR_1, BAR_2}` (including `_INVALID`, 2).
+    UnknownBarType {
+        /// The value.
+        bar_type: u32,
+    },
+}
+
+/// Decode one `UpdateBarPde_v15_00` body.
+///
+/// # Errors
+/// [`BarPdeRefusal`].
+pub fn decode_update_bar_pde(body: &[u8]) -> Result<PublishedPde, BarPdeRefusal> {
+    if body.len() < UPDATE_BAR_PDE_BODY_SIZE {
+        return Err(BarPdeRefusal::ShortBody { len: body.len() });
+    }
+    let u64_at = |o: usize| {
+        let mut b = [0u8; 8];
+        b.copy_from_slice(&body[o..o + 8]);
+        u64::from_le_bytes(b)
+    };
+    let bar_type = u32::from_le_bytes([body[0], body[1], body[2], body[3]]);
+    let bar = match bar_type {
+        BAR_TYPE_1 => BarAperture::Bar1,
+        BAR_TYPE_2 => BarAperture::Bar2,
+        _ => return Err(BarPdeRefusal::UnknownBarType { bar_type }),
+    };
+    Ok(PublishedPde {
+        bar,
+        entry: u64_at(ENTRY_VALUE_OFF),
+        level_shift: u64_at(ENTRY_LEVEL_SHIFT_OFF),
+    })
+}
+
+/// ★ A statement the guest made about its address spaces, carried to the memory plane.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MemStatement {
+    /// fn 70.
+    BarPde(PublishedPde),
+    /// `SET_PAGE_DIRECTORY` / `COPY_SERVER_RESERVED_PDES` — see
+    /// [`crate::rmrpc::PageDirStatement`].
+    PageDir(crate::rmrpc::PageDirStatement),
+    /// ★ P5c: the guest's VA-space OBJECT is gone — its own free, its device's, or its client's.
+    /// The plane retires the mirror (our rows unmapped, the host space recycled). ⊘ Never for a
+    /// `GPU_DEVICE` reference's own handle: that name is transient (RM frees it right after
+    /// publishing the PDEs, `[measured p5c]`), the device-default space outlives it until the
+    /// DEVICE goes.
+    Retire {
+        /// `hClient`.
+        client: u32,
+        /// The VA-space object.
+        vaspace: u32,
+    },
+    /// ★★ v3-refusals: the guest WITHDREW this VA-space object's page directory
+    /// (`NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY`). The plane stops reading the old root — UVM
+    /// frees that memory right after the reply (`uvm_va_space.c:1479-1483`, `uvm_gpu.c:1332`).
+    UnsetPageDir {
+        /// `hClient` (the ORIGINAL object's, when the unset came through a dup).
+        client: u32,
+        /// The VA-space object.
+        vaspace: u32,
+    },
+    /// ★★★ v3-refusals: the guest's sysmembar (`INTERNAL_BUS_FLUSH_WITH_SYSMEMBAR`,
+    /// [`crate::sysmembar`]). The plane performs it as the host sysmembar verb and only then
+    /// settles, so the held `NV_OK` is posted after the host GPU has flushed.
+    Sysmembar,
+}
+
+/// ★ Where statements go: the device's memory plane. Called on the register drainer, so it must
+/// only ENQUEUE (the plane's own thread does the work); the reply is held meanwhile.
+pub type MemSink = std::sync::Arc<dyn Fn(MemStatement) + Send + Sync>;
+
+/// ★★★ The chain link that answers `UPDATE_BAR_PDE`, hands the entry to the memory plane, and
+/// holds the reply until the plane says the root is written and walked.
+pub struct BarPdePolicy {
+    sink: MemSink,
+    held_last: bool,
+    /// Accepted publications.
+    pub published: u64,
+    /// Refused bodies.
+    pub refused: u64,
+}
+
+impl BarPdePolicy {
+    /// A link that sends to `sink`.
+    #[must_use]
+    pub fn new(sink: MemSink) -> BarPdePolicy {
+        BarPdePolicy {
+            sink,
+            held_last: false,
+            published: 0,
+            refused: 0,
+        }
+    }
+}
+
+impl core::fmt::Debug for BarPdePolicy {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("BarPdePolicy")
+            .field("published", &self.published)
+            .field("refused", &self.refused)
+            .finish()
+    }
+}
+
+impl CommandPolicy for BarPdePolicy {
+    fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        if cmd.function != RpcFunction::UpdateBarPde {
+            return None;
+        }
+        // ⊘ `payload`, not `wire_body()`: the struct has no flexible array and the declared
+        // length covers it whole (`ogkm-580: rpc.c:9710-9718`).
+        match decode_update_bar_pde(&cmd.payload) {
+            Ok(pde) => {
+                (self.sink)(MemStatement::BarPde(pde));
+                self.published += 1;
+                self.held_last = true;
+                // ★ An EMPTY body with NV_OK: the command has no `[OUT]` field.
+                Some(Reply {
+                    rpc_result: NV_OK,
+                    body: Vec::new(),
+                })
+            }
+            Err(e) => {
+                self.refused += 1;
+                self.held_last = false;
+                eprintln!("kf-rm: UPDATE_BAR_PDE refused: {e:?} — the aperture stays as it was");
+                Some(Reply {
+                    rpc_result: NV_ERR_INVALID_ARGUMENT,
+                    body: Vec::new(),
+                })
+            }
+        }
+    }
+
+    /// ★ Held iff the statement went to the plane — a refused body changed nothing to wait for.
+    fn holds_for_refresh(&self, cmd: &RpcCommand) -> bool {
+        cmd.function == RpcFunction::UpdateBarPde && self.held_last
+    }
+}
+
+/// ★★★ **The page-directory statements, carried to the memory plane** (`V3_P4_PORT_MAP.md` §2.2,
+/// Q10): `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` (`0x00801813`, UVM's) and
+/// `COPY_SERVER_RESERVED_PDES` (`0x90f10106` / `0x20800a9f`, every RM-managed VA space at
+/// construct time) become a ROOT on that VA-space object in the plane's `VasTable`.
+///
+/// Two behaviours, by control:
+/// - **The publications are OBSERVED, never answered.** `InitTablePolicy` answers them (its
+///   decode, validation and re-encode) and this link must not take that reply away; it is seated
+///   AHEAD of every answerer so it sees the control at all.
+/// - **`SET_PAGE_DIRECTORY` is ANSWERED** — `NV_OK`, the params echoed (the guest copies the
+///   reply's params back over its caller's struct, `ogkm-580: rpc.c:11085-11090`; the old
+///   `SetPageDirPolicy`'s §16.33 shape). ⊘ Refusing it makes RM roll the directory back
+///   (`ogkm-580: dma.c:531-551`), so a root carried to the plane with the control refused would
+///   be a root the guest abandoned. A sysmem root is refused by name in `rmrpc`
+///   (`SetPageDirRootAperture`) and never reaches here as a statement.
+///
+/// ★ Either way the reply, whoever authors it, is delivered only once the plane has reconciled
+/// the new root (Q10: *"a root change schedules a full walk … the guest-visible RPC reply is held
+/// until the reconcile lands"*). A control that translates to no statement holds nothing.
+pub struct PageDirPolicy {
+    abi: kf_abi::versions::DriverAbiTable,
+    guest_os: kf_abi::GuestOs,
+    sink: MemSink,
+    held_last: bool,
+    /// ★ P5c: every VA-space object allocated, `(hClient, hVaSpace)` → `(parent device, a
+    /// GPU_DEVICE reference)` — what a later free retires.
+    vas: std::collections::BTreeMap<(u32, u32), (u32, bool)>,
+    /// ★ P6b: `DUP_OBJECT` aliases of a VA-space object, `(dst client, dst handle)` → the
+    /// ORIGINAL `(client, handle)`. `DUP_OBJECT` aliases, it does not copy
+    /// (`vaspaceapiCopyConstruct` is `vaspaceIncRefCnt` + the same `pVASpace`, `vaspace_api.c:440`;
+    /// `THE_ARCHITECTURE_v3.md` §4.3): nvidia-uvm dups a user's VA space into its own client
+    /// (`nvUvmInterfaceDupAddressSpace`) and publishes the root through the DUP
+    /// (`uvm_va_space.c:1394`), while the user's channels name the ORIGINAL — `[measured p6b3]`
+    /// the root landed on `0xc1d00001:0xcaf00036` and the user's channel in `0xc1d0000b:0xcafe0010`
+    /// was refused *"has no mirror"*. So a statement through an alias is carried for the original.
+    aliases: std::collections::BTreeMap<(u32, u32), (u32, u32)>,
+    /// ★ v3-gfx: originals whose own name was freed while a dup still referenced them — RM keeps
+    /// the object (refcounted), so the mirror stays until the LAST alias goes. `[measured vgfx
+    /// 2026-09-26]` the Vulkan UMD frees its probe client (the original) and keeps rendering in the
+    /// dup.
+    orphans: std::collections::BTreeSet<(u32, u32)>,
+    /// Statements carried.
+    pub carried: u64,
+    /// ★ P5c: retirements carried.
+    pub retired: u64,
+}
+
+impl PageDirPolicy {
+    /// A link for one guest driver's wire.
+    #[must_use]
+    pub fn new(
+        abi: kf_abi::versions::DriverAbiTable,
+        guest_os: kf_abi::GuestOs,
+        sink: MemSink,
+    ) -> PageDirPolicy {
+        PageDirPolicy {
+            abi,
+            guest_os,
+            sink,
+            held_last: false,
+            vas: Default::default(),
+            aliases: Default::default(),
+            orphans: Default::default(),
+            carried: 0,
+            retired: 0,
+        }
+    }
+
+    /// ★ P5c: observe a VA-space alloc (its parent device and whether it is only a reference to
+    /// the device's default space).
+    fn observe_alloc(&mut self, cmd: &RpcCommand) {
+        let body = cmd.wire_body();
+        let Ok(h) = self.abi.decode_rpc_alloc(body) else {
+            return;
+        };
+        if crate::chanlink::alloc_shape(&self.abi, h.class)
+            != Some(kf_abi::versions::AllocParams::VaSpace)
+        {
+            return;
+        }
+        let device_ref = crate::rmrpc::alloc_params_window(&self.abi, body)
+            .and_then(|p| self.abi.decode_vaspace_index(p))
+            .is_some_and(|i| i == kf_abi::bringup::NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE);
+        self.vas
+            .insert((h.client, h.handle), (h.parent, device_ref));
+    }
+
+    /// ★ P6b: the VA-space object `(client, handle)` names — itself, or the original a dup aliases.
+    #[must_use]
+    pub fn canonical(&self, client: u32, handle: u32) -> (u32, u32) {
+        self.aliases
+            .get(&(client, handle))
+            .copied()
+            .unwrap_or((client, handle))
+    }
+
+    /// ★ P6b: a `DUP_OBJECT` of a VA-space object we know becomes an alias of the original.
+    fn observe_dup(&mut self, cmd: &RpcCommand) {
+        let Ok(d) = self.abi.decode_dup(&cmd.payload) else {
+            return;
+        };
+        let src = self.canonical(d.src_client, d.src_handle);
+        if self.vas.contains_key(&src) {
+            self.aliases.insert((d.dst_client, d.dst_handle), src);
+        }
+    }
+
+    /// ★ P5c: a free — retire every VA-space object it takes with it.
+    fn observe_free(&mut self, cmd: &RpcCommand) {
+        let Ok(f) = self.abi.decode_free(&cmd.payload) else {
+            return;
+        };
+        let (client, object) = (f.client, f.handle);
+        // ★ P6b: an alias's free (or its client's) drops the NAME only — the object lives on
+        // under its original handle, and only the original's free retires it. ⊘ A dup's parent
+        // device is not tracked, so a device free that takes a dup with it leaves a stale name
+        // until the client goes — a name that can only ever resolve to a live original.
+        self.aliases
+            .retain(|&(c, h), _| !(c == client && (object == client || h == object)));
+        let dying: Vec<(u32, u32)> = self
+            .vas
+            .iter()
+            .filter(|((c, v), (dev, device_ref))| {
+                *c == client
+                    && (object == client || *dev == object || (*v == object && !*device_ref))
+            })
+            .map(|(k, _)| *k)
+            .collect();
+        for (c, v) in dying {
+            self.vas.remove(&(c, v));
+            // ★ v3-gfx: still referenced by a dup ⇒ the object lives on; retire it with its last alias.
+            if self.aliases.values().any(|orig| *orig == (c, v)) {
+                self.orphans.insert((c, v));
+                continue;
+            }
+            (self.sink)(MemStatement::Retire {
+                client: c,
+                vaspace: v,
+            });
+            self.retired += 1;
+        }
+        let gone: Vec<(u32, u32)> = self
+            .orphans
+            .iter()
+            .filter(|o| !self.aliases.values().any(|a| a == *o))
+            .copied()
+            .collect();
+        for (c, v) in gone {
+            self.orphans.remove(&(c, v));
+            (self.sink)(MemStatement::Retire {
+                client: c,
+                vaspace: v,
+            });
+            self.retired += 1;
+        }
+    }
+}
+
+impl PageDirPolicy {
+    /// ★★ v3-refusals: `DMA_UNSET_PAGE_DIRECTORY` — answered `NV_OK` and carried to the plane as
+    /// [`MemStatement::UnsetPageDir`], the reply HELD until the plane has withdrawn the root.
+    ///
+    /// `[measured vrf 131f4841]` refused `0x56` twice per CUDA process before (UVM's
+    /// `uvm_gpu_va_space_unset_page_dir` and `deconfigure_address_space`). The guest never saw
+    /// it — `deviceCtrlCmdDmaUnsetPageDirectory_IMPL` overwrites the RPC status with its local
+    /// revoke's (`ogkm-580: dma.c:606-641`) — so the refusal's only effect was ON US: the plane
+    /// kept the withdrawn root, and every later all-PDB invalidate walked page-directory memory
+    /// UVM frees right after the reply. The `NV_OK` is truthful because the plane stops
+    /// reading that root before the reply leaves (the hold); the mirror's rows stay until the
+    /// object retires (`kf_mem::vasmgr::VasTable::clear_root`: nothing unmaps on a guess).
+    ///
+    /// ⊘ Declined (→ the ledger, `0x56`, as before) when the params are not the 8-byte struct
+    /// or name no VA space (`hVASpace = 0`, the device default, which no statement keys).
+    fn unset(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        let h = self.abi.decode_rpc_control(&cmd.payload).ok()?;
+        if h.cmd != UNSET_PAGE_DIRECTORY
+            || h.params_size as usize != UNSET_PAGE_DIRECTORY_PARAMS_SIZE
+        {
+            return None;
+        }
+        let p = cmd
+            .payload
+            .get(h.params_at..h.params_at + UNSET_PAGE_DIRECTORY_PARAMS_SIZE)?;
+        self.unset_statement(h.client, p, cmd)
+    }
+
+    /// ★★ fn 79 — `UNSET_PAGE_DIRECTORY` as its dedicated RPC (the ≤575.64.05 carrier,
+    /// `kf_abi::versions::DriverAbiTable::decode_unset_page_directory_rpc`): the measured wrapper's
+    /// `hClient` and embedded 8-byte params, then exactly the control carrier's statement.
+    /// ⊘ Declined like it (→ the ledger) for a wrapper that does not decode or names no VA space.
+    fn unset_rpc(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        let r = self
+            .abi
+            .decode_unset_page_directory_rpc(&cmd.payload)
+            .ok()?;
+        self.unset_statement(r.client, r.params, cmd)
+    }
+
+    /// The revocation both carriers state, from the control params' bytes.
+    fn unset_statement(&mut self, client: u32, p: &[u8], cmd: &RpcCommand) -> Option<Reply> {
+        let vaspace = u32::from_le_bytes([*p.first()?, *p.get(1)?, *p.get(2)?, *p.get(3)?]);
+        if vaspace == 0 {
+            return None;
+        }
+        let (client, vaspace) = self.canonical(client, vaspace);
+        (self.sink)(MemStatement::UnsetPageDir { client, vaspace });
+        self.carried += 1;
+        self.held_last = true;
+        Some(Reply {
+            rpc_result: NV_OK,
+            body: cmd.payload.clone(),
+        })
+    }
+}
+
+impl core::fmt::Debug for PageDirPolicy {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("PageDirPolicy")
+            .field("carried", &self.carried)
+            .finish()
+    }
+}
+
+/// `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY`.
+const SET_PAGE_DIRECTORY: u32 = 0x0080_1813;
+/// `NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY` (`ogkm-580: ctrl0080dma.h`), params
+/// `{ NvHandle hVASpace; NvU32 subDeviceId; }` — 8 bytes, pure `[IN]`.
+pub const UNSET_PAGE_DIRECTORY: u32 = 0x0080_1814;
+/// `sizeof(NV0080_CTRL_DMA_UNSET_PAGE_DIRECTORY_PARAMS)`.
+const UNSET_PAGE_DIRECTORY_PARAMS_SIZE: usize = 8;
+
+impl CommandPolicy for PageDirPolicy {
+    fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        self.held_last = false;
+        match cmd.function {
+            // ★ P5c: observed, never answered — the object seat answers both.
+            RpcFunction::RmAlloc => {
+                self.observe_alloc(cmd);
+                return None;
+            }
+            RpcFunction::Free => {
+                self.observe_free(cmd);
+                return None;
+            }
+            RpcFunction::DupObject => {
+                self.observe_dup(cmd);
+                return None;
+            }
+            RpcFunction::RmControl => {
+                if let Some(r) = self.unset(cmd) {
+                    return Some(r);
+                }
+            }
+            // ★★ The ≤575.64.05 carriers (fn 54 / fn 79): the same two statements, the same
+            // answers, the same holds — `crate::rmrpc::translate_set_page_directory_rpc` shares the
+            // SET statement's one function with the control carrier.
+            RpcFunction::SetPageDirectory => {}
+            RpcFunction::UnsetPageDirectory => return self.unset_rpc(cmd),
+            _ => return None,
+        }
+        let Ok(crate::rmrpc::Translation::PageDir(mut st)) =
+            crate::rmrpc::translate(&self.abi, self.guest_os, cmd)
+        else {
+            return None;
+        };
+        // ★ P6b: a root published through a dup is the ORIGINAL object's root.
+        let (c, v) = self.canonical(st.client.0, st.vaspace.0);
+        if std::env::var_os("KF_VAS_CENSUS").is_some() {
+            // Which carrier stated this root (a control id, or the ≤575 fn 54) — the plane's
+            // `pagedir` line cannot say, and two carriers can name one VA space.
+            let carrier = match cmd.function {
+                RpcFunction::RmControl => self.abi.decode_rpc_control(&cmd.payload).map_or_else(
+                    |_| "an undecodable control".to_string(),
+                    |h| format!("control {:#010x}", h.cmd),
+                ),
+                _ => format!("fn {}", cmd.code),
+            };
+            eprintln!(
+                "kf-rm: census pagedir statement {:#x}:{:#x} (as {c:#x}:{v:#x}) root={:#x} {:?} via {carrier}",
+                st.client.0, st.vaspace.0, st.pdb.0, st.pdb_aperture
+            );
+        }
+        st.client = kf_arch::ids::HClient(c);
+        st.vaspace = kf_arch::ids::HObject(v);
+        (self.sink)(MemStatement::PageDir(st));
+        self.carried += 1;
+        self.held_last = true;
+        // ★ fn 54 IS the set; a control carrier is answered only for `0x00801813` (the
+        // publications are observed here and answered by `InitTablePolicy`). The fn-54 echo is
+        // the guest's own 48 bytes: `rpcSetPageDirectory_v1E_05` reads only the status back
+        // (`575.57.08: rpc.c:9238-9270`).
+        let is_set = cmd.function == RpcFunction::SetPageDirectory
+            || self
+                .abi
+                .decode_rpc_control(&cmd.payload)
+                .is_ok_and(|h| h.cmd == SET_PAGE_DIRECTORY);
+        is_set.then(|| Reply {
+            rpc_result: NV_OK,
+            body: cmd.payload.clone(),
+        })
+    }
+
+    fn holds_for_refresh(&self, cmd: &RpcCommand) -> bool {
+        matches!(
+            cmd.function,
+            RpcFunction::RmControl
+                | RpcFunction::SetPageDirectory
+                | RpcFunction::UnsetPageDirectory
+        ) && self.held_last
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    fn body(bar_type: u32, entry: u64, shift: u64) -> Vec<u8> {
+        let mut b = vec![0u8; UPDATE_BAR_PDE_BODY_SIZE];
+        b[0..4].copy_from_slice(&bar_type.to_le_bytes());
+        b[4..8].copy_from_slice(&[0xAA; 4]); // the padding must not be read
+        b[8..16].copy_from_slice(&entry.to_le_bytes());
+        b[16..24].copy_from_slice(&shift.to_le_bytes());
+        b
+    }
+
+    /// `[cap3 #159657]` the guest read `PDE3[0] = 0x2efbc302` through PRAMIN just before fn 70.
+    #[test]
+    fn the_measured_entry_decodes_whole_and_skips_the_padding() {
+        let p = decode_update_bar_pde(&body(BAR_TYPE_2, 0x2_efbc_302, 47)).unwrap();
+        assert_eq!(
+            p,
+            PublishedPde {
+                bar: BarAperture::Bar2,
+                entry: 0x2_efbc_302,
+                level_shift: 47
+            }
+        );
+        assert_eq!(
+            decode_update_bar_pde(&[0; 23]),
+            Err(BarPdeRefusal::ShortBody { len: 23 })
+        );
+        assert_eq!(
+            decode_update_bar_pde(&body(2, 1, 1)),
+            Err(BarPdeRefusal::UnknownBarType { bar_type: 2 })
+        );
+    }
+
+    fn cmd(function: RpcFunction, payload: Vec<u8>) -> RpcCommand {
+        RpcCommand {
+            function,
+            code: 0x46,
+            sequence: 1,
+            payload,
+            elements: 1,
+            delivered: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn an_accepted_entry_reaches_the_plane_and_its_reply_is_held() {
+        let got: Arc<Mutex<Vec<MemStatement>>> = Arc::default();
+        let g = got.clone();
+        let mut p = BarPdePolicy::new(Arc::new(move |s| g.lock().unwrap().push(s)));
+        let c = cmd(
+            RpcFunction::UpdateBarPde,
+            body(BAR_TYPE_2, 0x2_efbc_302, 47),
+        );
+        let r = p.respond(&c).unwrap();
+        assert_eq!((r.rpc_result, r.body.len()), (NV_OK, 0));
+        assert!(p.holds_for_refresh(&c));
+        assert_eq!(got.lock().unwrap().len(), 1);
+
+        let bad = cmd(RpcFunction::UpdateBarPde, vec![0; 4]);
+        assert_eq!(p.respond(&bad).unwrap().rpc_result, NV_ERR_INVALID_ARGUMENT);
+        assert!(
+            !p.holds_for_refresh(&bad),
+            "a refusal holds nothing — a held reply nobody releases is a hang"
+        );
+        assert_eq!(got.lock().unwrap().len(), 1);
+        assert!(
+            p.respond(&cmd(RpcFunction::RmAlloc, vec![])).is_none(),
+            "declines everything else"
+        );
+    }
+
+    /// ★★ v3-refusals: `DMA_UNSET_PAGE_DIRECTORY` through a DUP is answered `NV_OK`, HELD, and
+    /// withdraws the ORIGINAL object's root (UVM unsets through its dup of the user's space, as it
+    /// set it); a short params image or `hVASpace = 0` is declined to the ledger as before.
+    #[test]
+    fn an_unset_through_a_dup_withdraws_the_originals_root_and_is_held() {
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
+        let seen: Arc<Mutex<Vec<MemStatement>>> = Arc::default();
+        let s2 = seen.clone();
+        let mut p = PageDirPolicy::new(
+            abi,
+            kf_abi::GuestOs::Linux,
+            Arc::new(move |st| s2.lock().unwrap().push(st)),
+        );
+        let words = |w: &[u32]| w.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>();
+        let (orig, alias) = (
+            (0xc1d0_0016u32, 0xcaf0_0003u32),
+            (0xc1d0_001au32, 0xbeef_0300u32),
+        );
+        p.vas.insert(orig, (0xcaf0_0001, false));
+        p.respond(&cmd(
+            RpcFunction::DupObject,
+            words(&[alias.0, 0xbeef_0003, alias.1, orig.0, orig.1, 0, 0]),
+        ));
+        let unset = |client: u32, device: u32, params: &[u8]| {
+            let mut payload = vec![0u8; 40 + params.len()];
+            payload[0..4].copy_from_slice(&client.to_le_bytes());
+            payload[4..8].copy_from_slice(&device.to_le_bytes());
+            payload[8..12].copy_from_slice(&UNSET_PAGE_DIRECTORY.to_le_bytes());
+            payload[16..20].copy_from_slice(&(params.len() as u32).to_le_bytes());
+            payload[40..].copy_from_slice(params);
+            cmd(RpcFunction::RmControl, payload)
+        };
+        // `nvGpuOpsUnsetPageDirectory`: hVASpace = UVM's dup, subDeviceId = instance + 1.
+        let c = unset(alias.0, 0xbeef_0003, &words(&[alias.1, 1]));
+        let r = p.respond(&c).expect("answered");
+        assert_eq!(r.rpc_result, NV_OK);
+        assert_eq!(
+            r.body, c.payload,
+            "params echoed: the control has no [OUT] field"
+        );
+        assert!(
+            p.holds_for_refresh(&c),
+            "held until the plane has withdrawn the root"
+        );
+        assert_eq!(
+            seen.lock().unwrap().as_slice(),
+            &[MemStatement::UnsetPageDir {
+                client: orig.0,
+                vaspace: orig.1
+            }]
+        );
+        for bad in [
+            unset(alias.0, 0xbeef_0003, &words(&[0, 1])),
+            unset(alias.0, 0xbeef_0003, &words(&[alias.1])),
+        ] {
+            assert!(
+                p.respond(&bad).is_none(),
+                "declined: no VA space named, or not the 8-byte struct"
+            );
+            assert!(
+                !p.holds_for_refresh(&bad),
+                "a declined control holds nothing"
+            );
+        }
+        assert_eq!(seen.lock().unwrap().len(), 1);
+    }
+
+    /// ★★ The ≤575.64.05 carriers (`V3_DRIVER_MATRIX.md` §6, the 575 `cuInit` wall): fn 54 from a
+    /// 575.57.08 guest states EXACTLY what `0x00801813` states from a bench-driver guest — the
+    /// same statement, `NV_OK`, the guest's own bytes echoed, the reply held — and fn 79 withdraws
+    /// it. A wrapper naming no VA space is declined (→ the ledger) and holds nothing.
+    #[test]
+    fn the_575_page_directory_rpcs_state_what_the_580_control_states() {
+        let v575 = kf_abi::DriverVersion {
+            major: 575,
+            minor: 57,
+            patch: 8,
+        };
+        let (client, device, vas) = (0xc1d0_0001u32, 0xcaf0_0002u32, 0xcaf0_0036u32);
+        let params = |vas: u32| {
+            let mut p = vec![0u8; 32];
+            p[0..8].copy_from_slice(&0x2_0440_0000u64.to_le_bytes()); // physAddress
+            p[8..12].copy_from_slice(&512u32.to_le_bytes()); // numEntries
+            p[12..16].copy_from_slice(&0x8u32.to_le_bytes()); // flags: aperture VIDMEM (bits 1:0 = 0)
+            p[16..20].copy_from_slice(&vas.to_le_bytes()); // hVASpace
+            p[24..28].copy_from_slice(&1u32.to_le_bytes()); // subDeviceId
+            p
+        };
+        let run = |abi: kf_abi::versions::DriverAbiTable, c: &RpcCommand| {
+            let seen: Arc<Mutex<Vec<MemStatement>>> = Arc::default();
+            let s2 = seen.clone();
+            let mut p = PageDirPolicy::new(
+                abi,
+                kf_abi::GuestOs::Linux,
+                Arc::new(move |st| s2.lock().unwrap().push(st)),
+            );
+            let r = p.respond(c);
+            let held = p.holds_for_refresh(c);
+            let got = seen.lock().unwrap().clone();
+            (r, held, got)
+        };
+        // The 580 control carrier, in the bench driver's measured RM-control wire.
+        let bench = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
+        let w = bench.rm_control_wire();
+        let mut ctl = vec![0u8; w.params_off + 32];
+        ctl[0..4].copy_from_slice(&client.to_le_bytes());
+        ctl[4..8].copy_from_slice(&device.to_le_bytes());
+        ctl[8..12].copy_from_slice(&SET_PAGE_DIRECTORY.to_le_bytes());
+        ctl[w.params_size_off..w.params_size_off + 4].copy_from_slice(&32u32.to_le_bytes());
+        ctl[w.params_off..].copy_from_slice(&params(vas));
+        let (r580, held580, st580) = run(bench, &cmd(RpcFunction::RmControl, ctl));
+        assert_eq!(r580.expect("the control is answered").rpc_result, NV_OK);
+        assert!(held580 && st580.len() == 1, "{st580:?}");
+
+        // The 575 dedicated carrier: `rpc_set_page_directory_v` {hClient, hDevice, pasid, pad, params}.
+        let t575 = *kf_abi::versions::table_for(v575).expect("575 table");
+        let fn54 = |vas: u32| {
+            let mut b = vec![0u8; 48];
+            b[0..4].copy_from_slice(&client.to_le_bytes());
+            b[4..8].copy_from_slice(&device.to_le_bytes());
+            b[16..48].copy_from_slice(&params(vas));
+            cmd(RpcFunction::SetPageDirectory, b)
+        };
+        let c = fn54(vas);
+        let (r575, held575, st575) = run(t575, &c);
+        let r575 = r575.expect("fn 54 is answered");
+        assert_eq!(
+            (r575.rpc_result, &r575.body),
+            (NV_OK, &c.payload),
+            "NV_OK, the guest's bytes echoed"
+        );
+        assert!(held575, "held until the plane has reconciled the root");
+        assert_eq!(st575, st580, "fn 54 states exactly what the control states");
+
+        let (none, held0, st0) = run(t575, &fn54(0));
+        assert!(
+            none.is_none() && !held0 && st0.is_empty(),
+            "no VA space named ⇒ declined, nothing held"
+        );
+
+        // fn 79: `rpc_unset_page_directory_v` {hClient, hDevice, params {hVASpace, subDeviceId}}.
+        let mut b = vec![0u8; 16];
+        b[0..4].copy_from_slice(&client.to_le_bytes());
+        b[4..8].copy_from_slice(&device.to_le_bytes());
+        b[8..12].copy_from_slice(&vas.to_le_bytes());
+        b[12..16].copy_from_slice(&1u32.to_le_bytes());
+        let c = cmd(RpcFunction::UnsetPageDirectory, b);
+        let (r, held, st) = run(t575, &c);
+        assert_eq!(r.expect("fn 79 is answered").rpc_result, NV_OK);
+        assert!(held);
+        assert_eq!(
+            st.as_slice(),
+            &[MemStatement::UnsetPageDir {
+                client,
+                vaspace: vas
+            }]
+        );
+    }
+
+    /// ★ v3-gfx: the original VA space's free does NOT retire its mirror while a dup still names
+    /// it; the last alias's free does.
+    #[test]
+    fn an_original_freed_under_a_live_dup_retires_with_its_last_alias() {
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
+        let seen: Arc<Mutex<Vec<MemStatement>>> = Arc::default();
+        let s2 = seen.clone();
+        let mut p = PageDirPolicy::new(
+            abi,
+            kf_abi::GuestOs::Linux,
+            Arc::new(move |st| s2.lock().unwrap().push(st)),
+        );
+        let words = |w: &[u32]| w.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>();
+        let (orig, alias) = (
+            (0xc1d0_0016u32, 0xfade_0003u32),
+            (0xc1d0_001au32, 0xbeef_0300u32),
+        );
+        p.vas.insert(orig, (0xfade_0001, false));
+        p.respond(&cmd(
+            RpcFunction::DupObject,
+            words(&[alias.0, 0xbeef_0003, alias.1, orig.0, orig.1, 0, 0]),
+        ));
+        assert_eq!(p.canonical(alias.0, alias.1), orig);
+        p.respond(&cmd(RpcFunction::Free, words(&[orig.0, 0, orig.0, 0])));
+        assert!(
+            seen.lock().unwrap().is_empty(),
+            "retired under a live dup: {:?}",
+            seen.lock().unwrap()
+        );
+        p.respond(&cmd(
+            RpcFunction::Free,
+            words(&[alias.0, 0xbeef_0003, alias.1, 0]),
+        ));
+        assert_eq!(
+            seen.lock().unwrap().as_slice(),
+            &[MemStatement::Retire {
+                client: orig.0,
+                vaspace: orig.1
+            }]
+        );
+    }
+}

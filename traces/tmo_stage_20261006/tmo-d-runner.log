@@ -1,0 +1,103 @@
+Formatting '/var/lib/kf-sdr-lut-20261006/tmo-d/guest.qcow2', fmt=qcow2 cluster_size=65536 extended_l2=off compression_type=zlib size=35970351104 backing_file=/var/lib/kf-linux-color-20261006/default.qcow2 backing_fmt=qcow2 lazy_refcounts=off refcount_bits=16
+COLOR_EVENT {'label': 'start', 'utc': '2026-10-06T21:26:11.042364+00:00'}
+COLOR_EVENT {'label': 'driver', 'utc': '2026-10-06T21:26:20.690027+00:00'}
+COLOR_EVENT {'label': 'copy-color_properties', 'utc': '2026-10-06T21:26:22.090743+00:00'}
+COLOR_EVENT {'label': 'copy-reject_gamma', 'utc': '2026-10-06T21:26:22.222641+00:00'}
+COLOR_EVENT {'label': 'copy-wl_scene', 'utc': '2026-10-06T21:26:22.352080+00:00'}
+COLOR_EVENT {'label': 'copy-request_tmo', 'utc': '2026-10-06T21:26:22.482339+00:00'}
+COLOR_EVENT {'label': 'build-clients', 'utc': '2026-10-06T21:26:22.619626+00:00'}
+COLOR_EVENT {'label': 'build-tmo', 'utc': '2026-10-06T21:26:23.128586+00:00'}
+COLOR_EVENT {'label': 'kms-before', 'utc': '2026-10-06T21:26:23.326913+00:00'}
+COLOR_EVENT {'label': 'weston-start', 'utc': '2026-10-06T21:26:23.456775+00:00'}
+COLOR_EVENT {'label': 'weston-scene', 'utc': '2026-10-06T21:26:28.596039+00:00'}
+COLOR_EVENT {'label': 'weston-scene', 'utc': '2026-10-06T21:26:33.731813+00:00'}
+COLOR_EVENT {'label': 'weston-result', 'utc': '2026-10-06T21:26:33.746935+00:00'}
+COLOR_EVENT {'label': 'weston-stop', 'utc': '2026-10-06T21:26:33.888033+00:00'}
+COLOR_EVENT {'label': 'tmo-control-off', 'utc': '2026-10-06T21:26:37.050534+00:00'}
+COLOR_EVENT {'label': 'sway-start', 'utc': '2026-10-06T21:26:37.181291+00:00'}
+COLOR_EVENT {'label': 'sway-scene', 'utc': '2026-10-06T21:26:44.327243+00:00'}
+COLOR_EVENT {'label': 'sway-before', 'utc': '2026-10-06T21:26:49.458571+00:00'}
+COLOR_EVENT {'label': 'sway-before', 'utc': '2026-10-06T21:26:49.480900+00:00'}
+COLOR_EVENT {'label': 'warm-start', 'utc': '2026-10-06T21:26:49.635489+00:00'}
+COLOR_EVENT {'label': 'sway-warm', 'utc': '2026-10-06T21:26:55.779168+00:00'}
+COLOR_EVENT {'label': 'sway-warm', 'utc': '2026-10-06T21:26:55.797363+00:00'}
+COLOR_EVENT {'label': 'warm-stop', 'utc': '2026-10-06T21:26:55.939401+00:00'}
+COLOR_EVENT {'label': 'sway-restored', 'utc': '2026-10-06T21:27:00.073270+00:00'}
+COLOR_EVENT {'label': 'sway-restored', 'utc': '2026-10-06T21:27:00.097143+00:00'}
+COLOR_EVENT {'label': 'dmesg-after', 'utc': '2026-10-06T21:27:00.245958+00:00'}
+COLOR_EVENT {'label': 'stop', 'utc': '2026-10-06T21:27:00.388612+00:00'}
+COLOR_EVENT {'label': 'exit-0', 'utc': '2026-10-06T21:27:08.696468+00:00'}
+{
+  "schema": "kayfabe-linux-tmo-stage/1",
+  "source_revision": "8dde9b51dd42e88a4340d7cafe2a2dfb90bc6040",
+  "qemu_sha256": "bf34c60a638a7e86f44f97993603b611298ea98c13ca10de4fbf2220f0b7aac4",
+  "harness_sha256": "d849c1f6146019e4b62b892996a2784223b5233736b0f382aa57d274125c80b4",
+  "checks": {
+    "baseline_gpu_scene_ready": true,
+    "request_adapter_armed": true,
+    "grayscale_nonzero_baseline": true,
+    "tmo_property_available": true,
+    "requested_zero_curve_in_kms_state": true,
+    "real_non_test_atomic_accepted": true,
+    "nonzero_tmo_method_binding": true,
+    "tmo_control_programmed": true,
+    "nonzero_tmo_binding_armed_at_capture": true,
+    "trace_budget_not_exhausted": true,
+    "warm_scene_frame_callback": true,
+    "output_changed": true,
+    "zero_curve_output_black": true,
+    "restored_identical": true,
+    "restored_scene_ready": true,
+    "no_scanout_refusal": true
+  },
+  "passed": true,
+  "verdict": "PASS",
+  "failure_reasons": [],
+  "nonzero_tmo_bindings": [
+    [
+      "7",
+      "0x10099"
+    ],
+    [
+      "7",
+      "0x1009c"
+    ],
+    [
+      "7",
+      "0x10099"
+    ]
+  ],
+  "tmo_control_words": [
+    [
+      "7",
+      "0x40509"
+    ],
+    [
+      "7",
+      "0x40509"
+    ],
+    [
+      "7",
+      "0x40509"
+    ]
+  ],
+  "armed_tmo_windows": {
+    "7": true,
+    "8": false
+  },
+  "accepted_real_atomics": 3,
+  "screenshot_rgb_sha256": {
+    "sway-before": "9449c5353875d3b003b607a478df9e6303feb0216c34719564a549f8a597340f",
+    "sway-warm": "1f56bd4f609fab80a2b9cce7487d5c08de2768476849e1353881ca748d8d3b6a",
+    "sway-restored": "9449c5353875d3b003b607a478df9e6303feb0216c34719564a549f8a597340f"
+  },
+  "trace_method_records": 20264,
+  "trace_budget_remaining": 45272,
+  "missing_property_request_blocked_by_guest_adapter": false,
+  "limitations": [
+    "One grayscale zero-intensity fixture; no general TMO/HDR parity claim.",
+    "A nonzero binding alone does not prove processing.",
+    "Method arming is not an independent RM channel-lifetime proof.",
+    "The first missing-property gate rejects before kernel submission."
+  ]
+}

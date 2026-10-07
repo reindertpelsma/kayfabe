@@ -1,0 +1,201 @@
+=== boot_capture tag=llm_g2 at 2026-09-25T21:07:42+00:00 ===
+=== source revision: fb851ade ===
+=== qemu binary: -rwxr-xr-x 1 root root 95798888 Sep 25 19:46 /workspace/bench/kf3-bins/53c2bc20/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:f8cfe8d77f88ddff6471dd67ccde96325d252d15 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kf-llm/scripts/bench/boot_nvkvm.sh  sha256=7454bf433c1d9212
+    used: /root/kf-llm/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Fri Sep 25 21:07:50 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3060        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep 25 21:07 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep 25 21:07 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep 25 21:07 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep 25 21:07 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep 25 21:07 .
+drwxr-xr-x 18 root root   4000 Sep 25 21:07 ..
+cr--------  1 root root 240, 1 Sep 25 21:07 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep 25 21:07 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kf-llm/scripts/bench/llm_parity_hook.sh at 2026-09-25T21:07:57+00:00 ===
+LP_GUEST_PM=Enabled Legacy persistence mode for GPU 00000000:00:03.0. All done. Enabled 
+LP_GUEST_SMI=NVIDIA GeForce RTX 3060, 580.159.04
+LP_GUEST_NPROC=4 LP_GUEST_MEM=7941
+LP_START lane=guest_pm date=2026-09-25T21:08:03+00:00 model=Qwen/Qwen2-0.5B-Instruct snapshot=[c540970f9e29518b1d8f06ab8b24cba66ad77b6d] short=3 long= x3 warm=1
+LP lane=guest_pm kind=short ntok=16 proc=1 LLM_DEVICE=cuda
+LP lane=guest_pm kind=short ntok=16 proc=1 TORCH_CUDA_AVAILABLE=True
+LP lane=guest_pm kind=short ntok=16 proc=1 TORCH_DEV_COUNT=1
+LP lane=guest_pm kind=short ntok=16 proc=1 LLM_PARAM_DEVICE=cuda
+LP lane=guest_pm kind=short ntok=16 proc=1 LLM_RATIO_ELIGIBLE=1
+LP lane=guest_pm kind=short ntok=16 proc=1 LLM_TEXT= ______. A. Paris B. London C. New York D
+LP lane=guest_pm kind=short ntok=16 proc=1 LLM_TEXT_SHA256=51e95abb645c421494a10e6e218bfc494ec69ae995947126fa9c0c08f18d20fa
+LP lane=guest_pm kind=short ntok=16 proc=1 LLM_OK=1
+LP lane=guest_pm kind=short ntok=16 proc=1 LLM_TOKENS=16
+LP lane=guest_pm kind=short ntok=16 proc=1 LLM_MS=6967.5
+LP lane=guest_pm kind=short ntok=16 proc=1 LLM_RC=0
+LP_EXT lane=guest_pm kind=short ntok=16 proc=1 ext_ms=41875 rc=0
+LP lane=guest_pm kind=short ntok=16 proc=2 LLM_DEVICE=cuda
+LP lane=guest_pm kind=short ntok=16 proc=2 TORCH_CUDA_AVAILABLE=True
+LP lane=guest_pm kind=short ntok=16 proc=2 TORCH_DEV_COUNT=1
+LP lane=guest_pm kind=short ntok=16 proc=2 LLM_PARAM_DEVICE=cuda
+LP lane=guest_pm kind=short ntok=16 proc=2 LLM_RATIO_ELIGIBLE=1
+LP lane=guest_pm kind=short ntok=16 proc=2 LLM_TEXT= ______. A. Paris B. London C. New York D
+LP lane=guest_pm kind=short ntok=16 proc=2 LLM_TEXT_SHA256=51e95abb645c421494a10e6e218bfc494ec69ae995947126fa9c0c08f18d20fa
+LP lane=guest_pm kind=short ntok=16 proc=2 LLM_OK=1
+LP lane=guest_pm kind=short ntok=16 proc=2 LLM_TOKENS=16
+LP lane=guest_pm kind=short ntok=16 proc=2 LLM_MS=6164.1
+LP lane=guest_pm kind=short ntok=16 proc=2 LLM_RC=0
+LP_EXT lane=guest_pm kind=short ntok=16 proc=2 ext_ms=20346 rc=0
+LP lane=guest_pm kind=short ntok=16 proc=3 LLM_DEVICE=cuda
+LP lane=guest_pm kind=short ntok=16 proc=3 TORCH_CUDA_AVAILABLE=True
+LP lane=guest_pm kind=short ntok=16 proc=3 TORCH_DEV_COUNT=1
+LP lane=guest_pm kind=short ntok=16 proc=3 LLM_PARAM_DEVICE=cuda
+LP lane=guest_pm kind=short ntok=16 proc=3 LLM_RATIO_ELIGIBLE=1
+LP lane=guest_pm kind=short ntok=16 proc=3 LLM_TEXT= ______. A. Paris B. London C. New York D
+LP lane=guest_pm kind=short ntok=16 proc=3 LLM_TEXT_SHA256=51e95abb645c421494a10e6e218bfc494ec69ae995947126fa9c0c08f18d20fa
+LP lane=guest_pm kind=short ntok=16 proc=3 LLM_OK=1
+LP lane=guest_pm kind=short ntok=16 proc=3 LLM_TOKENS=16
+LP lane=guest_pm kind=short ntok=16 proc=3 LLM_MS=3936.9
+LP lane=guest_pm kind=short ntok=16 proc=3 LLM_RC=0
+LP_EXT lane=guest_pm kind=short ntok=16 proc=3 ext_ms=19007 rc=0
+LP lane=guest_pm kind=graph ntok=512 proc=1 LLM_PARAM_DEVICE=cuda
+LP lane=guest_pm kind=graph ntok=512 proc=1 LLM_EXC=RuntimeError: CUDA error: unspecified launch failure
+LP lane=guest_pm kind=graph ntok=512 proc=1 LLM_TEXT=
+LP lane=guest_pm kind=graph ntok=512 proc=1 LLM_TEXT_SHA256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+LP lane=guest_pm kind=graph ntok=512 proc=1 LLM_OK=0
+LP_EXT lane=guest_pm kind=graph ntok=512 proc=1 ext_ms=14848 rc=1
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=1 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=1 Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:   0%|          | 1/290 [00:00<00:35,  8.03it/s]Loading weights:  47%|████▋     | 136/290 [00:00<00:00, 684.20it/s]Loading weights:  72%|███████▏  | 208/290 [00:00<00:00, 698.56it/s]Loading weights:  97%|█████████▋| 280/290 [00:00<00:00, 672.20it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 641.59it/s]
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=1 LLM_PARAM_DEVICE=cuda
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=1 LLM_EXC=RuntimeError: CUDA error: unspecified launch failure
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=1 CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=1 For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=1 Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=1 
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=1 LLM_TEXT=
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=1 LLM_TEXT_SHA256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=1 LLM_OK=0
+LP lane=guest_pm kind=graph ntok=512 proc=2 LLM_PARAM_DEVICE=cuda
+LP lane=guest_pm kind=graph ntok=512 proc=2 LLM_EXC=RuntimeError: CUDA error: unspecified launch failure
+LP lane=guest_pm kind=graph ntok=512 proc=2 LLM_TEXT=
+LP lane=guest_pm kind=graph ntok=512 proc=2 LLM_TEXT_SHA256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+LP lane=guest_pm kind=graph ntok=512 proc=2 LLM_OK=0
+LP_EXT lane=guest_pm kind=graph ntok=512 proc=2 ext_ms=15003 rc=1
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=2 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=2 Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  22%|██▏       | 64/290 [00:00<00:00, 607.77it/s]Loading weights:  47%|████▋     | 135/290 [00:00<00:00, 664.32it/s]Loading weights:  71%|███████▏  | 207/290 [00:00<00:00, 686.64it/s]Loading weights:  95%|█████████▌| 276/290 [00:00<00:00, 670.42it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 684.36it/s]
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=2 LLM_PARAM_DEVICE=cuda
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=2 LLM_EXC=RuntimeError: CUDA error: unspecified launch failure
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=2 CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=2 For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=2 Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=2 
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=2 LLM_TEXT=
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=2 LLM_TEXT_SHA256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=2 LLM_OK=0
+LP lane=guest_pm kind=graph ntok=512 proc=3 LLM_PARAM_DEVICE=cuda
+LP lane=guest_pm kind=graph ntok=512 proc=3 LLM_EXC=RuntimeError: CUDA error: unspecified launch failure
+LP lane=guest_pm kind=graph ntok=512 proc=3 LLM_TEXT=
+LP lane=guest_pm kind=graph ntok=512 proc=3 LLM_TEXT_SHA256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+LP lane=guest_pm kind=graph ntok=512 proc=3 LLM_OK=0
+LP_EXT lane=guest_pm kind=graph ntok=512 proc=3 ext_ms=15718 rc=1
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=3 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=3 Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:   0%|          | 1/290 [00:00<01:36,  2.99it/s]Loading weights:  60%|█████▉    | 173/290 [00:00<00:00, 512.22it/s]Loading weights:  94%|█████████▍| 272/290 [00:00<00:00, 529.44it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 461.03it/s]
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=3 LLM_PARAM_DEVICE=cuda
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=3 LLM_EXC=RuntimeError: CUDA error: unspecified launch failure
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=3 CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=3 For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=3 Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=3 
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=3 LLM_TEXT=
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=3 LLM_TEXT_SHA256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+LP_FAILTAIL lane=guest_pm kind=graph ntok=512 proc=3 LLM_OK=0
+LP lane=guest_pm kind=graph ntok=2048 proc=1 LLM_PARAM_DEVICE=cuda
+LP lane=guest_pm kind=graph ntok=2048 proc=1 LLM_EXC=RuntimeError: CUDA error: unspecified launch failure
+LP lane=guest_pm kind=graph ntok=2048 proc=1 LLM_TEXT=
+LP lane=guest_pm kind=graph ntok=2048 proc=1 LLM_TEXT_SHA256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+LP lane=guest_pm kind=graph ntok=2048 proc=1 LLM_OK=0
+LP_EXT lane=guest_pm kind=graph ntok=2048 proc=1 ext_ms=15179 rc=1
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=1 Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:   7%|▋         | 21/290 [00:00<00:01, 207.41it/s]Loading weights:  47%|████▋     | 137/290 [00:00<00:00, 763.93it/s]Loading weights:  74%|███████▍  | 216/290 [00:00<00:00, 773.00it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 728.00it/s]
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=1 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=1 LLM_PARAM_DEVICE=cuda
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=1 LLM_EXC=RuntimeError: CUDA error: unspecified launch failure
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=1 CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=1 For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=1 Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=1 
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=1 LLM_TEXT=
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=1 LLM_TEXT_SHA256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=1 LLM_OK=0
+LP lane=guest_pm kind=graph ntok=2048 proc=2 LLM_PARAM_DEVICE=cuda
+LP lane=guest_pm kind=graph ntok=2048 proc=2 LLM_EXC=RuntimeError: CUDA error: unspecified launch failure
+LP lane=guest_pm kind=graph ntok=2048 proc=2 LLM_TEXT=
+LP lane=guest_pm kind=graph ntok=2048 proc=2 LLM_TEXT_SHA256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+LP lane=guest_pm kind=graph ntok=2048 proc=2 LLM_OK=0
+LP_EXT lane=guest_pm kind=graph ntok=2048 proc=2 ext_ms=14694 rc=1
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=2 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=2 Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  22%|██▏       | 63/290 [00:00<00:00, 614.42it/s]Loading weights:  51%|█████     | 147/290 [00:00<00:00, 736.21it/s]Loading weights:  76%|███████▌  | 221/290 [00:00<00:00, 689.00it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 729.72it/s]
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=2 LLM_PARAM_DEVICE=cuda
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=2 LLM_EXC=RuntimeError: CUDA error: unspecified launch failure
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=2 CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=2 For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=2 Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=2 
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=2 LLM_TEXT=
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=2 LLM_TEXT_SHA256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=2 LLM_OK=0
+LP lane=guest_pm kind=graph ntok=2048 proc=3 LLM_PARAM_DEVICE=cuda
+LP lane=guest_pm kind=graph ntok=2048 proc=3 LLM_EXC=RuntimeError: CUDA error: unspecified launch failure
+LP lane=guest_pm kind=graph ntok=2048 proc=3 LLM_TEXT=
+LP lane=guest_pm kind=graph ntok=2048 proc=3 LLM_TEXT_SHA256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+LP lane=guest_pm kind=graph ntok=2048 proc=3 LLM_OK=0
+LP_EXT lane=guest_pm kind=graph ntok=2048 proc=3 ext_ms=15030 rc=1
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=3 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=3 Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  27%|██▋       | 79/290 [00:00<00:00, 789.60it/s]Loading weights:  54%|█████▍    | 158/290 [00:00<00:00, 768.16it/s]Loading weights:  81%|████████  | 235/290 [00:00<00:00, 699.43it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 747.62it/s]
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=3 LLM_PARAM_DEVICE=cuda
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=3 LLM_EXC=RuntimeError: CUDA error: unspecified launch failure
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=3 CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=3 For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=3 Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=3 
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=3 LLM_TEXT=
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=3 LLM_TEXT_SHA256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+LP_FAILTAIL lane=guest_pm kind=graph ntok=2048 proc=3 LLM_OK=0
+LP_DONE lane=guest_pm date=2026-09-25T21:10:55+00:00
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 38 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=85
+GUEST_DMESG_AFTER_NVRM=82
+GUEST_DMESG_WORKLOAD_DELTA=47
+=== HOST dmesg delta for this boot (watermark 747 → 766) ===
+HOST_DMESG_LINES=19
+HOST_DMESG_NVRM=19
+HOST_DMESG_XID=18

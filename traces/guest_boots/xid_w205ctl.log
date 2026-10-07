@@ -1,0 +1,28 @@
+[xid-watch] tag=w205ctl  host=ubuntu  utc=2026-08-10T06:24:10Z
+[xid-watch] command: scripts/bench/boot_capture.sh w205_227194f_ctl
+[xid-watch] host_dmesg_lines=997  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 3060, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+[boot_capture:w205_227194f_ctl] booting (extra args: none)
+[boot_capture:w205_227194f_ctl] guest is up after 35s
+[boot_capture:w205_227194f_ctl] module unloaded and ring buffer cleared; loading cold
+[boot_capture:w205_227194f_ctl] opening the device (this is what runs RmInitAdapter)
+[boot_capture:w205_227194f_ctl] captured 34 dmesg lines, 31 NVRM, 0 adapter → /workspace/bench/run_w205_227194f_ctl_dmesg.log
+[boot_capture:w205_227194f_ctl] --- the verdict lines ---
+[boot_capture:w205_227194f_ctl] running POST_CAPTURE_HOOK: /workspace/bench/kayfabe/scripts/bench/guest_cuinit_wall.sh
+[boot_capture:w205_227194f_ctl] hook finished: rc=0
+[boot_capture:w205_227194f_ctl] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:w205_227194f_ctl] census present:
+    2026-08-10T06:25:50.957625Z qemu-system-x86_64: info: nvkvm: doorbells: 448 arrived, 362 served, 86 REFUSED by name; last token 0x00010001 (16 logged)
+    2026-08-10T06:25:50.957717Z qemu-system-x86_64: info: nvkvm:   first doorbell refusal [Route::NotACopyEngineChannel] this channel's engine is GrCompute (route HostGr), so its pushbuffer is not copy-engine work and the shell's CPU copy-engine executor is the wrong executor for it; refused by the ROUTING fact rather than decoded by a codec that can only decline
+[boot_capture:w205_227194f_ctl] evidence carried into the repo: /workspace/bench/kayfabe/traces/guest_boots/run_w205_227194f_ctl_{qemu,dmesg,probe}.log
+[boot_capture:w205_227194f_ctl] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+[boot_capture:w205_227194f_ctl]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+[boot_capture:w205_227194f_ctl] done. serial=/workspace/bench/run_w205_227194f_ctl_serial.log qemu=/workspace/bench/run_w205_227194f_ctl_qemu.log dmesg=/workspace/bench/run_w205_227194f_ctl_dmesg.log probe=/workspace/bench/run_w205_227194f_ctl_probe.log
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (997 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_w205ctl.log

@@ -1,0 +1,15 @@
+START 2026-09-30T12:36:11+00:00
+Preparing worktree (detached HEAD c0a35924)
+Updating files:  60% (5815/9603)Updating files:  61% (5858/9603)Updating files:  62% (5954/9603)Updating files:  63% (6050/9603)Updating files:  64% (6146/9603)Updating files:  65% (6242/9603)Updating files:  66% (6338/9603)Updating files:  67% (6435/9603)Updating files:  68% (6531/9603)Updating files:  69% (6627/9603)Updating files:  70% (6723/9603)Updating files:  71% (6819/9603)Updating files:  72% (6915/9603)Updating files:  73% (7011/9603)Updating files:  74% (7107/9603)Updating files:  75% (7203/9603)Updating files:  76% (7299/9603)Updating files:  77% (7395/9603)Updating files:  78% (7491/9603)Updating files:  79% (7587/9603)Updating files:  80% (7683/9603)Updating files:  81% (7779/9603)Updating files:  82% (7875/9603)Updating files:  83% (7971/9603)Updating files:  84% (8067/9603)Updating files:  85% (8163/9603)Updating files:  86% (8259/9603)Updating files:  87% (8355/9603)Updating files:  88% (8451/9603)Updating files:  89% (8547/9603)Updating files:  90% (8643/9603)Updating files:  91% (8739/9603)Updating files:  92% (8835/9603)Updating files:  93% (8931/9603)Updating files:  94% (9027/9603)Updating files:  95% (9123/9603)Updating files:  96% (9219/9603)Updating files:  97% (9315/9603)Updating files:  98% (9411/9603)Updating files:  99% (9507/9603)Updating files: 100% (9603/9603)Updating files: 100% (9603/9603), done.
+HEAD is now at c0a35924 V3_DISPLAY: STATUS - M3 met for the Wayland desktop (Cinnamon + vkcube on the virtual monitor), X11 partial; the GF100_DISP_SW decision named for the owner
+HEAD=c0a35924cdf2959f914a262a018a5d24a7268cfe CHECKOUT=/workspace/bench/verify-worktrees/mc_c0a35924.nQeBce
+TESTS passed 1725 failed 0
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/c0a35924/qemu-system-x86_64 rev=c0a35924 mtime=2026-09-30 12:40:40.067234302 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+FG_RC=0
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+EXIT rc=0 2026-09-30T12:58:20+00:00

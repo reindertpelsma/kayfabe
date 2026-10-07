@@ -1,0 +1,43 @@
+/target
+# ★ Any sibling build tree an agent points `CARGO_TARGET_DIR` at. Untracked is NOT
+# enough: `scripts/claim_ledger.py`'s universe is `git ls-files -o --exclude-standard`,
+# so an untracked build tree that happens to contain a generated `.rs` lands INSIDE the
+# gate's universe (`gates_quantified_over_a_list`, fourth instance — "tracked" is not
+# "present", and neither is "present" the same as "ours").
+/target-*
+# ★ The ABI generator is a separate cargo workspace run by hand
+# (`crates/kayfabe-abi/gen`), so its build output is NOT under the root `/target`
+# above. Left untracked it made two CI gates fail on `grep: … binary file matches`
+# the first time anyone regenerated the ABI (task #111).
+/crates/kayfabe-abi/gen/target
+# firmware/ crates are their own cargo workspaces (firmware/README.md), so their build output is
+# beside them, not under the root /target.
+/firmware/*/target
+# OWNER_RULINGS §K: no compiled binary is committed — the GOP driver is built by
+# crates/kf-gop-image/build.rs. CI's `firmware` job also fails on any tracked .efi or MZ file.
+/firmware/**/*.efi
+Cargo.lock.orig
+# cargo-mutants run artifacts (the mutation-testing gate, decision #28)
+/mutants.out
+/mutants.out.old
+/mutants_fwdmmu
+/mutants_triage
+
+# Generated review artifacts (regenerable from their .md/.py sources)
+docs/design/*.pdf
+docs/design/*.png
+__pycache__/
+
+# LaTeX build artifacts for docs/whitepaper. build.sh deletes these on every run,
+# so a tracked copy churns on every build. They were added accidentally in w353.
+docs/whitepaper/*.aux
+docs/whitepaper/*.log
+docs/whitepaper/*.out
+docs/whitepaper/*.toc
+
+# The deadman heartbeat is wall-clock state, not source. Committing it makes every
+# `git add -A` carry a timestamp and turns a rebase into a conflict over a number.
+.deadman/beat
+
+# w753 session scratch: logs, saved copies for the known-positive pass, box coordinates.
+.w753/

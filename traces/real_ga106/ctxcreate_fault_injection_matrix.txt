@@ -1,0 +1,87 @@
+# cuCtxCreate fault-injection matrix — real GA106, real libcuda, no QEMU
+# date: 2026-08-12T14:22:13+00:00
+# host: ubuntu  driver: 580.159.04
+# gpu:  NVIDIA GeForce RTX 3060
+# driver program: cuinit_probe, FULL ladder (NVPROBE_STOP unset => stages 1..5)
+#   stage1 cuInit  stage2 cuDeviceGetCount  stage3 cuDeviceGet  stage4 cuCtxCreate  stage5 cuCtxDestroy
+# ⊘ a row with INJECT_FIRED=0 is UNMEASURED for that id, not evidence the id is inert.
+
+== build ==
+   disk: /dev/root       243G  138G  105G  57% /
+   built ok
+
+== rows ==
+== ROW baseline
+   NVFAULT_CTRL   = -   NVFAULT_STATUS = 0x56
+   INJECT_FIRED   = 0   
+   cuInit(0)      = 0
+   cuCtxCreate    = 0
+   probe rc       = 0
+   INJECT lines:
+   stage markers:
+     cuInit(0) -> 0
+     cuDeviceGetCount -> 0, count=1
+     cuDeviceGet(0) -> 0, dev=0
+     cuCtxCreate(0, 0) -> 0
+     cuCtxDestroy -> 0
+
+== ROW f_ctrl_20810108
+   NVFAULT_CTRL   = 0x20810108   NVFAULT_STATUS = 0x56
+   INJECT_FIRED   = 1   
+   cuInit(0)      = 0
+   cuCtxCreate    = 0
+   probe rc       = 0
+   INJECT lines:
+     INJECT CTRL cmd=0x20810108 real_status=0x00000000 forced=0x00000056
+   stage markers:
+     cuInit(0) -> 0
+     cuDeviceGetCount -> 0, count=1
+     cuDeviceGet(0) -> 0, dev=0
+     cuCtxCreate(0, 0) -> 0
+     cuCtxDestroy -> 0
+
+== ROW f_ctrl_2080200a
+   NVFAULT_CTRL   = 0x2080200a   NVFAULT_STATUS = 0x56
+   INJECT_FIRED   = 1   
+   cuInit(0)      = 0
+   cuCtxCreate    = 0
+   probe rc       = 0
+   INJECT lines:
+     INJECT CTRL cmd=0x2080200a real_status=0x00000000 forced=0x00000056
+   stage markers:
+     cuInit(0) -> 0
+     cuDeviceGetCount -> 0, count=1
+     cuDeviceGet(0) -> 0, dev=0
+     cuCtxCreate(0, 0) -> 0
+     cuCtxDestroy -> 0
+
+== ROW f_ctrl_20800a9a
+   NVFAULT_CTRL   = 0x20800a9a   NVFAULT_STATUS = 0x56
+   INJECT_FIRED   = 0   ⊘ UNMEASURED — the id was never issued, so this row says NOTHING about it
+   cuInit(0)      = 0
+   cuCtxCreate    = 0
+   probe rc       = 0
+   INJECT lines:
+   stage markers:
+     cuInit(0) -> 0
+     cuDeviceGetCount -> 0, count=1
+     cuDeviceGet(0) -> 0, dev=0
+     cuCtxCreate(0, 0) -> 0
+     cuCtxDestroy -> 0
+
+== ROW f_ctrl_all_three
+   NVFAULT_CTRL   = 0x20810108,0x2080200a,0x20800a9a   NVFAULT_STATUS = 0x56
+   INJECT_FIRED   = 2   
+   cuInit(0)      = 0
+   cuCtxCreate    = 0
+   probe rc       = 0
+   INJECT lines:
+     INJECT CTRL cmd=0x2080200a real_status=0x00000000 forced=0x00000056
+     INJECT CTRL cmd=0x20810108 real_status=0x00000000 forced=0x00000056
+   stage markers:
+     cuInit(0) -> 0
+     cuDeviceGetCount -> 0, count=1
+     cuDeviceGet(0) -> 0, dev=0
+     cuCtxCreate(0, 0) -> 0
+     cuCtxDestroy -> 0
+

@@ -1,0 +1,307 @@
+//! Boot **sequences** — implementations of [`BootSequence`], not the shape of one.
+//!
+//! ## ★★★ What this module is, and what it is deliberately not
+//!
+//! `mmio_write` used to match [`GspReg`] arm by arm, and those arms *were* one
+//! generation's boot ordering: `Sec2FalconCpuctl` meant "the RM firmware is now loaded",
+//! `GspQueueHead` meant "doorbell", the mailbox pair meant "publish". That is a real and
+//! correct description of the falcon/secure-booter regime — the defect was never that it
+//! existed. **The defect was that it was unhooked**: it sat in the FSM's own flow, so a
+//! generation that reaches those same truths through different registers could only be
+//! added by editing it.
+//!
+//! So the ordering moved out of the flow and into a value. [`FalconSecureBooterBoot`]
+//! below is that regime, unchanged in behaviour, now stated as *one implementation of*
+//! [`BootSequence`] that a generation opts into by name. A generation outside the regime
+//! writes its own, and the FSM does not change.
+//!
+//! ## Why this regime's implementation lives in a logic crate, and the next one does not
+//!
+//! It carries **no offsets and no chip facts**. It is written entirely in [`GspReg`]
+//! — the shared vocabulary — and in [`GspModel`]'s predicates, so every value it depends
+//! on (which bit is STARTCPU, which argument means Unload, which bit clears the status
+//! edge) comes from the generation's own model at call time. That is what makes it
+//! *shareable* between generations rather than *privileged*: two generations select it,
+//! neither is defaulted into it, and nothing in it names either.
+//!
+//! A generation whose boot is driven by registers the shared vocabulary cannot name has
+//! nothing to gain from living here — its offsets are the whole content — so it lives
+//! with its offsets, in the adapter crate. The asymmetry is the vocabulary's, not a
+//! ranking.
+
+use kf_arch::gsp::{
+    AfterSuspend, ArchBootState, BootContext, BootPhase, BootSequence, BootStageDesc, BootStep,
+    BootStepKind, BootSteps, FalconDma, GspModel, GspReg, RegWrite,
+};
+
+/// Latch slot holding the secure-booter argument — see [`FalconSecureBooterBoot`].
+const LATCH_BOOTER_ARG: usize = 0;
+/// ★ v3-initrace: latch slots for the GSP falcon's ucode-load DMA — the source base
+/// (`BASE1:BASE`, in 256-byte units), the last block's `MOFFS << 32 | FBOFFS`, and the
+/// guest-physical address of the DMEM image's offset 0 **plus one** (0 = no DMEM load since the
+/// last STARTCPU). See [`FalconSecureBooterBoot`]'s *FWSEC's command*.
+const LATCH_DMA_BASE: usize = 1;
+const LATCH_DMA_OFFS: usize = 2;
+const LATCH_DMEM_IMAGE: usize = 3;
+/// ★ v3-initrace: the PIO DMEM port — `addr | inc << 32`.
+const LATCH_PIO_PORT: usize = 4;
+/// … and the bootloader descriptor's `dataDmaBase` as written through it, `lo | hi << 32`, with
+/// which halves arrived since the last start in [`LATCH_BL_SEEN`] (bit 0 lo, bit 1 hi).
+const LATCH_BL_DATA: usize = 5;
+const LATCH_BL_SEEN: usize = 6;
+/// `RM_FLCN_BL_DMEM_DESC.dataDmaBase` — `{reserved[4], signature[4], ctxDma, codeDmaBase{lo,hi},
+/// nonSecureCodeOff, nonSecureCodeSize, secureCodeOff, secureCodeSize, codeEntryPoint,
+/// dataDmaBase{lo,hi}, …}` (`ogkm-580: src/nvidia/arch/nvalloc/common/inc/rmflcnbl.h:40-102`),
+/// copied to DMEM offset 0 (`kernel_gsp_falcon_tu102.c:260-266`).
+const BL_DATA_DMA_BASE_LO: u64 = 0x40;
+const BL_DATA_DMA_BASE_HI: u64 = 0x44;
+
+/// The **falcon + secure-booter** boot regime.
+///
+/// One implementation of [`BootSequence`], selected by a generation, never defaulted to.
+/// In NVIDIA's own generated HAL this regime spans `TU102…AD107` for every function the
+/// shared [`GspReg`] vocabulary models
+/// (`ogkm-580: src/nvidia/generated/g_gpu_nvoc.c:2374-2385`), which is why two adapter
+/// crates name it and neither duplicates it.
+///
+/// The ordering, in the driver's words
+/// (`kgspBootstrap_TU102`: `ogkm-580: src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_tu102.c:493-578`,
+/// `ogkm-610: :522-618` — the ordering is identical at both tags):
+///
+/// 1. the GSP falcon `CPUCTL` STARTCPU that runs FWSEC, which raises the protected region;
+/// 2. the LibOS boot-args address into the falcon's `MAILBOX0`/`MAILBOX1`
+///    (`kgspProgramLibosBootArgsAddr_TU102`, `ogkm-580: :362-374`);
+/// 3. the SEC2 Booter Load, which starts the RM firmware.
+///
+/// ⚠ The FSM's *own* ordering constraint is looser than that list and deliberately so:
+/// the boot-args pair publishes from either [`BootPhase::ProtectedRegionUp`] **or**
+/// [`BootPhase::Booted`], because the guest programs the mailboxes at step 2 *and* again
+/// on a resume path (`ogkm-580: kernel_gsp_tu102.c:933`,
+/// `src/nvidia/src/kernel/gpu/gsp/arch/ampere/kernel_gsp_ga102.c:162`), and refusing the
+/// second one would strand a re-acquiring driver.
+///
+/// # State
+///
+/// One latch, [`LATCH_BOOTER_ARG`]: the secure-booter argument, written to SEC2's
+/// `MAILBOX0` one write before the `CPUCTL` that acts on it, and the only thing that
+/// distinguishes a Load from an Unload at our boundary
+/// (`C: src/qemu/nvkvm_gpu_emul.c:4222-4234`). It used to be a `sec2_mailbox0` field on
+/// the FSM itself — one regime's convention living in the arch-independent value.
+///
+/// # ★★★ v3-initrace — FWSEC's command
+///
+/// RM loads FWSEC into the GSP falcon by DMA, 256 bytes at a time, DMEM block `MOFFS` from
+/// `(BASE1:BASE << 8) + FBOFFS` (`s_dmaTransfer_GA102`, `ogkm-580:
+/// kernel_gsp_falcon_ga102.c:98-145`, driven by `kgspExecuteHsFalcon_GA102`, `:176-258`) — and
+/// the DMEM image carries the FRTS command RM patched in, whose `frtsRegionOffset4K` is where
+/// WPR2 must come up. So the three [`GspModel::falcon_dma`] latches locate the image's DMEM
+/// offset 0, and the STARTCPU that runs the ucode is preceded by [`BootStep::FwsecCommand`]
+/// carrying it. ⊘ The latch is consumed by that STARTCPU: a later STARTCPU with no DMEM load of
+/// its own reads nothing stale.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct FalconSecureBooterBoot;
+
+impl FalconSecureBooterBoot {
+    /// The regime.
+    #[must_use]
+    pub fn new() -> FalconSecureBooterBoot {
+        FalconSecureBooterBoot
+    }
+}
+
+/// See [`BootSequence::stages`] — the cold-boot stages of this regime, in order.
+const FALCON_BOOTER_STAGES: &[BootStageDesc] = &[
+    BootStageDesc {
+        name: "FWSEC's FRTS command, read out of the DMEM image the GSP falcon was loaded from",
+        step: BootStepKind::FwsecCommand,
+    },
+    BootStageDesc {
+        name: "GSP falcon STARTCPU runs FWSEC and raises the protected region",
+        step: BootStepKind::StartProcessor,
+    },
+    BootStageDesc {
+        name: "SEC2 Booter Load starts the RM firmware",
+        step: BootStepKind::FirmwareLoaded,
+    },
+    BootStageDesc {
+        name: "LibOS boot-args address, low half, into the GSP falcon MAILBOX0",
+        step: BootStepKind::BootArgsLo,
+    },
+    BootStageDesc {
+        name: "LibOS boot-args address, high half, into MAILBOX1",
+        step: BootStepKind::BootArgsHi,
+    },
+    BootStageDesc {
+        name: "the completed pair publishes the message queues",
+        step: BootStepKind::PublishBootArgs,
+    },
+];
+
+impl BootSequence for FalconSecureBooterBoot {
+    fn stages(&self) -> &'static [BootStageDesc] {
+        FALCON_BOOTER_STAGES
+    }
+
+    /// ★ w828: the driver ends the life with FWSEC-SB then Booter Unload
+    /// (`kgspTeardown_TU102`, `ogkm-580: src/nvidia/src/kernel/gpu/gsp/arch/turing/
+    /// kernel_gsp_tu102.c:619-661`); their STARTCPUs are E2/E4. Nothing happens on its own.
+    fn after_suspend(&self) -> AfterSuspend {
+        AfterSuspend::AwaitsTeardownUcode
+    }
+
+    fn on_write(
+        &self,
+        model: &dyn GspModel,
+        w: &RegWrite,
+        ctx: &BootContext,
+        state: &mut ArchBootState,
+    ) -> BootSteps {
+        let val = w.val;
+        // ★ v3-initrace: the GSP falcon's ucode-load DMA — latched, never answered.
+        if let Some(d) = model.falcon_dma(w.bar, w.off, val) {
+            match d {
+                FalconDma::Base(b) => {
+                    let base = (state.latch(LATCH_DMA_BASE) & !0xFFFF_FFFF) | u64::from(b);
+                    state.set_latch(LATCH_DMA_BASE, base);
+                }
+                FalconDma::Base1(b) => {
+                    let base = (state.latch(LATCH_DMA_BASE) & 0xFFFF_FFFF) | (u64::from(b) << 32);
+                    state.set_latch(LATCH_DMA_BASE, base);
+                }
+                FalconDma::MemOffset(m) => {
+                    let o = (state.latch(LATCH_DMA_OFFS) & 0xFFFF_FFFF) | (u64::from(m) << 32);
+                    state.set_latch(LATCH_DMA_OFFS, o);
+                }
+                FalconDma::SourceOffset(f) => {
+                    let o = (state.latch(LATCH_DMA_OFFS) & !0xFFFF_FFFF) | u64::from(f);
+                    state.set_latch(LATCH_DMA_OFFS, o);
+                }
+                FalconDma::Transfer { dmem_load: true } => {
+                    // DMEM block `m` came from `base + f`, so DMEM offset 0 is at `base + f - m`.
+                    let o = state.latch(LATCH_DMA_OFFS);
+                    let (m, f) = (o >> 32, o & 0xFFFF_FFFF);
+                    let image = (state.latch(LATCH_DMA_BASE) << 8)
+                        .checked_add(f)
+                        .and_then(|a| a.checked_sub(m));
+                    state.set_latch(LATCH_DMEM_IMAGE, image.map_or(0, |a| a.saturating_add(1)));
+                }
+                FalconDma::Transfer { dmem_load: false } => {}
+                FalconDma::DmemPort { addr, inc } => {
+                    state.set_latch(LATCH_PIO_PORT, u64::from(addr) | (u64::from(inc) << 32));
+                }
+                FalconDma::DmemWord(word) => {
+                    let port = state.latch(LATCH_PIO_PORT);
+                    let addr = port & 0xFFFF_FFFF;
+                    let (data, seen) = (state.latch(LATCH_BL_DATA), state.latch(LATCH_BL_SEEN));
+                    if addr == BL_DATA_DMA_BASE_LO {
+                        state.set_latch(LATCH_BL_DATA, (data & !0xFFFF_FFFF) | u64::from(word));
+                        state.set_latch(LATCH_BL_SEEN, seen | 1);
+                    } else if addr == BL_DATA_DMA_BASE_HI {
+                        state.set_latch(
+                            LATCH_BL_DATA,
+                            (data & 0xFFFF_FFFF) | (u64::from(word) << 32),
+                        );
+                        state.set_latch(LATCH_BL_SEEN, seen | 2);
+                    }
+                    if port >> 32 != 0 {
+                        state.set_latch(
+                            LATCH_PIO_PORT,
+                            (port & !0xFFFF_FFFF) | ((addr + 4) & 0xFFFF),
+                        );
+                    }
+                }
+            }
+        }
+        // An offset the shared vocabulary cannot name means nothing else in this regime: every
+        // write it reacts to has a `GspReg`. A generation outside the regime is exactly
+        // the case where that is false, and it does not use this sequence.
+        let Some(reg) = w.reg else {
+            return BootSteps::none();
+        };
+        match reg {
+            GspReg::GspFalconCpuctl if model.is_startcpu(val) => {
+                // The image this start runs: the DMA-loaded DMEM (`BOOT_FROM_HS`), else the
+                // bootloader descriptor's `dataDmaBase` (`BOOT_WITH_LOADER`) — each only if it was
+                // written since the last start (both latches are consumed here).
+                let image = state.latch(LATCH_DMEM_IMAGE);
+                let bl = (state.latch(LATCH_BL_SEEN) == 3).then(|| state.latch(LATCH_BL_DATA));
+                state.set_latch(LATCH_DMEM_IMAGE, 0);
+                state.set_latch(LATCH_BL_SEEN, 0);
+                let mut steps = BootSteps::none();
+                if image != 0 {
+                    steps.push(BootStep::FwsecCommand(image - 1));
+                } else if let Some(base) = bl {
+                    steps.push(BootStep::FwsecCommand(base));
+                }
+                steps.push(BootStep::StartProcessor);
+                steps
+            }
+            GspReg::Sec2FalconMailbox0 => {
+                // Latched, not acted on: Load and Unload differ only by this argument.
+                state.set_latch(LATCH_BOOTER_ARG, val);
+                BootSteps::none()
+            }
+            GspReg::Sec2FalconCpuctl if model.is_startcpu(val) => {
+                #[allow(clippy::cast_possible_truncation)]
+                let arg = state.latch(LATCH_BOOTER_ARG) as u32;
+                if model.is_booter_unload(arg) {
+                    // The Booter Unload. WPR2 must read down afterwards, and the guest
+                    // asserts exactly that
+                    // (`ogkm-610: kernel_gsp_booter_tu102.c:175-187`, `ogkm-580: :179-191`
+                    // — identical code at both tags, including the GC6 arm that requires
+                    // WPR2 to stay *up*).
+                    BootSteps::one(BootStep::Teardown)
+                } else if ctx.obs.stage == BootPhase::ProtectedRegionUp {
+                    BootSteps::one(BootStep::FirmwareLoaded)
+                } else {
+                    BootSteps::none()
+                }
+            }
+            GspReg::GspFalconMailbox0 | GspReg::GspFalconMailbox1 => {
+                #[allow(clippy::cast_possible_truncation)]
+                let half = val as u32;
+                let (mut lo, mut hi) = (ctx.obs.boot_args_lo, ctx.obs.boot_args_hi);
+                let (mut lo_seen, mut hi_seen) = ctx.boot_args_seen;
+                let mut steps = BootSteps::none();
+                if reg == GspReg::GspFalconMailbox0 {
+                    lo = half;
+                    lo_seen = true;
+                    steps.push(BootStep::BootArgsLo(half));
+                } else {
+                    hi = half;
+                    hi_seen = true;
+                    steps.push(BootStep::BootArgsHi(half));
+                }
+                // ★ [inferred] I4, taking the plan's own robust reading: the pair is
+                // complete when **both halves have been written since the last reset**,
+                // not when a particular half arrives. The C keys on MAILBOX1
+                // (`C:4298-4302`) and ogkm writes lo then hi
+                // (`kgspProgramLibosBootArgsAddr_TU102`,
+                // `ogkm-610: kernel_gsp_tu102.c:392-403`, `ogkm-580: :363-374` — identical
+                // at both tags) — a write *order*, not a protocol guarantee, so keying on
+                // one half would be an assumption where a conjunction costs nothing.
+                if lo_seen
+                    && hi_seen
+                    && matches!(
+                        ctx.obs.stage,
+                        BootPhase::ProtectedRegionUp | BootPhase::Booted
+                    )
+                {
+                    steps.push(BootStep::PublishBootArgs(
+                        (u64::from(hi) << 32) | u64::from(lo),
+                    ));
+                }
+                steps
+            }
+            GspReg::GspQueueHead(_) => BootSteps::one(BootStep::CommandDoorbell),
+            // The guest's ISR clears the edge before draining the queue
+            // (`C: src/qemu/nvkvm_gpu_emul.c:4193-4200`).
+            GspReg::GspFalconIrqsclr if model.is_swgen0_clear(val) => {
+                BootSteps::one(BootStep::ClearStatusIrq)
+            }
+            _ => BootSteps::none(),
+        }
+    }
+}
+
+kf_util::assert_send_sync!(FalconSecureBooterBoot);

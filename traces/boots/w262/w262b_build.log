@@ -1,0 +1,572 @@
+START 2026-08-12T06:29:08+00:00 pid=2187399
+REV=7f10b0145936151147a5419305e5e4dba6197ac8 short=7f10b014 tree:[]
+== target: /workspace/bench/qemu-10.2.4 (10.2.4)
+== archive features: host-isolates
+== building the archive
+   Compiling kayfabe-isolate-host v0.1.0 (/workspace/kayfabe_w262/crates/kayfabe-isolate-host)
+   Compiling kayfabe-qemu-raw v0.1.0 (/workspace/kayfabe_w262/crates/kayfabe-qemu-raw)
+warning: kayfabe-isolate-host@0.1.0: embedded isolate image: 737952 bytes, x86_64-unknown-linux-musl
+    Finished `release` profile [optimized] target(s) in 12.49s
+== archive: /workspace/bench/cargo-target-w262/release/libkayfabe_qemu_raw.a (2026-08-12 06:29:21.107547238 +0000)
+== laying the overlay into hw/misc/nvkvm
+== building
+ninja: Entering directory `/workspace/bench/qemu-build'
+[0/1] Regenerating build files
+The Meson build system
+Version: 1.9.0
+Source dir: /workspace/bench/qemu-10.2.4
+Build dir: /workspace/bench/qemu-build
+Build type: native build
+Project name: qemu
+Project version: 10.2.4
+C compiler for the host machine: cc -m64 (gcc 11.4.0 "cc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0")
+C linker for the host machine: cc -m64 ld.bfd 2.38
+Host machine cpu family: x86_64
+Host machine cpu: x86_64
+Program scripts/symlink-install-tree.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/symlink-install-tree.py)
+Program sh found: YES (/usr/bin/sh)
+Program python3 found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3)
+Compiler for language rust skipped: feature rust disabled
+Program iasl found: NO
+Program bzip2 found: YES (/usr/bin/bzip2)
+Compiler for C supports link arguments -Wl,-z,relro: YES (cached)
+Compiler for C supports link arguments -Wl,-z,now: YES (cached)
+Checking if "-fzero-call-used-regs=used-gpr" compiles: YES (cached)
+Compiler for C supports arguments -ftrivial-auto-var-init=zero: NO (cached)
+Compiler for C supports arguments -fzero-init-padding-bits=all: NO (cached)
+Compiler for C supports arguments -fzero-call-used-regs=used-gpr: YES (cached)
+Compiler for C supports arguments -Wempty-body: YES (cached)
+Compiler for C supports arguments -Wendif-labels: YES (cached)
+Compiler for C supports arguments -Wexpansion-to-defined: YES (cached)
+Compiler for C supports arguments -Wformat-security: YES (cached)
+Compiler for C supports arguments -Wformat-y2k: YES (cached)
+Compiler for C supports arguments -Wignored-qualifiers: YES (cached)
+Compiler for C supports arguments -Wimplicit-fallthrough=2: YES (cached)
+Compiler for C supports arguments -Winit-self: YES (cached)
+Compiler for C supports arguments -Wmissing-format-attribute: YES (cached)
+Compiler for C supports arguments -Wmissing-prototypes: YES (cached)
+Compiler for C supports arguments -Wnested-externs: YES (cached)
+Compiler for C supports arguments -Wold-style-declaration: YES (cached)
+Compiler for C supports arguments -Wold-style-definition: YES (cached)
+Compiler for C supports arguments -Wredundant-decls: YES (cached)
+Compiler for C supports arguments -Wshadow=local: YES (cached)
+Compiler for C supports arguments -Wstrict-prototypes: YES (cached)
+Compiler for C supports arguments -Wtype-limits: YES (cached)
+Compiler for C supports arguments -Wundef: YES (cached)
+Compiler for C supports arguments -Wvla: YES (cached)
+Compiler for C supports arguments -Wwrite-strings: YES (cached)
+Compiler for C supports arguments -Wno-gnu-variable-sized-type-not-at-end: NO (cached)
+Compiler for C supports arguments -Wno-initializer-overrides: NO (cached)
+Compiler for C supports arguments -Wno-missing-include-dirs: YES (cached)
+Compiler for C supports arguments -Wno-psabi: YES (cached)
+Compiler for C supports arguments -Wno-shift-negative-value: YES (cached)
+Compiler for C supports arguments -Wno-string-plus-int: NO (cached)
+Compiler for C supports arguments -Wno-tautological-type-limit-compare: NO (cached)
+Compiler for C supports arguments -Wno-typedef-redefinition: NO (cached)
+Program cgcc skipped: feature sparse disabled
+Library m found: YES
+Dependency threads found: YES unknown (cached)
+Library util found: YES
+Dependency glib-2.0 found: YES 2.72.4 (cached)
+Dependency gio-2.0 skipped: feature gio disabled
+Program scripts/xml-preprocess.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/xml-preprocess.py)
+Dependency pixman-1 skipped: feature pixman disabled
+Dependency zlib found: YES 1.2.11 (cached)
+Library aio skipped: feature linux_aio disabled
+Dependency liburing skipped: feature linux_io_uring disabled
+Dependency libnfs skipped: feature libnfs disabled
+Dependency appleframeworks (modules: Cocoa, CoreVideo, QuartzCore) skipped: feature cocoa disabled
+Dependency appleframeworks (modules: vmnet) skipped: feature vmnet disabled
+Dependency libseccomp skipped: feature seccomp disabled
+Library cap-ng skipped: feature cap_ng disabled
+Dependency xkbcommon skipped: feature xkbcommon disabled
+Dependency slirp skipped: feature slirp disabled
+Library vdeplug skipped: feature vde disabled
+Dependency libpulse skipped: feature pa disabled
+Dependency alsa skipped: feature alsa disabled
+Dependency jack skipped: feature jack disabled
+Dependency libpipewire-0.3 skipped: feature pipewire disabled
+Dependency sndio skipped: feature sndio disabled
+Dependency spice-protocol skipped: feature spice_protocol disabled
+Checking for function "shm_open" : YES (cached)
+Dependency libiscsi skipped: feature libiscsi disabled
+Dependency libzstd skipped: feature zstd disabled
+Dependency qpl skipped: feature qpl disabled
+Dependency libwd skipped: feature uadk disabled
+Dependency libwd_comp skipped: feature uadk disabled
+Dependency qatzip skipped: feature qatzip disabled
+Dependency virglrenderer skipped: feature virglrenderer disabled
+Dependency rutabaga_gfx_ffi skipped: feature rutabaga_gfx disabled
+Dependency blkio skipped: feature blkio disabled
+Dependency libcurl skipped: feature curl disabled
+Dependency libudev skipped: feature libudev disabled
+Dependency igvm skipped: feature igvm disabled
+Library brlapi skipped: feature brlapi disabled
+Dependency sdl2 skipped: feature sdl disabled
+Library rados skipped: feature rbd disabled
+Library rbd skipped: feature rbd disabled
+Dependency glusterfs-api skipped: feature glusterfs disabled
+Dependency libssh skipped: feature libssh disabled
+Library bz2 skipped: feature bzip2 disabled
+Library lzfse skipped: feature lzfse disabled
+Has header "dsound.h" : NO (cached)
+Dependency appleframeworks (modules: CoreAudio) skipped: feature coreaudio disabled
+Dependency epoxy skipped: feature opengl disabled
+Has header "epoxy/egl.h" with dependency epoxy: NO (cached)
+Dependency libcbor skipped: feature libcbor disabled
+Dependency libgcrypt skipped: feature gcrypt disabled
+Dependency nettle skipped: feature nettle disabled
+Dependency capstone skipped: feature capstone disabled
+Found pkg-config: YES (/usr/bin/pkg-config) 0.29.2
+Run-time dependency gmp found: NO (tried pkgconfig)
+Library pam skipped: feature auth_pam disabled
+Library snappy skipped: feature snappy disabled
+Library lzo2 skipped: feature lzo disabled
+Library numa skipped: feature numa disabled
+Library fdt found: NO
+
+Executing subproject dtc 
+
+dtc| Project name: dtc
+dtc| Project version: 1.6.0
+dtc| C compiler for the host machine: cc -m64 (gcc 11.4.0 "cc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0")
+dtc| C linker for the host machine: cc -m64 ld.bfd 2.38
+dtc| Compiler for C supports arguments -Wpointer-arith: YES (cached)
+dtc| Compiler for C supports arguments -Wcast-qual: YES (cached)
+dtc| Compiler for C supports arguments -Wnested-externs: YES (cached)
+dtc| Compiler for C supports arguments -Wstrict-prototypes: YES (cached)
+dtc| Compiler for C supports arguments -Wmissing-prototypes: YES (cached)
+dtc| Compiler for C supports arguments -Wredundant-decls: YES (cached)
+dtc| Compiler for C supports arguments -Wshadow: YES (cached)
+dtc| Dependency yaml-0.1 skipped: feature yaml disabled
+dtc| Dependency valgrind skipped: feature valgrind disabled
+dtc| Program python found: NO (disabled by: python )
+dtc| Program swig skipped: feature python disabled
+dtc| Found git repository at /workspace/bench/qemu-10.2.4/subprojects/dtc
+dtc| Compiler for C supports link arguments -Wl,--version-script=/workspace/bench/qemu-10.2.4/subprojects/dtc/libfdt/version.lds: YES (cached)
+dtc| Build targets in project: 2
+dtc| Subproject dtc finished.
+
+Library rdmacm skipped: feature rdma disabled
+Library ibverbs skipped: feature rdma disabled
+Dependency libcacard skipped: feature smartcard disabled
+Dependency u2f-emu skipped: feature u2f disabled
+Dependency canokey-qemu skipped: feature canokey disabled
+Dependency libusbredirparser-0.5 skipped: feature usb_redir disabled
+Dependency libusb-1.0 skipped: feature libusb disabled
+Dependency libpmem skipped: feature libpmem disabled
+Dependency libdaxctl skipped: feature libdaxctl disabled
+Dependency libkeyutils skipped: feature libkeyutils disabled
+Checking for function "gettid" : YES (cached)
+Dependency libselinux skipped: feature selinux disabled
+Dependency fuse3 skipped: feature fuse disabled
+Dependency libbpf skipped: feature bpf disabled
+Dependency libdw skipped: feature libdw disabled
+Header "linux/fs.h" has symbol "FIFREEZE" : YES (cached)
+Header "linux/fs.h" has symbol "FITRIM" : YES (cached)
+Has header "sys/epoll.h" : YES (cached)
+Has header "linux/magic.h" : YES (cached)
+Has header "linux/btrfs.h" : YES (cached)
+Has header "libdrm/drm.h" : NO (cached)
+Has header "linux/openat2.h" : YES (cached)
+Has header "pty.h" : YES (cached)
+Has header "sys/disk.h" : NO (cached)
+Has header "sys/ioccom.h" : NO (cached)
+Has header "sys/kcov.h" : NO (cached)
+Checking for function "close_range" : YES (cached)
+Checking for function "accept4" : YES (cached)
+Checking for function "clock_adjtime" : YES (cached)
+Checking for function "dup3" : YES (cached)
+Checking for function "fallocate" : YES (cached)
+Checking for function "posix_fallocate" : YES (cached)
+Checking for function "sched_getcpu" : NO (cached)
+Checking for function "posix_memalign" : YES (cached)
+Checking for function "_aligned_malloc" : NO (cached)
+Checking for function "valloc" : YES (cached)
+Checking for function "memalign" : YES (cached)
+Checking for function "ppoll" : YES (cached)
+Checking for function "preadv" : YES (cached)
+Checking for function "pthread_fchdir_np" : NO (cached)
+Checking for function "sendfile" : YES (cached)
+Checking for function "setns" : YES (cached)
+Checking for function "unshare" : YES (cached)
+Checking for function "syncfs" : YES (cached)
+Checking for function "sync_file_range" : YES (cached)
+Checking for function "timerfd_create" : YES (cached)
+Checking for function "getloadavg" : YES (cached)
+Checking for function "htonll" : NO (cached)
+Checking for function "copy_file_range" : YES (cached)
+Checking for function "getifaddrs" : YES (cached)
+Checking for function "openpty" with dependency -lutil: YES (cached)
+Checking for function "strchrnul" : YES (cached)
+Checking for function "system" : YES (cached)
+Header "sys/inotify.h" has symbol "inotify_init" : YES (cached)
+Header "sys/inotify.h" has symbol "inotify_init1" : YES (cached)
+Header "linux/blkzoned.h" has symbol "BLKOPENZONE" : YES (cached)
+Header "sys/epoll.h" has symbol "epoll_create1" : YES (cached)
+Header "linux/falloc.h" has symbol "FALLOC_FL_PUNCH_HOLE" : YES (cached)
+Header "linux/falloc.h" has symbol "FALLOC_FL_KEEP_SIZE" : YES (cached)
+Header "linux/falloc.h" has symbol "FALLOC_FL_ZERO_RANGE" : YES (cached)
+Has header "linux/fiemap.h" : YES (cached)
+Header "linux/fs.h" has symbol "FS_IOC_FIEMAP" : YES (cached)
+Header "sched.h" has symbol "getcpu" : YES (cached)
+Checking for function "getrandom" : YES (cached)
+Header "sys/random.h" has symbol "GRND_NONBLOCK" : YES (cached)
+Header "sys/prctl.h" has symbol "PR_SET_TIMERSLACK" : YES (cached)
+Header "linux/rtnetlink.h" has symbol "IFLA_PROTO_DOWN" : YES (cached)
+Header "sys/sysmacros.h" has symbol "makedev" : YES (cached)
+Header "getopt.h" has symbol "optreset" : NO (cached)
+Header "netinet/in.h" has symbol "IPPROTO_MPTCP" : YES (cached)
+Header "netinet/tcp.h" has symbol "TCP_KEEPCNT" : YES (cached)
+Header "netinet/tcp.h" has symbol "TCP_KEEPIDLE" : YES (cached)
+Header "netinet/tcp.h" has symbol "TCP_KEEPINTVL" : YES (cached)
+Checking whether type "struct sigevent" has member "sigev_notify_thread_id" : NO (cached)
+Checking whether type "struct stat" has member "st_atim" : YES (cached)
+Checking whether type "struct blk_zone" has member "capacity" : YES (cached)
+Checking for type "struct iovec" : YES (cached)
+Checking for type "struct utmpx" : YES (cached)
+Header "asm/hwprobe.h" has symbol "RISCV_HWPROBE_EXT_ZBA" : NO (cached)
+Header "linux/vm_sockets.h" has symbol "AF_VSOCK" : YES (cached)
+Checking for size of "void *" : 8 (cached)
+Program scripts/minikconf.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/minikconf.py)
+Configuring x86_64-softmmu-config-target.h using configuration
+Configuring x86_64-softmmu-config-devices.mak with command
+Reading depfile: /workspace/bench/qemu-build/meson-private/x86_64-softmmu-config-devices.mak.d
+Configuring x86_64-softmmu-config-devices.h using configuration
+Program scripts/make-config-poison.sh found: YES (/workspace/bench/qemu-10.2.4/scripts/make-config-poison.sh)
+Configuring config-host.h using configuration
+Program scripts/hxtool found: YES (/workspace/bench/qemu-10.2.4/scripts/hxtool)
+Program scripts/shaderinclude.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/shaderinclude.py)
+Program scripts/qapi-gen.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/qapi-gen.py)
+Program scripts/qemu-version.sh found: YES (/workspace/bench/qemu-10.2.4/scripts/qemu-version.sh)
+
+Executing subproject keycodemapdb 
+
+keycodemapdb| Project name: keycodemapdb
+keycodemapdb| Project version: undefined
+keycodemapdb| Program tools/keymap-gen found: YES (/workspace/bench/qemu-10.2.4/subprojects/keycodemapdb/tools/keymap-gen)
+keycodemapdb| Build targets in project: 427
+keycodemapdb| Subproject keycodemapdb finished.
+
+Program scripts/decodetree.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/decodetree.py)
+Program ../scripts/modules/module_block.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/block/../scripts/modules/module_block.py)
+Program ../scripts/block-coroutine-wrapper.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/block/../scripts/block-coroutine-wrapper.py)
+Program scripts/modinfo-collect.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/modinfo-collect.py)
+Program scripts/modinfo-generate.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/modinfo-generate.py)
+Program nm found: YES
+Program scripts/undefsym.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/undefsym.py)
+Program scripts/feature_to_c.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/feature_to_c.py)
+Program scripts/rust/rust_root_crate.sh found: YES (/workspace/bench/qemu-10.2.4/scripts/rust/rust_root_crate.sh)
+Configuring 50-edk2-i386-secure.json using configuration
+Configuring 50-edk2-x86_64-secure.json using configuration
+Configuring 60-edk2-aarch64.json using configuration
+Configuring 60-edk2-arm.json using configuration
+Configuring 60-edk2-i386.json using configuration
+Configuring 60-edk2-x86_64.json using configuration
+Configuring 60-edk2-loongarch64.json using configuration
+Configuring 60-edk2-riscv64.json using configuration
+Program dtc found: NO
+Program qemu-keymap found: NO
+Program /workspace/bench/qemu-build/pyvenv/bin/sphinx-build skipped: feature docs disabled
+Program /workspace/bench/qemu-10.2.4/scripts/decodetree.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/decodetree.py)
+
+Executing subproject berkeley-softfloat-3 
+
+berkeley-softfloat-3| Project name: berkeley-softfloat-3
+berkeley-softfloat-3| Project version: undefined
+berkeley-softfloat-3| C compiler for the host machine: cc -m64 (gcc 11.4.0 "cc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0")
+berkeley-softfloat-3| C linker for the host machine: cc -m64 ld.bfd 2.38
+berkeley-softfloat-3| Configuring platform.h using configuration
+berkeley-softfloat-3| Build targets in project: 525
+berkeley-softfloat-3| Subproject berkeley-softfloat-3 finished.
+
+
+Executing subproject berkeley-testfloat-3 
+
+berkeley-testfloat-3| Project name: berkeley-testfloat-3
+berkeley-testfloat-3| Project version: undefined
+berkeley-testfloat-3| C compiler for the host machine: cc -m64 (gcc 11.4.0 "cc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0")
+berkeley-testfloat-3| C linker for the host machine: cc -m64 ld.bfd 2.38
+berkeley-testfloat-3| Configuring platform.h using configuration
+berkeley-testfloat-3| Compiler for C supports arguments -Wno-ignored-pragmas: NO (cached)
+berkeley-testfloat-3| Build targets in project: 527
+berkeley-testfloat-3| Subproject berkeley-testfloat-3 finished.
+
+Program diff found: YES (/usr/bin/diff)
+Program dbus-daemon found: YES (/usr/bin/dbus-daemon)
+Run-time dependency sysprof-capture-4 found: NO (tried pkgconfig)
+Dependency glib-2.0 found: YES 2.72.4 (cached)
+Program initrd-stress.sh found: YES (/workspace/bench/qemu-10.2.4/tests/migration-stress/initrd-stress.sh)
+Build targets in project: 718
+
+qemu 10.2.4
+
+  Build environment
+    Build directory                 : /workspace/bench/qemu-build
+    Source path                     : /workspace/bench/qemu-10.2.4
+    Download dependencies           : YES
+
+  Directories
+    Build directory                 : /workspace/bench/qemu-build
+    Source path                     : /workspace/bench/qemu-10.2.4
+    Download dependencies           : YES
+    Install prefix                  : /usr/local
+    BIOS directory                  : share/qemu
+    firmware path                   : share/qemu-firmware
+    binary directory                : /usr/local/bin
+    library directory               : /usr/local/lib/x86_64-linux-gnu
+    module directory                : lib/x86_64-linux-gnu/qemu
+    libexec directory               : /usr/local/libexec
+    include directory               : /usr/local/include
+    config directory                : /usr/local/etc
+    local state directory           : /var/local
+    Manual directory                : /usr/local/share/man
+    Doc directory                   : /usr/local/share/doc
+
+  Host binaries
+    python                          : /workspace/bench/qemu-build/pyvenv/bin/python3 (version: 3.10)
+    sphinx-build                    : NO
+    gdb                             : 
+    iasl                            : NO
+    genisoimage                     : /usr/bin/genisoimage
+
+  Configurable features
+    Documentation                   : NO
+    system-mode emulation           : YES
+    user-mode emulation             : NO
+    block layer                     : YES
+    Install blobs                   : YES
+    module support                  : NO
+    fuzzing support                 : NO
+    Audio drivers                   : 
+    Trace backends                  : log
+    QOM debugging                   : YES
+    Relocatable install             : YES
+    vhost-kernel support            : NO
+    vhost-net support               : NO
+    vhost-user support              : NO
+    vhost-user-crypto support       : NO
+    vhost-user-blk server support   : NO
+    vhost-vdpa support              : NO
+    build guest agent               : NO
+
+  Compilation
+    host CPU                        : x86_64
+    host endianness                 : little
+    C compiler                      : cc -m64
+    Host C compiler                 : cc -m64
+    C++ compiler                    : NO
+    Objective-C compiler            : NO
+    Rust support                    : NO
+    CFLAGS                          : -g -O2
+    QEMU_CFLAGS                     : -mcx16 -msse2 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -fno-strict-aliasing -fno-common -fwrapv -fzero-call-used-regs=used-gpr
+    QEMU_LDFLAGS                    : -Wl,-z,relro -Wl,-z,now
+    link-time optimization (LTO)    : NO
+    PIE                             : YES
+    static build                    : NO
+    malloc trim support             : NO
+    membarrier                      : NO
+    debug graph lock                : NO
+    debug stack usage               : NO
+    mutex debugging                 : NO
+    memory allocator                : system
+    avx2 optimization               : YES
+    avx512bw optimization           : YES
+    gcov                            : NO
+    thread sanitizer                : NO
+    CFI support                     : NO
+    strip binaries                  : NO
+    sparse                          : NO
+    mingw32 support                 : NO
+
+  Cross compilers
+    x86_64                          : cc
+
+  Targets and accelerators
+    KVM support                     : YES
+    HVF support                     : NO
+    WHPX support                    : NO
+    NVMM support                    : NO
+    MSHV support                    : NO
+    Xen support                     : NO
+    Xen emulation                   : YES
+    TCG support                     : YES
+    TCG backend                     : native (x86_64)
+    TCG plugins                     : NO
+    TCG debug enabled               : NO
+    target list                     : x86_64-softmmu
+    default devices                 : YES
+    out of process emulation        : NO
+    vfio-user server                : NO
+
+  Block layer support
+    coroutine backend               : ucontext
+    coroutine pool                  : YES
+    Block whitelist (rw)            : 
+    Block whitelist (ro)            : 
+    Use block whitelist in tools    : NO
+    VirtFS (9P) support             : NO
+    replication support             : NO
+    bochs support                   : NO
+    cloop support                   : NO
+    dmg support                     : NO
+    qcow v1 support                 : NO
+    vdi support                     : NO
+    vhdx support                    : NO
+    vmdk support                    : NO
+    vpc support                     : NO
+    vvfat support                   : NO
+    qed support                     : NO
+    parallels support               : NO
+    FUSE exports                    : NO
+    VDUSE block exports             : NO
+
+  Crypto
+    TLS priority                    : NORMAL
+    GNUTLS support                  : NO
+    libgcrypt                       : NO
+    nettle                          : NO
+    SM4 ALG support                 : NO
+    SM3 ALG support                 : NO
+    AF_ALG support                  : NO
+    rng-none                        : NO
+    Linux keyring                   : NO
+    Linux keyutils                  : NO
+
+  User interface
+    D-Bus display                   : NO
+    SDL support                     : NO
+    SDL image support               : NO
+    GTK support                     : NO
+    pixman                          : NO
+    VTE support                     : NO
+    PNG support                     : NO
+    VNC support                     : NO
+    spice protocol support          : NO
+    curses support                  : NO
+    brlapi support                  : NO
+
+  Graphics backends
+    VirGL support                   : NO
+    Rutabaga support                : NO
+
+  Audio backends
+    OSS support                     : NO
+    sndio support                   : NO
+    ALSA support                    : NO
+    PulseAudio support              : NO
+    PipeWire support                : NO
+    JACK support                    : NO
+
+  Network backends
+    AF_XDP support                  : NO
+    passt support                   : NO
+    slirp support                   : NO
+    vde support                     : NO
+    netmap support                  : NO
+    l2tpv3 support                  : NO
+
+  Dependencies
+    libtasn1                        : NO
+    PAM                             : NO
+    iconv support                   : NO
+    blkio support                   : NO
+    curl support                    : NO
+    Multipath support               : NO
+    Linux AIO support               : NO
+    Linux io_uring support          : NO
+    ATTR/XATTR support              : NO
+    RDMA support                    : NO
+    fdt support                     : internal
+    libcap-ng support               : NO
+    bpf support                     : NO
+    rbd support                     : NO
+    smartcard support               : NO
+    U2F support                     : NO
+    libusb                          : NO
+    usb net redir                   : NO
+    OpenGL support (epoxy)          : NO
+    GBM                             : NO
+    libiscsi support                : NO
+    libnfs support                  : NO
+    seccomp support                 : NO
+    GlusterFS support               : NO
+    hv-balloon support              : NO
+    TPM support                     : NO
+    IGVM support                    : NO
+    libssh support                  : NO
+Cleaning... 0 files.
+    lzo support                     : NO
+    snappy support                  : NO
+    bzip2 support                   : NO
+    lzfse support                   : NO
+    zstd support                    : NO
+    Query Processing Library support: NO
+    UADK Library support            : NO
+    qatzip support                  : NO
+    NUMA host support               : NO
+    capstone                        : NO
+    libpmem support                 : NO
+    libdaxctl support               : NO
+    libcbor support                 : NO
+    libudev                         : NO
+    FUSE lseek                      : NO
+    selinux                         : NO
+    libdw                           : NO
+    valgrind                        : NO
+
+  Subprojects
+    berkeley-softfloat-3            : YES
+    berkeley-testfloat-3            : YES
+    dtc                             : YES
+    keycodemapdb                    : YES
+
+  User defined options
+    Native files                    : /workspace/bench/qemu-build/config-meson.cross
+    auto_features                   : disabled
+    curses                          : disabled
+    docs                            : disabled
+    gtk                             : disabled
+    guest_agent                     : disabled
+    kvm                             : enabled
+    libssh                          : disabled
+    sdl                             : disabled
+    slirp                           : disabled
+    tools                           : disabled
+    tpm                             : disabled
+    vde                             : disabled
+    vnc                             : disabled
+    werror                          : false
+
+Found ninja-1.10.1 at /usr/bin/ninja
+Running postconf script '/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/symlink-install-tree.py'
+[1/7] Generating qemu-version.h with a custom command (wrapped by meson to capture output)
+[2/5] Generating qemu.syms with a custom command (wrapped by meson to capture output)
+[3/5] Generating block.syms with a custom command (wrapped by meson to capture output)
+[4/5] Compiling C object libsystem.a.p/hw_misc_nvkvm_nvkvm.c.o
+In file included from ../qemu-10.2.4/hw/misc/nvkvm/nvkvm.c:61:
+../qemu-10.2.4/hw/misc/nvkvm/kayfabe_shim.h:400:22: warning: "/*" within comment [-Wcomment]
+  400 |  * traces/guest_boots/*_qemu.log] `grep -c hClass` over every committed device log returns
+      |                       
+../qemu-10.2.4/hw/misc/nvkvm/nvkvm.c: In function ‘nvkvm_report_registers’:
+../qemu-10.2.4/hw/misc/nvkvm/nvkvm.c:2552:22: warning: declaration of ‘i’ shadows a previous local [-Wshadow=compatible-local]
+ 2552 |             uint64_t i;
+      |                      ^
+../qemu-10.2.4/hw/misc/nvkvm/nvkvm.c:2503:18: note: shadowed declaration is here
+ 2503 |         uint64_t i, shown = a.served_len;
+      |                  ^
+[5/5] Linking target qemu-system-x86_64
+== built: /workspace/bench/qemu-build/qemu-system-x86_64
+BUILD_RC=0
+STAMP=[kayfabe-rev:7f10b0145936151147a5419305e5e4dba6197ac8] WANT=[kayfabe-rev:7f10b0145936151147a5419305e5e4dba6197ac8]
+STAMP_GATE=PASS
+=== CONTENT CHECK (counts must be non-zero) ===
+  GR-BIRTH             = 8
+  GUEST-RING           = 5
+  NOT-ASKED            = 5
+  DECLINED             = 5
+  BAR1 GP_PUT          = 4
+  NOT A TIMELINE       = 1
+  LOOPBACK BACKEND     = 2
+EXIT_STATUS=0
+BUILDDONE

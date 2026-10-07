@@ -1,0 +1,16 @@
+W=4194304
+Window 4194304
+  Position: 0,0 (screen: 0)
+  Geometry: 1024x768
+set=0
+HOST_left_ptr CURSOR w=328 h=328 hot=4,2 serial=21 name=[] visible_px=423 bbox_rel_hot=-1,-2,19,28 fnv_rel_hot=0x2ce7a0bf87ebd106
+HOST_POINTER_left_ptr x:100 y:90 screen:0 window:4194304
+GUEST_left_ptr CURSOR w=24 h=24 hot=3,1 serial=13 name=[left_ptr] visible_px=254 bbox_rel_hot=-1,-1,14,22 fnv_rel_hot=0x1da6c2469055d3aa POINTER 78 70 
+RELAY_left_ptr 
+VNC_left_ptr VNC_CURSOR w=256 h=256 hot=3,1 visible_px=254 bbox_rel_hot=-1,-1,14,22 fnv_rel_hot=0x977b1b1340901adb
+set=0
+HOST_crosshair CURSOR w=328 h=328 hot=15,15 serial=22 name=[] visible_px=460 bbox_rel_hot=-15,-15,14,15 fnv_rel_hot=0x289aa41ebf1cb740
+HOST_POINTER_crosshair x:100 y:90 screen:0 window:4194304
+GUEST_crosshair CURSOR w=24 h=24 hot=11,11 serial=14 name=[crosshair] visible_px=281 bbox_rel_hot=-11,-11,11,12 fnv_rel_hot=0x548443b1d42e7d42 POINTER 78 70 
+RELAY_crosshair 
+VNC_crosshair VNC_CURSOR w=256 h=256 hot=11,11 visible_px=281 bbox_rel_hot=-11,-11,11,12 fnv_rel_hot=0xf6108d49685ef58f

@@ -1,0 +1,514 @@
+> ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
+> The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
+> its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
+> implement from it, and do not cite it as current. Archived 2026-09-21 (w822).
+
+# THE BAR0 READ SURFACE — zero read traps, and what still exits on write
+
+**STATUS: LIVE (2026-09-12, w561).** Owner's target, stated in as many words: *"get me a raw
+client pass incl boot in mean test with 0 read traps in entirety of kayfabe"*. This document is
+the decision that target is built from. Supersede it here, in place, if the shape changes.
+
+## 1. The finding this rests on
+
+`[measured w561, from the chip table — no boot required]` BAR0 is 4096 pages. **524 are live**,
+and 512 of those are two windows:
+
+| what claims it | pages | where |
+|---|---|---|
+| PRAMIN window | 256 | `0x700000`–`0x7ff000` |
+| VBIOS / ROM | 256 | `0x300000`–`0x3ff000` |
+| GSP registers | 5 | `0x110000`, `0x111000`, `0x118000`, `0x1fa000`, `0x840000` |
+| boot registers | 3 | `0x0`, `0x9000`, `0x88000` |
+| interrupt leaves | 1 | `0xb81000` |
+| invalidate trigger | 1 | `0xb83000` |
+| free-running counter | 1 | `0xbb0000` |
+| window latch | 1 | `0x1000` |
+
+`[measured w561]` the doorbell is at **`0xbb0090`** — the SAME page as the counter — and its own
+offset reads `unclaimed`, because a doorbell is write-only.
+
+## 2. Why every one of them can stop trapping on READ
+
+⊘ Checked, not assumed. Of the twelve non-window pages, **eleven have no read side effect**:
+
+- interrupt leaves — `CpuIntrState::read(&self)` is an array lookup.
+- invalidate trigger — one atomic load.
+- window latch — returns the guest's own last write.
+- GSP registers — the whole read path is `&self`: `mmio_read_with`, `boot_context`, `observe`,
+  `on_read`. Only `mmio_write` takes `&mut`.
+- boot registers — a table.
+
+⇒ Each is a **pure function of state we own**, so a page whose bytes we update when that state
+changes answers the guest identically, with no exit.
+
+The twelfth is the counter, and it is different in kind: it changes continuously, so no copy can
+keep up. It is not shadowed — the host's own usermode page is mapped over it. ★ And because the
+doorbell shares that page, one read-only mapping serves both correctly: counter reads resolve
+natively, the doorbell write still exits.
+
+## 3. The decision
+
+**BAR0 becomes a container tiled by three kinds of piece, no overlaps.**
+
+1. **SHADOW** — everything except the two exceptions below. A rom device: reads resolve out of
+   its own memory with no exit; writes dispatch to this device. Its bytes are:
+   - zero for the 3572 pages no register lives in (a fresh mapping already is),
+   - the VBIOS image, written once at realize (static for the life of the boot),
+   - every shadowable register's current value, written by its PRODUCER whenever it changes.
+2. **PRAMIN** — one memory slot over `0x700000`, re-pointed by a single `mmap` when the guest
+   moves the window. Owner: *"is just one mmap remap in vmm va, no bql lock, no kvm memslot
+   update"*. Reads AND writes resolve natively: it is the framebuffer, not a register file.
+3. **THE USERMODE PAGE** — `0xbb0000`, mapped read-only from the host so the counter is the
+   host's own, and the doorbell write at `+0x90` still exits.
+
+## 3a. THE TARGET, as the owner stated it
+
+> *"get me a raw client pass incl boot in mean test with 0 read traps in entirety of kayfabe"*
+> … *"and write traps only in bar0, so not in bar1/2, except pramin (and more optionally if you
+> can get that)"*
+
+⇒ Three numbers, and a boot that passes while they hold:
+
+| surface | reads | writes |
+|---|---|---|
+| BAR0, except PRAMIN and the usermode page | **0 traps** | traps — the control plane |
+| BAR0 PRAMIN | **0 traps** | **0 traps** |
+| BAR1 / BAR2 | **0 traps** | **0 traps** |
+
+⊘ BAR1/BAR2 are already demand-filled memory slots, so their steady state is trap-free; what is
+NOT yet zero is the FIRST touch of each page, which is one exit per page by construction. Making
+that zero means filling them before the guest arrives, not filling them faster — a different
+change from the shadow below, and the one §7 lists last because it is the least understood.
+
+## 3b. PRAMIN, concretely — one mapping, re-pointed by one `mmap`
+
+Owner: *"is just one mmap remap in vmm va, no bql lock, no kvm memslot update"*, and
+*"safe code may not touch raw vmm va pointers unchecked"*.
+
+**The shape.** One memory slot over `[BAR0 + 0x700000, +1 MiB)`, installed once. A VA
+reservation of the same size in this process. Moving the window is `mmap(MAP_FIXED, fd,
+offset = window_base)` over that reservation — the MMU notifier makes KVM drop its own
+entries, so there is no memslot ioctl, no big lock, and nothing for the hypervisor to arbitrate.
+⊘ Synchronous on the vCPU, because RM writes the latch and then uses the window immediately;
+there is no completion to defer behind. It is one syscall, which is what makes that affordable.
+
+**What it requires, and this is the real work.** A single `mmap` can only place the window if
+the framebuffer's backing is CONTIGUOUS BY FRAMEBUFFER ADDRESS in the fd. Today
+`SharedPageArena::alloc` is a bump allocator with a free list (`arena_unsafe.rs:170-177`) —
+fd offset is allocation ORDER, so a 1 MiB window is 256 unrelated offsets.
+
+⇒ **Make the arena address-indexed: fd offset == framebuffer address.** This is a
+SIMPLIFICATION, not an addition — the free list and the bump cursor both disappear, because the
+address IS the offset. A sparse `memfd` the length of the framebuffer costs nothing until a
+page is touched.
+
+⊘ **And it must be the SAME arena, not a second one.** A separate address-indexed backing for
+PRAMIN would give the same framebuffer byte two homes, with nothing keeping them equal — the
+failure this file's §5 is about. The BAR1/BAR2 mirror keeps working unchanged: a per-page slot
+at `fd_offset = frame` is still correct when the offset happens to equal the address.
+
+⚠ `SharedPageArena::LEN` is 1 GiB today, chosen to match a residency ceiling. Address-indexing
+makes the extent a property of the FRAMEBUFFER's length, not of a ceiling, and the two must
+stop being conflated.
+
+## 4. What still exits, and it is the whole point
+
+After this, a guest read of BAR0 **never** leaves the vCPU. Writes exit only where they must:
+
+- the **doorbell** (`0xbb0090`) — the work-submit token;
+- the **GSP queue**, **boot registers**, **interrupt leaves**, **invalidate trigger** and the
+  **window latch** — every one of which drives a state machine, raises an interrupt, moves a
+  window or starts an invalidate;
+- writes into the shadow's zero and VBIOS regions, which are rare and kept trapping because the
+  run list was measured from the READ classifier and a piece that swallowed writes would be
+  claiming something never measured.
+
+⊘ PRAMIN writes stop exiting entirely. `[measured w542]` that alone is **69 730 of 89 322**
+write traps in a boot — 78%.
+
+## 5. The invariant a producer must keep, and how it is checked
+
+★★★ **A shadowed register has TWO homes: the state it is computed from, and the shadow's bytes.
+A producer that updates one and not the other makes the guest read a stale value with no fault
+and no counter** — the failure this whole tree is written against.
+
+⇒ The shadow is **not** written by hand at each producer. The plane owns one `write_through`
+entry point; a register's value reaches the guest only through it. And a debug gate sweeps every
+shadowable offset at teardown, comparing the shadow's bytes against the classifier's own answer
+— a divergence is a named failure, not a mystery in a later boot.
+
+## 6. What this does NOT do
+
+⊘ It does not reduce write traps except through PRAMIN.
+⊘ It does not make the counter's value ours — it is the host's, and the two timebases must come
+from the same mapping or they disagree at 43 ppm (`native_dataplane_cup2_ga106.md` §4).
+⊘ It says nothing about BAR1/BAR2, which are demand-filled memory slots under their own arms.
+
+## 6a. Measured — 2026-09-13, the first grades on a MATCHING host (RTX 3060, GA106)
+
+★ Every figure below is from a boot that graded `W392D_GUEST_OUTCOME=(P)`.
+
+| BAR0 reads reaching the handler | w553 baseline | w582 |
+|---|---|---|
+| total | 304 189 | 161 422 |
+| **unclaimed** | **104 203** | **138** |
+| VBIOS / ROM | 4 632 | **0** |
+| GSP registers | — | **0** |
+| window latch | — | **0** |
+
+⊘ `cpu_intr` is NOT a read count — that counter deliberately counts reads AND writes in one
+number, so it cannot be read as remaining read traps.
+
+★★ **PRAMIN reached the target and is parked.** With the aperture placed as one slot,
+`window[SERVED r=0 w=0]` — down from 3704 reads and 631 458 writes. The guest's GSP bootstrap
+then times out (`0x62:0x40:2028`), so the mapping is right and something that bootstrap needs is
+not equal on both sides of it. See `barmirror.rs`'s parked install for the open hypotheses.
+
+### Trap latency — goal 6's standing number
+
+    worst_trap = 39 599 us   at bar0+0x110c00 (the GSP RPC submit)
+    slow_traps (>1ms) = 4 in the whole boot
+    VCPU-BLOCKING none   inline_exceptions=0
+    rank0: worst_wait=0us  slow_waits=0  slow_holds=0  worst_hold=330us
+
+⊘ **The 39.6 ms is not a lock.** Rank-0 waits measured ZERO and the worst hold is 330 us, so no
+vCPU waited on anything this device holds. The owner's rule — *"the thread wasn't scheduled
+doesn't count, but only if that's a vCPU steal, not if it was waiting on a blocking lock in the
+vCPU thread"* — puts this on the schedulable side of the line, on an 11-core NESTED guest.
+⚠ That is an argument, not a measurement of steal time, and it is the next thing to measure
+rather than assume. `[w515]` names this exact site as the worst trap and it remains the target.
+
+## 6b. ⊘⊘⊘ CORRECTION, 2026-09-13 (w587) — **THE §6a NUMBERS ARE A PASSING BOOT'S; MINE WERE NOT,
+## AND I COMPARED THEM ANYWAY.**
+
+`[measured w586a/w587, rev 330a0202, this box]` I reported **BAR0 reads 161 422 → 33** as the
+surface improving. ⊘ **It is not that.** The 33 came from a boot that **failed
+`RmInitAdapter`** — the guest never reached the work that generates reads. On the SAME box, the
+last known-good commit (w583, `316f36e1`) rebuilt and booted measures:
+
+    BAR0-READS total=158964 | producer[cpu_intr=13270] | live[ptimer=129]
+               | window[SERVED r=3707 w=631257]        ← PRAMIN parked, trapping as designed
+
+⇒ **158 964 is this box's baseline, and 33 is a truncated run.** The two are not comparable in
+either direction. ⚠ This tree has recorded that exact trap before — *"a truncated run's census
+looked BETTER and was worthless"* — and the shape it takes is always the same: **every number
+that measures WORK falls when the work stops happening, and falling is what progress looks
+like.** A census is only comparable against a run that got equally far.
+
+★ What DOES survive from that boot, because it is a ratio rather than a total:
+`reads_from_BACKED_pages=0` and `top[+0xbb0000=...]` — of the reads that DID happen, none
+escaped a page the cut backs, and all of them were the counter. That is evidence about the
+backing, and it is independent of how far the guest got.
+
+⊘ **And the regression is mine, not the box's.** w583 rebuilt on this box opens the adapter and
+`nvidia-smi` enumerates the GPU with 12 288 MiB; w584..w587 fail `RmInitAdapter (0x23:0x65:1206)`
+with `GSP-SUBMIT SERVICING REFUSED PeerWritePtrOutOfRange`. Bisect in progress.
+
+## 6c. ★★★★★ MEASURED 2026-09-13 (w590) — **ONE PAGE IS LEFT, AND THE HARDWARE OWNS IT**
+
+Three arms, **one binary**, differing only by environment variable, on a matching GA106
+(580.159.04). **All three graded `W392D_GUEST_OUTCOME=(P)`, `THREADS 8 of 8 verified`,
+`MEAN_FALSIFIER=PASS`** — so these are same-depth comparisons, not a truncated run flattering
+itself (§6b).
+
+| arm | BAR0 reads reaching the handler | PRAMIN r / w | pages producing traps |
+|---|---|---|---|
+| **B** control (`SHADOW_INVAL=0 PRAMIN_SLOT=0`) | 184 585 | — | 5 |
+| **A** invalidate page backed | **148** | 25 / 71 719 | 4 |
+| **C** + PRAMIN slot — *the default* | **134** | **2 / 3 905** | **1** |
+
+    BAR0-READ-HOTSPOTS pages_touched=1 reads_from_live_pages=132
+                       reads_from_BACKED_pages=0  top[+0xbb0000=132]
+
+⇒ **Every remaining read trap is the free-running counter**, and nothing escaped a page the cut
+backs. The read surface is finished except for a register whose value no copy can hold, which is
+exactly what §3 predicted when it named the usermode page as the third piece.
+
+★ Two counters answered their own questions on this boot:
+- `PRAMIN-SLOT moves=22 skipped=18373` with **no re-point refusal** — the slot followed all 22
+  times the guest re-aimed the window, so the guest never read the wrong framebuffer.
+- `store_refused=0 store_migrated=0 store_read_refused=0 store_resets=0` — the store and the file
+  agreed about every frame, and `device_reset` never punched the arena during a driver load,
+  which was the open risk w587 could not argue away and had to count instead.
+
+⊘ Trap latency is unchanged and remains goal 6's standing item: `inline_exceptions=0`,
+`slow_traps(>1ms)=1`, `worst_trap=14 618 us at bar0+0x110c00` — the GSP RPC submit, as it has
+been since w515.
+
+## 6d. ★★★★★ CORRECTED 2026-09-13 (w607) — **PRAMIN WAS ALREADY AT ZERO, AND THE NUMBER I
+## SPENT SIX HYPOTHESES ON NEVER CONTAINED A PRAMIN ACCESS**
+
+`[measured w603a, ONE boot, graded `(P)`]` — the arithmetic closes exactly in both directions:
+
+| | reads | writes |
+|---|---|---|
+| `window[SERVED …]`, read as PRAMIN's | 57 | 3 895 |
+| BAR1 (translated) | 55 | 2 300 |
+| BAR2 (translated) | 2 | 1 595 |
+| **PRAMIN, by subtraction** | **0** | **0** |
+
+⇒ **The PRAMIN aperture takes no traps at all, and has not since the slot was un-parked.**
+Goal 2's PRAMIN clause is MET.
+
+### ★★★★★ AND THE ZERO IS MEASURED, NOT STRUCTURAL (w609) — the counter against its own control
+
+⊘ A zero from a counter that has never been seen non-zero is w587's trap, and I have walked into
+that family twice today. So the new `pramin_reads`/`pramin_writes` were run against the control
+arm first. **One binary, one environment variable, both arms graded `(P)`:**
+
+| `KAYFABE_PRAMIN_SLOT` | PRAMIN-ONLY r / w | ALL-WINDOWS r / w |
+|---|---|---|
+| `0` (control) | **22 / 67 956** | 34 / 72 314 |
+| default (slot live) | **0 / 0** | 32 / 3 727 |
+
+⊘ The `ALL-WINDOWS` figure for the slot arm was first written down as `2 / 728`, read from a log
+while that boot was still running. It is `32 / 3 727` at teardown. ⚠ A counter sampled mid-run is
+not the run's number, and the two look identical on the page — the same shape as §6b's truncated
+census, caught here within the minute rather than after three commits. ★ `PRAMIN-ONLY` was `0`
+at both samples, so the conclusion is untouched.
+
+⇒ The counter reads **sixty-eight thousand** when the aperture traps and **exactly zero** when
+the slot serves it. That is a known-positive and a measurement, not an absent instrument.
+
+⊘⊘⊘ **The instrument was the defect, and I asserted it was not.** The `FbWindow::Pramin` arms of
+`RegPlane::read`/`write` were literally `{}` — no PRAMIN counter existed — while `fb_reads` and
+`fb_writes` were incremented **outside** the `match window`, for every window. So
+`window[SERVED r= w=]` was `BAR1 + BAR2 + PRAMIN`.
+
+⚠ **And `Counters::fb_reads`'s own doc said *"through the BAR0 moving window"*.** w597's commit
+says I *"checked the counter means what I have been claiming"* — I checked the DOC COMMENT, which
+was the thing that was wrong, so checking it CONFIRMED the error. ⇒ A stale doc is worse than no
+doc: it turns verification into corroboration. **Read the code the doc describes, or you have
+checked nothing.**
+
+★ The base correlation was real and had an innocent cause. `kbusSetupBar0WindowBeforeBar2Bootstrap_GM107`
+(`ogkm-580 kern_bus_gm107.c:2163-2198`) parks the BAR0 window on `bar2[GFID_PF].pdeBase` — RM's
+page-level instances at the **top of FB** — for the whole BAR2 bootstrap, and restores it at
+`:1989`. Two caller pairs, two leaky episodes. The bursts are **BAR2 traffic while the latch
+happens to rest there**, and `0x2fff00000` being the memfd's last megabyte is a coincidence of
+where RM puts BAR2's page directory.
+
+⇒ The six refuted hypotheses were all sound about the number they tested; the number was not
+about PRAMIN. `pramin_reads`/`pramin_writes` now exist, and the census prints
+`window[ALL-WINDOWS …| PRAMIN-ONLY …]` so the two can never be confused again.
+
+★ **What is actually left is BAR1/BAR2 first touch** — 55/2 300 and 2/1 595 on that boot — which
+§7 already names as *"the last exits on those BARs, and the least understood item here"*.
+
+## 6e. ★★★★★ BAR1/BAR2 IS DEMAND-FILL LATENCY, AND THE ARITHMETIC CLOSES EXACTLY (w608)
+
+`[measured w603a, ONE boot, graded `(P)`]` — every number here comes from an increment site I
+read before using it, which after §6d is the rule rather than a precaution:
+
+    trapped BAR1 + BAR2 accesses   55 + 2 300 + 2 + 1 595 = 3 952
+    BAR-MIRROR FILLS               queued=3952 run=3952 dropped=0
+    refused                        [ALREADY-COVERED=3572]
+    successful fills               166 (bar1) + 214 (bar2) = 380
+    3 572 + 380                    = 3 952            ← closes exactly
+    distinct pages ever needed     63 (bar1) + 121 (bar2) = 184
+    slots peak                     173
+
+⇒ **Every trapped BAR1/BAR2 access queues a fill, and 90.4 % of those fills find the page
+ALREADY COVERED.** The guest touches a page, we queue a slot install, and it touches the same
+page again before the install lands — so the trap count is not measuring distinct pages at all.
+**184 pages are ever needed; 3 952 accesses pay for them.**
+
+★ That is not a bug in the mirror. It is the cost of filling ON DEMAND.
+
+⊘⊘⊘ **CORRECTED 2026-09-13 (w620) — THIS SECTION CITED THE WRONG RULING, AND THE MIS-CITATION
+COST TWO IMPLEMENTATIONS.** §6e originally answered this with the owner's *"if a channel is
+created inheriting a va base, then you can map at create, of existing known va maps, and only
+return from rpc if channel is usuable."* ⚠ **That ruling is about VAS ROW PUBLICATION and it is
+already implemented** — `shim.rs`'s `publish_vas_rows`, on the worker after the birth drain and
+before the RPC reply, quoting the ruling verbatim with its date. It fixed an Xid 31 `FAULT_PDE`
+on a GPFIFO ring. **The owner never ruled on BAR memslots at a channel birth**, and reading a
+ruling about one plane as a ruling about another is `a_rulings_date_is_part_of_the_citation`
+in its other form: right quote, wrong subject.
+
+★ **The moment for BAR1 is the TLB INVALIDATE, not a birth**, and the tree already said so
+before I arrived. `window_leaves` was written for the refresh and had no caller until w617
+borrowed it (*"enumerating here is what makes refresh authoritative rather than reactive"*), and
+the owner's contract quoted beside it is *"no traps in bar1/bar2 at all, ever, only for a fault"*
+with *"promote/depromote is only allowed in refresh"*.
+
+⇒ Why a birth **cannot** work, mechanically: a BAR1 mapping is made by CPU-RM locally
+(`kbusMapFbAperture_GM107` → `dmaAllocMapping_HAL` → `dmaUpdateVASpace_GF100`) with **no RPC**.
+Its PTE writes reach us through BAR2, which is slot-served and invisible; the only thing we
+observe is the invalidate. A birth therefore enumerates whatever BAR1 held BEFORE it.
+
+⊘ What this replaces: *"BAR1/BAR2 first touch, the last exits on those BARs and the least
+understood item here"* (§7). It is now understood and measured. The remaining work is the map-at-
+create path, and its success criterion is ready-made — `ALREADY-COVERED` should fall to near
+zero, and trapped accesses should approach the distinct-page count rather than exceed it 21×.
+
+## 6f. ★★★★★ MAP-AT-CREATE IS AIMED AT THE RIGHT TRAFFIC — MEASURED (w616)
+
+`[measured w615a, a boot that graded `(P)` with `MEAN_FALSIFIER=PASS`]`:
+
+    pre_birth_pages=[bar1=0 bar2=20] of [bar1=66 bar2=119]
+
+| | pages needed BEFORE the first channel birth | total | post-birth |
+|---|---|---|---|
+| BAR1 | **0** | 66 | **100 %** |
+| BAR2 | 20 | 119 | 83 % |
+| both | **20** | **185** | **89.2 %** |
+
+⇒ **The owner's map-at-create ruling covers 89 % of the working set, and all of BAR1.** My
+concern was that BAR2's bootstrap would dominate — RM writes instance blocks and page tables
+through that window long before any channel exists — and it does not: **20 pages**, a bounded
+and nameable remainder.
+
+★ This check could have gone the other way, and it cost one boot. Had it come back the other
+way, map-at-create would have been built, graded, and measured no change — a correct ruling
+aimed at the wrong half of the traffic, which is the most expensive kind of wrong there is.
+
+⊘ **And the first two attempts to take this measurement both LIED, in opposite directions.**
+w613's field was never printed at all (a format-string edit that silently matched nothing), and
+w614's replacement printed `NO-BIRTH` — a confident, readable, wrong finding — because the hook
+sat on a drain that never fires while the same log carried `born=1`. Both compiled, both passed
+every test, both graded `(P)`. ⇒ **A field nothing reads and a branch nothing takes are the same
+bug in different clothes**, and the only detector for either is reading the output for the thing
+you just added.
+
+## 6g. ⊘⊘⊘ MAP-AT-CREATE, FIRST ATTEMPT — **FAILED ITS CRITERION AND MADE THINGS WORSE (w618)**
+
+`[measured w617a, a boot that graded `(P)`]`, against the criterion fixed BEFORE the boot:
+
+| | before | after | |
+|---|---|---|---|
+| `ALREADY-COVERED-EARLY` | 2 574 | **11 480** | **4.5× worse** |
+| bar1 `distinct_pages` | 66 | **319** | 253 slots nobody touches |
+| bar1 `fills` | 166 | 679 | |
+| BAR1 writes | ~2 300–3 544 | 3 105 | **not reduced** |
+| BAR2 | 2 / 1 453 | 2 / 1 453 | unchanged — the one prediction that held |
+
+    premap[runs=30 pages=7811 refused=0]   -> 260 pages per birth, for a 66-page working set
+
+⊘⊘⊘ **MY SELF-DIAGNOSIS HERE WAS WRONG, corrected w620.** I wrote that this *"maps the wrong
+set"* and needs the channel's own VA maps. It does not. **BAR1 is its own VAS keyed by
+`bar1_pde_base`; its leaves ARE its known maps; a channel has no "own" BAR1 subset**; and going
+from a VAS row to an aperture offset would be the reverse resolution `mode2_address_table.md`
+forbids. The 253 extra pages were **untouched, not wrong**.
+
+★ The two real defects, both visible in the code I wrote:
+
+1. **A LEAF IS NOT A PAGE.** `fill_now` installs exactly one 4 KiB slot, and GA10x offers 4 KiB,
+   **64 KiB**, 2 MiB and 512 MiB. RM caps BAR1 mappings at the big page size and forces 64 KiB on
+   a BAR1 of ≤ 256 MiB, so any vidmem object ≥ 64 KiB is ONE leaf covering **sixteen** pages — of
+   which w617 filled the first. The other fifteen demand-filled exactly as before. ⇒ **That is
+   the "premapping did not reduce the traps" I could not explain**, and it is not a coordinate
+   problem: `window_leaves` and `bar1_translate` walk the identical root at `vabase: 0`, so the
+   offsets were right all along.
+2. **The moment.** See the correction above §6e.
+
+⊘ And the 11 480 is 30 re-enumerations of an already-covered tree, which follows from (2).
+
+⇒ **Default OFF behind `KAYFABE_PREMAP_BAR1=1`, kept rather than deleted**, because only its
+INPUT is wrong: the machinery installs slots correctly and a corrected version — fed the
+channel's own VA maps — will want to be graded against this arm. **A change that fails a
+pre-registered criterion is turned off, not tuned until it goes green.**
+
+★ The criterion is what made this a five-minute result instead of an argument. It named three
+numbers and their directions in advance; two moved the wrong way and the third confirmed the
+model. Without it the honest reading — *"premap installed 7 811 pages, look at it working"* — was
+available and wrong.
+
+## 6h. ★★★★★ BAR1 IS AT ZERO TRAPS (w621) — map-at-INVALIDATE, graded
+
+`[measured w620a, a boot that graded `(P)`]`, against the criterion fable fixed before it ran:
+
+| | before | after | criterion | |
+|---|---|---|---|---|
+| **BAR1 reads / writes** | 0–55 / 2 300–3 544 | **0 / 0** | near 0 | ★ **met** |
+| BAR2 reads / writes | 2 / 1 453 | 2 / 1 434 | unchanged | ✔ held |
+| bar1 `distinct_pages` | 66 | 800 | *may rise, not a failure* | ✔ as stated |
+| `premap runs` | — | **1 181** | ≈ invalidate count | ✔ exactly |
+| `biggest_leaf` | — | **65 536** | 4096 would mean untested | ★ defect 1 was real |
+
+⇒ **Goal 2's BAR1 clause is MET: the aperture takes no traps at all.** Both of fable's defects
+were real and both mattered — the 64 KiB leaf (`biggest_leaf=65536` proves the case arose) and
+the moment (`runs` matches the invalidate count exactly, which a birth never could).
+
+⊘⊘ **AND IT COSTS 567 312 FILL CALLS**, because each of the 1 181 invalidates re-enumerates the
+whole BAR1 tree whether or not it changed. The trap metric is perfect and the WORK metric is far
+worse than the demand-fill it replaced. ⇒ That is the next commit, and it is a cheap one: gate
+the enumeration on the tree having actually changed. ⚠ Recording it as a cost rather than
+rounding it away — goal 8 (two clients in parallel) is a worker-headroom problem, and half a
+million redundant fills is exactly the headroom it needs.
+
+★ What remains for goal 2: the counter page (~132 reads) and **BAR2** (2 / 1 434), which needs
+the entry-rooted subtree decode `window_leaves` refuses by name — fable sizes it at ~25 lines.
+
+## 6i. ★★★★★ BOTH BARs AT ZERO (w627) — goal 2 is one page from complete
+
+`[measured w626a, a boot that graded `(P)`]`:
+
+    BAR1 (translated)  0 reads / 0 writes
+    BAR2 (translated)  0 reads / 0 writes
+    premap[runs=2362 filled=6133 skipped=712049 refused=0 biggest_leaf=65536 bar2_visited=19]
+
+⇒ **Every aperture this device owns is now trap-free except one page.**
+
+| surface | reads | writes |
+|---|---|---|
+| BAR0 excluding the counter page | **0** | traps — the control plane, which goal 2 allows |
+| the free-running counter (`+0xbb0000`) | ~132 | — |
+| PRAMIN | **0** | **0** |
+| BAR1 | **0** | **0** |
+| BAR2 | **0** | **0** |
+
+★ BAR2 became reachable at all because `decode_subtree_from_entry` (w624) gave the enumerator a
+root it could start from; it started WORKING when its budget stopped being BAR1's.
+
+⊘⊘⊘ **AND MY REASON FOR THE BUDGET WAS WRONG IN ITS UNITS — caught by the instrument I added to
+avoid guessing twice.** w626 said *"the budget counts page-table PAGES visited"*. It does not:
+`decode_subtree` charges `cost = level_shift(level).entries` **per page** — 512 or 1 024 on
+GA10x. `bar2_visited=19` means BAR2's tree is **19 pages**, which would have fit a 2 048 *page*
+budget a hundred times over; at ~1 000 entries each it needs **~19 000**, and 2 048 buys two or
+three pages. ⇒ Right mechanism, wrong unit, and **`bar2_visited=19` beside a budget of 2 048 is a
+contradiction rather than a confirmation** — it had to be explained, and explaining it is what
+found the error.
+
+⚠ Third time this session I asserted what a number counts without reading the site that consumes
+it, after w607's lying doc comment and w617's assumed identity. The pattern is now explicit
+enough to state: **a unit is part of a number's definition, and neither its name nor its
+docstring is a substitute for the line that changes it.**
+
+## 7. Status
+
+- [x] w550 — the cut, and the 3572 dead pages backed. `[measured w553]` the raw client passed
+      with it: `(P)`, `MEAN_FALSIFIER=PASS`, `THREADS 8 of 8`, `VCPU-BLOCKING none`.
+- [x] w561 — the live-page census and the read-side-effect audit above.
+- [x] the shadow and its `write_through` — ⚠ the port had **no caller** until w577, so every
+      producer write was a no-op and the pages held realize-time bytes; see w576.
+- [x] VBIOS bytes into the shadow at realize (w563) — ROM reads 4632 -> **0**.
+- [x] ⊘ PRAMIN — *was* parked at w582; see the w590 row below. Four real defects were fixed
+      getting there (w569, w579, w580, w581) and three more after (w584, w585, w588).
+- [x] **w588 — the baseline on this box is `(P)`**: `W392D_GUEST_OUTCOME=(P)`,
+      `THREADS 8 of 8 verified`, `MEAN_FALSIFIER=PASS`, with PRAMIN parked. So the target is
+      real and every later grade has something to regress from.
+- [x] **w588 — WHERE THE REMAINING READS ARE, measured on that passing boot.** It was never a
+      long tail: `+0xb83000` (MMU invalidate) is **204 035 of 204 198 = 99.9 %**;
+      `+0xbb0000` (the counter) is **129**; three PRAMIN-latch pages account for **22**.
+      `reads_from_BACKED_pages=0` — nothing escaped a page the cut backs.
+- [x] **w590 — the invalidate page backed.** `[measured]` 184 585 -> 148 reads, client still
+      `(P)`. Both edges publish; `KAYFABE_SHADOW_INVAL=0` is the control arm.
+- [x] **w590 — PRAMIN as one re-pointed slot, UN-PARKED and passing.** `[measured]` PRAMIN
+      writes 631 257 -> 3 905, reads 3 707 -> 2, client `(P)`, and the slot followed all 22
+      window moves. w582's park was on a refuted hypothesis; the real blockers were w584,
+      w585 and w586's own census.
+- [ ] the usermode page mapped from the host — after w590 this is the LAST read source, and it
+      is 129 reads rather than the 135 §3 estimated.
+- [x] **PRAMIN: ZERO traps, both directions** (w607, by subtraction on one `(P)` boot, and now
+      counted directly). ⇒ Goal 2's PRAMIN clause is met.
+- [ ] graded: raw client `(P)` **and** a read-trap census of **zero**.
+- [x] **BAR1 — ZERO TRAPS (w621)**, by enumerating its leaves at the TLB invalidate and filling
+      every page of each leaf. ⊘ At a cost of 567 312 fill calls, fixed next.
+- [x] **BAR1 AND BAR2 — ZERO TRAPS (w627)**, by enumerating each aperture's leaves at the TLB
+      invalidate and filling every page of every leaf. ⊘ BAR2 needed its own root decode (w624)
+      and its own budget (w626). `[measured]` 3 952 trapped
+      accesses for **184 distinct pages**; 90.4 % of fills find the page `ALREADY-COVERED`. It
+      is demand-fill latency, and the owner's map-at-create ruling removes the class.
+      `[measured w616]` **89.2 % of that working set is needed only AFTER the first channel
+      birth** (BAR1: 100 %), so the ruling covers it; the pre-birth remainder is 20 BAR2 pages.

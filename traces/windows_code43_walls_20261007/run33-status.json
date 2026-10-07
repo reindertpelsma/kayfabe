@@ -1,0 +1,28 @@
+{
+  "time_utc": "2026-10-07T13:55:13.5777638Z",
+  "uptime_seconds": 97.0822628,
+  "os_version": "10.0.26100",
+  "driver_sha256": "31c79cce80b573e21647ace8d1a2b65697f992e7f86196f89e30af477b1bd47c",
+  "driver_file_version": "32.0.15.8088",
+  "display": [
+    {
+      "Name": "Microsoft Basic Display Adapter",
+      "PNPDeviceID": "PCI\\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\\3&267A616A&0&48",
+      "ConfigManagerErrorCode": 10,
+      "Status": "Error"
+    },
+    {
+      "Name": "NVIDIA GeForce RTX 4070",
+      "PNPDeviceID": "PCI\\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\\3&267A616A&0&30",
+      "ConfigManagerErrorCode": 43,
+      "Status": "Error"
+    }
+  ],
+  "nvidia_smi": {
+    "available": true,
+    "exit_code": 9,
+    "stdout": "NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.\r\n\r\n",
+    "stderr": "",
+    "timed_out": false
+  }
+}

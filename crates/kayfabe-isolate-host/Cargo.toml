@@ -1,0 +1,76 @@
+[package]
+name = "kayfabe-isolate-host"
+description = "The REAL host isolate behind kayfabe-isolate's ports: a sandboxed child process per (Proc, GpuId), its request/reply wire protocol, and an RmBackend that issues genuine NVIDIA RM ioctls. The first implementor of IsolateFactory/Isolate/RmBackend outside kayfabe-mocks (host_execution_plane.md §3)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kayfabe-util.workspace = true
+kayfabe-arch.workspace = true
+kayfabe-abi.workspace = true
+# ★ #156 — the arch-impl crate, for `HostClasses` PROFILES only. This crate holds the
+# host-forwarding path, and three of the class ids it allocates change with the host
+# board's generation, so the numbers live behind `kayfabe_arch::HostClasses` and in the
+# crate where a chip's facts are ALLOWED to live. Depending on it is what lets this crate
+# be SCOPED by the Generation-name gate instead of exempted from it.
+# ⊘ A TOML `#` comment is NOT filtered by that gate the way a `//` line is, so this
+# comment may not name a generation either. That is the gate working, not a nuisance.
+kayfabe-chips.workspace = true
+kayfabe-vmm.workspace = true
+kayfabe-isolate.workspace = true
+kayfabe-linux-raw.workspace = true
+
+# ★ The child process. It is a binary in THIS crate rather than a separate one so the
+# parent's factory and the child's serve loop cannot drift out of protocol agreement
+# without failing to compile: they share `crate::proto` by construction, not by review.
+# ★ OPTIONAL, and only the CUDA scratchpad image links it: the walk kernel's PTX, its ABI
+# mirror and the `dlopen`ed driver binding. See the `cuda-scratchpad` feature.
+kayfabe-cuda = { workspace = true, optional = true }
+
+[[bin]]
+name = "kayfabe-isolate"
+path = "src/bin/isolate.rs"
+
+# ★ The bring-up ladder as a program (host_execution_plane.md §4). A human-facing
+# diagnostic, deliberately NOT part of the isolate: the isolate faces a hostile guest and
+# has no business owning an argument parser or a `println!`.
+# ⊘ `kayfabe-rm-ladder` MOVED OUT (w823) to `crates/kayfabe-rm-ladder`. It is the grading
+# instrument for the 30-arm bare-metal suite, and it cannot live inside the crate the v3 rewrite
+# deletes -- that would retire the grader together with the thing it grades.
+
+# ★★ The containment prober. A separate PROCESS is not a stylistic choice here: entering
+# the sandbox rewrites this process's mount namespace and root, so the property can only be
+# measured in something disposable. `tests/sandbox_escape.rs` drives it in three modes,
+# including the deliberately mis-ordered one that must still show the escape.
+[[bin]]
+name = "kayfabe-sandbox-probe"
+path = "src/bin/sandbox_probe.rs"
+
+
+[dev-dependencies]
+# The R1 lock witness, so the real backend can be driven WITH a ranked lock held and the
+# assert watched to fire — a gate never seen to fail is not evidence.
+kayfabe-util.workspace = true
+# ★★★ W229 — `tests/compile_fail.rs`. The isolate's own address space (`rm::ExecutorVas`)
+# must be UNSPELLABLE outside this crate, and an impossibility asserted only in prose is
+# the failure class this repo keeps cataloguing.
+trybuild = "1.0" 
+
+[lints]
+workspace = true
+
+[features]
+# ★★★★★ THE SECOND ISOLATE IMAGE — `THE_CONSTRAINTS.md` §w724d, `SINGLE_STORE_PLAN.md`
+# increment 4. OFF BY DEFAULT.
+#
+# When on, `build.rs` additionally builds `kayfabe-isolate` for the HOST (glibc) triple and
+# embeds it as a SECOND image, and the child gains the `--cuda-walk` arm that brings CUDA all
+# the way up BEFORE entering the sandbox.
+#
+# ⊘ The ordinary musl-static image and its sandbox-first guarantee are **untouched**. Only the
+# one VM-lifetime scratchpad isolate runs the second build, and only it is sandboxed late.
+#
+# ⚠ It costs a second nested cargo build of the whole isolate dependency tree, which is why it
+# is a feature rather than unconditional.
+cuda-scratchpad = ["dep:kayfabe-cuda"]

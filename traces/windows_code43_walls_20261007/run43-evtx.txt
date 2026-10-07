@@ -1,0 +1,4 @@
+System.evtx of boundary-kayfabe-43 (read-only NBD via recover_bugcheck.py); display-driver events since 2026-10-07 17:31:32
+2026-10-07 17:31:46.178 nvlddmkm 153 <string>\Device\Video0</string> <string>Resetting TDR occurred on GPUID:6</string>
+2026-10-07 17:31:46.396 nvlddmkm 153 <string>\Device\Video0</string> <string>Reset TDR occurred on GPUID:6</string>
+2026-10-07 17:31:46.521 nvlddmkm 153 <string>\Device\Video0</string> <string>Restarting TDR occurred on GPUID:6</string>

@@ -1,0 +1,43 @@
+opened device `NVIDIA DRM driver` on driver `nvidia-drm` (version 0.0.0 at 20160202)
+Connectors:
+id	encoder	status		name		size (mm)	modes	encoders
+126	125	connected	DVI-D-1        	250x250		1	125
+  modes:
+	index name refresh (Hz) hdisp hss hse htot vdisp vss vse vtot
+  #0 1920x1080 29.94 1920 1968 2000 2080 1080 1083 1088 1096 68250 flags: phsync, nvsync; type: preferred
+  props:
+	1 EDID:
+		flags: immutable blob
+		blobs:
+
+		value:
+			00ffffffffffff002cc2010001000000
+			27240104a119197806ee91a3544c9926
+			0f505400000001010101010101010101
+			010101010101a91a80a0703810403020
+			3500fc1d1100001a000000fd00181e0f
+			a011000a202020202020000000fc006b
+			6179666162650a202020202000000010
+			00000000000000000000000000000047
+	2 DPMS:
+		flags: enum
+		enums: On=0 Standby=1 Suspend=2 Off=3
+		value: 0
+	5 link-status:
+		flags: enum
+		enums: Good=0 Bad=1
+		value: 0
+	6 non-desktop:
+		flags: immutable range
+		values: 0 1
+		value: 0
+	4 TILE:
+		flags: immutable blob
+		blobs:
+
+		value:
+	127 vrr_capable:
+		flags: immutable range
+		values: 0 1
+		value: 0
+

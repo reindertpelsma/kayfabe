@@ -1,0 +1,26 @@
+HOSTMEM_START device="NVIDIA GeForce RTX 4070" sm_89 pci=0000:06:00 cuda_driver=13000 runtime=12040 canMapHostMemory=1 pageableMemoryAccess=0 hostRegisterSupported=1
+CHECK pageable_h2d_ce                    PASS GPU read 0 wrong words of 16777216
+CHECK pageable_d2h_ce                    PASS CPU read 0 wrong words of 16777216
+CHECK pinned_h2d_ce                      PASS GPU read 0 wrong words of 16777216
+CHECK pinned_d2h_ce                      PASS CPU read 0 wrong words of 16777216
+CHECK zerocopy_kernel_reads_host         PASS GPU read 0 wrong words of 16777216
+CHECK zerocopy_kernel_writes_host        PASS CPU read 0 wrong words of 16777216
+CHECK wc_zerocopy_kernel_reads_host      PASS GPU read 0 wrong words of 16777216
+CHECK wc_zerocopy_kernel_writes_host     PASS CPU read 0 wrong words of 16777216
+CHECK wc_pinned_h2d_ce                   PASS GPU read 0 wrong words of 16777216
+CHECK wc_pinned_d2h_ce                   PASS CPU read 0 wrong words of 16777216
+CHECK reg_malloc_h2d_ce                  PASS GPU read 0 wrong words of 16777216
+CHECK reg_malloc_d2h_ce                  PASS CPU read 0 wrong words of 16777216
+CHECK reg_malloc_kernel_reads_host       PASS GPU read 0 wrong words of 16777216
+CHECK reg_malloc_kernel_writes_host      PASS CPU read 0 wrong words of 16777216
+CHECK reg_memfd_h2d_ce                   PASS GPU read 0 wrong words of 16777216
+CHECK reg_memfd_d2h_ce                   PASS CPU read 0 wrong words of 16777216
+CHECK reg_memfd_kernel_reads_host        PASS GPU read 0 wrong words of 16777216
+CHECK reg_memfd_kernel_writes_host       PASS CPU read 0 wrong words of 16777216
+CHECK sem_writevalue_seen_by_cpu_polling PASS 64/64 seen before any sync (worst 3 us); mem_ops_v1_attr=0
+CHECK sem_writevalue_after_sync          PASS 64/64 correct after cudaStreamSynchronize
+CHECK sem_kernelflag_seen_while_running  PASS flag=0xf1a6f1a6 after 3 us of polling (kernel still resident)
+CHECK device_healthy_at_end              PASS no error
+HOSTMEM_SUMMARY pass=22 fail=0
+HOSTMEM_VERDICT=PASS
+RC=0

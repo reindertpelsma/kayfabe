@@ -1,0 +1,9 @@
+[package]
+name = "kayfabe-util"
+description = "Purely generic utilities for the kayfabe Mode-2 core. No GPU concepts (design decision #2)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true

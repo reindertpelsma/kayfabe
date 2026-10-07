@@ -1,0 +1,32 @@
+Q10_START 2026-09-26T23:35:38+00:00 rev=bb9b67a9 host=580.159.04
+CLIENT_RC=0
+KF3_BUILD_RC=0 KF3_BUILT /workspace/bench/kf3-bins/bb9b67a9/qemu-system-x86_64 rev=bb9b67a9 mtime=2026-09-26 23:36:08.243420431 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+V3_GATES_SUMMARY pass=9 fail=0
+FAILPOINT guest=535.309.01 host=580.159.04 rev=bb9b67a9 verdict=FAST_VERDICT=FAIL (raw client rc=1) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the bac
+FP10 guest=535.309.01 adapter_failed=1 W349=0
+/workspace/bench/fast_fp_53530901_bb9b67a9_ttyS0.log:[    9.108942] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(
+/workspace/bench/fast_fp_53530901_bb9b67a9_ttyS0.log:[    9.145650] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from gpuBuildGenericK
+/workspace/bench/fast_fp_53530901_bb9b67a9_ttyS0.log:[    9.191457] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x23:0x56:907)
+FP10 guest=545.23.08 adapter_failed=1 W349=0
+/workspace/bench/fast_fp_5452308_bb9b67a9_ttyS0.log:[    8.813545] NVRM nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pR
+/workspace/bench/fast_fp_5452308_bb9b67a9_ttyS0.log:[    8.850943] NVRM nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from gpuBuildGenericKer
+/workspace/bench/fast_fp_5452308_bb9b67a9_ttyS0.log:[    8.897151] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x23:0x56:899)
+LADDER host=580.159.04 guest=610.57.04 rev=bb9b67a9 4/4
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=12274
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=12250
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=3 trapped=12398
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=5 trapped=12878
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+CUP2_RC=0
+HEARTBEAT-LINES guest=610.57.04 0
+FAT 595.84 [2026-09-26T23:46:55+00:00] fat 595.84: STAGED ✔ /workspace/bench/guest-595.84.qcow2
+LADDER host=580.159.04 guest=595.84 rev=bb9b67a9 4/4
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=12253
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=12226
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=5 trapped=12376
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=4 trapped=12946
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+CUP2_RC=0
+HEARTBEAT-LINES guest=595.84 0
+TESTS_RC=0 passed=1618 failed=0
+FG_DEFAULT_RC=0

@@ -1,0 +1,159 @@
+diff --git a/src/qemu/nvkvm_gpu_emul.c b/src/qemu/nvkvm_gpu_emul.c
+index bf1a2f8..f41ab60 100644
+--- a/src/qemu/nvkvm_gpu_emul.c
++++ b/src/qemu/nvkvm_gpu_emul.c
+@@ -292,9 +292,31 @@ struct NvkvmGpuEmul {
+          * the doorbell -> channel demux key (plan §1.4).  P1: resolution+logging only. */
+         uint32_t vchid;
+         bool     vchid_valid;
++        /* #14 P4-4b: PINNED true FB page of this channel's GPFIFO ring (+ its BAR1
++         * page-offset), first resolved by the M5.16 BAR1-written-page MRU scan or the
++         * gpfifo bridge.  That scan is a HEURISTIC over the last 64 guest-BAR1-written
++         * pages: with TWO concurrent processes the doubled/interleaved BAR1 traffic
++         * evicts the kernel PT-writer channel's ring (client 0xc1d00001), so its pending
++         * page-table-write pushes carrying the 2nd process's PD0/leaf PTEs never execute
++         * -> the loser's own VAS never becomes walkable -> it starves (the #14 wall,
++         * trace-proven 2026-07-09).  Pinning the resolved page survives eviction.
++         * #12-SAFE + DEFAULT-ON: the pin is consumed only after re-validating that its
++         * pending GP entry STILL decodes to this channel's own pushbuffer (chan_execute)
++         * — a torn-down/reused ring (libcuda driver-unload) reads zero/garbage and the
++         * pin is rejected, so no stale page is ever consumed across teardown (the round-5
++         * #12 regression, which had NO such content re-validation).  The pin is removed
++         * with the channel entry at channel-free (ctx_free_drop drops chans[]).  Same
++         * forward-populated doctrine as fin_fb: resolve ONCE then PIN; refreshed whenever
++         * a later M5.16/bridge resolution succeeds.  0 = not yet resolved. */
++        uint64_t gpfifo_phys;
++        uint64_t gpfifo_bar1off;
+     } chans[NVKVM_MAX_CHANS];
+     int chan_n;
+     uint32_t chan_client;       /* working-set: client of the channel chan_exec runs */
++    uint64_t chan_gpfifo_pin;   /* #14 P4-4b working-set: the executing channel's pinned ring
++                                 * page (chans[].gpfifo_phys) — seeds chan_execute's ring-entry
++                                 * read when the M5.16 re-scan would starve.  0 = no pin. */
++    uint64_t chan_gpfifo_pin_b1off;
+ 
+     /* ── Address-virtualization #2 side-table (the reverse-driver core) ────────
+      * For GSP-managed VASes the leaf PTEs are filled GSP-side and never land in
+@@ -607,6 +629,7 @@ struct NvkvmGpuEmul {
+     int      m2_cpt_dirty_n;    /* live entries in m2_cpt_dirty (0 = clean) */
+     uint32_t m2_last_db_token;  /* M5.11: last guest work-submit token seen at the doorbell (dedup log) */
+     bool     m2_last_db_valid;
++    int      m2_ringdark_logs;  /* #14 P4-4c: bounded RING-DARK instrumentation budget */
+     uint32_t m2_gr_client;      /* M5.7: the GR compute client (set at crashwin arm) */
+     /* #14: ALL user GR compute clients (one per guest process — every client that
+      * allocs an AMPERE_COMPUTE_B 0xc7c0).  m2_gr_client stays the FIRST (legacy
+@@ -2693,6 +2716,8 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
+                         s->chans[cslot].fin_fb      = 0;   /* #12: re-resolve on (re)alloc */
+                         s->chans[cslot].fin_sys     = false; /* #12 L3b: re-resolve aperture */
+                         s->chans[cslot].token_valid = false;
++                        s->chans[cslot].gpfifo_phys = 0;   /* #14 P4-4b: fresh ring -> re-resolve pin */
++                        s->chans[cslot].gpfifo_bar1off = 0;
+                         /* #14 P1: recover the guest vChid from the alloc flags.  A GSP-client
+                          * CPU-RM encodes its already-decided ChID into USERD_INDEX so the
+                          * physical RMAPI reuses it (kernel_channel.c:2688):
+@@ -3735,6 +3760,8 @@ static void nvkvm_bar0_write(void *opaque, hwaddr off, uint64_t val,
+             s->chan_hvaspace   = c->hvaspace;
+             s->chan_client     = c->client;
+             s->chan_gp_get     = c->gp_get;
++            s->chan_gpfifo_pin = c->gpfifo_phys;         /* #14 P4-4b: pinned ring page (if any) */
++            s->chan_gpfifo_pin_b1off = c->gpfifo_bar1off;
+             /* M5.28: route this channel's working-set maps into ITS per-channel fresh VAS
+              * (matched by parent TSG). On first touch, mirror the channel's whole guest PDB
+              * into the fresh VAS so every guest VA places into a VAS we own (no host-RM
+@@ -3867,6 +3894,15 @@ static void nvkvm_bar0_write(void *opaque, hwaddr off, uint64_t val,
+               nvkvm_chan_execute(s);
+               nvkvm_t_chan_exec_ns += nvkvm_now_ns() - t0cx; nvkvm_t_chan_exec_calls++; }
+             c->gp_get = s->chan_gp_get;          /* save consumed index */
++            /* #14 P4-4b: persist the ring page chan_execute resolved (M5.16/bridge/pin)
++             * as this channel's PIN — forward-populated truth, never re-derived
++             * (address-table doctrine).  Refresh on every successful resolution so the
++             * pin follows a ring re-placement; a torn-down ring resolves to nothing and
++             * leaves the last pin, which chan_execute content-re-validates before use. */
++            if (s->chan_gpfifo_phys) {
++                c->gpfifo_phys    = s->chan_gpfifo_phys;
++                c->gpfifo_bar1off = s->chan_gpfifo_bar1off;
++            }
+             if (c->gp_get == before) {
+                 continue;                        /* no new work on this channel */
+             }
+@@ -5750,6 +5786,80 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+             break;
+         }
+     }
++    /* #14 P4-4b (DEFAULT-ON, #12-safe): last-resort — the live resolution above found
++     * NEITHER an own/content-picked VAS (chan_pdb==0) NOR a BAR1-written ring page
++     * (chan_gpfifo_phys==0), yet this channel has pending work.  This is the #14
++     * starvation wall: with two concurrent processes the doubled BAR1 traffic evicts the
++     * kernel PT-writer channel's ring from the bar1_wpg MRU, so its page-table-write
++     * pushes (carrying the loser process's PD0/leaf PTEs) go RING-DARK and never execute
++     * -> the loser starves (trace-proven 2026-07-09).  Consume this channel's PINNED true
++     * ring page (captured at a prior successful resolution) so the pushes run despite the
++     * eviction.
++     *
++     * #12-SAFETY (why default-on where round-5's ungated pin regressed cupctx2_min exit):
++     * (a) it fires ONLY when the live resolution already failed — single-process channels
++     * resolve their ring every doorbell (bench-stable), so this path is inert single-proc
++     * = byte-identical; and (b) the pin is consumed ONLY if its pending GP entry STILL
++     * decodes to a valid pushbuffer pointer inside THIS channel's ring buffer.  A ring the
++     * guest tore down at driver-unload (page freed/zeroed/reused) reads zero or an
++     * out-of-range pointer -> pin rejected -> no stale page consumed across teardown (the
++     * exact round-5 regression, which lacked this content re-validation).  The pin is
++     * removed with the channel entry at channel-free (ctx_free_drop). */
++    if (s->chan_pdb == 0 && s->chan_gpfifo_phys == 0 && s->chan_gpfifo_pin &&
++        gp_put < s->chan_gpfifo_ent && gp_put != s->chan_gp_get) {
++        uint64_t off = (uint64_t)s->chan_gp_get * 8;
++        if (off + 8 <= 0x1000) {
++            uint32_t e0 = (uint32_t)nvkvm_fb_read(s, s->chan_gpfifo_pin + off, 4);
++            uint32_t e1 = (uint32_t)nvkvm_fb_read(s, s->chan_gpfifo_pin + off + 4, 4);
++            uint64_t pb = (uint64_t)(e0 & 0xFFFFFFFCu) | ((uint64_t)(e1 & 0xFFu) << 32);
++            uint32_t pblen = (e1 >> 10) & 0x1FFFFFu;
++            if (pb && pblen && pblen <= 0x40000 && pb < s->chan_gpfifo_va &&
++                (s->chan_gpfifo_va - pb) <= 0x100000ull) {
++                s->chan_gpfifo_phys    = s->chan_gpfifo_pin;
++                s->chan_gpfifo_bar1off = s->chan_gpfifo_pin_b1off;
++                /* Pin the channel's own VAS for pb/sema translation (chan_pdb) the same
++                 * way M5.16 does: content-pick the VAS under which pb reads non-zero,
++                 * preferring the channel's own client VAS. */
++                uint64_t own = nvkvm_chan_own_pdb(s);
++                if (own) {
++                    bool sy = false;
++                    uint64_t pp = nvkvm_walk_pdb(s, own, pb, &sy);
++                    if (pp != NVKVM_GMMU_FAULT && nvkvm_phys_rd32(s, pp, sy) != 0) {
++                        s->chan_pdb = own;
++                    }
++                }
++                for (int v = 0; s->chan_pdb == 0 && v < s->chan_vas_n; v++) {
++                    bool sy = false;
++                    uint64_t pp = nvkvm_walk_pdb(s, s->chan_vas[v].pdb, pb, &sy);
++                    if (pp == NVKVM_GMMU_FAULT) { continue; }
++                    if (nvkvm_phys_rd32(s, pp, sy) != 0) { s->chan_pdb = s->chan_vas[v].pdb; break; }
++                }
++                if (s->m2_ringdark_logs < 200) {
++                    s->m2_ringdark_logs++;
++                    qemu_log("nvkvm-gpu[%s] #14 P4-4b RING-PIN consumed client=0x%08x "
++                             "gpfifo=0x%llx pin=0x%llx pb=0x%llx pdb=0x%llx [ring evicted "
++                             "from bar1_wpg MRU]\n", s->chip->name, s->chan_client,
++                             (unsigned long long)s->chan_gpfifo_va,
++                             (unsigned long long)s->chan_gpfifo_pin, (unsigned long long)pb,
++                             (unsigned long long)s->chan_pdb);
++                }
++            }
++        }
++    }
++    /* #14 P4-4c INSTRUMENT (bounded): pending work but the ring is unreadable — no VAS
++     * pick, no BAR1-written ring page, and no valid pin.  This is the residual starvation
++     * the ring-pin can't reach (round-5's "2nd path": the leaf push dropped WITHOUT ring
++     * eviction).  Log the channel + proc so 4c can attribute the drop to doorbell
++     * scheduling (TSG off-runlist) vs CE-copy resolution (wrong PDB). */
++    if (s->chan_pdb == 0 && s->chan_gpfifo_phys == 0 &&
++        gp_put < s->chan_gpfifo_ent && gp_put != s->chan_gp_get && s->m2_ringdark_logs < 200) {
++        s->m2_ringdark_logs++;
++        int pi = nvkvm_m2_proc_find_by_client(s, s->chan_client);
++        qemu_log("nvkvm-gpu[%s] #14 RING-DARK client=0x%08x gpfifo=0x%llx gp_get=%u "
++                 "gp_put=%u wpg_n=%d pin=0x%llx proc=%d\n", s->chip->name, s->chan_client,
++                 (unsigned long long)s->chan_gpfifo_va, s->chan_gp_get, gp_put,
++                 s->bar1_wpg_n, (unsigned long long)s->chan_gpfifo_pin, pi);
++    }
+     if (gp_put >= s->chan_gpfifo_ent) {
+         return;                                  /* implausible -> bail */
+     }

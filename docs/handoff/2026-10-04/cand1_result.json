@@ -1,0 +1,177 @@
+{
+  "summary": "Candidate merge 1: master + v3-sec-nonpriv + v3-scratch-bound + v3-dispsw-exp + rulings; CI, merge-resolution review, then a real-GPU boot + merge bar + apps + display lanes at the exact head",
+  "agentCount": 3,
+  "logs": [],
+  "result": {
+    "build": {
+      "head_commit": "8a682f1b415844801e855ca6b28388f91c244251",
+      "ci": "GREEN at 8a682f1b (v3-cand-1, pushed; worktree /workspace/kf-cand-1). Push run 37157600752: success. It ran stable, aarch64 and firmware; slow is skipped on push by design, because its `if:` allows only the nightly cron or a manual dispatch. To cover every job I dispatched run 37157724581 on the same head, and all four jobs passed, slow included. Stable job log: 3844 tests passed, 0 failed. The new tests from the merged branches all ran: kf3_takes_the_discard_requirement_first..., every_alloc_request_is_admitted_first, x11_dispsw_needs_display_on, past_either_cap..., cpuwin a_refused_sink_keeps_the_seed and a_view_landed_over_piecewise... Gate lines from the log: CAP-gate as root ran=6 vacuous=0; unsafe ratchet kf-linux-raw 78/78, kf-qemu 46/46, firmware/kf-gop 78/78; clippy new=0; claims new=0; SECTION_GATE offenders=0; ogkm doc citations 172/172. Checks run locally before each commit: cargo fmt --all --check, rustfmt --edition 2024 --check on changed .rs files, debt.py claims new=0, check_sections.sh, a local copy of the binary, ogkm and ratchet gates, and kf3.c -fsyntax-only -Werror against /workspace/bench/qemu-10.2.4 with the qemu-build flags. That build is configured with CONFIG_PIXMAN undefined, so the check used a config-host.h copy with pixman on. A negative control (one extra argument to kf3_realize) failed as expected. Local cargo tests, -j2 under the flock: kf-mem cpuwin 31/31, kf-linux-raw lib 141/141, kf-host all passed; the target dir was deleted afterwards. NOT done by me: the real-hardware stage (box vmb was not touched). Note: / is at 1.6 GB free, below the 4 GB floor. This run is not the cause: its target dir is deleted and the worktree is 282 MB. Most of the 8.9 GB in the shared session scratchpad is other work's (gatelens_s101_q7 2.7G, target-nw/target-fw ~0.8G each); this run left only small scripts and logs there.",
+      "merged": [
+        "1. origin/v3-owner-questions be378fdb -> 5ddeb890 (docs only, OWNER_RULINGS §R standing merge approval; no conflict)",
+        "2. origin/v3-sec-nonpriv 76dba5bd -> e18a616b (the merge is code-identical to the branch head, because master's 8 newer commits are docs only; kf-linux-raw unsafe 75->77)",
+        "3. origin/v3-scratch-bound 1461bfd7 -> 52c98e0b (one scratch tile per window, PRAMIN kept-view rule, kf3 ram_block_discard_require first)",
+        "4. origin/v3-dispsw-exp 86b4fa10 -> 8a682f1b (x11-dispsw default off, GF100_DISP_SW twins capped 16/channel and 1024/VM, KF3 ABI 13; brings v3-b0a's commits along)"
+      ],
+      "conflicts": [
+        "docs/design/V3_SECURITY_AUDIT_PLAN.md (sec-nonpriv), VMM role row and P0/P1/P2 rows: kept the branch's corrected mechanism text (CAP_SYS_ADMIN cleared per call, reply tripwire, kf_cuda::posture, S1-29) together with master's S1-21/S1-23 ids and file citations. Master's stage-1 audit had read sec-nonpriv at 55743ecd, before the libcuda posture, so I folded dated corrections into the S1-22 row of the audit plan, R3.4 of V3_SECURITY_MODEL.md and the S1-22 status in docs/audits/2026-10-03-v3-stage1.md: the libcuda half is built; the other kf-host RM calls on QEMU's own threads and the in-process GET_PRIVILEGED_STATUS gate test are still open.",
+        ".github/workflows/ci.yml (scratch-bound), unsafe ratchet AUDITED: recomputed rather than picking a side. kf-linux-raw = 75 + 2 (capability_unsafe.rs, sec-nonpriv) + 1 (window_unsafe.rs advise, scratch-bound) = 78; kf-qemu stays 46 and firmware/kf-gop 78 (master). The tree counts the same and CI agrees. Both sides' per-file itemisations are kept. The CAP-gate step and birth_census --selftest merged cleanly.",
+        "qemu/hw/misc/kf3/kf3.c (scratch-bound), kf3_dev_realize: master's gop ROM-property refusal now runs before ram_block_discard_require(true). It builds and holds nothing, so plain return is still correct there, and the requirement still precedes kf3_realize. kf3_option_rom_build's failure changed from return to goto fail, so the requirement is released; kf3_realize_discard.rs allows exactly one return after the requirement is held. dispsw's x11_dispsw argument then auto-merged into the kf3_realize call.",
+        "crates/kf-mem/src/cpuwin.rs (scratch-bound) test fakes: Rec keeps master's refuse_arms and the branch's AtomicBool refuse_place/refuse_sink with its helpers. Both test sets are kept: master's GOP seed and reseed tests and the branch's PRAMIN kept-view tests. Master's a_refused_sink_keeps_the_seed now builds Rec with AtomicBool::new(true).",
+        "docs/design/V3_SWEEP_AND_INSTALL.md (scratch-bound), the ABI-lock citation: names symbols (KF3_ABI in kf3.h, the kf3_abi_version() check in kf3_dev_realize), following the branch's review fix 5, instead of master's refreshed line numbers.",
+        "crates/kf-host/src/lib.rs (dispsw): status-code collision. dispsw's DISP_SW_CLASS_ID_UNREADABLE was 0x4B73, which sec-nonpriv already uses for PRIVILEGED_CHANNEL_REFUSED (0x4B73-0x4B75 are the birth refusals). Renumbered it to 0x4B76 with a note; nothing outside kf-host names the value.",
+        "crates/kf-qemu/src/device.rs (dispsw): both appended items kept, sec-nonpriv's on_cuda_thread and dispsw's config_tests module.",
+        "Corrections folded in after merge 4 (no textual conflict): V3_SECURITY_AUDIT_PLAN's display-SW caps row and its 'known so far' bullet now say the caps are built at 86b4fa10 (PER_CHANNEL_CAP 16, PER_VM_CAP 1024)."
+      ],
+      "abi": "KF3 ABI 13 kept. kf3.h, kf3.c's call and ffi_unsafe.rs all agree on kf3_realize(gpu_minor, fb_mb, bar1_bytes, bar2_bytes, guest_driver, display, gop, x11_dispsw, out, err, err_len). The CI test wire_mirror passed, and kf3.c is -fsyntax-only clean against QEMU 10.2.4. scratch-bound's realize change (discard requirement first, goto fail on every failure path) does not change the signature. What v3-broker must do: it holds 12 for a different kf3_realize (display_broker right after gop). It can keep 12 only if it merges into a master still at 11. Merged into a master at 13 (this candidate), it must renumber to 14, place display_broker after x11_dispsw, and make the same change in kf3.h, kf3.c's kf3_realize call, crates/kf-qemu/src/ffi_unsafe.rs (KF3_ABI and the extern fn) and tests/wire_mirror.rs, so that archives at both 12 and 13 are refused. That instruction is written as a dated note at KF3_ABI in kf3.h and ffi_unsafe.rs.",
+      "triage": [
+        "v3-loud-uvm e1339d01 (+10, 34 behind): REAL UNMERGED WORK, needs a test. Release §I, managed memory fails loudly: kf-qemu chan.rs deliver_rc/rc_scan (+819), device.rs, kf-abi oserrorlog, kf-rm rpc, apps verdict/boot-gate scripts. CI green at e1339d01 (run 37141434034). V3_APP_MATRIX §R5 STATUS says it has NOT run on a box: every guest/host expectation is a prediction until §R5.7. Before a later candidate it needs a merge with master (expect conflicts in kf-qemu chan.rs with dispsw and device.rs with sec-nonpriv/dispsw), then the §R5.7 box run plus the merge bar.",
+        "v3-b0a 71395167: ALREADY MERGED. It is an ancestor of v3-cand-1, carried in by v3-dispsw-exp (597d28c7..71395167). Nothing left.",
+        "v3-display-test f20ab853: SUPERSEDED. It is 3 merge commits of v3-gop and v3-b0a, both now in the candidate. Its only non-trace difference from the candidate is in scripts/bench/display/hook.sh lines that dispsw later rewrote; it has no traces the candidate lacks.",
+        "v3-uvm-guest 544ea118 (+17, 107 behind): REAL UNMERGED WORK, BLOCKED by the owner. The guest UVM fault plane is ~7.4k lines (faultplane.rs, kf-host efs.rs, kf-abi uvmefs/faultpacket). M2 was measured at c849f68d (traces/v3_uvm_guest/). The owner ruled 2026-10-02 that §3.8a is NO on both questions (OWNER_RULINGS §E): no CPU/MMIO reads of guest page tables, and the ~4 s GR stall is unacceptable; not to merge until the per-fault GR hold is measured and bounded. Its last CI at 544ea118 FAILED. It needs the redesign its own stop note records (walker sysmem copy plus CE snapshot of changed leaves, a park limit, a two-VM hostile test) before any test.",
+        "v3-uvm-state-machine cee957ff: ALREADY EQUIVALENT. docs/design/V3_UVM_STATE_MACHINE.md on master (172b1d2a, same title) is byte-identical to the branch's. Docs only, nothing to merge.",
+        "v3-uvm-n4 600b864a: DOCS/TRACES research only (V3_UVM_DEMAND_PAGING §12 N4/E5/E6, traces/v3_uvm_research); an ancestor of v3-uvm-e6pp. SUPERSEDED as a route: b3 was selected and 'N4 is not the next experiment' (STATUS_AND_HANDOFF §3.2; 580's UVM callback registrant is global). Historical only.",
+        "v3-uvm-e6pp c6765f5c: DOCS/TRACES research only, containing n4 and nopatch (§11-§13 of V3_UVM_DEMAND_PAGING, 34 trace files). Master cites it as historical research that is 'not the implementation route' (V3_UVM_DEMAND_PAGING.md:18, OWNER_RULINGS §E). No merge needed. If ever wanted as a docs addendum, its §11-§13 numbering collides with master's restructured doc.",
+        "v3-uvm-nopatch d681c55f: DOCS/TRACES only (the no-patch survey, §11, traces/v3_uvm_nopatch). Contained in v3-uvm-e6pp, and its conclusion was superseded by the b3 decision.",
+        "v3-cdp-exp1 6498628f: EXPERIMENT, 'not for merge' in its own commit. 9 lines in kf-mem apply.rs that keep the SMSKED kind and log it. The result is recorded on master in docs/design/V3_CDP.md, and the real CDP fix merged as v3-mc23 (afb552ea).",
+        "v3-mgpu-audit b0f6c5dd: SUPERSEDED. Master's docs/design/V3_MULTI_GPU_AUDIT.md is the newer version (8039dd96: blockers 1 and 2 fixed, harness built), and STATUS_AND_HANDOFF already marks this branch superseded.",
+        "v3-drivers a50265f8: SUPERSEDED / already equivalent. The 535/545 capability allowlist is on master as a7dddf35, owner-approved under ruling 5 (kf-abi versions.rs:422), plus the audit tests in 3a738baa. The branch is 261 behind and would delete those.",
+        "v3-sec-p0 ea5890e9 (CI green): SUPERSEDED by v3-sec-nonpriv, which is in this candidate. It refuses CAP_SYS_ADMIN at realize; the owner ruled against that (OWNER_RULINGS §P: 'I dont think you should refuse cap sys admin if clearing a bit fixes it'), and audit S1-22 calls it 'not the chosen branch'. Its bench scripts for an unprivileged QEMU launch (qemu_unpriv.sh, provision_box.sh, boot_nvkvm.sh) bear on S1-22 check (1), running the gates with CAP_SYS_ADMIN dropped from the launcher. They would need rework into a non-refusing deployment default plus a box test before joining a candidate."
+      ]
+    },
+    "review": {
+      "verdict": "ok",
+      "findings": [
+        {
+          "severity": "medium",
+          "where": "scripts/bench/box/merge_check.sh:37-75 (the whole bar); traces/v3_display/dispsw_20261003/README.md:22,134; crates/kf-mem/src/cpuwin.rs retire_seed/reseed -> crates/kf-qemu/src/mem.rs:483-489 (WindowOps::sink -> window_sink)",
+          "issue": "Checked and clean: the four merges against both parents (re-merged with merge-tree, and scanned for lines lost from either side or duplicated); the ratchet counts (kf-linux-raw 78, kf-qemu 46, firmware/kf-gop 78, the same in the tree and the CI log); ABI 13 in kf3.h:23/49-51, ffi_unsafe.rs:96-108 and kf3.c:835-836; status codes 0x4B70-0x4B76 all unique; and CI on 8a682f1b (all 4 jobs green, CAP-gate root ran=6 vacuous=0, BIRTH_CENSUS_SELFTEST 11/0). The gap is hardware coverage of how the lanes interact. The merge bar runs only the fast suite, the gates, bare metal and the birth census, never display=on, gop=on or x11-dispsw=on. (1) All of dispsw's hardware evidence predates sec-nonpriv (e130cea3 to d84086df). Under a root QEMU its passthrough twins were therefore stamped ADMIN. In the candidate they are born USER, so a GF100_DISP_SW under a USER host channel (alloc, NV906F_CTRL_GET_CLASS_ENGINEID readback, software methods) has never been measured. (2) GOP's B0-B5 evidence (d4c3767b/4a4b95f7) predates scratch-bound, which branched at 281a10a1, before GOP. GOP's seed retirement and the B5 unload/reseed now sink through the tiled, advised window_sink, a combination that has never run on a box. The owner's bar requires each change's own hardware tests at the exact commit.",
+          "fix": "In the hardware stage at 8a682f1b, run these in addition to merge_check.sh: the display lane with gop=on (B1 seed retirement, B5 unload/reseed), and dispsw_run.sh A/B (dsw_off, then dsw_on x11-dispsw=on). In the B run's QEMU log, require `dispsw[... host_refused=0]`, zero host Xid, and every `kf-host: channel birth` line reading `PRIVILEGED_CHANNEL=0 privilege=USER`. Optionally run birth_census over that log as well, since its arms otherwise never include display or dispsw."
+        },
+        {
+          "severity": "low",
+          "where": "docs/design/V3_SECURITY_AUDIT_PLAN.md:178,179,204; docs/design/V3_SECURITY_MODEL.md:272,274",
+          "issue": "These are living docs, and the merge made their line citations point at unrelated code, though they were right at master. The resolution note says master's file citations were kept, but scratch-bound added about 137 lines to mem.rs and dispsw about 302 lines to chan.rs ahead of the cited code. Now: `mem.rs:1755-1762` (create_mirror, P1/S1-21) is MemPlane field inits, and create_mirror is at mem.rs:1894. `mem.rs:487-503` (P2/S1-23) is inside WindowOps::sink, and P5b resolve_placed_prefix is at :579. `chan.rs:2551-2598` (S1-42 encoder_session) is free-plane docs, and encoder_session is at chan.rs:2853. `mem.rs:301` (S1-45 retire queue) is WINDOW_ADVICE_REFUSED, and the mpsc channel is at :386.",
+          "fix": "Cite symbols instead (create_mirror, resolve_placed_prefix and the ring-region constants, ChanPlane::encoder_session, TrapNodes::start's retire channel), or re-point the lines and add `at 8a682f1b`. The stage-1 audit's own citations can stay, since that doc is anchored to revision 12a526df (§0)."
+        },
+        {
+          "severity": "low",
+          "where": "docs/design/V3_SECURITY_MODEL.md:269,277; docs/audits/2026-10-03-v3-stage1.md:1440,1631",
+          "issue": "Corrections that were folded into the S1-22 rows were not folded into the other places that state the same fact, so the candidate contradicts itself. In the model's §7 table: line 269 says scratch memfds and mapping growth are 'fixed on branch (unmerged)', but the candidate merges it. Line 277 says display-SW objects and kernel-mapped bytes are 'caps in progress' and **open**, but the caps are built (crates/kf-qemu/src/dispsw.rs:33,40, enforced at :340) and the KERNEL_MAPPING bit is masked for every map (crates/kf-host/src/lib.rs nvos46_map_flags). In the audit: line 1440 still says libcuda 'runs with the VMM's capabilities', and line 1631 says 'libcuda not covered (S1-22)'. Both contradict the correction at :512-516 and kf_cuda::posture. CLAUDE.md's hygiene rule asks for supersession to be recorded in the superseded text itself.",
+          "fix": "Add dated ⊘ CORRECTED 2026-10-04 (v3-cand-1) notes in place on those four rows. Scratch row: merged and bounded to one tile per window. Display-SW row: capped at 16 per channel and 1024 per VM, kernel mappings masked, experiment default off. Audit rows 1440/1631: libcuda threads clear CAP_SYS_ADMIN for the thread's life; the other kf-host RM calls are still open."
+        },
+        {
+          "severity": "low",
+          "where": "qemu/hw/misc/kf3/kf3.h:18-22; crates/kf-qemu/src/ffi_unsafe.rs:21-25",
+          "issue": "The new instruction to v3-broker says to make the ABI 14 change in tests/wire_mirror.rs too. That file holds no ABI number and no kf3_realize signature: it reads KF3_ABI from ffi_unsafe.rs and compares entry points against kf3.h generically, and no commit on v3-dispsw-exp touched it for ABI 13. The pointer is also misleading the other way. It suggests a test guards kf3.c's own kf3_realize call (kf3.c:835-836), but no CI test does. Only the C build (build_kf3.sh in merge_check, or the coordinator's -fsyntax-only) would catch a mismatch there.",
+          "fix": "Drop wire_mirror.rs from the list, and add that kf3.c's call site is checked only by the C build (build_kf3.sh on the box), so a broker re-merge must rebuild kf3 against QEMU 10.2.4."
+        },
+        {
+          "severity": "low",
+          "where": "merge 5ddeb890 (v3-owner-questions at be378fdb) vs origin/v3-owner-questions 076386cf",
+          "issue": "v3-owner-questions moved after the candidate merged it: 659a398d, 2f698311 and 076386cf are docs-only OWNER_RULINGS §K rulings (Secure Boot with a per-install key, vTPM state persistence, no BitLocker), committed between 00:19 and 00:24, after the merge at 00:01. No hunk was lost, but a master moved to 8a682f1b will not carry these owner rulings.",
+          "fix": "Merge origin/v3-owner-questions (076386cf) separately; it is docs-only and CI-tested. Or state in the handoff that §K is not in this candidate."
+        }
+      ]
+    },
+    "fix": null,
+    "head": "8a682f1b415844801e855ca6b28388f91c244251",
+    "hardware": {
+      "tested_commit": "8a682f1b415844801e855ca6b28388f91c244251",
+      "verdict": "fail",
+      "merge_bar": "PASS at 8a682f1b on vmb (vast 54049598, RTX 3060, host 580.159.04). Ran merge_check.sh from the checkout with CARGO_BUILD_JOBS=$(nproc) and a fresh CARGO_TARGET_DIR of its own. Window 22:38:04–23:01:02 UTC, EXIT rc=0, HEAD=8a682f1b4158…. Results: crate tests 1936 passed / 0 failed; V3_GATES_SUMMARY pass=9 fail=0 (V3_GATES_BIRTHS births=11 user=11 ok=1); KF3_RC=0 (kf3-bins/8a682f1b, GOP driver embedded); bare metal BARE_SUITE_PASS=30 (0 crashes); FG_RC=0; guest FAST_SUITE_PASS=30 FAIL=0 CRASH=0 NOTRUN=0; birth census self-test 11 cases, 0 wrong; BIRTH_CENSUS_OK (arms=30, suite_births=161, gate_births=11, all PRIVILEGED_CHANNEL=0 privilege=USER). All 30 thin-guest kernel consoles are non-empty, each has NVRM lines (22–234) and none has an Xid. CI at 8a682f1b: runs 37157600752 and 37157724581 both passed. The three evidence commits also passed CI (37160522760, 37166161227, 37167985753).",
+      "apps": "PASS, no regression. The bundle was built on the box (build_bundle.sh, sha fb64de820389b448, no BUILD FAIL) and setup_side.sh ran on the host. The guest is guest_apps.qcow2, a copy of guest.qcow2 set up by provision_guest_apps.sh (all SETUP ok). The guest used the merge bar's kf3 binary (kf3-bins/8a682f1b; every boot logged kf3-bin-rev:8a682f1b), fb-mb=8192, 16 GiB, 6 vCPUs. Bare-metal host: 71/71, 0 host Xid. Guest, one boot, no PM (APPS_PER_BOOT=100): 67/71 = 61/65 apps + 6/6 stream probes. Run alone, the same 4 still fail. Compared app by app with the 2830988f baseline (traces/v3_cdp/app_matrix_2830988f), all 71 rows match in the host, batched and alone runs; 0 apps that passed there fail here. The 4 failures are the documented UVM four (UnifiedMemoryStreams, UnifiedMemoryPerf, conjugateGradientUM with Error amount = 1.000000, attach_verify), with the documented signature: kf3 'RC host twin … except_type=0x1f (Xid 31)', host Xid 31 GR MMU faults (journald: 4 in the batched boot, 1 per alone boot), guest Xid 0. All four pass on bare metal. Digests equal the host's and the baseline's (torch 763c693a5a53f948, hf 0d973108a6251e14, llama caf613a5d956b7e3). Every boot's guest dmesg is non-empty and has NVRM lines.",
+      "display": "B0, B1 and the X11 A/B pass; B5 FAILS, and master's code fails it the same way on this box. Guest provisioned with provision_guest_gfx.sh and provision_guest_display.sh all; runs used kf3-bins/8a682f1b with no rebuild. Host journald for the whole stage: 0 Xid, 0 NVRM. B0 (OVMF, gop=off): PASS — pattern pixel-exact, 120/120 flips at 61.11 Hz, no seed lines. B1 (gop=on): PASS — DISPLAY_BOOT_HANDOFF black_frames=0, pattern pixel-exact, 120/120 flips at 60.00 Hz; the B2 seed/preserve lines are present and 'cannot preserve' appears 0 times; the contact sheet shows TianoCore, then kernel text, the login prompt and the probe pattern, with no black at the handoff. B5 (unload_hook): FAIL, lane rc 3, 3 of 14 arms (B5A2_AFTER_SESSION, B5A2_CONSOLE, B5A2_PRESERVED). In arm (a2), after X exits, kf3 logs 'scanout REFUSED context DMA 0x10088 on channel 7: NotBound'; the PRESERVE_HW free then finds no window and shows BLACK instead of the preserved scanout, and the console never comes back. Alternating repeats on the same box: candidate 8a682f1b failed 2/2 (B5A2_CONSOLE and B5A2_PRESERVED); master's code (kf3-bins/d4c3767b; git diff d4c3767b 789dee9f -- crates qemu firmware is empty) failed 2/2 the same way, with the same refusal. display.rs, inst.rs and scanout.rs are identical in master and the candidate. X11 x11-dispsw A/B (dispsw_run.sh, DISPLAY_X11_BARE=1) matches the documented criteria. Off: the X driver logs 'Failed to allocate display software resources', Cinnamon segfaults to the fallback dialog, vkcube returns 134/1/134, glxgears runs at about 42 FPS, and bare-X fullscreen runs at 2.0 FPS with vkcube FIFO returning 134. On: Cinnamon is up with 0 crashes, vkcube returns 0/1/0 (the long run returns 0), glxgears vsync runs at 57.9–59.6 FPS (2591 FPS without vsync), bare X runs at about 60 FPS windowed and fullscreen with vkcube FIFO returning 0, the status line reads dispsw[twins=80 live=0 host_refused=0 no_twin=0 capped=0 …], and 80/80 classIDs equal the guest's. The only GSP refusal that differs between off and on is 0x20800a5d. The host release path was called 0 times. Every display boot's guest dmesg is non-empty with 25 NVRM lines.",
+      "failures": [
+        "Display B5 (GOP unload lane) FAILS at 8a682f1b: DISPLAY_B5_VERDICT FAIL arms=14, failed=3 in the stage run and failed=2 in 2 repeats. The failing arms are B5A2_CONSOLE and B5A2_PRESERVED, plus B5A2_AFTER_SESSION once. After X11 Cinnamon (NVIDIA X driver, modeset=0) exits, kf3 logs 'scanout REFUSED context DMA 0x10088 on channel 7: NotBound' before the PRESERVE_HW window and core frees. It then shows 'BLACK … no head is lit' instead of 'the PRESERVED scanout', and the text console stays black.",
+        "This is NOT a candidate regression: master's code (kf3-bins/d4c3767b, the code of 789dee9f, built by this box's own mb_gop merge bar) fails B5 identically on vmb in 2 of 2 alternating runs, with the same refusal line. The display code on that path is unchanged between master and the candidate. Likely mechanism, inferred from the code and logs rather than run directly: every scanout copy re-resolves each window's context DMA (crates/kf-qemu/src/display.rs:2106), and when nobody is watching the console a copy is due every 250 ms (display.rs:1997). The guest unbinds the console context DMA before freeing the windows. On vast 54032077 that gap was 153 ms, so the earlier pass was timing-dependent; here it is 346 ms to 2.2 s, so a copy falls inside it and the window is refused."
+      ],
+      "evidence_commit": "f190f346c0d4b34a92bf46e553f4df79a4d82b88",
+      "notes": "Evidence is in traces/v3_candidates/cand1_20261003/ on v3-cand-1: README.md, merge_bar/, apps/, display/ (including b5_repeats/), and host_pat_warnings.txt. It was added in three evidence-only commits: 3319433f (merge bar), 4e283319 (apps) and f190f346 (display plus final README). git diff 8a682f1b..f190f346 touches only traces/v3_candidates/ (0 files outside). Before each commit: cargo fmt --all --check and the firmware rustfmt check passed (CI's form; a whole-tree rustfmt pass also hits the out-of-workspace archive/ crates, which this run did not change); debt.py claims new=0; check_sections offenders=0. CI passed on every evidence commit (last: run 37167985753 at f190f346). Master and v3 were not pushed.\n\nTwo more findings, neither of which fails a check:\n(1) Harness: boot_capture.sh's host-dmesg delta is blind on this box. The host kernel ring buffer is full and wrapping, so the line count fell during a boot (watermark 1769 → 1717), and HOST_DMESG_XID=0 / DISPLAY_HOST_XID=0 were reported while journald held 4 host Xid 31 lines inside the batched app boot. Every host-Xid number in the README is therefore read from journald by time window.\n(2) New host-kernel warning arriving with the v3-scratch-bound lane: 'x86/PAT: kf3-vamgr:<pid> freeing invalid memtype'. Counts by run window: 47 in v3-scratch-bound's own merge bar (69ccb08c); 42 in the candidate's (all at 22:59:02, the end of the gpga-reserve-probe arm); 0 for master's code (d4c3767b) and for v3-sec-nonpriv (1d71f3db); 52 during the candidate display stage. Not investigated further.\n\nBox state: vmb is idle (no qemu, no jobs). /root/kayfabe is detached at 8a682f1b; it was on v3-scratch-bound 69ccb08c before. Added on the box: guest_apps.qcow2; the display packages in guest.qcow2; the /workspace/apps bundle; CUDA 12.6 on the host; target dir /workspace/bench/kf-target-cand1; worktree /workspace/bench/verify-worktrees/b5ab_master789 (at 789dee9f). Job scripts and logs are in /root/jobs/cand1_*.sh and /root/prov/cand1_*.log.\n\nLocal disk on / was 2.1–2.5 GB free during the run, below the 4 GB floor. This run added about 5 MB of evidence; the rest is other agents' files (the shared session scratchpad holds 9.8 GB), which I did not touch. My background waiter has finished; no local or box job of mine is still running."
+    }
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Build"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Review"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 3,
+      "title": "Hardware"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "build:cand-1",
+      "phaseIndex": 1,
+      "phaseTitle": "Build",
+      "agentId": "a28ff03f447982d00",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1791064871934,
+      "queuedAt": 1791064871911,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "8a682f1b415844801e855ca6b28388f91c244251",
+      "promptPreview": "AUTHORIZATION (read first). Dispatched by the coordinating main session of this Claude Code session. The repository owner, in this session on 2026-10-03, verbatim: \"you have full approval to merge only it ci passed, code is good and it passed on real hardware with a real boot and apps. you are free to merge in a candidate merge branch and then test that, or check per branch, what you prefer, as lo…",
+      "promptFramed": true,
+      "lastProgressAt": 1791066300493,
+      "tokens": 263692,
+      "toolCalls": 140,
+      "durationMs": 1428559,
+      "resultPreview": "{\"head_commit\":\"8a682f1b415844801e855ca6b28388f91c244251\",\"ci\":\"GREEN at 8a682f1b (v3-cand-1, pushed; worktree /workspace/kf-cand-1). Push run 37157600752: success. It ran stable, aarch64 and firmware; slow is skipped on push by design, because its `if:` allows only the nightly cron or a manual dispatch. To cover every job I dispatched run 37157724581 on the same head, and all four jobs passed, sl…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "review:merge",
+      "phaseIndex": 2,
+      "phaseTitle": "Review",
+      "agentId": "aa582418db601d8b6",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1791066300522,
+      "queuedAt": 1791066300497,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "ok",
+      "promptPreview": "AUTHORIZATION (read first). Dispatched by the coordinating main session of this Claude Code session. The repository owner, in this session on 2026-10-03, verbatim: \"you have full approval to merge only it ci passed, code is good and it passed on real hardware with a real boot and apps. you are free to merge in a candidate merge branch and then test that, or check per branch, what you prefer, as lo…",
+      "promptFramed": true,
+      "lastProgressAt": 1791066931691,
+      "tokens": 240922,
+      "toolCalls": 89,
+      "durationMs": 631169,
+      "resultPreview": "{\"verdict\":\"ok\",\"findings\":[{\"severity\":\"medium\",\"where\":\"scripts/bench/box/merge_check.sh:37-75 (the whole bar); traces/v3_display/dispsw_20261003/README.md:22,134; crates/kf-mem/src/cpuwin.rs retire_seed/reseed -> crates/kf-qemu/src/mem.rs:483-489 (WindowOps::sink -> window_sink)\",\"issue\":\"Checked and clean: the four merges against both parents (re-merged with merge-tree, and scanned for lines l…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "hardware:cand-1",
+      "phaseIndex": 3,
+      "phaseTitle": "Hardware",
+      "agentId": "a169b51662510e065",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1791066931715,
+      "queuedAt": 1791066931692,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "8a682f1b415844801e855ca6b28388f91c244251",
+      "promptPreview": "AUTHORIZATION (read first). Dispatched by the coordinating main session of this Claude Code session. The repository owner, in this session on 2026-10-03, verbatim: \"you have full approval to merge only it ci passed, code is good and it passed on real hardware with a real boot and apps. you are free to merge in a candidate merge branch and then test that, or check per branch, what you prefer, as lo…",
+      "promptFramed": true,
+      "lastProgressAt": 1791077490234,
+      "tokens": 404702,
+      "toolCalls": 179,
+      "durationMs": 10558519,
+      "resultPreview": "{\"tested_commit\":\"8a682f1b415844801e855ca6b28388f91c244251\",\"verdict\":\"fail\",\"merge_bar\":\"PASS at 8a682f1b on vmb (vast 54049598, RTX 3060, host 580.159.04). Ran merge_check.sh from the checkout with CARGO_BUILD_JOBS=$(nproc) and a fresh CARGO_TARGET_DIR of its own. Window 22:38:04–23:01:02 UTC, EXIT rc=0, HEAD=8a682f1b4158…. Results: crate tests 1936 passed / 0 failed; V3_GATES_SUMMARY pass=9 fai…"
+    }
+  ],
+  "totalTokens": 909316,
+  "totalToolCalls": 408
+}

@@ -1,0 +1,22 @@
+=== transpose side=guest start=2026-10-04T03:09:40+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/transpose
+Transpose Starting...
+
+GPU Device 0: "Ampere" with compute capability 8.6
+
+> Device 0: "NVIDIA GeForce RTX 3060"
+> SM Capability 8.6 detected:
+> [NVIDIA GeForce RTX 3060] has 28 MP(s) x 128 (Cores/MP) = 3584 (Cores)
+> Compute performance scaling factor = 1.00
+
+Matrix size: 1024x1024 (64x64 tiles), tile size: 16x16, block size: 16x16
+
+transpose simple copy       , Throughput = 93.2005 GB/s, Time = 0.08382 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+transpose shared memory copy, Throughput = 93.6011 GB/s, Time = 0.08347 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+transpose naive             , Throughput = 94.7869 GB/s, Time = 0.08242 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+transpose coalesced         , Throughput = 95.0466 GB/s, Time = 0.08220 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+transpose optimized         , Throughput = 96.0881 GB/s, Time = 0.08131 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+transpose coarse-grained    , Throughput = 92.4327 GB/s, Time = 0.08452 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+transpose fine-grained      , Throughput = 94.5728 GB/s, Time = 0.08261 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+transpose diagonal          , Throughput = 93.4077 GB/s, Time = 0.08364 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+Test passed
+=== end rc=0 secs=3 2026-10-04T03:09:43+00:00

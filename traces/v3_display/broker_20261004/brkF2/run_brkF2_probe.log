@@ -1,0 +1,112 @@
+=== boot_capture tag=brkF2 at 2026-10-03T23:22:06+00:00 ===
+=== source revision: 3aeac81b ===
+=== qemu binary: -rwxr-xr-x 1 root root 89663928 Oct  3 23:19 /workspace/bench/kf3-bins/3aeac81b/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=82f88b7bb676717a
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Sat Oct  3 23:22:13 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3060        Off |   00000000:00:02.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Oct  3 23:22 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Oct  3 23:22 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Oct  3 23:22 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Oct  3 23:22 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Oct  3 23:22 .
+drwxr-xr-x 18 root root   4000 Oct  3 23:22 ..
+cr--------  1 root root 240, 1 Oct  3 23:22 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Oct  3 23:22 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/display/broker_hook.sh at 2026-10-03T23:22:15+00:00 ===
+BRK_HOOK_START 2026-10-03T23:22:15+00:00
+BRK_GUEST_KMS rc=0  nodes=[by-path card0 renderD128 ]
+BRK_RELAY_CONNECTED 1 GPU_COPY_PROBE=[kf3: broker: GPU-copy rung possible — render node renderD128 (226:128), nvidia-drm gpu_id 0x7, modifier 0x0300000000606014, slot attributes s1-nvkms-offscreen]
+BRK_EV_DEVICE broker=[nvkvm-broker: the X server renders on DRM device 226:128 (render node)] relay=[kf3: broker: the compositor renders on this GPU: the GPU-copy rung may be used] host_nodes=[/dev/dri/card0=e2:0 /dev/dri/renderD128=e2:80 ]
+tar: xorg.conf: time stamp 2026-10-03 23:22:25 is 0.6244748 s in the future
+tar: 50-kf-autologin.conf: time stamp 2026-10-03 23:22:25 is 0.62404809 s in the future
+BRK_GUEST_DESKTOP=yes session=cinnamon busid=PCI:0:2:0 (rc=0 )
+BRK_RUNGS       1 frames go as a GPU copy in host VRAM        1 frames go as a LINEAR dma-buf        1 frames go as shared memory only 
+BRK_RUNG_LINE kf3: broker: the compositor renders on this GPU: the GPU-copy rung may be used
+BRK_RUNG_LINE kf3: broker: the display CAN show XR24 modifier 0x0300000000606014
+BRK_RUNG_LINE kf3: broker: the display CANNOT show XR24 modifier 0x0000000000000000
+BRK_RUNG_LINE kf3: broker: the display imported a GPU-copy frame (its RELEASE came back)
+BRK_WINDOW id=[4194304]
+BRK_WINDOW active=[4194304] (must be the window above)
+BRK_WINDOW geometry=1024x768+0+0 root=[ dimensions: 1024x768 pixels (347x260 millimeters)]
+BRK_MODE_LINES guest cursor: the HOST pointer shows it (hover; not composed)|
+BRK_HOST_HOVER CURSOR w=256 h=256 hot=3,1 serial=16 name=[] visible_px=254 bbox_rel_hot=-1,-1,14,22 fnv_rel_hot=0x977b1b1340901adb
+BRK_GUEST_POINTER 47 7
+BRK_GUEST_CURSOR CURSOR w=24 h=24 hot=3,1 serial=8 name=[left_ptr] visible_px=254 bbox_rel_hot=-1,-1,14,22 fnv_rel_hot=0x1da6c2469055d3aa
+BRK_HOVER_CURSOR_COMPARE visible_a=254 visible_b=254 max_channel_diff=48
+BRK_HOST_VS_GUEST hover size_mismatch 640x480 vs 1024x768 (the broker fullscreen against the guest frame; the host shot has no pointer, the frame no cursor in hover)
+BRK_MAP frame=1024x695 window=1024x768+0+0 guest_pointer=47,7 -> host 47,7
+BRK_HOST_CROSS CURSOR w=256 h=256 hot=11,11 serial=17 name=[] visible_px=281 bbox_rel_hot=-11,-11,11,12 fnv_rel_hot=0xf6108d49685ef58f
+BRK_GUEST_CROSS CURSOR w=24 h=24 hot=11,11 serial=9 name=[crosshair] visible_px=281 bbox_rel_hot=-11,-11,11,12 fnv_rel_hot=0x548443b1d42e7d42
+BRK_CROSS_CURSOR_COMPARE visible_a=281 visible_b=281 max_channel_diff=52
+BRK_CROSS_SETS guest cursor image 256x256 hot 0,0 sent (1 so far)|guest cursor image 256x256 hot 3,1 sent (2 so far)|guest cursor image 256x256 hot 11,11 sent (3 so far)| xsetroot=[rc=0 ]
+BRK_CURSOR_COMPOSITION guest cursor composition 0x072ff = PREMULT_ALPHA (K1 255, cursor factor 2, viewport factor 7, mode 0); its 256x256 pixels: 163 partially transparent, 0 with a colour channel above alpha (consistent with premultiplied pixels)|
+BRK_VNC_HOVER VNC_CURSOR w=256 h=256 hot=11,11 visible_px=281 bbox_rel_hot=-11,-11,11,12 fnv_rel_hot=0xf6108d49685ef58f
+BRK_VNC_HOVER_CURSOR_COMPARE visible_a=281 visible_b=281 max_channel_diff=52
+BRK_HOST_XTERM CURSOR w=256 h=256 hot=4,8 serial=18 name=[] visible_px=86 bbox_rel_hot=-4,-8,4,7 fnv_rel_hot=0x2d58db0c16d1185b
+BRK_GUEST_XTERM CURSOR w=9 h=16 hot=4,8 serial=10 name=[] visible_px=86 bbox_rel_hot=-4,-8,4,7 fnv_rel_hot=0x2d58db0c16d1185b
+BRK_XTERM_CURSOR_COMPARE visible_a=86 visible_b=86 max_channel_diff=0
+BRK_XTERM_RELAY xsetroot=[rc=0 ] broker: guest cursor image 256x256 hot 4,8 sent (4 so far)|
+BRK_VNC_XTERM VNC_CURSOR w=256 h=256 hot=4,8 visible_px=86 bbox_rel_hot=-4,-8,4,7 fnv_rel_hot=0x2d58db0c16d1185b
+BRK_CROSS_MAP guest_pointer=79,29 -> host 79,32
+BRK_HOST_HIDDEN CURSOR w=1 h=1 hot=0,0 serial=14 name=[] visible_px=0 bbox_rel_hot=none fnv_rel_hot=none
+BRK_HOST_AFTER_HIDE CURSOR w=256 h=256 hot=11,11 serial=19 name=[] visible_px=281 bbox_rel_hot=-11,-11,11,12 fnv_rel_hot=0xf6108d49685ef58f
+BRK_HIDE_GUEST CURSOR_HIDDEN for 10 s CURSOR_SHOWN 
+BRK_HIDE_RELAY 0 relay lines, host_cursor_refusals=0
+BRK_GRAB_ON grab ON|guest cursor: composed into the frame (grabbed; the broker hides its own image)|
+BRK_HOST_GRAB CURSOR w=1 h=1 hot=0,0 serial=14 name=[] visible_px=0 bbox_rel_hot=none fnv_rel_hot=none
+BRK_VNC_GRAB VNC_CURSOR w=32 h=32 hot=0,0 visible_px=0 bbox_rel_hot=none fnv_rel_hot=none
+BRK_GRAB_FRAME_DIFF host_hover_vs_host_grab_px=76 console_hover_vs_grab_px=0 (the composed cursor near the guest pointer; the host shot is what the broker shows — the console's frames are fresh only on the host-memory rungs)
+BRK_GRAB_MOVE guest_pointer=79 29 -> 119 56 host_moved_cursor_px=76 console_moved_cursor_px=0
+BRK_GRAB_OFF grab off|guest cursor: the HOST pointer shows it (hover; not composed)|
+BRK_HOST_AFTER_GRAB CURSOR w=256 h=256 hot=11,11 serial=19 name=[] visible_px=281 bbox_rel_hot=-11,-11,11,12 fnv_rel_hot=0xf6108d49685ef58f
+BRK_AFTER_GRAB host_hover_vs_host_after_grab_px=0 (hover again: no cursor in the frame)
+BRK_HOLD up to 1200s from 2026-10-03T23:24:05+00:00 (touch /workspace/bench/brk/brkF2/release to end it)
+BRK_HOLD_END 2026-10-03T23:26:24+00:00
+BRK_E5_FDS  311 /dev/nvidiaN; 63 anon_inode:[eventfd]; 11 (deleted); 10 /dmabuf:; 7 anon_inode:[eventpoll]; 6 pipe:[N]; 6 anon_inode:kvm-vcpu:N; 6 anon_inode:kvm-vcpu-stats:N; 5 /dev/nvidiactl; 4 socket:[N]; 2 /workspace/bench/run_brkFN_qemu.log; 2 /dev/nvidia-uvm;
+BRK_E5_VRAM 219477, 8730 MiB;
+BRK_HOOK_DONE 2026-10-03T23:26:25+00:00
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 28 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=81
+GUEST_DMESG_AFTER_NVRM=61
+GUEST_DMESG_WORKLOAD_DELTA=53
+=== HOST dmesg delta for this boot (watermark 826 → 826) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

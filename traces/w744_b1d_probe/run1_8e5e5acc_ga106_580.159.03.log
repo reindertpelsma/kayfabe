@@ -1,0 +1,32 @@
+RUN_START 2026-09-15T16:09:42Z
+TREE_MANIFESTS=24
+TREE_REV=8e5e5acc
+      = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `kayfabe-isolate-host` (bin "kayfabe-rm-ladder") generated 3 warnings (run `cargo fix --bin "kayfabe-rm-ladder" -p kayfabe-isolate-host` to apply 1 suggestion)
+    Finished `release` profile [optimized] target(s) in 19.28s
+CARGO_RC=0
+NVIDIA GeForce RTX 3060, 580.159.03
+===== B1D PROBE BEGIN =====
+info  RMLADDER ARGV     = [--gpu 0 --dup-vaspace-probe]
+ok    R2 version         = "580.159.03"
+ok    R4 hClient         = 0xc1d0464b
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unknown
+info  B1d roles           = GPU 0, euid 0 — S (scratchpad) dupes P's (per-proc) address space IN; S holds the vidmem, P holds neither
+B1D_CLIENT_S=0xc1d0464b
+B1D_CLIENT_P=0xc1d0464c
+B1D_P_RANGE=0xcafe0005  (NV01_MEMORY_VIRTUAL, the hDma class)
+B1D_P_SPACE=0xcafe0004  (FERMI_VASPACE_A, the class the brief names)
+B1D_Q1A_DUP_VASPACE status=0x0000 h=0xcafe0004   (NV_OK)
+B1D_Q1B_DUP_VIRTUAL status=0x0026 h=0xcafe0005   (REFUSED)
+B1D_Q1C_RANGE_OVER_DUPED status=0x0019 h=0xcafe0006   (REFUSED)
+⊘⊘⊘  B1d THE HINGE FAILS  = neither route produced an hDma S may name. Route A (dup the NV01_MEMORY_VIRTUAL) and route B (dup the FERMI_VASPACE_A, build a local range over it) are both refused. (d) as written cannot be built.
+B1D_HINGE=FAIL
+B1D_PROBE=(F)
+done — B1(d) dup-vaspace hinge probe only
+PROBE_RC=1
+===== B1D PROBE END =====
+RUN_EXIT_STATUS=1
+
+[exited with code 0]

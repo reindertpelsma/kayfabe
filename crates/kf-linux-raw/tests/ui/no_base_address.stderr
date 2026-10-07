@@ -1,0 +1,23 @@
+error[E0599]: no method named `base` found for struct `MappedRegion` in the current scope
+  --> tests/ui/no_base_address.rs:19:29
+   |
+19 |     let _base: u64 = region.base();
+   |                             ^^^^ method not found in `MappedRegion`
+
+error[E0599]: no method named `addr` found for struct `MappedRegion` in the current scope
+  --> tests/ui/no_base_address.rs:20:31
+   |
+20 |     let _addr: usize = region.addr();
+   |                               ^^^^ method not found in `MappedRegion`
+
+error[E0616]: field `map` of struct `MappedRegion` is private
+  --> tests/ui/no_base_address.rs:21:25
+   |
+21 |     let _field = region.map;
+   |                         ^^^ private field
+
+error[E0599]: no method named `base` found for struct `Reservation` in the current scope
+  --> tests/ui/no_base_address.rs:22:38
+   |
+22 |     let _res_base: u64 = reservation.base();
+   |                                      ^^^^ method not found in `Reservation`

@@ -1,0 +1,36 @@
+DISPLAY_LANE_START tag=mc21m0 rev=4c48ca0c 2026-09-27T23:01:51+00:00
+[boot_capture:mc21m0] BINARY kf3-bin-rev:4c48ca0c  (/workspace/bench/kf3-bins/4c48ca0c/qemu-system-x86_64)  ⇒ every claim from this boot cites THIS revision
+[boot_capture:mc21m0] host dmesg watermark: 950 lines
+[boot_capture:mc21m0] booting (extra args: -vga none -vnc 127.0.0.1:0)
+== kf3 binary: /workspace/bench/kf3-bins/4c48ca0c/qemu-system-x86_64 (rev 4c48ca0c)  device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on
+[boot_capture:mc21m0] guest is up after 36s
+[boot_capture:mc21m0] module unloaded and ring buffer cleared; loading cold
+[boot_capture:mc21m0] opening the device (this is what runs RmInitAdapter)
+[boot_capture:mc21m0] captured 29 dmesg lines, 26 NVRM, 0 adapter → /workspace/bench/run_mc21m0_dmesg.log
+[boot_capture:mc21m0] --- the verdict lines ---
+[boot_capture:mc21m0] running POST_CAPTURE_HOOK: /root/kf-mc/scripts/bench/display/hook.sh
+[boot_capture:mc21m0] hook finished: rc=0
+[boot_capture:mc21m0] guest dmesg after workload: 57 lines (46 NVRM), delta 28 → /workspace/bench/run_mc21m0_dmesg_after.log
+[boot_capture:mc21m0] host dmesg delta: 0 lines, 0
+0 NVRM, 0
+0 Xid → /workspace/bench/run_mc21m0_hostdmesg.log
+[boot_capture:mc21m0] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:mc21m0] census present (kf3):
+    kf3: family=Ampere phase=Running trapped=4175 applied=2216 refused=4 serviced=362 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=209 walks=218/218 cleared=209 superseded=0 named_missed=2 unreconciled=0 mapped=450 unmapped=277 clipped=0x0 held=0 vmm_overlaps=0 priv_withhel
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10018
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10018
+[boot_capture:mc21m0] evidence carried into the repo: /root/kf-mc/traces/guest_boots/run_mc21m0_{qemu,dmesg,probe,hostdmesg}.log
+[boot_capture:mc21m0] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+[boot_capture:mc21m0]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+[boot_capture:mc21m0] done. serial=/workspace/bench/run_mc21m0_serial.log qemu=/workspace/bench/run_mc21m0_qemu.log dmesg=/workspace/bench/run_mc21m0_dmesg.log dmesg_after=/workspace/bench/run_mc21m0_dmesg_after.log probe=/workspace/bench/run_mc21m0_probe.log hostdmesg=/workspace/bench/run_mc21m0_hostdmesg.log
+DISPLAY_PROBE_BUILD=ok
+DISPLAY_DRM_MODPROBE rc=0 
+DISPLAY_DRM_NODES by-path card0 renderD128 
+DISPLAY_DRM_DMESG_LINES=28 displayless=1
+DISPLAY_KFDISP_DRIVER=nvidia-drm
+DISPLAY_KFDISP_COUNTS connectors=0 crtcs=0 encoders=0 fbs=0
+DISPLAY_KFDISP_SUMMARY connected=0 primary=0 overlay=0 cursor=0
+DISPLAY_CONNECTED=no card=/dev/dri/card0
+DISPLAY_LANE_EXIT rc=0 2026-09-27T23:02:54+00:00

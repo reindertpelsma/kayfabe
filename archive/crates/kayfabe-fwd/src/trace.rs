@@ -1,0 +1,162 @@
+//! The compiler-checked bridge from this plane's faults to `kayfabe-trace`'s [`FaultTag`].
+//!
+//! `kayfabe-trace` sits **below** this crate in the lattice, so it cannot name
+//! [`FwdFault`] or [`Stale`]. The bridge lives here instead, as an **exhaustive `match`**
+//! rather than a `Display` impl: adding a fault variant fails the build until the trace
+//! vocabulary is told about it, which is what stops a refusal quietly becoming
+//! untraceable (`testing_doctrine.md` §6 rule 1).
+//!
+//! ★ `Stale` is tagged **through** `FwdFault::Stale`, so the tag of a staleness refusal
+//! names its `Stale` variant rather than collapsing to `"FwdFault::Stale"`. §12.10's
+//! lesson is exactly that: a canary that could not tell `Stale::Proc` from an anonymous
+//! RM error passed for the wrong reason for a whole milestone.
+//!
+//! In its own file rather than in `lib.rs` on purpose: the mutation campaign's file scope
+//! is `crates/kayfabe-fwd/src/lib.rs`, and a naming table with one arm per variant is
+//! `core_mutation_gate.md` decision #15's "hollow test to move a number" in gate form —
+//! it belongs outside the denominator, not inside it with a test written to chase it.
+
+use kayfabe_trace::{FaultTag, Faulted};
+
+use crate::{FwdFault, Stale};
+
+impl Faulted for Stale {
+    fn fault_tag(&self) -> FaultTag {
+        match self {
+            Stale::Proc(_) => FaultTag("Stale::Proc"),
+            Stale::Channel(_) => FaultTag("Stale::Channel"),
+            Stale::Vas { .. } => FaultTag("Stale::Vas"),
+            Stale::Route { .. } => FaultTag("Stale::Route"),
+            Stale::Rebound => FaultTag("Stale::Rebound"),
+            Stale::Target { .. } => FaultTag("Stale::Target"),
+        }
+    }
+}
+
+impl Faulted for FwdFault {
+    fn fault_tag(&self) -> FaultTag {
+        match self {
+            FwdFault::MalformedToken { .. } => FaultTag("FwdFault::MalformedToken"),
+            // ⊘ TWO tags, not one, and that is the entire point of `VchidMiss`: a census
+            // keyed on the tag summed an exec-plane miss and a proc-channel miss into a
+            // single number for two sessions, and the number named the wrong stage.
+            FwdFault::UnknownVchid {
+                miss: crate::VchidMiss::ExecPlane,
+                ..
+            } => FaultTag("FwdFault::UnknownVchid/by_vchid"),
+            FwdFault::UnknownVchid {
+                miss: crate::VchidMiss::ProcChannels,
+                ..
+            } => FaultTag("FwdFault::UnknownVchid/proc.channels"),
+            FwdFault::RetiredProc(_) => FaultTag("FwdFault::RetiredProc"),
+            FwdFault::Condemned { .. } => FaultTag("FwdFault::Condemned"),
+            FwdFault::NoVas(_) => FaultTag("FwdFault::NoVas"),
+            // ⊘ Its OWN tag, not folded into `NoVas`: "this channel names no VA space" and
+            // "its VA space has not declared a page directory YET" are different states of
+            // knowledge with different fixes, and a census that summed them would hide the
+            // second behind the first. See `FwdFault::UndeclaredPdb`.
+            FwdFault::UndeclaredPdb { .. } => FaultTag("FwdFault::UndeclaredPdb"),
+            FwdFault::NotScheduled { .. } => FaultTag("FwdFault::NotScheduled"),
+            FwdFault::UnknownChannel { .. } => FaultTag("FwdFault::UnknownChannel"),
+            FwdFault::IsolateRetired { .. } => FaultTag("FwdFault::IsolateRetired"),
+            FwdFault::IsolatePending { .. } => FaultTag("FwdFault::IsolatePending"),
+            FwdFault::NoHostVas { .. } => FaultTag("FwdFault::NoHostVas"),
+            FwdFault::HandoverRouteDisagrees { .. } => FaultTag("FwdFault::HandoverRouteDisagrees"),
+            FwdFault::GuestRamNotSysmem { .. } => FaultTag("FwdFault::GuestRamNotSysmem"),
+            FwdFault::GuestRamAddressTaken { .. } => FaultTag("FwdFault::GuestRamAddressTaken"),
+            FwdFault::GuestRamPinTooShort { .. } => FaultTag("FwdFault::GuestRamPinTooShort"),
+            FwdFault::GuestRamPinOverlaps(_) => FaultTag("FwdFault::GuestRamPinOverlaps"),
+            FwdFault::FbLeafDisagrees { .. } => FaultTag("FwdFault::FbLeafDisagrees"),
+            FwdFault::FbLeafGranularity { .. } => FaultTag("FwdFault::FbLeafGranularity"),
+            FwdFault::FbLeafExtent { .. } => FaultTag("FwdFault::FbLeafExtent"),
+            FwdFault::CeTooFragmented { .. } => FaultTag("FwdFault::CeTooFragmented"),
+            FwdFault::UnknownPdb { .. } => FaultTag("FwdFault::UnknownPdb"),
+            FwdFault::NoTarget { .. } => FaultTag("FwdFault::NoTarget"),
+            FwdFault::CePeerOperand { .. } => FaultTag("FwdFault::CePeerOperand"),
+            FwdFault::CeUnstableBacking { .. } => FaultTag("FwdFault::CeUnstableBacking"),
+            FwdFault::CeNoTable { .. } => FaultTag("FwdFault::CeNoTable"),
+            FwdFault::CeWalk { .. } => FaultTag("FwdFault::CeWalk"),
+            FwdFault::CpuCeStraddle { .. } => FaultTag("FwdFault::CpuCeStraddle"),
+            FwdFault::CpuCeFb { .. } => FaultTag("FwdFault::CpuCeFb"),
+            // ★ Delegated, so an address fault's tag names WHICH address fault. A miss
+            // and an overlap are different findings, and `mode2_address_table.md`'s whole
+            // discipline is that a miss is loud and specific.
+            FwdFault::Address(f) => f.fault_tag(),
+            FwdFault::Arena => FaultTag("FwdFault::Arena"),
+            FwdFault::GpaRead { .. } => FaultTag("FwdFault::GpaRead"),
+            FwdFault::NonRamGpa { .. } => FaultTag("FwdFault::NonRamGpa"),
+            FwdFault::PushbufferAperture { .. } => FaultTag("FwdFault::PushbufferAperture"),
+            FwdFault::RingFbNeverWritten { .. } => FaultTag("FwdFault::RingFbNeverWritten"),
+            // ★ Delegated, for the same reason `FwdFault::Address` is: *"the region kind
+            // could not be decided"* and *"a fake framebuffer was offered a real GPU VA"*
+            // are different findings, and a census counting one number could not tell them
+            // apart.
+            FwdFault::RegionKindRefused { fault, .. } => match fault {
+                kayfabe_mmu::RegionKindFault::FakeFbAtRealGpuVa { .. } => {
+                    FaultTag("RegionKindFault::FakeFbAtRealGpuVa")
+                }
+                kayfabe_mmu::RegionKindFault::PeerHasNoKind => {
+                    FaultTag("RegionKindFault::PeerHasNoKind")
+                }
+                // ★ w291 — its own tag, never folded into the two above. "a guest-RAM pin
+                // was offered a row that is not guest RAM" is a different finding from
+                // either, and a census that merged them could not say which chain refused.
+                kayfabe_mmu::RegionKindFault::NotGuestRam { .. } => {
+                    FaultTag("RegionKindFault::NotGuestRam")
+                }
+            },
+            FwdFault::RingBroughtNoEntry { .. } => FaultTag("FwdFault::RingBroughtNoEntry"),
+            FwdFault::RingProducerCursorUnknown { .. } => {
+                FaultTag("FwdFault::RingProducerCursorUnknown")
+            }
+            FwdFault::RingProducerCursorOutOfRange { .. } => {
+                FaultTag("FwdFault::RingProducerCursorOutOfRange")
+            }
+            FwdFault::SubmissionDecodedNoWork { .. } => {
+                FaultTag("FwdFault::SubmissionDecodedNoWork")
+            }
+            FwdFault::CeReleaseNoClock => FaultTag("FwdFault::CeReleaseNoClock"),
+            FwdFault::UvmFaultMethodWithoutFaultDelivery { .. } => {
+                FaultTag("FwdFault::UvmFaultMethodWithoutFaultDelivery")
+            }
+            FwdFault::PushTooFragmented { .. } => FaultTag("FwdFault::PushTooFragmented"),
+            // ⊘ The tag stays the RM error's own: `on` names WHERE, never WHY, and a
+            // census keyed on it would split one cause across two rows.
+            FwdFault::Rm { err, .. } => err.fault_tag(),
+            FwdFault::NotAnEngine(_) => FaultTag("FwdFault::NotAnEngine"),
+            // ★ w393 — two DIFFERENT findings: "a doorbell reached an un-born passthrough
+            // channel" and "its birth found nothing to adopt". The second is the usual cause
+            // of the first, and a census that merged them could not say whether the supply
+            // side or the latch was the thing that failed.
+            FwdFault::PassthroughDoorbellBirth { .. } => {
+                FaultTag("FwdFault::PassthroughDoorbellBirth")
+            }
+            FwdFault::PassthroughRingNotAdoptable { .. } => {
+                FaultTag("FwdFault::PassthroughRingNotAdoptable")
+            }
+            // ★ The HOP is in the tag, not only in the variant: "the parent was not a
+            // channel" and "the parent's Device has not resolved yet" are a permanent
+            // refusal and a deferral, and a census that could not tell them apart would
+            // report a design error and a race as one number.
+            FwdFault::EngineObjectParent { why, .. } => match why {
+                crate::EngineParentMiss::NoNode => FaultTag("FwdFault::EngineParent::NoNode"),
+                crate::EngineParentMiss::NotAChannel => {
+                    FaultTag("FwdFault::EngineParent::NotAChannel")
+                }
+                crate::EngineParentMiss::NoTarget => FaultTag("FwdFault::EngineParent::NoTarget"),
+                crate::EngineParentMiss::UnnamedVchid => {
+                    FaultTag("FwdFault::EngineParent::UnnamedVchid")
+                }
+            },
+            FwdFault::WrongArm { .. } => FaultTag("FwdFault::WrongArm"),
+            FwdFault::Present(_) => FaultTag("FwdFault::Present"),
+            FwdFault::Completion(_) => FaultTag("FwdFault::Completion"),
+            FwdFault::PoolSaturated { .. } => FaultTag("FwdFault::PoolSaturated"),
+            FwdFault::Cancelled { .. } => FaultTag("FwdFault::Cancelled"),
+            FwdFault::Wedged { .. } => FaultTag("FwdFault::Wedged"),
+            FwdFault::Stale(s) => s.fault_tag(),
+            FwdFault::SystemDataPlane => FaultTag("FwdFault::SystemDataPlane"),
+            FwdFault::ForeignBacking { .. } => FaultTag("FwdFault::ForeignBacking"),
+        }
+    }
+}

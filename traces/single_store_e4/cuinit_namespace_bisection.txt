@@ -1,0 +1,11 @@
+### the cuInit namespace bisection, 2026-09-14, RTX 3060 / 580.159.04
+### each row: unshare <ns> ./cuprobe   (cuInit=0 is success; 304 = CUDA_ERROR_OPERATING_SYSTEM)
+--user --map-root-user     cuInit=0 devices=1
+--pid --fork               cuInit=304 devices=-1
+--mount                    cuInit=0 devices=1
+--net                      cuInit=0 devices=1
+--ipc                      cuInit=0 devices=1
+--uts                      cuInit=0 devices=1
+ALL SIX (the isolate)      cuInit=304 devices=-1
+pid+mount, /proc REMOUNTED cuInit=0 devices=1
+user+pid+mount,/proc remntd cuInit=0 devices=1

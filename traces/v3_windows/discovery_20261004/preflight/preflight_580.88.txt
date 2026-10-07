@@ -1,0 +1,40 @@
+# NVIDIA 580.88 package pre-flight (runbook §5.3), vwin, 2026-10-04T01:07:09Z
+## sha256
+303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d  virtio-win.iso
+67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68  win11_ltsc_2024_eval_x64_en-us.iso
+90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9  580.88-desktop-win10-win11-64bit-international-dch-whql.exe
+ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9  OpenSSH-Win64-v10.0.0.0.msi
+## nv_dispi.inf
+367:%NVIDIA_DEV.2504%           = Section062, PCI\VEN_10DE&DEV_2504                 
+10:DriverVer   = 07/27/2025, 32.0.15.8088
+EnableGpuFirmware lines in the INF: 0
+## gsp_ga10x.bin sections (name size)
+[Nr] Off
+NULL 00
+.fwimage 4743000
+.note.gnu.build-id 000024
+.fwversion 00000a
+.fwsignature_gb20y 001000
+.fwsignature_cc_gb20x 001000
+.fwsignature_gb20x 001000
+.fwsignature_cc_gb10x 001000
+.fwsignature_gb10y 001000
+.fwsignature_gb10x 001000
+.fwsignature_cc_gh100 001000
+.fwsignature_gh100 001000
+.fwsignature_ad10x 001000
+.fwsignature_ga10x 001000
+.symtab 000060
+.strtab 0001d2
+.shstrtab 000109
+gsp_ga10x.bin .fwversion: 580.65.05
+gsp_tu10x.bin .fwversion: 580.65.05
+## nvlddmkm.sys strings
+110445800 nv580.88/Display.Driver/nvlddmkm.sys
+      1 580.88
+      2 r580_78-7
+ASCII 580.65.0x occurrences: 0
+DVSReal r580_78 580.88 DVS-Applications
+      1 EnableGpuFirmware
+      1 EnableGpuFirmwareLogs
+      2 NVIDIA Windows Kernel Mode Driver, Version 580.88 

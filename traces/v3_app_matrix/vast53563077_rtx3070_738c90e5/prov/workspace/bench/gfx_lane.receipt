@@ -1,0 +1,7 @@
+GFX_LANE_PROVISIONED=yes
+date=2026-09-30T18:36:51+00:00
+control=BUILD_GFX_OK ba4331af9705
+/usr/bin/vglrun /usr/bin/Xvfb /usr/bin/vulkaninfo /usr/bin/eglinfo /usr/bin/glslangValidator /usr/share/glvnd/egl_vendor.d/: 10_nvidia.json 50_mesa.json  /usr/share/vulkan/icd.d/: asahi_icd.json gfxstream_vk_icd.json intel_hasvk_icd.json intel_icd.json lvp_icd.json nouveau_icd.json radeon_icd.json virtio_icd.json 
+kernel_before=6.8.0-142-generic
+kernel_after=6.8.0-142-generic
+provisioner_rev=738c90e5

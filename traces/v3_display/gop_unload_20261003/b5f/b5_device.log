@@ -1,0 +1,128 @@
+kf3: display: +50 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch
+kf3: mem t=46.886s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #1: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=46.891s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #2: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=46.913s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #3: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=48.497s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #4: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=48.505s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #5: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=48.507s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #6: guest views []; 0x7f0000 bytes show SCRATCH
+kf3: mem t=48.507s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: mem t=48.508s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 2) — the guest's RM gave BAR1 up
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=213: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: mem t=48.533s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch (seed life 2: the guest's RM took BAR1 back after giving it up)
+kf3: mem t=59.751s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #7: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=59.755s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #8: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=59.772s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #9: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=75.893s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #10: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=75.900s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #11: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=75.902s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #12: guest views []; 0x7f0000 bytes show SCRATCH
+kf3: mem t=75.903s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: mem t=75.903s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 3) — the guest's RM gave BAR1 up
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=165: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: mem t=75.927s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch (seed life 3: the guest's RM took BAR1 back after giving it up)
+kf3: mem t=96.814s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #13: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=96.817s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #14: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=96.832s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #15: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=114.809s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #16: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=114.816s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #17: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=114.821s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #18: guest views []; 0x7f0000 bytes show SCRATCH
+kf3: mem t=114.821s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: mem t=114.822s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 4) — the guest's RM gave BAR1 up
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=180: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: mem t=114.858s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch (seed life 4: the guest's RM took BAR1 back after giving it up)
+kf3: mem t=131.123s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #19: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=131.126s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #20: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=131.143s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #21: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: display: ChannelAllocated { kind: Core, instance: 0, offset: 0, client: 3251634220, pb: Some(Pushbuffer { addr_space: 1, phys: 4862619648, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: mem t=131.625s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #22: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=131.630s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #23: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=131.635s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #24: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=131.639s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #25: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=131.644s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #26: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=131.649s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #27: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=131.654s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #28: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=131.659s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #29: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=131.664s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #30: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=131.669s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #31: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=131.673s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #32: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=131.678s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #33: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=131.683s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #34: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=131.691s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #35: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=131.718s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #36: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=132.144s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #37: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=132.185s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #38: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=132.191s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #39: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=132.196s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #40: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=132.299s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #41: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=132.343s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #42: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: display: the guest armed its first head at +132338 ms — the boot layer is retired after 1012 boot frame(s)
+kf3: display: +132338 ms the console shows BLACK 1920x1080 (no head scans a window) (core channel allocated)
+kf3: display: +132340 ms the console shows head 3 1920x1080: [window 6 iso 0x1008f+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+kf3: mem t=132.379s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #43: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=132.404s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #44: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=134.817s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #45: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=134.873s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #46: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=134.877s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #47: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=134.916s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #48: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=134.919s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #49: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=134.997s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #50: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=135.001s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #51: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=135.028s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #52: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=135.031s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #53: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=135.089s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #54: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=147.893s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #55: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=147.909s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #56: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: display: +147905 ms the console shows BLACK 1920x1080 (no head scans a window) (core channel allocated)
+kf3: display: +147927 ms the console shows head 3 1920x1080: [window 6 iso 0x10088+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+kf3: mem t=147.948s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #57: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=147.952s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #58: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=147.960s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #59: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=147.976s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #60: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=147.998s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #61: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=148.006s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #62: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=148.011s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #63: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=148.015s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #64: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=148.019s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #65: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=148.023s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #66: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=148.027s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #67: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=148.032s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #68: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=148.036s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #69: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=148.040s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #70: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=148.044s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #71: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=148.048s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #72: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=148.053s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #73: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=148.057s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #74: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: display: +148077 ms the console shows the PRESERVED scanout 1920x1080 [window 6 store 0x0] (freed with PRESERVE_HW) (core channel allocated)
+kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: true }
+kf3: mem t=148.104s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #75: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=148.206s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #76: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=148.212s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #77: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=148.214s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #78: guest views []; 0x7f0000 bytes show SCRATCH
+kf3: mem t=148.214s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: mem t=148.215s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 5) — the guest's RM gave BAR1 up
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=874: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: mem t=148.247s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch (seed life 5: the guest's RM took BAR1 back after giving it up)
+kf3: mem t=164.246s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #79: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=164.249s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #80: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=164.264s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #81: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: display: ChannelAllocated { kind: Core, instance: 0, offset: 0, client: 3251634220, pb: Some(Pushbuffer { addr_space: 1, phys: 5055885312, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: mem t=164.660s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #82: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=164.665s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #83: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=164.670s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #84: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=164.674s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #85: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=164.679s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #86: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=164.684s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #87: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=164.688s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #88: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: display: +164807 ms the console shows head 3 1920x1080: [window 6 iso 0x10088+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+kf3: display: +175810 ms the console shows BLACK 1920x1080 (no head scans a window) (core channel allocated)
+kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+kf3: display: ChannelAllocated { kind: Core, instance: 0, offset: 0, client: 3251634220, pb: Some(Pushbuffer { addr_space: 1, phys: 5055885312, limit: 4095, size_enum: 0 }), life: 5 }
+kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+kf3: mem t=179.290s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: mem t=179.290s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 6) — the guest's RM gave BAR1 up
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=605: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: mem t=179.315s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)

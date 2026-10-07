@@ -1,0 +1,1131 @@
+//! Batch-2 engine + context seams (`execution_plane.md` §2.1/§2.2/§2.5/§3): the
+//! `EngineKind` routing tag, the shallow GR/CE context lifecycle (Case-1 forward →
+//! host self-promotes its own golden ctx; Case-2 ack-only), and — the CRITICAL
+//! anti-bolt-on property — that **the host verb surface does NOT grow to add an
+//! engine**: a new engine is new arch encoding rows + core routing arms, ZERO new
+//! host reach.
+//!
+//! Invariant/contract tests (decision #15), mock-driven, GPU-free.
+
+#![allow(clippy::unusual_byte_groupings)]
+
+use kayfabe_arch::Arch;
+use kayfabe_arch::ids::GpuId;
+use kayfabe_arch::ids::{ClassId, EngineKind, GpuVa, HClient, HObject, Pdb, VChid};
+use kayfabe_completion::{CompletionError, MAX_FENCE_JUMP, OsEventRef};
+use kayfabe_core::gpa::GpaSpace;
+use kayfabe_core::gpu::Gpu;
+use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
+use kayfabe_fwd::{
+    CompletionArm, ControlRoute, FwdFault, arm_fence, completion_arm, fence_observed,
+    forward_engine_object, handle_doorbell, publish_backing, route_control,
+};
+use kayfabe_isolate::{IsolateId, RmError};
+use kayfabe_mocks::{
+    MockArch, MockIsolateFactory, RmVerb, SharedRecorder, VerbKind, mock_classes as mc, mock_ctrl,
+};
+use kayfabe_rt::device::{LockMode, SharedDevice};
+use kayfabe_tests::{Guarded, Scenario, identical_handles};
+
+const CLIENT: HClient = HClient(0xAA);
+const PDB: Pdb = Pdb(0x3401_000);
+const GR_VCHID: VChid = VChid(0x10);
+const CE_VCHID: VChid = VChid(0x11);
+
+fn compute_gpu() -> (Guarded<Gpu>, SharedRecorder) {
+    let arch = std::sync::Arc::new(MockArch::new());
+    let (factory, recorder) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
+    let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
+    let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");
+    let mut s = Scenario::new();
+    s.compute_process(CLIENT, PDB, identical_handles(GR_VCHID.0, CE_VCHID.0));
+    for ev in s.events {
+        gpu.apply(ev).expect("applies");
+    }
+    (
+        Guarded::new("engine_context::compute_gpu", gpu, recorder.clone()),
+        recorder,
+    )
+}
+
+/// `Arch::engine_of_object` maps object classes to the `EngineKind` routing tag; a
+/// non-engine class returns `None` (recorded, never guessed).
+#[test]
+fn engine_of_object_classifies_all_kinds() {
+    let arch = MockArch::new();
+    assert_eq!(
+        arch.engine_of_object(mc::COMPUTE),
+        Some(EngineKind::GrCompute)
+    );
+    assert_eq!(
+        arch.engine_of_object(mc::GRAPHICS),
+        Some(EngineKind::GrGraphics)
+    );
+    assert_eq!(arch.engine_of_object(mc::DMA_COPY), Some(EngineKind::Ce));
+    assert_eq!(arch.engine_of_object(mc::NVENC), Some(EngineKind::NvEnc));
+    assert_eq!(
+        arch.engine_of_object(mc::MEMORY),
+        None,
+        "memory is not an engine object"
+    );
+    assert_eq!(
+        arch.engine_of_object(ClassId(0xdead)),
+        None,
+        "unknown class → None, no guess"
+    );
+}
+
+/// Case-1 forward: the engine-object alloc materializes the host channel and allocs
+/// the object on it, through the OWNING proc's isolate — the host builds its own ctx.
+#[test]
+fn case1_forwards_engine_object_on_own_isolate() {
+    let (mut gpu, recorder) = compute_gpu();
+
+    let out = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[])
+        .expect("GR compute object forwards");
+    assert_eq!(out.engine, EngineKind::GrCompute);
+    assert!(
+        out.materialized_channel,
+        "first forward materializes the host channel"
+    );
+
+    // The host saw: a channel alloc THEN an engine-object alloc on that channel, both
+    // on ONE isolate (the owning proc's).
+    let log = recorder.lock().unwrap();
+    let chan = log.log.iter().find_map(|(iso, v)| match v {
+        RmVerb::AllocChannel { handle, .. } => Some((*iso, *handle)),
+        _ => None,
+    });
+    let (chan_iso, chan_h) = chan.expect("host channel allocated");
+    let obj = log.log.iter().find_map(|(iso, v)| match v {
+        RmVerb::AllocEngineObject { chan, class, .. } => Some((*iso, *chan, *class)),
+        _ => None,
+    });
+    let (obj_iso, obj_chan, obj_class) = obj.expect("engine object allocated");
+    assert_eq!(
+        obj_chan, chan_h,
+        "engine object allocated ON the host channel"
+    );
+    assert_eq!(obj_class, mc::COMPUTE);
+    assert_eq!(
+        obj_iso, chan_iso,
+        "channel + object forwarded on the SAME isolate"
+    );
+}
+
+/// ★★★★★ **§16.105 — A REFUSED engine-object alloc NAMES THE HOST CHANNEL IT WAS
+/// ATTEMPTED ON**, and the channel it names has already been destroyed.
+///
+/// # Why this cannot be done at the caller, which is the whole point of the change
+///
+/// `EngineObjectPlan::channel` is `None` for a first forward — the host channel is built
+/// **inside the same verb chain** — and the chain's unwind then frees it. Both facts are
+/// asserted below, so a future "simplification" that drops
+/// [`kayfabe_isolate::VerbFailure::on`] and reads the plan instead fails here rather than
+/// silently printing `NONE` on the only path that matters.
+///
+/// ⊘ The status is [`RmError::Other`]`(0x40)` = `NV_ERR_INVALID_STATE`, the exact code a
+/// real GA106 returns for this alloc (`kfifoRunlistSetId_GM107` → `chandesConstruct_IMPL`,
+/// `ogkm-580: channel_descendant.c:243-252`).
+#[test]
+fn a_refused_engine_object_alloc_names_the_host_channel_it_was_attempted_on() {
+    let (mut gpu, recorder) = compute_gpu();
+    recorder
+        .lock()
+        .expect("recorder")
+        .fail_kinds
+        .insert(VerbKind::AllocEngineObject, RmError::Other(0x40));
+
+    let got = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[])
+        .expect_err("the host refuses the object alloc");
+
+    let log = recorder.lock().expect("recorder");
+    let chan_h = log
+        .log
+        .iter()
+        .find_map(|(_, v)| match v {
+            RmVerb::AllocChannel { handle, .. } => Some(*handle),
+            _ => None,
+        })
+        .expect("the host channel WAS built — inside this same chain");
+    assert_eq!(
+        got,
+        FwdFault::Rm {
+            err: RmError::Other(0x40),
+            on: Some(chan_h),
+        },
+        "the refusal names the host channel the alloc was attempted on"
+    );
+    // ⊘ …and that channel no longer exists. This is the falsifier for "just read it off
+    // the plan afterwards": there is nothing left to read it off.
+    assert!(
+        log.log
+            .iter()
+            .any(|(_, v)| matches!(v, RmVerb::Free { obj } if *obj == chan_h)),
+        "the unwind freed the channel it named — the handle is an identity, not a lease"
+    );
+}
+
+/// ★ The other half of §16.105, and the one that keeps `on` honest: when the channel was
+/// **already** materialized, the refusal names THAT channel and the unwind frees nothing.
+///
+/// Without this arm, `on` could be "whatever this chain just allocated" and every
+/// assertion in the test above would still pass.
+#[test]
+fn a_refusal_on_an_existing_channel_names_it_and_frees_nothing() {
+    let (mut gpu, recorder) = compute_gpu();
+    let first = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[])
+        .expect("the first forward materializes the channel");
+    assert!(first.materialized_channel);
+    let chan_h = recorder
+        .lock()
+        .expect("recorder")
+        .log
+        .iter()
+        .find_map(|(_, v)| match v {
+            RmVerb::AllocChannel { handle, .. } => Some(*handle),
+            _ => None,
+        })
+        .expect("host channel allocated");
+
+    recorder
+        .lock()
+        .expect("recorder")
+        .fail_kinds
+        .insert(VerbKind::AllocEngineObject, RmError::Other(0x40));
+    let got = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::DMA_COPY, &[])
+        .expect_err("the second class is refused on the existing channel");
+
+    assert_eq!(
+        got,
+        FwdFault::Rm {
+            err: RmError::Other(0x40),
+            on: Some(chan_h),
+        },
+        "the refusal names the channel that already existed"
+    );
+    assert!(
+        !recorder
+            .lock()
+            .expect("recorder")
+            .log
+            .iter()
+            .any(|(_, v)| matches!(v, RmVerb::Free { obj } if *obj == chan_h)),
+        "a live channel is not freed by a refusal that merely happened on it"
+    );
+}
+
+/// A second forward on the same channel does not re-materialize it (idempotent
+/// per-proc lifecycle, nothing one-shot).
+#[test]
+fn case1_second_forward_reuses_channel() {
+    let (mut gpu, _rec) = compute_gpu();
+    let first = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[]).unwrap();
+    assert!(first.materialized_channel);
+    let second = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[]).unwrap();
+    assert!(
+        !second.materialized_channel,
+        "host channel already materialized"
+    );
+}
+
+/// ★★★★★ **§16.106 — THE GUEST'S OWN CE DECLARATION REACHES THE CHANNEL ALLOC.**
+///
+/// The whole fix is that `alloc_channel` can read *which* copy engine the object names,
+/// because [`kayfabe_arch::ids::EngineKind::Ce`] cannot carry an instance and the adapter
+/// therefore invented one (`COPY0`, runlist 0) while the guest declared `COPY2`/`COPY3`
+/// (runlists 1 and 2) — all 14 refusals of `w250`/`w251`/`w254`.
+///
+/// # ⊘ Why this test exists SEPARATELY from the adapter's own unit tests
+///
+/// Those test the *decision*. This tests the *delivery*: a trait parameter is an upper
+/// bound on what a caller MAY communicate and says nothing about what it does. Without
+/// this, `Worker::execute` could pass `None` on every path, `declared_channel_engine_type`
+/// would still be perfectly correct, and the fix would be dead — the exact shape that cost
+/// this campaign four rungs (`a signature is an upper bound; only the CALL SITE says what
+/// is READ`).
+#[test]
+fn the_guests_ce_alloc_params_reach_the_channel_alloc() {
+    let (mut gpu, recorder) = compute_gpu();
+    // Eight bytes shaped like `NVB0B5_ALLOCATION_PARAMETERS { version = 1, engineType }`.
+    // ⊘ Spelled as bytes here on purpose: this test is about the blob ARRIVING verbatim,
+    // not about anyone's decode of it.
+    let declared: [u8; 8] = [1, 0, 0, 0, 11, 0, 0, 0];
+
+    forward_engine_object(&mut gpu, GpuId::ZERO, CE_VCHID, mc::DMA_COPY, &declared)
+        .expect("the CE object forwards");
+
+    let log = recorder.lock().expect("recorder");
+    let hosting = log
+        .log
+        .iter()
+        .find_map(|(_, v)| match v {
+            RmVerb::AllocChannel { hosting, .. } => Some(hosting.clone()),
+            _ => None,
+        })
+        .expect("the channel was materialized");
+    assert_eq!(
+        hosting,
+        Some((mc::DMA_COPY, declared.to_vec())),
+        "the channel alloc was told which object it is hosting, byte for byte"
+    );
+}
+
+/// ⊘ The other arm: a channel born **without** an engine object hosts none, so it names
+/// none. Without this, `hosting` could be filled in from something ambient and the test
+/// above would still pass.
+///
+/// ⊘⊘ **REWRITTEN 2026-09-09 (w393) — this used to be
+/// `a_doorbell_materialized_channel_names_no_hosted_object`, and the shape it pinned is
+/// superseded.** A user-proc (`Passthrough`) channel is no longer materialized by its first
+/// doorbell over a ring of ours: it is born at its own channel alloc, over the guest's ring
+/// and USERD, because a doorbell birth adopts the USERD *after* the guest wrote `GP_PUT` and
+/// host RM zeroes a taken USERD (`[measured w233]`, real GA106 — the cursor that rang is
+/// destroyed). The invariant this test carries — *the birth that hosts nothing records
+/// `hosting: None`* — is unchanged; the birth site moved, and the doorbell half became the
+/// refusal pinned by [`a_doorbell_never_births_a_passthrough_channel`].
+#[test]
+fn a_channel_born_at_its_alloc_names_no_hosted_object() {
+    let (mut gpu, recorder) = compute_gpu();
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    let born = kayfabe_tests::birth_passthrough_channels(&mut gpu);
+    assert_eq!(
+        born.born.len(),
+        2,
+        "both of the proc's channels are born at their alloc"
+    );
+
+    /// One recorded `AllocChannel`: `(hosting, adopted?)`.
+    type Birth = (Option<(ClassId, Vec<u8>)>, bool);
+    let log = recorder.lock().expect("recorder");
+    let births: Vec<Birth> = log
+        .log
+        .iter()
+        .filter_map(|(_, v)| match v {
+            RmVerb::AllocChannel { hosting, adopt, .. } => Some((hosting.clone(), adopt.is_some())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        births.len(),
+        2,
+        "one host channel per guest channel, and no more"
+    );
+    for (hosting, adopted) in births {
+        assert_eq!(hosting, None, "a birth at the alloc hosts no object");
+        assert!(
+            adopted,
+            "★ and it is over the GUEST'S ring — `adopt: Some` is the one shape the \
+             older doorbell arm could never record (its adopt was ring-only and the \
+             engine-object arm always hosts), which is how a verb log tells the three \
+             birth sites apart"
+        );
+    }
+}
+
+/// ★★★★★ **w393 — THE NEW CONTRACT: a doorbell NEVER births a `Passthrough` channel.**
+/// Refused by name, with **zero** host ops — no channel, no schedule, no doorbell — because
+/// the only two things a doorbell birth could do are the two measured defects: adopt the
+/// USERD now (zeroing the cursor that rang, `[measured w233]` / `[measured w392j]` 5× Xid 31)
+/// or birth over our own ring (illegal for the kind; `[measured w392h]` `Xid 0`, the engine
+/// fetches nothing and reports nothing).
+///
+/// ⊘ `Emulated` channels are NOT under this rule: their lazy doorbell birth over our ring is
+/// the design (we drive that ring; it runs our function bodies) — pinned beside this by
+/// [`an_emulated_channels_first_doorbell_still_births_it_over_our_ring`].
+#[test]
+fn a_doorbell_never_births_a_passthrough_channel() {
+    let (mut gpu, recorder) = compute_gpu();
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    let (pid, cid) = gpu.spine.by_vchid[&(GpuId::ZERO, CE_VCHID)];
+    assert_eq!(
+        gpu.procs[&pid].channels[&cid].kind,
+        kayfabe_core::channel_kind::GuestChannelKind::Passthrough,
+        "the subject is a user-proc channel"
+    );
+    let before = recorder.lock().expect("recorder").log.len();
+
+    let refused = handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(CE_VCHID), &[]);
+
+    assert_eq!(
+        refused,
+        Err(FwdFault::PassthroughDoorbellBirth {
+            proc: pid,
+            chan: cid,
+            vchid: CE_VCHID,
+        }),
+        "★ refused BY NAME — not `NoVas`, not `NotScheduled`, not a served ring over a \
+         ring of ours"
+    );
+    assert_eq!(
+        recorder.lock().expect("recorder").log.len(),
+        before,
+        "★ and NOTHING was materialized: a refusal that had already allocated a channel \
+         would be the w392h silence with a fault message on top"
+    );
+    assert!(
+        gpu.procs[&pid].channels[&cid].host_channel.is_none(),
+        "the channel is still un-born — the birth belongs to the alloc, not to this arm"
+    );
+}
+
+/// ★ Engine-object forward idempotency (§2.2: "re-sends are idempotent"): a REPLAYED
+/// Case-1 engine-object alloc — same channel, same declared class, re-sent any number
+/// of times (the protocol is order-/repeat-independent) — yields exactly ONE host
+/// engine object. The replay resolves from the channel's idempotency table and
+/// returns the ORIGINAL host handle; the host backend never sees a duplicate alloc
+/// (the same retried-RPC discipline the graph applies to alloc/DUP replay).
+#[test]
+fn replayed_engine_object_alloc_forwards_exactly_one_host_object() {
+    let (mut gpu, recorder) = compute_gpu();
+
+    let first = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[]).unwrap();
+    assert!(!first.reused, "first forward is the real alloc");
+    for _ in 0..3 {
+        let replay =
+            forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[]).unwrap();
+        assert!(replay.reused, "replay resolves from the idempotency table");
+        assert_eq!(
+            replay.host_object, first.host_object,
+            "the ORIGINAL host object"
+        );
+        assert_eq!(replay.engine, EngineKind::GrCompute);
+    }
+
+    // The host saw EXACTLY ONE engine-object alloc — no duplicate host object.
+    let log = recorder.lock().unwrap();
+    let engine_allocs = log
+        .log
+        .iter()
+        .filter(|(_, v)| matches!(v, RmVerb::AllocEngineObject { .. }))
+        .count();
+    assert_eq!(
+        engine_allocs, 1,
+        "a replayed alloc must NOT create a duplicate host object"
+    );
+
+    // A DIFFERENT class on the same channel is a genuinely new object, not a replay.
+    drop(log);
+    let ce = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::DMA_COPY, &[]).unwrap();
+    assert!(!ce.reused);
+    assert_ne!(ce.host_object, first.host_object);
+}
+
+/// ★ The fine `EngineKind` lands ON the `Channel` (§2.2 "what the core tracks"),
+/// graph-derived: the channel class's declared kind, refined by the engine object
+/// allocated on it — so NVENC vs GR-compute is distinguishable at the channel
+/// (routing + completion-arm selection), not just at parse. Order-independent and
+/// replay-tolerant like everything graph-derived.
+#[test]
+fn engine_kind_lands_on_the_channel_via_the_graph() {
+    let (mut gpu, _rec) = compute_gpu();
+    let kind_of = |gpu: &Gpu, vchid: VChid| {
+        let (pid, cid) = gpu.spine.by_vchid[&(GpuId::ZERO, vchid)];
+        gpu.procs[&pid].channels[&cid].engine
+    };
+
+    // Channel-class defaults: GR-class channel = GrCompute, CE-class channel = Ce.
+    assert_eq!(kind_of(&gpu, GR_VCHID), EngineKind::GrCompute);
+    assert_eq!(kind_of(&gpu, CE_VCHID), EngineKind::Ce);
+
+    // An NVENC session object allocated ON the GR channel refines the channel's
+    // context to NvEnc — the distinguishability the completion tie-in keys on.
+    let nvenc_alloc = RmEvent::Alloc {
+        client: CLIENT,
+        parent: HObject(0x5c00_0019), // the GR channel handle
+        handle: HObject(0x5c00_0030),
+        class: mc::NVENC,
+        facts: AllocFacts::default(),
+    };
+    gpu.apply(nvenc_alloc).expect("engine-object alloc applies");
+    assert_eq!(
+        kind_of(&gpu, GR_VCHID),
+        EngineKind::NvEnc,
+        "engine object refined the channel"
+    );
+    assert_eq!(
+        kind_of(&gpu, CE_VCHID),
+        EngineKind::Ce,
+        "the other channel is untouched"
+    );
+
+    // Replay tolerance: the identical alloc re-sent changes nothing.
+    gpu.apply(nvenc_alloc)
+        .expect("replayed alloc is idempotent");
+    assert_eq!(kind_of(&gpu, GR_VCHID), EngineKind::NvEnc);
+
+    // The refinement is graph-derived, so it SURVIVES unrelated re-derivations
+    // (any later apply re-syncs channels from the projection).
+    let mut s2 = Scenario::new();
+    s2.compute_process(
+        HClient(0xBB),
+        Pdb(0x3405_000),
+        identical_handles(0x20, 0x21),
+    );
+    for ev in s2.events {
+        gpu.apply(ev).expect("second proc applies");
+    }
+    assert_eq!(
+        kind_of(&gpu, GR_VCHID),
+        EngineKind::NvEnc,
+        "refinement survives re-derivation"
+    );
+}
+
+/// Case-2 controls are ACK-ONLY: never reach the host backend (replaying an
+/// unprivileged GSP-internal control is "wrong layer"). Case-1 controls forward.
+#[test]
+fn case2_controls_are_ack_only_never_forwarded() {
+    let (mut gpu, recorder) = compute_gpu();
+    let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
+
+    // First materialize a host object to issue a Case-1 control against.
+    let out = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[]).unwrap();
+    let mut payload = [0u8; 8];
+
+    // Case-2: PROMOTE_CTX — ack-only, no host op.
+    let route = route_control(
+        &mut gpu,
+        GpuId::ZERO,
+        pid,
+        out.host_object,
+        mock_ctrl::PROMOTE_CTX,
+        &mut payload,
+    )
+    .expect("promote_ctx routes");
+    assert_eq!(route, ControlRoute::AckOnly);
+    // Case-2: GET_CTX_BUFFER_INFO — ack-only.
+    let route = route_control(
+        &mut gpu,
+        GpuId::ZERO,
+        pid,
+        out.host_object,
+        mock_ctrl::GET_CTX_BUFFER_INFO,
+        &mut payload,
+    )
+    .expect("get_ctx_buffer_info routes");
+    assert_eq!(route, ControlRoute::AckOnly);
+
+    // No Control verb reached the backend for the two Case-2 controls.
+    {
+        let log = recorder.lock().unwrap();
+        assert!(
+            !log.log
+                .iter()
+                .any(|(_, v)| matches!(v, RmVerb::Control { .. })),
+            "Case-2 controls must NEVER reach the host backend"
+        );
+    }
+
+    // Case-1: a forwardable control DOES reach the host.
+    let route = route_control(
+        &mut gpu,
+        GpuId::ZERO,
+        pid,
+        out.host_object,
+        mock_ctrl::FORWARDABLE,
+        &mut payload,
+    )
+    .expect("forwardable control routes");
+    assert_eq!(route, ControlRoute::Forwarded);
+    let log = recorder.lock().unwrap();
+    assert!(
+        log.log.iter().any(
+            |(_, v)| matches!(v, RmVerb::Control { cmd, .. } if *cmd == mock_ctrl::FORWARDABLE)
+        ),
+        "a Case-1 control forwards to the host"
+    );
+}
+
+/// A class the arch does not recognize as an engine object is a loud fault — never
+/// guessed into a GR/CE object.
+#[test]
+fn forwarding_a_non_engine_class_is_a_loud_fault() {
+    let (mut gpu, _rec) = compute_gpu();
+    // ★ §12.38 — the EXACT variant, carrying the class it refused: the `ClassId` is the
+    // whole content of this fault, so wildcarding it asserts almost nothing.
+    assert_eq!(
+        forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::MEMORY, &[]),
+        Err(FwdFault::NotAnEngine(mc::MEMORY))
+    );
+}
+
+/// ★ THE anti-bolt-on property: forwarding EACH engine kind (compute, graphics, CE,
+/// NVENC) uses the SAME host verb (`AllocEngineObject`) — the host verb surface does
+/// NOT grow per engine. Only the arch's class→EngineKind row differs.
+#[test]
+fn host_verb_surface_does_not_grow_per_engine() {
+    // For each distinct engine class, forward it on a fresh compute channel and record
+    // which host verb kinds were used. The SET of verb variants must be identical
+    // across engines — no engine introduces a new host verb.
+    let engines = [
+        (mc::COMPUTE, EngineKind::GrCompute),
+        (mc::GRAPHICS, EngineKind::GrGraphics),
+        (mc::DMA_COPY, EngineKind::Ce),
+        (mc::NVENC, EngineKind::NvEnc),
+    ];
+
+    let verb_kind = |v: &RmVerb| -> &'static str {
+        match v {
+            RmVerb::AllocChannel { .. } => "AllocChannel",
+            RmVerb::AllocVaSpace { .. } => "AllocVaSpace",
+            RmVerb::AllocEngineObject { .. } => "AllocEngineObject",
+            RmVerb::AllocSysmem { .. } => "AllocSysmem",
+            RmVerb::AllocVidmem { .. } => "AllocVidmem",
+            RmVerb::Alloc { .. } => "Alloc",
+            RmVerb::Schedule { .. } => "Schedule",
+            RmVerb::MapGpuVa { .. } => "MapGpuVa",
+            RmVerb::UnmapGpuVa { .. } => "UnmapGpuVa",
+            RmVerb::RingDoorbell { .. } => "RingDoorbell",
+            RmVerb::Free { .. } => "Free",
+            RmVerb::Control { .. } => "Control",
+            RmVerb::CeCopy { .. } => "CeCopy",
+            RmVerb::FbRead { .. } => "FbRead",
+            RmVerb::ExportBacking { .. } => "ExportBacking",
+            RmVerb::MapGuestRam { .. } => "MapGuestRam",
+            RmVerb::UnmapGuestRam { .. } => "UnmapGuestRam",
+            RmVerb::DescribeGuestRam { .. } => "DescribeGuestRam",
+            RmVerb::JoinFbLeaf { .. } => "JoinFbLeaf",
+            RmVerb::AliasFbLeaf { .. } => "AliasFbLeaf",
+        }
+    };
+
+    let mut reference: Option<std::collections::BTreeSet<&'static str>> = None;
+    for (class, kind) in engines {
+        let (mut gpu, recorder) = compute_gpu();
+        let out = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, class, &[])
+            .unwrap_or_else(|_| panic!("{kind:?} forwards"));
+        assert_eq!(out.engine, kind);
+
+        let used: std::collections::BTreeSet<&'static str> = recorder
+            .lock()
+            .unwrap()
+            .log
+            .iter()
+            .map(|(_, v)| verb_kind(v))
+            .collect();
+        match &reference {
+            None => reference = Some(used),
+            Some(r) => assert_eq!(
+                &used, r,
+                "engine {kind:?} used a DIFFERENT host verb set — the host surface grew per engine (anti-bolt-on violated)"
+            ),
+        }
+    }
+    // And the verb set is exactly the intent verbs, including the one engine verb.
+    let r = reference.unwrap();
+    assert!(
+        r.contains("AllocEngineObject"),
+        "every engine forwards via the one engine verb"
+    );
+    assert!(
+        !r.contains("Alloc"),
+        "no engine falls back to a generic raw alloc"
+    );
+}
+
+/// ★ GR-1 — the C's `dma_copy_class_alloc_params` wrong-runlist class, pinned at the
+/// core (memory: missing engine typing → `engineType=0` → wrong runlist →
+/// cuCtxCreate 401): every host channel alloc carries the channel's graph-derived
+/// `EngineKind`, so a graphics/NVENC/CE channel is materialized on ITS OWN
+/// engine/runlist — never a compute default the adapter would have to guess.
+/// Covers BOTH materialization sites: the engine-object forward and the doorbell.
+#[test]
+fn channel_materialization_declares_its_engine_to_the_backend() {
+    // The recorded engine of the ONE AllocChannel in a recorder's log.
+    let recorded_engine = |rec: &SharedRecorder| -> EngineKind {
+        let log = rec.lock().unwrap();
+        let engines: Vec<EngineKind> = log
+            .log
+            .iter()
+            .filter_map(|(_, v)| match v {
+                RmVerb::AllocChannel { engine, .. } => Some(*engine),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(engines.len(), 1, "exactly one host channel alloc");
+        engines[0]
+    };
+
+    // Site 1 (`forward_engine_object`): for each engine kind, refine the GR channel's
+    // context through the graph (the guest's engine-object alloc), then let the
+    // Case-1 forward materialize the host channel — the alloc must carry THAT kind.
+    for (class, kind) in [
+        (mc::COMPUTE, EngineKind::GrCompute),
+        (mc::GRAPHICS, EngineKind::GrGraphics),
+        (mc::DMA_COPY, EngineKind::Ce),
+        (mc::NVENC, EngineKind::NvEnc),
+    ] {
+        let (mut gpu, recorder) = compute_gpu();
+        gpu.apply(RmEvent::Alloc {
+            client: CLIENT,
+            parent: HObject(0x5c00_0019), // the GR channel handle
+            handle: HObject(0x5c00_0030),
+            class,
+            facts: AllocFacts::default(),
+        })
+        .expect("engine object refines the channel");
+        forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, class, &[])
+            .unwrap_or_else(|_| panic!("{kind:?} forwards"));
+        assert_eq!(
+            recorded_engine(&recorder),
+            kind,
+            "{kind:?} channel materialized on a WRONG engine/runlist (the 401 class)"
+        );
+    }
+
+    // Site 2 (the birth at the channel ALLOC — ⊘ w393: this used to be `handle_doorbell`'s
+    // lazy materialization, which no longer exists for a `Passthrough` channel): the CE
+    // channel is born as Ce — not the GR/compute default — and its first ring finds it so.
+    let (mut gpu, recorder) = compute_gpu();
+    // ★ #177 — the guest schedules before it rings.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    let (pid, cid) = gpu.spine.by_vchid[&(GpuId::ZERO, CE_VCHID)];
+    let born = kayfabe_tests::birth_passthrough_channels(&mut gpu);
+    assert!(
+        born.born.contains(&(pid, cid)),
+        "the CE channel was born at its alloc"
+    );
+    let ce_births: Vec<EngineKind> = recorder
+        .lock()
+        .expect("recorder")
+        .log
+        .iter()
+        .filter_map(|(_, v)| match v {
+            RmVerb::AllocChannel { engine, .. } => Some(*engine),
+            _ => None,
+        })
+        .filter(|e| *e == EngineKind::Ce)
+        .collect();
+    assert_eq!(
+        ce_births.len(),
+        1,
+        "the alloc-born CE channel must land on the CE runlist (and only one channel did)"
+    );
+    handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(CE_VCHID), &[])
+        .expect("CE doorbell rings the alloc-born channel");
+}
+
+// =================================================================================
+// Completion pattern (e) — the mapped-fence arm (`execution_plane.md` §1.2/§2.4;
+// NVENC's fence-not-event shape, `nvenc_101`). Arm selection keys on the CHANNEL's
+// EngineKind; firing is value-observation, never event delivery.
+// =================================================================================
+
+const FENCE_VA: GpuVa = GpuVa(0x2_0060_0000);
+
+/// Build a compute proc whose GR channel is refined to an NVENC context (session
+/// object on the channel, through the graph) with a published fence page.
+fn nvenc_gpu() -> (Guarded<Gpu>, kayfabe_core::ProcId, kayfabe_core::ChanId) {
+    let (mut gpu, _rec) = compute_gpu();
+    gpu.apply(RmEvent::Alloc {
+        client: CLIENT,
+        parent: HObject(0x5c00_0019), // the GR channel handle
+        handle: HObject(0x5c00_0030),
+        class: mc::NVENC,
+        facts: AllocFacts::default(),
+    })
+    .expect("NVENC session allocs on the channel");
+    let (pid, cid) = gpu.spine.by_vchid[&(GpuId::ZERO, GR_VCHID)];
+    assert_eq!(gpu.procs[&pid].channels[&cid].engine, EngineKind::NvEnc);
+    publish_backing(
+        gpu.procs.get_mut(&pid).unwrap(),
+        GpuId::ZERO,
+        PDB,
+        FENCE_VA,
+        0x1000,
+    )
+    .expect("fence page publishes into the channel's own host VAS");
+    (gpu, pid, cid)
+}
+
+/// ★ Pattern (e), end to end: an NVENC-shaped channel arms a mapped-fence
+/// completion; it fires when the observed value reaches/passes the target — and it
+/// is DISTINCT from the event-delivery path: nothing enters the completion queue,
+/// nothing posts, no SWGEN0 (the guest worker reads the mapped value directly,
+/// `nvenc_101`).
+#[test]
+fn nvenc_mapped_fence_arms_and_fires_distinct_from_event_delivery() {
+    let (mut gpu, pid, cid) = nvenc_gpu();
+
+    // Arm at current=7, target=9 (the encoder will advance the fence to 9).
+    assert_eq!(
+        arm_fence(&mut gpu, pid, cid, FENCE_VA, 7, 9, OsEventRef(0xF0)),
+        Ok(None)
+    );
+
+    // Below target: not fired. At target: fired, exactly once.
+    assert_eq!(
+        fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, 8),
+        Ok(None)
+    );
+    assert_eq!(
+        fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, 9),
+        Ok(Some(OsEventRef(0xF0)))
+    );
+    assert_eq!(
+        fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, 10),
+        Ok(None),
+        "fired exactly once"
+    );
+
+    // Distinct from the event path: the queue observed NOTHING, nothing to post.
+    assert!(
+        !gpu.procs[&pid].completion.has_outstanding(),
+        "a fired fence never enters the completion queue (fence-not-event)"
+    );
+    assert!(
+        gpu.pump_completions(GpuId::ZERO).is_none(),
+        "nothing rides the GSP/SWGEN0 path"
+    );
+}
+
+/// The #12 wrap guard on the arm: a fence sequence crossing the u32 boundary fires
+/// correctly, and a BACKWARDS (stale/foreign) value is a loud refusal that never
+/// counts as completion progress.
+#[test]
+fn nvenc_fence_wrap_guard_fires_across_wrap_and_refuses_backwards_jumps() {
+    let (mut gpu, pid, cid) = nvenc_gpu();
+
+    // Arm just below the u32 boundary; the target is past the wrap.
+    assert_eq!(
+        arm_fence(
+            &mut gpu,
+            pid,
+            cid,
+            FENCE_VA,
+            u32::MAX - 1,
+            2,
+            OsEventRef(0xF1)
+        ),
+        Ok(None)
+    );
+    // A stale/backwards value (a huge forward step under wrap arithmetic) is LOUD.
+    let stale = u32::MAX - 1 - (MAX_FENCE_JUMP as u32 + 1);
+    assert_eq!(
+        fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, stale),
+        Err(FwdFault::Completion(CompletionError::FenceJump {
+            last: u32::MAX - 1,
+            value: stale
+        })),
+        "the #12 backwards-jump class is refused, never treated as completion"
+    );
+    // The genuine advance across the wrap still fires.
+    assert_eq!(
+        fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, 1),
+        Ok(None),
+        "before target"
+    );
+    assert_eq!(
+        fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, 2),
+        Ok(Some(OsEventRef(0xF1)))
+    );
+}
+
+/// Arm selection is exact AT the channel: a GR-compute or CE channel (shared-sema
+/// arm) REFUSES a mapped-fence arm — the NVENC-vs-compute distinction the coarse
+/// `EngineClass` could not express. And an unmapped fence address is a loud MISS
+/// even on an NVENC channel (the fence must live in the channel's own Vas).
+#[test]
+fn fence_arm_selection_is_exact_at_the_channel() {
+    // Selection table: only NVENC rides the fence arm (NVDEC = honest gap, sema).
+    assert_eq!(
+        completion_arm(EngineKind::NvEnc),
+        CompletionArm::MappedFence
+    );
+    for k in [
+        EngineKind::GrCompute,
+        EngineKind::GrGraphics,
+        EngineKind::Ce,
+        EngineKind::NvDec,
+    ] {
+        assert_eq!(
+            completion_arm(k),
+            CompletionArm::SharedSema,
+            "{k:?} is not fence-signalled"
+        );
+    }
+
+    // A compute-shaped channel refuses the fence arm loudly.
+    let (mut gpu, _rec) = compute_gpu();
+    let (pid, cid) = gpu.spine.by_vchid[&(GpuId::ZERO, GR_VCHID)];
+    publish_backing(
+        gpu.procs.get_mut(&pid).unwrap(),
+        GpuId::ZERO,
+        PDB,
+        FENCE_VA,
+        0x1000,
+    )
+    .unwrap();
+    assert!(
+        matches!(
+            arm_fence(&mut gpu, pid, cid, FENCE_VA, 0, 1, OsEventRef(0xF2)),
+            Err(FwdFault::WrongArm {
+                engine: EngineKind::GrCompute,
+                ..
+            })
+        ),
+        "arming a fence on a sema-signalled channel is a WrongArm fault"
+    );
+
+    // An NVENC channel with an UNMAPPED fence address is a loud MISS (never armed).
+    let (mut gpu, pid, cid) = nvenc_gpu();
+    assert!(matches!(
+        arm_fence(
+            &mut gpu,
+            pid,
+            cid,
+            GpuVa(0xdead_0000),
+            0,
+            1,
+            OsEventRef(0xF3)
+        ),
+        Err(FwdFault::Address(_))
+    ));
+}
+
+/// ★★★★ **§16.65 — the DOORBELL ROUTING STATEMENT, as a value, over every engine.**
+///
+/// # ⊘ What was wrong, and why a partition is the fix rather than a check
+///
+/// `[measured 2026-08-10, boots s49/s50]` the shim's CPU copy-engine executor claimed
+/// **every** doorbell that had a VA space and a ring — `Ce` and `GrCompute` alike — because
+/// the only gate in front of it asked about the *isolate plane* and never about the
+/// *engine*. `[measured 2026-08-10, boot `s51_d502ac6_engroute`]` it was **86 doorbells
+/// wide**: `GrCompute=86 Ce=362`, summing to the 448 that arrived. ⊘ Nothing was forged —
+/// and that is precisely why nothing caught it. A GR ring decodes to `Opaque` at a
+/// class-gated codec, so the refusal was *true of the bytes* and *silent about the cause*.
+///
+/// ⊘ **The `SubmissionHasNoLaunch { methods: 3, opaque: 2 }` this doc used to name as the
+/// symptom was a different doorbell's** — its own printed pushbuffer reads `SET_OBJECT →
+/// AMPERE_DMA_COPY_B`, a CE push on a CE channel at the CE executor, and it was §16.66's
+/// four-word semaphore release.
+///
+/// ★ So the statement is *"which executor owns this channel's work"*, and it is
+/// **exhaustive over `EngineKind`**: a variant added without a route fails to compile in
+/// `CeChannelFacts::route`, rather than falling into a default arm and being served by
+/// whoever happens to answer first.
+///
+/// ⊘ This test is over the **pure** decision, which is what `shim_logic.rs`'s own header
+/// calls the honest half of a seam: `try_ce_submission` needs a realized `SharedDevice`
+/// and a memory plane, and `[audited 2026-08-10]` had **no test coverage at all** before
+/// this rung. Pinning the decision is not pinning the gate; it is pinning the thing the
+/// gate reads.
+#[test]
+fn every_engine_kind_names_the_executor_that_owns_its_doorbells() {
+    use kayfabe_rt::DoorbellRoute;
+
+    // ★ The whole enum, from the enum's own list — so a new variant lands here rather than
+    // being silently absent from the table below.
+    for kind in EngineKind::ALL {
+        let want = match kind {
+            // The copy IS the workload and its operands are in memory this process holds.
+            EngineKind::Ce => DoorbellRoute::CpuCe,
+            // ⊘ Not served yet, and DISTINCT from `Unserved`: GR is the destination the
+            // ladder is walking toward, and a census must be able to say how much traffic
+            // is waiting on work that is planned.
+            EngineKind::GrCompute | EngineKind::GrGraphics => DoorbellRoute::HostGr,
+            EngineKind::NvEnc | EngineKind::NvDec | EngineKind::Other => DoorbellRoute::Unserved,
+        };
+        assert_eq!(
+            kayfabe_rt::device::route_of_engine(kind),
+            want,
+            "★ {} routes to the wrong executor — a doorbell sent to an executor that \
+             cannot serve it is refused by a name that describes the BYTES and says \
+             nothing about the routing",
+            kind.name(),
+        );
+    }
+
+    // ⊘ Non-vacuity: the mapping is not constant. A `route_of_engine` that returned one
+    // value for everything would satisfy every equality above if the table were wrong in
+    // the same direction, so assert the partition really has three cells.
+    assert_ne!(
+        kayfabe_rt::device::route_of_engine(EngineKind::Ce),
+        kayfabe_rt::device::route_of_engine(EngineKind::GrCompute),
+        "⊘ CE and GR must not share an executor — that identity IS the §16.65 defect",
+    );
+    assert_ne!(
+        kayfabe_rt::device::route_of_engine(EngineKind::GrCompute),
+        kayfabe_rt::device::route_of_engine(EngineKind::NvEnc),
+        "⊘ 'planned but not built' and 'nobody designed a path' are different states",
+    );
+}
+
+/// ★★★ **§16.65 — the census's buckets are a BIJECTION with the engines they count.**
+///
+/// `KayfabeRegAudit::doorbells_by_engine` is positional, so [`EngineKind::index`] is the
+/// only thing that says what bucket `i` holds. ⊘ Two variants sharing an index would merge
+/// two populations into one number that still looked like a partition — the failure this
+/// campaign names *"a wall that can carry no name"*, in a histogram.
+#[test]
+fn the_engine_census_buckets_are_distinct_and_cover_the_enum() {
+    let mut seen = vec![false; EngineKind::ALL.len()];
+    for kind in EngineKind::ALL {
+        let i = kind.index();
+        assert!(
+            i < seen.len(),
+            "★ {} indexes bucket {i}, past the end of a census of {} — the count and the \
+             enum have drifted",
+            kind.name(),
+            seen.len(),
+        );
+        assert!(
+            !seen[i],
+            "★ bucket {i} is claimed twice; two engines' doorbells would merge into one \
+             number that still reads as a partition",
+        );
+        seen[i] = true;
+        assert_eq!(
+            EngineKind::ALL[i],
+            kind,
+            "★ `index` and `ALL` disagree, so every label in a boot log is off by one",
+        );
+    }
+    assert!(
+        seen.into_iter().all(|b| b),
+        "⊘ a bucket nothing counts into"
+    );
+
+    // ⊘ And the names are distinct, or the census prints two columns a reader cannot tell
+    // apart — the same argument `rmrpc_bridge.rs`'s refusal-tag sweep makes one plane over.
+    let names: std::collections::BTreeSet<&str> =
+        EngineKind::ALL.iter().map(|k| k.name()).collect();
+    assert_eq!(
+        names.len(),
+        EngineKind::ALL.len(),
+        "★ two engines share a label"
+    );
+}
+
+/// ★★★ **w393 — THE OTHER KIND, unchanged: an `Emulated` channel IS still born by its first
+/// doorbell, over a ring of OURS.** The guest kernel's own channel (a KERNEL client root ⇒
+/// the system proc ⇒ `GuestChannelKind::Emulated`) has no host channel until it rings; the
+/// ring births one with `adopt: None` (our ring is correct here — we drive it, it runs our
+/// function bodies) and `hosting: None`, on the SYSTEM isolate.
+///
+/// ⊘ The negative control for [`a_doorbell_never_births_a_passthrough_channel`]: the
+/// refusal there is BY KIND, not a blanket. A tree that refused every lazy birth would pass
+/// that test and fail this one.
+///
+/// ⊘ Through `SharedDevice::doorbell`, not `handle_doorbell`: the system proc lives in its
+/// own field, and only the shell's route reaches it.
+#[test]
+fn an_emulated_channels_first_doorbell_still_births_it_over_our_ring() {
+    const K_CLIENT: HClient = HClient(0xC1D0_000A);
+    const K_DEVICE: HObject = HObject(0xC1D0_0101);
+    const K_VASPACE: HObject = HObject(0xC1D0_0110);
+    const K_CHANNEL: HObject = HObject(0xC1D0_0119);
+    const K_VCHID: VChid = VChid(0x40);
+    const K_PDB: Pdb = Pdb(0x2_efa9_c000);
+
+    let (mut gpu, recorder) = compute_gpu();
+    // The guest kernel's own subgraph — the CeUtils/scrubber shape every boot creates.
+    for ev in [
+        RmEvent::Alloc {
+            client: K_CLIENT,
+            parent: HObject(K_CLIENT.0),
+            handle: HObject(K_CLIENT.0),
+            class: mc::CLIENT,
+            facts: kayfabe_tests::kernel_client(),
+        },
+        RmEvent::Alloc {
+            client: K_CLIENT,
+            parent: HObject(K_CLIENT.0),
+            handle: K_DEVICE,
+            class: mc::DEVICE,
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
+        },
+        RmEvent::Alloc {
+            client: K_CLIENT,
+            parent: K_DEVICE,
+            handle: K_VASPACE,
+            class: mc::VASPACE,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::SetPageDir {
+            client: K_CLIENT,
+            vaspace: K_VASPACE,
+            pdb: K_PDB,
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+        },
+        RmEvent::Alloc {
+            client: K_CLIENT,
+            parent: K_DEVICE,
+            handle: K_CHANNEL,
+            class: mc::CHANNEL_CE,
+            facts: AllocFacts {
+                h_vaspace: Some(K_VASPACE),
+                userd_flags: MockArch::userd_flags_for(K_VCHID),
+                ..Default::default()
+            },
+        },
+    ] {
+        gpu.apply(ev).expect("the guest kernel's subgraph applies");
+    }
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    let (pid, cid) = gpu.spine.by_vchid[&(GpuId::ZERO, K_VCHID)];
+    assert_eq!(
+        pid,
+        Gpu::SYSTEM_PROC,
+        "the kernel's channel routes to the system proc"
+    );
+    assert_eq!(
+        gpu.system.channels[&cid].kind,
+        kayfabe_core::channel_kind::GuestChannelKind::Emulated,
+        "…and is declared Emulated"
+    );
+    assert!(
+        gpu.system.channels[&cid].host_channel.is_none(),
+        "non-vacuity: nothing has born it yet — the doorbell below is the birth"
+    );
+    let dev = gpu.map(|g| SharedDevice::new(g, LockMode::Sharded));
+
+    let out = dev
+        .doorbell(None, GpuId::ZERO, MockArch::token_for(K_VCHID), &[], None)
+        .expect("★ an Emulated channel's first doorbell births it and rings it");
+    assert_eq!(out.proc, Gpu::SYSTEM_PROC);
+    assert_eq!(
+        out.kind,
+        kayfabe_core::channel_kind::GuestChannelKind::Emulated
+    );
+
+    let births: Vec<(bool, bool)> = recorder
+        .lock()
+        .expect("recorder")
+        .log
+        .iter()
+        .filter(|(iso, _)| *iso == IsolateId::new(Gpu::SYSTEM_PROC.0, GpuId::ZERO))
+        .filter_map(|(_, v)| match v {
+            RmVerb::AllocChannel { hosting, adopt, .. } => {
+                Some((hosting.is_some(), adopt.is_some()))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        births,
+        vec![(false, false)],
+        "★ exactly one host channel, born on the SYSTEM isolate by the doorbell, hosting \
+         no object and adopting NO guest ring — `RingSource::Ours`, which is the design \
+         for this kind and illegal for the other"
+    );
+    assert!(
+        dev.with_proc(Gpu::SYSTEM_PROC, |p| p.channels[&cid]
+            .host_channel
+            .is_some())
+            .expect("the system proc is always live"),
+        "…and the core adopted it"
+    );
+}

@@ -1,0 +1,10 @@
+# kbuild artifacts — the module is built on a box, never committed.
+*.o
+*.ko
+*.mod
+*.mod.c
+*.mod.o
+*.symvers
+*.order
+.*.cmd
+.tmp_versions/

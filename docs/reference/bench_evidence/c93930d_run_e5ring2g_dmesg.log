@@ -1,0 +1,26 @@
+Warning: Permanently added '192.168.77.2' (ED25519) to the list of known hosts.
+[   24.872048] nvidia-nvlink: Nvlink Core is being initialized, major device number 239
+
+[   24.887365] nvidia 0000:00:03.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=none:owns=io+mem
+[   24.892964] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   26.817102] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   26.817359] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   27.745034] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   27.802529] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   27.803237] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   27.803331] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   28.416660] NVRM: _memmgrMemUtilsScrubInitScheduleChannel: Unable to schedule channel, status: 56
+[   28.416665] NVRM: nvAssertOkFailedNoLog: Assertion failed: Failure: Generic Error [NV_ERR_GENERIC] (0x0000FFFF) returned from _memmgrMemUtilsScrubInitScheduleChannel(pGpu, pChannel) @ mem_utils.c:2006
+[   28.416717] NVRM: nvCheckOkFailedNoLog: Check failed: Failure: Generic Error [NV_ERR_GENERIC] (0x0000FFFF) returned from memmgrMemUtilsChannelSchedulingSetup(pGpu, pMemoryManager, pChannel) @ mem_utils_gm107.c:1027
+[   28.437582] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ ce_utils.c:304
+[   28.437639] NVRM: nvAssertOkFailedNoLog: Assertion failed: Failure: Generic Error [NV_ERR_GENERIC] (0x0000FFFF) returned from objCreate(&pScrubber->pCeUtils, pHeap, CeUtils, pGpu, pKernelMIGGPUInstance, &ceUtilsAllocParams) @ mem_scrub.c:181
+[   28.437693] NVRM: nvAssertOkFailedNoLog: Assertion failed: Failure: Generic Error [NV_ERR_GENERIC] (0x0000FFFF) returned from scrubberConstruct(pGpu, pHeap) @ mem_mgr_scrub_gp100.c:63
+[   28.437745] NVRM: nvAssertOkFailedNoLog: Assertion failed: Failure: Generic Error [NV_ERR_GENERIC] (0x0000FFFF) returned from memmgrScrubHandlePostSchedulingEnable_HAL(pGpu, pMemoryManager) @ mem_mgr.c:487
+[   28.437796] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   28.437951] NVRM: RmInitNvDevice: *** Cannot load state into the device
+[   28.437955] NVRM: RmInitAdapter: RmInitNvDevice failed, bailing out of RmInitAdapter
+[   28.438579] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[   29.217723] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+[   29.229232] NVRM: iovaspaceDestruct_IMPL: 1 left-over mappings in IOVAS 0x3
+[   29.229248] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0xffff:1249)
+[   29.231563] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0

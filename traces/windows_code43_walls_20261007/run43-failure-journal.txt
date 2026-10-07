@@ -1,0 +1,21 @@
+Oct 07 19:30:51 claude systemd[1]: Started kf-boundary-kayfabe-43.service - [systemd-run] /usr/bin/python3 -u /var/lib/kf-code43-stubs-20261007/kftree/scripts/bench/windows/pc_sdr_experiment.py --arm kayfabe --run 43 --no-mmio-trace --product-revision 5f201b8ae5fe680d2c4358c11ea47a34a672e756.
+Oct 07 19:30:51 claude python3[1139478]: Formatting '/var/lib/kf-windows-20261005/boundary-kayfabe-43/windows.qcow2', fmt=qcow2 cluster_size=65536 extended_l2=off compression_type=zlib size=161061273600 backing_file=/var/lib/kf-windows-20261005/baseline/windows.qcow2 backing_fmt=qcow2 lazy_refcounts=off refcount_bits=16
+Oct 07 19:31:32 claude python3[1139474]: BOUNDARY_START boundary-kayfabe-43
+Oct 07 19:34:20 claude systemd[1]: Stopping kf-boundary-kayfabe-43.service - [systemd-run] /usr/bin/python3 -u /var/lib/kf-code43-stubs-20261007/kftree/scripts/bench/windows/pc_sdr_experiment.py --arm kayfabe --run 43 --no-mmio-trace --product-revision 5f201b8ae5fe680d2c4358c11ea47a34a672e756...
+Oct 07 19:34:22 claude python3[1139474]: BOUNDARY_EXIT boundary-kayfabe-43 0
+Oct 07 19:34:22 claude python3[1139474]: Traceback (most recent call last):
+Oct 07 19:34:22 claude python3[1139474]:   File "/var/lib/kf-code43-stubs-20261007/kftree/scripts/bench/windows/pc_sdr_experiment.py", line 32, in <module>
+Oct 07 19:34:22 claude python3[1139474]:     main()
+Oct 07 19:34:22 claude python3[1139474]:     ~~~~^^
+Oct 07 19:34:22 claude python3[1139474]:   File "/var/lib/kf-code43-stubs-20261007/kftree/scripts/bench/windows/pc_sdr_experiment.py", line 28, in main
+Oct 07 19:34:22 claude python3[1139474]:     module.main()
+Oct 07 19:34:22 claude python3[1139474]:     ~~~~~~~~~~~^^
+Oct 07 19:34:22 claude python3[1139474]:   File "/var/lib/kf-windows-20261005/boundary-tools/pc_boundary_experiment.py", line 178, in main
+Oct 07 19:34:22 claude python3[1139474]:     time.sleep(1)
+Oct 07 19:34:22 claude python3[1139474]:     ~~~~~~~~~~^^^
+Oct 07 19:34:22 claude python3[1139474]:   File "/var/lib/kf-windows-20261005/boundary-tools/pc_boundary_experiment.py", line 158, in interrupted
+Oct 07 19:34:22 claude python3[1139474]:     raise KeyboardInterrupt()
+Oct 07 19:34:22 claude python3[1139474]: KeyboardInterrupt
+Oct 07 19:34:22 claude systemd[1]: kf-boundary-kayfabe-43.service: Deactivated successfully.
+Oct 07 19:34:22 claude systemd[1]: Stopped kf-boundary-kayfabe-43.service - [systemd-run] /usr/bin/python3 -u /var/lib/kf-code43-stubs-20261007/kftree/scripts/bench/windows/pc_sdr_experiment.py --arm kayfabe --run 43 --no-mmio-trace --product-revision 5f201b8ae5fe680d2c4358c11ea47a34a672e756.
+Oct 07 19:34:22 claude systemd[1]: kf-boundary-kayfabe-43.service: Consumed 2min 34.019s CPU time over 3min 30.492s wall clock time, 17.1G memory peak.

@@ -1,0 +1,61 @@
+[   318.922] 
+X.Org X Server 1.21.1.11
+X Protocol Version 11, Revision 0
+[   318.922] Current Operating System: Linux ubuntu 6.8.0-142-generic #142-Ubuntu SMP PREEMPT_DYNAMIC Wed Sep  2 14:24:27 UTC 2026 x86_64
+[   318.922] Kernel command line: BOOT_IMAGE=/vmlinuz-6.8.0-142-generic root=LABEL=cloudimg-rootfs ro console=tty1 console=ttyS0
+[   318.922] xorg-server 2:21.1.12-1ubuntu1.8 (For technical support please see http://www.ubuntu.com/support) 
+[   318.922] Current version of pixman: 0.42.2
+[   318.922] 	Before reporting problems, check http://wiki.x.org
+	to make sure that you have the latest version.
+[   318.922] Markers: (--) probed, (**) from config file, (==) default setting,
+	(++) from command line, (!!) notice, (II) informational,
+	(WW) warning, (EE) error, (NI) not implemented, (??) unknown.
+[   318.922] (==) Log file: "/var/log/Xorg.0.log", Time: Sat Oct  3 16:32:40 2026
+[   318.923] (==) Using system config directory "/usr/share/X11/xorg.conf.d"
+[   318.923] (==) No Layout section.  Using the first Screen section.
+[   318.923] (==) No screen section available. Using defaults.
+[   318.923] (**) |-->Screen "Default Screen Section" (0)
+[   318.923] (**) |   |-->Monitor "<default monitor>"
+[   318.923] (==) No monitor specified for screen "Default Screen Section".
+	Using a default monitor configuration.
+[   318.923] (**) Allowing byte-swapped clients
+[   318.923] (==) Automatically adding devices
+[   318.923] (==) Automatically enabling devices
+[   318.923] (==) Automatically adding GPU devices
+[   318.923] (==) Automatically binding GPU devices
+[   318.923] (==) Max clients allowed: 256, resource mask: 0x1fffff
+[   318.923] (WW) The directory "/usr/share/fonts/X11/cyrillic" does not exist.
+[   318.923] 	Entry deleted from font path.
+[   318.923] (WW) The directory "/usr/share/fonts/X11/100dpi/" does not exist.
+[   318.923] 	Entry deleted from font path.
+[   318.923] (WW) The directory "/usr/share/fonts/X11/75dpi/" does not exist.
+[   318.923] 	Entry deleted from font path.
+[   318.924] (WW) The directory "/usr/share/fonts/X11/Type1" does not exist.
+[   318.924] 	Entry deleted from font path.
+[   318.924] (WW) The directory "/usr/share/fonts/X11/100dpi" does not exist.
+[   318.924] 	Entry deleted from font path.
+[   318.924] (WW) The directory "/usr/share/fonts/X11/75dpi" does not exist.
+[   318.924] 	Entry deleted from font path.
+[   318.924] (==) FontPath set to:
+	/usr/share/fonts/X11/misc,
+	built-ins
+[   318.924] (==) ModulePath set to "/usr/lib/xorg/modules"
+[   318.924] (II) The server relies on udev to provide the list of input devices.
+	If no devices become available, reconfigure udev or disable AutoAddDevices.
+[   318.924] (II) Loader magic: 0x5778048eb020
+[   318.924] (II) Module ABI versions:
+[   318.924] 	X.Org ANSI C Emulation: 0.4
+[   318.924] 	X.Org Video Driver: 25.2
+[   318.924] 	X.Org XInput driver : 24.4
+[   318.924] 	X.Org Server Extension : 10.0
+[   318.925] (++) using VT number 7
+
+[   318.926] (II) systemd-logind: logind integration requires -keeptty and -keeptty was not provided, disabling logind integration
+[   318.928] (II) xfree86: Adding drm device (/dev/dri/card0)
+[   318.928] (II) Platform probe for /sys/devices/pci0000:00/0000:00:02.0/drm/card0
+[   318.947] (--) PCI:*(0@0:2:0) 10de:2504:3842:3656 rev 161, Mem @ 0xfd000000/16777216, 0xe0000000000/134217728, 0xe0008000000/33554432, 0xfe040000/16384, BIOS @ 0x????????/131072
+[   318.947] (II) LoadModule: "glx"
+[   318.947] (II) Loading /usr/lib/xorg/modules/extensions/libglx.so
+[   318.950] (II) Module glx: vendor="X.Org Foundation"
+[   318.950] 	compiled for 1.21.1.11, module version = 1.0.0
+[   318.950] 	ABI class: X.Org Server Extension, version 10.0

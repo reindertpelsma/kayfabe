@@ -1,0 +1,802 @@
+=== FOUND 96fa407a364a9445d4cf1f5421f50a15100092d4 in /workspace/kayfabe_w295
+From c42e66783750ea1d4ea409e39e607cf1f0b1fc07 Mon Sep 17 00:00:00 2001
+From: reindertpelsma <reindert.pelsma@gmail.com>
+Date: Fri, 14 Aug 2026 09:24:40 +0200
+Subject: [PATCH 1/3] =?UTF-8?q?land=20the=20road-to-v1=20doc=20on=20master?=
+ =?UTF-8?q?=20=E2=80=94=20it=20was=20CITED=20and=20UNREACHABLE?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The regression-suite lane cited docs/design/road_to_v1_after_cup2.md for the
+owner's rule "every audit ships with a known-positive, or it does not ship",
+and then measured that the file exists only on the unmerged branch
+w293-road-to-v1-doc. A reader on master could not open it.
+
+⇒ Same class this tree has paid for repeatedly: a correct citation pointing at
+something the reader cannot reach is not a citation. The rule is real and
+owner-set; the pointer was the defect.
+
+Content unchanged from a6b6dd3.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01YW25X2fg3Pr2vEgZkWh46K
+---
+ docs/design/road_to_v1_after_cup2.md | 175 +++++++++++++++++++++++++++
+ 1 file changed, 175 insertions(+)
+ create mode 100644 docs/design/road_to_v1_after_cup2.md
+
+diff --git a/docs/design/road_to_v1_after_cup2.md b/docs/design/road_to_v1_after_cup2.md
+new file mode 100644
+index 00000000..594554bf
+--- /dev/null
++++ b/docs/design/road_to_v1_after_cup2.md
+@@ -0,0 +1,175 @@
++# The road to v1, after cup2 — gates, threat model, audit order
++
++> **STATUS: LIVE — 2026-08-14.** Owner's plan, agreed in conversation, with three pushbacks the
++> owner accepted folded in. ⊘ This is a **gate order and a specification**, not a schedule. Supersede
++> it in place; do not write a successor beside it.
++>
++> **Precondition, not yet met:** `CUP2_RC` is **1** (was 124). The address plane is closed —
++> `Xid = 0`, `host_rows = 18 295/18 309` — and the remaining wall is our own control-plane refusal
++> vocabulary. **Everything below assumes cup2 passes first.**
++
++---
++
++## 0. The rule that governs everything downstream
++
++> **A completion is sent only if the observed state after it is intended and safe in the guest.**
++> — owner, 2026-08-14
++
++⇒ A no-op fake GSP init **completes immediately, because the observed end-state genuinely is
++"nothing to do."** A copy completes **because bytes moved.** Same for every kernel channel.
++
++★★★ **State this as CONSTRUCTION, not policy.** *"Do not forge"* is a rule that decays; *"a
++completion carries the evidence of its own end-state"* is a type. **The wins that held on this
++campaign were all of the second kind** — the ring gate is `E0639` at compile time, the channel role
++is a **type** so a wrong role does not compile, `MERGE-AGREES` is a checked invariant rather than a
++printed number. ⇒ **Every policy-shaped completion rule will eventually be violated by a well-meaning
++patch; a construction-shaped one cannot be.**
++
++⚠ **Known-positive required:** a deliberately-unsatisfied completion must be **observed to be
++refused**. A rule never seen to fire is not a rule.
++
++---
++
++## 1. Gate order — and two of these are reordered from the owner's first draft
++
++| # | gate | why here |
++|---|---|---|
++| **1** | **cup2 passes** | precondition for everything |
++| **2** | **interrupt / os-event + error reporting, hard test** | ⚠ **its own rung, not a checkbox** — see §2 |
++| **3** | **compatibility audit** | ⊘ **moved BEFORE security** — see §4 |
++| **4** | **security · race safety · unsafe Rust** | audit code that is not about to move |
++| **5** | **cup2 on a second architecture** | ⊘ **format oracle first** — see §5 |
++| **6** | **LLM at 60 tok/s in guest, host compute intact** | the product metric |
++
++---
++
++## 2. Gate 2 — the delivery plane is half-built and half-blocked
++
++**Do not schedule this as a checkbox.** Measured state:
++
++- ⊘ **Criterion 1 (the guest observes the SAME fault by identity) has slipped five rungs.** Its
++  blocker is named: `CRIT1 STATE = CONTROL-NEVER-LANDED`, and it is **not relaxation-dependent** —
++  identical on every arm.
++- ⚠ **The wall is SCOPE, not mechanism.** Arm 4's control operands live in a **third, freshly
++  allocated VAS** that nothing we serve doorbells, and **every** operand mechanism we own — the pin,
++  the join, FB publication, the guest-RAM merge — is scoped to the **doorbelling channel's VAS**.
++- ★ **`FaultEmission` is built and orphaned** (`kayfabe-rmrpc/src/fault.rs`) — and per the
++  2026-08-13 finding it is **the wrong shape anyway**: the host RM writes the guest's own notifier
++  pages when we register them, so **we are not the writer.**
++- ⊘ **`0x83de030c` is a DIFFERENT TIER from `0x83de0309`** (global SM registers for the currently
++  resident GR context; `hTargetChannel` never validated). Serving `0309` **neither implies nor
++  requires** it. Measured, not assumed.
++
++★★ **Answer this by evidence before building anything:** *does cup2 — or any real client — ever put
++a CE operand in a VAS that never doorbells?* ⇒ **If not, criterion 1 needs a different PROBE, not a
++bigger mechanism**, and widening publication to every declared VAS would scale cost and blast radius
++with **guest behaviour** rather than with work.
++
++---
++
++## 3. The threat model — owner's, 2026-08-14
++
++### Violations (all of these are bugs)
++
++1. guest userspace **or the isolate** obtaining access to arbitrary GPGA or guest RAM
++2. isolate → **VMM** breakout
++3. isolate → **guest kernel** breakout
++4. guest process → **RCE in the isolate**
++5. guest process → **unrelated guest process** it has no access to
++6. guest process → **guest kernel** escalation
++7. guest kernel → **RCE in the isolate**
++8. guest kernel → **VMM** breakout
++
++### Safe by construction (not findings)
++
++- VMM → guest kernel / guest userspace
++- host GPU → VMM ⚠ **only via the privileged side; an unprivileged malicious channel reaching the
++  VMM is a violation**
++- guest kernel → all guest userspace processes
++
++### ★★★ The asymmetry that is easy to miss
++
++**`ogkm` trusts the GPU.** It applies no guardrails to GSP RPC replies and grants the device full DMA
++to its memory. ⇒ **We inherit that trust because we are the GSP.**
++
++⇒ **Therefore the red flag is: can guest USERSPACE steer the data we hand the guest KERNEL such that
++it violates the spec `ogkm` expects?** That is a **confused-deputy** question — *"can an unprivileged
++guest process use us as a weapon against its own kernel"* — and **nothing in the current audit set
++asks it.**
++
++⊘ **The converse is NOT a finding:** the guest kernel letting the VMM violate spec is fine, provided
++it carries no breakout risk.
++
++---
++
++## 4. Audit order — compatibility first, and every audit carries a plant
++
++### ⊘ Why compatibility precedes security
++
++**Compatibility findings change the code. Security findings are only valid against code that is not
++about to move.** ⇒ Auditing first and then landing a driver-version or architecture fix means
++**auditing twice**, and this tree has already paid for *"a ruling's DATE is part of the citation."*
++
++Axes: driver versions · GPU architectures · guest kernel versions · **QEMU and Cloud Hypervisor as
++first-class, not bolt-on**.
++
++### ★★★ Every audit ships with a known-positive, or it does not ship
++
++⚠ **This is the failure mode these audits will actually hit.** *"Scan for exploits"* with nothing
++planted **returns clean — and clean is exactly what a broken scan returns.**
++
++> **Plant one reachable violation per class before running the audit. A scan that misses its own
++> plant is a broken instrument, not a clean bill of health.**
++
++★ Measured justification, one day: an instrument returned the same error for **every** address
++including a known-mapped one (only the known-positive made it a refutation rather than *"nothing is
++mapped"*); a headline count was wrong because it read **one of two records**; a cursor advanced on an
++arm that moved **zero bytes**. ⇒ **Six times in one day, an instrument's null and the system's
++success were the same reading.**
++
++Applies equally to **race safety** (plant a reachable ordering violation) and **unsafe Rust** (plant
++a soundness hole the audit must name).
++
++---
++
++## 5. Gate 5 — the second architecture will not fail at cup2
++
++⊘ **It will fail earlier, at a page-table format we never validated.** Measured:
++
++- the **arch floor is in a different GMMU format family** from the only built row;
++- **`Ad10xArch::mmu()` still delegates to `MockArch`'s INVENTED format** while the Ampere row is
++  oracle-checked.
++
++⇒ ★★ **Compile the second architecture's GMMU format against `ogkm` as an oracle FIRST, then run
++cup2.** Otherwise the boot reports *"it broke"* without reporting **where**, and a mock's invented
++encoding makes the seam look finished.
++
++---
++
++## 6. Open owner questions
++
++- **`PreemptionNotImplemented` (`0x20801210`)** — keep refusing, or serve? Native GA106 serves it;
++  our payload now matches native **except the channel handle**. ⚠ **Do not assume refusing is the
++  safe side** — the SM-debugger refusal was measured **backwards**: RM's default is `_ALL`, the guest
++  asked for `0x3a` which **excludes `_FATAL`**, so **refusing left the guest strictly more
++  permissive.**
++- **`0x00801909` `PERF_CUDA_LIMIT_SET_CONTROL`** — native serves `NV_OK`; we refuse.
++- **The six `not_granular` rows** (1 021 440 bytes) — RM's 64 KiB fixed-placement gate. Widening
++  `FbLeafExtent` to a multi-row extent **collides with the per-row reclaim walk**; one handle in N
++  rows is a double free.
++- **Publication amortisation** — ~4.4 s once at the first doorbell, then zero over 187 doorbells.
++  Working, not optimised.
++- **Choice 1** — the constructor hard-coding `kind: RealGpuMemory` would flip `is_guest_ram()` for
++  ~16 000 rows and **silently re-route the CE partitioner**. Owner's *"put the kind ON the value"*
++  class. Its own item, its own control arm.
++
++---
++
++## 7. What this document is not
++
++⊘ **Not a schedule.** ⊘ **Not a claim that the gates are independent** — gate 2 may be unblocked by
++gate 1, and gate 5 may surface work that reopens gate 3. ⊘ **Not a substitute for the measured
++state**: every number here carries a rung and a boot, and a number without one is not evidence.
++
++Related: `docs/design/guest_ram_publication_merge.md` · `docs/design/channel_alloc_forwardability.md` ·
++`/workspace/nvidia-gpu-passthrough/docs/reference/ogkm_authored_guest_userspace_structures.md`
+-- 
+2.34.1
+
+
+From a80e94ce8bb08bc906b34ec7d2e4d44b4ebecb31 Mon Sep 17 00:00:00 2001
+From: Reindert Pelsma <229738317+reindertpelsma@users.noreply.github.com>
+Date: Fri, 14 Aug 2026 09:12:44 +0200
+Subject: [PATCH 2/3] =?UTF-8?q?w295:=20THE=20CLASS=20GATE=20=E2=80=94=20a?=
+ =?UTF-8?q?=20control=20on=20a=20class=20we=20refuse=20to=20create=20is=20?=
+ =?UTF-8?q?refused?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+⊘⊘⊘ THE BRIEF'S PREMISE IS BACKWARDS ON ITS FIRST TERM. Briefed as 'we allow
+the alloc, allow a control, and refuse the free'. Measured, we REFUSE the
+alloc; the GUEST's kernel allows it, builds the object locally and returns
+NV_OK to userspace regardless. The triple is REFUSE / SERVE / REFUSE, and the
+odd row is the CONTROL, not the free.
+
+  run_w294cup2_qemu.log   AllocClassNotPermitted::Refused x3 id=0x0000402c,0x000083de
+  run_w294cup2_qemu.log   control 0x83de0309 result 0x00000000 x1
+  w294nvd_ce_r1.jsonl.zst i=366 ALLOC 0x83de -> NV_OK   i=422 FREE 0x5c000072 -> 0x56
+  run_s51_..._probe.log   both halves in ONE boot: userspace NV_OK, kernel GspRmAlloc
+                          failed hClass=0x000083de status=0x00000056
+
+So 'serving' 0x83de0309 answered NV_OK for state nothing on our side holds --
+an echo, not a service. w292's ARGUMENT survives untouched: the control writes
+no hardware and RM's default is _ALL. What it could not ask -- because nothing
+in capability.rs could -- is whether we hold the object.
+
+MECHANISM
+  control_owner_class(cmd) = cmd >> 16, RM's own encoding, which this module
+  already depended on in its BinApi rule; naming it lets a CLASS question be
+  asked of a CONTROL.
+  CapabilityTable::control refuses any command whose owner class is denied,
+  carrying the CLASS's name and reason -- placed ABOVE both blanket rules,
+  which is the half that outlives this one id: RM_GSS_LEGACY_MASK is bit 15,
+  half the command space of EVERY class, and passes commands with no table row
+  at all. No allowlist edit could ever have revealed a leak there.
+
+GATES
+  no_control_is_admitted_on_a_denied_class -- every boundary x every denied
+  class x the RESOLVED answer, plus two synthetic probes per class so the
+  blanket rules are covered too.
+  the_class_gate_names_a_deliberate_disagreement -- the KNOWN-POSITIVE: builds
+  a deliberate class/control disagreement, asserts the predicate names exactly
+  it, asserts the resolved answer flips, and asserts the SAME control row with
+  the class row removed is Listed, so the refusal cannot be the fixture being
+  unreachable for another reason.
+
+Three existing ratchets fired on 0x83de0309 and each gets a written position
+rather than a deletion. Counts: 163->162 controls, uniform -8 across the eight
+boundaries (a class denial refuses a whole cmd>>16 family, so a non-uniform
+delta would mean the gate resolved differently per boundary), Nvproxy 149->148,
+denied controls and denied classes both UNCHANGED -- nothing was added to the
+deny side, a contradiction was removed from the admit side.
+
+⚠ THE CASE IS AN OWNER CALL and is NOT decided here: whether GT200_DEBUGGER
+should be denied at all. docs/design/class_control_consistency.md names the
+boundary admitting it would widen, and the evidence that every CUDA context
+allocates it on real hardware. The lever is now ONE LINE.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01YW25X2fg3Pr2vEgZkWh46K
+---
+ crates/kayfabe-abi/src/capability.rs     | 308 +++++++++++++++++++++--
+ crates/kayfabe-abi/src/submit.rs         |  24 +-
+ crates/kayfabe-rmrpc/src/policy.rs       |   9 +-
+ docs/design/class_control_consistency.md | 252 +++++++++++++++++++
+ tests/tests/admitted_is_served.rs        |  67 ++++-
+ tests/tests/gpfifo_schedule.rs           |  19 +-
+ 6 files changed, 642 insertions(+), 37 deletions(-)
+ create mode 100644 docs/design/class_control_consistency.md
+
+diff --git a/crates/kayfabe-abi/src/capability.rs b/crates/kayfabe-abi/src/capability.rs
+index 9a37b322..fd9ee63e 100644
+--- a/crates/kayfabe-abi/src/capability.rs
++++ b/crates/kayfabe-abi/src/capability.rs
+@@ -166,6 +166,32 @@ pub const RM_GSS_LEGACY_MASK: u32 = 0x0000_8000;
+ /// (`gvisor/pkg/abi/nvgpu/classes.go:69`).
+ pub const NV2081_BINAPI_CLASS: u32 = 0x2081;
+ 
++/// ★★★★★ **The class a control ACTS ON, read out of the command word itself.**
++///
++/// RM encodes it in the top half: `NVxxxx_CTRL_CMD_*` is
++/// `(FINN_<CLASS>_<IFACE>_INTERFACE_ID << 8) | index`, and the interface id is
++/// `(class << 8) | iface` — so `cmd >> 16` **is** the external class id. Read off NVIDIA's
++/// own generated table rather than inferred: `NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK`
++/// is `0x83de0309` and `GT200_DEBUGGER` is `0x83de`
++/// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl83de/ctrl83dedebug.h:225`,
++/// `src/common/sdk/nvidia/inc/class/cl83de.h:33`); `NVA06C_CTRL_CMD_SET_TIMESLICE` is
++/// `0xa06c0103` on `KEPLER_CHANNEL_GROUP_A` `0xa06c`.
++///
++/// ⊘ **This is not a new convention — this module already depended on it**, in
++/// [`CapabilityTable::control`]'s binary-API rule, which has always tested
++/// `(cmd >> 16) & 0xffff == NV2081_BINAPI_CLASS`. Naming it is what lets a *class*
++/// question be asked of a *control*, which is the quantification the deny tables were
++/// missing (see [`DENIED_CLASSES`]).
++///
++/// ⚠ **It is a derivation, not a lookup, and it is exact only for class-scoped ids.** The
++/// `NV0000_*` root controls decode to class `0x0000`, which is `NV01_ROOT` and is a real
++/// class — correctly so, since those controls genuinely act on the client root. No id this
++/// port carries decodes to a class it does not act on.
++#[must_use]
++pub const fn control_owner_class(cmd: u32) -> u32 {
++    (cmd >> 16) & 0xffff
++}
++
+ /// Where a permitted row came from. Not decoration: it is what distinguishes a row with
+ /// an upstream oracle from one this project added on its own evidence, and the two are
+ /// audited differently.
+@@ -603,10 +629,46 @@ impl CapabilityTable {
+                 why: d.why,
+             });
+         }
++        // ★★★★★ **THE CLASS GATE OVER CONTROLS — w295. A control on an object we refused
++        // to create is refused with the CLASS's reason.**
++        //
++        // `[measured 2026-08-14, traces/w294_cudalimit + traces/nvdiff_w292]` this port
++        // held `GT200_DEBUGGER` (`0x83de`) in [`DENIED_CLASSES`], **refused the guest's
++        // `RM_ALLOC` of it** (`run_w294cup2_qemu.log`:
++        // `AllocClassNotPermitted::Refused … id=0x000083de`), and then answered
++        // `0x83de0309` — a control ON that class — with `NV_OK`
++        // (`control 0x83de0309 result 0x00000000 x1`). ⇒ **We answered on behalf of an
++        // object we do not have.** That is an echo, not a service: the exception mask the
++        // guest believes it set on the GSP side was never held by anything.
++        //
++        // ⊘ **It was invisible because every gate here quantified over CONTROLS.** The two
++        // deny tables were independent lists with no predicate relating them, so a class
++        // could be refused and its own controls admitted with nothing in the type system,
++        // the tables or the tests able to notice. `no_control_is_admitted_on_a_denied_class`
++        // is the quantifier that closes it; this branch is what makes the answer follow.
++        //
++        // ★★★ **Placed ABOVE the two blanket rules on purpose, and that is the half that
++        // matters more than the one measured id.** `RM_GSS_LEGACY_MASK` is bit 15 — *half
++        // the command space of every class* — and the binary-API rule takes a whole class.
++        // Both pass a command with **no table row at all**, so without this ordering a
++        // denied class's controls would leak through a blanket that never names them, and
++        // no allowlist edit could ever have shown it. `0x83de0309` has bit 15 clear and so
++        // arrives at the allowlist today; `0x83de8xxx` would not have.
++        //
++        // ⇒ ★ **The owner's lever is now ONE LINE.** Denying a class denies its controls,
++        // and admitting a class re-admits them, with no second edit and no second list to
++        // keep in step. Which way `0x83de` should go is an owner ruling and is written up
++        // in `docs/design/class_control_consistency.md`.
++        if let Some(d) = find_denied(self.shared.denied_classes, control_owner_class(cmd.0)) {
++            return ControlPermit::Denied(Denial::Refused {
++                name: d.name,
++                why: d.why,
++            });
++        }
+         if cmd.0 & RM_GSS_LEGACY_MASK != 0 {
+             return ControlPermit::GssLegacyRule;
+         }
+-        if (cmd.0 >> 16) & 0xffff == NV2081_BINAPI_CLASS {
++        if control_owner_class(cmd.0) == NV2081_BINAPI_CLASS {
+             return ControlPermit::BinApiRule;
+         }
+         // ★ Own blocks before the shared base. The two are disjoint by construction
+@@ -814,13 +876,28 @@ pub(crate) static CONTROLS_SHARED: &[ControlEntry] = &[
+     ControlEntry { cmd: 0x503c0102, name: "NV503C_CTRL_CMD_REGISTER_VA_SPACE", origin: Origin::Nvproxy },
+     ControlEntry { cmd: 0x503c0104, name: "NV503C_CTRL_CMD_REGISTER_VIDMEM", origin: Origin::Nvproxy },
+     ControlEntry { cmd: 0x503c0105, name: "NV503C_CTRL_CMD_UNREGISTER_VIDMEM", origin: Origin::Nvproxy },
+-    // ★★★★★ **w292 — RESTORED TO THE ALLOWLIST BY OWNER RULING** (2026-08-14, *"no
+-    // objection, feel free to do it"*), after `traces/nvdiff_w292` measured it ending
+-    // `cuCtxCreate`. It was moved to `DENIED_CONTROLS` on the premise that this port does
+-    // not implement SM debugger trapping; the premise is right and the conclusion was
+-    // wrong, because **this control programs no hardware at all** — see
+-    // `DeniedBecause::SmDebuggerTrapping`'s w292 correction for the ogkm citations.
+-    ControlEntry { cmd: 0x83de0309, name: "NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK", origin: Origin::Nvproxy },
++    // ⊘⊘⊘ **`0x83de0309` WAS HERE (w292) AND IS NOT ANY MORE — w295, and this is NOT a
++    // reversal of w292's ARGUMENT.**
++    //
++    // w292 restored it by owner ruling on a measured, correct premise: the control writes
++    // no hardware, and RM's default when it is never called is `_ALL`, so refusing it
++    // leaves the guest strictly MORE permissive than serving it does. ★ **Every word of
++    // that survives.** What it did not ask — because nothing in this file could ask it —
++    // is *whether we hold the object the control acts on*. We do not:
++    // `GT200_DEBUGGER` (`0x83de`) is in `DENIED_CLASSES` and we refuse the guest's
++    // `RM_ALLOC` of it (`traces/w294_cudalimit/run_w294cup2_qemu.log`,
++    // `AllocClassNotPermitted::Refused … id=0x000083de`).
++    //
++    // ⇒ Serving it was answering `NV_OK` for state nothing on our side holds — and
++    // "refusing is more permissive than serving" is only true when serving actually SETS
++    // something. It did not. `CapabilityTable::control`'s class gate now derives this
++    // answer from the class row instead of from a hand-kept second list, so the two can
++    // never disagree again.
++    //
++    // ★ **To restore it, move the class, not the control**: delete the `0x83de` row from
++    // `DENIED_CLASSES` and this id is permitted again with no edit here — that is the
++    // owner decision `docs/design/class_control_consistency.md` sets out, with the
+=== FOUND dd696ae6df5e265fdfc732f275db71241a6974c6 in /workspace/kayfabe_w314bt
+From e74a485e7884d38a5bd7199417dd220e64971c62 Mon Sep 17 00:00:00 2001
+From: Reindert Pelsma <229738317+reindertpelsma@users.noreply.github.com>
+Date: Fri, 14 Aug 2026 16:59:59 +0200
+Subject: [PATCH 1/3] fmt: master was RED on `cargo fmt --check`, across FOUR
+ of today's merges
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+⊘ Mechanical, no logic. `cargo fmt --all`.
+
+⊘⊘ AND THE PROCESS FAILURE IS MINE. Files from w303 (reap_composition_root.rs,
+shim.rs), w305 (preempt_is_decided.rs), w306 (cancellation_plane_is_honest.rs) and
+rm.rs were all unformatted on master. Every one of those lanes reported "gates: the
+same three red before and after" — and that was TRUE, because they were measuring
+`ci_gates.sh`'s three doc-citation failures. `cargo fmt --check` is a SEPARATE
+CI-blocking step, some lanes ran it and some did not, and I merged all four without
+checking it myself.
+
+★ The transferable bit: "gates unchanged" is only as wide as the gate set the lane
+happened to run. I read four identical reassurances as covering the same surface,
+and none of them said which steps they had NOT run. A report that names its scope
+is worth more than one that reports a clean number.
+
+Found by w310, which ran the full set on a rented box because it could not build
+locally — i.e. the OOM correction is what surfaced this.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01YW25X2fg3Pr2vEgZkWh46K
+---
+ .../kayfabe-isolate-host/src/bin/rmladder.rs  |  6 ++++-
+ crates/kayfabe-isolate-host/src/rm.rs         |  9 ++++---
+ crates/kayfabe-qemu-raw/src/shim.rs           |  1 -
+ .../tests/reap_composition_root.rs            | 14 ++++++-----
+ tests/tests/cancellation_plane_is_honest.rs   | 24 +++++++++++++++----
+ tests/tests/preempt_is_decided.rs             |  4 +++-
+ 6 files changed, 42 insertions(+), 16 deletions(-)
+
+diff --git a/crates/kayfabe-isolate-host/src/bin/rmladder.rs b/crates/kayfabe-isolate-host/src/bin/rmladder.rs
+index 512b931b..a6bf2092 100644
+--- a/crates/kayfabe-isolate-host/src/bin/rmladder.rs
++++ b/crates/kayfabe-isolate-host/src/bin/rmladder.rs
+@@ -3018,7 +3018,11 @@ fn ce_client(
+                      engine=COPY0 fault-va={UNMAPPED_VA:#018x}. ⇒ THIS is what ran; it is \
+                      built from the values passed to the probe, not from the flags a harness \
+                      believes it set",
+-                    if shared { "SHARED (arm 1's, already carried retired work)" } else { "FRESH (a third, never used)" },
++                    if shared {
++                        "SHARED (arm 1's, already carried retired work)"
++                    } else {
++                        "FRESH (a third, never used)"
++                    },
+                     fault_arms.as_str(),
+                 );
+                 let out = match rm.probe_guest_reachability(
+diff --git a/crates/kayfabe-isolate-host/src/rm.rs b/crates/kayfabe-isolate-host/src/rm.rs
+index 210f9b79..e42c57dc 100644
+--- a/crates/kayfabe-isolate-host/src/rm.rs
++++ b/crates/kayfabe-isolate-host/src/rm.rs
+@@ -7165,7 +7165,9 @@ impl HostRmBackend {
+             // relocated is the failure `PlacementRefused` exists for, and an arm that asks
+             // for nothing has nothing to compare.
+             let want_ctrl_src = arms.dictate_addresses.then_some(CTRL_SRC_AT.0);
+-            let ctrl_src_va = self.conn.raw_map_dma(range, ctrl_src, BYTES, want_ctrl_src)?;
++            let ctrl_src_va = self
++                .conn
++                .raw_map_dma(range, ctrl_src, BYTES, want_ctrl_src)?;
+             mapped.push(ctrl_src_va);
+             if let Some(want) = want_ctrl_src {
+                 if ctrl_src_va != want {
+@@ -7213,8 +7215,9 @@ impl HostRmBackend {
+             // new thing RM is told is where to write when it kills this channel.
+             let ring_at = arms.dictate_addresses.then_some(GpuVa(PROBE_RING_AT));
+             let (c, token) = match notifier_h {
+-                Some(n) => self
+-                    .alloc_channel_at_with_error_notifier(vas, ENGINE_TYPE_COPY0, ring_at, n)?,
++                Some(n) => {
++                    self.alloc_channel_at_with_error_notifier(vas, ENGINE_TYPE_COPY0, ring_at, n)?
++                }
+                 // ⊘ w309 — the SAME channel with `hObjectError` unset, which is exactly what
+                 // every caller before w287 built. Plane A is unmeasured on this arm by
+                 // construction, and [`GuestReachProbe::notifier`] reports `None`.
+diff --git a/crates/kayfabe-qemu-raw/src/shim.rs b/crates/kayfabe-qemu-raw/src/shim.rs
+index ba94f85a..8d7b5a7d 100644
+--- a/crates/kayfabe-qemu-raw/src/shim.rs
++++ b/crates/kayfabe-qemu-raw/src/shim.rs
+@@ -13220,7 +13220,6 @@ fn fb_userd_cursors(
+ mod pushbuffer_pin_tests {
+     use super::pushbuffer_sample;
+ 
+-
+     /// ★★★★★ **A TRUNCATED SAMPLE MUST NEVER RENDER AS A COMPLETE LIST** — the defect in my
+     /// own first draft, caught before any output was read.
+     ///
+diff --git a/crates/kayfabe-qemu-raw/tests/reap_composition_root.rs b/crates/kayfabe-qemu-raw/tests/reap_composition_root.rs
+index 9f7c852f..7e80f5ca 100644
+--- a/crates/kayfabe-qemu-raw/tests/reap_composition_root.rs
++++ b/crates/kayfabe-qemu-raw/tests/reap_composition_root.rs
+@@ -75,10 +75,7 @@ fn regs() -> Regs {
+ /// subject is lifetime, not routing, so the channel never has to be rung.
+ fn declare_one_proc(
+     dev: &kayfabe_rt::device::SharedDevice,
+-) -> (
+-    kayfabe_arch::ids::HClient,
+-    kayfabe_arch::ids::HObject,
+-) {
++) -> (kayfabe_arch::ids::HClient, kayfabe_arch::ids::HObject) {
+     use kayfabe_abi::generated::classes as nv;
+     use kayfabe_arch::ClientKind;
+     use kayfabe_arch::ids::{ClassId, HClient, HObject, Pdb};
+@@ -167,7 +164,11 @@ fn a_guest_register_write_reaps_a_retired_proc() {
+     let dev = r.object_model();
+ 
+     // ---- phase 1: nothing retired, and a register write is a no-op for the reap.
+-    assert_eq!(dev.retired_len(), 0, "nothing is retired before the guest acts");
++    assert_eq!(
++        dev.retired_len(),
++        0,
++        "nothing is retired before the guest acts"
++    );
+     let _ = r.write(BAR_REGS, NOBODYS_OFFSET, 4, 0);
+     assert_eq!(
+         dev.retired_len(),
+@@ -268,7 +269,8 @@ fn process_churn_does_not_accumulate_toward_the_retired_cap() {
+                 },
+             },
+         ] {
+-            dev.apply(ev).expect("a fresh guest process declares itself");
++            dev.apply(ev)
++                .expect("a fresh guest process declares itself");
+         }
+         dev.apply(RmEvent::Free {
+             client,
+diff --git a/tests/tests/cancellation_plane_is_honest.rs b/tests/tests/cancellation_plane_is_honest.rs
+index 9283078c..e54ae3cd 100644
+--- a/tests/tests/cancellation_plane_is_honest.rs
++++ b/tests/tests/cancellation_plane_is_honest.rs
+@@ -210,10 +210,26 @@ fn the_table_covers_every_verb_measured_arriving() {
+     for (cmd, ledgers, name) in [
+         (0xa06f_0112u32, "115/195", "NVA06F_CTRL_CMD_STOP_CHANNEL"),
+         (0x2080_012c, "115/195", "NV2080_CTRL_CMD_GPU_EVICT_CTX"),
+-        (0x906f_0102, "1/195 (w299 multiproc)", "NV906F_CTRL_CMD_RESET_CHANNEL"),
+-        (0xa06f_0103, "both crossing boots", "NVA06F_CTRL_CMD_GPFIFO_SCHEDULE"),
+-        (0xa06c_0101, "both crossing boots", "NVA06C_CTRL_CMD_GPFIFO_SCHEDULE"),
+-        (0xa06c_0105, "native GA106, 1/run", "NVA06C_CTRL_CMD_PREEMPT"),
++        (
++            0x906f_0102,
++            "1/195 (w299 multiproc)",
++            "NV906F_CTRL_CMD_RESET_CHANNEL",
++        ),
++        (
++            0xa06f_0103,
++            "both crossing boots",
++            "NVA06F_CTRL_CMD_GPFIFO_SCHEDULE",
++        ),
++        (
++            0xa06c_0101,
++            "both crossing boots",
++            "NVA06C_CTRL_CMD_GPFIFO_SCHEDULE",
++        ),
++        (
++            0xa06c_0105,
++            "native GA106, 1/run",
++            "NVA06C_CTRL_CMD_PREEMPT",
++        ),
+     ] {
+         assert!(
+             cancellation_verb(cmd).is_some(),
+diff --git a/tests/tests/preempt_is_decided.rs b/tests/tests/preempt_is_decided.rs
+index 7bf82233..9995e116 100644
+--- a/tests/tests/preempt_is_decided.rs
++++ b/tests/tests/preempt_is_decided.rs
+@@ -59,7 +59,9 @@ fn one_group_gpu() -> (kayfabe_core::gpu::Gpu, HObject) {
+     use kayfabe_abi::generated::classes as nv;
+     let mut gpu = kayfabe_core::gpu::Gpu::new(
+         Box::new(kayfabe_chips::Ga10xArch::new()),
+-        Box::new(kayfabe_isolate::StillbornIsolates::new("preempt_is_decided")),
++        Box::new(kayfabe_isolate::StillbornIsolates::new(
++            "preempt_is_decided",
++        )),
+         kayfabe_core::gpa::GpaSpace::new(0x10_0000_0000..0x20_0000_0000, 0x1_0000_0000),
+     )
+     .expect("the port's object model realizes");
+-- 
+2.34.1
+
+
+From ee93e3643bd36f3fc64601abefefa1e943ecb876 Mon Sep 17 00:00:00 2001
+From: Reindert Pelsma <229738317+reindertpelsma@users.noreply.github.com>
+Date: Fri, 14 Aug 2026 17:01:54 +0200
+Subject: [PATCH 2/3] =?UTF-8?q?w313:=20the=20test=20suite=20on=20BOTH=20re?=
+ =?UTF-8?q?vs=20=E2=80=94=20the=20same=20six=20reds,=20no=20new=20ones?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+cargo test --workspace --no-fail-fast, both revs, one script, same box, same target dir.
+253 test binaries per rev; six failures on each and they are the SAME six, compared as a
+SET rather than as a count. The restore introduces zero new reds and fixes none — including
+a_wired_device_refuses_a_framebuffer_page_nothing_ever_wrote, the witness-gate assertion
+the sweep relaxes, which is red at MASTER too.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MPb8iMWmbzT79C85kWzGMq
+---
+ traces/w313_restore/RESULT.md                 |  20 +
+ .../w313_test_suite_both_revs.log             | 540 ++++++++++++++++++
+ 2 files changed, 560 insertions(+)
+ create mode 100644 traces/w313_restore/w313_test_suite_both_revs.log
+
+diff --git a/traces/w313_restore/RESULT.md b/traces/w313_restore/RESULT.md
+index f4bce75d..e83f8815 100644
+--- a/traces/w313_restore/RESULT.md
++++ b/traces/w313_restore/RESULT.md
+@@ -179,6 +179,26 @@ Clippy: clean on both feature arms except **one pre-existing `collapsible_if`**
+ `vas_publish.publishes()` (untouched by this branch; present at master) and two in
+ `kayfabe-isolate-host`.
+ 
++### ⊘ THE TEST SUITE — SAME SIX REDS ON BOTH REVS, NAMED
++
++`cargo test --workspace --no-fail-fast` run **on both revs in one script, same box, same target
++dir** (`w313_test_suite_both_revs.log`, 253 test binaries per rev):
++
++| failing test | `w313-restore-two` | `0ff3e1e2` |
++|---|---|---|
++| `a_guest_doorbell_reaches_the_host_completion_observer` | ✘ | ✘ |
++| `a_second_doorbell_over_an_unchanged_ring_forwards_nothing` | ✘ | ✘ |
++| `the_observers_negative_verdict_refuses_the_guest_doorbell` | ✘ | ✘ |
++| `the_logic_crates_carry_no_unnamed_guest_os_assumption` | ✘ | ✘ |
++| `a_device_with_no_fb_source_refuses_the_vidmem_ring` | ✘ | ✘ |
++| `a_wired_device_refuses_a_framebuffer_page_nothing_ever_wrote` | ✘ | ✘ |
++
++**Six on each, the same six, and no others.** ⇒ the restore introduces **zero** new red tests.
++⚠ It also fixes none: these are the standing reds (three are w296's severance set — *"5 reds are
++ONE fact"* — and `a_wired_device_refuses_a_framebuffer_page_nothing_ever_wrote` is precisely the
++witness-gate assertion the sweep relaxes, red **at master too**, i.e. not caused by this
++restore). ⊘ Compared as a **set**, not as a count: a count cannot see a substitution.
++
+ ---
+ 
+ ## 5. ★★★ THE GATE THAT MISSED IT — now a CHECK, not a paragraph
+diff --git a/traces/w313_restore/w313_test_suite_both_revs.log b/traces/w313_restore/w313_test_suite_both_revs.log
+new file mode 100644
+index 00000000..568fb9e9
+--- /dev/null
++++ b/traces/w313_restore/w313_test_suite_both_revs.log
+@@ -0,0 +1,540 @@
++=== REV=w313-restore-two HEAD=e42f0f10 ===
++test result: ok. 355 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
++test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
++test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
++test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.27s
++test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
++test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.88s
++test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.93s
++test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
++test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
++test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
++test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
++test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
++test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
++test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
++test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
++test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
++test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
++test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
++test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
++test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.18s
++test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
++test result: ok. 68 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
++test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
++test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
++test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
++test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
++test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
++test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
++test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
++test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
++test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
++test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
++test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
++test result: ok. 150 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
++test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
++test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
++test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
++test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
++test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
++test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
++test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
++test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
++test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
++test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
++test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
++test result: ok. 72 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
++test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
++test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.18s
++test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
++test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
++test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
++test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
++test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
++test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
++test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
++test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
++test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
++test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.98s
++test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
++test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.44s
++test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
++test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
++test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
++test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.06s
++test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
++test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++failures:
++failures:
++    a_guest_doorbell_reaches_the_host_completion_observer
++    a_second_doorbell_over_an_unchanged_ring_forwards_nothing
++    the_observers_negative_verdict_refuses_the_guest_doorbell
++test result: FAILED. 3 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++error: test failed, to rerun pass `-p kayfabe-tests --test doorbell_reaches_the_completion_observer`
++test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
++test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
++test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.92s
++test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
++test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
++test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
++test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
++test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
++test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.97s
++test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
++test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
++test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
++test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s

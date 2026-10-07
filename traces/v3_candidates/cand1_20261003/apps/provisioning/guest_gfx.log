@@ -1,0 +1,14 @@
+[2026-10-03T23:43:31+00:00] guest up, kernel 6.8.0-142-generic — installing: vulkan-tools libvulkan-dev glslang-tools libegl-dev libopengl-dev libgl-dev libx11-dev mesa-utils xvfb x11-utils gcc + VirtualGL
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+[2026-10-03T23:44:57+00:00] control: BUILD_GFX_OK ba4331af9705
+/usr/bin/vglrun /usr/bin/Xvfb /usr/bin/vulkaninfo /usr/bin/eglinfo /usr/bin/glslangValidator /usr/share/glvnd/egl_vendor.d/: 10_nvidia.json 50_mesa.json  /usr/share/vulkan/icd.d/: asahi_icd.json gfxstream_vk_icd.json intel_hasvk_icd.json intel_icd.json lvp_icd.json nouveau_icd.json radeon_icd.json virtio_icd.json 
+GFX_LANE_PROVISIONED=yes
+date=2026-10-03T23:44:57+00:00
+control=BUILD_GFX_OK ba4331af9705
+/usr/bin/vglrun /usr/bin/Xvfb /usr/bin/vulkaninfo /usr/bin/eglinfo /usr/bin/glslangValidator /usr/share/glvnd/egl_vendor.d/: 10_nvidia.json 50_mesa.json  /usr/share/vulkan/icd.d/: asahi_icd.json gfxstream_vk_icd.json intel_hasvk_icd.json intel_icd.json lvp_icd.json nouveau_icd.json radeon_icd.json virtio_icd.json 
+kernel_before=6.8.0-142-generic
+kernel_after=6.8.0-142-generic
+provisioner_rev=8a682f1b
+[2026-10-03T23:45:17+00:00] GUEST_GFX_DONE rc=0

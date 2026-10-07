@@ -1,0 +1,56 @@
+[
+  {
+    "source": "/root/prov/c2surface.log",
+    "source_size": 3273,
+    "source_sha256": "de888188865f3f0c5623fd8dae83844aac1ac67f0db96a78df1cff745765eb4a",
+    "saved": "root/prov/c2surface.log"
+  },
+  {
+    "source": "/root/prov/c2surface_broker.log",
+    "source_size": 34698,
+    "source_sha256": "ff2187e27ca4d80806cee16142631a7d5f93f750327c52a69eb940f2666045eb",
+    "saved": "root/prov/c2surface_broker.log"
+  },
+  {
+    "source": "/workspace/bench/run_c2surface_dmesg.log",
+    "source_size": 4724,
+    "source_sha256": "f8f809861a5525e05579bdb6d985dac0a3d3c06353c8a46771a3634a198c27d4",
+    "saved": "workspace/bench/run_c2surface_dmesg.log"
+  },
+  {
+    "source": "/workspace/bench/run_c2surface_dmesg_after.log",
+    "source_size": 9148,
+    "source_sha256": "789c2f6feb282781ff5eee126e94919dc3c6d3419cf768a24e92722096da6fec",
+    "saved": "workspace/bench/run_c2surface_dmesg_after.log"
+  },
+  {
+    "source": "/workspace/bench/run_c2surface_hostdmesg.log",
+    "source_size": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved": "workspace/bench/run_c2surface_hostdmesg.log"
+  },
+  {
+    "source": "/workspace/bench/run_c2surface_probe.log",
+    "source_size": 3603,
+    "source_sha256": "6460330a724571854e1bd59a3b440c2952d42d1d036ba16574a4a56fe933fd64",
+    "saved": "workspace/bench/run_c2surface_probe.log"
+  },
+  {
+    "source": "/workspace/bench/run_c2surface_qemu.log",
+    "source_size": 274930,
+    "source_sha256": "c32bc799dd0988fb988af2f6345a512a20b5cdb1015ca6b32742882eaff68a9a",
+    "saved": "workspace/bench/run_c2surface_qemu.log.gz"
+  },
+  {
+    "source": "/workspace/bench/run_c2surface_rev.txt",
+    "source_size": 21,
+    "source_sha256": "c7c927a0763dd4206adb4622c12a7a72fed4e21568a7974a34ddf0b0fba4ca73",
+    "saved": "workspace/bench/run_c2surface_rev.txt"
+  },
+  {
+    "source": "/workspace/bench/run_c2surface_serial.log",
+    "source_size": 79000,
+    "source_sha256": "6ef6ccf520251b681f5b24d2080ba3cfb5b87b220e0b3cb3d48bc19f6b8e9784",
+    "saved": "workspace/bench/run_c2surface_serial.log"
+  }
+]

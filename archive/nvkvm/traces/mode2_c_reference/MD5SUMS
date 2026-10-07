@@ -1,0 +1,5 @@
+87c310e1afcf0ee44054d8462b117158  cap1_coldboot_hermetic.rec
+e503b6f797c1109532f9e3aa05ace9d7  cap1b_coldboot_hermetic_d6.rec
+afe6de9aeb6a8fae1b7384d08ed045d1  cap2_stalequeue_negative.rec
+23897b20e248386efb7839d76979f8fd  cap2b_stalequeue_nofn47.rec
+6cadc8e3cb2b5ce04c3059235b88e1e6  cap3_matmul_forwarding.rec

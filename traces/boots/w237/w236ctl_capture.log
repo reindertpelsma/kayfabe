@@ -1,0 +1,6 @@
+[boot_capture:w236ctl_7107bba_rvm] booting (extra args: none)
+[boot_capture:w236ctl_7107bba_rvm] guest is up after 40s
+[boot_capture:w236ctl_7107bba_rvm] module unloaded and ring buffer cleared; loading cold
+[boot_capture:w236ctl_7107bba_rvm] opening the device (this is what runs RmInitAdapter)
+CAPTURE_RC=2
+BOOTDONE

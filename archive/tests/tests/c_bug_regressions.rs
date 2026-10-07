@@ -1,0 +1,1183 @@
+//! ★ THE C-BUG REGRESSION MATRIX — the GAP rows (decision #18B).
+//!
+//! Companion to `docs/design/c_bug_regression_matrix.md`, which classifies EVERY
+//! hard-won C bug as impossible-by-construction / already-tested / gap. This file
+//! adds the regressions for the gap rows, so the rewrite can never silently
+//! reintroduce a bug the C already paid (days of bench time) to find. Each test's
+//! doc comment names the C incident it guards against, with its memory-file ref.
+//!
+//! Everything here drives the real core through the mock seams — no GPU, no OS,
+//! millisecond-fast (decision #15: test invariants/behavior, never internals).
+
+#![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
+
+use kayfabe_arch::ids::GpuId;
+use kayfabe_arch::ids::{GpuVa, HClient, HObject, Pdb, VChid};
+use kayfabe_completion::OsEventRef;
+use kayfabe_core::gpa::GpaSpace;
+use kayfabe_core::gpu::{Gpu, GpuError};
+use kayfabe_core::rmgraph::{NodeKey, RmEvent};
+use kayfabe_core::{ChanId, ProcId};
+use kayfabe_fwd::{
+    FwdFault, handle_doorbell, parse_pushbuffer, publish_backing, resolve, signal_golden_capture,
+};
+use kayfabe_mocks::{MockArch, MockIsolateFactory, MockPushbuffer, MockVmm, mock_classes as mc};
+use kayfabe_tests::{Guarded, ResidueClaim, Scenario, identical_handles};
+
+const A_PDB: Pdb = Pdb(0x3401_000);
+const B_PDB: Pdb = Pdb(0x3405_000);
+const VA: GpuVa = GpuVa(0x2_0020_0000);
+
+/// Fresh device with a generous window (default geometry for non-lifecycle tests).
+fn fresh_gpu() -> (
+    Guarded<Gpu>,
+    std::sync::Arc<std::sync::Mutex<kayfabe_mocks::RmRecorder>>,
+) {
+    gpu_with_window(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000)
+}
+
+/// Fresh device over an explicit window geometry (the lifecycle tests size the
+/// window tightly so exhaustion-vs-recycling is observable).
+fn gpu_with_window(
+    window: core::ops::Range<u64>,
+    arena_len: u64,
+) -> (
+    Guarded<Gpu>,
+    std::sync::Arc<std::sync::Mutex<kayfabe_mocks::RmRecorder>>,
+) {
+    let arch = std::sync::Arc::new(MockArch::new());
+    let (factory, rec) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
+    let gpa = GpaSpace::new(window, arena_len);
+    (
+        Guarded::new(
+            "c_bug_regressions",
+            Gpu::new(arch, Box::new(factory), gpa).expect("device realizes"),
+            rec.clone(),
+        ),
+        rec,
+    )
+}
+
+fn apply_all(gpu: &mut Gpu, evs: impl IntoIterator<Item = RmEvent>) {
+    for ev in evs {
+        gpu.apply(ev).expect("scenario event applies");
+    }
+}
+
+/// Build one compute process and return its (pid, first ChanId).
+fn build_proc(
+    gpu: &mut Gpu,
+    client: HClient,
+    pdb: Pdb,
+    vchids: (u16, u16),
+) -> (kayfabe_core::ProcId, kayfabe_core::ChanId) {
+    let mut s = Scenario::new();
+    s.compute_process(client, pdb, identical_handles(vchids.0, vchids.1));
+    apply_all(gpu, s.events);
+    let pid = *gpu
+        .spine
+        .by_pdb
+        .get(&(GpuId::ZERO, pdb))
+        .expect("routed by PDB");
+    let cid = *gpu.procs[&pid]
+        .chan_ids
+        .values()
+        .next()
+        .expect("has a channel");
+    // ★177: the guest always schedules a channel (`NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`)
+    // before ringing it; restore that step so tests reach the fault under test rather
+    // than `NotScheduled`.
+    kayfabe_tests::guest_schedules_every_channel(gpu);
+    (pid, cid)
+}
+
+/// [`build_proc`], then **born**: every `Passthrough` channel's host channel is created at
+/// its alloc, over the guest's own ring, before any doorbell — because a doorbell no
+/// longer births one (`FwdFault::PassthroughDoorbellBirth`, refused by name: adopting the
+/// guest's USERD at a doorbell zeroes the cursor that rang it, `[measured w233]`, and our
+/// own ring is illegal for the kind).
+///
+/// ⊘ Kept apart from [`build_proc`] on purpose: the `cb14_*_touch_alone_*` tests need a
+/// proc whose data plane is **untouched** (no host channel, no host VAS) so they can set
+/// ONE clause by hand, and a birth at build would touch two of the three.
+fn born_proc(
+    gpu: &mut Gpu,
+    client: HClient,
+    pdb: Pdb,
+    vchids: (u16, u16),
+) -> (kayfabe_core::ProcId, kayfabe_core::ChanId) {
+    let out = build_proc(gpu, client, pdb, vchids);
+    kayfabe_tests::birth_passthrough_channels(gpu);
+    out
+}
+
+/// Lay out a one-entry GPFIFO ring pointing at method words written to guest RAM, and
+/// bind the range in the issuing channel's address table — the guest's own
+/// `MAP_MEMORY_DMA` of its pushbuffer, which a GPFIFO entry's **virtual** address needs
+/// (`execution_plane_increments.md` §8.2.3). The entry names `pb_va(gpa)`, never `gpa`.
+fn script_pushbuffer(
+    gpu: &mut Gpu,
+    vmm: &mut MockVmm,
+    pid: ProcId,
+    cid: ChanId,
+    gpa: u64,
+    methods: &[(u32, Vec<u32>)],
+) -> Vec<u8> {
+    let ring = kayfabe_tests::script_ring_via(vmm, gpa, methods);
+    kayfabe_tests::bind_ring(gpu, pid, cid, &ring);
+    ring
+}
+
+// =================================================================================
+// #11 — the USERD-wipe class: a CE fill/copy must never clobber live core state.
+// =================================================================================
+
+/// **Guards #11** (`mode2_baremetal_32`: the CE zero-fill that WIPED a live USERD
+/// page — PyTorch's channel ring state — fixed in the C by `nvkvm_fb_is_live_userd`).
+///
+/// The core half of that invariant: an observed CE **physical** write landing on an
+/// address the core already tracks as LIVE state must never silently REPLACE that
+/// state. The parser's capture path is resolve-first — a dst that already resolves
+/// keeps its live binding (recorded as a dirtied PT page only); the live mapping's
+/// phys/host publication survive untouched.
+///
+/// (The *content* half — refusing the actual byte wipe over a live USERD in the FB
+/// shadow — is the FB-shadow/regs port's job and is flagged as a deferred-milestone
+/// row in the matrix. This pins the state half the pure core owns today.)
+#[test]
+fn cb11_ce_write_never_clobbers_live_binding() {
+    let (mut gpu, _rec) = fresh_gpu();
+    let mut vmm = MockVmm::new();
+    let (pid, cid) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+
+    // Live state: a published backing at VA (host-mapped in this Vas's host VAS).
+    let live = publish_backing(
+        gpu.procs.get_mut(&pid).unwrap(),
+        GpuId::ZERO,
+        A_PDB,
+        VA,
+        0x10000,
+    )
+    .unwrap();
+
+    // A scrubber-shaped CE physical write lands INSIDE the live range.
+    let ring = script_pushbuffer(
+        &mut gpu,
+        &mut vmm,
+        pid,
+        cid,
+        0x5000_0000,
+        &[
+            MockPushbuffer::set_object(mc::DMA_COPY),
+            MockPushbuffer::ce_launch_dma(VA.0 + 0x20, 0x1000, false),
+        ],
+    );
+    let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring).expect("parses");
+
+    // ★★★ #102 — the operand split makes this STRONGER than "observed but did not
+    // clobber". `VA` is an ordinary data buffer, not a page-table page, so its resolved
+    // physical destination owns nothing in the page-table index and the copy is
+    // classified **VA-operand**: forwarded to the host copy engine, never intercepted,
+    // with nothing for the core to write over the live binding with. The wipe shape is
+    // not "prevented"; there is no longer a code path that could perform it.
+    //
+    // This replaces a latch assertion that read `out.pt_writes == vec![VA & !0xfff]` —
+    // i.e. that a *data* buffer was captured as a page table, which was the inverted
+    // gate's behaviour and is exactly the over-capture #13-round-4-part2 broke
+    // cuCtxCreate with.
+    assert_eq!(
+        (out.pt_writes.len(), out.data_copies),
+        (0, 1),
+        "a copy into a data buffer is FORWARDED, not intercepted"
+    );
+    let (b, off) = resolve(&gpu, GpuId::ZERO, A_PDB, GpuVa(VA.0 + 0x20)).unwrap();
+    assert_eq!(off, 0x20);
+    assert_eq!(
+        b.phys(),
+        live.gpa,
+        "live binding's phys survives the CE write"
+    );
+    assert_eq!(
+        b.host_va(),
+        Some(live.host_va),
+        "live host publication survives the CE write"
+    );
+}
+
+// =================================================================================
+// #12 — the sema-write VAS collapse (UVM MAX_JUMP): completion writes must route by
+// the OWNING identity, never through a foreign VAS fallback.
+// =================================================================================
+
+/// **Guards #12 cont.32/33** (`mode2_12_layered_status`): the C's `chan_translate`
+/// blind fallback resolved a scrubber's sema release under a STALE FOREIGN client's
+/// PDB and wrote onto UVM's persistent tracking-sema page → UVM read a BACKWARDS
+/// value → `uvm_gpu_semaphore.c:776 MAX_JUMP` fatal → CTX2 dead.
+///
+/// The rewrite must route a channel's sema release to the OWNING proc's completion
+/// queue only — never to any other proc's (there is no fallback resolve to reach a
+/// foreign queue through). And once the owner is torn down, the release is a LOUD
+/// refusal — never consumed against a surviving proc's state.
+#[test]
+fn cb12_sema_release_routes_to_owner_never_a_foreign_proc() {
+    let (mut gpu, _rec) = fresh_gpu();
+    let mut vmm = MockVmm::new();
+    let (pid_a, cid_a) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let (pid_b, _cid_b) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
+
+    // A's channel releases a sema. ONLY A's queue observes it.
+    let ring = script_pushbuffer(
+        &mut gpu,
+        &mut vmm,
+        pid_a,
+        cid_a,
+        0x5000_0000,
+        &[MockPushbuffer::sem_release(0x2_0044_0f00, 0x45)],
+    );
+    parse_pushbuffer(&mut gpu, &mut vmm, pid_a, cid_a, &ring).expect("parses");
+    assert!(
+        gpu.procs[&pid_a].completion.has_outstanding(),
+        "owner's queue observed"
+    );
+    assert!(
+        !gpu.procs[&pid_b].completion.has_outstanding(),
+        "foreign proc's queue NEVER sees another channel's release (the MAX_JUMP write)"
+    );
+    assert!(
+        !gpu.system.completion.has_outstanding(),
+        "nor does the system queue"
+    );
+
+    // Tear A down; replaying its release is a LOUD refusal — the C's fallback would
+    // have resolved it under the survivor's PDB and poisoned B's live state.
+    gpu.apply(RmEvent::Free {
+        client: HClient(0xAA),
+        handle: HObject(0x5c00_0000),
+    })
+    .unwrap();
+    let replay = parse_pushbuffer(&mut gpu, &mut vmm, pid_a, cid_a, &ring);
+    // ★ §12.38 — the EXACT variant, naming WHICH proc is retired. `RetiredProc(_)` would
+    // have passed had the core named the SURVIVOR, which is the exact confusion this
+    // regression exists to catch.
+    assert_eq!(
+        replay,
+        Err(FwdFault::RetiredProc(pid_a)),
+        "a torn-down channel's release is refused, never re-routed"
+    );
+    assert!(
+        !gpu.procs[&pid_b].completion.has_outstanding(),
+        "survivor B untouched"
+    );
+}
+
+/// **Guards the #12 finishPayload-forge scoping rule + the scrubber-timeout class**
+/// (`mode2_12_layered_status` cont.33 fix 2: the forge is for KERNEL CeUtils ONLY,
+/// user-CE/GR excluded; lesson L5): a fabricated/system completion must land on the
+/// SYSTEM proc's queue and can never reach a user proc's completion state. In the
+/// rewrite the forge entry point is *typed* to the system proc
+/// (`signal_golden_capture`) — this pins the runtime half.
+#[test]
+fn cb12_system_forge_never_reaches_a_user_proc_queue() {
+    let (mut gpu, _rec) = fresh_gpu();
+    let (pid_a, _) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+
+    let ev = signal_golden_capture(&mut gpu, OsEventRef(0x60)).expect("system-typed forge");
+    assert_eq!(ev, OsEventRef(0x60));
+    assert!(
+        gpu.system.completion.has_outstanding(),
+        "forge landed on the SYSTEM queue"
+    );
+    assert!(
+        !gpu.procs[&pid_a].completion.has_outstanding(),
+        "a user proc's queue never receives a forged completion (L5)"
+    );
+    // It still DELIVERS (the guest's 4s golden-capture poll is satisfied).
+    let batch = gpu
+        .pump_completions(GpuId::ZERO)
+        .expect("system completion posts");
+    assert_eq!(batch.events, vec![OsEventRef(0x60)]);
+}
+
+// =================================================================================
+// #13 — CE-PT-write publication: decode the observed write DIRECTLY, never a
+// root walk racing the guest's leaf-filled-then-linked build order.
+// =================================================================================
+
+/// **Guards #13 rounds 1-3's mystery** (`mode2_13_multiiter_idle_hang`): the guest
+/// fills a leaf PT page and links it under the root a SEPARATE push later. The C's
+/// root walks read `runs=0` while the host faulted one page past the last-backed leaf;
+/// the v6 fix decodes each dirtied page DIRECTLY.
+///
+/// ## ★★★ What this test asserts after `#102`, and what MOVED
+///
+/// The old form asserted that an observed physical CE destination becomes **resolvable**
+/// — `resolve(leaf_page).phys == leaf_page`. That was a tautology over the bug: it held
+/// only because the capture bound `phys: dst.0`, mapping a page-table page, as a virtual
+/// address, to its own physical address. It publishes nothing, it is not a fact about the
+/// guest, and it is the identity function wearing a regression test's clothes. It also
+/// required capturing an address the core had no reason to believe was a page table at
+/// all, which is over-capture — the shape that broke `cuCtxCreate` in #13 round 4 part 2.
+///
+/// What is asserted here instead is the part the capture path owns TODAY:
+///
+/// 1. **No root reachability is ever consulted.** There is no walk to read `runs=0` from.
+///    The index is seeded from a DECLARED fact — a PDB *is* the physical address of its
+///    root page directory — so the very first page-table write, with zero prior traffic
+///    and nothing linked anywhere, is captured at the write.
+/// 2. **Order-independence across pushes**, which is the leaf-then-link property in the
+///    form stage B can state: a second, later push into the same tracked page does not
+///    disturb the first capture.
+/// 3. **A page we do not know is a page table is NOT captured** — it is forwarded. The
+///    failure direction is "not yet tracked", never "captured as something it is not".
+///
+/// ★★ **HONEST COVERAGE NOTE — do not let this rest here.** The literal
+/// *"orphan LEAF page filled in push 1, linked under the root in push 2"* case is **not
+/// covered by this test any more**, because a leaf page only enters the tracked set when
+/// a page-directory entry pointing at it is DECODED, and the decode-at-semaphore-release
+/// stage is not built yet. Point 3 pins the safe direction in the meantime. Restoring the
+/// literal case is the acceptance criterion for that stage, and this note is the marker.
+#[test]
+fn cb13_pt_write_capture_is_direct_no_root_reachability_needed() {
+    let (mut gpu, _rec) = fresh_gpu();
+    let mut vmm = MockVmm::new();
+    let (pid, cid) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+
+    // Push 1: the FIRST write this device has ever seen, into the VAS's root page
+    // directory. Nothing is linked, nothing has been swept, no completion has fired.
+    let root: u64 = A_PDB.0 & !0xfff;
+    let ring1 = script_pushbuffer(
+        &mut gpu,
+        &mut vmm,
+        pid,
+        cid,
+        0x5000_0000,
+        &[MockPushbuffer::ce_launch_dma(root + 0x18, 0x40, false)],
+    );
+    let out1 = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring1).expect("push 1 parses");
+    assert_eq!(
+        out1.pt_writes.len(),
+        1,
+        "captured at the write — no walk, no sweep"
+    );
+    assert_eq!(
+        (out1.pt_writes[0].page, out1.pt_writes[0].owner),
+        (root, pid),
+        "…and attributed from a DECLARED fact, not a discovered one"
+    );
+    assert!(
+        gpu.procs[&pid]
+            .vas_by_pdb(GpuId::ZERO, A_PDB)
+            .expect("the VAS exists")
+            .pt_pages
+            .contains(&root)
+    );
+
+    // ★ The capture binds NOTHING. A page-table page is not a mapping of itself; what its
+    // CONTENT describes is a separate act, at the guest's own commit point.
+    assert!(
+        resolve(&gpu, GpuId::ZERO, A_PDB, GpuVa(root + 0x18)).is_err(),
+        "the latch must not fabricate an identity mapping of the page table"
+    );
+
+    // Push 2, a push LATER, into the same tracked page: captured again, independently.
+    // The first capture is undisturbed — no ordering between pushes is required.
+    let ring2 = script_pushbuffer(
+        &mut gpu,
+        &mut vmm,
+        pid,
+        cid,
+        0x5001_0000,
+        &[MockPushbuffer::ce_launch_dma(root + 0x800, 0x40, false)],
+    );
+    let out2 = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring2).expect("push 2 parses");
+    assert_eq!(out2.pt_writes.len(), 1);
+    assert_eq!(
+        gpu.procs[&pid]
+            .vas_by_pdb(GpuId::ZERO, A_PDB)
+            .expect("the VAS exists")
+            .pt_pages
+            .len(),
+        1,
+        "one page, latched idempotently — the latch is an index, not a log"
+    );
+
+    // ★ The safe direction: a page nothing declares as a page table is FORWARDED, never
+    // guessed into a capture.
+    let unknown_page: u64 = 0x1_2340_0000;
+    let ring3 = script_pushbuffer(
+        &mut gpu,
+        &mut vmm,
+        pid,
+        cid,
+        0x5002_0000,
+        &[MockPushbuffer::ce_launch_dma(unknown_page, 0x1000, false)],
+    );
+    let out3 = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring3).expect("push 3 parses");
+    assert_eq!(
+        (out3.pt_writes.len(), out3.data_copies),
+        (0, 1),
+        "an untracked destination is VA-operand work — forwarded, not captured"
+    );
+}
+
+// =================================================================================
+// FUZZ-FOUND — the pushbuffer decoder's boundary-1 posture over HOSTILE guest bytes
+// (found by the coverage-guided `fuzz/fuzz_targets/parse_pushbuffer.rs` cargo-fuzz
+// target; both minimized here as deterministic regressions so the fuzzer never has to
+// re-find them). Class: attacker-controlled address arithmetic reaching an unchecked
+// `+`/`checked_add().expect()` — a hostile byte string could PANIC the core.
+// =================================================================================
+
+/// **Fuzz-found #1** — a hostile CE `LAUNCH_DMA` with a *physical* destination near
+/// `u64::MAX` panicked the core: the #13 capture path binds `[dst, dst + len.max(4K))`
+/// into the address table, and `IntervalMap::insert` did `start.checked_add(len)
+/// .expect("range wraps u64")` — a guest-controlled `dst` made that wrap and abort.
+///
+/// Fix: `IntervalMap::insert` now returns `IntervalError::Wraps` (and `::Empty` for a
+/// zero-length range) instead of panicking, which `AddressTable::bind` maps to the
+/// loud `AddressFault::Malformed`. A malformed range from hostile bytes is a clean
+/// `Err`, never a panic (boundary-1). The SAME container also backs the RPC-map bind
+/// path (`sync_rpc_mappings`), so that untrusted entry is closed by the same fix.
+#[test]
+fn cbfuzz_ce_physical_dst_near_umax_is_a_loud_fault_never_a_panic() {
+    let (mut gpu, _rec) = fresh_gpu();
+    let mut vmm = MockVmm::new();
+    let (pid, cid) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+
+    // The minimized crash: one physical CE dst whose page + len wraps u64.
+    let ring = script_pushbuffer(
+        &mut gpu,
+        &mut vmm,
+        pid,
+        cid,
+        0x5000_0000,
+        &[MockPushbuffer::ce_launch_dma(
+            0xFFFF_FFFF_FFFF_F800,
+            0x1000,
+            false,
+        )],
+    );
+    let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring)
+        .expect("a wrapping CE dst must not panic and must not fault the parse");
+    // ★★★ #102 — the ANSWER changed with the operand split, and the change is correct.
+    //
+    // This used to require `AddressFault::Malformed`, which came from the CE arm binding
+    // `phys: dst.0` — a page-table page mapped to itself. There is no such bind any more,
+    // so there is no malformed *range* to refuse: the destination is simply an address
+    // that owns no page table, i.e. VA-operand work, forwarded untouched. Refusing it
+    // would mean faulting the guest for issuing a copy we are not interested in.
+    //
+    // The property the fuzz campaign actually found stands unchanged and is asserted
+    // directly: **wrapping arithmetic on an attacker-controlled destination does not
+    // panic**, and nothing is half-applied.
+    assert_eq!(
+        (out.pt_writes.len(), out.data_copies),
+        (0, 1),
+        "a destination that owns no page table is forwarded, not captured"
+    );
+    // ★ The only binding in the table is the pushbuffer's own — the fixture's stand-in
+    // for the guest's `MAP_MEMORY_DMA` (§8.2.3). A second one would be the CE arm having
+    // bound something out of a wrapping destination, which is the crash's own shape.
+    assert_eq!(
+        gpu.procs[&pid]
+            .vas_by_pdb(GpuId::ZERO, A_PDB)
+            .expect("the VAS exists")
+            .table
+            .iter()
+            .map(|(va, _, _)| va)
+            .collect::<Vec<_>>(),
+        vec![kayfabe_tests::pb_va(0x5000_0000).0],
+        "no torn partial state"
+    );
+
+    // ★ The sharper case the old form could not reach: a wrapping length whose START is
+    // a real page-table page. Classification must still be total, and the latched page
+    // must be the page-aligned base — never a wrapped or truncated address.
+    let root = A_PDB.0 & !0xfff;
+    let ring = script_pushbuffer(
+        &mut gpu,
+        &mut vmm,
+        pid,
+        cid,
+        0x5001_0000,
+        &[MockPushbuffer::ce_launch_dma(
+            root + 0xff8,
+            u64::from(u32::MAX),
+            false,
+        )],
+    );
+    let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring)
+        .expect("a wrapping length on a real PT page must not panic either");
+    assert_eq!(out.pt_writes.len(), 1);
+    assert_eq!(
+        (out.pt_writes[0].page, out.pt_writes[0].bytes),
+        (root, u64::from(u32::MAX)),
+        "page-aligned base, length carried verbatim for the decode to bound itself with"
+    );
+}
+
+/// **Fuzz-found #2** — a hostile GPFIFO entry naming a range base near `u64::MAX`
+/// panicked the guest-memory adapter: the parser caps the per-range read to multiple
+/// pages (bounded work, correct) and forwards the attacker-controlled `gpa` to
+/// `Vmm::gpa_read`, whose contract is to return a `Result` — but the mock adapter did
+/// `gpa + i` and overflowed. The core is correct (it handles a `gpa_read` `Err` via
+/// `map_err`); the adapter must not panic. Fix: the mock addresses guest RAM with
+/// `checked_add`. Pins that a top-of-space range never panics.
+///
+/// ★★ **STRENGTHENED (2026-07-27), and the old expectation was a mock artifact.** This
+/// test used to `.expect(…)` a *successful* parse — *"a top-of-space range reads sparse
+/// zeros"* — on the grounds that an un-formable address is "exactly a real adapter's
+/// unbacked-page behavior". **That sentence was false**, and `vmm_portability.rs`'s
+/// second backend already said so in the same suite: `SecondVmm` returns
+/// `VmmError::BadGpa { gpa: u64::MAX }` for precisely this shape, and its doc calls that
+/// *"the contract"*. Two mock backends disagreed about whether a wrapping range is
+/// serviceable, and the sparse one was wrong: no adapter can memcpy a range that leaves
+/// the 64-bit space, and a real one must never try — `kayfabe_vmm::GuestRamMap::resolve`
+/// refuses it before a byte is touched.
+///
+/// The property this test *names* — a hostile top-of-space range is bounded and never
+/// panics — is unchanged and still asserted. What changed is that the outcome is now the
+/// **exact loud fault** instead of a silently-successful read of fabricated zeros, which
+/// is a strengthening in the direction `testing_doctrine.md` §2 requires (assert the
+/// variant, and pin which of two near neighbours reports it: `GpaRead` — *nothing is
+/// there* — never `NonRamGpa`, which means *a device is there*).
+///
+/// ★★★ **MOVED, not weakened (§8.2.3).** A GPFIFO entry names a GPU **virtual** address
+/// now, so an entry carrying `0xFFFF_FFFF_FFFF_F000` raw refuses at the address table
+/// before `Vmm::gpa_read` ever sees it — and the `GpaRead` arm this regression exists to
+/// pin would have become **unreachable**. The fix is to reach it the way a guest would:
+/// bind a top-of-space *mapping* whose physical side is the top of guest-physical space,
+/// so the wrap happens exactly where it used to. Both refusals are asserted, and they are
+/// asserted as **different** faults, because they are.
+#[test]
+fn cbfuzz_gpfifo_range_gpa_near_umax_never_panics() {
+    /// The top-of-space page, used as both the VA and (via a separate binding) the GPA.
+    const TOP: u64 = 0xFFFF_FFFF_FFFF_F000;
+
+    let (mut gpu, _rec) = fresh_gpu();
+    let mut vmm = MockVmm::new();
+    let (pid, cid) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+
+    // ARM 0 — the raw entry, unbound: refused one layer earlier, by name, and never read.
+    let mut unbound = Vec::new();
+    unbound.extend_from_slice(&TOP.to_le_bytes());
+    unbound.extend_from_slice(&0x20_0000u64.to_le_bytes());
+    assert_eq!(
+        parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &unbound),
+        Err(FwdFault::Address(kayfabe_mmu::AddressFault::Miss {
+            pdb: A_PDB,
+            va: GpuVa(TOP),
+        })),
+        "an unbound top-of-space VA is an address-table MISS, not a guest-memory read"
+    );
+
+    // A GPFIFO ring with one entry: a BOUND VA whose guest-physical base is near the top
+    // of the 64-bit space, with a multi-page declared length (the parser caps it to
+    // 1 MiB, which still wraps).
+    let va = GpuVa(0x40_0000_0000);
+    kayfabe_tests::bind_ring_at(&mut gpu, pid, cid, va, TOP, 0x1000);
+    let mut ring = Vec::new();
+    ring.extend_from_slice(&va.0.to_le_bytes());
+    ring.extend_from_slice(&0x20_0000u64.to_le_bytes()); // 2 MiB declared
+    // ★ The read is partitioned by the address table, so the wrap arrives at `gpa_read`
+    // as the binding's own 4 KiB — which is exactly the shape that overflowed the mock.
+    assert_eq!(
+        parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring),
+        Err(FwdFault::Address(kayfabe_mmu::AddressFault::Miss {
+            pdb: A_PDB,
+            va: GpuVa(va.0 + 0x1000),
+        })),
+        "past the binding's end there is no mapping, and a MISS is a FAULT — the read \
+         never runs off the end of a binding into the next page"
+    );
+
+    // Non-vacuity: the same VA with a length that fits the binding exactly. The read
+    // reaches `Vmm::gpa_read` at the top of the space, and THAT is where the loud
+    // guest-memory fault lives — `GpaRead` (nothing is there), never `NonRamGpa`
+    // (a device is there), and never a wrap-around read of fabricated zeros.
+    let mut fit_ring = Vec::new();
+    fit_ring.extend_from_slice(&va.0.to_le_bytes());
+    fit_ring.extend_from_slice(&0x1000u64.to_le_bytes());
+    let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &fit_ring)
+        .expect("a range ending exactly at the top of the space is formable, so it reads");
+    assert!(out.sem_releases.is_empty() && out.pt_writes.is_empty() && out.invalidates.is_empty());
+
+    // …and one byte past it wraps: the binding is stretched to cover it, so the refusal
+    // is the ADAPTER's and the variant is the one this regression was minimized from.
+    let wrap_va = GpuVa(0x50_0000_0000);
+    kayfabe_tests::bind_ring_at(&mut gpu, pid, cid, wrap_va, TOP, 0x2000);
+    let mut wrap_ring = Vec::new();
+    wrap_ring.extend_from_slice(&wrap_va.0.to_le_bytes());
+    wrap_ring.extend_from_slice(&0x2000u64.to_le_bytes());
+    assert_eq!(
+        parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &wrap_ring),
+        Err(FwdFault::GpaRead { gpa: TOP }),
+        "a range that leaves the 64-bit space is UNBACKED (`GpaRead`), not a device \
+         window (`NonRamGpa`) — and never a wrap-around read of fabricated zeros"
+    );
+}
+
+// =================================================================================
+// #14 — the arming-window class: there is no "multiproc mode" to arm too late.
+// =================================================================================
+
+/// **Guards #14 round 3's transition window** (`mode2_14_concurrent_apps`): the C
+/// gated its per-process divergences on `multiproc() = n>1`, but n flips only after
+/// the 2nd process is DETECTED — proc 1 + shared state ran blind first, and the
+/// corruption had landed by arming time. The rewrite has NO gate (single-process is
+/// the N=1 case of the only code path, lesson L9) — so a second process arriving
+/// AFTER the first is fully active (the exact C order: wo_14 interleaves; this test
+/// serializes) must build cleanly AND leave the first's state untouched.
+#[test]
+fn cb14_second_proc_arrives_after_first_is_active_no_arming_window() {
+    let (mut gpu, _rec) = fresh_gpu();
+    // Proc A is built AND fully active: published, scheduled, rung, completed.
+    let (pid_a, _cid_a) = born_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let pub_a = publish_backing(
+        gpu.procs.get_mut(&pid_a).unwrap(),
+        GpuId::ZERO,
+        A_PDB,
+        VA,
+        0x10000,
+    )
+    .unwrap();
+    let out_a =
+        handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x10)), &[]).unwrap();
+    assert!(out_a.scheduled_now);
+    gpu.procs
+        .get_mut(&pid_a)
+        .unwrap()
+        .completion
+        .observe(OsEventRef(0xA))
+        .unwrap();
+    let batch = gpu
+        .pump_completions(GpuId::ZERO)
+        .expect("A's completion posts");
+    gpu.completions_drained(GpuId::ZERO);
+    gpu.procs
+        .get_mut(&pid_a)
+        .unwrap()
+        .completion
+        .ack(batch.events[0]);
+
+    // NOW proc B arrives — identical handles, identical guest VA.
+    let (pid_b, _cid_b) = born_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
+    let pub_b = publish_backing(
+        gpu.procs.get_mut(&pid_b).unwrap(),
+        GpuId::ZERO,
+        B_PDB,
+        VA,
+        0x10000,
+    )
+    .unwrap();
+    assert_ne!(
+        pub_a.gpa, pub_b.gpa,
+        "late-arriving B still gets disjoint backing"
+    );
+    // ★★★ #102 — corrected (was `assert_ne!`). Identical guest VAs are host-mapped at the
+    // SAME address in DIFFERENT host VASes; the separation is the VAS and the backing,
+    // never the address. See `sim_14_two_process::t14_identical_va_disjoint_backing`.
+    assert_eq!(
+        (pub_a.host_va, pub_b.host_va),
+        (VA.0, VA.0),
+        "both procs host-mapped AT the guest VA they named"
+    );
+    assert_ne!(
+        gpu.procs[&pid_a]
+            .vas_by_pdb(GpuId::ZERO, A_PDB)
+            .expect("the VAS exists")
+            .host_vas,
+        gpu.procs[&pid_b]
+            .vas_by_pdb(GpuId::ZERO, B_PDB)
+            .expect("the VAS exists")
+            .host_vas,
+        "…in different host VASes — the late arrival got its OWN, not a share of A's"
+    );
+    let out_b =
+        handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x20)), &[]).unwrap();
+    assert!(
+        out_b.scheduled_now,
+        "B's channel schedules on ITS OWN plane"
+    );
+    assert_ne!(out_a.host_token, out_b.host_token);
+
+    // A's pre-existing state is untouched by B's arrival: same resolution, and its
+    // already-scheduled channel rings again WITHOUT rescheduling (state preserved).
+    let (ba, _) = resolve(&gpu, GpuId::ZERO, A_PDB, VA).unwrap();
+    assert_eq!(ba.phys(), pub_a.gpa, "A resolves ITS backing after B armed");
+    let again =
+        handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x10)), &[]).unwrap();
+    assert!(
+        !again.scheduled_now,
+        "A's exec-plane state survived B's arrival"
+    );
+}
+
+/// **Guards the silent-state-fold half of the same class** (lesson L9): a dup edge
+/// that would MERGE two procs after both touched their data planes is a LOUD
+/// `LateMerge` refusal, applied ATOMICALLY — the device rolls back and BOTH procs
+/// stay fully functional (the C instead folded/aliased state and corrupted the
+/// loser).
+#[test]
+fn cb14_late_merge_after_touch_is_loud_and_atomic() {
+    let (mut gpu, _rec) = fresh_gpu();
+    let (pid_a, _) = born_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let (pid_b, _) = born_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
+    let pub_a = publish_backing(
+        gpu.procs.get_mut(&pid_a).unwrap(),
+        GpuId::ZERO,
+        A_PDB,
+        VA,
+        0x10000,
+    )
+    .unwrap();
+    let pub_b = publish_backing(
+        gpu.procs.get_mut(&pid_b).unwrap(),
+        GpuId::ZERO,
+        B_PDB,
+        VA,
+        0x10000,
+    )
+    .unwrap();
+
+    // A hostile/late dup edge that would join the two touched components.
+    let late_dup = RmEvent::Dup {
+        src: NodeKey::new(HClient(0xAA), HObject(0x5c00_0010)),
+        dst: NodeKey::new(HClient(0xBB), HObject(0x9999_0000)),
+    };
+    let refused = gpu.apply(late_dup);
+    assert!(
+        matches!(refused, Err(GpuError::LateMerge { .. })),
+        "merging two touched procs is a loud refusal, never a silent fold: {refused:?}"
+    );
+
+    // ATOMIC: both procs still live, still routed, still resolving their OWN state.
+    assert_eq!(gpu.procs.len(), 2, "rollback kept both procs live");
+    let (ba, _) = resolve(&gpu, GpuId::ZERO, A_PDB, VA).unwrap();
+    let (bb, _) = resolve(&gpu, GpuId::ZERO, B_PDB, VA).unwrap();
+    assert_eq!(ba.phys(), pub_a.gpa);
+    assert_eq!(bb.phys(), pub_b.gpa);
+    assert!(handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x10)), &[]).is_ok());
+    assert!(handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x20)), &[]).is_ok());
+}
+
+/// ★ Mutation-gate kill (`Proc::is_untouched` `&&`→`||` between the ARENA clause and
+/// the host-channel clause): a proc is untouched ONLY if EVERY data-plane clause holds
+/// — arena un-carved AND no host channel AND no host VAS. `cb14` above touches all
+/// three at once (via `publish_backing`), so it cannot distinguish an `&&`→`||`
+/// mutation (which only differs when the clauses DISAGREE). This isolates the arena
+/// clause: it carves the arena DIRECTLY (no host channel/VAS materialized), so
+/// `is_untouched` must be false on the arena clause ALONE. A late merge that would
+/// absorb this arena-touched proc is therefore a loud `LateMerge` — the `||` mutant
+/// (which would read `arena_touched || channels_clean = true`) would wrongly permit the
+/// silent fold the C corrupted the loser with.
+#[test]
+fn cb14_arena_touch_alone_blocks_a_late_merge() {
+    let (mut gpu, _rec) = fresh_gpu();
+    let (pid_a, _) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let (pid_b, _) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
+
+    // Touch ONLY proc B's arena — carve a GPA directly, materializing NO host channel
+    // and NO host VAS (so the arena clause of `is_untouched` is the only false one).
+    let _touch = gpu
+        .procs
+        .get_mut(&pid_b)
+        .unwrap()
+        .arenas
+        .get_mut(&GpuId::ZERO)
+        .unwrap()
+        .alloc(0x10000, 0x1000)
+        .expect("arena carves");
+    let _ = pid_a;
+
+    // A late dup edge that would join A's and B's components. B's arena is touched, so
+    // the merge must be refused loudly and atomically — never a silent fold.
+    let late_dup = RmEvent::Dup {
+        src: NodeKey::new(HClient(0xAA), HObject(0x5c00_0010)),
+        dst: NodeKey::new(HClient(0xBB), HObject(0x9999_0000)),
+    };
+    let refused = gpu.apply(late_dup);
+    assert!(
+        matches!(refused, Err(GpuError::LateMerge { .. })),
+        "an arena-touched proc cannot be silently merge-absorbed: {refused:?}"
+    );
+    assert_eq!(gpu.procs.len(), 2, "rollback kept both procs live");
+}
+
+/// ★ Mutation-gate kill (`Proc::is_untouched` `&&`→`||` between the HOST-CHANNEL clause
+/// and the host-VAS clause): the twin of the test above, isolating the OTHER `&&`. A
+/// materialized host channel alone (arena un-carved, no host VAS) must make a proc
+/// touched — so a late merge absorbing it is a loud `LateMerge`. The `||` mutant would
+/// read `channels_clean(false) || vases_clean(true) = true` and wrongly permit the fold.
+/// We set the host channel DIRECTLY (the only touched clause) rather than via a doorbell
+/// (which would also materialize the host VAS and mask the disagreement).
+#[test]
+fn cb14_host_channel_touch_alone_blocks_a_late_merge() {
+    let (mut gpu, _rec) = fresh_gpu();
+    let (pid_a, _) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let (pid_b, cid_b) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
+    let _ = pid_a;
+    // ★ §12.35 — DECLARED RESIDUE (dangling). This test FABRICATES a `HostHandle` the
+    // mock never minted, because the state it needs — "host-VAS/host-channel touched and
+    // nothing else" — is not reachable through the protocol: materializing one for real
+    // would touch the other clauses too. A fabricated handle is by construction unknown
+    // to the ledger, so it reads as dangling. Declared rather than worked around: a
+    // harness that reaches past the core should have to say so.
+    gpu.declare_residue(
+        ResidueClaim::on(
+            kayfabe_isolate::IsolateId::new(pid_b.0, GpuId::ZERO),
+            "harness bypass: the late-merge clause under test is set by writing a \
+             fabricated HostHandle straight into core state, so the ledger has never \
+             seen it",
+        )
+        .dangling(1, 0),
+    );
+
+    // Touch ONLY proc B's host-channel clause: give one channel a host channel object,
+    // leaving the arena un-carved and every VAS's host VAS unmaterialized.
+    gpu.procs
+        .get_mut(&pid_b)
+        .unwrap()
+        .channels
+        .get_mut(&cid_b)
+        .unwrap()
+        .host_channel = Some(kayfabe_isolate::HostHandle::new(
+        // ★ N3 — stamped with the isolate whose state it is being written into. It used
+        // to name `IsolateId(0)` (the SYSTEM isolate) while sitting in proc B's channel;
+        // that was invisible while the teardown audit bucketed by `Proc`, and the audit
+        // now buckets by the namespace the handle itself records.
+        kayfabe_isolate::IsolateId::new(pid_b.0, GpuId::ZERO),
+        0xC0FFEE,
+    ));
+
+    let late_dup = RmEvent::Dup {
+        src: NodeKey::new(HClient(0xAA), HObject(0x5c00_0010)),
+        dst: NodeKey::new(HClient(0xBB), HObject(0x9999_0000)),
+    };
+    let refused = gpu.apply(late_dup);
+    assert!(
+        matches!(refused, Err(GpuError::LateMerge { .. })),
+        "a host-channel-touched proc cannot be silently merge-absorbed: {refused:?}"
+    );
+    assert_eq!(gpu.procs.len(), 2, "rollback kept both procs live");
+}
+
+/// ★ Mutation-gate kill (`Proc::is_untouched` `&&`→`||` INSIDE the per-VAS clause,
+/// between `host_vas.is_none()` and the "no published binding" check): a VAS is
+/// untouched only if it has NEITHER a materialized host VAS NOR any host-published
+/// binding — either one alone is host state that blocks an early merge. `publish_backing`
+/// sets BOTH at once, so the two sub-conditions always agree there; this isolates the
+/// host-VAS sub-condition by materializing ONLY a host VAS (no published binding, arena
+/// un-carved, no host channel). The `||` mutant would read `host_vas_absent(false) ||
+/// no_published_binding(true) = true` and wrongly call the VAS untouched.
+#[test]
+fn cb14_host_vas_touch_alone_blocks_a_late_merge() {
+    let (mut gpu, _rec) = fresh_gpu();
+    let (pid_a, _) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let (pid_b, _) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
+    let _ = pid_a;
+    // ★ §12.35 — DECLARED RESIDUE (dangling). This test FABRICATES a `HostHandle` the
+    // mock never minted, because the state it needs — "host-VAS/host-channel touched and
+    // nothing else" — is not reachable through the protocol: materializing one for real
+    // would touch the other clauses too. A fabricated handle is by construction unknown
+    // to the ledger, so it reads as dangling. Declared rather than worked around: a
+    // harness that reaches past the core should have to say so.
+    gpu.declare_residue(
+        ResidueClaim::on(
+            kayfabe_isolate::IsolateId::new(pid_b.0, GpuId::ZERO),
+            "harness bypass: the late-merge clause under test is set by writing a \
+             fabricated HostHandle straight into core state, so the ledger has never \
+             seen it",
+        )
+        .dangling(1, 0),
+    );
+
+    // Materialize ONLY a host VAS on proc B (no published binding, no host channel,
+    // arena un-carved) — the host-VAS sub-condition is the only touched one.
+    let vas = gpu
+        .procs
+        .get_mut(&pid_b)
+        .unwrap()
+        .vas_by_pdb_mut(GpuId::ZERO, B_PDB)
+        .unwrap();
+    vas.host_vas = Some(kayfabe_isolate::HostHandle::new(
+        // ★ N3 — proc B's own isolate, for the reason stated at the host-channel twin.
+        kayfabe_isolate::IsolateId::new(pid_b.0, GpuId::ZERO),
+        0xBADA55,
+    ));
+
+    let late_dup = RmEvent::Dup {
+        src: NodeKey::new(HClient(0xAA), HObject(0x5c00_0010)),
+        dst: NodeKey::new(HClient(0xBB), HObject(0x9999_0000)),
+    };
+    let refused = gpu.apply(late_dup);
+    assert!(
+        matches!(refused, Err(GpuError::LateMerge { .. })),
+        "a host-VAS-touched proc cannot be silently merge-absorbed: {refused:?}"
+    );
+    assert_eq!(gpu.procs.len(), 2, "rollback kept both procs live");
+}
+
+/// ★ Mutation-gate kill (`handle_doorbell` ring-gate match guard
+/// `None if working_set.is_empty()` → `true` / → `false`): the no-VAS arm of the #14
+/// ring-gate is REACHABLE with a live host channel — a guest can `Free` its VASpace
+/// handle AFTER the channel materialized (re-projection nulls `chan.vas_pdb`; the host
+/// channel persists). In that state the guard is load-bearing on both sides:
+///
+/// - a NON-EMPTY working set has no address space to have published it → loud
+///   `NoVas`, ZERO host ops (the →`true` mutant would skip the gate and ring the
+///   host doorbell UNGATED — exactly the #14 cross-VAS class);
+/// - an EMPTY working set touches no tracked VA → nothing to fault on, the ring
+///   proceeds (the →`false` mutant would refuse the legitimate GSP-managed-shaped
+///   ring).
+///
+/// (An earlier triage called these mutants equivalent by assuming `vas == None` ⇒
+/// `host_channel == None`; the free-after-materialize sequence disproves that.)
+#[test]
+fn cb14_ring_gate_on_vas_freed_channel_refuses_nonempty_allows_empty() {
+    let (mut gpu, rec) = fresh_gpu();
+    let (_pid, cid) = born_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let token = MockArch::token_for(VChid(0x10));
+
+    // Schedule the GR channel with an empty (trivially gated) ring. ⊘ w393: the host
+    // channel was born at the alloc (`build_proc`), not here — a doorbell schedules and
+    // rings, it no longer materializes.
+    let first = handle_doorbell(&mut gpu, GpuId::ZERO, token, &[]).expect("first ring schedules");
+    assert!(first.scheduled_now);
+
+    // The guest frees its VASpace HANDLE: re-projection nulls the channel's declared
+    // VAS while the materialized host channel survives.
+    gpu.apply(RmEvent::Free {
+        client: HClient(0xAA),
+        handle: HObject(0x5c00_0010),
+    })
+    .expect("freeing the VASpace handle applies");
+
+    // Non-empty working set on the VAS-less channel: loud NoVas, zero host ops.
+    let ops_before = rec.lock().unwrap().log.len();
+    let refused = handle_doorbell(&mut gpu, GpuId::ZERO, token, &[VA]);
+    // ★ §12.38 — the EXACT variant, naming the channel. This is THE site the taxonomy is
+    // written around (the same absence `sync_proc_to_boundary` defers on), so its fault
+    // is exactly the one worth pinning to the `ChanId`.
+    assert_eq!(
+        refused,
+        Err(FwdFault::NoVas(cid)),
+        "a non-empty submission with no declared VAS is refused loudly"
+    );
+    assert_eq!(
+        rec.lock().unwrap().log.len(),
+        ops_before,
+        "the refused ring performed ZERO host ops (no ungated doorbell)",
+    );
+
+    // Empty working set: nothing to gate — the ring on the still-materialized host
+    // channel proceeds (and needs no re-materialization/re-schedule).
+    let ok = handle_doorbell(&mut gpu, GpuId::ZERO, token, &[])
+        .expect("an empty submission has nothing to gate and rings");
+    assert!(
+        !ok.scheduled_now,
+        "already scheduled — no re-materialization"
+    );
+}
+
+// =================================================================================
+// ★ The device teardown→restart lifecycle (decision #18B's known-gap probe).
+// The GSP-reboot FSM half (WPR2/fn-47/seqNum) is NOT MODELED yet (`kayfabe-gsp` is a
+// skeleton) — that is a named MILESTONE row in the matrix, not faked here. The
+// teardown→recreate half IS core-coverable today: these two tests pin it.
+// =================================================================================
+
+/// **Guards the full-device teardown→rebuild cycle** (the C's "turn down, turn up"
+/// probe: #12's fn-47 idle-release path, `mode2_12_layered_status` cont.30-32, minus
+/// the unmodeled GSP FSM): tear EVERY process down, reap at the quiesce point, then
+/// rebuild with IDENTICAL handles/PDBs/VAs. The rebuilt device must be
+/// indistinguishable from fresh: everything routes, backs, schedules and completes,
+/// on FRESH isolate sessions, with the old procs' arenas RECYCLED (the tight window
+/// makes non-recycling loudly impossible).
+#[test]
+fn cb_lifecycle_full_teardown_reap_rebuild_identical() {
+    // Window fits EXACTLY 3 arenas: system + two procs. A rebuild can only succeed
+    // if reap actually recycled the torn-down procs' arenas.
+    let (mut gpu, rec) = gpu_with_window(0x1_0000_0000..0x1_3000_0000, 0x1000_0000);
+
+    // ---- Generation 1: two procs, real work. ----
+    let (pid_a, _) = born_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let (pid_b, _) = born_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
+    publish_backing(
+        gpu.procs.get_mut(&pid_a).unwrap(),
+        GpuId::ZERO,
+        A_PDB,
+        VA,
+        0x10000,
+    )
+    .unwrap();
+    publish_backing(
+        gpu.procs.get_mut(&pid_b).unwrap(),
+        GpuId::ZERO,
+        B_PDB,
+        VA,
+        0x10000,
+    )
+    .unwrap();
+    handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x10)), &[]).unwrap();
+    handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x20)), &[]).unwrap();
+    let gen1_arenas: Vec<_> = gpu
+        .procs
+        .values()
+        .map(|p| p.arenas[&GpuId::ZERO].range.clone())
+        .collect();
+    let gen1_sessions: std::collections::BTreeSet<kayfabe_isolate::IsolateId> =
+        rec.lock().unwrap().log.iter().map(|(id, _)| *id).collect();
+
+    // ---- Full teardown: every client root freed. ----
+    gpu.apply(RmEvent::Free {
+        client: HClient(0xAA),
+        handle: HObject(0x5c00_0000),
+    })
+    .unwrap();
+    gpu.apply(RmEvent::Free {
+        client: HClient(0xBB),
+        handle: HObject(0x5c00_0000),
+    })
+    .unwrap();
+    assert!(gpu.procs.is_empty(), "all procs retired");
+    assert!(
+        gpu.spine.by_pdb.is_empty() && gpu.spine.by_vchid.is_empty(),
+        "no routing residue"
+    );
+    assert_eq!(
+        gpu.spine.retired.len(),
+        2,
+        "both staged for the deferred reap (L10)"
+    );
+
+    // ---- The quiesce point: reap + recycle. ----
+    assert_eq!(gpu.reap_retired().len(), 2);
+    assert!(
+        gpu.spine.retired.is_empty(),
+        "reap drained the staging area"
+    );
+
+    // ---- Generation 2: IDENTICAL handles, PDBs, VAs. ----
+    let (pid_a2, _) = born_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let (pid_b2, _) = born_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
+    let pa2 = publish_backing(
+        gpu.procs.get_mut(&pid_a2).unwrap(),
+        GpuId::ZERO,
+        A_PDB,
+        VA,
+        0x10000,
+    )
+    .expect("gen-2 backs the identical VA cleanly — no stale residue");
+    let pb2 = publish_backing(
+        gpu.procs.get_mut(&pid_b2).unwrap(),
+        GpuId::ZERO,
+        B_PDB,
+        VA,
+        0x10000,
+    )
+    .unwrap();
+    assert_ne!(pa2.gpa, pb2.gpa, "gen-2 procs still disjoint");
+    // Recycled arenas: gen-2 procs run inside gen-1's ranges (the tight window
+    // leaves nothing else) — and that reuse is CLEAN by construction.
+    for p in gpu.procs.values() {
+        assert!(
+            gen1_arenas.contains(&p.arenas[&GpuId::ZERO].range),
+            "gen-2 arena {:x?} recycled from gen-1's {gen1_arenas:x?}",
+            p.arenas[&GpuId::ZERO].range
+        );
+    }
+    // Fresh channels schedule on fresh exec planes; completions flow.
+    assert!(
+        handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x10)), &[])
+            .unwrap()
+            .scheduled_now
+    );
+    assert!(
+        handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x20)), &[])
+            .unwrap()
+            .scheduled_now
+    );
+    gpu.procs
+        .get_mut(&pid_a2)
+        .unwrap()
+        .completion
+        .observe(OsEventRef(0xA2))
+        .unwrap();
+    assert!(
+        gpu.pump_completions(GpuId::ZERO).is_some(),
+        "gen-2 completions deliver"
+    );
+
+    // Fresh isolate sessions — gen 2 never ran on a dead proc's host session.
+    let all_sessions: std::collections::BTreeSet<kayfabe_isolate::IsolateId> =
+        rec.lock().unwrap().log.iter().map(|(id, _)| *id).collect();
+    assert!(
+        all_sessions.len() > gen1_sessions.len(),
+        "gen-2 spawned FRESH isolate sessions (gen1={gen1_sessions:?}, all={all_sessions:?})"
+    );
+}
+
+/// **Guards sustained process churn** (the C's #80 `teardown_hardening_done`: "host
+/// reaper + GPA free-list" — the shared window exhausted under create→destroy
+/// churn; and the C-era "fresh boot per GPU run" tax, lesson L12, that the rewrite
+/// exists to kill): many sequential process generations through a window sized for
+/// FOUR arenas must never exhaust, because every reap recycles.
+///
+/// ★ This regression EXPOSED a real core gap when written: `GpaSpace::carve` never
+/// recycled and `Gpu::retired` was never reaped, so generation ~4 died with
+/// `WindowExhausted` — exactly the C's leak, silently reintroduced. Fixed by
+/// `Gpu::reap_retired` + `GpaSpace::release` (see the matrix doc).
+#[test]
+fn cb_lifecycle_process_churn_never_exhausts_the_window() {
+    // Room for system + 3 concurrent procs only; 24 generations churn through it.
+    let (mut gpu, _rec) = gpu_with_window(0x1_0000_0000..0x1_4000_0000, 0x1000_0000);
+
+    for generation in 0..24u64 {
+        // Same client handle + PDB + VA every generation — the #12 identical-reuse
+        // shape, at device-lifecycle scale.
+        let (pid, _cid) = born_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+        let p = publish_backing(
+            gpu.procs.get_mut(&pid).unwrap(),
+            GpuId::ZERO,
+            A_PDB,
+            VA,
+            0x10000,
+        )
+        .unwrap_or_else(|e| panic!("generation {generation}: publish must succeed: {e:?}"));
+        let out = handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x10)), &[])
+            .unwrap_or_else(|e| panic!("generation {generation}: doorbell must ring: {e:?}"));
+        assert!(
+            out.scheduled_now,
+            "generation {generation}: fresh channel schedules"
+        );
+        let (b, _) = resolve(&gpu, GpuId::ZERO, A_PDB, VA).unwrap();
+        assert_eq!(
+            b.phys(),
+            p.gpa,
+            "generation {generation}: resolves its OWN backing"
+        );
+
+        // Teardown + reap at the quiesce point.
+        gpu.apply(RmEvent::Free {
+            client: HClient(0xAA),
+            handle: HObject(0x5c00_0000),
+        })
+        .unwrap();
+        assert_eq!(
+            gpu.reap_retired().len(),
+            1,
+            "generation {generation}: reaped"
+        );
+    }
+    assert!(
+        gpu.spine.retired.is_empty(),
+        "no unbounded staging growth across churn"
+    );
+    assert!(gpu.procs.is_empty());
+}

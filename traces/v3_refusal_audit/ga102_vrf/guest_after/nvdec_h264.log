@@ -1,0 +1,5 @@
+=== nvdec_h264 side=guest start=2026-09-26T14:28:57+00:00 cmd: [ -s /var/tmp/rf/out/_video/x264.mp4 ] || ffmpeg -y -hide_banner -f lavfi -i testsrc=size=1280x720:rate=30:duration=10 -c:v libx264 -pix_fmt yuv420p /var/tmp/rf/out/_video/x264.mp4 >/dev/null 2>&1; ffmpeg -hide_banner -hwaccel cuda -hwaccel_output_format cuda -i /var/tmp/rf/out/_video/x264.mp4 -f null - 2>&1 | tr "\r" "\n" | grep -E "frame=|rror|hwaccel|cuvid" | tail -4
+frame=    0 fps=0.0 q=-0.0 size=       0kB time=00:00:00.00 bitrate=N/A speed=   0x    
+frame=  292 fps=0.0 q=-0.0 size=N/A time=00:00:09.96 bitrate=N/A speed=11.3x    
+frame=  300 fps=0.0 q=-0.0 Lsize=N/A time=00:00:09.96 bitrate=N/A speed=11.3x    
+=== end rc=0 secs=4 2026-09-26T14:29:01+00:00

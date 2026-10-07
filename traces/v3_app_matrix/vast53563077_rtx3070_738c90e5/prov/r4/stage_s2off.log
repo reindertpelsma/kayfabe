@@ -1,0 +1,8 @@
+S2_START 2026-09-30T19:46:05+00:00 rev=738c90e5 mode=off KF3_DEV_EXTRA=<unset> qb=/workspace/bench/kf3-bins/738c90e5/qemu-system-x86_64
+STEP apps_off START 2026-09-30T19:46:05+00:00
+STEP apps_off RC=0 2026-09-30T20:17:15+00:00
+  apps_off| [apps_matrix 2026-09-30T20:15:47+00:00] boot ap_r4off_i_cdpSimpleQuicksort rc=0 apps=[cdpSimpleQuicksort] :: /workspace/bench/run_ap_r4off_i_cdpSimpleQuicksort_probe.log:APPS_HOOK tag=ap_r4off_i_cdpSimpleQuicksort apps=[cdpSimpleQuicksort] guest=NVIDIA GeForce RTX 3070, 580.159.04, Disabled /workspa
+  apps_off| [apps_matrix 2026-09-30T20:17:15+00:00] boot ap_r4off_i_conjugateGradientUM rc=0 apps=[conjugateGradientUM] :: /workspace/bench/run_ap_r4off_i_conjugateGradientUM_probe.log:APPS_HOOK tag=ap_r4off_i_conjugateGradientUM apps=[conjugateGradientUM] guest=NVIDIA GeForce RTX 3070, 580.159.04, Disabled /wo
+  apps_off| [apps_matrix 2026-09-30T20:17:15+00:00] GUEST_DONE batched: 66 pass / 71;  isolated re-runs: 0
+  apps_off| 0 pass / 5
+STEP apps_offpm START 2026-09-30T20:17:15+00:00

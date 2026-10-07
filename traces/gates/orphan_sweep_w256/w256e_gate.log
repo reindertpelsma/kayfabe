@@ -1,0 +1,576 @@
+GATE_START 2026-08-11T08:47:19+00:00 rev=a517402 scope=devgsp
+== baseline: cargo check --workspace
+   baseline OK
+== candidates enumerated: 458  (inherent `pub fn` only; trait methods are out of scope)
+   ORPHAN  crates/kayfabe-device/src/bar2.rs:152  new
+   ORPHAN  crates/kayfabe-device/src/bar2.rs:158  pdes
+   ORPHAN  crates/kayfabe-device/src/bar2.rs:169  updates
+   ORPHAN  crates/kayfabe-device/src/bar2.rs:175  refusals
+   ORPHAN  crates/kayfabe-device/src/bar2.rs:180  publish
+   ORPHAN  crates/kayfabe-device/src/bar2.rs:194  refuse
+   ORPHAN  crates/kayfabe-device/src/bar2.rs:205  device_reset
+   ORPHAN  crates/kayfabe-device/src/bar2.rs:235  why
+   ORPHAN  crates/kayfabe-device/src/bar2.rs:256  decode_update_bar_pde
+   ORPHAN  crates/kayfabe-device/src/bar2.rs:288  new
+   ORPHAN  crates/kayfabe-device/src/bar2.rs:294  driver
+   ORPHAN  crates/kayfabe-device/src/census.rs:243  set_probe_arm
+   ORPHAN  crates/kayfabe-device/src/census.rs:249  note_served
+   ORPHAN  crates/kayfabe-device/src/census.rs:271  note_arming
+   ORPHAN  crates/kayfabe-device/src/census.rs:291  note_bind
+   ORPHAN  crates/kayfabe-device/src/census.rs:311  snapshot
+   ORPHAN  crates/kayfabe-device/src/census.rs:343  new
+   ORPHAN  crates/kayfabe-device/src/ceresolve.rs:161  trigger
+   ORPHAN  crates/kayfabe-device/src/ceresolve.rs:251  published_root
+   ORPHAN  crates/kayfabe-device/src/ceresolve.rs:321  root_from_declared_pdb
+   ORPHAN  crates/kayfabe-device/src/ceresolve.rs:410  place
+   ORPHAN  crates/kayfabe-device/src/ceresolve.rs:519  resolve
+   ORPHAN  crates/kayfabe-device/src/ceresolve.rs:689  walk_trace
+   ORPHAN  crates/kayfabe-device/src/cpuintr.rs:208  decode
+   ORPHAN  crates/kayfabe-device/src/cpuintr.rs:306  read
+   ORPHAN  crates/kayfabe-device/src/cpuintr.rs:323  write
+   ORPHAN  crates/kayfabe-device/src/cpuintr.rs:388  latch
+   ORPHAN  crates/kayfabe-device/src/cpuintr.rs:446  any_pending
+   ORPHAN  crates/kayfabe-device/src/doorbell.rs:153  is_served
+   ORPHAN  crates/kayfabe-device/src/doorbell.rs:162  refusal
+   ORPHAN  crates/kayfabe-device/src/doorbell.rs:171  token
+   ORPHAN  crates/kayfabe-device/src/faultbuffer.rs:125  new
+   ORPHAN  crates/kayfabe-device/src/faultbuffer.rs:137  total
+   ORPHAN  crates/kayfabe-device/src/faultbuffer.rs:146  shadow_total
+   ORPHAN  crates/kayfabe-device/src/faultbuffer.rs:152  access_cntr_total
+   ORPHAN  crates/kayfabe-device/src/faultbuffer.rs:158  sample
+   ORPHAN  crates/kayfabe-device/src/faultbuffer.rs:169  note
+   ORPHAN  crates/kayfabe-device/src/faultbuffer.rs:204  new
+   ORPHAN  crates/kayfabe-device/src/fbwin.rs:132  new
+   ORPHAN  crates/kayfabe-device/src/fbwin.rs:139  raw
+   ORPHAN  crates/kayfabe-device/src/fbwin.rs:144  set_raw
+   ORPHAN  crates/kayfabe-device/src/fbwin.rs:150  base
+   ORPHAN  crates/kayfabe-device/src/fbwin.rs:156  target
+   ORPHAN  crates/kayfabe-device/src/fbwin.rs:177  fb_addr
+   ORPHAN  crates/kayfabe-device/src/fbwin.rs:441  tags
+   ORPHAN  crates/kayfabe-device/src/fbwin.rs:592  with_cap
+   ORPHAN  crates/kayfabe-device/src/fbwin.rs:604  limit
+   ORPHAN  crates/kayfabe-device/src/fbwin.rs:610  resident_pages
+   ORPHAN  crates/kayfabe-device/src/ga10x.rs:287  at
+   ORPHAN  crates/kayfabe-device/src/guestsysinfo.rs:73  new
+   ORPHAN  crates/kayfabe-device/src/guestsysinfo.rs:88  agreed_version
+   ORPHAN  crates/kayfabe-device/src/gvaspub.rs:262  new
+   ORPHAN  crates/kayfabe-device/src/gvaspub.rs:269  note
+   ORPHAN  crates/kayfabe-device/src/gvaspub.rs:315  note_undecodable
+   ORPHAN  crates/kayfabe-device/src/gvaspub.rs:322  snapshot
+   ORPHAN  crates/kayfabe-device/src/gvaspub.rs:342  device_reset
+   ORPHAN  crates/kayfabe-device/src/gvaspub.rs:355  is_pde_publication
+   ORPHAN  crates/kayfabe-device/src/gvaspub.rs:374  new
+   ORPHAN  crates/kayfabe-device/src/gvaspub.rs:380  driver
+   ORPHAN  crates/kayfabe-device/src/inert.rs:107  new
+   ORPHAN  crates/kayfabe-device/src/inert.rs:116  is_inert
+   ORPHAN  crates/kayfabe-device/src/inittables.rs:168  is_gss_legacy
+   ORPHAN  crates/kayfabe-device/src/inittables.rs:1112  cmd_id
+   ORPHAN  crates/kayfabe-device/src/inittables.rs:1196  params_size
+   ORPHAN  crates/kayfabe-device/src/inittables.rs:1272  from_cmd
+   ORPHAN  crates/kayfabe-device/src/inittables.rs:1284  new
+   ORPHAN  crates/kayfabe-device/src/inittables.rs:1292  with_probe_arm
+   ORPHAN  crates/kayfabe-device/src/inittables.rs:1317  guest_firmware
+   ORPHAN  crates/kayfabe-device/src/inittables.rs:1323  wanted
+   ORPHAN  crates/kayfabe-device/src/lib.rs:187  contains
+   ORPHAN  crates/kayfabe-device/src/lib.rs:212  contains
+   ORPHAN  crates/kayfabe-device/src/lib.rs:616  pci_bar_len
+   ORPHAN  crates/kayfabe-device/src/lib.rs:630  fb_window
+   ORPHAN  crates/kayfabe-device/src/lib.rs:928  rom_for
+   ORPHAN  crates/kayfabe-device/src/lib.rs:1099  served_chain
+   ORPHAN  crates/kayfabe-device/src/nonstall.rs:116  non_stall_vector
+   ORPHAN  crates/kayfabe-device/src/nonstall.rs:192  gsp_stall_vector
+   ORPHAN  crates/kayfabe-device/src/osevent.rs:115  post
+   ORPHAN  crates/kayfabe-device/src/osevent.rs:144  new
+   ORPHAN  crates/kayfabe-device/src/osevent.rs:155  register
+   ORPHAN  crates/kayfabe-device/src/osevent.rs:191  retire
+   ORPHAN  crates/kayfabe-device/src/osevent.rs:212  batch
+   ORPHAN  crates/kayfabe-device/src/osevent.rs:296  note
+   ORPHAN  crates/kayfabe-device/src/osevent.rs:351  note_join
+   ORPHAN  crates/kayfabe-device/src/osevent.rs:422  new
+   ORPHAN  crates/kayfabe-device/src/plane.rs:256  new
+   ORPHAN  crates/kayfabe-device/src/plane.rs:903  nothing
+   ORPHAN  crates/kayfabe-device/src/plane.rs:1332  root
+   ORPHAN  crates/kayfabe-device/src/plane.rs:1354  fb_len
+   ORPHAN  crates/kayfabe-device/src/plane.rs:1413  new
+   ORPHAN  crates/kayfabe-device/src/plane.rs:1531  rom
+   ORPHAN  crates/kayfabe-device/src/plane.rs:1705  state_guard_for_test
+   ORPHAN  crates/kayfabe-device/src/plane.rs:1721  doorbell_reg
+   ORPHAN  crates/kayfabe-device/src/plane.rs:1755  bar_pde_log
+   ORPHAN  crates/kayfabe-device/src/plane.rs:1784  set_page_dir_log
+   ORPHAN  crates/kayfabe-device/src/plane.rs:1828  resolve_published_va
+   ORPHAN  crates/kayfabe-device/src/plane.rs:1864  read_published_va
+   ORPHAN  crates/kayfabe-device/src/plane.rs:1910  published_walk_trace
+   ORPHAN  crates/kayfabe-device/src/plane.rs:2114  ce_session
+   ORPHAN  crates/kayfabe-device/src/plane.rs:2160  gvas_pub_log
+   ORPHAN  crates/kayfabe-device/src/plane.rs:2165  set_policy
+   ORPHAN  crates/kayfabe-device/src/plane.rs:2492  fb_window_sample
+   ORPHAN  crates/kayfabe-device/src/plane.rs:2499  phase
+   ORPHAN  crates/kayfabe-device/src/plane.rs:2518  gsp_state
+   ORPHAN  crates/kayfabe-device/src/setpagedir.rs:248  new
+   ORPHAN  crates/kayfabe-device/src/setpagedir.rs:258  latest
+   ORPHAN  crates/kayfabe-device/src/setpagedir.rs:264  total
+   ORPHAN  crates/kayfabe-device/src/setpagedir.rs:275  refused
+   ORPHAN  crates/kayfabe-device/src/setpagedir.rs:286  valid
+   ORPHAN  crates/kayfabe-device/src/setpagedir.rs:291  publish
+   ORPHAN  crates/kayfabe-device/src/setpagedir.rs:297  refuse
+   ORPHAN  crates/kayfabe-device/src/setpagedir.rs:306  device_reset
+   ORPHAN  crates/kayfabe-device/src/setpagedir.rs:339  why
+   ORPHAN  crates/kayfabe-device/src/setpagedir.rs:365  new
+   ORPHAN  crates/kayfabe-device/src/setpagedir.rs:371  driver
+   ORPHAN  crates/kayfabe-device/src/staticinfo.rs:77  new
+   ORPHAN  crates/kayfabe-device/src/staticinfo.rs:84  with_gid
+   ORPHAN  crates/kayfabe-device/src/staticinfo.rs:128  with_name
+   ORPHAN  crates/kayfabe-device/src/staticinfo.rs:137  gid_for_chip
+   ORPHAN  crates/kayfabe-device/src/staticinfo.rs:160  body
+   ORPHAN  crates/kayfabe-device/src/sticky.rs:241  rmapi_control_is_cacheable
+   ORPHAN  crates/kayfabe-device/src/sticky.rs:263  reply_would_be_cached
+   ORPHAN  crates/kayfabe-device/src/sticky.rs:300  new
+   ORPHAN  crates/kayfabe-device/src/sticky.rs:318  inspected
+   ORPHAN  crates/kayfabe-device/src/sticky.rs:330  rewritten
+   ORPHAN  crates/kayfabe-device/src/sticky.rs:344  neutralised
+   ORPHAN  crates/kayfabe-device/src/sticky.rs:351  malformed
+   ORPHAN  crates/kayfabe-device/src/sweep.rs:137  must_be_served
+   ORPHAN  crates/kayfabe-device/src/sweep.rs:900  triage_for
+   ORPHAN  crates/kayfabe-device/src/sweep.rs:913  must_serve_and_unserved
+   ORPHAN  crates/kayfabe-device/src/unserviced.rs:216  new
+   ORPHAN  crates/kayfabe-device/src/unserviced.rs:223  total
+   ORPHAN  crates/kayfabe-device/src/unserviced.rs:245  distinct
+   ORPHAN  crates/kayfabe-device/src/unserviced.rs:255  truncated
+   ORPHAN  crates/kayfabe-device/src/unserviced.rs:261  sample
+   ORPHAN  crates/kayfabe-device/src/unserviced.rs:272  note
+   ORPHAN  crates/kayfabe-device/src/unserviced.rs:303  new
+   ORPHAN  crates/kayfabe-gsp/src/boot.rs:188  status_cursor
+   ORPHAN  crates/kayfabe-gsp/src/boot.rs:194  command_cursor
+   ORPHAN  crates/kayfabe-gsp/src/boot.rs:543  len
+   ORPHAN  crates/kayfabe-gsp/src/boot.rs:549  is_empty
+   ORPHAN  crates/kayfabe-gsp/src/boot.rs:726  command_seq
+   ORPHAN  crates/kayfabe-gsp/src/boot.rs:733  observe
+   ORPHAN  crates/kayfabe-gsp/src/boot.rs:1243  service_command_queue
+   ORPHAN  crates/kayfabe-gsp/src/boot.rs:1577  post
+   ORPHAN  crates/kayfabe-gsp/src/element.rs:191  hdr_size
+   ORPHAN  crates/kayfabe-gsp/src/element.rs:197  checksum_off
+   ORPHAN  crates/kayfabe-gsp/src/element.rs:203  seqnum_off
+   ORPHAN  crates/kayfabe-gsp/src/element.rs:215  elem_count_off
+   ORPHAN  crates/kayfabe-gsp/src/element.rs:221  transport
+   ORPHAN  crates/kayfabe-gsp/src/element.rs:322  new
+   ORPHAN  crates/kayfabe-gsp/src/element.rs:349  rpc_length
+   ORPHAN  crates/kayfabe-gsp/src/element.rs:355  msg_len
+   ORPHAN  crates/kayfabe-gsp/src/element.rs:361  elements
+   ORPHAN  crates/kayfabe-gsp/src/element.rs:368  element_size_min
+   ORPHAN  crates/kayfabe-gsp/src/fault.rs:98  code
+   ORPHAN  crates/kayfabe-gsp/src/ram.rs:97  load
+   ORPHAN  crates/kayfabe-gsp/src/ram.rs:163  from_pages
+   ORPHAN  crates/kayfabe-gsp/src/ram.rs:187  len
+   ORPHAN  crates/kayfabe-gsp/src/ram.rs:193  is_empty
+   ORPHAN  crates/kayfabe-gsp/src/ram.rs:240  read
+   ORPHAN  crates/kayfabe-gsp/src/ram.rs:259  write
+   ORPHAN  crates/kayfabe-gsp/src/ram.rs:273  read_u32
+   ORPHAN  crates/kayfabe-gsp/src/ram.rs:284  write_u32
+   ORPHAN  crates/kayfabe-gsp/src/replay.rs:142  new
+   ORPHAN  crates/kayfabe-gsp/src/replay.rs:147  push
+   ORPHAN  crates/kayfabe-gsp/src/replay.rs:153  items
+   ORPHAN  crates/kayfabe-gsp/src/replay.rs:159  count
+   ORPHAN  crates/kayfabe-gsp/src/replay.rs:165  refusals
+   ORPHAN  crates/kayfabe-gsp/src/replay.rs:178  unseen_kinds
+   ORPHAN  crates/kayfabe-gsp/src/replay.rs:342  new
+   ORPHAN  crates/kayfabe-gsp/src/replay.rs:354  with_projection
+   ORPHAN  crates/kayfabe-gsp/src/replay.rs:360  refused
+   ORPHAN  crates/kayfabe-gsp/src/ring.rs:95  new
+   ORPHAN  crates/kayfabe-gsp/src/ring.rs:103  get
+   ORPHAN  crates/kayfabe-gsp/src/ring.rs:109  slot
+   ORPHAN  crates/kayfabe-gsp/src/ring.rs:121  index
+   ORPHAN  crates/kayfabe-gsp/src/ring.rs:163  decode
+   ORPHAN  crates/kayfabe-gsp/src/ring.rs:385  fresh
+   ORPHAN  crates/kayfabe-gsp/src/ring.rs:431  bind
+   ORPHAN  crates/kayfabe-gsp/src/ring.rs:492  published_header
+   ORPHAN  crates/kayfabe-gsp/src/ring.rs:498  msg_count
+   ORPHAN  crates/kayfabe-gsp/src/ring.rs:512  element_size
+   ORPHAN  crates/kayfabe-gsp/src/ring.rs:524  cmd_write_ptr_off
+   ORPHAN  crates/kayfabe-gsp/src/ring.rs:540  peer_stat_read_ptr_off
+   ORPHAN  crates/kayfabe-gsp/src/ring.rs:551  cmd_read_ptr_ack_off
+   ORPHAN  crates/kayfabe-gsp/src/ring.rs:557  cmd_element_off
+   ORPHAN  crates/kayfabe-gsp/src/ring.rs:565  stat_element_off
+   ORPHAN  crates/kayfabe-gsp/src/rpc.rs:197  validated
+   ORPHAN  crates/kayfabe-gsp/src/rpc.rs:211  classify
+   ORPHAN  crates/kayfabe-gsp/src/rpc.rs:316  disposition
+   ORPHAN  crates/kayfabe-gsp/src/rpc.rs:353  allowed_in_bootup_window
+   ORPHAN  crates/kayfabe-gsp/src/rpc.rs:435  from_incoming
+   ORPHAN  crates/kayfabe-gsp/src/rpc.rs:472  reply
+   ORPHAN  crates/kayfabe-gsp/src/rpc.rs:611  reply_alloc
+   ORPHAN  crates/kayfabe-gsp/src/rpc.rs:650  ack
+   ORPHAN  crates/kayfabe-isolate-host/src/child.rs:129  isolate
+   ORPHAN  crates/kayfabe-isolate-host/src/export.rs:74  mint
+   ORPHAN  crates/kayfabe-isolate-host/src/export.rs:90  lend
+   ORPHAN  crates/kayfabe-isolate-host/src/export.rs:101  len
+   ORPHAN  crates/kayfabe-isolate-host/src/export.rs:110  is_empty
+   ORPHAN  crates/kayfabe-isolate-host/src/export.rs:127  new
+   ORPHAN  crates/kayfabe-isolate-host/src/export.rs:147  adopt
+   ORPHAN  crates/kayfabe-isolate-host/src/export.rs:162  dup
+   ORPHAN  crates/kayfabe-isolate-host/src/export.rs:183  kind
+   ORPHAN  crates/kayfabe-isolate-host/src/export.rs:193  origin
+   ORPHAN  crates/kayfabe-isolate-host/src/export.rs:203  len
+   ORPHAN  crates/kayfabe-isolate-host/src/export.rs:209  is_empty
+   ORPHAN  crates/kayfabe-isolate-host/src/fdcross.rs:97  adopt
+   ORPHAN  crates/kayfabe-isolate-host/src/fdcross.rs:112  origin
+   ORPHAN  crates/kayfabe-isolate-host/src/fdcross.rs:119  kind
+   ORPHAN  crates/kayfabe-isolate-host/src/fdcross.rs:138  lend_to
+   ORPHAN  crates/kayfabe-isolate-host/src/fdcross.rs:154  as_local_fd
+   ORPHAN  crates/kayfabe-isolate-host/src/fdcross.rs:162  into_owned
+   ORPHAN  crates/kayfabe-isolate-host/src/guestram.rs:88  new
+   ORPHAN  crates/kayfabe-isolate-host/src/guestram.rs:100  bytes
+   ORPHAN  crates/kayfabe-isolate-host/src/guestram.rs:125  honour
+   ORPHAN  crates/kayfabe-isolate-host/src/guestram.rs:182  release
+   ORPHAN  crates/kayfabe-isolate-host/src/guestram.rs:205  with_region
+   ORPHAN  crates/kayfabe-isolate-host/src/guestram.rs:217  live_mappings
+   ORPHAN  crates/kayfabe-isolate-host/src/isolate.rs:187  parse
+   ORPHAN  crates/kayfabe-isolate-host/src/isolate.rs:250  decode_control
+   ORPHAN  crates/kayfabe-isolate-host/src/isolate.rs:779  wait_for_park
+   ORPHAN  crates/kayfabe-isolate-host/src/isolate.rs:834  spawn_error
+   ORPHAN  crates/kayfabe-isolate-host/src/isolate.rs:840  child_pid
+   ORPHAN  crates/kayfabe-isolate-host/src/isolate.rs:870  exports
+   ORPHAN  crates/kayfabe-isolate-host/src/isolate.rs:1074  with_guest_ram
+   ORPHAN  crates/kayfabe-isolate-host/src/isolate.rs:1084  spawned
+   ORPHAN  crates/kayfabe-isolate-host/src/isolate.rs:1095  with_park
+   ORPHAN  crates/kayfabe-isolate-host/src/isolate.rs:1117  is_embedded
+   ORPHAN  crates/kayfabe-isolate-host/src/isolate.rs:1125  embedded
+   ORPHAN  crates/kayfabe-isolate-host/src/isolate.rs:1137  spawn_host
+   ORPHAN  crates/kayfabe-isolate-host/src/loopback.rs:63  parse
+   ORPHAN  crates/kayfabe-isolate-host/src/loopback.rs:73  as_arg
+   ORPHAN  crates/kayfabe-isolate-host/src/loopback.rs:118  new
+   ORPHAN  crates/kayfabe-isolate-host/src/loopback.rs:160  new
+   ORPHAN  crates/kayfabe-isolate-host/src/loopback.rs:177  with_guest_ram
+   ORPHAN  crates/kayfabe-isolate-host/src/proto.rs:344  into_rm_error
+   ORPHAN  crates/kayfabe-isolate-host/src/proto.rs:376  prot_code
+   ORPHAN  crates/kayfabe-isolate-host/src/proto.rs:386  prot_from_code
+   ORPHAN  crates/kayfabe-isolate-host/src/proto.rs:400  engine_code
+   ORPHAN  crates/kayfabe-isolate-host/src/proto.rs:416  engine_from_code
+   ORPHAN  crates/kayfabe-isolate-host/src/proto.rs:541  encode
+   ORPHAN  crates/kayfabe-isolate-host/src/proto.rs:675  decode
+   ORPHAN  crates/kayfabe-isolate-host/src/proto.rs:773  encode
+   ORPHAN  crates/kayfabe-isolate-host/src/proto.rs:838  decode
+   ORPHAN  crates/kayfabe-isolate-host/src/proto.rs:890  write_frame
+   ORPHAN  crates/kayfabe-isolate-host/src/proto.rs:915  read_frame
+   ORPHAN  crates/kayfabe-isolate-host/src/rm.rs:2106  new
+   ORPHAN  crates/kayfabe-isolate-host/src/rm.rs:2116  latest
+   ORPHAN  crates/kayfabe-isolate-host/src/rm.rs:2592  with_guest_ram
+   ORPHAN  crates/kayfabe-isolate-host/src/rm.rs:2600  with_ce_witness
+   ORPHAN  crates/kayfabe-isolate-host/src/rm.rs:2650  fill_words
+   ORPHAN  crates/kayfabe-isolate-host/src/rm.rs:2683  read_words_independently
+   ORPHAN  crates/kayfabe-isolate-host/src/rm.rs:3974  ring_store_u32
+   ORPHAN  crates/kayfabe-isolate-host/src/rm.rs:4029  channel_ring_layout
+   ORPHAN  crates/kayfabe-isolate-host/src/rm.rs:4218  ce_copy_outcome
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:1178  isolate
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:1184  worker
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:1190  txn
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:1198  request
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:1205  abandon
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:1243  isolate
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:1249  worker
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:1256  txn
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:1262  reason
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:1271  is_abandon
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:1322  requests
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:1679  handles
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:1900  bare
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:1961  new
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:1998  txn
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:2021  isolate
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:2079  export_backing
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:2110  map_guest_ram
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:2130  unmap_guest_ram
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:2804  as_str
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:2867  observe_refusal
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:2885  refusing
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:3082  spawned
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:3089  why
+   ORPHAN  crates/kayfabe-isolate/src/lib.rs:3114  why
+
+== orphan gate: 282 of 458 checked have no caller outside their own crate
+   crates/kayfabe-device/src/bar2.rs:152  new
+   crates/kayfabe-device/src/bar2.rs:158  pdes
+   crates/kayfabe-device/src/bar2.rs:169  updates
+   crates/kayfabe-device/src/bar2.rs:175  refusals
+   crates/kayfabe-device/src/bar2.rs:180  publish
+   crates/kayfabe-device/src/bar2.rs:194  refuse
+   crates/kayfabe-device/src/bar2.rs:205  device_reset
+   crates/kayfabe-device/src/bar2.rs:235  why
+   crates/kayfabe-device/src/bar2.rs:256  decode_update_bar_pde
+   crates/kayfabe-device/src/bar2.rs:288  new
+   crates/kayfabe-device/src/bar2.rs:294  driver
+   crates/kayfabe-device/src/census.rs:243  set_probe_arm
+   crates/kayfabe-device/src/census.rs:249  note_served
+   crates/kayfabe-device/src/census.rs:271  note_arming
+   crates/kayfabe-device/src/census.rs:291  note_bind
+   crates/kayfabe-device/src/census.rs:311  snapshot
+   crates/kayfabe-device/src/census.rs:343  new
+   crates/kayfabe-device/src/ceresolve.rs:161  trigger
+   crates/kayfabe-device/src/ceresolve.rs:251  published_root
+   crates/kayfabe-device/src/ceresolve.rs:321  root_from_declared_pdb
+   crates/kayfabe-device/src/ceresolve.rs:410  place
+   crates/kayfabe-device/src/ceresolve.rs:519  resolve
+   crates/kayfabe-device/src/ceresolve.rs:689  walk_trace
+   crates/kayfabe-device/src/cpuintr.rs:208  decode
+   crates/kayfabe-device/src/cpuintr.rs:306  read
+   crates/kayfabe-device/src/cpuintr.rs:323  write
+   crates/kayfabe-device/src/cpuintr.rs:388  latch
+   crates/kayfabe-device/src/cpuintr.rs:446  any_pending
+   crates/kayfabe-device/src/doorbell.rs:153  is_served
+   crates/kayfabe-device/src/doorbell.rs:162  refusal
+   crates/kayfabe-device/src/doorbell.rs:171  token
+   crates/kayfabe-device/src/faultbuffer.rs:125  new
+   crates/kayfabe-device/src/faultbuffer.rs:137  total
+   crates/kayfabe-device/src/faultbuffer.rs:146  shadow_total
+   crates/kayfabe-device/src/faultbuffer.rs:152  access_cntr_total
+   crates/kayfabe-device/src/faultbuffer.rs:158  sample
+   crates/kayfabe-device/src/faultbuffer.rs:169  note
+   crates/kayfabe-device/src/faultbuffer.rs:204  new
+   crates/kayfabe-device/src/fbwin.rs:132  new
+   crates/kayfabe-device/src/fbwin.rs:139  raw
+   crates/kayfabe-device/src/fbwin.rs:144  set_raw
+   crates/kayfabe-device/src/fbwin.rs:150  base
+   crates/kayfabe-device/src/fbwin.rs:156  target
+   crates/kayfabe-device/src/fbwin.rs:177  fb_addr
+   crates/kayfabe-device/src/fbwin.rs:441  tags
+   crates/kayfabe-device/src/fbwin.rs:592  with_cap
+   crates/kayfabe-device/src/fbwin.rs:604  limit
+   crates/kayfabe-device/src/fbwin.rs:610  resident_pages
+   crates/kayfabe-device/src/ga10x.rs:287  at
+   crates/kayfabe-device/src/guestsysinfo.rs:73  new
+   crates/kayfabe-device/src/guestsysinfo.rs:88  agreed_version
+   crates/kayfabe-device/src/gvaspub.rs:262  new
+   crates/kayfabe-device/src/gvaspub.rs:269  note
+   crates/kayfabe-device/src/gvaspub.rs:315  note_undecodable
+   crates/kayfabe-device/src/gvaspub.rs:322  snapshot
+   crates/kayfabe-device/src/gvaspub.rs:342  device_reset
+   crates/kayfabe-device/src/gvaspub.rs:355  is_pde_publication
+   crates/kayfabe-device/src/gvaspub.rs:374  new
+   crates/kayfabe-device/src/gvaspub.rs:380  driver
+   crates/kayfabe-device/src/inert.rs:107  new
+   crates/kayfabe-device/src/inert.rs:116  is_inert
+   crates/kayfabe-device/src/inittables.rs:168  is_gss_legacy
+   crates/kayfabe-device/src/inittables.rs:1112  cmd_id
+   crates/kayfabe-device/src/inittables.rs:1196  params_size
+   crates/kayfabe-device/src/inittables.rs:1272  from_cmd
+   crates/kayfabe-device/src/inittables.rs:1284  new
+   crates/kayfabe-device/src/inittables.rs:1292  with_probe_arm
+   crates/kayfabe-device/src/inittables.rs:1317  guest_firmware
+   crates/kayfabe-device/src/inittables.rs:1323  wanted
+   crates/kayfabe-device/src/lib.rs:187  contains
+   crates/kayfabe-device/src/lib.rs:212  contains
+   crates/kayfabe-device/src/lib.rs:616  pci_bar_len
+   crates/kayfabe-device/src/lib.rs:630  fb_window
+   crates/kayfabe-device/src/lib.rs:928  rom_for
+   crates/kayfabe-device/src/lib.rs:1099  served_chain
+   crates/kayfabe-device/src/nonstall.rs:116  non_stall_vector
+   crates/kayfabe-device/src/nonstall.rs:192  gsp_stall_vector
+   crates/kayfabe-device/src/osevent.rs:115  post
+   crates/kayfabe-device/src/osevent.rs:144  new
+   crates/kayfabe-device/src/osevent.rs:155  register
+   crates/kayfabe-device/src/osevent.rs:191  retire
+   crates/kayfabe-device/src/osevent.rs:212  batch
+   crates/kayfabe-device/src/osevent.rs:296  note
+   crates/kayfabe-device/src/osevent.rs:351  note_join
+   crates/kayfabe-device/src/osevent.rs:422  new
+   crates/kayfabe-device/src/plane.rs:256  new
+   crates/kayfabe-device/src/plane.rs:903  nothing
+   crates/kayfabe-device/src/plane.rs:1332  root
+   crates/kayfabe-device/src/plane.rs:1354  fb_len
+   crates/kayfabe-device/src/plane.rs:1413  new
+   crates/kayfabe-device/src/plane.rs:1531  rom
+   crates/kayfabe-device/src/plane.rs:1705  state_guard_for_test
+   crates/kayfabe-device/src/plane.rs:1721  doorbell_reg
+   crates/kayfabe-device/src/plane.rs:1755  bar_pde_log
+   crates/kayfabe-device/src/plane.rs:1784  set_page_dir_log
+   crates/kayfabe-device/src/plane.rs:1828  resolve_published_va
+   crates/kayfabe-device/src/plane.rs:1864  read_published_va
+   crates/kayfabe-device/src/plane.rs:1910  published_walk_trace
+   crates/kayfabe-device/src/plane.rs:2114  ce_session
+   crates/kayfabe-device/src/plane.rs:2160  gvas_pub_log
+   crates/kayfabe-device/src/plane.rs:2165  set_policy
+   crates/kayfabe-device/src/plane.rs:2492  fb_window_sample
+   crates/kayfabe-device/src/plane.rs:2499  phase
+   crates/kayfabe-device/src/plane.rs:2518  gsp_state
+   crates/kayfabe-device/src/setpagedir.rs:248  new
+   crates/kayfabe-device/src/setpagedir.rs:258  latest
+   crates/kayfabe-device/src/setpagedir.rs:264  total
+   crates/kayfabe-device/src/setpagedir.rs:275  refused
+   crates/kayfabe-device/src/setpagedir.rs:286  valid
+   crates/kayfabe-device/src/setpagedir.rs:291  publish
+   crates/kayfabe-device/src/setpagedir.rs:297  refuse
+   crates/kayfabe-device/src/setpagedir.rs:306  device_reset
+   crates/kayfabe-device/src/setpagedir.rs:339  why
+   crates/kayfabe-device/src/setpagedir.rs:365  new
+   crates/kayfabe-device/src/setpagedir.rs:371  driver
+   crates/kayfabe-device/src/staticinfo.rs:77  new
+   crates/kayfabe-device/src/staticinfo.rs:84  with_gid
+   crates/kayfabe-device/src/staticinfo.rs:128  with_name
+   crates/kayfabe-device/src/staticinfo.rs:137  gid_for_chip
+   crates/kayfabe-device/src/staticinfo.rs:160  body
+   crates/kayfabe-device/src/sticky.rs:241  rmapi_control_is_cacheable
+   crates/kayfabe-device/src/sticky.rs:263  reply_would_be_cached
+   crates/kayfabe-device/src/sticky.rs:300  new
+   crates/kayfabe-device/src/sticky.rs:318  inspected
+   crates/kayfabe-device/src/sticky.rs:330  rewritten
+   crates/kayfabe-device/src/sticky.rs:344  neutralised
+   crates/kayfabe-device/src/sticky.rs:351  malformed
+   crates/kayfabe-device/src/sweep.rs:137  must_be_served
+   crates/kayfabe-device/src/sweep.rs:900  triage_for
+   crates/kayfabe-device/src/sweep.rs:913  must_serve_and_unserved
+   crates/kayfabe-device/src/unserviced.rs:216  new
+   crates/kayfabe-device/src/unserviced.rs:223  total
+   crates/kayfabe-device/src/unserviced.rs:245  distinct
+   crates/kayfabe-device/src/unserviced.rs:255  truncated
+   crates/kayfabe-device/src/unserviced.rs:261  sample
+   crates/kayfabe-device/src/unserviced.rs:272  note
+   crates/kayfabe-device/src/unserviced.rs:303  new
+   crates/kayfabe-gsp/src/boot.rs:188  status_cursor
+   crates/kayfabe-gsp/src/boot.rs:194  command_cursor
+   crates/kayfabe-gsp/src/boot.rs:543  len
+   crates/kayfabe-gsp/src/boot.rs:549  is_empty
+   crates/kayfabe-gsp/src/boot.rs:726  command_seq
+   crates/kayfabe-gsp/src/boot.rs:733  observe
+   crates/kayfabe-gsp/src/boot.rs:1243  service_command_queue
+   crates/kayfabe-gsp/src/boot.rs:1577  post
+   crates/kayfabe-gsp/src/element.rs:191  hdr_size
+   crates/kayfabe-gsp/src/element.rs:197  checksum_off
+   crates/kayfabe-gsp/src/element.rs:203  seqnum_off
+   crates/kayfabe-gsp/src/element.rs:215  elem_count_off
+   crates/kayfabe-gsp/src/element.rs:221  transport
+   crates/kayfabe-gsp/src/element.rs:322  new
+   crates/kayfabe-gsp/src/element.rs:349  rpc_length
+   crates/kayfabe-gsp/src/element.rs:355  msg_len
+   crates/kayfabe-gsp/src/element.rs:361  elements
+   crates/kayfabe-gsp/src/element.rs:368  element_size_min
+   crates/kayfabe-gsp/src/fault.rs:98  code
+   crates/kayfabe-gsp/src/ram.rs:97  load
+   crates/kayfabe-gsp/src/ram.rs:163  from_pages
+   crates/kayfabe-gsp/src/ram.rs:187  len
+   crates/kayfabe-gsp/src/ram.rs:193  is_empty
+   crates/kayfabe-gsp/src/ram.rs:240  read
+   crates/kayfabe-gsp/src/ram.rs:259  write
+   crates/kayfabe-gsp/src/ram.rs:273  read_u32
+   crates/kayfabe-gsp/src/ram.rs:284  write_u32
+   crates/kayfabe-gsp/src/replay.rs:142  new
+   crates/kayfabe-gsp/src/replay.rs:147  push
+   crates/kayfabe-gsp/src/replay.rs:153  items
+   crates/kayfabe-gsp/src/replay.rs:159  count
+   crates/kayfabe-gsp/src/replay.rs:165  refusals
+   crates/kayfabe-gsp/src/replay.rs:178  unseen_kinds
+   crates/kayfabe-gsp/src/replay.rs:342  new
+   crates/kayfabe-gsp/src/replay.rs:354  with_projection
+   crates/kayfabe-gsp/src/replay.rs:360  refused
+   crates/kayfabe-gsp/src/ring.rs:95  new
+   crates/kayfabe-gsp/src/ring.rs:103  get
+   crates/kayfabe-gsp/src/ring.rs:109  slot
+   crates/kayfabe-gsp/src/ring.rs:121  index
+   crates/kayfabe-gsp/src/ring.rs:163  decode
+   crates/kayfabe-gsp/src/ring.rs:385  fresh
+   crates/kayfabe-gsp/src/ring.rs:431  bind
+   crates/kayfabe-gsp/src/ring.rs:492  published_header
+   crates/kayfabe-gsp/src/ring.rs:498  msg_count
+   crates/kayfabe-gsp/src/ring.rs:512  element_size
+   crates/kayfabe-gsp/src/ring.rs:524  cmd_write_ptr_off
+   crates/kayfabe-gsp/src/ring.rs:540  peer_stat_read_ptr_off
+   crates/kayfabe-gsp/src/ring.rs:551  cmd_read_ptr_ack_off
+   crates/kayfabe-gsp/src/ring.rs:557  cmd_element_off
+   crates/kayfabe-gsp/src/ring.rs:565  stat_element_off
+   crates/kayfabe-gsp/src/rpc.rs:197  validated
+   crates/kayfabe-gsp/src/rpc.rs:211  classify
+   crates/kayfabe-gsp/src/rpc.rs:316  disposition
+   crates/kayfabe-gsp/src/rpc.rs:353  allowed_in_bootup_window
+   crates/kayfabe-gsp/src/rpc.rs:435  from_incoming
+   crates/kayfabe-gsp/src/rpc.rs:472  reply
+   crates/kayfabe-gsp/src/rpc.rs:611  reply_alloc
+   crates/kayfabe-gsp/src/rpc.rs:650  ack
+   crates/kayfabe-isolate-host/src/child.rs:129  isolate
+   crates/kayfabe-isolate-host/src/export.rs:74  mint
+   crates/kayfabe-isolate-host/src/export.rs:90  lend
+   crates/kayfabe-isolate-host/src/export.rs:101  len
+   crates/kayfabe-isolate-host/src/export.rs:110  is_empty
+   crates/kayfabe-isolate-host/src/export.rs:127  new
+   crates/kayfabe-isolate-host/src/export.rs:147  adopt
+   crates/kayfabe-isolate-host/src/export.rs:162  dup
+   crates/kayfabe-isolate-host/src/export.rs:183  kind
+   crates/kayfabe-isolate-host/src/export.rs:193  origin
+   crates/kayfabe-isolate-host/src/export.rs:203  len
+   crates/kayfabe-isolate-host/src/export.rs:209  is_empty
+   crates/kayfabe-isolate-host/src/fdcross.rs:97  adopt
+   crates/kayfabe-isolate-host/src/fdcross.rs:112  origin
+   crates/kayfabe-isolate-host/src/fdcross.rs:119  kind
+   crates/kayfabe-isolate-host/src/fdcross.rs:138  lend_to
+   crates/kayfabe-isolate-host/src/fdcross.rs:154  as_local_fd
+   crates/kayfabe-isolate-host/src/fdcross.rs:162  into_owned
+   crates/kayfabe-isolate-host/src/guestram.rs:88  new
+   crates/kayfabe-isolate-host/src/guestram.rs:100  bytes
+   crates/kayfabe-isolate-host/src/guestram.rs:125  honour
+   crates/kayfabe-isolate-host/src/guestram.rs:182  release
+   crates/kayfabe-isolate-host/src/guestram.rs:205  with_region
+   crates/kayfabe-isolate-host/src/guestram.rs:217  live_mappings
+   crates/kayfabe-isolate-host/src/isolate.rs:187  parse
+   crates/kayfabe-isolate-host/src/isolate.rs:250  decode_control
+   crates/kayfabe-isolate-host/src/isolate.rs:779  wait_for_park
+   crates/kayfabe-isolate-host/src/isolate.rs:834  spawn_error
+   crates/kayfabe-isolate-host/src/isolate.rs:840  child_pid
+   crates/kayfabe-isolate-host/src/isolate.rs:870  exports
+   crates/kayfabe-isolate-host/src/isolate.rs:1074  with_guest_ram
+   crates/kayfabe-isolate-host/src/isolate.rs:1084  spawned
+   crates/kayfabe-isolate-host/src/isolate.rs:1095  with_park
+   crates/kayfabe-isolate-host/src/isolate.rs:1117  is_embedded
+   crates/kayfabe-isolate-host/src/isolate.rs:1125  embedded
+   crates/kayfabe-isolate-host/src/isolate.rs:1137  spawn_host
+   crates/kayfabe-isolate-host/src/loopback.rs:63  parse
+   crates/kayfabe-isolate-host/src/loopback.rs:73  as_arg
+   crates/kayfabe-isolate-host/src/loopback.rs:118  new
+   crates/kayfabe-isolate-host/src/loopback.rs:160  new
+   crates/kayfabe-isolate-host/src/loopback.rs:177  with_guest_ram
+   crates/kayfabe-isolate-host/src/proto.rs:344  into_rm_error
+   crates/kayfabe-isolate-host/src/proto.rs:376  prot_code
+   crates/kayfabe-isolate-host/src/proto.rs:386  prot_from_code
+   crates/kayfabe-isolate-host/src/proto.rs:400  engine_code
+   crates/kayfabe-isolate-host/src/proto.rs:416  engine_from_code
+   crates/kayfabe-isolate-host/src/proto.rs:541  encode
+   crates/kayfabe-isolate-host/src/proto.rs:675  decode
+   crates/kayfabe-isolate-host/src/proto.rs:773  encode
+   crates/kayfabe-isolate-host/src/proto.rs:838  decode
+   crates/kayfabe-isolate-host/src/proto.rs:890  write_frame
+   crates/kayfabe-isolate-host/src/proto.rs:915  read_frame
+   crates/kayfabe-isolate-host/src/rm.rs:2106  new
+   crates/kayfabe-isolate-host/src/rm.rs:2116  latest
+   crates/kayfabe-isolate-host/src/rm.rs:2592  with_guest_ram
+   crates/kayfabe-isolate-host/src/rm.rs:2600  with_ce_witness
+   crates/kayfabe-isolate-host/src/rm.rs:2650  fill_words
+   crates/kayfabe-isolate-host/src/rm.rs:2683  read_words_independently
+   crates/kayfabe-isolate-host/src/rm.rs:3974  ring_store_u32
+   crates/kayfabe-isolate-host/src/rm.rs:4029  channel_ring_layout
+   crates/kayfabe-isolate-host/src/rm.rs:4218  ce_copy_outcome
+   crates/kayfabe-isolate/src/lib.rs:1178  isolate
+   crates/kayfabe-isolate/src/lib.rs:1184  worker
+   crates/kayfabe-isolate/src/lib.rs:1190  txn
+   crates/kayfabe-isolate/src/lib.rs:1198  request
+   crates/kayfabe-isolate/src/lib.rs:1205  abandon
+   crates/kayfabe-isolate/src/lib.rs:1243  isolate
+   crates/kayfabe-isolate/src/lib.rs:1249  worker
+   crates/kayfabe-isolate/src/lib.rs:1256  txn
+   crates/kayfabe-isolate/src/lib.rs:1262  reason
+   crates/kayfabe-isolate/src/lib.rs:1271  is_abandon
+   crates/kayfabe-isolate/src/lib.rs:1322  requests
+   crates/kayfabe-isolate/src/lib.rs:1679  handles
+   crates/kayfabe-isolate/src/lib.rs:1900  bare
+   crates/kayfabe-isolate/src/lib.rs:1961  new
+   crates/kayfabe-isolate/src/lib.rs:1998  txn
+   crates/kayfabe-isolate/src/lib.rs:2021  isolate
+   crates/kayfabe-isolate/src/lib.rs:2079  export_backing
+   crates/kayfabe-isolate/src/lib.rs:2110  map_guest_ram
+   crates/kayfabe-isolate/src/lib.rs:2130  unmap_guest_ram
+   crates/kayfabe-isolate/src/lib.rs:2804  as_str
+   crates/kayfabe-isolate/src/lib.rs:2867  observe_refusal
+   crates/kayfabe-isolate/src/lib.rs:2885  refusing
+   crates/kayfabe-isolate/src/lib.rs:3082  spawned
+   crates/kayfabe-isolate/src/lib.rs:3089  why
+   crates/kayfabe-isolate/src/lib.rs:3114  why
+
+⊘ This is a REPORT, not a verdict on any one of them: a verb may be a deliberate seam
+  awaiting its consumer, or a capability proven and never wired. Only a human knows
+  which, and that triage is what decides what this gate eventually enforces.
+GATE_EXIT_STATUS=0
+GATE_DONE 2026-08-11T09:27:29+00:00

@@ -1,0 +1,17 @@
+=== weston_client_diff side=guest start=2026-09-26T19:13:43+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+[19:13:43.237] Command line: weston --backend=headless --renderer=gl --width=1280 --height=720 --idle-time=0 --socket=gset-c --debug --log=/var/tmp/gfxset/out/guest/weston_client_diff.d/weston_gset-c.log
+[19:13:43.242] Loading module '/usr/lib/x86_64-linux-gnu/libweston-13/gl-renderer.so'
+[19:13:43.299] EGL version: 1.5
+[19:13:43.299] EGL vendor: NVIDIA
+[19:13:43.502] GL version: OpenGL ES 3.2 NVIDIA 580.159.04
+[19:13:43.502] GL vendor: NVIDIA Corporation
+[19:13:43.502] GL renderer: NVIDIA GeForce RTX 3070/PCIe/SSE2
+[19:13:43.503] GL ES 3.2 - renderer features:
+client: ALIVE
+    GL_RENDERER:    NVIDIA GeForce RTX 3070/PCIe/SSE2
+AB_DIFF 119804
+# AB_DIFF: 119804/230400 sampled px differ
+BC_DIFF 13025
+# BC_DIFF: 13025/230400 sampled px differ
+GSET_OK
+=== end rc=0 secs=21 2026-09-26T19:14:04+00:00

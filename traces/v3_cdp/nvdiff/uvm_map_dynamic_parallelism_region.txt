@@ -1,0 +1,8 @@
+# UVM_MAP_DYNAMIC_PARALLELISM_REGION (UVM ioctl 65) as recorded by the nvdiff shim: base, length, rmStatus
+host_a/host_0_auto_t.jsonl: record 359 base 0x764dc4c00000 length 0x1000 rmStatus 0x0 rc 0
+host_a/host_4_auto_t.jsonl: record 359 base 0x715cbac00000 length 0x1000 rmStatus 0x0 rc 0
+g3f67_a/probe_0_auto_t.jsonl: record 359 base 0x795816c00000 length 0x1000 rmStatus 0x0 rc 0
+g3f67_a/probe_4_auto_t.jsonl: record 359 base 0x7aa3dec00000 length 0x1000 rmStatus 0x0 rc 0
+gexp1_a/probe_4_auto_t.jsonl: record 359 base 0x75b470c00000 length 0x1000 rmStatus 0x0 rc 0
+gfix_a/probe_0_auto_t.jsonl: record 359 base 0x7b2fa2c00000 length 0x1000 rmStatus 0x0 rc 0
+gfix_a/probe_4_auto_t.jsonl: record 359 base 0x768ad2c00000 length 0x1000 rmStatus 0x0 rc 0

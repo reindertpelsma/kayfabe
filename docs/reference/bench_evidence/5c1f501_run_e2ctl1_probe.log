@@ -1,0 +1,40 @@
+=== boot_capture tag=e2ctl1 at 2026-08-01T22:30:07+00:00 ===
+=== source revision: UNKNOWN ===
+=== qemu binary: -rwxr-xr-x 1 root root 85692512 Aug  1 22:27 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+No devices were found
+SMI_RC=6
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Aug  1 22:30 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Aug  1 22:30 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Aug  1 22:30 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Aug  1 22:30 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Aug  1 22:30 .
+drwxr-xr-x 18 root root   4000 Aug  1 22:30 ..
+cr--------  1 root root 240, 1 Aug  1 22:30 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Aug  1 22:30 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK scripts/bench/e2_doorbell_witness.sh at 2026-08-01T22:30:15+00:00 ===
+=== E2 poke phase ===
+E2 bdf=0000:00:03.0
+staged
+-rwxrwxr-x 1 ubuntu ubuntu 1076096 Aug  1 22:30 /tmp/e2_doorbell_poke
+rmmod_rc=1
+=== CONTROL first: a non-doorbell write, same mapping, same value ===
+E2HOST control_before 2026-08-01T22:30:17.719690Z
+E2POKE target /sys/bus/pci/devices/0000:00:03.0/resource0 +0xbb0094 value 0x00070005
+E2POKE before 2026-08-01T22:30:17.243693Z
+E2POKE after 2026-08-01T22:30:17.244050Z
+E2POKE ok
+CONTROL_RC=0
+E2HOST control_after 2026-08-01T22:30:18.252768Z
+E2 ★ NEGATIVE CONTROL: the doorbell poke is SUPPRESSED
+HOOK_RC=0

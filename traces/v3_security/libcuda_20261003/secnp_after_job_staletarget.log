@@ -1,0 +1,33 @@
+START 2026-10-03T21:15:51+00:00 rev=1d71f3db
+KF3_BUILD_FAILED
+    |
+392 |     Untranslatable { target: Target, phys: u64, len: u64 },
+    |                                                 ^^^^^^^^
+
+warning: `kf-chan` (lib) generated 7 warnings (run `cargo fix --lib -p kf-chan` to apply 1 suggestion)
+error[E0432]: unresolved imports `kf_linux_raw::capability::ThreadCapOps`, `kf_linux_raw::capability::ThreadLifeClear`, `kf_linux_raw::capability::clear_effective_for_thread_life_on`
+  --> crates/kf-cuda/src/posture.rs:28:36
+   |
+28 |     BracketRefused, CAP_SYS_ADMIN, ThreadCapOps, ThreadLifeClear,
+   |                                    ^^^^^^^^^^^^  ^^^^^^^^^^^^^^^ no `ThreadLifeClear` in `capability`
+   |                                    |
+   |                                    no `ThreadCapOps` in `capability`
+29 |     clear_effective_for_thread_life_on,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `clear_effective_for_thread_life_on` in `capability`
+   |
+help: a similar name exists in the module
+   |
+28 -     BracketRefused, CAP_SYS_ADMIN, ThreadCapOps, ThreadLifeClear,
+28 +     BracketRefused, CAP_SYS_ADMIN, ThreadCaps, ThreadLifeClear,
+   |
+
+error[E0425]: cannot find value `ThisThread` in module `kf_linux_raw::capability`
+  --> crates/kf-cuda/src/posture.rs:56:51
+   |
+56 |     let r = posture_on(&kf_linux_raw::capability::ThisThread, &thread_name());
+   |                                                   ^^^^^^^^^^ not found in `kf_linux_raw::capability`
+
+Some errors have detailed explanations: E0425, E0432.
+For more information about an error, try `rustc --explain E0425`.
+error: could not compile `kf-cuda` (lib) due to 2 previous errors
+EXIT rc=1 2026-10-03T21:15:51+00:00

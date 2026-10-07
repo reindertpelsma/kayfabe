@@ -1,0 +1,21 @@
+[package]
+name = "kayfabe-isolate"
+description = "The per-process sandbox port: `Isolate`/`IsolateFactory` traits + the abstract `RmBackend` RM-verb trait (arch doc §4.2 `kayfabe-rm` folded here for now). No syscalls, no ioctls — real impls live in adapter crates."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kayfabe-util.workspace = true
+kayfabe-arch.workspace = true
+kayfabe-vmm.workspace = true
+
+[dev-dependencies]
+# ★ Its ONLY job is the compile-fail row that makes `ARCHITECTURE.md` invariant 5
+# structural: an ungated `VerbPlan::Doorbell` must fail to COMPILE outside this crate,
+# and an impossibility that is merely asserted in prose is the vacuous-instrument shape
+# `testing_doctrine.md` is about. Same pattern as `kayfabe-linux-raw/tests/ui/`.
+trybuild = "1.0"
+
+[lints]
+workspace = true

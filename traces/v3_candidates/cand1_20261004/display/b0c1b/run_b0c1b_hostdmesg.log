@@ -1,0 +1,2 @@
+[31726.843690] x86/PAT: kf3-vamgr:308809 freeing invalid memtype [mem 0x10015d0000-0x100165ffff]
+[31726.850860] x86/PAT: kf3-vamgr:308809 freeing invalid memtype [mem 0x1001dc0000-0x1001e5ffff]

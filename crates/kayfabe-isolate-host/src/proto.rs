@@ -1,0 +1,3083 @@
+//! The isolate wire protocol — one request, one reply, per worker channel.
+//!
+//! ## ★★ The C's shape, and the ONE place this deliberately diverges
+//!
+//! The C multiplexes **every** worker over a single socket and demultiplexes replies by
+//! `txn_id` (`C: src/stub/nvkvm_stub.c:748` — one shared job queue, 16 workers, one fd 0).
+//! That design needed a hardening pass whose comment is the argument against it: a stub
+//! that echoed one `txn_id` twice would write into a **returned stack frame**, so the
+//! reader must unlink the pending entry under the lock before receiving into the caller's
+//! buffers (`C: src/qemu/nvkvm_isolate.c:485-505`, audit R2-H2).
+//!
+//! `l1_concurrency.md` §11 B6 rules the other way, in as many words: *"concurrency comes
+//! from channel COUNT, never from multiplexing one channel"*. So each pool worker owns its
+//! own socket, the channel is 1-deep, and **there is no demux, no pending list, and no
+//! `txn_id` to confuse**. The entire class of bug the C's audit found is unrepresentable
+//! here, and that is the reason for the divergence rather than a preference for sockets.
+//!
+//! The txn still travels ([`Envelope::txn`]) — but only so the *cancel* path can check the
+//! C's refinement 4 (*"only signal the worker if it is still on that txn"*), never to route
+//! a reply.
+//!
+//! ## ★ Two `RmError` variants have NO wire form, and that is load-bearing
+//!
+//! - [`kayfabe_isolate::RmError::ForeignHandle`] is produced by `Worker::execute`'s gate
+//!   **before** a request is written. If the isolate could report it, a compromised child
+//!   could claim our own invariant broke — and the gate's whole value is that it is *our*
+//!   audit of *our* plan.
+//! - [`kayfabe_isolate::RmError::Wedged`] is produced when the reply channel is **abandoned**
+//!   (§7.5). A child that could send it would be reporting that it never answered, which is
+//!   a contradiction: a wedged worker is by definition one that cannot write.
+//!
+//! `wire_errors_that_the_child_may_not_claim` asserts both.
+//!
+//! ## Framing
+//!
+//! `u32` little-endian length, then that many bytes. A length beyond [`FRAME_MAX`] is
+//! refused **without reading it** — the child is inside the threat model's boundary 2, so a
+//! length field it controls must not be able to make us allocate.
+
+use kayfabe_isolate::RmError;
+use std::io::{self, Read, Write};
+
+/// ★★★★★ **The guest's adopted GPFIFO ring, ON THE WIRE**:
+/// `(memory, offset, gp_fifo_va, gp_fifo_entries, userd)`, where `userd` is leg B's
+/// `(memory, offset)` of the guest's own USERD or `None` when the ring was adopted and the
+/// USERD was not.
+///
+/// ⊘ A named alias, not a `struct`: this is the **wire** shape and it is encoded and decoded
+/// by hand field-by-field, so giving it a struct would invite a `derive` that silently
+/// disagrees with the hand-written codec. ⊘ And not left as a bare five-tuple either — four
+/// consecutive integers with no names is exactly where an encoder and a decoder swap two of
+/// them and every in-process test still passes.
+pub type AdoptedRingWire = (u8, u64, u64, u64, u64, u32, Option<(u8, u64, u64)>);
+
+/// ★★★★★ **CONSTRAINT 26 — the ring's PROVENANCE byte, the first field of
+/// [`AdoptedRingWire`].**
+///
+/// | value | meaning | the two numbers after it |
+/// |---|---|---|
+/// | `0` | `RingProvenance::OwnObject` | `(handle, 0)` |
+/// | `1` | `RingProvenance::StoreSlice` | `(offset, len)` — **no handle** |
+///
+/// ⊘ **An explicit byte, never an in-band sentinel.** `handle == 0` would be the obvious
+/// encoding of *"no handle"* and it is wrong for the reason this file already gives about
+/// `offset = 0`: the decoder must not have to decide what a legal value means. A tag that
+/// names neither arm is a refusal, so a peer that speaks a different vocabulary fails at the
+/// frame rather than three fields later.
+pub const RING_PROVENANCE_OWN_OBJECT: u8 = 0;
+/// See [`RING_PROVENANCE_OWN_OBJECT`].
+pub const RING_PROVENANCE_STORE_SLICE: u8 = 1;
+
+/// The largest frame either side will send or accept.
+///
+/// Sized against the C's own `MAX_IOCTL_PAYLOAD` of 64 KiB
+/// (`C: src/qemu/nvkvm_isolate.c:357`) with room for the control payloads RM controls
+/// carry, and stated as a **refusal bound** rather than a buffer size: nothing here
+/// pre-allocates it.
+pub const FRAME_MAX: usize = 1 << 20;
+
+/// What the parent asks the isolate to do. One variant per [`kayfabe_isolate::RmBackend`]
+/// verb — the port is the protocol, so a verb added there fails to compile here until it is
+/// carried.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Request {
+    /// [`kayfabe_isolate::RmBackend::alloc`].
+    Alloc {
+        /// Parent handle, raw (the namespace is the connection).
+        parent: u64,
+        /// RM class id.
+        class: u32,
+        /// Already-encoded alloc parameters.
+        params: Vec<u8>,
+    },
+    /// [`kayfabe_isolate::RmBackend::alloc_vaspace`].
+    AllocVaSpace,
+    /// [`kayfabe_isolate::RmBackend::subdevice_control`] — one control on THIS isolate's
+    /// own subdevice, for the per-GPU family that twins no guest object. The child
+    /// resolves the subdevice itself, so no host handle crosses back to the port.
+    SubdeviceControl {
+        /// Command id.
+        cmd: u32,
+        /// In/out payload.
+        payload: Vec<u8>,
+    },
+    /// [`kayfabe_isolate::RmBackend::alloc_sysmem`].
+    AllocSysmem {
+        /// Bytes requested.
+        len: u64,
+    },
+    /// ★★★ [`kayfabe_isolate::RmBackend::alloc_vidmem`] — the second crossing's blank
+    /// host framebuffer object. Same wire shape as [`Request::AllocSysmem`] and a
+    /// **different tag**, because the two name different stores and a shared tag would
+    /// make the aperture depend on which side decoded it.
+    AllocVidmem {
+        /// Bytes requested.
+        len: u64,
+    },
+    /// ★★★★★ [`kayfabe_isolate::RmBackend::reserve_gpga`] — the VM's ONE reserved
+    /// video-memory object (`gpga_is_one_reserved_object.md`).
+    ///
+    /// ⊘ **A different tag from [`Request::AllocVidmem`] because it is a different
+    /// allocation**, not the same one at a larger size: non-contiguous and page-aligned,
+    /// where `AllocVidmem` is contiguous and `len`-aligned. Sharing tag 19 would make the
+    /// contiguity of the guest's whole framebuffer depend on which side decoded it.
+    ReserveGpga {
+        /// Bytes requested.
+        len: u64,
+    },
+    /// ★★★★★ **RE-ISSUED 2026-09-14 — a CPU view of device memory, for the VMM.**
+    ///
+    /// ⊘⊘⊘ **TAG 30, NOT 25.** `ORPHANS_wire_or_discard.md` retired request tag **25** and
+    /// reply tag **12** for this verb with *"never re-issue"*. That note is still correct
+    /// about **those numbers** and is no longer correct about the verb:
+    /// `bar1_passthrough_device_local_host_visible.md` §4 item 1 records the owner's ruling of
+    /// 2026-09-14 granting decision (b), and **re-issuing this verb is exactly what it
+    /// authorises**. New numbers are minted so a peer built before the ruling cannot mistake a
+    /// new frame for an old one, and so a reader who finds only the orphan note does not
+    /// re-apply the retirement.
+    ///
+    /// ⚠ **The reply carries a `/dev/nvidia<N>` descriptor over `SCM_RIGHTS`** — condition 3
+    /// of the ruling. Conditions 1 and 2 (no escape, close on `mmap` return) are properties of
+    /// the **VMM's** use of it and are enforced at the call site, not here.
+    ///
+    /// ⚠ `write` had no field in the retired message: the real backend has taken a
+    /// `ViewAccess` since w596/w629. It is the **VMA's** protection — what the VMM process may
+    /// do — and is independent of what the guest's memslot tier permits.
+    ExportDeviceView {
+        /// The RM object to view, raw.
+        memory: u64,
+        /// Byte offset within it.
+        offset: u64,
+        /// Bytes to arm.
+        len: u64,
+        /// `1` for a writable mapping in the VMM, `0` for read-only.
+        write: u8,
+    },
+    /// ★★★ Give a device view's BAR1 aperture back — `NV_ESC_RM_UNMAP_MEMORY`.
+    ///
+    /// ⚠ `[measured w722]` `munmap` + `close` returns **nothing** to the host's BAR1 pool, and
+    /// the failure is silent (`status=0x51` inside the parameter struct, `ioctl()` returning
+    /// 0). Without this verb every crossing leaks its aperture until the pool refuses.
+    ReleaseDeviceView {
+        /// The token the isolate minted, as it appeared in the reply.
+        token: u64,
+    },
+    /// ★★★★★ **What the VM-lifetime scratchpad isolate's CUDA bring-up found out** —
+    /// `SINGLE_STORE_PLAN.md` increment 4.
+    ///
+    /// ⊘ **A read, not a command.** The bring-up and both post-sandbox probes already ran, at
+    /// startup, in the order §w724d prescribes; this only fetches the record. A verb that
+    /// *caused* the bring-up could not exist: by the time any worker can answer a request the
+    /// isolate is already sandboxed, and the whole design is that CUDA comes up before that.
+    ///
+    /// ⊘ Answered by every isolate, including one built without the `cuda-scratchpad`
+    /// feature, which says `CUDA_WALK=ABSENT` by name. An unanswered verb and an isolate that
+    /// never ran CUDA are different facts.
+    CudaWalkReport,
+    /// ★★★ [`kayfabe_isolate::RmBackend::largest_reservable_mb`] — the probe whose answer
+    /// the advertised framebuffer size is derived from.
+    ///
+    /// ⚠ The bisection runs in the CHILD. This request carries only its starting point, so
+    /// a dozen multi-gigabyte alloc/free pairs cost **one** IPC bracket rather than a dozen.
+    LargestReservableMb {
+        /// Where the halving search starts, in MiB.
+        start_mb: u64,
+    },
+    /// ★★★★★ **STAGE ONE CHUNK OF THE WALK KERNEL'S IMAGE** — `SINGLE_STORE_PLAN.md` §6
+    /// step 1, the live half. Request tag **32**.
+    ///
+    /// The image is the guest's page-table pages **relocated into a compact arena**
+    /// ([`kayfabe_mmu::walkshadow::build_image`]) — it must be, because the guest's RM puts
+    /// its tables ~11.78 GiB up a 12 GiB framebuffer and the kernel addresses tables as
+    /// offsets into one flat window.
+    ///
+    /// ⊘ **Chunked, and that is not an optimisation.** `[measured w724c]` a boot's resident
+    /// tables are ~7.3 MiB and [`FRAME_MAX`] is 1 MiB, so one frame cannot carry an image.
+    /// A staging verb keeps the framing invariant intact rather than raising a limit that
+    /// exists to bound a hostile peer.
+    ///
+    /// ⚠ `off == 0` **allocates**: the child drops whatever it was holding and takes a fresh
+    /// zeroed `span`. Any other offset appends into the image already declared, and a chunk
+    /// that would leave it is refused rather than clamped.
+    WalkShadowStage {
+        /// The whole image's length in bytes. Must be identical on every chunk of one image.
+        span: u64,
+        /// Where this chunk starts.
+        off: u64,
+        /// The chunk.
+        bytes: Vec<u8>,
+    },
+    /// ★★★★★ **RUN THE WALK KERNEL OVER THE STAGED IMAGE.** Request tag **33**.
+    ///
+    /// `pdbs` are the address-space roots **as they were relocated** — offsets into the
+    /// staged image, ascending, because the kernel refuses an unsorted list by name
+    /// (`KFWR_R_PDB_UNSORTED`).
+    ///
+    /// The reply is [`Reply::Payload`] carrying the report packed exactly as
+    /// [`kayfabe_mmu::walkreport::Report::parse`] expects it: header, then `pdb_count`
+    /// `PdbEntry`s, then `run_count` `MapRun`s. ⊘ The child does **not** interpret it; the
+    /// parent validates every report it acts on, and a child-side interpretation would be a
+    /// second decoder nobody diffs.
+    WalkShadowRun {
+        /// The relocated roots, ascending.
+        pdbs: Vec<u64>,
+        /// The report generation applied in full since the last run; `0` = none (resync).
+        ack: u64,
+    },
+    /// [`kayfabe_isolate::RmBackend::alloc_channel`].
+    AllocChannel {
+        /// Host VAS handle, raw.
+        vas: u64,
+        /// The channel's engine, as [`engine_code`].
+        engine: u8,
+        /// ★★★★★ **§16.106 — [`kayfabe_isolate::HostedObject`], across the wire.**
+        ///
+        /// `(class, params)` of the engine object this channel is being materialized to
+        /// host, or `None` for a doorbell materialization.
+        ///
+        /// ⊘⊘ **It has to cross.** The real adapter runs in the CHILD process; the
+        /// decision that reads this — `declared_channel_engine_type` — lives there. A
+        /// version of §16.106 that widened only the trait would compile, pass every
+        /// in-process test, and be **dead on the one path a boot exercises**
+        /// (`isolate_plane=real`). Presence is an explicit byte, never an in-band
+        /// sentinel: `class = 0` with empty params is a legal thing for a guest to send
+        /// and must not read as "no object".
+        hosting: Option<(u32, Vec<u8>)>,
+        /// ★★★★★ **LEG A2 — [`kayfabe_isolate::AdoptedGuestRing`], across the wire.**
+        ///
+        /// `(memory, ring_va, gp_fifo_va, gp_fifo_entries)`, or `None` for the ordinary
+        /// birth. ⊘ **It has to cross** for `hosting`'s reason, and one sharper: the adapter
+        /// that lowers it to `alloc_channel_over_guest_ring` — and the check that the handle
+        /// is one `join_fb_leaf` minted — both live in the CHILD. A version that widened
+        /// only the trait would compile, pass every in-process test, and be dead on the one
+        /// path a boot exercises.
+        ///
+        /// ⚠ Presence is an explicit byte, never an in-band sentinel: `gp_fifo_va = 0` is a
+        /// **value** the driver really declares (its golden-context channel) and must not
+        /// read as "no ring".
+        /// ★★★★★ **LEG B rides INSIDE it** — `(memory, offset)` of the guest's own USERD,
+        /// or `None` when the ring was adopted and the USERD was not.
+        ///
+        /// ⊘ Nested rather than a sibling field for the type's own reason
+        /// ([`kayfabe_isolate::AdoptedGuestRing::userd`]): *"the guest's USERD on a ring of
+        /// ours"* is a state that must not be representable, and a sibling `Option` on the
+        /// wire would make it one decode away.
+        adopt: Option<AdoptedRingWire>,
+        /// ★★★★★ **w288 — the channel's ERROR NOTIFIER, across the wire**: the raw host
+        /// handle of the memory object `hObjectError` must name, or `None` for a channel
+        /// born with no notifier at all.
+        ///
+        /// ⊘⊘ **It has to cross** for `hosting`'s and `adopt`'s reason: the adapter that
+        /// puts the handle into `NV_CHANNELGPFIFO_ALLOCATION_PARAMETERS` runs in the CHILD.
+        /// A version that widened only the trait would compile, pass every in-process test,
+        /// and be dead on the one path a boot exercises (`isolate_plane=real`).
+        ///
+        /// ⚠ **Presence is an explicit byte, never an in-band sentinel.** Handle `0` is
+        /// exactly what RM reads as *"no notifier"*, so a sentinel encoding would make
+        /// *"the caller asked for none"* and *"the caller named object zero"* the same
+        /// bytes — and the second is the shape of a bug we would then be unable to see.
+        err_notifier: Option<u64>,
+    },
+    /// ★★★★★ **w393 — [`kayfabe_isolate::RmBackend::alloc_channel_declared`], across the
+    /// wire.** A host channel born at the guest's own channel alloc: no `hosting`, a
+    /// **mandatory** adoption, and the guest's raw `engineType`.
+    ///
+    /// ⊘⊘ **Its own tag, not `AllocChannel` with a flag.** The child dispatches by variant
+    /// to the verb whose type makes the adoption mandatory; an in-band reading of
+    /// `hosting: None && adopt: Some` on the older request is exactly what the doorbell arm
+    /// already sends for a ring-only adoption, and would make the two births one decode
+    /// away from each other.
+    ///
+    /// ⚠ `declared_engine_type` carries a presence byte for `err_notifier`'s reason: `0`
+    /// is `NV2080_ENGINE_TYPE_NULL`, a value RM reads as *"runlist 0"*, and a sentinel
+    /// would make *"could not read it"* and *"the guest declared NULL"* the same bytes.
+    AllocChannelDeclared {
+        /// Host VAS handle, raw.
+        vas: u64,
+        /// The channel's engine, as [`engine_code`].
+        engine: u8,
+        /// The guest's own `NV2080_ENGINE_TYPE_*` code, or `None` when unread.
+        declared_engine_type: Option<u32>,
+        /// The adoption — mandatory. Same tuple as [`Self::AllocChannel::adopt`]'s `Some`.
+        adopt: AdoptedRingWire,
+        /// As [`Self::AllocChannel::err_notifier`].
+        err_notifier: Option<u64>,
+    },
+    /// ★★★★★ **w755r — [`kayfabe_isolate::RmBackend::birth_guest_channel_in_b`].**
+    ///
+    /// ⊘⊘ **Its own tag, not `AllocChannelDeclared` with a flag** — the same argument that
+    /// variant makes about `AllocChannel`, one step on. The child dispatches by variant to a
+    /// verb that **refuses unless it is the scratchpad**, and an in-band flag would make a
+    /// framing slip land on the ordinary birth, in the per-proc isolate, where it would be
+    /// refused for a different reason and send a reader somewhere else entirely.
+    ///
+    /// ⚠ `range` is **the scratchpad's `NV01_MEMORY_VIRTUAL` range inside B**, not a per-proc
+    /// VAS. The two are different namespaces (`BIRTH_HANDLE_BASE`), and the field is named
+    /// `range` rather than `vas` so a reader cannot mistake one for the other.
+    ///
+    /// ⚠ `err_notifier` is a **grant** (`offset`/`len`/`prot`), never a handle: the
+    /// descriptor must pin pages of the *scratchpad's* mapping, and `hObjectError` is a birth
+    /// parameter only B can name. `[measured w755r]` the first wiring of this route returned
+    /// `Other(86)` — the refusing trait default — because the verb reached a
+    /// `ProxyRmBackend` and there was no request to carry it. This is that request.
+    BirthGuestChannelInB {
+        /// The scratchpad's range inside B, raw.
+        range: u64,
+        /// The channel's engine, as [`engine_code`].
+        engine: u8,
+        /// The guest's own `NV2080_ENGINE_TYPE_*` code, or `None` when unread. Presence byte
+        /// for [`Self::AllocChannelDeclared`]'s reason: `0` is `NV2080_ENGINE_TYPE_NULL`.
+        declared_engine_type: Option<u32>,
+        /// The adoption — mandatory, same tuple as the sibling births.
+        adopt: AdoptedRingWire,
+        /// The error notifier's grant: `(offset, len, prot)`. `None` for no notifier.
+        err_notifier: Option<(u64, u64, u8)>,
+    },
+    /// [`kayfabe_isolate::RmBackend::alloc_engine_object`].
+    AllocEngineObject {
+        /// Host channel handle, raw.
+        chan: u64,
+        /// RM class id.
+        class: u32,
+        /// Already-encoded alloc parameters.
+        params: Vec<u8>,
+    },
+    /// [`kayfabe_isolate::RmBackend::schedule`].
+    Schedule {
+        /// Host channel handle, raw.
+        chan: u64,
+    },
+    /// [`kayfabe_isolate::RmBackend::free`].
+    Free {
+        /// Handle to free, raw.
+        obj: u64,
+    },
+    /// [`kayfabe_isolate::RmBackend::control`].
+    Control {
+        /// Target object, raw.
+        obj: u64,
+        /// Command id.
+        cmd: u32,
+        /// In/out payload.
+        payload: Vec<u8>,
+    },
+    /// [`kayfabe_isolate::RmBackend::map_gpu_va`].
+    MapGpuVa {
+        /// Host VAS handle, raw.
+        vas: u64,
+        /// Memory object, raw.
+        memory: u64,
+        /// Bytes to map.
+        len: u64,
+        /// ★ #102 — the host GPU VA to map AT (the guest VA, by address identity). Raw
+        /// because the wire carries scalars; the child re-wraps it as a `GpuVa`.
+        at: u64,
+    },
+    /// [`kayfabe_isolate::RmBackend::unmap_gpu_va`].
+    UnmapGpuVa {
+        /// Host VAS handle, raw.
+        vas: u64,
+        /// The GPU VA to unmap.
+        gpu_va: u64,
+    },
+    /// [`kayfabe_isolate::RmBackend::ring_doorbell`].
+    RingDoorbell {
+        /// Host work-submit token.
+        token: u64,
+    },
+    /// [`kayfabe_isolate::RmBackend::ce_copy`] — ONE sub-copy of a partitioned
+    /// copy-engine request (`#102` stage C2). The engine is carried as a byte because
+    /// the PLAN chose it and the child must not re-decide it: a wire that omitted it
+    /// would leave the child to infer representability, which is address-plane
+    /// knowledge it does not have.
+    CeCopy {
+        /// Host VAS handle, raw.
+        vas: u64,
+        /// Destination address.
+        dst: u64,
+        /// Source address, or the fill constant (see `src_is_const`).
+        src: u64,
+        /// Bytes.
+        len: u64,
+        /// `0` = `src` is an address, `1` = `src` is a constant pattern.
+        src_is_const: u8,
+        /// `0` = [`kayfabe_isolate::CeExecutor::HostCe`], `1` =
+        /// [`kayfabe_isolate::CeExecutor::Ours`].
+        by_ours: u8,
+        /// ★★★★★ **w283** — `1` when this sub-copy carries the guest's own declared
+        /// release ([`kayfabe_isolate::CeSubCopy::guest_release`]), `0` when it does not.
+        ///
+        /// ⊘ A separate flag rather than a sentinel address: `0` is a legal GPU VA (the
+        /// driver declares `gpFifoOffset = 0` for its golden-context channel, and this
+        /// project has already paid once for reading a value as a blank), so *"is there a
+        /// release"* and *"what is its address"* are two facts and cross as two fields.
+        rel_present: u8,
+        /// The guest's declared release address. ⊘ Meaningless unless `rel_present == 1`.
+        rel_va: u64,
+        /// The guest's declared payload. ⊘ Meaningless unless `rel_present == 1`.
+        rel_payload: u32,
+    },
+    /// [`kayfabe_isolate::RmBackend::fb_read`] — read the fabricated aperture (`#102`
+    /// stage C3). The reply carries the bytes **and** whether the aperture covered the
+    /// range at all, because those are two different facts and the second one is what
+    /// the walker turns into `MISS = FAULT`.
+    FbRead {
+        /// Guest-framebuffer-physical address to read.
+        phys: u64,
+        /// How many bytes. Bounded by the frame limit on the way back, not here — a
+        /// request that asks for more than a reply can carry is refused by the child
+        /// with a named error rather than truncated.
+        len: u64,
+    },
+    /// ★★★ [`kayfabe_isolate::RmBackend::export_backing`] — *"perform the mapping and
+    /// hand back memory"* (`isolate_vmm_fd_crossing.md` §12).
+    ///
+    /// ★ The **only** request whose reply may carry a descriptor. That is protocol
+    /// policy, and it is expressed as the `max_fds` allowance the reader passes
+    /// ([`crate::fdcross::read_frame_with_fds`]): every other reply is read with an
+    /// allowance of **zero**, so a child that attaches one to an `Alloc` reply has it
+    /// closed by the kernel and the frame refused — the port of the C's R2-M1 gate,
+    /// enforced by the kernel rather than by a `case` a later edit can forget.
+    ExportBacking {
+        /// `0` = [`kayfabe_isolate::ExportSource::Fabricated`, `1` =
+        /// [`kayfabe_isolate::ExportSource::HostDeviceMemory`]. A code we do not
+        /// recognise is a refusal, never a default — a defaulted source would silently
+        /// turn a request for the card's bytes into a fresh page of zeros.
+        source: u8,
+        /// The RM object, raw, when `source == 1`; ignored otherwise.
+        memory: u64,
+        /// Bytes wanted.
+        len: u64,
+        /// `0` = [`kayfabe_vmm::Prot::ReadWrite`], `1` = [`kayfabe_vmm::Prot::ReadOnly`].
+        prot: u8,
+    },
+    /// ★★★★★ **w629 — the VMM asking the isolate for a READ-ONLY view of the usermode page.**
+    ///
+    /// ⊘ It carries no parameters, and that is the security property rather than an omission.
+    /// The VMM does not name an object, an offset or a length: the isolate arms **its own**
+    /// usermode object, at offset 0, for the register length it already knows, `O_RDONLY`. A
+    /// verb whose caller could choose the object would be a verb that could ask for any
+    /// mapping the isolate can make.
+    ///
+    /// ★ Why the VMM needs it at all: the free-running counter cannot be shadowed — it changes
+    /// continuously, so no copy keeps up — and it is the last read trap anywhere on this
+    /// device. Mapping the host's own page read-only over it is the only implementation in
+    /// which the guest reads the GPU's real clock rather than a host CPU clock 43 ppm away
+    /// from it. See `the_counter_page_and_the_device_view.md`.
+    ///
+    /// ⚠ **Tag 26, because 25 is RETIRED** — it carried the deleted `ExportDeviceView` and a
+    /// peer built from an older revision may still send it. Never renumber, never re-issue.
+    ExportUsermodeView {
+        /// `0` = read-only (the guest's slot), `1` = read-write (OURS, for the ring).
+        ///
+        /// ⊘⊘ **Two views of ONE page, and the asymmetry is the design.** Owner, 2026-09-13:
+        /// *"you need have write access to it, and vmm only read, write is trapped so you can
+        /// translate doorbell token."*
+        ///   - the **read-only** view is placed in the guest's window: the counter at `+0x80`
+        ///     resolves natively with no exit, and the doorbell store at `+0x90` EXITS because
+        ///     the slot is read-only, which is what lets us see the token at all;
+        ///   - the **read-write** view is never given to the guest. It is how we ring the host
+        ///     doorbell with the TRANSLATED token, inline on the vCPU, as one dword store.
+        ///
+        /// ⚠ The access is a REQUEST FIELD rather than two verbs because the two differ in
+        /// exactly this one bit and nothing else; two verbs would be two things to keep in
+        /// step. ⊘ But the isolate still chooses the OBJECT — see the variant's own docs.
+        write: u8,
+    },
+    /// ★★★★★ [`kayfabe_isolate::RmBackend::map_guest_ram`] — the VMM instructing the
+    /// isolate to map a slice of **guest RAM** (`mode2_isolate_memory_boundary.md` §5).
+    ///
+    /// ⊘⊘ **It carries no descriptor, and that is the finding rather than a shortcut.**
+    /// The obvious design — and the one the task framing assumed — is a first
+    /// parent→child `SCM_RIGHTS` request carrying the guest-RAM `memfd`. It is not needed:
+    /// §2 of that page says the fd is handed to the isolate at a **fixed, known number**,
+    /// precisely so the seccomp filter installed afterwards can hardcode it, and
+    /// [`kayfabe_linux_raw::FdGrant`] already delivers descriptors at fixed numbers at
+    /// spawn. So this verb moves **scalars only**, which is also what makes the later
+    /// `SECCOMP_RET_USER_NOTIF` match trivial: every argument of the `mmap` the child is
+    /// about to issue is already in this frame.
+    ///
+    /// ⊘⊘ **CORRECTED w753 — THE SECOND HALF OF THE SENTENCE BELOW IS NOW FALSE, AND IT IS
+    /// THE HALF PEOPLE QUOTE.** The fd-IN gap on the request path **has been built**, for
+    /// constraint 32's route K: the child's reader is
+    /// [`crate::fdcross::read_frame_with_fds`] and [`Request::AdoptBirthClient`] carries two
+    /// descriptors **down**. ⚠ What survives unchanged is the ruling *about this verb*:
+    /// `MapGuestRam` still carries no descriptor and still should not, for exactly the
+    /// reason below. ⇒ read the paragraph below as *"not on this path"*, never as *"no such
+    /// path exists"* — a reader who takes it as the latter will build the mechanism twice.
+    ///
+    /// ★ The consequence worth writing down: the fd-IN gap on the request path is REAL
+    /// (the child's reader is `read_frame`, with no control buffer at all) and is **not on
+    /// this path**. Building it here would have been a whole mechanism serving a verb that
+    /// does not want it.
+    MapGuestRam {
+        /// Byte offset into the guest-RAM block. VMM-derived — see
+        /// [`kayfabe_isolate::GuestRamGrant`].
+        offset: u64,
+        /// Length in bytes. VMM-derived.
+        len: u64,
+        /// `0` = [`kayfabe_vmm::Prot::ReadWrite`], `1` = [`kayfabe_vmm::Prot::ReadOnly`].
+        prot: u8,
+    },
+    /// [`kayfabe_isolate::RmBackend::unmap_guest_ram`].
+    UnmapGuestRam {
+        /// The isolate's raw name for the mapping, as a previous [`Request::MapGuestRam`]
+        /// reply reported it.
+        region: u64,
+        /// Length in bytes.
+        len: u64,
+    },
+    /// ★★★★★ [`kayfabe_isolate::RmBackend::describe_guest_ram`] — make an RM
+    /// memory object out of guest pages this isolate already has mapped.
+    ///
+    /// ⊘ **It names a MAPPING, never a range.** There is no offset and no length in this
+    /// frame beyond the mapping's own, because the range was authorized once, by the VMM,
+    /// in the [`Request::MapGuestRam`] that produced `region`. A second pair of numbers
+    /// here would be a range the *isolate* chose, which is
+    /// `mode2_isolate_memory_boundary.md` §3's circularity re-entering through the door
+    /// the previous verb closed.
+    DescribeGuestRam {
+        /// The isolate's raw name for the mapping.
+        region: u64,
+        /// Length in bytes, as the grant stated it. Carried for the reply-shaping check
+        /// only — the child re-reads the mapping's own extent and does not trust this.
+        len: u64,
+    },
+    /// ★★★★★ [`kayfabe_isolate::RmBackend::join_fb_leaf`] — *"one memory for a framebuffer
+    /// leaf"* (`fb_cpu_view.md` §4).
+    ///
+    /// ★ **The SECOND request whose reply may carry a descriptor**, and the allowance is
+    /// granted per call exactly as [`Request::ExportBacking`]'s is
+    /// ([`crate::fdcross::read_frame_with_fds`]). ⊘ Growing that set from one to two is a
+    /// protocol-policy change and is written down as one: every other reply is still read
+    /// with an allowance of **zero**, so the kernel — not a `case` — is what stops a child
+    /// attaching a descriptor to an `Alloc`.
+    JoinFbLeaf {
+        /// The host VAS to place the mapping in, raw.
+        vas: u64,
+        /// Bytes — the guest leaf's own length.
+        len: u64,
+        /// The guest VA the mapping must land at. Address identity.
+        at: u64,
+        /// The emulated device's framebuffer-physical address for this leaf, so the child
+        /// can answer for the range by framebuffer address afterwards.
+        phys: u64,
+        /// `0` = [`kayfabe_vmm::Prot::ReadWrite`], `1` = [`kayfabe_vmm::Prot::ReadOnly`].
+        prot: u8,
+    },
+    /// ★★★★★ **w380** — [`kayfabe_isolate::RmBackend::alias_fb_leaf`], *"map an
+    /// already-joined frame at a second GPU VA"*.
+    ///
+    /// ⊘ **Its reply carries NO descriptor**, and that is the difference from
+    /// [`Request::JoinFbLeaf`] a reader should be able to see from the wire alone: the
+    /// frame's `memfd` crossed once, with the join. The fd allowance for this reply is
+    /// therefore **zero**, like every request but two.
+    AliasFbLeaf {
+        /// The host VAS to place the mapping in, raw.
+        vas: u64,
+        /// Bytes — must equal the joined frame's own length.
+        len: u64,
+        /// The guest VA the mapping must land at. Address identity.
+        at: u64,
+        /// The framebuffer-physical address of the frame to alias — the key the child looks
+        /// its existing join up by.
+        phys: u64,
+    },
+    /// ★★★ [`kayfabe_isolate::RmBackend::fb_join_peek`] — the both-directions instrument.
+    ///
+    /// ⊘ `poke` is an `Option` on the port and two fields here, because a wire form cannot
+    /// carry `None` in a `u32` without reserving a value — and a reserved value is a pattern
+    /// a caller can ask for and silently not get.
+    FbJoinPeek {
+        /// Framebuffer-physical address to read.
+        phys: u64,
+        /// How many bytes. Bounded by the child before a buffer is allocated.
+        len: u64,
+        /// `0` = read only, `1` = also write the per-word pattern below afterwards.
+        poke: u8,
+        /// The pattern base, when `poke == 1`; ignored otherwise.
+        pattern: u32,
+    },
+    /// ★★★★★ **CONSTRAINT 26, tag 34** — [`kayfabe_isolate::RmBackend::alloc_vaspace_bare`].
+    ///
+    /// ⊘ **A new tag and not a flag on [`Request::AllocVaSpace`] (tag 2).** The two differ
+    /// in *what the reply handle IS* — a range there, a space here — and a peer that read a
+    /// flag it did not understand would hand back an object of the wrong class under a name
+    /// that looks right. That is the failure this file's whole tag discipline exists for.
+    AllocVaSpaceBare,
+    /// ★★★★★ **CONSTRAINT 26, tag 35** — [`kayfabe_isolate::RmBackend::adopt_vaspace`].
+    ///
+    /// ⚠ **The only frame in the protocol that carries a client handle the receiving process
+    /// did not mint.** The child refuses it unless it is the scratchpad, by a type
+    /// (`kayfabe_isolate_host::rm`'s `handed_vaspace`), before any ioctl is built.
+    AdoptVaSpace {
+        /// The per-proc isolate's RM client, as **that** isolate reported it.
+        client: u32,
+        /// The bare `FERMI_VASPACE_A` inside it.
+        space: u32,
+    },
+    /// ★★★★★ **CONSTRAINT 26, tag 36** — [`kayfabe_isolate::RmBackend::map_store_slice`].
+    MapStoreSlice {
+        /// The adopted VA space's range handle, raw — an [`Request::AdoptVaSpace`] result.
+        vas: u64,
+        /// The reserved object, raw — a [`Request::ReserveGpga`] result.
+        memory: u64,
+        /// Offset **inside** that object.
+        offset: u64,
+        /// Bytes.
+        len: u64,
+        /// The guest's own VA. Binding, not a hint.
+        at: u64,
+    },
+    /// ★★★★★ **CONSTRAINT 26, tag 38** — [`kayfabe_isolate::RmBackend::vaspace_handover`].
+    ///
+    /// ⊘ Asked **for a space**, not for "this isolate's client": the far side refuses a
+    /// space that is not bare, which is the ownership check and not a lookup.
+    VaSpaceHandover {
+        /// The bare `FERMI_VASPACE_A` this isolate handed out, raw.
+        space: u64,
+    },
+    /// ★★★★★ **CONSTRAINT 32 STEP 1, tag 40** — [`kayfabe_isolate::RmBackend::mint_birth_client`].
+    ///
+    /// ⊘ It names nothing: the isolate mints the client in **its own** process identity and
+    /// there is nothing a caller could steer. ★ Its REPLY carries **two** descriptors up —
+    /// the first reply in this protocol to carry more than one — and that is why
+    /// [`crate::isolate::ProxyRmBackend`] reads it with its own allowance rather than
+    /// reusing the export path's `1`.
+    MintBirthClient,
+    /// ★★★★★ **CONSTRAINT 32 — ROUTE K, tag 39. THE ONE REQUEST THAT CARRIES DESCRIPTORS
+    /// DOWN**, and the only one there is ever expected to be.
+    ///
+    /// The per-proc isolate **I** opened a second `/dev/nvidiactl` plus the matching
+    /// per-GPU node, bound them with `NV_ESC_REGISTER_FD`, allocated an `NV01_ROOT_CLIENT`
+    /// on them, told the VMM the handle, and **closed its own copies**. This frame carries
+    /// those two descriptors to the scratchpad, which is from then on the only party that
+    /// can reach client `client` at all.
+    ///
+    /// ⊘ **The scalars are a NAME; the descriptors are the CAPABILITY.** `client` on its
+    /// own reaches no RM — an escape needs a `struct file` bound to that client's session,
+    /// and this frame is the only thing that ever delivers one. That asymmetry is why
+    /// [`crate::fdcross::FdOrigin::BirthClient`]'s one-target rule is the real gate and the
+    /// handle check is only a cross-check.
+    ///
+    /// ⚠ `minted_by_proc` is **not** decoration: RM stamps `ProcessID` from the **creating**
+    /// task (`client.c:112`), so constraint 32's whole claim — *"stamps land as I's"* — is a
+    /// statement about which proc opened these descriptors. The far side refuses when the
+    /// proc named here is not the proc the descriptors' provenance names.
+    AdoptBirthClient {
+        /// The `NV01_ROOT_CLIENT` handle I allocated on the descriptors that ride this
+        /// frame. Raw, because it is a **foreign** client and this crate's own client type
+        /// is by construction unable to represent one.
+        client: u64,
+        /// ★★★ **The per-proc isolate's OWN client `A`** — the client whose VA space the
+        /// scratchpad is about to dup into `client`.
+        ///
+        /// ⊘ It is on the wire rather than derived because **the VMM is the only party that
+        /// has it**: it is [`kayfabe_isolate::BareVaSpace::client`], produced by the
+        /// hand-over, and the scratchpad has never seen it. ⇒ it is also the **key** the far
+        /// side files this birth client under, so that [`Request::AdoptVaSpace`] — which
+        /// already carries `A` and nothing else — can find it without a second routing
+        /// decision.
+        isolate_client: u32,
+        /// The [`kayfabe_core::ProcId`] of the isolate that opened the descriptors and
+        /// minted the client on them.
+        minted_by_proc: u32,
+    },
+    /// ★★★★★ **CONSTRAINT 26/27, tag 37** — [`kayfabe_isolate::RmBackend::unmap_store_slice`].
+    UnmapStoreSlice {
+        /// The adopted VA space's range handle, raw.
+        vas: u64,
+        /// The VA to take down.
+        at: u64,
+    },
+}
+
+/// A request plus the checkout transaction it belongs to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Envelope {
+    /// The [`kayfabe_isolate::Txn`] this request was issued under. Carried for the cancel
+    /// path only (module docs).
+    pub txn: u64,
+    /// The request.
+    pub request: Request,
+}
+
+/// What the isolate answers. Shapes, not verbs: the parent knows which verb it sent, and a
+/// reply that re-declared it would be a second source of truth for the same fact.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Reply {
+    /// One freshly minted handle, raw.
+    Handle(u64),
+    /// A channel: its handle and its host work-submit token.
+    HandleAndToken(u64, u64),
+    /// Success with nothing to report.
+    Unit,
+    /// A control's payload, as the host wrote it back.
+    Payload(Vec<u8>),
+    /// A GPU virtual address.
+    Va(u64),
+    /// ★★★★★ **The geometry of an armed device node** — the answer to
+    /// [`Request::ExportDeviceView`], **reply tag 15** (12 is retired, never reused).
+    ///
+    /// ⊘ The **parent's** token does not cross: it mints its own when it adopts the
+    /// descriptor, exactly as every other descriptor-carrying reply does.
+    ///
+    /// ⊘⊘⊘ **CORRECTED w734 — THE CHILD'S TOKEN NOW DOES CROSS, AND IT HAD TO.** The text
+    /// above used to read *"the token does not cross"* full stop, and it was right about the
+    /// parent's and silent about the child's — while `Request::ReleaseDeviceView` is executed
+    /// **in the child, against the child's table**, and the only token the parent held was its
+    /// own. The two index spaces stay aligned solely because each child mint happens to be
+    /// matched in order by one parent adopt: an invariant nothing stated and nothing checked,
+    /// which a single refused `adopt` shifts by one forever. ⚠ And an unknown token releases
+    /// **nothing** and answers `Ok(())`, while `[measured w722]` that release is the only
+    /// thing that returns BAR1 aperture. ⇒ `release_token` crosses, and the parent hands back
+    /// what the child gave it rather than a number of its own that happens to match.
+    DeviceViewNode {
+        /// ★★★★★ **w734 — the CHILD's index into its own export table**, to be handed back
+        /// verbatim in `Request::ReleaseDeviceView`. ⊘ Never used as a parent token: the
+        /// parent's is minted by `adopt` and is what `dup` is keyed by.
+        release_token: u64,
+        /// The RM object viewed, raw — echoed so the value is self-describing at an installer
+        /// that never saw the request.
+        memory: u64,
+        /// The offset within it, as registered.
+        offset: u64,
+        /// ★ The length the driver will accept for the `mmap`: the registered length rounded
+        /// up to a host page. A VMM that `mmap`s the unrounded length is refused `ENXIO`.
+        mmap_len: u64,
+    },
+    /// ★★★ A size in **MiB** — the answer to [`Request::LargestReservableMb`].
+    ///
+    /// ⊘ Its own variant rather than [`Reply::Va`] or [`Reply::Handle`] carrying a number:
+    /// those name an address and a handle, and a reply whose field means something other
+    /// than its name is the shape this file already refuses for request tags. ⊘ `0` is a
+    /// real answer — *"nothing down to the probe's floor could be reserved"* — and is not
+    /// an error.
+    Megabytes(u64),
+    /// ★★★★★ **CONSTRAINT 26, reply tag 16** — [`Request::AllocVaSpaceBare`]'s answer: the
+    /// bare `FERMI_VASPACE_A` **and the client it lives in**.
+    ///
+    /// ⊘ A shape of its own rather than [`Reply::Handle`] plus a second round trip, and
+    /// rather than [`Reply::HandleAndToken`] with the client smuggled through the token
+    /// field. A handle without its namespace is not an answer, and re-using a shape whose
+    /// second field means *"work-submit token"* everywhere else is how a reader — and a
+    /// grader — comes to believe a boot did something it did not.
+    BareVaSpace {
+        /// The space handle, raw.
+        space: u64,
+        /// The RM client it lives in.
+        client: u32,
+    },
+    /// ★★★ #102 stage C3 — the answer to a [`Request::FbRead`].
+    ///
+    /// Two fields, not one, and the second is not a length: `covered == false` means the
+    /// isolate's fabricated aperture does not reach that address, which the walker turns
+    /// into a loud `MISS = FAULT`. Encoding it as "zero bytes came back" would make it
+    /// indistinguishable from a page of genuine zeros, and those are opposite facts.
+    FbBytes {
+        /// Whether a mapped extent covered the whole requested range.
+        covered: bool,
+        /// The bytes. Empty when `covered` is false.
+        bytes: Vec<u8>,
+    },
+    /// ★★★ The answer to a [`Request::ExportBacking`] — the geometry of a backing whose
+    /// **descriptor rides this frame's ancillary data**.
+    ///
+    /// ★★★★★ **w629 — the answer to [`Request::ExportUsermodeView`], and it carries a
+    /// DESCRIPTOR.**
+    ///
+    /// `mmap_len` is the length the VMM's `mmap` must use: the driver rounds the registered
+    /// range up to a host page and compares the mmap length against the ROUNDED size, so the
+    /// number that crosses is the only one it will accept.
+    ///
+    /// ⊘ The descriptor itself rides the frame's first byte via `write_frame_with_fds`; it is
+    /// not in this struct and cannot be. ⚠ A reader that takes this reply with the fd-free
+    /// `read_frame` has the descriptor **silently dropped by the kernel**, which is why its
+    /// caller must be a dedicated call with its own `max_fds` rather than the general one.
+    ///
+    /// ⚠ **Tag 13, because 12 is RETIRED** — it carried the deleted `Reply::DeviceView`, and a
+    /// peer built from an older revision may still send it. Never renumber, never re-issue.
+    UsermodeView {
+        /// The length the VMM's `mmap` must use, rounded as the driver rounds it.
+        mmap_len: u64,
+    },
+    /// ⊘ It carries no token. The child's index into its own export table is a child
+    /// value, and a parent that adopted it would be letting the peer name a slot in the
+    /// parent's registry — the same "the isolate is supplied by the caller, never by the
+    /// wire" rule [`WireError::into_rm_error`] already applies to a `BadHandle`. The
+    /// parent mints its own token when it adopts the descriptor.
+    Backing {
+        /// Byte offset into the backing at which the range begins.
+        offset: u64,
+        /// How many bytes are there.
+        len: u64,
+        /// What the isolate actually granted: `0` = read-write, `1` = read-only.
+        prot: u8,
+    },
+    /// ★★★★★ The answer to a [`Request::JoinFbLeaf`] — [`Reply::Backing`]'s geometry
+    /// **plus the two RM facts**, and its descriptor rides this frame's ancillary data.
+    ///
+    /// ⊘ Not `Reply::Backing`, and not a token: a joined leaf is memory *and* a placed RM
+    /// object, and a parent that received only the geometry would have adopted a backing
+    /// with nothing to free and no way to know whether the mapping landed where it asked.
+    /// Same no-token rule as [`Reply::Backing`] — the parent mints its own on adoption.
+    JoinedBacking {
+        /// Byte offset into the backing at which the range begins.
+        offset: u64,
+        /// How many bytes are there.
+        len: u64,
+        /// What the isolate actually granted: `0` = read-write, `1` = read-only.
+        prot: u8,
+        /// The `OS_DESCRIPTOR` object, raw. Stamped with **this connection's** isolate by
+        /// the parent, never taken from the wire.
+        memory: u64,
+        /// Where RM actually placed it. ⊘ Carried rather than assumed equal to the request:
+        /// the parent's own placement check is the point.
+        host_va: u64,
+    },
+    /// ★★★★★ **w380** — the answer to a [`Request::AliasFbLeaf`]: the two RM facts and
+    /// **nothing else**.
+    ///
+    /// ⊘ Not [`Reply::JoinedBacking`] with an empty geometry, and not
+    /// [`Reply::HandleAndToken`]: the first would let a parent adopt a backing that does not
+    /// exist, and the second is a *channel's* pair of numbers. A reply shape confusable with
+    /// either would be confused at the one seam where being wrong means the VMM installs a
+    /// second view of one frame.
+    Aliased {
+        /// The `OS_DESCRIPTOR` object, raw. Stamped with **this connection's** isolate by
+        /// the parent, never taken from the wire.
+        memory: u64,
+        /// Where RM actually placed it. ⊘ Carried rather than assumed equal to the request:
+        /// the parent's own placement check is the point.
+        host_va: u64,
+    },
+    /// ★★★★★ **CONSTRAINT 32 STEP 1 — the answer to a [`Request::MintBirthClient`].**
+    ///
+    /// ⚠ **The FIRST reply in this protocol that carries TWO descriptors**, and they are not
+    /// interchangeable: the control node is what an escape is issued on, the per-GPU node is
+    /// what keeps the session's GPU binding alive. They ride in that order and the reader's
+    /// allowance is `2` rather than the export path's `1`.
+    ///
+    /// ⊘ The scalars are a NAME and the descriptors are the CAPABILITY — a client handle
+    /// with no `struct file` bound to its session reaches no RM at all.
+    MintedBirthClient {
+        /// The `NV01_ROOT_CLIENT` RM assigned, in the **minting isolate's** identity.
+        client: u64,
+        /// The minting isolate's own client `A` — the key the far side files it under.
+        isolate_client: u32,
+    },
+    /// The verb failed.
+    Failed(WireError),
+}
+
+/// The subset of [`RmError`] an isolate may report. See the module docs for the two
+/// variants that are deliberately absent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WireError {
+    /// [`RmError::InsufficientPermissions`].
+    InsufficientPermissions,
+    /// [`RmError::BadHandle`], carrying the raw value the host refused.
+    BadHandle(u64),
+    /// [`RmError::NoMemory`].
+    NoMemory,
+    /// [`RmError::Interrupted`] — the host call returned `EINTR`.
+    Interrupted,
+    /// [`RmError::Other`], carrying the host's opaque status.
+    Other(u32),
+    /// ★★★ [`RmError::NotExportableAsMemory`] — the named boundary of decision (b).
+    ///
+    /// A wire form of its own rather than an `Other(status)`, because the whole value of
+    /// naming the boundary is lost if it arrives as an opaque number: a caller must be
+    /// able to tell *"the bytes are on the card and cannot cross as memory"* from
+    /// *"the host refused"*, and a status code makes those the same fact.
+    NotExportableAsMemory(u64),
+    /// ★★★ [`RmError::GuestRamUnavailable`] — the VM was not launched with a shared,
+    /// fd-backed memory block, so this isolate has no guest RAM to map.
+    ///
+    /// Named on the wire for the same reason as the variant above: it is a **deployment**
+    /// fact the isolate can observe and the VMM cannot, and arriving as an opaque status
+    /// would make it indistinguishable from "the host refused" — which is the difference
+    /// between *reconfigure the VM* and *file a bug*.
+    GuestRamUnavailable,
+    /// ★★★★★ **w755 — [`RmError::PlacementRefused`], CARRYING THE TWO NUMBERS THAT SAY
+    /// WHERE RM ACTUALLY PUT IT.**
+    ///
+    /// ⊘⊘⊘ **This variant is the repair of a wire form that DISCARDED the diagnosis.** Until
+    /// w755 a child's `PlacementRefused` was collapsed into `Other(NOT_ON_THIS_RUNG)` under a
+    /// comment asserting *"a child backend cannot produce `PlacementRefused` — the check that
+    /// mints it lives in the PARENT's `Worker::execute`, above the wire"*. That was true when
+    /// it was written (#102) and **stopped being true** when constraint 28's assertion moved
+    /// into the `NVOS46` sites themselves: `HostRmBackend::raw_map_dma_slice` and B's
+    /// `map_dma_slice` — the two arms of `map_store_slice` — both mint it, and both run in a
+    /// child.
+    ///
+    /// ⇒ `[measured w753]` the split-ownership boot reported
+    /// `map_refused=2154 first_refusal=Rm("Other(19270)")`. The refusal was constraint 28
+    /// firing 2 154 times, and `want`/`got` — the whole content of the diagnosis — never
+    /// crossed the boundary.
+    ///
+    /// ⚠ The lesson is sharper than the bug: the comment did not go stale about a *fact*, it
+    /// went stale about a **reachability claim**, and a reachability claim is exactly what
+    /// nothing re-checks. It is the same shape as `a_rulings_date_is_part_of_the_citation`.
+    PlacementRefused {
+        /// The VA the caller asked for — `at`, binding and not a hint.
+        want: u64,
+        /// The VA RM chose instead.
+        got: u64,
+    },
+}
+
+impl WireError {
+    /// Lift to the port's error type. **The isolate is supplied by the caller**, never by
+    /// the wire: a `BadHandle` is stamped with the namespace we asked on, so a child cannot
+    /// name another isolate's namespace even by lying.
+    #[must_use]
+    pub fn into_rm_error(self, isolate: kayfabe_isolate::IsolateId) -> RmError {
+        match self {
+            WireError::InsufficientPermissions => RmError::InsufficientPermissions,
+            WireError::BadHandle(raw) => {
+                RmError::BadHandle(kayfabe_isolate::HostHandle::new(isolate, raw))
+            }
+            WireError::NoMemory => RmError::NoMemory,
+            WireError::Interrupted => RmError::Interrupted,
+            WireError::Other(status) => RmError::Other(status),
+            WireError::NotExportableAsMemory(raw) => RmError::NotExportableAsMemory {
+                memory: kayfabe_isolate::HostHandle::new(isolate, raw),
+            },
+            WireError::GuestRamUnavailable => RmError::GuestRamUnavailable,
+            WireError::PlacementRefused { want, got } => RmError::PlacementRefused { want, got },
+        }
+    }
+}
+
+/// The wire code for [`kayfabe_isolate::ExportSource::Fabricated`].
+pub const EXPORT_SOURCE_FABRICATED: u8 = 0;
+/// The wire code for [`kayfabe_isolate::ExportSource::HostDeviceMemory`].
+pub const EXPORT_SOURCE_HOST_DEVICE: u8 = 1;
+
+/// The wire code for [`kayfabe_vmm::Prot::ReadWrite`].
+pub const PROT_READ_WRITE: u8 = 0;
+/// The wire code for [`kayfabe_vmm::Prot::ReadOnly`].
+pub const PROT_READ_ONLY: u8 = 1;
+
+/// [`kayfabe_vmm::Prot`]'s wire code. A dedicated mapping rather than a discriminant
+/// cast, for [`engine_code`]'s reason: a reordered enum must not silently re-route a
+/// protection, and the direction that fails open here is the dangerous one — a
+/// read-only run installed read-write.
+#[must_use]
+pub fn prot_code(prot: kayfabe_vmm::Prot) -> u8 {
+    match prot {
+        kayfabe_vmm::Prot::ReadWrite => PROT_READ_WRITE,
+        kayfabe_vmm::Prot::ReadOnly => PROT_READ_ONLY,
+    }
+}
+
+/// The inverse of [`prot_code`]. `None` for an unknown code — **never** a default, and
+/// specifically never a default of read-write.
+#[must_use]
+pub fn prot_from_code(code: u8) -> Option<kayfabe_vmm::Prot> {
+    match code {
+        PROT_READ_WRITE => Some(kayfabe_vmm::Prot::ReadWrite),
+        PROT_READ_ONLY => Some(kayfabe_vmm::Prot::ReadOnly),
+        _ => None,
+    }
+}
+
+/// The engine tag's wire code. A dedicated mapping rather than `as u8` on the enum: the
+/// core's [`kayfabe_arch::ids::EngineKind`] is free to gain, reorder or rename variants,
+/// and a discriminant cast would silently re-route a channel to a different runlist — the
+/// exact shape of the C's `engineType=0` bug (`dma_copy_class_alloc_params`, seam audit
+/// GR-1).
+#[must_use]
+pub fn engine_code(engine: kayfabe_arch::ids::EngineKind) -> u8 {
+    use kayfabe_arch::ids::EngineKind as E;
+    match engine {
+        E::GrCompute => 1,
+        E::GrGraphics => 2,
+        E::Ce => 3,
+        E::NvEnc => 4,
+        E::NvDec => 5,
+        E::Other => 6,
+    }
+}
+
+/// The inverse of [`engine_code`]. `None` for an unknown code — a wire value we do not
+/// recognise is a refusal, never a default: defaulting to `Other` would route the channel
+/// somewhere plausible and wrong.
+#[must_use]
+pub fn engine_from_code(code: u8) -> Option<kayfabe_arch::ids::EngineKind> {
+    use kayfabe_arch::ids::EngineKind as E;
+    Some(match code {
+        1 => E::GrCompute,
+        2 => E::GrGraphics,
+        3 => E::Ce,
+        4 => E::NvEnc,
+        5 => E::NvDec,
+        6 => E::Other,
+        _ => return None,
+    })
+}
+
+// =====================================================================================
+// Encoding — hand-rolled, because the alternative is a serialization dependency in the
+// one process boundary that faces a compromised peer.
+// =====================================================================================
+
+/// A malformed frame. Every variant names what was wrong, because the peer is inside the
+/// threat model and "decode failed" is not a diagnosis.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProtoError {
+    /// The frame ended in the middle of a field.
+    Truncated {
+        /// What was being read.
+        what: &'static str,
+    },
+    /// A tag byte that names no variant.
+    UnknownTag {
+        /// Which enum.
+        what: &'static str,
+        /// The byte.
+        tag: u8,
+    },
+    /// A length field larger than [`FRAME_MAX`], or a byte-string longer than its frame.
+    Oversize {
+        /// What was being read.
+        what: &'static str,
+        /// The declared length.
+        len: u64,
+    },
+    /// Bytes remained after a complete value was decoded — a peer appending to a frame is
+    /// a peer we do not understand, and the tolerant reading is how a parser differential
+    /// starts.
+    TrailingBytes {
+        /// How many.
+        len: usize,
+    },
+}
+
+impl std::fmt::Display for ProtoError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProtoError::Truncated { what } => write!(f, "frame ended inside {what}"),
+            ProtoError::UnknownTag { what, tag } => write!(f, "unknown {what} tag {tag}"),
+            ProtoError::Oversize { what, len } => write!(f, "{what} declares {len} bytes"),
+            ProtoError::TrailingBytes { len } => write!(f, "{len} bytes after a complete value"),
+        }
+    }
+}
+
+impl std::error::Error for ProtoError {}
+
+struct Cursor<'a> {
+    bytes: &'a [u8],
+    at: usize,
+}
+
+impl<'a> Cursor<'a> {
+    fn new(bytes: &'a [u8]) -> Self {
+        Cursor { bytes, at: 0 }
+    }
+    fn take(&mut self, n: usize, what: &'static str) -> Result<&'a [u8], ProtoError> {
+        let end = self
+            .at
+            .checked_add(n)
+            .ok_or(ProtoError::Truncated { what })?;
+        let s = self
+            .bytes
+            .get(self.at..end)
+            .ok_or(ProtoError::Truncated { what })?;
+        self.at = end;
+        Ok(s)
+    }
+    fn u8(&mut self, what: &'static str) -> Result<u8, ProtoError> {
+        Ok(self.take(1, what)?[0])
+    }
+    fn u32(&mut self, what: &'static str) -> Result<u32, ProtoError> {
+        let b = self.take(4, what)?;
+        Ok(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+    }
+    fn u64(&mut self, what: &'static str) -> Result<u64, ProtoError> {
+        let b = self.take(8, what)?;
+        Ok(u64::from_le_bytes([
+            b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+        ]))
+    }
+    fn blob(&mut self, what: &'static str) -> Result<Vec<u8>, ProtoError> {
+        let len = self.u32(what)? as usize;
+        if len > FRAME_MAX {
+            return Err(ProtoError::Oversize {
+                what,
+                len: len as u64,
+            });
+        }
+        Ok(self.take(len, what)?.to_vec())
+    }
+    fn finish(self) -> Result<(), ProtoError> {
+        let left = self.bytes.len() - self.at;
+        if left == 0 {
+            Ok(())
+        } else {
+            Err(ProtoError::TrailingBytes { len: left })
+        }
+    }
+}
+
+/// ★★★ **CONSTRAINT 26** — validate the ring's provenance byte, refusing by name.
+///
+/// ⊘ Refused rather than defaulted to `OwnObject`: a byte we do not understand means the two
+/// sides disagree about the frame, and *"it is the isolate's own object"* is the arm that
+/// makes the far side name a handle — so guessing it would turn a vocabulary mismatch into a
+/// `BadHandle` three fields later.
+fn ring_provenance_tag(tag: u8) -> Result<u8, ProtoError> {
+    match tag {
+        RING_PROVENANCE_OWN_OBJECT | RING_PROVENANCE_STORE_SLICE => Ok(tag),
+        tag => Err(ProtoError::UnknownTag {
+            what: "ring provenance",
+            tag,
+        }),
+    }
+}
+
+fn put_blob(out: &mut Vec<u8>, blob: &[u8]) {
+    out.extend_from_slice(&(blob.len() as u32).to_le_bytes());
+    out.extend_from_slice(blob);
+}
+
+impl Envelope {
+    /// Encode this envelope's body (without the frame length).
+    #[must_use]
+    pub fn encode(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(32);
+        out.extend_from_slice(&self.txn.to_le_bytes());
+        match &self.request {
+            Request::Alloc {
+                parent,
+                class,
+                params,
+            } => {
+                out.push(1);
+                out.extend_from_slice(&parent.to_le_bytes());
+                out.extend_from_slice(&class.to_le_bytes());
+                put_blob(&mut out, params);
+            }
+            Request::AllocVaSpace => out.push(2),
+            Request::SubdeviceControl { cmd, payload } => {
+                out.push(22);
+                out.extend_from_slice(&cmd.to_le_bytes());
+                put_blob(&mut out, payload);
+            }
+            Request::AllocSysmem { len } => {
+                out.push(3);
+                out.extend_from_slice(&len.to_le_bytes());
+            }
+            Request::AllocVidmem { len } => {
+                out.push(19);
+                out.extend_from_slice(&len.to_le_bytes());
+            }
+            Request::ReserveGpga { len } => {
+                out.push(27);
+                out.extend_from_slice(&len.to_le_bytes());
+            }
+            Request::LargestReservableMb { start_mb } => {
+                out.push(28);
+                out.extend_from_slice(&start_mb.to_le_bytes());
+            }
+            Request::CudaWalkReport => out.push(29),
+            Request::ExportDeviceView {
+                memory,
+                offset,
+                len,
+                write,
+            } => {
+                out.push(30);
+                out.extend_from_slice(&memory.to_le_bytes());
+                out.extend_from_slice(&offset.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.push(*write);
+            }
+            Request::ReleaseDeviceView { token } => {
+                out.push(31);
+                out.extend_from_slice(&token.to_le_bytes());
+            }
+            Request::AllocVaSpaceBare => out.push(34),
+            Request::AdoptVaSpace { client, space } => {
+                out.push(35);
+                out.extend_from_slice(&client.to_le_bytes());
+                out.extend_from_slice(&space.to_le_bytes());
+            }
+            Request::MapStoreSlice {
+                vas,
+                memory,
+                offset,
+                len,
+                at,
+            } => {
+                out.push(36);
+                out.extend_from_slice(&vas.to_le_bytes());
+                out.extend_from_slice(&memory.to_le_bytes());
+                out.extend_from_slice(&offset.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.extend_from_slice(&at.to_le_bytes());
+            }
+            Request::VaSpaceHandover { space } => {
+                out.push(38);
+                out.extend_from_slice(&space.to_le_bytes());
+            }
+            Request::MintBirthClient => out.push(40),
+            Request::AdoptBirthClient {
+                client,
+                isolate_client,
+                minted_by_proc,
+            } => {
+                out.push(39);
+                out.extend_from_slice(&client.to_le_bytes());
+                out.extend_from_slice(&isolate_client.to_le_bytes());
+                out.extend_from_slice(&minted_by_proc.to_le_bytes());
+            }
+            Request::UnmapStoreSlice { vas, at } => {
+                out.push(37);
+                out.extend_from_slice(&vas.to_le_bytes());
+                out.extend_from_slice(&at.to_le_bytes());
+            }
+            Request::WalkShadowStage { span, off, bytes } => {
+                out.push(32);
+                out.extend_from_slice(&span.to_le_bytes());
+                out.extend_from_slice(&off.to_le_bytes());
+                put_blob(&mut out, bytes);
+            }
+            Request::WalkShadowRun { pdbs, ack } => {
+                out.push(33);
+                out.extend_from_slice(
+                    &(u32::try_from(pdbs.len()).unwrap_or(u32::MAX)).to_le_bytes(),
+                );
+                for p in pdbs {
+                    out.extend_from_slice(&p.to_le_bytes());
+                }
+                out.extend_from_slice(&ack.to_le_bytes());
+            }
+            Request::AllocChannel {
+                vas,
+                engine,
+                hosting,
+                adopt,
+                err_notifier,
+            } => {
+                out.push(4);
+                out.extend_from_slice(&vas.to_le_bytes());
+                out.push(*engine);
+                match hosting {
+                    None => out.push(0),
+                    Some((class, params)) => {
+                        out.push(1);
+                        out.extend_from_slice(&class.to_le_bytes());
+                        put_blob(&mut out, params);
+                    }
+                }
+                match adopt {
+                    None => out.push(0),
+                    Some((kind, a, b, ring_va, gp_fifo_va, entries, userd)) => {
+                        out.push(1);
+                        out.push(*kind);
+                        out.extend_from_slice(&a.to_le_bytes());
+                        out.extend_from_slice(&b.to_le_bytes());
+                        out.extend_from_slice(&ring_va.to_le_bytes());
+                        out.extend_from_slice(&gp_fifo_va.to_le_bytes());
+                        out.extend_from_slice(&entries.to_le_bytes());
+                        // ★★★★★ LEG B, with its OWN presence byte inside the ring's. ⊘ Not
+                        // an in-band sentinel: `offset = 0` is a legal USERD placement (the
+                        // slot at the joined leaf's own base) and must not read as absent.
+                        // ★★★ w755l — THREE states, not two: absent, a joined leaf, and THE
+                        // STORE (which names no handle at all, because the per-proc isolate
+                        // may not name it — constraint 26). ⊘ A third TAG and not a sentinel
+                        // handle: `0` is a legal-looking handle, and this byte already exists
+                        // precisely so absence is never in-band.
+                        match userd {
+                            None => out.push(0),
+                            Some((kind, umem, uoff)) => {
+                                out.push(1 + kind);
+                                out.extend_from_slice(&umem.to_le_bytes());
+                                out.extend_from_slice(&uoff.to_le_bytes());
+                            }
+                        }
+                    }
+                }
+                // ★★★★★ w288 — its OWN presence byte, encoded LAST so the two options above
+                // keep their existing offsets. ⊘ Not an in-band sentinel: see the field's doc
+                // for why handle zero cannot be the carrier of absence.
+                match err_notifier {
+                    None => out.push(0),
+                    Some(memory) => {
+                        out.push(1);
+                        out.extend_from_slice(&memory.to_le_bytes());
+                    }
+                }
+            }
+            // ★ w393 — the adoption tuple is laid out byte-for-byte as `AllocChannel`'s
+            // `Some` arm, minus the outer presence byte (it is mandatory here).
+            Request::AllocChannelDeclared {
+                vas,
+                engine,
+                declared_engine_type,
+                adopt: (kind, a, b, ring_va, gp_fifo_va, entries, userd),
+                err_notifier,
+            } => {
+                out.push(24);
+                out.extend_from_slice(&vas.to_le_bytes());
+                out.push(*engine);
+                match declared_engine_type {
+                    None => out.push(0),
+                    Some(t) => {
+                        out.push(1);
+                        out.extend_from_slice(&t.to_le_bytes());
+                    }
+                }
+                out.push(*kind);
+                out.extend_from_slice(&a.to_le_bytes());
+                out.extend_from_slice(&b.to_le_bytes());
+                out.extend_from_slice(&ring_va.to_le_bytes());
+                out.extend_from_slice(&gp_fifo_va.to_le_bytes());
+                out.extend_from_slice(&entries.to_le_bytes());
+                // ★★★ w755l — the same three-state tag as the sibling encode above.
+                match userd {
+                    None => out.push(0),
+                    Some((kind, umem, uoff)) => {
+                        out.push(1 + kind);
+                        out.extend_from_slice(&umem.to_le_bytes());
+                        out.extend_from_slice(&uoff.to_le_bytes());
+                    }
+                }
+                match err_notifier {
+                    None => out.push(0),
+                    Some(memory) => {
+                        out.push(1);
+                        out.extend_from_slice(&memory.to_le_bytes());
+                    }
+                }
+            }
+            Request::BirthGuestChannelInB {
+                range,
+                engine,
+                declared_engine_type,
+                adopt: (kind, a, b, ring_va, gp_fifo_va, entries, userd),
+                err_notifier,
+            } => {
+                // ⊘ 41, not 40 — `MintBirthClient` holds 40. My first draft collided with it
+                // and the round trip caught it as `TrailingBytes { len: 86 }`: the decoder
+                // matched the field-less variant, consumed the tag, and left the whole body.
+                // ⚠ The scan that picked 40 grepped one indentation level and missed the
+                // arm at another. Tags are found by enumerating the DECODE arms, not by
+                // pattern-matching the encodes.
+                out.push(41);
+                out.extend_from_slice(&range.to_le_bytes());
+                out.push(*engine);
+                match declared_engine_type {
+                    None => out.push(0),
+                    Some(t) => {
+                        out.push(1);
+                        out.extend_from_slice(&t.to_le_bytes());
+                    }
+                }
+                out.push(*kind);
+                out.extend_from_slice(&a.to_le_bytes());
+                out.extend_from_slice(&b.to_le_bytes());
+                out.extend_from_slice(&ring_va.to_le_bytes());
+                out.extend_from_slice(&gp_fifo_va.to_le_bytes());
+                out.extend_from_slice(&entries.to_le_bytes());
+                // ★★★ w755l's three-state tag — `1 + kind`, NOT `kind`.
+                // ⊘⊘ My first draft of this arm pushed `kind` directly, which sends `Joined`
+                // as the byte that DECODES AS ABSENT and `TheStore` as the byte that decodes
+                // as `Joined`. Both are silent: the frame stays fixed-width and the receiver
+                // builds a well-formed request naming the wrong thing.
+                match userd {
+                    None => out.push(0),
+                    Some((kind, h, off)) => {
+                        out.push(1 + kind);
+                        out.extend_from_slice(&h.to_le_bytes());
+                        out.extend_from_slice(&off.to_le_bytes());
+                    }
+                }
+                match err_notifier {
+                    None => out.push(0),
+                    Some((offset, len, prot)) => {
+                        out.push(1);
+                        out.extend_from_slice(&offset.to_le_bytes());
+                        out.extend_from_slice(&len.to_le_bytes());
+                        out.push(*prot);
+                    }
+                }
+            }
+            Request::AllocEngineObject {
+                chan,
+                class,
+                params,
+            } => {
+                out.push(5);
+                out.extend_from_slice(&chan.to_le_bytes());
+                out.extend_from_slice(&class.to_le_bytes());
+                put_blob(&mut out, params);
+            }
+            Request::Schedule { chan } => {
+                out.push(6);
+                out.extend_from_slice(&chan.to_le_bytes());
+            }
+            Request::Free { obj } => {
+                out.push(7);
+                out.extend_from_slice(&obj.to_le_bytes());
+            }
+            Request::Control { obj, cmd, payload } => {
+                out.push(8);
+                out.extend_from_slice(&obj.to_le_bytes());
+                out.extend_from_slice(&cmd.to_le_bytes());
+                put_blob(&mut out, payload);
+            }
+            Request::MapGpuVa {
+                vas,
+                memory,
+                len,
+                at,
+            } => {
+                out.push(9);
+                out.extend_from_slice(&vas.to_le_bytes());
+                out.extend_from_slice(&memory.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.extend_from_slice(&at.to_le_bytes());
+            }
+            Request::UnmapGpuVa { vas, gpu_va } => {
+                out.push(10);
+                out.extend_from_slice(&vas.to_le_bytes());
+                out.extend_from_slice(&gpu_va.to_le_bytes());
+            }
+            Request::RingDoorbell { token } => {
+                out.push(11);
+                out.extend_from_slice(&token.to_le_bytes());
+            }
+            Request::CeCopy {
+                vas,
+                dst,
+                src,
+                len,
+                src_is_const,
+                by_ours,
+                rel_present,
+                rel_va,
+                rel_payload,
+            } => {
+                out.push(13);
+                out.extend_from_slice(&vas.to_le_bytes());
+                out.extend_from_slice(&dst.to_le_bytes());
+                out.extend_from_slice(&src.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.push(*src_is_const);
+                out.push(*by_ours);
+                out.push(*rel_present);
+                out.extend_from_slice(&rel_va.to_le_bytes());
+                out.extend_from_slice(&rel_payload.to_le_bytes());
+            }
+            Request::FbRead { phys, len } => {
+                out.push(14);
+                out.extend_from_slice(&phys.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+            }
+            Request::ExportBacking {
+                source,
+                memory,
+                len,
+                prot,
+            } => {
+                out.push(15);
+                out.push(*source);
+                out.extend_from_slice(&memory.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.push(*prot);
+            }
+            Request::ExportUsermodeView { write } => {
+                out.push(26);
+                out.push(*write);
+            }
+            Request::MapGuestRam { offset, len, prot } => {
+                out.push(16);
+                out.extend_from_slice(&offset.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.push(*prot);
+            }
+            Request::UnmapGuestRam { region, len } => {
+                out.push(17);
+                out.extend_from_slice(&region.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+            }
+            Request::DescribeGuestRam { region, len } => {
+                out.push(18);
+                out.extend_from_slice(&region.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+            }
+            Request::JoinFbLeaf {
+                vas,
+                len,
+                at,
+                phys,
+                prot,
+            } => {
+                out.push(20);
+                out.extend_from_slice(&vas.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.extend_from_slice(&at.to_le_bytes());
+                out.extend_from_slice(&phys.to_le_bytes());
+                out.push(*prot);
+            }
+            Request::AliasFbLeaf { vas, len, at, phys } => {
+                // ⊘ **23, and 22 was TAKEN.** `Request::SubdeviceControl` already pushes 22
+                // (`w346`), and the tag list is not ordered, so the collision is invisible by
+                // reading: an alias encoded as 22 decodes as a subdevice control, consumes a
+                // different number of bytes and answers `TrailingBytes`. It cost one test
+                // cycle and `RmError::Wedged` on a verb whose body was perfectly correct.
+                // ★ `every_request_round_trips_with_its_txn` is what caught it, which is why
+                // the sample list is a hand-written set with a coverage gate over it.
+                out.push(23);
+                out.extend_from_slice(&vas.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.extend_from_slice(&at.to_le_bytes());
+                out.extend_from_slice(&phys.to_le_bytes());
+            }
+            Request::FbJoinPeek {
+                phys,
+                len,
+                poke,
+                pattern,
+            } => {
+                out.push(21);
+                out.extend_from_slice(&phys.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.push(*poke);
+                out.extend_from_slice(&pattern.to_le_bytes());
+            }
+        }
+        out
+    }
+
+    /// Decode an envelope body.
+    ///
+    /// # Errors
+    /// [`ProtoError`] — every malformation is a named variant.
+    pub fn decode(bytes: &[u8]) -> Result<Self, ProtoError> {
+        let mut c = Cursor::new(bytes);
+        let txn = c.u64("envelope txn")?;
+        let request = match c.u8("request tag")? {
+            1 => Request::Alloc {
+                parent: c.u64("alloc parent")?,
+                class: c.u32("alloc class")?,
+                params: c.blob("alloc params")?,
+            },
+            2 => Request::AllocVaSpace,
+            22 => Request::SubdeviceControl {
+                cmd: c.u32("subdevice control cmd")?,
+                payload: c.blob("subdevice control payload")?,
+            },
+            3 => Request::AllocSysmem {
+                len: c.u64("sysmem len")?,
+            },
+            19 => Request::AllocVidmem {
+                len: c.u64("vidmem len")?,
+            },
+            27 => Request::ReserveGpga {
+                len: c.u64("gpga reservation len")?,
+            },
+            28 => Request::LargestReservableMb {
+                start_mb: c.u64("gpga probe start mb")?,
+            },
+            29 => Request::CudaWalkReport,
+            32 => Request::WalkShadowStage {
+                span: c.u64("walk shadow span")?,
+                off: c.u64("walk shadow off")?,
+                bytes: c.blob("walk shadow chunk")?,
+            },
+            33 => {
+                let n = c.u32("walk shadow pdb count")? as usize;
+                let mut pdbs = Vec::with_capacity(n.min(1024));
+                for _ in 0..n {
+                    pdbs.push(c.u64("walk shadow pdb")?);
+                }
+                let ack = c.u64("walk shadow ack")?;
+                Request::WalkShadowRun { pdbs, ack }
+            }
+            30 => Request::ExportDeviceView {
+                memory: c.u64("device view memory")?,
+                offset: c.u64("device view offset")?,
+                len: c.u64("device view len")?,
+                write: c.u8("device view write")?,
+            },
+            31 => Request::ReleaseDeviceView {
+                token: c.u64("device view token")?,
+            },
+            34 => Request::AllocVaSpaceBare,
+            35 => Request::AdoptVaSpace {
+                client: c.u32("adopt vaspace client")?,
+                space: c.u32("adopt vaspace space")?,
+            },
+            36 => Request::MapStoreSlice {
+                vas: c.u64("store slice vas")?,
+                memory: c.u64("store slice memory")?,
+                offset: c.u64("store slice offset")?,
+                len: c.u64("store slice len")?,
+                at: c.u64("store slice at")?,
+            },
+            38 => Request::VaSpaceHandover {
+                space: c.u64("vaspace handover space")?,
+            },
+            40 => Request::MintBirthClient,
+            39 => Request::AdoptBirthClient {
+                client: c.u64("birth client handle")?,
+                isolate_client: c.u32("birth client isolate client")?,
+                minted_by_proc: c.u32("birth client minting proc")?,
+            },
+            37 => Request::UnmapStoreSlice {
+                vas: c.u64("store unmap vas")?,
+                at: c.u64("store unmap at")?,
+            },
+            4 => Request::AllocChannel {
+                vas: c.u64("channel vas")?,
+                engine: c.u8("channel engine")?,
+                hosting: match c.u8("channel hosting presence")? {
+                    0 => None,
+                    1 => Some((
+                        c.u32("channel hosting class")?,
+                        c.blob("channel hosting params")?,
+                    )),
+                    // ⊘ Refused by name rather than defaulted to `None`: a byte we do not
+                    // understand means the two sides disagree about the frame, and
+                    // continuing would decode the REST of the message at the wrong offset.
+                    tag => {
+                        return Err(ProtoError::UnknownTag {
+                            what: "channel hosting presence",
+                            tag,
+                        });
+                    }
+                },
+                adopt: match c.u8("channel adopt presence")? {
+                    0 => None,
+                    1 => Some((
+                        ring_provenance_tag(c.u8("adopt provenance")?)?,
+                        c.u64("adopt ring a")?,
+                        c.u64("adopt ring b")?,
+                        c.u64("adopt ring_va")?,
+                        c.u64("adopt gp_fifo_va")?,
+                        c.u32("adopt gp_fifo_entries")?,
+                        match c.u8("channel adopt userd presence")? {
+                            0 => None,
+                            1 => Some((
+                                0,
+                                c.u64("adopt userd memory")?,
+                                c.u64("adopt userd offset")?,
+                            )),
+
+                            // ★ w755l — the store: the handle word is present and MEANINGLESS, read and
+
+                            // discarded so the frame stays fixed-width.
+                            2 => Some((
+                                1,
+                                c.u64("adopt userd store pad")?,
+                                c.u64("adopt userd offset")?,
+                            )),
+                            tag => {
+                                return Err(ProtoError::UnknownTag {
+                                    what: "channel adopt userd presence",
+                                    tag,
+                                });
+                            }
+                        },
+                    )),
+                    // ⊘ Refused by name for the presence byte above's reason.
+                    tag => {
+                        return Err(ProtoError::UnknownTag {
+                            what: "channel adopt presence",
+                            tag,
+                        });
+                    }
+                },
+                err_notifier: match c.u8("channel err_notifier presence")? {
+                    0 => None,
+                    1 => Some(c.u64("channel err_notifier memory")?),
+                    // ⊘ Refused by name, never defaulted to `None`. A byte we do not
+                    // understand means the two sides disagree about the frame; defaulting
+                    // would decode the REST of the message at the wrong offset AND would
+                    // silently produce a channel with no notifier, which is the one outcome
+                    // indistinguishable from a channel that simply did not fault.
+                    tag => {
+                        return Err(ProtoError::UnknownTag {
+                            what: "channel err_notifier presence",
+                            tag,
+                        });
+                    }
+                },
+            },
+            41 => Request::BirthGuestChannelInB {
+                range: c.u64("birth-in-b range")?,
+                engine: c.u8("birth-in-b engine")?,
+                declared_engine_type: match c.u8("birth-in-b engine type presence")? {
+                    0 => None,
+                    1 => Some(c.u32("birth-in-b engine type")?),
+                    tag => {
+                        return Err(ProtoError::UnknownTag {
+                            what: "birth-in-b engine type presence",
+                            tag,
+                        });
+                    }
+                },
+                adopt: (
+                    ring_provenance_tag(c.u8("birth-in-b adopt provenance")?)?,
+                    c.u64("birth-in-b adopt ring a")?,
+                    c.u64("birth-in-b adopt ring b")?,
+                    c.u64("birth-in-b adopt ring_va")?,
+                    c.u64("birth-in-b adopt gp_fifo_va")?,
+                    c.u32("birth-in-b adopt gp_fifo_entries")?,
+                    match c.u8("birth-in-b adopt userd presence")? {
+                        0 => None,
+                        1 => Some((
+                            0,
+                            c.u64("birth-in-b adopt userd memory")?,
+                            c.u64("birth-in-b adopt userd offset")?,
+                        )),
+                        // ★ w755l — THE STORE. The handle word is present and MEANINGLESS.
+                        2 => Some((
+                            1,
+                            c.u64("birth-in-b adopt userd store pad")?,
+                            c.u64("birth-in-b adopt userd offset")?,
+                        )),
+                        tag => {
+                            return Err(ProtoError::UnknownTag {
+                                what: "birth-in-b adopt userd presence",
+                                tag,
+                            });
+                        }
+                    },
+                ),
+                err_notifier: match c.u8("birth-in-b err_notifier presence")? {
+                    0 => None,
+                    1 => Some((
+                        c.u64("birth-in-b err_notifier offset")?,
+                        c.u64("birth-in-b err_notifier len")?,
+                        c.u8("birth-in-b err_notifier prot")?,
+                    )),
+                    tag => {
+                        return Err(ProtoError::UnknownTag {
+                            what: "birth-in-b err_notifier presence",
+                            tag,
+                        });
+                    }
+                },
+            },
+            24 => Request::AllocChannelDeclared {
+                vas: c.u64("declared channel vas")?,
+                engine: c.u8("declared channel engine")?,
+                declared_engine_type: match c.u8("declared engine type presence")? {
+                    0 => None,
+                    1 => Some(c.u32("declared engine type")?),
+                    // ⊘ Refused by name for `AllocChannel`'s reason: an unknown byte means
+                    // the two sides disagree about the frame.
+                    tag => {
+                        return Err(ProtoError::UnknownTag {
+                            what: "declared engine type presence",
+                            tag,
+                        });
+                    }
+                },
+                adopt: (
+                    ring_provenance_tag(c.u8("declared adopt provenance")?)?,
+                    c.u64("declared adopt ring a")?,
+                    c.u64("declared adopt ring b")?,
+                    c.u64("declared adopt ring_va")?,
+                    c.u64("declared adopt gp_fifo_va")?,
+                    c.u32("declared adopt gp_fifo_entries")?,
+                    match c.u8("declared adopt userd presence")? {
+                        0 => None,
+                        1 => Some((
+                            0,
+                            c.u64("declared adopt userd memory")?,
+                            c.u64("declared adopt userd offset")?,
+                        )),
+                        // ★ w755l — THE STORE. The handle word is present and MEANINGLESS;
+                        // it is read and discarded so the frame stays fixed-width.
+                        2 => Some((
+                            1,
+                            c.u64("declared adopt userd store pad")?,
+                            c.u64("declared adopt userd offset")?,
+                        )),
+                        tag => {
+                            return Err(ProtoError::UnknownTag {
+                                what: "declared adopt userd presence",
+                                tag,
+                            });
+                        }
+                    },
+                ),
+                err_notifier: match c.u8("declared channel err_notifier presence")? {
+                    0 => None,
+                    1 => Some(c.u64("declared channel err_notifier memory")?),
+                    tag => {
+                        return Err(ProtoError::UnknownTag {
+                            what: "declared channel err_notifier presence",
+                            tag,
+                        });
+                    }
+                },
+            },
+            5 => Request::AllocEngineObject {
+                chan: c.u64("engine chan")?,
+                class: c.u32("engine class")?,
+                params: c.blob("engine params")?,
+            },
+            6 => Request::Schedule {
+                chan: c.u64("schedule chan")?,
+            },
+            7 => Request::Free {
+                obj: c.u64("free obj")?,
+            },
+            8 => Request::Control {
+                obj: c.u64("control obj")?,
+                cmd: c.u32("control cmd")?,
+                payload: c.blob("control payload")?,
+            },
+            9 => Request::MapGpuVa {
+                vas: c.u64("map vas")?,
+                memory: c.u64("map memory")?,
+                len: c.u64("map len")?,
+                at: c.u64("map at")?,
+            },
+            10 => Request::UnmapGpuVa {
+                vas: c.u64("unmap vas")?,
+                gpu_va: c.u64("unmap va")?,
+            },
+            11 => Request::RingDoorbell {
+                token: c.u64("doorbell token")?,
+            },
+            // ⊘ **Tag 12 is RETIRED, not free** (`ORPHANS_wire_or_discard.md`, 2026-09-12).
+            // It carried `ExportSurface`, deleted because no `Worker` wrapper ever existed
+            // and the host impl was a stub returning not-implemented. A peer built from an
+            // older revision may still send it; reusing the number for a new request would
+            // decode those frames as the new verb. Never renumber, and never re-issue 12.
+            13 => Request::CeCopy {
+                vas: c.u64("ce vas")?,
+                dst: c.u64("ce dst")?,
+                src: c.u64("ce src")?,
+                len: c.u64("ce len")?,
+                src_is_const: c.u8("ce src kind")?,
+                by_ours: c.u8("ce engine")?,
+                rel_present: c.u8("ce release present")?,
+                rel_va: c.u64("ce release va")?,
+                rel_payload: c.u32("ce release payload")?,
+            },
+            14 => Request::FbRead {
+                phys: c.u64("fb phys")?,
+                len: c.u64("fb len")?,
+            },
+            15 => Request::ExportBacking {
+                source: c.u8("export source")?,
+                memory: c.u64("export memory")?,
+                len: c.u64("export len")?,
+                prot: c.u8("export prot")?,
+            },
+            // ⊘ **Tag 25 is RETIRED, not free** (`ORPHANS_wire_or_discard.md`, 2026-09-12).
+            // It carried `ExportDeviceView`, deleted for having zero senders of any kind.
+            // A peer built from an older revision may still send it; reusing the number for
+            // a new request would decode those frames as the new verb. Never renumber, and
+            // never re-issue 25.
+            26 => Request::ExportUsermodeView {
+                write: c.u8("usermode view write")?,
+            },
+            16 => Request::MapGuestRam {
+                offset: c.u64("guest ram offset")?,
+                len: c.u64("guest ram len")?,
+                prot: c.u8("guest ram prot")?,
+            },
+            17 => Request::UnmapGuestRam {
+                region: c.u64("guest ram region")?,
+                len: c.u64("guest ram len")?,
+            },
+            18 => Request::DescribeGuestRam {
+                region: c.u64("guest ram region")?,
+                len: c.u64("guest ram len")?,
+            },
+            20 => Request::JoinFbLeaf {
+                vas: c.u64("join vas")?,
+                len: c.u64("join len")?,
+                at: c.u64("join at")?,
+                phys: c.u64("join phys")?,
+                prot: c.u8("join prot")?,
+            },
+            23 => Request::AliasFbLeaf {
+                vas: c.u64("alias vas")?,
+                len: c.u64("alias len")?,
+                at: c.u64("alias at")?,
+                phys: c.u64("alias phys")?,
+            },
+            21 => Request::FbJoinPeek {
+                phys: c.u64("peek phys")?,
+                len: c.u64("peek len")?,
+                poke: c.u8("peek poke")?,
+                pattern: c.u32("peek pattern")?,
+            },
+            tag => {
+                return Err(ProtoError::UnknownTag {
+                    what: "request",
+                    tag,
+                });
+            }
+        };
+        c.finish()?;
+        Ok(Envelope { txn, request })
+    }
+}
+
+impl Reply {
+    /// Encode this reply's body (without the frame length).
+    #[must_use]
+    pub fn encode(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(16);
+        match self {
+            Reply::Handle(h) => {
+                out.push(1);
+                out.extend_from_slice(&h.to_le_bytes());
+            }
+            Reply::HandleAndToken(h, t) => {
+                out.push(2);
+                out.extend_from_slice(&h.to_le_bytes());
+                out.extend_from_slice(&t.to_le_bytes());
+            }
+            Reply::Unit => out.push(3),
+            Reply::Payload(p) => {
+                out.push(4);
+                put_blob(&mut out, p);
+            }
+            Reply::Va(va) => {
+                out.push(5);
+                out.extend_from_slice(&va.to_le_bytes());
+            }
+            Reply::Megabytes(mb) => {
+                out.push(14);
+                out.extend_from_slice(&mb.to_le_bytes());
+            }
+            Reply::MintedBirthClient {
+                client,
+                isolate_client,
+            } => {
+                out.push(17);
+                out.extend_from_slice(&client.to_le_bytes());
+                out.extend_from_slice(&isolate_client.to_le_bytes());
+            }
+            Reply::BareVaSpace { space, client } => {
+                out.push(16);
+                out.extend_from_slice(&space.to_le_bytes());
+                out.extend_from_slice(&client.to_le_bytes());
+            }
+            Reply::DeviceViewNode {
+                release_token,
+                memory,
+                offset,
+                mmap_len,
+            } => {
+                out.push(15);
+                out.extend_from_slice(&release_token.to_le_bytes());
+                out.extend_from_slice(&memory.to_le_bytes());
+                out.extend_from_slice(&offset.to_le_bytes());
+                out.extend_from_slice(&mmap_len.to_le_bytes());
+            }
+            Reply::FbBytes { covered, bytes } => {
+                out.push(8);
+                out.push(u8::from(*covered));
+                put_blob(&mut out, bytes);
+            }
+            Reply::UsermodeView { mmap_len } => {
+                out.push(13);
+                out.extend_from_slice(&mmap_len.to_le_bytes());
+            }
+            Reply::Backing { offset, len, prot } => {
+                out.push(9);
+                out.extend_from_slice(&offset.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.push(*prot);
+            }
+            Reply::JoinedBacking {
+                offset,
+                len,
+                prot,
+                memory,
+                host_va,
+            } => {
+                out.push(10);
+                out.extend_from_slice(&offset.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.push(*prot);
+                out.extend_from_slice(&memory.to_le_bytes());
+                out.extend_from_slice(&host_va.to_le_bytes());
+            }
+            Reply::Aliased { memory, host_va } => {
+                out.push(11);
+                out.extend_from_slice(&memory.to_le_bytes());
+                out.extend_from_slice(&host_va.to_le_bytes());
+            }
+            Reply::Failed(e) => {
+                out.push(7);
+                match e {
+                    WireError::InsufficientPermissions => out.push(1),
+                    WireError::BadHandle(raw) => {
+                        out.push(2);
+                        out.extend_from_slice(&raw.to_le_bytes());
+                    }
+                    WireError::NoMemory => out.push(3),
+                    WireError::Interrupted => out.push(4),
+                    WireError::Other(status) => {
+                        out.push(5);
+                        out.extend_from_slice(&status.to_le_bytes());
+                    }
+                    WireError::NotExportableAsMemory(raw) => {
+                        out.push(6);
+                        out.extend_from_slice(&raw.to_le_bytes());
+                    }
+                    WireError::GuestRamUnavailable => out.push(7),
+                    WireError::PlacementRefused { want, got } => {
+                        out.push(8);
+                        out.extend_from_slice(&want.to_le_bytes());
+                        out.extend_from_slice(&got.to_le_bytes());
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// Decode a reply body.
+    ///
+    /// # Errors
+    /// [`ProtoError`].
+    pub fn decode(bytes: &[u8]) -> Result<Self, ProtoError> {
+        let mut c = Cursor::new(bytes);
+        let reply = match c.u8("reply tag")? {
+            1 => Reply::Handle(c.u64("handle")?),
+            2 => Reply::HandleAndToken(c.u64("handle")?, c.u64("token")?),
+            3 => Reply::Unit,
+            4 => Reply::Payload(c.blob("payload")?),
+            5 => Reply::Va(c.u64("va")?),
+            14 => Reply::Megabytes(c.u64("reservable mb")?),
+            17 => Reply::MintedBirthClient {
+                client: c.u64("minted birth client")?,
+                isolate_client: c.u32("minted birth isolate client")?,
+            },
+            16 => Reply::BareVaSpace {
+                space: c.u64("bare vaspace space")?,
+                client: c.u32("bare vaspace client")?,
+            },
+            15 => Reply::DeviceViewNode {
+                release_token: c.u64("device view release token")?,
+                memory: c.u64("device view memory")?,
+                offset: c.u64("device view offset")?,
+                mmap_len: c.u64("device view mmap len")?,
+            },
+            // ⊘ **Reply tag 6 is RETIRED, not free** (`ORPHANS_wire_or_discard.md`,
+            // 2026-09-12). It carried `Reply::Surface`, the answer to the deleted
+            // `Request::ExportSurface`. Never renumber, and never re-issue 6.
+            7 => Reply::Failed(match c.u8("error tag")? {
+                1 => WireError::InsufficientPermissions,
+                2 => WireError::BadHandle(c.u64("bad handle")?),
+                3 => WireError::NoMemory,
+                4 => WireError::Interrupted,
+                5 => WireError::Other(c.u32("status")?),
+                6 => WireError::NotExportableAsMemory(c.u64("unexportable memory")?),
+                7 => WireError::GuestRamUnavailable,
+                8 => WireError::PlacementRefused {
+                    want: c.u64("placement want")?,
+                    got: c.u64("placement got")?,
+                },
+                tag => {
+                    return Err(ProtoError::UnknownTag {
+                        what: "wire error",
+                        tag,
+                    });
+                }
+            }),
+            8 => Reply::FbBytes {
+                // ★ Any non-zero byte is `true`. A peer that wrote 2 said "covered", and
+                // refusing the frame over a boolean's spelling would turn a harmless
+                // encoding difference into a dead isolate.
+                covered: c.u8("fb covered")? != 0,
+                bytes: c.blob("fb bytes")?,
+            },
+            9 => Reply::Backing {
+                offset: c.u64("backing offset")?,
+                len: c.u64("backing len")?,
+                prot: c.u8("backing prot")?,
+            },
+            // ⊘ **Reply tag 12 is RETIRED, not free** (`ORPHANS_wire_or_discard.md`,
+            // 2026-09-12). It carried `Reply::DeviceView`, the answer to the deleted
+            // `Request::ExportDeviceView`. Never renumber, and never re-issue 12.
+            13 => Reply::UsermodeView {
+                mmap_len: c.u64("usermode view mmap_len")?,
+            },
+            10 => Reply::JoinedBacking {
+                offset: c.u64("joined offset")?,
+                len: c.u64("joined len")?,
+                prot: c.u8("joined prot")?,
+                memory: c.u64("joined memory")?,
+                host_va: c.u64("joined host va")?,
+            },
+            11 => Reply::Aliased {
+                memory: c.u64("aliased memory")?,
+                host_va: c.u64("aliased host va")?,
+            },
+            tag => return Err(ProtoError::UnknownTag { what: "reply", tag }),
+        };
+        c.finish()?;
+        Ok(reply)
+    }
+}
+
+// =====================================================================================
+// Framing
+// =====================================================================================
+
+/// Write one length-prefixed frame.
+///
+/// # Errors
+/// [`io::Error`] from the underlying channel, or [`io::ErrorKind::InvalidInput`] if `body`
+/// exceeds [`FRAME_MAX`].
+pub fn write_frame(w: &mut impl Write, body: &[u8]) -> io::Result<()> {
+    if body.len() > FRAME_MAX {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "frame exceeds FRAME_MAX",
+        ));
+    }
+    let mut framed = Vec::with_capacity(4 + body.len());
+    framed.extend_from_slice(&(body.len() as u32).to_le_bytes());
+    framed.extend_from_slice(body);
+    // ★ ONE write, not two. A length written separately from its body is a channel that a
+    // signal-interrupted partial write desynchronises permanently — the desync hazard §7.2
+    // forbids, reached by the cancellation path rather than by a peer.
+    w.write_all(&framed)
+}
+
+/// Read one length-prefixed frame into `buf`.
+///
+/// Returns `Ok(false)` on a clean end of stream, which is how §7.5's **abandon** surfaces:
+/// the requester's socket is shut down by the watchdog, the blocked read returns zero, and
+/// the caller turns that into [`RmError::Wedged`]. It is a state, not an error.
+///
+/// # Errors
+/// [`io::Error`], including [`io::ErrorKind::Interrupted`] — which the caller must classify
+/// rather than retry, because on the isolate's side it means a cancel landed.
+pub fn read_frame(r: &mut impl Read, buf: &mut Vec<u8>) -> io::Result<bool> {
+    let mut len = [0u8; 4];
+    match read_exact_or_eof(r, &mut len)? {
+        0 => return Ok(false),
+        4 => {}
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "peer died inside a frame's length",
+            ));
+        }
+    }
+    let len = u32::from_le_bytes(len) as usize;
+    if len > FRAME_MAX {
+        // ★ Refused WITHOUT reading it. The peer is inside boundary 2; a length it controls
+        // must not be able to make us allocate, and must not be able to make us consume an
+        // unbounded number of bytes looking for the end either.
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "peer declared a frame beyond FRAME_MAX",
+        ));
+    }
+    buf.clear();
+    buf.resize(len, 0);
+    if read_exact_or_eof(r, buf)? != len {
+        // A length arrived and its body did not: the peer died mid-frame. Distinguished
+        // from a clean EOF because the two mean different things — one is an orderly
+        // shutdown, the other is a corpse.
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "peer died between a frame's length and its body",
+        ));
+    }
+    Ok(true)
+}
+
+/// Fill `buf`, reporting **how many bytes arrived** rather than treating a short read as
+/// an error. The caller needs the distinction: zero bytes before a frame is an orderly
+/// shutdown (§7.5's abandon), while a short read *inside* one is a corpse.
+///
+/// `Interrupted` is propagated, never retried. Retrying is the ordinary `std` behaviour
+/// and it is wrong here — on the isolate's side an interrupted read is a **cancel that
+/// landed**, and swallowing it reproduces the `SA_RESTART` failure one layer up.
+fn read_exact_or_eof(r: &mut impl Read, buf: &mut [u8]) -> io::Result<usize> {
+    let mut filled = 0;
+    while filled < buf.len() {
+        match r.read(&mut buf[filled..]) {
+            Ok(0) => break,
+            Ok(n) => filled += n,
+            // ★★ THE INTERRUPT RULE, and it is position-dependent — the C learned this one
+            // too (`C: src/stub/nvkvm_stub.c:564-588`: *"a stray SIGUSR1 can hit a worker
+            // mid-send; retry rather than corrupt the response framing"*).
+            //
+            // At a frame BOUNDARY (`filled == 0`) an interrupt is a **cancel that landed**
+            // and must be reported, because that is the whole §7.2 mechanism.
+            //
+            // MID-FRAME it is a stray signal that must be RETRIED, because abandoning half
+            // a frame desynchronises the channel permanently — the next reader takes the
+            // remainder of this frame as the start of the next one, which is §7.2's
+            // "silent cross-transaction corruption" reached from the signal path instead
+            // of from the abandon path.
+            Err(e) if e.kind() == io::ErrorKind::Interrupted && filled > 0 => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(filled)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kayfabe_arch::ids::EngineKind;
+
+    fn every_request() -> Vec<Request> {
+        vec![
+            // ★ w629 — a unit variant still needs a sample: the round-trip gate proves its TAG
+            // decodes to it, which is the only thing that can go wrong for a verb with no body
+            // and is exactly what a renumbering would break.
+            Request::ExportUsermodeView { write: 0 },
+            Request::ExportUsermodeView { write: 1 },
+            Request::Alloc {
+                parent: 0xC1D0_0001,
+                class: 0x90f1,
+                params: vec![1, 2, 3],
+            },
+            Request::AllocVaSpace,
+            Request::SubdeviceControl {
+                cmd: 0x2080_9009,
+                payload: vec![0u8; 8],
+            },
+            Request::AllocSysmem { len: 0x4000 },
+            Request::AllocVidmem { len: 0x20_0000 },
+            Request::ReserveGpga {
+                len: 11_808u64 << 20,
+            },
+            Request::LargestReservableMb { start_mb: 12_288 },
+            Request::CudaWalkReport,
+            Request::WalkShadowStage {
+                span: 0x4000,
+                off: 0x1000,
+                bytes: vec![0xab; 64],
+            },
+            Request::WalkShadowRun {
+                pdbs: vec![0x1000, 0x2000, 0x3000],
+                ack: 7,
+            },
+            Request::ExportDeviceView {
+                memory: 0xC1D0_0031,
+                offset: 0x20_0000,
+                len: 0x1_0000,
+                write: 1,
+            },
+            Request::ReleaseDeviceView { token: 7 },
+            Request::AllocVaSpaceBare,
+            Request::AdoptVaSpace {
+                client: 0xC1DD_3C6F,
+                space: 0xCAFE_0004,
+            },
+            Request::MapStoreSlice {
+                vas: 0xCAFE_000A,
+                memory: 0xCAFE_000B,
+                offset: 0x2_0000,
+                len: 0x1_0000,
+                at: 0x0000_0090_0000_1000,
+            },
+            Request::UnmapStoreSlice {
+                vas: 0xCAFE_000A,
+                at: 0x0000_0090_0000_1000,
+            },
+            Request::VaSpaceHandover { space: 0xCAFE_0006 },
+            Request::MintBirthClient,
+            Request::AdoptBirthClient {
+                client: 0xCAFE_0039,
+                isolate_client: 0xC1D0_0002,
+                minted_by_proc: 7,
+            },
+            Request::AllocChannel {
+                vas: 7,
+                engine: engine_code(EngineKind::Ce),
+                hosting: None,
+                adopt: None,
+                err_notifier: None,
+            },
+            // ★ §16.106 — BOTH arms of `hosting` are sampled, because the presence byte is
+            // the part a one-arm round trip would never exercise.
+            Request::AllocChannel {
+                vas: 7,
+                engine: engine_code(EngineKind::Ce),
+                hosting: Some((0xc7b5, vec![1, 0, 0, 0, 11, 0, 0, 0])),
+                adopt: None,
+                // ★★★★★ w288 — BOTH arms of `err_notifier` are sampled too, and this is the
+                // `Some` one. ⚠ Its value is deliberately **0**: handle zero is exactly what
+                // RM reads as "no notifier", so a round trip that only ever sampled a
+                // non-zero handle would not catch an encoder that treated zero as absence.
+                err_notifier: Some(0),
+            },
+            // ★★★★★ LEG A2 — and BOTH arms of `adopt` for the same reason, with the
+            // presence byte exercised beside a `hosting` that is also present, because the
+            // two options are encoded back to back and a length mistake in the first is
+            // only visible when something follows it.
+            //
+            // ⚠ `gp_fifo_va` is **0** here deliberately: it is a VALUE the driver really
+            // declares (its golden-context channel) and a round trip that only ever sampled
+            // non-zero would not catch an encoder that treated zero as absence.
+            Request::AllocChannel {
+                vas: 7,
+                engine: engine_code(EngineKind::Ce),
+                hosting: Some((0xc7b5, vec![1, 0, 0, 0, 11, 0, 0, 0])),
+                adopt: Some((
+                    RING_PROVENANCE_OWN_OBJECT,
+                    0x5c00_0019,
+                    0,
+                    0x2_0020_0000,
+                    0,
+                    1024,
+                    Some((0, 0x5c00_0019, 0x2000)),
+                )),
+                err_notifier: Some(0x5c00_0021),
+            },
+            // ★ w393 — BOTH arms of `declared_engine_type` and of the nested USERD, for the
+            // presence-byte reason every other option here gives. ⚠ `declared_engine_type:
+            // Some(0)` is deliberate: 0 is `NV2080_ENGINE_TYPE_NULL`, a VALUE, and a codec
+            // that treated it as absence would pass a non-zero-only sample.
+            Request::AllocChannelDeclared {
+                vas: 7,
+                engine: engine_code(EngineKind::Ce),
+                declared_engine_type: Some(0),
+                adopt: (
+                    RING_PROVENANCE_OWN_OBJECT,
+                    0x5c00_0019,
+                    0,
+                    0x2_0020_0000,
+                    0,
+                    1024,
+                    None,
+                ),
+                err_notifier: None,
+            },
+            // ★★★★★ **CONSTRAINT 26 — the STORE-SLICE arm of the provenance byte.** ⊘ Its own
+            // sample, not a variation of the one above: the two arms put DIFFERENT NUMBERS in
+            // the same two fields (`(handle, 0)` vs `(offset, len)`), which is precisely where
+            // an encoder and a decoder swap two integers and every in-process test still
+            // passes. `offset = 0` is deliberate — a slice at the object's own base is legal.
+            Request::AllocChannelDeclared {
+                vas: 9,
+                engine: engine_code(EngineKind::GrCompute),
+                declared_engine_type: Some(1),
+                adopt: (
+                    RING_PROVENANCE_STORE_SLICE,
+                    0,
+                    0x1_0000,
+                    0x2_0020_0000,
+                    0x2_0020_1000,
+                    1024,
+                    None,
+                ),
+                err_notifier: None,
+            },
+            Request::AllocChannelDeclared {
+                vas: 7,
+                engine: engine_code(EngineKind::Ce),
+                declared_engine_type: None,
+                adopt: (
+                    RING_PROVENANCE_OWN_OBJECT,
+                    0x5c00_0019,
+                    0,
+                    0x2_0020_0000,
+                    0x2_0020_0000,
+                    4096,
+                    Some((0, 0x5c00_0019, 0x2000)),
+                ),
+                err_notifier: Some(0x5c00_0021),
+            },
+            // ★★★★★ w755r — the store-birth request, in BOTH userd shapes.
+            // ⊘ Two entries and not one: the encode writes `1 + kind`, and a draft that
+            // wrote `kind` sends `Joined` as the byte that decodes as ABSENT and `TheStore`
+            // as the byte that decodes as `Joined` — silent both ways, because the frame
+            // stays fixed-width and the receiver builds a well-formed request naming the
+            // wrong object. Only a round trip over BOTH kinds catches it.
+            Request::BirthGuestChannelInB {
+                range: 0xB147_0003,
+                engine: engine_code(EngineKind::Ce),
+                declared_engine_type: Some(0x9),
+                adopt: (
+                    RING_PROVENANCE_STORE_SLICE,
+                    0x1_0000,
+                    0x1_0000,
+                    0x2_0020_0000,
+                    0x2_0020_0000,
+                    4096,
+                    // `TheStore` — the handle word is present and meaningless.
+                    Some((1, 0, 0x2000)),
+                ),
+                err_notifier: Some((0x1119e8000, 0x1000, PROT_READ_WRITE)),
+            },
+            Request::BirthGuestChannelInB {
+                range: 0xB147_0004,
+                engine: engine_code(EngineKind::GrCompute),
+                declared_engine_type: None,
+                adopt: (
+                    RING_PROVENANCE_STORE_SLICE,
+                    0x2_0000,
+                    0x1_0000,
+                    0x3_0020_0000,
+                    0x3_0020_0000,
+                    512,
+                    // `Joined` — the kind that a `kind`-not-`1 + kind` encode loses entirely.
+                    Some((0, 0x5c00_0019, 0x1000)),
+                ),
+                err_notifier: None,
+            },
+            Request::AllocEngineObject {
+                chan: 9,
+                class: 0xc7c0,
+                params: Vec::new(),
+            },
+            Request::Schedule { chan: 9 },
+            Request::Free { obj: 11 },
+            Request::Control {
+                obj: 13,
+                cmd: 0x801813,
+                payload: vec![0xAA; 64],
+            },
+            Request::MapGpuVa {
+                vas: 7,
+                memory: 11,
+                len: 0x1000,
+                at: 0x2_0020_0000,
+            },
+            Request::UnmapGpuVa {
+                vas: 7,
+                gpu_va: 0x200_0000,
+            },
+            Request::RingDoorbell { token: 0xDEAD },
+            // Both engine arms and both source kinds, so a wire that dropped either
+            // discriminant round-trips WRONG rather than round-tripping short.
+            Request::CeCopy {
+                vas: 7,
+                dst: 0x2_0000_0000,
+                src: 0x3_0000_0000,
+                len: 0x1000,
+                src_is_const: 0,
+                by_ours: 0,
+                rel_present: 0,
+                rel_va: 0,
+                rel_payload: 0,
+            },
+            Request::CeCopy {
+                vas: 7,
+                dst: 0x2_0000_0000,
+                src: 0xdead_beef,
+                len: 4,
+                src_is_const: 1,
+                by_ours: 1,
+                rel_present: 0,
+                rel_va: 0,
+                rel_payload: 0,
+            },
+            Request::FbRead {
+                phys: 0x1000_4000,
+                len: 4096,
+            },
+            // ★ BOTH sources, because the two arms of the verb have opposite outcomes and
+            // a sample carrying only the one that succeeds would prove the round trip
+            // about half the vocabulary.
+            Request::ExportBacking {
+                source: EXPORT_SOURCE_FABRICATED,
+                memory: 0,
+                len: 0x20_0000,
+                prot: PROT_READ_WRITE,
+            },
+            Request::ExportBacking {
+                source: EXPORT_SOURCE_HOST_DEVICE,
+                memory: 0x11,
+                len: 0x1000,
+                prot: PROT_READ_ONLY,
+            },
+            // ★ BOTH protections, for the reason `prot_code` exists at all: the direction
+            // that fails open here is the dangerous one, and a sample carrying only
+            // read-write would prove the round trip about the harmless half.
+            Request::MapGuestRam {
+                offset: 0x237f_e000,
+                len: 0x1_0000,
+                prot: PROT_READ_WRITE,
+            },
+            Request::MapGuestRam {
+                offset: 0,
+                len: 0x1000,
+                prot: PROT_READ_ONLY,
+            },
+            Request::UnmapGuestRam {
+                region: 0x4000_0000_0000_0001,
+                len: 0x1_0000,
+            },
+            Request::DescribeGuestRam {
+                region: 0x4000_0000_0000_0001,
+                len: 0x1_0000,
+            },
+            // ★ The second fd-carrying request. Both protections, for `MapGuestRam`'s
+            // reason one entry up.
+            Request::JoinFbLeaf {
+                vas: 7,
+                len: 0x20_0000,
+                at: 0x2_0020_0000,
+                phys: 0x2_efba_e000,
+                prot: PROT_READ_WRITE,
+            },
+            Request::JoinFbLeaf {
+                vas: 7,
+                len: 0x1_0000,
+                at: 0x2_0020_0000,
+                phys: 0,
+                prot: PROT_READ_ONLY,
+            },
+            // ★★★ w380 — the alias, which carries NO prot byte and NO descriptor. A wire
+            // that copied `JoinFbLeaf`'s encoding would round-trip four of its five fields
+            // and silently shift `phys`.
+            Request::AliasFbLeaf {
+                vas: 7,
+                len: 0x1_0000,
+                at: 0x7480_ac00_0000,
+                phys: 0x1e0_0000,
+            },
+            // ★ BOTH arms of the instrument: a bare read and a read-then-poke. A wire that
+            // dropped `poke` would round-trip the read correctly and turn every poke into a
+            // silent no-op — a control that reports the pattern it never wrote.
+            Request::FbJoinPeek {
+                phys: 0x2_efba_e000,
+                len: 4096,
+                poke: 0,
+                pattern: 0,
+            },
+            Request::FbJoinPeek {
+                phys: 0x2_efba_e000,
+                len: 4096,
+                poke: 1,
+                pattern: 0xa19a_5a5b,
+            },
+        ]
+    }
+
+    /// ★★ **The name of a request's variant, as an exhaustive match.**
+    ///
+    /// This exists so that `every_request()` cannot silently shrink. A list-quantified
+    /// gate is only as strong as its list, and the list is hand-written: adding a variant
+    /// without adding a sample would leave the round-trip proved about everything except
+    /// the new thing. Adding a variant breaks *this* match at compile time, and the
+    /// coverage test below then fails until the sample exists.
+    fn request_tag(r: &Request) -> &'static str {
+        match r {
+            Request::ExportUsermodeView { .. } => "ExportUsermodeView",
+            Request::Alloc { .. } => "Alloc",
+            Request::AllocVaSpace => "AllocVaSpace",
+            Request::SubdeviceControl { .. } => "SubdeviceControl",
+            Request::AllocSysmem { .. } => "AllocSysmem",
+            Request::AllocVidmem { .. } => "AllocVidmem",
+            Request::ReserveGpga { .. } => "ReserveGpga",
+            Request::LargestReservableMb { .. } => "LargestReservableMb",
+            Request::CudaWalkReport => "CudaWalkReport",
+            Request::WalkShadowStage { .. } => "WalkShadowStage",
+            Request::WalkShadowRun { .. } => "WalkShadowRun",
+            Request::ExportDeviceView { .. } => "ExportDeviceView",
+            Request::ReleaseDeviceView { .. } => "ReleaseDeviceView",
+            Request::AllocVaSpaceBare => "AllocVaSpaceBare",
+            Request::AdoptVaSpace { .. } => "AdoptVaSpace",
+            Request::MapStoreSlice { .. } => "MapStoreSlice",
+            Request::UnmapStoreSlice { .. } => "UnmapStoreSlice",
+            Request::VaSpaceHandover { .. } => "VaSpaceHandover",
+            Request::AdoptBirthClient { .. } => "AdoptBirthClient",
+            Request::MintBirthClient => "MintBirthClient",
+            Request::AllocChannel { .. } => "AllocChannel",
+            Request::AllocChannelDeclared { .. } => "AllocChannelDeclared",
+            Request::BirthGuestChannelInB { .. } => "BirthGuestChannelInB",
+            Request::AllocEngineObject { .. } => "AllocEngineObject",
+            Request::Schedule { .. } => "Schedule",
+            Request::Free { .. } => "Free",
+            Request::Control { .. } => "Control",
+            Request::MapGpuVa { .. } => "MapGpuVa",
+            Request::UnmapGpuVa { .. } => "UnmapGpuVa",
+            Request::RingDoorbell { .. } => "RingDoorbell",
+            Request::CeCopy { .. } => "CeCopy",
+            Request::FbRead { .. } => "FbRead",
+            Request::ExportBacking { .. } => "ExportBacking",
+            Request::MapGuestRam { .. } => "MapGuestRam",
+            Request::UnmapGuestRam { .. } => "UnmapGuestRam",
+            Request::DescribeGuestRam { .. } => "DescribeGuestRam",
+            Request::JoinFbLeaf { .. } => "JoinFbLeaf",
+            Request::AliasFbLeaf { .. } => "AliasFbLeaf",
+            Request::FbJoinPeek { .. } => "FbJoinPeek",
+        }
+    }
+
+    #[test]
+    fn the_round_trip_sample_covers_every_request_variant() {
+        let seen: std::collections::BTreeSet<&'static str> =
+            every_request().iter().map(request_tag).collect();
+        assert_eq!(
+            seen,
+            [
+                "AliasFbLeaf",
+                "Alloc",
+                "AllocChannel",
+                "AllocChannelDeclared",
+                "AllocEngineObject",
+                "AllocSysmem",
+                "AllocVaSpace",
+                "AllocVaSpaceBare",
+                "AdoptVaSpace",
+                "MapStoreSlice",
+                "UnmapStoreSlice",
+                "VaSpaceHandover",
+                "AdoptBirthClient",
+                "MintBirthClient",
+                "BirthGuestChannelInB",
+                "AllocVidmem",
+                "CeCopy",
+                "CudaWalkReport",
+                "WalkShadowStage",
+                "WalkShadowRun",
+                "ExportDeviceView",
+                "ReleaseDeviceView",
+                "Control",
+                "DescribeGuestRam",
+                "ExportBacking",
+                "ExportUsermodeView",
+                "FbJoinPeek",
+                "FbRead",
+                "Free",
+                "JoinFbLeaf",
+                "LargestReservableMb",
+                "MapGpuVa",
+                "MapGuestRam",
+                "ReserveGpga",
+                "RingDoorbell",
+                "Schedule",
+                "SubdeviceControl",
+                "UnmapGpuVa",
+                "UnmapGuestRam",
+            ]
+            .into_iter()
+            .collect(),
+            "the sample list and the variant list must be the same set"
+        );
+    }
+
+    #[test]
+    fn every_request_round_trips_with_its_txn() {
+        for (i, request) in every_request().into_iter().enumerate() {
+            let env = Envelope {
+                txn: i as u64 + 1,
+                request,
+            };
+            assert_eq!(Envelope::decode(&env.encode()), Ok(env));
+        }
+    }
+
+    #[test]
+    fn every_reply_round_trips() {
+        let replies = [
+            Reply::Handle(0xC1D0_0007),
+            Reply::HandleAndToken(1, 2),
+            Reply::Unit,
+            Reply::Payload(vec![7; 100]),
+            Reply::Va(0x7f00_0000),
+            Reply::Megabytes(11_808),
+            Reply::BareVaSpace {
+                space: 0xCAFE_0006,
+                client: 0xC1DD_3C70,
+            },
+            Reply::MintedBirthClient {
+                client: 0xCAFE_0040,
+                isolate_client: 0xC1DD_3C71,
+            },
+            Reply::DeviceViewNode {
+                // ⊘ w734: a value that is NOT any of the other three, so a codec that
+                // transposed two fields fails rather than round-tripping.
+                release_token: 5,
+                memory: 0xC1D0_0031,
+                offset: 0x20_0000,
+                mmap_len: 0x1_0000,
+            },
+            Reply::Failed(WireError::InsufficientPermissions),
+            Reply::Failed(WireError::BadHandle(0xBAD)),
+            Reply::Failed(WireError::NoMemory),
+            Reply::Failed(WireError::Interrupted),
+            Reply::Failed(WireError::Other(0x56)),
+            // ★ BOTH arms of the fabricated-aperture reply. `covered: false` with no bytes
+            // is a MISS, `covered: true` with bytes is a page — a wire that dropped the
+            // flag would round-trip the second correctly and turn the first into an empty
+            // page, which is the one answer this seam must never give.
+            Reply::FbBytes {
+                covered: false,
+                bytes: Vec::new(),
+            },
+            Reply::FbBytes {
+                covered: true,
+                bytes: vec![0xA5; 4096],
+            },
+            // ★ The reply whose descriptor is NOT in these bytes. It round-trips as
+            // geometry alone, which is the encoding property that matters: the fd travels
+            // as ancillary data and nothing in the body names it.
+            Reply::Backing {
+                offset: 0,
+                len: 0x20_0000,
+                prot: PROT_READ_WRITE,
+            },
+            Reply::Backing {
+                offset: 0x1000,
+                len: 0x1000,
+                prot: PROT_READ_ONLY,
+            },
+            Reply::Failed(WireError::NotExportableAsMemory(0xC1D0_0011)),
+            // ★ The joined reply — geometry AND the two RM facts, with the descriptor
+            // still absent from the body.
+            Reply::JoinedBacking {
+                offset: 0,
+                len: 0x20_0000,
+                prot: PROT_READ_WRITE,
+                memory: 0xC1D0_0021,
+                host_va: 0x2_0020_0000,
+            },
+            // ★★★ w380 — the alias reply: the two RM facts, no geometry, no descriptor.
+            Reply::Aliased {
+                memory: 0xC1D0_0022,
+                host_va: 0x7480_ac00_0000,
+            },
+        ];
+        for r in replies {
+            assert_eq!(Reply::decode(&r.encode()), Ok(r));
+        }
+    }
+
+    /// ★★★★★ **w755 — THE GATE THAT MAKES THE LIST BELOW EXHAUSTIVE FOR REAL.**
+    ///
+    /// ⊘⊘⊘ The test under this one claimed to assert *"by exhaustion"* and said *"the `match`
+    /// below fails to compile if `WireError` grows a variant, which is the point"*. **It does
+    /// not.** The `match` it referred to is over [`RmError`] and carries a `_ => {}` arm, and
+    /// the `for` list of `WireError`s is hand-maintained — so a new variant joins neither and
+    /// the test stays green having never seen it. `[found w755]` when
+    /// [`WireError::PlacementRefused`] was added, it escaped both.
+    ///
+    /// ★ THIS function is the real gate: a wildcard-free `match` over every variant. Adding
+    /// one is a **compile error here**, and the error lands three lines above the list that
+    /// must also be updated.
+    fn every_wire_error_variant(w: WireError) -> &'static str {
+        match w {
+            WireError::InsufficientPermissions => "InsufficientPermissions",
+            WireError::BadHandle(_) => "BadHandle",
+            WireError::NoMemory => "NoMemory",
+            WireError::Interrupted => "Interrupted",
+            WireError::Other(_) => "Other",
+            WireError::NotExportableAsMemory(_) => "NotExportableAsMemory",
+            WireError::GuestRamUnavailable => "GuestRamUnavailable",
+            WireError::PlacementRefused { .. } => "PlacementRefused",
+        }
+    }
+
+    /// Every variant, once. ⚠ Kept in step with [`every_wire_error_variant`] by the
+    /// `distinct_names` assertion in `wire_errors_that_the_child_may_not_claim`.
+    const ALL_WIRE_ERRORS: &[WireError] = &[
+        WireError::InsufficientPermissions,
+        WireError::BadHandle(1),
+        WireError::NoMemory,
+        WireError::Interrupted,
+        WireError::Other(0),
+        WireError::NotExportableAsMemory(1),
+        WireError::GuestRamUnavailable,
+        WireError::PlacementRefused {
+            want: 0x7f00_0000,
+            got: 0x7f00_1000,
+        },
+    ];
+
+    /// ★★ The two variants the child may not claim (module docs).
+    ///
+    /// ⚠ w755: the *exhaustion* this relies on is supplied by [`every_wire_error_variant`]
+    /// and the `distinct_names` assertion, not by the `match` below — see that function.
+    #[test]
+    fn wire_errors_that_the_child_may_not_claim() {
+        // ★ The list must cover every variant `every_wire_error_variant` can name. A new
+        // variant added to the enum is a compile error there; a new variant left out of
+        // ALL_WIRE_ERRORS is caught here.
+        let names: std::collections::BTreeSet<&str> = ALL_WIRE_ERRORS
+            .iter()
+            .map(|w| every_wire_error_variant(*w))
+            .collect();
+        assert_eq!(
+            names.len(),
+            ALL_WIRE_ERRORS.len(),
+            "ALL_WIRE_ERRORS repeats a variant, so it is short of at least one other"
+        );
+
+        let iso = kayfabe_isolate::IsolateId::new(1, kayfabe_arch::ids::GpuId(0));
+        for w in ALL_WIRE_ERRORS.iter().copied() {
+            match w.into_rm_error(iso) {
+                RmError::Wedged => panic!("a child claimed it never answered"),
+                RmError::ForeignHandle { .. } => panic!("a child claimed OUR gate fired"),
+                _ => {}
+            }
+        }
+    }
+
+    /// ★★★★★ **w755 — EVERY WIRE ERROR SURVIVES THE WIRE WITH ITS PAYLOAD.**
+    ///
+    /// ⊘⊘⊘ The defect this exists for was not a missing round-trip — it was a variant that
+    /// was **deliberately flattened** into `Other(NOT_ON_THIS_RUNG)` on the argument that a
+    /// child could never mint it. That argument was true at #102 and false at HEAD, and
+    /// nothing re-checked it, so `[measured w753]` `map_refused=2154` reported a placement
+    /// refusal as an opaque integer with `want`/`got` gone.
+    ///
+    /// ⇒ The gate is not *"does it encode"* but *"does what came back EQUAL what went in"*,
+    /// over every variant, driven off [`ALL_WIRE_ERRORS`] which is itself gated above.
+    #[test]
+    fn every_wire_error_round_trips_with_its_payload() {
+        for w in ALL_WIRE_ERRORS.iter().copied() {
+            let back = Reply::decode(&Reply::Failed(w).encode());
+            assert_eq!(
+                back,
+                Ok(Reply::Failed(w)),
+                "{} did not survive the wire",
+                every_wire_error_variant(w)
+            );
+        }
+    }
+
+    /// ★★★★★ **w755 — AND IT MUST SURVIVE THE FULL CHILD→PARENT LIFT, NOT JUST `encode`.**
+    ///
+    /// ⊘ The flattening that cost w753 happened in `crate::child::failed`, one layer ABOVE
+    /// the codec — the codec was always fine. A test that only round-trips `WireError` would
+    /// have stayed green through the entire defect. This one starts from an [`RmError`] a
+    /// child really mints and asserts the parent gets the same error back, `want`/`got`
+    /// included.
+    #[test]
+    fn a_childs_placement_refusal_reaches_the_parent_intact() {
+        let iso = kayfabe_isolate::IsolateId::new(1, kayfabe_arch::ids::GpuId(0));
+        let minted = RmError::PlacementRefused {
+            want: 0x7f00_1234_5000,
+            got: 0x7f00_9876_0000,
+        };
+        let Reply::Failed(w) = crate::child::failed_for_test(minted) else {
+            panic!("a refusal did not shape as Failed");
+        };
+        let Ok(Reply::Failed(decoded)) = Reply::decode(&Reply::Failed(w).encode()) else {
+            panic!("the refusal did not survive the codec");
+        };
+        assert_eq!(
+            decoded.into_rm_error(iso),
+            minted,
+            "constraint 28's diagnosis was altered on the way out of the child"
+        );
+    }
+
+    /// ★★★ The **named boundary** survives the wire as itself, and is stamped with OUR
+    /// namespace — not the child's.
+    ///
+    /// Both halves matter. If `NotExportableAsMemory` arrived as `Other`, a VMM could not
+    /// tell *"the bytes are on the card"* from *"the host refused"*, and the whole point
+    /// of naming the boundary would be lost at the last hop. If the handle carried the
+    /// child's claimed namespace, a compromised isolate could name a **sibling's** object
+    /// in a refusal the VMM logs and acts on.
+    #[test]
+    fn the_unexportable_boundary_keeps_its_name_and_our_namespace() {
+        let ours = kayfabe_isolate::IsolateId::new(4, kayfabe_arch::ids::GpuId(1));
+        let round_tripped =
+            Reply::decode(&Reply::Failed(WireError::NotExportableAsMemory(0x77)).encode())
+                .expect("decodes");
+        let Reply::Failed(w) = round_tripped else {
+            panic!("expected a failure reply");
+        };
+        match w.into_rm_error(ours) {
+            RmError::NotExportableAsMemory { memory } => {
+                assert_eq!(memory.isolate(), ours, "stamped with OUR namespace");
+                assert_eq!(memory.raw(), 0x77);
+            }
+            other => panic!("the boundary lost its name on the wire: {other:?}"),
+        }
+    }
+
+    /// ★★ Neither wire code may be defaulted. A `prot` byte the child does not recognise
+    /// must **refuse**, and specifically must not fall through to read-write: that
+    /// direction hands the guest a write it was never granted.
+    #[test]
+    fn an_unknown_protection_code_is_refused_rather_than_defaulted_to_writable() {
+        assert_eq!(
+            prot_from_code(PROT_READ_WRITE),
+            Some(kayfabe_vmm::Prot::ReadWrite)
+        );
+        assert_eq!(
+            prot_from_code(PROT_READ_ONLY),
+            Some(kayfabe_vmm::Prot::ReadOnly)
+        );
+        for bad in [2u8, 3, 0xFF] {
+            assert_eq!(prot_from_code(bad), None, "code {bad} must not decode");
+        }
+        for p in [kayfabe_vmm::Prot::ReadWrite, kayfabe_vmm::Prot::ReadOnly] {
+            assert_eq!(prot_from_code(prot_code(p)), Some(p));
+        }
+    }
+
+    /// A `BadHandle` is stamped with the namespace **we** asked on, so a compromised child
+    /// cannot name another isolate's namespace.
+    #[test]
+    fn a_reported_bad_handle_is_stamped_with_our_namespace_not_the_childs() {
+        let ours = kayfabe_isolate::IsolateId::new(4, kayfabe_arch::ids::GpuId(1));
+        match WireError::BadHandle(0x99).into_rm_error(ours) {
+            RmError::BadHandle(h) => {
+                assert_eq!(h.isolate(), ours);
+                assert_eq!(h.raw(), 0x99);
+            }
+            other => panic!("expected BadHandle, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn an_unknown_request_tag_is_a_named_refusal() {
+        let mut body = 1u64.to_le_bytes().to_vec();
+        body.push(200);
+        assert_eq!(
+            Envelope::decode(&body),
+            Err(ProtoError::UnknownTag {
+                what: "request",
+                tag: 200
+            })
+        );
+    }
+
+    #[test]
+    fn a_truncated_field_is_a_named_refusal() {
+        let env = Envelope {
+            txn: 1,
+            request: Request::MapGpuVa {
+                vas: 1,
+                memory: 2,
+                len: 3,
+                at: 0x4000,
+            },
+        };
+        let full = env.encode();
+        assert_eq!(
+            Envelope::decode(&full[..full.len() - 1]),
+            // #102: `at` is the LAST field on the wire, so a one-byte truncation now
+            // lands on it. That the refusal moved is the point — the placement address
+            // is carried, and a frame missing it is refused by name rather than decoded
+            // into a map at address zero.
+            Err(ProtoError::Truncated { what: "map at" })
+        );
+    }
+
+    /// ★ Trailing bytes are refused. A peer that appends is a peer we do not understand,
+    /// and tolerating it is where a parser differential begins.
+    #[test]
+    fn trailing_bytes_are_refused_rather_than_ignored() {
+        let mut body = Envelope {
+            txn: 1,
+            request: Request::AllocVaSpace,
+        }
+        .encode();
+        body.push(0);
+        assert_eq!(
+            Envelope::decode(&body),
+            Err(ProtoError::TrailingBytes { len: 1 })
+        );
+    }
+
+    #[test]
+    fn a_blob_longer_than_the_bound_is_refused_without_reading_it() {
+        let mut body = 1u64.to_le_bytes().to_vec();
+        body.push(1); // Alloc
+        body.extend_from_slice(&0u64.to_le_bytes());
+        body.extend_from_slice(&0u32.to_le_bytes());
+        body.extend_from_slice(&(FRAME_MAX as u32 + 1).to_le_bytes());
+        assert_eq!(
+            Envelope::decode(&body),
+            Err(ProtoError::Oversize {
+                what: "alloc params",
+                len: FRAME_MAX as u64 + 1,
+            })
+        );
+    }
+
+    #[test]
+    fn engine_codes_round_trip_and_an_unknown_one_is_refused() {
+        for e in [
+            EngineKind::GrCompute,
+            EngineKind::GrGraphics,
+            EngineKind::Ce,
+            EngineKind::NvEnc,
+            EngineKind::NvDec,
+            EngineKind::Other,
+        ] {
+            assert_eq!(engine_from_code(engine_code(e)), Some(e));
+        }
+        assert_eq!(engine_from_code(0), None, "0 must not default to an engine");
+        assert_eq!(engine_from_code(7), None);
+    }
+
+    /// ★ The GR-1 property, stated as an assertion rather than a comment: no engine's wire
+    /// code is zero, so a zero-initialised or truncated field cannot name a valid engine.
+    /// The C's `engineType = 0` shipped a channel to the wrong runlist and cost a
+    /// `cuCtxCreate 401`.
+    #[test]
+    fn no_engine_code_is_zero() {
+        for e in [
+            EngineKind::GrCompute,
+            EngineKind::GrGraphics,
+            EngineKind::Ce,
+            EngineKind::NvEnc,
+            EngineKind::NvDec,
+            EngineKind::Other,
+        ] {
+            assert_ne!(engine_code(e), 0);
+        }
+    }
+
+    #[test]
+    fn a_frame_round_trips_over_a_byte_channel() {
+        let mut chan: Vec<u8> = Vec::new();
+        let env = Envelope {
+            txn: 42,
+            request: Request::Control {
+                obj: 1,
+                cmd: 2,
+                payload: vec![9; 300],
+            },
+        };
+        write_frame(&mut chan, &env.encode()).expect("write");
+        let mut r = chan.as_slice();
+        let mut buf = Vec::new();
+        assert!(read_frame(&mut r, &mut buf).expect("read"));
+        assert_eq!(Envelope::decode(&buf), Ok(env));
+        assert!(!read_frame(&mut r, &mut buf).expect("eof"), "clean EOF");
+    }
+
+    /// ★★ A hostile length is refused before a byte of body is consumed — asserted by the
+    /// channel still holding all of its bytes afterwards.
+    #[test]
+    fn a_hostile_frame_length_is_refused_without_consuming_the_body() {
+        let mut chan = (FRAME_MAX as u32 + 1).to_le_bytes().to_vec();
+        chan.extend_from_slice(&[0xAB; 16]);
+        let mut r = chan.as_slice();
+        let mut buf = Vec::new();
+        let e = read_frame(&mut r, &mut buf).expect_err("must refuse");
+        assert_eq!(e.kind(), io::ErrorKind::InvalidData);
+        assert_eq!(r.len(), 16, "the body must not have been consumed");
+        assert!(buf.is_empty(), "nothing was allocated for it");
+    }
+
+    #[test]
+    fn a_peer_that_dies_between_length_and_body_is_distinguished_from_a_clean_eof() {
+        let mut chan = 32u32.to_le_bytes().to_vec();
+        chan.extend_from_slice(&[0; 4]);
+        let mut r = chan.as_slice();
+        let mut buf = Vec::new();
+        let e = read_frame(&mut r, &mut buf).expect_err("must refuse");
+        assert_eq!(e.kind(), io::ErrorKind::UnexpectedEof);
+    }
+}

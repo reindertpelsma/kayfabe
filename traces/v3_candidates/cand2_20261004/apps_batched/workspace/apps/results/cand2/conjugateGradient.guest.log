@@ -1,0 +1,15 @@
+=== conjugateGradient side=guest start=2026-10-04T11:56:30+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/conjugateGradient
+GPU Device 0: "Ampere" with compute capability 8.6
+
+> GPU device has 28 Multi-Processors, SM 8.6 compute capabilities
+
+iteration =   1, residual = 4.449883e+01
+iteration =   2, residual = 3.245218e+00
+iteration =   3, residual = 2.690220e-01
+iteration =   4, residual = 2.307639e-02
+iteration =   5, residual = 1.993140e-03
+iteration =   6, residual = 1.846193e-04
+iteration =   7, residual = 1.693379e-05
+iteration =   8, residual = 1.600115e-06
+Test Summary:  Error amount = 0.000000
+=== end rc=0 secs=3 2026-10-04T11:56:33+00:00

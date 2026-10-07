@@ -1,0 +1,17 @@
+== privprobe euid=0 pid=88412
+== CapPrm:	000001ffffffffff
+== CapEff:	000001ffffffffff
+== NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+ARM capeff_sys_admin=1 capprm_sys_admin=1 class=NV01_ROOT(0x0) reply_hClass=0x41 client=0xc1d0016d ctrl_status=0x0 privStatusFlags=0x5 PRIV_USER=1 PRIV_HANDLE=1 (admin per rmclientIsAdmin)
+ARM capeff_sys_admin=1 capprm_sys_admin=1 class=NV01_ROOT_NON_PRIV(0x1) reply_hClass=0x41 client=0xc1d0016e ctrl_status=0x0 privStatusFlags=0x5 PRIV_USER=1 PRIV_HANDLE=1 (admin per rmclientIsAdmin)
+ARM capeff_sys_admin=1 capprm_sys_admin=1 class=NV01_ROOT_CLIENT(0x41) reply_hClass=0x41 client=0xc1d0016f ctrl_status=0x0 privStatusFlags=0x5 PRIV_USER=1 PRIV_HANDLE=1 (admin per rmclientIsAdmin)
+ARM capeff_sys_admin=0 capprm_sys_admin=1 class=NV01_ROOT(0x0) reply_hClass=0x41 client=0xc1d00170 ctrl_status=0x0 privStatusFlags=0x0 PRIV_USER=0 PRIV_HANDLE=0 (admin per rmclientIsAdmin)
+ARM capeff_sys_admin=0 capprm_sys_admin=1 class=NV01_ROOT_NON_PRIV(0x1) reply_hClass=0x41 client=0xc1d00171 ctrl_status=0x0 privStatusFlags=0x0 PRIV_USER=0 PRIV_HANDLE=0 (admin per rmclientIsAdmin)
+ARM capeff_sys_admin=0 capprm_sys_admin=1 class=NV01_ROOT_CLIENT(0x41) reply_hClass=0x41 client=0xc1d00172 ctrl_status=0x0 privStatusFlags=0x0 PRIV_USER=0 PRIV_HANDLE=0 (admin per rmclientIsAdmin)
+REQUERY born_with_capeff=1 now_capeff_sys_admin=0 class=NV01_ROOT client=0xc1d0016d privStatusFlags=0x0 PRIV_USER=0 PRIV_HANDLE=0 (admin per rmclientIsAdmin)
+REQUERY born_with_capeff=1 now_capeff_sys_admin=0 class=NV01_ROOT_NON_PRIV client=0xc1d0016e privStatusFlags=0x0 PRIV_USER=0 PRIV_HANDLE=0 (admin per rmclientIsAdmin)
+REQUERY born_with_capeff=1 now_capeff_sys_admin=0 class=NV01_ROOT_CLIENT client=0xc1d0016f privStatusFlags=0x0 PRIV_USER=0 PRIV_HANDLE=0 (admin per rmclientIsAdmin)
+REQUERY born_with_capeff=1 now_capeff_sys_admin=1 class=NV01_ROOT client=0xc1d0016d privStatusFlags=0x5 PRIV_USER=1 PRIV_HANDLE=1 (admin per rmclientIsAdmin)
+REQUERY born_with_capeff=1 now_capeff_sys_admin=1 class=NV01_ROOT_NON_PRIV client=0xc1d0016e privStatusFlags=0x5 PRIV_USER=1 PRIV_HANDLE=1 (admin per rmclientIsAdmin)
+REQUERY born_with_capeff=1 now_capeff_sys_admin=1 class=NV01_ROOT_CLIENT client=0xc1d0016f privStatusFlags=0x5 PRIV_USER=1 PRIV_HANDLE=1 (admin per rmclientIsAdmin)
+== PRIVPROBE_EXIT rc=0

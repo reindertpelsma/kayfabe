@@ -1,0 +1,17 @@
+=== w224d [measured 2026-08-10, vh, shim rev 7b0694f] — WHICH PROCESSES HOLD GUEST RAM ===
+qemu pid=1056047 (guest answered ssh)
+guest-RAM inode=757510
+LOADED
+--- holders, sampled 20x over ~40s while the driver runs ---
+  pid=1056047 comm=qemu-system-x86 fd=15 exe=/workspace/bench/qemu-build/qemu-system-x86_64
+  pid=1056047 comm=qemu-system-x86 fd=25 exe=/workspace/bench/qemu-build/qemu-system-x86_64
+  pid=1056143 comm=memfd:kayfabe-i fd=6 exe=/memfd:kayfabe-isolate (deleted)
+--- for reference, the qemu-side descriptors ---
+  qemu fd=15 inode=757510
+  qemu fd=25 inode=757510
+=== done ===
+  pid=1056047 comm=qemu-system-x86 fd=15 exe=/workspace/bench/qemu-build/qemu-system-x86_64
+  pid=1056047 comm=qemu-system-x86 fd=25 exe=/workspace/bench/qemu-build/qemu-system-x86_64
+  pid=1056143 comm=memfd:kayfabe-i fd=6 exe=/memfd:kayfabe-isolate (deleted)
+--- for reference, the qemu-side descriptors ---
+=== done ===

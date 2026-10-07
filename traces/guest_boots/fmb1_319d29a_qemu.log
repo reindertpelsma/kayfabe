@@ -1,0 +1,10 @@
+2026-08-09T07:40:30.235215Z qemu-system-x86_64: -device nvkvm-gpu,bar1-size=268435456,bar2-size=33554432,id=kf0: info: nvkvm: presenting 10de:2504 class 030000 rev a1 subsys 1462:397d (8 interrupt vectors)
+2026-08-09T07:40:30.386042Z qemu-system-x86_64: info: nvkvm: memory plane realized (bar0=0xfd000000 bar1=0xe0000000 bar2=0xf0000000, register plane has guest memory=yes)
+2026-08-09T07:41:06.136065Z qemu-system-x86_64: warning: nvkvm: the emulated GSP asked for its STATUS-QUEUE interrupt and this device does not deliver that one. The guest's own interrupt trigger IS delivered; this is the GSP-engine stall vector, which needs a pending bit in the interrupt tree first. A guest that BLOCKS on a status-queue event will not be woken by us — the boot path polls instead.
+2026-08-09T07:41:11.731677Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010002 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+2026-08-09T07:41:11.732905Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010002 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+2026-08-09T07:41:33.470378Z qemu-system-x86_64: warning: nvkvm: the emulated GSP refused a register write at +0x110c00: GspFault::QueueNotBound
+2026-08-09T07:41:33.470674Z qemu-system-x86_64: warning: nvkvm: the emulated GSP refused a register write at +0x110c00: GspFault::QueueNotBound
+2026-08-09T07:41:39.176878Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010002 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+2026-08-09T07:41:39.178149Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010002 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+2026-08-09T07:41:40.626602Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010003 at +0xbb0090 REFUSED [FwdFault::IsolateRetired]

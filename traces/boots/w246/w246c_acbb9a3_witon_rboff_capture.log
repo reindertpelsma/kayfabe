@@ -1,0 +1,20 @@
+START 2026-08-11T05:22:52+00:00 tag=w246c_acbb9a3_witon_rboff KAYFABE_RING_VIDMEM=0 KAYFABE_PT_WITNESS_EXEC=on ce_executor=host rev=acbb9a3
+[boot_capture:w246c_acbb9a3_witon_rboff] booting (extra args: none)
+[boot_capture:w246c_acbb9a3_witon_rboff] guest is up after 35s
+[boot_capture:w246c_acbb9a3_witon_rboff] module unloaded and ring buffer cleared; loading cold
+[boot_capture:w246c_acbb9a3_witon_rboff] opening the device (this is what runs RmInitAdapter)
+[boot_capture:w246c_acbb9a3_witon_rboff] captured 34 dmesg lines, 31 NVRM, 0 adapter → /workspace/bench/run_w246c_acbb9a3_witon_rboff_dmesg.log
+[boot_capture:w246c_acbb9a3_witon_rboff] --- the verdict lines ---
+[boot_capture:w246c_acbb9a3_witon_rboff] running POST_CAPTURE_HOOK: /workspace/kayfabe_w244/scripts/bench/cup2_hook_w232.sh
+[boot_capture:w246c_acbb9a3_witon_rboff] hook finished: rc=0
+[boot_capture:w246c_acbb9a3_witon_rboff] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:w246c_acbb9a3_witon_rboff] census present:
+    2026-08-11T05:26:59.127478Z qemu-system-x86_64: info: nvkvm: doorbells: 191 arrived, 175 served, 16 REFUSED by name; last token 0x00010001 (16 logged)
+    2026-08-11T05:26:59.127566Z qemu-system-x86_64: info: nvkvm:   first doorbell refusal [Route::NotACopyEngineChannel] this channel's engine is GrCompute (route HostGr), so its pushbuffer is not copy-engine work and the shell's CPU copy-engine executor is the wrong executor for it; refused by the ROUTING fact rather than decoded by a codec that can only decline
+[boot_capture:w246c_acbb9a3_witon_rboff] evidence carried into the repo: /workspace/kayfabe_w244/traces/guest_boots/run_w246c_acbb9a3_witon_rboff_{qemu,dmesg,probe}.log
+[boot_capture:w246c_acbb9a3_witon_rboff] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+[boot_capture:w246c_acbb9a3_witon_rboff]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+[boot_capture:w246c_acbb9a3_witon_rboff] done. serial=/workspace/bench/run_w246c_acbb9a3_witon_rboff_serial.log qemu=/workspace/bench/run_w246c_acbb9a3_witon_rboff_qemu.log dmesg=/workspace/bench/run_w246c_acbb9a3_witon_rboff_dmesg.log probe=/workspace/bench/run_w246c_acbb9a3_witon_rboff_probe.log
+CAPTURE_RC=0
+EXIT_STATUS=0
+BOOTDONE

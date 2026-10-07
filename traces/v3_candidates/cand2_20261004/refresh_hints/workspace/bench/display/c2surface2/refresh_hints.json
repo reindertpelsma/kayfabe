@@ -1,0 +1,23 @@
+[
+  {
+    "width": 1920,
+    "height": 1080,
+    "hz": 29.938412408759124,
+    "sha256": "850a322aa54f04b28f88a845cff50f8b6a4859da51bc3765479c47ee5fcd0855",
+    "requested_hz": 30
+  },
+  {
+    "width": 1920,
+    "height": 1080,
+    "hz": 49.98956739463068,
+    "sha256": "97b1dd0c7795f4af48cb5bf31a1d88f0c1ef4a94830bfdc1f6474c38a384398b",
+    "requested_hz": 50
+  },
+  {
+    "width": 1920,
+    "height": 1080,
+    "hz": 60.0,
+    "sha256": "02f2c5ed964317f61e61b5212d8a7433f66702d29f9fa224019f15868070c89a",
+    "requested_hz": 60
+  }
+]

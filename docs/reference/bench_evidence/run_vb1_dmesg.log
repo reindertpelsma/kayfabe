@@ -1,0 +1,36 @@
+[   21.258050] nvidia-nvlink: Nvlink Core is being initialized, major device number 239
+
+[   21.267529] nvidia 0000:00:03.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=none:owns=io+mem
+[   21.271705] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   22.622828] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_CE_GET_FAULT_METHOD_BUFFER_SIZE, &params, sizeof(params)) @ kernel_ce.c:843
+[   22.629666] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   22.629879] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   23.601159] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   23.639917] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   23.640099] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   23.640178] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   24.176981] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ gpu_vaspace.c:5187
+[   24.177031] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ gpu_vaspace.c:4129
+[   24.177201] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ gpu_vaspace.c:611
+[   24.177725] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ device_share.c:260
+[   24.177779] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from vaspaceGetByHandleOrDeviceDefault(pClient, hDevice, pAllocData->hVASpace, ppVAS) @ virtual_mem.c:133
+[   24.177835] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, pChannel->hClient, hDevice, hVirtMem, NV50_MEMORY_VIRTUAL, &memAllocParams, sizeof(memAllocParams)) @ mem_utils_gm107.c:322
+[   24.270202] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ gpu_vaspace.c:5187
+[   24.270282] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ gpu_vaspace.c:4129
+[   24.270594] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ gpu_vaspace.c:611
+[   24.270943] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ device_share.c:260
+[   24.270995] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from vaspaceGetByHandleOrDeviceDefault(pClient, pParams->hParent, hVASpace, &pVAS) @ kernel_channel_group_api.c:224
+[   24.271050] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithSecInfo(pRmApi, hClient, hParent, &pChannelGpfifoParams->hPhysChannelGroup, KEPLER_CHANNEL_GROUP_A, NV_PTR_TO_NvP64(&tsgParams), sizeof(tsgParams), RMAPI_ALLOC_FLAGS_SKIP_RPC, NvP64_NULL, &pRmApi->defaultSecInfo) @ kernel_channel.c:381
+[   24.271106] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hDeviceId, hChannelId, hClass, &channelGPFIFOAllocParams, sizeof(channelGPFIFOAllocParams)) @ mem_utils_gm107.c:1301
+[   24.271168] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _memUtilsAllocateChannel(pGpu, pMemoryManager, hClient, hDevice, hChannel, hErrNotifierVirt, hPushBuffer, pChannel) @ mem_utils_gm107.c:857
+[   24.271172] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ ce_utils.c:286
+[   24.271858] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from objCreate(&pScrubber->pCeUtils, pHeap, CeUtils, pGpu, pKernelMIGGPUInstance, &ceUtilsAllocParams) @ mem_scrub.c:181
+[   24.271913] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from scrubberConstruct(pGpu, pHeap) @ mem_mgr_scrub_gp100.c:63
+[   24.271978] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from memmgrScrubHandlePostSchedulingEnable_HAL(pGpu, pMemoryManager) @ mem_mgr.c:487
+[   24.272042] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   28.977375] NVRM: RmInitAdapter: osVerifySystemEnvironment failed, bailing!
+[   29.080008] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[   29.822282] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+[   29.848972] NVRM: iovaspaceDestruct_IMPL: 1 left-over mappings in IOVAS 0x3
+[   29.849016] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x11:0x45:2134)
+[   29.854885] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0

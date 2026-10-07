@@ -1,0 +1,29 @@
+=== clean reruns (c94601d9) ===
+## /root/efs/efs_d_1.log
+RECORDS serviced=128 unexpected=0 pages=128
+LAT DELIVERY_packet_to_user    n=128 min=64.6 p50=92.6 p90=118.5 p99=166.0 max=170.3 us
+DATA bad=0
+RESULT PASS
+## /root/efs/efs_d_2.log
+RECORDS serviced=128 unexpected=0 pages=128
+LAT DELIVERY_packet_to_user    n=128 min=66.4 p50=99.0 p90=121.6 p99=174.0 max=180.0 us
+DATA bad=0
+RESULT PASS
+## /root/efs/efs_d_3.log
+RECORDS serviced=128 unexpected=0 pages=128
+LAT DELIVERY_packet_to_user    n=128 min=91.6 p50=117.1 p90=161.6 p99=211.1 max=233.4 us
+DATA bad=0
+RESULT PASS
+## /root/efs/efs_d_4.log
+RECORDS serviced=128 unexpected=0 pages=128
+LAT DELIVERY_packet_to_user    n=128 min=65.1 p50=109.8 p90=119.7 p99=131.3 max=139.3 us
+DATA bad=0
+RESULT PASS
+## /root/efs/efs_d_5.log
+RECORDS serviced=128 unexpected=0 pages=128
+LAT DELIVERY_packet_to_user    n=128 min=79.7 p50=111.9 p90=130.3 p99=158.1 max=169.1 us
+DATA bad=0
+RESULT PASS
+## coex_d.log
+THROUGHPUT sgemm_iters=2460 iters_per_s=203.6 managed_rounds=123 managed_bad=0 checksum=3321.500 wall=12.08
+RESULT PASS

@@ -1,0 +1,18 @@
+reg : ERROR: The system was unable to find the specified registry key or value.
+At C:\kf\collect.ps1:29 char:5
++     reg query HKLM\SYSTEM\CurrentControlSet\Services\nvlddmkm
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ERROR: The syst...y key or value.:String) [], Remote    Exception
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+== class key {4d36e968-e325-11ce-bfc1-08002be10318}\0001
+
+
+reg : ERROR: The system was unable to find the specified registry key or value.
+At C:\kf\collect.ps1:32 char:38
++ ... ss key $k"; reg query "HKLM\SYSTEM\CurrentControlSet\Control\Class\$k ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ERROR: The syst...y key or value.:String) [], Remote    Exception
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+

@@ -1,0 +1,16 @@
+Oct 04 03:41:20 ubuntu kernel: x86/PAT: kf3-vamgr:308809 freeing invalid memtype [mem 0x10015d0000-0x100165ffff]
+Oct 04 03:41:20 ubuntu kernel: x86/PAT: kf3-vamgr:308809 freeing invalid memtype [mem 0x1001dc0000-0x1001e5ffff]
+Oct 04 03:41:32 ubuntu kernel: x86/PAT: kf3-vamgr:308809 freeing invalid memtype [mem 0x1000de0000-0x1000e5ffff]
+Oct 04 03:43:34 ubuntu kernel: x86/PAT: kf3-vamgr:309274 freeing invalid memtype [mem 0x1001610000-0x100169ffff]
+Oct 04 03:43:34 ubuntu kernel: x86/PAT: kf3-vamgr:309274 freeing invalid memtype [mem 0x10016a0000-0x100189ffff]
+Oct 04 03:43:34 ubuntu kernel: x86/PAT: kf3-vamgr:309274 freeing invalid memtype [mem 0x10018a0000-0x1001a9ffff]
+Oct 04 03:43:34 ubuntu kernel: x86/PAT: kf3-vamgr:309274 freeing invalid memtype [mem 0x1001e00000-0x1001e9ffff]
+Oct 04 03:43:34 ubuntu kernel: x86/PAT: kf3-vamgr:309274 freeing invalid memtype [mem 0x1001ea0000-0x100209ffff]
+Oct 04 03:43:34 ubuntu kernel: x86/PAT: kf3-vamgr:309274 freeing invalid memtype [mem 0x10020a0000-0x100229ffff]
+Oct 04 04:02:09 ubuntu kernel: kfdsw: loaded, 8/8 probes
+Oct 04 04:04:04 ubuntu kernel: x86/PAT: kf3-vamgr:314499 freeing invalid memtype [mem 0x1001810000-0x100181ffff]
+Oct 04 04:05:49 ubuntu kernel: x86/PAT: kf3-vamgr:314499 freeing invalid memtype [mem 0x1001ab0000-0x1001abffff]
+Oct 04 04:06:42 ubuntu kernel: kfdsw: unloaded dsw=0 addr_valid=0 sem=0 ntf=0 dsw_err=0 sem_calls=0 sem_err=0 ntf_calls=0 ntf_err=0 map_found=0 map_null=0 kva_null=0 kva_set=0 drains=1690532 drain_client=0/0_failed drain_device=0/0_failed drain_event=0/0_failed
+Oct 04 04:06:52 ubuntu kernel: kfdsw: loaded, 8/8 probes
+Oct 04 04:10:47 ubuntu kernel: x86/PAT: kf3-vamgr:315575 freeing invalid memtype [mem 0x1001d50000-0x1001d5ffff]
+Oct 04 04:11:44 ubuntu kernel: kfdsw: unloaded dsw=0 addr_valid=0 sem=0 ntf=0 dsw_err=0 sem_calls=0 sem_err=0 ntf_calls=0 ntf_err=0 map_found=0 map_null=0 kva_null=0 kva_set=0 drains=1693171 drain_client=0/0_failed drain_device=0/0_failed drain_event=0/0_failed

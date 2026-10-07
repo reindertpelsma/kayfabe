@@ -1,0 +1,65 @@
+=== w401 TRIGGER BOOT 2026-09-10T16:28:37+00:00 tag=w407 ===
+qemu rev: kayfabe-rev:444acb1f7fb23cf24962822b4ce17b784c644c01 
+WRITER-TRIGGER in binary: 2 (0 ⇒ this is the OLD promote-only latch — STOP, do not grade)
+W406-REFRESH in binary: 4 (0 ⇒ the refresh arms are NOT in this binary — STOP, do not grade)
+boot_capture rc=5 (⊘ rc=5 is the evidence-persist check; read the artefacts)
+--- LEDGER tag=w407 ---
+[client] W392D_OUTCOME=(P) ★★★★★ PASS — all three paths content-verified,
+[client] THREADS           8 of 8 verified ✔
+[client] MEAN_FALSIFIER=PASS
+--- THE LADDER (P1..Pn), which is what this change is graded on ---
+[ladder] P1 → ✔ VERIFIED over 8 round(s)
+[ladder] P2 → ✔ VERIFIED over 8 round(s)
+[ladder] P3 → ✔ VERIFIED over 8 round(s)
+[ladder] P1 rm-invalidate  ✔ VERIFIED over 8 round(s)
+[ladder] P2 uvm-memop      ✔ VERIFIED over 8 round(s)
+[ladder] P3 rpc-bind       ✔ VERIFIED over 8 round(s)
+[ladder] P1 → ✔ VERIFIED over 8 round(s)
+[ladder] P2 → ✔ VERIFIED over 8 round(s)
+[ladder] P3 → ✔ VERIFIED over 8 round(s)
+[ladder] P1 rm-invalidate  ✔ VERIFIED over 8 round(s)
+[ladder] P2 uvm-memop      ✔ VERIFIED over 8 round(s)
+[ladder] P3 rpc-bind       ✔ VERIFIED over 8 round(s)
+--- ★ THE GUEST-SIDE CLIENT, which is the rung the owner asked for ---
+[guest]  W392D_MEAN_CONFIG=threads:8 rounds:8 falsify:on (⊘ client defaults are 4/4)
+[guest]  W392D_GUEST_OUTCOME=(P) ★★★★★ THE FALSIFIER SURVIVES — the SAME client that
+[guest]  W392D_GUEST_RC=0
+[guest]  MEAN_FALSIFIER=PASS
+[guest]  P1 → ✔ VERIFIED over 8 round(s)
+[guest]  STALE RACE → ✔ VERIFIED over 2 round(s)
+[guest]  P2 → ✔ VERIFIED over 8 round(s)
+[guest]  P3 → ✔ VERIFIED over 8 round(s)
+[guest]  THREADS → 8/8 clean, 28 overlapping pair(s) of graded intervals
+[guest]  P1 rm-invalidate  ✔ VERIFIED over 8 round(s)
+[guest]  P2 uvm-memop      ✔ VERIFIED over 8 round(s)
+[guest]  P3 rpc-bind       ✔ VERIFIED over 8 round(s)
+[guest]  STALE RACE        ✔ VERIFIED over 2 round(s)
+[guest]  THREADS           8 of 8 verified ✔
+[guest]  MEAN_FALSIFIER=PASS
+--- ★★★ THE ORDERING, WHICH IS THE WHOLE GRADE ---
+[order]  publish of 0x9140000000 at line 3401;  ring of token 9 at line 3432
+[order]  ✔ PUBLISHED BEFORE THE RING — the page is backed when the engine may fetch
+[order]  GR0 fault at 0x91_40000000: 0 (must be 0)
+[order]  CE0 bystander @0xa0_00000000: 1 (present in GREEN runs too)
+--- THE TRIGGER ITSELF ---
+[trig]   RPCMAP-PUBLISH (inline, the fix): 0
+[trig]   RPCBIND-PUBLISH lines: 387
+[trig] RPCBIND-PUBLISH (off-vCPU) vas_changed=1 VAS-PUBLISH token=0x00000001 arm=publish W328SCOPE[arm=all scoped=false target=⊘NONE (no channel fac
+[trig] RPCBIND-PUBLISH (off-vCPU) vas_changed=1 VAS-PUBLISH token=0x00000001 arm=publish W328SCOPE[arm=all scoped=false target=⊘NONE (no channel fac
+[trig] RPCBIND-PUBLISH (off-vCPU) vas_changed=1 VAS-PUBLISH token=0x00000001 arm=publish W328SCOPE[arm=all scoped=false target=⊘NONE (no channel fac
+[trig] RPCBIND-PUBLISH (off-vCPU) vas_changed=1 VAS-PUBLISH token=0x00000001 arm=publish W328SCOPE[arm=all scoped=false target=⊘NONE (no channel fac
+[trig] RPCBIND-PUBLISH (off-vCPU) vas_changed=1 VAS-PUBLISH token=0x00000001 arm=publish W328SCOPE[arm=all scoped=false target=⊘NONE (no channel fac
+[trig] RPCBIND-PUBLISH (off-vCPU) vas_changed=1 VAS-PUBLISH token=0x00000001 arm=publish W328SCOPE[arm=all scoped=false target=⊘NONE (no channel fac
+[trig] RPCBIND-PUBLISH (off-vCPU) vas_changed=1 VAS-PUBLISH token=0x00000001 arm=publish W328SCOPE[arm=all scoped=false target=⊘NONE (no channel fac
+[trig] RPCBIND-PUBLISH (off-vCPU) vas_changed=1 VAS-PUBLISH token=0x00000001 arm=publish W328SCOPE[arm=all scoped=false target=⊘NONE (no channel fac
+[trig]   MMUINVAL-PUBLISH lines: 1181
+[w406]   MMUINVAL-REFRESH firings: 1181  (the TLB-invalidate arm refreshed BEFORE completing)
+[w406]   CE-LOCAL-REFRESH firings: 232  (the UVM emulated channel refreshed BEFORE its release was written)
+[w406]   MMUINVAL-COMPLETE WITHHELD: 0  (a newer trigger arrived mid-refresh; expected 0 — RM serialises)
+[w406]   CE-LOCAL COMPLETION NOT WRITTEN: 0  (must be 0: a stranded waiter)
+[w406]   worst refresh_ms: 78.33  (the guest spins on TRIGGER for this long)
+[w406]   invalidate census: worst_hold_us=22136 over_budget=0 reentrant=0
+[trig]   PROMOTE-BOUND lines:    4
+[xid]    host Xid lines: 1
+[boot]   arming banners: FB-JOIN arm=shared GR-ROUTE arm=passthrough GUEST-RING arm=ring PT-SWEEP arm=on 
+--- END LEDGER tag=w407 ---

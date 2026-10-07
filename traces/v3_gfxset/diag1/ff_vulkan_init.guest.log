@@ -1,0 +1,54 @@
+=== ff_vulkan_init side=guest start=2026-09-26T18:19:01+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+vulkan ICD: /etc/vulkan/icd.d/nvidia_icd.json only
+Reading option '-init_hw_device' ... matched as option 'init_hw_device' (initialise hardware device) with argument 'vulkan=vk:0'.
+Reading option '-filter_hw_device' ... matched as option 'filter_hw_device' (set hardware device used when filtering) with argument 'vk'.
+Applying option init_hw_device (initialise hardware device) with argument vulkan=vk:0.
+[Vulkan @ 0x61f949a1fc80] Supported layers:
+[Vulkan @ 0x61f949a1fc80] 	VK_LAYER_NV_optimus
+[Vulkan @ 0x61f949a1fc80] 	VK_LAYER_NV_present
+[Vulkan @ 0x61f949a1fc80] 	VK_LAYER_MESA_device_select
+[Vulkan @ 0x61f949a1fc80] 	VK_LAYER_INTEL_nullhw
+[Vulkan @ 0x61f949a1fc80] 	VK_LAYER_MESA_overlay
+[Vulkan @ 0x61f949a1fc80] GPU listing:
+[Vulkan @ 0x61f949a1fc80]     0: NVIDIA GeForce RTX 3070 (discrete) (0x2484)
+[Vulkan @ 0x61f949a1fc80] Device 0 selected: NVIDIA GeForce RTX 3070 (discrete) (0x2484)
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_KHR_push_descriptor
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_EXT_physical_device_drm
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_EXT_shader_atomic_float
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_KHR_cooperative_matrix
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_EXT_shader_object
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_KHR_shader_subgroup_rotate
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_KHR_workgroup_memory_explicit_layout
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_KHR_shader_relaxed_extended_instruction
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_EXT_shader_replicated_composites
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_KHR_shader_expect_assume
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_KHR_video_maintenance1
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_KHR_video_maintenance2
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_KHR_external_memory_fd
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_EXT_external_memory_dma_buf
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_EXT_image_drm_format_modifier
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_KHR_external_semaphore_fd
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_EXT_external_memory_host
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_KHR_video_queue
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_KHR_video_encode_queue
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_KHR_video_decode_queue
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_KHR_video_encode_h264
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_KHR_video_decode_h264
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_KHR_video_encode_h265
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_KHR_video_decode_h265
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_KHR_video_decode_vp9
+[Vulkan @ 0x61f949a1fc80] Using device extension VK_KHR_video_decode_av1
+[Vulkan @ 0x61f949a1fc80] Queue families:
+[Vulkan @ 0x61f949a1fc80]     0: graphics compute transfer sparse (queues: 16)
+[Vulkan @ 0x61f949a1fc80]     1: transfer sparse (queues: 2)
+[Vulkan @ 0x61f949a1fc80]     2: compute transfer sparse (queues: 8)
+[Vulkan @ 0x61f949a1fc80]     3: transfer decode sparse (queues: 1)
+[Vulkan @ 0x61f949a1fc80]     4: transfer encode sparse (queues: 1)
+[Vulkan @ 0x61f949a1fc80]     5: transfer sparse optical_flow (queues: 1)
+[Vulkan @ 0x61f949a1fc80] Device creation failure: VK_ERROR_INITIALIZATION_FAILED
+Device creation failed: -542398533.
+Failed to set value 'vulkan=vk:0' for option 'init_hw_device': Generic error in an external library
+Error parsing global options: Generic error in an external library
+GSET_DIG side=guest item=ff_vulkan_init key=frame val=EMPTY
+GSET_FAIL ffmpeg vulkan init rc=187: [Vulkan @ 0x61f949a1fc80] Device creation failure: VK_ERROR_INITIALIZATION_FAILED
+=== end rc=0 secs=4 2026-09-26T18:19:06+00:00

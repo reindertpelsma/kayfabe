@@ -1,0 +1,73 @@
+[package]
+name = "kayfabe-tests"
+description = "The VMM-agnostic conformance suite: RmGraph order-independence units + the #14 two-process simulation, driven entirely through the mock harness (no GPU, no OS)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+kayfabe-util.workspace = true
+kayfabe-arch.workspace = true
+kayfabe-core.workspace = true
+kayfabe-fwd.workspace = true
+kayfabe-mmu.workspace = true
+kayfabe-completion.workspace = true
+kayfabe-isolate.workspace = true
+kayfabe-vmm.workspace = true
+# ★ The REAL Vmm (l1_os_shell.md §10, M2-c). The conformance suite drives the SAME core
+# traffic through the mock harness and through real KVM memslots — which is the
+# portability contract exercised rather than asserted.
+kayfabe-vmm-kvm.workspace = true
+# ★ The QEMU adapter, for ONE reason: `viewer_install` — the consumer of the GPGA viewer
+# index — lives there, and the vCPU that proves its layout is native lives in the KVM
+# adapter. `tests/tests/gpga_viewer_native.rs` is the only place the two meet.
+kayfabe-vmm-qemu.workspace = true
+kayfabe-linux-raw.workspace = true
+# ★ The real reactor loop (l1_os_shell.md §3, M2-d): the suite drives real host
+# readiness primitives through the same core the mock harness drives.
+kayfabe-shell.workspace = true
+kayfabe-mocks.workspace = true
+kayfabe-rt.workspace = true
+# ★ The trace/replay vocabulary (docs/design/mode2_gsp_port_plan.md §6). The conformance
+# suite is where "is this vocabulary usable, ordered and non-vacuous?" gets answered, so
+# the crate's tests live here beside the traffic they observe rather than in a unit file.
+kayfabe-trace.workspace = true
+# ★ The faked GSP (docs/design/mode2_gsp_port_plan.md S0-S5). Its oracle is an
+# INDEPENDENT re-implementation of the guest driver's own msgq/RPC receive path
+# (tests/src/gspworld.rs), so the boot exchange is exercised end to end with no GPU,
+# no hypervisor and no OS.
+kayfabe-gsp.workspace = true
+# ★ The C↔Rust trace differential (task #47, `docs/design/c_rust_trace_differential.md`).
+# The replay and its ledger classifier live in that crate; what lives HERE is the check
+# that its Axis-A bundle is the same one the rest of this suite drives the GSP through.
+kayfabe-crec.workspace = true
+kayfabe-device = { workspace = true, features = ["test-lock-probe"] }
+# ★ The arch-impl crate (AD10x + the GH100 refutation fixture). Here so the SECOND and
+# THIRD architectures are driven through the SAME `GspFsm` the first one is — the whole
+# point of `tests/tests/arch_axis_second_generation.rs` is that no other code moves.
+kayfabe-chips.workspace = true
+# ★ The GSP -> core bridge (docs/design/gsp_core_bridge.md). The conformance suite is where
+# wire bytes meet `Gpu::apply`, so this is where the bridge's integration tests live: the
+# mocks, the `Guarded` leak audit and the mean composed runs are all already here.
+kayfabe-rmrpc.workspace = true
+# Axis A: the version-keyed wire tables the GSP path decodes RPC envelopes with.
+kayfabe-abi.workspace = true
+
+[dev-dependencies]
+# ★★★ E6 — the REAL host RM backend, for the hardware acceptance ONLY
+# (`tests/e6_hw_join.rs`). A **dev**-dependency: this crate's library is the mock-driven
+# conformance harness and must not link an adapter that issues real NVIDIA ioctls. The
+# hardware test gates itself on a connection and asserts nothing without one.
+kayfabe-isolate-host.workspace = true
+# Property-based / fuzz testing — DEV-ONLY (never a core dependency). Generates
+# arbitrary + adversarial RM event streams to fuzz the guest→core attack surface.
+proptest = "1.11"
+# Asserting the EXACT errno a real kernel returned (EEXIST vs ENOMEM), never `is_err()`.
+libc = "0.2"
+
+[lints]
+workspace = true

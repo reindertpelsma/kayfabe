@@ -1,0 +1,876 @@
+//! ★★★★★ **w323 — THE DEFERRED PUBLICATION LANE: what a doorbell trap may hand to a
+//! worker, and what it may never.**
+//!
+//! Owner ruling, 2026-08-14, quoted verbatim in
+//! `docs/design/publication_off_the_vmm_lock.md`: publication must not run under the VMM's
+//! global lock, and the boundaries that say when to act already exist elsewhere.
+//! ⊘ The quote lives there because it names QEMU's lock by its QEMU name and this crate is
+//! gated against that. ⚠ An owner's words are not reworded to satisfy a lint.
+//!
+//! Full argument: `docs/design/publication_off_the_bql.md`. This module is the mechanism
+//! only, and it is deliberately free of every GPU concept except the guest's opaque
+//! doorbell token, so its properties can be tested with no device, no isolate and no boot.
+//!
+//! # 1. Why deferral is legal at all — the ordering requirement is NOT what it looks like
+//!
+//! The requirement is **publish → *our* host ring**. ⊘ It is **not** *publish → the guest's
+//! MMIO doorbell store*, and conflating those two is what made this look impossible for
+//! three rungs. The guest's store is **fire-and-forget by the GPFIFO contract**: the guest
+//! does not read a result, does not poll a status and cannot observe when we act. Both ends
+//! of the real ordering constraint are **ours**.
+//!
+//! ⇒ we may return from the trap immediately, publish on a worker, and ring the host when
+//! publication is complete. The guest cannot tell the difference, because it never waited.
+//!
+//! ★ The C did exactly this and its own source says so
+//! (`C: src/qemu/nvkvm_gpu_emul.c:592-604`): an **O(1) dirty latch at the write**, then a
+//! **deferred commit at the release semaphore** — *"before the release un-gates the
+//! (already-rung, host-resident) GR channel into the new mapping"*. **The channel was
+//! already rung.**
+//!
+//! # 2. ⊘⊘⊘ REFUTED ON HARDWARE, 2026-09-06 (w383) — **COALESCING BREAKS THE GUEST.**
+//!
+//! Read this before §2 below, which is left in place because its *reasoning* is what the
+//! measurement contradicts and deleting it would hide what was tested.
+//!
+//! `[measured w383, real GA106, cup3, three boots, one variable]`:
+//!
+//! | arm | `CUP3_VAL` | host `Xid` |
+//! |---|---|---|
+//! | `off` — inline on the vCPU (the control) | **43** | 0 |
+//! | `on` — deferred **and coalescing** | **ABSENT**, `cuCtxCreate → unknown error (999)` | **2** (`Xid 31`: `CE2 … FAULT_PDE @ 0x7eca_d4e00000`, `GR0_PBDMA0 … FAULT_PTE @ 0x2_0440f000`) |
+//! | `nocoalesce` — deferred, **one execution per doorbell** | **43** | 0 |
+//!
+//! ⇒ ★★★★★ **DEFERRING IS FINE AND COALESCING IS NOT.** The two had been the same change
+//! and therefore the same red; the arm that separates them is
+//! `DoorbellAsyncArm::NoCoalesce`, and it settled it in one boot.
+//!
+//! ## ⊘ WHERE §2's ARGUMENT IS WRONG — the premise was checked in the wrong place
+//!
+//! §2 rests on *"the submission cursor is read at EXECUTION time, not latched at trap
+//! time"*. That is **true and verified** of `kayfabe_rt::ceutils::run_submission`, which
+//! reads forward from its `GpCursor` *while the entries decode* and therefore does consume
+//! everything a coalesced burst left. It was **asserted, never measured**, of the
+//! forwarding path — `SharedDevice::doorbell` → `kayfabe_fwd::read_gpfifo_ring` — and the
+//! forwarding path is the one the failing arm exercises. `[measured]` the same workload ran
+//! **229 publication passes on the control and 53 on the coalescing arm** for a comparable
+//! doorbell count: 200 doorbells' worth of forwarding was folded away, and the guest's
+//! engines faulted on ranges whose mappings the folded-away passes would have carried.
+//!
+//! ⚠ **The lesson is not "coalescing is impossible".** It is that *"N doorbells are one
+//! act"* is a claim about a **specific consumer**, and this module made it about all of
+//! them. A future coalescing arm must be justified per consumer, and the negative control
+//! must stay.
+//!
+//! # 2a. The original argument, RETAINED — what was believed and why
+//!
+//! The obvious design is a per-channel FIFO of pending doorbells, and then the brief's
+//! question *"what happens on overflow"* is real and unpleasant. It dissolves:
+//!
+//! **The submission cursor is read at EXECUTION time, not latched at trap time.**
+//! `SharedDevice::doorbell` → `forward_ring` reads the channel's GPFIFO `GP_PUT` out of
+//! guest memory when it runs. So *N* doorbells on one token and *one* doorbell after the
+//! last `GP_PUT` advance are **the same act**: both execute against the newest cursor.
+//!
+//! ⇒ the queue holds **at most one entry per distinct token**, and re-offering a token
+//! already pending is a coalesce, not a push. Its size is bounded by the number of live
+//! channels, which is a function of the *guest's allocations* — a number RM already bounds
+//! and which no amount of doorbell ringing can inflate. **A guest cannot make this grow by
+//! ringing faster**, which is the property an unbounded queue on a guest-driven path
+//! actually needs.
+//!
+//! ⚠ **The one thing coalescing costs, stated rather than discovered later:** the worker
+//! reads the ring while the guest is running, where today it reads it with the guest
+//! halted. A guest that rewrites a GPFIFO entry between advancing `GP_PUT` and the engine
+//! consuming it now races us. ⊘ That is **already illegal for the guest against real
+//! hardware** — the GPU DMA-reads the pushbuffer asynchronously and the GPFIFO contract
+//! forbids exactly this — so the deferral is *more* faithful, not less. What it is not is
+//! *identical*: our decoder is not the hardware's, and a torn read must fault rather than
+//! be acted on. That obligation is the ring reader's, not this queue's, and it is named in
+//! `publication_off_the_bql.md` §5.3.
+//!
+//! # 3. ⊘⊘⊘ THE ASYMMETRY THAT IS THE WHOLE SAFETY ARGUMENT — MAP MAY DEFER, REVOKE MAY NOT
+//!
+//! Owner ruling, folded in above the mechanism because the mechanism enforces it:
+//!
+//! | direction | what a late act costs |
+//! |---|---|
+//! | **MAP** (invalid → valid) | the engine walks an unpublished VA ⇒ a **GPU fault**. **FAIL-SAFE**: this tree measured containment — a bystander ran 2 675 519 verified iterations through one. |
+//! | **REVOKE** (valid → invalid) | a **live host-GPU translation into guest pages the guest has already released and Linux has reused**. **FAIL-DANGEROUS.** |
+//!
+//! ⇒ ★★★★★ **DEFERRING A REVOCATION IS NOT A LATENCY CHOICE, IT IS A LEAK WINDOW** whose
+//! duration is exactly the deferral. This module makes that **not expressible**: the queue's
+//! item type is [`MapPublication`] and there is no `From`, no `Deref` and no constructor
+//! that turns a revocation into one. A caller that tries hands a [`Revocation`] to a
+//! parameter that does not accept it and **does not compile**
+//! (`tests/ui/defer_a_revocation.rs`).
+//!
+//! ⊘ **And a guest omission must not be able to open the window either.** The revocation
+//! lane is driven by *our* teardown of *our* host objects — `Proc::stage_release` and the
+//! budgeted drain — never by a guest signal we could be denied. Withholding whatever would
+//! have triggered a publish cannot extend a revocation's window, because no guest action is
+//! on that path at all.
+//!
+//! # 4. ⊘ AND THE OTHER INVALIDATE — the one that is OURS, and which is already discharged
+//!
+//! Two unrelated things wear the word:
+//! 1. **the GUEST's** TLB invalidate, which we might observe as a publish trigger.
+//!    ⊘⊘⊘ **CORRECTED 2026-08-14 (w326) — IT DOES EXIST AND IT IS MEASURED.** This text
+//!    said the guest issues **zero** on our compute path, citing `mode2_address_table.md` §5
+//!    audit S3. Those numbers are right and the inference from them was not: RM's transport
+//!    on GA106 is **BAR0 `0x00B8_30B0`**, neither of the two transports that census
+//!    enumerated. `[measured, boot `w326m1`]` **377 triggers on one `cup3` boot**, 145 of them
+//!    naming a GPU VA space, `all_pdb=0` on every one. See `crate::mmuinval`.
+//!    ⇒ ★ a commit boundary **does** exist. ⊘ But it is **1.6× rarer than the doorbell**, not
+//!    orders of magnitude — so it is the right trigger for *soundness* and for *scope* (it
+//!    names its PDB), and **not** a cost argument. Nothing in this module waits for one;
+//!    that remains true;
+//! 2. **the invalidate WE owe the HOST GPU** after a host PTE changes.
+//!
+//! ★ (2) is **discharged by the host RM, by construction, on every path we own**: we never
+//! author a host PTE. Every host mapping change of ours is an RM ioctl
+//! (`NV_ESC_RM_MAP_MEMORY_DMA` / `NV_ESC_RM_UNMAP_MEMORY_DMA`), and RM invalidates inside
+//! it — `dmaUnmapBuffer` → `vaspaceInvalidateTlb(pVAS, pGpu, PTE_DOWNGRADE)`
+//! (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/dma.c:899`, again `:1010`), `PTE_UPGRADE` on
+//! the map side (`.../arch/maxwell/virt_mem_allocator_gm107.c:3032`).
+//!
+//! ⚠ **The consequence for this design, and it is the reason the asymmetry above is not
+//! merely prudent:** RM's invalidate happens **inside the ioctl we are deferring**. Deferring
+//! a revocation therefore defers its TLB invalidate by exactly the same interval. The leak
+//! window is not an artefact of our bookkeeping; it is a real interval during which the host
+//! GMMU still holds the translation.
+
+use std::collections::{HashSet, VecDeque};
+use std::sync::{Condvar, Mutex};
+
+/// ★★★ **A publication that MAY be deferred** — the map direction, and the only thing
+/// [`PublicationQueue`] accepts.
+///
+/// The field is private and the only constructor is [`MapPublication::for_doorbell`], so
+/// the type's guarantee — *"this is an invalid→valid transition, whose late arrival costs a
+/// GPU fault and nothing worse"* — is a claim about how the value was **obtained**, which
+/// only a constructor can make.
+/// ★★★★★ **WHAT A QUEUED PUBLICATION IS FOR.**
+///
+/// The lane carries publication JOBS, not doorbells — the type has always been named
+/// `MapPublication`. Adding a second kind here is what lets the guest's `MMU_INVALIDATE` be
+/// published **off the vCPU** without a second worker thread, which the owner explicitly does
+/// not want: *"You don't have to have a separate doorbell thread (in fact better is not)."*
+/// ⊘ `#[repr(usize)]` with explicit discriminants (w671): `Stats::queued_by_kind` indexes by
+/// `kind as usize`, so the numbering is a **contract**, not an accident of declaration order.
+/// Reordering the variants without touching the array would silently re-label a census.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(usize)]
+pub enum PublicationKind {
+    /// The guest rang a doorbell; publish what its submission needs, then forward.
+    Doorbell = 0,
+    /// ★★★★★ **w472 — a pure WAKE for the BAR mirror's fill queue.** Carries no work of its
+    /// own: the worker drains the queue and that is all.
+    ///
+    /// ⊘ A fill is a PREFETCH — the plane already served the access that missed, and
+    /// installing the slot only stops the NEXT access to that page from exiting. So this
+    /// token is the one kind that is **safe to drop**: losing it costs extra exits on one
+    /// page and can never produce a wrong value. ⚠ It must still be SENT, though: without a
+    /// wake the queue drains only at the next invalidate, and a page that keeps trapping is
+    /// how BAR1 went back to tens of thousands of exits.
+    MirrorFill = 1,
+    /// ★★★ The guest wrote the **TLB invalidate trigger**. Publish, then signal completion so
+    /// the guest's own poll of the trigger register clears.
+    ///
+    /// ⊘ The guest waits by POLLING the register — that is what
+    /// `kgmmuCheckPendingInvalidates_TU102` does on real hardware — so deferring this work
+    /// does not make the guest miss it. What changes is only that the wait happens in the
+    /// guest's own loop instead of inside one held MMIO store.
+    Invalidate = 2,
+    /// ★★★ The guest completed an **RPC map call** (`GPU_PROMOTE_CTX`) — the owner's
+    /// synchronization point (2). Publish the rows it bound.
+    ///
+    /// ⊘ No completion to signal: unlike an invalidate there is no trigger register the guest
+    /// polls. The RPC has already returned; what remains is getting its rows onto the host
+    /// before the engine that uses them runs.
+    RpcBind = 4,
+    /// ★★★★★ **w432 — the GSP command queue moved and a worker must service it.**
+    ///
+    /// `[measured]` servicing it inside the guest's `NV_PGSP_QUEUE_HEAD` store held a vCPU for
+    /// **1.79 s** — the worst trap in the device. This job is what that store leaves behind
+    /// instead of doing the work.
+    ///
+    /// ⊘ Its token is a monotonic SEQUENCE, not a doorbell token and not a register value:
+    /// what the worker needs to know is *"the queue moved since you last looked"*, and the
+    /// queue state itself lives in guest RAM where the FSM reads it.
+    GspSubmit = 3,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MapPublication {
+    token: u64,
+    kind: PublicationKind,
+    /// ★★★★★ **WHEN THIS JOB WAS OFFERED** — `Instant` at `offer`, read at `take`.
+    ///
+    /// ⊘ w763s. The guest's hold is `trigger → completion`; the worker's phase timers only
+    /// cover `dequeue → completion`. `[measured w763]` the phases summed to ~6 ms against a
+    /// 24.8 ms hold, and NOTHING in the tree could say where the other ~19 ms went. This is
+    /// the missing half: `take` minus `offer` is the QUEUE, and it separates "the worker is
+    /// behind" from "the wake was slow" — two findings with completely different fixes.
+    offered_at: Option<std::time::Instant>,
+}
+
+impl MapPublication {
+    /// How long this job sat in the queue, if it was stamped. See [`Self::offered_at`].
+    #[must_use]
+    pub fn queued_for(&self) -> Option<std::time::Duration> {
+        self.offered_at.map(|t| t.elapsed())
+    }
+
+    /// The guest rang `token`; the mappings its submission needs are to be published and
+    /// the host channel rung, on a worker.
+    #[must_use]
+    pub const fn for_doorbell(token: u64) -> Self {
+        Self {
+            token,
+            kind: PublicationKind::Doorbell,
+            offered_at: None,
+        }
+    }
+
+    /// The guest wrote the TLB invalidate trigger `val`; publish, then complete it.
+    #[must_use]
+    pub const fn for_invalidate(val: u64) -> Self {
+        Self {
+            offered_at: None,
+            token: val,
+            kind: PublicationKind::Invalidate,
+        }
+    }
+
+    /// A wake for the BAR mirror's deferred page fills. See [`PublicationKind::MirrorFill`].
+    #[must_use]
+    pub const fn for_mirror_fill(seq: u64) -> Self {
+        Self {
+            offered_at: None,
+            token: seq,
+            kind: PublicationKind::MirrorFill,
+        }
+    }
+
+    /// A GSP command-queue submission waiting for a worker. See [`PublicationKind::GspSubmit`].
+    #[must_use]
+    pub const fn for_gsp_submit(seq: u64) -> Self {
+        Self {
+            offered_at: None,
+            token: seq,
+            kind: PublicationKind::GspSubmit,
+        }
+    }
+
+    /// The guest bound mappings through an RPC map call; publish them.
+    #[must_use]
+    pub const fn for_rpc_bind(seq: u64) -> Self {
+        Self {
+            offered_at: None,
+            token: seq,
+            kind: PublicationKind::RpcBind,
+        }
+    }
+
+    /// What this job is for.
+    #[must_use]
+    pub const fn kind(self) -> PublicationKind {
+        self.kind
+    }
+
+    /// The guest's own doorbell token.
+    #[must_use]
+    pub const fn token(self) -> u64 {
+        self.token
+    }
+}
+
+/// ⊘⊘ **A revocation — valid→invalid. It exists HERE so that it can be REFUSED here.**
+///
+/// It carries no data and is deliberately useless: its entire purpose is to be a distinct
+/// Rust type from [`MapPublication`], so *"put the unmap on the deferred queue"* is a type
+/// error rather than a code review that has to happen every time.
+///
+/// ⊘ There is **no** `From<Revocation> for MapPublication`, no `Deref`, no `as_map()`, and
+/// no public field — the three dismantling routes `host_class_role_wiring.rs` enumerates
+/// for a role type, closed by construction and pinned by
+/// `tests/ui/defer_a_revocation.rs` + `the_revocation_type_has_no_route_into_the_queue`.
+///
+/// ★ Where revocations actually go: `Proc::stage_release` → the **budgeted, synchronous**
+/// drain in `Regs::write`. That is tier 2 — bounded, inline, and correct precisely because
+/// it is bounded (`blocking_and_completion_model.md` §2). It is **not** free and it is not
+/// pretended to be; it is a far smaller global-lock cost than today's whole-VAS publication drain,
+/// and it is the honest floor. See `publication_off_the_bql.md` §4.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Revocation {
+    /// ⊘ Private and unused: the type is a *refusal*, not a payload. A `pub` field would be
+    /// the "uniform escape" route a role type must not have.
+    _unused: (),
+}
+
+impl Revocation {
+    /// Name a revocation. ⊘ It cannot be enqueued; see the type's docs.
+    #[must_use]
+    pub const fn of_a_host_mapping() -> Self {
+        Self { _unused: () }
+    }
+}
+
+/// What [`PublicationQueue::offer`] did with a token — the two outcomes are different
+/// facts and a `bool` would have hidden which.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Offered {
+    /// A new entry joined the queue.
+    Queued,
+    /// ★ This token was **already pending**, so the offer coalesced into it. Not a drop:
+    /// the pending execution will read the newest cursor and therefore covers this
+    /// doorbell too. See the module docs §2.
+    Coalesced,
+    /// ⊘ **REFUSED** — the queue is at its distinct-token cap. The caller must fall back to
+    /// running the work inline, which is today's behaviour and is therefore never worse
+    /// than the status quo. Counted, never silent.
+    Full,
+}
+
+/// Everything the queue can say about itself, as one value, so a log line cannot report a
+/// subset and a reader cannot infer the rest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct QueueStats {
+    /// Offers that created a new entry.
+    pub queued: u64,
+    /// Offers that folded into a pending entry (§2 — a doorbell is a level).
+    pub coalesced: u64,
+    /// ★★★★★ **QUEUED, BROKEN DOWN BY KIND (w671) — because the TOTAL cannot say what to fix.**
+    ///
+    /// ⊘⊘ `[measured w670a, one `cuDeviceGet`]` `queued=12268 coalesced=0`, and a `cuDeviceGet`
+    /// that should be microseconds took **20 s**. The vCPU was clean (one trap over 1 ms, 98.9 %
+    /// CPU, `slow_starved=0`) and the isolate verbs totalled **154 ms** — so the cost is neither
+    /// a stalled trap nor a slow verb, it is **~12 000 worker passes at ~1.6 ms each**.
+    ///
+    /// ⚠ And the total is where the diagnosis stopped: counting the log's per-kind MARKERS gave
+    /// ~1 200 events against 12 268 jobs, because those lines are capped and rate-limited. **A
+    /// capped log line is not a census.** The queue is the one place that sees every offer, so
+    /// it is the only place that can answer *"which kind is 12 000 of them"*.
+    ///
+    /// ⊘ `coalesced=0` is NOT a broken optimisation: `for_mirror_fill`/`for_gsp_submit`/
+    /// `for_rpc_bind` are keyed by a **monotonic seq**, so their tokens are distinct by
+    /// construction and can never coalesce. Only `for_doorbell` (keyed by the guest's token)
+    /// can. Reading that zero as a coalescing bug would have been a whole wasted lane.
+    pub queued_by_kind: [u64; 5],
+    /// ⊘ Offers refused at the cap. **Non-zero means some doorbell ran inline**, and the
+    /// caller owes a line saying so.
+    pub refused: u64,
+    /// Entries the worker took.
+    pub taken: u64,
+    /// The deepest the queue has ever been — the bound, measured rather than assumed.
+    pub high_water: usize,
+}
+
+/// The shared state, behind one leaf mutex.
+#[derive(Debug, Default)]
+struct Inner {
+    /// FIFO of tokens awaiting execution. ★ Order across tokens is preserved; order
+    /// *within* a token is vacuous because there is at most one entry per token.
+    order: VecDeque<MapPublication>,
+    /// Membership, so `offer` is O(1) rather than a scan of `order`.
+    pending: HashSet<u64>,
+    stats: QueueStats,
+    /// Set once; wakes the worker so it can exit rather than park forever.
+    stopping: bool,
+    /// ★ Monotonic count of completed executions, so a test (or a wait-for-quiesce) can ask
+    /// *"has everything offered before instant T been acted on?"* without polling the
+    /// queue's emptiness — which is true both before the worker starts and after it
+    /// finishes, and therefore answers nothing on its own.
+    completed: u64,
+}
+
+/// ★★★ **The lane.** Single consumer, many producers, coalescing, capped.
+///
+/// ⊘ It holds **no reference to the device, the plane or any isolate** — deliberately, and
+/// it is the same law `kayfabe_rt::inbox` states: *"a producer that wanted to touch core
+/// state has nothing to touch"*. Everything it carries is a `u64` the guest wrote.
+#[derive(Debug)]
+pub struct PublicationQueue {
+    inner: Mutex<Inner>,
+    wake: Condvar,
+    cap: usize,
+    /// ★★★★★ **w383 — whether an offer for an already-pending token COALESCES or QUEUES.**
+    ///
+    /// ⊘⊘ **This exists because §2's argument is a HYPOTHESIS about our ring reader, and
+    /// this rung is the first thing that could test it.** §2 says N doorbells on one token
+    /// and one doorbell after the last `GP_PUT` advance are the same act, *because the
+    /// cursor is read at execution time*. That is true of `ceutils::run_submission` (it
+    /// reads forward from its cursor while the entries decode) and it is **asserted, not
+    /// measured**, of `kayfabe_fwd::read_gpfifo_ring` and everything downstream of it.
+    ///
+    /// ⇒ the flag is the **negative control** for §2: same thread, same deferral, same
+    /// worker, one variable. A boot that is red with `coalesce` and green without it has
+    /// refuted §2 and localized the defect to the ring reader — which no amount of reading
+    /// the code was going to settle.
+    coalesce: bool,
+}
+
+impl PublicationQueue {
+    /// ★★ **The distinct-token cap.**
+    ///
+    /// Not a rate limit — §2 explains why a rate cannot grow this queue. It is a bound on
+    /// **live channels with work outstanding**, and it is set well above anything RM
+    /// permits a single guest to hold open so that hitting it is a *diagnosis*, not a
+    /// routine. On overflow the caller runs inline, i.e. degrades to today's behaviour.
+    pub const DEFAULT_CAP: usize = 4096;
+
+    /// A queue with [`Self::DEFAULT_CAP`].
+    #[must_use]
+    pub fn new() -> Self {
+        Self::with_cap(Self::DEFAULT_CAP)
+    }
+
+    /// A queue with an explicit cap — for tests that want to reach the refusal arm without
+    /// building 4096 channels. ⊘ A cap of 0 is legal and refuses everything, which is the
+    /// known-positive the refusal arm needs.
+    #[must_use]
+    pub fn with_cap(cap: usize) -> Self {
+        Self {
+            inner: Mutex::new(Inner::default()),
+            wake: Condvar::new(),
+            cap,
+            coalesce: true,
+        }
+    }
+
+    /// ★★★★★ **w383 — a queue that NEVER coalesces**: every offer becomes its own entry, so
+    /// every doorbell gets its own execution. See [`Self::coalesce`] for why this exists.
+    ///
+    /// ⊘ The cap still applies, and it now bounds *offers in flight* rather than *distinct
+    /// live channels* — a materially weaker bound, and the reason this is a control rather
+    /// than the default. A guest **can** grow this queue by ringing faster, which is exactly
+    /// the property §2 was written to avoid; on refusal the caller runs inline, so the
+    /// consequence is bounded latency rather than unbounded memory.
+    #[must_use]
+    pub fn uncoalescing() -> Self {
+        Self {
+            coalesce: false,
+            ..Self::new()
+        }
+    }
+
+    /// Whether this queue coalesces repeat offers for one token.
+    #[must_use]
+    pub const fn coalesces(&self) -> bool {
+        self.coalesce
+    }
+
+    /// ★★★★★ **THE the VMM's global lock-SIDE CALL, and the whole point: it does no host I/O.**
+    ///
+    /// A hash insert, a `VecDeque` push and a `notify_one`, under one leaf mutex that no
+    /// other trap path takes for anything but this. That is `INLINE-SAFE` clause (a) (it
+    /// completes without the guest running), clause (b) (it is O(1)) and clause (c) (the
+    /// lock is a leaf held for a handful of instructions).
+    ///
+    /// ⊘ It takes a [`MapPublication`], not a token — so *"defer the unmap"* is a type
+    /// error at the call site rather than a review comment. See the module docs §3.
+    pub fn offer(&self, job: MapPublication) -> Offered {
+        let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let token = job.token();
+        // ⊘ `self.coalesce &&` — w383's negative control. With it off, a repeat offer takes
+        // the ordinary queue path below and `pending` stops being consulted at all (it is
+        // still maintained, so the two modes differ in exactly one branch).
+        if self.coalesce && g.pending.contains(&token) {
+            g.stats.coalesced += 1;
+            return Offered::Coalesced;
+        }
+        if g.order.len() >= self.cap {
+            g.stats.refused += 1;
+            return Offered::Full;
+        }
+        g.pending.insert(token);
+        // ⊘ Indexed BEFORE the push, off the job we still own, so the counter cannot drift from
+        // what was actually enqueued.
+        let k = job.kind() as usize;
+        // ★ Stamped HERE, not by the caller: every path into the queue goes through this
+        // line, so a new call site cannot forget to be timed.
+        let mut job = job;
+        job.offered_at = Some(std::time::Instant::now());
+        g.order.push_back(job);
+        g.stats.queued += 1;
+        if let Some(c) = g.stats.queued_by_kind.get_mut(k) {
+            *c += 1;
+        }
+        g.stats.high_water = g.stats.high_water.max(g.order.len());
+        drop(g);
+        self.wake.notify_one();
+        Offered::Queued
+    }
+
+    /// Take the next token, or `None` if the queue is empty. Non-blocking.
+    ///
+    /// ⊘ The token leaves `pending` **here**, at the take — not after execution. That is
+    /// deliberate and it is the safe direction: a doorbell offered *while* this token is
+    /// executing must queue again, because the guest may have advanced `GP_PUT` after the
+    /// worker read it. Clearing on completion instead would coalesce that doorbell into a
+    /// run that had already looked, and the submission would sit unexecuted until the next
+    /// unrelated doorbell — a **lost wakeup**, which is the classic bug of this shape.
+    pub fn take(&self) -> Option<MapPublication> {
+        let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        // ⊘ The JOB is stored, not rebuilt from its token: rebuilding lost the kind, which
+        // would silently turn every queued invalidate into a doorbell.
+        let job = g.order.pop_front()?;
+        g.pending.remove(&job.token());
+        g.stats.taken += 1;
+        Some(job)
+    }
+
+    /// Block until there is a token or the queue is stopping. `None` ⇒ stop.
+    ///
+    /// ⊘ Called **only** from the worker thread. A vCPU that called this would be waiting
+    /// on something the guest must do, under the VMM's global lock — clause (a)'s guaranteed deadlock —
+    /// which is why the worker is the only thing this crate hands the queue to in a
+    /// blocking role.
+    pub fn take_blocking(&self) -> Option<MapPublication> {
+        let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        loop {
+            if let Some(job) = g.order.pop_front() {
+                // ⊘ Return the STORED job: rebuilding from the token lost the kind, which
+                // would silently execute every queued invalidate as a doorbell.
+                g.pending.remove(&job.token());
+                g.stats.taken += 1;
+                return Some(job);
+            }
+            if g.stopping {
+                return None;
+            }
+            g = self.wake.wait(g).unwrap_or_else(|e| e.into_inner());
+        }
+    }
+
+    /// The worker announces one execution finished. Bumps [`Self::completed`].
+    pub fn note_completed(&self) {
+        let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        g.completed += 1;
+        drop(g);
+        self.wake.notify_all();
+    }
+
+    /// How many executions the worker has finished. Monotonic.
+    #[must_use]
+    pub fn completed(&self) -> u64 {
+        self.inner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .completed
+    }
+
+    /// How many tokens are waiting right now.
+    #[must_use]
+    pub fn depth(&self) -> usize {
+        self.inner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .order
+            .len()
+    }
+
+    /// This queue's numbers.
+    #[must_use]
+    pub fn stats(&self) -> QueueStats {
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).stats
+    }
+
+    /// Tell the worker to finish the queue and exit.
+    pub fn stop(&self) {
+        let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        g.stopping = true;
+        drop(g);
+        self.wake.notify_all();
+    }
+
+    /// One line for a boot log. ⊘ Prints `refused` even when it is 0 — a publication lane
+    /// that never refused and one that was never armed are different facts, and only the
+    /// presence of the line distinguishes them.
+    #[must_use]
+    pub fn census(&self) -> String {
+        let s = self.stats();
+        format!(
+            "PUBQUEUE by_kind[doorbell={} mirror_fill={} invalidate={} gsp_submit={} \
+             rpc_bind={}] coalesce={} queued={} coalesced={} refused={} taken={} completed={} \
+             depth={} high_water={} cap={}{}",
+            s.queued_by_kind[0],
+            s.queued_by_kind[1],
+            s.queued_by_kind[2],
+            s.queued_by_kind[3],
+            s.queued_by_kind[4],
+            self.coalesce,
+            s.queued,
+            s.coalesced,
+            s.refused,
+            s.taken,
+            self.completed(),
+            self.depth(),
+            s.high_water,
+            self.cap,
+            if s.refused > 0 {
+                " ⚠⚠ REFUSED>0 — those doorbells ran INLINE under the VMM's global lock"
+            } else {
+                ""
+            },
+        )
+    }
+}
+
+impl Default for PublicationQueue {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+kayfabe_util::assert_send_sync!(PublicationQueue, MapPublication, Revocation);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    /// ★★★ **THE COALESCE, which is what makes the overflow question dissolve.** Ten
+    /// doorbells on one token occupy one slot, and the queue says `Coalesced` rather than
+    /// pretending it queued them.
+    #[test]
+    fn many_doorbells_on_one_token_occupy_one_slot() {
+        let q = PublicationQueue::new();
+        assert_eq!(q.offer(MapPublication::for_doorbell(7)), Offered::Queued);
+        for _ in 0..9 {
+            assert_eq!(q.offer(MapPublication::for_doorbell(7)), Offered::Coalesced);
+        }
+        assert_eq!(q.depth(), 1);
+        let s = q.stats();
+        assert_eq!((s.queued, s.coalesced, s.refused), (1, 9, 0));
+    }
+
+    /// …and distinct tokens do **not** coalesce, which is the control the test above needs:
+    /// a queue that coalesced everything would pass it and serve one channel.
+    #[test]
+    fn distinct_tokens_each_get_their_own_slot() {
+        let q = PublicationQueue::new();
+        for t in 0..8 {
+            assert_eq!(q.offer(MapPublication::for_doorbell(t)), Offered::Queued);
+        }
+        assert_eq!(q.depth(), 8);
+        assert_eq!(q.stats().high_water, 8);
+    }
+
+    /// ★★ **ORDER ACROSS TOKENS IS FIFO** — the property `publication_off_the_bql.md` §3
+    /// relies on for cross-channel fairness. (Order *within* a token is vacuous: there is
+    /// never more than one entry.)
+    #[test]
+    fn tokens_come_back_in_the_order_they_were_offered() {
+        let q = PublicationQueue::new();
+        for t in [40, 10, 30, 20] {
+            q.offer(MapPublication::for_doorbell(t));
+        }
+        let got: Vec<u64> = std::iter::from_fn(|| q.take()).map(|j| j.token()).collect();
+        assert_eq!(got, vec![40, 10, 30, 20]);
+    }
+
+    /// ★★★★★ **THE LOST-WAKEUP PROPERTY, and it is the one a naive implementation gets
+    /// wrong.** A doorbell that arrives *after* its token was taken must queue again, not
+    /// coalesce into the run that has already read the cursor.
+    #[test]
+    fn a_doorbell_arriving_after_the_take_queues_again() {
+        let q = PublicationQueue::new();
+        q.offer(MapPublication::for_doorbell(5));
+        let job = q.take().expect("one job");
+        assert_eq!(job.token(), 5);
+        // The worker is now "executing" token 5; the guest advances GP_PUT and rings again.
+        assert_eq!(
+            q.offer(MapPublication::for_doorbell(5)),
+            Offered::Queued,
+            "coalescing here would lose the submission until an unrelated doorbell arrived"
+        );
+        assert_eq!(q.depth(), 1);
+    }
+
+    /// ⊘ **The refusal arm, with a known-positive** — a cap of 0 refuses, and the census
+    /// says out loud that those doorbells ran inline. A queue whose refusal path is never
+    /// exercised is a fallback nobody has ever seen work.
+    #[test]
+    fn a_full_queue_refuses_by_name_and_the_census_says_it_ran_inline() {
+        let q = PublicationQueue::with_cap(1);
+        assert_eq!(q.offer(MapPublication::for_doorbell(1)), Offered::Queued);
+        assert_eq!(q.offer(MapPublication::for_doorbell(2)), Offered::Full);
+        assert_eq!(q.stats().refused, 1);
+        assert!(
+            q.census()
+                .contains("ran INLINE under the VMM's global lock"),
+            "{}",
+            q.census()
+        );
+        // …and the control: below the cap, no refusal and no warning.
+        let ok = PublicationQueue::with_cap(4);
+        ok.offer(MapPublication::for_doorbell(1));
+        assert!(!ok.census().contains("REFUSED>0"));
+    }
+
+    /// ★★ **The trap-side call takes no lock any other trap path takes and does no I/O** —
+    /// asserted the only way a unit test can: it completes with no worker running at all,
+    /// so nothing it does can be waiting on one.
+    #[test]
+    fn the_offer_completes_with_no_consumer_in_existence() {
+        let q = PublicationQueue::new();
+        for t in 0..1000 {
+            q.offer(MapPublication::for_doorbell(t));
+        }
+        assert_eq!(q.depth(), 1000);
+        assert_eq!(
+            q.completed(),
+            0,
+            "nothing has executed, and the offer did not wait"
+        );
+    }
+
+    /// The worker end: blocks, wakes on an offer, and exits on `stop` rather than parking
+    /// forever.
+    #[test]
+    fn the_worker_wakes_on_an_offer_and_exits_on_stop() {
+        let q = Arc::new(PublicationQueue::new());
+        let w = {
+            let q = Arc::clone(&q);
+            std::thread::spawn(move || {
+                let mut seen = Vec::new();
+                while let Some(job) = q.take_blocking() {
+                    seen.push(job.token());
+                    q.note_completed();
+                }
+                seen
+            })
+        };
+        for t in 0..16 {
+            q.offer(MapPublication::for_doorbell(t));
+        }
+        // Wait for the worker to drain, then stop it.
+        while q.completed() < 1 {
+            std::thread::yield_now();
+        }
+        q.stop();
+        let seen = w.join().expect("worker joins");
+        assert!(!seen.is_empty(), "the worker must have executed something");
+        assert_eq!(q.depth(), 0, "stop must drain, not abandon");
+    }
+
+    /// ⊘⊘ **THE ASYMMETRY, asserted the only way a runtime test can — by showing the type
+    /// carries no route.** The compile-time half is `tests/ui/defer_a_revocation.rs`; this
+    /// is the census half, and the two are complements (a type guards the boundary, a
+    /// census guards the mint).
+    #[test]
+    fn the_revocation_type_has_no_route_into_the_queue() {
+        let src = include_str!("pubqueue.rs");
+        // Strip the test module, so this file's own prose about the absence does not read
+        // as the presence.
+        let body = src.split("#[cfg(test)]").next().expect("a non-test half");
+        for route in [
+            "impl From<Revocation>",
+            "fn as_map",
+            "impl std::ops::Deref for Revocation",
+            "pub token:",
+        ] {
+            assert!(
+                !body.contains(route),
+                "a uniform escape off the revocation/map split appeared: {route}"
+            );
+        }
+        // …and the queue's own signature still names the map type, so the split is asked
+        // for at the point of use rather than untagged there.
+        assert!(body.contains("pub fn offer(&self, job: MapPublication)"));
+    }
+}
+
+#[cfg(test)]
+mod the_full_lane_must_be_reachable_and_reported {
+    //! ★★★★★ **TESTING THAT THE FALLBACK FIRES** — owner, 2026-09-10: *"and both fallbacks
+    //! must be in a test pls … testing the fallback fire."*
+    //!
+    //! Both dropped-signal fallbacks in the shim key off [`Offered::Full`]:
+    //!
+    //! - a publication job that cannot be queued arms a **full PDB/PTE rescan**;
+    //! - a doorbell that cannot be queued arms a **loop over every emulated channel**.
+    //!
+    //! ⚠ Neither has ever fired on hardware — the census reads zero against `cap=4096` on
+    //! every measured boot. **That is exactly why they need a test.** A fallback that has
+    //! never run is a fallback nobody has ever seen work, and this tree has a standing habit
+    //! of shipping machinery that was built, wired, and never executed. The old code in both
+    //! places did the FORBIDDEN thing on this arm — published on a vCPU, and ran an emulated
+    //! channel inside a doorbell — so "it never fires" was load-bearing for a violation.
+    use super::*;
+
+    /// ⊘ THE PRECONDITION FOR BOTH FALLBACKS. If `Full` were unreachable, both would be dead
+    /// code and the flags they set would never be honoured.
+    #[test]
+    fn a_saturated_lane_actually_answers_full() {
+        let q = PublicationQueue::with_cap(4);
+        // ⊘ Distinct tokens: `for_doorbell` COALESCES on an equal token, so a queue fed one
+        // token repeatedly would answer `Coalesced` forever and never saturate — which is a
+        // real way to write this test and have it prove nothing.
+        for i in 0..4 {
+            assert_eq!(
+                q.offer(MapPublication::for_doorbell(i)),
+                Offered::Queued,
+                "offer {i} must fit: the cap is 4"
+            );
+        }
+        assert_eq!(
+            q.offer(MapPublication::for_doorbell(99)),
+            Offered::Full,
+            "the fifth offer into a cap-4 lane MUST answer Full — this is the arm both \
+             dropped-signal fallbacks hang off, and if it is unreachable they are dead code"
+        );
+    }
+
+    /// ★★★ And the same for the publication lane's own job kinds, since the shim's rescan
+    /// fallback is armed from an `for_invalidate`/`for_rpc_bind` offer, not a doorbell one.
+    #[test]
+    fn the_invalidate_and_rpc_bind_lanes_saturate_too() {
+        for (name, mk) in [
+            (
+                "invalidate",
+                MapPublication::for_invalidate as fn(u64) -> MapPublication,
+            ),
+            (
+                "rpc_bind",
+                MapPublication::for_rpc_bind as fn(u64) -> MapPublication,
+            ),
+        ] {
+            let q = PublicationQueue::uncoalescing();
+            let mut queued = 0usize;
+            let mut full = false;
+            // ⊘ Bounded: a lane that never saturates would otherwise spin here forever, and
+            // "the test hung" is a worse signal than "the test failed".
+            for i in 0..(PublicationQueue::DEFAULT_CAP as u64 + 16) {
+                match q.offer(mk(i)) {
+                    Offered::Queued | Offered::Coalesced => queued += 1,
+                    Offered::Full => {
+                        full = true;
+                        break;
+                    }
+                }
+            }
+            assert!(
+                full,
+                "the {name} lane accepted {queued} offers without ever answering Full — the \
+                 fallback that arms a full rescan can then never run"
+            );
+        }
+    }
+
+    /// ⊘ THE NEGATIVE CONTROL. Without it, a queue hardcoded to answer `Full` would pass both
+    /// tests above while accepting nothing at all.
+    #[test]
+    fn an_unsaturated_lane_never_answers_full() {
+        let q = PublicationQueue::with_cap(4);
+        assert_eq!(q.offer(MapPublication::for_invalidate(1)), Offered::Queued);
+        assert_ne!(
+            q.offer(MapPublication::for_invalidate(2)),
+            Offered::Full,
+            "two offers into a cap-4 lane is not saturation; a lane that cries Full here \
+             would arm a full rescan on every boot and hide its own cost as normal"
+        );
+    }
+}

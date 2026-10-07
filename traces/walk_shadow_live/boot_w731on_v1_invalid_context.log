@@ -1,0 +1,147 @@
+RUN_START 2026-09-15T01:15:31+00:00
+TREE_REV=97947c8441dd522aa5f8c3db147dcded17e0b441
+=== W731 LIVE SHADOW RUN 2026-09-15T01:15:31+00:00 tag=w731 ===
+TREE_REV=97947c8441dd522aa5f8c3db147dcded17e0b441
+== KAYFABE_SHIM_FEATURES=host-isolates cuda-scratchpad
+== qemu src=/workspace/bench/qemu-10.2.4 build=/workspace/bench/qemu-build
+SHIM_RC=0
+W731-CONTENT: walk_shadow_strings=28 cuda_image_symbols=1
+
+############ ARM=off ############
+=== SINGLE-STORE E6 BOOT 2026-09-15T01:25:22+00:00 tag=w731off ===
+KAYFABE_WALK_SHADOW=off KAYFABE_SCRATCHPAD=on KAYFABE_SCRATCHPAD_CUDA=on KAYFABE_SCRATCHPAD_START_MB=4096
+POST_CAPTURE_HOOK=/root/kayfabe/scripts/bench/w392d_mean_hook.sh
+BINARY_REV=97947c8441dd522aa5f8c3db147dcded17e0b441 TREE_REV=97947c8441dd522aa5f8c3db147dcded17e0b441
+E6-CONTENT: walk_shadow_strings=28 cuda_census=2 (either 0 ⇒ an OLDER binary — STOP)
+E6-IMAGE: cuda_image_symbols=1 (0 ⇒ built WITHOUT --features cuda-scratchpad ⇒ the shadow CANNOT run)
+boot_capture rc=5
+--- Q1 THE CLIENT (graded first; everything below is uninterpretable without it) ---
+[client] W392D_GUEST_OUTCOME=(P) ★★★★★ THE FALSIFIER SURVIVES — the SAME client that
+[client] THREADS           8 of 8 verified ✔
+[client] MEAN_FALSIFIER=PASS
+--- ★★★★★ Q2/Q3/Q4/Q5 THE SHADOW CENSUS (a missing line is UNMEASURED, not clean) ---
+E6-SHADOW-LINES=1  (0 ⇒ UNMEASURED)
+WALK-SHADOW ⊘ DISARMED — KAYFABE_WALK_SHADOW=off (the default), so the walk kernel was never run beside the host walk on this boot. This is NOT agreement and it is NOT a clean census; it is the absence of a measurement.
+E6-COMPARED=
+E6-DISAGREEMENTS=
+E6-BY-KIND=by_kind[doorbell=242 mirror_fill=41 invalidate=1132 gsp_submit=526 rpc_bind=333]
+E6-SKIPPED=
+E6-IMAGE-STATS=
+E6-VACUOUS=306
+--- ★ the per-refresh refusals, verbatim, if any fired ---
+--- ★ the isolate's OWN stderr for the shadow verbs ---
+--- Q2b THE CUDA CENSUS: the shadow cannot run without it ---
+E4-CUDA_WALK=OK
+E1-RESERVATION=HELD
+E1-RESERVED_MB=4096
+--- ★ the SAID refusal, if the shadow was armed with no isolate to run in ---
+--- the arena counter the previous session's plan turned on (reported, not depended on) ---
+arena[pages live=2415 peak=2415 allocations=4087 span_pages=990381 store_refused=0 store_migrated=0 store_read_refused=0 store_resets=0 (store numbers at END only)]
+--- Q5 WHAT THE GUEST PAID ---
+TRAPWITNESS off_trap_claims=566 inline_exceptions=0 worst_trap=28260us at=bar0+0x110c00 slow_traps(>1000us)=24 by_decade[1-10ms=23 10-100ms=1 100ms-1s=0 >1s=0] (target: inline_exceptions=0) 
+SLOW-SITES only proves it is under 1ms. 
+PT-SWEEP tasks=0 skipped=0 ran=0 truncated=0 pages=0 reasons={} JOIN-RELEASE revoked=0 released=0 stranded=0 drained=0 joined_ranges=0 remaps_refused=0 remaps_revoked=0 → bound=0 unchanged=0 repointed=0 swept
+HOST_DMESG_XID=1
+--- the guest's OWN first failure (NOT the last line: a re-boot attempt masks it) ---
+[   65.330607] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   73.846494] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   73.862504] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   73.949072] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   73.959478] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   73.959945] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   73.960055] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, N
+[   74.745602] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0x31415903; hObject=0x3141590f; hClass=0x00000070; paramsSize=0x00000018; paramsSta
+=== SINGLE-STORE E6 END 2026-09-15T01:29:10+00:00 tag=w731off ===
+
+############ ARM=on ############
+=== SINGLE-STORE E6 BOOT 2026-09-15T01:29:13+00:00 tag=w731on ===
+KAYFABE_WALK_SHADOW=on KAYFABE_SCRATCHPAD=on KAYFABE_SCRATCHPAD_CUDA=on KAYFABE_SCRATCHPAD_START_MB=4096
+POST_CAPTURE_HOOK=/root/kayfabe/scripts/bench/w392d_mean_hook.sh
+BINARY_REV=97947c8441dd522aa5f8c3db147dcded17e0b441 TREE_REV=97947c8441dd522aa5f8c3db147dcded17e0b441
+E6-CONTENT: walk_shadow_strings=28 cuda_census=2 (either 0 ⇒ an OLDER binary — STOP)
+E6-IMAGE: cuda_image_symbols=1 (0 ⇒ built WITHOUT --features cuda-scratchpad ⇒ the shadow CANNOT run)
+boot_capture rc=5
+--- Q1 THE CLIENT (graded first; everything below is uninterpretable without it) ---
+[client] W392D_GUEST_OUTCOME=(P) ★★★★★ THE FALSIFIER SURVIVES — the SAME client that
+[client] THREADS           8 of 8 verified ✔
+[client] MEAN_FALSIFIER=PASS
+--- ★★★★★ Q2/Q3/Q4/Q5 THE SHADOW CENSUS (a missing line is UNMEASURED, not clean) ---
+E6-SHADOW-LINES=4232  (0 ⇒ UNMEASURED)
+WALK-SHADOW refresh refused: run refused: Other(1464336405)
+WALK-SHADOW compared=0 kernel_unavailable=2115 skipped[isolate_refused=2115] host_runs=0 kernel_runs=0 host_unclassed=0 compared_flags=0xf image[pages_max=34 staged_bytes=166281216 absent_edges=13406 sysmem_edges=0] disagreements=0 by_kind[none] first[] ⇒ ⊘⊘ VACUOUS — the two walkers were never compared on this boot. This is NOT agreement; it is an unarmed or unreachable shadow. ⊘ SCOPE: the kernel walks a RELOCATED COPY holding exactly the pages the host walk visited (the guest's tables sit ~11.8 GiB up and no device buffer can span that), so `missing_in_kernel` is fully live and `extra_in_kernel` is live only WITHIN those pages.
+E6-COMPARED=0
+E6-DISAGREEMENTS=0
+E6-BY-KIND=by_kind[none]
+E6-SKIPPED=skipped[isolate_refused=2115]
+E6-IMAGE-STATS=image[pages_max=34 staged_bytes=166281216 absent_edges=13406 sysmem_edges=0]
+E6-VACUOUS=307
+--- ★ the per-refresh refusals, verbatim, if any fired ---
+kayfabe: WALK-SHADOW refresh refused: run refused: Other(1464336405)
+kayfabe: WALK-SHADOW refresh refused: run refused: Other(1464336405)
+kayfabe: WALK-SHADOW refresh refused: run refused: Other(1464336405)
+kayfabe: WALK-SHADOW refresh refused: run refused: Other(1464336405)
+kayfabe: WALK-SHADOW refresh refused: run refused: Other(1464336405)
+kayfabe: WALK-SHADOW refresh refused: run refused: Other(1464336405)
+--- ★ the isolate's OWN stderr for the shadow verbs ---
+kayfabe-isolate: ⊘ WALK-SHADOW upload refused: cuMemAlloc(gpga) refused: 201 (CUDA_ERROR_INVALID_CONTEXT)
+kayfabe-isolate: ⊘ WALK-SHADOW upload refused: cuMemAlloc(gpga) refused: 201 (CUDA_ERROR_INVALID_CONTEXT)
+kayfabe-isolate: ⊘ WALK-SHADOW upload refused: cuMemAlloc(gpga) refused: 201 (CUDA_ERROR_INVALID_CONTEXT)
+kayfabe-isolate: ⊘ WALK-SHADOW upload refused: cuMemAlloc(gpga) refused: 201 (CUDA_ERROR_INVALID_CONTEXT)
+kayfabe-isolate: ⊘ WALK-SHADOW upload refused: cuMemAlloc(gpga) refused: 201 (CUDA_ERROR_INVALID_CONTEXT)
+kayfabe-isolate: ⊘ WALK-SHADOW upload refused: cuMemAlloc(gpga) refused: 201 (CUDA_ERROR_INVALID_CONTEXT)
+--- Q2b THE CUDA CENSUS: the shadow cannot run without it ---
+E4-CUDA_WALK=OK
+E1-RESERVATION=HELD
+E1-RESERVED_MB=4096
+--- ★ the SAID refusal, if the shadow was armed with no isolate to run in ---
+kayfabe: WALK-SHADOW AT REALIZE: armed. The walk kernel will be run                          ALONGSIDE the host walk at every off-vCPU page-table sweep and the                          two answers compared by kind. ⊘ Nothing is published from it.                          Expiry: deleted when the w
+--- the arena counter the previous session's plan turned on (reported, not depended on) ---
+arena[pages live=2415 peak=2415 allocations=4087 span_pages=990381 store_refused=0 store_migrated=0 store_read_refused=0 store_resets=0 (store numbers at END only)]
+--- Q5 WHAT THE GUEST PAID ---
+TRAPWITNESS off_trap_claims=2668 inline_exceptions=0 worst_trap=41827us at=bar0+0x110c00 slow_traps(>1000us)=29 by_decade[1-10ms=28 10-100ms=1 100ms-1s=0 >1s=0] (target: inline_exceptions=0) 
+SLOW-SITES only proves it is under 1ms. 
+PT-SWEEP tasks=0 skipped=0 ran=0 truncated=0 pages=0 reasons={} JOIN-RELEASE revoked=0 released=0 stranded=0 drained=0 joined_ranges=0 remaps_refused=0 remaps_revoked=0 → bound=0 unchanged=0 repointed=0 swept
+HOST_DMESG_XID=1
+--- the guest's OWN first failure (NOT the last line: a re-boot attempt masks it) ---
+[   73.756280] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   81.641316] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   81.641692] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   81.711854] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   81.721403] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   81.721730] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   81.721777] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, N
+[   82.428869] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0x31415903; hObject=0x3141590f; hClass=0x00000070; paramsSize=0x00000018; paramsSta
+=== SINGLE-STORE E6 END 2026-09-15T01:33:35+00:00 tag=w731on ===
+
+=== W731 SUMMARY ===
+-- arm=off
+E6-CONTENT: walk_shadow_strings=28 cuda_census=2 (either 0 ⇒ an OLDER binary — STOP)
+E6-IMAGE: cuda_image_symbols=1 (0 ⇒ built WITHOUT --features cuda-scratchpad ⇒ the shadow CANNOT run)
+[client] W392D_GUEST_OUTCOME=(P) ★★★★★ THE FALSIFIER SURVIVES — the SAME client that
+[client] THREADS           8 of 8 verified ✔
+[client] MEAN_FALSIFIER=PASS
+E6-SHADOW-LINES=1  (0 ⇒ UNMEASURED)
+E6-COMPARED=
+E6-DISAGREEMENTS=
+E6-BY-KIND=by_kind[doorbell=242 mirror_fill=41 invalidate=1132 gsp_submit=526 rpc_bind=333]
+E6-SKIPPED=
+E6-IMAGE-STATS=
+E6-VACUOUS=306
+HOST_DMESG_XID=1
+-- arm=on
+E6-CONTENT: walk_shadow_strings=28 cuda_census=2 (either 0 ⇒ an OLDER binary — STOP)
+E6-IMAGE: cuda_image_symbols=1 (0 ⇒ built WITHOUT --features cuda-scratchpad ⇒ the shadow CANNOT run)
+[client] W392D_GUEST_OUTCOME=(P) ★★★★★ THE FALSIFIER SURVIVES — the SAME client that
+[client] THREADS           8 of 8 verified ✔
+[client] MEAN_FALSIFIER=PASS
+E6-SHADOW-LINES=4232  (0 ⇒ UNMEASURED)
+E6-COMPARED=0
+E6-DISAGREEMENTS=0
+E6-BY-KIND=by_kind[none]
+E6-SKIPPED=skipped[isolate_refused=2115]
+E6-IMAGE-STATS=image[pages_max=34 staged_bytes=166281216 absent_edges=13406 sysmem_edges=0]
+E6-VACUOUS=307
+HOST_DMESG_XID=1
+=== W731 END 2026-09-15T01:33:35+00:00 ===
+RUN_EXIT=0
+RUN_DONE 2026-09-15T01:33:35+00:00

@@ -1,0 +1,3 @@
+error: XDG_RUNTIME_DIR is invalid or not set in the environment.
+XCB failed to connect to the X server due to error:1.
+ERROR at ./vulkaninfo/./vulkaninfo.h:737: AppCreateXcbSurface failed to establish connection

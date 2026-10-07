@@ -1,0 +1,3 @@
+build_fast_guest: /dev/nbd0p1 never appeared after 5s; trying the whole-device arm
+mount: /tmp/tmp.Q46xeCHqpV/mnt: wrong fs type, bad option, bad superblock on /dev/nbd0, missing codepage or helper program, or other error.
+build_fast_guest: cannot mount the guest root (no nbd0p1, and nbd0 is not a filesystem either — is /workspace/bench/guest.qcow2 a partitioned image?)

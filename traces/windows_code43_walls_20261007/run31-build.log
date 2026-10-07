@@ -1,0 +1,3 @@
+== kf3 build: QEMU 10.2.4 rev c15c2628
+== archive 2026-10-07 14:51:53.676231056 +0200 (cargo succeeded: current for this revision by cargo's fingerprints)
+KF3_BUILT /var/lib/kf-windows-20261005/kf3-bins/c15c2628/qemu-system-x86_64 rev=c15c2628 mtime=2026-10-07 14:51:58.578219896 +0200 (shared build dir /var/lib/kf-windows-20261005/qemu-build-kf3)

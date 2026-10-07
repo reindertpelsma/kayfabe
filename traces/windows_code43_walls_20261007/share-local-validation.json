@@ -1,0 +1,16 @@
+{
+  "revision": "c30ee9106f7c434abcd359080f4fbfeb39b8f141",
+  "kf_rm_passed": 611,
+  "kf_rm_failed": 0,
+  "test_binaries": 51,
+  "clippy": {
+    "packages": [
+      "kf-rm",
+      "kf-qemu"
+    ],
+    "existing": 207,
+    "new": 0
+  },
+  "fmt": "pass",
+  "claims_new": 0
+}

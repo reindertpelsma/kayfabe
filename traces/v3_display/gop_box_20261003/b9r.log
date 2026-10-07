@@ -1,0 +1,11 @@
+DISPLAY_LANE_START tag=b9r rev=8c86c94a 2026-10-03T16:58:05+00:00
+[boot_capture:b9r] BINARY kf3-bin-rev:8c86c94a  (/workspace/bench/kf3-bins/8c86c94a/qemu-system-x86_64)  ⇒ every claim from this boot cites THIS revision
+[boot_capture:b9r] host dmesg watermark: 767 lines
+[boot_capture:b9r] booting (extra args: -vga none -vnc 127.0.0.1:0)
+== kf3 binary: /workspace/bench/kf3-bins/8c86c94a/qemu-system-x86_64 (rev 8c86c94a)  device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,gop=on,rombar=0
+== firmware: OVMF /usr/share/OVMF/OVMF_CODE_4M.fd (vars copy /workspace/bench/run_b9r_ovmf_vars.fd)
+[boot_capture:b9r] QEMU exited early — tail of its own report:
+2026-10-03T16:58:08.725063Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,gop=on,rombar=0: kf3: gop=on refused: rombar=0 asks for no ROM BAR (drop the property, or set gop=off; docs/design/V3_DISPLAY.md §4.11.12)
+[boot_capture:b9r] ★ FAILED (boot): QEMU pid 109146 is gone before ssh came up
+DISPLAY_HOST_XID= 
+DISPLAY_LANE_EXIT rc=2 2026-10-03T16:58:14+00:00

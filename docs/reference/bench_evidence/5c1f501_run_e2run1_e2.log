@@ -1,0 +1,33 @@
+[e2:e2run1] revision under test: UNKNOWN
+[e2:e2run1] archive in the binary: kayfabe-rev:5c1f501d003d121034154731bd6c9ed692565894 
+[e2:e2run1] building the guest poke tool
+[e2:e2run1] poke tool: /workspace/bench/e2_doorbell_poke: ELF 64-bit LSB executable, x86-64, version 1 (GNU/Linux), statically linked, BuildID[sha1]=2f01fa6a45fb11c371d9f3da20db949eedba2f61, for GNU/Linux 3.2.0, not stripped
+[e2:e2run1] booting (boot_capture drives the driver load and the device open)
+[boot_capture:e2run1] booting (extra args: none)
+[boot_capture:e2run1] guest is up after 29s
+[boot_capture:e2run1] module unloaded and ring buffer cleared; loading cold
+[boot_capture:e2run1] opening the device (this is what runs RmInitAdapter)
+[boot_capture:e2run1] captured 25 dmesg lines, 22 NVRM, 3 adapter → /workspace/bench/run_e2run1_dmesg.log
+[boot_capture:e2run1] --- the verdict lines ---
+[   25.036452] NVRM: RmInitNvDevice: *** Cannot load state into the device
+[   25.036455] NVRM: RmInitAdapter: RmInitNvDevice failed, bailing out of RmInitAdapter
+[   25.860869] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0xffff:1249)
+[boot_capture:e2run1] running POST_CAPTURE_HOOK: scripts/bench/e2_doorbell_witness.sh
+[boot_capture:e2run1] hook finished: rc=0
+[boot_capture:e2run1] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:e2run1] done. serial=/workspace/bench/run_e2run1_serial.log qemu=/workspace/bench/run_e2run1_qemu.log dmesg=/workspace/bench/run_e2run1_dmesg.log probe=/workspace/bench/run_e2run1_probe.log
+[e2:e2run1] boot_capture rc=0
+[e2:e2run1] --- the device's doorbell report ---
+2026-08-01T22:28:33.011648Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00070005 at +0xbb0090 REFUSED [FwdFault::UnknownVchid]
+2026-08-01T22:28:42.714021Z qemu-system-x86_64: info: nvkvm: doorbells: 1 arrived, 0 served, 1 REFUSED by name; last token 0x00070005 (1 logged)
+2026-08-01T22:28:42.714058Z qemu-system-x86_64: info: nvkvm:   first doorbell refusal [FwdFault::UnknownVchid] UnknownVchid { gpu: GpuId(0), vchid: VChid(5) }
+[e2:e2run1] counters: arrived=1 served=0 refused=1
+[e2:e2run1] ★ the ring was REFUSED by name: [FwdFault::UnknownVchid]
+[e2:e2run1] ★ CONTROL HOLDS: 2 guest MMIO writes issued (offsets +0xbb0094 and +0xbb0090), 1 arrival counted
+[e2:e2run1] attribution: control window opened 2026-08-01T22:28:28.890223Z
+[e2:e2run1]              doorbell window 2026-08-01T22:28:32.457621Z .. 2026-08-01T22:28:33.023650Z
+[e2:e2run1]              device stamped  2026-08-01T22:28:33.011648Z
+[e2:e2run1] ★★★ E2 ACCEPTANCE HOLDS at : one guest
+[e2:e2run1]     MMIO write to +0xbb0090 reached kayfabe_rt::SharedDevice::doorbell, was
+[e2:e2run1]     answered [FwdFault::UnknownVchid], and was COUNTED — arrival stamped inside the guest's own window.
+[e2:e2run1]     The control write at +0xbb0094, same mapping, produced neither.

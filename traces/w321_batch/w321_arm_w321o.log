@@ -1,0 +1,21 @@
+=== W321 ARM START tree=/workspace/kayfabe_w321 prefix=w321o n=1 2026-08-14T19:00:53+00:00
+=== HEAD=e8ed422c8ab8acb569787dd24cbdaba58fa56bba
+=== DIRT=[]
+=== ARM ENV (intent — the boot's own KNOB lines are the record of EXECUTION):
+===   KAYFABE_VAS_DRAIN_BUDGET_MS=[⊘unset ⇒ 3000 default]
+===   KAYFABE_VAS_DRAIN_ROW_LIMIT=[⊘unset ⇒ 65536 default]
+===   KAYFABE_DRAIN_BATCH=[⊘unset ⇒ off ⇒ master behaviour]
+--- boot 1/1 tag=w321o1 2026-08-14T19:00:57+00:00
+    BOOT 1: [CUP3_VAL=NO_KERNEL_LINE] [CUP3_RC=1] [⊘no-cup8] [⊘no-r33]
+            r33_arm1=[⊘ NO arm-1 LINE — the measurement did not happen, ⊘ NOT a fail]
+            ★ KNOB=[W319KNOB[budget_ms=3000 row_limit=65536]]
+            ★★★ DRAIN=[DRAIN[visited=true asked=13313 pinned=11668 refused=0 DRAIN_MS=3000 W319KNOB[budget_ms=3000 row_limit=65536] complete=false ⚠⚠ WALL BUDGET HIT ]
+            last_pinned_va=0x203193000  budget_hit_lines=[1] row_cap_hit_lines=[0]
+            ★★★★★ W321IPC[ipc_calls=35004 (3 /chain) ipc_us=2910652 (249 us/chain, 249 us/row) drain_us=3000000 ours_us=89348 ipc_share=97%]
+            ★★★★★ W321BATCH[arm=off chunks=13313 chains=11668 rows_pinned=11668 rows_refused=0 fallback_chunks=0 fallback_chains=0 rows_per_chain=1.00]
+            ★★★★★ W321CENSUS[rows=13313 bytes=0x3410000 len_4k=13312 len_lt64k=0 len_lt2m=1 len_ge2m=0 va_runs=3 pair_runs=1281 coalesce_ceiling=10.39x break_va_only=0 break_gpa_only=1278 break_both=2 runsz_4k=877 runsz_lt64k=282 runsz_lt2m=121 runsz_ge2m=1 max_run=0xca6000 ⇒ a coalescing fix can reduce 13313 host chains to 1281; a BATCHED-TRANSPORT fix is bounded by neither of these numbers]
+            ★★★★★ child_lines=[80] LAST=[W321CHILD worker=0 served=80000 — CHILD-SIDE SERVICE TIME (`serve_one` only; the frame read/write and the socket are OUTSIDE it, so parent_ipc_us MINUS these is the transport): map_guest_ram[n=13329 tot=178139us mean=13us] describe_guest_ram[n=13329 tot=567225us mean=42us] map_gpu_va[n=13313 tot=1065243us mean=80us] other[n=40029 tot=1615155us mean=40us]]
+            hostdmesg_bytes=[228] Xid_lines=[1] Xid (PCI:0000:00:07): 31 ENGINE CE3 HUBCLIENT_CE1 faulted @ 0x2_0440f000 FAULT_PDE ACCESS_TYPE_VIRT_WRITE 
+            guest NVRM_lines=[31] stall_lines=[0]
+=== W321 ARM EXIT status=0 2026-08-14T19:02:52+00:00
+=== W321 ARM TERMINATOR w321o rc=0 2026-08-14T19:02:52+00:00

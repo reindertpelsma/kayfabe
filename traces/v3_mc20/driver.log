@@ -1,0 +1,42 @@
+DRIVER_SWAP_START 2026-09-27T17:58:04+00:00
+before: NVRM version: NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 14:22:51 UTC 2025
+downloading NVIDIA-Linux-x86_64-580.159.04.run
+-rw------- 1 root root 397162548 Sep 27 17:58 /root/NVIDIA-Linux-x86_64-580.159.04.run
+dpkg lock free after 0s
+held packages: libnvidia-cfg1-575 libnvidia-common-575 libnvidia-compute-575 libnvidia-decode-575 libnvidia-encode-575 libnvidia-extra-575 libnvidia-fbc1-575 libnvidia-gl-575 nvidia-driver-575 
+Canceled hold on libnvidia-cfg1-575.
+Canceled hold on libnvidia-common-575.
+Canceled hold on libnvidia-compute-575.
+Canceled hold on libnvidia-decode-575.
+Canceled hold on libnvidia-encode-575.
+Canceled hold on libnvidia-extra-575.
+Canceled hold on libnvidia-fbc1-575.
+Canceled hold on libnvidia-gl-575.
+Canceled hold on nvidia-driver-575.
+unhold_rc=0
+holds remaining after unhold: 0  ⇒ MUST be 0
+modules still loaded: 0
+dpkg: warning: while removing nvidia-kernel-common-575, directory '/usr/lib/systemd/system' not empty so not removed
+dpkg: warning: while removing nvidia-kernel-common-575, directory '/usr/lib/modprobe.d' not empty so not removed
+Purging configuration files for nvidia-settings (575.51.03-0ubuntu1) ...
+Processing triggers for initramfs-tools (0.140ubuntu13.4) ...
+update-initramfs: Generating /boot/initrd.img-6.8.0-59-generic
+purge_rc=0  nvidia packages remaining: 6
+Verifying archive integrity... OK
+Uncompressing NVIDIA Accelerated Graphics Driver for Linux-x86_64 580.159.04......................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+
+WARNING: This NVIDIA driver package includes Vulkan components, but no Vulkan ICD loader was detected on this system. The NVIDIA Vulkan ICD will not function without the loader. Most distributions package the Vulkan loader; try installing the "vulkan-loader", "vulkan-icd-loader", or "libvulkan1" package.
+
+
+WARNING: Unable to determine the path to install the libglvnd EGL vendor library config files. Check that you have pkg-config and the libglvnd development libraries installed, or specify a path with --glvnd-egl-config-path.
+
+installer_rc_IGNORED_ON_PURPOSE=0
+after: NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+modinfo: version:        580.159.04 license:        Dual MIT/GPL 
+OPEN_MODULE=yes
+VERSION_MATCH=yes (580.159.04)
+open /dev/nvidiactl: OK
+open /dev/nvidia0: OK
+open /dev/nvidia-uvm: OK
+NVIDIA GeForce RTX 3060, 580.159.04
+DRIVER_SWAP_DONE rc=0 2026-09-27T18:02:11+00:00

@@ -1,0 +1,37 @@
+--- uvm_channel.c.nvkvmbak	2026-06-03 23:51:02.597513755 +0000
++++ uvm_channel.c	2026-06-03 23:51:02.630512804 +0000
+@@ -1511,6 +1511,34 @@
+ 
+     semaphore_va = uvm_channel_tracking_semaphore_get_gpu_va(channel);
+     uvm_channel_tracking_semaphore_release(push, semaphore_va, new_payload);
++    if (uvm_channel_is_ce(channel)) {
++        /* NVKVM Mode-2 DEBUG: report the tracking-semaphore GPA + payload to the
++         * emulated GPU via a BAR0 backdoor so QEMU can forge the CE SEM_RELEASE
++         * (the UVM channel sysmem mappings are GSP-internal, absent from RPCs). */
++        static int nvkvm_dbgn;
++        static void __iomem *nvkvm_bd;
++        void *cva = uvm_gpu_semaphore_get_cpu_va(&channel->tracking_sem.semaphore);
++        unsigned long long gpa = 0;
++        if (cva) {
++            if (is_vmalloc_addr(cva))
++                gpa = ((unsigned long long)vmalloc_to_pfn(cva) << PAGE_SHIFT) | ((unsigned long)cva & ~PAGE_MASK);
++            else
++                gpa = (unsigned long long)virt_to_phys(cva);
++        }
++        if (!nvkvm_bd) {
++            struct pci_dev *pdev = uvm_channel_get_gpu(channel)->parent->pci_dev;
++            if (pdev)
++                nvkvm_bd = ioremap(pci_resource_start(pdev, 0) + 0xFFF500UL, 16);
++        }
++        if (nvkvm_bd && gpa) {
++            writel((u32)gpa, nvkvm_bd);
++            writel((u32)(gpa >> 32), nvkvm_bd + 4);
++            writel(new_payload, nvkvm_bd + 8);   /* commit -> QEMU forges */
++        }
++        if (nvkvm_dbgn++ < 16)
++            printk(KERN_ERR "NVKVM-DIAG ce-push sema_gpuva=0x%llx payload=%u gpa=0x%llx bd=%px\n",
++                   (unsigned long long)semaphore_va, new_payload, gpa, nvkvm_bd);
++    }
+ 
+     if (uvm_channel_is_wlc(channel) && uvm_channel_manager_is_wlc_ready(channel_manager)) {
+         uvm_gpu_t *gpu = uvm_channel_get_gpu(channel);

@@ -1,0 +1,24 @@
+BASECMP_START 2026-09-26T22:51:03+00:00
+== 59cc98a9
+  [-p kayfabe-abi --test truncated_row_reads] test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filt
+  [-p kayfabe-isolate-host --test executor_vas_census] test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filt
+  [-p kayfabe-isolate-host --test guest_ring_census] test result: FAILED. 13 passed; 1 failed; 0 ignored; 0 measured; 0 fil
+  [-p kayfabe-isolate-host --test sysmem_notifier_node] test result: FAILED. 6 passed; 1 failed; 0 ignored; 0 measured; 0 filt
+  [-p kayfabe-isolate-host --lib rm::tests::no_collision_across_the_workspace] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtere
+  [spawn_unsafe run 1] test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured;
+  [spawn_unsafe run 2] test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured;
+  [spawn_unsafe run 3] test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured;
+  [spawn_unsafe run 4] test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured;
+  [spawn_unsafe run 5] test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured;
+== 2f71f662
+  [-p kayfabe-abi --test truncated_row_reads] test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filt
+  [-p kayfabe-isolate-host --test executor_vas_census] test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filt
+  [-p kayfabe-isolate-host --test guest_ring_census] test result: FAILED. 13 passed; 1 failed; 0 ignored; 0 measured; 0 fil
+  [-p kayfabe-isolate-host --test sysmem_notifier_node] test result: FAILED. 6 passed; 1 failed; 0 ignored; 0 measured; 0 filt
+  [-p kayfabe-isolate-host --lib rm::tests::no_collision_across_the_workspace] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtere
+  [spawn_unsafe run 1] test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured;
+  [spawn_unsafe run 2] test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured;
+  [spawn_unsafe run 3] test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured;
+  [spawn_unsafe run 4] test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured;
+  [spawn_unsafe run 5] test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured;
+BASECMP_EXIT 2026-09-26T22:51:26+00:00

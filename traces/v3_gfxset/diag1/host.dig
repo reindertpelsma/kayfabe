@@ -1,0 +1,13 @@
+GSET_DIG side=host item=ff_vulkan_init key=frame val=d8ce3bcaa6922462
+GSET_DIG side=host item=vk_ofa key=flow_field val=bbc6496d716475f3
+GSET_DIG side=host item=vk_ofa key=median val=-5.062,-3.031,
+GSET_VAL side=host item=vk_ofa key=good_frac val=0.9859
+GSET_DIG side=host item=pv_vk_rt_ext key=result val=RESULT:_0_VK_SUCCESS
+GSET_DIG side=host item=vk_info key=device val=NVIDIA_GeForce_RTX_3070
+GSET_DIG side=host item=vk_info key=vk_extensions val=6dd993f09dd30d7d
+GSET_DIG side=host item=vk_info key=vk_features val=d4127c69ea095f4a
+GSET_DIG side=host item=vk_info key=vk_properties val=3dad137d1dbce753
+GSET_DIG side=host item=vk_info key=vk_formats val=979a41104bb1f1d0
+GSET_DIG side=host item=vk_info key=vk_queueFamiliesProperties val=8374e587e4b5cb45
+GSET_VAL side=host item=vk_info key=vk_ext_count val=251
+GSET_VAL side=host item=vk_info key=vk_heaps val=-

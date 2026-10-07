@@ -1,0 +1,8 @@
+FAST_SUITE_STARTED=2026-09-26T23:24:33+00:00 arms=1 budget=180s
+rev=1f3e4fc4
+ARM                          VERDICT   secs  why
+--timer                      PASS      17s   17s
+FAST_CELL_ARM arm=timer verdict=PASS secs=17 client_ms=2250
+
+FAST_SUITE_PASS=1 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=1
+FAST_SUITE_RC=0

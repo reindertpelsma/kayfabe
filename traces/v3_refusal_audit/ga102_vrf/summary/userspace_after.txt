@@ -1,0 +1,64 @@
+== per workload
+  asyncAPI               host 437 rec, guest 437 rec, 2 divergent
+  blocksync              host 415 rec, guest 415 rec, 2 divergent
+  clpeak                 host 639 rec, guest 638 rec, 2 divergent
+  cup2                   host 403 rec, guest 403 rec, 2 divergent
+  cup3                   host 402 rec, guest 402 rec, 2 divergent
+  cup8                   host 408 rec, guest 408 rec, 2 divergent
+  deviceQuery            host 422 rec, guest 422 rec, 2 divergent
+  egl_offscreen          host 672 rec, guest 564 rec, 4 divergent
+  gpu_burn               host 624 rec, guest 617 rec, 7 divergent
+  graphMemoryNodes       host 467 rec, guest 467 rec, 2 divergent
+  llama_gen              host 748 rec, guest 748 rec, 2 divergent
+  nvdec_h264             host 1284 rec, guest 1109 rec, 3 divergent
+  nvenc_h264             host 1671 rec, guest 1675 rec, 3 divergent
+  nvenc_hevc             host 1546 rec, guest 1557 rec, 3 divergent
+  nvidia_smi             host 501 rec, guest 449 rec, 32 divergent
+  simpleCallback         host 458 rec, guest 468 rec, 2 divergent
+  simpleCudaGraphs       host 464 rec, guest 464 rec, 2 divergent
+  simpleIPC              host 863 rec, guest 863 rec, 2 divergent
+  simpleStreams          host 450 rec, guest 450 rec, 2 divergent
+  torch_correct          host 839 rec, guest 839 rec, 2 divergent
+  torch_train            host 798 rec, guest 798 rec, 2 divergent
+  vkpeak                 host 10778 rec, guest 10916 rec, 6 divergent
+  vulkaninfo             host 1428 rec, guest 1464 rec, 6 divergent
+== divergent (op, status), by number of workloads then calls
+  ctl:RM_CONTROL:0x2080200a NV2080_CTRL_CMD_PERF_BOOST                   st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=58/58  in: asyncAPI:1 blocksync:1 clpeak:1 cup2:1 cup3:1 cup8:1 deviceQuery:1 egl_offscreen:1 gpu_burn:1 graphMemoryNodes:1 llama_gen:1 nvdec_h264:1 nvenc_h264:1 nvenc_hevc:1 simpleCallback:1 simpleCudaGraphs:1 simpleIPC:2 simpleStreams:1 torch_correct:1 torch_train:1 vkpeak:32 vulkaninfo:5
+  ctl:RM_CONTROL:0x20810108 ?                                            st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=25/25  in: asyncAPI:1 blocksync:1 clpeak:1 cup2:1 cup3:1 cup8:1 deviceQuery:1 gpu_burn:2 graphMemoryNodes:1 llama_gen:1 nvdec_h264:1 nvenc_h264:1 nvenc_hevc:1 nvidia_smi:4 simpleCallback:1 simpleCudaGraphs:1 simpleIPC:2 simpleStreams:1 torch_correct:1 torch_train:1
+  ctl:RM_ALLOC:cls=0x9072                                                st=0x1f(NV_ERR_INVALID_ARGUMENT) host_ok=12/12  in: egl_offscreen:4 vkpeak:4 vulkaninfo:4
+  modeset:nr0x00                                                         rc=-1/errno=1      host_ok=18/18  in: egl_offscreen:2 vkpeak:2 vulkaninfo:2
+  ctl:RM_CONTROL:0x20808165 ?                                            st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=6/10  in: nvdec_h264:2 nvenc_h264:2 nvenc_hevc:2
+  ctl:RM_CONTROL:0x20810107 ?                                            st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=3/3  in: egl_offscreen:1 vkpeak:1 vulkaninfo:1
+  ctl:RM_CONTROL:0x2080a0d1 ?                                            st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=323/323  in: vkpeak:326 vulkaninfo:1
+  ctl:RM_CONTROL:0x00de0001 NV00DE_CTRL_CMD_REQUEST_DATA_POLL            st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=13/13  in: gpu_burn:1 nvidia_smi:10
+  ctl:RM_CONTROL:0x00800294 NV0080_CTRL_CMD_GPU_GET_BRAND_CAPS           st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=4/4  in: gpu_burn:1 nvidia_smi:3
+  ctl:RM_CONTROL:0x20800513 NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2    st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=0/0  in: gpu_burn:1 nvidia_smi:3
+  ctl:RM_CONTROL:0x20801210 NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=33/33  in: vkpeak:3 vulkaninfo:1
+  ctl:RM_CONTROL:0x2080852a ?                                            st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=2/2  in: gpu_burn:1 nvidia_smi:1
+  ctl:RM_CONTROL:0x20808536 ?                                            st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=2/2  in: gpu_burn:1 nvidia_smi:1
+  ctl:RM_CONTROL:0x2080014b NV2080_CTRL_CMD_GPU_GET_INFOROM_OBJECT_VERSI st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=3/15  in: nvidia_smi:15
+  ctl:RM_CONTROL:0x20810110 ?                                            st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=0/0  in: nvidia_smi:13
+  ctl:RM_CONTROL:0x20802068 NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE      st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=0/0  in: nvidia_smi:7
+  ctl:RM_CONTROL:0x2080a097 ?                                            st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=0/0  in: nvidia_smi:7
+  ctl:RM_CONTROL:0x20802087 NV2080_CTRL_CMD_PERF_GET_VID_ENG_PERFMON_SAM st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=0/0  in: nvidia_smi:4
+  ctl:RM_CONTROL:0x20809004 ?                                            st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=0/0  in: nvidia_smi:4
+  ctl:RM_ALLOC:cls=0x0073                                                st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=3/3  in: nvidia_smi:3
+  ctl:RM_ALLOC:cls=0x208f                                                st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=2/2  in: nvidia_smi:3
+  ctl:RM_CONTROL:0x2080013f NV2080_CTRL_CMD_GPU_GET_OEM_BOARD_INFO       st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=3/3  in: nvidia_smi:3
+  ctl:RM_CONTROL:0x2080852e ?                                            st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=3/3  in: nvidia_smi:3
+  ctl:RM_CONTROL:0x2080a612 ?                                            st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=3/3  in: nvidia_smi:3
+  ctl:RM_CONTROL:0x2080a618 ?                                            st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=3/3  in: nvidia_smi:3
+  ctl:RM_CONTROL:0x20801813 NV2080_CTRL_CMD_BUS_GET_PEX_COUNTERS         st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=2/2  in: nvidia_smi:2
+  ctl:RM_CONTROL:0x20801819 NV2080_CTRL_CMD_BUS_GET_PEX_UTIL_COUNTERS    st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=4/4  in: nvidia_smi:2
+  ctl:RM_ALLOC:cls=0x90e7                                                st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=1/1  in: nvidia_smi:1
+  ctl:RM_CONTROL:0x20800102 NV2080_CTRL_CMD_GPU_GET_INFO_V2              st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=35/35  in: nvidia_smi:1
+  ctl:RM_CONTROL:0x20800156 NV2080_CTRL_CMD_GPU_GET_INFOROM_IMAGE_VERSIO st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=1/1  in: nvidia_smi:1
+  ctl:RM_CONTROL:0x208001a4 NV2080_CTRL_CMD_GPU_GET_CHIP_DETAILS         st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=1/1  in: nvidia_smi:1
+  ctl:RM_CONTROL:0x20801829 NV2080_CTRL_CMD_BUS_GET_PCIE_REQ_ATOMICS_CAP st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=1/1  in: nvidia_smi:1
+  ctl:RM_CONTROL:0x20801830 NV2080_CTRL_CMD_BUS_GET_PCIE_CPL_ATOMICS_CAP st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=1/1  in: nvidia_smi:1
+  ctl:RM_CONTROL:0x20803083 NV2080_CTRL_CMD_NVLINK_GET_PLATFORM_INFO     st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=1/1  in: nvidia_smi:1
+  ctl:RM_CONTROL:0x20803401 NV2080_CTRL_CMD_ECC_GET_VOLATILE_COUNTS      st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=1/1  in: nvidia_smi:1
+  ctl:RM_CONTROL:0x20803404 NV2080_CTRL_CMD_ECC_GET_REPAIR_STATUS        st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=1/1  in: nvidia_smi:1
+  ctl:RM_CONTROL:0x2080a080 ?                                            st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=2/2  in: nvidia_smi:1
+  ctl:RM_CONTROL:0x2080a0a7 ?                                            st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=1/1  in: nvidia_smi:1
+  ctl:RM_CONTROL:0x20810111 ?                                            st=0x56(NV_ERR_NOT_SUPPORTED) host_ok=0/0  in: nvidia_smi:1

@@ -1,0 +1,20 @@
+=== W314 REPEAT START tree=/workspace/kayfabe_w314bt prefix=w314bt n=4 2026-08-14T15:37:31+00:00
+=== HEAD=dd696ae6df5e265fdfc732f275db71241a6974c6
+--- boot 1/4 tag=w314bt1 2026-08-14T15:37:35+00:00
+    BOOT 1: [CUP3_VAL=43] [CUP3_RC=0] Xid=[0] 
+            [⊘ NO PIN-RELEASE LINE — UNMEASURED, ⊘ not released=0] REAP_lines=[2]
+            max_reap_us=[2648366]  guest_stall_lines=[0]
+--- boot 2/4 tag=w314bt2 2026-08-14T15:40:14+00:00
+    BOOT 2: [CUP3_VAL=43] [CUP3_RC=0] Xid=[0] 
+            [⊘ NO PIN-RELEASE LINE — UNMEASURED, ⊘ not released=0] REAP_lines=[2]
+            max_reap_us=[2918210]  guest_stall_lines=[0]
+--- boot 3/4 tag=w314bt3 2026-08-14T15:42:32+00:00
+    BOOT 3: [CUP3_VAL=43] [CUP3_RC=0] Xid=[0] 
+            [⊘ NO PIN-RELEASE LINE — UNMEASURED, ⊘ not released=0] REAP_lines=[2]
+            max_reap_us=[2666893]  guest_stall_lines=[0]
+--- boot 4/4 tag=w314bt4 2026-08-14T15:44:51+00:00
+    BOOT 4: [CUP3_VAL=43] [CUP3_RC=0] Xid=[0] 
+            [⊘ NO PIN-RELEASE LINE — UNMEASURED, ⊘ not released=0] REAP_lines=[2]
+            max_reap_us=[2772771]  guest_stall_lines=[0]
+=== W314 REPEAT EXIT status=0 2026-08-14T15:47:05+00:00
+=== W314 REPEAT TERMINATOR w314bt rc=0 2026-08-14T15:47:05+00:00

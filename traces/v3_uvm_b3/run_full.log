@@ -1,0 +1,431 @@
+RUN_START 2026-09-30T10:31:38+00:00 ko_dir=/root/efs/patched
+=== build tests ===
+CUBIN_RC=0 7016
+FAULT_RC=0
+AUTH_RC=0
+COEXIST_RC=0
+=== A. stock module: EFS absent, unmapped access must fail (baseline) ===
+stock_modprobe_rc=0 efs_present=/sys/module/nvidia_uvm/parameters/uvm_ats_mode:0
+/sys/module/nvidia_uvm/parameters/uvm_block_cpu_to_cpu_copy_with_ce:0
+/sys/module/nvidia_uvm/parameters/uvm_channel_gpfifo_loc:0
+/sys/module/nvidia_uvm/parameters/uvm_channel_gpput_loc:0
+/sys/module/nvidia_uvm/parameters/uvm_channel_num_gpfifo_entries:0
+/sys/module/nvidia_uvm/parameters/uvm_channel_pushbuffer_loc:0
+/sys/module/nvidia_uvm/parameters/uvm_conf_computing_channel_iv_rotation_limit:0
+/sys/module/nvidia_uvm/parameters/uvm_cpu_chunk_allocation_sizes:0
+/sys/module/nvidia_uvm/parameters/uvm_debug_enable_push_acquire_info:0
+/sys/module/nvidia_uvm/parameters/uvm_debug_enable_push_desc:0
+/sys/module/nvidia_uvm/parameters/uvm_debug_prints:0
+/sys/module/nvidia_uvm/parameters/uvm_disable_hmm:0
+/sys/module/nvidia_uvm/parameters/uvm_downgrade_force_membar_sys:0
+/sys/module/nvidia_uvm/parameters/uvm_enable_builtin_tests:0
+/sys/module/nvidia_uvm/parameters/uvm_enable_debug_procfs:0
+/sys/module/nvidia_uvm/parameters/uvm_enable_va_space_mm:0
+/sys/module/nvidia_uvm/parameters/uvm_exp_gpu_cache_peermem:0
+/sys/module/nvidia_uvm/parameters/uvm_exp_gpu_cache_sysmem:0
+/sys/module/nvidia_uvm/parameters/uvm_fault_force_sysmem:0
+/sys/module/nvidia_uvm/parameters/uvm_force_prefetch_fault_support:0
+/sys/module/nvidia_uvm/parameters/uvm_global_oversubscription:0
+/sys/module/nvidia_uvm/parameters/uvm_leak_checker:0
+/sys/module/nvidia_uvm/parameters/uvm_page_table_location:0
+/sys/module/nvidia_uvm/parameters/uvm_peer_copy:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_access_counter_batch_count:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_access_counter_migration_enable:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_access_counter_threshold:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_fault_batch_count:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_fault_coalesce:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_fault_max_batches_per_service:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_fault_max_throttle_per_service:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_fault_replay_policy:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_fault_replay_update_put_ratio:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_map_remote_on_eviction:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_map_remote_on_native_atomics_fault:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_migrate_cpu_preunmap_block_order:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_migrate_cpu_preunmap_enable:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_pma_batch_nonpinned_order:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_prefetch_enable:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_prefetch_min_faults:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_prefetch_threshold:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_reenable_prefetch_faults_lapse_msec:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_thrashing_enable:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_thrashing_epoch:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_thrashing_lapse_usec:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_thrashing_max_resets:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_thrashing_nap:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_thrashing_pin:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_thrashing_pin_threshold:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_thrashing_threshold:0
+/sys/module/nvidia_uvm/parameters/uvm_release_asserts:0
+/sys/module/nvidia_uvm/parameters/uvm_release_asserts_dump_stack:0
+/sys/module/nvidia_uvm/parameters/uvm_release_asserts_set_global_error:0
+0
+### efs_fault stock 1 2026-09-30T10:31:41+00:00
+MODE stock arg=1 pages=1 op=store map=cuMemMap pid=73587
+UVM_INIT fd=9 rmStatus=0x0 flags=0x0 efs_requested=0
+DEVICE NVIDIA GeForce RTX 3060
+START QUERY ioctl=-38
+CALIB samples=97149 offset_ns=11124
+LAYOUT base=0x792e58600000 alias=0x792e58800000 gran=0x200000 pages=1 chunks=1
+PRELAUNCH QUERY ioctl=-38
+LAUNCHED real_ns=1790764303340395446
+KERNEL_RESULT 700 CUDA_ERROR_ILLEGAL_ADDRESS elapsed_ms=8.916
+END QUERY ioctl=-38
+RESULT EXPECTED_KERNEL_ERROR kernel_error=CUDA_ERROR_ILLEGAL_ADDRESS
+### exit=0 efs_fault stock 1
+
+=== B. patched module, default OFF: stock behaviour, EFS refused ===
+insmod_rc=0 NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+GPU 0: NVIDIA GeForce RTX 3060 (UUID: GPU-459d2c69-156c-43e9-34db-733876f9671e)
+### efs_auth 2026-09-30T10:31:45+00:00
+OK   QUERY_PLAIN ioctl=0 abi=1 enabled=0 active=0
+OK   WAIT_PLAIN_REFUSED ret=-65622
+OK   RESOLVE_PLAIN_REFUSED status=0x56
+OK   OPTIN_DISABLED_REFUSED ioctl=0 status=0x56
+RESULT PASS
+### exit=0 efs_auth
+
+### efs_fault stock 1 2026-09-30T10:31:45+00:00
+MODE stock arg=1 pages=1 op=store map=cuMemMap pid=73614
+UVM_INIT fd=9 rmStatus=0x0 flags=0x0 efs_requested=0
+DEVICE NVIDIA GeForce RTX 3060
+START QUERY rm=0x0 abi=1 enabled=0 active=0 max=1024 timeout_ms=10000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=0 g_safety_replays=0 g_efs_va_spaces=0
+CALIB samples=95888 offset_ns=10886
+LAYOUT base=0x707512600000 alias=0x707512800000 gran=0x200000 pages=1 chunks=1
+PRELAUNCH QUERY rm=0x0 abi=1 enabled=0 active=0 max=1024 timeout_ms=10000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=0 g_safety_replays=0 g_efs_va_spaces=0
+LAUNCHED real_ns=1790764307816020957
+KERNEL_RESULT 700 CUDA_ERROR_ILLEGAL_ADDRESS elapsed_ms=9.035
+END QUERY rm=0x0 abi=1 enabled=0 active=0 max=1024 timeout_ms=10000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=0 g_safety_replays=0 g_efs_va_spaces=0
+RESULT EXPECTED_KERNEL_ERROR kernel_error=CUDA_ERROR_ILLEGAL_ADDRESS
+### exit=0 efs_fault stock 1
+
+=== C. patched module, EFS ENABLED ===
+insmod_rc=0 NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+GPU 0: NVIDIA GeForce RTX 3060 (UUID: GPU-459d2c69-156c-43e9-34db-733876f9671e)
+### efs_auth 2026-09-30T10:31:50+00:00
+OK   QUERY_PLAIN ioctl=0 abi=1 enabled=1 active=0
+OK   WAIT_PLAIN_REFUSED ret=-65622
+OK   RESOLVE_PLAIN_REFUSED status=0x56
+OK   OPTIN_ENABLED ioctl=0 status=0x0
+OK   OPTIN_REQUIRES_HMM_OFF status=0x1f
+OK   QUERY_EFS_ACTIVE active=1 max=1024 timeout_ms=4000
+OK   RESOLVE_FABRICATED_STALE status=0x0 resolved=0 stale=2
+OK   WAIT_FOREIGN_TGID_REFUSED child_wait=-65563
+OK   RESOLVE_FOREIGN_TGID_REFUSED child_resolve=0x1b
+RESULT PASS
+### exit=0 efs_auth
+
+--- C1 negative control: pre-mapped, zero faults ---
+### efs_fault negative 8 2026-09-30T10:31:50+00:00
+MODE negative arg=8 pages=8 op=store map=cuMemMap pid=73641
+UVM_INIT fd=9 rmStatus=0x0 flags=0x4000000000000001 efs_requested=1
+DEVICE NVIDIA GeForce RTX 3060
+START QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=4000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=0 g_safety_replays=0 g_efs_va_spaces=2
+CALIB samples=95170 offset_ns=11461
+LAYOUT base=0x78deea600000 alias=0x78deed000000 gran=0x200000 pages=8 chunks=8
+NEGATIVE all 8 pages mapped before launch
+PRELAUNCH QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=4000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=0 g_safety_replays=0 g_efs_va_spaces=2
+LAUNCHED real_ns=1790764312330087623
+KERNEL_RESULT 0 CUDA_SUCCESS elapsed_ms=0.035
+END QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=4000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=0 g_safety_replays=0 g_efs_va_spaces=2
+RECORDS serviced=0 unexpected=0 pages=8
+LAT hw_access_to_packet        n=0
+LAT packet_to_parked           n=0
+LAT parked_to_user             n=0
+LAT DELIVERY_packet_to_user    n=0
+LAT access_to_user             n=0
+LAT map_(cuMemMap|uvm_map)     n=0
+LAT service_user_to_replay     n=0
+LAT replay_to_access_done      n=0
+LAT total_access_to_done       n=0
+LAT no_fault_access            n=8 min=1.0 p50=2.0 p90=2.0 p99=2.0 max=2.0 us
+DATA bad=0
+RESULT PASS
+### exit=0 efs_fault negative 8
+
+--- C2 service: real shader fault -> deliver -> map (cuMemMap) -> replay -> correct data ---
+### efs_fault service 32 2026-09-30T10:31:52+00:00
+MODE service arg=32 pages=32 op=store map=cuMemMap pid=73653
+UVM_INIT fd=9 rmStatus=0x0 flags=0x4000000000000001 efs_requested=1
+DEVICE NVIDIA GeForce RTX 3060
+START QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=4000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=0 g_safety_replays=0 g_efs_va_spaces=3
+CALIB samples=96978 offset_ns=11032
+LAYOUT base=0x302000000 alias=0x7dbb2c600000 gran=0x200000 pages=32 chunks=8
+PRELAUNCH QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=4000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=0 g_safety_replays=0 g_efs_va_spaces=3
+LAUNCHED real_ns=1790764314637842301
+FIRST_RECORD id=0x10000 va=0x302000000 page=0 access=2 fault_type=0 client_type=0 gpc=1 utlb=14 ve=63 mmu_engine=127 instances=1
+KERNEL_RESULT 0 CUDA_SUCCESS elapsed_ms=7.675
+END QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=4000 skip=1 parked=0 undelivered=0 diverted=32 deduped=0 refused_full=0 refused_closing=0 delivered=32 replayed=32 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=32 | g_skipped_batch_replays=32 g_safety_replays=0 g_efs_va_spaces=3
+RECORDS serviced=32 unexpected=0 pages=32
+LAT hw_access_to_packet        n=32 min=1.3 p50=2.0 p90=2.3 p99=3.5 max=3.5 us
+LAT packet_to_parked           n=32 min=37.2 p50=66.2 p90=121.1 p99=161.7 max=161.7 us
+LAT parked_to_user             n=32 min=16.3 p50=17.1 p90=31.3 p99=364.0 max=364.0 us
+LAT DELIVERY_packet_to_user    n=32 min=53.8 p50=83.5 p90=152.4 p99=525.8 max=525.8 us
+LAT access_to_user             n=32 min=55.3 p50=85.6 p90=154.9 p99=529.3 max=529.3 us
+LAT map_(cuMemMap|uvm_map)     n=32 min=104.6 p50=112.0 p90=148.2 p99=243.2 max=243.2 us
+LAT service_user_to_replay     n=32 min=113.8 p50=121.4 p90=157.7 p99=254.7 max=254.7 us
+LAT replay_to_access_done      n=32 min=-2.5 p50=-1.8 p90=-1.5 p99=-1.4 max=-1.4 us
+LAT total_access_to_done       n=32 min=169.0 p50=210.9 p90=290.8 p99=782.3 max=782.3 us
+LAT no_fault_access            n=0
+FIRST_FAULT_RAW page=0 F=1790764314637841856 D=1790764314638014633 R=1790764314638378682 M=1790764314638621890 Y=1790764314638633382 g0=1790764314637838336 g1=1790764314638620672 off=11032 access=2 type=0 inst=1
+DATA bad=24
+RESULT FAIL
+### exit=1 efs_fault service 32
+
+--- C3 service, kayfabe shape: map with our own RM vidmem via UVM ioctls ---
+### efs_fault service 8 raw 2026-09-30T10:31:55+00:00
+MODE service arg=8 pages=8 op=store map=raw-rm+uvm-ioctl pid=73665
+UVM_INIT fd=9 rmStatus=0x0 flags=0x4000000000000001 efs_requested=1
+DEVICE NVIDIA GeForce RTX 3060
+START QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=4000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=32 g_safety_replays=0 g_efs_va_spaces=4
+CALIB samples=97620 offset_ns=11308
+RAW_RM client=0xc1d00105 chunks=8
+LAYOUT base=0x7b0552600000 alias=0x7b0555000000 gran=0x200000 pages=8 chunks=8
+PRELAUNCH QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=4000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=32 g_safety_replays=0 g_efs_va_spaces=4
+LAUNCHED real_ns=1790764317102678849
+FIRST_RECORD id=0x10000 va=0x7b0552600000 page=0 access=2 fault_type=0 client_type=0 gpc=1 utlb=14 ve=63 mmu_engine=127 instances=1
+KERNEL_RESULT 0 CUDA_SUCCESS elapsed_ms=2.700
+CUDA_FAIL cuMemcpyDtoH(&v, g_base + (CUdeviceptr)p * g_gran, sizeof(v)) -> 1 CUDA_ERROR_INVALID_VALUE (line 509)
+### exit=3 efs_fault service 8 raw
+
+--- C4 read faults ---
+### efs_fault read 16 2026-09-30T10:31:57+00:00
+MODE read arg=16 pages=16 op=load map=cuMemMap pid=73677
+UVM_INIT fd=9 rmStatus=0x0 flags=0x4000000000000001 efs_requested=1
+DEVICE NVIDIA GeForce RTX 3060
+START QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=4000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=40 g_safety_replays=0 g_efs_va_spaces=5
+CALIB samples=96712 offset_ns=10796
+LAYOUT base=0x302000000 alias=0x72311e600000 gran=0x200000 pages=16 chunks=8
+PRELAUNCH QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=4000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=40 g_safety_replays=0 g_efs_va_spaces=5
+LAUNCHED real_ns=1790764319573336721
+FIRST_RECORD id=0x10000 va=0x302000000 page=0 access=1 fault_type=0 client_type=0 gpc=1 utlb=14 ve=63 mmu_engine=127 instances=1
+KERNEL_RESULT 0 CUDA_SUCCESS elapsed_ms=4.679
+READ_SUM got=0x1038 expect=0x1038
+END QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=4000 skip=1 parked=0 undelivered=0 diverted=16 deduped=0 refused_full=0 refused_closing=0 delivered=16 replayed=16 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=16 | g_skipped_batch_replays=56 g_safety_replays=0 g_efs_va_spaces=5
+RECORDS serviced=16 unexpected=0 pages=16
+LAT hw_access_to_packet        n=16 min=1.4 p50=1.8 p90=2.3 p99=3.3 max=3.3 us
+LAT packet_to_parked           n=16 min=81.1 p50=89.0 p90=106.8 p99=224.9 max=224.9 us
+LAT parked_to_user             n=16 min=18.8 p50=20.5 p90=39.7 p99=138.8 max=138.8 us
+LAT DELIVERY_packet_to_user    n=16 min=100.6 p50=110.7 p90=146.6 p99=363.7 max=363.7 us
+LAT access_to_user             n=16 min=102.0 p50=112.3 p90=148.7 p99=367.0 max=367.0 us
+LAT map_(cuMemMap|uvm_map)     n=16 min=117.8 p50=129.5 p90=153.2 p99=437.9 max=437.9 us
+LAT service_user_to_replay     n=16 min=127.9 p50=139.5 p90=163.4 p99=451.9 max=451.9 us
+LAT replay_to_access_done      n=16 min=-2.7 p50=-2.2 p90=-1.7 p99=-1.4 max=-1.4 us
+LAT total_access_to_done       n=16 min=236.5 p50=245.8 p90=301.1 p99=817.2 max=817.2 us
+LAT no_fault_access            n=0
+FIRST_FAULT_RAW page=0 F=1790764319573341440 D=1790764319573577093 R=1790764319573715929 M=1790764319574153782 Y=1790764319574167818 g0=1790764319573338112 g1=1790764319574155264 off=10796 access=1 type=0 inst=1
+DATA bad=0
+RESULT PASS
+### exit=0 efs_fault read 16
+
+--- C5 scoped cancel: the faulting VA space fails, nothing else ---
+### efs_fault cancel 2026-09-30T10:32:00+00:00
+MODE cancel arg=0 pages=1 op=store map=cuMemMap pid=73689
+UVM_INIT fd=9 rmStatus=0x0 flags=0x4000000000000001 efs_requested=1
+DEVICE NVIDIA GeForce RTX 3060
+START QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=4000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=56 g_safety_replays=0 g_efs_va_spaces=6
+CALIB samples=95953 offset_ns=10770
+LAYOUT base=0x78eaf0600000 alias=0x78eaf0800000 gran=0x200000 pages=1 chunks=1
+PRELAUNCH QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=4000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=56 g_safety_replays=0 g_efs_va_spaces=6
+LAUNCHED real_ns=1790764322016853128
+FIRST_RECORD id=0x10000 va=0x78eaf0600000 page=0 access=2 fault_type=0 client_type=0 gpc=1 utlb=14 ve=63 mmu_engine=127 instances=1
+CANCEL_ISSUED status=0x0 resolved=1 stale=0 ioctl_us=68.5
+KERNEL_RESULT 700 CUDA_ERROR_ILLEGAL_ADDRESS elapsed_ms=8.495
+ERROR_AFTER_CANCEL_MS 8.186
+END QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=4000 skip=1 parked=0 undelivered=0 diverted=1 deduped=0 refused_full=0 refused_closing=0 delivered=1 replayed=0 cancelled=1 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=57 g_safety_replays=0 g_efs_va_spaces=6
+RESULT EXPECTED_KERNEL_ERROR kernel_error=CUDA_ERROR_ILLEGAL_ADDRESS
+### exit=0 efs_fault cancel
+
+--- C6 kernel timeout cancels a never-answered fault ---
+### efs_fault timeout 2026-09-30T10:32:02+00:00
+MODE timeout arg=0 pages=1 op=store map=cuMemMap pid=73701
+UVM_INIT fd=9 rmStatus=0x0 flags=0x4000000000000001 efs_requested=1
+DEVICE NVIDIA GeForce RTX 3060
+START QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=4000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=57 g_safety_replays=0 g_efs_va_spaces=7
+CALIB samples=97814 offset_ns=11365
+LAYOUT base=0x707260600000 alias=0x707260800000 gran=0x200000 pages=1 chunks=1
+PRELAUNCH QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=4000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=57 g_safety_replays=0 g_efs_va_spaces=7
+LAUNCHED real_ns=1790764324490356334
+FIRST_RECORD id=0x10000 va=0x707260600000 page=0 access=2 fault_type=0 client_type=0 gpc=1 utlb=14 ve=63 mmu_engine=127 instances=1
+KERNEL_RESULT 700 CUDA_ERROR_ILLEGAL_ADDRESS elapsed_ms=4103.216
+ERROR_AFTER_FIRST_RECORD_MS 4102.852
+END QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=4000 skip=1 parked=0 undelivered=0 diverted=1 deduped=3 refused_full=0 refused_closing=0 delivered=1 replayed=0 cancelled=0 timed_out=1 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=61 g_safety_replays=3 g_efs_va_spaces=7
+RESULT EXPECTED_KERNEL_ERROR kernel_error=CUDA_ERROR_ILLEGAL_ADDRESS
+### exit=0 efs_fault timeout
+
+--- C7 crash with a fault parked (VMM death) ---
+### efs_fault crash 50 2026-09-30T10:32:08+00:00
+MODE crash arg=50 pages=1 op=store map=cuMemMap pid=73713
+UVM_INIT fd=9 rmStatus=0x0 flags=0x4000000000000001 efs_requested=1
+DEVICE NVIDIA GeForce RTX 3060
+START QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=4000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=61 g_safety_replays=3 g_efs_va_spaces=8
+CALIB samples=97438 offset_ns=11281
+LAYOUT base=0x7e3b7a600000 alias=0x7e3b7a800000 gran=0x200000 pages=1 chunks=1
+PRELAUNCH QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=4000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=61 g_safety_replays=3 g_efs_va_spaces=8
+LAUNCHED real_ns=1790764330978492572
+FIRST_RECORD id=0x10000 va=0x7e3b7a600000 page=0 access=2 fault_type=0 client_type=0 gpc=1 utlb=14 ve=63 mmu_engine=127 instances=1
+CRASH_NOW after_ms=50 (fault parked, SIGKILL self)
+tools/uvm_efs/box/run_experiment.sh: line 35: 73713 Killed                  /root/efs/"$@"
+### exit=137 efs_fault crash 50
+
+crash_shell_exit=0
+GPU 0: NVIDIA GeForce RTX 3060 (UUID: GPU-459d2c69-156c-43e9-34db-733876f9671e)
+smi_after_crash=0
+--- C8 context destroy with a fault pending ---
+### efs_fault ctxdestroy 2026-09-30T10:32:15+00:00
+MODE ctxdestroy arg=0 pages=1 op=store map=cuMemMap pid=73732
+UVM_INIT fd=9 rmStatus=0x0 flags=0x4000000000000001 efs_requested=1
+DEVICE NVIDIA GeForce RTX 3060
+START QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=4000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=62 g_safety_replays=3 g_efs_va_spaces=9
+CALIB samples=97858 offset_ns=10605
+LAYOUT base=0x74e2e8600000 alias=0x74e2e8800000 gran=0x200000 pages=1 chunks=1
+PRELAUNCH QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=4000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=62 g_safety_replays=3 g_efs_va_spaces=9
+LAUNCHED real_ns=1790764337330941382
+FIRST_RECORD id=0x10000 va=0x74e2e8600000 page=0 access=2 fault_type=0 client_type=0 gpc=1 utlb=14 ve=63 mmu_engine=127 instances=1
+CTXDESTROY_NOW (fault parked)
+CTXDESTROY_DONE result=0 CUDA_SUCCESS ms=4190.9
+RESULT CTXDESTROY_COMPLETED ctx_destroy=CUDA_SUCCESS
+### exit=0 efs_fault ctxdestroy
+
+=== D. COEXISTENCE: native host CUDA (matmul + managed demand paging) + EFS fault pressure ===
+insmod_rc=0 NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+GPU 0: NVIDIA GeForce RTX 3060 (UUID: GPU-459d2c69-156c-43e9-34db-733876f9671e)
+--- D0 coexist alone (baseline throughput) ---
+### coexist 6 2026-09-30T10:32:23+00:00
+THROUGHPUT sgemm_iters=1280 iters_per_s=211.9 managed_rounds=64 managed_bad=0 checksum=3321.500 wall=6.04
+RESULT PASS
+### exit=0 coexist 6
+
+--- D1 coexist WHILE an EFS VA space repeatedly faults+services ---
+efs_during_1 exit=1
+efs_during_2 exit=1
+efs_during_3 exit=1
+efs_during_4 exit=1
+efs_during_5 exit=1
+coexist_during exit=0
+COEXIST_DURING:
+THROUGHPUT sgemm_iters=2540 iters_per_s=211.5 managed_rounds=127 managed_bad=0 checksum=3321.500 wall=12.01
+RESULT PASS
+EFS_DURING_1:
+RECORDS serviced=32 unexpected=0 pages=32
+LAT DELIVERY_packet_to_user    n=32 min=43.4 p50=51.7 p90=126.6 p99=258.1 max=258.1 us
+DATA bad=24
+RESULT FAIL
+EFS_DURING_2:
+RECORDS serviced=32 unexpected=0 pages=32
+LAT DELIVERY_packet_to_user    n=32 min=102.8 p50=152.5 p90=189.1 p99=261.3 max=261.3 us
+DATA bad=24
+RESULT FAIL
+EFS_DURING_3:
+RECORDS serviced=32 unexpected=0 pages=32
+LAT DELIVERY_packet_to_user    n=32 min=81.3 p50=113.7 p90=157.0 p99=200.5 max=200.5 us
+DATA bad=24
+RESULT FAIL
+EFS_DURING_4:
+RECORDS serviced=32 unexpected=0 pages=32
+LAT DELIVERY_packet_to_user    n=32 min=91.6 p50=123.3 p90=157.8 p99=168.5 max=168.5 us
+DATA bad=24
+RESULT FAIL
+EFS_DURING_5:
+RECORDS serviced=32 unexpected=0 pages=32
+LAT DELIVERY_packet_to_user    n=32 min=67.4 p50=91.9 p90=122.0 p99=159.6 max=159.6 us
+DATA bad=24
+RESULT FAIL
+--- D2 coexist WHILE an EFS VA space parks a fault for 3s (a slow VMM) ---
+efs_park exit=0
+coexist_park exit=0
+COEXIST_PARK:
+THROUGHPUT sgemm_iters=1080 iters_per_s=134.7 managed_rounds=54 managed_bad=0 checksum=3321.500 wall=8.02
+RESULT PASS
+EFS_PARK:
+PARK_BEGIN ms=3000 real_ns=1790764368547489782
+PARK_END real_ns=1790764371547652579
+LAT DELIVERY_packet_to_user    n=1 min=203.0 p50=203.0 p90=203.0 p99=203.0 max=203.0 us
+DATA bad=0
+RESULT PASS
+=== E. latency (median/p99), quiet box, larger sample ===
+insmod_rc=0 NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+GPU 0: NVIDIA GeForce RTX 3060 (UUID: GPU-459d2c69-156c-43e9-34db-733876f9671e)
+### efs_fault service 256 2026-09-30T10:32:58+00:00
+MODE service arg=256 pages=256 op=store map=cuMemMap pid=73902
+UVM_INIT fd=9 rmStatus=0x0 flags=0x4000000000000001 efs_requested=1
+DEVICE NVIDIA GeForce RTX 3060
+START QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=10000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=0 g_safety_replays=0 g_efs_va_spaces=1
+CALIB samples=96199 offset_ns=11949
+LAYOUT base=0x302000000 alias=0x7f0938600000 gran=0x200000 pages=256 chunks=8
+PRELAUNCH QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=10000 skip=1 parked=0 undelivered=0 diverted=0 deduped=0 refused_full=0 refused_closing=0 delivered=0 replayed=0 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=0 | g_skipped_batch_replays=0 g_safety_replays=0 g_efs_va_spaces=1
+LAUNCHED real_ns=1790764380921373290
+FIRST_RECORD id=0x10000 va=0x302000000 page=0 access=2 fault_type=0 client_type=0 gpc=1 utlb=14 ve=63 mmu_engine=127 instances=1
+KERNEL_RESULT 0 CUDA_SUCCESS elapsed_ms=54.531
+END QUERY rm=0x0 abi=1 enabled=1 active=1 max=1024 timeout_ms=10000 skip=1 parked=0 undelivered=0 diverted=256 deduped=0 refused_full=0 refused_closing=0 delivered=256 replayed=256 cancelled=0 timed_out=0 teardown=0 stale=0 gpu_gone=0 hw_replays=256 | g_skipped_batch_replays=256 g_safety_replays=0 g_efs_va_spaces=1
+RECORDS serviced=256 unexpected=0 pages=256
+LAT hw_access_to_packet        n=256 min=1.3 p50=1.8 p90=2.3 p99=2.6 max=3.4 us
+LAT packet_to_parked           n=256 min=25.8 p50=58.5 p90=64.7 p99=78.9 max=316.1 us
+LAT parked_to_user             n=256 min=14.1 p50=15.1 p90=15.9 p99=31.1 max=40.6 us
+LAT DELIVERY_packet_to_user    n=256 min=39.9 p50=73.7 p90=81.5 p99=98.8 max=339.5 us
+LAT access_to_user             n=256 min=41.3 p50=75.5 p90=83.4 p99=100.8 max=342.8 us
+LAT map_(cuMemMap|uvm_map)     n=256 min=105.2 p50=125.0 p90=147.8 p99=171.7 max=394.4 us
+LAT service_user_to_replay     n=256 min=114.5 p50=135.2 p90=158.1 p99=181.1 max=407.8 us
+LAT replay_to_access_done      n=256 min=-39.6 p50=-2.2 p90=-1.7 p99=-1.6 max=-1.5 us
+LAT total_access_to_done       n=256 min=156.7 p50=208.9 p90=233.5 p99=244.7 max=747.5 us
+LAT no_fault_access            n=0
+FIRST_FAULT_RAW page=0 F=1790764380921372960 D=1790764380921701030 R=1790764380921724395 M=1790764380922118793 Y=1790764380922132148 g0=1790764380921369600 g1=1790764380922117120 off=11949 access=2 type=0 inst=1
+DATA bad=248
+RESULT FAIL
+### exit=1 efs_fault service 256
+
+=== restore stock module ===
+stock_modprobe_rc=0 efs_present=/sys/module/nvidia_uvm/parameters/uvm_ats_mode:0
+/sys/module/nvidia_uvm/parameters/uvm_block_cpu_to_cpu_copy_with_ce:0
+/sys/module/nvidia_uvm/parameters/uvm_channel_gpfifo_loc:0
+/sys/module/nvidia_uvm/parameters/uvm_channel_gpput_loc:0
+/sys/module/nvidia_uvm/parameters/uvm_channel_num_gpfifo_entries:0
+/sys/module/nvidia_uvm/parameters/uvm_channel_pushbuffer_loc:0
+/sys/module/nvidia_uvm/parameters/uvm_conf_computing_channel_iv_rotation_limit:0
+/sys/module/nvidia_uvm/parameters/uvm_cpu_chunk_allocation_sizes:0
+/sys/module/nvidia_uvm/parameters/uvm_debug_enable_push_acquire_info:0
+/sys/module/nvidia_uvm/parameters/uvm_debug_enable_push_desc:0
+/sys/module/nvidia_uvm/parameters/uvm_debug_prints:0
+/sys/module/nvidia_uvm/parameters/uvm_disable_hmm:0
+/sys/module/nvidia_uvm/parameters/uvm_downgrade_force_membar_sys:0
+/sys/module/nvidia_uvm/parameters/uvm_enable_builtin_tests:0
+/sys/module/nvidia_uvm/parameters/uvm_enable_debug_procfs:0
+/sys/module/nvidia_uvm/parameters/uvm_enable_va_space_mm:0
+/sys/module/nvidia_uvm/parameters/uvm_exp_gpu_cache_peermem:0
+/sys/module/nvidia_uvm/parameters/uvm_exp_gpu_cache_sysmem:0
+/sys/module/nvidia_uvm/parameters/uvm_fault_force_sysmem:0
+/sys/module/nvidia_uvm/parameters/uvm_force_prefetch_fault_support:0
+/sys/module/nvidia_uvm/parameters/uvm_global_oversubscription:0
+/sys/module/nvidia_uvm/parameters/uvm_leak_checker:0
+/sys/module/nvidia_uvm/parameters/uvm_page_table_location:0
+/sys/module/nvidia_uvm/parameters/uvm_peer_copy:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_access_counter_batch_count:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_access_counter_migration_enable:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_access_counter_threshold:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_fault_batch_count:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_fault_coalesce:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_fault_max_batches_per_service:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_fault_max_throttle_per_service:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_fault_replay_policy:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_fault_replay_update_put_ratio:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_map_remote_on_eviction:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_map_remote_on_native_atomics_fault:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_migrate_cpu_preunmap_block_order:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_migrate_cpu_preunmap_enable:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_pma_batch_nonpinned_order:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_prefetch_enable:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_prefetch_min_faults:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_prefetch_threshold:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_reenable_prefetch_faults_lapse_msec:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_thrashing_enable:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_thrashing_epoch:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_thrashing_lapse_usec:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_thrashing_max_resets:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_thrashing_nap:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_thrashing_pin:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_thrashing_pin_threshold:0
+/sys/module/nvidia_uvm/parameters/uvm_perf_thrashing_threshold:0
+/sys/module/nvidia_uvm/parameters/uvm_release_asserts:0
+/sys/module/nvidia_uvm/parameters/uvm_release_asserts_dump_stack:0
+/sys/module/nvidia_uvm/parameters/uvm_release_asserts_set_global_error:0
+0
+RUN_EXIT 2026-09-30T10:33:01+00:00

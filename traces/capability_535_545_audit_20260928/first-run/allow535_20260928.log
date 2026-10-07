@@ -1,0 +1,11 @@
+START 2026-09-28T18:01:24+00:00
+3a738baa test(abi): audit legacy capability IDs and pin complete existing policies
+TESTS passed 1653 failed 0
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/3a738baa/qemu-system-x86_64 rev=3a738baa mtime=2026-09-28 18:03:24.132813313 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+FG_RC=1
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+EXIT 2026-09-28T18:19:28+00:00

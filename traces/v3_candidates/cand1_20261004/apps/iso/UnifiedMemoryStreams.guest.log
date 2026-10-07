@@ -1,0 +1,7 @@
+=== UnifiedMemoryStreams side=guest start=2026-10-04T03:34:59+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/UnifiedMemoryStreams
+CUDA error at UnifiedMemoryStreams.cu:214 code=719(cudaErrorLaunchFailure) "cudaStreamAttachMemAsync(stream[tid + 1], t.data, 0, cudaMemAttachSingle)" 
+CUDA error at UnifiedMemoryStreams.cu:218 code=719(cudaErrorLaunchFailure) "cudaStreamAttachMemAsync(stream[tid + 1], t.result, 0, cudaMemAttachSingle)" 
+CUDA error at UnifiedMemoryStreams.cu:202 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(stream[0])" 
+free(): invalid pointer
+timeout: the monitored command dumped core
+=== end rc=134 secs=10 2026-10-04T03:35:09+00:00

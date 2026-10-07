@@ -1,0 +1,62 @@
+=== geekbench_gpu side=guest start=2026-10-04T03:28:46+00:00 host=ubuntu cmd: cd /opt/apps/data/geekbench && ./geekbench6 --gpu OpenCL 2>&1 | tail -60
+Geekbench 6.4.0 : https://www.geekbench.com/
+
+Geekbench 6 requires an active internet connection and automatically uploads 
+benchmark results to the Geekbench Browser.
+
+Upgrade to Geekbench 6 Pro to enable offline use and unlock other features:
+
+  https://store.primatelabs.com/v6
+
+Enter your Geekbench 6 Pro license using the following command line:
+
+  ./geekbench6 --unlock <email> <key>
+
+System Information
+  Operating System              Ubuntu 24.04.5 LTS
+  Kernel                        Linux 6.8.0-142-generic x86_64
+  Model                         QEMU Standard PC (Q35 + ICH9, 2009)
+  Motherboard                   N/A
+  BIOS                          SeaBIOS rel-1.17.0-0-gb52ca86e094d-prebuilt.qemu.org
+
+CPU Information
+  Name                          Intel Xeon E5-2673 v4
+  Topology                      1 Processor, 6 Cores
+  Identifier                    GenuineIntel Family 6 Model 79 Stepping 1
+  Base Frequency                2.30 GHz
+  L1 Instruction Cache          32.0 KB x 6
+  L1 Data Cache                 32.0 KB x 6
+  L2 Cache                      4.00 MB x 6
+  L3 Cache                      16.0 MB
+  Instruction Sets              sse2 sse3 pclmul fma3 sse41 aesni avx avx2
+
+Memory Information
+  Size                          15.6 GB
+
+OpenCL Information
+  Platform Vendor               NVIDIA Corporation
+  Platform Name                 NVIDIA CUDA
+  Device Vendor                 NVIDIA Corporation
+  Device Name                   NVIDIA GeForce RTX 3060
+  Device Driver Version         580.159 .04
+  Maximum Frequency             1777 MHz
+  Compute Units                 28
+  Device Memory                 7.69 GB
+
+
+OpenCL
+  Running Background Blur
+  Running Face Detection
+  Running Horizon Detection
+  Running Edge Detection
+  Running Gaussian Blur
+  Running Feature Matching
+  Running Stereo Matching
+  Running Particle Physics
+
+
+Uploading results to the Geekbench Browser. This could take a minute or two 
+depending on the speed of your internet connection.
+
+ unknown error (internal code 35)
+=== end rc=0 secs=80 2026-10-04T03:30:06+00:00

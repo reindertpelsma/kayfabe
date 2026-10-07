@@ -1,0 +1,2 @@
+[   26.329161] nvidia 0000:00:02.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=none:owns=io+mem
+[   37.983673] nvidia 0000:00:02.0: vgaarb: deactivate vga console

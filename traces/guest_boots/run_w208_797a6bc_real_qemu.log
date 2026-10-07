@@ -1,0 +1,145 @@
+2026-08-10T07:56:25.890115Z qemu-system-x86_64: -device nvkvm-gpu,bar1-size=268435456,bar2-size=33554432,id=kf0: info: nvkvm: presenting 10de:2504 class 030000 rev a1 subsys 1462:397d (8 interrupt vectors)
+2026-08-10T07:56:26.043506Z qemu-system-x86_64: info: nvkvm: memory plane realized (bar0=0xfd000000 bar1=0xe0000000 bar2=0xf0000000, register plane has guest memory=yes)
+2026-08-10T07:57:03.498441Z qemu-system-x86_64: warning: nvkvm: the emulated GSP asked for its STATUS-QUEUE interrupt and this device does not deliver that one. The guest's own interrupt trigger IS delivered; this is the GSP-engine stall vector, which needs a pending bit in the interrupt tree first. A guest that BLOCKS on a status-queue event will not be woken by us — the boot path polls instead.
+kayfabe: RING-PROJ token=0x00010002 proc=0 chan=1 vchid=VChid(0x2) key=0xc1e00006:0x2 engine=Ce vas=0xa dec=0xa pdb=0x2efa9c000 ring=0x420064000 entries=4096 (projection: ce_channel_facts) DESCENT | c=0xc1e00006 vas=0xa dec=0xa userd=h0x9/off0x0 root=0x2efa9c000/ap1/sh47/va[0x100000000..0x11fffffff] rootsrc=published ring=0x420064000 rng=S:0x237fe000 fin=S:0x2cf46004 gp[0]@0x420064000=0x420000064+0x60 pb=S:0x7c58064 pbm[24w of 96B]: [0]sub0/m0x0/Incrementing/n1=0xc7b5 [1]sub0/m0x700/Incrementing/n1=0x0 [2]sub0/m0x708/Incrementing/n1=0x4 [3]sub0/m0x264/Incrementing/n1=0x0 [4]sub0/m0x408/Incrementing/n2=0x4 [5]sub0/m0x418/Incrementing/n1=0x4 [6]sub0/m0x240/Incrementing/n3=0x4 [7]sub0/m0x300/Incrementing/n1=0x400058e [8]sub0/m0x10/Incrementing/n4=0x4 scan=4096/4096 declared (COMPLETE: every declared entry was read), unread=0, nonzero=[0]=0x0000600420000064 row=arm0x90f10106 x1 lv4/6 pgsz0x200000 sd0x0/0 va[0x100000000..0x11fffffff] L0=0x2efa9c000/sz0x20/ap1/sh47 L1=0x2efa9b000/sz0x1000/ap1/sh38 L2=0x2efa9a000/sz0x1000/ap1/sh29 L3=0x2efa99000/sz0x1000/ap1/sh21 fbL0@0x2efa9c000=029bfa2e00000000000000000000000000000000000000000000000000000000 nz4/4096 resY byBAR2#39 fbL1@0x2efa9b000=029afa2e00000000000000000000000000000000000000000000000000000000 nz4/4096 resY byBAR2#40 ctl=0x0/0x0 ctlL0@0x2efbae000=02adfb2e00000000000000000000000000000000000000000000000000000000 nz4/4096 resY byPRAMIN#21 ctlL1@0x2efbad000=02acfb2e00000000000000000000000000000000000000000000000000000000 nz4/4096 resY byBAR2#22 fbRING[p0]@va0x420064000=NOT-VIDMEM(S:0x237fe000) fbRING[p1]@va0x420065000=NOT-VIDMEM(S:0x237ff000) fbRING[p2]@va0x420066000=NOT-VIDMEM(S:0x2cf40000) fbRING[p3]@va0x420067000=NOT-VIDMEM(S:0x2cf41000) ⊘ BOUNDED-DUMP: 4 of 8 page(s) the ring spans fbFIN@va0x42006c004=NOT-VIDMEM(S:0x2cf46004) walk: L0@0x2efa9c000/byBAR2#39[ch1 lf0 sp0 inv3]=PDE@0x0->0x2efa9b000/Vidmem L1@0x2efa9b000/byBAR2#40[ch1 lf0 sp0 inv511]=PDE@0x0->0x2efa9a000/Vidmem L2@0x2efa9a000/byBAR2#41[ch26 lf0 sp0 inv486]=PDE@0x420000000->0x2efa80000/Vidmem L3@0x2efa80000/byBAR2#67[ch2 lf0 sp0 inv255]=PDE@0x420000000->0x2efa7f000/Vidmem/dual1of2 L5@0x2efa7f000/byBAR2#68[ch0 lf110 sp0 inv402]=LEAF@0x420064000->0x237fe000/SysmemCoherent/sz0x1000 walkend=LEAF
+kayfabe: FWD-RING proc=0 chan=1 key=0xc1e00006:0x2 pdb=0x2efa9c000 RING-VA-UNBOUND va=0x420064000 → NOTHING FORWARDED (the doorbell still reports SERVED)
+2026-08-10T07:57:09.206162Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010002 at +0xbb0090 SERVED
+2026-08-10T07:57:28.888065Z qemu-system-x86_64: warning: nvkvm: the emulated GSP refused a register write at +0x110c00: GspFault::QueueNotBound
+2026-08-10T07:57:28.888292Z qemu-system-x86_64: warning: nvkvm: the emulated GSP refused a register write at +0x110c00: GspFault::QueueNotBound
+kayfabe: RING-PROJ token=0x00010002 proc=0 chan=3 vchid=VChid(0x2) key=0xc1e0000e:0x2 engine=Ce vas=0xa dec=0xa pdb=0x2efa9c000 ring=0x420064000 entries=4096 (projection: ce_channel_facts) DESCENT | c=0xc1e0000e vas=0xa dec=0xa userd=h0x9/off0x0 root=0x2efa9c000/ap1/sh47/va[0x100000000..0x11fffffff] rootsrc=published ring=0x420064000 rng=S:0x285e2000 fin=S:0x285ea004 gp[0]@0x420064000=0x420000064+0x60 pb=S:0x5fdc064 pbm[24w of 96B]: [0]sub0/m0x0/Incrementing/n1=0xc7b5 [1]sub0/m0x700/Incrementing/n1=0x0 [2]sub0/m0x708/Incrementing/n1=0x4 [3]sub0/m0x264/Incrementing/n1=0x0 [4]sub0/m0x408/Incrementing/n2=0x4 [5]sub0/m0x418/Incrementing/n1=0x4 [6]sub0/m0x240/Incrementing/n3=0x4 [7]sub0/m0x300/Incrementing/n1=0x400058e [8]sub0/m0x10/Incrementing/n4=0x4 scan=4096/4096 declared (COMPLETE: every declared entry was read), unread=0, nonzero=[0]=0x0000600420000064 row=arm0x90f10106 x1 lv4/6 pgsz0x200000 sd0x0/0 va[0x100000000..0x11fffffff] L0=0x2efa9c000/sz0x20/ap1/sh47 L1=0x2efa9b000/sz0x1000/ap1/sh38 L2=0x2efa9a000/sz0x1000/ap1/sh29 L3=0x2efa99000/sz0x1000/ap1/sh21 fbL0@0x2efa9c000=029bfa2e00000000000000000000000000000000000000000000000000000000 nz4/4096 resY byBAR2#39 fbL1@0x2efa9b000=029afa2e00000000000000000000000000000000000000000000000000000000 nz4/4096 resY byBAR2#40 ctl=0x0/0x0 ctlL0@0x2efbae000=02adfb2e00000000000000000000000000000000000000000000000000000000 nz4/4096 resY byPRAMIN#21 ctlL1@0x2efbad000=02acfb2e00000000000000000000000000000000000000000000000000000000 nz4/4096 resY byBAR2#22 fbRING[p0]@va0x420064000=NOT-VIDMEM(S:0x285e2000) fbRING[p1]@va0x420065000=NOT-VIDMEM(S:0x285e3000) fbRING[p2]@va0x420066000=NOT-VIDMEM(S:0x285e4000) fbRING[p3]@va0x420067000=NOT-VIDMEM(S:0x285e5000) ⊘ BOUNDED-DUMP: 4 of 8 page(s) the ring spans fbFIN@va0x42006c004=NOT-VIDMEM(S:0x285ea004) walk: L0@0x2efa9c000/byBAR2#39[ch1 lf0 sp0 inv3]=PDE@0x0->0x2efa9b000/Vidmem L1@0x2efa9b000/byBAR2#40[ch1 lf0 sp0 inv511]=PDE@0x0->0x2efa9a000/Vidmem L2@0x2efa9a000/byBAR2#41[ch26 lf0 sp0 inv486]=PDE@0x420000000->0x2efa80000/Vidmem L3@0x2efa80000/byBAR2#67[ch2 lf0 sp0 inv255]=PDE@0x420000000->0x2efa7f000/Vidmem/dual1of2 L5@0x2efa7f000/byBAR2#68[ch0 lf110 sp0 inv402]=LEAF@0x420064000->0x285e2000/SysmemCoherent/sz0x1000 walkend=LEAF
+kayfabe: FWD-RING proc=0 chan=3 key=0xc1e0000e:0x2 pdb=0x2efa9c000 RING-VA-UNBOUND va=0x420064000 → NOTHING FORWARDED (the doorbell still reports SERVED)
+2026-08-10T07:57:33.800240Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010002 at +0xbb0090 SERVED
+2026-08-10T07:57:44.453313Z qemu-system-x86_64: warning: nvkvm: the emulated GSP refused a register write at +0x110c00: GspFault::QueueNotBound
+2026-08-10T07:57:44.453553Z qemu-system-x86_64: warning: nvkvm: the emulated GSP refused a register write at +0x110c00: GspFault::QueueNotBound
+kayfabe: RING-PROJ token=0x00010002 proc=0 chan=5 vchid=VChid(0x2) key=0xc1e00013:0x2 engine=Ce vas=0xa dec=0xa pdb=0x2efa9c000 ring=0x420064000 entries=4096 (projection: ce_channel_facts) DESCENT | c=0xc1e00013 vas=0xa dec=0xa userd=h0x9/off0x0 root=0x2efa9c000/ap1/sh47/va[0x100000000..0x11fffffff] rootsrc=published ring=0x420064000 rng=S:0x21087000 fin=S:0x2108f004 gp[0]@0x420064000=0x420000064+0x60 pb=S:0x20c62064 pbm[24w of 96B]: [0]sub0/m0x0/Incrementing/n1=0xc7b5 [1]sub0/m0x700/Incrementing/n1=0x0 [2]sub0/m0x708/Incrementing/n1=0x4 [3]sub0/m0x264/Incrementing/n1=0x0 [4]sub0/m0x408/Incrementing/n2=0x4 [5]sub0/m0x418/Incrementing/n1=0x4 [6]sub0/m0x240/Incrementing/n3=0x4 [7]sub0/m0x300/Incrementing/n1=0x400058e [8]sub0/m0x10/Incrementing/n4=0x4 scan=4096/4096 declared (COMPLETE: every declared entry was read), unread=0, nonzero=[0]=0x0000600420000064 row=arm0x90f10106 x1 lv4/6 pgsz0x200000 sd0x0/0 va[0x100000000..0x11fffffff] L0=0x2efa9c000/sz0x20/ap1/sh47 L1=0x2efa9b000/sz0x1000/ap1/sh38 L2=0x2efa9a000/sz0x1000/ap1/sh29 L3=0x2efa99000/sz0x1000/ap1/sh21 fbL0@0x2efa9c000=029bfa2e00000000000000000000000000000000000000000000000000000000 nz4/4096 resY byBAR2#39 fbL1@0x2efa9b000=029afa2e00000000000000000000000000000000000000000000000000000000 nz4/4096 resY byBAR2#40 ctl=0x0/0x0 ctlL0@0x2efbae000=02adfb2e00000000000000000000000000000000000000000000000000000000 nz4/4096 resY byPRAMIN#21 ctlL1@0x2efbad000=02acfb2e00000000000000000000000000000000000000000000000000000000 nz4/4096 resY byBAR2#22 fbRING[p0]@va0x420064000=NOT-VIDMEM(S:0x21087000) fbRING[p1]@va0x420065000=NOT-VIDMEM(S:0x21088000) fbRING[p2]@va0x420066000=NOT-VIDMEM(S:0x21089000) fbRING[p3]@va0x420067000=NOT-VIDMEM(S:0x2108a000) ⊘ BOUNDED-DUMP: 4 of 8 page(s) the ring spans fbFIN@va0x42006c004=NOT-VIDMEM(S:0x2108f004) walk: L0@0x2efa9c000/byBAR2#39[ch1 lf0 sp0 inv3]=PDE@0x0->0x2efa9b000/Vidmem L1@0x2efa9b000/byBAR2#40[ch1 lf0 sp0 inv511]=PDE@0x0->0x2efa9a000/Vidmem L2@0x2efa9a000/byBAR2#41[ch26 lf0 sp0 inv486]=PDE@0x420000000->0x2efa80000/Vidmem L3@0x2efa80000/byBAR2#67[ch2 lf0 sp0 inv255]=PDE@0x420000000->0x2efa7f000/Vidmem/dual1of2 L5@0x2efa7f000/byBAR2#68[ch0 lf110 sp0 inv402]=LEAF@0x420064000->0x21087000/SysmemCoherent/sz0x1000 walkend=LEAF
+kayfabe: FWD-RING proc=0 chan=5 key=0xc1e00013:0x2 pdb=0x2efa9c000 RING-VA-UNBOUND va=0x420064000 → NOTHING FORWARDED (the doorbell still reports SERVED)
+2026-08-10T07:57:50.113547Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010002 at +0xbb0090 SERVED
+kayfabe: RING-ROSTER 6 row(s), 0 dropped past the cap (a non-zero drop count means this list is a PREFIX and its absences prove nothing)
+kayfabe:   RING-ROSTER key=0xc1e00005:0x2 ring=0x120064000 entries=4096
+kayfabe:   RING-ROSTER key=0xc1e00006:0x2 ring=0x420064000 entries=4096
+kayfabe:   RING-ROSTER key=0xc1e0000d:0x2 ring=0x120064000 entries=4096
+kayfabe:   RING-ROSTER key=0xc1e0000e:0x2 ring=0x420064000 entries=4096
+kayfabe:   RING-ROSTER key=0xc1e00012:0x2 ring=0x120064000 entries=4096
+kayfabe:   RING-ROSTER key=0xc1e00013:0x2 ring=0x420064000 entries=4096
+2026-08-10T07:58:15.307971Z qemu-system-x86_64: info: nvkvm: registers: 448312 reads / 490802 writes (chip-constant 62444, rom 6948, gsp 1023r/1257w, UNCLAIMED 2601r/2673w), faults 4, guest-RAM refusals 0, interrupt requests dropped 339
+2026-08-10T07:58:15.308045Z qemu-system-x86_64: info: nvkvm: timer: 90 counter reads, 0 writes REFUSED (the guest reads the host GPU's counter and may not move it)
+2026-08-10T07:58:15.308081Z qemu-system-x86_64: info: nvkvm: interrupts: 0 vectors delivered, 0 undeliverable (guest had not enabled the table), 339 status-queue requests dropped
+2026-08-10T07:58:15.308115Z qemu-system-x86_64: info: nvkvm: completions: 0 announced (non-stall vector raised), 0 UNVECTORED (work done, nothing told the guest), 0 would be masked by the guest's own LEAF_EN
+2026-08-10T07:58:15.308150Z qemu-system-x86_64: info: nvkvm: framebuffer: 972 reads / 486741 writes served through the BAR0 moving window (74 window register reads / 62 writes), fb refusals 0, resident 290816 bytes
+2026-08-10T07:58:15.308184Z qemu-system-x86_64: info: nvkvm:   windows with no address model: 0r/0w — read it beside the BAR1 traffic that had to exist for this zero to say anything: 0 translated read(s) / 0 write(s), bar1PdeBase = 0x2f1cac000. ⊘ With 0 BAR1 accesses this line reports nothing about the guest.
+2026-08-10T07:58:15.308219Z qemu-system-x86_64: info: nvkvm:   framebuffer residency: 71 page(s) spanning [0x2eb750000..0x2f1cac000] — 25949 page(s) of extent, so the resident set is SPARSE. ⊘ A page NOT in this set was never written; a page in it that reads zero WAS addressed and given zeros. The byte census alone cannot tell those apart.
+2026-08-10T07:58:15.308254Z qemu-system-x86_64: info: nvkvm:   framebuffer FIRST-WRITER census: PRAMIN 21 / BAR1 0 / BAR2 50 / EXEC 0 / UNATTRIBUTED 0 page(s) — FIRST writer, not last, so this attributes CREATION and not traffic.
+2026-08-10T07:58:15.308289Z qemu-system-x86_64: info: nvkvm:   GPFIFO forward search: swept 71 of 71 resident page(s); 1 carry GPFIFO-entry-shaped bytes. ★ BEST 0x2efbaa000 with 256 shaped entries, created by BAR2. ⊘ Compare that ADDRESS with the leaf the doorbell probe's walk reported: if they differ, the write was caught and the DESCENT is aimed at the wrong table.
+2026-08-10T07:58:15.308326Z qemu-system-x86_64: info: nvkvm:   trap-status nvkvm-bar0-regs: base 0xfd000000 -> region 'nvkvm-bar0-regs' (OURS), IO — TRAPPED, every guest access reaches this device. ⇒ a never-written page behind this row IS a statement about the guest, because we would have seen the write.
+2026-08-10T07:58:15.308410Z qemu-system-x86_64: info: nvkvm:   trap-status nvkvm-bar1-window: base 0xe0000000 -> region 'nvkvm-bar1-window' (OURS), IO — TRAPPED, every guest access reaches this device. ⇒ a never-written page behind this row IS a statement about the guest, because we would have seen the write.
+2026-08-10T07:58:15.308465Z qemu-system-x86_64: info: nvkvm:   trap-status nvkvm-bar2-window: base 0xf0000000 -> region 'nvkvm-bar2-window' (OURS), IO — TRAPPED, every guest access reaches this device. ⇒ a never-written page behind this row IS a statement about the guest, because we would have seen the write.
+2026-08-10T07:58:15.308488Z qemu-system-x86_64: info: nvkvm:   trap-status nvkvm-msix: base 0xfe052000 -> region 'msix-table' ⚠ (NOT OURS — it overlays this BAR), IO — TRAPPED, every guest access reaches this device. ⇒ a never-written page behind this row IS a statement about the guest, because we would have seen the write.
+2026-08-10T07:58:15.308511Z qemu-system-x86_64: info: nvkvm: discarding reservations: none — every region this device presents either traps to the archive or is the interrupt table. ⊘ This is read off the region table, not off a counter, so it cannot go stale the way an unreachable counter did.
+2026-08-10T07:58:15.308532Z qemu-system-x86_64: info: nvkvm:   BAR1 access log: EMPTY — no access reached the handler, so there is nothing to attribute. ⊘ Read this beside the trap-status row for this BAR: it means 'no access' only while that row says TRAPPED.
+2026-08-10T07:58:15.308553Z qemu-system-x86_64: info: nvkvm: BAR2 (translated): 939 reads / 384807 writes resolved through the GMMU, 0 REFUSED by name; roots published 6 (0 bodies refused), BAR2 root entry 0x0
+2026-08-10T07:58:15.308575Z qemu-system-x86_64: info: nvkvm: SET_PAGE_DIRECTORY (0x00801813): NO RECORD LATCHED (0 accepted, 0 refused) — this is NOT "installed into VA space 0"; it is "nothing was installed". A boot that reaches cuInit with 0 accepted did not exercise the rung.
+2026-08-10T07:58:15.308596Z qemu-system-x86_64: info: nvkvm: BAR1 (translated): 0 reads / 0 writes resolved through the GMMU, 0 REFUSED by name; bar1PdeBase = 0x2f1cac000 (the framebuffer address WE published and the walk starts from), root entry published by the guest: no, as ogkm-580's two UPDATE_BAR_PDE call sites predict
+2026-08-10T07:58:15.308618Z qemu-system-x86_64: info: nvkvm: VA-space page-directory publications: 9 total, 7 distinct, 0 UNDECODABLE (counted from 0x90f10106 / 0x20800a9f ONLY; ⊘ 0x00801813 publishes a root too and is counted on its own line above, so these totals are NOT every root the guest published)
+2026-08-10T07:58:15.308639Z qemu-system-x86_64: info: nvkvm:   of those, 9 reached the object model, 6 ACCEPTED (Vas::pdb populated from the guest's own publication), 0 not an event
+2026-08-10T07:58:15.308661Z qemu-system-x86_64: info: nvkvm:   gvas cmd 0x20800a9f hClient 0x00000000 hObject 0x00000000 va [0x0000000100000000..0x000000011fffffff] pageSize 0x200000 levels 4 subdev 0/0 x3
+2026-08-10T07:58:15.308685Z qemu-system-x86_64: info: nvkvm:     level[0] ROOT phys 0x00000002efbae000 size 0x20 aperture 1 pageShift 47
+2026-08-10T07:58:15.308707Z qemu-system-x86_64: info: nvkvm:     level[1] phys 0x00000002efbad000 size 0x1000 aperture 1 pageShift 38
+2026-08-10T07:58:15.308750Z qemu-system-x86_64: info: nvkvm:     level[2] phys 0x00000002efbac000 size 0x1000 aperture 1 pageShift 29
+2026-08-10T07:58:15.308773Z qemu-system-x86_64: info: nvkvm:     level[3] phys 0x00000002efbab000 size 0x1000 aperture 1 pageShift 21
+2026-08-10T07:58:15.308794Z qemu-system-x86_64: info: nvkvm:   gvas cmd 0x90f10106 hClient 0xc1e00005 hObject 0x0000000c va [0x0000000100000000..0x000000011fffffff] pageSize 0x200000 levels 4 subdev 0/0 x1
+2026-08-10T07:58:15.308816Z qemu-system-x86_64: info: nvkvm:     level[0] ROOT phys 0x00000002efba5000 size 0x20 aperture 1 pageShift 47
+2026-08-10T07:58:15.308838Z qemu-system-x86_64: info: nvkvm:     level[1] phys 0x00000002efba4000 size 0x1000 aperture 1 pageShift 38
+2026-08-10T07:58:15.308859Z qemu-system-x86_64: info: nvkvm:     level[2] phys 0x00000002efba3000 size 0x1000 aperture 1 pageShift 29
+2026-08-10T07:58:15.308880Z qemu-system-x86_64: info: nvkvm:     level[3] phys 0x00000002efba2000 size 0x1000 aperture 1 pageShift 21
+2026-08-10T07:58:15.308902Z qemu-system-x86_64: info: nvkvm:   gvas cmd 0x90f10106 hClient 0xc1e00006 hObject 0x0000000a va [0x0000000100000000..0x000000011fffffff] pageSize 0x200000 levels 4 subdev 0/0 x1
+2026-08-10T07:58:15.308933Z qemu-system-x86_64: info: nvkvm:     level[0] ROOT phys 0x00000002efa9c000 size 0x20 aperture 1 pageShift 47
+2026-08-10T07:58:15.308955Z qemu-system-x86_64: info: nvkvm:     level[1] phys 0x00000002efa9b000 size 0x1000 aperture 1 pageShift 38
+2026-08-10T07:58:15.308976Z qemu-system-x86_64: info: nvkvm:     level[2] phys 0x00000002efa9a000 size 0x1000 aperture 1 pageShift 29
+2026-08-10T07:58:15.308998Z qemu-system-x86_64: info: nvkvm:     level[3] phys 0x00000002efa99000 size 0x1000 aperture 1 pageShift 21
+2026-08-10T07:58:15.309019Z qemu-system-x86_64: info: nvkvm:   gvas cmd 0x90f10106 hClient 0xc1e0000d hObject 0x0000000c va [0x0000000100000000..0x000000011fffffff] pageSize 0x200000 levels 4 subdev 0/0 x1
+2026-08-10T07:58:15.309041Z qemu-system-x86_64: info: nvkvm:     level[0] ROOT phys 0x00000002efba5000 size 0x20 aperture 1 pageShift 47
+2026-08-10T07:58:15.309062Z qemu-system-x86_64: info: nvkvm:     level[1] phys 0x00000002efba4000 size 0x1000 aperture 1 pageShift 38
+2026-08-10T07:58:15.309083Z qemu-system-x86_64: info: nvkvm:     level[2] phys 0x00000002efba3000 size 0x1000 aperture 1 pageShift 29
+2026-08-10T07:58:15.309105Z qemu-system-x86_64: info: nvkvm:     level[3] phys 0x00000002efba2000 size 0x1000 aperture 1 pageShift 21
+2026-08-10T07:58:15.309126Z qemu-system-x86_64: info: nvkvm:   gvas cmd 0x90f10106 hClient 0xc1e0000e hObject 0x0000000a va [0x0000000100000000..0x000000011fffffff] pageSize 0x200000 levels 4 subdev 0/0 x1
+2026-08-10T07:58:15.309148Z qemu-system-x86_64: info: nvkvm:     level[0] ROOT phys 0x00000002efa9c000 size 0x20 aperture 1 pageShift 47
+2026-08-10T07:58:15.309169Z qemu-system-x86_64: info: nvkvm:     level[1] phys 0x00000002efa9b000 size 0x1000 aperture 1 pageShift 38
+2026-08-10T07:58:15.309190Z qemu-system-x86_64: info: nvkvm:     level[2] phys 0x00000002efa9a000 size 0x1000 aperture 1 pageShift 29
+2026-08-10T07:58:15.309212Z qemu-system-x86_64: info: nvkvm:     level[3] phys 0x00000002efa99000 size 0x1000 aperture 1 pageShift 21
+2026-08-10T07:58:15.309233Z qemu-system-x86_64: info: nvkvm:   gvas cmd 0x90f10106 hClient 0xc1e00012 hObject 0x0000000c va [0x0000000100000000..0x000000011fffffff] pageSize 0x200000 levels 4 subdev 0/0 x1
+2026-08-10T07:58:15.309255Z qemu-system-x86_64: info: nvkvm:     level[0] ROOT phys 0x00000002efba5000 size 0x20 aperture 1 pageShift 47
+2026-08-10T07:58:15.309276Z qemu-system-x86_64: info: nvkvm:     level[1] phys 0x00000002efba4000 size 0x1000 aperture 1 pageShift 38
+2026-08-10T07:58:15.309297Z qemu-system-x86_64: info: nvkvm:     level[2] phys 0x00000002efba3000 size 0x1000 aperture 1 pageShift 29
+2026-08-10T07:58:15.309319Z qemu-system-x86_64: info: nvkvm:     level[3] phys 0x00000002efba2000 size 0x1000 aperture 1 pageShift 21
+2026-08-10T07:58:15.309587Z qemu-system-x86_64: info: nvkvm:   gvas cmd 0x90f10106 hClient 0xc1e00013 hObject 0x0000000a va [0x0000000100000000..0x000000011fffffff] pageSize 0x200000 levels 4 subdev 0/0 x1
+2026-08-10T07:58:15.309613Z qemu-system-x86_64: info: nvkvm:     level[0] ROOT phys 0x00000002efa9c000 size 0x20 aperture 1 pageShift 47
+2026-08-10T07:58:15.309634Z qemu-system-x86_64: info: nvkvm:     level[1] phys 0x00000002efa9b000 size 0x1000 aperture 1 pageShift 38
+2026-08-10T07:58:15.309656Z qemu-system-x86_64: info: nvkvm:     level[2] phys 0x00000002efa9a000 size 0x1000 aperture 1 pageShift 29
+2026-08-10T07:58:15.309677Z qemu-system-x86_64: info: nvkvm:     level[3] phys 0x00000002efa99000 size 0x1000 aperture 1 pageShift 21
+2026-08-10T07:58:15.309699Z qemu-system-x86_64: info: nvkvm: commands: 342 decoded, 57 UNSERVICED (refused by name; the guest logs these quietly, which is why they are here), 16 distinct
+2026-08-10T07:58:15.309745Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a87
+2026-08-10T07:58:15.309768Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a4b
+2026-08-10T07:58:15.309789Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800afe
+2026-08-10T07:58:15.309823Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800aff
+2026-08-10T07:58:15.309845Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a70
+2026-08-10T07:58:15.309866Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a80
+2026-08-10T07:58:15.309886Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20802a0f
+2026-08-10T07:58:15.309907Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080017e
+2026-08-10T07:58:15.309928Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a30
+2026-08-10T07:58:15.309949Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a2c
+2026-08-10T07:58:15.309970Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a2e
+2026-08-10T07:58:15.309990Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a34
+2026-08-10T07:58:15.310011Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800b03
+2026-08-10T07:58:15.310032Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800b05
+2026-08-10T07:58:15.310053Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a3f
+2026-08-10T07:58:15.310074Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a38
+2026-08-10T07:58:15.310095Z qemu-system-x86_64: info: nvkvm: bridge refusals: 3 total, 1 distinct (these ANSWER the command and so never reach the unserviced list)
+2026-08-10T07:58:15.310116Z qemu-system-x86_64: info: nvkvm:   bridge refusal BridgeRefusal::ReservedClient x3
+2026-08-10T07:58:15.310139Z qemu-system-x86_64: info: nvkvm: promote-ctx: NO REFUSAL LATCHED — no GPU_PROMOTE_CTX was refused this boot. ⊘ Read this against the 0x2080012b rows in the control census below: absent there too means none arrived.
+2026-08-10T07:58:15.310159Z qemu-system-x86_64: info: nvkvm: probe-arm set: EMPTY (shipping configuration: an arming is served only if the index is on SILENT_NOTIFIERS — the event cannot occur — or DELIVERED_NOTIFIERS — this device raises it; all others refused)
+2026-08-10T07:58:15.310181Z qemu-system-x86_64: info: nvkvm: controls: 117 answered, 26 distinct cmd/result rows (result 0 = served; non-zero = served-but-REFUSED, which reaches no other list)
+2026-08-10T07:58:15.310202Z qemu-system-x86_64: info: nvkvm:   control 0x20800a36 result 0x00000000 x3
+2026-08-10T07:58:15.310223Z qemu-system-x86_64: info: nvkvm:   control 0x20800a41 result 0x00000000 x3
+2026-08-10T07:58:15.310244Z qemu-system-x86_64: info: nvkvm:   control 0x208001b0 result 0x00000000 x6
+2026-08-10T07:58:15.310266Z qemu-system-x86_64: info: nvkvm:   control 0x20800a40 result 0x00000000 x3
+2026-08-10T07:58:15.310287Z qemu-system-x86_64: info: nvkvm:   control 0x20801112 result 0x00000000 x3
+2026-08-10T07:58:15.310308Z qemu-system-x86_64: info: nvkvm:   control 0x20800a5c result 0x00000000 x3
+2026-08-10T07:58:15.310329Z qemu-system-x86_64: info: nvkvm:   control 0x20800a1c result 0x00000000 x3
+2026-08-10T07:58:15.310380Z qemu-system-x86_64: info: nvkvm:   control 0x20801803 result 0x00000000 x3
+2026-08-10T07:58:15.310402Z qemu-system-x86_64: info: nvkvm:   control 0x20800af3 result 0x00000000 x6
+2026-08-10T07:58:15.310424Z qemu-system-x86_64: info: nvkvm:   control 0x20800aac result 0x00000000 x3
+2026-08-10T07:58:15.310445Z qemu-system-x86_64: info: nvkvm:   control 0x20800a61 result 0x00000000 x12
+2026-08-10T07:58:15.310466Z qemu-system-x86_64: info: nvkvm:   control 0x20802a08 result 0x00000000 x9
+2026-08-10T07:58:15.310487Z qemu-system-x86_64: info: nvkvm:   control 0x20800301 result 0x00000000 x9
+2026-08-10T07:58:15.310508Z qemu-system-x86_64: info: nvkvm:   control 0x20800a59 result 0x00000000 x3
+2026-08-10T07:58:15.310530Z qemu-system-x86_64: info: nvkvm:   control 0x20800a6c result 0x00000000 x9
+2026-08-10T07:58:15.310551Z qemu-system-x86_64: info: nvkvm:   control 0x20800a9f result 0x00000000 x3
+2026-08-10T07:58:15.310572Z qemu-system-x86_64: info: nvkvm:   control 0x20800a1f result 0x00000000 x3
+2026-08-10T07:58:15.310593Z qemu-system-x86_64: info: nvkvm:   control 0x20800a2a result 0x00000000 x3
+2026-08-10T07:58:15.310623Z qemu-system-x86_64: info: nvkvm:   control 0x20800a26 result 0x00000000 x3
+2026-08-10T07:58:15.310645Z qemu-system-x86_64: info: nvkvm:   control 0x20800a22 result 0x00000000 x3
+2026-08-10T07:58:15.310666Z qemu-system-x86_64: info: nvkvm:   control 0x20800a3d result 0x00000000 x3
+2026-08-10T07:58:15.310687Z qemu-system-x86_64: info: nvkvm:   control 0x20800a48 result 0x00000000 x3
+2026-08-10T07:58:15.310735Z qemu-system-x86_64: info: nvkvm:   control 0x20800a32 result 0x00000000 x3
+2026-08-10T07:58:15.310757Z qemu-system-x86_64: info: nvkvm:   control 0x90f10106 result 0x00000000 x6
+2026-08-10T07:58:15.310778Z qemu-system-x86_64: info: nvkvm:   control 0xa06f0103 result 0x00000000 x6
+2026-08-10T07:58:15.310799Z qemu-system-x86_64: info: nvkvm:   control 0xa06f0104 result 0x00000000 x3
+2026-08-10T07:58:15.310821Z qemu-system-x86_64: info: nvkvm: notifier armings (0x20800301): 9 total, 9 distinct (result 0xffffffff = nothing answered)
+2026-08-10T07:58:15.310842Z qemu-system-x86_64: info: nvkvm:   arming event 194 action 2 client 0xc1e00002 object 0xcaf00001 result 0x00000000 x1
+2026-08-10T07:58:15.310864Z qemu-system-x86_64: info: nvkvm:   arming event 35 action 2 client 0xc1e00005 object 0x0000000b result 0x00000000 x1
+2026-08-10T07:58:15.310886Z qemu-system-x86_64: info: nvkvm:   arming event 35 action 2 client 0xc1e00006 object 0x0000000c result 0x00000000 x1
+2026-08-10T07:58:15.310907Z qemu-system-x86_64: info: nvkvm:   arming event 194 action 2 client 0xc1e0000a object 0xcaf00001 result 0x00000000 x1
+2026-08-10T07:58:15.310929Z qemu-system-x86_64: info: nvkvm:   arming event 35 action 2 client 0xc1e0000d object 0x0000000b result 0x00000000 x1
+2026-08-10T07:58:15.310950Z qemu-system-x86_64: info: nvkvm:   arming event 35 action 2 client 0xc1e0000e object 0x0000000c result 0x00000000 x1
+2026-08-10T07:58:15.310972Z qemu-system-x86_64: info: nvkvm:   arming event 194 action 2 client 0xc1e0000f object 0xcaf00001 result 0x00000000 x1
+2026-08-10T07:58:15.310993Z qemu-system-x86_64: info: nvkvm:   arming event 35 action 2 client 0xc1e00012 object 0x0000000b result 0x00000000 x1
+2026-08-10T07:58:15.311015Z qemu-system-x86_64: info: nvkvm:   arming event 35 action 2 client 0xc1e00013 object 0x0000000c result 0x00000000 x1
+2026-08-10T07:58:15.311036Z qemu-system-x86_64: info: nvkvm: channel binds (0xa06f0104): 3 total, 3 distinct (result 0xffffffff = nothing answered)
+2026-08-10T07:58:15.311058Z qemu-system-x86_64: info: nvkvm:   bind engineType 11 (COPY2) client 0xc1e00006 object 0x00000002 result 0x00000000 x1
+2026-08-10T07:58:15.311080Z qemu-system-x86_64: info: nvkvm:   bind engineType 11 (COPY2) client 0xc1e0000e object 0x00000002 result 0x00000000 x1
+2026-08-10T07:58:15.311102Z qemu-system-x86_64: info: nvkvm:   bind engineType 11 (COPY2) client 0xc1e00013 object 0x00000002 result 0x00000000 x1
+2026-08-10T07:58:15.311124Z qemu-system-x86_64: info: nvkvm: isolates: 1 materialized, 1 live, 0 refusing (0 no-plane, 0 spawn-failed)
+2026-08-10T07:58:15.311146Z qemu-system-x86_64: info: nvkvm: doorbells: 3 arrived, 3 served, 0 REFUSED by name; last token 0x00010002 (3 logged)
+2026-08-10T07:58:15.311168Z qemu-system-x86_64: info: nvkvm:   of the served: 0 local (CPU CE, end witnessed), 3 forwarded (host channel rung)
+2026-08-10T07:58:15.311193Z qemu-system-x86_64: info: nvkvm:   by engine: GrCompute=0 GrGraphics=0 Ce=3 NvEnc=0 NvDec=0 Other=0 unrouted=0
+2026-08-10T07:58:15.311215Z qemu-system-x86_64: info: nvkvm: gpfifo rings: 6 declared, 6 with a non-zero address; first 0x0000000120064000 (4096 entries) — GPU VIRTUAL, untranslated

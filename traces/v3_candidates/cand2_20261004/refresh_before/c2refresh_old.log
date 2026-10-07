@@ -1,0 +1,8 @@
+START 2026-10-04T11:02:41+00:00
+[boot_capture:c2refresh_old] BINARY kf3-bin-rev:9d82f259  (/workspace/bench/kf3-bins/9d82f259/qemu-system-x86_64)  ⇒ every claim from this boot cites THIS revision
+[boot_capture:c2refresh_old] host dmesg watermark: 1535 lines
+[boot_capture:c2refresh_old] booting (extra args: -vga none -qmp unix:/workspace/bench/run_c2refresh_old.qmp,server=on,wait=off)
+★ boot_nvkvm: no kf3 binary for revision 9d82f259 at /workspace/bench/kf3-bins/9d82f259/qemu-system-x86_64 — run scripts/bench/build_kf3.sh from this checkout
+[boot_capture:c2refresh_old] QEMU exited early — tail of its own report:
+[boot_capture:c2refresh_old] ★ FAILED (boot): QEMU pid 347060 is gone before ssh came up
+EXIT rc=2 2026-10-04T11:02:48+00:00

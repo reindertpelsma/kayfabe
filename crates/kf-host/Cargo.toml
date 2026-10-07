@@ -1,0 +1,15 @@
+[package]
+name = "kf-host"
+description = "v3 host RM verbs, in-process: one RM session on the host GPU (no isolates, no IPC plane). Verbs are AUTHORED, never forwarded (author_host_flags)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kf-util.workspace = true
+kf-arch.workspace = true
+kf-abi.workspace = true
+kf-linux-raw.workspace = true
+
+[lints]
+workspace = true

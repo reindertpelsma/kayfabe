@@ -1,0 +1,14 @@
+[182739.491358] NVRM: RmIoctl: unknown NVRM ioctl command: 0x7f
+[182739.697738] NVRM: RmIoctl: unknown NVRM ioctl command: 0x7f
+[182739.697776] NVRM: RmIoctl: unknown NVRM ioctl command: 0x7f
+[182739.699272] NVRM: GPU at PCI:0000:00:07: GPU-45cf77eb-c44c-b28e-2059-cf997edecb5e
+[182739.699277] NVRM: Xid (PCI:0000:00:07): 31, pid=1047766, name=nvd_prog, channel 0x00000018, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x7a76_2a400000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[182739.706623] NVRM: RmIoctl: unknown NVRM ioctl command: 0x7f
+[182739.706639] NVRM: RmIoctl: unknown NVRM ioctl command: 0x7f
+[182739.706652] NVRM: RmIoctl: unknown NVRM ioctl command: 0x7f
+[182739.706671] NVRM: RmIoctl: unknown NVRM ioctl command: 0x7f
+[182739.706682] NVRM: RmIoctl: unknown NVRM ioctl command: 0x7f
+[182739.706693] NVRM: RmIoctl: unknown NVRM ioctl command: 0x7f
+[182739.706702] NVRM: RmIoctl: unknown NVRM ioctl command: 0x7f
+[182739.706725] NVRM: RmIoctl: unknown NVRM ioctl command: 0x7f
+[182739.762857] NVRM: RmIoctl: unknown NVRM ioctl command: 0x7f

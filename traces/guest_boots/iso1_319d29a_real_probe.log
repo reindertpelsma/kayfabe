@@ -1,0 +1,81 @@
+=== boot_capture tag=iso1 at 2026-08-09T08:17:06+00:00 ===
+=== source revision: 319d29a3c ===
+=== qemu binary: -rwxr-xr-x 1 root root 86196144 Aug  9 08:15 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:319d29a3cb0f988dc2c85f92c1b2676bae4c17bd 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /workspace/bench/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=92551d70f36ddbef
+    used: /workspace/bench/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+No devices were found
+SMI_RC=6
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Aug  9 08:17 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Aug  9 08:17 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Aug  9 08:17 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Aug  9 08:17 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Aug  9 08:17 .
+drwxr-xr-x 18 root root   4000 Aug  9 08:17 ..
+cr--------  1 root root 240, 1 Aug  9 08:17 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Aug  9 08:17 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /workspace/bench/cup2_hook_deadline.sh at 2026-08-09T08:17:29+00:00 ===
+=== cup2: locating a REAL cuda.h (3 of 5 hits in this guest are the PowerMac ADB
+===       header and sort AHEAD of it — check CONTENT, never the path) ===
+REAL: /usr/local/include/cuda.h
+=== cup2: build ===
+GCC_RC=0
+=== cup2: run (detached, deadline 180s on the HOST's clock) ===
+LAUNCHED pid=1513
+FAIL cuInit(0) -> unknown error (999)
+CUP2_RC=1
+=== cup2: guest dmesg delta ===
+[   43.482971] NVRM: iovaspaceDestruct_IMPL: 1 left-over mappings in IOVAS 0x3
+[   43.483000] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0x65:1249)
+[   43.489010] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0
+[   62.335785] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   62.336316] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   63.530727] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   63.594871] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   63.595081] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   63.595173] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   71.413622] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call timed out [NV_ERR_TIMEOUT] (0x00000065) returned from memmgrMemSet(pMemoryManager, &vidSurface, 0, sizeof vidmemData, TRANSFER_FLAGS_PREFER_CE) @ mem_mgr.c:463
+[   71.414058] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call timed out [NV_ERR_TIMEOUT] (0x00000065) returned from status @ mem_mgr.c:4159
+[   75.414726] NVRM: nvAssertFailedNoLog: Assertion failed: pCeUtils->lastCompletedPayload == lastSubmittedPayload @ ce_utils.c:349
+[   76.247414] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call timed out [NV_ERR_TIMEOUT] (0x00000065) returned from memmgrInitCeUtils(pMemoryManager, NV_FALSE, NV_TRUE) @ mem_mgr.c:526
+[   76.247586] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   76.247655] NVRM: RmInitNvDevice: *** Cannot load state into the device
+[   76.247657] NVRM: RmInitAdapter: RmInitNvDevice failed, bailing out of RmInitAdapter
+[   76.274859] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[   77.171998] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+[   77.205377] NVRM: iovaspaceDestruct_IMPL: 1 left-over mappings in IOVAS 0x3
+[   77.205771] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0x65:1249)
+[   77.211898] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0
+[   78.179032] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   78.179304] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   79.414094] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   79.460743] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   79.460956] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   79.461043] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   88.140765] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call timed out [NV_ERR_TIMEOUT] (0x00000065) returned from memmgrMemSet(pMemoryManager, &vidSurface, 0, sizeof vidmemData, TRANSFER_FLAGS_PREFER_CE) @ mem_mgr.c:463
+[   88.141161] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call timed out [NV_ERR_TIMEOUT] (0x00000065) returned from status @ mem_mgr.c:4159
+[   92.141547] NVRM: nvAssertFailedNoLog: Assertion failed: pCeUtils->lastCompletedPayload == lastSubmittedPayload @ ce_utils.c:349
+[   93.032721] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call timed out [NV_ERR_TIMEOUT] (0x00000065) returned from memmgrInitCeUtils(pMemoryManager, NV_FALSE, NV_TRUE) @ mem_mgr.c:526
+[   93.032791] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   93.032879] NVRM: RmInitNvDevice: *** Cannot load state into the device
+[   93.032882] NVRM: RmInitAdapter: RmInitNvDevice failed, bailing out of RmInitAdapter
+[   93.057536] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[   93.951376] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+[   93.987794] NVRM: iovaspaceDestruct_IMPL: 1 left-over mappings in IOVAS 0x3
+[   93.987828] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0x65:1249)
+[   93.994676] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0
+[   94.008596] NVRM: nvAssertFailedNoLog: Assertion failed: rmapiLockIsOwner() && rmGpuLockIsOwner() @ conf_compute_api.c:78
+HOOK_RC=0

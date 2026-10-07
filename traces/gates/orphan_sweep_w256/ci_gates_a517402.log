@@ -1,0 +1,5 @@
+GATES_START 2026-08-11T09:34:01+00:00 rev=a517402
+== git status (must be clean before gating):
+CLIPPY_RC=0
+FMT_RC=0
+GATES_DONE 2026-08-11T09:35:07+00:00

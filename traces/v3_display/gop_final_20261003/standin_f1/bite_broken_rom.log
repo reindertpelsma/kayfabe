@@ -1,0 +1,6 @@
+# Bite-check of the corrected sb_deny 'deny' rule (2026-10-03, local, KVM, deny-policy OVMF built by
+# scripts/display/build_ovmf_deny.sh from QEMU 10.2.4's roms/edk2). A throwaway copy of gop_standin.sh
+# added one arm, sb_deny_broken: the tail-padded ROM with its PE signature overwritten ("XX" at 0x200),
+# so it starts on no firmware. The old rule (PASS whenever the ROM did not start) would have PASSed it.
+GOP_STANDIN arm=sb_deny_broken verdict=FAIL not started under the deny policy, but not on stock OVMF either (control: rom_loaded=0 rom_started=0 secure_boot=1 app_result="KFGOP-TEST RESULT FAIL checks=1 failed=2" app_denied="no" ) — a ROM that cannot start, not a denial: rom_loaded=0 rom_started=0 secure_boot=1 app_result="KFGOP-TEST RESULT FAIL checks=1 failed=2" app_denied="no" 
+GOP_STANDIN_SUMMARY arms=1 passed=0 observed=0 skipped=0 failed=1 sb_deny_broken=FAIL 2026-10-03T21:16:25+02:00

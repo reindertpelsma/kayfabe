@@ -1,0 +1,13 @@
+cupy|PASS|noXid|slotfull=0||
+vulkaninfo|TIMEOUT|noXid|slotfull=0||
+vkpeak|FAIL|noXid|slotfull=0||No vulkan device
+egl_offscreen|FAIL|noXid|slotfull=0||CHECK egl_gl_Mtri_s FAIL
+nvenc_h264|FAIL|noXid|slotfull=0||[h264_nvenc @ 0x5f539a0d19c0] OpenEncodeSessionEx failed: unsupported device (2): (no details)
+nvenc_hevc|FAIL|noXid|slotfull=0||[hevc_nvenc @ 0x5ffb80c9c9c0] OpenEncodeSessionEx failed: unsupported device (2): (no details)
+nvdec_h264|FAIL|noXid|slotfull=0||[h264 @ 0x627a9d891f40] Failed setup for format cuda: hwaccel initialisation returned error.
+stream_default|PASS|noXid|slotfull=0||
+stream_created|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|CHECK created FAIL sync=719(unspecified launch failure)
+stream_nonblocking|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|CHECK nonblocking FAIL sync=719(unspecified launch failure)
+stream_perthread|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|CHECK perthread FAIL sync=719(unspecified launch failure)
+stream_two|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|CHECK two_a FAIL sync=719(unspecified launch failure)
+stream_created2nd|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|CHECK c2_created FAIL sync=719(unspecified launch failure)

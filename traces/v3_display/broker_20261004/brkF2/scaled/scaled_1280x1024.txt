@@ -1,0 +1,11 @@
+rc=0
+Screen 0: minimum 8 x 8, current 1280 x 1024, maximum 32767 x 32767
+nvkvm-broker: the guest changed resolution to 1280x1024: keeping the window and rescaling into it
+set=0
+D_HOST_left_ptr CURSOR w=192 h=192 hot=3,1 serial=26 name=[] visible_px=140 bbox_rel_hot=-1,-1,10,16 fnv_rel_hot=0xaf37312f3034c46f
+D_HOST_POINTER_left_ptr x:400 y:300 screen:0 window:4194304
+D_GUEST_left_ptr CURSOR w=24 h=24 hot=3,1 serial=15 name=[left_ptr] visible_px=254 bbox_rel_hot=-1,-1,14,22 fnv_rel_hot=0x1da6c2469055d3aa POINTER 490 399 
+set=0
+D_HOST_crosshair CURSOR w=192 h=192 hot=9,9 serial=27 name=[] visible_px=169 bbox_rel_hot=-9,-8,8,8 fnv_rel_hot=0x165aecfdd2f99b3d
+D_HOST_POINTER_crosshair x:400 y:300 screen:0 window:4194304
+D_GUEST_crosshair CURSOR w=24 h=24 hot=11,11 serial=16 name=[crosshair] visible_px=281 bbox_rel_hot=-11,-11,11,12 fnv_rel_hot=0x548443b1d42e7d42 POINTER 490 399 

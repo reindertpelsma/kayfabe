@@ -1,0 +1,22 @@
+JOBSTART 2026-10-04T02:20:29+00:00
+SOURCE_REV 0ac157b2fff15294073b95acbe7377a6133ae5aa dirty=0
+ATTEMPT 2 tag=cand1bmb2 target=/workspace/bench/kf-target-cand1b2 (fresh) nproc=19 2026-10-04T02:20:29+00:00
+ATTEMPT 2 MB_RC=0
+  | START 2026-10-04T02:20:29+00:00
+  | HEAD=0ac157b2fff15294073b95acbe7377a6133ae5aa CHECKOUT=/workspace/bench/verify-worktrees/cand1bmb2.ldK7Pa
+  | TESTS passed 1937 failed 0
+  | GATES_RC=0
+  | V3_GATES_SUMMARY pass=9 fail=0
+  | KF3_RC=0
+  | BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+  | FG_RC=0
+  | SUITE_RC=0
+  | FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+  | BIRTH_CENSUS_SELFTEST cases=11 wrong=0
+  | BIRTH_CENSUS_SUITE arms=30 births=161 user=161 cuda_threads=90
+  | BIRTH_CENSUS_GATES births=11 user=11 refused=0
+  | BIRTH_CENSUS_OK arms=30 suite_births=161 gate_births=11 all PRIVILEGED_CHANNEL=0 privilege=USER
+  | EXIT rc=0 2026-10-04T02:43:37+00:00
+KF3_BIN /workspace/bench/kf3-bins/0ac157b2/qemu-system-x86_64 89513304 2026-10-04 02:23:23.229343708 +0000 sha256=4267680c50759413
+MB_FINAL=0
+JOBEND rc=0 2026-10-04T02:43:37+00:00

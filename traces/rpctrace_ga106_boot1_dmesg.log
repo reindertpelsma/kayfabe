@@ -1,0 +1,5 @@
+[188936.671299] NVRM: rpctrace: armed, ring 67108864 bytes, rec_hdr 48 bytes
+[188936.671631] nvidia-nvlink: Nvlink Core is being initialized, major device number 238
+
+[188936.703010] nvidia 0000:00:07.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=none:owns=io+mem
+[188936.748434] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Aug  3 15:28:57 UTC 2026

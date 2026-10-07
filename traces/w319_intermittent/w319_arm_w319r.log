@@ -1,0 +1,30 @@
+=== W319 ARM START tree=/workspace/kayfabe_w319 prefix=w319r n=3 2026-08-14T17:37:10+00:00
+=== HEAD=40cc9e0edec9a87d8ba190001ff05884b870d070
+=== DIRT=[]
+=== ARM ENV (intent — the boot's own W319KNOB line is the record of EXECUTION):
+===   KAYFABE_VAS_DRAIN_ROW_LIMIT=11800
+===   KAYFABE_VAS_DRAIN_BUDGET_MS=[⊘unset ⇒ 3000 default]
+===   KAYFABE_VAS_DRAIN_ROW_LIMIT=[11800]
+--- boot 1/3 tag=w319r1 2026-08-14T17:37:14+00:00
+    BOOT 1: [CUP3_VAL=NO_KERNEL_LINE] [CUP3_RC=1]
+            ★ KNOB=[W319KNOB[budget_ms=3000 row_limit=11800]]
+            ★★★ DRAIN=[DRAIN[visited=true asked=11800 pinned=11800 refused=0 DRAIN_MS=2693 W319KNOB[budget_ms=3000 row_limit=11800] complete=false ⚠⚠ ROW CAP HIT ]
+            last_pinned_va=0x203217000  budget_hit_lines=[0] row_cap_hit_lines=[1]
+            hostdmesg_bytes=[228] Xid_lines=[1] Xid (PCI:0000:00:07): 31 ENGINE CE3 HUBCLIENT_CE1 faulted @ 0x2_0440f000 FAULT_PDE ACCESS_TYPE_VIRT_WRITE 
+            guest NVRM_lines=[31] stall_lines=[0]
+--- boot 2/3 tag=w319r2 2026-08-14T17:39:21+00:00
+    BOOT 2: [CUP3_VAL=NO_KERNEL_LINE] [CUP3_RC=1]
+            ★ KNOB=[W319KNOB[budget_ms=3000 row_limit=11800]]
+            ★★★ DRAIN=[DRAIN[visited=true asked=11800 pinned=11800 refused=0 DRAIN_MS=2508 W319KNOB[budget_ms=3000 row_limit=11800] complete=false ⚠⚠ ROW CAP HIT ]
+            last_pinned_va=0x203217000  budget_hit_lines=[0] row_cap_hit_lines=[1]
+            hostdmesg_bytes=[228] Xid_lines=[1] Xid (PCI:0000:00:07): 31 ENGINE CE3 HUBCLIENT_CE1 faulted @ 0x2_0440f000 FAULT_PDE ACCESS_TYPE_VIRT_WRITE 
+            guest NVRM_lines=[31] stall_lines=[0]
+--- boot 3/3 tag=w319r3 2026-08-14T17:41:29+00:00
+    BOOT 3: [CUP3_VAL=NO_KERNEL_LINE] [CUP3_RC=1]
+            ★ KNOB=[W319KNOB[budget_ms=3000 row_limit=11800]]
+            ★★★ DRAIN=[DRAIN[visited=true asked=11800 pinned=11800 refused=0 DRAIN_MS=2775 W319KNOB[budget_ms=3000 row_limit=11800] complete=false ⚠⚠ ROW CAP HIT ]
+            last_pinned_va=0x203217000  budget_hit_lines=[0] row_cap_hit_lines=[1]
+            hostdmesg_bytes=[232] Xid_lines=[1] Xid (PCI:0000:00:07): 31 ENGINE GRAPHICS HUBCLIENT_FE faulted @ 0x2_0440f000 FAULT_PDE ACCESS_TYPE_VIRT_WRITE 
+            guest NVRM_lines=[31] stall_lines=[0]
+=== W319 ARM EXIT status=0 2026-08-14T17:43:27+00:00
+=== W319 ARM TERMINATOR w319r rc=0 2026-08-14T17:43:27+00:00

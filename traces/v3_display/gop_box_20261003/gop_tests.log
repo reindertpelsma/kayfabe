@@ -1,0 +1,42 @@
+GOP_TESTS_START 2026-10-03T16:56:07+00:00 rev=8c86c94a
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/8c86c94a/qemu-system-x86_64 rev=8c86c94a mtime=2026-10-03 16:56:19.100602399 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+B0_LANE_RC=0
+DISPLAY_HOST_XID=0 
+DISPLAY_BOOT_VGA dev=0000:00:02.0 boot_vga=1 vgaarb_lines=2 
+DISPLAY_CONNECTED=yes card=/dev/dri/card0
+DISPLAY_PATTERN_MATCH=yes (pixel-exact 1920x1080)
+DISPLAY_KFDISP_FLIPS=120/120 flip_hz=60.03
+DISPLAY_LANE_EXIT rc=0 2026-10-03T16:58:05+00:00
+B9R_LANE_RC=0
+B9R_REFUSED=1 BOOT_ON=0
+2026-10-03T16:58:08.725063Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,gop=on,rombar=0: kf3: gop=on refused: rombar=0 asks for no ROM BAR (
+B1_LANE_RC=0
+DISPLAY_HOST_XID=0 
+DISPLAY_BOOT_VGA dev=0000:00:02.0 boot_vga=1 vgaarb_lines=2 
+DISPLAY_CONNECTED=yes card=/dev/dri/card1
+DISPLAY_PATTERN_MATCH=yes (pixel-exact 1920x1080)
+DISPLAY_KFDISP_FLIPS=120/120 flip_hz=59.10
+DISPLAY_LANE_EXIT rc=0 2026-10-03T17:00:01+00:00
+kf3: boot display ON — option ROM 9728 bytes (10de:2504, KFGP BAR1 +0x0, 1920x1080 pitch 7680, G = 0x7f0000); BAR1 [0, G) seeded with store [0, G), zeroed on the GPU
+2026-10-03T16:58:19.533414Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,gop=on: info: kf3: boot display option ROM registered: 9728 bytes in a 16384-byte ROM BAR
+kf3: display: boot layer — store [0, 0x7e9000) as 1920x1080 pitch 7680, shown until the guest arms a head
+kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 
+kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 
+kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 
+kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 
+kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 
+kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 
+kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 
+kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 
+kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 
+kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 
+kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 
+kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 
+kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 
+kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 
+kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 
+kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 
+kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 
+t001.ppm t002.ppm t004.ppm t006.ppm t009.ppm t012.ppm t016.ppm t020.ppm t025.ppm t030.ppm t040.ppm t050.ppm t060.ppm t075.ppm t090.ppm 
+GOP_TESTS_EXIT 2026-10-03T17:00:01+00:00

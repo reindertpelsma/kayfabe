@@ -1,0 +1,230 @@
+[   339.721] 
+X.Org X Server 1.21.1.11
+X Protocol Version 11, Revision 0
+[   339.721] Current Operating System: Linux ubuntu 6.8.0-142-generic #142-Ubuntu SMP PREEMPT_DYNAMIC Wed Sep  2 14:24:27 UTC 2026 x86_64
+[   339.722] Kernel command line: BOOT_IMAGE=/vmlinuz-6.8.0-142-generic root=LABEL=cloudimg-rootfs ro console=tty1 console=ttyS0
+[   339.722] xorg-server 2:21.1.12-1ubuntu1.8 (For technical support please see http://www.ubuntu.com/support) 
+[   339.722] Current version of pixman: 0.42.2
+[   339.722] 	Before reporting problems, check http://wiki.x.org
+	to make sure that you have the latest version.
+[   339.722] Markers: (--) probed, (**) from config file, (==) default setting,
+	(++) from command line, (!!) notice, (II) informational,
+	(WW) warning, (EE) error, (NI) not implemented, (??) unknown.
+[   339.722] (==) Log file: "/var/log/Xorg.0.log", Time: Sat Oct  3 16:40:05 2026
+[   339.722] (==) Using system config directory "/usr/share/X11/xorg.conf.d"
+[   339.722] (==) No Layout section.  Using the first Screen section.
+[   339.722] (==) No screen section available. Using defaults.
+[   339.722] (**) |-->Screen "Default Screen Section" (0)
+[   339.722] (**) |   |-->Monitor "<default monitor>"
+[   339.723] (==) No monitor specified for screen "Default Screen Section".
+	Using a default monitor configuration.
+[   339.723] (**) Allowing byte-swapped clients
+[   339.723] (==) Automatically adding devices
+[   339.723] (==) Automatically enabling devices
+[   339.723] (==) Automatically adding GPU devices
+[   339.723] (==) Automatically binding GPU devices
+[   339.723] (==) Max clients allowed: 256, resource mask: 0x1fffff
+[   339.723] (WW) The directory "/usr/share/fonts/X11/cyrillic" does not exist.
+[   339.723] 	Entry deleted from font path.
+[   339.723] (WW) The directory "/usr/share/fonts/X11/100dpi/" does not exist.
+[   339.723] 	Entry deleted from font path.
+[   339.723] (WW) The directory "/usr/share/fonts/X11/75dpi/" does not exist.
+[   339.723] 	Entry deleted from font path.
+[   339.723] (WW) The directory "/usr/share/fonts/X11/Type1" does not exist.
+[   339.723] 	Entry deleted from font path.
+[   339.723] (WW) The directory "/usr/share/fonts/X11/100dpi" does not exist.
+[   339.723] 	Entry deleted from font path.
+[   339.723] (WW) The directory "/usr/share/fonts/X11/75dpi" does not exist.
+[   339.723] 	Entry deleted from font path.
+[   339.723] (==) FontPath set to:
+	/usr/share/fonts/X11/misc,
+	built-ins
+[   339.723] (==) ModulePath set to "/usr/lib/xorg/modules"
+[   339.723] (II) The server relies on udev to provide the list of input devices.
+	If no devices become available, reconfigure udev or disable AutoAddDevices.
+[   339.723] (II) Loader magic: 0x5cc6214fc020
+[   339.723] (II) Module ABI versions:
+[   339.723] 	X.Org ANSI C Emulation: 0.4
+[   339.723] 	X.Org Video Driver: 25.2
+[   339.723] 	X.Org XInput driver : 24.4
+[   339.723] 	X.Org Server Extension : 10.0
+[   339.725] (++) using VT number 7
+
+[   339.725] (II) systemd-logind: logind integration requires -keeptty and -keeptty was not provided, disabling logind integration
+[   339.727] (II) xfree86: Adding drm device (/dev/dri/card0)
+[   339.727] (II) Platform probe for /sys/devices/pci0000:00/0000:00:02.0/drm/card0
+[   339.752] (--) PCI:*(0@0:2:0) 10de:2504:3842:3656 rev 161, Mem @ 0xfd000000/16777216, 0xe0000000000/134217728, 0xe0008000000/33554432, 0xfe040000/16384, BIOS @ 0x????????/131072
+[   339.752] (II) LoadModule: "glx"
+[   339.752] (II) Loading /usr/lib/xorg/modules/extensions/libglx.so
+[   339.754] (II) Module glx: vendor="X.Org Foundation"
+[   339.754] 	compiled for 1.21.1.11, module version = 1.0.0
+[   339.755] 	ABI class: X.Org Server Extension, version 10.0
+[   341.515] (==) Matched nouveau as autoconfigured driver 0
+[   341.515] (==) Matched modesetting as autoconfigured driver 1
+[   341.515] (==) Matched fbdev as autoconfigured driver 2
+[   341.515] (==) Matched vesa as autoconfigured driver 3
+[   341.515] (==) Assigned the driver to the xf86ConfigLayout
+[   341.515] (II) LoadModule: "nouveau"
+[   341.515] (WW) Warning, couldn't open module nouveau
+[   341.515] (EE) Failed to load module "nouveau" (module does not exist, 0)
+[   341.515] (II) LoadModule: "modesetting"
+[   341.515] (II) Loading /usr/lib/xorg/modules/drivers/modesetting_drv.so
+[   341.516] (II) Module modesetting: vendor="X.Org Foundation"
+[   341.516] 	compiled for 1.21.1.11, module version = 1.21.1
+[   341.516] 	Module class: X.Org Video Driver
+[   341.516] 	ABI class: X.Org Video Driver, version 25.2
+[   341.516] (II) LoadModule: "fbdev"
+[   341.516] (WW) Warning, couldn't open module fbdev
+[   341.516] (EE) Failed to load module "fbdev" (module does not exist, 0)
+[   341.516] (II) LoadModule: "vesa"
+[   341.516] (WW) Warning, couldn't open module vesa
+[   341.516] (EE) Failed to load module "vesa" (module does not exist, 0)
+[   343.121] (==) Matched nouveau as autoconfigured driver 0
+[   343.121] (==) Matched modesetting as autoconfigured driver 1
+[   343.121] (==) Matched fbdev as autoconfigured driver 2
+[   343.121] (==) Matched vesa as autoconfigured driver 3
+[   343.121] (==) Assigned the driver to the xf86ConfigLayout
+[   343.121] (II) LoadModule: "nouveau"
+[   343.122] (WW) Warning, couldn't open module nouveau
+[   343.122] (EE) Failed to load module "nouveau" (module does not exist, 0)
+[   343.122] (II) LoadModule: "modesetting"
+[   343.122] (II) Loading /usr/lib/xorg/modules/drivers/modesetting_drv.so
+[   343.122] (II) Module modesetting: vendor="X.Org Foundation"
+[   343.122] 	compiled for 1.21.1.11, module version = 1.21.1
+[   343.122] 	Module class: X.Org Video Driver
+[   343.122] 	ABI class: X.Org Video Driver, version 25.2
+[   343.122] (II) UnloadModule: "modesetting"
+[   343.122] (II) Unloading modesetting
+[   343.122] (II) Failed to load module "modesetting" (already loaded, 0)
+[   343.122] (II) LoadModule: "fbdev"
+[   343.122] (WW) Warning, couldn't open module fbdev
+[   343.122] (EE) Failed to load module "fbdev" (module does not exist, 0)
+[   343.122] (II) LoadModule: "vesa"
+[   343.122] (WW) Warning, couldn't open module vesa
+[   343.122] (EE) Failed to load module "vesa" (module does not exist, 0)
+[   343.122] (II) modesetting: Driver for Modesetting Kernel Drivers: kms
+[   343.137] (II) modeset(0): using drv /dev/dri/card0
+[   343.145] (II) modeset(0): Creating default Display subsection in Screen section
+	"Default Screen Section" for depth/fbbpp 24/32
+[   343.145] (==) modeset(0): Depth 24, (==) framebuffer bpp 32
+[   343.145] (==) modeset(0): RGB weight 888
+[   343.145] (==) modeset(0): Default visual is TrueColor
+[   343.145] (II) Loading sub module "glamoregl"
+[   343.145] (II) LoadModule: "glamoregl"
+[   343.146] (II) Loading /usr/lib/xorg/modules/libglamoregl.so
+[   343.148] (II) Module glamoregl: vendor="X.Org Foundation"
+[   343.148] 	compiled for 1.21.1.11, module version = 1.0.1
+[   343.148] 	ABI class: X.Org ANSI C Emulation, version 0.4
+[   343.407] (II) modeset(0): glamor X acceleration enabled on NVIDIA GeForce RTX 3060/PCIe/SSE2
+[   343.408] (II) modeset(0): glamor initialized
+[   343.408] (==) modeset(0): VariableRefresh: disabled
+[   343.408] (==) modeset(0): AsyncFlipSecondaries: disabled
+[   343.414] (II) modeset(0): Output DVI-D-1 has no monitor section
+[   343.422] (II) modeset(0): EDID for output DVI-D-1
+[   343.422] (II) modeset(0): Manufacturer: KFB  Model: 1  Serial#: 1
+[   343.422] (II) modeset(0): Year: 2026  Week: 39
+[   343.422] (II) modeset(0): EDID Version: 1.4
+[   343.422] (II) modeset(0): Digital Display Input
+[   343.422] (II) modeset(0): 8 bits per channel
+[   343.422] (II) modeset(0): Digital interface is DVI
+[   343.422] (II) modeset(0): Max Image Size [cm]: horiz.: 25  vert.: 25
+[   343.422] (II) modeset(0): Gamma: 2.20
+[   343.422] (II) modeset(0): No DPMS capabilities specified
+[   343.422] (II) modeset(0): Supported color encodings: RGB 4:4:4 
+[   343.422] (II) modeset(0): Default color space is primary color space
+[   343.422] (II) modeset(0): First detailed timing is preferred mode
+[   343.422] (II) modeset(0): Preferred mode is native pixel format and refresh rate
+[   343.422] (II) modeset(0): redX: 0.640 redY: 0.330   greenX: 0.300 greenY: 0.600
+[   343.422] (II) modeset(0): blueX: 0.150 blueY: 0.060   whiteX: 0.312 whiteY: 0.329
+[   343.422] (II) modeset(0): Supported established timings:
+[   343.422] (II) modeset(0): 640x480@60Hz
+[   343.422] (II) modeset(0): 800x600@60Hz
+[   343.422] (II) modeset(0): 1024x768@60Hz
+[   343.422] (II) modeset(0): Manufacturer's mask: 0
+[   343.422] (II) modeset(0): Supported standard timings:
+[   343.422] (II) modeset(0): #0: hsize: 1280  vsize 1024  refresh: 60  vid: 32897
+[   343.422] (II) modeset(0): #1: hsize: 1600  vsize 900  refresh: 60  vid: 49321
+[   343.422] (II) modeset(0): #2: hsize: 1680  vsize 1050  refresh: 60  vid: 179
+[   343.422] (II) modeset(0): Supported detailed timing:
+[   343.422] (II) modeset(0): clock: 148.5 MHz   Image Size:  508 x 285 mm
+[   343.422] (II) modeset(0): h_active: 1920  h_sync: 2008  h_sync_end 2052 h_blank_end 2200 h_border: 0
+[   343.422] (II) modeset(0): v_active: 1080  v_sync: 1084  v_sync_end 1089 v_blanking: 1125 v_border: 0
+[   343.422] (II) modeset(0): Ranges: V min: 24 V max: 75 Hz, H min: 15 H max: 160 kHz, PixClock max 175 MHz
+[   343.422] (II) modeset(0): Monitor name: kayfabe
+[   343.422] (II) modeset(0): EDID (in hex):
+[   343.422] (II) modeset(0): 	00ffffffffffff002cc2010001000000
+[   343.422] (II) modeset(0): 	27240104a119197806ee91a3544c9926
+[   343.422] (II) modeset(0): 	0f50542108008180a9c0b30001010101
+[   343.422] (II) modeset(0): 	010101010101023a801871382d40582c
+[   343.422] (II) modeset(0): 	4500fc1d1100001e000000fd00184b0f
+[   343.422] (II) modeset(0): 	a011000a202020202020000000fc006b
+[   343.422] (II) modeset(0): 	6179666162650a202020202000000010
+[   343.422] (II) modeset(0): 	00000000000000000000000000000083
+[   343.422] (II) modeset(0): Printing probed modes for output DVI-D-1
+[   343.422] (II) modeset(0): Modeline "1920x1080"x60.0  148.50  1920 2008 2052 2200  1080 1084 1089 1125 +hsync +vsync (67.5 kHz P)
+[   343.422] (II) modeset(0): Modeline "1680x1050"x60.0  146.25  1680 1784 1960 2240  1050 1053 1059 1089 -hsync +vsync (65.3 kHz)
+[   343.422] (II) modeset(0): Modeline "1600x900"x60.0  108.00  1600 1624 1704 1800  900 901 904 1000 +hsync +vsync (60.0 kHz)
+[   343.422] (II) modeset(0): Modeline "1280x1024"x60.0  108.00  1280 1328 1440 1688  1024 1025 1028 1066 +hsync +vsync (64.0 kHz)
+[   343.422] (II) modeset(0): Modeline "1024x768"x60.0   65.00  1024 1048 1184 1344  768 771 777 806 -hsync -vsync (48.4 kHz)
+[   343.422] (II) modeset(0): Modeline "800x600"x60.3   40.00  800 840 968 1056  600 601 605 628 +hsync +vsync (37.9 kHz)
+[   343.422] (II) modeset(0): Modeline "640x480"x59.9   25.18  640 656 752 800  480 490 492 525 -hsync -vsync (31.5 kHz)
+[   343.422] (II) modeset(0): Output DVI-D-1 connected
+[   343.422] (II) modeset(0): Using exact sizes for initial modes
+[   343.422] (II) modeset(0): Output DVI-D-1 using initial mode 1920x1080 +0+0
+[   343.422] (==) modeset(0): Using gamma correction (1.0, 1.0, 1.0)
+[   343.422] (==) modeset(0): DPI set to (96, 96)
+[   343.422] (II) Loading sub module "fb"
+[   343.422] (II) LoadModule: "fb"
+[   343.422] (II) Module "fb" already built-in
+[   343.540] (==) modeset(0): Backing store enabled
+[   343.540] (==) modeset(0): Silken mouse enabled
+[   343.540] (II) modeset(0): Initializing kms color map for depth 24, 8 bpc.
+[   343.540] (==) modeset(0): DPMS enabled
+[   343.541] (II) modeset(0): [DRI2] Setup complete
+[   343.541] (II) modeset(0): [DRI2]   DRI driver: nouveau
+[   343.541] (II) modeset(0): [DRI2]   VDPAU driver: nouveau
+[   343.541] (II) Initializing extension Generic Event Extension
+[   343.541] (II) Initializing extension SHAPE
+[   343.541] (II) Initializing extension MIT-SHM
+[   343.541] (II) Initializing extension XInputExtension
+[   343.541] (II) Initializing extension XTEST
+[   343.542] (II) Initializing extension BIG-REQUESTS
+[   343.542] (II) Initializing extension SYNC
+[   343.542] (II) Initializing extension XKEYBOARD
+[   343.542] (II) Initializing extension XC-MISC
+[   343.542] (II) Initializing extension SECURITY
+[   343.542] (II) Initializing extension XFIXES
+[   343.542] (II) Initializing extension RENDER
+[   343.542] (II) Initializing extension RANDR
+[   343.542] (II) Initializing extension COMPOSITE
+[   343.542] (II) Initializing extension DAMAGE
+[   343.543] (II) Initializing extension MIT-SCREEN-SAVER
+[   343.543] (II) Initializing extension DOUBLE-BUFFER
+[   343.543] (II) Initializing extension RECORD
+[   343.543] (II) Initializing extension DPMS
+[   343.543] (II) Initializing extension Present
+[   343.543] (II) Initializing extension DRI3
+[   343.543] (II) Initializing extension X-Resource
+[   343.543] (II) Initializing extension XVideo
+[   343.543] (II) Initializing extension XVideo-MotionCompensation
+[   343.543] (II) Initializing extension SELinux
+[   343.543] (II) SELinux: Disabled on system
+[   343.543] (II) Initializing extension GLX
+[   343.545] (II) AIGLX: Loaded and initialized nouveau
+[   343.545] (II) GLX: Initialized DRI2 GL provider for screen 0
+[   343.545] (II) Initializing extension XFree86-VidModeExtension
+[   343.545] (II) Initializing extension XFree86-DGA
+[   343.545] (II) Initializing extension XFree86-DRI
+[   343.545] (II) Initializing extension DRI2
+[   343.545] (EE) modeset(0): Failed to create pixmap
+[   343.545] (EE) 
+Fatal server error:
+[   343.546] (EE) failed to create screen resources(EE) 
+[   343.546] (EE) 
+Please consult the The X.Org Foundation support 
+	 at http://wiki.x.org
+ for help. 
+[   343.546] (EE) Please also check the log file at "/var/log/Xorg.0.log" for additional information.
+[   343.546] (EE) 
+[   343.546] (II) AIGLX: Suspending AIGLX clients for VT switch
+[   343.590] (EE) Server terminated with error (1). Closing log file.

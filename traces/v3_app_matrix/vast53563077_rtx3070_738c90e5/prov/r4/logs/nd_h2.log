@@ -1,0 +1,2 @@
+[gset-host 19:44:52] host nvidia-drm modeset=Y dri=by-path card0 renderD128  nodes=/dev/nvidia-modeset /dev/nvidia-uvm /dev/nvidia-uvm-tools /dev/nvidia0 /dev/nvidiactl  /dev/nvidia-caps: nvidia-cap1 nvidia-cap2 
+hostroot: ⊘ /dev/nbd1p1 never appeared

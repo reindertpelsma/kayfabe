@@ -1,0 +1,66 @@
+=== boot_capture tag=gs_gs3c3_b1 at 2026-09-26T21:56:28+00:00 ===
+=== source revision: d06833f0 ===
+=== qemu binary: -rwxr-xr-x 1 root root 85716704 Sep 26 21:08 /workspace/bench/kf3-bins/d06833f0/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=0f19b0c944f9e441
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Sat Sep 26 21:56:32 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3070        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   6144MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep 26 21:56 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep 26 21:56 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep 26 21:56 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep 26 21:56 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep 26 21:56 .
+drwxr-xr-x 18 root root   4000 Sep 26 21:56 ..
+cr--------  1 root root 240, 1 Sep 26 21:56 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep 26 21:56 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/gfxset/hook.sh at 2026-09-26T21:56:34+00:00 ===
+GSET_SHIPPED
+GSET_HOOK tag=gs_gs3c3_b1 items=[blender_cycles_cuda blender_cycles_optix] guest=NVIDIA GeForce RTX 3070, 580.159.04, Disabled
+GSET_GUEST_DRM rc=0 Y by-path card0 renderD128 
+GSET_RES side=guest item=blender_cycles_cuda verdict=PASS rc=0 secs=7 note=warn:BLENDER_OK CYCLES CUDA gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 boot=gs_gs3c3_b1 host_xid=0 guest_xid=0 kf3_rc=0 kf3_refusals=6 kf3_unserviced=20 kf3_lines=890
+GSET_RES side=guest item=blender_cycles_optix verdict=PASS rc=0 secs=4 note=warn:BLENDER_OK CYCLES OPTIX gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 boot=gs_gs3c3_b1 host_xid=0 guest_xid=0 kf3_rc=0 kf3_refusals=0 kf3_unserviced=19 kf3_lines=887
+GSET_HOOK_DONE
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 28 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=79
+GUEST_DMESG_AFTER_NVRM=71
+GUEST_DMESG_WORKLOAD_DELTA=51
+=== HOST dmesg delta for this boot (watermark 1691 → 1691) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

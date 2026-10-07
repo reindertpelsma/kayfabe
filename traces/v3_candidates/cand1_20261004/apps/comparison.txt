@@ -1,0 +1,78 @@
+# app by app: base = kf3 2830988f (traces/v3_cdp/app_matrix_2830988f/), c1 = kf3 8a682f1b (traces/v3_candidates/cand1_20261003/apps/), c1b = kf3 0ac157b2 (this run)
+# columns: app | kind | host base/c1/c1b | guest batched base/c1/c1b | guest alone base/c1/c1b | change vs base | change vs c1
+nvidia_smi | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+deviceQuery | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+vectorAdd | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+vectorAddDrv | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+matrixMul | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+matrixMulDrv | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+bandwidthTest | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+simpleStreams | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+asyncAPI | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+simpleAtomicIntrinsics | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+simpleCallback | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+simpleOccupancy | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+simpleZeroCopy | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+simpleCooperativeGroups | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+concurrentKernels | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+simpleIPC | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+UnifiedMemoryStreams | app | PASS/PASS/PASS | FAIL/FAIL/FAIL | FAIL/FAIL/FAIL | same | same
+UnifiedMemoryPerf | app | PASS/PASS/PASS | FAIL/FAIL/FAIL | FAIL/FAIL/FAIL | same | same
+conjugateGradientUM | app | PASS/PASS/PASS | FAIL/FAIL/FAIL | FAIL/FAIL/FAIL | same | same
+cudaTensorCoreGemm | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+bf16TensorCoreGemm | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+globalToShmemAsyncCopy | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+cdpSimpleQuicksort | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+graphMemoryNodes | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+simpleCudaGraphs | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+simpleCUBLAS | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+simpleCUFFT | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+conjugateGradient | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+MersenneTwisterGP11213 | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+reduction | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+sortingNetworks | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+scan | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+histogram | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+BlackScholes | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+fastWalshTransform | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+transpose | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+stream_triad | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+reduce | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+nbody | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+blackscholes | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+mandelbrot | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+conv2d | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+sgemm_cublas | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+fft_cufft | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+sha256 | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+memcpy2d | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+attach_verify | app | PASS/PASS/PASS | FAIL/FAIL/FAIL | FAIL/FAIL/FAIL | same | same
+stream_default | probe | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+stream_created | probe | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+stream_nonblocking | probe | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+stream_perthread | probe | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+stream_two | probe | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+stream_created2nd | probe | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+gpu_burn | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+torch_correct | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+torch_ai_bench | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+hf_generate | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+cupy | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+llama_cpp_gen | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+llama_bench | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+vulkaninfo | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+vkpeak | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+egl_offscreen | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+clinfo | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+clpeak | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+nvenc_h264 | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+nvenc_hevc | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+nvdec_h264 | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+hashcat | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+blender_cycles | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+geekbench_gpu | app | PASS/PASS/PASS | PASS/PASS/PASS | -/-/- | same | same
+# base 2830988f: host 71/71; guest batched apps 61/65, probes 6/6; alone re-runs 0/4 pass
+# c1 8a682f1b: host 71/71; guest batched apps 61/65, probes 6/6; alone re-runs 0/4 pass
+# c1b 0ac157b2: host 71/71; guest batched apps 61/65, probes 6/6; alone re-runs 0/4 pass
+# rows that differ from base: 0; from c1: 0
+# rows that PASSED at base and do not pass here: 0; that PASSED at c1 and do not pass here: 0

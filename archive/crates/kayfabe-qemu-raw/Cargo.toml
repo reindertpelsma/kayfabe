@@ -1,0 +1,176 @@
+[package]
+name = "kayfabe-qemu-raw"
+description = "The SECOND audited unsafe crate: the hypervisor FFI surface (l2_qemu_adapter.md §2.2, decision Q2). Built at stage Q2 — the extern \"C\" entry points a C QOM shim calls, and QemuHost implemented over a table of C function pointers. Every decision lives one module over, in the safe half."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# ★★ `staticlib` is what the C shim links, and `rlib` is what `cargo test` links. Both, or
+# one of the two consumers stops working: an rlib-only crate cannot be linked into a
+# hypervisor, and a staticlib-only crate cannot be a dependency or host a test target.
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+[dependencies]
+kayfabe-vmm.workspace = true
+kayfabe-vmm-qemu.workspace = true
+# Stage Q4: the chip table and the register plane. ★ This is the crossing the device's
+# MMIO path was missing — the archive was already linked in, and nothing routed into it.
+kayfabe-device.workspace = true
+# The guest driver version the register plane answers as (`shim::GUEST_DRIVER`), and the
+# `GuestOs` the object model is told it is serving.
+kayfabe-abi.workspace = true
+# ★★★ The object model, and the three ports it needs. This is the crossing the 2026-08-01
+# boot measured missing: the register plane reached `GSP_RM_ALLOC` and had nothing to
+# declare it into, so every class was refused by name and `RmInitAdapter` gave up.
+#
+# `kayfabe-rmrpc` is the ONLY crate permitted to name both `RpcCommand` and `RmEvent`, so
+# the link crosses as `Box<dyn CommandPolicy>` and this crate names neither vocabulary.
+kayfabe-rmrpc.workspace = true
+# `Gpu::new` + `GpaSpace` — the object model this port realizes at device-create time.
+kayfabe-core.workspace = true
+# `StillbornIsolates`: there is no forwarding plane in this build and the isolate seam says
+# so by refusing, rather than by a null that something later dereferences.
+kayfabe-isolate.workspace = true
+kayfabe-util.workspace = true
+# `Ga10xArch` — the class table the object model classifies with. Chosen over
+# `kayfabe_mocks::WireClassArch`; see `kayfabe_chips::ga10x`'s module docs for what it
+# refuses and why.
+#
+# ⊘ The reason given here USED TO BE "because `kayfabe-mocks` is test-only and this
+# archive ships", and that premise is FALSE: `cargo tree -p kayfabe-qemu-raw -e normal`
+# shows this crate -> `kayfabe-chips` -> `kayfabe-mocks` on NORMAL edges, because
+# `Ad10xArch`/`Gh100Arch` compose a `MockArch` for their non-GSP seams. `MockArch` is
+# therefore linked into this archive already. The choice of `Ga10xArch` stands on its own
+# merits — a real class table and a real GMMU format — and not on a linkage claim that
+# does not hold. See `docs/design/mock_fidelity_audit.md` finding G.
+kayfabe-chips.workspace = true
+# ★★★ E2 — the L1 shell (`SharedDevice`). The object model now lives behind its ranked
+# locks because TWO paths reach it: the object bridge and the doorbell port. See
+# `shim::SharedObjectModel`.
+# ★ w237 route B: `FbSource`/`FbBytes` — the seam the forwarding path reads our own
+# framebuffer through. A vocabulary edge only; the shim implements the trait, rt consumes it.
+# `walker::FbRead` — the trait `RegPlane::pt_bytes` returns.
+kayfabe-mmu.workspace = true
+kayfabe-fwd.workspace = true
+kayfabe-rt.workspace = true
+# `CommandPolicy` — the trait the object-model link crosses as.
+kayfabe-gsp.workspace = true
+# ★★★ The REAL host isolate plane — OPTIONAL, and off unless `host-isolates` is on. See
+# `[features]` below for why this is a feature rather than an ordinary dependency.
+kayfabe-isolate-host = { workspace = true, optional = true }
+# ★★★ The guest-RAM crossing's descriptor probe (`MemfdCensus`) — OPTIONAL, and gated by
+# the SAME feature, so the default archive's dependency graph is byte-for-byte master's.
+#
+# ⊘ This is a *use* of the raw crate, not an extension of it. §2.2's ruling is that
+# hypervisor-specific `unsafe` must not be PUT in `kayfabe-linux-raw`; finding a `memfd`
+# through `/proc/self/fd` is host-side OS specificity, which §1.1 licenses there, and it
+# needs no `unsafe` at all (a `memfd` re-opens, unlike a KVM anonymous inode). The
+# hypervisor-specific half — that QEMU names the block after the backend TYPE — stays
+# here, in `QEMU_MACHINE_RAM_MEMFD`.
+kayfabe-linux-raw = { workspace = true, optional = true }
+# ★★★★★ The L1 OS shell — `Reactor`, `Registrar`, `Poller`. OPTIONAL and gated by the SAME
+# feature, so the default archive's dependency graph is byte-for-byte master's.
+#
+# ⊘ It is here for the **completion observer's** loop and nothing else. `Reactor::new` had
+# ZERO production call sites in this tree until this edge existed
+# (`docs/design/completion_wait_architecture.md` §0.1 measured it, and §7 R3's whole
+# recommendation is *"the work is a composition root, not a design"*). The gate is the same
+# one the forwarding plane needs because the observation is only interesting when there is
+# a host that could satisfy it; a default archive gains no thread and no descriptor.
+kayfabe-shell = { workspace = true, optional = true }
+
+# =====================================================================================
+# ★★★ `host-isolates` — the first join between the device path and a real host GPU
+# =====================================================================================
+#
+# `docs/design/execution_plane_increments.md` increment **E0**. With this feature on, the
+# composition root can install `kayfabe_isolate_host::HostIsolateFactory` instead of
+# `StillbornIsolates`, so the isolate the object model materializes for a guest `Proc` is
+# a real sandboxed child process that opens `/dev/nvidiactl` and completes RM bring-up.
+#
+# ★★ IT IS A CARGO FEATURE AND NOT AN ORDINARY DEPENDENCY, for three reasons, in order of
+# weight:
+#
+# 1. **`kayfabe-isolate-host`'s `build.rs` embeds a musl-linked isolate binary**, built by
+#    a nested `cargo build --target <arch>-unknown-linux-musl`. Making that unconditional
+#    would put a `rustup target add` in the build path of the *hypervisor archive*, which
+#    every consumer of this crate then owes — including the aarch64 cross-check job, whose
+#    whole reason for `KAYFABE_ISOLATE_IMAGE_STUB` is that it has no musl std.
+# 2. **The shipped archive's host surface is a security boundary**, and a build that
+#    cannot even name `HostIsolateFactory` cannot be talked into spawning one. Off-by-
+#    default here means the default archive's forwarding plane is absent by *linkage*, not
+#    by an `if`.
+# 3. It keeps `cargo test --workspace`'s default arm identical to master's, so the suite
+#    stays green for everyone who does not opt in.
+#
+# ⊘ **The feature is not the selector.** It decides whether the plane can be NAMED; the
+# `KAYFABE_ISOLATES` environment variable (`shim::ISOLATE_PLANE_ENV`) decides which one runs.
+# That split is deliberate — it is what lets ONE binary run both arms of a negative control,
+# so an evidence run and its control cannot differ in anything but the variable.
+#
+# ⊘⊘⊘ **w763c — the variable`s DEFAULT moved to `real`, and the security property above did
+# not.** Reason 2 is the load-bearing one and it is untouched: a build without this feature
+# cannot name `HostIsolateFactory` at all, so `real` there refuses at realize, by name. The
+# default archive still spawns nothing, by LINKAGE. What changed is only what ABSENCE means in
+# a build that already opted in — and it had to, because `KAYFABE_FB_STORE` defaults to
+# `device`, which cannot be reached without a plane: `[measured w763]` the tree`s default
+# configuration refused its own boot at realize.
+[features]
+host-isolates = ["dep:kayfabe-isolate-host", "dep:kayfabe-linux-raw", "dep:kayfabe-shell"]
+# ★★★★★ SINGLE-STORE INCREMENT 4 — forwards to `kayfabe-isolate-host`'s own feature, which
+# is what makes `build.rs` build the glibc-linked SECOND isolate image.
+#
+# ⊘ A FORWARDING feature and not a duplicate: cargo features are per-package, so
+# `build_qom_shim.sh --features cuda-scratchpad` (which builds THIS package) could not reach
+# the other crate's without one. ⚠ It implies `host-isolates`, because a CUDA scratchpad
+# isolate with no isolate plane is a configuration that cannot do anything — and a boot that
+# armed only this would get a stillborn isolate and a census that blamed CUDA.
+cuda-scratchpad = ["host-isolates", "kayfabe-isolate-host/cuda-scratchpad"]
+
+# ★ `kayfabe-arch` is not a dependency of this crate and must not become one — the shim
+# names no architecture. `tests/shim_logic.rs` needs `GpuId` only to build the
+# `IsolateId` it asks the default factory to spawn, which is how it proves the default
+# plane is stillborn at the SEAM rather than by its type name.
+[dev-dependencies]
+kayfabe-arch.workspace = true
+# ★ TESTS ONLY, and for exactly one thing: `MockArch::userd_flags_for`, the encoder that
+# builds the `NVOS04_FLAGS` word a channel fixture declares its chid with. It is here
+# rather than a hand-written literal because that encoder is differentialled against
+# NVIDIA's OWN compiled writer (`tests/tests/userd_chid_oracle.rs`), so a fixture built
+# with it cannot drift away from the driver silently. The crate is already in this one's
+# NORMAL graph through `kayfabe-chips`, so this adds no edge to the shipped archive.
+kayfabe-mocks.workspace = true
+
+# ★ DELIBERATELY NOT `[lints] workspace = true` — the SECOND crate to omit it, and the
+# first one added since the rule was written. `l2_qemu_adapter.md` §2.2 / decision Q2:
+#
+#   "A QEMU adapter needs `extern "C"` entry points, raw `MemoryRegion *` handles, and
+#    adoption of a host pointer QEMU owns. All three are `unsafe`. Putting them in
+#    `kayfabe-linux-raw` would be wrong twice over: QEMU is not Linux, and
+#    `four_axes_of_variation.md` §1.1 licenses host-side *OS* specificity in that crate,
+#    not host-side *hypervisor* specificity."
+#
+# CI gate A's own failure text is what made this a decision rather than an edit:
+# "There is exactly ONE crate allowed to omit it (kayfabe-linux-raw), and adding a
+# second is a design decision, not a manifest edit." It has been made; the price is
+# stated in §2.2 and restated in ci.yml: the audit acceptance criterion moves from
+# "read one crate in one sitting" to "read two".
+#
+# ★★ THE CRATE IS EMPTY AT Q0, AND THE RATCHET SAYS SO — its expected relaxation count
+# is **0**. That is the strongest setting available: the first `unsafe` block ever added
+# here turns CI red until somebody itemises it in ci.yml, which is exactly the review
+# §2.2 asks for. Two other gates keep the hole shut in the meantime: the unsafe-surface
+# gate (any file using the keyword must be named `*_unsafe.rs`) is crate-agnostic, and
+# the host-pointer gate confines `*mut`/`*const`/`NonNull`/`transmute` the same way.
+#
+# ★ If stage Q2 is never built, DELETE this crate rather than leave it. An allow-unsafe
+# crate with nothing in it is a standing exemption nobody is auditing.
+[lints.rust]
+unsafe_code = "allow"
+missing_docs = "warn"
+
+[lints.clippy]
+# Same as `kayfabe-linux-raw`: every relaxation carries a `// SAFETY:` naming its
+# invariant and who guarantees it, or the build fails.
+undocumented_unsafe_blocks = "deny"

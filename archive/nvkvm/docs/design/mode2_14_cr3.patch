@@ -1,0 +1,448 @@
+diff --git a/src/qemu/nvkvm_cpukey.c b/src/qemu/nvkvm_cpukey.c
+new file mode 100644
+index 0000000..f484c21
+--- /dev/null
++++ b/src/qemu/nvkvm_cpukey.c
+@@ -0,0 +1,49 @@
++/*
++ * nvkvm_cpukey.c — per-target helper: read the executing vCPU's guest CR3.
++ *
++ * #14 per-guest-process isolation (docs/design + memory mode2_isolation_cr3_key):
++ * the guest process identity visible to QEMU at a trapping MMIO/PIO access is the
++ * vCPU's CR3 (the guest address space).  Two concurrent guest CUDA processes are
++ * indistinguishable by RM handle / guest VA (the stock driver hands both identical
++ * VAs and identical handle values), but their page directories differ — CR3 at the
++ * trapping write is the only authoritative process key.
++ *
++ * This lives in its own file because nvkvm_gpu_emul.c is built target-independent
++ * (system_ss) where X86CPU/env are poisoned; this file is added to specific_ss so
++ * it compiles with the target's cpu.h.
++ *
++ * Under KVM the QEMU-side register cache is stale until synchronized;
++ * cpu_synchronize_state() is the canonical fetch (same pattern as hw/i386/vapic.c)
++ * and is a no-op when the state is already dirty.  Callers are on the vCPU thread
++ * (MMIO trap handlers), where this is valid and race-free.
++ *
++ * Returned value: raw CR3 with the PCID/low bits and the PCID-noflush bit (63)
++ * masked, i.e. the page-directory base.  NOTE deliberately NOT masking bit 12:
++ * with KPTI the kernel/user halves of one process differ in bit 12 (order-1 PGD
++ * pair), but without KPTI two distinct processes' PGDs can be adjacent 4 KiB
++ * pages — masking would alias them.  Callers must treat "differs only in bit 12"
++ * as possibly-same-process if they ever key user-mode traps (KPTI); all current
++ * call sites trap from guest-kernel context (driver code), one CR3 per process.
++ *
++ * 0 = no executing vCPU (device reset / monitor / callback context).
++ */
++
++#include "qemu/osdep.h"
++#include "cpu.h"
++#include "sysemu/hw_accel.h"
++
++uint64_t nvkvm_current_guest_cr3(void);
++
++uint64_t nvkvm_current_guest_cr3(void)
++{
++#ifdef TARGET_I386
++    CPUState *cs = current_cpu;
++    if (!cs) {
++        return 0;
++    }
++    cpu_synchronize_state(cs);
++    return X86_CPU(cs)->env.cr[3] & 0x7ffffffffffff000ull;
++#else
++    return 0;
++#endif
++}
+diff --git a/src/qemu/nvkvm_gpu_emul.c b/src/qemu/nvkvm_gpu_emul.c
+index c0eebef..0e23e24 100644
+--- a/src/qemu/nvkvm_gpu_emul.c
++++ b/src/qemu/nvkvm_gpu_emul.c
+@@ -52,6 +52,10 @@
+ #include "virtio_nvgpu.h"   /* M5: Mode-1 forwarding stack (isolate API + NVOS structs) */
+ #include "exec/cpu-common.h" /* M6.0: qemu_ram_foreach_block/get_fd — guest-RAM memfd for item-4 */
+ 
++/* #14: guest-process key = vCPU CR3 at the trapping access (nvkvm_cpukey.c,
++ * specific_ss — this TU is target-independent and cannot read X86CPU itself). */
++extern uint64_t nvkvm_current_guest_cr3(void);
++
+ /* ── Chip identity ─────────────────────────────────────────────────────────
+  *
+  * Single source of truth for "which silicon are we pretending to be".  GA106
+@@ -285,9 +289,32 @@ struct NvkvmGpuEmul {
+          * changed) so discovery resumes; self-heals the same way the sweep already does. */
+         uint32_t stable_subs;   /* consecutive submissions with newpushbufs==0 */
+         bool     resident;      /* working set fully resident -> skip the walk */
++        uint64_t cr3;           /* #14: vCPU CR3 at the channel-alloc RPC = the OWNING guest
++                                 * process's address space (0 = unknown / pre-diag boot). */
++        uint64_t gpfifo_phys;   /* #14: PINNED true FB page of this channel's GPFIFO ring, as
++                                 * first resolved by M5.16 (BAR1-written-page scan) or the
++                                 * gpfifo bridge.  The scan is an MRU HEURISTIC over the last
++                                 * 64 guest-BAR1-written pages: with TWO processes the doubled
++                                 * BAR1 traffic starves it, the kernel PT-writer channel's ring
++                                 * becomes unreadable mid-run, its pending page-table-write
++                                 * pushes never execute, and the 2nd process's PD0/leaf PTEs
++                                 * never land (the #14 loser-starvation wall).  Consumed only
++                                 * under nvkvm_m2_multiproc() (single-process M5.16 re-derivation
++                                 * is bench-stable + byte-identical).  Same doctrine as fin_fb
++                                 * above: resolve ONCE, then PIN — re-resolving every doorbell
++                                 * drifts.  0 = not yet resolved. */
++        uint64_t gpfifo_bar1off;/* #14: BAR1 page-offset the pin was resolved at (companion to
++                                 * chan_gpfifo_bar1off, used by the finishPayload forge). */
+     } chans[NVKVM_MAX_CHANS];
+     int chan_n;
+     uint32_t chan_client;       /* working-set: client of the channel chan_exec runs */
++    uint64_t chan_cr3;          /* #14 working-set: OWNING process CR3 of that channel
++                                 * (captured at its alloc RPC); 0 = unknown. */
++    uint64_t chan_gpfifo_pin;   /* #14 working-set: the executing channel's pinned ring page
++                                 * (chans[].gpfifo_phys) + its BAR1 offset — seeds chan_execute's
++                                 * ring-entry read (multiproc() only) when the M5.16 re-scan
++                                 * would starve.  0 = no pin yet. */
++    uint64_t chan_gpfifo_pin_b1off;
+ 
+     /* ── Address-virtualization #2 side-table (the reverse-driver core) ────────
+      * For GSP-managed VASes the leaf PTEs are filled GSP-side and never land in
+@@ -368,7 +395,11 @@ struct NvkvmGpuEmul {
+      * under UVM's gpu-ops session client, nv_gpu_ops.c nvGpuOpsSetPageDirectory).  Kernel-
+      * internal VASes (CeUtils scrubber etc.) never take this path — #13 uses the flag to
+      * scope the CE-PT-write backing trigger to user-compute address spaces. */
+-    struct { uint32_t hvas; uint32_t client; uint64_t pdb; bool root_sys; bool uvm; } chan_vas[16];
++    /* .cr3: #14 — the vCPU CR3 at the trapping RPC that CAPTURED this root (the RM/UVM
++     * ioctl runs in the owning process's context, so this attributes the VAS to a guest
++     * PROCESS — the key that disambiguates two processes' identical VAs/handles). */
++    struct { uint32_t hvas; uint32_t client; uint64_t pdb; bool root_sys; bool uvm;
++             uint64_t cr3; } chan_vas[16];
+     int      chan_vas_n;
+     /* #12-L3c: STICKY per-client VAS roots — same captures as chan_vas[] but NEVER
+      * dropped on RM-handle free.  A GSP-managed UVM CE channel (empty instblk, hvas=0)
+@@ -564,6 +595,13 @@ struct NvkvmGpuEmul {
+     int      m2_cpt_dirty_n;    /* live entries in m2_cpt_dirty (0 = clean) */
+     uint32_t m2_last_db_token;  /* M5.11: last guest work-submit token seen at the doorbell (dedup log) */
+     bool     m2_last_db_valid;
++    /* #14 CR3 process key (diag build): the vCPU CR3 at the last VF-doorbell trap =
++     * the SUBMITTING guest process.  m2_cr3_seen[] dedups the discovery log. */
++    uint64_t m2_db_cr3;
++    uint64_t m2_cr3_seen[8];
++    int      m2_cr3_seen_n;
++    int      m2_cr3_logs;       /* bounded diag-log budget (doorbell/exec attribution) */
++    int      m2_pdbw_logs;      /* bounded diag-log budget (UVM PDB-root write watch) */
+     uint32_t m2_gr_client;      /* M5.7: the GR compute client (set at crashwin arm) */
+     /* #14: ALL user GR compute clients (one per guest process — every client that
+      * allocs an AMPERE_COMPUTE_B 0xc7c0).  m2_gr_client stays the FIRST (legacy
+@@ -1224,9 +1262,36 @@ static uint64_t nvkvm_fb_read(NvkvmGpuEmul *s, uint64_t fb_addr, unsigned size)
+     return v;
+ }
+ 
++/* #14 DIAG (bounded): watch every emulator-visible write that lands inside a
++ * captured UVM-VAS FB-rooted page-directory ROOT page.  Answers round-4's open
++ * question directly: does the "loser" process's PDB root EVER receive PDEs in our
++ * FB view (and from which transport/process), or does its tree stay unwritten?
++ * prov = "cpu" (BAR/PRAMIN/parser writes via fb_write) or "ce" (CPU-emulated CE). */
++static void nvkvm_m2_pdb_root_watch(NvkvmGpuEmul *s, uint64_t fb, uint64_t len,
++                                    uint64_t val, const char *prov)
++{
++    if (!s->m2exec || s->m2_pdbw_logs >= 400 || !s->chan_vas_n) { return; }
++    for (int i = 0; i < s->chan_vas_n; i++) {
++        if (!s->chan_vas[i].uvm || s->chan_vas[i].root_sys) { continue; }
++        uint64_t root = s->chan_vas[i].pdb & ~0xfffull;
++        if (fb < root + 0x1000ull && fb + len > root) {
++            s->m2_pdbw_logs++;
++            qemu_log("nvkvm-gpu[%s] #14 PDBW[%s] fb=0x%llx len=0x%llx val=0x%llx -> root "
++                     "of vas hvas=0x%08x client=0x%08x cr3=0x%llx (db_cr3=0x%llx)\n",
++                     s->chip->name, prov, (unsigned long long)fb,
++                     (unsigned long long)len, (unsigned long long)val,
++                     s->chan_vas[i].hvas, s->chan_vas[i].client,
++                     (unsigned long long)s->chan_vas[i].cr3,
++                     (unsigned long long)s->m2_db_cr3);
++            break;
++        }
++    }
++}
++
+ static void nvkvm_fb_write(NvkvmGpuEmul *s, uint64_t fb_addr, uint64_t val,
+                            unsigned size)
+ {
++    nvkvm_m2_pdb_root_watch(s, fb_addr, size, val, "cpu");   /* #14 DIAG */
+     /* M5.10 PERF: if this write lands on a tracked GR-VAS page-table page, a mapping changed ->
+      * flag a re-sweep for the next doorbell. The lo/hi range rejects the common data-plane write
+      * in two compares; the hash confirms. Once dirty, skip until the next sweep consumes it. */
+@@ -2313,6 +2378,7 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
+                 s->chan_vas[k].pdb  = ldq_le_p(cmd + 160);  /* levels[0].physAddress */
+                 s->chan_vas[k].root_sys = false;            /* FB-rooted (GSP-client) */
+                 s->chan_vas[k].uvm = false;                 /* RESERVED_PDES, not the UVM handover */
++                s->chan_vas[k].cr3 = nvkvm_current_guest_cr3(); /* #14: owning process */
+                 nvkvm_m2_cli_vas_add(s, s->chan_vas[k].client, s->chan_vas[k].pdb, false);
+                 /* #14: a VAS captured under a dup handle also belongs to the dup's
+                  * SOURCE client — key the sticky sema-resolution root under the true
+@@ -2323,9 +2389,11 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
+                                                             s->chan_vas[k].hvas);
+                     if (own14) { nvkvm_m2_cli_vas_add(s, own14, s->chan_vas[k].pdb, false); }
+                 }
+-                qemu_log("nvkvm-gpu[%s] M5: VAS hObject=0x%08x client=0x%08x PDB=0x%llx\n",
++                qemu_log("nvkvm-gpu[%s] M5: VAS hObject=0x%08x client=0x%08x PDB=0x%llx "
++                         "cr3=0x%llx\n",
+                          s->chip->name, s->chan_vas[k].hvas, s->chan_vas[k].client,
+-                         (unsigned long long)s->chan_vas[k].pdb);
++                         (unsigned long long)s->chan_vas[k].pdb,
++                         (unsigned long long)s->chan_vas[k].cr3);
+             }
+         }
+         /* M5.30 PRODUCTION UVM CAPTURE: snoop NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY
+@@ -2366,6 +2434,9 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
+                 s->chan_vas[k].pdb = phys;
+                 s->chan_vas[k].root_sys = rsys;
+                 s->chan_vas[k].uvm = true;                  /* #13: UVM-managed user VAS */
++                s->chan_vas[k].cr3 = nvkvm_current_guest_cr3(); /* #14: owning process
++                                 * (nvUvmInterfaceSetPageDirectory runs in the registering
++                                 * process's ioctl context — CR3 = that process's PGD). */
+                 nvkvm_m2_cli_vas_add(s, s->chan_vas[k].client, phys, rsys);
+                 /* #14: also key under the dup-source (owning compute) client. */
+                 {
+@@ -2373,9 +2444,10 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
+                     if (own14) { nvkvm_m2_cli_vas_add(s, own14, phys, rsys); }
+                 }
+                 qemu_log("nvkvm-gpu[%s] M5.30 SET_PAGE_DIR UVM-VAS hVASpace=0x%08x "
+-                         "PDB=0x%llx aperture=%u root=%s (candidate %d)\n",
++                         "PDB=0x%llx aperture=%u root=%s (candidate %d) cr3=0x%llx\n",
+                          s->chip->name, hvas, (unsigned long long)phys,
+-                         flags & 0x3u, rsys ? "SYS" : "FB", k);
++                         flags & 0x3u, rsys ? "SYS" : "FB", k,
++                         (unsigned long long)s->chan_vas[k].cr3);
+             }
+         }
+         /* #14: snoop DUP_OBJECT (fn=21) — the handle-graph edge that attributes a
+@@ -2498,14 +2570,20 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
+                         s->chans[cslot].fin_fb      = 0;   /* #12: re-resolve on (re)alloc */
+                         s->chans[cslot].fin_sys     = false; /* #12 L3b: re-resolve aperture */
+                         s->chans[cslot].token_valid = false;
++                        /* #14: the channel-alloc RPC traps from the allocating process's
++                         * ioctl context — CR3 here = the channel's OWNING process. */
++                        s->chans[cslot].cr3 = nvkvm_current_guest_cr3();
++                        s->chans[cslot].gpfifo_phys = 0;    /* #14: fresh ring -> re-resolve pin */
++                        s->chans[cslot].gpfifo_bar1off = 0;
+                     }
+                 }
+                 qemu_log("nvkvm-gpu[%s] M5: channel alloc class=0x%04x gpFifoVA="
+-                         "0x%llx ent=%u instblk=0x%llx(%s)\n",
++                         "0x%llx ent=%u instblk=0x%llx(%s) cr3=0x%llx\n",
+                          s->chip->name, hclass,
+                          (unsigned long long)s->chan_gpfifo_va, s->chan_gpfifo_ent,
+                          (unsigned long long)s->chan_inst_block,
+-                         s->chan_inst_sys ? "sys" : "fb");
++                         s->chan_inst_sys ? "sys" : "fb",
++                         (unsigned long long)nvkvm_current_guest_cr3());
+             }
+         }
+         /* M7 fix: on GSP_RM_FREE (fn==10) drop os-events for the freed event/client
+@@ -3384,6 +3462,32 @@ static void nvkvm_bar0_write(void *opaque, hwaddr off, uint64_t val,
+      * ce_utils.c:349).  For now, log it so the doorbell offset/token are
+      * confirmed against the GA100 HAL. */
+     if (off == NVKVM_VF_DOORBELL) {
++        /* #14 CR3 process key: the vCPU ringing the doorbell identifies the guest
++         * process submitting work (memory mode2_isolation_cr3_key).  Captured at the
++         * trap; consumed by the per-process VAS resolution below.  Log each newly-
++         * seen CR3 (bounded) + every change while diagnosing. */
++        if (s->m2exec && s->m2_cr3_logs < 400) {   /* budgeted: KVM reg-sync isn't free */
++            uint64_t cr3 = nvkvm_current_guest_cr3();
++            bool newc = false;
++            if (cr3) {
++                bool seen = false;
++                for (int i = 0; i < s->m2_cr3_seen_n; i++) {
++                    if (s->m2_cr3_seen[i] == cr3) { seen = true; break; }
++                }
++                if (!seen && s->m2_cr3_seen_n < (int)ARRAY_SIZE(s->m2_cr3_seen)) {
++                    s->m2_cr3_seen[s->m2_cr3_seen_n++] = cr3;
++                    newc = true;
++                }
++            }
++            if ((newc || (cr3 != s->m2_db_cr3 && s->m2_cr3_logs < 400))) {
++                s->m2_cr3_logs++;
++                qemu_log("nvkvm-gpu[%s] #14 CR3-DB doorbell token=0x%08x cr3=0x%llx%s "
++                         "(prev=0x%llx seen_n=%d)\n", s->chip->name, (uint32_t)val,
++                         (unsigned long long)cr3, newc ? " NEW" : "",
++                         (unsigned long long)s->m2_db_cr3, s->m2_cr3_seen_n);
++            }
++            s->m2_db_cr3 = cr3;
++        }
+         /* M5.11 (doorbell-demux observability): the guest writes its work-submit TOKEN here
+          * (val). On Ampere the token encodes the guest vChid+runlist (NVC36F GET_WORK_SUBMIT_TOKEN).
+          * Today we ignore it and ring the host GR token unconditionally — wrong for multi-channel.
+@@ -3513,6 +3617,9 @@ static void nvkvm_bar0_write(void *opaque, hwaddr off, uint64_t val,
+             s->chan_userd_sys  = c->userd_sys;
+             s->chan_hvaspace   = c->hvaspace;
+             s->chan_client     = c->client;
++            s->chan_cr3        = c->cr3;   /* #14: owning-process key */
++            s->chan_gpfifo_pin = c->gpfifo_phys;         /* #14: pinned ring page (if any) */
++            s->chan_gpfifo_pin_b1off = c->gpfifo_bar1off;
+             s->chan_gp_get     = c->gp_get;
+             /* M5.28: route this channel's working-set maps into ITS per-channel fresh VAS
+              * (matched by parent TSG). On first touch, mirror the channel's whole guest PDB
+@@ -3646,6 +3753,15 @@ static void nvkvm_bar0_write(void *opaque, hwaddr off, uint64_t val,
+               nvkvm_chan_execute(s);
+               nvkvm_t_chan_exec_ns += nvkvm_now_ns() - t0cx; nvkvm_t_chan_exec_calls++; }
+             c->gp_get = s->chan_gp_get;          /* save consumed index */
++            /* #14: persist the ring page chan_execute resolved (M5.16/bridge) as this
++             * channel's PIN — forward-populated truth, never re-derived (address-table
++             * doctrine).  Storage is inert single-process (consumed only under
++             * multiproc()); overwriting with a fresh successful resolution keeps the
++             * pin current if the guest ever re-places the ring. */
++            if (s->chan_gpfifo_phys) {
++                c->gpfifo_phys   = s->chan_gpfifo_phys;
++                c->gpfifo_bar1off = s->chan_gpfifo_bar1off;
++            }
+             if (c->gp_get == before) {
+                 continue;                        /* no new work on this channel */
+             }
+@@ -4525,6 +4641,53 @@ static uint64_t nvkvm_walk_pdb_root(NvkvmGpuEmul *s, uint64_t pdb, uint64_t va,
+     return page + (va & ((1ull << pgshift) - 1));
+ }
+ 
++/* #14 DIAG: level-by-level trace of one walk — shows exactly WHERE the loser
++ * process's own-tree walk dies (which level's entry is 0/invalid in our view),
++ * turning "walk FAULTs" into "table page X at level L was never written".  Logs
++ * one line per level; caller bounds the call count. */
++static void nvkvm_m2_walk_trace(NvkvmGpuEmul *s, uint64_t pdb, uint64_t va,
++                                bool root_sys, const char *tag)
++{
++    uint64_t tbl = pdb;
++    bool tsys = root_sys;
++    static const struct { int hi, lo; } lvl[3] = { {48,47}, {46,38}, {37,29} };
++    qemu_log("nvkvm-gpu[%s] #14 WALKTRACE[%s] va=0x%llx root=0x%llx(%s)\n", s->chip->name,
++             tag, (unsigned long long)va, (unsigned long long)pdb, root_sys ? "sys" : "fb");
++    for (int i = 0; i < 3; i++) {
++        uint32_t idx = (uint32_t)((va >> lvl[i].lo) &
++                                  ((1ull << (lvl[i].hi - lvl[i].lo + 1)) - 1));
++        uint64_t pde = nvkvm_pt_rd64(s, tbl + (uint64_t)idx * 8, tsys);
++        qemu_log("nvkvm-gpu[%s] #14   PD%d[%u] @0x%llx(%s) = 0x%llx\n", s->chip->name,
++                 3 - i, idx, (unsigned long long)(tbl + (uint64_t)idx * 8),
++                 tsys ? "sys" : "fb", (unsigned long long)pde);
++        if ((pde & 1) && i == 2) { return; }        /* 512M leaf: walk succeeds */
++        uint32_t ap = (uint32_t)((pde >> 1) & 0x3);
++        if (ap == 1) { tbl = ((pde >> 8) & ((1ull << 25) - 1)) << 12; tsys = false; }
++        else if (ap == 2 || ap == 3) { tbl = ((pde >> 8) & ((1ull << 46) - 1)) << 12; tsys = true; }
++        else { return; }
++        if (!tbl) { return; }
++    }
++    uint32_t idx0 = (uint32_t)((va >> 21) & 0xFF);
++    uint64_t lo = nvkvm_pt_rd64(s, tbl + (uint64_t)idx0 * 16, tsys);
++    uint64_t hi = nvkvm_pt_rd64(s, tbl + (uint64_t)idx0 * 16 + 8, tsys);
++    qemu_log("nvkvm-gpu[%s] #14   PD0[%u] @0x%llx(%s) lo=0x%llx hi=0x%llx\n", s->chip->name,
++             idx0, (unsigned long long)(tbl + (uint64_t)idx0 * 16), tsys ? "sys" : "fb",
++             (unsigned long long)lo, (unsigned long long)hi);
++    if (lo & 1) { return; }                          /* 2M leaf */
++    uint32_t small_ap = (uint32_t)((hi >> 1) & 0x3);
++    if (small_ap == 1 || small_ap == 2 || small_ap == 3) {
++        bool stsys = (small_ap != 1);
++        uint64_t st = stsys ? (((hi >> 8) & ((1ull << 46) - 1)) << 12)
++                            : (((hi >> 8) & ((1ull << 25) - 1)) << 12);
++        if (!st) { return; }
++        uint32_t pti = (uint32_t)((va >> 12) & 0x1FF);
++        uint64_t pte = nvkvm_pt_rd64(s, st + (uint64_t)pti * 8, stsys);
++        qemu_log("nvkvm-gpu[%s] #14   PT[%u] @0x%llx(%s) = 0x%llx\n", s->chip->name,
++                 pti, (unsigned long long)(st + (uint64_t)pti * 8), stsys ? "sys" : "fb",
++                 (unsigned long long)pte);
++    }
++}
++
+ /* FB-rooted convenience wrapper (the common case: GSP-client RM allocates the
+  * page directory from FB).  UVM-managed VASes use nvkvm_walk_pdb_root(...,true). */
+ static uint64_t nvkvm_walk_pdb(NvkvmGpuEmul *s, uint64_t pdb, uint64_t va,
+@@ -4824,6 +4987,32 @@ static uint64_t nvkvm_chan_own_pdb_rs(NvkvmGpuEmul *s, bool *out_root_sys)
+                     }
+                     return s->chan_vas[i].pdb;
+                 }
++                /* #14 CR3 DIAG (multiproc, bounded): a pass-0 CLIENT-MATCHED candidate
++                 * that FAULTs on the channel's own gpfifo VA is exactly the round-4
++                 * wall (the loser's own tree unreadable).  Show the process keys (VAS-
++                 * capture CR3, channel-alloc CR3, ringing CR3) + the root PDE0 the
++                 * walk sees, so we learn whether the tree is truly unwritten in our
++                 * view or mis-rooted (wrong aperture / stale root). */
++                if (pass == 0 && nvkvm_m2_multiproc(s) && s->m2_cr3_logs < 400) {
++                    s->m2_cr3_logs++;
++                    uint64_t pde0 = nvkvm_pt_rd64(s, s->chan_vas[i].pdb,
++                                                  s->chan_vas[i].root_sys);
++                    if (s->chan_vas[i].uvm && s->m2_cr3_logs < 60) {
++                        nvkvm_m2_walk_trace(s, s->chan_vas[i].pdb, s->chan_gpfifo_va,
++                                            s->chan_vas[i].root_sys, "own-fault");
++                    }
++                    qemu_log("nvkvm-gpu[%s] #14 CR3-RS pass0 own-candidate FAULT: "
++                             "chan_client=0x%08x chan_cr3=0x%llx db_cr3=0x%llx | vas[%d] "
++                             "hvas=0x%08x client=0x%08x cr3=0x%llx pdb=0x%llx rsys=%d "
++                             "uvm=%d pde0=0x%llx gpfifo=0x%llx\n", s->chip->name,
++                             s->chan_client, (unsigned long long)s->chan_cr3,
++                             (unsigned long long)s->m2_db_cr3, i, s->chan_vas[i].hvas,
++                             s->chan_vas[i].client, (unsigned long long)s->chan_vas[i].cr3,
++                             (unsigned long long)s->chan_vas[i].pdb,
++                             s->chan_vas[i].root_sys, s->chan_vas[i].uvm,
++                             (unsigned long long)pde0,
++                             (unsigned long long)s->chan_gpfifo_va);
++                }
+             }
+         }
+     }
+@@ -4840,9 +5029,11 @@ static uint64_t nvkvm_chan_own_pdb_rs(NvkvmGpuEmul *s, bool *out_root_sys)
+                      s->m2_devvas[i].vas);
+         }
+         for (int i = 0; i < s->chan_vas_n; i++) {
+-            qemu_log("nvkvm-gpu[%s] M5.32   chan_vas[%d] hvas=0x%08x pdb=0x%llx root_sys=%d\n",
+-                     s->chip->name, i, s->chan_vas[i].hvas,
+-                     (unsigned long long)s->chan_vas[i].pdb, s->chan_vas[i].root_sys);
++            qemu_log("nvkvm-gpu[%s] M5.32   chan_vas[%d] hvas=0x%08x client=0x%08x "
++                     "pdb=0x%llx root_sys=%d uvm=%d cr3=0x%llx\n",
++                     s->chip->name, i, s->chan_vas[i].hvas, s->chan_vas[i].client,
++                     (unsigned long long)s->chan_vas[i].pdb, s->chan_vas[i].root_sys,
++                     s->chan_vas[i].uvm, (unsigned long long)s->chan_vas[i].cr3);
+         }
+     }
+     return 0;
+@@ -5241,6 +5432,23 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+     s->chan_gpfifo_bar1off = 0;
+     s->chan_fin_ring_off = 0;          /* #12 cont.25: re-resolve per channel */
+     s->chan_fin_ring_found = false;
++    /* #14 (multiproc only — single-process byte-identical): seed the ring-entry read
++     * from this channel's PINNED true ring page.  The M5.16 fallback below is an MRU
++     * heuristic over the last 64 guest-BAR1-written pages, and with two concurrent
++     * processes the doubled/interleaved BAR1 traffic evicts the kernel PT-writer
++     * channel's ring (client 0xc1d00001, gpfifo 0x1210d0000): its pushes carrying the
++     * 2nd process's PD0/leaf page-table writes never execute -> the loser's own VAS
++     * never becomes walkable -> it starves (the #14 wall, trace-proven 2026-07-09).
++     * The pin is forward-populated truth (the SAME value a successful M5.16 re-scan
++     * yields, captured at first resolution); M5.16 still runs and refreshes it.
++     * GATED to multiproc(): single-process M5.16 re-derivation is bench-proven stable
++     * (baseline cupctx2_min/cup8/cup8_iter all rc=0 without it), and consuming a pin
++     * across a single-process CTX teardown re-introduced a driver-unload exit-hang —
++     * so single-process stays exactly the committed baseline. */
++    if (nvkvm_m2_multiproc(s) && s->chan_gpfifo_pin) {
++        s->chan_gpfifo_phys   = s->chan_gpfifo_pin;
++        s->chan_gpfifo_bar1off = s->chan_gpfifo_pin_b1off;
++    }
+     if (gp_put < s->chan_gpfifo_ent && gp_put != s->chan_gp_get) {
+         uint64_t eva = s->chan_gpfifo_va + (uint64_t)s->chan_gp_get * 8;
+         /* M5.21: prefer the channel's OWN client VAS — authoritative, avoids the
+@@ -5444,6 +5652,19 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+             break;
+         }
+     }
++    /* #14 DIAG (bounded): pending work but NO way to read the ring (no VAS pick, no
++     * M5.16 candidate, no pin) — this channel's pushes are stalled invisibly.  The
++     * exact starvation mode that dropped the loser process's page-table writes. */
++    if (s->chan_pdb == 0 && s->chan_gpfifo_phys == 0 &&
++        gp_put < s->chan_gpfifo_ent && gp_put != s->chan_gp_get &&
++        s->m2_pdbw_logs < 400) {
++        s->m2_pdbw_logs++;
++        qemu_log("nvkvm-gpu[%s] #14 RING-DARK client=0x%08x gpfifo=0x%llx gp_get=%u "
++                 "gp_put=%u wpg_n=%d cr3=0x%llx db_cr3=0x%llx\n", s->chip->name,
++                 s->chan_client, (unsigned long long)s->chan_gpfifo_va, s->chan_gp_get,
++                 gp_put, s->bar1_wpg_n, (unsigned long long)s->chan_cr3,
++                 (unsigned long long)s->m2_db_cr3);
++    }
+     if (gp_put >= s->chan_gpfifo_ent) {
+         return;                                  /* implausible -> bail */
+     }
+@@ -8195,6 +8416,7 @@ static void nvkvm_m2_cpt_sync_at_release(NvkvmGpuEmul *s)
+  * covers (spans are page-clamped in the copy loop, but the fill path is not). */
+ static void nvkvm_m2_ce_fb_write_hook(NvkvmGpuEmul *s, uint64_t dst, uint64_t len)
+ {
++    nvkvm_m2_pdb_root_watch(s, dst, len, 0, "ce");           /* #14 DIAG */
+     if (s->m2_gr_pt_n && !s->m2_gr_vas_dirty &&
+         dst >= s->m2_gr_pt_lo && dst <= s->m2_gr_pt_hi + 0xfffull &&
+         nvkvm_m2_gr_pt_contains(s, dst)) {

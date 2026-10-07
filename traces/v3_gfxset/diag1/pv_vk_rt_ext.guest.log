@@ -1,0 +1,17 @@
+=== pv_vk_rt_ext side=guest start=2026-09-26T18:19:36+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+vulkan ICD: /etc/vulkan/icd.d/nvidia_icd.json only
+loader instance API version: 1.3.275
+physical device [0/1]: NVIDIA GeForce RTX 3070 (deviceType=2, driverVersion=0x9127c100, apiVersion=1.4.312)
+requested 7 device extension(s):
+  VK_KHR_acceleration_structure
+  VK_KHR_ray_query
+  VK_KHR_ray_tracing_pipeline
+  VK_NV_ray_tracing
+  VK_NV_optical_flow
+  VK_NV_cuda_kernel_launch
+  VK_NVX_binary_import
+vkCreateDevice -> 0 (VK_SUCCESS)
+RESULT: 0 VK_SUCCESS
+GSET_DIG side=guest item=pv_vk_rt_ext key=result val=RESULT:_0_VK_SUCCESS
+GSET_OK
+=== end rc=0 secs=6 2026-09-26T18:19:42+00:00

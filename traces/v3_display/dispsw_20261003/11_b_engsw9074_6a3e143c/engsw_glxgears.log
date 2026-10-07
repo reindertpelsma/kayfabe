@@ -1,0 +1,10 @@
+ENGSW_SHIM pre 0x9074 under 0xbeef0100 handle 0xc0de9000: ioctl=0 status=0x56
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9074 under 0xbeef0100 handle 0xc0de9001: ioctl=0 status=0x56
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9074 under 0xbeef0100 handle 0xc0de9002: ioctl=0 status=0x56
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9074 under 0xbeef0100 handle 0xc0de9003: ioctl=0 status=0x56
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+294 frames in 5.0 seconds = 58.730 FPS
+299 frames in 5.0 seconds = 59.608 FPS

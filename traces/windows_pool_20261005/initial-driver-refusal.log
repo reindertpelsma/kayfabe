@@ -1,0 +1,1 @@
+qemu-system-x86_64: -device kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,display=on,guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0: kf3: realize refused: RM bring-up failed at R2 host driver version: host driver 595.91.07 is not a measured tag of the driver matrix; kayfabe carries host structs only between measured layouts (tools/drivermatrix/regen.sh 595.91.07)

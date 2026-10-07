@@ -1,0 +1,97 @@
+RUN_START 2026-09-15T05:01:59+00:00
+=== W734 FB-IO RUN 2026-09-15T05:01:59+00:00 tag=w734b ===
+TREE_REV=c253a18d75c38098d4a62aa0a5b43fef4460d586
+=== SINGLE-STORE E6 BOOT 2026-09-15T05:02:02+00:00 tag=w734b ===
+KAYFABE_WALK_SHADOW=on KAYFABE_SCRATCHPAD=on KAYFABE_SCRATCHPAD_CUDA=on KAYFABE_SCRATCHPAD_START_MB=4096
+POST_CAPTURE_HOOK=/root/kayfabe/scripts/bench/w392d_mean_hook.sh
+BINARY_REV=56edd0ed289eb16e6c6b725880f8627a28f1bbc7 TREE_REV=c253a18d75c38098d4a62aa0a5b43fef4460d586
+⊘⊘⊘ STALE BINARY — refusing to grade a run that does not contain the tree.
+    ⊘ KAYFABE_ALLOW_STALE_BINARY=1 — proceeding, as asked.
+E6-CONTENT: walk_shadow_strings=36 cuda_census=2 (either 0 ⇒ an OLDER binary — STOP)
+E6-IMAGE: cuda_image_symbols=1 (0 ⇒ built WITHOUT --features cuda-scratchpad ⇒ the shadow CANNOT run)
+boot_capture rc=5
+--- Q1 THE CLIENT (graded first; everything below is uninterpretable without it) ---
+[client] W392D_GUEST_OUTCOME=(P) ★★★★★ THE FALSIFIER SURVIVES — the SAME client that
+[client] THREADS           8 of 8 verified ✔
+[client] MEAN_FALSIFIER=PASS
+--- ★★★★★ Q2/Q3/Q4/Q5 THE SHADOW CENSUS (a missing line is UNMEASURED, not clean) ---
+E6-SHADOW-LINES=2  (0 ⇒ UNMEASURED)
+WALK-SHADOW AT REALIZE: armed. The walk kernel will be run ALONGSIDE the host walk at every off-vCPU page-table sweep and the two answers compared by kind. ⊘ Nothing is published from it. Expiry: deleted when the walk kernel can run WITHOUT the host walk — i.e. when §3's identity window retires the relocated image that is built from the host walk's `visited` set (SINGLE_STORE_PLAN.md §3); NOT merely when the swap arm is clean
+WALK-SHADOW compared=65 kernel_unavailable=2072 skipped[budget_spent=2072] host_runs=171 kernel_runs=171 host_unclassed=0 compared_flags=0xf image[pages_max=22 staged_bytes=3129344 absent_edges=0 sysmem_edges=0] disagreements=0 by_kind[none] first[] swap_armed=false decided=0 fell_back[none] ⇒ ★★★ AGREEMENT over every compared refresh, on the fields both walkers decode. ⚠ Necessary and not sufficient for the swap: see `compared_flags` — volatile, privilege, atomic-disable and KIND are decoded by the KERNEL ONLY and are not in this number. ⇒ ⊘ SWAP DISARMED — the arm was `on` (shadow), so the kernel decided nothing and was never on the publish path. This census is about the comparison only. ⊘ SCOPE: the kernel walks a RELOCATED COPY holding exactly the pages the host walk visited (the guest's tables sit ~11.8 GiB up and no device buffer can span that), so `missing_in_kernel` is fully live and `extra_in_kernel` is live only WITHIN those pages.
+E6-COMPARED=65
+E6-DISAGREEMENTS=0
+E6-BY-KIND=by_kind[none]
+E6-SKIPPED=skipped[budget_spent=2072]
+E6-IMAGE-STATS=image[pages_max=22 staged_bytes=3129344 absent_edges=0 sysmem_edges=0]
+E6-SWAP-ARMED=false
+E6-DECIDED=0
+E6-FELL-BACK=fell_back[none]
+E6-SWAP-VERDICT=SWAP DISARMED
+--- ★★★★★ every WALK-SWAP FALLBACK, verbatim (a disagreement must be LOUD, not a census row) ---
+E6-FALLBACK-LINES=0  (records only; the REALIZE banner names the string too)
+--- ★ the decider's shape check, if a replacement was ever refused whole ---
+E6-VERDICT=0  (1 ⇒ the census is VACUOUS; 0 ⇒ it is not)
+--- ★ the per-refresh refusals, verbatim, if any fired ---
+--- ★ the isolate's OWN stderr for the shadow verbs ---
+--- ★★★★★ Q2c THE CROSS-THREAD PROBE — the one whose absence cost w731's first boot ---
+⊘ A CUDA context is CURRENT PER THREAD. The bring-up runs on the isolate's startup
+  thread and every request is served on a WORKER. Probes (a) and (b) run where the
+  context already is, so they cannot see this; it must begin PASS.
+probe_other_thread="PASS a second thread can use this context (cuCtxSetCurrent + cuMemAlloc + cuMemFree)"
+--- Q2b THE CUDA CENSUS: the shadow cannot run without it ---
+E4-CUDA_WALK=OK
+E1-RESERVATION=HELD
+E1-RESERVED_MB=4096
+--- ★ the SAID refusal, if the shadow was armed with no isolate to run in ---
+kayfabe: WALK-SHADOW AT REALIZE: armed. The walk kernel will be run ALONGSIDE the host walk at every off-vCPU page-table sweep and the two answers compared by kind. ⊘ Nothing is published from it. Expiry: deleted when the walk kernel can run WITHOUT the host walk — i.e. when §3's identity windo
+--- the arena counter the previous session's plan turned on (reported, not depended on) ---
+arena[pages live=2415 peak=2415 allocations=4087 span_pages=990381 store_refused=0 store_migrated=0 store_read_refused=0 store_resets=0 (store numbers at END only)]
+E3-SPAN-PAGES=990381 E3-RESERVED_MB=4096 E3-ADVERTISED_MB=4096
+E3-IDENTITY-WINDOW=FITS top=4056600576 (3868.7 MiB) reserved=4294967296 (4096 MiB) headroom=227.3 MiB
+  ⊘ FITS = every framebuffer page the guest named this boot is inside the reserved object ⇒ §3's identity window is arithmetically possible for THIS workload. It is NOT a proof for every workload, and it says nothing about the promote/demote FAKE RANGE, which is specified and built by nobody.
+--- Q5 WHAT THE GUEST PAID ---
+TRAPWITNESS off_trap_claims=608 inline_exceptions=0 worst_trap=25402us at=bar0+0x110c00 slow_traps(>1000us)=2 by_decade[1-10ms=1 10-100ms=1 100ms-1s=0 >1s=0] (target: inline_exceptions=0) 
+SLOW-SITES only proves it is under 1ms. 
+PT-SWEEP tasks=0 skipped=0 ran=0 truncated=0 pages=0 reasons={} JOIN-RELEASE revoked=0 released=0 stranded=0 drained=0 joined_ranges=0 remaps_refused=0 remaps_revoked=0 → bound=0 unchanged=0 repointed=0 swept
+HOST_DMESG_XID=1
+--- the guest's OWN first failure (NOT the last line: a re-boot attempt masks it) ---
+[   20.042050] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   22.049676] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   22.049777] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   22.091008] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   22.093576] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   22.093665] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   22.093673] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, N
+[   22.586245] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0x31415903; hObject=0x3141590f; hClass=0x00000070; paramsSize=0x00000018; paramsSta
+=== SINGLE-STORE E6 END 2026-09-15T05:03:20+00:00 tag=w734b ===
+
+=== ★★★★★ W734 — THE TWO TERMS ===
+--- Q1 THE CLIENT (graded first) ---
+    W392D_GUEST_OUTCOME=(P) ★★★★★ THE FALSIFIER SURVIVES — the SAME client that
+        THREADS           8 of 8 verified ✔
+--- Q2 THE BYTE AND FRAME CENSUS ---
+W734-FBIO-LINES=1  (0 ⇒ UNMEASURED, which is NOT 'the store served nothing')
+FB-IO trap[r=0/0.0MiB w=0/0.0MiB frames=0] walk-bar[r=3454311/135.0MiB w=0/0.0MiB frames=58] walk-guest-pt[r=53545/140.5MiB w=0/0.0MiB frames=70] out-of-band[r=530/0.3MiB w=0/0.0MiB frames=60] cpu-ce[
+r=2/0.0MiB w=351/15.6MiB frames=2049] ★ TOTAL=291.5MiB WALK=275.5MiB WALK_FRAMES=128 ⇒ PROJECTION: at an ASSUMED 52 MiB/s over PCIe the WALK half alone would cost 5.2s of this boot, and the total 
+5.5s; and serving those frames as device views would need 128 armed nodes = 0.5 MiB of host BAR1 if none of them is contiguous with another. ⚠ The byte and frame counts are MEASURED here; the rate i
+s NOT — it is an input from a different path's measurement, and the product is only as good as it.
+W734-TOTAL=TOTAL=291.5MiB
+W734-WALK=WALK=275.5MiB
+W734-WALK-FRAMES=WALK_FRAMES=128
+W734-VACUOUS=0  (1 ⇒ the instrument was not reached)
+--- Q3 THE RATE, AND ITS PROVENANCE ---
+kayfabe: FB-IO-RATE 55076607 bytes/s ⇐ MEASURED on this boot through a device view of the reserved object
+--- the device-view probe's own four numbers ---
+DEVICE_VIEW=OK rate[rd=52.5MiB/s wr=4987.5MiB/s over=2048KiB arm_us=273 rel_us=446 released=true] mmap_len=0x1000 sentinel_roundtrip=true released=true ⇒ the scratchpad isolate armed a view of the RESERVED OBJECT, the node crossed by SCM_RIGHTS, this process mapped it, CLOSED the descriptor, and the mapping survived — the owner's 
+--- Q4 THE IDENTITY WINDOW, both moments ---
+IDENTITY-WINDOW ✔ POSSIBLE — advertised=4096.0 MiB ≤ reserved=4096.0 MiB, headroom=0.0 MiB. ⇒ every framebuffer address the guest can name is an offset into the reserved object, so the walk kernel's window can be IDENTITY and relocation, the staged image and its H2D copy, and MAX_REFRESHES all become retirable. ⚠ P
+IDENTITY-REACHED ✔ INSIDE — the guest's highest framebuffer address was 3868.7 MiB, 94.5 % of the 4096.0 MiB reserved, leaving 227.3 MiB. ★ This is the known-positive for the identity window: the guest's own tables fit in the object, so an identity window would have answered for all of them.
+--- §22 item 3's relation on this board ---
+BAR1-BUDGET host_bar1=256 MiB at 0000:00:07.0 advertised_guest_bar1=256 MiB headroom=16 MiB ⇒ ⊘⊘ DOES NOT FIT — 256 MiB advertised + 16 MiB headroom > 256 MiB host. ★ §22(b): we CHOOSE the left-hand side. Advertising 128 MiB leaves 128 MiB of headroom on this same board, 
+--- ★ the arena's own span, for cross-checking IDENTITY-REACHED ---
+arena[pages live=2415 peak=2415 allocations=4087 span_pages=990381 store_refused=0 store_migrated=0 store_read_refused=0 store_resets=0 (store numbers at END only)]
+--- ★ host Xid, if any (a fault makes every number above suspect) ---
+HOST_DMESG_XID=1
+=== W734 END 2026-09-15T05:03:45+00:00 ===
+RUN_EXIT=0
+RUN_END 2026-09-15T05:03:45+00:00

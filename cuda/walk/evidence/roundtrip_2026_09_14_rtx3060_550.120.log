@@ -1,0 +1,94 @@
+START 2026-09-14T15:20:28Z NVIDIA GeForce RTX 3060, 550.120
+I2 ok: exactly one dereference site
+I2 ok: exactly one raw pointer cast
+I1 ok: no while loop in kf_walk_one
+I1 ok: no goto, no recursion
+I1 ok: five nested loops, every trip count a format constant
+I3 ok: truncation raised from 5 sites
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -o kf_tests kf_tests.cu kf_walk.cu -lpthread
+jit ok: PTX-only binary
+.target sm_75
+device: NVIDIA GeForce RTX 3060  sm_86  driver-jit-from-PTX
+sizeof: header=64 pdb=32 run=32
+pass correctness/single_4k
+pass correctness/large_pages_64k_2m_512m
+pass correctness/coalesce_one_run
+pass correctness/coalesce_split_gpga
+pass correctness/coalesce_split_flags
+pass correctness/no_coalesce_across_pagesize
+pass correctness/sparse_and_invalid_skipped
+pass correctness/flags_decoded
+pass correctness/dual_pde_both_halves
+pass correctness/multiple_pdbs
+pass delta/nothing_changed
+pass delta/add
+pass delta/delete
+pass delta/edit_gpga
+pass delta/edit_flags
+pass delta/extend_and_shrink
+pass delta/move_page_table
+pass delta/change_root_pdb
+pass delta/free_subtree
+pass delta/generation_handshake
+pass hostile/self_cycle
+pass hostile/two_cycle
+pass hostile/deep_cycle
+pass hostile/pointer_past_end
+pass hostile/table_straddles_end
+pass hostile/unaligned_root
+pass hostile/root_out_of_range
+pass hostile/all_ones_entries
+pass hostile/all_ones_vidmem_pointer
+pass hostile/type_confusion
+pass hostile/foreign_aperture
+pass hostile/enormous_but_legal
+pass hostile/report_run_cap
+pass hostile/entry_budget
+pass hostile/pdb_capacity
+pass hostile/unsorted_pdb_list
+pass hostile/bounds_window_respected
+pass hostile/unaligned_inexpressible
+pass legal/shared_page_table
+pass legal/pte_maps_own_page_table
+      [differential] 15 images, 1212 benign leaves agreed exactly, 2 hostile leaves within the rust walker's set
+pass differential/rust_walker
+pass roundtrip/truncated_is_never_a_delta
+      [benign] 1000 steps over 4 seeds: 1000 closures checked, 554 non-empty deltas, 770 steps changed the mapping set, 239 with BOTH dual-PDE halves live, 0 truncations, max model 392, deepest walk 8748
+pass roundtrip/benign_stream
+      [hostile] 1000 steps over 4 seeds: 1000 closures checked, 551 non-empty deltas, 755 steps changed the mapping set, 177 with BOTH dual-PDE halves live, 0 truncations, max model 303, deepest walk 10380
+pass roundtrip/hostile_stream
+      [race roundtrip] 150 deltas applied, 0 truncations, 531800064 racer writes, deepest 3396, final model 106
+pass roundtrip/under_racer
+      [cpu live] 200 walks in 729 ms, 456767488 edits interleaved, deepest 1828 entries, 2473 runs total
+pass race/cpu_live_edits
+      [gpu live] 200 walks in 949 ms, deepest 1828 entries, 2934 runs total
+pass race/gpu_live_edits
+      [cpu racer] 200 walks in 170 ms, 30228480 host writes interleaved, deepest walk 1028 entries, 0 runs total
+pass race/cpu_garbage
+      [gpu racer] 120 walks in 576 ms, deepest walk 516 entries
+pass race/gpu_garbage
+pass scope/covering_the_change
+pass scope/excluding_a_pdb_carries_it
+pass scope/sentinel_is_full_walk
+pass scope/overflow_degrades_to_full
+pass scope/cannot_make_the_walk_wrong
+
+==== 54 passed, 0 failed ====
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -DKF_BREAK_BOUNDS -o kf_tests_broken kf_tests.cu kf_walk.cu -lpthread
+neg ok: bounds_window_respected fails without the check (rc=1)
+neg ok: pointer_past_end fails without the check (rc=1)
+neg ok: the control case still passes on the unbroken binary
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -DKF_OLD_MERGE -o kf_tests_oldmerge kf_tests.cu kf_walk.cu -lpthread
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -DKF_BREAK_ORDER -o kf_tests_badorder kf_tests.cu kf_walk.cu -lpthread
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -DKF_DROP_UNMAP -o kf_tests_nounmap kf_tests.cu kf_walk.cu -lpthread
+neg ok: the superseded whole-run merge breaks the round-trip (rc=1), on:
+    ! roundtrip/benign_stream:1827  applying the report in reverse order gives a different model  -- seed=12648430 step=183: model has pdb=19000 va=80c0e0ed4000 ps=0 that the full walk does not
+neg ok: a class emitted out of VA order breaks the round-trip (rc=1), on:
+    ! roundtrip/benign_stream:1827  applying the report in reverse order gives a different model  -- seed=12648430 step=224: sizes differ: model 83, full walk 84
+neg ok: dropping every UNMAP breaks CLOSURE and nothing else (rc=1), on:
+    ! roundtrip/benign_stream:1856  apply(model, delta) != full walk  -- seed=1 step=14 runs=1 flags=0x0 mask=0x0 :: sizes differ: model 9, full walk 1
+neg ok: the control round-trip still passes on the unbroken binary
+DMESG=UNREADABLE__absence_of_Xid_lines_here_is_NOT_evidence
+SMI=responsive
+INV=0 BUILD=0 PTX=0 NEG=0 CNEG=0
+EXIT=0

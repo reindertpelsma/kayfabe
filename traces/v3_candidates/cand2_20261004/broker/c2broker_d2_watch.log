@@ -1,0 +1,5 @@
+START 2026-10-04T11:49:04+00:00
+D2_BEFORE kf3: display fps[cap=75(unset) h3[armed=59.948 tick=59.94 clamped=0 late_max_us=1314 kms=0.0 tear=0.0 held=0 core_imm=5 vblirq=0.0] copies=0.0 checks=59.9 same=10532 ondemand=29 over=0]
+D2_AFTER kf3: display fps[cap=75(unset) h3[armed=59.948 tick=59.90 clamped=0 late_max_us=1314 kms=0.0 tear=0.0 held=0 core_imm=5 vblirq=0.0] copies=0.0 checks=59.9 same=11492 ondemand=45 over=0]
+D2_WATCH_VERDICT PASS same_delta=960.0 copies_hz=0.0 checks_hz=59.9
+EXIT rc=0 2026-10-04T11:53:56+00:00

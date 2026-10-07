@@ -1,0 +1,6 @@
+Oct 07 20:27:13 claude systemd[1]: Started kf-boundary-kayfabe-46.service - [systemd-run] /usr/bin/python3 -u /var/lib/kf-code43-mem-20261007/kftree/scripts/bench/windows/pc_sdr_experiment.py --arm kayfabe --run 46 --no-mmio-trace --product-revision 065447edefea76da11cce226511df475448fa080 --qemu-revision 065447edefea76da11cce226511df475448fa080 --sw-runlist-host-owned.
+Oct 07 20:27:13 claude python3[1203011]: Formatting '/var/lib/kf-windows-20261005/boundary-kayfabe-46/windows.qcow2', fmt=qcow2 cluster_size=65536 extended_l2=off compression_type=zlib size=161061273600 backing_file=/var/lib/kf-windows-20261005/baseline/windows.qcow2 backing_fmt=qcow2 lazy_refcounts=off refcount_bits=16
+Oct 07 20:27:53 claude python3[1203007]: BOUNDARY_START boundary-kayfabe-46
+Oct 07 20:28:55 claude python3[1203007]: BOUNDARY_EXIT boundary-kayfabe-46 0
+Oct 07 20:28:55 claude systemd[1]: kf-boundary-kayfabe-46.service: Deactivated successfully.
+Oct 07 20:28:55 claude systemd[1]: kf-boundary-kayfabe-46.service: Consumed 2min 53.814s CPU time over 1min 41.839s wall clock time, 15.7G memory peak.

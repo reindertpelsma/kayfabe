@@ -1,0 +1,15 @@
+# NEGATIVE ARM: same box, same binary, uid 65534
+info  RMLADDER ARGV     = [--gpu 0 --list-object-alias]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d0007e
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=d0347a5869744de86a87f9348bc94f45ef2d5e47
+==    W747 list-object-alias = gpu 0, euid 65534, parent 0x4000 bytes, slice page 2, control page 0
+info  W747 the bar        = a write through the PARENT after the slice exists must be visible through the SLICE (ALIAS); still reading the pre-write value is COPY and the USERD design is dead however green the read-at-creation looked
+ok    W747 KP grader      = a stale snapshot grades COPY · a live alias grades ALIAS · an uninterpretable read grades UNKNOWN — the grader can reach all three answers
+ok    W747 seed           = page 2 = 0x747a0001 (A), page 0 = 0x74750004 (S), both read back through the parent
+⊘     W747 slice L_N               = page 2 attr PAGE_SIZE_4KB REFUSED status 0x001b NV_ERR_INSUFFICIENT_PERMISSIONS
+⊘     W747 slice L_N               = page 2 attr PAGE_SIZE_DEFAULT REFUSED status 0x001b NV_ERR_INSUFFICIENT_PERMISSIONS
+FAIL  W747 slice          = ⊘ BOTH attribute arms refused. Decode the status above before reading it as a ruling on aliasing: 0x1b INSUFFICIENT_PERMISSIONS is the class's RS_FLAGS_ALLOC_PRIVILEGED, and ⚠ THAT GATE IS CAP_SYS_ADMIN, NOT uid 0 — RM's privLevel comes from os_is_administrator() = capable(CAP_SYS_ADMIN) (ogkm-580: nv-linux.h:537), so root inside an unprivileged container is refused exactly like a normal user; 0x56 NOT_SUPPORTED is memlistConstruct's GSP-client gate (check nvidia-smi -q for a GSP Firmware Version). Both are ENVIRONMENT results
+W747_VERDICT=NOTRUN
+done — list-object alias probe only

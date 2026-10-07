@@ -1,0 +1,19 @@
+BRK_LANE_START prep 9f2fd00 kf=9d82f259 2026-10-04T11:21:27+00:00
+PREP_APT_RC=0
+PREP_BROKER_REV 9f2fd004c8133a3821fe945e99c5b28a3ccd4be8 dirty=[0]
+PREP_BROKER_MAKE_RC=0 nvkvm-display-broker backends:  dma-buf test source : yes (libgbm)  wayland : yes  x11 : yes (dri3+present +xrender scaling and guest cursor) + xi2 raw motion  test : yes (always) 
+PREP_BROKER_BIN /opt/nvkvm-broker/nvkvm-display-broker sha256=45b943f45f22bb6b
+PREP_DMABUF_SRC rc=0 566514027aee9a38
+PREP_E0 driver=580.159.04 drm=580.159.04 modeset=N fbdev=Y
+PREP_E0 nodes crw-rw---- root video e2:0 /dev/dri/card0;crw-rw---- root render e2:80 /dev/dri/renderD128;
+PREP_E0 render_acl user::rw- user:user:rw- group::rw- mask::rw- other::---  
+PREP_MODESET reloaded rc=0 modeset=Y
+PREP_DM sddm start_rc=0
+PREP_SESSION user=user uid=1000 display=:0 xauth=set
+server does not have extension for -dpms option
+PREP_SESSION_LOCK autolock=off Autolock=false
+PREP_XORG [  2391.074] (II) NVIDIA GLX Module  580.159.04  Wed Apr 29 17:07:05 UTC 2026
+PREP_XDPY     DRI3
+PREP_XDPY     Present
+PREP_XDPY   dimensions:    1024x768 pixels (347x260 millimeters)
+BRK_LANE_EXIT rc=0 2026-10-04T11:22:07+00:00

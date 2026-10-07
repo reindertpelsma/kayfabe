@@ -1,0 +1,94 @@
+[   26.128785] nvidia-nvlink: Nvlink Core is being initialized, major device number 239
+
+[   26.143582] nvidia 0000:00:02.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=none:owns=io+mem
+[   26.148156] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   29.307305] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   29.307570] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   29.339250] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   29.343767] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   29.344818] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   29.344825] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   29.623547] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   29.624235] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0) @ kernel_graphics.c:2519
+[   29.626504] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   29.626508] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   29.626509] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   29.626510] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   29.630526] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:508
+[   29.630531] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   29.643619] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00009; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+[   29.643624] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2827
+[   29.643628] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:940
+[   29.646324] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   29.651053] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   30.527360] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   30.530952] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   30.568087] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00001; hParent=0xa55a0030; hObject=0xa55a0070; hClass=0x0000208f; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   30.703675] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[   30.726842] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+[   36.462295] nvidia-modeset: Loading NVIDIA UNIX Open Kernel Mode Setting Driver for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:04:37 UTC 2026
+[   36.480826] [drm] [nvidia-drm] [GPU ID 0x00000002] Loading driver
+[   37.306317] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   37.306537] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   37.323655] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   37.327685] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   37.329067] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   37.329074] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   37.608503] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   37.609328] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0) @ kernel_graphics.c:2519
+[   37.612310] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   37.612315] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   37.612317] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   37.612319] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   37.618097] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:508
+[   37.618104] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   37.634129] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00015; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+[   37.634188] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2827
+[   37.634196] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:940
+[   37.637971] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   37.644260] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00016; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   37.679761] nvidia-modeset: WARNING: GPU:0: Failed to register display hotplug handler: 0x56
+
+[   37.681772] nvidia-modeset: WARNING: GPU:0: Failed to register DisplayPort interrupt handler: 0x56
+
+[   37.684203] nvidia-modeset: WARNING: GPU:0: Failed to enable HDMI FRL retrain notifications (subdevice: 0) (error: 0x56)
+[   38.133069] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:02.0 on minor 0
+[   38.133221] nvidia 0000:00:02.0: vgaarb: deactivate vga console
+[   38.133673] Console: switching to colour dummy device 80x25
+[   38.180375] fbcon: nvidia-drmdrmfb (fb0) is primary device
+[   38.311163] Console: switching to colour frame buffer device 240x67
+[   38.330332] nvidia 0000:00:02.0: [drm] fb0: nvidia-drmdrmfb frame buffer device
+[   47.316736] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00018; hParent=0xa55a0030; hObject=0xa55a0060; hClass=0x000090e7; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   47.318157] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00018; hParent=0xa55a0030; hObject=0xa55a0070; hClass=0x0000208f; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   47.329498] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   47.344375] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   47.382937] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   47.391376] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   47.402572] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   83.058837] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   83.058855] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _gpushareddataRequestDataPoll(pData, pAllocParams->polledDataMask) @ gpu_user_shared_data.c:95
+[   86.359825] [drm:nv_drm_atomic_commit [nvidia_drm]] *ERROR* [nvidia-drm] [GPU ID 0x00000002] Flip event timeout on head 0
+[  215.049531] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[  215.049544] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _gpushareddataRequestDataPoll(pData, pAllocParams->polledDataMask) @ gpu_user_shared_data.c:95
+[  218.135827] [drm:nv_drm_atomic_commit [nvidia_drm]] *ERROR* [nvidia-drm] [GPU ID 0x00000002] Flip event timeout on head 0
+[  218.585338] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00036; hParent=0x01000012; hObject=0xc0de9000; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  218.589692] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00036; hParent=0x01000012; hObject=0xc0de9001; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  218.593662] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00036; hParent=0x01000012; hObject=0xc0de9002; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  218.597667] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00036; hParent=0x01000012; hObject=0xc0de9003; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  220.641917] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00041; hParent=0xbeef0100; hObject=0xc0de9000; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  220.646810] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00041; hParent=0xbeef0100; hObject=0xc0de9001; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  220.651456] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00041; hParent=0xbeef0100; hObject=0xc0de9002; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  220.655687] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00041; hParent=0xbeef0100; hObject=0xc0de9003; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  228.816868] hrtimer: interrupt took 6106086 ns
+[  234.352971] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00043; hParent=0xbeeb0100; hObject=0xc0de9000; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  234.357449] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00043; hParent=0xbeeb0100; hObject=0xc0de9001; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  234.361462] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00043; hParent=0xbeeb0100; hObject=0xc0de9002; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  234.366115] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00043; hParent=0xbeeb0100; hObject=0xc0de9003; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  234.384645] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00043; hParent=0xbeeb0101; hObject=0xc0de9004; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  234.389352] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00043; hParent=0xbeeb0101; hObject=0xc0de9005; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  234.393115] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00043; hParent=0xbeeb0101; hObject=0xc0de9006; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  234.397110] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00043; hParent=0xbeeb0101; hObject=0xc0de9007; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  234.404916] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00043; hParent=0xbeeb0102; hObject=0xc0de9008; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  234.409440] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00043; hParent=0xbeeb0102; hObject=0xc0de9009; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  234.413150] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00043; hParent=0xbeeb0102; hObject=0xc0de900a; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  234.416880] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00043; hParent=0xbeeb0102; hObject=0xc0de900b; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056

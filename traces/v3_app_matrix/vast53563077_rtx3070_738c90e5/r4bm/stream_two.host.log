@@ -1,0 +1,5 @@
+=== stream_two side=host start=2026-09-30T18:49:25+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/stream_probe two
+CHECK two_a ok
+CHECK two_b ok
+STREAM_PROBE_DONE two rc=0
+=== end rc=0 secs=2 2026-09-30T18:49:27+00:00

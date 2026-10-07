@@ -1,0 +1,9 @@
+info  RMLADDER ARGV     = [--dictated-ring-negative]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00150
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+info  R26n neg control    = GPU 0, euid 0 — OCCUPY 0x0000000411000000 first, then ask for a channel ring at the same address. The control fires if the ask is REFUSED
+ok    R26n occupied       = 0x0000000411000000 is now taken by another object
+★     R26n CONTROL FIRED  = RM refused the channel at an occupied 0x0000000411000000 with Other(19305) — the address is enforced by the driver, so R26's green is a fact about RM and not about our formatting
+done — dictated-ring negative control only

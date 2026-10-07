@@ -1,0 +1,13 @@
+# ★ PINNED (owner, 2026-10-02). A floating `stable` let the 2026-10-02 runner bump (1.98.1 -> 1.99.0)
+# break CI on every commit: trybuild snapshots changed wording and clippy grew new lints. Bump this
+# deliberately, in one commit that also regenerates `crates/*/tests/ui/*.stderr` and re-records
+# `scripts/ci/clippy-debt.json` — and update the three `toolchain:` lines in .github/workflows/ci.yml.
+[toolchain]
+channel = "1.99.0"
+components = ["rustfmt", "clippy"]
+# The isolate image is embedded as a static musl binary (crates/kayfabe-isolate-host/build.rs).
+# kf3's boot-display GOP driver is built from firmware/kf-gop and embedded (crates/kf-gop-image/build.rs,
+# OWNER_RULINGS §K, 2026-10-03: no compiled binary in the repo). An aarch64 build of kayfabe needs
+# aarch64-unknown-uefi instead; the build script names the missing target and the command.
+targets = ["x86_64-unknown-linux-musl", "x86_64-unknown-uefi"]
+profile = "minimal"

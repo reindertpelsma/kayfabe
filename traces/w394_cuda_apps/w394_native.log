@@ -1,0 +1,41 @@
+=== ★ w394 CUDA-apps suite — arm=native tag=w394n 2026-09-09T12:56:51+00:00 ===
+W394_BUILT=6 of 6  RC=0
+--- W394_NATIVE_BEGIN vector_add_test [] 2026-09-09T12:56:53+00:00
+PASS: 1024-element vec_add ran on GPU through nvkvm forwarder
+W394_NATIVE_RC_vector_add_test=0
+--- W394_NATIVE_END vector_add_test 2026-09-09T12:56:55+00:00
+--- W394_NATIVE_BEGIN matmul_test [] 2026-09-09T12:56:55+00:00
+PASS: 1024x1024 fp32 matmul on GPU through nvkvm forwarder
+W394_NATIVE_RC_matmul_test=0
+--- W394_NATIVE_END matmul_test 2026-09-09T12:56:58+00:00
+--- W394_NATIVE_BEGIN big_memcpy_test [4096] 2026-09-09T12:56:58+00:00
+PASS: 4194304 bytes round-tripped exactly
+W394_NATIVE_RC_big_memcpy_test=0
+--- W394_NATIVE_END big_memcpy_test 2026-09-09T12:57:00+00:00
+--- W394_NATIVE_BEGIN mem_bandwidth_probe [16 4] 2026-09-09T12:57:00+00:00
+device: NVIDIA GeForce RTX 3060
+H2D: 10.83 GB/s
+D2D: 2904.01 GB/s
+D2H: 6.89 GB/s
+correctness: OK (16777216 bytes verified)
+W394_NATIVE_RC_mem_bandwidth_probe=0
+--- W394_NATIVE_END mem_bandwidth_probe 2026-09-09T12:57:02+00:00
+--- W394_NATIVE_BEGIN gpu_bench [1024 5 200 200] 2026-09-09T12:57:02+00:00
+device: NVIDIA GeForce RTX 3060
+A throughput : 1024x1024 GEMM x5  0.025s  426.2 GFLOP/s
+B launch RTT : 200 launches  0.001s  6.03 us/launch  (165912 launches/s)
+C alloc RTT  : 200 alloc+free  0.022s  109.70 us/pair
+W394_NATIVE_RC_gpu_bench=0
+--- W394_NATIVE_END gpu_bench 2026-09-09T12:57:05+00:00
+--- W394_NATIVE_BEGIN cuda_micro [2000 500 16 500] 2026-09-09T12:57:05+00:00
+1 rm_control  : 2000 cuMemGetInfo   6.97 us/call
+2 alloc       : 500 alloc+free     117.69 us/pair
+3 bandwidth   : HtoD 16 MB x8     10.7 GB/s   DtoH 6.6 GB/s   DtoH correctness: OK (0/4194304 mismatched)
+3b pinned DtoH: 13.0 GB/s (pinned host buf, copy-engine path)
+4 launch_sync : 500 launch+sync    5.91 us/launch
+5 uvm_alloc   : 2000 managed+touch   215.59 us/op
+6 uvm_migrate : 500 GPU<->CPU cyc   3327.11 us/cycle (4 MB each way)
+7 poll_sync   : 5000 blk-event sync 60.27 us/sync
+W394_NATIVE_RC_cuda_micro=0
+--- W394_NATIVE_END cuda_micro 2026-09-09T12:57:10+00:00
+=== W394_NATIVE_SUITE_DONE 2026-09-09T12:57:10+00:00 ===

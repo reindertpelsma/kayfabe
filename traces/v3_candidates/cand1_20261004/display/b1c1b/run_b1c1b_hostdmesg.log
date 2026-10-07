@@ -1,0 +1,4 @@
+[31860.559346] x86/PAT: kf3-vamgr:309274 freeing invalid memtype [mem 0x10018a0000-0x1001a9ffff]
+[31860.565250] x86/PAT: kf3-vamgr:309274 freeing invalid memtype [mem 0x1001e00000-0x1001e9ffff]
+[31860.565630] x86/PAT: kf3-vamgr:309274 freeing invalid memtype [mem 0x1001ea0000-0x100209ffff]
+[31860.566142] x86/PAT: kf3-vamgr:309274 freeing invalid memtype [mem 0x10020a0000-0x100229ffff]

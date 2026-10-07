@@ -1,0 +1,5 @@
+info  R12 4 threads x 200 verbs, alloc_vaspace + free
+ok    R12 1 thread (base)  = 800 verbs sequential, 1496 ms
+ok    R12 one client       = 430 overlapping pairs, 1602 ms
+ok    R12 4 clients      = 454 overlapping pairs, 1594 ms
+★     R12 SPEEDUP         = one client x4 workers: 0.93x   |   4 clients: 0.94x   (ideal 4.00x, 800 verbs)

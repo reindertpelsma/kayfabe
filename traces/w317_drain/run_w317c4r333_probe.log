@@ -1,0 +1,238 @@
+=== boot_capture tag=w317c4r333 at 2026-08-14T16:53:03+00:00 ===
+=== source revision: 86dd30b7 ===
+=== qemu binary: -rwxr-xr-x 1 root root 88107240 Aug 14 16:52 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:86dd30b7fa67db5b3e81386061d72b256496cb6c 
+=== BUILD_REV.txt says (informational, NOT authoritative): kayfabe-rev:5feac9090bc58129c9906e2222f3934ae313a980
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /workspace/kf-w317/scripts/bench/boot_nvkvm.sh  sha256=a1daa5c4c557180f
+    used: /workspace/kf-w317/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Fri Aug 14 16:53:18 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  ERR!                           Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /  12288MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Aug 14 16:53 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Aug 14 16:53 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Aug 14 16:53 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Aug 14 16:53 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Aug 14 16:53 .
+drwxr-xr-x 18 root root   4000 Aug 14 16:53 ..
+cr--------  1 root root 240, 1 Aug 14 16:53 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Aug 14 16:53 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /workspace/kf-w317/scripts/bench/r33_hook_ce_client.sh at 2026-08-14T16:53:23+00:00 ===
+=== R33 milestone 2 — the raw CE client, in the guest ===
+--- the binary under test (⊘ the native arm must carry the SAME md5):
+    /workspace/bench/cargo-target-kf-w317/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder   2041912 bytes  md5 bc9397f7daa08dd27be9224b6891d554
+    /workspace/bench/cargo-target-kf-w317/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), static-pie linked, BuildID[sha1]=7127543e8d61435d7180215f61b545c94df281f7, not stripped
+    ★ STATIC — it will run in the guest's userland
+=== guest preconditions (⊘ each is a DIFFERENT failure from 'the client did not work') ===
+GUEST_UNAME=6.8.0-136-generic
+GUEST_NVIDIA_DEVS=[/dev/nvidia-uvm /dev/nvidia-uvm-tools /dev/nvidia0 /dev/nvidiactl  /dev/nvidia-caps: nvidia-cap1 nvidia-cap2 ]
+GUEST_NVRM_LOADED=1
+GUEST_EUID=1000
+=== push the binary into the guest ===
+GUEST_MD5=bc9397f7daa08dd27be9224b6891d554
+GUEST_EXECUTABLE=yes
+=== run it, under its own deadline, with a START marker and an RC terminator ===
+--- the client's own output, verbatim ---
+info  RMLADDER ARGV     = [--ce-client-fault]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00013
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=8339f73987e2cba2b831138869e4da04e22ee9ed
+info  R33 NOTIFIER APERTURE = SYSMEM (NV01_MEMORY_SYSTEM) ⊘ on the GUEST path a VIDMEM notifier decodes to ErrorNotifier::Unreachable, so NO host notifier is attached and arm 4 measures NOTHING while looking like it ran
+info  R33 raw CE client   = GPU 0, euid 1000 — a copy engine allocated, mapped, submitted and completed through RAW RM IOCTLS ONLY. No libcuda is loaded by this process
+info  R33 the bar is FOUR facts: the bytes moved (read back through a mapping that is not the one written), the semaphore carries the DECLARED payload at the DECLARED address, GP_GET reached GP_PUT, and the VA probe REFUSES where something is mapped. ⊘ `Ok(())` from any call under test is not one of them
+★     R33 IN-BAND CAL     = KNOWN-POSITIVE FIRED — cmd 0x20800ffe returned `errno == 0` from the syscall AND a non-zero RM status in the parameter struct ([Refused(86)]). ⇒ the in-band reader below CAN see a refusal, so a run reporting zero refusals is a measurement rather than a blind spot. (caller saw Err(Other(86)))
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000003 runlist=0 chid=3 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000003 ★★★ WROTE — the store instruction executed
+★     R33 arm 1 COPY      = 4096 bytes moved: dst[0] 0x3f0011cc -> 0xc0ffee33, dst[last] 0xc0fff232 (want 0xc0fff232), engine semaphore 0x00000001 (declared 0x00000001), GP_GET 1 caught GP_PUT 1 — read back through an INDEPENDENT mapping (its own device node, its own mmap, a kernel-chosen address)
+info  R33 arm 1 OPERANDS  = src 0x0000000120000000 dst 0x0000000120010000 (4096 bytes each, device-local, in the operand space). ⇒ A HOST `Xid` naming either of these addresses IS THIS SUBMISSION; one naming neither belongs to a different channel
+ok    R33 ADDRESS SPACES  = operands in range 0xcafe0005; the channel's ring, USERD and semaphore in range 0xcafe0009 (two different spaces — the w229 executor split); ring 0x0000000120020000, semaphore 0x0000000120022000. ⊘⊘ EVERY VERDICT BELOW IS SCOPED TO THESE TWO HANDLES and to no other page table — a guest channel's PDB is not asked anything by this rung
+★     R33 arm 2 OCCUPIED  = a fresh object asked for 0x0000000120020000 in range 0xcafe0009 and RM REFUSED it (NoMemory) — the ring really is there, so the probe can detect occupancy and arm 3's answer is a measurement
+★     R33 arm 3 FREE      = 0x0000000900000000 is UNCLAIMED in range 0xcafe0009 — a fresh object took the address and RM reported it back. ⇒ THIS IS THE `is this GPU VA mapped?` PRIMITIVE, with both polarities calibrated on one run and NO DEBUGGER involved
+info  R33 arm 6 PDE-INFO  = NV0080_CTRL_CMD_DMA_GET_PDE_INFO (0x801809) against RM's OWN VA space objects. ⊘ It reports what RM BELIEVES it mapped (populate source 1), NOT what hardware can resolve — never report a valid PTE here as `hardware can reach it`
+      R33 arm 6 CAL+ ring      0x0000000120020000 = PDE PRESENT (pageSize 0x20000000, ptePhysAddr 0x2000, addrSpace 0x0, pdeFlags 0x00000000, pdbAddr 0x0) ⊘ a page TABLE covers this VA; says NOTHING about the leaf
+      R33 arm 6 CAL- free      0x0000000900000000 = PDE PRESENT (pageSize 0x20000000, ptePhysAddr 0x2000, addrSpace 0x0, pdeFlags 0x00000000, pdbAddr 0x0) ⊘ a page TABLE covers this VA; says NOTHING about the leaf
+FAIL  R33 arm 6 CALIBRATION = ring -> Some(true) (want Some(true)), free -> Some(true) (want Some(false)). ⊘⊘ THE ROWS BELOW ARE NOT MEASUREMENTS THIS RUN. An oracle that cannot show both polarities cannot distinguish `nothing is mapped` from `I cannot see mappings`
+      R33 arm 6 arm1 src       0x0000000120000000 = PDE PRESENT (pageSize 0x20000000, ptePhysAddr 0x2000, addrSpace 0x0, pdeFlags 0x00000000, pdbAddr 0x0) ⊘ a page TABLE covers this VA; says NOTHING about the leaf
+      R33 arm 6 arm1 dst       0x0000000120010000 = PDE PRESENT (pageSize 0x20000000, ptePhysAddr 0x2000, addrSpace 0x0, pdeFlags 0x00000000, pdbAddr 0x0) ⊘ a page TABLE covers this VA; says NOTHING about the leaf
+      R33 arm 6 probe ctrlsrc  0x0000000700100000 = PDE PRESENT (pageSize 0x20000000, ptePhysAddr 0x2000, addrSpace 0x0, pdeFlags 0x00000000, pdbAddr 0x0) ⊘ a page TABLE covers this VA; says NOTHING about the leaf
+      R33 arm 6 probe ring     0x0000000700000000 = PDE PRESENT (pageSize 0x20000000, ptePhysAddr 0x2000, addrSpace 0x0, pdeFlags 0x00000000, pdbAddr 0x0) ⊘ a page TABLE covers this VA; says NOTHING about the leaf
+info  R33 arm 4 SPACE     = a THIRD, freshly allocated address space (range 0xcafe0011) — NOT arm 1's operand space and NOT arms 2/3's control space. ⊘ Arms 3 and 4 ask the same question about the same NUMBER in DIFFERENT address spaces, so they can disagree without either being wrong, and neither corroborates the other
+info  R33 arm 4 CONFIG    = vas=FRESH (a third, never used) addr=DICTATED notifier=PRESENT (the committed default) chan-ordinal=2 (HELD, not settable) engine=COPY0 fault-va=0x0000000900000000. ⇒ THIS is what ran; it is built from the values passed to the probe, not from the flags a harness believes it set
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+★     R33 CRIT1 STATE     = CONTROL-NEVER-LANDED | VA-IDENTITY MEASURED = no ⊘ every VA-IDENTITY count on this run is VACUOUS — the positive control did not land, so the deliberate fault was never issued and any notifier that fired belongs to the CONTROL
+??    R33 arm 5 CONTROL   = the pre-fault read did not happen, so a fired notifier below cannot be attributed to the fault rather than to channel creation
+★     R33 arm 5 NOTIFIER  = PLANE A FIRED — the driver wrote this process's OWN memory: status 0xffff, info32 0x0000001f (`ROBUST_CHANNEL_*`, the number a host log prints as `Xid`), info16 engine 0x0001, timestamp 0xd0e20e6018cbba36. ⇒ THIS is how a raw client learns IN-PROCESS that its channel was killed: it POLLS 16 bytes, no host log and no debugger
+FAIL  R33 arm 5 WHERE     = PLANE D UNMEASURED — `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO` refused or did not decode, so this run carries the fault's CODE and not its ADDRESS. ⊘ Not retried: the record is cleared by reading it, so a second ask would answer all-zero and that decodes as a fault at address 0
+★     R33 arm 5 IOCTL     = PLANE C SPEAKS — the next ioctl on the faulted channel refused with Other(19270). A second, independent guest-observable path
+??    R33 arm 4 control   = the POSITIVE CONTROL did not land (sem 0x00000000, GP_GET 1 GP_PUT 1, moved 0xdead0000 want 0x5ea1c071) — the fault probe was never issued, so this run says NOTHING about whether 0x0000000900000000 resolves. ⊘ THE CONTROL'S OWN OPERANDS: src 0x0000000700100000 dst 0x0000000700200000, ring 0x0000000700000000 — a HOST `Xid` naming ANY of these is THIS FAILURE, and `w288nc1` wrote one up as unattributable for want of exactly this line
+FAIL  R33 raw CE client   = at least one arm above did not meet its bar
+=== IOCTL CENSUS (R33 raw CE client, arms 1-4) ===
+  total=89 failed=0 logged=89 dropped=0
+  --- by phase (⊘ the shortfall against `total` is ioctls issued outside any phase):
+                R0-R6 bring-up  7
+      R33 in-band known-positive  1
+                    R7 vaspace  2
+              R33 arm1 ce-copy  26
+           R33 arm2/3 va-probe  7
+             R33 arm6 pte-info  6
+             R33 arm4 hw-fault  32
+                  R33 teardown  8
+                           SUM  89 of 89 accounted
+  --- by request, `_IOC_TYPE`/`_IOC_NR` (the driver's own NV_ESC number):
+      magic 0x46 nr 210 (0xd2) CHECK_VERSION_STR          x1
+      magic 0x46 nr 201 (0xc9) REGISTER_FD                x1
+      magic 0x46 nr  43 (0x2b) RM_ALLOC                   x24
+      magic 0x46 nr  78 (0x4e) RM_MAP_MEMORY              x11
+      magic 0x46 nr  42 (0x2a) RM_CONTROL                 x13
+      magic 0x46 nr  87 (0x57) RM_MAP_MEMORY_DMA          x10
+      magic 0x46 nr  88 (0x58) RM_UNMAP_MEMORY_DMA        x9
+      magic 0x46 nr  41 (0x29) RM_FREE                    x19
+      magic 0x46 nr  39 (0x27) RM_ALLOC_MEMORY            x1
+  --- THE SEQUENCE, in order (seq: nr name  size  phase  errno  RM-STATUS):
+      ⊘⊘ `errno` is the SYSCALL's answer; `RM-STATUS` is what RM wrote INTO THE PARAMETER STRUCT. They disagree by design, and `errno ok` beside a non-zero RM-STATUS is a SILENTLY REFUSED ioctl — the exact shape `failed=0` cannot see
+         1: nr 210 CHECK_VERSION_STR          size    72  R0-R6 bring-up         ok         (no status)
+         2: nr 201 REGISTER_FD                size     4  R0-R6 bring-up         ok         (no status)
+         3: nr  43 RM_ALLOC                   size    32  R0-R6 bring-up         ok         RM ok
+         4: nr  43 RM_ALLOC                   size    32  R0-R6 bring-up         ok         RM ok
+         5: nr  43 RM_ALLOC                   size    32  R0-R6 bring-up         ok         RM ok
+         6: nr  43 RM_ALLOC                   size    32  R0-R6 bring-up         ok         RM ok
+         7: nr  78 RM_MAP_MEMORY              size    56  R0-R6 bring-up         ok         RM ok
+         8: nr  42 RM_CONTROL                 size    32  R33 in-band known-positive ok         ★ RM REFUSED status=0x56
+         9: nr  43 RM_ALLOC                   size    32  R7 vaspace             ok         RM ok
+        10: nr  43 RM_ALLOC                   size    32  R7 vaspace             ok         RM ok
+        11: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok         RM ok
+        12: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok         RM ok
+        13: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm1 ce-copy       ok         RM ok
+        14: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok         RM ok
+        15: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok         RM ok
+        16: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm1 ce-copy       ok         RM ok
+        17: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm1 ce-copy       ok         RM ok
+        18: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm1 ce-copy       ok         RM ok
+        19: nr  78 RM_MAP_MEMORY              size    56  R33 arm1 ce-copy       ok         RM ok
+        20: nr  78 RM_MAP_MEMORY              size    56  R33 arm1 ce-copy       ok         RM ok
+        21: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok         RM ok
+        22: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm1 ce-copy       ok         RM ok
+        23: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok         RM ok
+        24: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok         RM ok
+        25: nr  42 RM_CONTROL                 size    32  R33 arm1 ce-copy       ok         RM ok
+        26: nr  42 RM_CONTROL                 size    32  R33 arm1 ce-copy       ok         RM ok
+        27: nr  78 RM_MAP_MEMORY              size    56  R33 arm1 ce-copy       ok         RM ok
+        28: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok         RM ok
+        29: nr  42 RM_CONTROL                 size    32  R33 arm1 ce-copy       ok         RM ok
+        30: nr  78 RM_MAP_MEMORY              size    56  R33 arm1 ce-copy       ok         RM ok
+        31: nr  88 RM_UNMAP_MEMORY_DMA        size    48  R33 arm1 ce-copy       ok         RM ok
+        32: nr  88 RM_UNMAP_MEMORY_DMA        size    48  R33 arm1 ce-copy       ok         RM ok
+        33: nr  41 RM_FREE                    size    16  R33 arm1 ce-copy       ok         RM ok
+        34: nr  88 RM_UNMAP_MEMORY_DMA        size    48  R33 arm1 ce-copy       ok         RM ok
+        35: nr  88 RM_UNMAP_MEMORY_DMA        size    48  R33 arm1 ce-copy       ok         RM ok
+        36: nr  41 RM_FREE                    size    16  R33 arm1 ce-copy       ok         RM ok
+        37: nr  43 RM_ALLOC                   size    32  R33 arm2/3 va-probe    ok         RM ok
+        38: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm2/3 va-probe    ok         ★ RM REFUSED status=0x51
+        39: nr  41 RM_FREE                    size    16  R33 arm2/3 va-probe    ok         RM ok
+        40: nr  43 RM_ALLOC                   size    32  R33 arm2/3 va-probe    ok         RM ok
+        41: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm2/3 va-probe    ok         RM ok
+        42: nr  88 RM_UNMAP_MEMORY_DMA        size    48  R33 arm2/3 va-probe    ok         RM ok
+        43: nr  41 RM_FREE                    size    16  R33 arm2/3 va-probe    ok         RM ok
+        44: nr  42 RM_CONTROL                 size    32  R33 arm6 pte-info      ok         RM ok
+        45: nr  42 RM_CONTROL                 size    32  R33 arm6 pte-info      ok         RM ok
+        46: nr  42 RM_CONTROL                 size    32  R33 arm6 pte-info      ok         RM ok
+        47: nr  42 RM_CONTROL                 size    32  R33 arm6 pte-info      ok         RM ok
+        48: nr  42 RM_CONTROL                 size    32  R33 arm6 pte-info      ok         RM ok
+        49: nr  42 RM_CONTROL                 size    32  R33 arm6 pte-info      ok         RM ok
+        50: nr  43 RM_ALLOC                   size    32  R33 arm4 hw-fault      ok         RM ok
+        51: nr  43 RM_ALLOC                   size    32  R33 arm4 hw-fault      ok         RM ok
+        52: nr  43 RM_ALLOC                   size    32  R33 arm4 hw-fault      ok         RM ok
+        53: nr  43 RM_ALLOC                   size    32  R33 arm4 hw-fault      ok         RM ok
+        54: nr  39 RM_ALLOC_MEMORY            size    56  R33 arm4 hw-fault      ok         RM ok
+        55: nr  78 RM_MAP_MEMORY              size    56  R33 arm4 hw-fault      ok         RM ok
+        56: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm4 hw-fault      ok         RM ok
+        57: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm4 hw-fault      ok         RM ok
+        58: nr  78 RM_MAP_MEMORY              size    56  R33 arm4 hw-fault      ok         RM ok
+        59: nr  78 RM_MAP_MEMORY              size    56  R33 arm4 hw-fault      ok         RM ok
+        60: nr  43 RM_ALLOC                   size    32  R33 arm4 hw-fault      ok         RM ok
+        61: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm4 hw-fault      ok         RM ok
+        62: nr  43 RM_ALLOC                   size    32  R33 arm4 hw-fault      ok         RM ok
+        63: nr  43 RM_ALLOC                   size    32  R33 arm4 hw-fault      ok         RM ok
+        64: nr  42 RM_CONTROL                 size    32  R33 arm4 hw-fault      ok         RM ok
+        65: nr  42 RM_CONTROL                 size    32  R33 arm4 hw-fault      ok         RM ok
+        66: nr  78 RM_MAP_MEMORY              size    56  R33 arm4 hw-fault      ok         RM ok
+        67: nr  43 RM_ALLOC                   size    32  R33 arm4 hw-fault      ok         RM ok
+        68: nr  42 RM_CONTROL                 size    32  R33 arm4 hw-fault      ok         RM ok
+        69: nr  78 RM_MAP_MEMORY              size    56  R33 arm4 hw-fault      ok         RM ok
+        70: nr  78 RM_MAP_MEMORY              size    56  R33 arm4 hw-fault      ok         RM ok
+        71: nr  41 RM_FREE                    size    16  R33 arm4 hw-fault      ok         RM ok
+        72: nr  88 RM_UNMAP_MEMORY_DMA        size    48  R33 arm4 hw-fault      ok         RM ok
+        73: nr  41 RM_FREE                    size    16  R33 arm4 hw-fault      ok         RM ok
+        74: nr  41 RM_FREE                    size    16  R33 arm4 hw-fault      ok         RM ok
+        75: nr  88 RM_UNMAP_MEMORY_DMA        size    48  R33 arm4 hw-fault      ok         RM ok
+        76: nr  88 RM_UNMAP_MEMORY_DMA        size    48  R33 arm4 hw-fault      ok         RM ok
+        77: nr  41 RM_FREE                    size    16  R33 arm4 hw-fault      ok         RM ok
+        78: nr  41 RM_FREE                    size    16  R33 arm4 hw-fault      ok         RM ok
+        79: nr  41 RM_FREE                    size    16  R33 arm4 hw-fault      ok         RM ok
+        80: nr  41 RM_FREE                    size    16  R33 arm4 hw-fault      ok         RM ok
+        81: nr  41 RM_FREE                    size    16  R33 arm4 hw-fault      ok         RM ok
+        82: nr  41 RM_FREE                    size    16  R33 teardown           ok         RM ok
+        83: nr  88 RM_UNMAP_MEMORY_DMA        size    48  R33 teardown           ok         RM ok
+        84: nr  41 RM_FREE                    size    16  R33 teardown           ok         RM ok
+        85: nr  41 RM_FREE                    size    16  R33 teardown           ok         RM ok
+        86: nr  41 RM_FREE                    size    16  R33 teardown           ok         RM ok
+        87: nr  41 RM_FREE                    size    16  R33 teardown           ok         RM ok
+        88: nr  41 RM_FREE                    size    16  R33 teardown           ok         RM ok
+        89: nr  41 RM_FREE                    size    16  R33 teardown           ok         RM ok
+  --- ★★★ IN-BAND VERDICT: 2 ioctl(s) REFUSED BY RM WITH `errno == 0`, 0 unreadable. ⊘ Compare against `failed=0` above: a difference is the census's own blind spot being measured
+=== END IOCTL CENSUS ===
+done — raw CE client only (WITH FAILED EVIDENCE)
+R33_RC=1
+--- end of the client's output ---
+=== ★★★★★ THE GRADE (anchored — an unanchored 'R33' matches the info banner) ===
+    R33_VERDICT_LINES=0
+    R33_RC=1
+    IOCTL_CENSUS_  total=89 failed=0
+    --- the first non-★ arm, if any (this is the minimal repro's head):
+      FAIL  R33 arm 6 CALIBRATION = ring -> Some(true) (want Some(true)), free -> Some(true) (want Some(false)). ⊘⊘ THE ROWS BELOW ARE NOT MEASUREMENTS THIS RUN. An oracle that cannot show both polarities cannot distinguish `nothing is mapped` from `I cannot see mappings`
+      ??    R33 arm 5 CONTROL   = the pre-fault read did not happen, so a fired notifier below cannot be attributed to the fault rather than to channel creation
+      FAIL  R33 arm 5 WHERE     = PLANE D UNMEASURED — `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO` refused or did not decode, so this run carries the fault's CODE and not its ADDRESS. ⊘ Not retried: the record is cleared by reading it, so a second ask would answer all-zero and that decodes as a fault at address 0
+      ??    R33 arm 4 control   = the POSITIVE CONTROL did not land (sem 0x00000000, GP_GET 1 GP_PUT 1, moved 0xdead0000 want 0x5ea1c071) — the fault probe was never issued, so this run says NOTHING about whether 0x0000000900000000 resolves. ⊘ THE CONTROL'S OWN OPERANDS: src 0x0000000700100000 dst 0x0000000700200000, ring 0x0000000700000000 — a HOST `Xid` naming ANY of these is THIS FAILURE, and `w288nc1` wrote one up as unattributable for want of exactly this line
+      FAIL  R33 raw CE client   = at least one arm above did not meet its bar
+    --- the LAST ioctl the client issued (where it died, if it did):
+              87: nr  41 RM_FREE                    size    16  R33 teardown           ok         RM ok
+              88: nr  41 RM_FREE                    size    16  R33 teardown           ok         RM ok
+              89: nr  41 RM_FREE                    size    16  R33 teardown           ok         RM ok
+=== the guest driver's own word across the run ===
+=== R33 milestone 2 hook done ===
+HOOK_RC=0
+=== HOST dmesg delta for this boot (watermark 1138 → 1139) ===
+HOST_DMESG_LINES=1
+HOST_DMESG_NVRM=1
+HOST_DMESG_XID=1

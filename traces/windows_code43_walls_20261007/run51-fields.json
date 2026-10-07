@@ -1,0 +1,271 @@
+[
+ {
+  "rep": 1,
+  "field": "name",
+  "output": "NVIDIA GeForce RTX 4070",
+  "lines": [
+   26016,
+   26174
+  ],
+  "requests": {
+   "RmControl 0x20809064 result=0x0": 2,
+   "RmControl 0x20809004 result=none": 2,
+   "RmAlloc 0x0000 result=0x0": 3,
+   "RmAlloc 0x0080 result=0x0": 3,
+   "RmAlloc 0x2080 result=0x0": 3,
+   "RmAlloc 0x0073 result=0x0": 1,
+   "RmAlloc 0x90f1 result=0x0": 1,
+   "RmControl 0x90f10106 result=0x0": 1,
+   "RmControl 0x00801812 result=0x0": 1,
+   "RmAlloc 0x0070 result=0x0": 2,
+   "RmAlloc 0x9096 result=0x0": 1
+  },
+  "refusal_lines": []
+ },
+ {
+  "rep": 1,
+  "field": "pstate",
+  "output": "[N/A]",
+  "lines": [
+   26174,
+   26351
+  ],
+  "requests": {
+   "RmControl 0x20809064 result=0x0": 2,
+   "RmControl 0x20809004 result=none": 2,
+   "RmAlloc 0x0000 result=0x0": 3,
+   "RmAlloc 0x0080 result=0x0": 3,
+   "RmAlloc 0x2080 result=0x0": 3,
+   "RmAlloc 0x0073 result=0x0": 1,
+   "RmAlloc 0x90f1 result=0x0": 1,
+   "RmControl 0x90f10106 result=0x0": 1,
+   "RmControl 0x00801812 result=0x0": 1,
+   "RmAlloc 0x0070 result=0x0": 2,
+   "RmAlloc 0x9096 result=0x0": 1,
+   "RmControl 0x20800aff result=none": 1,
+   "RmControl 0x20802068 result=none": 1
+  },
+  "refusal_lines": []
+ },
+ {
+  "rep": 1,
+  "field": "utilization.gpu",
+  "output": "[N/A]",
+  "lines": [
+   26351,
+   26516
+  ],
+  "requests": {
+   "RmControl 0x20809064 result=0x0": 3,
+   "RmControl 0x20809004 result=none": 2,
+   "RmAlloc 0x0000 result=0x0": 3,
+   "RmAlloc 0x0080 result=0x0": 3,
+   "RmAlloc 0x2080 result=0x0": 3,
+   "RmAlloc 0x0073 result=0x0": 1,
+   "RmAlloc 0x90f1 result=0x0": 1,
+   "RmControl 0x90f10106 result=0x0": 1,
+   "RmControl 0x00801812 result=0x0": 1,
+   "RmAlloc 0x0070 result=0x0": 2,
+   "RmAlloc 0x9096 result=0x0": 1,
+   "RmControl 0x00800294 result=none": 1,
+   "RmAlloc 0x2081 result=0x0": 1,
+   "RmControl 0x20810108 result=none": 1,
+   "RmControl 0x20800aff result=none": 1,
+   "RmControl 0x2080a097 result=none": 1
+  },
+  "refusal_lines": [
+   "kf3: GSP REFUSED fn76/0x00800294=0x56 (GSP_RM_CONTROL) first_seq=0 \u2014 the guest read a non-OK status",
+   "kf3: GSP REFUSED fn76/0x2080a097=0x56 (GSP_RM_CONTROL) first_seq=0 \u2014 the guest read a non-OK status"
+  ]
+ },
+ {
+  "rep": 1,
+  "field": "memory.used",
+  "output": "[N/A]",
+  "lines": [
+   26516,
+   26661
+  ],
+  "requests": {
+   "RmControl 0x20809064 result=0x0": 2,
+   "RmControl 0x20809004 result=none": 2,
+   "RmAlloc 0x0000 result=0x0": 3,
+   "RmAlloc 0x0080 result=0x0": 3,
+   "RmAlloc 0x2080 result=0x0": 3,
+   "RmAlloc 0x0073 result=0x0": 1,
+   "RmAlloc 0x90f1 result=0x0": 1,
+   "RmControl 0x90f10106 result=0x0": 1,
+   "RmControl 0x00801812 result=0x0": 1,
+   "RmAlloc 0x0070 result=0x0": 2,
+   "RmAlloc 0x9096 result=0x0": 1
+  },
+  "refusal_lines": []
+ },
+ {
+  "rep": 1,
+  "field": "memory.total",
+  "output": "[N/A]",
+  "lines": [
+   26661,
+   26805
+  ],
+  "requests": {
+   "RmControl 0x20809064 result=0x0": 2,
+   "RmControl 0x20809004 result=none": 2,
+   "RmAlloc 0x0000 result=0x0": 3,
+   "RmAlloc 0x0080 result=0x0": 3,
+   "RmAlloc 0x2080 result=0x0": 3,
+   "RmAlloc 0x0073 result=0x0": 1,
+   "RmAlloc 0x90f1 result=0x0": 1,
+   "RmControl 0x90f10106 result=0x0": 1,
+   "RmControl 0x00801812 result=0x0": 1,
+   "RmAlloc 0x0070 result=0x0": 2,
+   "RmAlloc 0x9096 result=0x0": 1
+  },
+  "refusal_lines": []
+ },
+ {
+  "rep": 1,
+  "field": "IDLE",
+  "output": "(idle window, no query)",
+  "lines": [
+   26805,
+   26810
+  ],
+  "requests": {},
+  "refusal_lines": []
+ },
+ {
+  "rep": 2,
+  "field": "name",
+  "output": "NVIDIA GeForce RTX 4070",
+  "lines": [
+   26810,
+   26955
+  ],
+  "requests": {
+   "RmControl 0x20809064 result=0x0": 2,
+   "RmControl 0x20809004 result=none": 2,
+   "RmAlloc 0x0000 result=0x0": 3,
+   "RmAlloc 0x0080 result=0x0": 3,
+   "RmAlloc 0x2080 result=0x0": 3,
+   "RmAlloc 0x0073 result=0x0": 1,
+   "RmAlloc 0x90f1 result=0x0": 1,
+   "RmControl 0x90f10106 result=0x0": 1,
+   "RmControl 0x00801812 result=0x0": 1,
+   "RmAlloc 0x0070 result=0x0": 2,
+   "RmAlloc 0x9096 result=0x0": 1
+  },
+  "refusal_lines": []
+ },
+ {
+  "rep": 2,
+  "field": "pstate",
+  "output": "[N/A]",
+  "lines": [
+   26955,
+   27105
+  ],
+  "requests": {
+   "RmControl 0x20809064 result=0x0": 2,
+   "RmControl 0x20809004 result=none": 2,
+   "RmAlloc 0x0000 result=0x0": 3,
+   "RmAlloc 0x0080 result=0x0": 3,
+   "RmAlloc 0x2080 result=0x0": 3,
+   "RmAlloc 0x0073 result=0x0": 1,
+   "RmAlloc 0x90f1 result=0x0": 1,
+   "RmControl 0x90f10106 result=0x0": 1,
+   "RmControl 0x00801812 result=0x0": 1,
+   "RmAlloc 0x0070 result=0x0": 2,
+   "RmAlloc 0x9096 result=0x0": 1,
+   "RmControl 0x20800aff result=none": 1,
+   "RmControl 0x20802068 result=none": 1
+  },
+  "refusal_lines": []
+ },
+ {
+  "rep": 2,
+  "field": "utilization.gpu",
+  "output": "[N/A]",
+  "lines": [
+   27105,
+   27269
+  ],
+  "requests": {
+   "RmControl 0x20809064 result=0x0": 3,
+   "RmControl 0x20809004 result=none": 2,
+   "RmAlloc 0x0000 result=0x0": 3,
+   "RmAlloc 0x0080 result=0x0": 3,
+   "RmAlloc 0x2080 result=0x0": 3,
+   "RmAlloc 0x0073 result=0x0": 1,
+   "RmAlloc 0x90f1 result=0x0": 1,
+   "RmControl 0x90f10106 result=0x0": 1,
+   "RmControl 0x00801812 result=0x0": 1,
+   "RmAlloc 0x0070 result=0x0": 2,
+   "RmAlloc 0x9096 result=0x0": 1,
+   "RmControl 0x00800294 result=none": 1,
+   "RmAlloc 0x2081 result=0x0": 1,
+   "RmControl 0x20810108 result=none": 1,
+   "RmControl 0x20800aff result=none": 1,
+   "RmControl 0x2080a097 result=none": 1
+  },
+  "refusal_lines": []
+ },
+ {
+  "rep": 2,
+  "field": "memory.used",
+  "output": "[N/A]",
+  "lines": [
+   27269,
+   27413
+  ],
+  "requests": {
+   "RmControl 0x20809064 result=0x0": 2,
+   "RmControl 0x20809004 result=none": 2,
+   "RmAlloc 0x0000 result=0x0": 3,
+   "RmAlloc 0x0080 result=0x0": 3,
+   "RmAlloc 0x2080 result=0x0": 3,
+   "RmAlloc 0x0073 result=0x0": 1,
+   "RmAlloc 0x90f1 result=0x0": 1,
+   "RmControl 0x90f10106 result=0x0": 1,
+   "RmControl 0x00801812 result=0x0": 1,
+   "RmAlloc 0x0070 result=0x0": 2,
+   "RmAlloc 0x9096 result=0x0": 1
+  },
+  "refusal_lines": []
+ },
+ {
+  "rep": 2,
+  "field": "memory.total",
+  "output": "[N/A]",
+  "lines": [
+   27413,
+   27558
+  ],
+  "requests": {
+   "RmControl 0x20809064 result=0x0": 2,
+   "RmControl 0x20809004 result=none": 2,
+   "RmAlloc 0x0000 result=0x0": 3,
+   "RmAlloc 0x0080 result=0x0": 3,
+   "RmAlloc 0x2080 result=0x0": 3,
+   "RmAlloc 0x0073 result=0x0": 1,
+   "RmAlloc 0x90f1 result=0x0": 1,
+   "RmControl 0x90f10106 result=0x0": 1,
+   "RmControl 0x00801812 result=0x0": 1,
+   "RmAlloc 0x0070 result=0x0": 2,
+   "RmAlloc 0x9096 result=0x0": 1
+  },
+  "refusal_lines": []
+ },
+ {
+  "rep": 2,
+  "field": "IDLE",
+  "output": "(idle window, no query)",
+  "lines": [
+   27558,
+   27562
+  ],
+  "requests": {},
+  "refusal_lines": []
+ }
+]

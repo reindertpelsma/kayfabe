@@ -1,0 +1,150 @@
+[ 2369.988175] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2374.482197] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2377.656261] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2380.072775] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2382.585381] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2385.200192] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2387.526330] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2389.863168] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2392.564959] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2401.676432] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2404.840169] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2406.900463] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2426.474278] x86/PAT: cuda0000740001e:94370 freeing invalid memtype [mem 0xc0bb0000-0xc0bb0fff]
+[ 2427.382743] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2430.566030] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2432.622994] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2451.970182] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+[ 2451.971626] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+[ 2451.972939] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+[ 2451.973506] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+[ 2451.973527] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+[ 2452.060954] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+[ 2452.062435] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+[ 2452.063737] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+[ 2452.064308] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+[ 2452.064318] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+[ 2452.152543] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+[ 2452.153968] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+[ 2452.155281] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+[ 2452.155847] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+[ 2452.155857] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+[ 2453.791817] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2457.011518] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2459.075090] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2479.574432] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+[ 2479.575931] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+[ 2479.577259] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+[ 2479.577827] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+[ 2479.577837] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+[ 2479.686662] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+[ 2479.688035] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+[ 2479.689306] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+[ 2479.689878] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+[ 2479.689888] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+[ 2479.784697] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+[ 2479.786057] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+[ 2479.787361] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+[ 2479.787928] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+[ 2479.787937] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+[ 2481.024425] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+[ 2481.025824] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+[ 2481.027107] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+[ 2481.027676] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+[ 2481.027687] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+[ 2481.186138] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+[ 2481.187671] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+[ 2481.188943] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+[ 2481.189504] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+[ 2481.189560] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+[ 2481.349301] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+[ 2481.350677] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+[ 2481.351904] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+[ 2481.352467] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+[ 2481.352477] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+[ 2483.006434] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2486.233609] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2508.120458] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2511.351756] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2513.436346] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2538.531213] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2541.713070] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2543.790829] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2575.342630] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2578.531263] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2580.606157] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2601.433020] NVRM: GPU at PCI:0000:00:07: GPU-e148da8c-d27b-2045-3332-47f9f94d3447
+[ 2601.433046] NVRM: Xid (PCI:0000:00:07): 31, pid=95539, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+[ 2604.550922] NVRM: Xid (PCI:0000:00:07): 31, pid=95539, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+[ 2607.565728] NVRM: Xid (PCI:0000:00:07): 31, pid=95539, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+[ 2610.718731] NVRM: Xid (PCI:0000:00:07): 31, pid=95539, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+[ 2615.114623] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2618.322163] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2620.398242] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2641.165285] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2643.272800] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2663.598999] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2666.798846] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2668.884232] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2690.321317] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2693.535333] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2695.632941] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2717.043339] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2720.356475] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2740.083359] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2743.287700] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2745.374982] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2765.268410] NVRM: GPU at PCI:0000:00:07: GPU-e148da8c-d27b-2045-3332-47f9f94d3447
+[ 2765.268427] NVRM: Xid (PCI:0000:00:07): 31, pid=96789, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[ 2769.746494] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2772.952194] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2775.034467] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2798.638073] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2801.879822] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2803.967038] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2828.820308] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2831.983379] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2834.059932] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2856.287793] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2859.484691] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2861.584187] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2882.071485] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2885.267786] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2887.350349] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2908.067500] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2911.266319] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2913.373859] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2934.228627] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2937.457804] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2939.564225] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2961.943695] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2965.116424] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2967.118025] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3051.026374] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3054.264376] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3056.337140] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3078.534623] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3081.749706] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3083.821317] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3106.071493] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3109.286026] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3111.348158] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3131.700942] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3134.900799] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3136.972433] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3158.253363] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3161.487698] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3163.565047] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3207.754918] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3210.972415] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3213.063288] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3236.154415] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3239.340408] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3241.443858] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3267.877736] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3271.048102] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3273.117431] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3294.182859] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3297.399256] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3299.473673] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3321.207373] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0

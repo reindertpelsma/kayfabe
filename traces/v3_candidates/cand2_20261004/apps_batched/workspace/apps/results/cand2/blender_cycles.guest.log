@@ -1,0 +1,6 @@
+=== blender_cycles side=guest start=2026-10-04T12:15:22+00:00 host=ubuntu cmd: for dev in CUDA OPTIX; do /opt/apps/data/blender/blender -b --factory-startup --python /opt/apps/bundle/share/blender_render.py -- $dev /opt/apps/out/guest/blender_$dev.png 2>&1 | grep -E "BLENDER_|Error|error|Fra:1 .*Finished" | tail -6; done
+Fra:1 Mem:43.01M (Peak 58.83M) | Time:00:03.54 | Mem:359.14M, Peak:359.14M | Scene, ViewLayer | Finished
+BLENDER_OK CUDA gpu=NVIDIA GeForce RTX 3060 mean=0.6405
+Fra:1 Mem:41.81M (Peak 57.63M) | Time:00:03.97 | Mem:359.02M, Peak:359.02M | Scene, ViewLayer | Finished
+BLENDER_OK OPTIX gpu=NVIDIA GeForce RTX 3060 mean=0.6405
+=== end rc=0 secs=18 2026-10-04T12:15:40+00:00

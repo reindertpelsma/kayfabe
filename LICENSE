@@ -1,0 +1,57 @@
+kayfabe is dual-licensed. You may use, copy, modify and distribute it under the
+terms of EITHER of these licenses, at your option:
+
+  * the Apache License, Version 2.0 (see LICENSE-APACHE)
+  * the GNU General Public License, version 2, or (at your option) any later
+    version (see LICENSE-GPL)
+
+SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+
+This applies to the whole repository, including archive/, except as listed
+below. archive/nvkvm/LICENSE is the Apache-2.0 text that the archived C
+prototype carried before this grant. The grant replaces it for that subtree,
+apart from the exceptions below.
+
+Exceptions:
+
+  1. third_party/ holds git submodules: the Linux kernel, NVIDIA's
+     open-gpu-kernel-modules and gVisor. Each one is under its own license.
+
+  2. Some files are derived from gVisor's nvproxy. gVisor is Copyright The
+     gVisor Authors and is licensed under the Apache License 2.0. These files
+     are available under the Apache License 2.0 only until they are re-derived
+     independently. This holds even where an older header in one of them also
+     names the GPL. The files are:
+       - crates/kf-abi/src/capability.rs
+       - crates/kayfabe-abi/src/capability.rs
+       - archive/nvkvm/src/qemu/nvkvm_ctrl_allowlist.h
+       - archive/nvkvm/src/qemu/nvkvm_fe_alloc_allowlist.h
+       - archive/nvkvm/tests/abi_parity/abi_parity_test.go
+       - every file that archive/nvkvm/CREDITS lists as directly derived from
+         nvproxy
+     The kf3 QEMU device links kf-abi, and QEMU as a whole is GPL-2.0. A QEMU
+     binary built from this tree is therefore not yet distributable under the
+     GPL. Task I7 in docs/design/V3_SWEEP_AND_INSTALL.md includes re-deriving
+     these allowlists from NVIDIA's open-gpu-kernel-modules headers.
+
+  3. A file that carries its own copyright or license notice is under the
+     terms of that notice. For example:
+       - NVIDIA's MIT-licensed driver sources in
+         archive/nvkvm/docs/kernel_patches/
+       - the nvidia-uvm patch in tools/uvm_efs/patch/, which is MIT like the
+         nvidia-uvm sources it modifies
+       - the Wayland protocol files in archive/nvkvm/tests/perf/protocols/
+       - archived C sources with their own SPDX tag, such as the GPL-2.0
+         guest kernel module in archive/nvkvm/src/guest/
+       - the display-broker protocol header vendored verbatim from nvkvm-pv
+         (368d2db) as crates/kf-broker/proto/nvkvm_broker_proto.h, which
+         carries GPL-2.0 OR Apache-2.0
+
+  4. Traces, logs and captures, under traces/, docs/ and archive/, contain
+     data produced by third-party software and hardware. Examples are kernel
+     and driver messages and GPU register and firmware contents. This grant
+     covers only kayfabe's own part of that data.
+
+Contributions: unless you explicitly state otherwise, any contribution you
+submit for inclusion in kayfabe is dual-licensed as above, without any
+additional terms or conditions.

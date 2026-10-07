@@ -1,0 +1,16 @@
+=== vk_ofa side=host start=2026-09-26T18:18:00+00:00 host=ubuntu kernel=6.8.0-59-generic drv=580.159.04
+vulkan ICD: /etc/vulkan/icd.d/nvidia_icd.json only
+OFA_START 512x256 shift=(5,3) grid=4
+OFA_DEVICE NVIDIA GeForce RTX 3070
+OFA_QUEUE_FAMILY 5 flags=0x10c
+OFA_INPUT_FORMATS 3 r8=1
+OFA_MEDIAN_X -5.062
+OFA_MEDIAN_Y -3.031
+OFA_GOOD_FRAC 0.9859
+OFA_HASH bbc6496d716475f3
+OFA_OK
+GSET_DIG side=host item=vk_ofa key=flow_field val=bbc6496d716475f3
+GSET_DIG side=host item=vk_ofa key=median val=-5.062,-3.031,
+GSET_VAL side=host item=vk_ofa key=good_frac val=0.9859
+GSET_OK
+=== end rc=0 secs=1 2026-09-26T18:18:01+00:00

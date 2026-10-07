@@ -1,0 +1,43 @@
+=== w380llm2 — ALIAS FANOUT AND THE cuBLAS DISCRIMINATOR ===
+=== source: run_w380llm2_qemu.log (280 MB), boot 2026-09-06T15:27:31Z, HEAD 3cacd43, arm=alias, hook=llm_hook2.sh ===
+
+--- ★★★ EVERY FRAME, AND HOW MANY DISTINCT NEW VAs IT WAS ALIASED AT ---
+0x1e00000 -> 4 distinct alias VA(s)
+0x2000000 -> 4 distinct alias VA(s)
+0x2200000 -> 4 distinct alias VA(s)
+0x2400000 -> 4 distinct alias VA(s)
+0x2600000 -> 4 distinct alias VA(s)
+0x2800000 -> 4 distinct alias VA(s)
+0x2a00000 -> 2 distinct alias VA(s)
+0x2c00000 -> 2 distinct alias VA(s)
+0x3400000 -> 1 distinct alias VA(s)
+0x3600000 -> 1 distinct alias VA(s)
+0x3800000 -> 1 distinct alias VA(s)
+0x3a00000 -> 1 distinct alias VA(s)
+0x3c00000 -> 1 distinct alias VA(s)
+0x3e00000 -> 1 distinct alias VA(s)
+0x4000000 -> 1 distinct alias VA(s)
+0x4200000 -> 1 distinct alias VA(s)
+0x4400000 -> 1 distinct alias VA(s)
+0x4600000 -> 1 distinct alias VA(s)
+
+--- ALIAS PLACEMENTS: count and the placed_as_asked tally ---
+     38 true
+distinct alias host objects = 38
+
+--- SUPERSEDE, counted ---
+SUPERSEDED=0
+SUPERSEDE_CAPPED=0
+SUPERSEDE_ANY=0
+
+--- the cross-process paths (both still refuse/reclaim by name) ---
+FRAME_NOT_OURS=198
+ORPHAN_RECLAIMED=107
+INSTALL_REFUSED=0
+ALIAS_BIND_REFUSED=0
+
+--- the publication census for pdb=0x201000 (last) ---
+proc=6 pdb=0x201000 total=18543 already_host=3896 already_pinned=14641 guest_ram=0 not_vidmem=0 not_granular=6(1021440 bytes) candidates=0(0 bytes, capped=0) published=0 refused=0 sum_ok=true
+
+--- PT-DECODE refusals (last) ---
+refusals=291 by_kind={"RepointsPublished": 18, "StraddlesLiveBinding": 255, "UnbindsPublished": 18}

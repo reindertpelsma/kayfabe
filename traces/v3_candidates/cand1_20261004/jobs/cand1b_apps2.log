@@ -1,0 +1,21 @@
+JOBSTART 2026-10-04T02:20:30+00:00
+MB_DONE_SEEN [JOBEND rc=0 2026-10-04T02:43:37+00:00]
+REV 0ac157b2fff15294073b95acbe7377a6133ae5aa dirty=0
+KF3_BIN /workspace/bench/kf3-bins/0ac157b2/qemu-system-x86_64 89513304 2026-10-04 02:23:23.229343708 +0000 sha256=4267680c50759413
+GUEST_APPS_IMG 22230794240 2026-10-04 00:45:57.596955884 +0000
+BUNDLE bundle.tgz sha=fb64de820389b448 1349706447 2026-10-03 23:20:42.868911325 +0000
+HOST_RC=0 2026-10-04T03:01:58+00:00
+[apps_matrix 2026-10-04T03:01:58+00:00] HOST_DONE 71 pass / 74 rows
+HOST_WINDOW [2026-10-04 02:44:11 .. 2026-10-04 03:01:58] host_xid_journal=0
+GUEST_RC=0 2026-10-04T03:39:20+00:00
+[apps_matrix 2026-10-04T03:01:58+00:00] kf3 binary: /workspace/bench/kf3-bins/0ac157b2/qemu-system-x86_64
+[apps_matrix 2026-10-04T03:30:23+00:00] boot ap_cand1b_b1 rc=0 apps=[nvidia_smi deviceQuery vectorAdd vectorAddDrv matrixMul matrixMulDrv bandwidthTest simpleStreams asyncAPI simpleAtomicIntrinsics simpleCallback simpleOccupancy simpleZeroC
+[apps_matrix 2026-10-04T03:33:02+00:00] boot ap_cand1b_i_UnifiedMemoryPerf rc=0 apps=[UnifiedMemoryPerf] :: /workspace/bench/run_ap_cand1b_i_UnifiedMemoryPerf_probe.log:APPS_HOOK tag=ap_cand1b_i_UnifiedMemoryPerf apps=[UnifiedMemoryPerf] gu
+[apps_matrix 2026-10-04T03:35:26+00:00] boot ap_cand1b_i_UnifiedMemoryStreams rc=0 apps=[UnifiedMemoryStreams] :: /workspace/bench/run_ap_cand1b_i_UnifiedMemoryStreams_probe.log:APPS_HOOK tag=ap_cand1b_i_UnifiedMemoryStreams apps=[UnifiedMe
+[apps_matrix 2026-10-04T03:37:40+00:00] boot ap_cand1b_i_attach_verify rc=0 apps=[attach_verify] :: /workspace/bench/run_ap_cand1b_i_attach_verify_probe.log:APPS_HOOK tag=ap_cand1b_i_attach_verify apps=[attach_verify] guest=NVIDIA GeForce R
+[apps_matrix 2026-10-04T03:39:19+00:00] boot ap_cand1b_i_conjugateGradientUM rc=0 apps=[conjugateGradientUM] :: /workspace/bench/run_ap_cand1b_i_conjugateGradientUM_probe.log:APPS_HOOK tag=ap_cand1b_i_conjugateGradientUM apps=[conjugateGrad
+[apps_matrix 2026-10-04T03:39:20+00:00] GUEST_DONE batched: 67 pass / 71;  isolated re-runs: 0
+GUEST_WINDOW [2026-10-04 03:01:58 .. 2026-10-04 03:39:20] host_xid_journal=8
+      5 kf3-bin-rev:0ac157b2
+APPS_DONE
+JOBEND rc=0 2026-10-04T03:39:20+00:00

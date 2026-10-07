@@ -1,0 +1,8 @@
+NVIDIA GeForce RTX 3090, 580.159.04, 00000000:00:07.0
+6.8.0-59-generic
+BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic root=PARTUUID=85c80741-2a2a-4df8-94fc-8525e0031367 ro console=tty1 console=ttyS0 panic=-1
+iommu_groups=0
+		DevCtl:	CorrErr+ NonFatalErr+ FatalErr+ UnsupReq-
+			RlxdOrd+ ExtTag+ PhantFunc- AuxPwr- NoSnoop- FLReset-
+[    1.004402] iommu: Default domain type: Translated
+[    1.004732] iommu: DMA domain TLB invalidation policy: lazy mode

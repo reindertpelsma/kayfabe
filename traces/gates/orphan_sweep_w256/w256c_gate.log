@@ -1,0 +1,758 @@
+GATE_START 2026-08-11T08:42:48+00:00 rev=a517402 scope=tail
+== baseline: cargo check --workspace
+   baseline OK
+== candidates enumerated: 533  (inherent `pub fn` only; trait methods are out of scope)
+   ORPHAN  crates/kayfabe-linux-raw/src/chardev_unsafe.rs:157  from_fd
+   ORPHAN  crates/kayfabe-linux-raw/src/chardev_unsafe.rs:163  as_fd
+   ORPHAN  crates/kayfabe-linux-raw/src/chardev_unsafe.rs:296  at
+   ORPHAN  crates/kayfabe-linux-raw/src/chardev_unsafe.rs:306  len
+   ORPHAN  crates/kayfabe-linux-raw/src/chardev_unsafe.rs:316  is_empty
+   ORPHAN  crates/kayfabe-linux-raw/src/chardev_unsafe.rs:385  adopt
+   ORPHAN  crates/kayfabe-linux-raw/src/epoll_unsafe.rs:94  len
+   ORPHAN  crates/kayfabe-linux-raw/src/epoll_unsafe.rs:100  is_empty
+   ORPHAN  crates/kayfabe-linux-raw/src/epoll_unsafe.rs:124  create
+   ORPHAN  crates/kayfabe-linux-raw/src/geometry.rs:137  validate_gpa_window
+   ORPHAN  crates/kayfabe-linux-raw/src/host_fd_unsafe.rs:110  create_named
+   ORPHAN  crates/kayfabe-linux-raw/src/host_fd_unsafe.rs:156  len_bytes
+Terminated
+mv: cannot stat 'crates/kayfabe-linux-raw/src/host_fd_unsafe.rs.orphan_gate_bak': No such file or directory
+   ORPHAN  crates/kayfabe-linux-raw/src/ioctl.rs:59  declared_size
+   ORPHAN  crates/kayfabe-linux-raw/src/ioctl.rs:90  read
+   ORPHAN  crates/kayfabe-linux-raw/src/ioctl.rs:98  write
+   ORPHAN  crates/kayfabe-linux-raw/src/ioctl.rs:104  none
+   ORPHAN  crates/kayfabe-linux-raw/src/kvm_gate.rs:72  kvm_available
+   ORPHAN  crates/kayfabe-linux-raw/src/kvm_gate.rs:92  report
+   ORPHAN  crates/kayfabe-linux-raw/src/kvm_unsafe.rs:206  adopt
+   ORPHAN  crates/kayfabe-linux-raw/src/kvm_unsafe.rs:220  try_clone_descriptor
+   ORPHAN  crates/kayfabe-linux-raw/src/kvm_unsafe.rs:446  set_memslot
+   ORPHAN  crates/kayfabe-linux-raw/src/kvm_unsafe.rs:474  clear_memslot
+   ORPHAN  crates/kayfabe-linux-raw/src/kvm_unsafe.rs:532  len_bytes
+   ORPHAN  crates/kayfabe-linux-raw/src/kvm_unsafe.rs:538  gpa
+   ORPHAN  crates/kayfabe-linux-raw/src/kvm_unsafe.rs:550  window
+   ORPHAN  crates/kayfabe-linux-raw/src/mapping_unsafe.rs:446  cache_policy
+   ORPHAN  crates/kayfabe-linux-raw/src/mapping_unsafe.rs:453  len_bytes
+   ORPHAN  crates/kayfabe-linux-raw/src/mapping_unsafe.rs:522  slice
+   ORPHAN  crates/kayfabe-linux-raw/src/mapping_unsafe.rs:719  cache_policy
+   ORPHAN  crates/kayfabe-linux-raw/src/mapping_unsafe.rs:725  len_bytes
+   ORPHAN  crates/kayfabe-linux-raw/src/mapping_unsafe.rs:787  load_u64
+   ORPHAN  crates/kayfabe-linux-raw/src/mapping_unsafe.rs:795  store_u64
+   ORPHAN  crates/kayfabe-linux-raw/src/mapping_unsafe.rs:888  len_bytes
+   ORPHAN  crates/kayfabe-linux-raw/src/memtype.rs:180  parse
+   ORPHAN  crates/kayfabe-linux-raw/src/memtype.rs:257  classify_physical
+   ORPHAN  crates/kayfabe-linux-raw/src/memtype.rs:351  recorded_memtype
+   ORPHAN  crates/kayfabe-linux-raw/src/memtype.rs:421  holds
+   ORPHAN  crates/kayfabe-linux-raw/src/memtype.rs:444  effective_memtype
+   ORPHAN  crates/kayfabe-linux-raw/src/memtype.rs:662  spread
+   ORPHAN  crates/kayfabe-linux-raw/src/memtype.rs:674  is_stable
+   ORPHAN  crates/kayfabe-linux-raw/src/memtype.rs:685  ns_per_read
+   ORPHAN  crates/kayfabe-linux-raw/src/memtype.rs:703  measure
+   ORPHAN  crates/kayfabe-linux-raw/src/memtype.rs:725  measure_over
+   ORPHAN  crates/kayfabe-linux-raw/src/memtype.rs:746  ratio_against
+   ORPHAN  crates/kayfabe-linux-raw/src/memtype.rs:761  against
+   ORPHAN  crates/kayfabe-linux-raw/src/page_size.rs:107  forced
+   ORPHAN  crates/kayfabe-linux-raw/src/procfd.rs:114  name
+   ORPHAN  crates/kayfabe-linux-raw/src/procfd.rs:120  bytes
+   ORPHAN  crates/kayfabe-linux-raw/src/procfd.rs:126  shared_mapped
+   ORPHAN  crates/kayfabe-linux-raw/src/procfd.rs:132  listed_as
+   ORPHAN  crates/kayfabe-linux-raw/src/procfd.rs:138  inode
+   ORPHAN  crates/kayfabe-linux-raw/src/procfd.rs:145  dev
+   ORPHAN  crates/kayfabe-linux-raw/src/procfd.rs:155  into_descriptor
+   ORPHAN  crates/kayfabe-linux-raw/src/procfd.rs:192  take_of_this_process
+   ORPHAN  crates/kayfabe-linux-raw/src/procfd.rs:302  seen
+   ORPHAN  crates/kayfabe-linux-raw/src/procfd.rs:311  the_only_shared_memfd_named
+   ORPHAN  crates/kayfabe-linux-raw/src/sandbox_unsafe.rs:215  names
+   ORPHAN  crates/kayfabe-linux-raw/src/sandbox_unsafe.rs:445  is_unprivileged
+   ORPHAN  crates/kayfabe-linux-raw/src/signal_unsafe.rs:115  raw
+   ORPHAN  crates/kayfabe-linux-raw/src/spawn_unsafe.rs:289  len_bytes
+   ORPHAN  crates/kayfabe-linux-raw/src/spawn_unsafe.rs:323  target
+   ORPHAN  crates/kayfabe-linux-raw/src/spawn_unsafe.rs:383  new
+   ORPHAN  crates/kayfabe-linux-raw/src/spawn_unsafe.rs:408  env
+   ORPHAN  crates/kayfabe-linux-raw/src/spawn_unsafe.rs:444  program
+   ORPHAN  crates/kayfabe-linux-raw/src/spawn_unsafe.rs:896  kill
+   ORPHAN  crates/kayfabe-linux-raw/src/spawn_unsafe.rs:922  try_reap
+   ORPHAN  crates/kayfabe-linux-raw/src/spawn_unsafe.rs:936  reap
+   ORPHAN  crates/kayfabe-linux-raw/src/view.rs:57  len_bytes
+   ORPHAN  crates/kayfabe-linux-raw/src/view.rs:67  read_into
+   ORPHAN  crates/kayfabe-linux-raw/src/view.rs:78  write_from
+   ORPHAN  crates/kayfabe-linux-raw/src/view.rs:91  slice
+   ORPHAN  crates/kayfabe-linux-raw/src/window_unsafe.rs:174  page_size
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:195  token_for
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:339  new
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:345  mock
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:496  method
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:502  set_object
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:516  ce_launch_dma
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:523  ce_launch_dma_full
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:552  sem_release
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:566  tlb_invalidate
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:791  encode_leaf
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:803  encode_pde
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:822  encode_dual_pde
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:1067  declare_device_mmio
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:1084  declare_unbacked
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:1090  regions
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:1118  advance
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:1125  ram_read
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:1519  exact
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:1529  on_isolate
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:1573  new
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:1582  is_pending
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:1609  wait_until_pending
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:1648  cancel_request_seen
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:1654  abandon_seen
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:1659  release
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:2020  held_by
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:2026  queued
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:2032  waits
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:2040  wait_until_blocked
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:2104  slow_fuzz_enabled
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:2351  is_balanced
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:2367  leaked_count
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:2375  ce_seed
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:2384  ce_image
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:2391  ce_clear
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:2397  fb_declare
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:2406  fb_covers
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:2416  ce_clear_range
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:2488  compact
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:2548  hold
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:2556  client_lock
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:2562  parked_of
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:2572  verbs_of
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:2699  standalone
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:2709  with_guest_ram
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:3494  new
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:3506  with_pool_size
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:3527  with_guest_ram
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:3537  spawned
+   ORPHAN  crates/kayfabe-mocks/src/lib.rs:3619  new
+   ORPHAN  crates/kayfabe-mocks/src/watchdog.rs:70  limit_or_env
+   ORPHAN  crates/kayfabe-mocks/src/watchdog.rs:85  write_uncaptured
+   ORPHAN  crates/kayfabe-mocks/src/watchdog.rs:108  thread_report
+   ORPHAN  crates/kayfabe-qemu-raw/src/lib.rs:110  build_rev
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:333  code
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:344  classify
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:381  classify_realize
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:403  bar_from_index
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:414  bar_index
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:455  placements
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:523  desc
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:595  realize
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:617  machine
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:622  unrealize
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:633  install_window
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:644  region_add
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:649  region_del
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:660  bar_move_requested
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:678  note_bar_mapping
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:715  audit
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:838  new
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:1241  copy_sentence
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:1300  publication_row
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:2460  classify_chip
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:2522  chip_for
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:2533  chip_identity
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:6228  create
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:6246  create_probed
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:6412  plane
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:6439  object_model
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:6452  completion_watch
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:6472  attach_ram
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:6622  report_stated_guest_ram_at
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:6740  stated_guest_ram
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:6749  guest_ram_backing
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:6760  detach_ram
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:6774  read
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:6788  write
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:6838  reset
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:6849  audit
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:7652  as_str
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:7664  parse
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:7688  isolate_plane_from
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:7787  parse
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:7804  guest_ram_source_from
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:7844  guest_ram_is_reachable_on
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:7959  forwarding_plane_owns_ce
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:7999  parse
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:8013  ce_executor_from
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:8056  fb_backing_from
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:8097  pt_witness_exec_from
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:8140  selected_mc_service_budget
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim.rs:8179  isolate_factory
+   ORPHAN  crates/kayfabe-qemu-raw/src/shim_unsafe.rs:760  engine_kind_c_name
+   ORPHAN  crates/kayfabe-rmrpc/src/fault.rs:119  deliver
+   ORPHAN  crates/kayfabe-rmrpc/src/lib.rs:1073  translate
+   ORPHAN  crates/kayfabe-rmrpc/src/lib.rs:1219  alloc_params_window
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:107  of
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:134  is_empty
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:199  new
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:395  new
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:504  new
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:959  new
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:967  with_limits
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:985  reassembler
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:995  census
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:1002  refusal_census
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:1010  promote_diag
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:1018  ring_census
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:1028  applied
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:1039  inert
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:1052  held
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:1064  promoted
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:1070  gpu
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:1084  deliver
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:1712  new
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:1723  with_limits
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:1793  mc_service_state
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:1800  claims
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:1810  census
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:1840  applied
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:1853  gpu
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:1864  gpu_mut
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:1878  deliver
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:2686  new
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:2735  claims
+   ORPHAN  crates/kayfabe-rmrpc/src/policy.rs:2741  snapshot
+   ORPHAN  crates/kayfabe-rmrpc/src/reasm.rs:204  new
+   ORPHAN  crates/kayfabe-rmrpc/src/reasm.rs:210  with_limits
+   ORPHAN  crates/kayfabe-rmrpc/src/reasm.rs:216  limits
+   ORPHAN  crates/kayfabe-rmrpc/src/reasm.rs:226  in_flight
+   ORPHAN  crates/kayfabe-rmrpc/src/reasm.rs:235  held_bytes
+   ORPHAN  crates/kayfabe-rmrpc/src/reasm.rs:245  accept
+   ORPHAN  crates/kayfabe-shell/src/reactor.rs:164  registrar
+   ORPHAN  crates/kayfabe-shell/src/reactor.rs:185  wake
+   ORPHAN  crates/kayfabe-shell/src/reactor.rs:196  shutdown
+   ORPHAN  crates/kayfabe-shell/src/reactor.rs:203  stats
+   ORPHAN  crates/kayfabe-shell/src/reactor.rs:240  new
+   ORPHAN  crates/kayfabe-shell/src/reactor.rs:277  stats
+   ORPHAN  crates/kayfabe-shell/src/reactor.rs:289  run
+   ORPHAN  crates/kayfabe-shell/src/reactor.rs:303  run_with
+   ORPHAN  crates/kayfabe-shell/src/sources.rs:150  of
+   ORPHAN  crates/kayfabe-shell/src/sources.rs:258  new
+   ORPHAN  crates/kayfabe-shell/src/sources.rs:274  with_bound
+   ORPHAN  crates/kayfabe-shell/src/sources.rs:284  bound
+   ORPHAN  crates/kayfabe-shell/src/sources.rs:290  armed
+   ORPHAN  crates/kayfabe-shell/src/sources.rs:308  arm
+   ORPHAN  crates/kayfabe-shell/src/sources.rs:361  disarm
+   ORPHAN  crates/kayfabe-shell/src/sources.rs:398  arm_counter
+   ORPHAN  crates/kayfabe-shell/src/sources.rs:415  arm_channel
+   ORPHAN  crates/kayfabe-shell/src/sources.rs:433  disarm_all
+   ORPHAN  crates/kayfabe-shell/src/sources.rs:444  armed_ever
+   ORPHAN  crates/kayfabe-shell/src/sources.rs:456  resolve
+   ORPHAN  crates/kayfabe-shell/src/sources.rs:491  poller
+   ORPHAN  crates/kayfabe-trace/src/budget.rs:46  bump
+   ORPHAN  crates/kayfabe-trace/src/budget.rs:53  of
+   ORPHAN  crates/kayfabe-trace/src/budget.rs:59  total
+   ORPHAN  crates/kayfabe-trace/src/budget.rs:70  silent_kinds
+   ORPHAN  crates/kayfabe-trace/src/budget.rs:79  seen_kinds
+   ORPHAN  crates/kayfabe-trace/src/budget.rs:89  is_silent
+   ORPHAN  crates/kayfabe-trace/src/budget.rs:95  wire_total
+   ORPHAN  crates/kayfabe-trace/src/budget.rs:105  core_total
+   ORPHAN  crates/kayfabe-trace/src/budget.rs:112  absorb
+   ORPHAN  crates/kayfabe-trace/src/event.rs:132  bytes
+   ORPHAN  crates/kayfabe-trace/src/event.rs:380  of
+   ORPHAN  crates/kayfabe-trace/src/event.rs:650  index
+   ORPHAN  crates/kayfabe-trace/src/event.rs:673  is_wire
+   ORPHAN  crates/kayfabe-trace/src/event.rs:712  kind
+   ORPHAN  crates/kayfabe-trace/src/event.rs:738  refusal
+   ORPHAN  crates/kayfabe-trace/src/sink.rs:108  new
+   ORPHAN  crates/kayfabe-trace/src/sink.rs:116  records
+   ORPHAN  crates/kayfabe-trace/src/sink.rs:122  len
+   ORPHAN  crates/kayfabe-trace/src/sink.rs:128  is_empty
+   ORPHAN  crates/kayfabe-trace/src/sink.rs:137  projection
+   ORPHAN  crates/kayfabe-trace/src/sink.rs:142  filter
+   ORPHAN  crates/kayfabe-trace/src/sink.rs:199  new
+   ORPHAN  crates/kayfabe-trace/src/sink.rs:208  trace
+   ORPHAN  crates/kayfabe-trace/src/sink.rs:214  counters
+   ORPHAN  crates/kayfabe-trace/src/sink.rs:220  sink
+   ORPHAN  crates/kayfabe-trace/src/sink.rs:225  sink_mut
+   ORPHAN  crates/kayfabe-trace/src/sink.rs:231  into_sink
+   ORPHAN  crates/kayfabe-trace/src/sink.rs:278  is_enabled
+   ORPHAN  crates/kayfabe-trace/src/sink.rs:288  emit
+   ORPHAN  crates/kayfabe-trace/src/sink.rs:300  emit_now
+   ORPHAN  crates/kayfabe-trace/src/sink.rs:310  next_seq
+   ORPHAN  crates/kayfabe-util/src/interval_map.rs:72  new
+   ORPHAN  crates/kayfabe-util/src/interval_map.rs:86  is_empty
+   ORPHAN  crates/kayfabe-util/src/interval_map.rs:153  next_from
+   ORPHAN  crates/kayfabe-util/src/lock.rs:93  bit
+   ORPHAN  crates/kayfabe-util/src/lock.rs:153  held_rank_mask
+   ORPHAN  crates/kayfabe-util/src/lock.rs:170  acquisitions
+   ORPHAN  crates/kayfabe-util/src/lockwitness.rs:87  note_acquired
+   ORPHAN  crates/kayfabe-util/src/lockwitness.rs:98  note_released
+   ORPHAN  crates/kayfabe-util/src/lockwitness.rs:117  held_ranks
+   ORPHAN  crates/kayfabe-util/src/lockwitness.rs:127  acquisitions
+   ORPHAN  crates/kayfabe-util/src/time.rs:31  since
+   ORPHAN  crates/kayfabe-vmm-kvm/src/lib.rs:830  realize
+   ORPHAN  crates/kayfabe-vmm-kvm/src/lib.rs:893  vmm
+   ORPHAN  crates/kayfabe-vmm-kvm/src/lib.rs:901  page_size
+   ORPHAN  crates/kayfabe-vmm-kvm/src/lib.rs:907  memslot_ceiling
+   ORPHAN  crates/kayfabe-vmm-kvm/src/lib.rs:935  install_ram_window
+   ORPHAN  crates/kayfabe-vmm-kvm/src/lib.rs:1129  remove_window
+   ORPHAN  crates/kayfabe-vmm-kvm/src/lib.rs:1221  declare_device_window
+   ORPHAN  crates/kayfabe-vmm-kvm/src/lib.rs:1242  register_backing
+   ORPHAN  crates/kayfabe-vmm-kvm/src/lib.rs:1272  resolve_region
+   ORPHAN  crates/kayfabe-vmm-kvm/src/lib.rs:1279  audit
+   ORPHAN  crates/kayfabe-vmm-kvm/src/lib.rs:1291  assert_map_matches_the_kernel
+   ORPHAN  crates/kayfabe-vmm-kvm/src/lib.rs:1371  advance
+   ORPHAN  crates/kayfabe-vmm-kvm/src/lib.rs:1385  drain_irqs
+   ORPHAN  crates/kayfabe-vmm-kvm/src/lib.rs:1442  audit
+   ORPHAN  crates/kayfabe-vmm-kvm/src/slotnum.rs:69  new
+   ORPHAN  crates/kayfabe-vmm-kvm/src/slotnum.rs:80  ceiling
+   ORPHAN  crates/kayfabe-vmm-kvm/src/slotnum.rs:86  recycled
+   ORPHAN  crates/kayfabe-vmm-kvm/src/slotnum.rs:92  live
+   ORPHAN  crates/kayfabe-vmm-kvm/src/slotnum.rs:107  alloc
+   ORPHAN  crates/kayfabe-vmm-kvm/src/slotnum.rs:138  release
+   ORPHAN  crates/kayfabe-vmm-kvm/src/vcpu.rs:152  create_vcpu
+   ORPHAN  crates/kayfabe-vmm-kvm/src/vcpu.rs:200  classify_guest_exit
+   ORPHAN  crates/kayfabe-vmm-kvm/src/vcpu.rs:218  enter_at
+   ORPHAN  crates/kayfabe-vmm-kvm/src/vcpu.rs:228  report
+   ORPHAN  crates/kayfabe-vmm-kvm/src/vcpu.rs:234  first_ram_declared_exit
+   ORPHAN  crates/kayfabe-vmm-kvm/src/vcpu.rs:250  run_until
+   ORPHAN  crates/kayfabe-vmm-qemu/src/classify.rs:50  is_ram
+   ORPHAN  crates/kayfabe-vmm-qemu/src/classify.rs:62  classify
+   ORPHAN  crates/kayfabe-vmm-qemu/src/host.rs:121  plain_ram
+   ORPHAN  crates/kayfabe-vmm-qemu/src/host.rs:133  device
+   ORPHAN  crates/kayfabe-vmm-qemu/src/layout.rs:231  new
+   ORPHAN  crates/kayfabe-vmm-qemu/src/layout.rs:242  saw
+   ORPHAN  crates/kayfabe-vmm-qemu/src/layout.rs:254  census
+   ORPHAN  crates/kayfabe-vmm-qemu/src/layout.rs:263  state
+   ORPHAN  crates/kayfabe-vmm-qemu/src/layout.rs:269  forget
+   ORPHAN  crates/kayfabe-vmm-qemu/src/layout.rs:276  clear
+   ORPHAN  crates/kayfabe-vmm-qemu/src/layout.rs:282  stated_sections
+   ORPHAN  crates/kayfabe-vmm-qemu/src/layout.rs:298  contiguous_runs
+   ORPHAN  crates/kayfabe-vmm-qemu/src/layout.rs:308  contiguous_runs_ever
+   ORPHAN  crates/kayfabe-vmm-qemu/src/layout.rs:344  backings_seen
+   ORPHAN  crates/kayfabe-vmm-qemu/src/layout.rs:367  resolve
+   ORPHAN  crates/kayfabe-vmm-qemu/src/lib.rs:253  passthrough
+   ORPHAN  crates/kayfabe-vmm-qemu/src/lib.rs:292  shareable
+   ORPHAN  crates/kayfabe-vmm-qemu/src/lib.rs:1158  install_tiered_window
+   ORPHAN  crates/kayfabe-vmm-qemu/src/lib.rs:1394  page_size
+   ORPHAN  crates/kayfabe-vmm-qemu/src/lib.rs:1400  slot_range
+   ORPHAN  crates/kayfabe-vmm-qemu/src/lib.rs:1418  register_backing
+   ORPHAN  crates/kayfabe-vmm-qemu/src/lib.rs:1444  resolve_region
+   ORPHAN  crates/kayfabe-vmm-qemu/src/lib.rs:1451  tiers
+   ORPHAN  crates/kayfabe-vmm-qemu/src/lib.rs:1485  assert_map_matches_the_kernel
+   ORPHAN  crates/kayfabe-vmm-qemu/src/lib.rs:1593  advance
+   ORPHAN  crates/kayfabe-vmm-qemu/src/lib.rs:1777  resolve_guest_ram
+   ORPHAN  crates/kayfabe-vmm-qemu/src/lib.rs:1892  remove_window
+   ORPHAN  crates/kayfabe-vmm-qemu/src/lib.rs:1981  audit
+   ORPHAN  crates/kayfabe-vmm-qemu/src/mock_host.rs:147  new
+   ORPHAN  crates/kayfabe-vmm-qemu/src/mock_host.rs:153  with_policy
+   ORPHAN  crates/kayfabe-vmm-qemu/src/mock_host.rs:164  log
+   ORPHAN  crates/kayfabe-vmm-qemu/src/mock_host.rs:170  irqs
+   ORPHAN  crates/kayfabe-vmm-qemu/src/mock_host.rs:176  discard_disabled
+   ORPHAN  crates/kayfabe-vmm-qemu/src/mock_host.rs:183  blockers
+   ORPHAN  crates/kayfabe-vmm-qemu/src/mock_host.rs:189  listening
+   ORPHAN  crates/kayfabe-vmm-qemu/src/mock_host.rs:200  live_regions
+   ORPHAN  crates/kayfabe-vmm-qemu/src/mock_host.rs:213  region_bytes
+   ORPHAN  crates/kayfabe-vmm-qemu/src/mock_host.rs:225  mint_foreign
+   ORPHAN  crates/kayfabe-vmm-qemu/src/mock_host.rs:245  mint_foreign_slice
+   ORPHAN  crates/kayfabe-vmm-qemu/src/mock_host.rs:289  mint_backed
+   ORPHAN  crates/kayfabe-vmm-qemu/src/mock_host.rs:308  place_bar
+   ORPHAN  crates/kayfabe-vmm-qemu/src/mock_host.rs:321  move_bar
+   ORPHAN  crates/kayfabe-vmm-qemu/src/mock_host.rs:500  bar
+   ORPHAN  crates/kayfabe-vmm-qemu/src/mock_host.rs:579  new
+   ORPHAN  crates/kayfabe-vmm-qemu/src/mock_host.rs:593  live
+   ORPHAN  crates/kayfabe-vmm-qemu/src/mock_host.rs:601  installs
+   ORPHAN  crates/kayfabe-vmm-qemu/src/mock_host.rs:608  clears
+   ORPHAN  crates/kayfabe-vmm-qemu/src/mock_host.rs:614  read_only_installs
+   ORPHAN  crates/kayfabe-vmm-qemu/src/mock_host.rs:628  replaces
+   ORPHAN  crates/kayfabe-vmm-qemu/src/slots.rs:119  new
+   ORPHAN  crates/kayfabe-vmm-qemu/src/slots.rs:223  new
+   ORPHAN  crates/kayfabe-vmm-qemu/src/slots.rs:242  ceiling
+   ORPHAN  crates/kayfabe-vmm-qemu/src/slots.rs:248  floor
+   ORPHAN  crates/kayfabe-vmm-qemu/src/slots.rs:254  recycled
+   ORPHAN  crates/kayfabe-vmm-qemu/src/slots.rs:260  live
+   ORPHAN  crates/kayfabe-vmm-qemu/src/slots.rs:272  alloc
+   ORPHAN  crates/kayfabe-vmm-qemu/src/slots.rs:303  release
+   ORPHAN  crates/kayfabe-vmm-qemu/src/slots.rs:349  readonly_slot
+   ORPHAN  crates/kayfabe-vmm-qemu/src/slots.rs:375  spans
+   ORPHAN  crates/kayfabe-vmm-qemu/src/viewer_install.rs:481  mappings
+   ORPHAN  crates/kayfabe-vmm-qemu/src/viewer_install.rs:493  observe_ranges
+   ORPHAN  crates/kayfabe-vmm-qemu/src/viewer_install.rs:607  new
+   ORPHAN  crates/kayfabe-vmm-qemu/src/viewer_install.rs:662  drain_and_install
+   ORPHAN  crates/kayfabe-vmm-qemu/src/viewer_install.rs:843  assert_effective_cacheability
+   ORPHAN  crates/kayfabe-vmm-qemu/src/viewer_install.rs:871  place_content
+   ORPHAN  crates/kayfabe-vmm-qemu/src/viewer_install.rs:966  mergeable
+   ORPHAN  crates/kayfabe-vmm-qemu/src/viewer_install.rs:976  census_of
+   ORPHAN  crates/kayfabe-vmm-qemu/src/viewer_install.rs:1008  tier_at
+
+== orphan gate: 372 of 533 checked have no caller outside their own crate
+   crates/kayfabe-linux-raw/src/chardev_unsafe.rs:157  from_fd
+   crates/kayfabe-linux-raw/src/chardev_unsafe.rs:163  as_fd
+   crates/kayfabe-linux-raw/src/chardev_unsafe.rs:296  at
+   crates/kayfabe-linux-raw/src/chardev_unsafe.rs:306  len
+   crates/kayfabe-linux-raw/src/chardev_unsafe.rs:316  is_empty
+   crates/kayfabe-linux-raw/src/chardev_unsafe.rs:385  adopt
+   crates/kayfabe-linux-raw/src/epoll_unsafe.rs:94  len
+   crates/kayfabe-linux-raw/src/epoll_unsafe.rs:100  is_empty
+   crates/kayfabe-linux-raw/src/epoll_unsafe.rs:124  create
+   crates/kayfabe-linux-raw/src/geometry.rs:137  validate_gpa_window
+   crates/kayfabe-linux-raw/src/host_fd_unsafe.rs:110  create_named
+   crates/kayfabe-linux-raw/src/host_fd_unsafe.rs:156  len_bytes
+   crates/kayfabe-linux-raw/src/ioctl.rs:59  declared_size
+   crates/kayfabe-linux-raw/src/ioctl.rs:90  read
+   crates/kayfabe-linux-raw/src/ioctl.rs:98  write
+   crates/kayfabe-linux-raw/src/ioctl.rs:104  none
+   crates/kayfabe-linux-raw/src/kvm_gate.rs:72  kvm_available
+   crates/kayfabe-linux-raw/src/kvm_gate.rs:92  report
+   crates/kayfabe-linux-raw/src/kvm_unsafe.rs:206  adopt
+   crates/kayfabe-linux-raw/src/kvm_unsafe.rs:220  try_clone_descriptor
+   crates/kayfabe-linux-raw/src/kvm_unsafe.rs:446  set_memslot
+   crates/kayfabe-linux-raw/src/kvm_unsafe.rs:474  clear_memslot
+   crates/kayfabe-linux-raw/src/kvm_unsafe.rs:532  len_bytes
+   crates/kayfabe-linux-raw/src/kvm_unsafe.rs:538  gpa
+   crates/kayfabe-linux-raw/src/kvm_unsafe.rs:550  window
+   crates/kayfabe-linux-raw/src/mapping_unsafe.rs:446  cache_policy
+   crates/kayfabe-linux-raw/src/mapping_unsafe.rs:453  len_bytes
+   crates/kayfabe-linux-raw/src/mapping_unsafe.rs:522  slice
+   crates/kayfabe-linux-raw/src/mapping_unsafe.rs:719  cache_policy
+   crates/kayfabe-linux-raw/src/mapping_unsafe.rs:725  len_bytes
+   crates/kayfabe-linux-raw/src/mapping_unsafe.rs:787  load_u64
+   crates/kayfabe-linux-raw/src/mapping_unsafe.rs:795  store_u64
+   crates/kayfabe-linux-raw/src/mapping_unsafe.rs:888  len_bytes
+   crates/kayfabe-linux-raw/src/memtype.rs:180  parse
+   crates/kayfabe-linux-raw/src/memtype.rs:257  classify_physical
+   crates/kayfabe-linux-raw/src/memtype.rs:351  recorded_memtype
+   crates/kayfabe-linux-raw/src/memtype.rs:421  holds
+   crates/kayfabe-linux-raw/src/memtype.rs:444  effective_memtype
+   crates/kayfabe-linux-raw/src/memtype.rs:662  spread
+   crates/kayfabe-linux-raw/src/memtype.rs:674  is_stable
+   crates/kayfabe-linux-raw/src/memtype.rs:685  ns_per_read
+   crates/kayfabe-linux-raw/src/memtype.rs:703  measure
+   crates/kayfabe-linux-raw/src/memtype.rs:725  measure_over
+   crates/kayfabe-linux-raw/src/memtype.rs:746  ratio_against
+   crates/kayfabe-linux-raw/src/memtype.rs:761  against
+   crates/kayfabe-linux-raw/src/page_size.rs:107  forced
+   crates/kayfabe-linux-raw/src/procfd.rs:114  name
+   crates/kayfabe-linux-raw/src/procfd.rs:120  bytes
+   crates/kayfabe-linux-raw/src/procfd.rs:126  shared_mapped
+   crates/kayfabe-linux-raw/src/procfd.rs:132  listed_as
+   crates/kayfabe-linux-raw/src/procfd.rs:138  inode
+   crates/kayfabe-linux-raw/src/procfd.rs:145  dev
+   crates/kayfabe-linux-raw/src/procfd.rs:155  into_descriptor
+   crates/kayfabe-linux-raw/src/procfd.rs:192  take_of_this_process
+   crates/kayfabe-linux-raw/src/procfd.rs:302  seen
+   crates/kayfabe-linux-raw/src/procfd.rs:311  the_only_shared_memfd_named
+   crates/kayfabe-linux-raw/src/sandbox_unsafe.rs:215  names
+   crates/kayfabe-linux-raw/src/sandbox_unsafe.rs:445  is_unprivileged
+   crates/kayfabe-linux-raw/src/signal_unsafe.rs:115  raw
+   crates/kayfabe-linux-raw/src/spawn_unsafe.rs:289  len_bytes
+   crates/kayfabe-linux-raw/src/spawn_unsafe.rs:323  target
+   crates/kayfabe-linux-raw/src/spawn_unsafe.rs:383  new
+   crates/kayfabe-linux-raw/src/spawn_unsafe.rs:408  env
+   crates/kayfabe-linux-raw/src/spawn_unsafe.rs:444  program
+   crates/kayfabe-linux-raw/src/spawn_unsafe.rs:896  kill
+   crates/kayfabe-linux-raw/src/spawn_unsafe.rs:922  try_reap
+   crates/kayfabe-linux-raw/src/spawn_unsafe.rs:936  reap
+   crates/kayfabe-linux-raw/src/view.rs:57  len_bytes
+   crates/kayfabe-linux-raw/src/view.rs:67  read_into
+   crates/kayfabe-linux-raw/src/view.rs:78  write_from
+   crates/kayfabe-linux-raw/src/view.rs:91  slice
+   crates/kayfabe-linux-raw/src/window_unsafe.rs:174  page_size
+   crates/kayfabe-mocks/src/lib.rs:195  token_for
+   crates/kayfabe-mocks/src/lib.rs:339  new
+   crates/kayfabe-mocks/src/lib.rs:345  mock
+   crates/kayfabe-mocks/src/lib.rs:496  method
+   crates/kayfabe-mocks/src/lib.rs:502  set_object
+   crates/kayfabe-mocks/src/lib.rs:516  ce_launch_dma
+   crates/kayfabe-mocks/src/lib.rs:523  ce_launch_dma_full
+   crates/kayfabe-mocks/src/lib.rs:552  sem_release
+   crates/kayfabe-mocks/src/lib.rs:566  tlb_invalidate
+   crates/kayfabe-mocks/src/lib.rs:791  encode_leaf
+   crates/kayfabe-mocks/src/lib.rs:803  encode_pde
+   crates/kayfabe-mocks/src/lib.rs:822  encode_dual_pde
+   crates/kayfabe-mocks/src/lib.rs:1067  declare_device_mmio
+   crates/kayfabe-mocks/src/lib.rs:1084  declare_unbacked
+   crates/kayfabe-mocks/src/lib.rs:1090  regions
+   crates/kayfabe-mocks/src/lib.rs:1118  advance
+   crates/kayfabe-mocks/src/lib.rs:1125  ram_read
+   crates/kayfabe-mocks/src/lib.rs:1519  exact
+   crates/kayfabe-mocks/src/lib.rs:1529  on_isolate
+   crates/kayfabe-mocks/src/lib.rs:1573  new
+   crates/kayfabe-mocks/src/lib.rs:1582  is_pending
+   crates/kayfabe-mocks/src/lib.rs:1609  wait_until_pending
+   crates/kayfabe-mocks/src/lib.rs:1648  cancel_request_seen
+   crates/kayfabe-mocks/src/lib.rs:1654  abandon_seen
+   crates/kayfabe-mocks/src/lib.rs:1659  release
+   crates/kayfabe-mocks/src/lib.rs:2020  held_by
+   crates/kayfabe-mocks/src/lib.rs:2026  queued
+   crates/kayfabe-mocks/src/lib.rs:2032  waits
+   crates/kayfabe-mocks/src/lib.rs:2040  wait_until_blocked
+   crates/kayfabe-mocks/src/lib.rs:2104  slow_fuzz_enabled
+   crates/kayfabe-mocks/src/lib.rs:2351  is_balanced
+   crates/kayfabe-mocks/src/lib.rs:2367  leaked_count
+   crates/kayfabe-mocks/src/lib.rs:2375  ce_seed
+   crates/kayfabe-mocks/src/lib.rs:2384  ce_image
+   crates/kayfabe-mocks/src/lib.rs:2391  ce_clear
+   crates/kayfabe-mocks/src/lib.rs:2397  fb_declare
+   crates/kayfabe-mocks/src/lib.rs:2406  fb_covers
+   crates/kayfabe-mocks/src/lib.rs:2416  ce_clear_range
+   crates/kayfabe-mocks/src/lib.rs:2488  compact
+   crates/kayfabe-mocks/src/lib.rs:2548  hold
+   crates/kayfabe-mocks/src/lib.rs:2556  client_lock
+   crates/kayfabe-mocks/src/lib.rs:2562  parked_of
+   crates/kayfabe-mocks/src/lib.rs:2572  verbs_of
+   crates/kayfabe-mocks/src/lib.rs:2699  standalone
+   crates/kayfabe-mocks/src/lib.rs:2709  with_guest_ram
+   crates/kayfabe-mocks/src/lib.rs:3494  new
+   crates/kayfabe-mocks/src/lib.rs:3506  with_pool_size
+   crates/kayfabe-mocks/src/lib.rs:3527  with_guest_ram
+   crates/kayfabe-mocks/src/lib.rs:3537  spawned
+   crates/kayfabe-mocks/src/lib.rs:3619  new
+   crates/kayfabe-mocks/src/watchdog.rs:70  limit_or_env
+   crates/kayfabe-mocks/src/watchdog.rs:85  write_uncaptured
+   crates/kayfabe-mocks/src/watchdog.rs:108  thread_report
+   crates/kayfabe-qemu-raw/src/lib.rs:110  build_rev
+   crates/kayfabe-qemu-raw/src/shim.rs:333  code
+   crates/kayfabe-qemu-raw/src/shim.rs:344  classify
+   crates/kayfabe-qemu-raw/src/shim.rs:381  classify_realize
+   crates/kayfabe-qemu-raw/src/shim.rs:403  bar_from_index
+   crates/kayfabe-qemu-raw/src/shim.rs:414  bar_index
+   crates/kayfabe-qemu-raw/src/shim.rs:455  placements
+   crates/kayfabe-qemu-raw/src/shim.rs:523  desc
+   crates/kayfabe-qemu-raw/src/shim.rs:595  realize
+   crates/kayfabe-qemu-raw/src/shim.rs:617  machine
+   crates/kayfabe-qemu-raw/src/shim.rs:622  unrealize
+   crates/kayfabe-qemu-raw/src/shim.rs:633  install_window
+   crates/kayfabe-qemu-raw/src/shim.rs:644  region_add
+   crates/kayfabe-qemu-raw/src/shim.rs:649  region_del
+   crates/kayfabe-qemu-raw/src/shim.rs:660  bar_move_requested
+   crates/kayfabe-qemu-raw/src/shim.rs:678  note_bar_mapping
+   crates/kayfabe-qemu-raw/src/shim.rs:715  audit
+   crates/kayfabe-qemu-raw/src/shim.rs:838  new
+   crates/kayfabe-qemu-raw/src/shim.rs:1241  copy_sentence
+   crates/kayfabe-qemu-raw/src/shim.rs:1300  publication_row
+   crates/kayfabe-qemu-raw/src/shim.rs:2460  classify_chip
+   crates/kayfabe-qemu-raw/src/shim.rs:2522  chip_for
+   crates/kayfabe-qemu-raw/src/shim.rs:2533  chip_identity
+   crates/kayfabe-qemu-raw/src/shim.rs:6228  create
+   crates/kayfabe-qemu-raw/src/shim.rs:6246  create_probed
+   crates/kayfabe-qemu-raw/src/shim.rs:6412  plane
+   crates/kayfabe-qemu-raw/src/shim.rs:6439  object_model
+   crates/kayfabe-qemu-raw/src/shim.rs:6452  completion_watch
+   crates/kayfabe-qemu-raw/src/shim.rs:6472  attach_ram
+   crates/kayfabe-qemu-raw/src/shim.rs:6622  report_stated_guest_ram_at
+   crates/kayfabe-qemu-raw/src/shim.rs:6740  stated_guest_ram
+   crates/kayfabe-qemu-raw/src/shim.rs:6749  guest_ram_backing
+   crates/kayfabe-qemu-raw/src/shim.rs:6760  detach_ram
+   crates/kayfabe-qemu-raw/src/shim.rs:6774  read
+   crates/kayfabe-qemu-raw/src/shim.rs:6788  write
+   crates/kayfabe-qemu-raw/src/shim.rs:6838  reset
+   crates/kayfabe-qemu-raw/src/shim.rs:6849  audit
+   crates/kayfabe-qemu-raw/src/shim.rs:7652  as_str
+   crates/kayfabe-qemu-raw/src/shim.rs:7664  parse
+   crates/kayfabe-qemu-raw/src/shim.rs:7688  isolate_plane_from
+   crates/kayfabe-qemu-raw/src/shim.rs:7787  parse
+   crates/kayfabe-qemu-raw/src/shim.rs:7804  guest_ram_source_from
+   crates/kayfabe-qemu-raw/src/shim.rs:7844  guest_ram_is_reachable_on
+   crates/kayfabe-qemu-raw/src/shim.rs:7959  forwarding_plane_owns_ce
+   crates/kayfabe-qemu-raw/src/shim.rs:7999  parse
+   crates/kayfabe-qemu-raw/src/shim.rs:8013  ce_executor_from
+   crates/kayfabe-qemu-raw/src/shim.rs:8056  fb_backing_from
+   crates/kayfabe-qemu-raw/src/shim.rs:8097  pt_witness_exec_from
+   crates/kayfabe-qemu-raw/src/shim.rs:8140  selected_mc_service_budget
+   crates/kayfabe-qemu-raw/src/shim.rs:8179  isolate_factory
+   crates/kayfabe-qemu-raw/src/shim_unsafe.rs:760  engine_kind_c_name
+   crates/kayfabe-rmrpc/src/fault.rs:119  deliver
+   crates/kayfabe-rmrpc/src/lib.rs:1073  translate
+   crates/kayfabe-rmrpc/src/lib.rs:1219  alloc_params_window
+   crates/kayfabe-rmrpc/src/policy.rs:107  of
+   crates/kayfabe-rmrpc/src/policy.rs:134  is_empty
+   crates/kayfabe-rmrpc/src/policy.rs:199  new
+   crates/kayfabe-rmrpc/src/policy.rs:395  new
+   crates/kayfabe-rmrpc/src/policy.rs:504  new
+   crates/kayfabe-rmrpc/src/policy.rs:959  new
+   crates/kayfabe-rmrpc/src/policy.rs:967  with_limits
+   crates/kayfabe-rmrpc/src/policy.rs:985  reassembler
+   crates/kayfabe-rmrpc/src/policy.rs:995  census
+   crates/kayfabe-rmrpc/src/policy.rs:1002  refusal_census
+   crates/kayfabe-rmrpc/src/policy.rs:1010  promote_diag
+   crates/kayfabe-rmrpc/src/policy.rs:1018  ring_census
+   crates/kayfabe-rmrpc/src/policy.rs:1028  applied
+   crates/kayfabe-rmrpc/src/policy.rs:1039  inert
+   crates/kayfabe-rmrpc/src/policy.rs:1052  held
+   crates/kayfabe-rmrpc/src/policy.rs:1064  promoted
+   crates/kayfabe-rmrpc/src/policy.rs:1070  gpu
+   crates/kayfabe-rmrpc/src/policy.rs:1084  deliver
+   crates/kayfabe-rmrpc/src/policy.rs:1712  new
+   crates/kayfabe-rmrpc/src/policy.rs:1723  with_limits
+   crates/kayfabe-rmrpc/src/policy.rs:1793  mc_service_state
+   crates/kayfabe-rmrpc/src/policy.rs:1800  claims
+   crates/kayfabe-rmrpc/src/policy.rs:1810  census
+   crates/kayfabe-rmrpc/src/policy.rs:1840  applied
+   crates/kayfabe-rmrpc/src/policy.rs:1853  gpu
+   crates/kayfabe-rmrpc/src/policy.rs:1864  gpu_mut
+   crates/kayfabe-rmrpc/src/policy.rs:1878  deliver
+   crates/kayfabe-rmrpc/src/policy.rs:2686  new
+   crates/kayfabe-rmrpc/src/policy.rs:2735  claims
+   crates/kayfabe-rmrpc/src/policy.rs:2741  snapshot
+   crates/kayfabe-rmrpc/src/reasm.rs:204  new
+   crates/kayfabe-rmrpc/src/reasm.rs:210  with_limits
+   crates/kayfabe-rmrpc/src/reasm.rs:216  limits
+   crates/kayfabe-rmrpc/src/reasm.rs:226  in_flight
+   crates/kayfabe-rmrpc/src/reasm.rs:235  held_bytes
+   crates/kayfabe-rmrpc/src/reasm.rs:245  accept
+   crates/kayfabe-shell/src/reactor.rs:164  registrar
+   crates/kayfabe-shell/src/reactor.rs:185  wake
+   crates/kayfabe-shell/src/reactor.rs:196  shutdown
+   crates/kayfabe-shell/src/reactor.rs:203  stats
+   crates/kayfabe-shell/src/reactor.rs:240  new
+   crates/kayfabe-shell/src/reactor.rs:277  stats
+   crates/kayfabe-shell/src/reactor.rs:289  run
+   crates/kayfabe-shell/src/reactor.rs:303  run_with
+   crates/kayfabe-shell/src/sources.rs:150  of
+   crates/kayfabe-shell/src/sources.rs:258  new
+   crates/kayfabe-shell/src/sources.rs:274  with_bound
+   crates/kayfabe-shell/src/sources.rs:284  bound
+   crates/kayfabe-shell/src/sources.rs:290  armed
+   crates/kayfabe-shell/src/sources.rs:308  arm
+   crates/kayfabe-shell/src/sources.rs:361  disarm
+   crates/kayfabe-shell/src/sources.rs:398  arm_counter
+   crates/kayfabe-shell/src/sources.rs:415  arm_channel
+   crates/kayfabe-shell/src/sources.rs:433  disarm_all
+   crates/kayfabe-shell/src/sources.rs:444  armed_ever
+   crates/kayfabe-shell/src/sources.rs:456  resolve
+   crates/kayfabe-shell/src/sources.rs:491  poller
+   crates/kayfabe-trace/src/budget.rs:46  bump
+   crates/kayfabe-trace/src/budget.rs:53  of
+   crates/kayfabe-trace/src/budget.rs:59  total
+   crates/kayfabe-trace/src/budget.rs:70  silent_kinds
+   crates/kayfabe-trace/src/budget.rs:79  seen_kinds
+   crates/kayfabe-trace/src/budget.rs:89  is_silent
+   crates/kayfabe-trace/src/budget.rs:95  wire_total
+   crates/kayfabe-trace/src/budget.rs:105  core_total
+   crates/kayfabe-trace/src/budget.rs:112  absorb
+   crates/kayfabe-trace/src/event.rs:132  bytes
+   crates/kayfabe-trace/src/event.rs:380  of
+   crates/kayfabe-trace/src/event.rs:650  index
+   crates/kayfabe-trace/src/event.rs:673  is_wire
+   crates/kayfabe-trace/src/event.rs:712  kind
+   crates/kayfabe-trace/src/event.rs:738  refusal
+   crates/kayfabe-trace/src/sink.rs:108  new
+   crates/kayfabe-trace/src/sink.rs:116  records
+   crates/kayfabe-trace/src/sink.rs:122  len
+   crates/kayfabe-trace/src/sink.rs:128  is_empty
+   crates/kayfabe-trace/src/sink.rs:137  projection
+   crates/kayfabe-trace/src/sink.rs:142  filter
+   crates/kayfabe-trace/src/sink.rs:199  new
+   crates/kayfabe-trace/src/sink.rs:208  trace
+   crates/kayfabe-trace/src/sink.rs:214  counters
+   crates/kayfabe-trace/src/sink.rs:220  sink
+   crates/kayfabe-trace/src/sink.rs:225  sink_mut
+   crates/kayfabe-trace/src/sink.rs:231  into_sink
+   crates/kayfabe-trace/src/sink.rs:278  is_enabled
+   crates/kayfabe-trace/src/sink.rs:288  emit
+   crates/kayfabe-trace/src/sink.rs:300  emit_now
+   crates/kayfabe-trace/src/sink.rs:310  next_seq
+   crates/kayfabe-util/src/interval_map.rs:72  new
+   crates/kayfabe-util/src/interval_map.rs:86  is_empty
+   crates/kayfabe-util/src/interval_map.rs:153  next_from
+   crates/kayfabe-util/src/lock.rs:93  bit
+   crates/kayfabe-util/src/lock.rs:153  held_rank_mask
+   crates/kayfabe-util/src/lock.rs:170  acquisitions
+   crates/kayfabe-util/src/lockwitness.rs:87  note_acquired
+   crates/kayfabe-util/src/lockwitness.rs:98  note_released
+   crates/kayfabe-util/src/lockwitness.rs:117  held_ranks
+   crates/kayfabe-util/src/lockwitness.rs:127  acquisitions
+   crates/kayfabe-util/src/time.rs:31  since
+   crates/kayfabe-vmm-kvm/src/lib.rs:830  realize
+   crates/kayfabe-vmm-kvm/src/lib.rs:893  vmm
+   crates/kayfabe-vmm-kvm/src/lib.rs:901  page_size
+   crates/kayfabe-vmm-kvm/src/lib.rs:907  memslot_ceiling
+   crates/kayfabe-vmm-kvm/src/lib.rs:935  install_ram_window
+   crates/kayfabe-vmm-kvm/src/lib.rs:1129  remove_window
+   crates/kayfabe-vmm-kvm/src/lib.rs:1221  declare_device_window
+   crates/kayfabe-vmm-kvm/src/lib.rs:1242  register_backing
+   crates/kayfabe-vmm-kvm/src/lib.rs:1272  resolve_region
+   crates/kayfabe-vmm-kvm/src/lib.rs:1279  audit
+   crates/kayfabe-vmm-kvm/src/lib.rs:1291  assert_map_matches_the_kernel
+   crates/kayfabe-vmm-kvm/src/lib.rs:1371  advance
+   crates/kayfabe-vmm-kvm/src/lib.rs:1385  drain_irqs
+   crates/kayfabe-vmm-kvm/src/lib.rs:1442  audit
+   crates/kayfabe-vmm-kvm/src/slotnum.rs:69  new
+   crates/kayfabe-vmm-kvm/src/slotnum.rs:80  ceiling
+   crates/kayfabe-vmm-kvm/src/slotnum.rs:86  recycled
+   crates/kayfabe-vmm-kvm/src/slotnum.rs:92  live
+   crates/kayfabe-vmm-kvm/src/slotnum.rs:107  alloc
+   crates/kayfabe-vmm-kvm/src/slotnum.rs:138  release
+   crates/kayfabe-vmm-kvm/src/vcpu.rs:152  create_vcpu
+   crates/kayfabe-vmm-kvm/src/vcpu.rs:200  classify_guest_exit
+   crates/kayfabe-vmm-kvm/src/vcpu.rs:218  enter_at
+   crates/kayfabe-vmm-kvm/src/vcpu.rs:228  report
+   crates/kayfabe-vmm-kvm/src/vcpu.rs:234  first_ram_declared_exit
+   crates/kayfabe-vmm-kvm/src/vcpu.rs:250  run_until
+   crates/kayfabe-vmm-qemu/src/classify.rs:50  is_ram
+   crates/kayfabe-vmm-qemu/src/classify.rs:62  classify
+   crates/kayfabe-vmm-qemu/src/host.rs:121  plain_ram
+   crates/kayfabe-vmm-qemu/src/host.rs:133  device
+   crates/kayfabe-vmm-qemu/src/layout.rs:231  new
+   crates/kayfabe-vmm-qemu/src/layout.rs:242  saw
+   crates/kayfabe-vmm-qemu/src/layout.rs:254  census
+   crates/kayfabe-vmm-qemu/src/layout.rs:263  state
+   crates/kayfabe-vmm-qemu/src/layout.rs:269  forget
+   crates/kayfabe-vmm-qemu/src/layout.rs:276  clear
+   crates/kayfabe-vmm-qemu/src/layout.rs:282  stated_sections
+   crates/kayfabe-vmm-qemu/src/layout.rs:298  contiguous_runs
+   crates/kayfabe-vmm-qemu/src/layout.rs:308  contiguous_runs_ever
+   crates/kayfabe-vmm-qemu/src/layout.rs:344  backings_seen
+   crates/kayfabe-vmm-qemu/src/layout.rs:367  resolve
+   crates/kayfabe-vmm-qemu/src/lib.rs:253  passthrough
+   crates/kayfabe-vmm-qemu/src/lib.rs:292  shareable
+   crates/kayfabe-vmm-qemu/src/lib.rs:1158  install_tiered_window
+   crates/kayfabe-vmm-qemu/src/lib.rs:1394  page_size
+   crates/kayfabe-vmm-qemu/src/lib.rs:1400  slot_range
+   crates/kayfabe-vmm-qemu/src/lib.rs:1418  register_backing
+   crates/kayfabe-vmm-qemu/src/lib.rs:1444  resolve_region
+   crates/kayfabe-vmm-qemu/src/lib.rs:1451  tiers
+   crates/kayfabe-vmm-qemu/src/lib.rs:1485  assert_map_matches_the_kernel
+   crates/kayfabe-vmm-qemu/src/lib.rs:1593  advance
+   crates/kayfabe-vmm-qemu/src/lib.rs:1777  resolve_guest_ram
+   crates/kayfabe-vmm-qemu/src/lib.rs:1892  remove_window
+   crates/kayfabe-vmm-qemu/src/lib.rs:1981  audit
+   crates/kayfabe-vmm-qemu/src/mock_host.rs:147  new
+   crates/kayfabe-vmm-qemu/src/mock_host.rs:153  with_policy
+   crates/kayfabe-vmm-qemu/src/mock_host.rs:164  log
+   crates/kayfabe-vmm-qemu/src/mock_host.rs:170  irqs
+   crates/kayfabe-vmm-qemu/src/mock_host.rs:176  discard_disabled
+   crates/kayfabe-vmm-qemu/src/mock_host.rs:183  blockers
+   crates/kayfabe-vmm-qemu/src/mock_host.rs:189  listening
+   crates/kayfabe-vmm-qemu/src/mock_host.rs:200  live_regions
+   crates/kayfabe-vmm-qemu/src/mock_host.rs:213  region_bytes
+   crates/kayfabe-vmm-qemu/src/mock_host.rs:225  mint_foreign
+   crates/kayfabe-vmm-qemu/src/mock_host.rs:245  mint_foreign_slice
+   crates/kayfabe-vmm-qemu/src/mock_host.rs:289  mint_backed
+   crates/kayfabe-vmm-qemu/src/mock_host.rs:308  place_bar
+   crates/kayfabe-vmm-qemu/src/mock_host.rs:321  move_bar
+   crates/kayfabe-vmm-qemu/src/mock_host.rs:500  bar
+   crates/kayfabe-vmm-qemu/src/mock_host.rs:579  new
+   crates/kayfabe-vmm-qemu/src/mock_host.rs:593  live
+   crates/kayfabe-vmm-qemu/src/mock_host.rs:601  installs
+   crates/kayfabe-vmm-qemu/src/mock_host.rs:608  clears
+   crates/kayfabe-vmm-qemu/src/mock_host.rs:614  read_only_installs
+   crates/kayfabe-vmm-qemu/src/mock_host.rs:628  replaces
+   crates/kayfabe-vmm-qemu/src/slots.rs:119  new
+   crates/kayfabe-vmm-qemu/src/slots.rs:223  new
+   crates/kayfabe-vmm-qemu/src/slots.rs:242  ceiling
+   crates/kayfabe-vmm-qemu/src/slots.rs:248  floor
+   crates/kayfabe-vmm-qemu/src/slots.rs:254  recycled
+   crates/kayfabe-vmm-qemu/src/slots.rs:260  live
+   crates/kayfabe-vmm-qemu/src/slots.rs:272  alloc
+   crates/kayfabe-vmm-qemu/src/slots.rs:303  release
+   crates/kayfabe-vmm-qemu/src/slots.rs:349  readonly_slot
+   crates/kayfabe-vmm-qemu/src/slots.rs:375  spans
+   crates/kayfabe-vmm-qemu/src/viewer_install.rs:481  mappings
+   crates/kayfabe-vmm-qemu/src/viewer_install.rs:493  observe_ranges
+   crates/kayfabe-vmm-qemu/src/viewer_install.rs:607  new
+   crates/kayfabe-vmm-qemu/src/viewer_install.rs:662  drain_and_install
+   crates/kayfabe-vmm-qemu/src/viewer_install.rs:843  assert_effective_cacheability
+   crates/kayfabe-vmm-qemu/src/viewer_install.rs:871  place_content
+   crates/kayfabe-vmm-qemu/src/viewer_install.rs:966  mergeable
+   crates/kayfabe-vmm-qemu/src/viewer_install.rs:976  census_of
+   crates/kayfabe-vmm-qemu/src/viewer_install.rs:1008  tier_at
+
+⊘ This is a REPORT, not a verdict on any one of them: a verb may be a deliberate seam
+  awaiting its consumer, or a capability proven and never wired. Only a human knows
+  which, and that triage is what decides what this gate eventually enforces.
+GATE_EXIT_STATUS=0
+GATE_DONE 2026-08-11T09:21:15+00:00

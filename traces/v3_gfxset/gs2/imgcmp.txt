@@ -1,0 +1,2 @@
+GSET_IMG item=blender_cycles_cuda key=out.png floor=94.77dB guest=95.92dB verdict=MATCH n_bare=14 bare_psnr=94.77..101.76 guest_psnr=94.22..96.98 bare_ndiff=3..15 guest_ndiff=9..17 bare_maxdiff=1 guest_maxdiff=1 values=691200
+GSET_IMG item=blender_cycles_optix key=out.png floor=96.53dB guest=97.50dB verdict=MATCH n_bare=14 bare_psnr=96.53..103.52 guest_psnr=96.11..99.54 bare_ndiff=2..10 guest_ndiff=5..11 bare_maxdiff=1 guest_maxdiff=1 values=691200

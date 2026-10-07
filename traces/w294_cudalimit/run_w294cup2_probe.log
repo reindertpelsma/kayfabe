@@ -1,0 +1,146 @@
+=== boot_capture tag=w294cup2 at 2026-08-14T00:27:42+00:00 ===
+=== source revision: b07e64f82 ===
+=== qemu binary: -rwxr-xr-x 1 root root 88086960 Aug 14 00:27 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:b07e64f82da751fe3de214f7967e3064cccfe747 
+=== BUILD_REV.txt says (informational, NOT authoritative): kayfabe-rev:5feac9090bc58129c9906e2222f3934ae313a980
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /workspace/kayfabe_w294/scripts/bench/boot_nvkvm.sh  sha256=a1daa5c4c557180f
+    used: /workspace/kayfabe_w294/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Fri Aug 14 00:27:56 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  ERR!                           Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /  12288MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Aug 14 00:27 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Aug 14 00:27 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Aug 14 00:27 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Aug 14 00:27 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Aug 14 00:27 .
+drwxr-xr-x 18 root root   4000 Aug 14 00:27 ..
+cr--------  1 root root 240, 1 Aug 14 00:27 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Aug 14 00:27 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /workspace/kayfabe_w294/scripts/bench/cup2_hook_gdbspin.sh at 2026-08-14T00:28:01+00:00 ===
+=== sources (md5 — a run cannot silently be a different copy) ===
+    /workspace/bench/cup2.c                                     27 lines  md5 d9f82375ebd54de500aeb7f85ef71efc
+    /workspace/kayfabe_w294/scripts/bench/guest_spinprobe.c    697 lines  md5 a6fb9b735e47203e35e457b666166295
+=== push + build in the guest ===
+GCC_CUP2_RC=0
+GCC_PROBE_RC=0
+=== is gdb available? (a cross-check, never the primary instrument) ===
+    gdb = no
+=== launch cup2 DETACHED under its own 180 s timeout (rc stays comparable to w232..w268) ===
+LAUNCHED pid=1819
+=== waiting for cup2 to reach cuCtxCreate (its last print is `totalMem=`) ===
+    reached-cuCtxCreate = yes after ~15s
+--- cup2 output so far ---
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+devices=1
+ok   cuDeviceGet(&d,0)
+ok   cuDeviceGetName(nm,256,d)
+name=
+ok   cuDeviceGetAttribute(&maj,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,d)
+ok   cuDeviceGetAttribute(&min,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,d)
+compute=8.6
+ok   cuDeviceTotalMem(&tot,d)
+totalMem=11959 MiB
+=== ★★★★★ SPIN PROBE, PASS 1 of 2 ===
+pid=1819 state=Zl
+--- per-thread ps (R = userspace spin; S/D = blocked in the kernel) ---
+    TID STAT %CPU WCHAN                  COMMAND
+   1819 Zl   97.5 -                      cup2
+   2039 Rl    2.0 -                      cuda-EvtHandlr
+--- /proc/<tid>/syscall ("running" = userspace, i.e. NOT a blocking syscall) ---
+    1819: -1 0x0 0x0
+    2039: running
+★ no maps — the target is gone or unreadable. ⊘ Nothing below would be resolvable, so nothing is printed.
+=== guest_spinprobe pid=1819 maps=0 budget=6000 steps ===
+SPINPROBE_RC=1
+=== the mappings the polled address must be joined against ===
+=== ⊘ gdb NOT PRESENT in the guest — cross-check skipped, C probe stands alone ===
+=== sleeping 20 s before pass 2 (⊘ the question is whether the value MOVES) ===
+=== ★★★★★ SPIN PROBE, PASS 2 of 2 ===
+⊘ cup2 is GONE — nothing to probe
+=== waiting for cup2's own timeout so CUP2_RC stays comparable to w232..w268 ===
+--- cup2 FINAL output ---
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+devices=1
+ok   cuDeviceGet(&d,0)
+ok   cuDeviceGetName(nm,256,d)
+name=
+ok   cuDeviceGetAttribute(&maj,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,d)
+ok   cuDeviceGetAttribute(&min,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,d)
+compute=8.6
+ok   cuDeviceTotalMem(&tot,d)
+totalMem=11959 MiB
+ok   cuCtxCreate(&ctx,0,d)
+CTX OK
+ok   cuMemAlloc(&dp,4096)
+MEMALLOC OK 0x7f263c200000
+ok   cuMemcpyHtoD(dp,&hv,4)
+ok   cuMemcpyDtoH(&rv,dp,4)
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+DONE
+CUP2_OUT_BYTES=519
+CUP2_RC=0
+[   81.061330] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+[   81.061837] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+[   81.063673] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+[   81.064306] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+[   81.066047] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+[   81.066552] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+[   81.068221] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+[   81.068703] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+[   81.070449] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+[   81.070849] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+[   81.072470] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+[   81.072918] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+[   81.349045] NVRM: kgmmuClientShadowFaultBufferUnregister_IMPL: Unregistering non-replayable fault buffer failed (status=0x00000056), proceeding...
+[   81.350707] NVRM: kgmmuFaultBufferReplayableDestroy_IMPL: Unregistering Replayable Fault buffer failed (status=0x00000056), proceeding...
+[   81.352405] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[   81.532581] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d0000c; hObject=0x5c000072; paramsStatus=0x00000000; status=0x00000056
+[   81.532598] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_client.c:844
+[   81.532693] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:259
+[   81.532780] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:1375
+[   82.858426] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00014; hObject=0xcaf00002; paramsStatus=0x00000000; status=0x00000056
+[   82.858442] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_client.c:844
+[   82.858609] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:259
+[   82.858765] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:1375
+[   82.862780] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[   84.079878] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+=== w269 gdbspin hook DONE ===
+HOOK_RC=0
+=== HOST dmesg delta for this boot (watermark 1106 → 1106) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

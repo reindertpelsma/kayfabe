@@ -1,0 +1,7 @@
+[gset-host 21:05:29] host nvidia-drm modeset=Y dri=by-path card0 renderD128  nodes=/dev/nvidia-modeset /dev/nvidia-uvm /dev/nvidia-uvm-tools /dev/nvidia0 /dev/nvidiactl  /dev/nvidia-caps: nvidia-cap1 nvidia-cap2 
+hostroot: UP image=/workspace/bench/guest.qcow2 root=/mnt/gset/root os=Ubuntu 24.04.5 LTS nvlibs=libnvidia-glcore.so.580.159.04 hostdrv=580.159.04
+[gset-host 21:05:31] items: blender_cycles_cuda blender_cycles_optix
+GSET_RES side=host item=blender_cycles_cuda verdict=PASS rc=0 secs=3 note=warn:BLENDER_OK CYCLES CUDA gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+GSET_RES side=host item=blender_cycles_optix verdict=PASS rc=0 secs=1 note=warn:BLENDER_OK CYCLES OPTIX gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 host_xid=0
+[gset-host 21:05:35] HOST_DONE 2 pass / 2 rows
+hostroot: DOWN

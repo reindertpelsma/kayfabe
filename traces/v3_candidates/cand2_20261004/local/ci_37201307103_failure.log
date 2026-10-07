@@ -1,0 +1,12 @@
+stable — build, test, clippy, fmt, boundary	Claim-ledger gate (a measurement word names its run, not a source read)	﻿2026-10-04T12:17:19.5558547Z ##[group]Run python3 scripts/ci/debt.py claims
+stable — build, test, clippy, fmt, boundary	Claim-ledger gate (a measurement word names its run, not a source read)	2026-10-04T12:17:19.5558935Z [36;1mpython3 scripts/ci/debt.py claims[0m
+stable — build, test, clippy, fmt, boundary	Claim-ledger gate (a measurement word names its run, not a source read)	2026-10-04T12:17:19.5621831Z shell: /usr/bin/bash -e {0}
+stable — build, test, clippy, fmt, boundary	Claim-ledger gate (a measurement word names its run, not a source read)	2026-10-04T12:17:19.5622254Z env:
+stable — build, test, clippy, fmt, boundary	Claim-ledger gate (a measurement word names its run, not a source read)	2026-10-04T12:17:19.5622595Z   CARGO_TERM_COLOR: always
+stable — build, test, clippy, fmt, boundary	Claim-ledger gate (a measurement word names its run, not a source read)	2026-10-04T12:17:19.5623050Z   CARGO_HOME: /home/runner/.cargo
+stable — build, test, clippy, fmt, boundary	Claim-ledger gate (a measurement word names its run, not a source read)	2026-10-04T12:17:19.5623504Z   CARGO_INCREMENTAL: 0
+stable — build, test, clippy, fmt, boundary	Claim-ledger gate (a measurement word names its run, not a source read)	2026-10-04T12:17:19.5624175Z   CACHE_ON_FAILURE: false
+stable — build, test, clippy, fmt, boundary	Claim-ledger gate (a measurement word names its run, not a source read)	2026-10-04T12:17:19.5624565Z ##[endgroup]
+stable — build, test, clippy, fmt, boundary	Claim-ledger gate (a measurement word names its run, not a source read)	2026-10-04T12:17:28.7095770Z NEW traces/v3_candidates/cand2_20261004/README.md|unattributed|24a1a4e1349f5d46f8ed2b69dd60faf04b328f03ea8a6a961848a5b81b9ab6c0: is read. **Scope:** authored EDID on userspace reprobe is verified; the collected
+stable — build, test, clippy, fmt, boundary	Claim-ledger gate (a measurement word names its run, not a source read)	2026-10-04T12:17:28.7097009Z claims: existing-debt=3151 new=1 resolved=3
+stable — build, test, clippy, fmt, boundary	Claim-ledger gate (a measurement word names its run, not a source read)	2026-10-04T12:17:28.7207233Z ##[error]Process completed with exit code 1.

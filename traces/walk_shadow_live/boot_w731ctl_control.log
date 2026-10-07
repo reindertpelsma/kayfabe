@@ -1,0 +1,53 @@
+CTL_START 2026-09-15T02:32:50+00:00
+TREE_REV=87441e73cc9c09ded0154504b99e4c73d4d18984
+=== SINGLE-STORE E6 BOOT 2026-09-15T02:32:50+00:00 tag=w731ctl ===
+KAYFABE_WALK_SHADOW=off KAYFABE_SCRATCHPAD=on KAYFABE_SCRATCHPAD_CUDA=on KAYFABE_SCRATCHPAD_START_MB=4096
+POST_CAPTURE_HOOK=/root/kayfabe/scripts/bench/w392d_mean_hook.sh
+BINARY_REV=87441e73cc9c09ded0154504b99e4c73d4d18984 TREE_REV=87441e73cc9c09ded0154504b99e4c73d4d18984
+E6-CONTENT: walk_shadow_strings=35 cuda_census=2 (either 0 ⇒ an OLDER binary — STOP)
+E6-IMAGE: cuda_image_symbols=1 (0 ⇒ built WITHOUT --features cuda-scratchpad ⇒ the shadow CANNOT run)
+boot_capture rc=5
+--- Q1 THE CLIENT (graded first; everything below is uninterpretable without it) ---
+[client] W392D_GUEST_OUTCOME=(P) ★★★★★ THE FALSIFIER SURVIVES — the SAME client that
+[client] THREADS           8 of 8 verified ✔
+[client] MEAN_FALSIFIER=PASS
+--- ★★★★★ Q2/Q3/Q4/Q5 THE SHADOW CENSUS (a missing line is UNMEASURED, not clean) ---
+E6-SHADOW-LINES=1  (0 ⇒ UNMEASURED)
+WALK-SHADOW ⊘ DISARMED — KAYFABE_WALK_SHADOW=off (the default), so the walk kernel was never run beside the host walk on this boot. This is NOT agreement and it is NOT a clean census; it is the absence of a measurement.
+E6-COMPARED=
+E6-DISAGREEMENTS=
+E6-BY-KIND=by_kind[doorbell=240 mirror_fill=41 invalidate=1132 gsp_submit=526 rpc_bind=331]
+E6-SKIPPED=
+E6-IMAGE-STATS=
+E6-VACUOUS=305
+--- ★ the per-refresh refusals, verbatim, if any fired ---
+--- ★ the isolate's OWN stderr for the shadow verbs ---
+--- ★★★★★ Q2c THE CROSS-THREAD PROBE — the one whose absence cost w731's first boot ---
+⊘ A CUDA context is CURRENT PER THREAD. The bring-up runs on the isolate's startup
+  thread and every request is served on a WORKER. Probes (a) and (b) run where the
+  context already is, so they cannot see this; it must begin PASS.
+probe_other_thread="PASS a second thread can use this context (cuCtxSetCurrent + cuMemAlloc + cuMemFree)"
+--- Q2b THE CUDA CENSUS: the shadow cannot run without it ---
+E4-CUDA_WALK=OK
+E1-RESERVATION=HELD
+E1-RESERVED_MB=4096
+--- ★ the SAID refusal, if the shadow was armed with no isolate to run in ---
+--- the arena counter the previous session's plan turned on (reported, not depended on) ---
+arena[pages live=2415 peak=2415 allocations=4087 span_pages=990381 store_refused=0 store_migrated=0 store_read_refused=0 store_resets=0 (store numbers at END only)]
+--- Q5 WHAT THE GUEST PAID ---
+TRAPWITNESS off_trap_claims=564 inline_exceptions=0 worst_trap=31075us at=bar0+0x110c00 slow_traps(>1000us)=16 by_decade[1-10ms=15 10-100ms=1 100ms-1s=0 >1s=0] (target: inline_exceptions=0) 
+SLOW-SITES only proves it is under 1ms. 
+PT-SWEEP tasks=0 skipped=0 ran=0 truncated=0 pages=0 reasons={} JOIN-RELEASE revoked=0 released=0 stranded=0 drained=0 joined_ranges=0 remaps_refused=0 remaps_revoked=0 → bound=0 unchanged=0 repointed=0 swept
+HOST_DMESG_XID=1
+--- the guest's OWN first failure (NOT the last line: a re-boot attempt masks it) ---
+[   67.297661] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   74.414880] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   74.415172] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   74.515429] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   74.527641] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   74.528100] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   74.528142] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, N
+[   75.094356] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0x31415903; hObject=0x3141590f; hClass=0x00000070; paramsSize=0x00000018; paramsSta
+=== SINGLE-STORE E6 END 2026-09-15T02:36:18+00:00 tag=w731ctl ===
+CTL_EXIT=0
+CTL_DONE 2026-09-15T02:36:18+00:00

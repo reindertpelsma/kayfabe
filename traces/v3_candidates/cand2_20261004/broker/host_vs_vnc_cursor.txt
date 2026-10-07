@@ -1,0 +1,1 @@
+CURSOR_COMPARE visible_a=281 visible_b=281 max_channel_diff=0

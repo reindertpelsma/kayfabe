@@ -1,0 +1,11 @@
+START 2026-09-28T18:24:39+00:00
+61c49f14 docs: require immediate doorbell dispatch with incidental coalescing only
+TESTS passed 1653 failed 0
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/61c49f14/qemu-system-x86_64 rev=61c49f14 mtime=2026-09-28 18:26:41.112475930 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+FG_RC=0
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+EXIT 2026-09-28T18:44:21+00:00

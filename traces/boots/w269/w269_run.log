@@ -1,0 +1,153 @@
+=== W269 START 2026-08-12T11:09:01+00:00 pid=2232203 ===
+=== SCRIPTS HEAD=8c5bb67214b643689569b4dbc0427783ef336cd7 (scripts only; the BINARY's revision is asserted separately) ===
+=== STAMP: [kayfabe-rev:70463ae329adac543de59b36da38112a4044fdeb] REQUIRED: [kayfabe-rev:70463ae329adac543de59b36da38112a4044fdeb] ===
+=== STAMP REQUIREMENT: PASS (no build was performed, and none was needed) ===
+=== CONTENT CHECK ===
+  KAYFABE_GR_ROUTE                       = 2
+  GR-ROUTE arm=                          = 1
+  GUEST-SEMA arm=                        = 1
+  SEMA-PIN                               = 2
+  PB-PIN                                 = 2
+  EXEC-WITNESS ARMED                     = 2
+  GR-CURSOR token=                       = 3
+  SEMA-PAGE-SLOT                         = 1
+  COMPLETION-WATCH                       = 8
+  scripts/bench/guest_spinprobe.c              md5 3eebe8c1c34f3a1deb49ecaab839b343
+  scripts/bench/cup2_hook_gdbspin.sh           md5 7d4a0e387d67bd1cd070b154542ba33c
+=== BOOT w269_refuse START 2026-08-12T11:09:10+00:00 ===
+    KAYFABE_FB_JOIN=[shared] KAYFABE_GUEST_RING=[ring] KAYFABE_GUEST_PUSHBUF=[pin] KAYFABE_PT_WITNESS_EXEC=[on] KAYFABE_GUEST_SEMA=[pin] KAYFABE_GR_ROUTE=[unset]
+[boot_capture:w269_refuse] host dmesg watermark: 982 lines
+[boot_capture:w269_refuse] booting (extra args: none)
+[boot_capture:w269_refuse] guest is up after 36s
+[boot_capture:w269_refuse] module unloaded and ring buffer cleared; loading cold
+[boot_capture:w269_refuse] opening the device (this is what runs RmInitAdapter)
+[boot_capture:w269_refuse] captured 34 dmesg lines, 31 NVRM, 0 adapter → /workspace/bench/run_w269_refuse_dmesg.log
+[boot_capture:w269_refuse] --- the verdict lines ---
+[boot_capture:w269_refuse] running POST_CAPTURE_HOOK: /workspace/kayfabe_w269/scripts/bench/cup2_hook_gdbspin.sh
+[boot_capture:w269_refuse] hook finished: rc=0
+[boot_capture:w269_refuse] host dmesg delta: 0 lines, 0
+0 NVRM, 0
+0 Xid → /workspace/bench/run_w269_refuse_hostdmesg.log
+[boot_capture:w269_refuse] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:w269_refuse] census present:
+    2026-08-12T11:13:24.321667Z qemu-system-x86_64: info: nvkvm: doorbells: 191 arrived, 175 served, 16 REFUSED by name; last token 0x00010001 (16 logged)
+    2026-08-12T11:13:24.321755Z qemu-system-x86_64: info: nvkvm:   first doorbell refusal [FwdFault::PushbufferAperture] PushbufferAperture { va: GpuVa(8592179200), aperture: Vidmem } | c=0xc1d0000c vas=0x5c000007 dec=NONE userd=h0x5c000014/off0x26000/phys=fb:0x1026000/0x200 fbuserd@0x1026088 GET=1 PUT=1 JOINED-one-memory root=0x201000/ap1/sh47/va[0x0..0x0] rootsrc=declared(object-model) ring=0x200224000 rng=V:0x1024000 fin=V:0x102c004 gp[0]@0x200224000=0x202c00000+0x20 pb=S:0x3e4d7000 pbm[8w of 32B]: [0]sub4/m0x0/Incrementing/n1=[0xc7b5] [1]sub4/m0x240/Incrementing/n3=[0x2,0x440ff30,0x1] [2]sub4/m0x300/Incrementing/n1=[0x14] scan=1024/1024 declared (COMPLETE: every declared entry was read), unread=0, nonzero=[0]=0x0000220202c00000 row=ABSENT-FROM-ROOT-TABLE(11 rows, 0 REFUSED-BY-CAP) fbRING[p0]@0x1024000=0000c00202220000000000000000000000000000000000000000000000000000 nz4/4096 resN-NEVER-WRITTEN by? fbRING[p1]@0x1025000=0000000000000000000000000000000000000000000000000000000000000000 nz0/4096 resN-NEVER-WRITTEN by? fbFIN@0x102c004=0000000000000000000000000000000000000000000000000000000000000000 nz0/4096 resN-NEVER-WRITTEN by? walk: L0@0x201000/byEXEC#104[ch1 lf0 sp0 inv3]=PDE@0x0->0x202000/Vidmem L1@0x202000/byEXEC#105[ch3 lf0 sp0 inv509]=PDE@0x0->0x203000/Vidmem L2@0x203000/byEXEC#106[ch1 lf0 sp0 inv511]=PDE@0x200000000->0x204000/Vidmem L3@0x204000/byEXEC#107[ch29 lf7 sp0 inv221]=LEAF@0x200200000->0x1000000/Vidmem/sz0x200000 walkend=LEAF
+[boot_capture:w269_refuse] evidence carried into the repo: /workspace/kayfabe_w269/traces/guest_boots/run_w269_refuse_{qemu,dmesg,probe,hostdmesg}.log
+[boot_capture:w269_refuse] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+[boot_capture:w269_refuse]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+[boot_capture:w269_refuse] done. serial=/workspace/bench/run_w269_refuse_serial.log qemu=/workspace/bench/run_w269_refuse_qemu.log dmesg=/workspace/bench/run_w269_refuse_dmesg.log probe=/workspace/bench/run_w269_refuse_probe.log hostdmesg=/workspace/bench/run_w269_refuse_hostdmesg.log
+=== BOOT w269_refuse RC=0 2026-08-12T11:13:26+00:00 ===
+--- post-boot liveness: pgrep -x qemu-system-x86 = [] ss2223 = [0]
+--- ENOSPC_LLVM=0
+?
+--- DISK: /dev/root       243G  138G  105G  57% /
+--- ARMING AS THE DEVICE SAW IT:
+    kayfabe: FB-JOIN arm=shared
+    kayfabe: GUEST-RING arm=ring
+    kayfabe: GUEST-PUSHBUF arm=pin
+    kayfabe: GUEST-SEMA arm=pin
+    kayfabe: GR-ROUTE arm=refuse
+    EXEC-WITNESS ARMED resident=156 by-executor=39 refused-at-cap=0 
+    ★ ROUTE-ARM ASSERTION: PASS (saw GR-ROUTE arm=refuse)
+    ★ CARRIED-ARM ASSERTION: PASS (GUEST-SEMA arm=pin)
+    ★ CARRIED-ARM ASSERTION: PASS (GUEST-PUSHBUF arm=pin)
+    ★ WITNESS-ARM ASSERTION: PASS (EXEC-WITNESS ARMED)
+    --- COMPLETION-WATCH OBSERVED = 17 | SEMA-PAGE-SLOT = 153
+    --- GR-REPORT-SEMAPHORE slots seen (distinct VA):
+
+    --- Xid (IDENTITY, never a count — w265's lesson):
+    --- THE PROBE'S OWN HEADLINES:
+      GCC_CUP2_RC=0
+          reached-cuCtxCreate = yes after ~15s
+      --- steps actually taken = 6000 (of a 6000 budget) ---
+      === ★★★★★ SNAPSHOT at RIP=0x70d1c802be1f (libcuda.so.580.159.04+0xc5e1f  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>) ===
+          N items = 8   array = 0x56fc4df6f540   (stride 40)
+          item[0] @0x56fc4df6f540  KIND=1  [0x08]=0x70d1c4119010 [0x10]=0x1 [0x18]=0x7ffc73bcace0 [0x20]=0x70d1c7aad7f4
+          item[1] @0x56fc4df6f568  KIND=1  [0x08]=0x70d1c4122628 [0x10]=0x1 [0x18]=0x56fc4df6f490 [0x20]=0x70d1c7c1e878
+          item[2] @0x56fc4df6f590  KIND=1  [0x08]=0x70d1c412bc40 [0x10]=0x1 [0x18]=0x70d1c7c36910 [0x20]=0x70d1c800cb70
+          item[3] @0x56fc4df6f5b8  KIND=1  [0x08]=0x70d1c4135258 [0x10]=0x1 [0x18]=0x8 [0x20]=0x70d1c7c15010
+          item[4] @0x56fc4df6f5e0  KIND=1  [0x08]=0x70d1c413e870 [0x10]=0x1 [0x18]=0x0 [0x20]=0x0
+          item[5] @0x56fc4df6f608  KIND=1  [0x08]=0x70d1c4147e88 [0x10]=0x1 [0x18]=0x0 [0x20]=0x0
+          item[6] @0x56fc4df6f630  KIND=1  [0x08]=0x70d1c41514a0 [0x10]=0x1 [0x18]=0x0 [0x20]=0x0
+          item[7] @0x56fc4df6f658  KIND=1  [0x08]=0x70d1c415aab8 [0x10]=0x1 [0x18]=0x0 [0x20]=0x0
+      SPINPROBE_RC=0
+      --- steps actually taken = 6000 (of a 6000 budget) ---
+      === ★★★★★ SNAPSHOT at RIP=0x70d1c802be1f (libcuda.so.580.159.04+0xc5e1f  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>) ===
+          N items = 8   array = 0x56fc4df6f540   (stride 40)
+          item[0] @0x56fc4df6f540  KIND=1  [0x08]=0x70d1c4119010 [0x10]=0x1 [0x18]=0x7ffc73bcace0 [0x20]=0x70d1c7aad7f4
+          item[1] @0x56fc4df6f568  KIND=1  [0x08]=0x70d1c4122628 [0x10]=0x1 [0x18]=0x56fc4df6f490 [0x20]=0x70d1c7c1e878
+          item[2] @0x56fc4df6f590  KIND=1  [0x08]=0x70d1c412bc40 [0x10]=0x1 [0x18]=0x70d1c7c36910 [0x20]=0x70d1c800cb70
+          item[3] @0x56fc4df6f5b8  KIND=1  [0x08]=0x70d1c4135258 [0x10]=0x1 [0x18]=0x8 [0x20]=0x70d1c7c15010
+          item[4] @0x56fc4df6f5e0  KIND=1  [0x08]=0x70d1c413e870 [0x10]=0x1 [0x18]=0x0 [0x20]=0x0
+          item[5] @0x56fc4df6f608  KIND=1  [0x08]=0x70d1c4147e88 [0x10]=0x1 [0x18]=0x0 [0x20]=0x0
+          item[6] @0x56fc4df6f630  KIND=1  [0x08]=0x70d1c41514a0 [0x10]=0x1 [0x18]=0x0 [0x20]=0x0
+          item[7] @0x56fc4df6f658  KIND=1  [0x08]=0x70d1c415aab8 [0x10]=0x1 [0x18]=0x0 [0x20]=0x0
+      SPINPROBE_RC=0
+      CUP2_RC=124
+=== BOOT w269_pass START 2026-08-12T11:13:26+00:00 ===
+    KAYFABE_FB_JOIN=[shared] KAYFABE_GUEST_RING=[ring] KAYFABE_GUEST_PUSHBUF=[pin] KAYFABE_PT_WITNESS_EXEC=[on] KAYFABE_GUEST_SEMA=[pin] KAYFABE_GR_ROUTE=[passthrough]
+[boot_capture:w269_pass] host dmesg watermark: 982 lines
+[boot_capture:w269_pass] booting (extra args: none)
+[boot_capture:w269_pass] guest is up after 34s
+[boot_capture:w269_pass] module unloaded and ring buffer cleared; loading cold
+[boot_capture:w269_pass] opening the device (this is what runs RmInitAdapter)
+[boot_capture:w269_pass] captured 34 dmesg lines, 31 NVRM, 0 adapter → /workspace/bench/run_w269_pass_dmesg.log
+[boot_capture:w269_pass] --- the verdict lines ---
+[boot_capture:w269_pass] running POST_CAPTURE_HOOK: /workspace/kayfabe_w269/scripts/bench/cup2_hook_gdbspin.sh
+[boot_capture:w269_pass] hook finished: rc=0
+[boot_capture:w269_pass] host dmesg delta: 1 lines, 1 NVRM, 1 Xid → /workspace/bench/run_w269_pass_hostdmesg.log
+[boot_capture:w269_pass] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:w269_pass] census present:
+    2026-08-12T11:17:38.374605Z qemu-system-x86_64: info: nvkvm: doorbells: 214 arrived, 205 served, 9 REFUSED by name; last token 0x00010001 (16 logged)
+    2026-08-12T11:17:38.374755Z qemu-system-x86_64: info: nvkvm:   first doorbell refusal [FwdFault::PushbufferAperture] PushbufferAperture { va: GpuVa(8592179200), aperture: Vidmem } | c=0xc1d0000c vas=0x5c000007 dec=NONE userd=h0x5c000014/off0x26000/phys=fb:0x1026000/0x200 fbuserd@0x1026088 GET=1 PUT=1 JOINED-one-memory root=0x201000/ap1/sh47/va[0x0..0x0] rootsrc=declared(object-model) ring=0x200224000 rng=V:0x1024000 fin=V:0x102c004 gp[0]@0x200224000=0x202c00000+0x20 pb=S:0x3e6b9000 pbm[8w of 32B]: [0]sub4/m0x0/Incrementing/n1=[0xc7b5] [1]sub4/m0x240/Incrementing/n3=[0x2,0x440ff30,0x1] [2]sub4/m0x300/Incrementing/n1=[0x14] scan=1024/1024 declared (COMPLETE: every declared entry was read), unread=0, nonzero=[0]=0x0000220202c00000 row=ABSENT-FROM-ROOT-TABLE(11 rows, 0 REFUSED-BY-CAP) fbRING[p0]@0x1024000=0000c00202220000000000000000000000000000000000000000000000000000 nz4/4096 resN-NEVER-WRITTEN by? fbRING[p1]@0x1025000=0000000000000000000000000000000000000000000000000000000000000000 nz0/4096 resN-NEVER-WRITTEN by? fbFIN@0x102c004=0000000000000000000000000000000000000000000000000000000000000000 nz0/4096 resN-NEVER-WRITTEN by? walk: L0@0x201000/byEXEC#104[ch1 lf0 sp0 inv3]=PDE@0x0->0x202000/Vidmem L1@0x202000/byEXEC#105[ch3 lf0 sp0 inv509]=PDE@0x0->0x203000/Vidmem L2@0x203000/byEXEC#106[ch1 lf0 sp0 inv511]=PDE@0x200000000->0x204000/Vidmem L3@0x204000/byEXEC#107[ch29 lf7 sp0 inv221]=LEAF@0x200200000->0x1000000/Vidmem/sz0x200000 walkend=LEAF
+[boot_capture:w269_pass] evidence carried into the repo: /workspace/kayfabe_w269/traces/guest_boots/run_w269_pass_{qemu,dmesg,probe,hostdmesg}.log
+[boot_capture:w269_pass] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+[boot_capture:w269_pass]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+[boot_capture:w269_pass] done. serial=/workspace/bench/run_w269_pass_serial.log qemu=/workspace/bench/run_w269_pass_qemu.log dmesg=/workspace/bench/run_w269_pass_dmesg.log probe=/workspace/bench/run_w269_pass_probe.log hostdmesg=/workspace/bench/run_w269_pass_hostdmesg.log
+=== BOOT w269_pass RC=0 2026-08-12T11:17:40+00:00 ===
+--- post-boot liveness: pgrep -x qemu-system-x86 = [] ss2223 = [0]
+--- ENOSPC_LLVM=0
+?
+--- DISK: /dev/root       243G  138G  105G  57% /
+--- ARMING AS THE DEVICE SAW IT:
+    kayfabe: FB-JOIN arm=shared
+    kayfabe: GUEST-RING arm=ring
+    kayfabe: GUEST-PUSHBUF arm=pin
+    kayfabe: GUEST-SEMA arm=pin
+    kayfabe: GR-ROUTE arm=passthrough
+    EXEC-WITNESS ARMED resident=156 by-executor=39 refused-at-cap=0 
+    ★ ROUTE-ARM ASSERTION: PASS (saw GR-ROUTE arm=passthrough)
+    ★ CARRIED-ARM ASSERTION: PASS (GUEST-SEMA arm=pin)
+    ★ CARRIED-ARM ASSERTION: PASS (GUEST-PUSHBUF arm=pin)
+    ★ WITNESS-ARM ASSERTION: PASS (EXEC-WITNESS ARMED)
+    --- COMPLETION-WATCH OBSERVED = 26 | SEMA-PAGE-SLOT = 186
+    --- GR-REPORT-SEMAPHORE slots seen (distinct VA):
+
+    --- Xid (IDENTITY, never a count — w265's lesson):
+      Xid (PCI:0000:00:07): 31, pid=2233438, name=memfd:kayfabe-i, channel 0x01000011, intr 00000000. MMU Fault: ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x2_04420000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_
+    --- THE PROBE'S OWN HEADLINES:
+      GCC_CUP2_RC=0
+          reached-cuCtxCreate = yes after ~15s
+      --- steps actually taken = 6000 (of a 6000 budget) ---
+      === ★★★★★ SNAPSHOT at RIP=0x7535e102be1f (libcuda.so.580.159.04+0xc5e1f  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>) ===
+          N items = 1   array = 0x7ffe3c98fbf8   (stride 40)
+          item[0] @0x7ffe3c98fbf8  KIND=1  [0x08]=0x7535dd134010 [0x10]=0x2 [0x18]=0x5664391ffec0 [0x20]=0x566439089160
+      SPINPROBE_RC=0
+      --- steps actually taken = 6000 (of a 6000 budget) ---
+      === ★★★★★ SNAPSHOT at RIP=0x7535e102be1f (libcuda.so.580.159.04+0xc5e1f  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>) ===
+          N items = 1   array = 0x7ffe3c98fbf8   (stride 40)
+          item[0] @0x7ffe3c98fbf8  KIND=1  [0x08]=0x7535dd134010 [0x10]=0x2 [0x18]=0x5664391ffec0 [0x20]=0x566439089160
+      SPINPROBE_RC=0
+      CUP2_RC=124
+=== ARTEFACT SIZES ===
+-rw-r--r-- 1 root root   5379 Aug 12 11:14 /workspace/bench/run_w269_pass_dmesg.log
+-rw-r--r-- 1 root root    228 Aug 12 11:17 /workspace/bench/run_w269_pass_hostdmesg.log
+-rw-r--r-- 1 root root  24339 Aug 12 11:17 /workspace/bench/run_w269_pass_probe.log
+-rw-r--r-- 1 root root 417204 Aug 12 11:17 /workspace/bench/run_w269_pass_qemu.log
+-rw-r--r-- 1 root root  70841 Aug 12 11:17 /workspace/bench/run_w269_pass_serial.log
+-rw-r--r-- 1 root root   5379 Aug 12 11:10 /workspace/bench/run_w269_refuse_dmesg.log
+-rw-r--r-- 1 root root      0 Aug 12 11:13 /workspace/bench/run_w269_refuse_hostdmesg.log
+-rw-r--r-- 1 root root  28123 Aug 12 11:13 /workspace/bench/run_w269_refuse_probe.log
+-rw-r--r-- 1 root root 321570 Aug 12 11:13 /workspace/bench/run_w269_refuse_qemu.log
+-rw-r--r-- 1 root root  71173 Aug 12 11:13 /workspace/bench/run_w269_refuse_serial.log
+=== W269 EXIT rc=0 at 2026-08-12T11:17:40+00:00 ===

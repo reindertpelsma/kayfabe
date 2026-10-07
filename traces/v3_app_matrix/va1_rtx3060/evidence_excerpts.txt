@@ -1,0 +1,42 @@
+### A: matrixMul (host dmesg, boot ap_r1_b5)
+[ 6577.406796] NVRM: Xid (PCI:0000:00:07): 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed
+[ 6577.406806] NVRM: Xid (PCI:0000:00:07): 13, Graphics Exception: ESR 0x407020=0x1000 0x407028=0x0 0x40702c=0x204c380 0x407030=0x0
+[ 6577.407491] NVRM: Xid (PCI:0000:00:07): 13, pid=142468, name=qemu-system-x86, Graphics Exception: channel 0x0000001f, Class 0000c7c0, Offset 00000000, Data 00000000
+
+### A: kf3 forwarding the RC (matrixMul.kf3.log)
+kf3: RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0xd (Xid 13) — forwarding RC_TRIGGERED
+
+### A: stream_default passes, stream_created fails (r2)
+CHECK default ok
+CHECK created FAIL sync=719(unspecified launch failure)
+
+### B: seq (10x vectorAdd in one boot) — the refusal
+kf3: walk report carried refusals=1 refuse_mask=0x10 pdbs=[201000] runs=0
+kf3: mem t=89.767s split ticket 1059 REFUSED: split Some(201000): VasKey(13965662854041305095) did not apply
+kf3: mem t=89.767s REFUSED VasKey(13965662854041305095) root 0x201000: slot 58 is full and nothing can be retired — raise WalkCfg::runs_per_pdb
+
+### B: llama_cpp_gen single process
+kf3: mem t=67.937s split ticket 71 REFUSED: split Some(201000): VasKey(13965662536213725191) did not apply
+kf3: mem t=67.937s REFUSED VasKey(13965662536213725191) root 0x201000: slot 16 is full and nothing can be retired — raise WalkCfg::runs_per_pdb
+
+### C: conjugateGradientUM (host dmesg + app output)
+[ 7757.515994] NVRM: Xid (PCI:0000:00:07): 31, pid=151037, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_1 faulted @ 0x7d09_ac200000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+Test Summary:  Error amount = 1.000000, result = SUCCESS
+
+### D: NVENC / NVDEC
+[h264_nvenc @ 0x5aeb9435b9c0] OpenEncodeSessionEx failed: unsupported device (2): (no details)
+[h264 @ 0x6003c48bbf80] decoder->cvdl->cuvidGetDecoderCaps(&caps) failed -> CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+
+### E: EGL
+=== egl_offscreen side=guest start=2026-09-26T02:48:12+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/egl_offscreen
+CHECK egl_gl_Mtri_s FAIL
+[egl] eglInitialize failed
+
+### F: Vulkan (vulkaninfo blocked; guest dmesg tail)
+[  100.181489] NVRM: scrubberDestruct:  Timed out when waiting for the scrub to complete the pending work .
+[  104.182460] NVRM: nvAssertFailedNoLog: Assertion failed: pCeUtils->lastCompletedPayload == lastSubmittedPayload @ ce_utils.c:349
+[  104.196706] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[  104.213301] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+
+### G: gpu_burn
+[   58.844872] gpu_burn[1965]: segfault at 7ffe836d7000 ip 00005e86890fb2a1 sp 00007ffe836d28c0 error 4 in gpu_burn[5e86890f9000+c000] likely on CPU 2 (core 2, socket 0)

@@ -1,0 +1,116 @@
+WL_SCENE_FAIL wl_display_connect (WAYLAND_DISPLAY=wayland-1)
+COLOR_READER uid=1000 driver=nvidia-drm master=1
+COLOR_CRTC id=60 active=1 gamma_size=1024
+COLOR_PROPERTY object=60 type=3435973836 name=NV_CRTC_REGAMMA_TF value=0
+COLOR_PROPERTY object=60 type=3435973836 name=NV_CRTC_REGAMMA_LUT value=0
+COLOR_PROPERTY object=60 type=3435973836 name=NV_CRTC_REGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=60 type=3435973836 name=DEGAMMA_LUT value=0
+COLOR_PROPERTY object=60 type=3435973836 name=DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=60 type=3435973836 name=CTM value=0
+COLOR_PROPERTY object=60 type=3435973836 name=GAMMA_LUT value=0
+COLOR_PROPERTY object=60 type=3435973836 name=GAMMA_LUT_SIZE value=1024
+COLOR_CRTC id=79 active=0 gamma_size=1024
+COLOR_PROPERTY object=79 type=3435973836 name=NV_CRTC_REGAMMA_TF value=0
+COLOR_PROPERTY object=79 type=3435973836 name=NV_CRTC_REGAMMA_LUT value=0
+COLOR_PROPERTY object=79 type=3435973836 name=NV_CRTC_REGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=79 type=3435973836 name=DEGAMMA_LUT value=0
+COLOR_PROPERTY object=79 type=3435973836 name=DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=79 type=3435973836 name=CTM value=0
+COLOR_PROPERTY object=79 type=3435973836 name=GAMMA_LUT value=0
+COLOR_PROPERTY object=79 type=3435973836 name=GAMMA_LUT_SIZE value=1024
+COLOR_CRTC id=98 active=0 gamma_size=1024
+COLOR_PROPERTY object=98 type=3435973836 name=NV_CRTC_REGAMMA_TF value=0
+COLOR_PROPERTY object=98 type=3435973836 name=NV_CRTC_REGAMMA_LUT value=0
+COLOR_PROPERTY object=98 type=3435973836 name=NV_CRTC_REGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=98 type=3435973836 name=DEGAMMA_LUT value=0
+COLOR_PROPERTY object=98 type=3435973836 name=DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=98 type=3435973836 name=CTM value=0
+COLOR_PROPERTY object=98 type=3435973836 name=GAMMA_LUT value=0
+COLOR_PROPERTY object=98 type=3435973836 name=GAMMA_LUT_SIZE value=1024
+COLOR_CRTC id=117 active=0 gamma_size=1024
+COLOR_PROPERTY object=117 type=3435973836 name=NV_CRTC_REGAMMA_TF value=0
+COLOR_PROPERTY object=117 type=3435973836 name=NV_CRTC_REGAMMA_LUT value=0
+COLOR_PROPERTY object=117 type=3435973836 name=NV_CRTC_REGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=117 type=3435973836 name=DEGAMMA_LUT value=0
+COLOR_PROPERTY object=117 type=3435973836 name=DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=117 type=3435973836 name=CTM value=0
+COLOR_PROPERTY object=117 type=3435973836 name=GAMMA_LUT value=0
+COLOR_PROPERTY object=117 type=3435973836 name=GAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=49 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=49 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=49 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=49 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=49 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=61 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=61 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=61 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=61 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=61 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=68 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=68 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=68 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=68 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=68 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=80 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=80 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=80 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=80 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=80 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=87 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=87 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=87 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=87 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=87 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=99 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=99 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=99 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=99 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=99 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=106 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=106 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=106 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=106 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=106 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+COLOR_PROPERTY object=118 type=4008636142 name=NV_PLANE_BLEND_CTM value=0
+COLOR_PROPERTY object=118 type=4008636142 name=NV_PLANE_DEGAMMA_TF value=0
+COLOR_PROPERTY object=118 type=4008636142 name=NV_PLANE_DEGAMMA_MULTIPLIER value=4294967296
+COLOR_PROPERTY object=118 type=4008636142 name=NV_PLANE_DEGAMMA_LUT value=0
+COLOR_PROPERTY object=118 type=4008636142 name=NV_PLANE_DEGAMMA_LUT_SIZE value=1024
+00:00:00.005 [INFO] [sway/main.c:338] Sway version 1.9
+00:00:00.005 [INFO] [sway/main.c:339] wlroots version 0.17.1
+00:00:00.006 [INFO] [sway/main.c:120] Linux ubuntu 6.8.0-142-generic #142-Ubuntu SMP PREEMPT_DYNAMIC Wed Sep  2 14:24:27 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+00:00:00.006 [INFO] [sway/main.c:136] Contents of /etc/lsb-release:
+00:00:00.006 [INFO] [sway/main.c:120] DISTRIB_ID=Ubuntu
+00:00:00.006 [INFO] [sway/main.c:120] DISTRIB_RELEASE=24.04
+00:00:00.006 [INFO] [sway/main.c:120] DISTRIB_CODENAME=noble
+00:00:00.006 [INFO] [sway/main.c:120] DISTRIB_DESCRIPTION="Ubuntu 24.04.5 LTS"
+00:00:00.006 [INFO] [sway/main.c:136] Contents of /etc/os-release:
+00:00:00.006 [INFO] [sway/main.c:120] PRETTY_NAME="Ubuntu 24.04.5 LTS"
+00:00:00.006 [INFO] [sway/main.c:120] NAME="Ubuntu"
+00:00:00.006 [INFO] [sway/main.c:120] VERSION_ID="24.04"
+00:00:00.006 [INFO] [sway/main.c:120] VERSION="24.04.5 LTS (Noble Numbat)"
+00:00:00.006 [INFO] [sway/main.c:120] VERSION_CODENAME=noble
+00:00:00.006 [INFO] [sway/main.c:120] ID=ubuntu
+00:00:00.006 [INFO] [sway/main.c:120] ID_LIKE=debian
+00:00:00.006 [INFO] [sway/main.c:120] HOME_URL="https://www.ubuntu.com/"
+00:00:00.006 [INFO] [sway/main.c:120] SUPPORT_URL="https://help.ubuntu.com/"
+00:00:00.006 [INFO] [sway/main.c:120] BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+00:00:00.006 [INFO] [sway/main.c:120] PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+00:00:00.006 [INFO] [sway/main.c:120] UBUNTU_CODENAME=noble
+00:00:00.006 [INFO] [sway/main.c:120] LOGO=ubuntu-logo
+00:00:00.006 [INFO] [sway/main.c:136] Contents of /etc/debian_version:
+00:00:00.006 [INFO] [sway/main.c:120] trixie/sid
+00:00:00.006 [INFO] [sway/main.c:108] LD_LIBRARY_PATH=
+00:00:00.006 [INFO] [sway/main.c:108] LD_PRELOAD=
+00:00:00.006 [INFO] [sway/main.c:108] PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+00:00:00.006 [INFO] [sway/main.c:108] SWAYSOCK=
+00:00:00.006 [ERROR] [sway/main.c:62] !!! Proprietary Nvidia drivers are in use !!!
+00:00:00.006 [INFO] [sway/main.c:376] Starting sway version 1.9
+00:00:00.007 [DEBUG] [sway/server.c:129] Initializing Wayland server
+00:00:00.008 [INFO] [wlr] [libseat] [libseat/backend/seatd.c:64] Could not connect to socket /run/kfcolor-seatd.sock: No such file or directory
+00:00:00.008 [ERROR] [wlr] [libseat] [libseat/libseat.c:58] Backend 'seatd' failed to open seat: No such file or directory
+00:00:00.008 [ERROR] [wlr] [backend/session/session.c:83] Unable to create seat: No such file or directory
+00:00:00.008 [ERROR] [wlr] [backend/session/session.c:248] Failed to load session backend
+00:00:00.008 [ERROR] [wlr] [backend/backend.c:79] Failed to start a session
+00:00:00.008 [ERROR] [wlr] [backend/backend.c:359] Failed to start a DRM session
+00:00:00.008 [ERROR] [sway/server.c:137] Unable to create backend

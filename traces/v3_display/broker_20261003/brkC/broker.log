@@ -1,0 +1,22 @@
+nvkvm-broker: shm tier: not requiring DRI3 or Present (frames arrive as shared memory and are put on screen with core PutImage)
+nvkvm-broker: scaling: XRender (the window fills even when the guest's mode differs)
+nvkvm-broker: shm tier: advertising no dma-buf format (frames are shared memory), so no modifier query is made
+nvkvm-broker: the X server renders on DRM device 226:128 (render node)
+nvkvm-broker: backend 'x11': window 1920x1080
+nvkvm-broker: grab capabilities: keyboard=1 abs=1 rel=1 lock=1 shortcuts-inhibited=1 focus-events=1 fullscreen=1
+nvkvm-broker: GRAB IS PARTIAL: X11 grabs are total for everything the X server routes, window-manager bindings included; input the kernel handles below X (SysRq, and VT switching on some setups) is not interceptable by any X client
+nvkvm-broker: listening on /run/user/1000/nvkvm/display.sock (mode 0600)
+nvkvm-broker:   allowed uid 0
+nvkvm-broker:   allowed uid 1000
+nvkvm-broker: accepted uid 0 gid 0 pid 189512
+nvkvm-broker: client attached: window 1920x1080, capabilities 0xeff, display device render node 226:128
+nvkvm-broker: grab: CTRL+ALT+G toggles, CTRL+ALT+F fullscreen. X11 grabs are total for everything the X server routes, window-manager bindings included; input the kernel handles below X (SysRq, and VT switching on some setups) is not interceptable by any X client
+nvkvm-broker: the VM reports: clipboard agent not seen yet (it is announced the first time the guest copies something)
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x00ffffffffffffff (implicit) -> NO
+nvkvm-broker: grab ON
+nvkvm-broker: XI RawMotion seq=2535 dev=2 src=4 dx=60 dy=40
+nvkvm-broker: XI RawMotion seq=2535 dev=2 src=4 dx=60 dy=40
+nvkvm-broker: grab off
+nvkvm-broker: client detached: closed the connection (3005 attach, 3005 commit, 0 rejected; 6 cursor, 0 cursor refused)
+
+Session terminated, killing shell...nvkvm-broker: signal received; shutting down

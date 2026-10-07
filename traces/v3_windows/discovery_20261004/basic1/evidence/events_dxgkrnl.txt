@@ -1,0 +1,3 @@
+== Microsoft-Windows-DxgKrnl-Admin
+== Microsoft-Windows-DxgKrnl-Operational
+

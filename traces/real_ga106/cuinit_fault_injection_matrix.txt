@@ -1,0 +1,35 @@
+# cuInit fault-injection matrix — real GA106 (RTX 3060, 580.159.04 Open), 2026-08-08
+#
+# Instrument: scripts/rpctrace/cuda_ioctl_trace.c in INJECTION mode. The real ioctl runs;
+# only the status word the caller reads back is overwritten with 0x56 (NV_ERR_NOT_SUPPORTED),
+# which is the exact shape our emulated GSP's refusal has on the wire.
+# Driver: cuinit_probe with NVPROBE_STOP=1 (cuInit only).
+#
+=== run: baseline2
+cuInit(0) -> 0
+PROBE_RC=0 (stopped by NVPROBE_STOP=1)
+
+=== run: f_ctrl_20810108
+INJECT-CONFIG ctrl=0x20810108 alloc=- status=0x00000056  ⚠ THIS RUN IS NOT A CAPTURE OF HARDWARE
+INJECT CTRL cmd=0x20810108 real_status=0x00000000 forced=0x00000056
+cuInit(0) -> 0
+PROBE_RC=0 (stopped by NVPROBE_STOP=1)
+
+=== run: f_alloc_2081
+INJECT-CONFIG ctrl=- alloc=0x2081 status=0x00000056  ⚠ THIS RUN IS NOT A CAPTURE OF HARDWARE
+INJECT ALLOC hClass=0x00002081 real_status=0x00000000 forced=0x00000056
+cuInit(0) -> 100
+PROBE_RC=1 (stopped at cuInit)
+
+=== run: f_ctrl_20800102
+INJECT-CONFIG ctrl=0x20800102 alloc=- status=0x00000056  ⚠ THIS RUN IS NOT A CAPTURE OF HARDWARE
+INJECT CTRL cmd=0x20800102 real_status=0x00000000 forced=0x00000056
+cuInit(0) -> 100
+PROBE_RC=1 (stopped at cuInit)
+
+=== run: f_both
+INJECT-CONFIG ctrl=0x20810108,0x20800102 alloc=0x2081 status=0x00000056  ⚠ THIS RUN IS NOT A CAPTURE OF HARDWARE
+INJECT ALLOC hClass=0x00002081 real_status=0x00000000 forced=0x00000056
+cuInit(0) -> 100
+PROBE_RC=1 (stopped at cuInit)
+

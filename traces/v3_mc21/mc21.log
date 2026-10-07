@@ -1,0 +1,11 @@
+START 2026-09-27T19:39:35+00:00
+4c48ca0c Merge origin/v3-display into v3-mc21 (display M0, default off)
+TESTS passed 1651 failed 0
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/4c48ca0c/qemu-system-x86_64 rev=4c48ca0c mtime=2026-09-27 19:42:23.135767751 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+FG_RC=0
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+EXIT 2026-09-27T19:58:48+00:00

@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+"""imgnoise.py --bare A.png B.png [C.png ...] --guest G.png — grade a NONDETERMINISTIC image against bare
+metal's own MEASURED spread (the Cycles items: GPU atomics change the sample accumulation order, so no two
+bare-metal runs give the same PNG).
+
+For every pair of images: PSNR over the R, G and B values (8-bit; alpha ignored), the number of values that
+differ, and the largest difference. The bare-metal pairs give the spread; the guest is compared with EVERY
+bare-metal image.
+  floor  = the LOWEST PSNR among the bare-metal pairs — how far apart bare metal's two farthest runs are
+  guest  = the MEDIAN of the guest's PSNR to each bare-metal image
+  MATCH iff guest >= floor: the guest is, typically, no farther from bare metal than bare metal is from
+  itself. A real defect (a wrong page, a lost write) moves PSNR by tens of dB, not by the spread.
+With two bare images the floor is ONE sample of the spread — printed as n_bare=2, and it is thin (measured:
+gs2's Cycles CUDA sat 0.3 dB outside a 2-image rule that also allowed a 3 dB margin). More bare-metal runs
+(suite.sh's GSET_NOISE_DIRS) make it a distribution.
+Prints one line: floor=<dB> guest=<dB> verdict=MATCH|DIFF, then the detail fields."""
+import math
+import os
+import statistics
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from pngdiff import load  # noqa: E402  (nvkvm-pv's verbatim PNG decoder)
+
+
+def rgb(path):
+    w, h, n, px = load(path)
+    if n < 3:
+        raise SystemExit(f"{path}: {n} channel(s), not RGB")
+    return (w, h), bytes(px[i] for i in range(len(px)) if i % n < 3)
+
+
+def dist(a, b):
+    if a[0] != b[0]:
+        return (0.0, len(a[1]), 255)
+    A, B = a[1], b[1]
+    se = 0
+    nd = 0
+    mx = 0
+    for x, y in zip(A, B):
+        if x != y:
+            d = x - y if x > y else y - x
+            se += d * d
+            nd += 1
+            if d > mx:
+                mx = d
+    if se == 0:
+        return (math.inf, 0, 0)
+    return (10 * math.log10(255 * 255 * len(A) / se), nd, mx)
+
+
+def fmt(v):
+    return "inf" if v == math.inf else f"{v:.2f}"
+
+
+def matrix(paths, nbare):
+    """--matrix [--nbare K] a.png b.png ...: every pair's number of differing values (and the largest
+    difference) — the evidence behind a verdict, and the test for a SYSTEMATIC guest difference (guest
+    images that agree with each other but not with bare metal). With --nbare K (the first K paths are
+    bare metal) it also prints each image's SPREAD: its mean number of differing values to the bare-metal
+    images (itself excluded) — a guest image is an outlier when its spread exceeds every bare image's."""
+    imgs = [rgb(p) for p in paths]
+    names = [os.path.basename(p) for p in paths]
+    D = [[dist(a, b) if i != j else (math.inf, 0, 0) for j, b in enumerate(imgs)] for i, a in enumerate(imgs)]
+    print("ndiff/maxdiff " + " ".join(f"{n[:14]:>14}" for n in names))
+    for i in range(len(imgs)):
+        print(f"{names[i][:14]:>14} " + " ".join(f"{D[i][j][1]:>11}/{D[i][j][2]:<2}" for j in range(len(imgs))))
+    if nbare >= 2:
+        for i in range(len(imgs)):
+            others = [D[i][j][1] for j in range(nbare) if j != i]
+            tag = "bare " if i < nbare else "GUEST"
+            print(f"spread {tag} {names[i]} mean_ndiff_to_bare={statistics.mean(others):.2f} "
+                  f"min={min(others)} max={max(others)} maxdiff={max(D[i][j][2] for j in range(nbare) if j != i)}")
+
+
+def sparse(ref, paths):
+    """--sparse REF.png A.png ...: each image as the R, G, B values where it differs from REF — lossless for
+    those channels and a few bytes per image (Cycles runs differ in a handful of values), so a noise
+    measurement's images can live in the repository beside the reference PNG instead of only on a box."""
+    R = rgb(ref)
+    print(f"# ref={os.path.basename(ref)} size={R[0][0]}x{R[0][1]} rgb_values={len(R[1])} format: <name> n=<count> <index>:<value>...")
+    for p in paths:
+        I = rgb(p)
+        if I[0] != R[0]:
+            print(f"{os.path.basename(p)} SIZE_MISMATCH {I[0]}")
+            continue
+        d = [f"{i}:{y}" for i, (x, y) in enumerate(zip(R[1], I[1])) if x != y]
+        print(f"{os.path.basename(p)} n={len(d)} {' '.join(d)}")
+
+
+def main():
+    a = sys.argv[1:]
+    if a[:1] == ["--sparse"]:
+        return sparse(a[1], a[2:])
+    if a[:1] == ["--matrix"]:
+        a = a[1:]
+        nbare = 0
+        if a[:1] == ["--nbare"]:
+            nbare, a = int(a[1]), a[2:]
+        return matrix(a, nbare)
+    if "--bare" not in a or "--guest" not in a:
+        raise SystemExit(__doc__)
+    bare = a[a.index("--bare") + 1:a.index("--guest")]
+    guest = a[a.index("--guest") + 1]
+    if len(bare) < 2:
+        raise SystemExit("need >= 2 bare-metal images")
+    B = [rgb(p) for p in bare]
+    G = rgb(guest)
+    bb = [dist(B[i], B[j]) for i in range(len(B)) for j in range(i + 1, len(B))]
+    gb = [dist(G, b) for b in B]
+    floor = min(d[0] for d in bb)
+    gmed = statistics.median(d[0] for d in gb)
+    v = "MATCH" if gmed >= floor else "DIFF"
+    print(f"floor={fmt(floor)}dB guest={fmt(gmed)}dB verdict={v} n_bare={len(B)} "
+          f"bare_psnr={fmt(min(d[0] for d in bb))}..{fmt(max(d[0] for d in bb))} "
+          f"guest_psnr={fmt(min(d[0] for d in gb))}..{fmt(max(d[0] for d in gb))} "
+          f"bare_ndiff={min(d[1] for d in bb)}..{max(d[1] for d in bb)} guest_ndiff={min(d[1] for d in gb)}..{max(d[1] for d in gb)} "
+          f"bare_maxdiff={max(d[2] for d in bb)} guest_maxdiff={max(d[2] for d in gb)} values={len(G[1])}")
+
+
+if __name__ == "__main__":
+    main()

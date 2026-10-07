@@ -1,0 +1,55 @@
+BOOT_WRAPPER_START 2026-09-14T21:17:50+00:00 tag=e36ref fb_trap=refuse
+=== SINGLE-STORE E36 BOOT 2026-09-14T21:17:50+00:00 tag=e36ref ===
+KAYFABE_FB_TRAP=refuse KAYFABE_SCRATCHPAD=off KAYFABE_SCRATCHPAD_CUDA=off KAYFABE_SCRATCHPAD_START_MB=<unset, default 12288>
+POST_CAPTURE_HOOK=/root/kayfabe/scripts/bench/w392d_mean_hook.sh
+BINARY_REV=54995fad5acd9fe41b1391818be2dd271eaf9245 TREE_REV=54995fad5acd9fe41b1391818be2dd271eaf9245
+E36-CONTENT: fb_trap_census=1 (0 ⇒ this binary predates §w724g's arm — STOP)
+E4-CONTENT: scratchpad_census=2 cuda_census=2 (either 0 ⇒ an OLDER binary — STOP)
+E4-IMAGE: cuda_image_symbols=0 (0 ⇒ built WITHOUT --features cuda-scratchpad)
+boot_capture rc=5
+--- Q1 THE CLIENT (graded first; everything below is uninterpretable without it) ---
+[client] W392D_GUEST_OUTCOME=(P) ★★★★★ THE FALSIFIER SURVIVES — the SAME client that
+[client] THREADS           8 of 8 verified ✔
+[client] MEAN_FALSIFIER=PASS
+--- ★★★★★ Q2/Q3 §w724g: IS THE TRAP PATH REACHABLE? ---
+E36-FB-TRAP-CENSUS-LINES=1  (expected 1; 0 ⇒ UNMEASURED, not zero)
+FB-TRAP KAYFABE_FB_TRAP=refuse ⇒ a trapped BAR1/BAR2 access is REFUSED BY NAME. ⚠ Any refusal below means publication is INCOMPLETE and increment 7's deletion of the demand-fill mirror is NOT licensed.
+FB-TRAP AT END OF RUN: arm=refuse FB_TRAP_REFUSALS=0 ⇒ ★★★ THE TRAP PATH WAS NEVER REACHED. Publication covered every BAR1/BAR2 access this boot made, so `zero in practice` becomes `unreachable` and increment 7's deletion is licensed.
+E36-FB_TRAP_ARM=refuse
+E36-FB_TRAP_REFUSALS=0
+--- ★ where the guest's driver stopped, if it did (read BEFORE blaming the arm) ---
+scripts/bench/single_store_e36_boot.sh: line 125: TAG: unbound variable
+--- Q4 the CUDA census, if armed (both instants; a missing line is UNMEASURED) ---
+E4-CUDA-CENSUS-LINES=0  (expected 2: REALIZE and END OF RUN)
+E4-CUDA_WALK=
+E4-ABI_REFUSAL=
+E4-JIT_MS=
+E4-BRINGUP_MS=
+--- ★★ Q4 THE TWO POST-SANDBOX PROBES (both must begin PASS) ---
+--- ★ the isolate's OWN stderr, in case it died before the parent could ask ---
+--- Q2b THE RESERVATION CENSUS (both instants) ---
+E1-CENSUS-LINES=2  (expected 2: REALIZE and END OF RUN)
+SCRATCHPAD AT REALIZE: arm=off up=false pool=0 reservation=DISARMED RESERVED_MB=0 ⇒ no VM-lifetime isolate; the advertised framebuffer is the compile-time one (set KAYFABE_SCRATCHPAD=on to arm)
+SCRATCHPAD AT END OF RUN: arm=off up=false pool=0 reservation=DISARMED RESERVED_MB=0 ⇒ no VM-lifetime isolate; the advertised framebuffer is the compile-time one (set KAYFABE_SCRATCHPAD=on to arm)
+--- Q4 THE ADVERTISED SIZE ---
+--- the reservation, as one greppable row ---
+E1-RESERVATION=DISARMED
+E1-RESERVED_MB=0
+--- Q5 WHAT THE GUEST PAID: the worst trap, beside the spawn we moved off its path ---
+TRAPWITNESS off_trap_claims=564 inline_exceptions=0 worst_trap=19272us at=bar0+0x110c00 slow_traps(>1000us)=1 by_decade[1-10ms=0 10-100ms=1 100ms-1s=0 >1s=0] (target: inline_exceptions=0) 
+SLOW-SITES only proves it is under 1ms. 
+--- the standing constraint rows, so an armed boot can be compared to the control ---
+BAR-MIRROR MECHANISM AT END OF RUN: slots live=0 peak=922 revalidate[runs=1185 kept=710779 removed=2922] quiesce[calls=804 removed=3215] retire_all[calls=0 removed=0] arena[pages live=2431 peak=2431 allocations=4103 span_pages=3087533
+doorbells: 361 arrived, 345 served, 4 REFUSED by name
+HOST_DMESG_XID=1
+--- the guest's OWN first failure (NOT the last line: a re-boot attempt masks it) ---
+[   18.601250] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   20.733997] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   20.734144] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   22.507828] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   22.511440] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   22.511637] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   22.511646] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, N
+[   22.725030] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0x31415903; hObject=0x3141590f; hClass=0x00000070; paramsSize=0x00000018; paramsSta
+=== SINGLE-STORE E36 END 2026-09-14T21:19:06+00:00 tag=e36ref ===
+BOOT_WRAPPER_EXIT=0 2026-09-14T21:19:06+00:00

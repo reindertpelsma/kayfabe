@@ -1,0 +1,132 @@
+=== boot_capture tag=m3z at 2026-09-30T12:59:37+00:00 ===
+=== source revision: c0a35924 ===
+=== qemu binary: -rwxr-xr-x 1 root root 88350448 Sep 30 12:59 /workspace/bench/kf3-bins/c0a35924/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=0f19b0c944f9e441
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Wed Sep 30 12:59:44 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3060        Off |   00000000:00:02.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep 30 12:59 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep 30 12:59 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep 30 12:59 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep 30 12:59 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep 30 12:59 .
+drwxr-xr-x 18 root root   4000 Sep 30 12:59 ..
+cr--------  1 root root 240, 1 Sep 30 12:59 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep 30 12:59 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/display/hook.sh at 2026-09-30T12:59:46+00:00 ===
+DISPLAY_PROBE_BUILD=ok
+DISPLAY_DRM_MODPROBE rc=0 
+DISPLAY_DRM_NODES by-path card0 renderD128 
+DISPLAY_DRM_DMESG_LINES=32 displayless=0
+DISPLAY_KFDISP_DRIVER=nvidia-drm
+DISPLAY_KFDISP_COUNTS connectors=1 crtcs=4 encoders=1 fbs=0
+DISPLAY_KFDISP_CONNECTOR id=126 type=DVI-D-1 status=connected modes=7 preferred=1920x1080@60
+DISPLAY_KFDISP_PLANE id=49 type=primary crtcs=0x1 formats=13
+DISPLAY_KFDISP_PLANE id=54 type=cursor crtcs=0x1 formats=1
+DISPLAY_KFDISP_PLANE id=61 type=overlay crtcs=0x1 formats=13
+DISPLAY_KFDISP_PLANE id=68 type=primary crtcs=0x2 formats=13
+DISPLAY_KFDISP_PLANE id=73 type=cursor crtcs=0x2 formats=1
+DISPLAY_KFDISP_PLANE id=80 type=overlay crtcs=0x2 formats=13
+DISPLAY_KFDISP_PLANE id=87 type=primary crtcs=0x4 formats=13
+DISPLAY_KFDISP_PLANE id=92 type=cursor crtcs=0x4 formats=1
+DISPLAY_KFDISP_PLANE id=99 type=overlay crtcs=0x4 formats=13
+DISPLAY_KFDISP_PLANE id=106 type=primary crtcs=0x8 formats=13
+DISPLAY_KFDISP_PLANE id=111 type=cursor crtcs=0x8 formats=1
+DISPLAY_KFDISP_PLANE id=118 type=overlay crtcs=0x8 formats=13
+DISPLAY_KFDISP_SUMMARY connected=1 primary=4 overlay=4 cursor=4
+DISPLAY_MODETEST_CONNECTED=1 modes_1080p=1
+DISPLAY_SMI_DISPLAY  Display Mode : Requested functionality has been deprecated Display Attached : Yes Display Active : Enabled Persistence Mode : Disabled Addressing Mode : HMM 
+DISPLAY_GPU_PROGRESS_ERRORS=0
+DISPLAY_CONNECTED=yes card=/dev/dri/card0
+(qemu)
+DISPLAY_PATTERN_MATCH=yes (pixel-exact 1920x1080)
+DISPLAY_KFDISP_DRIVER=nvidia-drm
+DISPLAY_KFDISP_MODE 1920x1080@60 clock=148500 connector=126 crtc=60
+DISPLAY_KFDISP_PATTERN_A_FNV=b46ca47163518677 pitch=7680
+DISPLAY_KFDISP_PATTERN_B_FNV=d42aac677e43ad67
+DISPLAY_KFDISP_SETCRTC_OK ms=10.1
+DISPLAY_KFDISP_FLIPS=120/120 flip_hz=59.48
+DISPLAY_KFDISP_SHOWING=A hold_s=20
+DISPLAY_KFDISP_RESTORED=ok fb=128
+DISPLAY_FLIP_EVENT_TIMEOUTS=0 DRM_WARNS=0
+DISPLAY_DESKTOP_CONF busid=PCI:0:2:0 session=cinnamon env=[] DESK_CONF_OK 
+DISPLAY_DESKTOP_SESSION=yes (rc=0  xorg_starts=/var/log/Xorg.0.log.old:1 /var/log/Xorg.0.log:1 )
+(qemu)
+DISPLAY_GLX_RENDERER NVIDIA GeForce RTX 3060/PCIe/SSE2 DIRECT=Yes
+DISPLAY_GLXGEARS 282 frames in 5.0 seconds = 56.274 FPS 282 frames in 5.0 seconds = 56.265 FPS 
+DISPLAY_GLXGEARS_NOVSYNC 294 frames in 5.0 seconds = 58.649 FPS
+DISPLAY_VKCUBE_PM0 Selected GPU 0: NVIDIA GeForce RTX 3060 RC=134
+DISPLAY_VKCUBE_PM1 Selected GPU 0: NVIDIA GeForce RTX 3060 RC=1
+DISPLAY_VKCUBE_PM2 Selected GPU 0: NVIDIA GeForce RTX 3060 RC=134
+(qemu)
+DISPLAY_VKCUBE Selected GPU 0: NVIDIA GeForce RTX 3060, type: DiscreteGpu VKCUBE_RC=134
+(qemu)
+DISPLAY_XORG_LOG errors=3 nvidia=38 [    72.179] (II) NVIDIA(0): Setting mode "DFP-0:nvidia-auto-select"
+DISPLAY_SHOT desk_1 md5=9c3b4a98aba2 bytes=6220817
+DISPLAY_SHOT desk_vkcube md5=9c3b4a98aba2 bytes=6220817
+DISPLAY_SHOT desk_2 md5=9c3b4a98aba2 bytes=6220817
+DISPLAY_DESKTOP_GPU_PROGRESS_ERRORS=0 XID=0
+DISPLAY_DESKTOP_CRASHES 1 cinnamon[2788]: segfault at 0 ip 000076dd46b57f19 sp 00007ffcceccb9b0 error 6 in libnvidia-glcore.so.580.159.04[76dd46400000+c00000]
+DISPLAY_CINNAMON_WAYLAND_SESSION=[cinnamon-wayland] (cinnamon-wayland.desktop weston.desktop )
+DISPLAY_CINNAMON_WAYLAND up=yes socket=[wayland-0] rc=0 
+(qemu)
+(qemu)
+DISPLAY_CINNAMON_WAYLAND_VKCUBE Selected GPU 0: NVIDIA GeForce RTX 3060 RC=124
+DISPLAY_CINNAMON_WAYLAND_CRASHES 1
+DISPLAY_SHOT cw_1 md5=0add3f1ad312
+DISPLAY_SHOT cw_vkcube md5=de84216b76d7
+DISPLAY_WESTON started  alive=yes
+(qemu)
+(qemu)
+DISPLAY_VKCUBE_WAYLAND Selected GPU 0: NVIDIA GeForce RTX 3060 RC=124
+(qemu)
+DISPLAY_SIMPLE_EGL RC=124 
+DISPLAY_SHOT weston_1 md5=fc5ea534e166
+DISPLAY_SHOT weston_vkcube md5=01be6e8e17c1
+DISPLAY_SHOT weston_egl md5=ff3b17f2b1ac
+DISPLAY_WESTON_GPU_PROGRESS_ERRORS=0
+DISPLAY_HOOK_DONE
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 28 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=150
+GUEST_DMESG_AFTER_NVRM=130
+GUEST_DMESG_WORKLOAD_DELTA=122
+=== HOST dmesg delta for this boot (watermark 1401 → 1401) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

@@ -1,0 +1,37 @@
+name=KEK guid=guid:EfiGlobalVariable size=3849 time=2026-10-03 23:34:59
+  siglist type=guid:EfiCertX509 count=1
+    subject CN=kayfabe VM kfwin PK/KEK
+    issuer CN=kayfabe VM kfwin PK/KEK
+  siglist type=guid:EfiCertX509 count=1
+    subject CN=Microsoft Corporation KEK CA 2011
+    issuer CN=Microsoft Corporation Third Party Marketplace Root
+  siglist type=guid:EfiCertX509 count=1
+    subject CN=Microsoft Corporation KEK 2K CA 2023
+    issuer CN=Microsoft RSA Devices Root CA 2021
+name=PK guid=guid:EfiGlobalVariable size=783 time=2026-10-03 23:34:59
+  siglist type=guid:EfiCertX509 count=1
+    subject CN=kayfabe VM kfwin PK/KEK
+    issuer CN=kayfabe VM kfwin PK/KEK
+name=SecureBootEnable guid=guid:EfiSecureBootEnableDisable size=1
+name=db guid=guid:EfiImageSecurityDatabase size=8775 time=2026-10-03 23:34:58
+  siglist type=guid:EfiCertX509 count=1
+    subject CN=Microsoft Windows Production PCA 2011
+    issuer CN=Microsoft Root Certificate Authority 2010
+  siglist type=guid:EfiCertX509 count=1
+    subject CN=Microsoft Corporation UEFI CA 2011
+    issuer CN=Microsoft Corporation Third Party Marketplace Root
+  siglist type=guid:EfiCertX509 count=1
+    subject CN=kayfabe GOP db key (ubuntu 2026-10-03)
+    issuer CN=kayfabe GOP db key (ubuntu 2026-10-03)
+  siglist type=guid:EfiCertX509 count=1
+    subject CN=Windows UEFI CA 2023
+    issuer CN=Microsoft Root Certificate Authority 2010
+  siglist type=guid:EfiCertX509 count=1
+    subject CN=Microsoft UEFI CA 2023
+    issuer CN=Microsoft RSA Devices Root CA 2021
+  siglist type=guid:EfiCertX509 count=1
+    subject CN=Microsoft Option ROM UEFI CA 2023
+    issuer CN=Microsoft RSA Devices Root CA 2021
+name=dbx guid=guid:EfiImageSecurityDatabase size=10664 time=2010-03-06 19:17:21
+  siglist type=guid:EfiCertSha256 count=1
+  siglist type=guid:EfiCertSha256 count=220

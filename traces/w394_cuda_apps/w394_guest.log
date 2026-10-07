@@ -1,0 +1,93 @@
+=== boot_capture tag=w394g at 2026-09-09T12:59:09+00:00 ===
+=== source revision: a9815c91 ===
+=== qemu binary: -rwxr-xr-x 1 root root 88867904 Sep  9 12:29 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:a9815c9140c9ed50bca7fff78e82d41307481543 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=b16b5a22da708e68
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Wed Sep  9 12:59:22 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  ERR!                           Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /  12288MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep  9 12:59 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep  9 12:59 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep  9 12:59 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep  9 12:59 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep  9 12:59 .
+drwxr-xr-x 18 root root   4000 Sep  9 12:59 ..
+cr--------  1 root root 240, 1 Sep  9 12:59 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep  9 12:59 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/w394_hook.sh at 2026-09-09T12:59:27+00:00 ===
+=== ★ w394 CUDA-apps suite — arm=guest tag=w394g 2026-09-09T12:59:27+00:00 ===
+W394_BUILT=6 of 6  RC=0
+W394_STAGED=6
+W394_GUEST_LIBCUDA=lrwxrwxrwx 1 root root 21 Sep  9 12:31 /usr/lib/x86_64-linux-gnu/libcuda.so.1 -> libcuda.so.580.159.04
+--- W394_GUEST_BEGIN vector_add_test [] 2026-09-09T12:59:34+00:00
+PASS: 1024-element vec_add ran on GPU through nvkvm forwarder
+W394_GUEST_RC_vector_add_test=0
+--- W394_GUEST_END vector_add_test 2026-09-09T12:59:56+00:00
+--- W394_GUEST_BEGIN matmul_test [] 2026-09-09T12:59:56+00:00
+PASS: 1024x1024 fp32 matmul on GPU through nvkvm forwarder
+W394_GUEST_RC_matmul_test=0
+--- W394_GUEST_END matmul_test 2026-09-09T13:01:04+00:00
+--- W394_GUEST_BEGIN big_memcpy_test [4096] 2026-09-09T13:01:04+00:00
+PASS: 4194304 bytes round-tripped exactly
+W394_GUEST_RC_big_memcpy_test=0
+--- W394_GUEST_END big_memcpy_test 2026-09-09T13:02:04+00:00
+--- W394_GUEST_BEGIN mem_bandwidth_probe [16 4] 2026-09-09T13:02:04+00:00
+device: 
+H2D: 0.00 GB/s
+D2D: 0.05 GB/s
+D2H: 0.00 GB/s
+correctness: OK (16777216 bytes verified)
+W394_GUEST_RC_mem_bandwidth_probe=0
+--- W394_GUEST_END mem_bandwidth_probe 2026-09-09T13:04:39+00:00
+--- W394_GUEST_BEGIN gpu_bench [1024 5 200 200] 2026-09-09T13:04:40+00:00
+cuInit failed: 999
+W394_GUEST_RC_gpu_bench=1
+--- W394_GUEST_END gpu_bench 2026-09-09T13:04:45+00:00
+--- W394_GUEST_BEGIN cuda_micro [2000 500 16 500] 2026-09-09T13:04:45+00:00
+cuInit(0) failed: 999
+W394_GUEST_RC_cuda_micro=1
+--- W394_GUEST_END cuda_micro 2026-09-09T13:04:47+00:00
+=== W394_GUEST_SUITE_DONE 2026-09-09T13:04:47+00:00 ===
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 35 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=307
+GUEST_DMESG_AFTER_NVRM=303
+GUEST_DMESG_WORKLOAD_DELTA=272
+=== HOST dmesg delta for this boot (watermark 748 → 748) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

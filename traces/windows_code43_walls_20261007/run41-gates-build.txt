@@ -1,0 +1,13 @@
+RUN41_BUILD_START 2026-10-07T19:05:12+02:00
+846a4b9c3 Correct the BINAPI interface citation
+DIRTY=0
+V3_GATES_SUMMARY pass=9 fail=0
+V3_GATES_BIRTHS births=11 user=11 refused=0 ok=1
+V3_GATES_EXIT pass=9 fail=0 births_ok=1 2026-10-07T19:05:20+02:00
+XID_BEFORE=5
+GR_TIER_VERDICT=PASS
+ORACLE_RC=0
+XID_AFTER=5
+[3/4] Linking target qemu-system-x86_64
+KF3_BUILT /var/lib/kf-windows-20261005/kf3-bins/846a4b9c/qemu-system-x86_64 rev=846a4b9c mtime=2026-10-07 19:05:34.829479427 +0200 (shared build dir /var/lib/kf-windows-20261005/qemu-build-kf3)
+RUN41_BUILD_EXIT 0 2026-10-07T19:05:34+02:00

@@ -1,0 +1,141 @@
+[+3.65s] DEBUG: Registering session with bus path /org/freedesktop/DisplayManager/Session0
+[+3.66s] DEBUG: Session pid=5055: Running command /usr/sbin/lightdm-session cinnamon-session-cinnamon
+[+3.66s] DEBUG: Creating shared data directory /var/lib/lightdm-data/ubuntu
+[+3.66s] DEBUG: Session pid=5055: Logging to .xsession-errors
+[+3.69s] DEBUG: Activating VT 7
+[+3.69s] DEBUG: Activating login1 session c2
+[+3.69s] DEBUG: Seat seat0 changes active session to c2
+[+3.69s] DEBUG: Session c2 is already active
+[+20.37s] DEBUG: Got signal 15 from process 1
+[+20.37s] DEBUG: Caught Terminated signal, shutting down
+[+20.37s] DEBUG: Stopping display manager
+[+20.37s] DEBUG: Seat seat0: Stopping
+[+20.37s] DEBUG: Seat seat0: Stopping display server
+[+20.37s] DEBUG: Sending signal 15 to process 4984
+[+20.37s] DEBUG: Seat seat0: Stopping session
+[+20.37s] DEBUG: Terminating login1 session c2
+[+20.39s] DEBUG: Session pid=5055: Sending SIGTERM
+[+21.35s] DEBUG: Process 4984 exited with return value 0
+[+21.35s] DEBUG: XServer 0: X server stopped
+[+21.35s] DEBUG: Releasing VT 7
+[+21.35s] DEBUG: XServer 0: Removing X server authority /var/run/lightdm/root/:0
+[+21.35s] DEBUG: Seat seat0: Display server stopped
+[+50.38s] DEBUG: Session pid=5055: Exited with return value 0
+[+50.38s] DEBUG: Seat seat0: Session stopped
+[+50.38s] DEBUG: Seat seat0: Stopped
+[+50.38s] DEBUG: Display manager stopped
+[+50.38s] DEBUG: Stopping daemon
+[+50.38s] DEBUG: Exiting with return value 0
+[+0.00s] DEBUG: Logging to /var/log/lightdm/lightdm.log
+[+0.00s] DEBUG: Starting Light Display Manager 1.30.0, UID=0 PID=2617
+[+0.00s] DEBUG: Loading configuration dirs from /usr/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-guest.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-log-backup.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-greeter-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-guest-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-xserver-command.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/60-lightdm-gtk-greeter.conf
+[+0.00s] DEBUG: Loading configuration dirs from /usr/local/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration dirs from /etc/xdg/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf.d/50-kf-autologin.conf
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf
+[+0.00s] DEBUG: Registered seat module local
+[+0.00s] DEBUG: Registered seat module xremote
+[+0.00s] DEBUG: Using D-Bus name org.freedesktop.DisplayManager
+[+0.01s] DEBUG: Using cross-namespace EXTERNAL authentication (this will deadlock if server is GDBus < 2.73.3)
+[+0.01s] DEBUG: _g_io_module_get_default: Found default implementation local (GLocalVfs) for ‘gio-vfs’
+[+0.02s] DEBUG: Monitoring logind for seats
+[+0.02s] DEBUG: New seat added from logind: seat0
+[+0.02s] DEBUG: Seat seat0: Loading properties from config section Seat:*
+[+0.02s] DEBUG: Seat seat0 has property CanMultiSession=no
+[+0.02s] DEBUG: Seat seat0: Starting
+[+0.02s] DEBUG: Seat seat0: Creating user session
+[+0.22s] DEBUG: Loading users from org.freedesktop.Accounts
+[+0.22s] DEBUG: User /org/freedesktop/Accounts/User1000 added
+[+0.31s] DEBUG: Seat seat0: Creating display server of type x
+[+0.32s] DEBUG: Using VT 7
+[+0.32s] DEBUG: Seat seat0: Starting local X display on VT 7
+[+0.32s] DEBUG: XServer 0: Logging to /var/log/lightdm/x-0.log
+[+0.32s] DEBUG: XServer 0: Writing X server authority to /var/run/lightdm/root/:0
+[+0.32s] DEBUG: XServer 0: Launching X Server
+[+0.32s] DEBUG: Launching process 2638: /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+[+0.32s] DEBUG: XServer 0: Waiting for ready signal from X server :0
+[+0.32s] DEBUG: Acquired bus name org.freedesktop.DisplayManager
+[+0.32s] DEBUG: Registering seat with bus path /org/freedesktop/DisplayManager/Seat0
+[+9.66s] DEBUG: Got signal 10 from process 2638
+[+9.66s] DEBUG: XServer 0: Got signal from X server :0
+[+9.66s] DEBUG: XServer 0: Connecting to XServer :0
+[+10.85s] DEBUG: Seat seat0: Display server ready, starting session authentication
+[+10.85s] DEBUG: Session pid=2703: Started with service 'lightdm-autologin', username 'ubuntu'
+[+10.85s] DEBUG: Got signal 10 from process 2638
+[+10.89s] DEBUG: Session pid=2703: Authentication complete with return value 0: Success
+[+10.89s] DEBUG: Seat seat0: Session authenticated, running command
+[+10.89s] DEBUG: Registering session with bus path /org/freedesktop/DisplayManager/Session0
+[+10.89s] DEBUG: Session pid=2703: Running command /usr/sbin/lightdm-session cinnamon-session-cinnamon
+[+10.89s] DEBUG: Creating shared data directory /var/lib/lightdm-data/ubuntu
+[+10.89s] DEBUG: Session pid=2703: Logging to .xsession-errors
+[+10.93s] DEBUG: Activating VT 7
+[+10.93s] DEBUG: Activating login1 session c1
+[+10.93s] DEBUG: Seat seat0 changes active session to c1
+[+10.93s] DEBUG: Session c1 is already active
+===X0
+> Warning:          Could not resolve keysym XF86DualRangeRadar
+> Warning:          Could not resolve keysym XF86RadarOverlay
+> Warning:          Could not resolve keysym XF86TraditionalSonar
+> Warning:          Could not resolve keysym XF86ClearvuSonar
+> Warning:          Could not resolve keysym XF86SidevuSonar
+> Warning:          Could not resolve keysym XF86NavInfo
+Errors from xkbcomp are not fatal to the X server
+(II) Server terminated successfully (0). Closing log file.
+
+X.Org X Server 1.21.1.11
+X Protocol Version 11, Revision 0
+Current Operating System: Linux ubuntu 6.8.0-142-generic #142-Ubuntu SMP PREEMPT_DYNAMIC Wed Sep  2 14:24:27 UTC 2026 x86_64
+Kernel command line: BOOT_IMAGE=/vmlinuz-6.8.0-142-generic root=LABEL=cloudimg-rootfs ro console=tty1 console=ttyS0
+xorg-server 2:21.1.12-1ubuntu1.8 (For technical support please see http://www.ubuntu.com/support) 
+Current version of pixman: 0.42.2
+	Before reporting problems, check http://wiki.x.org
+	to make sure that you have the latest version.
+Markers: (--) probed, (**) from config file, (==) default setting,
+	(++) from command line, (!!) notice, (II) informational,
+	(WW) warning, (EE) error, (NI) not implemented, (??) unknown.
+(==) Log file: "/var/log/Xorg.0.log", Time: Sun Oct  4 04:03:54 2026
+(==) Using system config directory "/usr/share/X11/xorg.conf.d"
+The XKEYBOARD keymap compiler (xkbcomp) reports:
+> Warning:          Could not resolve keysym XF86CameraAccessEnable
+> Warning:          Could not resolve keysym XF86CameraAccessDisable
+> Warning:          Could not resolve keysym XF86CameraAccessToggle
+> Warning:          Could not resolve keysym XF86NextElement
+> Warning:          Could not resolve keysym XF86PreviousElement
+> Warning:          Could not resolve keysym XF86AutopilotEngageToggle
+> Warning:          Could not resolve keysym XF86MarkWaypoint
+> Warning:          Could not resolve keysym XF86Sos
+> Warning:          Could not resolve keysym XF86NavChart
+> Warning:          Could not resolve keysym XF86FishingChart
+> Warning:          Could not resolve keysym XF86SingleRangeRadar
+> Warning:          Could not resolve keysym XF86DualRangeRadar
+> Warning:          Could not resolve keysym XF86RadarOverlay
+> Warning:          Could not resolve keysym XF86TraditionalSonar
+> Warning:          Could not resolve keysym XF86ClearvuSonar
+> Warning:          Could not resolve keysym XF86SidevuSonar
+> Warning:          Could not resolve keysym XF86NavInfo
+Errors from xkbcomp are not fatal to the X server
+The XKEYBOARD keymap compiler (xkbcomp) reports:
+> Warning:          Could not resolve keysym XF86CameraAccessEnable
+> Warning:          Could not resolve keysym XF86CameraAccessDisable
+> Warning:          Could not resolve keysym XF86CameraAccessToggle
+> Warning:          Could not resolve keysym XF86NextElement
+> Warning:          Could not resolve keysym XF86PreviousElement
+> Warning:          Could not resolve keysym XF86AutopilotEngageToggle
+> Warning:          Could not resolve keysym XF86MarkWaypoint
+> Warning:          Could not resolve keysym XF86Sos
+> Warning:          Could not resolve keysym XF86NavChart
+> Warning:          Could not resolve keysym XF86FishingChart
+> Warning:          Could not resolve keysym XF86SingleRangeRadar
+> Warning:          Could not resolve keysym XF86DualRangeRadar
+> Warning:          Could not resolve keysym XF86RadarOverlay
+> Warning:          Could not resolve keysym XF86TraditionalSonar
+> Warning:          Could not resolve keysym XF86ClearvuSonar
+> Warning:          Could not resolve keysym XF86SidevuSonar
+> Warning:          Could not resolve keysym XF86NavInfo
+Errors from xkbcomp are not fatal to the X server

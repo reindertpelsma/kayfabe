@@ -1,0 +1,7 @@
+
+FullName                                                         Length LastWriteTime       
+--------                                                         ------ -------------       
+C:\Windows\LiveKernelReports\PoW32kWatchdog-20261004-0158.dmp 324259840 10/4/2026 1:58:55 AM
+
+
+

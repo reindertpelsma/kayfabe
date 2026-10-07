@@ -1,0 +1,204 @@
+GATE_START 2026-08-11T08:41:20+00:00 rev=a517402 scope=fwd+rt
+== baseline: cargo check --workspace
+   baseline OK
+== candidates enumerated: 177  (inherent `pub fn` only; trait methods are out of scope)
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:1119  checkout
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:1357  verb_fault
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:1402  publish_backing
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:1467  pin_guest_ram
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:2028  back_fb_leaf
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:2430  resolve
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:2603  exec_doorbell
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:2875  handle_doorbell
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:2892  deliver_completions
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:2905  poll_completions
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:3109  exec_engine_object
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:3327  forward_engine_object
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:3382  forward_control
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:3482  route_control
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:3510  signal_golden_capture
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:3592  of
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:3619  ce_executor_c
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:4213  read_gpfifo_ring
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:4620  executor
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:4920  new
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:5213  plan_ce_split
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:5254  reached_hardware
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:5430  exec_ce
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:5638  parse_pushbuffer
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:5670  submit_ring
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:5694  latch_pt_writes
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:5745  gate_working_set
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:5803  completion_arm
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:5824  arm_fence
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:5839  arm_fence_in
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:5872  fence_observed
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:5886  fence_observed_in
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:5913  present_scanout
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:5926  present_scanout_in
+   ORPHAN  crates/kayfabe-fwd/src/lib.rs:5991  fault_facts
+   ORPHAN  crates/kayfabe-fwd/src/ptdecode.rs:134  reads
+   ORPHAN  crates/kayfabe-fwd/src/ptdecode.rs:140  misses
+   ORPHAN  crates/kayfabe-fwd/src/ptdecode.rs:325  is_clean
+   ORPHAN  crates/kayfabe-rt/src/ceutils.rs:291  new
+   ORPHAN  crates/kayfabe-rt/src/ceutils.rs:1037  census_gr_addresses
+   ORPHAN  crates/kayfabe-rt/src/completion_watch.rs:114  report_bytes
+   ORPHAN  crates/kayfabe-rt/src/completion_watch.rs:137  decode_report_semaphore
+   ORPHAN  crates/kayfabe-rt/src/completion_watch.rs:313  decode_address_operands
+   ORPHAN  crates/kayfabe-rt/src/completion_watch.rs:527  line
+   ORPHAN  crates/kayfabe-rt/src/completion_watch.rs:646  new
+   ORPHAN  crates/kayfabe-rt/src/completion_watch.rs:664  live
+   ORPHAN  crates/kayfabe-rt/src/completion_watch.rs:706  sweep
+   ORPHAN  crates/kayfabe-rt/src/cpu_ce.rs:152  execute_ours
+   ORPHAN  crates/kayfabe-rt/src/cpu_ce.rs:240  execute_ours_spans
+   ORPHAN  crates/kayfabe-rt/src/cpu_ce.rs:370  record
+   ORPHAN  crates/kayfabe-rt/src/cpu_ce.rs:409  resolve_releases
+   ORPHAN  crates/kayfabe-rt/src/cpu_ce.rs:454  write_resolved_completion
+   ORPHAN  crates/kayfabe-rt/src/cpu_ce.rs:543  write_completion
+   ORPHAN  crates/kayfabe-rt/src/device.rs:755  pool_waits
+   ORPHAN  crates/kayfabe-rt/src/device.rs:763  into_gpu
+   ORPHAN  crates/kayfabe-rt/src/device.rs:808  apply
+   ORPHAN  crates/kayfabe-rt/src/device.rs:1071  pump_completions
+   ORPHAN  crates/kayfabe-rt/src/device.rs:1082  completion_poll
+   ORPHAN  crates/kayfabe-rt/src/device.rs:1096  completions_drained
+   ORPHAN  crates/kayfabe-rt/src/device.rs:1115  reap_retired
+   ORPHAN  crates/kayfabe-rt/src/device.rs:1285  pt_page_owner
+   ORPHAN  crates/kayfabe-rt/src/device.rs:1365  drain_pending_releases
+   ORPHAN  crates/kayfabe-rt/src/device.rs:1407  retired_len
+   ORPHAN  crates/kayfabe-rt/src/device.rs:1415  register_source
+   ORPHAN  crates/kayfabe-rt/src/device.rs:1426  take_pending_wake
+   ORPHAN  crates/kayfabe-rt/src/device.rs:1621  cancel_handle
+   ORPHAN  crates/kayfabe-rt/src/device.rs:1649  request_cancel
+   ORPHAN  crates/kayfabe-rt/src/device.rs:1696  declare_wedged
+   ORPHAN  crates/kayfabe-rt/src/device.rs:2414  parse_pushbuffer
+   ORPHAN  crates/kayfabe-rt/src/device.rs:2474  forward_ce
+   ORPHAN  crates/kayfabe-rt/src/device.rs:2512  submit_ring
+   ORPHAN  crates/kayfabe-rt/src/device.rs:2549  decode_pt_writes
+   ORPHAN  crates/kayfabe-rt/src/device.rs:2933  publish_backing
+   ORPHAN  crates/kayfabe-rt/src/device.rs:3001  back_fb_leaf
+   ORPHAN  crates/kayfabe-rt/src/device.rs:3027  forward_engine_object
+   ORPHAN  crates/kayfabe-rt/src/device.rs:3061  forward_engine_object_by_parent
+   ORPHAN  crates/kayfabe-rt/src/device.rs:3304  route_control
+   ORPHAN  crates/kayfabe-rt/src/device.rs:3352  retire_proc
+   ORPHAN  crates/kayfabe-rt/src/device.rs:3392  gate_working_set
+   ORPHAN  crates/kayfabe-rt/src/device.rs:3433  signal_source
+   ORPHAN  crates/kayfabe-rt/src/device.rs:3850  route_of_engine
+   ORPHAN  crates/kayfabe-rt/src/executor.rs:66  new
+   ORPHAN  crates/kayfabe-rt/src/executor.rs:72  device
+   ORPHAN  crates/kayfabe-rt/src/executor.rs:79  drain_one
+   ORPHAN  crates/kayfabe-rt/src/executor.rs:111  drain_all
+   ORPHAN  crates/kayfabe-rt/src/executor.rs:166  new
+   ORPHAN  crates/kayfabe-rt/src/executor.rs:173  sequence
+   ORPHAN  crates/kayfabe-rt/src/executor.rs:178  stop
+   ORPHAN  crates/kayfabe-rt/src/executor.rs:188  is_stopping
+   ORPHAN  crates/kayfabe-rt/src/executor.rs:198  park
+   ORPHAN  crates/kayfabe-rt/src/executor.rs:228  run_until_stopped
+   ORPHAN  crates/kayfabe-rt/src/inbox.rs:88  try_pop
+   ORPHAN  crates/kayfabe-rt/src/inbox.rs:94  sender
+   ORPHAN  crates/kayfabe-rt/src/inbox.rs:102  len
+   ORPHAN  crates/kayfabe-rt/src/inbox.rs:108  is_empty
+   ORPHAN  crates/kayfabe-rt/src/inbox.rs:115  inbox
+
+== orphan gate: 96 of 177 checked have no caller outside their own crate
+   crates/kayfabe-fwd/src/lib.rs:1119  checkout
+   crates/kayfabe-fwd/src/lib.rs:1357  verb_fault
+   crates/kayfabe-fwd/src/lib.rs:1402  publish_backing
+   crates/kayfabe-fwd/src/lib.rs:1467  pin_guest_ram
+   crates/kayfabe-fwd/src/lib.rs:2028  back_fb_leaf
+   crates/kayfabe-fwd/src/lib.rs:2430  resolve
+   crates/kayfabe-fwd/src/lib.rs:2603  exec_doorbell
+   crates/kayfabe-fwd/src/lib.rs:2875  handle_doorbell
+   crates/kayfabe-fwd/src/lib.rs:2892  deliver_completions
+   crates/kayfabe-fwd/src/lib.rs:2905  poll_completions
+   crates/kayfabe-fwd/src/lib.rs:3109  exec_engine_object
+   crates/kayfabe-fwd/src/lib.rs:3327  forward_engine_object
+   crates/kayfabe-fwd/src/lib.rs:3382  forward_control
+   crates/kayfabe-fwd/src/lib.rs:3482  route_control
+   crates/kayfabe-fwd/src/lib.rs:3510  signal_golden_capture
+   crates/kayfabe-fwd/src/lib.rs:3592  of
+   crates/kayfabe-fwd/src/lib.rs:3619  ce_executor_c
+   crates/kayfabe-fwd/src/lib.rs:4213  read_gpfifo_ring
+   crates/kayfabe-fwd/src/lib.rs:4620  executor
+   crates/kayfabe-fwd/src/lib.rs:4920  new
+   crates/kayfabe-fwd/src/lib.rs:5213  plan_ce_split
+   crates/kayfabe-fwd/src/lib.rs:5254  reached_hardware
+   crates/kayfabe-fwd/src/lib.rs:5430  exec_ce
+   crates/kayfabe-fwd/src/lib.rs:5638  parse_pushbuffer
+   crates/kayfabe-fwd/src/lib.rs:5670  submit_ring
+   crates/kayfabe-fwd/src/lib.rs:5694  latch_pt_writes
+   crates/kayfabe-fwd/src/lib.rs:5745  gate_working_set
+   crates/kayfabe-fwd/src/lib.rs:5803  completion_arm
+   crates/kayfabe-fwd/src/lib.rs:5824  arm_fence
+   crates/kayfabe-fwd/src/lib.rs:5839  arm_fence_in
+   crates/kayfabe-fwd/src/lib.rs:5872  fence_observed
+   crates/kayfabe-fwd/src/lib.rs:5886  fence_observed_in
+   crates/kayfabe-fwd/src/lib.rs:5913  present_scanout
+   crates/kayfabe-fwd/src/lib.rs:5926  present_scanout_in
+   crates/kayfabe-fwd/src/lib.rs:5991  fault_facts
+   crates/kayfabe-fwd/src/ptdecode.rs:134  reads
+   crates/kayfabe-fwd/src/ptdecode.rs:140  misses
+   crates/kayfabe-fwd/src/ptdecode.rs:325  is_clean
+   crates/kayfabe-rt/src/ceutils.rs:291  new
+   crates/kayfabe-rt/src/ceutils.rs:1037  census_gr_addresses
+   crates/kayfabe-rt/src/completion_watch.rs:114  report_bytes
+   crates/kayfabe-rt/src/completion_watch.rs:137  decode_report_semaphore
+   crates/kayfabe-rt/src/completion_watch.rs:313  decode_address_operands
+   crates/kayfabe-rt/src/completion_watch.rs:527  line
+   crates/kayfabe-rt/src/completion_watch.rs:646  new
+   crates/kayfabe-rt/src/completion_watch.rs:664  live
+   crates/kayfabe-rt/src/completion_watch.rs:706  sweep
+   crates/kayfabe-rt/src/cpu_ce.rs:152  execute_ours
+   crates/kayfabe-rt/src/cpu_ce.rs:240  execute_ours_spans
+   crates/kayfabe-rt/src/cpu_ce.rs:370  record
+   crates/kayfabe-rt/src/cpu_ce.rs:409  resolve_releases
+   crates/kayfabe-rt/src/cpu_ce.rs:454  write_resolved_completion
+   crates/kayfabe-rt/src/cpu_ce.rs:543  write_completion
+   crates/kayfabe-rt/src/device.rs:755  pool_waits
+   crates/kayfabe-rt/src/device.rs:763  into_gpu
+   crates/kayfabe-rt/src/device.rs:808  apply
+   crates/kayfabe-rt/src/device.rs:1071  pump_completions
+   crates/kayfabe-rt/src/device.rs:1082  completion_poll
+   crates/kayfabe-rt/src/device.rs:1096  completions_drained
+   crates/kayfabe-rt/src/device.rs:1115  reap_retired
+   crates/kayfabe-rt/src/device.rs:1285  pt_page_owner
+   crates/kayfabe-rt/src/device.rs:1365  drain_pending_releases
+   crates/kayfabe-rt/src/device.rs:1407  retired_len
+   crates/kayfabe-rt/src/device.rs:1415  register_source
+   crates/kayfabe-rt/src/device.rs:1426  take_pending_wake
+   crates/kayfabe-rt/src/device.rs:1621  cancel_handle
+   crates/kayfabe-rt/src/device.rs:1649  request_cancel
+   crates/kayfabe-rt/src/device.rs:1696  declare_wedged
+   crates/kayfabe-rt/src/device.rs:2414  parse_pushbuffer
+   crates/kayfabe-rt/src/device.rs:2474  forward_ce
+   crates/kayfabe-rt/src/device.rs:2512  submit_ring
+   crates/kayfabe-rt/src/device.rs:2549  decode_pt_writes
+   crates/kayfabe-rt/src/device.rs:2933  publish_backing
+   crates/kayfabe-rt/src/device.rs:3001  back_fb_leaf
+   crates/kayfabe-rt/src/device.rs:3027  forward_engine_object
+   crates/kayfabe-rt/src/device.rs:3061  forward_engine_object_by_parent
+   crates/kayfabe-rt/src/device.rs:3304  route_control
+   crates/kayfabe-rt/src/device.rs:3352  retire_proc
+   crates/kayfabe-rt/src/device.rs:3392  gate_working_set
+   crates/kayfabe-rt/src/device.rs:3433  signal_source
+   crates/kayfabe-rt/src/device.rs:3850  route_of_engine
+   crates/kayfabe-rt/src/executor.rs:66  new
+   crates/kayfabe-rt/src/executor.rs:72  device
+   crates/kayfabe-rt/src/executor.rs:79  drain_one
+   crates/kayfabe-rt/src/executor.rs:111  drain_all
+   crates/kayfabe-rt/src/executor.rs:166  new
+   crates/kayfabe-rt/src/executor.rs:173  sequence
+   crates/kayfabe-rt/src/executor.rs:178  stop
+   crates/kayfabe-rt/src/executor.rs:188  is_stopping
+   crates/kayfabe-rt/src/executor.rs:198  park
+   crates/kayfabe-rt/src/executor.rs:228  run_until_stopped
+   crates/kayfabe-rt/src/inbox.rs:88  try_pop
+   crates/kayfabe-rt/src/inbox.rs:94  sender
+   crates/kayfabe-rt/src/inbox.rs:102  len
+   crates/kayfabe-rt/src/inbox.rs:108  is_empty
+   crates/kayfabe-rt/src/inbox.rs:115  inbox
+
+⊘ This is a REPORT, not a verdict on any one of them: a verb may be a deliberate seam
+  awaiting its consumer, or a capability proven and never wired. Only a human knows
+  which, and that triage is what decides what this gate eventually enforces.
+GATE_EXIT_STATUS=0
+GATE_DONE 2026-08-11T08:44:14+00:00

@@ -1,0 +1,3 @@
+2026-10-04: owned instance 54137212 destroyed; CLI command rc=0.
+Independent vastai show instances --raw: 54137212 absent; existing 54049598 running.
+Registry entry for 54137212 removed after verification. All display evidence was pushed before teardown.

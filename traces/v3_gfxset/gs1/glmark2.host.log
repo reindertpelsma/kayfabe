@@ -1,0 +1,53 @@
+=== glmark2 side=host start=2026-09-26T17:08:19+00:00 host=ubuntu kernel=6.8.0-59-generic drv=580.159.04
+[17:08:19.166] Command line: weston --backend=headless --renderer=gl --width=1280 --height=720 --idle-time=0 --socket=gset-g --debug --log=/var/tmp/gfxset/out/host/glmark2.d/weston_gset-g.log
+[17:08:19.173] Loading module '/usr/lib/x86_64-linux-gnu/libweston-13/gl-renderer.so'
+[17:08:19.231] EGL version: 1.5
+[17:08:19.231] EGL vendor: NVIDIA
+[17:08:19.289] GL version: OpenGL ES 3.2 NVIDIA 580.159.04
+[17:08:19.290] GL vendor: NVIDIA Corporation
+[17:08:19.290] GL renderer: NVIDIA GeForce RTX 3070/PCIe/SSE2
+[17:08:19.290] GL ES 3.2 - renderer features:
+glmark2 suite_offscreen rc=0 score=41082
+GSET_VAL side=host item=glmark2 key=suite_offscreen_score val=41082
+GSET_DIG side=host item=glmark2 key=suite_offscreen_scenes val=a4f297cbbb5c854a
+glmark2 suite_windowed rc=0 score=2378
+GSET_VAL side=host item=glmark2 key=suite_windowed_score val=2378
+GSET_DIG side=host item=glmark2 key=suite_windowed_scenes val=a4f297cbbb5c854a
+[build] use-vbo=false: Validation: Success
+[build] use-vbo=true: Validation: Success
+[texture] texture-filter=nearest: Validation: Success
+[texture] texture-filter=linear: Validation: Success
+[texture] texture-filter=mipmap: Validation: Success
+[shading] shading=gouraud: Validation: Success
+[shading] shading=blinn-phong-inf: Validation: Success
+[shading] shading=phong: Validation: Success
+[shading] shading=cel: Validation: Unknown
+[bump] bump-render=high-poly: Validation: Success
+[bump] bump-render=normals: Validation: Success
+[bump] bump-render=height: Validation: Success
+[effect2d] kernel=0,1,0;1,-4,1;0,1,0;: Validation: Success
+[effect2d] kernel=1,1,1,1,1;1,1,1,1,1;1,1,1,1,1;: Validation: Success
+[pulsar] light=false:quads=5:texture=false: Validation: Success
+[desktop] blur-radius=5:effect=blur:passes=1:separable=true:windows=4: Validation: Success
+[desktop] effect=shadow:windows=4: Validation: Success
+[buffer] columns=200:interleave=false:update-dispersion=0.9:update-fraction=0.5:update-method=map: Validation: Success
+[buffer] columns=200:interleave=false:update-dispersion=0.9:update-fraction=0.5:update-method=subdata: Validation: Success
+[buffer] columns=200:interleave=true:update-dispersion=0.9:update-fraction=0.5:update-method=map: Validation: Success
+[ideas] speed=duration: Validation: Unknown
+[jellyfish] <default>: Validation: Unknown
+[terrain] <default>: Validation: Unknown
+[shadow] <default>: Validation: Unknown
+[refract] <default>: Validation: Unknown
+[conditionals] fragment-steps=0:vertex-steps=0: Validation: Success
+[conditionals] fragment-steps=5:vertex-steps=0: Validation: Success
+[conditionals] fragment-steps=0:vertex-steps=5: Validation: Success
+[function] fragment-complexity=low:fragment-steps=5: Validation: Success
+[function] fragment-complexity=medium:fragment-steps=5: Validation: Success
+[loop] fragment-loop=false:fragment-steps=5:vertex-steps=5: Validation: Success
+[loop] fragment-steps=5:fragment-uniform=false:vertex-steps=5: Validation: Success
+[loop] fragment-steps=5:fragment-uniform=true:vertex-steps=5: Validation: Success
+GSET_DIG side=host item=glmark2 key=validate val=c4950292793cf023
+GSET_VAL side=host item=glmark2 key=validate_counts val=S27/F0/U6
+    GL_RENDERER:    NVIDIA GeForce RTX 3070/PCIe/SSE2
+GSET_OK
+=== end rc=0 secs=668 2026-09-26T17:19:27+00:00

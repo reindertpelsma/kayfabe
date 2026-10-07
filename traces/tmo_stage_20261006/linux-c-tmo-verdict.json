@@ -1,0 +1,74 @@
+{
+  "schema": "kayfabe-linux-tmo-stage/1",
+  "source_revision": "74cd590cec952e1b206d54532345ba0d481d0cd4",
+  "qemu_sha256": "72f2d50d0b4a93330cd359119cbcf2ffff487bc311fde5439e3ca6baaa185937",
+  "harness_sha256": "d849c1f6146019e4b62b892996a2784223b5233736b0f382aa57d274125c80b4",
+  "checks": {
+    "baseline_gpu_scene_ready": true,
+    "request_adapter_armed": true,
+    "grayscale_nonzero_baseline": true,
+    "tmo_property_available": true,
+    "requested_zero_curve_in_kms_state": true,
+    "real_non_test_atomic_accepted": true,
+    "nonzero_tmo_method_binding": true,
+    "tmo_control_programmed": true,
+    "nonzero_tmo_binding_armed_at_capture": true,
+    "trace_budget_not_exhausted": true,
+    "warm_scene_frame_callback": true,
+    "output_changed": true,
+    "zero_curve_output_black": true,
+    "restored_identical": true,
+    "restored_scene_ready": true,
+    "no_scanout_refusal": true
+  },
+  "passed": true,
+  "verdict": "PASS",
+  "failure_reasons": [],
+  "nonzero_tmo_bindings": [
+    [
+      "7",
+      "0x10099"
+    ],
+    [
+      "7",
+      "0x1009c"
+    ],
+    [
+      "7",
+      "0x10099"
+    ]
+  ],
+  "tmo_control_words": [
+    [
+      "7",
+      "0x40509"
+    ],
+    [
+      "7",
+      "0x40509"
+    ],
+    [
+      "7",
+      "0x40509"
+    ]
+  ],
+  "armed_tmo_windows": {
+    "7": true,
+    "8": false
+  },
+  "accepted_real_atomics": 3,
+  "screenshot_rgb_sha256": {
+    "sway-before": "9449c5353875d3b003b607a478df9e6303feb0216c34719564a549f8a597340f",
+    "sway-warm": "1f56bd4f609fab80a2b9cce7487d5c08de2768476849e1353881ca748d8d3b6a",
+    "sway-restored": "9449c5353875d3b003b607a478df9e6303feb0216c34719564a549f8a597340f"
+  },
+  "trace_method_records": 20264,
+  "trace_budget_remaining": 45272,
+  "missing_property_request_blocked_by_guest_adapter": false,
+  "limitations": [
+    "One grayscale zero-intensity fixture; no general TMO/HDR parity claim.",
+    "A nonzero binding alone does not prove processing.",
+    "Method arming is not an independent RM channel-lifetime proof.",
+    "The first missing-property gate rejects before kernel submission."
+  ]
+}

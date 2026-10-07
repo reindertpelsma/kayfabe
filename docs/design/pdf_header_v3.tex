@@ -1,0 +1,12 @@
+% Reference tables in this bundle carry file:line citations in typewriter text.
+% Those strings contain no hyphenation points, so LaTeX cannot break them and the
+% table overflows the text block. Three fixes, in order of how much they do:
+\usepackage[htt]{hyphenat}   % allow hyphenation inside \texttt
+\sloppy                      % prefer loose interword space over an overfull line
+\setlength{\tabcolsep}{3pt}  % tighten table gutters
+\setlength{\emergencystretch}{3em}
+% Let breaks happen at the punctuation that actually appears in paths and constants:
+\usepackage{xurl}
+\makeatletter
+\def\UrlBreaks{\do\/\do\-\do\_\do\.\do\:\do\+}
+\makeatother

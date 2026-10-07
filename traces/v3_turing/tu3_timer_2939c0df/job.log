@@ -1,0 +1,42 @@
+JOB_START 2026-09-28T02:24:04+00:00
+HEAD=2939c0df tree=db187f7b502c dirty=0
+    pixman                          : enabled
+    sdl                             : disabled
+    slirp                           : disabled
+    tools                           : disabled
+    tpm                             : disabled
+    vde                             : disabled
+    vnc                             : enabled
+    werror                          : false
+
+Found ninja-1.10.1 at /usr/bin/ninja
+Running postconf script '/workspace/bench/qemu-build-kf3/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/symlink-install-tree.py'
+[1/5] Generating qemu-version.h with a custom command (wrapped by meson to capture output)
+[2/3] Compiling C object libsystem.a.p/hw_misc_kf3_kf3.c.o
+[3/3] Linking target qemu-system-x86_64
+KF3_BUILT /workspace/bench/kf3-bins/2939c0df/qemu-system-x86_64 rev=2939c0df mtime=2026-09-28 02:24:30.301546280 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+BUILD_RC=0
+== kf3 binary: /workspace/bench/kf3-bins/2939c0df/qemu-system-x86_64 (rev 2939c0df)
+== serializing on /tmp/kayfabe-fastguest.lock (GPU runs are strictly serial)
+== arms: --timer,--probe-launch-dma   budget: 180s   self-deadline: 176000ms   trace: ring
+== qemu:  /workspace/bench/kf3-bins/2939c0df/qemu-system-x86_64  (built 2026-09-28 02:24:30)
+== device(s): -device kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,id=kf0
+== console: hvc (console=ttyS0 console=hvc0)
+=== FAST GUEST tu3_timer — 11s of a 180s budget, qemu rc=0 ===
+    FASTGUEST: up 4.58s
+    FASTGUEST: switch_root prepared in 1.0s
+    FASTGUEST: up 5.62s
+    FASTGUEST: root is a real mount (switch_root done) — the isolate sandbox can pivot_root
+    FASTGUEST: insmod ecc.ko ok
+    FASTGUEST: insmod nvidia.ko ok
+    FASTGUEST: insmod nvidia-uvm.ko ok
+    FASTGUEST: insmod wmi.ko ok
+    FASTGUEST: insmod video.ko ok
+    FASTGUEST: insmod nvidia-modeset.ko ok
+    FASTGUEST: nodes /dev/nvidia-caps/nvidia-cap1 /dev/nvidia-uvm /dev/nvidia-uvm-tools /dev/nvidia0 /dev/nvidiactl  /dev/nvidia-caps: nvidia-cap1 
+    FASTGUEST: ready 5.96s
+    FASTGUEST: arms --timer --probe-launch-dma  deadline 172s (budget 180s, 5s already spent booting)
+    FASTGUEST: client rc=1 at 6.31s
+    FASTGUEST: DONE
+FAST_VERDICT=FAIL (raw client rc=1)
+JOB_EXIT rc=1 2026-09-28T02:24:45+00:00

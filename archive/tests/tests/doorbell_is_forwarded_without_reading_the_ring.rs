@@ -1,0 +1,497 @@
+//! # ★★★★★ **THE OPACITY PIN — a doorbell is forwarded WITHOUT the ring being readable**
+//!
+//! Owner ruling, 2026-08-11: *"in prod passthrough isn't parsed"*. The ring is **opaque**.
+//! Everything a GR passthrough route would need is therefore a statement about a *cursor*
+//! and a *token*, never about ring content — and the property that has to hold, forever,
+//! is:
+//!
+//! > **Whether a doorbell is forwarded must not depend on whether its ring can be read.**
+//!
+//! `docs/design/gr_execution_boundary.md` §4.1 and `guest_ring_adoption.md` §4 both rest on
+//! that property. Until this file, **nothing quantified over it**.
+//!
+//! # ⊘ THE BRIEF'S FEARED ENTANGLEMENT DOES NOT EXIST — and that is what this file pins
+//!
+//! The rung brief predicted an entanglement to be broken: *"`plan_doorbell` runs the #14
+//! ring-gate over `working_set` … the GR arm's working set must be **empty so the gate is
+//! vacuous**, not bypassed."* ⊘ **It is already empty**, from the only production supplier
+//! (`crates/kayfabe-qemu-raw/src/shim.rs:3745` passes `&[]`), and
+//! `kayfabe_rt::device::SharedDevice::doorbell`'s own doc states the choice deliberately:
+//! *"The #14 ring-gate still sees an EMPTY working set, and that is stated on purpose …
+//! This wiring parses the ring **after** that gate."*
+//!
+//! So there was nothing to build and nothing to bypass. What was missing is the **test**:
+//! a documented intention is not an enforced one, and the ordering that makes it true —
+//! `verb_op(plan → execute → commit)` **then** `forward_ring` — is two adjacent statements
+//! in one function that any refactor may swap without a single assertion going red.
+//!
+//! # The three arms
+//!
+//! 1. **The acceptance.** A `GrCompute` channel whose GPFIFO ring has **no binding and no
+//!    bytes** — unreadable by construction — still reaches `RmBackend::ring_doorbell`.
+//!    ⊘ And forwards **no work**: `ce_copy` is never asked for. The two together are the
+//!    whole claim; either alone is satisfiable by a wiring that is wrong in the other
+//!    direction.
+//! 2. **The gate is VACUOUS, not BYPASSED.** The same channel, planned twice: with an
+//!    empty working set it plans; with one unpublished VA in the working set it is refused
+//!    by name. ⊘ Red in both directions by construction — a gate that always passed would
+//!    fail 2b, and a gate that always refused would fail 2a. This is what stops
+//!    *"the gate is vacuous here"* from being written as *"the gate was removed"*.
+//! 3. **Non-vacuity of the fixture**: nothing was rung, and nothing was recorded, before
+//!    the doorbell under study.
+//!
+//! # ⊘ What a green here does NOT mean
+//!
+//! - ⊘ **It does not open the GR route** — ★ **and the route has SINCE been opened, behind
+//!   an arming flag, 2026-08-11.** This bullet used to read *"`DoorbellRoute::HostGr` still
+//!   has no consumer, and `Route::NotACopyEngineChannel` still refuses every `GrCompute`
+//!   doorbell before this path is reached"*. That is now true only of the **default**
+//!   `KAYFABE_GR_ROUTE=refuse` arm; on `passthrough` the shim answers `None` and this
+//!   function is exactly what the doorbell reaches (`docs/design/gr_doorbell_passthrough.md`;
+//!   the route is pinned end to end by
+//!   `crates/kayfabe-qemu-raw/tests/gr_route_passthrough.rs`, and the default arm is still
+//!   pinned by `crates/kayfabe-qemu-raw/tests/e2_doorbell.rs`'s
+//!   `a_gr_channel_is_refused_by_route_and_the_engine_object_is_what_moves_it`).
+//!   ⇒ ★ This file's property did not weaken — it became **load-bearing in production**
+//!   rather than ahead of it. It was written before the route existed, which is why the
+//!   route could be opened without designing the opacity guarantee at the same time.
+//! - ⊘ **It says nothing about the host engine FETCHING anything.** The cursor bridge (G8)
+//!   is unbuilt: nothing writes the guest's `GP_PUT` into the host channel's USERD
+//!   (`guest_ring_adoption.md` §4). A rung doorbell on a channel whose `GP_PUT` is zero
+//!   fetches nothing, correctly and forever.
+//! - ⊘ **Nothing about a booted guest.** `only_live_boots_are_proof`.
+//!
+//! # ✔ WATCHED RED, BOTH DIRECTIONS, BEFORE IT WAS LANDED
+//!
+//! Green-both-ways proves nothing, so each arm was made to fail by breaking exactly the
+//! thing it guards, and the tree was restored afterwards (`git diff --stat` empty).
+//!
+//! | break, applied temporarily | arm 1 | arm 2a | arm 2b |
+//! |---|---|---|---|
+//! | **A — "parse-then-serve"**: a ring-resolvability precondition added to `plan_doorbell` ahead of the gate | ⊘ **RED** — `Got []`, `doorbell` answered `Err(Address(Miss { pdb: Pdb(537919488), va: GpuVa(8592031744) }))` | ⊘ **RED** | green |
+//! | **B — "the gate is bypassed"**: `VerbPlan::gated_doorbell`'s `is_host_published` check deleted | green | green | ⊘ **RED** — planned `DoorbellOutcome { proc: ProcId(1), chan: ChanId(0), … }` where a refusal was required |
+//!
+//! ★ Note the two breaks are caught by **different** arms and neither is caught by both.
+//! That is the property `falsifier_blocker_vs_only_blocker` asks for: one arm going red
+//! names *which* invariant moved, not merely *that* something did.
+//!
+//! Invariant/contract tests (decision #15), mock-driven, **GPU-free**.
+//!
+//! # ⊘⊘ CORRECTED 2026-09-09 (w393), above what it corrects — "no binding" is no longer
+//! part of "unreadable", and the file's property is unchanged
+//!
+//! Since w393 a `Passthrough` channel is **born at its own channel alloc, over the guest's
+//! ring** (`kayfabe_fwd::plan_channel_birth`), and a doorbell never births one
+//! (`FwdFault::PassthroughDoorbellBirth`, by name — adopting the guest's USERD at a doorbell
+//! zeroes the cursor that rang it, `[measured w233]`). A birth needs the ring to be
+//! **adoptable**: bound in the channel's VAS and host-addressable as the guest's own bytes.
+//! That is a statement about the **cursor's address** — exactly the *"statement about a
+//! cursor and a token"* the ruling above permits — and **not** about ring content.
+//!
+//! ⇒ The fixture now binds and pins the ring page (the birth's precondition) and still
+//! **writes no bytes** to it, and nothing parses it: `ring_content_is_forwardable` answers
+//! `false` for the kind. *"Unreadable"* below means *no bytes, never parsed*, which is the
+//! whole of what the opacity pin is about. The old *"no binding"* half of the fixture is
+//! now its own arm: [`an_unadoptable_ring_is_refused_by_name_and_never_served_over_ours`],
+//! which pins the NEW contract — a ring nobody bound cannot birth a channel, and the
+//! doorbell on it is refused by name rather than served over a ring of ours (the w392h
+//! silence: `Xid 0`, the engine fetching from a ring nothing wrote).
+
+#![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
+
+use std::sync::Arc;
+
+use kayfabe_arch::fault::ErrorNotifier;
+use kayfabe_arch::ids::{EngineKind, GpuId, GpuVa, HClient, HObject, Pdb, VChid};
+use kayfabe_core::gpa::GpaSpace;
+use kayfabe_core::gpu::Gpu;
+use kayfabe_core::rmgraph::{AllocFacts, GpFifoRing, RmEvent};
+use kayfabe_core::{ChanId, ProcId};
+use kayfabe_mocks::{
+    MockArch, MockIsolateFactory, MockVmm, RmVerb, SharedRecorder, mock_classes as mc,
+};
+use kayfabe_rt::device::{LockMode, SharedDevice};
+use kayfabe_tests::{Scenario, notifier_gpa};
+
+const GPU: GpuId = GpuId::ZERO;
+const CLIENT: HClient = HClient(0xC1D_0000);
+const PDB0: Pdb = Pdb(0x2010_0000);
+const GR_VCHID: VChid = VChid(0x07);
+
+/// ★★★ **The ring's VA — nothing binds it and nothing wrote it.**
+///
+/// The number is the guest's own, from the bench: `[measured 2026-08-11]` every committed
+/// boot since `w206` carries `RING-ROSTER key=0xc1d0000c:0x5c000019 ring=0x200200000
+/// entries=1024` (45 identical rows over 45 boots, `traces/guest_boots/`). Using it rather
+/// than a round fixture number costs nothing and makes the fixture's subject legible next
+/// to a log.
+///
+/// ⊘ What makes it unreadable here is **not** the number: it is that no bytes were ever
+/// written to the guest-physical page behind it, and nothing parses it. ⊘ w393: the page
+/// IS bound and pinned by the birth-at-alloc (a channel cannot exist without its ring
+/// being adoptable — see the module's correction block); what the fixture withholds is
+/// the bytes, which is the one thing a *read* would need and a *serve* must not.
+const GR_RING_VA: u64 = 0x2_0020_0000;
+
+/// How many entries the guest declares. `[measured]` the same boots say `1024`; the value
+/// is irrelevant to this file and is carried only so the declaration is a real one.
+const GR_RING_ENTRIES: u32 = 1024;
+
+/// A VA the guest never published. ⊘ Used **only** by arm 2b, to prove the #14 gate is
+/// live rather than removed.
+const UNPUBLISHED_VA: GpuVa = GpuVa(0x7d1e_0000_0000);
+
+// =====================================================================================
+// The guest
+// =====================================================================================
+
+/// One process with one **`GrCompute`** channel that declares a GPFIFO ring nobody wrote.
+/// `born` = the ring page is bound + pinned and the channel is born at its alloc (the
+/// production shape since w393); `false` leaves the ring unbound and the channel un-born,
+/// for the new-contract arm.
+///
+/// ⊘ `mc::CHANNEL_GR` is `EngineKind::GrCompute` in the mock arch's own classifier
+/// (`crates/kayfabe-mocks/src/lib.rs:216-218`, *"A GR-class channel is GrCompute until an
+/// engine object refines it"*), which is the same rule
+/// `kayfabe_core::project` applies to `AMPERE_CHANNEL_GPFIFO_A`. No engine object is
+/// allocated, so nothing refines it away.
+fn gr_guest_with_unreadable_ring(born: bool) -> (Gpu, MockVmm, SharedRecorder, ProcId, ChanId) {
+    let (factory, rec) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
+    let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
+    let mut gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa)
+        .expect("the device realizes");
+
+    let root = HObject(0xC1D_0000);
+    let dev = HObject(0xC1D_0001);
+    let vas = HObject(0xC1D_0010);
+    let tsg = HObject(0xC1D_0012);
+    let chan = HObject(0xC1D_0019);
+
+    let mut s = Scenario::new();
+    s.push(RmEvent::Alloc {
+        client: CLIENT,
+        parent: root,
+        handle: root,
+        class: mc::CLIENT,
+        facts: kayfabe_tests::user_client(CLIENT),
+    });
+    s.push(RmEvent::Alloc {
+        client: CLIENT,
+        parent: root,
+        handle: dev,
+        class: mc::DEVICE,
+        facts: AllocFacts {
+            device_instance: Some(0),
+            ..Default::default()
+        },
+    });
+    s.push(RmEvent::Alloc {
+        client: CLIENT,
+        parent: dev,
+        handle: vas,
+        class: mc::VASPACE,
+        facts: AllocFacts::default(),
+    });
+    s.push(RmEvent::SetPageDir {
+        client: CLIENT,
+        vaspace: vas,
+        pdb: PDB0,
+        // ⊘ The TEST default. The PRODUCTION path must never assume it:
+        // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+        // reports success, because a wrong-aperture read returns zeros.
+        pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+    });
+    s.push(RmEvent::Alloc {
+        client: CLIENT,
+        parent: dev,
+        handle: tsg,
+        class: mc::TSG,
+        facts: AllocFacts {
+            h_vaspace: Some(vas),
+            ..Default::default()
+        },
+    });
+    s.push(RmEvent::Alloc {
+        client: CLIENT,
+        parent: tsg,
+        handle: chan,
+        // ★ THE SUBJECT: a GR channel, not a CE one.
+        class: mc::CHANNEL_GR,
+        facts: AllocFacts {
+            h_vaspace: Some(vas),
+            userd_flags: MockArch::userd_flags_for(GR_VCHID),
+            error_notifier: Some(ErrorNotifier::Sysmem {
+                gpa: notifier_gpa(GR_VCHID),
+            }),
+            // ★★★ The guest DECLARES its ring. Nothing binds it and nothing writes it —
+            // which is the whole fixture. ⊘ Declaring it matters: a channel with no
+            // `gp_fifo_ring` at all would make `forward_ring` decline for a reason that
+            // has nothing to do with readability, and the test would pass vacuously.
+            gp_fifo_ring: Some(GpFifoRing {
+                va: GR_RING_VA,
+                entries: GR_RING_ENTRIES,
+            }),
+            ..Default::default()
+        },
+    });
+    for ev in s.events {
+        gpu.apply(ev).expect("applies");
+    }
+
+    let pid = *gpu.spine.by_pdb.get(&(GPU, PDB0)).expect("the VAS routed");
+    let cid = *gpu.procs[&pid]
+        .chan_ids
+        .values()
+        .next()
+        .expect("the scenario's channel");
+
+    // ★ #177 — the guest schedules before it rings. Not this file's subject.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    // ★ w393 — the channel is born at its alloc, over its ring page: bound, pinned, and
+    // NEVER WRITTEN. Not this file's subject either, but its precondition.
+    if born {
+        let b = kayfabe_tests::birth_passthrough_channels(&mut gpu);
+        assert_eq!(
+            b.born,
+            vec![(pid, cid)],
+            "the GR channel is born at its alloc"
+        );
+    }
+
+    (gpu, MockVmm::new(), rec, pid, cid)
+}
+
+/// Every host token `RmBackend::ring_doorbell` was asked for, in order. ⊘ The **verb** the
+/// backend received, not a counter of our own — `measure_at_the_boundary_not_inside`.
+fn doorbells(rec: &SharedRecorder) -> Vec<u64> {
+    rec.lock()
+        .expect("recorder")
+        .log
+        .iter()
+        .filter_map(|(_iso, v)| match v {
+            RmVerb::RingDoorbell { token } => Some(*token),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Every `ce_copy` the backend was asked to perform. Must stay empty here: an unreadable
+/// ring names no work.
+fn copies(rec: &SharedRecorder) -> usize {
+    rec.lock()
+        .expect("recorder")
+        .log
+        .iter()
+        .filter(|(_iso, v)| matches!(v, RmVerb::CeCopy { .. }))
+        .count()
+}
+
+// =====================================================================================
+// ★★★ ARM 1 — THE ACCEPTANCE
+// =====================================================================================
+
+/// ★★★★★ **A GR channel whose ring cannot be parsed still gets its doorbell forwarded.**
+///
+/// # Why this is the pin and not a restatement of the code
+///
+/// `SharedDevice::doorbell` is two statements: `verb_op(plan → execute → commit)`, whose
+/// execute arm is the sole `RmBackend::ring_doorbell` call site in the workspace
+/// (`crates/kayfabe-isolate/src/lib.rs:2412`), and **then** `forward_ring`, which is the
+/// first thing in the chain that touches a ring byte. Nothing enforces that order. A
+/// refactor that hoisted `forward_ring` — or that returned its `Err` before the verb ran —
+/// would be a silent change from *"passthrough"* to *"parse-then-serve"*, and every other
+/// test in the suite would stay green because every other test binds its ring.
+///
+/// ⊘ The assertion is deliberately on the **recorder**, not on `doorbell`'s `Result`: a
+/// ring that cannot be read may legitimately make the *outer* call refuse (the forwarding
+/// half genuinely failed), and reading that refusal as *"the doorbell was not forwarded"*
+/// is the exact conflation this file exists to forbid.
+#[test]
+fn a_gr_doorbell_is_forwarded_although_its_ring_can_not_be_read() {
+    let (gpu, mut vmm, rec, _pid, cid) = gr_guest_with_unreadable_ring(true);
+    let dev = Arc::new(SharedDevice::new(gpu, LockMode::Sharded));
+
+    // ★ ARM 3 — non-vacuity, first, so every number below is this doorbell's doing.
+    assert!(
+        doorbells(&rec).is_empty(),
+        "★ non-vacuity: building the guest must not ring anything"
+    );
+    assert_eq!(
+        copies(&rec),
+        0,
+        "★ non-vacuity: building the guest must not move a byte"
+    );
+
+    // The channel really is a GR channel, and it really does declare a ring. ⊘ Asserted
+    // rather than assumed: a fixture that silently produced `EngineKind::Ce` would make
+    // arm 1 green about the wrong engine entirely.
+    dev.with_proc(_pid, |proc| {
+        let chan = proc.channels.get(&cid).expect("the channel is live");
+        assert_eq!(
+            chan.engine,
+            EngineKind::GrCompute,
+            "the fixture's subject is a GR channel"
+        );
+    });
+
+    let out = dev.doorbell(
+        Some(&mut vmm),
+        GPU,
+        MockArch::token_for(GR_VCHID),
+        &[],
+        None,
+    );
+
+    // ★★★★★ THE CLAIM. Whatever the outer call answered, the host backend was asked to
+    // ring — i.e. the SERVE decision did not consult the ring.
+    let rung = doorbells(&rec);
+    assert_eq!(
+        rung.len(),
+        1,
+        "★★★★★ THE OPACITY PIN: a GR channel whose ring holds no bytes and is never parsed \
+         must STILL reach `RmBackend::ring_doorbell` exactly once. Got {rung:?}, and \
+         `SharedDevice::doorbell` answered {out:?}. ⊘ If this is empty, the serve decision \
+         now depends on the ring being readable — which is `in prod passthrough isn't \
+         parsed` broken, not a test that needs updating."
+    );
+
+    // ★★★ And the other half: it forwarded no WORK. A ring nobody can read names no
+    // operands, so asking the backend for a copy would mean the parse produced something
+    // out of nothing.
+    assert_eq!(
+        copies(&rec),
+        0,
+        "⊘ an unreadable ring must name no work — a `ce_copy` here would be a parse that \
+         invented its own operands"
+    );
+}
+
+// =====================================================================================
+// ★★★ ARM 2 — THE #14 RING-GATE IS VACUOUS, NOT BYPASSED
+// =====================================================================================
+
+/// ★★★★★ **The empty working set makes the gate vacuous; it does not remove it.**
+///
+/// `plan_doorbell` runs `VerbPlan::gated_doorbell` over the caller's `working_set`
+/// (`crates/kayfabe-fwd/src/lib.rs:2707-2718`) and the only production caller passes `&[]`
+/// (`crates/kayfabe-qemu-raw/src/shim.rs:3745`). Those two facts together are what make
+/// passthrough compatible with #14 — and they are **only** compatible if the gate is still
+/// there, live, for any caller that does supply a working set.
+///
+/// ⊘ **Red in both directions by construction.** A gate that had been deleted, or that
+/// answered `true` for everything, fails 2b. A gate that refused an empty set — the naive
+/// *"nothing is published, so refuse"* — fails 2a. Neither half can be made green by
+/// weakening the other, which is what `falsifier_blocker_vs_only_blocker` asks of a
+/// two-arm test.
+#[test]
+fn the_ring_gate_is_vacuous_on_an_empty_working_set_and_live_on_a_non_empty_one() {
+    let (gpu, _vmm, _rec, _pid, _cid) = gr_guest_with_unreadable_ring(true);
+    let dev = Arc::new(SharedDevice::new(gpu, LockMode::Sharded));
+    let token = MockArch::token_for(GR_VCHID);
+
+    // 2a — the production shape. No VA is offered, so the gate has nothing to refuse.
+    dev.doorbell(None, GPU, token, &[], None).expect(
+        "★ 2a: an EMPTY working set must plan — the gate is vacuous, by having \
+                 nothing to quantify over, and NOT by having been removed",
+    );
+
+    // 2b — the same channel, one unpublished VA offered. The gate must refuse it. ⊘ This
+    // is the arm that makes 2a mean something: without it, `plan_doorbell` returning `Ok`
+    // on `&[]` is equally consistent with the gate not existing.
+    let refused = dev.doorbell(None, GPU, token, &[UNPUBLISHED_VA], None);
+    let err = refused.expect_err(
+        "★★ 2b: a working set naming a VA this guest never published must be REFUSED. If \
+         this planned, the #14 ring-gate is not live and 2a's green means nothing.",
+    );
+    let named = format!("{err:?}");
+    assert!(
+        named.contains(&format!("{:x}", UNPUBLISHED_VA.0)) || named.contains("Miss"),
+        "★ the refusal must NAME the address it refused — got {named}. ⊘ A refusal that \
+         cannot say which VA it was about is `a_wall_that_can_carry_no_name`."
+    );
+}
+
+// =====================================================================================
+// ★★★ ARM 4 — THE NEW CONTRACT (w393): a ring nobody bound births nothing, and the
+// doorbell on it is refused BY NAME — never served over a ring of ours
+// =====================================================================================
+
+/// ★★★★★ **A `Passthrough` channel whose ring is not adoptable is never born, and its
+/// doorbell is refused by name — with ZERO host ops.**
+///
+/// This is the shape the old fixture had (*"a ring nobody bound"*) and the behaviour the
+/// old tree gave it: a doorbell birth over `RingSource::Ours`, the doorbell forwarded, the
+/// engine fetching from a ring nothing wrote — `[measured w392h]` `Xid 0`, every client row
+/// `NEVER RETIRED`, no fault anywhere. Since w393 that silence is a refusal:
+///
+/// 1. the birth-at-alloc refuses `PassthroughRingNotAdoptable`, naming the ring VA;
+/// 2. the doorbell refuses `PassthroughDoorbellBirth`, naming the channel;
+/// 3. the backend was asked for **nothing** — no channel, no doorbell, no copy.
+///
+/// ⊘ Read beside arm 1: the SAME channel, with its ring page bound and pinned (still with
+/// no bytes), IS served. The difference is adoptability, never readability — which is what
+/// keeps this arm from contradicting the opacity pin.
+#[test]
+fn an_unadoptable_ring_is_refused_by_name_and_never_served_over_ours() {
+    let (mut gpu, mut vmm, rec, pid, cid) = gr_guest_with_unreadable_ring(false);
+
+    // (1) The birth, attempted where production attempts it: refused by name, with the
+    // ring VA the guest declared.
+    let birth = kayfabe_fwd::birth_channel(&mut gpu, CLIENT, HObject(0xC1D_0019), None, None);
+    assert_eq!(
+        birth.map(|o| format!("{o:?}")),
+        Err(kayfabe_fwd::FwdFault::PassthroughRingNotAdoptable {
+            proc: pid,
+            chan: cid,
+            ring_va: Some(GR_RING_VA),
+        }),
+        "★ a ring the guest never bound cannot be adopted, and the refusal names it"
+    );
+    assert!(
+        gpu.procs[&pid].channels[&cid].host_channel.is_none(),
+        "⊘ and NOTHING fell back to our ring: the channel is still un-born"
+    );
+
+    // (2) The doorbell on the un-born channel: refused by name.
+    let dev = Arc::new(SharedDevice::new(gpu, LockMode::Sharded));
+    let out = dev.doorbell(
+        Some(&mut vmm),
+        GPU,
+        MockArch::token_for(GR_VCHID),
+        &[],
+        None,
+    );
+    assert_eq!(
+        out.map(|o| o.chan),
+        Err(kayfabe_fwd::FwdFault::PassthroughDoorbellBirth {
+            proc: pid,
+            chan: cid,
+            vchid: GR_VCHID,
+        }),
+        "★★★★★ THE NEW CONTRACT: a doorbell never births a passthrough channel. A `Served` \
+         here is the w392h silence — a doorbell forwarded on a ring of ours that nothing \
+         wrote, `Xid 0`, no completion, no fault."
+    );
+
+    // (3) Zero host ops — the recorder is the witness, as in arm 1.
+    assert!(
+        doorbells(&rec).is_empty(),
+        "⊘ no host doorbell was rung: got {:?}",
+        doorbells(&rec)
+    );
+    assert_eq!(copies(&rec), 0, "⊘ and no work was invented");
+    assert!(
+        !rec.lock()
+            .expect("recorder")
+            .log
+            .iter()
+            .any(|(_, v)| matches!(v, RmVerb::AllocChannel { .. })),
+        "⊘ and no host channel was allocated — a refusal that had already born one would \
+         be the old silence wearing a fault message"
+    );
+}

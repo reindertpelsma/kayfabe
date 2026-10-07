@@ -1,0 +1,387 @@
+> ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
+> The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
+> its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
+> implement from it, and do not cite it as current. Archived 2026-09-21 (w822).
+
+# w386 — THE GPFIFO RING WALK IS VALID FOR EXACTLY ONE LAP
+
+**STATUS — 2026-09-07 — LIVE. §9's OUTCOME (A) STANDS. ⊘⊘⊘ §11 IS REFUTED BY MY OWN NEXT
+RUN — SEE §12.** The garbage text is **NOT** the disk. It reappeared on a host with 177 G
+free, with the profiler as the only changed variable. It is **CORRUPTION**, and it is
+timing-sensitive. Read §12 before §11. The
+wrap is fixed on a real GA106 (§9). ⊘ **A SEPARATE AND UNRESOLVED QUESTION OPENED IN THE SAME
+RUN**: the LLM's output text is degenerate under *greedy* decoding while its token COUNT
+passes — see §10. That is **not** attributed to this fix, and §9's instrument argues against
+it, but it is not cleared either. Do not read §9 as "the LLM is fine".
+
+## 1. The defect
+
+`run_submission` (`crates/kayfabe-rt/src/ceutils.rs`) decided how many GPFIFO entries were new
+by **scanning forward until an entry decoded to nothing**. The rationale was written into the
+source (`ceutils.rs:87-99`):
+
+> ⊘ Why a cursor rather than a read of `GP_PUT` … this port does not know where this channel's
+> USERD lives … an unwritten entry is zero
+
+⊘ **That is sound for exactly ONE LAP.** Once the guest has written every slot once, no zero
+entry remains anywhere in the ring, ever again. The `break` stops firing, the walk runs to
+`MAX_ENTRIES_PER_DOORBELL = 8`, consumes **7 stale entries** from the previous lap, and the
+cursor never re-syncs.
+
+★ **It bites at slot `N-1`, not "after the lap"** — slot `N-1`'s forward neighbour is slot 0,
+which lap 1 already wrote. That is the arithmetic behind the measured numbers, not a
+correlation.
+
+⚠ **This is not merely a hang.** Past the wrap we re-execute retired `LAUNCH_DMA`s and
+**re-release stale semaphore payloads** over the word the guest polls — a completion sent for
+work the guest did not submit on that doorbell. It violates the owner's standing rule that a
+completion may only be sent when the observed state after it is intended and safe.
+
+⊘ The doc comment at `ceutils.rs:99` asserting *"the cursor is what makes re-execution
+impossible"* was **false past the wrap**, and is corrected in the fix.
+
+## 2. What was measured, before any fix (`run_w384c_guest_probe.log`, rev `5756322d`)
+
+| observation | value |
+|---|---|
+| 64-entry ring | `first_stall_at=63` |
+| 32-entry ring (`KAYFABE_LADDER_GPFIFO_ENTRIES=32`) | `first_stall_at=31` |
+| wrap bisection `n=63` | `stalled=false`, but `R6 control (close) = Lost { saw: 3735880580 }` = **`0xDEAD0384`**, the untouched sentinel |
+| wrap bisection `n=64` | `stalled=true first_stall_at=63` |
+| `reps=3`, one channel | rep0 `=63`, **rep1 `=15`, rep2 `=15`** — the FIRST drain window (drains every 16) |
+| native (real hardware, walks `GP_GET → GP_PUT`) | six laps, zero stalled drains |
+
+★ The 64/32 readings were **pre-registered before the run**, so *"it dies at absolute index
+63"* is **falsified**: the wedge tracks the ring's own modulus.
+
+★★ The `rep1/rep2 = 15` rows are the strongest single corroboration and were not part of the
+original account: after rep 0 has written the ring end to end, rep 1 is desynced from its
+**first** doorbell, so it breaks at the first window available to it.
+
+## 3. The fix (`65af51eb`)
+
+The walk stops at the guest's own producer cursor: `if idx == gp_put { break; }`, checked
+**before** the read, with a two-segment wrapped walk. `MAX_ENTRIES_PER_DOORBELL` survives as
+the hostile-ring cap but no longer terminates a normal walk. The zero-terminator remains only
+as a secondary safety break.
+
+The shim already read the producer cursor and threw it away — `fb_userd_cursors`
+(`shim.rs:16698-16713`) fed a GR observer log line only.
+
+⚠ **A lock hazard that shaped the design:** `RegPlane::fb_peek` takes the plane's state mutex
+and `ce_session_with_root` holds that **same non-reentrant `RankedMutex`** across its closure.
+Reading `GP_PUT` from inside `run_submission` would deadlock. All call sites read it *before*
+opening the session; that ordering is load-bearing.
+
+### 3.1 The unavailable-`GP_PUT` decision: REFUSE BY NAME
+
+`FwdFault::RingProducerCursorUnknown`. Falling back to the zero scan would silently reinstate
+this exact bug.
+
+Evidence: every CE channel in the committed boot record (w267 ×8, w269, w274b, w279, w281,
+w283, w287) declares its USERD in the **framebuffer** — `phys=fb:0x…/0x200` — with live
+cursors (`fbuserd@0x50088 GET=0 PUT=1`, then `GET=1 PUT=1` after the engine fetched). Zero
+`phys=sys:`, zero `UNDECLARED/UNREADABLE` in the whole `traces/` tree.
+
+⊘ **What would refute it:** a **Sysmem USERD on a CE channel** is legal, `framebuffer_base()`
+correctly returns `None` for it, and nothing in code prevents it. The evidence is an *absence
+in the boot record*, not a census over channel shapes. Such a channel would **newly refuse
+where it previously served its first lap.** That is the risky half of this change.
+
+An out-of-range cursor is its own fact (`RingProducerCursorOutOfRange`) — never coerced with
+`gp_put % entries`.
+
+★ The **observer** (`read_submission_methods`) takes the opposite policy deliberately: bounded
+by `GP_PUT` when available, never refused when absent. It releases nothing, so a stale entry
+there is a wrong log line; refusing would blind the instrument on exactly the channels whose
+failure it describes.
+
+## 4. Logic-level verification (VERIFIED BY ME on `kb`, both commits, one isolated clone)
+
+```
+621f257 (RED, test only)  -> FAILED, 9 passed 1 failed, rc=101
+c7c2c98 (FIX)             -> 13/13 ok, rc=0
+```
+
+The red test's own message names the mechanism:
+
+> doorbell 7 (slot 7) consumed 8 entries; the guest wrote ONE … `CeUtilsRun { entries: 8,
+> methods: 56, launches: 8, releases: 0, spans: 8, bytes: 512, completions: 8, cursor:
+> GpCursor { next: 7 } }`
+
+★ `completions: 8` = **seven stale semaphore releases in one doorbell**, and `cursor.next`
+returning to 7 means it re-walks the *whole ring* on every later doorbell, not merely "7
+ahead".
+
+★★ `lap_one_stops_at_the_first_unwritten_entry` — the **control**, the path `cup3`'s
+`CUP3_VAL=43` and the 8 GR completions run over — is **GREEN before and after**.
+
+⊘ A test *did* already drive `run_submission` (`tests/tests/e10e_ceutils_doorbell.rs`, since
+E10e). What never existed was a test that walks the ring **round**. Note it lives in
+`kayfabe-tests`, so `cargo test -p kayfabe-rt` does **not** run it.
+
+## 5. ★★★ PRE-REGISTERED HARDWARE OUTCOMES — written and committed BEFORE the run
+
+The arm: build the QEMU shim at `65af51eb`, boot the Mode-2 guest, run the w384
+doorbell-latency rung (`KAYFABE_CE_EXECUTOR=local`, as the failing run used) at `n=64`,
+`n=200`, and `--doorbell-latency-reps 3`; plus `cup3` as the known-positive control.
+
+- **(A) FIXED** — `first_stall_at=none` at `n=64` *and* `n=200`, the closing control **lands**
+  (not `Lost { saw: 0xDEAD0384 }`), reps 1 and 2 no longer stall at 15, and `CUP3_VAL=43`
+  still passes. ⇒ the account and the fix are both right.
+- **(B) UNMOVED** — still `first_stall_at=63`. ⇒ the fix is **not on this path**, or the
+  account is wrong. ⊘ NOT a tuning problem; do not touch thresholds. Re-open §1.
+- **(C) NEWLY REFUSED** — `RingProducerCursorUnknown` appears in the boot log. ⇒ §3.1's named
+  risk fired: a channel whose USERD we cannot read now refuses where it previously served its
+  first lap. **A different fact from (B)** and it does not share a verdict — the wrap is fixed
+  and a *new* refusal is exposed.
+- **(D) CONTROL BROKEN** — `CUP3_VAL` is not 43, or the 8 GR completions regress. ⇒ the fix
+  disturbed lap one despite the green unit control. Revert first, diagnose second.
+- **(E) PARTIAL** — rep 0 clean but reps 1/2 still stall at 15. ⇒ the wrap is fixed and
+  cross-rep state is not; the account is incomplete.
+- **(F) UNMEASURED_NO_BUILD / UNMEASURED_NO_GUEST** — attributable to the build or the boot,
+  **never** to the fix. ⚠ Distinct from every row above and must not be reported as one.
+
+⊘ **Zero bytes in a log is not "still running".** Check process liveness *and* the terminator
+line; `143` (job killed) and `124` (launcher timed out, job fine) mean opposite things.
+
+## 6. Residuals, deliberately NOT closed in this rung
+
+- ★ **The same bug class on the `Emulated` forward-ring path** — `device.rs:2890-2900`:
+  monotonic cursor, `ring[at..]` linear slice, zero-terminated scan. Gated `Emulated`-only
+  (`device.rs:6140-6147`) so it is **not** what bit this guest, but it will bite the first
+  kernel `Emulated` CE channel that completes a lap. Its own doc already admits it
+  (`gpu.rs:761-764`): *"nothing here handles a guest that fills its ring and wraps to index
+  0."*
+- ⊘ **`RING_ENTRIES_FALLBACK = 4096`** (`ceutils.rs:78`, `:493-497`, `:826-829`) silently
+  substitutes when `chan.ring_entries == 0`. It is a **divide-by-zero guard before it is a
+  modulus** (`% entries` panics on a vCPU beneath the BQL), so it cannot simply be deleted.
+  Can only fire on a verbatim guest-declared `gpFifoEntries == 0` on a `Ce`-routed channel
+  that also declared a ring VA; not present in any boot in `traces/`. Left as-is **on
+  purpose**: it is a second behaviour change on the same walk, and the hardware arm
+  **cannot grade it** — it would fire on channels this campaign has never observed, so a boot
+  could not tell a correct refusal from a new wedge.
+
+## 7. ⊘ The one row the account does NOT fully explain
+
+`n=63`, `R6 control (close) = Lost { saw: 0xDEAD0384 }`. The arithmetic says the control's own
+entry (slot 63) *is* consumed first and *should* land.
+
+The candidate reading — **unverified** — is that `0xDEAD_0384` is `DBL_SENTINEL`, which
+`fill_words` writes across the whole `W379_BYTES` region at setup, and that one of the seven
+**re-executed stale `LAUNCH_DMA`s** in that batch has a destination covering `OFF_POST`,
+re-filling the sentinel *over* the control's landed magic.
+
+⚠ If that is right it is **strictly worse** than the diagnosis in §1: not a missing write but
+a **retired copy re-running and clobbering a live value**. The fix would remove it either way.
+If it is wrong, the account has a hole and **this row is where it is** — which is the thing to
+check first if outcome (A) does not come back clean.
+
+## 8. Observability closed alongside
+
+`SERVED-LOCAL` recorded *that* a doorbell was served locally but **not how many ring entries it
+consumed** — the exact quantity this defect corrupts — and was print-capped at 16 lines per
+boot. With that number logged, the defect would have been visible as `entries=8` in any boot
+log instead of inferred from stall positions.
+
+New line: `CE-SERVED-LOCAL[ ⚠ODD] #n token=… chan=… entries=N gp=A->B gp_put=P ring_entries=E`.
+
+★★ **Two per-channel budgets, not one.** Ordinary rows (1 entry, no wrap) and *remarkable*
+rows (`entries != 1` **or** the walk wrapped) have separate budgets. A single cap would have
+hidden exactly the rows the defect produces — a 1024-entry ring wraps at doorbell 1023, a
+thousand ordinary rows after any budget is spent. Same class as the global cap that forged an
+absence in w383. `gp=7->7` while `entries=8` is the signature.
+
+## 9. ★★★★★ THE HARDWARE ARM — OUTCOME (A), MEASURED ON A REAL GA106
+
+Built at `95556ff1`, stamp checked in the binary (`kayfabe-rev:95556ff1…` == HEAD, so this is
+not the stale-binary trap). Lane `w386a`, `KAYFABE_CE_EXECUTOR=local` — the same configuration
+the failing run used.
+
+| | before (`5756322d`) | after (`95556ff1`) |
+|---|---|---|
+| `first_stall_at` | rep0 **63**, rep1 **15**, rep2 **15** | **`none`**, all 3 reps × 3 invocations |
+| `stalled_reps` / `timeouts` | 3 / 3 | **0 / 0** |
+| drains completed | 6 | **96** |
+| `R6 control (close)` | `Lost { saw: 0xDEAD0384 }` | **`Landed`** |
+| submissions graded | truncated at the wrap | **n=1536** |
+
+★ 1536 submissions on a 64-entry ring is **eight full laps**, where it previously died at the
+first. ★★ `RingProducerCursorUnknown` **did not fire** — §3.1's named risk stayed theoretical
+on this hardware.
+
+### 9.1 The new instrument, and what it independently establishes
+
+Every `CE-SERVED-LOCAL` row in the boot:
+
+```
+CE-SERVED-LOCAL #1 token=0x00010002 proc=0 chan=1 entries=1 gp=0->1 gp_put=1 ring_entries=4096
+CE-SERVED-LOCAL #2 token=0x00010002 proc=0 chan=1 entries=1 gp=1->2 gp_put=2 ring_entries=4096
+```
+
+**`entries=1` on every row, cursor tracking the producer exactly, and ZERO `⚠ODD` rows**
+(the budget that catches `entries != 1` or a wrapped walk). The pre-fix signature would have
+been `gp=7->7` with `entries=8`.
+
+⇒ The executor consumes exactly what the guest submitted, and **drops nothing** — which is the
+half of the fix that a stall-position measurement alone could not have shown.
+
+### 9.2 ⊘ What (A) does NOT buy
+
+**NOT a performance result.** `DBL_RATIO_X = 74.0 / 55.5 / 56.6`; guest doorbell p50 ~512–683 µs
+against a native ~9 µs floor, i.e. still **55–74× native**. It grades `PASS` only because that
+gate is set at 1000×. The launch floor is untouched by this rung and remains the binding
+constraint on throughput.
+
+## 10. ⊘⊘ OPEN — THE LLM'S TOKEN COUNT PASSES AND ITS TEXT DOES NOT
+
+Same boot revision, async lane off (the safe arm):
+
+```
+LLM_OK=1  LLM_TOKENS=16  LLM_MS=573799.8
+LLM_TEXT= ，ize'sus(,.- A的  :
+```
+
+against w383's, on the same probe:
+
+```
+LLM_TEXT= ______. A. Paris B. London C. New York D
+```
+
+★★★ **Decoding is GREEDY** — `model.generate(**ids, max_new_tokens=NTOK, do_sample=False)`
+(`scripts/bench/provision_guest_llm.sh:70`). At a fixed revision and prompt the text is
+therefore **required to be identical run to run**; it is not sampling noise.
+
+⚠ **`LLM_TOKENS=16` is a COUNT, and a count cannot see a substitution.** The rung's headline
+grade (`LLM_TOKENS_GRADE=16`) passes on a run whose output is degenerate. This is the same
+class as `a_count_cannot_see_a_substitution`, arriving at the grade layer rather than the
+counter layer.
+
+**What is simultaneously true and must not be waved away:**
+- `W382_MINMM_OK=1  W382_MINMM_SUM=64` — the un-forgeable minimal-matmul check **passes**.
+- `host Xid lines = [0]` — **zero new host Xids**. Nothing faulted.
+- §9.1's instrument shows the CE plane consuming exactly one entry per doorbell, dropping
+  nothing.
+- `LLM_MS` 722 820 → 573 800 and `inline_exceptions` 61 865 → 31 901: this boot was *faster*.
+
+⊘ **NOT ATTRIBUTED.** The LLM's matmuls run on **GR**, not on the CPU CE executor §9.1
+instruments, so §9.1 exonerates the CE plane and says nothing about the compute plane. And
+there is **n=1 on each side** — this tree's own `a_single_boot_43_has_a_20pc_false_negative_rate`
+says a single boot is not a grade. Candidate readings, none established:
+1. w386 changed which work executes on some path (⊘ argued against by 9.1, not excluded);
+2. the LLM text was **never stable** across boots and w383's coherent line was one draw;
+3. prompt/model state differs between the two trees.
+
+**The discriminator, running now:** repeat the LLM at this fixed revision (`w386llm2`,
+`w386llm3`). Under greedy decoding, identical text across repeats ⇒ reading 2 is dead and the
+difference is revision-linked; differing text across repeats at ONE revision ⇒ reading 2 is
+confirmed, the "LLM passes" milestone is weaker than recorded, and the grade needs a text
+assertion, not a count.
+
+⚠ **Whatever the answer, the grade is defective as it stands**: a workload whose output is
+garbage must not report `LLM_OK=1`. That is true independently of what caused this run.
+
+
+## 11. ★★★★★ §10 RESOLVED — IT WAS THE DISK, AND THE FIX IS EXONERATED
+
+Pre-registered outcome **(i)**: tokens with *coherent* text after the host's disk was
+reclaimed.
+
+| run | disk free at the time | `LLM_TEXT` | `LLM_MS` | `inline_exceptions` |
+|---|---|---|---|---|
+| w383 (earlier milestone) | healthy | ` ______. A. Paris B. London C. New York D` | 722 820 | 61 865 |
+| w386llm (§10's alarm) | **~71–100 G, starved** | ` ，ize'sus(,.- A的  :` | 573 800 | 31 901 |
+| w386llm2 / llm3 | starved | `ABSENT` (no tokens) | — | 54 115 / — |
+| **w386llm7 (post-reclaim)** | **178 G** | ` ______. A. Paris B. London C. New York D` | 675 794 | 26 993 |
+
+★★★ **The post-reclaim text is BYTE-IDENTICAL to w383's.** Decoding is greedy
+(`do_sample=False`), so identical output across revisions `w383 → 95556ff1` is exactly what
+a correct system must produce — and it does.
+
+⇒ **All three candidate readings in §10 are now settled:**
+1. *"w386 changed which work executes"* — **REFUTED.** The text is identical either side of
+   the fix. §9.1's instrument argued this and the measurement confirms it.
+2. *"the LLM text was never stable"* — **REFUTED.** It is stable, and reproducibly so.
+3. *"prompt/model state differed"* — **REFUTED.** Same probe, same output.
+
+★ And the fourth reading, which nobody registered because it did not look like a cause:
+**a starved host disk.** ⚠ Note its signature, because it is deceptive — the starved run was
+**FASTER** (573 s vs 676 s) and had **fewer** inline exceptions (31 901 vs 26 993 is the wrong
+direction, but 54 115 on the next one is not). *Less work, done wrong, looks like progress.*
+
+### 11.1 ⊘ WHAT DOES NOT CHANGE, AND IS THE ONLY THING HERE WORTH FIXING
+
+The grade is still defective, and this result makes it worse rather than better:
+
+**`LLM_TOKENS=16` and `LLM_OK=1` PASSED on the garbage run.** A count cannot see a
+substitution. The rung reported its headline success on a boot whose output was degenerate,
+and only a human reading the text caught it.
+
+⇒ **Phase 2 of the roadmap says CUDA applications "must pass" and inherits this definition of
+pass.** A bar built on a count cannot carry a phase that says *must pass*. The grade must
+assert the **text** — under greedy decoding that is cheap and exact: compare against the known
+string, or against the previous run's, and report a diff.
+
+### 11.2 CLOSED at n=2
+
+Run 8, same revision, same clean host: **`LLM_TEXT= ______. A. Paris B. London C. New York D`**
+again, `LLM_MS=681 398` against run 7's `675 794` — **0.8 % apart**.
+
+⇒ Post-reclaim the result is **reproducible in both text and time**, and identical to the
+milestone run recorded weeks earlier. §10 is closed. The only open item it leaves behind is
+§11.1's grade defect, which is a harness change and not a device one.
+
+
+## 12. ⊘⊘⊘ §11 IS WRONG — IT IS NOT THE DISK, IT IS CORRUPTION
+
+**Measured 2026-09-07, `w387prof`, same revision `95556ff1`, 177 G free.** The only variable
+changed from runs 7/8 was `KAYFABE_KFTIME=census`.
+
+```
+LLM_TEXT= ，ize'sus(,.- A的  :        ← the degenerate string, back
+LLM_MS=634895.5
+```
+
+⇒ **§11's conclusion "it was the disk" is REFUTED.** The disk was *a* trigger, not *the*
+cause. I concluded at n=2 having varied one axis and not the other, which is the same
+too-early-closure this campaign keeps paying for.
+
+### 12.1 The pattern across every run at this revision
+
+| run | perturbation | text | `LLM_MS` |
+|---|---|---|---|
+| w383 | none | **coherent** | 722 820 |
+| w386llm | disk starved | garbage | 573 800 |
+| w386llm2 / 3 | disk starved | ABSENT | — |
+| w386llm7 / 8 | none | **coherent** | 675 794 / 681 398 |
+| **w387prof** | **profiler armed** | **garbage** | 634 895 |
+
+★★★ **Coherent ⇔ unperturbed. Garbage ⇔ perturbed, by EITHER a starved disk or an armed
+profiler.** Two unrelated perturbations, same corruption. And **every garbage run is FASTER
+than every coherent one** — less work, done wrong.
+
+### 12.2 It is corruption, not instability
+
+⊘ Decoding is greedy. Wrong tokens mean **wrong values**, i.e. the model's tensors are being
+corrupted. Simultaneously: `W382_MINMM_SUM=64` passes (small, fast, does not run long enough
+to hit it) and there are **zero host Xids** — nothing faults. We compute wrong numbers
+silently.
+
+⇒ **This is a timing-sensitive correctness defect in the compute path**, and it is a far more
+serious finding than the wrap bug this document was opened for.
+
+### 12.3 ★★★ The leading candidate is the SAME defect, still live on the other ring path
+
+§6 recorded it and this run promotes it from residual to prime suspect:
+`crates/kayfabe-rt/../device.rs:2890-2900` — the `Emulated` forward-ring walk — has the
+**identical one-lap bug** this rung fixed for the CE executor: a monotonic cursor, a
+`ring[at..]` linear slice, and a zero-terminated scan. Its own doc comment admits it
+(`gpu.rs:761-764`): *"nothing here handles a guest that fills its ring and wraps to index 0."*
+
+The mechanism §1 established for the CE path applies unchanged: past the wrap it re-executes
+stale entries and **re-releases retired semaphore payloads**. That is a corruption mechanism,
+not merely a hang — and an LLM laps its rings constantly, where the raw client barely did.
+
+⚠ **NOT ESTABLISHED.** Stated as the candidate that fits, with its own refutation: if the
+corruption survives with that path disabled, it is elsewhere. This must be measured, not
+argued — §11 is what happens when I argue.

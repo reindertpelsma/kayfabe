@@ -1,0 +1,45 @@
+GOP_STANDIN_START rev=adbe6fcd 2026-10-03T18:31:54+02:00
+GOP_STANDIN_HOST qemu="QEMU emulator version 10.2.1 (Debian 1:10.2.1+ds-1ubuntu3.2)" accel=kvm kernel=vmlinuz-7.0.0-34-generic work=<scratch>
+GOP_STANDIN_HOST ovmf_package=2025.11-3ubuntu7
+GOP_STANDIN_PE release pe=<target>/fw-release/x86_64-unknown-uefi/release/kf-gop.efi file_bytes=9216 machine=0x8664 subsystem=11 size_of_image=0x4000 signed=false abi_marker=true
+GOP_STANDIN_PE release kf3_accepts=1
+GOP_STANDIN_PE debugcon pe=<target>/fw-debugcon/x86_64-unknown-uefi/release/kf-gop.efi file_bytes=17408 machine=0x8664 subsystem=11 size_of_image=0x7000 signed=false abi_marker=true
+GOP_STANDIN_PE debugcon kf3_accepts=1
+GOP_STANDIN_PE release_sha256=e2616ad8d4cb09da88399218144b6bdea9d2cb3148b701964f926604b7d6dff6
+GOP_STANDIN_ROM rom_bytes=9728
+GOP_STANDIN_ROM image=0 offset=0x0 bytes=0x2600 pcir_offset=0x1c vendor=0x1002 device=0x5046 pcir_rev=3 pcir_len=0x1c class=030000 code_type=3 indicator=0x80
+GOP_STANDIN_ROM image=0 efi_init_blocks=19 subsystem=11 machine=0x8664 compression=None image_header_offset=0x200
+GOP_STANDIN_ROM kfgp=1 vendor=0x1002 device=0x5046 bar=0 offset=0x0 width=1152 height=648 pitch=4608 fb_size=0x2e0000 edid_bytes=128
+GOP_STANDIN_HOST qemu_edk2=/workspace/bench/qemu-10.2.4/pc-bios/edk2-x86_64-code.fd.bz2 md5=661c68c8b0a2ed59d5e4a13563cd6e13
+GOP_STANDIN arm=gop_ubuntu verdict=PASS checks=21 failed=0 pattern_rows_bad=0/648 secure_boot=absent fb_base=0x80000000 pitch=4608 boot_s=2
+GOP_STANDIN arm=gop_qemu_edk2 verdict=PASS checks=21 failed=0 pattern_rows_bad=0/648 secure_boot=absent fb_base=0x80000000 pitch=4608 boot_s=5
+GOP_STANDIN_DETAIL gop_qemu_edk2 edk2: [Security] 3rd party image[0] is deferred to load before EndOfDxe: PciRoot(0x0)/Pci(0x1,0x0)/Offset(0x0,0x25FF).
+GOP_STANDIN_DETAIL gop_qemu_edk2 edk2: [Security] 3rd party image[1E990D18] can be loaded after EndOfDxe: PciRoot(0x0)/Pci(0x1,0x0)/Offset(0x0,0x25FF).
+GOP_STANDIN_DETAIL gop_qemu_edk2 edk2: GraphicsConsole video resolution 1152 x 648
+GOP_STANDIN_DETAIL gop_qemu_edk2 edk2: Graphics Console Started, Mode: 3
+GOP_STANDIN arm=stdvga_builtin_wins verdict=PASS observed=builtin-driver-bound kf_gop_loaded=1 kf_gop_started=0 gop_modes=30
+GOP_STANDIN arm=neg_wrong_id verdict=PASS refusal="ids 1002:5046 but the descriptor names 1002:5047" test_app_ours=0
+GOP_STANDIN arm=neg_no_descriptor verdict=PASS refusal="KFGP: no KFGP magic" test_app_ours=0
+PASS boot_vga=1 bootfb=0x80000000-0x802d8fff bootfb_bytes=2985984 sysfb=0000:00:01.0 driver=simple-framebuffer fb0=simpledrmdrmfb:1152,648:stride=4608 simpledrm=initialized fb0_write=ok bar_pattern_rows_bad=0/648
+GOP_STANDIN_DETAIL linux KFLINUX dmesg [    1.639743] pci 0000:00:01.0: vgaarb: setting as boot VGA device
+GOP_STANDIN_DETAIL linux KFLINUX dmesg [    1.639758] pci 0000:00:01.0: vgaarb: bridge control possible
+GOP_STANDIN_DETAIL linux KFLINUX dmesg [    1.639760] pci 0000:00:01.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
+GOP_STANDIN_DETAIL linux KFLINUX dmesg [    1.639776] vgaarb: loaded
+GOP_STANDIN_DETAIL linux KFLINUX dmesg [    1.924327] simple-framebuffer simple-framebuffer.0: [drm] Registered 1 planes with drm panic
+GOP_STANDIN_DETAIL linux KFLINUX dmesg [    1.927903] [drm] Initialized simpledrm 1.0.0 for simple-framebuffer.0 on minor 0
+GOP_STANDIN arm=linux verdict=PASS boot_vga=1 bootfb=0x80000000-0x802d8fff bootfb_bytes=2985984 sysfb=0000:00:01.0 driver=simple-framebuffer fb0=simpledrmdrmfb:1152,648:stride=4608 simpledrm=initialized fb0_write=ok bar_pattern_rows_bad=0/648 kernel=7.0.0-34-generic
+GOP_STANDIN arm=linux_two_vga verdict=PASS boot_vga=0000:00:03.0 bootfb_owner=0000:00:03.0 02.0:cmd=0x0007 03.0:cmd=0x0007 other_has_io_and_mem=yes
+GOP_STANDIN arm=sb_ms_unsigned_observe verdict=OBSERVED observed=unsigned_rom_loaded rom_loaded=1 rom_started=1 secure_boot=not-reported app_result="none" app_denied="Access Denied" 
+Signing Unsigned original image
+Signing Unsigned original image
+GOP_STANDIN_PE snakeoil-signed pe=<scratch>/sb/kf-gop-signed.efi file_bytes=19256 machine=0x8664 subsystem=11 size_of_image=0x7000 signed=true abi_marker=true
+GOP_STANDIN_PE snakeoil-signed kf3_accepts=1
+GOP_STANDIN_ROM tailpad pe_at=0x200 pe_bytes=19256 padding_after=200
+GOP_STANDIN arm=sb_snakeoil_signed verdict=PASS observed=signed_rom_loaded rom_loaded=1 rom_started=1 secure_boot=1 app_result="KFGOP-TEST RESULT PASS checks=21 failed=0" app_denied="no" 
+GOP_STANDIN arm=sb_snakeoil_unsigned_observe verdict=OBSERVED observed=loaded rom_loaded=1 rom_started=1 secure_boot=1 app_result="KFGOP-TEST RESULT PASS checks=21 failed=0" app_denied="no" 
+GOP_STANDIN arm=sb_snakeoil_tailpad_observe verdict=OBSERVED observed=loaded rom_loaded=1 rom_started=1 secure_boot=1 app_result="KFGOP-TEST RESULT PASS checks=21 failed=0" app_denied="no" 
+GOP_STANDIN arm=sb_deny_signed verdict=PASS observed=rom_verified_and_started rom_loaded=1 rom_started=1 secure_boot=1 app_result="KFGOP-TEST RESULT PASS checks=21 failed=0" app_denied="no" 
+GOP_STANDIN arm=sb_deny_unsigned verdict=PASS observed=rom_denied rom_loaded=0 rom_started=0 secure_boot=1 app_result="KFGOP-TEST RESULT FAIL checks=1 failed=2" app_denied="no" 
+GOP_STANDIN arm=sb_deny_tailpad verdict=PASS observed=rom_denied rom_loaded=0 rom_started=0 secure_boot=1 app_result="KFGOP-TEST RESULT FAIL checks=1 failed=2" app_denied="no" 
+GOP_STANDIN_SUMMARY arms=14 passed=11 observed=3 skipped=0 failed=0 gop_ubuntu=PASS gop_qemu_edk2=PASS stdvga_builtin_wins=PASS neg_wrong_id=PASS neg_no_descriptor=PASS linux=PASS linux_two_vga=PASS sb_ms_unsigned_observe=OBSERVED sb_snakeoil_signed=PASS sb_snakeoil_unsigned_observe=OBSERVED sb_snakeoil_tailpad_observe=OBSERVED sb_deny_signed=PASS sb_deny_unsigned=PASS sb_deny_tailpad=PASS 2026-10-03T18:33:20+02:00
+GOP_STANDIN_KEPT <scratch>

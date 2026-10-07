@@ -1,0 +1,2 @@
+/dev/nbd0 disconnected
+{"schema": "kayfabe-private-watchdog-recovery/1", "run": 19, "filename": "WATCHDOG-20261006-2331.dmp", "bytes": 343863, "sha256": "25a9c8f0515c9f67e6fb546bfffa94e935ea71e74fb7c33c5af78e23ef45f050", "dump_mtime_utc": "2026-10-06T23:31:57.993496+00:00", "experiment_start_utc": "2026-10-06T23:31:50.576107+00:00", "disk_access": "read-only NBD and NTFS; supervisor stopped", "baseline_sha256": "9ff194d31f0a871757fd436f14ab0da2e1e8a6360dc36bb925c12af12a64f85c", "windows_offset": 332398592, "cleanup_verified": true}

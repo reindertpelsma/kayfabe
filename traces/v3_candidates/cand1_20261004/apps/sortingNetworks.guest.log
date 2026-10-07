@@ -1,0 +1,165 @@
+=== sortingNetworks side=guest start=2026-10-04T03:08:22+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/sortingNetworks
+/opt/apps/bundle/samples/sortingNetworks Starting...
+
+Starting up CUDA context...
+GPU Device 0: "Ampere" with compute capability 8.6
+
+Allocating and initializing host arrays...
+
+Allocating and initializing CUDA arrays...
+
+Running GPU bitonic sort (1 identical iterations)...
+
+Testing array length 64 (16384 arrays per batch)...
+Average time: 1.048000 ms
+
+
+Validating the results...
+...reading back GPU results
+...inspecting keys array: OK
+...inspecting keys and values array: OK
+...stability property: NOT stable
+
+Testing array length 128 (8192 arrays per batch)...
+Average time: 0.334000 ms
+
+
+Validating the results...
+...reading back GPU results
+...inspecting keys array: OK
+...inspecting keys and values array: OK
+...stability property: NOT stable
+
+Testing array length 256 (4096 arrays per batch)...
+Average time: 0.394000 ms
+
+
+Validating the results...
+...reading back GPU results
+...inspecting keys array: OK
+...inspecting keys and values array: OK
+...stability property: NOT stable
+
+Testing array length 512 (2048 arrays per batch)...
+Average time: 0.415000 ms
+
+
+Validating the results...
+...reading back GPU results
+...inspecting keys array: OK
+...inspecting keys and values array: OK
+...stability property: NOT stable
+
+Testing array length 1024 (1024 arrays per batch)...
+Average time: 0.534000 ms
+
+
+Validating the results...
+...reading back GPU results
+...inspecting keys array: OK
+...inspecting keys and values array: OK
+...stability property: NOT stable
+
+Testing array length 2048 (512 arrays per batch)...
+Average time: 1.197000 ms
+
+
+Validating the results...
+...reading back GPU results
+...inspecting keys array: OK
+...inspecting keys and values array: OK
+...stability property: NOT stable
+
+Testing array length 4096 (256 arrays per batch)...
+Average time: 0.812000 ms
+
+
+Validating the results...
+...reading back GPU results
+...inspecting keys array: OK
+...inspecting keys and values array: OK
+...stability property: NOT stable
+
+Testing array length 8192 (128 arrays per batch)...
+Average time: 0.974000 ms
+
+
+Validating the results...
+...reading back GPU results
+...inspecting keys array: OK
+...inspecting keys and values array: OK
+...stability property: NOT stable
+
+Testing array length 16384 (64 arrays per batch)...
+Average time: 1.559000 ms
+
+
+Validating the results...
+...reading back GPU results
+...inspecting keys array: OK
+...inspecting keys and values array: OK
+...stability property: NOT stable
+
+Testing array length 32768 (32 arrays per batch)...
+Average time: 1.942000 ms
+
+
+Validating the results...
+...reading back GPU results
+...inspecting keys array: OK
+...inspecting keys and values array: OK
+...stability property: NOT stable
+
+Testing array length 65536 (16 arrays per batch)...
+Average time: 2.565000 ms
+
+
+Validating the results...
+...reading back GPU results
+...inspecting keys array: OK
+...inspecting keys and values array: OK
+...stability property: NOT stable
+
+Testing array length 131072 (8 arrays per batch)...
+Average time: 3.140000 ms
+
+
+Validating the results...
+...reading back GPU results
+...inspecting keys array: OK
+...inspecting keys and values array: OK
+...stability property: NOT stable
+
+Testing array length 262144 (4 arrays per batch)...
+Average time: 3.867000 ms
+
+
+Validating the results...
+...reading back GPU results
+...inspecting keys array: OK
+...inspecting keys and values array: OK
+...stability property: NOT stable
+
+Testing array length 524288 (2 arrays per batch)...
+Average time: 4.528000 ms
+
+
+Validating the results...
+...reading back GPU results
+...inspecting keys array: OK
+...inspecting keys and values array: OK
+...stability property: NOT stable
+
+Testing array length 1048576 (1 arrays per batch)...
+Average time: 5.471000 ms
+
+sortingNetworks-bitonic, Throughput = 191.6607 MElements/s, Time = 0.00547 s, Size = 1048576 elements, NumDevsUsed = 1, Workgroup = 512
+
+Validating the results...
+...reading back GPU results
+...inspecting keys array: OK
+...inspecting keys and values array: OK
+...stability property: NOT stable
+
+Shutting down...
+=== end rc=0 secs=11 2026-10-04T03:08:33+00:00

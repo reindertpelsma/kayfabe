@@ -1,0 +1,107 @@
+GUEST CAPTURES, SECOND FIRING — the two status divergences served, and the name fixed
+======================================================================================
+The re-run the first firing's worklist asked for. Diff against
+traces/host_reference_ga106/<stage>_r1.jsonl.zst; the "before" half is the sibling
+directory traces/guest_mode2_vh2/, kept intact on purpose.
+
+★★★ THE HEADLINE, AND IT IS A NO ON THE FALSIFIER
+  PROGRESS 221 / 479 = 46.1%   — IDENTICAL to the first firing, to the ioctl.
+  The wall is at the same index, on the same id, with the same multiplicity:
+      HOST A[350] RM_ALLOC cls=0x0040   GUEST B[315] RM_CONTROL 0x20801702 x175
+  ⇒ Serving both status divergences and fixing the model name moved the progress
+  fraction by ZERO. That was the prediction stated in the source commit BEFORE this
+  boot (`0x56` is forgiven; both ids are ~220 calls upstream of the wall), and the
+  measurement agrees with it. ⊘ A rung that does not move this number is not thereby
+  worthless — it is a rung on a different plane, and this instrument's whole value is
+  that it says which.
+
+★★★ WHAT DID MOVE, AND IT IS THE PART A PROGRESS FRACTION CANNOT SHOW
+  THE 0x56 CENSUS IS NOW **1**, AND IT IS HARDWARE'S OWN CENSUS EXACTLY.
+    before: 0x2080012f (forgiven), 0x20810108 (divergence), 0x2080200a (divergence)
+    after : 0x2080012f  — and nothing else, in either stage
+    hardware: 0x2080012f — and nothing else, in the whole 613-record program
+  `nvdiff.py diff`'s STATUS class fires **0** times against the reference, down from 2.
+  For the first time this port's control plane returns the same statuses a real GA106
+  does, at every aligned record of the program.
+
+  Total divergences 1005 -> 1000; UNEXPLAINED 505 -> 502; STATUS 2 -> 0.
+  ⊘ The residue is dominated by the reference rig, not by us: see the ⊘⊘ CORRECTIONS in
+  traces/host_reference_ga106/MANIFEST.txt. Rank by KIND, never by index.
+
+★★ THE MODEL NAME, END TO END
+  `0x20800110 GPU_GET_NAME_STRING` reply body @0x4:
+    before  23 zero bytes                      -> workload printed `name=`, nvidia-smi ERR!
+    after   "NVIDIA GeForce RTX 3060"          -> workload prints the name
+  `params_post@0x4 4e5649444941... vs 0000...` was an UNEXPLAINED divergence in the first
+  firing and is **absent** here; the bytes are identical to the host reference's.
+  ⊘ Only the environmental `hObject 07 vs 03` remains on that record — the reference GPU
+  is minor 7 on a five-GPU rig.
+  ⊘ `gpuShortNameString` (0x20800111, "GA106-A") is still ZERO, deliberately: nothing an
+  operator runs surfaces it, and inventing it is the failure this repo has a memory for.
+
+PROVENANCE (a bench claim without its revision is not a claim)
+  bench         vast.ai instance 47373001 ("vh2"), 2026-08-10 15:22-15:29 UTC
+  host GPU      NVIDIA GeForce RTX 3060 (GA106), host driver 580.159.04 OPEN
+  emulation     kayfabe QOM shim device `nvkvm-gpu`, QEMU 10.2.4 + KVM
+  ★ SOURCE REV  kayfabe 28cf456 (branch `status-divergence`)
+                = /workspace/bench/BUILD_REV.txt on vh2 at capture time.
+                ⊘ Do not attribute these numbers to "master"; attribute them to 28cf456.
+                The first firing was 954f926 — the diff between the two revisions is
+                exactly: serve 0x20810108, serve 0x20800a9a, `gpu-name` property.
+  boot          scripts/bench/boot_nvkvm.sh nvd2, and the device line it logged is
+                  nvkvm-gpu,bar1-size=268435456,bar2-size=33554432,id=kf0,
+                  gpu-name=NVIDIA GeForce RTX 3060
+                ★ The name is read from the HOST at boot time
+                (`nvidia-smi --query-gpu=gpu_name`, i.e. the host driver's own answer to
+                that same control), not declared in a table.
+  guest driver  NVIDIA UNIX **Open** Kernel Module 580.159.04, STOCK and UNPATCHED
+  guest kernel  6.8.0-136-generic, Ubuntu 24.04
+  instrument    tests/mode2/nvdiff/nvdiff_shim.c   md5 480e45c41de971910918438fb582f167
+  workload      tests/mode2/nvdiff/nvd_prog.c      md5 7af4c3ec2b702cf04ae00d68a6596c4d
+  uvm table     tests/mode2/nvdiff/uvm_sizes.h     md5 c9a0c5da3aabe32f8852f15e72405b63
+                — all three byte-identical to the host reference's AND to the first
+                firing's. One instrument, three subjects; that is what makes the
+                before/after comparison a comparison.
+  capture opts  NVDIFF_MAXBUF=65536, no truncation
+  harness       scripts/mode2_diag/nvdiff_capture_cycle.sh (boot -> wait -> capture ->
+                pull -> ASSERT), so this is re-derivable rather than remembered.
+
+FILES
+  dev_r{1,2}.jsonl.zst    94 records each, prog rc=0    — cuInit + device queries COMPLETE
+  ctx_r{1,2}.jsonl.zst   490 records each, prog rc=124  — cuCtxCreate still HANGS at 180 s
+  <stage>_r*.stdout       the workload's own verdict (★ `name=NVIDIA GeForce RTX 3060`)
+  env_<stage>.txt         environment as recorded at capture time
+  <stage>_dmesg.log.gz    the GUEST DRIVER'S OWN dmesg — 55 / 317 NVRM lines, asserted
+                          non-empty by the harness (the serial log is not where it is)
+  run_nvd2_qemu.log.gz    the device's own report for this boot
+
+GUEST NOISE FLOOR — measured BEFORE any diff was read, and ZERO
+  dev_r1 vs dev_r2   94 vs  94 records, ratio 1.000000, NO DIVERGENCE after canonicalisation
+  ctx_r1 vs ctx_r2  490 vs 490 records, ratio 1.000000, NO DIVERGENCE after canonicalisation
+  The two ctx captures are byte-identical in size (694 270 B) — and that is the SAME size
+  the first firing's were, which is a second, independent statement that the streams differ
+  only where the fixes touched them.
+  ⊘ Both runs of a stage share one QEMU process and one boot, so this bounds run-to-run
+  noise, NOT boot-to-boot noise.
+
+★ THE DEVICE'S OWN REPORT AGREES, FROM THE OTHER SIDE
+  run_nvd2_qemu.log records, in its end-of-boot census:
+      control 0x20810108 result 0x00000000 x4
+      control 0x20800a9a result 0x00000000 x2
+  and neither id appears in the `unserviced fn 76 cmd` list any more (27 ids remain).
+  ⊘⊘ **`0x2080200a` appears in this log ZERO times, as it always has.** That is the
+  refutation the worklist needed: the userspace census named `0x2080200a`, and the id that
+  reaches this device is `0x20800a9a` — the guest kernel implements the first and forwards
+  the second. Two instruments, two boundaries, one event. Serving the id the census named
+  would have been dead code with a green test.
+
+⊘ WHAT THIS RUN DOES NOT SAY
+  1. It is an ioctl/mmap trace of the CONTROL plane. `ce` and `launch` are byte-identical
+     to `ctx` on the host, so a kernel launch costs zero RM ioctls and nothing here bounds
+     the doorbell, pushbuffer, semaphore or completion planes.
+  2. The 0x56 census is a USERSPACE census. This boot's guest kernel still emits 317 NVRM
+     lines, and `kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state,
+     status=0x56` is still among them — a DIFFERENT internal control, deliberately not
+     touched. ⚠ Do not read that line as this fix having failed.
+  3. Cross-driver and cross-version as ever: closed 580.173.02 reference vs open 580.159.04
+     guest.

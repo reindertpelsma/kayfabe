@@ -1,0 +1,303 @@
+{
+  "schema": "kayfabe-compiled-request-flags/1",
+  "source_commit": "307159f2623d3bf45feb9177bd2da52ffbc5ddf9",
+  "header_sha256": {
+    "src/common/sdk/nvidia/inc/nvos.h": "07f9f453afbf080750663abc9e04e2d3b55500887303ba03bd6855916d2405bd",
+    "src/common/sdk/nvidia/inc/alloc/alloc_channel.h": "f0211fbc8bf3f80841f699bf4ccb776d32517308782dfb3c8e99c7652986b5ab"
+  },
+  "compiler": "cc (Ubuntu 15.2.0-16ubuntu1) 15.2.0",
+  "memory_flags": "0x48040200",
+  "channel_flags": "0x200120",
+  "fields": {
+    "NVOS02_FLAGS_PHYSICALITY": {
+      "mask": "0xf0",
+      "shift": 4,
+      "value": 0,
+      "enum_matches": [
+        "NVOS02_FLAGS_PHYSICALITY_CONTIGUOUS"
+      ]
+    },
+    "NVOS02_FLAGS_LOCATION": {
+      "mask": "0xf00",
+      "shift": 8,
+      "value": 2,
+      "enum_matches": [
+        "NVOS02_FLAGS_LOCATION_VIDMEM"
+      ]
+    },
+    "NVOS02_FLAGS_COHERENCY": {
+      "mask": "0xf000",
+      "shift": 12,
+      "value": 0,
+      "enum_matches": [
+        "NVOS02_FLAGS_COHERENCY_UNCACHED"
+      ]
+    },
+    "NVOS02_FLAGS_ALLOC": {
+      "mask": "0x30000",
+      "shift": 16,
+      "value": 0,
+      "enum_matches": [
+        "NVOS02_FLAGS_ALLOC_NISO_DISPLAY_NO",
+        "NVOS02_FLAGS_ALLOC_USER_READ_ONLY_NO",
+        "NVOS02_FLAGS_ALLOC_DEVICE_READ_ONLY_NO"
+      ]
+    },
+    "NVOS02_FLAGS_GPU_CACHEABLE": {
+      "mask": "0x40000",
+      "shift": 18,
+      "value": 1,
+      "enum_matches": [
+        "NVOS02_FLAGS_GPU_CACHEABLE_YES"
+      ]
+    },
+    "NVOS02_FLAGS_KERNEL_MAPPING": {
+      "mask": "0x80000",
+      "shift": 19,
+      "value": 0,
+      "enum_matches": [
+        "NVOS02_FLAGS_KERNEL_MAPPING_NO_MAP"
+      ]
+    },
+    "NVOS02_FLAGS_ALLOC_NISO_DISPLAY": {
+      "mask": "0x100000",
+      "shift": 20,
+      "value": 0,
+      "enum_matches": [
+        "NVOS02_FLAGS_ALLOC_NISO_DISPLAY_NO"
+      ]
+    },
+    "NVOS02_FLAGS_ALLOC_USER_READ_ONLY": {
+      "mask": "0x200000",
+      "shift": 21,
+      "value": 0,
+      "enum_matches": [
+        "NVOS02_FLAGS_ALLOC_USER_READ_ONLY_NO"
+      ]
+    },
+    "NVOS02_FLAGS_ALLOC_DEVICE_READ_ONLY": {
+      "mask": "0x400000",
+      "shift": 22,
+      "value": 0,
+      "enum_matches": [
+        "NVOS02_FLAGS_ALLOC_DEVICE_READ_ONLY_NO"
+      ]
+    },
+    "NVOS02_FLAGS_PEER_MAP_OVERRIDE": {
+      "mask": "0x800000",
+      "shift": 23,
+      "value": 0,
+      "enum_matches": [
+        "NVOS02_FLAGS_PEER_MAP_OVERRIDE_DEFAULT"
+      ]
+    },
+    "NVOS02_FLAGS_ALLOC_TYPE_SYNCPOINT": {
+      "mask": "0x1000000",
+      "shift": 24,
+      "value": 0,
+      "enum_matches": []
+    },
+    "NVOS02_FLAGS_MEMORY_PROTECTION": {
+      "mask": "0x6000000",
+      "shift": 25,
+      "value": 0,
+      "enum_matches": [
+        "NVOS02_FLAGS_MEMORY_PROTECTION_DEFAULT"
+      ]
+    },
+    "NVOS02_FLAGS_REGISTER_MEMDESC_TO_PHYS_RM": {
+      "mask": "0x8000000",
+      "shift": 27,
+      "value": 1,
+      "enum_matches": [
+        "NVOS02_FLAGS_REGISTER_MEMDESC_TO_PHYS_RM_TRUE"
+      ]
+    },
+    "NVOS02_FLAGS_MAPPING": {
+      "mask": "0xc0000000",
+      "shift": 30,
+      "value": 1,
+      "enum_matches": [
+        "NVOS02_FLAGS_MAPPING_NO_MAP"
+      ]
+    },
+    "NVOS04_FLAGS_CHANNEL_TYPE": {
+      "mask": "0x3",
+      "shift": 0,
+      "value": 0,
+      "enum_matches": [
+        "NVOS04_FLAGS_CHANNEL_TYPE_PHYSICAL"
+      ]
+    },
+    "NVOS04_FLAGS_VPR": {
+      "mask": "0x4",
+      "shift": 2,
+      "value": 0,
+      "enum_matches": [
+        "NVOS04_FLAGS_VPR_FALSE"
+      ]
+    },
+    "NVOS04_FLAGS_CC_SECURE": {
+      "mask": "0x4",
+      "shift": 2,
+      "value": 0,
+      "enum_matches": [
+        "NVOS04_FLAGS_CC_SECURE_FALSE"
+      ]
+    },
+    "NVOS04_FLAGS_CHANNEL_SKIP_MAP_REFCOUNTING": {
+      "mask": "0x8",
+      "shift": 3,
+      "value": 0,
+      "enum_matches": [
+        "NVOS04_FLAGS_CHANNEL_SKIP_MAP_REFCOUNTING_FALSE"
+      ]
+    },
+    "NVOS04_FLAGS_GROUP_CHANNEL_RUNQUEUE": {
+      "mask": "0x10",
+      "shift": 4,
+      "value": 0,
+      "enum_matches": [
+        "NVOS04_FLAGS_GROUP_CHANNEL_RUNQUEUE_DEFAULT"
+      ]
+    },
+    "NVOS04_FLAGS_PRIVILEGED_CHANNEL": {
+      "mask": "0x20",
+      "shift": 5,
+      "value": 1,
+      "enum_matches": [
+        "NVOS04_FLAGS_PRIVILEGED_CHANNEL_TRUE"
+      ]
+    },
+    "NVOS04_FLAGS_DELAY_CHANNEL_SCHEDULING": {
+      "mask": "0x40",
+      "shift": 6,
+      "value": 0,
+      "enum_matches": [
+        "NVOS04_FLAGS_DELAY_CHANNEL_SCHEDULING_FALSE"
+      ]
+    },
+    "NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE": {
+      "mask": "0x80",
+      "shift": 7,
+      "value": 0,
+      "enum_matches": [
+        "NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_FALSE"
+      ]
+    },
+    "NVOS04_FLAGS_CHANNEL_USERD_INDEX_VALUE": {
+      "mask": "0x700",
+      "shift": 8,
+      "value": 1,
+      "enum_matches": []
+    },
+    "NVOS04_FLAGS_CHANNEL_USERD_INDEX_FIXED": {
+      "mask": "0x800",
+      "shift": 11,
+      "value": 0,
+      "enum_matches": [
+        "NVOS04_FLAGS_CHANNEL_USERD_INDEX_FIXED_FALSE"
+      ]
+    },
+    "NVOS04_FLAGS_CHANNEL_USERD_INDEX_PAGE_VALUE": {
+      "mask": "0x1ff000",
+      "shift": 12,
+      "value": 0,
+      "enum_matches": []
+    },
+    "NVOS04_FLAGS_CHANNEL_USERD_INDEX_PAGE_FIXED": {
+      "mask": "0x200000",
+      "shift": 21,
+      "value": 1,
+      "enum_matches": [
+        "NVOS04_FLAGS_CHANNEL_USERD_INDEX_PAGE_FIXED_TRUE"
+      ]
+    },
+    "NVOS04_FLAGS_CHANNEL_DENY_AUTH_LEVEL_PRIV": {
+      "mask": "0x400000",
+      "shift": 22,
+      "value": 0,
+      "enum_matches": [
+        "NVOS04_FLAGS_CHANNEL_DENY_AUTH_LEVEL_PRIV_FALSE"
+      ]
+    },
+    "NVOS04_FLAGS_CHANNEL_SKIP_SCRUBBER": {
+      "mask": "0x800000",
+      "shift": 23,
+      "value": 0,
+      "enum_matches": [
+        "NVOS04_FLAGS_CHANNEL_SKIP_SCRUBBER_FALSE"
+      ]
+    },
+    "NVOS04_FLAGS_CHANNEL_CLIENT_MAP_FIFO": {
+      "mask": "0x1000000",
+      "shift": 24,
+      "value": 0,
+      "enum_matches": [
+        "NVOS04_FLAGS_CHANNEL_CLIENT_MAP_FIFO_FALSE"
+      ]
+    },
+    "NVOS04_FLAGS_SET_EVICT_LAST_CE_PREFETCH_CHANNEL": {
+      "mask": "0x2000000",
+      "shift": 25,
+      "value": 0,
+      "enum_matches": [
+        "NVOS04_FLAGS_SET_EVICT_LAST_CE_PREFETCH_CHANNEL_FALSE"
+      ]
+    },
+    "NVOS04_FLAGS_CHANNEL_VGPU_PLUGIN_CONTEXT": {
+      "mask": "0x4000000",
+      "shift": 26,
+      "value": 0,
+      "enum_matches": [
+        "NVOS04_FLAGS_CHANNEL_VGPU_PLUGIN_CONTEXT_FALSE"
+      ]
+    },
+    "NVOS04_FLAGS_CHANNEL_PBDMA_ACQUIRE_TIMEOUT": {
+      "mask": "0x8000000",
+      "shift": 27,
+      "value": 0,
+      "enum_matches": [
+        "NVOS04_FLAGS_CHANNEL_PBDMA_ACQUIRE_TIMEOUT_FALSE"
+      ]
+    },
+    "NVOS04_FLAGS_GROUP_CHANNEL_THREAD": {
+      "mask": "0x30000000",
+      "shift": 28,
+      "value": 0,
+      "enum_matches": [
+        "NVOS04_FLAGS_GROUP_CHANNEL_THREAD_DEFAULT"
+      ]
+    },
+    "NVOS04_FLAGS_MAP_CHANNEL": {
+      "mask": "0x40000000",
+      "shift": 30,
+      "value": 0,
+      "enum_matches": [
+        "NVOS04_FLAGS_MAP_CHANNEL_FALSE"
+      ]
+    },
+    "NVOS04_FLAGS_SKIP_CTXBUFFER_ALLOC": {
+      "mask": "0x80000000",
+      "shift": 31,
+      "value": 0,
+      "enum_matches": [
+        "NVOS04_FLAGS_SKIP_CTXBUFFER_ALLOC_FALSE"
+      ]
+    }
+  },
+  "device_flags": "0x38",
+  "device_flag_names": [
+    "NV_DEVICE_ALLOCATION_FLAGS_VASPACE_SIZE",
+    "NV_DEVICE_ALLOCATION_FLAGS_MAP_PTE",
+    "NV_DEVICE_ALLOCATION_FLAGS_VASPACE_IS_TARGET"
+  ],
+  "va_modes": {
+    "NV_DEVICE_ALLOCATION_VAMODE_OPTIONAL_MULTIPLE_VASPACES": 0,
+    "NV_DEVICE_ALLOCATION_VAMODE_SINGLE_VASPACE": 1,
+    "NV_DEVICE_ALLOCATION_VAMODE_MULTIPLE_VASPACES": 2
+  },
+  "limits": [
+    "Scalar bitfield decoding; not permission to forward requests or claim hardware support."
+  ]
+}

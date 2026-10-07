@@ -1,0 +1,930 @@
+diff --git a/src/qemu/nvkvm_gpu_emul.c b/src/qemu/nvkvm_gpu_emul.c
+index d028664..c0eebef 100644
+--- a/src/qemu/nvkvm_gpu_emul.c
++++ b/src/qemu/nvkvm_gpu_emul.c
+@@ -239,7 +239,7 @@ struct NvkvmGpuEmul {
+      * single chan_* fields above tracked, dropping the scrubber's work -> the
+      * ce_utils.c:349 timeout).  On a doorbell we walk EVERY channel's pending
+      * GPFIFO so we never need to map the doorbell token's chid to a channel. */
+-#define NVKVM_MAX_CHANS 32
++#define NVKVM_MAX_CHANS 64   /* #14: two concurrent processes register ~27 channels EACH */
+     struct nvkvm_chan_entry {
+         uint64_t gpfifo_va, userd;
+         uint32_t gpfifo_ent, gp_get, hvaspace, payload;
+@@ -382,6 +382,20 @@ struct NvkvmGpuEmul {
+      * resolves under its OWN client's VAS even after the handle is gone. */
+     struct { uint32_t client; uint64_t pdb; bool root_sys; } m2_cli_vas[64];
+     int      m2_cli_vas_n;
++    /* #14: DUP_OBJECT (RPC fn=21, NVOS55) handle-graph edges.  UVM's per-process
++     * gpu-ops client DUPs the user's FERMI_VASPACE_A out of libcuda's compute client
++     * (nvGpuOpsDupAddressSpace), then issues SET_PAGE_DIRECTORY under the dup handle —
++     * so chan_vas[] captures the user VAS under UVM's client, NOT the compute client
++     * that owns the executing channel.  With ONE process that ambiguity is harmless;
++     * with TWO, the stock driver hands both processes IDENTICAL guest VAs, and any
++     * client-blind VAS pick resolves process B's channel under process A's PDB (the
++     * #14 concurrent-cuCtxCreate hang).  These observed dup edges are the forward-
++     * populated ownership facts (address-table principle: transport-observed, never
++     * reverse-derived) that let the pick require "VAS belongs to the executing
++     * channel's client".  Edges are dropped when either side's client is freed
++     * (RM handle values are reused across process lifetimes). */
++    struct { uint32_t dst_client, dst_obj, src_client, src_obj; } m2_dup[64];
++    int      m2_dup_n;
+     uint32_t chan_hvaspace;    /* the tracked channel's hVASpace handle */
+ 
+     /* DEBUG-PROOF backdoor (mode2_uvm_complete): the patched guest UVM reports
+@@ -432,7 +446,7 @@ struct NvkvmGpuEmul {
+     int      m2_devvas_n;
+     /* M5.3: TSG (0xa06c) handle -> engineType, so a channel that passes engineType=0
+      * (NULL, "inherit") can be given its TSG's engine explicitly on the host. */
+-    struct { uint32_t tsg, engine; } m2_tsgeng[32];
++    struct { uint32_t tsg, engine; } m2_tsgeng[64];   /* #14: 2 procs */
+     int      m2_tsgeng_n;
+     /* M5.3 data-plane: the GR-client subdevice (NV20_SUBDEVICE_0 0x2080) handle, needed
+      * to issue GR_GET_CTX_BUFFER_INFO on the host shadow context after the compute object
+@@ -451,7 +465,7 @@ struct NvkvmGpuEmul {
+      * it from host_qva instead of the local g_malloc0 FB page — so the guest sees real
+      * GPU-initialized state (the proven cuCtxCreate fix). Inert until populated. The
+      * bring-up mechanism; KVM-memslot backing is the perf endpoint (see design doc). */
+-    struct { uint64_t fb_base, size; void *host_qva; } m2_fbback[64];
++    struct { uint64_t fb_base, size; void *host_qva; } m2_fbback[128];  /* #14: 2 procs */
+     int      m2_fbback_n;
+     /* M5.3 DIAG: crash-window FB-read probe. Set true the moment the GR compute
+      * object (0xc7c0) alloc returns OK — libcuda then reads GR-context GPU memory
+@@ -471,7 +485,7 @@ struct NvkvmGpuEmul {
+      * USERD IS the guest's USERD view (double-mmap): guest GP_PUT lands in host USERD and
+      * the host GPU advances GP_GET there for the guest's poll to see. */
+     struct { uint32_t client, chan; uint32_t h_userd; void *qva; uint64_t fb_base, size; }
+-             m2_chanbuf[32];
++             m2_chanbuf[96];   /* #14: two processes register ~27 channels EACH */
+     int      m2_chanbuf_n;
+     uint32_t m2_databuf_next;   /* unique host handle allocator for data-plane objects */
+     uint64_t m2_cur_gva;        /* BAR1 GPU VA of the in-flight aperture access (~0=none),
+@@ -551,6 +565,34 @@ struct NvkvmGpuEmul {
+     uint32_t m2_last_db_token;  /* M5.11: last guest work-submit token seen at the doorbell (dedup log) */
+     bool     m2_last_db_valid;
+     uint32_t m2_gr_client;      /* M5.7: the GR compute client (set at crashwin arm) */
++    /* #14: ALL user GR compute clients (one per guest process — every client that
++     * allocs an AMPERE_COMPUTE_B 0xc7c0).  m2_gr_client stays the FIRST (legacy
++     * single-process scalar, unchanged); the sweep/ring/backing paths iterate this
++     * list so a 2nd process's client is a peer, not invisible.  Entries drop on
++     * root client free (RM reuses handle values across process lifetimes). */
++    uint32_t m2_gr_clients[8];
++    int      m2_gr_clients_n;
++    /* #14 EARLY-ARM: user compute clients derived from DUP_OBJECT SRC (the UVM
++     * handover dups the user's VASpace OUT of libcuda's client), recorded at the
++     * fn=21 snoop — which lands at cuCtxCreate's UVM-registration step, BEFORE the
++     * client's channels, working-set mappings, or 0xc7c0 GR object exist (bench
++     * log: both processes' dup edges precede even the FIRST 0xc7c0).  The 0xc7c0-
++     * keyed m2_gr_clients[] list above flips the multiproc gate only after BOTH
++     * processes alloc their GR object — by then the shared single-process state
++     * has already aliased the two processes (the round-3 transition-window wall).
++     * This list arms nvkvm_m2_multiproc() at the 2nd distinct user client's dup,
++     * before any aliasing is possible.  It feeds ONLY multiproc()-gated behavior
++     * (pass-1 refusal, foreign-VAS skips, per-owner backing), so with a single
++     * process (one dup-src client, incl. #12's client-reusing 2-context case) it
++     * is inert and behavior is byte-identical.  Entries drop on root client free
++     * (RM reuses handle values across process lifetimes). */
++    uint32_t m2_user_clients[8];
++    int      m2_user_clients_n;
++    /* #14 piece-2: deferred completion-retry kick.  Set while servicing a guest
++     * MC_SERVICE_INTERRUPTS poll (fn=76 ctrl 0x20801702) in multiproc mode;
++     * consumed at the end of service_cmdq (after the RPC response is posted +
++     * acked) by replaying the work-submit doorbell service.  See the hook site. */
++    bool     m2_poll_kick;
+     /* M5.7: per-client NV01_MEMORY_VIRTUAL mapper over the client's GR VASpace, so the
+      * execution path can map_dma FIXED the guest's working-set buffers into the host
+      * channel's address space at the guest VAs (see [[mode2-mapdma-primitive]]). */
+@@ -577,13 +619,18 @@ struct NvkvmGpuEmul {
+     int      m2_cur_cvas;
+     uint32_t m2_gr_channel;     /* M5.8: the host GR channel handle (c56f under GR TSG) */
+     uint32_t m2_gr_tsg;         /* M5.8: the host GR TSG handle (a06c, channel's parent) */
+-    uint32_t m2_gr_tsg_sched;   /* #12 cont.34: which GR TSG handle we last GPFIFO_SCHEDULE'd.
+-                                 * doorbell_setup schedules the GR TSG once, but early-returns on
+-                                 * m2_doorbell_ready (sticky), so a 2nd context's NEW GR TSG was
+-                                 * never scheduled -> its 8 rl=0 GR channels rang but the host
+-                                 * never consumed (gp_get stuck 0) -> 8/16 pool semas never
+-                                 * advanced -> #12 residual. The ring loop schedules the GR TSG
+-                                 * whenever it differs from this. */
++    /* #12 cont.34 / #14: which GR TSGs we GPFIFO_SCHEDULE'd, keyed (client, tsg).
++     * doorbell_setup schedules the first GR TSG once, but early-returns on
++     * m2_doorbell_ready (sticky), so a 2nd context's NEW GR TSG was never scheduled
++     * -> its 8 rl=0 GR channels rang but the host never consumed (gp_get stuck 0)
++     * -> 8/16 pool semas never advanced -> #12 residual.  The ring loop schedules
++     * any GR TSG not in this set.  #14: the key MUST include the client — two
++     * concurrent processes get IDENTICAL RM handle values (both GR TSGs 0x5c000012),
++     * so the old value-keyed scalar made process B's GR TSG look already-scheduled
++     * and it sat off-runlist forever.  Entries drop on client/TSG free (handle
++     * values are reused across contexts and process lifetimes). */
++    struct { uint32_t client, tsg; } m2_tsg_sched[16];
++    int      m2_tsg_sched_n;
+     /* M7 (cuCtxCreate fix): the HOST's real GR-object alloc reply params (NV_GR_ALLOCATION_
+      * PARAMETERS, 16B incl the GSP-filled `caps` output @+12). Captured by shadow_fwd after the
+      * forwarded 0xc7c0 alloc, then passed through into the GSP-RPC reply (resp+112) so the guest
+@@ -1819,6 +1866,50 @@ static void nvkvm_m2_ctx_free_drop(NvkvmGpuEmul *s, uint32_t fClient, uint32_t f
+                      s->chip->name, flushed, fClient);
+         }
+     }
++    /* #14 m2_dup[]: drop dup edges naming the freed client (root free) or the freed
++     * object on either side.  RM reuses handle values across process lifetimes, so a
++     * stale edge could alias a later process's fresh client/VAS onto the wrong owner. */
++    for (int i = 0; i < s->m2_dup_n; ) {
++        bool hit = root ? (s->m2_dup[i].dst_client == fClient ||
++                           s->m2_dup[i].src_client == fClient)
++                        : ((s->m2_dup[i].dst_client == fClient && s->m2_dup[i].dst_obj == fObj) ||
++                           (s->m2_dup[i].src_client == fClient && s->m2_dup[i].src_obj == fObj));
++        if (hit) {
++            s->m2_dup[i] = s->m2_dup[s->m2_dup_n - 1];
++            s->m2_dup_n--; dropped++; continue;
++        }
++        i++;
++    }
++    /* #14 m2_gr_clients[] / m2_tsg_sched[]: drop the freed client's entries — RM reuses
++     * both client and TSG handle values across process lifetimes, so a stale entry would
++     * alias a later process onto the dead one's sweep/schedule state. */
++    if (root) {
++        for (int i = 0; i < s->m2_gr_clients_n; ) {
++            if (s->m2_gr_clients[i] == fClient) {
++                s->m2_gr_clients[i] = s->m2_gr_clients[s->m2_gr_clients_n - 1];
++                s->m2_gr_clients_n--; dropped++; continue;
++            }
++            i++;
++        }
++        /* #14 EARLY-ARM list: same lifecycle as m2_gr_clients[]. */
++        for (int i = 0; i < s->m2_user_clients_n; ) {
++            if (s->m2_user_clients[i] == fClient) {
++                s->m2_user_clients[i] = s->m2_user_clients[s->m2_user_clients_n - 1];
++                s->m2_user_clients_n--; dropped++; continue;
++            }
++            i++;
++        }
++    }
++    for (int i = 0; i < s->m2_tsg_sched_n; ) {
++        bool hit = root ? (s->m2_tsg_sched[i].client == fClient)
++                        : (s->m2_tsg_sched[i].client == fClient &&
++                           s->m2_tsg_sched[i].tsg == fObj);
++        if (hit) {
++            s->m2_tsg_sched[i] = s->m2_tsg_sched[s->m2_tsg_sched_n - 1];
++            s->m2_tsg_sched_n--; dropped++; continue;
++        }
++        i++;
++    }
+     /* chan_vas[] (no client key): drop the directly-freed VASpace handle, plus any whose
+      * handle was referenced by a just-removed devvas entry of this client. */
+     for (int i = 0; i < s->chan_vas_n; ) {
+@@ -2080,6 +2171,22 @@ static void nvkvm_m2_capture_devinfo(NvkvmGpuEmul *s); /* M14 fwd-decl */
+ static bool nvkvm_chan_sem_wr32(NvkvmGpuEmul *s, uint64_t va, uint32_t payload,
+                                 uint64_t *out_redir); /* M5.18 fwd-decl */
+ static bool nvkvm_m2_va_seen(NvkvmGpuEmul *s, uint32_t client, uint64_t va); /* M5.19 fwd-decl */
++/* #14 fwd-decls: dup-edge (fn=21) ownership helpers — see definitions near
++ * nvkvm_chan_own_pdb_rs. */
++static bool nvkvm_m2_vas_client_match(NvkvmGpuEmul *s, uint32_t vas_client,
++                                      uint32_t vas_hobj, uint32_t client);
++static uint32_t nvkvm_m2_vas_dup_owner(NvkvmGpuEmul *s, uint32_t vas_client,
++                                       uint32_t vas_hobj);
++static bool nvkvm_m2_dup_src_client(NvkvmGpuEmul *s, uint32_t client);
++static bool nvkvm_m2_vas_foreign(NvkvmGpuEmul *s, int v, uint32_t client);
++static bool nvkvm_m2_is_gr_client(NvkvmGpuEmul *s, uint32_t client);
++static bool nvkvm_m2_is_user_client(NvkvmGpuEmul *s, uint32_t client);
++static bool nvkvm_m2_multiproc(NvkvmGpuEmul *s);
++static void nvkvm_bar0_write(void *opaque, hwaddr off, uint64_t val,
++                             unsigned size); /* #14 poll-kick fwd-decl */
++static bool nvkvm_m2_tsg_sched_check(NvkvmGpuEmul *s, uint32_t client, uint32_t tsg);
++static void nvkvm_m2_tsg_sched_mark(NvkvmGpuEmul *s, uint32_t client, uint32_t tsg);
++static uint32_t nvkvm_m2_pdb_gr_owner(NvkvmGpuEmul *s, uint64_t pdb);
+ static uint64_t nvkvm_chan_own_pdb_rs(NvkvmGpuEmul *s, bool *out_root_sys); /* #12 L3b fwd-decl */
+ static void nvkvm_m2_ce_fb_write_hook(NvkvmGpuEmul *s, uint64_t dst, uint64_t len); /* #13 fwd-decl */
+ static void nvkvm_m2_cpt_sync_at_release(NvkvmGpuEmul *s); /* #13 fwd-decl */
+@@ -2207,6 +2314,15 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
+                 s->chan_vas[k].root_sys = false;            /* FB-rooted (GSP-client) */
+                 s->chan_vas[k].uvm = false;                 /* RESERVED_PDES, not the UVM handover */
+                 nvkvm_m2_cli_vas_add(s, s->chan_vas[k].client, s->chan_vas[k].pdb, false);
++                /* #14: a VAS captured under a dup handle also belongs to the dup's
++                 * SOURCE client — key the sticky sema-resolution root under the true
++                 * owner so that owner's channels resolve their semas in their OWN
++                 * address space (two processes share the capture client). */
++                {
++                    uint32_t own14 = nvkvm_m2_vas_dup_owner(s, s->chan_vas[k].client,
++                                                            s->chan_vas[k].hvas);
++                    if (own14) { nvkvm_m2_cli_vas_add(s, own14, s->chan_vas[k].pdb, false); }
++                }
+                 qemu_log("nvkvm-gpu[%s] M5: VAS hObject=0x%08x client=0x%08x PDB=0x%llx\n",
+                          s->chip->name, s->chan_vas[k].hvas, s->chan_vas[k].client,
+                          (unsigned long long)s->chan_vas[k].pdb);
+@@ -2251,12 +2367,65 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
+                 s->chan_vas[k].root_sys = rsys;
+                 s->chan_vas[k].uvm = true;                  /* #13: UVM-managed user VAS */
+                 nvkvm_m2_cli_vas_add(s, s->chan_vas[k].client, phys, rsys);
++                /* #14: also key under the dup-source (owning compute) client. */
++                {
++                    uint32_t own14 = nvkvm_m2_vas_dup_owner(s, s->chan_vas[k].client, hvas);
++                    if (own14) { nvkvm_m2_cli_vas_add(s, own14, phys, rsys); }
++                }
+                 qemu_log("nvkvm-gpu[%s] M5.30 SET_PAGE_DIR UVM-VAS hVASpace=0x%08x "
+                          "PDB=0x%llx aperture=%u root=%s (candidate %d)\n",
+                          s->chip->name, hvas, (unsigned long long)phys,
+                          flags & 0x3u, rsys ? "SYS" : "FB", k);
+             }
+         }
++        /* #14: snoop DUP_OBJECT (fn=21) — the handle-graph edge that attributes a
++         * VAS captured under one RM client (typically UVM's per-process gpu-ops
++         * client) to the compute client that owns it.  rpc_dup_object body =
++         * NVOS55_PARAMETERS @cmd+80: hClient(dst)@+0, hParent@+4, hObject(new dup
++         * handle)@+8, hClientSrc@+12, hObjectSrc@+16 (g_sdk-structures.h v03_00).
++         * Pure bookkeeping: the RPC itself is echoed/forwarded exactly as before. */
++        if (fn == 21) {
++            uint32_t d_cli = ldl_le_p(cmd + 80);
++            uint32_t d_obj = ldl_le_p(cmd + 88);
++            uint32_t s_cli = ldl_le_p(cmd + 92);
++            uint32_t s_obj = ldl_le_p(cmd + 96);
++            if (d_cli && d_obj && s_cli && s_obj) {
++                bool seen = false;
++                for (int i = 0; i < s->m2_dup_n; i++) {
++                    if (s->m2_dup[i].dst_client == d_cli && s->m2_dup[i].dst_obj == d_obj &&
++                        s->m2_dup[i].src_client == s_cli && s->m2_dup[i].src_obj == s_obj) {
++                        seen = true; break;
++                    }
++                }
++                if (!seen && s->m2_dup_n < (int)ARRAY_SIZE(s->m2_dup)) {
++                    int k = s->m2_dup_n++;
++                    s->m2_dup[k].dst_client = d_cli;
++                    s->m2_dup[k].dst_obj   = d_obj;
++                    s->m2_dup[k].src_client = s_cli;
++                    s->m2_dup[k].src_obj   = s_obj;
++                    qemu_log("nvkvm-gpu[%s] #14 DUP_OBJECT edge[%d]: dst=0x%08x/0x%08x "
++                             "<- src=0x%08x/0x%08x\n", s->chip->name, k,
++                             d_cli, d_obj, s_cli, s_obj);
++                }
++                /* #14 EARLY-ARM: the dup SRC is by construction a user compute
++                 * client (kernel-internal clients — UVM gpu-ops, CeUtils — only
++                 * ever appear on the DST side; bench-verified).  Register it NOW,
++                 * at cuCtxCreate's UVM-registration step, so a 2nd process arms
++                 * nvkvm_m2_multiproc() BEFORE its channels/working set exist —
++                 * not after its 0xc7c0 GR alloc, by which time the shared state
++                 * has already aliased the two processes (the round-3 wall).
++                 * Single process: exactly one src client ever appears (#12's two
++                 * contexts REUSE one client), so the gate stays off. */
++                if (!nvkvm_m2_is_user_client(s, s_cli) &&
++                    s->m2_user_clients_n < (int)ARRAY_SIZE(s->m2_user_clients)) {
++                    s->m2_user_clients[s->m2_user_clients_n++] = s_cli;
++                    qemu_log("nvkvm-gpu[%s] #14 user compute client[%d] = 0x%08x "
++                             "(dup-src early-arm)%s\n", s->chip->name,
++                             s->m2_user_clients_n - 1, s_cli,
++                             s->m2_user_clients_n > 1 ? "  -> MULTIPROC ARMED" : "");
++                }
++            }
++        }
+         if (fn == 103) {
+             uint32_t hclass = ldl_le_p(cmd + 92);
+             /* M5/M7 — record NV01_EVENT_OS_EVENT (0x0079) allocations so we can
+@@ -2298,11 +2467,19 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
+                 s->chan_userd      = ldq_le_p(cmd + 280);   /* userdMem.base */
+                 s->chan_userd_sys  = (ldl_le_p(cmd + 296) == 1u);
+                 s->chan_gp_get     = 0;
+-                /* Register in the multi-channel table (dedup by gpFifoVA). */
++                /* Register in the multi-channel table (dedup by (hClient, gpFifoVA)).
++                 * #14: the key MUST include the client — two concurrent processes get
++                 * IDENTICAL GPFIFO VAs (both pools at 0x2002xxxxx), so a VA-only dedup
++                 * made process B's registrations OVERWRITE process A's entries in
++                 * place (client/hobject/tsg swapped, cursors reset): half the live
++                 * channels simply vanished from the table and were never scheduled,
++                 * rung, or completion-forged.  Same-process replays still dedup. */
+                 if (s->chan_gpfifo_va && s->chan_userd) {
++                    uint32_t ccli = ldl_le_p(cmd + 80);            /* hClient */
+                     int cslot = -1;
+                     for (int i = 0; i < s->chan_n; i++) {
+-                        if (s->chans[i].gpfifo_va == s->chan_gpfifo_va) { cslot = i; break; }
++                        if (s->chans[i].gpfifo_va == s->chan_gpfifo_va &&
++                            s->chans[i].client == ccli) { cslot = i; break; }
+                     }
+                     if (cslot < 0 && s->chan_n < NVKVM_MAX_CHANS) { cslot = s->chan_n++; }
+                     if (cslot >= 0) {
+@@ -2437,6 +2614,22 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
+                 }
+             }
+             uint32_t ctrl = (fn == 76) ? ldl_le_p(resp + 88) : 0;
++            /* #14 piece-2 (per-process completion delivery): MC_SERVICE_INTERRUPTS
++             * (0x20801702) is the guest RM's explicit completion POLL — at the #14
++             * hang both starved processes spin exactly here.  In multiproc mode a
++             * user channel's execution/sema resolution may have been DEFERRED (the
++             * pass-1 refusal: its VAS capture raced the doorbell), and the retry
++             * only re-ran on the NEXT doorbell — but a process busy-polling
++             * cuCtxCreate submits nothing, so once the other process finishes (no
++             * more doorbells from anyone) the deferred work never retried and the
++             * poller starved forever.  Kick the doorbell service after this RPC
++             * completes (flag consumed at the end of service_cmdq, once the
++             * response is posted + acked): the service is idempotent (channels
++             * with no pending work bail at GP_PUT==gp_get).  multiproc()-gated —
++             * single-process behavior (incl. #12/#13 timing) is untouched. */
++            if (fn == 76 && ctrl == 0x20801702u && nvkvm_m2_multiproc(s)) {
++                s->m2_poll_kick = true;
++            }
+             if (fn == 76) {
+                 stl_le_p(resp + 92, 0); /* body.status = NV_OK (default) */
+                 /* M9: capture the caller's REQUEST paramsSize (the buffer libcuda/CPU-RM
+@@ -2958,6 +3151,18 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
+     uint8_t rp[4];
+     stl_le_p(rp, s->cmd_readptr);
+     nvkvm_dmaw(pdev, s->q_shmem + s->q_stat_base + 0x20, rp, sizeof(rp));
++    /* #14 piece-2: consume the MC_SERVICE_INTERRUPTS completion-retry kick — now
++     * that this batch's responses are posted and the read pointer is acked, replay
++     * the work-submit doorbell service so any DEFERRED user-channel execution/sema
++     * delivery retries and the polling process's completion advances (write sema
++     * THEN the guest's poll re-reads it).  Same entry point as a real doorbell
++     * ring; idempotent for channels with no pending work.  Only ever set in
++     * multiproc mode (see the fn=76 hook). */
++    if (s->m2_poll_kick) {
++        s->m2_poll_kick = false;
++        nvkvm_bar0_write(s, NVKVM_VF_DOORBELL,
++                         s->m2_last_db_valid ? s->m2_last_db_token : 0, 4);
++    }
+ }
+ 
+ /* M3-step-1: read the LibOS init-args region array from guest RAM at the GPA
+@@ -3515,8 +3720,11 @@ static void nvkvm_bar0_write(void *opaque, hwaddr off, uint64_t val,
+                 /* M5.33: the GR TSG is already GPFIFO_SCHEDULE'd (M5.8 in ctx1, or the
+                  * #12 cont.34 GR-TSG schedule in exec_doorbell for a 2nd context); re-
+                  * scheduling it here per-channel re-binds it with transient/freed init
+-                 * channels -> st=0x57. Skip whichever GR TSG is already scheduled. */
+-                if (c->tsg && !c->scheduled && c->tsg != s->m2_gr_tsg_sched) {
++                 * channels -> st=0x57. Skip whichever GR TSG is already scheduled.
++                 * #14: the check is (client, tsg)-keyed — two processes reuse identical
++                 * TSG handle values, so a value-only compare aliased them. */
++                if (c->tsg && !c->scheduled &&
++                    !nvkvm_m2_tsg_sched_check(s, c->client, c->tsg)) {
+                     uint8_t sp[3]; memset(sp, 0, sizeof(sp)); sp[0] = 1;
+                     uint32_t sst = 0xffff;
+                     int src = nvkvm_m2_control1(s, c->client, c->tsg, 0xa06c0101u,
+@@ -3618,8 +3826,15 @@ static void nvkvm_bar0_write(void *opaque, hwaddr off, uint64_t val,
+              * compute VAS's page tables and carried no parsed semaphore (the in-parse
+              * sync sites never fired), back the dirtied VAS before forging. */
+             nvkvm_m2_cpt_sync_at_release(s);
+-            if (c->client != s->m2_gr_client &&
+-                !nvkvm_m2_is_user_ce(s, c->client)) {
++            /* #14: the kernel-CeUtils finishPayload forge must exclude EVERY
++             * process's GR/user channels, not just the first client's — the host
++             * executes + releases those for real; forging a 2nd process's GR
++             * channel would fake-complete work the host hasn't run (correctness)
++             * and mask its real starvation.  Single process: is_gr_client is
++             * exactly {m2_gr_client} and multiproc() is false — byte-identical. */
++            if (!nvkvm_m2_is_gr_client(s, c->client) &&
++                !nvkvm_m2_is_user_ce(s, c->client) &&
++                !(nvkvm_m2_multiproc(s) && nvkvm_m2_is_user_client(s, c->client))) {
+                 /* #12 cont.24: forge THIS kernel channel's finishPayload — the channel-HOST
+                  * semaphore at gpFifoVA + GPFIFO_SIZE(0x8000) + HOST_SEMA(4) = +0x8004 that
+                  * channelWaitForFinishPayload polls (channel_utils.c:344; the GPU releases it via
+@@ -4318,6 +4533,182 @@ static uint64_t nvkvm_walk_pdb(NvkvmGpuEmul *s, uint64_t pdb, uint64_t va,
+     return nvkvm_walk_pdb_root(s, pdb, va, false, out_sys);
+ }
+ 
++/* #14: does a snooped VAS root (captured under RM client `vas_client`, VASpace
++ * handle `vas_hobj`) BELONG to the executing channel's client `client`?  TRUE when
++ * captured directly under that client, or when an observed DUP_OBJECT edge links
++ * the two: UVM's per-process gpu-ops client dups the user's VASpace out of the
++ * compute client (so the user VAS is captured under UVM's client — the miss that
++ * made the client-keyed pass-0 degrade to the blind content-pick and cross two
++ * concurrent processes' identical guest VAs, #14).  One hop, either direction —
++ * the dup edge is a transport-observed handle-graph fact, not a heuristic. */
++static bool nvkvm_m2_vas_client_match(NvkvmGpuEmul *s, uint32_t vas_client,
++                                      uint32_t vas_hobj, uint32_t client)
++{
++    if (!client || !vas_client) {
++        return false;
++    }
++    if (vas_client == client) {
++        return true;
++    }
++    for (int i = 0; i < s->m2_dup_n; i++) {
++        /* VAS captured under the dup DST (UVM's dup handle): owner = the src client. */
++        if (s->m2_dup[i].dst_client == vas_client && s->m2_dup[i].dst_obj == vas_hobj &&
++            s->m2_dup[i].src_client == client) {
++            return true;
++        }
++        /* VAS captured under the SRC side; `client` holds a dup of it. */
++        if (s->m2_dup[i].src_client == vas_client && s->m2_dup[i].src_obj == vas_hobj &&
++            s->m2_dup[i].dst_client == client) {
++            return true;
++        }
++    }
++    return false;
++}
++
++/* #14: if (vas_client, vas_hobj) is the DST of an observed dup edge, return the edge's
++ * SOURCE client — the compute client that owns the dupped object (UVM dups the user's
++ * VASpace out of libcuda's client, so the SET_PAGE_DIRECTORY capture under the dup
++ * handle really belongs to that source client).  0 = no edge (not dup-created). */
++static uint32_t nvkvm_m2_vas_dup_owner(NvkvmGpuEmul *s, uint32_t vas_client,
++                                       uint32_t vas_hobj)
++{
++    for (int i = 0; i < s->m2_dup_n; i++) {
++        if (s->m2_dup[i].dst_client == vas_client && s->m2_dup[i].dst_obj == vas_hobj) {
++            return s->m2_dup[i].src_client;
++        }
++    }
++    return 0;
++}
++
++/* #14: is `client` a USER COMPUTE client — i.e. did it dup one of its objects (its
++ * VASpace/TSG/channel) out to another client (the UVM handover)?  Kernel-internal
++ * clients (CeUtils, UVM gpu-ops) appear only on the DST side, never as SRC.  This is
++ * the transport-observed definition of "a process's libcuda client"; with one process
++ * the set is exactly {m2_gr_client}, so every consumer below is single-process-neutral. */
++static bool nvkvm_m2_dup_src_client(NvkvmGpuEmul *s, uint32_t client)
++{
++    if (!client) { return false; }
++    for (int i = 0; i < s->m2_dup_n; i++) {
++        if (s->m2_dup[i].src_client == client) { return true; }
++    }
++    return false;
++}
++
++/* #14: is chan_vas[v] PROVABLY another user process's VAS (relative to `client`)?
++ * TRUE only on positive transport evidence: (a) it is the DST of a dup edge whose
++ * source client is a different user client, or (b) it was captured directly under a
++ * different user compute client.  Kernel/UVM-internal roots (no dup linkage) are
++ * NEVER foreign — they stay visible to every client exactly as before, so with a
++ * single process this predicate is constant-false (no behavior change).  Used to
++ * stop the walk-all-roots paths (enum_gr_sysmem / resolve_fb / the blind pick
++ * passes) from crossing two processes' IDENTICAL guest VAs. */
++static bool nvkvm_m2_vas_foreign(NvkvmGpuEmul *s, int v, uint32_t client)
++{
++    if (nvkvm_m2_vas_client_match(s, s->chan_vas[v].client, s->chan_vas[v].hvas,
++                                  client)) {
++        return false;
++    }
++    uint32_t owner = nvkvm_m2_vas_dup_owner(s, s->chan_vas[v].client,
++                                            s->chan_vas[v].hvas);
++    if (owner && owner != client) {
++        return true;            /* (a) dup handle of another user's object */
++    }
++    if (s->chan_vas[v].client != client &&
++        nvkvm_m2_dup_src_client(s, s->chan_vas[v].client)) {
++        return true;            /* (b) captured under another user compute client */
++    }
++    return false;
++}
++
++/* #14: is `client` one of the user GR compute clients (a 0xc7c0 allocator)?  With a
++ * single process the list is exactly {m2_gr_client}, so every consumer is single-
++ * process-neutral. */
++static bool nvkvm_m2_is_gr_client(NvkvmGpuEmul *s, uint32_t client)
++{
++    if (!client) { return false; }
++    for (int i = 0; i < s->m2_gr_clients_n; i++) {
++        if (s->m2_gr_clients[i] == client) { return true; }
++    }
++    return false;
++}
++
++/* #14 EARLY-ARM: is `client` a user compute client by EITHER signal — the early
++ * dup-src registration (available from cuCtxCreate's UVM-registration step) or
++ * the late 0xc7c0 registration.  Used by the multiproc()-gated divergences
++ * (pass-1 refusal, per-owner backing) so a 2nd process's channels are separated
++ * from their FIRST execution, before its 0xc7c0 exists.  Single process:
++ * multiproc() is false, so every consumer is byte-identical. */
++static bool nvkvm_m2_is_user_client(NvkvmGpuEmul *s, uint32_t client)
++{
++    if (!client) { return false; }
++    for (int i = 0; i < s->m2_user_clients_n; i++) {
++        if (s->m2_user_clients[i] == client) { return true; }
++    }
++    return nvkvm_m2_is_gr_client(s, client);
++}
++
++/* #14: is more than one user GR compute client live (two concurrent guest processes
++ * with compute)?  The per-process VAS-separation divergences below (blind-pass refusal,
++ * foreign-VAS skip) activate ONLY here — with a single compute client (incl. #12's
++ * sequential 2-context single process, which REUSES one RM client) they are disabled so
++ * behavior is byte-identical to the single-process baseline (task single-process-safety
++ * mandate).  Ownership keying that is inherently identical for one client (chan/tsg
++ * client-keys, per-owner backing) stays always-on. */
++static bool nvkvm_m2_multiproc(NvkvmGpuEmul *s)
++{
++    /* #14 EARLY-ARM: the dup-src user-client list arms this at the 2nd process's
++     * cuCtxCreate UVM-registration (fn=21), BEFORE any of its channels/mappings
++     * exist; the 0xc7c0 list is kept as a belt-and-braces late signal. */
++    return s->m2_gr_clients_n > 1 || s->m2_user_clients_n > 1;
++}
++
++/* #14: (client, tsg)-keyed GPFIFO_SCHEDULE tracking — see the m2_tsg_sched struct
++ * comment (two processes reuse identical TSG handle VALUES, so a value-keyed scalar
++ * aliased them). */
++static bool nvkvm_m2_tsg_sched_check(NvkvmGpuEmul *s, uint32_t client, uint32_t tsg)
++{
++    for (int i = 0; i < s->m2_tsg_sched_n; i++) {
++        if (s->m2_tsg_sched[i].client == client && s->m2_tsg_sched[i].tsg == tsg) {
++            return true;
++        }
++    }
++    return false;
++}
++static void nvkvm_m2_tsg_sched_mark(NvkvmGpuEmul *s, uint32_t client, uint32_t tsg)
++{
++    if (nvkvm_m2_tsg_sched_check(s, client, tsg)) { return; }
++    if (s->m2_tsg_sched_n < (int)ARRAY_SIZE(s->m2_tsg_sched)) {
++        s->m2_tsg_sched[s->m2_tsg_sched_n].client = client;
++        s->m2_tsg_sched[s->m2_tsg_sched_n].tsg    = tsg;
++        s->m2_tsg_sched_n++;
++    }
++}
++
++/* #14: the user GR compute client that OWNS the VAS rooted at `pdb` — direct capture
++ * or via a DUP_OBJECT edge (the UVM-managed user VAS is captured under UVM's client;
++ * the dup edge names the true owner).  0 = no user-compute owner derivable (kernel/
++ * CeUtils roots).  Single process: the only derivable owner IS m2_gr_client. */
++static uint32_t nvkvm_m2_pdb_gr_owner(NvkvmGpuEmul *s, uint64_t pdb)
++{
++    for (int i = 0; i < s->chan_vas_n; i++) {
++        if (!pdb || s->chan_vas[i].pdb != pdb) { continue; }
++        uint32_t cl = s->chan_vas[i].client;
++        if (nvkvm_m2_is_gr_client(s, cl)) { return cl; }
++        uint32_t own = nvkvm_m2_vas_dup_owner(s, cl, s->chan_vas[i].hvas);
++        if (own && nvkvm_m2_is_gr_client(s, own)) { return own; }
++        /* #14 EARLY-ARM (multiproc only, single-process byte-identical): a 2nd
++         * process's VAS is owned by its dup-src user client BEFORE that client
++         * allocs 0xc7c0 — without this, the caller's `own = m2_gr_client`
++         * fallback would back the 2nd process's pages under the FIRST process's
++         * host VAS during the window (cross-process aliasing). */
++        if (nvkvm_m2_multiproc(s)) {
++            if (nvkvm_m2_is_user_client(s, cl)) { return cl; }
++            if (own && nvkvm_m2_is_user_client(s, own)) { return own; }
++        }
++    }
++    return 0;
++}
++
+ /* M5.21: the executing channel's OWN VAS PDB, derived from its client's GR
+  * VASpace (chan_client -> m2_devvas vas handle -> chan_vas pdb).  This is the
+  * AUTHORITATIVE address space for the channel's pushbuffer/sema — unlike the
+@@ -4388,12 +4779,36 @@ static uint64_t nvkvm_chan_own_pdb_rs(NvkvmGpuEmul *s, bool *out_root_sys)
+          * for channels whose true root was captured only under a foreign dup handle
+          * (e.g. UVM's 0xcaf00005, client-unlinkable) — unchanged behavior there. */
+         for (int pass = 0; pass < 2; pass++) {
++            /* #14: a USER compute client's channel resolves ONLY in a VAS it owns
++             * (direct or dup-linked) — miss means its PTs aren't populated yet, so
++             * DEFER (return 0; populate_cvas/chan_execute retry next doorbell) per
++             * the address-table rule (miss = fault, never heuristic-resolve).  The
++             * blind pass-1 probe validates by WALK SUCCESS alone, and the kernel
++             * gpu-ops whole-FB alias (12 GiB identity root) resolves ANY VA — with
++             * two concurrent processes, process B's first-doorbell probe raced its
++             * own PT population, pass-1 "hit" that alias, and populate_cvas latched
++             * B's fvas populated with the aliased garbage space (B hung forever).
++             * Kernel/CeUtils channels (no user-client linkage) keep pass 1.
++             * EARLY-ARM: keyed on is_user_client (dup-src, known from process
++             * start) so the 2nd process's channels are refused the blind pass
++             * from their FIRST execution — before its 0xc7c0 exists. */
++            if (pass == 1 && nvkvm_m2_multiproc(s) &&
++                nvkvm_m2_is_user_client(s, s->chan_client)) {
++                break;
++            }
+             for (int i = 0; i < s->chan_vas_n; i++) {
+                 if (!s->chan_vas[i].pdb) {
+                     continue;
+                 }
+-                if (pass == 0 && s->chan_vas[i].client != s->chan_client) {
+-                    continue;   /* pass 0: same-client roots only */
++                /* #14: pass-0 ownership is dup-edge aware — the user working-set
++                 * VASes are captured under UVM's per-process gpu-ops client, so the
++                 * plain client==chan_client test always missed them and degraded to
++                 * the blind pass-1 probe, which crossed two concurrent processes'
++                 * identical guest VAs (B's channel picked A's PDB -> B faulted). */
++                if (pass == 0 &&
++                    !nvkvm_m2_vas_client_match(s, s->chan_vas[i].client,
++                                               s->chan_vas[i].hvas, s->chan_client)) {
++                    continue;   /* pass 0: own-client (direct or dup-linked) roots only */
+                 }
+                 bool sy = false;
+                 if (nvkvm_walk_pdb_root(s, s->chan_vas[i].pdb, s->chan_gpfifo_va,
+@@ -4488,7 +4903,13 @@ static uint64_t nvkvm_chan_translate(NvkvmGpuEmul *s, uint64_t va, bool *out_sys
+      * before. */
+     if (s->chan_client) {
+         for (int i = 0; i < s->chan_vas_n; i++) {
+-            if (s->chan_vas[i].client != s->chan_client) { continue; }
++            /* #14: ownership is dup-edge aware (user VASes are captured under UVM's
++             * per-process gpu-ops client), so concurrent processes' identical VAs
++             * resolve under their OWN process's VAS here, not the blind pass below. */
++            if (!nvkvm_m2_vas_client_match(s, s->chan_vas[i].client,
++                                           s->chan_vas[i].hvas, s->chan_client)) {
++                continue;
++            }
+             uint64_t p = nvkvm_walk_pdb_root(s, s->chan_vas[i].pdb, va,
+                                              s->chan_vas[i].root_sys, out_sys);
+             if (p != NVKVM_GMMU_FAULT) { return p; }
+@@ -4616,10 +5037,21 @@ static bool nvkvm_chan_sem_wr32(NvkvmGpuEmul *s, uint64_t va, uint32_t payload,
+          * (pinning a probed root globally regressed single-context init — L3b note). */
+         if (p == NVKVM_GMMU_FAULT && s->chan_gpfifo_va) {
+             for (int pass = 0; pass < 2 && p == NVKVM_GMMU_FAULT; pass++) {
++                /* #14: user compute clients never take the blind pass (see
++                 * nvkvm_chan_own_pdb_rs) — a sema WRITE through the kernel
++                 * whole-FB alias would corrupt unrelated FB.  EARLY-ARM: keyed
++                 * on is_user_client (dup-src, known from process start). */
++                if (pass == 1 && nvkvm_m2_multiproc(s) &&
++                    nvkvm_m2_is_user_client(s, s->chan_client)) {
++                    break;
++                }
+                 for (int i = 0; i < s->chan_vas_n; i++) {
+                     if (!s->chan_vas[i].pdb) { continue; }
+-                    if (pass == 0 && s->chan_vas[i].client != s->chan_client) {
+-                        continue;   /* pass 0: same-client roots only */
++                    if (pass == 0 &&
++                        !nvkvm_m2_vas_client_match(s, s->chan_vas[i].client,
++                                                   s->chan_vas[i].hvas,
++                                                   s->chan_client)) {
++                        continue;   /* pass 0: own-client (direct or dup-linked) only (#14) */
+                     }
+                     bool gsy = false;
+                     if (nvkvm_walk_pdb_root(s, s->chan_vas[i].pdb, s->chan_gpfifo_va,
+@@ -4821,14 +5253,39 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+                 s->chan_pdb = own;
+             }
+         }
+-        for (int i = 0; s->chan_pdb == 0 && i < s->chan_vas_n; i++) {
+-            bool sy = false;
+-            uint64_t p = nvkvm_walk_pdb(s, s->chan_vas[i].pdb, eva, &sy);
+-            if (p == NVKVM_GMMU_FAULT) { continue; }
+-            if (nvkvm_phys_rd32(s, p, sy) != 0) {   /* valid GP_ENTRY0 (pb low) */
+-                s->chan_pdb = s->chan_vas[i].pdb;
++        /* #14: TWO passes.  Pass 0 restricts the content-pick to VASes owned by the
++         * executing channel's client (directly or via an observed DUP_OBJECT edge —
++         * the user VAS is captured under UVM's per-process gpu-ops client).  With two
++         * concurrent processes the stock driver hands out IDENTICAL guest VAs, so the
++         * blind first-non-zero scan below landed on process A's PDB while executing
++         * process B's channel -> B's pushbuffer walked under A's VAS -> FAULT -> both
++         * cuCtxCreate spun.  Pass 1 = the original blind probe, kept for channels
++         * whose true root has no client linkage (single-process legacy behavior). */
++        for (int pass = 0; s->chan_pdb == 0 && pass < 2; pass++) {
++            /* #14: user compute clients NEVER take the blind pass — their channel
++             * either resolves in an owned VAS or defers to the next doorbell (the
++             * kernel whole-FB alias walk-succeeds for ANY VA and would be parsed as
++             * a garbage pushbuffer).  Kernel channels keep the legacy blind probe.
++             * EARLY-ARM: keyed on is_user_client (dup-src, known from process
++             * start) — see nvkvm_chan_own_pdb_rs. */
++            if (pass == 1 && nvkvm_m2_multiproc(s) &&
++                nvkvm_m2_is_user_client(s, s->chan_client)) {
+                 break;
+             }
++            for (int i = 0; i < s->chan_vas_n; i++) {
++                if (pass == 0 &&
++                    !nvkvm_m2_vas_client_match(s, s->chan_vas[i].client,
++                                               s->chan_vas[i].hvas, s->chan_client)) {
++                    continue;   /* pass 0: own-client (direct or dup-linked) roots only */
++                }
++                bool sy = false;
++                uint64_t p = nvkvm_walk_pdb(s, s->chan_vas[i].pdb, eva, &sy);
++                if (p == NVKVM_GMMU_FAULT) { continue; }
++                if (nvkvm_phys_rd32(s, p, sy) != 0) {   /* valid GP_ENTRY0 (pb low) */
++                    s->chan_pdb = s->chan_vas[i].pdb;
++                    break;
++                }
++            }
+         }
+         qemu_log("nvkvm-gpu[%s] M5: chan_exec hvas=0x%08x picked_pdb=0x%llx "
+                  "gpfifoVA=0x%llx\n", s->chip->name, s->chan_hvaspace,
+@@ -5250,10 +5707,16 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+                                      * (blank) dst leaves land off-BAR1 and promote on first touch. */
+                                     qemu_log("nvkvm-gpu[%s] M5.60 user-CE VIRT dst un-backed "
+                                              "va=0x%llx dphys=0x%llx -> re-walk compute VAS "
+-                                             "client=0x%08x (#%u)\n", s->chip->name,
++                                             "clients=%d (#%u)\n", s->chip->name,
+                                              (unsigned long long)off_out,
+-                                             (unsigned long long)dp0, s->m2_gr_client, m560v);
+-                                    nvkvm_m2_enum_gr_sysmem(s, s->m2_gr_client);
++                                             (unsigned long long)dp0, s->m2_gr_clients_n, m560v);
++                                    /* #14: re-walk EVERY process's compute VAS (each sweep is
++                                     * owner-scoped, so this backs the dst under whichever
++                                     * process owns it).  Single process: one client = the
++                                     * old single enum call. */
++                                    for (int gk = 0; gk < s->m2_gr_clients_n; gk++) {
++                                        nvkvm_m2_enum_gr_sysmem(s, s->m2_gr_clients[gk]);
++                                    }
+                                 }
+                             }
+                         }
+@@ -5880,7 +6343,8 @@ static void nvkvm_m2_shadow_fwd(NvkvmGpuEmul *s, const uint8_t *cmd, uint32_t fn
+         }
+     }
+     /* M5.3: record TSG (0xa06c) handle -> engineType@12 for the channel engineType fix. */
+-    if (hClass == 0xa06cu && psize >= 16 && s->m2_tsgeng_n < 32) {
++    if (hClass == 0xa06cu && psize >= 16 &&
++        s->m2_tsgeng_n < (int)ARRAY_SIZE(s->m2_tsgeng)) {
+         s->m2_tsgeng[s->m2_tsgeng_n].tsg    = hObject;
+         s->m2_tsgeng[s->m2_tsgeng_n].engine = ldl_le_p(auxbuf + 12);
+         s->m2_tsgeng_n++;
+@@ -6073,6 +6537,15 @@ static void nvkvm_m2_shadow_fwd(NvkvmGpuEmul *s, const uint8_t *cmd, uint32_t fn
+     if (hClass == 0xc7c0u && rc == 0 && p.status == 0) {
+         /* M5.3 DIAG: arm the crash-window FB-read probe. libcuda now reads GR-context
+          * GPU memory and crashes (rbp=0); the reads logged from here pin the buffer. */
++        /* #14: record EVERY user GR compute client (one per guest process).  The
++         * legacy m2_gr_client scalar stays the first; the sweep/ring/backing paths
++         * iterate the list so a 2nd process's compute client is a peer. */
++        if (!nvkvm_m2_is_gr_client(s, hClient) &&
++            s->m2_gr_clients_n < (int)ARRAY_SIZE(s->m2_gr_clients)) {
++            s->m2_gr_clients[s->m2_gr_clients_n++] = hClient;
++            qemu_log("nvkvm-gpu[%s] #14 GR compute client[%d] = 0x%08x\n",
++                     s->chip->name, s->m2_gr_clients_n - 1, hClient);
++        }
+         if (!s->m2_gr_client) {
+             s->m2_gr_client = hClient;        /* M5.7: the GR compute client (load-bearing, always) */
+             /* M5.63: crashwin drives ONLY the high-volume per-fb/per-doorbell DIAG logs (M5.31/M5.15/
+@@ -6785,7 +7258,12 @@ static uint32_t nvkvm_m2_grmapper(NvkvmGpuEmul *s, uint32_t client)
+         /* M5.49b: this client hit the FRESH-VAS fallback => it is a libcuda
+          * compute-side (CE-copy) client, the user-observable data path.  Record it
+          * (dedup) so its CE completion is forced host-written under m2hostsem. */
+-        if (client != s->m2_gr_client) {
++        /* #14: never record a GR compute client (ANY process's, incl. a 2nd
++         * process's dup-src client pre-0xc7c0) as a user-CE client — that would
++         * route its GR channels through the CE-forward/hostsem paths.  Single
++         * process: is_gr_client == {m2_gr_client}, multiproc false — identical. */
++        if (!nvkvm_m2_is_gr_client(s, client) &&
++            !(nvkvm_m2_multiproc(s) && nvkvm_m2_is_user_client(s, client))) {
+             bool known = false;
+             for (int i = 0; i < s->m2_user_ce_n; i++) {
+                 if (s->m2_user_ce_clients[i] == client) { known = true; break; }
+@@ -6850,7 +7328,7 @@ static bool nvkvm_m2_back_and_map_inner(NvkvmGpuEmul *s, uint32_t client, uint64
+         }
+     }
+     uint64_t asize = (size + 0xffff) & ~0xffffull;     /* round to 64 KiB */
+-    if (s->m2_fbback_n >= 64) {
++    if (s->m2_fbback_n >= (int)ARRAY_SIZE(s->m2_fbback)) {
+         qemu_log("nvkvm-gpu[%s] M5.7 back_and_map: m2_fbback full\n", s->chip->name);
+         return false;
+     }
+@@ -6974,7 +7452,9 @@ static void nvkvm_m2_doorbell_setup(NvkvmGpuEmul *s, uint32_t client)
+         uint8_t sp[3]; memset(sp, 0, sizeof(sp)); sp[0] = 1;   /* {bEnable=1,bSkipSubmit,bSkipEnable} */
+         uint32_t sst = 0xffff;
+         int src = nvkvm_m2_control1(s, client, s->m2_gr_tsg, 0xa06c0101u, sp, sizeof(sp), &sst);
+-        if (src == 0 && sst == 0) { s->m2_gr_tsg_sched = s->m2_gr_tsg; }  /* #12 cont.34 */
++        if (src == 0 && sst == 0) {
++            nvkvm_m2_tsg_sched_mark(s, client, s->m2_gr_tsg);   /* #12 cont.34 / #14 pair-keyed */
++        }
+         qemu_log("nvkvm-gpu[%s] M5.8 doorbell: GPFIFO_SCHEDULE TSG=0x%08x rc=%d st=0x%x%s\n",
+                  s->chip->name, s->m2_gr_tsg, src, sst,
+                  (src == 0 && sst == 0) ? "  OK SCHEDULED" : "  <-- ERR");
+@@ -6982,20 +7462,25 @@ static void nvkvm_m2_doorbell_setup(NvkvmGpuEmul *s, uint32_t client)
+ }
+ 
+ /* M5.9: resolve a GR-VAS guest VA -> guest-FB phys by trying each snooped VAS PDB (FB leaf
+- * only; sysmem leaves are the GPU->CPU DMA path, handled elsewhere). 0 on miss. */
+-static uint64_t nvkvm_m2_resolve_fb_inner(NvkvmGpuEmul *s, uint64_t va)
++ * only; sysmem leaves are the GPU->CPU DMA path, handled elsewhere). 0 on miss.
++ * #14: `client` scopes the probe to VASes NOT provably another process's (two concurrent
++ * processes use identical guest VAs, so a client-blind first-hit walk resolved process B's
++ * GPFIFO/pushbuffer to A's phys).  Kernel roots are never foreign; single process:
++ * identical to the old blind walk. */
++static uint64_t nvkvm_m2_resolve_fb_inner(NvkvmGpuEmul *s, uint32_t client, uint64_t va)
+ {
+     for (int v = 0; v < s->chan_vas_n; v++) {
++        if (client && nvkvm_m2_multiproc(s) && nvkvm_m2_vas_foreign(s, v, client)) { continue; }
+         bool sy = false;
+         uint64_t p = nvkvm_walk_pdb(s, s->chan_vas[v].pdb, va, &sy);
+         if (p != NVKVM_GMMU_FAULT && !sy) { return p; }
+     }
+     return 0;
+ }
+-static uint64_t nvkvm_m2_resolve_fb(NvkvmGpuEmul *s, uint64_t va)
++static uint64_t nvkvm_m2_resolve_fb(NvkvmGpuEmul *s, uint32_t client, uint64_t va)
+ {
+     uint64_t t0 = nvkvm_now_ns();
+-    uint64_t r = nvkvm_m2_resolve_fb_inner(s, va);
++    uint64_t r = nvkvm_m2_resolve_fb_inner(s, client, va);
+     nvkvm_t_resolve_ns += nvkvm_now_ns() - t0; nvkvm_t_resolve_calls++;
+     return r;
+ }
+@@ -7415,7 +7900,7 @@ static void nvkvm_m2_leaf_flush(struct nvkvm_leaf_acc *a)
+                      * CPU view lazily on the first guest touch (promote-on-touch). Non-compute
+                      * clients keep the exact milestone path (go=false). Only under m2cefwd. */
+                     bool go = a->s->m2cefwd &&
+-                              (a->client == a->s->m2_gr_client ||
++                              (nvkvm_m2_is_gr_client(a->s, a->client) ||   /* #14: any process */
+                                nvkvm_m2_is_user_ce(a->s, a->client));
+                     if (nvkvm_m2_gpga_obj_ex(a->s, a->client, cva, a->gpa0 + off, clen, go) >= 0) {
+                         nvkvm_m2_va_mark(a->s, a->client, cva);
+@@ -7503,7 +7988,8 @@ static bool nvkvm_m2_pdb_is_compute(NvkvmGpuEmul *s, uint64_t pdb)
+         if (s->chan_vas[i].pdb != pdb) { continue; }
+         uint32_t cl = s->chan_vas[i].client;
+         if (s->chan_vas[i].uvm) { return true; }
+-        if (cl && (cl == s->m2_gr_client || nvkvm_m2_is_user_ce(s, cl))) { return true; }
++        if (cl && (nvkvm_m2_is_gr_client(s, cl) ||   /* #14: any process's compute client */
++                   nvkvm_m2_is_user_ce(s, cl))) { return true; }
+     }
+     return false;
+ }
+@@ -7679,6 +8165,16 @@ static void nvkvm_m2_cpt_sync_at_release(NvkvmGpuEmul *s)
+         /* Re-check ownership at decode time: a page freed/re-pointed since the latch
+          * (chan_vas[] pruned at teardown) must not back garbage. */
+         if (!nvkvm_m2_pdb_is_compute(s, s->m2_cpt[ci].pdb)) { continue; }
++        /* #14: back under the compute client that OWNS this PDB's VAS (dup-edge
++         * derived), not blanket m2_gr_client — two processes' identical guest VAs
++         * must land in their OWN host VASes.  Single process: owner IS m2_gr_client.
++         * Flush the run accumulator across an owner change (runs never span it). */
++        uint32_t own = nvkvm_m2_pdb_gr_owner(s, s->m2_cpt[ci].pdb);
++        if (!own) { own = s->m2_gr_client; }
++        if (own != a.client) {
++            nvkvm_m2_leaf_flush(&a);
++            a.client = own;
++        }
+         a.cpt_pdb = s->m2_cpt[ci].pdb;   /* newly-descended sub-tables join m2_cpt too */
+         nvkvm_m2_cpt_decode_page(s, ci, &a, &budget);
+     }
+@@ -7732,6 +8228,16 @@ static void nvkvm_m2_enum_gr_sysmem(NvkvmGpuEmul *s, uint32_t client)
+     for (int v = 0; v < s->chan_vas_n && budget > 0; v++) {
+         uint64_t pdb = s->chan_vas[v].pdb;
+         if (!pdb) { continue; }
++        /* #14 (the ALREADY-MAPPED aliasing root cause): never walk ANOTHER process's
++         * VAS under this sweep client.  Two concurrent processes get IDENTICAL guest
++         * VAs (both 0x2024xxxxx/0x2002xxxxx), so backing process B's leaves (different
++         * GPAs!) into A's host VAS hit st=0x51 against A's own maps — and worse, B's
++         * unique VAs landed A's fvas maps first, so B's OWN backing then collided in
++         * B's fvas and each process read the other's bytes (aliased completion sema =
++         * both cuCtxCreate spin).  Ownership is the transport-observed dup-edge fact;
++         * kernel/CeUtils roots have no user owner and stay visible to every client
++         * exactly as before, so a single process's sweep is byte-identical. */
++        if (nvkvm_m2_multiproc(s) && nvkvm_m2_vas_foreign(s, v, client)) { continue; }
+         struct nvkvm_leaf_acc a; memset(&a, 0, sizeof(a));
+         a.s = s; a.client = client;
+         /* #13: a compute-client VAS's walk also records its table pages into m2_cpt[]
+@@ -7852,8 +8358,13 @@ static void nvkvm_m2_exec_doorbell(NvkvmGpuEmul *s)
+      * host CE2 FAULT_PTE on a VIRT_WRITE once the host actually had to complete
+      * (the simulated completion used to mask it).  Sweep every forwarded compute
+      * client. */
+-    uint32_t sweepc[1 + (int)ARRAY_SIZE(s->m2_user_ce_clients)]; int nsweep = 0;
+-    if (grc) { sweepc[nsweep++] = grc; }
++    uint32_t sweepc[(int)ARRAY_SIZE(s->m2_gr_clients) +
++                    (int)ARRAY_SIZE(s->m2_user_ce_clients)]; int nsweep = 0;
++    /* #14: sweep EVERY user GR compute client (one per guest process), not just the
++     * first — a 2nd process's late-mapped working set (completion sema, pushbuffers)
++     * must back into ITS OWN host VAS (the enum walk is owner-scoped now).  Single
++     * process: the list is exactly {m2_gr_client} = the old behavior. */
++    for (int i = 0; i < s->m2_gr_clients_n; i++) { sweepc[nsweep++] = s->m2_gr_clients[i]; }
+     /* M5.51: only sweep the CE-copy clients under the (abandoned) host-only-sema path (m2hostsem).
+      * NOT under m2cexec (approach A): the m570 probe proved a full CE-client VAS sweep RE-BACKS the
+      * weight buffers the GR client already owns at the same gpga (1498 gpga FAILED + 1024-object cap
+@@ -7949,9 +8460,12 @@ static void nvkvm_m2_exec_doorbell(NvkvmGpuEmul *s)
+          * sweep below) + the M5.60 dst real-backing must have made the copy's src/dst leaves
+          * resident in THIS channel's VAS first, else the host CE faults (the old CE2 Xid). */
+         bool fwd_ce = s->m2cexec && nvkvm_m2_is_user_ce(s, c->client);
+-        if ((c->client != grc && !fwd_ce) || !c->gpfifo_va || !c->gpfifo_ent) { continue; }
++        /* #14: forward+ring the GR channels of EVERY user compute client (one per guest
++         * process), not just the first — single process: identical (list = {grc}). */
++        bool is_grc_chan = nvkvm_m2_is_gr_client(s, c->client);
++        if ((!is_grc_chan && !fwd_ce) || !c->gpfifo_va || !c->gpfifo_ent) { continue; }
+         uint32_t cc = c->client;   /* key residency on the channel's OWN client (CE VAS != GR VAS) */
+-        uint64_t gpf_phys = nvkvm_m2_resolve_fb(s, c->gpfifo_va);
++        uint64_t gpf_phys = nvkvm_m2_resolve_fb(s, cc, c->gpfifo_va);
+         if (!gpf_phys) { continue; }
+         uint32_t gp_put = (uint32_t)nvkvm_fb_read(s, c->userd + 0x8C, 4);
+         if (gp_put == c->gp_get || gp_put > c->gpfifo_ent || gp_put < c->gp_get) {
+@@ -7973,7 +8487,7 @@ static void nvkvm_m2_exec_doorbell(NvkvmGpuEmul *s)
+                 if (!pb) { continue; }
+                 uint64_t pbbase = pb & ~0xfffull;
+                 if (nvkvm_m2_va_seen(s, cc, pbbase)) { continue; }
+-                uint64_t pbphys = nvkvm_m2_resolve_fb(s, pbbase);
++                uint64_t pbphys = nvkvm_m2_resolve_fb(s, cc, pbbase);
+                 uint64_t sz = ((pb - pbbase) + (uint64_t)pblen * 4 + 0xfff) & ~0xfffull;
+                 if (!sz) { sz = 0x1000; }
+                 nvkvm_m2_back_and_map(s, cc, pbbase, pbphys, sz, true, "pushbuf");
+@@ -7995,7 +8509,7 @@ static void nvkvm_m2_exec_doorbell(NvkvmGpuEmul *s)
+         }
+         if (s->m2_trace)
+         qemu_log("nvkvm-gpu[%s] M5.9 exec_doorbell %s gp_get=%u->%u newpushbufs=%d (client=0x%08x)%s\n",
+-                 s->chip->name, (c->client == grc) ? "GR" : "CE", c->gp_get, gp_put, newmaps, cc,
++                 s->chip->name, is_grc_chan ? "GR" : "CE", c->gp_get, gp_put, newmaps, cc,
+                  skip_walk ? " [OPAQUE skip-walk]" : "");
+         /* M5.46: ring THIS channel's own host token. The GR channel (token from M5.8
+          * doorbell_setup) may legitimately use s->m2_gr_token; EVERY other channel
+@@ -8015,16 +8529,20 @@ static void nvkvm_m2_exec_doorbell(NvkvmGpuEmul *s)
+          * rl=0 GR channels rang but the host never consumed (gp_get stuck 0), leaving 8
+          * of the 16 pool-completion semaphores at 0 and libcuda's wait-ALL spinning
+          * forever.  This is THE #12 residual.  Schedule the fresh GR TSG exactly once
+-         * (tracked by m2_gr_tsg_sched); the M5.33 st=0x57 noise the old skip avoided was
+-         * RE-scheduling an already-scheduled TSG, which this one-shot guard prevents. */
+-        if (is_gr && s->m2_gr_tsg && s->m2_gr_tsg != s->m2_gr_tsg_sched) {
++         * (tracked by m2_tsg_sched); the M5.33 st=0x57 noise the old skip avoided was
++         * RE-scheduling an already-scheduled TSG, which this one-shot guard prevents.
++         * #14: track (client, tsg) pairs and schedule THIS channel's own TSG — two
++         * concurrent processes mint IDENTICAL TSG handle values (both 0x5c000012), so
++         * the old value-keyed scalar made process B's GR TSG look already-scheduled
++         * and B's GR channels rang forever off-runlist. */
++        if (is_gr && c->tsg && !nvkvm_m2_tsg_sched_check(s, c->client, c->tsg)) {
+             uint8_t sp[3]; memset(sp, 0, sizeof(sp)); sp[0] = 1;
+             uint32_t sst = 0xffff;
+-            int src = nvkvm_m2_control1(s, c->client, s->m2_gr_tsg, 0xa06c0101u,
++            int src = nvkvm_m2_control1(s, c->client, c->tsg, 0xa06c0101u,
+                                         sp, sizeof(sp), &sst);
+-            if (src == 0 && sst == 0) { s->m2_gr_tsg_sched = s->m2_gr_tsg; }
++            if (src == 0 && sst == 0) { nvkvm_m2_tsg_sched_mark(s, c->client, c->tsg); }
+             qemu_log("nvkvm-gpu[%s] #12 cont.34 GR-TSG GPFIFO_SCHEDULE TSG=0x%08x "
+-                     "client=0x%08x -> rc=%d st=0x%x%s\n", s->chip->name, s->m2_gr_tsg,
++                     "client=0x%08x -> rc=%d st=0x%x%s\n", s->chip->name, c->tsg,
+                      c->client, src, sst,
+                      (src == 0 && sst == 0) ? "  OK SCHEDULED" : "  <-- ERR");
+         }
+@@ -8157,7 +8675,8 @@ static void nvkvm_m2_back_channel_userd(NvkvmGpuEmul *s, uint32_t hClient,
+     if (ubase == 0) {
+         return;                              /* guest didn't place USERD — let RM alloc */
+     }
+-    if (s->m2_chanbuf_n >= 32 || s->m2_fbback_n >= 64) {
++    if (s->m2_chanbuf_n >= (int)ARRAY_SIZE(s->m2_chanbuf) ||
++        s->m2_fbback_n >= (int)ARRAY_SIZE(s->m2_fbback)) {
+         return;
+     }
+     /* Find the channel's device (VASpace parent) tracked for this client. */

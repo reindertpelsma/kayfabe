@@ -1,0 +1,15 @@
+START 2026-10-03T19:13:00+00:00
+Preparing worktree (detached HEAD 69ccb08c)
+Updating files:  48% (4977/10282)Updating files:  49% (5039/10282)Updating files:  50% (5141/10282)Updating files:  51% (5244/10282)Updating files:  52% (5347/10282)Updating files:  53% (5450/10282)Updating files:  54% (5553/10282)Updating files:  55% (5656/10282)Updating files:  56% (5758/10282)Updating files:  57% (5861/10282)Updating files:  58% (5964/10282)Updating files:  59% (6067/10282)Updating files:  60% (6170/10282)Updating files:  61% (6273/10282)Updating files:  62% (6375/10282)Updating files:  63% (6478/10282)Updating files:  64% (6581/10282)Updating files:  65% (6684/10282)Updating files:  66% (6787/10282)Updating files:  67% (6889/10282)Updating files:  68% (6992/10282)Updating files:  69% (7095/10282)Updating files:  70% (7198/10282)Updating files:  71% (7301/10282)Updating files:  72% (7404/10282)Updating files:  73% (7506/10282)Updating files:  74% (7609/10282)Updating files:  75% (7712/10282)Updating files:  76% (7815/10282)Updating files:  77% (7918/10282)Updating files:  78% (8020/10282)Updating files:  79% (8123/10282)Updating files:  80% (8226/10282)Updating files:  81% (8329/10282)Updating files:  82% (8432/10282)Updating files:  83% (8535/10282)Updating files:  84% (8637/10282)Updating files:  85% (8740/10282)Updating files:  86% (8843/10282)Updating files:  87% (8946/10282)Updating files:  88% (9049/10282)Updating files:  89% (9151/10282)Updating files:  90% (9254/10282)Updating files:  91% (9357/10282)Updating files:  92% (9460/10282)Updating files:  93% (9563/10282)Updating files:  94% (9666/10282)Updating files:  95% (9768/10282)Updating files:  96% (9871/10282)Updating files:  97% (9974/10282)Updating files:  98% (10077/10282)Updating files:  99% (10180/10282)Updating files:  99% (10203/10282)Updating files: 100% (10282/10282)Updating files: 100% (10282/10282), done.
+HEAD is now at 69ccb08c V3_P4_PORT_MAP Q3: name the CI runs of the third review's tests and bites
+HEAD=69ccb08cfce47d8d1c6963fea1b3599f69fd9917 CHECKOUT=/workspace/bench/verify-worktrees/mb_scratch2.LoswPx
+TESTS passed 1777 failed 0
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/69ccb08c/qemu-system-x86_64 rev=69ccb08c mtime=2026-10-03 19:15:46.197620398 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+FG_RC=0
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+EXIT rc=0 2026-10-03T19:35:01+00:00

@@ -1,0 +1,122 @@
+Q7TO8 waiting on q7 pid=1190627 2026-09-26T21:26:31+00:00
+Q7TO8 q7 stopped 2026-09-26T21:27:46+00:00: Q7_BAR_DONE 2026-09-26T21:27:44+00:00
+Q8_START 2026-09-26T21:27:56+00:00 rev=ee35ca4a host=580.159.04
+CLIENT_RC=0
+KF3_BUILD_RC=0 KF3_BUILT /workspace/bench/kf3-bins/ee35ca4a/qemu-system-x86_64 rev=ee35ca4a mtime=2026-09-26 21:28:30.688271476 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+V3_GATES_SUMMARY pass=9 fail=0
+FAT 575.57.08 [2026-09-26T21:33:11+00:00] fat 575.57.08: STAGED ✔ /workspace/bench/guest-575.57.08.qcow2
+LADDER host=580.159.04 guest=575.57.08 rev=ee35ca4a 4/4
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10366
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10363
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=5 trapped=10489
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=5 trapped=11033
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+CUP2_RC=0
+     76 kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+FAT 570.148.08 [2026-09-26T21:42:35+00:00] fat 570.148.08: STAGED ✔ /workspace/bench/guest-570.148.08.qcow2
+LADDER host=580.159.04 guest=570.148.08 rev=ee35ca4a 0/4
+CL_ROW mode=guest rung=cup2 rep=1 verdict=FAIL boot_rc=0 graded=[]  trapped=4638
+CL_ROW mode=guest rung=cup3 rep=1 verdict=FAIL boot_rc=0 graded=[CUP3_VAL=NO_KERNEL_LINE]  trapped=4638
+CL_ROW mode=guest rung=cup8 rep=1 verdict=FAIL boot_rc=0 graded=[CUP8_BAD=NO_RESULT_LINE CUP8_MAXERR=NO_RESULT_LINE] CUP8_WALL_S=9 trapped=4638
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=FAIL boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=NO_LINE GUEST_BENCH_VERDICT=] BENCH_measure_WALL_S=9 trapped=4638
+FAIL cuInit(0) -> unknown error (999)
+CUP2_RC=1
+     62 kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+FAT 565.57.01 [2026-09-26T21:52:23+00:00] fat 565.57.01: STAGED ✔ /workspace/bench/guest-565.57.01.qcow2
+LADDER host=580.159.04 guest=565.57.01 rev=ee35ca4a 0/4
+CL_ROW mode=guest rung=cup2 rep=1 verdict=FAIL boot_rc=0 graded=[]  trapped=4641
+CL_ROW mode=guest rung=cup3 rep=1 verdict=FAIL boot_rc=0 graded=[CUP3_VAL=NO_KERNEL_LINE]  trapped=4641
+CL_ROW mode=guest rung=cup8 rep=1 verdict=FAIL boot_rc=0 graded=[CUP8_BAD=NO_RESULT_LINE CUP8_MAXERR=NO_RESULT_LINE] CUP8_WALL_S=10 trapped=4633
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=FAIL boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=NO_LINE GUEST_BENCH_VERDICT=] BENCH_measure_WALL_S=9 trapped=4641
+FAIL cuInit(0) -> unknown error (999)
+CUP2_RC=1
+     58 kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+FAT 550.54.14 [2026-09-26T22:00:52+00:00] fat 550.54.14: ⊘ the guest's nvidia.ko is '', not 550.54.14 — see /var/log/nvidia-installer.log in the guest
+LADDER guest=550.54.14 UNSTAGED
+FAT 610.57.04 [2026-09-26T22:04:38+00:00] fat 610.57.04: STAGED ✔ /workspace/bench/guest-610.57.04.qcow2
+LADDER host=580.159.04 guest=610.57.04 rev=ee35ca4a 0/4
+CL_ROW mode=guest rung=cup2 rep=1 verdict=FAIL boot_rc=0 graded=[]  trapped=7785
+CL_ROW mode=guest rung=cup3 rep=1 verdict=FAIL boot_rc=0 graded=[CUP3_VAL=NO_KERNEL_LINE]  trapped=7801
+CL_ROW mode=guest rung=cup8 rep=1 verdict=FAIL boot_rc=0 graded=[CUP8_BAD=NO_RESULT_LINE CUP8_MAXERR=NO_RESULT_LINE] CUP8_WALL_S=2 trapped=7793
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=FAIL boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=NO_LINE GUEST_BENCH_VERDICT=] BENCH_measure_WALL_S=1 trapped=7793
+FAIL cuInit(0) -> initialization error (3)
+CUP2_RC=1
+      3 kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 100 }
+      3 kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 106 }
+      3 kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 107 }
+      3 kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 13 }
+Q8_LADDERS_EXIT 2026-09-26T22:10:02+00:00
+FG_DEFAULT_RC=0
+MATRIX_ROW host=580.159.04 guest=580.159.04 rev=ee35ca4a FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+LADDER host=580.159.04 guest=580.159.04 rev=ee35ca4a 4/4
+Q8_BAR_DONE 2026-09-26T22:32:12+00:00
+FAILPOINT guest=575.51.03 host=580.159.04 rev=ee35ca4a verdict=FAST_VERDICT=FAIL (raw client rc=1) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-prob
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+[   10.502729] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevi
+[   10.536679] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevi
+[   10.609606] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, N
+FAILPOINT guest=570.124.06 host=580.159.04 rev=ee35ca4a verdict=FAST_VERDICT=FAIL (raw client rc=1) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-pro
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+[    9.526437] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevi
+[    9.565433] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevi
+[    9.645710] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, N
+FAILPOINT guest=535.309.01 host=580.159.04 rev=ee35ca4a verdict=FAST_VERDICT=FAIL (raw client rc=1) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-pro
+W349REFUSE cmd=0x20800a36 why=unported-at-version struct=NV2080_CTRL_INTERNAL_GPU_GET_CHIP_INFO_PARAMS guest_driver=535.309.01 measured_size=92 encoder_size=88
+[    9.078022] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevi
+[    9.113329] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _gpuInitChipInfo(pGpu) @ gpu.c:2057
+[    9.156884] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x23:0x56:907)
+FAILPOINT guest=575.57.08 host=580.159.04 rev=ee35ca4a verdict=FAST_VERDICT=FAIL (raw client rc=1) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-prob
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+[   10.186457] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevi
+[   10.220588] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevi
+[   10.294336] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, N
+FAILPOINT guest=570.148.08 host=580.159.04 rev=ee35ca4a verdict=FAST_VERDICT=FAIL (raw client rc=1) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-pro
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+[   10.460952] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevi
+[   10.499301] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevi
+[   10.570832] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, N
+FAILPOINT guest=565.57.01 host=580.159.04 rev=ee35ca4a verdict=FAST_VERDICT=FAIL (raw client rc=1) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-prob
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+[    9.495554] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevi
+[    9.569805] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, N
+[    9.625294] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevi
+FAILPOINT guest=550.54.14 host=580.159.04 rev=ee35ca4a verdict=FAST_VERDICT=FAIL (raw client rc=1) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-prob
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+[    9.149638] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevi
+[    9.231450] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, N
+[    9.290882] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_ce.c:235
+FAILPOINT guest=610.57.04 host=580.159.04 rev=ee35ca4a verdict=FAST_VERDICT=FAIL (raw client rc=1) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-prob
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 7 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 13 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 20 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 21 }
+[   11.738221] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSu
+[   11.826453] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSu
+[   13.150615] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSu
+Q8_FAILPOINTS_EXIT 2026-09-26T22:41:15+00:00
+KERNEL65 rc=0 [2026-09-26T22:41:35+00:00] kernel 6.5.0-45-generic: STAGED ✔ /workspace/drivers/kernels/6.5.0-45-generic (cc=x86_64-linux-gnu-gcc-12)
+STAGE 545.23.08 rc=0 [2026-09-26T22:42:27+00:00] stage 545.23.08: STAGED ✔ /workspace/drivers/545.23.08
+FAILPOINT guest=545.23.08 host=580.159.04 rev=ee35ca4a verdict=FAST_VERDICT=FAIL (raw client rc=1) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the 
+/workspace/bench/fast_fp_5452308_ee35ca4a_ttyS0.log:[    0.000000] Linux version 6.5.0-45-generic (buildd@lcy02-amd64-109) (x86_64-linux-gnu-gcc-12 (Ubuntu 12.3.0-1ubuntu1~22.04) 12.3.0, GNU ld (GNU B
+/workspace/bench/fast_fp_5452308_ee35ca4a_qemu.log:W349REFUSE cmd=0x20800a36 why=unported-at-version struct=NV2080_CTRL_INTERNAL_GPU_GET_CHIP_INFO_PARAMS guest_driver=545.23.08 measured_size=92 encode
+RERUN rpc-mixed-allocs guest=580.95.05: 5/5 PASS; guest=default: 5/5 PASS
+INITFLAKE boots=49 adapter_failures=2
+Q8_EXIT 2026-09-26T22:48:47+00:00

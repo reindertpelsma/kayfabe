@@ -1,0 +1,35 @@
+info  RMLADDER ARGV     = [--cross-client-leak]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d001b6
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+W381_PROBE=sem-release — the w379 host-FIFO `SEM_RELEASE`. ⊘ The Mode-2 CPU copy-engine emulator                      decodes `PushMethod::SemRelease` and DELIBERATELY DOES NOT ACT ON IT, so                      inside a guest EVERY rung below is expected to report its CONTROL as                      FAILED and NOTRUN. That is the emulator's declared scope, NOT a red
+RUNG_map_propagation=NOTRUN
+RUNG_alias_two_vas=NOTRUN
+RUNG_alias_unmap=NOTRUN
+RUNG_missing_page=NOTRUN
+RUNG_map_stress=NOTRUN
+RUNG_rpc_mixed=NOTRUN
+info  R5b cross-client    = GPU 0, euid 0 — TWO RM clients, each with its own root, its own address space and its own channel, both naming 0x0000001c11000000
+info  R5b the bar         = neither client's object ever holds the OTHER's magic, and B's allocator does not see A's mapping
+info  R5b hClient A/B     = 0xc1d001b6 / 0xc1d001b7
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+info  R5b control A       = Landed
+info  R5b N1 B sees A's VA = Ok(Free) at 0x0000001c11000000 (A HAS IT MAPPED). Free ⇒ the two address spaces are separate
+info  R5b raw handles     = A object 0xcafe0009, B object 0xcafe000a (distinct; the VA collision alone carries the rung)
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+info  R5b control B       = Landed
+ok    R5b controls        = BOTH clients wrote their OWN object through the SAME VA number — so a later red is leakage and not a dead channel
+ok    R5b A after B       = A still holds MAGIC_A 0xc5c000a1
+ok    R5b B after B       = B holds MAGIC_B 0xc5c000b1
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+info  R5b A writes again  = Landed
+ok    R5b foreign handle  = client B mapping A's raw object 0xcafe0009 into B's OWN address space: refused Other(51) ⇒ RM scopes object handles PER CLIENT. `Other(87)` is `NV_ERR_OBJECT_NOT_FOUND` (`0x57`) — the handle names live memory under A and does not exist under B
+info  R5b census          = controls A=true B=true  B-sees-A's-VA-free=true  leak A<-B=false  leak B<-A=false  ordering=true  foreign handle refused=true
+★     R5b ISOLATED        = two RM clients drove the SAME GPU VA in their own address spaces, neither ever held the other's magic, and neither could name the other's object by its raw handle
+RUNGCTL_cross_client=PASS
+RUNG_cross_client=PASS
+done — w379/w381 mapping-plane rungs only

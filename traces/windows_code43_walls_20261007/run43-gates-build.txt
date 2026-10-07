@@ -1,0 +1,13 @@
+RUN43_BUILD_START 2026-10-07T19:30:23+02:00
+5f201b8ae Record run42 (product stub reproduces the bisect; FECS answered; dead channel's live mirror emptied); set up run43's row-commit diagnostic
+DIRTY=0
+V3_GATES_SUMMARY pass=9 fail=0
+V3_GATES_BIRTHS births=11 user=11 refused=0 ok=1
+V3_GATES_EXIT pass=9 fail=0 births_ok=1 2026-10-07T19:30:32+02:00
+XID_BEFORE=5
+GR_TIER_VERDICT=PASS
+ORACLE_RC=0
+XID_AFTER=5
+[3/4] Linking target qemu-system-x86_64
+KF3_BUILT /var/lib/kf-windows-20261005/kf3-bins/5f201b8a/qemu-system-x86_64 rev=5f201b8a mtime=2026-10-07 19:30:47.040143530 +0200 (shared build dir /var/lib/kf-windows-20261005/qemu-build-kf3)
+RUN43_BUILD_EXIT 0 2026-10-07T19:30:47+02:00

@@ -1,0 +1,51 @@
+== build (⊘ no real cuda.h — using the bundled nvd_cuda_min.h stand-in)
+/root/nvdiff/nvdiff_shim.c: In function ‘fd_is_nvidia.part.0.constprop’:
+/root/nvdiff/nvdiff_shim.c:134:37: warning: ‘%s’ directive output may be truncated writing up to 250 bytes into a region of size 32 [-Wformat-truncation=]
+  127 |     base = path + 5;                       /* skip "/dev/" */
+      |     ~~~~~~~~~~~~~~~                  
+......
+  134 |         snprintf(tmp, sizeof(tmp), "%s", base);
+      |                                     ^~
+In file included from /usr/include/stdio.h:894,
+                 from /root/nvdiff/nvdiff_shim.c:45:
+/usr/include/x86_64-linux-gnu/bits/stdio2.h:71:10: note: ‘__builtin_snprintf’ output between 1 and 251 bytes into a destination of size 32
+   71 |   return __builtin___snprintf_chk (__s, __n, __USE_FORTIFY_LEVEL - 1,
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   72 |                                    __glibc_objsize (__s), __fmt,
+      |                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   73 |                                    __va_arg_pack ());
+      |                                    ~~~~~~~~~~~~~~~~~
+/root/nvdiff/nvdiff_shim.c:129:55: warning: ‘%s’ directive output may be truncated writing up to 250 bytes into a region of size 32 [-Wformat-truncation=]
+  127 |     base = path + 5;                       /* skip "/dev/" */
+      |     ~~~~~~~~~~~~~~~                                    
+  128 |     if (fd < FDCACHE) {
+  129 |         snprintf(g_fdname[fd], sizeof(g_fdname[fd]), "%s", base);
+      |                                                       ^~
+In file included from /usr/include/stdio.h:894,
+                 from /root/nvdiff/nvdiff_shim.c:45:
+/usr/include/x86_64-linux-gnu/bits/stdio2.h:71:10: note: ‘__builtin_snprintf’ output between 1 and 251 bytes into a destination of size 32
+   71 |   return __builtin___snprintf_chk (__s, __n, __USE_FORTIFY_LEVEL - 1,
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   72 |                                    __glibc_objsize (__s), __fmt,
+      |                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   73 |                                    __va_arg_pack ());
+      |                                    ~~~~~~~~~~~~~~~~~
+== symbol-binding gate (the seven versioned entry points must bind _v2)
+   ok   cuDeviceTotalMem_v2
+   ok   cuCtxCreate_v2
+   ok   cuCtxDestroy_v2
+   ok   cuMemAlloc_v2
+   ok   cuMemFree_v2
+   ok   cuMemcpyHtoD_v2
+   ok   cuMemcpyDtoH_v2
+   ok   cuMemcpyDtoD_v2
+== environment
+date=2026-08-12T16:01:13Z
+uname=Linux ubuntu 6.8.0-59-generic #61~22.04.1-Ubuntu SMP PREEMPT_DYNAMIC Tue Apr 15 17:03:15 UTC 2 x86_64 x86_64 x86_64 GNU/Linux
+driver=NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+devnodes=/dev/nvidia-uvm /dev/nvidia-uvm-tools /dev/nvidia0 /dev/nvidiactl  /dev/nvidia-caps: nvidia-cap1 nvidia-cap2 
+libcuda=	libcuda.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libcuda.so.1
+stage=ce runs=0
+shim_md5=f4bbadc8a0a072c859990a162e4bde87
+prog_md5=326fb0bac2d5ec7b844fb9513f6923f7
+== runs=0: BUILD ONLY, nothing was executed (this is not an empty capture)

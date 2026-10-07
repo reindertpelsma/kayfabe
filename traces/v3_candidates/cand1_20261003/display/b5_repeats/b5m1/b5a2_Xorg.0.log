@@ -1,0 +1,263 @@
+[   119.985] 
+X.Org X Server 1.21.1.11
+X Protocol Version 11, Revision 0
+[   119.985] Current Operating System: Linux ubuntu 6.8.0-142-generic #142-Ubuntu SMP PREEMPT_DYNAMIC Wed Sep  2 14:24:27 UTC 2026 x86_64
+[   119.985] Kernel command line: BOOT_IMAGE=/vmlinuz-6.8.0-142-generic root=LABEL=cloudimg-rootfs ro console=tty1 console=ttyS0
+[   119.985] xorg-server 2:21.1.12-1ubuntu1.8 (For technical support please see http://www.ubuntu.com/support) 
+[   119.985] Current version of pixman: 0.42.2
+[   119.985] 	Before reporting problems, check http://wiki.x.org
+	to make sure that you have the latest version.
+[   119.985] Markers: (--) probed, (**) from config file, (==) default setting,
+	(++) from command line, (!!) notice, (II) informational,
+	(WW) warning, (EE) error, (NI) not implemented, (??) unknown.
+[   119.986] (==) Log file: "/var/log/Xorg.0.log", Time: Sun Oct  4 01:12:33 2026
+[   119.988] (==) Using config directory: "/etc/X11/xorg.conf.d"
+[   119.988] (==) Using system config directory "/usr/share/X11/xorg.conf.d"
+[   119.990] (==) No Layout section.  Using the first Screen section.
+[   119.991] (==) No screen section available. Using defaults.
+[   119.991] (**) |-->Screen "Default Screen Section" (0)
+[   119.991] (**) |   |-->Monitor "<default monitor>"
+[   119.993] (==) No device specified for screen "Default Screen Section".
+	Using the first device section listed.
+[   119.993] (**) |   |-->Device "kf3-b5"
+[   119.993] (==) No monitor specified for screen "Default Screen Section".
+	Using a default monitor configuration.
+[   119.993] (**) Allowing byte-swapped clients
+[   119.993] (==) Automatically adding devices
+[   119.993] (==) Automatically enabling devices
+[   119.993] (==) Automatically adding GPU devices
+[   119.993] (==) Automatically binding GPU devices
+[   119.993] (==) Max clients allowed: 256, resource mask: 0x1fffff
+[   119.994] (WW) The directory "/usr/share/fonts/X11/cyrillic" does not exist.
+[   119.994] 	Entry deleted from font path.
+[   119.994] (WW) The directory "/usr/share/fonts/X11/100dpi/" does not exist.
+[   119.994] 	Entry deleted from font path.
+[   119.994] (WW) The directory "/usr/share/fonts/X11/75dpi/" does not exist.
+[   119.994] 	Entry deleted from font path.
+[   119.994] (WW) The directory "/usr/share/fonts/X11/Type1" does not exist.
+[   119.994] 	Entry deleted from font path.
+[   119.994] (WW) The directory "/usr/share/fonts/X11/100dpi" does not exist.
+[   119.994] 	Entry deleted from font path.
+[   119.994] (WW) The directory "/usr/share/fonts/X11/75dpi" does not exist.
+[   119.994] 	Entry deleted from font path.
+[   119.994] (==) FontPath set to:
+	/usr/share/fonts/X11/misc,
+	built-ins
+[   119.994] (==) ModulePath set to "/usr/lib/xorg/modules"
+[   119.994] (II) The server relies on udev to provide the list of input devices.
+	If no devices become available, reconfigure udev or disable AutoAddDevices.
+[   119.994] (II) Loader magic: 0x5f06d0516020
+[   119.994] (II) Module ABI versions:
+[   119.994] 	X.Org ANSI C Emulation: 0.4
+[   119.994] 	X.Org Video Driver: 25.2
+[   119.994] 	X.Org XInput driver : 24.4
+[   119.994] 	X.Org Server Extension : 10.0
+[   119.997] (++) using VT number 7
+
+[   119.997] (II) systemd-logind: logind integration requires -keeptty and -keeptty was not provided, disabling logind integration
+[   120.000] (II) xfree86: Adding drm device (/dev/dri/card0)
+[   120.000] (II) Platform probe for /sys/devices/pci0000:00/0000:00:02.0/simple-framebuffer.0/drm/card0
+[   120.037] (--) PCI:*(0@0:2:0) 10de:2504:10de:1536 rev 161, Mem @ 0xc0000000/16777216, 0x800000000/134217728, 0x808000000/33554432, 0xc1040000/16384, BIOS @ 0x????????/131072
+[   120.038] (II) LoadModule: "glx"
+[   120.042] (II) Loading /usr/lib/xorg/modules/extensions/libglx.so
+[   120.048] (II) Module glx: vendor="X.Org Foundation"
+[   120.048] 	compiled for 1.21.1.11, module version = 1.0.0
+[   120.048] 	ABI class: X.Org Server Extension, version 10.0
+[   120.048] (II) LoadModule: "nvidia"
+[   120.049] (II) Loading /usr/lib/xorg/modules/drivers/nvidia_drv.so
+[   120.061] (II) Module nvidia: vendor="NVIDIA Corporation"
+[   120.061] 	compiled for 1.6.99.901, module version = 1.0.0
+[   120.061] 	Module class: X.Org Video Driver
+[   120.062] (II) NVIDIA dlloader X Driver  580.159.04  Wed Apr 29 17:01:30 UTC 2026
+[   120.062] (II) NVIDIA Unified Driver for all Supported NVIDIA GPUs
+[   120.074] (II) Loading sub module "fb"
+[   120.074] (II) LoadModule: "fb"
+[   120.074] (II) Module "fb" already built-in
+[   120.074] (II) Loading sub module "wfb"
+[   120.074] (II) LoadModule: "wfb"
+[   120.074] (II) Loading /usr/lib/xorg/modules/libwfb.so
+[   120.076] (II) Module wfb: vendor="X.Org Foundation"
+[   120.076] 	compiled for 1.21.1.11, module version = 1.0.0
+[   120.076] 	ABI class: X.Org ANSI C Emulation, version 0.4
+[   120.079] (II) NVIDIA(0): Creating default Display subsection in Screen section
+	"Default Screen Section" for depth/fbbpp 24/32
+[   120.079] (==) NVIDIA(0): Depth 24, (==) framebuffer bpp 32
+[   120.079] (==) NVIDIA(0): RGB weight 888
+[   120.079] (==) NVIDIA(0): Default visual is TrueColor
+[   120.079] (==) NVIDIA(0): Using gamma correction (1.0, 1.0, 1.0)
+[   120.080] (**) NVIDIA(0): Enabling 2D acceleration
+[   120.080] (II) Loading sub module "glxserver_nvidia"
+[   120.080] (II) LoadModule: "glxserver_nvidia"
+[   120.080] (II) Loading /usr/lib/xorg/modules/extensions/libglxserver_nvidia.so
+[   120.191] (II) Module glxserver_nvidia: vendor="NVIDIA Corporation"
+[   120.192] 	compiled for 1.6.99.901, module version = 1.0.0
+[   120.192] 	Module class: X.Org Server Extension
+[   120.192] (II) NVIDIA GLX Module  580.159.04  Wed Apr 29 17:07:05 UTC 2026
+[   120.194] (II) NVIDIA: The X server supports PRIME Render Offload.
+[   121.192] (EE) NVIDIA(GPU-0): Failed to get virtual display support info.
+[   121.642] (--) NVIDIA(0): Valid display device(s) on GPU-0 at PCI:0:2:0
+[   121.642] (--) NVIDIA(0):     DFP-0
+[   121.673] (WW) NVIDIA: No path to DRM device: No direct render devices found.
+[   122.029] (II) NVIDIA(0): NVIDIA GPU NVIDIA GeForce RTX 3060 (GA106-A) at PCI:0:2:0
+[   122.030] (II) NVIDIA(0):     (GPU-0)
+[   122.030] (--) NVIDIA(0): Memory: 8388608 kBytes
+[   122.032] (--) NVIDIA(0): VideoBIOS: 94.06.25.00.fc
+[   122.032] (II) NVIDIA(0): Detected PCI Express Link width: 16X
+[   122.050] (--) NVIDIA(GPU-0): KFB kayfabe (DFP-0): connected
+[   122.050] (--) NVIDIA(GPU-0): KFB kayfabe (DFP-0): Internal TMDS
+[   122.050] (--) NVIDIA(GPU-0): KFB kayfabe (DFP-0): 165.0 MHz maximum pixel clock
+[   122.051] (--) NVIDIA(GPU-0): 
+[   122.078] (==) NVIDIA(0): 
+[   122.078] (==) NVIDIA(0): No modes were requested; the default mode "nvidia-auto-select"
+[   122.078] (==) NVIDIA(0):     will be used as the requested mode.
+[   122.078] (==) NVIDIA(0): 
+[   122.086] (II) NVIDIA(0): Validated MetaModes:
+[   122.086] (II) NVIDIA(0):     "DFP-0:nvidia-auto-select"
+[   122.086] (II) NVIDIA(0): Virtual screen size determined to be 1920 x 1080
+[   122.210] (--) NVIDIA(0): DPI set to (195, 109); computed from "UseEdidDpi" X config
+[   122.210] (--) NVIDIA(0):     option
+[   122.213] (II) NVIDIA: Reserving 24576.00 MB of virtual memory for indirect memory
+[   122.213] (II) NVIDIA:     access.
+[   122.290] (II) NVIDIA(0): ACPI: failed to connect to the ACPI event daemon; the daemon
+[   122.290] (II) NVIDIA(0):     may not be running or the "AcpidSocketPath" X
+[   122.290] (II) NVIDIA(0):     configuration option may not be set correctly.  When the
+[   122.290] (II) NVIDIA(0):     ACPI event daemon is available, the NVIDIA X driver will
+[   122.290] (II) NVIDIA(0):     try to use it to receive ACPI event notifications.  For
+[   122.290] (II) NVIDIA(0):     details, please see the "ConnectToAcpid" and
+[   122.290] (II) NVIDIA(0):     "AcpidSocketPath" X configuration options in Appendix B: X
+[   122.290] (II) NVIDIA(0):     Config Options in the README.
+[   122.485] (II) NVIDIA(0): Setting mode "DFP-0:nvidia-auto-select"
+[   122.486] (EE) NVIDIA(0): Failed to allocate display software resources.
+[   122.623] (==) NVIDIA(0): Disabling shared memory pixmaps
+[   122.623] (==) NVIDIA(0): Backing store enabled
+[   122.623] (==) NVIDIA(0): Silken mouse enabled
+[   122.626] (==) NVIDIA(0): DPMS enabled
+[   122.626] (II) Loading sub module "dri2"
+[   122.626] (II) LoadModule: "dri2"
+[   122.626] (II) Module "dri2" already built-in
+[   122.627] (II) NVIDIA(0): [DRI2] Setup complete
+[   122.627] (II) NVIDIA(0): [DRI2]   VDPAU driver: nvidia
+[   122.627] (II) Initializing extension Generic Event Extension
+[   122.627] (II) Initializing extension SHAPE
+[   122.628] (II) Initializing extension MIT-SHM
+[   122.628] (II) Initializing extension XInputExtension
+[   122.629] (II) Initializing extension XTEST
+[   122.629] (II) Initializing extension BIG-REQUESTS
+[   122.629] (II) Initializing extension SYNC
+[   122.629] (II) Initializing extension XKEYBOARD
+[   122.629] (II) Initializing extension XC-MISC
+[   122.629] (II) Initializing extension SECURITY
+[   122.629] (II) Initializing extension XFIXES
+[   122.630] (II) Initializing extension RENDER
+[   122.630] (II) Initializing extension RANDR
+[   122.630] (II) Initializing extension COMPOSITE
+[   122.630] (II) Initializing extension DAMAGE
+[   122.630] (II) Initializing extension MIT-SCREEN-SAVER
+[   122.630] (II) Initializing extension DOUBLE-BUFFER
+[   122.630] (II) Initializing extension RECORD
+[   122.631] (II) Initializing extension DPMS
+[   122.631] (II) Initializing extension Present
+[   122.631] (II) Initializing extension DRI3
+[   122.631] (II) Initializing extension X-Resource
+[   122.631] (II) Initializing extension XVideo
+[   122.631] (II) Initializing extension XVideo-MotionCompensation
+[   122.631] (II) Initializing extension SELinux
+[   122.631] (II) SELinux: Disabled on system
+[   122.631] (II) Initializing extension GLX
+[   122.631] (II) Initializing extension GLX
+[   122.631] (II) Indirect GLX disabled.
+[   122.631] (II) GLX: Another vendor is already registered for screen 0
+[   122.631] (II) Initializing extension XFree86-VidModeExtension
+[   122.632] (II) Initializing extension XFree86-DGA
+[   122.632] (II) Initializing extension XFree86-DRI
+[   122.632] (II) Initializing extension DRI2
+[   122.632] (II) Initializing extension NV-GLX
+[   122.632] (II) Initializing extension NV-CONTROL
+[   122.632] (II) Initializing extension XINERAMA
+[   123.188] (II) config/udev: Adding input device Power Button (/dev/input/event0)
+[   123.188] (**) Power Button: Applying InputClass "libinput keyboard catchall"
+[   123.188] (II) LoadModule: "libinput"
+[   123.189] (II) Loading /usr/lib/xorg/modules/input/libinput_drv.so
+[   123.194] (II) Module libinput: vendor="X.Org Foundation"
+[   123.194] 	compiled for 1.21.1.11, module version = 1.4.0
+[   123.194] 	Module class: X.Org XInput Driver
+[   123.194] 	ABI class: X.Org XInput driver, version 24.4
+[   123.194] (II) Using input driver 'libinput' for 'Power Button'
+[   123.194] (**) Power Button: always reports core events
+[   123.194] (**) Option "Device" "/dev/input/event0"
+[   123.198] (II) event0  - Power Button: is tagged by udev as: Keyboard
+[   123.198] (II) event0  - Power Button: device is a keyboard
+[   123.198] (II) event0  - Power Button: device removed
+[   123.207] (**) Option "config_info" "udev:/sys/devices/LNXSYSTM:00/LNXPWRBN:00/input/input0/event0"
+[   123.207] (II) XINPUT: Adding extended input device "Power Button" (type: KEYBOARD, id 6)
+[   123.207] (**) Option "xkb_model" "pc105"
+[   123.207] (**) Option "xkb_layout" "us"
+[   123.210] (II) event0  - Power Button: is tagged by udev as: Keyboard
+[   123.210] (II) event0  - Power Button: device is a keyboard
+[   123.211] (II) config/udev: Adding input device AT Translated Set 2 keyboard (/dev/input/event1)
+[   123.211] (**) AT Translated Set 2 keyboard: Applying InputClass "libinput keyboard catchall"
+[   123.211] (II) Using input driver 'libinput' for 'AT Translated Set 2 keyboard'
+[   123.211] (**) AT Translated Set 2 keyboard: always reports core events
+[   123.211] (**) Option "Device" "/dev/input/event1"
+[   123.213] (II) event1  - AT Translated Set 2 keyboard: is tagged by udev as: Keyboard
+[   123.213] (II) event1  - AT Translated Set 2 keyboard: device is a keyboard
+[   123.213] (II) event1  - AT Translated Set 2 keyboard: device removed
+[   123.221] (**) Option "config_info" "udev:/sys/devices/platform/i8042/serio0/input/input1/event1"
+[   123.221] (II) XINPUT: Adding extended input device "AT Translated Set 2 keyboard" (type: KEYBOARD, id 7)
+[   123.221] (**) Option "xkb_model" "pc105"
+[   123.221] (**) Option "xkb_layout" "us"
+[   123.223] (II) event1  - AT Translated Set 2 keyboard: is tagged by udev as: Keyboard
+[   123.223] (II) event1  - AT Translated Set 2 keyboard: device is a keyboard
+[   123.224] (II) config/udev: Adding input device VirtualPS/2 VMware VMMouse (/dev/input/event3)
+[   123.224] (**) VirtualPS/2 VMware VMMouse: Applying InputClass "libinput pointer catchall"
+[   123.224] (II) Using input driver 'libinput' for 'VirtualPS/2 VMware VMMouse'
+[   123.224] (**) VirtualPS/2 VMware VMMouse: always reports core events
+[   123.224] (**) Option "Device" "/dev/input/event3"
+[   123.226] (II) event3  - VirtualPS/2 VMware VMMouse: is tagged by udev as: Mouse
+[   123.227] (II) event3  - VirtualPS/2 VMware VMMouse: device is a pointer
+[   123.227] (II) event3  - VirtualPS/2 VMware VMMouse: device removed
+[   123.242] (II) libinput: VirtualPS/2 VMware VMMouse: Step value 0 was provided, libinput Fallback acceleration function is used.
+[   123.242] (II) libinput: VirtualPS/2 VMware VMMouse: Step value 0 was provided, libinput Fallback acceleration function is used.
+[   123.242] (II) libinput: VirtualPS/2 VMware VMMouse: Step value 0 was provided, libinput Fallback acceleration function is used.
+[   123.242] (**) Option "config_info" "udev:/sys/devices/platform/i8042/serio1/input/input3/event3"
+[   123.242] (II) XINPUT: Adding extended input device "VirtualPS/2 VMware VMMouse" (type: MOUSE, id 8)
+[   123.242] (**) Option "AccelerationScheme" "none"
+[   123.242] (**) VirtualPS/2 VMware VMMouse: (accel) selected scheme none/0
+[   123.242] (**) VirtualPS/2 VMware VMMouse: (accel) acceleration factor: 2.000
+[   123.242] (**) VirtualPS/2 VMware VMMouse: (accel) acceleration threshold: 4
+[   123.244] (II) event3  - VirtualPS/2 VMware VMMouse: is tagged by udev as: Mouse
+[   123.244] (II) event3  - VirtualPS/2 VMware VMMouse: device is a pointer
+[   123.245] (II) config/udev: Adding input device VirtualPS/2 VMware VMMouse (/dev/input/mouse1)
+[   123.245] (II) No input driver specified, ignoring this device.
+[   123.245] (II) This device may have been added with another device file.
+[   123.246] (II) config/udev: Adding input device VirtualPS/2 VMware VMMouse (/dev/input/event2)
+[   123.246] (**) VirtualPS/2 VMware VMMouse: Applying InputClass "libinput pointer catchall"
+[   123.246] (II) Using input driver 'libinput' for 'VirtualPS/2 VMware VMMouse'
+[   123.246] (**) VirtualPS/2 VMware VMMouse: always reports core events
+[   123.246] (**) Option "Device" "/dev/input/event2"
+[   123.247] (II) event2  - VirtualPS/2 VMware VMMouse: is tagged by udev as: Mouse
+[   123.248] (II) event2  - VirtualPS/2 VMware VMMouse: device is a pointer
+[   123.248] (II) event2  - VirtualPS/2 VMware VMMouse: device removed
+[   123.263] (**) Option "config_info" "udev:/sys/devices/platform/i8042/serio1/input/input4/event2"
+[   123.263] (II) XINPUT: Adding extended input device "VirtualPS/2 VMware VMMouse" (type: MOUSE, id 9)
+[   123.263] (**) Option "AccelerationScheme" "none"
+[   123.263] (**) VirtualPS/2 VMware VMMouse: (accel) selected scheme none/0
+[   123.263] (**) VirtualPS/2 VMware VMMouse: (accel) acceleration factor: 2.000
+[   123.263] (**) VirtualPS/2 VMware VMMouse: (accel) acceleration threshold: 4
+[   123.264] (II) event2  - VirtualPS/2 VMware VMMouse: is tagged by udev as: Mouse
+[   123.265] (II) event2  - VirtualPS/2 VMware VMMouse: device is a pointer
+[   123.266] (II) config/udev: Adding input device VirtualPS/2 VMware VMMouse (/dev/input/mouse0)
+[   123.266] (II) No input driver specified, ignoring this device.
+[   123.266] (II) This device may have been added with another device file.
+[   124.210] (--) NVIDIA(GPU-0): KFB kayfabe (DFP-0): connected
+[   124.210] (--) NVIDIA(GPU-0): KFB kayfabe (DFP-0): Internal TMDS
+[   124.210] (--) NVIDIA(GPU-0): KFB kayfabe (DFP-0): 165.0 MHz maximum pixel clock
+[   124.210] (--) NVIDIA(GPU-0): 
+[   124.255] (--) NVIDIA(GPU-0): KFB kayfabe (DFP-0): connected
+[   124.255] (--) NVIDIA(GPU-0): KFB kayfabe (DFP-0): Internal TMDS
+[   124.255] (--) NVIDIA(GPU-0): KFB kayfabe (DFP-0): 165.0 MHz maximum pixel clock
+[   124.255] (--) NVIDIA(GPU-0): 
+[   125.217] (--) NVIDIA(GPU-0): KFB kayfabe (DFP-0): connected
+[   125.217] (--) NVIDIA(GPU-0): KFB kayfabe (DFP-0): Internal TMDS
+[   125.217] (--) NVIDIA(GPU-0): KFB kayfabe (DFP-0): 165.0 MHz maximum pixel clock
+[   125.217] (--) NVIDIA(GPU-0): 

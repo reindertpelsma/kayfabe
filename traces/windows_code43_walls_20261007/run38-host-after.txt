@@ -1,0 +1,5 @@
+NVIDIA GeForce RTX 4070, 595.91.07, P8, Enabled
+no-qemu
+nbd0-disconnected
+xid_total=5
+xid_lines_last_30min=0

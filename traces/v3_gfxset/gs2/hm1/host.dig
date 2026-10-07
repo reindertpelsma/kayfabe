@@ -1,0 +1,3 @@
+GSET_DIG side=host item=vk_ofa key=flow_field val=bbc6496d716475f3
+GSET_DIG side=host item=vk_ofa key=median val=-5.062,-3.031,
+GSET_VAL side=host item=vk_ofa key=good_frac val=0.9859

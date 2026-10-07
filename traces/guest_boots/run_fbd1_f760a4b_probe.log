@@ -1,0 +1,147 @@
+=== boot_capture tag=fbd1_f760a4b at 2026-08-09T11:11:25+00:00 ===
+=== source revision: f760a4b3b ===
+=== qemu binary: -rwxr-xr-x 1 root root 84721112 Aug  9 11:10 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:f760a4b3b8395abb6b6be6d0764e18a4e674f05c 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /workspace/bench/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=92551d70f36ddbef
+    used: /workspace/bench/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Sun Aug  9 11:11:37 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  ERR!                           Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /  12288MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Aug  9 11:11 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Aug  9 11:11 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Aug  9 11:11 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Aug  9 11:11 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Aug  9 11:11 .
+drwxr-xr-x 18 root root   4000 Aug  9 11:11 ..
+cr--------  1 root root 240, 1 Aug  9 11:11 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Aug  9 11:11 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /workspace/bench/kayfabe/scripts/bench/cup2_hook_deadline.sh at 2026-08-09T11:11:42+00:00 ===
+=== cup2: locating a REAL cuda.h (3 of 5 hits in this guest are the PowerMac ADB
+===       header and sort AHEAD of it — check CONTENT, never the path) ===
+REAL: /usr/local/include/cuda.h
+=== cup2: build ===
+GCC_RC=0
+=== cup2: run (detached, deadline 150s on the HOST's clock) ===
+LAUNCHED pid=1515
+★★★ cup2 DID NOT RETURN within 150s — this is a HANG, not a failure.
+CUP2_RC=TIMEOUT
+=== cup2: partial stdout ===
+=== cup2: WHERE IT IS BLOCKED (five samples — the instrument for an execution-plane wall) ===
+pid=1515 state=Rl
+--- sample 1 ---
+[<0>] uvm_gpu_tracking_semaphore_update_completed_value+0x128/0x3b0 [nvidia_uvm]
+--- sample 2 ---
+[<0>] uvm_spin_loop+0x109/0x180 [nvidia_uvm]
+[<0>] wait_for_entry_with_spin+0x4d/0x1c0 [nvidia_uvm]
+[<0>] uvm_tracker_wait_for_entry+0x94/0xd0 [nvidia_uvm]
+[<0>] uvm_push_end_and_wait+0x3e/0x60 [nvidia_uvm]
+[<0>] channel_pool_add+0x7e4/0x1150 [nvidia_uvm]
+[<0>] uvm_channel_manager_create+0x7a3/0x930 [nvidia_uvm]
+[<0>] add_gpu+0x450/0x24d0 [nvidia_uvm]
+[<0>] uvm_gpu_retain_by_uuid+0x1d7/0x2d0 [nvidia_uvm]
+[<0>] uvm_va_space_register_gpu+0x51/0xbb0 [nvidia_uvm]
+[<0>] uvm_api_register_gpu+0x73/0xc0 [nvidia_uvm]
+[<0>] uvm_ioctl+0x131a/0x1cf0 [nvidia_uvm]
+[<0>] uvm_unlocked_ioctl_entry.part.0+0x7b/0xf0 [nvidia_uvm]
+[<0>] uvm_unlocked_ioctl_entry+0x6b/0x90 [nvidia_uvm]
+[<0>] __x64_sys_ioctl+0xa3/0xf0
+[<0>] x64_sys_call+0x12a3/0x25a0
+[<0>] do_syscall_64+0x87/0x180
+[<0>] entry_SYSCALL_64_after_hwframe+0x78/0x80
+--- sample 3 ---
+[<0>] uvm_gpu_semaphore_get_cpu_va+0x46/0x70 [nvidia_uvm]
+[<0>] uvm_gpu_tracking_semaphore_update_completed_value+0x128/0x3b0 [nvidia_uvm]
+--- sample 4 ---
+[<0>] uvm_spin_loop+0x109/0x180 [nvidia_uvm]
+--- sample 5 ---
+[<0>] uvm_gpu_semaphore_get_cpu_va+0x46/0x70 [nvidia_uvm]
+[<0>] uvm_spin_loop+0xf0/0x180 [nvidia_uvm]
+[<0>] wait_for_entry_with_spin+0x4d/0x1c0 [nvidia_uvm]
+[<0>] uvm_tracker_wait_for_entry+0x94/0xd0 [nvidia_uvm]
+[<0>] uvm_push_end_and_wait+0x3e/0x60 [nvidia_uvm]
+[<0>] channel_pool_add+0x7e4/0x1150 [nvidia_uvm]
+[<0>] uvm_channel_manager_create+0x7a3/0x930 [nvidia_uvm]
+[<0>] add_gpu+0x450/0x24d0 [nvidia_uvm]
+[<0>] uvm_gpu_retain_by_uuid+0x1d7/0x2d0 [nvidia_uvm]
+[<0>] uvm_va_space_register_gpu+0x51/0xbb0 [nvidia_uvm]
+[<0>] uvm_api_register_gpu+0x73/0xc0 [nvidia_uvm]
+[<0>] uvm_ioctl+0x131a/0x1cf0 [nvidia_uvm]
+[<0>] uvm_unlocked_ioctl_entry.part.0+0x7b/0xf0 [nvidia_uvm]
+[<0>] uvm_unlocked_ioctl_entry+0x6b/0x90 [nvidia_uvm]
+[<0>] __x64_sys_ioctl+0xa3/0xf0
+[<0>] x64_sys_call+0x12a3/0x25a0
+[<0>] do_syscall_64+0x87/0x180
+[<0>] entry_SYSCALL_64_after_hwframe+0x78/0x80
+=== cup2: guest dmesg delta ===
+[   34.657972] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   34.658246] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00008; hObject=0x31415900; paramsStatus=0x00000000; status=0x00000056
+[   34.678383] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   34.678387] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   34.678388] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   34.678390] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   34.680231] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00008; hObject=0x3141590f; paramsStatus=0x00000000; status=0x00000056
+[   34.680236] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ mem.c:180
+[   34.688591] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00009; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000000; status=0x00000056
+[   35.071484] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   35.075262] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   35.103811] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00001; hParent=0xa55a0030; hObject=0xa55a0070; hClass=0x0000208f; paramsSize=0x00000000; paramsStatus=0x00000000; status=0x00000056
+[   35.107549] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00001; hObject=0xa55a0070; paramsStatus=0x00000000; status=0x00000056
+[   35.107558] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_client.c:844
+[   35.107662] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:259
+[   36.478797] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00009; hObject=0xcaf00002; paramsStatus=0x00000000; status=0x00000056
+[   36.478812] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_client.c:844
+[   36.479235] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:259
+[   36.479394] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:1375
+[   36.483302] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[   37.532034] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+[   55.366362] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   55.367131] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   56.487681] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   56.513549] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   56.513682] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   56.513747] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   60.615430] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00013; hParent=0x31415903; hObject=0x3141590f; hClass=0x00000070; paramsSize=0x00000018; paramsStatus=0x00000000; status=0x00000056
+[   60.885532] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00013; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000000; status=0x00000056
+[   60.964968] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   61.004946] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   61.005430] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00013; hObject=0x31415900; paramsStatus=0x00000000; status=0x00000056
+[   61.032767] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   61.032772] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   61.032775] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   61.032777] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   61.035270] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00013; hObject=0x3141590f; paramsStatus=0x00000000; status=0x00000056
+[   61.035276] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ mem.c:180
+[   61.047445] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00014; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000000; status=0x00000056
+[   61.804533] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf00012; hObject=0xcaf00015; hClass=0x0000c076; paramsSize=0x00000000; paramsStatus=0x00000000; status=0x00000056
+HOOK_RC=0

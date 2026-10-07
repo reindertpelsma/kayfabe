@@ -1,0 +1,13 @@
+== guest kernel: 6.8.0-142-generic
+== kernel taken from /dev/nbd0p16
+== modules taken (with closure): 6
+==   ecc.ko
+==   nvidia.ko
+==   nvidia-uvm.ko
+==   wmi.ko
+==   video.ko
+==   nvidia-modeset.ko
+== firmware taken: 2 file(s), 101M
+== built: /workspace/bench/fastguest/vmlinuz  15M
+== built: /workspace/bench/fastguest/initrd.cpio.gz  112M
+== kernel release: 6.8.0-142-generic

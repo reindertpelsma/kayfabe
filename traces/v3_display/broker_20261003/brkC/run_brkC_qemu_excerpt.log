@@ -1,0 +1,177 @@
+2026-10-03T21:40:12.286271Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,display-broker=/run/user/1000/nvkvm/display.sock,display-broker-uid=1000,display-broker-vram=off: info: kf3: display console registered (head 0 of kf0)
+2026-10-03T21:40:12.286379Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,display-broker=/run/user/1000/nvkvm/display.sock,display-broker-uid=1000,display-broker-vram=off: info: kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=0 sked=0/0held fn70=0 roots=0 root_moves=0 stmts=0/0 refused=0 pramin_repoints=0 pramin_miss=0 last_miss=0x0 pramin_worst_us=0 (map 0 mmap 0) pramin_maps=0 pramin_mmaps=0 inline_opens=0 reaped=0 cache_ops=0 sysmembars=0 root_unsets=0] mirrors=0 reused=0 prewarmed=0 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=0 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=0 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[] served=0 parks=2 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=1 released=0 refused=0 held=1] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=0 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=0 scanout_refused=0 scanout_avg_us=0 scanout_max_us=0] scanout_no_slot=0 scanout_d2h=0 scanout_pack=0 pack_skipped=0 display_vram_mib=0 host_cursor_reads=0 host_cursor_refused=0 broker[up=0 sent=0 gpucopy=0 gpucopy_backoffs=0 dropped=0 uncommitted=0 recovered=0 releases=0 unknown_releases=0 reclaims=0 blocked=0 backstops=0 reconnects=0 failed_attempts=0 peer_refused=0 cursor=composed cursor_sets=0 cursor_hides=0 cursor_shows=0 cursor_refused=0] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[] gsp_refusals[total=0 distinct=0 []] (BAR0 pieces=5)
+kf3: display plane ON — virtual NVDisplay for GA102 GA103 GA104 GA106 GA107 (IP 0x04010000, display class 0xc670, 4 heads)
+kf3: broker: display-broker-vram=off — host-memory rungs only
+kf3: broker: /dev/udmabuf opened — frames can go as a dma-buf (rungs 1 and 1b)
+kf3: display plane built — derived registers, caps page, engine vocabulary, GPU context on 0000:00:07.0
+2026-10-03T21:40:12.286271Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,display-broker=/run/user/1000/nvkvm/display.sock,display-broker-uid=1000,display-broker-vram=off: info: kf3: display console registered (head 0 of kf0)
+kf3: broker: relay to /run/user/1000/nvkvm/display.sock (brokers accepted: uid 0, QEMU's effective uid at each connect, display-broker-uid 1000); no clipboard
+2026-10-03T21:40:12.286335Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,display-broker=/run/user/1000/nvkvm/display.sock,display-broker-uid=1000,display-broker-vram=off: info: kf3: display broker relay on /run/user/1000/nvkvm/display.sock (input goes to this device's console)
+kf3: display: compose kernel self-test PASSED
+kf3: display worker up — engine 4 heads / 8 windows, caps page published
+kf3: broker: connected to /run/user/1000/nvkvm/display.sock, capabilities 0xeff — no /dev/udmabuf here, so frames go as shared memory only
+kf3: broker: broker window is now 1920x1080
+kf3: broker: window inactive (input suspended)
+kf3: broker: grab off
+kf3: broker: guest cursor: the HOST pointer shows it (hover; not composed)
+2026-10-03T21:40:12.309631Z qemu-system-x86_64: info: kf3: broker: pointing device -> #4 QEMU Virtio Tablet (absolute)
+kf3: display: +50 ms the console shows NOTHING yet (no head has scanned a window) (core channel FREE)
+kf3: broker: window active
+kf3: broker: broker window is now 1024x695
+kf3: display: resize 1024x695 -> monitor 1024x695 on display 0x100; no hotplug registration (the next probe reads it)
+kf3: display: InstMem(InstMem { phys: 8316977152, size: 65536, addr_space: 2 })
+kf3: display: InstMem(InstMem { phys: 8316977152, size: 65536, addr_space: 2 })
+kf-rm: display: hotplug event 0xc1d0000c:0x1000e (parent 0x10002) registered
+kf3: display: ChannelAllocated { kind: Core, instance: 0, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943794176, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 0, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943785984, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 0, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943777792, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 1, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943765504, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 1, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943757312, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 2, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943749120, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 2, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943732736, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 3, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943724544, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 3, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943712256, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 4, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943704064, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 4, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943695872, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 5, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943683584, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 5, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943675392, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 6, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943667200, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 6, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943646720, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 7, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943638528, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 7, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943630336, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 0, offset: 0, client: 3251634188, pb: None, life: 1 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 1, offset: 0, client: 3251634188, pb: None, life: 1 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 2, offset: 0, client: 3251634188, pb: None, life: 1 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 3, offset: 0, client: 3251634188, pb: None, life: 1 }
+kf3: display: head 0 idle raster 0x0 period 0 us
+kf3: display: head 1 idle raster 0x0 period 0 us
+kf3: display: head 2 idle raster 0x0 period 0 us
+kf3: display: head 3 ACTIVE raster 1184x715 period 16680 us
+kf3: display: 1 updates completed, 14532 methods
+kf3: display: +45696 ms the console shows head 3 1024x695: [window 6 iso 0x1008f+0x0 1024x695 pitch 64 fmt 0xe6] (core channel allocated)
+kf3: display: 5 updates completed, 15379 methods
+kf3: broker: guest resolution is now 1024x695
+kf3: broker: frames go as shared memory (F_SHM) — an X11 broker accepts it only with --present-mode=shm, and a refusal is not reported back
+kf3: broker: the display CANNOT show XR24 modifier 0x00ffffffffffffff
+kf3: display: 6 updates completed, 15438 methods
+kf3: display: 7 updates completed, 15497 methods
+kf3: display: 8 updates completed, 15556 methods
+kf3: display: 9 updates completed, 15615 methods
+kf3: display: 10 updates completed, 15674 methods
+kf3: display: 11 updates completed, 15733 methods
+kf3: display: 12 updates completed, 15792 methods
+kf3: display: 13 updates completed, 15851 methods
+kf3: display: 14 updates completed, 15910 methods
+kf3: display: +55547 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+kf3: display: 17 updates completed, 15973 methods
+kf3: display: +55797 ms the console shows BLACK 1024x695 (the scanout shown is lost: a lit head has had no window past the hold) (core channel allocated)
+kf3: display: +58918 ms the console shows head 3 1024x695: [window 6 iso 0x10091+0x0 1024x695 pitch 64 fmt 0xe6] (core channel allocated)
+kf3: display: 20 updates completed, 106539 methods
+kf3: display: 21 updates completed, 106564 methods
+kf3: display: 22 updates completed, 106565 methods
+kf3: display: 23 updates completed, 106576 methods
+kf3: broker: guest cursor image 256x256 hot 0,0 sent (1 so far)
+kf3: display: 24 updates completed, 106577 methods
+kf3: display: 25 updates completed, 106578 methods
+kf3: display: 26 updates completed, 106579 methods
+kf3: broker: broker window is now 1024x768
+kf3: display: resize 1024x768 -> monitor 1024x768 on display 0x100; hotplug queued
+kf3: display: hotplug posted for display 0x100 to 0xc1d0000c:0x1000e
+kf3: display: 27 updates completed, 106580 methods
+kf3: display: 28 updates completed, 106581 methods
+kf3: broker: guest cursor image 256x256 hot 4,2 sent (2 so far)
+kf3: display: 29 updates completed, 106582 methods
+kf3: broker: guest cursor image 256x256 hot 12,12 sent (3 so far)
+kf3: display: 30 updates completed, 106583 methods
+kf3: display: 31 updates completed, 106584 methods
+kf3: display: 32 updates completed, 106595 methods
+kf3: display: 34 updates completed, 106607 methods
+kf3: broker: grab ON
+kf3: broker: guest cursor: composed into the frame (grabbed; the broker hides its own image)
+2026-10-03T21:42:15.963160Z qemu-system-x86_64: info: kf3: broker: pointing device -> #5 QEMU Virtio Mouse (relative)
+kf3: display: 35 updates completed, 106608 methods
+kf3: broker: grab off
+kf3: broker: guest cursor: the HOST pointer shows it (hover; not composed)
+2026-10-03T21:42:26.930176Z qemu-system-x86_64: info: kf3: broker: pointing device -> #4 QEMU Virtio Tablet (absolute)
+kf3: display: 36 updates completed, 106619 methods
+kf3: display: +143785 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+kf3: display: 39 updates completed, 109234 methods
+kf3: display: 40 updates completed, 112740 methods
+kf3: display: 41 updates completed, 121567 methods
+kf3: display: +143865 ms the console shows head 3 1024x695: [window 6 iso 0x1008f+0x0 1024x695 pitch 64 fmt 0xe6] (core channel allocated)
+kf3: display: 44 updates completed, 122463 methods
+kf3: display: 45 updates completed, 123124 methods
+kf3: display: 46 updates completed, 123183 methods
+kf3: display: 47 updates completed, 123242 methods
+kf3: display: +149259 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+kf3: display: 49 updates completed, 123301 methods
+kf3: display: +149510 ms the console shows BLACK 1024x695 (the scanout shown is lost: a lit head has had no window past the hold) (core channel allocated)
+kf3: display: 52 updates completed, 123364 methods
+kf3: display: 53 updates completed, 127424 methods
+kf3: display: ChannelFreed { kind: Cursor, instance: 0, preserve: false }
+kf3: display: ChannelFreed { kind: Cursor, instance: 1, preserve: false }
+kf3: display: ChannelFreed { kind: Cursor, instance: 2, preserve: false }
+kf3: display: ChannelFreed { kind: Cursor, instance: 3, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 0, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 0, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 1, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 1, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 2, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 2, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 3, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 3, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 4, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 4, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 5, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 5, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 6, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 6, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 7, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 7, preserve: false }
+kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+kf3: display: ChannelAllocated { kind: Core, instance: 0, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943794176, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Window, instance: 0, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943638528, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 0, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943630336, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Window, instance: 1, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943671296, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 1, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943654912, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Window, instance: 2, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943745024, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 2, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943691776, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Window, instance: 3, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943679488, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 3, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943708160, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Window, instance: 4, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943699968, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 4, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943728640, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Window, instance: 5, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943773696, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 5, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943712256, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Window, instance: 6, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943749120, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 6, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943732736, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Window, instance: 7, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943765504, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 7, offset: 0, client: 3251634188, pb: Some(Pushbuffer { addr_space: 1, phys: 4943757312, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 0, offset: 0, client: 3251634188, pb: None, life: 3 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 1, offset: 0, client: 3251634188, pb: None, life: 3 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 2, offset: 0, client: 3251634188, pb: None, life: 3 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 3, offset: 0, client: 3251634188, pb: None, life: 3 }
+kf3: display: 54 updates completed, 138818 methods
+kf3: display: ChannelFreed { kind: Cursor, instance: 0, preserve: false }
+kf3: display: ChannelFreed { kind: Cursor, instance: 1, preserve: false }
+kf3: display: ChannelFreed { kind: Cursor, instance: 2, preserve: false }
+kf3: display: ChannelFreed { kind: Cursor, instance: 3, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 0, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 0, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 1, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 1, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 2, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 2, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 3, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 3, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 4, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 4, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 5, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 5, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 6, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 6, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 7, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 7, preserve: false }
+kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+kf-rm: display: hotplug registration retired by the FREE of 0xc1d0000c:0x1000e
+=== the last status line (device exit) ===
+kf3: family=Ampere phase=Running trapped=37860 applied=3043 refused=4 serviced=1179 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110c00 mem[inval=646 walks=659/659 cleared=646 superseded=0 named_missed=2 unreconciled=0 mapped=1481 unmapped=1234 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=553 priv_withheld_bytes=0x4bf73000 priv_mirrored=12 sked=0/0held fn70=3 roots=12 root_moves=0 stmts=33/33 refused=0 pramin_repoints=38 pramin_miss=0 last_miss=0x0 pramin_worst_us=279 (map 218 mmap 101) pramin_maps=38 pramin_mmaps=38 inline_opens=0 reaped=37 cache_ops=8 sysmembars=9 root_unsets=0] mirrors=3 reused=9 prewarmed=3 mirror_avg_us=325094 mirror_max_us=340041 vat[invals=15 arrive->clear_avg_us=671 max_us=229866 walks=15 walk_avg_us=329 gpu_avg_us=118 plan_avg_us=0 apply_avg_us=271 leaves=1 host_calls=46] chan[births=4 pt_births=8 acts=44/0refused worst_act_us=4827 nsi=[GR0:6690/5440raised CE2:71/0raised CE3:3004/2raised] served=148 parks=15226 host_rings=73 contended=0 poisoned=0 tokens=[0x801:fwd=73,subs=73,serves=137,put=Some(73),gp_get=Some(73) 0x802:fwd=2,subs=2,serves=5,put=Some(2),gp_get=Some(2)]] views[armed=442 released=304 refused=0 held=138] rc[armed=8 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=31331 raised=5476 held=0 oor=0] disp[writes=635 puts=588 methods=140280 updates=54 notifies=24 releases=0 vblanks=6401 irqs=21 exceptions=0 refused=0 scanouts=3005 scanout_refused=0 scanout_avg_us=551 scanout_max_us=4202] scanout_no_slot=0 scanout_d2h=3005 scanout_pack=0 pack_skipped=0 display_vram_mib=0 host_cursor_reads=1996 host_cursor_refused=0 broker[up=1 sent=3005 gpucopy=0 gpucopy_backoffs=0 dropped=0 uncommitted=0 recovered=0 releases=3005 unknown_releases=0 reclaims=0 blocked=0 backstops=0 reconnects=0 failed_attempts=0 peer_refused=0 cursor=hover cursor_sets=3 cursor_hides=2 cursor_shows=1 cursor_refused=0] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x00800294,0x20810108,0x2080014b,0x20800157,0x20801357,0x2080852e,0x20808513,0x20802068,0x2080a618,0x2080a612,0x2080a097,0x20800a38,0x20802a12,0x0073013d,0x20802801,0x00730293,0x00731144,0x0073012c,0x20810103,0x2080012f,0x20809019,0x2080a0a4,0x20800153,0x2080a088,0x20808524,0x20810107,0x20800a9a] gsp_refusals[total=128 distinct=46 [fn76/0x20800a87=0x56x2 fn76/0x20800afe=0x56x3 fn76/0x20800aff=0x56x5 fn76/0x20800a80=0x56x4 fn76/0x20802a0f=0x56x2 fn76/0x2080017e=0x56x2 fn76/0x20800a30=0x56x2 fn76/0x20800a2e=0x56x2 fn76/0x20800b03=0x56x2 fn76/0x20800b05=0x56x2 fn76/0x20800a3f=0x56x2 fn76/0x2080012b=0x56x2 fn76/0x2080013f=0x56x2 fn103/0x0000c36f=0x56x2 fn103/0x0000402c=0x56x2 fn76/0x00800294=0x56x1 fn76/0x20810108=0x56x1 fn76/0x2080014b=0x56x5 fn76/0x20800157=0x56x1 fn76/0x20801357=0x56x1 fn76/0x2080852e=0x56x2 fn76/0x20808513=0x56x2 fn76/0x20802068=0x56x1 fn76/0x2080a618=0x56x1 fn76/0x2080a612=0x56x1 fn76/0x2080a097=0x56x1 fn103/0x0000208f=0x56x1 fn76/0x20800a38=0x56x1 fn76/0x20802a12=0x56x24 fn76/0x20800301=0x56x3 fn76/0x0073013d=0x56x1 fn76/0x20802801=0x56x1 fn76/0x00730291=0x56x7 fn76/0x00730293=0x56x1 fn76/0x00731144=0x56x6 fn76/0x0073012c=0x56x6 fn76/0x20810103=0x56x1 fn76/0x2080012f=0x56x4 fn76/0x20809019=0x56x1 fn76/0x2080a0a4=0x56x1 fn76/0x20800153=0x56x2 fn76/0x2080a088=0x56x1 fn76/0x20808524=0x56x1 fn76/0x20800a5d=0x56x9 fn76/0x20810107=0x56x2 fn76/0x20800a9a=0x56x2]]

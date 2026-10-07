@@ -1,0 +1,2307 @@
+# CI green-gate (decision #33; the standing decision #15 follow-up).
+#
+# Two tiers, matching how the repo is actually built:
+#
+# Every-push gates (fast, deterministic — these stay the bar for landing anything):
+# - stable: the main workspace — build, the full fast suite (KAYFABE_SLOW unset:
+#   the two measured-slow tests skip loudly, everything else runs), Clippy errors
+#   and new warning sites, rustfmt --check, and the §6.2 hexagonal boundary grep
+#   (decision #37): the pure logic crates must name NO OS readiness primitive, in
+#   code or in comments.
+# - aarch64: cross-`cargo check` the whole workspace for arm64 (decision #36).
+#   The pure logic core must carry NO x86/CPU-arch assumption, so arm64 (later:
+#   Grace-Hopper / Jetson) can be added as an adapter, never a core bolt-on.
+#   `cargo check` type-checks without linking, so no cross-toolchain/QEMU is
+#   needed — an x86-ism that ever creeps into the core fails THIS gate on the push
+#   that introduces it. See docs/design/portability_arm64.md.
+# - (removed 2026-09-26, v3 archive) nightly-fuzz, tsan and mutants: the fuzz
+#   crate, the kayfabe-tests threaded suites and the L1 mutation surface they
+#   gated (kayfabe-rt/-fwd/-shell/-core) moved to archive/ at the v3 cutover.
+#
+# Standing scheduled gate (slow, so not per-push):
+# - slow (nightly + dispatch): the whole suite with KAYFABE_SLOW=1.
+#
+# 2026-09-29: v3 migration. Keep all workspace tests, including the retained grader.
+# Architecture checks cover the product and grader, not archived implementations or
+# the hash-frozen kayfabe-doorbell historical model. Existing warning/prose
+# debt is content-addressed; new sites fail. See docs/CI_V3.md for the exact boundary.
+# Hardware gates + the 30-arm suite remain an additional merge requirement.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [master]
+  schedule:
+    # Nightly (slow) — the job `if:` keys off the
+    # exact cron string, so keep it in sync.
+    - cron: '43 2 * * *'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  stable:
+    name: stable — build, test, clippy, fmt, boundary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
+          components: rustfmt, clippy
+          # ★★★ The isolate is EMBEDDED, and it is embedded as a STATIC binary:
+          # `crates/kayfabe-isolate-host/build.rs` runs a nested cargo for this triple and
+          # `include_bytes!`s the result. Without the target installed, every cargo command
+          # in this job fails in the build script. It is a build input, not an optimisation:
+          # the isolate is `exec`'d from a memfd inside a mount namespace that has no path to
+          # a dynamic loader.
+          # ★ x86_64-unknown-uefi (2026-10-03, OWNER_RULINGS §K): `crates/kf-gop-image/build.rs`
+          # builds kf3's boot-display GOP driver from firmware/kf-gop the same way, and a missing
+          # target is a named build error there. Both are listed in rust-toolchain.toml.
+          targets: x86_64-unknown-linux-musl, x86_64-unknown-uefi
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --workspace
+      - name: Allow user namespaces for this CI checkout's test executables
+        run: python3 scripts/ci/runner_namespaces.py
+      # (Deliberately not naming a test count here — it rots on every PR.)
+      #
+      # ★★ KAYFABE_NO_KVM=1 PINS THE OS-FREE CONFIGURATION. GitHub runners have no
+      # /dev/kvm, so this job was *already* running that configuration — but by accident
+      # of what the runner image happens to lack, which would lapse silently the day an
+      # image starts shipping the device. The guarantee it protects is architectural: the
+      # pure logic core must stay testable with NO OS layer, or we lock in Linux/KVM/QEMU/
+      # x86 semantics and only find out when a second VMM or a second architecture is
+      # attempted. `kayfabe-mocks` is the backend for this configuration.
+      #
+      # The with-KVM configuration is covered on developer boxes and the bench; the
+      # reached-count gate below is what stops the gated tests from silently vanishing
+      # from BOTH.
+      #
+      # ★★ `${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}`, NOT the bare path — MEASURED
+      # 2026-07-30. The three reached-count steps below read the log this step writes, and a
+      # fixed path in `/tmp` is a SHARED name. On GitHub that is invisible: every job gets its
+      # own runner. On a real box it is not — two `scripts/ci_gates.sh --all` runs at once
+      # (two agents, or a rebuild beside a bench run) clobber each other's log, and the gates
+      # then count the OTHER run's tests. It was seen: a run on a box WITH both vendored ogkm
+      # trees reported `VBIOS-oracle gate: ran=0 skipped=0 total=0` and failed, having read a
+      # concurrent run's file.
+      #
+      # That failure mode is worse than a flake, because it lands exactly where the owner says
+      # the authoritative run happens — a real box — and nowhere CI would ever show it. The
+      # default keeps GitHub's behaviour byte-identical; `ci_gates.sh` sets the variable to a
+      # per-invocation path so concurrent local runs cannot see each other.
+      #
+      # ★★★ AND IT WRITES A COMPLETION SENTINEL. The three consumers below cannot otherwise
+      # tell "the producer ran and genuinely found zero" from "I could not read my input" —
+      # both look like `ran=0 skipped=0 total=0`, and the second is an INFRASTRUCTURE
+      # failure wearing the costume of a catastrophic regression. That cost two full gate
+      # runs to diagnose the first time it happened. The sentinel is written after the pipe
+      # and carries the run's own exit code, so a truncated, clobbered, half-written or
+      # simply absent log is a DIFFERENT and louder answer than a real count of zero.
+      - name: Test (OS-free configuration — KVM forced absent)
+        run: |
+          set +e # GitHub invokes bash -e; capture the failed pipeline before returning its rc.
+          set -uo pipefail
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          KAYFABE_NO_KVM=1 cargo test --workspace --no-fail-fast 2>&1 | tee "$log"
+          rc="${PIPESTATUS[0]}"
+          printf 'KAYFABE-TEST-LOG-COMPLETE rc=%s pid=%s\n' "$rc" "$$" >> "$log"
+          if [ "$rc" -ne 0 ] && [ "${GITHUB_ACTIONS:-}" = true ]; then
+            # Diagnose host policy refusals without disabling confinement or skipping tests.
+            sysctl vm.memfd_noexec kernel.apparmor_restrict_unprivileged_userns || true
+            sudo dmesg | grep -E 'apparmor=|memfd' | tail -40 || true
+          fi
+          exit "$rc"
+      - name: Remove the CI-only namespace profile
+        if: always()
+        run: python3 scripts/ci/runner_namespaces.py --remove
+      # ★★ KVM-gate non-vacuity. GitHub runners do NOT provide /dev/kvm, so the ~33
+      # tests that need a real VM fd SKIP here — and a skip that nobody counts is the
+      # "green instrument on an unexercised path" failure this repo cares most about
+      # (testing_doctrine.md §1). CI therefore asserts the gated tests were REACHED,
+      # not that they ran: RAN + SKIPPED must meet the floor. Each test binary is its
+      # own process, so the counting has to be external to the harness.
+      #
+      # This exists because CI was RED for three commits (1336ce1, 42d850c, 0a6826c)
+      # while the local suite was green on a box that happens to have KVM. The floor
+      # is what stops the reverse failure: all 33 quietly vanishing and CI staying
+      # green.
+      - name: KVM-gate reached-count (floor, not an exact match)
+        run: |
+          set -euo pipefail
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          # ★★★ INFRASTRUCTURE vs RESULT — they must not be representable the same way.
+          # A missing, empty, truncated or foreign log makes every count below zero, which
+          # reads as "the gated tests vanished" and is a confident wrong answer. Exit 2 (not
+          # 1) so a caller can tell "the tree is bad" from "my input was".
+          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
+            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing," \
+                 "empty, or carries no completion sentinel — so the producer step did not" \
+                 "finish, or another process is writing the same path. This step reports" \
+                 "NOTHING about the tree. Set KAYFABE_TEST_LOG to a private path" \
+                 "(scripts/ci_gates.sh does) and re-run."
+            ls -l "$log" || true
+            exit 2
+          fi
+          ran=$(grep -c 'KVM-GATE: RAN' "$log" || true)
+          skipped=$(grep -c 'KVM-GATE: SKIPPED' "$log" || true)
+          total=$(( ran + skipped ))
+          # ★ 35 -> 30, 2026-09-26: the v3 archive move took the archived tests/ suite's KVM-gated
+          # tests with it. Measured on the verification box (KAYFABE_NO_KVM=1 cargo test
+          # --workspace at 29531eb5): KVM-GATE ran=0 skipped=30.
+          echo "KVM-gate: ran=$ran skipped=$skipped total=$total (floor 30)"
+          if [ "$total" -lt 30 ]; then
+            echo "::error::KVM-gated tests were not reached: $total < 30." \
+                 "Either they were deleted, or the gate stopped announcing itself." \
+                 "A silent skip is worse than a red build."
+            exit 1
+          fi
+          if [ "$ran" -gt 0 ]; then
+            echo "This runner has /dev/kvm: $ran gated tests actually executed."
+          fi
+      # ★★ SANDBOX-gate non-vacuity — the same argument as the KVM gate above, for the
+      # tests that need a mount or user namespace. They are the ONLY tests that assert the
+      # isolate's containment (a `/dev` descriptor that cannot name `..`, a child that holds
+      # no capability), so a runner where they silently stop running is a runner where a
+      # security property stops being checked while the build stays green.
+      #
+      # Deliberately a floor over RAN+SKIPPED and not an exact match: the gated set grows.
+      # The `RAN` line is printed too, so a job that HAS the capability says how many
+      # actually executed rather than leaving it to be inferred.
+      - name: SANDBOX-gate reached-count (floor, not an exact match)
+        run: |
+          set -euo pipefail
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          # ★★★ INFRASTRUCTURE vs RESULT — they must not be representable the same way.
+          # A missing, empty, truncated or foreign log makes every count below zero, which
+          # reads as "the gated tests vanished" and is a confident wrong answer. Exit 2 (not
+          # 1) so a caller can tell "the tree is bad" from "my input was".
+          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
+            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing," \
+                 "empty, or carries no completion sentinel — so the producer step did not" \
+                 "finish, or another process is writing the same path. This step reports" \
+                 "NOTHING about the tree. Set KAYFABE_TEST_LOG to a private path" \
+                 "(scripts/ci_gates.sh does) and re-run."
+            ls -l "$log" || true
+            exit 2
+          fi
+          ran=$(grep -c 'SANDBOX-GATE: RAN' "$log" || true)
+          skipped=$(grep -c 'SANDBOX-GATE: SKIPPED' "$log" || true)
+          total=$(( ran + skipped ))
+          echo "SANDBOX-gate: ran=$ran skipped=$skipped total=$total (floor 10)"
+          if [ "$total" -lt 10 ]; then
+            echo "::error::sandbox-gated tests were not reached: $total < 10." \
+                 "Either they were deleted, or the gate stopped announcing itself." \
+                 "These are the tests that assert the isolate cannot reach the host" \
+                 "filesystem and holds no capability; a silent skip is worse than red."
+            exit 1
+          fi
+          if [ "$ran" -gt 0 ]; then
+            echo "This runner permits namespaces: $ran gated tests actually executed."
+          fi
+      - name: CAP-gate — the live capability tests, reached unprivileged and run as root
+        run: |
+          set -euo pipefail
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
+            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing, empty or" \
+                 "unterminated, so this step reports nothing about the tree."
+            exit 2
+          fi
+          # `|| true`: under pipefail a grep with no match fails the substitution, and a count of
+          # zero is an answer here, not an error (the floor below decides).
+          ran_u=$(grep -o 'CAP-GATE: RAN' "$log" | wc -l || true)
+          vac_u=$(grep -o 'CAP-GATE: VACUOUS' "$log" | wc -l || true)
+          echo "CAP-gate, runner user: ran=$ran_u vacuous=$vac_u (reached floor 6)"
+          if [ $((ran_u + vac_u)) -lt 6 ]; then
+            echo "::error::the live capability tests were not reached: $((ran_u + vac_u)) < 6"
+            exit 1
+          fi
+          mapfile -t exes < <(cargo test -q -p kf-linux-raw -p kf-host -p kf-cuda --lib --no-run \
+              --message-format=json | python3 -c 'import json,sys
+          for l in sys.stdin:
+              j = json.loads(l)
+              if j.get("reason") == "compiler-artifact" and j.get("profile", {}).get("test") and j.get("executable"):
+                  print(j["executable"])')
+          if [ "${#exes[@]}" -ne 3 ]; then
+            echo "::error::expected 3 lib test binaries (kf-linux-raw, kf-host, kf-cuda), got ${#exes[@]}"
+            exit 1
+          fi
+          rootlog="$RUNNER_TEMP/cap-gate-root.log"
+          : > "$rootlog"
+          sudo grep -E '^(Uid|CapEff)' /proc/self/status
+          for e in "${exes[@]}"; do
+            sudo "$e" live_cap_ --test-threads=1 2>&1 | tee -a "$rootlog"
+          done
+          ran=$(grep -o 'CAP-GATE: RAN' "$rootlog" | wc -l || true)
+          vac=$(grep -o 'CAP-GATE: VACUOUS' "$rootlog" | wc -l || true)
+          echo "CAP-gate, root: ran=$ran vacuous=$vac (floor 6; vacuous must be 0)"
+          if [ "$vac" -ne 0 ] || [ "$ran" -lt 6 ]; then
+            echo "::error::as root every live capability test must exercise the real capset:" \
+                 "ran=$ran vacuous=$vac"
+            exit 1
+          fi
+      - name: UDMABUF-gate reached-count (floor, not an exact match)
+        run: |
+          set -euo pipefail
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
+            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing," \
+                 "empty, or carries no completion sentinel. This step reports NOTHING about" \
+                 "the tree."
+            exit 2
+          fi
+          ran=$(grep -c 'UDMABUF-GATE: RAN' "$log" || true)
+          skipped=$(grep -c 'UDMABUF-GATE: SKIPPED' "$log" || true)
+          total=$(( ran + skipped ))
+          echo "UDMABUF-gate: ran=$ran skipped=$skipped total=$total (floor 2)"
+          if [ "$total" -lt 2 ]; then
+            echo "::error::udmabuf-gated tests were not reached: $total < 2." \
+                 "Either they were deleted, or the gate stopped announcing itself."
+            exit 1
+          fi
+          if [ "$skipped" -gt 0 ]; then
+            echo "::warning::$skipped udmabuf-gated test(s) SKIPPED here (no /dev/udmabuf):" \
+                 "they asserted nothing; the dma-buf rung is graded on a box or a dev host."
+          fi
+      - name: Clippy (errors and new warning sites fail)
+        run: bash scripts/ci/clippy.sh
+      - name: Format check
+        run: cargo fmt --all --check
+      - name: v3 dependency isolation and CI guard self-tests
+        run: |
+          python3 scripts/ci/dependencies.py
+          python3 scripts/ci/debt.py frozen
+          python3 -m unittest discover -s scripts/ci -p 'test_*.py'
+          bash scripts/bench/qemu_identity_selftest.sh
+          bash scripts/bench/box/birth_census.sh --selftest
+      # ★ The hexagonal boundary gate (l1_concurrency.md §6.2, decision #37). The
+      # completion-source reactor's MODEL is core-owned and PURE: the core says
+      # "notifiable source" and "completion source", full stop. The OS half — the
+      # source→host-primitive table, the real wait loop, the real wake — is L1's
+      # adapter, and adapters do not live in these crates. A logic-crate diff that
+      # names an OS readiness primitive has breached the boundary, in code OR in a
+      # comment, so this greps both. Exit-code polarity: `grep -r` returns 0 on a
+      # HIT (= boundary breach = fail) and 1 on no match (= the success case), hence
+      # the `if`, never a bare `grep` under `set -e`.
+      # ★★★ `--exclude-dir=target` ON EVERY CRATE-DIR GREP BELOW, and it is a CORRECTNESS
+      # fix rather than a relaxation. `[measured 2026-08-08]`, two runs of
+      # `scripts/run_full_suite.sh` on the same tree at the same revision: the first was
+      # green on this gate, the second FAILED with
+      #
+      #   grep: crates/kayfabe-abi/gen/target/debug/deps/kayfabe_abi_gen-…: binary file matches
+      #
+      # ⊘ Nothing about the source changed. The suite's OWN `abi-gen-tests` phase runs
+      # `cd crates/kayfabe-abi/gen && cargo test`, which creates a nested (gitignored)
+      # `target/` INSIDE a crate this gate greps whole — so running the suite ARMS the
+      # failure for the next run of the suite. Same for anyone who regenerates the ABI.
+      #
+      # ⇒ These gates were green only on a tree that had never built the ABI generator,
+      # which is exactly what a fresh GitHub runner is. A gate that passes because the
+      # artefact it trips on is usually absent is the `skipped_oracle_kills_the_guard`
+      # shape pointed the other way, and it makes the suite ORDER-DEPENDENT.
+      #
+      # ⊘ This narrows nothing a reviewer cares about: `target/` is cargo output, never a
+      # source file, and the gate's own instruction — "never weaken this gate" — is about
+      # the PATTERN and the crate list, neither of which moves.
+      #
+      # ★★★★ `libc` -> `\blibc\b`, and this is a CORRECTION rather than the weakening the
+      # instruction forbids: `libc` is a SUBSTRING OF `libcuda`, and this gate has therefore
+      # been RED on every revision since libcuda entered the vocabulary. `[measured
+      # 2026-08-09, rev feb6fd0]` the unbounded pattern returns **39 hits across the whole
+      # pure-crate set and EVERY ONE of them is the word `libcuda`** — filter those out and
+      # nothing remains; with `\blibc\b` the count is **0**. There was never a real breach
+      # hiding among them.
+      #
+      # ⊘⊘ **A permanently-red gate is not a strict gate, it is an absent one.** Nobody
+      # could have told a genuine `libc::` from the noise, and §14.29-§14.31 each ran this
+      # suite and shipped past it — `skipped_oracle_kills_the_guard` reached by the other
+      # route. ★ `\blibc\b` still matches `libc::c_int`, `use libc;` and `-lc`-style
+      # mentions, because `:` and `;` are word boundaries; `[measured]` by planting
+      # `// bite probe: libc::c_int` in `kayfabe-util` and watching the corrected pattern
+      # fire on it, then removing it. It does NOT match `libcuda`, which is a different
+      # word naming a userspace library this port has to talk ABOUT.
+      - name: Hexagonal boundary gate (no OS vocabulary in the pure logic crates)
+        run: |
+          pure="crates/kayfabe-completion \
+                crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-arch \
+                crates/kayfabe-abi crates/kayfabe-device \
+                crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate crates/kayfabe-vmm \
+                crates/kayfabe-chips"
+          if grep -rniE --exclude-dir=target 'eventfd|epoll|timerfd|rawfd|\blibc\b|O_NONBLOCK' $pure; then
+            echo ""
+            echo "★ BOUNDARY BREACH — l1_concurrency.md §6.2."
+            echo "The pure logic crates own the completion-source MODEL, never the OS"
+            echo "readiness machinery: no host descriptor types, no syscall names, not"
+            echo "even in comments. The lines above name one. Move it into the L1"
+            echo "adapter and refer to it from the core as a 'notifiable source' /"
+            echo "'completion source'. Reword the comment; never weaken this gate."
+            exit 1
+          fi
+      # ★ The VMM-VOCABULARY gate (l1_os_shell.md §6.0, decision #39) — the sibling of
+      # the hexagonal gate, for the OTHER axis of portability.
+      #
+      # The hexagonal gate above keeps OS vocabulary out of the pure crates. Nothing
+      # kept *hypervisor* vocabulary out of anything — and hypervisor-agnosticism is a
+      # founding requirement of this port (`kayfabe-vmm`'s crate docs; arch §4.1's
+      # "count is not the invariant; hypervisor-agnosticism is"). The structural tell
+      # that it had gone unwritten: the word "agnostic" appears ZERO times in
+      # l1_concurrency.md and l1_os_shell.md combined. A requirement restated nowhere
+      # below the architecture doc is one the next adapter quietly breaks.
+      #
+      # Scope = the 11 pure logic crates PLUS `kayfabe-rt`. The shell is an adapter for
+      # *threads and locks*, deliberately outside the hexagonal list — but it is not a
+      # hypervisor adapter, and the concurrency shape it encodes (`SharedDevice`'s
+      # `&self` ranked locking) is precisely what a second backend must be able to reuse.
+      #
+      # ★ It gates API IDENTIFIERS, never the string "QEMU". That is the whole design:
+      # naming the adapter crates (`kayfabe-vmm-qemu`, `kayfabe-vmm-ch`), citing a QEMU
+      # source file, or writing "QEMU's BQL is one instance of the class" must all stay
+      # writable — so the pattern names things that only ever appear when QEMU's API has
+      # leaked inward (`BQL_LOCK_GUARD`, `memory_region_*`, `qdev_*`, `QEMUBH`), plus the
+      # two English phrases that are pure QEMU idiom ("bottom half", "main loop"). No
+      # allowlist exists and none is ever needed: every legitimate mention is rephrasable
+      # in one word ("the VMM's global lock", "the adapter's serialized executor"), and a
+      # gate with an allowlist is a gate with a negotiation.
+      #
+      # The two English idioms carry a LEADING \b, and it is load-bearing rather than
+      # tidiness: without it `main.?loop` matches the ordinary phrase "do-main loop"
+      # (and any word ending in "main" followed by "loop"). A gate that fires on English
+      # is a gate that gets muted, which is the §5.1 lesson applied one section early.
+      # The trailing side needs no anchor — "main-loop", "mainloop" and "main_loop" must
+      # all match, which is exactly what `.?` plus no trailing anchor gives.
+      #
+      # Exit-code polarity, as above: `grep -r` exits 0 on a HIT, and a hit here is the
+      # FAILURE case — hence the `if`, never a bare `grep` under `set -e`. (This polarity
+      # has been got wrong twice in this repo; it is written out at all three gates for
+      # that reason.)
+      - name: VMM-vocabulary gate (no hypervisor API vocabulary in the core or the shell)
+        run: |
+          portable="crates/kayfabe-completion \
+                    crates/kayfabe-mmu crates/kayfabe-gsp \
+                    crates/kayfabe-arch crates/kayfabe-abi crates/kayfabe-device \
+                    crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate \
+                    crates/kayfabe-vmm \
+                    crates/kayfabe-chips"
+          # ★ `crates/kayfabe-shell` ADDED 2026-07-29 (task #100). This step is named
+          # *"…in the core or the shell"* and did not cover the crate literally called
+          # `kayfabe-shell` — the L1 OS shell, which owns the reactor and the executor
+          # thread, i.e. exactly the code a QEMU-ism would reach for. `kayfabe-rt` (the
+          # L1 *threaded* shell) was in the list and `kayfabe-shell` was not; that reads
+          # as an omission when the second crate was split out, not as a decision. It is
+          # clean today, so this widens the gate's reach without moving anything.
+          if grep -rniE --exclude-dir=target '\bBQL\b|bql_lock|qemu_mutex_lock_iothread|BQL_LOCK_GUARD|MemoryRegion|memory_region_|qemu_bh|QEMUBH|aio_bh|qdev_|VMStateDescription|\bbottom.?half|\bmain.?loop|iothread' $portable; then
+            echo ""
+            echo "★ HYPERVISOR-VOCABULARY BREACH — l1_os_shell.md §6.0."
+            echo "The core and the L1 shell must name hypervisor CAPABILITIES, never one"
+            echo "hypervisor's API. The lines above name QEMU's. A CH/rust-vmm port must"
+            echo "cost one adapter crate and zero trait changes; every QEMU-ism that"
+            echo "reaches these crates is a line of that adapter written in the wrong"
+            echo "place. Reword to the capability:"
+            echo "  QEMU's BQL / iothread lock -> 'the VMM's global lock' (§6.3's CLASS:"
+            echo "                                'a lock the VMM owns, that we neither"
+            echo "                                 construct nor rank')"
+            echo "  bottom half / main loop    -> 'the adapter's serialized executor'"
+            echo "  MemoryRegion / qdev_*      -> the Vmm trait method that means it"
+            echo "Naming the adapter crates (kayfabe-vmm-qemu, kayfabe-vmm-ch) never trips"
+            echo "this gate — it matches API identifiers, not the vendor's name. So there"
+            echo "is no allowlist, and there is nothing to argue about in review."
+            exit 1
+          fi
+      # ★ The GENERATION-NAME gate (CLAUDE.md rule 1, decision #37's third axis) — the
+      # third vocabulary gate, and the one that was DOCUMENTED BUT ABSENT. CLAUDE.md has
+      # said "Grep gate (CI): no `Ampere|Turing|Hopper|Blackwell|Ada|V5\d\d` in any logic
+      # crate" since the repo was founded; ci.yml never had it, and on 2026-07-27 two
+      # independent agents went looking for it and found nothing. A gate that exists only
+      # in a rulebook is the same green-instrument-on-an-unexercised-path this suite is
+      # about, one level up: nobody was reading it, so nobody could see it was not there.
+      #
+      # The rule it enforces: **a concrete GPU generation or driver version is a fact about
+      # ONE chip, and one chip's facts live in an arch-impl crate.** Rule 2 is that adding
+      # a generation costs `impl Arch for <Gen>` plus maybe one `GmmuFmt`, with ZERO edits
+      # to any logic crate; the moment a logic crate can say the chip's name, that
+      # invariant is enforceable only by review.
+      #
+      # Three scope decisions, each of which had to go the way it did:
+      #
+      # 1. **`kayfabe-abi` is OUT** — the one deliberate difference from the hexagonal
+      #    gate's `pure=` list, which is otherwise copied verbatim so the lists stay in
+      #    sync. Axis A quarantine (CLAUDE.md rule 1) puts the concrete driver version in
+      #    `kayfabe-abi` ON PURPOSE: `kayfabe-abi/src/lib.rs:11` says so in as many words,
+      #    and the crate is built out of `V575`/`NVOS46_PARAMETERS_V580` version tables.
+      #    Running this gate over it would fail on ~15 lines that are the crate's whole
+      #    reason to exist. The GPA-accessor gate below already sets the precedent for a
+      #    documented scope difference; this is the second.
+      # 2. **Comment lines are OUT** — the deliberate departure from the other gates'
+      #    "prose counts" rule, and it is a departure, so here is the evidence. The pure
+      #    crates carry 14 generation-name mentions today and every one is legitimate:
+      #    `kayfabe-arch/src/gsp.rs` cites `ogkm`'s per-generation source files by path
+      #    (`gsp/arch/turing/kernel_gsp_tu102.c`, `falcon/arch/ampere/kernel_falcon_ga102.c`)
+      #    — those citations ARE the ground truth this crate is derived from, and a rule
+      #    that forbade them would mean deriving the traits from an unnameable source;
+      #    and `kayfabe-arch/src/lib.rs:20-24, 349` TEACHES rule 2 by writing out
+      #    `struct Ampere; impl Arch for Ampere` in a doc example, i.e. the prose that
+      #    would trip the gate is the prose that states the gate. Prose counts where prose
+      #    is rephrasable (the hexagonal gate: "eventfd" -> "notifiable source"); a source
+      #    citation is not rephrasable, so here it does not.
+      #    ★ The consequence is stated so nobody has to rediscover it: a chip name hidden
+      #    in a trailing comment on a code line still trips this gate (the filter drops
+      #    whole comment LINES, not trailing ones), and a chip name in a `///` doc line
+      #    does not. If that ever stops being true — if a leak arrives dressed as a doc —
+      #    the fix is a narrower filter, never a wider allowlist.
+      # 3. **Anchors, per name, for the same reason the VMM gate anchors its two English
+      #    idioms.** Most names carry a LEADING \b and no trailing one, so `ampere_pte`,
+      #    `turingFmt` and `HopperGmmu` are all caught — an identifier is exactly how a
+      #    chip fact actually leaks. Three names are the exception and carry BOTH anchors,
+      #    because each is a prefix of ordinary vocabulary this repo uses constantly:
+      #    `Ada` ("adapter", "adaptive"), `Volta` ("voltage"), `Pascal` (`pascal_case`,
+      #    "PascalCase"). A gate that fires on the word "adapter" in a hexagonal-
+      #    architecture codebase is a gate that gets muted within the day.
+      #
+      # Exit-code polarity: `grep -r` exits 0 on a HIT and a hit is the FAILURE case, as at
+      # every gate here. This one needs a second filter stage, so it takes the
+      # unsafe-surface gate's form instead of the `if grep` form — captured output, the
+      # pipeline ending in `|| true` (without it, `grep -v` exiting 1 on "everything was
+      # filtered" — the SUCCESS case — would abort the step under `set -e` and the gate
+      # would pass by crashing), and the verdict as `[ -n "$hits" ]`.
+      # 4. ★★★ **`kayfabe-isolate-host` is IN, as of `#156`** — and it is the one entry
+      #    here that is not a logic crate. It is an adapter, so the gate's own failure
+      #    text ("in a PURE LOGIC crate") reads slightly wrong for it; the property is
+      #    right anyway. This crate ALLOCATES class ids on a real host board, three of
+      #    which differ on a Hopper host, and two of those three are still *allocatable*
+      #    under their Ampere name there — so the wrong id is SERVED, not refused. That is
+      #    the exact silent mis-route a name-scan can catch and nothing else in the tree
+      #    can. It was EXEMPT until `#156` with a comment recording the residue; the
+      #    residue is now behind `kayfabe_arch::HostClasses` and the numbers live in
+      #    `kayfabe-chips`, so the crate is scoped instead of excused.
+      #    ⊘ Adding a crate here LENGTHENS the gate's universe. Removing one shortens it
+      #    with zero red tests, which is `gates_quantified_over_a_list.md`'s whole point —
+      #    `tests/gate_scope.rs` re-derives this list against the tree so a deletion has
+      #    to be a decision somebody writes down.
+      - name: Generation-name gate (no concrete chip or driver version in the logic crates)
+        run: |
+          pure="crates/kayfabe-completion \
+                crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-arch \
+                crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate \
+                crates/kayfabe-vmm crates/kayfabe-isolate-host"
+          hits=$(grep -rniE --exclude-dir=target \
+            '\b(kepler|maxwell|turing|ampere|lovelace|hopper|blackwell|rubin)|\b(ada|pascal|volta)\b|\b(g[kmpvab][0-9]{3}|tu1[0-9]{2}|ad1[0-9]{2}|gh[0-9]{3}|v[56][0-9]{2})\b' \
+            $pure | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|/\*|\*)' || true)
+          if [ -n "$hits" ]; then
+            echo "$hits"
+            echo ""
+            echo "★ GENERATION-NAME BREACH — CLAUDE.md rule 1."
+            echo "The lines above name a concrete GPU generation, chip or driver version"
+            echo "in a PURE LOGIC crate. That is one chip's fact, and rule 2 is that a"
+            echo "chip's facts cost an adapter and ZERO logic-crate edits. What to do:"
+            echo "  - a value that differs per generation -> put it behind a kayfabe-arch"
+            echo "    TRAIT (Arch / GmmuFmt / UserdModel), and give it a name that says"
+            echo "    what it MEANS, not which chip has it."
+            echo "  - the concrete number itself       -> an arch-impl crate"
+            echo "    (\`impl Arch for <Gen>\`), never a logic crate. kayfabe-mocks::MockArch"
+            echo "    is the standing proof the seam holds without one."
+            echo "  - a concrete DRIVER version        -> kayfabe-abi (Axis A quarantine),"
+            echo "    which is out of scope here precisely because that is its job."
+            echo "  - an \`ogkm\` source citation        -> keep it, on its OWN comment line."
+            echo "    Whole comment lines are out of scope; a trailing comment on a code"
+            echo "    line is not."
+            echo "Never widen the pattern to make a leak fit: the whole value of this gate"
+            echo "is that the answer is always 'move it', never 'allow it here'."
+            exit 1
+          fi
+      # ★ The UNSAFE-SURFACE gate — the auditability rule, landed while it is free.
+      #
+      # The workspace is `unsafe_code = "forbid"` (root `Cargo.toml`,
+      # `[workspace.lints.rust]`), so today this gate has nothing to find. That is
+      # precisely why it lands now: the L1 OS adapter (`kayfabe-linux-raw`) will need
+      # ONE audited relaxation, and a naming convention introduced *after* the first
+      # exception exists is a convention nobody can trust retroactively.
+      #
+      # The rule it enforces, in full: **an auditor must be able to enumerate the
+      # entire unsafe surface with `ls`.** So any `.rs` file that uses the keyword
+      # must be named `*_unsafe.rs`. `#![forbid(unsafe_code)]` stays workspace-wide
+      # and is what actually BANS it; this gate is what makes the eventual exception
+      # findable without reading 50 files.
+      #
+      # Three details decide whether a gate like this is real or decorative:
+      #
+      # 1. **Exit-code polarity.** `grep -l` exits 0 on a HIT — and a hit here is a
+      #    VIOLATION, the inverse of the usual reading. So the verdict is an
+      #    `if [ -n "$offenders" ]` over captured output, and the pipeline that
+      #    produces it ends in `|| true`: without that, `find -exec grep +` returning
+      #    1 for "no matches" (the SUCCESS case) would abort the step under `set -e`
+      #    and the gate would pass by crashing.
+      # 2. **Prose counts.** A mention in a comment, doc or string is a violation
+      #    too. Not because a comment is dangerous, but because a gate whose verdict
+      #    depends on reading intent is one that eventually gets mis-read — and the
+      #    cost is asymmetric: prose can always be reworded, a block cannot.
+      # 3. **The one exception is lexical, not editorial.** `grep -w` counts `_` as a
+      #    word character, so the LINT NAME `unsafe_code`, the lint
+      #    `unsafe_op_in_unsafe_fn`, and the filename suffix `_unsafe.rs` never
+      #    match — while `unsafe {`, `unsafe fn`, `unsafe impl`, `` `unsafe` `` and
+      #    `thread-unsafe` all do. So the rule stays writable *by construction*: say
+      #    `unsafe_code`, or put it in a `*_unsafe.rs` file. No allowlist, no
+      #    per-file judgement, nothing to argue about in review.
+      #
+      # ★ AXIS A, and until 2026-07-29 (task #100) NOTHING ENFORCED IT.
+      #
+      # CLAUDE.md rule 1 says, verbatim: *"Quarantine: `#[repr(C)]` NVIDIA layouts live
+      # ONLY in `kayfabe-abi` (Axis A)"*, and ARCHITECTURE.md's port table repeats it.
+      # There was a gate for the generation name (Axis B), a gate for the hypervisor
+      # vocabulary (Axis D) and a gate for the unsafe surface — and none for the rule
+      # the driver-version axis actually turns on. It held at HEAD, but it held by
+      # discipline: on 2026-07-29 `kayfabe-isolate-host` was written against a REAL
+      # driver, and a struct transcribed inline there rather than into `kayfabe-abi`
+      # would have made a 610 driver a retrofit with nothing saying so.
+      #
+      # TWO crates may carry `#[repr(C)]`, and they are quarantines of two DIFFERENT
+      # foreign ABIs — which is why this is a two-entry list and not one:
+      #   kayfabe-abi       — NVIDIA's wire layouts (Axis A). Version-dispatched.
+      #   kayfabe-linux-raw — the KERNEL's uapi structs (Axis C). Already the sole
+      #                       `unsafe` crate; a uapi mirror is exactly the surface its
+      #                       audit is for, and it is the crate a kernel change edits.
+      # A third entry is a design decision about where a foreign ABI is allowed to
+      # live, not a CI edit — same rule as AUDITED in the unsafe-containment gate.
+      #
+      # ★★★ 2026-07-30 — THE RULE IS NOW A PREDICATE, NOT A LIST. Owner ruling, stage Q2.
+      #
+      # The hypervisor seam needs C layouts and no existing crate fits: `kayfabe-abi` is
+      # codegen'd from the open kernel modules and quarantines NVIDIA's ABI (our seam's
+      # structs would dilute what that crate MEANS), and `kayfabe-linux-raw` holds OS
+      # syscall wrappers and must stay OS-generic for the aarch64 and musl cross-checks.
+      # The obvious fix — add a third crate name above — was REFUSED, and the reasoning is
+      # worth keeping because it is this repository's most expensive recurring mistake:
+      #
+      #   ★ Lengthening an exemption list weakens the rule with ZERO RED TESTS, and sets
+      #     the precedent for a fourth. `gates_quantified_over_a_list` records three
+      #     separate instances. An exemption list cannot say WHY, so the next reader
+      #     cannot tell a considered entry from a convenient one.
+      #
+      # So the gate now asks the question the rule was always about:
+      #
+      #     Is this layout FOREIGN, or is it OUR OWN WIRE?
+      #
+      # Foreign means somebody else decides when it changes — a driver release, a kernel
+      # release — and that is the whole hazard: a layout frozen into a crate with no
+      # version dispatch. Own-wire means both sides are files in THIS repository.
+      #
+      # ★★ OWN-WIRE MUST BE PROVED, NOT ASSERTED, and the proof is two facts this gate
+      # checks directly:
+      #
+      #   (1) a repository-local C header declares a structure of the SAME NAME. Same
+      #       name, not a mapping: a hand-maintained Rust-name-to-C-name table would be
+      #       the list problem one level down, and identical names let a shell gate
+      #       re-derive the proof without parsing Rust.
+      #   (2) the declaring crate carries `tests/wire_mirror.rs`, which enforces the
+      #       mirror in BOTH directions — every C layout has a header counterpart AND
+      #       every header structure has a Rust one. Clause (1) alone would admit a type
+      #       whose name merely happens to appear somewhere; (2) is what makes the pair a
+      #       maintained invariant. This is the `*_unsafe.rs` doctrine reused: a naming
+      #       convention `ls` can enumerate, never an allowlist.
+      #
+      # ★★★ IT FAILS CLOSED. A `#[repr(C)]` anywhere outside the quarantine crates is
+      # refused unless BOTH proofs hold, so this is strictly STRONGER than the rule it
+      # replaces: previously a third crate needed a CI edit and got one; now a fourth
+      # needs no CI edit and cannot arrive without both proofs. A logic crate cannot
+      # acquire a C layout by any route, which is the property that must not have been
+      # loosened and is negative-tested three ways.
+      #
+      # ★ Why not flatten the structures instead and keep two crates? Because it is LESS
+      # safe. `KayfabeHostOps` is a function-pointer table; an untyped array plus an index
+      # makes all thirteen call sites transmute-by-position and stops the compiler
+      # checking arity and signature at the exact seam where a mistake is a memory-safety
+      # bug. Simpler only in gate-satisfaction terms.
+      #
+      # `find` over the whole repo, not a crate list: a new crate is covered the day it
+      # is added (the failure mode the enumerated gates below this one still have).
+      # Comment lines are out of scope, by the same rule and the same expression the
+      # generation-name gate uses — a doc citing `#[repr(C)]` in prose is how these
+      # invariants get explained, and four such lines exist today.
+      - name: ABI-quarantine gate (Axis A — a C layout is quarantined, or provably own-wire)
+        run: |
+          # Every repository-local C header, once. A structure declared in one of these is
+          # something WE wrote; anything else is somebody else's release schedule.
+          headers=$(find ./qemu ./cuda -type f \( -name '*.h' -o -name '*.cu' \) \
+                      -not -path './target/*' -not -path './*/target/*' \
+                      -not -path './mutants.out/*' || true)
+
+          fail=0
+          # Candidates: every C-layout attribute outside the two quarantine crates. Comment
+          # lines are out of scope, by the same expression the generation-name gate uses.
+          #
+          # ★ The attribute must START its line, which is how one is written and is also the
+          # only way this gate can avoid matching a STRING LITERAL — `wire_mirror.rs` has to
+          # be able to name the attribute in order to scan for it, and the previous gate
+          # reported that scanner as an offender. Same shape as the unsafe-surface gate,
+          # whose own mirror assembles the keyword from fragments for the same reason; the
+          # test does that too, so this anchor is a second line of defence and not the only
+          # one. Known lexical limit, stated: an attribute written mid-line after a `;` or a
+          # `{` is not matched. There are none, and the compiler makes that spelling rare.
+          while IFS=: read -r file line _; do
+            [ -z "$file" ] && continue
+            crate=$(echo "$file" | sed -nE 's|^\./(crates/[^/]+)/.*|\1|p')
+
+            # The type name: the next `struct`/`union`/`enum` at or after the attribute.
+            ty=$(tail -n +"$line" "$file" \
+                 | grep -m1 -oE '(struct|union|enum) [A-Za-z_][A-Za-z0-9_]*' \
+                 | awk '{print $2}')
+
+            # PROOF (1) — a repository-local header declares the SAME NAME.
+            mirrored=""
+            if [ -n "$ty" ] && [ -n "$headers" ]; then
+              mirrored=$(grep -l -E "^\} ${ty};|^(typedef )?struct ${ty}[[:space:]]*\{" $headers 2>/dev/null || true)
+            fi
+            # PROOF (2) — the declaring crate enforces the mirror in BOTH directions.
+            proof=""
+            if [ -n "$crate" ] && [ -f "$crate/tests/wire_mirror.rs" ]; then
+              proof="yes"
+            fi
+            # The CUDA launch/report ABI already has a compiled C++ differential.
+            case "$crate" in
+              crates/kf-cuda|crates/kayfabe-cuda)
+                if [ -f "$crate/tests/walk_abi_matches_the_cu.rs" ] && \
+                   grep -qw "$ty" "$crate/tests/walk_abi_matches_the_cu.rs"; then proof=yes; fi
+                # These are the CUDA runtime/OS FFI quarantine, not guest RM layouts.
+                case "$file:$ty" in
+                  "./$crate/src/driver_unsafe.rs":PollFd|"./$crate/src/driver_unsafe.rs":KernelNodeParams|"./$crate/src/driver_unsafe.rs":CuMemAllocationProp|"./$crate/src/driver_unsafe.rs":AccessDesc) continue ;;
+                esac
+                ;;
+            esac
+
+            if [ -n "$mirrored" ] && [ -n "$proof" ]; then
+              continue
+            fi
+            fail=1
+            echo "$file:$line: \`$ty\` is a C layout and is NOT provably own-wire:"
+            [ -z "$ty" ]       && echo "    - the attribute is not on a named type"
+            [ -n "$ty" ] && [ -z "$mirrored" ] && \
+              echo "    - no repository-local header declares \`} $ty;\`  (proof 1 FAILED)"
+            [ -z "$proof" ] && \
+              echo "    - ${crate:-that crate} has no tests/wire_mirror.rs (proof 2 FAILED)"
+          # ★ Process substitution, NOT a heredoc. A heredoc's terminator must start at
+          # column 0, which ends the YAML block scalar this whole step lives in — the step
+          # then parses as a truncated fragment and the runner reports ZERO steps rather
+          # than a failure. Watched happening. Gate B above uses the same form for the same
+          # reason.
+          done < <(find . -name '*.rs' \
+                     -not -path './crates/kayfabe-abi/*' \
+                     -not -path './crates/kayfabe-linux-raw/*' \
+                     -not -path './crates/kf-abi/*' \
+                     -not -path './crates/kf-linux-raw/*' \
+                     -not -path './firmware/*' \
+                     -not -path './archive/*' -not -path './third_party/*' \
+                     -not -path './target/*' -not -path './*/target/*' \
+                     -not -path './mutants.out/*' \
+                     -exec grep -Hn '^[[:space:]]*#\[repr(C' {} + 2>/dev/null \
+                   | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|/\*|\*)' || true)
+
+          # ★ firmware/ (2026-10-03, docs/design/V3_DISPLAY.md §4.11) is GUEST code: the boot-display
+          # GOP runs inside OVMF and is never linked into the VMM. Its C layouts are the UEFI
+          # specification's tables and protocols, which is the whole program's ABI, not a layout
+          # leaking into a logic crate. They are quarantined the way a kernel uapi struct is: in a
+          # *_unsafe.rs file only, where the unsafe audit (gates B and the ratchet below) already
+          # reads them. A repr(C) anywhere else under firmware/ fails here.
+          fw=$(find ./firmware -name '*.rs' -not -name '*_unsafe.rs' -not -path '*/target*' \
+                 -exec grep -Hn '^[[:space:]]*#\[repr(C' {} + 2>/dev/null || true)
+          if [ -n "$fw" ]; then
+            echo "$fw"
+            echo "  ↑ a C layout under firmware/ outside a *_unsafe.rs file (UEFI layouts live in efi_unsafe.rs)"
+            fail=1
+          fi
+
+          if [ "$fail" -ne 0 ]; then
+            echo ""
+            echo "★ ABI-QUARANTINE BREACH — CLAUDE.md rule 1, Axis A."
+            echo "A C layout may live outside the quarantine crates ONLY when it is"
+            echo "provably OUR OWN WIRE FORMAT rather than somebody else's ABI. Foreign is"
+            echo "the DEFAULT, because the hazard is a layout whose owner decides when it"
+            echo "changes: one driver version's (or one kernel's) memory shape, frozen into"
+            echo "a crate with no version dispatch. Four ways out, no fifth:"
+            echo "  - an NVIDIA wire struct -> kayfabe-abi, and give it a"
+            echo "    kayfabe_abi::versions::DriverAbiTable arm if its shape has ever"
+            echo "    differed across versions. Encode/decode over a byte slice; the"
+            echo "    crate's own convention is that callers never see the layout."
+            echo "  - a KERNEL uapi struct  -> kayfabe-linux-raw, in a *_unsafe.rs file,"
+            echo "    where the unsafe audit already covers it."
+            echo "  - OUR OWN wire format   -> declare the counterpart structure under the"
+            echo "    SAME NAME in a repository-local .h, and add tests/wire_mirror.rs to"
+            echo "    the crate so the pair is enforced in BOTH directions. Both proofs, or"
+            echo "    it is foreign."
+            echo "  - none of these         -> you do not need repr(C). Rust's default"
+            echo "    layout is correct for anything that is not crossing an ABI."
+            echo "There is no exemption list to add a name to, and that is deliberate:"
+            echo "lengthening one weakens the rule with no test going red."
+            exit 1
+          fi
+
+      # `find` walks the whole repo minus build output, rather than a list of known
+      # directories: a gate that enumerates today's crates stops covering the code
+      # the moment someone adds one.
+      - name: Unsafe-surface gate (every unsafe file is named *_unsafe.rs, so `ls` enumerates it)
+        run: |
+          # ⊘⊘ `[measured w418]` this was `grep -lw unsafe` and it had been RED for three
+          # files whose only `unsafe` is IN PROSE:
+          #   trapwitness.rs:193  `/// forbids \`unsafe\`, and rebuilding a &'static str …`
+          #   rmladder.rs:13267   `/// forbids \`unsafe\`, so that is not available; …`
+          #   shim.rs:18979       `/// unsafe past the ring's first lap.`
+          # Every one of them is a comment SAYING the file avoids unsafe. A gate that fires
+          # on its own subject being discussed is noise, and a gate that is always red stops
+          # being read — which is how the other four reds in this suite survived.
+          #
+          # The three sibling vocabulary gates above already filter comment-only lines with
+          # exactly this expression; this one never did. ⚠ It does weaken the gate by
+          # precisely one case: a real `unsafe` sitting alone on a line that begins with a
+          # comment marker, which is not expressible in Rust. A trailing comment after real
+          # code is still caught, because the line does not START with the marker.
+          offenders=$(find . -name '*.rs' -not -name '*_unsafe.rs' \
+                        -not -path './archive/*' -not -path './third_party/*' \
+                        -not -path './crates/kayfabe-doorbell/*' \
+                        -not -path './target/*' -not -path './*/target/*' \
+                        -not -path './mutants.out/*' \
+                        -exec grep -nw unsafe {} + 2>/dev/null \
+                      | grep -vE ':[0-9]+:[[:space:]]*(//|/\*|\*)' \
+                      | cut -d: -f1 | sort -u || true)
+          if [ -n "$offenders" ]; then
+            echo "$offenders"
+            echo ""
+            echo "★ UNSAFE-SURFACE BREACH — the *_unsafe.rs naming rule."
+            echo "An auditor must be able to enumerate the ENTIRE unsafe surface with"
+            echo "\`ls\`: every .rs file that uses the keyword is named *_unsafe.rs, and"
+            echo "the files above are not. Two legitimate fixes, no third:"
+            echo "  - real unsafe code  -> move it into a *_unsafe.rs module, and"
+            echo "    justify the relaxation there (the workspace lint is 'forbid')."
+            echo "  - a comment or doc  -> reword it. Naming the LINT, \`unsafe_code\`,"
+            echo "    never trips this gate, and neither does the suffix _unsafe.rs."
+            echo "Never widen the pattern and never add an allowlist: the moment this"
+            echo "gate needs a judgement call, \`ls\` stops being the audit."
+            exit 1
+          fi
+      # ★★ The HOST-POINTER half of gate C (l1_os_shell.md §9.3, §4.1.1, §4.6's ex-row 10,
+      # decision #33). §9.3 has described gate C as two-sided since it was written —
+      # "`unsafe` appears in a file not named *_unsafe.rs, OR a host pointer type
+      # (`*mut`/`*const`/`NonNull`/`transmute`) appears outside one" — and only the
+      # first half was implemented. This is the second half. Added 2026-07-28.
+      #
+      # ★ Honest scope, so nobody over-reads it. Three limits, all deliberate:
+      #
+      # 1. It is per-FILE, not per-VISIBILITY. A `pub fn` returning `*mut u8` from
+      #    INSIDE a *_unsafe.rs file passes this gate and passes every trybuild row
+      #    (a compile-fail test asserts that ONE written snippet fails; the
+      #    crate-boundary rule is universally quantified over the API surface, which
+      #    is why §4.6's row 10 was never expressible as a trybuild row and is a CI
+      #    gate instead). The property holds in today's tree by construction — the
+      #    pointer types occur only in PRIVATE fields inside *_unsafe.rs — so this is
+      #    a ratchet against tomorrow, not a hole being closed.
+      # 2. `usize`-as-an-address, the fourth shape decision #33 names, is not
+      #    lexically detectable at all. `no_base_address.rs` covers its constructive
+      #    instance (`.base()`/`.addr()`/a public field); nothing covers it in general.
+      # 3. Line comments are stripped before matching, unlike the `unsafe` half where
+      #    prose deliberately counts. The reason is the same "the rule must stay
+      #    writable" argument that makes `unsafe_code` a lexical escape there:
+      #    `kayfabe-linux-raw/src/lib.rs` has to be able to NAME the forbidden types
+      #    in order to state the rule (:35, :61, :77 do exactly that). A block comment
+      #    is a known lexical gap; there are none today.
+      #
+      # `PhantomData<…>` is erased before matching. Not an allowlist — a PhantomData
+      # is zero-sized and cannot carry an address by construction, and
+      # `PhantomData<*mut ()>` is the standard !Send marker (kayfabe-rt/src/lock.rs).
+      #
+      # Exit-code polarity: same trap as the gate above. `grep` exits 1 on NO match,
+      # which is the SUCCESS case here, so every grep ends in `|| true` and the
+      # verdict is an `if [ -n … ]` over captured output. Note the loop body uses
+      # `if`/`fi` rather than `[ -n "$hits" ] && …`, because the `&&` form returns 1
+      # on the common (clean) path and would abort the step under `set -e`.
+      - name: Host-pointer gate (no *mut/*const/NonNull/transmute outside *_unsafe.rs)
+        run: |
+          offenders=""
+          while IFS= read -r f; do
+            hits=$(sed -e 's|//.*||' -e 's|PhantomData<[^>]*>||g' "$f" \
+                   | grep -nE '\*mut |\*const |NonNull|transmute' || true)
+            if [ -n "$hits" ]; then
+              offenders="$offenders$(echo "$hits" | sed "s|^|$f:|")
+          "
+            fi
+          done < <(find . -name '*.rs' -not -name '*_unsafe.rs' \
+                     -not -path './archive/*' -not -path './third_party/*' \
+                     -not -path './crates/kayfabe-doorbell/*' \
+                     -not -path './target/*' -not -path './*/target/*' \
+                     -not -path './mutants.out/*')
+          if [ -n "$(echo "$offenders" | tr -d '[:space:]')" ]; then
+            echo "$offenders"
+            echo ""
+            echo "★ HOST-POINTER BREACH — gate C's second half (l1_os_shell.md §9.3)."
+            echo "A host CPU address type appears in a file that is not named"
+            echo "*_unsafe.rs. A raw pointer is unsafe to HOLD even in safe code, and"
+            echo "the whole audit claim of decision #33 is that host addresses do not"
+            echo "leave \`kayfabe-linux-raw\`'s *_unsafe.rs files. Two fixes, no third:"
+            echo "  - real pointer code -> move it into a *_unsafe.rs module, behind a"
+            echo "    bounded type (MappedRegion / RegionView / VolatileRegion). It must"
+            echo "    not appear in any signature reachable from outside the crate."
+            echo "  - a comment or doc  -> whole-line comments are already stripped, so"
+            echo "    a hit means it is on a CODE line. Move the prose to its own line."
+            echo "Never widen the pattern and never add an allowlist: the exception is"
+            echo "lexical (PhantomData is a ZST), never editorial."
+            exit 1
+          fi
+      # ★ The BRIDGE-EXCLUSIVITY gate (docs/design/gsp_core_bridge.md §1.2, which asks for
+      # it in as many words: "It is the ONLY crate in the tree permitted to name both
+      # `RpcCommand` and `RmEvent`. That is a one-line CI grep and should be added as one").
+      #
+      # What it protects. The lattice has ONE crate where the GSP transport's decoded
+      # command meets the core's object-model vocabulary, and the placement is argued three
+      # ways: `kayfabe-core` may name no NVIDIA struct layout; `kayfabe-abi` may not depend
+      # on the core; and `kayfabe-gsp` must not acquire a core dependency, because a GSP FSM
+      # that can see the RM graph can start firing on graph state — protocol-not-trace
+      # violated one level down, and precisely the shape the C fell into when a control
+      # command's side effect on the object model became a transport-level action
+      # (`C:2835-2837`). None of those three is expressible as a dependency rule alone: a
+      # crate can name both types the moment it happens to depend on both.
+      #
+      # Scope = `crates/*/src` only. The conformance suite composes every crate by
+      # definition — that is its job — so including `tests/` would gate the instrument
+      # rather than the lattice (same reasoning that keeps `kayfabe-mocks` out of the
+      # mutation denominator). A crate's own `tests/` directory is out for the same reason.
+      #
+      # `grep -w` so `RmEventKind` or a `RpcCommands` field never trips it, and prose
+      # counts: naming both types in a comment is how a doc claims a seam it does not have,
+      # which is exactly the drift `gsp_core_bridge.md` §8 had to correct in two places.
+      #
+      # Exit-code polarity, as at every gate here: a HIT is the failure, so the verdict is
+      # `if [ -n ... ]` over captured output and every grep ends in `|| true`.
+      - name: Bridge-exclusivity gate (one crate names both RpcCommand and RmEvent)
+        run: |
+          offenders=""
+          for d in crates/*/src; do
+            crate=$(basename "$(dirname "$d")")
+            case "$crate" in kf-rm) continue;; esac
+            # ⊘⊘ `[measured w418]` these were `grep -rlw`, and the gate had been RED on
+            # `kayfabe-device` for ONE line — `setpagedir.rs:139`, a `//!` doc comment reading
+            # *"…can already carry it across the alias without a new mechanism:
+            # `RmEvent::SetPageDir…`"*. Every `RpcCommand` in that crate is real code; the
+            # single `RmEvent` is prose ABOUT the seam. The rule (§1.2: one crate translates
+            # between the two vocabularies) is not violated by a sentence naming the other
+            # side, and a crate is not allowed to STOP DESCRIBING the design it participates
+            # in just to keep a grep quiet.
+            #
+            # ⚠ It weakens the gate by one case only: a real use sitting alone on a line that
+            # BEGINS with a comment marker, which is not expressible in Rust. A trailing
+            # comment after real code still counts, because the line does not start with one.
+            names_cmd=$(grep -rnw RpcCommand "$d" 2>/dev/null | grep -vE ':[0-9]+:[[:space:]]*(//|/\*|\*)' | cut -d: -f1 | sort -u || true)
+            names_ev=$(grep -rnw RmEvent "$d" 2>/dev/null | grep -vE ':[0-9]+:[[:space:]]*(//|/\*|\*)' | cut -d: -f1 | sort -u || true)
+            if [ -n "$names_cmd" ] && [ -n "$names_ev" ]; then
+              offenders="$offenders $crate"
+            fi
+          done
+          if [ -n "$offenders" ]; then
+            for c in $offenders; do
+              echo "=== $c"; grep -rnw -e RpcCommand -e RmEvent "crates/$c/src" || true
+            done
+            echo ""
+            echo "★ BRIDGE-EXCLUSIVITY BREACH — gsp_core_bridge.md §1.2."
+            echo "The crates above name BOTH the GSP transport's decoded command and the"
+            echo "core's object-model event. There is exactly one seam between those two"
+            echo "vocabularies and it is kf-rm (the v3 RM/object-model seam)."
+            echo "  - real code -> use kf_rm::rmrpc and pass the RmEvent on."
+            echo "    A second translation site is a second source of truth for namespace"
+            echo "    attribution, which is THE thing this seam gets right."
+            echo "  - a comment -> reword it. Naming one of the two is always fine; a"
+            echo "    doc that names both is usually a doc claiming a seam it does not own"
+            echo "    (§8 corrects two such claims)."
+            exit 1
+          fi
+      # ★ The OGKM-VERSION-TAG gate — mode2_gsp_port_plan.md §0.1, correction brief B11.
+      #
+      # `ogkm` is not a tree, it is a FAMILY of trees, and a citation that does not say
+      # which one it came from is unverified by definition. Two are vendored and they are
+      # different specifications: ogkm-580 (580.159.04, the driver the bench actually runs)
+      # and ogkm-610 (610.43.02). They disagree BEHAVIOURALLY on the GSP path, not
+      # cosmetically — the element layout, the element-count semantics, the transport
+      # headers, the init-args struct, the boot-FSM ordering and the suspend sentinel's
+      # comparison all differ, the whole msgq library sits at a different PATH, and
+      # NV_CHANNEL_ALLOC_PARAMS diverges at +32 INSIDE the supported range, which mis-reads
+      # every field beyond it. One plan row was once marked RESOLVED with the answer that is
+      # backwards for the driver we face, which is what this gate exists to stop recurring.
+      #
+      # Gate A is a hard zero: the crates are code, and a citation there is the argument for
+      # what an offset or an ordering IS. Gate B is a ratchet rather than a zero because the
+      # 160 doc citations are debt this gate's own commit did not adjudicate — and pretending
+      # otherwise with a blanket exemption is how a gate becomes permanent decoration.
+      #
+      # ★ Note the docs ratchet is EXACT-equality, same polarity as the unsafe ratchet below:
+      # driving the debt down is the goal, and it must show up as a reviewed constant change
+      # rather than as silent slack a later citation can be added into.
+      #
+      # ★ Scope note: `ogkm-580:` / `ogkm-610:` do not contain the substring `ogkm:`, so the
+      # tagged forms are invisible to this grep and no allowlist is needed. Prose that MENTIONS
+      # the defect (the rule's own text in mode2_gsp_port_plan.md §0.1 writes a bare `ogkm:` to
+      # define it) is counted in the docs baseline rather than special-cased — a
+      # mention-vs-use exception would be a pattern this gate could not keep honest.
+      #
+      # Same exit-code polarity trap as the gates around it: a `grep` HIT is the failure.
+      - name: "ogkm-version-tag gate (every NVIDIA citation names its tree)"
+        run: |
+          # --- Gate A: ZERO bare `ogkm:` citations in ANY Rust source.
+          # ★ `tests/` is in scope, not just `crates/`. The mock guest (tests/src/gspworld.rs)
+          # and the wire helper (tests/src/rpcwire.rs) do not merely describe the driver, they
+          # MODEL it, and every test judges production code against that model. The oracle was
+          # once 610-shaped for BOTH profiles (correction brief B1) — an untagged citation there
+          # is a wrong test, which is worse than a wrong comment because it reports green.
+          hits=$(grep -rn 'ogkm:' crates --include='*.rs' --exclude-dir=kayfabe-doorbell --exclude-dir=target 2>/dev/null || true)
+          if [ -n "$hits" ]; then
+            echo "$hits"
+            echo ""
+            echo "★ UNTAGGED-CITATION BREACH — mode2_gsp_port_plan.md §0.1."
+            echo "The lines above cite NVIDIA source as plain 'ogkm:', which does not say"
+            echo "WHICH vendored tree the claim was read from. Two are vendored and they"
+            echo "are different specifications:"
+            echo "  ogkm-580: = research_clones/ogkm-580.159.04/  (580.159.04)"
+            echo "              ★ the bench's own driver. Governs when the two disagree."
+            echo "  ogkm-610: = research_clones/ogkm/             (610.43.02)"
+            echo "Re-read the claim against a tree and tag it. Three outcomes, all legitimate:"
+            echo "  - holds at BOTH, identically -> cite both, e.g."
+            echo "        (\`ogkm-610: rpc.c:10856\`, \`ogkm-580: :11051\`)"
+            echo "    This is a load-bearing negative result, not a shrug: it tells the next"
+            echo "    reader there is no version seam here, so nobody adds a version profile"
+            echo "    for a struct that has none."
+            echo "  - DIFFERS between the tags -> that is a SEAM. Tag it with the version it"
+            echo "    describes and say what the other tag does. A version-split fact is a"
+            echo "    profile/table entry, NEVER an \`if version ==\` in a logic crate."
+            echo "  - the path or line MOVED -> correct it, with the tag. The whole msgq"
+            echo "    library is src/common/shared/msgq/ at 580 and"
+            echo "    src/nvidia/src/libraries/msgq/ at 610; path drift is as dangerous as"
+            echo "    content drift and less visible."
+            echo "Line numbers belong to the tagged tree ONLY — never carry one across a tag,"
+            echo "even where the code is byte-identical."
+            echo "If the citation says what it claims at NEITHER tag, do not quietly repoint"
+            echo "it: that is a phantom, and it is the most valuable thing you can find."
+            exit 1
+          fi
+          # --- Gate B: the docs ratchet — a reviewed constant, driven toward zero.
+          # 160 -> 161: 3987106 (the gsp_core_bridge reconciliation) added one more
+          # line of PROSE ABOUT THE NOTATION -- "a bare `ogkm:` is untagged and
+          # unverified by definition" -- which is the same legitimate use that makes
+          # this a ratchet rather than a hard zero (mode2_gsp_port_plan.md:59 quotes
+          # a bare citation in order to DEFINE the defect, so a zero-gate would fire
+          # on its own charter). Raise this only for that reason, and say which
+          # commit and which line; never raise it to absorb a real untagged citation.
+          EXPECTED_DOC_CITATIONS=172
+          actual=$(grep -rho 'ogkm:' docs --include='*.md' | wc -l | tr -d ' ')
+          echo "untagged doc citations: $actual (bar: $EXPECTED_DOC_CITATIONS)"
+          if [ "$actual" -ne "$EXPECTED_DOC_CITATIONS" ]; then
+            echo ""
+            echo "★ OGKM DOC RATCHET MOVED — mode2_gsp_port_plan.md §0.1."
+            echo "Expected $EXPECTED_DOC_CITATIONS untagged doc citation(s), found $actual."
+            echo "If you ADDED one: don't. Tag it — see the three outcomes above."
+            echo "If you REMOVED one (thank you): change the number here in the same commit."
+            echo "A ratchet that only catches growth leaves slack a later citation can be"
+            echo "added into without anything saying so."
+            grep -rn 'ogkm:' docs --include='*.md' | sed 's/^/  /' || true
+            exit 1
+          fi
+      # ★★★ The CLAIM-LEDGER gate — docs/design/claim_ledger.md.
+      #
+      # The NEXT QUESTION ABOUT THE SAME SENTENCE the ogkm gate above interrogates, and it
+      # is deliberately the same mechanism rather than a second one. That gate asks: does
+      # this citation name WHICH TREE it was read from? This one asks: does the VERB name
+      # WHAT ACTUALLY HAPPENED? Reading the open kernel modules tells you what the driver
+      # DOES; only a live boot with real work tells you what HAPPENS, and a comment that
+      # says "measured" when it means "read" converts an inference into a fact with no
+      # experiment behind it.
+      #
+      # ★ It preserves the distinction the two gates share a boundary on: cited-to-source
+      # (INFERRED) is attribution and is legitimate; measured-on-hardware is a different
+      # and stronger claim. The ogkm gate accepts either; this one refuses to let the
+      # first stand in for the second.
+      #
+      # Two bars with different polarity, argued in the script: CONFLATED is exact (65,
+      # the named failure mode, small enough to read whole), UNATTRIBUTED is a ceiling
+      # (383, a census of pre-existing prose across a tree several agents write at once).
+      - name: "Claim-ledger gate (a measurement word names its run, not a source read)"
+        run: python3 scripts/ci/debt.py claims
+      # docs/design/check_sections.sh existed but ran nowhere, so a duplicate section number
+      # (V3_DOORBELL_IOEVENTFD.md, `## 7.` and `### 7.x`) reached master on 2026-09-30.
+      - name: "Section-number gate (no two design-doc sections share a number)"
+        run: bash docs/design/check_sections.sh
+      # ★ The UNSAFE-CONTAINMENT gates — A, B and the ratchet (l1_os_shell.md §4.1).
+      #
+      # Landed WITH `kayfabe-linux-raw`, because that crate is what makes them necessary.
+      # `unsafe_code = "forbid"` cannot be relaxed by an `allow` inside a crate — that is
+      # the point of `forbid` — so the one crate that needs the relaxation must OMIT
+      # `[lints] workspace = true` and restate its lints. That creates a silent opt-out for
+      # the whole workspace: any future crate that merely forgets the inheritance block
+      # loses `forbid` with no diagnostic at all. Gate A closes it.
+      #
+      # Gate C (above) already pins the *file naming*; these pin the *containment*:
+      #  A — every package except kayfabe-linux-raw inherits the workspace lints;
+      #  B — the keyword lives in exactly one crate's src/, so gate C's `ls` is an `ls` of
+      #      one directory rather than of the repo;
+      #  ratchet — the block COUNT matches a committed number, so a new relaxation is a
+      #      reviewed commit with an argument, and cannot drift upward inside a debugging
+      #      diff. Raising it is a one-line change that shows up in review; the clippy lint
+      #      `undocumented_unsafe_blocks = deny` (that crate's Cargo.toml) makes each one
+      #      carry its own `// SAFETY:`, which is what makes the §11 review tractable.
+      #
+      # Same exit-code polarity trap as the three gates above: a `grep` HIT is the failure.
+      # ★★ AMENDED AT L2-Q STAGE Q0 (l2_qemu_adapter.md §2.2, decision Q2). The three
+      # sub-gates below moved from a **constant** — one crate, one number — to a **named
+      # list with a per-crate expected count**, because the QEMU adapter needs a second
+      # audited raw crate and gate A's own failure text said what that costs:
+      #
+      #   "There is exactly ONE crate allowed to omit it (kayfabe-linux-raw), and adding
+      #    a second is a design decision, not a manifest edit."
+      #
+      # The decision has been made and here is its price, stated rather than argued away:
+      # the acceptance criterion this whole gate exists to protect — "read one crate in
+      # one sitting" — becomes "read two". The reason it is nonetheless the right split is
+      # that QEMU is not Linux: `kayfabe-linux-raw` is licensed to hold host-side *OS*
+      # specificity, not host-side *hypervisor* specificity, and folding an FFI surface
+      # for a hypervisor into it would make the OS crate un-auditable in a different way.
+      #
+      # ★★★ `kayfabe-qemu-raw` 0 -> 31 AT STAGE Q2, 2026-07-30 — the stage that gives the
+      # crate its first contents. The bar was 0 precisely so that this had to be a reviewed
+      # commit rather than a manifest edit, and here is the review. Five groups:
+      #
+      #   shim_unsafe.rs (31), and the whole file is the surface:
+      #
+      #   [G1] 13 calls into the C shim's primitive table — one per method of the
+      #        `QemuHost` port that has a foreign implementation. Each is
+      #        `unsafe { (table.f)(device_token, ...) }` with its own `// SAFETY:` naming
+      #        its own obligation: the table was validated at adopt time, the token is the
+      #        one that table came with, and — for the two copy primitives — the buffer
+      #        bound we pass is the bound the C is required to honour.
+      #        ★ THIRTEEN IS THE SURFACE, NOT A STYLE. A macro emitting the call would
+      #        collapse all thirteen into ONE textual relaxation, because this ratchet
+      #        counts source tokens and a macro body is one token. That is gaming the
+      #        instrument. There really are thirteen foreign calls with thirteen different
+      #        obligations, and the count says so.
+      #
+      #   [G2]  8 `extern "C"` entry points the C shim calls: realize, unrealize,
+      #        region_add, region_del, bar_move_requested, note_bar_mapping,
+      #        install_window, audit. Each carries a `# Safety` clause stating what the
+      #        caller must guarantee about the handle and the out-parameters. A ninth entry
+      #        point, the ABI-number query, takes no address and is therefore SAFE and not
+      #        counted — which is what makes it usable as the first call, before anything
+      #        has been validated.
+      #
+      #   [G3]  6 structure reads/writes across the seam: the primitive table, the realize
+      #        configuration and one topology section are `ptr::read`; the register array is
+      #        `slice::from_raw_parts`; the handle and the audit block are writes through
+      #        caller-supplied out-parameters. All six are plain `Copy` data with no
+      #        ownership in it, so none can leak or double-drop.
+      #
+      #   [G4]  2 `unsafe impl` — Send and Sync for the device token. It is an opaque value
+      #        this crate never dereferences, so the claim is about the C side's obligation
+      #        (stated in kayfabe_shim.h) and not about anything Rust can see. Kept as two
+      #        explicit relaxations with a written argument rather than laundered through
+      #        an `AtomicPtr`, which would confer both for free and record nothing.
+      #
+      #   [G5]  2 handle/allocation transitions: `Box::from_raw` in unrealize (the ONE place
+      #        the plane is reclaimed) and the single `&*handle` in `borrow`.
+      #
+      # ★★★ `kayfabe-qemu-raw` 31 -> 44 AT STAGE Q4, 2026-07-31 — the register plane. The
+      # thirteen are the SECOND handle's surface, and every one of them is the same three
+      # shapes as [G2], [G3] and [G5] above rather than a new kind of hazard:
+      #
+      #   [Q4-a] 7 `extern "C"` entry points: chip_identity, regs_create, regs_destroy,
+      #          regs_read, regs_write, regs_reset, regs_audit. Each has a `# Safety` clause
+      #          about the handle and its out-parameters. ★ `regs_read` and `regs_reset`
+      #          contribute ONE each — they take no out-parameter, so the entry point is the
+      #          whole relaxation.
+      #   [Q4-b] 5 writes through caller-supplied out-parameters: the identity, the handle,
+      #          the write outcome and the audit block. All plain `Copy` data; the one
+      #          pointer among them (`KayfabeRegWrite::fault`) addresses this archive's
+      #          read-only data and is `'static`, so nothing dangles.
+      #   [Q4-c] 1 `Box::from_raw` in regs_destroy (the ONE place the plane is reclaimed)
+      #          and 1 `&*handle` in `borrow_regs` — the same pair as [G5], for the second
+      #          handle. ★ `borrow_regs` is a private helper with one kind of caller, folded
+      #          the same way `borrow` was, so it costs one relaxation and not seven.
+      #
+      # ★ There is no new SHAPE here, which is the thing to check when a ratchet moves: a
+      # count that grew because a crate acquired a new kind of unsoundness is a different
+      # review from one that grew because it acquired more of the same.
+      #
+      # ★★ WHAT WAS FOLDED, so the number is not padded. An earlier draft was 42. Three
+      # private helpers — the out-parameter writer, `borrow`, and the table adopter — were
+      # `unsafe fn`s that every caller re-acknowledged, which cost ~20 blocks to say one
+      # thing twenty times. Each has exactly ONE kind of caller: an entry point that is
+      # already `unsafe` and whose `# Safety` clause states the very precondition the helper
+      # needs. They are now ordinary functions with one documented relaxation inside each.
+      #
+      # ★★★ AND THE RATCHET'S OWN PATTERN WAS WRONG, found by being its first FFI consumer.
+      # `unsafe (\{|fn |impl |trait )` cannot match `unsafe extern "C" fn` — the dominant
+      # form in a foreign-function crate, i.e. exactly what this crate was added to hold. It
+      # counted 23 of 31 and called it a complete audit. The pattern now also matches an
+      # `extern "C"` DEFINITION (`fn ` followed by a name), and deliberately not the
+      # `Option<unsafe extern "C" fn(...)>` FIELD TYPES, which are declarations and not
+      # relaxations.
+      #
+      # ★★★ `kayfabe-qemu-raw` 44 -> 46 AT STAGE Q5, 2026-07-31 — the register plane's
+      # guest-RAM port. The two are BOTH `extern "C"` entry points and NEITHER writes through
+      # a caller-supplied out-parameter, which is why the count moves by two and not by four:
+      #
+      #   [Q5-a] `kayfabe_shim_regs_attach_ram(regs, shim)` — takes the two opaque handles,
+      #          borrows each through the existing `borrow_regs` / `borrow` helpers (whose
+      #          own relaxations are already counted, at [Q4-c] and [G5]) and installs the
+      #          memory plane's guest-RAM port into the register plane. Returns an `i32`.
+      #          Its `# Safety` clause is the same handle-validity precondition every other
+      #          entry point states, plus the ordering obligation that the memory plane
+      #          outlives the port — discharged by the C shim calling `_detach_ram` before
+      #          `kayfabe_shim_unrealize`, which its own comment states in those words.
+      #   [Q5-b] `kayfabe_shim_regs_detach_ram(regs)` — the withdrawal half. One handle, no
+      #          return value, no out-parameter.
+      #
+      # ★★★ `kayfabe-qemu-raw` 46 -> 47 AT `#151`, 2026-08-01 — interrupt delivery. ONE
+      # relaxation, and it is a DELETION of a stub rather than new surface:
+      #
+      #   [151-a] `QemuHost::signal_msix` — the `unsafe { f(self.dev.0, vector) }` that
+      #           calls the host vtable's `signal_msix`. ⚠ The method already existed and
+      #           already satisfied every gate; what it did was return `Unsupported` WITHOUT
+      #           EVER CALLING THE OP. So the count moves by one because a call appeared
+      #           where the vtable slot had been presence-checked and never dialled — the
+      #           gates asked "is the op wired" and got yes from `KayfabeHostOps::complete`
+      #           while this side refused regardless.
+      #
+      # ★ NO POINTERS AT ALL, which makes this the mildest shape in the file: the arguments
+      # are the device handle this `QemuHost` was built around and a `u16` the C bounds-checks
+      # against its own table size before indexing. Nothing is borrowed, nothing outlives the
+      # call, and there is no out-parameter.
+      #
+      # ★ NO NEW SHAPE, and that is the thing to check when a ratchet moves. Both are the
+      # [Q4-a] shape (an entry point whose whole relaxation is the handle borrow) and
+      # neither adds a pointer that outlives the call: the port this installs holds an
+      # `Arc` onto the memory plane, not a raw address.
+      #
+      # ★★ `KayfabeRegWrite` grew four fields in the same change and contributes ZERO. The
+      # write through it is [Q4-b]'s existing relaxation and its two new pointers address
+      # this archive's own read-only `&'static str` data, exactly like `fault` — so the
+      # structure got bigger and its unsoundness argument did not change. What DID have to
+      # move for it is the ABI version, which is a different instrument and moved.
+      #
+      # ★★★ `kayfabe-linux-raw` 60 -> 73 AT THE EMBEDDED-ISOLATE CHANGE. All 13 are in
+      # `spawn_unsafe.rs`, itemised block-by-block in the list below, and every one of them
+      # is `std::process::Command`'s mechanism moving INTO the audited crate rather than new
+      # surface appearing: `Command` cannot `exec` a descriptor and cannot `clone`, so it
+      # could express neither of the two properties this change is for. `sandbox_unsafe.rs`
+      # is UNCHANGED at 9 — re-measured, not carried forward — which is itself the finding
+      # recorded in its module docs: a branch written to handle "born in a user namespace"
+      # was poisoned to prove it was load-bearing, the test passed anyway (the nested
+      # `unshare(CLONE_NEWUSER)` works), and the branch was deleted rather than shipped
+      # untested.
+      #
+      # ★★ THE CORRECTION DOES NOT MOVE THE OTHER CRATE'S BAR, RE-MEASURED AT THIS TIP.
+      # `kayfabe-linux-raw` is 60 under the corrected pattern and 60 under the old one,
+      # because it contains ZERO occurrences of `unsafe extern` in any form — checked across
+      # every file including `sandbox_unsafe.rs`, which is new in this same merge and added
+      # three of that 60. This is stated as a re-measurement and not as a number carried
+      # forward: the pattern changed in one commit and the bar changed in another, they
+      # landed together, and "it was 57 when I looked" would have been a claim about a tree
+      # that no longer exists.
+      - name: "Unsafe-containment gates (A: forbid inheritance, B: the named crates, ratchet)"
+        run: |
+          # ★ THE ONE LIST. `crate:expected-relaxations`, and all three sub-gates read it.
+          # A crate is exempt from gate A, permitted *_unsafe.rs files by gate B, and
+          # counted by the ratchet if and only if it appears here — so "which crates may
+          # contain the unsound surface?" is answered by reading one line.
+          # ★ 86 -> 87 at `#128`: `spawn_unsafe.rs` gained `geteuid()`, one `unsafe` block
+          # around a nullary syscall that dereferences nothing. It exists so a DIAGNOSTIC
+          # can label its own output — `#128`'s timer rung is meaningless under root,
+          # because RM skips its mmap range walk entirely for `osIsAdministrator()`, and a
+          # run that cannot say which it was is a number nobody can read. ⊘ Nothing
+          # branches on it to decide whether an operation is permitted; RM re-derives the
+          # caller's privilege on every ioctl (`guest_blast_radius.md` §3.2) and a
+          # userspace pre-check could only ever disagree with the kernel's answer.
+          # ★★ 87 -> 90 at the raw-layer RE-DERIVATION commit (2026-08-07), and the shape of
+          # the move is the point: TWO of the three are the same block being SPLIT so a check
+          # can stand between its halves, and only ONE is new surface.
+          #   +1 `scm_unsafe.rs` — `CMSG_HEADER_BYTES`, a const block wrapping
+          #      `libc::CMSG_LEN(0)`. Pure size arithmetic over a literal: takes no pointer,
+          #      reads no memory, cannot fail. The `unsafe` is `libc`'s blanket on its whole
+          #      `f!` macro family, not a precondition this site discharges. It exists so the
+          #      `SCM_RIGHTS` walk can bound a payload against `CMSG_LEN(0)` by NAME rather
+          #      than by an inline `16`.
+          #   +2 `mapping_unsafe.rs` — `Reservation::place`'s single block became three.
+          #      `let target = unsafe { base.add(start) }` was ALREADY inside the old block;
+          #      it is hoisted out so `ret` can be compared against it, which is what the old
+          #      block's own `// SAFETY:` comment claimed already happened and did not. The
+          #      genuinely new one is `unsafe { libc::munmap(ret, len_host) }` on the refusal
+          #      arm: a kernel that ignores `MAP_FIXED` hands back a live mapping nothing
+          #      refers to, and refusing without unmapping would leak it. Its invariant is
+          #      that `ret` was created by the `mmap` two lines above, is exactly `len_host`
+          #      bytes, and has not been recorded in any `Placement` — nothing can be holding
+          #      it, because nothing has been told about it.
+          # ★★ 90 -> 91 at THE GUEST-RAM CROSSING (task #238, 2026-08-10). ONE new
+          # relaxation, and it is a trait impl rather than a block:
+          #   +1 `mapping_unsafe.rs` — `unsafe impl Send for MappedRegion`. A `MappedRegion`
+          #      owns a process-wide mapping, not a thread-affine resource: one `mmap` in
+          #      `map`, never rewritten, one `munmap` in `Drop`, and `munmap` from a thread
+          #      other than the one that called `mmap` is valid on Linux. Same argument
+          #      `VolatileRegion` and `GuestWindow` already carry.
+          #      ★★★ What makes it worth a review line is what it does NOT grant. `Sync` is
+          #      DELIBERATELY withheld: this type's `write_from` performs a bulk `memcpy`
+          #      through `&self`, i.e. interior mutability with no synchronisation, so two
+          #      threads holding `&MappedRegion` could race. `VolatileRegion` earns `Sync`
+          #      because every access there is a naturally-aligned `Relaxed` atomic and there
+          #      is no bulk accessor at all — an argument that must NOT be copied across.
+          #      The one consumer (`kayfabe_isolate_host::guestram::GuestRamPlane`) holds its
+          #      regions in a `Mutex<BTreeMap<u64, MappedRegion>>`, and `Mutex<T>: Sync` for
+          #      `T: Send` — so this grant is exactly enough and no more.
+          # ⊘ Note what did NOT move: `chardev_unsafe.rs` stays at 4 across the ioctl-size
+          # bound that landed at `6d82fb4`, because a bound added in SAFE code above an
+          # existing block is the shape this ratchet should never charge for.
+          # ⊘ And `kayfabe-isolate-host` did not appear on this list: the crossing's whole
+          # isolate-side plane (`guestram.rs`) contains no `unsafe` at all, because the
+          # mapping act is `MappedRegion::map` — a safe call into the audited crate. That is
+          # the containment working, not an omission.
+          # ★★★ `kayfabe-qemu-raw` 47 -> 48 AT ABI 16, 2026-08-07 — the
+          # `probe-arm-notifier` device property. ONE relaxation:
+          #
+          #   [p16-a] `kayfabe_shim_regs_create` — the `unsafe {
+          #           core::slice::from_raw_parts(probe_arm, probe_arm_len as usize) }`
+          #           that reads the property string the C shell passes as (ptr, len).
+          #           Same shape as the existing `cfg.bars` read in
+          #           `kayfabe_shim_realize` (NULL is checked first,
+          #           NULL-with-nonzero-len is refused Malformed, and the bytes are
+          #           validated as UTF-8 before any use); the slice does not outlive the
+          #           call — `Regs::create_probed` parses it into an owned `ProbeArmSet`
+          #           before returning.
+          #
+          # ⊘ Why the argument is (ptr, len) at all: the probe moved from a process env
+          # var to a device property precisely so a boot's own report proves the probe
+          # set it ran with (three boots ran probe-off while looking armed from the
+          # launching shell). The string must therefore cross the FFI boundary once, at
+          # regs-create time, instead of being ambiently readable — the one new unsafe
+          # site IS the fix's mechanism, not incidental.
+          # ★★★ `kayfabe-qemu-raw` 48 -> 49 AT ABI 38, 2026-08-10 — the guest-RAM LAYOUT
+          # report (`guest_ram_crossing.md` §5.7). ONE relaxation, and it is an entry
+          # point rather than a pointer read:
+          #
+          #   [p38-a] `kayfabe_shim_regs_report_ram_layout` — `{unsafe} extern "C" fn`,
+          #           counted by the fifth form of the sweep because a definition is a
+          #           relaxation. It takes the two opaque handles every other paired entry
+          #           point takes, borrows them through the SAME `borrow_regs`/`borrow`
+          #           helpers as `kayfabe_shim_regs_attach_ram` two functions above, and
+          #           dereferences nothing itself. It returns `void`: there is no failure
+          #           to report, because a report that cannot be produced is a missing log
+          #           line and not a fault the caller can act on.
+          #
+          # ⊘ Why a SECOND entry point rather than reporting inside the existing attach:
+          # the attach-time report was measured EMPTY on a machine with 2 GiB of guest RAM
+          # (boots `w225a`-`w225d`). The topology listener sits on the device's bus-master
+          # address space, which the guest has not enabled at attach time, so that instant
+          # can only ever say "nothing yet". The layout has no single instant at which it
+          # is both complete and live, which is why it is reported twice and why the second
+          # report needs a caller the C already has: the exit notifier.
+          # ★★★ 91 -> 93 on 2026-09-06, AND THE TWO WERE REVIEWED RATHER THAN COUNTED.
+          # The gate went red at 93-vs-91 and was RIGHT: `c3c5d180` (w331, "huge-page the
+          # leaf memfd") added exactly two relaxations to `kayfabe-linux-raw` and never
+          # updated this line. Localised by counting the five forms at each commit since
+          # this number was last correct (`f7de7cfd`): 91 at f7de7cfd/7b0694f5/32f4f4fc/
+          # 7c637330/57107a0d, 93 from c3c5d180 onward.
+          #
+          # ⊘ **Bumping the number is the failure this gate exists to catch** — its own
+          # message calls it "a ratchet that has quietly become a comment". So both were
+          # read, in `mapping_unsafe.rs::request_huge_pages`:
+          #   1. `libc::madvise(base, len, MADV_HUGEPAGE)` — `base`/`len` are the mapping's
+          #      own extent, established by one `mmap` and never rewritten; `madvise` reads
+          #      no user memory and only advises.
+          #   2. a `read_volatile`/`write_volatile` fault-in loop — `off < len` so the
+          #      pointer stays inside the mapping, which is checked `PROT_WRITE` above and
+          #      outlives the loop; writing the byte back changes nothing observable and
+          #      forces the fault THP collapse keys on.
+          # Both carry those SAFETY comments in-tree. ★ Kept rather than deleted even though
+          # w331's huge-page result was a measured NULL: the function reports the bytes the
+          # kernel ACTUALLY gave rather than madvise's return, and that honesty is what
+          # produced the null (shmem THP ships `[never]`, so `rc=0` with `ShmemPmdMapped=0kB`).
+          #
+          # ⊘⊘ **93 -> 99, w385, 2026-09-06.** `crates/kayfabe-linux-raw/src/affinity_unsafe.rs`
+          # adds SIX `unsafe {` blocks — the whole file — for `sched_getaffinity` /
+          # `sched_setaffinity` on the CALLING thread. They exist because the w385 concurrent
+          # fuzz has to reproduce the topology the product presents: in kayfabe **each guest
+          # vCPU is a host thread**, and an unpinned stress rung on a 19-core box spreads
+          # across idle cores and never interleaves inside a critical section.
+          # ★ The gate's rule is that the NUMBER may only move with each new relaxation read,
+          # so all six were, and every one is the same shape — an owned `cpu_set_t` on the
+          # function's own stack, unaliased, outliving the call, with the syscall told the
+          # object's exact `size_of` and writing through no other pointer:
+          #   1. `core::mem::zeroed()` for the `cpu_set_t` in `current_cores`;
+          #   2. `libc::sched_getaffinity(0, size_of, &raw mut set)` — `pid == 0` names the
+          #      calling thread; return value checked, no fallback on failure;
+          #   3. `libc::CPU_ISSET(c, &set)` — `c` bounded by the object's own bit width,
+          #      computed from `size_of` on the same type;
+          #   4. `core::mem::zeroed()` for the `cpu_set_t` in `pin_current_thread`;
+          #   5. `libc::CPU_SET(c, &mut set)` — `c < bits` checked immediately above, and an
+          #      empty `cores` is refused before the loop so the mask is never `EINVAL`;
+          #   6. `libc::sched_setaffinity(0, size_of, &raw const set)` — reads the object,
+          #      writes through no caller pointer at all.
+          # ⊘ DIAGNOSTIC-ONLY: nothing in the shipped isolate or shim pins anything; the VMM
+          # owns vCPU placement. See `docs/design/w385_the_concurrent_fuzz.md` §2.1.
+          # ⊘ 99 → 101, 2026-09-10. `arena_unsafe.rs` landed in 84be84e1 (w393, the BAR
+          # mirror) with TWO relaxations and the bar was not moved with it, so this ratchet
+          # has been RED since 2026-09-09 15:15 and every commit pushed after it was pushed
+          # over a failing gate. ⚠ That is the ratchet working and nobody reading it — the
+          # gate exists precisely so a new relaxation is a reviewed commit rather than a
+          # line inside a debugging diff, and it can only do that if it is RUN.
+          #
+          # The two, audited 2026-09-10 (`arena_unsafe.rs:102` and `:104`):
+          #   `unsafe impl Sync for ArenaInner` — `map` is reached ONLY through `ArenaPage`
+          #     handles, each owning a distinct index for its whole life: issued once under
+          #     the `free` mutex (`alloc` pops the free list or bumps `next`) and returned
+          #     only by its own `Drop`. `ArenaPage` derives `Debug` alone, so it cannot be
+          #     cloned and no two handles can hold one index. ⇒ concurrent accesses through
+          #     different handles address DISJOINT byte ranges of one mapping. `file` is an
+          #     `OwnedFd` plus a length and is never mutated; `pages` is immutable; `free`
+          #     is a `Mutex`. Pinned by `pages_are_disjoint_and_recycled`.
+          #   `unsafe impl Send for ArenaInner` — every field is `Send` on its own
+          #     (`MappedRegion`, `SharedRam`, `Mutex<ArenaFree>`, `u64`).
+          # ⊘⊘⊘ 101 → 123, 2026-09-13 (w633). ADMITTED, and the admission has two halves that
+          # must not be confused.
+          #
+          # **19 of the 22 were already in the tree and undeclared** when this session began —
+          # the ratchet had been red for long enough that its red was background. ⚠ That is the
+          # failure the row's own message names: *"a hand-maintained constant that stops
+          # matching the tree is a ratchet that has quietly become a comment."* Admitting them
+          # is not approving them; it is making the NEXT drift visible again, which a
+          # permanently-red gate cannot do.
+          #
+          # **3 are mine, each with a reason:**
+          #   - `fallocate(PUNCH_HOLE)` on the page arena (w585) — a device reset must return
+          #     the framebuffer file to zero, and a 12 GiB memset is not a reset.
+          #   - `clock_gettime(CLOCK_THREAD_CPUTIME_ID)` (w592) — the only way to tell a
+          #     descheduled trap from a trap that ran, which is the owner's own criterion.
+          #   - `mprotect` (w598) — asked as a QUESTION, never as a capability: its only
+          #     in-tree caller asserts that it FAILS, proving `VM_MAYWRITE` was cleared.
+          #   ⊘  49 → 58, same day, same reading: all nine predate this session.
+          #   - `write_volatile` of one `u32` (w646) — `GuestWindow::store_u32`, the
+          #     passthrough doorbell ring. ⚠ A SEPARATE door from `write_from` on purpose: a
+          #     `copy_nonoverlapping` may be lowered to any sequence of accesses, and a
+          #     doorbell is a REGISTER — split into two halves it rings twice with garbage in
+          #     between. Bounds-checked AND alignment-checked, and the alignment is **refused,
+          #     never rounded**: rounding would hide a wrong-offset bug behind a working ring.
+          #   ⊘  123 → 124.
+          # ★★★ `kayfabe-cuda` 0 -> 28 AT SINGLE-STORE INCREMENT 4, 2026-09-14 — the THIRD
+          # audited crate, and gate A's own failure text says what that costs: "adding a third
+          # is a design decision, not a manifest edit". Here is the decision and its review.
+          #
+          # ⊘ WHY A THIRD CRATE AND NOT CODE IN ONE OF THE TWO. This gate already licenses
+          # `kayfabe-linux-raw` for host-side **OS** specificity and `kayfabe-qemu-raw` for
+          # host-side **hypervisor** specificity. `libcuda` is neither: it is a **third foreign
+          # runtime**, reached only by `dlopen` AT RUN TIME, present on some hosts and absent
+          # on others, holding a GPU vendor's ABI. Folding it into the OS crate would make that
+          # crate un-auditable in exactly the way the QEMU split already refused — and it would
+          # put a link-time-optional dependency inside the crate every build needs.
+          #
+          # ★ The acceptance criterion survives: the whole surface is ONE file,
+          # `driver_unsafe.rs`, and `abi.rs`, `walk.rs`, `synth.rs` and `selftest.rs` contain
+          # ZERO. Four groups:
+          #
+          #   [C1] 3 `unsafe extern "C"` + the `dlopen`/`dlsym`/`dlerror` calls that use them
+          #        (7 blocks): the library handle, the error string read, and the symbol
+          #        resolution. `RTLD_NOW` deliberately, so a missing symbol is a NAMED refusal
+          #        here rather than a null call at an arbitrary later moment.
+          #   [C2] 2 `unsafe impl` — Send and Sync for `Cuda`, a struct of code pointers into a
+          #        library loaded `RTLD_GLOBAL` for the life of the process. Nothing in it is
+          #        interior-mutable and nothing is freed; the claim is about the loader, not
+          #        about anything Rust can see. Kept as two explicit relaxations with a written
+          #        argument rather than laundered through a wrapper that would confer both for
+          #        free and record nothing.
+          #   [C3] 17 one-call driver entry points, each wrapped in a SAFE method on `Cuda` and
+          #        each carrying its own `// SAFETY:` naming its own obligation: an out-pointer
+          #        that is live for the call, or a buffer whose length is passed as the bound
+          #        the driver must honour. ★ SEVENTEEN IS THE SURFACE, NOT A STYLE — a macro
+          #        emitting them would collapse all seventeen into one textual relaxation,
+          #        which is gaming this instrument.
+          #   [C4] 2 layout transitions: `view_bytes` (`from_raw_parts` over one `#[repr(C)]`
+          #        value, for `cuLaunchKernel`'s BY-VALUE parameter) and `read_struct`
+          #        (`copy_nonoverlapping` out of a buffer the device wrote). ⚠ Both carry an
+          #        obligation they cannot discharge alone — that the Rust layout equals the
+          #        CUDA one — and it is discharged by a DIFFERENTIAL: `walk_abi_matches_the_cu`
+          #        extracts the struct definitions from `cuda/walk/kf_walk.cu` by name,
+          #        compiles a `g++` program that prints every `sizeof`/`offsetof`, and asserts
+          #        it against the Rust mirror. No GPU, no CUDA toolkit, runs in CI.
+          # ★ 28 -> 29, 2026-09-14: `zeroed<T>()`, and the block it replaces is the point.
+          #   `KfFormat` has interior PADDING, a Rust struct literal leaves padding UNDEFINED,
+          #   and those bytes are handed to `cuLaunchKernel` verbatim — so every launch was
+          #   reading uninitialised memory. Nothing misbehaved (the kernel reads named fields),
+          #   which is precisely why it survived until the byte-level differential failed at
+          #   byte 58 against a `.cu` that starts with `memset(&F, 0, sizeof(F))`.
+          # ★ 29 -> 30, 2026-09-15 (w731): `cuCtxSetCurrent`, one more [C3] one-call entry
+          #   point — an opaque context handle this library itself minted with
+          #   `cuCtxCreate_v2`, handed back to it, affecting the CALLING THREAD only. Its own
+          #   `// SAFETY:` says so, and `ctx_set_current` is the safe wrapper.
+          #   ⊘ And the reason it exists is worth the line: a CUDA context is **current per
+          #   thread**. The scratchpad isolate brings CUDA up on its startup thread (before
+          #   the sandbox, as §w724d requires) and serves requests on a WORKER, so without
+          #   this every call from a worker returned `CUDA_ERROR_INVALID_CONTEXT` (201) —
+          #   2 115 times in one boot, while the selftest, which runs on the bring-up thread,
+          #   reported `CUDA_WALK=OK`.
+          # ⊘⊘ **124 -> 127, CORRECTED 2026-09-14, and the drift is the finding.** The tree
+          # counted 127 while this constant said 124, so the ratchet had "quietly become a
+          # comment" — which is exactly what `gate_scope.rs`'s own failure text calls it, and
+          # that test was RED for a day before anyone ran the crate that holds it.
+          #
+          # ★ The three are all in `arena_unsafe.rs`, all from `ac86d320` (w719, the two-world
+          # census and the aperture store's range punch), and all reviewable in one look:
+          #   - `fallocate(FALLOC_FL_PUNCH_HOLE | KEEP_SIZE)` — the range punch that returns a
+          #     sparse region's pages without changing its length;
+          #   - two `fstat` (one via `mem::zeroed` for the `libc::stat`, one the call) — reading
+          #     the arena's resident size, which is how the census knows what it holds.
+          # Each carries its own `// SAFETY:` (the crate's `undocumented_unsafe_blocks = deny`
+          # makes that unskippable), and none of the three takes a pointer from outside.
+          # ★★★ `kayfabe-cuda` 36 -> 40, 2026-09-18 (w755y) — THE IMPORT SIDE, and it is the
+          # direction that MEASURED YES.
+          #
+          # ⊘ WHAT THE FOUR ARE: four `unsafe { }` CALL SITES in `import_and_map`, one per FFI
+          #   call — `cuMemImportFromShareableHandle`, `cuMemAddressReserve`, `cuMemMap`,
+          #   `cuMemSetAccess` — each with its own SAFETY comment. ⚠ NOT consolidated, for the
+          #   reason the w755i entry below already gives: one `unsafe` per call is the
+          #   reviewable granularity, and collapsing them to shrink this number buys the
+          #   ratchet at the cost of the review. The six new `Option<unsafe extern "C" fn>`
+          #   FIELD TYPES are declarations and are already counted as such by the gate.
+          #
+          # ★★★ WHY, and this one is settled by measurement rather than argued:
+          # `[measured w755x, RTX 3090, 580.159.04]` `CS_REVERSE=CUDA-IMPORT-OK dptr=0x302000000`
+          # — an RM-owned device allocation IS addressable by CUDA. ⇒ the single store can
+          # carry a device pointer, and the walk kernel (`KfWin { base, len }`, dereferenced at
+          # GPGA offsets) can be pointed at it and walk the guest's page tables IN PLACE.
+          #
+          # ⊘⊘ THAT IS WHAT DELETES CODE RATHER THAN ADDING IT. On the device arm the store's
+          # host-side reads REFUSE BY NAME (CUT A: *"two memories for one address"*), so the
+          # CPU page-table walk is blind — `bound=0 published=0 repointed=0` while
+          # `STALE MAPPING CAUGHT RED-HANDED`. The in-place walk removes the staged image
+          # (`build_image` reads through `FbRead`) **and** the Rust walker it is fed by. Four
+          # `unsafe` FFI calls buy the deletion of the whole CPU walk path.
+          #
+          # ⚠ The w755i entry below asked whether CUDA could own the store and recorded NO.
+          # That NO was WRONG — three transcription bugs of mine, each producing a status a
+          # real code path also returns (w755x). Both directions work. The entry is kept
+          # because its reasoning stands; only its verdict was bad.
+
+          # ★★★ `kayfabe-cuda` 30 -> 36, 2026-09-17 (w755i) — FOUR VMM SYMBOLS AND THEIR CALL
+          # SITES, and the ratchet is what made the growth visible rather than silent.
+          #
+          # ⊘ WHAT THE SIX ARE, so this is a review and not a number:
+          #   4 × `unsafe extern "C" fn` FIELD TYPES — `cuMemGetAllocationGranularity`,
+          #       `cuMemCreate`, `cuMemExportToShareableHandle`, `cuMemRelease`. A foreign
+          #       function-pointer type cannot be written without the keyword; these are
+          #       declarations, not new powers.
+          #   3 × `unsafe { }` CALL SITES in `export_device_allocation`, one per FFI call, each
+          #       carrying its own SAFETY comment. ⚠ Deliberately NOT consolidated into one
+          #       block: one `unsafe` per call is the reviewable granularity, and collapsing
+          #       them to shrink this number would buy the ratchet at the cost of the review.
+          #   1 × `sym_or_null`, which REPLACED two. The first draft duplicated `sym!`'s
+          #       `dlsym` + `transmute` pair inside a second macro; this gate is what said so,
+          #       and the duplication is gone. ⇒ net +6, not +8.
+          #
+          # ★ WHY THE SURFACE GROWS AT ALL: the four symbols answer one question —
+          # can a device allocation CUDA owns be IMPORTED INTO OUR RM CLIENT
+          # (`kayfabe_isolate_host::cudastore`). If yes, the single store becomes CUDA-owned
+          # and therefore addressable by the walk kernel LIVE at its own GPGA, by
+          # `cuMemcpyAsync` for the emulated CE plane, and by `map_store_slice` into guest VA
+          # spaces — from one object. The alternative is the relocation this replaces, which
+          # FORECLOSES the differential's most important disagreement direction.
+          #
+          # ⊘ They are `Option` and resolved NULL-tolerantly: a driver without the VMM API
+          # yields `None`, which is a MEASUREMENT about that host, never a load failure. The
+          # binding is loaded on every boot for the walk kernel, and a required symbol absent
+          # from an older `libcuda` would turn a missing experiment into a missing walker.
+          # Existing v3 adapters were approved in OWNER_RULINGS A6 / CLAUDE.md.
+          # This migration records their current surface; no new privilege is added.
+          #
+          # ★★ `kf-linux-raw` 73 -> 75 and `kf-qemu` 36 -> 42, 2026-09-30 (`v3-ioeventfd`,
+          # `docs/design/V3_DOORBELL_IOEVENTFD.md`) — the doorbell fast path's kernel doors.
+          #   kf-linux-raw `kvm_unsafe.rs` (+2): `KvmVm::ioeventfd` and
+          #     `KvmVm::register_coalesced_mmio` — one `ioctl` each on a live `#[repr(C)]` record
+          #     whose size the request encodes (`struct kvm_ioeventfd` 64 B, `struct
+          #     kvm_coalesced_mmio_zone` 16 B, both asserted by
+          #     `the_ioeventfd_uapi_size_and_flags_are_the_ones_the_kernel_declares`); `_IOW`, the
+          #     kernel only reads it and keeps no pointer (it takes its own eventfd reference).
+          #   kf-qemu `raw_unsafe.rs` (+4): `IoeventfdHook` — `unsafe impl Send`/`Sync` (the
+          #     opaque is the C device, which lives for the process; the verb is one `ioctl` with
+          #     no lock), `unsafe fn adopt` (the C verb's contract), and the one `unsafe { }` call
+          #     of the verb (a borrowed live fd for the whole call; the kernel never keeps the
+          #     number). `ffi_unsafe.rs` (+2): `kf3_set_ioeventfd` (`unsafe extern "C" fn`, the
+          #     same contract forwarded) and its `unsafe { adopt }`.
+          #   ⊘ No new power: the verb only assigns/deassigns ioeventfds on QEMU's own VM, and a
+          #     refusal is an errno the token survives on the trapped path.
+          #
+          # ★★ `kf-cuda` 73 -> 75 and `kf-qemu` 42 -> 44, 2026-09-30 (`v3-mc22`, the merge of
+          # `v3-ioeventfd` onto master 145cca8c). ⊘ The merge adds NONE of the four: the display
+          # work (`v3-display2`, c0a35924) added them all and left this constant at 73/36, and no CI
+          # run on that branch or on master ever reached this step (each stopped at the Clippy
+          # debt gate first) — so the drift was invisible, not absent. Itemised:
+          #   kf-cuda `driver_unsafe.rs` (+2): `Cuda::memset_d8` — one `unsafe { }` call of
+          #     `cuMemsetD8_v2` (every caller bounds `[dst, dst+n)` against the mapping it came
+          #     from), and `Cuda::pinned_free` — one `unsafe { }` call of `cuMemFreeHost` on a
+          #     `PinnedBuf` it consumes (no safe code can reach the pointer afterwards). The new
+          #     `cuMemFreeHost` field type is a declaration this count does not match.
+          #   kf-qemu `ffi_unsafe.rs` (+2): `kf3_display_frame` (`unsafe extern "C" fn`, KF3 ABI
+          #     10: `out` must be writable) and its one `unsafe { *out = fr }`.
+          #   ⊘ No new power: page-locked host memory the display worker already owns, handed to
+          #     QEMU's console by address; both CUDA calls act on memory this library allocated.
+          #
+          # ★★ `kf-linux-raw` 75 -> 87, 2026-10-03 (`v3-broker`, display step 3a — the broker
+          # relay, docs/design/V3_DISPLAY.md §8). Twelve, itemised:
+          #   `unixsock_unsafe.rs` (+8): `socket(AF_UNIX, NONBLOCK|CLOEXEC)` (integers only,
+          #     adopted on the same line); `connect` (a live, fully initialised `sockaddr_un`, its
+          #     own size; the path is bounded below `sun_path` first); `getsockopt(SO_PEERCRED)`
+          #     (a live `ucred` and its own size); `zeroed_msghdr` (an all-zero plain C struct);
+          #     the one-descriptor `SCM_RIGHTS` header build (a stack `[u64; 3]`, `CMSG_SPACE`
+          #     asserted to fit it); `sendmsg(MSG_NOSIGNAL|MSG_DONTWAIT)` (reads only); `recvmsg`
+          #     with NO control buffer (writes at most the caller's slice; a peer's descriptor is
+          #     dropped by the kernel and reported); and a test-only `recvmsg` with a control
+          #     buffer that adopts the one received descriptor at once.
+          #   `host_fd_unsafe.rs` (+4): `ioctl(UDMABUF_CREATE)` (a 24-byte `#[repr(C)]` mirror,
+          #     size asserted at compile time; the new descriptor adopted on the same line);
+          #     `fstatfs` and its zeroed `statfs` (a live local of the written type); a test-only
+          #     unsealed `memfd_create` (the case `/dev/udmabuf` must refuse).
+          #   ⊘ No new power over guest memory: the socket carries only dedicated, sealed frame
+          #     copies the display worker owns, and reads no descriptor from the peer.
+          #
+          # ★★ `kf-cuda` 75 -> 78 and `kf-qemu` 44 -> 53, 2026-10-03 (`v3-broker`, display step 3a —
+          # the broker relay's kf3 glue, KF3 ABI 11). Itemised:
+          #   kf-cuda `driver_unsafe.rs` (+3): `Cuda::host_register` — `HostSpan::as_ptr` (the span
+          #     of a mapping `display::Frame` OWNS and unregisters before it unmaps) and one call of
+          #     `cuMemHostRegister_v2` (flags 0) on it; `Cuda::host_unregister` — one call of
+          #     `cuMemHostUnregister` on a `PinnedBuf` it consumes.
+          #   kf-qemu `ffi_unsafe.rs` (+5): `kf3_broker_start` (`unsafe extern "C" fn`; `path` a
+          #     NUL-terminated string, `err` writable) with its `CStr::from_ptr` and its
+          #     `BrokerHooks::adopt` (the C verbs' contract forwarded); `kf3_broker_ready`
+          #     (`unsafe extern "C" fn`; `out` writable for `cap`) with its one bounded write per
+          #     event (`i < n <= cap`).
+          #   kf-qemu `raw_unsafe.rs` (+4): `unsafe impl Send for BrokerHooks` (the C state lives for
+          #     the process; the hooks are called only inside a `kf3_broker_*` entry), `unsafe fn
+          #     adopt`, and the two `unsafe { }` calls of the watch and timer verbs.
+          #   ⊘ No new power: the verbs only register fd handlers and a timer on QEMU's main loop,
+          #     for descriptors Rust owns; the registration pins memory this process mapped.
+          #
+          # ★★ `kf-linux-raw` 87 -> 89, 2026-10-03 (`v3-broker`, the review fixes of display step 3).
+          #   `unixsock_unsafe.rs` (+2): `effective_uid` — one `unsafe { }` call of `geteuid` (no
+          #     arguments, no memory, cannot fail). The broker peer check now reads QEMU's euid at
+          #     EVERY connect, after `-run-with user=`/`-runas` dropped privileges (a `/proc` read
+          #     fails inside a `-run-with chroot=` without `/proc`); and a test-only `listen(fd, 1)`
+          #     that narrows std's listener to a backlog of 1, so the full-backlog test needs a few
+          #     descriptors instead of more than `somaxconn` (it failed under `ulimit -n 1024`).
+          #   ⊘ No new power: `geteuid` reads this process's own credential.
+          #
+          # ★★ `kf-linux-raw` 89 -> 93, 2026-10-03 (`v3-broker`, the GPU-copy broker rung —
+          # docs/design/V3_DISPLAY.md §8.11, OWNER_RULINGS.md §L). `drm_unsafe.rs` (+4), each on a
+          # kernel-uapi `#[repr(C)]` mirror whose size is asserted at compile time and encoded in
+          # the request: `ioctl(DRM_IOCTL_PRIME_HANDLE_TO_FD)` (12-byte `drm_prime_handle`; the
+          # new dma-buf descriptor adopted at once); `ioctl(DRM_IOCTL_GEM_CLOSE)` (8 bytes, `_IOW`);
+          # `ioctl(DMA_BUF_IOCTL_EXPORT_SYNC_FILE)` (8 bytes; the sync_file adopted at once) and a
+          # zero-timeout `poll` on that one live `pollfd`.
+          #   ⊘ No new power: the render node's two nvidia-drm ioctls go through the EXISTING
+          #     `CharDevice::ioctl` (its size check and pointer patch-and-scrub) from SAFE code
+          #     (`drm.rs`), allowlisted to `GET_DEV_INFO` and `GEM_IMPORT_NVKMS_MEMORY`; the GEM
+          #     objects are only ever kayfabe's own VRAM frame slots, never guest memory.
+          #
+          # ★★★ `firmware/kf-gop:77`, 2026-10-03 — the FIRST entry that is not a crate under crates/,
+          # and an owner default rather than a manifest edit (the release brief: "the firmware crate
+          # is a named unsafe exception living under firmware/ only, outside the cargo workspace").
+          # An entry containing `/` is a path from the repository root; every other entry is
+          # `crates/<name>`. What it is: kf3's boot-display UEFI GOP (docs/design/V3_DISPLAY.md
+          # §4.11) — GUEST code that runs inside OVMF, built for x86_64-unknown-uefi by the
+          # `firmware` job, never linked into the VMM. Raw UEFI tables are its whole interface, so
+          # it cannot be safe; what it can be is CONTAINED: every decision (which controller is
+          # ours, Blt's bounds, placement inside the BAR) is in its safe library (`src/lib.rs`,
+          # `forbid(unsafe_code)`, host-tested), and the 77 sit in four files:
+          #   efi_unsafe.rs (23)   the UEFI ABI: 6 `unsafe fn` (system-table entry, FreePool,
+          #                        FreePages, InstallProtocolInterface, LocateDevicePath, the
+          #                        SecureBoot read) and one block per boot-service wrapper — each
+          #                        a call through the firmware's own table with locals as
+          #                        out-pointers and static GUIDs.
+          #   driver_unsafe.rs (32) the entry points: recovering `Driver`/`Ctx` from `This` (the
+          #                        protocol struct is the first field of a #[repr(C)] owner,
+          #                        checked by signature), config/attribute/BAR calls through PCI
+          #                        I/O, the ROM image slice (the bus driver's copy, read inside
+          #                        the call), the RAM shadow's slice, the framebuffer's one
+          #                        aligned volatile word store (`Mmio::store`, bounds-checked; the
+          #                        BAR range is first checked to fit the BAR the bus driver assigned
+          #                        and to be word-aligned — it is never a slice), the caller's Blt
+          #                        buffer (exactly the bytes the validated plan spans).
+          #   port_unsafe.rs (1)   one `out dx, al` to the debug port. Compiled into the driver
+          #                        only with `--features debugcon` (test builds), and only for
+          #                        x86_64 (`cfg(target_arch)`, §K; elsewhere a named build error).
+          #   bin/kf-gop-test/check_unsafe.rs (22) the stand-in's test application, never shipped.
+          #
+          # ★★ `kf-qemu` 44 -> 46, 2026-10-03 (`v3-gop-kf3`, KF3 ABI 11, the boot display's option ROM,
+          # docs/design/V3_DISPLAY.md §4.11.6). `ffi_unsafe.rs` (+2): `kf3_option_rom` (`unsafe extern
+          # "C" fn`: `rom` and `rom_len` must be writable) and its one `unsafe { }` storing the ROM's
+          # address and length through them. The bytes are the leaked device's (`Device::option_rom`,
+          # packed at realize, never freed), so the pointer the C device copies from is valid for the
+          # process. ⊘ No new power: the C device copies VMM-authored bytes into a read-only ROM region.
+          # ★★ `firmware/kf-gop` 77 -> 78, 2026-10-03 (`v3-gop`, OWNER_RULINGS §K: framebuffer writes are
+          # aligned volatile 32-bit stores — a BAR mapped as Device memory on arm64 faults on an
+          # unaligned access and forbids `DC ZVA`). `driver_unsafe.rs` (31 -> 32): `Mmio::store`'s one
+          # `unsafe { base.add(i).write_volatile(..) }`, bounds-checked against `words` on the line above;
+          # `Ctx::planes` keeps its one block, which now forms only the RAM shadow's slice — the BAR is
+          # never a slice again, so `blt` cannot reach it with `copy_from_slice`/`fill`. ⊘ No new power:
+          # the same bytes of the same BAR the old slice covered, now one aligned word at a time.
+          # ★★ `kf-linux-raw` 75 -> 77, 2026-10-03 (`v3-sec-nonpriv`) — the per-birth
+          # CAP_SYS_ADMIN bracket (`docs/design/THE_CONSTRAINTS.md` §30).
+          #   kf-linux-raw `capability_unsafe.rs` (+2): `capget_self` and `capset_self` — one
+          #     `syscall(SYS_capget/SYS_capset)` each, `pid = 0` (the calling thread only), on a
+          #     version-3 header `[u32; 2]` and two records `[u32; 6]` owned by the frame and alive
+          #     across the call; the kernel keeps no pointer and reports failure by return value.
+          #   ⊘ No new power: `capset` can only lower a thread's own effective set or raise it back
+          #     within its permitted set; the kernel refuses anything else.
+          # ★★ `kf-linux-raw` 75 -> 76, 2026-10-03 (`v3-scratch-bound`, review finding 1,
+          # `docs/design/V3_P4_PORT_MAP.md` Q3) — `GuestWindow::advise`, ONE `unsafe { }` block in
+          # `window_unsafe.rs`: `madvise` over `[offset, offset + len)` of the window, after
+          # `checked_span` bounds it inside the object's own live mapping and the page alignment
+          # is checked. The advice comes from a closed three-variant enum (`MADV_DONTDUMP`,
+          # `MADV_DONTFORK`, `MADV_HUGEPAGE`), each of which only sets a VMA flag: nothing is
+          # unmapped, discarded, re-protected or written, so no concurrent copy through the window
+          # can observe it. Why it exists: QEMU advises a window when it registers it, a later
+          # `MAP_FIXED` comes back without those flags, and mappings with different flags never
+          # merge, so every guest-driven place-then-sink cycle left two mappings for the VM's life.
+          # ⊘ No new power: flags on our own window only.
+          # ★ `kf-linux-raw` 77 + 1 = 78 at the merge of the two lines above (`v3-cand-1`, 2026-10-04):
+          #   capability_unsafe.rs (2, `v3-sec-nonpriv`) and window_unsafe.rs's `advise` (1,
+          #   `v3-scratch-bound`) are disjoint files and disjoint blocks; each branch counted from 75.
+          #
+          # ★★ MERGE 2026-10-03 (`v3-broker` takes master's boot display): the two branches each moved
+          # `kf-qemu` from 44 — the broker by +9 (53), the GOP option ROM by +2 (46) — so the bar is their
+          # sum, 55; `kf-linux-raw` 93 and `kf-cuda` 78 are the broker's alone; `firmware/kf-gop` 78 is
+          # master's alone.
+          # ★★ `kf-linux-raw` 93 -> 94, 2026-10-04 (`v3-broker`, nvkvm-pv broker `badf2d7`: the broker
+          # accepts only a descriptor it can PROVE to be shmem or a dma-buf, and closes any other on a
+          # helper thread). `host_fd_unsafe.rs` (+1): `fd_carrier`'s one `unsafe { }` call of
+          # `fcntl(fd, F_GET_SEALS)` — no third argument, no memory, a negative return is "not
+          # shmem". The rest of the proof (`fstatfs` only after it succeeded, through the existing
+          # `fs_magic`; `/proc/self/fdinfo` read with std, bounded at 4 KiB) adds no relaxation.
+          #   ⊘ No new power: it classifies a descriptor this process already holds, and asks an
+          #     unproven descriptor's filesystem nothing (no `fstatfs` on FUSE).
+          # ★★ `kf-qemu` 55 -> 59, 2026-10-04 (`v3-broker`, V3_DISPLAY.md §8.13: the guest's cursor for
+          # QEMU's own console while a cursor-capable broker hovers; KF3 ABI 12's broker surface).
+          # `ffi_unsafe.rs` (+4): `kf3_display_cursor` (`unsafe extern "C" fn`: `out` writable) and
+          # its one `unsafe { *out = c }` (checked non-null — and, since the review of 2026-10-04,
+          # aligned — first; that review's `kf3_display_cursor_done` is a SAFE `extern "C" fn` and
+          # adds no relaxation, so the bar stays 59); `kf3_display_cursor_pixels`
+          # (`unsafe extern "C" fn`: `data` writable for `words` u32s) and its one
+          # `slice::from_raw_parts_mut`, formed only after `data` is checked non-null and aligned
+          # and `words` is checked to be 1..=256*256 — the slice lives for the call, and the safe
+          # side (`kf_broker::ConsoleCursor::pixels`) writes it only when `words` is exactly the
+          # defined image's width * height.
+          #   ⊘ No new power: VMM-owned pixels (kayfabe's copy of the cursor) copied into a buffer
+          #     the C device allocated with `cursor_alloc` for exactly that size.
+          # kf-qemu 59 -> 61 (2026-10-05, optional native timer; KF3 ABI 20):
+          # ffi_unsafe.rs (+2): kf3_timer_view's unsafe extern function and its one output-write
+          # block. The C caller owns two writable output slots; the boundary rejects null or
+          # unaligned pointers and a missing device/timer. It returns only the prevalidated,
+          # read-only timer mapping, whose process-lifetime device outlives the QEMU RAMBlock.
+          # No guest pointer reaches it; C installs only a read-only ROM region over that view.
+          # Candidate 2 adds the disjoint capability (2) and scratch advice (1)
+          # blocks to the broker's audited kf-linux-raw count (94).
+          # kf-qemu 61 -> 67 (2026-10-07, claude/code43-trace-20261007, KF3 ABI 21; the default-off
+          # KF3_BAR0_TRACE diagnostic, OWNER_RULINGS.md §S's approved BAR0-read trap exception):
+          #   raw_unsafe.rs (+4): `ReadTrapHook` — `unsafe impl Send`/`Sync` (opaque is the C
+          #   device's state, alive for the process; the verb stores an atomic and schedules a
+          #   bottom half), `unsafe fn adopt` (the verb must be callable from any non-vCPU thread and
+          #   never block) and the one call in `request` under that contract.
+          #   ffi_unsafe.rs (+2): `kf3_set_read_trap` (`unsafe extern "C" fn`: the verb's contract)
+          #   and its one `ReadTrapHook::adopt` block.
+          #   ⊘ No new power: the verb only flips ROMD on kayfabe's own BAR0 shadow pieces; a read
+          #     that exits is answered from the same shadow word. Nothing reaches the host.
+          # ★ kf-chan:0 (2026-10-04, P1+P2 inc C, `docs/design/V3_P1P2_TSPACE.md` §3.8). OWNER_RULINGS
+          # §R(b): code that produces an address hardware will dereference is PERIMETER material
+          # even when it compiles as safe Rust, so the Translated plane's address authoring lives in
+          # ONE file named `*_unsafe.rs` — `crates/kf-chan/src/tspace_unsafe.rs`: the T-space
+          # windows' bounds, the `WindowAddr` only that file constructs, the only functions that put
+          # an address word or a LAUNCH_DMA word into a pushbuffer, and the ring's own fence/GP-entry
+          # authoring. It contains ZERO `unsafe` blocks (none is needed), so the relaxation count is
+          # 0 and does not move; kf-chan keeps `unsafe_code = "forbid"` through `[lints] workspace`.
+          # Listing the crate here is what lets gate B accept a `*_unsafe.rs` file in it, and makes
+          # the ratchet count it (0) from now on — a future `unsafe {}` there moves this number.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:97 kf-cuda:78 kf-qemu:67 firmware/kf-gop:78 kf-chan:0"
+          audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
+
+          # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
+          # ★ 2026-10-04 (P1+P2 review fix): an audited crate whose bar is 0 (kf-chan) is NOT
+          # exempt — its perimeter file holds no `unsafe` block, so it must keep inheriting the
+          # workspace lints (and with them `unsafe_code = "forbid"`); listing it in AUDITED only
+          # lets gate B accept its `*_unsafe.rs` file and the ratchet count it.
+          missing=""
+          for m in crates/*/Cargo.toml; do
+            # Historical dependency-free model, not product/grader; all its tests still run.
+            [ "$m" = crates/kayfabe-doorbell/Cargo.toml ] && continue
+            exempt=0
+            for entry in $AUDITED; do
+              case "$m" in "crates/${entry%%:*}/Cargo.toml") [ "${entry##*:}" = 0 ] || exempt=1;; esac
+            done
+            [ "$exempt" -eq 1 ] && continue
+            grep -q '^\[lints\]' "$m" && grep -q '^workspace = true' "$m" || missing="$missing $m"
+          done
+          if [ -n "$missing" ]; then
+            echo "★ FORBID-INHERITANCE BREACH — l1_os_shell.md §4.1 gate A."
+            echo "These manifests do not inherit the workspace lints, so they are NOT"
+            echo "covered by \`unsafe_code = \"forbid\"\` and nothing would have said so:"
+            for m in $missing; do echo "  $m"; done
+            echo "Add:"
+            echo "  [lints]"
+            echo "  workspace = true"
+            echo "The crates allowed to omit it are EXACTLY these, and adding a third is a"
+            echo "design decision, not a manifest edit:"
+            for entry in $AUDITED; do echo "  ${entry%%:*}"; done
+            exit 1
+          fi
+
+          # --- Gate B: the surface lives in the named crates' src/, and nowhere else.
+          # ★ An ARRAY, not a string. The string form was written first and it made this
+          # gate PASS BY CRASHING: an unquoted `$prune` is word-split AND glob-expanded,
+          # so `./crates/<c>/src/*` became a list of real filenames, `find` died with
+          # "paths must precede expression", and the empty output read as "no offenders".
+          # Exactly the green-instrument-on-an-unexercised-path failure this suite is
+          # about, inside the gate that enforces it.
+          prune=()
+          for entry in $AUDITED; do
+            prune+=( -not -path "./$(audited_dir "$entry")/src/*" )
+          done
+          outside=$(find . -name '*_unsafe.rs' "${prune[@]}" \
+                      -not -path './archive/*' -not -path './third_party/*' \
+                      -not -path './target/*' -not -path './*/target/*' \
+                      -not -path './mutants.out/*' || true)
+          if [ -n "$outside" ]; then
+            echo "$outside"
+            echo ""
+            echo "★ UNSAFE-CONTAINMENT BREACH — l1_os_shell.md §4.1 gate B."
+            echo "The unsound surface lives in the audited crates' src/ ONLY:"
+            for entry in $AUDITED; do echo "  $(audited_dir "$entry")/src/"; done
+            echo "The files above are elsewhere. Move the code, or the audit stops being"
+            echo "'read the audited crates in one sitting', which is its acceptance"
+            echo "criterion."
+            exit 1
+          fi
+
+          # --- The ratchet: the number of relaxations is a reviewed constant PER CRATE.
+          # Counts the syntactic forms only (`unsafe {`, `unsafe fn/impl/trait`), so prose
+          # inside those files — which gate C permits there — cannot inflate it.
+          #
+          # kayfabe-linux-raw (50). ★ 7 -> 25 at M2-c (l1_os_shell.md §10), the stage that
+          # gives the raw crate its first consumers. ★ 25 -> 37 at M2-d, the stage that
+          # gives it a reactor and a guest. ★ 37 -> 47 at L1-#91, the stage that gives it
+          # a HOST GPU and a child process (host_execution_plane.md §3 step 2): until then
+          # the entire host side of this project was a double, and a double needs no
+          # syscalls. The three new files are argued at the bottom of this list.
+          # ★ 49 -> 50 at L2-Q stage Q2, the stage that gives it a machine it did not
+          # create: ONE block, in kvm_unsafe.rs, argued in full below.
+          # ★★ 50 -> 57 CLOSING THE MEASURED HOST-FILESYSTEM ESCAPE. Six new blocks in
+          # `sandbox_unsafe.rs` and one in `chardev_unsafe.rs`, all argued below. The bar
+          # moved because the isolate's `/dev` descriptor was measured to open
+          # `../etc/shadow` on a real host — an `O_PATH` dirfd restricts enumeration and
+          # places NO restriction on `..` — and the only fix is a mount namespace plus a
+          # `pivot_root`, which is six syscalls glibc either does not wrap or must not be
+          # allowed to swallow the return value of. The seventh block is the probe that
+          # makes the fix MEASURABLE rather than argued; it is why the bar is raised for a
+          # security fix and not only for a feature.
+          # ★★ 57 -> 60 CLOSING THE PRIVILEGE HALF. Three new blocks, all in
+          # `sandbox_unsafe.rs`, itemised in full below: the capability drop the C carries
+          # (`prctl`, `capget`, `capset`) and the read-back that turns "we dropped them"
+          # from a sequence of calls into a checked outcome. The filesystem containment
+          # landed around a process that still held EVERY capability, which is what made
+          # this the same piece of work and not a follow-up.
+          # The surface, per file, each block carrying its
+          # own `// SAFETY:` (clippy `undocumented_unsafe_blocks = deny`):
+          #   window_unsafe.rs  (7) — the GuestWindow: one mmap, one MAP_FIXED shared by
+          #     place/restore, one munmap in Drop, two copy_nonoverlapping, and the two
+          #     PER-TYPE `Send`/`Sync` grants (§14.5 item 1 asked for exactly this shape,
+          #     argued per type, never one blanket impl).
+          #   host_fd_unsafe.rs (9) — from_raw_fd (the ONE adoption site), memfd_create,
+          #     ftruncate, F_ADD_SEALS, F_DUPFD_CLOEXEC, the notify descriptor's create,
+          #     write and read, and getrlimit (the §3.8 descriptor budget: the core's
+          #     source cap may not be set optimistically past the process's real limit).
+          #   kvm_unsafe.rs     (4) — open(/dev/kvm), the by-value ioctl, the memslot
+          #     ioctl, and ★ ADDED AT L2-Q STAGE Q2 (host_execution_plane.md §1): the
+          #     `BorrowedFd::borrow_raw` in `KvmVm::discover_in_this_process`. Under §1 the
+          #     hypervisor RESERVES the guest-physical window and does not back it, and we
+          #     install the memslots that shadow it — which means we need the descriptor of
+          #     a VM WE DID NOT CREATE. There is no API for that: the descriptor is an
+          #     anonymous inode, so `/proc/self/fd/N` cannot be re-opened (measured: ENXIO)
+          #     and it must be DUPLICATED, which needs a `BorrowedFd` over a number read
+          #     out of `/proc/self/fd`. This is the C's own mechanism
+          #     (`C: src/qemu/virtio_nvgpu.c:1114-1141`, which scans for the same symlink
+          #     target because the header that would expose the handle is target-only).
+          #     ★ Its SAFETY comment states an obligation it CANNOT discharge — that no
+          #     other thread closed the number in between — and closes the resulting
+          #     descriptor-identity hazard by re-reading the link of the descriptor it now
+          #     OWNS, which no other thread can change. Losing the race is a refusal, never
+          #     a wrong machine. The residual (the number closed AND recycled onto a second
+          #     VM) needs a second VM to exist, which the ambiguity arm already refuses.
+          #   mapping_unsafe.rs (6) — ★ ADDED TO THE ITEMISATION AT Q0, not to the count:
+          #     the list below this line accounted for 30 of the 37 the ratchet has been
+          #     asserting since M2-d, and the two files that make up the other 7 were
+          #     never named. The bounded mapping primitive: the mmap, the munmap in Drop,
+          #     the two MAP_FIXED arms (place / restore), the bounds-checked view
+          #     projection, and the mprotect.
+          #   sysconf_unsafe.rs (1) — the page-size query, the one syscall the geometry
+          #     newtype is derived from.
+          #   epoll_unsafe.rs   (3) — M2-d, the readiness set: create, ctl (shared by
+          #     watch/unwatch), and the wait. Level-triggered, keyed on a caller-chosen
+          #     token that is deliberately NOT the descriptor (§3.2's O3 argument).
+          #   vcpu_unsafe.rs    (8) — M2-d, the guest: KVM_RUN, the mmap of the shared run
+          #     structure and its munmap in Drop, the read of the exit union, the write of
+          #     an MMIO load's completion, the two by-reference register ioctls, and the
+          #     per-type `Send` grant for a vCPU (one runner thread owns one; `Sync` is
+          #     deliberately withheld).
+          #   chardev_unsafe.rs (4) — ★ L1-#91, the RM connection: open(O_PATH) of the
+          #     device DIRECTORY (so an isolate with no path to /dev can still name its
+          #     nodes), openat of a device node, and THE ioctl. The third is the one that
+          #     matters: it is the only place in the workspace where a host CPU address is
+          #     written into a caller-supplied buffer, it is bounds-checked before the write
+          #     and SCRUBBED after the syscall, so §4.2.1's "no host address crosses a crate
+          #     boundary" is a property of the values the caller can observe rather than of
+          #     who wrote the keyword.
+          #     ★ 3 -> 4: `DevDir::can_reach`, an `openat(O_RDONLY)` that immediately closes
+          #     what it opened. It exists so the containment question is a SYSCALL rather
+          #     than a comment — this file's own docs once argued the descriptor was bounded
+          #     and it was not. Its invariant is the same as `openat`'s neighbour above (a
+          #     live owned dirfd, a `&CStr` path outliving the call) and it takes ownership
+          #     through the same checked `adopt_fd`, so nothing is leaked on either arm.
+          #   signal_unsafe.rs  (6) — ★ L1-#91, the break signal (§7.2, C #73): zeroing a
+          #     sigaction, sigemptyset, sigaction WITHOUT SA_RESTART, gettid, getpid, and
+          #     tgkill. Six blocks for what reads as three calls because each libc entry
+          #     point is relaxed separately rather than one block spanning the function —
+          #     the house rule is that every SAFETY comment's invariant is established on a
+          #     line above it, and a single block would have four unrelated invariants.
+          #   spawn_unsafe.rs   (16) — ★★★ 3 -> 16 AT THE EMBEDDED-ISOLATE CHANGE. The
+          #     whole of `std::process::Command` was removed from the spawn path and the file
+          #     now owns fork/exec/wait outright, so the +13 is a mechanism moving INTO the
+          #     audited crate rather than new surface appearing. It buys three things that
+          #     were previously impossible and were all named as gaps in this same file's
+          #     docs: the isolate is `exec`'d from a **sealed memfd** with no path anywhere
+          #     (`KAYFABE_ISOLATE_BIN` and the `current_exe()` sibling search are deleted —
+          #     this process hands the child a descriptor for `/dev`, and it used to let an
+          #     environment variable choose which binary that was); the child is **cloned into
+          #     its own pid namespace**, which `unshare` after `exec` can never do; and the
+          #     uid/gid map handshake exists at all. Each is argued below.
+          #
+          #     The image (4): `memfd_create` — ONE block for both attempts, because the
+          #       `MFD_EXEC` retry differs by a single flag bit and has the identical
+          #       obligation (a `&CStr` name, nothing else dereferenced); the `from_raw_fd`
+          #       that adopts the result; the write loop, whose bound IS the caller's slice
+          #       length; and `F_ADD_SEALS`, an integer bitmask on a live descriptor.
+          #     The child half of the descriptor contract (2): `adopt_inherited_fd`'s liveness
+          #       probe and its `from_raw_fd`, two blocks because the second's invariant IS
+          #       the first's result.
+          #     The post-`fork` child (2): `child_after_fork` is an `unsafe fn` (its
+          #       precondition — "only in a just-forked child, on a plan built before the
+          #       fork" — is a real soundness contract and belongs in the signature) plus the
+          #       ONE block that discharges it. Deliberately not split per call: the
+          #       async-signal-safety argument is about the whole sequence, and five SAFETY
+          #       comments would each be unable to state the invariant that matters. The two
+          #       helpers it calls (`errno_now`, `report_and_exit`) are ORDINARY functions
+          #       with one block each — they are sound to call anywhere, and marking them
+          #       `unsafe fn` cost two extra relaxations to restate a contract their caller
+          #       already carries.
+          #     The fork (1): `fork` in the plain case, raw `clone` with the C's flag word in
+          #       the namespaced one (`C: nvkvm_isolate.c:124-133`), and the child-side
+          #       dispatch — one block, because "the child never returns from here" is the
+          #       invariant and it spans all three.
+          #     Reaping (2): `kill` and `waitpid`. Two, because the invariant differs: `kill`
+          #       must argue that the pid has NOT been reaped (a recycled pid is a signal to a
+          #       stranger), `waitpid` that it is ours to wait on.
+          #     Parent-side plumbing (3): `dup_above`'s `F_DUPFD_CLOEXEC` and its
+          #       `from_raw_fd` (same two-block shape as `adopt_inherited_fd`, same reason),
+          #       and `geteuid`/`getegid` in `write_child_maps` — read in the PARENT, because
+          #       the map line must name the ids the outer namespace uses.
+          #     ★ `errno_now` and `report_and_exit` account for the remaining 2 blocks.
+          #   sandbox_unsafe.rs (9) — ★★ THE CONTAINMENT, and the reason it is nine and not
+          #     one: every entry point is a syscall whose RETURN VALUE is the security
+          #     property, so each gets its own checked wrapper rather than one block
+          #     spanning the sequence. `unshare_` (mount / user namespace),
+          #     `mount_` (the ONE mount entry point — the private-propagation flip, the
+          #     scratch tmpfs, each device bind AND the read-only reseal all go through it,
+          #     so there is exactly one place a return could be dropped and the C's R4-L1
+          #     audit finding — a silently ignored reseal, i.e. a writable sandbox root —
+          #     cannot recur), `pivot_root_` (no libc wrapper exists on any target),
+          #     `umount_detach`, `outer_ids` (getuid/getgid, which cannot fail and must be
+          #     read BEFORE the uid_map is written), and the capability probe in
+          #     `can_unshare`, which forks a child that calls `unshare` and `_exit` and
+          #     nothing else. Everything else in the sequence is plain
+          #     `std::fs` and needs no relaxation at all — this runs in the child's own
+          #     `main`, not post-`fork`, so the async-signal-safety constraint that shapes
+          #     `spawn_unsafe.rs` does not apply here.
+          #     ★★ 6 -> 9 CLOSING THE PRIVILEGE HALF (#96). The filesystem containment shipped
+          #     around a process that still held `CapEff = 000001ffffffffff` — measured, on
+          #     the host this ships on — which is a boundary with a key taped to it:
+          #     `CAP_SYS_PTRACE` reaches the PARENT's memory, and the parent holds the KVM
+          #     descriptor and all guest RAM. The three new blocks are the C's capability
+          #     drop (`C: src/qemu/nvkvm_isolate.c:66-81`) plus the read-back that makes it
+          #     checkable:
+          #       `prctl_`  — ONE block for every process-control operation, because they
+          #         all have the same shape and the same invariant: `prctl` is variadic and
+          #         each of `PR_SET_NO_NEW_PRIVS`, `PR_SET_DUMPABLE`, `PR_CAPBSET_READ`,
+          #         `PR_CAPBSET_DROP`, `PR_CAP_AMBIENT` and the two `PR_GET_*` reads passes
+          #         its arguments BY VALUE. No memory crosses to the kernel, so there is
+          #         nothing per-call to argue and five copies of one sentence would be five
+          #         places for it to rot.
+          #       `capget_` / `capset_` — two blocks, not one, because the direction is the
+          #         invariant: one has the kernel WRITE into a local array, the other has it
+          #         READ one. Both pass a version-3 header and an array of exactly the two
+          #         `CapData` words that ABI requires — passing fewer is the one way to make
+          #         `capget` write out of bounds, and the array's TYPE is what prevents it.
+          #         `pid: 0` in the header means "this thread", so no other process is
+          #         addressed by either.
+          #     ★ The refusal is on the MEASUREMENT, not on the calls: individual failures
+          #     are tolerated (`PR_CAPBSET_DROP` answers EINVAL past the last capability by
+          #     design), then `privileges()` is read again and one surviving bit returns Err
+          #     — which drops the `DevDir` on the way out, so the isolate never receives a
+          #     device descriptor it would have been holding with privilege. Watched to fire:
+          #     deleting the `PR_CAPBSET_DROP` loop makes `enter` REFUSE, not pass.
+          #
+          # ★★ 60 -> 62 AT WORK-SUBMISSION RUNG 2. Two blocks, both in
+          #    `mapping_unsafe.rs`, both `unsafe impl` and NEITHER a new syscall:
+          #    `Send`/`Sync` for `VolatileRegion`. Itemised because the ratchet is a
+          #    review gate, not a counter:
+          #      - Send  — the same argument as `GuestWindow`'s, one layer in: the type
+          #        owns a process-wide mapping, its fields are immutable after `map`, and
+          #        `munmap` from another thread is valid.
+          #      - Sync  — ★ the one place in this crate where `Sync` is the DEFINITION
+          #        rather than a residual. Every accessor is a `Relaxed` atomic load or
+          #        store of one naturally-aligned word through `&self`; the width trait is
+          #        private with two impls, so there is no bulk accessor and nothing to
+          #        tear. Contrast `GuestWindow::Sync`, which explicitly does NOT claim the
+          #        race away.
+          #    WHY IT IS NEEDED: an RM connection's GPFIFO ring and USERD are mapped once
+          #    and shared by the isolate's whole worker pool, and `RmBackend: Send + Sync`
+          #    is structural (a `Proc` stores the boxed backend inside a `Sync` `Gpu`).
+          #    Without these two the pool would have to be a single worker. No syscall
+          #    surface is added by this rung at all — the mapping primitive it uses
+          #    (`Backing::DeviceFile`) reuses the existing `mmap` block.
+          #
+          # ★★★ 75 -> 77 AT WORK-SUBMISSION RUNG 3 (the doorbell). Two blocks, both inside
+          #    ONE new free function, `mapping_unsafe.rs::release_fence`, and they are two
+          #    rather than one because they are two different architectures' instructions:
+          #      - x86_64 — `core::arch::x86_64::_mm_sfence()`. No operands, no memory
+          #        access, no preconditions beyond SSE, which is baseline for the target.
+          #      - aarch64 — `asm!("dsb st")`. Same: no operands, touches no memory,
+          #        `preserves_flags` only. Deliberately NOT `nomem`, because the entire
+          #        point is that it orders memory.
+          #    WHY IT IS NEEDED, and why nothing safe would do: stores into a
+          #    write-combining mapping are not ordered against each other, and
+          #    `core::sync::atomic::fence(Release)` emits **no instruction at all** on
+          #    x86-64 — it is a compiler barrier. A doorbell rung without a real store
+          #    fence can reach the GPU before the pushbuffer bytes it announces, and the
+          #    engine then executes whatever was in the ring before, silently. This is
+          #    NVIDIA's own `os_flush_cpu_write_combine_buffer`. Watched to fire: with the
+          #    doorbell store removed, R15 reports `sem 0x00000000 GP_GET 0 GP_PUT 1` on
+          #    RTX 3090 / 580.159.04 — i.e. the seam this fence protects is live, not
+          #    hypothetical.
+          #    ★ No syscall surface is added: the fence is one instruction and no fd.
+          #
+          # ★★ 77 -> 86 THE ISOLATE ⇄ VMM DESCRIPTOR CROSSING (task #131). Nine blocks, all
+          #    in the new `scm_unsafe.rs`, and there is no new SHAPE here — every one is a
+          #    `libc` call whose arguments are built in the same function, plus the two
+          #    pointer walks the `cmsg` ABI has no safe expression for. See
+          #    `docs/design/isolate_vmm_fd_crossing.md`.
+          #      `send_with_fds` (3) — the control-message BUILD (`CMSG_FIRSTHDR`/`CMSG_DATA`
+          #        writes into a `[u64; 8]` whose size is asserted against `CMSG_SPACE` on
+          #        the line above the block, not assumed), the `sendmsg` itself, and the
+          #        tail `send` for a stream socket's partial accept. The tail is a plain
+          #        `send` deliberately: re-entering `sendmsg` would attach the descriptors a
+          #        SECOND time.
+          #      `recv_with_fds` (3) — `CMSG_SPACE` (a pure size computation, relaxed only
+          #        because libc declares it unsafe), the `recvmsg`, and the cmsg WALK. Each
+          #        integer is handed to `adopt_fd` on the expression that reads it — so a
+          #        refusal downstream closes it by `Drop` rather than by an arm someone must
+          #        remember to write.
+          #        ⚠ CORRECTED 2026-08-07. This entry used to state the walk's invariant as
+          #        *"the count comes from the kernel's own `cmsg_len`, never from a
+          #        peer-supplied number in the message body"* — true, and not an invariant.
+          #        `cmsg_len` being kernel-written says nothing about whether the payload it
+          #        describes fits the buffer WE own, and `libc::CMSG_FIRSTHDR` does not
+          #        inspect the first header's length at all. The count is now intersected
+          #        with the control region's own end (`scm_unsafe::descriptors_in`), which is
+          #        a fact about our array rather than about the kernel's good behaviour.
+          #      `descriptor_kind` (2) — `fstat` and the matching `assume_init`, split
+          #        because the second is only sound on the first's success path.
+          #      `unsafe_zeroed_msghdr` (1) — `msghdr` has private padding on some targets
+          #        and cannot be built with a struct literal portably; all-zeroes is a valid
+          #        inhabitant of a POD C struct and is the correct "no ancillary data".
+          #    ★ Watched to fire (5 bites, `crates/kayfabe-isolate-host/tests/fd_crossing.rs`):
+          #      removing the kind check fails 3 tests; ignoring `MSG_CTRUNC` fails 2;
+          #      removing the cross-isolate check fails 3; dropping `MSG_CMSG_CLOEXEC` fails
+          #      the exec test; `mem::forget`ing a refused descriptor fails 2.
+          #
+          # ★★ 87 -> 90 THE RE-DERIVATION COMMIT (2026-08-07). Three blocks, itemised in the
+          #    note above `AUDITED` because two of them are a SPLIT rather than growth:
+          #      `scm_unsafe.rs::CMSG_HEADER_BYTES` (1) — `CMSG_LEN(0)` in a const block.
+          #      `mapping_unsafe.rs::Reservation::place` (+2) — the `base.add(start)` hoisted
+          #        out of the `mmap` block so the returned address can be compared against
+          #        it, plus the `munmap` that gives back a mapping a non-conforming kernel
+          #        put somewhere else.
+          #    ★ Watched to fire, both directions:
+          #      - `available` shortened by one byte -> 2 of 18 `fd_crossing` tests RED
+          #        (`the_cap_admits_exactly_its_own_number_and_refuses_one_more` and
+          #        `more_descriptors_than_allowed_is_refused_and_leaks_nothing`), which is
+          #        the correct pair: a 1-byte loss only crosses a descriptor boundary at 4.
+          #      - the `MAP_FIXED` comparison forced to always refuse -> 5+ `mapping_unsafe`
+          #        tests RED, proving the arm is on the live path.
+          #    ⊘ The comparison's OTHER direction (forced to never refuse) is a principled
+          #    NON-BITER and is recorded as one: `MAP_FIXED` either returns the requested
+          #    address or fails, so no test on a conforming kernel can distinguish them. It
+          #    is there because the block's own SAFETY argument cites it, not because a test
+          #    demands it — and a citation of a check that does not exist is what this commit
+          #    is about.
+          #
+          # kayfabe-qemu-raw (0) — L2-Q stage Q0. Nothing yet, and §2.2's "itemise the
+          # second crate's blocks exactly as the first crate's 37 are" is therefore
+          # DEFERRED to stage Q2, which is when there will be blocks to itemise. Q2 owes
+          # this comment that itemisation in the same commit that moves this 0.
+          fail=0
+          for entry in $AUDITED; do
+            c="$(audited_dir "$entry")"; want="${entry##*:}"
+            # `find ... -exec ... +` rather than a glob: a crate with NO *_unsafe.rs files
+            # must count 0, and an unmatched glob would make grep fail the step instead.
+            #
+            # ★★ RECURSIVE, and it was NOT until 2026-07-29 (task #100, the five-axis
+            # seam audit). This loop carried `-maxdepth 1`, and gate B's prune above is
+            # `-not -path "./crates/<c>/src/*"` — whose `*` matches slashes. Between them,
+            # a `*_unsafe.rs` file ONE DIRECTORY DEEPER was invisible to BOTH: gate C
+            # (the naming gate) exempts it because it IS named `*_unsafe.rs`, gate B
+            # prunes it because it is under an audited `src/`, and the ratchet never
+            # looked. MEASURED, not reasoned about: two live relaxations (`unsafe fn` +
+            # an `unsafe {}` block) were compiled into `kayfabe-linux-raw` via
+            # `src/sub/hidden_unsafe.rs` + `pub mod sub;` and the ratchet still printed
+            # `50 (bar: 50)`. The one number this project reviews the unsafe surface by
+            # could be moved by any amount without a single gate firing, by putting the
+            # file in a subdirectory. There is no `-maxdepth` here now, deliberately:
+            # the audit surface is "every `*_unsafe.rs` under the crate", at any depth.
+            # grep's no-match status is a valid zero count (kf-chan's perimeter
+            # contains no unsafe Rust). Preserve I/O errors and find failures.
+            actual=$(find "$c/src" -name '*_unsafe.rs' \
+                       -exec sh -c 'grep -hoE '\''unsafe (\{|fn |impl |trait )|unsafe extern "C" fn [A-Za-z_]'\'' "$@"; rc=$?; test "$rc" -le 1' grep-count {} + \
+                     | wc -l | tr -d ' ')
+            echo "$c: $actual relaxation(s) (bar: $want)"
+            find "$c/src" -name '*_unsafe.rs' \
+              -exec grep -coE 'unsafe (\{|fn |impl |trait )|unsafe extern "C" fn [A-Za-z_]' {} + 2>/dev/null || true
+            [ "$actual" -ne "$want" ] && fail=1
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo ""
+            echo "★ UNSAFE RATCHET MOVED — l1_os_shell.md §4.1, l2_qemu_adapter.md §2.2."
+            echo "A crate's relaxation count differs from its reviewed bar (above)."
+            echo "If you ADDED one: change the number in AUDITED in the same commit, and"
+            echo "say in the message what the new block does and what its SAFETY"
+            echo "invariant is — and add it to the per-file itemisation."
+            echo "If you REMOVED one: change the number too — a ratchet that only catches"
+            echo "growth stops being a count of the audit surface."
+            exit 1
+          fi
+  aarch64:
+    name: aarch64 — core cross-checks (no x86 assumptions)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
+          # ★ aarch64-unknown-uefi (2026-10-03, OWNER_RULINGS §K: the ROM stays arch-neutral and
+          # "CI's aarch64 job also builds the driver for aarch64-unknown-uefi"). The cross-check
+          # below runs `crates/kf-gop-image/build.rs`, which builds firmware/kf-gop for the arch the
+          # workspace is checked for — so this job embeds a real AArch64 driver. UEFI targets link
+          # with rust-lld, which ships with the toolchain: no linker to install, no stub needed.
+          targets: aarch64-unknown-linux-gnu, aarch64-unknown-uefi
+      - uses: Swatinem/rust-cache@v2
+      # ★★ KAYFABE_ISOLATE_IMAGE_STUB=1 — the ONE reviewed opt-out from embedding a real
+      # isolate image, and this job is the only place it may be used. This job type-CHECKS
+      # for a triple it has neither a musl standard library nor a linker for, and it runs no
+      # test. It is not a soft-fail: the build script emits an empty image and warns, and
+      # `the_embedded_image_is_a_static_elf` turns any *test* run of such a build red at the
+      # first assertion, so an image-less build cannot reach the gate that matters.
+      - name: Cross-check the workspace for aarch64 (arch-portability gate; no linker needed)
+        env:
+          KAYFABE_ISOLATE_IMAGE_STUB: "1"
+        run: cargo check --workspace --target aarch64-unknown-linux-gnu
+      # ★ The boot-display GOP driver for aarch64-unknown-uefi, on its own (OWNER_RULINGS §K), so
+      # x86-isms cannot creep in: the release driver builds, Clippy denies warnings, kf3's PE check
+      # accepts it as AArch64 (machine 0xaa64 — the ROM's EfiMachineType is copied from it), and the
+      # two x86-only pieces (the `debugcon` port output and the stand-in's test app) refuse to build
+      # BY NAME rather than compiling into something that silently reports nothing.
+      - name: kf-gop for aarch64-unknown-uefi (driver builds; x86-only parts refuse by name)
+        run: |
+          set -euo pipefail
+          m=firmware/kf-gop/Cargo.toml
+          cargo build --locked --release --target aarch64-unknown-uefi --bin kf-gop --manifest-path "$m"
+          cargo clippy --locked --release --target aarch64-unknown-uefi --bin kf-gop --manifest-path "$m" -- -D warnings
+          efi=firmware/kf-gop/target/aarch64-unknown-uefi/release/kf-gop.efi
+          cargo run -q --locked -p kf-oprom --bin kf-oprom -- pe "$efi" | tee pe.txt
+          grep -q 'machine=0xaa64 subsystem=11' pe.txt || { echo "★ the aarch64 driver is not an AArch64 boot-service driver"; exit 1; }
+          for bin in "--bin kf-gop --features debugcon" "--bin kf-gop-test"; do
+            # shellcheck disable=SC2086
+            if cargo build --locked --release --target aarch64-unknown-uefi $bin --manifest-path "$m" \
+                 --target-dir firmware/kf-gop/target/refuse > refuse.log 2>&1; then
+              echo "★ '$bin' built for aarch64-unknown-uefi: it must refuse by name (x86 port I/O)"; exit 1
+            fi
+            grep -q 'x86 I/O port 0x402' refuse.log || { cat refuse.log; echo "★ '$bin' failed, but not with its named refusal"; exit 1; }
+            echo "refused by name for aarch64: $bin"
+          done
+
+
+  # ★ The boot-display GOP (docs/design/V3_DISPLAY.md §4.11), added 2026-10-03. firmware/kf-gop is
+  # GUEST code — a UEFI boot-service driver that runs inside OVMF — so it is outside the cargo
+  # workspace. The driver kf3 serves is built from it by `crates/kf-gop-image/build.rs` during every
+  # workspace build (OWNER_RULINGS §K: no compiled binary in the repo; rust-toolchain.toml lists
+  # x86_64-unknown-uefi). This job works on the firmware itself: both build flavours, its host tests
+  # and lints, kf3's PE check, and the local stand-in. The containment rules for its unsafe code run
+  # in the `stable` job (gate B, the ratchet's `firmware/kf-gop` entry, the ABI-quarantine firmware
+  # arm); its aarch64 build runs in the `aarch64` job.
+  # ⊘ CORRECTED 2026-10-03 (v3-gop): until §K landed this job also compared a committed
+  # firmware/kf-gop/kf-gop.efi with the build, and rust-toolchain.toml did not list the UEFI target.
+  firmware:
+    name: firmware — kf-gop (x86_64-unknown-uefi), kf3's PE check, size, local stand-in
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
+          components: rustfmt, clippy
+          targets: x86_64-unknown-uefi
+      # ★ OWNER_RULINGS §K: nothing compiled is committed. A tracked PE (`MZ` header) or `.efi` under
+      # the source tree fails here — the committed kf-gop.efi this repository carried until 2026-10-03
+      # is the instance this guards against.
+      - name: No compiled binary is committed (OWNER_RULINGS §K)
+        # ⊘ WIDENED 2026-10-03 (the review of v3-gop): this flagged only a `.efi` suffix or an `MZ`
+        # header, so an ELF, a packed option ROM (55 AA — exactly what `kf-oprom pack` emits), an
+        # object or an archive passed. §K says no compiled binary at all: every header below, and the
+        # suffixes of build output, outside archive/.
+        run: |
+          python3 - <<'EOF'
+          import subprocess, sys
+          files = subprocess.run(["git", "ls-files", "-z"], capture_output=True, check=True).stdout.split(b"\0")
+          SUFFIXES = (".efi", ".rom", ".o", ".a", ".so", ".rlib", ".rmeta", ".dll", ".exe", ".dylib",
+                      ".obj", ".lib", ".pdb", ".wasm", ".fd", ".ko", ".elf")
+          MAGIC = {
+              b"MZ": "PE/COFF (MZ)",
+              b"\x7fELF": "ELF",
+              b"\x55\xaa": "PCI option ROM (55 AA)",
+              b"!<arch>\n": "ar archive (.a / .rlib)",
+              b"\xcf\xfa\xed\xfe": "Mach-O",
+              b"\xce\xfa\xed\xfe": "Mach-O",
+              b"\xfe\xed\xfa\xcf": "Mach-O",
+              b"\xca\xfe\xba\xbe": "Mach-O fat / Java class",
+              b"\x00asm": "WebAssembly",
+          }
+          bad = []
+          for f in filter(None, files):
+              name = f.decode()
+              if name.startswith("archive/"):
+                  continue
+              try:
+                  with open(f, "rb") as h:
+                      head = h.read(8)
+              except (IsADirectoryError, FileNotFoundError):
+                  continue
+              why = [w for m, w in MAGIC.items() if head.startswith(m)]
+              if name.lower().endswith(SUFFIXES):
+                  why.append("suffix ." + name.rsplit(".", 1)[-1])
+              if why:
+                  bad.append(f"{name} ({', '.join(why)})")
+          for b in bad:
+              print(f"★ tracked compiled binary: {b}")
+          print(f"tracked files checked: {sum(1 for f in files if f)}; compiled binaries: {len(bad)}")
+          sys.exit(1 if bad else 0)
+          EOF
+      - name: Build the driver and the test app (release, and the debugcon test build)
+        run: |
+          cargo build --locked --release --target x86_64-unknown-uefi --manifest-path firmware/kf-gop/Cargo.toml
+          cargo build --locked --release --target x86_64-unknown-uefi --features debugcon \
+            --manifest-path firmware/kf-gop/Cargo.toml --target-dir firmware/kf-gop/target/debugcon
+      # ★ The driver kf3 embeds is THIS source's build, and the same bytes wherever it is built:
+      # `crates/kf-gop-image/build.rs` builds it in a nested cargo under OUT_DIR with a scrubbed
+      # environment, this job builds it standalone in another target directory, and the two must be
+      # identical. That is the property one future Secure Boot signature rests on (§K: "the driver is
+      # byte-identical on every host"): firmware/kf-gop/build.rs links with /Brepro and /DEBUG:NONE.
+      # (Until 2026-10-03 this step compared a committed kf-gop.efi instead; §K withdrew it.)
+      - name: The embedded driver is the standalone build, byte for byte
+        run: |
+          set -euo pipefail
+          cargo build --locked -p kf-gop-image --target-dir target/gop-image
+          embedded=$(find target/gop-image/debug/build -path '*kf-gop-image-*/out/kf-gop.efi')
+          [ "$(echo "$embedded" | wc -l)" -eq 1 ] || { echo "★ expected one embedded driver, found: $embedded"; exit 1; }
+          built=firmware/kf-gop/target/x86_64-unknown-uefi/release/kf-gop.efi
+          if ! cmp "$embedded" "$built"; then
+            echo "★ the driver kf-gop-image embeds differs from a standalone build of the same source"
+            echo "  embedded sha256 $(sha256sum < "$embedded" | cut -c1-64)"
+            echo "  built    sha256 $(sha256sum < "$built" | cut -c1-64)"
+            exit 1
+          fi
+          echo "kf-gop.efi reproduced across target directories: $(sha256sum < "$built" | cut -c1-64)"
+      - name: Host tests of the firmware's safe library
+        run: cargo test --locked --lib --target x86_64-unknown-linux-gnu --manifest-path firmware/kf-gop/Cargo.toml
+      - name: Clippy (warnings are errors) and rustfmt, both build flavours
+        run: |
+          m=firmware/kf-gop/Cargo.toml
+          cargo clippy --locked --release --target x86_64-unknown-uefi --bins --manifest-path "$m" -- -D warnings
+          cargo clippy --locked --release --target x86_64-unknown-uefi --bins --features debugcon \
+            --manifest-path "$m" --target-dir firmware/kf-gop/target/debugcon -- -D warnings
+          cargo clippy --locked --lib --tests --target x86_64-unknown-linux-gnu --manifest-path "$m" -- -D warnings
+          rustfmt --edition 2024 --check $(find firmware -name '*.rs' -not -path '*/target/*')
+      # kf3 serves only a PE that `kf_oprom::pe::check` accepts: x86-64 or AArch64 (the ROM's
+      # EfiMachineType is the PE's own), subsystem 11 (an EFI boot-service driver — EDK2 skips an
+      # application inside a ROM), and the ABI marker for the descriptor version kf-oprom encodes.
+      # The release build must also contain no port I/O.
+      - name: kf3 accepts the release driver; record its size
+        run: |
+          set -euo pipefail
+          efi=firmware/kf-gop/target/x86_64-unknown-uefi/release/kf-gop.efi   # == the embedded driver (step above)
+          cargo run -q --locked -p kf-oprom --bin kf-oprom -- pe "$efi" | tee pe.txt
+          cargo run -q --locked -p kf-oprom --bin kf-oprom -- pe firmware/kf-gop/target/debugcon/x86_64-unknown-uefi/release/kf-gop.efi
+          io=$(objdump -d "$efi" | grep -cE '\s(in|out)\s' || true)
+          if [ "$io" -ne 0 ]; then echo "★ the release driver contains $io port I/O instruction(s)"; exit 1; fi
+          {
+            echo "### kf-gop.efi (release, x86_64-unknown-uefi; what kf-gop-image embeds)"
+            echo "- bytes: $(stat -c %s "$efi")"
+            echo "- sha256: \`$(sha256sum "$efi" | cut -c1-64)\`"
+            echo "- \`$(head -1 pe.txt)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "KF_GOP_EFI_BYTES=$(stat -c %s "$efi")"
+      # ★ The local stand-in (scripts/display/gop_standin.sh): the same driver, packed by kf-oprom
+      # for QEMU's ati-vga, booted under OVMF — every GOP check, the framebuffer read back
+      # byte-exact, the refusals by name, Linux's simpledrm/BOOTFB/boot_vga, and the Secure Boot
+      # observations. GATING: an arm that fails fails the job. KVM when the runner exposes it,
+      # TCG otherwise (slower, same assertions). A Linux arm skips, saying why, when the runner's
+      # kernel has no built-in simpledrm.
+      - name: Install QEMU, OVMF and the stand-in's tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q qemu-system-x86 ovmf busybox-static sbsigntool cpio
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+          fi
+          ls -l /dev/kvm || echo "no /dev/kvm: the stand-in runs under TCG"
+          sudo cp "/boot/vmlinuz-$(uname -r)" "$RUNNER_TEMP/vmlinuz" && sudo chmod 0644 "$RUNNER_TEMP/vmlinuz"
+          sudo cp "/boot/config-$(uname -r)" "$RUNNER_TEMP/kconfig" && sudo chmod 0644 "$RUNNER_TEMP/kconfig" || true
+      - name: Stand-in (scripts/display/gop_standin.sh)
+        env:
+          KERNEL: ${{ runner.temp }}/vmlinuz
+          KERNEL_CONFIG: ${{ runner.temp }}/kconfig
+        run: bash scripts/display/gop_standin.sh
+
+  slow:
+    name: slow — full suite with the soaks (KAYFABE_SLOW=1)
+    # Nightly cron + manual dispatch only — never the push path (the push gate's
+    # job is to stay fast; this job's job is to make sure the soaks still run
+    # WITHOUT a human remembering them).
+    if: github.event.schedule == '43 2 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
+          targets: x86_64-unknown-linux-musl, x86_64-unknown-uefi   # the embedded isolate image and GOP driver; see the stable job
+      - uses: Swatinem/rust-cache@v2
+      - name: Test with the slow gate open (pushbuffer proptest fuzz + 16-thread stress soak)
+        run: |
+          python3 scripts/ci/runner_namespaces.py
+          KAYFABE_SLOW=1 cargo test --workspace --no-fail-fast
+      - name: Remove the CI-only namespace profile
+        if: always()
+        run: python3 scripts/ci/runner_namespaces.py --remove

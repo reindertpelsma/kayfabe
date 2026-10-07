@@ -1,0 +1,80 @@
+opened device `NVIDIA DRM driver` on driver `nvidia-drm` (version 0.0.0 at 20160202)
+CRTCs:
+id	fb	pos	size
+60	128	(0,0)	(1920x1080)
+  #0 1920x1080 29.94 1920 1968 2000 2080 1080 1083 1088 1096 68250 flags: phsync, nvsync; type: preferred
+  props:
+	24 VRR_ENABLED:
+		flags: range
+		values: 0 1
+		value: 0
+	45 NV_CRTC_REGAMMA_TF:
+		flags: enum
+		enums: Default=0 Linear=1 PQ (Perceptual Quantizer)=2
+		value: 0
+	48 NV_CRTC_REGAMMA_DIVISOR:
+		flags: range
+		values: 4294967296 9223372036854775807
+		value: 4294967296
+	46 NV_CRTC_REGAMMA_LUT:
+		flags: blob
+		blobs:
+
+		value:
+	47 NV_CRTC_REGAMMA_LUT_SIZE:
+		flags: immutable range
+		values: 0 4294967295
+		value: 1024
+	25 DEGAMMA_LUT:
+		flags: blob
+		blobs:
+
+		value:
+	26 DEGAMMA_LUT_SIZE:
+		flags: immutable range
+		values: 0 4294967295
+		value: 1024
+	27 CTM:
+		flags: blob
+		blobs:
+
+		value:
+	28 GAMMA_LUT:
+		flags: blob
+		blobs:
+
+		value:
+	29 GAMMA_LUT_SIZE:
+		flags: immutable range
+		values: 0 4294967295
+		value: 1024
+79	0	(0,0)	(0x0)
+  #0  -nan 0 0 0 0 0 0 0 0 0 flags: ; type: 
+  props:
+	24 VRR_ENABLED:
+		flags: range
+		values: 0 1
+		value: 0
+	45 NV_CRTC_REGAMMA_TF:
+		flags: enum
+		enums: Default=0 Linear=1 PQ (Perceptual Quantizer)=2
+		value: 0
+	48 NV_CRTC_REGAMMA_DIVISOR:
+		flags: range
+		values: 4294967296 9223372036854775807
+		value: 4294967296
+	46 NV_CRTC_REGAMMA_LUT:
+		flags: blob
+		blobs:
+
+		value:
+	47 NV_CRTC_REGAMMA_LUT_SIZE:
+		flags: immutable range
+		values: 0 4294967295
+		value: 1024
+	25 DEGAMMA_LUT:
+		flags: blob
+		blobs:
+
+		value:
+	26 DEGAMMA_LUT_SIZE:

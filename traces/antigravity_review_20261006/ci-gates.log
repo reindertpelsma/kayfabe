@@ -1,0 +1,124 @@
+
+=== Allow user namespaces for this CI checkout's test executables
+CI namespace profile: not a GitHub runner; host policy unchanged
+    ok
+
+=== Remove the CI-only namespace profile
+CI namespace profile: not a GitHub runner; host policy unchanged
+    ok
+
+=== v3 dependency isolation and CI guard self-tests
+V3_ISOLATION crates=21 violations=0
+frozen prototype: files=37 changed=0
+...................................
+----------------------------------------------------------------------
+Ran 35 tests in 8.818s
+
+OK
+QEMU_IDENTITY_SELFTEST PASS
+SELFTEST clean: pass (expected)
+SELFTEST admin: fail (expected)
+SELFTEST noline: fail (expected)
+SELFTEST refused: fail (expected)
+SELFTEST noposture: fail (expected)
+SELFTEST cudaheld: fail (expected)
+SELFTEST cudarefused: fail (expected)
+SELFTEST nogates: fail (expected)
+SELFTEST gateadmin: fail (expected)
+SELFTEST missingarm: fail (expected)
+SELFTEST shortboard: fail (expected)
+BIRTH_CENSUS_SELFTEST cases=11 wrong=0
+    ok
+
+=== Hexagonal boundary gate (no OS vocabulary in the pure logic crates)
+    ok
+
+=== VMM-vocabulary gate (no hypervisor API vocabulary in the core or the shell)
+    ok
+
+=== Generation-name gate (no concrete chip or driver version in the logic crates)
+    ok
+
+=== ABI-quarantine gate (Axis A — a C layout is quarantined, or provably own-wire)
+    ok
+
+=== Unsafe-surface gate (every unsafe file is named *_unsafe.rs, so `ls` enumerates it)
+    ok
+
+=== Host-pointer gate (no *mut/*const/NonNull/transmute outside *_unsafe.rs)
+    ok
+
+=== Bridge-exclusivity gate (one crate names both RpcCommand and RmEvent)
+    ok
+
+=== ogkm-version-tag gate (every NVIDIA citation names its tree)
+untagged doc citations: 172 (bar: 172)
+    ok
+
+=== Claim-ledger gate (a measurement word names its run, not a source read)
+claims: existing-debt=3150 new=0 resolved=4
+    ok
+
+=== Section-number gate (no two design-doc sections share a number)
+SECTION_GATE files=73 offenders=0
+    ok
+
+=== Unsafe-containment gates (A: forbid inheritance, B: the named crates, ratchet)
+crates/kayfabe-linux-raw: 127 relaxation(s) (bar: 127)
+crates/kayfabe-linux-raw/src/host_fd_unsafe.rs:9
+crates/kayfabe-linux-raw/src/scm_unsafe.rs:10
+crates/kayfabe-linux-raw/src/spawn_unsafe.rs:17
+crates/kayfabe-linux-raw/src/window_unsafe.rs:8
+crates/kayfabe-linux-raw/src/epoll_unsafe.rs:3
+crates/kayfabe-linux-raw/src/chardev_unsafe.rs:4
+crates/kayfabe-linux-raw/src/mapping_unsafe.rs:17
+crates/kayfabe-linux-raw/src/vcpu_unsafe.rs:8
+crates/kayfabe-linux-raw/src/sandbox_unsafe.rs:9
+crates/kayfabe-linux-raw/src/sysconf_unsafe.rs:1
+crates/kayfabe-linux-raw/src/signal_unsafe.rs:25
+crates/kayfabe-linux-raw/src/arena_unsafe.rs:6
+crates/kayfabe-linux-raw/src/kvm_unsafe.rs:4
+crates/kayfabe-linux-raw/src/affinity_unsafe.rs:6
+crates/kayfabe-cuda: 43 relaxation(s) (bar: 43)
+43
+crates/kf-linux-raw: 97 relaxation(s) (bar: 97)
+crates/kf-linux-raw/src/host_fd_unsafe.rs:14
+crates/kf-linux-raw/src/drm_unsafe.rs:4
+crates/kf-linux-raw/src/capability_unsafe.rs:2
+crates/kf-linux-raw/src/window_unsafe.rs:9
+crates/kf-linux-raw/src/epoll_unsafe.rs:3
+crates/kf-linux-raw/src/chardev_unsafe.rs:4
+crates/kf-linux-raw/src/mapping_unsafe.rs:24
+crates/kf-linux-raw/src/vcpu_unsafe.rs:8
+crates/kf-linux-raw/src/sysconf_unsafe.rs:1
+crates/kf-linux-raw/src/signal_unsafe.rs:6
+crates/kf-linux-raw/src/kvm_unsafe.rs:6
+crates/kf-linux-raw/src/affinity_unsafe.rs:6
+crates/kf-linux-raw/src/unixsock_unsafe.rs:10
+crates/kf-cuda: 78 relaxation(s) (bar: 78)
+78
+crates/kf-qemu: 61 relaxation(s) (bar: 61)
+crates/kf-qemu/src/raw_unsafe.rs:22
+crates/kf-qemu/src/ffi_unsafe.rs:39
+firmware/kf-gop: 78 relaxation(s) (bar: 78)
+firmware/kf-gop/src/bin/kf-gop-test/check_unsafe.rs:22
+firmware/kf-gop/src/driver_unsafe.rs:32
+firmware/kf-gop/src/efi_unsafe.rs:23
+firmware/kf-gop/src/port_unsafe.rs:1
+crates/kf-chan: 0 relaxation(s) (bar: 0)
+0
+    ok
+
+  deferred (needs --all, it reads the test log): Test (OS-free configuration — KVM forced absent)
+  deferred (needs --all, it reads the test log): KVM-gate reached-count (floor, not an exact match)
+  deferred (needs --all, it reads the test log): SANDBOX-gate reached-count (floor, not an exact match)
+  deferred (needs --all, it reads the test log): CAP-gate — the live capability tests, reached unprivileged and run as root
+  deferred (needs --all, it reads the test log): UDMABUF-gate reached-count (floor, not an exact match)
+ALL GATES CLEAN (14 steps, floor 13 for default mode)
+⊘ NOT RUN by this mode (3) — the green above says NOTHING about these:
+    · Build
+    · Clippy (errors and new warning sites fail)
+    · Format check
+  oracle census (from /tmp/kayfabe-test.Ere5iw.log):
+    VBIOS-ORACLE             RAN=0    SKIPPED=0
+★ Before pushing a CI change, run with --all — it is the only mode that covers every step.

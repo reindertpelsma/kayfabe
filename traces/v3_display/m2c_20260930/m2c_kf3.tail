@@ -1,0 +1,3 @@
+[2/3] Compiling C object libsystem.a.p/hw_misc_kf3_kf3.c.o
+[3/3] Linking target qemu-system-x86_64
+KF3_BUILT /workspace/bench/kf3-bins/945da292/qemu-system-x86_64 rev=945da292 mtime=2026-09-30 11:16:24.587770153 +0000 (shared build dir /workspace/bench/qemu-build-kf3)

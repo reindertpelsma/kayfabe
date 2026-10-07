@@ -1,0 +1,19 @@
+Source: tools/probes/kvm_ioeventfd_readonly.c
+Environment: Linux 7.0.0-34-generic x86_64 GNU/Linux; systemd-detect-virt=kvm
+Compiler: cc (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+Physical benchmark host: SSH root@172.22.1.20 -> Network is unreachable
+GPU throughput/latency: UNMEASURED
+
+Optimized: cc -O2 -Wall -Wextra -Werror; timeout 10; exit=0
+CASE inline PASS userspace_mmio=3 event_a=0 event_b=0 readback=decafbad
+CASE datamatch PASS userspace_mmio=1 event_a=1 event_b=1 readback=decafbad
+CASE deassigned-a PASS userspace_mmio=2 event_a=0 event_b=1 readback=decafbad
+CASE reassigned-a PASS userspace_mmio=1 event_a=1 event_b=1 readback=decafbad
+KVM_IOEVENTFD_READONLY=PASS cases=4 gpu_performance=UNMEASURED
+
+Sanitized: cc -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined; timeout 10; exit=0
+CASE inline PASS userspace_mmio=3 event_a=0 event_b=0 readback=decafbad
+CASE datamatch PASS userspace_mmio=1 event_a=1 event_b=1 readback=decafbad
+CASE deassigned-a PASS userspace_mmio=2 event_a=0 event_b=1 readback=decafbad
+CASE reassigned-a PASS userspace_mmio=1 event_a=1 event_b=1 readback=decafbad
+KVM_IOEVENTFD_READONLY=PASS cases=4 gpu_performance=UNMEASURED

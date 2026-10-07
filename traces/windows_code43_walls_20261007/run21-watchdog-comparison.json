@@ -1,0 +1,1256 @@
+{
+  "schema": "kayfabe-labelled-watchdog-series/1",
+  "driver_sha256": "31c79cce80b573e21647ace8d1a2b65697f992e7f86196f89e30af477b1bd47c",
+  "reference_label": "L",
+  "reference_raw_matches_independent_kd": true,
+  "cases": [
+    {
+      "label": "L",
+      "caller_supplied_revision": "b431aeaf",
+      "dump_bytes": 343710,
+      "dump_sha256": "6d4739d7b94efbf7560985f8f5796c6d72707874246ada6b4e8578fbec18f12b",
+      "nvcd": {
+        "offset": 269720,
+        "declared_bytes": 73991,
+        "available_bytes": 73990,
+        "missing_bytes": 1,
+        "version": "e3d5dc6e-db7d-4e28-b09e-f59a942f4a24",
+        "checksum": 11,
+        "checksum_valid": null,
+        "truncated_record_header_bytes": 3
+      },
+      "assertion_count": 24,
+      "module_record_file_offset": "0x154a8",
+      "module_name_file_offset": "0x16b3c",
+      "pe_identity": {
+        "entry": "0x6b2b0e0",
+        "size": "0x6b60000",
+        "checksum": "0x6962791",
+        "timestamp": "0x6885d1fb"
+      },
+      "bugcheck_code": "0x1b0",
+      "bugcheck_parameters_1_to_3": [
+        "0x2",
+        "0xffffffffc000009a",
+        "0x100"
+      ]
+    },
+    {
+      "label": "Deferred18",
+      "caller_supplied_revision": "c34d8dac7f6c52cf1db638f5f7b19e65b087f6bf",
+      "dump_bytes": 343891,
+      "dump_sha256": "f62f853076977d8837e75fabf09a5410c42baa5dc69133f4ced3e136f842aa48",
+      "nvcd": {
+        "offset": 269720,
+        "declared_bytes": 74172,
+        "available_bytes": 74171,
+        "missing_bytes": 1,
+        "version": "e3d5dc6e-db7d-4e28-b09e-f59a942f4a24",
+        "checksum": 73,
+        "checksum_valid": null,
+        "truncated_record_header_bytes": 3
+      },
+      "assertion_count": 24,
+      "module_record_file_offset": "0x154a8",
+      "module_name_file_offset": "0x16b3c",
+      "pe_identity": {
+        "entry": "0x6b2b0e0",
+        "size": "0x6b60000",
+        "checksum": "0x6962791",
+        "timestamp": "0x6885d1fb"
+      },
+      "bugcheck_code": "0x1b0",
+      "bugcheck_parameters_1_to_3": [
+        "0x2",
+        "0xffffffffc000009a",
+        "0x100"
+      ]
+    },
+    {
+      "label": "Timeslice19",
+      "caller_supplied_revision": "f6aa9d2e0e16b08873f7e7fb0272fc45d2ddaced",
+      "dump_bytes": 343863,
+      "dump_sha256": "25a9c8f0515c9f67e6fb546bfffa94e935ea71e74fb7c33c5af78e23ef45f050",
+      "nvcd": {
+        "offset": 269720,
+        "declared_bytes": 74144,
+        "available_bytes": 74143,
+        "missing_bytes": 1,
+        "version": "e3d5dc6e-db7d-4e28-b09e-f59a942f4a24",
+        "checksum": 193,
+        "checksum_valid": null,
+        "truncated_record_header_bytes": 3
+      },
+      "assertion_count": 24,
+      "module_record_file_offset": "0x154a8",
+      "module_name_file_offset": "0x16b3c",
+      "pe_identity": {
+        "entry": "0x6b2b0e0",
+        "size": "0x6b60000",
+        "checksum": "0x6962791",
+        "timestamp": "0x6885d1fb"
+      },
+      "bugcheck_code": "0x1b0",
+      "bugcheck_parameters_1_to_3": [
+        "0x2",
+        "0xffffffffc000009a",
+        "0x100"
+      ]
+    },
+    {
+      "label": "KernelGR21",
+      "caller_supplied_revision": "3fd6fc39513edf8581dfba16f5887d0d4d7a0b36",
+      "dump_bytes": 343935,
+      "dump_sha256": "8762ae6eb1caef9a1ee7d4f1860b07aaa97fdb96d007027bbd173efe661816cc",
+      "nvcd": {
+        "offset": 269720,
+        "declared_bytes": 74216,
+        "available_bytes": 74215,
+        "missing_bytes": 1,
+        "version": "e3d5dc6e-db7d-4e28-b09e-f59a942f4a24",
+        "checksum": 99,
+        "checksum_valid": null,
+        "truncated_record_header_bytes": 3
+      },
+      "assertion_count": 24,
+      "module_record_file_offset": "0x154a8",
+      "module_name_file_offset": "0x16b3c",
+      "pe_identity": {
+        "entry": "0x6b2b0e0",
+        "size": "0x6b60000",
+        "checksum": "0x6962791",
+        "timestamp": "0x6885d1fb"
+      },
+      "bugcheck_code": "0x1b0",
+      "bugcheck_parameters_1_to_3": [
+        "0x2",
+        "0xffffffffc000009a",
+        "0x100"
+      ]
+    }
+  ],
+  "incremental_comparisons": [
+    {
+      "previous": "L",
+      "current": "Deferred18",
+      "previous_assertions": 24,
+      "current_assertions": 24,
+      "identical_prefix": 17,
+      "identical_suffix_after_prefix": 0,
+      "previous_changed": [
+        {
+          "hint_rva": [
+            "0x16e97f4"
+          ],
+          "stack_rvas": [
+            "0x16e97f4",
+            "0x16b4f2a",
+            "0x1615220",
+            "0x1614aed",
+            "0x1959907",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x16b4f33"
+          ],
+          "stack_rvas": [
+            "0x16b4f33",
+            "0x1615220",
+            "0x1614aed",
+            "0x1959907",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x1615268"
+          ],
+          "stack_rvas": [
+            "0x1615268",
+            "0x1614aed",
+            "0x1959907",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x1615285"
+          ],
+          "stack_rvas": [
+            "0x1615285",
+            "0x1614aed",
+            "0x1959907",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x1614af6"
+          ],
+          "stack_rvas": [
+            "0x1614af6",
+            "0x1959907",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x1959910"
+          ],
+          "stack_rvas": [
+            "0x1959910",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x1965bd1"
+          ],
+          "stack_rvas": [
+            "0x1965bd1",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        }
+      ],
+      "current_changed": [
+        {
+          "hint_rva": [
+            "0x1a103e6"
+          ],
+          "stack_rvas": [
+            "0x1a103e6",
+            "0x169d057",
+            "0x16b50d1",
+            "0x1615220",
+            "0x1614aed",
+            "0x1959907",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x1961253"
+          ],
+          "stack_rvas": [
+            "0x1961253",
+            "0x19580c2",
+            "0x1959a6a",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x1959a89"
+          ],
+          "stack_rvas": [
+            "0x1959a89",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0xe37654"
+          ],
+          "stack_rvas": [
+            "0xe37654",
+            "0x1a36ec4",
+            "0x1957001",
+            "0x1959d96",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0xe38498"
+          ],
+          "stack_rvas": [
+            "0xe38498",
+            "0x1a36ef6",
+            "0x1957001",
+            "0x1959d96",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0xe37654"
+          ],
+          "stack_rvas": [
+            "0xe37654",
+            "0x1a36ec4",
+            "0x195729b",
+            "0x1959d96",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x304308"
+          ],
+          "stack_rvas": [
+            "0x304308",
+            "0x1aa76f",
+            "0x477c9a",
+            "0x478298",
+            "0x17f5170",
+            "0x17f4d65",
+            "0xfd0dc",
+            "0x27eac7",
+            "0x284674",
+            "0x27ff17"
+          ],
+          "level": [
+            86
+          ]
+        }
+      ]
+    },
+    {
+      "previous": "Deferred18",
+      "current": "Timeslice19",
+      "previous_assertions": 24,
+      "current_assertions": 24,
+      "identical_prefix": 21,
+      "identical_suffix_after_prefix": 0,
+      "previous_changed": [
+        {
+          "hint_rva": [
+            "0xe38498"
+          ],
+          "stack_rvas": [
+            "0xe38498",
+            "0x1a36ef6",
+            "0x1957001",
+            "0x1959d96",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0xe37654"
+          ],
+          "stack_rvas": [
+            "0xe37654",
+            "0x1a36ec4",
+            "0x195729b",
+            "0x1959d96",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x304308"
+          ],
+          "stack_rvas": [
+            "0x304308",
+            "0x1aa76f",
+            "0x477c9a",
+            "0x478298",
+            "0x17f5170",
+            "0x17f4d65",
+            "0xfd0dc",
+            "0x27eac7",
+            "0x284674",
+            "0x27ff17"
+          ],
+          "level": [
+            86
+          ]
+        }
+      ],
+      "current_changed": [
+        {
+          "hint_rva": [
+            "0xe37654"
+          ],
+          "stack_rvas": [
+            "0xe37654",
+            "0x1a36ec4",
+            "0x195729b",
+            "0x1959d96",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x304308"
+          ],
+          "stack_rvas": [
+            "0x304308",
+            "0x1aa76f",
+            "0x477c9a",
+            "0x478298",
+            "0x17f5170",
+            "0x17f4d65",
+            "0xfd0dc",
+            "0x27eac7",
+            "0x284674",
+            "0x27ff17"
+          ],
+          "level": [
+            86
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x1a1267d"
+          ],
+          "stack_rvas": [
+            "0x1a1267d",
+            "0x1a108f1",
+            "0x198d1a2",
+            "0x1a38a09",
+            "0x1a370c7",
+            "0x1a36ede",
+            "0x195729b",
+            "0x1959d96",
+            "0x1965547",
+            "0x1a346dd"
+          ],
+          "level": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "previous": "Timeslice19",
+      "current": "KernelGR21",
+      "previous_assertions": 24,
+      "current_assertions": 24,
+      "identical_prefix": 7,
+      "identical_suffix_after_prefix": 0,
+      "previous_changed": [
+        {
+          "hint_rva": [
+            "0x1abb0a"
+          ],
+          "stack_rvas": [
+            "0x1abb0a",
+            "0x1a99b6",
+            "0x39d4ea",
+            "0x3d53e1",
+            "0x10ef29",
+            "0x10ebd1",
+            "0x142ca8",
+            "0xe8c6c",
+            "0xe8893",
+            "0x19ec440"
+          ],
+          "level": [
+            86
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x62115c"
+          ],
+          "stack_rvas": [
+            "0x62115c",
+            "0x4d3c86",
+            "0x4cdf96",
+            "0x17381e",
+            "0xfd121",
+            "0x286475",
+            "0x26b8d4",
+            "0x25ffb7",
+            "0x25fb79",
+            "0x27f4af"
+          ],
+          "level": [
+            0
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x39d558"
+          ],
+          "stack_rvas": [
+            "0x39d558",
+            "0x3d53e1",
+            "0x10ef29",
+            "0x10ebd1",
+            "0x142ca8",
+            "0xe8c6c",
+            "0xe8893",
+            "0x19ec440",
+            "0x19652c7",
+            "0x1a346dd"
+          ],
+          "level": [
+            0
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x1a1267d"
+          ],
+          "stack_rvas": [
+            "0x1a1267d",
+            "0x1a10583",
+            "0x16158e2",
+            "0x1959373",
+            "0x19ec813",
+            "0x19652c7",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x19fe082"
+          ],
+          "stack_rvas": [
+            "0x19fe082",
+            "0x19ec93f",
+            "0x19652c7",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x19460d2"
+          ],
+          "stack_rvas": [
+            "0x19460d2",
+            "0x19eb418",
+            "0x19ecbef",
+            "0x19652c7",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x1947d1c"
+          ],
+          "stack_rvas": [
+            "0x1947d1c",
+            "0x1946198",
+            "0x19eb418",
+            "0x19ecbef",
+            "0x19652c7",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x1769a29"
+          ],
+          "stack_rvas": [
+            "0x1769a29",
+            "0x19eb7e9",
+            "0x1965389",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x17884de"
+          ],
+          "stack_rvas": [
+            "0x17884de",
+            "0x1769bb7",
+            "0x19eb7e9",
+            "0x1965389",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x304308"
+          ],
+          "stack_rvas": [
+            "0x304308",
+            "0x303ad9",
+            "0x1af7b4",
+            "0x3fb47a",
+            "0x25e97c",
+            "0x26e0da",
+            "0x26e453",
+            "0xdc16c",
+            "0xe22829",
+            "0xe220c5"
+          ],
+          "level": [
+            86
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x1a103e6"
+          ],
+          "stack_rvas": [
+            "0x1a103e6",
+            "0x169d057",
+            "0x16b50d1",
+            "0x1615220",
+            "0x1614aed",
+            "0x1959907",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x1961253"
+          ],
+          "stack_rvas": [
+            "0x1961253",
+            "0x19580c2",
+            "0x1959a6a",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x1959a89"
+          ],
+          "stack_rvas": [
+            "0x1959a89",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0xe37654"
+          ],
+          "stack_rvas": [
+            "0xe37654",
+            "0x1a36ec4",
+            "0x1957001",
+            "0x1959d96",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0xe37654"
+          ],
+          "stack_rvas": [
+            "0xe37654",
+            "0x1a36ec4",
+            "0x195729b",
+            "0x1959d96",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x304308"
+          ],
+          "stack_rvas": [
+            "0x304308",
+            "0x1aa76f",
+            "0x477c9a",
+            "0x478298",
+            "0x17f5170",
+            "0x17f4d65",
+            "0xfd0dc",
+            "0x27eac7",
+            "0x284674",
+            "0x27ff17"
+          ],
+          "level": [
+            86
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x1a1267d"
+          ],
+          "stack_rvas": [
+            "0x1a1267d",
+            "0x1a108f1",
+            "0x198d1a2",
+            "0x1a38a09",
+            "0x1a370c7",
+            "0x1a36ede",
+            "0x195729b",
+            "0x1959d96",
+            "0x1965547",
+            "0x1a346dd"
+          ],
+          "level": [
+            1
+          ]
+        }
+      ],
+      "current_changed": [
+        {
+          "hint_rva": [
+            "0x1a1267d"
+          ],
+          "stack_rvas": [
+            "0x1a1267d",
+            "0x1a10583",
+            "0x16158e2",
+            "0x1959373",
+            "0x19ec813",
+            "0x19652c7",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x19fe082"
+          ],
+          "stack_rvas": [
+            "0x19fe082",
+            "0x19ec93f",
+            "0x19652c7",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x19460d2"
+          ],
+          "stack_rvas": [
+            "0x19460d2",
+            "0x19eb418",
+            "0x19ecbef",
+            "0x19652c7",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x1947d1c"
+          ],
+          "stack_rvas": [
+            "0x1947d1c",
+            "0x1946198",
+            "0x19eb418",
+            "0x19ecbef",
+            "0x19652c7",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x1769a29"
+          ],
+          "stack_rvas": [
+            "0x1769a29",
+            "0x19eb7e9",
+            "0x1965389",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x17884de"
+          ],
+          "stack_rvas": [
+            "0x17884de",
+            "0x1769bb7",
+            "0x19eb7e9",
+            "0x1965389",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x304308"
+          ],
+          "stack_rvas": [
+            "0x304308",
+            "0x303ad9",
+            "0x1af7b4",
+            "0x3fb47a",
+            "0x25e97c",
+            "0x26e0da",
+            "0x26e453",
+            "0xdc16c",
+            "0xe22829",
+            "0xe220c5"
+          ],
+          "level": [
+            86
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x1a103e6"
+          ],
+          "stack_rvas": [
+            "0x1a103e6",
+            "0x169d057",
+            "0x16b50d1",
+            "0x1615220",
+            "0x1614aed",
+            "0x1959907",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x1961253"
+          ],
+          "stack_rvas": [
+            "0x1961253",
+            "0x19580c2",
+            "0x1959a6a",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x1959a89"
+          ],
+          "stack_rvas": [
+            "0x1959a89",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0xe37654"
+          ],
+          "stack_rvas": [
+            "0xe37654",
+            "0x1a36ec4",
+            "0x1957001",
+            "0x1959d96",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0xe37654"
+          ],
+          "stack_rvas": [
+            "0xe37654",
+            "0x1a36ec4",
+            "0x195729b",
+            "0x1959d96",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x304308"
+          ],
+          "stack_rvas": [
+            "0x304308",
+            "0x1aa76f",
+            "0x477c9a",
+            "0x478298",
+            "0x17f5170",
+            "0x17f4d65",
+            "0xfd0dc",
+            "0x27eac7",
+            "0x284674",
+            "0x27ff17"
+          ],
+          "level": [
+            86
+          ]
+        },
+        {
+          "hint_rva": [
+            "0x19c4605"
+          ],
+          "stack_rvas": [
+            "0x19c4605",
+            "0xe0348d",
+            "0xe029f4",
+            "0x1a6b046",
+            "0x19573c9",
+            "0x1959d96",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0xe37654"
+          ],
+          "stack_rvas": [
+            "0xe37654",
+            "0x1a36ec4",
+            "0x198c6dd",
+            "0x1a61faa",
+            "0x1a6729e",
+            "0x19fd575",
+            "0x1959e69",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0xe38498"
+          ],
+          "stack_rvas": [
+            "0xe38498",
+            "0x1a36ef6",
+            "0x198c6dd",
+            "0x1a61faa",
+            "0x1a6729e",
+            "0x19fd575",
+            "0x1959e69",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b"
+          ],
+          "level": [
+            1
+          ]
+        },
+        {
+          "hint_rva": [
+            "0xe37654"
+          ],
+          "stack_rvas": [
+            "0xe37654",
+            "0x1a36ec4",
+            "0x198c6dd",
+            "0x195a6c5",
+            "0x1959eee",
+            "0x1965547",
+            "0x1a346dd",
+            "0x1a4450b",
+            "0x17e4f9e",
+            "outside-nvlddmkm"
+          ],
+          "level": [
+            1
+          ]
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "Saved complete protobuf records only; inspect each outer NVCD integrity result.",
+    "No live descriptor locals; no assertion-level interpretation as NV_STATUS.",
+    "Labels/revisions supplied by caller; retain separate run metadata.",
+    "Module recognition is a checked580.88 triage profile, not a general Windows ABI."
+  ]
+}

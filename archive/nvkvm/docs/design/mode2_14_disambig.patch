@@ -1,0 +1,52 @@
+diff --git a/src/qemu/nvkvm_gpu_emul.c b/src/qemu/nvkvm_gpu_emul.c
+index bf1a2f8..189f947 100644
+--- a/src/qemu/nvkvm_gpu_emul.c
++++ b/src/qemu/nvkvm_gpu_emul.c
+@@ -2835,6 +2835,47 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
+             if (fn == 76 && ctrl == 0x20801702u && nvkvm_m2_multiproc(s)) {
+                 s->m2_poll_kick = true;
+             }
++            /* #14 DISAMBIG (2026-07-24, diagnostic-only): on the MC_SERVICE_INTERRUPTS
++             * completion-poll (where the loser cuCtxCreate spins), dump the DECISIVE
++             * (a)DELIVERY-vs-(b)EXECUTION evidence: for EVERY registered channel read the
++             * REAL host USERD get/put (m2_chanbuf qva +0x88/+0x8C) — proves whether the
++             * host GPU actually consumed/retired that channel's work — plus the os-event
++             * queue depth and the gsp_swgen0_pending delivery gate.  Bounded. */
++            if (fn == 76 && ctrl == 0x20801702u) {
++                static int m14dbg_n = 0;
++                if (m14dbg_n < 40) {
++                    m14dbg_n++;
++                    uint32_t pcli = ldl_le_p(resp + 80); /* control hClient */
++                    qemu_log("nvkvm-gpu[%s] #14-DISAMBIG poll[%d] hClient=0x%08x "
++                             "osevent_n=%d swgen0_pending=%d poll_kick=%d\n",
++                             s->chip->name, m14dbg_n, pcli, s->osevent_n,
++                             s->gsp_swgen0_pending, s->m2_poll_kick);
++                    for (int ci = 0; ci < s->chan_n; ci++) {
++                        struct nvkvm_chan_entry *cc = &s->chans[ci];
++                        if (!cc->hobject || !cc->gpfifo_va) { continue; }
++                        uint32_t hput = 0xffffffffu, hget = 0xffffffffu;
++                        uint32_t gput = 0xffffffffu;
++                        for (int k = 0; k < s->m2_chanbuf_n; k++) {
++                            if (s->m2_chanbuf[k].client == cc->client &&
++                                s->m2_chanbuf[k].chan == cc->hobject &&
++                                s->m2_chanbuf[k].qva) {
++                                hput = ldl_le_p((uint8_t *)s->m2_chanbuf[k].qva + 0x8C);
++                                hget = ldl_le_p((uint8_t *)s->m2_chanbuf[k].qva + 0x88);
++                                break;
++                            }
++                        }
++                        if (cc->userd) {
++                            gput = (uint32_t)nvkvm_fb_read(s, cc->userd + 0x8C, 4);
++                        }
++                        qemu_log("nvkvm-gpu[%s] #14-DISAMBIG   ch[%d] client=0x%08x "
++                                 "gpfifo_va=0x%llx guestPUT=%u chan_gp_get=%u "
++                                 "HOSTget=%u HOSTput=%u\n",
++                                 s->chip->name, ci, cc->client,
++                                 (unsigned long long)cc->gpfifo_va, gput, cc->gp_get,
++                                 hget, hput);
++                    }
++                }
++            }
+             if (fn == 76) {
+                 stl_le_p(resp + 92, 0); /* body.status = NV_OK (default) */
+                 /* M9: capture the caller's REQUEST paramsSize (the buffer libcuda/CPU-RM

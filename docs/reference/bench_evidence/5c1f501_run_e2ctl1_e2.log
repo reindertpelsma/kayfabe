@@ -1,0 +1,24 @@
+[e2:e2ctl1] revision under test: UNKNOWN
+[e2:e2ctl1] archive in the binary: kayfabe-rev:5c1f501d003d121034154731bd6c9ed692565894 
+[e2:e2ctl1] building the guest poke tool
+[e2:e2ctl1] poke tool: /workspace/bench/e2_doorbell_poke: ELF 64-bit LSB executable, x86-64, version 1 (GNU/Linux), statically linked, BuildID[sha1]=2f01fa6a45fb11c371d9f3da20db949eedba2f61, for GNU/Linux 3.2.0, not stripped
+[e2:e2ctl1] booting (boot_capture drives the driver load and the device open)
+[boot_capture:e2ctl1] booting (extra args: none)
+[boot_capture:e2ctl1] guest is up after 27s
+[boot_capture:e2ctl1] module unloaded and ring buffer cleared; loading cold
+[boot_capture:e2ctl1] opening the device (this is what runs RmInitAdapter)
+[boot_capture:e2ctl1] captured 25 dmesg lines, 22 NVRM, 3 adapter → /workspace/bench/run_e2ctl1_dmesg.log
+[boot_capture:e2ctl1] --- the verdict lines ---
+[   24.592076] NVRM: RmInitNvDevice: *** Cannot load state into the device
+[   24.592080] NVRM: RmInitAdapter: RmInitNvDevice failed, bailing out of RmInitAdapter
+[   25.429786] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0xffff:1249)
+[boot_capture:e2ctl1] running POST_CAPTURE_HOOK: scripts/bench/e2_doorbell_witness.sh
+[boot_capture:e2ctl1] hook finished: rc=0
+[boot_capture:e2ctl1] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:e2ctl1] done. serial=/workspace/bench/run_e2ctl1_serial.log qemu=/workspace/bench/run_e2ctl1_qemu.log dmesg=/workspace/bench/run_e2ctl1_dmesg.log probe=/workspace/bench/run_e2ctl1_probe.log
+[e2:e2ctl1] boot_capture rc=0
+[e2:e2ctl1] --- the device's doorbell report ---
+2026-08-01T22:30:33.088646Z qemu-system-x86_64: info: nvkvm: doorbells: 0 arrived, 0 served, 0 REFUSED by name; last token n/a 0x00000000 (0 logged)
+[e2:e2ctl1] counters: arrived=0 served=0 refused=0
+[e2:e2ctl1] ★ FAILED (acceptance): expected EXACTLY ONE arrival (the poke), got 0. More than one means something
+   other than this experiment rang; zero means the write never reached the classification.

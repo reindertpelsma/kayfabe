@@ -1,0 +1,5 @@
+System.evtx of run38 (read-only NBD via recover_bugcheck.py, 2026-10-07); nvlddmkm events after the run start:
+2026-10-07 16:46:15.138 nvlddmkm 153 \Device\Video0 Resetting TDR occurred on GPUID:6
+2026-10-07 16:46:15.342 nvlddmkm 153 \Device\Video0 Reset TDR occurred on GPUID:6
+2026-10-07 16:46:15.514 nvlddmkm 153 \Device\Video0 Restarting TDR occurred on GPUID:6
+Last record in the log: 2026-10-07 16:46:17.213; the controller stopped the guest at 16:48:49 (no flush).

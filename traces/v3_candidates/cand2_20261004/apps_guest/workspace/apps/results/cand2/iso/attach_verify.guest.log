@@ -1,0 +1,4 @@
+=== attach_verify side=guest start=2026-10-04T12:22:04+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/attach_verify
+attach_verify: 4 buffers x 1048576 elements, 0 mismatched
+FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)
+=== end rc=1 secs=6 2026-10-04T12:22:10+00:00

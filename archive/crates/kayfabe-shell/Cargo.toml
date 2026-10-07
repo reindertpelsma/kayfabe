@@ -1,0 +1,15 @@
+[package]
+name = "kayfabe-shell"
+description = "The L1 OS shell: the real reactor loop over host readiness primitives, the source registrar that owns their descriptors, and the executor thread (l1_os_shell.md §3)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kayfabe-util.workspace = true
+kayfabe-core.workspace = true
+kayfabe-rt.workspace = true
+kayfabe-linux-raw.workspace = true
+
+[lints]
+workspace = true

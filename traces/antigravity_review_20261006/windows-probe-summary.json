@@ -1,0 +1,54 @@
+{
+  "schema": "kayfabe-antigravity-repair-windows-probe/1",
+  "source_revision": "4cb9e6098e44570b9a28df54a0f98109d1df9734",
+  "qemu_sha256": "3cbd67edc2a9d07331bebfbad8c032ddfc3c41741f4bd27737ffc9e7674f1854",
+  "baseline_sha256": "9ff194d31f0a871757fd436f14ab0da2e1e8a6360dc36bb925c12af12a64f85c",
+  "windows_driver_sha256": "31c79cce80b573e21647ace8d1a2b65697f992e7f86196f89e30af477b1bd47c",
+  "flags": {
+    "KF3_GFX_POOL_PROBE": "1",
+    "KF3_TIMER_MAP": "1",
+    "KF3_TSPACE": "1",
+    "KF3_SW_RUNLIST_PROBE": "1",
+    "KF3_MEMORY_LIST_PROBE": "1",
+    "KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE": "1",
+    "KF3_DISPLAY_ILUT_CONSTRUCTOR_PROBE": "1",
+    "KF3_DISPLAY_TMO_SURFACE_CONSTRUCTOR_PROBE": "1",
+    "KF3_DISPLAY_OLUT_CONSTRUCTOR_PROBE": "1"
+  },
+  "nvidia_problem_codes": [
+    43
+  ],
+  "nvidia_smi_exit": 9,
+  "complete": {
+    "complete": true,
+    "elapsed": 164.0236698850058
+  },
+  "supervisor_result": "Result=success\nExecMainStatus=0\n",
+  "host_health": "NVIDIA GeForce RTX 4070, 595.91.07\n",
+  "rpc_records": 455,
+  "previous_n_rpc_records": 365,
+  "normalized_first_rpc_divergence_ordinal": 248,
+  "constructor_only_declaration": [
+    "kf3: EXPERIMENT display constructor probe: TMO advertised, ILUT surface loading=true, TMO surface loading=true, OLUT surface loading=true; ALL display methods refused before execution"
+  ],
+  "display_method_refusal_lines": 9,
+  "fake_control_success_log_count": 0,
+  "watchdog_recovery": {
+    "schema": "kayfabe-private-watchdog-recovery/1",
+    "run": 10,
+    "filename": "WATCHDOG-20261006-1019.dmp",
+    "bytes": 343783,
+    "sha256": "49291dd8b51fc9713bbda63787f329bfe1c98ebd214f42f8dfaada15257d352c",
+    "dump_mtime_utc": "2026-10-06T10:19:30.280066+00:00",
+    "experiment_start_utc": "2026-10-06T10:19:21.680838+00:00",
+    "disk_access": "read-only NBD and NTFS; supervisor stopped",
+    "baseline_sha256": "9ff194d31f0a871757fd436f14ab0da2e1e8a6360dc36bb925c12af12a64f85c",
+    "windows_offset": 332398592,
+    "cleanup_verified": true
+  },
+  "journal_integrity_limits": [
+    "Outer NVCD is one byte short; checksum cannot be validated. Only complete decoded records are compared.",
+    "580.88 triage/module profile and independent L KD control are pinned; this is not a general Windows dump parser."
+  ],
+  "hardware_claim_scope": "One Windows580.88/AD104 run; Code43 remains. No application or working rendering result."
+}

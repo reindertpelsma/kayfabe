@@ -1,0 +1,19 @@
+#14 CR3 round-5 (Fable, 2026-07-09) — the ONE-LINE ungate that flips the
+multiproc-gated ring-pin from "#12-safe, concurrent=one-pass" to
+"concurrent=BOTH-PASS byte-exact, but regresses #12 cupctx2_min teardown to an
+exit-hang (rc=124 AFTER VERDICT PASS+DONE)".
+
+In nvkvm_chan_execute(), the ring-page pin seed:
+
+    if (nvkvm_m2_multiproc(s) && s->chan_gpfifo_pin) {   // committed: #12-safe
+        s->chan_gpfifo_phys    = s->chan_gpfifo_pin;
+        s->chan_gpfifo_bar1off = s->chan_gpfifo_pin_b1off;
+    }
+
+Drop the `nvkvm_m2_multiproc(s) &&` guard -> 2x cup8 concurrent A=0 B=0
+byte-exact (VERIFIED once, 2026-07-09), BUT single-process cupctx2_min then
+exit-hangs in libcuda driver-unload (a stale pin consumed across CTX teardown).
+The pin alone is NOT a complete fix: on other boots the loser starves via a
+SECOND path (its PD0 leaf-PDE never written in our FB view) even when the kernel
+PT-writer ring never goes RING-DARK -> the real close needs per-process
+page-table publication separation (the CR3 isolate), not just the ring pin.

@@ -1,0 +1,9 @@
+STEP1_RC=0
+after: NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+OPEN_MODULE=yes
+VERSION_580=yes
+STEP2_RC=0
+W750_HEAD=edb282ae84b471abc6acd7a7e1d9aaf507df358c
+STEP3_RC=0
+NVIDIA GeForce RTX 3060, 580.159.04
+00:07.0 VGA compatible controller [0300]: NVIDIA Corporation GA106 [GeForce RTX 3060] [10de:2503] (rev a1)

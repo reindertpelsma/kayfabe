@@ -1,0 +1,71 @@
+nvidia_smi|PASS|0|0s|gXid:-|kf3rc:-|kf3ref:(1) kf-rm: RPC-REFUSED #8 UnmappedAllocClass { class: 8335 } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24|-
+deviceQuery|PASS|0|4s|gXid:-|kf3rc:-|kf3ref:-|-
+vectorAdd|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+vectorAddDrv|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+matrixMul|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+matrixMulDrv|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+bandwidthTest|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+simpleStreams|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+asyncAPI|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+simpleAtomicIntrinsics|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+simpleCallback|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+simpleOccupancy|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+simpleZeroCopy|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+simpleCooperativeGroups|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+concurrentKernels|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+simpleIPC|PASS|0|4s|gXid:-|kf3rc:-|kf3ref:-|-
+UnifiedMemoryStreams|FAIL|134|27s|gXid:-|kf3rc:kf3: RC host twin 0x1e (guest chid 0x7, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED|kf3ref:-|CUDA error at UnifiedMemoryStreams.cu:214
+UnifiedMemoryPerf|FAIL|1|1s|gXid:-|kf3rc:kf3: RC host twin 0x24 (guest chid 0xd, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED|kf3ref:-|Running ...CUDA error at matrixMultiplyPerf.cu:435
+conjugateGradientUM|FAIL|0|2s|gXid:-|kf3rc:kf3: RC host twin 0x20 (guest chid 0x9, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED|kf3ref:-|Test Summary: Error amount = 1.000000, result = SUCCESS
+cudaTensorCoreGemm|PASS|0|3s|gXid:-|kf3rc:-|kf3ref:-|-
+bf16TensorCoreGemm|PASS|0|12s|gXid:-|kf3rc:-|kf3ref:-|-
+globalToShmemAsyncCopy|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+cdpSimpleQuicksort|PASS|0|5s|gXid:-|kf3rc:-|kf3ref:-|-
+graphMemoryNodes|PASS|0|3s|gXid:-|kf3rc:-|kf3ref:-|-
+simpleCudaGraphs|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+simpleCUBLAS|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+simpleCUFFT|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+conjugateGradient|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|warn:Test Summary: Error amount = 0.000000
+MersenneTwisterGP11213|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|warn:Max absolute error: 0.000000E+00
+reduction|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+sortingNetworks|PASS|0|8s|gXid:-|kf3rc:-|kf3ref:-|-
+scan|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+histogram|PASS|0|3s|gXid:-|kf3rc:-|kf3ref:-|-
+BlackScholes|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|warn:Max absolute error: 1.192093E-05
+fastWalshTransform|PASS|0|5s|gXid:-|kf3rc:-|kf3ref:-|-
+transpose|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+stream_triad|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+reduce|PASS|0|3s|gXid:-|kf3rc:-|kf3ref:-|-
+nbody|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+blackscholes|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+mandelbrot|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+conv2d|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+sgemm_cublas|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+fft_cufft|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+sha256|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+memcpy2d|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+attach_verify|FAIL|1|1s|gXid:-|kf3rc:kf3: RC host twin 0x23 (guest chid 0xc, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED|kf3ref:-|FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)
+stream_default|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+stream_created|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+stream_nonblocking|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+stream_perthread|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+stream_two|PASS|0|0s|gXid:-|kf3rc:-|kf3ref:-|-
+stream_created2nd|PASS|0|0s|gXid:-|kf3rc:-|kf3ref:-|-
+gpu_burn|FAIL|139|4s|gXid:-|kf3rc:-|kf3ref:-|cuInit returned 0 (no error)
+torch_correct|PASS|0|53s|gXid:-|kf3rc:-|kf3ref:-|-
+torch_ai_bench|TIMEOUT|137|915s|gXid:-|kf3rc:-|kf3ref:(1) kf3: mem t=368.385s REFUSED VasKey(18446744069414584321) root 0x1f1cac000: 1 run(s) not applied: window map 0x110000+0x200000 (store @0x1000000): arm: NV_ESC_RM_MAP_MEMORY store@0x1000000+0x200000: No|CHECK torch_matmul_fp32_TFLOPs FAIL
+hf_generate|PASS|0|52s|gXid:-|kf3rc:-|kf3ref:-|-
+cupy|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+llama_cpp_gen|PASS|0|6s|gXid:-|kf3rc:-|kf3ref:-|warn:done_getting_tensors: tensor 'token_embd.weight' (q4_K) (and 0 others) cannot be used with preferred buffer type CUDA_Host, using CPU i
+llama_bench|PASS|0|3s|gXid:-|kf3rc:-|kf3ref:-|-
+vulkaninfo|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|warn:error: XDG_RUNTIME_DIR is invalid or not set in the environment.
+vkpeak|PASS|0|404s|gXid:-|kf3rc:-|kf3ref:-|-
+egl_offscreen|PASS|0|19s|gXid:-|kf3rc:-|kf3ref:-|-
+clinfo|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+clpeak|FAIL|0|101s|gXid:-|kf3rc:kf3: RC host twin 0x23 (guest chid 0xc, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED|kf3ref:-|clpeak: 4 test groups skipped (clFinish (-36))
+nvenc_h264|PASS|0|8s|gXid:-|kf3rc:-|kf3ref:-|-
+nvenc_hevc|PASS|0|7s|gXid:-|kf3rc:-|kf3ref:-|-
+nvdec_h264|PASS|0|6s|gXid:-|kf3rc:-|kf3ref:-|-
+hashcat|PASS|0|25s|gXid:-|kf3rc:-|kf3ref:-|warn:This means that hashcat cannot use the full parallel power of your device(s).
+blender_cycles|PASS|0|8s|gXid:-|kf3rc:-|kf3ref:-|-
+geekbench_gpu|PASS|0|66s|gXid:-|kf3rc:-|kf3ref:-|warn: unknown error (internal code 35)

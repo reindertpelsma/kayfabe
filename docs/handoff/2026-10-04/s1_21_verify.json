@@ -1,0 +1,621 @@
+{
+  "summary": "Verify or refute audit finding S1-21 (identity windows in user twin VA spaces) from source; explain why apps pass",
+  "agentCount": 7,
+  "logs": [],
+  "result": {
+    "answer": "**Short answer.** You're right about the part of v3 the apps use, and the audit is right about a second part. A twin's host VA space holds two kinds of mapping:\n\n- **Guest rows.** These are exactly the leaves the guest's own page tables state, mapped FIXED at the guest's own addresses. Privileged leaves are withheld from user twins. This is the \"only map what's needed\" part, and it is what the 61 passing apps run on. [READ c1, c2]\n- **Two windows that kayfabe adds.** One maps the whole store (all guest VRAM, including the guest kernel's GPU page tables and kayfabe's own BAR1/BAR2 roots). The other maps all guest RAM. No guest page-table entry asks for either. [READ c3, c4]\n\n**1. Scope.** `create_mirror` maps both windows into every mirror, with no user/kernel branch. Prewarmed spares get them too, and recycled spares keep them. [READ c3] Passthrough twins are born in that same mirror space. [READ c5] The store window is in every twin with no exception, because a mirror is only recorded once the store window has mapped. The RAM window is in every twin unless the guest-RAM object failed. [READ c6] I confirmed this on hardware: guest-USER twins (`privilege=0`) were born in a space logged with both windows. [MEASURED c7]\n\n**2. Why 61 apps pass.** Passthrough work is never parsed and never uses a window address. The only thing that reads window addresses is the Translated rewriter for the guest kernel's copy-engine work. [READ c8] The windows sit at the top of the space, where no guest row lives, and no guest leaf ever collided with one. [READ c9; MEASURED c10] Passing apps show that the needed mappings are present. They cannot show that extra mappings are absent. In the 61/65 run itself, deviceQuery's user mirror had both windows and it passed. [MEASURED c10] Every app in that run also ran as guest root (`privilege=1`), so the matrix never tested an unprivileged user. [MEASURED c10] So the code does \"only map what's needed\" for rows, but not for windows.\n\n**3. Why the windows exist.** The design rule §12 (commit `8ecad812`, 2026-09-22) says the window must not live in a separate VA space used only for Translated work. The reason: the guest's unified-memory driver (UVM) mixes physical and virtual addresses in one command stream, so the window has to sit beside the guest rows. The rule then says \"every host VAS we create\". [READ c11] The history after that:\n- P5 (`09252909`, 09-25) built the windows into every mirror.\n- P5b (`90784294`, 53 minutes later) put user channels into those same mirrors.\n- v3-roperm (`efce970b`, 09-26) withheld privileged rows from user twins but left the windows alone.\n\nA mirror's kernel/user status isn't known when it is built: UVM's space only becomes kernel at its first Translated birth. [READ c12] So putting windows everywhere was a convenience, not something the apps need. Section §24.2 of the design doc says the windows are \"in Translated spaces\"; the code doesn't match that. [READ c11]\n\n**4. Read or measured.** The access property is only READ from source. `map_window` adds only `GROWS_DOWN` and `CACHE_SNOOP`, so the mappings are read-write. On RM's NVOS46 path the privilege bit starts at zero and is never set, so the PTEs are non-privileged. [READ c13, c14] That means P0 (twin channels born as USER) does not shrink the exposure. Whether the hardware enforces anything beyond the PTE is UNVERIFIED. The test that would settle it is **T-WINDOW-USER**, with a `windows=none` census on user mirrors. It has never run, and no trace on any origin branch mentions it. [READ c15]\n\n**5. Where the audit overstates.** The substance holds. Three fixes:\n- Its line pointer is stale (see c3).\n- \"passes no privileged flag\" points at a flag that doesn't exist (c13).\n- \"reachable\" is read from source, not measured.\n\nCorrected sentence: *\"Every mirrored host space, including guest user processes' twin spaces, carries a read-write, non-privileged map of the whole store and all guest RAM, placed whether the space is user or kernel; reachability from user work is READ and T-WINDOW-USER has not run; it stays inside the VM.\"*\n\n**6. Fix.** P1/P2 creates one Translated-only VA space per VM that holds both windows and kayfabe's rings. Guest twins then hold only guest rows (design §4, rollout step 3 `KF3_TSPACE=1`). On the data path, passthrough apps should be unaffected. [READ c8; the A/B run is UNVERIFIED] One catch: today a mirror whose windows fail is never recorded, so every birth is refused with \"has no mirror\", passthrough included. P1 has to separate the mirror record from the windows; the comment at `mem.rs:1786-1788` understates this. [READ c6] It also saves 0.3–0.9 s per new mirror. [MEASURED c7, c10]\n\n**Citations** (kayfabe origin/master `e4fb0190`; ogkm = `research_clones/ogkm-580.159.04`)\n- c1 `crates/kf-mem/src/ledger.rs:404-420`\n- c2 `crates/kf-mem/src/apply.rs:395-404`\n- c3 `crates/kf-qemu/src/mem.rs:1786-1795` (create_mirror), `:1915-1921` (prewarm), `:928` (spares). The audit cites `:1755-1762`.\n- c4 `crates/kf-chip/src/bar0.rs:396-425`\n- c5 `crates/kf-qemu/src/chan.rs:2676, 2705-2712, 2817-2831`\n- c6 `mem.rs:1799-1842` (only window-success arms insert; the refusal arm inserts nothing); `chan.rs:2707-2712`\n- c7 `traces/v3_display/gop_box_20261003/run_b3_qemu.log:2747, :2803` (84 USER births; `priv_withheld=8817`)\n- c8 `chan.rs:491-524`, used only at `:3380`; passthrough is unparsed (`:22-27`)\n- c9 `apply.rs:446-457`; `mem.rs:716-724`\n- c10 `traces/v3_cdp/app_matrix_2830988f/all_logs.tgz`: `deviceQuery.kf3.log:354, :369`, `vmm_overlaps=0`, RAM-window map 672–906 ms; `guest.res`; `docs/design/V3_APP_MATRIX.md:66-70`\n- c11 `docs/design/THE_TRANSLATED_PLANE.md:417-420` (§12), `:1054-1058` (§24.2)\n- c12 `chan.rs:2900-2913`; `mem.rs:916-926`\n- c13 `crates/kf-host/src/channel.rs:377-390`; `crates/kf-host/src/lib.rs:229-238`; ogkm `nvos.h:1974-1976`\n- c14 ogkm `virt_mem_allocator_gm107.c:404, :1500, :2233`. kayfabe's own comment at `channel.rs:1104-1105` cites `:2849-2850`, which is a different function; its conclusion still holds.\n- c15 `docs/audits/2026-10-03-v3-stage1.md:442-460, :1626`",
+    "investigations": [
+      {
+        "lens": "census",
+        "result": {
+          "summary": "ANSWER TO THE OWNER: both statements are true, about two different layers of the same host VA space. At kayfabe origin/master e4fb0190, every host twin space holds two things.\n\n(a) Mirrored rows: exactly the leaves the guest's own page tables state, placed FIXED at the guest's VAs as slices of the store or guest-RAM object. Privileged leaves are withheld in user twins. This is the \"only map what's needed\" layer, it is what every passthrough app actually uses, and it is why 61/65 passes.\n\n(b) Two kayfabe-owned whole-object aliases (\"windows\"): all of the store (all guest VRAM, including the firmware carve-out that holds kayfabe's own BAR1/BAR2 root pages) and all guest RAM. They are mapped read-write and non-privileged, GROWS_DOWN, at the top of the space, at VAs no guest PTE names.\n\nOnly Translated channels (guest-kernel CE: CeUtils and UVM) dereference the windows. No passthrough path reads them. The 61/65 binary (2830988f) already had windows in every user twin, with window code byte-identical to master. So the matrix shows the needed rows are present. It cannot show the unneeded windows are absent, and it is no evidence for or against S1-21.\n\nWhy they are everywhere: THE_TRANSLATED_PLANE §12 (8ecad812, 2026-09-22) ruled \"every host VAS we create\". Commit 09252909 (2026-09-25) implemented it, because a space's kernel/user status is unknown when its mirror (or a prewarmed spare) is built. UVM's space only becomes kernel at its first Translated birth. The ruling was a convenience, not a functional need.\n\nNothing later removes, shrinks or protects the windows in user spaces. The v3-roperm kernel/user flag (efce970b, 2026-09-26) only gates privileged-leaf mirroring. Retired spaces keep their windows as spares for the next key. No commit on origin/master since 2026-09-29 touches the window code, and every v3 and security branch still has the 4 map_window calls.\n\nMeasured in a stock-driver fat guest (traces/v3_display/gop_box_20261003/run_b3_qemu.log, kf3 8c86c94a, same window code as master):\n- Guest USER-privilege passthrough twins on GR and CE are born in spaces logged with both windows.\n- In that boot, user twins withheld 8817 privileged guest leaves (0x4ce3d8000 bytes) while carrying the RW whole-object alias that backs them.\n- Each fresh mirror paid ~315-320 ms for its RAM window.\n\nNot measured: actual GPU reachability from a user twin. T-WINDOW-USER has never run, and that claim is UNVERIFIED.\n\nVasKey is one mirror per guest VA-space OBJECT ((hClient<<32)|hVASpace, with dups folded to the original), not one per process.\n\nKey files: /workspace/kf-master crates/kf-qemu/src/mem.rs, crates/kf-qemu/src/chan.rs, crates/kf-host/src/channel.rs, crates/kf-host/src/lib.rs, crates/kf-mem/src/ledger.rs, crates/kf-mem/src/apply.rs, crates/kf-rm/src/barpde.rs, crates/kf-rm/src/chanlink.rs, crates/kf-chip/src/bar0.rs, docs/design/THE_TRANSLATED_PLANE.md, docs/audits/2026-10-03-v3-stage1.md (all read at origin/master), plus /workspace/nvidia-gpu-passthrough/research_clones/ogkm-580.159.04.",
+          "claims": [
+            {
+              "claim": "Census of host GPU VA spaces kf3 creates. There are exactly two allocation sites, both in kf-qemu: create_mirror (one per guest VA-space object) and prewarm (spares built before the guest runs). The BAR1 and BAR2 targets are guest CPU windows, not host GPU VA spaces. Kayfabe's own libcuda contexts (walker, display) import the store into their own contexts. No guest channel is bound to them, and Translated rings are born in the mirror, not there.",
+              "evidence": "origin/master crates/kf-qemu/src/mem.rs:1767 (create_mirror alloc_vaspace), :1905 (prewarm alloc_vaspace); git grep alloc_vaspace over crates/kf-* shows no other non-harness site; mem.rs:447-457 (Target::Window/Bar1 = guest BAR apertures, Target::Gpu = host space); crates/kf-qemu/src/device.rs:754-807 (K_BAR2/K_BAR1 are CpuWindow); crates/kf-cuda/src/display.rs:408-426 (display imports store); crates/kf-qemu/src/chan.rs:2945-2947 (Translated HostRing::on_engine_at(me.rm, mirror.space, ...))",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "What each mirror contains:\n(a) the store window: one map of the WHOLE store object, fb_len = layout.fb_length;\n(b) the guest-RAM window: one map of the whole guest-memfd OS-descriptor object;\n(c) a ring-region reservation [1 TiB-4 GiB, 1 TiB), where rings are mapped only by a Translated birth;\n(d) the mirrored guest rows, FIXED at the guest's own VAs as slices of the store or RAM object;\n(e) SKED message-kind placements, which are also guest-leaf driven;\n(f) host RM's own GR context buffers, in the host hole [1 TiB-64 GiB, 1 TiB) of any twin with a GR channel.",
+              "evidence": "mem.rs:1786-1795 (two map_window calls), :1632 (fb_len = layout.fb_length), :516-518 + :716-724 (ring region / vmm_ranges), chan.rs:2945-2947 (rings only in the Translated branch); crates/kf-mem/src/ledger.rs:404-420 (HostVas::map: map_kind(space, store|ram_obj, SharedSlice, d.off, d.len, Some(d.va), ...)), ledger.rs map_sked (store slice, kind SMSKED_MESSAGE); crates/kf-host/src/channel.rs:57-97 (GUEST_VA_RANGES, HOST_HOLE_LO, host RM GR ctx buffers lowest-fit in the hole)",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "Window PTE attributes: read-write and non-privileged.\n- map_window passes only GROWS_DOWN, and the single NVOS46 choke point adds only CACHE_SNOOP (and FIXED when an address is given). ACCESS_READ_ONLY is never set.\n- NVOS46 has no privilege field.\n- In ogkm-580, a PTE's PRIVILEGE bit comes only from a memdesc's MEMDESC_FLAGS_GPU_PRIVILEGED in dmaMapBuffer_GM107, never from a client map's flags.\n- Whether hardware enforces PRIV per channel is closed-firmware behaviour and UNVERIFIED. It is moot here, because the bit is not set.",
+              "evidence": "crates/kf-host/src/channel.rs:377-390 (map_window: extra = NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN only), :1092-1106 (MapPerm doc: 'PRIVILEGE has no field: RM takes it from the memory descriptor'); crates/kf-host/src/lib.rs:229-238 (nvos46_map_flags = extra|page_size|CACHE_SNOOP_ENABLE|FIXED); ogkm-580.159.04 src/common/sdk/nvidia/inc/nvos.h:1974-1976, 2066-2068; src/nvidia/src/kernel/gpu/mem_mgr/arch/maxwell/virt_mem_allocator_gm107.c:2849-2850 (only producer of DMA_UPDATE_VASPACE_FLAGS_PRIV), :2233 (PTE PRIV from that flag)",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "Question 1: a guest user process's passthrough twin runs in a mirror, and therefore in a space carrying both windows.\n- A birth is refused unless its VA space has a mirror.\n- The twin is bound to mirror.space.\n- A user channel is any channel that is neither RM-internal nor PRIVILEGE=KERNEL.\n\nMeasured in a stock 580.159.04 fat guest: user client 0xc1d0002b's VA space got a fresh mirror logged with both windows (8 GiB store, 8 GiB guest RAM) at the top of the host VA space, above the guest-allocatable ranges. Passthrough twins with privilege=0 (guest USER, not rm-internal) were then born in that key on GR (0x1) and CE (0xb, 0xc).",
+              "evidence": "chan.rs:2676 (passthrough = !a.kernel_client), :2705-2712 (refuse if no mirror), :2817 + :2831 (birth_twin_in(me.rm, mirror.space, ...)); crates/kf-chan/src/passthrough.rs:126 (birth_channel(space, ...)); crates/kf-rm/src/chanlink.rs:685, :1378-1383 (kernel_channel); chan.rs:218-237 (privilege= log format). MEASURED: traces/v3_display/gop_box_20261003/run_b3_qemu.log:2747 (mirror space=0xcafe005d windows fb=...+0x200000000 ram=...+0x200000000), :2783, :2803, :2816 (BORN Passthrough ... privilege=0); kf3 binary 8c86c94a (b3.log:2), whose mem.rs and kf-host channel.rs window code is identical to origin/master (git diff shows only the BAR1 reseed addition)",
+              "basis": "MEASURED",
+              "holds": true
+            },
+            {
+              "claim": "Recycled spaces carry the windows too.\n- prewarm builds 3 spares, each with both windows.\n- A retired mirror keeps its windows and goes back to the spare pool.\n- A spare is handed to whatever key is named next, user or kernel. Only the privileged-leaf flag is re-derived.\n\nMeasured: one host space was built with both windows for one user key, retired as 'kept as a spare', then served the next key.",
+              "evidence": "mem.rs:1877-1890 (prewarm doc), :1905-1921, :966 (PREWARM_SPARES = 3), :929-931 (Spare doc: 'its two windows still in place'), :1961-2016 (retire_mirror: spare or free_vaspace), :2150-2191 (reuse: kernel_vas_for(key) only); MEASURED traces/capability_535_545_audit_20260928/final-run/guest/fast_allow535_final_20260928_doorbell-census_qemu.log:1002 (mirror space=0xcafe0040 with windows), :1029 (retire ... 0xcafe0040 kept as a spare), :1058 (next key retired from host space 0xcafe0040)",
+              "basis": "MEASURED",
+              "holds": true
+            },
+            {
+              "claim": "Question 2: there is one mirror per guest VA-space OBJECT, not one per guest process.\n- VasKey(u64) = (guest hClient << 32) | hVASpace, taken from the guest's SET_PAGE_DIRECTORY statement (0x00801813, or fn 54/79 on the 575.64.05-and-older carriers).\n- It is canonicalized through DUP_OBJECT to the original object.\n- One process can name several VA spaces; the raw client was measured naming three.\n- One mirror can host the channels of several guest clients through a dup. Measured: channels of clients 0xc1d00019, 0xc1d0001e and 0xc1d00026 were all born in VasKey 0xc1d00019_00010005.",
+              "evidence": "crates/kf-mem/src/vasmgr.rs:53-57 (VasKey = object identity); crates/kf-rm/src/barpde.rs:437, :479 (canonical), :497 (emit PageDir), :302-317 (canonical/observe_dup); mem.rs:2135 (key construction); chan.rs:2705-2706 (birth keys by vaspace_client); mem.rs:961-963 (measured w827: three VA spaces per raw-client process); MEASURED run_b3_qemu.log:2144, :2314, :2644",
+              "basis": "MEASURED",
+              "holds": true
+            },
+            {
+              "claim": "Question 3: nothing removes, shrinks or protects the windows in a user space.\n- map_window is called only at create_mirror and prewarm.\n- No code unmaps a window VA. The only readers of fb_base and ram are the Translated rewriter's translate.\n- The kernel flip at the first Translated birth, and kernel_vas_for, only drive withholds_privileged, i.e. whether privileged guest leaves are mirrored.\n- Retire either frees the whole space or keeps it, windows included, as a spare.",
+              "evidence": "mem.rs:1790, :1793, :1915, :1921 (the only map_window calls; git grep fb_base finds no other consumer beyond chan.rs:497/:517); chan.rs:2909 (kernel_vas.swap(true)); mem.rs:921-927 (kernel_vas_for), :726-729 (withholds_privileged = !kernel_vas); crates/kf-mem/src/apply.rs:395-403 (only privileged leaves are gated); mem.rs:2003-2016",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "Passthrough (user) work never uses the windows; Translated channels (guest-kernel CE: CeUtils scrub, UVM) are their only consumer.\n- The rewriter maps a PHYSICAL CE operand to fb_base+p or ram_base+file_offset, and that runs only in the Translated pump.\n- Passthrough twins run unparsed on the mirrored rows.\n- USERD and the error notifier are named to host RM as object+offset, not through a window.\n- Design §4: physical operands come only from the guest kernel; the compute class declares PHYS zero times.",
+              "evidence": "chan.rs:491-524 (Windows / SlotWindow translate), :3380 (SlotWindow used in the Translated pump), :22-27 (passthrough: nothing reads its pushbuffer, GP entries or cursors), :2738-2803 (UserdAt::Store / UserdAt::Ram, notifier obj+off); docs/design/THE_TRANSLATED_PLANE.md §4 (lines 81-104), §24.2 (lines 1034-1058)",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "Why 61/65 passes with windows present, and what it does and does not prove.\n- The 61/65 run at kf3 2830988f contains 09252909 (windows in every mirror), with window code identical to master. So all 61 passing apps ran in user twins that carried both windows.\n- They pass because their needed mappings are the mirrored rows.\n- No guest row ever collided with a kayfabe reservation (vmm_overlaps=0 on every status line of the GOP boot).\n- A functional matrix checks that needed mappings are present, not that unneeded ones are absent. It is no evidence for or against S1-21.\n- Inference (unmeasured): removing the windows from user twins would not change any app verdict.",
+              "evidence": "docs/design/V3_APP_MATRIX.md:8-9, :67-70 (61/65 at 2830988f, traces/v3_cdp/app_matrix_2830988f/); git merge-base --is-ancestor 09252909 2830988f = true; git diff 2830988f origin/master shows no map_window/fb_base/kernel_vas line changes; MEASURED run_b3_qemu.log (116 status lines, all vmm_overlaps=0); ledger.rs:404-420",
+              "basis": "MEASURED",
+              "holds": true
+            },
+            {
+              "claim": "The per-leaf user/kernel protection and the windows contradict each other. In a stock-driver boot, user twins WITHHELD 8817 privileged guest leaves (0x4ce3d8000 bytes), while only 12 were mirrored (in kernel spaces). The same user twins carry a read-write, non-privileged whole-object alias of the store and guest RAM: the physical backing those withheld leaves name. v3-roperm's guarantee ('an unprivileged guest channel must not reach what the guest kernel marked privileged') therefore holds for rows and is bypassed at whole-object level by the windows.",
+              "evidence": "MEASURED run_b3_qemu.log last phase=Running status: 'vmm_overlaps=0 priv_withheld=8817 priv_withheld_bytes=0x4ce3d8000 priv_mirrored=12'; apply.rs:395-403 (withhold comment states the guarantee); mem.rs:1786-1795 (windows map the whole objects)",
+              "basis": "MEASURED",
+              "holds": true
+            },
+            {
+              "claim": "The store window in every user twin also covers the firmware carve-out at the top of the store. That carve-out holds kayfabe's own declared BAR1 page directory and BAR2 root page, which the walker reads. The window is sized fb_len (the whole store), and the rewriter bounds a LocalFb operand by fb_len only. This stays inside the VM's store object, consistent with the audit's 'not a host breakout'.",
+              "evidence": "crates/kf-chip/src/bar0.rs:381-427 (FW_CARVE_OUT_BYTES; bar1_pde_base/bar2_pde_base = carve + offset); mem.rs:1632, :1790; chan.rs:497; device.rs:757-763, :808-812 (set_root at layout.bar2_pde_base / bar1_pde_base)",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "History, part 1 (how the windows got into every space):\n- §12 'What we will not do' was written 2026-09-22 in 8ecad812. It bars putting the identity window in a Translated-only VAS ('UVM mixes apertures in one stream') and says it 'goes in every host VAS we create ... from the first commit'.\n- map_window first appeared in 263c856a (2026-09-24, gate 3).\n- Windows went into every mirror in 09252909 (2026-09-25 00:55). Its message reads 'Every mirror now carries the identity + guest-RAM windows'.\n- Spares kept them in 1a93c1df (2026-09-25), and prewarm built them in bda5dc39 (2026-09-25).",
+              "evidence": "docs/design/THE_TRANSLATED_PLANE.md:416-421 on origin/master; git log -S'Translated-only VAS' -> 8ecad812; git log -S'in EVERY mirrored space' mem.rs -> 09252909; git log -G'map_window\\(space' mem.rs -> 09252909, 1a93c1df, bda5dc39, cc4befa0",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "History, part 2 (nothing since has changed it):\n- efce970b (2026-09-26, v3-roperm) added user/kernel classification for privileged leaves only.\n- f63caee8 (2026-09-26) added CACHE_SNOOP to every map.\n- cc4befa0 (2026-09-29) is rustfmt only.\n- No commit on origin/master through e4fb0190 (2026-10-03 23:06) changes window placement or scope.\n- origin/v3, v3-sec-nonpriv, v3-sec-p0, v3-sec-rawaddr and v3-gop all still have the 4 map_window calls in mem.rs. P1 is design-only.",
+              "evidence": "git log -S'kernel_vas_for' -> efce970b; git log -G'fn map_window|GROWS_DOWN' kf-host channel.rs -> cc4befa0, f63caee8, 263c856a; git log --since=2026-09-29 mem.rs shows only f442980e, 46509dce, afb552ea, 6894e00d, bbafb8d8 (none touch map_window lines); per-branch grep -c 'rm.map_window(space' = 4; docs/design/V3_SECURITY_AUDIT_PLAN.md:177 ('design in progress')",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "The §12 reason supports windows in the guest-KERNEL space where Translated work runs. It does not require them in user spaces. They went 'everywhere' because a space's kernel/user status is unknown when its mirror or spare is built: UVM's space is classed kernel only at its first Translated birth. This was a placement convenience, not a functional dependency.",
+              "evidence": "chan.rs:2900-2913 (flip at Translated birth, after mirror creation); mem.rs:2149-2192 (mirror/spare taken at the page-directory statement), :1877-1890 (spares prebuilt before the guest runs); THE_TRANSLATED_PLANE.md:417-418; agrees with scratchpad sec_p0p1p2_design.json result.p1p2.summary and result.p1p2_review (verdict needs_fixes, which confirms 'Both windows are mapped in every mirror')",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "The windows cost time on the user path: each fresh mirror's RAM-window map measured 315-320 ms on an 8 GiB guest. A mirror is built while the guest's page-directory reply is held. User apps therefore pay for a mapping they never use.",
+              "evidence": "MEASURED run_b3_qemu.log:2050 (ram_window 319944 us), :2383 (314686 us), :2747 (315032 us); mem.rs:961-965 (held page-directory reply; measured w827 65-86 ms at 2 GiB)",
+              "basis": "MEASURED",
+              "holds": true
+            },
+            {
+              "claim": "No box test has measured that GPU work on a user twin can actually reach memory through the windows. T-WINDOW-USER has never run, and no trace on any origin branch contains 'T-WINDOW-USER' or a 'windows=none' census. The reachability half of S1-21 is an inference from: the mapping is present in the twin's bound space (MEASURED), and its PTE is non-privileged read-write (READ).",
+              "evidence": "docs/audits/2026-10-03-v3-stage1.md:442-462 (S1-21 Check/Status 'open'), :1626 ('Box tests still to run ... T-WINDOW-USER (S1-21)'); git grep 'T-WINDOW-USER|windows=none' across all origin/* branches hits only the audit doc",
+              "basis": "UNVERIFIED",
+              "holds": false
+            },
+            {
+              "claim": "Minor: S1-21's citation 'crates/kf-qemu/src/mem.rs:1755-1762' lands on create_mirror's doc comment and signature on origin/master. The two window maps are at mem.rs:1786-1795, as the task text says. The substance of the citation is right; the line range is stale.",
+              "evidence": "docs/audits/2026-10-03-v3-stage1.md:443; origin/master mem.rs:1755-1763 (doc + fn create_mirror), :1786-1795 (P5 comment + map_window calls)",
+              "basis": "READ",
+              "holds": true
+            }
+          ]
+        }
+      },
+      {
+        "lens": "apps",
+        "result": {
+          "summary": "Short answer: passing apps show that the mappings apps need are present. They cannot show that unneeded mappings are absent, and in the 61/65 run the two windows were present in the apps' own twin spaces.\n\nRead at kayfabe origin/master e4fb0190. Measured evidence comes from traces/v3_cdp/app_matrix_2830988f/ (kf3 2830988f, which has the same window code at mem.rs:1724-1731).\n\nA passthrough twin's host VA space holds two different kinds of mapping:\n\n1. **Guest rows.** This is the part the owner's intuition is right about. The walker reads the guest's own page tables. For each leaf, the VA manager issues one fixed map at the guest's own VA, of a slice of the store or of the guest-RAM object. It refuses or withholds anything the guest did not ask for: guest-privileged leaves are withheld from user twins, and a leaf that overlaps a kayfabe placement is refused. Apps work because of these rows. Measured: privileged leaves were withheld in graphics, video and OpenCL apps (up to 130 427), and those apps still passed. `vmm_overlaps=0` in all 71 per-app logs.\n\n2. **The two windows.** These are added by kayfabe, not by the guest. `create_mirror` maps the whole store (all guest VRAM, including the guest kernel's GPU page tables) and the whole guest-RAM object into every mirrored space. It does this whether the space is a user space or a kernel space. Spares and recycled spaces carry the windows too. The mapping is read-write and carries no privilege attribute: NVOS46 has no privilege field, and RM sets the PTE PRIV bit only for its own GR context buffers.\n   - The only reader of the window addresses is the Translated rewriter for guest-kernel CE channels. Guest userspace cannot create such a channel.\n   - Measured in the 61/65 run: there were 1249 passthrough births in 75 spaces and 440 Translated births in 214 spaces, and no space had both. None of the 75 passthrough spaces ever became a kernel space.\n   - Every one of the 12 mirror-creation lines in that run shows both windows: 8 GiB for the store, 16 GiB for RAM. That includes the spaces where deviceQuery and simpleIPC ran, and both passed.\n\n**Why passing apps can't settle it.** A correct app only touches addresses its own page tables map. The windows sit at addresses the guest never maps; if it tried, the map would be refused, and the count of such attempts was zero. So whether the windows are there or not makes no difference to a correct app. The same binaries pass on bare metal, where no window exists at all: host 71/71. The matrix therefore confirms the rows are right and says nothing either way about the windows. On top of that, every passthrough channel in the run had guest privilege level 1 (ADMIN), so no app ran as an unprivileged guest user. To show the windows are absent you would need what the audit names: a `windows=none` census on user mirrors, and the T-WINDOW-USER box test. Neither has been run.\n\n**What would break if user spaces had no windows.** On the data path, nothing: nothing passthrough reads uses a window address. There is one coupling in the code, though:\n- `create_mirror` only records the channel-plane Mirror when both window maps succeed (mem.rs:1798-1843).\n- Every birth, passthrough included, refuses with \"has no mirror\" when that record is missing (chan.rs:2707-2712).\n- `prewarm` throws away a spare whose windows were refused (mem.rs:1949-1955).\n\nSo with today's code, \"no windows\" means refused births. That coupling has to be cut; it is not something apps need. The comment at mem.rs:1787-1788 says only a Translated channel would refuse, which understates it.\n\n**Measured cost of the windows today.** Mapping the RAM window took 672-906 ms per newly created mirror in this run.\n\n**How it got this way.** §12 (2026-09-22) put the window \"in every host VAS\" because UVM mixes physical and virtual addresses in one stream. P5 then built that, and P5b (both 09-25) put user channels into those same mirrors. v3-roperm (09-26) withheld guest-privileged leaves from user twins but did not touch kayfabe's own windows.\n\n**Two citation notes.**\n- The audit's pointer mem.rs:1755-1762 is create_mirror's doc comment and signature; the window maps are at :1786-1793.\n- origin/v3-apps still has the 35/65 baseline. The 61/65 result is in origin/master's copy of V3_APP_MATRIX.md, at lines 67-70.\n\nThe P1 design's statement \"Passthrough work never uses the windows; Translated rewrites are their only consumer\" holds independently.",
+          "claims": [
+            {
+              "claim": "The '61 apps' result is real: 67/71 rows passed (61/65 apps plus 6/6 stream probes) and the host passed 71/71; the 4 failures are the UVM four.",
+              "evidence": "traces/v3_cdp/app_matrix_2830988f/guest.res (67 verdict=PASS, 4 FAIL: UnifiedMemoryStreams, UnifiedMemoryPerf, conjugateGradientUM, attach_verify); host.res (71 PASS). origin/master docs/design/V3_APP_MATRIX.md:67-70. origin/v3-apps:docs/design/V3_APP_MATRIX.md:20,160 still show the 35/65 baseline; the 61/65 lives on origin/master.",
+              "basis": "MEASURED",
+              "holds": true
+            },
+            {
+              "claim": "A passthrough app's GPU virtual addresses are served by guest rows. Each walked guest leaf becomes one fixed map, at the guest's own VA, of a slice of the store (vidmem leaf, offset = GPGA) or of the guest-RAM object (sysmem leaf, memfd offset). This is the mirror of the guest's own page tables, and it is what makes apps work.",
+              "evidence": "crates/kf-mem/src/ledger.rs:70-111 (desired_from_leaves: vidmem leaf -> store slice, sysmem -> RAM-object slice); ledger.rs:404-431 (HostVas::map: MapBacking::SharedSlice at Some(d.va)); crates/kf-mem/src/apply.rs:405-468; crates/kf-qemu/src/mem.rs:726-743 (GpuMirror::map records only rows it placed). The walker itself runs in its own CUDA context with the store imported, not in the twins: docs/design/THE_TRANSLATED_PLANE.md:947-950.",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "The passthrough twin is born in that same mirrored host space, over the guest's own GPFIFO VA. Its USERD and error notifier are named by object handle plus offset, not by any window VA. Nothing on the passthrough path parses the pushbuffer or reads a window address.",
+              "evidence": "crates/kf-qemu/src/chan.rs:2810-2831 (`let space = mirror.space;` then birth_twin_in(me.rm, space, g, join)); crates/kf-chan/src/passthrough.rs:1-7 (unparsed), :95-128 (RingSpec{gp_fifo_va, userd_memory, userd_offset}); chan.rs:2742-2799 (USERD/notifier via store handle or mirror.ram_obj handle + offset).",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "For guest rows, v3 does map only what is needed, and even less. A user twin withholds every leaf the guest kernel marked privileged, and a guest leaf that overlaps a kayfabe placement is refused by name. In the 61/65 run privileged leaves were withheld in large numbers in graphics, video and OpenCL apps, and those apps still passed. No guest leaf ever overlapped a kayfabe placement.",
+              "evidence": "READ: crates/kf-mem/src/apply.rs:395-404 (withhold_privileged), :446-457 (reserved overlap -> refuse, vmm_overlaps); crates/kf-qemu/src/mem.rs:726-729, :917-926. MEASURED: the per-app kf3 logs inside traces/v3_cdp/app_matrix_2830988f/all_logs.tgz show priv_withheld rising from 2067 (vulkaninfo) to 130427 (blender_cycles, clinfo, clpeak, egl_offscreen, geekbench_gpu, hashcat, nvenc/nvdec all PASS in guest.res), and vmm_overlaps=0 in all 71 per-app kf3 logs.",
+              "basis": "MEASURED",
+              "holds": true
+            },
+            {
+              "claim": "The two windows are not guest rows. create_mirror maps the whole store and the whole guest-RAM object into EVERY mirrored host space, whether the space is a user space or a kernel space, with RM choosing the address (GROWS_DOWN). Prewarmed spares, recycled spares and retired spaces all keep them. The measured revision has the same code.",
+              "evidence": "crates/kf-qemu/src/mem.rs:1786-1793 (rm.map_window(space, store, fb_len, true) and the RAM-object window); prewarm :1915-1921; Spare :928-939; spare reuse :2150-2172 (windows inherited, class re-derived only for privileged leaves); retire->spare :1996-2002. At the measured rev: git show 2830988f:crates/kf-qemu/src/mem.rs:1724-1731.",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "The window mappings are read-write and carry no privilege attribute, and the host map call cannot express one: RM sets the PTE PRIV bit from a memory-descriptor flag that ogkm-580 sets only on RM's own GR context allocations. The PRIV bit is enforced against user twin channels (reported measurement). Whether closed GSP firmware enforces anything further is unverified.",
+              "evidence": "crates/kf-host/src/channel.rs:377-390 (map_window: extra = GROWS_DOWN only); crates/kf-host/src/lib.rs:229-238 (flags = extra|page_size|CACHE_SNOOP_ENABLE), :1128-1139; ogkm-580 src/common/sdk/nvidia/inc/nvos.h:1974-1976 (ACCESS 0 = READ_WRITE; no NVOS46 privilege field); virt_mem_allocator_gm107.c:2849-2850 (PRIV from MEMDESC_FLAGS_GPU_PRIVILEGED); that flag is set only in kernel_graphics_context.c:1127,1277 and kgraphics_{tu102,gp100,gm200}.c. Enforcement: docs/design/V3_HEADLESS_GRAPHICS.md:200-205 reports Xid 31 FAULT_PRIV_VIOLATION when a user twin touched a host privileged buffer; no trace file was located. Closed-firmware behaviour: UNVERIFIED.",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "During the 61/65 run the windows were present in passthrough apps' own twin spaces. All 12 create_mirror lines show both windows, one over all guest VRAM (8 GiB = fb-mb 8192) and one over all guest RAM (16 GiB), and none was refused. Three of the 75 passthrough spaces have an explicit line, including the spaces of deviceQuery and simpleIPC, which both PASSED. The other passthrough spaces came from reused spares, which carry the windows by construction.",
+              "evidence": "traces/v3_cdp/app_matrix_2830988f/all_logs.tgz: 12 lines 'mirror space=..: windows fb=<base>+0x200000000 ram=<base>+0x400000000' (bases deliberately not reproduced); VasKeys with these lines that host passthrough births: deviceQuery.kf3.log, simpleIPC.kf3.log, iso/{UnifiedMemory*,conjugateGradientUM,attach_verify}.kf3.log; census 'mirrors=4 reused=297 prewarmed=3'. guest.res: deviceQuery PASS, simpleIPC PASS. Spares carry the windows: mem.rs:1930-1948, :2150-2172 (READ).",
+              "basis": "MEASURED",
+              "holds": true
+            },
+            {
+              "claim": "The Translated rewriter for guest-kernel CE channels is the only product code that uses the window addresses. Mirror.fb_base and Mirror.ram are read only by Windows/SlotWindow, which are built only in the Translated pump. The only other use is vmm_ranges, which uses them to refuse guest leaves. The kf-gate3/4 test harnesses map their own windows.",
+              "evidence": "crates/kf-qemu/src/chan.rs:491-524 (Windows::translate uses fb_base; SlotWindow uses mirror.ram), constructed only at chan.rs:3380-3397 (Translated Slot pump); crates/kf-chan/src/translated.rs:99-105, :726-736; mem.rs:714-724, :1844-1847 (vmm_ranges); an exhaustive grep of fb_base / mirror.ram over crates/kf-qemu, kf-chan, kf-mem, kf-host and kf-trap finds no other reader; display.rs:1058-1068 uses RamMap (CPU), not windows; crates/kf-harness/src/bin/kf-gate3.rs:240-267, kf-gate4.rs:336-359 (test-only).",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "Guest userspace cannot reach the windows' only consumer: a channel is Translated only if its client is RM-internal or the guest kernel stamped PRIVILEGE=KERNEL, and every other channel is Passthrough. In the 61/65 run no host space ever held both kinds, so every window mapped in a passthrough space had no consumer.",
+              "evidence": "READ: crates/kf-rm/src/chanlink.rs:1366-1383 (kernel_channel; :1373-1376 itself names window addresses as what a user channel must not get); chan.rs:2676-2683. MEASURED (all_logs.tgz incl. iso/): 1249 'BORN Passthrough' births in 75 distinct VasKeys and 440 'BORN Translated' births in 214 VasKeys, with 0 VasKeys in common; all 75 passthrough spaces belong to ordinary (non-0xC1E) clients, and 0 of the 68 'is a guest-KERNEL space' flips name a passthrough space.",
+              "basis": "MEASURED",
+              "holds": true
+            },
+            {
+              "claim": "Removing the windows from user spaces would break nothing on the data path. Passthrough uses only rows and object handles, and the same app binaries pass on bare metal, where no kayfabe window exists.",
+              "evidence": "READ: claims on rows, birth and window consumers (ledger.rs:404-431, chan.rs:2810-2831, chan.rs:491-524/3380-3397). MEASURED: traces/v3_cdp/app_matrix_2830988f/host.res 71/71 PASS with the identical bundle (docs/design/V3_APP_MATRIX.md:67-70).",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "Today's code ties channel births to the windows anyway. create_mirror records the channel-plane Mirror only when both window maps succeed, and every birth, passthrough included, refuses when that record is missing. Prewarm also discards a spare whose windows were refused. So 'no windows' currently means refused births. This is a structural dependency that the fix must cut, not a data-path need. The comment at mem.rs:1787-1788 says only a Translated channel would refuse, which understates it.",
+              "evidence": "crates/kf-qemu/src/mem.rs:1798-1843 (only the (Ok(fb), Some(Ok)) and (Ok(fb), None) arms insert into plane.mirrors; the catch-all '(fb, ram) => windows REFUSED' inserts nothing); chan.rs:2707-2712 ('VA space .. has no mirror' refusal, before the passthrough branch at :2739); mem.rs:1949-1955 (prewarm frees the space if either window refuses); comment mem.rs:1786-1788.",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "Passing apps are not evidence that the windows are absent; they are evidence only that the apps never use them. A correct app touches only addresses its own page tables map. The windows sit at addresses the guest never maps (such a map would be refused, and none was attempted), so their presence makes no difference to a correct app. The run measured apps passing with the windows present in their twins, and bare metal measured the same apps passing with no windows at all.",
+              "evidence": "Logic from apply.rs:446-457 (guest leaves never alias a window). MEASURED: vmm_overlaps=0 (all 71 per-app kf3 logs); windows present in PASSing apps' spaces (deviceQuery, simpleIPC, all_logs.tgz + guest.res); host.res 71/71 with no kayfabe.",
+              "basis": "MEASURED",
+              "holds": true
+            },
+            {
+              "claim": "The matrix could not have tested the guest user/kernel boundary even in principle. Every passthrough channel in the run was stamped guest privilege level 1 (ADMIN), so no app ran as an unprivileged guest user, and the matrix has no hostile arm. Evidence that the windows are absent would need the audit's census (user mirrors log windows=none, with a negative control) and the T-WINDOW-USER box test, which has not been run.",
+              "evidence": "MEASURED: all 1249 'BORN Passthrough' lines in all_logs.tgz carry 'privilege=1'; level meaning READ from crates/kf-abi/src/notifier.rs:277-294 (0 USER, 1 ADMIN, 2 KERNEL; recomputed by guest CPU-RM from the caller's context). Required checks: docs/audits/2026-10-03-v3-stage1.md:455-459 (S1-21 Check), :1626 (T-WINDOW-USER still to run).",
+              "basis": "MEASURED",
+              "holds": true
+            },
+            {
+              "claim": "How it got this way: the design put the window in every host VA space so that UVM's mixed address streams would always find it (2026-09-22). P5 implemented windows in every mirror, and P5b then put user channels into those same mirrors as passthrough twins (both 2026-09-25, P5 first). v3-roperm (2026-09-26) withheld guest-privileged leaves from user twins but did not touch kayfabe's own windows. §24.2 describes the windows as being 'in Translated spaces', but the code maps them in all spaces.",
+              "evidence": "docs/design/THE_TRANSLATED_PLANE.md:419-420 (§12, from commit 8ecad812 2026-09-22), :1054-1058 (§24.2); git log -S on mem.rs: 09252909 (P5, 2026-09-25); chan.rs 'BORN Passthrough': 90784294 (P5b, 2026-09-25; merge-base confirms P5 is its ancestor); apply.rs withholds_privileged: efce970b (2026-09-26).",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "Cost the windows add today: mapping the RAM window took 672-906 ms per newly created mirror in the 61/65 run, and the store window 1.1-3.1 ms. Spares hide part of this.",
+              "evidence": "traces/v3_cdp/app_matrix_2830988f/all_logs.tgz: 'ram_window' fields 672095..906580 us and 'fb_window' 1126..3080 us across the 12 mirror lines; census mirror_avg_us=798353. Code comment mem.rs:961-966 (65-86 ms on another box).",
+              "basis": "MEASURED",
+              "holds": true
+            },
+            {
+              "claim": "The audit's S1-21 pointer has drifted. It cites crates/kf-qemu/src/mem.rs:1755-1762, which at origin/master is create_mirror's doc comment and signature; the window maps are at :1786-1793. The finding itself is correct.",
+              "evidence": "git show origin/master:docs/audits/2026-10-03-v3-stage1.md:443 vs git show origin/master:crates/kf-qemu/src/mem.rs:1755-1763 and :1786-1793.",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "The P1 design's statement 'Passthrough work never uses the windows; Translated rewrites are their only consumer' is independently confirmed.",
+              "evidence": "P1 design JSON (scratchpad sec_p0p1p2_design.json result.p1p2.summary), checked against the consumer and birth claims above (chan.rs:491-524, :3380-3397, :2810-2831) and the measured zero-overlap of passthrough and Translated spaces.",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "Whether any app's GPU work actually touched a window address during the run is not measured. Passthrough is unparsed and no GPU-side access trace exists. The only facts available are that no app failed in a window-related way and that the guest never mapped those addresses.",
+              "evidence": "crates/kf-chan/src/passthrough.rs:1-7 (nothing reads a pushbuffer); no access instrument exists in the traces; vmm_overlaps=0 (all_logs.tgz).",
+              "basis": "UNVERIFIED",
+              "holds": true
+            }
+          ]
+        }
+      },
+      {
+        "lens": "reach",
+        "result": {
+          "summary": "Short answer to the owner: you are right that v3 maps only what is needed, but that is true of the guest's own rows. It is not true of the two identity windows, and the 61/65 result cannot tell the difference.\n\n**What v3 maps for an app's own process.** It maps only what the guest's page tables say. The walk and reconcile place guest rows, privileged guest leaves are withheld in user twins, and any guest row that overlaps a kayfabe placement is refused. Those rows are what the apps exercise.\n\n**The windows are a separate thing kayfabe adds.** Each window is one mapping over a whole kayfabe-owned object: the store window covers all guest VRAM and the RAM window covers all guest RAM. They are placed when a mirror is created (and in prewarmed spares), not derived from any guest page-table entry.\n- They are needed only by Translated channels, which run the guest kernel's own GPU work (RM's CeUtils and UVM). The rewriter turns their physical-address operands into window addresses.\n- Passthrough twins, where an app's own channels run, never use them.\n- They are in every space because THE_TRANSLATED_PLANE §12 chose that. A UVM space is only recognised as a kernel space when its first Translated channel is born, which happens after its mirror and spare already exist.\n\n**Why the apps still pass with the windows present.**\n- The windows sit at the top of the host VA space (GROWS_DOWN), above the 2^47 ceiling that guest allocations stay under, and any guest row overlapping them is refused. So a correct app never uses a window address, and the windows neither help nor disturb it.\n- This was measured in the 61/65 run itself (kf3 2830988f). A guest user process's mirror (client 0xc1d00020) logged both windows: 8 GiB store and 16 GiB RAM, at the top of the 49-bit space. Passthrough twins were born in that same space, and deviceQuery passed. In the same log, RM/UVM's space became a guest-KERNEL space, which is where the windows are actually used.\n- So 61/65 shows that everything an app uses is mapped correctly. It says nothing about whether extra memory is also mapped. The app matrix cannot detect this gap.\n\n**Reachability, read from source (never measured).**\n- The window mappings are read-write. They are not privileged: the map call (NVOS46) has no privilege flag, and in ogkm-580 RM's map path for it the privilege variable is zeroed and never set, so the page-table entry is written as non-privileged.\n- A non-privileged entry is exactly what every ordinary CUDA allocation uses. The GPU's privilege fault fires only when a non-privileged access hits a privileged entry.\n- So the P0 fix (twin channels born USER) does not reduce what the windows expose. P0 is measured on `v3-sec-nonpriv`, which is not yet merged into master.\n- The windows lie within the address width of the copy-engine and compute inline-write operands (49-bit on GA10x). They lie above the 40-bit width of host semaphores and ring entries.\n- Neither host RM nor the guest's own page tables limit the windows. kayfabe copies the guest's \"privileged\" marking only onto guest rows, and the windows bypass it by mapping the same memory without it.\n\n**Measurement status.** T-WINDOW-USER, the test that would check reachability from a user twin, exists only in the audit text. No trace on any origin branch has run it.\n\n**Two citation problems.**\n- S1-21's line pointer is stale. The code is now at `kf-qemu/src/mem.rs:1786-1795`, and `prewarm` at `:1915-1921` also maps both windows.\n- A source comment in kayfabe (kf-host `channel.rs:1104-1105`) cites the wrong ogkm function for where page-table privilege comes from. Its conclusion, that a client cannot set the bit, still holds.\n\nNothing was edited, committed or run on a box. Logs were extracted only to the scratchpad (`/tmp/claude-0/-workspace-nvidia-gpu-passthrough/85f9c0ab-d91a-47ab-b068-c099d453dd8f/scratchpad/am/`).",
+          "claims": [
+            {
+              "claim": "The identity windows are needed only by Translated (guest-kernel) channels; passthrough twins (user processes' channels) never consume or emit window VAs.",
+              "evidence": "kf-master origin/master crates/kf-qemu/src/chan.rs:491-524 (Windows/SlotWindow are the only production `impl Window`; `git grep 'impl Window for'` finds only these plus kf-chan tests), used only in the Translated pump at chan.rs:3380; passthrough birth takes only `mirror.space` and `mirror.rows` (chan.rs:2817-2828, `birth_twin_in(me.rm, space, ...)`); docs/design/THE_TRANSLATED_PLANE.md §4 (:81-104) and §24.2 (:1034-1058). The P1 design JSON says the same: 'Passthrough work never uses the windows. Translated rewrites are their only consumer.'",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "Both windows are deliberately mapped into EVERY mirrored host VA space, user twins included (live mirrors and prewarmed/reused spares). The reason is that a UVM space is only recognised as kernel at its first Translated birth, which comes after its mirror and spare were built.",
+              "evidence": "THE_TRANSLATED_PLANE.md:419-420 (§12: 'it goes in **every** host VAS we create'); kf-qemu/src/mem.rs:1786-1795 (create_mirror), :1915-1921 (prewarm maps both), :928 (a retired spare keeps 'its two windows still in place'); chan.rs:2900-2913 (kernel flip at Translated birth); kf-qemu/src/mem.rs:920-926 (kernel_vas_for: USER unless RM-internal client).",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "In the 61/65 app-matrix run (kf3 2830988f), a guest USER process's mirror carried both windows (8 GiB store, 16 GiB guest RAM), passthrough twins were born in that same space, and the app passed. In the same log the RM/UVM space flipped to guest-KERNEL, which is where the windows are actually consumed.",
+              "evidence": "traces/v3_cdp/app_matrix_2830988f/all_logs.tgz → deviceQuery.kf3.log:354 (VasKey client 0xc1d00020: 'windows fb=0x1fffe00000000+0x200000000 ram=0x1fffa00000000+0x400000000'), :369 ('BORN Passthrough ... in VasKey(13965662583458365447)', the same key), :256 + :286 (client 0xc1d0000a space with windows becomes 'guest-KERNEL space (Translated chan ...)'); traces/v3_cdp/app_matrix_2830988f/guest.res (deviceQuery verdict=PASS); docs/design/V3_APP_MATRIX.md (origin/master) lines 7-9 and 68 (61/65 at 2830988f). Also simpleIPC.kf3.log:687,723 show the same window lines (simpleIPC PASS).",
+              "basis": "MEASURED",
+              "holds": true
+            },
+            {
+              "claim": "The app matrix measures completeness (every VA an app names is mapped correctly), not minimality (nothing else is mapped). The windows sit where no correct guest program names an address, so their presence neither helps nor disturbs an app, and the matrix cannot detect them.",
+              "evidence": "Window placement is GROWS_DOWN via the whole-space range (kf-host/src/channel.rs:377-389), outside the guest-VA reservations whose top is the 2^47 CPU-VA ceiling (channel.rs:70-94); any guest leaf overlapping a VMM placement is refused by name (kf-mem/src/apply.rs:443-455; kf-qemu/src/mem.rs:716-724 vmm_ranges; kf-mem/src/ledger.rs:296-305). The measured co-presence of windows and a passing app is in the claim above. That no guest allocation is ever placed above 2^47 is kayfabe's own stated premise (channel.rs:73-76), not measured here.",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "Removing the windows from user twins (P1) would leave the 61/65 verdicts unchanged.",
+              "evidence": "Follows from passthrough never consuming window VAs (chan.rs:491-524, :2817-2828). Not measured: the P1 rollout's A/B (`KF3_TSPACE=1`, sec_p0p1p2_design.json result.p1p2 §9 step 3) has not run on any box.",
+              "basis": "UNVERIFIED",
+              "holds": true
+            },
+            {
+              "claim": "map_window's NVOS46 request is GROWS_DOWN | CACHE_SNOOP_ENABLE and nothing else. There is no FIXED and no page-size pin, ACCESS is READ_WRITE (value 0), there is no TLB_LOCK (atomics allowed), GPU_CACHEABLE is DEFAULT and there is no kind override. It maps the whole object from offset 0 (the store, or the guest-RAM OS descriptor) through the space's full range.",
+              "evidence": "kf-host/src/channel.rs:377-390 (`extra = NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN`; `raw_map_dma_slice(space.range, memory, 0, len, None, extra, false, 0)`); kf-host/src/lib.rs:229-238 (nvos46_map_flags always ORs CACHE_SNOOP_ENABLE, FIXED only if `at` is Some), :1124-1126 (page_size 0 when at=None), :1135; ogkm-580 src/common/sdk/nvidia/inc/nvos.h:1974-1976 (ACCESS 0=READ_WRITE), :2003-2012 (SHADER_ACCESS_DEFAULT matches ACCESS), :2066-2068, :2107-2110.",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "No client flag can make the window PTEs privileged. NVOS46 has no privilege field, and on the NVOS46 path RM writes them PRIVILEGE_FALSE (VER2) / PCF REGULAR (VER3).",
+              "evidence": "ogkm-580 nvos.h:1971-2140 (the NVOS46 flag set has no PRIV field); src/nvidia/src/kernel/gpu/mem_mgr/dma.c:178 → dmaAllocMapping_GM107 in arch/maxwell/virt_mem_allocator_gm107.c:317; there `pLocals` is zeroed (:404) and `pLocals->priv` is never assigned before it is passed to dmaUpdateVASpace (:1500; only references are :359 and :1500); PTE writer :2233 (priv→NV_MMU_PTE_PRIVILEGE_FALSE), :2515 (fldPrivilege), :2451 and :2460 (VER3 PCF REGULAR when !priv). kayfabe states the same: kf-mem/src/apply.rs:41-44 ('No unprivileged host verb can place that bit').",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "kf-host's MapPerm doc comment says RM takes PRIVILEGE from the memory descriptor on this path, citing virt_mem_allocator_gm107.c:2849-2850.",
+              "evidence": "kf-host/src/channel.rs:1104-1105. ogkm-580 virt_mem_allocator_gm107.c:2849-2850 is inside dmaMapBuffer_GM107 (:2701), an internal mapping path. The NVOS46 path (dmaAllocMapping_GM107) never reads MEMDESC_FLAGS_GPU_PRIVILEGED and leaves priv at 0 (:404, :1500). The citation points at the wrong function; the conclusion (a client cannot set PRIV) still holds.",
+              "basis": "READ",
+              "holds": false
+            },
+            {
+              "claim": "Aperture and caching: the store window is a vidmem object, so its PTEs are aperture VIDEO with the allocation's default cache attribute. The RAM window is an OS descriptor over the write-back guest memfd, mapped with CACHE_SNOOP so that RM gives it a SYS_COH (coherent) aperture on non-coherent platforms.",
+              "evidence": "ogkm-580 virt_mem_allocator_gm107.c:1196-1209 (ADDR_FBMEM → GMMU_APERTURE_VIDEO), :1445-1462 (GPU_CACHEABLE_DEFAULT keeps the allocation's attribute), :432-441 (snoop from NVOS46 when DEFER_TO_MAP), :1341-1347 (cpuCacheSnoop → SYS_COH); kf-qemu/src/mem.rs:1657-1690 (guest_ram_object: OS descriptor over the whole memfd, ReadWrite, WriteBack); THE_TRANSLATED_PLANE.md:184-195 (§6 snoop measurement).",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "The twin space is RM's default whole range, and GROWS_DOWN puts the windows at its top: the store window ends at the top of the 49-bit space on GA106/AD104 and at the top of the 57-bit space on GB203, with the RAM window directly below it.",
+              "evidence": "kf-abi/src/bringup.rs:413-431 (all-zero NvVaspaceAllocationParameters = default range); kf-host/src/channel.rs:180-190; measured: traces/v3_cdp/app_matrix_2830988f/all_logs.tgz deviceQuery.kf3.log:354 (GA106: fb 0x1fffe00000000+8GiB ends at 2^49, ram 0x1fffa00000000+16GiB); traces/driver_matrix/ptx82/gates_rtx4070_ad104_580.159.04_82.log:51-52 (0x1fffff0000000 / 0x1ffffec000000, gate-sized); traces/driver_matrix/ptx82/gates_rtx5080_gb203_580.173.02.log:51-52 (0x1fffffff0000000 / 0x1ffffffec000000); THE_TRANSLATED_PLANE.md:1077-1078, :1096-1098.",
+              "basis": "MEASURED",
+              "holds": true
+            },
+            {
+              "claim": "On GA10x the measured window range lies inside the address width that copy-engine operands and semaphores (C7B5) and the compute class's inline-to-memory destination (C7C0) can carry (49 bits). It lies outside the width of host-class semaphores, GPFIFO entries and the compute report semaphore (40 bits). The width of shader global pointers is not stated in any open header. C8B5 operands are 57-bit; the C9B5/CAB5 open headers are trimmed, so Blackwell CE width is not readable from them.",
+              "evidence": "ogkm-580 kernel-open/nvidia-uvm/clc7b5.h:48 (SET_SEMAPHORE_A_UPPER 16:0), :161-166 (OFFSET_IN/OUT_UPPER 16:0); src/common/sdk/nvidia/inc/class/clc7c0.h:167-168 (OFFSET_OUT_UPPER 16:0), :733 (REPORT_SEMAPHORE_A_OFFSET_UPPER 7:0); kernel-open/nvidia-uvm/clc56f.h:77 (SEMAPHOREA_OFFSET_UPPER 7:0), :209 (SEM_ADDR_HI 7:0), :270-272 (GP entry 40-bit); clc8b5.h:92,96 (24:0); clc9b5.h/clcab5.h have no OFFSET_*_UPPER defines.",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "No per-channel VA limit sits below the space's top. Open RM sets the instance-block address limit to the VA space's own limit, and the windows are inside the space RM itself placed them in.",
+              "evidence": "ogkm-580 src/nvidia/src/kernel/gpu/mmu/arch/volta/kern_gmmu_gv100.c:279-283 → arch/pascal/kern_gmmu_gp100.c:99-101 (vaLimit = vaspaceGetVaLimit(pVAS) − uvmKernelPrivRegion); kf twins use the legacy subcontext (kf-host/src/channel.rs:597-610, h_context_share 0). Whether GSP firmware programs user-channel instance blocks the same way is closed and UNVERIFIED.",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "After P0 every kf3 host channel is born PRIVILEGE_USER, but that is on branch v3-sec-nonpriv, not on master. On master (e4fb0190) births inherit the VMM's CAP_SYS_ADMIN and are ADMIN when QEMU runs as root.",
+              "evidence": "origin/v3-sec-nonpriv:traces/v3_security/nonpriv_20261003/README.md (box 54050499, GA106, 580.159.04: 161 suite births + 11 gate births with PRIVILEGED_CHANNEL=0 and privilege=USER; BEFORE run at 3e0f6dee: reply flags 0x004000a0, PRIVILEGED_CHANNEL=1); `git merge-base --is-ancestor origin/v3-sec-nonpriv origin/master` → not merged; ogkm-580 src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:276-291 (KERNEL/ADMIN/USER decision).",
+              "basis": "MEASURED",
+              "holds": true
+            },
+            {
+              "claim": "GMMU privilege applies per PTE. A PRIV PTE faults (PRIV_VIOLATION) for a non-privileged access, while a valid, read-write, non-PRIV PTE is the ordinary user mapping and translates for a USER channel in its bound space. So P0 does not reduce what the windows expose.",
+              "evidence": "ogkm-580 src/common/inc/swref/published/pascal/gp100/dev_mmu.h:130-132 (VER2 PRIVILEGE 5:5), ampere/ga100/dev_mmu.h:56-58; volta/gv100/dev_fault.h:52 (FAULT_TYPE_PRIV_VIOLATION); kernel-open/nvidia-uvm/uvm_pascal_mmu.c:276-277 (every UVM user PTE is PRIVILEGE FALSE), :335-337 ('Engines with priv accesses won't fault on the priv PTE' ⇒ non-priv accesses do); window PTEs are non-PRIV (claim above). The hardware's exact rule for which accesses count as privileged is closed and UNVERIFIED beyond these sources.",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "The GMMU privilege check is known to fire against guest-authored GR work in a kf twin: a guest GL ROP access to a host-RM privileged GR context buffer raised host Xid 31 FAULT_PRIV_VIOLATION. The windows lack exactly this bit.",
+              "evidence": "docs/design/V3_HEADLESS_GRAPHICS.md:200-205 (origin/master, 'MEASURED 2026-09-26 … Xid 31 GPCCLIENT_PROP_0 … FAULT_PRIV_VIOLATION'); kf-host/src/channel.rs:57-62. Caveat: the host-side Xid line is not in the committed trace; traces/v3_gfx/run_gfx7_gfx.out is guest-side only (shows GFX_S4=FAIL). Inferred from the nonpriv README, not checked for gfx7: those channels were ADMIN under root QEMU.",
+              "basis": "MEASURED",
+              "holds": true
+            },
+            {
+              "claim": "The guest's own page tables cannot restrict, replace or remove the windows. The windows come from kayfabe-owned objects at mirror creation, not from any guest leaf. Walk and reconcile manage only guest rows, and refuse any guest leaf that overlaps a window. kayfabe's own range unmaps avoid them.",
+              "evidence": "kf-qemu/src/mem.rs:1786-1795, :1915-1921; kf-mem/src/apply.rs:443-455 (overlap with 'OUR placement' refused, Q11); kf-qemu/src/mem.rs:716-724 (vmm_ranges = ring region + both windows); kf-mem/src/ledger.rs:296-305; kf-host/src/channel.rs:405-411 (unmap_range must not reach a window).",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "kayfabe mirrors the guest kernel's privilege restriction only for guest rows: privileged leaves are withheld from user twins, and each leaf's read-only/atomic/volatile permissions are carried over. Neither applies to the windows. They alias all of the store (which holds guest GPU page tables and other guest-kernel allocations, plus kayfabe's BAR1/BAR2 roots in the carve-out) and all of guest RAM, with non-PRIV read-write PTEs. So the withholding is bypassed at the window.",
+              "evidence": "kf-mem/src/apply.rs:395-405 ('a PRIVILEGED memory leaf never reaches a user twin … the host cannot express the bit'), :38-44; kf-mem/src/ledger.rs:307-313; kf-qemu/src/mem.rs:727-729 (GpuMirror::withholds_privileged); kf-host/src/channel.rs:1090-1105 (MapPerm, not passed by map_window); THE_TRANSLATED_PLANE.md §2 (:44-56, one object covers the whole guest FB); kf-chip/src/bar0.rs:396-425 (bar1/bar2 PDE bases inside [carve, fb_length)); chan.rs:497 (LocalFb bounded only by fb_len).",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "Host RM does not restrict the windows either. The space is allocated with the default whole range and no flags, the windows are mapped through the space's own full-range object (not a guest reservation), and nothing in the request is read-only or privileged.",
+              "evidence": "kf-abi/src/bringup.rs:413-431; kf-host/src/channel.rs:180-200 (alloc_vaspace: NV01_MEMORY_VIRTUAL offset 0 limit 0), :389 (space.range), :377-390; see the NVOS46 flag claim above.",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "Reachability of a window from a user twin has never been measured. T-WINDOW-USER exists only as text in the stage-1 audit, and no trace on any origin/* branch records such a run.",
+              "evidence": "git grep 'T-WINDOW-USER|WINDOW_USER|window_user|windows=none' across every origin/* branch hits only docs/audits/2026-10-03-v3-stage1.md (origin/master, v3-sec-audit-s1, v3-sec-rawaddr, v3), at :455-459, :1605, :1626; the audit lists it as 'Box tests still to run (all UNVERIFIED until they do)' (:1626).",
+              "basis": "READ",
+              "holds": true
+            },
+            {
+              "claim": "The parts that are measured are: windows present in user twins, window placements, and passthrough GR/CE twins executing guest work in host spaces built by walking the guest's tables. That a user channel's access to a window VA translates is read from source only.",
+              "evidence": "deviceQuery.kf3.log:354/:369 in traces/v3_cdp/app_matrix_2830988f/all_logs.tgz; traces/driver_matrix/ptx82/*.log:51-52; THE_TRANSLATED_PLANE.md:1135-1153 (§27 gates 5+6, box 52430332). The reachability chain is in the READ claims above.",
+              "basis": "MEASURED",
+              "holds": true
+            },
+            {
+              "claim": "S1-21's code pointer is stale: it cites kf-qemu/src/mem.rs:1755-1762 for the window maps. It also does not cite prewarm, which maps both windows into every spare.",
+              "evidence": "At origin/master e4fb0190 the create_mirror window maps are at crates/kf-qemu/src/mem.rs:1786-1795 and prewarm's are at :1915-1921; audit text docs/audits/2026-10-03-v3-stage1.md:443. V3_SECURITY_AUDIT_PLAN.md:177 repeats :1755-1762. The finding's substance is unaffected.",
+              "basis": "READ",
+              "holds": true
+            }
+          ]
+        }
+      }
+    ],
+    "skeptics": [
+      {
+        "angle": "no-user-mirrors",
+        "result": {
+          "refuted": false,
+          "scope_correction": "The core claim stands, and \"every twin\" is accurate rather than overstated. Restate it with these corrections:\n(1) Citations at origin/master e4fb0190: the windows are mapped at crates/kf-qemu/src/mem.rs:1786-1794 (create_mirror starts at :1757), at :1915-1921 (prewarm spares) and at :2148-2187 (recycled spares keep their windows). map_window is at crates/kf-host/src/channel.rs:377-390. The audit's mem.rs:1755-1762 refers to 12a526df.\n(2) Scope of \"every twin\". The STORE window is in every passthrough twin's space without exception. A twin is born only when plane.mirrors has an entry for the key (chan.rs:2736-2742), and create_mirror inserts that entry only when the store window mapped (mem.rs:1797-1838). The RAM window is in every twin except one whose guest-RAM object failed (Mirror.ram = None). That space also has its sysmem leaves and sysmem USERD refused (chan.rs:2749-2761).\n(3) The phrase \"passes no privileged flag\" points at the wrong fix. NVOS46 has no client-settable privilege bit. RM takes PTE PRIVILEGE from the memory descriptor (ogkm-580 virt_mem_allocator_gm107.c:2849-2850), and only RM-internal GR buffers set it (kernel_graphics_context.c:1127,1277; kgraphics_*). So the window PTEs are valid, read-write (nvos.h:1974-1975: ACCESS default 0 = READ_WRITE) and non-privileged. The fix is not to map them in user spaces, as P1 proposes; a flag cannot do it.\n(4) Label the measurements accurately. MEASURED: the windows are present in a guest user client's twin space. READ: they are reachable by that client's GPU work (no address filter on passthrough, valid user-privilege PTEs). UNVERIFIED: an actual access from user GPU work. T-WINDOW-USER has not run, and no trace on any origin branch mentions it. The audit's follow-on clause (\"the walker then mirrors whatever those tables say\") was not checked here and stays UNVERIFIED.",
+          "reasoning": "I tried every refutation angle the task named. None holds: guest user processes' passthrough work runs in the same host VA space that carries both windows.\n\n1. User twins bind to the mirror's space (READ).\n   - birth() takes passthrough = !a.kernel_client and looks up the mirror by (vaspace_client, vas) in self.mirrors (chan.rs:2676, 2735-2742).\n   - It sets space = mirror.space (chan.rs:2808) and calls birth_twin_in(rm, space, ...) (chan.rs:2821).\n   - That reaches birth_channel → birth_group with h_va_space: space.space (kf-host channel.rs:529-560). A later member joins the group's legacy ctx share with h_va_space 0, so it inherits the group's space (channel.rs birth_member doc; ogkm kernel_channel.c:1037).\n   - ChanPlane.mirrors and MemPlane.mirrors are one Arc (device.rs:552-559, 705-716).\n\n2. No separate builder exists for user spaces, and no kernel-only gate (READ). Every PageDir statement for a key without a target either pops a spare or calls create_mirror (mem.rs:2148-2192), whatever the client. Spares come from prewarm, which maps both windows (mem.rs:1915-1921), or from retire_mirror, which keeps them (\"its two windows still in place\", mem.rs:928, 1958-1960). No code path unmaps a window. kernel_vas_for classifies a space as USER or KERNEL (mem.rs:916-925), but that only decides whether privileged guest LEAVES are withheld (mem.rs:574-578, 726-728). Windows are mapped regardless of it.\n\n3. Window attributes (READ). map_window passes only DMA_OFFSET_GROWS_DOWN (channel.rs:377-390) into the single NVOS46 builder (kf-host lib.rs:1096-1140). The result is read-write and non-privileged (see scope_correction). Passthrough work is not parsed: \"Nothing here reads its pushbuffer, GP entries or cursors\" (chan.rs:27). So the host MMU's translation of the twin's space is the only check, and it holds valid PTEs over the whole store (fb_len = layout.fb_length, mem.rs:1632) and the whole guest memfd (mem.rs:1640-1645).\n\n4. MEASURED. traces/recovered_integration_20260929/fast_recovered_mc_20260929_ce-client_qemu.log on origin/master (source d883d0eb; its window code matches e4fb0190 apart from rustfmt):\n   - :878 records VasKey 0xc1d0000b_cafe0008 with mirror space=0xcafe0026 and windows fb=0x1fffe00000000+0x200000000, ram=0x1fffd80000000+0x80000000.\n   - :900 records \"BORN Passthrough\" for client 0xc1d0000b in that same VasKey.\n   - 0xc1d0000b is outside the RM-internal handle range (kf-rm chanlink.rs:1362-1364), so it is a guest user process.\n\n5. The owner's question: \"v3 only maps what's needed — how else do 61 apps pass?\" Both statements are true, and they do not conflict.\n   - Guest leaves (\"rows\") are mapped on demand: a fixed slice of the store or RAM object at the guest's own VA, carrying the guest's permissions (kf-mem ledger.rs:404-418; MapPerm, channel.rs:1092-1135). Privileged leaves are withheld in user spaces. That is what the 61/65 result (V3_APP_MATRIX.md:7-9, kf3 2830988f) exercises.\n   - The windows are a separate, additional mapping that belongs to kayfabe, placed at the top of every mirror. Their only consumers are the Translated rewriter's Windows/SlotWindow (chan.rs:491-523, built only at chan.rs:3380 in the Translated pump). The P1 design (sec_p0p1p2_design.json result.p1p2) states \"Passthrough work never uses the windows\", and its review confirms \"Both windows are mapped in every mirror\".\n   - They are in user spaces because of THE_TRANSLATED_PLANE.md §12 (\"it goes in every host VAS we create\", :418-419) and because a space is only known to be kernel at its first Translated birth, after its mirror was built.\n   - A passing app shows that every mapping it needs is present. It cannot show that unneeded mappings are absent. The windows sit at VAs no app uses, and an overlap would be refused by name (vmm_ranges at mem.rs:715-724; ledger.rs:297). So 61 passing apps are fully consistent with S1-21. Only an absence test (T-WINDOW-USER, not yet run) can settle reachability on hardware.",
+          "evidence": [
+            "READ crates/kf-qemu/src/mem.rs:1786-1794 (origin/master e4fb0190): create_mirror maps fb window (store, fb_len) and RAM window (guest-RAM object) with map_window(..., true) — '★ P5: the two windows, in EVERY mirrored space (§12)'",
+            "READ crates/kf-qemu/src/mem.rs:1797-1838: plane.mirrors.insert happens only when the fb window is Ok; (fb, ram) refusal arm inserts nothing",
+            "READ crates/kf-qemu/src/mem.rs:2148-2192: every PageDir for a new key takes a spare (windows kept) or calls create_mirror — no client/kernel gate",
+            "READ crates/kf-qemu/src/mem.rs:1915-1921 (prewarm maps both windows) and :928, :1958-1960 (retired spare keeps windows)",
+            "READ crates/kf-qemu/src/mem.rs:916-925, 574-578, 726-728: kernel_vas USER/KERNEL classification gates only privileged guest LEAVES, not the windows",
+            "READ crates/kf-qemu/src/chan.rs:2676 (passthrough = !kernel_client), 2735-2742 (mirror lookup by key, refuse if absent), 2808 (space = mirror.space), 2821 (birth_twin_in(me.rm, space, ...))",
+            "READ crates/kf-chan/src/passthrough.rs:95-133 birth_twin_in -> rm.birth_channel(space,...); crates/kf-host/src/channel.rs:529-560 birth_group h_va_space: space.space; members use hContextShare=0/h_va_space=0 (legacy ctxshare; ogkm-580 kernel_channel.c:1037)",
+            "READ crates/kf-qemu/src/device.rs:552-559, 705-716: ChanPlane and MemPlane share one Mirrors Arc",
+            "READ crates/kf-host/src/channel.rs:377-390 map_window: extra = NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN only; crates/kf-host/src/lib.rs:1096-1140 the one NVOS46 builder",
+            "READ ogkm-580.159.04 src/common/sdk/nvidia/inc/nvos.h:1974-1975 (ACCESS default 0 = READ_WRITE); virt_mem_allocator_gm107.c:2849-2850 (PTE PRIV from MEMDESC_FLAGS_GPU_PRIVILEGED, set only in kernel_graphics_context.c:1127,1277 and kgraphics_* GR buffers)",
+            "READ crates/kf-qemu/src/chan.rs:23-28: passthrough twin — 'Nothing here reads its pushbuffer, GP entries or cursors'",
+            "READ crates/kf-qemu/src/chan.rs:491-523 and :3380: Windows/SlotWindow (window consumers) are constructed only in the Translated pump",
+            "READ crates/kf-mem/src/ledger.rs:404-418: guest rows mapped as fixed slices of store/RAM object at the guest's own VA with the guest's perm — the 'only what is needed' half",
+            "READ docs/design/THE_TRANSLATED_PLANE.md:418-419 (§12): 'it goes in every host VAS we create, above the guest's range'",
+            "MEASURED traces/recovered_integration_20260929/fast_recovered_mc_20260929_ce-client_qemu.log:878 — VasKey(0xc1d0000bcafe0008) mirror space=0xcafe0026: windows fb=0x1fffe00000000+0x200000000 ram=0x1fffd80000000+0x80000000; :900 — chan 0xc1d0000b:0xcafe000c BORN Passthrough ... in the same VasKey (source d883d0eb; client outside RM-internal range per crates/kf-rm/src/chanlink.rs:1362-1364)",
+            "READ docs/design/V3_APP_MATRIX.md:7-9 (origin/master): 61/65 apps at kf3 2830988f — measures presence of needed mappings only",
+            "READ sec_p0p1p2_design.json result.p1p2: 'Passthrough work never uses the windows. Translated rewrites are their only consumer'; result.p1p2_review: 'Both windows are mapped in every mirror (mem.rs:1755-1762)' at 12a526df",
+            "UNVERIFIED: an actual GPU-side access through a window from user work — T-WINDOW-USER has not run (docs/audits/2026-10-03-v3-stage1.md:454-457, :1626); no trace on any origin branch mentions it"
+          ]
+        }
+      },
+      {
+        "angle": "not-accessible",
+        "result": {
+          "refuted": false,
+          "scope_correction": "S1-21 holds on the PTE-attribute angle. Five corrections or additions:\n(1) Citations have drifted. At origin/master e4fb0190 the window maps are at crates/kf-qemu/src/mem.rs:1786-1793 (create_mirror) and :1915-1921 (prewarm spares, which keep their windows when reused). map_window is at crates/kf-host/src/channel.rs:377-390.\n(2) Label the evidence. \"User-accessible\" is READ from source: the PTE attributes are PRIVILEGE_FALSE (VER3: PCF REGULAR), ACCESS READ_WRITE, aperture VIDEO / SYS_COH. Two things are MEASURED: both windows are present in user mirrors that have passthrough twins, and this includes the 61/65 app-matrix run. No user channel has yet been measured accessing memory through a window, so that remains UNVERIFIED until T-WINDOW-USER runs. How the GMMU enforces the PRIV bit is closed hardware (UNVERIFIED). The bit is enforced against twins (gfx7 FAULT_PRIV_VIOLATION, recorded in docs only), but the windows do not carry it.\n(3) \"Every twin\" means every twin whose mirror's window maps succeeded. A mirror with no guest-RAM object has no RAM window (the (Ok(fb), None) arm).\n(4) Addition: the user twin's rows deliberately withhold privileged guest leaves (kf-mem/src/apply.rs:40-44, \"No unprivileged host verb can place that bit\"). The windows place the same unprivileged PTEs over the whole store and all guest RAM, so they bypass that withholding.\n(5) Addition (from the P1+P2 review, READ): the store window also covers the firmware carve-out where kayfabe puts the BAR1/BAR2 page-directory roots it declares to the guest (kf-chip/src/bar0.rs:397-425). That memory is still inside the VM.",
+          "reasoning": "I tried every refutation angle I was given. None holds.\n\n(a) Privileged bit. The windows go through NV_ESC_RM_MAP_MEMORY_DMA, then virtmemMapTo, dmaAllocMap and dmaAllocMapping_GM107. In that function pLocals->priv is never assigned. It is zeroed by portMemSet at virt_mem_allocator_gm107.c:404 and passed at :1500. :2233 therefore gives NV_MMU_PTE_PRIVILEGE_FALSE (VER2 field at :2515), and VER3 sets PCF REGULAR at :2460. In open RM the only producer of DMA_UPDATE_VASPACE_FLAGS_PRIV is dmaMapBuffer_GM107 (:2849-2850), RM's internal buffer path, which the windows do not use. NVOS46 has no privilege field at all (nvos.h:1974-2151). kayfabe's own code says the same thing (apply.rs:40-44, :241).\n\n(b) Read-only or no-access. map_window passes only GROWS_DOWN (channel.rs:383-389). The choke point adds only page size (0 when not FIXED) and CACHE_SNOOP (kf-host/src/lib.rs:229-238). ACCESS and SHADER_ACCESS are both 0, i.e. READ_WRITE / DEFAULT (nvos.h:1975, :2009).\n\n(c) Aperture. The store window is vidmem, mapped as GMMU_APERTURE_VIDEO (gm107.c:1197-1210). The RAM window is snooped sysmem, mapped as SYS_COH (:1340-1350). These are the same objects and apertures the user twins' own rows use: store slices, guest-RAM USERD and notifiers (chan.rs:2742-2798).\n\n(d) Different VA space. Twins are born in the mirror's host space: the mirror is looked up by VasKey (chan.rs:2705-2712) and birth_group passes h_va_space = space.space (channel.rs:554-561). Twin work is submitted unparsed (THE_TRANSLATED_PLANE §4, §27), so guest-authored virtual operands are translated through that space's page tables, windows included.\n\n(e) Windows only in kernel spaces. Not so. The §12 design rule is literally \"it goes in every host VAS we create\". kernel_vas only gates guest privileged leaves (mem.rs:921-928), and no code removes windows from a user space.\n\nOn the owner's question: \"only map what's needed\" is true of the rows, and is not true of the windows. The windows exist for the Translated plane: Windows/SlotWindow (chan.rs:491-523) is used only by the Translated slot pump (chan.rs:3380). Passthrough twins never use them; the P1+P2 design says the same.\n\n61/65 apps passing measures completeness: no needed mapping is missing. It does not measure minimality: no extra mapping is present. The windows sit GROWS_DOWN above the guest's reserved allocatable ranges (§24.2; channel.rs GUEST_VA_RANGES), so they neither collide with app VAs nor get named by them. The app-matrix run at 2830988f itself shows a user mirror created with both windows and CUDA's passthrough GR twins born in that same space.\n\nThe finding is a READ conclusion backed by measured presence of the windows. The end-to-end access test (T-WINDOW-USER) has not run.",
+          "evidence": [
+            "READ kf-master origin/master e4fb0190 crates/kf-qemu/src/mem.rs:1786-1793: create_mirror maps the store window (plane.fb_len) and the guest-RAM window into every new mirror, with comment 'P5: the two windows, in EVERY mirrored space (§12)'. :1915-1921 does the same for prewarmed spares, and spares are reused with their windows (mem.rs ~1962-1964, :2014).",
+            "READ crates/kf-host/src/channel.rs:377-390: map_window's only extra flag is NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN. Compare map_kind :326-363, which adds MapPerm (read-only) only for rows.",
+            "READ crates/kf-host/src/lib.rs:229-238: nvos46_map_flags ORs in only page_size, CACHE_SNOOP_ENABLE and FIXED. No ACCESS or privilege bit.",
+            "READ ogkm-580 src/common/sdk/nvidia/inc/nvos.h:1974-2151: NVOS46 flags have no privilege field. ACCESS 0 = READ_WRITE (:1975); SHADER_ACCESS 0 = DEFAULT (:2009).",
+            "READ ogkm-580 src/nvidia/src/kernel/mem_mgr/virtual_mem.c:1206,1426 -> src/nvidia/src/kernel/gpu/mem_mgr/dma.c:76,178 -> virt_mem_allocator_gm107.c:317 dmaAllocMapping_GM107. pLocals->priv is declared at :359, zeroed at :404, never assigned, and passed at :1500.",
+            "READ virt_mem_allocator_gm107.c:2233 maps no PRIV flag to NV_MMU_PTE_PRIVILEGE_FALSE. :2515 writes the VER2 fldPrivilege from it; :2460 sets VER3 PCF REGULAR when !priv. The only producer of DMA_UPDATE_VASPACE_FLAGS_PRIV is dmaMapBuffer_GM107 :2849-2850 (RM-internal).",
+            "READ virt_mem_allocator_gm107.c:1197-1210 (FBMEM -> GMMU_APERTURE_VIDEO) and :1340-1350 (cpuCacheSnoop -> SYS_COH). These are the same apertures as the user rows.",
+            "READ crates/kf-mem/src/apply.rs:40-44 and :241: 'No unprivileged host verb can place that bit, so a user twin WITHHOLDS the leaf ... rather than map it where an unprivileged channel could reach it'. The windows map the same memory with unprivileged PTEs.",
+            "READ crates/kf-qemu/src/chan.rs:2705-2712 (twin birth uses the mirror for its VasKey); crates/kf-host/src/channel.rs:554-561 (TSG h_va_space = mirror space).",
+            "READ crates/kf-qemu/src/chan.rs:491-523 and :3380: Windows/SlotWindow are used only by the Translated slot pump. Passthrough never consumes the windows.",
+            "READ docs/design/THE_TRANSLATED_PLANE.md §12 (~:416-422): 'Put the identity window in a Translated-only VAS — UVM mixes apertures in one stream ⇒ it goes in every host VAS we create'. §24.2 (~:1053-1057): GROWS_DOWN placement.",
+            "MEASURED docs/design/THE_TRANSLATED_PLANE.md §21 (~:894-906, from fast_w825base_*_qemu.log): the guest's VAS roots lie inside the store window.",
+            "MEASURED traces/v3_cdp/app_matrix_2830988f/all_logs.tgz -> deviceQuery.kf3.log:354: a user VasKey mirror created with both windows. :369-397: passthrough twins (engine 0x1, client 0xc1d00020) born in that same VasKey. This is the 61/65 app-matrix run.",
+            "MEASURED traces/capability_535_545_audit_20260928/final-run/guest/fast_allow535_final_20260928_concurrency_qemu.log:896,910: a windowed mirror, then a passthrough twin born in the same VasKey with declared_kernel_pid=false.",
+            "MEASURED (recorded in docs only; raw host dmesg not in traces/v3_gfx) docs/design/V3_HEADLESS_GRAPHICS.md:200-205 and crates/kf-host/src/channel.rs:57-70: a twin's ROP touching host RM's PRIV-mapped GR context buffer gave Xid 31 FAULT_PRIV_VIOLATION. The PRIV bit is the GMMU's enforced distinction, and the windows lack it.",
+            "UVERIFIED: no box test (T-WINDOW-USER) has exercised a user twin accessing memory through a window (docs/audits/2026-10-03-v3-stage1.md:454-459, :1626). The hardware semantics of PRIVILEGE_FALSE / PCF REGULAR are closed hardware.",
+            "READ /tmp/.../scratchpad/sec_p0p1p2_design.json result.p1p2.summary: 'Passthrough work never uses the windows. Translated rewrites are their only consumer.' result.p1p2_review [MEDIUM]: the store window covers kayfabe-declared BAR1/BAR2 roots in the carve-out (kf-chip/src/bar0.rs:397-425)."
+          ]
+        }
+      },
+      {
+        "angle": "not-nameable",
+        "result": {
+          "refuted": false,
+          "scope_correction": "S1-21 holds in substance. Four corrections: (1) Its 'Where' line cites crates/kf-qemu/src/mem.rs:1755-1762. At origin/master e4fb0190 the window maps are at mem.rs:1786-1795 (create_mirror starts at :1757); that should be updated. (2) '`map_window` passes no privileged flag' names the wrong mechanism. Whether a userspace host RM client can ask for privileged GMMU PTEs at all is UNVERIFIED. The defect that matters is that the windows are mapped unconditionally into every mirror, user mirrors included. That bypasses the user/kernel classification kayfabe already applies to guest leaves (kernel_vas_for / withholds_privileged). (3) 'Reachable from any passthrough twin' is READ from source, not MEASURED: box test T-WINDOW-USER has not run. MEASURED is narrower: user-process mirrors log both windows as present. (4) 'Including the guest kernel's GPU page tables' holds only where the guest places its tables in FB. The RAM window covers the sysmem case, so the class claim stands either way. Suggested restatement: 'Every mirrored host space, including the twin spaces of guest user processes, holds a read-write window over the whole store (all guest FB) and one over the whole guest-RAM memfd. These are mapped regardless of the mirror's kernel/user classification. Passthrough user channels are born in those spaces, so the guest's kernel/user GPU boundary does not hold [READ; reachability box test T-WINDOW-USER not yet run]. The windows stay inside the VM's own memory.'",
+          "reasoning": "I tried to refute S1-21 from three directions and none worked.\n\n(A) Are the windows actually in user twin spaces? Yes. create_mirror runs for every VasKey a page-directory statement names, with no kernel/user branch. It maps the store window and the RAM window unconditionally. Passthrough user channels are born in mirror.space, the same host space. So guest user GPU work runs in a host space that holds both windows.\n\n(B) Are the windows outside what a user-driven engine can translate? I found nothing that limits them. Placement is the host RM's choice in the twin space. The guest kernel's own VA limit only governs the guest's allocator; the hardware walks the twin's page tables, not the guest's. No code path restricts which channels in a space can translate through the windows. The only per-mirror privilege control in the tree, withholds_privileged, applies to mirrored guest leaves and not to the windows. I stop at the property level and do not describe naming or access.\n\n(C) Is the impact overstated? Not materially. The identity window's length is the guest FB layout's fb_length, which is the store length. The RAM object is an OS descriptor over the whole guest memfd. The design doc records the walker reading the guest's page tables in place through the window. Guest page tables in sysmem would fall under the RAM window instead.\n\nOn the owner's question about 61 apps: passing apps cannot refute this. Mapping too much never makes an app fail; only mapping too little does. The apps pass because the guest's own rows are mirrored correctly. The windows are additional mappings that exist for Translated (kernel) channels and kayfabe's own reads. So 'v3 maps only what is needed' is true of the mirrored guest rows and false of the windows.\n\nWeak points: the 'no privileged flag' wording names a mechanism that may not be selectable from userspace RM. The cited line numbers have moved. Reachability is READ, not MEASURED.",
+          "evidence": [
+            "READ crates/kf-qemu/src/mem.rs:1757-1795 (origin/master e4fb0190): create_mirror allocates a host space, then calls rm.map_window(space, store, plane.fb_len, true) and rm.map_window(space, ram_obj, len, true). Comment at :1786: 'the two windows, in EVERY mirrored space (§12)'. There is no branch on kernel_vas.",
+            "READ crates/kf-host/src/channel.rs:369-390: map_window sets only NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN. There is no read-only attribute, privilege attribute or fixed placement. The address is RM-chosen and read back.",
+            "READ crates/kf-qemu/src/chan.rs:2705-2711 and ~2817-2830: a passthrough channel looks up the mirror for its VasKey, then calls kf_chan::passthrough::birth_twin_in(me.rm, mirror.space, ...). The user twin is born in the windowed space; the owner tag Owner::User is set at ~2850.",
+            "READ crates/kf-qemu/src/mem.rs:~916-926 kernel_vas_for: a mirror is classified KERNEL only for an RM-internal client, otherwise USER. Around :720 GpuMirror::withholds_privileged returns !kernel_vas, so privileged guest leaves are withheld from user twins, but nothing like that applies to the windows.",
+            "READ crates/kf-qemu/src/mem.rs:1546-1553, 1632: fb_len = layout.fb_length, documented as 'The store's length (the identity window's)'. The ram_obj field doc says 'an OS descriptor over the WHOLE guest memfd'. mem.rs:1657-1689 guest_ram_object sizes it from the memfd's metadata length.",
+            "READ crates/kf-host/src/channel.rs:~93-110 GUEST_VA_RANGES / HOST_HOLE_LO and alloc_vaspace (~:205-245): the twin space is allocated with default parameters. Only the guest's allocatable ranges are reserved; the windows go through the space's own range object, not a guest reservation.",
+            "MEASURED traces/capability_535_545_audit_20260928/final-run/guest/*_qemu.log (e.g. fast_allow535_final_20260928_ce-client_qemu.log:878, _concurrency_qemu.log:879/896/928, _cross-client-leak_qemu.log:880): mirror-creation lines for guest client VasKeys (more than one in concurrency runs) log both windows present ('windows fb=...+0x200000000 ram=...+0x80000000'). None logs windows absent, so user mirrors carry both windows.",
+            "READ docs/design/THE_TRANSLATED_PLANE.md §21-§22 (headings 'THE WALKER CAN READ THE GUEST'S TABLES THROUGH THE WINDOW' / 'READS THE GUEST'S TABLES IN PLACE, IN THE ONE OBJECT'): guest GMMU tables are read through the store window, so they lie inside its range.",
+            "READ docs/audits/2026-10-03-v3-stage1.md:442-460: S1-21 status 'open (P1 design in progress)'; check T-WINDOW-USER not run (:1626). Reachability by user GPU work is therefore READ/UNVERIFIED, not MEASURED.",
+            "UNVERIFIED: whether host RM grants a userspace client privileged GMMU PTEs on request (closed GSP firmware path). It does not decide S1-21, because the windows are mapped into user twins either way.",
+            "Not consulted this pass: the P1/P2 design JSON, V3_APP_MATRIX.md, V3_SECURITY_MODEL.md and ogkm vaspace defaults. The conclusion rests on the kayfabe source and traces cited above."
+          ]
+        }
+      }
+    ]
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Investigate"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Refute"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 3,
+      "title": "Synthesize"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "investigate:census",
+      "phaseIndex": 1,
+      "phaseTitle": "Investigate",
+      "agentId": "a6b52b628d747b479",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1791062407394,
+      "queuedAt": 1791062407370,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "ANSWER TO THE OWNER: both statements are true, about two di…",
+      "promptPreview": "AUTHORIZATION. Dispatched by the coordinating main session of this Claude Code session. The repository owner asked, in this session on 2026-10-03, about audit finding S1-21: \"I dont understand, if v3 is correct we only map whats needed to map. I mean its not only needed for security, but also to make things work in the first place..how could you otherwise achieve 61 apps passing\". This is a READ-O…",
+      "promptFramed": true,
+      "lastProgressAt": 1791062994948,
+      "tokens": 224642,
+      "toolCalls": 74,
+      "durationMs": 587552,
+      "resultPreview": "{\"summary\":\"ANSWER TO THE OWNER: both statements are true, about two different layers of the same host VA space. At kayfabe origin/master e4fb0190, every host twin space holds two things.\\n\\n(a) Mirrored rows: exactly the leaves the guest's own page tables state, placed FIXED at the guest's VAs as slices of the store or guest-RAM object. Privileged leaves are withheld in user twins. This is the \\\"…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "investigate:apps",
+      "phaseIndex": 1,
+      "phaseTitle": "Investigate",
+      "agentId": "a7ef8286d3fba4502",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1791062407395,
+      "queuedAt": 1791062407370,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Short answer: passing apps show that the mappings apps need…",
+      "promptPreview": "AUTHORIZATION. Dispatched by the coordinating main session of this Claude Code session. The repository owner asked, in this session on 2026-10-03, about audit finding S1-21: \"I dont understand, if v3 is correct we only map whats needed to map. I mean its not only needed for security, but also to make things work in the first place..how could you otherwise achieve 61 apps passing\". This is a READ-O…",
+      "promptFramed": true,
+      "lastProgressAt": 1791062926497,
+      "tokens": 231464,
+      "toolCalls": 80,
+      "durationMs": 517762,
+      "resultPreview": "{\"summary\":\"Short answer: passing apps show that the mappings apps need are present. They cannot show that unneeded mappings are absent, and in the 61/65 run the two windows were present in the apps' own twin spaces.\\n\\nRead at kayfabe origin/master e4fb0190. Measured evidence comes from traces/v3_cdp/app_matrix_2830988f/ (kf3 2830988f, which has the same window code at mem.rs:1724-1731).\\n\\nA pas…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "investigate:reach",
+      "phaseIndex": 1,
+      "phaseTitle": "Investigate",
+      "agentId": "a02a4b75de9fd175c",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1791062926501,
+      "queuedAt": 1791062407370,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Short answer to the owner: you are right that v3 maps only …",
+      "promptPreview": "AUTHORIZATION. Dispatched by the coordinating main session of this Claude Code session. The repository owner asked, in this session on 2026-10-03, about audit finding S1-21: \"I dont understand, if v3 is correct we only map whats needed to map. I mean its not only needed for security, but also to make things work in the first place..how could you otherwise achieve 61 apps passing\". This is a READ-O…",
+      "promptFramed": true,
+      "lastProgressAt": 1791063650039,
+      "tokens": 248115,
+      "toolCalls": 105,
+      "durationMs": 723537,
+      "resultPreview": "{\"summary\":\"Short answer to the owner: you are right that v3 maps only what is needed, but that is true of the guest's own rows. It is not true of the two identity windows, and the 61/65 result cannot tell the difference.\\n\\n**What v3 maps for an app's own process.** It maps only what the guest's page tables say. The walk and reconcile place guest rows, privileged guest leaves are withheld in user…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "refute:no-user-mirrors",
+      "phaseIndex": 2,
+      "phaseTitle": "Refute",
+      "agentId": "a70e8f3b80933b718",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1791062994970,
+      "queuedAt": 1791062407370,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "The core claim stands, and \"every twin\" is accurate rather …",
+      "promptPreview": "AUTHORIZATION. Dispatched by the coordinating main session of this Claude Code session. The repository owner asked, in this session on 2026-10-03, about audit finding S1-21: \"I dont understand, if v3 is correct we only map whats needed to map. I mean its not only needed for security, but also to make things work in the first place..how could you otherwise achieve 61 apps passing\". This is a READ-O…",
+      "promptFramed": true,
+      "lastProgressAt": 1791063316307,
+      "tokens": 144888,
+      "toolCalls": 46,
+      "durationMs": 321336,
+      "resultPreview": "{\"refuted\":false,\"scope_correction\":\"The core claim stands, and \\\"every twin\\\" is accurate rather than overstated. Restate it with these corrections:\\n(1) Citations at origin/master e4fb0190: the windows are mapped at crates/kf-qemu/src/mem.rs:1786-1794 (create_mirror starts at :1757), at :1915-1921 (prewarm spares) and at :2148-2187 (recycled spares keep their windows). map_window is at crates/kf…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "refute:not-accessible",
+      "phaseIndex": 2,
+      "phaseTitle": "Refute",
+      "agentId": "ae502e7d106590a98",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1791063316310,
+      "queuedAt": 1791062407370,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "S1-21 holds on the PTE-attribute angle. Five corrections or…",
+      "promptPreview": "AUTHORIZATION. Dispatched by the coordinating main session of this Claude Code session. The repository owner asked, in this session on 2026-10-03, about audit finding S1-21: \"I dont understand, if v3 is correct we only map whats needed to map. I mean its not only needed for security, but also to make things work in the first place..how could you otherwise achieve 61 apps passing\". This is a READ-O…",
+      "promptFramed": true,
+      "lastProgressAt": 1791063669404,
+      "tokens": 159781,
+      "toolCalls": 61,
+      "durationMs": 353092,
+      "resultPreview": "{\"refuted\":false,\"scope_correction\":\"S1-21 holds on the PTE-attribute angle. Five corrections or additions:\\n(1) Citations have drifted. At origin/master e4fb0190 the window maps are at crates/kf-qemu/src/mem.rs:1786-1793 (create_mirror) and :1915-1921 (prewarm spares, which keep their windows when reused). map_window is at crates/kf-host/src/channel.rs:377-390.\\n(2) Label the evidence. \\\"User-acc…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 6,
+      "label": "refute:not-nameable",
+      "phaseIndex": 2,
+      "phaseTitle": "Refute",
+      "agentId": "aea4cf0b95418d0e0",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1791063650043,
+      "queuedAt": 1791062407370,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "S1-21 holds in substance. Four corrections: (1) Its 'Where'…",
+      "promptPreview": "AUTHORIZATION. Dispatched by the coordinating main session of this Claude Code session. The repository owner asked, in this session on 2026-10-03, about audit finding S1-21: \"I dont understand, if v3 is correct we only map whats needed to map. I mean its not only needed for security, but also to make things work in the first place..how could you otherwise achieve 61 apps passing\". This is a READ-O…",
+      "promptFramed": true,
+      "lastProgressAt": 1791063797162,
+      "tokens": 98578,
+      "toolCalls": 15,
+      "durationMs": 147119,
+      "resultPreview": "{\"refuted\":false,\"scope_correction\":\"S1-21 holds in substance. Four corrections: (1) Its 'Where' line cites crates/kf-qemu/src/mem.rs:1755-1762. At origin/master e4fb0190 the window maps are at mem.rs:1786-1795 (create_mirror starts at :1757); that should be updated. (2) '`map_window` passes no privileged flag' names the wrong mechanism. Whether a userspace host RM client can ask for privileged GM…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 7,
+      "label": "synthesize",
+      "phaseIndex": 3,
+      "phaseTitle": "Synthesize",
+      "agentId": "a3a9f23edf893b21d",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1791063797166,
+      "queuedAt": 1791063797164,
+      "attempt": 1,
+      "lastToolName": "Bash",
+      "lastToolSummary": "cd /workspace/kf-master && git show origin/master:crates/kf…",
+      "promptPreview": "AUTHORIZATION. Dispatched by the coordinating main session of this Claude Code session. The repository owner asked, in this session on 2026-10-03, about audit finding S1-21: \"I dont understand, if v3 is correct we only map whats needed to map. I mean its not only needed for security, but also to make things work in the first place..how could you otherwise achieve 61 apps passing\". This is a READ-O…",
+      "promptFramed": true,
+      "lastProgressAt": 1791063911338,
+      "tokens": 114617,
+      "toolCalls": 13,
+      "durationMs": 114171,
+      "resultPreview": "**Short answer.** You're right about the part of v3 the apps use, and the audit is right about a second part. A twin's host VA space holds two kinds of mapping:\n\n- **Guest rows.** These are exactly the leaves the guest's own page tables state, mapped FIXED at the guest's own addresses. Privileged leaves are withheld from user twins. This is the \"only map what's needed\" part, and it is what the 61 …"
+    }
+  ],
+  "totalTokens": 1222085,
+  "totalToolCalls": 394
+}

@@ -1,0 +1,14 @@
+kf3: chan 0xc1e00007:0xbaba0045 class=0xc56f engine=0x1 kernel=true vaspace=Some(baba0042) chid=Some(1) — a KERNEL non-CE channel: not born (kernel GR is P7)
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1e00007:0xcaf00001 params=560 rpc_flags=0x0
+kf3: chan 0xc1e00007:0xbaba0045 GPU_PROMOTE_CTX: no passthrough twin — not ours (entries=9)
+kf3: act birth translated: chan 0xc1d00012:0xff040000 BORN Translated: token 0x801 -> host 0x1002e in VasKey(13965662457344034928) gpfifo=0x12024b000x16384 userd=Some(Sysmem { base: 9555193856, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B fast=off (2504 us, off the GSP lock)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x5080 client=0xc1d00012 parent=0xff040000 handle=0xff1fe010 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xa06c0103 client=0xc1d00012 object=0xff0e0000 result=0x0
+kf3: act timeslice: 0xc1d00012:0xff0e0000 SET_TIMESLICE 4000 us on 1 twin group(s) (207 us, off the GSP lock)
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xa06c0101 client=0xc1d00012 object=0xff0e0000 result=0x0
+kf3: chan 0xc1d00014:0xff040001 class=0xc56f engine=0x1 kernel=true vaspace=Some(ff000870) chid=Some(2) — a KERNEL non-CE channel: not born (kernel GR is P7)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x5080 client=0xc1d00014 parent=0xff040001 handle=0xff1fe010 result=0x0
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d00014:0xff030000 params=560 rpc_flags=0x0
+kf3: chan 0xc1d00014:0xff040001 GPU_PROMOTE_CTX: no passthrough twin — not ours (entries=9)
+kf3: DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x1002e fast=0
+kf3: chan token 0x801 (host 0x1002e) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0]

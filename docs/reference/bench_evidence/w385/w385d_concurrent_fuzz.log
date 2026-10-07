@@ -1,0 +1,616 @@
+=== ★★★★★ W385 CONCURRENT FUZZ START 2026-09-06T17:51:17+00:00 on ubuntu ===
+=== HEAD=[⊘ NO REPO — UNATTRIBUTABLE]
+=== DIRT=[]
+=== DRIVER=[NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026]
+=== CORES=19
+=== BIN=/workspace/bench/cargo-target-w385/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder md5=9de95ef2f11b5ad87db9efd5420d9260 2322320 bytes
+
+################ ARM t3i128c3 — T=3 I=128   ################
+    inner rc=0  (⊘ NOT the grade — the rung's watchdog exits 3 by design)
+kayfabe-isolate: DOORBELL-STORE #504 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #506 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #506 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #505 host_token=0x0000000a runlist=0 chid=10 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #505 host_token=0x0000000a ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #507 host_token=0x0000000c runlist=0 chid=12 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #507 host_token=0x0000000c ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #508 host_token=0x00000007 runlist=0 chid=7 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #508 host_token=0x00000007 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #509 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #509 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #510 host_token=0x00000009 runlist=0 chid=9 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #510 host_token=0x00000009 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #511 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #511 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #512 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #512 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+info  W385 crowd    census = 1152 ops over 9 workers in 205 ms, 0 refused, 9/9 workers finished
+info  W385 crowd    verbs  = alloc=87 map_a=102 map_b=66 write=138 alias_prop=27 unmap_b=24 probe=33 free=61 recycle=80 idle=534
+info  W385 crowd    op us   = n=618 min=65 p50=1291 p90=4501 p99=8612 max=16558  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd    overlap = 3619 pairs of RM-verb intervals from DIFFERENT threads intersected, over 618/618 spans
+info  W385 crowd    handles = 176 minted across 9 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd    pinning = mode crowd — 9/9 workers accepted a mask; observed core sets {"0-2"}
+FUZZ_ARM=crowd verdict=PASS threads=9 pin=crowd cores=3 ops=1152 engine_ops=189 alias_ops=27 overlap=3619 viol=0 refused=0 pinned=9/9 finished=9/9
+FUZZ_THREADS=3
+FUZZ_CORES=3
+FUZZ_ITERS=128
+FUZZ_CLIENTS=2
+FUZZ_ARMS=4
+FUZZ_OPS=3072
+FUZZ_OVERLAP_PAIRS=8256
+FUZZ_VIOLATIONS=0
+FUZZ_REFUSED=0
+info  W385 pairing        = percore=PASS vs unpinned=PASS — placement did not change the answer
+info  W385 pairing        = crowd=PASS vs crowd-free=PASS — placement did not change the answer
+FUZZ_REASON=CLEAN
+★     W385 FUZZ CLEAN     = 3072 operations over 4 arms (up to 9 threads, 2 client(s), 3 cores), 8256 measured cross-thread overlaps, zero invariant violations. ⚠ THAT IS A BUDGET, NOT A PROOF: absence of a red is not absence of a race, and every arm sampled ONE schedule of one seed
+RUNGCTL_concurrent_fuzz=PASS
+RUNG_concurrent_fuzz=PASS
+done — w385 concurrent fuzz only
+    · t3i128c3unpinned verdict=PASS threads=3 pin=unpinned cores=3 ops=384 engine_ops=61 alias_ops=9 overlap=271 viol=0 refused=0 pinned=0/3 finished=3/3
+    · t3i128c3percore verdict=PASS threads=3 pin=percore cores=3 ops=384 engine_ops=61 alias_ops=9 overlap=279 viol=0 refused=0 pinned=3/3 finished=3/3
+    · t3i128c3crowd-free verdict=PASS threads=9 pin=unpinned cores=3 ops=1152 engine_ops=189 alias_ops=27 overlap=4087 viol=0 refused=0 pinned=0/9 finished=9/9
+    · t3i128c3crowd verdict=PASS threads=9 pin=crowd cores=3 ops=1152 engine_ops=189 alias_ops=27 overlap=3619 viol=0 refused=0 pinned=9/9 finished=9/9
+
+################ ARM t3i512c3 — T=3 I=512   ################
+    inner rc=0  (⊘ NOT the grade — the rung's watchdog exits 3 by design)
+kayfabe-isolate: DOORBELL-STORE tally: 4096 stores attempted; the last 3584 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 4608 stores attempted; the last 4096 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+info  W385 crowd-free census = 4608 ops over 9 workers in 657 ms, 0 refused, 9/9 workers finished
+info  W385 crowd-free verbs  = alloc=210 map_a=288 map_b=348 write=918 alias_prop=631 unmap_b=140 probe=217 free=183 recycle=162 idle=1511
+info  W385 crowd-free op us   = n=3097 min=75 p50=1098 p90=3260 p99=7634 max=10939  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd-free overlap = 20797 pairs of RM-verb intervals from DIFFERENT threads intersected, over 3097/3097 spans
+info  W385 crowd-free handles = 381 minted across 9 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd-free pinning = mode unpinned — 0/9 workers accepted a mask; observed core sets {"0-18"}
+FUZZ_ARM=crowd-free verdict=PASS threads=9 pin=unpinned cores=3 ops=4608 engine_ops=1689 alias_ops=631 overlap=20797 viol=0 refused=0 pinned=0/9 finished=9/9
+
+info  W385 ARM crowd      = 9 threads across 2 client(s), placement crowd, seeded jitter <= 200 us
+kayfabe-isolate: DOORBELL-STORE tally: 5120 stores attempted; the last 4608 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 5632 stores attempted; the last 5120 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 6144 stores attempted; the last 5632 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 6656 stores attempted; the last 6144 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 7168 stores attempted; the last 6656 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 7680 stores attempted; the last 7168 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+info  W385 crowd    census = 4608 ops over 9 workers in 674 ms, 0 refused, 9/9 workers finished
+info  W385 crowd    verbs  = alloc=210 map_a=288 map_b=348 write=918 alias_prop=631 unmap_b=140 probe=217 free=183 recycle=162 idle=1511
+info  W385 crowd    op us   = n=3097 min=48 p50=1058 p90=3404 p99=7073 max=10686  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd    overlap = 19685 pairs of RM-verb intervals from DIFFERENT threads intersected, over 3097/3097 spans
+info  W385 crowd    handles = 381 minted across 9 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd    pinning = mode crowd — 9/9 workers accepted a mask; observed core sets {"0-2"}
+FUZZ_ARM=crowd verdict=PASS threads=9 pin=crowd cores=3 ops=4608 engine_ops=1689 alias_ops=631 overlap=19685 viol=0 refused=0 pinned=9/9 finished=9/9
+FUZZ_THREADS=3
+FUZZ_CORES=3
+FUZZ_ITERS=512
+FUZZ_CLIENTS=2
+FUZZ_ARMS=4
+FUZZ_OPS=12288
+FUZZ_OVERLAP_PAIRS=43258
+FUZZ_VIOLATIONS=0
+FUZZ_REFUSED=0
+info  W385 pairing        = percore=PASS vs unpinned=PASS — placement did not change the answer
+info  W385 pairing        = crowd=PASS vs crowd-free=PASS — placement did not change the answer
+FUZZ_REASON=CLEAN
+★     W385 FUZZ CLEAN     = 12288 operations over 4 arms (up to 9 threads, 2 client(s), 3 cores), 43258 measured cross-thread overlaps, zero invariant violations. ⚠ THAT IS A BUDGET, NOT A PROOF: absence of a red is not absence of a race, and every arm sampled ONE schedule of one seed
+RUNGCTL_concurrent_fuzz=PASS
+RUNG_concurrent_fuzz=PASS
+done — w385 concurrent fuzz only
+    · t3i512c3unpinned verdict=PASS threads=3 pin=unpinned cores=3 ops=1536 engine_ops=564 alias_ops=210 overlap=1404 viol=0 refused=0 pinned=0/3 finished=3/3
+    · t3i512c3percore verdict=PASS threads=3 pin=percore cores=3 ops=1536 engine_ops=564 alias_ops=210 overlap=1372 viol=0 refused=0 pinned=3/3 finished=3/3
+    · t3i512c3crowd-free verdict=PASS threads=9 pin=unpinned cores=3 ops=4608 engine_ops=1689 alias_ops=631 overlap=20797 viol=0 refused=0 pinned=0/9 finished=9/9
+    · t3i512c3crowd verdict=PASS threads=9 pin=crowd cores=3 ops=4608 engine_ops=1689 alias_ops=631 overlap=19685 viol=0 refused=0 pinned=9/9 finished=9/9
+
+################ ARM t6i256c3 — T=6 I=256   ################
+    inner rc=0  (⊘ NOT the grade — the rung's watchdog exits 3 by design)
+FUZZ_ARM=percore verdict=PASS threads=3 pin=percore cores=3 ops=768 engine_ops=251 alias_ops=77 overlap=645 viol=0 refused=0 pinned=3/3 finished=3/3
+
+info  W385 ARM crowd-free = 9 threads across 2 client(s), placement unpinned, seeded jitter <= 200 us
+kayfabe-isolate: DOORBELL-STORE tally: 1536 stores attempted; the last 1024 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 2048 stores attempted; the last 1536 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+info  W385 crowd-free census = 2304 ops over 9 workers in 364 ms, 0 refused, 9/9 workers finished
+info  W385 crowd-free verbs  = alloc=99 map_a=151 map_b=172 write=431 alias_prop=232 unmap_b=89 probe=79 free=80 recycle=106 idle=865
+info  W385 crowd-free op us   = n=1439 min=95 p50=1263 p90=3913 p99=8311 max=13535  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd-free overlap = 9894 pairs of RM-verb intervals from DIFFERENT threads intersected, over 1439/1439 spans
+info  W385 crowd-free handles = 214 minted across 9 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd-free pinning = mode unpinned — 0/9 workers accepted a mask; observed core sets {"0-18"}
+FUZZ_ARM=crowd-free verdict=PASS threads=9 pin=unpinned cores=3 ops=2304 engine_ops=752 alias_ops=232 overlap=9894 viol=0 refused=0 pinned=0/9 finished=9/9
+
+info  W385 ARM crowd      = 9 threads across 2 client(s), placement crowd, seeded jitter <= 200 us
+kayfabe-isolate: DOORBELL-STORE tally: 2560 stores attempted; the last 2048 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 3072 stores attempted; the last 2560 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 3584 stores attempted; the last 3072 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+info  W385 crowd    census = 2304 ops over 9 workers in 370 ms, 0 refused, 9/9 workers finished
+info  W385 crowd    verbs  = alloc=99 map_a=151 map_b=172 write=431 alias_prop=232 unmap_b=89 probe=79 free=80 recycle=106 idle=865
+info  W385 crowd    op us   = n=1439 min=51 p50=1101 p90=4000 p99=7884 max=19349  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd    overlap = 8813 pairs of RM-verb intervals from DIFFERENT threads intersected, over 1439/1439 spans
+info  W385 crowd    handles = 214 minted across 9 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd    pinning = mode crowd — 9/9 workers accepted a mask; observed core sets {"0-2"}
+FUZZ_ARM=crowd verdict=PASS threads=9 pin=crowd cores=3 ops=2304 engine_ops=752 alias_ops=232 overlap=8813 viol=0 refused=0 pinned=9/9 finished=9/9
+FUZZ_THREADS=6
+FUZZ_CORES=3
+FUZZ_ITERS=256
+FUZZ_CLIENTS=2
+FUZZ_ARMS=4
+FUZZ_OPS=6912
+FUZZ_OVERLAP_PAIRS=23157
+FUZZ_VIOLATIONS=0
+FUZZ_REFUSED=0
+info  W385 pairing        = percore=PASS vs unpinned=PASS — placement did not change the answer
+info  W385 pairing        = crowd=PASS vs crowd-free=PASS — placement did not change the answer
+FUZZ_REASON=CLEAN
+★     W385 FUZZ CLEAN     = 6912 operations over 4 arms (up to 9 threads, 2 client(s), 3 cores), 23157 measured cross-thread overlaps, zero invariant violations. ⚠ THAT IS A BUDGET, NOT A PROOF: absence of a red is not absence of a race, and every arm sampled ONE schedule of one seed
+RUNGCTL_concurrent_fuzz=PASS
+RUNG_concurrent_fuzz=PASS
+done — w385 concurrent fuzz only
+    · t6i256c3unpinned verdict=PASS threads=6 pin=unpinned cores=3 ops=1536 engine_ops=503 alias_ops=154 overlap=3805 viol=0 refused=0 pinned=0/6 finished=6/6
+    · t6i256c3percore verdict=PASS threads=3 pin=percore cores=3 ops=768 engine_ops=251 alias_ops=77 overlap=645 viol=0 refused=0 pinned=3/3 finished=3/3
+    · t6i256c3crowd-free verdict=PASS threads=9 pin=unpinned cores=3 ops=2304 engine_ops=752 alias_ops=232 overlap=9894 viol=0 refused=0 pinned=0/9 finished=9/9
+    · t6i256c3crowd verdict=PASS threads=9 pin=crowd cores=3 ops=2304 engine_ops=752 alias_ops=232 overlap=8813 viol=0 refused=0 pinned=9/9 finished=9/9
+
+################ ARM t12i128c3 — T=12 I=128   ################
+    inner rc=0  (⊘ NOT the grade — the rung's watchdog exits 3 by design)
+info  W385 percore  overlap = 333 pairs of RM-verb intervals from DIFFERENT threads intersected, over 249/249 spans
+info  W385 percore  handles = 53 minted across 3 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 percore  pinning = mode percore — 3/3 workers accepted a mask; observed core sets {"0", "1", "2"}
+FUZZ_ARM=percore verdict=PASS threads=3 pin=percore cores=3 ops=384 engine_ops=93 alias_ops=21 overlap=333 viol=0 refused=0 pinned=3/3 finished=3/3
+
+info  W385 ARM crowd-free = 12 threads across 2 client(s), placement unpinned, seeded jitter <= 200 us
+kayfabe-isolate: DOORBELL-STORE tally: 1024 stores attempted; the last 512 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+info  W385 crowd-free census = 1536 ops over 12 workers in 317 ms, 0 refused, 12/12 workers finished
+info  W385 crowd-free verbs  = alloc=128 map_a=124 map_b=131 write=232 alias_prop=84 unmap_b=60 probe=80 free=92 recycle=73 idle=532
+info  W385 crowd-free op us   = n=1004 min=121 p50=1600 p90=6703 p99=14438 max=21032  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd-free overlap = 9878 pairs of RM-verb intervals from DIFFERENT threads intersected, over 1004/1004 spans
+info  W385 crowd-free handles = 213 minted across 12 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd-free pinning = mode unpinned — 0/12 workers accepted a mask; observed core sets {"0-18"}
+FUZZ_ARM=crowd-free verdict=PASS threads=12 pin=unpinned cores=3 ops=1536 engine_ops=376 alias_ops=84 overlap=9878 viol=0 refused=0 pinned=0/12 finished=12/12
+
+info  W385 ARM crowd      = 12 threads across 2 client(s), placement crowd, seeded jitter <= 200 us
+kayfabe-isolate: DOORBELL-STORE tally: 1536 stores attempted; the last 1024 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+info  W385 crowd    census = 1536 ops over 12 workers in 290 ms, 0 refused, 12/12 workers finished
+info  W385 crowd    verbs  = alloc=128 map_a=124 map_b=131 write=232 alias_prop=84 unmap_b=60 probe=80 free=92 recycle=73 idle=532
+info  W385 crowd    op us   = n=1004 min=62 p50=1564 p90=6026 p99=11024 max=30161  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd    overlap = 8988 pairs of RM-verb intervals from DIFFERENT threads intersected, over 1004/1004 spans
+info  W385 crowd    handles = 213 minted across 12 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd    pinning = mode crowd — 12/12 workers accepted a mask; observed core sets {"0-2"}
+FUZZ_ARM=crowd verdict=PASS threads=12 pin=crowd cores=3 ops=1536 engine_ops=376 alias_ops=84 overlap=8988 viol=0 refused=0 pinned=12/12 finished=12/12
+FUZZ_THREADS=12
+FUZZ_CORES=3
+FUZZ_ITERS=128
+FUZZ_CLIENTS=2
+FUZZ_ARMS=4
+FUZZ_OPS=4992
+FUZZ_OVERLAP_PAIRS=28829
+FUZZ_VIOLATIONS=0
+FUZZ_REFUSED=0
+info  W385 pairing        = percore=PASS vs unpinned=PASS — placement did not change the answer
+info  W385 pairing        = crowd=PASS vs crowd-free=PASS — placement did not change the answer
+FUZZ_REASON=CLEAN
+★     W385 FUZZ CLEAN     = 4992 operations over 4 arms (up to 12 threads, 2 client(s), 3 cores), 28829 measured cross-thread overlaps, zero invariant violations. ⚠ THAT IS A BUDGET, NOT A PROOF: absence of a red is not absence of a race, and every arm sampled ONE schedule of one seed
+RUNGCTL_concurrent_fuzz=PASS
+RUNG_concurrent_fuzz=PASS
+done — w385 concurrent fuzz only
+    · t12i128c3unpinned verdict=PASS threads=12 pin=unpinned cores=3 ops=1536 engine_ops=376 alias_ops=84 overlap=9630 viol=0 refused=0 pinned=0/12 finished=12/12
+    · t12i128c3percore verdict=PASS threads=3 pin=percore cores=3 ops=384 engine_ops=93 alias_ops=21 overlap=333 viol=0 refused=0 pinned=3/3 finished=3/3
+    · t12i128c3crowd-free verdict=PASS threads=12 pin=unpinned cores=3 ops=1536 engine_ops=376 alias_ops=84 overlap=9878 viol=0 refused=0 pinned=0/12 finished=12/12
+    · t12i128c3crowd verdict=PASS threads=12 pin=crowd cores=3 ops=1536 engine_ops=376 alias_ops=84 overlap=8988 viol=0 refused=0 pinned=12/12 finished=12/12
+
+################ ARM t8i256c1 — T=8 I=256   ################
+    inner rc=1  (⊘ NOT the grade — the rung's watchdog exits 3 by design)
+info  W385 percore  handles = 29 minted across 1 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 percore  pinning = mode percore — 1/1 workers accepted a mask; observed core sets {"0"}
+FUZZ_ARM=percore verdict=NOTRUN threads=1 pin=percore cores=1 ops=256 engine_ops=75 alias_ops=17 overlap=0 viol=0 refused=0 pinned=1/1 finished=1/1
+⊘     W385 percore    = UNMEASURED, and WHICH kind matters: finished=1/1  pinned=1/1  overlap=0  engine_ops=75. The first of those that is short IS the reason
+
+info  W385 ARM crowd-free = 8 threads across 2 client(s), placement unpinned, seeded jitter <= 200 us
+kayfabe-isolate: DOORBELL-STORE tally: 1536 stores attempted; the last 1024 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 2048 stores attempted; the last 1536 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+info  W385 crowd-free census = 2048 ops over 8 workers in 294 ms, 0 refused, 8/8 workers finished
+info  W385 crowd-free verbs  = alloc=114 map_a=161 map_b=163 write=361 alias_prop=175 unmap_b=73 probe=57 free=93 recycle=117 idle=734
+info  W385 crowd-free op us   = n=1314 min=63 p50=1021 p90=2977 p99=5484 max=7551  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd-free overlap = 7550 pairs of RM-verb intervals from DIFFERENT threads intersected, over 1314/1314 spans
+info  W385 crowd-free handles = 239 minted across 8 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd-free pinning = mode unpinned — 0/8 workers accepted a mask; observed core sets {"0-18"}
+FUZZ_ARM=crowd-free verdict=PASS threads=8 pin=unpinned cores=1 ops=2048 engine_ops=609 alias_ops=175 overlap=7550 viol=0 refused=0 pinned=0/8 finished=8/8
+
+info  W385 ARM crowd      = 8 threads across 2 client(s), placement crowd, seeded jitter <= 200 us
+kayfabe-isolate: DOORBELL-STORE tally: 2560 stores attempted; the last 2048 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+info  W385 crowd    census = 2048 ops over 8 workers in 487 ms, 0 refused, 8/8 workers finished
+info  W385 crowd    verbs  = alloc=114 map_a=161 map_b=163 write=361 alias_prop=175 unmap_b=73 probe=57 free=93 recycle=117 idle=734
+info  W385 crowd    op us   = n=1314 min=43 p50=384 p90=3449 p99=8264 max=14471  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd    overlap = 3595 pairs of RM-verb intervals from DIFFERENT threads intersected, over 1314/1314 spans
+info  W385 crowd    handles = 239 minted across 8 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd    pinning = mode crowd — 8/8 workers accepted a mask; observed core sets {"0"}
+FUZZ_ARM=crowd verdict=PASS threads=8 pin=crowd cores=1 ops=2048 engine_ops=609 alias_ops=175 overlap=3595 viol=0 refused=0 pinned=8/8 finished=8/8
+FUZZ_THREADS=8
+FUZZ_CORES=1
+FUZZ_ITERS=256
+FUZZ_CLIENTS=2
+FUZZ_ARMS=4
+FUZZ_OPS=6400
+FUZZ_OVERLAP_PAIRS=18954
+FUZZ_VIOLATIONS=0
+FUZZ_REFUSED=0
+info  W385 pairing        = percore=NOTRUN vs unpinned=PASS — placement did not change the answer
+info  W385 pairing        = crowd=PASS vs crowd-free=PASS — placement did not change the answer
+FUZZ_REASON=ARM_UNMEASURED
+RUNGCTL_concurrent_fuzz=PASS
+RUNG_concurrent_fuzz=NOTRUN
+done — w385 concurrent fuzz only
+    · t8i256c1unpinned verdict=PASS threads=8 pin=unpinned cores=1 ops=2048 engine_ops=609 alias_ops=175 overlap=7809 viol=0 refused=0 pinned=0/8 finished=8/8
+    · t8i256c1percore verdict=NOTRUN threads=1 pin=percore cores=1 ops=256 engine_ops=75 alias_ops=17 overlap=0 viol=0 refused=0 pinned=1/1 finished=1/1
+    · t8i256c1crowd-free verdict=PASS threads=8 pin=unpinned cores=1 ops=2048 engine_ops=609 alias_ops=175 overlap=7550 viol=0 refused=0 pinned=0/8 finished=8/8
+    · t8i256c1crowd verdict=PASS threads=8 pin=crowd cores=1 ops=2048 engine_ops=609 alias_ops=175 overlap=3595 viol=0 refused=0 pinned=8/8 finished=8/8
+
+################ ARM t16i256c2 — T=16 I=256   ################
+    inner rc=0  (⊘ NOT the grade — the rung's watchdog exits 3 by design)
+info  W385 ARM crowd-free = 16 threads across 2 client(s), placement unpinned, seeded jitter <= 200 us
+kayfabe-isolate: DOORBELL-STORE tally: 2560 stores attempted; the last 2048 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 3072 stores attempted; the last 2560 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 3584 stores attempted; the last 3072 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+info  W385 crowd-free census = 4096 ops over 16 workers in 737 ms, 0 refused, 16/16 workers finished
+info  W385 crowd-free verbs  = alloc=226 map_a=300 map_b=276 write=649 alias_prop=339 unmap_b=121 probe=177 free=178 recycle=193 idle=1637
+info  W385 crowd-free op us   = n=2459 min=101 p50=1774 p90=9789 p99=21257 max=30260  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd-free overlap = 33094 pairs of RM-verb intervals from DIFFERENT threads intersected, over 2459/2459 spans
+info  W385 crowd-free handles = 435 minted across 16 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd-free pinning = mode unpinned — 0/16 workers accepted a mask; observed core sets {"0-18"}
+FUZZ_ARM=crowd-free verdict=PASS threads=16 pin=unpinned cores=2 ops=4096 engine_ops=1109 alias_ops=339 overlap=33094 viol=0 refused=0 pinned=0/16 finished=16/16
+
+info  W385 ARM crowd      = 16 threads across 2 client(s), placement crowd, seeded jitter <= 200 us
+kayfabe-isolate: DOORBELL-STORE tally: 4096 stores attempted; the last 3584 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 4608 stores attempted; the last 4096 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 5120 stores attempted; the last 4608 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 5632 stores attempted; the last 5120 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+info  W385 crowd    census = 4096 ops over 16 workers in 671 ms, 0 refused, 16/16 workers finished
+info  W385 crowd    verbs  = alloc=226 map_a=300 map_b=276 write=649 alias_prop=339 unmap_b=121 probe=177 free=178 recycle=193 idle=1637
+info  W385 crowd    op us   = n=2459 min=48 p50=2102 p90=8002 p99=16042 max=33256  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd    overlap = 29428 pairs of RM-verb intervals from DIFFERENT threads intersected, over 2459/2459 spans
+info  W385 crowd    handles = 435 minted across 16 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd    pinning = mode crowd — 16/16 workers accepted a mask; observed core sets {"0-1"}
+FUZZ_ARM=crowd verdict=PASS threads=16 pin=crowd cores=2 ops=4096 engine_ops=1109 alias_ops=339 overlap=29428 viol=0 refused=0 pinned=16/16 finished=16/16
+FUZZ_THREADS=16
+FUZZ_CORES=2
+FUZZ_ITERS=256
+FUZZ_CLIENTS=2
+FUZZ_ARMS=4
+FUZZ_OPS=12800
+FUZZ_OVERLAP_PAIRS=95444
+FUZZ_VIOLATIONS=0
+FUZZ_REFUSED=0
+info  W385 pairing        = percore=PASS vs unpinned=PASS — placement did not change the answer
+info  W385 pairing        = crowd=PASS vs crowd-free=PASS — placement did not change the answer
+FUZZ_REASON=CLEAN
+★     W385 FUZZ CLEAN     = 12800 operations over 4 arms (up to 16 threads, 2 client(s), 2 cores), 95444 measured cross-thread overlaps, zero invariant violations. ⚠ THAT IS A BUDGET, NOT A PROOF: absence of a red is not absence of a race, and every arm sampled ONE schedule of one seed
+RUNGCTL_concurrent_fuzz=PASS
+RUNG_concurrent_fuzz=PASS
+done — w385 concurrent fuzz only
+    · t16i256c2unpinned verdict=PASS threads=16 pin=unpinned cores=2 ops=4096 engine_ops=1109 alias_ops=339 overlap=32719 viol=0 refused=0 pinned=0/16 finished=16/16
+    · t16i256c2percore verdict=PASS threads=2 pin=percore cores=2 ops=512 engine_ops=152 alias_ops=50 overlap=203 viol=0 refused=0 pinned=2/2 finished=2/2
+    · t16i256c2crowd-free verdict=PASS threads=16 pin=unpinned cores=2 ops=4096 engine_ops=1109 alias_ops=339 overlap=33094 viol=0 refused=0 pinned=0/16 finished=16/16
+    · t16i256c2crowd verdict=PASS threads=16 pin=crowd cores=2 ops=4096 engine_ops=1109 alias_ops=339 overlap=29428 viol=0 refused=0 pinned=16/16 finished=16/16
+
+################ ARM t3i5000c3 — T=3 I=5000   ################
+    inner rc=0  (⊘ NOT the grade — the rung's watchdog exits 3 by design)
+kayfabe-isolate: DOORBELL-STORE tally: 51712 stores attempted; the last 51200 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 52224 stores attempted; the last 51712 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 52736 stores attempted; the last 52224 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 53248 stores attempted; the last 52736 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 53760 stores attempted; the last 53248 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 54272 stores attempted; the last 53760 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 54784 stores attempted; the last 54272 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 55296 stores attempted; the last 54784 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 55808 stores attempted; the last 55296 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 56320 stores attempted; the last 55808 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 56832 stores attempted; the last 56320 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 57344 stores attempted; the last 56832 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 57856 stores attempted; the last 57344 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 58368 stores attempted; the last 57856 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 58880 stores attempted; the last 58368 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 59392 stores attempted; the last 58880 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 59904 stores attempted; the last 59392 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+info  W385 crowd    census = 45000 ops over 9 workers in 6187 ms, 0 refused, 9/9 workers finished
+info  W385 crowd    verbs  = alloc=2303 map_a=3365 map_b=3512 write=7940 alias_prop=4341 unmap_b=1478 probe=1985 free=2286 recycle=2206 idle=15584
+info  W385 crowd    op us   = n=29416 min=43 p50=1011 p90=3602 p99=7334 max=33279  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd    overlap = 39474 pairs of RM-verb intervals from DIFFERENT threads intersected, over 6000/29416 spans
+info  W385 crowd    handles = 4518 minted across 9 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd    pinning = mode crowd — 9/9 workers accepted a mask; observed core sets {"0-2"}
+FUZZ_ARM=crowd verdict=PASS threads=9 pin=crowd cores=3 ops=45000 engine_ops=13759 alias_ops=4341 overlap=39474 viol=0 refused=0 pinned=9/9 finished=9/9
+FUZZ_THREADS=3
+FUZZ_CORES=3
+FUZZ_ITERS=5000
+FUZZ_CLIENTS=2
+FUZZ_ARMS=4
+FUZZ_OPS=120000
+FUZZ_OVERLAP_PAIRS=97083
+FUZZ_VIOLATIONS=0
+FUZZ_REFUSED=0
+info  W385 pairing        = percore=PASS vs unpinned=PASS — placement did not change the answer
+info  W385 pairing        = crowd=PASS vs crowd-free=PASS — placement did not change the answer
+FUZZ_REASON=CLEAN
+★     W385 FUZZ CLEAN     = 120000 operations over 4 arms (up to 9 threads, 2 client(s), 3 cores), 97083 measured cross-thread overlaps, zero invariant violations. ⚠ THAT IS A BUDGET, NOT A PROOF: absence of a red is not absence of a race, and every arm sampled ONE schedule of one seed
+RUNGCTL_concurrent_fuzz=PASS
+RUNG_concurrent_fuzz=PASS
+done — w385 concurrent fuzz only
+    · t3i5000c3unpinned verdict=PASS threads=3 pin=unpinned cores=3 ops=15000 engine_ops=4607 alias_ops=1463 overlap=7423 viol=0 refused=0 pinned=0/3 finished=3/3
+    · t3i5000c3percore verdict=PASS threads=3 pin=percore cores=3 ops=15000 engine_ops=4607 alias_ops=1463 overlap=7557 viol=0 refused=0 pinned=3/3 finished=3/3
+    · t3i5000c3crowd-free verdict=PASS threads=9 pin=unpinned cores=3 ops=45000 engine_ops=13759 alias_ops=4341 overlap=42629 viol=0 refused=0 pinned=0/9 finished=9/9
+    · t3i5000c3crowd verdict=PASS threads=9 pin=crowd cores=3 ops=45000 engine_ops=13759 alias_ops=4341 overlap=39474 viol=0 refused=0 pinned=9/9 finished=9/9
+
+################ ARM t24i300c3 — T=24 I=300   ################
+    inner rc=0  (⊘ NOT the grade — the rung's watchdog exits 3 by design)
+info  W385 crowd-free census = 7200 ops over 24 workers in 1527 ms, 0 refused, 24/24 workers finished
+info  W385 crowd-free verbs  = alloc=444 map_a=558 map_b=597 write=1215 alias_prop=869 unmap_b=216 probe=182 free=374 recycle=329 idle=2416
+info  W385 crowd-free op us   = n=4784 min=98 p50=3020 p90=16899 p99=39193 max=53098  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd-free overlap = 101826 pairs of RM-verb intervals from DIFFERENT threads intersected, over 4784/4784 spans
+info  W385 crowd-free handles = 797 minted across 24 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd-free pinning = mode unpinned — 0/24 workers accepted a mask; observed core sets {"0-18"}
+FUZZ_ARM=crowd-free verdict=PASS threads=24 pin=unpinned cores=3 ops=7200 engine_ops=2300 alias_ops=869 overlap=101826 viol=0 refused=0 pinned=0/24 finished=24/24
+
+info  W385 ARM crowd      = 24 threads across 2 client(s), placement crowd, seeded jitter <= 200 us
+kayfabe-isolate: DOORBELL-STORE tally: 8704 stores attempted; the last 8192 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 9216 stores attempted; the last 8704 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 9728 stores attempted; the last 9216 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 10240 stores attempted; the last 9728 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 10752 stores attempted; the last 10240 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 11264 stores attempted; the last 10752 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 11776 stores attempted; the last 11264 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 12288 stores attempted; the last 11776 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+info  W385 crowd    census = 7200 ops over 24 workers in 1179 ms, 0 refused, 24/24 workers finished
+info  W385 crowd    verbs  = alloc=444 map_a=558 map_b=597 write=1215 alias_prop=869 unmap_b=216 probe=182 free=374 recycle=329 idle=2416
+info  W385 crowd    op us   = n=4784 min=43 p50=3246 p90=11820 p99=24929 max=64465  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd    overlap = 97066 pairs of RM-verb intervals from DIFFERENT threads intersected, over 4784/4784 spans
+info  W385 crowd    handles = 797 minted across 24 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd    pinning = mode crowd — 24/24 workers accepted a mask; observed core sets {"0-2"}
+FUZZ_ARM=crowd verdict=PASS threads=24 pin=crowd cores=3 ops=7200 engine_ops=2300 alias_ops=869 overlap=97066 viol=0 refused=0 pinned=24/24 finished=24/24
+FUZZ_THREADS=24
+FUZZ_CORES=3
+FUZZ_ITERS=300
+FUZZ_CLIENTS=2
+FUZZ_ARMS=4
+FUZZ_OPS=22500
+FUZZ_OVERLAP_PAIRS=299868
+FUZZ_VIOLATIONS=0
+FUZZ_REFUSED=0
+info  W385 pairing        = percore=PASS vs unpinned=PASS — placement did not change the answer
+info  W385 pairing        = crowd=PASS vs crowd-free=PASS — placement did not change the answer
+FUZZ_REASON=CLEAN
+★     W385 FUZZ CLEAN     = 22500 operations over 4 arms (up to 24 threads, 2 client(s), 3 cores), 299868 measured cross-thread overlaps, zero invariant violations. ⚠ THAT IS A BUDGET, NOT A PROOF: absence of a red is not absence of a race, and every arm sampled ONE schedule of one seed
+RUNGCTL_concurrent_fuzz=PASS
+RUNG_concurrent_fuzz=PASS
+done — w385 concurrent fuzz only
+    · t24i300c3unpinned verdict=PASS threads=24 pin=unpinned cores=3 ops=7200 engine_ops=2300 alias_ops=869 overlap=100231 viol=0 refused=0 pinned=0/24 finished=24/24
+    · t24i300c3percore verdict=PASS threads=3 pin=percore cores=3 ops=900 engine_ops=282 alias_ops=107 overlap=745 viol=0 refused=0 pinned=3/3 finished=3/3
+    · t24i300c3crowd-free verdict=PASS threads=24 pin=unpinned cores=3 ops=7200 engine_ops=2300 alias_ops=869 overlap=101826 viol=0 refused=0 pinned=0/24 finished=24/24
+    · t24i300c3crowd verdict=PASS threads=24 pin=crowd cores=3 ops=7200 engine_ops=2300 alias_ops=869 overlap=97066 viol=0 refused=0 pinned=24/24 finished=24/24
+
+################ ARM t32i200c4 — T=32 I=200   ################
+    inner rc=0  (⊘ NOT the grade — the rung's watchdog exits 3 by design)
+kayfabe-isolate: DOORBELL-STORE tally: 5120 stores attempted; the last 4608 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 5632 stores attempted; the last 5120 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 6144 stores attempted; the last 5632 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+info  W385 crowd-free census = 6400 ops over 32 workers in 1215 ms, 0 refused, 32/32 workers finished
+info  W385 crowd-free verbs  = alloc=296 map_a=392 map_b=479 write=1216 alias_prop=476 unmap_b=278 probe=328 free=239 recycle=375 idle=2321
+info  W385 crowd-free op us   = n=4079 min=86 p50=4293 p90=18843 p99=46281 max=65556  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd-free overlap = 118599 pairs of RM-verb intervals from DIFFERENT threads intersected, over 4079/4079 spans
+info  W385 crowd-free handles = 703 minted across 32 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd-free pinning = mode unpinned — 0/32 workers accepted a mask; observed core sets {"0-18"}
+FUZZ_ARM=crowd-free verdict=PASS threads=32 pin=unpinned cores=4 ops=6400 engine_ops=1970 alias_ops=476 overlap=118599 viol=0 refused=0 pinned=0/32 finished=32/32
+
+info  W385 ARM crowd      = 32 threads across 2 client(s), placement crowd, seeded jitter <= 200 us
+kayfabe-isolate: DOORBELL-STORE tally: 6656 stores attempted; the last 6144 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 7168 stores attempted; the last 6656 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 7680 stores attempted; the last 7168 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 8192 stores attempted; the last 7680 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 8704 stores attempted; the last 8192 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+info  W385 crowd    census = 6400 ops over 32 workers in 998 ms, 0 refused, 32/32 workers finished
+info  W385 crowd    verbs  = alloc=296 map_a=392 map_b=479 write=1216 alias_prop=476 unmap_b=278 probe=328 free=239 recycle=375 idle=2321
+info  W385 crowd    op us   = n=4079 min=47 p50=3934 p90=16150 p99=31903 max=87694  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd    overlap = 113734 pairs of RM-verb intervals from DIFFERENT threads intersected, over 4079/4079 spans
+info  W385 crowd    handles = 703 minted across 32 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd    pinning = mode crowd — 32/32 workers accepted a mask; observed core sets {"0-3"}
+FUZZ_ARM=crowd verdict=PASS threads=32 pin=crowd cores=4 ops=6400 engine_ops=1970 alias_ops=476 overlap=113734 viol=0 refused=0 pinned=32/32 finished=32/32
+FUZZ_THREADS=32
+FUZZ_CORES=4
+FUZZ_ITERS=200
+FUZZ_CLIENTS=2
+FUZZ_ARMS=4
+FUZZ_OPS=20000
+FUZZ_OVERLAP_PAIRS=351817
+FUZZ_VIOLATIONS=0
+FUZZ_REFUSED=0
+info  W385 pairing        = percore=PASS vs unpinned=PASS — placement did not change the answer
+info  W385 pairing        = crowd=PASS vs crowd-free=PASS — placement did not change the answer
+FUZZ_REASON=CLEAN
+★     W385 FUZZ CLEAN     = 20000 operations over 4 arms (up to 32 threads, 2 client(s), 4 cores), 351817 measured cross-thread overlaps, zero invariant violations. ⚠ THAT IS A BUDGET, NOT A PROOF: absence of a red is not absence of a race, and every arm sampled ONE schedule of one seed
+RUNGCTL_concurrent_fuzz=PASS
+RUNG_concurrent_fuzz=PASS
+done — w385 concurrent fuzz only
+    · t32i200c4unpinned verdict=PASS threads=32 pin=unpinned cores=4 ops=6400 engine_ops=1970 alias_ops=476 overlap=118372 viol=0 refused=0 pinned=0/32 finished=32/32
+    · t32i200c4percore verdict=PASS threads=4 pin=percore cores=4 ops=800 engine_ops=244 alias_ops=58 overlap=1112 viol=0 refused=0 pinned=4/4 finished=4/4
+    · t32i200c4crowd-free verdict=PASS threads=32 pin=unpinned cores=4 ops=6400 engine_ops=1970 alias_ops=476 overlap=118599 viol=0 refused=0 pinned=0/32 finished=32/32
+    · t32i200c4crowd verdict=PASS threads=32 pin=crowd cores=4 ops=6400 engine_ops=1970 alias_ops=476 overlap=113734 viol=0 refused=0 pinned=32/32 finished=32/32
+
+################ ARM t48i200c4 — T=48 I=200   ################
+    inner rc=0  (⊘ NOT the grade — the rung's watchdog exits 3 by design)
+kayfabe-isolate: DOORBELL-STORE tally: 3584 stores attempted; the last 3072 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 4096 stores attempted; the last 3584 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 4608 stores attempted; the last 4096 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+info  W385 crowd-free census = 9600 ops over 48 workers in 1663 ms, 0 refused, 48/48 workers finished
+info  W385 crowd-free verbs  = alloc=597 map_a=693 map_b=592 write=1240 alias_prop=308 unmap_b=222 probe=259 free=482 recycle=417 idle=4790
+info  W385 crowd-free op us   = n=4810 min=87 p50=7677 p90=34937 p99=70212 max=105234  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd-free overlap = 206231 pairs of RM-verb intervals from DIFFERENT threads intersected, over 4810/4810 spans
+info  W385 crowd-free handles = 1062 minted across 48 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd-free pinning = mode unpinned — 0/48 workers accepted a mask; observed core sets {"0-18"}
+FUZZ_ARM=crowd-free verdict=PASS threads=48 pin=unpinned cores=4 ops=9600 engine_ops=1770 alias_ops=308 overlap=206231 viol=0 refused=0 pinned=0/48 finished=48/48
+
+info  W385 ARM crowd      = 48 threads across 2 client(s), placement crowd, seeded jitter <= 200 us
+kayfabe-isolate: DOORBELL-STORE tally: 5120 stores attempted; the last 4608 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 5632 stores attempted; the last 5120 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 6144 stores attempted; the last 5632 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 6656 stores attempted; the last 6144 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+kayfabe-isolate: DOORBELL-STORE tally: 7168 stores attempted; the last 6656 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+info  W385 crowd    census = 9600 ops over 48 workers in 1347 ms, 0 refused, 48/48 workers finished
+info  W385 crowd    verbs  = alloc=597 map_a=693 map_b=592 write=1240 alias_prop=308 unmap_b=222 probe=259 free=482 recycle=417 idle=4790
+info  W385 crowd    op us   = n=4810 min=50 p50=6652 p90=27091 p99=57010 max=110446  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd    overlap = 201288 pairs of RM-verb intervals from DIFFERENT threads intersected, over 4810/4810 spans
+info  W385 crowd    handles = 1062 minted across 48 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd    pinning = mode crowd — 48/48 workers accepted a mask; observed core sets {"0-3"}
+FUZZ_ARM=crowd verdict=PASS threads=48 pin=crowd cores=4 ops=9600 engine_ops=1770 alias_ops=308 overlap=201288 viol=0 refused=0 pinned=48/48 finished=48/48
+FUZZ_THREADS=48
+FUZZ_CORES=4
+FUZZ_ITERS=200
+FUZZ_CLIENTS=2
+FUZZ_ARMS=4
+FUZZ_OPS=29600
+FUZZ_OVERLAP_PAIRS=615195
+FUZZ_VIOLATIONS=0
+FUZZ_REFUSED=0
+info  W385 pairing        = percore=PASS vs unpinned=PASS — placement did not change the answer
+info  W385 pairing        = crowd=PASS vs crowd-free=PASS — placement did not change the answer
+FUZZ_REASON=CLEAN
+★     W385 FUZZ CLEAN     = 29600 operations over 4 arms (up to 48 threads, 2 client(s), 4 cores), 615195 measured cross-thread overlaps, zero invariant violations. ⚠ THAT IS A BUDGET, NOT A PROOF: absence of a red is not absence of a race, and every arm sampled ONE schedule of one seed
+RUNGCTL_concurrent_fuzz=PASS
+RUNG_concurrent_fuzz=PASS
+done — w385 concurrent fuzz only
+    · t48i200c4unpinned verdict=PASS threads=48 pin=unpinned cores=4 ops=9600 engine_ops=1770 alias_ops=308 overlap=206866 viol=0 refused=0 pinned=0/48 finished=48/48
+    · t48i200c4percore verdict=PASS threads=4 pin=percore cores=4 ops=800 engine_ops=156 alias_ops=27 overlap=810 viol=0 refused=0 pinned=4/4 finished=4/4
+    · t48i200c4crowd-free verdict=PASS threads=48 pin=unpinned cores=4 ops=9600 engine_ops=1770 alias_ops=308 overlap=206231 viol=0 refused=0 pinned=0/48 finished=48/48
+    · t48i200c4crowd verdict=PASS threads=48 pin=crowd cores=4 ops=9600 engine_ops=1770 alias_ops=308 overlap=201288 viol=0 refused=0 pinned=48/48 finished=48/48
+
+################ ARM replay-a — T=8 I=96 seed=0x5EED0385  ################
+    inner rc=0  (⊘ NOT the grade — the rung's watchdog exits 3 by design)
+kayfabe-isolate: DOORBELL-STORE #509 host_token=0x00000008 runlist=0 chid=8 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #509 host_token=0x00000008 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #510 host_token=0x0000000c runlist=0 chid=12 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #510 host_token=0x0000000c ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #511 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #511 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #512 host_token=0x0000000c runlist=0 chid=12 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #512 host_token=0x0000000c ★★★ WROTE — the store instruction executed
+info  W385 crowd-free census = 864 ops over 9 workers in 170 ms, 0 refused, 9/9 workers finished
+info  W385 crowd-free verbs  = alloc=51 map_a=66 map_b=79 write=112 alias_prop=52 unmap_b=34 probe=36 free=27 recycle=43 idle=364
+info  W385 crowd-free op us   = n=500 min=112 p50=1387 p90=4543 p99=10072 max=11964  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd-free overlap = 3257 pairs of RM-verb intervals from DIFFERENT threads intersected, over 500/500 spans
+info  W385 crowd-free handles = 103 minted across 9 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd-free pinning = mode unpinned — 0/9 workers accepted a mask; observed core sets {"0-18"}
+FUZZ_ARM=crowd-free verdict=PASS threads=9 pin=unpinned cores=3 ops=864 engine_ops=198 alias_ops=52 overlap=3257 viol=0 refused=0 pinned=0/9 finished=9/9
+
+info  W385 ARM crowd      = 9 threads across 2 client(s), placement crowd, seeded jitter <= 200 us
+info  W385 crowd    census = 864 ops over 9 workers in 170 ms, 0 refused, 9/9 workers finished
+info  W385 crowd    verbs  = alloc=51 map_a=66 map_b=79 write=112 alias_prop=52 unmap_b=34 probe=36 free=27 recycle=43 idle=364
+info  W385 crowd    op us   = n=500 min=51 p50=1146 p90=4448 p99=8955 max=10726  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd    overlap = 3030 pairs of RM-verb intervals from DIFFERENT threads intersected, over 500/500 spans
+info  W385 crowd    handles = 103 minted across 9 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd    pinning = mode crowd — 9/9 workers accepted a mask; observed core sets {"0-2"}
+FUZZ_ARM=crowd verdict=PASS threads=9 pin=crowd cores=3 ops=864 engine_ops=198 alias_ops=52 overlap=3030 viol=0 refused=0 pinned=9/9 finished=9/9
+FUZZ_THREADS=8
+FUZZ_CORES=3
+FUZZ_ITERS=96
+FUZZ_CLIENTS=2
+FUZZ_ARMS=4
+FUZZ_OPS=2784
+FUZZ_OVERLAP_PAIRS=8788
+FUZZ_VIOLATIONS=0
+FUZZ_REFUSED=0
+info  W385 pairing        = percore=PASS vs unpinned=PASS — placement did not change the answer
+info  W385 pairing        = crowd=PASS vs crowd-free=PASS — placement did not change the answer
+FUZZ_REASON=CLEAN
+★     W385 FUZZ CLEAN     = 2784 operations over 4 arms (up to 9 threads, 2 client(s), 3 cores), 8788 measured cross-thread overlaps, zero invariant violations. ⚠ THAT IS A BUDGET, NOT A PROOF: absence of a red is not absence of a race, and every arm sampled ONE schedule of one seed
+RUNGCTL_concurrent_fuzz=PASS
+RUNG_concurrent_fuzz=PASS
+done — w385 concurrent fuzz only
+    · replay-aunpinned verdict=PASS threads=8 pin=unpinned cores=3 ops=768 engine_ops=169 alias_ops=43 overlap=2297 viol=0 refused=0 pinned=0/8 finished=8/8
+    · replay-apercore verdict=PASS threads=3 pin=percore cores=3 ops=288 engine_ops=62 alias_ops=17 overlap=204 viol=0 refused=0 pinned=3/3 finished=3/3
+    · replay-acrowd-free verdict=PASS threads=9 pin=unpinned cores=3 ops=864 engine_ops=198 alias_ops=52 overlap=3257 viol=0 refused=0 pinned=0/9 finished=9/9
+    · replay-acrowd verdict=PASS threads=9 pin=crowd cores=3 ops=864 engine_ops=198 alias_ops=52 overlap=3030 viol=0 refused=0 pinned=9/9 finished=9/9
+
+################ ARM replay-b — T=8 I=96 seed=0x5EED0385  ################
+    inner rc=0  (⊘ NOT the grade — the rung's watchdog exits 3 by design)
+kayfabe-isolate: DOORBELL-STORE #509 host_token=0x00000009 runlist=0 chid=9 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #509 host_token=0x00000009 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #510 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #510 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #511 host_token=0x00000007 runlist=0 chid=7 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #511 host_token=0x00000007 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #512 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #512 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+info  W385 crowd-free census = 864 ops over 9 workers in 162 ms, 0 refused, 9/9 workers finished
+info  W385 crowd-free verbs  = alloc=51 map_a=66 map_b=79 write=112 alias_prop=52 unmap_b=34 probe=36 free=27 recycle=43 idle=364
+info  W385 crowd-free op us   = n=500 min=105 p50=1386 p90=3957 p99=9169 max=10611  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd-free overlap = 3329 pairs of RM-verb intervals from DIFFERENT threads intersected, over 500/500 spans
+info  W385 crowd-free handles = 103 minted across 9 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd-free pinning = mode unpinned — 0/9 workers accepted a mask; observed core sets {"0-18"}
+FUZZ_ARM=crowd-free verdict=PASS threads=9 pin=unpinned cores=3 ops=864 engine_ops=198 alias_ops=52 overlap=3329 viol=0 refused=0 pinned=0/9 finished=9/9
+
+info  W385 ARM crowd      = 9 threads across 2 client(s), placement crowd, seeded jitter <= 200 us
+info  W385 crowd    census = 864 ops over 9 workers in 191 ms, 0 refused, 9/9 workers finished
+info  W385 crowd    verbs  = alloc=51 map_a=66 map_b=79 write=112 alias_prop=52 unmap_b=34 probe=36 free=27 recycle=43 idle=364
+info  W385 crowd    op us   = n=500 min=54 p50=1314 p90=5298 p99=12799 max=21661  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd    overlap = 2951 pairs of RM-verb intervals from DIFFERENT threads intersected, over 500/500 spans
+info  W385 crowd    handles = 103 minted across 9 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd    pinning = mode crowd — 9/9 workers accepted a mask; observed core sets {"0-2"}
+FUZZ_ARM=crowd verdict=PASS threads=9 pin=crowd cores=3 ops=864 engine_ops=198 alias_ops=52 overlap=2951 viol=0 refused=0 pinned=9/9 finished=9/9
+FUZZ_THREADS=8
+FUZZ_CORES=3
+FUZZ_ITERS=96
+FUZZ_CLIENTS=2
+FUZZ_ARMS=4
+FUZZ_OPS=2784
+FUZZ_OVERLAP_PAIRS=9054
+FUZZ_VIOLATIONS=0
+FUZZ_REFUSED=0
+info  W385 pairing        = percore=PASS vs unpinned=PASS — placement did not change the answer
+info  W385 pairing        = crowd=PASS vs crowd-free=PASS — placement did not change the answer
+FUZZ_REASON=CLEAN
+★     W385 FUZZ CLEAN     = 2784 operations over 4 arms (up to 9 threads, 2 client(s), 3 cores), 9054 measured cross-thread overlaps, zero invariant violations. ⚠ THAT IS A BUDGET, NOT A PROOF: absence of a red is not absence of a race, and every arm sampled ONE schedule of one seed
+RUNGCTL_concurrent_fuzz=PASS
+RUNG_concurrent_fuzz=PASS
+done — w385 concurrent fuzz only
+    · replay-bunpinned verdict=PASS threads=8 pin=unpinned cores=3 ops=768 engine_ops=169 alias_ops=43 overlap=2557 viol=0 refused=0 pinned=0/8 finished=8/8
+    · replay-bpercore verdict=PASS threads=3 pin=percore cores=3 ops=288 engine_ops=62 alias_ops=17 overlap=217 viol=0 refused=0 pinned=3/3 finished=3/3
+    · replay-bcrowd-free verdict=PASS threads=9 pin=unpinned cores=3 ops=864 engine_ops=198 alias_ops=52 overlap=3329 viol=0 refused=0 pinned=0/9 finished=9/9
+    · replay-bcrowd verdict=PASS threads=9 pin=crowd cores=3 ops=864 engine_ops=198 alias_ops=52 overlap=2951 viol=0 refused=0 pinned=9/9 finished=9/9
+
+################ CONTROL — the WATCHDOG, provoked on purpose ################
+    inner rc=3  (⊘ 3 is what the watchdog exits with, by design)
+    W385_WATCHDOG=PASS — it fired, printed FAIL by name, and dumped 8 worker rows
+        worker  0  last op = alloc        iter 5885   last beat 0 ms ago  done=false
+        worker  1  last op = alias_prop   iter 5893   last beat 1 ms ago  done=false
+        worker  2  last op = probe        iter 5848   last beat 0 ms ago  done=false
+        worker  3  last op = write        iter 5841   last beat 0 ms ago  done=false
+        worker  4  last op = alloc        iter 5888   last beat 1 ms ago  done=false
+        worker  5  last op = free         iter 5926   last beat 1 ms ago  done=false
+        worker  6  last op = recycle      iter 5828   last beat 0 ms ago  done=false
+        worker  7  last op = idle         iter 5811   last beat 0 ms ago  done=false
+
+================================================================================
+=== ★★★★★ THE W385 TABLE — one row per arm, graded on printed lines
+================================================================================
+    ARM          T    I     SEED                 VERDICT  CONTROL    OPS        VIOL   REASON
+    t3i128c3     3    128   0x18d2ccb501e5d295   PASS     PASS       3072       0      CLEAN overlap=8256
+    t3i512c3     3    512   0x18d2ccb5a3323bcd   PASS     PASS       12288      0      CLEAN overlap=43258
+    t6i256c3     6    256   0x18d2ccb6909fd249   PASS     PASS       6912       0      CLEAN overlap=23157
+    t12i128c3    12   128   0x18d2ccb75362ccb1   PASS     PASS       4992       0      CLEAN overlap=28829
+    t8i256c1     8    256   0x18d2ccb80eea8489   NOTRUN   PASS       6400       0      ARM_UNMEASURED overlap=18954
+    t16i256c2    16   256   0x18d2ccb8d970a49b   PASS     PASS       12800      0      CLEAN overlap=95444
+    t3i5000c3    3    5000  0x18d2ccb9df50e26f   PASS     PASS       120000     0      CLEAN overlap=97083
+    t24i300c3    24   300   0x18d2ccbe74cf371f   PASS     PASS       22500      0      CLEAN overlap=299868
+    t32i200c4    32   200   0x18d2ccbffa2ba7a9   PASS     PASS       20000      0      CLEAN overlap=351817
+    t48i200c4    48   200   0x18d2ccc151bceab7   PASS     PASS       29600      0      CLEAN overlap=615195
+    replay-a     8    96    0x000000005eed0385   PASS     PASS       2784       0      CLEAN overlap=8788
+    replay-b     8    96    0x000000005eed0385   PASS     PASS       2784       0      CLEAN overlap=9054
+
+=== ★★ THE REPLAY CHECK — same seed, same decisions?
+    W385_REPLAY=SAME — both runs drew the same verbs in every arm:
+      alloc=5 map_a=5 map_b=1 write=3 alias_prop=0 unmap_b=1 probe=0 free=4 recycle=6 idle=71
+      alloc=45 map_a=59 map_b=68 write=99 alias_prop=43 unmap_b=27 probe=31 free=23 recycle=41 idle=332
+      alloc=17 map_a=22 map_b=25 write=36 alias_prop=17 unmap_b=9 probe=10 free=9 recycle=17 idle=126
+      alloc=51 map_a=66 map_b=79 write=112 alias_prop=52 unmap_b=34 probe=36 free=27 recycle=43 idle=364
+      alloc=51 map_a=66 map_b=79 write=112 alias_prop=52 unmap_b=34 probe=36 free=27 recycle=43 idle=364
+
+=== ★★★ THE READING RULE, applied
+    * every arm PASS            ⇒ (A) no invariant broke under any schedule SAMPLED.
+                                   ⚠ Absence of a red is not absence of a race.
+    * any arm FAIL + control PASS ⇒ (B) ★★★★★ A REAL RED. Replay it with its SEED.
+    * any NOTRUN + control FAIL ⇒ (C) ⊘ the RUNG is broken, not the system.
+    * NOTRUN + NO_CONCURRENCY_OBSERVED ⇒ (D) ⊘ nothing was sampled. Not a pass.
+    * FUZZ_REASON=DEADLOCK/WATCHDOG ⇒ (H) ★★ a hang that failed BY NAME.
+=== W385 EXIT at 2026-09-06T17:52:30+00:00 ===

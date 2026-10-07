@@ -1,0 +1,114 @@
+=== clpeak side=host start=2026-10-04T11:47:38+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/clpeak
+
+Platform: NVIDIA CUDA
+  Device: NVIDIA GeForce RTX 3060
+    Driver version  : 580.159.04 (Linux x64)
+    Compute units   : 28
+    Clock frequency : 1777 MHz
+
+    Global memory bandwidth (GBPS)
+      float   : 316.43
+      float2  : 325.86
+      float4  : 331.18
+      float8  : 287.63
+      float16 : 325.71
+
+    Single-precision compute (GFLOPS)
+      float   : 13088.24
+      float2  : 13070.69
+      float4  : 13025.49
+      float8  : 12939.53
+      float16 : 12832.75
+
+    No half precision support! Skipped
+
+    Double-precision compute (GFLOPS)
+      double   : 211.12
+      double2  : 211.22
+      double4  : 210.71
+      double8  : 209.71
+      double16 : 207.66
+
+    Integer compute (GIOPS)
+      int   : 6709.79
+      int2  : 6720.64
+      int4  : 6704.80
+      int8  : 6716.63
+      int16 : 6670.83
+
+    Integer compute Fast 24bit (GIOPS)
+      int   : 6677.65
+      int2  : 6676.91
+      int4  : 6674.44
+      int8  : 6648.26
+      int16 : 6577.52
+
+    Transfer bandwidth (GBPS)
+      enqueueWriteBuffer              : 5.88
+      enqueueReadBuffer               : 7.03
+      enqueueWriteBuffer non-blocking : 5.45
+      enqueueReadBuffer non-blocking  : 6.05
+      enqueueMapBuffer(for read)      : 5.76
+        memcpy from mapped ptr        : 7.08
+      enqueueUnmap(after write)       : 9.73
+        memcpy to mapped ptr          : 6.96
+
+    Kernel launch latency : 4.04 us
+
+
+Platform: Portable Computing Language
+  Device: pthread-Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz
+    Driver version  : 1.8 (Linux x64)
+    Compute units   : 19
+    Clock frequency : 2299 MHz
+
+    Global memory bandwidth (GBPS)
+      float   : 52.81
+      float2  : 59.56
+      float4  : 60.08
+      float8  : 59.60
+      float16 : 62.16
+
+    Single-precision compute (GFLOPS)
+      float   : 16.25
+      float2  : 31.90
+      float4  : 66.27
+      float8  : 125.45
+      float16 : 241.88
+
+    No half precision support! Skipped
+
+    Double-precision compute (GFLOPS)
+      double   : 16.19
+      double2  : 31.96
+      double4  : 61.01
+      double8  : 120.89
+      double16 : 231.87
+
+    Integer compute (GIOPS)
+      int   : 23.67
+      int2  : 17.95
+      int4  : 36.24
+      int8  : 69.47
+      int16 : 136.41
+
+    Integer compute Fast 24bit (GIOPS)
+      int   : 24.38
+      int2  : 17.98
+      int4  : 34.53
+      int8  : 68.56
+      int16 : 135.43
+
+    Transfer bandwidth (GBPS)
+      enqueueWriteBuffer              : 5.58
+      enqueueReadBuffer               : 5.53
+      enqueueWriteBuffer non-blocking : 6.06
+      enqueueReadBuffer non-blocking  : 6.08
+      enqueueMapBuffer(for read)      : 4808.52
+        memcpy from mapped ptr        : 6.60
+      enqueueUnmap(after write)       : 8272.28
+        memcpy to mapped ptr          : 6.69
+
+    Kernel launch latency : 54.81 us
+
+=== end rc=0 secs=134 2026-10-04T11:49:52+00:00

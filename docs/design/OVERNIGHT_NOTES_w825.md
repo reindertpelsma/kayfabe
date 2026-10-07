@@ -1,0 +1,168 @@
+# OVERNIGHT NOTES — w825 (2026-09-23/24)
+
+STATUS: LIVE — the running log of the overnight autonomy session. Box 52236011 (RTX 3060,
+GA106, 580.159.04). Baseline `w825base`: thin guest 17/30 (honest 15/30).
+
+
+## ★ MORNING SUMMARY (read this first) — 2026-09-24 ~01:50
+
+| goal | result | evidence |
+|---|---|---|
+| thin/fast guest (raw client, 30 arms) | **26/30** at `47029f0c`, **25/30** at `518726d3`; FAIL=0 both | all misses are TIMEOUTs; `defer-liveness` flips on the budget edge |
+| CUDA ladder | ✔ `cup3` **43**, ✔ `cup8` **N=2048 bad=0 maxerr=0** | Xid 0; GR forwarded; same program as the C's green |
+| LLM | ✔ **PASS** — GPU text == CPU text, 16 tokens | `LLM_PARAM_DEVICE=cuda`, 21 055 forwarded GR doorbells, Xid 0; ⚠ 9.5 s vs CPU 1.2 s |
+
+**Why I stopped rather than kept going:** the four remaining thin-guest arms are each blocked on a
+multi-day build or on an owner decision, not on a bug I can find tonight:
+- `ce-client-guest-ram`, `concurrency`, `concurrent-fuzz` — the invalidate hold is now ≈ the CPU
+  page-table sweep alone (~3.5–8 ms: ~29 PT pages read at ~25 MB/s through device views).
+  Only §9 step 4 (GPU walker) removes it, and that needs a new kernel report format (see the step-4
+  section). Group D is also §10.1's acceptance test for the worker/epoll plane (`kf-qemu`, 0 lines).
+- `gpga-reserve-probe` — §10 group E: a 256 MiB CPU read sweep, bound by construction; the plan
+  already says it needs a budget ≥ 90 s.
+
+**Owner questions (decisions I did not take):**
+1. **GPGA reservation headroom.** The default reserves the maximum (11 760 MiB of 12 GiB); host RM
+   then has no vidmem for per-channel GR context and CUDA's 3rd GR channel birth fails NoMemory.
+   Everything CUDA/LLM above ran with `KAYFABE_SCRATCHPAD_START_MB=10240`. What policy? (per-channel
+   headroom × max channels, or a fixed reserve?) I did NOT change the default.
+2. **CPU PT sweep on the hold until step 4 lands** — v3 declares CPU reads of vidmem dead; the
+   sweep is exactly that, and it is now the whole hold. OK to keep it as the bridge?
+3. **`gpga-reserve-probe` budget** — raise that arm's budget to ≥ 90 s, or keep 45 s and accept
+   it as a known E-group miss until the BAR1 device-view path is faster?
+
+**Box 52236011 destroyed at the end of the session (verified), timer removed.**
+
+## Measured and fixed
+
+1. **The doorbell ledger never saw a WORKER forward** (`c61f4a49`). A deferred doorbell is
+   recorded on the trap as `Scheduled ⇒ emulated`; the worker then stored it to hardware
+   (`DOORBELL-STORE … WROTE`) and nothing updated the ledger. Five arms whose client said
+   `ALL ARMS MET rc=0` were graded FAIL "never reached hardware": `blockage-coverage`,
+   `late-map-race`, `executor-vas`, `dictated-ring`, `ce-client`. **All five now PASS**
+   (w825b), each token `forwarded>0`.
+   ⇒ The `forwarded=0` cluster was a GRADER defect, not a data-path one. `route_of_engine`
+   (`CpuCe` for CE) is NOT on the user-channel path: user CE channels are `Passthrough` and
+   forward through the store (`STORE-BIRTH … BORN IN B`).
+2. **REAL cross-client leak, two layers** (`eaf05f50`, `4bc8e7be`). Per-proc isolates and
+   per-proc birth clients are separate RM clients, so handle NUMBERS repeat. `StoreMapPort::
+   adopted` keyed by `.raw()`, and every `BirthConn` minted from `0xB147_0000`; proc 2's
+   channel ran in proc 1's host VAS and A's copy landed in B's object. Keyed by the whole
+   handle + one process-wide birth-handle counter. `cross-client-leak` **PASS** (w825d),
+   distinct ranges `0xb1470003` / `0xb147000a`.
+
+3b. **Full suite at `4bc8e7be`: 22/30** (from 17, honest 15). Every remaining failure is a
+   timeout except `rpc-mixed-allocs`.
+4b. **Guest RAM as ONE RM object — BUILT** (`a0e43134`, `d622fd2c`): the scratchpad maps the
+   whole memfd as one `OS_DESCRIPTOR` (2 GiB in ~1.5 s) and sysmem rows are FIXED slices of it
+   at the guest's VA; a slice the guest's rows no longer back is unmapped (handle-ledger diff).
+   The per-page pin path is skipped on the K arm. `engines` **PASS** (was a 17 s worker grind).
+5b. **The raw client raced itself** (`88b628bc`): `w381_engine_write` reused one staging word
+   without waiting for its copy to retire. `rpc-mixed-allocs` **PASS**, identity 12/12,
+   ordering 6/6. ⚠ A CLIENT fix — the guest's deferred first doorbells exposed it.
+6b. **The invalidate hold** (the guest spins on TRIGGER for all of it) was ~15 ms per map:
+   BAR-mirror revalidation on EVERY invalidate (5.3 ms), BAR premap on every invalidate
+   (6.8 ms), PT refresh (2.6 ms). Scoped both BAR phases to BAR-relevant invalidates
+   (`4d3d10d6`, `89026348`) and memoised page-table reads within a revalidation pass
+   (`47029f0c`). ⚠ `refresh` (the CPU walk of user page tables through vidmem device views)
+   is what remains — that is §9 step 4 (the GPU walker) and is the next build.
+
+★★★ **Full suite at `47029f0c`: 26/30, FAIL=0** (w825i). Remaining four are all TIMEOUTs —
+`concurrency`, `ce-client-guest-ram`, `gpga-reserve-probe`, `concurrent-fuzz` — and all four are
+bound by the invalidate hold's CPU page-table sweep (§ step 4) or, for `gpga-reserve-probe`,
+by CPU reads of vidmem through BAR1 device views (by construction).
+
+⊘ **Refuted, measured:** SSE4.1 streaming loads (`MOVNTDQA`) on the device view — FB-IO-RATE
+24.94 vs 24.95 MB/s on AMD Zen 2. The CPU read rate of vidmem is not a load-instruction
+problem; it stays ~25 MB/s. ⇒ The sweep's cost can only fall by reading LESS (step 4, the GPU
+walker), not by reading faster.
+
+## Diagnosed, in progress
+
+3. **Guest RAM (sysmem) is never mapped into the host VAS on the K arm** — v3's second
+   ground truth is not built on the live path. Every sysmem row publish is refused
+   (`map_gpu_va` refuses a bare space). Causes `rpc-mixed-allocs`, `ce-client-guest-ram`,
+   and — through the per-page pin path re-trying every sysmem row on every publish
+   (~99k worker requests, ~17 s) — the `engines`/`concurrency` stalls. Being built: one
+   OS_DESCRIPTOR over guest RAM in the scratchpad, sysmem rows FIXED-mapped as slices.
+4. `concurrent-fuzz`: no longer wedges; RM verb p50 163 ms ⇒ budget-bound.
+5. `defer-liveness`: the rung PASSes at 34 s; the guest then hangs in close past 45 s.
+6. `gpga-reserve-probe`: a 256 MiB CPU read sweep through BAR1 device views (~24 MB/s) —
+   performance-bound by construction.
+
+## ✔✔✔ CUDA FIRST COMPUTE — `CUP3_VAL=43` on v3, 2026-09-24 01:18 (`518726d3`, run `w825cup3o`)
+
+Stock unpatched 580.159.04 guest, full CUDA driver, `cuCtxCreate → cuModuleLoad → cuLaunchKernel
+→ sync`: **`CUP3_KERNEL_LINE=KERNEL rv=43 want=43 -> PASS`**, every stage ✔. Proof it ran on
+the GPU and not on us: host Xid **0**; the GR channel's token `0x7` `forwarded=118`; 8/8
+`0xc7c0` compute objects FORWARDED. ⊘ Conditions: `KAYFABE_SCRATCHPAD_START_MB=10240` (the
+headroom question below), `NVKVM_RAM_BACKEND=memfd NVKVM_RAM_MB=4096`.
+The chain of fixes, each measured: `6edddcfd` `d930d4a8` (cuInit), `7ff4cf12` `6f6d87e4`
+(births), `802ea1ea` (sub-page promote row), `73687042` `518726d3` (UVM's MAP_EXTERNAL PTEs,
+written by our CPU-CE executor and invalidated in-band, were never swept).
+
+## ✔✔✔ `cup8` — `N=2048 bad=0 maxerr=0`, 2026-09-24 01:21 (same binary, run `w825cup8`)
+
+**The north star** (`cuCtxCreate → matmul`, numerically exact) on v3: `CUP8 RESULT N=2048 bad=0
+maxerr=0 C[0]=2048(exp 2048) -> PASS`, host Xid 0, 37 s wall. `CUP8_SAME_PROGRAM=yes` — md5
+`593c1ef9…`, the program the C artifact ran to `bad=0 maxerr=0`. Same conditions as cup3.
+
+**Suite regression check at `518726d3` (after the CUDA fixes): 25/30, FAIL=0.** The one
+difference from 26/30 is `--defer-liveness`, whose rung PASSES at ~33 s and whose guest then
+exceeds 45 s in TEARDOWN — the same budget-edge seen at baseline (it passed at 47 s under a
+90 s budget). The new sweeps cost it 364 ms total. ⚠ Every arm pays a 4 s
+`_threadNodeCheckTimeout` in guest RM teardown: some teardown request is never answered.
+Not yet diagnosed; fixing it would buy every arm 4 s.
+
+## ✔✔✔ LLM lane — PASS, 2026-09-24 01:49 (run `w825llm`, `518726d3`)
+
+`provision_guest_llm.sh` (CPU control PASSED, receipt written) then `w409_llm_boot.sh` with
+`KAYFABE_SCRATCHPAD_START_MB=10240`: `W392_OUTCOME=(P) PASS — 16 tokens AND the text matches the
+CPU`; GPU text `[ ______. A. Paris B. London C. New York D]` == CPU text; Xid 0;
+`LLM_PARAM_DEVICE=cuda`; GR token forwarded=21 055. ⚠ `LLM_MS` 9 511 (GPU) vs 1 211 (guest CPU)
+— correct but ~8× slower than the CPU; parity is the next LLM question, not this one.
+
+## Step 4 (walk-at-invalidate on the GPU) — mapped, NOT built tonight, and why
+
+The seam exists (`PtSweepDecider::decide`, `kayfabe-rt/src/device.rs:9175`), but the in-place
+GPU walk cannot replace the CPU sweep as-is:
+- the kernel's report is **coalesced runs** — no table pages, levels, child edges or sparse
+  slots — so the `SubtreeDecode` every downstream consumer reads (`ReachShadow::observe` →
+  `settle` → `AddressTable::bind`) cannot be rebuilt from it;
+- four wiring defects on the in-place path: `cudawalk::run` refuses without a staged image it
+  then ignores (`cudawalk.rs:288`); the decider sends relocated roots, not real PDBs
+  (`walkshadow.rs:332`); `arm_store_device_pointer` imports the store in a DIFFERENT CUDA
+  context (`rm.rs:10535`, the kernel cannot use it — `walk.rs:669`); a foreign-aperture table
+  refuses the whole report instead of one branch (`kf_walk.cu:512`);
+- ⚠ **and it would not be faster yet**: Rust launches only the SERIAL kernel (1.6–4.5 ms),
+  vs today's CPU sweep ≈ 3.5 ms per invalidate. Only the parallel kernel (205 µs) wins, and no
+  Rust code calls `kf_run_parallel`.
+⇒ Plan (8 steps, file:line anchored) is in the session log; the order is: page-record section
+in the kernel report → per-branch foreign-aperture → same-context import → real-PDB verb →
+`subtree_from_report` → decider-first execute → wire + keep the Shadow arm as a field-by-field
+check → parallel launches. **Owner question:** is it acceptable to keep the CPU sweep (reads of
+vidmem PT pages through device views) on the hold until that lands, given v3 declares CPU reads
+of vidmem dead? Tonight's work kept it and cut everything around it instead.
+
+## CUDA ladder (`cup3`, full guest via `boot_capture.sh` + `cup3_hook.sh`) — progress, in order
+
+Run with `NVKVM_RAM_BACKEND=memfd NVKVM_RAM_MB=4096 KAYFABE_CUP3_TIMEOUT=120`. Each step was
+measured on box 52236011 and each fix is its own commit:
+1. `cuInit` hung in `UVM_REGISTER_GPU` (never `CTX OK`). Two defects on the CPU-CE path for
+   kernel/UVM channels: a new channel inherited a dead one's GPFIFO cursor (`6edddcfd`), and an
+   entry below `GP_PUT` not yet VISIBLE refused the doorbell forever (`d930d4a8`). ⇒ **`cuInit`
+   completes.**
+2. `cuCtxCreate`'s GR channels were refused birth: libcuda declares engineType 0 (NULL) and a
+   re-bind of the identical store slice was refused as "taken" (`7ff4cf12`).
+3. Then `NoMemory` on the 3rd GR birth: ⚠⚠ **the GPGA reservation (11760 MiB of 12 GiB)
+   leaves host RM no vidmem for per-channel GR context.** Measured with
+   `KAYFABE_SCRATCHPAD_START_MB=10240`: all 16 births succeed. **OWNER QUESTION — sizing
+   policy**: the reservation must leave headroom proportional to the channels the guest can
+   create; today it takes the maximum. 10 GiB is a measured working value, not a policy.
+4. CE channels declared NULL inside a CE TSG were born as GR — host RM refused their copy
+   object (runlist conflict). Now born on the TSG's engine (`6f6d87e4`).
+5. **Current wall:** `cuCtxCreate → 999`, host `Xid 31 CE2_PBDMA0 FAULT_PTE @ 0x2_0440f000`
+   (virt read — a pushbuffer fetch). That page is the native oracle's completion page
+   (`0x2_0440_fff0`, host RAM). All 12 801 guest-RAM rows of the process's VAS are slices
+   by then, so either the page is not a sysmem row we see or it is used before its row is
+   published. A `KAYFABE_PROBE_VA` run is in flight to say which.

@@ -1,0 +1,185 @@
+[   26.314457] nvidia-nvlink: Nvlink Core is being initialized, major device number 239
+
+[   26.329161] nvidia 0000:00:02.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=none:owns=io+mem
+[   26.334120] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   29.298861] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   29.298937] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   29.335348] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   29.339737] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   29.340907] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   29.340915] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   29.639440] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   29.640521] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0) @ kernel_graphics.c:2519
+[   29.644382] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   29.644389] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   29.644392] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   29.644394] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   29.650885] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:508
+[   29.650893] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   29.670076] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00009; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+[   29.670083] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2827
+[   29.670090] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:940
+[   29.673670] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   29.679785] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   31.032779] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   31.035920] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   31.073937] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00001; hParent=0xa55a0030; hObject=0xa55a0070; hClass=0x0000208f; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   31.191573] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[   31.212003] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+[   36.453947] nvidia-modeset: Loading NVIDIA UNIX Open Kernel Mode Setting Driver for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:04:37 UTC 2026
+[   36.464781] [drm] [nvidia-drm] [GPU ID 0x00000002] Loading driver
+[   37.163120] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   37.163235] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   37.184767] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   37.190422] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   37.191717] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   37.191727] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   37.489786] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   37.490681] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0) @ kernel_graphics.c:2519
+[   37.493600] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   37.493607] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   37.493610] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   37.493613] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   37.499425] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:508
+[   37.499434] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   37.517975] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00015; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+[   37.517983] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2827
+[   37.518047] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:940
+[   37.522011] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   37.527741] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00016; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   37.561835] nvidia-modeset: WARNING: GPU:0: Failed to register display hotplug handler: 0x56
+
+[   37.563668] nvidia-modeset: WARNING: GPU:0: Failed to register DisplayPort interrupt handler: 0x56
+
+[   37.565509] nvidia-modeset: WARNING: GPU:0: Failed to enable HDMI FRL retrain notifications (subdevice: 0) (error: 0x56)
+[   37.983526] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:02.0 on minor 0
+[   37.983673] nvidia 0000:00:02.0: vgaarb: deactivate vga console
+[   37.983987] Console: switching to colour dummy device 80x25
+[   38.021483] fbcon: nvidia-drmdrmfb (fb0) is primary device
+[   38.133018] Console: switching to colour frame buffer device 240x67
+[   38.147006] nvidia 0000:00:02.0: [drm] fb0: nvidia-drmdrmfb frame buffer device
+[   47.067816] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00018; hParent=0xa55a0030; hObject=0xa55a0060; hClass=0x000090e7; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   47.069249] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00018; hParent=0xa55a0030; hObject=0xa55a0070; hClass=0x0000208f; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   47.080928] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   47.097121] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   47.137923] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   47.146362] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   47.158523] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   82.859604] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   82.859686] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _gpushareddataRequestDataPoll(pData, pAllocParams->polledDataMask) @ gpu_user_shared_data.c:95
+[   86.184657] [drm:nv_drm_atomic_commit [nvidia_drm]] *ERROR* [nvidia-drm] [GPU ID 0x00000002] Flip event timeout on head 0
+[  214.342455] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[  214.342472] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _gpushareddataRequestDataPoll(pData, pAllocParams->polledDataMask) @ gpu_user_shared_data.c:95
+[  217.448688] [drm:nv_drm_atomic_commit [nvidia_drm]] *ERROR* [nvidia-drm] [GPU ID 0x00000002] Flip event timeout on head 0
+[  217.945426] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0003d; hParent=0x01000012; hObject=0xc0de9000; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  217.948956] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0003d; hParent=0x01000012; hObject=0xc0de9001; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  217.952253] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0003d; hParent=0x01000012; hObject=0xc0de9002; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  217.955539] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0003d; hParent=0x01000012; hObject=0xc0de9003; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  220.044935] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9000; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  220.048233] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9001; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  220.051702] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9002; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  220.054949] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9003; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  220.643462] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9004; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  220.646341] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9005; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  220.649105] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9006; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  220.651975] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9007; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  221.139647] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9008; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  221.142468] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9009; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  221.145211] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de900a; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  221.147934] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de900b; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  221.612699] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de900c; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  221.615545] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de900d; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  221.618163] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de900e; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  221.620849] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de900f; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  222.072616] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9010; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  222.075371] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9011; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  222.077981] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9012; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  222.080664] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9013; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  222.545328] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9014; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  222.548072] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9015; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  222.550815] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9016; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  222.553601] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9017; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  223.014329] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9018; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  223.017120] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9019; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  223.019840] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de901a; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  223.022539] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de901b; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  223.482896] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de901c; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  223.486104] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de901d; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  223.488685] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de901e; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  223.491911] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de901f; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  223.951631] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9020; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  223.954905] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9021; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  223.958036] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9022; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  223.960679] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9023; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  224.420315] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9024; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  224.423069] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9025; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  224.425896] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9026; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  224.428988] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9027; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  224.887908] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9028; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  224.891207] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9029; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  224.894728] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de902a; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  224.897658] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de902b; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  225.381550] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de902c; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  225.384605] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de902d; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  225.387593] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de902e; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  225.390655] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de902f; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  225.865799] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9030; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  225.868390] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9031; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  225.870728] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9032; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  225.873345] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9033; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  226.316598] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9034; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  226.319583] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9035; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  226.322367] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9036; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  226.324974] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9037; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  226.785586] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9038; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  226.788658] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9039; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  226.791572] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de903a; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  226.794227] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de903b; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  227.260326] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de903c; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  227.263125] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de903d; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  227.266089] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de903e; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  227.268895] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de903f; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  227.744405] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9040; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  227.747884] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9041; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  227.750970] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9042; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  227.754100] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9043; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  228.250633] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9044; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  228.253960] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9045; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  228.256967] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9046; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  228.259657] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9047; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  228.723040] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9048; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  228.725807] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9049; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  228.729019] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de904a; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  228.731627] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de904b; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  229.199081] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de904c; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  229.202048] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de904d; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  229.205057] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de904e; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  229.208055] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de904f; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  229.673633] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9050; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  229.677048] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9051; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  229.679977] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9052; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  229.682883] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9053; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  230.143669] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9054; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  230.146971] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9055; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  230.149677] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9056; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  230.152662] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9057; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  230.644811] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9058; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  230.648397] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de9059; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  230.651684] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de905a; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  230.655000] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de905b; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  231.134665] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de905c; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  231.139446] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de905d; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  231.142339] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de905e; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  231.145877] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00048; hParent=0xbeef0100; hObject=0xc0de905f; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  233.598972] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0004a; hParent=0xbeeb0100; hObject=0xc0de9000; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  233.602167] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0004a; hParent=0xbeeb0100; hObject=0xc0de9001; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  233.605016] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0004a; hParent=0xbeeb0100; hObject=0xc0de9002; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  233.607930] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0004a; hParent=0xbeeb0100; hObject=0xc0de9003; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  233.627072] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0004a; hParent=0xbeeb0101; hObject=0xc0de9004; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  233.629892] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0004a; hParent=0xbeeb0101; hObject=0xc0de9005; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  233.632908] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0004a; hParent=0xbeeb0101; hObject=0xc0de9006; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  233.635975] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0004a; hParent=0xbeeb0101; hObject=0xc0de9007; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  233.643353] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0004a; hParent=0xbeeb0102; hObject=0xc0de9008; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  233.645911] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0004a; hParent=0xbeeb0102; hObject=0xc0de9009; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  233.648711] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0004a; hParent=0xbeeb0102; hObject=0xc0de900a; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[  233.651361] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0004a; hParent=0xbeeb0102; hObject=0xc0de900b; hClass=0x00009074; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056

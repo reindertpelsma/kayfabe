@@ -1,0 +1,75 @@
+##### REV w754-gsp-queue-off-vcpu (400a8525) #####
+--- iter 1 sweep_defers_to_mmio ---
+test with_no_trap_in_flight_the_sweep_does_not_defer ... ok
+test a_permanently_trapping_guest_does_not_livelock_the_sweep ... ok
+test every_trap_path_returns_the_in_flight_count_to_zero ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.99s
+--- iter 1 spawn_unsafe ---
+test spawn_unsafe::tests::an_ungranted_descriptor_does_not_reach_the_child ... ok
+test spawn_unsafe::tests::a_namespaced_child_is_pid_1_in_its_own_namespaces ... ok
+test spawn_unsafe::tests::two_grants_on_one_number_are_refused - should panic ... ok
+test spawn_unsafe::tests::more_grants_than_the_child_can_place_are_refused_in_the_parent ... ok
+test spawn_unsafe::tests::one_image_spawns_more_than_once ... ok
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 145 filtered out; finished in 0.04s
+--- iter 2 sweep_defers_to_mmio ---
+test every_trap_path_returns_the_in_flight_count_to_zero ... ok
+test a_permanently_trapping_guest_does_not_livelock_the_sweep ... ok
+test with_no_trap_in_flight_the_sweep_does_not_defer ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.01s
+--- iter 2 spawn_unsafe ---
+test spawn_unsafe::tests::one_image_spawns_more_than_once ... ok
+test spawn_unsafe::tests::try_reap_reports_none_while_running_and_the_code_afterwards ... ok
+test spawn_unsafe::tests::the_environment_is_cleared_and_only_declared_entries_survive ... ok
+test spawn_unsafe::tests::a_namespaced_child_is_pid_1_in_its_own_namespaces ... ok
+test spawn_unsafe::tests::more_grants_than_the_child_can_place_are_refused_in_the_parent ... ok
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 145 filtered out; finished in 0.03s
+--- iter 3 sweep_defers_to_mmio ---
+test a_permanently_trapping_guest_does_not_livelock_the_sweep ... ok
+test with_no_trap_in_flight_the_sweep_does_not_defer ... ok
+test every_trap_path_returns_the_in_flight_count_to_zero ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.97s
+--- iter 3 spawn_unsafe ---
+test spawn_unsafe::tests::two_grants_on_one_number_are_refused - should panic ... ok
+test spawn_unsafe::tests::try_reap_reports_none_while_running_and_the_code_afterwards ... ok
+test spawn_unsafe::tests::the_environment_is_cleared_and_only_declared_entries_survive ... ok
+test spawn_unsafe::tests::more_grants_than_the_child_can_place_are_refused_in_the_parent ... ok
+test spawn_unsafe::tests::one_image_spawns_more_than_once ... ok
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 145 filtered out; finished in 0.05s
+##### REV 579ddcb7 (579ddcb7) #####
+--- iter 1 sweep_defers_to_mmio ---
+test a_permanently_trapping_guest_does_not_livelock_the_sweep ... ok
+test every_trap_path_returns_the_in_flight_count_to_zero ... ok
+test with_no_trap_in_flight_the_sweep_does_not_defer ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.88s
+--- iter 1 spawn_unsafe ---
+test spawn_unsafe::tests::a_namespaced_child_is_pid_1_in_its_own_namespaces ... ok
+test spawn_unsafe::tests::try_reap_reports_none_while_running_and_the_code_afterwards ... ok
+test spawn_unsafe::tests::the_environment_is_cleared_and_only_declared_entries_survive ... ok
+test spawn_unsafe::tests::one_image_spawns_more_than_once ... ok
+test spawn_unsafe::tests::more_grants_than_the_child_can_place_are_refused_in_the_parent ... ok
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 145 filtered out; finished in 0.05s
+--- iter 2 sweep_defers_to_mmio ---
+test with_no_trap_in_flight_the_sweep_does_not_defer ... ok
+test a_permanently_trapping_guest_does_not_livelock_the_sweep ... ok
+test every_trap_path_returns_the_in_flight_count_to_zero ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.87s
+--- iter 2 spawn_unsafe ---
+test spawn_unsafe::tests::an_ungranted_descriptor_does_not_reach_the_child ... ok
+test spawn_unsafe::tests::one_image_spawns_more_than_once ... ok
+test spawn_unsafe::tests::the_environment_is_cleared_and_only_declared_entries_survive ... ok
+test spawn_unsafe::tests::more_grants_than_the_child_can_place_are_refused_in_the_parent ... ok
+test spawn_unsafe::tests::a_namespaced_child_is_pid_1_in_its_own_namespaces ... ok
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 145 filtered out; finished in 0.03s
+--- iter 3 sweep_defers_to_mmio ---
+test with_no_trap_in_flight_the_sweep_does_not_defer ... ok
+test a_permanently_trapping_guest_does_not_livelock_the_sweep ... ok
+test every_trap_path_returns_the_in_flight_count_to_zero ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.86s
+--- iter 3 spawn_unsafe ---
+test spawn_unsafe::tests::two_grants_on_one_number_are_refused - should panic ... ok
+test spawn_unsafe::tests::try_reap_reports_none_while_running_and_the_code_afterwards ... ok
+test spawn_unsafe::tests::the_environment_is_cleared_and_only_declared_entries_survive ... ok
+test spawn_unsafe::tests::one_image_spawns_more_than_once ... ok
+test spawn_unsafe::tests::more_grants_than_the_child_can_place_are_refused_in_the_parent ... ok
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 145 filtered out; finished in 0.05s
+W754_FLAKY_TERMINATOR rc=0 2026-09-16T14:37:29+00:00

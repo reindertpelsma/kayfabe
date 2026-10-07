@@ -1,0 +1,40 @@
+# The broker's DRI3 refusal path on the wire, run where a refusal CAN be made: nvkvm-pv badf2d7's
+# test backend (nb_session_test.c: the pair (XR24|AR24, 0xc0ffee) is advertised and every ATTACH of it
+# is refused through the same core call x11_attach() uses, nb_sink_format_refused(), both twins).
+# Dev host (no GPU), 2026-10-04: git archive badf2d7 src/broker src/common | make nvkvm-display-broker;
+#   nvkvm-display-broker --socket b.sock --backend test --persist --verbose
+#   a fake source serving a sealed 1 MiB memfd as (512x512 stride 2048, XR24, modifier 0xc0ffee)
+#   python3 scripts/bench/display/dri3_refusal.py --broker b.sock --source s.sock --settle 1 --variants own,kind,own_again  (kayfabe cc19632e)
+
+## the client (one connection per variant; QUERY_FORMAT XR24 only, never AR24)
+DRI3_SOURCE 512x512 stride=2048 offset=0 fourcc=XR24 modifier=0x0000000000c0ffee size=1048576
+DRI3_VARIANT own decl=512x512/2048/0/0x0000000000c0ffee query=1 after=[XR24:0 AR24:0] frames=0 releases=0 requery=0
+DRI3_VARIANT kind decl=512x512/2048/0/0x0000000000606fee query=0 after=[XR24:0] frames=0 releases=0 requery=0
+DRI3_VARIANT own_again decl=512x512/2048/0/0x0000000000c0ffee query=1 after=[XR24:0 AR24:0] frames=0 releases=0 requery=0
+DRI3_DONE
+
+## the broker's log (format lines)
+nvkvm-broker: TEST BACKEND: no display is being driven, no input is being grabbed, and a memfd is accepted where a real backend demands a dma-buf. Events come from stdin.
+nvkvm-broker: accepted uid 0 gid 0 pid 130105
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0000000000c0ffee (none) -> YES
+nvkvm-broker: TEST attach: REFUSED XR24 mod=0x0000000000c0ffee, as DRI3 refuses an import it advertised
+nvkvm-broker: ERROR: ATTACH: the display refused the buffer: Invalid argument
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0000000000c0ffee (none) -> NO
+nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 1 rejected; 0 cursor, 0 cursor refused)
+nvkvm-broker: accepted uid 0 gid 0 pid 130105
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0000000000606fee (none) -> NO
+nvkvm-broker: ERROR: ATTACH: fourcc XR24 modifier 0x0000000000606fee (none) is not advertised by this display.  If the compositor runs on a different GPU than the guest's, no modifier will ever match 
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0000000000606fee (none) -> NO
+nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 1 rejected; 0 cursor, 0 cursor refused)
+nvkvm-broker: accepted uid 0 gid 0 pid 130105
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0000000000c0ffee (none) -> YES
+nvkvm-broker: TEST attach: REFUSED XR24 mod=0x0000000000c0ffee, as DRI3 refuses an import it advertised
+nvkvm-broker: ERROR: ATTACH: the display refused the buffer: Invalid argument
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0000000000c0ffee (none) -> NO
+nvkvm-broker: client detached: closed the connection (1 attach, 1 commit, 1 rejected; 0 cursor, 0 cursor refused)
+
+# Reading: one refusal = two unsolicited EV_FORMAT x=0, XR24 and AR24 (AR24 never asked), and the re-query on
+# the same connection answers 0; the next connection's first QUERY answers 1 again (the refusal is connection
+# state). A pair dropped at the format gate ("kind" here: not advertised) gets ONE x=0, for the pair the
+# ATTACH named. The relay's handling of each is unit-tested (V3_DISPLAY.md §8.15 rows 1-3); on the box no
+# DRI3 refusal could be made (README).

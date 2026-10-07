@@ -1,0 +1,8 @@
+=== ff_placebo side=host start=2026-09-26T18:24:57+00:00 host=ubuntu kernel=6.8.0-59-generic drv=580.159.04
+vulkan ICD: /etc/vulkan/icd.d/nvidia_icd.json only
+ff libplacebo_scale rc=0 md5=ffc2235ca8a09ee9 bytes=23328000
+GSET_DIG side=host item=ff_placebo key=libplacebo_scale val=ffc2235ca8a09ee9
+ff libplacebo_deband rc=0 md5=1fbe083cb544d976 bytes=41472000
+GSET_DIG side=host item=ff_placebo key=libplacebo_deband val=1fbe083cb544d976
+GSET_OK
+=== end rc=0 secs=3 2026-09-26T18:25:00+00:00

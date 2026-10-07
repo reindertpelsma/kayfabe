@@ -1,0 +1,68 @@
+=== e0_isolate_witness tag=e0breal1 at 2026-08-01T19:22:54+00:00 ===
+REV_UNDER_TEST=853a311695e6c46613deb7b4be2a2f6eaaf70520
+TREE_DIRTY_FILES=0
+KAYFABE_ISOLATES=real
+qemu binary: -rwxr-xr-x 1 root root 84166088 Aug  1 19:22 /workspace/bench/qemu-build/qemu-system-x86_64
+archive rev embedded in the qemu binary:
+  kayfabe-rev:853a311695e6c46613deb7b4be2a2f6eaaf70520
+host gpu: NVIDIA GeForce RTX 3060, 580.159.04
+archive rev == source rev
+
+=== boot_capture phases (t+ seconds from witness start) ===
+t+0    [boot_capture:e0breal1] booting (extra args: none)
+t+27   [boot_capture:e0breal1] guest is up after 27s
+t+28   [boot_capture:e0breal1] module unloaded and ring buffer cleared; loading cold
+t+29   [boot_capture:e0breal1] opening the device (this is what runs RmInitAdapter)
+=== ISOLATE CHILD pid 302316  at 2026-08-01T19:23:30+00:00  (t+32s from witness start) ===
+cmdline: kayfabe-isolate --proc 0 --gpu 0 --workers 4 --rm real --park none 
+ppid   : 292675
+ppid is: /workspace/bench/qemu-build/qemu-system-x86_64 -machine q35,accel=kvm -cpu host -smp 3 -m 2048 -driv
+--- open descriptors (the RM nodes are the point) ---
+  total 0
+  lrwx------ 1 root root 64 Aug  1 19:23 0 -> /dev/null
+  l-wx------ 1 root root 64 Aug  1 19:23 1 -> /workspace/bench/run_e0breal1_qemu.log
+  l-wx------ 1 root root 64 Aug  1 19:23 2 -> /workspace/bench/run_e0breal1_qemu.log
+  lrwx------ 1 root root 64 Aug  1 19:23 3 -> socket:[285572]
+  l--------- 1 root root 64 Aug  1 19:23 4 -> /dev
+  lrwx------ 1 root root 64 Aug  1 19:23 5 -> socket:[285574]
+  lrwx------ 1 root root 64 Aug  1 19:23 6 -> socket:[285576]
+  lrwx------ 1 root root 64 Aug  1 19:23 7 -> socket:[285578]
+  lrwx------ 1 root root 64 Aug  1 19:23 8 -> socket:[285580]
+  lrwx------ 1 root root 64 Aug  1 19:23 9 -> /dev/nvidiactl
+--- mappings naming an nvidia node (an RM-SERVED mmap) ---
+  (none)
+--- containment ---
+  Name:	48
+  Uid:	0	0	0	0
+  Gid:	0	0	0	0
+  Threads:	1
+  CapPrm:	0000000000000000
+  CapEff:	0000000000000000
+  CapBnd:	0000000000000000
+  NoNewPrivs:	1
+  Seccomp:	0
+  Seccomp_filters:	0
+  namespaces (vs this shell's):
+    user  child=user:[4026532682]  host=user:[4026531837]
+    pid   child=pid:[4026532622]  host=pid:[4026531836]
+    net   child=net:[4026532686]  host=net:[4026531840]
+    mnt   child=mnt:[4026532683]  host=mnt:[4026531841]
+    ipc   child=ipc:[4026532685]  host=ipc:[4026531839]
+    uts   child=uts:[4026532684]  host=uts:[4026531838]
+
+t+37   [boot_capture:e0breal1] captured 26 dmesg lines, 22 NVRM, 3 adapter → /workspace/bench/run_e0breal1_dmesg.log
+t+37   [boot_capture:e0breal1] --- the verdict lines ---
+t+37   [   25.880138] NVRM: RmInitNvDevice: *** Cannot load state into the device
+t+37   [   25.880142] NVRM: RmInitAdapter: RmInitNvDevice failed, bailing out of RmInitAdapter
+t+37   [   26.825520] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0xffff:1249)
+t+37   [boot_capture:e0breal1] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+t+52   [boot_capture:e0breal1] done. serial=/workspace/bench/run_e0breal1_serial.log qemu=/workspace/bench/run_e0breal1_qemu.log dmesg=/workspace/bench/run_e0breal1_dmesg.log probe=/workspace/bench/run_e0breal1_probe.log
+=== summary ===
+boot_capture rc: 0
+isolate-child samples: 10   (0 = never seen alive)
+distinct isolate-child pids: 1
+plane->RmMode mapping check: ★ FAILED: no RM-served /dev/nvidia0 MAPPING (R6b never completed)
+E0b lazy-spawn check: ok — first isolate child at t+32s, guest opened the device at
+            t+29s ⇒ the spawn FOLLOWS the guest's action
+=== E1: the device's own isolate-plane census (from /workspace/bench/run_e0breal1_qemu.log) ===
+  qemu-system-x86_64: info: nvkvm: isolates: 1 materialized, 1 live, 0 refusing (0 no-plane, 0 spawn-failed)

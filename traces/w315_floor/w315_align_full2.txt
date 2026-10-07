@@ -1,0 +1,75 @@
+========================================================================================
+=== ★★★★★ w315 — THE HOST DOORBELL TRAP, ALIGNED TO THE GUEST'S LAUNCHES
+========================================================================================
+    guest launches with a submit/sync split: 12
+    host per-event doorbell lines: mmio_doorbell=529  doorbell_fwd=275
+
+--- THE ALIGNMENT (derived, not assumed)
+    best RMS(host_trap_dur − guest_submit_ms) = 1.074 ms at δ = -17795 ms
+    median RMS over all 37915 candidate offsets = 94.7 ms
+    ⇒ the best is 88.1× better than a random offset
+    launch windows with a doorbell trap starting inside: 12/12
+
+    i      host_trap     g_submit     g_launch        resid
+    0         91.898       92.964      116.148       -1.066
+    1        100.608      101.547      124.830       -0.939
+    2         98.515       99.126      122.278       -0.611
+    3         90.948       91.446      114.925       -0.498
+    4        100.056      100.726      123.602       -0.670
+    5         89.926       91.044      114.011       -1.118
+    6         89.747       90.317      112.889       -0.570
+    7         84.299       85.834      108.856       -1.535
+    8         94.571       95.926      118.668       -1.355
+    9         92.791       93.977      116.909       -1.186
+    10        97.574       99.165      121.820       -1.591
+    11        91.635       92.661      115.817       -1.026
+
+    Σ host trap  =  1122.568 ms
+    Σ g_submit   =  1134.733 ms   ⇒ the trap is 98.9% of SUBMIT
+    Σ g_launch   =  1410.753 ms   ⇒ the trap is 79.6% of the LAUNCH
+    ★ residual (submit − trap) = 1.014 ms per launch, sd 0.355
+      ⊘ THIS is where the vmexit lives. The exit is over before our handler runs, so
+        nested-virt tax can only appear here — and here it is a few ms, not tens.
+        ⚠ It also contains the guest driver's own work around the store; this
+        measurement cannot split those two and does not claim to.
+
+--- ★★★★★ THE BREAKDOWN OF THE LAUNCH DOORBELLS ONLY (12 matched)
+    ⊘ NOT the whole-boot census: that one is dominated by cuInit/cuCtxCreate traffic
+      and by two multi-second outliers. These are the doorbells the timed launches
+      actually rang.
+
+    Σ trap = 1121.890 ms over 12 launches = 93.491 ms/launch
+
+    segment          shape   total ms   ms/launch   median ms    share
+    vas_publish      work     626.100      52.175      52.668    55.8%
+    pt_decode        work     267.013      22.251      21.265    23.8%
+    pt_sweep         work     102.829       8.569       9.085     9.2%
+    core             host      54.025       4.502       4.404     4.8%
+    pt_vascensus     work      36.311       3.026       3.131     3.2%
+    ringproj         work      28.200       2.350       2.229     2.5%
+    ce_try           work       2.231       0.186       0.151     0.2%
+    bindcensus       work       1.284       0.107       0.100     0.1%
+    operand_join     work       1.149       0.096       0.096     0.1%
+    log_ptdecode     log        1.109       0.092       0.078     0.1%
+    pt_witness       work       0.652       0.054       0.045     0.1%
+    err_notifier     work       0.454       0.038       0.026     0.0%
+    log_vas_publish  log        0.186       0.015       0.015     0.0%
+    log_operand_join log        0.090       0.007       0.006     0.0%
+    pin_ring         work       0.076       0.006       0.006     0.0%
+    log_pin_ring     log        0.054       0.004       0.005     0.0%
+    vmm_unlock       work       0.012       0.001       0.001     0.0%
+    vmm_lock         work       0.000       0.000       0.000     0.0%
+    UNMARKED         -          0.115       0.010           -     0.0%
+      ⊘ UNMARKED is the residual INSIDE the bracket. It is printed, never distributed.
+    NESTED core_rm_ipc host      52.339       4.362           -     4.7%  ⊘ INSIDE `core` — do not add
+
+    ★ ROLL-UP BY FAMILY (and by SHAPE, which is what says whether bare metal helps):
+      page-table + publication        1032.905 ms    86.075 ms/launch    92.1%
+      ring projection / probes          33.406 ms     2.784 ms/launch     3.0%
+      THE ACTUAL HOST FORWARD           54.025 ms     4.502 ms/launch     4.8%
+      our own logging (instrument)       1.439 ms     0.120 ms/launch     0.1%
+      shape=work   1066.311 ms    88.859 ms/launch    95.0%   (costs the SAME on bare metal ⇒ a real finding)
+      shape=host     54.025 ms     4.502 ms/launch     4.8%   (blocked in the host RM / the isolate child)
+      shape=log       1.439 ms     0.120 ms/launch     0.1%   (the instrument's own printing — see the `base` arm for its true cost)
+
+=== w315 ALIGN VERDICT = 0

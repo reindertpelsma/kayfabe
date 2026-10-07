@@ -1,0 +1,110 @@
+=== ★★★★★ W322 NATIVE START 2026-08-14T19:02:55+00:00 pid=1685348 ===
+modes=[vram hostalloc hostalloc_wc hostreg managed_cpu] bw=[4,16,32,64,128,256] target_mib=256 iters=7 reps=1
+src md5 = 2b9f9f6e96e88df44fdd66606b44e8b2
+name, driver_version, memory.used [MiB]
+NVIDIA GeForce RTX 3060, 580.159.04, 0 MiB
+
+=== ★ ARM alloc=vram -> /workspace/w322/native_vram.log  2026-08-14T19:02:57+00:00
+    arm_rc=0
+    BENCH_BW_MODULE_RC=0
+    BENCH_BW_FUNC_RC=0
+    BWROW mib=4 alloc=vram nf=1048576 reps=1 bytes=4194304 iters=7 submit_med_ms=0.003 sync_med_ms=0.020 sync_min_ms=0.020 sync_max_ms=0.020 total_med_ms=0.023 read_GBps=213.137 read_GBps_incl_submit=181.635 expect=4 got0=4 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+    BWROW mib=16 alloc=vram nf=4194304 reps=1 bytes=16777216 iters=7 submit_med_ms=0.003 sync_med_ms=0.062 sync_min_ms=0.062 sync_max_ms=0.063 total_med_ms=0.066 read_GBps=269.596 read_GBps_incl_submit=255.945 expect=16 got0=16 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+    BWROW mib=32 alloc=vram nf=8388608 reps=1 bytes=33554432 iters=7 submit_med_ms=0.003 sync_med_ms=0.116 sync_min_ms=0.115 sync_max_ms=0.116 total_med_ms=0.119 read_GBps=290.037 read_GBps_incl_submit=282.978 expect=32 got0=32 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+    BWROW mib=64 alloc=vram nf=16777216 reps=1 bytes=67108864 iters=7 submit_med_ms=0.003 sync_med_ms=0.221 sync_min_ms=0.221 sync_max_ms=0.222 total_med_ms=0.224 read_GBps=303.545 read_GBps_incl_submit=299.652 expect=64 got0=64 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+    BWROW mib=128 alloc=vram nf=33554432 reps=1 bytes=134217728 iters=7 submit_med_ms=0.003 sync_med_ms=0.433 sync_min_ms=0.433 sync_max_ms=0.434 total_med_ms=0.436 read_GBps=309.821 read_GBps_incl_submit=307.565 expect=128 got0=128 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+    BWROW mib=256 alloc=vram nf=67108864 reps=1 bytes=268435456 iters=7 submit_med_ms=0.003 sync_med_ms=0.856 sync_min_ms=0.856 sync_max_ms=0.983 total_med_ms=0.860 read_GBps=313.599 read_GBps_incl_submit=312.153 expect=256 got0=256 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+    BENCH_BW_ROWS=6
+    BENCH_BW_ROWS_UNMEASURED=0
+
+=== ★ ARM alloc=hostalloc -> /workspace/w322/native_hostalloc.log  2026-08-14T19:03:08+00:00
+    arm_rc=0
+    BENCH_BW_MODULE_RC=0
+    BENCH_BW_FUNC_RC=0
+    BWROW mib=4 alloc=hostalloc nf=1048576 reps=1 bytes=4194304 iters=7 submit_med_ms=0.004 sync_med_ms=0.347 sync_min_ms=0.347 sync_max_ms=0.352 total_med_ms=0.351 read_GBps=12.072 read_GBps_incl_submit=11.933 expect=4 got0=4 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+    BWROW mib=16 alloc=hostalloc nf=4194304 reps=1 bytes=16777216 iters=7 submit_med_ms=0.004 sync_med_ms=1.366 sync_min_ms=1.364 sync_max_ms=1.368 total_med_ms=1.372 read_GBps=12.279 read_GBps_incl_submit=12.232 expect=16 got0=16 bad=0
+    BWROW mib=32 alloc=hostalloc nf=8388608 reps=1 bytes=33554432 iters=7 submit_med_ms=0.003 sync_med_ms=2.750 sync_min_ms=2.744 sync_max_ms=2.767 total_med_ms=2.755 read_GBps=12.203 read_GBps_incl_submit=12.178 expect=32 got0=32 bad=0
+    BWROW mib=64 alloc=hostalloc nf=16777216 reps=1 bytes=67108864 iters=7 submit_med_ms=0.004 sync_med_ms=5.782 sync_min_ms=5.754 sync_max_ms=5.817 total_med_ms=5.786 read_GBps=11.606 read_GBps_incl_submit=11.598 expect=64 got0=64 bad=0
+    BWROW mib=128 alloc=hostalloc nf=33554432 reps=1 bytes=134217728 iters=7 submit_med_ms=0.004 sync_med_ms=12.644 sync_min_ms=12.509 sync_max_ms=12.738 total_med_ms=12.648 read_GBps=10.615 read_GBps_incl_submit=10.612 expect=128 got0=128 bad=0
+    BWROW mib=256 alloc=hostalloc nf=67108864 reps=1 bytes=268435456 iters=7 submit_med_ms=0.004 sync_med_ms=28.387 sync_min_ms=27.612 sync_max_ms=29.129 total_med_ms=28.391 read_GBps=9.456 read_GBps_incl_submit=9.455 expect=256 got0=256 bad=0
+    BENCH_BW_ROWS=6
+    BENCH_BW_ROWS_UNMEASURED=0
+
+=== ★ ARM alloc=hostalloc_wc -> /workspace/w322/native_hostalloc_wc.log  2026-08-14T19:03:20+00:00
+    arm_rc=0
+    BENCH_BW_MODULE_RC=0
+    BENCH_BW_FUNC_RC=0
+    BWROW mib=4 alloc=hostalloc_wc nf=1048576 reps=1 bytes=4194304 iters=7 submit_med_ms=0.003 sync_med_ms=0.347 sync_min_ms=0.347 sync_max_ms=0.348 total_med_ms=0.351 read_GBps=12.077 read_GBps_incl_submit=11.962 expect=4 got0=4 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+    BWROW mib=16 alloc=hostalloc_wc nf=4194304 reps=1 bytes=16777216 iters=7 submit_med_ms=0.003 sync_med_ms=1.366 sync_min_ms=1.365 sync_max_ms=1.369 total_med_ms=1.369 read_GBps=12.284 read_GBps_incl_submit=12.253 expect=16 got0=16 bad=0
+    BWROW mib=32 alloc=hostalloc_wc nf=8388608 reps=1 bytes=33554432 iters=7 submit_med_ms=0.003 sync_med_ms=3.163 sync_min_ms=3.145 sync_max_ms=3.261 total_med_ms=3.170 read_GBps=10.609 read_GBps_incl_submit=10.585 expect=32 got0=32 bad=0
+    BWROW mib=64 alloc=hostalloc_wc nf=16777216 reps=1 bytes=67108864 iters=7 submit_med_ms=0.003 sync_med_ms=9.542 sync_min_ms=9.407 sync_max_ms=9.668 total_med_ms=9.545 read_GBps=7.033 read_GBps_incl_submit=7.031 expect=64 got0=64 bad=0
+    BWROW mib=128 alloc=hostalloc_wc nf=33554432 reps=1 bytes=134217728 iters=7 submit_med_ms=0.004 sync_med_ms=22.264 sync_min_ms=21.802 sync_max_ms=22.661 total_med_ms=22.269 read_GBps=6.028 read_GBps_incl_submit=6.027 expect=128 got0=128 bad=0
+    BWROW mib=256 alloc=hostalloc_wc nf=67108864 reps=1 bytes=268435456 iters=7 submit_med_ms=0.005 sync_med_ms=49.328 sync_min_ms=48.300 sync_max_ms=50.006 total_med_ms=49.333 read_GBps=5.442 read_GBps_incl_submit=5.441 expect=256 got0=256 bad=0
+    BENCH_BW_ROWS=6
+    BENCH_BW_ROWS_UNMEASURED=0
+
+=== ★ ARM alloc=hostreg -> /workspace/w322/native_hostreg.log  2026-08-14T19:03:31+00:00
+    arm_rc=0
+    BENCH_BW_MODULE_RC=0
+    BENCH_BW_FUNC_RC=0
+    BWROW mib=4 alloc=hostreg nf=1048576 reps=1 bytes=4194304 iters=7 submit_med_ms=0.003 sync_med_ms=0.350 sync_min_ms=0.345 sync_max_ms=0.350 total_med_ms=0.353 read_GBps=11.976 read_GBps_incl_submit=11.870 expect=4 got0=4 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+    BWROW mib=16 alloc=hostreg nf=4194304 reps=1 bytes=16777216 iters=7 submit_med_ms=0.004 sync_med_ms=1.372 sync_min_ms=1.371 sync_max_ms=1.372 total_med_ms=1.376 read_GBps=12.226 read_GBps_incl_submit=12.196 expect=16 got0=16 bad=0
+    BWROW mib=32 alloc=hostreg nf=8388608 reps=1 bytes=33554432 iters=7 submit_med_ms=0.004 sync_med_ms=2.732 sync_min_ms=2.732 sync_max_ms=2.733 total_med_ms=2.736 read_GBps=12.282 read_GBps_incl_submit=12.265 expect=32 got0=32 bad=0
+    BWROW mib=64 alloc=hostreg nf=16777216 reps=1 bytes=67108864 iters=7 submit_med_ms=0.004 sync_med_ms=5.456 sync_min_ms=5.456 sync_max_ms=5.464 total_med_ms=5.460 read_GBps=12.300 read_GBps_incl_submit=12.291 expect=64 got0=64 bad=0
+    BWROW mib=128 alloc=hostreg nf=33554432 reps=1 bytes=134217728 iters=7 submit_med_ms=0.004 sync_med_ms=10.892 sync_min_ms=10.890 sync_max_ms=10.901 total_med_ms=10.897 read_GBps=12.322 read_GBps_incl_submit=12.317 expect=128 got0=128 bad=0
+    BWROW mib=256 alloc=hostreg nf=67108864 reps=1 bytes=268435456 iters=7 submit_med_ms=0.004 sync_med_ms=21.780 sync_min_ms=21.778 sync_max_ms=21.787 total_med_ms=21.787 read_GBps=12.325 read_GBps_incl_submit=12.321 expect=256 got0=256 bad=0
+    BENCH_BW_ROWS=6
+    BENCH_BW_ROWS_UNMEASURED=0
+
+=== ★ ARM alloc=managed_cpu -> /workspace/w322/native_managed_cpu.log  2026-08-14T19:03:43+00:00
+    arm_rc=0
+    BENCH_BW_MODULE_RC=0
+    BENCH_BW_FUNC_RC=0
+    BW_ADVISE in preferred_cpu_rc=0 accessed_by_gpu_rc=0
+    BWROW mib=4 alloc=managed_cpu nf=1048576 reps=1 bytes=4194304 iters=7 submit_med_ms=0.003 sync_med_ms=0.351 sync_min_ms=0.334 sync_max_ms=0.351 total_med_ms=0.354 read_GBps=11.951 read_GBps_incl_submit=11.845 expect=4 got0=4 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+    BW_ADVISE in preferred_cpu_rc=0 accessed_by_gpu_rc=0
+    BWROW mib=16 alloc=managed_cpu nf=4194304 reps=1 bytes=16777216 iters=7 submit_med_ms=0.004 sync_med_ms=1.374 sync_min_ms=1.369 sync_max_ms=1.375 total_med_ms=1.378 read_GBps=12.210 read_GBps_incl_submit=12.179 expect=16 got0=16 bad=0
+    BW_ADVISE in preferred_cpu_rc=0 accessed_by_gpu_rc=0
+    BWROW mib=32 alloc=managed_cpu nf=8388608 reps=1 bytes=33554432 iters=7 submit_med_ms=0.004 sync_med_ms=2.737 sync_min_ms=2.736 sync_max_ms=2.738 total_med_ms=2.740 read_GBps=12.261 read_GBps_incl_submit=12.244 expect=32 got0=32 bad=0
+    BW_ADVISE in preferred_cpu_rc=0 accessed_by_gpu_rc=0
+    BWROW mib=64 alloc=managed_cpu nf=16777216 reps=1 bytes=67108864 iters=7 submit_med_ms=0.004 sync_med_ms=5.462 sync_min_ms=5.461 sync_max_ms=5.462 total_med_ms=5.465 read_GBps=12.287 read_GBps_incl_submit=12.279 expect=64 got0=64 bad=0
+    BW_ADVISE in preferred_cpu_rc=0 accessed_by_gpu_rc=0
+    BWROW mib=128 alloc=managed_cpu nf=33554432 reps=1 bytes=134217728 iters=7 submit_med_ms=0.005 sync_med_ms=10.909 sync_min_ms=10.894 sync_max_ms=10.917 total_med_ms=10.920 read_GBps=12.304 read_GBps_incl_submit=12.291 expect=128 got0=128 bad=0
+    BW_ADVISE in preferred_cpu_rc=0 accessed_by_gpu_rc=0
+    BWROW mib=256 alloc=managed_cpu nf=67108864 reps=1 bytes=268435456 iters=7 submit_med_ms=0.004 sync_med_ms=21.810 sync_min_ms=21.804 sync_max_ms=21.813 total_med_ms=21.815 read_GBps=12.308 read_GBps_incl_submit=12.305 expect=256 got0=256 bad=0
+    BENCH_BW_ROWS=6
+    BENCH_BW_ROWS_UNMEASURED=0
+
+=== ★★★★★ THE RULER — read_GBps by mode and buffer size ===
+    (⊘ small sizes are the L2 plateau and are the SAME whatever the backing is;
+     the LARGE end is the aperture. Compare across modes at the largest size.)
+    mib                     vram     hostalloc  hostalloc_wc       hostreg   managed_cpu
+    4                    213.137        12.072        12.077        11.976        11.951
+    16                   269.596        12.279        12.284        12.226        12.210
+    32                   290.037        12.203        10.609        12.282        12.261
+    64                   303.545        11.606         7.033        12.300        12.287
+    128                  309.821        10.615         6.028        12.322        12.304
+    256                  313.599         9.456         5.442        12.325        12.308
+
+=== ★ correctness of every row (bad MUST be 0 in every measured row) ===
+    mib=16 alloc=hostalloc bad=0
+    mib=32 alloc=hostalloc bad=0
+    mib=64 alloc=hostalloc bad=0
+    mib=128 alloc=hostalloc bad=0
+    mib=256 alloc=hostalloc bad=0
+    mib=16 alloc=hostalloc_wc bad=0
+    mib=32 alloc=hostalloc_wc bad=0
+    mib=64 alloc=hostalloc_wc bad=0
+    mib=128 alloc=hostalloc_wc bad=0
+    mib=256 alloc=hostalloc_wc bad=0
+    mib=16 alloc=hostreg bad=0
+    mib=32 alloc=hostreg bad=0
+    mib=64 alloc=hostreg bad=0
+    mib=128 alloc=hostreg bad=0
+    mib=256 alloc=hostreg bad=0
+    mib=16 alloc=managed_cpu bad=0
+    mib=32 alloc=managed_cpu bad=0
+    mib=64 alloc=managed_cpu bad=0
+    mib=128 alloc=managed_cpu bad=0
+    mib=256 alloc=managed_cpu bad=0
+=== W322 NATIVE DONE rc=0 2026-08-14T19:03:54+00:00 ===

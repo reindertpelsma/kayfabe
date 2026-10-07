@@ -1,0 +1,36 @@
+DISPLAY_LANE_START tag=m0a rev=5dbf670b 2026-09-26T23:43:07+00:00
+[boot_capture:m0a] BINARY kf3-bin-rev:5dbf670b  (/workspace/bench/kf3-bins/5dbf670b/qemu-system-x86_64)  ⇒ every claim from this boot cites THIS revision
+[boot_capture:m0a] host dmesg watermark: 776 lines
+[boot_capture:m0a] booting (extra args: -vga none -vnc 127.0.0.1:0)
+== kf3 binary: /workspace/bench/kf3-bins/5dbf670b/qemu-system-x86_64 (rev 5dbf670b)  device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on
+[boot_capture:m0a] guest is up after 53s
+[boot_capture:m0a] module unloaded and ring buffer cleared; loading cold
+[boot_capture:m0a] opening the device (this is what runs RmInitAdapter)
+[boot_capture:m0a] captured 29 dmesg lines, 26 NVRM, 0 adapter → /workspace/bench/run_m0a_dmesg.log
+[boot_capture:m0a] --- the verdict lines ---
+[boot_capture:m0a] running POST_CAPTURE_HOOK: /root/kayfabe/scripts/bench/display/hook.sh
+[boot_capture:m0a] hook finished: rc=0
+[boot_capture:m0a] guest dmesg after workload: 57 lines (46 NVRM), delta 28 → /workspace/bench/run_m0a_dmesg_after.log
+[boot_capture:m0a] host dmesg delta: 1 lines, 1 NVRM, 0
+0 Xid → /workspace/bench/run_m0a_hostdmesg.log
+[boot_capture:m0a] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:m0a] census present (kf3):
+    kf3: family=Ampere phase=Running trapped=4183 applied=2216 refused=4 serviced=362 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=209 walks=218/218 cleared=209 superseded=0 named_missed=2 unreconciled=0 mapped=438 unmapped=299 clipped=0x0 held=0 vmm_overlaps=0 priv_withhel
+    DOORBELL-LEDGER tok=0x00000002 route=translated emulated=0 forwarded=2 host=0x10019
+    DOORBELL-LEDGER tok=0x00000001 route=translated emulated=0 forwarded=0 host=0x10018
+    DOORBELL-LEDGER tok=0x00000002 route=translated emulated=0 forwarded=4098 host=0x10019
+    DOORBELL-LEDGER tok=0x00000001 route=translated emulated=0 forwarded=0 host=0x10018
+[boot_capture:m0a] evidence carried into the repo: /root/kayfabe/traces/guest_boots/run_m0a_{qemu,dmesg,probe,hostdmesg}.log
+[boot_capture:m0a] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+[boot_capture:m0a]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+[boot_capture:m0a] done. serial=/workspace/bench/run_m0a_serial.log qemu=/workspace/bench/run_m0a_qemu.log dmesg=/workspace/bench/run_m0a_dmesg.log dmesg_after=/workspace/bench/run_m0a_dmesg_after.log probe=/workspace/bench/run_m0a_probe.log hostdmesg=/workspace/bench/run_m0a_hostdmesg.log
+DISPLAY_PROBE_BUILD=ok
+DISPLAY_DRM_MODPROBE rc=0 
+DISPLAY_DRM_NODES by-path card0 renderD128 
+DISPLAY_DRM_DMESG_LINES=28 displayless=1
+DISPLAY_KFDISP_DRIVER=nvidia-drm
+DISPLAY_KFDISP_COUNTS connectors=0 crtcs=0 encoders=0 fbs=0
+DISPLAY_KFDISP_SUMMARY connected=0 primary=0 overlay=0 cursor=0
+DISPLAY_CONNECTED=no card=/dev/dri/card0
+DISPLAY_LANE_EXIT rc=0 2026-09-26T23:44:27+00:00
+LANE_RC=0

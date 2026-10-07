@@ -1,0 +1,8 @@
+DISPLAY_LANE_PROVISIONED=yes
+phase=all
+date=2026-10-04T11:20:27+00:00
+control=/usr/bin/modetest /usr/bin/kmscube /usr/bin/weston /usr/bin/Xorg /usr/sbin/lightdm /usr/bin/cinnamon-session /usr/bin/xdotool /usr/bin/import /usr/bin/mpv /usr/bin/glxinfo /usr/bin/vkcube PROBE=yes
+/usr/lib/xorg/modules/drivers/nvidia_drv.so /usr/share/X11/xorg.conf.d/nvidia-drm-outputclass.conf 
+kernel_before=6.8.0-142-generic
+kernel_after=6.8.0-142-generic
+provisioner_rev=9d82f259

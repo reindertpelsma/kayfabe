@@ -1,0 +1,14 @@
+== fix: == crate tests fix 2f71f662
+passed=3483 failed=5 ignored=1
+error: test failed, to rerun pass `-p kayfabe-abi --test truncated_row_reads`
+error: test failed, to rerun pass `-p kayfabe-isolate-host --test executor_vas_census`
+error: test failed, to rerun pass `-p kayfabe-isolate-host --test guest_ring_census`
+error: test failed, to rerun pass `-p kayfabe-isolate-host --test sysmem_notifier_node`
+error: test failed, to rerun pass `-p kayfabe-linux-raw --lib`
+== master: == crate tests master 3d71b596
+passed=3511 failed=5 ignored=1
+error: test failed, to rerun pass `-p kayfabe-abi --test truncated_row_reads`
+error: test failed, to rerun pass `-p kayfabe-isolate-host --lib`
+error: test failed, to rerun pass `-p kayfabe-isolate-host --test executor_vas_census`
+error: test failed, to rerun pass `-p kayfabe-isolate-host --test guest_ring_census`
+error: test failed, to rerun pass `-p kayfabe-isolate-host --test sysmem_notifier_node`

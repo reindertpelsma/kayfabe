@@ -1,0 +1,4 @@
+test no_binary_mints_the_isolates_address_space ... FAILED
+test the_client_reports_its_state_on_every_path ... FAILED
+test the_probe_does_not_mint_the_rings_geometry_twice ... FAILED
+test the_set_of_truncated_rows_this_tree_references_is_exactly_the_set_it_argues_about ... FAILED

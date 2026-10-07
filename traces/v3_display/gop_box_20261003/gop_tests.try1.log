@@ -1,0 +1,17 @@
+GOP_TESTS_START 2026-10-03T16:52:18+00:00 rev=c858fa06
+KF3_RC=1
+ninja: build stopped: subcommand failed.
+B0_LANE_RC=0
+[boot_capture:b0] ★ FAILED (boot): QEMU pid 104531 is gone before ssh came up
+DISPLAY_HOST_XID= 
+DISPLAY_LANE_EXIT rc=2 2026-10-03T16:52:43+00:00
+B9R_LANE_RC=0
+B9R_REFUSED= BOOT_ON=
+grep: /workspace/bench/run_b9r_qemu.log: No such file or directory
+B1_LANE_RC=0
+[boot_capture:b1] ★ FAILED (boot): QEMU pid 104759 is gone before ssh came up
+DISPLAY_HOST_XID= 
+DISPLAY_LANE_EXIT rc=2 2026-10-03T16:52:55+00:00
+grep: /workspace/bench/run_b1_qemu.log: No such file or directory
+
+GOP_TESTS_EXIT 2026-10-03T16:55:20+00:00

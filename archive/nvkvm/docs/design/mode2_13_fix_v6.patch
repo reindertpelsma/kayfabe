@@ -1,0 +1,557 @@
+diff --git a/src/qemu/nvkvm_gpu_emul.c b/src/qemu/nvkvm_gpu_emul.c
+index 2f3503a..d028664 100644
+--- a/src/qemu/nvkvm_gpu_emul.c
++++ b/src/qemu/nvkvm_gpu_emul.c
+@@ -363,7 +363,12 @@ struct NvkvmGpuEmul {
+      * FB.  False for the FB-rooted VASes snooped from VASPACE_COPY_SERVER_RESERVED
+      * _PDES; set true for UVM-managed VASes whose root we learn from
+      * NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY (0x801813) with a SYSMEM aperture. */
+-    struct { uint32_t hvas; uint32_t client; uint64_t pdb; bool root_sys; } chan_vas[16];
++    /* .uvm: root captured from NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY — the transport
++     * UVM uses to hand RM/GSP the page-directory root of a UVM-MANAGED user VAS (issued
++     * under UVM's gpu-ops session client, nv_gpu_ops.c nvGpuOpsSetPageDirectory).  Kernel-
++     * internal VASes (CeUtils scrubber etc.) never take this path — #13 uses the flag to
++     * scope the CE-PT-write backing trigger to user-compute address spaces. */
++    struct { uint32_t hvas; uint32_t client; uint64_t pdb; bool root_sys; bool uvm; } chan_vas[16];
+     int      chan_vas_n;
+     /* #12-L3c: STICKY per-client VAS roots — same captures as chan_vas[] but NEVER
+      * dropped on RM-handle free.  A GSP-managed UVM CE channel (empty instblk, hvas=0)
+@@ -525,6 +530,24 @@ struct NvkvmGpuEmul {
+     uint64_t m2_gr_pt_last;     /* last page recorded (skip re-hashing sequential entry reads) */
+     int      m2_gr_pt_n;        /* live entries in m2_gr_pt_set */
+     uint64_t m2_gr_pt_set[8192];/* open-addressing hash set of 4 KiB vidmem PT-page bases */
++    /* #13: page-table-page ownership for COMPUTE VAS(es).  Each entry = one table the
++     * compute-VAS walk visited: its 4 KiB page, owning PDB, GMMU level, and the VA base
++     * that level covers.  Populated by the same walks that build m2_gr_pt_set (see
++     * nvkvm_m2_cpt_record).  nvkvm_m2_ce_fb_write_hook LATCHES an entry dirty (O(1)) when
++     * a CPU-emulated CE write lands on its page; nvkvm_m2_cpt_sync_at_release then decodes
++     * each dirtied page DIRECTLY (not via a root walk) and backs its new leaves into the
++     * persistent host GR VAS — at the map push's completion-semaphore release, before the
++     * release un-gates the (already-rung, host-resident) GR channel into the new mapping.
++     * Decoding the written page directly (vs from the root) is load-bearing: the guest
++     * fills a leaf PT page THEN links it under the root a push later, so at the release a
++     * root walk can't yet reach it (runs=0) but the page itself holds committed PTEs.
++     * Keyed by 4 KiB page base (open addressing, page==0 = empty; PT pages never live at
++     * FB page 0).  Same lifecycle as m2_gr_pt_set: reset + rebuilt on every recorded sweep. */
++    struct { uint64_t page, pdb, vabase; uint8_t level; bool dirty; } m2_cpt[4096];
++    int      m2_cpt_n;          /* live entries in m2_cpt (capped at 3/4 fill) */
++    uint64_t m2_cpt_lo, m2_cpt_hi; /* min/max tracked page base (cheap CE-write pre-filter) */
++    int      m2_cpt_dirty[256]; /* indices of m2_cpt entries a CE write dirtied since last sync */
++    int      m2_cpt_dirty_n;    /* live entries in m2_cpt_dirty (0 = clean) */
+     uint32_t m2_last_db_token;  /* M5.11: last guest work-submit token seen at the doorbell (dedup log) */
+     bool     m2_last_db_valid;
+     uint32_t m2_gr_client;      /* M5.7: the GR compute client (set at crashwin arm) */
+@@ -2058,6 +2081,8 @@ static bool nvkvm_chan_sem_wr32(NvkvmGpuEmul *s, uint64_t va, uint32_t payload,
+                                 uint64_t *out_redir); /* M5.18 fwd-decl */
+ static bool nvkvm_m2_va_seen(NvkvmGpuEmul *s, uint32_t client, uint64_t va); /* M5.19 fwd-decl */
+ static uint64_t nvkvm_chan_own_pdb_rs(NvkvmGpuEmul *s, bool *out_root_sys); /* #12 L3b fwd-decl */
++static void nvkvm_m2_ce_fb_write_hook(NvkvmGpuEmul *s, uint64_t dst, uint64_t len); /* #13 fwd-decl */
++static void nvkvm_m2_cpt_sync_at_release(NvkvmGpuEmul *s); /* #13 fwd-decl */
+ static uint32_t nvkvm_phys_rd32(NvkvmGpuEmul *s, uint64_t phys, bool sys);  /* #12 L3b fwd-decl */
+ static void nvkvm_phys_wr32(NvkvmGpuEmul *s, uint64_t phys, bool sys, uint32_t v); /* #12 L3b fwd-decl */
+ 
+@@ -2180,6 +2205,7 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
+                 s->chan_vas[k].client = ldl_le_p(cmd + 80); /* GSP_RM_CONTROL hClient (#12-L3) */
+                 s->chan_vas[k].pdb  = ldq_le_p(cmd + 160);  /* levels[0].physAddress */
+                 s->chan_vas[k].root_sys = false;            /* FB-rooted (GSP-client) */
++                s->chan_vas[k].uvm = false;                 /* RESERVED_PDES, not the UVM handover */
+                 nvkvm_m2_cli_vas_add(s, s->chan_vas[k].client, s->chan_vas[k].pdb, false);
+                 qemu_log("nvkvm-gpu[%s] M5: VAS hObject=0x%08x client=0x%08x PDB=0x%llx\n",
+                          s->chip->name, s->chan_vas[k].hvas, s->chan_vas[k].client,
+@@ -2223,6 +2249,7 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
+                 s->chan_vas[k].client = ldl_le_p(cmd + 80); /* GSP_RM_CONTROL hClient (#12-L3) */
+                 s->chan_vas[k].pdb = phys;
+                 s->chan_vas[k].root_sys = rsys;
++                s->chan_vas[k].uvm = true;                  /* #13: UVM-managed user VAS */
+                 nvkvm_m2_cli_vas_add(s, s->chan_vas[k].client, phys, rsys);
+                 qemu_log("nvkvm-gpu[%s] M5.30 SET_PAGE_DIR UVM-VAS hVASpace=0x%08x "
+                          "PDB=0x%llx aperture=%u root=%s (candidate %d)\n",
+@@ -3586,6 +3613,11 @@ static void nvkvm_bar0_write(void *opaque, hwaddr off, uint64_t val,
+              * correct per the address-table rule.  SCOPE: kernel CeUtils only — user-CE
+              * and GR channels are excluded (the host executes + releases those for real),
+              * so cup8/LLM's compute round-trip is untouched. */
++            /* #13: the finishPayload forge below is ANOTHER completion the guest may
++             * order compute against.  If this channel's just-executed pushes wrote a
++             * compute VAS's page tables and carried no parsed semaphore (the in-parse
++             * sync sites never fired), back the dirtied VAS before forging. */
++            nvkvm_m2_cpt_sync_at_release(s);
+             if (c->client != s->m2_gr_client &&
+                 !nvkvm_m2_is_user_ce(s, c->client)) {
+                 /* #12 cont.24: forge THIS kernel channel's finishPayload — the channel-HOST
+@@ -4143,6 +4175,12 @@ static void nvkvm_m2_gr_pt_reset(NvkvmGpuEmul *s)
+     if (s->m2_gr_pt_n) { memset(s->m2_gr_pt_set, 0, sizeof(s->m2_gr_pt_set)); }
+     s->m2_gr_pt_n = 0; s->m2_gr_pt_last = 0;
+     s->m2_gr_pt_lo = ~0ull; s->m2_gr_pt_hi = 0;
++    /* #13: the compute-PT metadata set shares the sweep lifecycle (rebuilt by the same
++     * recorded walk) — stale entries for freed/re-pointed tables must not linger, and
++     * the pending dirty-index list refers into it so it resets too. */
++    if (s->m2_cpt_n) { memset(s->m2_cpt, 0, sizeof(s->m2_cpt)); }
++    s->m2_cpt_n = 0; s->m2_cpt_dirty_n = 0;
++    s->m2_cpt_lo = ~0ull; s->m2_cpt_hi = 0;
+ }
+ 
+ /* Read 8 bytes from a page-table entry in FB (vidmem) or sysmem (GPA). */
+@@ -4191,6 +4229,27 @@ static uint64_t nvkvm_walk_pdb_root(NvkvmGpuEmul *s, uint64_t pdb, uint64_t va,
+         uint32_t idx = (uint32_t)((va >> lvl[i].lo) &
+                                   ((1ull << (lvl[i].hi - lvl[i].lo + 1)) - 1));
+         uint64_t pde = nvkvm_pt_rd64(s, tbl + (uint64_t)idx * 8, tsys);
++        /* #13 FIX: on GA10x, a PD1 entry can itself be a 512 MiB LEAF PTE
++         * (kern_gmmu_fmt_ga10x.c: pLevels[2].bPageTable = NV_TRUE; bit0 =
++         * NV_MMU_VER2_PTE_VALID, aperture 2:1 with PTE encoding 0=VID,2/3=SYS).
++         * The guest kernel-RM's CeUtils channel (bUseVasForCeCopy,
++         * channel_utils.c) identity-maps the WHOLE FB heap into its own VAS at
++         * the largest page size — 512 MiB — and then issues its page-table
++         * writes as VIRTUAL-dst CE copies (dstAddr = fbPhys + fbAliasVA -
++         * startFbOffset = fbPhys).  Without this case the walker decoded the
++         * 512M vidmem PTE as PDE_APERTURE_INVALID -> FAULT, chan_execute
++         * silently DROPPED every such PT write, the compute VAS's rebuilt
++         * subtree never reached our FB shadow, its re-mapped buffers were
++         * never backed into the persistent host GR VAS, and the host CE
++         * FAULT_PDE'd one page past the last-backed leaf (#13, Xid 31). */
++        if ((pde & 1) && i == 2) {                   /* PD1-level 512 MiB leaf PTE */
++            uint32_t lap = (uint32_t)((pde >> 1) & 0x3);
++            uint64_t pg;
++            if (lap == 0) { pg = ((pde >> 8) & ((1ull << 25) - 1)) << 12; *out_sys = false; }
++            else if (lap == 2 || lap == 3) { pg = ((pde >> 8) & ((1ull << 46) - 1)) << 12; *out_sys = true; }
++            else { return NVKVM_GMMU_FAULT; }        /* PEER unsupported */
++            return pg + (va & 0x1FFFFFFFull);
++        }
+         uint32_t ap = (uint32_t)((pde >> 1) & 0x3);  /* PDE APERTURE: 1=VID,2/3=SYS */
+         if (ap == 1) { tbl = ((pde >> 8) & ((1ull << 25) - 1)) << 12; tsys = false; }
+         else if (ap == 2 || ap == 3) { tbl = ((pde >> 8) & ((1ull << 46) - 1)) << 12; tsys = true; }
+@@ -5119,8 +5178,20 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+                     bool src_phys = (d >> 12) & 1;   /* SRC_TYPE PHYSICAL */
+                     bool dst_phys = (d >> 13) & 1;   /* DST_TYPE PHYSICAL */
+                     uint32_t sem_type = (d >> 3) & 0x3; /* SEMAPHORE_TYPE [4:3], !=0 => release */
++                    /* #13: DATA_TRANSFER_TYPE [1:0] (NVC7B5, == NVB0B5): 0 = NONE — a
++                     * semaphore-release-only launch that moves NO data.  UVM/RM emit these
++                     * as the completion release right after a real copy; re-executing the
++                     * copy with the STALE offset/length state (what we did before decoding
++                     * this field) issued phantom duplicate copies — and phantom translate
++                     * FAULTs for VIRT addresses.  EXCEPT: a CE MEMSET (REMAP_ENABLE[10] /
++                     * MEMORY_SCRUB_ENABLE[23]) also has DATA_TRANSFER_TYPE==NONE but DOES
++                     * write via remap — zeroing bytes for those killed the scrubber's
++                     * zero-fill and hung cuCtxCreate (the round-4 regression).  Only zero
++                     * for a GENUINE no-op (no transfer, no remap, no scrub). */
++                    bool xfer_none = ((d & 0x3u) == 0u);
+                     uint64_t bytes = (uint64_t)llen * lcount;
+                     if (bytes > (16u << 20)) bytes = 16u << 20;  /* safety cap */
++                    if (xfer_none && !remap && !mscrub) { bytes = 0; }
+                     /* M5.60 (Phase A — user-CE dst real-backing, the cup5/LLM-hang fix
+                      * prerequisite): the copy DEST must be a REAL host vidmem object
+                      * mapped in the GR fvas (not a fake fb_page) — both so the CPU copy
+@@ -5134,7 +5205,7 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+                      * -> the next copy classifies gpga and skips the re-walk). Gated to the
+                      * forwarded user-CE path; never the kernel scrubber/MEMSET or a sysmem
+                      * (DtoH) dst. A total cap bounds any never-backable pathological leaf. */
+-                    if (s->m2cefwd && !mscrub && !remap && s->m2_gr_client &&
++                    if (s->m2cefwd && !mscrub && !remap && !xfer_none && s->m2_gr_client &&
+                         nvkvm_m2_is_user_ce(s, s->chan_client)) {
+                         uint64_t full = (uint64_t)llen * lcount;
+                         if (full >= 4 && dst_phys && dst_pm == 0) {
+@@ -5247,6 +5318,9 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+                             } else {                                  /* sysmem dst: per-word DMA */
+                                 for (uint64_t k = 0; k < span; k += 4) { nvkvm_phys_wr32(s, p + k, sy, remapA); }
+                             }
++                            /* #13: a fill can write PTEs too (UVM's pte_batch flushes a run of
++                             * IDENTICAL PTE values as a CE memset_8) — same hook as the copy dst. */
++                            if (!sy) { nvkvm_m2_ce_fb_write_hook(s, p, span); }
+                             b += span;
+                         }
+                     } else {
+@@ -5262,7 +5336,26 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+                             bool ssy, dsy;
+                             uint64_t sp = NVKVM_CE_RESOLVE(off_in + b,  src_phys, src_pm, ssy);
+                             uint64_t dp = NVKVM_CE_RESOLVE(off_out + b, dst_phys, dst_pm, dsy);
+-                            if (sp == NVKVM_GMMU_FAULT || dp == NVKVM_GMMU_FAULT) break;
++                            if (sp == NVKVM_GMMU_FAULT || dp == NVKVM_GMMU_FAULT) {
++                                /* #13 DIAG: a CE copy DROPPED mid-stream on a translate fault —
++                                 * the remaining [b, bytes) is silently never written.  #13's
++                                 * root cause was exactly this class: the CeUtils VIRTUAL-dst
++                                 * (512 MiB FB-alias identity map) page-table writes all faulted
++                                 * here before the walker grew PD1-leaf support.  Keep the trace
++                                 * to catch any other dropped-transport class early. */
++                                static uint32_t dbgcd13;
++                                if (dbgcd13 < 256) {
++                                    dbgcd13++;
++                                    qemu_log("nvkvm-gpu[%s] #13 CE-DROP client=0x%08x in=0x%llx(%s) "
++                                             "out=0x%llx(%s) bytes=0x%llx b=0x%llx %s-FAULT\n",
++                                             s->chip->name, s->chan_client,
++                                             (unsigned long long)off_in, src_phys ? "phys" : "virt",
++                                             (unsigned long long)off_out, dst_phys ? "phys" : "virt",
++                                             (unsigned long long)bytes, (unsigned long long)b,
++                                             (sp == NVKVM_GMMU_FAULT) ? "SRC" : "DST");
++                                }
++                                break;
++                            }
+                             uint64_t span = bytes - b;
+                             uint64_t spg = 0x1000ull - (sp & 0xfffull);  /* src page tail */
+                             uint64_t dpg = 0x1000ull - (dp & 0xfffull);  /* dst page tail */
+@@ -5291,6 +5384,14 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+                                     nvkvm_phys_wr32(s, dp + k, dsy, nvkvm_phys_rd32(s, sp + k, ssy));
+                                 }
+                             }
++                            /* #13 THE TRIGGER: the guest kernel writes page tables via CE copies
++                             * (VIRTUAL dst through the CeUtils 512 MiB FB alias); these land here
++                             * through fb_host_ptr and BYPASS nvkvm_fb_write, so neither the M5.10
++                             * dirty-arm nor any sweep sees them.  If this span just changed a
++                             * COMPUTE VAS's page table, back the newly-mapped VA range NOW —
++                             * before this push's completion release un-gates the host GR channel
++                             * into the new mapping. */
++                            if (!dsy) { nvkvm_m2_ce_fb_write_hook(s, dp, span); }
+                             b += span;
+                         }
+                     }
+@@ -5351,6 +5452,10 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+                      * scrub pushbuffer ALSO emits an NVC56F SEM_EXECUTE (host
+                      * sema at semaOffset), so honoring only that left this one
+                      * unwritten and the scrubber timed out (ce_utils.c:349). */
++                    /* #13: this launch releases a completion semaphore — the commit point of
++                     * any compute-VAS page-table writes earlier in this push.  Back the
++                     * dirtied VAS BEFORE the release is observable (see cpt_sync_at_release). */
++                    if (sem_type != 0) { nvkvm_m2_cpt_sync_at_release(s); }
+                     if (!host_ce && sem_type != 0 && ce_sem_addr) {
+                         /* CE-EXEC fwd (A): when host_ce, the forwarded host CE pushbuffer's own
+                          * SEM_RELEASE writes ce_sem_pay — the CPU must NOT also write it (double
+@@ -5376,6 +5481,8 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+                 case 0x68: sem_pay_hi = d; break;                                            /* SEM_PAYLOAD_HI */
+                 case 0x6c: {                                                                 /* SEM_EXECUTE */
+                     if ((d & 0x7u) == 0x1u && sem_addr) {   /* OPERATION == RELEASE */
++                        /* #13: commit point — back any dirtied compute VAS first. */
++                        nvkvm_m2_cpt_sync_at_release(s);
+                         bool sz64 = (d >> 24) & 1;           /* PAYLOAD_SIZE: 0=16B(64-bit val), 1=4B */
+                         uint64_t redir = 0;                  /* M5.18: also write the BAR1 page libcuda polls */
+                         /* M5.49b: wr32 returns false for the host-only user CE-copy path
+@@ -7147,6 +7254,12 @@ static int nvkvm_m2_gpga_obj(NvkvmGpuEmul *s, uint32_t client, uint64_t va,
+  * SYSMEM run via the primitive above. (Vidmem leaves are host-resident already — M6.4.) */
+ struct nvkvm_leaf_acc { NvkvmGpuEmul *s; uint32_t client; uint64_t va0, gpa0, len;
+                         int sys, runs, backed; uint64_t sysbytes, vidbytes;
++                        /* #13: when nonzero, this walk is over a COMPUTE VAS rooted at this
++                         * PDB — record every visited vidmem table page's {page,level,vabase}
++                         * into m2_cpt[] so nvkvm_m2_cpt_sync_at_release can later decode a
++                         * CE-written page against it.  0 = don't record (kernel VASes,
++                         * dry-run probes, per-channel cvas mirrors). */
++                        uint64_t cpt_pdb;
+                         /* M5.13 DRY-RUN probe: when dry, do NOT back anything; just log which
+                          * leaf (VA range) maps the `target` guest-phys. Used to definitively
+                          * identify the completion-semaphore page's owning PDB + GR-VA before we
+@@ -7336,6 +7449,110 @@ static void nvkvm_m2_leaf_add(struct nvkvm_leaf_acc *a, uint64_t va, uint64_t gp
+     a->va0 = va; a->gpa0 = gpa; a->sys = sys; a->len = pgsz;
+ }
+ 
++/* #13: compute-VAS page-table page ownership (m2_cpt[]) — see the struct comment.
++ * A page is recorded for every table the compute-VAS walk visits, at any level
++ * (0..2 = PD3/PD2/PD1, 3 = PD0, 4 = small (4 KiB) leaf PT, 5 = big (64 KiB) leaf
++ * PT; big PTs are only 256 B, so their 4 KiB page is what's keyed).  `vabase` is
++ * the VA that this level covers, so the exact table base can be re-derived from
++ * the page and decoded without a root walk. */
++#define NVKVM_M2_CPT_SLOTS 4096
++static void nvkvm_m2_cpt_record(NvkvmGpuEmul *s, uint64_t pdb, uint64_t tbl,
++                                int level, uint64_t vabase)
++{
++    uint64_t base = tbl & ~0xfffull;
++    if (!base) { return; }
++    uint32_t h = (uint32_t)((base >> 12) * 2654435761u) & (NVKVM_M2_CPT_SLOTS - 1);
++    for (int p = 0; p < NVKVM_M2_CPT_SLOTS; p++) {
++        if (s->m2_cpt[h].page == 0) {
++            if (s->m2_cpt_n >= NVKVM_M2_CPT_SLOTS * 3 / 4) { return; }  /* full: stop (bounded) */
++            s->m2_cpt_n++;
++            break;
++        }
++        if (s->m2_cpt[h].page == base) { break; }  /* re-record: update in place */
++        h = (h + 1) & (NVKVM_M2_CPT_SLOTS - 1);
++    }
++    s->m2_cpt[h].page = base; s->m2_cpt[h].pdb = pdb;
++    s->m2_cpt[h].vabase = vabase; s->m2_cpt[h].level = (uint8_t)level;
++    if (base < s->m2_cpt_lo) { s->m2_cpt_lo = base; }
++    if (base > s->m2_cpt_hi) { s->m2_cpt_hi = base; }
++}
++static int nvkvm_m2_cpt_find(NvkvmGpuEmul *s, uint64_t addr)
++{
++    uint64_t base = addr & ~0xfffull;
++    uint32_t h = (uint32_t)((base >> 12) * 2654435761u) & (NVKVM_M2_CPT_SLOTS - 1);
++    for (int p = 0; p < NVKVM_M2_CPT_SLOTS; p++) {
++        if (s->m2_cpt[h].page == 0) { return -1; }
++        if (s->m2_cpt[h].page == base) { return (int)h; }
++        h = (h + 1) & (NVKVM_M2_CPT_SLOTS - 1);
++    }
++    return -1;
++}
++/* #13: is `pdb` the page-directory root of a USER-COMPUTE address space?  True for
++ * a chan_vas[] root that is either (a) UVM-managed — handed over via SET_PAGE_
++ * DIRECTORY, the transport that exists exactly to register a user process's GPU VA
++ * space (cuMemAlloc pointers live there; issued under UVM's session client, so the
++ * hClient can't discriminate) — or (b) registered by the GR compute client itself /
++ * one of libcuda's user-CE clients.  The kernel scrubber / CeUtils internal VASes
++ * qualify under neither — their transient tables must never trigger backing (that
++ * was round-4 part2's cuCtxCreate breaker).  Re-checked at trigger time so a freed
++ * VAS's stale m2_cpt entries (pruned from chan_vas[] at teardown) are inert. */
++static bool nvkvm_m2_pdb_is_compute(NvkvmGpuEmul *s, uint64_t pdb)
++{
++    if (!pdb || !s->m2_gr_client) { return false; }
++    for (int i = 0; i < s->chan_vas_n; i++) {
++        if (s->chan_vas[i].pdb != pdb) { continue; }
++        uint32_t cl = s->chan_vas[i].client;
++        if (s->chan_vas[i].uvm) { return true; }
++        if (cl && (cl == s->m2_gr_client || nvkvm_m2_is_user_ce(s, cl))) { return true; }
++    }
++    return false;
++}
++
++/* Decode ONE leaf PTE -> accumulate its page.  Shared by the full pt_enum walk and
++ * the #13 CE-PT-write trigger (which decodes only the entries a write covered). */
++static void nvkvm_m2_pt_enum_pte(NvkvmGpuEmul *s, uint64_t pte, uint64_t va,
++                                 uint64_t pgsz, struct nvkvm_leaf_acc *a)
++{
++    if (!(pte & 1)) { return; }
++    uint32_t apt = (uint32_t)((pte >> 1) & 0x3); uint64_t pg; int sys;
++    if (apt == 0) { pg = ((pte >> 8) & ((1ull << 25) - 1)) << 12; sys = 0; }
++    else if (apt == 2 || apt == 3) { pg = ((pte >> 8) & ((1ull << 46) - 1)) << 12; sys = 1; }
++    else { return; }
++    nvkvm_m2_leaf_add(a, va, pg, sys, pgsz);
++}
++
++/* Decode ONE PD0 dual entry {lo,hi} covering VA `pdva`: a 2 MiB leaf PTE, else
++ * descend its small (4 KiB) / big (64 KiB) leaf PTs.  Shared as above. */
++static void nvkvm_m2_pt_enum_pd0e(NvkvmGpuEmul *s, uint64_t lo, uint64_t hi,
++                                  uint64_t pdva, struct nvkvm_leaf_acc *a, int *budget)
++{
++    if (lo & 1) {                                          /* 2 MiB leaf PTE */
++        nvkvm_m2_pt_enum_pte(s, lo, pdva, 0x200000ull, a);
++        return;
++    }
++    uint32_t big_ap = (uint32_t)((lo >> 1) & 0x3), small_ap = (uint32_t)((hi >> 1) & 0x3);
++    if (small_ap == 1 || small_ap == 2 || small_ap == 3) {
++        bool stsys = (small_ap != 1);
++        uint64_t st = stsys ? (((hi >> 8) & ((1ull << 46) - 1)) << 12)
++                            : (((hi >> 8) & ((1ull << 25) - 1)) << 12);
++        if (st && a->cpt_pdb && !stsys) { nvkvm_m2_cpt_record(s, a->cpt_pdb, st, 4, pdva); }
++        for (uint32_t j = 0; st && j < 512 && *budget > 0; j++) {
++            uint64_t pte = nvkvm_pt_rd64(s, st + (uint64_t)j * 8, stsys); (*budget)--;
++            nvkvm_m2_pt_enum_pte(s, pte, pdva | ((uint64_t)j << 12), 0x1000ull, a);
++        }
++    }
++    if (big_ap == 1 || big_ap == 2 || big_ap == 3) {
++        bool btsys = (big_ap != 1);
++        uint64_t bt = btsys ? (((lo >> 4) & ((1ull << 50) - 1)) << 8)
++                            : (((lo >> 4) & ((1ull << 29) - 1)) << 8);
++        if (bt && a->cpt_pdb && !btsys) { nvkvm_m2_cpt_record(s, a->cpt_pdb, bt, 5, pdva); }
++        for (uint32_t j = 0; bt && j < 32 && *budget > 0; j++) {
++            uint64_t pte = nvkvm_pt_rd64(s, bt + (uint64_t)j * 8, btsys); (*budget)--;
++            nvkvm_m2_pt_enum_pte(s, pte, pdva | ((uint64_t)j << 16), 0x10000ull, a);
++        }
++    }
++}
++
+ /* Recursive GMMU-VER2 descent: PD3->PD2->PD1 (8B PDEs), PD0 (16B dual-PDE / 2 MiB leaf),
+  * small (4K) / big (64K) PTs. Mirrors nvkvm_walk_pdb's decode but ENUMERATES every valid
+  * leaf instead of resolving one VA. `budget` bounds total entries visited (sparse tables). */
+@@ -7344,9 +7561,16 @@ static void nvkvm_m2_pt_enum(NvkvmGpuEmul *s, uint64_t tbl, bool tsys, int level
+ {
+     if (*budget <= 0 || tbl == 0) { return; }
+     static const struct { int lo, n; } L[3] = { {47, 2}, {38, 512}, {29, 512} };
++    if (a->cpt_pdb && !tsys) { nvkvm_m2_cpt_record(s, a->cpt_pdb, tbl, level, vabase); }
+     if (level < 3) {
+         for (uint32_t i = 0; i < (uint32_t)L[level].n && *budget > 0; i++) {
+             uint64_t pde = nvkvm_pt_rd64(s, tbl + (uint64_t)i * 8, tsys);
++            /* #13 (matches the walker's PD1-leaf case): a GA10x PD1 entry with bit0 set
++             * is itself a 512 MiB LEAF PTE, not a PDE.  Its only known producer is the
++             * CeUtils whole-FB identity alias — never DESCEND it as if it pointed at a
++             * table (a SYS-aperture leaf would walk garbage) and never BACK it (a
++             * 512 MiB alias of the whole heap is not a compute working-set leaf). */
++            if (level == 2 && (pde & 1)) { continue; }
+             uint32_t ap = (uint32_t)((pde >> 1) & 0x3);
+             uint64_t nt; bool ntsys;
+             if (ap == 1) { nt = ((pde >> 8) & ((1ull << 25) - 1)) << 12; ntsys = false; }
+@@ -7360,45 +7584,139 @@ static void nvkvm_m2_pt_enum(NvkvmGpuEmul *s, uint64_t tbl, bool tsys, int level
+     for (uint32_t i = 0; i < 256 && *budget > 0; i++) {       /* PD0: 256 dual-PDEs */
+         uint64_t e = tbl + (uint64_t)i * 16;
+         uint64_t lo = nvkvm_pt_rd64(s, e, tsys), hi = nvkvm_pt_rd64(s, e + 8, tsys);
+-        uint64_t pdva = vabase | ((uint64_t)i << 21);
+         (*budget)--;
+-        if (lo & 1) {                                          /* 2 MiB leaf PTE */
+-            uint32_t lap = (uint32_t)((lo >> 1) & 0x3); uint64_t pg; int sys;
+-            if (lap == 0) { pg = ((lo >> 8) & ((1ull << 25) - 1)) << 12; sys = 0; }
+-            else if (lap == 2 || lap == 3) { pg = ((lo >> 8) & ((1ull << 46) - 1)) << 12; sys = 1; }
++        nvkvm_m2_pt_enum_pd0e(s, lo, hi, vabase | ((uint64_t)i << 21), a, budget);
++    }
++}
++
++/* #13 THE FIX — forward-populate host GR-VAS backing from the OBSERVED page-table-
++ * write transport, keyed by PDB and honoring the guest's own commit point
++ * (docs/design/mode2_address_table.md §4.2/§5).
++ *
++ * The guest (re)maps a compute buffer by writing the compute VAS's page tables via
++ * VIRTUAL-dst CE copies through the CeUtils 512 MiB FB alias (resolvable since the
++ * walker's PD1-leaf support, part 1 of this fix), then releases the map push's
++ * completion semaphore.  The ALREADY-RUNG host GR channel sits in a SEM ACQUIRE on
++ * exactly that release and dereferences the new mapping immediately after — and the
++ * guest's LAST doorbell precedes the map push, so no doorbell-driven sweep can ever
++ * run in between (bench-proven in cup8_iter iter-2: sweeps #20-23 all fire before
++ * the remap lands; host CE then Xid-31 FAULT_PDEs one page past the last-backed
++ * leaf).  Two halves:
++ *
++ *  - nvkvm_m2_ce_fb_write_hook (at each CE FB write): if the span landed on a tracked
++ *    compute-VAS page-table PAGE, LATCH that page's index (O(1)).  No decode/backing
++ *    in the hot loop — a big scrub can hit a PD page thousands of times, and decoding
++ *    its subtree per span livelocks (bench-proven: the first per-write attempt hung
++ *    with State=R busy-poll and no CTX OK).
++ *  - nvkvm_m2_cpt_sync_at_release (BEFORE the push's semaphore release is written):
++ *    decode each dirtied page DIRECTLY — from the page itself, NOT a root walk — and
++ *    back its leaves with the same coalescing/va_seen-dedup'd sweep primitives.
++ *    Direct decode is load-bearing: the guest fills a leaf PT page and links it under
++ *    the root a SEPARATE push later, so at this release a root walk of the PDB can't
++ *    yet reach the page (bench-proven: root re-walk read runs=0 while the host CE
++ *    faulted one page past the last-backed leaf), but the page itself already holds
++ *    committed PTEs.  The release is the guest's own commit point for those PTEs, and
++ *    the CPU emulation is synchronous, so backing completes before the release is
++ *    observable: the §5.1 membar/fence ordering by construction.
++ *
++ * Scope — why this is cuCtxCreate-safe where round-4's part2 pre-sema sweep was
++ * not: part2 swept EVERY chan_vas VAS (kernel scrubber's transient tables, the
++ * 12 GiB whole-FB alias) on EVERY kernel-CE sema release.  This decodes ONLY pages a
++ * CE write actually landed on, only for compute-VAS PTs (nvkvm_m2_pdb_is_compute,
++ * re-checked at decode time so a freed VAS's stale m2_cpt entries are inert), and
++ * only committed values the guest just wrote — never a whole-tree walk of possibly-
++ * mid-update state (the §6 torn-walk hazard). */
++
++/* Per-level table geometry, indexed by m2_cpt level (0=PD3..2=PD1, 3=PD0, 4=small
++ * leaf PT, 5=big leaf PT).  `shift` = VA bits this level's entries stride; `nent` =
++ * entries per 4 KiB page; PD0 (level 3) has 16 B dual entries, the rest 8 B. */
++static const struct { int shift; uint32_t nent; } nvkvm_m2_cpt_lvl[6] = {
++    { 47, 512 }, { 38, 512 }, { 29, 512 }, { 21, 256 }, { 12, 512 }, { 16, 32 },
++};
++static void nvkvm_m2_cpt_decode_page(NvkvmGpuEmul *s, int ci,
++                                     struct nvkvm_leaf_acc *a, int *budget)
++{
++    uint64_t tbl = s->m2_cpt[ci].page, vabase = s->m2_cpt[ci].vabase;
++    int lvl = s->m2_cpt[ci].level;
++    uint32_t nent = nvkvm_m2_cpt_lvl[lvl].nent;
++    int shft = nvkvm_m2_cpt_lvl[lvl].shift;
++    for (uint32_t i = 0; i < nent && *budget > 0; i++) {
++        uint64_t va = vabase | ((uint64_t)i << shft);
++        if (lvl == 3) {                            /* PD0: 16 B dual PDE / 2 MiB leaf */
++            uint64_t lo = nvkvm_pt_rd64(s, tbl + (uint64_t)i * 16, false);
++            uint64_t hi = nvkvm_pt_rd64(s, tbl + (uint64_t)i * 16 + 8, false);
++            (*budget)--;
++            nvkvm_m2_pt_enum_pd0e(s, lo, hi, va, a, budget);
++        } else if (lvl >= 4) {                     /* small/big leaf PT: one PTE */
++            uint64_t pte = nvkvm_pt_rd64(s, tbl + (uint64_t)i * 8, false);
++            (*budget)--;
++            nvkvm_m2_pt_enum_pte(s, pte, va, lvl == 4 ? 0x1000ull : 0x10000ull, a);
++        } else {                                   /* PD3/PD2/PD1: a PDE (sub-table) */
++            uint64_t pde = nvkvm_pt_rd64(s, tbl + (uint64_t)i * 8, false);
++            (*budget)--;
++            if (lvl == 2 && (pde & 1)) { continue; }   /* 512 MiB leaf (FB alias): never back */
++            uint32_t ap = (uint32_t)((pde >> 1) & 0x3);
++            uint64_t nt; bool ntsys;
++            if (ap == 1) { nt = ((pde >> 8) & ((1ull << 25) - 1)) << 12; ntsys = false; }
++            else if (ap == 2 || ap == 3) { nt = ((pde >> 8) & ((1ull << 46) - 1)) << 12; ntsys = true; }
+             else { continue; }
+-            nvkvm_m2_leaf_add(a, pdva, pg, sys, 0x200000ull);
+-            continue;
++            nvkvm_m2_pt_enum(s, nt, ntsys, lvl + 1, va, a, budget);
+         }
+-        uint32_t big_ap = (uint32_t)((lo >> 1) & 0x3), small_ap = (uint32_t)((hi >> 1) & 0x3);
+-        if (small_ap == 1 || small_ap == 2 || small_ap == 3) {
+-            bool stsys = (small_ap != 1);
+-            uint64_t st = stsys ? (((hi >> 8) & ((1ull << 46) - 1)) << 12)
+-                                : (((hi >> 8) & ((1ull << 25) - 1)) << 12);
+-            for (uint32_t j = 0; st && j < 512 && *budget > 0; j++) {
+-                uint64_t pte = nvkvm_pt_rd64(s, st + (uint64_t)j * 8, stsys); (*budget)--;
+-                if (!(pte & 1)) { continue; }
+-                uint32_t apt = (uint32_t)((pte >> 1) & 0x3); uint64_t pg; int sys;
+-                if (apt == 0) { pg = ((pte >> 8) & ((1ull << 25) - 1)) << 12; sys = 0; }
+-                else if (apt == 2 || apt == 3) { pg = ((pte >> 8) & ((1ull << 46) - 1)) << 12; sys = 1; }
+-                else { continue; }
+-                nvkvm_m2_leaf_add(a, pdva | ((uint64_t)j << 12), pg, sys, 0x1000ull);
+-            }
+-        }
+-        if (big_ap == 1 || big_ap == 2 || big_ap == 3) {
+-            bool btsys = (big_ap != 1);
+-            uint64_t bt = btsys ? (((lo >> 4) & ((1ull << 50) - 1)) << 8)
+-                                : (((lo >> 4) & ((1ull << 29) - 1)) << 8);
+-            for (uint32_t j = 0; bt && j < 32 && *budget > 0; j++) {
+-                uint64_t pte = nvkvm_pt_rd64(s, bt + (uint64_t)j * 8, btsys); (*budget)--;
+-                if (!(pte & 1)) { continue; }
+-                uint32_t apt = (uint32_t)((pte >> 1) & 0x3); uint64_t pg; int sys;
+-                if (apt == 0) { pg = ((pte >> 8) & ((1ull << 25) - 1)) << 12; sys = 0; }
+-                else if (apt == 2 || apt == 3) { pg = ((pte >> 8) & ((1ull << 46) - 1)) << 12; sys = 1; }
+-                else { continue; }
+-                nvkvm_m2_leaf_add(a, pdva | ((uint64_t)j << 16), pg, sys, 0x10000ull);
+-            }
++    }
++}
++static void nvkvm_m2_cpt_sync_at_release(NvkvmGpuEmul *s)
++{
++    if (!s->m2_cpt_dirty_n) { return; }
++    int ndirty = s->m2_cpt_dirty_n;
++    struct nvkvm_leaf_acc a; memset(&a, 0, sizeof(a));
++    a.s = s; a.client = s->m2_gr_client;
++    int budget = 300000;
++    bool rec = s->m2_recording_gr_pt;
++    s->m2_recording_gr_pt = true;      /* fresh sub-tables join the tracked sets */
++    for (int k = 0; k < s->m2_cpt_dirty_n; k++) {
++        int ci = s->m2_cpt_dirty[k];
++        s->m2_cpt[ci].dirty = false;
++        /* Re-check ownership at decode time: a page freed/re-pointed since the latch
++         * (chan_vas[] pruned at teardown) must not back garbage. */
++        if (!nvkvm_m2_pdb_is_compute(s, s->m2_cpt[ci].pdb)) { continue; }
++        a.cpt_pdb = s->m2_cpt[ci].pdb;   /* newly-descended sub-tables join m2_cpt too */
++        nvkvm_m2_cpt_decode_page(s, ci, &a, &budget);
++    }
++    s->m2_cpt_dirty_n = 0;
++    s->m2_recording_gr_pt = rec;
++    nvkvm_m2_leaf_flush(&a);
++    if (a.backed || budget <= 0) {
++        qemu_log("nvkvm-gpu[%s] #13 PT-SYNC@release: dirty_pages=%d runs=%d backed=%d "
++                 "(budget_left=%d)\n", s->chip->name, ndirty, a.runs, a.backed, budget);
++    }
++}
++
++/* #13: one hook for every CPU-emulated CE write that lands in FB.  These writes go
++ * through nvkvm_fb_host_ptr / phys_wr32 and BYPASS nvkvm_fb_write — so (a) mirror
++ * fb_write's M5.10 tracked-PT-page dirty-arm (a CE-written PTE re-arms the doorbell
++ * re-sweep), and (b) latch the touched compute-VAS PT page(s) for the #13 release-
++ * time decode above.  A span can cross a page boundary, so latch every page it
++ * covers (spans are page-clamped in the copy loop, but the fill path is not). */
++static void nvkvm_m2_ce_fb_write_hook(NvkvmGpuEmul *s, uint64_t dst, uint64_t len)
++{
++    if (s->m2_gr_pt_n && !s->m2_gr_vas_dirty &&
++        dst >= s->m2_gr_pt_lo && dst <= s->m2_gr_pt_hi + 0xfffull &&
++        nvkvm_m2_gr_pt_contains(s, dst)) {
++        s->m2_gr_vas_dirty = true;
++    }
++    if (!s->m2exec || !s->m2_gr_client || !s->m2_cpt_n || !len) { return; }
++    if (dst > s->m2_cpt_hi + 0xfffull || dst + len <= s->m2_cpt_lo) { return; }
++    for (uint64_t p = dst & ~0xfffull; p < dst + len; p += 0x1000ull) {
++        int ci = nvkvm_m2_cpt_find(s, p);
++        if (ci < 0 || s->m2_cpt[ci].dirty) { continue; }
++        if (!nvkvm_m2_pdb_is_compute(s, s->m2_cpt[ci].pdb)) { continue; }
++        if (s->m2_cpt_dirty_n >= (int)ARRAY_SIZE(s->m2_cpt_dirty)) {
++            /* Overflow (unbounded fill hitting many PT pages): drain now so nothing
++             * is lost — the current values are as committed as this write makes them. */
++            nvkvm_m2_cpt_sync_at_release(s);
+         }
++        s->m2_cpt[ci].dirty = true;
++        s->m2_cpt_dirty[s->m2_cpt_dirty_n++] = ci;
+     }
+ }
+ 
+@@ -7416,11 +7734,14 @@ static void nvkvm_m2_enum_gr_sysmem(NvkvmGpuEmul *s, uint32_t client)
+         if (!pdb) { continue; }
+         struct nvkvm_leaf_acc a; memset(&a, 0, sizeof(a));
+         a.s = s; a.client = client;
++        /* #13: a compute-client VAS's walk also records its table pages into m2_cpt[]
++         * so the CE-PT-write trigger can decode writes against them. */
++        a.cpt_pdb = nvkvm_m2_pdb_is_compute(s, pdb) ? pdb : 0;
+         nvkvm_m2_pt_enum(s, pdb, false, 0, 0, &a, &budget);
+         nvkvm_m2_leaf_flush(&a);
+-        qemu_log("nvkvm-gpu[%s] M6.5 enum_gr_sysmem: vas=0x%08x pdb=0x%llx runs=%d "
++        qemu_log("nvkvm-gpu[%s] M6.5 enum_gr_sysmem: vas=0x%08x pdb=0x%llx comp=%d runs=%d "
+                  "sysbytes=0x%llx vidbytes=0x%llx backed=%d (budget_left=%d)\n", s->chip->name,
+-                 s->chan_vas[v].hvas, (unsigned long long)pdb, a.runs,
++                 s->chan_vas[v].hvas, (unsigned long long)pdb, a.cpt_pdb ? 1 : 0, a.runs,
+                  (unsigned long long)a.sysbytes, (unsigned long long)a.vidbytes,
+                  a.backed, budget);
+     }

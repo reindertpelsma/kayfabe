@@ -1,0 +1,4 @@
+=== stream_nonblocking side=host start=2026-10-04T11:36:58+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/stream_probe nonblocking
+CHECK nonblocking ok
+STREAM_PROBE_DONE nonblocking rc=0
+=== end rc=0 secs=3 2026-10-04T11:37:01+00:00

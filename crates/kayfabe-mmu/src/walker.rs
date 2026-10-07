@@ -1,0 +1,1240 @@
+//! # The page-table decoder — `#102` stage C3
+//!
+//! The walk *algorithm* is core (one loop, all regimes); the entry *format* is Axis-B
+//! ([`kayfabe_arch::GmmuFmt`]). This module is the algorithm, and nothing in it names a
+//! bit position, a page size or a level number: it asks the format for the geometry
+//! ([`kayfabe_arch::GmmuFmt::level_shift`]) and for the meaning of an entry
+//! ([`kayfabe_arch::GmmuFmt::decode_entry`]), and turns the pair into *(virtual address
+//! → backing)* facts the address table can be forward-populated with.
+//!
+//! ## The three laws it is written to, all of them load-bearing
+//!
+//! 1. ★★★ **MISS = FAULT, never a guess.** [`FbRead`] answering `false` is a *loud*
+//!    [`WalkFault::Unbacked`], not zeros. The C's `nvkvm_pt_rd64` returns `0` for an
+//!    unreadable page (`C: nvkvm_gpu_emul.c:4891-4904`), which decodes as `Invalid` and
+//!    is therefore indistinguishable from a genuinely empty slot — a page we could not
+//!    read is *forwarded*, never guessed into a capture. Nothing here ever resolves a
+//!    physical address backwards into a virtual one either: the table is
+//!    forward-populated and this is the thing that populates it.
+//!
+//! 2. ★★★ **Decode is not policy.** The 512 MiB leaf that #13 was about must
+//!    **decode faithfully here** and be dropped **by policy** at the binding site
+//!    ([`leaf_disposition`]). The C does exactly this in three places — `walk_pdb_root`
+//!    *resolves* it (`C: :4949`), `pt_enum` *skips* it (`C: :8649`) and
+//!    `cpt_decode_page` *skips* it (`C: :8733`) — and both skips carry the same reason,
+//!    *"its only known producer is the CeUtils whole-FB identity alias"*. That is a
+//!    statement about a **producer**, not a property of a big leaf. Collapsing the two
+//!    halves into one is how #13's round-4 silent drop was built.
+//!
+//! 3. ★★ **Every leaf size the regime enumerates decodes; one it does not is a LOUD
+//!    fault** ([`WalkFault::UnknownLeafSize`]). #13's corollary L3, restated as a check
+//!    rather than as a comment.
+//!
+//! ## Where the bytes come from
+//!
+//! [`FbRead`] is the seam and it has one production implementation
+//! (`kayfabe_fwd::IsolateFb`), over the **isolate's mapping of the fabricated aperture**
+//! (`eight_blockers_resolved.md` §12.2). The core holds the address table and decides
+//! *what*; the isolate holds bytes and does *it*. Nothing in these crates ever stores
+//! page content — the rejected Option 3 (§11.6) is unrepresentable here, because
+//! [`FbRead`] has no method that hands content *in*.
+
+use kayfabe_arch::ids::{GpuVa, Pdb};
+use kayfabe_arch::{Aperture, GmmuFmt, PageSize, PteDecode};
+
+use crate::{AddressFault, AddressTable, Binding};
+
+/// Abstract page-table byte source (a synthetic FB image in tests; the isolate's
+/// fabricated-aperture mapping in production). Keeps the walker pure.
+pub trait FbRead {
+    /// Read `buf.len()` bytes at physical address `phys`; `false` if unbacked.
+    ///
+    /// ★ **`&mut self`, and that is not incidental.** The production implementation is a
+    /// *connection*, not an image: every read is a round trip to the isolate that holds
+    /// the aperture. Typing it `&self` would force interior mutability into the one
+    /// place the whole design is trying to keep honest, and would hide from every caller
+    /// that this call **blocks** — which is exactly the fact R1 needs visible, since a
+    /// decode pass must not run under a ranked lock.
+    ///
+    /// ★★ `false` means **this source cannot serve the range**, and callers turn it into
+    /// [`WalkFault::Unbacked`]. It must never be spelled as "zeros": a zero-filled page
+    /// decodes as a full page of invalid entries, which is a page that legitimately maps
+    /// nothing, and the two are opposite facts.
+    fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
+        self.read_in(phys, Aperture::Vidmem, buf)
+    }
+
+    /// ★★★★★ **READ `phys` IN `aperture`. The aperture is part of the ADDRESS, not a hint.**
+    ///
+    /// **Owner, 2026-09-10:** *"FbRead should ignore backing … branching on aperture should not
+    /// be in that much code."* ⇒ exactly one implementation branches; every caller passes the
+    /// aperture it decoded and stops caring.
+    ///
+    /// # ⊘ Why the old signature was a bug and not a simplification
+    ///
+    /// [`PtPage`] has carried an `aperture` all along and `read` took only `phys`, so the
+    /// walker **decoded an aperture and then threw it away**. Every page-table page was read as
+    /// though it lived in the framebuffer. `[measured w411]` the user proc's `pdb=0x201000`
+    /// took **37 sweep tasks and yielded nothing**, because its tables are not where we looked;
+    /// its four GR context VAs stayed invisible and `P3 rpc-bind` stayed red through four
+    /// correct upstream fixes, each of which made the walk happen more often while it read the
+    /// wrong memory.
+    ///
+    /// ⚠ And it failed SILENTLY, in the way this trait's own doc already warned: `truncated=0`,
+    /// the reads *succeeded*, and a zero-filled page decodes as a page of invalid entries. *"The
+    /// tables say nothing is mapped"* and *"we cannot see the tables"* arrived as one answer.
+    ///
+    /// ⊘ The default body preserves the old behaviour for implementations that genuinely have
+    /// one aperture (a synthetic FB image in tests), so this is additive — but production
+    /// sources MUST override it, or they keep the bug with a new signature.
+    fn read_in(&mut self, phys: u64, aperture: Aperture, buf: &mut [u8]) -> bool;
+
+    /// ★★★★ **WHO first wrote the page at `phys`, if this source can say at all** — a short
+    /// tag and a monotonic sequence number, exactly `kayfabe_device::FbPageOrigin`'s pair.
+    ///
+    /// # ⊘ Why a *walker* trait carries a provenance question
+    ///
+    /// The address plane's populate discipline names **two co-equal sources** and
+    /// `reachability_on_transition.md` §7.2 names, as standing residue, a **third transport
+    /// it does not witness**: *"CPU-written entries through the instance/BAR2 window and
+    /// through PRAMIN … reach no witness here. Anything they publish stays a miss."* A walk
+    /// that succeeds where the address table misses is therefore either evidence the table
+    /// is incomplete or evidence it is the wrong mechanism — and **the two are told apart
+    /// by which transport created the page-table pages the walk just read.** That fact is
+    /// held by the byte source and by nothing else on the path.
+    ///
+    /// ⊘ [`None`] is *"this source cannot answer"*, never *"nobody wrote it"* — the same
+    /// distinction [`FbRead::read`]'s `false` carries, and the reason the default is `None`
+    /// rather than a fabricated tag. A source that does not track origins must not be made
+    /// to invent one.
+    fn page_writer(&self, phys: u64) -> Option<(&'static str, u64)> {
+        let _ = phys;
+        None
+    }
+}
+
+/// Result of a (future) walk. Placeholder shape for the milestone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WalkResult {
+    /// VA resolves to a leaf.
+    Mapped {
+        /// Physical address of the page.
+        phys: u64,
+    },
+    /// The walk hit an invalid entry — a loud fault at the commit point.
+    Fault {
+        /// Directory level (0 = root) where the walk faulted.
+        level: u8,
+        /// The PDB being walked.
+        pdb: Pdb,
+    },
+}
+
+/// ★★★ **One virtual address, resolved** — what [`translate`] answers.
+///
+/// It carries the leaf's whole statement and not just the address, because every consumer
+/// so far needs a second field: a translated aperture access needs [`Translation::aperture`]
+/// to know *which store* holds the byte, and a write needs [`Translation::read_only`] to
+/// know whether the guest said it may.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Translation {
+    /// The physical address of the byte, i.e. the leaf's page base **plus the offset
+    /// within the page**. Already offset — a caller that had to add it could add it twice.
+    pub phys: u64,
+    /// Which aperture `phys` is in. ⊘ Never assumed to be vidmem: a leaf may name system
+    /// memory, and answering a sysmem address out of a framebuffer store is the exact
+    /// aliasing `Aperture` exists to prevent.
+    pub aperture: Aperture,
+    /// The leaf's page size.
+    pub size: PageSize,
+    /// The guest's read-only bit, carried so a caller cannot silently widen rights.
+    pub read_only: bool,
+    /// The level the leaf was found at, for a diagnostic.
+    pub level: u8,
+}
+
+/// Why a **point** translation refused. Disjoint from [`WalkFault`] on purpose: those are
+/// reasons a *decode* could not be performed, these are reasons this VA has no answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TranslateFault {
+    /// The decoder refused. Carried whole rather than flattened — a walk that could not
+    /// read a table and a walk that read a table saying "nothing here" are opposite facts.
+    Walk(WalkFault),
+    /// ★★★ **MISS.** A slot on the path decoded to [`PteDecode::Invalid`]. This is the
+    /// address table's own `miss = fault`, arriving from the page tables rather than from
+    /// the table.
+    Unmapped {
+        /// The virtual address asked for.
+        va: u64,
+        /// The level whose slot was invalid.
+        level: u8,
+    },
+    /// ★★ The guest **declared** this range backing-free ([`PteDecode::Sparse`]). A
+    /// different answer from [`TranslateFault::Unmapped`] and it must stay different: one
+    /// is a statement the guest made, the other is the absence of one.
+    Sparse {
+        /// The virtual address asked for.
+        va: u64,
+        /// The level whose slot was sparse.
+        level: u8,
+    },
+    /// The descent ran past [`MAX_WALK_DEPTH`] — a guest-built cycle.
+    TooDeep {
+        /// The last table the descent refused to follow.
+        phys: u64,
+    },
+}
+
+impl TranslateFault {
+    /// One clause, for a diagnostic an operator reads beside a register offset.
+    #[must_use]
+    pub fn why(self) -> &'static str {
+        match self {
+            Self::Walk(_) => "the page-table decoder refused a level of this walk",
+            Self::Unmapped { .. } => "the guest's page tables map nothing at this address",
+            Self::Sparse { .. } => {
+                "the guest declared this range SPARSE — deliberately backing-free"
+            }
+            Self::TooDeep { .. } => {
+                "the descent exceeded its depth bound; a page directory points back at itself"
+            }
+        }
+    }
+}
+
+/// Read one entry of a table page.
+///
+/// ★ One entry, not the page: a point query that read the whole table would cost 4 KiB of
+/// round trip per level for eight bytes of answer, and [`FbRead`]'s production
+/// implementation is a *connection*. [`decode_page`] reads the page because its job is the
+/// page; this reads the entry because its job is the entry. They share the decoder, which
+/// is the part that can be wrong.
+fn entry_at(
+    fmt: &dyn GmmuFmt,
+    fb: &mut dyn FbRead,
+    table: u64,
+    level: u8,
+    va: u64,
+) -> Result<u128, WalkFault> {
+    let geo = fmt
+        .level_shift(level)
+        .ok_or(WalkFault::NoSuchLevel { level })?;
+    let width = fmt.entry_size(level);
+    // ★ `entries` must be a power of two **here** and not in `decode_page`, and the
+    // asymmetry is real: `decode_page` iterates `0..entries` and never inverts the map,
+    // while a point query has to turn a virtual address back into an index. `%` would
+    // answer for a non-power-of-two count and the answer would be a different slot from
+    // the one `decode_page` gave that address — two descriptions of one table.
+    if width == 0
+        || width > MAX_ENTRY_BYTES
+        || geo.entries == 0
+        || !geo.entries.is_power_of_two()
+        || geo.shift >= 64
+    {
+        return Err(WalkFault::BadGeometry { level });
+    }
+    let idx = (va >> geo.shift) & u64::from(geo.entries - 1);
+    let at = idx
+        .checked_mul(u64::from(width))
+        .and_then(|o| table.checked_add(o))
+        .ok_or(WalkFault::BadGeometry { level })?;
+    let mut raw = [0u8; MAX_ENTRY_BYTES as usize];
+    if !fb.read(at, &mut raw[..width as usize]) {
+        return Err(WalkFault::Unbacked { phys: at, level });
+    }
+    Ok(u128::from_le_bytes(raw))
+}
+
+/// Turn one decoded slot into either an answer or the next hop, and follow it.
+///
+/// ★★ **Both halves of a dual slot are tried, in the order the format returned them.** A
+/// point query cannot know from the slot alone whether `va` is mapped by the small-page
+/// sub-table or the big-page one — that is what the sub-tables themselves say — so the
+/// first that answers wins and the *first* fault is reported if neither does. Following
+/// only [`PteDecode::Pde::edge`] would drop a whole sub-tree with no diagnostic, which is
+/// `#13`'s shape at the 16-byte level and the reason [`PteDecode::Pde::also`] exists.
+fn follow(
+    fmt: &dyn GmmuFmt,
+    fb: &mut dyn FbRead,
+    decode: PteDecode,
+    level: u8,
+    va: u64,
+    depth: u8,
+) -> Result<Translation, TranslateFault> {
+    match decode {
+        PteDecode::Invalid => Err(TranslateFault::Unmapped { va, level }),
+        PteDecode::Sparse => Err(TranslateFault::Sparse { va, level }),
+        PteDecode::Leaf {
+            phys,
+            aperture,
+            size,
+            read_only,
+        } => {
+            // ★★ #13's corollary L3, at the point-query site as well as at the capture
+            // one: a leaf whose size this regime does not enumerate is a LOUD fault. It
+            // must not be rounded to the nearest real size — the offset within the page
+            // is computed from it, so a wrong size is a wrong ADDRESS.
+            if !fmt.page_sizes().contains(&size) {
+                return Err(TranslateFault::Walk(WalkFault::UnknownLeafSize {
+                    va,
+                    size,
+                }));
+            }
+            if size.0 == 0 || !size.0.is_power_of_two() {
+                return Err(TranslateFault::Walk(WalkFault::UnknownLeafSize {
+                    va,
+                    size,
+                }));
+            }
+            Ok(Translation {
+                phys: phys.saturating_add(va & (size.0 - 1)),
+                aperture,
+                size,
+                read_only,
+                level,
+            })
+        }
+        PteDecode::Pde { edge, also } => {
+            let mut first: Option<TranslateFault> = None;
+            for e in [Some(edge), also].into_iter().flatten() {
+                // A null sub-table pointer is not a sub-table — the same truthiness
+                // `decode_page` guards every descent with.
+                if e.next == 0 {
+                    continue;
+                }
+                // ★★★ Same refusal on the point-query path. `PdeEdge::aperture` was carried
+                // and never read; following a sysmem edge here would descend into the
+                // framebuffer at the child's GPA. Recorded as this edge's fault so a walk
+                // with a vidmem sibling still succeeds through the sibling.
+                if e.aperture != Aperture::Vidmem {
+                    first.get_or_insert(TranslateFault::Walk(WalkFault::ForeignAperture {
+                        phys: e.next,
+                        level: e.child_level,
+                        aperture: e.aperture,
+                    }));
+                    continue;
+                }
+                match descend(fmt, fb, e.next, e.child_level, va, depth + 1) {
+                    Ok(t) => return Ok(t),
+                    Err(f) => first.get_or_insert(f),
+                };
+            }
+            Err(first.unwrap_or(TranslateFault::Unmapped { va, level }))
+        }
+    }
+}
+
+/// One level of the descent: read the slot `va` selects, decode it, follow it.
+fn descend(
+    fmt: &dyn GmmuFmt,
+    fb: &mut dyn FbRead,
+    table: u64,
+    level: u8,
+    va: u64,
+    depth: u8,
+) -> Result<Translation, TranslateFault> {
+    if depth >= MAX_WALK_DEPTH {
+        return Err(TranslateFault::TooDeep { phys: table });
+    }
+    let raw = entry_at(fmt, fb, table, level, va).map_err(TranslateFault::Walk)?;
+    follow(fmt, fb, fmt.decode_entry(level, raw), level, va, depth)
+}
+
+/// ★★★ **Resolve ONE virtual address through the guest's own page tables** — the primitive
+/// a *translated aperture* needs, as distinct from the bulk capture [`decode_subtree`]
+/// performs.
+///
+/// # ⊘ Why this is not a second walker
+///
+/// It shares everything that can be wrong with [`decode_page`]: the same
+/// [`kayfabe_arch::GmmuFmt::decode_entry`], the same [`kayfabe_arch::GmmuFmt::level_shift`]
+/// geometry, the same [`FbRead`] byte source, the same `MISS = FAULT` rule and the same
+/// `#13` leaf-size check. What differs is only the *question*: `decode_page` asks "what
+/// does this table contain", which is what a reachability shadow
+/// ([`crate::reach::ReachShadow`]) is built from; this asks "where does this address
+/// land", which is what a hardware TLB miss asks. Neither can answer the other's question
+/// and neither re-implements the other's decode.
+///
+/// ⊘ And it deliberately does **not** consult [`leaf_disposition`]. That policy exists to
+/// stop the whole-framebuffer identity alias being *bound into the address table*; a
+/// translated aperture access is not a binding, and refusing it would refuse an access the
+/// hardware would have served.
+///
+/// `root` is the page directory to start from, carrying its own level — level 0 for a page
+/// directory base, and any level for a caller resuming under an edge it already holds.
+///
+/// # Errors
+/// [`TranslateFault`]: the decode refused, the address is unmapped, the guest declared it
+/// sparse, or the descent hit its depth bound.
+pub fn translate(
+    fmt: &dyn GmmuFmt,
+    fb: &mut dyn FbRead,
+    root: PtPage,
+    va: u64,
+) -> Result<Translation, TranslateFault> {
+    descend(fmt, fb, root.phys, root.level, va, 0)
+}
+
+/// ★★★ **Resolve one virtual address from an ENTRY rather than from a table** — for a root
+/// the guest handed us as a *value*.
+///
+/// # Why this exists, and why it is not a convenience
+///
+/// A GSP-offload guest does not tell its GPU where its own bus-aperture page directory is.
+/// It builds the directory itself, reads its own **root entry** back out, and sends that
+/// eight-byte value to the firmware to install in the directory the hardware is actually
+/// bound to. So the only fact this port ever receives about that tree is one *entry*, at a
+/// known level, and there is no table page anywhere that contains it — the page that would
+/// have contained it is the firmware's, and this port is the firmware.
+///
+/// Starting the descent from the entry is therefore the **faithful** model, not a shortcut:
+/// it is exactly the state the hardware would be in after the firmware wrote that entry
+/// into slot `index` of its own root. ⊘ It is also the reason nothing here reverse-derives
+/// a root from observed traffic — the root is a value the guest *published*, which is the
+/// forward direction the address-table doctrine requires.
+///
+/// # Errors
+/// As [`translate`].
+pub fn translate_from_entry(
+    fmt: &dyn GmmuFmt,
+    fb: &mut dyn FbRead,
+    level: u8,
+    entry: u128,
+    va: u64,
+) -> Result<Translation, TranslateFault> {
+    follow(fmt, fb, fmt.decode_entry(level, entry), level, va, 0)
+}
+
+/// ★★★ **One page-table page, and everything needed to decode it.**
+///
+/// The C's `m2_cpt` entry (`C: nvkvm_gpu_emul.c:8714-8720`) minus the ownership fields,
+/// which live one layer up. `level` and `vabase` are **not** derivable from `phys`: a
+/// page of eight-byte words is the same bytes at every level, and what it *means* depends
+/// entirely on where in the tree it hangs. That is why they travel with it.
+///
+/// ★ Where the metadata comes from is the thing §11.2 named as the hard part: it is
+/// **forward-populated, from the root down.** Level 0 is a declared fact — a PDB *is*
+/// its own root page — and every [`decode_page`] then hands each child its level and its
+/// `vabase`. Nothing reverse-derives it, and nothing sweeps for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PtPage {
+    /// Physical address of the table page.
+    pub phys: u64,
+    /// Which aperture `phys` is in.
+    pub aperture: Aperture,
+    /// The level this page sits at, in the format's own numbering (0 = root).
+    pub level: u8,
+    /// The virtual address the page's entry 0 describes.
+    pub vabase: u64,
+}
+
+/// One leaf mapping recovered from a page-table page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DecodedLeaf {
+    /// The virtual address it maps.
+    pub va: GpuVa,
+    /// What it maps to.
+    pub phys: u64,
+    /// Which aperture `phys` is in.
+    pub aperture: Aperture,
+    /// How many bytes it maps.
+    pub size: PageSize,
+    /// The guest's read-only bit, carried so a binding cannot silently widen rights.
+    pub read_only: bool,
+    /// ★ The level the leaf was found at. Carried because a leaf's provenance is what
+    /// makes a diagnostic about it actionable, and because a leaf that has forgotten
+    /// where it came from cannot be asked where it came from.
+    pub level: u8,
+}
+
+/// What one page-table page turned out to contain.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PageDecode {
+    /// Sub-tables this page points at, each already carrying its own level and `vabase`.
+    ///
+    /// ★ A **dual** slot contributes **two** entries here with the same `vabase`, because
+    /// one 16-byte slot names two sub-tables ([`PteDecode::Pde::also`]). A consumer that
+    /// assumes one child per slot is `#13`'s silent drop one level up the tree.
+    pub children: Vec<PtPage>,
+    /// Leaf mappings this page defines. **Includes** the ones policy will drop.
+    pub leaves: Vec<DecodedLeaf>,
+    /// ★★ Virtual addresses of slots the guest declared **SPARSE**, ascending.
+    ///
+    /// Kept as addresses rather than as a count, and kept apart from
+    /// [`PageDecode::invalid`], because sparse is a *declaration* and invalid is an
+    /// absence (`reachability_on_transition.md` §3.6). A shadow that cannot tell them
+    /// apart cannot tell valid→sparse (an unmap) from invalid→sparse (nothing).
+    pub sparse: Vec<u64>,
+    /// Slots that decoded to [`PteDecode::Invalid`] — a page that maps nothing there.
+    /// Counted rather than discarded so "this page was empty" and "this page was never
+    /// read" are different observations.
+    pub invalid: usize,
+}
+
+/// Why a decode refused. Every variant is LOUD; none has a fallback value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WalkFault {
+    /// ★★★ The byte source could not serve this page — **MISS, and a miss is a FAULT**.
+    /// The subtree under it is not decoded and nothing is bound for it. It is forwarded,
+    /// never guessed.
+    Unbacked {
+        /// The page that could not be read.
+        phys: u64,
+        /// The level it was believed to be at.
+        level: u8,
+    },
+    /// ★★★ A **page-table page that is not in video memory**, refused by name.
+    ///
+    /// The byte source behind every read here is the isolate's mapping of the *fabricated
+    /// aperture* — it serves framebuffer bytes and nothing else. So a table page whose
+    /// aperture is system memory names a **GPA**, and reading it through this source would
+    /// interpret that GPA as a **GPGA**: whatever framebuffer byte happens to sit at the same
+    /// number. The walk would succeed, decode structured garbage, and bind it.
+    ///
+    /// ⊘ That is `#170`/`#171`'s species exactly — *"a GPA-typed field holding a VA is the
+    /// whole bug"* — one level down, and it is silent. `PtPage`/`PdeEdge` have carried an
+    /// `aperture` since they existed and **no read site consulted it** (found 2026-08-06).
+    ///
+    /// ★ Unreachable on today's boot path: RM allocates page directories from FBMEM
+    /// (`ogkm-580: kern_bus_gm107.c:4050`, as `bar2.rs` already cites), so every table page a
+    /// real walk meets is vidmem. This is therefore **not a bug fix** — it converts a latent
+    /// *silently wrong* into a loud *not implemented*, which is what it actually is: serving
+    /// sysmem-resident page tables (UVM's) needs a second byte source, not a wider read here.
+    ForeignAperture {
+        /// The address the table page claimed.
+        phys: u64,
+        /// The level it was believed to be at.
+        level: u8,
+        /// The aperture it declared — anything but vidmem reaches this.
+        aperture: Aperture,
+    },
+    /// The format has no such level. An un-enumerated level is a fault, never a stride
+    /// this crate invents (see [`kayfabe_arch::GmmuFmt::level_shift`]).
+    NoSuchLevel {
+        /// The level asked for.
+        level: u8,
+    },
+    /// The level's geometry is not one a table page can hold — a zero-width entry, an
+    /// entry wider than [`kayfabe_arch::GmmuFmt::decode_entry`]'s `u128` can carry, a
+    /// zero entry count, an impossible stride, or a count × width that overflows. Guest
+    /// input never reaches this (it is a claim the *format* made), but a bad adapter must
+    /// fail loudly rather than read out of bounds of its own arithmetic.
+    BadGeometry {
+        /// The level whose geometry was refused.
+        level: u8,
+    },
+    /// ★★ A leaf claiming a size the regime does not enumerate (#13's corollary L3).
+    /// Never rounded to the nearest real size, never dropped quietly.
+    UnknownLeafSize {
+        /// The virtual address of the offending leaf.
+        va: u64,
+        /// The size it claimed.
+        size: PageSize,
+    },
+    /// A slot's virtual address does not fit in 64 bits at this level's stride — a
+    /// format claiming, e.g., 512 entries at shift 60.
+    VaOverflow {
+        /// The level whose arithmetic overflowed.
+        level: u8,
+    },
+    /// The descent's entry budget ran out. Loud, because the alternative is a partial
+    /// capture presented as a complete one — the C bounds the same walk with
+    /// `budget = 300000` (`C: nvkvm_gpu_emul.c:8759`) and simply stops.
+    BudgetExhausted,
+    /// The descent hit its depth limit. A page pointing at itself is a guest-writable
+    /// cycle, and a decoder that follows it never returns.
+    TooDeep {
+        /// The page the descent refused to follow.
+        phys: u64,
+    },
+}
+
+/// The largest entry width [`decode_page`] will read into a `u128`.
+const MAX_ENTRY_BYTES: u8 = 16;
+
+/// ★★★ **Decode ONE page-table page** — the primitive `#102` stage C3 exists to build.
+///
+/// Reads the whole table in a single [`FbRead::read`] (one round trip to the aperture,
+/// not one per entry), then decodes every slot through the format. Returns the page's
+/// children and its leaves; **descends into nothing** — [`decode_subtree`] is the
+/// descending caller, and keeping them apart is what makes the budget and the
+/// cycle-refusal expressible at all.
+///
+/// ★ It is the *direct* decode #13's fix rests on: *"decode each dirtied page DIRECTLY —
+/// from the page itself, NOT a root walk … the guest fills a leaf PT page and links it
+/// under the root a SEPARATE push later, so at this release a root walk of the PDB can't
+/// yet reach the page, but the page itself already holds committed PTEs"*
+/// (`C: nvkvm_gpu_emul.c:8676-8690`).
+///
+/// # Errors
+/// Any [`WalkFault`]. In particular [`WalkFault::Unbacked`] when the source cannot serve
+/// the page — which is a fault and not an empty page.
+pub fn decode_page(
+    fmt: &dyn GmmuFmt,
+    fb: &mut dyn FbRead,
+    page: PtPage,
+) -> Result<PageDecode, WalkFault> {
+    let geo = fmt
+        .level_shift(page.level)
+        .ok_or(WalkFault::NoSuchLevel { level: page.level })?;
+    let width = fmt.entry_size(page.level);
+    if width == 0 || width > MAX_ENTRY_BYTES || geo.entries == 0 || geo.shift >= 64 {
+        return Err(WalkFault::BadGeometry { level: page.level });
+    }
+    let bytes = u64::from(geo.entries)
+        .checked_mul(u64::from(width))
+        .and_then(|n| usize::try_from(n).ok())
+        .ok_or(WalkFault::BadGeometry { level: page.level })?;
+
+    // ★★★ Aperture BEFORE bytes. `fb` serves the fabricated aperture only, so a non-vidmem
+    // table page would have its GPA read as a GPGA — see `WalkFault::ForeignAperture`.
+    if page.aperture != Aperture::Vidmem {
+        return Err(WalkFault::ForeignAperture {
+            phys: page.phys,
+            level: page.level,
+            aperture: page.aperture,
+        });
+    }
+
+    let mut image = vec![0u8; bytes];
+    // ★ The page's OWN aperture, decoded from its parent's PDE — not an assumption.
+    if !fb.read_in(page.phys, page.aperture, &mut image) {
+        return Err(WalkFault::Unbacked {
+            phys: page.phys,
+            level: page.level,
+        });
+    }
+
+    let sizes = fmt.page_sizes();
+    let mut out = PageDecode::default();
+    for i in 0..geo.entries {
+        let at = (i as usize) * (width as usize);
+        let mut raw = [0u8; MAX_ENTRY_BYTES as usize];
+        raw[..width as usize].copy_from_slice(&image[at..at + width as usize]);
+        // Slot `i` of a table at this level describes `vabase | (i << shift)`. Checked,
+        // because `shift` and `entries` are both the format's claims and a format that
+        // claims 512 entries at shift 60 must fault rather than wrap into VA 0.
+        let index_va = u64::from(i)
+            .checked_shl(u32::from(geo.shift))
+            .filter(|v| v >> geo.shift == u64::from(i))
+            .ok_or(WalkFault::VaOverflow { level: page.level })?;
+        let va = page.vabase | index_va;
+
+        match fmt.decode_entry(page.level, u128::from_le_bytes(raw)) {
+            PteDecode::Invalid => out.invalid += 1,
+            // ★★ A third state, carried as a third state. See [`PageDecode::sparse`].
+            PteDecode::Sparse => out.sparse.push(va),
+            PteDecode::Pde { edge, also } => {
+                // A null sub-table pointer is not a sub-table. The C guards every descent
+                // with the same truthiness (`C: :8615`, `:8623`, `:8636`).
+                //
+                // ★★ BOTH halves of a dual slot are followed. Taking `edge` and dropping
+                // `also` would lose a whole sub-tree with no diagnostic — the shape #13
+                // was, at the 16-byte level.
+                for e in [Some(edge), also].into_iter().flatten() {
+                    if e.next != 0 {
+                        out.children.push(PtPage {
+                            phys: e.next,
+                            aperture: e.aperture,
+                            level: e.child_level,
+                            vabase: va,
+                        });
+                    }
+                }
+            }
+            PteDecode::Leaf {
+                phys,
+                aperture,
+                size,
+                read_only,
+            } => {
+                // ★★ #13's corollary L3: a leaf whose size the regime does not enumerate
+                // is a LOUD fault. Not clamped, not skipped — the whole cost of #13 was
+                // an un-enumerated leaf being treated as "not a mapping".
+                if !sizes.contains(&size) {
+                    return Err(WalkFault::UnknownLeafSize { va, size });
+                }
+                out.leaves.push(DecodedLeaf {
+                    va: GpuVa(va),
+                    phys,
+                    aperture,
+                    size,
+                    read_only,
+                    level: page.level,
+                });
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Maximum descent depth. The format's own level count bounds a *legal* tree; this bounds
+/// an **illegal** one, because the page a PDE points at is guest-written and may point
+/// back at its own parent.
+pub const MAX_WALK_DEPTH: u8 = 16;
+
+/// What a bounded descent produced.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SubtreeDecode {
+    /// Every leaf found, in ascending virtual-address order within each page and in
+    /// depth-first order across pages. **Includes** the ones policy will drop.
+    pub leaves: Vec<DecodedLeaf>,
+    /// Every page actually decoded, with the level and `vabase` it was decoded at — the
+    /// forward-populated metadata chain, for the caller to remember so that a later
+    /// *direct* decode of one of these pages knows what it is.
+    pub visited: Vec<PtPage>,
+    /// ★★★ **Each visited page beside WHAT IT CONTAINED**, in visit order.
+    ///
+    /// [`SubtreeDecode::leaves`] is these pages' leaves flattened, and flattening is
+    /// lossy in the one way `reachability_on_transition.md` needs: it forgets **which
+    /// page** a leaf came out of, and therefore whether that page was witnessed and
+    /// whether it is reachable. It also forgets the edges and the sparse slots entirely.
+    /// A reachability shadow is a statement about pages, so it is fed from here.
+    ///
+    /// Kept **alongside** the flattened views rather than replacing them: a consumer that
+    /// only wants "every leaf under this root" should not have to re-flatten, and the two
+    /// cannot disagree because one is built from the other.
+    pub decodes: Vec<(PtPage, PageDecode)>,
+    /// ★★★ Branches that could not be decoded, **kept and returned rather than
+    /// absorbed**. A subtree that faulted contributes no leaves and is not silently a
+    /// subtree with no mappings.
+    pub faults: Vec<WalkFault>,
+    /// Slots that decoded to nothing, summed over every page visited.
+    pub invalid: usize,
+}
+
+/// ★★ **Descend from `root`, bounded** — the C's `nvkvm_m2_pt_enum` (`C: :8635`), with
+/// its silent failure modes made loud.
+///
+/// `budget` counts **entries examined**, exactly as the C's does, so a sparse tree costs
+/// what it contains rather than what it could contain.
+///
+/// ★ **A fault on one branch does not discard another branch's leaves.** The leaves that
+/// decoded are real facts about memory the guest really did map, and throwing them away
+/// because a sibling was unreadable would be #13's silent drop with a different cause.
+/// The faults come back in [`SubtreeDecode::faults`] for the caller to surface; they are
+/// never turned into zeros.
+///
+/// # Errors
+/// [`WalkFault::BudgetExhausted`] — and only that. Everything else is per-branch and
+/// lands in [`SubtreeDecode::faults`], because the budget is the one condition under
+/// which the *whole* result is untrustworthy.
+/// ★★★★★ **w624 — `decode_subtree`'s twin for a root that is an ENTRY, not a page.**
+///
+/// ⊘⊘ BAR2 could not be enumerated, and `window_leaves` refused it BY NAME for a real reason:
+/// BAR1's directory is a chip constant that names a **page**, so `decode_subtree` can start
+/// there, while **BAR2's root is a raw PDE entry the guest republishes** through
+/// `UPDATE_BAR_PDE`. `decode_subtree` takes a `PtPage`; there was nothing to hand it.
+///
+/// ★ This is the exact enumeration twin of [`translate_from_entry`], which already walks that
+/// shape for a point query: decode the entry, and for each non-null **vidmem** edge, decode the
+/// subtree it names. Same decode, same edge filter, same aperture refusal — the only difference
+/// is that one follows a single `va` and this one enumerates everything.
+///
+/// ⚠ `vabase: 0` is not an assumption. BAR2 publishes **slot 0 only** — the other slots belong
+/// to the firmware's half of the address space and this port has published none — which is the
+/// same fact `bar2_translate` enforces before it walks, refusing any offset that indexes past
+/// slot 0 rather than answering it out of the one root we hold.
+///
+/// ⊘ A sysmem edge is SKIPPED rather than followed, for `follow`'s reason verbatim: following
+/// one would descend into the framebuffer at the child's GPA and return leaves that look
+/// ordinary and name the wrong memory.
+///
+/// # Errors
+/// As [`decode_subtree`]. ⊘ A root entry that decodes to a LEAF is not an error and not a
+/// subtree: it is one mapping, returned as one leaf.
+pub fn decode_subtree_from_entry(
+    fmt: &dyn GmmuFmt,
+    fb: &mut dyn FbRead,
+    level: u8,
+    entry: u128,
+    budget: u32,
+) -> Result<SubtreeDecode, WalkFault> {
+    let mut out = SubtreeDecode::default();
+    match fmt.decode_entry(level, entry) {
+        PteDecode::Pde { edge, also } => {
+            let mut left = budget;
+            for e in [Some(edge), also].into_iter().flatten() {
+                if e.next == 0 || e.aperture != Aperture::Vidmem {
+                    continue;
+                }
+                let sub = decode_subtree(
+                    fmt,
+                    fb,
+                    PtPage {
+                        phys: e.next,
+                        aperture: e.aperture,
+                        level: e.child_level,
+                        vabase: 0,
+                    },
+                    left,
+                )?;
+                left = left.saturating_sub(sub.visited.len() as u32);
+                out.leaves.extend(sub.leaves);
+                out.visited.extend(sub.visited);
+                // ★★★★★ **CUT C — THE FAULTS COME BACK, AND UNTIL NOW THEY DID NOT.**
+                //
+                // ⊘⊘⊘ `[established from the source, w739]` this function extended `leaves`
+                // and `visited` and **dropped `sub.faults` on the floor**. It is the ONLY
+                // root shape BAR2 has, so `window_leaves(InstanceWindow)` could never report
+                // a fault — `faults` was structurally pinned at 0 on the one window that
+                // matters for `kbusVerifyBar2`.
+                //
+                // ★★★ That is what made cut B item 4 **inert on BAR2**: `premap_window`'s
+                // `arm_then_retry` treats `Ok && faults == 0` as *good* and stops, so an
+                // enumeration whose page-table pages could not be read out of the single
+                // store came back `Ok` with an **EMPTY** leaf list on the first attempt and
+                // **never armed anything**. `[measured w738]` `premap[... bar2_visited=0
+                // pt_faults=0]` with `named=0` — the census that cut B added to close the
+                // empty-artefact class, reporting a zero its own plumbing guaranteed.
+                //
+                // ⚠ Same class this tree has now paid for five times, one layer below where
+                // it was looked for: cut B fixed `window_leaves` to RETURN faults and nothing
+                // ever PUT one in for the entry-rooted walk.
+                out.faults.extend(sub.faults);
+                // ⊘ `invalid` for the same reason, in the same statement: a count summed from
+                // one of two sibling subtrees is a number that is wrong without being empty,
+                // which is worse than absent.
+                out.invalid += sub.invalid;
+                // ⊘ And `decodes`, which was dropped beside them. It costs nothing — the
+                // vector is already allocated inside `sub` and is moved, not cloned — and
+                // leaving one of four fields behind is exactly the inconsistency that made
+                // `faults` invisible for a whole increment.
+                out.decodes.extend(sub.decodes);
+            }
+        }
+        // ⊘ A leaf AT THE ROOT is a legal one-mapping tree, not a malformed one.
+        PteDecode::Leaf { size, .. } => {
+            if let Ok(t) = translate_from_entry(fmt, fb, level, entry, 0) {
+                out.leaves.push(DecodedLeaf {
+                    va: GpuVa(0),
+                    phys: t.phys,
+                    aperture: t.aperture,
+                    size,
+                    read_only: t.read_only,
+                    level,
+                });
+            }
+        }
+        PteDecode::Invalid | PteDecode::Sparse => {}
+    }
+    Ok(out)
+}
+
+pub fn decode_subtree(
+    fmt: &dyn GmmuFmt,
+    fb: &mut dyn FbRead,
+    root: PtPage,
+    budget: u32,
+) -> Result<SubtreeDecode, WalkFault> {
+    let mut out = SubtreeDecode::default();
+    let mut left = budget;
+    // Explicit stack: the depth bound is the guard against a guest-built cycle, and a
+    // recursive form would exhaust the host stack before it reached the bound.
+    let mut stack: Vec<(PtPage, u8)> = vec![(root, 0)];
+    while let Some((page, depth)) = stack.pop() {
+        if depth >= MAX_WALK_DEPTH {
+            out.faults.push(WalkFault::TooDeep { phys: page.phys });
+            continue;
+        }
+        let cost = fmt.level_shift(page.level).map_or(1, |g| g.entries);
+        if left < cost {
+            return Err(WalkFault::BudgetExhausted);
+        }
+        left -= cost;
+        match decode_page(fmt, fb, page) {
+            Ok(d) => {
+                out.visited.push(page);
+                out.invalid += d.invalid;
+                out.leaves.extend(d.leaves.iter().copied());
+                // Pushed in reverse so the pop order is ascending in virtual address — a
+                // deterministic visit order is what makes a `leaves` comparison in a test
+                // an assertion rather than a coin flip.
+                for c in d.children.iter().rev() {
+                    stack.push((*c, depth + 1));
+                }
+                out.decodes.push((page, d));
+            }
+            Err(e) => out.faults.push(e),
+        }
+    }
+    Ok(out)
+}
+
+/// Why the binding site refused a leaf the walker decoded correctly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DropReason {
+    /// ★★★ **The whole-framebuffer identity alias.**
+    ///
+    /// The guest kernel-RM's copy-engine utility identity-maps the *entire* framebuffer
+    /// heap into its own address space **at the regime's largest page size** and then
+    /// issues its page-table writes as virtual-destination copies through it
+    /// (`C: nvkvm_gpu_emul.c:4936-4952`). The walker must resolve that mapping — not
+    /// resolving it is literally what #13 was (*"chan_execute silently DROPPED every such
+    /// PT write"*) — and the binding site must not back it, because an alias of the whole
+    /// heap is not a compute working set (`C: :8649`, `:8733`, same reason at both).
+    WholeFbIdentityAlias,
+}
+
+/// What the binding site does with one decoded leaf.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LeafDisposition {
+    /// Forward-populate the address table with it.
+    Bind,
+    /// Decoded faithfully, not bound — with the reason.
+    Drop(DropReason),
+}
+
+/// ★★★ **THE POLICY, and it is the ONLY thing in this module that is one.**
+///
+/// [`decode_page`] resolves every leaf the format can express, including the alias; this
+/// says which of them the address plane should stand behind. The separation is §11.7's
+/// standing instruction, re-verified against all three C sites this stage: `walk_pdb_root`
+/// **resolves** the 512 MiB leaf (`C: :4949`), while `pt_enum` (`C: :8649`) and
+/// `cpt_decode_page` (`C: :8733`) **skip** it — and the two skips give a reason about its
+/// *producer*, not about its size class.
+///
+/// ★ The predicate is *"this leaf maps the regime's largest enumerated page size"*,
+/// because that is the C's own identification of the alias — *"identity-maps the WHOLE FB
+/// heap into its own VAS at the largest page size"* (`C: :4941-4944`) — rather than a
+/// hard-coded 512 MiB, which would be one chip's number sitting in a logic crate. A
+/// regime that grows a larger leaf moves this predicate with it, which is the correct
+/// coupling: the alias is defined as *the biggest thing this MMU can map*, not as a
+/// constant.
+///
+/// ★★ It deliberately does **not** consult the address table, the aperture, or anything
+/// about the destination. A policy that varied with what we happened to have published
+/// would make the drop unpredictable from the guest's own actions, and this drop has to
+/// be explainable to a person reading a trace.
+#[must_use]
+pub fn leaf_disposition(fmt: &dyn GmmuFmt, leaf: &DecodedLeaf) -> LeafDisposition {
+    match fmt.page_sizes().iter().max() {
+        Some(&largest) if leaf.size == largest => {
+            LeafDisposition::Drop(DropReason::WholeFbIdentityAlias)
+        }
+        _ => LeafDisposition::Bind,
+    }
+}
+
+/// ★★★ **HOW the two shapes differ** — the four ways a leaf can overlap a live binding
+/// without being it. Named rather than counted, because the four have different causes.
+///
+/// ⊘ These are shapes, not diagnoses. [`StraddleAgreement`] is the half that says whether
+/// anything is actually *wrong*; this half says only what the geometry is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum StraddleShape {
+    /// Same base address, the leaf is **shorter**. A finer page over a coarser binding —
+    /// the small-page half of a dual PDE arriving after the big-page half, or a guest
+    /// splitting a large page.
+    SameStartShorter,
+    /// Same base address, the leaf is **longer**. The coarser page arriving second.
+    SameStartLonger,
+    /// The leaf starts **inside** the live binding and ends inside it. The interior pages
+    /// of a finer tiling over a coarser binding; the bulk case whenever a 64 KiB or 2 MiB
+    /// binding is already down and 4 KiB leaves follow.
+    InsideLarger,
+    /// The leaf starts inside the live binding and runs **past its end**. Neither contains
+    /// the other; this is the shape a *stale* binding of the wrong extent leaves behind,
+    /// and the one that cannot be explained by page-size granularity alone.
+    CrossesEnd,
+}
+
+/// ★★★★★ **DO THE TWO SHAPES AGREE ABOUT THE MEMORY?** — the discriminator that turns a
+/// straddle count into a finding.
+///
+/// A straddle is a *geometry* conflict. It is only a *correctness* conflict if the two
+/// shapes disagree about which byte lives at the leaf's virtual address. That is a
+/// computation, not a judgement: the live binding's own arithmetic already answers it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum StraddleAgreement {
+    /// Same aperture, and the live binding resolves the leaf's base VA to **exactly** the
+    /// physical address the leaf names. ⇒ the two are one fact at two granularities. The
+    /// refusal is still correct (the table holds one shape per range) but nothing here
+    /// indicts either source.
+    SameMemory,
+    /// The live binding resolves the leaf's base VA to a **different** physical address, or
+    /// a different aperture. ⇒ two sources genuinely disagree about what backs this VA.
+    /// **This is the row a reader must act on.**
+    Contradicts,
+}
+
+/// ★★★ Both shapes of a [`PopulateRefusal::StraddlesLiveBinding`], verbatim, so the reason
+/// is reconstructible from the refusal alone.
+///
+/// ⊘ Everything here is *recorded*, nothing is decided. [`Straddle::shape`] and
+/// [`Straddle::agreement`] are pure functions of these fields, kept as methods rather than
+/// stored so a row can never carry a classification that disagrees with its own numbers —
+/// the `a_second_source_of_truth_beside_a_complete_value` shape.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Straddle {
+    /// The leaf's extent.
+    pub size: PageSize,
+    /// ★ The level the leaf was decoded at — which **is** its provenance. On GA10x a
+    /// straddle between level 4 (`PT_BIG`, 64 KiB) and level 5 (`PT_SMALL`, 4 KiB) names
+    /// the two halves of one 16-byte dual PD0 entry, and a straddle between level 3
+    /// (a 2 MiB PD0 leaf) and either of them names a large-page/small-page split. A count
+    /// cannot say which; the level can.
+    pub level: u8,
+    /// What the leaf claims backs its base VA.
+    pub phys: u64,
+    /// The aperture the leaf claims.
+    pub aperture: Aperture,
+    /// Where the live binding starts.
+    pub live_start: u64,
+    /// How long the live binding is.
+    pub live_len: u64,
+    /// What the live binding says backs `live_start`.
+    pub live_phys: u64,
+    /// The live binding's aperture.
+    pub live_aperture: Aperture,
+    /// Whether the live binding is **host-published**. A published straddle cannot be
+    /// reconciled by unbinding — that is [`PopulateRefusal::RepointsPublished`]'s whole
+    /// argument — so the two states want different work and the refusal must carry which.
+    pub live_published: bool,
+}
+
+impl Straddle {
+    /// Which of the four geometries this is. `va` is the leaf's own base address.
+    #[must_use]
+    pub fn shape(&self, va: GpuVa) -> StraddleShape {
+        let end = va.0.saturating_add(self.size.0);
+        let live_end = self.live_start.saturating_add(self.live_len);
+        if va.0 == self.live_start {
+            if self.size.0 < self.live_len {
+                StraddleShape::SameStartShorter
+            } else {
+                StraddleShape::SameStartLonger
+            }
+        } else if end <= live_end {
+            StraddleShape::InsideLarger
+        } else {
+            StraddleShape::CrossesEnd
+        }
+    }
+
+    /// ★★★★★ Whether the live binding already resolves this leaf's base VA to the physical
+    /// address the leaf names.
+    ///
+    /// ⊘ The comparison is at the **leaf's base VA**, offset into the live binding — not
+    /// between the two `phys` fields, which describe different addresses whenever the leaf
+    /// starts inside the binding. Comparing the bases would report `Contradicts` for every
+    /// interior page of a perfectly consistent tiling, which is the `w270` mistake
+    /// (*"keyed on the VA and not the extent"*) inverted.
+    #[must_use]
+    pub fn agreement(&self, va: GpuVa) -> StraddleAgreement {
+        let inside = va.0 >= self.live_start && va.0 - self.live_start < self.live_len;
+        let resolved = self
+            .live_phys
+            .wrapping_add(va.0.wrapping_sub(self.live_start));
+        if inside && self.aperture == self.live_aperture && resolved == self.phys {
+            StraddleAgreement::SameMemory
+        } else {
+            StraddleAgreement::Contradicts
+        }
+    }
+}
+
+/// Why one leaf could not be forward-populated into the table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PopulateRefusal {
+    /// The table refused the bind. Carries the table's own fault verbatim.
+    Refused {
+        /// The leaf's virtual address.
+        va: GpuVa,
+        /// What the table said.
+        fault: AddressFault,
+    },
+    /// ★★★ The leaf re-points a range that is **host-published**.
+    ///
+    /// Rebinding it here would drop a live [`crate::HostBacking`] on the floor: the host
+    /// object would still be allocated and still mapped into that `Vas`'s host VAS, and
+    /// no core state would name it any more. That is the G1 defect, and it is worse than
+    /// G1 because the mapping stays *live* — hardware would keep resolving the old page.
+    /// Unpublishing needs a worker and an unmap verb, i.e. the forwarding plane, so the
+    /// table says so and refuses rather than guessing.
+    RepointsPublished {
+        /// The leaf's virtual address.
+        va: GpuVa,
+        /// What it now claims to map.
+        phys: u64,
+    },
+    /// The leaf's range overlaps a *differently shaped* live binding — it starts inside
+    /// one, or is a different length. Loud, because silently resizing a neighbour is how
+    /// the `ALREADY-MAPPED` collision class hides.
+    ///
+    /// ★★★★★ **IT CARRIES BOTH SHAPES, AND THAT IS THE WHOLE POINT** (`w277`). It used to
+    /// carry `va` alone, and `[measured, w276b_on]` **255 of 255** refusals were this kind
+    /// — a histogram with one bucket, over a payload that could not say **what differed**.
+    /// *"A count cannot see a substitution"*, one plane over: `refusals=255
+    /// by_kind={StraddlesLiveBinding: 255}` is consistent with a page-size mismatch, an
+    /// extent mismatch, a stale binding and two sources contradicting each other, and
+    /// **those four want opposite fixes**.
+    ///
+    /// ⚠ Read [`Straddle::agreement`] before reading [`Straddle::shape`]: a straddle whose
+    /// two shapes **agree about the memory** is a granularity restatement of one fact and
+    /// nothing is wrong with the guest; a straddle that **contradicts** is two sources
+    /// disagreeing about what backs a VA, which is the class `w222`'s bad join came from.
+    /// The refusal is correct in both cases — but only one of them is a bug.
+    StraddlesLiveBinding {
+        /// The leaf's virtual address. Kept as a named field so every existing reader that
+        /// matches on `{ va }` (and ignores the rest) keeps compiling and keeps meaning
+        /// what it meant.
+        va: GpuVa,
+        /// Both shapes, verbatim, plus what they say about the same byte.
+        straddle: Straddle,
+    },
+    /// ★★★ **An UNBIND of a range that is host-published**
+    /// (`reachability_on_transition.md` §6).
+    ///
+    /// The mirror image of [`PopulateRefusal::RepointsPublished`], and it gets its own
+    /// variant because it is a different act with the same consequence: dropping the
+    /// range from the table would leave the host object still allocated and still mapped
+    /// into that address space's host VAS, with **no core state naming it**. That is
+    /// worse than a leak — hardware would keep resolving it — and it is what a teardown
+    /// (`reachability_on_transition.md` §3.3) would do to a published range if the
+    /// unbind were performed rather than refused.
+    ///
+    /// Unpublishing needs a worker and an unmap verb, i.e. the forwarding plane. So the
+    /// refusal is the answer, and the binding stays.
+    UnbindsPublished {
+        /// The virtual address that would have been dropped.
+        va: GpuVa,
+    },
+    /// ★★★ **The leaf's aperture names no GPGA kind** — today only [`Aperture::Peer`]
+    /// ([`crate::RegionKindFault::PeerHasNoKind`]).
+    ///
+    /// ⊘ It gets a refusal rather than a [`DropReason`] deliberately: a drop is *"we
+    /// decoded it faithfully and policy declines to stand behind it"*, which is a decision;
+    /// this is *"the guest declared something no kind describes"*, which is a fact we cannot
+    /// represent. Before [`crate::RegionKind`] existed the leaf simply became a binding with
+    /// no host object and classified as `Fabricated` — fiction over another GPU's
+    /// framebuffer — and the contradiction only surfaced two layers later, when
+    /// `DeclaredResidency` had no CPU plane to give it.
+    ///
+    /// [`Aperture::Peer`]: kayfabe_arch::Aperture::Peer
+    UndecidableKind {
+        /// The leaf's virtual address.
+        va: GpuVa,
+        /// Why no kind could be decided.
+        fault: crate::RegionKindFault,
+    },
+}
+
+/// What forward-populating a set of leaves did.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PopulateOutcome {
+    /// Leaves bound into a range that was free.
+    pub bound: usize,
+    /// Leaves that named exactly what the table already said. Counted, not re-bound —
+    /// re-binding would be a loud overlap for a fact that has not changed.
+    pub unchanged: usize,
+    /// Leaves that re-pointed an existing, **unpublished** binding.
+    pub repointed: usize,
+    /// ★★ Leaves the walker decoded and [`leaf_disposition`] dropped, with the reason.
+    /// Recorded rather than counted: *"we saw it and declined it"* is the assertion that
+    /// separates this stage's two halves, and a bare counter cannot carry the reason.
+    pub dropped: Vec<(GpuVa, DropReason)>,
+    /// Leaves that could not be applied. Loud; the caller propagates.
+    pub refusals: Vec<PopulateRefusal>,
+}
+
+/// ★★★ **Forward-populate `table` from decoded leaves** — the join between the decoder
+/// and the address table, and the site [`leaf_disposition`] runs at.
+///
+/// Every leaf arrives as a *declaration*: [`Binding::host`] is `None`, because a decode
+/// says what the guest's own page tables now claim and says nothing about whether host
+/// memory exists behind it. Publication is a separate verb on the forwarding plane, and
+/// keeping them separate is what lets `Fabricated` and `HostBacked` be different answers
+/// to the representability question at all.
+///
+/// ★ It is **total and non-throwing**: every leaf produces exactly one outcome, and a
+/// refusal on one does not abandon the rest. A populate that stopped at the first
+/// conflicting leaf would drop the tail of a legitimate remap — `#13 CE-DROP` rebuilt at
+/// a different layer.
+pub fn populate(
+    fmt: &dyn GmmuFmt,
+    table: &mut AddressTable,
+    pdb: Pdb,
+    leaves: &[DecodedLeaf],
+) -> PopulateOutcome {
+    let mut out = PopulateOutcome::default();
+    for leaf in leaves {
+        if let LeafDisposition::Drop(why) = leaf_disposition(fmt, leaf) {
+            out.dropped.push((leaf.va, why));
+            continue;
+        }
+        // ★★★ THE DECISION, at the bind site, from the only authority Mode 2 has: the
+        // guest's own leaf PTE. `Vidmem` → kind 2, sysmem → kind 4, `Peer` → refused by
+        // name. ⊘ This used to be `Binding { .., host: None }` — no kind at all — and the
+        // range acquired one by falling through `representability_of`'s unguarded arm at
+        // classify time, three crates away.
+        let want = match Binding::declared_by_guest(leaf.phys, leaf.aperture) {
+            Ok(b) => b,
+            Err(fault) => {
+                out.refusals
+                    .push(PopulateRefusal::UndecidableKind { va: leaf.va, fault });
+                continue;
+            }
+        };
+        match table.binding_at(leaf.va) {
+            // Exactly this range is already bound.
+            Some((start, len, have)) if start == leaf.va.0 && len == leaf.size.0 => {
+                // ★★ The comparison is over the DECLARATION — `(phys, aperture)` — and
+                // deliberately not over the whole [`Binding`]. A decode says what the
+                // guest's page tables claim; it says nothing at all about whether host
+                // memory has been published behind that claim, and [`Binding::host`] is
+                // the answer to that second question. Comparing the whole value would
+                // make every re-decode of an already-published range look like a re-point
+                // and refuse it — the guest would map a buffer, we would back it, and the
+                // next page-table write in the same address space would start failing.
+                if (have.phys, have.aperture) == (want.phys, want.aperture) {
+                    out.unchanged += 1;
+                } else if have.host.is_some() {
+                    out.refusals.push(PopulateRefusal::RepointsPublished {
+                        va: leaf.va,
+                        phys: leaf.phys,
+                    });
+                } else {
+                    // Unmap eager, then re-bind: the table's own discipline, and the
+                    // reason a re-point is not an "insert over".
+                    table.unbind(leaf.va);
+                    match table.bind(pdb, leaf.va, leaf.size.0, want) {
+                        Ok(()) => out.repointed += 1,
+                        Err(fault) => out
+                            .refusals
+                            .push(PopulateRefusal::Refused { va: leaf.va, fault }),
+                    }
+                }
+            }
+            // Something else lives here, shaped differently. ★ Record BOTH shapes: the
+            // refusal is the only place the two are ever in scope together, so a payload
+            // that keeps only the VA throws away the entire answer to *"what differs"*.
+            Some((live_start, live_len, have)) => {
+                out.refusals.push(PopulateRefusal::StraddlesLiveBinding {
+                    va: leaf.va,
+                    straddle: Straddle {
+                        size: leaf.size,
+                        level: leaf.level,
+                        phys: leaf.phys,
+                        aperture: leaf.aperture,
+                        live_start,
+                        live_len,
+                        live_phys: have.phys,
+                        live_aperture: have.aperture,
+                        live_published: have.host.is_some(),
+                    },
+                });
+            }
+            // Nothing at the start VA — but the range may still run into a neighbour,
+            // which `bind` refuses as an overlap. That refusal is the answer; pre-checking
+            // it here would be the same question asked twice, in two places that can drift.
+            None => match table.bind(pdb, leaf.va, leaf.size.0, want) {
+                Ok(()) => out.bound += 1,
+                Err(fault) => out
+                    .refusals
+                    .push(PopulateRefusal::Refused { va: leaf.va, fault }),
+            },
+        }
+    }
+    out
+}

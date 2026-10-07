@@ -1,0 +1,3 @@
+KFDISP_DRIVER=nvidia-drm
+KFDISP_COUNTS connectors=0 crtcs=0 encoders=0 fbs=0
+KFDISP_SUMMARY connected=0 primary=0 overlay=0 cursor=0

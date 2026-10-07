@@ -1,0 +1,1 @@
+{"interface": "hmp", "socket": "/workspace/bench/run_c2refresh_after.mon", "ok": true, "width": 1920, "height": 1080, "sha256": "6a5b4a50571023435cab0a3a792dc22931c55729859cef8866784ae0632dd896", "dominant": [["39b54a", 2058224], ["010101", 15360], ["cccccc", 16]], "elapsed_ms": 782}

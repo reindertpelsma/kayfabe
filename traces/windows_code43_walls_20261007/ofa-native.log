@@ -1,0 +1,8 @@
+START revision=ff12e6a7f2d22a72ee0380d0e27555aca716a3a9 dirty=0
+kf-host: channel birth h=0xcafe0008 engine=0x33 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+VIDEO_CONTEXT driver=595.91.07 arch=(190, 4, a1) context=Some((cafe0009, c9fa, 33)) channel=Channel { tsg: cafe0007, chan: cafe0008, token: 50007 }
+VIDEO_CODEC_NEGATIVE=REFUSED
+VIDEO_FENCE seq=1 completed=1
+VIDEO_RELEASE Some("ring 0x120000000 released: cpu unmapped, view ok unmap ok free ok")
+VIDEO_CONTEXT_VERDICT=PASS
+EXIT 0

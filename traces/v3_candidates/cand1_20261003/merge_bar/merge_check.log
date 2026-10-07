@@ -1,0 +1,19 @@
+START 2026-10-03T22:38:04+00:00
+Preparing worktree (detached HEAD 8a682f1b)
+Updating files:  43% (4962/11303)Updating files:  44% (4974/11303)Updating files:  45% (5087/11303)Updating files:  46% (5200/11303)Updating files:  47% (5313/11303)Updating files:  48% (5426/11303)Updating files:  49% (5539/11303)Updating files:  50% (5652/11303)Updating files:  51% (5765/11303)Updating files:  52% (5878/11303)Updating files:  53% (5991/11303)Updating files:  54% (6104/11303)Updating files:  55% (6217/11303)Updating files:  56% (6330/11303)Updating files:  57% (6443/11303)Updating files:  58% (6556/11303)Updating files:  59% (6669/11303)Updating files:  60% (6782/11303)Updating files:  61% (6895/11303)Updating files:  62% (7008/11303)Updating files:  63% (7121/11303)Updating files:  64% (7234/11303)Updating files:  65% (7347/11303)Updating files:  66% (7460/11303)Updating files:  67% (7574/11303)Updating files:  68% (7687/11303)Updating files:  69% (7800/11303)Updating files:  70% (7913/11303)Updating files:  71% (8026/11303)Updating files:  72% (8139/11303)Updating files:  73% (8252/11303)Updating files:  74% (8365/11303)Updating files:  75% (8478/11303)Updating files:  76% (8591/11303)Updating files:  77% (8704/11303)Updating files:  78% (8817/11303)Updating files:  79% (8930/11303)Updating files:  80% (9043/11303)Updating files:  81% (9156/11303)Updating files:  82% (9269/11303)Updating files:  83% (9382/11303)Updating files:  84% (9495/11303)Updating files:  85% (9608/11303)Updating files:  86% (9721/11303)Updating files:  87% (9834/11303)Updating files:  88% (9947/11303)Updating files:  88% (9956/11303)Updating files:  89% (10060/11303)Updating files:  90% (10173/11303)Updating files:  91% (10286/11303)Updating files:  92% (10399/11303)Updating files:  93% (10512/11303)Updating files:  94% (10625/11303)Updating files:  95% (10738/11303)Updating files:  96% (10851/11303)Updating files:  97% (10964/11303)Updating files:  98% (11077/11303)Updating files:  99% (11190/11303)Updating files: 100% (11303/11303)Updating files: 100% (11303/11303), done.
+HEAD is now at 8a682f1b v3-cand-1: merge v3-dispsw-exp (86b4fa10) — x11-dispsw, default off, GF100_DISP_SW host twins with caps; KF3 ABI 13
+HEAD=8a682f1b415844801e855ca6b28388f91c244251 CHECKOUT=/workspace/bench/verify-worktrees/cand1mb.fNsE45
+TESTS passed 1936 failed 0
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/8a682f1b/qemu-system-x86_64 rev=8a682f1b mtime=2026-10-03 22:40:59.785292853 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+FG_RC=0
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+BIRTH_CENSUS_SELFTEST cases=11 wrong=0
+BIRTH_CENSUS_SUITE arms=30 births=161 user=161 cuda_threads=90
+BIRTH_CENSUS_GATES births=11 user=11 refused=0
+BIRTH_CENSUS_OK arms=30 suite_births=161 gate_births=11 all PRIVILEGED_CHANNEL=0 privilege=USER
+EXIT rc=0 2026-10-03T23:01:02+00:00

@@ -1,0 +1,12 @@
+[ 5978.982654] NVRM: kceGetFaultMethodBufferSize_IMPL: KAYFABE-FMB: 0x20802a08 -> status=0x0 params.size=20480 (0x5000) sizeof=4
+[ 5978.982662] NVRM: kfifoCalcTotalSizeOfFaultMethodBuffers_GV100: KAYFABE-FMB: calcTotal perGroup=20480 maxChannelGroups=4096 runQueues=2
+[ 5979.012051] NVRM: kceGetFaultMethodBufferSize_IMPL: KAYFABE-FMB: 0x20802a08 -> status=0x0 params.size=20480 (0x5000) sizeof=4
+[ 5979.012055] NVRM: kchangrpAllocFaultMethodBuffers_GV100: KAYFABE-FMB: kchangrpAllocFaultMethodBuffers bufSizeInBytes=20480 (0x5000) runQueues=2
+[ 5979.017523] NVRM: kceGetFaultMethodBufferSize_IMPL: KAYFABE-FMB: 0x20802a08 -> status=0x0 params.size=20480 (0x5000) sizeof=4
+[ 5979.017527] NVRM: kchangrpAllocFaultMethodBuffers_GV100: KAYFABE-FMB: kchangrpAllocFaultMethodBuffers bufSizeInBytes=20480 (0x5000) runQueues=2
+[ 5979.021485] NVRM: kceGetFaultMethodBufferSize_IMPL: KAYFABE-FMB: 0x20802a08 -> status=0x0 params.size=20480 (0x5000) sizeof=4
+[ 5979.021490] NVRM: kchangrpAllocFaultMethodBuffers_GV100: KAYFABE-FMB: kchangrpAllocFaultMethodBuffers bufSizeInBytes=20480 (0x5000) runQueues=2
+[ 5979.038274] NVRM: kceGetFaultMethodBufferSize_IMPL: KAYFABE-FMB: 0x20802a08 -> status=0x0 params.size=20480 (0x5000) sizeof=4
+[ 5979.038277] NVRM: kchangrpAllocFaultMethodBuffers_GV100: KAYFABE-FMB: kchangrpAllocFaultMethodBuffers bufSizeInBytes=20480 (0x5000) runQueues=2
+name, driver_version, uuid, pci.bus_id
+NVIDIA GeForce RTX 3060, 580.159.04, GPU-e28d7776-e4f9-704b-d392-d46f187343f8, 00000000:00:07.0

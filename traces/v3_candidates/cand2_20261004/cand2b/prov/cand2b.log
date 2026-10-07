@@ -1,0 +1,19 @@
+START 2026-10-04T11:09:54+00:00
+Preparing worktree (detached HEAD 9d82f259)
+Updating files:  45% (5667/12537)Updating files:  46% (5768/12537)Updating files:  47% (5893/12537)Updating files:  48% (6018/12537)Updating files:  49% (6144/12537)Updating files:  50% (6269/12537)Updating files:  51% (6394/12537)Updating files:  52% (6520/12537)Updating files:  53% (6645/12537)Updating files:  54% (6770/12537)Updating files:  55% (6896/12537)Updating files:  56% (7021/12537)Updating files:  57% (7147/12537)Updating files:  58% (7272/12537)Updating files:  59% (7397/12537)Updating files:  60% (7523/12537)Updating files:  61% (7648/12537)Updating files:  62% (7773/12537)Updating files:  63% (7899/12537)Updating files:  64% (8024/12537)Updating files:  65% (8150/12537)Updating files:  66% (8275/12537)Updating files:  67% (8400/12537)Updating files:  68% (8526/12537)Updating files:  69% (8651/12537)Updating files:  70% (8776/12537)Updating files:  71% (8902/12537)Updating files:  72% (9027/12537)Updating files:  73% (9153/12537)Updating files:  74% (9278/12537)Updating files:  75% (9403/12537)Updating files:  76% (9529/12537)Updating files:  77% (9654/12537)Updating files:  78% (9779/12537)Updating files:  79% (9905/12537)Updating files:  80% (10030/12537)Updating files:  81% (10155/12537)Updating files:  82% (10281/12537)Updating files:  83% (10406/12537)Updating files:  84% (10532/12537)Updating files:  85% (10657/12537)Updating files:  86% (10782/12537)Updating files:  87% (10908/12537)Updating files:  88% (11033/12537)Updating files:  89% (11158/12537)Updating files:  90% (11284/12537)Updating files:  91% (11409/12537)Updating files:  92% (11535/12537)Updating files:  92% (11564/12537)Updating files:  93% (11660/12537)Updating files:  94% (11785/12537)Updating files:  95% (11911/12537)Updating files:  96% (12036/12537)Updating files:  97% (12161/12537)Updating files:  98% (12287/12537)Updating files:  99% (12412/12537)Updating files: 100% (12537/12537)Updating files: 100% (12537/12537), done.
+HEAD is now at 9d82f259 Update the console cursor when an asynchronous frame arrives
+HEAD=9d82f2598d267732c87476da27f501aaabe2c4af CHECKOUT=/workspace/bench/verify-worktrees/cand2b.M0IDQF
+TESTS passed 2131 failed 0
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/9d82f259/qemu-system-x86_64 rev=9d82f259 mtime=2026-10-04 11:12:58.900827924 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+FG_RC=0
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+BIRTH_CENSUS_SELFTEST cases=11 wrong=0
+BIRTH_CENSUS_SUITE arms=30 births=161 user=161 cuda_threads=90
+BIRTH_CENSUS_GATES births=11 user=11 refused=0
+BIRTH_CENSUS_OK arms=30 suite_births=161 gate_births=11 all PRIVILEGED_CHANNEL=0 privilege=USER
+EXIT rc=0 2026-10-04T11:33:28+00:00

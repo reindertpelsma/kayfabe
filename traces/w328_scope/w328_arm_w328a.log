@@ -1,0 +1,46 @@
+=== W328 ARM START tree=/workspace/kayfabe_w328 prefix=w328a n=3 2026-08-14T21:43:50+00:00
+=== REV=[e4bf27321bed30519cdd4c6231d7107754275bcf w328-scope-the-publication 2026-08-14T23:30:35+02:00]
+=== ARM ENV (intent — the boot's own lines are the record of EXECUTION):
+===   KAYFABE_PUBLISH_SCOPE=[⊘unset ⇒ all ⇒ master breadth]
+===   KAYFABE_DRAIN_BATCH=[⊘unset ⇒ off ⇒ master, one chain per row]
+--- boot 1/3 tag=w328a1 2026-08-14T21:43:54+00:00
+    BOOT 1: [CUP3_VAL=43] [CUP3_RC=0] [⊘no-cup8]
+            r33_arm1=[⊘ NO arm-1 LINE — the measurement did not happen, ⊘ NOT a fail]
+            ★★★★★ FIRST  W328SCOPE[arm=all scoped=false target=proc=2 pdb=0x201000 scoped_out=0 target_us=29177 target_published=28 other_vases=3 other_us=256 other_published=0 other_refused=0 breadth_share=0%]
+            ★★★★★ LAST   W328SCOPE[arm=all scoped=false target=proc=2 pdb=0x201000 scoped_out=0 target_us=54209 target_published=0 other_vases=3 other_us=199 other_published=0 other_refused=0 breadth_share=0%]   passes=[229]
+            ★★★★★ W328PIN[arm=all scoped=false scoped_out=0 other_vases=0 other_us=0 other_pinned=0 drain_ms=2960]
+            ★★★★★ TRAPWITNESS off_trap_claims=0 inline_exceptions=19213 worst_trap=3048658us (target: inline_exceptions=0)
+            ★★★ DRAIN=[DRAIN[visited=true asked=13313 pinned=13313 refused=0 DRAIN_MS=2960 W319KNOB[budget_ms=3000 row_limit=65536] complete=true ] last_pinned_va=0x2047ff000
+            ★★★ ATTRIBUTOR rc=0 VERDICT=0 GREEN — CUP3_VAL=43 and no host Xid. Nothing to attribute.
+            ⊘KFTIME-SEG vas_publish ABSENT — UNMEASURED
+            ⊘host_rows UNMEASURED  unserviced_distinct=[40]
+            Xid_lines=[0] 
+            guest NVRM_lines=[31] stall_lines=[0]
+--- boot 2/3 tag=w328a2 2026-08-14T21:46:45+00:00
+    BOOT 2: [CUP3_VAL=43] [CUP3_RC=0] [⊘no-cup8]
+            r33_arm1=[⊘ NO arm-1 LINE — the measurement did not happen, ⊘ NOT a fail]
+            ★★★★★ FIRST  W328SCOPE[arm=all scoped=false target=proc=2 pdb=0x201000 scoped_out=0 target_us=25554 target_published=25 other_vases=3 other_us=255 other_published=0 other_refused=0 breadth_share=0%]
+            ★★★★★ LAST   W328SCOPE[arm=all scoped=false target=proc=2 pdb=0x201000 scoped_out=0 target_us=47541 target_published=0 other_vases=3 other_us=154 other_published=0 other_refused=0 breadth_share=0%]   passes=[229]
+            ★★★★★ W328PIN[arm=all scoped=false scoped_out=0 other_vases=0 other_us=0 other_pinned=0 drain_ms=2969]
+            ★★★★★ TRAPWITNESS off_trap_claims=0 inline_exceptions=19213 worst_trap=3112556us (target: inline_exceptions=0)
+            ★★★ DRAIN=[DRAIN[visited=true asked=13313 pinned=13313 refused=0 DRAIN_MS=2969 W319KNOB[budget_ms=3000 row_limit=65536] complete=true ] last_pinned_va=0x2047ff000
+            ★★★ ATTRIBUTOR rc=0 VERDICT=0 GREEN — CUP3_VAL=43 and no host Xid. Nothing to attribute.
+            ⊘KFTIME-SEG vas_publish ABSENT — UNMEASURED
+            ⊘host_rows UNMEASURED  unserviced_distinct=[40]
+            Xid_lines=[0] 
+            guest NVRM_lines=[31] stall_lines=[0]
+--- boot 3/3 tag=w328a3 2026-08-14T21:49:13+00:00
+    BOOT 3: [CUP3_VAL=43] [CUP3_RC=0] [⊘no-cup8]
+            r33_arm1=[⊘ NO arm-1 LINE — the measurement did not happen, ⊘ NOT a fail]
+            ★★★★★ FIRST  W328SCOPE[arm=all scoped=false target=proc=2 pdb=0x201000 scoped_out=0 target_us=33930 target_published=28 other_vases=3 other_us=238 other_published=0 other_refused=0 breadth_share=0%]
+            ★★★★★ LAST   W328SCOPE[arm=all scoped=false target=proc=2 pdb=0x201000 scoped_out=0 target_us=51226 target_published=0 other_vases=3 other_us=142 other_published=0 other_refused=0 breadth_share=0%]   passes=[229]
+            ★★★★★ W328PIN[arm=all scoped=false scoped_out=0 other_vases=0 other_us=0 other_pinned=0 drain_ms=2681]
+            ★★★★★ TRAPWITNESS off_trap_claims=0 inline_exceptions=19213 worst_trap=2788831us (target: inline_exceptions=0)
+            ★★★ DRAIN=[DRAIN[visited=true asked=13313 pinned=13313 refused=0 DRAIN_MS=2681 W319KNOB[budget_ms=3000 row_limit=65536] complete=true ] last_pinned_va=0x2047ff000
+            ★★★ ATTRIBUTOR rc=0 VERDICT=0 GREEN — CUP3_VAL=43 and no host Xid. Nothing to attribute.
+            ⊘KFTIME-SEG vas_publish ABSENT — UNMEASURED
+            ⊘host_rows UNMEASURED  unserviced_distinct=[40]
+            Xid_lines=[0] 
+            guest NVRM_lines=[31] stall_lines=[0]
+=== W328 ARM EXIT status=0 2026-08-14T21:51:36+00:00
+=== W328 ARM TERMINATOR w328a rc=0 2026-08-14T21:51:36+00:00

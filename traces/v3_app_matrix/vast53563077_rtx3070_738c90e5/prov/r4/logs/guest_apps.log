@@ -1,0 +1,18 @@
+Image resized.
+[2026-09-30T18:26:32+00:00] guest up; root fs: /dev/vda1        32G  3.7G   28G  12% /
+/dev/vda1        71G  3.7G   67G   6% /
+6.8.0-142-generic
+BUNDLE_IN=2.1G
+  guest: SETUP_apt=ok
+  guest: SETUP_torch=ok
+  guest: SETUP_pylibs=ok
+  guest: IMPORT_OK 2.6.0+cu124 0.21.0+cu124 4.46.3 13.3.0
+  guest: HF_MODEL_CACHED
+  guest: SETUP_gguf=ok
+  guest: SETUP_blender=ok
+  guest: SETUP_geekbench=ok
+  guest: /dev/vda1        71G   18G   53G  25% /
+  guest: SETUP_SIDE_DONE
+6.8.0-142-generic
+580.159.04
+[2026-09-30T18:31:40+00:00] GUEST_APPS_DONE

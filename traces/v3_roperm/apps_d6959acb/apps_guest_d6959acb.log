@@ -1,0 +1,39 @@
+APPS2_START 2026-09-26T17:12:21+00:00
+head=d6959acb dirty=0
+[apps_matrix 2026-09-26T17:12:21+00:00] START side=guest run=ro3g rev=d6959acb apps=9
+[apps_matrix 2026-09-26T17:12:21+00:00] kf3 binary: /workspace/bench/kf3-bins/d6959acb/qemu-system-x86_64
+[apps_matrix 2026-09-26T17:14:28+00:00] boot ap_ro3g_b1 rc=0 apps=[torch_correct] :: /workspace/bench/run_ap_ro3g_b1_probe.log:APPS_HOOK tag=ap_ro3g_b1 apps=[torch_correct] guest=NVIDIA GeForce RTX 3090, 580.159.04, Disabled /workspace/bench/run_ap_ro3g_b1_probe.log:APPS_HOOK_DONE 
+[apps_matrix 2026-09-26T17:16:40+00:00] boot ap_ro3g_b2 rc=0 apps=[llama_cpp_gen] :: /workspace/bench/run_ap_ro3g_b2_probe.log:APPS_HOOK tag=ap_ro3g_b2 apps=[llama_cpp_gen] guest=NVIDIA GeForce RTX 3090, 580.159.04, Disabled /workspace/bench/run_ap_ro3g_b2_probe.log:APPS_HOOK_DONE 
+[apps_matrix 2026-09-26T17:18:46+00:00] boot ap_ro3g_b3 rc=0 apps=[llama_bench] :: /workspace/bench/run_ap_ro3g_b3_probe.log:APPS_HOOK tag=ap_ro3g_b3 apps=[llama_bench] guest=NVIDIA GeForce RTX 3090, 580.159.04, Disabled /workspace/bench/run_ap_ro3g_b3_probe.log:APPS_HOOK_DONE 
+[apps_matrix 2026-09-26T17:26:47+00:00] boot ap_ro3g_b4 rc=0 apps=[vkpeak] :: /workspace/bench/run_ap_ro3g_b4_probe.log:APPS_HOOK tag=ap_ro3g_b4 apps=[vkpeak] guest=NVIDIA GeForce RTX 3090, 580.159.04, Disabled /workspace/bench/run_ap_ro3g_b4_probe.log:APPS_HOOK_DONE 
+[apps_matrix 2026-09-26T17:28:05+00:00] boot ap_ro3g_b5 rc=0 apps=[nvenc_h264] :: /workspace/bench/run_ap_ro3g_b5_probe.log:APPS_HOOK tag=ap_ro3g_b5 apps=[nvenc_h264] guest=NVIDIA GeForce RTX 3090, 580.159.04, Disabled /workspace/bench/run_ap_ro3g_b5_probe.log:APPS_HOOK_DONE 
+[apps_matrix 2026-09-26T17:29:24+00:00] boot ap_ro3g_b6 rc=0 apps=[nvenc_hevc] :: /workspace/bench/run_ap_ro3g_b6_probe.log:APPS_HOOK tag=ap_ro3g_b6 apps=[nvenc_hevc] guest=NVIDIA GeForce RTX 3090, 580.159.04, Disabled /workspace/bench/run_ap_ro3g_b6_probe.log:APPS_HOOK_DONE 
+[apps_matrix 2026-09-26T17:30:41+00:00] boot ap_ro3g_b7 rc=0 apps=[nvdec_h264] :: /workspace/bench/run_ap_ro3g_b7_probe.log:APPS_HOOK tag=ap_ro3g_b7 apps=[nvdec_h264] guest=NVIDIA GeForce RTX 3090, 580.159.04, Disabled /workspace/bench/run_ap_ro3g_b7_probe.log:APPS_HOOK_DONE 
+[apps_matrix 2026-09-26T17:31:53+00:00] boot ap_ro3g_b8 rc=0 apps=[vectorAdd] :: /workspace/bench/run_ap_ro3g_b8_probe.log:APPS_HOOK tag=ap_ro3g_b8 apps=[vectorAdd] guest=NVIDIA GeForce RTX 3090, 580.159.04, Disabled /workspace/bench/run_ap_ro3g_b8_probe.log:APPS_HOOK_DONE 
+[apps_matrix 2026-09-26T17:33:04+00:00] boot ap_ro3g_b9 rc=0 apps=[simpleAtomicIntrinsics] :: /workspace/bench/run_ap_ro3g_b9_probe.log:APPS_HOOK tag=ap_ro3g_b9 apps=[simpleAtomicIntrinsics] guest=NVIDIA GeForce RTX 3090, 580.159.04, Disabled /workspace/bench/run_ap_ro3g_b9_probe.log:APPS_HOOK
+scripts/apps/apps_matrix.sh: line 79: /workspace/apps/results/ro3g/guest_isolated.res: No such file or directory
+[apps_matrix 2026-09-26T17:33:04+00:00] GUEST_DONE batched: 9 pass / 9;  isolated re-runs: 0 pass / 0
+APPS_GUEST_EXIT=0
+APPRES side=guest app=torch_correct verdict=PASS rc=0 secs=51 quiet=1 note=- boot=ap_ro3g_b1 guest_xid=0 kf3_lines=1434 kf3_refusals=4
+APPRES side=guest app=llama_cpp_gen verdict=PASS rc=0 secs=56 quiet=0 note=warn:done_getting_tensors: tensor 'token_embd.weight' (q4_K) (and 0 others) cannot be used with preferred buffer type CUDA_Host, using CPU instead boot=ap_ro3g_b2 guest_xid=0 kf3_lines=1868 kf3_refusals=4
+APPRES side=guest app=llama_bench verdict=PASS rc=0 secs=22 quiet=1 note=- boot=ap_ro3g_b3 guest_xid=0 kf3_lines=2075 kf3_refusals=4
+APPRES side=guest app=vkpeak verdict=PASS rc=0 secs=377 quiet=4 note=- boot=ap_ro3g_b4 guest_xid=0 kf3_lines=3000 kf3_refusals=0
+APPRES side=guest app=nvenc_h264 verdict=PASS rc=0 secs=12 quiet=0 note=- boot=ap_ro3g_b5 guest_xid=0 kf3_lines=1218 kf3_refusals=4
+APPRES side=guest app=nvenc_hevc verdict=PASS rc=0 secs=12 quiet=0 note=- boot=ap_ro3g_b6 guest_xid=0 kf3_lines=1213 kf3_refusals=4
+APPRES side=guest app=nvdec_h264 verdict=PASS rc=0 secs=12 quiet=0 note=- boot=ap_ro3g_b7 guest_xid=0 kf3_lines=1206 kf3_refusals=4
+APPRES side=guest app=vectorAdd verdict=PASS rc=0 secs=4 quiet=0 note=- boot=ap_ro3g_b8 guest_xid=0 kf3_lines=1103 kf3_refusals=4
+APPRES side=guest app=simpleAtomicIntrinsics verdict=PASS rc=0 secs=5 quiet=1 note=- boot=ap_ro3g_b9 guest_xid=0 kf3_lines=1124 kf3_refusals=4
+--- isolated:
+--- digests:
+APPDIG side=guest app=llama_cpp_gen OUTSHA llama_cpp 30451301af8e011d
+APPDIG side=guest app=torch_correct DIGEST cnn_train_step 763c693a5a53f948
+COUNTERS boot_ap_ro3g_b1 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=18 kernel_spaces=1 passthrough_births=16 withheld_lines=0
+COUNTERS boot_ap_ro3g_b2 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=18 kernel_spaces=1 passthrough_births=16 withheld_lines=0
+COUNTERS boot_ap_ro3g_b3 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=18 kernel_spaces=1 passthrough_births=16 withheld_lines=0
+COUNTERS boot_ap_ro3g_b4 priv_withheld=135637 priv_withheld_bytes=0x4cbf83a000 priv_mirrored=18 kernel_spaces=0 passthrough_births=60 withheld_lines=64
+COUNTERS boot_ap_ro3g_b5 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=18 kernel_spaces=1 passthrough_births=18 withheld_lines=0
+COUNTERS boot_ap_ro3g_b6 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=18 kernel_spaces=1 passthrough_births=18 withheld_lines=0
+COUNTERS boot_ap_ro3g_b7 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=18 kernel_spaces=1 passthrough_births=17 withheld_lines=0
+COUNTERS boot_ap_ro3g_b8 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=18 kernel_spaces=1 passthrough_births=16 withheld_lines=0
+COUNTERS boot_ap_ro3g_b9 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=18 kernel_spaces=1 passthrough_births=16 withheld_lines=0
+APPS2_EXIT 2026-09-26T17:33:05+00:00

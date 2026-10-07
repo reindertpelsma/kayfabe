@@ -1,0 +1,66 @@
+BARE_SUITE_STARTED=2026-10-03T21:22:12+00:00 arms=30 budget=180s
+bin=/workspace/bench/kf-verify-target/release/kayfabe-rm-ladder  rev=1d71f3db
+gpu=NVIDIA GeForce RTX 3060  driver=580.159.04(open)  pci_dev=0x250410DE  cc=8.6
+ARM                          VERDICT    secs  why
+--timer                      PASS         3s  3s
+BARE_CELL_ARM arm=timer verdict=PASS secs=3 ms=2136 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--engines                    PASS         2s  2s
+BARE_CELL_ARM arm=engines verdict=PASS secs=2 ms=2145 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--doorbell-census            PASS         2s  2s
+BARE_CELL_ARM arm=doorbell-census verdict=PASS secs=2 ms=2218 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--gpu-info-sweep             PASS         2s  2s
+BARE_CELL_ARM arm=gpu-info-sweep verdict=PASS secs=2 ms=1918 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--bus-info-sweep             PASS         3s  3s
+BARE_CELL_ARM arm=bus-info-sweep verdict=PASS secs=3 ms=3476 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--concurrency                PASS         7s  7s
+BARE_CELL_ARM arm=concurrency verdict=PASS secs=7 ms=6433 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--defer-liveness             PASS        14s  14s
+BARE_CELL_ARM arm=defer-liveness verdict=PASS secs=14 ms=14298 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--blockage-coverage          PASS         3s  3s
+BARE_CELL_ARM arm=blockage-coverage verdict=PASS secs=3 ms=2563 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--alias-two-vas              PASS         2s  2s
+BARE_CELL_ARM arm=alias-two-vas verdict=PASS secs=2 ms=2159 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--alias-unmap-observe        PASS         2s  2s
+BARE_CELL_ARM arm=alias-unmap-observe verdict=PASS secs=2 ms=2139 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--map-propagation            PASS         2s  2s
+BARE_CELL_ARM arm=map-propagation verdict=PASS secs=2 ms=2128 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--late-map-race              PASS         3s  3s
+BARE_CELL_ARM arm=late-map-race verdict=PASS secs=3 ms=2481 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--missing-page-fault         PASS         5s  5s
+BARE_CELL_ARM arm=missing-page-fault verdict=PASS secs=5 ms=5095 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--uvm-invalidate             PASS         2s  2s
+BARE_CELL_ARM arm=uvm-invalidate verdict=PASS secs=2 ms=2252 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--uvm-mean                   PASS         2s  2s
+BARE_CELL_ARM arm=uvm-mean verdict=PASS secs=2 ms=2186 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--executor-vas               PASS         2s  2s
+BARE_CELL_ARM arm=executor-vas verdict=PASS secs=2 ms=2160 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--guest-ring-channel         PASS         2s  2s
+BARE_CELL_ARM arm=guest-ring-channel verdict=PASS secs=2 ms=2165 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--dictated-ring              PASS         2s  2s
+BARE_CELL_ARM arm=dictated-ring verdict=PASS secs=2 ms=2120 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--dictated-ring-negative     PASS         2s  2s
+BARE_CELL_ARM arm=dictated-ring-negative verdict=PASS secs=2 ms=2146 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--ce-client                  PASS         2s  2s
+BARE_CELL_ARM arm=ce-client verdict=PASS secs=2 ms=2150 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--ce-client-guest-ram        PASS        10s  10s
+BARE_CELL_ARM arm=ce-client-guest-ram verdict=PASS secs=10 ms=9940 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--guest-ram-pin              PASS         2s  2s
+BARE_CELL_ARM arm=guest-ram-pin verdict=PASS secs=2 ms=2125 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--bar1-crossing              PASS         2s  2s
+BARE_CELL_ARM arm=bar1-crossing verdict=PASS secs=2 ms=2181 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--atomics-probe              PASS         2s  2s
+BARE_CELL_ARM arm=atomics-probe verdict=PASS secs=2 ms=2096 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--pce-mask-probe             PASS         2s  2s
+BARE_CELL_ARM arm=pce-mask-probe verdict=PASS secs=2 ms=2094 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--gpga-reserve-probe         PASS        19s  19s
+BARE_CELL_ARM arm=gpga-reserve-probe verdict=PASS secs=19 ms=18840 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--map-stress                 PASS         2s  2s
+BARE_CELL_ARM arm=map-stress verdict=PASS secs=2 ms=2217 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--concurrent-fuzz            PASS         3s  3s
+BARE_CELL_ARM arm=concurrent-fuzz verdict=PASS secs=3 ms=2594 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--cross-client-leak          PASS         2s  2s
+BARE_CELL_ARM arm=cross-client-leak verdict=PASS secs=2 ms=2141 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+--rpc-mixed-allocs           PASS         3s  3s
+BARE_CELL_ARM arm=rpc-mixed-allocs verdict=PASS secs=3 ms=2904 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+BARE_CELL pci_dev=0x250410DE gpu="NVIDIA GeForce RTX 3060" drv=580.159.04 kmod=open cc=8.6 rev=1d71f3db pass=30 fail=0 crash=0 arms=30 uuid=GPU-9fdaccfb-1920-54dc-3d1b-48aaa43e2692

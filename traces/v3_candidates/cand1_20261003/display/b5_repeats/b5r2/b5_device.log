@@ -1,0 +1,55 @@
+kf3: display: +50 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch
+kf3: mem t=61.399s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #1: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=62.906s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #6: guest views []; 0x7f0000 bytes show SCRATCH
+kf3: mem t=62.906s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: mem t=62.907s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 2) — the guest's RM gave BAR1 up
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=213: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: mem t=62.951s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch (seed life 2: the guest's RM took BAR1 back after giving it up)
+kf3: mem t=76.453s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #7: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=92.967s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #12: guest views []; 0x7f0000 bytes show SCRATCH
+kf3: mem t=92.967s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: mem t=92.968s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 3) — the guest's RM gave BAR1 up
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=165: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: mem t=93.008s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch (seed life 3: the guest's RM took BAR1 back after giving it up)
+kf3: mem t=117.285s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #13: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=135.850s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #18: guest views []; 0x7f0000 bytes show SCRATCH
+kf3: mem t=135.850s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: mem t=135.851s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 4) — the guest's RM gave BAR1 up
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=180: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: mem t=135.896s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch (seed life 4: the guest's RM took BAR1 back after giving it up)
+kf3: mem t=155.259s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #19: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: display: ChannelAllocated { kind: Core, instance: 0, offset: 0, client: 3251634220, pb: Some(Pushbuffer { addr_space: 1, phys: 5027807232, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: the guest armed its first head at +156856 ms — the boot layer is retired after 1092 boot frame(s)
+kf3: display: +156856 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: +156857 ms the console shows head 3 1920x1080: [window 6 iso 0x1008f+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+kf3: display: +173672 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+kf3: display: +173713 ms the console shows head 3 1920x1080: [window 6 iso 0x10088+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+kf3: display: +174086 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: true }
+kf3: display: +174107 ms the console shows BLACK 1920x1080 (the scanout shown is lost: no head is lit) (core channel FREE)
+kf3: mem t=174.266s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #78: guest views []; 0x7f0000 bytes show SCRATCH
+kf3: mem t=174.266s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: mem t=174.267s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 5) — the guest's RM gave BAR1 up
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=874: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: mem t=174.307s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch (seed life 5: the guest's RM took BAR1 back after giving it up)
+kf3: mem t=223.036s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #79: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: display: ChannelAllocated { kind: Core, instance: 0, offset: 0, client: 3251634220, pb: Some(Pushbuffer { addr_space: 1, phys: 4939542528, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: mem t=223.789s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #97: guest views []; 0x7f0000 bytes show SCRATCH
+kf3: mem t=223.822s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #98: guest views [(0, 7f0000, Some(a00000))]; 0x0 bytes show SCRATCH
+kf3: display: +223836 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+kf3: display: +223846 ms the console shows head 3 1920x1080: [window 6 iso 0x10088+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+kf3: display: +235427 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+kf3: display: +235678 ms the console shows BLACK 1920x1080 (the scanout shown is lost: a lit head has had no window past the hold) (core channel allocated)
+kf3: mem t=238.495s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #99: guest views []; 0x7f0000 bytes show SCRATCH
+kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+kf3: display: ChannelAllocated { kind: Core, instance: 0, offset: 0, client: 3251634220, pb: Some(Pushbuffer { addr_space: 1, phys: 5114650624, limit: 4095, size_enum: 0 }), life: 5 }
+kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+kf3: mem t=239.329s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: mem t=239.330s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 6) — the guest's RM gave BAR1 up
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=606: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: mem t=239.362s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)

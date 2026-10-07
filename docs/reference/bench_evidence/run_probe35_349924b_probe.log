@@ -1,0 +1,29 @@
+=== boot_capture tag=probe35_349924b at 2026-08-07T22:13:24+00:00 ===
+=== source revision: 349924bf ===
+=== qemu binary: -rwxr-xr-x 1 root root 84447672 Aug  7 22:11 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:349924bf1d6089532c551eed202831f5424ec5b9 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /workspace/bench/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=92551d70f36ddbef
+    used: /workspace/bench/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+No devices were found
+SMI_RC=6
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Aug  7 22:13 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Aug  7 22:13 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Aug  7 22:13 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Aug  7 22:13 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Aug  7 22:13 .
+drwxr-xr-x 18 root root   4000 Aug  7 22:13 ..
+cr--------  1 root root 240, 1 Aug  7 22:13 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Aug  7 22:13 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia

@@ -1,0 +1,16 @@
+WIN_EDITION PASS Microsoft Windows 11 Enterprise LTSC Evaluation build 26100 10.0.26100
+WIN_SECUREBOOT PASS Confirm-SecureBootUEFI=True
+WIN_DB_HAS_KAYFABE PASS db contains 'kayfabe GOP'=True; Microsoft entries: Windows Production PCA 2011; Microsoft Corporation UEFI CA 2011; Windows UEFI CA 2023; Microsoft UEFI CA 2023; Microsoft Option ROM UEFI CA 2023
+WIN_TPM PASS present=True ready=True enabled=True activated=True owned=True spec=2.0, 0, 1.64
+WIN_TPM_EK INFO PublicKeyHash=35dfefab5ffb4d718e4a1eeb2725ca014dd963e4e243fca9afdab39845e79cfe ManufacturerCertificates=1
+WIN_BITLOCKER PASS VolumeStatus=FullyDecrypted ProtectionStatus=Off PreventDeviceEncryption=1; manage-bde: Conversion Status: Fully Decrypted; Percentage Encrypted: 0.0%; Encryption Method: None; Protection Status: Protection Off
+WIN_VBS PASS VirtualizationBasedSecurityStatus=0
+WIN_VIRTIO PASS store: fwcfg.inf,pvpanic.inf,smbus.inf,viorng.inf,vioser.inf,viostor.inf,netkvm.inf; missing: ; balloon/viomem staged: ; bound: QEMU FwCfg Device; QEMU PVPanic Device; Red Hat VirtIO SCSI controller; VirtIO RNG Device; VirtIO Serial Driver; Red Hat VirtIO Ethernet Adapter
+WIN_PNP_CLEAN PASS problem devices:
+WIN_DISPLAY INFO Microsoft Basic Display Adapter [PCI\VEN_10DE&DEV_2504&SUBSYS_36563842&REV_A1\3&11583659&0&28] status=OK problem=CM_PROB_NONE
+WIN_SERVICES PASS QEMU-GA=Running sshd=Running
+WIN_WU_OFF PASS NoAutoUpdate=1 ExcludeWUDriversInQualityUpdate=1 wuauserv=Stopped
+WIN_NO_HIBER PASS HiberbootEnabled=0
+WIN_SAC_OFF PASS VerifiedAndReputablePolicyState=0
+WIN_FIRSTLOGON PASS KF_FIRSTLOGON OK 2026-10-04T00:13:45.0841109+00:00
+WIN_CHECK_DONE fail=0

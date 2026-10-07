@@ -1,0 +1,4 @@
+src=/workspace/nvdp/nvdp.c
+src_sha256=403b111c2d2f98075865fb031e611da172c3d166a8e80de56c1b0f53d0d7e958
+gitrev=1e6fc945
+cc=cc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0

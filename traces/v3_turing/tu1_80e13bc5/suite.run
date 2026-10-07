@@ -1,0 +1,66 @@
+FAST_SUITE_STARTED=2026-09-28T02:01:18+00:00 arms=30 budget=180s
+rev=80e13bc5
+ARM                          VERDICT   secs  why
+--timer                      CRASH     1s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=timer verdict=CRASH secs=1 client_ms=?
+--engines                    CRASH     1s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=engines verdict=CRASH secs=1 client_ms=?
+--doorbell-census            CRASH     2s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=doorbell-census verdict=CRASH secs=2 client_ms=?
+--gpu-info-sweep             CRASH     1s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=gpu-info-sweep verdict=CRASH secs=1 client_ms=?
+--bus-info-sweep             CRASH     2s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=bus-info-sweep verdict=CRASH secs=2 client_ms=?
+--concurrency                CRASH     1s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=concurrency verdict=CRASH secs=1 client_ms=?
+--defer-liveness             CRASH     2s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=defer-liveness verdict=CRASH secs=2 client_ms=?
+--blockage-coverage          CRASH     1s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=blockage-coverage verdict=CRASH secs=1 client_ms=?
+--alias-two-vas              CRASH     2s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=alias-two-vas verdict=CRASH secs=2 client_ms=?
+--alias-unmap-observe        CRASH     1s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=alias-unmap-observe verdict=CRASH secs=1 client_ms=?
+--map-propagation            CRASH     1s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=map-propagation verdict=CRASH secs=1 client_ms=?
+--late-map-race              CRASH     2s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=late-map-race verdict=CRASH secs=2 client_ms=?
+--missing-page-fault         CRASH     1s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=missing-page-fault verdict=CRASH secs=1 client_ms=?
+--uvm-invalidate             CRASH     2s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=uvm-invalidate verdict=CRASH secs=2 client_ms=?
+--uvm-mean                   CRASH     1s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=uvm-mean verdict=CRASH secs=1 client_ms=?
+--executor-vas               CRASH     2s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=executor-vas verdict=CRASH secs=2 client_ms=?
+--guest-ring-channel         CRASH     2s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=guest-ring-channel verdict=CRASH secs=2 client_ms=?
+--dictated-ring              CRASH     1s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=dictated-ring verdict=CRASH secs=1 client_ms=?
+--dictated-ring-negative     CRASH     2s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=dictated-ring-negative verdict=CRASH secs=2 client_ms=?
+--ce-client                  CRASH     1s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=ce-client verdict=CRASH secs=1 client_ms=?
+--ce-client-guest-ram        CRASH     0s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=ce-client-guest-ram verdict=CRASH secs=0 client_ms=?
+--guest-ram-pin              CRASH     2s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=guest-ram-pin verdict=CRASH secs=2 client_ms=?
+--bar1-crossing              CRASH     1s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=bar1-crossing verdict=CRASH secs=1 client_ms=?
+--atomics-probe              CRASH     2s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=atomics-probe verdict=CRASH secs=2 client_ms=?
+--pce-mask-probe             CRASH     1s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=pce-mask-probe verdict=CRASH secs=1 client_ms=?
+--gpga-reserve-probe         CRASH     2s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=gpga-reserve-probe verdict=CRASH secs=2 client_ms=?
+--map-stress                 CRASH     1s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=map-stress verdict=CRASH secs=1 client_ms=?
+--concurrent-fuzz            CRASH     2s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=concurrent-fuzz verdict=CRASH secs=2 client_ms=?
+--cross-client-leak          CRASH     1s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=cross-client-leak verdict=CRASH secs=1 client_ms=?
+--rpc-mixed-allocs           CRASH     1s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=rpc-mixed-allocs verdict=CRASH secs=1 client_ms=?
+
+FAST_SUITE_PASS=0 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=30 NOTRUN=0 ARMS=30
+FAST_SUITE_RC=1

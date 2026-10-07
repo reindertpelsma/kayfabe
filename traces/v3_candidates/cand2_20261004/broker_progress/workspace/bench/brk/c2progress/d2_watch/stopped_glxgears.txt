@@ -1,0 +1,6 @@
+Running synchronized to the vertical refresh.  The framerate should be
+approximately the same as the monitor refresh rate.
+291 frames in 5.0 seconds = 58.118 FPS
+299 frames in 5.0 seconds = 59.767 FPS
+300 frames in 5.0 seconds = 59.950 FPS
+299 frames in 5.0 seconds = 59.740 FPS

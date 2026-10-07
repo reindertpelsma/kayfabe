@@ -1,0 +1,709 @@
+//! ★★★★★ **v3 gate 9 — the walk kernel's DIFF is the protocol's, report for report.**
+//! (Owner design + COMMIT-ON-ACK ruling 2026-09-25; `kf_cuda::diffmodel` is the spec.)
+//!
+//! The GPU half (`kf_diff_slots`, `kf_diff_emit`, `kf_commit_kernel`) and the Rust model are two
+//! implementations of one protocol; this gate runs them side by side on the SAME random guest
+//! tables, with the SAME random host verdicts, and requires every report to be identical — the
+//! old CUDA suite's round-trip closure (`t_roundtrip_*`: apply(model, delta) == full walk),
+//! re-aimed at commit-on-ack: after the host acknowledges everything, the slot expresses exactly
+//! the walk and the next diff is empty. Per format (VER2 and VER3 — every family first-class).
+//!
+//! Then the throughput it exists for (`V3_P5_PORT_MAP.md` Q8): 13 000 separate guest-RAM pages in
+//! ONE space, one added per walk — `--ce-client-guest-ram`'s shape. Every report must be ONE run,
+//! and the GPU time per walk is measured at 1 000 and at 13 000 rows: the diff must not grow with
+//! the space (the old emission was one GPU thread, ~0.53 µs per row, per walk).
+//!
+//! No RM, no QEMU: the tables live in an uploaded image; only the walk kernel runs.
+
+use kf_cuda::abi::{AP_SYS, AP_VID, RF_AP};
+use kf_cuda::abi::{
+    KFWR_ACK_APPLIED, KFWR_ACK_FAILED, KFWR_ACK_HELD, KFWR_OP_MAP, KFWR_OP_UNMAP, KFWR_RF_HELD,
+    KfMapRun,
+};
+use kf_cuda::abi::{
+    KFWR_RF_ATOMIC_DISABLE, KFWR_RF_PRIVILEGE, KFWR_RF_READ_ONLY, KFWR_RF_VOLATILE,
+};
+use kf_cuda::abi::{KFWR_RF_KEY_PERM_ALL, KFWR_RF_KEY_PERM_DEFAULT};
+use kf_cuda::abi::{kf_format_ver2, kf_format_ver3};
+use kf_cuda::diffmodel::{self, AckCode, Committed};
+use kf_cuda::walk::{DeviceImage, WalkCfg, WalkEntry, WalkKernel};
+use kf_harness::Ledger as Checks;
+use kf_harness::tables::{Tree, Tree3};
+use std::collections::BTreeMap;
+
+const IMG_BYTES: usize = 64 << 20;
+const PT_A: u64 = 0x10_0000;
+const PT_B: u64 = 0x50_0000;
+const PT_BYTES: usize = 4 << 20;
+/// Data pages (vidmem GPGA or guest-RAM GPA) live in `[DATA, IMG_BYTES)`.
+const DATA: u64 = 16 << 20;
+const PAGE: u64 = 0x1000;
+
+fn main() {
+    let mut l = Checks::default();
+    for (tag, v3) in [("ver2", false), ("ver3", true)] {
+        if let Err(e) = differential(&mut l, tag, v3, None, KFWR_RF_KEY_PERM_DEFAULT) {
+            l.check(if v3 { "ver3_run" } else { "ver2_run" }, false, e);
+        }
+    }
+    // ★ v3-roperm: the key is the host's policy (`KfArgs::key_perm`); the other policy the host
+    // ships (`KF3_CARRY_ATOMIC_DISABLE=1`: every permission bit keyed) is held to the model too.
+    if let Err(e) = differential(&mut l, "ver2-keyall", false, None, KFWR_RF_KEY_PERM_ALL) {
+        l.check("ver2_keyall_run", false, e);
+    }
+    // ★★★ w829: the same differential with slots born TINY (64 runs), so they grow — a device
+    // copy and a transparent re-walk — again and again MID-HISTORY, under random refusals. The
+    // model's capacity is unbounded: every report must still be the model's diff, and the
+    // settled slots must close — a re-submitted walk may neither double-commit nor drop a
+    // host-confirmed placement.
+    if let Err(e) = differential(
+        &mut l,
+        "ver2-growth",
+        false,
+        Some(64),
+        KFWR_RF_KEY_PERM_DEFAULT,
+    ) {
+        l.check("ver2_growth_run", false, e);
+    }
+    // ★ 2026-10-07: Windows run43's walk #2192, replayed per format (KF_PDE_ADDR_ZERO_IS_A_TABLE).
+    for (tag, v3) in [("ver2", false), ("ver3", true)] {
+        if let Err(e) = level_move_replay(&mut l, tag, v3) {
+            l.check(
+                if v3 {
+                    "ver3_level_move_run"
+                } else {
+                    "ver2_level_move_run"
+                },
+                false,
+                e,
+            );
+        }
+    }
+    if let Err(e) = throughput(&mut l) {
+        l.check("throughput_run", false, e);
+    }
+    let v = l.verdict();
+    println!("GATE9_VERDICT={}", if v { "PASS" } else { "FAIL" });
+    std::process::exit(if v { 0 } else { 1 });
+}
+
+/// The guest's tables in either format, plus the harness's own record of what it mapped
+/// (va → (at, sys)) — the model's walk is built from THAT, never from the GPU's report.
+enum GuestTree {
+    V2(Tree),
+    V3(Tree3),
+}
+
+impl GuestTree {
+    fn new(v3: bool, base: u64) -> GuestTree {
+        if v3 {
+            GuestTree::V3(Tree3::new(base, PT_BYTES))
+        } else {
+            GuestTree::V2(Tree::new(base, PT_BYTES))
+        }
+    }
+    /// ★ v3-roperm: `perm` is the run-flag permission set (`KFWR_RF_*`) the leaf carries, written
+    /// as raw PTE bits at the FORMAT DESCRIPTOR's positions (VER2 bits; VER3 PCF bits).
+    fn map(&mut self, va: u64, at: u64, sys: bool, perm: u32, fmt: &kf_cuda::abi::KfFormat) {
+        let bits = raw_perm_bits(perm, fmt);
+        match self {
+            GuestTree::V2(t) => t.map4k_bits(va, at, sys, bits),
+            GuestTree::V3(t) => t.map4k_bits(va, at, sys, bits),
+        }
+    }
+    fn unmap(&mut self, va: u64) {
+        match self {
+            GuestTree::V2(t) => t.unmap4k(va),
+            GuestTree::V3(t) => t.unmap4k(va),
+        }
+    }
+    /// Move the shift-29 level on `va`'s path to `new_at`; returns its bytes ([`Tree::move_pd1`]).
+    fn move_pd1(&mut self, va: u64, new_at: u64) -> Option<Vec<u8>> {
+        match self {
+            GuestTree::V2(t) => t.move_pd1(va, new_at),
+            GuestTree::V3(t) => t.move_pd1(va, new_at),
+        }
+    }
+    fn root(&self) -> u64 {
+        match self {
+            GuestTree::V2(t) => t.root,
+            GuestTree::V3(t) => t.root,
+        }
+    }
+    fn origin(&self) -> u64 {
+        match self {
+            GuestTree::V2(t) => t.img.origin,
+            GuestTree::V3(t) => t.img.origin,
+        }
+    }
+    fn used(&self) -> &[u8] {
+        match self {
+            GuestTree::V2(t) => &t.img.mem[..t.img.used()],
+            GuestTree::V3(t) => &t.img.mem[..t.img.used()],
+        }
+    }
+}
+
+/// ★ v3-roperm: the permission bits a leaf may carry, as run flags (`KFWR_RF_KEY_PERM_ALL`). Which
+/// of them re-map on a flip is the policy under test (`key_perm`).
+const PERM_BITS: [u32; 4] = [
+    KFWR_RF_READ_ONLY,
+    KFWR_RF_ATOMIC_DISABLE,
+    KFWR_RF_VOLATILE,
+    KFWR_RF_PRIVILEGE,
+];
+
+/// Run-flag permissions → the raw PTE bits of `fmt` (never a hard-coded position).
+fn raw_perm_bits(perm: u32, fmt: &kf_cuda::abi::KfFormat) -> u64 {
+    let mut b = 0u64;
+    for (flag, pos) in [
+        (KFWR_RF_READ_ONLY, fmt.bit_read_only),
+        (KFWR_RF_ATOMIC_DISABLE, fmt.bit_atomic_disable),
+        (KFWR_RF_VOLATILE, fmt.bit_volatile),
+        (KFWR_RF_PRIVILEGE, fmt.bit_privilege),
+    ] {
+        if perm & flag != 0 {
+            b |= 1u64 << pos;
+        }
+    }
+    b
+}
+
+/// A random permission set: mostly none, often read-only (the read-duplicate), sometimes more.
+fn random_perm(r: &mut Rng) -> u32 {
+    match r.below(8) {
+        0..=3 => 0,
+        4 | 5 => KFWR_RF_READ_ONLY,
+        _ => {
+            PERM_BITS[r.below(4) as usize]
+                | if r.below(2) == 0 {
+                    KFWR_RF_READ_ONLY
+                } else {
+                    0
+                }
+        }
+    }
+}
+
+/// What the walker reports for `pages` — runs coalesced exactly as the kernel coalesces (VA and
+/// backing contiguous, identical flags): the model's input.
+fn walk_of(pages: &BTreeMap<u64, (u64, bool, u32)>) -> Vec<KfMapRun> {
+    let mut out: Vec<KfMapRun> = Vec::new();
+    for (&va, &(at, sys, perm)) in pages {
+        let flags = RF_AP.put(u32::from(if sys { AP_SYS } else { AP_VID })) | perm;
+        if let Some(l) = out.last_mut()
+            && l.va + l.len == va
+            && l.gpga + l.len == at
+            && l.flags == flags
+        {
+            l.len += PAGE;
+            continue;
+        }
+        out.push(KfMapRun {
+            va,
+            gpga: at,
+            len: PAGE,
+            flags,
+            op: KFWR_OP_MAP,
+            pdb_index: 0,
+        });
+    }
+    out
+}
+
+/// The comparable part of a run: op, va, len, backing, aperture + permissions (v3-roperm), held.
+fn key(r: &KfMapRun) -> (u16, u64, u64, u64, u32, bool) {
+    let perm = PERM_BITS.iter().fold(0, |a, b| a | b);
+    (
+        r.op,
+        r.va,
+        r.len,
+        r.gpga,
+        r.flags & (RF_AP.bits() | perm),
+        r.flags & KFWR_RF_HELD != 0,
+    )
+}
+
+struct Rng(u64);
+impl Rng {
+    fn next(&mut self) -> u64 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        self.0
+    }
+    fn below(&mut self, n: u64) -> u64 {
+        self.next() % n
+    }
+}
+
+fn write_tree(k: &WalkKernel, img: &DeviceImage, t: &GuestTree) -> Result<(), String> {
+    k.write_image(img, t.origin(), t.used())
+        .map_err(|e| e.to_string())
+}
+
+/// One entry of a live GPU report: its runs.
+fn entry_runs(r: &kf_cuda::Report, i: usize) -> Vec<KfMapRun> {
+    let p = r.pdbs[i];
+    r.runs[p.first_run as usize..(p.first_run + p.run_count) as usize].to_vec()
+}
+
+#[allow(clippy::too_many_lines)]
+fn differential(
+    l: &mut Checks,
+    tag: &str,
+    v3: bool,
+    slot_default: Option<u32>,
+    key_perm: u32,
+) -> Result<(), String> {
+    let fmt = if v3 {
+        kf_format_ver3()
+    } else {
+        kf_format_ver2()
+    };
+    let growth = slot_default.is_some();
+    let keyall = key_perm == KFWR_RF_KEY_PERM_ALL;
+    let cfg = WalkCfg {
+        table_version: fmt.table_version,
+        slot_default: slot_default.unwrap_or(WalkCfg::default().slot_default),
+        key_perm,
+        ..WalkCfg::default()
+    };
+    let mut k = WalkKernel::bring_up_on(
+        cfg,
+        fmt,
+        kf_cuda::walk::WalkDevice::PciBusId(&kf_harness::gate_bdf()?),
+    )
+    .map_err(|e| format!("{tag}: {e}"))?;
+    let img = k.upload(&vec![0u8; IMG_BYTES]).map_err(|e| e.to_string())?;
+    // Slot 3 walks tree A, slot 5 walks tree B — and at step 40 slot 5's object MOVES its root
+    // to tree A2 (the slot is the object's: the new root is diffed against what it placed).
+    let mut trees = [
+        GuestTree::new(v3, PT_A),
+        GuestTree::new(v3, PT_B),
+        GuestTree::new(v3, PT_B + (PT_BYTES as u64)),
+    ];
+    let mut pages: [BTreeMap<u64, (u64, bool, u32)>; 3] = Default::default();
+    let mut perm_edits = 0usize;
+    let mut model: BTreeMap<u32, Committed> = BTreeMap::new();
+    let mut r = Rng(0x2545_F491_4F6C_DD1D ^ u64::from(v3));
+    let cap = cfg.runs_per_pdb as usize;
+    let (mut steps, mut runs_seen, mut mismatches, mut failed_codes, mut held_codes) =
+        (0usize, 0usize, 0usize, 0usize, 0usize);
+    let mut first_mismatch: Option<String> = None;
+    let mut b_tree = 1usize;
+    let mut resets = 0usize;
+    for step in 0..160 {
+        // ── the guest edits its tables ──
+        for t in 0..3 {
+            let base = 0x40_0000_0000u64 * (t as u64 + 1);
+            for _ in 0..(1 + r.below(12)) {
+                let va = base + r.below(512) * PAGE;
+                match r.below(7) {
+                    0 | 1 => {
+                        trees[t].unmap(va);
+                        pages[t].remove(&va);
+                    }
+                    2 if !pages[t].is_empty() => {
+                        // Grow a neighbour contiguously (the walker coalesces it).
+                        if let Some((&pv, &(pa, s, pp))) = pages[t].range(..va).next_back() {
+                            let (nv, na) = (pv + PAGE, pa + PAGE);
+                            if na < IMG_BYTES as u64 {
+                                trees[t].map(nv, na, s, pp, &fmt);
+                                pages[t].insert(nv, (na, s, pp));
+                            }
+                        }
+                    }
+                    // ★ v3-roperm: flip ONE permission of a mapped page IN PLACE — same VA, same
+                    // backing (UVM read duplication's RW→RO revoke, and its collapse back).
+                    3 if !pages[t].is_empty() => {
+                        if let Some((&pv, &(pa, s, pp))) = pages[t].range(..va).next_back() {
+                            let np = pp ^ PERM_BITS[r.below(4) as usize];
+                            trees[t].map(pv, pa, s, np, &fmt);
+                            pages[t].insert(pv, (pa, s, np));
+                            perm_edits += 1;
+                        }
+                    }
+                    _ => {
+                        let sys = r.below(4) == 0;
+                        let at = DATA + r.below(((IMG_BYTES as u64) - DATA) / PAGE) * PAGE;
+                        let perm = random_perm(&mut r);
+                        trees[t].map(va, at, sys, perm, &fmt);
+                        pages[t].insert(va, (at, sys, perm));
+                    }
+                }
+            }
+            write_tree(&k, &img, &trees[t])?;
+        }
+        if step == 40 {
+            b_tree = 2;
+        }
+        if step == 100 {
+            // The object behind slot 5 is gone: its slot is released and emptied.
+            k.reset_slot(5).map_err(|e| e.to_string())?;
+            model.remove(&5);
+            resets += 1;
+        }
+        let entries = [
+            WalkEntry {
+                pdb: trees[0].root(),
+                slot: 3,
+            },
+            WalkEntry {
+                pdb: trees[b_tree].root(),
+                slot: 5,
+            },
+        ];
+        let rep = k
+            .refresh_image(&img, &entries)
+            .map_err(|e| format!("{tag} step {step}: {e}"))?;
+        rep.validate()
+            .map_err(|e| format!("{tag} step {step}: {e}"))?;
+        rep.require_diff()
+            .map_err(|e| format!("{tag} step {step}: {e}"))?;
+        if rep.truncated() || rep.header.refusals != 0 {
+            return Err(format!(
+                "{tag} step {step}: flags={:#x} refusals={} mask={:#x}",
+                rep.header.flags, rep.header.refusals, rep.header.refuse_mask
+            ));
+        }
+        // ── the model, on the harness's own record of the tables ──
+        let mut codes = vec![KFWR_ACK_FAILED; rep.runs.len()];
+        for (i, (slot, which)) in [(3u32, 0usize), (5u32, b_tree)].into_iter().enumerate() {
+            let walk = walk_of(&pages[which]);
+            let com = model.get(&slot).cloned().unwrap_or_default();
+            let want = diffmodel::diff_with(&com, &walk, cap, key_perm);
+            let got = entry_runs(&rep, i);
+            runs_seen += got.len();
+            let (a, b): (Vec<_>, Vec<_>) = (
+                got.iter().map(key).collect(),
+                want.runs.iter().map(key).collect(),
+            );
+            if a != b || rep.pdbs[i].slot() != slot {
+                mismatches += 1;
+                first_mismatch.get_or_insert_with(|| {
+                    format!("step {step} slot {slot}: gpu={a:x?}\n  model={b:x?}")
+                });
+            }
+            // ── the host's verdict: random refusals, never a map over a refused unmap ──
+            let mut failed_unmaps: Vec<(u64, u64)> = Vec::new();
+            let mut mc: Vec<AckCode> = Vec::with_capacity(want.runs.len());
+            for x in &want.runs {
+                let blocked = x.op == KFWR_OP_MAP
+                    && failed_unmaps
+                        .iter()
+                        .any(|&(s, e)| x.va < e && s < x.va + x.len);
+                let c = if blocked || r.below(5) == 0 {
+                    AckCode::Failed
+                } else if x.op == KFWR_OP_MAP && r.below(20) == 0 {
+                    AckCode::Held
+                } else {
+                    AckCode::Applied
+                };
+                if x.op == KFWR_OP_UNMAP && c == AckCode::Failed {
+                    failed_unmaps.push((x.va, x.va + x.len));
+                }
+                mc.push(c);
+            }
+            let first = rep.pdbs[i].first_run as usize;
+            for (j, c) in mc.iter().enumerate() {
+                codes[first + j] = match c {
+                    AckCode::Failed => KFWR_ACK_FAILED,
+                    AckCode::Applied => KFWR_ACK_APPLIED,
+                    AckCode::Held => KFWR_ACK_HELD,
+                };
+                failed_codes += usize::from(*c == AckCode::Failed);
+                held_codes += usize::from(*c == AckCode::Held);
+            }
+            model.insert(slot, diffmodel::commit(&com, &want.runs, &mc));
+        }
+        k.ack(rep.header.generation, codes)
+            .map_err(|e| e.to_string())?;
+        steps += 1;
+    }
+    l.check(
+        if growth {
+            "ver2_growth_gpu_diff_is_the_model_diff"
+        } else if keyall {
+            "ver2_keyall_gpu_diff_is_the_model_diff"
+        } else if v3 {
+            "ver3_gpu_diff_is_the_model_diff"
+        } else {
+            "ver2_gpu_diff_is_the_model_diff"
+        },
+        mismatches == 0 && runs_seen > 100 && failed_codes > 10 && held_codes > 0 && resets == 1 && perm_edits > 20,
+        format!(
+            "{steps} walks, {runs_seen} runs compared, {mismatches} mismatching entries, verdicts failed={failed_codes} held={held_codes} permission edits={perm_edits}{}",
+            first_mismatch.map(|m| format!(" FIRST: {m}")).unwrap_or_default()
+        ),
+    );
+    // ── closure: acknowledge everything until quiet; the GPU's slot then says what the walk says ──
+    let mut quiet = false;
+    for _ in 0..4 {
+        let entries = [
+            WalkEntry {
+                pdb: trees[0].root(),
+                slot: 3,
+            },
+            WalkEntry {
+                pdb: trees[b_tree].root(),
+                slot: 5,
+            },
+        ];
+        let rep = k.refresh_image(&img, &entries).map_err(|e| e.to_string())?;
+        if rep.runs.is_empty() {
+            quiet = true;
+            break;
+        }
+        let n = rep.runs.len();
+        // Apply in the model too, so the final comparison is of the same history.
+        for (i, (slot, which)) in [(3u32, 0usize), (5u32, b_tree)].into_iter().enumerate() {
+            let com = model.get(&slot).cloned().unwrap_or_default();
+            let want = diffmodel::diff_with(&com, &walk_of(&pages[which]), cap, key_perm);
+            let _ = i;
+            model.insert(
+                slot,
+                diffmodel::commit(&com, &want.runs, &vec![AckCode::Applied; want.runs.len()]),
+            );
+        }
+        k.ack(rep.header.generation, vec![KFWR_ACK_APPLIED; n])
+            .map_err(|e| e.to_string())?;
+    }
+    let closed = [(3u32, 0usize), (5u32, b_tree)].iter().all(|&(s, w)| {
+        diffmodel::coverage_with(&model.get(&s).cloned().unwrap_or_default().flat(), key_perm)
+            == diffmodel::coverage_with(&walk_of(&pages[w]), key_perm)
+    });
+    l.check(
+        if growth {
+            "ver2_growth_settled_slots_are_quiet_and_closed"
+        } else if keyall {
+            "ver2_keyall_settled_slots_are_quiet_and_closed"
+        } else if v3 {
+            "ver3_settled_slots_are_quiet_and_closed"
+        } else {
+            "ver2_settled_slots_are_quiet_and_closed"
+        },
+        quiet && closed,
+        format!("quiet={quiet} closed={closed}"),
+    );
+    if growth {
+        // ⊘ Non-vacuity: the arm is about growth; it must have happened, more than once.
+        let census = k.capacity_census();
+        let grows = k.capacity_stats().grows;
+        l.check(
+            "ver2_growth_slots_actually_grew",
+            grows >= 2,
+            format!("{census}"),
+        );
+    }
+    k.release(img);
+    Ok(())
+}
+
+/// ★ 2026-10-07 — Windows run43's walk #2192, replayed on the GPU (`KF_PDE_ADDR_ZERO_IS_A_TABLE`
+/// in `cuda/walk/kf_walk.cu`). A guest kernel VA space's rows lie under one 512 MiB entry of the
+/// shift-29 level (run43: 22 rows in `[0x2000_0000, 0x4000_0000)`); the guest moves that level to a
+/// new instance at FB offset 0, repoints the parent and invalidates. No translation changed, so once
+/// the first walk is acknowledged the walk after the move must be an EMPTY diff with no refusal.
+/// Under the old "a zero sub-table address is null" rule it UNMAPped every row, silently.
+/// ⊘ Known-positive in the same arm: the instance at 0 then zeroed must UNMAP every placement, so
+/// the empty diff above is not merely a walker that reports nothing.
+fn level_move_replay(l: &mut Checks, tag: &str, v3: bool) -> Result<(), String> {
+    let fmt = if v3 {
+        kf_format_ver3()
+    } else {
+        kf_format_ver2()
+    };
+    let cfg = WalkCfg {
+        table_version: fmt.table_version,
+        ..WalkCfg::default()
+    };
+    let mut k = WalkKernel::bring_up_on(
+        cfg,
+        fmt,
+        kf_cuda::walk::WalkDevice::PciBusId(&kf_harness::gate_bdf()?),
+    )
+    .map_err(|e| format!("{tag}: {e}"))?;
+    let img = k.upload(&vec![0u8; IMG_BYTES]).map_err(|e| e.to_string())?;
+    let mut t = GuestTree::new(v3, PT_A);
+    // run43's shape: the ring page, its neighbours, and rows far apart under the same PD1 entry.
+    let vas: [u64; 7] = [
+        0x2000_2000,
+        0x200c_4000,
+        0x200c_5000,
+        0x2024_7000,
+        0x2400_0000,
+        0x3fdf_0000,
+        0x3ffd_6000,
+    ];
+    let mut pages: BTreeMap<u64, (u64, bool, u32)> = BTreeMap::new();
+    for (i, &va) in vas.iter().enumerate() {
+        let (at, sys) = (DATA + 2 * (i as u64) * PAGE, i % 3 == 1);
+        t.map(va, at, sys, 0, &fmt);
+        pages.insert(va, (at, sys, 0));
+    }
+    write_tree(&k, &img, &t)?;
+    let entries = [WalkEntry {
+        pdb: t.root(),
+        slot: 3,
+    }];
+    let walk = |k: &mut WalkKernel, what: &str| -> Result<kf_cuda::Report, String> {
+        let rep = k
+            .refresh_image(&img, &entries)
+            .map_err(|e| format!("{tag} {what}: {e}"))?;
+        rep.validate().map_err(|e| format!("{tag} {what}: {e}"))?;
+        rep.require_diff()
+            .map_err(|e| format!("{tag} {what}: {e}"))?;
+        Ok(rep)
+    };
+    let first = walk(&mut k, "first walk")?;
+    let want = walk_of(&pages).len();
+    let all_maps = first.runs.iter().all(|r| r.op == KFWR_OP_MAP);
+    let n1 = first.runs.len();
+    k.ack(first.header.generation, vec![KFWR_ACK_APPLIED; n1])
+        .map_err(|e| e.to_string())?;
+    let settled = walk(&mut k, "settled walk")?;
+    // (Nothing to acknowledge: an empty report has no verdicts to stage.)
+    let settled_quiet = settled.runs.is_empty();
+    // ── the move: the level's bytes go to FB 0, the parent names 0, the old instance is zero ──
+    let level = t
+        .move_pd1(vas[0], 0)
+        .ok_or_else(|| format!("{tag}: the tree has no PD1 on {:#x}", vas[0]))?;
+    k.write_image(&img, 0, &level).map_err(|e| e.to_string())?;
+    write_tree(&k, &img, &t)?;
+    let moved = walk(&mut k, "walk after the move")?;
+    l.check(
+        if v3 {
+            "ver3_level_move_to_fb0_is_quiet"
+        } else {
+            "ver2_level_move_to_fb0_is_quiet"
+        },
+        all_maps
+            && n1 == want
+            && settled_quiet
+            && moved.runs.is_empty()
+            && moved.header.refusals == 0
+            && !moved.truncated(),
+        format!(
+            "first walk {n1} MAP runs (model {want}, all MAP {all_maps}); settled quiet {settled_quiet}; \
+             after the move {} runs ({} UNMAP), refusals={} mask={:#x}",
+            moved.runs.len(),
+            moved
+                .runs
+                .iter()
+                .filter(|r| r.op == KFWR_OP_UNMAP)
+                .count(),
+            moved.header.refusals,
+            moved.header.refuse_mask
+        ),
+    );
+    k.ack(
+        moved.header.generation,
+        vec![KFWR_ACK_APPLIED; moved.runs.len()],
+    )
+    .map_err(|e| e.to_string())?;
+    // ── known-positive: the instance at 0 emptied — every placement must go ──
+    k.write_image(&img, 0, &vec![0u8; level.len()])
+        .map_err(|e| e.to_string())?;
+    let gone = walk(&mut k, "walk after emptying the level")?;
+    let unmaps = gone.runs.iter().filter(|r| r.op == KFWR_OP_UNMAP).count();
+    l.check(
+        if v3 {
+            "ver3_level_move_known_positive_empty_level_unmaps_all"
+        } else {
+            "ver2_level_move_known_positive_empty_level_unmaps_all"
+        },
+        unmaps == n1 && gone.runs.len() == n1,
+        format!(
+            "{unmaps} UNMAP of {n1} placements ({} runs)",
+            gone.runs.len()
+        ),
+    );
+    k.ack(
+        gone.header.generation,
+        vec![KFWR_ACK_APPLIED; gone.runs.len()],
+    )
+    .map_err(|e| e.to_string())?;
+    k.release(img);
+    Ok(())
+}
+
+/// ★ Q8's shape: 13 000 separate guest-RAM pages, one added per walk.
+fn throughput(l: &mut Checks) -> Result<(), String> {
+    const ROWS: u64 = 13_000;
+    let mut k = WalkKernel::bring_up_on(
+        WalkCfg::default(),
+        kf_format_ver2(),
+        kf_cuda::walk::WalkDevice::PciBusId(&kf_harness::gate_bdf()?),
+    )
+    .map_err(|e| e.to_string())?;
+    let img = k.upload(&vec![0u8; IMG_BYTES]).map_err(|e| e.to_string())?;
+    let mut tree = Tree::new(PT_A, PT_BYTES);
+    let mut one_run = 0u64;
+    let mut gpu_at = |n: u64, v: &mut Vec<u64>, us: u64| {
+        if (n > 900 && n <= 1100) || n > ROWS - 200 {
+            v.push(us);
+        }
+    };
+    let (mut early, mut late, mut wall_late) = (Vec::new(), Vec::new(), Vec::new());
+    let t_all = std::time::Instant::now();
+    for i in 0..ROWS {
+        let va = 0x1_2000_0000 + i * PAGE;
+        // Separate pages: the backing skips a page each time, so nothing coalesces (13 000 runs).
+        tree.map4k_sys(va, DATA + (2 * i * PAGE) % ((IMG_BYTES as u64) - DATA));
+        k.write_image(&img, tree.img.origin, &tree.img.mem[..tree.img.used()])
+            .map_err(|e| e.to_string())?;
+        let t0 = std::time::Instant::now();
+        k.submit_image(
+            &img,
+            &[WalkEntry {
+                pdb: tree.root,
+                slot: 0,
+            }],
+        )
+        .map_err(|e| e.to_string())?;
+        let c = k.wait(10_000).map_err(|e| e.to_string())?;
+        let wall = u64::try_from(t0.elapsed().as_micros()).unwrap_or(u64::MAX);
+        let n = c.report.runs.len();
+        if n == 1 && c.report.runs[0].va == va && c.report.runs[0].op == KFWR_OP_MAP {
+            one_run += 1;
+        }
+        let rows = i + 1;
+        gpu_at(
+            rows,
+            if rows <= 1100 { &mut early } else { &mut late },
+            c.gpu_us,
+        );
+        if rows > ROWS - 200 {
+            wall_late.push(wall);
+        }
+        k.ack(c.report.header.generation, vec![KFWR_ACK_APPLIED; n])
+            .map_err(|e| e.to_string())?;
+    }
+    let med = |v: &mut Vec<u64>| {
+        v.sort_unstable();
+        v.get(v.len() / 2).copied().unwrap_or(0)
+    };
+    let (e, la, w) = (med(&mut early), med(&mut late), med(&mut wall_late));
+    l.measure(
+        "throughput",
+        format!(
+            "rows={ROWS} one_run_reports={one_run} gpu_us_p50@1000={e} gpu_us_p50@13000={la} wall_us_p50@13000={w} total_s={:.1}",
+            t_all.elapsed().as_secs_f64()
+        ),
+    );
+    l.check(
+        "every_added_page_is_a_one_run_diff",
+        one_run == ROWS,
+        format!("{one_run} of {ROWS}"),
+    );
+    // ⊘ The old serial emission cost ~0.53 µs per row per walk: +6 400 µs between 1 000 and 13 000
+    // rows. The bound allows the parallel diff's own O(n / threads) growth, not that.
+    l.check(
+        "the_diff_does_not_grow_with_the_space",
+        la <= e + 1_000,
+        format!("gpu p50 {e} us @1000 rows -> {la} us @13000 rows"),
+    );
+    k.release(img);
+    Ok(())
+}

@@ -1,0 +1,11 @@
+gbm backend: nvidia
+allocated 512x512 XR24  stride=2048 offset=0 planes=1
+  real modifier   0x0300000000606014
+  advertised as   0x0300000000606014
+  dma-buf size    1048576 bytes (need >= 1048576)
+  gbm_bo_map REFUSED (Success) — the buffer holds whatever the
+  allocator left in it.  The IMPORT is the thing under test;
+  noise on screen still means the frame arrived.
+serving the dma-buf on /run/kf-dri3-src.sock — this process holds the graphics
+stack so that the peer does not have to.
+handed the dma-buf fd to a peer

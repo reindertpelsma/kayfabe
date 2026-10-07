@@ -1,0 +1,13 @@
+APPRES side=host app=cupy verdict=PASS rc=0 secs=4 quiet=0 note=-
+APPRES side=host app=vulkaninfo verdict=PASS rc=0 secs=3 quiet=0 note=-
+APPRES side=host app=vkpeak verdict=PASS rc=0 secs=445 quiet=1 note=-
+APPRES side=host app=egl_offscreen verdict=PASS rc=0 secs=17 quiet=0 note=-
+APPRES side=host app=nvenc_h264 verdict=PASS rc=0 secs=7 quiet=0 note=-
+APPRES side=host app=nvenc_hevc verdict=PASS rc=0 secs=7 quiet=0 note=-
+APPRES side=host app=nvdec_h264 verdict=PASS rc=0 secs=9 quiet=0 note=-
+APPRES side=host app=stream_default verdict=PASS rc=0 secs=2 quiet=0 note=-
+APPRES side=host app=stream_created verdict=PASS rc=0 secs=3 quiet=1 note=-
+APPRES side=host app=stream_nonblocking verdict=PASS rc=0 secs=2 quiet=0 note=-
+APPRES side=host app=stream_perthread verdict=PASS rc=0 secs=3 quiet=1 note=-
+APPRES side=host app=stream_two verdict=PASS rc=0 secs=2 quiet=0 note=-
+APPRES side=host app=stream_created2nd verdict=PASS rc=0 secs=3 quiet=1 note=-

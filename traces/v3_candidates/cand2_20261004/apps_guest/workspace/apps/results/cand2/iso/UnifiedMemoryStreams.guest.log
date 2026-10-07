@@ -1,0 +1,21 @@
+=== UnifiedMemoryStreams side=guest start=2026-10-04T12:20:23+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/UnifiedMemoryStreams
+CUDA error at UnifiedMemoryStreams.cu:214 code=719(cudaErrorLaunchFailure) "cudaStreamAttachMemAsync(stream[tid + 1], t.data, 0, cudaMemAttachSingle)" 
+CUDA error at UnifiedMemoryStreams.cu:214 code=719(cudaErrorLaunchFailure) "cudaStreamAttachMemAsync(stream[tid + 1], t.data, 0, cudaMemAttachSingle)" 
+CUDA error at UnifiedMemoryStreams.cu:214 code=719(cudaErrorLaunchFailure) "cudaStreamAttachMemAsync(stream[tid + 1], t.data, 0, cudaMemAttachSingle)" 
+CUDA error at UnifiedMemoryStreams.cu:214 code=719(cudaErrorLaunchFailure) "cudaStreamAttachMemAsync(stream[tid + 1], t.data, 0, cudaMemAttachSingle)" 
+GPU Device 0: "Ampere" with compute capability 8.6
+
+Executing tasks on host / device
+Task [0], thread [0] executing on device (503)
+Task [1], thread [1] executing on device (920)
+Task [2], thread [3] executing on device (925)
+Task [3], thread [2] executing on host (64)
+Task [4], thread [2] executing on device (240)
+Task [5], thread [2] executing on device (903)
+Task [6], thread [0] executing on device (314)
+Task [7], thread [3] executing on device (590)
+Task [8], thread [0] executing on device (136)
+Task [9], thread [2] executing on device (995)
+Task [10], thread [1] executing on device (606)
+timeout: the monitored command dumped core
+=== end rc=139 secs=10 2026-10-04T12:20:33+00:00

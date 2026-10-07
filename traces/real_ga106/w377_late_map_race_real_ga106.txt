@@ -1,0 +1,65 @@
+info  RMLADDER ARGV     = [--late-map-race]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d02744
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=bf9683a53c3a76421a79f41248243e4d3dcfb373-dirty
+info  W377 late-map race  = GPU 0, euid 0 — queue work behind a fence, ring ONCE, then map the memory it will touch
+info  W377 the bar        = ARM A (map before the doorbell) must PASS, or ARM B is uninterpretable. ⊘ Neither arm's verdict is the ioctl's return value
+info  W377-A map            = BEFORE the doorbell, at 0x0000000541000000
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+ok    W377-A parked         = target still 0xdead0000 (sentinel), GP_GET 1 GP_PUT 1 — the channel is STALLED IN THE ACQUIRE, which is what makes the window below real
+info  W377-A outcome      = Landed { gp_get: 1, gp_put: 1 }
+ok    W377-A control      = MAGIC landed with the target mapped BEFORE the doorbell — the channel, the fence and the release all work
+info  W377-B map            = deferred until AFTER the doorbell
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+ok    W377-B parked         = target still 0xdead0000 (sentinel), GP_GET 1 GP_PUT 1 — the channel is STALLED IN THE ACQUIRE, which is what makes the window below real
+ok    W377-B late map       = mapped at 0x0000000561000000 AFTER the doorbell, with the channel running. NO further doorbell is sent
+info  W377-B outcome      = Landed { gp_get: 1, gp_put: 1 }
+★     W377 LATE MAP LANDED = a mapping created AFTER the doorbell, with the channel already running and NO second doorbell, was walked by the engine (GP_GET 1 GP_PUT 1, target 0x1dea0031). ⇒ The driver publishes it, and a doorbell-triggered publisher CANNOT see it
+done — late-map race only
+--- n=2 ---
+info  RMLADDER ARGV     = [--late-map-race]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d02762
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=bf9683a53c3a76421a79f41248243e4d3dcfb373-dirty
+info  W377 late-map race  = GPU 0, euid 0 — queue work behind a fence, ring ONCE, then map the memory it will touch
+info  W377 the bar        = ARM A (map before the doorbell) must PASS, or ARM B is uninterpretable. ⊘ Neither arm's verdict is the ioctl's return value
+info  W377-A map            = BEFORE the doorbell, at 0x0000000541000000
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+ok    W377-A parked         = target still 0xdead0000 (sentinel), GP_GET 1 GP_PUT 1 — the channel is STALLED IN THE ACQUIRE, which is what makes the window below real
+info  W377-A outcome      = Landed { gp_get: 1, gp_put: 1 }
+ok    W377-A control      = MAGIC landed with the target mapped BEFORE the doorbell — the channel, the fence and the release all work
+info  W377-B map            = deferred until AFTER the doorbell
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+ok    W377-B parked         = target still 0xdead0000 (sentinel), GP_GET 1 GP_PUT 1 — the channel is STALLED IN THE ACQUIRE, which is what makes the window below real
+ok    W377-B late map       = mapped at 0x0000000561000000 AFTER the doorbell, with the channel running. NO further doorbell is sent
+info  W377-B outcome      = Landed { gp_get: 1, gp_put: 1 }
+★     W377 LATE MAP LANDED = a mapping created AFTER the doorbell, with the channel already running and NO second doorbell, was walked by the engine (GP_GET 1 GP_PUT 1, target 0x1dea0031). ⇒ The driver publishes it, and a doorbell-triggered publisher CANNOT see it
+done — late-map race only
+--- n=3 ---
+info  RMLADDER ARGV     = [--late-map-race]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d02775
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=bf9683a53c3a76421a79f41248243e4d3dcfb373-dirty
+info  W377 late-map race  = GPU 0, euid 0 — queue work behind a fence, ring ONCE, then map the memory it will touch
+info  W377 the bar        = ARM A (map before the doorbell) must PASS, or ARM B is uninterpretable. ⊘ Neither arm's verdict is the ioctl's return value
+info  W377-A map            = BEFORE the doorbell, at 0x0000000541000000
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+ok    W377-A parked         = target still 0xdead0000 (sentinel), GP_GET 1 GP_PUT 1 — the channel is STALLED IN THE ACQUIRE, which is what makes the window below real
+info  W377-A outcome      = Landed { gp_get: 1, gp_put: 1 }
+ok    W377-A control      = MAGIC landed with the target mapped BEFORE the doorbell — the channel, the fence and the release all work
+info  W377-B map            = deferred until AFTER the doorbell
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+ok    W377-B parked         = target still 0xdead0000 (sentinel), GP_GET 1 GP_PUT 1 — the channel is STALLED IN THE ACQUIRE, which is what makes the window below real
+ok    W377-B late map       = mapped at 0x0000000561000000 AFTER the doorbell, with the channel running. NO further doorbell is sent
+info  W377-B outcome      = Landed { gp_get: 1, gp_put: 1 }
+★     W377 LATE MAP LANDED = a mapping created AFTER the doorbell, with the channel already running and NO second doorbell, was walked by the engine (GP_GET 1 GP_PUT 1, target 0x1dea0031). ⇒ The driver publishes it, and a doorbell-triggered publisher CANNOT see it
+done — late-map race only

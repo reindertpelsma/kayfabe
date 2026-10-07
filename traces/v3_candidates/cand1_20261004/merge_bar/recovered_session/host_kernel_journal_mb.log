@@ -1,0 +1,356 @@
+Oct 04 02:24:08 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:24:08 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:24:08 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+Oct 04 02:24:08 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+Oct 04 02:24:08 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+Oct 04 02:24:08 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:24:08 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:24:08 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+Oct 04 02:24:08 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+Oct 04 02:24:08 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+Oct 04 02:24:08 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:24:08 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:24:08 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+Oct 04 02:24:08 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+Oct 04 02:24:08 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:301
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+Oct 04 02:24:27 ubuntu kernel: NVRM: GPU at PCI:0000:00:08: GPU-9fdaccfb-1920-54dc-3d1b-48aaa43e2692
+Oct 04 02:24:27 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=291246, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+Oct 04 02:24:30 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=291246, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+Oct 04 02:24:33 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=291246, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+Oct 04 02:24:36 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=291246, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+Oct 04 02:24:48 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:24:53 ubuntu kernel: NVRM: GPU at PCI:0000:00:08: GPU-9fdaccfb-1920-54dc-3d1b-48aaa43e2692
+Oct 04 02:24:53 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=291622, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+Oct 04 02:25:00 ubuntu kernel: NVRM: kchannelIsSchedulable_IMPL: Cannot schedule externally-owned channel 0x0000000a with unbound allocations!
+Oct 04 02:25:03 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:05 ubuntu kernel: NVRM: memMap_IMPL: CPU mapping not supported for addressSpace: 0x1
+Oct 04 02:25:09 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:11 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:50 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:25:51 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+Oct 04 02:27:36 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:27:36 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:27:36 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+Oct 04 02:27:36 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+Oct 04 02:27:36 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+Oct 04 02:27:36 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:27:36 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:27:36 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+Oct 04 02:27:36 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+Oct 04 02:27:36 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+Oct 04 02:27:36 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:27:36 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:27:36 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+Oct 04 02:27:36 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+Oct 04 02:27:36 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+Oct 04 02:28:03 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:28:03 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:28:03 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+Oct 04 02:28:03 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+Oct 04 02:28:03 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+Oct 04 02:28:03 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:28:03 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:28:03 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+Oct 04 02:28:03 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+Oct 04 02:28:03 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+Oct 04 02:28:03 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:28:03 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:28:03 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+Oct 04 02:28:03 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+Oct 04 02:28:03 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+Oct 04 02:28:06 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:28:06 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:28:06 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+Oct 04 02:28:06 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+Oct 04 02:28:06 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+Oct 04 02:28:06 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:28:06 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:28:06 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+Oct 04 02:28:06 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+Oct 04 02:28:06 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+Oct 04 02:28:06 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:28:06 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Oct 04 02:28:06 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+Oct 04 02:28:06 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+Oct 04 02:28:06 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+Oct 04 02:30:21 ubuntu kernel: NVRM: GPU at PCI:0000:00:08: GPU-9fdaccfb-1920-54dc-3d1b-48aaa43e2692
+Oct 04 02:30:21 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=293641, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+Oct 04 02:30:24 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=293641, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+Oct 04 02:30:27 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=293641, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+Oct 04 02:30:31 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=293641, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+Oct 04 02:33:14 ubuntu kernel: NVRM: GPU at PCI:0000:00:08: GPU-9fdaccfb-1920-54dc-3d1b-48aaa43e2692
+Oct 04 02:33:14 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=294839, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x1000a80000-0x1000beffff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x1000bf0000-0x1000deffff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x1000df0000-0x1000feffff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x1000ff0000-0x10011effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10011f0000-0x10013effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10013f0000-0x10015effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10015f0000-0x10017effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10017f0000-0x10019effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10019f0000-0x1001beffff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x1001bf0000-0x1001deffff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x1001df0000-0x1001feffff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x1001ff0000-0x10021effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10021f0000-0x10023effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10023f0000-0x10025effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10025f0000-0x10027effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10027f0000-0x10029effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10029f0000-0x1002beffff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x1002bf0000-0x1002deffff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x1002df0000-0x1002feffff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x1002ff0000-0x10031effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10031f0000-0x10033effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10033f0000-0x10035effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10035f0000-0x10037effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10037f0000-0x10039effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10039f0000-0x1003beffff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x1003bf0000-0x1003deffff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x1003df0000-0x1003feffff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x1003ff0000-0x10041effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10041f0000-0x10043effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10043f0000-0x10045effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x1004a80000-0x1004beffff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x1004bf0000-0x1004deffff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x1004df0000-0x1004feffff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x1004ff0000-0x10051effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10051f0000-0x10053effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10053f0000-0x10055effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10055f0000-0x10057effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10057f0000-0x10059effff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x10059f0000-0x1005beffff]
+Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x1005bf0000-0x1005deffff]

@@ -1,0 +1,388 @@
+nvkvm-broker: TEST BACKEND: no display is being driven, no input is being grabbed, and a memfd is accepted where a real backend demands a dma-buf. Events come from stdin.
+nvkvm-broker: the test backend advertises 0 (format, modifier) pairs
+nvkvm-broker: backend 'test': window 1920x1080
+nvkvm-broker: grab capabilities: keyboard=1 abs=1 rel=1 lock=1 shortcuts-inhibited=1 focus-events=1 fullscreen=1
+nvkvm-broker: GRAB IS PARTIAL: THIS IS THE TEST BACKEND: nothing is displayed and no real input is captured
+nvkvm-broker: listening on /run/c2surface2_broker.sock (mode 0600)
+nvkvm-broker:   allowed uid 0
+nvkvm-broker: WARNING: running as root and --drop-user was not given. The broker will stay root. Pass --drop-user <name|uid>.
+nvkvm-broker: accepted uid 0 gid 0 pid 114613
+nvkvm-broker: TEST cursor: none (no image)
+nvkvm-broker: client attached: window 1920x1080, capabilities 0xfff, display device unknown 0:0
+nvkvm-broker: grab: CTRL+ALT+G toggles, CTRL+ALT+F fullscreen. THIS IS THE TEST BACKEND: nothing is displayed and no real input is captured
+nvkvm-broker: the VM reports: clipboard agent not seen yet (it is announced the first time the guest copies something)
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0000000000000000 (LINEAR) -> NO
+nvkvm-broker: ERROR: ATTACH: fourcc XR24 modifier 0x0000000000000000 (LINEAR) is not advertised by this display.  If the compositor runs on a different GPU than the guest's, no modifier will ever match and a readback/copy path is required — the VMM can ask first with CMD_QUERY_FORMAT; run the broker with --verbose to see what it does advertise.
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: TEST attach: id=15586 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=15586 1920x1080
+nvkvm-broker: TEST attach: id=13360 1920x1080 stride=7680 offset=0 XR24 mod=0x0000000000000000 size=8294400
+nvkvm-broker: TEST commit: id=13360 1920x1080
+nvkvm-broker: client detached: closed the connection (186 attach, 186 commit, 1 rejected; 0 cursor, 0 cursor refused)
+nvkvm-broker: TEST cursor: none (no image)
+nvkvm-broker: signal received; shutting down

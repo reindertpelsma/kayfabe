@@ -1,0 +1,220 @@
+{
+  "schema": "kayfabe-linux-color-audit/1",
+  "manifest": {
+    "source_revision": "c9135eea3c8e7ce59d46089fc8808f1e0bf77f81",
+    "qemu_sha256": "6dab7c86fb6db4f3b01a59008c385b65f438121786ef9e58ff0220f1fc9500d5",
+    "command": [
+      "/var/lib/kf-windows-20261005/kf3-bins/c9135eea/qemu-system-x86_64",
+      "-machine",
+      "q35,accel=kvm",
+      "-cpu",
+      "host",
+      "-bios",
+      "/usr/share/seabios/bios-256k.bin",
+      "-m",
+      "6G",
+      "-smp",
+      "6",
+      "-object",
+      "memory-backend-memfd,id=ram,size=6G,share=on",
+      "-machine",
+      "memory-backend=ram",
+      "-vga",
+      "none",
+      "-device",
+      "kf3-gpu,guest-driver=580.159.04,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on",
+      "-display",
+      "none",
+      "-drive",
+      "if=virtio,file=/var/lib/kf-sdr-lut-20261006/linux-b/guest.qcow2,format=qcow2",
+      "-netdev",
+      "user,id=n0,hostfwd=tcp:127.0.0.1:2244-:22",
+      "-device",
+      "virtio-net-pci,netdev=n0,romfile=",
+      "-serial",
+      "file:/var/lib/kf-sdr-lut-20261006/linux-b/serial.log",
+      "-qmp",
+      "unix:/var/lib/kf-sdr-lut-20261006/linux-b/qmp.sock,server=on,wait=off",
+      "-msg",
+      "timestamp=on"
+    ],
+    "harness_sha256": "93ba25d70d646d480edaf9fa1b4058d61db3889dbf323cdc070c8f2e9667bc95",
+    "guest_gamma_fault": false,
+    "flags": {
+      "KF3_DISPLAY_METHOD_TRACE": "1",
+      "KF3_DISPLAY_SDR_COLOR": "1"
+    },
+    "scope": "AD104 / Linux580.159.04"
+  },
+  "events": [
+    {
+      "label": "start",
+      "utc": "2026-10-06T13:05:05.567238+00:00"
+    },
+    {
+      "label": "driver",
+      "utc": "2026-10-06T13:05:15.199819+00:00"
+    },
+    {
+      "label": "copy-color_properties",
+      "utc": "2026-10-06T13:05:16.108791+00:00"
+    },
+    {
+      "label": "copy-reject_gamma",
+      "utc": "2026-10-06T13:05:16.247644+00:00"
+    },
+    {
+      "label": "copy-wl_scene",
+      "utc": "2026-10-06T13:05:16.384350+00:00"
+    },
+    {
+      "label": "build-clients",
+      "utc": "2026-10-06T13:05:16.516132+00:00"
+    },
+    {
+      "label": "kms-before",
+      "utc": "2026-10-06T13:05:16.906854+00:00"
+    },
+    {
+      "label": "weston-start",
+      "utc": "2026-10-06T13:05:17.041061+00:00"
+    },
+    {
+      "label": "weston-scene",
+      "utc": "2026-10-06T13:05:22.181322+00:00"
+    },
+    {
+      "label": "weston-scene",
+      "utc": "2026-10-06T13:05:27.318750+00:00"
+    },
+    {
+      "label": "weston-result",
+      "utc": "2026-10-06T13:05:27.329321+00:00"
+    },
+    {
+      "label": "weston-stop",
+      "utc": "2026-10-06T13:05:27.469140+00:00"
+    },
+    {
+      "label": "sway-start",
+      "utc": "2026-10-06T13:05:30.627909+00:00"
+    },
+    {
+      "label": "sway-scene",
+      "utc": "2026-10-06T13:05:37.776991+00:00"
+    },
+    {
+      "label": "sway-before",
+      "utc": "2026-10-06T13:05:42.907526+00:00"
+    },
+    {
+      "label": "sway-before",
+      "utc": "2026-10-06T13:05:42.929784+00:00"
+    },
+    {
+      "label": "warm-start",
+      "utc": "2026-10-06T13:05:43.074882+00:00"
+    },
+    {
+      "label": "sway-warm",
+      "utc": "2026-10-06T13:05:48.205546+00:00"
+    },
+    {
+      "label": "sway-warm",
+      "utc": "2026-10-06T13:05:48.229829+00:00"
+    },
+    {
+      "label": "warm-stop",
+      "utc": "2026-10-06T13:05:48.366806+00:00"
+    },
+    {
+      "label": "sway-restored",
+      "utc": "2026-10-06T13:05:51.508461+00:00"
+    },
+    {
+      "label": "sway-restored",
+      "utc": "2026-10-06T13:05:51.529797+00:00"
+    },
+    {
+      "label": "dmesg-after",
+      "utc": "2026-10-06T13:05:51.677449+00:00"
+    },
+    {
+      "label": "stop",
+      "utc": "2026-10-06T13:05:51.813898+00:00"
+    },
+    {
+      "label": "exit-0",
+      "utc": "2026-10-06T13:05:57.072247+00:00"
+    }
+  ],
+  "client_rgba_fnv": "ad584bcbbd263ea5",
+  "screenshots": {
+    "sway-before": {
+      "sha256": "856320f2970d3b445b30f948faf5c28cde26c96f369628e68ad746bf953bfc69",
+      "scene_rgba_fnv": "ad584bcbbd263ea5",
+      "scene_matches_client": true
+    },
+    "sway-warm": {
+      "sha256": "e544ce60bb09b5a0c9285c9ea402884c9bc7120a2eb878cb37034d8a749675e2",
+      "scene_rgba_fnv": "ebac64b0abd0f286",
+      "scene_matches_client": false
+    },
+    "sway-restored": {
+      "sha256": "856320f2970d3b445b30f948faf5c28cde26c96f369628e68ad746bf953bfc69",
+      "scene_rgba_fnv": "ad584bcbbd263ea5",
+      "scene_matches_client": true
+    }
+  },
+  "all_three_outputs_identical": false,
+  "gamma_before": [
+    "name=GAMMA_LUT value=0",
+    "name=GAMMA_LUT value=0",
+    "name=GAMMA_LUT value=0",
+    "name=GAMMA_LUT value=0"
+  ],
+  "gamma_warm": [
+    "name=GAMMA_LUT value=133 bytes=8192 entries=1024 midpoint=32799,21021,9750 endpoint=65535,42001,19482",
+    "name=GAMMA_LUT value=0",
+    "name=GAMMA_LUT value=0",
+    "name=GAMMA_LUT value=0"
+  ],
+  "gamma_restored": [
+    "name=GAMMA_LUT value=0",
+    "name=GAMMA_LUT value=0",
+    "name=GAMMA_LUT value=0",
+    "name=GAMMA_LUT value=0"
+  ],
+  "protocol_failure_event": false,
+  "injected_kms_failure": false,
+  "generated_table_sha256": "ead7384aa48aa42d682c017cd7cc7744eb9e2f240dea503a41c703df39e23da6",
+  "color_method_value_counts": {
+    "NVC67E_SET_ILUT_CONTROL": {
+      "0x40508": 78
+    },
+    "NVC67E_SET_CONTEXT_DMA_ILUT": {
+      "0x10086": 78
+    },
+    "NVC67E_SET_OFFSET_ILUT": {
+      "0x0": 78
+    },
+    "NVC77D_HEAD_SET_OLUT_CONTROL(3)": {
+      "0x40508": 5,
+      "0x40509": 1
+    },
+    "NVC77D_HEAD_SET_CONTEXT_DMA_OLUT(3)": {
+      "0x10086": 5,
+      "0x10072": 1
+    },
+    "NVC77D_HEAD_SET_OFFSET_OLUT(3)": {
+      "0x21": 6
+    }
+  },
+  "method_records": 37622,
+  "trace_budget_remaining": 27914,
+  "limits": [
+    "One AD104/580.159.04 guest cell; SDR fixed XRGB scene.",
+    "Native shader/client control and KMS readback do not capture physical post-LUT pixels.",
+    "Warm control tests output gamma, not arbitrary input LUT/HDR transformations."
+  ]
+}

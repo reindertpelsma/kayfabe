@@ -1,0 +1,1 @@
+{"interface": "hmp", "socket": "/workspace/bench/run_c2refresh_before.mon", "ok": false, "error": "timed out", "elapsed_ms": 8012}

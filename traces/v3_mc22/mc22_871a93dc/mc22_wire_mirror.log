@@ -1,0 +1,11 @@
+BIN=/workspace/bench/kf-verify-target/debug/deps/wire_mirror-a999920b7610334f built=2026-09-30 14:43:13.052255606 +0000 by merge_check mc22 (rev 871a93dc, checkout /workspace/bench/verify-worktrees/mc22.7IthFe)
+
+running 4 tests
+test a_signature_that_drifted_from_kf3_h_is_refused ... ok
+test c_field_census_sees_members_even_when_they_could_fit_in_padding ... ok
+test the_c_header_and_rust_seam_declare_the_same_entry_points ... ok
+test the_c_header_and_rust_seam_have_identical_layouts ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+RC=0

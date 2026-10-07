@@ -1,0 +1,17 @@
+# kf3 display lane (M3): the stock NVIDIA X driver on the virtual NVDisplay. @BUSID@ is the kf3
+# device's guest PCI address (hook.sh fills it in from lspci).
+Section "ServerLayout"
+    Identifier "kf3"
+    Screen 0 "kf3-screen"
+EndSection
+
+Section "Device"
+    Identifier "kf3-gpu"
+    Driver "nvidia"
+    BusID "@BUSID@"
+EndSection
+
+Section "Screen"
+    Identifier "kf3-screen"
+    Device "kf3-gpu"
+EndSection

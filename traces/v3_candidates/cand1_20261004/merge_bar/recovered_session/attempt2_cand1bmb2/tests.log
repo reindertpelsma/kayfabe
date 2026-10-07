@@ -1,0 +1,2092 @@
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1150:5
+     |
+1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1432:5
+     |
+1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-util/src/lockwitness.rs:193:5
+    |
+193 |     pub fn is_vcpu() -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `a_coordinator_is_judged_on_DURATION_not_on_blocking_at_all` should have a snake case name
+    --> crates/kf-util/src/lock.rs:1565:8
+     |
+1565 |     fn a_coordinator_is_judged_on_DURATION_not_on_blocking_at_all() {
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `a_coordinator_is_judged_on_duration_not_on_blocking_at_all`
+     |
+     = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:814:5
+    |
+814 | /     fn on_read(
+815 | |         &self,
+816 | |         _model: &dyn GspModel,
+817 | |         _bar: u8,
+...   |
+820 | |         _state: &ArchBootState,
+821 | |     ) -> Option<u64> {
+    | |____________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:943:5
+    |
+943 |     fn libos_region_layout(&self) -> LibosRegionLayout;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates/kf-linux-raw/src/mapping_unsafe.rs:1170:5
+     |
+1170 |     pub fn load_u32(&self, offset: HostOffset) -> Result<u32, RawError> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: value assigned to `prop` is never read
+    --> crates/kf-cuda/src/driver_unsafe.rs:1811:9
+     |
+1811 |         prop.alloc_flags_reserved = [0; 4];
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: maybe it is overwritten before being read?
+     = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/kf-cuda/src/walk.rs:871:13
+    |
+871 |         let mut h: KfDev = crate::driver_unsafe::zeroed();
+    |             ----^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `cuMemUnmap` and `cuMemAddressFree` are never read
+   --> crates/kf-cuda/src/driver_unsafe.rs:253:16
+    |
+120 | pub struct Cuda {
+    |            ---- fields in this struct
+...
+253 |     pub(crate) cuMemUnmap: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
+    |                ^^^^^^^^^^
+254 |     pub(crate) cuMemAddressFree: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
+    |                ^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: missing documentation for a method
+    --> crates/kf-cuda/src/driver_unsafe.rs:1749:5
+     |
+1749 | /     pub fn export_device_allocation(
+1750 | |         &self,
+1751 | |         device: i32,
+1752 | |         bytes: usize,
+1753 | |     ) -> Result<ExportedAllocation, String> {
+     | |___________________________________________^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for the crate
+  --> crates/kf-cuda/tests/synth_origin.rs:1:1
+   |
+ 1 | / use kf_cuda::synth::*;
+ 2 | |
+ 3 | | #[test]
+ 4 | | fn an_image_at_an_origin_names_absolute_addresses_and_rewrites_nothing() {
+...  |
+56 | |     );
+57 | | }
+   | |_^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:2507:5
+     |
+2507 |     pub fn release_held(&mut self, ram: &mut dyn GuestRam) -> Result<usize, GspFault> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:2601:5
+     |
+2601 | /     pub fn post_event(
+2602 | |         &mut self,
+2603 | |         ram: &mut dyn GuestRam,
+2604 | |         rpc: &OutgoingRpc,
+2605 | |     ) -> Result<(), GspFault> {
+     | |_____________________________^
+
+warning: function `host_version_gate` is never used
+   --> crates/kf-host/src/lib.rs:270:4
+    |
+270 | fn host_version_gate(reported: Option<&str>) -> Result<String, String> {
+    |    ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: missing documentation for the crate
+  --> crates/kf-abi/tests/capability_policy_550.rs:1:1
+   |
+ 1 | / #[path = "support/capability_snapshot.rs"]
+ 2 | | mod capability_snapshot;
+ 3 | |
+ 4 | | #[test]
+...  |
+64 | | }
+   | |_^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a constant
+  --> crates/kf-trap/src/bitmap.rs:23:1
+   |
+23 | pub const N_TOKENS: usize = 1 << TOKEN_BITS;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a constant
+  --> crates/kf-trap/src/bitmap.rs:24:1
+   |
+24 | pub const N_WORDS: usize = N_TOKENS / 64;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates/kf-trap/src/bitmap.rs:25:1
+   |
+25 | pub const N_SUMMARY: usize = N_WORDS / 64;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates/kf-trap/src/bitmap.rs:27:1
+   |
+27 | pub struct RungBitmap {
+   | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates/kf-trap/src/bitmap.rs:54:5
+   |
+54 |     pub fn new() -> RungBitmap {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates/kf-trap/src/memmap.rs:32:1
+   |
+32 | pub const PAGE: u64 = 0x1000;
+   | ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:59:12
+   |
+59 |     Hole { why: &'static str },
+   |            ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:78:5
+   |
+78 |     pub bar: Bar,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:79:5
+   |
+79 |     pub base: u64,
+   |     ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:80:5
+   |
+80 |     pub len: u64,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:81:5
+   |
+81 |     pub how: Disposition,
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:87:5
+   |
+87 |     pub regions: Vec<Region>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:88:5
+   |
+88 |     pub bar0_bytes: u64,
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:89:5
+   |
+89 |     pub bar1_bytes: u64,
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:90:5
+   |
+90 |     pub bar2_bytes: u64,
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-trap/src/model.rs:29:1
+   |
+29 | pub enum S {
+   | ^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-trap/src/model.rs:30:5
+   |
+30 |     Idle,
+   |     ^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-trap/src/model.rs:31:5
+   |
+31 |     Rung,
+   |     ^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-trap/src/model.rs:32:5
+   |
+32 |     Busy,
+   |     ^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-trap/src/model.rs:33:5
+   |
+33 |     BusyRung,
+   |     ^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/ring.rs:44:5
+   |
+44 |     pub bar: u8,
+   |     ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/ring.rs:45:5
+   |
+45 |     pub offset: u32,
+   |     ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/ring.rs:46:5
+   |
+46 |     pub value: u64,
+   |     ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/ring.rs:47:5
+   |
+47 |     pub width: u8,
+   |     ^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-trap/src/ring.rs:51:1
+   |
+51 | pub enum Push {
+   | ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates/kf-trap/src/ring.rs:61:1
+   |
+61 | pub struct PrivRing {
+   | ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates/kf-trap/src/ring.rs:80:5
+   |
+80 |     pub fn new() -> PrivRing {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/ring.rs:179:5
+    |
+179 |     pub fn is_poisoned(&self) -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/ring.rs:183:5
+    |
+183 |     pub fn occupancy(&self) -> usize {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates/kf-trap/src/shadow.rs:41:5
+   |
+41 |     pub const fn new() -> Cell {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-trap/src/shadow.rs:45:5
+   |
+45 |     pub fn read(&self) -> u64 {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-trap/src/shadow.rs:98:1
+   |
+98 | pub enum ClearOutcome {
+   | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates/kf-trap/src/shadow.rs:110:5
+    |
+110 |     pub const fn new() -> Trigger {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/shadow.rs:185:5
+    |
+185 |     pub fn completed(&self) -> u64 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates/kf-trap/src/timer.rs:31:1
+   |
+31 | pub const GA106_BAR0_PAGES: u32 = GA106_BAR0_BYTES >> 12;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates/kf-trap/src/timer.rs:40:1
+   |
+40 | pub const VF_TIME_1: u32 = 0x30084;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/timer.rs:92:5
+   |
+92 |     pub hal: TimerHal,
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+   --> crates/kf-trap/src/token.rs:111:1
+    |
+111 | pub const HOST_TOKEN_MASK: u64 = (1 << HOST_TOKEN_BITS) - 1;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/token.rs:117:5
+    |
+117 |     pub state: State,
+    |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/token.rs:118:5
+    |
+118 |     pub route: Route,
+    |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/token.rs:119:5
+    |
+119 |     pub host_token: u32,
+    |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates/kf-trap/src/token.rs:126:5
+    |
+126 |     pub fn decode(w: u64) -> Token {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/token.rs:135:5
+    |
+135 |     pub fn encode(self) -> u64 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates/kf-trap/src/token.rs:173:5
+    |
+173 |     pub const fn new() -> TokenWord {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/token.rs:178:5
+    |
+178 |     pub fn load(&self) -> Token {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/trap.rs:49:9
+   |
+49 |         readable: bool,
+   |         ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/trap.rs:50:9
+   |
+50 |         semantics: WriteSemantics,
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/trap.rs:61:22
+   |
+61 |     RingHostInline { host_token: u32 },
+   |                      ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/trap.rs:80:5
+   |
+80 |     pub tokens: &'a [TokenWord],
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/trap.rs:81:5
+   |
+81 |     pub bits: &'a RungBitmap,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/trap.rs:85:5
+   |
+85 |     pub drainer_wake: &'a WakeWord,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/trap.rs:86:5
+   |
+86 |     pub ring: &'a PrivRing,
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates/kf-trap/src/trappolicy.rs:75:1
+   |
+75 | pub const PRAMIN_LEN: u64 = 0x0010_0000;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/trappolicy.rs:197:5
+    |
+197 |     pub bar: Bar,
+    |     ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/trappolicy.rs:198:5
+    |
+198 |     pub base: u64,
+    |     ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/trappolicy.rs:199:5
+    |
+199 |     pub len: u64,
+    |     ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/vmm.rs:61:22
+   |
+61 |     RingHostInline { host_token: u32 },
+   |                      ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/vmm.rs:119:5
+    |
+119 |     fn remove_memslot(&self, slot: SlotId) -> Result<(), VmmError>;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/vmm.rs:127:5
+    |
+127 |     fn signal_drainer(&self);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates/kf-trap/src/vmm.rs:137:1
+    |
+137 | pub struct SlotId(pub u32);
+    | ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+   --> crates/kf-trap/src/vmm.rs:140:1
+    |
+140 | pub enum VmmError {
+    | ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates/kf-trap/src/vmm.rs:141:5
+    |
+141 |     BadGpa,
+    |     ^^^^^^
+
+warning: missing documentation for a variant
+   --> crates/kf-trap/src/vmm.rs:142:5
+    |
+142 |     NoSlots,
+    |     ^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates/kf-trap/src/vmm.rs:143:5
+    |
+143 |     Refused,
+    |     ^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/vmm.rs:147:9
+    |
+147 |         bar: u8,
+    |         ^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/vmm.rs:148:9
+    |
+148 |         base: u64,
+    |         ^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/vmm.rs:149:9
+    |
+149 |         len: u64,
+    |         ^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-trap/src/vmm.rs:193:1
+    |
+193 | pub fn store_value(data: &mut [u8], v: u64) {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates/kf-trap/src/wake.rs:26:1
+   |
+26 | pub struct WakeWord(AtomicU64);
+   | ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates/kf-trap/src/wake.rs:42:5
+   |
+42 |     pub const fn new() -> WakeWord {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/wake.rs:104:5
+    |
+104 |     pub fn pollers(&self) -> u64 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-core/src/caps.rs:19:5
+   |
+19 |     Channel,
+   |     ^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a variant
+  --> crates/kf-core/src/caps.rs:20:5
+   |
+20 |     EngineObject,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-core/src/caps.rs:21:5
+   |
+21 |     AddressSpace,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-core/src/caps.rs:29:1
+   |
+29 | pub enum Refusal {
+   | ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/caps.rs:31:23
+   |
+31 |     OverDeclaredCap { twin: Twin, cap: u32, asked: u32 },
+   |                       ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/caps.rs:31:35
+   |
+31 |     OverDeclaredCap { twin: Twin, cap: u32, asked: u32 },
+   |                                   ^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/caps.rs:31:45
+   |
+31 |     OverDeclaredCap { twin: Twin, cap: u32, asked: u32 },
+   |                                             ^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-core/src/caps.rs:66:5
+   |
+66 |     pub fn acquire(&mut self, t: Twin) -> Result<(), Refusal> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-core/src/caps.rs:80:5
+   |
+80 |     pub fn release(&mut self, t: Twin) {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-core/src/caps.rs:86:5
+   |
+86 |     pub fn live(&self, t: Twin) -> u32 {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates/kf-core/src/caps.rs:106:5
+    |
+106 |     Backed {
+    |     ^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/caps.rs:107:9
+    |
+107 |         host_offset: u64,
+    |         ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates/kf-core/src/caps.rs:114:1
+    |
+114 | pub struct Aperture {
+    | ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/caps.rs:132:5
+    |
+132 |     pub fn back(&mut self, offset: u64, len: u64) -> Backing {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/caps.rs:145:5
+    |
+145 |     pub fn len(&self) -> u64 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/caps.rs:149:5
+    |
+149 |     pub fn is_empty(&self) -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/caps.rs:153:5
+    |
+153 |     pub fn refusals(&self) -> u64 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-core/src/channel.rs:32:5
+   |
+32 |     AtAllocation,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates/kf-core/src/channel.rs:48:1
+   |
+48 | pub struct Submission {
+   | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/channel.rs:49:5
+   |
+49 |     pub owner: Owner,
+   |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/channel.rs:50:5
+   |
+50 |     pub route: Route,
+   |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/channel.rs:51:5
+   |
+51 |     pub all_operands_translatable: bool,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/channel.rs:103:16
+    |
+103 |     Modelled { operand_words: u8 },
+    |                ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/channel.rs:150:16
+    |
+150 |     TooLarge { want: u64, max: u64 },
+    |                ^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/channel.rs:150:27
+    |
+150 |     TooLarge { want: u64, max: u64 },
+    |                           ^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/channel.rs:158:5
+    |
+158 |     pub fn name(&self) -> &'static str {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-core/src/completion.rs:80:1
+   |
+80 | pub enum Raise {
+   | ^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates/kf-core/src/completion.rs:88:5
+   |
+88 |     pub const fn new() -> EngineIrq {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-core/src/completion.rs:97:5
+   |
+97 |     pub fn arm(&self) {
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/completion.rs:130:5
+    |
+130 |     pub fn mask(&self) {
+    |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/completion.rs:142:5
+    |
+142 |     pub fn retired_count(&self) -> u64 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/leaf.rs:38:5
+   |
+38 |     pub block: u32,
+   |     ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/leaf.rs:39:5
+   |
+39 |     pub offset: u64,
+   |     ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/leaf.rs:40:5
+   |
+40 |     pub len: u64,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-core/src/leaf.rs:44:1
+   |
+44 | pub enum LeafRefusal {
+   | ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-core/src/leaf.rs:85:5
+   |
+85 |     pub fn contains_gpa(&self, gpa: u64) -> bool {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates/kf-core/src/leaf.rs:104:5
+    |
+104 |     pub fn new() -> GuestRamLayout {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/leaf.rs:107:5
+    |
+107 |     pub fn register(&mut self, b: GuestRamBlock) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates/kf-core/src/lifetime.rs:56:1
+   |
+56 | pub const ORDER: [Step; 9] = [
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-core/src/lifetime.rs:69:1
+   |
+69 | pub enum TeardownError {
+   | ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/lifetime.rs:71:18
+   |
+71 |     OutOfOrder { attempted: Step, expected: Step },
+   |                  ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/lifetime.rs:71:35
+   |
+71 |     OutOfOrder { attempted: Step, expected: Step },
+   |                                   ^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates/kf-core/src/lifetime.rs:83:5
+   |
+83 |     pub fn new() -> Teardown {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-core/src/lifetime.rs:87:5
+   |
+87 |     pub fn run(&mut self, s: Step) -> Result<(), TeardownError> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/lifetime.rs:104:5
+    |
+104 |     pub fn complete(&self) -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+   --> crates/kf-core/src/lifetime.rs:120:1
+    |
+120 | pub enum Diff {
+    | ^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates/kf-core/src/plane.rs:122:5
+    |
+122 |     pub const fn new() -> Vmm {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/plane.rs:134:5
+    |
+134 |     pub tokens: Vec<TokenWord>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/plane.rs:135:5
+    |
+135 |     pub bits: RungBitmap,
+    |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/plane.rs:140:5
+    |
+140 |     pub ring: PrivRing,
+    |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/plane.rs:141:5
+    |
+141 |     pub token_mask: u32,
+    |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/plane.rs:262:5
+    |
+262 |     pub fn worker_wake(&self) -> &WakeWord {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/kf-chan/src/dbfast.rs:504:14
+    |
+504 |             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+504 -             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+504 +             .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+    |
+
+warning: unused import: `kf_abi::submit as s`
+   --> crates/kf-rm/src/authored.rs:452:9
+    |
+452 |     use kf_abi::submit as s;
+    |         ^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: missing documentation for a constant
+  --> crates/kf-mem/src/addr.rs:35:1
+   |
+35 | pub const PAGE: u64 = 0x1000;
+   | ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for an enum
+  --> crates/kf-mem/src/store.rs:14:1
+   |
+14 | pub enum StoreRefusal {
+   | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-mem/src/store.rs:17:9
+   |
+17 |         offset: u64,
+   |         ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-mem/src/store.rs:18:9
+   |
+18 |         len: u64,
+   |         ^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-mem/src/store.rs:19:9
+   |
+19 |         object: u64,
+   |         ^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-mem/src/store.rs:21:5
+   |
+21 |     ZeroLength,
+   |     ^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-mem/src/store.rs:25:5
+   |
+25 |     pub fn name(&self) -> &'static str {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates/kf-mem/src/store.rs:41:5
+   |
+41 |     pub fn new(token: HostToken, len: u64) -> Store {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-mem/src/store.rs:44:5
+   |
+44 |     pub fn token(&self) -> HostToken {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-mem/src/store.rs:47:5
+   |
+47 |     pub fn len(&self) -> u64 {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-mem/src/store.rs:50:5
+   |
+50 |     pub fn is_empty(&self) -> bool {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-chan/src/translated.rs:386:17
+    |
+386 |     BadHeader { at: usize, word: u32 },
+    |                 ^^^^^^^^^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a struct field
+   --> crates/kf-chan/src/translated.rs:386:28
+    |
+386 |     BadHeader { at: usize, word: u32 },
+    |                            ^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-chan/src/translated.rs:388:17
+    |
+388 |     Truncated { at: usize },
+    |                 ^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-chan/src/translated.rs:392:22
+    |
+392 |     Untranslatable { target: Target, phys: u64, len: u64 },
+    |                      ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-chan/src/translated.rs:392:38
+    |
+392 |     Untranslatable { target: Target, phys: u64, len: u64 },
+    |                                      ^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-chan/src/translated.rs:392:49
+    |
+392 |     Untranslatable { target: Target, phys: u64, len: u64 },
+    |                                                 ^^^^^^^^
+
+warning: unused import: `std::sync::atomic::AtomicBool`
+   --> crates/kf-trap/src/tests.rs:616:5
+    |
+616 | use std::sync::atomic::AtomicBool;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `hopper_and_blackwell_have_a_read_exit_and_each_one_is_NAMED` should have a snake case name
+  --> crates/kf-trap/tests/memory_map.rs:54:4
+   |
+54 | fn hopper_and_blackwell_have_a_read_exit_and_each_one_is_NAMED() {
+   |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `hopper_and_blackwell_have_a_read_exit_and_each_one_is_named`
+   |
+   = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: function `a_hole_is_installed_by_NOT_installing_it` should have a snake case name
+   --> crates/kf-trap/tests/memory_map.rs:314:4
+    |
+314 | fn a_hole_is_installed_by_NOT_installing_it() {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `a_hole_is_installed_by_not_installing_it`
+
+warning: variable does not need to be mutable
+    --> crates/kf-core/src/tests.rs:1039:9
+     |
+1039 |     let mut p = Plane::new(&vmm, 32, 0x1f);
+     |         ----^
+     |         |
+     |         help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+    --> crates/kf-core/src/tests.rs:1067:9
+     |
+1067 |     let mut p = Plane::new(&vmm, 32, 0x1f);
+     |         ----^
+     |         |
+     |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+    --> crates/kf-core/src/tests.rs:1086:9
+     |
+1086 |     let mut p = Plane::new(&vmm, 32, 0x1f);
+     |         ----^
+     |         |
+     |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+    --> crates/kf-core/src/tests.rs:1114:9
+     |
+1114 |     let mut p = Plane::new(&vmm, 32, 0x1f);
+     |         ----^
+     |         |
+     |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+    --> crates/kf-core/src/tests.rs:1193:9
+     |
+1193 |     let mut p = Plane::new(&vmm, 32, 0x1f);
+     |         ----^
+     |         |
+     |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+    --> crates/kf-core/src/tests.rs:1229:9
+     |
+1229 |     let mut p = Plane::new(&vmm, 32, 0x1f);
+     |         ----^
+     |         |
+     |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+    --> crates/kf-core/src/tests.rs:1247:9
+     |
+1247 |     let mut p = Plane::new(&vmm, 32, 0x1f);
+     |         ----^
+     |         |
+     |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+    --> crates/kf-core/src/tests.rs:1270:9
+     |
+1270 |     let mut p = Plane::new(&vmm, 32, 0x1f);
+     |         ----^
+     |         |
+     |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+    --> crates/kf-core/src/tests.rs:1296:9
+     |
+1296 |     let mut p = Plane::new(&vmm, 32, 0x1f);
+     |         ----^
+     |         |
+     |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+    --> crates/kf-core/src/tests.rs:1321:9
+     |
+1321 |     let mut p = Plane::new(&vmm, 32, 0x1f);
+     |         ----^
+     |         |
+     |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+    --> crates/kf-core/src/tests.rs:1350:9
+     |
+1350 |     let mut p = Plane::new(&vmm, 16, 0xf);
+     |         ----^
+     |         |
+     |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+    --> crates/kf-core/src/tests.rs:1362:9
+     |
+1362 |     let mut p = Plane::new(&vmm, 32, 0x1f);
+     |         ----^
+     |         |
+     |         help: remove this `mut`
+
+warning: function `a_privileged_write_wakes_the_DRAINER_not_a_worker` should have a snake case name
+   --> crates/kf-trap/src/tests.rs:537:4
+    |
+537 | fn a_privileged_write_wakes_the_DRAINER_not_a_worker() {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `a_privileged_write_wakes_the_drainer_not_a_worker`
+    |
+    = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: missing documentation for the crate
+  --> crates/kf-mem/tests/store_is_a_bounds_check.rs:1:1
+   |
+ 1 | / use kf_mem::*;
+ 2 | |
+ 3 | | #[test]
+ 4 | | fn a_slice_inside_the_object_is_its_own_offset() {
+...  |
+26 | |     assert_eq!(s.slice(0, 0).unwrap_err().name(), "store_zero_length");
+27 | | }
+   | |_^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+  --> crates/kf-rm/src/rpc.rs:84:1
+   |
+84 | pub fn name_of(function: u32) -> Option<&'static str> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a constant
+   --> crates/kf-rm/src/rpc.rs:135:1
+    |
+135 | pub const CONTROLS: [(u32, ControlDisposition); 33] = [
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-rm/src/rpc.rs:201:1
+    |
+201 | pub fn control_disposition(cmd: u32) -> ControlDisposition {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> crates/kf-harness/src/bin/kf-gate9.rs:494:9
+    |
+494 |     let mut gpu_at = |n: u64, v: &mut Vec<u64>, us: u64| {
+    |         ----^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/kf-harness/src/bin/kf-gate4.rs:492:9
+    |
+492 |     let mut plane = Plane::for_family(
+    |         ----^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+    --> crates/kf-qemu/src/chan.rs:1405:22
+     |
+1405 |                     .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+     |                      ^^^^^^^^^^^^
+     |
+     = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+     |
+1405 -                     .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+1405 +                     .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+     |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+    --> crates/kf-qemu/src/device.rs:1050:23
+     |
+1050 |             let _ = w.fetch_update(Ordering::AcqRel, Ordering::Acquire, |old| {
+     |                       ^^^^^^^^^^^^
+     |
+help: replace the use of the deprecated method
+     |
+1050 -             let _ = w.fetch_update(Ordering::AcqRel, Ordering::Acquire, |old| {
+1050 +             let _ = w.try_update(Ordering::AcqRel, Ordering::Acquire, |old| {
+     |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+    --> crates/kf-qemu/src/device.rs:2920:10
+     |
+2920 |     left.fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+     |          ^^^^^^^^^^^^
+     |
+help: replace the use of the deprecated method
+     |
+2920 -     left.fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+2920 +     left.try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+     |
+
+
+running 422 tests
+....................................................................................... 87/422
+....................................................................................... 174/422
+....................................................................................... 261/422
+....................................................................................... 348/422
+..........................................................................
+test result: ok. 422 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 10 tests
+..........
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.96s
+
+
+running 8 tests
+........
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 19 tests
+...................
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 7 tests
+.......
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 6 tests
+......
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 27 tests
+...........................
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 22 tests
+......................
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 4 tests
+....
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 4 tests
+....
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.53s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 9 tests
+.........
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+
+running 6 tests
+......
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+KVM-GATE: RAN every_token_refused_by_the_kernel_the_fd_limit_or_the_budget_still_works_through_the_trap
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+
+running 2 tests
+KVM-GATE: RAN churning_births_and_frees_never_lose_a_store_or_ring_the_wrong_twin
+KVM-GATE: RAN registered_tokens_skip_the_exit_and_everything_else_traps_in_order
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.89s
+
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+
+running 6 tests
+......
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 15 tests
+...............
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 32 tests
+................................
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 11 tests
+...........
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.61s
+
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 5 tests
+.....
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 6 tests
+......
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 47 tests
+...............................................
+test result: ok. 47 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 11 tests
+...........
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.84s
+
+
+running 9 tests
+.........
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.19s
+
+
+running 30 tests
+.......................CAP-GATE: RAN kf-cuda live_cap_open_clears_before_dlopen (CAP_SYS_ADMIN was in the effective set: the real capset ran)
+CAP-GATE: RAN kf-cuda live_cap_cuda_thread_clears_before_the_first_call (CAP_SYS_ADMIN was in the effective set: the real capset ran)
+.......
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.14s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 9 tests
+.........
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 7 tests
+.......
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+
+running 4 tests
+....
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 48 tests
+................................................
+test result: ok. 48 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.87s
+
+
+running 5 tests
+.....
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 26 tests
+..........................
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 21 tests
+CAP-GATE: RAN kf-host live_cap_born_user_issues_without_cap_sys_admin (CAP_SYS_ADMIN was in the effective set: the real capset ran)
+.....................
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+
+running 5 tests
+.....
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+
+running 141 tests
+CAP-GATE: RAN kf-linux-raw live_cap_bracket_clears_effective_for_the_call_and_restores_it (CAP_SYS_ADMIN was in the effective set: the real capset ran)
+CAP-GATE: RAN kf-linux-raw live_cap_bracket_never_touches_another_thread (CAP_SYS_ADMIN was in the effective set: the real capset ran)
+CAP-GATE: RAN kf-linux-raw live_cap_thread_life_clear_is_inherited_and_stays (CAP_SYS_ADMIN was in the effective set: the real capset ran)
+.............................................KVM-GATE: RAN a_misaligned_memslot_is_the_kernels_einval_not_our_opinion
+.KVM-GATE: RAN a_real_vm_reports_a_real_memslot_ceiling
+KVM-GATE: RAN a_slot_index_past_the_ceiling_is_a_real_kernel_refusal
+...KVM-GATE: RAN a_window_installed_as_a_memslot_can_be_read_and_removed
+.KVM-GATE: RAN overlapping_memslots_are_refused_by_the_kernel
+.KVM-GATE: RAN the_confirmation_accepts_a_real_machine
+.................................... 87/141
+..................KVM-GATE: RAN a_guest_store_into_a_read_only_memslot_faults_out_and_never_reaches_the_backing
+KVM-GATE: RAN a_completed_mmio_load_is_the_value_the_guest_then_stores
+KVM-GATE: RAN a_guest_executes_out_of_a_file_backed_placement
+KVM-GATE: RAN a_guest_reads_the_memslot_we_installed_and_exits_when_it_is_gone
+..KVM-GATE: RAN an_out_of_range_mmio_completion_width_is_refused_by_that_exact_variant
+KVM-GATE: RAN datamatch_ioeventfd_on_a_read_only_slot_signals_its_token_and_everything_else_exits
+.........KVM-GATE: RAN a_sub_range_memslot_address_advances_by_exactly_its_offset
+.........................
+test result: ok. 141 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+
+
+running 2 tests
+.   Compiling libc v0.2.189
+    Checking kf-util v0.1.0 (/workspace/bench/verify-worktrees/cand1bmb2.ldK7Pa/crates/kf-util)
+warning: missing documentation for a function
+    --> /workspace/bench/verify-worktrees/cand1bmb2.ldK7Pa/crates/kf-util/src/lock.rs:1150:5
+     |
+1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+    --> /workspace/bench/verify-worktrees/cand1bmb2.ldK7Pa/crates/kf-util/src/lock.rs:1432:5
+     |
+1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> /workspace/bench/verify-worktrees/cand1bmb2.ldK7Pa/crates/kf-util/src/lockwitness.rs:193:5
+    |
+193 |     pub fn is_vcpu() -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-util` (lib) generated 3 warnings
+    Checking kf-arch v0.1.0 (/workspace/bench/verify-worktrees/cand1bmb2.ldK7Pa/crates/kf-arch)
+warning: missing documentation for a method
+   --> /workspace/bench/verify-worktrees/cand1bmb2.ldK7Pa/crates/kf-arch/src/gsp.rs:814:5
+    |
+814 | /     fn on_read(
+815 | |         &self,
+816 | |         _model: &dyn GspModel,
+817 | |         _bar: u8,
+...   |
+820 | |         _state: &ArchBootState,
+821 | |     ) -> Option<u64> {
+    | |____________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+   --> /workspace/bench/verify-worktrees/cand1bmb2.ldK7Pa/crates/kf-arch/src/gsp.rs:943:5
+    |
+943 |     fn libos_region_layout(&self) -> LibosRegionLayout;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-arch` (lib) generated 2 warnings
+    Checking kf-linux-raw v0.1.0 (/workspace/bench/verify-worktrees/cand1bmb2.ldK7Pa/crates/kf-linux-raw)
+warning: missing documentation for a method
+    --> /workspace/bench/verify-worktrees/cand1bmb2.ldK7Pa/crates/kf-linux-raw/src/mapping_unsafe.rs:1170:5
+     |
+1170 |     pub fn load_u32(&self, offset: HostOffset) -> Result<u32, RawError> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: `kf-linux-raw` (lib) generated 1 warning
+    Checking kf-linux-raw-tests v0.0.0 (/workspace/bench/kf-target-cand1b2/tests/trybuild/kf-linux-raw)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.68s
+
+
+test tests/ui/cache_policy_has_no_default.rs ... ok
+test tests/ui/map_fixed_bare_address.rs ... ok
+test tests/ui/no_base_address.rs ... ok
+test tests/ui/no_borrow_escape.rs ... ok
+test tests/ui/no_wide_volatile_load.rs ... ok
+test tests/ui/offset_arithmetic.rs ... ok
+test tests/ui/page_size_literal.rs ... ok
+test tests/ui/region_is_not_sync.rs ... ok
+test tests/ui/view_outlives_region.rs ... ok
+
+
+.
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.18s
+
+
+running 4 tests
+MEMTYPE-GATE: RAN visible_system_ram_satisfies_a_write_back_request
+..MEMTYPE-GATE: TIMED the_downgrade_that_111_was_is_visible_and_ordinary_memory_is_not attempt 1/4 — cached 203.33/210.32 ns/read (spread 1.03x), device 8885.98 ns/read, ratio 42.3x, verdict UncachedClass
+MEMTYPE-GATE: RAN the_downgrade_that_111_was_is_visible_and_ordinary_memory_is_not
+..
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+
+running 4 tests
+KVM-GATE: RAN an_adopted_descriptor_reaches_the_address_space_it_was_duplicated_from
+.KVM-GATE: RAN two_machines_in_one_process_are_refused_rather_than_guessed_between
+.KVM-GATE: RAN the_discovered_machine_is_the_one_this_process_created_and_shares_its_address_space
+..
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+
+running 4 tests
+....
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 93 tests
+....................................................................................... 87/93
+......
+test result: ok. 93 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.38s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+
+running 26 tests
+..........................
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 61 tests
+.............................................................
+test result: ok. 61 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 4 tests
+....
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+
+running 38 tests
+......................................
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+
+running 4 tests
+....
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 7 tests
+.......
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 7 tests
+.......
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.84s
+
+
+running 5 tests
+.....
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 9 tests
+.........
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 11 tests
+...........
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 5 tests
+.....
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 16 tests
+................
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 12 tests
+............
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 10 tests
+..........
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 21 tests
+.....................
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 6 tests
+......
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 8 tests
+........
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 6 tests
+......
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 6 tests
+......
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+
+running 8 tests
+........
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 8 tests
+........
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 11 tests
+...........
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 10 tests
+..........
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 11 tests
+...........
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 13 tests
+.............
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 28 tests
+............................
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+
+running 6 tests
+......
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 11 tests
+...........
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+
+
+running 24 tests
+........................
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.13s
+
+
+running 5 tests
+.....
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 12 tests
+............
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 18 tests
+..................
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 9 tests
+.........
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 8 tests
+........
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 8 tests
+........
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 14 tests
+..............
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 4 tests
+....
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 19 tests
+...................
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.10s
+
+
+running 101 tests
+....................................................................................... 87/101
+..............
+test result: ok. 101 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 12 tests
+............
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 10 tests
+..........
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 4 tests
+....
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 6 tests
+......
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 18 tests
+..................
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 9 tests
+.........
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 62 tests
+..............................................................
+test result: ok. 62 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+
+running 8 tests
+........
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+
+running 10 tests
+..........
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 55 tests
+.......................................................
+test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.85s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+all doctests ran in 0.51s; merged doctests compilation took 0.39s
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

@@ -1,0 +1,13 @@
+RUN42_BUILD_START 2026-10-07T19:23:02+02:00
+c53554788 Fix the test helpers' table lookup (Result, not Option)
+DIRTY=0
+V3_GATES_SUMMARY pass=9 fail=0
+V3_GATES_BIRTHS births=11 user=11 refused=0 ok=1
+V3_GATES_EXIT pass=9 fail=0 births_ok=1 2026-10-07T19:23:14+02:00
+XID_BEFORE=5
+GR_TIER_VERDICT=PASS
+ORACLE_RC=0
+XID_AFTER=5
+[3/4] Linking target qemu-system-x86_64
+KF3_BUILT /var/lib/kf-windows-20261005/kf3-bins/c5355478/qemu-system-x86_64 rev=c5355478 mtime=2026-10-07 19:23:29.278755812 +0200 (shared build dir /var/lib/kf-windows-20261005/qemu-build-kf3)
+RUN42_BUILD_EXIT 0 2026-10-07T19:23:29+02:00

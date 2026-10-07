@@ -1,0 +1,239 @@
+GSP-RM RPC message-queue recorder — hooks for open-gpu-kernel-modules 580.159.04
+
+Task #178, `replay-conformance`. Spec: docs/design/rpc_trace_capture.md.
+
+WHAT THIS PATCH DOES, AND WHAT IT DELIBERATELY DOES NOT.
+
+It adds two capture points and three failure-accounting calls to the GSP message
+queue, and nothing else. It changes no control flow, no status code and no
+timing-sensitive ordering; every added statement is either a call into the
+recorder or a local initialisation. The recorder itself is NOT in this patch —
+it is `nv_rpctrace.c` / `nv_rpctrace.h`, dropped into the checkout by
+`scripts/rpctrace/build_instrumented.sh`, so that no NVIDIA source file grows a
+body of ours.
+
+★★★ THE PLACEMENTS ARE THE LOAD-BEARING PART.
+
+  send    — BEFORE the `gpuIsCCFeatureEnabled` block in GspMsgQueueSendCommand.
+            ccslEncryptWithRotationChecks() encrypts the element IN PLACE (same
+            buffer as source and destination), so a hook after that block records
+            ciphertext and reports no error. CC is off on our benches, which means
+            both placements are byte-identical today — the reason to get it right
+            now is that the wrong one fails first on hardware nobody has captured.
+
+  receive — AFTER the ccslDecryptWithRotationChecks() block in
+            GspMsgQueueReceiveStatus, and after the msgLen sanity check, so the
+            bytes are plaintext and the record can state whether the declared
+            length agreed with what was actually present.
+
+★★ AND THE ACCOUNTING IS PART OF THE INSTRUMENT, not decoration. A send that
+returns BUSY_RETRY composed an element that never went on the wire; it is
+recorded and flagged NV_RPCTRACE_F_NOT_SENT rather than omitted or silently
+kept. A receive that fails after retries has no element at all, so it produces
+no record — only a counted hole, because a row with a length and no bytes is the
+`dlen=0` defect (11 of 56 rows in the C artifact's control table) that this whole
+recorder exists to make structurally impossible.
+
+Apply with: git apply -p1  (or patch -p1) from the root of an
+open-gpu-kernel-modules 580.159.04 checkout. `build_instrumented.sh` does it.
+---
+diff -u -r a/kernel-open/nvidia/nv-procfs.c b/kernel-open/nvidia/nv-procfs.c
+--- a/kernel-open/nvidia/nv-procfs.c
++++ b/kernel-open/nvidia/nv-procfs.c
+@@ -29,6 +29,7 @@
+ #if defined(CONFIG_PROC_FS)
+ 
+ #include "nv-procfs.h"
++#include "nv_rpctrace.h"   // kayfabe rpctrace: GSP-RM RPC recorder
+ #include "nv_compiler.h"
+ #include "nv-reg.h"
+ #include "conftest/patches.h"
+@@ -1366,6 +1367,14 @@
+     proc_nvidia_gpus = NV_CREATE_PROC_DIR("gpus", proc_nvidia);
+     if (!proc_nvidia_gpus)
+         goto failed;
++
++    //
++    // kayfabe rpctrace: allocate the ring and publish /proc/driver/nvidia/rpctrace.
++    // Ordered here on purpose — it needs proc_nvidia to exist, and it must be armed
++    // before any GPU is probed, because the first RPCs go out during GSP bring-up.
++    //
++    if (nv_rpctrace_procfs_init(proc_nvidia) != 0)
++        goto failed;
+ #endif
+     return 0;
+ #if defined(CONFIG_PROC_FS)
+@@ -1379,6 +1388,7 @@
+ {
+ #if defined(CONFIG_PROC_FS)
+     proc_remove(proc_nvidia);
++    nv_rpctrace_shutdown();   // kayfabe rpctrace: free the ring after its proc entry is gone
+ #endif
+ }
+ 
+diff -u -r a/kernel-open/nvidia/nvidia-sources.Kbuild b/kernel-open/nvidia/nvidia-sources.Kbuild
+--- a/kernel-open/nvidia/nvidia-sources.Kbuild
++++ b/kernel-open/nvidia/nvidia-sources.Kbuild
+@@ -21,6 +21,7 @@
+ NVIDIA_SOURCES += nvidia/nv-p2p.c
+ NVIDIA_SOURCES += nvidia/nv-pat.c
+ NVIDIA_SOURCES += nvidia/nv-procfs.c
++NVIDIA_SOURCES += nvidia/nv_rpctrace.c
+ NVIDIA_SOURCES += nvidia/nv-usermap.c
+ NVIDIA_SOURCES += nvidia/nv-vm.c
+ NVIDIA_SOURCES += nvidia/nv-vtophys.c
+diff -u -r a/src/nvidia/src/kernel/gpu/gsp/message_queue_cpu.c b/src/nvidia/src/kernel/gpu/gsp/message_queue_cpu.c
+--- a/src/nvidia/src/kernel/gpu/gsp/message_queue_cpu.c
++++ b/src/nvidia/src/kernel/gpu/gsp/message_queue_cpu.c
+@@ -48,6 +48,16 @@
+ 
+ #include "gpu/gsp/message_queue.h"
+ #include "gpu/gsp/message_queue_priv.h"
++
++//
++// kayfabe rpctrace: the GSP-RM RPC recorder. This header is NOT part of the
++// NVIDIA tree; `scripts/rpctrace/build_instrumented.sh` copies it in beside
++// message_queue_priv.h before applying this patch. It carries the record format
++// and three prototypes; the implementation lives in the OS layer
++// (kernel-open/nvidia/nv_rpctrace.c) and resolves at module link time, exactly
++// like the driver's own os_* calls.
++//
++#include "gpu/gsp/nv_rpctrace.h"
+ #include "msgq/msgq_priv.h"
+ #include "gpu/gsp/kernel_gsp.h"
+ #include "nvrm_registry.h"
+@@ -464,6 +474,7 @@
+     NV_STATUS  nvStatus         = NV_OK;
+     NvU32      msgLen           = GSP_MSG_QUEUE_ELEMENT_HDR_SIZE +
+                                   pMQI->pCmdQueueElement->rpc.length;
++    NvU32      rpcTraceSeq      = NV_RPCTRACE_NO_REC;   // kayfabe rpctrace
+ 
+     if ((msgLen < sizeof(GSP_MSG_QUEUE_ELEMENT)) ||
+         (msgLen > GSP_MSG_QUEUE_ELEMENT_SIZE_MAX))
+@@ -482,6 +493,38 @@
+     pCQE->elemCount = GSP_MSG_QUEUE_BYTES_TO_ELEMENTS(msgLen);
+     pCQE->checkSum  = 0; // The checkSum field is included in the checksum calculation, so zero it.
+ 
++    //
++    // ★★★ kayfabe rpctrace — CPU→GSP hook. PLACEMENT IS THE POINT.
++    //
++    // This is BEFORE the `if (gpuIsCCFeatureEnabled(pGpu))` block immediately
++    // below, which calls ccslEncryptWithRotationChecks() with `pSrc + HDR` as
++    // BOTH source and destination — it encrypts the element IN PLACE. A hook
++    // placed after that block records CIPHERTEXT, and reports no error at all
++    // while doing so. Confidential Compute is off on our benches, so the two
++    // placements produce byte-identical output today; that is precisely why the
++    // wrong one would survive and would first be wrong on the CC part nobody has
++    // captured yet.
++    //
++    // Consequence, stated rather than buried: pCQE->checkSum is still 0 in the
++    // recorded bytes, because the checksum is computed after this point in BOTH
++    // branches. No placement has plaintext and checksum together, and plaintext
++    // is the one that carries information.
++    //
++    // The record is written here but its transport outcome is stamped at `done:`
++    // below, because a send can fail with NV_ERR_BUSY_RETRY after the element was
++    // composed — and an element that was never put on the wire must not read as
++    // one that was.
++    //
++    rpcTraceSeq = nv_rpctrace_record(NV_RPCTRACE_DIR_CPU_TO_GSP,
++                                     pCQE->rpc.function,
++                                     pCQE->rpc.length,
++                                     pCQE->seqNum,
++                                     pCQE->rpc.rpc_result,
++                                     gpuIsCCFeatureEnabled(pGpu) ?
++                                         NV_RPCTRACE_F_CC_ENABLED : 0,
++                                     pSrc,
++                                     msgLen);
++
+     if (gpuIsCCFeatureEnabled(pGpu))
+     {
+         ConfidentialCompute *pCC = GPU_GET_CONF_COMPUTE(pGpu);
+@@ -508,6 +551,7 @@
+                 NV_PRINTF(LEVEL_ERROR, "Fatal error detected in RPC encrypt: IV overflow!\n");
+                 confComputeSetErrorState(pGpu, pCC);
+             }
++            nv_rpctrace_set_outcome(rpcTraceSeq, nvStatus);  // kayfabe rpctrace
+             return nvStatus;
+         }
+ 
+@@ -590,6 +634,14 @@
+     nvStatus = NV_OK;
+ 
+ done:
++    //
++    // kayfabe rpctrace: stamp the transport outcome onto the record written
++    // above. A non-zero status sets NV_RPCTRACE_F_NOT_SENT, so a replay can tell
++    // "the driver composed this" from "the driver transmitted this". BUSY_RETRY
++    // makes the caller re-send the same element, which appears in the trace as
++    // two records with the same elem_seq — the first flagged NOT_SENT.
++    //
++    nv_rpctrace_set_outcome(rpcTraceSeq, nvStatus);
+     return nvStatus;
+ }
+ 
+@@ -731,6 +783,12 @@
+         else
+         {
+             NV_PRINTF(LEVEL_ERROR, "Read failed after %d retries.\n", nRetries);
++            //
++            // kayfabe rpctrace: there is no valid element here, so there is no
++            // record — only a counted hole. ⊘ Emitting a zero-length row would be
++            // the `dlen=0` defect this recorder exists to remove.
++            //
++            nv_rpctrace_note_rx_error(nvStatus);
+             goto exit;
+         }
+     }
+@@ -752,6 +810,7 @@
+             // Do not re-try if decryption failed. Decryption failure is considered fatal.
+             NV_PRINTF(LEVEL_ERROR, "Fatal error detected in RPC decrypt: 0x%x!\n", nvStatus);
+             confComputeSetErrorState(pGpu, pCC);
++            nv_rpctrace_note_rx_error(nvStatus);  // kayfabe rpctrace
+             return nvStatus;
+         }
+     }
+@@ -769,6 +828,43 @@
+         nvStatus = NV_ERR_INVALID_PARAM_STRUCT;
+     }
+ 
++    //
++    // ★★★ kayfabe rpctrace — GSP→CPU hook. PLACEMENT IS THE POINT.
++    //
++    // This is AFTER the ccslDecryptWithRotationChecks() block above, so the
++    // recorded bytes are PLAINTEXT — the exact mirror of the send hook, which
++    // must be BEFORE its encrypt block. It is also after the msgLen sanity
++    // check, so the record can state whether the DECLARED length agreed with the
++    // bytes actually present instead of quietly reconciling them.
++    //
++    // ⊘ capLen is never the declared length. It is the number of bytes this
++    // function actually copied into the staging element (nElements queue pages),
++    // or the declared length when that is both valid and smaller. Either way it
++    // is bytes we HAVE. The recorder refuses anything above one element's
++    // maximum rather than truncating, so a corrupt nElements from the GPU costs
++    // a counted refusal, not an out-of-bounds read.
++    //
++    {
++        NvU32 rpcTraceElemBytes = nElements * GSP_MSG_QUEUE_ELEMENT_SIZE_MIN;
++        NvU32 rpcTraceCapLen    = rpcTraceElemBytes;
++        NvU32 rpcTraceFlags     = gpuIsCCFeatureEnabled(pGpu) ?
++                                      NV_RPCTRACE_F_CC_ENABLED : 0;
++
++        if ((nvStatus == NV_OK) && (msgLen <= rpcTraceElemBytes))
++            rpcTraceCapLen = msgLen;
++        else
++            rpcTraceFlags |= NV_RPCTRACE_F_LEN_DISAGREE;
++
++        nv_rpctrace_record(NV_RPCTRACE_DIR_GSP_TO_CPU,
++                           pMQI->pCmdQueueElement->rpc.function,
++                           pMQI->pCmdQueueElement->rpc.length,
++                           pMQI->pCmdQueueElement->seqNum,
++                           pMQI->pCmdQueueElement->rpc.rpc_result,
++                           rpcTraceFlags,
++                           pMQI->pCmdQueueElement,
++                           rpcTraceCapLen);
++    }
++
+ exit:
+ 
+     nRet = msgqRxMarkConsumed(pMQI->hQueue, nElements);

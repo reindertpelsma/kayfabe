@@ -1,0 +1,1 @@
+DSW_TRACE_TOTALS dsw_calls=0 dsw_addr_valid=0 dsw_sem=0 dsw_ntf=0 dsw_err=0 sem_calls=0 sem_err=0 ntf_calls=0 ntf_err=0 map_found=0 map_null=0 map_kva_null=0 map_kva_set=0 drains=1696779 drain_client_lookups=0 drain_client_fail=0 drain_dev_lookups=0 drain_dev_fail=0 drain_event_lookups=0 drain_event_fail=0

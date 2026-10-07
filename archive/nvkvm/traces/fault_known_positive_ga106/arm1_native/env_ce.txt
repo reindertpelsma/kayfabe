@@ -1,0 +1,8 @@
+date=2026-08-12T16:01:13Z
+uname=Linux ubuntu 6.8.0-59-generic #61~22.04.1-Ubuntu SMP PREEMPT_DYNAMIC Tue Apr 15 17:03:15 UTC 2 x86_64 x86_64 x86_64 GNU/Linux
+driver=NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+devnodes=/dev/nvidia-uvm /dev/nvidia-uvm-tools /dev/nvidia0 /dev/nvidiactl  /dev/nvidia-caps: nvidia-cap1 nvidia-cap2 
+libcuda=	libcuda.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libcuda.so.1
+stage=ce runs=0
+shim_md5=f4bbadc8a0a072c859990a162e4bde87
+prog_md5=326fb0bac2d5ec7b844fb9513f6923f7

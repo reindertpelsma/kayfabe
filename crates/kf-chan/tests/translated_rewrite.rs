@@ -1,0 +1,652 @@
+//! w826 — the Translated channel's rewriter, GPU-free.
+use kf_abi::submit::{ce, method_header_decode, method_header_inc};
+use kf_chan::translated::{CeState, Piece, Refusal, Target, Window, rewrite};
+
+const CE_CLASS: u32 = 0xc7b5;
+const SUB: u32 = 4;
+const WIN: u64 = 0x7f00_0000_0000;
+
+struct W;
+impl Window for W {
+    fn translate(&self, t: Target, phys: u64, len: u64) -> Option<u64> {
+        match t {
+            Target::LocalFb if phys + len <= 0x3_0000_0000 => Some(WIN + phys),
+            _ => None,
+        }
+    }
+}
+
+fn is_ce(c: u32) -> bool {
+    c == CE_CLASS
+}
+
+fn m(sub: u32, method: u32, args: &[u32]) -> Vec<u32> {
+    let mut v = vec![method_header_inc(sub, method, args.len() as u32).unwrap()];
+    v.extend_from_slice(args);
+    v
+}
+
+/// Every (method, value) write in normalised output, in order.
+fn writes(p: &[Piece]) -> Vec<(u32, u32)> {
+    let mut out = Vec::new();
+    for piece in p {
+        if let Piece::Words(w) = piece {
+            let mut i = 0;
+            while i < w.len() {
+                let h = method_header_decode(w[i]).unwrap();
+                out.push((h.method, w[i + 1]));
+                i += 2;
+            }
+        }
+    }
+    out
+}
+
+fn setup() -> Vec<u32> {
+    m(SUB, 0, &[CE_CLASS])
+}
+
+#[test]
+fn a_virtual_copy_is_forwarded_unchanged() {
+    let mut pb = setup();
+    pb.extend(m(SUB, ce::OFFSET_IN_UPPER, &[0x1, 0x2000, 0x1, 0x3000]));
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[0x182]));
+    let mut st = CeState::default();
+    let out = rewrite(&pb, is_ce, &mut st, &W).unwrap();
+    let wr = writes(&out);
+    assert!(wr.contains(&(ce::LAUNCH_DMA, 0x182)));
+    assert!(wr.contains(&(0x404, 0x2000)));
+}
+
+#[test]
+fn a_physical_fb_scrub_becomes_a_window_va_and_the_guest_offset_is_restored() {
+    let mut pb = setup();
+    pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[0])); // LOCAL_FB
+    pb.extend(m(SUB, ce::OFFSET_OUT_UPPER, &[0x0, 0x40_0000]));
+    pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[0x1000]));
+    let launch = ce::LAUNCH_DST_PHYSICAL | ce::LAUNCH_DST_PITCH | 0x2; // non-pipelined, dst physical pitch
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[launch]));
+    let mut st = CeState::default();
+    let wr = writes(&rewrite(&pb, is_ce, &mut st, &W).unwrap());
+    let li = wr.iter().position(|&(mm, _)| mm == ce::LAUNCH_DMA).unwrap();
+    assert_eq!(
+        wr[li].1 & ce::LAUNCH_DST_PHYSICAL,
+        0,
+        "the type bit must flip to VIRTUAL"
+    );
+    let va = WIN + 0x40_0000;
+    assert_eq!(wr[li - 1], (0x40c, (va & 0xFFFF_FFFF) as u32));
+    assert_eq!(wr[li - 2], (ce::OFFSET_OUT_UPPER, (va >> 32) as u32));
+    assert_eq!(
+        wr[li + 2],
+        (0x40c, 0x40_0000),
+        "the guest's own offset is restored after"
+    );
+}
+
+#[test]
+fn mem_op_is_dropped_and_becomes_a_split_point() {
+    let mut pb = setup();
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[0x0]));
+    pb.extend(m(0, 0x28, &[0x800, 0, 0x0020_1000, (9 << 27) | 0x2]));
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[0x0]));
+    let mut st = CeState::default();
+    let out = rewrite(&pb, is_ce, &mut st, &W).unwrap();
+    assert_eq!(out.len(), 3, "{out:?}");
+    assert_eq!(
+        out[1],
+        Piece::Invalidate {
+            pdb: Some(0x2_0020_1000)
+        }
+    );
+    // ⊘ The invalidate never reaches our channel; ★ P6b (d): its SYSMEMBAR (MEM_OP_A 11:11)
+    // does, as a MEMBAR ahead of the split — the only MEM_OP_D our channel ever sees.
+    let d: Vec<u32> = writes(&out)
+        .iter()
+        .filter(|&&(mm, _)| mm == 0x34)
+        .map(|&(_, v)| v)
+        .collect();
+    assert_eq!(d, vec![5 << 27], "only a SYS MEMBAR is forwarded");
+    let wr = writes(&out[..1]);
+    assert_eq!(
+        &wr[wr.len() - 4..],
+        &[(0x28, 0), (0x2c, 0), (0x30, 0), (0x34, 5 << 27)],
+        "before the split"
+    );
+    // Without the SYSMEMBAR bit, nothing of the MEM_OP reaches us.
+    let mut pb = setup();
+    pb.extend(m(0, 0x28, &[0, 0, 0x0020_1000, (9 << 27) | 0x2]));
+    let out = rewrite(&pb, is_ce, &mut CeState::default(), &W).unwrap();
+    assert!(
+        writes(&out)
+            .iter()
+            .all(|&(mm, _)| !(0x28..=0x34).contains(&mm)),
+        "MEM_OP must never reach our channel"
+    );
+}
+
+/// ★ P6b ruling (d): a MEMBAR is an ordering host method, not a privileged one
+/// (`alloc_channel.h:207-214` names only TLB_INVALIDATE and ACCESS_COUNTER_CLR) — forwarded with
+/// its A-C operands exactly as written, in stream order, and never a split point.
+#[test]
+fn a_membar_is_forwarded_in_order_and_is_not_a_split() {
+    let mut pb = setup();
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[0x0]));
+    // uvm_hal_pascal_host_membar_gpu: A=0, B=0, C=MEMBAR_TYPE_MEMBAR(1), D=OPERATION_MEMBAR.
+    pb.extend(m(0, 0x28, &[0, 0, 1, 5 << 27]));
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[0x4]));
+    let out = rewrite(&pb, is_ce, &mut CeState::default(), &W).unwrap();
+    assert_eq!(out.len(), 1, "no split: {out:?}");
+    let wr = writes(&out);
+    let i = wr.iter().position(|&(mm, _)| mm == 0x28).unwrap();
+    assert_eq!(
+        &wr[i..i + 4],
+        &[(0x28, 0), (0x2c, 0), (0x30, 1), (0x34, 5 << 27)]
+    );
+    assert_eq!(
+        wr[i - 1],
+        (ce::LAUNCH_DMA, 0x0),
+        "after the launch before it"
+    );
+    assert_eq!(
+        wr[i + 4],
+        (ce::LAUNCH_DMA, 0x4),
+        "before the launch after it"
+    );
+}
+
+#[test]
+fn pdb_all_names_no_root() {
+    let mut pb = setup();
+    pb.extend(m(0, 0x30, &[1, 9 << 27]));
+    let mut st = CeState::default();
+    let out = rewrite(&pb, is_ce, &mut st, &W).unwrap();
+    assert!(out.contains(&Piece::Invalidate { pdb: None }));
+}
+
+#[test]
+fn peer_and_untranslatable_operands_are_refused_by_name() {
+    let mut pb = setup();
+    pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[3]));
+    pb.extend(m(
+        SUB,
+        ce::LAUNCH_DMA,
+        &[ce::LAUNCH_DST_PHYSICAL | ce::LAUNCH_DST_PITCH],
+    ));
+    let mut st = CeState::default();
+    assert_eq!(rewrite(&pb, is_ce, &mut st, &W), Err(Refusal::PeerOperand));
+    let mut pb = setup();
+    pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[1])); // sysmem: this window has none
+    pb.extend(m(
+        SUB,
+        ce::LAUNCH_DMA,
+        &[ce::LAUNCH_DST_PHYSICAL | ce::LAUNCH_DST_PITCH],
+    ));
+    let mut st = CeState::default();
+    assert!(matches!(
+        rewrite(&pb, is_ce, &mut st, &W),
+        Err(Refusal::Untranslatable { .. })
+    ));
+}
+
+/// A window that records every range it was asked to vet.
+struct Rec(std::cell::RefCell<Vec<(Target, u64, u64)>>);
+impl Window for Rec {
+    fn translate(&self, t: Target, phys: u64, len: u64) -> Option<u64> {
+        self.0.borrow_mut().push((t, phys, len));
+        Some(WIN + phys)
+    }
+}
+
+fn vetted(pb: &[u32]) -> Result<Vec<(Target, u64, u64)>, Refusal> {
+    let w = Rec(std::cell::RefCell::new(Vec::new()));
+    let mut st = CeState::default();
+    rewrite(pb, is_ce, &mut st, &w)?;
+    Ok(w.0.into_inner())
+}
+
+/// ★ RM's scrub is a REMAPPED constant fill: `LINE_LENGTH_IN` counts 4-byte elements
+/// (`COMPONENT_SIZE_FOUR`, one component, `DST_X = CONST_A`), so 0x400 elements is 0x1000 bytes —
+/// and the source, never read, must not be vetted at all.
+#[test]
+fn a_remapped_fill_is_vetted_in_bytes_and_its_unread_source_is_not_vetted() {
+    let mut pb = setup();
+    pb.extend(m(SUB, ce::SET_REMAP_CONST_A, &[0]));
+    pb.extend(m(
+        SUB,
+        ce::SET_REMAP_COMPONENTS,
+        &[(3 << 16) | ce::REMAP_DST_SEL_CONST_A],
+    ));
+    pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[0]));
+    pb.extend(m(SUB, ce::OFFSET_OUT_UPPER, &[0x0, 0x10_0000]));
+    pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[0x400]));
+    let launch = 0x2
+        | ce::LAUNCH_REMAP_ENABLE
+        | ce::LAUNCH_SRC_PHYSICAL
+        | ce::LAUNCH_DST_PHYSICAL
+        | ce::LAUNCH_SRC_PITCH
+        | ce::LAUNCH_DST_PITCH;
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[launch]));
+    assert_eq!(
+        vetted(&pb).unwrap(),
+        vec![(Target::LocalFb, 0x10_0000, 0x1000)]
+    );
+}
+
+/// Multi-line: the footprint is `pitch × (lines − 1) + line`, not `line × lines`.
+#[test]
+fn a_multi_line_copy_is_vetted_over_its_pitch() {
+    let mut pb = setup();
+    pb.extend(m(SUB, ce::SET_SRC_PHYS_MODE, &[0]));
+    pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[0]));
+    pb.extend(m(SUB, ce::OFFSET_IN_UPPER, &[0, 0x1000, 0, 0x9_0000]));
+    pb.extend(m(SUB, 0x410, &[0x2000, 0x100])); // PITCH_IN, PITCH_OUT
+    pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[0x80, 4])); // LINE_LENGTH_IN, LINE_COUNT
+    let launch = 0x2
+        | ce::LAUNCH_MULTI_LINE_ENABLE
+        | ce::LAUNCH_SRC_PHYSICAL
+        | ce::LAUNCH_DST_PHYSICAL
+        | ce::LAUNCH_SRC_PITCH
+        | ce::LAUNCH_DST_PITCH;
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[launch]));
+    assert_eq!(
+        vetted(&pb).unwrap(),
+        vec![
+            (Target::LocalFb, 0x1000, 0x2000 * 3 + 0x80),
+            (Target::LocalFb, 0x9_0000, 0x100 * 3 + 0x80)
+        ]
+    );
+}
+
+#[test]
+fn a_block_linear_physical_operand_is_refused() {
+    let mut pb = setup();
+    pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[0x100]));
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[0x2 | ce::LAUNCH_DST_PHYSICAL]));
+    assert_eq!(vetted(&pb), Err(Refusal::BlockLinearPhysical));
+}
+
+/// UVM binds `GP100_UVM_SW` on a subchannel of its kernel channels: its SET_OBJECT and NOPs are
+/// consumed (no host object stands behind it), its fault methods refused by name, and any other
+/// foreign class refused — never forwarded to a host channel that would fault on it.
+#[test]
+fn the_uvm_sw_class_is_consumed_and_foreign_classes_are_refused() {
+    let mut pb = setup();
+    pb.extend(m(5, 0, &[kf_chan::translated::GP100_UVM_SW]));
+    pb.extend(m(5, 0x100, &[0])); // NO_OPERATION
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[0]));
+    let mut st = CeState::default();
+    let out = rewrite(&pb, is_ce, &mut st, &W).unwrap();
+    assert!(
+        writes(&out)
+            .iter()
+            .all(|&(mm, v)| !(mm == 0 && v == kf_chan::translated::GP100_UVM_SW) && mm != 0x100)
+    );
+    let mut pb = setup();
+    pb.extend(m(5, 0, &[kf_chan::translated::GP100_UVM_SW]));
+    pb.extend(m(5, 0x104, &[0, 0, 0])); // FAULT_CANCEL_A..C
+    let mut st = CeState::default();
+    assert_eq!(
+        rewrite(&pb, is_ce, &mut st, &W),
+        Err(Refusal::SwMethod { method: 0x104 })
+    );
+    let pb = m(2, 0, &[0xc7c0]);
+    let mut st = CeState::default();
+    assert_eq!(
+        rewrite(&pb, is_ce, &mut st, &W),
+        Err(Refusal::ForeignClass {
+            subch: 2,
+            class: 0xc7c0
+        })
+    );
+}
+
+/// ★★★★★ P6b: nvidia-uvm binds its CE on subchannel 0 and pushes every CE method on subchannel
+/// 4 (`uvm_maxwell_ce.c:31-36`, `uvm_push_macros.h:84-85`). A physical launch there MUST be
+/// rewritten onto the window — `[measured p6b8]` it was forwarded verbatim, aimed at host
+/// physical memory.
+#[test]
+fn uvm_binds_the_ce_on_subchannel_0_and_launches_on_4_and_is_still_rewritten() {
+    let mut pb = m(0, 0, &[CE_CLASS]); // SET_OBJECT on subchannel 0
+    pb.extend(m(4, ce::SET_DST_PHYS_MODE, &[0])); // LOCAL_FB
+    pb.extend(m(4, ce::OFFSET_OUT_UPPER, &[0x0, 0x20_1000]));
+    pb.extend(m(4, ce::LINE_LENGTH_IN, &[0x8]));
+    pb.extend(m(
+        4,
+        ce::LAUNCH_DMA,
+        &[ce::LAUNCH_DST_PHYSICAL | ce::LAUNCH_DST_PITCH | 0x2],
+    ));
+    let wr = writes(&rewrite(&pb, is_ce, &mut CeState::default(), &W).unwrap());
+    let li = wr.iter().position(|&(mm, _)| mm == ce::LAUNCH_DMA).unwrap();
+    assert_eq!(
+        wr[li].1 & ce::LAUNCH_DST_PHYSICAL,
+        0,
+        "rewritten to VIRTUAL"
+    );
+    assert_eq!(
+        wr[li - 1],
+        (0x40c, ((WIN + 0x20_1000) & 0xFFFF_FFFF) as u32),
+        "onto the window"
+    );
+    // A software subchannel no SET_OBJECT bound is refused, never forwarded.
+    let pb = m(6, 0x300, &[0x2]);
+    assert_eq!(
+        rewrite(&pb, is_ce, &mut CeState::default(), &W),
+        Err(Refusal::UnboundSubchannel {
+            subch: 6,
+            method: 0x300
+        })
+    );
+}
+
+/// L2 maintenance is unprivileged (`alloc_channel.h:207-214`) — forwarded with its operands;
+/// ACCESS_COUNTER_CLR is served (no counters exist); Hopper's MMU_OPERATION and unnamed
+/// operations are refused by name, never silently consumed.
+#[test]
+fn mem_op_l2_is_forwarded_access_counter_clr_is_served_and_the_rest_is_refused() {
+    for (op, name) in [
+        (0x10u32, "L2_FLUSH_DIRTY"),
+        (0x11, "L2_SYSMEM_NCOH_INVALIDATE"),
+        (0xe, "L2_SYSMEM_INVALIDATE"),
+    ] {
+        let mut pb = setup();
+        pb.extend(m(0, 0x28, &[0, 0, 0, op << 27]));
+        let out = rewrite(&pb, is_ce, &mut CeState::default(), &W).unwrap();
+        let d: Vec<u32> = writes(&out)
+            .iter()
+            .filter(|&&(mm, _)| mm == 0x34)
+            .map(|&(_, v)| v)
+            .collect();
+        assert_eq!(d, vec![op << 27], "{name} is forwarded");
+    }
+    let mut pb = setup();
+    pb.extend(m(0, 0x28, &[0, 0, 0, 0x16 << 27]));
+    let out = rewrite(&pb, is_ce, &mut CeState::default(), &W).unwrap();
+    assert!(
+        writes(&out).iter().all(|&(mm, _)| mm != 0x34),
+        "ACCESS_COUNTER_CLR never reaches our channel"
+    );
+    for op in [0xbu32, 0x1f] {
+        let mut pb = setup();
+        pb.extend(m(0, 0x28, &[0, 0, 0, op << 27]));
+        let e = rewrite(&pb, is_ce, &mut CeState::default(), &W).unwrap_err();
+        assert!(
+            format!("{e:?}").contains(&format!("{op}")),
+            "op {op:#x} refused by name: {e:?}"
+        );
+    }
+}
+
+/// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): RM's Hopper+ FAST SCRUB (`LAUNCH_DMA` bit 23,
+/// dst PHYSICAL LOCAL_FB) cannot run virtual — the host CE raised Xid 71 on GB203. It becomes the
+/// equivalent virtual byte zero-fill; the guest's remap registers and offset are restored after.
+#[test]
+fn a_hopper_plus_fast_scrub_becomes_a_virtual_zero_fill() {
+    const CAB5: u32 = 0xcab5;
+    fn is_bw_ce(c: u32) -> bool {
+        c == CAB5
+    }
+    // channel_utils.c:618-690 — pattern, 1-byte map, phys dst, 4 KiB, scrub launch.
+    let mut pb = m(SUB, 0, &[CAB5]);
+    pb.extend(m(SUB, ce::SET_REMAP_CONST_A, &[0x5a]));
+    pb.extend(m(SUB, ce::SET_REMAP_COMPONENTS, &[0x5]));
+    pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[0]));
+    pb.extend(m(SUB, ce::OFFSET_OUT_UPPER, &[0x0, 0x20_0000]));
+    pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[0x1000]));
+    let launch = (1 << 7)
+        | (1 << 8)
+        | (1 << 23)
+        | (1 << 26)
+        | ce::LAUNCH_DST_PHYSICAL
+        | ce::LAUNCH_SRC_PHYSICAL
+        | 2;
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[launch]));
+    let mut st = CeState::default();
+    let wr = writes(&rewrite(&pb, is_bw_ce, &mut st, &W).unwrap());
+    let at = wr.iter().position(|w| w.0 == ce::LAUNCH_DMA).unwrap();
+    let l = wr[at].1;
+    assert_eq!(l & (1 << 23), 0, "no scrub bit on the virtual launch");
+    assert_eq!(
+        l & (ce::LAUNCH_DST_PHYSICAL | ce::LAUNCH_SRC_PHYSICAL),
+        0,
+        "virtual both sides"
+    );
+    assert_ne!(l & ce::LAUNCH_REMAP_ENABLE, 0, "a remap fill");
+    assert_eq!(l & 3, 2, "transfer type kept");
+    // Before the launch: CONST_A = 0, byte map from CONST_A, OFFSET_OUT = the window VA.
+    let before = &wr[..at];
+    assert_eq!(
+        before
+            .iter()
+            .rev()
+            .find(|w| w.0 == ce::SET_REMAP_CONST_A)
+            .unwrap()
+            .1,
+        0
+    );
+    assert_eq!(
+        before
+            .iter()
+            .rev()
+            .find(|w| w.0 == ce::SET_REMAP_COMPONENTS)
+            .unwrap()
+            .1,
+        4
+    );
+    let lo = before.iter().rev().find(|w| w.0 == 0x40c).unwrap().1;
+    assert_eq!(u64::from(lo), (WIN + 0x20_0000) & 0xFFFF_FFFF);
+    // After: the guest's own values are back.
+    let after = &wr[at + 1..];
+    assert!(after.contains(&(ce::SET_REMAP_CONST_A, 0x5a)));
+    assert!(after.contains(&(ce::SET_REMAP_COMPONENTS, 0x5)));
+    assert!(after.contains(&(0x40c, 0x20_0000)));
+    // ⊘ On an Ampere class bit 23 is VPRMODE, not a scrub: the generic phys rewrite, bit kept.
+    let mut pb = setup();
+    pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[0]));
+    pb.extend(m(SUB, ce::SET_REMAP_COMPONENTS, &[0x4]));
+    pb.extend(m(SUB, ce::OFFSET_OUT_UPPER, &[0x0, 0x20_0000]));
+    pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[0x1000]));
+    pb.extend(m(
+        SUB,
+        ce::LAUNCH_DMA,
+        &[(1 << 7) | (1 << 8) | (1 << 23) | ce::LAUNCH_REMAP_ENABLE | ce::LAUNCH_DST_PHYSICAL],
+    ));
+    let mut st = CeState::default();
+    let wr = writes(&rewrite(&pb, is_ce, &mut st, &W).unwrap());
+    let l = wr.iter().find(|w| w.0 == ce::LAUNCH_DMA).unwrap().1;
+    assert_ne!(l & (1 << 23), 0, "GA10x: bit 23 is not ours to touch");
+}
+
+/// ★ 2026-09-26: a Hopper+ CE's `OFFSET_*_UPPER` is 25 bits (57-bit VA). `[measured GB203]` the
+/// Blackwell host placed the identity window at `0x1ff_fffe_0000_0000`; masking to 17 bits sent the
+/// copy to `0x1fffe_…` (Xid 31 FAULT_PDE). Ampere keeps 17.
+#[test]
+fn a_hopper_plus_window_va_keeps_all_25_upper_bits() {
+    struct High;
+    impl Window for High {
+        fn translate(&self, t: Target, phys: u64, _len: u64) -> Option<u64> {
+            (t == Target::LocalFb).then_some(0x1ff_fffe_0000_0000 + phys)
+        }
+    }
+    const CAB5: u32 = 0xcab5;
+    fn is_bw_ce(c: u32) -> bool {
+        c == CAB5
+    }
+    let mut pb = m(SUB, 0, &[CAB5]);
+    pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[0]));
+    pb.extend(m(SUB, ce::SET_REMAP_COMPONENTS, &[0x4]));
+    pb.extend(m(SUB, ce::OFFSET_OUT_UPPER, &[0x0, 0x5_0000]));
+    pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[0x1000]));
+    pb.extend(m(
+        SUB,
+        ce::LAUNCH_DMA,
+        &[(1 << 7) | (1 << 8) | ce::LAUNCH_REMAP_ENABLE | ce::LAUNCH_DST_PHYSICAL],
+    ));
+    let mut st = CeState::default();
+    let wr = writes(&rewrite(&pb, is_bw_ce, &mut st, &High).unwrap());
+    let at = wr.iter().position(|w| w.0 == ce::LAUNCH_DMA).unwrap();
+    let up = wr[..at]
+        .iter()
+        .rev()
+        .find(|w| w.0 == ce::OFFSET_OUT_UPPER)
+        .unwrap()
+        .1;
+    assert_eq!(up, 0x1ff_fffe, "all 25 bits of the window's upper half");
+}
+
+/// ★ v3-initrace: the completion probe's record — every RELEASE the guest's methods ask for (CE
+/// launch semaphores, host `SEMAPHORED` / `SEM_EXECUTE` releases) is recorded with its VA and
+/// payload, acquires and launches without a semaphore are not, and the forwarded words are
+/// exactly what they were without the record.
+#[test]
+fn releases_are_recorded_and_the_words_are_unchanged() {
+    use kf_chan::translated::ReleaseKind;
+    let mut pb = setup();
+    pb.extend(m(SUB, ce::SET_SEMAPHORE_A, &[0x3, 0x2006_c004, 7]));
+    pb.extend(m(
+        SUB,
+        ce::LAUNCH_DMA,
+        &[ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD],
+    ));
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[0])); // no semaphore
+    pb.extend(m(0, 0x10, &[0x3, 0x2006_c000, 9, 0x0110_0002])); // SEMAPHOREA-D, RELEASE
+    pb.extend(m(0, 0x10, &[0x3, 0x2006_c000, 9, 0x0000_0001])); // …D ACQUIRE: not a release
+    pb.extend(m(0, 0x5c, &[0x2006_c008, 0x3, 11, 0, 1])); // SEM_ADDR_LO..SEM_EXECUTE RELEASE
+    pb.extend(m(0, 0x6c, &[0])); // SEM_EXECUTE ACQUIRE
+    let mut st = CeState::default();
+    let out = rewrite(&pb, is_ce, &mut st, &W).unwrap();
+    let got: Vec<(u64, u32, ReleaseKind)> = st
+        .releases
+        .take()
+        .iter()
+        .map(|r| (r.va, r.payload, r.kind))
+        .collect();
+    assert_eq!(
+        got,
+        vec![
+            (0x3_2006_c004, 7, ReleaseKind::CeOneWord),
+            (0x3_2006_c000, 9, ReleaseKind::HostSemaphoreD),
+            (0x3_2006_c008, 11, ReleaseKind::HostSemExecute),
+        ]
+    );
+    assert!(st.releases.take().is_empty(), "a take empties the record");
+    // The record never changes what is forwarded: same words with a fresh state.
+    let mut st2 = CeState::default();
+    assert_eq!(
+        writes(&rewrite(&pb, is_ce, &mut st2, &W).unwrap()),
+        writes(&out)
+    );
+}
+
+/// A strict channel state — inc A's by-name refusals enforced (`KF3_INCA_REFUSE=1`, T-mode).
+fn strict() -> CeState {
+    CeState {
+        strict: true,
+        ..CeState::default()
+    }
+}
+
+/// ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §3.2, §7 test 8): on a STRICT channel every
+/// method on the refused list is refused BY NAME — a host one on any subchannel, a copy-engine one
+/// on a hardware subchannel — and its neighbours are not. ★ Review fix 2026-10-04: on the
+/// count-only DEFAULT path the same write is counted and forwarded exactly as before inc A (a
+/// method below `0x100` or on a CE subchannel goes out as written).
+#[test]
+fn refusals_by_name_every_refused_method() {
+    use kf_chan::translated::REFUSED_METHODS;
+    for &(lo, hi, name) in &REFUSED_METHODS {
+        for mm in [lo, hi] {
+            let subs: &[u32] = if mm < 0x100 { &[0, SUB, 6] } else { &[0, SUB] };
+            for &sub in subs {
+                let mut pb = setup();
+                pb.extend(m(sub, mm, &[0x1234]));
+                let r = rewrite(&pb, is_ce, &mut strict(), &W);
+                assert_eq!(
+                    r,
+                    Err(Refusal::RefusedMethod {
+                        subch: sub,
+                        method: mm,
+                        name
+                    }),
+                    "{name} {mm:#x} on subchannel {sub}"
+                );
+                // The default path: counted, forwarded as written — today's words, unchanged.
+                let mut st = CeState::default();
+                let out = rewrite(&pb, is_ce, &mut st, &W)
+                    .unwrap_or_else(|e| panic!("count-only {name} {mm:#x}: {e:?}"));
+                assert_eq!(
+                    writes(&out),
+                    vec![(0, CE_CLASS), (mm, 0x1234)],
+                    "count-only {name} {mm:#x} on subchannel {sub}"
+                );
+                assert_eq!(st.inca.refused_methods, 1, "{name} {mm:#x} counted");
+                assert_eq!(st.inca.total(), 1);
+            }
+        }
+    }
+    // The neighbours of the refused ranges still pass (state methods today's rewriter keeps).
+    for mm in [ce::SET_SEMAPHORE_PAYLOAD, ce::SET_SRC_PHYS_MODE, 0x700] {
+        let mut pb = setup();
+        pb.extend(m(SUB, mm, &[0]));
+        let mut st = strict();
+        assert!(rewrite(&pb, is_ce, &mut st, &W).is_ok(), "{mm:#x}");
+        assert_eq!(st.inca.total(), 0, "{mm:#x} is not counted");
+    }
+}
+
+/// ★ P1+P2 inc A (§3.7): on a strict channel a SUB-DEVICE-MASK header is refused by name; on the
+/// count-only default path it is counted and pushed RAW, in place, as before inc A.
+#[test]
+fn a_subdevice_mask_header_is_refused() {
+    for tert in 1..=3u32 {
+        let sdm = (tert << 16) | (0x1 << 4); // GRP0_USE_TERT, TERT_OP = SET/STORE/USE
+        let mut pb = setup();
+        pb.push(sdm);
+        pb.extend(m(SUB, ce::LAUNCH_DMA, &[0]));
+        assert_eq!(
+            rewrite(&pb, is_ce, &mut strict(), &W),
+            Err(Refusal::SubDeviceMask { at: 2 }),
+            "tert_op {tert}"
+        );
+        let mut st = CeState::default();
+        let out = rewrite(&pb, is_ce, &mut st, &W).expect("count-only");
+        let words: Vec<u32> = out
+            .iter()
+            .flat_map(|p| match p {
+                Piece::Words(w) => w.clone(),
+                Piece::Invalidate { .. } => Vec::new(),
+            })
+            .collect();
+        let mut want = setup();
+        want.push(sdm);
+        want.extend(m(SUB, ce::LAUNCH_DMA, &[0]));
+        assert_eq!(words, want, "pushed raw, in place, tert_op {tert}");
+        assert_eq!(st.inca.subdevice_masks, 1);
+    }
+}
+
+/// ★ P1+P2 inc A (§3.6): the census counts every write — including one that is then refused —
+/// with its header form, its `LAUNCH_DMA` word and its operation values.
+#[test]
+fn the_census_counts_what_the_channel_pushed() {
+    use kf_chan::census::{Census, OpKind, SubKind};
+    use kf_chan::translated::rewrite_counted;
+    let mut pb = setup();
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[0x182]));
+    pb.extend(m(0, 0x10, &[0x1, 0x2000, 7, 2])); // SEMAPHOREA-D, RELEASE
+    pb.extend(m(0, 0x5c, &[0x3000, 0x1, 9, 0, 1])); // SEM_ADDR_LO..SEM_EXECUTE, RELEASE
+    let mut c = Census::default();
+    rewrite_counted(&pb, is_ce, &mut CeState::default(), &W, Some(&mut c)).unwrap();
+    assert_eq!(c.count(CE_CLASS, SubKind::Ce, ce::LAUNCH_DMA), 1);
+    assert_eq!(c.launches_of(CE_CLASS, 0x182), 1);
+    assert_eq!(c.count(CE_CLASS, SubKind::Host, 0x1c), 1);
+    assert_eq!(c.ops_of(OpKind::SemaphoreD, 2), 1);
+    assert_eq!(c.ops_of(OpKind::SemExecute, 1), 1);
+    assert_eq!(c.forms_of("inc"), 4);
+    // A refused write (a strict channel) is counted before it is refused.
+    let mut pb = setup();
+    pb.extend(m(SUB, 0x220, &[0x1]));
+    let mut c = Census::default();
+    assert!(rewrite_counted(&pb, is_ce, &mut strict(), &W, Some(&mut c)).is_err());
+    assert_eq!(c.count(CE_CLASS, SubKind::Ce, 0x220), 1);
+}

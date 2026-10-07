@@ -1,0 +1,175 @@
+diff --git a/src/qemu/nvkvm_gpu_emul.c b/src/qemu/nvkvm_gpu_emul.c
+index 2f3503a..54b5882 100644
+--- a/src/qemu/nvkvm_gpu_emul.c
++++ b/src/qemu/nvkvm_gpu_emul.c
+@@ -4191,6 +4191,27 @@ static uint64_t nvkvm_walk_pdb_root(NvkvmGpuEmul *s, uint64_t pdb, uint64_t va,
+         uint32_t idx = (uint32_t)((va >> lvl[i].lo) &
+                                   ((1ull << (lvl[i].hi - lvl[i].lo + 1)) - 1));
+         uint64_t pde = nvkvm_pt_rd64(s, tbl + (uint64_t)idx * 8, tsys);
++        /* #13 FIX: on GA10x, a PD1 entry can itself be a 512 MiB LEAF PTE
++         * (kern_gmmu_fmt_ga10x.c: pLevels[2].bPageTable = NV_TRUE; bit0 =
++         * NV_MMU_VER2_PTE_VALID, aperture 2:1 with PTE encoding 0=VID,2/3=SYS).
++         * The guest kernel-RM's CeUtils channel (bUseVasForCeCopy,
++         * channel_utils.c) identity-maps the WHOLE FB heap into its own VAS at
++         * the largest page size — 512 MiB — and then issues its page-table
++         * writes as VIRTUAL-dst CE copies (dstAddr = fbPhys + fbAliasVA -
++         * startFbOffset = fbPhys).  Without this case the walker decoded the
++         * 512M vidmem PTE as PDE_APERTURE_INVALID -> FAULT, chan_execute
++         * silently DROPPED every such PT write, the compute VAS's rebuilt
++         * subtree never reached our FB shadow, its re-mapped buffers were
++         * never backed into the persistent host GR VAS, and the host CE
++         * FAULT_PDE'd one page past the last-backed leaf (#13, Xid 31). */
++        if ((pde & 1) && i == 2) {                   /* PD1-level 512 MiB leaf PTE */
++            uint32_t lap = (uint32_t)((pde >> 1) & 0x3);
++            uint64_t pg;
++            if (lap == 0) { pg = ((pde >> 8) & ((1ull << 25) - 1)) << 12; *out_sys = false; }
++            else if (lap == 2 || lap == 3) { pg = ((pde >> 8) & ((1ull << 46) - 1)) << 12; *out_sys = true; }
++            else { return NVKVM_GMMU_FAULT; }        /* PEER unsupported */
++            return pg + (va & 0x1FFFFFFFull);
++        }
+         uint32_t ap = (uint32_t)((pde >> 1) & 0x3);  /* PDE APERTURE: 1=VID,2/3=SYS */
+         if (ap == 1) { tbl = ((pde >> 8) & ((1ull << 25) - 1)) << 12; tsys = false; }
+         else if (ap == 2 || ap == 3) { tbl = ((pde >> 8) & ((1ull << 46) - 1)) << 12; tsys = true; }
+@@ -4705,6 +4726,33 @@ static bool nvkvm_chan_sem_wr32(NvkvmGpuEmul *s, uint64_t va, uint32_t payload,
+     }
+     return wrote;   /* host-only => false: caller skips its sim-log + high-word write */
+ }
++/* #13 FIX — sync the host GR VAS BEFORE a CPU-emulated CE semaphore release.
++ *
++ * The guest's compute submissions are ordered against its map/unmap pushes by
++ * GPU-side semaphores: the (already-rung, host-resident) GR channel sits in a
++ * SEM ACQUIRE until the UVM/RM map push's CE release fires.  We emulate those
++ * map pushes on the CPU (chan_execute), so the release is OUR write — and the
++ * moment we write it, the real host GPU proceeds into the compute op.  The
++ * map push's page-table writes land only in the emulated FB shadow; nothing
++ * re-synced the persistent host GR VAS between those writes and the release
++ * (the deferred sweep is doorbell-driven, and the guest's LAST doorbell can
++ * precede the map push's execution — trace-proven in cup8_iter iter-2: GR ring
++ * @115..119, PT rebuild lands later, sweep never re-runs, host CE FAULT_PDE one
++ * page past the last-backed leaf, Xid 31).  So: when this parse wrote a tracked
++ * GR-VAS page-table page (m2_gr_vas_dirty, armed by the CE-copy dst check the
++ * same way nvkvm_fb_write arms it), run the compute-VAS backing sweep NOW,
++ * before the release is observable.  enum_gr_sysmem is idempotent (va_seen
++ * dedup), so this consumes the dirty flag a few doorbells early at worst. */
++static void nvkvm_m2_pt_sync_before_sema(NvkvmGpuEmul *s)
++{
++    if (s->m2_gr_vas_dirty && s->m2exec && s->m2_gr_client) {
++        s->m2_gr_vas_dirty = false;     /* consume; a later PT write re-arms */
++        qemu_log("nvkvm-gpu[%s] #13 pre-sema PT-sync sweep (client=0x%08x)\n",
++                 s->chip->name, s->m2_gr_client);
++        nvkvm_m2_enum_gr_sysmem(s, s->m2_gr_client);
++    }
++}
++
+ /* Read one 32-bit word at a CHANNEL GPU VA (translate then phys read). */
+ static bool nvkvm_chan_rd32(NvkvmGpuEmul *s, uint64_t va, uint32_t *out)
+ {
+@@ -5119,8 +5167,21 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+                     bool src_phys = (d >> 12) & 1;   /* SRC_TYPE PHYSICAL */
+                     bool dst_phys = (d >> 13) & 1;   /* DST_TYPE PHYSICAL */
+                     uint32_t sem_type = (d >> 3) & 0x3; /* SEMAPHORE_TYPE [4:3], !=0 => release */
++                    /* #13: DATA_TRANSFER_TYPE [1:0] (NVC7B5, == NVB0B5): 0 = NONE — a
++                     * semaphore-release-only launch that moves NO data.  UVM/RM emit these
++                     * as the completion release right after a real copy; re-executing the
++                     * copy with the STALE offset/length state (what we did before decoding
++                     * this field) issued phantom duplicate copies — and phantom translate
++                     * FAULTs for VIRT addresses (the "#13 CE-DROP" noise). */
++                    /* #13: DATA_TRANSFER_TYPE==NONE is a no-data launch — EXCEPT a CE
++                     * MEMSET (REMAP_ENABLE[10] / MEMORY_SCRUB_ENABLE[23]) which also has
++                     * DATA_TRANSFER_TYPE==NONE but DOES write via remap.  Zeroing bytes for
++                     * those killed the scrubber's zero-fill and hung cuCtxCreate (the
++                     * round-4 regression).  Only zero for a GENUINE no-op (no xfer, no remap). */
++                    bool xfer_none = ((d & 0x3u) == 0u);
+                     uint64_t bytes = (uint64_t)llen * lcount;
+                     if (bytes > (16u << 20)) bytes = 16u << 20;  /* safety cap */
++                    if (xfer_none && !remap && !mscrub) { bytes = 0; }
+                     /* M5.60 (Phase A — user-CE dst real-backing, the cup5/LLM-hang fix
+                      * prerequisite): the copy DEST must be a REAL host vidmem object
+                      * mapped in the GR fvas (not a fake fb_page) — both so the CPU copy
+@@ -5134,7 +5195,7 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+                      * -> the next copy classifies gpga and skips the re-walk). Gated to the
+                      * forwarded user-CE path; never the kernel scrubber/MEMSET or a sysmem
+                      * (DtoH) dst. A total cap bounds any never-backable pathological leaf. */
+-                    if (s->m2cefwd && !mscrub && !remap && s->m2_gr_client &&
++                    if (s->m2cefwd && !mscrub && !remap && !xfer_none && s->m2_gr_client &&
+                         nvkvm_m2_is_user_ce(s, s->chan_client)) {
+                         uint64_t full = (uint64_t)llen * lcount;
+                         if (full >= 4 && dst_phys && dst_pm == 0) {
+@@ -5239,6 +5300,12 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+                              * GP_PUT/GP_GET ring cursors) — that idles the ring forever and
+                              * hangs the guest's sync.  Skip the span (it's one 4 KiB page). */
+                             if (!sy && nvkvm_fb_is_live_userd(s, p)) { b += span; continue; }
++                            /* #13: same PT-page dirty-arm as the copy path below. */
++                            if (!sy && s->m2_gr_pt_n && !s->m2_gr_vas_dirty &&
++                                p >= s->m2_gr_pt_lo && p <= s->m2_gr_pt_hi + 0xfffull &&
++                                nvkvm_m2_gr_pt_contains(s, p)) {
++                                s->m2_gr_vas_dirty = true;
++                            }
+                             uint8_t *dhp = sy ? NULL : nvkvm_fb_host_ptr(s, p, true);  /* M5.12 PERF */
+                             if (!sy && dhp && remapA == 0) {          /* zero-fill: bulk */
+                                 memset(dhp, 0, span);
+@@ -5262,7 +5329,26 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+                             bool ssy, dsy;
+                             uint64_t sp = NVKVM_CE_RESOLVE(off_in + b,  src_phys, src_pm, ssy);
+                             uint64_t dp = NVKVM_CE_RESOLVE(off_out + b, dst_phys, dst_pm, dsy);
+-                            if (sp == NVKVM_GMMU_FAULT || dp == NVKVM_GMMU_FAULT) break;
++                            if (sp == NVKVM_GMMU_FAULT || dp == NVKVM_GMMU_FAULT) {
++                                /* #13 DIAG: a CE copy DROPPED mid-stream on a translate fault —
++                                 * the remaining [b, bytes) is silently never written.  #13's
++                                 * root cause was exactly this: the CeUtils VIRTUAL-dst (FB-alias
++                                 * identity map, 512M PTEs) PT writes all faulted here before the
++                                 * walker's PD1-leaf support.  Keep the trace to catch any other
++                                 * dropped-transport class early. */
++                                static uint32_t dbgcd13;
++                                if (dbgcd13 < 256) {
++                                    dbgcd13++;
++                                    qemu_log("nvkvm-gpu[%s] #13 CE-DROP client=0x%08x in=0x%llx(%s) "
++                                             "out=0x%llx(%s) bytes=0x%llx b=0x%llx %s-FAULT\n",
++                                             s->chip->name, s->chan_client,
++                                             (unsigned long long)off_in, src_phys ? "phys" : "virt",
++                                             (unsigned long long)off_out, dst_phys ? "phys" : "virt",
++                                             (unsigned long long)bytes, (unsigned long long)b,
++                                             (sp == NVKVM_GMMU_FAULT) ? "SRC" : "DST");
++                                }
++                                break;
++                            }
+                             uint64_t span = bytes - b;
+                             uint64_t spg = 0x1000ull - (sp & 0xfffull);  /* src page tail */
+                             uint64_t dpg = 0x1000ull - (dp & 0xfffull);  /* dst page tail */
+@@ -5273,6 +5359,17 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+                             /* M5.48: protect a live channel's USERD page from a CE copy dst
+                              * landing on it (same hazard as the fill path above). */
+                             if (!dsy && nvkvm_fb_is_live_userd(s, dp)) { b += span; continue; }
++                            /* #13: a CE copy landing on a tracked GR-VAS page-table page = a
++                             * mapping changed under the compute VAS.  Arm the re-sweep flag
++                             * exactly like nvkvm_fb_write does (these copies BYPASS fb_write
++                             * via fb_host_ptr, so the fb_write hook never sees them); the
++                             * pre-sema sync consumes it before the map push's completion
++                             * release is observable to the (host-resident) GR channel. */
++                            if (!dsy && s->m2_gr_pt_n && !s->m2_gr_vas_dirty &&
++                                dp >= s->m2_gr_pt_lo && dp <= s->m2_gr_pt_hi + 0xfffull &&
++                                nvkvm_m2_gr_pt_contains(s, dp)) {
++                                s->m2_gr_vas_dirty = true;
++                            }
+                             if (!logged0) {
+                                 logged0 = true;
+                                 qemu_log("nvkvm-gpu[%s] M5:   COPY[0] src 0x%llx(%s)=0x%08x -> "
+@@ -5351,6 +5448,10 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+                      * scrub pushbuffer ALSO emits an NVC56F SEM_EXECUTE (host
+                      * sema at semaOffset), so honoring only that left this one
+                      * unwritten and the scrubber timed out (ce_utils.c:349). */
++                    /* #13: sync the host GR VAS BEFORE this launch's completion release is
++                     * observable (the host-resident GR channel's SEM ACQUIRE un-gates on
++                     * it and immediately dereferences the just-mapped buffers). */
++                    if (sem_type != 0) { nvkvm_m2_pt_sync_before_sema(s); }
+                     if (!host_ce && sem_type != 0 && ce_sem_addr) {
+                         /* CE-EXEC fwd (A): when host_ce, the forwarded host CE pushbuffer's own
+                          * SEM_RELEASE writes ce_sem_pay — the CPU must NOT also write it (double
+@@ -5376,6 +5477,7 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+                 case 0x68: sem_pay_hi = d; break;                                            /* SEM_PAYLOAD_HI */
+                 case 0x6c: {                                                                 /* SEM_EXECUTE */
+                     if ((d & 0x7u) == 0x1u && sem_addr) {   /* OPERATION == RELEASE */
++                        nvkvm_m2_pt_sync_before_sema(s);     /* #13: host GR VAS current first */
+                         bool sz64 = (d >> 24) & 1;           /* PAYLOAD_SIZE: 0=16B(64-bit val), 1=4B */
+                         uint64_t redir = 0;                  /* M5.18: also write the BAR1 page libcuda polls */
+                         /* M5.49b: wr32 returns false for the host-only user CE-copy path

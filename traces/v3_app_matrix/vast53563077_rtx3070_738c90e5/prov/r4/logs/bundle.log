@@ -1,0 +1,94 @@
+[build_bundle 18:07:06] installing cuda-toolkit-12-6
+BUILD_cuda_toolkit=ok
+Build cuda_12.6.r12.6/compiler.35059454_0
+BUILD_attach_verify=ok
+BUILD_blackscholes=ok
+BUILD_conv2d=ok
+BUILD_fft_cufft=ok
+BUILD_mandelbrot=ok
+BUILD_memcpy2d=ok
+BUILD_nbody=ok
+BUILD_reduce=ok
+BUILD_sgemm_cublas=ok
+BUILD_sha256=ok
+BUILD_stream_probe=ok
+BUILD_stream_triad=ok
+BUILD_egl_offscreen=ok
+libcublas.so.12 libcublasLt.so.12 libcudart.so.12 libcufft.so.11 libcurand.so.10 libcusolver.so.11 libcusparse.so.12 libnvJitLink.so.12 libnvrtc-builtins.so.12.6 libnvrtc.so.12 
+Note: switching to '9c688d7ff78455ed42e345124d1495aad6bf66de'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+BUILD_sample_deviceQuery=ok
+BUILD_sample_bandwidthTest=ok
+BUILD_sample_vectorAdd=ok
+BUILD_sample_matrixMul=ok
+BUILD_sample_simpleStreams=ok
+BUILD_sample_asyncAPI=ok
+BUILD_sample_simpleAtomicIntrinsics=ok
+BUILD_sample_simpleIPC=ok
+BUILD_sample_UnifiedMemoryStreams=ok
+BUILD_sample_simpleCallback=ok
+BUILD_sample_simpleOccupancy=ok
+BUILD_sample_clock_nvrtc=ok
+BUILD_sample_vectorAddDrv=ok
+BUILD_sample_matrixMulDrv=ok
+BUILD_sample_simpleZeroCopy=ok
+BUILD_sample_simpleCooperativeGroups=ok
+BUILD_sample_cudaTensorCoreGemm=ok
+BUILD_sample_cdpSimpleQuicksort=ok
+BUILD_sample_graphMemoryNodes=ok
+BUILD_sample_simpleCudaGraphs=ok
+BUILD_sample_globalToShmemAsyncCopy=ok
+BUILD_sample_bf16TensorCoreGemm=ok
+BUILD_sample_simpleCUBLAS=ok
+BUILD_sample_simpleCUFFT=ok
+BUILD_sample_conjugateGradient=ok
+BUILD_sample_MersenneTwisterGP11213=ok
+BUILD_sample_reduction=ok
+BUILD_sample_sortingNetworks=ok
+BUILD_sample_scan=ok
+BUILD_sample_histogram=ok
+BUILD_sample_BlackScholes=ok
+BUILD_sample_fastWalshTransform=ok
+BUILD_sample_transpose=ok
+BUILD_sample_concurrentKernels=ok
+BUILD_sample_conjugateGradientUM=ok
+BUILD_sample_UnifiedMemoryPerf=ok
+BUILD_gpu_burn=ok
+BUILD_llama_cpp=ok
+LLAMA_REV=4b1a27fa0 common,rpc : simplify fs_create_directory_with_parents() (#29432)
+Note: switching to 'a4d617d7d054450aa83965d0fd9d62ee2009957f'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+BUILD_clpeak=ok
+BUILD_vkpeak=ok
+BUNDLE 2.1G 1349697284B  sha=f25767eec17ed254
+BUILD_BUNDLE_DONE

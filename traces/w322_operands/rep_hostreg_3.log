@@ -1,0 +1,63 @@
+=== W311 NATIVE START 2026-08-14T19:06:23+00:00 pid=1686582 ===
+SIZES=256 ITERS=3 BATCH=2
+W322 ALLOC=[hostreg] BW=[256] BW_ITERS=7 BW_TARGET_MIB=256 BW_ONLY=1 BW_REPS=1
+=== GPU STATE BEFORE ===
+name, driver_version, memory.used [MiB], utilization.gpu [%]
+NVIDIA GeForce RTX 3060, 580.159.04, 0 MiB, 3 %
+pid, process_name, used_gpu_memory [MiB]
+    ⊘ any process listed above shares this GPU and the numbers below are CONTENDED.
+=== BUILD ===
+source md5 = 2b9f9f6e96e88df44fdd66606b44e8b2
+NATIVE_GCC_RC=0
+binary md5 = 5bce6452bb5c9f89752b15a498a5de40
+
+=== ★★★★★ NEGATIVE CONTROL (BENCH_NOLAUNCH=1) — the verifier must FIRE ===
+BENCH_MODE=NOLAUNCH — ★ NEGATIVE CONTROL. Launches are SKIPPED; the verifier MUST report bad = N*N. A 0 here means the verifier is dead.
+BENCH_NOLAUNCH_TOTAL_BAD=1835008
+BENCH_VERDICT: PASS-NEGATIVE-CONTROL (the bw verifier FIRED with launches skipped)
+NATIVE_NEGCTRL_RC=0   (0 = the verifier fired; ⊘ 3 = it is DEAD and every green below is vacuous)
+
+=== ★★★★★ THE NATIVE MEASUREMENT ===
+BENCH_BUILD sizes=[256] iters=3 batch=2 verify_every=1 nolaunch=0
+BENCH_W320 batch_sweep=[] batch_reps=5 ctx_flags=0x0 hostmem=0
+BENCH_W322 alloc=[hostreg] bw=[256] bw_iters=7 bw_target_mib=256 bw_only=1 bw_reps=1
+BENCH_TSTATE_AVAILABLE=yes cpu_ms=6.054448 nvcsw=0
+BENCH_CLOCK_ORIGIN mono_ms=366624711.374 real_ms=1786734390398.629
+BENCH_MODE=MEASURE
+ok   cuInit(0)
+BENCH_INIT_MS=1703.31
+ok   cuDeviceGetCount(&nd)
+ok   cuDeviceGet(&d,0)
+BENCH_DEVICE=[NVIDIA GeForce RTX 3060]
+ok   cuCtxCreate_v2(&ctx,CTXFLAGS,d)
+BENCH_CTX_MS=105.53
+ok   cuModuleLoadData(&mod,PTX)
+BENCH_MODULE_MS=0.12
+ok   cuModuleGetFunction(&fn,mod,"mm")
+
+BENCH_BW_MODULE_RC=0
+BENCH_BW_FUNC_RC=0
+BW_BEGIN mib=256 nf=67108864 reps=1 bytes_per_launch=268435456 alloc=hostreg in_ptr=0x714f6fe00000 out_ptr=0x714f84200000 grid=1024x256
+BWITER mib=256 i=0 submit_ms=0.038 sync_ms=21.795 total_ms=21.834 bad=0
+BWITER mib=256 i=1 submit_ms=0.010 sync_ms=21.809 total_ms=21.820 bad=0
+BWITER mib=256 i=2 submit_ms=0.005 sync_ms=21.802 total_ms=21.807 bad=0
+BWITER mib=256 i=3 submit_ms=0.004 sync_ms=21.798 total_ms=21.802 bad=0
+BWITER mib=256 i=4 submit_ms=0.005 sync_ms=21.797 total_ms=21.801 bad=0
+BWITER mib=256 i=5 submit_ms=0.006 sync_ms=21.797 total_ms=21.802 bad=0
+BWITER mib=256 i=6 submit_ms=0.005 sync_ms=21.802 total_ms=21.808 bad=0
+BWROW mib=256 alloc=hostreg nf=67108864 reps=1 bytes=268435456 iters=7 submit_med_ms=0.005 sync_med_ms=21.798 sync_min_ms=21.795 sync_max_ms=21.809 total_med_ms=21.807 read_GBps=12.315 read_GBps_incl_submit=12.309 expect=256 got0=256 bad=0
+BENCH_BW_ROWS=1
+BENCH_BW_ROWS_UNMEASURED=0
+BENCH_MATMUL_SKIPPED=1 (BENCH_BW_ONLY)
+BENCH_CLOCK_END mono_ms=366626749.024 real_ms=1786734392436.279
+
+BENCH_SIZES_DONE=0
+BENCH_TOTAL_BAD=0
+BENCH_VERDICT: PASS (every bw row verified)
+DONE
+NATIVE_RC=0
+NATIVE_WALL_S=2
+
+=== GPU STATE AFTER ===
+0 MiB, 4 %
+=== W311 NATIVE EXIT rc=0 at 2026-08-14T19:06:34+00:00 ===

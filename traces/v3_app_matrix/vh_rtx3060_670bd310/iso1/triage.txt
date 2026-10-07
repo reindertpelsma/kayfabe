@@ -1,0 +1,8 @@
+UnifiedMemoryStreams|TIMEOUT|137|136s|gXid:-|kf3rc:kf3: RC host twin 0x25 (guest chid 0xe, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED|kf3ref:(2) kf3: mem t=70.586s split ticket 98 REFUSED: split Some(201000): VasKey(13965662544803659783) did not apply|-
+UnifiedMemoryPerf|FAIL|1|5s|gXid:-|kf3rc:kf3: RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED|kf3ref:-|Running ...CUDA error at matrixMultiplyPerf.cu:435
+conjugateGradientUM|FAIL|0|11s|gXid:-|kf3rc:kf3: RC host twin 0x22 (guest chid 0xb, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED|kf3ref:-|Test Summary: Error amount = 1.000000, result = SUCCESS
+attach_verify|FAIL|1|6s|gXid:-|kf3rc:kf3: RC host twin 0x20 (guest chid 0x9, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED|kf3ref:-|FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)
+gpu_burn|FAIL|139|18s|gXid:-|kf3rc:-|kf3ref:-|cuInit returned 0 (no error)
+torch_ai_bench|FAIL|1|24s|gXid:-|kf3rc:kf3: RC host twin 0x20 (guest chid 0x9, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED|kf3ref:-|RuntimeError: CUDA error: unspecified launch failure
+clpeak|FAIL|0|104s|gXid:-|kf3rc:kf3: RC host twin 0x24 (guest chid 0xd, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED|kf3ref:-|clpeak: 4 test groups skipped (clFinish (-36))
+llama_cpp_gen|PASS|0|29s|gXid:-|kf3rc:-|kf3ref:-|warn:done_getting_tensors: tensor 'token_embd.weight' (q4_K) (and 0 others) cannot be used with preferred buffer type CUDA_Host, using CPU i

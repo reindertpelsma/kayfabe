@@ -1,0 +1,3 @@
+dbfast[ON regs=2 placed=2/256 sites=1 doorbells=11118968 wakes=11114175 rang=11112029 handed=2146 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=10127213/1152495211 max_batch=2 wake_to_deliver[n=11114175 p50=1.7us p99=3.1us max=1716.0us]
+/workspace/bench/run_llm1_spin4_gpm_qemu.log:EXPERIMENT KF3_DBFAST_SPIN_US: the drainer polls doorbells for 100µs after each delivery before parking
+/workspace/bench/llm/llm1_spin4_gpm_driver.log:device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,doorbell-ioeventfd=on

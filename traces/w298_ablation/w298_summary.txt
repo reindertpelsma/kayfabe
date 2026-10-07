@@ -1,0 +1,357 @@
+=== W298 ABLATION START label=base overrides=[(none — BASELINE, the w297 arming byte for byte)] 2026-08-14T09:39:19+00:00 pid=2957039 ===
+--------------------------------------------------------------------------------
+W298 ROW  label=base  overrides=[(none — BASELINE, the w297 arming byte for byte)]  arc=0  2026-08-14T09:42:02+00:00
+  ^CUP3_VAL      = CUP3_VAL=43          ^CUP3_RC = CUP3_RC=0
+  JIT precond    = CUP3_JIT_PRESENT=yes
+  ladder ✔count  = 8   first ✘ = <none>
+  Xid count      = 0   [no Xid line]
+  fault level    = ⊘none printed
+  fault engine   = ⊘none printed
+  fault VA       = ⊘none
+  host_rows      = host_rows=0 of 0;host_rows=0 of 21;host_rows=0 of 533;host_rows=0 of 6254;host_rows=12961 of 13348;host_rows=13342 of 13348;host_rows=13342 of 14886;host_rows=14880 of 14886;host_rows=14880 of 14887;host_rows=14881 of 15913;host_rows=15907 of 15913;host_rows=15907 of 16425;host_rows=16419 of 16425;host_rows=16419 of 16426;host_rows=16420 of 16426;host_rows=16420 of 16938;host_rows=16932 of 16938;host_rows=16932 of 18269;host_rows=18263 of 18269;host_rows=18263 of 18276;host_rows=18270 of 18277;host_rows=18271 of 18277;host_rows=18271 of 18309;host_rows=18295 of 18309;host_rows=4 of 13348;
+  ARM IN FORCE   = VAS-PUBLISH arm=drain OPERAND-JOIN arm=join PT-SWEEP tasks=2 skipped=2 ran=2 
+  doorbells      = by engine: GrCompute=125 GrGraphics=0 Ce=355 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  unserviced ids = 40
+  refused pins   = none
+  relaxation report rows = 12  (MUST be 12; 0 means the block is VACUOUS and every
+                                    'was on' reading below it is unsourced)
+  logs: /workspace/w298base.log  Q=4967934b  P=13262b
+=== W298 ROW EXIT label=base rc=0 2026-08-14T09:42:02+00:00 ===
+############ w298 ARM ptsweep [KAYFABE_PT_SWEEP=off] 2026-08-14T09:43:06+00:00 ############
+=== W298 ABLATION START label=ptsweep overrides=[ KAYFABE_PT_SWEEP=off] 2026-08-14T09:43:06+00:00 pid=2959129 ===
+--------------------------------------------------------------------------------
+W298 ROW  label=ptsweep  overrides=[ KAYFABE_PT_SWEEP=off]  arc=0  2026-08-14T09:45:16+00:00
+  ^CUP3_VAL      = CUP3_VAL=43          ^CUP3_RC = CUP3_RC=0
+  JIT precond    = CUP3_JIT_PRESENT=yes
+  ladder ✔count  = 8   first ✘ = <none>
+  Xid count      = 0   [no Xid line]
+  fault level    = ⊘none printed
+  fault engine   = ⊘none printed
+  fault VA       = ⊘none
+  host_rows      = ⊘ABSENT-UNMEASURED
+  ARM IN FORCE   = VAS-PUBLISH arm=drain OPERAND-JOIN arm=join 
+  doorbells      = by engine: GrCompute=125 GrGraphics=0 Ce=355 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  unserviced ids = 40
+  refused pins   = none
+  relaxation report rows = 12  (MUST be 12; 0 means the block is VACUOUS and every
+                                    'was on' reading below it is unsourced)
+  logs: /workspace/w298ptsweep.log  Q=3822284b  P=13267b
+=== W298 ROW EXIT label=ptsweep rc=0 2026-08-14T09:45:16+00:00 ===
+############ w298 ARM ptsweep DONE rc=0 2026-08-14T09:45:16+00:00 ############
+############ w298 ARM vaspub [KAYFABE_VAS_PUBLISH=assert] 2026-08-14T09:45:16+00:00 ############
+=== W298 ABLATION START label=vaspub overrides=[ KAYFABE_VAS_PUBLISH=assert] 2026-08-14T09:45:16+00:00 pid=2960032 ===
+--------------------------------------------------------------------------------
+W298 ROW  label=vaspub  overrides=[ KAYFABE_VAS_PUBLISH=assert]  arc=0  2026-08-14T09:47:15+00:00
+  ^CUP3_VAL      = ⊘ABSENT-UNMEASURED          ^CUP3_RC = CUP3_RC=1
+  JIT precond    = CUP3_JIT_PRESENT=yes
+  ladder ✔count  = 0   first ✘ = ✘ CTX OK
+  Xid count      = 1   [Xid (PCI:0000:00:07): 31, pid=2960505]
+  fault level    = FAULT_PDE 
+  fault engine   = ACCESS_TYPE_VIRT_WRITE ENGINE GRAPHICS HUBCLIENT_FE 
+  fault VA       = 0x70ab_a8e00000
+  host_rows      = host_rows=0 of 0;host_rows=0 of 21;host_rows=0 of 533;host_rows=0 of 6254;host_rows=1 of 13348;host_rows=13 of 13348;host_rows=14 of 13348;host_rows=15 of 13348;host_rows=16 of 13348;host_rows=17 of 13348;host_rows=18 of 13348;host_rows=19 of 13348;host_rows=20 of 13348;host_rows=21 of 14886;host_rows=21 of 14887;host_rows=22 of 15913;host_rows=23 of 15913;host_rows=23 of 16425;host_rows=3 of 13348;host_rows=4 of 13348;host_rows=5 of 13348;host_rows=6 of 13348;host_rows=7 of 13348;host_rows=8 of 13348;host_rows=9 of 13348;
+  ARM IN FORCE   = VAS-PUBLISH arm=assert OPERAND-JOIN arm=join PT-SWEEP tasks=2 skipped=2 ran=2 
+  doorbells      = by engine: GrCompute=12 GrGraphics=0 Ce=312 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  unserviced ids = 40
+  refused pins   = none
+  relaxation report rows = 12  (MUST be 12; 0 means the block is VACUOUS and every
+                                    'was on' reading below it is unsourced)
+  logs: /workspace/w298vaspub.log  Q=1766600b  P=13566b
+=== W298 ROW EXIT label=vaspub rc=0 2026-08-14T09:47:15+00:00 ===
+############ w298 ARM vaspub DONE rc=0 2026-08-14T09:47:15+00:00 ############
+############ w298 ARM opjoin [KAYFABE_OPERAND_JOIN=assert] 2026-08-14T09:47:15+00:00 ############
+=== W298 ABLATION START label=opjoin overrides=[ KAYFABE_OPERAND_JOIN=assert] 2026-08-14T09:47:15+00:00 pid=2961077 ===
+--------------------------------------------------------------------------------
+W298 ROW  label=opjoin  overrides=[ KAYFABE_OPERAND_JOIN=assert]  arc=0  2026-08-14T09:49:29+00:00
+  ^CUP3_VAL      = CUP3_VAL=43          ^CUP3_RC = CUP3_RC=0
+  JIT precond    = CUP3_JIT_PRESENT=yes
+  ladder ✔count  = 8   first ✘ = <none>
+  Xid count      = 0   [no Xid line]
+  fault level    = ⊘none printed
+  fault engine   = ⊘none printed
+  fault VA       = ⊘none
+  host_rows      = host_rows=0 of 0;host_rows=0 of 21;host_rows=0 of 533;host_rows=0 of 6254;host_rows=1 of 13348;host_rows=13342 of 13348;host_rows=13342 of 14886;host_rows=14880 of 14886;host_rows=14880 of 14887;host_rows=14881 of 15913;host_rows=15907 of 15913;host_rows=15907 of 16425;host_rows=16419 of 16425;host_rows=16419 of 16426;host_rows=16420 of 16426;host_rows=16420 of 16938;host_rows=16932 of 16938;host_rows=16932 of 18269;host_rows=18263 of 18269;host_rows=18263 of 18276;host_rows=18270 of 18277;host_rows=18271 of 18277;host_rows=18271 of 18309;host_rows=18295 of 18309;
+  ARM IN FORCE   = VAS-PUBLISH arm=drain OPERAND-JOIN arm=assert PT-SWEEP tasks=2 skipped=2 ran=2 
+  doorbells      = by engine: GrCompute=125 GrGraphics=0 Ce=355 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  unserviced ids = 40
+  refused pins   = none
+  relaxation report rows = 12  (MUST be 12; 0 means the block is VACUOUS and every
+                                    'was on' reading below it is unsourced)
+  logs: /workspace/w298opjoin.log  Q=4961065b  P=13264b
+=== W298 ROW EXIT label=opjoin rc=0 2026-08-14T09:49:29+00:00 ===
+############ w298 ARM opjoin DONE rc=0 2026-08-14T09:49:29+00:00 ############
+############ w298 ARM grroute [KAYFABE_GR_ROUTE=refuse] 2026-08-14T09:49:29+00:00 ############
+=== W298 ABLATION START label=grroute overrides=[ KAYFABE_GR_ROUTE=refuse] 2026-08-14T09:49:29+00:00 pid=2962120 ===
+--------------------------------------------------------------------------------
+W298 ROW  label=grroute  overrides=[ KAYFABE_GR_ROUTE=refuse]  arc=0  2026-08-14T09:56:09+00:00
+  ^CUP3_VAL      = ⊘ABSENT-UNMEASURED          ^CUP3_RC = CUP3_RC=124
+  JIT precond    = CUP3_JIT_PRESENT=yes
+  ladder ✔count  = 0   first ✘ = ✘ CTX OK
+  Xid count      = 0   [no Xid line]
+  fault level    = ⊘none printed
+  fault engine   = ⊘none printed
+  fault VA       = ⊘none
+  host_rows      = host_rows=0 of 0;host_rows=0 of 21;host_rows=0 of 6254;host_rows=1 of 13348;host_rows=13342 of 13348;
+  ARM IN FORCE   = VAS-PUBLISH arm=drain OPERAND-JOIN arm=join PT-SWEEP tasks=2 skipped=2 ran=2 
+  doorbells      = by engine: GrCompute=8 GrGraphics=0 Ce=183 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  unserviced ids = 40
+  refused pins   = none
+  relaxation report rows = 12  (MUST be 12; 0 means the block is VACUOUS and every
+                                    'was on' reading below it is unsourced)
+  logs: /workspace/w298grroute.log  Q=466686b  P=13454b
+=== W298 ROW EXIT label=grroute rc=0 2026-08-14T09:56:09+00:00 ===
+############ w298 ARM grroute DONE rc=0 2026-08-14T09:56:09+00:00 ############
+############ w298 ARM gring [KAYFABE_GUEST_RING=off] 2026-08-14T09:56:09+00:00 ############
+=== W298 ABLATION START label=gring overrides=[ KAYFABE_GUEST_RING=off] 2026-08-14T09:56:09+00:00 pid=2964054 ===
+--------------------------------------------------------------------------------
+W298 ROW  label=gring  overrides=[ KAYFABE_GUEST_RING=off]  arc=0  2026-08-14T10:02:52+00:00
+  ^CUP3_VAL      = ⊘ABSENT-UNMEASURED          ^CUP3_RC = CUP3_RC=124
+  JIT precond    = CUP3_JIT_PRESENT=yes
+  ladder ✔count  = 0   first ✘ = ✘ CTX OK
+  Xid count      = 0   [no Xid line]
+  fault level    = ⊘none printed
+  fault engine   = ⊘none printed
+  fault VA       = ⊘none
+  host_rows      = host_rows=0 of 0;host_rows=0 of 13348;host_rows=0 of 21;host_rows=0 of 6254;host_rows=12984 of 13348;host_rows=13342 of 13348;
+  ARM IN FORCE   = VAS-PUBLISH arm=drain OPERAND-JOIN arm=join PT-SWEEP tasks=2 skipped=2 ran=2 
+  doorbells      = by engine: GrCompute=8 GrGraphics=0 Ce=183 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  unserviced ids = 40
+  refused pins   = none
+  relaxation report rows = 12  (MUST be 12; 0 means the block is VACUOUS and every
+                                    'was on' reading below it is unsourced)
+  logs: /workspace/w298gring.log  Q=541640b  P=13452b
+=== W298 ROW EXIT label=gring rc=0 2026-08-14T10:02:52+00:00 ===
+############ w298 ARM gring DONE rc=0 2026-08-14T10:02:52+00:00 ############
+############ w298 ARM gpushbuf [KAYFABE_GUEST_PUSHBUF=off] 2026-08-14T10:02:52+00:00 ############
+=== W298 ABLATION START label=gpushbuf overrides=[ KAYFABE_GUEST_PUSHBUF=off] 2026-08-14T10:02:52+00:00 pid=2966201 ===
+--------------------------------------------------------------------------------
+W298 ROW  label=gpushbuf  overrides=[ KAYFABE_GUEST_PUSHBUF=off]  arc=0  2026-08-14T10:05:08+00:00
+  ^CUP3_VAL      = CUP3_VAL=43          ^CUP3_RC = CUP3_RC=0
+  JIT precond    = CUP3_JIT_PRESENT=yes
+  ladder ✔count  = 8   first ✘ = <none>
+  Xid count      = 0   [no Xid line]
+  fault level    = ⊘none printed
+  fault engine   = ⊘none printed
+  fault VA       = ⊘none
+  host_rows      = host_rows=0 of 0;host_rows=0 of 21;host_rows=0 of 533;host_rows=0 of 6254;host_rows=13342 of 13348;host_rows=13342 of 14886;host_rows=14880 of 14886;host_rows=14880 of 14887;host_rows=14881 of 15913;host_rows=15907 of 15913;host_rows=15907 of 16425;host_rows=16419 of 16425;host_rows=16419 of 16426;host_rows=16420 of 16426;host_rows=16420 of 16938;host_rows=16932 of 16938;host_rows=16932 of 18269;host_rows=18263 of 18269;host_rows=18263 of 18276;host_rows=18270 of 18277;host_rows=18271 of 18277;host_rows=18271 of 18309;host_rows=18295 of 18309;host_rows=4 of 13348;
+  ARM IN FORCE   = VAS-PUBLISH arm=drain OPERAND-JOIN arm=join PT-SWEEP tasks=2 skipped=2 ran=2 
+  doorbells      = by engine: GrCompute=125 GrGraphics=0 Ce=355 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  unserviced ids = 40
+  refused pins   = none
+  relaxation report rows = 12  (MUST be 12; 0 means the block is VACUOUS and every
+                                    'was on' reading below it is unsourced)
+  logs: /workspace/w298gpushbuf.log  Q=4367617b  P=13250b
+=== W298 ROW EXIT label=gpushbuf rc=0 2026-08-14T10:05:08+00:00 ===
+############ w298 ARM gpushbuf DONE rc=0 2026-08-14T10:05:08+00:00 ############
+############ w298 ARM gsema [KAYFABE_GUEST_SEMA=off] 2026-08-14T10:05:08+00:00 ############
+=== W298 ABLATION START label=gsema overrides=[ KAYFABE_GUEST_SEMA=off] 2026-08-14T10:05:08+00:00 pid=2967301 ===
+--------------------------------------------------------------------------------
+W298 ROW  label=gsema  overrides=[ KAYFABE_GUEST_SEMA=off]  arc=0  2026-08-14T10:07:28+00:00
+  ^CUP3_VAL      = CUP3_VAL=43          ^CUP3_RC = CUP3_RC=0
+  JIT precond    = CUP3_JIT_PRESENT=yes
+  ladder ✔count  = 8   first ✘ = <none>
+  Xid count      = 0   [no Xid line]
+  fault level    = ⊘none printed
+  fault engine   = ⊘none printed
+  fault VA       = ⊘none
+  host_rows      = host_rows=0 of 0;host_rows=0 of 21;host_rows=0 of 533;host_rows=0 of 6254;host_rows=1 of 13348;host_rows=13014 of 13348;host_rows=13342 of 13348;host_rows=13342 of 14886;host_rows=14880 of 14886;host_rows=14880 of 14887;host_rows=14881 of 15913;host_rows=15907 of 15913;host_rows=15907 of 16425;host_rows=16419 of 16425;host_rows=16419 of 16426;host_rows=16420 of 16426;host_rows=16420 of 16938;host_rows=16932 of 16938;host_rows=16932 of 18269;host_rows=18263 of 18269;host_rows=18263 of 18276;host_rows=18270 of 18277;host_rows=18271 of 18277;host_rows=18271 of 18309;host_rows=18295 of 18309;
+  ARM IN FORCE   = VAS-PUBLISH arm=drain OPERAND-JOIN arm=join PT-SWEEP tasks=2 skipped=2 ran=2 
+  doorbells      = by engine: GrCompute=125 GrGraphics=0 Ce=358 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  unserviced ids = 40
+  refused pins   = none
+  relaxation report rows = 12  (MUST be 12; 0 means the block is VACUOUS and every
+                                    'was on' reading below it is unsourced)
+  logs: /workspace/w298gsema.log  Q=5577224b  P=13263b
+=== W298 ROW EXIT label=gsema rc=0 2026-08-14T10:07:28+00:00 ===
+############ w298 ARM gsema DONE rc=0 2026-08-14T10:07:28+00:00 ############
+############ w298 ARM goperand [KAYFABE_GUEST_OPERAND=off] 2026-08-14T10:07:28+00:00 ############
+=== W298 ABLATION START label=goperand overrides=[ KAYFABE_GUEST_OPERAND=off] 2026-08-14T10:07:28+00:00 pid=2968373 ===
+--------------------------------------------------------------------------------
+W298 ROW  label=goperand  overrides=[ KAYFABE_GUEST_OPERAND=off]  arc=0  2026-08-14T10:09:42+00:00
+  ^CUP3_VAL      = CUP3_VAL=43          ^CUP3_RC = CUP3_RC=0
+  JIT precond    = CUP3_JIT_PRESENT=yes
+  ladder ✔count  = 8   first ✘ = <none>
+  Xid count      = 0   [no Xid line]
+  fault level    = ⊘none printed
+  fault engine   = ⊘none printed
+  fault VA       = ⊘none
+  host_rows      = host_rows=0 of 0;host_rows=0 of 21;host_rows=0 of 533;host_rows=0 of 6254;host_rows=1 of 13348;host_rows=13342 of 13348;host_rows=13342 of 14886;host_rows=14880 of 14886;host_rows=14880 of 14887;host_rows=14881 of 15913;host_rows=15907 of 15913;host_rows=15907 of 16425;host_rows=16419 of 16425;host_rows=16419 of 16426;host_rows=16420 of 16426;host_rows=16420 of 16938;host_rows=16932 of 16938;host_rows=16932 of 18269;host_rows=18263 of 18269;host_rows=18263 of 18276;host_rows=18270 of 18277;host_rows=18271 of 18277;host_rows=18271 of 18309;host_rows=18295 of 18309;
+  ARM IN FORCE   = VAS-PUBLISH arm=drain OPERAND-JOIN arm=join PT-SWEEP tasks=2 skipped=2 ran=2 
+  doorbells      = by engine: GrCompute=125 GrGraphics=0 Ce=355 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  unserviced ids = 40
+  refused pins   = none
+  relaxation report rows = 12  (MUST be 12; 0 means the block is VACUOUS and every
+                                    'was on' reading below it is unsourced)
+  logs: /workspace/w298goperand.log  Q=4292958b  P=13250b
+=== W298 ROW EXIT label=goperand rc=0 2026-08-14T10:09:42+00:00 ===
+############ w298 ARM goperand DONE rc=0 2026-08-14T10:09:42+00:00 ############
+############ w298 ARM fbjoin [KAYFABE_FB_JOIN=off] 2026-08-14T10:09:42+00:00 ############
+=== W298 ABLATION START label=fbjoin overrides=[ KAYFABE_FB_JOIN=off] 2026-08-14T10:09:42+00:00 pid=2969538 ===
+--------------------------------------------------------------------------------
+W298 ROW  label=fbjoin  overrides=[ KAYFABE_FB_JOIN=off]  arc=0  2026-08-14T10:16:19+00:00
+  ^CUP3_VAL      = ⊘ABSENT-UNMEASURED          ^CUP3_RC = CUP3_RC=124
+  JIT precond    = CUP3_JIT_PRESENT=yes
+  ladder ✔count  = 0   first ✘ = ✘ CTX OK
+  Xid count      = 0   [no Xid line]
+  fault level    = ⊘none printed
+  fault engine   = ⊘none printed
+  fault VA       = ⊘none
+  host_rows      = host_rows=0 of 0;host_rows=0 of 21;host_rows=0 of 6254;host_rows=1 of 13348;host_rows=10 of 13348;host_rows=11 of 13348;host_rows=12 of 13348;host_rows=13 of 13348;host_rows=14 of 13348;host_rows=15 of 13348;host_rows=16 of 13348;host_rows=17 of 13348;host_rows=3 of 13348;host_rows=4 of 13348;host_rows=5 of 13348;host_rows=6 of 13348;host_rows=7 of 13348;host_rows=8 of 13348;host_rows=9 of 13348;
+  ARM IN FORCE   = VAS-PUBLISH arm=drain OPERAND-JOIN arm=join PT-SWEEP tasks=2 skipped=2 ran=2 
+  doorbells      = by engine: GrCompute=8 GrGraphics=0 Ce=183 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  unserviced ids = 40
+  refused pins   = none
+  relaxation report rows = 12  (MUST be 12; 0 means the block is VACUOUS and every
+                                    'was on' reading below it is unsourced)
+  logs: /workspace/w298fbjoin.log  Q=493636b  P=13453b
+=== W298 ROW EXIT label=fbjoin rc=0 2026-08-14T10:16:19+00:00 ===
+############ w298 ARM fbjoin DONE rc=0 2026-08-14T10:16:19+00:00 ############
+############ w298 ARM isolates [KAYFABE_ISOLATES=stillborn] 2026-08-14T10:16:19+00:00 ############
+=== W298 ABLATION START label=isolates overrides=[ KAYFABE_ISOLATES=stillborn] 2026-08-14T10:16:19+00:00 pid=2971539 ===
+--------------------------------------------------------------------------------
+W298 ROW  label=isolates  overrides=[ KAYFABE_ISOLATES=stillborn]  arc=92  2026-08-14T10:16:20+00:00
+  ^CUP3_VAL      = ⊘ABSENT-UNMEASURED          ^CUP3_RC = ⊘ABSENT
+  JIT precond    = ⊘ABSENT-UNMEASURED
+  ladder ✔count  =    first ✘ = <none>
+  Xid count      = ⊘UNMEASURED   [no Xid line]
+  fault level    = ⊘none printed
+  fault engine   = ⊘none printed
+  fault VA       = ⊘none
+  host_rows      = ⊘ABSENT-UNMEASURED
+  ARM IN FORCE   = ⊘ DEVICE EMITTED NO ARM LINE — the arm is UNWITNESSED
+  doorbells      = ⊘ABSENT-UNMEASURED
+  unserviced ids = 0
+  refused pins   = none
+  relaxation report rows = 0  (MUST be 12; 0 means the block is VACUOUS and every
+                                    'was on' reading below it is unsourced)
+  logs: /workspace/w298isolates.log  Q=MISSINGb  P=MISSINGb
+=== W298 ROW EXIT label=isolates rc=92 2026-08-14T10:16:20+00:00 ===
+############ w298 ARM isolates DONE rc=92 2026-08-14T10:16:20+00:00 ############
+############ w298 ARM ceexec [KAYFABE_CE_EXECUTOR=local] 2026-08-14T10:16:20+00:00 ############
+=== W298 ABLATION START label=ceexec overrides=[ KAYFABE_CE_EXECUTOR=local] 2026-08-14T10:16:20+00:00 pid=2971752 ===
+--------------------------------------------------------------------------------
+W298 ROW  label=ceexec  overrides=[ KAYFABE_CE_EXECUTOR=local]  arc=92  2026-08-14T10:16:21+00:00
+  ^CUP3_VAL      = ⊘ABSENT-UNMEASURED          ^CUP3_RC = ⊘ABSENT
+  JIT precond    = ⊘ABSENT-UNMEASURED
+  ladder ✔count  =    first ✘ = <none>
+  Xid count      = ⊘UNMEASURED   [no Xid line]
+  fault level    = ⊘none printed
+  fault engine   = ⊘none printed
+  fault VA       = ⊘none
+  host_rows      = ⊘ABSENT-UNMEASURED
+  ARM IN FORCE   = ⊘ DEVICE EMITTED NO ARM LINE — the arm is UNWITNESSED
+  doorbells      = ⊘ABSENT-UNMEASURED
+  unserviced ids = 0
+  refused pins   = none
+  relaxation report rows = 0  (MUST be 12; 0 means the block is VACUOUS and every
+                                    'was on' reading below it is unsourced)
+  logs: /workspace/w298ceexec.log  Q=MISSINGb  P=MISSINGb
+=== W298 ROW EXIT label=ceexec rc=92 2026-08-14T10:16:21+00:00 ===
+############ w298 ARM ceexec DONE rc=92 2026-08-14T10:16:21+00:00 ############
+############ w298 ARM ptwitness [KAYFABE_PT_WITNESS_EXEC=off] 2026-08-14T10:16:21+00:00 ############
+=== W298 ABLATION START label=ptwitness overrides=[ KAYFABE_PT_WITNESS_EXEC=off] 2026-08-14T10:16:21+00:00 pid=2971968 ===
+--------------------------------------------------------------------------------
+W298 ROW  label=ptwitness  overrides=[ KAYFABE_PT_WITNESS_EXEC=off]  arc=92  2026-08-14T10:16:22+00:00
+  ^CUP3_VAL      = ⊘ABSENT-UNMEASURED          ^CUP3_RC = ⊘ABSENT
+  JIT precond    = ⊘ABSENT-UNMEASURED
+  ladder ✔count  =    first ✘ = <none>
+  Xid count      = ⊘UNMEASURED   [no Xid line]
+  fault level    = ⊘none printed
+  fault engine   = ⊘none printed
+  fault VA       = ⊘none
+  host_rows      = ⊘ABSENT-UNMEASURED
+  ARM IN FORCE   = ⊘ DEVICE EMITTED NO ARM LINE — the arm is UNWITNESSED
+  doorbells      = ⊘ABSENT-UNMEASURED
+  unserviced ids = 0
+  refused pins   = none
+  relaxation report rows = 0  (MUST be 12; 0 means the block is VACUOUS and every
+                                    'was on' reading below it is unsourced)
+  logs: /workspace/w298ptwitness.log  Q=MISSINGb  P=MISSINGb
+=== W298 ROW EXIT label=ptwitness rc=92 2026-08-14T10:16:22+00:00 ===
+############ w298 ARM ptwitness DONE rc=92 2026-08-14T10:16:22+00:00 ############
+############ w298 SEQUENCE COMPLETE 2026-08-14T10:16:22+00:00 ############
+############ w298 ARM isolates [KAYFABE_ISOLATES=stillborn] 2026-08-14T10:17:36+00:00 ############
+=== W298 ABLATION START label=isolates overrides=[ KAYFABE_ISOLATES=stillborn] 2026-08-14T10:17:36+00:00 pid=2972582 ===
+--------------------------------------------------------------------------------
+W298 ROW  label=isolates  overrides=[ KAYFABE_ISOLATES=stillborn]  arc=0  2026-08-14T10:18:10+00:00
+  ^CUP3_VAL      = ⊘ABSENT-UNMEASURED          ^CUP3_RC = ⊘ABSENT
+  JIT precond    = ⊘ABSENT-UNMEASURED
+  ladder ✔count  =    first ✘ = <none>
+  Xid count      = ⊘UNMEASURED   [no Xid line]
+  fault level    = ⊘none printed
+  fault engine   = ⊘none printed
+  fault VA       = ⊘none
+  host_rows      = ⊘ABSENT-UNMEASURED
+  ARM IN FORCE   = ⊘ DEVICE EMITTED NO ARM LINE — the arm is UNWITNESSED
+  doorbells      = ⊘ABSENT-UNMEASURED
+  unserviced ids = 0
+  refused pins   = none
+  relaxation report rows = 12  (MUST be 12; 0 means the block is VACUOUS and every
+                                    'was on' reading below it is unsourced)
+  logs: /workspace/w298isolates.log  Q=720b  P=MISSINGb
+=== W298 ROW EXIT label=isolates rc=0 2026-08-14T10:18:10+00:00 ===
+############ w298 ARM isolates DONE rc=0 2026-08-14T10:18:10+00:00 ############
+############ w298 ARM ceexec [KAYFABE_CE_EXECUTOR=local] 2026-08-14T10:18:10+00:00 ############
+=== W298 ABLATION START label=ceexec overrides=[ KAYFABE_CE_EXECUTOR=local] 2026-08-14T10:18:10+00:00 pid=2973119 ===
+--------------------------------------------------------------------------------
+W298 ROW  label=ceexec  overrides=[ KAYFABE_CE_EXECUTOR=local]  arc=0  2026-08-14T10:20:05+00:00
+  ^CUP3_VAL      = ⊘ABSENT-UNMEASURED          ^CUP3_RC = CUP3_RC=1
+  JIT precond    = CUP3_JIT_PRESENT=yes
+  ladder ✔count  = 0   first ✘ = ✘ CTX OK
+  Xid count      = 0   [no Xid line]
+  fault level    = ⊘none printed
+  fault engine   = ⊘none printed
+  fault VA       = ⊘none
+  host_rows      = ⊘ABSENT-UNMEASURED
+  ARM IN FORCE   = VAS-PUBLISH arm=drain OPERAND-JOIN arm=join 
+  doorbells      = by engine: GrCompute=0 GrGraphics=0 Ce=2 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  unserviced ids = 30
+  refused pins   = none
+  relaxation report rows = 12  (MUST be 12; 0 means the block is VACUOUS and every
+                                    'was on' reading below it is unsourced)
+  logs: /workspace/w298ceexec.log  Q=40770b  P=9276b
+=== W298 ROW EXIT label=ceexec rc=0 2026-08-14T10:20:05+00:00 ===
+############ w298 ARM ceexec DONE rc=0 2026-08-14T10:20:05+00:00 ############
+############ w298 ARM ptwitness [KAYFABE_PT_WITNESS_EXEC=off] 2026-08-14T10:20:05+00:00 ############
+=== W298 ABLATION START label=ptwitness overrides=[ KAYFABE_PT_WITNESS_EXEC=off] 2026-08-14T10:20:05+00:00 pid=2974278 ===
+--------------------------------------------------------------------------------
+W298 ROW  label=ptwitness  overrides=[ KAYFABE_PT_WITNESS_EXEC=off]  arc=0  2026-08-14T10:22:14+00:00
+  ^CUP3_VAL      = ⊘ABSENT-UNMEASURED          ^CUP3_RC = CUP3_RC=1
+  JIT precond    = CUP3_JIT_PRESENT=yes
+  ladder ✔count  = 0   first ✘ = ✘ CTX OK
+  Xid count      = 1   [Xid (PCI:0000:00:07): 31, pid=2974974]
+  fault level    = FAULT_PDE 
+  fault engine   = ACCESS_TYPE_VIRT_WRITE ENGINE GRAPHICS HUBCLIENT_FE 
+  fault VA       = 0x7328_14e00000
+  host_rows      = host_rows=0 of 0;host_rows=0 of 21;host_rows=0 of 6254;host_rows=13342 of 13348;host_rows=4 of 8;
+  ARM IN FORCE   = VAS-PUBLISH arm=drain OPERAND-JOIN arm=join PT-SWEEP tasks=0 skipped=4 ran=0 
+  doorbells      = by engine: GrCompute=12 GrGraphics=0 Ce=312 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  unserviced ids = 40
+  refused pins   = none
+  relaxation report rows = 12  (MUST be 12; 0 means the block is VACUOUS and every
+                                    'was on' reading below it is unsourced)
+  logs: /workspace/w298ptwitness.log  Q=1678008b  P=13596b
+=== W298 ROW EXIT label=ptwitness rc=0 2026-08-14T10:22:14+00:00 ===
+############ w298 ARM ptwitness DONE rc=0 2026-08-14T10:22:14+00:00 ############
+############ w298 ARM bothoff [KAYFABE_PT_SWEEP=off KAYFABE_VAS_PUBLISH=assert] 2026-08-14T10:22:14+00:00 ############
+=== W298 ABLATION START label=bothoff overrides=[ KAYFABE_PT_SWEEP=off KAYFABE_VAS_PUBLISH=assert] 2026-08-14T10:22:14+00:00 pid=2975394 ===
+--------------------------------------------------------------------------------
+W298 ROW  label=bothoff  overrides=[ KAYFABE_PT_SWEEP=off KAYFABE_VAS_PUBLISH=assert]  arc=0  2026-08-14T10:24:19+00:00
+  ^CUP3_VAL      = ⊘ABSENT-UNMEASURED          ^CUP3_RC = CUP3_RC=1
+  JIT precond    = CUP3_JIT_PRESENT=yes
+  ladder ✔count  = 0   first ✘ = ✘ CTX OK
+  Xid count      = 1   [Xid (PCI:0000:00:07): 31, pid=2976059]
+  fault level    = FAULT_PDE 
+  fault engine   = ACCESS_TYPE_VIRT_WRITE ENGINE GRAPHICS HUBCLIENT_FE 
+  fault VA       = 0x75b9_b2e00000
+  host_rows      = ⊘ABSENT-UNMEASURED
+  ARM IN FORCE   = VAS-PUBLISH arm=assert OPERAND-JOIN arm=join 
+  doorbells      = by engine: GrCompute=12 GrGraphics=0 Ce=312 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  unserviced ids = 40
+  refused pins   = none
+  relaxation report rows = 12  (MUST be 12; 0 means the block is VACUOUS and every
+                                    'was on' reading below it is unsourced)
+  logs: /workspace/w298bothoff.log  Q=1338635b  P=13567b
+=== W298 ROW EXIT label=bothoff rc=0 2026-08-14T10:24:19+00:00 ===
+############ w298 ARM bothoff DONE rc=0 2026-08-14T10:24:19+00:00 ############
+############ w298 SEQ2 COMPLETE 2026-08-14T10:24:19+00:00 ############

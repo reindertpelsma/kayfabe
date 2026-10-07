@@ -1,0 +1,42 @@
+# platform facts, container box 52821735 (vast machine 19053), captured 2026-09-26T21:38:17+00:00
+## cmdline
+BOOT_IMAGE=/boot/vmlinuz-6.8.0-124-generic root=UUID=983e8720-7a7f-4e64-883a-408fa74cd528 ro quiet splash vt.handoff=7
+## kernel
+6.8.0-124-generic
+## iommu groups visible
+0
+## dmesg
+dmesg: read kernel buffer failed: Operation not permitted
+## GPUs (procfs, host driver)
+NVRM version: NVIDIA UNIX x86_64 Kernel Module  580.159.04  Wed Apr 29 17:32:45 UTC 2026
+Model: 		 NVIDIA GeForce RTX 4070
+DMA Size: 	 47 bits
+Bus Location: 	 0000:04:00.0
+Device Minor: 	 0
+Model: 		 NVIDIA GeForce RTX 4070
+DMA Size: 	 47 bits
+Bus Location: 	 0000:06:00.0
+Device Minor: 	 1
+## this container node
+/dev/nvidia1
+NVIDIA GeForce RTX 4070, 580.159.04, 00000000:06:00.0, 4, 16
+## PCI topology
+0000:04:00.0 -> /sys/devices/pci0000:00/0000:00:01.2/0000:02:00.2/0000:03:00.0/0000:04:00.0
+0000:06:00.0 -> /sys/devices/pci0000:00/0000:00:03.1/0000:06:00.0
+00:00.0 Host bridge [0600]: Advanced Micro Devices, Inc. [AMD] Starship/Matisse Root Complex [1022:1480]
+00:01.1 PCI bridge [0604]: Advanced Micro Devices, Inc. [AMD] Starship/Matisse GPP Bridge [1022:1483]
+00:01.2 PCI bridge [0604]: Advanced Micro Devices, Inc. [AMD] Starship/Matisse GPP Bridge [1022:1483]
+00:03.1 PCI bridge [0604]: Advanced Micro Devices, Inc. [AMD] Starship/Matisse GPP Bridge [1022:1483]
+00:07.1 PCI bridge [0604]: Advanced Micro Devices, Inc. [AMD] Starship/Matisse Internal PCIe GPP Bridge 0 to bus[E:B] [1022:1484]
+00:08.1 PCI bridge [0604]: Advanced Micro Devices, Inc. [AMD] Starship/Matisse Internal PCIe GPP Bridge 0 to bus[E:B] [1022:1484]
+02:00.2 PCI bridge [0604]: Advanced Micro Devices, Inc. [AMD] Device [1022:43e9]
+03:00.0 PCI bridge [0604]: Advanced Micro Devices, Inc. [AMD] Device [1022:43ea]
+03:08.0 PCI bridge [0604]: Advanced Micro Devices, Inc. [AMD] Device [1022:43ea]
+04:00.0 VGA compatible controller [0300]: NVIDIA Corporation Device [10de:2786] (rev a1)
+06:00.0 VGA compatible controller [0300]: NVIDIA Corporation Device [10de:2786] (rev a1)
+## CPU
+model name	: AMD Ryzen 9 5900X 12-Core Processor
+## RM params
+EnablePCIERelaxedOrderingMode: 0
+RegistryDwords: ""
+RegistryDwordsPerDevice: ""

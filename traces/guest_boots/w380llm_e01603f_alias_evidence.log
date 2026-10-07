@@ -1,0 +1,45 @@
+=== w380llm — THE FB-JOIN ALIAS EVIDENCE, distilled from a 23 MB qemu log ===
+=== source: run_w380llm_qemu.log, boot 2026-09-06T15:10:33Z, HEAD e01603f, arm=alias ===
+
+--- JOIN-RELEASE arm, as the device emitted it (first) ---
+JOIN-RELEASE arm=alias revoked=0 released=0 stranded=0 drained=0 joined_ranges=1 remaps_refused=0 → bound=19618 unchanged=1 repointed=0 unboun
+
+--- EVERY alias DECISION with two DIFFERENT VAs (the fix firing) ---
+0x1e00000 0x71884a000000 0x718846000000
+0x2000000 0x71884a200000 0x718846200000
+0x2200000 0x71884a400000 0x718846400000
+0x2400000 0x71884a600000 0x718846600000
+0x2600000 0x71884a800000 0x718846800000
+0x2800000 0x71884aa00000 0x718846a00000
+0x2a00000 0x71884ac00000 0x718846c00000
+0x2c00000 0x71884ae00000 0x718846e00000
+
+--- EVERY alias PLACEMENT, verbatim ---
+leaf va=0x718846000000 len=0x200000 fb_phys=0x1e00000 → ★★★★★ ALIASED memory=0xcafe22ac host_va=0x718846000000 placed_as_asked=true
+leaf va=0x718846200000 len=0x200000 fb_phys=0x2000000 → ★★★★★ ALIASED memory=0xcafe22ad host_va=0x718846200000 placed_as_asked=true
+leaf va=0x718846400000 len=0x200000 fb_phys=0x2200000 → ★★★★★ ALIASED memory=0xcafe22ae host_va=0x718846400000 placed_as_asked=true
+leaf va=0x718846600000 len=0x200000 fb_phys=0x2400000 → ★★★★★ ALIASED memory=0xcafe22af host_va=0x718846600000 placed_as_asked=true
+leaf va=0x718846800000 len=0x200000 fb_phys=0x2600000 → ★★★★★ ALIASED memory=0xcafe22b0 host_va=0x718846800000 placed_as_asked=true
+leaf va=0x718846a00000 len=0x200000 fb_phys=0x2800000 → ★★★★★ ALIASED memory=0xcafe22b1 host_va=0x718846a00000 placed_as_asked=true
+leaf va=0x718846c00000 len=0x200000 fb_phys=0x2a00000 → ★★★★★ ALIASED memory=0xcafe22b2 host_va=0x718846c00000 placed_as_asked=true
+leaf va=0x718846e00000 len=0x200000 fb_phys=0x2c00000 → ★★★★★ ALIASED memory=0xcafe22b3 host_va=0x718846e00000 placed_as_asked=true
+
+--- SUPERSEDE: every spelling, counted ---
+SUPERSEDED=0
+SUPERSEDE_CAPPED=0
+SUPERSEDE_ANY=0
+
+--- the publication census for the FAULTING VAS of w376llmd (last emission) ---
+proc=3 pdb=0x201000 total=17436 already_host=9185 already_pinned=8245 guest_ram=0 not_vidmem=0 not_granular=6(1021440 bytes) candidates=0(0 bytes, capped=0) published=0 refused=0 sum_ok=true
+
+--- w378 coverage, aggregate (last) ---
+COVERAGE TABLE⊆PUBLISHED COVERED=false vases=4 covered_vases=1 trivial_vases=1 declared=14054704640B published=1154363392B residual_bytes=12905793024 residual_intervals=11 excess_bytes=5451776 excess_intervals=1 zero_len_rows=0 
+
+--- PT-DECODE refusals (last) ---
+refusals=271 by_kind={"RepointsPublished": 8, "StraddlesLiveBinding": 255, "UnbindsPublished": 8}
+
+--- install refusals / not-ours / orphan reclaims ---
+INSTALL_REFUSED=0
+FRAME_NOT_OURS=0
+ORPHAN_RECLAIMED=0
+ALIAS_BIND_REFUSED=0

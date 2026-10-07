@@ -1,0 +1,33 @@
+DISPLAY_LANE_START tag=recovered_display_m1_20260929 rev=d883d0eb 2026-09-29T18:23:21+00:00
+[boot_capture:recovered_display_m1_20260929] BINARY kf3-bin-rev:d883d0eb  (/workspace/bench/kf3-bins/d883d0eb/qemu-system-x86_64)  ⇒ every claim from this boot cites THIS revision
+[boot_capture:recovered_display_m1_20260929] host dmesg watermark: 1134 lines
+[boot_capture:recovered_display_m1_20260929] booting (extra args: -vga none -vnc 127.0.0.1:0)
+== kf3 binary: /workspace/bench/kf3-bins/d883d0eb/qemu-system-x86_64 (rev d883d0eb)  device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on
+[boot_capture:recovered_display_m1_20260929] guest is up after 37s
+[boot_capture:recovered_display_m1_20260929] module unloaded and ring buffer cleared; loading cold
+[boot_capture:recovered_display_m1_20260929] opening the device (this is what runs RmInitAdapter)
+[boot_capture:recovered_display_m1_20260929] captured 28 dmesg lines, 25 NVRM, 0 adapter → /workspace/bench/run_recovered_display_m1_20260929_dmesg.log
+[boot_capture:recovered_display_m1_20260929] --- the verdict lines ---
+[boot_capture:recovered_display_m1_20260929] running POST_CAPTURE_HOOK: /root/kf-mc/scripts/bench/display/hook.sh
+[boot_capture:recovered_display_m1_20260929] hook finished: rc=0
+[boot_capture:recovered_display_m1_20260929] guest dmesg after workload: 73 lines (45 NVRM), delta 45 → /workspace/bench/run_recovered_display_m1_20260929_dmesg_after.log
+[boot_capture:recovered_display_m1_20260929] host dmesg delta: 0 lines, 0
+0 NVRM, 0
+0 Xid → /workspace/bench/run_recovered_display_m1_20260929_hostdmesg.log
+[boot_capture:recovered_display_m1_20260929] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:recovered_display_m1_20260929] guest did not power down in 30s (a wedged vcpu cannot); asking QEMU to quit on /workspace/bench/run_recovered_display_m1_20260929.mon
+[boot_capture:recovered_display_m1_20260929] census present (kf3):
+    kf3: family=Ampere phase=Running trapped=5426 applied=2242 refused=4 serviced=387 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=209 walks=218/218 cleared=209 superseded=0 named_missed=2 unreconciled=0 mapped=279 unmapped=105 clipped=0x0 held=0 vmm_overlaps=0 priv_withhel
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10018
+[boot_capture:recovered_display_m1_20260929] evidence carried into the repo: /root/kf-mc/traces/guest_boots/run_recovered_display_m1_20260929_{qemu,dmesg,probe,hostdmesg}.log
+[boot_capture:recovered_display_m1_20260929] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+[boot_capture:recovered_display_m1_20260929]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+[boot_capture:recovered_display_m1_20260929] done. serial=/workspace/bench/run_recovered_display_m1_20260929_serial.log qemu=/workspace/bench/run_recovered_display_m1_20260929_qemu.log dmesg=/workspace/bench/run_recovered_display_m1_20260929_dmesg.log dmesg_after=/workspace/bench/run_recovered_display_m1_20260929_dmesg_after.log probe=/workspace/bench/run_recovered_display_m1_20260929_probe.log hostdmesg=/workspace/bench/run_recovered_display_m1_20260929_hostdmesg.log
+DISPLAY_PROBE_BUILD=ok
+DISPLAY_DRM_MODPROBE 
+DISPLAY_DRM_NODES ls: cannot access '/dev/dri': No such file or directory 
+DISPLAY_DRM_DMESG_LINES=45 displayless=0
+DISPLAY_KFDISP_FAIL=open /dev/dri/card0: No such file or directory
+DISPLAY_CONNECTED=no card=/dev/dri/card0
+DISPLAY_LANE_EXIT rc=0 2026-09-29T18:26:23+00:00

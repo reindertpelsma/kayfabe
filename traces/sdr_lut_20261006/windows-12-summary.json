@@ -1,0 +1,88 @@
+{
+  "schema": "kayfabe-windows-sdr/1",
+  "run": "boundary-kayfabe-12",
+  "source_revision": "2aa8b92de6c6ab158f9bc8e788be792408a074a3",
+  "qemu_sha256": "4bf444aeb1aa0b82312c201b7441a89d9c892eb638e255af3eac8a88e0e82c55",
+  "baseline_sha256": "9ff194d31f0a871757fd436f14ab0da2e1e8a6360dc36bb925c12af12a64f85c",
+  "driver_sha256": "31c79cce80b573e21647ace8d1a2b65697f992e7f86196f89e30af477b1bd47c",
+  "flags": {
+    "KF3_GFX_POOL_PROBE": "1",
+    "KF3_TIMER_MAP": "1",
+    "KF3_TSPACE": "1",
+    "KF3_SW_RUNLIST_PROBE": "1",
+    "KF3_MEMORY_LIST_PROBE": "1",
+    "KF3_DISPLAY_SDR_COLOR": "1",
+    "KF3_DISPLAY_METHOD_TRACE": "1",
+    "KF3_DISPLAY_ILUT_CONSTRUCTOR_PROBE": null,
+    "KF3_DISPLAY_TMO_SURFACE_CONSTRUCTOR_PROBE": null
+  },
+  "uptime_seconds": 97.4843744,
+  "nvidia_error_codes": [
+    43
+  ],
+  "nvidia_smi_exit_code": 9,
+  "rpc_records": 363,
+  "display_method_records": 0,
+  "scanout_refusals": 0,
+  "qemu_log_sha256": "77d026c288e60173af57c2a00f588d172351a9659f163ef87a5e463a3e27ec96",
+  "unit_result": "Result=success\nExecMainStatus=0\n",
+  "host_health": "NVIDIA GeForce RTX 4070, 595.91.07",
+  "caps_sampling": {
+    "schema": 1,
+    "available": false,
+    "pci": {
+      "irq_pin": 1,
+      "bus": 0,
+      "qdev_id": "kf0",
+      "irq": 0,
+      "slot": 6,
+      "class_info": {
+        "class": 768,
+        "desc": "VGA controller"
+      },
+      "id": {
+        "device": 10118,
+        "subsystem-vendor": 5208,
+        "vendor": 4318,
+        "subsystem": 16622
+      },
+      "function": 0,
+      "regions": [
+        {
+          "prefetch": false,
+          "mem_type_64": false,
+          "bar": 0,
+          "size": 16777216,
+          "address": -1,
+          "type": "memory"
+        },
+        {
+          "prefetch": true,
+          "mem_type_64": true,
+          "bar": 1,
+          "size": 134217728,
+          "address": -1,
+          "type": "memory"
+        },
+        {
+          "prefetch": true,
+          "mem_type_64": true,
+          "bar": 3,
+          "size": 33554432,
+          "address": -1,
+          "type": "memory"
+        },
+        {
+          "prefetch": false,
+          "mem_type_64": false,
+          "bar": 5,
+          "size": 16384,
+          "address": -1,
+          "type": "memory"
+        }
+      ]
+    },
+    "note": "BAR0 decoding disabled at sampling time; no page read was attempted"
+  },
+  "scope": "Real DIRECT10 ILUT/OLUT size and surface-loading declarations enabled; TMO remains absent. Startup stops before any display method programming."
+}

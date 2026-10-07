@@ -1,0 +1,139 @@
+//! # `kayfabe-qemu-raw` — the second audited raw crate: the hypervisor FFI surface
+//!
+//! `l2_qemu_adapter.md` §2.2 / decision Q2. This crate is the **entire** foreign-function
+//! surface of the hypervisor adapter: the `extern "C"` entry points a C device shim calls,
+//! and [`QemuHost`](kayfabe_vmm_qemu::host::QemuHost) implemented over a table of C function
+//! pointers the shim supplies.
+//!
+//! It stopped being empty on 2026-07-30, at stage **Q2**.
+//!
+//! ## ★★★ The seam is a TABLE OF PRIMITIVES, not a set of linked symbols — a departure
+//! ## from `l2_qemu_adapter.md` §2.3, taken deliberately
+//!
+//! §2.3 draws the picture as *"the C never calls Rust logic and Rust never calls C logic;
+//! both call primitives"* and leaves the mechanism implicit. The obvious mechanism —
+//! `extern "C"` **declarations** of the hypervisor's own functions, resolved by the linker
+//! when this archive is linked into it — was rejected for three reasons, in order of weight:
+//!
+//! 1. ★★ **It would make this crate untestable outside a hypervisor.** An archive with
+//!    undefined references to `memory_region_init_io` cannot be linked into a test harness,
+//!    so `cargo test -p kayfabe-qemu-raw` would need a hypervisor build to run at all. The
+//!    whole point of §10's stage table is that Q0 and Q1 need no machine; a raw crate that
+//!    silently requires one takes that back.
+//! 2. ★★ **It would hard-code the hypervisor's symbol names into Rust**, which is exactly
+//!    the coupling `four_axes_of_variation.md` names as a bolt-on risk. A table of function
+//!    pointers has no vendor in it: a second hypervisor supplies its own table and this crate
+//!    does not change. The names live in the C shim, where the vendor already is.
+//! 3. **It would put the hypervisor's version skew inside Rust.** The two releases this was
+//!    built against disagree about header paths, one class-initialiser signature, and whether
+//!    a property array carries a terminator. All three are C spellings of the same thing, and
+//!    they are absorbed by a dozen lines of `#if` in the shim's own compatibility header —
+//!    not by a build script probing a source tree.
+//!
+//! The price, stated rather than argued away: the table is **hand-mirrored** in
+//! `qemu/hw/misc/nvkvm/kayfabe_shim.h`, so a field added on one side and not the other is a
+//! real hazard. It is answered by two handshakes checked at realize — an ABI number and
+//! `sizeof` the table — so a mismatch is a named refusal at startup rather than a jump
+//! through a garbage address later. Both arms are exercised.
+//!
+//! ## Layout
+//!
+//! ```text
+//!   hw/misc/nvkvm/  (C, QOM only)  ──▶  shim_unsafe.rs  ──▶  shim.rs  ──▶  kayfabe-vmm-qemu
+//!        the vendor's names           the raw surface       decisions        all the logic
+//! ```
+//!
+//! [`shim`] is safe, holds no addresses, and is where every decision lives — driven end to
+//! end by `kayfabe_vmm_qemu::mock_host::MockQemuHost` with no hypervisor present.
+//! `shim_unsafe.rs` is one file, and its `ls`-enumerability is the audit.
+//!
+//! ## ★★ What this stage does NOT build, named rather than sketched
+//!
+//! - **No interrupt path.** The vector-raising method refuses by name. Message-signalled
+//!   interrupts are §7 and need plumbing this stage has none of.
+//! - **No trap dispatch.** The device's register region traps and returns a constant; nothing
+//!   routes an access into the core. That is §6 / stage Q4.
+//! - **No lockless-IO measurement.** The shim marks its regions where the hypervisor offers
+//!   the facility (10.2 and later) and the realize-time coverage self-check asserts it, but
+//!   the A/B acceptance run of §11's last row was not performed.
+//!
+//! ## ★ The version floor is now TWO different numbers, and the difference is real
+//!
+//! `l2_qemu_adapter.md` §3.5 asks for a compile-time floor and a realize-time floor, both
+//! 10.2, on the argument that *"the build-time check is a claim about the headers, this is a
+//! claim about the binary"*. Building the shim showed those two claims cannot differ here —
+//! §2.1 of the same document proves there is no out-of-tree device mechanism, so the shim is
+//! compiled *inside* the binary it runs in and the two have one source. What survives is a
+//! better distinction: the two floors are about different **subjects**.
+//!
+//! - the **compile-time** floor is about SYMBOLS — every hypervisor function the shim names
+//!   was verified present at **9.2**, so that is where the `#error` sits;
+//! - the **realize-time** floor is `kayfabe_vmm_qemu::VERSION_FLOOR`, still **10.2**, and is
+//!   about SEMANTICS: the global-lock opt-out, which did not exist before 10.2.
+//!
+//! Keeping them equal would have made the shim unbuildable on the only hypervisor tree the C
+//! oracle itself ran on, and would have hidden the more useful fact: on a 9.2 build the
+//! device compiles, registers, realizes its C half, and is then refused **by name** at the
+//! Rust half. That refusal was watched happening, which is worth more than a floor nobody
+//! could reach.
+
+#![doc(test(attr(deny(warnings))))]
+
+/// ★ w740 — the bounded arm-then-retry loop. NOT gated: `barmirror` is, and `shim`'s
+/// CeUtils doorbell path is not, and both need the same loop.
+pub(crate) mod armretry;
+/// ★★★★★ w393 — the demand-driven BAR1/BAR2 mirror (a memslot per touched aperture page).
+/// ★★★★★ `THE_CONSTRAINTS.md` §22 item 3 — the BAR1 sizing relation, queried from the board
+/// rather than compared against a literal, and printed every boot.
+///
+/// ⊘ NOT behind `host-isolates`: it reads sysfs text and needs no isolate, no device
+/// descriptor and no GPU. A board with no NVIDIA device gets a census line saying so.
+pub mod bar1budget;
+
+#[cfg(feature = "host-isolates")]
+pub mod barmirror;
+/// ★★★★★ §3's device-view port — the reserved object, reachable after bring-up.
+pub mod deviceview;
+pub mod kftime;
+pub mod reclaimtick;
+/// ★★★★★ `SINGLE_STORE_PLAN.md` increment 1 — the VM-lifetime scratchpad isolate and the
+/// one reserved video-memory object it owns. Gated by `KAYFABE_SCRATCHPAD`, off by default.
+pub mod scratchpad;
+pub mod shim;
+pub mod shim_unsafe;
+/// ★★★★★ **CONSTRAINT 26** — the port through which the scratchpad does all GPU-side
+/// mapping, and the home of the restated `RING_NOT_A_JOINED_WINDOW` question.
+pub mod storemap;
+pub mod walkmirror;
+/// ★ w787 — the one enumerable home for process-environment mutation. See the module docs.
+pub mod testenv_unsafe;
+pub mod walkshadow;
+
+/// ★★★ **The revision this archive was built from** — 40 lowercase hex, or `"unknown"`,
+/// with `-dirty` appended when the worktree had uncommitted tracked changes.
+///
+/// Stamped by `build.rs`; see that file for why a build that cannot answer says `unknown`
+/// rather than guessing.
+///
+/// The `kayfabe-rev:` prefix exists so the answer is findable **from outside the process**:
+/// `strings <binary> | grep kayfabe-rev`. That is the instrument the 2026-08-01 bench
+/// post-mortem did not have — the binary it was debugging contained exactly one 40-hex
+/// string and that string was a build-id, so the only available provenance was "which
+/// worktree did this come from", which was wrong by 19 commits.
+pub static BUILD_REV: &str = concat!("kayfabe-rev:", env!("KAYFABE_BUILD_REV"));
+
+/// ★ The anchor that keeps [`BUILD_REV`] in the archive.
+///
+/// ⊘ Without `#[used]` a `static` that nothing in a linked program reads may be dropped,
+/// and this one is *designed* to have no reader inside the process — its consumer is
+/// `strings`. `#[used]` is the attribute that says "emit this even though it looks dead",
+/// which is exactly the claim being made.
+#[used]
+static BUILD_REV_ANCHOR: &&str = &BUILD_REV;
+
+/// The revision, without the `kayfabe-rev:` marker prefix — for a caller inside the
+/// process (a log line at realize, a test).
+#[must_use]
+pub fn build_rev() -> &'static str {
+    env!("KAYFABE_BUILD_REV")
+}

@@ -1,0 +1,187 @@
+
+running 9 tests
+test caps::tests::nvkms_reads_four_heads_eight_windows_and_real_clocks ... ok
+test caps::tests::constructor_probe_refuses_missing_capability_semantics ... ok
+test caps::tests::ilut_probe_changes_only_generated_surface_load_bit_in_every_display_cell ... FAILED
+test caps::tests::olut_probe_changes_only_its_surface_load_bit_in_every_display_cell ... FAILED
+test caps::tests::tmo_surface_probe_changes_only_derived_capd_bit_in_every_display_cell ... FAILED
+test caps::tests::constructor_probe_changes_only_derived_tmo_fields_in_every_display_cell ... ok
+test caps::tests::ilut_probe_refuses_missing_or_invalid_derived_layout ... ok
+test caps::tests::tmo_surface_probe_refuses_missing_or_invalid_derived_layout ... ok
+test caps::tests::olut_probe_refuses_missing_or_invalid_derived_layout ... ok
+
+failures:
+
+---- caps::tests::ilut_probe_changes_only_generated_surface_load_bit_in_every_display_cell stdout ----
+
+thread 'caps::tests::ilut_probe_changes_only_generated_surface_load_bit_in_every_display_cell' (565495) panicked at crates/kf-disp/src/caps.rs:746:25:
+assertion `left == right` failed
+  left: 1
+ right: 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- caps::tests::olut_probe_changes_only_its_surface_load_bit_in_every_display_cell stdout ----
+
+thread 'caps::tests::olut_probe_changes_only_its_surface_load_bit_in_every_display_cell' (565498) panicked at crates/kf-disp/src/caps.rs:561:25:
+assertion `left == right` failed
+  left: 1
+ right: 0
+
+---- caps::tests::tmo_surface_probe_changes_only_derived_capd_bit_in_every_display_cell stdout ----
+
+thread 'caps::tests::tmo_surface_probe_changes_only_derived_capd_bit_in_every_display_cell' (565500) panicked at crates/kf-disp/src/caps.rs:653:25:
+assertion `left == right` failed
+  left: 1
+ right: 0
+
+
+failures:
+    caps::tests::ilut_probe_changes_only_generated_surface_load_bit_in_every_display_cell
+    caps::tests::olut_probe_changes_only_its_surface_load_bit_in_every_display_cell
+    caps::tests::tmo_surface_probe_changes_only_derived_capd_bit_in_every_display_cell
+
+test result: FAILED. 6 passed; 3 failed; 0 ignored; 0 measured; 89 filtered out; finished in 0.09s
+
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1150:5
+     |
+1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1432:5
+     |
+1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-util/src/lockwitness.rs:193:5
+    |
+193 |     pub fn is_vcpu() -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-util` (lib) generated 3 warnings
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:814:5
+    |
+814 | /     fn on_read(
+815 | |         &self,
+816 | |         _model: &dyn GspModel,
+817 | |         _bar: u8,
+...   |
+820 | |         _state: &ArchBootState,
+821 | |     ) -> Option<u64> {
+    | |____________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:943:5
+    |
+943 |     fn libos_region_layout(&self) -> LibosRegionLayout;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-arch` (lib) generated 2 warnings
+warning: missing documentation for a constant
+ --> crates/kf-abi/src/timer.rs:4:1
+  |
+4 | pub const REGISTER_OFFSET: u32 =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/timer.rs:10:5
+   |
+10 |     pub register_bytes: u64,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/timer.rs:11:5
+   |
+11 |     pub time_low: u64,
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/timer.rs:12:5
+   |
+12 |     pub time_high: u64,
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: `kf-abi` (lib) generated 4 warnings
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:2510:5
+     |
+2510 |     pub fn release_held(&mut self, ram: &mut dyn GuestRam) -> Result<usize, GspFault> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:2628:5
+     |
+2628 | /     pub fn post_event(
+2629 | |         &mut self,
+2630 | |         ram: &mut dyn GuestRam,
+2631 | |         rpc: &OutgoingRpc,
+2632 | |     ) -> Result<(), GspFault> {
+     | |_____________________________^
+
+warning: `kf-gsp` (lib) generated 2 warnings
+   Compiling kf-disp v0.1.0 (/var/lib/kf-windows-20261005/kayfabe-review-mutant-20261006/crates/kf-disp)
+warning: missing documentation for a function
+   --> crates/kf-disp/src/caps.rs:363:1
+    |
+363 | / pub fn page(
+364 | |     t: &ClassTable,
+365 | |     r: &Regs,
+366 | |     caps: u32,
+367 | |     heads: u32,
+368 | |     windows: u32,
+369 | | ) -> Result<CapsPage, Missing> {
+    | |______________________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a struct field
+    --> crates/kf-disp/src/engine.rs:1340:5
+     |
+1340 |     pub ilut_dma: u32,
+     |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+    --> crates/kf-disp/src/engine.rs:1341:5
+     |
+1341 |     pub ilut_offset: u32,
+     |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+    --> crates/kf-disp/src/engine.rs:1342:5
+     |
+1342 |     pub ilut_control: u32,
+     |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+    --> crates/kf-disp/src/engine.rs:1343:5
+     |
+1343 |     pub ilut_winim_hi: u32,
+     |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+    --> crates/kf-disp/src/engine.rs:1344:5
+     |
+1344 |     pub ilut_winim_lo: u32,
+     |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates/kf-disp/src/scanout.rs:371:1
+    |
+371 | pub struct IlutPlan {
+    | ^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-disp` (lib test) generated 7 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.49s
+     Running unittests src/lib.rs (/var/lib/kf-windows-20261005/review-mutant-target-20261006/debug/deps/kf_disp-4d2eb5c4978224d2)
+error: test failed, to rerun pass `-p kf-disp --lib`

@@ -1,0 +1,18 @@
+ND_START 2026-09-26T20:59:16+00:00 N=6 rev=b15c7cc8
+ND_HOST k=1 rc=0 blender_cycles_cuda=PASS,xid=0 blender_cycles_optix=PASS,xid=0 
+ND_HOST k=2 rc=0 blender_cycles_cuda=PASS,xid=0 blender_cycles_optix=PASS,xid=0 
+ND_HOST k=3 rc=0 blender_cycles_cuda=PASS,xid=0 blender_cycles_optix=PASS,xid=0 
+ND_HOST k=4 rc=0 blender_cycles_cuda=PASS,xid=0 blender_cycles_optix=PASS,xid=0 
+ND_HOST k=5 rc=0 blender_cycles_cuda=PASS,xid=0 blender_cycles_optix=PASS,xid=0 
+ND_HOST k=6 rc=0 blender_cycles_cuda=PASS,xid=0 blender_cycles_optix=PASS,xid=0 
+ND_EXIT 2026-09-26T20:59:59+00:00
+ND_START 2026-09-26T21:03:52+00:00 N=12 rev=b15c7cc8
+ND_EXIT rc=2 (the K0=7 attempt died at start: a syntax error in an in-place edit of this script; nothing ran)
+ND_START 2026-09-26T21:04:54+00:00 K0=7 N=12 rev=b15c7cc8
+ND_HOST k=7 rc=0 blender_cycles_cuda=PASS,xid=0 blender_cycles_optix=PASS,xid=0 
+ND_HOST k=8 rc=0 blender_cycles_cuda=PASS,xid=0 blender_cycles_optix=PASS,xid=0 
+ND_HOST k=9 rc=0 blender_cycles_cuda=PASS,xid=0 blender_cycles_optix=PASS,xid=0 
+ND_HOST k=10 rc=0 blender_cycles_cuda=PASS,xid=0 blender_cycles_optix=PASS,xid=0 
+ND_HOST k=11 rc=0 blender_cycles_cuda=PASS,xid=0 blender_cycles_optix=PASS,xid=0 
+ND_HOST k=12 rc=0 blender_cycles_cuda=PASS,xid=0 blender_cycles_optix=PASS,xid=0 
+ND_EXIT 2026-09-26T21:05:36+00:00

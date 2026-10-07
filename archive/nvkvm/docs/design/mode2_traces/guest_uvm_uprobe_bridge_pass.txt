@@ -1,0 +1,46 @@
+M8.14 no-LD_PRELOAD / no-NVUVM_SHADOW guest pass, 2026-06-07.
+
+QEMU was freshly booted with:
+
+- q35 root slot addr=0x7
+- m2pbmap=/tmp/m2_pbmap.txt
+
+The guest loaded normal nvidia.ko and nvidia-uvm.ko, then loaded
+nvkvm_uvm_uprobe_bridge.  cup2 was run with only LD_LIBRARY_PATH pointing at
+the guest libcuda.  There was no LD_PRELOAD and no NVUVM_SHADOW.
+
+cup2 output:
+
+```text
+pid=2222
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+devices=1
+ok   cuDeviceGet(&d, 0)
+ok   cuDeviceGetName(nm, sizeof(nm), d)
+name=NVIDIA GeForce RTX 3060
+ok   cuDeviceGetAttribute(&maj, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, d)
+ok   cuDeviceGetAttribute(&min, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, d)
+compute=8.6
+ok   cuDeviceTotalMem(&tot, d)
+totalMem=11909 MiB
+ok   cuCtxCreate(&ctx, 0, d)
+CTX OK
+ok   cuMemAlloc(&dp, 4096)
+MEMALLOC OK 0x753d1e200000
+ok   cuMemcpyHtoD(dp, &hv, 4)
+HTOD OK dp=0x753d1e200000 sleeping-before-dtoh
+ok   cuMemcpyDtoH(&rv, dp, 4)
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+DONE
+```
+
+Guest dmesg bridge lines:
+
+```text
+[   70.217075] nvkvm_uvm_bridge: mapped BAR0 debug aperture at 0000:00:07.0 start=0xfb000000
+[   70.226711] nvkvm_uvm_bridge: registered cuMemcpyHtoD at /usr/local/nvidia-guest/lib/libcuda.so.580.159.04+0x378af0
+[   70.226744] nvkvm_uvm_bridge: registered cuMemcpyHtoD_v2 at /usr/local/nvidia-guest/lib/libcuda.so.580.159.04+0x37aab0
+[   70.226749] nvkvm_uvm_bridge: loaded max_bytes=4096
+[  129.252353] nvkvm_uvm_bridge: HtoD dst=0x753d1e200000 bytes=0x4 gpa=0x13a989000 first=0xabcd1234 slot=1
+```

@@ -1,0 +1,44 @@
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d001a2
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=1d5704dd9
+info  R23 atomics probe   = 0x2080182a, 112-byte params, one bare Subdevice, no channel
+info  R23 H1=caller-state (all arms refuse)  H2=the 0xCD seed IS the capType
+info  R23 R18 replay  cap=CD tail=CD = refused Other(86)
+info  R23 cap=CD tail=00            = refused Other(86)
+★     R23 cap=SYSMEM(0) tail=CD     = NV_OK  echo cap=0x00000000 dbdf=0x00000000  body=WRITTEN
+      R23 cap=SYSMEM(0) tail=CD       raw=000000000000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd00000000
+      R23 op[ 0] IADD  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 1] IMIN  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 2] IMAX  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 3] INC   bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 4] DEC   bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 5] IAND  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 6] IOR   bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 7] IXOR  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 8] EXCH  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 9] CAS   bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[10] FADD  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[11] FMIN  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[12] FMAX  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+★     R23 libcuda replay all-zero   = NV_OK  echo cap=0x00000000 dbdf=0x00000000  body=UNTOUCHED
+      R23 libcuda replay all-zero     raw=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+info  R23 cap=GPU(1) tail=CD        = refused Other(86)
+info  R23 cap=P2P(2) tail=CD        = refused Other(86)
+info  R23 cap=3 (undeclared) tail=CD = refused Other(86)
+★     R23 cap=SYSMEM dbdf=CD tail=CD = NV_OK  echo cap=0x00000000 dbdf=0xcdcdcdcd  body=WRITTEN
+      R23 cap=SYSMEM dbdf=CD tail=CD   raw=00000000cdcdcdcd00cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd00000000
+      R23 op[ 0] IADD  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 1] IMIN  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 2] IMAX  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 3] INC   bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 4] DEC   bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 5] IAND  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 6] IOR   bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 7] IXOR  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 8] EXCH  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 9] CAS   bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[10] FADD  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[11] FMIN  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[12] FMAX  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+done — atomics probe only

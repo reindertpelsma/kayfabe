@@ -1,0 +1,8 @@
+=== cdpSimpleQuicksort side=guest start=2026-09-30T18:17:08+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/cdpSimpleQuicksort
+GPU Device 0: "Ampere" with compute capability 8.6
+
+Initializing data:
+Running quicksort on 128 elements
+Launching kernel on the GPU
+Validating results: OK
+=== end rc=0 secs=7 2026-09-30T18:17:15+00:00

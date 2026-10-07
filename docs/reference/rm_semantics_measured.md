@@ -1,0 +1,439 @@
+# RM semantics — measured and source-verified
+
+**What this file is.** A *reference sheet* of NVIDIA RM/UVM behaviours that this project has
+either read out of the open kernel modules or **measured on real hardware**, with the citation
+next to each fact. It exists because these facts are load-bearing for several independent
+design decisions and were previously only recoverable by reading a 3 500-line contact log in
+`../design/l1_concurrency.md`. **The reasoning lives in the design docs; the facts live here.**
+
+**How to use it.** When a design doc needs "what does RM actually do", cite a row here rather
+than re-deriving it. When a row is wrong, fix it here and the design docs inherit the fix.
+When something is *not* here, the standing rule applies: **do not invent NVIDIA/RM/GSP
+behaviour** — read `ogkm`, read gVisor's `nvproxy`, or run a bench experiment, and write the
+answer down. Every row is tagged:
+
+- **[src]** — read from `ogkm` (the open NVIDIA kernel modules) or from gVisor.
+- **[measured]** — observed on real hardware by this project, with the method stated.
+- **[inferred]** — a conclusion drawn from the two above. Marked so it can be attacked.
+
+---
+
+## ⚠️ 0. The version caveat — read this before quoting any number
+
+| | |
+|---|---|
+| `ogkm` checkout every **[src]** row below is read from | **610.43.02** (`research_clones/ogkm/version.mk:1`) |
+| driver the bench GPU actually runs | **580.159.04** (RTX 3060, GA106) |
+
+The **locking architecture** (per-client `RS_LOCK_CLIENT` write locks, one global API lock,
+the GSP RPC under both) is stable across these versions, and the gVisor corroboration
+(§1, production, its own version matrix) is independent evidence of that. But **any specific
+default, mask, or line number must be re-checked against the running driver before it is
+written down as fact**, and any *number* quoted from `ogkm` (`apiLockMask`'s default, a
+timeout constant) is a 610-series number being used as a 580-series prior. Where a row's
+correctness depends on the exact value rather than the shape, it says so.
+
+This is the single most likely way a row here goes quietly stale.
+
+---
+
+## 1. ★ RM serializes every ioctl per client — the pool buys latency isolation, not parallelism
+
+**[src]** Every resource-server entry point reachable from an ioctl takes the per-client lock
+in `LOCK_ACCESS_WRITE`:
+`ogkm: src/nvidia/src/libraries/resserv/src/rs_server.c:778, :1143, :1503, :1923, :2009,
+:2131, :2218, :2546`, and alloc *asserts* it at `:786-788`.
+
+**[src]** The **only** client-**READ** site in the whole driver is kernel-internal and not
+reachable from an ioctl at all: `nvGpuOpsGetExternalAllocPtes`
+(`ogkm: .../rmapi/nv_gpu_ops.c:4674-4676`, UVM). NVIDIA special-cased exactly one hot path to
+get same-client concurrency — which is strong evidence about the general case.
+
+**[src]** Alloc and free additionally take the **global** API lock in WRITE. There is one
+`g_RmApiLock` (`.../rmapi/rmapi.c:53-58`, `:535`); the default `apiLockMask` is
+`NVBIT(RS_API_CTRL)` only (`.../core/system.c:423`), so `serverAllocResourceLookupLockFlags`
+and its free equivalent override read-only back to WRITE
+(`.../rmapi/alloc_free.c:1714-1718`, `:1746-1748`). Only `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`
+escapes. ~~**The API lock is held across the GSP RPC** (`.../gpu/gsp/kernel_gsp.c:398`, `:2954`).~~
+
+> **⚠️ CITATION WITHDRAWN (2026-07-27, doc audit) — those two lines evidence a DIFFERENT LOCK.**
+> Both `kernel_gsp.c:398` and `:2954` are the same assertion:
+> `NV_ASSERT(rmGpuGroupLockIsOwner(pGpu->gpuInstance, GPU_LOCK_GRP_SUBDEVICE, &gpuMaskUnused));`
+> — that is the **GPU group (subdevice) lock**, not the **API lock**. The API-lock predicate is
+> spelled `rmapiLockIsOwner()`, and in `kernel_gsp.c` it appears only at `:1420`, `:4483`,
+> `:4653` and `:5117` — **none of them on the RPC wait path** these citations were attached to.
+>
+> **`[unverified]` — the claim itself is NOT retracted, only its evidence.** It remains very
+> likely true by a different route: alloc and free take the API lock in WRITE at the `rmapi`
+> layer *before* descending (the `alloc_free.c` citations above, which do hold), and nothing on
+> the path drops it. But that is an argument from call-graph shape, not a source read, and it
+> is exactly the kind of step this file exists to refuse to take silently.
+>
+> **What would settle it:** find the assertion or the acquire/release pair that brackets
+> `_kgspRpcRecvPoll` — or, cheaper and stronger, a bench kprobe showing a second client's
+> `NV_ESC_RM_ALLOC` blocked for the duration of a first client's GSP RPC.
+>
+> **★ Why it matters rather than being pedantry.** This citation is load-bearing twice over:
+> `../design/l1_concurrency.md` §11 B3 concludes *"a wedged verb blocks **every other
+> isolate's** RM calls"* — which needs the **global API** lock, since the GPU **group** lock is
+> per-GPU and would not, on its own, extend the blast radius across GPUs. And §2 below sizes
+> `VERB_BUDGET` on "6 s *plus API-lock queueing behind other clients*". If the lock actually
+> held across the RPC were only the per-GPU group lock, both the blast radius and the queueing
+> term would be narrower than recorded.
+
+**[src, production]** gVisor corroborates independently: `nvproxy` holds a per-client
+exclusive mutex across the host ioctl, under real CUDA
+(`gvisor: pkg/sentry/devices/nvproxy/frontend_unsafe.go:367-381`).
+
+> **[inferred] Consequence.** A pool of N workers on one RM client buys **~nothing on the
+> wire**. Its value is *liveness and latency isolation*: a six-second verb must not make a
+> sibling thread's independent verb appear to hang. Sizing a pool to the vCPU count implies a
+> scaling relationship that does not exist — past the point where one slow verb cannot hide a
+> fast one, extra workers are extra host threads queued in **D state** on the same
+> uninterruptible `down_write`.
+
+Design consequences: `../design/l1_concurrency.md` §7.2 (pool sizing, `DEFAULT_POOL_WORKERS`)
+and §12.26 (where this correction was made).
+
+---
+
+## 2. ★ RM's waits are UNINTERRUPTIBLE — so an interrupted alloc almost certainly COMPLETED
+
+**[src]** Three independent waits, none of them interruptible:
+
+| wait | mechanism | citation |
+|---|---|---|
+| the global API lock | `down_write` (no `_killable`, no `_interruptible`) | `ogkm: kernel-open/nvidia/os-interface.c:330-338` |
+| the GSP RPC reply | busy-poll loop with **no signal check** | `ogkm: .../gpu/gsp/kernel_gsp.c:2963-3060` |
+| client drain at free | bare `while (refCount > 1)` spin | `ogkm: .../resserv/src/rs_server.c:3164-3168` |
+
+~~**[src]** The GSP RPC timeout is 4 s (`defaultus`, `.../os/os.c:2136-2139`) × 1.5 = **6 s**
+(`.../gpu/gsp/kernel_gsp.c:2927`).~~ **RM's own answer at expiry is to keep going** — *"Today,
+we will soldier on if GSP times out"* (`:3000-3003`) — escalating to `gpuMarkDeviceForReset`
+plus an Xid (`:2772-2792`).
+
+> **★★ [src] CORRECTION (2026-07-27, doc audit) — "6 s" is ONE OF THREE REGIMES, and it is the
+> one that does NOT apply while we are doing our job.** The struck sentence quoted the
+> `NV_GPU_MODE_GRAPHICS_MODE` arm as though it were the only arm. It is not.
+> `osGetTimeoutParams` (**correct path: `ogkm src/nvidia/arch/nvalloc/unix/src/os.c:2116-2155`**
+> — *not* `src/kernel/os/os.c`, which does not exist) switches on `gpuGetMode(pGpu)`:
+>
+> | regime | `defaultus` | × 1.5 (`kernel_gsp.c:2927`) | citation |
+> |---|---|---|---|
+> | vGPU hypervisor (`hypervisorIsVgxHyper()`) — overrides the mode switch entirely | **1.8 s** | **2.7 s** | `os.c:2130` |
+> | `NV_GPU_MODE_GRAPHICS_MODE` | 4 s | **6 s** ← the number this doc carried | `os.c:2138` |
+> | **`NV_GPU_MODE_COMPUTE_MODE`** | **30 s** | **45 s** | `os.c:2142` |
+>
+> (and a fourth, orthogonal: under `IS_VGPU_GSP_PLUGIN_OFFLOAD_ENABLED` the multiplier is
+> replaced by `NV_MAX(3.1 s, defaultus) + defaultus/2` (`kernel_gsp.c:2915-2918`), so a
+> vGPU-GSP host lands at 4.0 s rather than 2.7 s. Out of scope today — the project's posture is
+> bare-metal by default — but it is a *fourth* answer, not a footnote to the first three.)
+>
+> **[src] And the mode is DYNAMIC, not a board property.**
+> `gpuGetMode(pGpu) = pGpu->computeModeRefCount > 0 ? COMPUTE : GRAPHICS`
+> (`ogkm src/nvidia/generated/g_gpu_nvoc.h:5582-5584`). `gpuChangeComputeModeRefCount_IMPL`
+> (`ogkm src/nvidia/src/kernel/gpu/gpu.c:311-345`) logs *"new mode: COMPUTE"* on the 0→1
+> transition and **re-runs `timeoutInitializeGpuDefault`** right there, so `defaultus` flips
+> 4 s → 30 s the moment the **first compute client** appears and flips back when the last one
+> goes.
+>
+> **★ Why this is load-bearing rather than trivia: a CUDA workload IS the 0→1 transition.**
+> Every scenario this project exists to serve runs with `computeModeRefCount > 0`. So the
+> bound that actually applies to a forwarded verb is **45 s, not 6 s** — and the 6 s figure
+> describes the idle GPU we are not interested in. `../design/l1_os_shell.md` §7.5's
+> `VERB_BUDGET` was sized against 6 s "plus API-lock queueing"; against 45 s plus queueing that
+> sizing needs re-deriving. **Not yet propagated into §7.5 — flagged, not fixed, because the
+> budget is a design decision and not mine to take.**
+>
+> **⚠️ [unverified] — which regime the bench GPU is actually in was never observed.** The mode
+> is a *host-driver* property of the RTX 3060, and nothing in this repo has read it back.
+> **What would settle it:** `dmesg | grep "new mode:"` on the bench during a Mode-2 CUDA run,
+> or a kprobe on `gpuChangeComputeModeRefCount_IMPL`. Until then the 45 s row is a **[src]**
+> upper bound, not a measurement, and the 6 s row is not safe to quote as *the* number.
+>
+> Two lesser fixes folded in above: the path (`arch/nvalloc/unix/src/os.c`, not `os/os.c`), and
+> the "soldier on" comment, which is at **`:3000-3003`**, not `:2999-3002`. Also note the ×1.5
+> at `:2927` is itself the *inner* `else` of two conditions — `bSlowGspRpc` (emulation/
+> simulation, which substitutes a wholly different value at `:2908`) and
+> `IS_VGPU_GSP_PLUGIN_OFFLOAD_ENABLED` (`:2915-2918`) — so "×1.5" is bare-metal-non-vGPU only.
+
+> **★ [inferred] The correctness statement, not a performance one: an interrupted
+> `NV_ESC_RM_ALLOC` almost certainly COMPLETED**, because RM had no interruptible point at
+> which to abandon it. A forwarder that treats `EINTR` as "it did not happen" leaks a host
+> object it can no longer name.
+
+**[inferred] And it re-reads a C-era measurement.** The C recorded a *"~3.4–3.5 s bounded
+EINTR unwind measured on RTX 3060"* (`C: docs/design/signal_interrupt_delivery.md`). There is
+no unwind: that was **RM's own 4 s timeout elapsing**. Anything sized against "3.5 s" — a
+watchdog budget, a wedge detector — is sized against a number that means the opposite of what
+it appears to mean. `VERB_BUDGET` must exceed 6 s *plus* API-lock queueing behind other
+clients (`../design/l1_os_shell.md` §7.5).
+
+**Still owed a bench measurement** (G4's open question): whether the object allocated by an
+interrupted alloc can be reconciled at all, or only reclaimed by isolate death.
+
+---
+
+## 3. ★★ UVM has exactly ONE RM client per module load — not one per process
+
+**[measured]** RTX 3060, driver **580.159.04**, 2026-07-25. `nvUvmInterfaceSessionCreate`
+fires **exactly once per `nvidia_uvm` module load**.
+
+```
+NVSESS SESSION_CLIENT=0xc1d00069        <- once per module load
+ 82 dups pid=A dst=0xc1d00069 src=0xc1d00067
+ 82 dups pid=B dst=0xc1d00069 src=0xc1d00068     <- SAME destination
+```
+
+- A **third** process, run later, joined the same destination. It changes only across a
+  module reload.
+- Over the whole trace: dups with the session as **source** = 0; dups with a user client as
+  **destination** = 0; userspace `NV_ESC_RM_DUP_OBJECT` = 0 — **CUDA never issues one**. A
+  strict one-directional star *into* the session client.
+- **Only 25 of the 82 dups reach GSP.** Any rule keyed on the GSP wire must therefore be
+  correct on that subset alone.
+
+**[src]** Consistent with the source: `nvUvmInterfaceSessionCreate` is called once from
+`uvm_global_init` (`ogkm: kernel-open/nvidia-uvm/uvm_global.c:117`, from `module_init`) into
+the singleton `g_uvm_global`; every dup lands in it (`.../rmapi/nv_gpu_ops.c:2753-2760`,
+`:8444-8450`) with the *user's* client as source.
+
+### ★ The method, recorded because it is reusable
+
+This is not visible by ordinary means, and the next person will otherwise waste the same day:
+
+- **`strace` / `LD_PRELOAD` cannot see these.** They are in-kernel RM calls made by
+  `nvidia_uvm` on the process's behalf — **never a userspace ioctl**.
+- **ftrace refuses the RM core**: it is compiled `notrace`.
+- What worked was a throwaway **`register_kprobe` module** on RM's dup funnel
+  `rmapiDupObjectWithSecInfo` and on the GSP wire `rpcRmApiDupObject_GSP` /
+  `rpcRmApiAlloc_GSP`.
+
+> **Why it mattered.** The C's stale comment *"UVM's per-process gpu-ops client"*
+> (`C: src/qemu/nvkvm_gpu_emul.c:392`) seeded a wrong model that was then encoded in **both**
+> the Rust core and its test suite — so **no test could have caught it; the tests asserted the
+> same wrong model as the code.** Only measurement finds that class of error. (The C's own
+> bench note — a singular *"UVM's RM client (0xc1d00001)"* — was the accurate one.)
+
+Design consequence — the `Proc` grouping rule: `../design/l1_concurrency.md` §12.27.
+
+---
+
+## 4. The client-kind discriminator on the wire — and the three things it is NOT
+
+**[measured + src]** `rpcRmApiAlloc_GSP` with `hClass == NV01_ROOT` carries
+`NV0000_ALLOC_PARAMETERS`, whose `processID` is the discriminator:
+
+```
+GSPALLOC hClient=0xc1d00067 parm.processID=0x0000dd13      <- process A's pid
+GSPALLOC hClient=0xc1d00068 parm.processID=0x0000dd14      <- process B's pid
+GSPALLOC hClient=0xc1d00069 parm.processID=0xffffffff      <- UVM session = KERNEL_PID
+GSPALLOC hClient=0xc1e0006a..76 parm.processID=0xffffffff  <- other RM-internal clients
+```
+
+**[src]** Stamped ~~unconditionally~~ **on the discrete-x86 path** at
+`ogkm: src/nvidia/inc/kernel/vgpu/rpc.h:67-77` — `privLevel >= RS_PRIV_LEVEL_KERNEL →
+processID = KERNEL_PID (0xFFFFFFFF)`, else the client's own `ProcID` (`:74`). It is a
+**declared protocol fact**, available at client-creation time, *before any dup exists*.
+
+> **⚠️ [src] CORRECTION (2026-07-27, doc audit) — "unconditionally" was wrong, and this doc
+> already contradicted itself on it.** `nvidia_abi_oracles.md` §3's closing note records the
+> same macro accurately; this section did not, and the two sat next to each other saying
+> different things. The assignment has **two escapes**, both visible in the cited range:
+>
+> 1. **`if (!IsT234DorBetter(pGpu))` (`rpc.h:57`)** — the whole block, `hClient` aside, is
+>    skipped on Tegra T234D and later, leaving `processID` at its `{0}` initialiser. It would
+>    decode as `User { pid: 0 }`. Irrelevant to a discrete x86 target; a real hazard if this
+>    project ever targets Tegra.
+> 2. **`if (pClient != NULL)` (`rpc.h:62`, `else NV_ASSERT(0)` at `:79-80`)** — a lookup miss
+>    also leaves it 0, on an assertion path rather than a returned error.
+>
+> **What survives unharmed:** the *discriminator* claim. On the target this project actually
+> serves, `KERNEL_PID` vs `ProcID` is exactly as described, and §4's three non-discriminators
+> are untouched. What does not survive is reading "unconditionally" as licence to treat a
+> `processID` of `0` as impossible — it is reachable, and on the failure paths above it is
+> **indistinguishable from a genuine pid 0**.
+
+Three non-discriminators, each of which looks usable and is not:
+
+1. **★ The handle VALUE.** The UVM session `0xc1d00069` sits numerically *between* the two
+   user clients, on the same `RS_CLIENT_HANDLE_BASE` (`ogkm: .../g_resserv_nvoc.h:173`;
+   `RS_CLIENT_INTERNAL_HANDLE_BASE (0xC1E00000)` exists and other kernel clients use it —
+   **UVM's session does not**). Keying on the range mis-files the single most important kernel
+   client in the system, and would have looked right.
+2. **`processName`** is empty in every observed record.
+3. **The dup graph itself** — which is the thing the discriminator has to decide about.
+
+**[src] Handle values are per-client and reusable.** RM mints client-scoped handles from one
+shared base, so *the same raw handle value is live and different in every other client*. A
+handle is never an identity on its own; a free issued into the wrong client's namespace does
+not fault, it **destroys a bystander**. (This is why `HostHandle` carries its `IsolateId` —
+`../design/l1_concurrency.md` §12.26.)
+
+---
+
+## 5. `deviceInstance` is attacker-controlled, and RM fails open to GPU 0
+
+**[measured]** Trivially attacker-controlled: ~20 lines of raw `NV_ESC_RM_ALLOC` on
+`/dev/nvidiactl`, **no patched guest kernel**. Stock userspace never emits one.
+
+**[src]** RM enforces `deviceInstance < NV_MAX_DEVICES (32)` in three places
+(`ogkm alloc_free.c:1372-1390`; `device.c:118-129` → `NV_ERR_INVALID_CLASS`;
+`device.c:357-368`) — **so a `< 32` cap is not where the risk lives.** The real check is
+`osIsGpuAccessible` → `nv_is_gpu_accessible` (`kernel-open/nvidia/nv.c:5904-5910`), which
+scans the **host process's fd table**; device allocs go through `/dev/nvidiactl`, which
+carries no GPU identity, so `deviceInstance` is the *sole* selector.
+
+**[src] `gpumgrGetPrimaryForDevice` fails open to GPU 0** for an in-range-but-unpopulated
+instance (`gpu_mgr.c:688-691`).
+
+**[src]** The same `deviceInstance` **twice under one client is legal on bare metal**
+(`device.c:368-380` rejects it only under `IS_VIRTUAL`). **Device-per-client is not 1:1** — an
+entitlement check must be a *membership* test and must never drift into a uniqueness one.
+
+Design consequence: cap to the **entitlement**, not to `NV_MAX_DEVICES`
+(`../design/l1_concurrency.md` §12.21).
+
+---
+
+## 6. Kernel references into user memory can outlive the owning process
+
+**[src]** A dup'd object is kept alive by refcount: `memCopyConstruct_IMPL`'s
+`pHwResource->refCount++` / `memdescAddRef` / `DupCount++`
+(`ogkm: src/nvidia/src/kernel/mem_mgr/mem.c:1027-1031`). **Kernel clients hold refcounted
+references into USER memory** — that is the whole mechanism by which UVM works.
+
+**[src]** And such a reference genuinely **can outlive the owning process**: `uvm_va_space`
+hangs off the **file**, not the process
+(`ogkm: kernel-open/nvidia-uvm/uvm_va_space_mm.c:75-81`), and
+`UVM_INIT_FLAGS_MULTI_PROCESS_SHARING_MODE` states it outright — resources are freed *"when
+the last reference to the file is dropped rather than when this process exits"*
+(`ogkm: kernel-open/nvidia-uvm/uvm.h:160-167`; zombie ranges `uvm_va_range.h:265-268`).
+
+> **[inferred] The design rule this forces.** A per-process host lifetime keyed on the guest's
+> *client root* would be a use-after-free on exactly this path. Keying it on **live resources
+> with attribution by origin** makes the surviving kernel reference keep the owner's isolate,
+> arena and published backing alive for precisely as long as RM's own refcount says the object
+> lives — no extra machinery.
+
+**[src]** RM's own free order is children-before-parents (`rs_client.c:830-849`,
+`rs_server.c:963-981`), and RM auto-unmaps at free — so an unmap-then-free discipline on our
+side protects *our* mirror, not RM's.
+
+Design consequences and the measured end-to-end behaviour (alive-and-usable: yes; freed at
+refcount 0: **no**): `../design/l1_concurrency.md` §12.33.
+
+---
+
+## 7. Cross-PID dup policy
+
+**[src]** `RS_SHARE_TYPE_PID` is the default `DUP_OBJECT` share policy: a cross-PID dup is
+**denied unless opted out** (`ogkm: src/nvidia/src/kernel/rmapi/client_resource.c:219-231`,
+`sharing.c:344-353`). UVM's own dups pass
+`NV04_DUP_HANDLE_FLAGS_REJECT_KERNEL_DUP_PRIVILEGE` (`nv_gpu_ops.c:2759`, `:8490`).
+
+**[inferred]** Genuine cross-process sharing therefore has to be *declared*, which is what
+makes "a user↔user dup edge is the sharing edge" a faithful model rather than a convenient one.
+
+---
+
+## 8. ★★ A dup'd control fd IS a capability — RM gates on the FILE and the uid, never on the pid
+
+This is the fact the central-registry decision turns on (`../design/l1_os_shell.md` §7.8.1), so
+it is recorded here with its citations rather than in the design doc that consumes it.
+
+**[src] Every ioctl-reachable resource-server entry point runs the same one check on the
+caller — `clientValidate` — and nothing pid-shaped.** `serverAllocResource`
+(`ogkm: .../resserv/src/rs_server.c:824`), `serverFreeResourceTree…` (`:1153`),
+`serverControl` (`:1547`), `serverCopyResource` (dup, `:1695`), `serverShareResourceAccess`
+(`:1933`), `serverMap`/`serverUnmap` (`:2022`, `:2138`), `serverInterMap`/`serverInterUnmap`
+(`:2232`, `:2554`).
+
+**[src] And `clientValidate` is not a process check.** The generic resserv implementation is a
+literal `return NV_OK` (`.../resserv/src/rs_client.c:452-459`); RM's override does the work
+(`.../rmapi/client.c:765-791`), and it has exactly two arms, both enabled by default on Linux
+(`PDB_PROP_SYS_VALIDATE_CLIENT_HANDLE` = `((0)||(1)||(0))` and `…_STRICT` = `((1) && !0)`,
+`generated/g_system_nvoc.c:110-111`):
+
+| arm | what it compares | consequence for a dup'd fd |
+|---|---|---|
+| **strict** (default): `pClient->pOSInfo != pSecInfo->clientOSInfo → NV_ERR_INVALID_CLIENT` | the client's owning **control-device `struct file`** — `secInfo.clientOSInfo = nvfp->ctl_nvfp` (`arch/nvalloc/unix/src/escape.c:379-381`), stamped into the client at creation (`rmapi/client.c:91`) | a **dup** (or an `SCM_RIGHTS` copy) is *the same* `struct file`, so it **passes**. A fresh `open()` of `/dev/nvidiactl` is a different file and does not |
+| non-strict: `_rmclientUserClientSecurityCheck` (`client.c:469-…`) | a **uid** security token (`osGetSecurityToken` → `osValidateClientTokens`), plus a kernel-vs-user privilege check | same uid ⇒ **passes** |
+
+> **★ [inferred] The capability statement.** The gate is the **file** (and the uid), never the
+> calling process. So a dup'd `/dev/nvidiactl` descriptor held by another process is a **real
+> capability over the whole client namespace behind it**: allocate under another client, free
+> its root and destroy everything beneath it, or enumerate its tree with
+> `GET_HANDLE_INFO` — **two ioctls, no pid gate anywhere on the path**. This is consistent
+> with, and sharper than, the already-recorded *"RM client lifetime is keyed to the **file**,
+> not the process"* (`arch/nvalloc/unix/src/osapi.c:552-557`, `../design/l1_concurrency.md`
+> §12.27).
+
+**★ The misreading to avoid, stated because it is the available mistake.** RM *does* have
+per-process checks — an mmap context may only be armed by the process owning the client
+(`osapi.c:2540-2542`, `kernel-open/nvidia/nv-mmap.c:542-549`), and cross-PID `DUP_OBJECT` is
+denied by default (§7). **Those are CPU-mapping coherence and dup policy, not an access
+boundary**, and reading them as one would conclude that holding the fd is harmless. It is not:
+none of them stands between a control fd and Alloc/Control/Free.
+
+**[src] The sanctioned escape, if a lifetime hold is ever genuinely required**, is an
+**export-object fd** rather than a device fd. NVIDIA structurally bars an export fd from
+becoming a mapping fd: `nvidia_mmap` returns `-EINVAL` outright when the file has objects
+exported into it — *"Do not allow mmap operation if this is a fd into which rm objects have
+been exported"* (`kernel-open/nvidia/nv-mmap.c:781-788`). So the capability an export fd
+carries is narrower **by construction**, not by our discipline.
+
+⚠️ Every row here is **[src]** at `ogkm` 610.43.02 — §0's version caveat applies, and the two
+PDB defaults in particular are values, not shapes. Nothing in this section has been confirmed
+by a bench experiment on 580.159.04.
+
+---
+
+## 9. ★★ RM resolves `hClient` FIRST — "use before exist" is `NV_ERR_INVALID_CLIENT`, not a tolerated ordering
+
+**[src]** Every ioctl-reachable resource-server entry point looks the client handle up in
+the client database **before** it touches a single object handle, and fails if it is not
+there. `ogkm src/nvidia/src/libraries/resserv/src/rs_server.c`:
+
+| operation | entry point | client lookup | then |
+|---|---|---|---|
+| `RM_ALLOC` (non-root) | `serverAllocResource` | `:778` `_serverLockClientWithLockInfo` | `clientValidate` `:824` |
+| `DUP_OBJECT` (**both** ends) | `serverCopyResource` | `:1674` `_serverLockDualClientWithLockInfo` | `clientValidate(dst)` `:1696` |
+| `RM_CONTROL` (e.g. `SET_PAGE_DIRECTORY`) | `serverControl` | `:1503` / `:1519` | `clientValidate` `:1547` |
+| `RM_MAP_MEMORY_DMA` | `serverInterMap` | `:2218` | `clientValidate` `:2232` |
+| `RM_FREE` | `serverFreeResourceTree` | `:1143` | — |
+| map / unmap | `serverMap` / `serverUnmap` | `:2009` / `:2131` | — |
+
+A missing client entry is `NV_ERR_INVALID_OBJECT_HANDLE` inside the lock helper
+(`:3486-3487` for the single-client form, `:3547-3550` for the dual), and `clientValidate`'s
+own refusal one line later is `NV_ERR_INVALID_CLIENT`
+(`ogkm src/nvidia/src/kernel/rmapi/client.c:782`).
+
+**[src]** The **one** exemption is the client-root alloc itself, which *creates* the
+namespace: `serverAllocResource` branches to `serverAllocClient` (`:764`) and never takes
+the client lock.
+
+**[src]** Freeing a client root destroys the whole namespace (children-before-parents,
+`rs_client.c:830-849`), so "a namespace with no root" and "a namespace that never existed"
+are the same state to RM.
+
+> **★ [inferred] The rule this forces on a forwarder.** Order-independence is owed to the
+> orderings the protocol *allows*, not to every ordering a stream can express. **No event
+> may name a client namespace that does not exist** — and the earlier fact here is one we
+> always observe, because a client root is on the GSP wire by construction (§4 is decoded
+> from exactly that RPC). Contrast §3: only 25 of 82 dups reach GSP, so a dup's *source
+> object* may be one RM saw and we did not, which is why THAT absence must stay a deferral.
+> The two are different categories and look identical in code.
+
+Design consequence: `../design/l1_concurrency.md` §12.38 (the corrected MISS criterion, and
+the cross-process isolation break that came from getting it wrong).
+
+---
+
+## See also
+
+- `mode2_bench_lifecycle.md` — the *C Mode-2 artifact's* measured lifecycle behaviour
+  (fn-47, driver restart, kill-mid-ioctl). Different subject, same discipline.
+- `../design/l1_concurrency.md` §12.26, §12.27, §12.33 — where these facts were established
+  and what each one changed.
+- `../design/l1_os_shell.md` §0.2 — the per-claim ground-truth table for the OS shell.

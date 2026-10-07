@@ -1,0 +1,13 @@
+Oct 04 11:54:54 ubuntu kernel: NVRM: GPU at PCI:0000:00:08: GPU-9fdaccfb-1920-54dc-3d1b-48aaa43e2692
+Oct 04 11:54:54 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=380063, name=qemu-system-x86, channel 0x00000020, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC0 GPCCLIENT_T1_0 faulted @ 0x721f_5c019000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+Oct 04 11:55:05 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=380063, name=qemu-system-x86, channel 0x00000022, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x7adc_3e000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+Oct 04 11:55:14 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=380063, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_1 faulted @ 0x72b1_1e200000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+Oct 04 11:58:52 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=380063, name=qemu-system-x86, channel 0x0000001f, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC2 GPCCLIENT_T1_1 faulted @ 0x7b56_40007000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+Oct 04 12:18:49 ubuntu kernel: NVRM: GPU at PCI:0000:00:08: GPU-9fdaccfb-1920-54dc-3d1b-48aaa43e2692
+Oct 04 12:18:49 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=383917, name=qemu-system-x86, channel 0x00000022, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x74a6_34000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+Oct 04 12:20:32 ubuntu kernel: NVRM: GPU at PCI:0000:00:08: GPU-9fdaccfb-1920-54dc-3d1b-48aaa43e2692
+Oct 04 12:20:32 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=384392, name=qemu-system-x86, channel 0x00000020, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC0 GPCCLIENT_T1_1 faulted @ 0x6ffc_f41f0000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+Oct 04 12:22:10 ubuntu kernel: NVRM: GPU at PCI:0000:00:08: GPU-9fdaccfb-1920-54dc-3d1b-48aaa43e2692
+Oct 04 12:22:10 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=384883, name=qemu-system-x86, channel 0x0000001f, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x72ee_aa000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+Oct 04 12:23:57 ubuntu kernel: NVRM: GPU at PCI:0000:00:08: GPU-9fdaccfb-1920-54dc-3d1b-48aaa43e2692
+Oct 04 12:23:57 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=385342, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_1 faulted @ 0x70d7_92200000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ

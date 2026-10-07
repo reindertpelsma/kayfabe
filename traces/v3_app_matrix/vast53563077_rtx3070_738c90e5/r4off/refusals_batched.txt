@@ -1,0 +1,71 @@
+  nvidia_smi | PASS | kf3_refusals=5 | REFUSED QueueNotBound x2; RPC AllocClassNotPermitted{class: 50031, denial: NotOnAllowlist} x1; RPC AllocClassNotPermitted{class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus} x1; RPC UnmappedAllocClass{class: 8335} x1
+  deviceQuery | PASS | kf3_refusals=11 | REFUSED QueueNotBound x2; RPC AllocClassNotPermitted{class: 50031, denial: NotOnAllowlist} x1; RPC AllocClassNotPermitted{class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus} x1; GSP fn76/0x2080012f=0x56 x1; GSP fn76/0x20802a12=0x56 x1; GSP fn76/0x20800ab8=0x56 x1; GSP fn76/0x20800a9a=0x56 x1; GSP fn76/0x20800a9e=0x56 x1; GSP fn76/0x20800a9c=0x56 x1; GSP fn76/0x20800a1e=0x56 x1
+  vectorAdd | PASS | kf3_refusals=4 | REFUSED QueueNotBound x2; RPC AllocClassNotPermitted{class: 50031, denial: NotOnAllowlist} x1; RPC AllocClassNotPermitted{class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus} x1
+  vectorAddDrv | PASS | kf3_refusals=4 | REFUSED QueueNotBound x2; RPC AllocClassNotPermitted{class: 50031, denial: NotOnAllowlist} x1; RPC AllocClassNotPermitted{class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus} x1
+  matrixMul | PASS | kf3_refusals=4 | REFUSED QueueNotBound x2; RPC AllocClassNotPermitted{class: 50031, denial: NotOnAllowlist} x1; RPC AllocClassNotPermitted{class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus} x1
+  matrixMulDrv | PASS | kf3_refusals=4 | REFUSED QueueNotBound x2; RPC AllocClassNotPermitted{class: 50031, denial: NotOnAllowlist} x1; RPC AllocClassNotPermitted{class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus} x1
+  bandwidthTest | PASS | kf3_refusals=4 | REFUSED QueueNotBound x2; RPC AllocClassNotPermitted{class: 50031, denial: NotOnAllowlist} x1; RPC AllocClassNotPermitted{class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus} x1
+  simpleStreams | PASS | kf3_refusals=4 | REFUSED QueueNotBound x2; RPC AllocClassNotPermitted{class: 50031, denial: NotOnAllowlist} x1; RPC AllocClassNotPermitted{class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus} x1
+  asyncAPI | PASS | kf3_refusals=4 | REFUSED QueueNotBound x2; RPC AllocClassNotPermitted{class: 50031, denial: NotOnAllowlist} x1; RPC AllocClassNotPermitted{class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus} x1
+  simpleAtomicIntrinsics | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  simpleCallback | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  simpleOccupancy | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  simpleZeroCopy | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  simpleCooperativeGroups | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  concurrentKernels | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  simpleIPC | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+! UnifiedMemoryStreams | FAIL | kf3_refusals=3 | REFUSED QueueNotBound x2; GSP fn76/0x83de030c=0x56 x1
+! UnifiedMemoryPerf | FAIL | kf3_refusals=2 | REFUSED QueueNotBound x2
+! conjugateGradientUM | FAIL | kf3_refusals=2 | REFUSED QueueNotBound x2
+  cudaTensorCoreGemm | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  bf16TensorCoreGemm | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  globalToShmemAsyncCopy | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+! cdpSimpleQuicksort | TIMEOUT | kf3_refusals=2 | REFUSED QueueNotBound x2
+  graphMemoryNodes | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  simpleCudaGraphs | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  simpleCUBLAS | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  simpleCUFFT | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  conjugateGradient | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  MersenneTwisterGP11213 | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  reduction | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  sortingNetworks | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  scan | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  histogram | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  BlackScholes | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  fastWalshTransform | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  transpose | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  stream_triad | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  reduce | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  nbody | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  blackscholes | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  mandelbrot | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  conv2d | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  sgemm_cublas | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  fft_cufft | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  sha256 | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  memcpy2d | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+! attach_verify | FAIL | kf3_refusals=2 | REFUSED QueueNotBound x2
+  stream_default | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  stream_created | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  stream_nonblocking | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  stream_perthread | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  stream_two | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  stream_created2nd | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  gpu_burn | PASS | kf3_refusals=7 | REFUSED QueueNotBound x4; GSP fn76/0x2080852a=0x56 x1; GSP fn76/0x20808546=0x56 x1; GSP fn76/0x20808536=0x56 x1
+  torch_correct | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  torch_ai_bench | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  hf_generate | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  cupy | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  llama_cpp_gen | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  llama_bench | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  vulkaninfo | PASS | kf3_refusals=4 | REFUSED QueueNotBound x2; GSP fn76/0x20810107=0x56 x1; GSP fn76/0x2080a0d1=0x56 x1
+  vkpeak | PASS | kf3_refusals=0 | 
+  egl_offscreen | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  clinfo | PASS | kf3_refusals=4 | REFUSED QueueNotBound x4
+  clpeak | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  nvenc_h264 | PASS | kf3_refusals=3 | REFUSED QueueNotBound x2; GSP fn76/0x20808165=0x56 x1
+  nvenc_hevc | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  nvdec_h264 | PASS | kf3_refusals=2 | REFUSED QueueNotBound x2
+  hashcat | PASS | kf3_refusals=3 | REFUSED QueueNotBound x2; GSP fn76/0x20809004=0x56 x1
+  blender_cycles | PASS | kf3_refusals=4 | REFUSED QueueNotBound x4
+  geekbench_gpu | PASS | kf3_refusals=0 | 

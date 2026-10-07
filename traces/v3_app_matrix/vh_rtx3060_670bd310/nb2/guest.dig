@@ -1,0 +1,3 @@
+APPDIG side=guest app=torch_correct DIGEST cnn_train_step 763c693a5a53f948
+APPDIG side=guest app=hf_generate OUTSHA hf_generate 0d973108a6251e14
+APPDIG side=guest app=llama_cpp_gen OUTSHA llama_cpp 51d8a3f3ab90ec22

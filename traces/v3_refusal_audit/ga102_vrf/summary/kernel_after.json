@@ -1,0 +1,1077 @@
+[
+ {
+  "fn": 76,
+  "detail": "20800a87",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "deviceQuery": 1,
+   "egl_offscreen": 1,
+   "gpu_burn": 2,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "nvidia_smi": 3,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 1,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 2,
+   "vkpeak": 1,
+   "vulkaninfo": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20800a4b",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "deviceQuery": 1,
+   "egl_offscreen": 1,
+   "gpu_burn": 2,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "nvidia_smi": 3,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 1,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 2,
+   "vkpeak": 1,
+   "vulkaninfo": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20800afe",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 2,
+   "blocksync": 2,
+   "clpeak": 2,
+   "cup2": 2,
+   "cup3": 2,
+   "cup8": 2,
+   "deviceQuery": 2,
+   "egl_offscreen": 2,
+   "gpu_burn": 4,
+   "graphMemoryNodes": 2,
+   "llama_gen": 2,
+   "nvdec_h264": 2,
+   "nvenc_h264": 2,
+   "nvenc_hevc": 2,
+   "nvidia_smi": 6,
+   "simpleCallback": 2,
+   "simpleCudaGraphs": 2,
+   "simpleIPC": 2,
+   "simpleStreams": 2,
+   "torch_correct": 2,
+   "torch_train": 4,
+   "vkpeak": 2,
+   "vulkaninfo": 2
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20800aff",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "deviceQuery": 1,
+   "egl_offscreen": 1,
+   "gpu_burn": 3,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "nvidia_smi": 13,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 1,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 2,
+   "vkpeak": 1,
+   "vulkaninfo": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20800a80",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 2,
+   "blocksync": 2,
+   "clpeak": 2,
+   "cup2": 2,
+   "cup3": 2,
+   "cup8": 2,
+   "deviceQuery": 2,
+   "egl_offscreen": 2,
+   "gpu_burn": 4,
+   "graphMemoryNodes": 2,
+   "llama_gen": 2,
+   "nvdec_h264": 2,
+   "nvenc_h264": 2,
+   "nvenc_hevc": 2,
+   "nvidia_smi": 6,
+   "simpleCallback": 2,
+   "simpleCudaGraphs": 2,
+   "simpleIPC": 2,
+   "simpleStreams": 2,
+   "torch_correct": 2,
+   "torch_train": 4,
+   "vkpeak": 2,
+   "vulkaninfo": 2
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20802a0f",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "deviceQuery": 1,
+   "egl_offscreen": 1,
+   "gpu_burn": 2,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "nvidia_smi": 3,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 1,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 2,
+   "vkpeak": 1,
+   "vulkaninfo": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "2080017e",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "deviceQuery": 1,
+   "egl_offscreen": 1,
+   "gpu_burn": 2,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "nvidia_smi": 3,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 1,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 2,
+   "vkpeak": 1,
+   "vulkaninfo": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20800a30",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "deviceQuery": 1,
+   "egl_offscreen": 1,
+   "gpu_burn": 2,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "nvidia_smi": 3,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 1,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 2,
+   "vkpeak": 1,
+   "vulkaninfo": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20800a2e",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "deviceQuery": 1,
+   "egl_offscreen": 1,
+   "gpu_burn": 2,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "nvidia_smi": 3,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 1,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 2,
+   "vkpeak": 1,
+   "vulkaninfo": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20800a34",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "deviceQuery": 1,
+   "egl_offscreen": 1,
+   "gpu_burn": 2,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "nvidia_smi": 3,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 1,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 2,
+   "vkpeak": 1,
+   "vulkaninfo": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20800b03",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "deviceQuery": 1,
+   "egl_offscreen": 1,
+   "gpu_burn": 2,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "nvidia_smi": 3,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 1,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 2,
+   "vkpeak": 1,
+   "vulkaninfo": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20800b05",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "deviceQuery": 1,
+   "egl_offscreen": 1,
+   "gpu_burn": 2,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "nvidia_smi": 3,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 1,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 2,
+   "vkpeak": 1,
+   "vulkaninfo": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20800a3f",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "deviceQuery": 1,
+   "egl_offscreen": 1,
+   "gpu_burn": 2,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "nvidia_smi": 3,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 1,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 2,
+   "vkpeak": 1,
+   "vulkaninfo": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "2080012b",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "deviceQuery": 1,
+   "egl_offscreen": 1,
+   "gpu_burn": 2,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "nvidia_smi": 3,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 1,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 2,
+   "vkpeak": 1,
+   "vulkaninfo": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "2080013f",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "deviceQuery": 1,
+   "egl_offscreen": 1,
+   "gpu_burn": 2,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "nvidia_smi": 6,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 1,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 2,
+   "vkpeak": 1,
+   "vulkaninfo": 1
+  }
+ },
+ {
+  "fn": 103,
+  "detail": "0000c36f",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "deviceQuery": 1,
+   "egl_offscreen": 1,
+   "gpu_burn": 2,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "nvidia_smi": 3,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 1,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 2,
+   "vkpeak": 1,
+   "vulkaninfo": 1
+  }
+ },
+ {
+  "fn": 103,
+  "detail": "0000402c",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "deviceQuery": 1,
+   "egl_offscreen": 1,
+   "gpu_burn": 2,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "nvidia_smi": 3,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 1,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 2,
+   "vkpeak": 1,
+   "vulkaninfo": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20810108",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "deviceQuery": 1,
+   "gpu_burn": 2,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "nvidia_smi": 4,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 2,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20800a38",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "deviceQuery": 1,
+   "egl_offscreen": 1,
+   "gpu_burn": 2,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "nvidia_smi": 3,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 1,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 2,
+   "vkpeak": 1,
+   "vulkaninfo": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "2080012f",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 2,
+   "blocksync": 2,
+   "clpeak": 2,
+   "cup2": 2,
+   "cup3": 2,
+   "cup8": 2,
+   "deviceQuery": 2,
+   "egl_offscreen": 2,
+   "gpu_burn": 3,
+   "graphMemoryNodes": 2,
+   "llama_gen": 2,
+   "nvdec_h264": 2,
+   "nvenc_h264": 2,
+   "nvenc_hevc": 2,
+   "nvidia_smi": 2,
+   "simpleCallback": 2,
+   "simpleCudaGraphs": 2,
+   "simpleIPC": 3,
+   "simpleStreams": 2,
+   "torch_correct": 2,
+   "torch_train": 2,
+   "vkpeak": 2,
+   "vulkaninfo": 2
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20802a12",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 12,
+   "blocksync": 12,
+   "clpeak": 12,
+   "cup2": 12,
+   "cup3": 12,
+   "cup8": 12,
+   "deviceQuery": 12,
+   "egl_offscreen": 12,
+   "gpu_burn": 12,
+   "graphMemoryNodes": 12,
+   "llama_gen": 12,
+   "nvdec_h264": 20,
+   "nvenc_h264": 16,
+   "nvenc_hevc": 16,
+   "simpleCallback": 12,
+   "simpleCudaGraphs": 12,
+   "simpleIPC": 16,
+   "simpleStreams": 12,
+   "torch_correct": 12,
+   "torch_train": 12,
+   "vkpeak": 176,
+   "vulkaninfo": 52
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20800a9a",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "deviceQuery": 1,
+   "egl_offscreen": 1,
+   "gpu_burn": 1,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 2,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 1,
+   "vkpeak": 32,
+   "vulkaninfo": 5
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20800a9e",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "deviceQuery": 1,
+   "gpu_burn": 1,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 1,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20800a9c",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "deviceQuery": 1,
+   "gpu_burn": 1,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 1,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20800a1e",
+  "status": "56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "deviceQuery": 1,
+   "gpu_burn": 1,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 1,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20800ab8",
+  "status": "56",
+  "workloads": {
+   "cup2": 1,
+   "nvenc_h264": 1,
+   "simpleCudaGraphs": 1,
+   "torch_train": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20810107",
+  "status": "56",
+  "workloads": {
+   "egl_offscreen": 1,
+   "vkpeak": 1,
+   "vulkaninfo": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "00800294",
+  "status": "56",
+  "workloads": {
+   "gpu_burn": 1,
+   "nvidia_smi": 3
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20808513",
+  "status": "56",
+  "workloads": {
+   "gpu_burn": 1,
+   "nvidia_smi": 3
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20808546",
+  "status": "56",
+  "workloads": {
+   "gpu_burn": 20,
+   "nvidia_smi": 18
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "2080852a",
+  "status": "56",
+  "workloads": {
+   "gpu_burn": 1,
+   "nvidia_smi": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20808536",
+  "status": "56",
+  "workloads": {
+   "gpu_burn": 1,
+   "nvidia_smi": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20808165",
+  "status": "56",
+  "workloads": {
+   "nvdec_h264": 2,
+   "nvenc_h264": 2,
+   "nvenc_hevc": 2
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20810110",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 13
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "2080014b",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 15
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20800157",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 3
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20801357",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 3
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "2080852e",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 3
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20802068",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 7
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "2080a618",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 3
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "2080a612",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 3
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "2080a097",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 7
+  }
+ },
+ {
+  "fn": 103,
+  "detail": "0000208f",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 3
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20810111",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20800102",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "208001a4",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20803083",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20800156",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 1
+  }
+ },
+ {
+  "fn": 103,
+  "detail": "000090e7",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20801813",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 2
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20801819",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 2
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20801829",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20801830",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "2080a080",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20809038",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20802087",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 4
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20803401",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20803404",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20801322",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20801344",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "2080a63c",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "2080a0f2",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20809004",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 4
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "2080a0a7",
+  "status": "56",
+  "workloads": {
+   "nvidia_smi": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "20801210",
+  "status": "56",
+  "workloads": {
+   "vkpeak": 3,
+   "vulkaninfo": 1
+  }
+ },
+ {
+  "fn": 76,
+  "detail": "2080a0d1",
+  "status": "56",
+  "workloads": {
+   "vkpeak": 326,
+   "vulkaninfo": 1
+  }
+ }
+]

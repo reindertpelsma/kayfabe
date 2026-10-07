@@ -1,0 +1,13 @@
+{
+  "schema": "kayfabe-private-watchdog-recovery/1",
+  "run": 13,
+  "filename": "WATCHDOG-20261006-2115.dmp",
+  "bytes": 343783,
+  "sha256": "3fbdbfacf03b8e190adb40075799aa9a70b681da2a8161e9f27ef20442e19a91",
+  "dump_mtime_utc": "2026-10-06T21:15:42.649599+00:00",
+  "experiment_start_utc": "2026-10-06T21:15:35.602639+00:00",
+  "disk_access": "read-only NBD and NTFS; supervisor stopped",
+  "baseline_sha256": "9ff194d31f0a871757fd436f14ab0da2e1e8a6360dc36bb925c12af12a64f85c",
+  "windows_offset": 332398592,
+  "cleanup_verified": true
+}

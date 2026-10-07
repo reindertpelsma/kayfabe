@@ -1,0 +1,1703 @@
+//! The `GET_GSP_STATIC_INFO` (fn 65) **reply body**: `GspStaticConfigInfo`, and in
+//! particular the FB region table the guest's memory manager cannot start without.
+//!
+//! ## ★★★ Why this one is not a control, and why that matters here
+//!
+//! Every other reply this crate encodes is a `GSP_RM_CONTROL` — a header the guest wrote,
+//! with a `status` and a `paramsSize` we overwrite. Fn 65 has none of that. The GSP posts
+//! the whole `GspStaticConfigInfo` struct at the RPC body and the guest copies it into
+//! `pGpu->pGspStaticInfo` unconditionally, so there is no field in which to say *"not
+//! served"*. A zero body is not a refusal; it is an answer that says this GPU has no
+//! memory. Measured on a stock 580.159.04 guest at `d1ba379`, where fn 65 fell through to
+//! the FSM's bare acknowledgement — the request's own zeroed body, echoed:
+//!
+//! ```text
+//! NVRM: memmgrInitBaseFbRegions_FWCLIENT: Missing FB region table in GSP Init arguments.
+//! NVRM: ... [NV_ERR_INVALID_PARAMETER] (0x3B) from memmgrInitBaseFbRegions_HAL @ mem_mgr.c:3417
+//! NVRM: ... [NV_ERR_INVALID_PARAMETER] (0x3B) from memmgrInitFbRegions @ mem_mgr.c:392
+//! NVRM: RmInitNvDevice: *** Cannot pre-initialize the device
+//! NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x23:0x3b:1206)
+//! ```
+//!
+//! `memmgrInitBaseFbRegions_FWCLIENT` is `ogkm-580:
+//! src/nvidia/src/kernel/gpu/mem_mgr/mem_mgr_gsp_client.c:61-67`; the `numFBRegions == 0`
+//! branch is the line above.
+//!
+//! ## ★★ A region is a PROMISE, not a description
+//!
+//! Every byte inside a region with `reserved == 0` is memory the guest's heap will hand to
+//! a client and expect to work (`ogkm-580: mem_mgr_gsp_client.c:104-105` accumulates it
+//! into `fbUsableMemSize`; `ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/heap.c:533-618`
+//! builds the allocator over it). A region invented to look plausible is a promise the
+//! data plane is asked to keep thousands of records later, at an allocation that names
+//! nothing about this file. So the rows are a chip-row decision
+//! (`kayfabe_device::ChipProfile::fb_regions`), this module is only the layout, and the
+//! encoder [refuses](GspStaticInfoError) a table whose geometry does not describe the FB
+//! the same device advertises.
+//!
+//! ## ★ The layout is pinned against real hardware bytes, not against a header read
+//!
+//! The offsets below are computed from the `ogkm-580` struct declarations, and then
+//! **checked against an RTX 3060's own answer**: the C artifact's captured reply
+//! (`C: src/qemu/mode2_gspstaticinfo_ga106.h`, 1792 bytes) appears verbatim, exactly once,
+//! in `traces/mode2_c_reference/cap1b_coldboot_hermetic_d6` — record 141977, a 4096-byte
+//! `GuestWrite` to `0x1_2764_4000`, at payload offset 80 (the element's 48-byte header
+//! plus the 32-byte RPC header). `crates/kayfabe-device/tests/gsp_static_info.rs` feeds
+//! that capture's five rows back through [`encode_gsp_static_info`] and requires the
+//! bytes out to equal the bytes in.
+
+use crate::versions::GspStaticInfoWire;
+
+extern crate alloc;
+use alloc::vec;
+use alloc::vec::Vec;
+
+/// `sizeof(GspStaticConfigInfo)` at the 580 shape — the body length the guest's own
+/// request declares (`rpc.length` 1824 = 32-byte RPC header + this), and the length the C
+/// artifact's captured reply carries.
+///
+/// A measured constant rather than a sum of the whole struct: the fields past
+/// [`FB_LENGTH_OFF`] are all left zero by this port, so their layout is not modelled and
+/// writing it out would be a description of nothing. Read from `cap1b_coldboot_hermetic_d6`
+/// record 141977 (`rpc.length` at element+56 = 1824) and from the capture log the C header
+/// was generated from (`C: docs/research/captures/ga106_gspstaticinfo_580.log:1`,
+/// `NVKVM_CAPGSI size=1792`).
+pub const GSP_STATIC_CONFIG_INFO_SIZE: usize = 1792;
+
+/// `NV0080_CTRL_GR_CAPS_TBL_SIZE` (`ogkm-580:
+/// src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080gr.h:78`) — `grCapsBits[]`, the first
+/// member.
+const GR_CAPS_BITS_SIZE: usize = 23;
+
+/// `NV2080_GPU_MAX_GID_LENGTH` — `gidInfo.data[]`.
+const GID_DATA_SIZE: usize = 256;
+
+/// `sizeof(NV2080_CTRL_GPU_GET_GID_INFO_PARAMS)`: `index`, `flags`, `length`, `data[256]`
+/// (`ogkm-580: ctrl2080gpu.h:1785-1790`).
+pub const GID_INFO_SIZE: usize = 12 + GID_DATA_SIZE;
+
+/// `RM_SHA1_GID_SIZE` — how many bytes of `gidInfo.data[]` are the GPU's UUID
+/// (`ogkm-580: src/nvidia/inc/kernel/gpu/gpu_uuid.h:30-34`, *"uses the first 16 bytes"*).
+pub const RM_SHA1_GID_SIZE: usize = 16;
+
+/// Byte offset of `gidInfo` — the **second** member of `GspStaticConfigInfo`
+/// (`ogkm-580: src/nvidia/inc/kernel/gpu/gsp/gsp_static_config.h:80-81`), after
+/// `grCapsBits[23]` realigned to the struct's 4-byte members.
+pub const GID_INFO_OFF: usize = align_up(GR_CAPS_BITS_SIZE, 4);
+
+/// Byte offset of `gidInfo.data[]` — past `index`, `flags` and `length`.
+pub const GID_DATA_OFF: usize = GID_INFO_OFF + 12;
+
+/// `NV2080_GPU_CMD_GPU_GET_GID_FLAGS_FORMAT_BINARY` (`0x2`) with
+/// `..._TYPE_SHA1` (`0x0` at bit 2) — `ogkm-580: ctrl2080gpu.h:1793-1798`.
+///
+/// ★ Corroborated by the real board rather than derived: the C artifact's captured
+/// GA106 reply (`C: docs/research/captures/ga106_gspstaticinfo_580.log:3-4`) carries
+/// `index = 0`, `flags = 2`, `length = 0x10` at exactly these offsets. This is a row
+/// **with a body**, which is the half of that capture set `CLAUDE.md` records as
+/// trustworthy byte-for-byte.
+pub const GID_FLAGS_SHA1_BINARY: u32 = 0x2;
+
+/// `NV2080_CTRL_CMD_GPU_GET_GID_INFO` — the control the HOST is asked for its own GPU's UUID
+/// (non-privileged: it is in the nvproxy allow-list, `capability.rs`). Request: `index = 0`,
+/// `flags = ` [`GID_FLAGS_SHA1_BINARY`]; reply: `length = 16`, `data[0..16]`.
+pub const NV2080_CTRL_CMD_GPU_GET_GID_INFO: u32 = 0x2080_014a;
+
+/// `sizeof(NV2080_CTRL_BIOS_GET_SKU_INFO_PARAMS)` (`ogkm-580: ctrl2080bios.h:376-386`):
+/// `BoardID` u32, `chipSKU[9]`, `chipSKUMod[5]`, u32 `skuConfigVersion` (3 bytes of
+/// padding ahead of it), `project[5]`, `projectSKU[5]`, `CDP[6]`, `projectSKUMod[2]`,
+/// then u32 `businessCycle` (2 more bytes of padding).
+const SKU_INFO_SIZE: usize = 48;
+
+/// `sizeof(NV0080_CTRL_GPU_GET_SRIOV_CAPS_PARAMS)` (`ogkm-580: ctrl0080gpu.h:481-500`):
+/// three u32 (padded to 16), six u64, nine `NvBool`, rounded to the struct's 8-byte
+/// alignment.
+const SRIOV_CAPS_SIZE: usize = 80;
+
+/// `NVGPU_ENGINE_CAPS_MASK_ARRAY_MAX` = `(RM_ENGINE_TYPE_LAST - 1) / 32 + 1`
+/// (`ogkm-580: src/nvidia/inc/kernel/gpu/nvbitmask.h:35`), with `RM_ENGINE_TYPE_LAST ==
+/// NV2080_ENGINE_TYPE_LAST == 0x54` (`ogkm-580: gpu_engine_type.c:32` and
+/// `src/common/sdk/nvidia/inc/class/cl2080_notification.h:373`).
+pub const ENGINE_CAPS_WORDS: usize = (0x54 - 1) / 32 + 1;
+
+/// ★ Byte offset of `engineCaps[]` — after `fbRegionInfoParams`, `sriovCaps` and the u32
+/// `sriovMaxGfid` (`ogkm-580: gsp_static_config.h:84-88`).
+pub const ENGINE_CAPS_OFF: usize =
+    FB_REGION_INFO_PARAMS_OFF + FB_REGION_INFO_PARAMS_SIZE + SRIOV_CAPS_SIZE + 4;
+
+/// Round `off` up to `align`, which must be a power of two.
+const fn align_up(off: usize, align: usize) -> usize {
+    off.next_multiple_of(align)
+}
+
+/// Byte offset of `fbRegionInfoParams` — after `grCapsBits[23]`, `gidInfo` and `SKUInfo`,
+/// realigned to 8 because the member is `NV_DECLARE_ALIGNED(..., 8)`.
+///
+/// ⚠ The realignment is four bytes that no field name mentions. Packing the table at 340
+/// puts `numFBRegions` where `SKUInfo.businessCycle`'s padding is, and the guest reads
+/// zero — i.e. it reproduces the exact failure this module exists to fix, while looking
+/// like it served a table.
+pub const FB_REGION_INFO_PARAMS_OFF: usize = align_up(
+    align_up(GR_CAPS_BITS_SIZE, 4) + GID_INFO_SIZE + SKU_INFO_SIZE,
+    8,
+);
+
+/// `NV2080_CTRL_CMD_FB_GET_FB_REGION_INFO_MEM_TYPES` — the width of the deprecated
+/// `blackList[]` (`ogkm-580: ctrl2080fb.h:862`).
+const FB_REGION_MEM_TYPES: usize = 18;
+
+/// `sizeof(NV2080_CTRL_CMD_FB_GET_FB_REGION_FB_REGION_INFO)`: three u64, a u32, three
+/// `NvBool`, `blackList[18]`, rounded to the 8-byte alignment the u64 members force
+/// (`ogkm-580: ctrl2080fb.h:866-875`).
+pub const FB_REGION_ENTRY_SIZE: usize = align_up(24 + 4 + 3 + FB_REGION_MEM_TYPES, 8);
+
+/// `NV2080_CTRL_CMD_FB_GET_FB_REGION_INFO_MAX_ENTRIES` (`ogkm-580: ctrl2080fb.h:877`).
+/// Also the bound RM itself checks against, as `MAX_FB_REGIONS`
+/// (`ogkm-580: src/nvidia/generated/g_mem_mgr_nvoc.h:440`, and the `ct_assert` tying the
+/// two together at `mem_mgr_ctrl.c:655`).
+pub const FB_REGION_MAX_ENTRIES: usize = 16;
+
+/// `sizeof(NV2080_CTRL_CMD_FB_GET_FB_REGION_INFO_PARAMS)`: `numFBRegions`, four bytes of
+/// alignment padding, then `fbRegion[16]`.
+pub const FB_REGION_INFO_PARAMS_SIZE: usize = 8 + FB_REGION_MAX_ENTRIES * FB_REGION_ENTRY_SIZE;
+
+/// Byte offset of `fb_length` — `fbRegionInfoParams`, `sriovCaps`, `sriovMaxGfid`,
+/// `engineCaps[]`, `poisonFuseEnabled`, realigned to 8.
+///
+/// ★ This is the FB size stated a **second** time: `NV_USABLE_FB_SIZE_IN_MB` states it
+/// first, and RM takes `fbTotalMemSizeMb` from here while taking `fbAddrSpaceSizeMb` from
+/// the last region's limit (`ogkm-580: mem_mgr_gsp_client.c:118-120`). Three statements of
+/// one fact; [`encode_gsp_static_info`] refuses the two it can see disagree.
+pub const FB_LENGTH_OFF: usize = align_up(
+    FB_REGION_INFO_PARAMS_OFF
+        + FB_REGION_INFO_PARAMS_SIZE
+        + SRIOV_CAPS_SIZE
+        + 4
+        + ENGINE_CAPS_WORDS * 4
+        + 1,
+    8,
+);
+
+/// `NV2080_GPU_MAX_NAME_STRING_LENGTH` (`ogkm-580:
+/// src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h:320`) — the width of each of the
+/// three name arrays, **including** the terminating NUL.
+pub const NAME_STRING_LEN: usize = 64;
+
+/// Byte offset of `gpuNameString[64]` — past `fb_length`, `fbio_mask`, `fb_bus_width`,
+/// `fb_ram_type`, `fbp_mask` and `l2_cache_size`
+/// (`ogkm-580: src/nvidia/inc/kernel/gpu/gsp/gsp_static_config.h:93-99`).
+///
+/// ★ **Confirmed against the real board, not derived twice.** The captured RTX 3060 fn-65
+/// reply carries `"NVIDIA GeForce RTX 3060"` at exactly **1388** and `"GA106-A"` at 1452
+/// (`C: docs/research/captures/ga106_gspstaticinfo_580.log`) — a row *with* a body, which
+/// is the half of that capture set `CLAUDE.md` records as trustworthy byte-for-byte.
+pub const NAME_STRING_OFF: usize = FB_LENGTH_OFF + 8 + 8 + 4 + 4 + 8 + 4;
+
+/// Byte offset of `gpuShortNameString[64]`.
+pub const SHORT_NAME_STRING_OFF: usize = NAME_STRING_OFF + NAME_STRING_LEN;
+
+/// Byte offset of `gpuNameString_Unicode[64]` — `NvU16`, i.e. UTF-16LE, 128 bytes wide.
+pub const NAME_STRING_UNICODE_OFF: usize = SHORT_NAME_STRING_OFF + NAME_STRING_LEN;
+
+/// ★★★★ Byte offset of `bar1PdeBase` — **the guest's only statement of where BAR1's page
+/// tables go**.
+///
+/// # ⊘ Why a field this port left zero for four months was not a harmless omission
+///
+/// `GspStaticConfigInfo` declares `NvU64 bar1PdeBase; NvU64 bar2PdeBase;` back to back
+/// (`ogkm-580: src/nvidia/inc/kernel/gpu/gsp/gsp_static_config.h:132-133`), and the guest
+/// does not ask for either — it *takes* them. `kbusPatchBar1Pdb_GSPCLIENT`
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/bus/kern_bus.c:755-807`) builds a framebuffer
+/// memory descriptor over `pGSCI->bar1PdeBase` and hands it to
+/// `mmuWalkModifyLevelInstance`, replacing the backing of CPU-RM's own BAR1 root level.
+/// Every BAR1 mapping the guest makes from then on writes its page directory **there**.
+///
+/// There is no reply status in which to say *"not served"* and no second command that
+/// carries the value: unlike BAR2, whose root the guest publishes back to us as an entry
+/// value on `UPDATE_BAR_PDE`, **BAR1's root is only ever stated here, by us**. A zero is
+/// therefore not an absence — it is this port telling the guest to root its framebuffer
+/// aperture at framebuffer address `0`, which on this device's own region table is inside
+/// the **usable** heap.
+///
+/// ★ **1664**, and it is a measured offset, not a struct-walk: the real RTX 3060 reply the
+/// rest of this module is pinned against carries `0x2_F1CA_C000` at exactly this byte and
+/// `0x2_F339_2000` (`bar2PdeBase`) at 1672 — both inside that capture's own reserved
+/// regions 2–4 (`[0x2_EFBE_0000, 0x2_FFFF_FFFF]`). The C artifact reads the same two words
+/// out of the same capture at the same offsets
+/// (`C: src/qemu/mode2_regs_ga10x.h:140`, `NVKVM_GSPSTATIC_BAR2PDEBASE_OFF 1672`, and
+/// `C: src/qemu/nvkvm_gpu_emul.c:3498-3502`, *"bar1PdeBase precedes bar2PdeBase"*).
+pub const BAR1_PDE_BASE_OFF: usize = 1664;
+
+// ★ The field must fit inside the body this port declares, and it must not tread on the
+// name strings that precede it. A build error here means one of the two measured offsets
+// moved without the other.
+const _: () = assert!(BAR1_PDE_BASE_OFF >= NAME_STRING_UNICODE_OFF + 2 * NAME_STRING_LEN);
+const _: () = assert!(BAR1_PDE_BASE_OFF + 8 <= GSP_STATIC_CONFIG_INFO_SIZE);
+const _: () = assert!(BAR1_PDE_BASE_OFF + 16 <= GSP_STATIC_CONFIG_INFO_SIZE);
+
+/// ★★★★ `bar2PdeBase`, at 1672 — **WRITTEN since P4 (w826): our BAR2 root is declared.**
+///
+/// ⊘⊘ SUPERSEDED (2026-09-24, w826, `V3_P4_PORT_MAP.md` Q4): this field used to be *"named and
+/// deliberately NOT written"*, on the reason that the old tree's CPU plane walked BAR2 from the
+/// fn 70 **entry** and so never needed an address, and that a boot served 286 352 BAR2 writes with
+/// it zero. That reason was an ARCHITECTURE, and v3 dropped it: there is no CPU walk. The GPU
+/// walker walks from a ROOT PAGE in the store, and the guest names that page in every BAR2
+/// `MMU_INVALIDATE` — the PDB it latches is exactly this value
+/// (`kbusPatchBar2Pdb_GSPCLIENT`, `ogkm-580: kern_bus.c:826-878`, re-points
+/// `virtualBar2.pPDB` here; `[measured cap3 #159728]` the guest's first BAR2 invalidate writes
+/// `MMU_INVALIDATE_PDB = 0x2f33920`, i.e. this capture's `0x2_F339_2000`). Left zero, every
+/// BAR2 invalidate names FB address 0 — the *"Pdb(0) meant both at offset 0 and absent"*
+/// ambiguity the thin-guest campaign paid for.
+///
+/// ⇒ The device declares a page it owns (`kf_chip::bar0::FbLayout::bar2_pde_base`, inside the
+/// carve-out), zeroes it, and serves fn 70 by writing the guest's `PDE3[0]` into its entry 0.
+pub const BAR2_PDE_BASE_OFF: usize = BAR1_PDE_BASE_OFF + 8;
+
+/// ★★★ **A model name this device declares** — `gpuNameString` / `gpuShortNameString`.
+///
+/// # ★★★ Where the value must come from, and why this type does NOT say
+///
+/// A model name is a **model** string, not a board identity: every RTX 3060 on earth
+/// answers `"NVIDIA GeForce RTX 3060"`, because the string says *what chip this is*. Under
+/// the owner's standing **READ-NATIVE, WRITE-TRAP** ruling (2026-07-31) the right source
+/// is therefore the **host GPU's own answer** —
+/// `NV2080_CTRL_CMD_GPU_GET_NAME_STRING` (`0x20800110`), already on this port's capability
+/// allowlist with origin `Nvproxy` — so a host holding an AD102 presents an AD102's name
+/// with **no new chip row to write**. A hardcoded per-generation table is the thing that
+/// ruling exists to prevent.
+///
+/// ⊘ **Contrast [`GpuGid`], and the contrast is the whole point.** A UUID is a
+/// per-*board* identity, and forwarding the host's verbatim breaks on **collision**, not
+/// on secrecy: two guests on one host would report one identity for two "different" GPUs,
+/// and one physical GPU backing two vGPUs *inside* one guest breaks CUDA enumeration
+/// outright. Its requirement is *stable across reboots of the same VM, unique across VMs*
+/// — so that one is queried for **structure** and derived from a VM identity for
+/// **value**. Name: forward. Identity: derive.
+///
+/// # ⊘ Which is why [`GspStaticInfo::name`] is an `Option` and this type has no default
+///
+/// Nothing on the fn-65 path can issue a host ioctl: fn 65 is the **second RPC of the
+/// whole driver life** (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:4232`,
+/// inside `kgspInitRm`, called from `arch/nvalloc/unix/src/osinit.c:2024`), so no guest RM
+/// object exists yet, and the system proc's isolate — the only device-level host-verb
+/// carrier — is materialized by the *first accepted guest RM event*
+/// (`tests/tests/isolate_spawn_is_guest_caused.rs`), strictly later. The value must
+/// therefore already be in hand when the policy is built, which makes this a **seam** and
+/// not a query site.
+///
+/// ⇒ `None` is what a port that has not been handed one says, and it leaves the array
+/// **zero** — which the guest surfaces as `Name: ERR!`. `c_oracle_empty_rows_are_wrong` is
+/// the memory: *an absent measurement must not decode as a value*. A default constant here
+/// would be a string that looks measured, which is the failure mode that cost this project
+/// a buffer overrun with a hardware writer.
+///
+/// # What the guest does with it
+///
+/// `gpuGetNameString_FWCLIENT` (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/gpu_gspclient.c:269-290`) `portMemCopy`s the field straight
+/// out of `pGpu->pGspStaticInfo` — the ASCII array for
+/// `NV2080_CTRL_GPU_GET_NAME_STRING_FLAGS_TYPE_ASCII` and the UTF-16 one otherwise. There
+/// is no second producer on a GSP client. `[measured 2026-08-08, boot p35_8088019]` a zero
+/// field there is what `nvidia-smi` prints as `Name: ERR!`.
+///
+/// # The invariants, in the type
+///
+/// ASCII, non-empty, and short enough to NUL-terminate inside
+/// [`NAME_STRING_LEN`] — so the array RM copies out is always a C string. ⊘ The check is
+/// in the constructor and not in the encoder for [`GpuGid`]'s reason: an encoder check
+/// leaves a caller holding an unusable value until the wire. ★ And it is the check a
+/// **host-supplied** string will need most: `GET_NAME_STRING` hands back a fixed 64-byte
+/// array from another kernel, and this port must not forward whatever is in it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GpuName(&'static str);
+
+impl GpuName {
+    /// A model string, or `None` if it cannot be delivered as a NUL-terminated ASCII
+    /// array of [`NAME_STRING_LEN`] bytes.
+    ///
+    /// ⚠ `len() < NAME_STRING_LEN`, strictly: a name of exactly 64 bytes would fill the
+    /// array with no room for the terminator, and RM copies the whole fixed-width array
+    /// into a buffer it then treats as a string.
+    #[must_use]
+    pub const fn new(s: &'static str) -> Option<GpuName> {
+        let b = s.as_bytes();
+        if b.is_empty() || b.len() >= NAME_STRING_LEN {
+            return None;
+        }
+        let mut i = 0;
+        while i < b.len() {
+            // Printable ASCII only. A NUL inside the string would truncate it silently,
+            // and a non-ASCII byte cannot be widened to the UTF-16 array by doubling.
+            if b[i] < 0x20 || b[i] > 0x7e {
+                return None;
+            }
+            i += 1;
+        }
+        Some(GpuName(s))
+    }
+
+    /// [`GpuName::new`] for a `const` item — an unusable name is a **compile** error
+    /// rather than a runtime `None` some caller has to invent an answer for.
+    ///
+    /// ★ This is the door a chip row uses, which is why the failure has to happen at the
+    /// row and not thirteen seconds into a boot.
+    #[must_use]
+    pub const fn declared(s: &'static str) -> GpuName {
+        match GpuName::new(s) {
+            Some(n) => n,
+            None => panic!(
+                "a declared GPU name must be non-empty printable ASCII shorter than \
+                 NV2080_GPU_MAX_NAME_STRING_LENGTH (64), so RM's fixed-width copy is a \
+                 NUL-terminated C string"
+            ),
+        }
+    }
+
+    /// The declared string.
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        self.0
+    }
+}
+
+/// Write `name` into a [`NAME_STRING_LEN`]-byte array at `off`, NUL-padded.
+fn put_name(body: &mut [u8], off: usize, name: GpuName) {
+    let b = name.as_str().as_bytes();
+    body[off..off + b.len()].copy_from_slice(b);
+}
+
+/// Write `name` into a [`NAME_STRING_LEN`]-element UTF-16LE array at `off`, NUL-padded.
+///
+/// ★ A plain byte-doubling, and it is correct *because* [`GpuName`] refuses non-ASCII:
+/// every code point is one UTF-16 unit whose high byte is zero.
+fn put_name_unicode(body: &mut [u8], off: usize, name: GpuName) {
+    for (i, b) in name.as_str().as_bytes().iter().enumerate() {
+        body[off + i * 2] = *b;
+        body[off + i * 2 + 1] = 0;
+    }
+}
+
+/// One FB region, as the guest's RM will file it.
+///
+/// Deliberately **not** `#[repr(C)]`: [`encode_gsp_static_info`] is the only thing that
+/// knows the wire layout, so a row is free to be ergonomic. The field docs are
+/// `ogkm-580: ctrl2080fb.h:820-856`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FbRegion {
+    /// First valid address in the region.
+    pub base: u64,
+    /// Last valid address in the region — `limit - base + 1` is its size.
+    pub limit: u64,
+    /// How much of the region RM must leave alone. ★ **Non-zero makes the whole region a
+    /// reserved one**: RM sets `bRsvdRegion` on any non-zero value and adds the size to
+    /// `reservedMemSize` instead of `fbUsableMemSize`, whatever the number was
+    /// (`ogkm-580: mem_mgr_gsp_client.c:96-106`). There is no partial reservation.
+    pub reserved: u64,
+    /// Relative bandwidth; higher is faster. Only compared between regions.
+    pub performance: u32,
+    /// Whether compressed kinds may be allocated here.
+    pub support_compressed: bool,
+    /// Whether ISO kinds (display, cursor, video) may be allocated here.
+    pub support_iso: bool,
+    /// Whether only `NVOS32_ALLOC_FLAGS_PROTECTED` allocations may land here.
+    pub protected: bool,
+}
+
+/// ★★★ **The GPU's UUID** — `gidInfo.data[0..16]`, and the field whose being zero fails
+/// `RmInitAdapter` thirteen seconds and four subsystems away from here.
+///
+/// # Why this is a type and not a `[u8; 16]`
+///
+/// The guest's only test of it is *"is it all zeros"*:
+///
+/// ```text
+/// if (portMemCmp(pGSCI->gidInfo.data, zeroGid, RM_SHA1_GID_SIZE) == 0)
+///     return NV_ERR_INVALID_STATE;                 // gpuGenGidData_FWCLIENT
+/// ```
+///
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/gpu_gspclient.c:152-159`). On a GSP client that
+/// function is the **only** producer of the UUID — the other two `gpuGenGidData` HALs are
+/// `_VF` and `_SOC`, so no register, fuse or PCI path can supply one. `[measured
+/// 2026-08-08, boots p35_754e393 and p35_1f88649]` a zero field there surfaces as:
+///
+/// ```text
+/// NVRM: RmRegisterGpudb: Failed to get UUID
+/// NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x43:0x59:2239)
+/// ```
+///
+/// — `osinit.c:2239` is `RM_SET_ERROR(status, RM_GPUDB_REGISTER_FAILED)`, and `0x59` is
+/// `NV_ERR_OPERATING_SYSTEM`, which `RmRegisterGpudb` returns at `osinit.c:1671-1674` when
+/// `RmGetGpuUuidRaw` hands back `NULL`. ⇒ **an all-zero UUID must be unconstructible**,
+/// which is what this newtype is for. A `[u8; 16]` field would put the check in the
+/// encoder, where a caller could pass a default and get a body that looks served.
+///
+/// # ⊘ What this port does NOT claim
+///
+/// NVIDIA's own value is the first 16 bytes of a SHA-1 over the chip's ECID, computed by
+/// the closed physical RM (`gpuGenGidData_GK104`, declared in
+/// `ogkm-580: g_gpu_nvoc.h:4737` and **not** in the open tree). This port cannot compute
+/// that and does not pretend to: [`GpuGid::derive`] produces a *stable synthetic
+/// identity*, and the only properties claimed for it are determinism, non-zeroness, and
+/// distinctness for distinct seeds.
+///
+/// ★ **Scope (resolved 2026-10-08 for the device, narrowed for everything else).** A UUID that
+/// is a function of the chip row alone collides: two nvkvm GPUs of one row, in one VM or in two,
+/// would carry the same one, and orchestrators and cluster tools that key on the GPU id fail
+/// on that (this is a COLLISION problem; it is not about hiding the host GPU). So the kf3
+/// device no longer lets the chip row decide: its `gpu-uuid` property resolves ONE per-VM,
+/// per-device value (`kf_rm::gpuuid`: `auto` = a domain-separated SHA-256 over the VM's identity,
+/// the host GPU's UUID and the device's slot; `random`; `host`; or an explicit value), and it
+/// arrives here through [`GpuGid::from_bytes`] / [`GpuGid::parse`]. [`GpuGid::derive`] below
+/// remains the fallback of a policy built without a declared value (every GPU-free test, and a
+/// board whose `gpu_gid` is `None`), and it is still per chip row — which is exactly why the
+/// device never uses it.
+///
+/// ⊘ Still open: the UUID the guest reads is not NVIDIA's (the closed physical RM's SHA-1 over
+/// the ECID); nothing is claimed beyond determinism, non-zeroness and distinctness. A guest
+/// that hands its UUID back to the host (UVM's `UvmGpuMappingAttributes`, `GET_UUID_FROM_GPU_ID`
+/// on a host client) is not translated anywhere in v3 today — no v3 path carries a guest UUID
+/// to the host (`rg -i uuid crates/kf-*`, 2026-10-08), and the day one does it must map the
+/// guest value to the host's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GpuGid([u8; RM_SHA1_GID_SIZE]);
+
+impl GpuGid {
+    /// An operator-declared UUID, or `None` if it is the one value the guest reads as
+    /// *"GSP static info has not been initialized yet"*.
+    #[must_use]
+    pub const fn from_bytes(bytes: [u8; RM_SHA1_GID_SIZE]) -> Option<GpuGid> {
+        let mut i = 0;
+        while i < RM_SHA1_GID_SIZE {
+            if bytes[i] != 0 {
+                return Some(GpuGid(bytes));
+            }
+            i += 1;
+        }
+        None
+    }
+
+    /// Parse the text form of a UUID — `GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` (what
+    /// `nvidia-smi -L` prints, [`GpuGid`]'s `Display`), the same without the `GPU-` prefix, or
+    /// 32 bare hex digits. Hex digits of either case; nothing else is accepted — no spaces, no
+    /// newline, no `0x`, no sign, no other prefix, no trailing text.
+    ///
+    /// The input is length-checked before it is looked at, so a hostile property string costs
+    /// a constant amount of work.
+    ///
+    /// # Errors
+    /// [`GpuGidTextError`], by kind; [`GpuGidTextError::AllZero`] for the one value the guest
+    /// reads as *"not initialized"*.
+    pub fn parse(text: &str) -> Result<GpuGid, GpuGidTextError> {
+        let body = text.strip_prefix("GPU-").unwrap_or(text);
+        let bytes = parse_uuid_body(text.len(), body)?;
+        GpuGid::from_bytes(bytes).ok_or(GpuGidTextError::AllZero)
+    }
+
+    /// The wire bytes, for [`encode_gsp_static_info`].
+    #[must_use]
+    pub const fn as_bytes(&self) -> &[u8; RM_SHA1_GID_SIZE] {
+        &self.0
+    }
+
+    /// A stable synthetic identity for `seed`.
+    ///
+    /// FNV-1a over a domain-separated seed, expanded by SplitMix64. ★ Deliberately a
+    /// *named, boring, dependency-free* mixing function rather than a hash imported for
+    /// the occasion: nothing here is a security property, and the one property that is
+    /// load-bearing — *the same seed always yields the same UUID, so a guest that pinned
+    /// `GPU-<uuid>` still finds its device after a reboot* — is easier to see in eight
+    /// lines than to take on trust from a crate.
+    ///
+    /// Never all-zero: the final byte-0 fixup is what makes the return type total rather
+    /// than an `Option` the caller would have to invent an answer for.
+    #[must_use]
+    pub fn derive(seed: &[u8]) -> GpuGid {
+        /// The domain separator, so a seed that happens to collide with some other use of
+        /// the same bytes does not produce the same identity.
+        const DOMAIN: &[u8] = b"kayfabe/gpu-gid/v1\0";
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        for b in DOMAIN.iter().chain(seed.iter()) {
+            h ^= u64::from(*b);
+            h = h.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        let mut out = [0u8; RM_SHA1_GID_SIZE];
+        for chunk in out.chunks_mut(8) {
+            h = h.wrapping_add(0x9e37_79b9_7f4a_7c15);
+            let mut z = h;
+            z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+            z ^= z >> 31;
+            chunk.copy_from_slice(&z.to_le_bytes());
+        }
+        // ⊘ The one value the guest reads as "not initialized yet" is excluded by
+        // construction rather than by a probability argument.
+        if out.iter().all(|b| *b == 0) {
+            out[0] = 1;
+        }
+        GpuGid(out)
+    }
+}
+
+impl core::fmt::Display for GpuGid {
+    /// `GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`, lowercase — the form `nvidia-smi -L` and
+    /// NVML print, and what [`GpuGid::parse`] reads back.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("GPU-")?;
+        write_uuid_body(f, &self.0)
+    }
+}
+
+/// Why a UUID text was refused ([`GpuGid::parse`], [`parse_uuid_text`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuGidTextError {
+    /// Longer than any accepted form (`GPU-` plus 36 characters = 40); `len` is the input's.
+    TooLong {
+        /// The input's length in bytes.
+        len: usize,
+    },
+    /// Not 32 hex digits, nor the 8-4-4-4-12 dashed form of 36 characters.
+    BadLength {
+        /// The length of the body (after any `GPU-`), in bytes.
+        len: usize,
+    },
+    /// A byte that is not an ASCII hex digit (or a dash outside the 8-4-4-4-12 positions).
+    BadChar {
+        /// Byte offset within the body (after any `GPU-`).
+        at: usize,
+    },
+    /// All 16 bytes zero — the value the guest reads as *"GSP static info not initialized"*.
+    AllZero,
+}
+
+impl core::fmt::Display for GpuGidTextError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            GpuGidTextError::TooLong { len } => {
+                write!(f, "{len} bytes is longer than any UUID form (at most 40)")
+            }
+            GpuGidTextError::BadLength { len } => write!(
+                f,
+                "{len} characters is neither 32 hex digits nor the 36-character 8-4-4-4-12 form"
+            ),
+            GpuGidTextError::BadChar { at } => write!(
+                f,
+                "byte {at} is not a hex digit (or a dash outside the 8-4-4-4-12 positions)"
+            ),
+            GpuGidTextError::AllZero => f.write_str(
+                "all-zero is the value the guest driver reads as \"not initialized\" and fails on",
+            ),
+        }
+    }
+}
+
+/// The longest accepted text: `GPU-` plus the 36-character dashed form.
+const MAX_UUID_TEXT: usize = 4 + 36;
+
+/// Parse a bare UUID text (no `GPU-` prefix): 32 hex digits or the dashed 8-4-4-4-12 form.
+/// Unlike [`GpuGid::parse`] the all-zero value is returned, not refused — a caller that
+/// treats it as *"unset"* (QEMU's `-uuid` default) needs to see it.
+///
+/// # Errors
+/// [`GpuGidTextError`] other than `AllZero`.
+pub fn parse_uuid_text(text: &str) -> Result<[u8; RM_SHA1_GID_SIZE], GpuGidTextError> {
+    parse_uuid_body(text.len(), text)
+}
+
+fn parse_uuid_body(
+    whole_len: usize,
+    body: &str,
+) -> Result<[u8; RM_SHA1_GID_SIZE], GpuGidTextError> {
+    if whole_len > MAX_UUID_TEXT {
+        return Err(GpuGidTextError::TooLong { len: whole_len });
+    }
+    let b = body.as_bytes();
+    let dashed = match b.len() {
+        32 => false,
+        36 => true,
+        len => return Err(GpuGidTextError::BadLength { len }),
+    };
+    let mut out = [0u8; RM_SHA1_GID_SIZE];
+    let mut nibbles = 0usize;
+    for (at, c) in b.iter().enumerate() {
+        if dashed && matches!(at, 8 | 13 | 18 | 23) {
+            if *c != b'-' {
+                return Err(GpuGidTextError::BadChar { at });
+            }
+            continue;
+        }
+        let v = match c {
+            b'0'..=b'9' => c - b'0',
+            b'a'..=b'f' => c - b'a' + 10,
+            b'A'..=b'F' => c - b'A' + 10,
+            _ => return Err(GpuGidTextError::BadChar { at }),
+        };
+        out[nibbles / 2] |= v << (4 * (1 - nibbles % 2));
+        nibbles += 1;
+    }
+    Ok(out)
+}
+
+fn write_uuid_body(
+    f: &mut core::fmt::Formatter<'_>,
+    bytes: &[u8; RM_SHA1_GID_SIZE],
+) -> core::fmt::Result {
+    for (i, b) in bytes.iter().enumerate() {
+        if matches!(i, 4 | 6 | 8 | 10) {
+            f.write_str("-")?;
+        }
+        write!(f, "{b:02x}")?;
+    }
+    Ok(())
+}
+
+/// The static facts this port is willing to state about one GPU.
+///
+/// ⊘ Deliberately not "the struct". Every field of `GspStaticConfigInfo` this type does
+/// not name is left **zero**, which is this port saying it does not advertise the thing —
+/// and the next guest-side failure names which one it wanted. Growing this type is how a
+/// rung is climbed; pre-filling it from a capture is how a failure is moved somewhere it
+/// cannot be read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GspStaticInfo<'a> {
+    /// `fbRegionInfoParams.fbRegion[]`, in ascending address order.
+    pub fb_regions: &'a [FbRegion],
+    /// `fb_length` — the framebuffer this device advertises, in bytes.
+    pub fb_length: u64,
+    /// `gidInfo.data[0..16]` — this GPU's UUID. See [`GpuGid`] for what fails without it.
+    pub gid: GpuGid,
+    /// `gpuNameString[]` — the model name, e.g. `"NVIDIA GeForce RTX 3060"`, or `None`
+    /// if this port has not been told one.
+    ///
+    /// ⊘ `None` writes **zero**, which the guest surfaces as `nvidia-smi`'s `Name: ERR!`
+    /// — loud, attributable, and not a value. See [`GpuName`] for why there is no default
+    /// and where the value is supposed to come from.
+    pub name: Option<GpuName>,
+    /// `gpuShortNameString[]` — the chip-level name, e.g. `"GA106-A"`, or `None`.
+    pub short_name: Option<GpuName>,
+    /// ★★★★ `bar1PdeBase` — the framebuffer address at which this device keeps BAR1's root
+    /// page directory. See [`BAR1_PDE_BASE_OFF`] for why writing it is not optional and
+    /// what leaving it zero told the guest.
+    pub bar1_pde_base: u64,
+    /// ★★★★ `bar2PdeBase` — the framebuffer address of OUR BAR2 root page. See
+    /// [`BAR2_PDE_BASE_OFF`].
+    pub bar2_pde_base: u64,
+    /// ★ `engineCaps[]` — a bitmask indexed by **NV2080** engine type (bit `t % 32` of word
+    /// `t / 32`), converted to RM types by `gpuGetRmEngineTypeCapMask`
+    /// (`ogkm-580: gpu_engine_type.c:305-331`). Its only GSP-client reader is
+    /// `gpuCheckEngineWithOrderList_KERNEL` (`gpu.c:6432-6565`), and for NVENC / NVDEC / OFA /
+    /// NVJPG / SEC2 it is the WHOLE presence test: a video class survives
+    /// `gpuRemoveMissingEngines` (`gpu.c:1786-1824`) only when its bit is set. All zero = the
+    /// guest keeps no video class at all.
+    pub engine_caps: [u32; ENGINE_CAPS_WORDS],
+}
+
+/// A `GspStaticConfigInfo` this port will not put on the wire.
+///
+/// Every variant is a table whose geometry contradicts something the same device has
+/// already told the same guest. The alternative to refusing is a heap built over memory
+/// nothing backs, whose first symptom is a fault at an address that names none of this.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GspStaticInfoError {
+    /// No regions at all — which is the defect this module exists to fix, so producing it
+    /// from the encoder side is refused rather than shipped.
+    NoRegions,
+    /// More regions than `fbRegion[]` holds.
+    TooManyRegions {
+        /// How many rows were offered.
+        len: usize,
+        /// The array bound, [`FB_REGION_MAX_ENTRIES`].
+        max: usize,
+    },
+    /// A region whose `limit` is below its `base`, i.e. a region of negative size.
+    RegionInverted {
+        /// Which row.
+        index: usize,
+        /// Its `base`.
+        base: u64,
+        /// Its `limit`.
+        limit: u64,
+    },
+    /// Two regions that are not in ascending, non-overlapping order. RM indexes the last
+    /// row for `fbAddrSpaceSizeMb` (`ogkm-580: mem_mgr_gsp_client.c:119-120`) and the heap
+    /// walks them in order, so "ascending" is not a tidiness rule.
+    RegionsOutOfOrder {
+        /// The row that starts too low.
+        index: usize,
+        /// Where it starts.
+        base: u64,
+        /// Where its predecessor ended.
+        prev_limit: u64,
+    },
+    /// The regions do not describe the framebuffer this device advertises: the last
+    /// region's `limit + 1` is not `fb_length`. RM reads the two independently and
+    /// believes both.
+    RegionsDoNotSpanFb {
+        /// `last.limit + 1`.
+        top: u64,
+        /// The `fb_length` in the same reply.
+        fb_length: u64,
+    },
+    /// This port does not encode this driver version's `GspStaticConfigInfo`.
+    UnsupportedWire {
+        /// The shape asked for.
+        wire: GspStaticInfoWire,
+    },
+    /// ★ A field the encoder writes does not exist in the guest version's MEASURED layout
+    /// ([`encode_gsp_static_info_at`]) — a per-version gap, named by path.
+    MissingField {
+        /// The field path (`crate::matrix` spelling).
+        path: &'static str,
+    },
+}
+
+impl core::fmt::Display for GspStaticInfoError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::NoRegions => write!(
+                f,
+                "an empty FB region table is the answer 'this GPU has no memory'; RM \
+                 rejects it as NV_ERR_INVALID_PARAMETER"
+            ),
+            Self::TooManyRegions { len, max } => {
+                write!(f, "{len} FB regions; fbRegion[] holds {max}")
+            }
+            Self::RegionInverted { index, base, limit } => write!(
+                f,
+                "FB region {index} has limit {limit:#x} below base {base:#x}; limit is the \
+                 last valid address, not a size"
+            ),
+            Self::RegionsOutOfOrder {
+                index,
+                base,
+                prev_limit,
+            } => write!(
+                f,
+                "FB region {index} starts at {base:#x}, at or below the previous region's \
+                 limit {prev_limit:#x}; RM reads the table in order"
+            ),
+            Self::RegionsDoNotSpanFb { top, fb_length } => write!(
+                f,
+                "the FB regions end at {top:#x} but fb_length is {fb_length:#x}; RM takes \
+                 fbAddrSpaceSizeMb from the one and fbTotalMemSizeMb from the other"
+            ),
+            Self::UnsupportedWire { wire } => write!(
+                f,
+                "this port does not encode the {wire:?} shape of GspStaticConfigInfo"
+            ),
+            Self::MissingField { path } => write!(
+                f,
+                "GspStaticConfigInfo.{path} does not exist in this driver version's measured layout"
+            ),
+        }
+    }
+}
+
+impl core::error::Error for GspStaticInfoError {}
+
+/// Encode a `GspStaticConfigInfo` reply body.
+///
+/// The result is always [`GSP_STATIC_CONFIG_INFO_SIZE`] bytes, zero-filled outside the
+/// fields [`GspStaticInfo`] names — RM copies the whole struct into its own storage and
+/// reads fields this port has not reached yet, so a short body would leave them holding
+/// the request's bytes rather than zero.
+///
+/// # Errors
+///
+/// Any [`GspStaticInfoError`]: a region table that contradicts itself or the advertised
+/// `fb_length`, or a driver version whose struct shape this port does not encode.
+pub fn encode_gsp_static_info(
+    info: &GspStaticInfo<'_>,
+    wire: GspStaticInfoWire,
+) -> Result<Vec<u8>, GspStaticInfoError> {
+    if wire != GspStaticInfoWire::Pre610 {
+        return Err(GspStaticInfoError::UnsupportedWire { wire });
+    }
+    let regions = info.fb_regions;
+    if regions.is_empty() {
+        return Err(GspStaticInfoError::NoRegions);
+    }
+    if regions.len() > FB_REGION_MAX_ENTRIES {
+        return Err(GspStaticInfoError::TooManyRegions {
+            len: regions.len(),
+            max: FB_REGION_MAX_ENTRIES,
+        });
+    }
+    for (i, r) in regions.iter().enumerate() {
+        if r.limit < r.base {
+            return Err(GspStaticInfoError::RegionInverted {
+                index: i,
+                base: r.base,
+                limit: r.limit,
+            });
+        }
+        if i > 0 {
+            let prev_limit = regions[i - 1].limit;
+            if r.base <= prev_limit {
+                return Err(GspStaticInfoError::RegionsOutOfOrder {
+                    index: i,
+                    base: r.base,
+                    prev_limit,
+                });
+            }
+        }
+    }
+    let top = regions[regions.len() - 1].limit.wrapping_add(1);
+    if top != info.fb_length {
+        return Err(GspStaticInfoError::RegionsDoNotSpanFb {
+            top,
+            fb_length: info.fb_length,
+        });
+    }
+
+    let mut body = vec![0u8; GSP_STATIC_CONFIG_INFO_SIZE];
+    // ★★★ `gidInfo`. `index` stays 0, which is what the captured GA106 reply carries and
+    // what `gpuGenGidData_FWCLIENT` never reads; `flags` and `length` are written because
+    // the real GSP writes them, and a field the guest does not read is not a licence to
+    // leave the struct half-built (`mock_fidelity_both_directions`: no more and no less
+    // than hardware).
+    body[GID_INFO_OFF + 4..GID_INFO_OFF + 8].copy_from_slice(&GID_FLAGS_SHA1_BINARY.to_le_bytes());
+    body[GID_INFO_OFF + 8..GID_INFO_OFF + 12]
+        .copy_from_slice(&(RM_SHA1_GID_SIZE as u32).to_le_bytes());
+    body[GID_DATA_OFF..GID_DATA_OFF + RM_SHA1_GID_SIZE].copy_from_slice(info.gid.as_bytes());
+    let n = u32::try_from(regions.len()).unwrap_or(u32::MAX);
+    let p = FB_REGION_INFO_PARAMS_OFF;
+    body[p..p + 4].copy_from_slice(&n.to_le_bytes());
+    for (i, r) in regions.iter().enumerate() {
+        let o = p + 8 + i * FB_REGION_ENTRY_SIZE;
+        body[o..o + 8].copy_from_slice(&r.base.to_le_bytes());
+        body[o + 8..o + 16].copy_from_slice(&r.limit.to_le_bytes());
+        body[o + 16..o + 24].copy_from_slice(&r.reserved.to_le_bytes());
+        body[o + 24..o + 28].copy_from_slice(&r.performance.to_le_bytes());
+        body[o + 28] = u8::from(r.support_compressed);
+        body[o + 29] = u8::from(r.support_iso);
+        body[o + 30] = u8::from(r.protected);
+        // `blackList[]` stays zero: it is documented DEPRECATED in favour of `supportISO`
+        // (`ogkm-580: ctrl2080fb.h:855-856`), and the RTX 3060 capture leaves all 18 bytes
+        // of every one of its five rows at zero.
+    }
+    body[FB_LENGTH_OFF..FB_LENGTH_OFF + 8].copy_from_slice(&info.fb_length.to_le_bytes());
+    // ★★ All three name arrays, because a real GSP writes all three and
+    // `gpuGetNameString_FWCLIENT` reads the UTF-16 one whenever the caller does not ask
+    // for ASCII (`ogkm-580: gpu_gspclient.c:278-287`). Filling only the array the boot
+    // path happens to read is the too-capable/too-strict pair from
+    // `mock_fidelity_both_directions` in its quieter half: a client asking for Unicode
+    // would get an empty string and no error.
+    if let Some(name) = info.name {
+        put_name(&mut body, NAME_STRING_OFF, name);
+        put_name_unicode(&mut body, NAME_STRING_UNICODE_OFF, name);
+    }
+    if let Some(short) = info.short_name {
+        put_name(&mut body, SHORT_NAME_STRING_OFF, short);
+    }
+    // ★★★★ BAR1's root, which the guest will re-root its own page-table walker onto without
+    // asking. Written unconditionally — a zero from the caller is still a statement, and it
+    // is the one [`kayfabe_device::ChipProfile::bar1_pde_base`] spells "no address model".
+    body[BAR1_PDE_BASE_OFF..BAR1_PDE_BASE_OFF + 8]
+        .copy_from_slice(&info.bar1_pde_base.to_le_bytes());
+    // ★★★★ BAR2's root (P4): the page every later BAR2 invalidate names. Unconditional, for the
+    // same reason as BAR1's.
+    body[BAR2_PDE_BASE_OFF..BAR2_PDE_BASE_OFF + 8]
+        .copy_from_slice(&info.bar2_pde_base.to_le_bytes());
+    for (i, w) in info.engine_caps.iter().enumerate() {
+        body[ENGINE_CAPS_OFF + 4 * i..ENGINE_CAPS_OFF + 4 * i + 4]
+            .copy_from_slice(&w.to_le_bytes());
+    }
+    Ok(body)
+}
+
+/// ★★★ Encode a `GspStaticConfigInfo` at the GUEST's MEASURED layout
+/// (`docs/design/V3_DRIVER_MATRIX.md` §4, `crate::generated::matrix::GSPSTATICCONFIGINFO`).
+///
+/// The same fields [`encode_gsp_static_info`] writes — the UUID, the FB region table, the
+/// framebuffer length, the three name arrays, both BAR roots and `engineCaps` — each placed at
+/// the offset the version's own header puts it, found by NAME in the measured layout; every
+/// other byte stays zero, which is the same "advertise only what we state" policy as the bench
+/// encoder. For the bench version the result is byte-identical to [`encode_gsp_static_info`]
+/// (asserted in the tests), so this encoder replaces a 580-pinned layout rather than adding a
+/// second one.
+///
+/// ★ The layouts it spans, measured: 2168 bytes (535/545), 2184 (550), 1640 (565), 1656
+/// (570/575, 48-byte FB-region entries), 1792 (580.x), 1808 (590), 1592 (595, no `grCapsBits`),
+/// 1600 (610). ⊘ Zero stays zero: a version's field this encoder has no source for (e.g. 550's
+/// `SM_info`, 610's `fbRegion[].regionTag`) is written as zero, as today's encoder writes every
+/// 580 field it has no source for — the guest's next refusal names the field it wanted.
+///
+/// `gpuShortNameString` and `gpuNameString_Unicode` are optional (610 drops the Unicode array);
+/// the other fields are required and a layout without one is [`GspStaticInfoError::MissingField`].
+///
+/// # Errors
+/// [`GspStaticInfoError`] — the region-table checks of [`encode_gsp_static_info`] (with the array
+/// bound taken from the measured `fbRegion[]`), or a required field missing at this version.
+pub fn encode_gsp_static_info_at(
+    info: &GspStaticInfo<'_>,
+    layout: &crate::matrix::Resolved,
+) -> Result<Vec<u8>, GspStaticInfoError> {
+    let need = |path: &'static str| {
+        layout
+            .maybe(path)
+            .ok_or(GspStaticInfoError::MissingField { path })
+    };
+    let region_arr = need("fbRegionInfoParams.fbRegion")?;
+    let region_el = need("fbRegionInfoParams.fbRegion[]")?;
+    let stride = region_el
+        .bytes()
+        .filter(|b| *b > 0)
+        .ok_or(GspStaticInfoError::MissingField {
+            path: "fbRegionInfoParams.fbRegion[]",
+        })?;
+    let max_entries = region_arr.bytes().unwrap_or(0) / stride;
+    let regions = info.fb_regions;
+    if regions.is_empty() {
+        return Err(GspStaticInfoError::NoRegions);
+    }
+    if regions.len() > max_entries {
+        return Err(GspStaticInfoError::TooManyRegions {
+            len: regions.len(),
+            max: max_entries,
+        });
+    }
+    for (i, r) in regions.iter().enumerate() {
+        if r.limit < r.base {
+            return Err(GspStaticInfoError::RegionInverted {
+                index: i,
+                base: r.base,
+                limit: r.limit,
+            });
+        }
+        if i > 0 {
+            let prev_limit = regions[i - 1].limit;
+            if r.base <= prev_limit {
+                return Err(GspStaticInfoError::RegionsOutOfOrder {
+                    index: i,
+                    base: r.base,
+                    prev_limit,
+                });
+            }
+        }
+    }
+    let top = regions[regions.len() - 1].limit.wrapping_add(1);
+    if top != info.fb_length {
+        return Err(GspStaticInfoError::RegionsDoNotSpanFb {
+            top,
+            fb_length: info.fb_length,
+        });
+    }
+
+    let mut body = vec![0u8; layout.size()];
+    let put = |body: &mut Vec<u8>, off: usize, bytes: &[u8]| {
+        body[off..off + bytes.len()].copy_from_slice(bytes);
+    };
+    // gidInfo — see `encode_gsp_static_info` for why flags and length are written.
+    put(
+        &mut body,
+        need("gidInfo.flags")?.off(),
+        &GID_FLAGS_SHA1_BINARY.to_le_bytes(),
+    );
+    put(
+        &mut body,
+        need("gidInfo.length")?.off(),
+        &(RM_SHA1_GID_SIZE as u32).to_le_bytes(),
+    );
+    put(&mut body, need("gidInfo.data")?.off(), info.gid.as_bytes());
+    // The FB region table, entry by entry at the measured stride and member offsets.
+    let n = u32::try_from(regions.len()).unwrap_or(u32::MAX);
+    put(
+        &mut body,
+        need("fbRegionInfoParams.numFBRegions")?.off(),
+        &n.to_le_bytes(),
+    );
+    let e0 = region_el.off();
+    let rel = |path: &'static str| need(path).map(|f| f.off() - e0);
+    let (o_base, o_limit, o_rsvd, o_perf) = (
+        rel("fbRegionInfoParams.fbRegion[].base")?,
+        rel("fbRegionInfoParams.fbRegion[].limit")?,
+        rel("fbRegionInfoParams.fbRegion[].reserved")?,
+        rel("fbRegionInfoParams.fbRegion[].performance")?,
+    );
+    let (o_cmp, o_iso, o_prot) = (
+        rel("fbRegionInfoParams.fbRegion[].supportCompressed")?,
+        rel("fbRegionInfoParams.fbRegion[].supportISO")?,
+        rel("fbRegionInfoParams.fbRegion[].bProtected")?,
+    );
+    for (i, r) in regions.iter().enumerate() {
+        let o = e0 + i * stride;
+        put(&mut body, o + o_base, &r.base.to_le_bytes());
+        put(&mut body, o + o_limit, &r.limit.to_le_bytes());
+        put(&mut body, o + o_rsvd, &r.reserved.to_le_bytes());
+        put(&mut body, o + o_perf, &r.performance.to_le_bytes());
+        body[o + o_cmp] = u8::from(r.support_compressed);
+        body[o + o_iso] = u8::from(r.support_iso);
+        body[o + o_prot] = u8::from(r.protected);
+    }
+    put(
+        &mut body,
+        need("fb_length")?.off(),
+        &info.fb_length.to_le_bytes(),
+    );
+    if let Some(name) = info.name {
+        put_name(&mut body, need("gpuNameString")?.off(), name);
+        if let Some(u) = layout.maybe("gpuNameString_Unicode") {
+            put_name_unicode(&mut body, u.off(), name);
+        }
+    }
+    if let Some(short) = info.short_name
+        && let Some(f) = layout.maybe("gpuShortNameString")
+    {
+        put_name(&mut body, f.off(), short);
+    }
+    put(
+        &mut body,
+        need("bar1PdeBase")?.off(),
+        &info.bar1_pde_base.to_le_bytes(),
+    );
+    put(
+        &mut body,
+        need("bar2PdeBase")?.off(),
+        &info.bar2_pde_base.to_le_bytes(),
+    );
+    // `engineCaps[]` is indexed by NV2080 engine type, which is append-only; a version with
+    // fewer words (2 at ≤ 550) cannot name the engine types the dropped word would carry,
+    // because those types do not exist at that version.
+    let caps = need("engineCaps")?;
+    let words = caps.bytes().unwrap_or(0) / 4;
+    for (i, w) in info.engine_caps.iter().take(words).enumerate() {
+        put(&mut body, caps.off() + 4 * i, &w.to_le_bytes());
+    }
+    Ok(body)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A UUID for the encoder tests. Any non-zero value; the encoding is what is under
+    /// test here, never the value.
+    fn a_gid() -> GpuGid {
+        GpuGid::derive(b"gspstaticinfo unit test")
+    }
+
+    /// A model name for the encoder tests. What is under test is where the bytes land.
+    fn a_name() -> Option<GpuName> {
+        Some(GpuName::declared("NVIDIA Test Part 9999"))
+    }
+
+    /// A short name for the encoder tests.
+    fn a_short_name() -> Option<GpuName> {
+        Some(GpuName::declared("TT999-Z"))
+    }
+
+    /// ★★ [`GpuName`] refuses everything RM's fixed-width copy could not survive.
+    ///
+    /// ⊘ Exact-`None` assertions and a non-vacuity case, never `is_none()` alone: what is
+    /// under test is that the *boundary* is where it is claimed to be. 63 bytes is the
+    /// longest name that still NUL-terminates inside
+    /// `NV2080_GPU_MAX_NAME_STRING_LENGTH`, and 64 is the first that does not — RM would
+    /// copy the whole array into a buffer it then treats as a C string.
+    #[test]
+    fn a_name_that_rm_could_not_read_back_as_a_c_string_is_unconstructible() {
+        assert_eq!(GpuName::new(""), None, "an empty model name is not a name");
+        assert!(GpuName::new("A").is_some());
+
+        const SIXTY_THREE: &str = "123456789012345678901234567890123456789012345678901234567890123";
+        assert_eq!(SIXTY_THREE.len(), 63);
+        assert!(
+            GpuName::new(SIXTY_THREE).is_some(),
+            "63 bytes still leaves room for the terminator"
+        );
+        const SIXTY_FOUR: &str = "1234567890123456789012345678901234567890123456789012345678901234";
+        assert_eq!(SIXTY_FOUR.len(), 64);
+        assert_eq!(
+            GpuName::new(SIXTY_FOUR),
+            None,
+            "a 64-byte name fills the array with no room for the NUL"
+        );
+
+        // Non-ASCII cannot be widened to the UTF-16 array by doubling, and a control
+        // character (including an embedded NUL) would truncate the string silently.
+        assert_eq!(GpuName::new("NVIDIA GeForce RTX 3060\u{00ae}"), None);
+        assert_eq!(GpuName::new("NVIDIA\u{0}RTX"), None);
+        assert_eq!(GpuName::new("NVIDIA\nRTX"), None);
+        // Non-vacuity: every character a real model string uses is accepted.
+        assert!(GpuName::new("NVIDIA GeForce RTX 3060").is_some());
+        assert!(GpuName::new("GA106-A").is_some());
+    }
+
+    /// ★ The Unicode array is the ASCII one widened, and it is written because a real GSP
+    /// writes it — `gpuGetNameString_FWCLIENT` reads it for every `type` that is not
+    /// `..._FLAGS_TYPE_ASCII` (`ogkm-580: gpu_gspclient.c:278-287`).
+    #[test]
+    fn all_three_name_arrays_are_written_and_nul_padded() {
+        let fb = 1 << 20;
+        let body = encode_gsp_static_info(
+            &GspStaticInfo {
+                fb_regions: &one_region(fb),
+                fb_length: fb,
+                gid: a_gid(),
+                name: Some(GpuName::declared("AB")),
+                short_name: Some(GpuName::declared("C")),
+                bar1_pde_base: 0,
+                bar2_pde_base: 0,
+                engine_caps: [0; ENGINE_CAPS_WORDS],
+            },
+            GspStaticInfoWire::Pre610,
+        )
+        .expect("encodes");
+        assert_eq!(&body[1388..1392], b"AB\0\0");
+        assert!(body[1390..1452].iter().all(|b| *b == 0));
+        assert_eq!(&body[1452..1455], b"C\0\0");
+        assert!(body[1453..1516].iter().all(|b| *b == 0));
+        assert_eq!(&body[1516..1521], b"A\0B\0\0");
+        assert!(body[1520..1644].iter().all(|b| *b == 0));
+        // ⊘ And nothing past the struct's three name arrays was touched.
+        assert!(body[1644..].iter().all(|b| *b == 0));
+    }
+
+    /// A minimal well-formed table: one usable region spanning a 1 MiB framebuffer.
+    fn one_region(fb: u64) -> [FbRegion; 1] {
+        [FbRegion {
+            base: 0,
+            limit: fb - 1,
+            reserved: 0,
+            performance: 6,
+            support_compressed: true,
+            support_iso: true,
+            protected: false,
+        }]
+    }
+
+    #[test]
+    fn the_offsets_are_the_ones_the_580_struct_produces() {
+        // Literals, deliberately: reading these back off the constants under test would
+        // make the assertions agree with the arithmetic rather than with the struct.
+        assert_eq!(FB_REGION_INFO_PARAMS_OFF, 344);
+        assert_eq!(FB_REGION_ENTRY_SIZE, 56);
+        assert_eq!(FB_REGION_INFO_PARAMS_SIZE, 904);
+        assert_eq!(FB_LENGTH_OFF, 1352);
+        // ★ The three name arrays. 1388 and 1452 are not arithmetic here: they are where
+        // `"NVIDIA GeForce RTX 3060"` and `"GA106-A"` were FOUND in the real board's own
+        // fn-65 reply (`C: docs/research/captures/ga106_gspstaticinfo_580.log`), so this
+        // assertion is a struct read checked against silicon rather than against itself.
+        assert_eq!(NAME_STRING_OFF, 1388);
+        assert_eq!(SHORT_NAME_STRING_OFF, 1452);
+        assert_eq!(NAME_STRING_UNICODE_OFF, 1516);
+        // The UTF-16 array is 128 bytes wide and still inside the struct.
+        assert_eq!(NAME_STRING_UNICODE_OFF + 2 * NAME_STRING_LEN, 1644);
+        // ⊘ …and 1644 is inside the struct, with 148 bytes of unmodelled tail after it.
+        assert_eq!(GSP_STATIC_CONFIG_INFO_SIZE - 1644, 148);
+        assert_eq!(GSP_STATIC_CONFIG_INFO_SIZE, 1792);
+        // The alignment hole ahead of the region table is four bytes nothing names.
+        assert_eq!(FB_REGION_INFO_PARAMS_OFF - (24 + 268 + 48), 4);
+    }
+
+    /// ★★★ The one value the guest reads as *"GSP static info has not been initialized
+    /// yet for UUID"* (`ogkm-580: gpu_gspclient.c:152-156`) has no constructor. This is
+    /// the property that makes the newtype worth existing — an encoder-side check would
+    /// leave a caller able to hold a zero UUID and only discover it at the wire.
+    #[test]
+    fn an_all_zero_uuid_cannot_be_constructed() {
+        assert!(GpuGid::from_bytes([0u8; RM_SHA1_GID_SIZE]).is_none());
+        // One byte set anywhere is enough, including the last one — the guest compares
+        // all sixteen, so the check must not be "is byte 0 non-zero".
+        let mut last = [0u8; RM_SHA1_GID_SIZE];
+        last[RM_SHA1_GID_SIZE - 1] = 1;
+        assert_eq!(
+            GpuGid::from_bytes(last).expect("non-zero").as_bytes(),
+            &last
+        );
+    }
+
+    /// Determinism is the load-bearing property: a guest that pinned `GPU-<uuid>` must
+    /// find the same device after a reboot, and two different seeds must not collide.
+    #[test]
+    fn derive_is_stable_and_seed_sensitive() {
+        assert_eq!(GpuGid::derive(b"a"), GpuGid::derive(b"a"));
+        assert_ne!(GpuGid::derive(b"a"), GpuGid::derive(b"b"));
+        // The empty seed is a real caller (a chip row of all zeros) and must still be
+        // non-zero on the wire.
+        assert!(GpuGid::derive(&[]).as_bytes().iter().any(|b| *b != 0));
+    }
+
+    /// The text form round-trips, in the exact shape `nvidia-smi -L` prints, and every
+    /// accepted spelling of one value is the same value.
+    #[test]
+    fn text_form_round_trips_and_accepts_every_spelling() {
+        let bytes: [u8; RM_SHA1_GID_SIZE] = [
+            0x51, 0xb0, 0x86, 0x78, 0x78, 0x28, 0x40, 0x15, 0x19, 0x62, 0xa6, 0x5a, 0x7a, 0x48,
+            0x8e, 0x3c,
+        ];
+        let gid = GpuGid::from_bytes(bytes).expect("non-zero");
+        let text = "GPU-51b08678-7828-4015-1962-a65a7a488e3c";
+        assert_eq!(std::format!("{gid}"), text);
+        assert_eq!(GpuGid::parse(text), Ok(gid));
+        assert_eq!(
+            GpuGid::parse("51b08678-7828-4015-1962-a65a7a488e3c"),
+            Ok(gid)
+        );
+        assert_eq!(GpuGid::parse("51b08678782840151962a65a7a488e3c"), Ok(gid));
+        assert_eq!(
+            GpuGid::parse("GPU-51B08678-7828-4015-1962-A65A7A488E3C"),
+            Ok(gid)
+        );
+        // Every byte value survives (nibble order, not just "some hex").
+        for b in 0u8..=255 {
+            let mut v = [0x5au8; RM_SHA1_GID_SIZE];
+            v[7] = b;
+            v[15] = !b;
+            let g = GpuGid::from_bytes(v).expect("non-zero");
+            assert_eq!(GpuGid::parse(&std::format!("{g}")), Ok(g), "{b:#x}");
+        }
+    }
+
+    /// Hostile property strings are refused by kind, and cheaply: the length gate is first.
+    #[test]
+    fn text_form_refuses_everything_else() {
+        let good = "GPU-51b08678-7828-4015-1962-a65a7a488e3c";
+        assert!(GpuGid::parse(good).is_ok());
+        let cases: &[(&str, GpuGidTextError)] = &[
+            ("", GpuGidTextError::BadLength { len: 0 }),
+            ("GPU-", GpuGidTextError::BadLength { len: 0 }),
+            ("auto", GpuGidTextError::BadLength { len: 4 }),
+            // trailing newline / space / NUL: the shell-quoting accidents
+            (
+                "GPU-51b08678-7828-4015-1962-a65a7a488e3c\n",
+                GpuGidTextError::TooLong { len: 41 },
+            ),
+            (
+                "51b08678-7828-4015-1962-a65a7a488e3c ",
+                GpuGidTextError::BadLength { len: 37 },
+            ),
+            (
+                "51b08678-7828-4015-1962-a65a7a488e3\0",
+                GpuGidTextError::BadChar { at: 35 },
+            ),
+            // dashes in the wrong place
+            (
+                "51b086787-828-4015-1962-a65a7a488e3c",
+                GpuGidTextError::BadChar { at: 8 },
+            ),
+            (
+                "51b08678-7828-4015-1962a65a7a488e3c-",
+                GpuGidTextError::BadChar { at: 23 },
+            ),
+            // not hex
+            (
+                "GPU-51b08678-7828-4015-1962-a65a7a488e3g",
+                GpuGidTextError::BadChar { at: 35 },
+            ),
+            (
+                "0x51b0867878284015 1962a65a7a488e3c",
+                GpuGidTextError::BadLength { len: 35 },
+            ),
+            (
+                "+1b08678782840151962a65a7a488e3c",
+                GpuGidTextError::BadChar { at: 0 },
+            ),
+            // other prefixes, and a lowercase one, are not spellings of this
+            (
+                "gpu-51b08678-7828-4015-1962-a65a7a488e3c",
+                GpuGidTextError::BadLength { len: 40 },
+            ),
+            (
+                "MIG-51b08678-7828-4015-1962-a65a7a488e3c",
+                GpuGidTextError::BadLength { len: 40 },
+            ),
+            // non-ASCII must not panic on a char boundary
+            (
+                "GPU-51b08678-7828-4015-1962-a65a7a488e\u{e9}",
+                GpuGidTextError::BadChar { at: 34 },
+            ),
+        ];
+        for (text, want) in cases {
+            assert_eq!(GpuGid::parse(text), Err(*want), "{text:?}");
+        }
+        // Long input is refused before it is examined.
+        let long = "a".repeat(1 << 20);
+        assert_eq!(
+            GpuGid::parse(&long),
+            Err(GpuGidTextError::TooLong { len: 1 << 20 })
+        );
+    }
+
+    /// All-zero is refused in every spelling; `parse_uuid_text` returns it so a caller can treat
+    /// it as "unset".
+    #[test]
+    fn text_form_refuses_all_zero() {
+        for z in [
+            "GPU-00000000-0000-0000-0000-000000000000",
+            "00000000-0000-0000-0000-000000000000",
+            "00000000000000000000000000000000",
+        ] {
+            assert_eq!(GpuGid::parse(z), Err(GpuGidTextError::AllZero), "{z}");
+        }
+        assert_eq!(
+            parse_uuid_text("00000000-0000-0000-0000-000000000000"),
+            Ok([0u8; RM_SHA1_GID_SIZE])
+        );
+        assert!(parse_uuid_text("GPU-00000000-0000-0000-0000-000000000000").is_err());
+    }
+
+    #[test]
+    fn the_body_is_the_whole_struct_and_zero_outside_what_we_state() {
+        let fb = 1 << 20;
+        let body = encode_gsp_static_info(
+            &GspStaticInfo {
+                fb_regions: &one_region(fb),
+                fb_length: fb,
+                gid: a_gid(),
+                name: a_name(),
+                short_name: a_short_name(),
+                bar1_pde_base: 0,
+                bar2_pde_base: 0,
+                engine_caps: [0; ENGINE_CAPS_WORDS],
+            },
+            GspStaticInfoWire::Pre610,
+        )
+        .expect("encodes");
+        assert_eq!(body.len(), 1792);
+        // `grCapsBits[23]` and its alignment byte, then `SKUInfo` — both still untouched.
+        assert!(body[..24].iter().all(|b| *b == 0), "grCaps untouched");
+        assert!(body[292..344].iter().all(|b| *b == 0), "SKUInfo untouched");
+        // ★ `gidInfo`, at the literal offsets the 580 struct produces — spelled out
+        // rather than read back off the constants, like the offsets test above.
+        assert_eq!(
+            u32::from_le_bytes(body[24..28].try_into().unwrap()),
+            0,
+            "gidInfo.index"
+        );
+        assert_eq!(
+            u32::from_le_bytes(body[28..32].try_into().unwrap()),
+            2,
+            "gidInfo.flags = FORMAT_BINARY | TYPE_SHA1"
+        );
+        assert_eq!(
+            u32::from_le_bytes(body[32..36].try_into().unwrap()),
+            16,
+            "gidInfo.length"
+        );
+        assert_eq!(&body[36..52], a_gid().as_bytes(), "gidInfo.data[0..16]");
+        assert!(
+            body[52..292].iter().all(|b| *b == 0),
+            "the 240 bytes of gidInfo.data past the SHA-1 UUID stay zero"
+        );
+        assert!(
+            body[1248..1352].iter().all(|b| *b == 0),
+            "sriov/engineCaps untouched"
+        );
+        // ⊘ The tail past `fb_length`, in two pieces, because exactly one field between
+        // here and the end of the struct is now stated: the three name arrays at
+        // 1388..1644. `fbio_mask`, `fb_bus_width`, `fb_ram_type`, `fbp_mask` and
+        // `l2_cache_size` are real on the captured board and left zero here, because this
+        // port does not advertise them.
+        assert!(
+            body[1360..NAME_STRING_OFF].iter().all(|b| *b == 0),
+            "fbio_mask .. l2_cache_size"
+        );
+        assert!(
+            body[NAME_STRING_UNICODE_OFF + 2 * NAME_STRING_LEN..]
+                .iter()
+                .all(|b| *b == 0),
+            "the tail past the three name arrays"
+        );
+        assert_eq!(u32::from_le_bytes(body[344..348].try_into().unwrap()), 1);
+        assert_eq!(u64::from_le_bytes(body[1352..1360].try_into().unwrap()), fb);
+    }
+
+    #[test]
+    fn an_empty_table_is_refused_rather_than_encoded() {
+        let e = encode_gsp_static_info(
+            &GspStaticInfo {
+                fb_regions: &[],
+                fb_length: 1 << 20,
+                gid: a_gid(),
+                name: a_name(),
+                short_name: a_short_name(),
+                bar1_pde_base: 0,
+                bar2_pde_base: 0,
+                engine_caps: [0; ENGINE_CAPS_WORDS],
+            },
+            GspStaticInfoWire::Pre610,
+        )
+        .expect_err("refuses");
+        assert_eq!(e, GspStaticInfoError::NoRegions);
+    }
+
+    #[test]
+    fn more_regions_than_the_array_holds_is_refused() {
+        let mut rows = [FbRegion {
+            base: 0,
+            limit: 0,
+            reserved: 0,
+            performance: 0,
+            support_compressed: false,
+            support_iso: false,
+            protected: false,
+        }; 17];
+        for (i, r) in rows.iter_mut().enumerate() {
+            r.base = (i as u64) << 20;
+            r.limit = r.base + 0xf_ffff;
+        }
+        let e = encode_gsp_static_info(
+            &GspStaticInfo {
+                fb_regions: &rows,
+                fb_length: 17 << 20,
+                gid: a_gid(),
+                name: a_name(),
+                short_name: a_short_name(),
+                bar1_pde_base: 0,
+                bar2_pde_base: 0,
+                engine_caps: [0; ENGINE_CAPS_WORDS],
+            },
+            GspStaticInfoWire::Pre610,
+        )
+        .expect_err("refuses");
+        assert_eq!(e, GspStaticInfoError::TooManyRegions { len: 17, max: 16 });
+    }
+
+    #[test]
+    fn an_inverted_region_is_refused() {
+        let rows = [FbRegion {
+            base: 0x2000,
+            limit: 0x1000,
+            reserved: 0,
+            performance: 0,
+            support_compressed: false,
+            support_iso: false,
+            protected: false,
+        }];
+        let e = encode_gsp_static_info(
+            &GspStaticInfo {
+                fb_regions: &rows,
+                fb_length: 0x1001,
+                gid: a_gid(),
+                name: a_name(),
+                short_name: a_short_name(),
+                bar1_pde_base: 0,
+                bar2_pde_base: 0,
+                engine_caps: [0; ENGINE_CAPS_WORDS],
+            },
+            GspStaticInfoWire::Pre610,
+        )
+        .expect_err("refuses");
+        assert_eq!(
+            e,
+            GspStaticInfoError::RegionInverted {
+                index: 0,
+                base: 0x2000,
+                limit: 0x1000
+            }
+        );
+    }
+
+    #[test]
+    fn overlapping_regions_are_refused() {
+        let rows = [
+            FbRegion {
+                base: 0,
+                limit: 0xffff,
+                reserved: 0,
+                performance: 0,
+                support_compressed: false,
+                support_iso: false,
+                protected: false,
+            },
+            FbRegion {
+                base: 0x8000,
+                limit: 0x1_ffff,
+                reserved: 0,
+                performance: 0,
+                support_compressed: false,
+                support_iso: false,
+                protected: false,
+            },
+        ];
+        let e = encode_gsp_static_info(
+            &GspStaticInfo {
+                fb_regions: &rows,
+                fb_length: 0x2_0000,
+                gid: a_gid(),
+                name: a_name(),
+                short_name: a_short_name(),
+                bar1_pde_base: 0,
+                bar2_pde_base: 0,
+                engine_caps: [0; ENGINE_CAPS_WORDS],
+            },
+            GspStaticInfoWire::Pre610,
+        )
+        .expect_err("refuses");
+        assert_eq!(
+            e,
+            GspStaticInfoError::RegionsOutOfOrder {
+                index: 1,
+                base: 0x8000,
+                prev_limit: 0xffff
+            }
+        );
+    }
+
+    #[test]
+    fn a_table_that_does_not_span_the_advertised_fb_is_refused() {
+        let fb = 1 << 20;
+        let e = encode_gsp_static_info(
+            &GspStaticInfo {
+                fb_regions: &one_region(fb),
+                fb_length: fb * 2,
+                gid: a_gid(),
+                name: a_name(),
+                short_name: a_short_name(),
+                bar1_pde_base: 0,
+                bar2_pde_base: 0,
+                engine_caps: [0; ENGINE_CAPS_WORDS],
+            },
+            GspStaticInfoWire::Pre610,
+        )
+        .expect_err("refuses");
+        assert_eq!(
+            e,
+            GspStaticInfoError::RegionsDoNotSpanFb {
+                top: fb,
+                fb_length: fb * 2
+            }
+        );
+    }
+
+    #[test]
+    fn a_shape_this_port_has_never_seen_on_a_wire_is_refused_by_name() {
+        let fb = 1 << 20;
+        let e = encode_gsp_static_info(
+            &GspStaticInfo {
+                fb_regions: &one_region(fb),
+                fb_length: fb,
+                gid: a_gid(),
+                name: a_name(),
+                short_name: a_short_name(),
+                bar1_pde_base: 0,
+                bar2_pde_base: 0,
+                engine_caps: [0; ENGINE_CAPS_WORDS],
+            },
+            GspStaticInfoWire::From610_43_02,
+        )
+        .expect_err("refuses");
+        assert_eq!(
+            e,
+            GspStaticInfoError::UnsupportedWire {
+                wire: GspStaticInfoWire::From610_43_02
+            }
+        );
+    }
+
+    /// A realistic info block: two regions (one reserved), all names, both roots, caps.
+    fn full_info(regions: &[FbRegion], fb: u64) -> GspStaticInfo<'_> {
+        GspStaticInfo {
+            fb_regions: regions,
+            fb_length: fb,
+            gid: a_gid(),
+            name: a_name(),
+            short_name: a_short_name(),
+            bar1_pde_base: 0x20C_C000,
+            bar2_pde_base: 0x37B_2000,
+            engine_caps: [0x8000_0402, 0x0000_1003, 0x0000_0010],
+        }
+    }
+
+    fn two_regions(fb: u64) -> [FbRegion; 2] {
+        [
+            FbRegion {
+                base: 0,
+                limit: 0xFFFFF,
+                reserved: 0x10_0000,
+                performance: 0,
+                support_compressed: false,
+                support_iso: false,
+                protected: false,
+            },
+            FbRegion {
+                base: 0x10_0000,
+                limit: fb - 1,
+                reserved: 0,
+                performance: 6,
+                support_compressed: true,
+                support_iso: true,
+                protected: false,
+            },
+        ]
+    }
+
+    fn v(major: u16, minor: u16, patch: u16) -> crate::DriverVersion {
+        crate::DriverVersion {
+            major,
+            minor,
+            patch,
+        }
+    }
+
+    /// ★★★ The measured encoder IS the bench encoder at every 580.x tag — byte for byte — so it
+    /// replaces the pinned layout instead of standing beside it.
+    #[test]
+    fn the_measured_encoder_is_the_bench_encoder_at_every_580_tag() {
+        use crate::generated::matrix::{GSPSTATICCONFIGINFO, MEASURED};
+        let fb = 8u64 << 30;
+        let regions = two_regions(fb);
+        let info = full_info(&regions, fb);
+        let bench =
+            encode_gsp_static_info(&info, GspStaticInfoWire::Pre610).expect("bench encodes");
+        let mut n = 0;
+        for tag in MEASURED.iter().filter(|t| t.major == 580) {
+            let lay = crate::matrix::Resolved::of(&GSPSTATICCONFIGINFO, *tag).expect("measured");
+            assert_eq!(
+                encode_gsp_static_info_at(&info, &lay).expect("encodes"),
+                bench,
+                "{tag}"
+            );
+            n += 1;
+        }
+        assert!(n >= 7, "the 580 branch is measured at {n} tags");
+    }
+
+    /// ★★ At 570/575 the SAME facts land at the 570 offsets: 1656 bytes, 48-byte region entries,
+    /// `fb_length`@1224, `bar1PdeBase`@1536 — measured, not transcribed.
+    #[test]
+    fn the_570_layout_puts_the_same_facts_at_its_own_offsets() {
+        use crate::generated::matrix::GSPSTATICCONFIGINFO;
+        let fb = 8u64 << 30;
+        let regions = two_regions(fb);
+        let info = full_info(&regions, fb);
+        for tag in [v(570, 124, 6), v(575, 57, 8)] {
+            let lay = crate::matrix::Resolved::of(&GSPSTATICCONFIGINFO, tag).expect("measured");
+            let b = encode_gsp_static_info_at(&info, &lay).expect("encodes");
+            assert_eq!(b.len(), 1656, "{tag}");
+            let u64_at = |o: usize| u64::from_le_bytes(b[o..o + 8].try_into().expect("8"));
+            assert_eq!(u64_at(1224), fb, "fb_length at {tag}");
+            assert_eq!(u64_at(1536), 0x20C_C000, "bar1PdeBase at {tag}");
+            assert_eq!(u64_at(1544), 0x37B_2000, "bar2PdeBase at {tag}");
+            assert_eq!(
+                u32::from_le_bytes(b[344..348].try_into().expect("4")),
+                2,
+                "numFBRegions"
+            );
+            // entry 1 at 352 + 48: base, limit
+            assert_eq!(
+                u64_at(352 + 48),
+                0x10_0000,
+                "region 1 base at the 48-byte stride"
+            );
+            assert_eq!(u64_at(352 + 48 + 8), fb - 1, "region 1 limit");
+            assert_eq!(&b[36..52], a_gid().as_bytes(), "gidInfo.data@36");
+        }
+    }
+
+    /// 610 drops the Unicode name and moves `gidInfo` to the front; the measured encoder follows,
+    /// and a required field absent at a version is a named refusal.
+    #[test]
+    fn the_610_layout_encodes_without_the_unicode_array() {
+        use crate::generated::matrix::GSPSTATICCONFIGINFO;
+        let fb = 8u64 << 30;
+        let regions = two_regions(fb);
+        let info = full_info(&regions, fb);
+        let lay =
+            crate::matrix::Resolved::of(&GSPSTATICCONFIGINFO, v(610, 43, 2)).expect("measured");
+        assert!(lay.maybe("gpuNameString_Unicode").is_none());
+        let b = encode_gsp_static_info_at(&info, &lay).expect("encodes");
+        assert_eq!(b.len(), 1600);
+        assert_eq!(&b[12..28], a_gid().as_bytes(), "gidInfo.data@12 at 610");
+    }
+}

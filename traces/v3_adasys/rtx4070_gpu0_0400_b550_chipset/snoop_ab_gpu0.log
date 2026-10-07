@@ -1,0 +1,24 @@
+ crates/kf-host/src/lib.rs | 1 +
+ 1 file changed, 1 insertion(+)
+AB_REV 59cc98a9 + snoop toggle; GPU=00000000:04:00.0 KF_GATE_GPU=0
+AB arm=snoop run=1 gate=3 verdict=PASS fails=0 
+AB arm=snoop run=1 gate=4 verdict=PASS fails=0 
+AB arm=snoop run=2 gate=3 verdict=PASS fails=0 
+AB arm=snoop run=2 gate=4 verdict=PASS fails=0 
+AB arm=snoop run=3 gate=3 verdict=PASS fails=0 
+AB arm=snoop run=3 gate=4 verdict=PASS fails=0 
+AB arm=snoop run=4 gate=3 verdict=PASS fails=0 
+AB arm=snoop run=4 gate=4 verdict=PASS fails=0 
+AB arm=snoop run=5 gate=3 verdict=PASS fails=0 
+AB arm=snoop run=5 gate=4 verdict=PASS fails=0 
+AB arm=nosnoop run=1 gate=3 verdict=FAIL fails=2       1 fb_to_sysmem_by_engine       1 sysmem_to_fb_by_engine 
+AB arm=nosnoop run=1 gate=4 verdict=FAIL fails=3       3 channel_retired_and_released 
+AB arm=nosnoop run=2 gate=3 verdict=FAIL fails=2       1 fb_to_sysmem_by_engine       1 sysmem_to_fb_by_engine 
+AB arm=nosnoop run=2 gate=4 verdict=FAIL fails=3       3 channel_retired_and_released 
+AB arm=nosnoop run=3 gate=3 verdict=FAIL fails=2       1 fb_to_sysmem_by_engine       1 sysmem_to_fb_by_engine 
+AB arm=nosnoop run=3 gate=4 verdict=FAIL fails=3       3 channel_retired_and_released 
+AB arm=nosnoop run=4 gate=3 verdict=FAIL fails=2       1 fb_to_sysmem_by_engine       1 sysmem_to_fb_by_engine 
+AB arm=nosnoop run=4 gate=4 verdict=FAIL fails=3       3 channel_retired_and_released 
+AB arm=nosnoop run=5 gate=3 verdict=FAIL fails=2       1 fb_to_sysmem_by_engine       1 sysmem_to_fb_by_engine 
+AB arm=nosnoop run=5 gate=4 verdict=FAIL fails=3       3 channel_retired_and_released 
+AB_DONE

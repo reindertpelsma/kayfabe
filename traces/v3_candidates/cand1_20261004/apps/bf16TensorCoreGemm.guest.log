@@ -1,0 +1,13 @@
+=== bf16TensorCoreGemm side=guest start=2026-10-04T03:06:32+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/bf16TensorCoreGemm
+Initializing...
+GPU Device 0: "Ampere" with compute capability 8.6
+
+M: 8192 (16 x 512)
+N: 8192 (16 x 512)
+K: 8192 (16 x 512)
+Preparing data for GPU...
+Required shared memory size: 72 Kb
+Computing using high performance kernel = 0 - compute_bf16gemm_async_copy
+Time: 64.690178 ms
+TFLOPS: 17.00
+=== end rc=0 secs=15 2026-10-04T03:06:47+00:00

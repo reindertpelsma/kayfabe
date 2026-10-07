@@ -1,0 +1,123 @@
+=== boot_capture tag=vhC2_g at 2026-09-26T00:19:09+00:00 ===
+=== source revision: c2851a92 ===
+=== qemu binary: -rwxr-xr-x 1 root root 95798872 Sep 25 23:30 /workspace/bench/kf3-bins/e5ff45ff/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:da0419de682e0104d66e6c38e9d0e8b6bbbe7f2e 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kf-llm3/scripts/bench/boot_nvkvm.sh  sha256=7454bf433c1d9212
+    used: /root/kf-llm3/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Sat Sep 26 00:19:18 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3060        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep 26 00:19 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep 26 00:19 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep 26 00:19 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep 26 00:19 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep 26 00:19 .
+drwxr-xr-x 18 root root   4000 Sep 26 00:19 ..
+cr--------  1 root root 240, 1 Sep 26 00:19 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep 26 00:19 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kf-llm3/scripts/bench/llm_parity_hook.sh at 2026-09-26T00:19:23+00:00 ===
+LP_GUEST_SMI=NVIDIA GeForce RTX 3060, 580.159.04
+LP_GUEST_NPROC=4 LP_GUEST_MEM=7941
+LP_START lane=guest date=2026-09-26T00:19:31+00:00 model=Qwen/Qwen2-0.5B-Instruct snapshot=[c540970f9e29518b1d8f06ab8b24cba66ad77b6d] short=0 long=2048 x1 warm=1
+LP lane=guest kind=long ntok=2048 proc=1 LLM_KVM_EXITS=6469035
+LP lane=guest kind=long ntok=2048 proc=1 LLM_DOORBELLS=4446297
+LP lane=guest kind=long ntok=2048 proc=1 LLM_DEVICE=cuda
+LP lane=guest kind=long ntok=2048 proc=1 TORCH_CUDA_AVAILABLE=True
+LP lane=guest kind=long ntok=2048 proc=1 TORCH_DEV_COUNT=1
+LP lane=guest kind=long ntok=2048 proc=1 LLM_T_IMPORT_MS=20141.1
+LP lane=guest kind=long ntok=2048 proc=1 LLM_TORCH=2.6.0+cu124 LLM_TRANSFORMERS=5.17.0
+LP lane=guest kind=long ntok=2048 proc=1 LLM_T_CUINIT_MS=1855.8
+LP lane=guest kind=long ntok=2048 proc=1 LLM_GPU=NVIDIA GeForce RTX 3060
+LP lane=guest kind=long ntok=2048 proc=1 LLM_T_LOAD_MS=23451.8
+LP lane=guest kind=long ntok=2048 proc=1 LLM_T_TODEV_MS=366.1
+LP lane=guest kind=long ntok=2048 proc=1 LLM_PARAM_DEVICE=cuda
+LP lane=guest kind=long ntok=2048 proc=1 LLM_RATIO_ELIGIBLE=1
+LP lane=guest kind=long ntok=2048 proc=1 LLM_RUN 0 cold ntok=2048 ms=163229.7 tok_s=12.547 ttft_ms=6016.1 decode_tok_s=13.021 same_text=1
+LP lane=guest kind=long ntok=2048 proc=1 LLM_RUN 1 warm ntok=2048 ms=159824.8 tok_s=12.814 ttft_ms=86.6 decode_tok_s=12.815 same_text=1
+LP lane=guest kind=long ntok=2048 proc=1 LLM_TEXT= ______. A. Paris B. London C. New York D. Tokyo 答案: A  在Windows中，当一个应用程序窗口被最小化后，该应用程序将____。 A. 继续在前台运行 B. 被暂停执行 C. 被转入后台执行 D. 被终止执行 答案: C  下列关于计算机病毒的叙述中，正确的是______。 A. 计算机病毒是一种有逻辑错误的程序 B. 计算机病毒是通过磁盘引导扇区传染的 C. 计算机病毒可以通过读写磁盘或网络等方式进行传播 D. 计算机病毒发作时会破坏硬盘上的数据 答案: C  以下关于Windows 7操作系统说法不正确的是______。 A. Windows 7操作系统可以安装在多个型号的CPU上 B. Windows 7操作系统可以安装在多种类型的主板上 C. Windows 7操作系统可以安装在多种类型的内存上 D. Windows 7操作系统可以安装在多种类型的硬盘上 答案: C  在Windows中，如果要查找文件名的第2个字符为“a”的所有文件，其正确的搜索路径是______。 A. C:\Documents and Settings\用户名\My Documents\aa B. C:\Documents and Settings\用户名\My Documents\aa C. C:\Documents and Settings\用户名\My Documents\aa D. C:\Documents and Settings\用户名\My Documents\aa 答案: A  在Windows中，若要同时改变窗口的高度和宽度，应该采用的操作是______。 A. 改变鼠标操作中的缩放比例 B. 改变水平滚动条的显示位置 C. 使用组合键Alt+Tab D. 使用菜单栏中的“属性”命令 答案: A  在Windows中，为了防止他人修改注册表，应采取的措施是______。 A. 在注册表编辑器中禁用对注册表项的修改 B. 在注册表编辑器中禁用对注册表项的删除 C. 在注册表编辑器中禁用对注册表项的添加 D. 在注册表编辑器中禁用对注册表项的查询 答案: A  在Windows中，用户可以使用键盘上的______键来移动窗口的位置。 A. Ctrl+Up B. Ctrl+Down C. Ctrl+End D. Ctrl+Home 答案: D  在Windows中，如果要查看当前正在运行的应用程序，可以单击桌面空白处，然后选择“任务栏”中的图标，再从弹出的下拉列表中选择需要的应用程序。______ A. 正确 B. 错误 答案: A  在Windows中，如果要打开“我的电脑”窗口，可以按快捷键______。 A. Ctrl+Esc B. Ctrl+Tab C. Ctrl+空格 D. Ctrl+Shift 答案: A   在Windows中，如果要打开“我的电脑”窗口，可以按快捷键______。 A. Ctrl+Esc B. Ctrl+Tab C. Ctrl+空格 D. Ctrl+Shift 答案: A.  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：
+LP lane=guest kind=long ntok=2048 proc=1 LLM_TEXT_SHA256=0ec987059539a8b9dff67642631a9bf1b67f2ff5c5f66ca250ce16de2e32dbad
+LP lane=guest kind=long ntok=2048 proc=1 LLM_T_PROC_MS=368880.4
+LP lane=guest kind=long ntok=2048 proc=1 LLM_OK=1
+LP lane=guest kind=long ntok=2048 proc=1 LLM_TOKENS=2048
+LP lane=guest kind=long ntok=2048 proc=1 LLM_MS=163229.7
+LP lane=guest kind=long ntok=2048 proc=1 LLM_RC=0
+LP_EXT lane=guest kind=long ntok=2048 proc=1 ext_ms=375038 rc=0
+LP lane=guest kind=perf ntok=128 proc=1 LLM_KVM_EXITS=431225
+LP lane=guest kind=perf ntok=128 proc=1 LLM_DOORBELLS=286195
+LP lane=guest kind=perf ntok=128 proc=1 LLM_DEVICE=cuda
+LP lane=guest kind=perf ntok=128 proc=1 TORCH_CUDA_AVAILABLE=True
+LP lane=guest kind=perf ntok=128 proc=1 TORCH_DEV_COUNT=1
+LP lane=guest kind=perf ntok=128 proc=1 LLM_T_IMPORT_MS=4844.2
+LP lane=guest kind=perf ntok=128 proc=1 LLM_TORCH=2.6.0+cu124 LLM_TRANSFORMERS=5.17.0
+LP lane=guest kind=perf ntok=128 proc=1 LLM_T_CUINIT_MS=907.4
+LP lane=guest kind=perf ntok=128 proc=1 LLM_GPU=NVIDIA GeForce RTX 3060
+LP lane=guest kind=perf ntok=128 proc=1 LLM_T_LOAD_MS=1762.2
+LP lane=guest kind=perf ntok=128 proc=1 LLM_T_TODEV_MS=338.0
+LP lane=guest kind=perf ntok=128 proc=1 LLM_PARAM_DEVICE=cuda
+LP lane=guest kind=perf ntok=128 proc=1 LLM_RATIO_ELIGIBLE=1
+LP lane=guest kind=perf ntok=128 proc=1 LLM_RUN 0 cold ntok=128 ms=12043.9 tok_s=10.628 ttft_ms=959.6 decode_tok_s=11.458 same_text=1
+LP lane=guest kind=perf ntok=128 proc=1 LLM_RUN 1 warm ntok=128 ms=10519.7 tok_s=12.168 ttft_ms=87.0 decode_tok_s=12.174 same_text=1
+LP lane=guest kind=perf ntok=128 proc=1 LLM_TEXT= ______. A. Paris B. London C. New York D. Tokyo 答案: A  在Windows中，当一个应用程序窗口被最小化后，该应用程序将____。 A. 继续在前台运行 B. 被暂停执行 C. 被转入后台执行 D. 被终止执行 答案: C  下列关于计算机病毒的叙述中，正确的是______。 A. 计算机病毒是一种有逻辑错误的程序 B. 计算机病毒是通过磁盘引导扇区传染的 C. 计算
+LP lane=guest kind=perf ntok=128 proc=1 LLM_TEXT_SHA256=60743cf686ddbeab919b43c9b1f80fe8c7175a37e3b6f2da9b996855faf1d52a
+LP lane=guest kind=perf ntok=128 proc=1 LLM_T_PROC_MS=30418.7
+LP lane=guest kind=perf ntok=128 proc=1 LLM_OK=1
+LP lane=guest kind=perf ntok=128 proc=1 LLM_TOKENS=128
+LP lane=guest kind=perf ntok=128 proc=1 LLM_MS=12043.9
+LP lane=guest kind=perf ntok=128 proc=1 LLM_RC=0
+LP_EXT lane=guest kind=perf ntok=128 proc=1 ext_ms=38300 rc=0
+LP_PERFKVM   Error: unknown switch `i'
+LP_PERFKVM 
+LP_PERFKVM  Usage: perf kvm stat report [<options>]
+LP_PERFKVM 
+LP_PERFKVM     -f, --force           don't complain, do it
+LP_PERFKVM     -k, --key <sort-key>  key for sorting: sample(sort by samples number) time (sort by avg time)
+LP_PERFKVM     -p, --pid <pid>       analyze events only for given process id(s)
+LP_PERFKVM         --event <report event>
+LP_PERFKVM                           event for reporting: vmexit, mmio (x86 only), ioport (x86 only)
+LP_PERFKVM         --stdio           use the stdio interface
+LP_PERFKVM         --vcpu <n>        vcpu id to report
+LP_PERFKVM 
+LP_PERF_ERR [ perf record: Woken up 92708 times to write data ] [ perf record: Captured and wrote 121.177 MB /tmp/lp_perf_393584/perf.data (1207489 samples) ] 
+LP_DONE lane=guest date=2026-09-26T00:26:31+00:00
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 42 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=127
+GUEST_DMESG_AFTER_NVRM=124
+GUEST_DMESG_WORKLOAD_DELTA=85
+=== HOST dmesg delta for this boot (watermark 1183 → 1183) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

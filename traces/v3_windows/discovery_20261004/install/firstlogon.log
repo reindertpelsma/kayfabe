@@ -1,0 +1,111 @@
+**********************
+Windows PowerShell transcript start
+Start time: 20261004001238
+Username: KFWIN\kf
+RunAs User: KFWIN\kf
+Configuration Name: 
+Machine: KFWIN (Microsoft Windows NT 10.0.26100.0)
+Host Application: powershell -NoProfile -ExecutionPolicy Bypass -File F:\kf-firstlogon.ps1 -Src F:
+Process ID: 2248
+PSVersion: 5.1.26100.1591
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.1591
+BuildVersion: 10.0.26100.1591
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+unattend media: F:  virtio-win: E:
+START virtio-drivers 2026-10-04T00:12:53.6489524+00:00
+Microsoft PnP Utility
+
+Adding driver package:  netkvm.inf
+Driver package added successfully. (Already exists in the system)
+Published Name:         oem1.inf
+Driver package is up-to-date on device: PCI\VEN_1AF4&DEV_1000&SUBSYS_00011AF4&REV_00\3&11583659&0&10
+
+Total driver packages:  1
+Added driver packages:  0
+  pnputil NetKVM rc=259
+Microsoft PnP Utility
+
+Adding driver package:  vioser.inf
+Driver package added successfully. (Already exists in the system)
+Published Name:         oem5.inf
+Driver package is up-to-date on device: PCI\VEN_1AF4&DEV_1003&SUBSYS_00031AF4&REV_00\3&11583659&0&18
+
+Total driver packages:  1
+Added driver packages:  0
+  pnputil vioserial rc=259
+Microsoft PnP Utility
+
+Adding driver package:  viorng.inf
+Driver package added successfully. (Already exists in the system)
+Published Name:         oem0.inf
+Driver package is up-to-date on device: PCI\VEN_1AF4&DEV_1005&SUBSYS_00041AF4&REV_00\3&11583659&0&20
+
+Total driver packages:  1
+Added driver packages:  0
+  pnputil viorng rc=259
+Microsoft PnP Utility
+
+Adding driver package:  pvpanic.inf
+Driver package added successfully. (Already exists in the system)
+Published Name:         oem2.inf
+Driver package is up-to-date on device: ACPI\QEMU0001\4&22f5829e&0
+
+Total driver packages:  1
+Added driver packages:  0
+  pnputil pvpanic rc=259
+Microsoft PnP Utility
+
+Adding driver package:  fwcfg.inf
+Driver package added successfully. (Already exists in the system)
+Published Name:         oem3.inf
+Driver package is up-to-date on device: ACPI\QEMU0002\3&11583659&0
+
+Total driver packages:  1
+Added driver packages:  0
+  pnputil fwcfg rc=259
+Microsoft PnP Utility
+
+Adding driver package:  smbus.inf
+Driver package added successfully. (Already exists in the system)
+Published Name:         oem4.inf
+Driver package is up-to-date on device: PCI\VEN_8086&DEV_2930&SUBSYS_11001AF4&REV_02\3&11583659&0&FB
+
+Total driver packages:  1
+Added driver packages:  0
+  pnputil smbus rc=259
+EXIT virtio-drivers rc=0 2026-10-04T00:12:56.6608791+00:00
+START qemu-guest-agent 2026-10-04T00:12:56.6956926+00:00
+EXIT qemu-guest-agent rc=0 2026-10-04T00:13:11.0843182+00:00
+START openssh-install 2026-10-04T00:13:11.0912752+00:00
+EXIT openssh-install rc=0 2026-10-04T00:13:27.2956863+00:00
+START openssh-config 2026-10-04T00:13:27.3011314+00:00
+
+
+Name      : sshd
+Status    : Running
+StartType : Automatic
+
+
+
+EXIT openssh-config rc=0 2026-10-04T00:13:42.5928722+00:00
+START power-and-recovery 2026-10-04T00:13:42.5998622+00:00
+
+
+
+The operation completed successfully.
+The operation completed successfully.
+EXIT power-and-recovery rc=0 2026-10-04T00:13:43.5302729+00:00
+START defender-exclusion 2026-10-04T00:13:43.5337349+00:00
+EXIT defender-exclusion rc=0 2026-10-04T00:13:44.9554506+00:00
+START autologon-cleanup 2026-10-04T00:13:44.9589201+00:00
+EXIT autologon-cleanup rc=0 2026-10-04T00:13:45.0614928+00:00
+KF_FIRSTLOGON OK
+**********************
+Windows PowerShell transcript end
+End time: 20261004001345
+**********************

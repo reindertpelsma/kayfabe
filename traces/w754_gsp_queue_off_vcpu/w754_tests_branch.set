@@ -1,0 +1,44 @@
+BUILD error: 12 targets failed:
+BUILD error: test failed, to rerun pass `-p kayfabe-linux-raw --lib`
+BUILD error: test failed, to rerun pass `-p kayfabe-tests --test admitted_is_served`
+BUILD error: test failed, to rerun pass `-p kayfabe-tests --test doorbell_reaches_the_completion_observer`
+BUILD error: test failed, to rerun pass `-p kayfabe-tests --test guest_os_axis_gate`
+BUILD error: test failed, to rerun pass `-p kayfabe-tests --test host_class_role_wiring`
+BUILD error: test failed, to rerun pass `-p kayfabe-tests --test l1_mean`
+BUILD error: test failed, to rerun pass `-p kayfabe-tests --test reachability`
+BUILD error: test failed, to rerun pass `-p kayfabe-tests --test ring_out_of_our_own_framebuffer`
+BUILD error: test failed, to rerun pass `-p kayfabe-tests --test rmrpc_bridge`
+BUILD error: test failed, to rerun pass `-p kayfabe-tests --test sticky_answer`
+BUILD error: test failed, to rerun pass `-p kayfabe-tests --test trace_replay`
+BUILD error: test failed, to rerun pass `-p kayfabe-tests --test unranked_locks`
+TEST a_condemned_components_arena_is_released_once_and_never_recycled_to_an_impostor
+TEST a_condemned_entry_must_not_poison_client_handles_the_guest_has_freed
+TEST a_device_with_no_fb_source_refuses_the_vidmem_ring
+TEST a_fragmented_control_is_answered_once_per_fragment_on_its_own_sequence
+TEST a_guest_doorbell_reaches_the_host_completion_observer
+TEST a_hostile_stream_traces_exact_refusals_and_forwards_nothing
+TEST a_live_component_that_splits_yields_two_procs
+TEST a_publication_becomes_a_set_page_dir_event_keyed_on_the_headers_hobject
+TEST a_published_gpa_is_provably_its_own_procs_ram_under_mean_arena_churn
+TEST a_recovered_component_shares_no_arena_or_host_handle_with_the_condemned_one
+TEST a_remap_of_a_published_row_is_refused_and_counted_not_revoked
+TEST a_second_doorbell_over_an_unchanged_ring_forwards_nothing
+TEST a_wired_device_refuses_a_framebuffer_page_nothing_ever_wrote
+TEST an_unpermitted_control_is_refused_before_its_params_are_read
+TEST condemnation_spans_a_procs_gpus_and_spares_identical_ids_on_other_gpus
+TEST evasion_relabelling_the_condemned_component_still_fails
+TEST evasion_splitting_the_condemned_component_still_fails
+TEST every_crate_is_scoped_or_exempted_by_this_gate
+TEST every_unranked_lock_a_vcpu_thread_can_hold_is_classified
+TEST every_unserviced_id_a_boot_recorded_is_classified
+TEST mean_multiproc_multithread_multigpu_multiworkload
+TEST no_role_is_untagged_at_the_point_it_is_asked_for
+TEST one_boundary_spanning_two_condemned_entries_merges_them_for_good
+TEST recovery_after_a_multi_gpu_condemnation_serves_both_targets
+TEST spawn_unsafe::tests::a_child_runs_from_an_image_with_no_path_at_all
+TEST the_compute_subgraph_reaches_the_graph_through_the_real_transport
+TEST the_logic_crates_carry_no_unnamed_guest_os_assumption
+TEST the_observers_negative_verdict_refuses_the_guest_doorbell
+TEST the_role_untag_sites_are_exactly_the_pinned_derived_set
+TEST the_rpc_bridge_survives_two_interleaved_guest_streams_under_mean_device_load
+TEST the_universe_of_answering_policies_is_derived_from_the_source

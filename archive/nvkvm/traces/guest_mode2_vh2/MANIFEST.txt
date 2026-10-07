@@ -1,0 +1,138 @@
+GUEST CAPTURES — the "what ACTUALLY happens" half of the ioctl differential
+============================================================================
+The FIRST firing of the host<->guest differential oracle against a live Mode-2 guest.
+
+★ SUPERSEDED-BUT-KEPT. traces/guest_mode2_vh2_s2/ is the SECOND firing, taken with the
+  same instrument at kayfabe 28cf456 (this one is 954f926), after the two-item worklist
+  below was served. This directory is the "before" half of that comparison and must not
+  be deleted. Headline of the re-run: the progress fraction is UNCHANGED at 221/479, and
+  the 0x56 census went 3 -> 1, i.e. to hardware's own census exactly.
+  ⊘ And one of the two ids below is WRONG: `0x2080200a` never reaches the device. See
+  the second firing's MANIFEST and `kayfabe_abi::perfboost`.
+Diff these against traces/host_reference_ga106/<stage>_r1.jsonl.zst.
+
+PROVENANCE (a bench claim without its revision is not a claim)
+  bench         vast.ai instance 47373001 ("vh2"), 2026-08-10 14:21-14:35 UTC
+  host GPU      NVIDIA GeForce RTX 3060 (GA106), host driver 580.159.04 OPEN
+  emulation     kayfabe QOM shim device `nvkvm-gpu`, QEMU 10.2.4 + KVM
+  ★ SOURCE REV  954f926513f25730b8d1e1a07d1d79c58b600d98
+                ("w216 BOOTED (§16.78): cuCtxCreate TERMINATES ...")
+                = /workspace/bench/BUILD_REV.txt on vh2 at capture time. Note this is
+                TWO commits AHEAD of the pushed kayfabe origin/master (dfbb31c) and SIX
+                behind the unpushed local master (2692e7b). ⊘ Do not attribute these
+                numbers to "master" — attribute them to 954f926.
+  boot          scripts/bench/boot_nvkvm.sh nvd1  (tap net, no memfd RAM backend,
+                NVKVM_DEV_EXTRA unset), guest Ubuntu 24.04 / 6.8.0-136-generic
+  guest driver  NVIDIA UNIX **Open** Kernel Module 580.159.04, STOCK and UNPATCHED,
+                distribution install (in-tree nvidia.ko, libcuda in /lib/x86_64-linux-gnu)
+  instrument    tests/mode2/nvdiff/nvdiff_shim.c   md5 480e45c41de971910918438fb582f167
+  workload      tests/mode2/nvdiff/nvd_prog.c      md5 7af4c3ec2b702cf04ae00d68a6596c4d
+  uvm table     tests/mode2/nvdiff/uvm_sizes.h     md5 c9a0c5da3aabe32f8852f15e72405b63
+                — all three byte-identical to the host reference's. One instrument.
+  capture opts  NVDIFF_MAXBUF=65536, no truncation (`nvdiff.py summary` confirms)
+
+FILES
+  dev_r{1,2}.jsonl.zst    94 records each, prog rc=0  — cuInit + device queries COMPLETE
+  ctx_r{1,2}.jsonl.zst   490 records each, prog rc=124 — cuCtxCreate HANGS, killed at 180 s
+  <stage>_r*.stdout       the workload's own verdict
+  env_<stage>.txt         environment as recorded at capture time
+  <stage>_dmesg.log.gz    ★ the GUEST DRIVER'S OWN dmesg (the serial log is not where it is)
+  run_nvd1_qemu.log.gz    the emulated device's own report for this boot — independent
+                          corroboration of the wall named below
+
+GUEST NOISE FLOOR — measured, and ZERO
+  dev_r1 vs dev_r2   94 vs  94 records, ratio 1.000000, NO DIVERGENCE after canonicalisation
+  ctx_r1 vs ctx_r2  490 vs 490 records, ratio 1.000000, NO DIVERGENCE after canonicalisation
+  The two ctx captures are byte-identical in size (694 270 B). The guest half is as quiet
+  as the host half, so every divergence below is a property of the subjects, not the
+  instrument. ⊘ Both runs of a stage share one QEMU process and one boot; this floor
+  therefore bounds run-to-run noise, NOT boot-to-boot noise.
+
+★★★ THE WALL, NAMED — first divergence that ends the program
+  The two streams run in lockstep to the very last successful call:
+
+      HOST A[344] nvidia7:RM_ALLOC cls=0x0079    GUEST B[309] nvidia0:RM_ALLOC cls=0x0079
+           A[345] RM_ALLOC cls=0x003e                 B[310] (same)
+           A[346] RM_CONTROL 0x00000d01               B[311] (same)
+           A[347] RM_MAP_MEMORY                       B[312] (same)
+           A[348] UVM_CREATE_EXTERNAL_RANGE           B[313] (same)
+           A[349] UVM_MAP_EXTERNAL_ALLOCATION         B[314] (same)
+      ---- and then they part company, permanently ----
+           A[350] RM_ALLOC cls=0x0040             B[315] RM_CONTROL 0x20801702  x175 -> killed
+                  (NV01_MEMORY_LOCAL_USER)               (NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS,
+                                                          engines=0xFFFFFFFF, one thread, forever)
+
+  KIND: **EXTRA calls**, not missing, not a wrong value, and NOT a size mismatch.
+  ⚠ 0x20801702 is called **0 times on real hardware in the entire 613-record program** and
+  **175 times by us**, all from the single thread that was inside cuCtxCreate. It is the
+  documented "service interrupts for the specified engines" escape hatch — i.e. libcuda
+  waiting for a completion that never signalled and falling back to polling. This is the
+  LOST WAKEUP, and the oracle gives it an index and an id rather than an inference.
+
+  ★ INDEPENDENTLY CORROBORATED by the device's own log for the same boot: run 1's last
+  device activity is eight `DOORBELL-REFUSED ... [Route::NotACopyEngineChannel]` lines for
+  tokens 0x07-0x0e at 14:22:04, and then nothing at all for the remaining ~175 s until the
+  timeout kills the workload. Two instruments that share no code agree on the instant.
+
+  Progress measure: cuCtxCreate's first ioctl is A[129] on the host and B[94] here (the dev
+  stage is 129 records there and 94 here), so the guest completes B[94..314] = **221 of
+  cuCtxCreate's 479 ioctls (46.1%)** before the spin, and then emits 175 MC_SERVICE_INTERRUPTS.
+  cuInit and every device query complete correctly (dev stage, prog rc=0).
+
+★★ THE 0x56 CENSUS — the census the host reference makes possible
+  Hardware issues exactly ONE non-OK status in the whole program: 0x2080012f
+  (NV2080_CTRL_CMD_GPU_QUERY_ECC_STATUS) = 0x56, in cuInit. Subtract it and every
+  remaining 0x56 we emit is a measured divergence. Ours (ctx_r1, all 490 records):
+
+    id           name                                 guest   hardware   verdict
+    0x2080012f   GPU_QUERY_ECC_STATUS                 0x56    0x56       ✓ the forgiven one
+    0x20810108   (class 0x2081 NV2081_BINAPI)         0x56    NV_OK      ✗ DIVERGENCE, in cuInit
+    0x2080200a   PERF_BOOST                           0x56    NV_OK      ✗ DIVERGENCE, in cuCtxCreate
+
+  THREE 0x56 total, ONE of them legitimate. TWO-ITEM WORKLIST, and both are ranked:
+    * 0x20810108 — guest B[41], host A[77]. paramsSize 992 on both sides. Host `replies`
+      classes it PURE-IN: 992 bytes in, 992 identical bytes back. So NV_OK on a body RM
+      does not touch — cheap to satisfy, and it is the FIRST status divergence in the
+      whole stream. Not in ogkm's ctrl2081 headers (NV2081_BINAPI is a binary-API
+      passthrough class), so its meaning must be recovered from the capture, not a header.
+    * 0x2080200a PERF_BOOST — guest B[95], host A[130]. This is the **second ioctl of
+      cuCtxCreate on both sides**, params `12000000 ffffffff`, 8 bytes. Hardware calls it
+      TWICE (A[130] entering, A[478] leaving); we refuse the first and never reach the second.
+
+  ⊘ SCOPE, and it matters: this is a **userspace** census. The same guest's kernel emits
+  293 NVRM lines, saturated with `status=0x00000056` from `rpcRmApiFree_GSP` /
+  `GspRmAlloc` — the RM<->GSP RPC plane, which this instrument cannot see at all. "Three
+  0x56" is true of the ioctl boundary and false of the driver.
+
+★ ONE MORE NON-ENVIRONMENTAL DIVERGENCE, and it is a ship milestone
+  0x20800110 = NV2080_CTRL_CMD_GPU_GET_NAME_STRING, host A[114] / guest B[78], NV_OK both
+  sides, same paramsSize. Host reply body @0x4 = "NVIDIA GeForce RTX 3060"; ours = 23 zero
+  bytes. That is exactly why the workload prints `name=` (empty) and why `nvidia-smi`
+  prints `ERR!` in the Name column. An NV_OK with an empty body — the "A WALL THAT CAN
+  CARRY NO NAME" shape, here literally about a name.
+
+⊘⊘ WHAT IS **NOT** A DEFECT — read before mining the diff further
+  The raw `nvdiff.py diff` reports 1005 divergences and names CARD_INFO at A[1] as the
+  first. ★ That first one is ENVIRONMENTAL and so are the great majority. See the ⊘
+  CORRECTIONS appended to traces/host_reference_ga106/MANIFEST.txt: the reference host is a
+  FIVE-GPU rig running the CLOSED driver, not the single-GPU open-driver box its provenance
+  block described. Consequences you will hit immediately:
+    * CARD_INFO returns 5 populated card entries there and 1 here.
+    * A[18:22] four RM_CONTROL 0x215, A[28:60] thirty-two more, A[68:71] three more — all
+      per-GPU enumeration of the four GPUs we do not have.
+    * The reference's GPU is minor 7, so `nvidia7:REGISTER_FD` vs `nvidia0:REGISTER_FD`
+      mis-aligns four blocks purely on the device node's NAME.
+    * `hdr_post@0x4(hObject) 07 vs 03`, `params_post 00c4 vs 0300` — GPU instance and PCI
+      bus leaking into handles and reply bodies.
+  ⇒ Rank by KIND and by whether the field can depend on the rig, never by index alone.
+
+★ A REFUTED PRIOR, stated because it was load-bearing
+  The owner's expectation going in was that **size mismatches were often the issue**.
+  MEASURED: across both stages and every aligned record, `nvdiff.py`'s SIZE class fires
+  **ZERO** times. Every declared paramsSize we present matches hardware exactly. The
+  divergences are STATUS, EXTRA calls, and empty reply bodies — not sizes.
+
+RE-RUNNING THIS
+  scripts/mode2_diag/nvdiff_run_guest.sh detects the guest layout (see its header). On the
+  kayfabe bench: boot with scripts/bench/boot_nvkvm.sh, then push the four instrument files
+  into the guest and run the runner with NVDIFF_MAXBUF=65536.

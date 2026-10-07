@@ -1,0 +1,8 @@
+CDPP mode=0 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=0 parent_end=1 | t_parent_end=0.045 t_child=-1.000 t_streamquery_ok=0.045 t_eventquery_ok=0.045 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0 memcpy=0
+CDPP RESULT mode=0 sched=auto OK
+rc=0

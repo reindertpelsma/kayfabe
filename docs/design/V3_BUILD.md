@@ -1,0 +1,259 @@
+# V3_BUILD — how v3 is being built (branch `v3`)
+
+**STATUS: LIVE, 2026-09-24 (w826).** Governs the build order and what is copied. The design is
+`THE_ARCHITECTURE_v3.md` + `THE_V3_PLAN.md`; this file only records the execution decisions.
+
+## Rules (owner, 2026-09-24)
+
+- v3 is written **as designed**, in fresh `kf-*` crates. The old `kayfabe-*` crates are **frozen**:
+  reference + grader (rm-ladder, fastguest harness, bare-metal suite, cup3/cup8/LLM hooks).
+- Code may be **copied from the old tree whenever it fits v3**. The test is the code's shape, not its
+  origin. Never copied: CPU reads of guest page tables, CPU-executed engine work, address
+  tables/VA mirrors/joins, isolates/IPC plane, publication epochs/dirty gates/sweeps, per-page BAR
+  fill traps, **and snapshots of the guest's tables** (the walk kernel's delta snapshot and
+  `walkmirror` included — v3 §4.2 w825: *the snapshot is a shadow; the ledger replaces it*).
+  > ⊘ **AMENDED 2026-09-25 (owner design + COMMIT-ON-ACK ruling; branch `v3-diff`).** The rule
+  > above forbade the old walk kernel's snapshot for a reason that still stands: it was the
+  > PREVIOUS WALK — guest table content, installed whether or not the host acted on it (a §18.2
+  > shadow; `walkmirror` was its CPU copy), and the ack was one generation for the whole report.
+  > What the walk kernel now keeps in vidmem is different in kind: per VA-space object, the
+  > placements the host **confirmed it made**, committed run by run from the host's verdict — the
+  > "ledger of our own map handles" §4.2 (w825) itself sanctions, moved beside the walker. The walk
+  > still reads the guest's live tables every time; nothing is served from the record; a stale
+  > entry costs one extra diff line, never a wrong translation. ⇒ The walk emits a **DIFF**
+  > (`kf_cuda::diffmodel` is the spec; `kf-gate9` holds the GPU to it) and the CPU ledger +
+  > `plan_reconcile` are gone (`V3_P5_PORT_MAP.md` Q8). ⊘ Still never copied: `walkmirror`, a
+  > whole-generation ack, anything that installs the walk itself as "previous state".
+- The target is the v3 architecture; **LLM parity is what v3 must deliver**, never a shortcut.
+  Temporary breakage is accepted.
+
+## Reference sources, per open question (checked w826)
+
+Pinned in `third_party/` (ogkm 610 + 580, linux for nouveau/nova, gvisor for nvproxy); nvkvm-pv at
+`/workspace/nvkvm-pv`. Rank: ogkm > nova > nouveau (THE_CONSTRAINTS §50); nvproxy answers the
+host-userspace question only.
+
+- **Per-die tables** → HOST-QUERY, unprivileged (ogkm `g_subdevice_nvoc.c` flags, `0x8` =
+  NON_PRIVILEGED): interrupt data via `MC_GET_STATIC_INTR_TABLE 0x2080170e`,
+  `MC_GET_ENGINE_NOTIFICATION_INTR_VECTORS 0x2080170d`, `MC_GET_INTR_CATEGORY_SUBTREE_MAP 0x2080170f`
+  (the INTERNAL `0x20800a5c` and `FIFO_GET_DEVICE_INFO_TABLE 0x20801112` are kernel-only); engines
+  `GET_ENGINES_V2`, `GET_HW_ENGINE_ID`; GR info, CE PCE mask, CE caps, FB info V2, arch info, name,
+  GPU info V2 — all NON_PRIVILEGED. Gaps: nova/nouveau device-info decoding as family rules. ★ The
+  old tree's captured GA106 rows are the TEST ORACLE: on a GA106 host, derived == captured.
+- **Host event → guest MSI** → nvkvm-pv already materialises a host eventfd for
+  `NV01_EVENT_OS_EVENT` (`src/qemu/nvkvm_handle.c:134-142`; the event fd is a `/dev/nvidia*` fd,
+  `nvkvm_isolate_handlers.c:2615-2618`); the eventfd → KVM irqfd → MSI-X hop is standard KVM/QEMU.
+- **Per-family GSP boot** → nova-core (`linux/drivers/gpu/nova-core`, Rust, GA10x+ FWSEC/WPR2).
+- **Host control allowlist + layouts across driver versions** → nvproxy.
+- **Bench grading** → the old project's nvdiff live oracle + bare-metal suite.
+
+## The crate map (from the w826 five-way inventory)
+
+| v3 crate | built from (copy / adapt) | new |
+|---|---|---|
+| `kf-util` | copy `kayfabe-util` | — |
+| `kf-arch` | copy `kayfabe-arch` (GSP seam; GMMU/USERD traits later) | — |
+| `kf-abi` | copy `kayfabe-abi` (generated modules, wire/view/versions, table layouts); `oracle.rs` test-only | regenerate from ogkm later |
+| `kf-gsp` | copy `kayfabe-gsp` {ring, element, ram, rpc, fault, seq}; **adapt** `boot.rs` (drop HeldReply / holds_for_refresh / deferred lane); `kayfabe-device/abi.rs`; drop `replay.rs` | — |
+| `kf-chip` | ⊘ **NOT a copy of `kayfabe-device/ga10x.rs`** (a GA106-only captured-constants file — the per-die shape v3 exists to end). Built on the **axes** (`derive_per_die_maintain_per_family`, owner 2026-09-13): **(a) FAMILY row, hand-maintained, one per generation** (`ga10x`/`ad10x`/`gh100`/`gb20x`: MMU format regime, USERD model, doorbell encoding, GSP boot style SEC2-booter vs FSP, ogkm header dir); **(b) register offsets GENERATED** from ogkm `dev_*.h` per family by the swref parser (`kayfabe-doorbell/swref.rs`) and class sets by `classgen.rs`; **(c) per-die facts READ FROM THE HOST GPU** at realize through unprivileged RM queries, else derived from ogkm, else fabricated so RM's own code accepts it — **each field carries its provenance**. The driver-version axis stays in `kf-abi`/`kf-gsp` (element layout keyed by version). | the generator, the `HostFacts` query set, the family table |
+| `kf-trap` | `kayfabe-doorbell` {token, bitmap, wake, ring, trap, trappolicy, shadow, memmap}; the inline passthrough store | thin register adapter (~200 lines) replacing `RegPlane` |
+| `kf-rm` | `kayfabe-device` {inittables, staticinfo, guestsysinfo, inert, unserviced, census, sticky}; `kayfabe-rmrpc` {translate, reasm, fault}; doorbell {rmgraph, accessmap, rpc} | object graph keyed `(hClient,hObject)`; `GPU_GET_NAME_STRING` from the host |
+| `kf-host` | `RmConnection` from `isolate-host/rm.rs` (raw verbs public; no `HostRmBackend`, birth clients, exec VAS); `map_local_at_with_flags` + `invalidate_tlb`; `birth_channel`, `alloc_engine_object`, schedule; `kayfabe-linux-raw` chardev/ioctl/mapping/window/eventfd | deferred **unmap** flag; OS-event / NONSTALL registration |
+| `kf-mem` | existing `kf-mem`; `kayfabe-cuda` + `cuda/walk` kernel (walk + the commit-on-ack DIFF against confirmed placements — ⊘ 2026-09-25, replaces "no delta snapshot" + the CPU ledger/planners); `reconcile_scoped` | our BAR1/BAR2 roots declared in static info; batched map with TLB-defer + one invalidate; scoped walks by named PDB |
+| `kf-chan` | doorbell {channel, completion, plane, hostverb}; `kayfabe-rt/translated.rs`; birth rules from `kayfabe-fwd` (adoptability by GPGA arithmetic, not bindings); `kayfabe-completion` policy | **Translated execution** (windows, own ring, GP copy, split at MEM_OP); **host event → irqfd → MSI** |
+| `kf-core` | doorbell `vmm.rs` seam | — |
+| `kf-qemu` + `qemu/hw/misc/kf3/` | QOM glue + `KayfabeHostOps` from `nvkvm.c` / `shim_unsafe.rs`; `vmm-qemu` window verbs | device `kf3-gpu`, `kf3_` symbols, `KF_DEVICE` in the 3 harness sites |
+
+⊘ **CORRECTED w826 (`V3_P2_PORT_MAP.md` §4.1): `kayfabe-device/sweep.rs` is NOT a publication
+sweep** — it is the control TRIAGE table (`SWEEP_TRIAGE`, :83-171) for the guest's engine sweep, and
+dropping it re-creates `t134a`'s silent engine amputation. It is COPIED into kf-rm. The name misled
+the list below. The full P2/P3 copy order is `V3_P2_PORT_MAP.md`.
+
+**Dropped outright:** `kayfabe-device/plane.rs` (except GSP dispatch ideas), fbwin/gpgaview/ceresolve/
+gvaspub/pubqueue/mmuinval/bar2/setpagedir, `kayfabe-core` gpu/project/gpa/reactor/promote-join,
+`kayfabe-rt` device/ceutils/completion_watch, `kayfabe-fwd` CE half, isolate crates, barmirror,
+deviceview, walkmirror, the whole-generation delta/ack (⊘ 2026-09-25: the per-run commit-on-ack diff is a different thing — see the amended rule above).
+
+## ★★★ Order: the real planes FIRST, graded by a GPU harness — guest boot LAST (owner, w826)
+
+> *"I would not go to guest boot with fake planes. Since you need emulated channels and translated
+> to boot in v3, its better to postpone that until this land. Otherwise you are going to race
+> towards a inline synchronous fake completor which is precisely what we need to avoid. Thats why
+> your test infrastructure is actually important."*
+
+The stock driver cannot pass `RmInitAdapter` without its kernel CeUtils channels completing. Booting
+before the channel and completion planes exist forces a synchronous fake completion on the vCPU —
+the CPU executor under another name. ⇒ **No guest boot until kf-host + kf-mem + kf-chan are real.**
+
+1. `kf-host` — in-process RM session; one reserved object; identity + guest-RAM windows; VAS; batched
+   map/unmap with TLB-defer; channel birth; host events → eventfd.
+2. `kf-mem` — the store; OUR bar1/bar2 roots; the walk diffed against our handle ledger.
+3. `kf-chan` — passthrough birth; Translated execution; VMM-executed emulated channels (§37);
+   completions via host event → eventfd → one wake path, **never inline**.
+4. **`kf-harness` (the gate for 1–3): the harness plays the guest, no QEMU.** Guest RAM = a memfd,
+   guest VRAM = the store. It writes real page tables into the store, places a kernel-style CE
+   pushbuffer (PHYS operands + semaphore release) in guest RAM, rings the token, and asserts: the
+   REAL engine copied and released, the completion arrived via the eventfd, `forwarded=` per token,
+   the `MEM_OP` split published before resuming, hostile rings refused by name.
+5. Only then P2 guest boot (`kf-trap`, `kf-qemu`), P3 `nvidia-smi`, and the 30-arm suite.
+
+P2's non-booting work (`kf-chip` generator, `HostFacts`) proceeds in parallel.
+
+## Order and gates (THE_V3_PLAN §2)
+
+P2 GSP boot → `GSP_INIT_DONE` + first RPC · P3 objects/controls → `nvidia-smi` correct · P4 memory/VA/BAR
+→ alias/map/invalidate arms · P5 channels → ring/doorbell/concurrency arms · P6 Translated → kernel scrub
+`forwarded>0`, ce-client* · P7 compute → cup3, cup8 · then the LLM lane at ≥0.8× host tok/s.
+
+★ **Host baseline, recorded w826** (box 52430332, RTX 3060 GA106, 580.159.04, torch 2.6.0+cu124 —
+the same pinned wheel the guest gets, transformers 5.17.0, `Qwen/Qwen2-0.5B-Instruct`, 16 tokens
+greedy, `scripts/bench/run_llm.py` = the guest's own runner): **`HOST_LLM_TOK_PER_S=10.43`**
+(`generate()` wall, COLD — the basis the guest hook reports). ⊘ The line this replaces said "never
+recorded"; w720 had measured one on another box (0.20× parity). A denominator belongs to ITS box:
+re-record on the box the guest number comes from.
+
+★★★ **LLM lane measured on kf3, w828 (branch `v3-llm`, device built at `53c2bc20` = master `f8cfe8d7`
++ the cache-op fix `8dd2bbdf`).** Fat guest (`boot_capture.sh`, `KF_DEVICE=kf3`, 8 GiB, 4 vCPU) on
+`vh3` (itself a KVM guest — nested), the same box's host, and `vc` (non-KVM container, bare metal).
+Matrix `scripts/bench/llm_parity.sh`, tables `llm_parity_summary.py`, raw output `traces/llm_parity/`.
+Each cell mean of 3 processes.
+
+| tok/s | guest (kf3) | vh3 host | vc bare | guest/vh3 | guest/vc |
+|---|---|---|---|---|---|
+| short 16-tok cold (recorded basis) | 3.10 | 8.94 | 13.40 | 0.35 | 0.23 |
+| 512 steady decode (warm) | 5.89 | 19.33 | 28.28 | 0.30 | 0.21 |
+| 2048 steady decode (warm) | 6.02 | 19.50 | 28.26 | 0.31 | 0.21 |
+
+- ⊘ **Long runs do NOT amortize the gap: it is per TOKEN, not per process.** Guest text == host text
+  for 16/512/2048 tokens (sha256). Ledger: every token `emulated=0`; every passthrough token
+  `forwarded>0`. **~1080 doorbells per decoded token** (eager HF decode = ~1000 kernel launches), and
+  doorbells are 99.7% of all trapped exits (16.79M of 16.84M in llm_g1): ≈106 µs of guest time per
+  doorbell on this nested box. 0.8× would need ≤~8 µs per doorbell — no trapped exit reaches that
+  here. ⇒ parity for eager decode needs an EXIT-FREE doorbell (owner decision), not setup work.
+- Per-process fixed cost: guest persistence mode (`nvidia-smi -pm 1`) removes the per-process
+  emulated-GSP unload/reboot (11 → 1 `UnloadingGuestDriver`) and ~3-4 s per process.
+- ★ **CORRECTED 2026-09-26 (branch `v3-video`, `614fbc7e`): the root cause named below is FIXED.** One host
+  channel group per guest TSG (`HostRm::birth_group`/`birth_member`; members share the legacy
+  subcontext, and the group is scheduled once and freed with its last member). `[measured vvid]` a
+  local-memory kernel on a second CUDA stream now passes in the guest (it failed with `sync 719`), and
+  ffmpeg's CUDA contexts no longer raise the Xid. `cup3`/`cup8` and the fast suite still pass. ⊘ The
+  CUDA-graph LLM arm has NOT been re-measured. See `V3_VIDEO_ENGINES.md` §2.2.
+- ⊘ **WALL: any kernel on a non-default CUDA stream faults** — host `Xid 13 SKEDCHECK05_LOCAL_MEMORY_
+  TOTAL_SIZE failed` on the second GR twin (bisect `llm_graph_probe.py`: default stream incl.
+  StaticCache passes; `x*2+1` on a side stream fails). Every twin is born in its OWN host TSG
+  (`kf-host/src/channel.rs` `birth_channel`), so TSG-scoped GR state the guest programmed through its
+  first channel is absent from the second's context (`CtxBind initialized: 0` vs `3591`). Blocks the
+  CUDA-graph arm (`run_llm_graph.py`: bare 169.6 tok/s, host 165.6, 6x eager) and any multi-stream app.
+
+★★★ **Same matrix on AMD, w828b (`vh`: EPYC 7452 KVM guest, RTX 3060, 580.159.04; device `e5ff45ff`
+= the above + the sysmem-containment fix `f4813205`).** Raw: `traces/llm_parity/vh_amd/`.
+
+| tok/s | guest (kf3) | guest + PM | vh host | vc bare (Xeon) | guest+PM/vh | guest+PM/vc |
+|---|---|---|---|---|---|---|
+| short 16-tok cold | 4.80 | 5.81 | 17.19 | 13.40 | 0.34 | 0.43 |
+| 512 steady decode | 12.62 | 12.58 | 43.98 | 28.28 | 0.29 | 0.45 |
+| 2048 steady decode | 13.04 | 12.69 | 43.53 | 28.26 | 0.29 | 0.45 |
+
+- Exits are ~2x cheaper than on vh3's Intel, but the EPYC host is also 2.2x faster, so the ratio is
+  unchanged (0.29x vs 0.31x). Per 2048-token process (PM lane): **1084.5 doorbells and 1303 KVM
+  exits per token** (5.34M exits, 4.44M ledger doorbells). Excess per token 55.8 ms ⇒ **~51 µs of
+  guest time per doorbell** (42.8 µs per exit on average). `perf kvm stat` in the box (L1): npf
+  (the doorbell MMIO write) is 70% of exits at 18.5 µs average L1 handling; the rest is L0 nesting.
+  0.8x needs ≤ ~5 µs per doorbell.
+- ⊘ **Fixed: sysmem walk runs were bounded by the vidmem store span** (`f4813205`): UVM's CE channel
+  died on a valid guest page above 8 GiB GPA in any 8 GiB guest. ⊘ **Open: without guest persistence
+  mode, UVM's CE channel dies on the 5th CUDA process of a boot** (both boots, `vhA_g`/`vhB_g`):
+  `split walk (pdb 0x201000): walk report TRUNCATED (flags=0x85, refuse_mask=0x10 RUN_CAP)` — each
+  process re-inits the adapter; with PM (one init) 9 processes ran clean. Looks like placements for
+  UVM's re-created VAS accumulating across adapter cycles; not fixed.
+  ⊘⊘ **CORRECTED + FIXED w829 (`v3-uvmwall`) — the reading above was WRONG: not an accumulation,
+  not a leak.** The refusing entry is the CUDA process's OWN space (root `0x201000`, a fresh slot;
+  table 7 objects, 121 free slots). Census (`KF_VAS_CENSUS=1`, `uw4`): 16 366 of its 16 384 runs
+  are 4 KiB sys-coherent pages, a VA-contiguous ~56 MiB at `0x2_0000_0000` + ~2 k at the CPU-mirrored
+  VA; of 16 378 VA-contiguous neighbours **0** are GPA-contiguous (kind/flags split nothing). The run
+  count follows guest-RAM fragmentation, which grows every process (faster with a re-init per
+  process): died at proc 6/4 on `ce623b3f`, 1/2/3 on `v3-mc3` — variance, not a regression. The
+  uniform `runs_per_pdb = 16 384` (walk slice AND slot) was the wall; the re-init agent's `ro_R2`
+  "slot N is full" is the same space through the diff's slot bound. **Fix:** the walker's capacity
+  is pooled and host-managed (`kf-cuda::capacity`, `KfLayout`, `KF_ABI_VERSION 4`): per-entry walk
+  regions and per-slot committed regions carved from a 1 Mi-run walk pool and a 2 Mi-run slot pool
+  (same device memory as before), the kernel reports each space's need, and `WalkKernel` grows a
+  slot (stream-ordered DtoD copy) and re-walks on the collecting (VA) thread. One space may now hold
+  1 Mi runs. Verified: 24/24 no-PM and 24/24 PM torch processes per boot (`vf1`), gate9's growth arm.
+  ⚠ Follow-up: each scattered 4 KiB run is ONE host map call on the guest-RAM object (~12.6 k per
+  fragmented process) — a batched verb (e.g. a page-list object mapped once) is the next budget.
+  ✔ **ANSWERED 2026-09-26 (`v3-batchmap`, `V3_BATCHED_MAP.md`):** VA-contiguous guest-RAM runs are
+  ONE `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over a stitched view, mapped once; VA-adjacent unmaps are
+  ONE `NVOS47` range. A 12 288-run space: 3 map + 1 unmap verbs (was 24 576); exit unmap 1 256 →
+  7 ms (the per-run unmap was O(mappings): RM walks the whole inter-mapping list per call); no-PM
+  process 4.7 → 4.3 s mean on `vh`. The map half is slower (265 → 352 ms: stitch `mmap`s).
+
+★★★ **App-matrix fixes, `v3-appfix` (2026-09-26; box vast 52689820, RTX 3060 GA106, 580.159.04;
+fat guest, kf3 binaries `kf3-bins/<rev>`).** The three guest-only failures of `V3_APP_MATRIX.md`
+(branch `v3-apps`, measured at `79848341`, bare metal passes all), bare metal re-run on this box first.
+- **J — host `NV_ESC_RM_MAP_MEMORY … NoMemory` at the ~60th process (FIXED, `f372f63f`).** Measured
+  (`ce2cb06d`, guest PM, 100× a small CUDA process): host BAR1 used grew **~4.5 MiB per process**,
+  the 256 MiB aperture was full at ~55 and the next process hung. kf3's new `views[]` counters
+  (`HostRm::view_counts`, in the status line) showed held CPU views growing ~4 per process = the 4
+  Translated (guest-kernel CE) channels each process births. ⊘ **`HostRing` owned nothing but its
+  channel**: its 1 MiB device-local object, the object's GPU mapping and its BAR1 CPU view (armed by
+  `HostRm::map_cpu`, which DROPS the release cookie) survived every retire, and the ring slot was
+  never reused (*"a freed ring's memory stays mapped today"*). Fix: the ring owns
+  `{object, view cookie, space}`; `HostRing::release` (after the channel free) munmaps,
+  `NV_ESC_RM_UNMAP_MEMORY`, GPU-unmaps and frees; refused births unwind the same way; slots are a
+  pool, returned only on a clean release. **After: 100/100 processes in one PM boot, host BAR1 flat
+  at 17-19 MiB** (was +4.5 MiB/process), held views flat (~90-110).
+- **G — `gpu_burn` SIGSEGV after `cuInit` (FIXED, `b0ceaf09`).** Not a CUDA fault: gpu_burn reads
+  `nvidia-smi -l 5 -q -d TEMPERATURE` until `'\n'` into a 10 KiB stack buffer and runs off its stack
+  on EOF. In the guest `nvidia-smi -l` exited 3 at once (*"Failed register events"*). nvdiff shim,
+  host vs guest: NVML arms `EVENT_SET_NOTIFICATION` for 37, 118, 159, 155, 156, 191, 192 — all `NV_OK`
+  on bare metal; kf3 answered 37 (`RC_ERROR`) `0x56`. Every one of the seven is raised by the guest's
+  OWN CPU-RM (`gpuNotifySubDeviceEvent`), so the GSP arming is bookkeeping: new admitting list
+  `kf_abi::eventnotify::GUEST_RAISED_NOTIFIERS`, pinned by a test. After: `nvidia-smi -l` runs,
+  gpu_burn `GPU 0: OK`.
+- **C — managed memory / Xid 31 `FAULT_PDE` (ROOT-CAUSED; NOT fixable inside the current host
+  boundary).** `um_probe` shapes, each fully checked, host vs guest: `cudaMalloc`, managed +
+  `cudaMemPrefetchAsync`, managed + `cudaMemAdviseSetAccessedBy`, `cudaHostAlloc`, D2H into pageable
+  — **all correct in the guest**; managed with CPU first touch, managed with GPU first touch, and a
+  kernel writing plain `malloc` memory (HMM, `pageableMemoryAccess=1`) — **host Xid 31 FAULT_PDE,
+  guest `cudaDeviceSynchronize` = 719**. ⇒ everything the guest UVM MAPS is published correctly; what
+  fails is **demand paging**: the guest UVM expects a replayable fault to populate the page, kf3
+  delivers none (`kf_abi::faultbuffer::DELIVERY_UNBUILT`), and the host twin's fault is
+  non-replayable, so the host RCs the TSG. `torch_ai_bench` is the same class (its fault VA
+  `0x7fa9_87c45000` is pageable host memory). ⊘ The guest is **not** told success: the RC is
+  forwarded (`RC_TRIGGERED`, Xid 31) and CUDA returns 719; `conjugateGradientUM` prints `SUCCESS`
+  because it checks neither its `cudaDeviceSynchronize` (`main.cpp:171,220`) nor its cuBLAS status,
+  and its verdict is `k <= max_iter` (`:270-272`). ⊘ Why it cannot be closed from host userspace:
+  a replayable host fault needs a fault-capable VAS, which RM refuses unless it is also
+  EXTERNALLY_OWNED (`ogkm-580 vaspace_api.c:678-690`, i.e. UVM-owned page tables), and the fault
+  buffer class is `RS_FLAGS_ALLOC_KERNEL_PRIVILEGED` (`resource_list.h`, `MMU_FAULT_BUFFER`). An owner
+  decision (a host fault channel, or a sanctioned eager-mapping policy) — `THE_OPEN_QUESTIONS.md` §4.
+- **R — guest read-only PTEs were read-write on the host (FIXED on `v3-roperm`, `a1a82903`;
+  box vast 52732498, GA106).** Found by source review in `V3_UVM_DEMAND_PAGING.md` §6 (branch
+  `v3-uvm-research`): the walker decoded READ_ONLY / ATOMIC_DISABLE / VOLATILE per leaf, then
+  keyed a placement on aperture + kind only (`kf_hkey`, `diffmodel::host_key`) and mapped every
+  twin read-write. Measured on master `283a5304`: `readmostly_probe gpuwrite` and `downgrade`
+  (`cudaMemAdviseSetReadMostly`, then a GPU write) returned **`bad=1048576` with no CUDA error
+  and no Xid**. Fix: ONE host permission policy (`kf_mem::apply::PermPolicy`) feeds both the diff
+  key (`KfArgs::key_perm`, a per-launch parameter; `KF_ABI_VERSION` 4 → 5) and the host map
+  (`kf_host::MapPerm` → `NVOS46`): **READ_ONLY** (`ACCESS_READ_ONLY`) and **VOLATILE**
+  (`GPU_CACHEABLE_NO`) are carried, and a keyed change on a kept placement is UNMAP + MAP; batches
+  group only same-permission rows. After: both modes fail **loudly** (719 + host Xid 31
+  `FAULT_RO_VIOLATION ACCESS_TYPE_VIRT_WRITE`); `reprefetch` passes. Correct values need
+  replayable-fault delivery (C).
+  ⊘ **ATOMIC_DISABLE is carried only with `KF3_CARRY_ATOMIC_DISABLE=1`** (enable once fault
+  delivery exists): guest UVM sets it so a GPU atomic on a sysmem-resident managed page faults and
+  migrates; without delivery, carrying it turned `atomicAdd_system` on such a page into a 719 (host
+  Xid 31 atomic fault) where the uncarried mapping gives the bare-metal values
+  (`traces/v3_roperm/atomics_probe.cu`).
+  ⊘ **PRIVILEGE** has no unprivileged map verb (RM takes it from the memory descriptor): a USER twin
+  (every mirror but an RM-internal client's or one a Translated channel was born in) WITHHOLDS a
+  privileged leaf — counted (`priv_withheld` / `priv_mirrored` in the status line), named, never
+  committed. Evidence: `traces/v3_roperm/`.
+- **Matrix re-run, single-stream + UVM rows (`fix1`, one app per boot, kf3 `f372f63f`):** host
+  **43/43**, guest **38/43** (the same 43 rows were 36/43 at `79848341`: `gpu_burn` G and `cupy` B now
+  PASS). Remaining: `conjugateGradientUM` and `torch_ai_bench` (C, above); `UnifiedMemoryPerf`,
+  `attach_verify`, `UnifiedMemoryStreams` (A — Xid 13 `SKEDCHECK05` on the 2nd stream's twin, the
+  `v3-int` one-TSG fix; `UnifiedMemoryStreams` prints 719 and then hangs in its other threads, the
+  same on master `ce2cb06d` and on `f703cdaf` — A/B'd, not a regression). v3 gates **9/9** and
+  `KF_DEVICE=kf3` fast suite **30/30** at `f703cdaf`. Raw: `traces/v3_appfix/`.

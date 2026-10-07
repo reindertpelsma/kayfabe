@@ -1,0 +1,94 @@
+======================================================================================
+=== ★★★★★ w315 ATTRIBUTION  label=census
+===   probe=/workspace/bench/run_w315census_probe.log
+===   qemu =/workspace/bench/run_w315census_qemu.log
+======================================================================================
+
+--- 1. THE GUEST'S OWN SEGMENTATION (guest CLOCK_MONOTONIC, both halves)
+    first launch  n=1   launch_med=  102.870 ms   submit_med=   79.547 ms   sync_med=   23.322 ms
+    steady state  n=11  launch_med=  108.931 ms   submit_med=   85.504 ms   sync_med=   23.248 ms
+    ⇒ of the median launch, SUBMIT is  78.6% and COMPLETION is  21.4%
+    ★ This split needs NO clock correspondence — both halves are the guest's own
+      clock. It says WHICH SIDE of cuLaunchKernel the floor is on, and nothing
+      about whose code is running there.
+    BSUM N=512 iters=12 first_ms=102.870 med_ms=108.931 p90_ms=113.495 min_ms=96.532 max_ms=122.816 gflops=2.464 batch_per_launch_ms=91.887 batch_gflops=2.921 h2d_ms=151.539 d2h_med_ms=73.628 submit_med_ms=85.504 sync_med_ms=23.248 bad=0 maxerr=0
+    GUEST_BSUM N=512 iters=12 first_ms=102.870 med_ms=108.931 p90_ms=113.495 min_ms=96.532 max_ms=122.816 gflops=2.464 batch_per_launch_ms=91.887 batch_gflops=2.921 h2d_ms=151.539 d2h_med_ms=73.628 submit_med_ms=85.504 sync_med_ms=23.248 bad=0 maxerr=0
+
+--- 2. THE HOST-SIDE BREAKDOWN (host CLOCK_MONOTONIC, vCPU thread, inside the trap)
+
+    kind=mmio_read  why=periodic  events=12000  total=20.5 ms  mean=1 us  max=11017 us
+      marked=19.1 ms   ★ UNMARKED=1.4 ms (7.0%)  ⊘ the residual is NAMED, never distributed
+      HIST us: [0,10)=11916 [10,100)=74 [100,1000)=9 [10000,30000)=1
+
+    kind=mmio_other  why=periodic  events=416800  total=4854.4 ms  mean=11 us  max=2070606 us
+      marked=4542.0 ms   ★ UNMARKED=312.4 ms (6.4%)  ⊘ the residual is NAMED, never distributed
+      HIST us: [0,10)=414239 [10,100)=2334 [100,1000)=163 [1000,10000)=43 [10000,30000)=16 [30000,60000)=2 [60000,100000)=1 [1000000,∞)=2
+
+    kind=mmio_doorbell  why=periodic  events=400  total=14650.3 ms  mean=36625 us  max=1840179 us
+      marked=14649.4 ms   ★ UNMARKED=0.9 ms (0.0%)  ⊘ the residual is NAMED, never distributed
+      HIST us: [10,100)=97 [100,1000)=28 [1000,10000)=1 [10000,30000)=167 [30000,60000)=14 [60000,100000)=82 [100000,200000)=7 [200000,500000)=3 [1000000,∞)=1
+
+    kind=doorbell_fwd  why=periodic  events=200  total=8554.5 ms  mean=42772 us  max=1840164 us
+      marked=8552.6 ms   ★ UNMARKED=1.8 ms (0.0%)  ⊘ the residual is NAMED, never distributed
+      NESTED core_rm_ipc   calls=240     total=129.0      ms mean=537      us  ⊘ inside a SEG above — do not add
+      HIST us: [10000,30000)=166 [30000,60000)=14 [60000,100000)=10 [100000,200000)=6 [200000,500000)=3 [1000000,∞)=1
+
+    kind=doorbell_ce  why=periodic  events=200  total=33.3 ms  mean=166 us  max=10991 us
+      marked=33.3 ms   ★ UNMARKED=0.0 ms (0.1%)  ⊘ the residual is NAMED, never distributed
+      HIST us: [10,100)=143 [100,1000)=53 [1000,10000)=3 [10000,30000)=1
+
+--- 3. THE PER-LAUNCH ARITHMETIC — the only place the two halves meet
+    ⊘⊘ THE HOST CENSUS IS WHOLE-BOOT. It includes every doorbell rung during
+       driver load, cuInit, cuCtxCreate, the copies and the batch phase — not
+       only the timed launches. ⇒ dividing it by the launch count is an
+       OVER-ESTIMATE of the per-launch trap cost, and that is the useful
+       direction: if even the over-estimate is small against launch_ms, the
+       floor is NOT inside our traps, and no clock correspondence was needed
+       to say so. ⚠ The converse does NOT follow — a large over-estimate does
+       not locate the time in the launches.
+    launches in the run (incl. first)         = 12
+    doorbell MMIO writes                      = 400
+    ⇒ doorbell writes per launch (OVER-EST)   = 33.33
+    ⇒ host doorbell-trap ms per launch (O-EST)= 1220.861 ms
+    ⇒ host time IN OTHER MMIO TRAPS per launch=  404.534 ms
+    guest median launch_ms                    =  108.931 ms
+    ⇒ ACCOUNTED (all MMIO traps)              = 1625.395 ms  (1492.1%)
+    ⇒ ★★★ UNACCOUNTED                        = -1516.464 ms  (-1392.1%)
+      ⊘ UNACCOUNTED is time the guest spent NOT inside one of our traps: its own
+        driver, its own userspace spin, or waiting for something we do not run.
+        It is NAMED here and must not be attributed to any host segment.
+      ⚠⚠ ACCOUNTED EXCEEDS the guest's launch window. Nesting says that is
+         IMPOSSIBLE ⇒ the doorbell population is not per-launch (start-up
+         traffic is in the total), or the clocks are not what this assumes.
+         ⊘ REPORT THIS AS OUTCOME (D)/(E) — do not rescale to make it fit.
+
+--- 3b. ⊘⊘ THE BENCH IS NESTED — what UNACCOUNTED could be, and what it cannot
+    `[measured 2026-08-14]` the bench host is ITSELF a KVM guest, so our guest runs
+    at L2 and every MMIO access is a NESTED vmexit (L2 -> L1 -> L0). The C artifact
+    attributes a 2.5x llama.cpp gap to exactly this (49.9 tok/s bare metal vs ~20
+    nested) — `C: docs/MILESTONES.md:12-14`.
+    ⊘ NO SEGMENT ABOVE CAN CONTAIN IT. The exit is already over when our handler is
+      entered, so nested-virt tax lives ENTIRELY in UNACCOUNTED. What bounds it is
+      the exit COUNT x the per-exit cost.
+    our device's MMIO accesses this boot (each ONE vmexit) = 429200
+      reads=12000  doorbell_writes=400  other_writes=416800
+    ⇒ per launch (WHOLE-BOOT OVER-ESTIMATE)                = 35767
+      at   2 us per nested exit ⇒   71.533 ms per launch
+      at  10 us per nested exit ⇒  357.667 ms per launch
+      at  50 us per nested exit ⇒ 1788.333 ms per launch
+      ⚠ THE PER-EXIT COST IS NOT MEASURED HERE. Those three rows are an
+        ARITHMETIC RANGE, not a finding — exactly the kind of reasoning that
+        produced `251/2 = 125.5` and was wrong. They bound the question; they
+        do not answer it.
+    ⚠ And our device is not the only source of exits: the KVM sampler log
+      (`run_<tag>_kvmexits.log`) counts ALL of them, host-wide.
+
+--- 4. ⚠ SUSPECTS, NOT CORROBORATIONS
+    A period that matches the measured quantity is a suspect. w311 nearly shipped
+    `251/2 = 125.5 ms ≈ C` as the mechanism; it was OBSERVER_TICK_MS = 250, the
+    observer thread's own epoll timeout. Any coincidence below must be CLOSED by a
+    bracket or an injection, never by the coincidence itself.
+         63 lines match /OBSERVER_TICK|SEMA-PAGE seq/ — the 250 ms observer tick — an OBSERVER, on its own thread
+          1 lines match /VAS_DRAIN_WALL_BUDGET|budget/ — a wall budget firing means rows went UNPUBLISHED, not refused
+
+=== w315 VERDICT = 0 (report produced; the LETTER is a human reading, not this exit)

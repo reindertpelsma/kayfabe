@@ -1,0 +1,124 @@
+JOB_START cdpA 2026-09-30T17:55:45+00:00
+CDPH_START 2026-09-30T17:55:45+00:00 tag=host_a runs=[0:auto:1 4:auto:1 1:auto 2:auto 3:auto 4:spin 4:block qs] scripts=82d18bab host_driver=580.159.04
+/root/kf-cdp/scripts/cdp/cdp_probe.cu(88): warning #550-D: variable "te" was set but never used
+    double tp = -1, tc = -1, te = -1, tq = -1, tev = -1;
+                             ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+CDP_BUILD ok probe=7a22bbc286d1 shim=0b6d172be1f5 src=d788df89fef2
+=== host mode=0 sched=auto trace=1 2026-09-30T17:55:47+00:00
+CDPP mode=0 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=0 parent_end=1 | t_parent_end=0.014 t_child=-1.000 t_streamquery_ok=0.014 t_eventquery_ok=0.014 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0 memcpy=0
+CDPP RESULT mode=0 sched=auto OK
+rc=0
+=== host mode=4 sched=auto trace=1 2026-09-30T17:55:49+00:00
+CDPP mode=4 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=1 parent_end=1 | t_parent_end=0.009 t_child=0.009 t_streamquery_ok=0.011 t_eventquery_ok=0.009 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0xc0ffee memcpy=0
+CDPP RESULT mode=4 sched=auto OK
+rc=0
+=== host mode=1 sched=auto trace=0 2026-09-30T17:55:52+00:00
+CDPP mode=1 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=1 parent_end=1 | t_parent_end=0.007 t_child=0.007 t_streamquery_ok=0.007 t_eventquery_ok=0.007 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0xc0ffee memcpy=0
+CDPP RESULT mode=1 sched=auto OK
+rc=0
+=== host mode=2 sched=auto trace=0 2026-09-30T17:55:54+00:00
+CDPP mode=2 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=1 parent_end=1 | t_parent_end=0.008 t_child=0.008 t_streamquery_ok=0.008 t_eventquery_ok=0.008 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0xc0ffee memcpy=0
+CDPP RESULT mode=2 sched=auto OK
+rc=0
+=== host mode=3 sched=auto trace=0 2026-09-30T17:55:57+00:00
+CDPP mode=3 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=1 parent_end=1 | t_parent_end=0.011 t_child=0.011 t_streamquery_ok=0.011 t_eventquery_ok=0.011 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0xc0ffee memcpy=0
+CDPP RESULT mode=3 sched=auto OK
+rc=0
+=== host mode=4 sched=spin trace=0 2026-09-30T17:55:59+00:00
+CDPP mode=4 sched=spin setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=1 parent_end=1 | t_parent_end=0.010 t_child=0.010 t_streamquery_ok=0.010 t_eventquery_ok=0.010 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0xc0ffee memcpy=0
+CDPP RESULT mode=4 sched=spin OK
+rc=0
+=== host mode=4 sched=block trace=0 2026-09-30T17:56:02+00:00
+CDPP mode=4 sched=block setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=1 parent_end=1 | t_parent_end=0.009 t_child=0.009 t_streamquery_ok=0.009 t_eventquery_ok=0.009 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0xc0ffee memcpy=0
+CDPP RESULT mode=4 sched=block OK
+rc=0
+=== host cdpSimpleQuicksort 2026-09-30T17:56:04+00:00
+GPU Device 0: "Ampere" with compute capability 8.6
+
+Initializing data:
+Running quicksort on 128 elements
+Launching kernel on the GPU
+Validating results: OK
+rc=0
+host kernel log since start: 1 lines, 0 Xid
+CDPH_EXIT rc=0 2026-09-30T17:56:07+00:00
+CDPG_START 2026-09-30T17:56:07+00:00 bin=/workspace/bench/kf3-bins/3f67ed95/qemu-system-x86_64 tag=g3f67_a runs=[0:auto:1 4:auto:1] scripts=82d18bab
+/root/kf-cdp/scripts/cdp/cdp_probe.cu(88): warning #550-D: variable "te" was set but never used
+    double tp = -1, tc = -1, te = -1, tq = -1, tev = -1;
+                             ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+CDP_BUILD ok probe=11c5538664af shim=0b6d172be1f5 src=d788df89fef2
+boot_capture rc=0; kf3 rev stamp: /workspace/apps/results/cdpp/g3f67_a/boot.driver.log:kf3-bin-rev:3f67ed95
+host kernel log since start: 1 lines, 0 Xid
+=== CDPH run mode=0 sched=auto trace=1 2026-09-30T17:57:17+00:00
+CDPP mode=0 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=0 parent_end=1 | t_parent_end=0.040 t_child=-1.000 t_streamquery_ok=0.040 t_eventquery_ok=0.040 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0 memcpy=0
+CDPP RESULT mode=0 sched=auto OK
+rc=0
+=== CDPH run mode=4 sched=auto trace=1 2026-09-30T17:57:25+00:00
+CDPP mode=4 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=0 parent_end=1 | t_parent_end=0.043 t_child=-1.000 t_streamquery_ok=-1.000 t_eventquery_ok=-1.000 (-1 = not within 5 s)
+CDPP WATCHDOG: cudaDeviceSynchronize did not return in 20 s
+rc=137
+CDPP mode=0 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=0 parent_end=1 | t_parent_end=0.040 t_child=-1.000 t_streamquery_ok=0.040 t_eventquery_ok=0.040 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0 memcpy=0
+CDPP RESULT mode=0 sched=auto OK
+rc=0
+CDPP mode=4 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=0 parent_end=1 | t_parent_end=0.043 t_child=-1.000 t_streamquery_ok=-1.000 t_eventquery_ok=-1.000 (-1 = not within 5 s)
+CDPP WATCHDOG: cudaDeviceSynchronize did not return in 20 s
+rc=137
+CDPG_EXIT rc=0 2026-09-30T17:58:55+00:00
+JOB_EXIT cdpA rc=0 2026-09-30T17:58:55+00:00

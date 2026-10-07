@@ -1,0 +1,650 @@
+{
+  "input_kind": "compiler-derived TSV, not raw C",
+  "product_revision": "fdc991c9d3fd51dab005beda2487365661a3db25",
+  "tables": [
+    {
+      "capabilities": {
+        "C373": {
+          "PRECOMP_WIN_PIPE_HDR_CAPA": null,
+          "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT": null,
+          "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT_TRUE": null,
+          "PRECOMP_WIN_PIPE_HDR_CAPD": null,
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_DIRECT": null,
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_LOGNR": null,
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_LOGSZ": null,
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_SFCLOAD": null
+        },
+        "C573": {
+          "PRECOMP_WIN_PIPE_HDR_CAPA": {
+            "kind": "A",
+            "values": [
+              1920,
+              32
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT": {
+            "kind": "F",
+            "values": [
+              20,
+              20
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT_TRUE": {
+            "kind": "V",
+            "values": [
+              1
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD": {
+            "kind": "A",
+            "values": [
+              1932,
+              32
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_DIRECT": {
+            "kind": "F",
+            "values": [
+              9,
+              9
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_LOGNR": {
+            "kind": "F",
+            "values": [
+              6,
+              4
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_LOGSZ": {
+            "kind": "F",
+            "values": [
+              3,
+              0
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_SFCLOAD": {
+            "kind": "F",
+            "values": [
+              8,
+              8
+            ]
+          }
+        },
+        "C673": {
+          "PRECOMP_WIN_PIPE_HDR_CAPA": {
+            "kind": "A",
+            "values": [
+              1920,
+              32
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT": {
+            "kind": "F",
+            "values": [
+              20,
+              20
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT_TRUE": {
+            "kind": "V",
+            "values": [
+              1
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD": {
+            "kind": "A",
+            "values": [
+              1932,
+              32
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_DIRECT": {
+            "kind": "F",
+            "values": [
+              9,
+              9
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_LOGNR": {
+            "kind": "F",
+            "values": [
+              6,
+              4
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_LOGSZ": {
+            "kind": "F",
+            "values": [
+              3,
+              0
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_SFCLOAD": {
+            "kind": "F",
+            "values": [
+              8,
+              8
+            ]
+          }
+        },
+        "C773": {
+          "PRECOMP_WIN_PIPE_HDR_CAPA": {
+            "kind": "A",
+            "values": [
+              1920,
+              32
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT": {
+            "kind": "F",
+            "values": [
+              20,
+              20
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT_TRUE": {
+            "kind": "V",
+            "values": [
+              1
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD": {
+            "kind": "A",
+            "values": [
+              1932,
+              32
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_DIRECT": {
+            "kind": "F",
+            "values": [
+              9,
+              9
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_LOGNR": {
+            "kind": "F",
+            "values": [
+              6,
+              4
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_LOGSZ": {
+            "kind": "F",
+            "values": [
+              3,
+              0
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_SFCLOAD": {
+            "kind": "F",
+            "values": [
+              8,
+              8
+            ]
+          }
+        },
+        "CA73": {
+          "PRECOMP_WIN_PIPE_HDR_CAPA": {
+            "kind": "A",
+            "values": [
+              1920,
+              32
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT": {
+            "kind": "F",
+            "values": [
+              20,
+              20
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT_TRUE": {
+            "kind": "V",
+            "values": [
+              1
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD": {
+            "kind": "A",
+            "values": [
+              1932,
+              32
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_DIRECT": {
+            "kind": "F",
+            "values": [
+              9,
+              9
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_LOGNR": {
+            "kind": "F",
+            "values": [
+              6,
+              4
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_LOGSZ": {
+            "kind": "F",
+            "values": [
+              3,
+              0
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_SFCLOAD": {
+            "kind": "F",
+            "values": [
+              8,
+              8
+            ]
+          }
+        }
+      },
+      "methods": {
+        "C37E": {
+          "SET_CONTEXT_DMA_TMO_LUT": null,
+          "SET_OFFSET_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_HI_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT_ENABLE": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT_ENABLE_DISABLE": null,
+          "SET_TMO_CONTROL": null
+        },
+        "C57E": {
+          "SET_CONTEXT_DMA_TMO_LUT": null,
+          "SET_OFFSET_TMO_LUT": {
+            "kind": "V",
+            "values": [
+              1324
+            ]
+          },
+          "SET_SURFACE_ADDRESS_HI_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT_ENABLE": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT_ENABLE_DISABLE": null,
+          "SET_TMO_CONTROL": null
+        },
+        "C67E": {
+          "SET_CONTEXT_DMA_TMO_LUT": null,
+          "SET_OFFSET_TMO_LUT": {
+            "kind": "V",
+            "values": [
+              1324
+            ]
+          },
+          "SET_SURFACE_ADDRESS_HI_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT_ENABLE": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT_ENABLE_DISABLE": null,
+          "SET_TMO_CONTROL": null
+        },
+        "C97E": {
+          "SET_CONTEXT_DMA_TMO_LUT": null,
+          "SET_OFFSET_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_HI_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT_ENABLE": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT_ENABLE_DISABLE": null,
+          "SET_TMO_CONTROL": null
+        },
+        "CA7E": {
+          "SET_CONTEXT_DMA_TMO_LUT": null,
+          "SET_OFFSET_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_HI_TMO_LUT": {
+            "kind": "V",
+            "values": [
+              1680
+            ]
+          },
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT": {
+            "kind": "V",
+            "values": [
+              1684
+            ]
+          },
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT_ENABLE": {
+            "kind": "F",
+            "values": [
+              0,
+              0
+            ]
+          },
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT_ENABLE_DISABLE": {
+            "kind": "V",
+            "values": [
+              0
+            ]
+          },
+          "SET_TMO_CONTROL": null
+        }
+      },
+      "path": "crates/kf-disp/data/classes-580.159.04.tsv",
+      "sha256": "b37cbfffc912406623239d0e37324a9c586a28523eb90c3cc8648de810b257b0"
+    },
+    {
+      "capabilities": {
+        "C373": {
+          "PRECOMP_WIN_PIPE_HDR_CAPA": null,
+          "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT": null,
+          "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT_TRUE": null,
+          "PRECOMP_WIN_PIPE_HDR_CAPD": null,
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_DIRECT": null,
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_LOGNR": null,
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_LOGSZ": null,
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_SFCLOAD": null
+        },
+        "C573": {
+          "PRECOMP_WIN_PIPE_HDR_CAPA": {
+            "kind": "A",
+            "values": [
+              1920,
+              32
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT": {
+            "kind": "F",
+            "values": [
+              20,
+              20
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT_TRUE": {
+            "kind": "V",
+            "values": [
+              1
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD": {
+            "kind": "A",
+            "values": [
+              1932,
+              32
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_DIRECT": {
+            "kind": "F",
+            "values": [
+              9,
+              9
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_LOGNR": {
+            "kind": "F",
+            "values": [
+              6,
+              4
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_LOGSZ": {
+            "kind": "F",
+            "values": [
+              3,
+              0
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_SFCLOAD": {
+            "kind": "F",
+            "values": [
+              8,
+              8
+            ]
+          }
+        },
+        "C673": {
+          "PRECOMP_WIN_PIPE_HDR_CAPA": {
+            "kind": "A",
+            "values": [
+              1920,
+              32
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT": {
+            "kind": "F",
+            "values": [
+              20,
+              20
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT_TRUE": {
+            "kind": "V",
+            "values": [
+              1
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD": {
+            "kind": "A",
+            "values": [
+              1932,
+              32
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_DIRECT": {
+            "kind": "F",
+            "values": [
+              9,
+              9
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_LOGNR": {
+            "kind": "F",
+            "values": [
+              6,
+              4
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_LOGSZ": {
+            "kind": "F",
+            "values": [
+              3,
+              0
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_SFCLOAD": {
+            "kind": "F",
+            "values": [
+              8,
+              8
+            ]
+          }
+        },
+        "C773": {
+          "PRECOMP_WIN_PIPE_HDR_CAPA": {
+            "kind": "A",
+            "values": [
+              1920,
+              32
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT": {
+            "kind": "F",
+            "values": [
+              20,
+              20
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT_TRUE": {
+            "kind": "V",
+            "values": [
+              1
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD": {
+            "kind": "A",
+            "values": [
+              1932,
+              32
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_DIRECT": {
+            "kind": "F",
+            "values": [
+              9,
+              9
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_LOGNR": {
+            "kind": "F",
+            "values": [
+              6,
+              4
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_LOGSZ": {
+            "kind": "F",
+            "values": [
+              3,
+              0
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_SFCLOAD": {
+            "kind": "F",
+            "values": [
+              8,
+              8
+            ]
+          }
+        },
+        "CA73": {
+          "PRECOMP_WIN_PIPE_HDR_CAPA": {
+            "kind": "A",
+            "values": [
+              1920,
+              32
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT": {
+            "kind": "F",
+            "values": [
+              20,
+              20
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPA_TMO_PRESENT_TRUE": {
+            "kind": "V",
+            "values": [
+              1
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD": {
+            "kind": "A",
+            "values": [
+              1932,
+              32
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_DIRECT": {
+            "kind": "F",
+            "values": [
+              9,
+              9
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_LOGNR": {
+            "kind": "F",
+            "values": [
+              6,
+              4
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_LOGSZ": {
+            "kind": "F",
+            "values": [
+              3,
+              0
+            ]
+          },
+          "PRECOMP_WIN_PIPE_HDR_CAPD_TMO_SFCLOAD": {
+            "kind": "F",
+            "values": [
+              8,
+              8
+            ]
+          }
+        }
+      },
+      "methods": {
+        "C37E": {
+          "SET_CONTEXT_DMA_TMO_LUT": null,
+          "SET_OFFSET_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_HI_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT_ENABLE": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT_ENABLE_DISABLE": null,
+          "SET_TMO_CONTROL": null
+        },
+        "C57E": {
+          "SET_CONTEXT_DMA_TMO_LUT": null,
+          "SET_OFFSET_TMO_LUT": {
+            "kind": "V",
+            "values": [
+              1324
+            ]
+          },
+          "SET_SURFACE_ADDRESS_HI_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT_ENABLE": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT_ENABLE_DISABLE": null,
+          "SET_TMO_CONTROL": null
+        },
+        "C67E": {
+          "SET_CONTEXT_DMA_TMO_LUT": null,
+          "SET_OFFSET_TMO_LUT": {
+            "kind": "V",
+            "values": [
+              1324
+            ]
+          },
+          "SET_SURFACE_ADDRESS_HI_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT_ENABLE": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT_ENABLE_DISABLE": null,
+          "SET_TMO_CONTROL": null
+        },
+        "C97E": {
+          "SET_CONTEXT_DMA_TMO_LUT": null,
+          "SET_OFFSET_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_HI_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT_ENABLE": null,
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT_ENABLE_DISABLE": null,
+          "SET_TMO_CONTROL": null
+        },
+        "CA7E": {
+          "SET_CONTEXT_DMA_TMO_LUT": null,
+          "SET_OFFSET_TMO_LUT": null,
+          "SET_SURFACE_ADDRESS_HI_TMO_LUT": {
+            "kind": "V",
+            "values": [
+              1680
+            ]
+          },
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT": {
+            "kind": "V",
+            "values": [
+              1684
+            ]
+          },
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT_ENABLE": {
+            "kind": "F",
+            "values": [
+              0,
+              0
+            ]
+          },
+          "SET_SURFACE_ADDRESS_LO_TMO_LUT_ENABLE_DISABLE": {
+            "kind": "V",
+            "values": [
+              0
+            ]
+          },
+          "SET_TMO_CONTROL": null
+        }
+      },
+      "path": "crates/kf-disp/data/classes-580.65.06.tsv",
+      "sha256": "0f434f1b996054f1832fd15087e26881d8565df75c641806a7d98cbc39cb5449"
+    }
+  ]
+}

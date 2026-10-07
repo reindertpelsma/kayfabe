@@ -1,0 +1,5 @@
+=== UnifiedMemoryPerf side=guest start=2026-10-04T12:18:44+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/UnifiedMemoryPerf
+GPU Device 0: "Ampere" with compute capability 8.6
+
+Running ...CUDA error at matrixMultiplyPerf.cu:435 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(streamToRunOn)" 
+=== end rc=1 secs=6 2026-10-04T12:18:50+00:00

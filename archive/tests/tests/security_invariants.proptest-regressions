@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 26f6951afca76487b8de5b7a3967941a96d07a62244565d326e75a08700a686d # shrinks to ops = [Free { idx: 1 }, Alloc { parent_idx: 5, class: ClassId(61456) }]
+cc a71921e19209a67f69b0b020616eac4b012068670558326166bced16bcd919fc # shrinks to ops = [Free { idx: 5 }, Alloc { parent_idx: 0, class: ClassId(61456) }, Alloc { parent_idx: 0, class: ClassId(61456) }, Alloc { parent_idx: 0, class: ClassId(61456) }, Alloc { parent_idx: 0, class: ClassId(61456) }, Alloc { parent_idx: 0, class: ClassId(61456) }, Alloc { parent_idx: 0, class: ClassId(61456) }, Alloc { parent_idx: 0, class: ClassId(61456) }, Dup { src_idx: 19, into_c2: false }, Free { idx: 9 }]
+cc c0bc01788b6c36a1e8e6e778537f26a417e07603d5b4dace8d62350bde231ccc # shrinks to hostile = [SetPageDir { client: HClient(40961), vaspace: HObject(1543503872), pdb: Pdb(720896) }, Alloc { client: HClient(40961), parent: HObject(1543503872), handle: HObject(1543503876), class: ClassId(61456), facts: AllocFacts { h_vaspace: None, h_ctx_share: None, userd_flags: 11525, mem_phys: Some(3735879680) } }, SetPageDir { client: HClient(40961), vaspace: HObject(1543503876), pdb: Pdb(10485760) }, Dup { src: NodeKey { client: HClient(40961), handle: HObject(1543503876) }, dst: NodeKey { client: HClient(40961), handle: HObject(1543503872) } }]

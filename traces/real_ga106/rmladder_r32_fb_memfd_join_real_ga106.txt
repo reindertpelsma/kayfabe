@@ -1,0 +1,12 @@
+# R32 --fb-memfd-join [measured 2026-08-11T16:11:44+00:00, bench vh, RTX 3060 GA106, host driver 580.159.04]
+# tree/binary stamp: 62ab8755245b3c320de8365b08e3da4f1031292a
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00f37
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=62ab8755245b3c320de8365b08e3da4f1031292a
+info  R32 fb-join probe  = GPU 0, euid 0 — ONE sealed memfd mapped TWICE; mapping I described to RM at 0x0000000301400000; every byte written and read through mapping S
+ok    R32 cpu join       = mapping S read 0x00000000 before and 0x1010face after mapping I wrote it — ONE memory, measured with no GPU in the path
+ok    R32 forward (J1)   = placed at 0x0000000301400000 AS ASKED, CE retired (sem 0x00000001), dst[0] 0xa112fffe -> 0x5eed0001, and 65536 of 65536 bytes compared EQUAL — the GPU read what the OTHER mapping wrote
+ok    R32 reverse (J2)   = CE retired (sem 0x00000002); the memfd held 0x5eed0001 through S immediately before the copy and 65536 of 65536 bytes read back through S EQUAL afterwards — ★ the GPU WROTE and the OTHER mapping READ IT. This is the completion-semaphore direction.
+done — fb-memfd-join probe only
+PROBE_RC=0

@@ -1,0 +1,25 @@
+=== W320 CORR START 2026-08-14T18:12:44+00:00 pid=1635627 HEAD=468e29def8e6b855bd914fdde76ec1a7f1d9cd21
+=== rep 1: cup3 + R33 arm1, gated 2026-08-14T18:12:44+00:00
+=== rep 1 RC=0 2026-08-14T18:15:44+00:00
+    [r1] W313 INERT-GATE VERDICT = INERT-ON-BOTH-PLANES
+=== rep 2: cup3 + R33 arm1, gated 2026-08-14T18:15:44+00:00
+=== rep 2 RC=0 2026-08-14T18:18:17+00:00
+    [r2] W313 INERT-GATE VERDICT = INERT-ON-BOTH-PLANES
+=== rep 3: cup3 + R33 arm1, gated 2026-08-14T18:18:17+00:00
+=== rep 3 RC=0 2026-08-14T18:20:50+00:00
+    [r3] W313 INERT-GATE VERDICT = INERT-ON-BOTH-PLANES
+=== cup8 2048 rep 1 2026-08-14T18:20:50+00:00
+=== cup8 rep 1 RC=0 2026-08-14T18:22:32+00:00
+    [q1] N=2048 iters=6 first_ms=874.567 med_ms=772.338 p90_ms=780.881 min_ms=744.956 max_ms=780.881 gflops=22.244 batch_per_launch_ms=778.711 batch_gflops=22.062 h2d_ms=247.266 d2h_med_ms=65.246 submit_med_ms=4.046 sync_med_ms=768.527 sync_cpu_med_ms=768.394 sync_offcpu_med_ms=0.133 sync_nvcsw_med=0.0 submit_cpu_med_ms=4.052 bad=0 maxerr=0
+=== cup8 2048 rep 2 2026-08-14T18:22:32+00:00
+=== cup8 rep 2 RC=0 2026-08-14T18:24:15+00:00
+    [q2] N=2048 iters=6 first_ms=1110.585 med_ms=946.731 p90_ms=962.921 min_ms=944.029 max_ms=962.921 gflops=18.147 batch_per_launch_ms=943.680 batch_gflops=18.205 h2d_ms=212.179 d2h_med_ms=68.265 submit_med_ms=4.046 sync_med_ms=942.685 sync_cpu_med_ms=942.098 sync_offcpu_med_ms=0.117 sync_nvcsw_med=0.0 submit_cpu_med_ms=4.052 bad=0 maxerr=0
+=== cup8 2048 rep 3 2026-08-14T18:24:15+00:00
+=== cup8 rep 3 RC=0 2026-08-14T18:25:57+00:00
+    [q3] N=2048 iters=6 first_ms=1141.866 med_ms=939.938 p90_ms=983.377 min_ms=854.960 max_ms=983.377 gflops=18.278 batch_per_launch_ms=967.357 batch_gflops=17.760 h2d_ms=405.575 d2h_med_ms=69.515 submit_med_ms=4.201 sync_med_ms=935.737 sync_cpu_med_ms=935.313 sync_offcpu_med_ms=0.068 sync_nvcsw_med=0.0 submit_cpu_med_ms=4.225 bad=0 maxerr=0
+=== NEGCTRL (BENCH_NOLAUNCH=1, first and only context of its own boot) 2026-08-14T18:25:57+00:00
+=== negctrl RC=0 2026-08-14T18:27:20+00:00
+    GUEST_NEGCTRL_SWEEP_ROWS=4
+    GUEST_NEGCTRL_SWEEP_ROWS_WITH_BAD_0=0
+    GUEST_NEGCTRL_TOTAL_BAD=524288
+=== W320 CORR EXIT rc=0 2026-08-14T18:27:20+00:00

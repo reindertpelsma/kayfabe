@@ -1,0 +1,6 @@
+kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only
+kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 1), (20c, 1)]: the background probe was refused or changed the answer — zero-probe bytes only
+2026-09-28T02:04:00.249008Z qemu-system-x86_64: -device kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,id=kf0: kf3: realize refused: host facts: 3 host fact(s) refused by name:
+  memory_system: depends on `gr_info`, which was refused
+  gr_static: depends on `gr_info`, which was refused
+  gr_info: reply not servable: Unservable { cmd: 545264168, why: "a GR info entry RM's own readers require non-zero is zero" }

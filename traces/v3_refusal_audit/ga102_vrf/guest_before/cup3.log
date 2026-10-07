@@ -1,0 +1,23 @@
+=== cup3 side=guest start=2026-09-26T13:01:27+00:00 cmd: /opt/rf/cup3
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+ok   cuDeviceGet(&d,0)
+ok   cuCtxCreate(&ctx,0,d)
+CTX OK
+ok   cuModuleLoadData(&mod,PTX)
+MODULE OK
+ok   cuModuleGetFunction(&fn,mod,"k")
+FUNC OK
+ok   cuMemAlloc(&d_in,4)
+ok   cuMemAlloc(&d_out,4)
+MEMALLOC in=0x7483ee200000 out=0x7483ee200200
+ok   cuMemcpyHtoD(d_in,&hv,4)
+ok   cuMemsetD32(d_out,0,1)
+ok   cuLaunchKernel(fn, 1,1,1, 1,1,1, 0, 0, args, 0)
+LAUNCH OK
+ok   cuCtxSynchronize()
+SYNC OK
+ok   cuMemcpyDtoH(&rv,d_out,4)
+KERNEL rv=43 want=43 -> PASS
+DONE
+=== end rc=0 secs=2 2026-09-26T13:01:29+00:00

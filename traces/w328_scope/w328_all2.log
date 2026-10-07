@@ -1,0 +1,5 @@
+=== W328 ALL2 START 2026-08-14T22:21:59+00:00 tree=/workspace/kayfabe_w328
+=== arm G (gate + scope + batch, cup3) done 2026-08-14T22:31:05+00:00
+=== arm GE (gate + scope + batch, cup8) done 2026-08-14T22:39:55+00:00
+=== arm GX (gate + scope + batch, R33 arm 1) done 2026-08-14T22:46:22+00:00
+=== W328 ALL2 TERMINATOR rc=0 2026-08-14T22:46:22+00:00

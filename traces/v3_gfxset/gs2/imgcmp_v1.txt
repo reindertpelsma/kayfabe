@@ -1,0 +1,2 @@
+GSET_IMG item=blender_cycles_cuda key=out.png floor=99.325248dB guest=96.015316dB verdict=DIFF
+GSET_IMG item=blender_cycles_optix key=out.png floor=100.786528dB guest=99.994716dB verdict=MATCH

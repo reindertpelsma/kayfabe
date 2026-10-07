@@ -1,0 +1,34 @@
+PROVISION_START 2026-10-03T23:04:30+00:00
+PROVISION_REPO=/root/kayfabe branch=v3-windows rev=494bfeaa
+HEAD=494bfeaa branch=v3-windows
+CARGO_RC=0
+PROVISION_DONE rc=0 2026-10-03T23:07:33+00:00
+DRIVER_SWAP_START 2026-10-03T23:07:33+00:00
+before: NVRM version: NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 14:22:51 UTC 2025
+held packages: libnvidia-cfg1-575 libnvidia-common-575 libnvidia-compute-575 libnvidia-decode-575 libnvidia-encode-575 libnvidia-extra-575 libnvidia-fbc1-575 libnvidia-gl-575 nvidia-driver-575 
+purge_rc=0  nvidia driver packages remaining: 0  ⇒ MUST be 0
+KERNEL_CC=x86_64-linux-gnu-gcc-12 (/usr/bin/x86_64-linux-gnu-gcc-12) for kernel 6.8.0-59-generic
+after: NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+OPEN_MODULE=yes
+VERSION_MATCH=yes (580.159.04)
+DRIVER_SWAP_DONE rc=0 2026-10-03T23:12:22+00:00
+[2026-10-03T23:12:49+00:00] BENCH_TREE_START
+[2026-10-03T23:15:41+00:00] TRACK_A done
+[2026-10-03T23:18:06+00:00] TRACK_B done
+[2026-10-03T23:15:41+00:00] A: KF3_BUILT /workspace/bench/kf3-bins/494bfeaa/qemu-system-x86_64 rev=494bfeaa mtime=2026-10-03 23:15:41.416524137 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+KF3_BUILT /workspace/bench/kf3-bins/494bfeaa/qemu-system-x86_64 rev=494bfeaa mtime=2026-10-03 23:15:41.416524137 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+[2026-10-03T23:17:46+00:00] B2: guest cuda.h CUresult x601  ⇒ MUST be >= 500
+[2026-10-03T23:17:46+00:00] B2: guest modinfo = version:        580.159.04 license:        Dual MIT/GPL vermagic:       6.8.0-142-generic SMP preempt mod_unload modversions  
+[2026-10-03T23:17:46+00:00] B2: guest driver VERIFIED on content
+[2026-10-03T23:18:30+00:00] BENCH_TREE_DONE
+== linux 580.65.06 staging
+JOB_START 2026-10-03T23:36:26+00:00
+STAGE_DRIVER_RC=0
+[2026-10-03T23:37:49+00:00] stage 580.65.06: download https://us.download.nvidia.com/XFree86/Linux-x86_64/580.65.06/NVIDIA-Linux-x86_64-580.65.06.run
+[2026-10-03T23:38:08+00:00] stage 580.65.06: firmware ✔ gsp_ga10x.bin gsp_tu10x.bin 
+[2026-10-03T23:38:10+00:00] stage 580.65.06: STAGED ✔ /workspace/drivers/580.65.06
+STAGE_FAT_RC=0
+[2026-10-03T23:41:42+00:00] fat 580.65.06: guest modinfo=580.65.06 libcuda=580.65.06
+[2026-10-03T23:42:24+00:00] fat 580.65.06: check boot: ssh + settled in 35s, modinfo=580.65.06
+[2026-10-03T23:42:28+00:00] fat 580.65.06: STAGED ✔ /workspace/bench/guest-580.65.06.qcow2
+JOB_EXIT 2026-10-03T23:42:28+00:00

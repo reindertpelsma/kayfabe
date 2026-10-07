@@ -1,0 +1,96 @@
+diff --git a/src/qemu/nvkvm_gpu_emul.c b/src/qemu/nvkvm_gpu_emul.c
+index 2f3503a..083e689 100644
+--- a/src/qemu/nvkvm_gpu_emul.c
++++ b/src/qemu/nvkvm_gpu_emul.c
+@@ -947,6 +947,7 @@ static void nvkvm_timeshare_window_dump(NvkvmGpuEmul *s, const char *why)
+ static bool nvkvm_m2_promote_gpu_only(NvkvmGpuEmul *s, int oi);
+ /* M5.10 PERF: GR PT-page set membership — fwd-decl (nvkvm_fb_write, below, is the dirty hook). */
+ static bool nvkvm_m2_gr_pt_contains(NvkvmGpuEmul *s, uint64_t addr);
++static inline void nvkvm_m2_gr_pt_touch(NvkvmGpuEmul *s, uint64_t fb_addr); /* #13 fwd-decl */
+ 
+ /* M5.11c PERF: (re)build the sorted-by-base index over m2_gpga[]. Insertion sort — n is small
+  * (~430) and rebuilds happen only when an object is allocated (load-time), never during steady
+@@ -1160,11 +1161,7 @@ static void nvkvm_fb_write(NvkvmGpuEmul *s, uint64_t fb_addr, uint64_t val,
+     /* M5.10 PERF: if this write lands on a tracked GR-VAS page-table page, a mapping changed ->
+      * flag a re-sweep for the next doorbell. The lo/hi range rejects the common data-plane write
+      * in two compares; the hash confirms. Once dirty, skip until the next sweep consumes it. */
+-    if (s->m2_gr_pt_n && !s->m2_gr_vas_dirty &&
+-        fb_addr >= s->m2_gr_pt_lo && fb_addr <= s->m2_gr_pt_hi + 0xfffull &&
+-        nvkvm_m2_gr_pt_contains(s, fb_addr)) {
+-        s->m2_gr_vas_dirty = true;
+-    }
++    nvkvm_m2_gr_pt_touch(s, fb_addr);
+     /* M5.31 DIAG: log guest writes into the GR-VAS page-table region the cuCtxCreate
+      * poll re-walks (the stuck small-page PDE @0x2efbc5000 + its PTE table @0x2efbc6xxx).
+      * Tells us whether the CPU-RM WRITES these (per gmmu_walk.c memmgrMemWrite -> a
+@@ -4144,6 +4141,23 @@ static void nvkvm_m2_gr_pt_reset(NvkvmGpuEmul *s)
+     s->m2_gr_pt_n = 0; s->m2_gr_pt_last = 0;
+     s->m2_gr_pt_lo = ~0ull; s->m2_gr_pt_hi = 0;
+ }
++/* #13 (2026-07-05): a write landing on a tracked GR-VAS page-table page means a mapping
++ * changed -> arm a re-sweep for the next doorbell (identical intent to the nvkvm_fb_write
++ * hook, factored out so the CE bulk-copy data path can call it too).  The lo/hi range
++ * rejects the common data write in two compares before the hash confirms.  The guest RM
++ * populates page tables by CE COPY (bulk memcpy fb->fb, which BYPASSES nvkvm_fb_write), so
++ * without this a fresh mapping written via CE never sets the dirty flag, the gated re-sweep
++ * skips it, and the newly-mapped buffer page is left unbacked in the host GR VAS -> the host
++ * GR engine FAULT_PDEs on it (#13: cup8_iter N=1536 iter-2 matmul dst one 2 MiB page past the
++ * last-backed gpga).  Marking dirty here makes the launch doorbell re-sweep and back it. */
++static inline void nvkvm_m2_gr_pt_touch(NvkvmGpuEmul *s, uint64_t fb_addr)
++{
++    if (s->m2_gr_pt_n && !s->m2_gr_vas_dirty &&
++        fb_addr >= s->m2_gr_pt_lo && fb_addr <= s->m2_gr_pt_hi + 0xfffull &&
++        nvkvm_m2_gr_pt_contains(s, fb_addr)) {
++        s->m2_gr_vas_dirty = true;
++    }
++}
+ 
+ /* Read 8 bytes from a page-table entry in FB (vidmem) or sysmem (GPA). */
+ static uint64_t nvkvm_pt_rd64(NvkvmGpuEmul *s, uint64_t addr, bool sys)
+@@ -5121,6 +5135,22 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+                     uint32_t sem_type = (d >> 3) & 0x3; /* SEMAPHORE_TYPE [4:3], !=0 => release */
+                     uint64_t bytes = (uint64_t)llen * lcount;
+                     if (bytes > (16u << 20)) bytes = 16u << 20;  /* safety cap */
++                    /* #13 (2026-07-05): a KERNEL-CE / UVM CeUtils client (neither a userspace
++                     * CE-copy client nor the GR compute client) is the guest RM's page-table
++                     * populator + scrubber.  Its CE op means the COMPUTE VAS mapping just
++                     * changed (a fresh cuMemAlloc leaf mapped, or a freed one scrubbed).  Arm a
++                     * re-sweep so the NEXT doorbell re-walks and backs the newly-mapped leaves
++                     * into the host GR VAS BEFORE the GR channel's CE touches them.  Without
++                     * this, the dirty flag (set only on writes to ALREADY-tracked PT pages) miss
++                     * a mapping whose PTE lands on a PT page allocated since the last sweep, so
++                     * the last buffer leaf is left unbacked and the host GR CE FAULT_PDEs on it
++                     * one 2 MiB page past the last-backed gpga (#13: cup8_iter N=1536 iter-2).
++                     * Idle in steady-state compute (no allocation => CeUtils quiet) => no LLM
++                     * perf regression; fires during the alloc/free churn where a sweep is due. */
++                    if (!nvkvm_m2_is_user_ce(s, s->chan_client) &&
++                        s->chan_client != s->m2_gr_client) {
++                        s->m2_gr_vas_dirty = true;
++                    }
+                     /* M5.60 (Phase A — user-CE dst real-backing, the cup5/LLM-hang fix
+                      * prerequisite): the copy DEST must be a REAL host vidmem object
+                      * mapped in the GR fvas (not a fake fb_page) — both so the CPU copy
+@@ -5240,6 +5270,10 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+                              * hangs the guest's sync.  Skip the span (it's one 4 KiB page). */
+                             if (!sy && nvkvm_fb_is_live_userd(s, p)) { b += span; continue; }
+                             uint8_t *dhp = sy ? NULL : nvkvm_fb_host_ptr(s, p, true);  /* M5.12 PERF */
++                            /* #13: a CE fill onto a tracked GR PT page = a mapping change the
++                             * fb_write hook can't see (this path writes dhp directly) -> arm a
++                             * re-sweep so the launch doorbell backs the newly-mapped buffer. */
++                            if (!sy) { nvkvm_m2_gr_pt_touch(s, p); }
+                             if (!sy && dhp && remapA == 0) {          /* zero-fill: bulk */
+                                 memset(dhp, 0, span);
+                             } else if (!sy && dhp) {                  /* pattern-fill: per-word into ptr */
+@@ -5282,6 +5316,12 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+                             }
+                             uint8_t *shp = ssy ? NULL : nvkvm_fb_host_ptr(s, sp, false);
+                             uint8_t *dhp = dsy ? NULL : nvkvm_fb_host_ptr(s, dp, true);
++                            /* #13: the guest RM populates page tables by CE COPY into vidmem PT
++                             * pages; that write bypasses the nvkvm_fb_write dirty hook.  If this
++                             * dst is a tracked GR PT page, a mapping changed -> arm a re-sweep so
++                             * the next (launch) doorbell backs the newly-mapped buffer into the
++                             * host GR VAS before the host engine touches it (root cause of #13). */
++                            if (!dsy) { nvkvm_m2_gr_pt_touch(s, dp); }
+                             if (!ssy && !dsy && dhp) {                    /* fb -> fb: bulk */
+                                 if (shp) { memcpy(dhp, shp, span); }
+                                 else     { memset(dhp, 0, span); }        /* sparse-zero src page */

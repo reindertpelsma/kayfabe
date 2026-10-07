@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+# appcmp.py <base_dir> <c1_dir> <c1b_dir> — app by app, three runs: verdicts from {host,guest,guest_isolated}.res
+import sys, re, os
+def load(p):
+    d = {}
+    if not os.path.exists(p): return d
+    for l in open(p, errors="replace"):
+        m = re.match(r"APPRES side=\S+ app=(\S+) verdict=(\S+)", l)
+        if m: d[m.group(1)] = m.group(2)
+    return d
+PROBES = {"stream_default", "stream_created", "stream_nonblocking", "stream_perthread", "stream_two", "stream_created2nd"}
+runs = sys.argv[1:4]
+H = [load(os.path.join(r, "host.res")) for r in runs]
+G = [load(os.path.join(r, "guest.res")) for r in runs]
+I = [load(os.path.join(r, "guest_isolated.res")) for r in runs]
+order = []
+for l in open(os.path.join(runs[0], "host.res")):
+    m = re.match(r"APPRES side=\S+ app=(\S+)", l)
+    if m and m.group(1) not in order: order.append(m.group(1))
+for d in H + G:
+    for a in d:
+        if a not in order: order.append(a)
+print("# app by app: base = kf3 2830988f (traces/v3_cdp/app_matrix_2830988f/), c1 = kf3 8a682f1b (traces/v3_candidates/cand1_20261003/apps/), c1b = kf3 0ac157b2 (this run)")
+print("# columns: app | kind | host base/c1/c1b | guest batched base/c1/c1b | guest alone base/c1/c1b | change vs base | change vs c1")
+diff_b = diff_c = reg_b = reg_c = 0
+for a in order:
+    kind = "probe" if a in PROBES else "app"
+    h = [x.get(a, "-") for x in H]; g = [x.get(a, "-") for x in G]; i = [x.get(a, "-") for x in I]
+    cb = "same" if (h[2], g[2], i[2]) == (h[0], g[0], i[0]) else "DIFF"
+    cc = "same" if (h[2], g[2], i[2]) == (h[1], g[1], i[1]) else "DIFF"
+    diff_b += cb == "DIFF"; diff_c += cc == "DIFF"
+    reg_b += (g[0] == "PASS" and g[2] != "PASS") or (h[0] == "PASS" and h[2] != "PASS")
+    reg_c += (g[1] == "PASS" and g[2] != "PASS") or (h[1] == "PASS" and h[2] != "PASS")
+    print(f"{a} | {kind} | {'/'.join(h)} | {'/'.join(g)} | {'/'.join(i)} | {cb} | {cc}")
+def score(d, kind):
+    xs = [a for a in order if (a in PROBES) == (kind == "probe") and a in d]
+    return f"{sum(d[a] == 'PASS' for a in xs)}/{len(xs)}"
+for n, k in zip(("base 2830988f", "c1 8a682f1b", "c1b 0ac157b2"), range(3)):
+    print(f"# {n}: host {sum(v == 'PASS' for v in H[k].values())}/{len(H[k])}; guest batched apps {score(G[k], 'app')}, probes {score(G[k], 'probe')}; alone re-runs {sum(v == 'PASS' for v in I[k].values())}/{len(I[k])} pass")
+print(f"# rows that differ from base: {diff_b}; from c1: {diff_c}")
+print(f"# rows that PASSED at base and do not pass here: {reg_b}; that PASSED at c1 and do not pass here: {reg_c}")

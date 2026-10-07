@@ -1,0 +1,5 @@
+[ 2466.434905] x86/PAT: kf3-vamgr:99003 freeing invalid memtype [mem 0x800910000-0x800b0ffff]
+[ 2466.435176] x86/PAT: kf3-vamgr:99003 freeing invalid memtype [mem 0x800b10000-0x800d0ffff]
+[ 2466.435304] x86/PAT: kf3-vamgr:99003 freeing invalid memtype [mem 0x800d10000-0x800f0ffff]
+[ 2470.612375] x86/PAT: kf3-vamgr:99003 freeing invalid memtype [mem 0x800910000-0x800b0ffff]
+[ 2470.612593] x86/PAT: kf3-vamgr:99003 freeing invalid memtype [mem 0x800b10000-0x800d0ffff]

@@ -1,0 +1,76 @@
+=== boot_capture tag=d1 at 2026-10-03T17:40:39+00:00 ===
+=== source revision: e2c6e1d5 ===
+=== qemu binary: -rwxr-xr-x 1 root root 89143296 Oct  3 17:39 /workspace/bench/kf3-bins/e2c6e1d5/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=82f88b7bb676717a
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Sat Oct  3 17:40:47 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3060        Off |   00000000:00:02.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Oct  3 17:40 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Oct  3 17:40 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Oct  3 17:40 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Oct  3 17:40 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Oct  3 17:40 .
+drwxr-xr-x 19 root root   4040 Oct  3 17:40 ..
+cr--------  1 root root 240, 1 Oct  3 17:40 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Oct  3 17:40 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/display/unload_hook.sh at 2026-10-03T17:40:49+00:00 ===
+DISPLAY_B5_CONSOLE=yes
+DISPLAY_B5C_MODULES nvidia_uvm nvidia  fb=[0 simpledrmdrmfb ]
+DISPLAY_B5C_CUDA_ONLY_CONSOLE up=33.08 before=[1920x1080 nonblack=0/1000 md5=a03e10ab9b6f] after=[1920x1080 nonblack=0/1000 md5=a03e10ab9b6f] changed=no
+DISPLAY_B5C2_RM_HELD up=49.08 holder=1786 before=[1920x1080 nonblack=0/1000 md5=a03e10ab9b6f] after=[1920x1080 nonblack=2/1000 md5=03456db0f781] changed=yes
+DISPLAY_B5C3_AFTER_SECOND_TEARDOWN up=63.44 before=[1920x1080 nonblack=2/1000 md5=03456db0f781] after=[1920x1080 nonblack=2/1000 md5=03456db0f781] changed=no
+DISPLAY_B5A_DRM_MODESET_PARAM not-loaded xorg_conf=ls: cannot access '/etc/X11/xorg.conf': No such file or directory /etc/X11/xorg.conf.d/: 
+DISPLAY_B5A_X up=no start_up=71.71 rc=0  shot=[1920x1080 nonblack=37/1000 md5=9257412ba2e1] driver=[	(WW) warning, (EE) error, (NI) not implemented, (??) unknown.|[    74.277] (II) LoadModule: "nvidia"|[    74.283] (EE) Failed to load module "nouveau" (module does not exist, 0)|[    74.283] (II) LoadModule: "modesetting"|[    74.284] (II) LoadModule: "fbdev"|[    74.284] (EE) Failed to load module "fbdev" (module does not exist, 0)|[    74.284] (II) LoadModule: "vesa"|[    74.284] (EE) Failed to load module "vesa" (module does not exist, 0)|[    75.754] (II) LoadModule: "nvidia"|[    75.754] (EE) Failed to load module "nouveau" (module does not exist, 0)|[    75.754] (II) LoadModule: "modesetting"|[    75.755] (II) LoadModule: "fbdev"|] modules=[nvidia_uvm nvidia ]
+DISPLAY_B5A_AFTER_X stop_up=198.41 rc=0  shot=[1920x1080 nonblack=37/1000 md5=9257412ba2e1] changed_from_x=no (expected: the text console)
+DISPLAY_B5A_CONSOLE_AFTER_X up=206.15 before=[1920x1080 nonblack=37/1000 md5=9257412ba2e1] after=[1920x1080 nonblack=37/1000 md5=9257412ba2e1] changed=no
+DISPLAY_B5A2_X up=no start_up=214.08 rc=0  shot=[1920x1080 nonblack=37/1000 md5=c93d1f856c84] driver=[	(WW) warning, (EE) error, (NI) not implemented, (??) unknown.|[    74.277] (II) LoadModule: "nvidia"|[    74.283] (EE) Failed to load module "nouveau" (module does not exist, 0)|[    74.283] (II) LoadModule: "modesetting"|[    74.284] (II) LoadModule: "fbdev"|[    74.284] (EE) Failed to load module "fbdev" (module does not exist, 0)|[    74.284] (II) LoadModule: "vesa"|[    74.284] (EE) Failed to load module "vesa" (module does not exist, 0)|[    75.754] (II) LoadModule: "nvidia"|[    75.754] (EE) Failed to load module "nouveau" (module does not exist, 0)|[    75.754] (II) LoadModule: "modesetting"|[    75.755] (II) LoadModule: "fbdev"|] modules=[nvidia_uvm nvidia ]
+DISPLAY_B5A2_AFTER_X stop_up=339.06 rc=0  shot=[1920x1080 nonblack=37/1000 md5=c93d1f856c84] changed_from_x=no (expected: the text console)
+DISPLAY_B5A2_CONSOLE_AFTER_X up=346.47 before=[1920x1080 nonblack=37/1000 md5=c93d1f856c84] after=[1920x1080 nonblack=37/1000 md5=c93d1f856c84] changed=no
+DISPLAY_B5B_FBCON up=364.90 rc=0  fb=[0 nvidia-drmdrmfb ] shot=[1920x1080 nonblack=3/1000 md5=9d827a8c0c73]
+DISPLAY_B5B_AFTER_RMMOD up=365.78 unbound 366.23 2026.66 rc=0 0  shot=[1920x1080 nonblack=3/1000 md5=9d827a8c0c73] modules=[nvidia_modeset nvidia_uvm nvidia ]
+DISPLAY_B5_DEVICE_LINES 82
+DISPLAY_B5_HOOK_DONE
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 28 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=130
+GUEST_DMESG_AFTER_NVRM=109
+GUEST_DMESG_WORKLOAD_DELTA=102
+=== HOST dmesg delta for this boot (watermark 770 → 770) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

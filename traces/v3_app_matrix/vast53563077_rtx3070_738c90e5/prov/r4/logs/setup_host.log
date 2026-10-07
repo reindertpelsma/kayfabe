@@ -1,0 +1,11 @@
+SETUP_apt=ok
+SETUP_torch=ok
+SETUP_pylibs=ok
+IMPORT_OK 2.6.0+cu124 0.21.0+cu124 4.46.3 13.3.0
+HF_MODEL_CACHED
+SETUP_gguf=ok
+Blender 4.5.0
+SETUP_blender=ok
+SETUP_geekbench=ok
+/dev/root       194G   54G  141G  28% /
+SETUP_SIDE_DONE

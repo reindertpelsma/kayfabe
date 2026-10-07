@@ -1,0 +1,1 @@
+KFDISP_FAIL=open /dev/dri/card0: No such file or directory

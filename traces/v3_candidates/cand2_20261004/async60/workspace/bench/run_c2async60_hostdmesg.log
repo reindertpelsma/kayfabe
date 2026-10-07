@@ -1,0 +1,6 @@
+[ 5640.682276] x86/PAT: kf3-vamgr:117494 freeing invalid memtype [mem 0x8019c0000-0x801a4ffff]
+[ 5640.682544] x86/PAT: kf3-vamgr:117494 freeing invalid memtype [mem 0x801a50000-0x801c4ffff]
+[ 5640.688796] x86/PAT: kf3-vamgr:117494 freeing invalid memtype [mem 0x8021b0000-0x80224ffff]
+[ 5640.689083] x86/PAT: kf3-vamgr:117494 freeing invalid memtype [mem 0x802250000-0x80244ffff]
+[ 5648.030827] x86/PAT: kf3-vamgr:117494 freeing invalid memtype [mem 0x8019c0000-0x801a4ffff]
+[ 5648.038026] x86/PAT: kf3-vamgr:117494 freeing invalid memtype [mem 0x8021b0000-0x80224ffff]

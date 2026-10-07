@@ -1,0 +1,7672 @@
+//! ★★★ **Stage Q4: the register plane.** One trapped base-address-register access in, one
+//! value out.
+//!
+//! # What was missing, in one sentence
+//!
+//! `kayfabe_gsp::GspFsm` has had `mmio_read`/`mmio_write` since stage S3 and
+//! `kayfabe_crec` has been driving them from a recorded trace for weeks — but a *guest*
+//! could not reach them, because the hypervisor shim's register region returned a constant
+//! and said so in its own comment. This module is the missing routing, and nothing else:
+//! it decides which of five sources answers an offset and it holds the lock that makes the
+//! FSM usable from more than one vCPU.
+//!
+//! # ★★ The five sources, in the order they are asked
+//!
+//! 1. **The chip's silicon constants** ([`crate::BootReg`]) — exact-offset, stateless.
+//! 2. **The free-running nanosecond counter** ([`crate::PtimerRegs`]) — the only source
+//!    whose answer is a function of neither the chip nor the FSM. See below.
+//! 3. **The ROM window** — the synthetic VBIOS, generated from the same profile the
+//!    device's PCI identity comes from.
+//! 4. **The GSP register model** — anything [`kayfabe_arch::GspModel::decode_reg`] claims.
+//! 5. **Nobody** — and this is where the interesting decision is, below.
+//!
+//! The order is safe because the four claimants are provably disjoint (`assert_disjoint`): `assert_disjoint`
+//! checks it for a chip at construction, so a future row whose ROM window swallowed a GSP
+//! register is a refusal at realize and not a value nobody can explain.
+//!
+//! # ★★★ A STOPPED CLOCK IS AN UNKILLABLE HANG, WHICH IS WHY THE CLOCK IS A CONSTRUCTOR
+//! ARGUMENT
+//!
+//! The driver's every bounded wait — falcon reset-ready, memory scrubbing, DMA idle, halt,
+//! the message-queue polls — is a bare loop whose only exit besides success is
+//! `gpuCheckTimeout`, and on this generation `gpuCheckTimeout` reads the GPU's own
+//! nanosecond counter through the virtual-function aperture
+//! (`ogkm-580: src/nvidia/src/kernel/gpu/timer/arch/turing/timer_tu102.c:130-155`, whose
+//! `tmrReadTimeLoReg_TU102`/`tmrReadTimeHiReg_TU102` read
+//! `NV_VIRTUAL_FUNCTION_TIME_0`/`_TIME_1`). Answer that counter with a constant and *every*
+//! one of those loops becomes unbounded: the driver spins in kernel context, uninterruptible
+//! by any signal, and prints nothing at all, because the print only exists on the timeout
+//! arm it can never reach. One example, in full, is
+//! `kflcnPreResetWait_GA102`
+//! (`ogkm-580: src/nvidia/src/kernel/gpu/falcon/arch/ampere/kernel_falcon_ga102.c:212-224`).
+//!
+//! So [`NanoClock`] is **not** a port with a default. `set_ram`/`set_policy` can default,
+//! because [`RefusingRam`] refuses *by name* and a refusal is a diagnosis. There is no
+//! refusing answer for a register read — a wrong number is the only thing a reader can be
+//! handed — so the decision is moved to where it cannot be skipped: [`RegPlane::new`] takes
+//! the clock, and a caller that has not thought about time does not compile.
+//!
+//! # ★★★ An unclaimed register reads ZERO, and that is a decision with a cost
+//!
+//! `kayfabe_arch::GspModel::decode_reg` returning `None` means *"a different model owns
+//! this offset"*, and plan §11-O1 — every non-GSP register — is still open. So this plane
+//! is asked about thousands of offsets it has no model for, and it answers zero, exactly as
+//! the C artifact does (`C: src/qemu/nvkvm_gpu_emul.c:1500-1504` and its comment
+//! *"everything else reads back 0 for now"*).
+//!
+//! That is **not** MISS = FAULT and it is worth being honest about why. MISS = FAULT is the
+//! address-table rule, where a miss means we would otherwise invent a translation. Here the
+//! guest is reading a register a real chip does have; answering zero is a *wrong value*
+//! rather than a *fabricated mapping*, and refusing instead would mean the device could not
+//! be booted at all until every register in a 16 MiB aperture had a model. What this plane
+//! owes instead is **visibility**: [`Counters::unclaimed_reads`] and
+//! [`RegPlane::unclaimed_sample`] make "how much of this boot was answered by a defaulted
+//! zero, and where" a number an operator can read, rather than a suspicion. When §11-O1
+//! closes, this arm becomes a refusal and the counter is how anyone knows what that will
+//! cost.
+//!
+//! # ★★ Guest RAM is a NAMED REFUSAL — before stage Q5 *and after it*
+//!
+//! [`kayfabe_gsp::GspFsm::mmio_write`] needs a [`GuestRam`] the moment a write is a queue
+//! doorbell. Stage Q4 wired *registers* only; the memory plane's realize is a separate
+//! object with a separate lifetime, and joining them is stage **Q5**, which is
+//! [`RegPlane::set_ram`].
+//!
+//! The construction default is still [`RefusingRam`] and that has not moved, because the
+//! default is what a shell that forgot to wire gets, and [`NO_RAM_PORT`] says exactly that
+//! in one sentence. What Q5 changes is only *which* implementation a realized device
+//! carries — and the replacement is a refuser too: the adapter's port resolves through the
+//! guest-physical region map, which proves a range is memory before touching it and
+//! refuses everything else **by name**. So at both stages the answer to an address nothing
+//! backs is `GspFault::GuestRam(RamRefused…)`, carried to the caller with its address, its
+//! length and its reason ([`WriteOutcome::ram_refusal`]).
+//!
+//! That is the property to preserve, and it is worth stating why in the negative: a
+//! zero-filled read of a message queue produces a well-formed-looking element with a zero
+//! checksum — a *wrong answer the guest acts on* — and the closest cautionary case in this
+//! tree is the free-running counter above, where a defaulted zero was a plausible answer
+//! and therefore an unkillable silent spin. A refusal is never plausible, which is exactly
+//! what makes it a diagnosis.
+//!
+//! # ★★★ A FRAMEBUFFER WINDOW IS NOT AN UNCLAIMED REGISTER (`#102` stage C)
+//!
+//! The "unclaimed reads zero" argument two sections up turns on the offset naming a
+//! *register*. Three of the offsets this plane is handed do not: the `PRAMIN` window inside
+//! the register aperture, the framebuffer aperture and the instance/`BAR2` window are
+//! **device memory**, and a page table lives in device memory. So they are classified
+//! before the unclaimed arm and counted under their own name
+//! ([`crate::FbWindow`], [`Counters::fb_window_reads`], [`RegPlane::fb_window_sample`]).
+//!
+//! ⊘ **Nothing here serves a framebuffer byte, and nothing here decides where the
+//! framebuffer should live** — that is plan §11-O1 and `eight_blockers_resolved.md` §12,
+//! which put the bytes in the isolate. This arm exists so that the absence has a name.
+//!
+//! ★★ It is worth the type because the volume is not small and was not visible.
+//! Bucketing every base-address-register write in the committed C reference traces by
+//! region (`nvidia-gpu-passthrough/traces/mode2_c_reference/`, decoded 2026-07-31):
+//! **211 836** of the cold boot's and **250 041** of the matmul's land in one of these three
+//! windows — and under the previous code every one was indistinguishable from an unknown
+//! register offset. See [`crate::FbWindow`] for the per-window split.
+//!
+//! # ★★★ AND ONE OF THE THREE IS NOW SERVED — `PRAMIN`, THE BAR0 MOVING WINDOW (`#146`)
+//!
+//! The paragraph above was written when **no** framebuffer byte was served and the arm
+//! existed so that the absence had a name. That is still true of two of the three windows.
+//! It is no longer true of `PRAMIN`: [`crate::fbwin`] gives it a real address model
+//! ([`Bar0Window`], the `NV_PBUS_BAR0_WINDOW` latch) and a real byte store
+//! ([`FbStore`]), because the boot of 2026-08-01 stopped at `kbusVerifyBar2_GM107`, whose
+//! first sub-test is a plain **dword write-then-read through `PRAMIN`** with no BAR2 and no
+//! MMU anywhere in it.
+//!
+//! The other two are unchanged and still refuse, and the difference is not effort: the
+//! framebuffer aperture and the instance window are **GMMU-translated**, so serving them
+//! needs the page-table format `kayfabe_chips::UnbuiltGmmu` says this port does not have.
+//! `PRAMIN` is **untranslated** — the framebuffer address *is* the window base plus the
+//! offset — so it needs no MMU at all. ⊘ That asymmetry is the whole of why one window
+//! could be built and two could not, and it is why serving this one did not turn
+//! `the_shipped_arch_refuses_every_data_plane_seam` red.
+//!
+//! ★★ The three counters that used to describe every window
+//! ([`Counters::fb_window_reads`], [`Counters::fb_window_writes`]) now describe **only the
+//! unserved ones**, and three new counters describe this one
+//! ([`Counters::fb_reads`], [`Counters::fb_writes`], [`Counters::fb_refusals`]). Merging
+//! them would have hidden exactly the fact that matters: *how many framebuffer accesses
+//! this boot dropped on the floor*.
+
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::{Mutex, RwLock};
+
+use kayfabe_arch::gsp::GspModel;
+use kayfabe_arch::{Aperture, GmmuFmt};
+use kayfabe_gsp::{CommandPolicy, GspAbi, GspFault, GspFsm, GuestRam, RamRefused};
+use kayfabe_mmu::walker::{FbRead, PtPage, translate, translate_from_entry};
+use kayfabe_trace::Faulted;
+use kayfabe_util::lock::{LockRank, RankedMutex};
+
+use crate::bar2::{BarPdeLog, BarPdes};
+use crate::cpuintr::CpuIntrTree;
+use crate::doorbell::{DoorbellPort, DoorbellRefused, DoorbellReport, RefusingDoorbell};
+use crate::fbwin::{
+    Bar0Window, FbPageArena, FbPageBacking, FbRefused, FbStore, FbWriter, RefusingFb,
+};
+use crate::gvaspub::{GvasPubLog, GvasPubSnapshot};
+use crate::{ChipError, ChipProfile, FbWindow};
+
+/// A [`GuestRam`] that refuses every access, by name.
+///
+/// ★ Not a stub that returns zeros. A zero-filled read of a message queue produces a
+/// well-formed-looking element with a zero checksum, i.e. a *wrong answer the guest acts
+/// on*; a refusal produces `GspFault::GuestRam`, which this plane counts and reports. The
+/// difference is the whole reason this type exists rather than a `Vec<u8>`.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct RefusingRam;
+
+/// [`RefusingRam`]'s one sentence, as [`RamRefused::why`].
+///
+/// ★ It names the *absence*, not a failure: a plane whose shell never called
+/// [`RegPlane::set_ram`] has no memory to reach, and a reader who sees this has a wiring
+/// question, not a guest-behaviour question. Those two are the near neighbours here.
+pub const NO_RAM_PORT: &str = "the register plane has no guest-RAM port installed; the shell never called set_ram, \
+     so this device cannot reach guest memory at all";
+
+impl GuestRam for RefusingRam {
+    fn read(&mut self, gpa: u64, buf: &mut [u8]) -> Result<(), RamRefused> {
+        Err(RamRefused {
+            gpa,
+            len: buf.len(),
+            why: NO_RAM_PORT,
+        })
+    }
+
+    fn write(&mut self, gpa: u64, bytes: &[u8]) -> Result<(), RamRefused> {
+        Err(RamRefused {
+            gpa,
+            len: bytes.len(),
+            why: NO_RAM_PORT,
+        })
+    }
+}
+
+/// ★★★ The device's free-running nanosecond counter, as a port.
+///
+/// The one thing this plane serves that is a function of neither the chip nor the boot
+/// state machine. See the module docs for why it is a constructor argument rather than a
+/// settable port with a default.
+///
+/// The contract is narrow and all of it is load-bearing:
+///
+/// - **Monotonic non-decreasing.** The driver reads the counter as high / low / high and
+///   retries when the high half moved; a counter that went backwards would make an elapsed
+///   time negative and a timeout fire immediately or never.
+/// - **Advancing.** Two calls separated by real work must not return the same value
+///   forever. This is the whole point of the type.
+/// - **Nanoseconds.** The driver's timeouts are in microseconds and it converts by
+///   dividing, so the *unit* is part of the contract even though nothing can check it.
+///
+/// ---
+/// ⚠⚠⚠ **THIS PORT IS A BOOT-ONLY STOPGAP. It is not the finished design, and it must not
+/// be read as intent** (`#128`, `docs/design/register_plane_read_native.md` §4).
+///
+/// It was necessary and it is correct for what it fixed: RM's `gpuCheckTimeout` needs
+/// elapsed time to *exist*, and answering the counter with a defaulted zero produced an
+/// **unkillable silent D-state with no dmesg** on a stock 580.159.04 guest, cleared by
+/// `5b54494` in the same session. But a **synthetic CPU-side clock is the wrong answer for
+/// two independent reasons**:
+///
+/// 1. **Accuracy, not performance.** A vmexit costs microseconds with high variance, so a
+///    *nanosecond* counter read through a trap carries jitter three orders of magnitude
+///    larger than its own resolution. It stops being a nanosecond timer the instant it is
+///    trapped — however rarely it is read. ⊘ Trap volume is irrelevant to this.
+/// 2. **Timebase.** Compute is forwarded to a real host GPU, so every timestamp the GPU
+///    produces (event semaphores, `%globaltimer`) is in the **host GPU's** timebase. This
+///    clock is unrelated to it, so anything correlating the two —
+///    `cudaEventElapsedTime`, every profiler — gets a **wrong answer, not a slow one**.
+///
+/// The finished design is *read-native, write-trap*: the guest's timer page is backed by a
+/// host GPU register page under `KVM_MEM_READONLY`, so reads never exit and correlation is
+/// correct by construction. ★ **MEASURED 2026-08-02 on a real GA106 (RTX 3060,
+/// 580.159.04):** an unprivileged, capability-less process *can* map the host counter and
+/// read it live — `docs/reference/bench_evidence/timer-mappability-9087090.out`, decoded in
+/// `docs/design/read_native_timer_measured.md`. What is not built is the memslot caller.
+///
+/// ⊘ **The standing rule this port must keep whatever replaces it:** *never answer a
+/// free-running counter with a constant.* Zero is **plausible**, so the driver believes it
+/// and spins forever with no diagnostic; a refusal is not plausible and surfaces in one
+/// boot. That is why [`kayfabe_abi::submit::ptimer_sample`] refuses rather than guessing,
+/// and why there is no `Default` impl here.
+pub trait NanoClock: Send + Sync + core::fmt::Debug {
+    /// Nanoseconds since an arbitrary, fixed origin.
+    fn now_ns(&self) -> u64;
+}
+
+/// A [`NanoClock`] that advances a fixed amount per reading, from zero.
+///
+/// ★ For tests and for any caller that must be reproducible: it makes the counter a pure
+/// function of *how many times it has been read*, so a replay produces bit-identical
+/// values. It is deliberately **not** the default for a live device — the driver's timeouts
+/// are wall-clock quantities, and a clock whose rate depends on how often the guest happens
+/// to poll turns a 4-second timeout into an unpredictable number of iterations.
+#[derive(Debug)]
+pub struct SteppingClock {
+    step_ns: u64,
+    now: AtomicU64,
+}
+
+impl SteppingClock {
+    /// A clock that advances `step_ns` nanoseconds per reading.
+    #[must_use]
+    pub fn new(step_ns: u64) -> SteppingClock {
+        SteppingClock {
+            step_ns,
+            now: AtomicU64::new(0),
+        }
+    }
+}
+
+impl NanoClock for SteppingClock {
+    fn now_ns(&self) -> u64 {
+        self.now.fetch_add(self.step_ns, Ordering::Relaxed)
+    }
+}
+
+/// What a register access did, as numbers an acceptance test outside the process can read.
+///
+/// ★ Every field is a count of a *route taken*, so the four sources of §"the four sources"
+/// are separately observable. A boot in which `gsp_reads` is zero looks identical to a boot
+/// in which it is thousands, if all you have is "the guest hung".
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Counters {
+    /// Register reads dispatched into this plane.
+    pub reads: u64,
+    /// Register writes dispatched into this plane.
+    pub writes: u64,
+    /// Reads answered from [`ChipProfile::boot_regs`].
+    pub boot_reg_reads: u64,
+    /// Reads answered from the free-running nanosecond counter.
+    pub ptimer_reads: u64,
+    /// ★ Writes to the free-running nanosecond counter, **refused by name** (`#128`).
+    ///
+    /// Its own counter rather than a share of [`Self::unclaimed_writes`], because the two
+    /// mean opposite things: unclaimed is *"this port does not model that offset yet"*,
+    /// this is *"this port models it and says no"*. A guest RM issuing
+    /// `tmrSetCurrentTime` should show up here and nowhere else.
+    pub ptimer_writes_refused: u64,
+    /// Reads answered from the ROM window.
+    pub rom_reads: u64,
+    /// Reads answered by the GSP register model.
+    pub gsp_reads: u64,
+    /// Writes the GSP register model claimed.
+    pub gsp_writes: u64,
+    /// ★ Reads no source claimed, answered with a defaulted zero. See the module docs for
+    /// why this is a counter and not a refusal.
+    pub unclaimed_reads: u64,
+    /// ★ w564 — register values written through to the guest's read shadow. ⚠ ZERO with a
+    /// sink installed means every shadowed page is answering its REALIZE-TIME bytes and
+    /// nothing has updated since; that is correct only if nothing changed.
+    pub shadow_writes: u64,
+    /// ★★★★★ w554 — unclaimed reads that landed in a page the aperture cut backs with
+    /// read-only memory, i.e. reads the cut SHOULD have removed.
+    ///
+    /// ⊘ Its whole job is to separate two readings of the same number. If this is ~0 while
+    /// [`Counters::unclaimed_reads`] is large, the cut is working and the traffic never went
+    /// to the dead pages; if it is large, the pieces are not serving and the reads are
+    /// arriving here anyway. A single "unclaimed" total cannot tell those apart, and the two
+    /// call for opposite next steps.
+    pub unclaimed_reads_in_dead_pages: u64,
+    /// Writes no source claimed, dropped.
+    pub unclaimed_writes: u64,
+    /// ★★★ Reads that landed in a framebuffer window ([`crate::FbWindow`]) this port has
+    /// **no address model for** — the GMMU-translated ones. **Not** a subset of
+    /// [`Counters::unclaimed_reads`]: an access is classified into exactly one of the two,
+    /// because the whole point is that they are different facts.
+    ///
+    /// ⚠ Since `#146` this excludes `PRAMIN`, which is served — see
+    /// [`Counters::fb_reads`].
+    pub fb_window_reads: u64,
+    /// Writes that landed in an unmodelled framebuffer window and were therefore
+    /// **dropped**.
+    ///
+    /// ★★ The one to watch. A dropped framebuffer write can be a dropped page-table entry,
+    /// which does not fail here — it fails much later, as a mapping that is simply absent.
+    pub fb_window_writes: u64,
+    /// ★★★ Reads **served** from the device's framebuffer through ANY window.
+    ///
+    /// ⊘⊘⊘ **CORRECTED w607.** This said *"through the BAR0 moving window"* and it is the
+    /// UNION: `BAR1 + BAR2 + PRAMIN`. The `FbWindow::Pramin` arm bumped nothing of its own,
+    /// and this counter is incremented outside the `match window`, for every window. A census
+    /// line printed it as `window[SERVED …]` and six hypotheses were built on reading it as
+    /// PRAMIN's. ⇒ Ask [`Counters::pramin_reads`] for PRAMIN.
+    pub fb_reads: u64,
+    /// ★★★ Writes **landed** in the device's framebuffer through ANY window — the union, as
+    /// [`Counters::fb_reads`] explains at length. Ask [`Counters::pramin_writes`] for PRAMIN.
+    ///
+    /// ★ "Landed", not "attempted": this counter is incremented only after
+    /// [`FbStore::write`] returned `Ok`, so `fb_writes + fb_refusals == attempts` and
+    /// neither number can absorb the other. A port that counted attempts would report a
+    /// healthy boot while dropping every byte.
+    pub fb_writes: u64,
+    /// ★★★ Reads **served through the GMMU** from the translated instance/`BAR2` window.
+    ///
+    /// ★ Counted apart from [`Counters::fb_reads`] even though the bytes come out of the
+    /// same store, because the two say different things: `fb_reads` says a window
+    /// resolved an address arithmetically, this says a **page walk succeeded**. A boot in
+    /// which this is zero and `kbusVerifyBar2` still fails has an unrooted aperture; a
+    /// boot in which it is large and the test still fails has a translation that resolves
+    /// to the wrong byte. Merging them would make those two indistinguishable.
+    pub bar2_reads: u64,
+    /// ★★★★★ **w607 — PRAMIN accesses that reached the handler, on their own.**
+    /// `[measured w603a]` `0` in both directions on a boot that graded `(P)` with the slot
+    /// live: total 57 r / 3895 w, minus BAR1 55/2300, minus BAR2 2/1595, leaves exactly
+    /// nothing. **The PRAMIN aperture takes no traps at all.**
+    pub pramin_reads: u64,
+    /// As [`Counters::pramin_reads`], for writes.
+    pub pramin_writes: u64,
+    /// ★★★ Writes **served through the GMMU** into the translated instance/`BAR2` window.
+    pub bar2_writes: u64,
+    /// ★★★ Translated accesses this port **refused, by name** — an unrooted aperture, an
+    /// unmapped virtual address, a leaf in an aperture this port cannot serve, or a
+    /// format that is not installed.
+    ///
+    /// ⊘ **This is what a dropped translated write looks like**, and it must never be
+    /// zero-with-a-shrug: `kbusVerifyBar2` detects exactly one such drop, ninety lines
+    /// and one L2 evict later, as `NV_ERR_MEMORY_ERROR`.
+    pub bar2_faults: u64,
+    /// ★★★★ Reads **served through the GMMU** from the translated framebuffer/`BAR1`
+    /// window.
+    ///
+    /// ⊘ Counted apart from [`Counters::bar2_reads`] because the two apertures resolve from
+    /// **different roots by different mechanisms** — BAR2 from an entry the guest published,
+    /// BAR1 from a directory address this port published — so one number covering both could
+    /// be large while either root was never usable at all.
+    pub bar1_reads: u64,
+    /// ★★★★ Writes **served through the GMMU** into the translated framebuffer/`BAR1`
+    /// window.
+    ///
+    /// ★ This is the counter the ring-submission question turns on. `boot s17_e8fde62`
+    /// measured **three** BAR1 writes reaching a discarding fallback — a GPFIFO entry in two
+    /// halves and a `GP_PUT` — so a boot in which this is zero and
+    /// [`Counters::fb_window_writes`] is three means the aperture is still not translating.
+    pub bar1_writes: u64,
+    /// ★★★★ Framebuffer-aperture accesses this port **refused, by name**.
+    ///
+    /// ⊘ Separate from [`Counters::bar2_faults`] for the reason the reads are: a refusal
+    /// here means *our own* `bar1PdeBase` did not resolve, which is a defect in this port's
+    /// reply, while a BAR2 refusal means an entry the guest published did not.
+    pub bar1_faults: u64,
+    /// ★★★ Framebuffer accesses the store **refused, by name** — see
+    /// [`crate::fbwin::FbRefused`].
+    ///
+    /// ⊘ This is what a dropped framebuffer write looks like now: a number that moves, a
+    /// sentence, and a physical address, at the instant it happens. Before `#146` it looked
+    /// like nothing at all until `kbusVerifyBar2` reported `NV_ERR_MEMORY_ERROR` hundreds
+    /// of operations later.
+    pub fb_refusals: u64,
+    /// ★★ Reads of `NV_PBUS_BAR0_WINDOW` itself — the guest asking where its own window
+    /// points.
+    ///
+    /// ★ Worth a counter of its own because a boot in which this is **zero** and
+    /// [`Counters::fb_reads`] is large means the guest never checked, which is the
+    /// condition under which a dropped window write goes unnoticed. RM does both: it
+    /// read-modify-writes the register twice per re-point and refreshes its own cache from
+    /// it (`ogkm-580: kern_bus_gm107.c:4738-4741`).
+    pub bar0_window_reads: u64,
+    /// Writes to `NV_PBUS_BAR0_WINDOW` — the guest re-pointing its window.
+    pub bar0_window_writes: u64,
+    /// Faults the FSM raised on a write.
+    pub faults: u64,
+    /// Guest-RAM accesses the plane's RAM port refused.
+    pub ram_refusals: u64,
+    /// Times a write asked for the status-queue interrupt to be announced.
+    pub irq_requests: u64,
+    /// Accesses to the `CPU_INTR` tree (`crate::cpuintr`) — reads and writes together.
+    ///
+    /// ★ One counter for both directions on purpose: the diagnostic question is *"did the
+    /// guest drive this block at all"*, and a boot in which it is zero means the driver
+    /// never reached `_osVerifyInterrupts`, whatever else went wrong.
+    pub cpu_intr_accesses: u64,
+    /// ★★★ `CPU_INTR_LEAF_TRIGGER` writes that latched a vector — i.e. the number of
+    /// message-signalled interrupts this device asked the shell to deliver.
+    ///
+    /// `[measured]` the C oracle's `cap1` has **exactly one** across 359 062 records
+    /// (`crates/kayfabe-crec/tests/cap1_differential.rs:31`), so a healthy boot's expected
+    /// value here is 1, not 0 and not many.
+    pub cpu_intr_raises: u64,
+    /// ★★★ Of those, how many real silicon would have **masked** — see
+    /// [`crate::cpuintr::TriggerOutcome::would_be_masked`].
+    ///
+    /// ⊘ This device raises anyway, deliberately. A non-zero value here is not a fault; it
+    /// is the evidence that the enable bookkeeping and the guest's expectations disagree,
+    /// and it is the only thing that could ever justify turning gating on.
+    pub cpu_intr_masked: u64,
+    /// ★★★ **§14.18 — completions this device ANNOUNCED with a non-stall vector.**
+    ///
+    /// One per [`crate::DoorbellReport::ServedLocally`] whose channel's bound engine
+    /// resolved to a `vectorNonStall` ([`crate::nonstall::non_stall_vector`]). ⊘ A
+    /// *separate* number from [`Counters::cpu_intr_raises`], which counts the guest asking
+    /// the device to interrupt the guest: they are two causes and a boot that delivered the
+    /// wrong number of vectors must be diagnosable as to which.
+    ///
+    /// ★ `nonstall_raises + nonstall_unvectored` is the number of completions, so the two
+    /// together say *"every copy we served, we either announced or could not"* — the
+    /// invariant that makes a silent completion impossible to hide.
+    pub nonstall_raises: u64,
+    /// ★★★ Completions this device could **not** announce, with the reason available in
+    /// the serving's own note.
+    ///
+    /// ⊘ **This is the one number that must be zero in a healthy boot**, and it is the
+    /// whole reason serving notifier index 35 is honest: it counts work that really
+    /// happened and was never notified. `[measured 2026-08-08, boot cebind_p35 at
+    /// 5a035e0]` the scrubber binds COPY2, whose row publishes `vectorNonStall = 0x07`, so
+    /// the expected value is 0. A non-zero one is not a crash — it is the promise being
+    /// broken quietly, printed.
+    pub nonstall_unvectored: u64,
+    /// ★★ Of the [`Counters::nonstall_raises`], how many real silicon would have **masked**
+    /// — see [`crate::cpuintr::TriggerOutcome::would_be_masked`].
+    ///
+    /// ⚠ Sharper here than for the loopback trigger, and worth reading before concluding a
+    /// delivery worked: the guest's own non-stall scan is
+    /// `intrReadRegLeaf(j) & intrReadRegLeafEnSet(j)`
+    /// (`ogkm-580: intr_nonstall_tu102.c:344-346`), so a vector latched while its
+    /// `LEAF_EN` bit is clear is **invisible to the ISR** even though the message was
+    /// delivered. A non-zero value here with a hung scrubber is that exact diagnosis, and
+    /// without the counter the two are the same silence.
+    pub nonstall_masked: u64,
+    /// ★★★★★ §16.76 — how many os-event batches this device **announced**: one GSP stall
+    /// vector latched and one message delivered per batch, never per event.
+    ///
+    /// ★ Compare with `kayfabe_device::osevent::OsEventLog::batches`, which counts the same
+    /// events from the other side of the seam. They must agree; if they do not, the
+    /// interrupt half and the posting half disagree about what happened, which is exactly
+    /// the two-projections defect this port keeps meeting.
+    pub gsp_event_raises: u64,
+    /// ★★★ Batches that were posted and could **not** be announced, because this chip's
+    /// captured interrupt table names no usable stall vector for `MC_ENGINE_IDX_GSP`.
+    ///
+    /// ⊘ **Must be zero on GA106**, whose table publishes `0x9b` — a non-zero value means
+    /// messages are sitting in the guest's status queue with nothing telling it to look.
+    pub gsp_event_unvectored: u64,
+    /// ★★ Of the [`Counters::gsp_event_raises`], how many real silicon would have
+    /// **masked** — [`crate::cpuintr::TriggerOutcome::would_be_masked`] for the GSP's own
+    /// stall vector.
+    ///
+    /// ⚠ Read this before concluding a delivery worked. A latch whose `LEAF_EN` bit is
+    /// clear is a wakeup the ISR will not attribute, and without this counter *"we raised
+    /// and the guest ignored it"* and *"we raised into a masked leaf"* are the same
+    /// silence.
+    pub gsp_event_masked: u64,
+    /// ★★★★★ §16.76 — `IRQSCLR` writes that cleared the status-queue edge
+    /// ([`kayfabe_gsp::Transition::E10`]) — **the opener**.
+    ///
+    /// ⊘ `cap1` contains **zero** of these across 359 062 records, so the oracle constrains
+    /// this number not at all and only a live boot can. It is the one that says whether the
+    /// os-event flow-control gate can ever reopen: `gsp_event_raises > 0` with
+    /// `status_irq_cleared == 0` is a gate latched shut after one batch, and the delivery
+    /// plane has gone quiet without anything going red.
+    pub status_irq_cleared: u64,
+    /// ★★★ **E2** — guest MMIO writes that landed on the usermode doorbell register
+    /// ([`crate::doorbell_reg`]), i.e. work-submit tokens the guest rang.
+    ///
+    /// ★ The **arrival** count, incremented before the port is consulted, so it is a
+    /// statement about the guest and not about the core: `doorbells == doorbells_served +
+    /// doorbells_refused` at all times, and neither of the two can absorb the other.
+    ///
+    /// ⊘ A boot in which this is zero is not evidence that the doorbell path is broken —
+    /// see `docs/design/execution_plane_increments.md` §7: at the current wall the guest
+    /// driver never reaches `kfifoUpdateUsermodeDoorbell` because the channel *schedule*
+    /// before it fails.
+    pub doorbells: u64,
+    /// Of those, the ones the installed [`crate::DoorbellPort`] **served** — a
+    /// `DoorbellOutcome` came back from the core.
+    pub doorbells_served: u64,
+    /// ★★★★ **§16.62.3 — of the served, the ones the SHELL's own CPU executor ran**
+    /// ([`crate::DoorbellReport::ServedLocally`]).
+    ///
+    /// ⊘ Split out because [`Counters::doorbells_served`] answers a question nobody is
+    /// actually asking at this wall. *"354 served"* is read as progress, but the two
+    /// servings are different events with different evidence: `ServedLocally` means **this
+    /// process moved the bytes and witnessed the end**, while `Served` means a host channel
+    /// was rung at an instant this device was not standing at. A boot in which the split
+    /// moved from one to the other would be a change in what the number means, with the
+    /// number unchanged — which is the shape [`crate::DoorbellReport::ServedLocally`]'s own
+    /// doc refuses one field over.
+    ///
+    /// ★ `doorbells_served_locally + doorbells_served_forwarded == doorbells_served`,
+    /// always, for the same reason `served + refused == doorbells` does.
+    pub doorbells_served_locally: u64,
+    /// ★★ Of the served, the ones handed to a **host** channel
+    /// ([`crate::DoorbellReport::Served`]). See [`Counters::doorbells_served_locally`].
+    pub doorbells_served_forwarded: u64,
+    /// Of those, the ones the port **refused, by name**. Includes the refusal of the
+    /// default [`crate::RefusingDoorbell`], which is what a build with no forwarding plane
+    /// answers every ring with.
+    pub doorbells_refused: u64,
+    /// ★★★★★ **DEFERRED, AND COUNTED NOWHERE UNTIL w695l.**
+    ///
+    /// ⊘⊘⊘ `[measured w695j]` `doorbells: 48 arrived, 42 served, 2 REFUSED` — **48 != 44**.
+    /// Four doorbells arrived and were neither served nor refused, against the invariant stated
+    /// four fields up. `DoorbellReport::Scheduled` took the publication queue and its accounting
+    /// arm was literally `=> {}`, directly below a comment warning that *"a third arm that
+    /// counted as neither would break it silently."*
+    ///
+    /// ⇒ A `Scheduled` doorbell is counted HERE on deferral, and counted again as
+    /// served/refused if the worker ever completes it. So `served + refused + scheduled` is the
+    /// arrival total, and `scheduled - (later served or refused)` is the number of submissions
+    /// that **went into the queue and never came out** — which is exactly what a hung guest
+    /// looks like from our side, and exactly what nothing could see before.
+    pub doorbells_scheduled: u64,
+    /// Commands decoded off the guest's command queue.
+    pub commands: u64,
+    /// ★★ Of those, the ones **no policy answered** — refused by name by the FSM. See
+    /// [`crate::unserviced`]: the refusal is quiet in the guest, so this and
+    /// [`RegPlane::unserviced_sample`] are the only place the list is readable.
+    pub commands_unserviced: u64,
+}
+
+/// ★★★ **One device life's residue, whole.** What [`RegPlane::residue`] answers; see that
+/// method for why the enumeration is a compiler obligation and not a list.
+///
+/// ★ Every member has derived equality, so comparing two lives is `==` on one value. The
+/// two members [`RegPlane`] holds that *cannot* have equality — the guest-RAM port and the
+/// command policy, both `Box<dyn …>` — are absent by decision rather than by oversight, and
+/// [`RegPlane::residue`]'s docs say which and why.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaneResidue {
+    /// Every route counter, as [`RegPlane::counters`] reports them.
+    pub counters: Counters,
+    /// ★★★★ **G1's witness** — what the guest's CPU wrote through the framebuffer windows
+    /// and nothing has drained yet ([`PtWitnessStats`]).
+    ///
+    /// In the residue for `bar_pdes`' reason: a page the **previous** guest wrote, carried
+    /// across a device life and then attributed to this guest's address space, would
+    /// publish the previous guest's page-table bytes as this one's mappings. See
+    /// [`RegPlane::device_reset`], which clears it.
+    pub pt_witness: PtWitnessStats,
+    /// ★★ The emulated GSP, **whole**: phase, queue binding, both ring cursors, both
+    /// sequence numbers, the mailbox shadows, the boot-args conjunction, the region
+    /// identity and both latches. `PartialEq` is derived over every field it has.
+    pub gsp: GspFsm,
+    /// The bounded sample of `(bar, offset)` pairs no source claimed.
+    pub unclaimed: Vec<(u8, u64)>,
+    /// ★ The bounded sample of framebuffer-window accesses. Added to the residue in
+    /// `#130`: it is the exact twin of `unclaimed` and had been outside every snapshot
+    /// since it was written.
+    pub fb_window: Vec<(FbWindow, u64)>,
+    /// The distinct commands no policy answered.
+    pub unserviced: Vec<crate::unserviced::UnservicedCommand>,
+    /// ★★★ The control census — what WAS answered, and with what result, including the
+    /// served-but-refused class the `unserviced` list cannot see (`crate::census`).
+    /// Guest-driven observation state, in the residue for `fb_window`'s reason.
+    pub census: crate::census::CensusSnapshot,
+    /// ★★★★★ **w326 — the guest's own TLB invalidates** (`crate::mmuinval`): how many
+    /// arrived, their scope, and whether any publication is still outstanding.
+    ///
+    /// ⊘ Carried in the residue because `pending == true` at teardown is a **guest hang**
+    /// that has already happened, and the only place it can be seen is here.
+    pub mmu_inval: crate::mmuinval::MmuInvalidateSnapshot,
+    /// ★ The replayable-fault-buffer registrations the guest asked for and this port
+    /// declined. Guest-driven, and — like `fb_window` — in no snapshot before `#130`.
+    pub fault_buffers: Vec<crate::faultbuffer::FaultBufferNote>,
+    /// How many such registrations arrived in total, including repeats and anything past
+    /// the sample bound. A count and a sample fail differently: a sample that saturates
+    /// stops moving, and the count does not.
+    pub fault_buffers_registered: u64,
+    /// How many **client shadow** fault-buffer registrations (`0x20800a9d`) arrived.
+    ///
+    /// ⊘ Separate from [`Self::fault_buffers_registered`] because the two controls carry
+    /// different promises — see `crate::faultbuffer`.
+    pub shadow_fault_buffers_registered: u64,
+    /// How many **access-counter** buffer registrations (`0x20800a1d`) arrived.
+    pub access_cntr_buffers_registered: u64,
+    /// ★★★ The BAR0 moving window's register, as the guest last wrote it.
+    ///
+    /// Device state, so it is in the residue: a reloaded device whose window still pointed
+    /// where the previous guest left it is not indistinguishable from a cold one, and the
+    /// register's reset value is a documented silicon fact (`_BASE_0`, `_TARGET_VID_MEM`).
+    pub bar0_window: Bar0Window,
+    /// ★★★ The bus apertures' published page-table roots.
+    ///
+    /// Device state, so it is in the residue, and for the sharpest reason in this struct:
+    /// a reloaded device that still held the previous guest's BAR2 root would follow it
+    /// into framebuffer the new guest has not written and answer the **previous** guest's
+    /// mappings through the new one's aperture.
+    pub bar_pdes: BarPdes,
+    /// ★★★ The VA spaces' published page-directory roots (`crate::gvaspub`).
+    ///
+    /// In the residue for `bar_pdes`' reason, one level up: a reloaded device that still
+    /// held the previous guest's VAS roots would attribute that guest's address spaces to
+    /// this one's channels the moment anything consumes them.
+    pub gvas_pub: GvasPubSnapshot,
+    /// ★★★★ The page-directory root the guest INSTALLED via `0x00801813`
+    /// (`crate::setpagedir`), if any.
+    ///
+    /// In the residue for `gvas_pub`' reason exactly: a reloaded device still reporting
+    /// the previous guest's installed root would answer *"this address space is rooted
+    /// here"* about a page directory belonging to a guest that no longer exists.
+    pub set_page_dir: Option<crate::setpagedir::SetPageDirRecord>,
+    /// ★★★ How many bytes of framebuffer the store is holding.
+    ///
+    /// ⊘ Content, not identity — this is a *size*, and it is here because the alternative
+    /// was leaving device memory out of the residue entirely. A device life that ended
+    /// holding the previous guest's page tables and instance blocks is exactly what
+    /// [`FbStore::device_reset`] exists to prevent, and a property quantified over "all of
+    /// the device's state" that silently skipped its **memory** would be `#130`'s own
+    /// shrinking-universe failure.
+    pub fb_resident_bytes: u64,
+    /// ★★★ **E2** — what the usermode doorbell aperture saw: the last token and the first
+    /// refusal ([`DoorbellLog`]).
+    ///
+    /// In the residue rather than only in the counters because it is *state*, and because
+    /// the property `#130` exists for is the one that matters here: a device life that
+    /// ended still reporting the **previous** guest's work-submit token would attribute a
+    /// ring to whoever booted next.
+    pub doorbell: DoorbellLog,
+}
+
+/// The mutable half — everything that needs the lock.
+/// ★★★★★ **w522 — THE PLANE'S MEMORY, UNDER ITS OWN LOCK.**
+///
+/// Exactly the two fields a copy-engine session needs (`resolve_locked`, `CePlane::fb`) and
+/// nothing else. `[measured w510-w521]` `RegPlane::ce_session_with_root` holds the plane's
+/// FSM mutex for **5-8 ms** at a stretch — it wraps an arbitrary caller closure, and the shim
+/// passes it the whole CE submission — while a vCPU's `RegPlane::read`/`write` blocks on that
+/// same mutex. The lock census named the waiter and the holder as the **same line**, boot
+/// after boot.
+///
+/// ⊘ The submission does not touch the FSM, the command policy, the BAR0 window latch, the
+/// unclaimed list or the interrupt tree. The two paths were sharing a lock over data neither
+/// needs from the other — the owner's complaint, verbatim: *"locks taking over data
+/// structures that protect 90% of the data completely irrelevant for the vcpu mmio handler."*
+///
+/// ⚠ [`LockRank::PlaneMem`] sorts between `Plane` and `Device`, and that is forced: a register
+/// path may take the FSM and then reach the framebuffer (PRAMIN, the BAR0 framebuffer window),
+/// so `Plane → PlaneMem` must be legal; and the CE session calls into the core inside its
+/// closure, so `PlaneMem → Device` must be too.
+struct PlaneMem {
+    /// The emulated framebuffer store.
+    fb: Box<dyn FbStore>,
+    /// The GMMU format installed for this device, if the guest has published one.
+    mmu: Option<Box<dyn GmmuFmt>>,
+}
+
+struct PlaneState {
+    fsm: GspFsm,
+    ram: Box<dyn GuestRam>,
+    policy: Box<dyn CommandPolicy>,
+    /// The first unclaimed accesses seen, as `(bar, offset)`, for diagnosis. Bounded,
+    /// deliberately: an unbounded set is a guest-driven allocation, and a poller can produce
+    /// millions.
+    ///
+    /// ★ The **bar** travels with the offset, and that is a fix rather than a decoration:
+    /// offset `0x9008c` in the framebuffer aperture and offset `0x9008c` in the register
+    /// aperture are the same number and different facts, and a sample that reported only the
+    /// number said the second when it meant the first.
+    unclaimed: Vec<(u8, u64)>,
+    /// The first framebuffer-window accesses seen, as `(window, offset)`. Bounded for the
+    /// same reason and by the same constant.
+    fb_window: Vec<(FbWindow, u64)>,
+    /// ★★★ The BAR0 moving window's register. **Under the same lock as everything the
+    /// window resolves**, so a read and a write on two vCPUs cannot observe half of a
+    /// re-point.
+    bar0_window: Bar0Window,
+    /// ★★★ The `CPU_INTR` tree — pending and enable bits for the Turing-or-later interrupt
+    /// block. Under the same lock as everything else here, because the guest's ISR reads
+    /// `TOP` and `LEAF` from one vCPU while another may still be inside the trigger write
+    /// that set them, and a torn view of that pair is a lost interrupt. See
+    /// [`crate::cpuintr`].
+    /// The framebuffer this device advertises, as a port. [`RefusingFb`] until a shell
+    /// installs one — the exact shape [`PlaneState::ram`] already has.
+
+    /// ★★★★ **G1 — THE WITNESS FOR THE CPU TRANSPORT.** Framebuffer pages the **guest's
+    /// own CPU** wrote through one of this plane's windows, deduped to the 4 KiB page.
+    ///
+    /// # Why this exists, measured
+    ///
+    /// `[measured 2026-08-10, boot `w208_797a6bc_real`]` every one of the five page-table
+    /// pages on the walling ring's tree carries `/byBAR2` — `#39, #40, #41, #67, #68` — and
+    /// the same boot's first-writer census reads `EXEC 0`. So the transport that publishes
+    /// that tree is the CPU through [`RegPlane::fb_write`], and `Vas::pt_pages`' only
+    /// writers are fed from a **CE pushbuffer parse**. Everything that transport published
+    /// stayed a miss (`reachability_on_transition.md` §7.2).
+    ///
+    /// # ⊘ Why a DRAINED SET here and not a `PtWitnessPort` on the `set_doorbell` precedent
+    ///
+    /// A port would be called on **every** framebuffer-window write — 384 807 of them in
+    /// one measured boot — each one taking the port's own lock and a trait-object call,
+    /// *after* `drop(s)`. This set is inserted into under the mutex the write **already
+    /// holds**, so the hot path pays one `BTreeSet` insert (an already-present key on all
+    /// but the first write to a page) and **no new lock**. `unranked_locks.rs` is the gate
+    /// that would have to grow a row for the alternative, and the row it already carries
+    /// for `Mutex<PlaneState>` says why: it is held across the whole policy chain on the
+    /// vCPU's own MMIO trap.
+    ///
+    /// ⊘ It carries **no** claim that these pages are page tables. It is the transport's
+    /// name for what the CPU wrote; who owns each page, and whether it is a page table at
+    /// all, is answered by the core's `Spine::pt_page_owner` at the drain.
+    pt_witness: std::collections::BTreeSet<u64>,
+    /// Pages [`PlaneState::pt_witness`] could not take because [`MAX_PT_WITNESS_PAGES`] was
+    /// reached. Loud, never silent: a witness that quietly stopped witnessing is
+    /// indistinguishable from a guest that stopped writing.
+    pt_witness_refused: u64,
+    /// Every window write that reached the witness, deduped or not — the denominator
+    /// `pt_witness.len()` is a numerator of.
+    pt_witness_writes: u64,
+}
+
+/// How many distinct framebuffer pages [`PlaneState::pt_witness`] will hold.
+///
+/// ★ A bound of **ours** on a set the guest drives (boundary-1). The measured population is
+/// tiny — `[measured 2026-08-10, boot `w208_797a6bc_real`]` `PRAMIN 21 / BAR1 0 / BAR2 50 /
+/// EXEC 0`, so **71** CPU-written pages in a whole boot — and a guest that scribbles one
+/// byte into every page of a 4 GiB framebuffer would otherwise mint a million entries.
+pub const MAX_PT_WITNESS_PAGES: usize = 1 << 16;
+
+/// ★★★★ **G1's report** — what the CPU transport wrote, as a fact a caller can print.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PtWitnessStats {
+    /// Distinct 4 KiB pages currently held, waiting to be drained.
+    pub pending: usize,
+    /// Window writes that reached the witness, over this device's life.
+    pub writes: u64,
+    /// Pages refused because [`MAX_PT_WITNESS_PAGES`] was reached.
+    pub refused: u64,
+}
+
+/// How many distinct unclaimed offsets are remembered.
+///
+/// ★ Small and fixed. The counter says *how many*; this says *which*, and a guest that
+/// polls one register a million times must not be able to grow it.
+pub const UNCLAIMED_SAMPLE_MAX: usize = 64;
+
+/// What one read produced, and which source produced it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReadOutcome {
+    /// A chip constant.
+    BootReg(u64),
+    /// One half of the free-running nanosecond counter.
+    Ptimer(u64),
+    /// A byte of the ROM window.
+    Rom(u64),
+    /// The GSP register model's encoding for the FSM's current state.
+    Gsp(u64),
+    /// The GSP model claimed the offset and could not serve it.
+    GspFault(&'static str),
+    /// ★★★ The offset is inside a framebuffer window — **device memory**, which this port
+    /// does not model. Reads zero like [`ReadOutcome::Unclaimed`] does and is a separate
+    /// variant precisely because the two mean different things: see the module docs.
+    ///
+    /// ⚠ Since `#146` this is the answer for the **GMMU-translated** windows only; the
+    /// BAR0 moving window answers [`ReadOutcome::Fb`].
+    FbWindow(FbWindow),
+    /// ★★★ The BAR0 moving window's register itself, `NV_PBUS_BAR0_WINDOW` — the last
+    /// word the guest wrote there.
+    ///
+    /// A variant of its own rather than a [`ReadOutcome::BootReg`], because a boot register
+    /// is a *constant of the silicon* and this one is a latch the guest owns. See
+    /// [`Bar0Window`] for why answering it with anything other than the guest's own word
+    /// breaks the guest's read-modify-write.
+    Bar0Window(u64),
+    /// ★★★ A `CPU_INTR` tree register — pending bits, enable bits, or the write-only
+    /// trigger reading as zero. See [`crate::cpuintr`].
+    ///
+    /// A variant of its own, and not folded into [`ReadOutcome::Gsp`], because the guest's
+    /// **interrupt service routine** is the reader: `osWaitForInterrupt` decides whether an
+    /// interrupt happened at all from one of these reads (`ogkm-580: os_sanity.c:57,101`),
+    /// so a boot in which this count is zero and a vector was raised is a boot in which the
+    /// ISR never looked — a completely different diagnosis from "we answered wrong".
+    CpuIntr(u64),
+    /// ★★★★★ **w326 — the MMU-invalidate register's `TRIGGER` bit**, i.e. RM's completion
+    /// poll (`crate::mmuinval`).
+    ///
+    /// ⚠ A variant of its own, and **the only [`ReadOutcome`] whose value depends on work
+    /// this device has not finished yet**. It is called out in the type rather than folded
+    /// into [`ReadOutcome::Gsp`] precisely so that the exception to
+    /// *"every read arm is local"* is impossible to overlook: `grep MmuInvalidate` finds
+    /// the whole of it.
+    MmuInvalidate(u64),
+    /// ★★★ Framebuffer bytes, served through the BAR0 moving window.
+    Fb {
+        /// Which window (always [`FbWindow::Pramin`] today).
+        window: FbWindow,
+        /// The framebuffer-physical address the window resolved the offset to.
+        phys: u64,
+        /// The bytes, as a little-endian value masked to the access width.
+        value: u64,
+    },
+    /// ★★★ The framebuffer store **refused** the resolved address, by name.
+    ///
+    /// ⊘ It still reads zero, because a trapped register read has no error channel to the
+    /// guest — but it is a *different variant*, counted apart ([`Counters::fb_refusals`])
+    /// and sampled, so an operator is never left inferring a dropped access from a boot
+    /// that failed somewhere else.
+    FbRefused {
+        /// Which window.
+        window: FbWindow,
+        /// The address the window resolved to.
+        phys: u64,
+        /// Why the store would not serve it.
+        why: &'static str,
+    },
+    /// ★★★ A **translated** window this port would not resolve — with the virtual
+    /// address and the reason.
+    ///
+    /// ⊘ A different variant from [`ReadOutcome::FbRefused`] because the two carry
+    /// different kinds of address: that one has a *physical* address the store refused,
+    /// this one has a *virtual* one that never became physical. Reporting a VA in a field
+    /// named `phys` is the aliasing defect `kayfabe_arch::Aperture` exists to prevent,
+    /// one layer up.
+    TranslationRefused {
+        /// Which window.
+        window: FbWindow,
+        /// The virtual address, i.e. the aperture offset the guest accessed.
+        va: u64,
+        /// Why it did not resolve.
+        why: &'static str,
+    },
+    /// No source claimed the offset.
+    Unclaimed,
+}
+
+impl ReadOutcome {
+    /// The value the guest sees. An unclaimed or faulted register reads zero — see the
+    /// module docs.
+    #[must_use]
+    pub fn value(self) -> u64 {
+        match self {
+            Self::BootReg(v)
+            | Self::Ptimer(v)
+            | Self::Rom(v)
+            | Self::Gsp(v)
+            | Self::Bar0Window(v)
+            | Self::CpuIntr(v)
+            | Self::MmuInvalidate(v) => v,
+            Self::Fb { value, .. } => value,
+            Self::GspFault(_)
+            | Self::FbWindow(_)
+            | Self::FbRefused { .. }
+            | Self::TranslationRefused { .. }
+            | Self::Unclaimed => 0,
+        }
+    }
+}
+
+/// What one write produced.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WriteOutcome {
+    /// The GSP register model claimed the offset.
+    pub claimed: bool,
+    /// The fault the FSM raised, by tag, if it raised one.
+    pub fault: Option<&'static str>,
+    /// ★★ The guest-RAM refusal behind a `GspFault::GuestRam`, kept **whole**.
+    ///
+    /// The tag alone says *which kind* of fault; this says *which address*, *how many
+    /// bytes* and *why the port would not serve it*. Stage Q4 shipped without it because
+    /// there was exactly one reason a RAM access could fail (there was no RAM port); the
+    /// moment a real port was wired in there were several, and a diagnosis that cannot
+    /// distinguish them costs a boot each time.
+    pub ram_refusal: Option<RamRefused>,
+    /// ★★★ The write landed in a framebuffer window this port has no address model for
+    /// and was dropped, with the window named. `None` means it did not.
+    ///
+    /// ⚠ Since `#146` the BAR0 moving window is never reported here — it either lands
+    /// ([`WriteOutcome::fb_landed`]) or refuses ([`WriteOutcome::fb_refusal`]). ⊘ **There
+    /// is deliberately no third answer**: *"framebuffer write, dropped, success"* is the
+    /// shape this whole rung exists to make unrepresentable.
+    pub fb_window: Option<FbWindow>,
+    /// ★★★ The write **landed** in the device's framebuffer, at this physical address.
+    ///
+    /// Set only after [`FbStore::write`] returned `Ok`.
+    pub fb_landed: Option<u64>,
+    /// ★★★ A **translated** write this port would not resolve — the virtual address, the
+    /// length and the reason.
+    ///
+    /// ⊘ There is deliberately no success-shaped answer beside it: a translated write is
+    /// either landed ([`WriteOutcome::fb_landed`], with the *physical* address the walk
+    /// produced) or refused here. `kbusVerifyBar2_GM107:4163-4200` is the caller that
+    /// notices, and it notices ninety lines later.
+    pub bar2_refusal: Option<Bar2Refused>,
+    /// ★★★ The framebuffer store **refused** the write, whole — address, length, reason.
+    ///
+    /// ★ Kept as the payload rather than as a tag for the same reason
+    /// [`WriteOutcome::ram_refusal`] is: the sentence and the address are the diagnosis,
+    /// and a shell that could only report *that* one happened would cost a boot to tell
+    /// "the shell forgot to install the store" from "the guest pointed the window past the
+    /// end of its own framebuffer".
+    pub fb_refusal: Option<FbRefused>,
+    /// The status-queue interrupt should be announced to the guest.
+    pub raise_status_irq: bool,
+    /// ★★★ A vector is now pending: **deliver a message-signalled interrupt**.
+    ///
+    /// ★★ **TWO producers since §14.18, and one field**, which is the opposite of the
+    /// split argued for below — deliberately, because they are the same *action* on the
+    /// same tree: either the guest wrote `CPU_INTR_LEAF_TRIGGER` (the `_osVerifyInterrupts`
+    /// loopback) or this device latched an engine's `vectorNonStall` because a completion
+    /// it witnessed really happened ([`RegPlane::announce_completion`]). The guest's ISR
+    /// cannot tell them apart — it reads TOP/LEAF and demultiplexes — so a second flag
+    /// would be a distinction the wire could not carry. Which one it was is in
+    /// [`Counters::cpu_intr_raises`] vs [`Counters::nonstall_raises`], where the question
+    /// is actually asked.
+    ///
+    /// ⚠ A second field beside [`WriteOutcome::raise_status_irq`] and not the same one,
+    /// even though today both end in one `msix_notify`. They are two different *causes* —
+    /// one is the emulated GSP announcing that it put something on the status queue, the
+    /// other is the guest asking the device to interrupt the guest — and a boot that
+    /// delivered the wrong number of vectors must be diagnosable as to which. Folding them
+    /// would make `Counters::irq_requests` and `Counters::cpu_intr_raises` two names for
+    /// one number and lose exactly that.
+    pub raise_cpu_intr: bool,
+    /// ★★★ **E2** — this write was a **usermode doorbell**, and here is what the core
+    /// answered: a served outcome, or a refusal with a kind and a sentence.
+    ///
+    /// `None` means the write was not a doorbell at all — which is the *control* every E2
+    /// acceptance needs, expressed in the type rather than in a counter comparison.
+    ///
+    /// ⊘ There is deliberately no `doorbell: bool` beside it. Two fields for one fact is
+    /// how a *"was a doorbell"* and a *"went somewhere"* come to disagree; see
+    /// [`crate::DoorbellReport`], which has the same shape for the same reason.
+    pub doorbell: Option<DoorbellReport>,
+    /// ★★★★★ **w326 — this write was the guest's TLB invalidate, and it COMMITTED.**
+    ///
+    /// `Some(inv)` means the guest set `TRIGGER` at BAR0 `0x00B8_30B0`, i.e. it has
+    /// finished writing page tables and is **now spinning on the same register waiting for
+    /// us**. The shell must publish and then call
+    /// [`crate::mmuinval::MmuInvalidateLog::complete`] — see [`RegPlane::mmu_inval`].
+    ///
+    /// ⊘ Reported for **every** trigger, armed or not, because *"the register fired"* and
+    /// *"we acted on it"* are different facts and the disarmed control needs the first
+    /// without the second. Whether the shell must act is
+    /// [`Self::publish_before_completing`], and it is a separate field for exactly that
+    /// reason.
+    pub invalidate: Option<crate::mmuinval::Invalidate>,
+    /// ★★★ Set iff the shell **owes a publication and a completion** for this write.
+    ///
+    /// ⚠ When this is `true` the guest is blocked in `kgmmuCheckPendingInvalidates` and
+    /// will spin to its `gpuCheckTimeout` — **4 s** before its first compute object,
+    /// **30 s** after (`crate::mmuinval` §3) — if the completion never comes. A dropped
+    /// completion here is a guest **hang**, not a fault.
+    pub publish_before_completing: bool,
+    /// How many transitions fired.
+    pub transitions: usize,
+    /// How many commands were decoded off the command queue.
+    pub commands: usize,
+}
+
+impl WriteOutcome {
+    /// A write that claimed nothing, faulted nowhere and moved no byte.
+    ///
+    /// ★ The base every arm of the write path builds on, so that **adding a field to
+    /// [`WriteOutcome`] is one edit rather than six** — and, more to the point, so that the
+    /// field cannot be silently omitted from one arm and set in the other five. That shape
+    /// is how a "dropped" arm and a "landed" arm come to differ in a way nobody notices.
+    #[must_use]
+    pub fn nothing() -> WriteOutcome {
+        WriteOutcome {
+            claimed: false,
+            fault: None,
+            ram_refusal: None,
+            fb_window: None,
+            fb_landed: None,
+            bar2_refusal: None,
+            fb_refusal: None,
+            raise_status_irq: false,
+            raise_cpu_intr: false,
+            doorbell: None,
+            invalidate: None,
+            publish_before_completing: false,
+            transitions: 0,
+            commands: 0,
+        }
+    }
+}
+
+/// The fault tag a refused framebuffer write carries out to the shell.
+///
+/// ★ A sentence rather than a name, because the shell prints it verbatim beside the
+/// register offset and the reader is an operator staring at one line of a boot log.
+pub const FB_WRITE_REFUSED: &str = "the framebuffer store would not take a write through the BAR0 moving window; the \
+     bytes did NOT land, and the guest will not be told";
+
+/// The fault tag a write to the **free-running nanosecond counter** carries (`#128`).
+///
+/// ★★★ It is a REFUSAL, not a drop and not an emulated set. The guest's own RM issues
+/// this write — `tmrSetCurrentTime_GV100` (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/timer/arch/volta/timer_gv100.c:56-82`) — so it will be seen,
+/// and it must be seen as a *decision*. Under `register_plane_read_native.md` the guest
+/// reads this counter natively off the host GPU, and a guest that could also *move* it
+/// would destroy the single property that buys: that a guest timestamp and a host GPU
+/// timestamp are in one timebase.
+pub const PTIMER_WRITE_REFUSED: &str = "a write to the free-running nanosecond counter was refused: the guest reads the \
+     HOST GPU's own counter and may not move it; the value did NOT change";
+
+/// The fault tag a refused **translated** write carries out to the shell.
+///
+/// ★ Its own sentence, not [`FB_WRITE_REFUSED`] reused, because the two failures have
+/// different fixes: that one means the store would not take bytes at an address that had
+/// already been resolved, this one means no address was resolved at all.
+pub const BAR2_WRITE_REFUSED: &str = "the GMMU would not translate this write through the instance/BAR2 window; the \
+     bytes did NOT land anywhere, and the guest will not be told";
+
+/// ★★★ A translated access this port refused, whole.
+///
+/// The twin of [`FbRefused`] on the other side of the walk: address, length, reason. The
+/// address is **virtual** and the type says so in its field name, because a virtual and a
+/// physical address are different facts and one struct that could carry either would let
+/// a reader mistake one for the other at exactly the moment it matters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Bar2Refused {
+    /// The aperture offset the guest accessed, i.e. the virtual address in the bus VAS.
+    pub va: u64,
+    /// How many bytes were asked for.
+    pub len: usize,
+    /// One sentence.
+    pub why: &'static str,
+}
+
+/// [`RegPlane`]'s refusal when no page-table format has been installed.
+pub const NO_MMU_PORT: &str = "the register plane has no page-table format installed; the shell never called \
+     set_mmu, so a translated aperture has no way to resolve an address and this port \
+     will not invent a stride";
+
+/// The aperture has no published root.
+/// w473 — the subtree decode refused: a malformed table, a guest-built cycle, or a budget
+/// that ran out. ⊘ All three are the same answer to the caller — **the list is not
+/// complete** — and a partial list must never be returned as if it were.
+pub const WINDOW_ENUMERATION_REFUSED: &str = "the BAR page-table enumeration did not complete (unbacked page, malformed entry, or \
+     exhausted budget); a PARTIAL list is refused because it reads as a shorter mapping";
+
+pub const BAR2_UNROOTED: &str = "the guest has not published a root page-directory entry for this aperture \
+     (UPDATE_BAR_PDE); on the firmware-offload model that entry is the ONLY fact this \
+     port ever receives about that page-table tree";
+
+/// The published root names a level this format does not have.
+pub const BAR2_UNKNOWN_ROOT_LEVEL: &str = "the published root entry declares a level shift this chip's page-table format \
+     does not have a level for; decoding it at a guessed level would read the wrong \
+     fields of the entry";
+
+/// The access falls outside the one root slot the guest published.
+pub const BAR2_OUTSIDE_PUBLISHED_SLOT: &str = "this aperture offset indexes a root slot the guest never published; on the \
+     firmware-offload model the guest owns root slot 0 and the firmware owns the rest, \
+     and this port has published none of its own";
+
+/// The walk resolved to an aperture this port cannot serve.
+pub const BAR2_FOREIGN_APERTURE: &str = "the guest's page tables map this address into an aperture this port does not \
+     serve through the bus window; answering it out of the framebuffer store would \
+     alias two different memories onto one address";
+
+/// The walk resolved to a leaf the guest marked read-only.
+pub const BAR2_READ_ONLY: &str = "the guest's own page tables mark this mapping read-only; letting a write through \
+     would give the guest a mapping stronger than the one it published";
+
+// ── BAR1, the framebuffer aperture ─────────────────────────────────────────────────────
+//
+// ★★★★ Separate sentences from BAR2's, and NOT the same constants reused, because the two
+// apertures fail for different reasons and a refusal that names the wrong window sends the
+// reader to the wrong root. BAR2 fails when the guest has not PUBLISHED an entry to us;
+// BAR1 fails when the chip row this port shipped declares no directory address, which is a
+// defect in OUR reply and not in the guest's.
+
+/// The fault tag a refused write through the framebuffer aperture carries out to the shell.
+pub const BAR1_WRITE_REFUSED: &str = "the GMMU would not translate this write through the framebuffer/BAR1 window; the \
+     bytes did NOT land anywhere, and the guest will not be told";
+
+/// This chip row states no BAR1 page-directory address.
+///
+/// ⊘ Distinct from [`BAR2_UNROOTED`] in the direction of blame: BAR2's root is a fact the
+/// guest sends us and may legitimately not have sent yet, whereas BAR1's root is a fact
+/// **we** send the guest, so its absence is this port's own omission.
+pub const BAR1_NO_ROOT_DECLARED: &str = "this chip row declares no bar1PdeBase, so there is no framebuffer address at which \
+     to find BAR1's root page directory; unlike BAR2 the guest never publishes this one \
+     back to us — it takes it from our own GspStaticConfigInfo reply and roots its page \
+     tables there";
+
+/// The walk resolved to an aperture this port cannot serve through BAR1.
+pub const BAR1_FOREIGN_APERTURE: &str = "the guest's page tables map this framebuffer-aperture address into an aperture \
+     this port does not serve through the bus window; answering it out of the framebuffer \
+     store would alias two different memories onto one address";
+
+/// The walk resolved to a leaf the guest marked read-only.
+pub const BAR1_READ_ONLY: &str = "the guest's own page tables mark this framebuffer-aperture mapping read-only; \
+     letting a write through would give the guest a mapping stronger than the one it \
+     published";
+
+/// ★★★★★ **w393 — the BAR mirror's port into the plane**: what the plane must tell the
+/// shell BEFORE it moves a framebuffer range's bytes between memories.
+///
+/// The shell installs memslots over the store's pages and joins (the demand-driven BAR1/BAR2
+/// mirror). A memslot is a second name for those bytes that the guest writes through with
+/// **no trap**, so every operation that changes which memory a range is served from — a join
+/// install (`install_join` copies the local pages in and drops them), a release (the bytes
+/// move back or are dropped), a device reset (everything goes) — must first take that second
+/// name away, or a guest store landing between the copy and the retire is lost. The plane is
+/// the one choke point every such operation passes through, so the plane calls this port.
+///
+/// ⊘ Called with **no ranked lock held** — before the plane's own lock is taken — because the
+/// retire is a hypervisor ioctl (blocking, R1). The shell's `resume` re-enables fills for
+/// the range afterwards; between the two the range is served by the trap, correctly.
+pub trait FbMirrorPort: Send + Sync + core::fmt::Debug {
+    /// Retire every memslot over `[phys, phys+len)` and refuse new ones there until
+    /// [`FbMirrorPort::resume`].
+    fn quiesce(&self, phys: u64, len: u64);
+    /// Lift the refusal [`FbMirrorPort::quiesce`] placed.
+    fn resume(&self, phys: u64, len: u64);
+    /// Retire every memslot the mirror holds, naming why (a device reset).
+    fn retire_all(&self, why: &'static str);
+    /// ★★★★★ **w468 — run any revalidation the vCPU deferred.** The trap path only
+    /// *requests* a revalidation (one atomic bump); the walk over every live slot is
+    /// O(live) page walks plus a memslot ioctl per drop, which is milliseconds and may
+    /// never run inside an MMIO exit. Called on the publication worker, before the
+    /// invalidate's completion is written.
+    fn revalidate_pending(&self);
+    /// ★★★★★ **w472 — run the page fills the vCPU deferred.** A fill is a prefetch that
+    /// costs three syscalls (`mmap`, `mmap MAP_FIXED`, `KVM_SET_USER_MEMORY_REGION`), which
+    /// is three of the five blocking doors `[measured w471]` found on vCPU threads.
+    fn drain_fills(&self);
+}
+
+/// ★★★★★ **CUT B — what [`RegPlane::window_leaves`] found**, including what it could NOT read.
+///
+/// # ⊘⊘⊘ Why this is a struct and not the `(leaves, visited)` pair it replaces
+///
+/// `decode_subtree` errors on budget exhaustion **and on nothing else**; a page-table page it
+/// could not read becomes a per-branch `WalkFault` and the walk carries on. The pair dropped
+/// those faults, so an enumeration whose root page was unreadable returned an **empty leaf
+/// list and `Ok`** — *"the guest has mapped nothing"*, which is a statement about the guest
+/// made out of a failure of ours.
+///
+/// ⚠ It never fired under the arena store, whose `read` answers every in-range address. Under
+/// the single store an unarmed page-table page faults on every walk, and the caller's correct
+/// response is to arm and try again — which it cannot decide without this number.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WindowEnumeration {
+    /// Every vidmem leaf the window's own page tables declare.
+    pub leaves: Vec<kayfabe_mmu::walker::DecodedLeaf>,
+    /// How many page-table pages were visited — the measurement that turns the next budget
+    /// into a number rather than a second guess (w626).
+    pub visited: usize,
+    /// ★★★ **How many branches could not be decoded.** Non-zero means [`WindowEnumeration::leaves`]
+    /// is a SUBSET of what the guest mapped, and a caller that treats it as the whole set is
+    /// publishing fewer pages than the guest asked for.
+    pub faults: usize,
+}
+
+/// ★★★★★ **w393 — one translated-window page, resolved for the mirror**: where it lands in
+/// the framebuffer, whether the guest's own PTE forbids writes, and what memory backs it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WindowPageResolution {
+    /// The framebuffer-physical address of the page (page-aligned).
+    pub phys: u64,
+    /// The guest's PTE marks the page read-only: a memslot over it must be read-only too,
+    /// so a guest store still traps and is refused by name as it is today.
+    pub read_only: bool,
+    /// What backs the page — see [`FbPageBacking`].
+    pub backing: FbPageBacking,
+}
+
+/// ★★★★★ **WHERE A SHADOWED REGISTER'S BYTES LIVE** — the hypervisor's memory, written
+/// through by [`RegPlane::shadow_write`] and read by the guest with no VM exit.
+///
+/// ⊘ A trait rather than a buffer this crate owns, because the memory is the shell's: it is
+/// the backing of a region the guest has mapped, and a copy here would be a second home for
+/// the same bytes with nothing keeping them equal.
+///
+/// ⚠ Implementations must be safe to call from a vCPU thread inside an MMIO exit: no blocking,
+/// no allocation, no ranked lock.
+pub trait ReadShadowPort: Send + Sync + core::fmt::Debug {
+    /// Place `bytes` at `off` in the register aperture's shadow.
+    ///
+    /// ⊘ Total: an offset the shadow does not cover is DROPPED, not refused. The shadow's
+    /// coverage is decided by the cut, and a producer has no business knowing which pages were
+    /// published — but a dropped byte must never be reported as written.
+    fn write(&self, off: u64, bytes: &[u8]);
+}
+
+/// ★★★ The register plane: the routing stage Q4 adds.
+pub struct RegPlane {
+    chip: &'static ChipProfile,
+    model: Box<dyn GspModel>,
+    rom: Vec<u8>,
+    /// ★ Outside the [`Mutex`], and that is the point: the guest reads this counter in the
+    /// inner loop of every timeout it has, millions of times per boot, and putting it
+    /// behind the FSM's lock would serialize the whole thing behind a doorbell being
+    /// serviced. [`NanoClock`] takes `&self` so it needs no lock of ours.
+    clock: Box<dyn NanoClock>,
+    state: RankedMutex<PlaneState>,
+    /// ★★★★★ w564 — where a producer's new register value goes so the guest reads it without
+    /// trapping. `None` is the shipping default and means *"publish nothing"*, never *"publish
+    /// something stale"*. See [`RegPlane::shadow_write`].
+    read_shadow: std::sync::RwLock<Option<std::sync::Arc<dyn ReadShadowPort>>>,
+    /// ★ w565 — the GSP model's register offsets, swept once. See
+    /// [`RegPlane::gsp_register_offsets`].
+    gsp_regs: std::sync::OnceLock<Vec<u64>>,
+    /// ★★★★★ w573 — one bit per aperture page, set when the cut backs that page with memory.
+    ///
+    /// ⊘⊘ **Built at CONSTRUCTION, and w554 built it LAZILY ON THE READ PATH.** `dead_page` is
+    /// called from the unclaimed arm of `read`, so the first unclaimed read a guest issued —
+    /// very early in boot — ran `bar0_backable_runs` inside its own MMIO exit: **4096 pages ×
+    /// 1024 dwords = 4.2 MILLION predicate evaluations, on the vCPU, with the guest halted.**
+    ///
+    /// ⚠ That is the owner's third invariant violated by an INSTRUMENT — the counter added to
+    /// measure the cut was itself the stall. `[measured w573, bench boot]` the tree at w554
+    /// graded `(R)` where w553 graded `(P)`.
+    ///
+    /// ★ It is a pure function of the chip, so there was never a reason to defer it: no guest
+    /// state, no lock, no I/O. Computing it in `new` costs one sweep at realize, where nothing
+    /// is waiting.
+    dead_pages: Box<[u64]>,
+    /// See [`PlaneMem`] — the framebuffer and the GMMU format, under their own lock so a CE
+    /// submission and a register write stop contending over data neither needs.
+    mem: kayfabe_util::lock::RankedMutex<PlaneMem>,
+    /// ★★★★★ **w507 — HOW MANY vCPUs ARE INSIDE AN MMIO TRAP RIGHT NOW.**
+    ///
+    /// Not a lock and not a count of lock waiters — a count of threads that are *in* a trap
+    /// and may need [`RegPlane::state`] before they can answer the guest. `[measured w506]`
+    /// the census read `worst_wait=3825us` against `worst_hold=0us`: no holder is long, a
+    /// waiter is STARVED. `std::sync::Mutex` is barging, so the page-table sweep — which
+    /// re-locks once per table page in a tight loop — keeps winning the handoff against a
+    /// vCPU parked in `futex_wait`. See [`PlanePtBytes::breathe`], the only reader.
+    ///
+    /// ⊘ Deliberately coarse: bumped across the WHOLE of [`RegPlane::read`]/[`RegPlane::write`],
+    /// not around the acquisition. "A vCPU is in a trap" is the condition the sweep must yield
+    /// to; narrowing it to "a vCPU is blocked on this exact mutex" would re-open the same race
+    /// one level down, because the bump would land after the sweep had already re-won.
+    mmio_in_flight: AtomicU32,
+    /// ★★★★★ **w513 — THE CPU INTERRUPT TREE, OUT FROM UNDER THE BIG LOCK.**
+    ///
+    /// `[measured w510]` the worst MMIO trap of the whole boot was **15 982 us at
+    /// `bar0+0xb81208`** — a register in this very block (`0x00B8_1000`-`0x00B8_1643`). It
+    /// waited that long because `PlaneState`'s mutex ALSO covers `fb`, `ram`, `mmu` and the
+    /// page-table witness, and `ce_session_with_root` holds it for **8.2 ms** across a whole
+    /// CE submission on the worker.
+    ///
+    /// An interrupt-enable write has nothing to do with any of that data. The owner, before
+    /// any of it was measured: *"locks taking over data structures that protect 90% of the
+    /// data completely irrelevant for the vcpu mmio handler"*.
+    ///
+    /// ⊘ Its own lock, at [`LockRank::Leaf`], and **never taken under the plane's**: all four
+    /// uses took `state.lock()` for this field and nothing else, so there is no site where
+    /// the two are held together and no order to establish.
+    cpu_intr: kayfabe_util::lock::RankedMutex<CpuIntrTree>,
+    c: PlaneCounters,
+    /// ★★ The list of commands nothing answered. Held here as well as inside the chain's
+    /// terminal link because a caller that replaces the policy with
+    /// [`RegPlane::set_policy`] still gets to read what the default one recorded — and
+    /// because reading it must not take the FSM's lock behind a doorbell.
+    unserviced: crate::unserviced::UnservicedLog,
+    /// ★★★ The control census — seen-and-served and seen-and-refused, the two positive
+    /// states without which the unserviced list's absences discriminate nothing
+    /// (`crate::census`). Held here for [`RegPlane::unserviced`]'s two reasons: readable
+    /// without the FSM's lock, and it survives [`RegPlane::set_policy`].
+    census: crate::census::ControlCensusLog,
+    /// ★★★★★ **w326 — the guest's own TLB invalidate** (`crate::mmuinval`), BAR0
+    /// `0x00B8_30B0`. This is the MAP side's **tier-1 publish trigger**: the exact instant
+    /// the guest declares its page-table writes live, and — because RM spin-polls the same
+    /// register — an instant at which the guest is already blocked.
+    ///
+    /// Held here for `unserviced`'s two reasons and one of its own: the guest polls this
+    /// register in a tight loop, so answering it must never take the FSM's lock.
+    mmu_inval: crate::mmuinval::MmuInvalidateLog,
+    /// ★★★★★ w795 — per-route doorbell cost. See [`crate::dbtable::DoorbellHistogram`] for
+    /// why it is unconditional and what its own probe costs.
+    dbcost: crate::dbtable::DoorbellHistogram,
+    /// ★★★★★ w801 — which TOKENS took which disposition. See [`crate::dbtable::DoorbellLedger`]
+    /// for why counts alone could not answer the question three rungs argued about.
+    dbledger: crate::dbtable::DoorbellLedger,
+    /// ★★★★★ **The FSM's pending-doorbell count, readable WITHOUT the big lock.**
+    ///
+    /// ⊘⊘ `[measured w462]` w432 put `pending_command_doorbells()` at the tail of **every**
+    /// MMIO write, and that accessor read the count through `self.state.lock()` — the lock
+    /// holding `fsm`, `ram` and `policy`, which the worker takes for whole RPCs. So every vCPU
+    /// register write queued behind the worker's servicing. `bar0+0xb830b0` took **48 slow
+    /// traps, worst 54 053 us**, on a path whose own arm returns before any lock is taken.
+    ///
+    /// ⚠ **That was my own regression, in the commit that moved the work OFF the vCPU.**
+    /// Moving work off a thread and then reading its state through a shared lock puts the wait
+    /// straight back — the owner's rule, stated as a mechanism: *"a blocking call in vcpu also
+    /// counts if the lock its waiting on to acquire is hold by a thread that has a blocking
+    /// call"*.
+    ///
+    /// ⊘ Mirrored, not moved: the FSM keeps the authoritative `u32` (it derives `Eq`, which an
+    /// atomic cannot). This is written under the lock the writer already holds, and read with
+    /// no lock at all.
+    pending_cmd_doorbells: std::sync::atomic::AtomicU32,
+    /// ★★★★★ **w754 — COMMAND DOORBELLS THE TRAP POSTED WITHOUT TAKING THE RANK-0 LOCK.**
+    ///
+    /// Constraint 6: *"every MMIO trap only posts the register write to a queue …, wakes a
+    /// worker, and returns."* w432 stopped the queue-head write from SERVICING the queue;
+    /// it still reached the deferral through [`RegPlane::state`], the lock a worker holds
+    /// across a whole RPC. This is where the write lands instead, and
+    /// [`RegPlane::service_one_deferred_command`] folds it into the FSM under the lock it
+    /// was taking anyway.
+    ///
+    /// ⊘ A SECOND counter beside [`RegPlane::pending_cmd_doorbells`] and not a replacement:
+    /// that one MIRRORS the FSM's authoritative count, this one holds what the FSM has not
+    /// been told yet. [`RegPlane::pending_command_doorbells`] returns the sum, so the shim's
+    /// wake gate sees a posted doorbell immediately.
+    ///
+    /// ⚠ Cleared by [`RegPlane::device_reset`] with the FSM's own count, because a doorbell
+    /// for a queue binding that no longer exists must not be serviced against the next one.
+    posted_cmd_doorbells: std::sync::atomic::AtomicU32,
+    /// ★ Whether command-doorbell deferral is armed, readable with NO lock.
+    ///
+    /// ⊘ The FSM holds the authoritative flag (it derives `Eq`); this mirrors it so the trap
+    /// can decide *"post, or fall through to the inline path"* without the rank-0 lock —
+    /// which is the whole point of the classification above it. ⚠ Written under the lock by
+    /// [`RegPlane::set_defer_commands`], the one place the FSM's copy changes, so the two
+    /// cannot drift: a mirror refreshed in fewer places than its source is precisely w469's
+    /// defect.
+    defer_cmds_armed: std::sync::atomic::AtomicBool,
+    /// ★ Step 5a's whole deliverable: where the guest said its replayable fault buffer is
+    /// (`crate::faultbuffer`). Recorded, never answered.
+    fault_buffer: crate::faultbuffer::FaultBufferLog,
+    /// ★★★ The bus apertures' published root page-directory entries (`crate::bar2`). Held
+    /// here as well as inside the chain link that writes it, for the same two reasons
+    /// [`RegPlane::unserviced`] is: reading it must not take the FSM's lock behind a
+    /// doorbell, and a caller that replaced the policy still gets to read what the guest
+    /// published.
+    bar_pdes: BarPdeLog,
+    /// ★★★★★ **w393 — the BAR mirror's port** ([`FbMirrorPort`]), `None` until a shell
+    /// installs one. Read on the join/release/reset paths **before** the plane's lock is
+    /// taken; a plane with none behaves byte for byte as before w393.
+    fb_mirror: RwLock<Option<std::sync::Arc<dyn FbMirrorPort>>>,
+    /// ★★★ **What a trapped BAR1/BAR2 access does** — see [`FbTrapPolicy`], which carries
+    /// this gate's expiry condition.
+    ///
+    /// ⊘ An `AtomicU8` and not a lock: it is read on the vCPU's own trap path, where the
+    /// contract is that nothing blocks, and it is written exactly once at realize.
+    fb_trap_policy: std::sync::atomic::AtomicU8,
+    /// How many trapped accesses [`FbTrapPolicy::RefuseByName`] has refused.
+    fb_trap_refused: std::sync::atomic::AtomicU64,
+    /// ★★★★★ **CUT B — whether the installed store has a byte port**, cached from
+    /// [`RegPlane::set_fb`]. See that method for why this is not asked of the store.
+    fb_has_demand_port: std::sync::atomic::AtomicBool,
+    /// ★★★ **The VA-space page-directory publications** (`crate::gvaspub`) — the guest
+    /// telling us where its page directories live, with the `hObject` that names which VA
+    /// space they root. Held here for the two reasons `bar_pdes` is: reading it must not
+    /// take the FSM's lock behind a doorbell, and a caller that replaced the policy still
+    /// gets to read what the guest published.
+    gvas_pub: GvasPubLog,
+    /// ★★★★ **The page-directory root the guest INSTALLS** (`crate::setpagedir`) —
+    /// `0x00801813`, refused by this port in every boot before §16.30. Held here for
+    /// `bar_pdes`' two reasons: reading it must not take the FSM's lock behind a doorbell,
+    /// and a caller that replaced the policy still gets to read what the guest installed.
+    set_page_dir: crate::setpagedir::SetPageDirLog,
+    /// ★★★★★ §16.76 — **the os-event registry** (`crate::osevent`): which
+    /// `(hClient, hEvent, notifyIndex)` a wakeup may be posted to.
+    ///
+    /// Held here for `bar_pdes`' two reasons and one of its own: [`RegPlane::write`] reads
+    /// it on the way OUT of the FSM's own lock, to hand the batch straight back in — so it
+    /// is a plane fact, not merely a report field.
+    os_events: crate::osevent::OsEventLog,
+    /// ★ Refused doorbells, counted **by fault name** — see `account_doorbell_report`.
+    /// `[measured w692a]` 503 refusals reached the teardown as one number with 16 samples.
+    doorbell_refusals_by_kind: std::sync::Mutex<std::collections::BTreeMap<String, u64>>,
+    /// ★★★ **E2 — the usermode doorbell seam** (`crate::doorbell`).
+    ///
+    /// ⚠ **Outside [`RegPlane::state`], and that is a requirement rather than a
+    /// preference.** `kayfabe_rt::SharedDevice::doorbell` takes the core's ranked locks and
+    /// can *block* on the isolate pool's backpressure gate; running it under the FSM mutex
+    /// would put a guest-controlled wait beneath the lock every other vCPU needs to read a
+    /// register. The classification in [`RegPlane::write`] therefore runs before that mutex
+    /// is taken, and this port has a lock of its own.
+    ///
+    /// ★ A [`RwLock`] and not a [`Mutex`]: rings are the hot path and sibling vCPUs must be
+    /// able to ring concurrently; only [`RegPlane::set_doorbell`] — one call, at
+    /// composition — takes it for writing.
+    doorbell: RwLock<Box<dyn DoorbellPort>>,
+    /// What the doorbell aperture has seen, beyond the counts. Its own small lock, taken
+    /// *after* the port has answered and never held across the call.
+    doorbell_log: Mutex<DoorbellLog>,
+}
+
+/// ★★★ **E2** — what this device life's doorbell aperture saw, beyond the counters.
+///
+/// ⊘ The **first** refusal is kept and later ones are not. A flood of identical rings must
+/// not be able to push the diagnosis out of a one-line report, and the first one is the one
+/// that happened before anything else could have changed the device's state.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct DoorbellLog {
+    /// The most recent token the guest stored, or `None` if it never rang.
+    ///
+    /// ★ An `Option` and not a bare `0`: token zero is a legal work-submit token (runlist
+    /// 0, channel 0), so a sentinel could not tell *"rang channel 0"* from *"never rang"* —
+    /// the same two-fields-for-one-fact argument `KayfabeRegWrite::fb_landed` already
+    /// carries.
+    pub last_token: Option<u64>,
+    /// The first ring the port refused — kind and sentence — or `None` if none was.
+    pub first_refusal: Option<DoorbellRefused>,
+    /// ★★★ **E10e — the MOST RECENT ring the SHELL served itself**, whole
+    /// ([`DoorbellReport::ServedLocally::note`]): what the CPU copy-engine executor
+    /// actually did — spans run, bytes moved, where the finishPayload landed.
+    ///
+    /// ⊘ **Last, where [`Self::first_refusal`] is first, and the asymmetry is the point.**
+    /// A refusal is a *diagnosis* and a flood of identical rings must not push it out of
+    /// the one line a teardown report has room for; a serving is *progress*, and the last
+    /// one is how far the guest got. `memmgrTestCeUtils` issues a `MemSet` and then a
+    /// `MemCopy`, so "which one was the last to land" is the whole question the report is
+    /// asked (`ogkm-580: mem_mgr.c:463` vs `:467`).
+    pub last_local_serving: Option<String>,
+}
+
+impl core::fmt::Debug for RegPlane {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RegPlane")
+            .field("chip", &self.chip.name)
+            .field("rom_len", &self.rom.len())
+            .field("counters", &self.counters())
+            .finish_non_exhaustive()
+    }
+}
+
+/// The counters, atomically. Separate from [`PlaneState`] so a read that takes the
+/// FSM lock and one that does not both account, and so [`RegPlane::counters`] never
+/// blocks behind a doorbell being serviced.
+#[derive(Debug, Default)]
+struct PlaneCounters {
+    reads: AtomicU64,
+    /// ★★★★★ **w586 — WHERE THE REMAINING BAR0 READS ARE, one counter per 4 KiB page.**
+    ///
+    /// ⊘ `[measured w582]` BAR0 reads reaching the handler are **161 422**, of which only
+    /// **138** are unclaimed. So 161 284 reads are CLAIMED by a decode arm and trap anyway,
+    /// and no instrument in this tree could say which arm. Goal 2 is *zero* read traps; a
+    /// total with no breakdown cannot be worked down, it can only be guessed at — and the
+    /// candidate everyone reaches for (the spin-polled invalidate trigger) is a hypothesis
+    /// nobody has measured.
+    ///
+    /// ★ One `Relaxed` increment indexed by `off >> 12`, into a fixed array sized at
+    /// construction. No allocation, no lock, no branch beyond the bound — cheap enough for
+    /// the inside of an MMIO exit, which is the only place it can be counted.
+    bar0_read_pages: Box<[AtomicU64]>,
+    writes: AtomicU64,
+    boot_reg_reads: AtomicU64,
+    ptimer_reads: AtomicU64,
+    ptimer_writes_refused: AtomicU64,
+    rom_reads: AtomicU64,
+    gsp_reads: AtomicU64,
+    gsp_writes: AtomicU64,
+    unclaimed_reads: AtomicU64,
+    /// ★★★★★ **w602 — of the BAR0-window accesses, how many arrived OFF a trap thread.**
+    ///
+    /// ⊘⊘ `[measured w601]` with the PRAMIN slot live, at the correct GPA, with BAR0 unmoved
+    /// and the re-point accepted, 2 316 window accesses still reach this plane — **all at one
+    /// window base**. Four readings of that number have now been refuted, and the fifth
+    /// possibility is the one this tree has a name for: **`our_census_counts_intent`** — that
+    /// they are not guest exits at all, but THIS PROCESS calling the window path internally.
+    ///
+    /// ★ A memory slot can only remove accesses the GUEST makes. An internal caller reaches
+    /// `RegPlane::write` directly and would be counted identically, which is exactly how a
+    /// working slot could look like a broken one. `trapwitness::in_trap()` separates them, and
+    /// it is a thread-local `Cell` read — no lock, no syscall, safe on the trap path.
+    fb_window_off_trap: AtomicU64,
+    /// ★ w564 — how many register values were written through to the read shadow.
+    shadow_writes: AtomicU64,
+    /// ★ w554 — of those, the ones inside a page the cut backs with memory. See the read
+    /// arm for why this is a separate number and not a fraction of the one above.
+    unclaimed_reads_in_dead_pages: AtomicU64,
+    unclaimed_writes: AtomicU64,
+    fb_window_reads: AtomicU64,
+    fb_window_writes: AtomicU64,
+    fb_reads: AtomicU64,
+    fb_writes: AtomicU64,
+    fb_refusals: AtomicU64,
+    bar2_reads: AtomicU64,
+    /// ★★★★★ **w607 — PRAMIN accesses that actually reached this handler.**
+    ///
+    /// ⊘⊘ **It did not exist, and its absence cost six instruments and four boots.** The
+    /// `FbWindow::Pramin` arms of `read`/`write` were literally `{}`, while `fb_reads` and
+    /// `fb_writes` were bumped **unconditionally for every window** just outside the match —
+    /// so `window[SERVED r= w=]` was BAR1 + BAR2 + PRAMIN, and `Counters::fb_reads`'s doc
+    /// called it *"through the BAR0 moving window"*.
+    ///
+    /// ⚠ I checked that doc and reported the counter verified. **The doc was the thing that
+    /// was wrong**, so checking it confirmed the error. `our_census_counts_intent` again, and
+    /// this time the intent was written down in a doc comment and believed.
+    pramin_reads: AtomicU64,
+    /// As [`PlaneCounters::pramin_reads`], for writes.
+    pramin_writes: AtomicU64,
+    bar2_writes: AtomicU64,
+    bar2_faults: AtomicU64,
+    bar1_reads: AtomicU64,
+    bar1_writes: AtomicU64,
+    bar1_faults: AtomicU64,
+    bar0_window_reads: AtomicU64,
+    bar0_window_writes: AtomicU64,
+    commands: AtomicU64,
+    faults: AtomicU64,
+    ram_refusals: AtomicU64,
+    irq_requests: AtomicU64,
+    cpu_intr_accesses: AtomicU64,
+    cpu_intr_raises: AtomicU64,
+    cpu_intr_masked: AtomicU64,
+    nonstall_raises: AtomicU64,
+    nonstall_unvectored: AtomicU64,
+    /// ⊘⊘ **THE THREE CAUSES OF `nonstall_unvectored`, SPLIT (w682).** `[measured w682a]`
+    /// `nonstall[raises=4 unvectored=39]` — nine of every ten completions the guest waits for
+    /// were never announced, and ONE counter covered three defects with three different fixes:
+    /// a channel with **no bound engine** (we never recorded the bind), an engine with **no
+    /// vector** in this chip's `intr_table` (a table gap), and a vector **out of range** (a
+    /// decode bug). ★ The w625 lesson — a refusal counter covering several causes reads as one
+    /// problem and is several.
+    nonstall_no_engine: AtomicU64,
+    nonstall_no_vector: AtomicU64,
+    nonstall_out_of_range: AtomicU64,
+    nonstall_masked: AtomicU64,
+    gsp_event_raises: AtomicU64,
+    gsp_event_unvectored: AtomicU64,
+    gsp_event_masked: AtomicU64,
+    status_irq_cleared: AtomicU64,
+    doorbells: AtomicU64,
+    doorbells_served: AtomicU64,
+    /// ★★★★ §16.62.3 — the SPLIT of `doorbells_served`. See `Counters::doorbells_served_locally`.
+    doorbells_served_locally: AtomicU64,
+    doorbells_served_forwarded: AtomicU64,
+    doorbells_refused: AtomicU64,
+    doorbells_scheduled: AtomicU64,
+}
+
+/// How many level rows [`RegPlane::bar2_phys`] will ask a format about when it maps a
+/// published root's level shift back to a level index.
+///
+/// ★ A bound rather than `u8::MAX`, and it is a bound on **our** loop rather than a claim
+/// about any format: `kayfabe_arch::GmmuFmt::level_shift` answers `None` for a row it does
+/// not have, so scanning further finds nothing and only costs calls. Sixteen is already
+/// three times the deepest regime this project has read.
+/// How many format levels a root's `pageShift` is searched against.
+///
+/// ⊘ `pub(crate)`: [`crate::ceresolve`] derives a published root's level with the exact
+/// same search `bar2_phys` does for BAR2's, and two constants would be two answers to one
+/// question.
+pub(crate) const MAX_FORMAT_LEVELS: u8 = 16;
+
+/// Why a windowed access did not resolve to a framebuffer address.
+///
+/// ★ Two variants and not one string, because the two are reported differently: one is a
+/// window this port has never modelled (counted as a dropped *window* access, which is
+/// what it has always been), and the other is a window that IS modelled and refused this
+/// ★★★★★ **WHAT THE TRAP PATH DOES** — `SINGLE_STORE_PLAN.md` §w724g's *"make the trap path
+/// refuse by name, boot, confirm the refusal never fires"*.
+///
+/// # ⊘ Why this exists at all, and what it is FOR
+///
+/// `TRAP_FILLS=0` says BAR1/BAR2 traps **do not fire**. It does not say the trap path is
+/// **unreachable**, and §w721b records that those are different claims — *"zero in practice"*
+/// versus *"impossible by construction"*. Today the trap path is the **backstop that makes
+/// premap-completeness a SOFT property**: if publication misses a page, the guest traps and
+/// gets served, and nobody learns that publication was incomplete.
+///
+/// ⇒ [`FbTrapPolicy::RefuseByName`] removes the backstop **without removing the code**. One
+/// boot with it armed converts *"the counter reads zero"* into *"the path is unreachable"* —
+/// which is what licenses deleting the demand-fill mirror in increment 7.
+///
+/// # ⚠ EXPIRY CONDITION — this gate is created WITH the condition under which it is DELETED
+///
+/// §w724g: *"Every gate names, in its own doc comment, the condition under which it is
+/// deleted … it cannot quietly become permanent."*
+///
+/// > **DELETE THIS ENUM, [`RegPlane::set_fb_trap_policy`] and the `KAYFABE_FB_TRAP`
+/// > environment variable when the guest suite (`scripts/bench/rmladder_suite.sh`, all 30
+/// > arms, IN THE GUEST) is green with `KAYFABE_FB_TRAP=refuse`.** At that point the trap
+/// > path is proven unreachable, the demand-fill mirror goes with it (increment 7), and a
+/// > policy switch over a path that no longer exists is exactly the *"unwired but still
+/// > compiling"* cruft §w724g names.
+///
+/// ⊘ *Host*-green is not the condition. §w724g: *"a host-green suite is the easy way to
+/// declare victory early. The gate for unwiring is the GUEST suite."*
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FbTrapPolicy {
+    /// The shipped behaviour: a trapped BAR1/BAR2 access is translated and served out of the
+    /// framebuffer store, exactly as it always has been.
+    #[default]
+    Serve,
+    /// ★ **Refuse, by name.** A trapped BAR1/BAR2 access resolves nothing and returns
+    /// [`WindowRefusal::Translated`] with a sentence saying the trap path is armed to refuse.
+    ///
+    /// ⊘ It is a **refusal**, not a panic and not a zero. A panic inside a QEMU callback is
+    /// non-unwinding and takes the VMM with it, so the measurement would destroy the boot it
+    /// is trying to take; and answering zero would be a silent wrong value, which is the
+    /// failure class this whole tree is organised against.
+    RefuseByName,
+}
+
+/// The sentence a refused trap carries. ⊘ One `&'static str`, so the census can count
+/// occurrences of exactly this refusal and not of translation faults that happen to share a
+/// variant.
+pub const FB_TRAP_REFUSED: &str = "the BAR1/BAR2 trap path is ARMED TO REFUSE (KAYFABE_FB_TRAP=refuse): this access was not      covered by publication, and serving it here is the backstop that makes premap-completeness      a soft property. If you are reading this in a boot log, publication is INCOMPLETE and the      demand-fill mirror may not be deleted.";
+
+/// particular address (counted as a translation fault, with the address).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowRefusal {
+    /// No address model for this window at all.
+    NoAddressModel,
+    /// A translated window that would not resolve this virtual address.
+    Translated {
+        /// The aperture offset asked for.
+        va: u64,
+        /// One sentence.
+        why: &'static str,
+    },
+}
+
+/// ★★★ **The join.** The device's one [`FbStore`], wearing the page-table walker's
+/// byte-source trait.
+///
+/// # Why this is five lines and not a second store
+///
+/// `kayfabe_mmu::walker::FbRead` and [`FbStore`] are two views of the same bytes and they
+/// exist separately for a reason that is about *direction*, not about content: `FbRead`
+/// deliberately has no method that hands content **in**, which is what makes *"the core
+/// acquired a store of device memory"* unrepresentable in the pure crates. A borrow is
+/// therefore the only correct adapter — it cannot outlive the store, cannot copy it, and
+/// cannot become a second one.
+///
+/// ⊘ `false`, never zeros. [`FbStore::read`] already answers `Ok` with zeros for an
+/// address inside the advertised framebuffer that nobody has written (which is a true
+/// statement about memory this device owns); it returns `Err` only for a range it does not
+/// back at all, and *that* is what the walker must see as a miss.
+struct FbStoreReader<'a> {
+    fb: &'a mut dyn FbStore,
+    /// ★ w825 — a page-table read memo that outlives ONE lock acquisition but not one pass.
+    /// See [`PtReadMemo`].
+    memo: Option<&'a mut PtReadMemo>,
+}
+
+/// ★★★★★ **w825 — page-table bytes read once per REVALIDATION PASS, not once per slot.**
+///
+/// `[measured w825h --uvm-mean]` 256 genuine BAR invalidates, each re-walking ~365 mirror
+/// slots from the root through vidmem read by the CPU (~24 MB/s device views): `reval` avg
+/// 8.9 ms, worst 139 ms, with the guest held for all of it. Every slot shares the upper
+/// levels, so they are read once here. ⊘ Scoped to one pass by construction — the caller
+/// builds it, passes it through every slot, and drops it — so it can never answer a later
+/// invalidate from bytes the guest has since rewritten.
+#[derive(Debug, Default)]
+pub struct PtReadMemo {
+    bytes: std::collections::HashMap<(u64, usize), Vec<u8>>,
+    /// Reads answered from the memo, for the census.
+    pub hits: u64,
+    /// Reads that went to the store.
+    pub misses: u64,
+}
+
+/// ★★★★ **G3 — [`FbRead`] over this plane's own framebuffer, one lock acquisition per
+/// page.** Built by [`RegPlane::pt_bytes`]; see that method for which store is
+/// authoritative for a page-table decode and why the lock is taken per read.
+///
+/// ⊘ It holds **no bytes** and no guard — the same property [`FbStoreReader`] has, for the
+/// same reason: [`FbRead`] has no method that hands content *in*, so *"the core acquired a
+/// store of device memory"* stays unrepresentable.
+#[derive(Debug)]
+pub struct PlanePtBytes<'a> {
+    plane: &'a RegPlane,
+    /// ⊘ w507 — reads since this reader last yielded. See [`PlanePtBytes::breathe`].
+    reads: std::cell::Cell<u32>,
+}
+
+/// Raises [`RegPlane::mmio_in_flight`] for as long as a vCPU is inside an MMIO trap.
+///
+/// ⚠ The decrement is in `Drop`, so an early `return` out of the middle of a trap handler —
+/// and [`RegPlane::write`] has many — cannot leave the count stuck high. A stuck count would
+/// make the sweep yield forever and convert this fix into the stall it exists to prevent.
+struct MmioInFlight<'a>(&'a AtomicU32);
+
+/// Times [`PlanePtBytes::breathe`] hit its yield bound and swept anyway. ⚠ A nonzero value is
+/// not a bug — it is the sweep refusing to be held off forever — but a LARGE one says the
+/// guest traps faster than the sweep can complete, which is a different problem from
+/// starvation and wants a different fix.
+static SWEEP_DEFER_GIVEUPS: AtomicU64 = AtomicU64::new(0);
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ w754 — THE GSP QUEUE-HEAD DOORBELL'S OWN CENSUS. Constraint 6's two halves, and
+// they must be read together: a POST that nothing folds in is a parked guest, and a FOLD
+// with no posts is an arm that never ran.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// Queue-head writes that posted and returned **without the rank-0 lock**.
+static GSP_HEAD_POSTED: AtomicU64 = AtomicU64::new(0);
+/// Posted doorbells the worker folded into the FSM under the lock.
+static GSP_POSTED_FOLDED: AtomicU64 = AtomicU64::new(0);
+
+/// ★★★ **One line, and it states its own verdict.** ⊘ The four readings are kept apart
+/// because they have nothing in common:
+/// *posted=0 folded=0* is an UNARMED boot (no worker ⇒ the FSM services inline, as designed);
+/// *posted>0 folded=0* is a **PARKED GUEST** — the trap took work off the inline path and
+/// nothing ever picked it up;
+/// *posted>0 folded>0* with `posted - folded` small is the mechanism working, the remainder
+/// being whatever was in flight at teardown;
+/// *folded>posted* is impossible and says the counters have a second writer.
+#[must_use]
+pub fn gsp_head_census() -> String {
+    let posted = GSP_HEAD_POSTED.load(Ordering::Relaxed);
+    let folded = GSP_POSTED_FOLDED.load(Ordering::Relaxed);
+    let verdict = if posted == 0 && folded == 0 {
+        "⊘ UNARMED — no queue-head write took the lock-free path. On a boot with no doorbell          worker that is CORRECT (the FSM services inline); on one with a worker it means the          early classification never fired and constraint 6 is UNMEASURED here"
+    } else if folded == 0 {
+        "⊘⊘⊘ PARKED — doorbells were posted and NOTHING folded them in. The guest's RPCs are          unanswered and it is polling a reply that will never come. This is a hang, not a          statistic"
+    } else if folded > posted {
+        "⊘⊘ IMPOSSIBLE — more folded than posted ⇒ a second writer of these counters"
+    } else {
+        "★ WORKING — the queue-head write posts with no rank-0 acquisition and the worker          folds it in under the lock it was taking anyway (constraint 6)"
+    };
+    format!(
+        "GSP-HEAD posted={posted} folded={folded} in_flight={} ⇒ {verdict}",
+        posted.saturating_sub(folded)
+    )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ CUT B — THE ARM-THEN-RETRY CENSUS. `SINGLE_STORE_PLAN.md` cut B, items 2, 3 and 5.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// ★★★ **How many retries one host-side read may buy.** A **fixed trip count**, never a
+/// convergence argument — `THE_CONSTRAINTS.md` §20's first structural invariant.
+///
+/// # Why two
+///
+/// A single [`FbRead::read_in`] asks for **one** page-table page, so one successful drain is
+/// all it can possibly need. The second attempt exists for one race and one only: a drain on
+/// another thread evicting the run this one just armed. ⊘ A larger number would not fix
+/// anything a smaller one cannot — a read that misses twice after two drains is missing for a
+/// reason arming does not address — and it would turn a wedged port into a spin on a thread
+/// that may be a worker the rest of the device is waiting on.
+pub const FB_DEMAND_READ_RETRIES: u32 = 2;
+
+/// Drains that actually ran (a port existed and the caller was allowed to arm).
+static FB_DEMAND_DRAINS: AtomicU64 = AtomicU64::new(0);
+/// Pages armed across every drain.
+static FB_DEMAND_ARMED: AtomicU64 = AtomicU64::new(0);
+/// Arms the port refused. ⚠ Non-zero here is the **host BAR1 aperture**, not video memory.
+static FB_DEMAND_REFUSED: AtomicU64 = AtomicU64::new(0);
+/// ★★★ Drains DECLINED BY NAME because the caller was a vCPU or inside an MMIO trap —
+/// cut B item 5's counter, and the one that says the guard is reached rather than merely
+/// written.
+static FB_DEMAND_DECLINED_ON_VCPU: AtomicU64 = AtomicU64::new(0);
+/// Calls that found no byte port at all: the arena arm, and cut A's shape. ⊘ Counted
+/// separately so *"the mechanism is absent"* can never be read as *"the mechanism refused"*.
+static FB_DEMAND_NO_PORT: AtomicU64 = AtomicU64::new(0);
+/// Host reads that succeeded only because a retry armed their page — cut B WORKING.
+static FB_DEMAND_READ_RETRIED_OK: AtomicU64 = AtomicU64::new(0);
+/// Host reads that still missed after the last allowed retry.
+static FB_DEMAND_READ_GAVE_UP: AtomicU64 = AtomicU64::new(0);
+
+/// ★★★ **CUT B's CENSUS LINE.** Printed on both arms, and it states its own verdict.
+///
+/// ⊘ The four zero-states are kept apart on purpose, because they have nothing in common:
+/// *no port* is the control arm, *declined* is a vCPU reaching the arming path, *refused* is
+/// the host BAR1 aperture, and *gave up* is a page that arming does not fix.
+#[must_use]
+pub fn fb_demand_census() -> String {
+    let drains = FB_DEMAND_DRAINS.load(Ordering::Relaxed);
+    let armed = FB_DEMAND_ARMED.load(Ordering::Relaxed);
+    let refused = FB_DEMAND_REFUSED.load(Ordering::Relaxed);
+    let declined = FB_DEMAND_DECLINED_ON_VCPU.load(Ordering::Relaxed);
+    let noport = FB_DEMAND_NO_PORT.load(Ordering::Relaxed);
+    let retried = FB_DEMAND_READ_RETRIED_OK.load(Ordering::Relaxed);
+    let gaveup = FB_DEMAND_READ_GAVE_UP.load(Ordering::Relaxed);
+    let verdict = if drains == 0 && noport > 0 && declined == 0 {
+        "⊘ NO BYTE PORT — the arena arm, or the single store without one. Cut B's arming path          was reached and had nothing to arm through; this is not a refusal."
+    } else if drains == 0 && declined == 0 && noport == 0 {
+        "⊘⊘ VACUOUS — nothing ever asked the store for bytes it could not serve. That is not          `no host-side access was needed`; it is an unmeasured arming path."
+    } else if armed == 0 && declined > 0 {
+        "⊘⊘⊘ EVERY ARMING ATTEMPT WAS DECLINED ON A vCPU — the demand is arriving on a thread          that may not arm, so nothing can ever arm it. Cut B's retry is at the wrong caller:          it belongs at a LOCK-FREE entry point, not at the access that missed."
+    } else if retried > 0 && gaveup == 0 {
+        "★★★★★ CUT B IS WORKING — every host read that missed was armed and served on retry."
+    } else if retried > 0 {
+        "◐ CUT B IS PARTLY WORKING — some reads were armed and served on retry, some gave up          after the fixed retry bound. Read `refused` first: a non-zero there is the host BAR1          aperture, which arming cannot fix by trying again."
+    } else {
+        "⊘ THE ARMING PATH RAN AND NO READ WAS EVER SERVED BY A RETRY — either the drain armed          nothing (read `armed`), or what missed was not a page the port can arm."
+    };
+    format!(
+        "FB-DEMAND drains={drains} armed={armed} refused={refused} declined_on_vcpu={declined} \
+         no_port={noport} read_retried_ok={retried} read_gave_up={gaveup} ⇒ {verdict}"
+    )
+}
+
+/// `(drains, armed, refused, declined_on_vcpu, no_port, read_retried_ok, read_gave_up)` —
+/// the same numbers [`fb_demand_census`] renders, for a test to assert on.
+#[must_use]
+pub fn fb_demand_counts() -> (u64, u64, u64, u64, u64, u64, u64) {
+    (
+        FB_DEMAND_DRAINS.load(Ordering::Relaxed),
+        FB_DEMAND_ARMED.load(Ordering::Relaxed),
+        FB_DEMAND_REFUSED.load(Ordering::Relaxed),
+        FB_DEMAND_DECLINED_ON_VCPU.load(Ordering::Relaxed),
+        FB_DEMAND_NO_PORT.load(Ordering::Relaxed),
+        FB_DEMAND_READ_RETRIED_OK.load(Ordering::Relaxed),
+        FB_DEMAND_READ_GAVE_UP.load(Ordering::Relaxed),
+    )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ **w734 — THE STORE'S I/O VOLUME, IN BYTES, BY ROLE.**
+//
+// # ⊘⊘⊘ Why this did not exist, and why its absence was expensive
+//
+// `SINGLE_STORE_PLAN.md`'s ordering rule — *"§6 MUST PRECEDE §3"* — and
+// `THE_CONSTRAINTS.md` §w724c's *"there is no working intermediate … it does not boot"* both
+// rest on ONE quantity: **how many bytes the host reads out of the framebuffer store per
+// boot.** Both documents state it as `7.3 MiB × 1178 refreshes @ 48 MiB/s ⇒ ~3 minutes`, and
+// the 24 MiB variant as ~10 minutes.
+//
+// ⊘ `[surveyed w734]` **no byte counter for store I/O exists anywhere in this tree.** The
+// numbers above are a DERIVATION — `pages_swept` (a page count, at six different page sizes,
+// three of which are not 4 KiB) multiplied by an assumed width. This tree's own rule is that
+// *a derivation cited as a measurement is the most expensive kind of wrong*, and the
+// derivation in question is the one that decides the order of the whole branch.
+//
+// ⇒ This counts the bytes. Not pages, not calls alone — **bytes**, at the five entry points
+// that reach [`FbStore`], split by the role that will or will not survive the switch:
+//
+// | role | what it is | after the switch |
+// |---|---|---|
+// | [`FbIoRole::Trap`] | a guest BAR1/BAR2/PRAMIN access that took a VM exit (≤8 B each) | served by a memslot; ~zero by constraint 1 |
+// | [`FbIoRole::WalkInPlane`] | `window_leaves`, `bar1_translate`, `bar2_translate`, `ceresolve` — the BAR apertures' OWN page tables | **stays**, and moves onto the PCIe bus |
+// | [`FbIoRole::WalkGuestPt`] | `PlanePtBytes` — the guest's CUDA page tables, the sweep and the decode | **stays** until the kernel owns reachability (§6 step 3) |
+// | [`FbIoRole::OutOfBand`] | `fb_peek`/`fb_poke`/`fb_ring_sweep`/dumps — instruments, not the device | mostly diagnostics; separable |
+//
+// ★ The split is the whole value. A total says *"the switch costs N seconds"*; the split says
+// **which of the four has to be fixed first**, which is exactly the question §6-before-§3 was
+// answering without the number.
+//
+// ⊘ **Statics, and deliberately so.** `Counters` lives behind the FSM lock and this must be
+// incremented on the walk paths, which hold `mem` and sometimes `state`; taking a third lock
+// under those is the R1 hazard this file is written against. Relaxed atomics on a
+// process-global, exactly as [`SWEEP_DEFER_GIVEUPS`] and [`MIRROR_DRAINS`] already are.
+// ⚠ Process-global therefore means **per process, not per device**. One QEMU serves one
+// device today; a second would sum into these. Said here rather than discovered later.
+// ⚠⚠ **THIS INSTRUMENT IS ON A HOT PATH AND IT IS NOT GATED — said here, because this tree's
+// own rule is that an instrument is on a hot path unless somebody checked.**
+//
+// `[measured w734]` `walk-bar` takes **3 454 311** reads a boot, so this costs three relaxed
+// atomics and one bitmap `fetch_or` on each of them — ~70 ms a boot by arithmetic, on a boot
+// whose walk already costs seconds. ⊘ **That figure is REASONED, not measured**: no control
+// boot was taken without the census, and the only bound that IS measured is that the raw
+// client graded `(P)` with `THREADS 8 of 8` on all four boots that carried it.
+//
+// ⊘ Left ungated deliberately, and the trade is stated rather than assumed: a gate would
+// double the arm matrix (§w724g: *"keep the count small"*), and a census that is off on the
+// boot somebody wants to read is the failure mode this whole module exists against. ⚠ If a
+// latency campaign ever attributes milliseconds to this, take the control boot first — w586
+// added a census that re-ran a 4.2 M-dword sweep fifteen times a boot and broke it, and the
+// author of that fix was the author of the warning.
+/// One role a framebuffer-store access can arrive in. See the module-level table above.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FbIoRole {
+    /// A guest MMIO access that took a VM exit — `fb_read`/`fb_write`, ≤8 bytes each.
+    Trap,
+    /// A page-table read of one of the BAR apertures' own tables, inside the plane lock.
+    WalkInPlane,
+    /// A page-table read of the GUEST's tables, through `PlanePtBytes`.
+    WalkGuestPt,
+    /// `fb_peek`/`fb_poke` and the instruments built on them.
+    OutOfBand,
+    /// ★ The CPU copy-engine executor (`kayfabe_rt::cpu_ce`) — a scrub or a copy this
+    /// device performed with the host CPU because no real engine ran it. ⊘ Its own role
+    /// because it is the one bucket whose right answer after the switch is *"stop doing
+    /// this on the CPU"* rather than *"make the bytes cheaper"*.
+    CpuCe,
+}
+
+impl FbIoRole {
+    const N: usize = 5;
+    const fn idx(self) -> usize {
+        match self {
+            FbIoRole::Trap => 0,
+            FbIoRole::WalkInPlane => 1,
+            FbIoRole::WalkGuestPt => 2,
+            FbIoRole::OutOfBand => 3,
+            FbIoRole::CpuCe => 4,
+        }
+    }
+    /// The token this role prints under.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            FbIoRole::Trap => "trap",
+            FbIoRole::WalkInPlane => "walk-bar",
+            FbIoRole::WalkGuestPt => "walk-guest-pt",
+            FbIoRole::OutOfBand => "out-of-band",
+            FbIoRole::CpuCe => "cpu-ce",
+        }
+    }
+    /// Every role, in printing order.
+    #[must_use]
+    pub const fn all() -> [FbIoRole; FbIoRole::N] {
+        [
+            FbIoRole::Trap,
+            FbIoRole::WalkInPlane,
+            FbIoRole::WalkGuestPt,
+            FbIoRole::OutOfBand,
+            FbIoRole::CpuCe,
+        ]
+    }
+}
+
+/// `[role]` read calls, read bytes, write calls, write bytes.
+static FB_IO: [[AtomicU64; 4]; FbIoRole::N] = [
+    [
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+    ],
+    [
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+    ],
+    [
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+    ],
+    [
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+    ],
+    [
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+    ],
+];
+
+/// ★★★★★ **THE SECOND TERM, AND IT IS THE ONE THAT DECIDES THE APERTURE** — how many
+/// **DISTINCT 4 KiB frames** each role has ever touched.
+///
+/// # ⊘⊘⊘ Why bytes alone cannot answer the question the switch asks
+///
+/// A device view is mapped from **file offset 0 only** (`nvidia_mmap_helper` refuses
+/// `vm_pgoff != 0`), so a device-backed store needs **one armed node per contiguous run it
+/// serves** — and an armed node costs host BAR1 aperture, which §22 item 3 measured at
+/// **256 MiB total, shared with the host driver**. ⇒ the switch has TWO costs and they are
+/// bounded by different things:
+///
+/// | term | bounded by | what a large value means |
+/// |---|---|---|
+/// | **bytes** | the PCIe bus's rate | the boot gets slower |
+/// | **distinct frames** | the host's BAR1 aperture | the design **does not fit**, at any speed |
+///
+/// ⊘ A boot that re-reads 25 pages 1181 times is 118 MiB of traffic and **100 KiB of
+/// aperture** — affordable. A boot that touches 1 870 distinct pages once each is 7.3 MiB of
+/// traffic and **1 870 armed nodes**, each an isolate round trip and a permanently-retained
+/// `/dev/nvidia<N>` descriptor in the VMM. **The second is the harder problem and the byte
+/// count cannot see it.** Nothing in this tree had measured either.
+///
+/// ★ A bitmap over frame numbers, not a set: it is lock-free, bounded by the framebuffer's own
+/// size (12 GiB ⇒ 3 M frames ⇒ 384 KiB per role), and it must not be a `Mutex` because two of
+/// the five roles are reached from a vCPU inside an MMIO exit.
+///
+/// ⚠ **Distinct-EVER, not distinct-concurrently.** A working set that churns reports its
+/// union, which is the pessimistic direction — it can say *"this does not fit"* about a design
+/// that recycles. Stated because the optimistic reading is the dangerous one.
+struct FrameSet {
+    words: Vec<AtomicU64>,
+    distinct: AtomicU64,
+}
+
+impl FrameSet {
+    fn new() -> FrameSet {
+        // 12 GiB of 4 KiB frames, the largest framebuffer any row in this tree advertises.
+        // ⊘ A frame past the end is counted in the total and NOT in the bitmap, and
+        // `truncated` says so — silently dropping it would under-report the aperture term,
+        // which is the flattering direction.
+        const FRAMES: usize = (12 << 30) / (crate::fbwin::FB_PAGE as usize);
+        FrameSet {
+            words: (0..FRAMES / 64).map(|_| AtomicU64::new(0)).collect(),
+            distinct: AtomicU64::new(0),
+        }
+    }
+
+    /// Mark the frames covering `[phys, phys+len)`. Returns nothing; the count is internal.
+    fn mark(&self, phys: u64, len: u64) {
+        let first = phys / crate::fbwin::FB_PAGE;
+        let last = phys.saturating_add(len.saturating_sub(1)) / crate::fbwin::FB_PAGE;
+        for f in first..=last {
+            let (w, b) = ((f / 64) as usize, f % 64);
+            let Some(word) = self.words.get(w) else {
+                continue;
+            };
+            let bit = 1u64 << b;
+            if word.fetch_or(bit, Ordering::Relaxed) & bit == 0 {
+                self.distinct.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+}
+
+/// Lazily built — five 384 KiB bitmaps allocated on a boot that never reaches this code
+/// would be 1.9 MiB of nothing.
+static FB_FRAMES: [std::sync::OnceLock<FrameSet>; FbIoRole::N] = [
+    std::sync::OnceLock::new(),
+    std::sync::OnceLock::new(),
+    std::sync::OnceLock::new(),
+    std::sync::OnceLock::new(),
+    std::sync::OnceLock::new(),
+];
+
+fn frames(role: FbIoRole) -> &'static FrameSet {
+    FB_FRAMES[role.idx()].get_or_init(FrameSet::new)
+}
+
+/// How many **distinct 4 KiB frames** `role` has touched. See [`FrameSet`].
+#[must_use]
+pub fn fb_frames_for(role: FbIoRole) -> u64 {
+    FB_FRAMES[role.idx()]
+        .get()
+        .map_or(0, |f| f.distinct.load(Ordering::Relaxed))
+}
+
+/// Note one read of `len` bytes at framebuffer address `phys` in `role`. ⊘ Counted whether or
+/// not the store served it: the question this instrument answers is *"how many bytes would
+/// have to cross the bus, and how many frames would have to be mapped"*, and a refused read is
+/// one the switched store would still have had to attempt.
+#[inline]
+pub fn note_fb_read(role: FbIoRole, phys: u64, len: usize) {
+    let r = &FB_IO[role.idx()];
+    r[0].fetch_add(1, Ordering::Relaxed);
+    r[1].fetch_add(len as u64, Ordering::Relaxed);
+    frames(role).mark(phys, len as u64);
+}
+
+/// Note one write of `len` bytes at framebuffer address `phys` in `role`. See
+/// [`note_fb_read`]. ★ Writes mark the **same** frame set as reads: a frame is mapped or it
+/// is not, and the aperture does not care which direction touched it.
+#[inline]
+pub fn note_fb_write(role: FbIoRole, phys: u64, len: usize) {
+    let r = &FB_IO[role.idx()];
+    r[2].fetch_add(1, Ordering::Relaxed);
+    r[3].fetch_add(len as u64, Ordering::Relaxed);
+    frames(role).mark(phys, len as u64);
+}
+
+/// `(read calls, read bytes, write calls, write bytes)` for one role.
+#[must_use]
+pub fn fb_io_for(role: FbIoRole) -> (u64, u64, u64, u64) {
+    let r = &FB_IO[role.idx()];
+    (
+        r[0].load(Ordering::Relaxed),
+        r[1].load(Ordering::Relaxed),
+        r[2].load(Ordering::Relaxed),
+        r[3].load(Ordering::Relaxed),
+    )
+}
+
+/// ★★★ The census line — every role, plus the one derived number the plan turns on.
+///
+/// ⊘ The projection at the end is explicitly labelled a **projection**, with its rate named
+/// as an input, because that is the half this tree keeps losing: the measured term is the
+/// byte count, the 48 MiB/s is somebody else's measurement of a different path, and a line
+/// that printed only their product would be a derivation wearing a measurement's clothes.
+#[must_use]
+pub fn fb_io_census_line(bytes_per_sec: u64) -> String {
+    let mut out = String::from("kayfabe: FB-IO");
+    let mut walk_bytes = 0u64;
+    let mut total_bytes = 0u64;
+    let mut walk_frames = 0u64;
+    for role in FbIoRole::all() {
+        let (rc, rb, wc, wb) = fb_io_for(role);
+        total_bytes += rb + wb;
+        if matches!(role, FbIoRole::WalkInPlane | FbIoRole::WalkGuestPt) {
+            walk_bytes += rb + wb;
+        }
+        let fr = fb_frames_for(role);
+        walk_frames += if matches!(role, FbIoRole::WalkInPlane | FbIoRole::WalkGuestPt) {
+            fr
+        } else {
+            0
+        };
+        out.push_str(&format!(
+            " {}[r={rc}/{:.1}MiB w={wc}/{:.1}MiB frames={fr}]",
+            role.as_str(),
+            rb as f64 / (1024.0 * 1024.0),
+            wb as f64 / (1024.0 * 1024.0),
+        ));
+    }
+    if total_bytes == 0 {
+        // ⊘⊘⊘ **THE VACUITY ARM.** A census of zero bytes and a census that never ran print
+        // the same `0`, and this tree's most expensive recurring instrument failure is
+        // exactly that pair being collapsed.
+        //
+        // ⊘⊘ **CORRECTED w739 — THE JUSTIFICATION THAT USED TO BE HERE IS FALSE ON THE
+        // `device` ARM.** It read *"there is no boot in which the store serves nothing —
+        // `kbusVerifyBar2` writes and reads it before the guest's first instruction"*.
+        // `[measured w738, the cut-B device boot]` `FB-IO trap[r=0/0.0MiB w=0/0.0MiB
+        // frames=0]`: `kbusVerifyBar2`'s four MMUTest dwords were refused at TRANSLATION and
+        // never reached `RegPlane::fb_write` at all, so the trap role really did record
+        // nothing. ⇒ the premise held under the arena store and is **arm-dependent**, which
+        // is exactly the shape a justification written once and never re-read acquires.
+        //
+        // ★ The arm itself is unchanged and still right: a total of zero across **every**
+        // role is a statement about the INSTRUMENT, because the walk roles cannot all be
+        // silent on a boot that reaches `RmInitAdapter` at all.
+        out.push_str(
+            " \u{2298}\u{2298} VACUOUS \u{2014} not one byte was recorded in any role.              That is not `the store served nothing`: every boot writes it during              `kbusVerifyBar2`. It means these counters were not reached on this binary's              path, and NOTHING below may be read as a measurement.",
+        );
+        return out;
+    }
+    out.push_str(&format!(
+        " \u{2605} TOTAL={:.1}MiB WALK={:.1}MiB WALK_FRAMES={walk_frames} \u{21d2} PROJECTION: at \
+         an ASSUMED {} MiB/s over PCIe the WALK half alone would cost {:.1}s of this boot, and \
+         the total {:.1}s; and serving those frames as device views would need \
+         {walk_frames} armed nodes = {:.1} MiB of host BAR1 if none of them is contiguous \
+         with another. \u{26a0} The byte and frame counts are MEASURED here; the rate is NOT \
+         \u{2014} it is an input from a different path's measurement, and the product is only as \
+         good as it.",
+        total_bytes as f64 / (1024.0 * 1024.0),
+        walk_bytes as f64 / (1024.0 * 1024.0),
+        bytes_per_sec / (1024 * 1024),
+        walk_bytes as f64 / bytes_per_sec as f64,
+        total_bytes as f64 / bytes_per_sec as f64,
+        walk_frames as f64 * 4096.0 / (1024.0 * 1024.0),
+    ));
+    out
+}
+
+/// How many times [`RegPlane::drain_mirror_revalidation`] has been called, by anyone.
+///
+/// ⊘ Exists because the drain's CALLER is the thing that regressed, not its body: it had one
+/// caller, inside the doorbell worker, and the `off` arm has no worker. A census of what the
+/// drain *did* would have read as healthy on an arm where it never ran at all. See
+/// `no_worker_still_drains.rs`.
+static MIRROR_DRAINS: AtomicU64 = AtomicU64::new(0);
+/// ★ **CONSTRAINT 27** — how many times [`RegPlane::revalidate_mirror_first`] ran. ⊘ A
+/// zero beside a non-zero `MIRROR_DRAINS` says the unmap-first pass is not wired, which is
+/// the failure that would be invisible: the fills still happen and the boot looks normal.
+static MIRROR_UNMAP_FIRST_DRAINS: AtomicU64 = AtomicU64::new(0);
+
+/// See [`MIRROR_DRAINS`].
+#[must_use]
+pub fn mirror_drains() -> u64 {
+    MIRROR_DRAINS.load(Ordering::Relaxed)
+}
+
+/// See [`MIRROR_UNMAP_FIRST_DRAINS`] — **constraint 27's own non-vacuity number.**
+#[must_use]
+pub fn mirror_unmap_first_drains() -> u64 {
+    MIRROR_UNMAP_FIRST_DRAINS.load(Ordering::Relaxed)
+}
+
+/// Times [`PlanePtBytes::breathe`] actually yielded to an in-flight MMIO trap. ★ This is the
+/// number that says the mechanism is REACHED; `SWEEP_DEFER_GIVEUPS` alone cannot distinguish
+/// "never needed" from "never ran", which is this tree's most expensive recurring instrument
+/// failure.
+static SWEEP_DEFERRALS: AtomicU64 = AtomicU64::new(0);
+
+/// `(deferrals, giveups)` — see [`SWEEP_DEFERRALS`] and [`SWEEP_DEFER_GIVEUPS`].
+pub fn sweep_defer_census() -> (u64, u64) {
+    (
+        SWEEP_DEFERRALS.load(Ordering::Relaxed),
+        SWEEP_DEFER_GIVEUPS.load(Ordering::Relaxed),
+    )
+}
+
+impl<'a> MmioInFlight<'a> {
+    fn enter(n: &'a AtomicU32) -> Self {
+        n.fetch_add(1, Ordering::AcqRel);
+        Self(n)
+    }
+}
+
+impl Drop for MmioInFlight<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+impl PlanePtBytes<'_> {
+    /// Upper bound on yields spent deferring to one vCPU, so the sweep cannot livelock.
+    const MAX_DEFER_YIELDS: u32 = 2048;
+
+    /// ★★★★★ **w507 — LET A WAITING vCPU IN.**
+    ///
+    /// `[measured w506]` the plane lock shows `worst_wait=3825us` against `worst_hold=0us`.
+    /// **No holder is long.** A vCPU is simply starved: `std::sync::Mutex` is *barging*, so a
+    /// loop that unlocks and immediately re-locks keeps winning the handoff against a thread
+    /// parked in `futex_wait`. `lockcost`'s own line names the shape — *"a big wait with a
+    /// small hold is STARVATION or many short holders, not one long one — opposite fixes"*.
+    ///
+    /// This reader is that loop: the page-table sweep drives one acquisition **per page** over
+    /// a whole VAS, and `[measured w504]` the stall alarm caught a vCPU parked in
+    /// `futex_wait -> RankedMutex<PlaneState>::lock -> RegPlane::write`.
+    ///
+    /// ⊘ The fix is NOT to hold the lock longer. One guard across the whole sweep would turn
+    /// starvation into a guaranteed multi-millisecond stall for every waiter — the opposite
+    /// fix the census warns about. Yielding periodically keeps every hold as short as it is
+    /// now and only stops this thread from re-winning the race forever.
+    ///
+    /// ⊘ And a bare periodic `yield_now()` is NOT enough either, which is why this reads a
+    /// flag instead of a counter. `sched_yield` on a box with idle cores — this one is 24-core
+    /// and ~90% idle — returns immediately with nothing to switch to, so a blind yield is very
+    /// nearly a no-op. The sweep has to defer to a *named* condition, and wait for it to clear.
+    ///
+    /// ⚠ Bounded by [`Self::MAX_DEFER_YIELDS`]. A guest that traps continuously would otherwise
+    /// hold the sweep off forever, and a sweep that never commits is its own stall — the
+    /// page-table mirror is what the next doorbell resolves against.
+    fn breathe(&self) {
+        self.reads.set(self.reads.get().wrapping_add(1));
+        let mut spun = 0u32;
+        while self.plane.mmio_in_flight.load(Ordering::Acquire) != 0 {
+            if spun >= Self::MAX_DEFER_YIELDS {
+                SWEEP_DEFER_GIVEUPS.fetch_add(1, Ordering::Relaxed);
+                return;
+            }
+            if spun == 0 {
+                SWEEP_DEFERRALS.fetch_add(1, Ordering::Relaxed);
+            }
+            spun += 1;
+            std::thread::yield_now();
+        }
+    }
+}
+
+impl FbRead for PlanePtBytes<'_> {
+    /// ★★★★★ **THE ONE PLACE THAT BRANCHES ON APERTURE.**
+    ///
+    /// Owner, 2026-09-10: *"FbRead should ignore backing … branching on aperture should not be
+    /// in that much code."* Every caller passes the aperture it decoded from the parent PDE and
+    /// stops caring; this resolves it to a byte source exactly once.
+    ///
+    /// `[measured w411]` before this, the walker read EVERY page-table page from the
+    /// framebuffer regardless of the aperture it had just decoded — so a VAS whose tables live
+    /// in sysmem took 37 sweep tasks and yielded nothing, and `P3 rpc-bind` stayed red through
+    /// four correct upstream fixes.
+    /// ★★★★★ **CUT B item 2 — AND IT IS THE ONE CONSUMER THAT COSTS NO TRANSIENT AT ALL.**
+    ///
+    /// `SINGLE_STORE_PLAN.md`'s w735 consumer table, first row: *"`PlanePtBytes::read_in` —
+    /// ★ **YES.** It takes the plane locks *inside*, per read, so it is lock-free at entry"*.
+    /// ⇒ this reader can arm **synchronously**: the attempt below drops both guards before it
+    /// asks the port for anything, and the retry is a second attempt of the same read rather
+    /// than a deferral of it. Nothing upstream learns that a page had to be armed.
+    ///
+    /// ⚠ **A fixed trip count** ([`FB_DEMAND_READ_RETRIES`]), never a loop that ends when the
+    /// read succeeds: the input is a guest-authored page-table pointer and §20's first
+    /// structural invariant is that no loop terminates on guest data.
+    fn read_in(&mut self, phys: u64, aperture: kayfabe_arch::Aperture, buf: &mut [u8]) -> bool {
+        use kayfabe_arch::Aperture;
+        self.breathe();
+        for attempt in 0..=FB_DEMAND_READ_RETRIES {
+            // ⊘ BOTH locks, in rank order: `ram` is guest RAM and stays with the FSM, `fb`
+            // moved to [`PlaneMem`] at w522. This is the one reader that needs each. ★ Both
+            // guards are dropped at the end of THIS block, before anything below may arm.
+            let served = {
+                let mut s = self.plane.state.lock();
+                let mut m = self.plane.mem.lock();
+                match aperture {
+                    // Device-local: the (fake) framebuffer.
+                    Aperture::Vidmem => {
+                        // ⊘ Counted on the FIRST attempt only. A refused read moves **zero
+                        // bytes**, and w734's census is a statement about I/O VOLUME that a
+                        // rate model is multiplied against — three attempts of one 8-byte
+                        // entry read is 8 bytes of traffic, not 24. ⚠ Said here because the
+                        // retry loop is new and the census it feeds is already published.
+                        if attempt == 0 {
+                            note_fb_read(FbIoRole::WalkGuestPt, phys, buf.len());
+                        }
+                        m.fb.read(phys, buf).is_ok()
+                    }
+                    // ★ System memory. A GMMU PDE may point at a next-level table in sysmem,
+                    // and the guest's own address for it is a GPA — so this is a guest-RAM
+                    // read, not an FB one. Reading it out of the framebuffer is what produced
+                    // a page of "invalid" entries.
+                    Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => {
+                        s.ram.read(phys, buf).is_ok()
+                    }
+                    // ⊘ Peer memory has no plane here, and INVALID is the absence of an
+                    // aperture. Both are `false` = "this source cannot serve the range", which
+                    // the walker turns into `WalkFault::Unbacked`. ⚠ NEVER zeros: a zero page
+                    // decodes as a full page of invalid entries — "the tables map nothing" —
+                    // and that is the opposite fact.
+                    _ => false,
+                }
+            };
+            if served {
+                if attempt > 0 {
+                    FB_DEMAND_READ_RETRIED_OK.fetch_add(1, Ordering::Relaxed);
+                }
+                return true;
+            }
+            // ⊘ Only the framebuffer store has a demand port; a guest-RAM miss and a peer
+            // aperture are facts about a different memory and arming cannot touch them.
+            if aperture != Aperture::Vidmem || attempt == FB_DEMAND_READ_RETRIES {
+                break;
+            }
+            // ★★★ LOCK-FREE HERE — both guards above went out of scope with the block.
+            if !self.plane.arm_fb_demand().progressed() {
+                // ⊘ `progressed()` is false for *"nothing was wanted"*, *"the drain declined"*
+                // and *"there is no port"* alike, and all three mean the same thing to this
+                // loop: retrying is a spin. The three are told apart in the census, not here.
+                break;
+            }
+        }
+        if aperture == Aperture::Vidmem {
+            FB_DEMAND_READ_GAVE_UP.fetch_add(1, Ordering::Relaxed);
+        }
+        false
+    }
+
+    /// As [`PlanePtBytes::read_in`] with a vidmem aperture, including the arm-then-retry.
+    fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
+        self.breathe();
+        for attempt in 0..=FB_DEMAND_READ_RETRIES {
+            let served = {
+                // ⊘ First attempt only — see `read_in`.
+                if attempt == 0 {
+                    note_fb_read(FbIoRole::WalkGuestPt, phys, buf.len());
+                }
+                let mut m = self.plane.mem.lock();
+                m.fb.read(phys, buf).is_ok()
+            };
+            if served {
+                if attempt > 0 {
+                    FB_DEMAND_READ_RETRIED_OK.fetch_add(1, Ordering::Relaxed);
+                }
+                return true;
+            }
+            if attempt == FB_DEMAND_READ_RETRIES || !self.plane.arm_fb_demand().progressed() {
+                break;
+            }
+        }
+        FB_DEMAND_READ_GAVE_UP.fetch_add(1, Ordering::Relaxed);
+        false
+    }
+
+    /// The same per-address first-writer answer [`FbStoreReader`] gives, so a decode and a
+    /// `walk:` line read the identical fact about a page.
+    fn page_writer(&self, phys: u64) -> Option<(&'static str, u64)> {
+        let m = self.plane.mem.lock();
+        m.fb.page_origin(phys).map(|o| (o.by.tag(), o.seq))
+    }
+}
+
+impl FbStoreReader<'_> {
+    fn read_memo(&mut self, phys: u64, buf: &mut [u8]) -> bool {
+        let key = (phys, buf.len());
+        if let Some(m) = self.memo.as_deref_mut() {
+            if let Some(b) = m.bytes.get(&key) {
+                buf.copy_from_slice(b);
+                m.hits += 1;
+                return true;
+            }
+        }
+        note_fb_read(FbIoRole::WalkInPlane, phys, buf.len());
+        let ok = self.fb.read(phys, buf).is_ok();
+        if ok {
+            if let Some(m) = self.memo.as_deref_mut() {
+                m.misses += 1;
+                m.bytes.insert(key, buf.to_vec());
+            }
+        }
+        ok
+    }
+}
+
+impl FbRead for FbStoreReader<'_> {
+    /// ⊘ This reader holds ONLY a framebuffer store — it has no guest-RAM source at all. So a
+    /// sysmem or peer aperture is `false` ("cannot serve"), never a silent framebuffer read of
+    /// the same number. Answering from the wrong aperture is precisely the defect this
+    /// signature exists to prevent, and a reader with one source must say so rather than guess.
+    fn read_in(&mut self, phys: u64, aperture: kayfabe_arch::Aperture, buf: &mut [u8]) -> bool {
+        match aperture {
+            kayfabe_arch::Aperture::Vidmem => self.read_memo(phys, buf),
+            _ => false,
+        }
+    }
+
+    fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
+        self.read_memo(phys, buf)
+    }
+
+    /// ★★★★ **This store CAN answer, and it is the only byte source on any walk path that
+    /// can** — §16.15's first-writer census, asked one page at a time instead of as a total.
+    ///
+    /// A total (`PRAMIN 21 / BAR1 0 / BAR2 50 / EXEC 0`) says which windows created the
+    /// framebuffer; it cannot say *"and the page holding this ring's leaf PTE is one of the
+    /// 50"*. That is the question the address-table-vs-descent disagreement turns on, so it
+    /// is asked by address.
+    fn page_writer(&self, phys: u64) -> Option<(&'static str, u64)> {
+        self.fb.page_origin(phys).map(|o| (o.by.tag(), o.seq))
+    }
+}
+
+/// Why a [`RegPlane::read_published_va`] produced no bytes.
+///
+/// ⊘ Two arms, not one string: *"the walk refused"* and *"the walk resolved and the store
+/// refused"* are different findings about different components, and a caller that reported
+/// them identically would spend a boot telling them apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PublishedVaRead {
+    /// The walk did not produce an address; its own finding, whole.
+    Unresolved(crate::ceresolve::CeResolve),
+    /// The address resolved and the store that owns that aperture refused it, by name.
+    Store(&'static str),
+}
+
+impl PublishedVaRead {
+    /// One line naming what happened, for a boot report.
+    #[must_use]
+    pub fn describe(&self) -> String {
+        match self {
+            PublishedVaRead::Unresolved(r) => r.describe(),
+            PublishedVaRead::Store(why) => format!("RESOLVED but the store refused: {why}"),
+        }
+    }
+}
+
+/// ★★★ **One CE submission's borrowed view of the register plane** — see
+/// [`RegPlane::ce_session`], which is the only way to obtain one.
+///
+/// It is deliberately four capabilities and no more:
+/// [`CePlane::resolve`] (the guest's own page-table walk, from the root the guest
+/// published), [`CePlane::fb`] (the emulated framebuffer, which is both where the page
+/// tables live and where a vidmem operand's bytes go), [`CePlane::root`] (for the report)
+/// and [`CePlane::now_ns`] (§16.66 — the counter a timestamped semaphore release is
+/// stamped from). ⊘ It exposes **no guest-RAM port**: the executor's guest-RAM side is the
+/// shell's own `Vmm`, so that a copy's bytes and a completion's bytes cannot travel by two
+/// different descriptions of one memory plane.
+pub struct CePlane<'a> {
+    state: &'a mut PlaneMem,
+    chip: &'static ChipProfile,
+    root: crate::ceresolve::VasRoot,
+    demand: crate::ceresolve::Demand,
+    clock: &'a dyn NanoClock,
+}
+
+impl core::fmt::Debug for CePlane<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("CePlane")
+            .field("root", &self.root)
+            .finish_non_exhaustive()
+    }
+}
+
+impl CePlane<'_> {
+    /// The page-directory root this session walks from — `levels[0]` of the publication
+    /// the guest made for its `(hClient, hVASpace)` pair.
+    #[must_use]
+    pub fn root(&self) -> crate::ceresolve::VasRoot {
+        self.root
+    }
+
+    /// ★★★ Resolve one GPU virtual address in this session's VA space, on the demand the
+    /// session was opened with.
+    ///
+    /// ⊘ Nothing is cached, here or anywhere below (`gmmu_publication_discipline.md` §7
+    /// rule 6): every call is a fresh descent, which is what a TLB does and what makes the
+    /// answer valid for this demand and no other.
+    pub fn resolve(&mut self, va: u64) -> crate::ceresolve::CeResolve {
+        resolve_locked(self.state, self.chip, &self.root, va, self.demand)
+    }
+
+    /// The emulated framebuffer this device backs.
+    pub fn fb(&mut self) -> &mut dyn FbStore {
+        self.state.fb.as_mut()
+    }
+
+    /// The framebuffer length this chip advertises — the bound a vidmem address is legal
+    /// against, taken from the chip rather than from the store so the two cannot disagree.
+    #[must_use]
+    pub fn fb_len(&self) -> u64 {
+        self.chip.fb_length
+    }
+
+    /// ★★★ **§16.66 — the nanosecond counter a four-word (timestamped) copy-engine
+    /// semaphore release is stamped from.**
+    ///
+    /// # ⊘ Why this is a capability of the CE session and not a second clock
+    ///
+    /// It is `RegPlane`'s **own** [`NanoClock`] — literally the field
+    /// [`RegPlane::ptimer_read`] answers the guest's `NV_PTIMER_TIME_0/1` reads from. On
+    /// real hardware a `RELEASE_FOUR_WORD_SEMAPHORE` writes the engine's `PTIMER` sample,
+    /// and a guest that reads `PTIMER` itself and subtracts gets an elapsed time. Handing
+    /// this executor a *different* time source — `Instant::now`, a counter of its own, a
+    /// zero — would break exactly that subtraction, and break it into a **plausible wrong
+    /// number** rather than into an error.
+    ///
+    /// ⚠ Being the same clock is the whole property, so it is taken through the same
+    /// object rather than passed in by a caller who could pass another.
+    #[must_use]
+    pub fn now_ns(&self) -> u64 {
+        self.clock.now_ns()
+    }
+}
+
+/// The walk, with the plane's state already locked — the one body
+/// [`RegPlane::resolve_published_va`] and [`RegPlane::read_published_va`] share, so the two
+/// entry points cannot come to disagree about which format or which framebuffer answers.
+fn resolve_locked(
+    s: &mut PlaneMem,
+    chip: &'static ChipProfile,
+    root: &crate::ceresolve::VasRoot,
+    va: u64,
+    demand: crate::ceresolve::Demand,
+) -> crate::ceresolve::CeResolve {
+    let limits = crate::ceresolve::CeAddrLimits {
+        // ★ The chip's own advertised length — the same number `SparseFb` was sized from
+        // and the emulated GSP answers `FB_GET_INFO` with, so the §7 rule-5 bound cannot
+        // disagree with the store it bounds.
+        fb_len: chip.fb_length,
+        // See `CeAddrLimits`: this port has no query for the guest's RAM extent, and a
+        // fabricated bound would be worse than a stated absence.
+        gpa_limit: None,
+    };
+    let PlaneMem { mmu, fb } = s;
+    let Some(fmt) = mmu.as_deref() else {
+        return crate::ceresolve::CeResolve::NoMmuPort;
+    };
+    let mut src = FbStoreReader {
+        fb: fb.as_mut(),
+        memo: None,
+    };
+    crate::ceresolve::resolve(fmt, &mut src, root, va, limits, demand)
+}
+
+impl RegPlane {
+    /// The state-free filter's verdict for `(bar, off)` — "could this possibly be ours?".
+    /// See the call site in `read_inner` and `state_free_read_filter.rs`.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn model_may_claim_for_test(&self, bar: u8, off: u64) -> bool {
+        self.model.decode_reg(bar, off).is_some() || self.model.boot_sequence().may_read(bar, off)
+    }
+
+    /// What the LOCKED path would conclude for `(bar, off)`: `true` if the boot FSM answers it.
+    /// ⊘ The pair exists so a test can compare the two verdicts; production asks only the first
+    /// and then, if it admits, the second.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn model_would_serve_for_test(&self, bar: u8, off: u64) -> bool {
+        let s = self.state.lock();
+        s.fsm
+            .mmio_read_with(self.model.as_ref(), bar, off)
+            .is_some()
+    }
+
+    /// The register aperture's length, from the chip row. ⊘ Exposed so a caller placing a
+    /// mapping over BAR0 uses the SAME number the arm chain is bounded by, rather than a
+    /// transcription of it that can drift.
+    #[must_use]
+    pub fn regs_aperture_len(&self) -> u64 {
+        self.chip.regs_aperture_len
+    }
+
+    /// ★★★★★ **WHICH RUNS OF BAR0 HOLD NO REGISTER AT ALL** — the set a read-only zero
+    /// region may cover (w545).
+    ///
+    /// `[measured w544]` **3 572 of BAR0's 4 096 pages hold no register**, in **12 contiguous
+    /// runs**, and every read to them answers `ReadOutcome::Unclaimed => 0`. A read-only
+    /// mapping over those runs is therefore **byte-identical** to what this device answers
+    /// today — not an approximation with a fallback — and `[measured w542]` it carries
+    /// **124 415 of 241 722** BAR0 reads.
+    ///
+    /// # ⊘ Why this SWEEPS instead of reading the chip's declared ranges
+    ///
+    /// The profile declares `boot_regs`, `ptimer`, `rom_window` and `pramin_window` — but the
+    /// interrupt tree, the BAR0 window latch, the invalidate registers and the GSP model's own
+    /// decode live in four other places. A derivation would have to gather all eight and would
+    /// **drift the first time one of them moved**, and the failure is silent: a register inside
+    /// a mapped run stops reaching this device and answers zero forever.
+    ///
+    /// ⇒ So it asks [`RegPlane::read_inner`] — the REAL arm chain, in its real order. Nothing
+    /// can drift from itself.
+    ///
+    /// ⚠ Deliberately `read_inner` and not [`RegPlane::read`]: the wrapper is what counts, and
+    /// a 4-million-read sweep through it would poison every figure in `bar0_read_census` before
+    /// the guest had issued a single access.
+    ///
+    /// ⊘ The unit is the PAGE, because a memslot is: one live register poisons its whole 4 KiB.
+    #[must_use]
+    pub fn bar0_backable_runs(&self) -> Vec<(u64, u64)> {
+        const PAGE: u64 = 4096;
+        let pages = self.chip.regs_aperture_len / PAGE;
+        let mut runs: Vec<(u64, u64)> = Vec::new();
+        for page in 0..pages {
+            let base = page * PAGE;
+            // ★★★★★ w563 — SHADOWABLE, not merely dead.
+            //
+            // A page is backable when every dword in it is a pure function of state that does
+            // not change without this device changing it — the unclaimed default of zero, a
+            // boot-register constant, or a byte of the ROM image. `[measured w561]` widening
+            // from "dead" to "shadowable" adds the 256-page VBIOS aperture, which carries
+            // 4632 reads a boot and whose bytes never move after realize.
+            //
+            // ⊘ It does NOT yet include the eleven pages of producer-updated registers. They
+            // are shadowable in principle — `[measured w561]` none of them has a read side
+            // effect — but only once a producer writes through to the shadow, and a page
+            // published before that would answer a stale value with no fault and no counter.
+            let shadowable = (base..base + PAGE).step_by(4).all(|off| {
+                self.bar0_dword_is_dead(off)
+                    || self.chip.boot_regs.iter().any(|r| r.off == off)
+                    || self.chip.rom_window.contains(off)
+                    // ⊘⊘⊘ **w576 — THE PRODUCER-UPDATED ARMS ARE NOT BACKED, because the
+                    // write-through they depend on HAS NO CALLER.**
+                    //
+                    // w564 widened this predicate to the interrupt tree, the invalidate trigger
+                    // and the window latch, on the stated ground that *"`shadow_write` keeps
+                    // them current"*. It does not: `RegPlane::set_read_shadow` is called from
+                    // **nowhere in the workspace**, so the port is always `None` and every
+                    // `shadow_write` returns immediately. The pieces therefore hold their
+                    // REALIZE-TIME bytes for the life of the boot.
+                    //
+                    // ⇒ The guest's ISR read zeros from a page that could never change.
+                    // `[measured w573-w576]` every tree from w564 onward grades **(E)**:
+                    // `RmInitAdapter failed (0x62:0x56:2028)`, no channel, every doorbell
+                    // refused. Three separate fixes to the PRODUCERS (w574, w575) could not
+                    // help, because the producers were never the broken half.
+                    //
+                    // ⚠ The lesson is the shape, not the bug: w564's own message claimed *"one
+                    // write-through entry point"* and that was true — an entry point with no
+                    // exit. **A sink nobody installed and a sink that works are the same code
+                    // until a guest reads one.** The page stays trapped until the port is
+                    // wired AND a boot shows the client passing with it.
+                    // ★★★★★ w577 — BACK AGAIN, now that a sink is actually installed
+                    // (`kayfabe_shim_bar0_shadow_attach`). ⊘ The interrupt tree publishes from
+                    // all FIVE of its mutation sites (w574), which is what makes this safe:
+                    // a vector we raise reaches the guest's ISR through the shadow.
+                    || crate::cpuintr::decode(off).is_some()
+                    // ⊘⊘ w575 — THE INVALIDATE TRIGGER IS **NOT** BACKED, and this is a
+                    // measured refusal rather than an oversight.
+                    //
+                    // The guest SPIN-POLLS this register waiting for TRIGGER to read false.
+                    // Its value is cleared by the WORKER, when a publication job completes —
+                    // so a shadow of it is only as current as the last worker pass. Publish
+                    // "pending" and fail to publish "done" promptly and the guest spins on a
+                    // page that has stopped changing, which is strictly worse than trapping,
+                    // because a trap at least asks us.
+                    //
+                    // ⚠ `[measured w573-w575]` w564 backed it and the boot graded (E):
+                    // `RmInitAdapter failed`. It stays trapped until something makes "done"
+                    // observable at the instant it becomes true, and a boot says so.
+                    || (self.chip.bar0_window_reg != 0 && off == self.chip.bar0_window_reg)
+                    // ★★★★★ **w590 — THE INVALIDATE BLOCK, and this one is MEASURED rather
+                    // than argued.**
+                    //
+                    // `[measured w588, a boot that graded (P)]` the trigger's page is
+                    // **204 035 of 204 198** BAR0 reads reaching the handler — **99.9 %**. The
+                    // whole of goal 2's read half is this one page; everything else together
+                    // is 163 reads, of which 129 are the free-running counter.
+                    //
+                    // ⊘⊘ w575 excluded it deliberately, and the argument was right at the
+                    // time: *"its value is cleared by the WORKER, so a shadow of it is only as
+                    // current as the last worker pass; publish 'pending' and fail to publish
+                    // 'done' and the guest spins on a page that has stopped changing, which is
+                    // strictly worse than trapping."* ⚠ Its EVIDENCE, though, was w564's (E) —
+                    // and `set_read_shadow` had **no caller anywhere** until w577, so every
+                    // shadow write in that experiment was a no-op. **The exclusion outlived the
+                    // measurement that justified it.**
+                    //
+                    // ★ Both edges publish now, and that is exactly what w575 asked for:
+                    // *pending* synchronously on the trigger write (`RegPlane::write`, one
+                    // screen up) and *done* by whoever completes the refresh
+                    // (`publish_invalidate_trigger`, called by the worker immediately after
+                    // `complete_through`). The two latches write through as of this commit.
+                    //
+                    // ⚠ Knobbed, because a change whose failure mode is *the guest spins
+                    // forever* must be gradeable against its own control in one binary —
+                    // w586's lesson, which cost four boots to learn.
+                    || (!Self::shadow_invalidate_disabled()
+                        && crate::mmuinval::invalidate_regs(self.chip).is_some_and(|r| {
+                            off == r.trigger || off == r.pdb || off == r.upper_pdb
+                        }))
+                    // ★ w577 — the GSP group republishes on every FSM write and the sink is
+                    // now real. ⊘ `may_read` offsets stay out: the boot sequence's `on_read`
+                    // has no republisher at all.
+                    || self.model.decode_reg(0, off).is_some()
+            });
+            if !shadowable {
+                continue;
+            }
+            match runs.last_mut() {
+                Some((start, len)) if *start + *len == base => *len += PAGE,
+                _ => runs.push((base, PAGE)),
+            }
+        }
+        runs
+    }
+
+    /// ★ w590 — `KAYFABE_SHADOW_INVAL=0` keeps the MMU-invalidate page trapping, as the
+    /// control arm for the change above. Read once per sweep, never on an access path.
+    fn shadow_invalidate_disabled() -> bool {
+        std::env::var("KAYFABE_SHADOW_INVAL").is_ok_and(|v| v == "0")
+    }
+
+    /// ★★★★★ **Could ANY arm of [`RegPlane::read_inner`] claim this dword?** — asked as a
+    /// question about the register MAP, touching no state and changing none.
+    ///
+    /// # ⊘⊘ This used to be `read_inner` itself, and that was a defect with teeth
+    ///
+    /// The sweep above called the real read path over the whole sixteen megabytes. Two of
+    /// its arms are **producers, not lookups**: the GSP arm takes the plane lock and steps
+    /// `s.fsm`, and the framebuffer-window arm MATERIALISES store pages. So the sweep did
+    /// not describe the aperture — it **drove the state machine across it**, and then
+    /// described whatever it had left behind.
+    ///
+    /// `[measured w550, bench boot]` the device asks this question twice at realize and
+    /// compares, and the two answers were **4 runs and then 12**. That cross-check is the
+    /// only reason it was seen at all: a single call returns a plausible list either way,
+    /// and the `bar0_backable_pages` test never noticed because a fresh plane swept once
+    /// is exactly the case where the mutation has not happened yet.
+    ///
+    /// ⇒ Every arm is asked by its **claim predicate** instead. All of them are table
+    /// lookups over `chip` or state-free calls into the model, so this function is pure by
+    /// construction rather than by care — and `bar0_dead_set_is_stable` pins that the answer
+    /// does not move when it is asked twice with a sweep of real reads in between.
+    fn bar0_dword_is_dead(&self, off: u64) -> bool {
+        const BAR: u8 = kayfabe_abi::pcibars::bus_bar::REGS as u8;
+        !(self.chip.boot_regs.iter().any(|r| r.off == off)
+            || self.ptimer_read(off).is_some()
+            || self.chip.rom_window.contains(off)
+            || (self.chip.bar0_window_reg != 0 && off == self.chip.bar0_window_reg)
+            || crate::cpuintr::decode(off).is_some()
+            || self.invalidate_regs().is_some_and(|r| r.trigger == off)
+            || self.chip.fb_window(BAR, off).is_some()
+            || self.model.decode_reg(BAR, off).is_some()
+            || self.model.boot_sequence().may_read(BAR, off))
+    }
+
+    /// ★★★★★ **FILL A RANGE OF THE READ SHADOW** — what the guest would read from
+    /// `[off, off+buf.len())`, written into `buf`, with **no side effect of any kind**.
+    ///
+    /// # Why this is not `read`
+    ///
+    /// [`RegPlane::read`] is the trapping path: it counts, it may take locks, and for the
+    /// framebuffer window it MATERIALISES store pages. A shadow is filled thousands of dwords
+    /// at a time and at moments the guest is not waiting on; using the trapping path for it
+    /// would drive the device to describe it, which is the w551 defect one layer up.
+    ///
+    /// ⊘ So this serves ONLY the arms that are pure functions of state we own — the boot
+    /// register table, the ROM image, and the unclaimed default of zero. Every other offset is
+    /// left **untouched** in `buf` and reported, so a caller can see exactly which bytes it
+    /// must not publish yet rather than discovering a stale zero in a guest.
+    ///
+    /// Returns how many bytes were filled.
+    pub fn bar0_shadow_fill(&self, off: u64, buf: &mut [u8]) -> usize {
+        const BAR: u8 = kayfabe_abi::pcibars::bus_bar::REGS as u8;
+        let mut filled = 0usize;
+        for (i, byte) in buf.iter_mut().enumerate() {
+            let at = off.saturating_add(i as u64);
+            if let Some(r) = self.chip.boot_regs.iter().find(|r| r.off == (at & !3)) {
+                let shift = 8 * u32::from((at & 3) as u8);
+                *byte = ((r.value >> shift) & 0xff) as u8;
+                filled += 1;
+            } else if self.chip.rom_window.contains(at) {
+                let idx = at - self.chip.rom_window.base;
+                *byte = usize::try_from(idx)
+                    .ok()
+                    .and_then(|i| self.rom.get(i))
+                    .copied()
+                    .unwrap_or(0);
+                filled += 1;
+            } else if let Some(reg) = crate::cpuintr::decode(at & !3) {
+                // ★ w564 — the interrupt tree, read under its own leaf-rank lock. Every offset
+                // `shadowable_regs` publishes must fill here, or the piece is refused.
+                let v = self.cpu_intr.lock().read(reg);
+                let shift = 8 * u32::from((at & 3) as u8);
+                *byte = ((v >> shift) & 0xff) as u8;
+                filled += 1;
+            } else if self
+                .invalidate_regs()
+                .is_some_and(|r| r.trigger == (at & !3))
+            {
+                // ★ w564 — one atomic load; see `read_inner`'s eighth arm for why this read
+                // means something and why answering it is safe.
+                let v = self.mmu_inval.read_trigger();
+                let shift = 8 * u32::from((at & 3) as u8);
+                *byte = ((v >> shift) & 0xff) as u8;
+                filled += 1;
+            } else if self.model.decode_reg(BAR, at & !3).is_some() {
+                // ★ w565 — the GSP model's projection of the boot state machine. Read through
+                // `mmio_read_with`, which is `&self` end to end, so filling cannot advance the
+                // machine it is describing.
+                let v = {
+                    let st = self.state.lock();
+                    st.fsm.mmio_read_with(self.model.as_ref(), BAR, at & !3)
+                };
+                match v {
+                    Some(Ok(v)) => {
+                        let shift = 8 * u32::from((at & 3) as u8);
+                        *byte = ((v >> shift) & 0xff) as u8;
+                        filled += 1;
+                    }
+                    // ⊘ A register the model names and cannot encode is NOT filled. The piece
+                    // is then refused rather than published with a hole — see the C caller.
+                    _ => {}
+                }
+            } else if self.chip.bar0_window_reg != 0 && (at & !3) == self.chip.bar0_window_reg {
+                let v = u64::from(self.state.lock().bar0_window.raw());
+                let shift = 8 * u32::from((at & 3) as u8);
+                *byte = ((v >> shift) & 0xff) as u8;
+                filled += 1;
+            } else if self.bar0_dword_is_dead(at & !3) {
+                // ⊘ `ReadOutcome::Unclaimed => 0` is the answer this device already gives,
+                // byte for byte. A shadow byte of zero here is not a default — it is the
+                // value.
+                *byte = 0;
+                filled += 1;
+            }
+        }
+        filled
+    }
+
+    /// ★★★ **Is this offset in a page the aperture cut backs with memory?** — one bit load.
+    ///
+    /// ⊘ A BITMAP and not a scan of the run list, because this is asked on every unclaimed
+    /// read and `[measured w553]` that is 119 797 of them in a boot. The map is built once,
+    /// from the same `bar0_backable_runs` the device cuts with, so the instrument and the cut
+    /// cannot disagree about which pages are dead — which is the whole point of asking.
+    fn dead_page(&self, off: u64) -> bool {
+        const PAGE: u64 = 4096;
+        let page = off / PAGE;
+        self.dead_pages
+            .get((page / 64) as usize)
+            .is_some_and(|w| w & (1 << (page % 64)) != 0)
+    }
+
+    /// ★★★ **WHICH arm claims this dword** — the same predicate chain as
+    /// [`RegPlane::bar0_dword_is_dead`], reported instead of collapsed to a bool.
+    ///
+    /// ⊘ Derived from the SAME chain, in the same order, rather than written out a second
+    /// time: a census that listed arms independently of the classifier could name one the
+    /// classifier does not consult, and the two would drift with nothing to catch it.
+    #[must_use]
+    pub fn bar0_claim_name_for_test(&self, off: u64) -> &'static str {
+        const BAR: u8 = kayfabe_abi::pcibars::bus_bar::REGS as u8;
+        if self.chip.boot_regs.iter().any(|r| r.off == off) {
+            "boot_reg"
+        } else if self.ptimer_read(off).is_some() {
+            "ptimer"
+        } else if self.chip.rom_window.contains(off) {
+            "rom/vbios"
+        } else if self.chip.bar0_window_reg != 0 && off == self.chip.bar0_window_reg {
+            "window_latch"
+        } else if crate::cpuintr::decode(off).is_some() {
+            "cpu_intr"
+        } else if self.invalidate_regs().is_some_and(|r| r.trigger == off) {
+            "mmu_invalidate"
+        } else if self.chip.fb_window(BAR, off).is_some() {
+            "pramin/fb"
+        } else if self.model.decode_reg(BAR, off).is_some() {
+            "gsp_decode"
+        } else if self.model.boot_sequence().may_read(BAR, off) {
+            "boot_sequence"
+        } else {
+            "unclaimed"
+        }
+    }
+
+    /// Whether the production classifier calls this dword dead — for the test that pins it
+    /// against [`RegPlane::read_inner`]'s own answer.
+    #[must_use]
+    pub fn bar0_dword_is_dead_for_test(&self, off: u64) -> bool {
+        self.bar0_dword_is_dead(off)
+    }
+
+    /// How many vCPU threads are inside an MMIO trap on this plane right now.
+    pub fn mmio_in_flight(&self) -> u32 {
+        self.mmio_in_flight.load(Ordering::Acquire)
+    }
+
+    /// Hold the plane's own state lock across `f`, so a test can prove another path makes
+    /// progress while it is held. ⊘ Exists because the alternative — asserting a DURATION —
+    /// measures the box the test runs on, not the lock.
+    #[doc(hidden)]
+    pub fn hold_plane_state_for_test<R>(&self, f: impl FnOnce() -> R) -> R {
+        let _g = self.state.lock();
+        f()
+    }
+
+    /// Hold [`RegPlane::mmio_in_flight`] up without being a real trap, so a test can drive
+    /// [`PlanePtBytes::breathe`]'s bound deterministically instead of racing a second thread.
+    #[doc(hidden)]
+    pub fn hold_mmio_in_flight_for_test(&self) -> impl Drop + '_ {
+        MmioInFlight::enter(&self.mmio_in_flight)
+    }
+
+    /// Build a plane for one chip and one guest driver version.
+    ///
+    /// # Errors
+    ///
+    /// Whatever [`crate::rom_for`] refuses, or [`ChipError::OverlappingSources`] if the
+    /// chip's own declarations put two answers over one offset.
+    pub fn new(
+        chip: &'static ChipProfile,
+        abi: GspAbi,
+        clock: Box<dyn NanoClock>,
+    ) -> Result<RegPlane, ChipError> {
+        RegPlane::with_objects(
+            chip,
+            abi,
+            clock,
+            kayfabe_abi::eventnotify::ProbeArmSet::default(),
+            crate::ObjectLinks::default(),
+        )
+    }
+
+    /// Build a plane whose served chain also carries an **object-model link**.
+    ///
+    /// ★★★ A separate constructor rather than a fifth argument on [`RegPlane::new`], and
+    /// the reason is a rule this project already paid for
+    /// (`gates_quantified_over_a_list`): `new` has ~25 call sites, every one of them a
+    /// test about registers, and threading `None` through all of them would make the
+    /// interesting case — *there IS an object model* — look like the default. It is not
+    /// the default. It is a decision one composition root makes, and it is spelled out at
+    /// the one place that makes it.
+    ///
+    /// `links` is [`crate::ObjectLinks`] — the object model's **two** seats in the chain
+    /// (see that type for why they are two, and why only one of them can answer). This
+    /// crate cannot name either link's concrete type: it has no `kayfabe-core` dependency,
+    /// deliberately (*"a GSP FSM that can see the RM graph starts firing on graph state"*),
+    /// so what crosses is a pair of trait objects and the port owns the choice. See
+    /// [`crate::served_chain`] for where in the chain each lands and what it must not claim.
+    ///
+    /// # Errors
+    ///
+    /// As [`RegPlane::new`].
+    pub fn with_objects(
+        chip: &'static ChipProfile,
+        abi: GspAbi,
+        clock: Box<dyn NanoClock>,
+        probe_arm: kayfabe_abi::eventnotify::ProbeArmSet,
+        links: crate::ObjectLinks,
+    ) -> Result<RegPlane, ChipError> {
+        let rom = crate::rom_for(chip)?;
+        // ⊘ The size comes from the ROW, so the model and `boot_regs` cannot name two
+        // different framebuffers. See `ChipProfile::gsp_model`.
+        let model = (chip.gsp_model)(chip.fb_length >> 20);
+        assert_disjoint(chip, model.as_ref())?;
+        let unserviced = crate::unserviced::UnservicedLog::new();
+        let census = crate::census::ControlCensusLog::new();
+        let fault_buffer = crate::faultbuffer::FaultBufferLog::new();
+        let bar_pdes = BarPdeLog::new();
+        let gvas_pub = GvasPubLog::new();
+        let set_page_dir = crate::setpagedir::SetPageDirLog::new();
+        let os_events = crate::osevent::OsEventLog::new();
+        // ★ The probe set is recorded into the census FIRST, and `served_policy` reads it
+        // back out of the same log — so "the set the report prints" and "the set the
+        // event-plane arm reads" are one stored value, not two values this line promises
+        // to keep equal. The probe's history is three boots that ran without it while
+        // looking armed from the launching shell; the report proving what it ran with is
+        // the fix.
+        census.set_probe_arm(probe_arm);
+        let mut plane = RegPlane {
+            doorbell_refusals_by_kind: std::sync::Mutex::new(std::collections::BTreeMap::new()),
+            read_shadow: std::sync::RwLock::new(None),
+            gsp_regs: std::sync::OnceLock::new(),
+            dead_pages: Box::new([]),
+            chip,
+            model,
+            rom,
+            clock,
+            mmio_in_flight: AtomicU32::new(0),
+            cpu_intr: kayfabe_util::lock::RankedMutex::new(
+                kayfabe_util::lock::LockRank::Leaf,
+                CpuIntrTree::new(),
+            ),
+            mem: kayfabe_util::lock::RankedMutex::new(
+                kayfabe_util::lock::LockRank::PlaneMem,
+                PlaneMem {
+                    fb: Box::new(RefusingFb),
+                    mmu: None,
+                },
+            ),
+            state: RankedMutex::new(
+                LockRank::Plane,
+                PlaneState {
+                    fsm: GspFsm::new(abi),
+                    ram: Box::new(RefusingRam),
+                    policy: crate::served_policy(
+                        chip,
+                        abi.driver,
+                        // ★ The SAME handles the plane keeps below — see `ChainLogs`' own docs
+                        // for why this is a struct and not four positional arguments.
+                        crate::ChainLogs {
+                            unserviced: unserviced.clone(),
+                            fault_buffer: fault_buffer.clone(),
+                            bar_pdes: bar_pdes.clone(),
+                            gvas_pub: gvas_pub.clone(),
+                            set_page_dir: set_page_dir.clone(),
+                            os_events: os_events.clone(),
+                        },
+                        census.clone(),
+                        links,
+                    ),
+                    unclaimed: Vec::new(),
+                    fb_window: Vec::new(),
+                    bar0_window: Bar0Window::new(),
+                    pt_witness: std::collections::BTreeSet::new(),
+                    pt_witness_refused: 0,
+                    pt_witness_writes: 0,
+                },
+            ),
+            c: PlaneCounters {
+                // ⊘ Sized from the chip's own aperture, not a constant: a bigger BAR0 on a
+                // later architecture gets a bigger histogram without anyone remembering to
+                // widen it. `derive(Default)` leaves this EMPTY, and the increment below is
+                // written with `get()` so an unsized plane counts nothing rather than panics.
+                bar0_read_pages: (0..(chip.regs_aperture_len / 4096))
+                    .map(|_| AtomicU64::new(0))
+                    .collect(),
+                ..PlaneCounters::default()
+            },
+            unserviced,
+            census,
+            mmu_inval: crate::mmuinval::MmuInvalidateLog::new(),
+            dbcost: crate::dbtable::DoorbellHistogram::default(),
+            dbledger: crate::dbtable::DoorbellLedger::default(),
+            pending_cmd_doorbells: std::sync::atomic::AtomicU32::new(0),
+            posted_cmd_doorbells: std::sync::atomic::AtomicU32::new(0),
+            defer_cmds_armed: std::sync::atomic::AtomicBool::new(false),
+            fault_buffer,
+            bar_pdes,
+            fb_mirror: RwLock::new(None),
+            fb_trap_policy: std::sync::atomic::AtomicU8::new(0),
+            fb_trap_refused: std::sync::atomic::AtomicU64::new(0),
+            // ⊘ `false` until a store is installed, which is the truth: `RegPlane::new` builds
+            // with `RefusingFb`, which has none.
+            fb_has_demand_port: std::sync::atomic::AtomicBool::new(false),
+            gvas_pub,
+            set_page_dir,
+            os_events,
+            // ⊘ The default is a REFUSAL, not an empty sink — see `crate::RefusingDoorbell`.
+            doorbell: RwLock::new(Box::new(RefusingDoorbell)),
+            doorbell_log: Mutex::new(DoorbellLog::default()),
+        };
+        // ★★★★★ w573 — THE BITMAP IS BUILT HERE, at realize, where nothing is waiting.
+        //
+        // ⊘⊘ w554 built it lazily inside `dead_page`, which the READ path calls — so the first
+        // unclaimed read a guest issued swept 4096 pages at dword stride **inside its own MMIO
+        // exit, on the vCPU**. It is a pure function of the chip: no guest state, no lock, no
+        // I/O. There was never a reason to defer it, and deferring it put 4.2 million predicate
+        // evaluations under a halted guest.
+        plane.dead_pages = plane.build_dead_page_bitmap();
+        // ★★★★★ **w754 — AND THE SECOND SWEEP OF THE SAME APERTURE, FOR THE SAME REASON.**
+        //
+        // ⊘⊘⊘ **w573's comment directly above is the whole argument, and a second lazy sweep
+        // was sitting three functions away with nobody having applied it.**
+        // `RegPlane::gsp_register_offsets` is a `OnceLock<Vec<u64>>` built from
+        // `(0..regs_aperture_len).step_by(4).filter(decode_reg)` — **the same 4.19 M
+        // evaluations over the same 16 MiB aperture** — and it initialises inside whichever
+        // guest MMIO store first reaches `publish_gsp_registers`.
+        //
+        // `[measured w754, GA106, stall alarm at `bar0+0x110118`]` that store was the worst
+        // trap in the device on **all three arms** of one boot — 45 580 / 53 345 / 46 136 µs,
+        // 100 % CPU, **zero context switches** — and the backtrace names this `OnceLock`'s
+        // initialiser between `publish_gsp_registers` and `kvm_vcpu_thread_fn`.
+        //
+        // ★ The lesson is not "warm this one too". It is that **a fix applied to an instance
+        // leaves the class**: the two sweeps are the same shape, over the same range, in the
+        // same file, and the first one's comment already says why it is wrong. ⚠ Any future
+        // `OnceLock` whose initialiser is O(aperture) belongs on this line, not on a trap.
+        let _warm = plane.gsp_register_offsets();
+        Ok(plane)
+    }
+
+    /// One bit per aperture page, set when every dword in it is backable. See
+    /// [`RegPlane::dead_pages`] for why this runs at construction and nowhere else.
+    fn build_dead_page_bitmap(&self) -> Box<[u64]> {
+        const PAGE: u64 = 4096;
+        let n = (self.chip.regs_aperture_len / PAGE).div_ceil(64) as usize;
+        let mut map = vec![0u64; n];
+        for (start, len) in self.bar0_backable_runs() {
+            for page in (start / PAGE)..((start + len) / PAGE) {
+                map[(page / 64) as usize] |= 1 << (page % 64);
+            }
+        }
+        map.into_boxed_slice()
+    }
+
+    /// The chip this plane answers as.
+    #[must_use]
+    pub fn chip(&self) -> &'static ChipProfile {
+        self.chip
+    }
+
+    /// The ROM image the window serves, for a test that wants to check the bytes the guest
+    /// would read against the generator's own output.
+    #[must_use]
+    pub fn rom(&self) -> &[u8] {
+        &self.rom
+    }
+
+    /// Install a real guest-RAM port, replacing [`RefusingRam`].
+    ///
+    /// ★ The seam stage Q5 plugs into. It takes `&self` and the lock, so a plane already
+    /// answering registers on one vCPU can acquire RAM without being rebuilt.
+    pub fn set_ram(&self, ram: Box<dyn GuestRam>) {
+        let mut s = self.state.lock();
+        s.ram = ram;
+    }
+
+    /// ★★★ Install the device's framebuffer, replacing [`RefusingFb`].
+    ///
+    /// # Why it is a port and not a `Vec<u8>` in this struct
+    ///
+    /// Two reasons, and they point the same way. **(1)** The bytes are device *memory*, and
+    /// where device memory lives is a decision the owner made at another seam
+    /// (`eight_blockers_resolved.md` §12.2: the isolate's mapping of the fabricated
+    /// aperture). This crate must not become a second answer to it — see [`FbStore`] for
+    /// the three measured reasons that seam cannot serve *this* access today, and for what
+    /// convergence looks like when it can. **(2)** A 12 GiB framebuffer is not a `Vec` on
+    /// any box this project runs on.
+    ///
+    /// ★ Takes `&self` and the plane's lock, like [`RegPlane::set_ram`], so a plane already
+    /// answering registers acquires memory without being rebuilt and without an interval in
+    /// which it answers something else.
+    /// ★★★★★ **INSTALL THE READ SHADOW'S SINK** — where a producer's new register value goes
+    /// so the guest can read it without leaving the vCPU.
+    ///
+    /// ⊘ A port rather than a buffer this crate owns, for `FbMirrorPort`'s reason: the memory
+    /// the guest reads is the hypervisor's, created and placed by the shell, and a copy here
+    /// would be a second home for the same bytes with nothing to keep them equal.
+    ///
+    /// ⚠ Absent is the shipping default and must stay correct: with no sink every shadowable
+    /// page is simply not published, so the guest traps and is served exactly as before.
+    /// A missing sink may never become a silently stale page.
+    pub fn set_read_shadow(&self, port: std::sync::Arc<dyn ReadShadowPort>) {
+        *self.read_shadow.write().unwrap_or_else(|e| e.into_inner()) = Some(port);
+    }
+
+    /// ★★★★★ **THE ONE WAY A REGISTER'S VALUE REACHES THE GUEST'S SHADOW.**
+    ///
+    /// # Why there is exactly one of these
+    ///
+    /// `the_bar0_read_surface.md` §5: a shadowed register has TWO homes — the state it is
+    /// computed from, and the shadow's bytes. A producer that updates one and not the other
+    /// makes the guest read a stale value **with no fault and no counter**, which is the
+    /// failure class this tree is written against.
+    ///
+    /// ⇒ Producers do not write the shadow. They call this, and this is the only caller of the
+    /// port. A second write path would be a second thing to remember, and the reviewer who has
+    /// to notice it is the weakest link.
+    ///
+    /// ⊘ Cheap when unarmed: one `RwLock` read that finds `None` and returns. It is called
+    /// from register writes, which are already the trapping path.
+    pub fn shadow_write(&self, off: u64, val: u64, size: u8) {
+        let guard = self.read_shadow.read().unwrap_or_else(|e| e.into_inner());
+        let Some(port) = guard.as_ref() else {
+            return;
+        };
+        let bytes = val.to_le_bytes();
+        let n = usize::from(size.min(8));
+        port.write(off, &bytes[..n]);
+        self.c.shadow_writes.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn set_fb(&self, fb: Box<dyn FbStore>) {
+        // ★★★★★ **CUT B — THE ONE PLACE THAT ANSWERS "IS THERE A BYTE PORT?", CACHED.**
+        //
+        // ⊘⊘ Not a convenience. [`RegPlane::arm_fb_demand`] is called on **every** host-side
+        // read that missed, and asking the store would take the memory lock a second time —
+        // on the arena arm, where the answer is always `None` and the miss is a guest-authored
+        // page-table entry pointing outside the framebuffer. ⇒ a guest could double this
+        // plane's lock traffic on a path that is already refusing, which is the amplification
+        // shape §w720h says the single store deletes rather than adds.
+        //
+        // ★ Safe to cache because this is the ONLY door that changes the store, and it is the
+        // composition root's, called once at realize.
+        self.fb_has_demand_port
+            .store(fb.demand_port().is_some(), Ordering::Relaxed);
+        let mut s = self.mem.lock();
+        s.fb = fb;
+    }
+
+    /// ★★★★★ **w393 — install the BAR mirror's port.** Takes `&self`, like
+    /// [`RegPlane::set_fb`]. ⊘ Not under the plane's lock: the port is consulted before that
+    /// lock is taken, so it lives behind its own.
+    /// ★★★★★ **Arm or disarm the trap path's refusal** — `SINGLE_STORE_PLAN.md` §w724g.
+    /// See [`FbTrapPolicy`] for what it does and for the condition under which this method is
+    /// **deleted**.
+    ///
+    /// ⚠ Called ONCE, at the composition root, beside every other plane decision. A policy
+    /// consulted twice is a boot that can change its mind halfway through.
+    pub fn set_fb_trap_policy(&self, policy: FbTrapPolicy) {
+        self.fb_trap_policy.store(
+            match policy {
+                FbTrapPolicy::Serve => 0,
+                FbTrapPolicy::RefuseByName => 1,
+            },
+            std::sync::atomic::Ordering::Relaxed,
+        );
+    }
+
+    /// What a trapped BAR1/BAR2 access will do.
+    #[must_use]
+    pub fn fb_trap_policy(&self) -> FbTrapPolicy {
+        if self
+            .fb_trap_policy
+            .load(std::sync::atomic::Ordering::Relaxed)
+            == 0
+        {
+            FbTrapPolicy::Serve
+        } else {
+            FbTrapPolicy::RefuseByName
+        }
+    }
+
+    /// ★★ How many trapped accesses this policy has refused. ⊘ The number the boot exists to
+    /// read: a non-zero here means publication is incomplete and increment 7's deletion is
+    /// **not** licensed.
+    #[must_use]
+    pub fn fb_trap_refusals(&self) -> u64 {
+        self.fb_trap_refused
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn set_fb_mirror(&self, port: std::sync::Arc<dyn FbMirrorPort>) {
+        *self.fb_mirror.write().unwrap_or_else(|e| e.into_inner()) = Some(port);
+    }
+
+    /// Withdraw the port. Every later join/release/reset runs without it, which is the
+    /// pre-w393 behaviour; the shell retires its own slots before calling this.
+    pub fn clear_fb_mirror(&self) {
+        *self.fb_mirror.write().unwrap_or_else(|e| e.into_inner()) = None;
+    }
+
+    /// ★★★★★ **w468 — the off-vCPU half of the BAR mirror's flush.** The worker calls
+    /// this before completing an invalidate, so the guest's spin is released only after
+    /// every stale mirror slot is gone. ⊘ Never call this from a vCPU thread.
+    pub fn drain_mirror_revalidation(&self) {
+        MIRROR_DRAINS.fetch_add(1, Ordering::Relaxed);
+        if let Some(m) = self.fb_mirror() {
+            // ⊘ Fills FIRST, then the revalidation: a fill installs a slot and the
+            // revalidation decides which installed slots are still true, so running them the
+            // other way round would revalidate a table the very next call adds to.
+            m.drain_fills();
+            m.revalidate_pending();
+        }
+    }
+
+    /// ★★★★★ **CONSTRAINT 27 — THE UNMAP HALF OF THE MIRROR FLUSH, AND NOTHING ELSE.**
+    ///
+    /// `THE_CONSTRAINTS.md` §27 requires *"unmaps ordered before maps within one
+    /// refresh"*. [`RegPlane::drain_mirror_revalidation`] cannot serve that: it runs the
+    /// fills **first**, deliberately and for a stated reason, so calling it early would
+    /// install slots before the stale ones are gone — maps before unmaps, which is the
+    /// order the constraint forbids.
+    ///
+    /// ⇒ The refresh calls **this** before it publishes anything, and the full drain after.
+    /// ⊘ Not a replacement for it: the fills still have to run, and the second
+    /// revalidation is then cheap because this one already retired everything stale.
+    ///
+    /// ⚠ Worker only, exactly as its sibling — the walk is O(live slots) page walks plus a
+    /// memslot ioctl per drop.
+    pub fn revalidate_mirror_first(&self) {
+        MIRROR_UNMAP_FIRST_DRAINS.fetch_add(1, Ordering::Relaxed);
+        if let Some(m) = self.fb_mirror() {
+            m.revalidate_pending();
+        }
+    }
+
+    fn fb_mirror(&self) -> Option<std::sync::Arc<dyn FbMirrorPort>> {
+        self.fb_mirror
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// ★★★★★ **w393 — hand the store its page arena.** See
+    /// [`crate::fbwin::FbStore::install_page_arena`].
+    ///
+    /// # Errors
+    /// The arena, back, when the store refused it (no arena support, or one already installed).
+    pub fn install_fb_page_arena(
+        &self,
+        arena: Box<dyn FbPageArena>,
+    ) -> Result<(), Box<dyn FbPageArena>> {
+        let mut s = self.mem.lock();
+        s.fb.install_page_arena(arena)
+    }
+
+    /// ★★★★★ **w393 — resolve one page of a translated window for the mirror**: the same
+    /// page walk the trap performs, then [`crate::fbwin::FbStore::page_backing`] on the
+    /// frame it lands on — in **one** hold of the plane lock, so the translation and the
+    /// backing are one instant's answer.
+    ///
+    /// `off` is the aperture offset (any byte; the page containing it is resolved).
+    /// `materialise` is passed through to the store.
+    ///
+    /// ⊘ A window with no address model, or a translation the guest's own tables refuse, is
+    /// the same named [`WindowRefusal`] the trap reports — never a zero.
+    ///
+    /// # Errors
+    /// [`WindowRefusal`], by name.
+    pub fn window_page_backing(
+        &self,
+        w: FbWindow,
+        off: u64,
+        materialise: bool,
+    ) -> Result<WindowPageResolution, WindowRefusal> {
+        self.window_page_backing_memo(w, off, materialise, None)
+    }
+
+    /// [`Self::window_page_backing`] reading page tables through a pass-scoped
+    /// [`PtReadMemo`]. ⊘ The plane lock is still taken per call — the memo lives OUTSIDE it,
+    /// so a vCPU trap never waits behind a whole pass.
+    pub fn window_page_backing_memo(
+        &self,
+        w: FbWindow,
+        off: u64,
+        materialise: bool,
+        memo: Option<&mut PtReadMemo>,
+    ) -> Result<WindowPageResolution, WindowRefusal> {
+        let page_off = off & !(crate::fbwin::FB_PAGE - 1);
+        // ★★★★★ **w755 — CONSTRAINT 4: RANK 0 IS TAKEN BY THE ONE ARM THAT READS IT, NOT BY
+        // ALL THREE.**
+        //
+        // ⊘⊘⊘ This function used to open `let mut st = self.state.lock();` unconditionally,
+        // under the comment *"BOTH, in rank order"*. But look at what each arm actually
+        // reads: **only `Pramin` touches `st`** (the BAR0 window latch). `bar1_translate` and
+        // `bar2_translate` take `&mut s` and nothing else. So on the two translated windows —
+        // which are the BAR1/BAR2 paths the device arm runs on — rank 0 was held across a
+        // full guest page-table walk AND the store's `page_backing`, protecting nothing.
+        //
+        // ⇒ `[measured w754]` `LOCKCOST rank0 worst_wait=9625us worst_wait_blocked_by=
+        // plane.rs:3286`, 52% of a 9 649 us trap spent WAITING. w754's own conclusion was
+        // *"the next cut is lock scope, not thread placement — moving more work off the vCPU
+        // cannot help a trap already waiting on a lock a worker holds."* This is that cut.
+        //
+        // ★ It is a pure SCOPE reduction, not a semantic change: removing an acquisition of a
+        // lock whose guard is never read cannot alter what this function computes. The only
+        // thing it can alter is mutual exclusion against other rank-0 holders — and there is
+        // nothing here to exclude them from.
+        //
+        // ⚠ `Pramin` keeps BOTH, in the original order and for the original scope. Its
+        // "translation" IS the latch read, so the atomicity this function's docs require —
+        // translation and backing as one instant's answer — is exactly what holding `st`
+        // across `page_backing` provides. Narrowing that one would be a different change with
+        // a different argument, and it is not the hot path.
+        let mut s;
+        let _st_pramin;
+        let (phys, read_only) = match w {
+            FbWindow::Pramin => {
+                let st = self.state.lock();
+                s = self.mem.lock();
+                let phys = st
+                    .bar0_window
+                    .fb_addr(page_off.wrapping_sub(self.chip.pramin_window.base));
+                // Held to the end of the function, as before — see the ⚠ above.
+                _st_pramin = st;
+                (phys, false)
+            }
+            FbWindow::FbAperture if self.chip.bar1_pde_base == 0 => {
+                return Err(WindowRefusal::NoAddressModel);
+            }
+            FbWindow::FbAperture => {
+                s = self.mem.lock();
+                self.bar1_translate(page_off, &mut s, memo)?
+            }
+            FbWindow::InstanceWindow => {
+                s = self.mem.lock();
+                self.bar2_translate(page_off, &mut s, memo)?
+            }
+        };
+        let phys = phys & !(crate::fbwin::FB_PAGE - 1);
+        // ★★★★★ **w719 — the measurement constraint 15's aperture split rests on.** Records
+        // which world reached this GPGA; decides nothing. `twoworlds`' module docs carry why
+        // this cannot be settled from the design docs (they disagree) and what a zero is worth.
+        crate::twoworlds::note(
+            match w {
+                FbWindow::FbAperture => crate::twoworlds::World::Bar1,
+                FbWindow::Pramin | FbWindow::InstanceWindow => crate::twoworlds::World::Control,
+            },
+            phys,
+        );
+        let backing = s.fb.page_backing(phys, materialise);
+        Ok(WindowPageResolution {
+            phys,
+            read_only,
+            backing,
+        })
+    }
+
+    /// ★★★★★ **Join one framebuffer range to memory a second party also maps**
+    /// (`fb_cpu_view.md` §4) — the establishment copy and the install, in **one** hold of the
+    /// plane lock.
+    ///
+    /// # ★★★ Why the two halves share this critical section
+    ///
+    /// The copy reads the store's own pages; the install makes the joined mapping
+    /// authoritative for the same range. Between them the store holds bytes in two places,
+    /// and a guest framebuffer write landing in that window would be written to the copy that
+    /// is about to be discarded — silently, with no fault and no status, which is the exact
+    /// failure mode the join exists to remove. Holding the lock across both makes the window
+    /// **not exist**, so the safety is by construction rather than by discipline.
+    ///
+    /// ⊘ This is also why the caller must arrive here having **already** done the isolate
+    /// round trip. Nothing under this lock may block ([`crate::fbwin::FbStore::install_join`]
+    /// records why, and that the R1 witness would not say so); the `memcpy` this performs
+    /// blocks on nothing.
+    ///
+    /// ★ Takes `&self` and the lock, like [`RegPlane::set_fb`] — a plane already answering
+    /// registers acquires a join without being rebuilt.
+    ///
+    /// # Errors
+    /// Whatever the store refused with, whole — the address, the length and the reason.
+    pub fn join_fb(
+        &self,
+        phys: u64,
+        region: Box<dyn crate::fbwin::FbJoined>,
+    ) -> Result<crate::fbwin::FbJoinInstalled, FbRefused> {
+        // ★★★★★ **THE REFUSED REGION IS DROPPED OUTSIDE THE LOCK, AND THAT ORDERING IS THE
+        // WHOLE POINT OF THIS FUNCTION'S SHAPE.**
+        //
+        // ⊘⊘ `[measured 2026-08-13, vh, boot w289j]` it used to be one line —
+        // `s.fb.install_join(phys, region)` — and a refusal therefore dropped the caller's
+        // `Box<dyn FbJoined>` **while the plane lock was held**. Dropping it `munmap`s, which
+        // is a blocking call, so `lockwitness`' R1 assert fired inside an `extern "C"` QEMU
+        // callback: *"munmap (dropping a host mapping) while holding rank(s) [0]"* → a
+        // NON-UNWINDING panic → **the whole VMM aborted**, on the guest's own MMIO write path.
+        // ⚠ Guest-reachable: the guest chooses the operands, so the guest chooses whether a
+        // join is refused.
+        //
+        // ★ The fix is `l1_concurrency.md` §3.3's own prescription — *"drop every guard"*
+        // before the blocking call. `install_join` now hands the region **back** on refusal so
+        // this function can release the lock first and drop it lock-free.
+        // ★★★★★ w393 — THE MIRROR'S SLOTS COME OFF FIRST, before the lock and before the
+        // establishment copy: a guest store through a memslot over a local page, landing
+        // after the copy read that page, would be lost. `quiesce` is a hypervisor ioctl, so
+        // it runs here, lock-free (R1), and `resume` after the install lets the mirror
+        // re-fill the range over the JOIN's memory on the next touch.
+        let len = region.len();
+        let mirror = self.fb_mirror();
+        if let Some(m) = &mirror {
+            m.quiesce(phys, len);
+        }
+        let (out, displaced) = {
+            let mut s = self.mem.lock();
+            match s.fb.install_join(phys, region) {
+                Ok(est) => (Ok(est), None),
+                Err((why, back)) => (Err(why), Some(back)),
+            }
+        };
+        if let Some(m) = &mirror {
+            m.resume(phys, len);
+        }
+        // ⊘ Explicit, not incidental: this is where the `munmap` happens, and it must stay
+        // after the block above. A `let _ =` or an inlined match would put it back under the
+        // guard and re-arm the abort.
+        drop(displaced);
+        out
+    }
+
+    /// ★★★★★ **w742 — ASK THE STORE WHAT THIS RANGE NEEDS, BEFORE ANYTHING IS DESTROYED.**
+    ///
+    /// [`crate::fbwin::FbStore::join_plan`], through one short hold of the memory lock. Nothing
+    /// blocks, nothing is allocated, and — the whole point — **the BAR mirror is not quiesced**.
+    ///
+    /// # ⊘⊘⊘ WHY THIS IS A SEPARATE VERB AND NOT A BRANCH INSIDE [`RegPlane::join_fb`]
+    ///
+    /// `join_fb`'s first act is `m.quiesce(phys, len)` — the mirror's slots over the range come
+    /// off **before** the store is asked, because the establishment copy must not race a guest
+    /// store through a memslot. That ordering is correct and stays. But it means a store that
+    /// refuses the install has already had the guest's memory slots taken away for nothing, and
+    /// `[measured w740]` the bill for that is exact: **4431** `THE INSTALL REFUSED`, **4431**
+    /// `quiesce[calls=`, **58175** slots removed, and **2183** `BAR1-PASSTHROUGH` guest exits
+    /// into the windows those removals opened.
+    ///
+    /// ⇒ The question has to be asked **before** `join_fb` is entered at all, which is what this
+    /// is for. ⊘ It deliberately does not quiesce, does not resume, and cannot fail.
+    #[must_use]
+    pub fn fb_join_plan(&self, phys: u64, len: u64) -> crate::fbwin::FbJoinPlan {
+        let s = self.mem.lock();
+        s.fb.join_plan(phys, len)
+    }
+
+    /// ★★★★★ **w742 — RECORD A WANT for one slice of the reserved object.** The `want` half of
+    /// the arming pair; [`RegPlane::arm_fb_demand`] is the `drain` half and is the only one that
+    /// performs the IPC round trip.
+    ///
+    /// Returns `true` when a byte port took the demand, `false` when this store has none — which
+    /// is every store but the single store, and is the control arm's answer **by construction**.
+    ///
+    /// # ⚠ THE LOCK DISCIPLINE, WHICH IS THE WHOLE OF THE SAFETY ARGUMENT
+    ///
+    /// `SINGLE_STORE_PLAN.md` §3: *"`want` records **under** the plane lock; `drain` is the IPC
+    /// round trip and runs **only** at lock-free entry points."* The `Arc` clone below is the one
+    /// thing that takes the memory lock, and the lock is **released before `want` is called** —
+    /// not because `want` blocks (it takes one `BTreeSet` mutex and inserts), but because a
+    /// caller who reads this must never learn the habit of calling a port under the plane lock.
+    ///
+    /// ⊘ Bounded by the port's own `WANT_SET_CAP`, which drops loudly rather than growing: the
+    /// set is fed by guest-authored addresses and an unbounded one is a guest-driven host
+    /// allocation.
+    pub fn want_fb_device_slice(&self, at: u64, len: u64) -> bool {
+        let Some(port) = self.fb_demand_port() else {
+            return false;
+        };
+        // ⊘ HERE, with the memory lock released — see the doc above.
+        port.want(at, len.max(1), crate::fbwin::DeviceFbWant::Read);
+        true
+    }
+
+    /// ★★★★★ **w329 — RELEASE the join installed at `phys`**, [`RegPlane::join_fb`]'s inverse
+    /// and the half `w327` measured the absence of as a hard `rc=719`.
+    ///
+    /// Returns `true` if a join was installed at exactly `phys` and is now gone; `false` means
+    /// **nothing was there**, and a caller must read that as *"do not release the host object
+    /// either"* — the store would still be serving bytes out of it.
+    ///
+    /// # ⚠⚠ THE `munmap` IS OUTSIDE THE LOCK, FOR [`RegPlane::join_fb`]'s MEASURED REASON
+    ///
+    /// Dropping the region `munmap`s, which blocks, and `lockwitness`' R1 assert fires inside
+    /// an `extern "C"` QEMU callback as a **non-unwinding panic** — the whole VMM aborts, on
+    /// the guest's own MMIO write path. `join_fb` pays for this once already
+    /// (`[measured 2026-08-13, vh, boot w289j]`); this function is the second site that can
+    /// hit it and the ordering here is that fix, not an imitation of it.
+    ///
+    /// ⊘ The `drop` is a **statement**, deliberately not a `let _ =` and not an inlined match:
+    /// either of those would put it back under the guard and re-arm the abort.
+    pub fn release_fb_join(&self, phys: u64) -> bool {
+        // ★★★★★ w393 — mirror slots over the join come off BEFORE its bytes go (see
+        // `join_fb`). The extent is looked up first because the release itself does not
+        // carry it; a range that turns out to hold no join quiesces nothing.
+        let quiesced = self.quiesce_mirror_over_join(phys);
+        let released = {
+            let mut s = self.mem.lock();
+            s.fb.release_join(phys)
+        };
+        self.resume_mirror(quiesced);
+        let had = released.is_some();
+        // ⊘ HERE, after the guard is gone. See the doc above.
+        drop(released);
+        had
+    }
+
+    /// ★★ **w329 — is a join installed at EXACTLY `phys`?** The cheap half of
+    /// [`RegPlane::release_fb_join`], for a caller that must decide whether a collision is even
+    /// possible before doing anything expensive.
+    ///
+    /// ⊘ EXACT base, for [`crate::fbwin::FbStore::release_join`]'s reason: a join covers a
+    /// whole leaf, so an interior address names no join and answering `true` for one would send
+    /// the caller to release a range it did not name.
+    #[must_use]
+    pub fn fb_join_installed_at(&self, phys: u64) -> bool {
+        let s = self.mem.lock();
+        s.fb.joined_ranges().iter().any(|(b, _)| *b == phys)
+    }
+
+    /// ★★★ **w393 — the EXTENT of the join installed at EXACTLY `phys`**, `None` when there
+    /// is none. [`RegPlane::fb_join_installed_at`] with the length attached, for the caller
+    /// that must compare it: a join's base matching says nothing about its length, and
+    /// `[measured w392q]` a 4 KiB join at a frame answered `true` for a 64 KiB leaf at the
+    /// same base, which then had no `memfd` of its length to alias.
+    #[must_use]
+    pub fn fb_join_extent_at(&self, phys: u64) -> Option<u64> {
+        let s = self.mem.lock();
+        s.fb.joined_ranges()
+            .iter()
+            .find(|(b, _)| *b == phys)
+            .map(|(_, l)| *l)
+    }
+
+    /// ★★★★★ **w393 — RELEASE the join at `phys`, KEEPING ITS BYTES in the store**, so the
+    /// frame can be re-joined at another extent. [`RegPlane::release_fb_join`]'s carrying
+    /// twin; see [`crate::fbwin::FbStore::release_join_carrying_bytes`] for why the bytes
+    /// must come back and why the store refuses before it changes anything.
+    ///
+    /// ★ The read-back and the release happen under ONE hold of the plane lock, for
+    /// [`RegPlane::join_fb`]'s reason: between them the range would otherwise have its bytes
+    /// in two places, and a guest write landing in that window would go to the copy about to
+    /// be discarded.
+    ///
+    /// ⚠ The `munmap` is OUTSIDE the lock, exactly as in [`RegPlane::release_fb_join`], and
+    /// the `drop` is a statement for the same measured reason (`w289j`).
+    ///
+    /// # Errors
+    /// The store's own sentence, whole; on `Err` the store is unchanged and the join stands.
+    pub fn release_fb_join_carrying_bytes(
+        &self,
+        phys: u64,
+    ) -> Result<crate::fbwin::FbJoinCarried, FbRefused> {
+        // ★★★★★ w393 — mirror slots over the join come off BEFORE its bytes are carried
+        // back (see `join_fb`): a guest store through such a slot after the carry read it
+        // would be lost, and the whole point of this verb is that no byte is.
+        let quiesced = self.quiesce_mirror_over_join(phys);
+        let (out, released) = {
+            let mut s = self.mem.lock();
+            match s.fb.release_join_carrying_bytes(phys) {
+                Ok((region, carried)) => (Ok(carried), Some(region)),
+                Err(why) => (Err(why), None),
+            }
+        };
+        self.resume_mirror(quiesced);
+        // ⊘ HERE, after the guard is gone. See the doc above.
+        drop(released);
+        out
+    }
+
+    /// The quiesce half shared by both release verbs: look the join's extent up (one short
+    /// hold of the lock), then retire the mirror's slots over it, lock-free.
+    fn quiesce_mirror_over_join(
+        &self,
+        phys: u64,
+    ) -> Option<(std::sync::Arc<dyn FbMirrorPort>, u64, u64)> {
+        let m = self.fb_mirror()?;
+        let len = {
+            let s = self.mem.lock();
+            s.fb.joined_ranges()
+                .iter()
+                .find(|(b, _)| *b == phys)
+                .map(|(_, l)| *l)
+        }?;
+        m.quiesce(phys, len);
+        Some((m, phys, len))
+    }
+
+    fn resume_mirror(&self, q: Option<(std::sync::Arc<dyn FbMirrorPort>, u64, u64)>) {
+        if let Some((m, phys, len)) = q {
+            m.resume(phys, len);
+        }
+    }
+
+    /// Every joined framebuffer range this plane's store holds, `(phys, len)`, ascending.
+    #[must_use]
+    pub fn joined_fb_ranges(&self) -> Vec<(u64, u64)> {
+        let s = self.mem.lock();
+        s.fb.joined_ranges()
+    }
+
+    /// ★★★ Install the chip's **page-table format**, replacing the refusal.
+    ///
+    /// # Why a port and not a [`ChipProfile`] row
+    ///
+    /// A `GmmuFmt` is an Axis-B seam, and the crate that implements one for a real
+    /// generation is an *arch adapter* (`kayfabe_chips`), not this one. Making it a chip
+    /// row would mean this crate naming that crate — the wrong direction, and the second
+    /// copy of a chip's page-table format the moment a second consumer appears. As a port
+    /// it is installed by the one composition root that already holds both, and the format
+    /// the plane walks with is **the same type** `kayfabe_arch::Arch::mmu` answers with.
+    ///
+    /// ⊘ Not installing it is a **refusal**, not a default: [`NO_MMU_PORT`] says so by
+    /// name at every translated access, and no arithmetic is invented in its absence.
+    ///
+    /// ★ Takes `&self` and the plane's lock, like [`RegPlane::set_fb`] and
+    /// [`RegPlane::set_ram`].
+    pub fn set_mmu(&self, mmu: Box<dyn GmmuFmt>) {
+        let mut s = self.mem.lock();
+        s.mmu = Some(mmu);
+    }
+
+    /// ★★★ **E2** — install the **usermode doorbell port**, replacing
+    /// [`crate::RefusingDoorbell`].
+    ///
+    /// This is the seam a guest work-submit token crosses on its way to
+    /// `kayfabe_rt::SharedDevice::doorbell`. Until a shell calls this, every ring is
+    /// **counted and refused by name** ([`crate::NO_DOORBELL_PORT`]) rather than dropped —
+    /// see [`crate::doorbell`] for why silently swallowing it is the one answer this seam
+    /// must not have.
+    ///
+    /// ⚠ Takes the port's **own** lock, not [`RegPlane::state`]'s. See the field's docs:
+    /// the port is called with no plane lock held because it can block.
+    pub fn set_doorbell(&self, port: Box<dyn DoorbellPort>) {
+        let mut p = self.doorbell.write().unwrap_or_else(|e| e.into_inner());
+        *p = port;
+    }
+
+    /// ★★★★ **G1 — take every page the guest's CPU has written since the last drain.**
+    ///
+    /// Ascending, deduped to the 4 KiB page. **Drained**, exactly as `plan_pt_decode`
+    /// drains `Vas::pt_pages` and for the same reason: a page written again after this call
+    /// must be witnessed again, and leaving it set would make the second write
+    /// indistinguishable from the first.
+    ///
+    /// ⊘ The caller owes [`RegPlane::requeue_pt_witness`] whatever it could not attribute.
+    /// A page the core cannot yet name an owner for is **not** a page that was not written.
+    pub fn drain_pt_witness(&self) -> Vec<u64> {
+        let mut s = self.state.lock();
+        std::mem::take(&mut s.pt_witness).into_iter().collect()
+    }
+
+    /// ★★★ Put pages back that the caller could not attribute — the other half of
+    /// [`RegPlane::drain_pt_witness`].
+    ///
+    /// # ⊘ Why the drain is not simply a read
+    ///
+    /// A page-table page is routinely written **before** anything points at it
+    /// (`PtDecodePlan::deferred`'s orphan leaf, one level up: here it is a page written
+    /// before its *owner* is derivable). Dropping it would destroy the only record that the
+    /// guest wrote it, and `reachability_on_transition.md` §2.2 is explicit that a leaf
+    /// binds only if the guest was **seen** to write its page. So an unattributable page is
+    /// carried, not discarded, until a later decode learns whose it is.
+    ///
+    /// Returns how many were refused for want of room ([`MAX_PT_WITNESS_PAGES`]).
+    pub fn requeue_pt_witness(&self, pages: impl IntoIterator<Item = u64>) -> u64 {
+        let mut s = self.state.lock();
+        let mut refused = 0;
+        for p in pages {
+            let page = p & !0xfff;
+            if s.pt_witness.contains(&page) {
+                continue;
+            }
+            if s.pt_witness.len() < MAX_PT_WITNESS_PAGES {
+                s.pt_witness.insert(page);
+            } else {
+                refused += 1;
+                s.pt_witness_refused = s.pt_witness_refused.saturating_add(1);
+            }
+        }
+        refused
+    }
+
+    /// What the CPU transport has written — see [`PtWitnessStats`].
+    #[must_use]
+    pub fn pt_witness_stats(&self) -> PtWitnessStats {
+        let s = self.state.lock();
+        PtWitnessStats {
+            pending: s.pt_witness.len(),
+            writes: s.pt_witness_writes,
+            refused: s.pt_witness_refused,
+        }
+    }
+
+    /// ★★★★ **G3 — THE BYTE SOURCE A PAGE-TABLE DECODE ON THIS PLANE MUST READ.**
+    ///
+    /// # ⊘ Which store is authoritative, and why it is this one rather than the isolate
+    ///
+    /// `kayfabe_fwd::IsolateFb` reads through `Worker::fb_read` → `RmBackend::fb_read`,
+    /// whose host implementation is `Err(NOT_ON_THIS_RUNG)` and whose own doc says the
+    /// aperture's extent *"is not written down anywhere in this tree"*. That source is
+    /// right for §12.2's fabricated aperture — memory **we** put bytes into on behalf of a
+    /// copy we performed. It is the wrong source here, and the boot says so by name: the
+    /// walk that produced the ruling read these very pages out of **this** store and
+    /// tagged every one of them `/byBAR2`, which is `FbWriter::Window(InstanceWindow)`,
+    /// stamped by [`RegPlane::fb_write`] four hundred lines up. The guest's page tables on
+    /// the Mode-2 plane are in the device's own [`FbStore`], because the emulated BAR2
+    /// window is what put them there.
+    ///
+    /// ⚠ This is the seam decision §16.73.7 flagged and declined to take. Getting it wrong
+    /// is *a self-consistent wrong store* — a writer and a reader that agree and are both
+    /// wrong — so it is taken against the transport tag rather than against a preference.
+    ///
+    /// # ⚠ The lock, and why it is taken PER READ
+    ///
+    /// Every read here takes and releases the plane's FSM mutex. Handing out a guard-borrowed
+    /// reader instead would put the caller's **core** locks beneath it — and although
+    /// plane→core is the established order, `unranked_locks.rs`' row for `Mutex<PlaneState>`
+    /// is explicit that *nothing may block beneath it*, and a proc mutex can block.
+    ///
+    /// ⊘⊘ **CORRECTED `[w236, 2026-08-11]`: the row cited above NO LONGER EXISTS.** This lock
+    /// is [`kayfabe_util::lock::LockRank::Plane`] now, so the hazard the paragraph reasons
+    /// about is **enforced** rather than argued: taking a core lock and then this one panics
+    /// by name (§16.87). ★ The per-read acquisition is still right — it is what keeps the
+    /// guard from spanning caller code — but it is now a *performance* choice, not the only
+    /// thing standing between us and an unwitnessed inversion.
+    /// `decode_page` reads a whole page-table page per call (`kayfabe_mmu::walker:573`), so
+    /// the measured population is tens of acquisitions per doorbell, not thousands.
+    #[must_use]
+    pub fn pt_bytes(&self) -> PlanePtBytes<'_> {
+        PlanePtBytes {
+            plane: self,
+            reads: std::cell::Cell::new(0),
+        }
+    }
+
+    /// ★★★★★ **CUT B — THE STORE'S BYTE PORT, HANDED OUT SO A LOCK-FREE CALLER CAN DRAIN IT.**
+    ///
+    /// Takes the memory lock for exactly one `Arc` clone and releases it. [`None`] from every
+    /// store but the single store with a byte port installed.
+    ///
+    /// ⚠ **The returned port must be drained with NO plane lock held.** That is the whole
+    /// reason this is a getter rather than a `drain` method: `DeviceFbPort::drain` is an IPC
+    /// round trip that asserts lock-free, and every other door into the store is under the
+    /// lock.
+    #[must_use]
+    pub fn fb_demand_port(&self) -> Option<std::sync::Arc<dyn crate::fbwin::DeviceFbPort>> {
+        let s = self.mem.lock();
+        s.fb.demand_port()
+    }
+
+    /// ★★★★★ **CUT C — IS THERE A BYTE PORT?**, answered from the cached flag and **without
+    /// taking the memory lock**.
+    ///
+    /// # ⊘⊘⊘ Why a lock-free predicate and not just `fb_demand_port().is_some()`
+    ///
+    /// The one caller is the shell's MMIO path deciding whether a **refused** BAR1/BAR2
+    /// access is worth queueing a repair for. That decision is made on a **vCPU inside an
+    /// MMIO exit**, on the hottest path in the device, and `fb_demand_port` takes
+    /// `PlaneMem` — the lock the vCPU is already contending for and the one w516/w522 were
+    /// both about. ⇒ asking the store would put a second acquisition of the most expensive
+    /// lock in the device on a path that is already refusing.
+    ///
+    /// ★ Safe for the same reason [`RegPlane::arm_fb_demand`]'s use of it is: `set_fb` is the
+    /// only door that changes the store and the composition root calls it once, at realize.
+    ///
+    /// ⊘ **It is a question about the MECHANISM, never about an address.** `true` means *"the
+    /// single store is installed with a byte port"*; it says nothing about whether any
+    /// particular page can be armed, and a caller that read it as *"this will work"* would be
+    /// making cut A's mistake one level up.
+    #[must_use]
+    pub fn fb_has_demand_port(&self) -> bool {
+        self.fb_has_demand_port.load(Ordering::Relaxed)
+    }
+
+    /// ★★★★★ **CUT B — ARM WHAT THE STORE COULD NOT SERVE.** Call only from a lock-free,
+    /// off-vCPU caller; it declines by name otherwise.
+    ///
+    /// # ⊘⊘ Why the vCPU check is HERE and not only inside the port
+    ///
+    /// Two callers reach this — the page-table reader and the BAR mirror — and only one of
+    /// them is guarded elsewhere. `WalkShadowDecider::decide` already establishes the shape
+    /// (*"FIRST, AND BEFORE ANY LOCK IS TAKEN … a synchronous isolate round trip there blocks
+    /// a vCPU"*), and the reason it is asked twice is that `assert_lock_free`'s
+    /// `assert_not_on_vcpu` half only **reports** unless `KAYFABE_VCPU_BLOCK_FATAL` is set.
+    /// ⇒ an unguarded route would not panic; it would silently block a vCPU inside an MMIO
+    /// exit and be discovered later as latency with nothing pointing at the cause.
+    ///
+    /// ⊘ A decline is **counted and named**, never silent: see [`fb_demand_census`].
+    pub fn arm_fb_demand(&self) -> crate::fbwin::DeviceFbDrained {
+        use crate::fbwin::DeviceFbDrained;
+        // ⚠ ASKED BEFORE THE LOCK IS TAKEN, for `WalkShadowDecider`'s reason: taking the
+        // memory mutex first and asking afterwards would make a vCPU wait on a lock another
+        // thread may hold across an IPC round trip — the same cost through a lock instead of
+        // through a socket, with none of the instruments pointed at it.
+        if kayfabe_util::lockwitness::on_vcpu_thread() || kayfabe_util::trapwitness::in_trap() {
+            FB_DEMAND_DECLINED_ON_VCPU.fetch_add(1, Ordering::Relaxed);
+            return DeviceFbDrained::declined();
+        }
+        // ⊘ Asked of the cached flag, NOT of the store: see `set_fb`. On the arena arm this
+        // returns before any lock is taken at all.
+        if !self.fb_has_demand_port.load(Ordering::Relaxed) {
+            // ⊘ NOT counted as a decline: *"this store has no byte port"* is the arena arm and
+            // cut A's shape, and folding it into the vCPU refusal would make the control arm
+            // print a number about a mechanism it does not have.
+            FB_DEMAND_NO_PORT.fetch_add(1, Ordering::Relaxed);
+            return DeviceFbDrained::default();
+        }
+        let Some(port) = self.fb_demand_port() else {
+            FB_DEMAND_NO_PORT.fetch_add(1, Ordering::Relaxed);
+            return DeviceFbDrained::default();
+        };
+        FB_DEMAND_DRAINS.fetch_add(1, Ordering::Relaxed);
+        let d = port.drain();
+        FB_DEMAND_ARMED.fetch_add(u64::from(d.armed), Ordering::Relaxed);
+        FB_DEMAND_REFUSED.fetch_add(u64::from(d.refused), Ordering::Relaxed);
+        if d.declined {
+            FB_DEMAND_DECLINED_ON_VCPU.fetch_add(1, Ordering::Relaxed);
+        }
+        d
+    }
+
+    /// ★ **Hold the plane's FSM lock explicitly** — for the rank falsifier only.
+    ///
+    /// ⊘ [`Self::pt_bytes`] takes and releases the mutex **per read** by design, so a test
+    /// asking *"what is refused while this lock is HELD"* cannot pose its question through
+    /// it. This is the only door that holds the guard across caller code, and it exists
+    /// because the alternative — asserting on a lock the test cannot hold — is a test that
+    /// passes for the wrong reason.
+    #[cfg(feature = "test-lock-probe")]
+    #[must_use]
+    pub fn state_guard_for_test(&self) -> impl Drop + '_ {
+        self.state.lock()
+    }
+
+    /// What this device life's doorbell aperture has seen — see [`DoorbellLog`].
+    #[must_use]
+    pub fn doorbell_log(&self) -> DoorbellLog {
+        self.doorbell_log
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// Where this plane's chip puts its usermode doorbell, or `None` if it names no
+    /// usermode register group. Derived — see [`crate::doorbell_reg`].
+    #[must_use]
+    pub fn doorbell_reg(&self) -> Option<u64> {
+        crate::doorbell::doorbell_reg(self.chip)
+    }
+
+    /// Where this chip's MMU-invalidate registers are (`crate::mmuinval`), or `None` if it
+    /// advertises no usermode window.
+    #[must_use]
+    pub fn invalidate_regs(&self) -> Option<crate::mmuinval::InvalidateRegs> {
+        crate::mmuinval::invalidate_regs(self.chip)
+    }
+
+    /// ★★★★★ **Every offset in the register aperture the GSP model decodes** — swept once,
+    /// cached, and used to re-publish the whole group after any write the FSM claimed.
+    ///
+    /// ⊘ The sweep uses `decode_reg`, which is state-free, so building this list cannot
+    /// disturb the FSM it is about to describe. It is a property of the CHIP, not of the boot,
+    /// which is why caching it is sound.
+    ///
+    /// # ⊘⊘⊘ w754 — THIS SWEEP IS 4 194 304 `decode_reg` CALLS AND IT USED TO RUN ON A vCPU
+    ///
+    /// `[measured w754, GA106, `KAYFABE_STALL_ALARM_AT=110118`]` the backtrace, verbatim:
+    ///
+    /// ```text
+    /// 2: <Vec<u64> as SpecFromIterNested<u64, Filter<StepBy<Range<u64>>>>>
+    /// 3: <OnceLock<Vec<u64>>>::get_or_init  … RegPlane::gsp_register_offsets
+    /// 6: RegPlane::publish_gsp_registers
+    /// 7: RegPlane::write
+    /// 9: kayfabe_shim_regs_write  …  20: kvm_vcpu_thread_fn
+    /// ```
+    ///
+    /// `regs_aperture_len` is **16 MiB**, so `(0..len).step_by(4)` is 4.19 M iterations, and a
+    /// `OnceLock` initialises **inside whichever guest MMIO store reaches it first**: on three
+    /// arms of one boot that was `bar0+0x110118` at **45 580 / 53 345 / 46 136 µs**, 100 % CPU,
+    /// zero context switches — the worst trap in the device, on all three.
+    ///
+    /// ★★★ **And the comment on [`RegPlane::publish_gsp_registers`] said it was cheap.** It
+    /// says *"cost is bounded by the chip's register map, not by traffic … they span five pages
+    /// of a sixteen-megabyte aperture"* — which is TRUE OF THE LOOP BODY and FALSE OF THE SWEEP
+    /// THAT BUILDS THE LIST IT ITERATES. ⚠ A bound stated about the wrong quantity reads
+    /// exactly like a bound.
+    ///
+    /// ⇒ [`RegPlane::new`] warms it, at realize, off every vCPU. The `OnceLock` stays because
+    /// it is still the right shape — what changes is WHO pays for the one initialisation, and
+    /// `gsp_register_offsets_warm` is how a test can insist it is nobody in a trap.
+    ///
+    /// ⊘ **The better fix is not this one and is named here so it is not forgotten:** ask the
+    /// model to ENUMERATE its registers instead of probing 4 M offsets for them. That is a
+    /// `kayfabe-arch` trait change (`GspModel` exposes `decode_reg`/`addr_of` but no iterator),
+    /// it is derived-per-family rather than swept, and it would make this list's cost a
+    /// property of the register map the way the comment always claimed.
+    fn gsp_register_offsets(&self) -> &[u64] {
+        const BAR: u8 = kayfabe_abi::pcibars::bus_bar::REGS as u8;
+        self.gsp_regs.get_or_init(|| {
+            (0..self.chip.regs_aperture_len)
+                .step_by(4)
+                .filter(|&off| self.model.decode_reg(BAR, off).is_some())
+                .collect()
+        })
+    }
+
+    /// ★★★ **Is the GSP offset list already built?** — so a test can insist the 4 M-iteration
+    /// sweep above happened at realize and not inside a guest trap.
+    ///
+    /// ⊘ A property of the PLANE, asked after construction. A test that merely timed a write
+    /// would be measuring the box; this asks the structural question, and it fails closed:
+    /// `false` immediately after [`RegPlane::new`] means some vCPU is going to pay for it.
+    #[must_use]
+    pub fn gsp_register_offsets_warm(&self) -> bool {
+        self.gsp_regs.get().is_some()
+    }
+
+    /// ★★★★★ **Re-publish every GSP register into the read shadow.**
+    ///
+    /// # ⊘⊘ Why the WHOLE group and not the offset that was written
+    ///
+    /// A GSP register's value is `model.encode(reg, &observe())` — a projection of the boot
+    /// state machine, not a stored word. One write advances that machine, and ANY register's
+    /// projection may move as a result: the queue pointers, the status word and the boot
+    /// progress are all views of the same state. Publishing only the offset the guest named
+    /// would leave every other view stale, and the guest reads those views to decide what to
+    /// do next.
+    ///
+    /// ⚠ Cost is bounded by the chip's register map, not by traffic: it is the same handful of
+    /// offsets every time, and `[measured w561]` they span five pages of a sixteen-megabyte
+    /// aperture.
+    pub fn publish_gsp_registers(&self) {
+        const BAR: u8 = kayfabe_abi::pcibars::bus_bar::REGS as u8;
+        if self
+            .read_shadow
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_none()
+        {
+            return;
+        }
+        for &off in self.gsp_register_offsets() {
+            let v = {
+                let s = self.state.lock();
+                s.fsm.mmio_read_with(self.model.as_ref(), BAR, off)
+            };
+            if let Some(Ok(v)) = v {
+                self.shadow_write(off, v, 4);
+            }
+        }
+    }
+
+    /// ★★★★★ **Publish the WHOLE interrupt tree into the read shadow — from inside the hold.**
+    ///
+    /// # ⊘⊘ w574 — this is the fix for a regression that stopped the driver dead
+    ///
+    /// `[measured w573/w574, bench boot]` w564 made the interrupt-leaf page backable and wired
+    /// write-through at **one** site: the guest's own write. The tree is mutated at FOUR more —
+    /// the reset, two raise paths, and the vector latch — and every one of those is the DEVICE
+    /// changing the tree, which is the direction that matters.
+    ///
+    /// ⇒ The guest's ISR read its leaves out of a shadow that only moved when the guest itself
+    /// wrote, so a raised vector was invisible: it was told *"nothing pending"* at the one
+    /// instant the answer decides whether the adapter initialises. `ga10x.rs` says exactly this
+    /// about a defaulted zero here, and I backed the page anyway. The boot graded **(E)** —
+    /// `RmInitAdapter failed`, no channel, every doorbell refused.
+    ///
+    /// ★ Takes the guard, so it CANNOT re-lock and cannot be called from outside a hold. That
+    /// is the property that makes "call it at every mutation" checkable rather than remembered.
+    fn publish_cpu_intr(&self, tree: &crate::cpuintr::CpuIntrTree) {
+        if self
+            .read_shadow
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_none()
+        {
+            return;
+        }
+        for (off, reg) in crate::cpuintr::shadowable_regs() {
+            self.shadow_write(off, u64::from(tree.read(reg)), 4);
+        }
+    }
+
+    /// ★★★★★ **Publish the invalidate trigger's current value into the read shadow.**
+    ///
+    /// ⊘⊘ Called by whoever COMPLETES an invalidate, and it has to be: the guest is spinning
+    /// on this register, and the completion is the edge it is spinning for. A write-through on
+    /// the trigger write alone would publish *"pending"* and never publish *"done"* — the
+    /// guest would spin forever on a shadow that stopped changing, which is strictly worse
+    /// than trapping, because a trap at least asks us.
+    ///
+    /// ⚠ This is the sharpest instance of `the_bar0_read_surface.md` §5 in the whole surface:
+    /// two homes, and the one that matters is the one nobody thinks to update.
+    pub fn publish_invalidate_trigger(&self) {
+        let Some(regs) = self.invalidate_regs() else {
+            return;
+        };
+        self.shadow_write(regs.trigger, self.mmu_inval.read_trigger(), 4);
+    }
+
+    /// ★★★★★ **The guest's TLB-invalidate log** — the publish plane's trigger and its
+    /// completion. See [`crate::mmuinval`].
+    #[must_use]
+    pub fn mmu_inval(&self) -> &crate::mmuinval::MmuInvalidateLog {
+        &self.mmu_inval
+    }
+
+    /// ★★★ **The plane's OWN clock, in microseconds** — the stamp
+    /// [`crate::mmuinval::MmuInvalidateLog::note_trigger`] and
+    /// [`crate::mmuinval::MmuInvalidateLog::complete`] must share.
+    ///
+    /// ⊘ It exists so the *completer* cannot supply a different time source from the
+    /// *armer*. `note_trigger` is called from `RegPlane::write`, which reads `self.clock`;
+    /// a caller outside this crate completing with `Instant::now` would compute a hold
+    /// against two unrelated clocks and produce a **plausible wrong number** rather than an
+    /// error — the same hazard [`RegPlane::now_ns`]'s CE sibling names one screen up.
+    #[must_use]
+    pub fn clock_now_us(&self) -> u64 {
+        self.clock.now_ns() / 1_000
+    }
+
+    /// What the guest has published about the bus apertures' page-table roots.
+    ///
+    /// ⊘ The only channel: the guest ignores this command's status
+    /// (`crate::bar2`), so *"did the root arrive?"* is not answerable from a guest log.
+    #[must_use]
+    pub fn bar_pdes(&self) -> BarPdes {
+        self.bar_pdes.pdes()
+    }
+
+    /// How many roots the guest published, and how many bodies were refused.
+    #[must_use]
+    pub fn bar_pde_counts(&self) -> (u64, u64) {
+        (self.bar_pdes.updates(), self.bar_pdes.refusals())
+    }
+
+    /// ★★★ The publication latch itself, as a shared handle.
+    ///
+    /// # ⊘ Why this hands out the writable handle rather than a copy
+    ///
+    /// [`RegPlane::set_policy`] replaces the **whole** command chain, and the link that
+    /// decodes `UPDATE_BAR_PDE` off the wire lives in that chain
+    /// ([`crate::bar2::BarPdePolicy`]). A caller that replaced the chain without being able
+    /// to reach this latch would **silently unroot the aperture**: the guest would go on
+    /// publishing its root, nothing would receive it, and every translated access would
+    /// refuse — with a correct-looking diagnosis pointing at the guest. So the latch is
+    /// part of the plane's surface and not a private field, exactly as
+    /// [`crate::unserviced::UnservicedLog`] is shared with the chain that writes it.
+    ///
+    /// ★ Read-mostly in practice. [`RegPlane::bar_pdes`] is what a *reporter* wants.
+    #[must_use]
+    pub fn bar_pde_log(&self) -> BarPdeLog {
+        self.bar_pdes.clone()
+    }
+
+    /// ★★★★ The page-directory root the guest **installed** via `0x00801813`, if any.
+    ///
+    /// ⊘ The only channel, and for a reason neither `bar_pdes` nor `gvas_pub` has: RM
+    /// reads this control's status and **rolls back on failure**
+    /// (`ogkm-580: dma.c:531-551`), so a boot in which it was refused is a boot in which
+    /// the guest's own VA space never got a root. See `crate::setpagedir`.
+    ///
+    /// ★ `None` and a zeroed record are different answers: `hVASpace == 0` is a real
+    /// handle meaning the client/device pair's implicit VA space, so `Option` is the
+    /// distinction rather than a sentinel.
+    #[must_use]
+    pub fn set_page_dir(&self) -> Option<crate::setpagedir::SetPageDirRecord> {
+        self.set_page_dir.latest()
+    }
+
+    /// How many `SET_PAGE_DIRECTORY` commands were accepted, and how many refused.
+    #[must_use]
+    pub fn set_page_dir_counts(&self) -> (u64, u64) {
+        (self.set_page_dir.total(), self.set_page_dir.refused())
+    }
+
+    /// The install latch itself, as a shared handle — [`RegPlane::bar_pde_log`]'s reason
+    /// exactly: [`RegPlane::set_policy`] replaces the whole chain, and the link that
+    /// decodes `0x801813` lives in it.
+    #[must_use]
+    pub fn set_page_dir_log(&self) -> crate::setpagedir::SetPageDirLog {
+        self.set_page_dir.clone()
+    }
+
+    /// ★★★ What the guest has published about its **VA spaces'** page-directory roots
+    /// (`crate::gvaspub`) — every publication, with the `hClient`/`hObject` it arrived on
+    /// and every `PdeLevel` it carried.
+    ///
+    /// ⊘ The only channel, and for a sharper reason than `bar_pdes`': these two controls
+    /// are answered `NV_OK` by `crate::inittables::InitTablePolicy` and the decoded value
+    /// was, until this log existed, discarded at the arm. `[measured 2026-08-08]`
+    /// (`traces/real_ga106/rpc_transcript_real_ga106.txt`, the §14.9 census) they are the
+    /// **only** page-directory root the boot ever sends — `SET_PAGE_DIRECTORY` occurs
+    /// zero times — so a boot that does not print this prints nothing about its own
+    /// address spaces.
+    #[must_use]
+    pub fn gvas_publications(&self) -> GvasPubSnapshot {
+        self.gvas_pub.snapshot()
+    }
+
+    /// ★★★ **Resolve one GPU virtual address in a VA space the guest published** — the
+    /// `crate::ceresolve` walk, over **this plane's own** framebuffer and page-table
+    /// format.
+    ///
+    /// # ⊘ The trigger discipline is the argument, not a comment
+    ///
+    /// `demand` is `gmmu_publication_discipline.md` §7 rule 1: the guest event that
+    /// authorised the walk. There is no constructor for a [`crate::ceresolve::Demand`]
+    /// that does not name one, so this method cannot be used to prefetch — which is §6.2's
+    /// refused case, and the one whose three interleavings all produce a *plausible-looking
+    /// wrong physical page* rather than an error.
+    ///
+    /// # Why it belongs on the plane
+    ///
+    /// The page tables were written by the guest **through this plane's BAR2 window**, into
+    /// the same [`crate::FbStore`] `bar2_phys` reads and the BAR0 moving window writes. A
+    /// resolver reaching a second store would answer out of a framebuffer the guest never
+    /// wrote — the exact disagreement `bar2_phys`'s own docs refuse. So the byte source is
+    /// not a parameter: it is this plane's, or the answer is about a different device.
+    ///
+    /// ★ The framebuffer bound for §7 rule 5 comes from the **chip's own advertised
+    /// length** — the same number the emulated GSP answers `FB_GET_INFO` with and the same
+    /// one `SparseFb` was sized from, so the limit cannot disagree with the store.
+    #[must_use]
+    pub fn resolve_published_va(
+        &self,
+        client: u32,
+        vaspace: u32,
+        va: u64,
+        demand: crate::ceresolve::Demand,
+    ) -> crate::ceresolve::CeResolve {
+        let Some(root) =
+            crate::ceresolve::published_root(&self.gvas_pub.snapshot(), client, vaspace)
+        else {
+            return crate::ceresolve::CeResolve::NoPublication;
+        };
+        // ⊘ Rank order: FSM (0) then memory (1). The sysmem arm below reads guest RAM,
+        // which stayed with the FSM — acquiring it AFTER `mem` is the R3 inversion that took
+        // w523's boot down. `[measured w523]` the doorbell worker panicked with "acquiring a
+        // rank-0 (Plane) lock while already holding [PlaneMem]", poisoned both locks and
+        // ended QEMU mid-run. ⚠ The discipline turned a latent deadlock into a named abort in
+        // one boot — but the inversion was MINE, introduced by the commit that split the lock.
+        let mut st = self.state.lock();
+        let mut s = self.mem.lock();
+        resolve_locked(&mut s, self.chip, &root, va, demand)
+    }
+
+    /// ★★ **Resolve a published GPU VA and READ the bytes behind it** — resolution and
+    /// access in one lock acquisition, routed to the store the **leaf's own aperture**
+    /// names.
+    ///
+    /// # ⊘ The aperture is the router, and it is not optional
+    ///
+    /// A vidmem leaf is an offset into this device's framebuffer; a sysmem leaf is a guest
+    /// physical address. The two are different number spaces that collide freely — at 8 GiB
+    /// a GPU VA is itself a legal GPA (`execution_plane_increments.md` §8.2.3's measured
+    /// warning) — so serving one out of the other's store is the *silent wrong bytes*
+    /// failure the whole address plane exists to refuse. `c_ceutils_ring_resolution.md` §4
+    /// measured a CeUtils finishPayload in **each** aperture within one run, so neither
+    /// answer is the safe default.
+    ///
+    /// ⊘ Peer memory is refused: this device backs none.
+    ///
+    /// # Errors
+    /// The resolution itself, whenever it was not [`crate::ceresolve::CeResolve::Resolved`]
+    /// — returned whole so a caller reports the walk's own finding rather than "read
+    /// failed" — or the store's refusal sentence.
+    pub fn read_published_va(
+        &self,
+        client: u32,
+        vaspace: u32,
+        va: u64,
+        buf: &mut [u8],
+        demand: crate::ceresolve::Demand,
+    ) -> Result<crate::ceresolve::CeResolve, PublishedVaRead> {
+        let Some(root) =
+            crate::ceresolve::published_root(&self.gvas_pub.snapshot(), client, vaspace)
+        else {
+            return Err(PublishedVaRead::Unresolved(
+                crate::ceresolve::CeResolve::NoPublication,
+            ));
+        };
+        // ⊘ Rank order: FSM (0) then memory (1). The sysmem arm below reads guest RAM,
+        // which stayed with the FSM — acquiring it AFTER `mem` is the R3 inversion that took
+        // w523's boot down. `[measured w523]` the doorbell worker panicked with "acquiring a
+        // rank-0 (Plane) lock while already holding [PlaneMem]", poisoned both locks and
+        // ended QEMU mid-run. ⚠ The discipline turned a latent deadlock into a named abort in
+        // one boot — but the inversion was MINE, introduced by the commit that split the lock.
+        let mut st = self.state.lock();
+        let mut s = self.mem.lock();
+        let r = resolve_locked(&mut s, self.chip, &root, va, demand);
+        let crate::ceresolve::CeResolve::Resolved { phys, aperture, .. } = r else {
+            return Err(PublishedVaRead::Unresolved(r));
+        };
+        match aperture {
+            Aperture::Vidmem => {
+                s.fb.read(phys, buf)
+                    .map(|()| r)
+                    .map_err(|e| PublishedVaRead::Store(e.why))
+            }
+            // ⊘ `st` is the guard taken ABOVE, in rank order — see there for the boot this
+            // cost. Re-acquiring rank 0 here would be the inversion.
+            Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => st
+                .ram
+                .read(phys, buf)
+                .map(|()| r)
+                .map_err(|e| PublishedVaRead::Store(e.why)),
+            Aperture::Peer => Err(PublishedVaRead::Store(
+                "the leaf names PEER memory and this device backs no peer aperture",
+            )),
+        }
+    }
+
+    /// ★★★★ **The PER-LEVEL descent trace for one published VA space and one address** —
+    /// [`crate::ceresolve::walk_trace`], over this plane's own format and framebuffer.
+    ///
+    /// ⊘ The byte source and the format are **this plane's**, exactly as
+    /// [`RegPlane::resolve_published_va`] argues: a trace read through a second store would
+    /// describe a different device. No [`crate::ceresolve::Demand`] — this reads page-table
+    /// pages the guest already published and it produces no address any caller may act on;
+    /// it produces a **sentence**.
+    #[must_use]
+    pub fn published_walk_trace(&self, client: u32, vaspace: u32, va: u64) -> String {
+        let Some(root) =
+            crate::ceresolve::published_root(&self.gvas_pub.snapshot(), client, vaspace)
+        else {
+            return " walk=NO-PUBLICATION".to_string();
+        };
+        let mut s = self.mem.lock();
+        let PlaneMem { mmu, fb } = &mut *s;
+        let Some(fmt) = mmu.as_deref() else {
+            return " walk=NO-MMU-PORT".to_string();
+        };
+        let mut src = FbStoreReader {
+            fb: fb.as_mut(),
+            memo: None,
+        };
+        crate::ceresolve::walk_trace(fmt, &mut src, &root, va)
+    }
+
+    /// ★★★★ **The framebuffer's residency census** — [`None`] when no store is installed.
+    ///
+    /// See [`crate::fbwin::FbStore::residency`] for the measured asymmetry it exists to
+    /// break: `nz0/4096` cannot tell *"never written"* from *"written with zeros"*, and a
+    /// sparse store's page map can.
+    #[must_use]
+    pub fn fb_residency(&self) -> Option<crate::fbwin::FbResidency> {
+        let s = self.mem.lock();
+        s.fb.residency()
+    }
+
+    /// ★★★★★ **Where the page at `phys` stands — THE JOIN CHECKED FIRST.**
+    ///
+    /// ⊘⊘ This replaces `fb_is_resident`, which was **removed rather than kept beside it**:
+    /// a join-blind residency question reachable from the plane is a question that will be
+    /// asked again. `[measured 2026-08-12, boot `w278b_guest`]` all three of its callers —
+    /// two dump rows and the forwarding plane's `page_written` — got the wrong answer for a
+    /// joined page, and one of them refused a doorbell over it. See
+    /// [`crate::fbwin::FbPageStanding`] for the artefact line.
+    ///
+    /// ⊘ The store's own [`crate::fbwin::FbStore::is_resident`] is unchanged and still means
+    /// *"does this store hold a page"*.
+    #[must_use]
+    pub fn fb_page_standing(&self, phys: u64) -> crate::fbwin::FbPageStanding {
+        use crate::fbwin::FbPageStanding;
+        let s = self.mem.lock();
+        // ★★★ THE JOIN, FIRST — for the same reason `FbStore::read` and `write_tagged`
+        // check it first: after `install_join` this store's own page for the range is gone
+        // by design, so every question answered from `pages` is answered about memory that
+        // was deliberately given away.
+        if s.fb
+            .joined_ranges()
+            .into_iter()
+            .any(|(phys0, len)| phys >= phys0 && phys - phys0 < len)
+        {
+            return FbPageStanding::JoinedOneMemory;
+        }
+        match s.fb.is_resident(phys) {
+            None => FbPageStanding::Unknown,
+            Some(true) => FbPageStanding::Resident,
+            Some(false) => FbPageStanding::NeverWritten,
+        }
+    }
+
+    /// ★★★★ **Every resident framebuffer frame, ascending** — [`None`] when the store
+    /// cannot enumerate. See [`crate::fbwin::FbStore::resident_frames`] for why the
+    /// converse of `is_resident` is now the question, and why it is a **forward** search.
+    #[must_use]
+    pub fn fb_resident_frames(&self) -> Option<Vec<u64>> {
+        let s = self.mem.lock();
+        s.fb.resident_frames()
+    }
+
+    /// ★★★★★ **The store's own arena census — `(refusals, migrations, read refusals)`.**
+    ///
+    /// ⊘⊘ **w584/w585 — this exists because the numbers already existed and nothing read
+    /// them.** `arena_refusals` counted every page the arena turned away for fifteen commits,
+    /// while the store silently fell back to the heap and the bug surfaced as PRAMIN failing.
+    /// A counter with no reader is not an instrument. ⇒ `BAR-MIRROR MECHANISM` prints these.
+    ///
+    /// The first three must be **0** in a healthy boot once an arena is installed: a refusal means
+    /// the store and the file disagree about where a frame lives, which is the whole class.
+    #[must_use]
+    pub fn fb_arena_census(&self) -> (u64, u64, u64, u64) {
+        let s = self.mem.lock();
+        s.fb.arena_census_all()
+    }
+
+    /// ★★★★ **Who wrote this framebuffer page FIRST, and when** — [`None`] when the store
+    /// cannot say **or** nothing is resident there. See [`crate::fbwin::FbWriter`].
+    #[must_use]
+    pub fn fb_page_origin(&self, phys: u64) -> Option<crate::fbwin::FbPageOrigin> {
+        let s = self.mem.lock();
+        s.fb.page_origin(phys)
+    }
+
+    /// ★★★★★ **w318 — how many writes this store has taken from `by`.** [`None`] means the
+    /// store does not count, which is **UNMEASURED and not `0`**: a gate reading this must
+    /// arm on `None`, never skip. See [`crate::fbwin::FbStore::writes_by`].
+    #[must_use]
+    pub fn fb_writes_by(&self, by: crate::fbwin::FbWriter) -> Option<u64> {
+        let s = self.mem.lock();
+        s.fb.writes_by(by)
+    }
+
+    /// ★★★ **Read RAW framebuffer bytes at a framebuffer-physical address** — no walk, no
+    /// translation, no [`crate::ceresolve::Demand`], and **strictly an observation**.
+    ///
+    /// # ⊘ Why this exists, and why it is not a second data path
+    ///
+    /// `execution_plane_increments.md` §16.8's question is *"what does OUR framebuffer
+    /// actually hold at the address the guest published?"*, and that is a question about
+    /// **our own store**, not about the guest's address space. Every other reader here goes
+    /// through the guest's page tables, which is exactly the thing under suspicion: the
+    /// walk from the failing root descends successfully and lands on an unwritten page, and
+    /// telling *"a real page-table pool we are addressing from the wrong base"* from
+    /// *"noise the walk descended into"* needs the bytes themselves.
+    ///
+    /// ⊘ **It reads and it changes nothing** — no allocation in the store beyond what a
+    /// read already implies, no cache, no effect the guest can observe. It is the same
+    /// `read` the BAR0 moving window serves, addressed directly.
+    ///
+    /// ⚠ `buf` is caller-bounded and the caller is a diagnostic. An unwritten address
+    /// inside the advertised framebuffer reads **zero and succeeds** ([`FbStore::read`]),
+    /// which is precisely the fact §16.8 must be able to distinguish from *refused*.
+    ///
+    /// # Errors
+    /// The store's own sentence when it does not back the range at all.
+    pub fn fb_peek(&self, phys: u64, buf: &mut [u8]) -> Result<(), &'static str> {
+        note_fb_read(FbIoRole::OutOfBand, phys, buf.len());
+        let mut s = self.mem.lock();
+        s.fb.read(phys, buf).map_err(|e| e.why)
+    }
+
+    /// ★★★ [`RegPlane::fb_peek`]'s write twin — **for an instrument, and it is written as
+    /// one** (`fb_cpu_view.md` §5.12's both-directions probe).
+    ///
+    /// It is the same `write` the BAR0 moving window serves, addressed directly, so bytes put
+    /// here take **exactly** the path a guest PRAMIN store takes — which is the whole reason
+    /// the probe uses it rather than reaching into the store: a check that wrote through some
+    /// other door would be measuring a door the guest does not use.
+    ///
+    /// ⚠ **It changes device memory.** [`RegPlane::fb_peek`]'s docs can say *"it changes
+    /// nothing"*; this one cannot, and the caller owes a reason for every byte. ⊘ Attributed
+    /// [`FbWriter::Unattributed`] deliberately — *"nobody said which window"* is the truth
+    /// here, and claiming a window would put an instrument's bytes in the by-writer census as
+    /// though the guest had put them there.
+    ///
+    /// # Errors
+    /// The store's own sentence when it does not back the range at all.
+    pub fn fb_poke(&self, phys: u64, bytes: &[u8]) -> Result<(), &'static str> {
+        note_fb_write(FbIoRole::OutOfBand, phys, bytes.len());
+        let mut s = self.mem.lock();
+        s.fb.write(phys, bytes).map_err(|e| e.why)
+    }
+
+    /// The published page-directory root of one `(hClient, hVASpace)` pair, for a report
+    /// that wants to state the root it walked from. ⊘ Reading a root is not walking one;
+    /// no [`crate::ceresolve::Demand`] is needed and none is implied.
+    #[must_use]
+    pub fn published_root(&self, client: u32, vaspace: u32) -> Option<crate::ceresolve::VasRoot> {
+        crate::ceresolve::published_root(&self.gvas_pub.snapshot(), client, vaspace)
+    }
+
+    /// ★★★★ **§16.64 — the walkable root for a page-directory base the OBJECT MODEL
+    /// resolved**, derived against *this plane's* installed format.
+    ///
+    /// The whole argument — why a handle-keyed table structurally cannot answer for a
+    /// UVM-managed VA space, and why claiming `Vidmem` here is a fact rather than a
+    /// convenience — is on [`crate::ceresolve::root_from_declared_pdb`]. This method exists
+    /// so the derivation reads the format **this plane installed**, for
+    /// [`RegPlane::resolve_published_va`]'s reason exactly: a root sized against a second
+    /// format would describe a different device.
+    ///
+    /// # Errors
+    /// [`crate::ceresolve::CeResolve::NoMmuPort`] when no format is installed, or whatever
+    /// the derivation refuses.
+    pub fn root_from_declared_pdb(
+        &self,
+        pdb_phys: u64,
+    ) -> Result<crate::ceresolve::VasRoot, crate::ceresolve::CeResolve> {
+        let s = self.mem.lock();
+        let Some(fmt) = s.mmu.as_deref() else {
+            return Err(crate::ceresolve::CeResolve::NoMmuPort);
+        };
+        crate::ceresolve::root_from_declared_pdb(fmt, pdb_phys)
+    }
+
+    /// ★★★ **§16.64 — resolve one GPU VA against a root the caller already holds.**
+    ///
+    /// The sibling of [`RegPlane::resolve_published_va`] for the case where the root did
+    /// not come from this device's publication table. ⊘ Same `demand` discipline, same
+    /// body ([`resolve_locked`]), same framebuffer — only the root's *provenance* differs,
+    /// and that difference is the caller's to state.
+    #[must_use]
+    pub fn resolve_va_from_root(
+        &self,
+        root: &crate::ceresolve::VasRoot,
+        va: u64,
+        demand: crate::ceresolve::Demand,
+    ) -> crate::ceresolve::CeResolve {
+        // ⊘ Rank order: FSM (0) then memory (1). The sysmem arm below reads guest RAM,
+        // which stayed with the FSM — acquiring it AFTER `mem` is the R3 inversion that took
+        // w523's boot down. `[measured w523]` the doorbell worker panicked with "acquiring a
+        // rank-0 (Plane) lock while already holding [PlaneMem]", poisoned both locks and
+        // ended QEMU mid-run. ⚠ The discipline turned a latent deadlock into a named abort in
+        // one boot — but the inversion was MINE, introduced by the commit that split the lock.
+        let mut st = self.state.lock();
+        let mut s = self.mem.lock();
+        resolve_locked(&mut s, self.chip, root, va, demand)
+    }
+
+    /// ★★★ **§16.64 — read the bytes behind a GPU VA against a root the caller holds.**
+    ///
+    /// [`MemoryPlane::read_published_va`]'s sibling; same aperture routing, same stores, and
+    /// the same refusal that PEER memory is not backed. Only the root's provenance differs.
+    ///
+    /// # Errors
+    /// The resolution whenever it was not `Resolved`, or the store's refusal sentence.
+    pub fn read_va_from_root(
+        &self,
+        root: &crate::ceresolve::VasRoot,
+        va: u64,
+        buf: &mut [u8],
+        demand: crate::ceresolve::Demand,
+    ) -> Result<crate::ceresolve::CeResolve, PublishedVaRead> {
+        // ⊘ Rank order: FSM (0) then memory (1). The sysmem arm below reads guest RAM,
+        // which stayed with the FSM — acquiring it AFTER `mem` is the R3 inversion that took
+        // w523's boot down. `[measured w523]` the doorbell worker panicked with "acquiring a
+        // rank-0 (Plane) lock while already holding [PlaneMem]", poisoned both locks and
+        // ended QEMU mid-run. ⚠ The discipline turned a latent deadlock into a named abort in
+        // one boot — but the inversion was MINE, introduced by the commit that split the lock.
+        let mut st = self.state.lock();
+        let mut s = self.mem.lock();
+        let r = resolve_locked(&mut s, self.chip, root, va, demand);
+        let crate::ceresolve::CeResolve::Resolved { phys, aperture, .. } = r else {
+            return Err(PublishedVaRead::Unresolved(r));
+        };
+        match aperture {
+            Aperture::Vidmem => {
+                s.fb.read(phys, buf)
+                    .map(|()| r)
+                    .map_err(|e| PublishedVaRead::Store(e.why))
+            }
+            // ⊘ `st` is the guard taken ABOVE, in rank order — see there for the boot this
+            // cost. Re-acquiring rank 0 here would be the inversion.
+            Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => st
+                .ram
+                .read(phys, buf)
+                .map(|()| r)
+                .map_err(|e| PublishedVaRead::Store(e.why)),
+            Aperture::Peer => Err(PublishedVaRead::Store(
+                "the leaf names PEER memory and this device backs no peer aperture",
+            )),
+        }
+    }
+
+    /// ★★★ **§16.64 — the per-level descent trace for a root the caller already holds.**
+    ///
+    /// [`RegPlane::published_walk_trace`]'s sibling; produces a **sentence**, no address,
+    /// and therefore takes no [`crate::ceresolve::Demand`].
+    #[must_use]
+    pub fn walk_trace_from_root(&self, root: &crate::ceresolve::VasRoot, va: u64) -> String {
+        let mut s = self.mem.lock();
+        let PlaneMem { mmu, fb } = &mut *s;
+        let Some(fmt) = mmu.as_deref() else {
+            return " walk=NO-MMU-PORT".to_string();
+        };
+        let mut src = FbStoreReader {
+            fb: fb.as_mut(),
+            memo: None,
+        };
+        crate::ceresolve::walk_trace(fmt, &mut src, root, va)
+    }
+
+    /// ★★★ **One CE submission's worth of this plane, under ONE lock acquisition**
+    /// (`execution_plane_increments.md` §14.15 obstacle 3, the *"the plane hands out its
+    /// stores"* half of the owner's two options).
+    ///
+    /// # Why a session and not more `resolve_published_va`-shaped calls
+    ///
+    /// Serving one guest submission needs the plane **many times**: resolve the ring, read
+    /// it, resolve and read each pushbuffer range, resolve every operand run of every
+    /// `LAUNCH_DMA`, write the destination bytes, resolve the finishPayload and write it.
+    /// Doing that through per-call locking would take and drop the FSM mutex dozens of
+    /// times *inside one guest-visible event*, so a second vCPU could re-point the BAR0
+    /// window or replace the format between two steps of a single copy. A submission is
+    /// one atomic thing to the guest; this makes it one to us.
+    ///
+    /// ⊘ **The root is resolved ONCE, before the lock**, and a channel whose
+    /// `(client, vaspace)` published nothing gets `None` rather than a session that will
+    /// refuse every question — the absence of a publication is a fact about the guest, not
+    /// about a walk.
+    ///
+    /// ⚠ **Lock order.** This is the plane's own mutex and the caller must hold **no core
+    /// lock** when it calls: the command-policy chain already takes the core's ranked locks
+    /// *under* this mutex (`kayfabe_rmrpc::policy::Bridge`, boxed into `PlaneState::policy`),
+    /// so plane→core is the established order and core→plane is its inversion. That is why
+    /// the CE executor runs off `DoorbellPort::ring` — which `RegPlane::write` documents as
+    /// being called with no plane lock held — rather than from inside
+    /// `kayfabe_fwd::apply_pushbuffer`, which runs under a proc lock.
+    pub fn ce_session<R>(
+        &self,
+        client: u32,
+        vaspace: u32,
+        demand: crate::ceresolve::Demand,
+        f: impl FnOnce(&mut CePlane<'_>) -> R,
+    ) -> Option<R> {
+        let root = crate::ceresolve::published_root(&self.gvas_pub.snapshot(), client, vaspace)?;
+        Some(self.ce_session_with_root(&root, demand, f))
+    }
+
+    /// ★★★★ **§16.64 — a CE session over a root the caller already holds**, for the VA
+    /// spaces [`MemoryPlane::ce_session`]'s handle-keyed lookup structurally cannot answer
+    /// for.
+    ///
+    /// ⊘ **Not an `Option`, and that is the difference that matters.** `ce_session` returns
+    /// `None` to mean *"the guest published no root for that `(hClient, hVASpace)`"* — a
+    /// sentence [`crate::ceresolve::root_from_declared_pdb`] shows is **false about the
+    /// guest** for a UVM-managed VA space, which publishes through a transport that lookup
+    /// never sees and under a *dup* handle it could not match anyway. A caller that has
+    /// already obtained a root has nothing left to refuse *here*, so this cannot manufacture
+    /// a second refusal wearing the first one's name.
+    ///
+    /// ★ Same body, same lock, same [`CePlane`] as `ce_session` — which now delegates — so
+    /// the two entry points cannot come to disagree about what a session is.
+    pub fn ce_session_with_root<R>(
+        &self,
+        root: &crate::ceresolve::VasRoot,
+        demand: crate::ceresolve::Demand,
+        f: impl FnOnce(&mut CePlane<'_>) -> R,
+    ) -> R {
+        let mut s = self.mem.lock();
+        let mut ce = CePlane {
+            state: &mut s,
+            chip: self.chip,
+            root: *root,
+            demand,
+            clock: self.clock.as_ref(),
+        };
+        f(&mut ce)
+    }
+
+    /// The publication latch itself, as a shared handle — for
+    /// [`RegPlane::bar_pde_log`]'s reason: [`RegPlane::set_policy`] replaces the whole
+    /// chain, and the link that decodes these publications lives in it.
+    #[must_use]
+    pub fn gvas_pub_log(&self) -> GvasPubLog {
+        self.gvas_pub.clone()
+    }
+
+    /// Install a command policy, replacing the C-baseline echo.
+    pub fn set_policy(&self, policy: Box<dyn CommandPolicy>) {
+        let mut s = self.state.lock();
+        s.policy = policy;
+    }
+
+    /// ★★★★★ **The BAR0 pages the remaining read traps land in, worst first (w586).**
+    ///
+    /// ⊘ `[measured w582]` 161 422 BAR0 reads reach the handler and only 138 are unclaimed —
+    /// so the work left for goal 2 is entirely in **claimed** reads, and until this existed
+    /// no instrument could say which page they were in. A total is not a work list.
+    ///
+    /// ★ Each row says whether the aperture cut BACKS that page, because that is the actual
+    /// question: a read arriving from a page the cut backs means the backing is not working;
+    /// a read from a page the cut deliberately leaves live is a page still to be solved.
+    #[must_use]
+    pub fn bar0_read_hotspots(&self, top: usize) -> String {
+        // ⊘⊘⊘ **w587 — THIS RE-RAN `bar0_backable_runs()`, AND THAT WAS THE w586 REGRESSION.**
+        //
+        // `[measured w587, bisect]` w584 and w585 both boot clean; w586 fails `RmInitAdapter`
+        // with GSP RPCs taking ~60 ms each. The cause is here: `bar0_backable_runs` is a
+        // **4 194 304-dword predicate sweep** over the whole aperture, and this report is
+        // emitted **15 times in a boot** from the periodic census — not once at teardown, as I
+        // assumed when I wrote it.
+        //
+        // ⚠ **This is w554's lesson, committed again by the person who wrote it down.** w554:
+        // *"`dead_page` built its bitmap on the READ path — 4.2M predicate evaluations inside
+        // an MMIO exit"*, fixed by building it in `new`. ⇒ The fix then produced the very
+        // bitmap this now uses. **An instrument is on a hot path unless someone checked, and
+        // `bar0_read_hotspots` is an instrument.**
+        let backed = |page: u64| self.dead_page(page << 12);
+        let mut rows: Vec<(u64, u64)> = self
+            .c
+            .bar0_read_pages
+            .iter()
+            .enumerate()
+            .map(|(i, a)| (a.load(Ordering::Relaxed), i as u64))
+            .filter(|(n, _)| *n > 0)
+            .collect();
+        rows.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+        let live: u64 = rows
+            .iter()
+            .filter(|(_, p)| !backed(*p))
+            .map(|(n, _)| n)
+            .sum();
+        let from_backed: u64 = rows
+            .iter()
+            .filter(|(_, p)| backed(*p))
+            .map(|(n, _)| n)
+            .sum();
+        let listed: Vec<String> = rows
+            .iter()
+            .take(top)
+            .map(|(n, p)| {
+                format!(
+                    "+0x{:x}={n}{}",
+                    p << 12,
+                    if backed(*p) { "!BACKED" } else { "" }
+                )
+            })
+            .collect();
+        format!(
+            "BAR0-READ-HOTSPOTS pages_touched={} live_pages={from_backed_pages}              reads_from_live_pages={live} reads_from_BACKED_pages={from_backed} top[{}]              ⊘ a read tagged `!BACKED` came from a page the aperture cut backs with memory,              so it should never have reached this handler at all — that is a BACKING defect,              not a page still to solve. Everything else is the work list for goal 2.",
+            rows.len(),
+            listed.join(" "),
+            from_backed_pages = rows.iter().filter(|(_, p)| !backed(*p)).count(),
+        )
+    }
+
+    /// The counters.
+    ///
+    /// ★★★ **The source is DESTRUCTURED, and the absent `..` is the point.** This is a
+    /// projection from one struct to another, i.e. exactly the shape that goes silently
+    /// out of date: an atomic added to [`PlaneCounters`] that nobody wires here is a
+    /// number the outside world can never read, with no red test anywhere. Binding every
+    /// field by name makes `rustc` refuse the pattern (E0027) on the day the field is
+    /// added, so *"is this on the wire?"* becomes a question someone must answer rather
+    /// than one nobody is asked.
+    #[must_use]
+    /// ★★★★★ **THE BAR0 READ MIX — step zero of serving reads from a page (w538).**
+    ///
+    /// `THE_PRODUCTION_CONTRACT.md` §4 commits BAR0 to **write traps only**, with reads served
+    /// from a read-only memslot. Which registers can live in a page is not a matter of opinion:
+    ///
+    /// - **static** — the boot registers and the VBIOS window never change after reset, so a
+    ///   page written once is correct forever;
+    /// - **producer-updated** — the GSP queue, the invalidate completion, the interrupt leaves
+    ///   and the window latch change only when WE change them, so the page can be written at
+    ///   that moment;
+    /// - **live** — the free-running counter advances continuously and no page we write can
+    ///   keep up. ★ The owner's answer is that it is mappable from host userspace, which makes
+    ///   it a mapping problem rather than a shadowing one.
+    ///
+    /// ⊘ **Nothing in this tree printed these numbers**, so every statement about the size of
+    /// the win has been arithmetic over an unmeasured mix. `[measured w537]` the CPU-time
+    /// instrument counts 89 106 traps and is armed **only on writes**, so the read half of the
+    /// MMIO surface was not merely unreported — it was uncounted.
+    ///
+    /// ⚠ Renders every class including the zeros, deliberately. A class that prints nothing
+    /// cannot be told from a class that was never reached, and the whole point of this line is
+    /// to decide which registers are worth a page.
+    #[must_use]
+    pub fn bar0_read_census(&self) -> String {
+        let c = self.counters();
+        let named = c.boot_reg_reads
+            + c.rom_reads
+            + c.gsp_reads
+            + c.ptimer_reads
+            + c.bar0_window_reads
+            + c.cpu_intr_accesses
+            + c.fb_window_reads
+            + c.fb_reads;
+        format!(
+            "BAR0-READS total={} | static[boot_reg={} rom={}] | \
+             producer[gsp={} bar0_window={} cpu_intr={}] | live[ptimer={}] | \
+             window[ALL-WINDOWS r={} w={} | PRAMIN-ONLY r={} w={} | NO-ADDRESS-MODEL r={} w={} \
+             | moves={}] | \
+             window_off_trap={} ⊘⊘ `window_off_trap` is the discriminator w602 added: a memory \
+             slot can only remove accesses the GUEST makes, so window traffic that arrived OFF \
+             a trap thread is THIS PROCESS calling the window path and is not a slot failure at \
+             all. | \
+             unclaimed={} (of which {} IN A PAGE THE CUT BACKS) residual={} ⊘ `cpu_intr` \
+             counts reads AND writes (one counter, two \
+             facts). ★ `window[SERVED ..]` is the PRAMIN/framebuffer aperture actually \
+             CARRYING traffic — the one a mapping would remove, in BOTH directions, because \
+             the fake framebuffer is real memory. ⊘⊘ `NO-ADDRESS-MODEL` is the OTHER thing: \
+             window accesses this port has no address model for, i.e. REFUSED, not served. \
+             `[w539]` reporting the refused pair as if it were the traffic made PRAMIN look \
+             COLD (`0/0`) while `moves=42` said the guest was programming it — a contradiction \
+             the owner caught by asking why ogkm would move a window it never used. `moves` is \
+             how often a mapping would need re-pointing.",
+            c.reads,
+            c.boot_reg_reads,
+            c.rom_reads,
+            c.gsp_reads,
+            c.bar0_window_reads,
+            c.cpu_intr_accesses,
+            c.ptimer_reads,
+            c.fb_reads,
+            c.fb_writes,
+            self.c.pramin_reads.load(Ordering::Relaxed),
+            self.c.pramin_writes.load(Ordering::Relaxed),
+            c.fb_window_reads,
+            c.fb_window_writes,
+            c.bar0_window_writes,
+            self.c.fb_window_off_trap.load(Ordering::Relaxed),
+            c.unclaimed_reads,
+            c.unclaimed_reads_in_dead_pages,
+            c.reads.saturating_sub(named),
+        )
+    }
+
+    /// ★★★★★ **The framebuffer address the `PRAMIN` window currently starts at.**
+    ///
+    /// ⊘ Read through the SAME `fb_addr` the read path uses, at the window's own base offset,
+    /// so the slot the hypervisor points at and the bytes this plane would serve cannot name
+    /// different framebuffer addresses.
+    ///
+    /// `None` when the chip declares no window.
+    #[must_use]
+    pub fn pramin_fb_base(&self) -> Option<u64> {
+        if self.chip.pramin_window.len == 0 {
+            return None;
+        }
+        Some(self.state.lock().bar0_window.fb_addr(0))
+    }
+
+    /// Where the `PRAMIN` aperture sits in the register BAR, as `(offset, length)`.
+    #[must_use]
+    /// ★★★★★ **w631 — the counter page's BAR0 span, DERIVED from the chip's own table.**
+    ///
+    /// `(offset, len)` within BAR0, or `None` if this chip advertises no usermode window.
+    ///
+    /// ⊘ **Derived, never a constant**, for the reason `doorbell_reg` gives one file over: the
+    /// base comes from `reg_base::USERMODE` in the table the guest itself is shown, so a chip
+    /// that places it elsewhere is followed rather than mis-decoded. `[the owner]` *"if not,
+    /// then it must be derived"*, and every architecture from Turing to Blackwell computes this
+    /// the same way.
+    ///
+    /// ⚠ **ONE page, not the 64 KiB the mapping covers.** The registers that matter —
+    /// `TIME_0`, `TIME_1` and the doorbell — all live in page 0, and the other fifteen pages
+    /// measured zero reads. A 64 KiB slot would hand the guest fifteen pages of hardware
+    /// nobody asked for; the `mmap` is 64 KiB because the driver refuses any other length, and
+    /// the SLOT is 4 KiB because that is what the guest needs.
+    ///
+    /// ⊘ `None` is a refusal to classify, not a default offset — a chip advertising no
+    /// usermode window told the driver it has no such aperture.
+    #[must_use]
+    pub fn usermode_page_span(&self) -> Option<(u64, u64)> {
+        self.chip
+            .chip_info
+            .reg_bases
+            .iter()
+            .find(|r| r.index == kayfabe_abi::chipinfo::reg_base::USERMODE)
+            .map(|r| (u64::from(r.offset), 4096))
+    }
+
+    pub fn pramin_span(&self) -> Option<(u64, u64)> {
+        if self.chip.pramin_window.len == 0 {
+            return None;
+        }
+        Some((self.chip.pramin_window.base, self.chip.pramin_window.len))
+    }
+
+    /// ★★★★★ **How many times the guest has re-pointed the `PRAMIN` window** — ONE atomic
+    /// load, because the mirror asks on every write trap.
+    ///
+    /// ⊘ A count and not the latch value: two writes that restore the original value still
+    /// moved the window in between, and a value comparison would call that no change while a
+    /// slot installed in the middle named a frame that is no longer the window's.
+    ///
+    /// ⊘ Not [`RegPlane::counters`], which loads some forty atomics to build a struct. That
+    /// is a teardown census; this is the trap path.
+    #[must_use]
+    pub fn bar0_window_write_count(&self) -> u64 {
+        self.c.bar0_window_writes.load(Ordering::Relaxed)
+    }
+
+    pub fn counters(&self) -> Counters {
+        let g = |a: &AtomicU64| a.load(Ordering::Relaxed);
+        let PlaneCounters {
+            // ⊘ Not a field of [`Counters`]: that struct is `Copy` scalars, and this is a
+            // 4096-entry histogram. It is reported by [`RegPlane::bar0_read_hotspots`], which
+            // is where a breakdown belongs — a total and a breakdown answer different
+            // questions and merging them would make `Counters` allocate.
+            bar0_read_pages: _,
+            pramin_reads,
+            pramin_writes,
+            // ⊘ Reported by `bar0_read_census` rather than carried in `Counters`, beside the
+            // totals it qualifies.
+            fb_window_off_trap: _,
+            reads,
+            writes,
+            boot_reg_reads,
+            ptimer_reads,
+            ptimer_writes_refused,
+            rom_reads,
+            gsp_reads,
+            gsp_writes,
+            unclaimed_reads,
+            shadow_writes,
+            unclaimed_reads_in_dead_pages,
+            unclaimed_writes,
+            fb_window_reads,
+            fb_window_writes,
+            fb_reads,
+            fb_writes,
+            fb_refusals,
+            bar2_reads,
+            bar2_writes,
+            bar2_faults,
+            bar1_reads,
+            bar1_writes,
+            bar1_faults,
+            bar0_window_reads,
+            bar0_window_writes,
+            commands,
+            faults,
+            ram_refusals,
+            irq_requests,
+            cpu_intr_accesses,
+            cpu_intr_raises,
+            cpu_intr_masked,
+            nonstall_raises,
+            nonstall_unvectored,
+            nonstall_masked,
+            gsp_event_raises,
+            gsp_event_unvectored,
+            gsp_event_masked,
+            status_irq_cleared,
+            doorbells,
+            doorbells_served,
+            doorbells_served_locally,
+            doorbells_served_forwarded,
+            doorbells_refused,
+            doorbells_scheduled,
+            // ⊘ Named here because the destructuring is EXHAUSTIVE on purpose: a `..` would let
+            // a new counter be added and never reported, which is the failure this whole line
+            // of work is about. They are surfaced through `intr_census`, not `Counters`.
+            nonstall_no_engine: _,
+            nonstall_no_vector: _,
+            nonstall_out_of_range: _,
+        } = &self.c;
+        Counters {
+            pramin_reads: g(pramin_reads),
+            pramin_writes: g(pramin_writes),
+            reads: g(reads),
+            writes: g(writes),
+            boot_reg_reads: g(boot_reg_reads),
+            ptimer_reads: g(ptimer_reads),
+            ptimer_writes_refused: g(ptimer_writes_refused),
+            rom_reads: g(rom_reads),
+            gsp_reads: g(gsp_reads),
+            gsp_writes: g(gsp_writes),
+            unclaimed_reads: g(unclaimed_reads),
+            shadow_writes: g(shadow_writes),
+            unclaimed_reads_in_dead_pages: g(unclaimed_reads_in_dead_pages),
+            unclaimed_writes: g(unclaimed_writes),
+            fb_window_reads: g(fb_window_reads),
+            fb_window_writes: g(fb_window_writes),
+            fb_reads: g(fb_reads),
+            fb_writes: g(fb_writes),
+            fb_refusals: g(fb_refusals),
+            bar2_reads: g(bar2_reads),
+            bar2_writes: g(bar2_writes),
+            bar2_faults: g(bar2_faults),
+            bar1_reads: g(bar1_reads),
+            bar1_writes: g(bar1_writes),
+            bar1_faults: g(bar1_faults),
+            bar0_window_reads: g(bar0_window_reads),
+            bar0_window_writes: g(bar0_window_writes),
+            commands: g(commands),
+            commands_unserviced: self.unserviced.total(),
+            faults: g(faults),
+            ram_refusals: g(ram_refusals),
+            irq_requests: g(irq_requests),
+            cpu_intr_accesses: g(cpu_intr_accesses),
+            cpu_intr_raises: g(cpu_intr_raises),
+            cpu_intr_masked: g(cpu_intr_masked),
+            nonstall_raises: g(nonstall_raises),
+            nonstall_unvectored: g(nonstall_unvectored),
+            nonstall_masked: g(nonstall_masked),
+            gsp_event_raises: g(gsp_event_raises),
+            gsp_event_unvectored: g(gsp_event_unvectored),
+            gsp_event_masked: g(gsp_event_masked),
+            status_irq_cleared: g(status_irq_cleared),
+            doorbells: g(doorbells),
+            doorbells_served: g(doorbells_served),
+            doorbells_served_locally: g(doorbells_served_locally),
+            doorbells_served_forwarded: g(doorbells_served_forwarded),
+            doorbells_refused: g(doorbells_refused),
+            doorbells_scheduled: g(doorbells_scheduled),
+        }
+    }
+
+    /// ★★★ **Everything this device life would leave behind, as ONE value — and the
+    /// enumeration is enforced by the COMPILER, not by a reviewer's memory.**
+    ///
+    /// # The property this exists for (`#130`)
+    ///
+    /// > After a guest bricks the emulator, unload → reload must yield a device
+    /// > **indistinguishable from first boot**.
+    ///
+    /// "Indistinguishable" is a statement quantified over *all* of the device's state, so
+    /// the way it fails is not a wrong assertion — it is a **true assertion about a
+    /// shrinking universe**. This repository has been bitten by that shape five separate
+    /// times, and it had already happened here: the recovery test shipped on 2026-07-31
+    /// named [`RegPlane::unclaimed_sample`] as its one non-derived member, and by the time
+    /// the next task looked, [`RegPlane::fb_window_sample`] and
+    /// [`RegPlane::fault_buffer_sample`] had been added beside it and were in **no**
+    /// snapshot at all. Nothing went red. Nothing could have.
+    ///
+    /// # ★★ How this is structural rather than another list
+    ///
+    /// The body **destructures [`RegPlane`] and [`PlaneState`] with no `..`**. A field
+    /// added to either is `error[E0027]: pattern does not mention field` — the build stops
+    /// on the commit that adds the state, and the author decides *there* whether it is
+    /// device state (into the residue) or shell wiring (bound to `_` with a reason). That
+    /// is the difference between a guarantee and a reset function someone must remember to
+    /// extend.
+    ///
+    /// ⊘ Six fields are deliberately `_`, in three groups, each with a stated reason:
+    /// - `chip`, `model`, `rom` — a `&'static` table, its model and the ROM generated from
+    ///   it. Immutable for the plane's whole life; two lives of the same chip cannot
+    ///   differ here.
+    /// - `clock` — the host's monotonic time, which is *supposed* to keep running across a
+    ///   reload. A device whose clock reset would be the bug (see this module's
+    ///   "a stopped clock is an unkillable hang").
+    /// - `ram`, `policy` — the **shell's** wiring, replaced through [`RegPlane::set_ram`]
+    ///   and [`RegPlane::set_policy`], and `Box<dyn …>` with no equality to compare. That
+    ///   they survive a [`RegPlane::device_reset`] is asserted separately and by name.
+    #[must_use]
+    pub fn residue(&self) -> PlaneResidue {
+        // ★★★ EXHAUSTIVE. The missing `..` is load-bearing — see this method's docs.
+        let RegPlane {
+            // ⊘ w795 — bound and ignored here on purpose: this destructuring exists so a new
+            // field cannot be silently left out of the teardown census, and the doorbell cost
+            // histogram is rendered from `doorbell_cost()` by the shim, not from this snapshot.
+            dbcost: _,
+            dbledger: _,
+            // ⊘ Neither is residue. The POLICY is set once at realize from the environment and
+            // survives a device reset by design (a reset does not un-arm an experiment the
+            // operator armed); the COUNTER is a census of the whole boot, and zeroing it at a
+            // reset would silently shorten the window the measurement covers.
+            fb_trap_policy: _,
+            fb_trap_refused: _,
+            // ⊘ NOT residue either, and for the policy's reason: the byte port is a property
+            // of the STORE the composition root installed, and a device reset does not replace
+            // the store. Clearing it would leave a live port unreachable for the rest of the
+            // boot, which reads exactly like a port that was never built.
+            fb_has_demand_port: _,
+            doorbell_refusals_by_kind: _,
+            read_shadow: _,
+            gsp_regs: _,
+            dead_pages: _,
+            cpu_intr: _,
+            mmio_in_flight: _,
+            mem: _,
+            pending_cmd_doorbells: _,
+            posted_cmd_doorbells: _,
+            defer_cmds_armed: _,
+            chip: _,
+            model: _,
+            rom: _,
+            clock: _,
+            state,
+            // Read through `counters()`, which destructures it in turn.
+            c: _,
+            unserviced,
+            census,
+            mmu_inval,
+            fault_buffer,
+            bar_pdes,
+            // ★ The mirror port is the shell's wiring, like `ram` and `policy`.
+            fb_mirror: _,
+            gvas_pub,
+            set_page_dir,
+            // ⊘ Read through `os_event_log()`; the registry's own counters are what the
+            // report carries, and they are already `Arc`-shared with the chain link.
+            os_events: _,
+            // ★ The PORT is the shell's wiring, like `ram` and `policy`; what this device
+            // life SAW through it is carried out as `doorbell` just below.
+            doorbell: _,
+            doorbell_log,
+        } = self;
+        let counters = self.counters();
+        let doorbell = doorbell_log
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let s = state.lock();
+        // ★★★ EXHAUSTIVE, for the same reason.
+        let PlaneState {
+            fsm,
+            ram: _,
+            policy: _,
+            unclaimed,
+            fb_window,
+            bar0_window,
+            // ★ Carried out as counters rather than as state: *"how many vectors did this
+            // life ask for, how many could it not announce, and would any have been
+            // masked"* is the question a teardown report is asked, and a snapshot of the
+            // arrays would answer none of it.
+            //
+            // ⚠ **The old reason given here was wrong and is corrected**: it said the
+            // arrays are *transient*, because *"every bit the guest sets it clears again in
+            // the same ISR"*. Since §14.18 this device sets bits the guest may never clear
+            // — see [`RegPlane::device_reset`], which now rebuilds the tree for exactly
+            // that reason. The field is excluded because it is reported as counters, not
+            // because it cannot hold anything across a life.
+            // ★ The PORT is the shell's wiring, like `ram` and `policy`; what it HOLDS is
+            // device state and is carried out as `fb_resident_bytes` just below.
+            // ⊘ `fb` and `mmu` left this struct at w522 — see [`PlaneMem`]. The framebuffer's
+            // contribution is still carried out below as `fb_resident_bytes`, read through
+            // the plane's own accessor rather than destructured here.
+            // ★★★★ G1's set IS guest-driven device state — the pages the guest's CPU wrote
+            // and nothing has yet attributed — so it is carried out, like `fb_window` and
+            // the census. ⊘ As a count and not as the addresses: the residue is a
+            // comparison object, and a per-boot physical address would make two identical
+            // devices compare unequal for a reason that is about the guest's allocator.
+            pt_witness,
+            pt_witness_refused,
+            pt_witness_writes,
+        } = &*s;
+        PlaneResidue {
+            counters,
+            pt_witness: PtWitnessStats {
+                pending: pt_witness.len(),
+                writes: *pt_witness_writes,
+                refused: *pt_witness_refused,
+            },
+            gsp: fsm.clone(),
+            unclaimed: unclaimed.clone(),
+            fb_window: fb_window.clone(),
+            unserviced: unserviced.sample(),
+            census: census.snapshot(),
+            mmu_inval: mmu_inval.snapshot(),
+            fault_buffers: fault_buffer.sample(),
+            fault_buffers_registered: fault_buffer.total(),
+            shadow_fault_buffers_registered: fault_buffer.shadow_total(),
+            access_cntr_buffers_registered: fault_buffer.access_cntr_total(),
+            bar0_window: *bar0_window,
+            bar_pdes: bar_pdes.pdes(),
+            gvas_pub: gvas_pub.snapshot(),
+            set_page_dir: set_page_dir.latest(),
+            // ⊘ Read through the plane's own lock rather than destructured from the FSM
+            // state: `fb` moved to [`PlaneMem`] at w522. Taken AFTER the state guard is
+            // gone, in rank order, so this census cannot itself become a stall.
+            fb_resident_bytes: self.mem.lock().fb.resident_bytes(),
+            doorbell,
+        }
+    }
+
+    /// ★★ The distinct commands nothing answered, up to
+    /// [`crate::unserviced::UNSERVICED_SAMPLE_MAX`] — see that module for why the guest
+    /// cannot be asked this question.
+    #[must_use]
+    pub fn unserviced_sample(&self) -> Vec<crate::unserviced::UnservicedCommand> {
+        self.unserviced.sample()
+    }
+
+    /// ★★★ **How many distinct commands went unserviced — the truth, past
+    /// [`crate::unserviced::UNSERVICED_SAMPLE_MAX`].**
+    ///
+    /// ⊘ Separate from [`Self::unserviced_sample`]`().len()` on purpose: that length is
+    /// clamped by the sample's own cap, and reporting it as a distinct count is what let a
+    /// saturated ledger read as a complete one. See
+    /// [`crate::unserviced::UnservicedLog::distinct`].
+    #[must_use]
+    pub fn unserviced_distinct(&self) -> u64 {
+        self.unserviced.distinct()
+    }
+
+    /// ★★★ The control census — what was **answered**, and with what result, including the
+    /// served-but-refused class the unserviced list structurally cannot see
+    /// (`crate::census`).
+    #[must_use]
+    pub fn control_census(&self) -> crate::census::CensusSnapshot {
+        self.census.snapshot()
+    }
+
+    /// How many times the guest registered a **replayable hardware** fault buffer
+    /// (`NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER`, `0x20800a9b`).
+    ///
+    /// ⊘⊘ **The old doc said "the recorder declines the command, so this number rising means
+    /// the guest's UVM reached the registration and was REFUSED."** That stopped being true
+    /// at §14.41: `crate::inittables` now answers the control and the recorder is an observer.
+    /// The number still counts *asks*, but a rising count now means **served**, which is the
+    /// opposite reading — and a stale sentence like that is how a report gets misread.
+    #[must_use]
+    pub fn fault_buffers_registered(&self) -> u64 {
+        self.fault_buffer.total()
+    }
+
+    /// How many times the guest registered a **client shadow** fault buffer
+    /// (`NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER`, `0x20800a9d`).
+    #[must_use]
+    pub fn shadow_fault_buffers_registered(&self) -> u64 {
+        self.fault_buffer.shadow_total()
+    }
+
+    /// How many times the guest registered an **access-counter notification** buffer
+    /// (`NV2080_CTRL_CMD_INTERNAL_UVM_REGISTER_ACCESS_CNTR_BUFFER`, `0x20800a1d`).
+    #[must_use]
+    pub fn access_cntr_buffers_registered(&self) -> u64 {
+        self.fault_buffer.access_cntr_total()
+    }
+
+    /// The fault-buffer registrations remembered, capped at
+    /// [`crate::faultbuffer::FAULT_BUFFER_SAMPLE_MAX`].
+    #[must_use]
+    pub fn fault_buffer_sample(&self) -> Vec<crate::faultbuffer::FaultBufferNote> {
+        self.fault_buffer.sample()
+    }
+
+    /// ★★★★★ §16.76 — the os-event registry, as a shared handle.
+    ///
+    /// ⊘ The only channel to what the guest registered, and — for
+    /// [`RegPlane::bar_pde_log`]'s reason — a handle rather than a snapshot:
+    /// [`RegPlane::set_policy`] replaces the whole chain, and the link that records
+    /// registrations lives in it.
+    #[must_use]
+    pub fn os_event_log(&self) -> crate::osevent::OsEventLog {
+        self.os_events.clone()
+    }
+
+    /// The distinct `(bar, offset)` pairs no source claimed, up to
+    /// [`UNCLAIMED_SAMPLE_MAX`].
+    ///
+    /// ★ `bar` is part of the answer. An offset alone names two different accesses in two
+    /// different apertures, and reporting only the offset made a framebuffer access read as
+    /// a register one.
+    #[must_use]
+    pub fn unclaimed_sample(&self) -> Vec<(u8, u64)> {
+        let s = self.state.lock();
+        s.unclaimed.clone()
+    }
+
+    /// ★★★ The distinct framebuffer-window accesses seen, up to [`UNCLAIMED_SAMPLE_MAX`].
+    ///
+    /// The *which* behind [`Counters::fb_window_reads`] / [`Counters::fb_window_writes`].
+    /// An operator reading a boot that ends in a missing mapping wants this list, because
+    /// every entry is a byte of device memory this port did not carry.
+    #[must_use]
+    pub fn fb_window_sample(&self) -> Vec<(FbWindow, u64)> {
+        let s = self.state.lock();
+        s.fb_window.clone()
+    }
+
+    /// The FSM's current boot phase, so a test can assert the guest moved it.
+    #[must_use]
+    /// ★★★★★ **POST THE REPLIES THAT WERE WAITING ON THE PUBLICATION** — the release half
+    /// of `CommandPolicy::holds_for_refresh`.
+    ///
+    /// Owner, 2026-09-10: *"You should only return from a TLB invalidate, the RPC map call
+    /// or the kernel emulated channel for UVM after the PTE/PDB page table refresh function
+    /// finished."*
+    ///
+    /// ⊘ **Called from the publication worker, never from a vCPU.** The vCPU serviced the
+    /// command, held the reply and returned from its trap; the guest is spinning in its own
+    /// `rpcRecvPoll`. This is the moment the rows are on the host and the guest may proceed.
+    ///
+    /// ⚠ Takes the plane lock, which a trap path also takes — so it must stay what it is: a
+    /// bounded copy of already-encoded bytes into the guest's ring. No host I/O, no syscall,
+    /// nothing that can block. `[w395]` a lock a worker held across a blocking call is what
+    /// produced the 1.79 s trap this campaign misattributed to inline servicing.
+    ///
+    /// Returns how many replies were posted, or the fault that stopped it.
+    ///
+    /// # Errors
+    ///
+    /// Whatever `GspFsm::release_held` refuses with; the unposted replies stay queued.
+    /// ★★★★★ **w432 — SERVICE THE GSP COMMAND QUEUE OFF THE vCPU.**
+    ///
+    /// The guest's write to `NV_PGSP_QUEUE_HEAD` only RECORDS that the queue moved; this does
+    /// the work. `[measured]` doing it inside that write held a vCPU for **1.79 s**, the worst
+    /// trap in the device, because one store drains and services every queued RPC — host verbs
+    /// included — before returning.
+    ///
+    /// Returns `(serviced, raise_status_irq)`. ⚠ **The caller MUST act on the flag.** The
+    /// inline path's `WriteOutcome.raise_status_irq` was consumed by the trap's caller; moving
+    /// the work here moves that duty here, and a worker that drops it leaves the guest polling
+    /// a reply whose interrupt never arrives — a hang that looks exactly like a slow GPU.
+    ///
+    /// ⊘ Counters are bumped identically to the inline path, so a boot's census does not
+    /// change meaning when the work moves threads.
+    ///
+    /// # Errors
+    /// Whatever servicing refused, by name.
+    pub fn service_deferred_commands(&self) -> Result<(usize, bool), kayfabe_gsp::GspFault> {
+        // ⊘⊘⊘ **ONE DOORBELL PER LOCK ACQUISITION. THE DRAIN MUST NOT HOLD THIS ACROSS ALL OF
+        // THEM.**
+        //
+        // `[measured w447, n=2]` moving the work off the vCPU was NOT enough: with
+        // `inline_exceptions=0` and `gsp_off_vcpu=561`, the worst trap was **unchanged** at
+        // `worst_trap=1 779 094us at=bar0+0x110c00` — `NV_PGSP_QUEUE_HEAD(0)`, the very
+        // register whose servicing had just been deferred — with `slow_traps(>1000us)=194`.
+        //
+        // The reason is this lock. A vCPU's queue-head write takes `self.state.lock()` to
+        // record the doorbell; the worker took the SAME lock and held it for the whole drain.
+        // ⇒ **The vCPU still waited for the work, just through the lock instead of through the
+        // call.** That is the owner's second invariant, and it is the one I broke:
+        //
+        // > *"a trap may not take longer than a millisecond. no blocking calls in vcpu, no
+        // >  blocking calls in lock, especially the one shared with vcpus"*
+        //
+        // ⚠ Moving work off a thread does not move the WAIT off that thread. A censusdd that
+        // counts only declared inline exceptions cannot see this: nothing is inline, nothing
+        // is declared, and the vCPU is parked anyway.
+        //
+        // ⊘ This does not make a single command's servicing short — one RPC that drives a host
+        // verb is still as long as that verb. It bounds the hold to ONE command instead of all
+        // pending ones, which is the part that scaled with the queue.
+        let mut total = 0usize;
+        let mut owed = false;
+        // ★★★ w449 — TIME ONE COMMAND, because w448's hypothesis was WRONG and I need the
+        // distribution rather than another guess.
+        //
+        // `[measured w448]` bounding the lock hold to ONE doorbell did NOT move the worst trap:
+        // `1 884 058us at=bar0+0x110c00`, `slow_traps` 194 → 178. So *"the drain holds the lock
+        // across all pending doorbells"* was not the dominant cause.
+        //
+        // ⊘ The live hypothesis is the one w448's own commit message already conceded: a single
+        // command that drives a host verb is as long as that verb, and one such command under
+        // this lock parks a vCPU for its whole duration. This measures that directly — if the
+        // max single-command time is ~1.8 s, the fix is getting host verbs out from under the
+        // plane lock, not batching differently.
+        let mut worst_us = 0u128;
+        loop {
+            let t0 = std::time::Instant::now();
+            let one = self.service_one_deferred_command()?;
+            let dt = t0.elapsed().as_micros();
+            match one {
+                None => break,
+                Some(irq) => {
+                    total += 1;
+                    owed |= irq;
+                    if dt > worst_us {
+                        worst_us = dt;
+                    }
+                }
+            }
+        }
+        if worst_us > 1000 {
+            // ⚠ Printed only above 1 ms, which is the owner's own trap ceiling. A line per
+            // fast command would bury the one that matters.
+            eprintln!(
+                "kayfabe: GSP-DRAIN serviced={total} worst_single_command={worst_us}us \
+                 ⊘ the plane lock is held for this long, and a vCPU's queue-head write waits \
+                 on it — compare with `worst_trap … at=bar0+0x110c00`"
+            );
+        }
+        Ok((total, owed))
+    }
+
+    /// Service exactly ONE deferred command doorbell, taking and releasing the plane lock.
+    ///
+    /// Returns `None` when none is pending, `Some(raise_status_irq)` otherwise.
+    ///
+    /// # Errors
+    /// Whatever servicing refused, by name.
+    fn service_one_deferred_command(&self) -> Result<Option<bool>, kayfabe_gsp::GspFault> {
+        let mut s = self.state.lock();
+        let PlaneState {
+            fsm, ram, policy, ..
+        } = &mut *s;
+        // ★★★★★ **w754 — FOLD IN WHAT THE TRAP POSTED, under the lock we already hold.**
+        //
+        // The queue-head write is now classified before the rank-0 lock and counted in
+        // `posted_cmd_doorbells`; this is the one place that count becomes the FSM's. ⊘ A
+        // `swap`, not a read-then-clear: a trap posting between the two would otherwise be
+        // erased, and an erased doorbell is a guest submission nothing ever services.
+        //
+        // ⚠ BEFORE the `== 0` early return, or a boot whose every doorbell took the new path
+        // would find the FSM's count zero and return `None` forever — the queue would never
+        // be drained and the guest would park. That ordering is the whole correctness of the
+        // hand-over.
+        let posted = self
+            .posted_cmd_doorbells
+            .swap(0, std::sync::atomic::Ordering::AcqRel);
+        if posted > 0 {
+            fsm.note_command_doorbells(posted);
+            GSP_POSTED_FOLDED.fetch_add(u64::from(posted), Ordering::Relaxed);
+        }
+        if fsm.pending_command_doorbells() == 0 {
+            return Ok(None);
+        }
+        let serviced = fsm.service_one_deferred_command(ram.as_mut(), policy.as_mut());
+        // ⊘⊘⊘ **w469 — REFRESH THE MIRROR HERE TOO, AND DO IT ON EVERY OUTCOME.** w466 added
+        // the lock-free `pending_cmd_doorbells` mirror and stored it on the WRITE path only.
+        // Servicing decrements the FSM's real count and left the mirror stale, so
+        // `RegPlane::pending_command_doorbells` read nonzero until the guest's next register
+        // write — and the shim gates its GSP-submit enqueue on exactly that value. ⇒ every
+        // MMIO write enqueued a spurious pubqueue token.
+        //
+        // `[measured w467, one binary, two arms]` that is the whole of the 40x difference the
+        // A/B found: `slow_traps` 169 (lock, true count) vs 6776 (atomic, stale mirror).
+        // ⊘ It is NOT that the big lock was throttling the guest — that was my reading before
+        // `an_armed_queue_head_write_records_and_returns` (which had been red since w466)
+        // named the defect exactly.
+        self.pending_cmd_doorbells.store(
+            fsm.pending_command_doorbells(),
+            std::sync::atomic::Ordering::Release,
+        );
+        match serviced {
+            Ok(report) => {
+                if report.raise_status_irq {
+                    self.c.irq_requests.fetch_add(1, Ordering::Relaxed);
+                }
+                self.c
+                    .commands
+                    .fetch_add(report.commands.len() as u64, Ordering::Relaxed);
+                let opened = report
+                    .transitions
+                    .iter()
+                    .filter(|t| **t == kayfabe_gsp::Transition::E10)
+                    .count();
+                if opened > 0 {
+                    self.c
+                        .status_irq_cleared
+                        .fetch_add(opened as u64, Ordering::Relaxed);
+                }
+                Ok(Some(report.raise_status_irq))
+            }
+            Err(f) => {
+                self.c.faults.fetch_add(1, Ordering::Relaxed);
+                if matches!(f, GspFault::GuestRam(_)) {
+                    self.c.ram_refusals.fetch_add(1, Ordering::Relaxed);
+                }
+                Err(f)
+            }
+        }
+    }
+
+    /// How many command doorbells are waiting for [`Self::service_deferred_commands`].
+    #[must_use]
+    /// ★★★★★ **THE INTERRUPT CENSUS — and it had NO CONSUMER AT ALL until w681.**
+    ///
+    /// ⊘⊘⊘ These counters have been incremented on every interrupt path since they were
+    /// written, and **nothing outside tests ever read them**: the only aggregator,
+    /// `Regs::audit()`, is consumed by no production caller and by no C-side printer. A field
+    /// nothing reads cannot fail — sitting on the interrupt path.
+    ///
+    /// ⚠ That is exactly the path `cuCtxCreate` spins on. `[oracle, real GA106]` the guest
+    /// calls `NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS` (`0x20801702`) **175 times until killed**,
+    /// and **hardware calls it zero times in the whole program**. A guest servicing interrupts
+    /// in a loop is a guest waiting for one that never arrives — and until this line existed a
+    /// boot could not say whether we raised any at all.
+    ///
+    /// ⊘ `unvectored` is the sharp one: a completion we DECLINED to announce because the
+    /// channel had no bound engine. That is a raise the guest is waiting for and will never
+    /// get. `masked` is the guest's own doing and is legitimate. Folding them into one number
+    /// would hide the defect inside the excuse.
+    #[must_use]
+    /// ★★★★★ **DID THE GUEST ARM AN OS-EVENT, AND DID WE EVER POST ONE? (w688)**
+    ///
+    /// ⊘⊘ `OsEventLog` has tracked `registered` / `posted` / `batches` / `overflowed` /
+    /// `malformed` since it was written and **printed none of them** — the same defect as the
+    /// interrupt census one function below, on the other half of the same path.
+    ///
+    /// ⚠ Without this line, widening the delivery gate is unfalsifiable. `[measured w687a]` I
+    /// widened it from `ServedLocally` to `is_served()` and read `unvectored` to judge the
+    /// result — **a counter on a different path**, which moved 40 → 38 and told me nothing. The
+    /// three numbers that actually decide it are here:
+    ///
+    /// - `registered=0` ⇒ the guest never armed anything through our recorder. Delivery is
+    ///   irrelevant and the wall is upstream, in `NV01_EVENT_OS_EVENT` never reaching us.
+    /// - `registered>0, batches=0` ⇒ armed but never delivered — the gate is still wrong.
+    /// - `registered>0, batches>0` ⇒ we are posting; the wall is past the wake.
+    ///
+    /// ★ Three outcomes, three different next steps. That is what a census is for, and why
+    /// reading a neighbouring counter instead cost a boot.
+    #[must_use]
+    /// ★★★★★ **REFUSED DOORBELLS, BY NAME (w693).**
+    ///
+    /// ⊘ `[measured w692a]` the teardown said **"503 REFUSED by name … (16 logged)"** and a grep
+    /// for fault names over the entire log found **one**. A total plus a handful of samples
+    /// cannot say whether five hundred refusals are one cause or five — and in the same boot
+    /// **zero** doorbells were forwarded (`0 forwarded (host channel rung)`), so every one of
+    /// them is a submission that never reached the GPU.
+    ///
+    /// ★ Owner: *"if its a passthrough there are only a few things it can be like a passthrough
+    /// doorbell not working (race), logging failed doorbells is useful."* For a passthrough
+    /// channel the failure set is small, so naming the refusal is most of the diagnosis.
+    #[must_use]
+    pub fn doorbell_refusal_census(&self) -> String {
+        let by = self
+            .doorbell_refusals_by_kind
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if by.is_empty() {
+            // ⊘ Said out loud: "no doorbell was refused" and "the counter never ran" are
+            // different facts and must not share a blank line.
+            return "DOORBELL-REFUSALS none — not one doorbell was refused this boot".to_string();
+        }
+        let mut rows: Vec<(&String, &u64)> = by.iter().collect();
+        rows.sort_by(|a, b| b.1.cmp(a.1));
+        let body = rows
+            .iter()
+            .map(|(k, n)| format!("{k}={n}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        format!(
+            "DOORBELL-REFUSALS {body} ⊘ every refused doorbell is a submission that never \
+             reached the GPU. Compare with `of the served: N forwarded (host channel rung)` — \
+             if that is 0, nothing ran on the host at all this boot."
+        )
+    }
+
+    pub fn os_event_census(&self) -> String {
+        format!(
+            "OSEVENT-CENSUS registered={} posted={} batches={} overflowed={} malformed={} \
+             ⊘ registered=0 means the guest never armed one through us — delivery is then \
+             irrelevant and the wall is upstream. batches=0 with registered>0 means armed and \
+             never delivered.",
+            self.os_events.registered(),
+            self.os_events.posted(),
+            self.os_events.batches(),
+            self.os_events.overflowed(),
+            self.os_events.malformed(),
+        )
+    }
+
+    pub fn intr_census(&self) -> String {
+        use Ordering::Relaxed;
+        let c = &self.c;
+        format!(
+            "INTR-CENSUS nonstall[raises={} unvectored={} (no_engine={} no_vector={} \
+             out_of_range={}) masked={}] cpu[accesses={} raises={} \
+             masked={}] gsp_event[raises={} unvectored={} masked={}] ⊘ `unvectored` is a \
+             completion we refused to announce — the guest is still waiting for it. A non-zero \
+             there beside a spinning guest is the FIRST thing to read.",
+            c.nonstall_raises.load(Relaxed),
+            c.nonstall_unvectored.load(Relaxed),
+            c.nonstall_no_engine.load(Relaxed),
+            c.nonstall_no_vector.load(Relaxed),
+            c.nonstall_out_of_range.load(Relaxed),
+            c.nonstall_masked.load(Relaxed),
+            c.cpu_intr_accesses.load(Relaxed),
+            c.cpu_intr_raises.load(Relaxed),
+            c.cpu_intr_masked.load(Relaxed),
+            c.gsp_event_raises.load(Relaxed),
+            c.gsp_event_unvectored.load(Relaxed),
+            c.gsp_event_masked.load(Relaxed),
+        )
+    }
+
+    pub fn pending_command_doorbells(&self) -> u32 {
+        // ⊘ **THE w467 A/B IS SETTLED AND ITS LOSING ARM IS GONE.** `KAYFABE_PENDING_VIA_LOCK`
+        // existed to compare this lock-free read against w432's read through the big `state`
+        // lock, because removing that lock coincided with `slow_traps` **166 -> 6863**.
+        //
+        // `[measured w469]` the A/B was right that the atomic arm caused it and wrong about
+        // why: the mirror was refreshed on the WRITE path only and went stale the moment the
+        // coordinator serviced a doorbell, so every MMIO write enqueued a spurious token. The
+        // lock was never the problem; the second source of truth was. With the refresh fixed,
+        // the lock-free read is simply correct and there is nothing left to compare.
+        //
+        // ★ An arm is an experiment and an experiment has an end. The losing side belongs in
+        // the commit that records the result; leaving it is how 51 flags accumulate, each one
+        // doubling the state space everything else must be correct in.
+        // ★ w754 — THE SUM. `pending_cmd_doorbells` mirrors what the FSM knows;
+        // `posted_cmd_doorbells` is what the trap recorded without taking the rank-0 lock and
+        // the FSM has not been told yet. The shim gates its worker wake on this value, so a
+        // posted doorbell that were invisible here would be a doorbell nothing wakes for —
+        // the `DROPPED.arm_gsp_drain()` fallback exists for a FULL lane, not for a silent one.
+        self.pending_cmd_doorbells
+            .load(std::sync::atomic::Ordering::Acquire)
+            .saturating_add(
+                self.posted_cmd_doorbells
+                    .load(std::sync::atomic::Ordering::Acquire),
+            )
+    }
+
+    /// Arm or disarm command-doorbell deferral on the FSM.
+    ///
+    /// ⚠ Arming this without a worker that drains it parks the guest by construction.
+    pub fn set_defer_commands(&self, on: bool) {
+        self.state.lock().fsm.set_defer_commands(on);
+        // ⊘ Under the same hold as the FSM's own flag, and in the ONE place that flag
+        // changes. A mirror refreshed in fewer places than its source is w469's defect
+        // (`pending_cmd_doorbells` stored on the write path only), and it read as a
+        // measurement for two boots.
+        self.defer_cmds_armed
+            .store(on, std::sync::atomic::Ordering::Release);
+    }
+
+    pub fn release_held_replies(&self) -> Result<usize, kayfabe_gsp::GspFault> {
+        let mut s = self.state.lock();
+        let PlaneState { fsm, ram, .. } = &mut *s;
+        fsm.release_held(&mut **ram)
+    }
+
+    /// How many replies are waiting on a publication. ⊘ Non-zero at teardown means a guest
+    /// was left polling for a reply we never sent.
+    #[must_use]
+    pub fn held_replies(&self) -> usize {
+        self.state.lock().fsm.held_len()
+    }
+
+    pub fn phase(&self) -> kayfabe_gsp::BootPhase {
+        let s = self.state.lock();
+        s.fsm.phase()
+    }
+
+    /// ★★ The emulated GSP's state as a **whole value**, so two device lives can be
+    /// compared rather than a field list somebody chose.
+    ///
+    /// [`RegPlane::phase`] answers one field, which is what a boot test wants and exactly
+    /// what a *recovery* test must not rely on: "is this device indistinguishable from a
+    /// cold one?" quantified over a hand-written list of getters silently stops covering
+    /// the field added next. [`kayfabe_gsp::GspFsm`] derives `PartialEq`, so equality
+    /// against `GspFsm::new` is total by construction and stays total for free — the same
+    /// argument [`kayfabe_gsp::GspFsm::device_reset`] makes for rebuilding the value
+    /// instead of clearing fields, used from the outside.
+    ///
+    /// ★ It is a **clone**, not a borrow: the value lives behind the plane's lock, and
+    /// handing out a guard would let a caller hold the register plane shut.
+    #[must_use]
+    pub fn gsp_state(&self) -> kayfabe_gsp::GspFsm {
+        let s = self.state.lock();
+        s.fsm.clone()
+    }
+
+    /// Power-on reset: rebuild the FSM, re-point the BAR0 window at its reset value and
+    /// **forget every framebuffer byte**. The RAM port, the framebuffer *port* and the
+    /// policy survive, because they are the *shell's* wiring and not the device's state.
+    ///
+    /// ★★★ The framebuffer clear is not tidiness. Content that survived a device life is
+    /// the previous guest's page tables, instance blocks and semaphores, readable by the
+    /// next one through this very window — see [`FbStore::device_reset`].
+    pub fn device_reset(&self) {
+        // ★★★★★ w393 — the mirror's memslots go FIRST, lock-free: the store is about to
+        // forget every byte, and a slot that outlived that would hand the next guest the
+        // previous one's framebuffer through a window nothing traps.
+        if let Some(m) = self.fb_mirror() {
+            m.retire_all("device reset");
+        }
+        let mut s = self.state.lock();
+        s.fsm.device_reset();
+        // ★★★ w754 — AND THE POSTED COUNT DIES WITH THE BINDING. `GspFsm::device_reset`
+        // rebuilds the FSM, so its own pending count goes to zero; a posted doorbell left
+        // here would be folded in afterwards and serviced against the NEXT queue binding.
+        // ⊘ Under the same hold as the FSM's reset, so no trap can post into the gap.
+        self.posted_cmd_doorbells
+            .store(0, std::sync::atomic::Ordering::Release);
+        self.pending_cmd_doorbells
+            .store(0, std::sync::atomic::Ordering::Release);
+        s.bar0_window = Bar0Window::new();
+        self.mem.lock().fb.device_reset();
+        // ★★★ **AND THE INTERRUPT TREE** — `#151`'s state, and §14.18 is what made leaving
+        // it out dangerous rather than merely untidy.
+        //
+        // ⚠ The old argument for skipping it (it survives in this method's absence, and in
+        // `RegPlane::residue`'s note) was that *"every bit the guest sets it clears again in
+        // the same ISR"*. That was true while the ONLY producer was `_osVerifyInterrupts`'
+        // loopback, which clears its own bit before returning. It is **false** now: a
+        // non-stall completion vector is latched by THIS device
+        // ([`RegPlane::announce_completion`]) and cleared only by a guest that lives long
+        // enough to run `_intrServiceNonStallLeaf_TU102`. A guest that resets between the
+        // two leaves a CE completion bit set, and the next guest's very first non-stall
+        // scan finds `MC_ENGINE_IDX_CE2` pending for a copy that never happened in its
+        // life — a fabricated completion notification, across a device life, from the one
+        // path this whole increment exists to keep honest.
+        //
+        // ⊘ And it is the register block's own stated reset:
+        // `NV_VIRTUAL_FUNCTION_PRIV_CPU_INTR_LEAF_VALUE_INIT` and both `_EN_*_VALUE_INIT`
+        // are `0x00000000` (`ogkm-580: ampere/ga102/dev_vm.h:52,56,60`), so a device that
+        // came back from a power-on reset with pending bits is not modelling silicon.
+        {
+            let mut t = self.cpu_intr.lock();
+            *t = CpuIntrTree::new();
+            // ★ w574 — a RESET is a change too: the shadow must go back to zeros with it.
+            self.publish_cpu_intr(&t);
+        }
+        // ★★★★ **AND G1'S WITNESS** — for `BarPdeLog::device_reset`'s reason, sharpened by
+        // what this one feeds. An undrained page here is handed to `Spine::pt_page_owner`
+        // and then **decoded as page-table bytes** into whichever address space claims it.
+        // Carried across a device life, that publishes the PREVIOUS guest's page tables as
+        // this guest's mappings — the cross-life information leak `bar_pdes` guards
+        // against, except that this one ends in a translation the new guest's copies use.
+        // ⊘ The write/refusal totals are life-scoped diagnostics and are cleared with it.
+        s.pt_witness.clear();
+        s.pt_witness_refused = 0;
+        s.pt_witness_writes = 0;
+        // ★★★ And the published roots. See `crate::bar2::BarPdeLog::device_reset` for why
+        // this one is a cross-life *information* leak and not merely stale state.
+        self.bar_pdes.device_reset();
+        // ★★★ And the VA-space publications, for `BarPdeLog::device_reset`'s reason one
+        // level up: a root that survived a device life belongs to the PREVIOUS guest's
+        // address space, and the whole purpose of recording it is that something will
+        // eventually follow it.
+        self.gvas_pub.device_reset();
+        // ★★★★ And the INSTALLED root, for the same reason a third time. `0x00801813`
+        // hands us a `physAddress` the guest chose; carrying it across a device life would
+        // report the previous guest's page directory as this one's.
+        self.set_page_dir.device_reset();
+        // ★★ E2 — and the doorbell log, for the same reason: a token the PREVIOUS guest
+        // rang, reported after a reset as this life's, is a false attribution in exactly
+        // the direction that would make an E2 acceptance run pass on somebody else's ring.
+        // ⊘ The PORT is not touched: it is the shell's wiring, and a reset is the guest's
+        // event, not the composition root's.
+        *self.doorbell_log.lock().unwrap_or_else(|e| e.into_inner()) = DoorbellLog::default();
+    }
+
+    /// ★★★ Serve one register read.
+    ///
+    /// `size` is the access width in bytes; the answer is masked to it, because a guest
+    /// reading a byte of a dword register must not be handed the whole thing.
+    pub fn read(&self, bar: u8, off: u64, size: u8) -> ReadOutcome {
+        self.c.reads.fetch_add(1, Ordering::Relaxed);
+        // ★ w586 — which BAR0 page this read landed in. See `PlaneCounters::bar0_read_pages`.
+        if bar == 0 {
+            if let Some(slot) = self.c.bar0_read_pages.get((off >> 12) as usize) {
+                slot.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+        let _vcpu = MmioInFlight::enter(&self.mmio_in_flight);
+        let out = self.read_inner(bar, off, size);
+        match out {
+            ReadOutcome::BootReg(_) => self.c.boot_reg_reads.fetch_add(1, Ordering::Relaxed),
+            ReadOutcome::Ptimer(_) => self.c.ptimer_reads.fetch_add(1, Ordering::Relaxed),
+            ReadOutcome::Rom(_) => self.c.rom_reads.fetch_add(1, Ordering::Relaxed),
+            ReadOutcome::Gsp(_) => self.c.gsp_reads.fetch_add(1, Ordering::Relaxed),
+            ReadOutcome::GspFault(_) => self.c.faults.fetch_add(1, Ordering::Relaxed),
+            ReadOutcome::Bar0Window(_) => self.c.bar0_window_reads.fetch_add(1, Ordering::Relaxed),
+            ReadOutcome::CpuIntr(_) => self.c.cpu_intr_accesses.fetch_add(1, Ordering::Relaxed),
+            ReadOutcome::FbWindow(w) => {
+                self.note_fb_window(w, off);
+                self.c.fb_window_reads.fetch_add(1, Ordering::Relaxed)
+            }
+            ReadOutcome::Fb { window, .. } => {
+                // ★ Attributed by the window the ADDRESS MODEL resolved, never re-derived
+                // from `bar` — the same discipline the write-tag follows one method down.
+                match window {
+                    FbWindow::InstanceWindow => {
+                        self.c.bar2_reads.fetch_add(1, Ordering::Relaxed);
+                    }
+                    FbWindow::FbAperture => {
+                        self.c.bar1_reads.fetch_add(1, Ordering::Relaxed);
+                    }
+                    // ★★★★★ w607 — PRAMIN's OWN counter. This arm was `{}` and the totals
+                    // below were read as PRAMIN's for weeks. See `Counters::pramin_reads`.
+                    FbWindow::Pramin => {
+                        self.c.pramin_reads.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+                {
+                    if !kayfabe_util::trapwitness::in_trap() {
+                        self.c.fb_window_off_trap.fetch_add(1, Ordering::Relaxed);
+                    }
+                    self.c.fb_reads.fetch_add(1, Ordering::Relaxed)
+                }
+            }
+            ReadOutcome::TranslationRefused { window, .. } => {
+                self.note_fb_window(window, off);
+                match window {
+                    FbWindow::FbAperture => self.c.bar1_faults.fetch_add(1, Ordering::Relaxed),
+                    _ => self.c.bar2_faults.fetch_add(1, Ordering::Relaxed),
+                }
+            }
+            ReadOutcome::FbRefused { window, .. } => {
+                self.note_fb_window(window, off);
+                self.c.fb_refusals.fetch_add(1, Ordering::Relaxed)
+            }
+            ReadOutcome::Unclaimed => {
+                self.note_unclaimed(bar, off);
+                // ★★★★★ w554 — IS THIS READ ONE THE CUT COULD EVER HAVE REMOVED?
+                //
+                // ⊘⊘ Because 87.2% of PAGES being dead does not make 87.2% of READS
+                // removable, and reading it that way is what this counter exists to stop.
+                // A page is backable only when EVERY dword in it is dead, so one live
+                // register keeps its whole 4 KiB trapping — and an unclaimed read inside
+                // such a page reaches the handler no matter how the aperture is cut.
+                // `[measured w553]` the cut landed, the device reported 12 dead pieces over
+                // 87.2% of the aperture, and unclaimed reads moved 121126 → 119797. These
+                // two counters are the only thing that can say whether that is the cut
+                // failing or the traffic simply not living where the dead pages are.
+                if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8 && self.dead_page(off) {
+                    self.c
+                        .unclaimed_reads_in_dead_pages
+                        .fetch_add(1, Ordering::Relaxed);
+                }
+                self.c.unclaimed_reads.fetch_add(1, Ordering::Relaxed)
+            }
+            // ⊘ Counted inside `crate::mmuinval` and NOT here: the poll count and the
+            // trigger count have to come from one structure or they can disagree about a
+            // boot, and `polls` is the only evidence that distinguishes "we held TRIGGER
+            // and the guest spun" from "we answered immediately".
+            ReadOutcome::MmuInvalidate(_) => 0,
+        };
+        out
+    }
+
+    fn read_inner(&self, bar: u8, off: u64, size: u8) -> ReadOutcome {
+        if bar == 0 {
+            if let Some(r) = self.chip.boot_regs.iter().find(|r| r.off == off) {
+                return ReadOutcome::BootReg(mask(u64::from(r.value), size));
+            }
+            if let Some(v) = self.ptimer_read(off) {
+                return ReadOutcome::Ptimer(mask(v, size));
+            }
+            if self.chip.rom_window.contains(off) {
+                return ReadOutcome::Rom(self.rom_read(off - self.chip.rom_window.base, size));
+            }
+        }
+        // ★★★ THE WINDOW REGISTER IS A LATCH. Asked here, before the GSP model and before
+        // the unclaimed arm, and answered with the guest's own last word — see
+        // `crate::fbwin` for the two independent ways a defaulted zero here loses a write
+        // permanently (the guest's read-modify-write, and RM's own
+        // `cachedBar0WindowVidOffset`).
+        if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8
+            && self.chip.bar0_window_reg != 0
+            && off == self.chip.bar0_window_reg
+        {
+            let s = self.state.lock();
+            return ReadOutcome::Bar0Window(mask(u64::from(s.bar0_window.raw()), size));
+        }
+        // ★★★ THE INTERRUPT TREE, asked before the GSP model for the same reason the
+        // window latch is: `0x00B8_1000`-`0x00B8_1643` is a *register block the chip
+        // declares*, and a defaulted zero out of it is not a harmless unknown — it is the
+        // ISR being told "no vector is pending" at the one instant the answer decides
+        // whether the adapter initialises at all. See `crate::cpuintr`.
+        if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8
+            && let Some(reg) = crate::cpuintr::decode(off)
+        {
+            // ⊘ No plane lock — see the matching write arm. w513.
+            return ReadOutcome::CpuIntr(mask(u64::from(self.cpu_intr.lock().read(reg)), size));
+        }
+        // ★★★★★ **THE INVALIDATE COMPLETION** (w326) — and it is the EIGHTH arm.
+        //
+        // ⚠⚠ `publication_off_the_bql.md` §5.2 measured that all seven arms above are local
+        // and concluded that **no guest-visible MMIO read depends on completed work**. That
+        // finding is now **SCOPED, NOT REFUTED**: it remains true of all seven, and this
+        // eighth one is a deliberate exception, added with its eyes open. It is also the
+        // only one, and the only one it may ever be without this note being rewritten.
+        //
+        // ★ Why it is safe to make this read mean something: the guest is **already
+        // blocking on it**. `kgmmuCheckPendingInvalidates` spin-polls until `TRIGGER` reads
+        // false, so we are not introducing a wait — we are answering one the hardware
+        // protocol already specified. ⊘ And when the plane is **disarmed** this answers `0`
+        // unconditionally, which is byte-identical to the `Unclaimed` arm it took before.
+        //
+        // ⊘ Lock-free: it reads one atomic. A lock here would put every polling vCPU behind
+        // the worker, which is the cost this rung exists to remove.
+        if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8
+            && let Some(regs) = self.invalidate_regs()
+            && off == regs.trigger
+        {
+            return ReadOutcome::MmuInvalidate(mask(self.mmu_inval.read_trigger(), size));
+        }
+        // ★★★ Device memory, not a register — asked BEFORE the GSP model and before the
+        // unclaimed arm, because a framebuffer window that some future model happened to
+        // claim an offset inside would be served as a register, which is the silent-
+        // misattribution this classification exists to prevent. `assert_disjoint` refuses
+        // such a chip at realize, so reaching here means the two really are separate.
+        if let Some(w) = self.chip.fb_window(bar, off) {
+            return self.fb_read(w, off, size);
+        }
+        // ★★★★★ **w543 — ASK THE STATE-FREE HALF FIRST, AND DO NOT TAKE THE LOCK TO BE TOLD
+        // "NOT MINE".**
+        //
+        // `[measured w539]` **121 793 of 241 874 BAR0 reads in a boot are UNCLAIMED** — half
+        // the read surface. Every one of them reached this line, took the plane's **rank-0
+        // mutex**, asked the FSM, and was told nothing claimed it. That is the lock a vCPU's
+        // `RegPlane::write` waits on, and `[measured w510]` it is the lock the whole w510–w525
+        // campaign was about.
+        //
+        // ⊘ Both halves of `mmio_read_with` dispatch through `model`, which lives OUTSIDE the
+        // lock: `decode_reg` is state-free, and the boot sequence's `on_read` needs state but
+        // now declares its offsets state-free via `may_read`. So "could this possibly be ours"
+        // is answerable without locking anything, and on this workload the answer is no half
+        // the time.
+        //
+        // ⚠ The hazard is a `may_read` that says no where `on_read` would have said yes: that
+        // turns a served register into an unclaimed one SILENTLY, and the guest sees a
+        // defaulted zero instead of a value. `a_state_free_filter_never_hides_a_served_register`
+        // sweeps the offsets to check the two agree.
+        if self.model.decode_reg(bar, off).is_none()
+            && !self.model.boot_sequence().may_read(bar, off)
+        {
+            return ReadOutcome::Unclaimed;
+        }
+        let s = self.state.lock();
+        match s.fsm.mmio_read_with(self.model.as_ref(), bar, off) {
+            None => ReadOutcome::Unclaimed,
+            Some(Ok(v)) => ReadOutcome::Gsp(mask(v, size)),
+            Some(Err(f)) => ReadOutcome::GspFault(f.fault_tag().0),
+        }
+    }
+
+    /// ★★★ **THE ONE RESOLVER.** Which framebuffer-physical address a windowed access at
+    /// register offset `off` names, or `None` for a window this port has no address model
+    /// for.
+    ///
+    /// # Why this is a function and not two lines inlined twice
+    ///
+    /// It is called by [`RegPlane::fb_read`] and by [`RegPlane::fb_write`] and by nothing
+    /// else. Two copies of `(base << 16) + (off - window_base)` could disagree about the
+    /// mask width, about `+` versus `|`, or about which end the offset is subtracted from —
+    /// and a read-after-write that resolved to two different addresses is precisely the
+    /// failure `kbusVerifyBar2_GM107` reports, arriving with no clue that the arithmetic
+    /// was the cause. One function cannot disagree with itself.
+    ///
+    /// ⊘ The two `None` arms are honest rather than lazy: the framebuffer aperture and the
+    /// instance window are **GMMU-translated**, and this port's `GmmuFmt` says it has no
+    /// page-table format (`kayfabe_chips::UnbuiltGmmu`). Answering them would mean
+    /// inventing a translation, which is `MISS = FAULT`'s whole prohibition.
+    fn window_phys(
+        &self,
+        w: FbWindow,
+        off: u64,
+        write: bool,
+        // ⊘ BOTH halves, because this one function spans them: PRAMIN resolves through the
+        // BAR0 window LATCH (FSM state), while BAR1/BAR2 resolve through the GMMU and the
+        // framebuffer, which moved to [`PlaneMem`] at w522.
+        st: &PlaneState,
+        s: &mut PlaneMem,
+    ) -> Result<u64, WindowRefusal> {
+        match w {
+            FbWindow::Pramin => Ok(st.bar0_window.fb_addr(off - self.chip.pramin_window.base)),
+            // ★★★★ §16.18. Was `NoAddressModel` unconditionally, and the comment that stood
+            // here said BAR1's root *"arrives through the same command"* as BAR2's. ⊘ **That
+            // was false**, and it is why nobody built this: `NV_RM_RPC_UPDATE_BAR_PDE` has
+            // two call sites in the whole of `ogkm-580` and both pass
+            // `NV_RPC_UPDATE_PDE_BAR_2`. BAR1's root never arrives at all — the guest takes
+            // it from OUR `GspStaticConfigInfo.bar1PdeBase`. See
+            // [`crate::ChipProfile::bar1_pde_base`].
+            //
+            // ★ A chip row that declares no such address still gets `NoAddressModel`, which
+            // keeps that arm live and keeps the honest answer available for a device this
+            // port has no framebuffer-aperture model for.
+            FbWindow::FbAperture if self.chip.bar1_pde_base == 0 => {
+                Err(WindowRefusal::NoAddressModel)
+            }
+            // ★★★★★ **§w724g's MEASUREMENT, and it is placed HERE deliberately.**
+            //
+            // This is the trap path: `fb_read`/`fb_write`, i.e. a guest BAR1/BAR2 access that
+            // took a VM exit because no memslot covered it. Refusing here — and ONLY here —
+            // removes the backstop while leaving the premap path (`window_page_backing`)
+            // untouched, so a boot with the arm on still publishes normally and the refusal
+            // counts exactly the accesses publication MISSED.
+            //
+            // ⊘ PRAMIN is deliberately NOT refused. It is a control aperture that the guest
+            // reads *through* immediately after re-pointing it, it is the one sanctioned
+            // expensive trap (`the_write_trap_contract`), and it is not what increment 7
+            // deletes. Refusing it would make the boot fail for a reason unrelated to the
+            // question being asked.
+            FbWindow::FbAperture | FbWindow::InstanceWindow
+                if self.fb_trap_policy() == FbTrapPolicy::RefuseByName =>
+            {
+                self.fb_trap_refused
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                Err(WindowRefusal::Translated {
+                    va: off,
+                    why: FB_TRAP_REFUSED,
+                })
+            }
+            FbWindow::FbAperture => self.bar1_phys(off, write, s),
+            FbWindow::InstanceWindow => self.bar2_phys(off, write, s),
+        }
+        // ★★★★★ **w719d — THE TRAP PATH IS THE OTHER HALF OF THE TWO-WORLDS CENSUS.**
+        //
+        // ⊘⊘ `[found w719d]` the census had exactly ONE call site, in `window_page_backing` —
+        // the MIRROR/PREMAP path — so every **trapped** guest access (`fb_read`/`fb_write`,
+        // which resolve through this function) was invisible to it. A census blind to a whole
+        // path prints the same `0` as a census over a disjoint workload, which is this
+        // module's own named failure shape, committed by the author who wrote the warning.
+        //
+        // ⚠ Under constraint 1 (zero BAR1/BAR2 traps) the mirror is the dominant path in
+        // production, so the earlier number was probably not WRONG — but "probably, because of
+        // a property of a different subsystem" is not what an instrument the split rests on
+        // should be resting on.
+        .inspect(|phys| {
+            crate::twoworlds::note(
+                match w {
+                    FbWindow::FbAperture => crate::twoworlds::World::Bar1,
+                    FbWindow::Pramin | FbWindow::InstanceWindow => crate::twoworlds::World::Control,
+                },
+                *phys & !(crate::fbwin::FB_PAGE - 1),
+            );
+        })
+    }
+
+    /// ★★★★ **THE FRAMEBUFFER APERTURE'S TRANSLATION** — one BAR1 offset, one page walk,
+    /// one framebuffer address, **in the same store the GMMU walker reads**.
+    ///
+    /// # ★★★ Why this is not `bar2_phys` with a different root
+    ///
+    /// It shares the store, the format and the walker — deliberately, because that sharing
+    /// is the entire correctness claim of this rung: a value written through BAR1 must be
+    /// readable at the same framebuffer address by the page walk and by PRAMIN, or we have
+    /// rebuilt the self-consistent-wrong-store defect one aperture over, where a
+    /// read-after-write through the same wrong function agrees with itself and detects
+    /// nothing.
+    ///
+    /// What differs is **where the descent starts**, and it differs in kind:
+    ///
+    /// | | BAR2 | BAR1 |
+    /// |---|---|---|
+    /// | root is | an eight-byte **entry value** | a **page-directory address** |
+    /// | it reaches us via | `UPDATE_BAR_PDE(BAR_2)`, from the guest | nothing — we *state* it in `bar1PdeBase` |
+    /// | so the walk starts from | [`translate_from_entry`] | [`translate`], over a real table page |
+    /// | slots we may index | **only slot 0**; the firmware owns the rest | **all of them** — the directory is ours end to end |
+    ///
+    /// The slot restriction has no analogue here and its absence is not an oversight:
+    /// `kbusPatchBar1Pdb_GSPCLIENT` re-roots CPU-RM's *whole* BAR1 walker onto our address
+    /// (`ogkm-580: kern_bus.c:775-792`), so every entry in that directory was written by the
+    /// guest and there is no firmware half to trespass on.
+    ///
+    /// ⊘ Level **0** is not a guess and not a parameter. Unlike BAR2, no `entryLevelShift`
+    /// travels with this root, because no message carries it — what we hold is the base of
+    /// the directory the guest's own `pRootFmt` describes, and a page-directory base *is*
+    /// its format's root level by definition (`walker::PtPage`, *"level 0 is a declared
+    /// fact — a PDB is its own root page"*).
+    ///
+    /// # What each refusal means
+    ///
+    /// Named, never zero, for [`RegPlane::bar2_phys`]'s reason: a zero-filled entry is a
+    /// well-formed *"maps nothing"* and a zero-filled data read is a well-formed *"the guest
+    /// wrote nothing"*, and a guest acts on both.
+    fn bar1_phys(&self, va: u64, write: bool, s: &mut PlaneMem) -> Result<u64, WindowRefusal> {
+        let (phys, read_only) = self.bar1_translate(va, s, None)?;
+        if write && read_only {
+            return Err(WindowRefusal::Translated {
+                va,
+                why: BAR1_READ_ONLY,
+            });
+        }
+        Ok(phys)
+    }
+
+    /// The walk half of [`RegPlane::bar1_phys`]: `(phys, read_only)`, with the write check
+    /// left to the caller so the mirror can ask about a page without choosing a direction.
+    /// ★★★★★ **w473 — EVERY LEAF THE GUEST'S BAR PAGE TABLE DECLARES, not one VA.**
+    ///
+    /// # ⊘ Why this has to exist before the single big memslot can
+    ///
+    /// Today the BAR mirror learns which pages to map by **trapping**: a guest access
+    /// misses, the trap resolves one VA with [`RegPlane::bar1_translate`], and a slot is
+    /// installed. The moment one memslot covers the whole window, that discovery is **gone**
+    /// — an unfilled page inside a RAM slot reads zeros from the anonymous mapping
+    /// underneath instead of exiting, so nothing ever learns it was touched.
+    ///
+    /// ⇒ complete population is a **precondition** of the big-slot design, not a later
+    /// optimisation of it. Landing the slot first would silently serve zeros for every page
+    /// the guest had not already happened to touch.
+    ///
+    /// ★ Owner's contract (2026-09-11): *"no traps in bar1/bar2 at all, ever, only for a
+    /// fault. Never to serve data"* and *"promote/depromote is only allowed in refresh"*.
+    /// Enumerating here is what makes refresh authoritative rather than reactive.
+    ///
+    /// `budget` bounds the walk the way [`kayfabe_mmu::walker::decode_subtree`] means it: a
+    /// guest-built cycle or a vast sparse tree costs at most that many entries. ⊘ An
+    /// exhausted budget is an ERROR, never a short list — a truncated enumeration would read
+    /// as "the guest mapped fewer pages", which is the one wrong answer that looks right.
+    ///
+    /// # Errors
+    /// Whatever the window refuses, by name, plus a budget exhaustion.
+    pub fn window_leaves(
+        &self,
+        w: FbWindow,
+        budget: u32,
+    ) -> Result<WindowEnumeration, WindowRefusal> {
+        let mut s = self.mem.lock();
+        let PlaneMem { mmu, fb } = &mut *s;
+        let Some(fmt) = mmu.as_deref() else {
+            return Err(WindowRefusal::Translated {
+                va: 0,
+                why: NO_MMU_PORT,
+            });
+        };
+        // ⊘⊘ **BAR1 ONLY, AND THE REASON IS STRUCTURAL, NOT LAZINESS.** The two windows are
+        // rooted DIFFERENTLY. BAR1's directory is a chip constant the GSP client patches
+        // (`kbusPatchBar1Pdb_GSPCLIENT`), so it names a PAGE and `decode_subtree` can start
+        // there. BAR2's root is a raw PDE **entry** the guest republishes through
+        // `UPDATE_BAR_PDE`, which is why `bar2_translate` uses `translate_from_entry` rather
+        // than a page walk — and `decode_subtree` takes a `PtPage`, not an entry.
+        //
+        // ⇒ enumerating BAR2 needs an entry-rooted subtree decode that does not exist yet.
+        // Refused BY NAME here rather than papered over by decoding the entry into a page
+        // and hoping the level is right: a wrong root yields a plausible, WRONG list of
+        // leaves, and a wrong list is exactly the failure the budget rule below exists to
+        // prevent.
+        // ★★★★★ **w624 — BAR2 IS ENUMERABLE NOW, and the refusal above is superseded.**
+        //
+        // The comment above is still TRUE about why `decode_subtree` alone cannot do it: BAR2's
+        // root is a raw PDE **entry**, not a page. What changed is that the entry-rooted twin
+        // now exists — `decode_subtree_from_entry`, the exact enumeration counterpart of
+        // `translate_from_entry`, which has always walked this shape for a point query. Same
+        // decode, same vidmem-only edge filter, same refusal to follow a sysmem edge.
+        //
+        // ⊘ And the level is DERIVED here exactly as `bar2_translate` derives it — from the
+        // shift the guest sent beside the entry (`kbusPatchBar2Pdb_GSPCLIENT` sends
+        // `pRootFmt->virtAddrBitLo` precisely because the entry alone does not say which format
+        // row it belongs to). **That is what makes "a wrong root yields a plausible, WRONG list
+        // of leaves" not apply**: the level is not guessed, it is the guest's own.
+        let mut src = FbStoreReader {
+            fb: fb.as_mut(),
+            memo: None,
+        };
+        let decoded = match w {
+            FbWindow::FbAperture => {
+                let root = self.chip.bar1_pde_base;
+                if root == 0 {
+                    return Err(WindowRefusal::Translated {
+                        va: 0,
+                        why: BAR2_UNROOTED,
+                    });
+                }
+                kayfabe_mmu::walker::decode_subtree(
+                    fmt,
+                    &mut src,
+                    PtPage {
+                        phys: root,
+                        aperture: Aperture::Vidmem,
+                        level: 0,
+                        vabase: 0,
+                    },
+                    budget,
+                )
+            }
+            FbWindow::InstanceWindow => {
+                let Some(root) = self.bar_pdes.pdes().bar2 else {
+                    return Err(WindowRefusal::Translated {
+                        va: 0,
+                        why: BAR2_UNROOTED,
+                    });
+                };
+                let Some(level) = (0..MAX_FORMAT_LEVELS)
+                    .filter_map(|l| fmt.level_shift(l).map(|g| (l, g)))
+                    .find(|(_, g)| u64::from(g.shift) == root.level_shift)
+                    .map(|(l, _)| l)
+                else {
+                    return Err(WindowRefusal::Translated {
+                        va: 0,
+                        why: BAR2_UNKNOWN_ROOT_LEVEL,
+                    });
+                };
+                kayfabe_mmu::walker::decode_subtree_from_entry(
+                    fmt,
+                    &mut src,
+                    level,
+                    u128::from(root.entry),
+                    budget,
+                )
+            }
+            FbWindow::Pramin => {
+                return Err(WindowRefusal::Translated {
+                    va: 0,
+                    why: BAR2_UNROOTED,
+                });
+            }
+        }
+        .map_err(|_| WindowRefusal::Translated {
+            va: 0,
+            why: WINDOW_ENUMERATION_REFUSED,
+        })?;
+        // ⊘ Vidmem only, exactly as `bar1_translate` refuses a foreign aperture: a BAR
+        // window entry naming sysmem is not something this mirror can back, and dropping it
+        // silently here would be the same lie the single-VA path refuses to tell.
+        // ★ w626 — the tree's real size travels with its leaves. ⊘ The budget counts PAGES
+        // VISITED, and `decode_subtree` errors on exhaustion and on nothing else, so a caller
+        // that guessed a budget has no way to learn the right one from a refusal. Returning
+        // `visited` turns the next budget into a measurement instead of a second guess.
+        // ★★★★★ **CUT B item 4 — THE FAULTS COME BACK, AND UNTIL NOW THEY DID NOT.**
+        //
+        // ⊘⊘⊘ `decode_subtree` returns `Err` for **budget exhaustion and nothing else**; every
+        // other per-branch failure — a page it could not read among them — lands in
+        // `decoded.faults` and the walk continues. This function used to drop that vector on
+        // the floor, so an enumeration whose ROOT page could not be read returned
+        // `Ok((vec![], 0))`: **an empty list that reads as "the guest has mapped nothing"**.
+        //
+        // ⚠ That is the one wrong answer that looks right, and it is the same shape this
+        // tree's own budget rule five paragraphs up refuses (*"a truncated enumeration would
+        // read as `the guest mapped fewer pages`"*) — the rule was written for the budget and
+        // the same hole was open beside it for faults. Under the arena store it never fired,
+        // because `SparseFb::read` answers every in-range address; under the single store an
+        // unarmed page-table page faults on **every** walk, which is exactly when the caller
+        // needs to know to arm and try again.
+        //
+        // ⊘ Returned as a COUNT rather than turned into an `Err`: a fault is a real
+        // per-branch fact on both arms, and making it terminal would change the control arm's
+        // behaviour for a condition that is not new.
+        Ok(WindowEnumeration {
+            leaves: decoded
+                .leaves
+                .into_iter()
+                .filter(|l| l.aperture == Aperture::Vidmem)
+                .collect(),
+            visited: decoded.visited.len(),
+            faults: decoded.faults.len(),
+        })
+    }
+
+    fn bar1_translate(
+        &self,
+        va: u64,
+        s: &mut PlaneMem,
+        memo: Option<&mut PtReadMemo>,
+    ) -> Result<(u64, bool), WindowRefusal> {
+        let PlaneMem { mmu, fb } = s;
+        let Some(fmt) = mmu.as_deref() else {
+            return Err(WindowRefusal::Translated {
+                va,
+                why: NO_MMU_PORT,
+            });
+        };
+        let root = self.chip.bar1_pde_base;
+        if root == 0 {
+            // Unreachable through `window_phys`, which takes the `NoAddressModel` arm first.
+            // Restated rather than assumed away because this method is also a seam a test
+            // drives, and a zero root would otherwise walk address zero as a directory.
+            return Err(WindowRefusal::Translated {
+                va,
+                why: BAR1_NO_ROOT_DECLARED,
+            });
+        }
+        let mut src = FbStoreReader {
+            fb: fb.as_mut(),
+            memo,
+        };
+        let t = translate(
+            fmt,
+            &mut src,
+            PtPage {
+                phys: root,
+                // ⊘ The directory is in framebuffer memory because that is what
+                // `kbusPatchBar1Pdb_GSPCLIENT` describes it as — `memdescDescribe(pMemDesc,
+                // ADDR_FBMEM, pGSCI->bar1PdeBase, rootSize)` (`ogkm-580: kern_bus.c:773`).
+                aperture: Aperture::Vidmem,
+                level: 0,
+                vabase: 0,
+            },
+            va,
+        )
+        .map_err(|f| WindowRefusal::Translated { va, why: f.why() })?;
+        if t.aperture != Aperture::Vidmem {
+            return Err(WindowRefusal::Translated {
+                va,
+                why: BAR1_FOREIGN_APERTURE,
+            });
+        }
+        Ok((t.phys, t.read_only))
+    }
+
+    /// ★★★ **THE GMMU TRANSLATION** — one aperture offset, one page walk, one framebuffer
+    /// address.
+    ///
+    /// # ★★★ ONE STORE, TWO APERTURES — the whole point of this rung
+    ///
+    /// The page-table pages this walk reads come out of [`PlaneState::fb`], **the same
+    /// [`FbStore`] the BAR0 moving window writes into** — because that is where the guest
+    /// put them. `kbusSetupBar2GpuVaSpace_GM107` builds the whole BAR2 tree through the
+    /// BAR0 window before it publishes the root, and the leaf this walk resolves is read
+    /// back through that same window by `kbusVerifyBar2`. If this method reached a
+    /// *second* store, the two apertures would disagree about one physical byte, which is
+    /// exactly the defect the guest's own test is written to catch. [`FbStoreReader`] is
+    /// the whole of the join: it is a borrow of the one store wearing the walker's trait.
+    ///
+    /// # What each refusal means
+    ///
+    /// Every arm is a **named** refusal and none of them reads zero, because a zero-filled
+    /// page-table entry is a well-formed *"this maps nothing"* and a zero-filled data read
+    /// is a well-formed *"the guest wrote nothing"*. Both are answers a guest acts on.
+    fn bar2_phys(&self, va: u64, write: bool, s: &mut PlaneMem) -> Result<u64, WindowRefusal> {
+        let (phys, read_only) = self.bar2_translate(va, s, None)?;
+        if write && read_only {
+            return Err(WindowRefusal::Translated {
+                va,
+                why: BAR2_READ_ONLY,
+            });
+        }
+        Ok(phys)
+    }
+
+    /// The walk half of [`RegPlane::bar2_phys`]: `(phys, read_only)` — see
+    /// [`RegPlane::bar1_translate`] for why the write check is the caller's.
+    fn bar2_translate(
+        &self,
+        va: u64,
+        s: &mut PlaneMem,
+        memo: Option<&mut PtReadMemo>,
+    ) -> Result<(u64, bool), WindowRefusal> {
+        // ★ Destructured so the format and the byte store can be borrowed at once. They
+        // are different fields and the borrow checker knows it; a method call on `s`
+        // would not let it.
+        let PlaneMem { mmu, fb } = s;
+        let Some(fmt) = mmu.as_deref() else {
+            return Err(WindowRefusal::Translated {
+                va,
+                why: NO_MMU_PORT,
+            });
+        };
+        let Some(root) = self.bar_pdes.pdes().bar2 else {
+            return Err(WindowRefusal::Translated {
+                va,
+                why: BAR2_UNROOTED,
+            });
+        };
+        // ★★ The level is DERIVED from the shift the guest sent beside the entry, never
+        // assumed to be zero. `kbusPatchBar2Pdb_GSPCLIENT` sends
+        // `pRootFmt->virtAddrBitLo` (`ogkm-580: kern_bus.c:880`) precisely because the
+        // entry alone does not say which format row it belongs to, and the fields of a
+        // dual entry and a single one do not overlap.
+        let Some((level, geo)) = (0..MAX_FORMAT_LEVELS)
+            .filter_map(|l| fmt.level_shift(l).map(|g| (l, g)))
+            .find(|(_, g)| u64::from(g.shift) == root.level_shift)
+        else {
+            return Err(WindowRefusal::Translated {
+                va,
+                why: BAR2_UNKNOWN_ROOT_LEVEL,
+            });
+        };
+        // ★★★ The guest published exactly ONE slot of that level — its own, slot 0. The
+        // other slots belong to the firmware's half of the address space
+        // (`ogkm-580: kern_bus.c:810-820`) and this port has published none, so an offset
+        // that indexes past slot 0 has no root at all. Refused by name rather than
+        // resolved against the one root we happen to hold, which would silently answer a
+        // foreign address space out of this one.
+        if geo.entries == 0 || (va >> geo.shift) & u64::from(geo.entries.saturating_sub(1)) != 0 {
+            return Err(WindowRefusal::Translated {
+                va,
+                why: BAR2_OUTSIDE_PUBLISHED_SLOT,
+            });
+        }
+        let mut src = FbStoreReader {
+            fb: fb.as_mut(),
+            memo,
+        };
+        let t = translate_from_entry(fmt, &mut src, level, u128::from(root.entry), va)
+            .map_err(|f| WindowRefusal::Translated { va, why: f.why() })?;
+        // ⊘ Vidmem only, and by NAME. The guest's page tables can legitimately name
+        // system memory, and this port has a guest-RAM port that could serve it — but
+        // nothing on this boot path maps sysmem through the bus window (every memdesc
+        // `kbusVerifyBar2` and `kbusSetupCpuPointerForBusFlush` allocate is `ADDR_FBMEM`,
+        // `ogkm-580: kern_bus_gm107.c:4050`, `kern_bus_gv100.c:66-72`), so serving it
+        // would be an untested path answering a case nobody has observed.
+        if t.aperture != Aperture::Vidmem {
+            return Err(WindowRefusal::Translated {
+                va,
+                why: BAR2_FOREIGN_APERTURE,
+            });
+        }
+        Ok((t.phys, t.read_only))
+    }
+
+    /// Serve one framebuffer-window read.
+    fn fb_read(&self, w: FbWindow, off: u64, size: u8) -> ReadOutcome {
+        let mut st = self.state.lock();
+        let mut s = self.mem.lock();
+        let phys = match self.window_phys(w, off, false, &st, &mut s) {
+            Ok(p) => p,
+            Err(WindowRefusal::NoAddressModel) => return ReadOutcome::FbWindow(w),
+            Err(WindowRefusal::Translated { va, why }) => {
+                return ReadOutcome::TranslationRefused { window: w, va, why };
+            }
+        };
+        let n = usize::from(size.clamp(1, 8));
+        let mut buf = [0u8; 8];
+        note_fb_read(FbIoRole::Trap, phys, n);
+        match s.fb.read(phys, &mut buf[..n]) {
+            Ok(()) => ReadOutcome::Fb {
+                window: w,
+                phys,
+                value: mask(u64::from_le_bytes(buf), size),
+            },
+            Err(e) => ReadOutcome::FbRefused {
+                window: w,
+                phys,
+                why: e.why,
+            },
+        }
+    }
+
+    /// Serve one framebuffer-window write.
+    ///
+    /// ★★★ **There are exactly three answers and none of them is "dropped, success".**
+    /// Either the window has no address model (the two translated apertures — reported as
+    /// [`WriteOutcome::fb_window`], which is what "dropped" honestly means there), or the
+    /// store took the bytes ([`WriteOutcome::fb_landed`]), or the store refused by name
+    /// ([`WriteOutcome::fb_refusal`], with the address and the reason). The `Result` from
+    /// [`FbStore::write`] is matched, never discarded.
+    fn fb_write(&self, w: FbWindow, off: u64, size: u8, val: u64) -> WriteOutcome {
+        let mut st = self.state.lock();
+        let mut s = self.mem.lock();
+        let phys = match self.window_phys(w, off, true, &st, &mut s) {
+            Ok(p) => p,
+            Err(WindowRefusal::NoAddressModel) => {
+                // ⊘ BOTH guards, and `st` is the one that matters: `note_fb_window` takes the
+                // FSM lock itself, and a `RankedMutex` is not reentrant — holding it here is
+                // an R3 violation that the rank discipline catches by name rather than a
+                // deadlock at 3am. Caught by `bar0_window.rs` the moment w522 gave `fb_write`
+                // a state guard it had not held before.
+                drop(s);
+                drop(st);
+                self.note_fb_window(w, off);
+                self.c.fb_window_writes.fetch_add(1, Ordering::Relaxed);
+                return WriteOutcome {
+                    fb_window: Some(w),
+                    ..WriteOutcome::nothing()
+                };
+            }
+            Err(WindowRefusal::Translated { va, why }) => {
+                drop(s);
+                // ⊘ As above: `note_fb_window` re-takes the FSM lock, which is not reentrant.
+                drop(st);
+                self.note_fb_window(w, off);
+                // ★★★★ The tag names the window that actually refused. Reusing BAR2's
+                // sentence for a BAR1 refusal would send a reader to `UPDATE_BAR_PDE` for a
+                // root that command never carries — *"refusals by name, and by a name that
+                // is TRUE"*.
+                let tag = if w == FbWindow::FbAperture {
+                    self.c.bar1_faults.fetch_add(1, Ordering::Relaxed);
+                    BAR1_WRITE_REFUSED
+                } else {
+                    self.c.bar2_faults.fetch_add(1, Ordering::Relaxed);
+                    BAR2_WRITE_REFUSED
+                };
+                return WriteOutcome {
+                    // ★ A FAULT, so the shell prints it at the instant the write is lost
+                    // rather than leaving it to be inferred from an NV_ERR_MEMORY_ERROR
+                    // ninety lines of guest code later.
+                    fault: Some(tag),
+                    bar2_refusal: Some(Bar2Refused {
+                        va,
+                        len: usize::from(size.clamp(1, 8)),
+                        why,
+                    }),
+                    ..WriteOutcome::nothing()
+                };
+            }
+        };
+        match w {
+            FbWindow::InstanceWindow => {
+                self.c.bar2_writes.fetch_add(1, Ordering::Relaxed);
+            }
+            FbWindow::FbAperture => {
+                self.c.bar1_writes.fetch_add(1, Ordering::Relaxed);
+            }
+            // ★ w607 — the write half of the same counter. See `PlaneCounters::pramin_reads`.
+            FbWindow::Pramin => {
+                self.c.pramin_writes.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+        let n = usize::from(size.clamp(1, 8));
+        let bytes = val.to_le_bytes();
+        // ★★★★ §16.16 — THE TAG IS PASSED, and until this line it was not.
+        //
+        // `[measured 2026-08-09, tree `e394b69`]` §16.15 built `write_tagged`, `FbWriter`,
+        // `FbPageOrigin` and `FbResidency::by_writer` and then wired **none** of them: a
+        // repo-wide search for `write_tagged` returned its own definition and its own
+        // default impl, and nothing else — no production caller, no test caller, no report
+        // field. Every framebuffer write in the tree went through `FbStore::write`, whose
+        // default records `FbWriter::Unattributed`. ⊘ Booting that tree would have produced
+        // a census reading **100 % UNATTRIBUTED**, which by the instrument's own definition
+        // means *"we did not instrument that path"* — a non-finding dressed as a
+        // measurement. This is the `a_declared_capability_reachable_from_nowhere` shape.
+        //
+        // ★ `w` is the window the ADDRESS MODEL already resolved for this very access —
+        // taken from the same `match` that produced `phys`, never recomputed. A second
+        // derivation of the window would be a second projection auditing the first.
+        note_fb_write(FbIoRole::Trap, phys, n);
+        let outcome = match s.fb.write_tagged(phys, &bytes[..n], FbWriter::Window(w)) {
+            Ok(()) => {
+                if !kayfabe_util::trapwitness::in_trap() {
+                    self.c.fb_window_off_trap.fetch_add(1, Ordering::Relaxed);
+                }
+                self.c.fb_writes.fetch_add(1, Ordering::Relaxed);
+                // ★★★★ **G1 — THE WITNESS FOR THE CPU TRANSPORT, taken at the one line that
+                // stamps `/byBAR2`.**
+                //
+                // `FbWriter::Window(w)` two lines up is what makes the walk print
+                // `L0@0x2efa9c000/byBAR2#39`. So *this* call is the writer §16.73's ruling
+                // named, and the witness is taken from the same statement rather than from a
+                // second derivation of "which window" — the §16.16 rule that two projections
+                // of one fact are never reconciled in silence.
+                //
+                // ⊘ Only on the LANDED arm. A refused write changed no byte, and witnessing
+                // it would put a page into the drain that the store does not back —
+                // `unwitnessed` would then be under-reported for a page nobody wrote, which
+                // is the witness gate lying in the direction that binds.
+                //
+                // ⊘ It records a PAGE, never a value and never a claim that the page is a
+                // page table. `Spine::pt_page_owner` decides ownership at the drain, and a
+                // page nothing owns is requeued, not guessed at.
+                st.pt_witness_writes = st.pt_witness_writes.saturating_add(1);
+                // ★ BOTH pages when the access straddles, because `FbStore::write` really
+                // does land bytes in two frames (`SparseFb::runs`). A witness that recorded
+                // only the first would leave the second page written-and-unwitnessed, which
+                // is the one state that binds nothing and looks like nothing happened.
+                let last = phys.saturating_add(n as u64 - 1);
+                for page in [phys & !0xfff, last & !0xfff] {
+                    if st.pt_witness.contains(&page) {
+                        continue;
+                    }
+                    if st.pt_witness.len() < MAX_PT_WITNESS_PAGES {
+                        st.pt_witness.insert(page);
+                    } else {
+                        st.pt_witness_refused = st.pt_witness_refused.saturating_add(1);
+                    }
+                }
+                WriteOutcome {
+                    fb_landed: Some(phys),
+                    ..WriteOutcome::nothing()
+                }
+            }
+            Err(e) => {
+                self.c.fb_refusals.fetch_add(1, Ordering::Relaxed);
+                WriteOutcome {
+                    // ★ It is a FAULT, not merely a note: the shell prints `fault`
+                    // unconditionally, so a refused framebuffer write is loud in the same
+                    // boot rather than inferable from a later `NV_ERR_MEMORY_ERROR`.
+                    fault: Some(FB_WRITE_REFUSED),
+                    fb_refusal: Some(e),
+                    ..WriteOutcome::nothing()
+                }
+            }
+        };
+        drop(s);
+        // ⊘ The FSM guard too — `note_fb_window` re-takes it and a `RankedMutex` is not
+        // reentrant. w522 gave this function a state guard it had not held before, and the
+        // rank discipline named all three sites by panic rather than letting one deadlock.
+        drop(st);
+        self.note_fb_window(w, off);
+        outcome
+    }
+
+    /// The free-running counter's two halves, or `None` if `off` is neither.
+    ///
+    /// ★ Each half samples the clock independently, which is the C artifact's behaviour
+    /// (`C: src/qemu/nvkvm_gpu_emul.c:1523-1528`) and is safe because the driver reads
+    /// high / low / high and retries whenever the high half moved — so a sample that
+    /// straddles a 2^32-nanosecond boundary (about every 4.3 s) is *detected* by the reader
+    /// rather than needing to be prevented by us.
+    fn ptimer_read(&self, off: u64) -> Option<u64> {
+        let p = self.chip.ptimer;
+        if off == p.lo_off {
+            // The low half's `NSEC` field is bits 31:5, so the bottom five bits of a real
+            // one read zero (`ogkm-580:
+            // src/common/inc/swref/published/turing/tu102/dev_vm.h:224-225`).
+            Some(u64::from(
+                (self.clock.now_ns() as u32) & PTIMER_LO_NSEC_MASK,
+            ))
+        } else if off == p.hi_off {
+            Some(self.clock.now_ns() >> 32)
+        } else {
+            None
+        }
+    }
+
+    /// Read `size` bytes out of the ROM image, little-endian.
+    ///
+    /// ★ Past the end of the image reads zero, exactly as an unprogrammed EEPROM would.
+    /// The driver never *needs* those bytes: it computes `biosSize` from the image's own
+    /// PCIR/NPDE block count and confines itself to that.
+    fn rom_read(&self, off: u64, size: u8) -> u64 {
+        let mut v: u64 = 0;
+        for i in 0..u64::from(size.min(8)) {
+            let b = off.saturating_add(i);
+            let byte = usize::try_from(b)
+                .ok()
+                .and_then(|i| self.rom.get(i))
+                .copied()
+                .unwrap_or(0);
+            v |= u64::from(byte) << (8 * i);
+        }
+        v
+    }
+
+    /// ★★★ Serve one register write.
+    pub fn write(&self, bar: u8, off: u64, size: u8, val: u64) -> WriteOutcome {
+        self.c.writes.fetch_add(1, Ordering::Relaxed);
+        let _vcpu = MmioInFlight::enter(&self.mmio_in_flight);
+        // ★★★ THE WINDOW REGISTER IS A LATCH, and it is classified FIRST — before the
+        // framebuffer windows, before the GSP model and before the unclaimed arm. A write
+        // here that fell through to `unclaimed_writes` would be dropped, and the guest
+        // would go on addressing framebuffer address zero believing it had moved the
+        // window. See `crate::fbwin`.
+        if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8
+            && self.chip.bar0_window_reg != 0
+            && off == self.chip.bar0_window_reg
+        {
+            self.c.bar0_window_writes.fetch_add(1, Ordering::Relaxed);
+            let mut s = self.state.lock();
+            // ⊘ The whole word, truncated to 32 bits and NOT masked to the two fields this
+            // port decodes: the guest reads this register back and re-writes it, so a bit
+            // we do not understand must survive the round trip. Dropping it would be a
+            // read-modify-LOSE at a register whose entire job is to be modified in place.
+            s.bar0_window.set_raw(val as u32);
+            // ★★★ w564 — WRITE THROUGH. The guest reads this register back (that is the
+            // read-modify-write the comment above is about), so its shadow must carry the
+            // value the moment the state does. ⊘ The RAW word, matching the read arm's
+            // `s.bar0_window.raw()` exactly — a shadow that stored the DECODED fields would
+            // answer a different number than the trap does, which is the silent divergence
+            // the teardown gate checks for.
+            self.shadow_write(off, u64::from(s.bar0_window.raw()), 4);
+            return WriteOutcome {
+                claimed: true,
+                ..WriteOutcome::nothing()
+            };
+        }
+        // ★★★ **THE USERMODE DOORBELL** (E2). Classified here — before the FSM's lock is
+        // taken, before the framebuffer windows and before `decode_reg` — for two separate
+        // reasons, and both of them are load-bearing.
+        //
+        // 1. ⚠ **No plane lock may be held.** The port calls into the core, which takes
+        //    ranked locks and can block on the isolate pool's backpressure gate. Every
+        //    arm below this one is inside `self.state.lock()`; a doorbell classified there
+        //    would put a guest-controlled wait under the lock every other vCPU needs to
+        //    read a register. This is the only classification in `write` whose POSITION is
+        //    a concurrency requirement rather than a precedence one.
+        // 2. ★ A write that fell through to `unclaimed_writes` would be **dropped**, and
+        //    the dropped write would be the guest's entire submission — the same argument
+        //    the window latch and the interrupt tree make, one aperture over.
+        //
+        // ⊘ `bar` is checked, not assumed. The register aperture's offset `0x00bb0090` and
+        // the framebuffer aperture's offset `0x00bb0090` are the same number and different
+        // facts (`PlaneState::unclaimed`'s own note), and only one of them is a ring.
+        if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8
+            && let Some(reg) = self.doorbell_reg()
+            && off == reg
+        {
+            return self.ring_doorbell(mask(val, size));
+        }
+        // ★★★★★ **THE GUEST'S TLB INVALIDATE** (w326) — `crate::mmuinval`.
+        //
+        // Classified **here**, immediately after the doorbell and before the FSM's lock, for
+        // the doorbell's own two reasons and a third that is stronger than either:
+        //
+        // 1. ⚠ **No plane lock may be held.** The armed path hands the shell a publication
+        //    to run; every arm below this one is inside `self.state.lock()`, and a
+        //    publication classified there would put the whole publish plane under the lock
+        //    every other vCPU needs to read a register.
+        // 2. ★ A write that fell through would be **dropped into the unclaimed census** —
+        //    which is exactly where it went from M5 until this rung, and is why three
+        //    campaigns believed the guest emitted no invalidate at all.
+        // 3. ★★★★★ **The guest BLOCKS on this register.** `kgmmuCheckPendingInvalidates`
+        //    spin-polls it until `TRIGGER` reads false. Answering late is not a latency
+        //    cost here; it is the guest's whole VM stopped. It therefore gets the earliest
+        //    classification that is correct, and the completion is unconditional.
+        //
+        // ⊘ `bar` is checked, not assumed — same aliasing hazard the doorbell arm names.
+        if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8
+            && let Some(regs) = self.invalidate_regs()
+        {
+            if off == regs.pdb || off == regs.upper_pdb {
+                // ⊘ The PDB halves are a LATCH, not a command: RM writes both, then
+                // triggers (`kgmmuSetPdbToInvalidate_TU102`). Recording them without
+                // acting is the whole point — the trigger word alone does not say which
+                // VA space it means.
+                self.mmu_inval
+                    .note_pdb_write(regs, off, mask(val, size) as u32);
+                // ★★★ w590 — WRITE THROUGH, for the same reason the trigger does one line
+                // down. These are latches the guest sets immediately before the trigger; on
+                // real hardware they read back what was written. Once this page is BACKED they
+                // are read with no exit, so a shadow that never moved would answer the
+                // realize-time zero. ⊘ `the_bar0_read_surface.md` §5: two homes, and the one
+                // that matters is the one nobody thinks to update.
+                self.shadow_write(off, mask(val, size), 4);
+                return WriteOutcome {
+                    claimed: true,
+                    ..WriteOutcome::nothing()
+                };
+            }
+            if off == regs.trigger {
+                let now_us = self.clock.now_ns() / 1_000;
+                let (inv, act) = self.mmu_inval.note_trigger(mask(val, size) as u32, now_us);
+                // ★★★ w564 — WRITE THROUGH. The guest spin-polls this register waiting for
+                // TRIGGER to read false, so its shadow is not a convenience: it is the thing
+                // the guest is watching. ⊘ Published from `read_trigger`, the SAME source the
+                // read arm uses, so the two cannot answer differently.
+                self.shadow_write(off, self.mmu_inval.read_trigger(), 4);
+                return WriteOutcome {
+                    claimed: true,
+                    invalidate: Some(inv),
+                    publish_before_completing: matches!(
+                        act,
+                        crate::mmuinval::TriggerAction::Publish
+                    ),
+                    ..WriteOutcome::nothing()
+                };
+            }
+        }
+        // ★★★ THE INTERRUPT TREE. Classified here, beside the window latch and before the
+        // model's `decode_reg` gate, because the model does not own these offsets and a
+        // write that fell through would be DROPPED — and the dropped write would be
+        // `CPU_INTR_LEAF_TRIGGER` itself, i.e. the entire request. See `crate::cpuintr`.
+        if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8
+            && let Some(reg) = crate::cpuintr::decode(off)
+        {
+            self.c.cpu_intr_accesses.fetch_add(1, Ordering::Relaxed);
+            // ⊘ The plane lock is NOT taken here, and that is the whole point of w513: this
+            // write reaches only the interrupt tree, and the plane's mutex also covers `fb`,
+            // `ram`, `mmu` and the page-table witness — which `ce_session_with_root` holds
+            // for 8.2 ms across a CE submission on the worker.
+            let fired = {
+                let mut t = self.cpu_intr.lock();
+                let fired = t.write(reg, val as u32);
+                // ★★★ w564 — WRITE THROUGH, under the SAME hold as the mutation. One write
+                // may change several registers (a SET and a CLEAR alias are two ports onto one
+                // mask), so the WHOLE group is republished, never just the named offset.
+                self.publish_cpu_intr(&t);
+                fired
+            };
+            // ⊘ `out_of_range` raises NOTHING: the guest named a leaf row this chip does
+            // not have, so no pending bit was latched, and a vector delivered with nothing
+            // pending would send the guest's ISR looking for an interrupt that is not
+            // there. It is counted as an access and no more.
+            let raise = fired.is_some_and(|t| !t.out_of_range);
+            if raise {
+                self.c.cpu_intr_raises.fetch_add(1, Ordering::Relaxed);
+            }
+            if fired.is_some_and(|t| t.would_be_masked && !t.out_of_range) {
+                self.c.cpu_intr_masked.fetch_add(1, Ordering::Relaxed);
+            }
+            return WriteOutcome {
+                claimed: true,
+                raise_cpu_intr: raise,
+                ..WriteOutcome::nothing()
+            };
+        }
+        // ★★★★★ **w754 — THE GSP COMMAND-QUEUE DOORBELL: POST AND RETURN, NO PLANE LOCK.**
+        //
+        // Constraint 6: *"every MMIO trap only posts the register write to a queue (optionally
+        // clearing another register to close a race), wakes a worker, and returns."*
+        //
+        // ⊘ **This is NOT "move the drain".** w432 already moved the servicing to a worker and
+        // w472b made the arming survive a guest reset, so this write has not drained anything
+        // for a long time. What it still did was reach that deferral through
+        // [`RegPlane::state`] — the rank-0 lock that also covers `ram`, `policy` and the FSM,
+        // and which the worker holds for a whole command. ⇒ the trap recorded a counter
+        // increment at the price of a lock a blocking thread owns, which is the owner's own
+        // formulation of the rule: *"a blocking call in vcpu also counts if the lock it's
+        // waiting on to acquire is held by a thread that has a blocking call."*
+        //
+        // ⊘ Classified HERE — beside the usermode doorbell, the MMU invalidate and the
+        // interrupt tree — for the reason all three of them give in their own comments: every
+        // arm below this point is inside `self.state.lock()`, and the POSITION is a
+        // concurrency requirement rather than a precedence one.
+        //
+        // ⚠ **Asked of the MODEL, never of the offset.** Which register means *"the command
+        // queue moved"* is the chip profile's business (`NV_PGSP_QUEUE_HEAD(i)`, an ARRAY —
+        // `ad10x: 0x110c00 + i*8`), and an offset test here would be a second copy of that
+        // knowledge, free to diverge quietly.
+        //
+        // ⊘ **Nothing is shadowed and that is measured, not assumed:** every chip profile
+        // encodes `GspReg::GspQueueHead(_) => 0` on a read (`ad10x.rs:293`, `gh100.rs:714`,
+        // `gb20x.rs:803`), and the FSM stores no value for it, so the value the guest wrote
+        // was never readable back on ANY path. Adding a shadow here would be a behaviour
+        // change wearing the clothes of a refactor.
+        //
+        // ⚠ **The arming gate is what keeps the no-worker arm correct.** With deferral off
+        // there is no thread to fold the count in, so the write falls through to the FSM and
+        // is serviced inline exactly as before — slower and correct, the same shape
+        // `start_doorbell_publish_worker`'s `Err` arm chose.
+        //
+        // ⊘⊘ **AND THE SKIPPED `publish_gsp_registers()` IS ARGUED, NOT OVERLOOKED.** The
+        // generic GSP arm below republishes the whole register group into the read shadow
+        // after every claimed write. Returning here skips that, and it is sound for this
+        // register and no other: with deferral armed, `GspFsm::apply`'s `CommandDoorbell`
+        // arm returns before touching ANY state, `FalconSecureBooterBoot::on_write` emits
+        // that one step and mutates no `arch_state`, and no chip profile encodes a value for
+        // `GspQueueHead` at all. ⇒ there is nothing whose shadow could have moved.
+        // ⚠ If a future generation makes a queue-head write change observable GSP state, this
+        // arm must publish before it returns — the shadow is the half of the read surface
+        // nobody thinks to update (`the_bar0_read_surface.md` §5).
+        if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8
+            && self
+                .defer_cmds_armed
+                .load(std::sync::atomic::Ordering::Acquire)
+            && matches!(
+                self.model.decode_reg(bar, off),
+                Some(kayfabe_arch::GspReg::GspQueueHead(_))
+            )
+        {
+            self.c.gsp_writes.fetch_add(1, Ordering::Relaxed);
+            self.posted_cmd_doorbells
+                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            GSP_HEAD_POSTED.fetch_add(1, Ordering::Relaxed);
+            return WriteOutcome {
+                claimed: true,
+                ..WriteOutcome::nothing()
+            };
+        }
+        // ★★★ **A WRITE TO THE FREE-RUNNING COUNTER IS REFUSED BY NAME** (`#128`).
+        //
+        // `tmrSetCurrentTime_GV100` writes `NV_PTIMER_TIME_0/_1`
+        // (`ogkm-580: src/nvidia/src/kernel/gpu/timer/arch/volta/timer_gv100.c:56-82`), so
+        // this is a write the guest's own RM really issues, not a hypothetical.
+        //
+        // ⚠ Before this arm the write fell through to `unclaimed_writes` and was dropped.
+        // The *effect* was already right — nothing reached any counter — but the DECISION
+        // was never made: it was indistinguishable from the hundreds of offsets this port
+        // simply does not model yet, and it would have stayed indistinguishable when the
+        // page went read-native. `register_plane_read_native.md` §5 asks for this policy
+        // to be **decided explicitly**, and refuse-by-name is the house form.
+        //
+        // ★★★ **AND IT IS NOT REDUNDANT TODAY** — an earlier draft of this comment said it
+        // was, and the claim was wrong in the flattering direction. Under `#128` the second
+        // holder is `KVM_MEM_READONLY` on the backing memslot, and **that is not built yet**
+        // (`read_native_timer_measured.md` §6). A third was claimed and does not exist at
+        // all: RM's `NV_PROTECT_READABLE` grant covers the PTIMER page, and §2 of that
+        // document is precisely that the PTIMER page CANNOT be the backing page — the page
+        // that can is the usermode window, which the same whitelist leaves READ-WRITE
+        // because a CUDA process has to ring its doorbell through it
+        // (`ogkm-580: src/nvidia/src/kernel/gpu/subdevice/subdevice_ctrl_gpu_kernel.c:2903,
+        // :2919-2926`; measured 2026-08-02 on a GA106 at revision 9087090,
+        // `docs/reference/bench_evidence/timer-mappability-9087090.out`).
+        //
+        // ⇒ Right now this arm is the ONLY thing refusing the write. A comment that counts
+        // a mechanism guarding a different page is not conservative; it invites the next
+        // reader to delete the one that is load-bearing.
+        //
+        // ⊘ It refuses rather than emulating a settable clock. A guest that could move its
+        // own counter would break the one property `#128` buys — that guest timestamps and
+        // host GPU timestamps are in the same timebase.
+        if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8
+            && (off == self.chip.ptimer.lo_off || off == self.chip.ptimer.hi_off)
+        {
+            self.c.ptimer_writes_refused.fetch_add(1, Ordering::Relaxed);
+            return WriteOutcome {
+                claimed: true,
+                fault: Some(PTIMER_WRITE_REFUSED),
+                ..WriteOutcome::nothing()
+            };
+        }
+        // ★★★ A framebuffer write either LANDS or REFUSES BY NAME — see
+        // [`RegPlane::fb_write`], which is where the three-answers rule is written down.
+        // It is classified before the register sources for the reason `read_inner` gives.
+        if let Some(w) = self.chip.fb_window(bar, off) {
+            return self.fb_write(w, off, size, val);
+        }
+        let claimed = self.model.decode_reg(bar, off).is_some();
+        if !claimed {
+            self.note_unclaimed(bar, off);
+            self.c.unclaimed_writes.fetch_add(1, Ordering::Relaxed);
+            return WriteOutcome::nothing();
+        }
+        self.c.gsp_writes.fetch_add(1, Ordering::Relaxed);
+        let mut s = self.state.lock();
+        // ⊘ `cpu_intr` is deliberately NOT bound here any more: §16.77.1 moved the only
+        // consumer to `RegPlane::ring_doorbell`, and leaving the binding would have let a
+        // future edit re-latch a vector from a register write without anyone noticing that
+        // it is the trigger this rung deleted.
+        let PlaneState {
+            fsm, ram, policy, ..
+        } = &mut *s;
+        match fsm.mmio_write_with(
+            ram.as_mut(),
+            self.model.as_ref(),
+            policy.as_mut(),
+            bar,
+            off,
+            val,
+        ) {
+            Ok(report) => {
+                // ⊘ Mirror the FSM's pending count into the lock-free atomic, under the
+                // lock we already hold. The hot path reads it on every MMIO write and must
+                // never take this lock to do so — see `pending_cmd_doorbells`.
+                self.pending_cmd_doorbells.store(
+                    fsm.pending_command_doorbells(),
+                    std::sync::atomic::Ordering::Release,
+                );
+                if report.raise_status_irq {
+                    self.c.irq_requests.fetch_add(1, Ordering::Relaxed);
+                }
+                self.c
+                    .commands
+                    .fetch_add(report.commands.len() as u64, Ordering::Relaxed);
+                // ★★★★★ §16.76 — THE OPENER, counted. See `Counters::status_irq_cleared`.
+                let opened = report
+                    .transitions
+                    .iter()
+                    .filter(|t| **t == kayfabe_gsp::Transition::E10)
+                    .count();
+                if opened > 0 {
+                    self.c
+                        .status_irq_cleared
+                        .fetch_add(opened as u64, Ordering::Relaxed);
+                }
+                // ⊘⊘ §16.77.1 — **NO os-event delivery from here, and the deletion is the
+                // fix.** This arm used to call `deliver_os_events` on EVERY claimed GSP
+                // register write. That was invisible while the flow-control gate was stuck
+                // shut after one batch; the instant §16.77 made the guest able to drain,
+                // it became a livelock the guest names in its own log:
+                //
+                //   `[measured 2026-08-10, boot w213 at b0df550]`
+                //   `NVRM: _intrServiceStallExactList: Stuck interrupt detected for
+                //    mcEngine 50` … `Bailing after 1000 iterations` — repeatedly —
+                //   beside `125251 batches` / `375751 POST_EVENT` / `125440 vectors
+                //   delivered`, of which `125237 WOKE WITH NOTHING`.
+                //
+                // ★ The C has exactly ONE call site, and it is not a register write: it is
+                // the DOORBELL path, gated on `any_completed`, with the comment *"a channel
+                // finished: deliver the os-event completion"*
+                // (`C: src/qemu/nvkvm_gpu_emul.c:4358-4367`). The trigger is **work
+                // completing**, never **a register being touched** — see
+                // `RegPlane::ring_doorbell`, which is where this now lives.
+                //
+                // ★★ And this port's own instrument had already said so: `woke_with_nothing`
+                // is defined as *"a batch announced with no newly-served doorbell behind
+                // it"*, and it was 125 237 of 125 251. The number named the defect a rung
+                // before anyone read it that way.
+                let out = WriteOutcome {
+                    claimed: true,
+                    raise_status_irq: report.raise_status_irq,
+                    transitions: report.transitions.len(),
+                    commands: report.commands.len(),
+                    ..WriteOutcome::nothing()
+                };
+                // ★★★★★ w565 — REPUBLISH THE GSP GROUP, and the `drop` is load-bearing.
+                //
+                // ⊘ `publish_gsp_registers` re-reads the FSM through the plane lock, which
+                // this arm still holds through `s`. Calling it here without releasing first
+                // is a self-deadlock on a vCPU thread inside an MMIO exit — the guest would
+                // simply stop. The borrow ends with the match; `s` does not, so it is dropped
+                // by name rather than by scope.
+                drop(s);
+                self.publish_gsp_registers();
+                out
+            }
+            Err(f) => {
+                self.c.faults.fetch_add(1, Ordering::Relaxed);
+                // ★ Matched for its PAYLOAD, not merely for its shape: the counter says
+                // how many, and `ram_refusal` carries which address and why out to the
+                // shell, which is the only channel an operator ever reads.
+                let ram_refusal = match f {
+                    GspFault::GuestRam(r) => {
+                        self.c.ram_refusals.fetch_add(1, Ordering::Relaxed);
+                        Some(r)
+                    }
+                    _ => None,
+                };
+                WriteOutcome {
+                    claimed: true,
+                    fault: Some(f.fault_tag().0),
+                    ram_refusal,
+                    ..WriteOutcome::nothing()
+                }
+            }
+        }
+    }
+
+    /// ★★★★★ **w383 — THE ACCOUNTING, LIFTED OUT OF THE TRAP so the deferred lane can
+    /// reach it.**
+    ///
+    /// Every counter and every log field a doorbell report owns, in one place. It was
+    /// inline in [`RegPlane::ring_doorbell`] until the publication lane got a worker; the
+    /// worker produces a report at an instant the trap has already returned from, and a
+    /// second copy of this block on that side is how two counters come to disagree about
+    /// one event.
+    ///
+    /// ⊘ **It raises nothing and takes no plane lock.** The interrupt half stays in
+    /// `ring_doorbell`, because delivery is the trap's to report through
+    /// [`WriteOutcome::raise_cpu_intr`] and the worker has no wire for it. That is safe
+    /// **by construction, not by luck**: the deferred arm is the forwarding path, whose
+    /// only reports are [`DoorbellReport::Served`] and [`DoorbellReport::Refused`], and
+    /// both of those already answer `false` to every raise below. See the
+    /// `⊘ A DEFERRED SERVED-LOCALLY` guard at the worker's call site.
+    ///
+    /// # ⚠ What the deferred lane does to `Counters::doorbells`' invariant, stated
+    ///
+    /// `doorbells == doorbells_served + doorbells_refused` holds **exactly** while the lane
+    /// is disarmed, and becomes `doorbells >= served + refused` while it is armed. The
+    /// difference is not a leak: it is precisely *(coalesced offers) + (entries in flight)*,
+    /// and both terms are on `pubqueue::PublicationQueue::census`. ⊘ A
+    /// [`DoorbellReport::Scheduled`] is deliberately counted in **neither** bucket — it
+    /// claims nothing about the work, and folding it into `served` would be the exact
+    /// "counted as a doorbell, went nowhere, looked fine" this crate's doorbell doctrine
+    /// forbids.
+    /// ★ w795 — the per-route doorbell cost census. Rendered at teardown beside the others.
+    #[must_use]
+    pub fn doorbell_cost(&self) -> &crate::dbtable::DoorbellHistogram {
+        &self.dbcost
+    }
+
+    /// ★ w801 — the per-token disposition ledger.
+    #[must_use]
+    pub fn doorbell_ledger(&self) -> &crate::dbtable::DoorbellLedger {
+        &self.dbledger
+    }
+
+    pub fn account_doorbell_report(&self, token: u64, report: &DoorbellReport) {
+        match report {
+            // ★ Both servings count as served — `doorbells == served + refused` is the
+            // invariant [`Counters::doorbells`] states, and a third arm that counted as
+            // neither would break it silently. Which serving it was is in the report.
+            DoorbellReport::Served { .. } | DoorbellReport::ServedLocally { .. } => {
+                self.c.doorbells_served.fetch_add(1, Ordering::Relaxed);
+                // ★★★★ §16.62.3 — and WHICH serving it was, in its own counter. The arm
+                // above deliberately keeps both together so `served + refused == doorbells`
+                // cannot be broken; this one says what `served` is made of, so a boot can
+                // never report progress without saying whose progress it was.
+                match report {
+                    DoorbellReport::ServedLocally { .. } => {
+                        self.c
+                            .doorbells_served_locally
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
+                    DoorbellReport::Served { .. } => {
+                        self.c
+                            .doorbells_served_forwarded
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
+                    // ⊘ Unreachable under the outer arm; named rather than `_` so a new
+                    // report variant fails this build instead of vanishing from the split.
+                    DoorbellReport::Refused { .. } | DoorbellReport::Scheduled { .. } => {}
+                }
+            }
+            DoorbellReport::Refused { refusal, .. } => {
+                self.c.doorbells_refused.fetch_add(1, Ordering::Relaxed);
+                // ★★★★★ **COUNT THE REFUSAL BY NAME (w693).** Owner: *"if its a passthrough
+                // there are only a few things it can be like a passthrough doorbell not working
+                // (race), logging failed doorbells is useful."*
+                //
+                // ⊘⊘ `[measured w692a]` the teardown reported **"503 REFUSED by name; last token
+                // … (16 logged)"** — five hundred refusals, **sixteen printed**, and a grep for
+                // fault names over the whole log found exactly ONE. The cap is correct (a
+                // per-event print at that rate is a second workload) and it means the
+                // DISTRIBUTION is invisible: a total plus one sample cannot say whether 503
+                // refusals are one cause or five.
+                //
+                // ⚠ And zero doorbells were forwarded in that boot — `0 forwarded (host channel
+                // rung)` — so every one of these is a submission that never reached the GPU.
+                // For a passthrough channel the failure set is small; naming it is most of the
+                // diagnosis.
+                let mut by = self
+                    .doorbell_refusals_by_kind
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
+                // ⊘ Bounded: a guest-driven key space must not grow without limit. Past the cap
+                // the count still rises under a named bucket, so the TOTAL stays honest even
+                // when the breakdown saturates.
+                let k = refusal.kind.0.to_string();
+                if by.len() < 32 || by.contains_key(&k) {
+                    *by.entry(k).or_insert(0u64) += 1;
+                } else {
+                    *by.entry("⊘OTHER(table full)".to_string()).or_insert(0u64) += 1;
+                }
+            }
+            // ★★★★★ w383 — ACCEPTED, AND COUNTED NOWHERE HERE. The work has not run; the
+            // report that says what it did will come back through this same function from
+            // the worker. Counting it as `served` would make the queue's depth read as
+            // progress.
+            // ⊘ NOT an empty arm any more. See `Counters::doorbells_scheduled`: this is the
+            // third arm the invariant's own comment warned about, and it broke it silently for
+            // as long as the deferred lane has existed.
+            DoorbellReport::Scheduled { .. } => {
+                self.c.doorbells_scheduled.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+        {
+            let mut log = self.doorbell_log.lock().unwrap_or_else(|e| e.into_inner());
+            log.last_token = Some(token);
+            if log.first_refusal.is_none()
+                && let DoorbellReport::Refused { refusal, .. } = report
+            {
+                log.first_refusal = Some(refusal.clone());
+            }
+            if let DoorbellReport::ServedLocally { note, .. } = report {
+                log.last_local_serving = Some(note.clone());
+            }
+        }
+    }
+
+    /// ★★★ **E2** — hand one guest work-submit token to the installed port, count what
+    /// came back, and report it whole.
+    ///
+    /// Split out of [`RegPlane::write`] so the *"no plane lock is held here"* obligation is
+    /// visible in one place: nothing in this function takes [`RegPlane::state`], and the
+    /// only lock it holds across the port call is the port's own [`RwLock`] read guard.
+    ///
+    /// ⊘ w383 — the counting half now lives in [`RegPlane::account_doorbell_report`],
+    /// because the deferred publication lane produces a report on a worker thread and a
+    /// second copy of that block is how two counters come to disagree about one event. What
+    /// stays here is the **raising** half, which is the trap's alone: delivery leaves through
+    /// [`WriteOutcome::raise_cpu_intr`] and a worker has no such wire.
+    fn ring_doorbell(&self, token: u64) -> WriteOutcome {
+        // ★ Counted BEFORE the port is consulted, so `doorbells` is a statement about what
+        // the GUEST did and cannot be reduced by anything the core decides.
+        self.c.doorbells.fetch_add(1, Ordering::Relaxed);
+        // ★★ w326 — the invalidate-per-doorbell ratio is the number the trigger-vs-doorbell
+        // decision turns on, so BOTH its terms are taken by one observer over one interval.
+        // Two logs correlated afterwards is how a ratio comes to describe two boots.
+        self.mmu_inval.note_doorbell();
+        // ★★★★★ **w795 — TIME THE DOORBELL, BY ROUTE.** See `DoorbellHistogram` for why this
+        // is here, what it costs, and the §41 argument for paying it. ⊘ The span covers exactly
+        // `port.ring` — the dword write or the queue push — and nothing around it, because the
+        // question the asynchronous-doorbell decision turns on is what THAT costs.
+        let t_ring = std::time::Instant::now();
+        let report = {
+            let port = self.doorbell.read().unwrap_or_else(|e| e.into_inner());
+            port.ring(token)
+        };
+        let ring_ns = t_ring.elapsed().as_nanos() as u64;
+        // ⊘ Classified from the REPORT, not from a second `route()` lookup: the port has just
+        // decided, and re-deriving it here would be two projections of one fact.
+        let class = match &report {
+            DoorbellReport::Served { .. } => crate::dbtable::DoorbellClass::Passthrough,
+            DoorbellReport::Scheduled { .. } => crate::dbtable::DoorbellClass::Emulated,
+            _ => crate::dbtable::DoorbellClass::Other,
+        };
+        self.dbcost.record(class, ring_ns);
+        // ★★★★★ **w801 — AND WHICH TOKEN IT WAS.** `Served` here is the inline passthrough
+        // store, i.e. the dword reached the real register — that is `forwarded`. ⊘ A
+        // `ServedLocally` is our own executor and is explicitly NOT forwarded, which is the
+        // distinction the whole ledger exists to make.
+        self.dbledger.record(
+            token,
+            class,
+            matches!(report, DoorbellReport::Served { .. }),
+        );
+        self.account_doorbell_report(token, &report);
+        // ★★★ **§14.18 — THE COMPLETION IS ANNOUNCED**, and only a completion is.
+        let raise_cpu_intr = match &report {
+            DoorbellReport::ServedLocally { engine, .. } => self.announce_completion(*engine),
+            // ⊘ Not `Served`: a forwarded doorbell's work finishes on a HOST engine, at an
+            // instant this device is not standing at, and the host's own completion path is
+            // `kayfabe_completion`'s. Announcing here would be a notification for work whose
+            // end we did not witness — the doorbell doctrine's own prohibition, one field
+            // over. ⊘ And not `Refused`, which is the same claim with the sign flipped.
+            // ⊘ And not `Scheduled`: nothing has happened yet. The worker that runs it
+            // produces `Served`/`Refused`, neither of which announces anything either.
+            DoorbellReport::Served { .. }
+            | DoorbellReport::Refused { .. }
+            | DoorbellReport::Scheduled { .. } => false,
+        };
+        // ★★★★★ **§16.77.1 — THE OS-EVENT WAKEUP, ON THE C's OWN TRIGGER.**
+        //
+        // `C: src/qemu/nvkvm_gpu_emul.c:4358-4367` — its single call site, inside the
+        // doorbell handler, gated on `any_completed`: *"a channel finished: deliver the
+        // os-event completion so libcuda's blocking-sync poll() wakes … Posting per
+        // completed-doorbell is bounded by the queue ring."*
+        //
+        // ⊘ **`ServedLocally`, and nothing else — the SAME precondition
+        // [`RegPlane::announce_completion`] documents.** The two are one truth claim: this
+        // device witnessed the bytes move and the finishPayload advance. A `Served`
+        // (forwarded) doorbell finishes on a host engine we are not standing at, and a
+        // `Refused` one finished nowhere.
+        //
+        // ⚠ **Bounded by construction, and that is the whole point.** The previous trigger
+        // — every claimed GSP register write — produced 125 251 batches in one boot and the
+        // guest's `_intrServiceStallExactList` declared `mcEngine 50` STUCK. This trigger
+        // fires at most once per locally-served doorbell (`[measured, w213]` 183 of them).
+        //
+        // ⊘ The lock is taken HERE and not around the port call above: `ring_doorbell`'s
+        // contract is that no plane lock is held across `port.ring(token)`, and this runs
+        // after it — the same shape `announce_completion` uses one statement up.
+        // ★★★★★ **ANY SERVED COMPLETION, NOT JUST A LOCALLY-SERVED ONE (w686).**
+        //
+        // ⊘⊘⊘ This read `matches!(report, ServedLocally { .. })`, so a **forwarded** doorbell —
+        // every passthrough channel, which is every CUDA channel that matters — **never posted
+        // the guest's armed os-event.** `[measured w684a]`
+        // `nonstall[raises=4 unvectored=40 (no_engine=40 ...)]`: forty of forty-four completions
+        // announced nothing, and the guest sat in `MC_SERVICE_INTERRUPTS` waiting for a wake
+        // that by construction could not come.
+        //
+        // ★ **The arm is what matters, not which executor served it.** `deliver_os_events`
+        // already implements the arm-directed rule correctly — it takes `os_events.batch()` and
+        // returns `false` when nothing is armed, so a guest that is spinning on a semaphore
+        // still gets no interrupt. The bug was never in the delivery, it was in the gate.
+        //
+        // ⊘ The old justification does not survive the evidence: *"a forwarded doorbell's work
+        // finishes on a HOST engine, at an instant this device is not standing at"* is true of
+        // the **semaphore**, and irrelevant to the **event**. The guest asked to be woken when
+        // its work finished; the work finished; we owe it the wake. Withholding it because we
+        // did not personally move the bytes is the reasoning that produced the forty.
+        //
+        // ⚠ The bound the old comment defends is preserved: this still fires **at most once per
+        // served doorbell**, never per claimed register write — which is what produced 125 251
+        // batches and a STUCK `mcEngine 50`. `is_served()` is exhaustive over the report enum,
+        // so a future serving arm is included by the compiler rather than by memory.
+        let raise_os_event = if report.is_served() {
+            let mut s = self.state.lock();
+            let PlaneState { fsm, ram, .. } = &mut *s;
+            // ⊘ The interrupt tree now has its own lock, and this is the ONLY place the two
+            // are held together. Plane (rank 0) is acquired first and the tree is a Leaf
+            // (rank 3), so the ranks are strictly increasing and `check_acquire` accepts it.
+            let mut intr = self.cpu_intr.lock();
+            let r = self.deliver_os_events(fsm, ram.as_mut(), &mut intr);
+            // ★★★★★ w574 — the DEVICE just changed the interrupt tree. Publish inside the
+            // hold, or the guest's ISR reads a shadow that only moves when the guest writes.
+            self.publish_cpu_intr(&intr);
+            r
+        } else {
+            false
+        };
+        let raise_cpu_intr = raise_cpu_intr || raise_os_event;
+        WriteOutcome {
+            // ★ `claimed`, because this device DOES own the offset — whatever the core then
+            // decided. A doorbell reported as unclaimed would tell an operator the aperture
+            // is unmodelled, which is the opposite of what happened.
+            claimed: true,
+            doorbell: Some(report),
+            raise_cpu_intr,
+            ..WriteOutcome::nothing()
+        }
+    }
+
+    /// ★★★★★ **w383 — THE LOCALLY-SERVED COMPLETION, ANNOUNCED FROM OFF THE TRAP.**
+    ///
+    /// The two guest-visible acts a [`DoorbellReport::ServedLocally`] owes — the non-stall
+    /// completion announcement and the os-event wakeup — in the order and under the
+    /// preconditions [`RegPlane::ring_doorbell`] performs them, so the deferred lane cannot
+    /// come to differ from the trap about what a local serving means. Returns whether a
+    /// message-signalled vector is owed.
+    ///
+    /// ⊘ **It does not raise anything.** On the trap the raise leaves through
+    /// [`WriteOutcome::raise_cpu_intr`]; a worker has no such wire and must go through its
+    /// own `Vmm::raise_irq`. Keeping the *decision* here and the *delivery* at the caller
+    /// is what stops the two paths from acquiring two different opinions about when a
+    /// vector goes out — the same split `announce_completion` already makes one layer down.
+    ///
+    /// ⚠ **The precondition is the report's, not this function's**: call it only for a
+    /// `ServedLocally`, i.e. only after this device witnessed the bytes move and the
+    /// finishPayload advance. A `Served` (forwarded) doorbell finishes on a host engine we
+    /// are not standing at, and announcing for one would be a notification for work whose
+    /// end we did not witness.
+    #[must_use]
+    pub fn announce_deferred_local_completion(&self, engine: Option<u32>) -> bool {
+        let raise_cpu_intr = self.announce_completion(engine);
+        let raise_os_event = {
+            let mut s = self.state.lock();
+            let PlaneState { fsm, ram, .. } = &mut *s;
+            // ⊘ The interrupt tree now has its own lock, and this is the ONLY place the two
+            // are held together. Plane (rank 0) is acquired first and the tree is a Leaf
+            // (rank 3), so the ranks are strictly increasing and `check_acquire` accepts it.
+            let mut intr = self.cpu_intr.lock();
+            let r = self.deliver_os_events(fsm, ram.as_mut(), &mut intr);
+            // ★★★★★ w574 — the DEVICE just changed the interrupt tree. Publish inside the
+            // hold, or the guest's ISR reads a shadow that only moves when the guest writes.
+            self.publish_cpu_intr(&intr);
+            r
+        };
+        raise_cpu_intr || raise_os_event
+    }
+
+    /// ★★★★★ §16.76 — **the os-event wakeup, delivered**: gate, post the batch, latch the
+    /// GSP's own stall vector, and answer whether a message should go out.
+    ///
+    /// # Where it is called from, and why there
+    ///
+    /// At the end of every **claimed GSP register write** — which is where the guest's
+    /// command doorbell (`QUEUE_HEAD`) lands, and therefore where every `GSP_RM_CONTROL`
+    /// the guest issues has just been answered. `C: src/qemu/nvkvm_gpu_emul.c:4363-4367`
+    /// calls `nvkvm_gsp_deliver_events` from the doorbell path for the same reason. ⊘ It is
+    /// **not** hung off `MC_SERVICE_INTERRUPTS` specifically: that control is one of the
+    /// things that arrives through this door, and keying on it would make the wakeup depend
+    /// on the guest choosing the fallback poll rather than on the guest submitting anything
+    /// at all.
+    ///
+    /// # ⊘⊘ THE JOIN, INSTRUMENTED — and the thing this function must not be read as
+    ///
+    /// **A wakeup is not a completion, and this device must never manufacture one.** The
+    /// data plane is passthrough: the guest's buffers are pinned into the **host GPU's**
+    /// address space, so when the guest's channel really executes, the host GPU DMAs the
+    /// release semaphore straight into guest RAM and nothing here is in the path. ⊘ The C's
+    /// *"write sema THEN signal"* (`C:4357-4361`) is its **forgery path**, not the
+    /// architecture — this port's standing limit is that *"there is NO C oracle for the
+    /// completion plane; the C FORGES completions"*
+    /// (`docs/design/c_rust_trace_differential.md`), so citing it as the model would be
+    /// citing the oracle where it is degenerate. Our job on this path is exactly one thing:
+    /// **deliver the notification**.
+    ///
+    /// That leaves one question the boot must be able to answer, and only one: **did any of
+    /// the guest's work actually execute** between this batch and the last? If not, the
+    /// notification is honest and there is nothing behind it — libcuda wakes, re-reads a
+    /// semaphore the host never DMA'd into, and blocks again. ⊘ From outside, that is
+    /// byte-identical to never having woken it.
+    ///
+    /// `[measured 2026-08-10, boot w209_ffc80f8]` this port has executed none of the
+    /// guest's work: `CE-SUBMIT → REFUSED BEFORE SUBMISSION`, and the isolate plane defaults
+    /// to `Stillborn`. So [`crate::osevent::OsEventLog::woke_with_nothing`] is expected to
+    /// equal the batch count, and that is the **diagnosis** — it names the next rung (get
+    /// the guest's channel forwarded and executed) rather than indicting the plane built
+    /// here, and emphatically not a licence to fabricate the payload.
+    fn deliver_os_events(
+        &self,
+        fsm: &mut GspFsm,
+        ram: &mut dyn kayfabe_gsp::GuestRam,
+        cpu_intr: &mut CpuIntrTree,
+    ) -> bool {
+        // ⊘ Cheap-exit on the empty registry BEFORE the FSM is touched: this runs on every
+        // claimed GSP register write, and the overwhelming majority of boots register no
+        // os-event at all. `batch()` takes the registry lock; nothing else here does.
+        let batch = self.os_events.batch();
+        if batch.is_empty() {
+            return false;
+        }
+        let outcome = fsm.deliver_events(ram, &batch);
+        self.os_events.note(&outcome);
+        let kayfabe_gsp::EventDelivery::Delivered { posted, .. } = &outcome else {
+            return false;
+        };
+        // ★★★ THE JOIN. Recorded at the instant of the announcement, against the count of
+        // servings this device actually stood at — see this function's docs.
+        self.os_events.note_join(
+            batch.len(),
+            *posted,
+            self.c.doorbells_served.load(Ordering::Relaxed),
+            self.c.doorbells_served_forwarded.load(Ordering::Relaxed),
+        );
+        // ⚠ TWO NUMBERS, ONE WORD. This is the GPU interrupt-tree vector (155 on GA106),
+        // latched so the guest's ISR has something to FIND; the MSI-X index the shell
+        // delivers is a different number entirely and belongs to the shell.
+        let Ok(vector) = crate::nonstall::gsp_stall_vector(self.chip.intr_table) else {
+            // Posted and unannounceable: the messages are in the guest's queue with
+            // nothing telling it to look. Counted, never guessed at with a default vector.
+            self.c.gsp_event_unvectored.fetch_add(1, Ordering::Relaxed);
+            return false;
+        };
+        let latched = cpu_intr.latch(vector);
+        if latched.out_of_range {
+            self.c.gsp_event_unvectored.fetch_add(1, Ordering::Relaxed);
+            return false;
+        }
+        self.c.gsp_event_raises.fetch_add(1, Ordering::Relaxed);
+        if latched.would_be_masked {
+            self.c.gsp_event_masked.fetch_add(1, Ordering::Relaxed);
+        }
+        true
+    }
+
+    /// ★★★ **§14.18 — latch the non-stall vector that says an engine finished the guest's
+    /// work**, and answer whether a message should be delivered.
+    ///
+    /// # ⊘ The precondition is the CALLER's, and it is the only one that matters
+    ///
+    /// This must be reached **only** from a [`DoorbellReport::ServedLocally`], i.e. after
+    /// the shell's CPU copy-engine executor moved the bytes and advanced the finishPayload
+    /// (`execution_plane_increments.md` §14.17). *"The completion and the notification are
+    /// the same truth claim"* — a latch on any other path would be this device announcing
+    /// work it did not witness, which is the exact shape [`crate::DoorbellReport`]'s own
+    /// doctrine makes unrepresentable one field over.
+    ///
+    /// # ★★★ Why a failed lookup is a LOUD zero and not a silent one
+    ///
+    /// Three things can go wrong and all three mean the same thing to the guest: work
+    /// happened and nothing told it. So every one of them lands in
+    /// [`Counters::nonstall_unvectored`] — the counter whose healthy value is zero — rather
+    /// than being folded into "did not raise". ⊘ There is deliberately no fallback vector:
+    /// the obvious one would be CE0's, whose row publishes `INTR_VECTOR_INVALID`, so a
+    /// default would be inventing the one answer hardware explicitly refuses to give.
+    ///
+    /// # ⚠ Masked is recorded, not acted on
+    ///
+    /// `crate::cpuintr`'s standing decision — raise regardless of the enable bits, count
+    /// the disagreement — applies unchanged, and it matters more here than for the loopback
+    /// trigger: the guest's non-stall scan ANDs `LEAF` with `LEAF_EN_SET`
+    /// (`ogkm-580: intr_nonstall_tu102.c:344-346`), so a masked latch is a message the ISR
+    /// will not attribute. [`Counters::nonstall_masked`] is what makes that one boot's
+    /// finding instead of an argument.
+    fn announce_completion(&self, engine: Option<u32>) -> bool {
+        let Some(rm_engine_type) = engine else {
+            // The guest never sent `NVA06F_CTRL_CMD_BIND` for this channel, so there is no
+            // engine to name a vector — counted, never guessed.
+            self.c.nonstall_no_engine.fetch_add(1, Ordering::Relaxed);
+            self.c.nonstall_unvectored.fetch_add(1, Ordering::Relaxed);
+            return false;
+        };
+        let Ok(vector) = crate::nonstall::non_stall_vector(self.chip.intr_table, rm_engine_type)
+        else {
+            self.c.nonstall_no_vector.fetch_add(1, Ordering::Relaxed);
+            self.c.nonstall_unvectored.fetch_add(1, Ordering::Relaxed);
+            return false;
+        };
+        // ⊘ No plane lock — the latch touches only the interrupt tree. w513.
+        let outcome = {
+            let mut t = self.cpu_intr.lock();
+            let o = t.latch(vector);
+            // ★★★★★ w574 — THE most important of the five: this is a vector being raised, and
+            // the shadow is what the guest's ISR reads to find it.
+            self.publish_cpu_intr(&t);
+            o
+        };
+        if outcome.out_of_range {
+            // A vector the captured table publishes but this chip's `LEAF` family has no
+            // row for. Nothing was latched, so nothing may be delivered — and it is the
+            // same broken promise as the two above, so it is counted the same way.
+            self.c.nonstall_out_of_range.fetch_add(1, Ordering::Relaxed);
+            self.c.nonstall_unvectored.fetch_add(1, Ordering::Relaxed);
+            return false;
+        }
+        self.c.nonstall_raises.fetch_add(1, Ordering::Relaxed);
+        if outcome.would_be_masked {
+            self.c.nonstall_masked.fetch_add(1, Ordering::Relaxed);
+        }
+        true
+    }
+
+    fn note_unclaimed(&self, bar: u8, off: u64) {
+        let mut s = self.state.lock();
+        if s.unclaimed.len() < UNCLAIMED_SAMPLE_MAX && !s.unclaimed.contains(&(bar, off)) {
+            s.unclaimed.push((bar, off));
+        }
+    }
+
+    fn note_fb_window(&self, w: FbWindow, off: u64) {
+        let mut s = self.state.lock();
+        if s.fb_window.len() < UNCLAIMED_SAMPLE_MAX && !s.fb_window.contains(&(w, off)) {
+            s.fb_window.push((w, off));
+        }
+    }
+}
+
+/// The low half's `NSEC` field, bits 31:5.
+const PTIMER_LO_NSEC_MASK: u32 = 0xFFFF_FFE0;
+
+/// Mask a value to an access width. A width of 8 or more is the whole value.
+fn mask(v: u64, size: u8) -> u64 {
+    match size {
+        1 => v & 0xFF,
+        2 => v & 0xFFFF,
+        4 => v & 0xFFFF_FFFF,
+        _ => v,
+    }
+}
+
+/// ★★ Prove a chip's three read sources are disjoint, at construction.
+///
+/// The read path asks them in a fixed order, so an overlap would be resolved *silently* by
+/// that order — a GSP register swallowed by a ROM window would read as ROM bytes forever
+/// and the FSM would simply never be consulted. A chip row is data, and data can be wrong;
+/// this is the check that makes a wrong row a refusal at realize.
+///
+/// The ROM window is checked against the GSP model by asking the model to decode every
+/// 4-byte-aligned offset in the window. That is 262 144 calls for a 1 MiB window, once, at
+/// realize — cheap enough to be exhaustive, and being exhaustive is the point: a sampled
+/// check would pass a row whose single overlapping register sat between samples.
+fn assert_disjoint(chip: &ChipProfile, model: &dyn GspModel) -> Result<(), ChipError> {
+    // ★ The counter's two halves go first, and are checked against every other source
+    // rather than only against the ones added before them. A counter half swallowed by an
+    // earlier source is the exact defect this whole check exists for, in its worst form:
+    // the guest would read a constant and spin forever with nothing printed.
+    for off in [chip.ptimer.lo_off, chip.ptimer.hi_off] {
+        if off >= chip.regs_aperture_len {
+            return Err(ChipError::OutsideAperture {
+                off,
+                aperture: chip.regs_aperture_len,
+            });
+        }
+        if chip.boot_regs.iter().any(|r| r.off == off) {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "a silicon-constant register",
+                b: "the free-running nanosecond counter",
+            });
+        }
+        if chip.rom_window.contains(off) {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the free-running nanosecond counter",
+                b: "the ROM window",
+            });
+        }
+        if model.decode_reg(0, off).is_some() {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the free-running nanosecond counter",
+                b: "the GSP register model",
+            });
+        }
+    }
+    if chip.ptimer.lo_off == chip.ptimer.hi_off {
+        return Err(ChipError::OverlappingSources {
+            off: chip.ptimer.lo_off,
+            a: "the nanosecond counter's low half",
+            b: "its own high half",
+        });
+    }
+    for r in chip.boot_regs {
+        if chip.rom_window.contains(r.off) {
+            return Err(ChipError::OverlappingSources {
+                off: r.off,
+                a: "a silicon-constant register",
+                b: "the ROM window",
+            });
+        }
+        if model.decode_reg(0, r.off).is_some() {
+            return Err(ChipError::OverlappingSources {
+                off: r.off,
+                a: "a silicon-constant register",
+                b: "the GSP register model",
+            });
+        }
+        if r.off >= chip.regs_aperture_len {
+            return Err(ChipError::OutsideAperture {
+                off: r.off,
+                aperture: chip.regs_aperture_len,
+            });
+        }
+    }
+    if chip.rom_window.base.saturating_add(chip.rom_window.len) > chip.regs_aperture_len {
+        return Err(ChipError::OutsideAperture {
+            off: chip.rom_window.base,
+            aperture: chip.regs_aperture_len,
+        });
+    }
+    let mut off = chip.rom_window.base;
+    let end = chip.rom_window.base + chip.rom_window.len;
+    while off < end {
+        if model.decode_reg(0, off).is_some() {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the ROM window",
+                b: "the GSP register model",
+            });
+        }
+        off += 4;
+    }
+    // ★★★ THE TWO HALVES OF THE BAR0 MOVING WINDOW MUST BOTH BE THERE, OR NEITHER.
+    //
+    // The register selects which framebuffer page the aperture shows. A row with the
+    // aperture and no register serves a FIXED view of framebuffer address zero while the
+    // guest believes it has moved the window — every access mis-addressed, nothing logged,
+    // and the first symptom hundreds of operations later at `kbusVerifyBar2`. That is the
+    // exact failure `#146` was written against, so it is refused at realize rather than
+    // discovered in a boot.
+    if (chip.pramin_window.len == 0) != (chip.bar0_window_reg == 0) {
+        return Err(ChipError::WindowWithoutItsRegister {
+            window_len: chip.pramin_window.len,
+            reg_off: chip.bar0_window_reg,
+        });
+    }
+    if chip.bar0_window_reg != 0 {
+        let off = chip.bar0_window_reg;
+        if off >= chip.regs_aperture_len {
+            return Err(ChipError::OutsideAperture {
+                off,
+                aperture: chip.regs_aperture_len,
+            });
+        }
+        // ★★ Checked against every other source, in the order the read path asks them, and
+        // for the sharpest version of the disjointness argument: this offset is answered
+        // BEFORE all of them, so an overlap would not merely resolve to the wrong source —
+        // it would make the other source *unreachable*, and the boot register or GSP
+        // register it swallowed would answer a guest's latch value forever.
+        if chip.boot_regs.iter().any(|r| r.off == off) {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the BAR0 moving window's own register",
+                b: "a silicon-constant register",
+            });
+        }
+        if off == chip.ptimer.lo_off || off == chip.ptimer.hi_off {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the BAR0 moving window's own register",
+                b: "the free-running nanosecond counter",
+            });
+        }
+        if chip.rom_window.contains(off) {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the BAR0 moving window's own register",
+                b: "the ROM window",
+            });
+        }
+        if chip.pramin_window.contains(off) {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the BAR0 moving window's own register",
+                b: "the PRAMIN framebuffer window",
+            });
+        }
+        if model.decode_reg(0, off).is_some() {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the BAR0 moving window's own register",
+                b: "the GSP register model",
+            });
+        }
+    }
+    // ★★★ **E2 — THE USERMODE DOORBELL, checked against every other source.**
+    //
+    // It is classified FIRST in `RegPlane::write` (earlier even than the window latch,
+    // because its port may block and therefore may hold no plane lock), so an overlap here
+    // makes the loser **unreachable** rather than merely mis-ordered — and the loser would
+    // be answered by a call into the forwarding core instead of by the register model. That
+    // is the strongest form of the argument the BAR0 window register's block above makes.
+    //
+    // ⊘ The offset is DERIVED from the usermode register base this chip advertises to the
+    // guest (`crate::doorbell_reg`), so this check also has a second edge: it refuses a
+    // chip row whose advertised usermode window collides with something it also decodes,
+    // which is a row the guest driver would have been TOLD to map over a live register.
+    if let Some(off) = crate::doorbell::doorbell_reg(chip) {
+        if off >= chip.regs_aperture_len {
+            return Err(ChipError::OutsideAperture {
+                off,
+                aperture: chip.regs_aperture_len,
+            });
+        }
+        if chip.boot_regs.iter().any(|r| r.off == off) {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the usermode doorbell register",
+                b: "a silicon-constant register",
+            });
+        }
+        if off == chip.ptimer.lo_off || off == chip.ptimer.hi_off {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the usermode doorbell register",
+                b: "the free-running nanosecond counter",
+            });
+        }
+        if off == chip.bar0_window_reg && chip.bar0_window_reg != 0 {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the usermode doorbell register",
+                b: "the BAR0 moving window's own register",
+            });
+        }
+        if chip.rom_window.contains(off) {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the usermode doorbell register",
+                b: "the ROM window",
+            });
+        }
+        if chip.pramin_window.contains(off) {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the usermode doorbell register",
+                b: "the PRAMIN framebuffer window",
+            });
+        }
+        if model.decode_reg(0, off).is_some() {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the usermode doorbell register",
+                b: "the GSP register model",
+            });
+        }
+    }
+    // ★★★ The PRAMIN window is checked against every register source, exhaustively, for a
+    // reason the other windows do not have: it is classified BEFORE the GSP model, so an
+    // overlap here would not read as the wrong source, it would make a register the FSM
+    // needs unreachable — and the FSM would then be waiting on a doorbell that can never
+    // arrive. That is the stopped-clock failure with a different cause.
+    let pramin = chip.pramin_window;
+    if pramin.len != 0 {
+        if pramin.base.saturating_add(pramin.len) > chip.regs_aperture_len {
+            return Err(ChipError::OutsideAperture {
+                off: pramin.base,
+                aperture: chip.regs_aperture_len,
+            });
+        }
+        for r in chip.boot_regs {
+            if pramin.contains(r.off) {
+                return Err(ChipError::OverlappingSources {
+                    off: r.off,
+                    a: "the PRAMIN framebuffer window",
+                    b: "a silicon-constant register",
+                });
+            }
+        }
+        for off in [chip.ptimer.lo_off, chip.ptimer.hi_off] {
+            if pramin.contains(off) {
+                return Err(ChipError::OverlappingSources {
+                    off,
+                    a: "the PRAMIN framebuffer window",
+                    b: "the free-running nanosecond counter",
+                });
+            }
+        }
+        let mut off = pramin.base;
+        let end = pramin.base + pramin.len;
+        while off < end {
+            if chip.rom_window.contains(off) {
+                return Err(ChipError::OverlappingSources {
+                    off,
+                    a: "the PRAMIN framebuffer window",
+                    b: "the ROM window",
+                });
+            }
+            if model.decode_reg(0, off).is_some() {
+                return Err(ChipError::OverlappingSources {
+                    off,
+                    a: "the PRAMIN framebuffer window",
+                    b: "the GSP register model",
+                });
+            }
+            off += 4;
+        }
+    }
+    Ok(())
+}
+
+kayfabe_util::assert_send_sync!(RegPlane);
+kayfabe_util::assert_send_sync!(RefusingRam);

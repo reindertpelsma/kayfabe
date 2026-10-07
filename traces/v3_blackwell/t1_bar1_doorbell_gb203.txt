@@ -1,0 +1,21 @@
+# T1 positive (c2ac8480): KF_ARMS=--uvm-invalidate --uvm-mean
+== hardware: 15 doorbell(s) forwarded across 2 guest token(s); 0 stranded, 0 declared by the operand gate
+FAST_VERDICT=PASS (5s)
+GUEST_RC=0
+EXIT 2026-09-26T11:37:03+00:00
+kf3: bar1db view LIVE #1: BAR1 0x90000+0x10000 (usermode page 0x0) now traps its doorbell
+kf3: DOORBELL-LEDGER tok=0x00001002 route=translated emulated=0 forwarded=2 host=0x400d000e
+kf3: DOORBELL-LEDGER tok=0x00001001 route=translated emulated=0 forwarded=2 host=0x400d000d
+kf3: DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x400d000c
+kf3: DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=4 host=0x400d000b
+kf3: bar1db view REMOVED #1: BAR1 0x90000+0x10000 (doorbells through BAR1 views so far: 10)
+kf3: DOORBELL-LEDGER tok=0x00000002 route=translated emulated=0 forwarded=0 host=0x400d000a
+kf3: DOORBELL-LEDGER tok=0x00000001 route=translated emulated=0 forwarded=15 host=0x400d0009
+
+# T1 NEGATIVE CONTROL (c2ac8480, KF3_NEGCTL_NO_BAR1_DOORBELL=1): same arms
+FAST_VERDICT=CRASH (budget 90s exceeded — a timeout IS a crash)
+kf3: ⚠ NEGATIVE CONTROL KF3_NEGCTL_NO_BAR1_DOORBELL: BAR1 usermode views are NOT classified (family Blackwell)
+ok    W392C open          = /dev/nvidia-uvm
+ok    W392C INITIALIZE    = rmStatus 0x0
+ok    W392C MM_INITIALIZE = rmStatus 0x0
+(no REGISTER_GPU verdict: UVM waits for channels whose BAR1 doorbells land in guest RAM)

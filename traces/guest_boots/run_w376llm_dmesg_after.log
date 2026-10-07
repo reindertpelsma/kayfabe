@@ -1,0 +1,178 @@
+[   21.123423] nvidia-nvlink: Nvlink Core is being initialized, major device number 239
+
+[   21.133237] nvidia 0000:00:03.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=none:owns=io+mem
+[   21.135624] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   25.425087] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   25.425188] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   27.576821] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   27.605177] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   27.605367] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   27.605435] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   29.113567] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0x31415903; hObject=0x3141590f; hClass=0x00000070; paramsSize=0x00000018; paramsStatus=0x00000000; status=0x00000056
+[   29.186806] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000000; status=0x00000056
+[   29.207104] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   29.217133] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   29.217282] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00008; hObject=0x31415900; paramsStatus=0x00000000; status=0x00000056
+[   29.224303] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   29.224309] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   29.224321] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   29.224324] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   29.225071] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00008; hObject=0x3141590f; paramsStatus=0x00000000; status=0x00000056
+[   29.225076] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ mem.c:180
+[   29.228423] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00009; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000000; status=0x00000056
+[   30.458361] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   30.459139] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   30.480592] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00001; hParent=0xa55a0030; hObject=0xa55a0070; hClass=0x0000208f; paramsSize=0x00000000; paramsStatus=0x00000000; status=0x00000056
+[   30.481729] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00001; hObject=0xa55a0070; paramsStatus=0x00000000; status=0x00000056
+[   30.481736] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_client.c:844
+[   30.481769] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:259
+[   30.846237] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00009; hObject=0xcaf00002; paramsStatus=0x00000000; status=0x00000056
+[   30.846245] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_client.c:844
+[   30.846279] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:259
+[   30.846307] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:1375
+[   30.847042] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[   31.191561] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+[   34.519727] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   34.520102] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   34.982409] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   35.009932] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   35.010114] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   35.010181] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   36.697302] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00012; hParent=0x31415903; hObject=0x3141590f; hClass=0x00000070; paramsSize=0x00000018; paramsStatus=0x00000000; status=0x00000056
+[   36.782112] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00012; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000000; status=0x00000056
+[   36.805509] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   36.817150] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   36.817301] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00012; hObject=0x31415900; paramsStatus=0x00000000; status=0x00000056
+[   36.825402] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   36.825407] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   36.825410] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   36.825413] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   36.826288] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00012; hObject=0x3141590f; paramsStatus=0x00000000; status=0x00000056
+[   36.826294] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ mem.c:180
+[   36.830131] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00013; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000000; status=0x00000056
+[   37.225019] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00013; hObject=0xcaf00002; paramsStatus=0x00000000; status=0x00000056
+[   37.225027] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_client.c:844
+[   37.225063] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:259
+[   37.225093] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:1375
+[   37.225704] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[   37.598613] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+[   48.977970] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   48.978148] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   49.425437] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   49.438266] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   49.438388] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   49.438420] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   51.033807] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0001c; hParent=0x31415903; hObject=0x3141590f; hClass=0x00000070; paramsSize=0x00000018; paramsStatus=0x00000000; status=0x00000056
+[   51.119193] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0001c; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000000; status=0x00000056
+[   51.142508] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   51.154537] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   51.154701] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d0001c; hObject=0x31415900; paramsStatus=0x00000000; status=0x00000056
+[   51.163043] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   51.163049] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   51.163052] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   51.163055] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   51.163777] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d0001c; hObject=0x3141590f; paramsStatus=0x00000000; status=0x00000056
+[   51.163783] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ mem.c:180
+[   51.167619] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0001d; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000000; status=0x00000056
+[   73.299407] python invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0, oom_score_adj=0
+[   73.299591] CPU: 2 PID: 1546 Comm: python Tainted: G           OE      6.8.0-138-generic #138-Ubuntu
+[   73.299650] Hardware name: QEMU Standard PC (Q35 + ICH9, 2009), BIOS rel-1.17.0-0-gb52ca86e094d-prebuilt.qemu.org 04/01/2014
+[   73.299671] Call Trace:
+[   73.299798]  <TASK>
+[   73.299841]  dump_stack_lvl+0x76/0xa0
+[   73.299889]  dump_stack+0x10/0x20
+[   73.299889]  dump_header+0x49/0x210
+[   73.299889]  oom_kill_process+0x118/0x280
+[   73.299889]  ? srso_return_thunk+0x5/0x5f
+[   73.299889]  ? oom_evaluate_task+0x143/0x1e0
+[   73.299889]  out_of_memory+0x103/0x350
+[   73.299889]  __alloc_pages_may_oom+0x10c/0x1d0
+[   73.299889]  __alloc_pages_slowpath.constprop.0+0x4d9/0xa70
+[   73.299889]  __alloc_pages+0x31f/0x350
+[   73.299889]  alloc_pages_mpol+0x91/0x210
+[   73.299889]  alloc_pages+0x5b/0xd0
+[   73.299889]  folio_alloc+0x15/0x40
+[   73.299889]  filemap_alloc_folio+0xf4/0x100
+[   73.299889]  __filemap_get_folio+0x199/0x2e0
+[   73.299889]  filemap_fault+0x15c/0x8e0
+[   73.299889]  __do_fault+0x3d/0x190
+[   73.299889]  do_read_fault+0x133/0x200
+[   73.299889]  do_fault+0xf0/0x260
+[   73.299889]  handle_pte_fault+0x114/0x1d0
+[   73.299889]  __handle_mm_fault+0x654/0x790
+[   73.299889]  handle_mm_fault+0x18a/0x380
+[   73.299889]  do_user_addr_fault+0x169/0x670
+[   73.299889]  exc_page_fault+0x83/0x1b0
+[   73.299889]  asm_exc_page_fault+0x27/0x30
+[   73.299889] RIP: 0033:0x784cb328adad
+[   73.299889] Code: Unable to access opcode bytes at 0x784cb328ad83.
+[   73.299889] RSP: 002b:00007ffcc1b92b80 EFLAGS: 00010293
+[   73.299889] RAX: 0000000000000000 RBX: 00000000188b5410 RCX: 0000000000200004
+[   73.299889] RDX: 00000000188b57e8 RSI: 00007ffcc1b92b80 RDI: 00000000188b5860
+[   73.299889] RBP: 00007ffcc1b92bb0 R08: 00000000188b5520 R09: 000000000001c101
+[   73.299889] R10: 000000005c000002 R11: 0000000000000007 R12: 00000000188b57d0
+[   73.299889] R13: 00000000188b5520 R14: 0000000000000003 R15: 0000000018879520
+[   73.299889]  </TASK>
+[   73.301977] Mem-Info:
+[   73.301994] active_anon:130153 inactive_anon:229645 isolated_anon:0
+                active_file:20 inactive_file:27 isolated_file:0
+                unevictable:6821 dirty:0 writeback:0
+                slab_reclaimable:5837 slab_unreclaimable:12865
+                mapped:14497 shmem:243 pagetables:1614
+                sec_pagetables:0 bounce:0
+                kernel_misc_reclaimable:0
+                free:12534 free_pcp:2090 free_cma:0
+[   73.302017] Node 0 active_anon:520612kB inactive_anon:918580kB active_file:80kB inactive_file:108kB unevictable:27284kB isolated(anon):0kB isolated(file):0kB mapped:57988kB dirty:0kB writeback:0kB shmem:972kB shmem_thp:0kB shmem_pmdmapped:0kB anon_thp:0kB writeback_tmp:0kB kernel_stack:2816kB pagetables:6456kB sec_pagetables:0kB all_unreclaimable? yes
+[   73.302029] Node 0 DMA free:7996kB boost:0kB min:348kB low:432kB high:516kB reserved_highatomic:0KB active_anon:2500kB inactive_anon:4412kB active_file:0kB inactive_file:0kB unevictable:0kB writepending:0kB present:15992kB managed:15360kB mlocked:0kB bounce:0kB free_pcp:36kB local_pcp:28kB free_cma:0kB
+[   73.302054] lowmem_reserve[]: 0 1914 1914 1914 1914
+[   73.302070] Node 0 DMA32 free:42140kB boost:0kB min:44704kB low:55880kB high:67056kB reserved_highatomic:0KB active_anon:518112kB inactive_anon:914168kB active_file:120kB inactive_file:412kB unevictable:27284kB writepending:0kB present:2080624kB managed:1999148kB mlocked:27284kB bounce:0kB free_pcp:8324kB local_pcp:8060kB free_cma:0kB
+[   73.302248] lowmem_reserve[]: 0 0 0 0 0
+[   73.302263] Node 0 DMA: 7*4kB (M) 11*8kB (UM) 6*16kB (ME) 2*32kB (ME) 3*64kB (UE) 1*128kB (E) 1*256kB (E) 2*512kB (UE) 2*1024kB (ME) 2*2048kB (ME) 0*4096kB = 8020kB
+[   73.302318] Node 0 DMA32: 1595*4kB (ME) 1469*8kB (UME) 626*16kB (UME) 192*32kB (UME) 61*64kB (UME) 21*128kB (UME) 5*256kB (UME) 0*512kB 0*1024kB 0*2048kB 0*4096kB = 42164kB
+[   73.302540] Node 0 hugepages_total=0 hugepages_free=0 hugepages_surp=0 hugepages_size=1048576kB
+[   73.302710] Node 0 hugepages_total=0 hugepages_free=0 hugepages_surp=0 hugepages_size=2048kB
+[   73.302716] 2470 total pagecache pages
+[   73.302720] 0 pages in swap cache
+[   73.302723] Free swap  = 0kB
+[   73.302726] Total swap = 0kB
+[   73.302730] 524154 pages RAM
+[   73.302733] 0 pages HighMem/MovableOnly
+[   73.302735] 20527 pages reserved
+[   73.302738] 0 pages hwpoisoned
+[   73.302742] Tasks state (memory values in pages):
+[   73.302745] [  pid  ]   uid  tgid total_vm      rss rss_anon rss_file rss_shmem pgtables_bytes swapents oom_score_adj name
+[   73.302758] [    316]     0   316    12623     1080      256      824         0   110592        0          -250 systemd-journal
+[   73.302768] [    372]     0   372    72238     6720     4576     2144         0   106496        0         -1000 multipathd
+[   73.302777] [    382]     0   382     6494     1280      672      608         0    69632        0         -1000 systemd-udevd
+[   73.302785] [    496]   998   496     4751      992      256      736         0    81920        0             0 systemd-network
+[   73.302793] [    504]   991   504     5367     1184      480      704         0    90112        0             0 systemd-resolve
+[   73.302801] [    509]   996   509    22757     1024      224      800         0    77824        0             0 systemd-timesyn
+[   73.302957] [    621]     0   621     1806      608       64      544         0    61440        0             0 cron
+[   73.302965] [    622]   101   622     2444      992      160      832         0    65536        0          -900 dbus-daemon
+[   73.302974] [    626]   989   626    77041     1088      192      896         0   102400        0             0 polkitd
+[   73.302981] [    636]     0   636     4536     1024      224      800         0    81920        0             0 systemd-logind
+[   73.302988] [    638]     0   638   117228     1408      512      896         0   135168        0             0 udisksd
+[   73.302996] [    652]   102   652    55627     1152      320      832         0    81920        0             0 rsyslogd
+[   73.303004] [    685]     0   685    79590     1376      480      896         0   122880        0             0 ModemManager
+[   73.303011] [    687]     0   687    27505     3200     2304      896         0   122880        0             0 unattended-upgr
+[   73.303019] [    693]     0   693     1537      448       32      416         0    53248        0             0 agetty
+[   73.303026] [    701]     0   701     1526      416       32      384         0    49152        0             0 agetty
+[   73.303034] [    795]     0   795     3005      800      256      544         0    73728        0         -1000 sshd
+[   73.303041] [    802]  1000   802     5023     1216      448      768         0    77824        0           100 systemd
+[   73.303049] [    803]  1000   803     5291      688      432      256         0    69632        0           100 (sd-pam)
+[   73.303057] [   1497]     0  1497     3684     1056      416      640         0    73728        0             0 sshd
+[   73.303064] [   1543]  1000  1543     3740      872      456      416         0    73728        0             0 sshd
+[   73.303072] [   1544]  1000  1544     1935      512       64      448         0    61440        0             0 bash
+[   73.303079] [   1545]  1000  1545     1530      416        0      416         0    53248        0             0 timeout
+[   73.303086] [   1546]  1000  1546  2497129   363037   350018    13019         0  4345856        0             0 python
+[   73.303095] oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=/,mems_allowed=0,global_oom,task_memcg=/user.slice/user-1000.slice/session-14.scope,task=python,pid=1546,uid=1000
+[   73.303371] Out of memory: Killed process 1546 (python) total-vm:9988516kB, anon-rss:1400072kB, file-rss:52076kB, shmem-rss:0kB, UID:1000 pgtables:4244kB oom_score_adj:0
+[   73.563509] NVRM: kgmmuClientShadowFaultBufferUnregister_IMPL: Unregistering non-replayable fault buffer failed (status=0x00000056), proceeding...
+[   73.564091] NVRM: kgmmuFaultBufferReplayableDestroy_IMPL: Unregistering Replayable Fault buffer failed (status=0x00000056), proceeding...
+[   73.564630] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[   74.150055] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d0001d; hObject=0xcaf00002; paramsStatus=0x00000000; status=0x00000056
+[   74.150078] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_client.c:844
+[   74.150143] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:259
+[   74.150249] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:1375
+[   74.150937] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[   74.521840] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213

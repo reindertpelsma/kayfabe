@@ -1,0 +1,285 @@
+//! # kayfabe-crec — the C↔Rust trace differential
+//!
+//! `docs/design/c_rust_trace_differential.md`: the C artifact is **not** history. It is a
+//! second implementation of the same contract and the only one a real NVIDIA driver has
+//! ever accepted end to end, so it is a *standing oracle* — and the recorded trace is the
+//! durable form of it, because the bench that produced it is perishable.
+//!
+//! This crate is the consumer of that artifact. Four pieces:
+//!
+//! | module | owns |
+//! |---|---|
+//! | [`format`] | the C recorder's binary format, decoded — cross-validated against `rec_dump.py` |
+//! | [`ga10x`] | the **GA10x** register model: the first real `GspModel`, and the reason `kayfabe-gsp` needs none |
+//! | [`oracle`] | the guest RAM a recorded capture can answer, and precisely the part it cannot |
+//! | [`replay`] | the transaction-segmented replay against `GspFsm`, and both sides' decoded projection |
+//! | [`ledger`] | the reader of §6.3's MUST-DIFFER table: expected-differ vs **finding** |
+//!
+//! ## ★★★ Read these four limits before believing any result
+//!
+//! They were measured *before* the capture (`c_rust_trace_differential.md` §5a), and this
+//! crate's own run reproduces every one of them:
+//!
+//! 1. **The completion plane has no C oracle at all.** The C never observes a host
+//!    completion source; it *forges* completions. 17 isolate call sites, zero poll/event
+//!    verbs. A green diff says nothing about it.
+//! 2. **The diff will never be green end to end, and a green diff would itself be the
+//!    bug.** The C has no refusal vocabulary — it echoes `NV_OK` for essentially
+//!    everything — so every MUST-DIFFER row is a position where the C emits a positive
+//!    event and we emit a refusal.
+//! 3. **Only a hermetic capture can be closed over.** With `m2fwd=on` the host GPU DMAs
+//!    into guest RAM behind the recorder. `cap1` is the one that is hermetic.
+//! 4. **`cap1` raises exactly one interrupt in 359 062 records** — and this harness
+//!    measures *which* one. It is the `INTR_LEAF_TRIGGER` self-test the driver's own
+//!    `_osVerifyInterrupts` writes (`C: nvkvm_gpu_emul.c:4326-4345`), **not** a GSP
+//!    SWGEN0: `nvkvm_gsp_raise_swgen0` is reachable only from
+//!    `nvkvm_gsp_deliver_events`, which returns immediately when no os-event is
+//!    registered, and no CUDA process runs in `cap1`. So the C posts 202 status elements
+//!    and announces **none** of them; the guest picks up `GSP_INIT_DONE` and every RPC
+//!    reply by polling. A differential that expected a busy interrupt plane here would be
+//!    surprised, and one that expected *any* GSP interrupt would be wrong.
+//!
+//! ## ★★ And the fifth, which this crate discovered rather than inherited
+//!
+//! **The C's guest-RAM read set is a strict subset of ours, so a hermetic capture cannot
+//! by itself close a replay of a correct GSP.** Two of the ledger's own rows say why:
+//! GSP-D8 (the C computes `sharedMemPhysAddr + offset` and never reads the region's page
+//! table) and GSP-D2 (the C has no flow control and never reads the peer's status-queue
+//! read pointer). Both are addresses our implementation *must* read and the capture
+//! cannot answer. [`oracle::ReconKind`] is how that is made visible instead of invisible:
+//! every such read is filled under a **named assumption** and counted, and the count is
+//! part of the result.
+//!
+//! ## Where the traces live
+//!
+//! `traces/cap1_coldboot_hermetic.rec` and `traces/cap1b_coldboot_hermetic_d6.rec`,
+//! committed uncompressed so this crate needs no decoder, no external binary and no
+//! third-party dependency. [`cap1_path`]/[`cap1b_path`] resolve them, and honour
+//! `KAYFABE_C_TRACE_CAP1`/`KAYFABE_C_TRACE_CAP1B` for a caller that has them elsewhere.
+//!
+//! ## ★★ And the sixth limit, which is about THIS CRATE rather than the capture
+//!
+//! A replay answers with a [`kayfabe_gsp::CommandPolicy`], and for a long time the only one
+//! it could answer with was [`kayfabe_gsp::EchoOk`] — the C's own acknowledge-everything
+//! baseline. That is the right null model for measuring the **transport**, and it means the
+//! **reply** plane was not being measured at all: no served control's body was ever produced,
+//! so none was ever compared. [`Replay::with_policy`] and [`served_policy`] are the fix, and
+//! `tests/cap1b_differential.rs` is where the reply plane is now differenced.
+
+pub mod format;
+pub mod ga10x;
+pub mod ledger;
+pub mod oracle;
+pub mod replay;
+
+pub use format::{CHeader, CKind, CRecord, CTrace, CrecError};
+pub use ga10x::{Ga10xArch, Ga10xGspModel};
+pub use ledger::{Census, Classified, Verdict, census, classify};
+pub use oracle::{Answer, OracleRam, ReconKind, Reconstruction, Unobserved};
+pub use replay::{Fill, Note, PolicyFactory, Projected, Replay, ReplayResult, Txn, Unprojected};
+
+use std::path::PathBuf;
+
+/// The RPC function ids the bench's driver uses, all explicit in its X-macro table
+/// (`ogkm-610: src/nvidia/inc/kernel/vgpu/rpc_global_enums.h:11, 20, 31, 57, 75, 81, 82,
+/// 83, 86, 113, 254, 256`; every id is identical at `ogkm-580`).
+///
+/// ★★ Duplicated from the conformance suite's `gspworld::FUNCTIONS` **with a mechanism,
+/// not a comment**: `tests/tests/c_trace_differential.rs` asserts `bench_abi()` equals
+/// `P580.abi()` field for field. The duplication exists because this crate must be usable
+/// without the test crate while the test crate depends on it.
+///
+/// ★ That mechanism earned its keep on the first run: three ids here were wrong
+/// (`continuation_record`, `gsp_rm_alloc`, `post_event`) and the assertion caught all
+/// three before a single divergence had been interpreted. `cap1` independently confirms
+/// `gsp_rm_alloc = 103` — 45 of its 178 recorded commands carry that function id.
+pub const FUNCTIONS: kayfabe_gsp::FunctionCodes = kayfabe_gsp::FunctionCodes {
+    set_guest_system_info: 1,
+    set_guest_system_info_ext: 0x40,
+    init_gsp_trace_crash_buffer: 0xE4,
+    free: 10,
+    dup_object: 21,
+    unloading_guest_driver: 47,
+    get_gsp_static_info: 65,
+    continuation_record: 71,
+    gsp_set_system_info: 72,
+    set_registry: 73,
+    ecc_notifier_write_ack: 202,
+    // `X(RM, UPDATE_BAR_PDE, 70)` — `ogkm-610:`/`ogkm-580: rpc_global_enums.h:80`.
+    update_bar_pde: 70,
+    gsp_rm_control: 76,
+    gsp_rm_alloc: 103,
+    gsp_init_done: 0x1001,
+    post_event: 0x1003,
+    // `E(RC_TRIGGERED, 0x1004)` — `ogkm-610: rpc_global_enums.h:257`,
+    // `ogkm-580: :256`. The simulated-fault carrier (task #111); it appears in no
+    // recorded capture, because the C artifact never emitted one.
+    rc_triggered: 0x1004,
+};
+
+/// Axis A for the driver the capture was recorded against — **580.159.04**, keyed on the
+/// full `major.minor.patch` through `kayfabe_abi::versions`, never on a literal.
+///
+/// This is a *value*, and [`replay::Replay::new`] takes it as an argument: a second driver
+/// version is a second value here and never a second code path in `kayfabe-gsp`.
+///
+/// # Panics
+///
+/// If `kayfabe_abi::versions::BENCH_DRIVER` has no wire table, or if the table describes
+/// an element layout `kayfabe-gsp` rejects. Both are build-time facts about the version
+/// tables, not run-time conditions.
+#[must_use]
+pub fn bench_abi() -> kayfabe_gsp::GspAbi {
+    let table = kayfabe_abi::versions::table_for(kayfabe_abi::versions::BENCH_DRIVER)
+        .expect("the bench driver has a wire table");
+    let wire = table.gsp_element_wire();
+    let transport = match wire.transport() {
+        None => kayfabe_gsp::TransportHdr::None,
+        Some(t) => kayfabe_gsp::TransportHdr::Mctp {
+            header_off: t.header_off,
+            header_word: t.header_word,
+            nvdm_off: t.nvdm_off,
+            nvdm_word: t.nvdm_word,
+        },
+    };
+    let init = table.gsp_init_args_wire();
+    kayfabe_gsp::GspAbi {
+        msgq: kayfabe_gsp::MsgqAbi {
+            // `MSGQ_VERSION = 0`, `MSGQ_MSG_SIZE_MIN = 16`, `MSGQ_FLAGS_SWAP_RX = 1`
+            // (`ogkm-580: src/common/shared/msgq/inc/msgq/msgq_priv.h:37-38` + `msgq.h:30-39`);
+            // `RM_PAGE_SIZE = 4096` (`ogkm-580: rm_page_size.h:38`) — the DRIVER's page
+            // size, not the host's.
+            version: 0,
+            msg_size_min: 16,
+            swap_rx_flag: 1,
+            region_page_size: 4096,
+        },
+        element: kayfabe_gsp::ElementLayout::new(
+            wire.hdr_size(),
+            wire.checksum_off(),
+            wire.seqnum_off(),
+            wire.elem_count_off(),
+            transport,
+        )
+        .expect("the version table describes a real element"),
+        rpc: kayfabe_gsp::RpcAbi {
+            header_version: 0x0300_0000,
+            codes: FUNCTIONS,
+        },
+        element_size_max: table.gsp_element_size_max(),
+        init_args: kayfabe_gsp::InitArgsLayout {
+            shared_mem_pa_off: 0,
+            pte_count_off: 8,
+            cmd_queue_off_off: 16,
+            stat_queue_off_off: 24,
+            min_size: init.min_size(),
+            element_hdr_size_off: init.element_hdr_size_off(),
+        },
+        driver: *table,
+    }
+}
+
+/// ★★ The command-policy chain a **guest** is answered by, as a [`PolicyFactory`] the
+/// replay can be handed.
+///
+/// `kayfabe_device::served_policy` for [`kayfabe_device::default_chip`] and the capture's
+/// own driver — the same call `kayfabe_device::plane::RegPlane::new` makes, so a link
+/// added or reordered there is a link added or reordered here. ⊘ Never a second list.
+///
+/// The [`unserviced::UnservicedLog`](kayfabe_device::unserviced::UnservicedLog) is fresh
+/// per run, which is what a factory is for: a log shared across
+/// [`Fill::Reconstructed`]'s rounds would count the same command up to
+/// [`Replay::MAX_ROUNDS`] times.
+#[must_use]
+pub fn served_policy() -> Box<dyn kayfabe_gsp::CommandPolicy> {
+    kayfabe_device::served_policy(
+        kayfabe_device::default_chip(),
+        bench_abi().driver,
+        // ★ Every latch fresh per run, for the same reason the unserviced log is: a
+        // shared one would carry one round's published roots and publications into the
+        // next. ⊘ The publication recorder is an OBSERVER (it always declines), so it
+        // cannot change a replayed reply byte either way — but it can change a REPORT.
+        kayfabe_device::ChainLogs::default(),
+        // Fresh per run, like the unserviced log and for its reason. ⊘ And never
+        // `set_probe_arm`ed, so the probe set `served_policy` derives from it is EMPTY:
+        // the replay answers a recorded capture, and the C whose replies it diffs
+        // against never probe-armed anything.
+        kayfabe_device::census::ControlCensusLog::new(),
+        // ⊘ **NEITHER object-model seat, and this is a decision the differential depends
+        // on.** `cap1`/`cap1b` are the C's replies, and the C had no object model — it
+        // answered `GSP_RM_ALLOC` from its own tables. Installing one here would diff our
+        // object model's answers against the C's forged ones and call the disagreement a
+        // regression. The port's chain and this one now differ by exactly these two links,
+        // which is why `tests/tests/served_chain_seats.rs` pins that the rest of the chain is
+        // unchanged by their presence. ⚠ It cites a file that EXISTS; the sentence this
+        // replaced named `crates/kayfabe-device/tests/served_chain_objects.rs`, which never
+        // did.
+        //
+        // ⚠ The publication seat could not change a replayed byte even if it were seated
+        // (`kayfabe_gsp::CommandObserver` has no return value), but it would declare into
+        // an object model, and the replay has none to declare into.
+        kayfabe_device::ObjectLinks::default(),
+    )
+}
+
+/// The committed hermetic cold-boot capture.
+///
+/// `KAYFABE_C_TRACE_CAP1` overrides, for a caller that keeps the artifact outside the
+/// repository. Nothing else is searched: a differential that silently ran against a
+/// *different* file than it reported would be worse than one that did not run.
+#[must_use]
+pub fn cap1_path() -> PathBuf {
+    if let Ok(p) = std::env::var("KAYFABE_C_TRACE_CAP1") {
+        return PathBuf::from(p);
+    }
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../traces/cap1_coldboot_hermetic.rec")
+}
+
+/// Load and decode the capture at [`cap1_path`].
+///
+/// # Errors
+///
+/// The `io::Error` if the file is missing, or the [`CrecError`] if it is not a well-formed
+/// capture. Both are returned rather than panicked, so a caller can say which happened.
+pub fn load_cap1() -> Result<Result<CTrace, CrecError>, std::io::Error> {
+    let blob = std::fs::read(cap1_path())?;
+    Ok(CTrace::parse(&blob))
+}
+
+/// ★★★ The **same experiment as `cap1`, re-captured with GSP-D6 witnessed** — the capture
+/// that can be closed *past* the first multi-element command.
+///
+/// `cap1`'s closure limit is txn 978, and the reason is a defect in the C's *recorder
+/// reach*, not in the protocol: the C acts on element 0 of a multi-element command and
+/// advances its read pointer past the continuations without reading them, so the capture
+/// holds no observation of them while they were live. `cap1b` was taken at the C's
+/// `819282d`, where `nvkvm_m3_service_cmdq` reads the continuation slots through the
+/// recorder chokepoint and **throws the bytes away** — the bug is unchanged, it is merely
+/// *witnessed*: 32/32 continuation elements observed against 0/32 before, and the reply
+/// stream proven byte-unchanged against a same-binary control (`C:
+/// traces/mode2_c_reference/README.md`, "The reply stream is unchanged — the proof").
+///
+/// ⚠ It is **not** a strictly-larger `cap1`: it is driven by `cap1_coldboot_guest.sh`
+/// rather than by hand, so its `nvidia-smi -q` is not SIGPIPE-truncated and it carries
+/// more RPC work after `GSP_INIT_DONE` (859 `GuestWrite` vs 563). The bring-up prefix is
+/// the same, which is what a differential of the boot needs.
+///
+/// `KAYFABE_C_TRACE_CAP1B` overrides, on the same terms as [`cap1_path`].
+#[must_use]
+pub fn cap1b_path() -> PathBuf {
+    if let Ok(p) = std::env::var("KAYFABE_C_TRACE_CAP1B") {
+        return PathBuf::from(p);
+    }
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../traces/cap1b_coldboot_hermetic_d6.rec")
+}
+
+/// Load and decode the capture at [`cap1b_path`].
+///
+/// # Errors
+///
+/// The `io::Error` if the file is missing, or the [`CrecError`] if it is not a well-formed
+/// capture. Both are returned rather than panicked, so a caller can say which happened.
+pub fn load_cap1b() -> Result<Result<CTrace, CrecError>, std::io::Error> {
+    let blob = std::fs::read(cap1b_path())?;
+    Ok(CTrace::parse(&blob))
+}

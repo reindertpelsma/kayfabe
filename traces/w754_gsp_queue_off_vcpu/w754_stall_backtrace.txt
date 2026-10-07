@@ -1,0 +1,39 @@
+kayfabe: ⊘⊘⊘ TRAP STALL ALARM — this vCPU thread exceeded the budget WHILE STILL INSIDE ITS MMIO TRAP. `[measured w499]` every slow trap carried a VOLUNTARY context switch, so the frame below is where it BLOCKED.
+   0: kayfabe_linux_raw::signal_unsafe::stall_alarm::timer::on_stall
+   1: <unknown>
+   2: <alloc::vec::Vec<u64> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u64, core::iter::adapters::filter::Filter<core::iter::adapters::step_by::StepBy<core::ops::range::Range<u64>>, <kayfabe_device::plane::RegPlane>::gsp_register_offsets::{closure#0}::{closure#0}>>>::from_iter
+   3: <std::sync::once::Once>::call_once_force::<<std::sync::once_lock::OnceLock<alloc::vec::Vec<u64>>>::initialize<<std::sync::once_lock::OnceLock<alloc::vec::Vec<u64>>>::get_or_init<<kayfabe_device::plane::RegPlane>::gsp_register_offsets::{closure#0}>::{closure#0}, !>::{closure#0}>::{closure#0}
+   4: <std::sys::sync::once::futex::Once>::call
+             at /rustc/48a229ceaefd4985c50990b14116b6d856af0985/library/std/src/sys/sync/once/futex.rs:183:21
+   5: <std::sync::once_lock::OnceLock<alloc::vec::Vec<u64>>>::initialize::<<std::sync::once_lock::OnceLock<alloc::vec::Vec<u64>>>::get_or_init<<kayfabe_device::plane::RegPlane>::gsp_register_offsets::{closure#0}>::{closure#0}, !>
+   6: <kayfabe_device::plane::RegPlane>::publish_gsp_registers
+   7: <kayfabe_device::plane::RegPlane>::write
+   8: <kayfabe_qemu_raw::shim::Regs>::write
+   9: kayfabe_shim_regs_write
+  10: nvkvm_trap_write
+             at ./qemu-build/../qemu-10.2.4/hw/misc/nvkvm/nvkvm.c:598:5
+  11: memory_region_write_accessor
+             at ./qemu-build/../qemu-10.2.4/system/memory.c:491:5
+  12: access_with_adjusted_size
+             at ./qemu-build/../qemu-10.2.4/system/memory.c:567:18
+  13: memory_region_dispatch_write
+             at ./qemu-build/../qemu-10.2.4/system/memory.c:1554:13
+  14: flatview_write_continue_step
+             at ./qemu-build/../qemu-10.2.4/system/physmem.c:3269:18
+  15: flatview_write_continue
+             at ./qemu-build/../qemu-10.2.4/system/physmem.c:3299:19
+  16: flatview_write
+             at ./qemu-build/../qemu-10.2.4/system/physmem.c:3330:12
+  17: address_space_write
+             at ./qemu-build/../qemu-10.2.4/system/physmem.c:3450:18
+  18: address_space_rw
+             at ./qemu-build/../qemu-10.2.4/system/physmem.c:3460:16
+  19: kvm_cpu_exec
+             at ./qemu-build/../qemu-10.2.4/accel/kvm/kvm-all.c:3248:13
+  20: kvm_vcpu_thread_fn
+             at ./qemu-build/../qemu-10.2.4/accel/kvm/kvm-accel-ops.c:53:17
+  21: qemu_thread_start
+             at ./qemu-build/../qemu-10.2.4/util/qemu-thread-posix.c:393:9
+  22: <unknown>
+  23: <unknown>
+

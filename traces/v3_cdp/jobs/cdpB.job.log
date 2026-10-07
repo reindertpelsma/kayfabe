@@ -1,0 +1,96 @@
+JOB_START cdpB 2026-09-30T17:59:32+00:00
+6498628f EXPERIMENT exp1 (not for merge): keep the SMSKED_MESSAGE kind on a vidmem leaf's host map + log every SKED-kind leaf
+BUILD rc=0 secs=28
+KF3_BUILT /workspace/bench/kf3-bins/6498628f/qemu-system-x86_64 rev=6498628f mtime=2026-09-30 18:00:01.571283193 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+CDPG_START 2026-09-30T18:00:01+00:00 bin=/workspace/bench/kf3-bins/6498628f/qemu-system-x86_64 tag=gexp1_a runs=[4:auto:1 1:auto 2:auto 3:auto 4:spin 4:block qs] scripts=6498628f
+/root/kf-cdp/scripts/cdp/cdp_probe.cu(88): warning #550-D: variable "te" was set but never used
+    double tp = -1, tc = -1, te = -1, tq = -1, tev = -1;
+                             ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+CDP_BUILD ok probe=52ca2ce19033 shim=0b6d172be1f5 src=d788df89fef2
+boot_capture rc=0; kf3 rev stamp: /workspace/apps/results/cdpp/gexp1_a/boot.driver.log:kf3-bin-rev:6498628f
+host kernel log since start: 1 lines, 0 Xid
+=== CDPH run mode=4 sched=auto trace=1 2026-09-30T18:01:12+00:00
+CDPP mode=4 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=1 parent_end=1 | t_parent_end=0.041 t_child=0.041 t_streamquery_ok=0.041 t_eventquery_ok=0.041 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0xc0ffee memcpy=0
+CDPP RESULT mode=4 sched=auto OK
+rc=0
+=== CDPH run mode=1 sched=auto trace=0 2026-09-30T18:01:21+00:00
+CDPP mode=1 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=1 parent_end=1 | t_parent_end=0.045 t_child=0.045 t_streamquery_ok=0.047 t_eventquery_ok=0.047 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0xc0ffee memcpy=0
+CDPP RESULT mode=1 sched=auto OK
+rc=0
+=== CDPH run mode=2 sched=auto trace=0 2026-09-30T18:01:24+00:00
+CDPP mode=2 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=1 parent_end=1 | t_parent_end=0.041 t_child=0.041 t_streamquery_ok=0.043 t_eventquery_ok=0.043 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0xc0ffee memcpy=0
+CDPP RESULT mode=2 sched=auto OK
+rc=0
+=== CDPH run mode=3 sched=auto trace=0 2026-09-30T18:01:27+00:00
+CDPP mode=3 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=1 parent_end=1 | t_parent_end=0.043 t_child=0.043 t_streamquery_ok=0.043 t_eventquery_ok=0.043 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0xc0ffee memcpy=0
+CDPP RESULT mode=3 sched=auto OK
+rc=0
+=== CDPH run mode=4 sched=spin trace=0 2026-09-30T18:01:31+00:00
+CDPP mode=4 sched=spin setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=1 parent_end=1 | t_parent_end=0.033 t_child=0.033 t_streamquery_ok=0.033 t_eventquery_ok=0.033 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0xc0ffee memcpy=0
+CDPP RESULT mode=4 sched=spin OK
+rc=0
+=== CDPH run mode=4 sched=block trace=0 2026-09-30T18:01:34+00:00
+CDPP mode=4 sched=block setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=1 parent_end=1 | t_parent_end=0.050 t_child=0.050 t_streamquery_ok=0.050 t_eventquery_ok=0.050 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0xc0ffee memcpy=0
+CDPP RESULT mode=4 sched=block OK
+rc=0
+=== CDPH cdpSimpleQuicksort 2026-09-30T18:01:38+00:00
+QS GPU Device 0: "Ampere" with compute capability 8.6
+QS 
+QS Initializing data:
+QS Running quicksort on 128 elements
+QS Launching kernel on the GPU
+QS Validating results: OK
+QS rc=0
+CDPP mode=1 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=1 parent_end=1 | t_parent_end=0.045 t_child=0.045 t_streamquery_ok=0.047 t_eventquery_ok=0.047 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0xc0ffee memcpy=0
+CDPP RESULT mode=1 sched=auto OK
+rc=0
+CDPP mode=2 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=1 parent_end=1 | t_parent_end=0.041 t_child=0.041 t_streamquery_ok=0.043 t_eventquery_ok=0.043 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0xc0ffee memcpy=0
+CDPP RESULT mode=2 sched=auto OK
+rc=0
+CDPP mode=3 sched=auto setflags=0
+CDPP setup sync=0
+CDPG_EXIT rc=0 2026-09-30T18:01:53+00:00
+JOB_EXIT cdpB rc=0 2026-09-30T18:01:53+00:00

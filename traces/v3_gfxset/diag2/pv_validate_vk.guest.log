@@ -1,0 +1,18 @@
+=== pv_validate_vk side=guest start=2026-09-26T18:27:12+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+vulkan ICD: /etc/vulkan/icd.d/nvidia_icd.json only
+CHECK|vk_loader|PASS|/lib/x86_64-linux-gnu/libvulkan.so.1
+CHECK|vk_instance|PASS|vkCreateInstance rc=0
+CHECK|vk_physical_device|PASS|1 device(s): NVIDIA GeForce RTX 3070
+CHECK|vk_device_is_nvidia|PASS|NVIDIA GeForce RTX 3070 (vendorID 0x10DE)
+CHECK|vk_import_host_ptr|PASS|imported 2 MiB of host memory (type 3)
+CHECK|vk_compute_dispatch|PASS|4096 elements, data[i]=i*3+7 verified on NVIDIA GeForce RTX 3070 (e.g. data[4095]=12292)
+vk_compute_dispatch=PASS
+vk_device_is_nvidia=PASS
+vk_import_host_ptr=PASS
+vk_instance=PASS
+vk_loader=PASS
+vk_physical_device=PASS
+GSET_DIG side=guest item=pv_validate_vk key=checks val=93e49a98239a6831
+GSET_DIG side=guest item=pv_validate_vk key=vk_import_host_ptr val=PASS
+GSET_OK
+=== end rc=0 secs=2 2026-09-26T18:27:14+00:00

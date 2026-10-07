@@ -1,0 +1,52 @@
+=== video_nvenc_nvdec side=host start=2026-09-26T17:19:34+00:00 host=ubuntu kernel=6.8.0-59-generic drv=580.159.04
+VIDEO_LANE_START 2026-09-26T17:19:34+00:00 host=ubuntu ff=1117840ca374e638 compact=0
+driver=580.159.04
+src rc=0 secs=0.13
+src.yuv md5=aa19742c214909f82d8da93847de2155 bytes=124416000
+enc_h264 rc=0 secs=0.51
+enc_h264.bit md5=90ba39a7843738db144b27e17ecbc5ac bytes=1933646
+swdec_h264 rc=0 secs=0.22
+swdec_h264.yuv md5=5382f3c9b1723a149dcaa44f43d17d66 frames=90
+psnr_h264 PSNR y:51.536032 u:49.252275 v:49.767867 average:50.747592
+enc_hevc rc=0 secs=0.53
+enc_hevc.bit md5=54665faef94363aacc10daf304e47b5d bytes=1951664
+swdec_hevc rc=0 secs=0.32
+swdec_hevc.yuv md5=cc5f1138ef1bf2002c99320f83085d8f frames=90
+psnr_hevc PSNR y:51.220817 u:48.615103 v:49.088162 average:50.277185
+enc_x264 rc=0 secs=2.09
+enc_x264.bit md5=dd1503ccb53c9ec084f9b4fd9480592a
+swdec_x264 rc=0 secs=0.22
+swdec_x264.yuv md5=0b3eaa0f159c2ff6f4a4bf4708e189cb
+hwdec_h264 rc=0 secs=0.64
+hwdec_h264.yuv md5=5382f3c9b1723a149dcaa44f43d17d66 bitexact_vs_sw=YES
+cuvid_h264 rc=0 secs=0.56
+cuvid_h264.yuv md5=5382f3c9b1723a149dcaa44f43d17d66 bitexact_vs_sw=YES
+hwdec_hevc rc=0 secs=0.52
+hwdec_hevc.yuv md5=cc5f1138ef1bf2002c99320f83085d8f bitexact_vs_sw=YES
+cuvid_hevc rc=0 secs=0.55
+cuvid_hevc.yuv md5=cc5f1138ef1bf2002c99320f83085d8f bitexact_vs_sw=YES
+hwdec_x264 rc=0 secs=0.53
+hwdec_x264.yuv md5=0b3eaa0f159c2ff6f4a4bf4708e189cb bitexact_vs_sw=YES
+cuvid_x264 rc=0 secs=0.54
+cuvid_x264.yuv md5=0b3eaa0f159c2ff6f4a4bf4708e189cb bitexact_vs_sw=YES
+perf_nvenc_1080p rc=0 secs=0.77
+perf_nvenc_1080p fps=0.0 
+VIDEO_LANE_END rc=0 2026-09-26T17:19:47+00:00
+GSET_DIG side=host item=video_nvenc_nvdec key=src.yuv val=aa19742c214909f82d8da93847de2155
+GSET_DIG side=host item=video_nvenc_nvdec key=enc_h264.bit val=90ba39a7843738db144b27e17ecbc5ac
+GSET_DIG side=host item=video_nvenc_nvdec key=swdec_h264.yuv val=5382f3c9b1723a149dcaa44f43d17d66
+GSET_DIG side=host item=video_nvenc_nvdec key=enc_hevc.bit val=54665faef94363aacc10daf304e47b5d
+GSET_DIG side=host item=video_nvenc_nvdec key=swdec_hevc.yuv val=cc5f1138ef1bf2002c99320f83085d8f
+GSET_DIG side=host item=video_nvenc_nvdec key=enc_x264.bit val=dd1503ccb53c9ec084f9b4fd9480592a
+GSET_DIG side=host item=video_nvenc_nvdec key=swdec_x264.yuv val=0b3eaa0f159c2ff6f4a4bf4708e189cb
+GSET_DIG side=host item=video_nvenc_nvdec key=hwdec_h264.yuv val=5382f3c9b1723a149dcaa44f43d17d66
+GSET_DIG side=host item=video_nvenc_nvdec key=cuvid_h264.yuv val=5382f3c9b1723a149dcaa44f43d17d66
+GSET_DIG side=host item=video_nvenc_nvdec key=hwdec_hevc.yuv val=cc5f1138ef1bf2002c99320f83085d8f
+GSET_DIG side=host item=video_nvenc_nvdec key=cuvid_hevc.yuv val=cc5f1138ef1bf2002c99320f83085d8f
+GSET_DIG side=host item=video_nvenc_nvdec key=hwdec_x264.yuv val=0b3eaa0f159c2ff6f4a4bf4708e189cb
+GSET_DIG side=host item=video_nvenc_nvdec key=cuvid_x264.yuv val=0b3eaa0f159c2ff6f4a4bf4708e189cb
+GSET_VAL side=host item=video_nvenc_nvdec key=psnr_h264 val=y:51.536032
+GSET_VAL side=host item=video_nvenc_nvdec key=psnr_hevc val=y:51.220817
+GSET_VAL side=host item=video_nvenc_nvdec key=nvenc_1080p val=0.0
+GSET_OK
+=== end rc=0 secs=13 2026-09-26T17:19:47+00:00

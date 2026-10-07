@@ -1,0 +1,133 @@
+=== REV: 65d75322e3db93e3848d643e640f2aded31225ee  tree:[?? traces/guest_boots/run_w230a_0aea0f2_guestring_dmesg.log ?? traces/guest_boots/run_w230a_0aea0f2_guestring_probe.log ?? traces/guest_boots/run_w230a_0aea0f2_guestring_qemu.log ] ===
+=== host: NVIDIA GeForce RTX 3060, 580.159.04 euid=0 ===
+=== R31 guest-ring channel ===
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00bbb
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=b39f95fcaa29e5e7f856b72d2910bfd0b8629860
+info  R31 guest ring      = GPU 0, euid 0 — a sealed memfd → OS_DESCRIPTOR → FIXED map → a channel whose gpFifoOffset and gpFifoEntries are the CALLER'S, with no ring allocated and no CPU map of it
+★     R31 arm D entries   = a zero `gpFifoEntries` was REFUSED BY NAME (`RING_ENTRIES_REFUSED`) and NOTHING was allocated on the way — the CPU-map counter did not move. The refusal is reachable, so the arms below are not vacuous
+info  R31 what was asked  = ring object at 0x0000000900000000, gpFifoOffset 0x0000000900003000 (= ring + 0x3000, deliberately NOT our 0x1000), gpFifoEntries 4096 (the guest's measured count; ours is 64)
+★     R31 adopt           = HOST RM BUILT THE CHANNEL (token 0x4) over an object it did not allocate, placed AS ASKED at 0x0000000900000000, told gpFifoOffset 0x0000000900003000 and gpFifoEntries 4096 — and building it asked RM for exactly ONE CPU mapping (USERD). A store into the ring is refused by name (`RING_NOT_OURS`)
+★     R31 arm B nomap     = the CPU map of the guest-backed ring was ATTEMPTED and REFUSED Other(86) — so `no CPU map` is not a policy we chose, it is the only available answer
+⚠⚠    R31 arm C unbound   = the SAME call with gpFifoOffset 0x0000000b00000000 — an address nothing was ever mapped at — was ACCEPTED (token 0x4, freed). ⇒ RM does NOT resolve gpFifoOffset at alloc time, exactly as `ogkm-580: kernel_channel.c:2664` and `kernel_graphics.c:2420-2424` say. TWO consequences: (1) arm A's acceptance is about the ioctl and the NUMBERS, not about the binding; (2) the host channel's birth does NOT have to move to the doorbell — the binding is needed when hardware FETCHES, which is after it
+★     R31 guest ring      = a host channel over the GUEST'S queue, at the GUEST'S address and the GUEST'S entry count, on real hardware. ⊘ It is NOT runnable: nothing writes `GP_PUT`, so the engine has nothing to fetch. cup2 does not pass and the completion watcher stays NOT-OBSERVED
+done — guest-ring channel probe only
+R31_RC=0
+=== R30 executor-VAS (all three arms) ===
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00bbc
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=b39f95fcaa29e5e7f856b72d2910bfd0b8629860
+info  R30 executor VAS    = GPU 0, euid 0 — build the isolate's OWN copy-engine channel over a `Vas`, then ask whether its semaphore VA is nameable from that same `Vas` (the space a GUEST channel is bound to)
+info  R30 the bar is THREE arms: A the guest space must be FREE at sem_va, B the SAME call against the control space must REFUSE, C an engine bound to the guest space must NOT resolve sem_va. ⊘ A alone is vacuous
+ok    R30 CE round-trip   = 4096 bytes moved, dst[0] 0x3f0011cf -> 0xc0ffee30 — the isolate's own copy-engine channel now EXISTS, which is what the rest of this rung is about
+ok     R30 spaces          = guest range 0xcafe0005, control range 0xcafe0009, ring 0x0000000120020000, sem 0x0000000120022000, our last payload 0x00000001 — two different address spaces
+ok    R30 arm A guest     = the isolate's 65536-byte ring object at 0x0000000120020000 (semaphore 0x0000000120022000) is UNCLAIMED in the guest-bound space — a fresh object took the address and RM reported it back
+ok    R30 arm B control   = the SAME call REFUSES at 0x0000000120020000 in the control space (NoMemory) — the probe can detect occupancy, so arm A's `Free` is a measurement and not a constant
+★     R30 arm C REFUSED   = the guest-bound engine did NOT retire a read of 0x0000000120022000 (sem 0x00000000, GP_GET 2 GP_PUT 2) — the address does not resolve in the space a guest channel is bound to. ⚠ Expect one `Xid 31 FAULT_PDE` in the host dmesg for this channel; that is the boundary, not a bug
+★     R30 executor VAS    = the isolate's CE semaphore is NOT nameable from the address space a guest channel is bound to
+done — executor-VAS probe only
+R30_RC=0
+=== R26 dictated ring ===
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00bbd
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=b39f95fcaa29e5e7f856b72d2910bfd0b8629860
+info  R26 dictated ring   = GPU 0, euid 0 — allocate a host channel whose RING OBJECT is placed at 0x0000000411000000 BY US, then make the engine fetch from it
+info  R26 the bar is TWO facts: the placement RM reports back, and GP_GET moving. ⊘ `Ok(())` from the call under test is not one of them
+ok    R26 placement       = RM reports the ring at 0x0000000411000000 AS ASKED (token 0x00000004) — necessary, and NOT yet sufficient
+★     R26 dictated ring   = ring placed at 0x0000000411000000 AS ASKED, GP_GET 1 caught GP_PUT 1, sem 0x1dea0026 (want 0x1dea0026) — the GPU FETCHED from an address we chose
+done — dictated-ring probe only
+R26_RC=0
+=== R26n negative ===
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00bbe
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=b39f95fcaa29e5e7f856b72d2910bfd0b8629860
+info  R26n neg control    = GPU 0, euid 0 — OCCUPY 0x0000000411000000 first, then ask for a channel ring at the same address. The control fires if the ask is REFUSED
+ok    R26n occupied       = 0x0000000411000000 is now taken by another object
+★     R26n CONTROL FIRED  = RM refused the channel at an occupied 0x0000000411000000 with NoMemory — the address is enforced by the driver, so R26's green is a fact about RM and not about our formatting
+done — dictated-ring negative control only
+R26N_RC=0
+=== R25 osdesc ===
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00bbf
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=b39f95fcaa29e5e7f856b72d2910bfd0b8629860
+info  R25 osdesc probe   = GPU 0, euid 0 — a sealed memfd, described to RM, mapped at 0x0000000300400000, read by a real CE
+★     R25 osdesc         = placed at 0x0000000300400000 AS ASKED, CE retired (sem 0x00000001), dst[0] 0xa112fffe -> 0x5eed0001, and 65536 of 65536 bytes compared EQUAL — guest-RAM-shaped memory reaches the host GPU's MMU
+done — osdesc probe only
+R25_RC=0
+=== R25n negative ===
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00bc0
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=b39f95fcaa29e5e7f856b72d2910bfd0b8629860
+info  R25 osdesc probe   = GPU 0, euid 0 — a sealed memfd, described to RM, mapped at 0x0000000300400000, read by a real CE  [NEGATIVE CONTROL: the memfd is deliberately NOT written, so a MISMATCH AT WORD 0 is the PASS]
+ok    R25 neg control    = the memfd was never written and the CE delivered 0x00000000 at word 0 where the pattern would have been 0x5eed0001 — the comparison CAN fail, so the positive run's agreement is a measurement
+done — osdesc probe only
+R25N_RC=0
+=== R29 guest-ram-pin ===
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00bc1
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=b39f95fcaa29e5e7f856b72d2910bfd0b8629860
+info  R29 guestpin probe = GPU 0, euid 0 — a shared memfd behind a real GuestRamPlane, granted at a NON-ZERO offset, described through the port's own `describe_guest_ram`, mapped at 0x0000000301400000
+★     R29 guestpin       = placed at 0x0000000301400000 AS ASKED, 65536 bytes at grant offset 0x10000, and the isolate's mapping reads 0x9a114001 — the word the VMM wrote at that offset. ⊘ This is the PRODUCTION route (GuestRamPlane -> describe_guest_ram -> map_gpu_va), not R25's parallel one. ⊘ It is a memfd THIS process made: it is SHAPED like guest RAM and it is not the guest's.
+done — guest-RAM pin probe only
+R29_RC=0
+=== full ladder (R7..R17, the CE round-trip) ===
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00bc2
+ok    R6 hSubdevice      = 0xcafe0002
+ok    R7 hVaSpace       = 0xcafe0005
+ok    R8 hMemory        = 0xcafe0006 (1048576 bytes)
+ok    R9 host GPU VA    = 0x0000000200200000 (FIXED, as requested)
+info  R+ control          = Other(31) (a status, not a transport failure)
+ok    R+ bogus class      = refused: Other(34)
+ok    R13.1 channel      = 0xcafe000f, engine Ce, token 0x00000004 (runlist 0 chid 4)
+ok    R13.1 schedule     = on the runlist
+ok    R13.2 channel      = 0xcafe0015, engine GrCompute, token 0x00000005 (runlist 0 chid 5)
+ok    R13.2 schedule     = on the runlist
+★     R13 token identity  = 0x00000004 != 0x00000005 (two live channels)
+ok    R13 unknown engine  = refused before any object was allocated
+★     R14 device memory   = wrote 0xa5a51234/0x5a5aedcb through mapping A, read both back through an INDEPENDENT mapping B
+ok    R14 USERD cursors   = GP_GET 0 GP_PUT 0
+ok    R14 ring bound      = a load past the object is refused BY BOUND
+★     R15 SEM LANDED      = sem 0xbeef5ea1 (want 0xbeef5ea1), GP_GET 1 -> caught GP_PUT 1 — the GPU consumed our ring and released our semaphore
+★     R17 CE COPY         = 4096 bytes: dst[0] 0x3f0011ff -> 0xc0ffee00, dst[last] 0xc0fff1ff (want 0xc0fff1ff) — read back through an INDEPENDENT mapping
+ok    R13 free channel    = group, ring, USERD and mapping
+ok    R13 free channel    = group, ring, USERD and mapping
+ok    R10 isolate         = 4 workers
+ok    R11 through-isolate = host GPU VA 0x0000000200200000, hMemory 0xcafe0006
+★     R16 sandboxed doorbell = the capability-less isolate CPU-mapped the ring, USERD and the usermode BAR0 window, and rang channel 0xcafe000e token 0x00000004
+done
+LADDER_RC=0
+--- host dmesg ---
+[199042.141262] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[199042.141281] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[199042.141288] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[199042.213980] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[199042.213991] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[199042.213995] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[199042.300907] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[199042.300920] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[199042.300925] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[199042.409959] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[199042.409970] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[199042.409975] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[199042.469923] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[199042.469934] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[199042.469938] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[199042.533279] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[199042.533327] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[199042.533334] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[199042.591829] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[199042.591840] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[199042.591845] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[199280.981525] NVRM: memMap_IMPL: CPU mapping not supported for addressSpace: 0x1
+[199281.016289] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+[199281.030583] NVRM: Xid (PCI:0000:00:07): 31, pid=1603720, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x1_20022000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[199283.077274] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+LADDERALLDONE

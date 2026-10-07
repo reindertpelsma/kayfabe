@@ -1,0 +1,27 @@
+START 2026-08-12T16:01:10Z host=ubuntu uid=0
+ENV driver=NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+ENV gpu=NVIDIA GeForce RTX 3060, 00000000:00:07.0
+ENV prog_md5=326fb0bac2d5ec7b844fb9513f6923f7 shim_md5=f4bbadc8a0a072c859990a162e4bde87
+ENV dmesg_lines_at_start=1018
+BUILD ok 8 symbols gated
+---- stage faultce ----
+BYST running pid=1047680
+PROG faultce rc=0  (⚠ a fault stage is EXPECTED to end in a failing CUDA call; rc is not the verdict)
+DMESG faultce new_lines=9 xid_lines=9
+VERDICT  VERDICT NOFAULT — nothing we did produced an error at any level
+FAULT    FAULT how=none va=0x738fba200000 first_op_rc=0(no error) sync_rc=0(no error) delivered_on=NOTHING
+VICTIM   VICTIM_STATE sync=0 dtoh=0 alloc=0 htod=0 destroy=0 -> STILL_HEALTHY
+BYST_IN  BYSTANDER_INPROC rc=0/0/0/0 value=0x1234abcd want=0x1234abcd -> ALIVE
+BYST_X   BYSTANDER_XPROC iters=4132579 fails=0 -> ALIVE
+XID      (no Xid line)
+---- stage faultgr ----
+BYST running pid=1047751
+PROG faultgr rc=0  (⚠ a fault stage is EXPECTED to end in a failing CUDA call; rc is not the verdict)
+DMESG faultgr new_lines=14 xid_lines=14
+VERDICT  VERDICT FAULT_PROVOKED how=G_wild_global_store
+FAULT    FAULT how=G_wild_global_store va=0x7a762a400000 first_op_rc=0(no error) sync_rc=700(an illegal memory access was encountered) delivered_on=A_LATER_SYNC
+VICTIM   VICTIM_STATE sync=700 dtoh=700 alloc=700 htod=700 destroy=0 -> POISONED
+BYST_IN  BYSTANDER_INPROC rc=0/700/700/700 value=0x0 want=0x1234abcd -> BROKEN
+BYST_X   BYSTANDER_XPROC iters=4195511 fails=0 -> ALIVE
+XID      [182739.699277] NVRM: Xid (PCI:0000:00:07): 31, pid=1047766, name=nvd_prog, channel 0x00000018, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x7a76_2a400000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+EXIT rc=0

@@ -1,0 +1,6 @@
+=== blocksync side=guest start=2026-09-26T14:13:09+00:00 cmd: /opt/rf/blocksync
+BLOCKSYNC device_sync dt=2.501 kernel>=2.500 err=0 val=42 ok
+BLOCKSYNC event_sync dt=2.501 kernel>=2.500 err=0 val=42 ok
+BLOCKSYNC stream_sync dt=2.501 kernel>=2.500 err=0 val=42 ok
+BLOCKSYNC_DONE ok
+=== end rc=0 secs=10 2026-09-26T14:13:19+00:00

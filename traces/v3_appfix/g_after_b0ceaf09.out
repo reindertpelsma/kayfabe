@@ -1,0 +1,27 @@
+FIX_HOOK_START 2026-09-26T04:59:44+00:00 tag=g6
+3
+SMI_LOOP_RC=124
+All done.
+CHECK malloc ok bad=0
+CHECK malloc ok bad=0
+CHECK malloc ok bad=0
+CHECK malloc ok bad=0
+CHECK malloc ok bad=0
+CHECK malloc ok bad=0
+CHECK malloc ok bad=0
+CHECK malloc ok bad=0
+CHECK malloc ok bad=0
+CHECK malloc ok bad=0
+CHECK malloc ok bad=0
+CHECK malloc ok bad=0
+CHECK malloc ok bad=0
+CHECK malloc ok bad=0
+CHECK malloc ok bad=0
+LOOP15_DONE
+APPRES side=guest app=gpu_burn verdict=PASS rc=0 secs=101 quiet=0 note=warn:cuInit returned 0 (no error)
+done
+
+Tested 1 GPUs:
+	GPU 0: OK
+=== end rc=0 secs=101 2026-09-26T05:02:04+00:00
+FIX_HOOK_EXIT rc=0 2026-09-26T05:02:04+00:00

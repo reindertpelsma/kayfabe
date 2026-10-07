@@ -1,0 +1,224 @@
+=== W311 NATIVE START 2026-08-14T19:07:49+00:00 pid=1687028 ===
+SIZES=128,512,1024,2048 ITERS=5 BATCH=2
+W322 ALLOC=[hostreg] BW=[] BW_ITERS=7 BW_TARGET_MIB=256 BW_ONLY=0 BW_REPS=0
+=== GPU STATE BEFORE ===
+name, driver_version, memory.used [MiB], utilization.gpu [%]
+NVIDIA GeForce RTX 3060, 580.159.04, 0 MiB, 4 %
+pid, process_name, used_gpu_memory [MiB]
+    ⊘ any process listed above shares this GPU and the numbers below are CONTENDED.
+=== BUILD ===
+source md5 = 2b9f9f6e96e88df44fdd66606b44e8b2
+NATIVE_GCC_RC=0
+binary md5 = 5bce6452bb5c9f89752b15a498a5de40
+
+=== ★★★★★ NEGATIVE CONTROL (BENCH_NOLAUNCH=1) — the verifier must FIRE ===
+BENCH_MODE=NOLAUNCH — ★ NEGATIVE CONTROL. Launches are SKIPPED; the verifier MUST report bad = N*N. A 0 here means the verifier is dead.
+ITER N=256 i=0 launch_ms=0.002 submit_ms=0.000 sync_ms=0.002 t0_mono_ms=366709974.071 sub_cpu_ms=0.007 syn_cpu_ms=0.002 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.003 verified=yes bad=65536
+ITER N=256 i=1 launch_ms=0.002 submit_ms=0.000 sync_ms=0.002 t0_mono_ms=366709974.419 sub_cpu_ms=0.002 syn_cpu_ms=0.002 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=65536
+ITER N=256 i=2 launch_ms=0.002 submit_ms=0.000 sync_ms=0.002 t0_mono_ms=366709974.613 sub_cpu_ms=0.002 syn_cpu_ms=0.002 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=65536
+BSWEEP N=256 K=1 rep=0 total_ms=0.001 submit_ms=0.000 sync_ms=0.000 cpu_ms=0.002 offcpu_ms=-0.002 nvcsw=0 bad=65536
+BSWEEP N=256 K=1 rep=1 total_ms=0.000 submit_ms=0.000 sync_ms=0.000 cpu_ms=0.002 offcpu_ms=-0.002 nvcsw=0 bad=65536
+BSWEEP N=256 K=4 rep=0 total_ms=0.000 submit_ms=0.000 sync_ms=0.000 cpu_ms=0.002 offcpu_ms=-0.002 nvcsw=0 bad=65536
+BSWEEP N=256 K=4 rep=1 total_ms=0.000 submit_ms=0.000 sync_ms=0.000 cpu_ms=0.002 offcpu_ms=-0.002 nvcsw=0 bad=65536
+B256_BAD=524288
+BENCH_NOLAUNCH_TOTAL_BAD=524288
+BENCH_VERDICT: PASS-NEGATIVE-CONTROL (the verifier FIRED with launches skipped)
+NATIVE_NEGCTRL_RC=0   (0 = the verifier fired; ⊘ 3 = it is DEAD and every green below is vacuous)
+
+=== ★★★★★ THE NATIVE MEASUREMENT ===
+BENCH_BUILD sizes=[128,512,1024,2048] iters=5 batch=2 verify_every=1 nolaunch=0
+BENCH_W320 batch_sweep=[] batch_reps=5 ctx_flags=0x0 hostmem=0
+BENCH_W322 alloc=[hostreg] bw=[] bw_iters=7 bw_target_mib=256 bw_only=0 bw_reps=0
+BENCH_TSTATE_AVAILABLE=yes cpu_ms=2.937130 nvcsw=0
+BENCH_CLOCK_ORIGIN mono_ms=366710053.992 real_ms=1786734475741.247
+BENCH_MODE=MEASURE
+ok   cuInit(0)
+BENCH_INIT_MS=44.45
+ok   cuDeviceGetCount(&nd)
+ok   cuDeviceGet(&d,0)
+BENCH_DEVICE=[NVIDIA GeForce RTX 3060]
+ok   cuCtxCreate_v2(&ctx,CTXFLAGS,d)
+BENCH_CTX_MS=95.80
+ok   cuModuleLoadData(&mod,PTX)
+BENCH_MODULE_MS=0.10
+ok   cuModuleGetFunction(&fn,mod,"mm")
+
+BENCH_SIZE_BEGIN N=128 per_matrix_MiB=0 device_MiB=0
+B128_ALLOC_MS=0.42
+B128_PTRS=A:0x7ce798c00000,B:0x7ce798a00000,C:0x7ce798800000
+B128_H2D_MS=0.05  (2 x 0 MiB)
+B128_GRID=(8,8)x(16,16)
+ITER N=128 i=0 launch_ms=0.151 submit_ms=0.015 sync_ms=0.136 t0_mono_ms=366710195.053 sub_cpu_ms=0.018 syn_cpu_ms=0.136 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.014 syn_stime_ms=0.121 verified=yes bad=0
+ITER N=128 i=1 launch_ms=0.133 submit_ms=0.003 sync_ms=0.130 t0_mono_ms=366710195.308 sub_cpu_ms=0.005 syn_cpu_ms=0.130 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.014 syn_stime_ms=0.117 verified=yes bad=0
+ITER N=128 i=2 launch_ms=0.133 submit_ms=0.003 sync_ms=0.130 t0_mono_ms=366710195.506 sub_cpu_ms=0.005 syn_cpu_ms=0.130 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.014 syn_stime_ms=0.116 verified=yes bad=0
+ITER N=128 i=3 launch_ms=0.133 submit_ms=0.002 sync_ms=0.130 t0_mono_ms=366710195.698 sub_cpu_ms=0.004 syn_cpu_ms=0.130 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.014 syn_stime_ms=0.117 verified=yes bad=0
+ITER N=128 i=4 launch_ms=0.132 submit_ms=0.002 sync_ms=0.130 t0_mono_ms=366710195.887 sub_cpu_ms=0.004 syn_cpu_ms=0.130 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.131 syn_stime_ms=0.000 verified=yes bad=0
+
+B128_N=128
+B128_ITERS=5
+B128_FIRST_MS=0.151
+B128_MEDIAN_MS=0.133
+B128_P90_MS=0.133
+B128_MIN_MS=0.132
+B128_MAX_MS=0.133
+B128_MEAN_MS=0.133
+B128_GFLOPS=31.624
+B128_BATCH=2
+B128_BATCH_TOTAL_MS=0.263
+B128_BATCH_PER_LAUNCH_MS=0.131
+B128_BATCH_GFLOPS=31.921
+B128_BATCH_BAD=0
+B128_H2D_MS=0.055
+B128_D2H_MED_MS=0.013
+B128_ALLOC_MS2=0.422
+B128_SUBMIT_MED_MS=0.003
+B128_SYNC_MED_MS=0.130
+B128_SYNC_CPU_MED_MS=0.130
+B128_SYNC_OFFCPU_MED_MS=-0.000
+B128_SYNC_NVCSW_MED=0.0
+B128_SUBMIT_CPU_MED_MS=0.005
+B128_SUBMIT_MAX_MS=0.003
+B128_SYNC_MAX_MS=0.130
+B128_WINDOW_MONO_MS=366710195.053..366710196.019
+B128_BAD=0
+B128_MAXERR=0
+BSUM N=128 iters=5 first_ms=0.151 med_ms=0.133 p90_ms=0.133 min_ms=0.132 max_ms=0.133 gflops=31.624 batch_per_launch_ms=0.131 batch_gflops=31.921 h2d_ms=0.055 d2h_med_ms=0.013 submit_med_ms=0.003 sync_med_ms=0.130 sync_cpu_med_ms=0.130 sync_offcpu_med_ms=-0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.005 bad=0 maxerr=0
+BENCH_SIZE_END N=128
+
+BENCH_SIZE_BEGIN N=512 per_matrix_MiB=1 device_MiB=3
+B512_ALLOC_MS=2.18
+B512_PTRS=A:0x7ce798c00000,B:0x7ce798800000,C:0x7ce798600000
+B512_H2D_MS=0.34  (2 x 1 MiB)
+B512_GRID=(32,32)x(16,16)
+ITER N=512 i=0 launch_ms=6.182 submit_ms=0.007 sync_ms=6.175 t0_mono_ms=366710200.603 sub_cpu_ms=0.010 syn_cpu_ms=6.175 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=6.044 syn_stime_ms=0.131 verified=yes bad=0
+ITER N=512 i=1 launch_ms=6.238 submit_ms=0.005 sync_ms=6.234 t0_mono_ms=366710208.034 sub_cpu_ms=0.007 syn_cpu_ms=6.234 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=6.042 syn_stime_ms=0.191 verified=yes bad=0
+ITER N=512 i=2 launch_ms=6.217 submit_ms=0.003 sync_ms=6.214 t0_mono_ms=366710214.881 sub_cpu_ms=0.006 syn_cpu_ms=6.214 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=6.214 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=512 i=3 launch_ms=6.142 submit_ms=0.003 sync_ms=6.139 t0_mono_ms=366710221.695 sub_cpu_ms=0.005 syn_cpu_ms=6.139 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=6.139 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=512 i=4 launch_ms=5.989 submit_ms=0.003 sync_ms=5.986 t0_mono_ms=366710228.433 sub_cpu_ms=0.005 syn_cpu_ms=5.986 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=5.986 syn_stime_ms=0.000 verified=yes bad=0
+
+B512_N=512
+B512_ITERS=5
+B512_FIRST_MS=6.182
+B512_MEDIAN_MS=6.217
+B512_P90_MS=6.238
+B512_MIN_MS=5.989
+B512_MAX_MS=6.238
+B512_MEAN_MS=6.146
+B512_GFLOPS=43.179
+B512_BATCH=2
+B512_BATCH_TOTAL_MS=12.161
+B512_BATCH_PER_LAUNCH_MS=6.081
+B512_BATCH_GFLOPS=44.145
+B512_BATCH_BAD=0
+B512_H2D_MS=0.343
+B512_D2H_MED_MS=0.098
+B512_ALLOC_MS2=2.182
+B512_SUBMIT_MED_MS=0.003
+B512_SYNC_MED_MS=6.214
+B512_SYNC_CPU_MED_MS=6.214
+B512_SYNC_OFFCPU_MED_MS=-0.000
+B512_SYNC_NVCSW_MED=0.0
+B512_SUBMIT_CPU_MED_MS=0.006
+B512_SUBMIT_MAX_MS=0.005
+B512_SYNC_MAX_MS=6.234
+B512_WINDOW_MONO_MS=366710200.603..366710234.422
+B512_BAD=0
+B512_MAXERR=0
+BSUM N=512 iters=5 first_ms=6.182 med_ms=6.217 p90_ms=6.238 min_ms=5.989 max_ms=6.238 gflops=43.179 batch_per_launch_ms=6.081 batch_gflops=44.145 h2d_ms=0.343 d2h_med_ms=0.098 submit_med_ms=0.003 sync_med_ms=6.214 sync_cpu_med_ms=6.214 sync_offcpu_med_ms=-0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.006 bad=0 maxerr=0
+BENCH_SIZE_END N=512
+
+BENCH_SIZE_BEGIN N=1024 per_matrix_MiB=4 device_MiB=12
+B1024_ALLOC_MS=2.43
+B1024_PTRS=A:0x7ce789a00000,B:0x7ce789400000,C:0x7ce788e00000
+B1024_H2D_MS=1.07  (2 x 4 MiB)
+B1024_GRID=(64,64)x(16,16)
+ITER N=1024 i=0 launch_ms=43.749 submit_ms=0.007 sync_ms=43.742 t0_mono_ms=366710256.864 sub_cpu_ms=0.011 syn_cpu_ms=43.741 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=43.741 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=1024 i=1 launch_ms=44.042 submit_ms=0.007 sync_ms=44.035 t0_mono_ms=366710305.392 sub_cpu_ms=0.010 syn_cpu_ms=44.035 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=44.035 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=1024 i=2 launch_ms=43.411 submit_ms=0.007 sync_ms=43.404 t0_mono_ms=366710351.754 sub_cpu_ms=0.009 syn_cpu_ms=43.404 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=43.405 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=1024 i=3 launch_ms=43.364 submit_ms=0.007 sync_ms=43.357 t0_mono_ms=366710397.555 sub_cpu_ms=0.009 syn_cpu_ms=43.358 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=43.358 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=1024 i=4 launch_ms=43.625 submit_ms=0.008 sync_ms=43.617 t0_mono_ms=366710443.326 sub_cpu_ms=0.011 syn_cpu_ms=43.617 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=43.617 syn_stime_ms=0.000 verified=yes bad=0
+
+B1024_N=1024
+B1024_ITERS=5
+B1024_FIRST_MS=43.749
+B1024_MEDIAN_MS=43.625
+B1024_P90_MS=44.042
+B1024_MIN_MS=43.364
+B1024_MAX_MS=44.042
+B1024_MEAN_MS=43.610
+B1024_GFLOPS=49.226
+B1024_BATCH=2
+B1024_BATCH_TOTAL_MS=88.290
+B1024_BATCH_PER_LAUNCH_MS=44.145
+B1024_BATCH_GFLOPS=48.646
+B1024_BATCH_BAD=0
+B1024_H2D_MS=1.068
+B1024_D2H_MED_MS=0.472
+B1024_ALLOC_MS2=2.427
+B1024_SUBMIT_MED_MS=0.007
+B1024_SYNC_MED_MS=43.617
+B1024_SYNC_CPU_MED_MS=43.617
+B1024_SYNC_OFFCPU_MED_MS=0.000
+B1024_SYNC_NVCSW_MED=0.0
+B1024_SUBMIT_CPU_MED_MS=0.010
+B1024_SUBMIT_MAX_MS=0.008
+B1024_SYNC_MAX_MS=44.035
+B1024_WINDOW_MONO_MS=366710256.864..366710486.951
+B1024_BAD=0
+B1024_MAXERR=0
+BSUM N=1024 iters=5 first_ms=43.749 med_ms=43.625 p90_ms=44.042 min_ms=43.364 max_ms=44.042 gflops=49.226 batch_per_launch_ms=44.145 batch_gflops=48.646 h2d_ms=1.068 d2h_med_ms=0.472 submit_med_ms=0.007 sync_med_ms=43.617 sync_cpu_med_ms=43.617 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.010 bad=0 maxerr=0
+BENCH_SIZE_END N=1024
+
+BENCH_SIZE_BEGIN N=2048 per_matrix_MiB=16 device_MiB=48
+B2048_ALLOC_MS=8.91
+B2048_PTRS=A:0x7ce785e00000,B:0x7ce784c00000,C:0x7ce783a00000
+B2048_H2D_MS=3.69  (2 x 16 MiB)
+B2048_GRID=(128,128)x(16,16)
+ITER N=2048 i=0 launch_ms=335.205 submit_ms=0.009 sync_ms=335.195 t0_mono_ms=366710613.903 sub_cpu_ms=0.014 syn_cpu_ms=335.194 syn_offcpu_ms=0.001 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=335.194 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=2048 i=1 launch_ms=330.723 submit_ms=0.010 sync_ms=330.713 t0_mono_ms=366710967.682 sub_cpu_ms=0.014 syn_cpu_ms=330.697 syn_offcpu_ms=0.016 syn_nvcsw=0 syn_nivcsw=1 syn_utime_ms=330.698 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=2048 i=2 launch_ms=333.433 submit_ms=0.020 sync_ms=333.414 t0_mono_ms=366711307.760 sub_cpu_ms=0.023 syn_cpu_ms=333.412 syn_offcpu_ms=0.002 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=333.411 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=2048 i=3 launch_ms=341.401 submit_ms=0.009 sync_ms=341.392 t0_mono_ms=366711650.528 sub_cpu_ms=0.013 syn_cpu_ms=341.392 syn_offcpu_ms=-0.001 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=341.392 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=2048 i=4 launch_ms=338.534 submit_ms=0.010 sync_ms=338.524 t0_mono_ms=366712001.345 sub_cpu_ms=0.013 syn_cpu_ms=338.476 syn_offcpu_ms=0.048 syn_nvcsw=0 syn_nivcsw=2 syn_utime_ms=338.443 syn_stime_ms=0.033 verified=yes bad=0
+
+B2048_N=2048
+B2048_ITERS=5
+B2048_FIRST_MS=335.205
+B2048_MEDIAN_MS=338.534
+B2048_P90_MS=341.401
+B2048_MIN_MS=330.723
+B2048_MAX_MS=341.401
+B2048_MEAN_MS=336.023
+B2048_GFLOPS=50.748
+B2048_BATCH=2
+B2048_BATCH_TOTAL_MS=677.974
+B2048_BATCH_PER_LAUNCH_MS=338.987
+B2048_BATCH_GFLOPS=50.680
+B2048_BATCH_BAD=0
+B2048_H2D_MS=3.688
+B2048_D2H_MED_MS=1.846
+B2048_ALLOC_MS2=8.911
+B2048_SUBMIT_MED_MS=0.010
+B2048_SYNC_MED_MS=338.524
+B2048_SYNC_CPU_MED_MS=338.476
+B2048_SYNC_OFFCPU_MED_MS=0.016
+B2048_SYNC_NVCSW_MED=0.0
+B2048_SUBMIT_CPU_MED_MS=0.014
+B2048_SUBMIT_MAX_MS=0.020
+B2048_SYNC_MAX_MS=341.392
+B2048_WINDOW_MONO_MS=366710613.903..366712339.879
+B2048_BAD=0
+B2048_MAXERR=0
+BSUM N=2048 iters=5 first_ms=335.205 med_ms=338.534 p90_ms=341.401 min_ms=330.723 max_ms=341.401 gflops=50.748 batch_per_launch_ms=338.987 batch_gflops=50.680 h2d_ms=3.688 d2h_med_ms=1.846 submit_med_ms=0.010 sync_med_ms=338.524 sync_cpu_med_ms=338.476 sync_offcpu_med_ms=0.016 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.014 bad=0 maxerr=0
+BENCH_SIZE_END N=2048
+BENCH_CLOCK_END mono_ms=366713037.618 real_ms=1786734478724.873
+
+BENCH_SIZES_DONE=4
+BENCH_TOTAL_BAD=0
+BENCH_VERDICT: PASS (every timed iteration verified)
+DONE
+NATIVE_RC=0
+NATIVE_WALL_S=4
+
+=== GPU STATE AFTER ===
+0 MiB, 3 %
+=== W311 NATIVE EXIT rc=0 at 2026-08-14T19:08:01+00:00 ===

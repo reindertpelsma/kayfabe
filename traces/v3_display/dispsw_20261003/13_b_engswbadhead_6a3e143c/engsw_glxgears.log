@@ -1,0 +1,193 @@
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9000: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9001: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9002: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9003: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9004: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9005: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9006: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9007: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9008: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9009: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de900a: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de900b: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de900c: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de900d: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de900e: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de900f: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9010: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9011: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9012: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9013: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9014: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9015: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9016: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9017: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9018: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9019: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de901a: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de901b: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de901c: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de901d: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de901e: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de901f: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9020: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9021: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9022: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9023: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9024: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9025: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9026: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9027: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9028: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9029: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de902a: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de902b: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de902c: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de902d: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de902e: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de902f: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9030: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9031: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9032: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9033: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9034: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9035: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9036: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9037: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9038: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9039: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de903a: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de903b: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de903c: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de903d: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de903e: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de903f: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+7 frames in 5.8 seconds =  1.207 FPS
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9040: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9041: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9042: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9043: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9044: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9045: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9046: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9047: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9048: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9049: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de904a: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de904b: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de904c: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de904d: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de904e: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de904f: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9050: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9051: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9052: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9053: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9054: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9055: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9056: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9057: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9058: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de9059: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de905a: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de905b: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de905c: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de905d: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de905e: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeef0100 handle 0xc0de905f: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeef0100 handle 0xbeef4903: ioctl=0 status=0

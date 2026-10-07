@@ -1,0 +1,15 @@
+=== w409 LLM BOOT 2026-09-24T01:45:28+00:00 tag=w825llm ===
+REFRESH in binary: 1 (0 ⇒ STOP, this predates w406)
+boot_capture rc=5 (⊘ read the artefacts, not the code)
+--- LEDGER tag=w825llm ---
+[llm]      W392_OUTCOME=(P) ★★★★★ PASS — 16 tokens AND the text matches the CPU
+[llm]  W392_GPU_TOKENS=16  W392_GPU_RC=0
+[llm]  W392_CPU_TOKENS=16  W392_CPU_RC=0
+[llm]  W392_GPU_TEXT=[ ______. A. Paris B. London C. New York D]
+[llm]  W392_CPU_TEXT=[ ______. A. Paris B. London C. New York D]
+[llm]  W392_MINMM_SUM=ABSENT (64 = the small path is CORRECT)
+[llm]  W392_XIDS=0
+--- ⚠ A TOKEN COUNT IS NOT A PASS: the two texts must MATCH ---
+[xid]  host Xid lines: 0
+[trig] MMUINVAL-REFRESH: 803  worst refresh_ms: refresh_ms=22.91
+--- END LEDGER tag=w825llm ---
