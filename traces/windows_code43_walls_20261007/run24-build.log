@@ -1,0 +1,5 @@
+HEAD is now at a6f84d0d9 Birth experimental kernel OFA channels after native context validation
+V3_GATES_SUMMARY pass=9 fail=0
+V3_GATES_BIRTHS births=11 user=11 refused=0 ok=1
+V3_GATES_EXIT pass=9 fail=0 births_ok=1 2026-10-07T02:12:53+02:00
+KF3_BUILT /var/lib/kf-windows-20261005/kf3-bins/a6f84d0d/qemu-system-x86_64 rev=a6f84d0d mtime=2026-10-07 02:13:04.369542130 +0200 (shared build dir /var/lib/kf-windows-20261005/qemu-build-kf3)

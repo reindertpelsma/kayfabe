@@ -1,0 +1,12 @@
+tmo_stage_20261006/windows-13-qemu.log.gz	rpcs=452	teardown_at=296	last=fn103/c56f AMPERE_CHANNEL_GPFIFO_A	result=0x40
+windows_exact_decode_20261007/run14-qemu.log.gz	rpcs=452	teardown_at=296	last=fn103/c56f AMPERE_CHANNEL_GPFIFO_A	result=0x40
+windows_exact_decode_20261007/run15-qemu.log.gz	rpcs=452	teardown_at=296	last=fn103/c56f AMPERE_CHANNEL_GPFIFO_A	result=0x40
+run16-qemu.log.gz	rpcs=454	teardown_at=297	last=fn103/5080 NV50_DEFERRED_API_CLASS	result=0x56
+run17-qemu.log.gz	rpcs=457	teardown_at=300	last=fn103/5080 NV50_DEFERRED_API_CLASS	result=0x56
+run18-qemu.log.gz	rpcs=495	teardown_at=322	last=fn76/2080012b NV2080_CTRL_CMD_GPU_PROMOTE_CTX	result=refused(unserviced)
+run19-qemu.log.gz	rpcs=495	teardown_at=322	last=fn76/2080012b NV2080_CTRL_CMD_GPU_PROMOTE_CTX	result=refused(unserviced)
+run20-qemu.log.gz	rpcs=495	teardown_at=322	last=fn76/2080012b NV2080_CTRL_CMD_GPU_PROMOTE_CTX	result=refused(unserviced)
+run21-qemu.log.gz	rpcs=587	teardown_at=382	last=fn76/2080012b NV2080_CTRL_CMD_GPU_PROMOTE_CTX	result=refused(unserviced)
+run22-qemu.log.gz	rpcs=630	teardown_at=408	last=fn76/2080012b NV2080_CTRL_CMD_GPU_PROMOTE_CTX	result=refused(unserviced)
+run23-qemu.log.gz	rpcs=671	teardown_at=433	last=fn76/2080012b NV2080_CTRL_CMD_GPU_PROMOTE_CTX	result=refused(unserviced)
+run24-qemu.log.gz	rpcs=695	teardown_at=448	last=fn76/2080220e NV2080_CTRL_CMD_GET_RC_RECOVERY	result=refused(unserviced)

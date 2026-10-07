@@ -5,6 +5,24 @@
 success or master-promotion claim. Borrowed RTX4070; host595.91.07 remains attached
 to its ordinary display driver. Only owned fresh-overlay Kayfabe VMs are used.
 
+> **Correction, 2026-10-07 (after run24; [analysis](#abort-point-analysis-against-the-vfio-reference)).**
+> The run sections below read "24 saved assertions unchanged" as weak evidence that
+> a wall might not matter. That inference is wrong. The kernel-RM assert journal
+> is a fixed 4 KiB buffer, and a 168-byte `RmRC2SwRmAssert3_RECORD` gives exactly
+> 24 slots (OGKM 580.65.06 `journal.c:79,187,953`, `rmcd.h:236-245`, sizes checked
+> with a compiler). Once it is full, later asserts are dropped. So the dump keeps
+> only the first 24 asserts of the boot and *cannot* show a late wall. The RPC
+> traces of runs 13-24 show that each wall was the abort point. In every run,
+> the driver's teardown (20 or more consecutive `Free` RPCs) begins with the RPC
+> right after the first refusal that StartDevice does not tolerate. The livedump
+> is `VIDEO_MINIPORT_FAILED_LIVEDUMP` (0x1B0), Arg1=2 "Start device failed",
+> NTSTATUS 0xC000009A. It is identical whether the abort RPC returned 0x40 (runs
+> 13-15) or 0x56 (runs 16-24), so it is a generic StartDevice mapping, not the
+> RM status. Also, OGKM `rcdbRmAssertStatus` stores the NV_STATUS as the record
+> level (`journal.c:2421-2461`). The two level-86 (0x56) saved records therefore
+> match kayfabe refusals. Earlier tool notes said that "level is not NV_STATUS";
+> this holds for level-1 records only.
+
 ## First repair: Device-shared default VA resolution
 
 The failing COPY2 channel has hVASpace=0 under client c1d00012. Its Device
@@ -457,6 +475,100 @@ Native sourceff12e6a7f2d22a72ee0380d0e27555aca716a3a9 probes OFA0/engine33:
 refuses class selection, completes real GPU fence seq1 and releases all ring/
 channel resources. Host display stays enabled. This gates default-off
 KF3_KERNEL_OFA_CTX=1 with private T-space and actual context ownership; OFA/codec/
-CE submissions remain unsupported. Windows run24 pending.
+CE submissions remain unsupported. Windows run24 pending (superseded 2026-10-07:
+[run24 result](#run24-ofa0-promotion-succeeds-the-abort-moves-to-get_rc_recovery)).
 
 OFA guest increment:101 QEMU tests pass; Clippy and claims new0.
+
+## Run24: OFA0 promotion succeeds; the abort moves to GET_RC_RECOVERY
+
+Product/QEMU a6f84d0d9de8ba2022868356466fc2a4fab02343 (see [command](run24-command.json));
+[status](run24-status.json), [trace](run24-qemu.log.gz), [requests](run24-requests.log),
+[completion](run24-complete.json), [host health](run24-host-health.txt),
+[9/9 gates](run24-gates.log), [immutable build](run24-build.log). The controller
+saw two identical status samples after more than 90 s of uptime: the NVIDIA
+adapter has ConfigManagerErrorCode 43 and nvidia-smi exits 9. The guest shut down
+cleanly, the unit result is success, and the host RTX 4070 on 595.91.07 is healthy.
+
+Kernel OFA0 on client c1d0001c, channel ff040007 (engine 0x33) is born as a real
+USER host channel with an owned C9FA object. Its legacy Falcon promotion returns 0
+and its GPFIFO_SCHEDULE returns 0. Eleven Translated channels are born, with the
+same two real scrubber GPU submissions. No OFA, codec or CE work is submitted or
+emulated. The next refusal is NV2080_CTRL_CMD_GET_RC_RECOVERY (0x2080220e,
+`ctrl2080rc.h:235-269`); the driver starts tearing down immediately after it
+(see the analysis below).
+
+[Fresh watchdog recovery](run24-watchdog-recovery.log) used the audited read-only
+NBD/NTFS tool after the supervisor stopped, and cleanup was verified. The dump
+mtime is 23 s after experiment start. The [comparison](run24-watchdog-comparison.json)
+shows all 24 assertions identical to run23 and run22. The outer NVCD is still
+one byte short, so no checksum claim is made. The raw dump remains private on
+the controller.
+
+## Abort-point analysis against the VFIO reference
+
+**Method.** The VFIO boots boundary-vfio-8/9/10 (same baseline disk, Windows
+580.88, real RTX 4070 behind VFIO) all ended with Code 0 and nvidia-smi exit 0.
+Each one has a complete narrow GSP-observer export: 8208 records, no drops and no
+sequence gaps for vfio-10. No new VFIO run was needed. `scripts/bench/windows/abort_point.py`
+decodes that export and pairs requests with replies in queue order. It also parses
+the kayfabe `KF3_RPC_TRACE` logs. Handles and timestamps are left out of every key.
+The control names come from OGKM 580.65.06 headers
+([names](ogkm-580.65.06-control-names.txt)).
+
+**Abort point per run** ([table](abort-points-run13-24.txt)):
+
+| runs | last RPC before teardown | kayfabe result | RPCs before teardown |
+|---|---|---|---|
+| 13-15 | alloc AMPERE_CHANNEL_GPFIFO_A (COPY2) | 0x40 | 296 |
+| 16-17 | alloc NV50_DEFERRED_API_CLASS | 0x56 | 297 / 300 |
+| 18-23 | GPU_PROMOTE_CTX (GR, then NVDEC, then NVENC1, then OFA) | refused | 322 → 433 |
+| 24 | GET_RC_RECOVERY | refused | 448 |
+
+Every repair moved the abort point forward. About 50 other refusals earlier in
+each boot are tolerated, and the real GSP itself returns 24 non-OK statuses
+before this point (for example 0x20800a87 and 0x20800b05 both return 0x56).
+So a refusal is fatal only at specific StartDevice call sites.
+
+**VFIO at the same point.** In all three VFIO boots, GET_RC_RECOVERY is at RPC
+index 2515. The physical GSP answers with status 0 and `rcEnable=0`
+(DISABLED), with rmctrlFlags 0x40154 (PRIVILEGED, ROUTE_TO_PHYSICAL,
+PHYSICAL_IMPLEMENTED_ON_VGPU_GUEST, among others). Windows then calls
+SET_RC_RECOVERY with DISABLED, followed by 25 NV01_EVENT_KERNEL_CALLBACK (0x78)
+allocations plus EVENT_SET_NOTIFICATION, and then display bring-up. OGKM's
+vGPU-guest handler `subdeviceCtrlCmdGetRcRecovery_VF` (`kernel_rc_ctrl.c:321-329`)
+returns DISABLED as a constant.
+
+**Forecast** ([full list](vfio10-forecast-after-run24.txt)). After index 2515,
+98 distinct controls/classes (991 RPCs) were either refused or never seen in
+any kayfabe run 13-24. In VFIO order, the first ones are SET_RC_RECOVERY,
+class 0x78, NV0073 display event/active/SOR/DP-AUX controls, and NVC372
+IS_MODE_POSSIBLE (156 calls). After those come ZBC_CLEAR, DMA_SET_DEFAULT_VASPACE,
+FIFO_DISABLE_CHANNELS and the perf/thermal 0x2080a0xx groups. Some of these
+are fatal and some are tolerated; only a boot can tell which. This list lets
+source-backed support be implemented in batches instead of one wall per boot.
+
+**Ranked hypotheses.**
+1. *(High; direct evidence in 12 runs.)* Code43/smi9 is StartDevice aborting
+   on the first refusal it does not tolerate. Today that is GET_RC_RECOVERY.
+   0xC000009A is the KMD's generic StartDevice status.
+2. *(High, as a structural fact.)* The 24 saved assertions are a full 4 KiB
+   journal holding the first asserts of the boot. They cannot identify or
+   exclude late walls, so their invariance is not evidence against causality.
+3. *(Medium.)* More fatal walls follow inside the forecast list, especially in
+   display bring-up (NV0073/NVC372). These need real semantics, not success
+   stubs.
+4. *(Low; no evidence.)* Non-RPC causes such as BAR sizes, the 4 GiB virtual FB
+   or timing. In every run the abort coincides with an RPC refusal, and no
+   BAR0 or timing difference has been needed to explain it. Not ruled out for
+   later walls.
+
+**Next experiment (proposed, not implemented).** Give 0x2080220e/0x2080220d a
+VM-scoped, source-backed implementation. GET reports the VM's own RC-recovery
+setting, initially DISABLED (matching the VFIO reply and the `_VF` HAL). SET
+records DISABLED and refuses ENABLED unless kayfabe implements RC recovery for
+the VM's own channels. Nothing is forwarded to the host GPU's global policy.
+Then boot run25 and check the predicted outcome: the teardown moves past VFIO
+index 2516, and the new abort RPC is one of the forecast entries (most likely
+class 0x78 or an NV0073 control). If the abort is anywhere else, hypothesis 1
+needs revisiting.

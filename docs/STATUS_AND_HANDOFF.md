@@ -11,6 +11,20 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-07
 
+**Code43 cause analysis, 2026-10-07 (corrects the paragraph below).** Run24 at
+a6f84d0d births and promotes OFA0. Code43/smi9 is verified and the 24 assertions
+are unchanged. Reading the unchanged list as "the walls are not the cause" is
+wrong. The RM assert journal is a 4 KiB buffer that holds exactly 24 records
+(OGKM `journal.c`, `rmcd.h`), so it keeps only the first asserts of the boot.
+In runs 13-24, the driver's Free-teardown begins right after the first
+StartDevice refusal it does not tolerate. That RPC was C56F, then 5080, then
+GPU_PROMOTE_CTX, and is now GET_RC_RECOVERY 0x2080220e. The livedump is 0x1B0
+"Start device failed" with STATUS_INSUFFICIENT_RESOURCES, whatever the RM status.
+Three Code43-free VFIO boots return rcEnable=DISABLED at the same RPC index
+(2515), then continue. A VFIO-derived forecast lists 98 later controls/classes
+that kayfabe has never served. Next: VM-scoped RC_RECOVERY, then run25 to test
+the prediction. [Analysis](../traces/windows_code43_walls_20261007/README.md#abort-point-analysis-against-the-vfio-reference).
+
 **Active Code43 iteration, 2026-10-07:** owner requests continued repair one wall
 at a time. The first change resolves the declared Device-shared default VA for
 COPY2; bounded same-GPU relationships and revocation tests pass (611 kf-rm tests).
