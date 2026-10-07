@@ -22,7 +22,11 @@ verified again. GET is served, and the abort moved by one RPC to
 `SET_RC_RECOVERY` (0x56). Windows sends ENABLED even after GET reports DISABLED.
 **Owner decision pending:** accept ENABLED with no effect (`_VF` HAL), report
 ENABLED as an inferred host fact, or implement per-VM RC recovery. The class-0x78
-and NV0073 event entries that follow are already served. [Batch and run25](../traces/windows_code43_walls_20261007/README.md#sixth-repair-startdevice-batch-after-get_rc_recovery).
+and NV0073 event entries that follow are already served. DIAGNOSTIC run26 at
+8208effe (default-off `KF3_RC_RECOVERY_ENABLED_DIAG`) accepts ENABLED and aborts
+at VFIO index 2518: the first `0x20800301` arming (notifier 44) is refused. Code43
+persists. The next wall is the 23 notifier indices Windows arms, ranked in the
+traces README. [Batch and run25](../traces/windows_code43_walls_20261007/README.md#sixth-repair-startdevice-batch-after-get_rc_recovery).
 
 **Code43 cause analysis, 2026-10-07 (corrects the paragraph below).** Run24 at
 a6f84d0d births and promotes OFA0. Code43/smi9 is verified and the 24 assertions
