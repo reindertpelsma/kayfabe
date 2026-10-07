@@ -2043,3 +2043,46 @@ definition).
   `0x2080a630`, and this would be the third consecutive run that does not move the abort, so the
   loop stops (stop rule) and reports.
 - *Placement (a reading of run41, 2026-10-07, not a test):* as stated for run39.
+
+### Run41 result: `0x2081010d` alone passes VFIO 2861 — the minimal set is one control
+
+Product/QEMU 846a4b9c3d9ebbffd6bb23af7d25e1deab20a1b6, `kf3-bins/846a4b9c`, flags as run40; started
+2026-10-07 17:05 UTC. [command](run41-command.json), [trace](run41-qemu.log.gz),
+[requests](run41-requests.log), [maplog of c1d00021's VA space](run41-maplog-c1d00021.txt),
+[gates, oracle and build](run41-gates-build.txt) (9/9, 11/11 USER births, GR tier PASS, Xid 5 before
+and after; [oracle log](gr-tier-native-run41.log)), [controller error](run41-controller-error.txt),
+[unit journal](run41-failure-journal.txt), [bugcheck header](run41-bugcheck.json),
+[Windows events](run41-evtx.txt), [host after](run41-host-after.txt). Host afterwards: no QEMU, NBD
+disconnected, display enabled, P8, Xid 5 (unchanged).
+
+**Measured (run41 at 846a4b9c, 2026-10-07):**
+- One `DIAG-ZERO-OK` answer, `0x2081010d` (zero params). **The abort moved past VFIO 2861** and the
+  run follows run38's course: `abort_point.py` rpcs=2605, teardown_at=644, last `fn76/20801111`
+  (unserviced); the server-context-only PDE copy returns 0; the kernel copy channel (token 0x80c)
+  dies at GP entry 2; nvlddmkm logs two TDR cycles (Resetting/Reset/Restarting at 17:06:34 and
+  17:06:40 UTC); no bugcheck; the status script timed out again (Code43/smi **not measured**).
+- **The copy channel's placement rows are EMPTY at its death:** `0x200c4010 not placed by us
+  (rows=0 below=none above=none)`. The maplog shows walk #248 mapping `va=0x200c4000 len=0x20000`
+  (sysmem, aperture 3) into that VA space right after the channel's birth, then only `MAP`s for that
+  space up to the death — no `UNMAP`, no retire, no root statement for it — and two submissions
+  completing on the engine in between.
+
+**Bisect conclusion (measured over runs 38-41, 2026-10-07):** answering `0x2081010d` alone is
+sufficient; `0x2080a801` alone and `0x2080a630` alone are not; the ten early controls, the four
+with public layouts included, are not needed. **The minimal set is `{0x2081010d}`.**
+- What is known about it (read, 2026-10-07): the pinned retail Windows 580.88 `nvlddmkm.sys`
+  (SHA256 `31c79cce…`, the same file `sw_runlist` pins) exports it in its NVOC method table
+  (`NVOC_EXPORTED_METHOD_DEF`, OGKM 580.65.06 `src/nvidia/inc/libraries/nvoc/runtime.h:73-84`) at
+  file offset 0xecfbf0: `methodId 0x2081010d`, `paramSize 0`, `flags 0x10208` =
+  `NON_PRIVILEGED | ROUTE_TO_VGPU_HOST | GSP_PLUGIN_FOR_VGPU_GSP` (`control.h:208, 253, 290`). Its
+  interface is OGKM's `FINN_NV2081_BINAPI_INTERFACE_ID` (`g_finn_rm_api.h:425`); message 0x0d has no
+  public name, layout or body. A web search (2026-10-07) found no public layout (gVisor's `nvgpu`
+  ABI names only the class `NV2081_BINAPI`).
+- ⚠ So the one needed answer is **not** shown to be a power/thermal control, and the retail flags
+  say it is **non-privileged**. Whether it belongs under §S ("privileged host management: stub")
+  is for the owner; see the product section below.
+
+**Inferred, not tested:** the TDR follows from the dead copy channel. Why its rows map is empty is
+open; the candidates are a second writer of the same `PlacedRows` that clears it outside a walk,
+or a channel holding a different mirror's rows than the walker fills (rows=0 rules out "one row was
+retired" for this death).

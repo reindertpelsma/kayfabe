@@ -1,0 +1,295 @@
+kf3: maplog t=165254.220993 ARRIVE root VasKey(13965662590488021072) (inflight walk: none)
+kf3: maplog t=165254.221015 walk#240 SUBMIT wants=[{root VasKey(13965662590488021072) -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165254.221024 STATEMENT pagedir VasKey(13965662590488021072) root=0xefa38000 First
+kf3: maplog t=165254.225268 walk#243 SUBMIT wants=[{inval seq=234 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=14 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165254.225445 walk#243 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x20002000 len=0x10000 at=0xea6d0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165254.225480 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0063 doorbells []
+kf3: maplog t=165254.225834 walk#244 SUBMIT wants=[{inval seq=235 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=11 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165254.225979 walk#244 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x20012000 len=0x1000 at=0xea6c0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165254.226014 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0063 doorbells []
+kf3: maplog t=165254.226341 walk#245 SUBMIT wants=[{inval seq=236 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=10 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165254.226486 walk#245 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x20013000 len=0x2000 at=0xea6e0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165254.226521 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0063 doorbells []
+kf3: maplog t=165254.226849 walk#246 SUBMIT wants=[{inval seq=237 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=10 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165254.226995 walk#246 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x20015000 len=0x20000 at=0xea6f0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165254.227030 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0063 doorbells []
+kf3: maplog t=165254.227360 walk#247 SUBMIT wants=[{inval seq=238 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=9 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165254.227506 walk#247 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x20035000 len=0x8f000 at=0xea710000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165254.227540 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0063 doorbells []
+kf3: maplog t=165254.227871 walk#248 SUBMIT wants=[{inval seq=239 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=9 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165254.228106 walk#248 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x200c4000 len=0x20000 at=0x23977b000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165254.228106 walk#248 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x200e4000 len=0x1000 at=0x23977a000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165254.228106 walk#248 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x200e5000 len=0xa000 at=0x239770000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165254.228189 APPLIED VasKey(13965662590488021072) +3 -0 host space 0xcafe0063 doorbells []
+kf3: maplog t=165254.241222 walk#250 SUBMIT wants=[{inval seq=241 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=22 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165254.241509 walk#250 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x200ef000 len=0x15000 at=0x239750000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165254.241509 walk#250 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x20104000 len=0x1000 at=0x23974f000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165254.241509 walk#250 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x20105000 len=0x15000 at=0x23973a000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165254.241641 APPLIED VasKey(13965662590488021072) +3 -0 host space 0xcafe0063 doorbells []
+kf3: maplog t=165254.248872 walk#252 SUBMIT wants=[{inval seq=243 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=22 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165254.249063 walk#252 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x2011a000 len=0x10000 at=0x239962000 ap=2 kind=0x0 ack=1
+kf3: maplog t=165254.249130 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0063 doorbells []
+kf3: maplog t=165254.249785 walk#254 SUBMIT wants=[{inval seq=245 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=17 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165254.249955 walk#254 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x2012a000 len=0x11d000 at=0xecf66000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165254.249998 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0063 doorbells []
+kf3: maplog t=165254.250068 walk#255 SUBMIT wants=[{inval seq=246 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=11 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165254.250213 walk#255 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x20247000 len=0x5000 at=0xefa2c000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165254.250251 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0063 doorbells []
+kf3: maplog t=165254.250600 walk#257 SUBMIT wants=[{inval seq=248 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=21 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165254.250756 walk#257 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x20250000 len=0x80000 at=0xed1a0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165254.250791 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0063 doorbells []
+kf3: maplog t=165254.250859 walk#258 SUBMIT wants=[{inval seq=249 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=12 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165254.250996 walk#258 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x2024c000 len=0x3000 at=0xefa65000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165254.251038 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0063 doorbells []
+kf3: maplog t=165254.255993 walk#278 SUBMIT wants=[{inval seq=269 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=10 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165254.256599 walk#278 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x24000000 len=0x25f0000 at=0xed2a0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165254.256649 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0063 doorbells []
+kf3: maplog t=165254.256719 walk#279 SUBMIT wants=[{inval seq=270 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=11 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165254.256864 walk#279 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x202d0000 len=0x20000 at=0xef890000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165254.256907 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0063 doorbells []
+kf3: maplog t=165254.256974 walk#280 SUBMIT wants=[{inval seq=271 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=10 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165254.257118 walk#280 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x202f0000 len=0x80000 at=0xef8b0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165254.257160 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0063 doorbells []
+kf3: maplog t=165254.260625 walk#283 SUBMIT wants=[{inval seq=274 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=13 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165254.260778 walk#283 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x3fdf0000 len=0x1000 at=0x1271cf000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165254.260812 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0063 doorbells []
+kf3: maplog t=165254.260987 walk#284 SUBMIT wants=[{inval seq=275 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=11 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165254.261530 walk#284 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x3fdf1000 len=0x30000 at=0x1271d0000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165254.261530 walk#284 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x3fe21000 len=0x1000 at=0x127116000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165254.261530 walk#284 VasKey(13965662590488021072) root 0xefa38000 MAP va=0x3fe22000 len=0x1cf000 at=0x127200000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165254.261621 APPLIED VasKey(13965662590488021072) +3 -0 host space 0xcafe0063 doorbells []
+kf3: maplog t=165255.079201 walk#2192 SUBMIT wants=[{inval seq=2183 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=11 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x20002000 len=0x10000 at=0xea6d0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x20012000 len=0x1000 at=0xea6c0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x20013000 len=0x2000 at=0xea6e0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x20015000 len=0x20000 at=0xea6f0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x20035000 len=0x8f000 at=0xea710000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x200c4000 len=0x20000 at=0x23977b000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x200e4000 len=0x1000 at=0x23977a000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x200e5000 len=0xa000 at=0x239770000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x200ef000 len=0x15000 at=0x239750000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x20104000 len=0x1000 at=0x23974f000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x20105000 len=0x15000 at=0x23973a000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x2011a000 len=0x10000 at=0x239962000 ap=2 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x2012a000 len=0x11d000 at=0xecf66000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x20247000 len=0x5000 at=0xefa2c000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x2024c000 len=0x3000 at=0xefa65000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x3fdf0000 len=0x1000 at=0x1271cf000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x3fdf1000 len=0x30000 at=0x1271d0000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x3fe21000 len=0x1000 at=0x127116000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x3fe22000 len=0x1cf000 at=0x127200000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x20250000 len=0x80000 at=0xed1a0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x202d0000 len=0x20000 at=0xef890000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x202f0000 len=0x80000 at=0xef8b0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165255.079827 walk#2192 VasKey(13965662590488021072) root 0xefa38000 UNMAP va=0x24000000 len=0x25f0000 at=0xed2a0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165255.080500 APPLIED VasKey(13965662590488021072) +0 -23 host space 0xcafe0063 doorbells []
+kf3: maplog t=165258.439604 walk#2215 SUBMIT wants=[{inval seq=2205 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=24 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165258.453592 walk#2223 SUBMIT wants=[{inval seq=2213 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=20 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165258.453796 walk#2224 SUBMIT wants=[{inval seq=2214 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=13 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165258.453955 walk#2225 SUBMIT wants=[{inval seq=2215 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=13 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165258.454106 walk#2226 SUBMIT wants=[{inval seq=2216 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=10 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165258.454255 walk#2227 SUBMIT wants=[{inval seq=2217 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=9 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165258.454418 walk#2228 SUBMIT wants=[{inval seq=2218 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=13 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165258.454565 walk#2229 SUBMIT wants=[{inval seq=2219 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=10 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165258.454735 walk#2230 SUBMIT wants=[{inval seq=2220 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=13 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165258.455244 walk#2231 SUBMIT wants=[{inval seq=2221 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=14 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165258.457023 walk#2232 SUBMIT wants=[{inval seq=2222 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=16 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165258.457306 walk#2233 SUBMIT wants=[{inval seq=2223 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=22 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165258.457576 walk#2234 SUBMIT wants=[{inval seq=2224 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=14 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165258.457835 walk#2235 SUBMIT wants=[{inval seq=2225 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=10 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165258.458097 walk#2236 SUBMIT wants=[{inval seq=2226 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=10 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165258.458493 walk#2237 SUBMIT wants=[{inval seq=2227 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=10 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165258.458788 walk#2238 SUBMIT wants=[{inval seq=2228 pdb=0xefa38000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=18 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s8@0xefa38000]
+kf3: maplog t=165258.459190 STATEMENT retire VasKey(13965662590488021072): 1 live channel(s) still run in host space 0xcafe0063 — KEPT, never recycled
+kf3: maplog t=165259.404505 ARRIVE root VasKey(13965662590488021072) (inflight walk: none)
+kf3: maplog t=165259.404532 walk#2506 SUBMIT wants=[{root VasKey(13965662590488021072) -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165259.404543 STATEMENT pagedir VasKey(13965662590488021072) root=0xefa3f000 First
+kf3: maplog t=165259.408788 walk#2509 SUBMIT wants=[{inval seq=2511 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=20 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165259.408982 walk#2509 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x20002000 len=0x10000 at=0xea6d0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165259.409024 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0015 doorbells []
+kf3: maplog t=165259.409367 walk#2510 SUBMIT wants=[{inval seq=2512 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=14 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165259.409517 walk#2510 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x20012000 len=0x1000 at=0xea6c0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165259.409557 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0015 doorbells []
+kf3: maplog t=165259.409907 walk#2511 SUBMIT wants=[{inval seq=2513 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=13 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165259.410058 walk#2511 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x20013000 len=0x2000 at=0xea6e0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165259.410099 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0015 doorbells []
+kf3: maplog t=165259.410438 walk#2512 SUBMIT wants=[{inval seq=2514 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=13 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165259.410582 walk#2512 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x20015000 len=0x20000 at=0xea6f0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165259.410637 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0015 doorbells []
+kf3: maplog t=165259.410977 walk#2513 SUBMIT wants=[{inval seq=2515 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=14 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165259.411139 walk#2513 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x20035000 len=0x8f000 at=0xea710000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165259.411187 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0015 doorbells []
+kf3: maplog t=165259.411460 walk#2514 SUBMIT wants=[{inval seq=2516 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=18 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165259.411712 walk#2514 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x200c4000 len=0x1b000 at=0x2397a6000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165259.411712 walk#2514 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x200df000 len=0x5000 at=0x2397a1000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165259.411712 walk#2514 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x200e4000 len=0xb000 at=0x239796000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165259.411823 APPLIED VasKey(13965662590488021072) +3 -0 host space 0xcafe0015 doorbells []
+kf3: maplog t=165259.422933 walk#2516 SUBMIT wants=[{inval seq=2518 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=18 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165259.423196 walk#2516 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x200ef000 len=0x10000 at=0x23977b000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165259.423196 walk#2516 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x200ff000 len=0xb000 at=0x239770000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165259.423196 walk#2516 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x2010a000 len=0x10000 at=0x239760000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165259.423308 APPLIED VasKey(13965662590488021072) +3 -0 host space 0xcafe0015 doorbells []
+kf3: maplog t=165259.430653 walk#2518 SUBMIT wants=[{inval seq=2520 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=15 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165259.430811 walk#2518 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x2011a000 len=0x10000 at=0x239952000 ap=2 kind=0x0 ack=1
+kf3: maplog t=165259.430855 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0015 doorbells []
+kf3: maplog t=165259.431406 walk#2520 SUBMIT wants=[{inval seq=2522 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=10 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165259.431566 walk#2520 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x2012a000 len=0x11d000 at=0xecf66000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165259.431606 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0015 doorbells []
+kf3: maplog t=165259.431674 walk#2521 SUBMIT wants=[{inval seq=2523 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=11 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165259.431814 walk#2521 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x20247000 len=0x5000 at=0xefa33000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165259.431846 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0015 doorbells []
+kf3: maplog t=165259.432185 walk#2523 SUBMIT wants=[{inval seq=2525 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=10 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165259.432330 walk#2523 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x20250000 len=0x80000 at=0xed1a0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165259.432373 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0015 doorbells []
+kf3: maplog t=165259.432441 walk#2524 SUBMIT wants=[{inval seq=2526 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=10 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165259.432579 walk#2524 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x2024c000 len=0x3000 at=0xefa65000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165259.432635 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0015 doorbells []
+kf3: maplog t=165259.437212 walk#2544 SUBMIT wants=[{inval seq=2546 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=9 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165259.437809 walk#2544 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x24000000 len=0x25f0000 at=0xed2a0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165259.437851 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0015 doorbells []
+kf3: maplog t=165259.437916 walk#2545 SUBMIT wants=[{inval seq=2547 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=11 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165259.438056 walk#2545 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x202d0000 len=0x20000 at=0xef890000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165259.438096 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0015 doorbells []
+kf3: maplog t=165259.438156 walk#2546 SUBMIT wants=[{inval seq=2548 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=8 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165259.438296 walk#2546 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x202f0000 len=0x80000 at=0xef8b0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165259.438335 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0015 doorbells []
+kf3: maplog t=165259.446217 walk#2549 SUBMIT wants=[{inval seq=2551 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=12 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165259.446378 walk#2549 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x3fdf0000 len=0x1000 at=0x1271cf000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165259.446423 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe0015 doorbells []
+kf3: maplog t=165259.446614 walk#2550 SUBMIT wants=[{inval seq=2552 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=15 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165259.447328 walk#2550 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x3fdf1000 len=0x10a000 at=0x1272c6000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165259.447328 walk#2550 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x3fefb000 len=0x1000 at=0x127200000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165259.447328 walk#2550 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x3fefc000 len=0x1000 at=0x127256000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165259.447328 walk#2550 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x3fefd000 len=0xf4000 at=0x21d203000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165259.447480 APPLIED VasKey(13965662590488021072) +4 -0 host space 0xcafe0015 doorbells []
+kf3: maplog t=165260.297730 walk#4477 SUBMIT wants=[{inval seq=4478 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=16 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x20002000 len=0x10000 at=0xea6d0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x20012000 len=0x1000 at=0xea6c0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x20013000 len=0x2000 at=0xea6e0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x20015000 len=0x20000 at=0xea6f0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x20035000 len=0x8f000 at=0xea710000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x200c4000 len=0x1b000 at=0x2397a6000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x200df000 len=0x5000 at=0x2397a1000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x200e4000 len=0xb000 at=0x239796000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x200ef000 len=0x10000 at=0x23977b000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x200ff000 len=0xb000 at=0x239770000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x2010a000 len=0x10000 at=0x239760000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x2011a000 len=0x10000 at=0x239952000 ap=2 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x2012a000 len=0x11d000 at=0xecf66000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x20247000 len=0x5000 at=0xefa33000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x2024c000 len=0x3000 at=0xefa65000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x3fdf0000 len=0x1000 at=0x1271cf000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x3fdf1000 len=0x10a000 at=0x1272c6000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x3fefb000 len=0x1000 at=0x127200000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x3fefc000 len=0x1000 at=0x127256000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x3fefd000 len=0xf4000 at=0x21d203000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x20250000 len=0x80000 at=0xed1a0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x202d0000 len=0x20000 at=0xef890000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x202f0000 len=0x80000 at=0xef8b0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165260.298366 walk#4477 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x24000000 len=0x25f0000 at=0xed2a0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165260.299079 APPLIED VasKey(13965662590488021072) +0 -24 host space 0xcafe0015 doorbells []
+kf3: maplog t=165264.106909 walk#4509 SUBMIT wants=[{inval seq=4508 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=46 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165264.121863 walk#4517 SUBMIT wants=[{inval seq=4516 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=18 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165264.122149 walk#4518 SUBMIT wants=[{inval seq=4517 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=12 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165264.122306 walk#4519 SUBMIT wants=[{inval seq=4518 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=8 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165264.122452 walk#4520 SUBMIT wants=[{inval seq=4519 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=8 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165264.122601 walk#4521 SUBMIT wants=[{inval seq=4520 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=8 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165264.122747 walk#4522 SUBMIT wants=[{inval seq=4521 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=8 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165264.122949 walk#4523 SUBMIT wants=[{inval seq=4522 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=7 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165264.123111 walk#4524 SUBMIT wants=[{inval seq=4523 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=9 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165264.123536 walk#4525 SUBMIT wants=[{inval seq=4524 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=21 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165264.125546 walk#4526 SUBMIT wants=[{inval seq=4525 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=23 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165264.125868 walk#4527 SUBMIT wants=[{inval seq=4526 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=18 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165264.126180 walk#4528 SUBMIT wants=[{inval seq=4527 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=16 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165264.126485 walk#4529 SUBMIT wants=[{inval seq=4528 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=17 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165264.126775 walk#4530 SUBMIT wants=[{inval seq=4529 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=9 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165264.127211 walk#4531 SUBMIT wants=[{inval seq=4530 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=8 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165264.127464 walk#4532 SUBMIT wants=[{inval seq=4531 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=7 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s15@0xefa3f000]
+kf3: maplog t=165264.127863 STATEMENT retire VasKey(13965662590488021072): 1 live channel(s) still run in host space 0xcafe0015 — KEPT, never recycled
+kf3: maplog t=165264.825191 ARRIVE root VasKey(13965662590488021072) (inflight walk: none)
+kf3: maplog t=165264.825211 walk#4802 SUBMIT wants=[{root VasKey(13965662590488021072) -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s24@0xefa3f000]
+kf3: maplog t=165264.825220 STATEMENT pagedir VasKey(13965662590488021072) root=0xefa3f000 First
+kf3: maplog t=165264.828527 walk#4805 SUBMIT wants=[{inval seq=4816 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=47 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s24@0xefa3f000]
+kf3: maplog t=165264.828760 walk#4805 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x20002000 len=0x10000 at=0xea6d0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165264.828805 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe00ce doorbells []
+kf3: maplog t=165264.829148 walk#4806 SUBMIT wants=[{inval seq=4817 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=21 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s24@0xefa3f000]
+kf3: maplog t=165264.829302 walk#4806 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x20012000 len=0x1000 at=0xea6c0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165264.829343 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe00ce doorbells []
+kf3: maplog t=165264.829702 walk#4807 SUBMIT wants=[{inval seq=4818 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=15 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s24@0xefa3f000]
+kf3: maplog t=165264.829848 walk#4807 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x20013000 len=0x2000 at=0xea6e0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165264.829888 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe00ce doorbells []
+kf3: maplog t=165264.830219 walk#4808 SUBMIT wants=[{inval seq=4819 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=13 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s24@0xefa3f000]
+kf3: maplog t=165264.830364 walk#4808 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x20015000 len=0x20000 at=0xea6f0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165264.830404 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe00ce doorbells []
+kf3: maplog t=165264.830745 walk#4809 SUBMIT wants=[{inval seq=4820 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=14 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s24@0xefa3f000]
+kf3: maplog t=165264.830897 walk#4809 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x20035000 len=0x8f000 at=0xea710000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165264.830938 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe00ce doorbells []
+kf3: maplog t=165264.831198 walk#4810 SUBMIT wants=[{inval seq=4821 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=13 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s24@0xefa3f000]
+kf3: maplog t=165264.831491 walk#4810 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x200c4000 len=0x24000 at=0x23977b000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165264.831491 walk#4810 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x200e8000 len=0x6000 at=0x239775000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165264.831491 walk#4810 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x200ee000 len=0x1000 at=0x239774000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165264.831591 APPLIED VasKey(13965662590488021072) +3 -0 host space 0xcafe00ce doorbells []
+kf3: maplog t=165264.838554 walk#4812 SUBMIT wants=[{inval seq=4823 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=23 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s24@0xefa3f000]
+kf3: maplog t=165264.838825 walk#4812 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x200ef000 len=0x13000 at=0x239750000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165264.838825 walk#4812 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x20102000 len=0x5000 at=0x239764000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165264.838825 walk#4812 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x20107000 len=0x13000 at=0x23973d000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165264.838945 APPLIED VasKey(13965662590488021072) +3 -0 host space 0xcafe00ce doorbells []
+kf3: maplog t=165264.845408 walk#4814 SUBMIT wants=[{inval seq=4825 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=19 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s24@0xefa3f000]
+kf3: maplog t=165264.845575 walk#4814 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x2011a000 len=0x10000 at=0x239922000 ap=2 kind=0x0 ack=1
+kf3: maplog t=165264.845633 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe00ce doorbells []
+kf3: maplog t=165264.846078 walk#4816 SUBMIT wants=[{inval seq=4827 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=17 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s24@0xefa3f000]
+kf3: maplog t=165264.846255 walk#4816 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x2012a000 len=0x11d000 at=0xecf66000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165264.846305 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe00ce doorbells []
+kf3: maplog t=165264.846375 walk#4817 SUBMIT wants=[{inval seq=4828 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=13 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s24@0xefa3f000]
+kf3: maplog t=165264.846518 walk#4817 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x20247000 len=0x5000 at=0xefa33000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165264.846558 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe00ce doorbells []
+kf3: maplog t=165264.847782 walk#4819 SUBMIT wants=[{inval seq=4830 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=14 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s24@0xefa3f000]
+kf3: maplog t=165264.847942 walk#4819 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x20250000 len=0x80000 at=0xed1a0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165264.847982 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe00ce doorbells []
+kf3: maplog t=165264.848054 walk#4820 SUBMIT wants=[{inval seq=4831 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=12 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s24@0xefa3f000]
+kf3: maplog t=165264.848199 walk#4820 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x2024c000 len=0x3000 at=0xefa65000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165264.848248 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe00ce doorbells []
+kf3: maplog t=165264.853289 walk#4840 SUBMIT wants=[{inval seq=4851 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=10 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s24@0xefa3f000]
+kf3: maplog t=165264.853982 walk#4840 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x24000000 len=0x25f0000 at=0xed2a0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165264.854038 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe00ce doorbells []
+kf3: maplog t=165264.854120 walk#4841 SUBMIT wants=[{inval seq=4852 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=18 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s24@0xefa3f000]
+kf3: maplog t=165264.854273 walk#4841 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x202d0000 len=0x20000 at=0xef890000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165264.854323 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe00ce doorbells []
+kf3: maplog t=165264.854400 walk#4842 SUBMIT wants=[{inval seq=4853 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=13 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s24@0xefa3f000]
+kf3: maplog t=165264.854551 walk#4842 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x202f0000 len=0x80000 at=0xef8b0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165264.854600 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe00ce doorbells []
+kf3: maplog t=165264.873106 walk#4873 SUBMIT wants=[{inval seq=4882 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=16 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s24@0xefa3f000]
+kf3: maplog t=165264.873305 walk#4873 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x3fdf0000 len=0x1000 at=0x1271cf000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165264.873348 APPLIED VasKey(13965662590488021072) +1 -0 host space 0xcafe00ce doorbells []
+kf3: maplog t=165264.873626 walk#4874 SUBMIT wants=[{inval seq=4883 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=22 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s24@0xefa3f000]
+kf3: maplog t=165264.874357 walk#4874 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x3fdf1000 len=0xba000 at=0x127316000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165264.874357 walk#4874 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x3feab000 len=0x57000 at=0x127200000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165264.874357 walk#4874 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x3ff02000 len=0x1000 at=0x1272a6000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165264.874357 walk#4874 VasKey(13965662590488021072) root 0xefa3f000 MAP va=0x3ff03000 len=0xee000 at=0x21bcc7000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165264.874504 APPLIED VasKey(13965662590488021072) +4 -0 host space 0xcafe00ce doorbells []
+kf3: maplog t=165265.710158 walk#6801 SUBMIT wants=[{inval seq=6809 pdb=0xefa3f000/Vidmem all_pdb=false all_va=true hub_only=false raw=0x80010001 age_us=17 -> [0xc1d00021ff000850]}] walked=[0xc1d00021ff000850=s24@0xefa3f000]
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x20002000 len=0x10000 at=0xea6d0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x20012000 len=0x1000 at=0xea6c0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x20013000 len=0x2000 at=0xea6e0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x20015000 len=0x20000 at=0xea6f0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x20035000 len=0x8f000 at=0xea710000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x200c4000 len=0x24000 at=0x23977b000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x200e8000 len=0x6000 at=0x239775000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x200ee000 len=0x1000 at=0x239774000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x200ef000 len=0x13000 at=0x239750000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x20102000 len=0x5000 at=0x239764000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x20107000 len=0x13000 at=0x23973d000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x2011a000 len=0x10000 at=0x239922000 ap=2 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x2012a000 len=0x11d000 at=0xecf66000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x20247000 len=0x5000 at=0xefa33000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x2024c000 len=0x3000 at=0xefa65000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x3fdf0000 len=0x1000 at=0x1271cf000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x3fdf1000 len=0xba000 at=0x127316000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x3feab000 len=0x57000 at=0x127200000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x3ff02000 len=0x1000 at=0x1272a6000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x3ff03000 len=0xee000 at=0x21bcc7000 ap=3 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x20250000 len=0x80000 at=0xed1a0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x202d0000 len=0x20000 at=0xef890000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x202f0000 len=0x80000 at=0xef8b0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165265.710746 walk#6801 VasKey(13965662590488021072) root 0xefa3f000 UNMAP va=0x24000000 len=0x25f0000 at=0xed2a0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=165265.711447 APPLIED VasKey(13965662590488021072) +0 -24 host space 0xcafe00ce doorbells []
