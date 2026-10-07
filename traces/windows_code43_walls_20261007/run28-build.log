@@ -1,0 +1,8 @@
+HEAD is now at c474de602 Apply owner rulings for notifiers 33, 34, 45 and 139 as silent arms
+V3_GATES_START 2026-10-07T14:06:59+02:00
+V3_GATES_SUMMARY pass=9 fail=0
+V3_GATES_BIRTHS births=11 user=11 refused=0 ok=1
+V3_GATES_EXIT pass=9 fail=0 births_ok=1 2026-10-07T14:07:16+02:00
+== kf3 build: QEMU 10.2.4 rev c474de60
+== archive 2026-10-07 14:07:27.077085940 +0200 (cargo succeeded: current for this revision by cargo's fingerprints)
+KF3_BUILT /var/lib/kf-windows-20261005/kf3-bins/c474de60/qemu-system-x86_64 rev=c474de60 mtime=2026-10-07 14:07:31.966058315 +0200 (shared build dir /var/lib/kf-windows-20261005/qemu-build-kf3)

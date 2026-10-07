@@ -621,7 +621,7 @@ impl DisplayRegistry {
             {
                 self.on_event_alloc(h.client, h.handle, h.parent, body);
             }
-            self.on_display_event_bind(h.client, h.handle, body);
+            self.on_display_event_bind(h.client, h.handle, h.parent, body);
             return;
         }
         if !is_display_class(h.class) {
@@ -723,7 +723,7 @@ impl DisplayRegistry {
     /// `NV0073_CTRL_CMD_EVENT_SET_NOTIFICATION` checks. Only the two handles `hParentClient` (+0)
     /// and `hSrcResource` (+4) of `NV0005_ALLOC_PARAMETERS` (`cl0005.h:40-47`) are read; `data` (+16,
     /// a guest pointer) is never touched. The event's handle and client are the RPC header's.
-    fn on_display_event_bind(&mut self, client: u32, event: u32, body: &[u8]) {
+    fn on_display_event_bind(&mut self, client: u32, event: u32, parent: u32, body: &[u8]) {
         let Some(params) = crate::rmrpc::alloc_params_window(&self.driver, body) else {
             return;
         };
@@ -743,6 +743,15 @@ impl DisplayRegistry {
         // ⊘ Only a same-client binding is modelled: a cross-client notifier (hParentClient naming
         // another client) is left unbound, so its EVENT_SET_NOTIFICATION is refused.
         if owner != client || !self.objects.contains_key(&(client, src)) {
+            // ★ 2026-10-07 (run28): diagnostic only — the two handles, never `data`. Run28's
+            // Windows NV0073 EVENT_SET_NOTIFICATION found no binding for an event allocated
+            // under the display-common object; this line says which handle disagreed.
+            if self.objects.contains_key(&(client, parent)) {
+                eprintln!(
+                    "kf-rm: display: event {client:#x}:{event:#x} under display object {parent:#x} NOT \
+                     bound: hParentClient={parent_client:#x} hSrcResource={src:#x}"
+                );
+            }
             return;
         }
         if !lock(&self.model).bind_display_event(client, src, event) {

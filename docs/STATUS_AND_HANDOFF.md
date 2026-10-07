@@ -35,7 +35,10 @@ semantics, followed by real-host-event notifiers (PSTATE, CE, GRAPHICS, runlist 
 VFIO event census (no boot): the real GSP posts only 33 PSTATE_CHANGE, 34/45 (HDCP/audio
 for display 0x200) and 139 RUNLIST_PREEMPT_COMPLETE. Every other armed index, 120 and 122
 included, is never posted and is now accepted silently. 33 and 139 (armed at 2528 and 2530)
-are owner decision items; run28 is on hold. [Batch and run25](../traces/windows_code43_walls_20261007/README.md#sixth-repair-startdevice-batch-after-get_rc_recovery).
+are owner decision items; run28 is on hold. *(Superseded the same day:* the owner ruled on all four and they are now
+silent arms. Run28 at c474de60 reaches VFIO 2558, the first NV0073 control, and aborts there
+with kayfabe's own INVALID_STATE (the event-to-display-object binding was not found). Code43
+persists. A diagnostic log for that binding is committed but not run; run29 needs a go-ahead.) [Batch and run25](../traces/windows_code43_walls_20261007/README.md#sixth-repair-startdevice-batch-after-get_rc_recovery).
 
 **Code43 cause analysis, 2026-10-07 (corrects the paragraph below).** Run24 at
 a6f84d0d births and promotes OFA0. Code43/smi9 is verified and the 24 assertions

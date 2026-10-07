@@ -916,3 +916,43 @@ Tests 1471 pass, Clippy new 0, rustfmt clean.
 **Falsifier, stated before run28:** worthwhile only if the abort reaches the NV0073 display
 controls (VFIO index ≥ 2558). The run log will list every preempt-type control Windows sends
 and its result.
+
+### Run28 result: the abort reaches VFIO 2558, the first NV0073 control, and fails there
+
+Product/QEMU c474de602a948c8b43dd328509874b3edc200a4f, `kf3-bins/c474de60`, run on 2026-10-07
+at 12:07-12:10 UTC. [command](run28-command.json), [status](run28-status.json),
+[trace](run28-qemu.log.gz), [requests](run28-requests.log), [completion](run28-complete.json),
+[host health](run28-host-health.txt), [unit result](run28-unit-result.txt),
+[9/9 gates](run28-gates.log) (11/11 USER births), [build](run28-build.log),
+[watchdog recovery](run28-watchdog-recovery.log) (cleanup verified 2026-10-07). After 98 s of
+uptime the NVIDIA adapter has ConfigManagerErrorCode 43 and nvidia-smi exits 9, so Code43
+persists. No initialization success is claimed. Afterwards the host was healthy: display
+enabled, P8, no Xid, no QEMU, NBD disconnected.
+
+**Abort point:** 775 RPCs, teardown at 489. The last RPC is
+`NV0073_CTRL_CMD_EVENT_SET_NOTIFICATION` 0x00730301 on the display-common object ff0a0000,
+returning **0x40 (INVALID_STATE)**. That is VFIO index **2558**, the first NV0073 control. All
+20 class-0x78 allocations and every 0x20800301 arming from 2518 to 2556 returned 0. The 0x78
+event ff060070 (allocated under ff0a0000 with notify index HOTPLUG) did register as the hotplug
+target. **The falsifier's threshold is reached exactly (index 2558), but the abort is in
+kayfabe's own NV0073 handler, not further into display setup.**
+
+**Cause (kayfabe's own refusal, partly inferred).** The handler returns INVALID_STATE when no
+event is bound to the object. The binding is made from `NV0005_ALLOC_PARAMETERS`
+`hParentClient`/`hSrcResource`, as RM's `eventInit` does (`event.c:116-120, 385`). For this
+event the pair did not name (c1d00002, ff0a0000). The trace does not carry those two fields,
+so which one differs is unknown (inferred). The commit after c474de60 adds a diagnostic line (the two
+handles only, never `data`) for exactly this case; it has not been run yet.
+
+**Preempt-type controls sent in run28:** none. No FIFO_DISABLE_CHANNELS, NVA06C PREEMPT,
+GR_CTXSW_PREEMPTION_BIND/MODE, RESTART_RUNLIST, STOP/START_RUNLIST or RUNLIST_SET_SCHED_POLICY
+occurred before teardown. PERF_GET_POWERSTATE (VFIO 2571) was not reached.
+
+**Next walls, ranked by what each needs:**
+1. *Derivable now (one diagnostic boot needs go-ahead):* the NV0073 event binding. Log the
+   event's hParentClient/hSrcResource, then bind exactly as RM does.
+2. *Already implemented, then reached in order:* NV0073 SYSTEM_GET_ACTIVE (2567), PERF_GET_POWERSTATE (2571).
+3. *Needs new semantics:* 0x007302a3 (2572; unnamed in the 580.65.06 headers), DFP_ASSIGN_SOR
+   (2575), DP_AUXCH_CTRL (2581; refuse as not-DP?).
+4. *Needs owner rule plus real implementation, later (VFIO 3307 onwards):* FIFO_DISABLE_CHANNELS
+   preempt, per §S.
