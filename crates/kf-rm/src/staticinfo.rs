@@ -194,18 +194,19 @@ pub struct StaticInfoPolicy {
 }
 
 impl StaticInfoPolicy {
-    /// Bind the policy to a chip row and a guest driver version, with the UUID this
-    /// device declares derived from the chip row.
+    /// Bind the policy to a board and a guest driver version. The UUID is the board's declared
+    /// one ([`BoardFacts::gpu_gid`], resolved per VM by [`crate::gpuuid`]); a board with none
+    /// falls back to a value derived from the chip row.
     ///
-    /// ⚠ **Per chip row, therefore not per board.** See [`GpuGid`]: two nvkvm GPUs built
-    /// from the same row would declare the same UUID, and the answer is a VMM-declared
-    /// value through [`StaticInfoPolicy::with_gid`]. The derivation is here rather than a
-    /// constant so that the value is at least *stable* — a guest that pinned
-    /// `GPU-<uuid>` finds the same device after a reboot — and so that adding a second
-    /// chip row cannot silently produce a second GPU with the first one's identity.
+    /// ⚠ **The fallback is per chip row, therefore not per board.** See [`GpuGid`]: two nvkvm
+    /// GPUs built from the same row would declare the same UUID. The kf3 device never takes
+    /// this path (it always declares `gpu_gid`); the fallback is here so every GPU-free
+    /// construction still gets a stable non-zero value — a guest that pinned `GPU-<uuid>` finds
+    /// the same device after a reboot — and so that adding a second chip row cannot silently
+    /// produce a second GPU with the first one's identity.
     #[must_use]
     pub fn new(board: Arc<BoardFacts>, driver: DriverAbiTable) -> StaticInfoPolicy {
-        let gid = Self::gid_for_board(&board);
+        let gid = board.gpu_gid.unwrap_or_else(|| Self::gid_for_board(&board));
         StaticInfoPolicy::with_gid(board, driver, gid)
     }
 
@@ -226,6 +227,13 @@ impl StaticInfoPolicy {
             engine_caps: [0; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS],
             console: None,
         }
+    }
+
+    /// The UUID this policy puts in every body it encodes ([`Self::body`], [`Self::body_measured`],
+    /// [`Self::body_measured_with`] and the wire reply built from them) — the one value.
+    #[must_use]
+    pub fn gid(&self) -> GpuGid {
+        self.gid
     }
 
     /// ★ Seat the boot display's console ([`ConsoleSeat`]): fn 65's region table then follows the

@@ -22,6 +22,7 @@ pub mod display;
 pub mod faultbuffer;
 pub mod fecstrace;
 mod gfxpool_probe;
+pub mod gpuuid;
 pub mod guestsysinfo;
 pub mod hostfacts;
 pub mod hostquery;
@@ -76,6 +77,14 @@ pub struct BoardFacts {
     /// stated a second time, so the two can no longer disagree (the old `identity_for`
     /// cross-check existed only because they could).
     pub pci_bars: Vec<PciBarRow>,
+    /// ★ **The GPU UUID the guest reads — the ONE value** (`gidInfo.data[0..16]` in
+    /// `GET_GSP_STATIC_INFO`, which is the only producer of it on a GSP client: the guest's
+    /// `NV2080_CTRL_CMD_GPU_GET_GID_INFO`, NVML's `GPU-…` and `nvidia-smi -L` are all computed
+    /// from it by the guest's own RM). Resolved once per device at realize
+    /// ([`gpuuid::resolve`]) and carried in the `Arc<BoardFacts>` every chain rebuild shares, so
+    /// no site can build its own. `None` = no declaration (GPU-free tests): the policy then
+    /// falls back to the per-chip-row [`staticinfo::StaticInfoPolicy::gid_for_board`].
+    pub gpu_gid: Option<kf_abi::gspstaticinfo::GpuGid>,
 }
 
 impl BoardFacts {

@@ -109,6 +109,8 @@ pub fn board_at(fb_size_mb: u64) -> BoardFacts {
         pci_subsystem_vendor_id: 0x1462,
         pci_subsystem_id: 0x397D,
         pci_bars: pci_bars(),
+        // Undeclared: StaticInfoPolicy falls back to the chip-row value, as before.
+        gpu_gid: None,
     }
 }
 
@@ -533,6 +535,8 @@ pub fn host_facts() -> HostFacts {
         // The old row's ROM version (`kf_abi::vbios::VBIOS_PROFILES[0]`) — ⊘ not a measured
         // board version; the v3 device asks the host (`BIOS_GET_INFO_V2`).
         vbios_version: Some((0x9418_0000, 0x00)),
+        // The replay never captured GET_GID_INFO: the host did not answer, so None.
+        host_gid: None,
         perf_level_info_v2: Some(perf_level_info_v2()),
         gss_replay: Vec::new(),
         fifo_latency: Vec::new(),

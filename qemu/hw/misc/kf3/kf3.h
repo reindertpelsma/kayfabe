@@ -43,7 +43,9 @@
 /* 21 (2026-10-07, claude/code43-trace-20261007): ABI 20 plus the default-off KF3_BAR0_TRACE
  * diagnostic's read-trap verb (Kf3ReadTrapFn, kf3_set_read_trap; OWNER_RULINGS.md sec. S, the
  * diagnostic BAR0-read trap exception). */
-#define KF3_ABI 21
+/* 22 (2026-10-08, claude/gpu-uuid-per-vm-20261008): ABI 21 plus the per-VM GPU UUID. kf3_realize
+ * gains gpu_uuid and vm_id (nullable strings) and pci_devfn after gop_efi. */
+#define KF3_ABI 22
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -110,11 +112,15 @@ uint32_t kf3_abi_version(void);
  * ★ ABI 16: `display_max_fps` — the cap on every head's emulated vblank tick, whole Hz, 24..75;
  * 0 = unset (cap 75, today's EDID). Rust refuses any other value, and a non-zero one without
  * display=1, by name (§8.16).
- * ABI 19: gop_efi is a signed copy of the embedded GOP driver or NULL; needs gop=1. */
+ * ABI 19: gop_efi is a signed copy of the embedded GOP driver or NULL; needs gop=1.
+ * ABI 22: gpu_uuid is the gpu-uuid property (auto|random|host|GPU-xxxxxxxx-...; NULL = auto);
+ * vm_id is the VM's identity text (the vm-id property, else QEMU's -uuid, else NULL);
+ * pci_devfn is the device's guest PCI devfn. Rust validates all three and refuses by name. */
 int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, uint64_t bar1_bytes, uint64_t bar2_bytes,
                     const char *guest_driver, uint32_t display, uint32_t gop, uint32_t x11_dispsw,
                     uint32_t display_broker,
-                    uint32_t display_max_fps, const char *gop_efi, void **out,
+                    uint32_t display_max_fps, const char *gop_efi,
+                    const char *gpu_uuid, const char *vm_id, uint32_t pci_devfn, void **out,
                     char *err, size_t err_len);
 int32_t kf3_identity(void *h, Kf3Identity *out);
 /* ★ ABI 7: config-space words the guest reads by config cycle (Hopper+ PCIe link caps). */

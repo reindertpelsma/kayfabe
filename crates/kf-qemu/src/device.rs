@@ -74,6 +74,16 @@ pub struct Config {
     /// ★ 2026-10-04 (`v3-windows`): `gop-efi=<path>`, a signed copy of the embedded GOP driver to
     /// serve instead of the unsigned one ([`crate::gop::SignedGop`]). Needs `gop=on`.
     pub gop_efi: Option<String>,
+    /// ★ 2026-10-08: `gpu-uuid=` — the guest-visible GPU UUID: `auto` (unset; stable per VM and
+    /// host GPU, distinct across VMs), `random`, `host`, or an explicit `GPU-xxxxxxxx-…` value.
+    /// Parsed by [`Config::check`]; resolved at realize ([`crate::gpuuid`], [`kf_rm::gpuuid`]).
+    pub gpu_uuid: Option<String>,
+    /// ★ The VM's identity text for `auto`: the `vm-id=` property if set, else QEMU's `-uuid` if
+    /// given (decided by the C device), else `None`. An all-zero value is no identity.
+    pub vm_id: Option<String>,
+    /// The device's guest PCI `devfn` (0..=255), a byte of the `auto` construction: it separates
+    /// two kf3 devices of one VM that sit on one host GPU.
+    pub pci_devfn: u32,
 }
 
 impl Config {
@@ -96,6 +106,7 @@ impl Config {
                  the 2026-10-03 x11-dispsw note)"
                 .into());
         }
+        crate::gpuuid::check(self)?;
         kf_disp::pace::check(self.display, self.display_max_fps)
     }
 }
@@ -336,6 +347,21 @@ impl Device {
         let mut host = std::sync::Arc::new(
             crate::rmfacts::host_facts(rm, family).map_err(|e| format!("host facts: {e}"))?,
         );
+        // ★ 2026-10-08: the guest-visible GPU UUID — resolved ONCE, here, from the properties and the
+        // host GPU's own UUID (`HostFacts::host_gid`), before anything is reserved. It travels in
+        // `BoardFacts::gpu_gid`, which every chain rebuild shares, so fn 65's encoders cannot differ.
+        let gpu_uuid =
+            crate::gpuuid::resolve_for(cfg, host.host_gid, &mut kf_rm::gpuuid::os_entropy)?;
+        for w in &gpu_uuid.warnings {
+            eprintln!("kf3: ⚠ {w}");
+        }
+        eprintln!(
+            "kf3: guest GPU UUID {} (gpu-uuid={}, basis {:?}, devfn {:#x})",
+            gpu_uuid.gid,
+            kf_rm::gpuuid::GpuUuidMode::parse(cfg.gpu_uuid.as_deref()).map_or("?", |m| m.label()),
+            gpu_uuid.basis,
+            cfg.pci_devfn
+        );
         // ★ ONE identity for the host GPU: the PCI address the frontend's `CARD_INFO` states
         // for our minor (`HostRm::card`). The RM device instance was resolved from it; the
         // sysfs facts and the CUDA device below are selected by it too — never by ordinal.
@@ -552,6 +578,7 @@ impl Device {
             pci_subsystem_id: pci.subsystem,
             // ★ The apertures THIS device decodes (never the host card's): BAR0 is the host's
             // register span, BAR1/BAR2 are the C device's properties, and there is no I/O BAR.
+            gpu_gid: Some(gpu_uuid.gid),
             pci_bars: vec![
                 kf_abi::pcibars::PciBarRow {
                     name: "registers",
@@ -3397,6 +3424,9 @@ mod config_tests {
             display_max_fps: 0,
             gop: false,
             gop_efi: None,
+            gpu_uuid: None,
+            vm_id: None,
+            pci_devfn: 0,
         }
     }
 

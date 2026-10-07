@@ -62,6 +62,8 @@
 #include "system/memory.h"
 #include "system/address-spaces.h"
 #include "system/kvm.h"
+#include "system/system.h"   /* qemu_uuid, qemu_uuid_set (ABI 22: the VM identity for gpu-uuid=auto) */
+#include "qemu/uuid.h"
 #include "qemu/event_notifier.h"
 #include "qemu/main-loop.h"
 #include "block/aio.h"
@@ -155,6 +157,11 @@ struct Kf3State {
      * the guest's GF100_DISP_SW objects on the host with authored params, or refuse them by name. Rust's. */
     bool x11_dispsw;
     char *gop_efi;  /* ★ ABI 19: a signed copy of the embedded GOP driver (OWNER_RULINGS §K) */
+    /* ★ ABI 22 (2026-10-08): the per-VM GPU UUID. gpu_uuid = auto (default) | random | host |
+     * GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx; vm_id overrides QEMU's -uuid as the VM identity that
+     * auto hashes. Rust parses, validates and refuses by name (crates/kf-rm/src/gpuuid.rs). */
+    char *gpu_uuid;
+    char *vm_id;
     /* ★ ABI 10 (v3-display2's 9, M2): the console the display's frames are shown on, and the frame
      * it shows. Main thread only (gfx_update, realize, exit). */
     QemuConsole *con;
@@ -1371,8 +1378,16 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
     }
     s->discard_required = true;
 
-    if (kf3_realize(s->gpu_minor, s->fb_mb, s->bar1_size, s->bar2_size, s->guest_driver, s->display ? 1 : 0,
-                    s->gop ? 1 : 0, s->x11_dispsw ? 1 : 0, broker_word, s->display_max_fps, s->gop_efi, &s->h, err, sizeof(err)) != 0) {
+    /* ABI 22: the VM's identity is the vm-id property, else QEMU's -uuid when one was given. A VM
+     * with neither passes NULL and Rust says so by name (gpu-uuid=auto then uses a random value). */
+    char *qemu_vm_id = (!s->vm_id || !s->vm_id[0]) && qemu_uuid_set
+                           ? qemu_uuid_unparse_strdup(&qemu_uuid) : NULL;
+    const char *vm_id = (s->vm_id && s->vm_id[0]) ? s->vm_id : qemu_vm_id;
+    int32_t realize_rc = kf3_realize(s->gpu_minor, s->fb_mb, s->bar1_size, s->bar2_size, s->guest_driver, s->display ? 1 : 0,
+                    s->gop ? 1 : 0, s->x11_dispsw ? 1 : 0, broker_word, s->display_max_fps, s->gop_efi,
+                    s->gpu_uuid, vm_id, (uint32_t)pci->devfn, &s->h, err, sizeof(err));
+    g_free(qemu_vm_id); /* Rust copied what it keeps during the call */
+    if (realize_rc != 0) {
         error_setg(errp, "kf3: realize refused: %s", err);
         goto fail;
     }
@@ -1611,6 +1626,9 @@ static const Property kf3_properties[] = {
     /* ★ ABI 19 (2026-10-05, Windows integration): the boot display's driver, signed — validated by Rust as the
      * embedded kf-gop plus an Authenticode signature; refused with gop=off. */
     DEFINE_PROP_STRING("gop-efi", Kf3State, gop_efi),
+    /* ABI 22: see Kf3State. Unset gpu-uuid = auto. Unset vm-id falls back to -uuid (if given). */
+    DEFINE_PROP_STRING("gpu-uuid", Kf3State, gpu_uuid),
+    DEFINE_PROP_STRING("vm-id", Kf3State, vm_id),
     /* ★ 2026-09-30: the doorbell fast path (docs/design/V3_DOORBELL_IOEVENTFD.md). OFF until measured. */
     DEFINE_PROP_BOOL("doorbell-ioeventfd", Kf3State, db_ioeventfd, false),
     DEFINE_PROP_UINT32("doorbell-ioeventfd-max", Kf3State, db_ioeventfd_max, 256),
