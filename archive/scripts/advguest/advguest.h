@@ -147,4 +147,24 @@ static inline u32 adv_method_hdr_inc(u32 subch, u32 method, u32 count)
 }
 #define ADV_SUBCH_COPY   4u   /* the copy engine's conventional subchannel */
 
+/* ── NV50_DEFERRED_API (class 0x5080), software method only ──────────────────
+ * This module has no ioctl path to real RM (that is the whole point of it —
+ * see advguest.c's header comment), so it can never REGISTER a deferred-API
+ * entry: registration is the RM control call `NV5080_CTRL_CMD_DEFERRED_API_V2`
+ * on a real object a real client allocated, and this module opens no device
+ * file at all. What it CAN do is push the class's own software method, 0x200,
+ * naming a handle that was never registered — the stray-trigger / no-object
+ * shape (OWNER_RULINGS.md §U, the falsification probe's F8/F5). A SET_OBJECT
+ * for class 0x5080 is also a fabricated-channel first, because advguest's
+ * channel is never RM's: on COLD (no real channel ever told kayfabe about
+ * this token) the write is `dbtable::Route::Unallocated`, same as every other
+ * A2x case; the point of A17 is to have the SAME case ready to mean something
+ * once a Translated channel's software subchannel exists to refuse it by name.
+ * `ogkm-580: src/nvidia/src/kernel/gpu/deferred_api.c` — the class id and the
+ * 0x200 software method (`Nv50DeferredApi[1] = {_class5080DeferredApiV2, 0x0200,
+ * 0x0203}`). */
+#define ADV_CLASS_5080           0x5080u
+#define ADV_5080_TRIGGER_METHOD  0x0200u
+#define ADV_SUBCH_5080           5u   /* distinct from ADV_SUBCH_COPY; arbitrary */
+
 #endif /* ADVGUEST_H */

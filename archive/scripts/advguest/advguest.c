@@ -94,6 +94,13 @@ static int threads = 4;
 module_param(threads, int, 0444);
 MODULE_PARM_DESC(threads, "concurrent kthreads for phase 3");
 
+/* DEFAULT OFF (kayfabe task A/C/owner working rules: a new arm never runs by
+ * default). A17 is a STRAY-TRIGGER probe only — see advguest.h's comment on
+ * ADV_CLASS_5080 for exactly what it can and cannot test without real RM. */
+static int deferred_api;
+module_param(deferred_api, int, 0444);
+MODULE_PARM_DESC(deferred_api, "1 = also run A17 (class 0x5080 stray-trigger probe)");
+
 /* ── device handle ─────────────────────────────────────────────────────────── */
 static struct pci_dev *adv_pdev;
 static void __iomem *adv_bar0;
@@ -771,6 +778,49 @@ static void adv_a42_multicpu_queue_head(void)
 	kfree(ws);
 }
 
+/* A17 — NV50_DEFERRED_API (class 0x5080) stray trigger, no registered entry.
+ *
+ * ⊘⊘ WHAT THIS DOES NOT TEST: the deferred-API table (register / duplicate /
+ * privilege-at-trigger / implicit-vs-explicit-delete). That needs a REAL RM
+ * client to call `NV5080_CTRL_CMD_DEFERRED_API_V2`, and this module opens no
+ * `/dev/nvidia*` — see advguest.h. The GPU-free model of that table is
+ * `kf-harness`'s `deferred_model.rs`; the hardware arm against a real RM
+ * client is `kf-deferred-oracle`. This case tests only the shape the
+ * falsification probe named F8: a 0x200 with NO corresponding entry, fired
+ * from a channel this module fabricated itself (never an RM-recognized one on
+ * COLD, same as every other Axx case — see `want_reach`).
+ *
+ * What it asks: a SET_OBJECT naming class 0x5080 on a subchannel, then the
+ * class's own software method 0x200 with an unregistered, arbitrary handle as
+ * Data. PASS = contained (`alive_verdict`): no VMM crash/hang from either the
+ * SET_OBJECT or the stray trigger, on a token nothing ever registered. */
+static void adv_a17_deferred_api_stray_trigger(void)
+{
+	struct adv_chan c;
+	u32 *pb;
+	unsigned int p = 0;
+
+	if (!deferred_api) {
+		adv_report("A17", "deferred_api_5080_stray_trigger", V_NOTRUN,
+			   "off by default (insmod deferred_api=1)");
+		return;
+	}
+	if (!adv_chan_alloc(&c)) {
+		adv_report("A17", "deferred_api_5080_stray_trigger", V_NOTRUN, "no mem");
+		return;
+	}
+	pb = c.pb;
+	adv_pb_put(pb, &p, adv_method_hdr_inc(ADV_SUBCH_5080, 0 /* SET_OBJECT */, 1));
+	adv_pb_put(pb, &p, ADV_CLASS_5080);
+	adv_pb_put(pb, &p, adv_method_hdr_inc(ADV_SUBCH_5080, ADV_5080_TRIGGER_METHOD, 1));
+	adv_pb_put(pb, &p, 0x5151deadu /* an hApiHandle nothing registered */);
+	adv_arm_ring(&c, p);
+	adv_ring_doorbell(ADV_HOSTILE_TOK);
+	adv_report("A17", "deferred_api_5080_stray_trigger", alive_verdict(),
+		   "%s", want_reach("FwdFault::SwMethodNoObject|Route::Unallocated"));
+	adv_chan_free(&c);
+}
+
 /* ── driver ─────────────────────────────────────────────────────────────────── */
 static void adv_run_suite(void)
 {
@@ -785,7 +835,7 @@ static void adv_run_suite(void)
 	if (!up) {
 		/* phase 0 failed → every later case is UNMEASURED, not passing. */
 		static const char * const ids[] = {
-			"A10","A11","A12","A13","A14","A15","A16",
+			"A10","A11","A12","A13","A14","A15","A16","A17",
 			"A20","A21","A22","A23","A24","A25","A26","A27",
 			"A28","A29","A30","A31","A32","A40","A41","A42",
 		};
@@ -805,6 +855,7 @@ static void adv_run_suite(void)
 	adv_a14_gpfifo_len_zero();
 	adv_a15_gpfifo_len_absurd();
 	adv_a16_userd_out_of_ram();
+	adv_a17_deferred_api_stray_trigger();
 	/* phase 2 */
 	adv_a20_doorbell_out_of_range();
 	adv_a21_doorbell_never_created();
