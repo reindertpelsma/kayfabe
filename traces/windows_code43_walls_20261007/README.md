@@ -1756,3 +1756,27 @@ power initialisation. It consumes the results of earlier power, thermal or perf 
 refused. The refusals were tolerated when they happened, which is why the abort-point rule ("the
 teardown follows the first refusal not tolerated") never named them. The stage then fails before it
 sends its first RPC.
+
+## DIAGNOSTIC run37: zero `NV_OK` for the refused power/thermal/perf/clock queries (setup)
+
+**Change (diagnostic only, never a product answer; `KF3_DIAG_ZERO_OK=1`, default off, the runner's
+flag list gains it; `crates/kf-rm/src/diagzero.rs`).** A link placed just before the unserviced
+ledger answers 13 controls with `NV_OK` and their params zeroed. Each was sent by one of the guest's
+own clients, left unserviced by kayfabe in run36 and answered with status 0 by the real GSP in
+vfio-10: `0x20808524`, `0x2080a70a`, `0x2080a630`, `0x2080a801`, `0x2080a060`, `0x20809004`,
+`0x20810108`, `0x2081010d`, `0x2080205b`, `0x20802068`, `0x20802801`, `0x20802806`, `0x00800106`.
+A serialized envelope is left unserviced. Nothing is forwarded to the host and no GPU state is
+touched. The list was captured from one boot, which is acceptable for a default-off diagnostic and
+is why it can never become a product answer. `KF3_BAR0_TRACE` stays on. kf-rm tests pass (2 new).
+
+**Why zero, and what it cannot show.** Zero is the least specific `OK`. If Windows checks a value
+(for example "at least one thermal sensor"), a zero answer fails that check just as the refusal
+does. So a run where the abort does not move weakens hypothesis 5 but does not falsify it outright.
+
+**Falsifier, stated before run37.** Hypothesis 5 (power/thermal/perf/clock part): the abort after
+the paging channel's `GPFIFO_SCHEDULE` follows from one of these 13 refusals, consumed later. It is
+**supported** if the run logs `DIAG-ZERO-OK` answers for the listed controls and the abort moves
+past VFIO 2861: the next RPCs would be the THERMAL legacy queries `0x2080852e`/`0x20808530`/
+`0x2080852a`, which kayfabe would then refuse or answer, or something later. It is **weakened** if
+the answers are logged and the abort stays at VFIO 2861. If the abort moves EARLIER, a zero answer
+broke something the refusal did not, and the run names it. *Prediction:* the abort moves past 2861.

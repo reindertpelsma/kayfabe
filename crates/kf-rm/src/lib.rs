@@ -17,6 +17,7 @@ pub mod authored;
 pub mod barpde;
 pub mod census;
 pub mod chanlink;
+pub mod diagzero;
 pub mod display;
 pub mod faultbuffer;
 mod gfxpool_probe;
@@ -561,6 +562,15 @@ pub fn served_chain(
     ]);
     if let Some(objects) = objects {
         chain.push(Box::new(objects));
+    }
+    // ★ DIAGNOSTIC, default off (`KF3_DIAG_ZERO_OK=1`; `diagzero.rs`, Windows Code43 hypothesis 5):
+    // just before the ledger, so it answers only what every link above declined.
+    if diagzero::enabled() {
+        eprintln!(
+            "kf-rm: DIAGNOSTIC KF3_DIAG_ZERO_OK: {} unserviced power/thermal/perf/clock controls answered NV_OK with zeroed params (never a product answer)",
+            diagzero::DIAG_ZERO_OK.len()
+        );
+        chain.push(Box::new(diagzero::DiagZeroOk::new(driver)));
     }
     chain.push(Box::new(unserviced::UnservicedLedger::new(
         driver, unserviced,
