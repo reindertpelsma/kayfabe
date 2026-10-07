@@ -24,6 +24,24 @@ from pathlib import Path
 
 KEYWORD_UNSAFE = "un" + "safe"
 
+# Every keyword, strict, reserved and weak. `r#kw` is an identifier, never the keyword, so a raw
+# token matches one of these names only as an identifier. Every OTHER name means the same thing
+# raw or not: `r#include!` is `include!`, `#[r#path = …]` is `#[path = …]` (measured 2026-10-04,
+# rustc 1.99.0), so `Tok.is_ident` ignores the raw prefix for them.
+KEYWORDS = frozenset({
+    "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern",
+    "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub",
+    "ref", "return", "self", "Self", "static", "struct", "super", "trait", "true", "type",
+    KEYWORD_UNSAFE, "use", "where", "while", "abstract", "become", "box", "do", "final", "macro",
+    "override", "priv", "typeof", "unsized", "virtual", "yield", "try", "gen",
+    # weak: keywords only in their position, and never when spelled raw
+    "union", "macro_rules", "safe", "auto", "default", "raw",
+})
+
+# rustc's whitespace (Pattern_White_Space), which is NOT Python's `str.isspace`: U+200E/U+200F
+# are whitespace to rustc and not to Python, U+00A0 the other way round.
+RUST_WS = frozenset("\t\n\x0b\x0c\r \x85\u200e\u200f\u2028\u2029")
+
 
 class LexError(ValueError):
     """The file could not be tokenized; the gate must fail, never skip it."""
@@ -44,7 +62,11 @@ class Tok:
         return self.kind not in ("comment", "doc")
 
     def is_ident(self, name: str | None = None) -> bool:
-        return self.kind == "ident" and not self.raw and (name is None or self.text == name)
+        """An identifier, `name` if given. A raw token never matches a keyword (`r#unsafe` is
+        not the keyword) and always matches any other name (`r#include` IS `include`)."""
+        if self.kind != "ident" or (name is not None and self.text != name):
+            return False
+        return not self.raw or self.text not in KEYWORDS
 
     def is_punct(self, ch: str) -> bool:
         return self.kind == "punct" and self.text == ch
@@ -58,6 +80,45 @@ def _ident_cont(c: str) -> bool:
     return c == "_" or c.isalnum() or (ord(c) > 127 and ("a" + c).isidentifier())
 
 
+def shebang_len(src: str) -> int:
+    """The length rustc strips as a shebang, or 0: rustc_lexer's `strip_shebang`, exactly.
+
+    A file starting `#!` is a shebang UNLESS the first token after `#!` that is not whitespace
+    or a NON-doc comment is `[`. Testing only for whitespace before `[` (the first version of
+    this tokenizer) hid `#!/**/[cfg_attr(…)] <code>`: rustc compiles that line and the
+    tokenizer skipped it (review 2026-10-04). An unterminated comment ends the search, as
+    rustc's tokenizer reaching the end does. A doc comment is a token, so it ends it too."""
+    if not src.startswith("#!"):
+        return 0
+    j, n = 2, len(src)
+    while j < n:
+        if src[j] in RUST_WS:
+            j += 1
+        elif src.startswith("//", j) and not (src.startswith("///", j) and not src.startswith("////", j)) \
+                and not src.startswith("//!", j):
+            e = src.find("\n", j)
+            j = n if e < 0 else e
+        elif src.startswith("/*", j) and not src.startswith("/*!", j) and not (
+                src.startswith("/**", j) and not src.startswith("/***", j) and not src.startswith("/**/", j)):
+            depth, k = 1, j + 2
+            while depth and k < n:
+                if src.startswith("/*", k):
+                    depth, k = depth + 1, k + 2
+                elif src.startswith("*/", k):
+                    depth, k = depth - 1, k + 2
+                else:
+                    k += 1
+            if depth:
+                break
+            j = k
+        else:
+            break
+    if j < n and src[j] == "[":
+        return 0
+    e = src.find("\n")
+    return len(src) if e < 0 else e
+
+
 def tokenize(src: str, name: str = "<src>") -> list[Tok]:
     toks: list[Tok] = []
     i, n = 0, len(src)
@@ -66,10 +127,9 @@ def tokenize(src: str, name: str = "<src>") -> list[Tok]:
     def err(msg: str) -> LexError:
         return LexError(f"{name}:{line}: {msg}")
 
-    # A shebang line is not Rust (`#![` is an inner attribute, not a shebang).
-    if src.startswith("#!") and not src[2:].lstrip().startswith("["):
-        while i < n and src[i] != "\n":
-            i += 1
+    # A shebang line is not Rust; rustc's own rule decides what one is (`shebang_len`). The
+    # perimeter gate fails any file that has one (L0), so this only keeps the tokens honest.
+    i = shebang_len(src)
 
     def advance_to(j: int) -> None:
         nonlocal i, line, col0
@@ -562,7 +622,7 @@ def unsafe_sites(s: Structure) -> list[Site]:
     out: list[Site] = []
     fn_by_kw = {it.kw: it for it in s.items if it.kind == "fn"}
     for k, t in enumerate(c):
-        if t.kind == "ident" and not t.raw and t.text in ASM_MACROS and k + 1 < len(c) and c[k + 1].is_punct("!") \
+        if t.kind == "ident" and t.text in ASM_MACROS and k + 1 < len(c) and c[k + 1].is_punct("!") \
                 and not (k > 0 and c[k - 1].is_ident("macro_rules")):
             out.append(Site("asm", t.line, k))
             continue

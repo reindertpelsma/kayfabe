@@ -335,11 +335,17 @@ impl<'a> Indirect<'a> {
     /// ⚠ Read [`IndirectTarget::Region`] before using this: the pages stay pinned after
     /// the call returns, and only freeing the RM object releases them.
     ///
+    /// ⚠ OPEN (V3_SEC_PERIMETER.md §4.2, audit S1-40): RM pins `limit + 1` bytes, and the
+    /// `limit` field is written by the CALLER, not derived from `len` here; and the pin
+    /// outlives this borrow of `region`. Both are why this export is not yet `OK`.
+    ///
     /// # Errors
     /// [`RawError::ZeroLength`], [`RawError::LengthOverflow`], [`RawError::OutOfRange`],
     /// [`RawError::TooLargeForHost`] — the range is not inside `region`. Refused **here**,
     /// at construction, so a caller cannot hold an out-of-range description and discover it
-    /// only when the driver has already walked it.
+    /// only when the driver has already walked it. [`RawError::Unsupported`] — `region` is
+    /// mapped read-only: the driver pins its pages for the GPU to WRITE (every caller passes a
+    /// read-write view), and a read-only mapping must not become device-writable memory.
     pub fn describing(
         at: usize,
         region: &'a crate::MappedRegion,
@@ -349,6 +355,12 @@ impl<'a> Indirect<'a> {
         if len == 0 {
             return Err(RawError::ZeroLength {
                 what: "descriptor length",
+            });
+        }
+        if !region.is_writable() {
+            return Err(RawError::Unsupported {
+                what: "a read-only region described to the driver",
+                detail: "the driver pins the pages for the device to write; describe a read-write view",
             });
         }
         // Establishes the bound now; `ioctl` re-establishes it when it mints the address,
@@ -1124,6 +1136,49 @@ mod tests {
                 what: "descriptor length",
             })
         );
+    }
+
+    /// ★ `overflow` (review 2026-10-04: the row lost this label): an offset whose sum with the
+    /// length wraps is refused as an OVERFLOW by name, never wrapped into a small, in-range
+    /// address; and a read-only region is refused, because the driver pins it for the device to
+    /// write.
+    #[test]
+    fn a_described_range_that_overflows_or_a_read_only_region_is_refused() {
+        use crate::{Backing, CachePolicy, HostOffset, HostPageSize, HostProt, MappedRegion};
+
+        let page = HostPageSize::query();
+        let region = MappedRegion::map(
+            Backing::PrivateAnonymous,
+            page.bytes(),
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page,
+        )
+        .expect("anonymous mapping");
+        for offset in [u64::MAX, u64::MAX - 1, u64::MAX - page.bytes() + 2] {
+            assert!(
+                matches!(
+                    Indirect::describing(0, &region, HostOffset::new(offset), page.bytes()),
+                    Err(RawError::LengthOverflow { .. })
+                ),
+                "offset {offset:#x} + one page wraps: an overflow, by name"
+            );
+        }
+        let read_only = MappedRegion::map(
+            Backing::PrivateAnonymous,
+            page.bytes(),
+            HostProt::ReadOnly,
+            CachePolicy::WriteBack,
+            page,
+        )
+        .expect("a read-only anonymous mapping");
+        assert!(matches!(
+            Indirect::describing(0, &read_only, HostOffset::new(0), page.bytes()),
+            Err(RawError::Unsupported {
+                what: "a read-only region described to the driver",
+                ..
+            })
+        ));
     }
 
     #[test]

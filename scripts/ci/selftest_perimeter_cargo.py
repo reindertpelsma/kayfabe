@@ -176,6 +176,46 @@ CASES = [
      [ROW_CHECKED, "| `o` | pub | safe fn |  |  | OPEN: later |"], ["E10 ", "status must be OK"], {}),
     ("E13_a_safe_trait_ok_without_sealed", "/// t\npub trait Tr {}\n", "",
      [ROW_CHECKED, "| `trait Tr` | pub | trait |  |  | OK |"], ["E13 "], {}),
+    # ---- added 2026-10-04 after review: each a shape the first generator could not see
+    ("E1_a_cfg_attr_macro_export_is_a_row",
+     "#[cfg_attr(all(), macro_export)]\nmacro_rules! peek {\n    () => {\n        1\n    };\n}\n", "", [ROW_CHECKED],
+     ["add a row under `## crates/u/src/a_unsafe.rs`: | `peek!` | pub | macro"], {}),
+    ("E1d_an_item_spliced_into_a_safe_module_by_an_alias_of_include", "", "", [ROW_CHECKED],
+     ["E1d crates/u/src/b_unsafe.rs:0: `Win (in the module of crates/u/src/s.rs)`"],
+     {"files": {"crates/u/src/lib.rs": LIB + "mod b_unsafe;\nmod s;\n",
+                "crates/u/src/b_unsafe.rs": "/// w\npub(crate) struct Win {\n    base: *mut u8,\n}\n",
+                "crates/u/src/s.rs": "//! s\nuse core::include as splice;\nsplice!(\"b_unsafe.rs\");\n"}}),
+    ("E1c_E1b_a_nested_cfg_attr_derive_hidden_from_rustdoc",
+     "/// h\n#[cfg_attr(all(), cfg_attr(not(doc), derive(Clone)))]\npub struct Hd {\n    p: *mut u8,\n}\n"
+     "impl Drop for Hd {\n    fn drop(&mut self) {}\n}\n", "", [ROW_CHECKED],
+     ["E1c crates/u/src/a_unsafe.rs:", "`doc`", "E1b crates/u/src/a_unsafe.rs:", "`impl Clone for Hd`"], {}),
+    ("E1b_an_impl_in_a_fn_body_hidden_from_rustdoc",
+     "/// h\npub struct Hf;\n/// f\npub fn f() {\n    #[cfg(not(doc))]\n    impl Clone for Hf {\n"
+     "        fn clone(&self) -> Self {\n            Hf\n        }\n    }\n}\n", "", [ROW_CHECKED],
+     ["E1b crates/u/src/a_unsafe.rs:", "`impl Clone for Hf`"], {}),
+    ("E5_an_open_owning_handle_deriving_clone_with_no_debt",
+     "/// h\n#[derive(Clone)]\npub struct H {\n    fd: i32,\n}\nimpl Drop for H {\n    fn drop(&mut self) {}\n}\n", "",
+     [ROW_CHECKED, open_row("H", kind="owning handle"), open_row("<H as Clone>", "default", "trait impl"),
+      open_row("<H as Clone>::clone", "default"), open_row("<H as Drop>", "default", "trait impl"),
+      open_row("<H as Drop>::drop", "default"), open_row("H: Send", kind="auto trait"),
+      open_row("H: Sync", kind="auto trait")],
+     ["E5 ", "implements ['Clone']", "list `E5|crates/u/src/a_unsafe.rs|H`"], {}),
+    ("E5_control_the_same_handle_listed_as_debt",
+     "/// h\n#[derive(Clone)]\npub struct H {\n    fd: i32,\n}\nimpl Drop for H {\n    fn drop(&mut self) {}\n}\n", "",
+     [ROW_CHECKED, open_row("H", kind="owning handle"), open_row("<H as Clone>", "default", "trait impl"),
+      open_row("<H as Clone>::clone", "default"), open_row("<H as Drop>", "default", "trait impl"),
+      open_row("<H as Drop>::drop", "default"), open_row("H: Send", kind="auto trait"),
+      open_row("H: Sync", kind="auto trait")],
+     ["PERIMETER_EXPORTS findings=0"], {"debt": ["E5|crates/u/src/a_unsafe.rs|H"]}),
+    ("E15_a_stale_debt_entry", "", "", [ROW_CHECKED], ["E15 ", "`E5|crates/u/src/a_unsafe.rs|checked`"],
+     {"debt": ["E5|crates/u/src/a_unsafe.rs|checked"]}),
+    ("E4L_a_private_unsafe_fn_without_a_safety_heading",
+     "/// No contract stated.\n#[allow(dead_code)]\nUNSAFE fn hidden(p: *const u8) -> u8 {\n    UNSAFE { *p }\n}\n", "",
+     [ROW_CHECKED], ["E4L crates/u/src/a_unsafe.rs:", "`hidden` is unsafe and has no `# Safety` heading"], {}),
+    # A committed `[build] rustdoc` must not run in the generator's place: `RUSTDOC` names the
+    # pinned toolchain's own (review 2026-10-04). The interposer here fails loudly if it runs.
+    ("G5_control_a_configured_rustdoc_does_not_run", "", "", [ROW_CHECKED], ["PERIMETER_EXPORTS findings=0"],
+     {"files": {".cargo/config.toml": '[build]\nrustdoc = "/bin/false"\n'}}),
     ("E14_an_ok_static_of_an_address_type",
      "/// s\npub static S: AtomicPtrish = AtomicPtrish(0);\n/// a\npub struct AtomicPtrish(usize);\n", "",
      [ROW_CHECKED, "| `S` | pub | static |  |  | OK |", open_row("AtomicPtrish", kind="owning handle"),
@@ -196,7 +236,8 @@ def run_case(tmp: Path, name: str, extra: str, tests: str, rows: list[str], over
         "crates/u/src/bounds.rs": BOUNDS,
         "crates/u/src/a_unsafe.rs": A.replace("EXTRA", extra).replace("TESTS", tests),
         "scripts/ci/perimeter.toml": PERIMETER.replace("TOOLCHAIN", toolchain()).replace(
-            "FORMAT", over.get("format", "61")).replace("E9", over.get("e9", "0")),
+            "FORMAT", over.get("format", "61")).replace("E9", over.get("e9", "0"))
+        + (f"[exports.debt]\nitems = {over['debt']!r}\n".replace("'", '"') if "debt" in over else ""),
         "docs/design/PERIMETER_EXPORTS.md": table(rows, over.get("vd", VD)),
     }
     files.update(over.get("files", {}))

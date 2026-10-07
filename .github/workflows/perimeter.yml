@@ -75,6 +75,14 @@ jobs:
         with:
           name: perimeter-exports-regenerated
           path: docs/design/PERIMETER_EXPORTS.md
+      # and the rustdoc JSON it was generated from, so a reviewer can re-run the gate locally
+      # (`perimeter.py exports --json-dir`) without building kf-qemu's closure twice
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: perimeter-rustdoc-json
+          path: ${{ runner.temp }}/kf-rustdoc/*/doc/*.json
+          if-no-files-found: ignore
       # ★ The base a RISE is judged against (V3_SEC_PERIMETER.md §2): the PR base; on master the
       # first parent; on any other push the merge-base with origin/master. fetch-depth 0 above.
       - name: "G6 size ratchet, exact (rule c); L8 caller obligations; L9 mint sites"

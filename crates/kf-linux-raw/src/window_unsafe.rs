@@ -68,6 +68,18 @@
 //! one `mmap`, which the PRAMIN move needs on the vCPU (OWNER_RULINGS: one host map + one
 //! `mmap`).
 //!
+//! ⚠ **OPEN (review 2026-10-04): the gap is visible to CONCURRENT accessors.** Poisoning is
+//! check-then-act. Between the kernel clearing the old pages and the re-plug, an accessor on
+//! another thread that already passed its `live()` check can copy from the gap (`SIGSEGV`), or
+//! — if an unrelated `mmap(NULL)` lands in the gap first — read or write that foreign mapping,
+//! and a concurrent placement that passed `live()` can `MAP_FIXED` over it. Concurrent use is
+//! the intended model (racing PRAMIN placers on vCPUs). Closing it needs either exclusion
+//! between accessors and a placement's `MAP_FIXED` (a lock or seqlock on the copy path, which
+//! this type's no-lock design and the vCPU rules forbid today) or an atomic replace (a staging
+//! map plus `mremap(MREMAP_FIXED)`, one more syscall per PRAMIN move than OWNER_RULINGS item
+//! 4 allows). Both are an owner decision; the hazard is on the failure path of a file-backed
+//! placement only (a refusing device or file `mmap` handler).
+//!
 //! ## Read/write are `&self` and take **no lock**
 //!
 //! This is the load-bearing difference from the mock harness's shape. `Vmm::gpa_read` is
@@ -85,7 +97,7 @@ use crate::page_size::HostPageSize;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicBool, Ordering};
 use kf_util::lockwitness;
-use std::os::fd::{AsRawFd, BorrowedFd};
+use std::os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd};
 
 /// A guest-physical window's host backing: an address range that is mapped from
 /// construction until `Drop`, into which page-granular backings are placed and restored.
@@ -112,15 +124,19 @@ unsafe impl Send for GuestWindow {}
 
 // SAFETY: every method takes `&self`. `base`, `len` and `page` are immutable for the
 // object's life, and `poisoned` is an atomic, so there is no field a concurrent pair of
-// `&self` methods can tear. The
-// two methods that change what the address range *contains* (`place`, `restore`) do so by
-// `mmap(MAP_FIXED)`, which the kernel applies to the range atomically under its own
-// `mmap_lock` — the range is never transiently unmapped, so a concurrent `read_into`
-// observes old bytes, new bytes or a mixture, and never a fault. That residual mixture is
-// a data race in the letter of the abstract machine and is NOT claimed away: §4.2.2's
-// ruling (keep the memcpy; a torn read is indistinguishable from a hostile guest write,
-// and the API cannot re-read the source so the double fetch is excluded structurally)
-// applies verbatim, one layer out. See the module docs.
+// `&self` methods can tear. The doors that change what the address range *contains*
+// (`place`, `place_sealed`, `place_device_view`, `restore`) do so by `mmap(MAP_FIXED)`, which
+// the kernel applies under its own `mmap_lock`; a SUCCESSFUL placement replaces the range
+// without unmapping it in between, so a concurrent `read_into` observes old bytes, new bytes or
+// a mixture. That mixture is a data race in the letter of the abstract machine and is NOT
+// claimed away: §4.2.2's ruling (keep the memcpy; a torn read is indistinguishable from a
+// hostile guest write, and the API cannot re-read the source so the double fetch is excluded
+// structurally) applies verbatim, one layer out.
+// ⚠ RESIDUAL, NOT CLAIMED AWAY (review 2026-10-04): a FAILED file-backed `MAP_FIXED` leaves a
+// gap until `replug` runs (a8). An accessor on another thread that passed `live()` before the
+// poison can fault in that gap, or touch a foreign mapping that an unrelated `mmap` placed
+// there; a concurrent placement can `MAP_FIXED` over such a mapping. The module docs state the
+// two ways to close it; until an owner chooses one, this impl's row is OPEN with that reason.
 unsafe impl Sync for GuestWindow {}
 
 impl GuestWindow {
@@ -237,42 +253,50 @@ impl GuestWindow {
         backing: Backing<'_>,
     ) -> Result<(), RawError> {
         lockwitness::assert_lock_free("mmap MAP_FIXED (placing a backing inside a window)");
-        let (fd, file_offset, share_flags) = match backing {
-            Backing::PrivateAnonymous => (-1, 0, libc::MAP_PRIVATE | libc::MAP_ANONYMOUS),
-            Backing::SharedFile { fd, offset } => {
-                geometry::require_aligned(offset, self.page, "file offset")?;
-                let off = libc::off_t::try_from(offset)
-                    .map_err(|_| RawError::TooLargeForHost { value: offset })?;
-                // ★ a10: every page of the placement must exist in the file NOW. A page past
-                // end-of-file is mapped without complaint and then raises SIGBUS on the first
-                // access, which `read_into` would make from safe code. (A file truncated AFTER
-                // placement is the residual, OPEN: it needs `F_SEAL_SHRINK` on the backing.)
-                let size = file_size(fd)?;
-                let end = offset
-                    .checked_add(len)
-                    .ok_or(RawError::LengthOverflow { offset, len })?;
-                if end > size {
-                    return Err(RawError::OutOfRange {
-                        offset,
-                        len,
-                        object_len: size,
-                    });
-                }
-                (fd.as_raw_fd(), off, libc::MAP_SHARED)
-            }
+        let source = match backing {
+            Backing::PrivateAnonymous => Source::Anonymous { noreserve: false },
+            Backing::SharedFile { fd, offset } => Source::File { fd, offset },
             // ★★★ Refused by variant, at the door. See `RawError::DeviceBackingNotPlaceable`:
             // a window placement is MAP_FIXED into a range a guest memslot already names, and
             // a device backing is a window onto hardware. There is no call for which the
             // composition is right, so there is no check — there is a refusal.
             Backing::DeviceFile { .. } => return Err(RawError::DeviceBackingNotPlaceable),
         };
+        self.fixed_map(offset, len, source, "placement")
+    }
+
+    /// ★ Place `[file_offset, file_offset + len)` of a [`SealedFile`] over `[offset, offset +
+    /// len)` of the window: [`GuestWindow::place`]'s `SharedFile` arm with NO syscall but the
+    /// `mmap` itself.
+    ///
+    /// The a10 bound (every page of the placement exists in the file) is checked against the
+    /// size the [`SealedFile`] recorded when it was adopted, off the vCPU, and that size cannot
+    /// fall afterwards (`F_SEAL_SHRINK`). `place` must `fstat` every time, which made a PRAMIN
+    /// move two syscalls on the vCPU where OWNER_RULINGS item 4 allows one host map plus one
+    /// `mmap` (review 2026-10-04); this door keeps it at one, and it also closes a10's
+    /// truncation residual for the files that use it.
+    ///
+    /// # Errors
+    /// As [`GuestWindow::place`]; [`RawError::OutOfRange`] when the placement runs past the
+    /// sealed size.
+    ///
+    /// # Panics
+    /// If called with any ranked lock held (R1, §4.5).
+    pub fn place_sealed(
+        &self,
+        offset: HostOffset,
+        len: u64,
+        file: &SealedFile,
+        file_offset: u64,
+    ) -> Result<(), RawError> {
+        lockwitness::assert_lock_free("mmap MAP_FIXED (placing a sealed file inside a window)");
         self.fixed_map(
             offset,
             len,
-            fd,
-            file_offset,
-            share_flags,
-            libc::PROT_READ | libc::PROT_WRITE,
+            Source::Sealed {
+                file,
+                offset: file_offset,
+            },
             "placement",
         )
     }
@@ -347,15 +371,7 @@ impl GuestWindow {
                 detail: "the window's write doors would fault on it; place a writable view",
             });
         }
-        self.fixed_map(
-            offset,
-            len,
-            fd.as_raw_fd(),
-            0,
-            libc::MAP_SHARED,
-            libc::PROT_READ | libc::PROT_WRITE,
-            "device view",
-        )
+        self.fixed_map(offset, len, Source::Device { fd }, "device view")
     }
 
     /// ★★ Restore `[offset, offset + len)` to anonymous zero-fill — the **unmap** of the
@@ -378,25 +394,21 @@ impl GuestWindow {
         self.fixed_map(
             offset,
             len,
-            -1,
-            0,
-            libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_NORESERVE,
-            libc::PROT_READ | libc::PROT_WRITE,
+            Source::Anonymous { noreserve: true },
             "restore",
         )
     }
 
-    /// The one `MAP_FIXED` in this file. Both doors above validate their own arguments
-    /// through it, so neither has a precondition the other is trusted to have met (the
-    /// crate's house rule).
+    /// The one `MAP_FIXED` in this file, and EVERY check it relies on: the window's own range,
+    /// alignment, and — for a file — that each page of the placement exists in the file now
+    /// (a10). No door above hands it a precondition: each passes what it was given, as a
+    /// [`Source`], and this fn validates it (rule (a); ⊘ until 2026-10-04 the file offset and
+    /// size were "validated by the caller two frames up", review).
     fn fixed_map(
         &self,
         offset: HostOffset,
         len: u64,
-        fd: libc::c_int,
-        file_offset: libc::off_t,
-        share_flags: libc::c_int,
-        prot: libc::c_int,
+        source: Source<'_>,
         what: &'static str,
     ) -> Result<(), RawError> {
         self.live()?;
@@ -406,32 +418,79 @@ impl GuestWindow {
         geometry::require_aligned(offset.get(), self.page, what)?;
         geometry::require_aligned(len, self.page, what)?;
         let (start, len_host) = bounds::checked_span(self.len_bytes(), offset, len, what)?;
+        let anon = libc::MAP_PRIVATE | libc::MAP_ANONYMOUS;
+        let (fd, file_offset, share_flags) = match source {
+            Source::Anonymous { noreserve: false } => (-1, 0, anon),
+            Source::Anonymous { noreserve: true } => (-1, 0, anon | libc::MAP_NORESERVE),
+            Source::File { fd, offset } => {
+                // ★ a10: every page of the placement must exist in the file NOW. A page past
+                // end-of-file is mapped without complaint and then raises SIGBUS on the first
+                // access, which `read_into` would make from safe code. A file truncated AFTER
+                // placement is the residual (OPEN); `place_sealed` closes it.
+                let off = self.file_extent(offset, len, file_size(fd)?)?;
+                (fd.as_raw_fd(), off, libc::MAP_SHARED)
+            }
+            Source::Sealed { file, offset } => {
+                let off = self.file_extent(offset, len, file.len)?;
+                (file.fd.as_raw_fd(), off, libc::MAP_SHARED)
+            }
+            // A device node's `mmap` handler bounds what it maps (the NVIDIA driver refuses any
+            // `vm_pgoff` but zero and any length but the armed one, `nv-mmap.c:533-565`).
+            Source::Device { fd } => (fd.as_raw_fd(), 0, libc::MAP_SHARED),
+        };
 
-        // SAFETY: this is the `MAP_FIXED` call, and its argument is that the target range
-        // is one this process already owns and is still holding:
-        //  (a) `self.base` is the type invariant — a live mapping of exactly `self.len`
-        //      bytes, created at a KERNEL-CHOSEN address (so it displaced nothing) and not
-        //      released until `Drop`;
-        //  (b) `checked_span` on the line above proved `start + len_host <= self.len` with
-        //      the overflow checked BEFORE the bound, so `base.add(start)` is in bounds of
-        //      that allocation (the precondition of `add`) and the whole range lies inside
-        //      the window — `MAP_FIXED` can therefore replace only our own window filler,
-        //      never the hypervisor's heap, our stack or our text;
-        //  (c) `offset` and `len` are host-page-aligned (checked above) and `file_offset`
-        //      was validated by the caller two frames up in the same expression, so `mmap`
-        //      has no rounding to do;
-        //  (d) no reference into the range can be outstanding: this type hands out no
-        //      borrows at all — `read_into`/`write_from` copy and return.
-        // The result is compared against the requested address below, so a kernel that
-        // honoured the request elsewhere cannot be mistaken for success.
+        // SAFETY: the address computation only. `start + len_host <= self.len` was proven
+        // above by `checked_span`, with the overflow checked BEFORE the bound, and the
+        // type invariant says `base` is a live mapping of `self.len` bytes, so `base.add(start)`
+        // stays inside that allocation (the precondition of `add`).
         let target = unsafe { self.base.as_ptr().add(start).cast::<libc::c_void>() };
-        let ret = map_fixed(target, len_host, prot, share_flags, fd, file_offset);
+        // SAFETY: `map_fixed`'s contract, each half established in this fn:
+        //  (a) `target..target + len_host` lies inside this window's own live mapping, which was
+        //      created at a KERNEL-CHOSEN address (so it displaced nothing) and is not released
+        //      until `Drop` — `MAP_FIXED` can replace only our own pages, never the
+        //      hypervisor's heap, our stack or our text;
+        //  (b) offset and length are host-page-aligned (checked above), and a file's
+        //      `[file_offset, file_offset + len)` exists in it (a10, `file_extent`) or is the
+        //      device driver's to bound;
+        //  (c) no reference into the range can be outstanding: this type hands out no borrows
+        //      at all — `read_into`/`write_from` copy and return.
+        let ret = unsafe {
+            map_fixed(
+                target,
+                len_host,
+                libc::PROT_READ | libc::PROT_WRITE,
+                share_flags,
+                fd,
+                file_offset,
+            )
+        };
         if ret == libc::MAP_FAILED {
             let err = last_syscall_error("mmap");
-            self.replug(target, len_host);
+            // SAFETY: `replug`'s contract: `target`/`len_host` are exactly the in-bounds,
+            // page-aligned range of this window the failed `MAP_FIXED` above named.
+            unsafe { self.replug(target, len_host) };
             return Err(err);
         }
         Ok(())
+    }
+
+    /// a10: `[offset, offset + len)` of a file of `size` bytes, page-aligned and inside it; the
+    /// offset as the `off_t` `mmap` takes.
+    fn file_extent(&self, offset: u64, len: u64, size: u64) -> Result<libc::off_t, RawError> {
+        geometry::require_aligned(offset, self.page, "file offset")?;
+        let off = libc::off_t::try_from(offset)
+            .map_err(|_| RawError::TooLargeForHost { value: offset })?;
+        let end = offset
+            .checked_add(len)
+            .ok_or(RawError::LengthOverflow { offset, len })?;
+        if end > size {
+            return Err(RawError::OutOfRange {
+                offset,
+                len,
+                object_len: size,
+            });
+        }
+        Ok(off)
     }
 
     /// ★ a8: after a failed `MAP_FIXED`, put the anonymous filler back where the kernel may
@@ -441,11 +500,18 @@ impl GuestWindow {
     /// or somebody else's), or the kernel ignores the flag, the range cannot be proved whole:
     /// the window is poisoned. ⚠ OPEN: a foreign anonymous mapping that merged into the
     /// filler's VMA is indistinguishable from the filler (V3_SEC_PERIMETER.md §4.1, a8).
-    fn replug(&self, target: *mut libc::c_void, len_host: usize) {
+    ///
+    /// # Safety
+    ///
+    /// `target..target + len_host` is the page-aligned range of THIS window that a failed
+    /// `MAP_FIXED` named. On success the re-plug is recorded as the window's filler again; given
+    /// any other range, a successful `MAP_FIXED_NOREPLACE` would heal nothing and the window
+    /// would go on reporting a gap as whole (rule (a): an unchecked precondition, so `unsafe`).
+    unsafe fn replug(&self, target: *mut libc::c_void, len_host: usize) {
         // SAFETY: `MAP_FIXED_NOREPLACE` creates a mapping only if NO page of the range is
         // mapped, and fails with `EEXIST` otherwise, so this call can displace nothing — not
-        // ours, not another thread's. `target`/`len_host` are the in-bounds, page-aligned pair
-        // `fixed_map` checked; the flags and protections are constants.
+        // ours, not another thread's. `target`/`len_host` are this window's page-aligned range
+        // by this fn's contract; the flags and protections are constants.
         let ret = unsafe {
             libc::mmap(
                 target,
@@ -608,6 +674,68 @@ impl GuestWindow {
     }
 }
 
+/// What [`GuestWindow::fixed_map`] places, as each door received it; `fixed_map` checks every
+/// part of it (no door hands it a precondition).
+#[derive(Debug, Clone, Copy)]
+enum Source<'a> {
+    /// The anonymous filler (`restore` asks for `MAP_NORESERVE`, `place` does not).
+    Anonymous { noreserve: bool },
+    /// A shared file: its size is read with `fstat` at placement (a10).
+    File { fd: BorrowedFd<'a>, offset: u64 },
+    /// A file whose size was recorded at adoption and cannot shrink ([`SealedFile`]).
+    Sealed { file: &'a SealedFile, offset: u64 },
+    /// An armed device node at offset 0; its driver bounds the mapping.
+    Device { fd: BorrowedFd<'a> },
+}
+
+/// ★ A shared file that cannot SHRINK, adopted once (off the vCPU): the placement source
+/// [`GuestWindow::place_sealed`] bounds with no syscall.
+///
+/// [`SealedFile::adopt`] duplicates the descriptor (this value owns its own reference), checks
+/// that `F_SEAL_SHRINK` is set, and only THEN records the size: from that point the size can
+/// only grow, so every page below the recorded size exists for this value's whole life and a
+/// placement inside it can never become a `SIGBUS` mapping (a10's truncation residual, closed
+/// for this source). `SharedRam` seals itself at creation; QEMU's `memory-backend-memfd` seals
+/// by default (`seal=on`).
+#[derive(Debug)]
+pub struct SealedFile {
+    fd: OwnedFd,
+    len: u64,
+}
+
+impl SealedFile {
+    /// Adopt (a duplicate of) `fd`.
+    ///
+    /// # Errors
+    /// [`RawError::Unsupported`] when the file can shrink (no `F_SEAL_SHRINK`, or a file that
+    /// takes no seals at all); [`RawError::Syscall`] when it cannot be duplicated or sized.
+    pub fn adopt(fd: BorrowedFd<'_>) -> Result<Self, RawError> {
+        let fd = fd.try_clone_to_owned().map_err(|e| RawError::Syscall {
+            call: "dup(a file to seal-check)",
+            errno: e.raw_os_error(),
+        })?;
+        // SAFETY: `fcntl(F_GET_SEALS)` reads no memory of this process: both arguments are
+        // integers, and `fd` is the live descriptor this value owns. The result is checked.
+        let seals = unsafe { libc::fcntl(fd.as_raw_fd(), libc::F_GET_SEALS) };
+        if seals < 0 || seals & libc::F_SEAL_SHRINK == 0 {
+            return Err(RawError::Unsupported {
+                what: "a sealed placement source",
+                detail: "the file can shrink (no F_SEAL_SHRINK): a page placed from it could vanish \
+                         and fault the next access; place it with `GuestWindow::place`, which sizes \
+                         it at every placement",
+            });
+        }
+        let len = file_size(fd.as_fd())?;
+        Ok(SealedFile { fd, len })
+    }
+
+    /// The size recorded at adoption: a lower bound for the file's whole life.
+    #[must_use]
+    pub fn len_bytes(&self) -> u64 {
+        self.len
+    }
+}
+
 /// The size of the file behind `fd`, by `fstat` (a10).
 fn file_size(fd: BorrowedFd<'_>) -> Result<u64, RawError> {
     let mut st = core::mem::MaybeUninit::<libc::stat>::uninit();
@@ -628,9 +756,17 @@ fn file_size(fd: BorrowedFd<'_>) -> Result<u64, RawError> {
     })
 }
 
-/// The one `mmap(MAP_FIXED)` of [`GuestWindow::fixed_map`]. Its caller established that
-/// `target..target + len` lies inside the window's own mapping.
-fn map_fixed(
+/// The one `mmap(MAP_FIXED)` of [`GuestWindow::fixed_map`], split out so the a8 fault seam can
+/// stand in for it in tests.
+///
+/// # Safety
+///
+/// `target..target + len` is a page-aligned range inside a mapping this process owns and may
+/// replace (a [`GuestWindow`]'s own range), with no reference into it outstanding; and for a
+/// file (`fd >= 0`, not `MAP_ANONYMOUS`), `[file_offset, file_offset + len)` exists in it now,
+/// or the file is a device whose `mmap` handler bounds the mapping. `MAP_FIXED` replaces
+/// whatever is mapped at `target` without asking (rule (a): `unsafe`, review 2026-10-04).
+unsafe fn map_fixed(
     target: *mut libc::c_void,
     len: usize,
     prot: libc::c_int,
@@ -642,9 +778,9 @@ fn map_fixed(
     if let Some(ret) = seam::fail_fixed(target, len) {
         return ret;
     }
-    // SAFETY: `fixed_map`'s argument, verbatim: the range is in bounds of the window's live
-    // mapping (`checked_span`), page-aligned, and no borrow into it is outstanding, so
-    // `MAP_FIXED` replaces only the window's own pages.
+    // SAFETY: this fn's contract, verbatim: the range is the caller's own replaceable,
+    // page-aligned mapping with no borrow into it, and a file's pages exist, so `MAP_FIXED`
+    // replaces only those pages and the result is never a SIGBUS mapping.
     unsafe {
         libc::mmap(
             target,
@@ -1271,6 +1407,75 @@ mod tests {
             },
         )
         .expect("the page the file does have places");
+    }
+
+    /// ★ a10 without the per-placement `fstat` (review 2026-10-04): a [`SealedFile`] is
+    /// refused unless it cannot shrink, a placement past its recorded size is refused by name,
+    /// and one inside it places and reads through.
+    #[test]
+    fn a_sealed_file_places_without_a_syscall_and_refuses_past_its_size() {
+        use std::os::fd::AsFd;
+        let p = page();
+        let w = GuestWindow::create(4 * p.bytes(), p).expect("window");
+        // A memfd that takes seals but has none: `F_GET_SEALS` answers 0, so only the
+        // `F_SEAL_SHRINK` test can refuse it (a plain file answers EINVAL, which proves less).
+        // SAFETY: test-only; the name is a NUL-terminated literal and the result is checked
+        // before `OwnedFd` takes ownership of it.
+        let unsealed = unsafe {
+            let raw = libc::memfd_create(c"kf-a10-unsealed".as_ptr(), libc::MFD_ALLOW_SEALING);
+            assert!(raw >= 0, "memfd_create");
+            <OwnedFd as std::os::fd::FromRawFd>::from_raw_fd(raw)
+        };
+        for f in [memfd_of(p.bytes()).into(), unsealed] {
+            let f: OwnedFd = f;
+            assert!(
+                matches!(
+                    SealedFile::adopt(f.as_fd()),
+                    Err(RawError::Unsupported {
+                        what: "a sealed placement source",
+                        ..
+                    })
+                ),
+                "a file that can shrink is refused"
+            );
+        }
+        let ram = crate::SharedRam::create(2 * p.bytes()).expect("a sealed memfd");
+        let sealed = SealedFile::adopt(ram.as_backing_fd()).expect("SharedRam is sealed");
+        assert_eq!(sealed.len_bytes(), 2 * p.bytes());
+        assert_eq!(
+            w.place_sealed(HostOffset::ZERO, 2 * p.bytes(), &sealed, p.bytes()),
+            Err(RawError::OutOfRange {
+                offset: p.bytes(),
+                len: 2 * p.bytes(),
+                object_len: 2 * p.bytes(),
+            })
+        );
+        assert_eq!(
+            w.place_sealed(HostOffset::ZERO, p.bytes(), &sealed, !p.mask()),
+            Err(RawError::TooLargeForHost { value: !p.mask() }),
+            "a file offset no `off_t` can hold is refused by name before any arithmetic"
+        );
+        w.place_sealed(HostOffset::new(p.bytes()), p.bytes(), &sealed, p.bytes())
+            .expect("the second page of the file, inside it");
+        w.write_from(HostOffset::new(p.bytes()), b"sealed")
+            .expect("write through it");
+        let m = crate::MappedRegion::map(
+            Backing::SharedFile {
+                fd: ram.as_backing_fd(),
+                offset: p.bytes(),
+            },
+            p.bytes(),
+            HostProt::ReadWrite,
+            crate::CachePolicy::WriteBack,
+            p,
+        )
+        .expect("map the file's second page directly");
+        let mut direct = [0u8; 6];
+        m.read_into(HostOffset::ZERO, &mut direct).expect("read it");
+        assert_eq!(
+            &direct, b"sealed",
+            "the window showed the file's second page"
+        );
     }
 
     /// A file of exactly `len` bytes (unlinked at once; the descriptor keeps it).

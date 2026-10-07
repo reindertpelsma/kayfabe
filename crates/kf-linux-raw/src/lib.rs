@@ -307,4 +307,4 @@ pub use signal_unsafe::{
 };
 pub use vcpu_unsafe::{KvmVcpu, VcpuExit};
 pub use view::RegionView;
-pub use window_unsafe::GuestWindow;
+pub use window_unsafe::{GuestWindow, SealedFile};

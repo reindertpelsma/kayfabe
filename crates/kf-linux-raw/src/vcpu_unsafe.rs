@@ -41,19 +41,15 @@
 
 use crate::error::{RawError, last_syscall_error};
 use crate::host_fd_unsafe::adopt_fd;
-use crate::kvm_unsafe::{Kvm, KvmVm, ioctl_arg};
+use crate::kvm_unsafe::{Kvm, KvmVm, SystemRequest, VmRequest};
 use kf_util::{leafwitness, lockwitness};
 use std::os::fd::{AsRawFd, OwnedFd};
 use std::sync::Arc;
 
 // --- ioctl numbers -------------------------------------------------------------------
 
-/// `_IO(KVMIO, 0x04)` — the size of the per-vCPU shared run structure.
-const KVM_GET_VCPU_MMAP_SIZE: libc::c_ulong = 0xAE04;
-/// `_IO(KVMIO, 0x41)` — create a vCPU, returning its descriptor.
-const KVM_CREATE_VCPU: libc::c_ulong = 0xAE41;
-/// `_IO(KVMIO, 0x47)` — where the hypervisor may put its 3-page task-state segment.
-const KVM_SET_TSS_ADDR: libc::c_ulong = 0xAE47;
+// `KVM_GET_VCPU_MMAP_SIZE`, `KVM_CREATE_VCPU` and `KVM_SET_TSS_ADDR` are by-value requests:
+// they live in `kvm_unsafe.rs`'s closed request sets (`SystemRequest`, `VmRequest`).
 /// `_IO(KVMIO, 0x80)` — enter the guest.
 const KVM_RUN: libc::c_ulong = 0xAE80;
 /// `_IOW(KVMIO, 0x82, struct kvm_regs)` — 144 bytes (18 × `__u64`).
@@ -295,12 +291,7 @@ impl KvmVcpu {
     pub fn create(kvm: &Kvm, vm: Arc<KvmVm>, id: u32) -> Result<Self, RawError> {
         lockwitness::assert_lock_free("KVM_CREATE_VCPU");
         leafwitness::assert_leaf_free("KVM_CREATE_VCPU");
-        let run_size = ioctl_arg(
-            kvm.borrow_fd(),
-            KVM_GET_VCPU_MMAP_SIZE,
-            0,
-            "KVM_GET_VCPU_MMAP_SIZE",
-        )?;
+        let run_size = kvm.by_value(SystemRequest::GetVcpuMmapSize)?;
         let run_size = usize::try_from(run_size).unwrap_or(0);
         if run_size < EXIT_UNION_OFFSET + core::mem::size_of::<KvmMmioExit>() {
             return Err(RawError::Unsupported {
@@ -309,12 +300,7 @@ impl KvmVcpu {
                          the uapi layout is not the one these structs are written for",
             });
         }
-        let raw = ioctl_arg(
-            vm.borrow_fd(),
-            KVM_CREATE_VCPU,
-            libc::c_ulong::from(id),
-            "KVM_CREATE_VCPU",
-        )?;
+        let raw = vm.by_value(VmRequest::CreateVcpu(id))?;
         let fd = adopt_fd(raw, "KVM_CREATE_VCPU")?;
 
         // SAFETY: a `PROT_READ|PROT_WRITE`, `MAP_SHARED` mapping of exactly `run_size`
@@ -563,12 +549,7 @@ impl KvmVm {
         if self.check_extension(KVM_CAP_SET_TSS_ADDR)? == 0 {
             return Ok(false);
         }
-        ioctl_arg(
-            self.borrow_fd(),
-            KVM_SET_TSS_ADDR,
-            TSS_ADDR,
-            "KVM_SET_TSS_ADDR",
-        )?;
+        self.by_value(VmRequest::SetTssAddr(TSS_ADDR))?;
         Ok(true)
     }
 }

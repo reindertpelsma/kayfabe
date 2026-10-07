@@ -13,6 +13,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -29,12 +30,20 @@ def compare(actual: dict[str, str], baseline: dict[str, str]) -> list[str]:
     return sorted(actual.keys() - baseline.keys())
 
 
+FROZEN = "crates/kayfabe-doorbell"
+
+
 def frozen() -> dict[str, str]:
-    """Bind the frozen prototype's gate exceptions to its exact existing source."""
-    crate = ROOT / "crates/kayfabe-doorbell"
-    paths = sorted([crate / "Cargo.toml", *crate.rglob("*.rs")])
-    return {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
-            for path in paths if "target" not in path.parts}
+    """Bind the frozen prototype's gate exceptions to its exact existing source.
+
+    Every file git knows under the path (tracked, or untracked and not ignored), with NO name
+    excluded. ⊘ This used to drop any path with a `target` component, and cargo discovers
+    `src/bin/target/main.rs` as a binary named `target`: a new exempt unit the hash never saw
+    (review 2026-10-04). A file set that cannot be listed fails, never shrinks."""
+    out = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", FROZEN],
+                         cwd=ROOT, capture_output=True, check=True).stdout.decode()
+    paths = sorted({p for p in out.split("\0") if p})
+    return {p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in paths if (ROOT / p).is_file()}
 
 
 def claims() -> dict[str, str]:
