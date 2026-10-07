@@ -1,0 +1,7 @@
+kf3: privilege check passed — no thread of this process holds CAP_SYS_ADMIN (permitted/effective/ambient) across 5 thread(s)
+kf-host: SEC_P0 channel birth engine=0xb flags=0x00400080 PRIVILEGED_CHANNEL=0
+kf-host: SEC_P0 channel birth engine=0xb flags=0x00400080 PRIVILEGED_CHANNEL=0
+kf-host: SEC_P0 channel birth engine=0x9 flags=0x00400080 PRIVILEGED_CHANNEL=0
+kf-host: SEC_P0 channel birth engine=0x1 flags=0x00400080 PRIVILEGED_CHANNEL=0
+kf-host: SEC_P0 channel birth engine=0x9 flags=0x00400080 PRIVILEGED_CHANNEL=0
+kf-host: SEC_P0 channel birth engine=0x9 flags=0x00400080 PRIVILEGED_CHANNEL=0
