@@ -845,3 +845,61 @@ whether its reason still holds before relying on it (see the top of this file).
       now with the isolate to make it worth removing."*
     - **How to apply:** v3 is one process, with no isolate children, no scratchpad process and no
       IPC (`design/THE_ARCHITECTURE_v3.md:169`; the owner's reasons are quoted at `:187-194`).
+
+## U. The deferred API (class 0x5080) is Translated-only; the doorbell is not a boundary (2026-10-07)
+
+**STATUS: LIVE ruling; one open question for the owner (U.4).**
+
+1. **Class 5080 is Translated-only.** Owner, 2026-10-07: *"So then my ruling will be api defer for
+   translated only."*
+   - **How to apply:** a class-5080 alloc on a Passthrough channel is refused `NOT_SUPPORTED`; on a
+     Translated channel it is admitted, and the `0x200` trigger (`DeferredApiV2`, data = the
+     `hApiHandle` registered with `NV5080_CTRL_CMD_DEFERRED_API[_V2]`) is serviced by a
+     host-authored equivalent, never forwarded as guest bytes. There is no channel-creation flag that
+     announces the class (ogkm `alloc_channel.h` `NVOS04_FLAGS_*`; the class is a `KernelChannel`
+     child, `RS_FLAGS_ALLOC_NON_PRIVILEGED`, `resource_list.h:1525`), and a Passthrough ring cannot be
+     converted mid-life, so the alloc RPC is the control point.
+2. **The doorbell is not a synchronization boundary.** Owner, 2026-10-07: *"No diff at doorbell,
+   doorbell doesn't provide any safe boundary for you other than translate and ring on host, it only
+   provides "everything before this rung is now scheduled to run after it", it doesn't even provide
+   a boundary to you to run code before a channel advances, as this can be done without doorbell or
+   worse a doorbell of another process just sending the same token (everyone can write), plus perf
+   wise its bad, doorbells are the most optimized piece of code. Nothing can be injected there."*
+   - **How to apply:** ordering against a channel's progress exists only in streams kayfabe writes.
+     A deferred `DMA_INVALIDATE_TLB` is therefore a host-written gate: an acquire on a host-owned
+     semaphore at the `0x200`, released by the VA-manager thread after its diff is committed, then the
+     host invalidate. Nothing blocks on a vCPU and no completion is forged. (Whether the Translated
+     plane can emit that acquire is unverified; it is the first step of the implementation.)
+3. **An unprivileged-origin deferred-API channel**, if one is ever needed, must not accept physical
+   operands and must not map VRAM beyond what is assigned to the channel, as for Passthrough. Owner,
+   2026-10-07: *"Such channels should absolutely not accept phys operands or map the entire vram
+   beyond whats assigned to the channel much like passthrough."* Today every host channel is born
+   with `DENY_PHYSICAL_MODE_CE` (`kf-host/src/channel.rs:234`); the VAS restriction (the channel's
+   own VAS, not the GPGA VAS) is not built, and no creation-time signal exists to choose it, so such
+   a use is refused until it is needed.
+4. **Open for the owner.** The 2026-10-07 measurement (`traces/deferred_api_falsify_20261007/`,
+   driver 595.91.07, not the 580 interval) shows a host client registers the guest's chosen
+   `hApiHandle` verbatim (only `0`, the client handle, the firmware-reserved range and its own live
+   handles are refused) and that two clients have independent namespaces. That is the owner's own
+   condition for "match the handle, no translated handling". Ruling U.1 predates the result and is
+   unchanged. Matching would still not cover entries whose side effects kayfabe owns (the TLB
+   invalidate), and nothing in the scanned userspace needs the class (below), so there is no demand
+   for the Passthrough route. **Owner to say whether U.1 stays as written.**
+
+**Evidence behind U (measured unless marked).**
+- No Linux guest run allocated the class: 250 trace files carry `AllocClassNotPermitted` lines
+  (class 5080 was not on the allowlist before 2026-10-07); class 20608 (`0x5080`) appears only in
+  Windows runs 16 and 17.
+- A byte scan of the NVIDIA userspace (595.91.07 on the host; 610.43.02 CUDA compat) finds none of
+  the four control ids `0x50800101..104` in libcuda, OpenCL, NVENC, NVML, NVCUVID, the GL/EGL/GLX
+  cores, Vulkan SC, `nvidia-smi` or the MPS server; positive controls (`GPU_GET_GID_INFO`,
+  `GR_GET_INFO`, `BUS_GET_INFO_V2`) hit. 580.x libraries and the Windows user-mode driver were not
+  scanned.
+- Of the eight commands the trigger can run, `DMA_INVALIDATE_TLB`, `GR_CTXSW_ZCULL_BIND`,
+  `GR_CTXSW_PM_BIND`, `GR_CTXSW_PREEMPTION_BIND` are `NON_PRIVILEGED`; `GPU_PROMOTE_CTX`,
+  `GPU_INITIALIZE_CTX`, `FIFO_UPDATE_CHANNEL_INFO` are `PRIVILEGED`; `GPU_EVICT_CTX` is kernel-only
+  (ogkm flag words). Registration does not check the inner command; the check runs at trigger with
+  the registrant's privilege (`deferred_api.c`). Execution on GSP GPUs is in physical RM (inferred).
+- A stray `0x200` with no 5080 object raises Xid 32 on the firing channel only and the channel is
+  RC'd; no MMU fault reaches nvidia-uvm. Not measured: cross-object, cross-channel and cross-client
+  isolation, and rate (the probe's CE channel could not bind a software object).
