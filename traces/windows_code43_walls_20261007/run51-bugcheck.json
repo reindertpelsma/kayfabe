@@ -1,0 +1,2 @@
+/dev/nbd0 disconnected
+{"schema": "kayfabe-bugcheck-recovery/1", "run": 51, "disk_access": "read-only NBD and NTFS; supervisor stopped", "pagefile": {"valid": false, "signature": "0000000000000000", "all_zero": true}, "minidump": null, "evtx_copied": ["System.evtx"], "cleanup_verified": true}

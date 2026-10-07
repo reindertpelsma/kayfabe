@@ -2822,3 +2822,69 @@ both runs of that field and not in the baseline `name` windows nor in the idle w
 **Falsifier:** if a field's windows hold no refused control that the baseline lacks, the `[N/A]` is not a
 refused-RPC effect (then the owner's premise is wrong for that field and the cause is NVML/driver-side).
 Nothing is served in this run; the mapping goes to the owner with a per-control recommendation.
+
+### Run51 result (owner question): which refused control feeds which `nvidia-smi` field — measured
+
+Product/QEMU `621310b3`, flags as run47, BAR1 128 MiB (unchanged); one 5-minute boot by hand, ACPI shutdown,
+QEMU exit 0, no `DEAD`, host afterwards unchanged (Xid 61, no QEMU, NBD disconnected, P8).
+Probe `scripts/bench/windows/smi_field_probe.py` (QGA `nvidia-smi.exe --query-gpu=<field>`; qemu.log line
+counts before/after each query; the distinct `rpc-trace` requests, `Free` excluded, in each window), two
+repetitions interleaved with an idle window. [Data](run51-fields.json), [trace](run51-qemu.log.gz),
+[command](run51-command.json), [host after](run51-host-after.txt).
+
+**Measured.** An idle window of 5 s holds **0 requests** (clean noise floor). `name` (baseline) is identical in
+both repetitions: 11 requests (RmAlloc 0x0000, 0x0070, 0x0073, 0x0080, 0x2080, 0x9096, 0x90f1; RmControl
+`0x00801812`, `0x20809064`, `0x90f10106` served; `0x20809004` refused). Added over the baseline, present in both
+repetitions of the field and absent in `name` and idle:
+
+| field (output) | requests added to the baseline | status |
+|---|---|---|
+| `pstate` (`[N/A]`) | `0x20800aff`, `0x20802068` | both refused |
+| `utilization.gpu` (`[N/A]`) | `0x20800aff`, `0x00800294`, `0x2080a097`, `0x20810108`, RmAlloc class `0x2081` | the four controls refused; the alloc served `0x0` |
+| `memory.used` (`[N/A]`) | **none** | — |
+| `memory.total` (`[N/A]`) | **none** | — |
+
+("Refused" = the one-time `GSP REFUSED fn76/<cmd>=0x56` record exists for the control in the run; the
+`rpc-trace` result column prints `none` for exactly these. Repeats of a refusal are silent, so the windows
+are read from `rpc-trace`, not from the refusal records.)
+
+**Consequences (measured, then inferred).**
+- *Measured:* `memory.used` and `memory.total` send nothing beyond what `name` sends, so **their `[N/A]` is not
+  caused by a control only that query sends.** The `name` set contains one refused control, `0x20809004`
+  (GSS-legacy, 1544-byte params, 39 times in the run). `FB_GET_INFO_V2` (`0x20801303`) and `BUS_GET_INFO_V2`
+  (`0x20801823`) do not appear in any query window; each is refused once, in the boot, by kayfabe's own encoder
+  (`W349REFUSE ... UnmeasuredIndex { index: 1 }` = `COMPRESSION_SIZE`, and `index: 24` = `PCIE_ASLM_STATUS`).
+- *Inferred, not tested:* the memory fields are answered from the driver's own state, taken at boot; a
+  boot-time refusal of the FB info (`0x20801303`) or of `0x20809004` is the candidate. The premise "the memory
+  N/A is a refused-control effect" is therefore only supported for pstate and utilization.
+
+**Per control: ogkm name, layout, privilege, what Linux guests get, recommendation** (nothing served here).
+Flag words from `ogkm-580.65.06 g_subdevice_nvoc.c` (bits from `control.h:170-318`).
+
+| control | ogkm name / layout | flags | Linux guest today | recommendation |
+|---|---|---|---|---|
+| `0x20802068` | `NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE`, `{ NvU32 currPstate }` (`ctrl2080perf.h:885-891`) | `0x50048`: NON_PRIVILEGED, ROUTE_TO_PHYSICAL | refused `0x56` (V3_REFUSAL_AUDIT.md section 7, class C, "telemetry with no truthful source"); also on the Passthrough allowlist (`capability.rs`, nvproxy origin) | owner choice: a truthful read of the host's P-state is unprivileged, but §S says P-state is host-owned and the ruling's own examples keep such queries refused or absent. Recommend keep refused (N/A is the honest answer) unless the owner wants pstate shown |
+| `0x20800aff` / `0x20800afe` | `NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL` `{ u64 polledDataMask; u32 pollFrequencyMs }` / `..._INIT_USER_SHARED_DATA` `{ bInit, physAddr }` (`ctrl2080internal.h:4000-4025`) | `0xc0`: ROUTE_TO_PHYSICAL and INTERNAL (kernel-only, not NON_PRIVILEGED) | refused `0x56`; the audit argues RUSD holds telemetry only and readers fall back when `lastModifiedTimestamp = 0` | **privileged-looking: owner.** It configures GSP's RUSD polling loop and links a guest page that the GSP then fills. A §S stub (accept, never publish) leaves the page empty, so pstate and utilization would stay `N/A`; filling it would mean kayfabe authoring host-derived telemetry into guest memory. Recommend keep refused until the owner decides whether RUSD telemetry is wanted |
+| `0x00800294` | `NV0080_CTRL_CMD_GPU_GET_BRAND_CAPS`, one output bitmask (`ctrl0080gpu.h:550`) | `0x40049`: NON_PRIVILEGED (plus NO_GPUS_LOCK, ROUTE_TO_PHYSICAL) | refused `0x56` (audit: nvidia-smi telemetry) | unprivileged read with a public layout; the bitmask is a per-die fact derivable from the host (derive, never capture). Candidate to serve truthfully; unknown whether it feeds `utilization.gpu` at all (it arrived with it, causality not tested) |
+| `0x2080a097` | GSS-legacy (`0x8000` bit set), **no ogkm header, no params struct, no export** | n/a | refused `0x56` | **unknown semantics: do not decide.** Needs the Windows decode (`/var/tmp/kf-ogkm-windows-decode-580`) or a VFIO reply |
+| `0x20810108` + alloc class `0x2081` | `NV2081_BINAPI` `binapiControl_IMPL`: the export table has 0 entries, the payload is forwarded verbatim, "direction undecidable" (classification TSV) | none known | refused; the class alloc is served | **unknown semantics: do not decide**; same sources as above |
+| `0x20809004` (baseline of every query) | GSS-legacy, 1544-byte params, no header | n/a | refused `0x56` | unknown semantics; it is in the `name` baseline, so NVML tolerates the refusal |
+| `0x20801303` FB_GET_INFO_V2 | `NV2080_CTRL_CMD_FB_GET_INFO_V2` (`ctrl2080fb.h`; list of up to 0x80 index/data pairs) | `0x10118`: NON_PRIVILEGED, GPU_LOCK_DEVICE_ONLY, API_LOCK_READONLY, GSP_PLUGIN_FOR_VGPU_GSP (not ROUTE_TO_PHYSICAL) | **served truthfully for the cuInit shape** (bus width, RAM type, FBP count and mask, L2 size, LTC and LTS counts, host-derived through `kf_abi::fbinfo` / `hostquery::query_forwarded_fb_info`); any other index refuses the whole request by name | Windows asks at least `COMPRESSION_SIZE` (index 1). Strongest candidate for implementation (unprivileged, public layout, host-derivable), but the guest-visible values (total FB = the VM's `fb-mb`, not the host's 12 GiB) are a design decision: owner |
+| `0x20801823` BUS_GET_INFO_V2 | `NV2080_CTRL_CMD_BUS_GET_INFO_V2` (`ctrl2080bus.h:588`) | `0x10118`: NON_PRIVILEGED | served for the measured Linux shapes; Windows adds index 24 `PCIE_ASLM_STATUS` | same pattern as FB info: derivable, needs a per-index policy |
+
+**Falsifier outcome.** For `pstate` and `utilization.gpu` the added requests exist and are refused: the owner's
+premise holds. For `memory.used` and `memory.total` it is **falsified as a per-query effect** (no added
+request); they track the boot-time state.
+
+## Run52 setup: BAR1 1 GiB (harness setting) against the D3D device-creation failure
+
+Same binary and flags as run47-51; the only change is `pc_sdr_experiment.py --bar1-mb 1024` (rewrites the
+pinned template's `bar1-size=134217728` to 1 GiB; `command.json` records the real argv; opt-in). Probe:
+`d3d12_signal_probe.ps1` as in run50, by hand through QGA.
+**Hypothesis H-bar1 (inferred from run50's `BAR1 Used 100 MiB / Free 28 MiB`, untested):** a D3D hardware
+device needs CPU-visible BAR1 space that a 128 MiB BAR1 does not leave, and fails with
+`D3DERR_OUTOFVIDEOMEMORY`. **Falsifier:** with 1 GiB, `D3D11CreateDevice`/`D3D12CreateDevice` on the NVIDIA
+adapter still returns `0x8876017c`. If it succeeds, the probe's queue/fence steps run and are recorded
+(H-signal's own falsifiers from run50 apply). Also recorded: whether nvidia-smi's BAR1 line and the boot
+change, and any guest-side event. A BAR1 size is a harness choice, not code; the design note
+(`V3_P4_PORT_MAP.md` 2.3(d)) already says the default should derive from the host's BAR1.
