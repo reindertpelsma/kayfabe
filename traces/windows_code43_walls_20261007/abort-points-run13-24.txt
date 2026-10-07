@@ -12,3 +12,4 @@ run23-qemu.log.gz	rpcs=671	teardown_at=433	last=fn76/2080012b NV2080_CTRL_CMD_GP
 run24-qemu.log.gz	rpcs=695	teardown_at=448	last=fn76/2080220e NV2080_CTRL_CMD_GET_RC_RECOVERY	result=refused(unserviced)
 run25-qemu.log.gz	rpcs=696	teardown_at=449	last=fn76/2080220d NV2080_CTRL_CMD_SET_RC_RECOVERY	result=0x56
 run26-qemu.log.gz	rpcs=699	teardown_at=451	last=fn76/20800301 NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION	result=0x56
+run27-qemu.log.gz	rpcs=711	teardown_at=457	last=fn76/20800301 NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION	result=0x56

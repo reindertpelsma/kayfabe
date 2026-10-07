@@ -26,7 +26,12 @@ and NV0073 event entries that follow are already served. DIAGNOSTIC run26 at
 8208effe (default-off `KF3_RC_RECOVERY_ENABLED_DIAG`) accepts ENABLED and aborts
 at VFIO index 2518: the first `0x20800301` arming (notifier 44) is refused. Code43
 persists. The next wall is the 23 notifier indices Windows arms, ranked in the
-traces README. [Batch and run25](../traces/windows_code43_walls_20261007/README.md#sixth-repair-startdevice-batch-after-get_rc_recovery).
+traces README.
+Owner ruling §S (2026-10-07, `OWNER_RULINGS.md`) is applied at 4448be53: RC recovery is a
+stub (ENABLED), the notifier family is classified per index, and hotplug is real for Windows.
+Run27 still shows Code43. The abort is at VFIO index 2524, the arming of 120
+HOTPLUG_PROCESSING_COMPLETE, which has no OGKM producer. That needs an owner decision or
+semantics, followed by real-host-event notifiers (PSTATE, CE, GRAPHICS, runlist preempt). [Batch and run25](../traces/windows_code43_walls_20261007/README.md#sixth-repair-startdevice-batch-after-get_rc_recovery).
 
 **Code43 cause analysis, 2026-10-07 (corrects the paragraph below).** Run24 at
 a6f84d0d births and promotes OFA0. Code43/smi9 is verified and the 24 assertions

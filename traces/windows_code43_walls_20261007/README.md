@@ -794,3 +794,39 @@ VFIO index 2518 into display setup (the NV0073 controls and IS_MODE_POSSIBLE, 25
 **Prediction:** the fourth arming, HOTPLUG_PROCESSING_COMPLETE at VFIO index 2524, is refused.
 If Windows treats that refusal as fatal like the first, run27 aborts there and the falsifier
 holds again, until 120 has a source-backed producer.
+
+### Run27 result: the abort moves to HOTPLUG_PROCESSING_COMPLETE (VFIO 2524); the falsifier holds
+
+Product/QEMU 4448be5399683e6534a3f6a72b005164ae7bebe6, `kf3-bins/4448be53`, run on
+2026-10-07 at 11:27-11:30 UTC. [command](run27-command.json), [status](run27-status.json),
+[trace](run27-qemu.log.gz), [requests](run27-requests.log),
+[completion](run27-complete.json), [host health](run27-host-health.txt),
+[unit result](run27-unit-result.txt), [9/9 gates](run27-gates.log) (11/11 USER births),
+[build](run27-build.log), [watchdog recovery](run27-watchdog-recovery.log) (cleanup verified
+2026-10-07). After 99 s of uptime the NVIDIA adapter has ConfigManagerErrorCode 43 and
+nvidia-smi exits 9, so Code43 persists. No initialization success is claimed. Afterwards the
+host was healthy: display enabled, P8, no Xid, no QEMU, NBD disconnected.
+
+**Abort point:** 711 RPCs, teardown at 457. The last RPC is `EVENT_SET_NOTIFICATION`
+0x20800301 → 0x56, the arming that follows the fourth class-0x78 allocation (ff060090). In VFIO
+order that arming is index 120 HOTPLUG_PROCESSING_COMPLETE at **VFIO index 2524**, as
+predicted. GET and SET_RC_RECOVERY, four 0x78 allocations and the armings of 44, 43 and 113 all
+returned 0. The distinct refusal set is unchanged from run26, because the refused control is the
+same command with a different index. The falsifier holds: the abort moved six RPCs, not into
+display setup.
+
+**Next walls, ranked by what each needs** (in VFIO order from 2524):
+1. *Needs new semantics or an owner decision:* **120 HOTPLUG_PROCESSING_COMPLETE.** No
+   producer or event-data struct exists anywhere in OGKM, so kayfabe cannot post it from its
+   own state as §S.2 requires. Options: accept it with a defined producer (kayfabe posts 120
+   after each hotplug post it makes; the ordering would be inferred, not sourced), classify it
+   as a stub, or obtain the semantics.
+2. *Needs new semantics (derive from real host events):* 33 PSTATE_CHANGE, 139
+   RUNLIST_PREEMPT_COMPLETE, 12 GRAPHICS, 23/24/26 CE0/CE1/CE3. One possible source: kayfabe
+   arms the same notifiers on its own unprivileged host subdevice and relays them, or the
+   copy/graphics non-stall completions of the VM's own host channels.
+3. *Needs an owner decision:* 122 RESERVED122. It has no defined meaning, so it can be neither
+   argued silent nor implemented.
+4. *Then, already implemented and not yet reached:* the remaining 0x78 allocations, NV0073
+   EVENT_SET_NOTIFICATION, PERF_GET_POWERSTATE, SYSTEM_GET_ACTIVE and IS_MODE_POSSIBLE.
+   *Needs new semantics:* 0x007302a3, DFP_ASSIGN_SOR, DP_AUXCH_CTRL.
