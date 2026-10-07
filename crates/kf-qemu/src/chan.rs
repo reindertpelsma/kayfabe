@@ -659,6 +659,11 @@ fn kernel_nvenc_ctx() -> bool {
     *ON.get_or_init(|| std::env::var_os("KF3_KERNEL_NVENC_CTX").is_some_and(|v| v == "1"))
 }
 
+fn kernel_ofa_ctx() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_KERNEL_OFA_CTX").is_some_and(|v| v == "1"))
+}
+
 /// ★ P1+P2 inc D (§7.13) — **`KF3_NEGCTL_STALE_BIND=1`**, the stale-bind counter's POSITIVE
 /// CONTROL: every recorded resolution is perturbed, so `stale_binds=` must move on a box run that
 /// retires any T-mode work. Default OFF; read once. Never set in production.
@@ -1801,6 +1806,7 @@ impl ChanPlane {
                     if engine_type == kf_abi::submit::ENGINE_TYPE_GRAPHICS
                         || kf_abi::submit::nvdec_index_of_engine_type(engine_type).is_some()
                         || kf_abi::submit::nvenc_index_of_engine_type(engine_type).is_some()
+                        || kf_abi::submit::ofa_index_of_engine_type(engine_type).is_some()
                     {
                         return self.defer("bind translated context", Box::new(move |me: &ChanPlane| {
                             let slot = me.slot(ht).ok_or_else(|| (NV_ERR_INVALID_STATE, "GR slot gone".into()))?;
@@ -3344,11 +3350,16 @@ impl ChanPlane {
             && kf_abi::submit::nvenc_index_of_engine_type(engine).is_some()
             && kernel_nvenc_ctx()
             && crate::tspace::enabled();
+        let kernel_ofa = a.kernel_client
+            && kf_abi::submit::ofa_index_of_engine_type(engine).is_some()
+            && kernel_ofa_ctx()
+            && crate::tspace::enabled();
         if a.kernel_client
             && !is_copy_engine(engine)
             && !kernel_gr
             && !kernel_nvdec
             && !kernel_nvenc
+            && !kernel_ofa
         {
             eprintln!(
                 "kf3: chan {:#x}:{:#x} class={:#x} engine={engine:#x} kernel=true vaspace={:x?} chid={:x?} — a KERNEL non-CE channel: not born (kernel GR is P7)",
@@ -3725,7 +3736,7 @@ impl ChanPlane {
                     None
                 };
                 let host = match ts {
-                    Some(t) => t.ring(me.rm, if kernel_gr || kernel_nvdec || kernel_nvenc { engine } else { me.host_ce }).map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, e)))?,
+                    Some(t) => t.ring(me.rm, if kernel_gr || kernel_nvdec || kernel_nvenc || kernel_ofa { engine } else { me.host_ce }).map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, e)))?,
                     None => {
                         // ★ P6b: OUR ring goes in OUR region of the space, never where RM's allocator (the
                         // guest's own allocator) would put it — `crate::mem::RING_REGION_BASE`.

@@ -451,3 +451,12 @@ Run23 [fresh watchdog recovery](run23-watchdog-recovery.log) confirms read-only
 access and cleanup. The [comparison](run23-watchdog-comparison.json) retains
 all24 complete assertions identical to run22, despite further RPC progress;
 outer NVCD still one byte short, no valid checksum claim.
+
+Native sourceff12e6a7f2d22a72ee0380d0e27555aca716a3a9 probes OFA0/engine33:
+[native oracle](ofa-native.log) constructs a USER channel and ownedC9FA object,
+refuses class selection, completes real GPU fence seq1 and releases all ring/
+channel resources. Host display stays enabled. This gates default-off
+KF3_KERNEL_OFA_CTX=1 with private T-space and actual context ownership; OFA/codec/
+CE submissions remain unsupported. Windows run24 pending.
+
+OFA guest increment:101 QEMU tests pass; Clippy and claims new0.

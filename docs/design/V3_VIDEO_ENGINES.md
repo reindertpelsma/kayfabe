@@ -10,6 +10,18 @@ Read with `V3_HEADLESS_GRAPHICS.md` §4, which listed the six gaps this branch c
 
 ---
 
+**2026-10-07 RESEARCH correction for kernel channels on `codex/sdr-lut-20261006`:**
+The passthrough path below describes guest USER video channels. Experimental
+`KF3_KERNEL_NVDEC_CTX`, `KF3_KERNEL_NVENC_CTX` and `KF3_KERNEL_OFA_CTX` plus private
+T-space also construct guest KERNEL channels as actual USER host rings with
+owned generated-family video objects. Promotion requires that real context;
+no guest context address reaches the host. Nonempty public submissions refuse
+before host PB writes; only the private authored FIFO fence runs. Native
+NVDEC0/C9B0 (`7152d1a8`), NVENC1/C9B7 (`e465d356`) and OFA0/C9FA (`ff12e6a7`)
+complete GPU fences and clean releases. Windows runs22/23 pass NVDEC/NVENC
+promotions but retain Code43. Evidence: `traces/windows_code43_walls_20261007/`.
+No kernel codec/optical-flow execution or Windows initialization success claim.
+
 ## 1. What the guest needs before it will allocate a video class
 
 The guest is a GSP client. Its CPU-RM decides that NVENC/NVDEC exist from five statements, and it

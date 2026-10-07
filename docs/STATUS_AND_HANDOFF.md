@@ -61,7 +61,9 @@ adds default-off KF3_KERNEL_NVENC_CTX plus TSPACE.101 QEMU tests pass, zero new
 Clippy debt. Run23 at e462194d births/promotes both NVENC1 channels, nine
 Translated births, same two real GPU submissions. Code43/smi9 persist. Next:
 OFA0/engine33 clientc1d0001c/ff040007 has no birth and Falcon promotion refuses.
-Native OFA oracle pending. A second4000us channel-timeslice setter also refuses. NVENC0 native bind refused, and is not
+Native ff12e6a7 OFA0 USER context/fence/release passes; default-off
+KF3_KERNEL_OFA_CTX plus TSPACE implemented,101 QEMU tests pass, zero new Clippy
+and claims debt. Windows run24 pending. A second4000us channel-timeslice setter also refuses. NVENC0 native bind refused, and is not
 substituted for the requested NVENC1 instance. Arbitrary kernel GR/software/codec execution remains unsupported;
 queued Deferred API controls/methods remain unsupported; no completion is forged.
 

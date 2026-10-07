@@ -970,7 +970,7 @@ impl HostRm {
     /// `NV_MSENC_ALLOCATION_PARAMETERS` / `NV_BSP_ALLOCATION_PARAMETERS` — the same 12 bytes
     /// `{size = 12, prohibitMultipleInstances = 0, engineInstance}` (`ogkm-580: nvos.h:2943-2996`),
     /// OFA has the same three U32 fields (`nvos.h:3011-3016`), carried through
-    /// the measured decoder layout as in the existing passthrough OFA path.
+    /// the decoder ABI carrier (`kf-chan/src/passthrough.rs:188-193`).
     /// `engineInstance` = the twin's own engine index, so nothing of the guest's alloc but its
     /// class reaches the host. Host RM (a GSP client itself) allocates and promotes the falcon
     /// context (`kernel_falcon.c:279-299`) — the guest's own context buffer is never used.
