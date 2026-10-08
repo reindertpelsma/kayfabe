@@ -733,7 +733,7 @@ impl Device {
         let chain_logs = kf_rm::ChainLogs::default();
         // ★ 2026-10-08 (owner ruling §X): the relay wakes a guest for the non-stall events IT armed
         // — read from the same os-event registry the served chain records them in.
-        chans.set_nonstall_arms(chain_logs.os_events.nonstall_arms());
+        chans.set_os_events(&chain_logs.os_events);
         let census = kf_rm::census::ControlCensusLog::new();
         // ★ The boot display: fn 72's body, kept by the GSP state machine for fn 65's encoder —
         // ONE cell across every `ReselectAtFn1` rebuild, like the census (`kf_gsp::sysinfo`) — with

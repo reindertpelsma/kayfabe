@@ -232,6 +232,9 @@ pub struct EngineEvent {
     pub slot: Option<usize>,
     /// Host notifier wakes on this engine whose event the guest had not armed (nothing raised).
     pub not_armed: AtomicU64,
+    /// ★ 2026-10-09: an edge of THIS engine is in a paced raise still owed (credited to `raised`
+    /// when the tick delivers it). Written by the one worker thread only.
+    pub owed_late: std::sync::atomic::AtomicBool,
 }
 
 /// A CE class id on ANY family — the class tables are generated per family and class ids are
@@ -1380,8 +1383,11 @@ pub struct ChanPlane {
     pub pt_births: AtomicU64,
     /// ★ 2026-10-08 (owner ruling §X): host `FIFO_EVENT_MTHD` edges seen by the relay.
     pub pt_fifo_edges: AtomicU64,
-    /// …of which raised a guest vector at once.
+    /// …of which raised a guest vector (at once, or late through optional pacing).
     pub pt_fifo_raised: AtomicU64,
+    /// ★ 2026-10-09: one bit per guest vector — a paced raise still owed there carries a
+    /// `FIFO_EVENT_MTHD` edge (credited to `pt_fifo_raised` when the tick delivers it).
+    pt_fifo_owed: [AtomicU64; kf_chan::ptnsi::VECTORS / 64],
     /// ★ v3-video: host NVENC session slots held per guest client (acquired on OUR host client;
     /// released with the guest's release or its client's free).
     enc_sessions: Mutex<HashMap<u32, u32>>,
@@ -1409,6 +1415,8 @@ pub struct ChanPlane {
     /// The guest's non-stall subscriptions (`kf_rm::osevent::NonstallArms`), set once at realize
     /// from the served chain's os-event registry; read lock-free by the workers.
     nsi_arms: std::sync::OnceLock<std::sync::Arc<kf_rm::osevent::NonstallArms>>,
+    /// The same registry (a shared handle), for its overflow counts in the report.
+    nsi_log: std::sync::OnceLock<kf_rm::osevent::OsEventLog>,
     /// The index into [`ChanPlane::engines`] of GR0 — the fallback vector for a host
     /// `FIFO_EVENT_MTHD` edge when every vector carries an armed engine.
     host_notify_engine: Option<usize>,
@@ -1733,6 +1741,7 @@ impl ChanPlane {
                 crelays: AtomicU64::new(0),
                 slot: engine_slot(kind),
                 not_armed: AtomicU64::new(0),
+                owed_late: std::sync::atomic::AtomicBool::new(false),
             });
         }
         eprintln!(
@@ -1807,6 +1816,7 @@ impl ChanPlane {
             pt_births: AtomicU64::new(0),
             pt_fifo_edges: AtomicU64::new(0),
             pt_fifo_raised: AtomicU64::new(0),
+            pt_fifo_owed: std::array::from_fn(|_| AtomicU64::new(0)),
             groups: Mutex::new(HashMap::new()),
             enc_sessions: Mutex::new(HashMap::new()),
             rung: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
@@ -1814,6 +1824,7 @@ impl ChanPlane {
             rung_at_us: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             nsi,
             nsi_arms: std::sync::OnceLock::new(),
+            nsi_log: std::sync::OnceLock::new(),
             host_notify_engine,
             t0: std::time::Instant::now(),
             rc_ev,
@@ -1915,8 +1926,9 @@ impl ChanPlane {
 
     /// ★ Realize (2026-10-08, owner ruling §X): the guest's non-stall subscriptions, from the
     /// served chain's os-event registry. Set once; until then no event counts as armed.
-    pub fn set_nonstall_arms(&self, arms: std::sync::Arc<kf_rm::osevent::NonstallArms>) {
-        let _ = self.nsi_arms.set(arms);
+    pub fn set_os_events(&self, log: &kf_rm::osevent::OsEventLog) {
+        let _ = self.nsi_arms.set(log.nonstall_arms());
+        let _ = self.nsi_log.set(log.clone());
     }
 
     /// Whether the guest armed subscription `slot` (lock-free).
@@ -1958,9 +1970,19 @@ impl ChanPlane {
             vector,
             self.nsi_now_ns(),
         );
-        if let kf_chan::ptnsi::Verdict::Raise(v) = verdict {
-            self.pt_fifo_raised.fetch_add(1, Ordering::Relaxed);
-            deliver(v);
+        match verdict {
+            kf_chan::ptnsi::Verdict::Raise(v) => {
+                self.pt_fifo_raised.fetch_add(1, Ordering::Relaxed);
+                deliver(v);
+            }
+            kf_chan::ptnsi::Verdict::Owed => {
+                if let Some(v) = vector.map(|v| v as usize)
+                    && let Some(w) = self.pt_fifo_owed.get(v / 64)
+                {
+                    w.fetch_or(1 << (v % 64), Ordering::Relaxed);
+                }
+            }
+            _ => {}
         }
         if n <= 16 || n.is_power_of_two() {
             eprintln!(
@@ -1993,6 +2015,9 @@ impl ChanPlane {
             kf_chan::ptnsi::Verdict::NotArmed => {
                 e.not_armed.fetch_add(1, Ordering::Relaxed);
             }
+            kf_chan::ptnsi::Verdict::Owed => {
+                e.owed_late.store(true, Ordering::Relaxed);
+            }
             _ => {}
         }
         verdict
@@ -2002,16 +2027,26 @@ impl ChanPlane {
     /// what the optional pacing owes. Returns whether anything is still owed. With pacing off
     /// (the default) it is one branch.
     ///
-    /// A late raise counts in `raised` of the first engine announced on its vector (the pacer
-    /// owes per VECTOR, so it cannot say which engine's edge it carries; per vector, `late` is
-    /// exact).
+    /// ★ 2026-10-09: a late raise is credited to the source(s) whose edge it carries — `pt_fifo_raised`
+    /// if a `FIFO_EVENT_MTHD` edge was owed on its vector, and `raised` of every engine whose own
+    /// edge was owed there (the edge side marks them; edges, tick and marks all run on the one
+    /// worker thread). One late raise can carry both kinds, so the per-source counts may sum above
+    /// the vector's `raised`; per vector, `late` stays exact.
     pub fn nsi_tick(&self, mut deliver: impl FnMut(u32)) -> bool {
         if self.nsi.pacer().interval_ns() == 0 {
             return false;
         }
         self.nsi.flush(self.nsi_now_ns(), |v| {
-            if let Some(e) = self.engines.iter().find(|e| e.vector == Some(v)) {
-                e.raised.fetch_add(1, Ordering::Relaxed);
+            let i = v as usize;
+            if let Some(w) = self.pt_fifo_owed.get(i / 64)
+                && w.fetch_and(!(1 << (i % 64)), Ordering::Relaxed) & (1 << (i % 64)) != 0
+            {
+                self.pt_fifo_raised.fetch_add(1, Ordering::Relaxed);
+            }
+            for e in self.engines.iter().filter(|e| e.vector == Some(v)) {
+                if e.owed_late.swap(false, Ordering::Relaxed) {
+                    e.raised.fetch_add(1, Ordering::Relaxed);
+                }
             }
             deliver(v);
         })
@@ -2045,13 +2080,17 @@ impl ChanPlane {
             })
             .collect();
         format!(
-            "fifo_edges={} fifo_raised={} fifo_armed={} sticky={:#x} kernel_nonstall_registered={} arm_clears={} {} {}",
+            "fifo_edges={} fifo_raised={} fifo_armed={} sticky={:#x} kernel_nonstall_registered={} arm_clears={} os_event_overflowed={} kernel_nonstall_overflowed={} {} {}",
             self.pt_fifo_edges.load(o),
             self.pt_fifo_raised.load(o),
             count(Some(kf_abi::eventnotify::NONSTALL_SLOT_FIFO_EVENT_MTHD)),
             arms.map_or(0, |a| a.sticky()),
             arms.map_or(0, |a| a.kernel_registered.load(o)),
             arms.map_or(0, |a| a.clears.load(o)),
+            self.nsi_log.get().map_or(0, kf_rm::osevent::OsEventLog::overflowed),
+            self.nsi_log
+                .get()
+                .map_or(0, kf_rm::osevent::OsEventLog::kernel_overflowed),
             self.nsi.summary(),
             per.join(" ")
         )

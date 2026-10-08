@@ -37,8 +37,12 @@ armed, live_twins) still above 0 = the FREE path does not retire them.
 - guest_G_eca43847_*  --ce-client PASS, --ce-interrupt PASS; legs as bare metal (COPY0: FIFO_EVENT_MTHD 50/50, GR0
       50/50; COPY2: CE2 50/50, FIFO_EVENT_MTHD 50/50); controls 0/10; quiet window clean after 1 window.
       pt_nsi: kernel_nonstall_registered=2, arm_clears=1 (fn 1), fifo_armed=3 at the end (the client's 1 + 2 kernel
-      registrations), fifo_edges=264 of which fifo_raised=233 (15a400b5: 138 of 269); FIFO edges #1-#4 still NotArmed
-      (before the registrations). The guest-kernel 0x78/0x7e path IS exercised on hardware. Which kernel user made the
+      registrations), fifo_edges=264 of which fifo_raised=233 (15a400b5: 138 of 269).
+      ⊘ CORRECTED 2026-10-09 (re-review of 7519cd89; this line said "FIFO edges #1-#4 still NotArmed (before the
+      registrations)"): MEASURED — the log prints edges #1-#16 and then powers of two; #1-#16 are all NotArmed and
+      #32/#64/#128/#256 Raise; the counters give 264 - 233 = 31 FIFO edges not raised in all (W run: 311 - 274 = 37).
+      Edges #17-#31 are not logged, and no line carries a timestamp. INFERRED, not measured: that the unarmed edges
+      came before the first registration (no registration time is logged to compare against). The guest-kernel 0x78/0x7e path IS exercised on hardware. Which kernel user made the
       two registrations is not identified (INFERRED: CeUtils' channels, mem_utils.c:1905-1906, which the fast guest's
       RM creates for its kernel copy channels).
 - guest_W_eca43847_*  the same with KF_POWEROFF_DELAY_S=5: PASS, the same legs; after the wait the final pt_nsi line
@@ -47,7 +51,9 @@ armed, live_twins) still above 0 = the FREE path does not retire them.
       retire every arm, the guest kernel's included (INFERRED: the guest RM tears CeUtils down with its last client).
 - guest_suite30_eca43847_per_arm.txt, run-suite30b.log  30 PASS / 0 FAIL / 0 CRASH.
 - Not re-run at eca43847: the paced and noisy-neighbour runs (the pacer and the vector choice are unchanged since
-  15a400b5; only what counts as armed changed, which adds raises and removes none).
+  15a400b5). ⊘ CORRECTED 2026-10-09: this line said the fix "adds raises and removes none" — an inference, and
+  false in general: fn 1's clear and a reused pair moving its arm can each REMOVE an arm the earlier binary kept.
+  Whether those runs would change is not measured.
 
 MEASURED:
 - bare_nsi_bare{1,2}_f589ab23_ce-interrupt_r35.log  bare metal, 2 runs, PASS both. 12 of 12 notifiers armed. COPY0 launch

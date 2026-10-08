@@ -207,12 +207,28 @@ impl NonstallArms {
         }
     }
 
-    /// Only ever called under [`OsEventLog`]'s row lock (as is `up`), so writers never race and
-    /// a load-then-store cannot lose an update; readers stay lock-free.
+    /// ⊘ Two locks write these counters ([`OsEventLog`]'s `live` rows and its `kernel` rows), so
+    /// writers DO race each other: `down` is one atomic read-modify-write (a saturating
+    /// decrement), like `up`, never a load-then-store that could lose a concurrent `up`. Readers
+    /// stay lock-free.
     fn down(&self, slot: usize) {
         if let Some(c) = self.counts.get(slot) {
-            let v = c.load(Ordering::Relaxed);
-            c.store(v.saturating_sub(1), Ordering::Relaxed);
+            let _ = c.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| {
+                Some(v.saturating_sub(1))
+            });
+        }
+    }
+
+    /// ★ Move one subscription from `old` to `new`: `up(new)` FIRST, then `down(old)`. With
+    /// `old == new` the other order lets a lock-free reader see the count pass through 0 and
+    /// judge an armed slot NotArmed (a lost wake); this order can only show one too many (a
+    /// spurious wake, harmless).
+    fn shift(&self, old: Option<usize>, new: Option<usize>) {
+        if let Some(n) = new {
+            self.up(n);
+        }
+        if let Some(o) = old {
+            self.down(o);
         }
     }
 
@@ -222,7 +238,8 @@ impl NonstallArms {
         }
     }
 
-    /// Every count and sticky bit back to zero — under the row locks, like `up`/`down`.
+    /// Every count and sticky bit back to zero — called with BOTH row locks held
+    /// ([`OsEventLog::clear`]), so no `up`/`down` runs concurrently.
     fn zero(&self) {
         for c in &self.counts {
             c.store(0, Ordering::Relaxed);
@@ -251,6 +268,8 @@ pub struct OsEventLog {
     registered: Arc<AtomicU64>,
     retired: Arc<AtomicU64>,
     overflowed: Arc<AtomicU64>,
+    /// Kernel-callback registrations refused because [`KERNEL_NONSTALL_MAX`] was reached.
+    kernel_overflowed: Arc<AtomicU64>,
     malformed: Arc<AtomicU64>,
     posted: Arc<AtomicU64>,
     batches: Arc<AtomicU64>,
@@ -293,12 +312,7 @@ impl OsEventLog {
             if row.0 == reg && row.1 == slot {
                 return false;
             }
-            if let Some(old) = row.1 {
-                self.nonstall.down(old);
-            }
-            if let Some(new) = slot {
-                self.nonstall.up(new);
-            }
+            self.nonstall.shift(row.1, slot);
             *row = (reg, slot);
             return true;
         }
@@ -329,14 +343,13 @@ impl OsEventLog {
             .fetch_add(1, Ordering::Relaxed);
         if let Some(row) = rows.iter_mut().find(|r| r.0 == client && r.1 == event) {
             if row.2 != slot {
-                self.nonstall.down(row.2);
-                self.nonstall.up(slot);
+                self.nonstall.shift(Some(row.2), Some(slot));
                 row.2 = slot;
             }
             return;
         }
         if rows.len() >= KERNEL_NONSTALL_MAX {
-            self.overflowed.fetch_add(1, Ordering::Relaxed);
+            self.kernel_overflowed.fetch_add(1, Ordering::Relaxed);
             self.nonstall.stick(slot);
             return;
         }
@@ -347,6 +360,10 @@ impl OsEventLog {
     /// ★ The guest's RM started again (fn 1, `SET_GUEST_SYSTEM_INFO`): every registration of the
     /// previous RM life is dead. Drop all rows and zero every non-stall arm (a reused handle pair
     /// must not inherit an old slot, and a stale arm must not outlive its RM).
+    ///
+    /// ⚠ PLAUSIBLE, unverified: a guest driver that re-sent fn 1 within ONE RM life while holding
+    /// events (a Windows KMD path not ruled out) would leave them unarmed here until registered
+    /// again. Linux cannot: `kgspInitRm` runs only from `RmInitAdapter`.
     pub fn clear(&self) {
         let mut live = self.live.lock().unwrap_or_else(|e| e.into_inner());
         let mut rows = self.kernel.lock().unwrap_or_else(|e| e.into_inner());
@@ -457,13 +474,22 @@ impl OsEventLog {
         self.retired.load(Ordering::Relaxed)
     }
 
-    /// How many registrations were refused because the table was full.
+    /// How many `NV01_EVENT_OS_EVENT` registrations were refused because the live table
+    /// ([`OS_EVENT_MAX`]) was full (the kernel-callback table's own count:
+    /// [`OsEventLog::kernel_overflowed`]).
     ///
     /// ★ Its healthy value is zero, and a non-zero one is not a tuning signal — it means
     /// this device is knowingly not waking someone.
     #[must_use]
     pub fn overflowed(&self) -> u64 {
         self.overflowed.load(Ordering::Relaxed)
+    }
+
+    /// How many guest-kernel non-stall callback registrations were refused because
+    /// [`KERNEL_NONSTALL_MAX`] was reached (their slot sticks). Healthy value: zero.
+    #[must_use]
+    pub fn kernel_overflowed(&self) -> u64 {
+        self.kernel_overflowed.load(Ordering::Relaxed)
     }
 
     /// How many `NV01_EVENT_OS_EVENT` allocs arrived whose params this port could not read.
@@ -1049,6 +1075,58 @@ mod tests {
         // A registration after fn 1 arms again.
         log.register_kernel_nonstall(3, 4, 5);
         assert!(arms.armed(5));
+    }
+
+    /// ★ A replaced row moving within ONE slot never shows that slot unarmed to a lock-free reader
+    /// (`up` before `down`), and the two row locks' writers never lose a count (`down` is one
+    /// atomic RMW).
+    #[test]
+    fn a_same_slot_replacement_never_shows_the_slot_unarmed() {
+        use std::sync::atomic::AtomicBool;
+        let log = OsEventLog::new();
+        let arms = log.nonstall_arms();
+        let a = OsEventRegistration {
+            client: 1,
+            event: 2,
+            notify_index: 35,
+        };
+        let b = OsEventRegistration {
+            notify_index: 36,
+            ..a
+        };
+        assert!(log.register_slot(a, Some(4)));
+        let stop = Arc::new(AtomicBool::new(false));
+        let reader = {
+            let (arms, stop) = (Arc::clone(&arms), Arc::clone(&stop));
+            std::thread::spawn(move || {
+                let mut unarmed = 0u64;
+                while !stop.load(Ordering::Relaxed) {
+                    if !arms.armed(4) {
+                        unarmed += 1;
+                    }
+                }
+                unarmed
+            })
+        };
+        // A kernel writer on the same slot, under the other lock, at the same time.
+        let kernel = {
+            let log = log.clone();
+            std::thread::spawn(move || {
+                for i in 0..20_000u32 {
+                    log.register_kernel_nonstall(7, 0x500 + (i % 8), 4);
+                    log.retire(7, 0x500 + (i % 8));
+                }
+            })
+        };
+        for i in 0..20_000 {
+            assert!(log.register_slot(if i % 2 == 0 { b } else { a }, Some(4)));
+        }
+        kernel.join().unwrap();
+        stop.store(true, Ordering::Relaxed);
+        assert_eq!(reader.join().unwrap(), 0, "a reader saw the slot unarmed");
+        assert_eq!(arms.count(4), 1, "no count lost or leaked across the two locks");
+        assert_eq!(log.retire(1, 2), 1);
+        assert!(!arms.armed(4));
     }
 
     /// ⊘ A non-stall registration past the bound is not remembered — so its slot sticks armed

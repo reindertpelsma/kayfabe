@@ -1,6 +1,6 @@
 # The three channel kinds — passthrough, translated, emulated
 
-**STATUS: LIVE, 2026-10-08.** The three kinds are implemented in v3 (`ARCHITECTURE.md`, *channel kinds*;
+**STATUS: LIVE, 2026-10-09.** The three kinds are implemented in v3 (`ARCHITECTURE.md`, *channel kinds*;
 `kf-chan`), and §1.1 and §1.2 carry their own LIVE status lines. ⊘ *Superseded status line, kept as
 history: "DESIGN, 2026-09-19 (w803). Owner ruling. Not yet implemented."* — the text below §1.2 is
 that 2026-09-19 design ruling; where it and the code disagree, `ARCHITECTURE.md` and
@@ -59,8 +59,22 @@ Passthrough" for it, never plain "Passthrough", when `GP_GET`, USERD or the door
 
 ### 1.2 Passthrough completion interrupts: every VM that armed the event is woken (2026-10-08, owner)
 
-**STATUS: LIVE, 2026-10-08 — `kf_chan::ptnsi`, owner ruling §X; branch
-`claude/passthrough-nsi-nogate-20261008`.** ⊘ *This supersedes the doorbell gate of
+**STATUS: LIVE, 2026-10-09 — `kf_chan::ptnsi`, owner ruling §X; branch
+`claude/passthrough-nsi-nogate-20261008`.**
+
+⊘ **CORRECTION 2026-10-09 (independent review of `1f083ac4`; fixed at `cd0fab8d`, measured at `eca43847`).**
+"Armed" below is too narrow. A guest event is armed on a notifier if EITHER a live guest
+`NV01_EVENT_OS_EVENT` OR a live guest-kernel callback event (`NV01_EVENT_KERNEL_CALLBACK_EX` `0x7e` /
+`NV01_EVENT_KERNEL_CALLBACK` `0x78`: CeUtils, semaphore surfaces, nvkms) carries `NV01_EVENT_NONSTALL_INTR`
+on that notifier (`kf_rm::osevent::OsEventLog::register_kernel_nonstall`; both retired by the same `FREE`s,
+all cleared at fn 1). The `15a400b5`/`b831b364` measurements cited below were taken BEFORE that fix: those
+binaries dropped the guest kernel's non-stall edges as NotArmed (a regression against master's live-twin
+rule), and the legs passed because the raw client's own OS events were armed. Re-measured at `eca43847`
+(`traces/passthrough_nsi_nogate_20261008/INDEX.txt`, RE-VERIFY): every leg 50/50, controls 0/10, 30/30, two
+guest-kernel registrations armed `FIFO_EVENT_MTHD` (233 of 264 FIFO edges raised, against 138 of 269 before).
+The pacing and noisy-neighbour runs were not repeated after the fix.
+
+⊘ *This supersedes the doorbell gate of
 `claude/passthrough-interrupt-20261008` (96336228: an edge raised only with a live twin AND a doorbell
 counted since the last edge, 1 s afterglow). That gate trusted a guest-controlled signal and could drop a
 completion that landed after the afterglow.* A Passthrough twin's completion interrupt is raised by the
@@ -78,7 +92,8 @@ is never dropped: by default every armed edge raises at once; an optional pacing
 worker's tick even if no further edge comes. The guest's leaf pending bit is a level held until the guest's
 write-1-to-clear, and the guest clears before it services, so merged raises cannot lose a wake.
 `KF3_PT_NSI_RELAY=0` (FIFO edges counted, not raised) stays the falsifier mode. `[measured 2026-10-08, RTX
-4070, kf3 15a400b5/b831b364, traces/passthrough_nsi_nogate_20261008/]` the guest's `--ce-interrupt` legs land
+4070, kf3 15a400b5/b831b364 — BEFORE the kernel-callback fix, see the correction above,
+traces/passthrough_nsi_nogate_20261008/]` the guest's `--ce-interrupt` legs land
 exactly as on bare metal (all 50/50, controls 0/10), the 30-arm suite passes 30/30, pacing at 50 ms alone
 loses no completion (tick-delivered late raises 99/49/148), and beside a noisy neighbour VM every interrupt
 leg of both guests completes while their controls see each other's edges (the residual below).
