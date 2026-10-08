@@ -4031,8 +4031,8 @@ fn crit1(state: kayfabe_isolate_host::rm::Crit1State) {
 /// GPU node file and not an `eventfd(2)`.
 fn ce_interrupt(rm: &mut HostRmBackend, gpu: u32) -> bool {
     use kayfabe_isolate_host::rm::osevent::{
-        CE_IRQ_CONTROL_ITERATIONS, CE_IRQ_ITERATIONS, CE_IRQ_WAKE_BOUND, ChannelSourceProbe,
-        TOKENS, mask_names, token_name,
+        CE_IRQ_CONTROL_ITERATIONS, CE_IRQ_ITERATIONS, CE_IRQ_QUIET_PATIENCE, CE_IRQ_WAKE_BOUND,
+        ChannelSourceProbe, TOKENS, mask_names, token_name,
     };
 
     /// Neither zero nor a value the destination is pre-filled with (`!base` per iteration).
@@ -4078,13 +4078,17 @@ fn ce_interrupt(rm: &mut HostRmBackend, gpu: u32) -> bool {
         ev.ce_class
     );
     println!(
-        "{}  R35 quiet window      = nothing submitted: readable files = {}",
+        "{}  R35 quiet window      = nothing submitted: readable files = {} (after {} window(s), \
+         {} ms of waiting; patience {} ms)",
         if ev.quiet_mask == 0 {
             "★    "
         } else {
             "FAIL "
         },
-        mask_names(ev.quiet_mask)
+        mask_names(ev.quiet_mask),
+        ev.quiet_attempts,
+        ev.quiet_waited_ms,
+        CE_IRQ_QUIET_PATIENCE.as_millis()
     );
     match &ev.channel_source {
         ChannelSourceProbe::Refused(s) => println!(

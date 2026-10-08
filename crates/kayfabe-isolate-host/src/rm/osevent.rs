@@ -88,6 +88,11 @@ pub const CE_IRQ_CONTROL_ITERATIONS: usize = 10;
 pub const CE_IRQ_WAKE_BOUND: Duration = Duration::from_secs(2);
 /// F4's window.
 pub const CE_IRQ_QUIET: Duration = Duration::from_millis(300);
+/// ★ How long the arm waits for the GPU to be quiet before it starts: these notifiers are GPU-wide,
+/// so a second tenant (a VM with a display, a desktop compositor) raises them too and makes every
+/// "silent" control unreadable. The window is retried until it is clean or this patience runs out;
+/// if it never is, the arm FAILS on the quiet window by name — it does not grade a noisy GPU.
+pub const CE_IRQ_QUIET_PATIENCE: Duration = Duration::from_secs(60);
 /// After the positive wake: how long the other files are watched for a stray readiness.
 pub const CE_IRQ_GRACE: Duration = Duration::from_millis(25);
 /// The control leg's per-iteration window: long enough for a real interrupt to have arrived many
@@ -480,8 +485,12 @@ pub struct CeIrqEvidence {
     pub notifiers: [u32; TOKENS],
     /// The CE class the channel's object is.
     pub ce_class: u32,
-    /// Tokens readable during the quiet window (F4): must be none.
+    /// Tokens readable during the LAST quiet window (F4): must be none.
     pub quiet_mask: u16,
+    /// How many quiet windows it took, and how long the arm waited for one, in milliseconds.
+    pub quiet_attempts: u32,
+    /// ... see [`Self::quiet_attempts`].
+    pub quiet_waited_ms: u64,
     /// The legs that ran.
     pub legs: Vec<CeIrqLeg>,
     /// Legs not applicable on this die (or whose channel the host refused), with the reason.
@@ -500,8 +509,11 @@ impl CeIrqEvidence {
         let mut f = Vec::new();
         if self.quiet_mask != 0 {
             f.push(format!(
-                "quiet window: {} became readable with nothing submitted",
-                mask_names(self.quiet_mask)
+                "quiet window: {} became readable with nothing submitted, in every one of {} \
+                 windows over {} ms (another tenant on this GPU?)",
+                mask_names(self.quiet_mask),
+                self.quiet_attempts,
+                self.quiet_waited_ms
             ));
         }
         let interrupt_legs = self.legs.iter().filter(|l| l.wake != CeWake::None).count();
@@ -934,9 +946,18 @@ impl HostRmBackend {
         };
 
         // --- F4: nothing submitted, nothing readable ----------------------------------------------
-        let _ = Self::drain_ready(&poller)?;
-        let quiet = Self::wait_tokens(&poller, 0, Instant::now(), CE_IRQ_QUIET, false)?;
-        let quiet_mask = quiet.others;
+        let quiet_started = Instant::now();
+        let mut quiet_attempts = 0u32;
+        let quiet_mask = loop {
+            let _ = Self::drain_ready(&poller)?;
+            quiet_attempts += 1;
+            let q = Self::wait_tokens(&poller, 0, Instant::now(), CE_IRQ_QUIET, false)?;
+            if q.others == 0 || quiet_started.elapsed() >= CE_IRQ_QUIET_PATIENCE {
+                break q.others;
+            }
+        };
+        let quiet_waited_ms =
+            u64::try_from(quiet_started.elapsed().as_millis()).unwrap_or(u64::MAX);
 
         // --- the legs ------------------------------------------------------------------------------
         let mut legs = Vec::new();
@@ -1007,6 +1028,8 @@ impl HostRmBackend {
             notifiers,
             ce_class,
             quiet_mask,
+            quiet_attempts,
+            quiet_waited_ms,
             legs,
             skipped,
             channel_source,
@@ -1379,7 +1402,7 @@ mod tests {
             let f = l.failures(BOUND);
             assert!(f.iter().any(|s| s.contains(needle)), "{needle}: {f:?}");
         };
-        check(&|i| i.wake_us = None, "never became readable");
+        check(&|i| i.wake_us = None, "became readable in 1 of");
         check(&|i| i.wake_us = Some(2_000_001), "later than");
         check(&|i| i.sem_ok = false, "semaphore never held");
         check(&|i| i.data_ok = false, "did not verify");
@@ -1434,6 +1457,8 @@ mod tests {
             notifiers: [0; TOKENS],
             ce_class: 0xC7B5,
             quiet_mask: 0,
+            quiet_attempts: 1,
+            quiet_waited_ms: 300,
             legs,
             skipped: vec![],
             channel_source: ChannelSourceProbe::NotRun,
