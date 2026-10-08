@@ -222,3 +222,48 @@ relay's report line (`fifo_armed`, `kernel_nonstall_registered`, edges/raised/no
 snapshot, for `0x1016` and every twin whether `GPGet == GPPut` (the GPU finished: a completion not delivered) or not
 (which method/semaphore it waits on and who should release it). VFIO boot3 cannot show the same channel's state: the
 reference traces BAR0 and GSP RPCs, never guest memory.
+
+## 8. Run 102 (binary `kf3-bins/3e9bcdce`, boot 3, RTX 4070, 2026-10-09): falsifier MET — the armed-rule relay does not end the stall; the GPU finished everything
+
+`[measured, run 102 at 3e9bcdce, RTX 4070, 2026-10-09 23:45:31-23:47:32 UTC]` files `run102-*`
+([harness](run102-harness.log), [qemu log](run102-qemu.log.gz), [BAR0 trace](run102-trace.log.gz), [frames](run102-frames.tsv),
+[bugcheck](run102-bugcheck.json)). kf3 clock → UTC: `UTC = kf − 275562.358 s` (teardown `RM_INTR_EN ← 0` at kf 275613.530 =
+23:45:51.173).
+- **Relay:** the new relay is live (`non-stall relay (owner ruling 2026-10-08): every host edge -> the guest vector of every event
+  this guest ARMED, never dropped …`). Report line before the teardown: `fifo_edges=5694 fifo_raised=5002 fifo_armed=1
+  kernel_nonstall_registered=5 arm_clears=1 … edges=11365 not_armed=2756 v0[raised=3139] v1[raised=4842] v2[raised=628]
+  GR0[vec=0 armed=1 wakes=3200 not_armed=221 raised=2985 live_twins=5] CE2[vec=1 armed=0 wakes=1214 not_armed=1214]
+  CE3[vec=2 armed=1 wakes=1257 not_armed=629 raised=628 live_twins=4]`. In the stall window (after the last flip) every GR0 and
+  CE3 wake was raised (`Raise(0)` ×283, `Raise(2)` ×188; CE2's 440 are `NotArmed`: no guest event on CE2). All MSIs in the read
+  trace are on MSI vector 0 (`0xfeeff00c/0x4962`); the guest's ISR reads the leaf registers (`0xb81000 = 0x3`, `0xb81600`)
+  and clears them throughout — the per-engine "vectors" are leaf bits, not MSI vectors.
+- **Course:** first window scanout +12.7 s; the last flip (window-0 PUT `0xa80`, LATCH) at kf 275610.148 = 23:45:47.79; then
+  no window PUT for 3.3 s, while the D3D process's GR channel `0x15` still rang 13 doorbells, `0x1016` 5 and `0x13` 2 (the last
+  at kf 275612.155); **the TDR's state collection (reads of `0x688000…`) at 23:45:49.855 = 2.06 s after the last flip**
+  (run 100: 2.12 s after its last flip) — the TDR clock starts at the last flip, not at the last GPU work. Teardown at
+  275613.5, recovery refused at the T-space rule (`birth REFUSED` ×1), `SWITCH_TO_VGA`, **0x116** `(…, 0xfffff8002e154930,
+  0xffffffffc000009a, 0x4)`, reboot, Code 43 (`no NVIDIA adapter`). No host Xid. The frames stayed black (the stall came
+  3.4 s after the first scanout, before the lock screen drew).
+- **Stall snapshot (1 s after the last doorbell, and at each twin's free):** for all nine Passthrough twins including
+  `0x1016`, **`GPGet == GPPut` and `Get == Put`** — the engines fetched every GPFIFO entry and executed every method
+  (no channel is held in an acquire: a held acquire stops `Get` short of `Put`). Every semaphore the last segments name holds
+  its release value, e.g. `0x1016`: host `SEM RELEASE va=0x404a000 payload=0x52 memory=0x52`, CE release `va=0x1200eb0a0`
+  payload 0 memory 0; `0x15`: `SEM RELEASE va=0x4034000 payload=0x1b6 memory=0x1b6`, 3D report `va=0x1200e7000 payload=0x1a
+  memory=0x1a`; `0x13`, `0xe`, `0xf`, `0x11`, `0x1012`, `0x1014` likewise ("a release the memory holds"). VFIO boot3 cannot
+  show the same state (it traces BAR0 and GSP RPCs, not guest memory).
+
+**Conclusion (measured, runs 100 and 102, RTX 4070, 2026-10-09):** the GPU did all the work, its fences are in guest memory, and the completion interrupts were
+raised on GR0's and CE3's vectors; the guest kept rendering (doorbells) but **stopped presenting**: no flip after the last
+latched one, and the TDR fires ~2.1 s after that last flip in both runs 100 and 102. `[inferred]` What times out is the
+present/flip path (the KMD's flip queue waiting for the last flip's completion), not render work. The armed-rule relay is
+not the fix for this wall (falsifier met); it stays merged (owner-ruled).
+
+## 9. Boot 4 (run 103), stated before the boot (2026-10-09, RTX 4070): H-flipdone
+
+Same binary and flags as run 102 plus `KF3_DISPLAY_TRACE=1` (each window completion kf3 publishes: `TRACE notify chn …
+handle … +offset … -> result` and `TRACE release chn … value … -> result`, and `TRACE window N latched`).
+**H-flipdone:** the last latched flip's completion (its `SET_SEMAPHORE_RELEASE` value at `SEMAPHORE_CONTROL`'s offset in
+context DMA `0xff1fe1b0`, and its notifier per `SET_NOTIFIER_CONTROL`) is not published where/when the KMD reads it.
+**Falsifier:** for the last latched flip, `TRACE release chn 1 … -> Ok(())` and `TRACE notify chn 1 … -> Ok(())` appear within
+one frame of its latch, with the same offsets and values as the earlier flips that did complete, and the guest still stops
+flipping — then kf3 publishes what it publishes for every flip and the wall is in what the KMD expects beyond it.
