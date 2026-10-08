@@ -1,0 +1,214 @@
+USERD_IOVA_MATRIX_START 2026-10-08T20:19:38+02:00
+HEAD=b4f2b7d1 dirty=0
+BIN=/var/lib/kf-windows-20261005/userd-iova-target/release/kf-userd-iova
+GPU=NVIDIA GeForce RTX 4070, 595.91.07, 2157 MiB, 12282 MiB
+uname=7.0.0-34-generic
+iommu_groups_by_type:      30 DMA-FQ       1 identity 
+qemu_running: 1
+=== CASE 1 ctl_vram 0 2026-10-08T20:19:38+02:00 MemAvailable_kB=20147344
+USERD_IOVA_START case=ctl_vram offset=0x0 pid=2377180
+MEASURE session driver 595.91.07
+MEASURE arch 0x4
+kf-host: channel birth h=0xcafe000a engine=0x9 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+USERD_IOVA_RESULT case=ctl_vram offset=0x0 born iova=vram fits_40bit=None
+CHECK control_born PASS VRAM USERD birth works (rig is sound)
+USERD_IOVA_VERDICT case=ctl_vram offset=0x0 PASS
+CASE_EXIT 1 0 2026-10-08T20:19:38+02:00
+GPU_ALIVE memory.used=2157 MiB
+=== CASE 2 big 0 2026-10-08T20:19:40+02:00 MemAvailable_kB=20142572
+USERD_IOVA_START case=big offset=0x0 pid=2377200
+MEASURE session driver 595.91.07
+MEASURE arch 0x4
+MEASURE descriptor_made memfd[0x0+0x200000000) obj=0xcafe0004 in 3342 ms
+MEASURE userd_iova 0x7ffc00000000 aperture=1 (SYSMEM=1) fits_40bit=false bits=47
+USERD_IOVA_RESULT case=big offset=0x0 REFUSED status=0x1e iova=0x7ffc00000000 fits_40bit=Some(false)
+CHECK birth_outcome_recorded PASS refused: Other(30)
+CHECK outcome_recorded PASS sysmem case ran to a result
+USERD_IOVA_VERDICT case=big offset=0x0 PASS
+CASE_EXIT 2 0 2026-10-08T20:19:45+02:00
+DMESG [256047.986971] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Address not valid [NV_ERR_INVALID_ADDRESS] (0x0000001E) returned from _kchannelAllocOrDescribeInstMem(pKernelChannel, pChannelGpfifoParams) @ kernel_channel.c:899
+GPU_ALIVE memory.used=2157 MiB
+=== CASE 3 big 40000000 2026-10-08T20:19:47+02:00 MemAvailable_kB=20164092
+USERD_IOVA_START case=big offset=0x40000000 pid=2377222
+MEASURE session driver 595.91.07
+MEASURE arch 0x4
+MEASURE descriptor_made memfd[0x0+0x200000000) obj=0xcafe0004 in 3237 ms
+MEASURE userd_iova 0x7ffc40000000 aperture=1 (SYSMEM=1) fits_40bit=false bits=47
+USERD_IOVA_RESULT case=big offset=0x40000000 REFUSED status=0x1e iova=0x7ffc40000000 fits_40bit=Some(false)
+CHECK birth_outcome_recorded PASS refused: Other(30)
+CHECK outcome_recorded PASS sysmem case ran to a result
+USERD_IOVA_VERDICT case=big offset=0x40000000 PASS
+CASE_EXIT 3 0 2026-10-08T20:19:52+02:00
+GPU_ALIVE memory.used=2157 MiB
+=== CASE 4 big 100100000 2026-10-08T20:19:54+02:00 MemAvailable_kB=19826024
+USERD_IOVA_START case=big offset=0x100100000 pid=2377245
+MEASURE session driver 595.91.07
+MEASURE arch 0x4
+MEASURE descriptor_made memfd[0x0+0x200000000) obj=0xcafe0004 in 3288 ms
+MEASURE userd_iova 0x7ffb00101000 aperture=1 (SYSMEM=1) fits_40bit=false bits=47
+USERD_IOVA_RESULT case=big offset=0x100100000 REFUSED status=0x1e iova=0x7ffb00101000 fits_40bit=Some(false)
+CHECK birth_outcome_recorded PASS refused: Other(30)
+CHECK outcome_recorded PASS sysmem case ran to a result
+USERD_IOVA_VERDICT case=big offset=0x100100000 PASS
+CASE_EXIT 4 0 2026-10-08T20:19:58+02:00
+GPU_ALIVE memory.used=2157 MiB
+=== CASE 5 big 1e6666000 2026-10-08T20:20:00+02:00 MemAvailable_kB=19640044
+USERD_IOVA_START case=big offset=0x1e6666000 pid=2377412
+MEASURE session driver 595.91.07
+MEASURE arch 0x4
+MEASURE descriptor_made memfd[0x0+0x200000000) obj=0xcafe0004 in 3291 ms
+MEASURE userd_iova 0x7ffbe6667000 aperture=1 (SYSMEM=1) fits_40bit=false bits=47
+USERD_IOVA_RESULT case=big offset=0x1e6666000 REFUSED status=0x1e iova=0x7ffbe6667000 fits_40bit=Some(false)
+CHECK birth_outcome_recorded PASS refused: Other(30)
+CHECK outcome_recorded PASS sysmem case ran to a result
+USERD_IOVA_VERDICT case=big offset=0x1e6666000 PASS
+CASE_EXIT 5 0 2026-10-08T20:20:05+02:00
+GPU_ALIVE memory.used=2039 MiB
+=== CASE 6 small_alone 40000000 2026-10-08T20:20:07+02:00 MemAvailable_kB=19596844
+USERD_IOVA_START case=small_alone offset=0x40000000 pid=2377482
+MEASURE session driver 595.91.07
+MEASURE arch 0x4
+MEASURE descriptor_made memfd[0x40000000+0x1000) obj=0xcafe0004 in 0 ms
+MEASURE userd_iova 0x7ffdfe8ef000 aperture=1 (SYSMEM=1) fits_40bit=false bits=47
+USERD_IOVA_RESULT case=small_alone offset=0x40000000 REFUSED status=0x1e iova=0x7ffdfe8ef000 fits_40bit=Some(false)
+CHECK birth_outcome_recorded PASS refused: Other(30)
+CHECK outcome_recorded PASS sysmem case ran to a result
+USERD_IOVA_VERDICT case=small_alone offset=0x40000000 PASS
+CASE_EXIT 6 0 2026-10-08T20:20:07+02:00
+DMESG [256070.954019] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Address not valid [NV_ERR_INVALID_ADDRESS] (0x0000001E) returned from kchannelCreateUserdMemDescBc_HAL(pGpu, pKernelChannel, hClient, pChannelGpfifoParams->hUserdMemory, pChannelGpfifoParams->userdOffset) @ kernel_channel.c:2234
+DMESG [256070.954022] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Address not valid [NV_ERR_INVALID_ADDRESS] (0x0000001E) returned from _kchannelAllocOrDescribeInstMem(pKernelChannel, pChannelGpfifoParams) @ kernel_channel.c:899
+GPU_ALIVE memory.used=2039 MiB
+=== CASE 7 small_before 40000000 2026-10-08T20:20:09+02:00 MemAvailable_kB=19584296
+USERD_IOVA_START case=small_before offset=0x40000000 pid=2377543
+MEASURE session driver 595.91.07
+MEASURE arch 0x4
+MEASURE descriptor_made memfd[0x40000000+0x1000) obj=0xcafe0004 in 0 ms
+MEASURE descriptor_made memfd[0x0+0x200000000) obj=0xcafe0005 in 3226 ms
+MEASURE userd_iova 0x7ffdfe8d7000 aperture=1 (SYSMEM=1) fits_40bit=false bits=47
+USERD_IOVA_RESULT case=small_before offset=0x40000000 REFUSED status=0x1e iova=0x7ffdfe8d7000 fits_40bit=Some(false)
+CHECK birth_outcome_recorded PASS refused: Other(30)
+CHECK outcome_recorded PASS sysmem case ran to a result
+USERD_IOVA_VERDICT case=small_before offset=0x40000000 PASS
+CASE_EXIT 7 0 2026-10-08T20:20:13+02:00
+DMESG [256076.326447] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Address not valid [NV_ERR_INVALID_ADDRESS] (0x0000001E) returned from kchannelCreateUserdMemDescBc_HAL(pGpu, pKernelChannel, hClient, pChannelGpfifoParams->hUserdMemory, pChannelGpfifoParams->userdOffset) @ kernel_channel.c:2234
+DMESG [256076.326450] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Address not valid [NV_ERR_INVALID_ADDRESS] (0x0000001E) returned from _kchannelAllocOrDescribeInstMem(pKernelChannel, pChannelGpfifoParams) @ kernel_channel.c:899
+GPU_ALIVE memory.used=2039 MiB
+=== CASE 8 small_after 40000000 2026-10-08T20:20:15+02:00 MemAvailable_kB=19809256
+USERD_IOVA_START case=small_after offset=0x40000000 pid=2377615
+MEASURE session driver 595.91.07
+MEASURE arch 0x4
+MEASURE descriptor_made memfd[0x0+0x200000000) obj=0xcafe0004 in 3315 ms
+MEASURE descriptor_made memfd[0x40000000+0x1000) obj=0xcafe0005 in 0 ms
+MEASURE userd_iova 0x7ffaffff9000 aperture=1 (SYSMEM=1) fits_40bit=false bits=47
+USERD_IOVA_RESULT case=small_after offset=0x40000000 REFUSED status=0x1e iova=0x7ffaffff9000 fits_40bit=Some(false)
+CHECK birth_outcome_recorded PASS refused: Other(30)
+CHECK outcome_recorded PASS sysmem case ran to a result
+USERD_IOVA_VERDICT case=small_after offset=0x40000000 PASS
+CASE_EXIT 8 0 2026-10-08T20:20:20+02:00
+DMESG [256082.863135] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Address not valid [NV_ERR_INVALID_ADDRESS] (0x0000001E) returned from kchannelCreateUserdMemDescBc_HAL(pGpu, pKernelChannel, hClient, pChannelGpfifoParams->hUserdMemory, pChannelGpfifoParams->userdOffset) @ kernel_channel.c:2234
+DMESG [256082.863138] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Address not valid [NV_ERR_INVALID_ADDRESS] (0x0000001E) returned from _kchannelAllocOrDescribeInstMem(pKernelChannel, pChannelGpfifoParams) @ kernel_channel.c:899
+GPU_ALIVE memory.used=2039 MiB
+=== CASE 9 small_alone 1f0005000 2026-10-08T20:20:22+02:00 MemAvailable_kB=19921192
+USERD_IOVA_START case=small_alone offset=0x1f0005000 pid=2377646
+MEASURE session driver 595.91.07
+MEASURE arch 0x4
+MEASURE descriptor_made memfd[0x1f0005000+0x1000) obj=0xcafe0004 in 0 ms
+MEASURE userd_iova 0x7ffdfe8d6000 aperture=1 (SYSMEM=1) fits_40bit=false bits=47
+USERD_IOVA_RESULT case=small_alone offset=0x1f0005000 REFUSED status=0x1e iova=0x7ffdfe8d6000 fits_40bit=Some(false)
+CHECK birth_outcome_recorded PASS refused: Other(30)
+CHECK outcome_recorded PASS sysmem case ran to a result
+USERD_IOVA_VERDICT case=small_alone offset=0x1f0005000 PASS
+CASE_EXIT 9 0 2026-10-08T20:20:22+02:00
+GPU_ALIVE memory.used=2039 MiB
+=== CASE 10 small_before 1f0005000 2026-10-08T20:20:24+02:00 MemAvailable_kB=19900732
+USERD_IOVA_START case=small_before offset=0x1f0005000 pid=2377668
+MEASURE session driver 595.91.07
+MEASURE arch 0x4
+MEASURE descriptor_made memfd[0x1f0005000+0x1000) obj=0xcafe0004 in 0 ms
+MEASURE descriptor_made memfd[0x0+0x200000000) obj=0xcafe0005 in 3221 ms
+MEASURE userd_iova 0x7ffdfe8d5000 aperture=1 (SYSMEM=1) fits_40bit=false bits=47
+USERD_IOVA_RESULT case=small_before offset=0x1f0005000 REFUSED status=0x1e iova=0x7ffdfe8d5000 fits_40bit=Some(false)
+CHECK birth_outcome_recorded PASS refused: Other(30)
+CHECK outcome_recorded PASS sysmem case ran to a result
+USERD_IOVA_VERDICT case=small_before offset=0x1f0005000 PASS
+CASE_EXIT 10 0 2026-10-08T20:20:28+02:00
+GPU_ALIVE memory.used=2039 MiB
+=== CASE 11 small_after 1f0005000 2026-10-08T20:20:30+02:00 MemAvailable_kB=19624644
+USERD_IOVA_START case=small_after offset=0x1f0005000 pid=2377968
+MEASURE session driver 595.91.07
+MEASURE arch 0x4
+MEASURE descriptor_made memfd[0x0+0x200000000) obj=0xcafe0004 in 3241 ms
+MEASURE descriptor_made memfd[0x1f0005000+0x1000) obj=0xcafe0005 in 0 ms
+MEASURE userd_iova 0x7ffaffff3000 aperture=1 (SYSMEM=1) fits_40bit=false bits=47
+USERD_IOVA_RESULT case=small_after offset=0x1f0005000 REFUSED status=0x1e iova=0x7ffaffff3000 fits_40bit=Some(false)
+CHECK birth_outcome_recorded PASS refused: Other(30)
+CHECK outcome_recorded PASS sysmem case ran to a result
+USERD_IOVA_VERDICT case=small_after offset=0x1f0005000 PASS
+CASE_EXIT 11 0 2026-10-08T20:20:35+02:00
+DMESG [256097.936970] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Address not valid [NV_ERR_INVALID_ADDRESS] (0x0000001E) returned from _kchannelAllocOrDescribeInstMem(pKernelChannel, pChannelGpfifoParams) @ kernel_channel.c:899
+GPU_ALIVE memory.used=2039 MiB
+=== CASE 12 small_before 1e6666000 2026-10-08T20:20:37+02:00 MemAvailable_kB=19756468
+USERD_IOVA_START case=small_before offset=0x1e6666000 pid=2378152
+MEASURE session driver 595.91.07
+MEASURE arch 0x4
+MEASURE descriptor_made memfd[0x1e6666000+0x1000) obj=0xcafe0004 in 0 ms
+MEASURE descriptor_made memfd[0x0+0x200000000) obj=0xcafe0005 in 3252 ms
+MEASURE userd_iova 0x7ffdfe8ef000 aperture=1 (SYSMEM=1) fits_40bit=false bits=47
+USERD_IOVA_RESULT case=small_before offset=0x1e6666000 REFUSED status=0x1e iova=0x7ffdfe8ef000 fits_40bit=Some(false)
+CHECK birth_outcome_recorded PASS refused: Other(30)
+CHECK outcome_recorded PASS sysmem case ran to a result
+USERD_IOVA_VERDICT case=small_before offset=0x1e6666000 PASS
+CASE_EXIT 12 0 2026-10-08T20:20:41+02:00
+GPU_ALIVE memory.used=2039 MiB
+=== CASE 13 small_after 1e6666000 2026-10-08T20:20:43+02:00 MemAvailable_kB=20014888
+USERD_IOVA_START case=small_after offset=0x1e6666000 pid=2378282
+MEASURE session driver 595.91.07
+MEASURE arch 0x4
+MEASURE descriptor_made memfd[0x0+0x200000000) obj=0xcafe0004 in 3272 ms
+MEASURE descriptor_made memfd[0x1e6666000+0x1000) obj=0xcafe0005 in 0 ms
+MEASURE userd_iova 0x7ffafffed000 aperture=1 (SYSMEM=1) fits_40bit=false bits=47
+USERD_IOVA_RESULT case=small_after offset=0x1e6666000 REFUSED status=0x1e iova=0x7ffafffed000 fits_40bit=Some(false)
+CHECK birth_outcome_recorded PASS refused: Other(30)
+CHECK outcome_recorded PASS sysmem case ran to a result
+USERD_IOVA_VERDICT case=small_after offset=0x1e6666000 PASS
+CASE_EXIT 13 0 2026-10-08T20:20:48+02:00
+GPU_ALIVE memory.used=2039 MiB
+=== CASE 14 big 40000000 2026-10-08T20:20:50+02:00 MemAvailable_kB=20000956
+USERD_IOVA_START case=big offset=0x40000000 pid=2378313
+MEASURE session driver 595.91.07
+MEASURE arch 0x4
+MEASURE descriptor_made memfd[0x0+0x200000000) obj=0xcafe0004 in 3621 ms
+MEASURE userd_iova 0x7ffc40000000 aperture=1 (SYSMEM=1) fits_40bit=false bits=47
+USERD_IOVA_RESULT case=big offset=0x40000000 REFUSED status=0x1e iova=0x7ffc40000000 fits_40bit=Some(false)
+CHECK birth_outcome_recorded PASS refused: Other(30)
+CHECK outcome_recorded PASS sysmem case ran to a result
+USERD_IOVA_VERDICT case=big offset=0x40000000 PASS
+CASE_EXIT 14 0 2026-10-08T20:20:55+02:00
+GPU_ALIVE memory.used=2039 MiB
+=== CASE 15 small_before 40000000 2026-10-08T20:20:57+02:00 MemAvailable_kB=19994020
+USERD_IOVA_START case=small_before offset=0x40000000 pid=2378345
+MEASURE session driver 595.91.07
+MEASURE arch 0x4
+MEASURE descriptor_made memfd[0x40000000+0x1000) obj=0xcafe0004 in 0 ms
+MEASURE descriptor_made memfd[0x0+0x200000000) obj=0xcafe0005 in 3278 ms
+MEASURE userd_iova 0x7ffdfe8d4000 aperture=1 (SYSMEM=1) fits_40bit=false bits=47
+USERD_IOVA_RESULT case=small_before offset=0x40000000 REFUSED status=0x1e iova=0x7ffdfe8d4000 fits_40bit=Some(false)
+CHECK birth_outcome_recorded PASS refused: Other(30)
+CHECK outcome_recorded PASS sysmem case ran to a result
+USERD_IOVA_VERDICT case=small_before offset=0x40000000 PASS
+CASE_EXIT 15 0 2026-10-08T20:21:01+02:00
+GPU_ALIVE memory.used=2039 MiB
+=== CASE 16 small_after 40000000 2026-10-08T20:21:03+02:00 MemAvailable_kB=19492188
+USERD_IOVA_START case=small_after offset=0x40000000 pid=2378415
+MEASURE session driver 595.91.07
+MEASURE arch 0x4
+MEASURE descriptor_made memfd[0x0+0x200000000) obj=0xcafe0004 in 3327 ms
+MEASURE descriptor_made memfd[0x40000000+0x1000) obj=0xcafe0005 in 0 ms
+MEASURE userd_iova 0x7ffafffe7000 aperture=1 (SYSMEM=1) fits_40bit=false bits=47
+USERD_IOVA_RESULT case=small_after offset=0x40000000 REFUSED status=0x1e iova=0x7ffafffe7000 fits_40bit=Some(false)
+CHECK birth_outcome_recorded PASS refused: Other(30)
+CHECK outcome_recorded PASS sysmem case ran to a result
+USERD_IOVA_VERDICT case=small_after offset=0x40000000 PASS
+CASE_EXIT 16 0 2026-10-08T20:21:08+02:00
+GPU_ALIVE memory.used=2039 MiB
+USERD_IOVA_MATRIX_END 2026-10-08T20:21:10+02:00
