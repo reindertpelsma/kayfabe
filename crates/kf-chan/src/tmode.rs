@@ -465,6 +465,12 @@ fn one(
             SubKind::Ce
         };
         c.method(st.tier.map_or(0, tier_class), kind, m);
+        // ★ 2026-10-08 (owner question, run64): the T-mode path never recorded the LAUNCH_DMA words,
+        // so a census could not say whether a channel named a PHYSICAL operand (`SRC_TYPE` bit 12,
+        // `DST_TYPE` bit 13). Count-only, as every census entry.
+        if kind == SubKind::Ce && m == ce::LAUNCH_DMA {
+            c.launch(st.tier.map_or(0, tier_class), v);
+        }
     }
     if m < 0x100 {
         let Some(hm) = host_method(m) else {
