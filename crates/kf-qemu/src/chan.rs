@@ -2087,7 +2087,9 @@ impl ChanPlane {
             arms.map_or(0, |a| a.sticky()),
             arms.map_or(0, |a| a.kernel_registered.load(o)),
             arms.map_or(0, |a| a.clears.load(o)),
-            self.nsi_log.get().map_or(0, kf_rm::osevent::OsEventLog::overflowed),
+            self.nsi_log
+                .get()
+                .map_or(0, kf_rm::osevent::OsEventLog::overflowed),
             self.nsi_log
                 .get()
                 .map_or(0, kf_rm::osevent::OsEventLog::kernel_overflowed),

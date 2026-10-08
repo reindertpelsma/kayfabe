@@ -208,14 +208,18 @@ impl NonstallArms {
     }
 
     /// ⊘ Two locks write these counters ([`OsEventLog`]'s `live` rows and its `kernel` rows), so
-    /// writers DO race each other: `down` is one atomic read-modify-write (a saturating
-    /// decrement), like `up`, never a load-then-store that could lose a concurrent `up`. Readers
+    /// writers DO race each other: `down` is an atomic compare-exchange decrement (stopping
+    /// at 0), like `up`, never a load-then-store that could lose a concurrent `up`. Readers
     /// stay lock-free.
     fn down(&self, slot: usize) {
         if let Some(c) = self.counts.get(slot) {
-            let _ = c.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| {
-                Some(v.saturating_sub(1))
-            });
+            let mut v = c.load(Ordering::Relaxed);
+            while v > 0 {
+                match c.compare_exchange_weak(v, v - 1, Ordering::Relaxed, Ordering::Relaxed) {
+                    Ok(_) => break,
+                    Err(now) => v = now,
+                }
+            }
         }
     }
 
@@ -1124,7 +1128,11 @@ mod tests {
         kernel.join().unwrap();
         stop.store(true, Ordering::Relaxed);
         assert_eq!(reader.join().unwrap(), 0, "a reader saw the slot unarmed");
-        assert_eq!(arms.count(4), 1, "no count lost or leaked across the two locks");
+        assert_eq!(
+            arms.count(4),
+            1,
+            "no count lost or leaked across the two locks"
+        );
         assert_eq!(log.retire(1, 2), 1);
         assert!(!arms.armed(4));
     }
