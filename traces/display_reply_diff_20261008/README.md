@@ -292,3 +292,31 @@ initialises all eight windows at driver start (row P17 unchanged); **H-hdmi** �
 `DFP_SET_ELD_AUDIO_CAPS` (the path is taken) and still writes no window PUT after the modeset; **H-xbar** — `DFP_ASSIGN_SOR`
 is sent and answered and still no window PUT. Whole batch: `puts=39` at the stall marker with all three confirmed. If
 `puts > 39`: one bisect boot (time-box: 3 boots), H-caps alone vs H-hdmi + H-xbar.
+
+## 9. Run 98 (binary `kf3-bins/1048afc7`, §8's batch): the window programming happens — `puts=63` at the marker
+
+`[measured, run98 at 1048afc7, RTX 4070, 2026-10-09]` files `run98-*`. All eleven flags confirmed (log lines; the HDMI/xbar
+probe answered `0x00730101` ×2, `0x00730250` ×5, `0x00731140` ×4, `0x00731144` ×4, `0x00730273`, `0x00730293`, `0x007302a2`,
+`0x007302a6`, `0x00731152`; `CAPS_PROBE … 99 words`). Against run 97, measured in the WTRACE:
+- **driver start (row P17) now matches the hardware's shape**: windows 0/2/4/6 only (PUTs 0x310 → 0x8e0 → 0x9f0 → 0 → 0x7f0;
+  hardware 0x320 → 0x8f0 → 0xa00 → 0 → 0x7f0), the odd windows untouched — H-caps' falsifier is not met;
+- after the modeset (core PUT 0x630) and the first VSync, `0x90f10106` is followed by **core PUT 0x680 + window 0 PUT 0x800**
+  (271314.546 s) — the hardware's order at 12.594-12.596 (`0x90f10106`, core PUT 0xcf0, window 0 PUT 0x870) — then more
+  window 0 flips (0x8f0-0x950, 0x9b0-0xa00, 0xa50-0xa80, 0xae0-0xaf0), core updates every 2 s, and 921 VSyncs (frame 1072);
+- the harness's stall marker (`0x00730108` after the first Passthrough birth) fired at 15.5 s with `puts=63`, but here it is
+  a client's GET_CONNECT_STATE during normal display activity; the harness then quit the guest (30 s later, `puts=100`), so
+  no QGA probe ran. ~20 s after driver start (271333.08) the guest's RM re-initialised the display from scratch (core and
+  window init sequence, Translated kernel channels reborn) — a driver reset, cause not identified in this log. No host Xid
+  during the boot (the Xid 31 lines at 00:25 belong to another agent's boot between runs 97 and 98).
+
+`[inferred]` H-hdmi + H-xbar + H-caps together are sufficient for the primary-window programming; which one is necessary is
+open. The init-window change is attributable to the caps page alone (nothing else in the batch touches what the KMD reads
+before 11.07 s on hardware), which makes H-caps the first candidate.
+
+## 10. Boot 3 of the time-box (run 99): bisect — H-caps alone — plus the D3D probes
+
+Flags: run 97's set + `KF3_DISPLAY_CAPS_PROBE` (no HDMI, no xbar probe), same binary (`1048afc7`; later commits on this
+branch change no code). Harness [drd-run2.sh](drd-run2.sh): the marker no longer ends the boot; 40 s after it a screendump,
+then the QGA probes (D3D11 clear + read-back, D3D12 fence, monitor info + `nvidia-smi`, the user-session probe), then a
+clean stop. Prediction (H-caps sufficient): driver-start init on windows 0/2/4/6 and a window 0 PUT after the modeset.
+Falsifier: no window PUT after the modeset (`puts=39` at the marker) — then H-hdmi and/or H-xbar is necessary.
