@@ -126,6 +126,10 @@ struct PtChan {
     /// ★ v3-video: the guest's falcon context buffer `(VA, size)` from its falcon promote — the VA
     /// the host's own falcon context is steered onto (see `ChanPlane::engine_object`).
     falcon_ctx: Option<(u64, u64)>,
+    /// ⚠ DIAGNOSTIC (2026-10-09, [`ChanPlane::pt_stall_snapshot_poll`]): where the guest declared
+    /// this channel's ring — `(GPFIFO VA, entries, USERD GPA if in guest RAM)`. Read only by the
+    /// default-off stall snapshot; never used to act.
+    ring_at: (u64, u32, Option<u64>),
 }
 
 /// ★★★ v3-promote — **the guest's context-buffer statements, satisfied by the twin** (owner
@@ -508,6 +512,138 @@ fn scan_sw_methods(words: &[u32]) -> SwScan {
         i = i.saturating_add(1).saturating_add(h.arg_words);
     }
     out
+}
+
+/// ⚠ DIAGNOSTIC switch (default off, 2026-10-09): `KF3_PT_STALL_SNAPSHOT=1` arms the stall snapshot
+/// ([`ChanPlane::pt_stall_snapshot_poll`]); `KF3_PT_STALL_SNAPSHOT_MS` the silence (200..=10000,
+/// default 1000). `None` = off.
+fn pt_stall_snapshot_ms() -> Option<u64> {
+    static ON: std::sync::OnceLock<Option<u64>> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| {
+        if std::env::var("KF3_PT_STALL_SNAPSHOT").as_deref() != Ok("1") {
+            return None;
+        }
+        let ms = std::env::var("KF3_PT_STALL_SNAPSHOT_MS")
+            .ok()
+            .and_then(|v| v.trim().parse::<u64>().ok())
+            .unwrap_or(1000)
+            .clamp(200, 10_000);
+        eprintln!(
+            "kf3: ⚠ DIAGNOSTIC KF3_PT_STALL_SNAPSHOT=1: after {ms} ms with no doorbell to any live Passthrough twin (and at each twin's free), its USERD, ring entries, segment methods and semaphores are read from guest memory and logged (at most {SNAP_MAX} stalls, {SNAP_FREE_MAX} frees per boot)"
+        );
+        Some(ms)
+    })
+}
+
+/// Stall snapshots per boot (one per silence).
+const SNAP_MAX: u32 = 4;
+/// Snapshots at a twin's free per boot.
+const SNAP_FREE_MAX: u32 = 32;
+/// GPFIFO entries listed per twin.
+const SNAP_ENTRIES: u32 = 12;
+/// Entries before `GPPut` whose segments are decoded.
+const SNAP_SEGMENTS: u32 = 3;
+/// Words read per segment.
+const SNAP_WORDS: usize = 256;
+/// Methods listed per segment.
+const SNAP_METHODS: usize = 48;
+/// Semaphores read back per twin.
+const SNAP_SEMS: usize = 8;
+
+/// ⚠ DIAGNOSTIC: a semaphore a segment names — host `SEM_EXECUTE` (`NVC56F_SEM_*`,
+/// `ogkm-595.84: clc56f.h:206-229`), or the 3D/CE release [`last_fence_release`] finds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SemRef {
+    op: &'static str,
+    va: u64,
+    payload: u64,
+    wide: bool,
+    /// The GPFIFO entry whose segment named it (`u32::MAX` until the caller sets it).
+    gp: u32,
+}
+
+/// ⚠ DIAGNOSTIC, pure: a segment's methods as `(subchannel, method byte offset, value)` (at most
+/// `max`), and its host semaphore operations. Host methods (`< 0x100`) apply on every subchannel;
+/// `SEM_ADDR_LO/HI` (0x5c/0x60), `SEM_PAYLOAD_LO/HI` (0x64/0x68) latch, `SEM_EXECUTE` (0x6c)
+/// executes: OPERATION `2:0`, PAYLOAD_SIZE `24:24` (`clc56f.h:206-229`). Stops at the first
+/// undecodable header (named) or the segment's end.
+struct SnapDecoded {
+    methods: Vec<(u32, u32, u32)>,
+    sems: Vec<SemRef>,
+    stopped_at: Option<usize>,
+}
+
+fn snap_decode(words: &[u32], max: usize) -> SnapDecoded {
+    use kf_abi::submit::{MethodForm, method_header_decode};
+    const OPS: [&str; 8] = [
+        "ACQUIRE",
+        "RELEASE",
+        "ACQ_STRICT_GEQ",
+        "ACQ_CIRC_GEQ",
+        "ACQ_AND",
+        "ACQ_NOR",
+        "REDUCTION",
+        "OP7",
+    ];
+    let mut d = SnapDecoded {
+        methods: Vec::new(),
+        sems: Vec::new(),
+        stopped_at: None,
+    };
+    let (mut lo, mut hi, mut plo, mut phi) = (0u32, 0u32, 0u32, 0u32);
+    let mut i = 0usize;
+    while i < words.len() {
+        let Some(h) = method_header_decode(words[i]) else {
+            d.stopped_at = Some(i);
+            break;
+        };
+        let args: Vec<(u32, u32)> = match h.form {
+            MethodForm::EndPbSegment => break,
+            MethodForm::Immediate => vec![(h.method, h.immd)],
+            MethodForm::Incrementing => (0..h.arg_words)
+                .filter_map(|k| words.get(i + 1 + k).map(|v| (h.method + 4 * k as u32, *v)))
+                .collect(),
+            MethodForm::NonIncrementing => (0..h.arg_words)
+                .filter_map(|k| words.get(i + 1 + k).map(|v| (h.method, *v)))
+                .collect(),
+            MethodForm::IncrementOnce => (0..h.arg_words)
+                .filter_map(|k| {
+                    words
+                        .get(i + 1 + k)
+                        .map(|v| (if k == 0 { h.method } else { h.method + 4 }, *v))
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+        for (m, v) in args {
+            if d.methods.len() < max {
+                d.methods.push((h.subchannel, m, v));
+            }
+            match m {
+                0x5c => lo = v,
+                0x60 => hi = v,
+                0x64 => plo = v,
+                0x68 => phi = v,
+                0x6c => {
+                    let wide = (v >> 24) & 1 == 1;
+                    d.sems.push(SemRef {
+                        op: OPS[(v & 7) as usize],
+                        va: (u64::from(hi & 0xff) << 32) | u64::from(lo & !3),
+                        payload: if wide {
+                            (u64::from(phi) << 32) | u64::from(plo)
+                        } else {
+                            u64::from(plo)
+                        },
+                        wide,
+                        gp: u32::MAX,
+                    });
+                }
+                _ => {}
+            }
+        }
+        i = i.saturating_add(1).saturating_add(h.arg_words);
+    }
+    d
 }
 
 /// ⚠ DIAGNOSTIC (2026-10-08, after run76; `KF3_RELAY_PB_PEEK=1` only): the LAST one-word semaphore
@@ -4489,6 +4625,16 @@ impl ChanPlane {
                     // ★ The fast path goes FIRST: its placements removed, its eventfd's last count
                     // delivered (to the token word, retired on the drainer at the statement — so
                     // absorbed), acknowledged — only then may the twin go and the token be reborn.
+                    // ⚠ DIAGNOSTIC (`KF3_PT_STALL_SNAPSHOT=1`, bounded per boot): the twin's state
+                    // before it goes — a TDR teardown frees the stalled twins here.
+                    if pt_stall_snapshot_ms().is_some() {
+                        static FREES: AtomicU32 = AtomicU32::new(0);
+                        if FREES.fetch_add(1, Ordering::Relaxed) < SNAP_FREE_MAX {
+                            eprintln!("kf3: PT-SNAP BEGIN at free of tok={:#x} (maplog t={:.6})", t.idx, kf_mem::maplog::t());
+                            me.pt_snapshot_twin(c, h, &t);
+                            eprintln!("kf3: PT-SNAP END");
+                        }
+                    }
                     let fast = me.dbfast.deregister(t.idx);
                     let r = me.release_twin(c, t.tsg, t.ctx_share, t.chan);
                     t.live.fetch_sub(1, Ordering::AcqRel);
@@ -5033,6 +5179,262 @@ impl ChanPlane {
         g.peek.next = idx;
     }
 
+    /// ⚠ DIAGNOSTIC (default off, 2026-10-09, `KF3_PT_STALL_SNAPSHOT=1`; record
+    /// `traces/windows_reset_20261009/`): **the stall snapshot**. Called by the drainer (never a
+    /// vCPU) about every 250 ms. When no doorbell has reached any live Passthrough twin for
+    /// `KF3_PT_STALL_SNAPSHOT_MS` (default 1000, 200..=10000) after at least one did, it reads, once
+    /// per silence and at most [`SNAP_MAX`] times per boot, every live twin's state from GUEST
+    /// memory ([`Self::pt_snapshot_twin`]). Post-mortem only: it logs; nothing it reads reaches a
+    /// host action. With the switch off it returns at its first load.
+    pub fn pt_stall_snapshot_poll(&self) {
+        let Some(silence) = pt_stall_snapshot_ms() else {
+            return;
+        };
+        static STATE: Mutex<(u64, Option<std::time::Instant>, bool, u32)> =
+            Mutex::new((0, None, false, 0));
+        let tokens: Vec<u32> = match self.pt.lock() {
+            Ok(m) => m.values().map(|t| t.idx).collect(),
+            Err(_) => return,
+        };
+        let total: u64 = tokens
+            .iter()
+            .filter_map(|&i| self.rung.get(i as usize))
+            .map(|c| c.load(Ordering::Relaxed))
+            .sum();
+        let Ok(mut st) = STATE.lock() else { return };
+        let (last, since, armed, taken) = &mut *st;
+        let now = std::time::Instant::now();
+        if total != *last || since.is_none() {
+            *armed = *armed || (total > *last && since.is_some());
+            *last = total;
+            *since = Some(now);
+            return;
+        }
+        let quiet = since.map_or(0, |t| now.duration_since(t).as_millis());
+        if !*armed || *taken >= SNAP_MAX || quiet < u128::from(silence) {
+            return;
+        }
+        *armed = false;
+        *taken += 1;
+        let n = *taken;
+        drop(st);
+        self.pt_snapshot_all(&format!(
+            "stall #{n}: no doorbell to any of {} live Passthrough twin(s) for {quiet} ms (doorbells so far {total})",
+            tokens.len()
+        ));
+    }
+
+    /// ⚠ DIAGNOSTIC: [`Self::pt_snapshot_twin`] for every live twin, under one `pt` lock.
+    fn pt_snapshot_all(&self, why: &str) {
+        let Ok(m) = self.pt.lock() else { return };
+        eprintln!(
+            "kf3: PT-SNAP BEGIN {why} (maplog t={:.6})",
+            kf_mem::maplog::t()
+        );
+        let mut twins: Vec<_> = m.iter().collect();
+        twins.sort_by_key(|(_, t)| t.idx);
+        for ((c, h), t) in twins {
+            self.pt_snapshot_twin(*c, *h, t);
+        }
+        eprintln!("kf3: PT-SNAP END");
+    }
+
+    /// ⚠ DIAGNOSTIC: one twin's state, read from guest memory — its USERD (`NVC56F` USERD layout,
+    /// `ogkm-595.84: clc56f.h:49-63`), the GPFIFO entries around `GPGet`/`GPPut`, the push-buffer
+    /// methods of the last [`SNAP_SEGMENTS`] entries before `GPPut` (decoded by
+    /// [`snap_decode`]), and the current value at every semaphore those methods name. Bounded:
+    /// [`SNAP_ENTRIES`] entries, [`SNAP_WORDS`] words per segment, [`SNAP_SEMS`] semaphores. Every
+    /// read goes through the guest's declared USERD GPA (checked against guest RAM) or OUR placement
+    /// rows (an unplaced or vidmem VA is named, never followed).
+    fn pt_snapshot_twin(&self, c: u32, h: u32, t: &PtChan) {
+        let tok = t.idx;
+        let (gpfifo_va, entries, userd_gpa) = t.ring_at;
+        let db = self
+            .rung
+            .get(tok as usize)
+            .map_or(0, |x| x.load(Ordering::Relaxed));
+        let db_at = self
+            .rung_at_us
+            .get(tok as usize)
+            .map_or(0, |x| x.load(Ordering::Relaxed));
+        let mut u = [0u8; 0x90];
+        let userd = userd_gpa
+            .ok_or_else(|| "USERD not in guest RAM".to_string())
+            .and_then(|gpa| {
+                let off = self
+                    .ram
+                    .dma_to_file_range(gpa, u.len() as u64)
+                    .ok_or_else(|| format!("USERD GPA {gpa:#x} outside guest RAM"))?;
+                let (mem, at) = self
+                    .ram
+                    .at_file_offset(off, u.len() as u64)
+                    .ok_or_else(|| format!("USERD offset {off:#x} unregistered"))?;
+                if mem.read_into(at, &mut u) {
+                    Ok(())
+                } else {
+                    Err("USERD read".to_string())
+                }
+            });
+        let w = |o: usize| u32::from_le_bytes([u[o], u[o + 1], u[o + 2], u[o + 3]]);
+        let (gp_get, gp_put) = (w(0x88), w(0x8c));
+        match &userd {
+            Ok(()) => eprintln!(
+                "kf3: PT-SNAP tok={tok:#x} chan {c:#x}:{h:#x} host={:#x} engine={:#x} user_work={} doorbells={db} last_doorbell_us={db_at} USERD@{:#x}: Put={:#x} Get={:#x} Reference={:#x} PutHi={:#x} TopLevelGet={:#x} TopLevelGetHi={:#x} GetHi={:#x} GPGet={gp_get:#x} GPPut={gp_put:#x} ring={gpfifo_va:#x}x{entries} — {}",
+                t.chan.token,
+                t.engine,
+                t.user_work,
+                userd_gpa.unwrap_or(0),
+                w(0x40),
+                w(0x44),
+                w(0x48),
+                w(0x4c),
+                w(0x58),
+                w(0x5c),
+                w(0x60),
+                if gp_get == gp_put {
+                    "GPGet == GPPut: the engine fetched every entry the guest put"
+                } else {
+                    "GPGet != GPPut: entries put and NOT fetched"
+                }
+            ),
+            Err(e) => eprintln!(
+                "kf3: PT-SNAP tok={tok:#x} chan {c:#x}:{h:#x} host={:#x} engine={:#x} doorbells={db} last_doorbell_us={db_at} USERD unreadable ({e}) ring={gpfifo_va:#x}x{entries}",
+                t.chan.token, t.engine
+            ),
+        }
+        if entries == 0 || userd.is_err() {
+            return;
+        }
+        let n = entries.max(1);
+        // entries [GPGet - 2, GPPut + 2), at most SNAP_ENTRIES; the segments of the last
+        // SNAP_SEGMENTS before GPPut are decoded
+        let first = (gp_get % n + n - 2.min(n - 1)) % n;
+        let span = ((gp_put % n + n - first) % n + 2).min(SNAP_ENTRIES);
+        let mut sems: Vec<SemRef> = Vec::new();
+        for k in 0..span {
+            let i = (first + k) % n;
+            let mut e = [0u8; 8];
+            let gpva = gpfifo_va + u64::from(i) * 8;
+            if let Err(why) = self.snap_read(&t.rows, gpva, &mut e) {
+                eprintln!("kf3: PT-SNAP tok={tok:#x} GP[{i:#x}] @{gpva:#x}: {why}");
+                continue;
+            }
+            let lo = u32::from_le_bytes([e[0], e[1], e[2], e[3]]);
+            let hi = u32::from_le_bytes([e[4], e[5], e[6], e[7]]);
+            let va = u64::from(lo & !3) | (u64::from(hi & 0xff) << 32);
+            let words = (hi >> 10) & 0x1f_ffff;
+            let pending = (i + n - gp_get % n) % n < (gp_put % n + n - gp_get % n) % n;
+            let decode = (gp_put % n + n - i) % n <= SNAP_SEGMENTS && (gp_put % n + n - i) % n > 0;
+            let mut line = format!(
+                "kf3: PT-SNAP tok={tok:#x} GP[{i:#x}] {} lo={lo:#010x} hi={hi:#010x} va={va:#x} words={words}",
+                if pending { "PENDING" } else { "fetched" }
+            );
+            if decode && words > 0 {
+                let mut buf = vec![0u8; (words as usize).min(SNAP_WORDS) * 4];
+                match self.snap_read(&t.rows, va, &mut buf) {
+                    Ok(()) => {
+                        let ws: Vec<u32> = buf
+                            .as_chunks::<4>()
+                            .0
+                            .iter()
+                            .map(|c| u32::from_le_bytes(*c))
+                            .collect();
+                        let d = snap_decode(&ws, SNAP_METHODS);
+                        line.push_str(&format!(
+                            " methods[{}{}]: {}",
+                            d.methods.len(),
+                            d.stopped_at
+                                .map_or(String::new(), |w| format!(", undecodable at word {w}")),
+                            d.methods
+                                .iter()
+                                .map(|(s, m, v)| format!("s{s}:{m:#x}={v:#x}"))
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                        ));
+                        for s in d.sems {
+                            if sems.len() < SNAP_SEMS {
+                                sems.push(s);
+                            }
+                        }
+                        if let Some((k, fva, p)) = last_fence_release(&ws)
+                            && sems.len() < SNAP_SEMS
+                        {
+                            sems.push(SemRef {
+                                op: k,
+                                va: fva,
+                                payload: u64::from(p),
+                                wide: false,
+                                gp: i,
+                            });
+                        }
+                        for s in sems.iter_mut().filter(|s| s.gp == u32::MAX) {
+                            s.gp = i;
+                        }
+                    }
+                    Err(why) => line.push_str(&format!(" segment unreadable ({why})")),
+                }
+            }
+            eprintln!("{line}");
+        }
+        for s in &sems {
+            let mut b = [0u8; 8];
+            let now = self
+                .snap_read(&t.rows, s.va, &mut b[..if s.wide { 8 } else { 4 }])
+                .map(|()| u64::from_le_bytes(b));
+            eprintln!(
+                "kf3: PT-SNAP tok={tok:#x} SEM {} (GP[{:#x}]) va={:#x} payload={:#x} memory={} — {}",
+                s.op,
+                s.gp,
+                s.va,
+                s.payload,
+                now.as_ref()
+                    .map_or_else(|e| format!("unreadable ({e})"), |v| format!("{v:#x}")),
+                match (&now, s.op.starts_with("ACQ")) {
+                    (Ok(v), true) if *v >= s.payload =>
+                        "an acquire the memory already satisfies (>=)",
+                    (Ok(_), true) =>
+                        "an ACQUIRE NOT YET SATISFIED (memory < payload): who releases it?",
+                    (Ok(v), false) if *v == s.payload => "a release the memory holds",
+                    (Ok(_), false) =>
+                        "a release NOT in memory (not executed, or overwritten later)",
+                    (Err(_), _) => "",
+                }
+            );
+        }
+    }
+
+    /// ⚠ DIAGNOSTIC: read guest memory at a VA through OUR placement rows, guest-RAM rows only (a
+    /// vidmem row is named, not read: the snapshot arms no CPU view of the store).
+    fn snap_read(
+        &self,
+        rows: &crate::mem::PlacedRows,
+        va: u64,
+        out: &mut [u8],
+    ) -> Result<(), String> {
+        let len = out.len() as u64;
+        let mut done = 0u64;
+        while done < len {
+            let at_va = va + done;
+            let (ram, off, avail) = crate::mem::resolve_placed_prefix(rows, at_va)
+                .ok_or_else(|| format!("{at_va:#x} not placed by us"))?;
+            if !ram {
+                return Err(format!(
+                    "{at_va:#x} is a vidmem row (not read by the snapshot)"
+                ));
+            }
+            let n = avail.min(len - done);
+            let (mem, at) = self
+                .ram
+                .at_file_offset(off, n)
+                .ok_or_else(|| format!("{at_va:#x}: guest-RAM offset {off:#x} unregistered"))?;
+            if !mem.read_into(at, &mut out[done as usize..(done + n) as usize]) {
+                return Err(format!("{at_va:#x}: guest-RAM read"));
+            }
+            done += n;
+        }
+        Ok(())
+    }
+
     fn slot(&self, ht: u32) -> Option<Arc<Mutex<Slot>>> {
         self.slots.read().ok()?.get(&ht).cloned()
     }
@@ -5390,6 +5792,14 @@ impl ChanPlane {
                             space,
                             rows,
                             falcon_ctx: None,
+                            ring_at: (
+                                a.gpfifo_va,
+                                g.entries,
+                                match a.userd {
+                                    Some(kf_arch::UserdMem::Sysmem { base, .. }) => Some(base),
+                                    _ => None,
+                                },
+                            ),
                         });
                     }
                     me.pt_births.fetch_add(1, Ordering::Relaxed);
@@ -6614,6 +7024,7 @@ mod dispsw_tests {
             },
             rows: crate::mem::PlacedRows::default(),
             falcon_ctx: None,
+            ring_at: (0, 0, None),
         }
     }
 
@@ -7360,5 +7771,55 @@ mod preempt_order_tests {
         // A Translated ring resolves by its own handle only.
         let r = resolve(&[(0x32, 0x41)]);
         assert_eq!(r.tr, [((0x32, 0x41), 0x80c)]);
+    }
+}
+
+#[cfg(test)]
+mod snap_tests {
+    use super::{SNAP_METHODS, snap_decode};
+    use kf_abi::submit::{method_header_inc, method_header_non_inc};
+
+    #[test]
+    fn the_stall_snapshot_decodes_host_semaphores_and_is_bounded() {
+        // SEM_ADDR_LO/HI, PAYLOAD_LO/HI, EXECUTE(ACQ_CIRC_GEQ, 64-bit) on subchannel 3 (host methods
+        // apply on every subchannel), then a 32-bit RELEASE of the same address
+        let mut w = vec![
+            method_header_inc(3, 0x5c, 5).unwrap(),
+            0x1234_5678,
+            0x12,
+            7,
+            1,
+            3 | (1 << 24),
+        ];
+        w.extend([method_header_non_inc(0, 0x64, 1).unwrap(), 9]);
+        w.extend([method_header_inc(0, 0x6c, 1).unwrap(), 1]);
+        let d = snap_decode(&w, SNAP_METHODS);
+        assert_eq!(d.sems.len(), 2);
+        assert_eq!(
+            (
+                d.sems[0].op,
+                d.sems[0].va,
+                d.sems[0].payload,
+                d.sems[0].wide
+            ),
+            ("ACQ_CIRC_GEQ", 0x12_1234_5678, (1 << 32) | 7, true)
+        );
+        assert_eq!(
+            (
+                d.sems[1].op,
+                d.sems[1].va,
+                d.sems[1].payload,
+                d.sems[1].wide
+            ),
+            ("RELEASE", 0x12_1234_5678, 9, false)
+        );
+        assert_eq!(d.methods.len(), 7);
+        assert_eq!(d.methods[0], (3, 0x5c, 0x1234_5678));
+        assert!(d.stopped_at.is_none());
+        // bounded: never more than `max` methods listed, whatever the segment holds
+        let many: Vec<u32> = std::iter::once(method_header_non_inc(0, 0x100, 4000).unwrap())
+            .chain(std::iter::repeat_n(0, 4000))
+            .collect();
+        assert_eq!(snap_decode(&many, 5).methods.len(), 5);
     }
 }

@@ -2226,6 +2226,7 @@ impl Device {
             );
         }
         let mut last_delivery: Option<std::time::Instant> = None;
+        let mut snap_at = std::time::Instant::now();
         while !self.stop.load(Ordering::Acquire) {
             if let Some([gsprm, libos]) = heartbeat
                 && hb_at.elapsed() >= std::time::Duration::from_millis(500)
@@ -2236,6 +2237,12 @@ impl Device {
                     self.shadow_store(gsprm, ms, 4);
                     self.shadow_store(libos, ms, 4);
                 }
+            }
+            // ⚠ DIAGNOSTIC (`KF3_PT_STALL_SNAPSHOT=1`, default off): the stall snapshot's poll, on
+            // the drainer (never a vCPU); a no-op load with the switch off.
+            if snap_at.elapsed() >= std::time::Duration::from_millis(250) {
+                snap_at = std::time::Instant::now();
+                self.chans.pt_stall_snapshot_poll();
             }
             // A heartbeat for the boot log, on the drainer (never a vCPU): printed only on change.
             if beat.0.elapsed() >= std::time::Duration::from_secs(2) {
@@ -3249,11 +3256,9 @@ impl kf_chan::dbfast::Sink for Device {
             .plane
             .trap_write(Class::Doorbell, 0, off, u64::from(value), 4)
         {
-            Action::RingHostInline { host_token } => {
-                Delivered::Rang {
-                    reached: self.rm.doorbell(host_token).is_ok(),
-                }
-            }
+            Action::RingHostInline { host_token } => Delivered::Rang {
+                reached: self.rm.doorbell(host_token).is_ok(),
+            },
             Action::WakeWorker => {
                 let _ = self.worker_efd.signal();
                 Delivered::Handed
