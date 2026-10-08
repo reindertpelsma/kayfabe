@@ -185,6 +185,60 @@ struct PtNotifier {
 /// drainer (a guest cannot grow a host allocation by preempting in a loop).
 const PREEMPT_DONE_MAX: usize = 64;
 
+/// ★★ 2026-10-08 (after run84) — **a `RUNLIST_PREEMPT_COMPLETE` goes out only after its control's
+/// reply.** The GSP answers the async `DISABLE_CHANNELS` first and posts 139 after it, every time
+/// (`[measured, vfio-10]` RPCs 6628-6633 and 8100-8126: reply, then event). kayfabe's act pushes the
+/// completion when the host verb returns, BEFORE its deferred reply settles; a drainer pass between
+/// the two posted the event first (`[measured, run84 at 4d733007]`: the first preempt's event
+/// preceded its reply). The drainer that posts is the one that holds replies, so "no reply held"
+/// (`held_replies == 0`, read under the GSP lock) means this act's reply is already in the queue.
+#[must_use]
+pub fn preempt_posts_ready(held_replies: usize) -> bool {
+    held_replies == 0
+}
+
+/// What a `DISABLE_CHANNELS` list resolves to in THIS VM's plane: twins (`pt`), Translated host rings
+/// (`tr`, by host token) and entries naming nothing here (`unknown`).
+#[derive(Debug, PartialEq, Eq)]
+struct DisableList<T> {
+    pt: Vec<((u32, u32), T)>,
+    tr: Vec<((u32, u32), u32)>,
+    unknown: Vec<(u32, u32)>,
+}
+
+/// ★ v3-chanctl (pure since 2026-10-08) — resolve each `(hClient, hChannel)` entry: a twin by its own
+/// handle; else a Translated ring; else (★ run82) a CHANNEL GROUP handle — every twin of that client
+/// allocated under it (Windows' kernel preempts a process's TSG by its handle); else unknown. Only this
+/// VM's maps are consulted, so a handle of another VM (or a freed group) is `unknown`, which the caller
+/// refuses whole (nothing half-done).
+fn resolve_disable_list<T>(
+    list: &[(u32, u32)],
+    twin: impl Fn(u32, u32) -> Option<T>,
+    group: impl Fn(u32, u32) -> Vec<((u32, u32), T)>,
+    translated: impl Fn(u32, u32) -> Option<u32>,
+) -> DisableList<T> {
+    let mut out = DisableList {
+        pt: Vec::new(),
+        tr: Vec::new(),
+        unknown: Vec::new(),
+    };
+    for &(c, h) in list {
+        if let Some(t) = twin(c, h) {
+            out.pt.push(((c, h), t));
+        } else if let Some(ht) = translated(c, h) {
+            out.tr.push(((c, h), ht));
+        } else {
+            let members = group(c, h);
+            if members.is_empty() {
+                out.unknown.push((c, h));
+            } else {
+                out.pt.extend(members);
+            }
+        }
+    }
+    out
+}
+
 /// `ROBUST_CHANNEL_PREEMPTIVE_REMOVAL` (`ogkm-580: nverror.h:61`).
 const ROBUST_CHANNEL_PREEMPTIVE_REMOVAL: u32 = 45;
 
@@ -1080,6 +1134,15 @@ fn translated_ce_relay() -> bool {
 fn relay_get_refresh() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("KF3_RELAY_GET_REFRESH").is_some_and(|v| v == "1"))
+}
+
+// ⚠ DIAGNOSTIC (2026-10-08, after run84; default off, never shipped): answer a twins-only re-enable
+// (`DISABLE_CHANNELS(bDisable=FALSE)`) NV_OK with no host act — see [`ChanPlane::disable_channels`].
+fn reenable_noact() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| {
+        std::env::var_os("KF3_ASYNC_PREEMPT_REENABLE_NOACT").is_some_and(|v| v == "1")
+    })
 }
 
 // Experimental decoder context ownership only; codec submissions still refuse.
@@ -2128,8 +2191,13 @@ impl ChanPlane {
         (r, f)
     }
 
-    /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): the completed async preempts not yet posted (drained).
-    pub fn take_preempt_done(&self) -> Vec<(u32, u64)> {
+    /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): the completed async preempts not yet posted (drained) —
+    /// ⊘ none while any reply is still held ([`preempt_posts_ready`]): the event must follow its
+    /// control's reply, as the GSP posts it.
+    pub fn take_preempt_done(&self, held_replies: usize) -> Vec<(u32, u64)> {
+        if !preempt_posts_ready(held_replies) {
+            return Vec::new();
+        }
         self.preempt_done
             .lock()
             .map(|mut q| std::mem::take(&mut *q))
@@ -2883,38 +2951,25 @@ impl ChanPlane {
             // Vacuously true: RM disables nothing (the only in-tree caller never sends it).
             return ChanAnswer::Done;
         }
-        let mut pt = Vec::new();
-        let mut tr = Vec::new();
-        let mut unknown = Vec::new();
-        {
+        let DisableList { pt, tr, unknown } = {
             let Ok(m) = self.pt.lock() else {
                 return ChanAnswer::Refused {
                     status: NV_ERR_INVALID_STATE,
                     why: "twins poisoned".into(),
                 };
             };
-            for &(c, h) in list {
-                if let Some(v) = m.get(&(c, h)) {
-                    pt.push(((c, h), v.chan));
-                } else if let Some(ht) = self.translated_of(c, h) {
-                    tr.push(((c, h), ht));
-                } else {
-                    // ★ 2026-10-08 (run82): an entry may name a CHANNEL GROUP (Windows' kernel
-                    // preempts a process's TSG by its handle) — every twin of that client
-                    // allocated under it.
-                    let members: Vec<_> = m
-                        .iter()
+            resolve_disable_list(
+                list,
+                |c, h| m.get(&(c, h)).map(|v| v.chan),
+                |c, h| {
+                    m.iter()
                         .filter(|(k, v)| k.0 == c && v.tsg == Some(h))
                         .map(|(k, v)| (*k, v.chan))
-                        .collect();
-                    if members.is_empty() {
-                        unknown.push((c, h));
-                    } else {
-                        pt.extend(members);
-                    }
-                }
-            }
-        }
+                        .collect()
+                },
+                |c, h| self.translated_of(c, h),
+            )
+        };
         if pt.is_empty() && tr.is_empty() {
             return ChanAnswer::NotOurs;
         }
@@ -2935,9 +2990,29 @@ impl ChanPlane {
                 ),
             };
         }
+        // ⚠ DIAGNOSTIC (2026-10-08, after run84; `KF3_ASYNC_PREEMPT_REENABLE_NOACT=1`, default off, NEVER
+        // shipped): the coordinator's bisect — a re-enable of twins only (no Translated ring) is answered
+        // NV_OK with NO host act, so the twins stay disabled on the host. It is a status the host did not
+        // earn (a diagnostic, not a behaviour): it tells whether the host re-enable act itself is what
+        // the guest's later timeout follows (run83 refused it and survived; run84 served it and TDR'd).
+        if !disable && tr.is_empty() && reenable_noact() {
+            let toks: Vec<String> = pt
+                .iter()
+                .map(|(k, c)| format!("{:#x}:{:#x}->host {:#x}", k.0, k.1, c.token))
+                .collect();
+            eprintln!(
+                "kf3: ⚠ DIAGNOSTIC KF3_ASYNC_PREEMPT_REENABLE_NOACT: {client:#x} DISABLE_CHANNELS(bDisable=false) over twin(s) [{}] answered NV_OK with NO host act (the twins stay disabled on the host){}",
+                toks.join(", "),
+                self.relay_snapshots(&pt)
+            );
+            return ChanAnswer::Done;
+        }
         self.defer(
             "disable channels",
             Box::new(move |me: &ChanPlane| {
+                // ⚠ DIAGNOSTIC (after run84): which twins this act names, and each relay's cursors
+                // before the host verb (host-derived reads of 4 bytes each; nothing forwarded).
+                let before = me.relay_snapshots(&pt);
                 let mut hosts: Vec<kf_host::Channel> = pt.iter().map(|(_, c)| *c).collect();
                 let mut slots = Vec::new();
                 for (_, ht) in &tr {
@@ -2987,12 +3062,18 @@ impl ChanPlane {
                         }
                     }
                 }
+                let after = me.relay_snapshots(&pt);
+                let toks: Vec<String> = pt
+                    .iter()
+                    .map(|(k, c)| format!("{:#x}:{:#x}->host {:#x}", k.0, k.1, c.token))
+                    .collect();
                 Ok(format!(
-                    "{client:#x} DISABLE_CHANNELS(bDisable={disable}, bOnlyDisableScheduling={only_scheduling}, bRewindGpPut={rewind}) over {} twin(s) + {} Translated ring(s){}",
+                    "{client:#x} DISABLE_CHANNELS(bDisable={disable}, bOnlyDisableScheduling={only_scheduling}, bRewindGpPut={rewind}) over {} twin(s) [{}] + {} Translated ring(s){}; relays before{before} after{after}",
                     pt.len(),
+                    toks.join(", "),
                     tr.len(),
                     if preempt_event.is_some() {
-                        " — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued"
+                        " — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply)"
                     } else {
                         ""
                     }
@@ -4465,6 +4546,38 @@ impl ChanPlane {
                 Some(false)
             }
         }
+    }
+
+    /// ⚠ DIAGNOSTIC (2026-10-08, after run84): for each named twin that is relayed, its cursors as
+    /// ` [host H: guest PUT/GET, relay host_put, engine GET]` — four-byte loads of the guest's slot and
+    /// the twin's USERD, nothing stored or rung. A relay a doorbell step holds is reported `busy`.
+    fn relay_snapshots(&self, pt: &[((u32, u32), kf_host::Channel)]) -> String {
+        let Ok(m) = self.relays.lock() else {
+            return " [relays poisoned]".into();
+        };
+        let mut out = String::new();
+        for (_, c) in pt {
+            let Some(r) = m.get(&c.token) else { continue };
+            let Ok(g) = r.try_lock() else {
+                out.push_str(&format!(" [host {:#x}: busy]", c.token));
+                continue;
+            };
+            let mut io = RelayMem {
+                guest: &g.guest,
+                host: &g.host,
+                rm: self.rm,
+                token: g.chan.token,
+            };
+            use kf_chan::userd_relay::RelayIo;
+            let gput = io.guest_put();
+            let hget = io.host_get();
+            let gget = g.guest.load(kf_abi::submit::USERD_GP_GET);
+            out.push_str(&format!(
+                " [host {:#x}: guest PUT={:x?} GET={:x?} relay host_put={:#x} engine GET={:x?}]",
+                c.token, gput, gget, g.st.host_put, hget
+            ));
+        }
+        out
     }
 
     /// ★ 2026-10-08 (`KF3_RELAY_GET_REFRESH=1`, default off; [`kf_chan::userd_relay::refresh`]): on a
@@ -6812,5 +6925,166 @@ mod twin_defapi_tests {
             twin_defapi_plan(true, true),
             TwinDefapiPlan::AuthorHostObject
         );
+    }
+}
+
+/// ★ 2026-10-08 (after run84) — the async preempt's ordering and the disable list's resolution, with
+/// fake host completions (no GPU): a model drainer that holds replies until their acts settle,
+/// releases them in order, then posts queued preempt completions through [`preempt_posts_ready`] —
+/// the same pass order as `Device::drainer_loop` (`release_settled`, then `deliver_preempt_complete`).
+#[cfg(test)]
+mod preempt_order_tests {
+    use super::{DisableList, preempt_posts_ready, resolve_disable_list};
+
+    /// One control on the model GSP: its reply waits for its act (`settled`).
+    struct Held {
+        name: &'static str,
+        settled: bool,
+    }
+
+    #[derive(Default)]
+    struct Drainer {
+        held: Vec<Held>,
+        /// Completions the act thread queued (as `ChanPlane::preempt_done`).
+        done: Vec<&'static str>,
+        /// What the guest's message queue receives, in order.
+        wire: Vec<String>,
+    }
+
+    impl Drainer {
+        fn request(&mut self, name: &'static str) {
+            self.held.push(Held {
+                name,
+                settled: false,
+            });
+        }
+        /// The act ran on the host: the completion is queued BEFORE the act's reply settles (the
+        /// window run84 hit).
+        fn act_queues(&mut self, ev: &'static str) {
+            self.done.push(ev);
+        }
+        fn act_settles(&mut self, name: &'static str) {
+            for h in &mut self.held {
+                if h.name == name {
+                    h.settled = true;
+                }
+            }
+        }
+        /// One drainer pass: release settled replies in order (a held one blocks those behind it),
+        /// then post completions only when the gate allows.
+        fn pass(&mut self) {
+            while self.held.first().is_some_and(|h| h.settled) {
+                let h = self.held.remove(0);
+                self.wire.push(format!("reply {}", h.name));
+            }
+            if preempt_posts_ready(self.held.len()) {
+                for ev in self.done.drain(..) {
+                    self.wire.push(format!("event {ev}"));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_event_follows_its_reply_even_when_the_act_queues_it_first() {
+        let mut d = Drainer::default();
+        d.request("disable A");
+        d.act_queues("A");
+        d.pass(); // run84's window: the act queued, its reply not settled yet
+        assert!(d.wire.is_empty(), "nothing may reach the guest before the reply");
+        d.act_settles("disable A");
+        d.pass();
+        assert_eq!(d.wire, ["reply disable A", "event A"]);
+    }
+
+    #[test]
+    fn an_enable_sent_before_the_disable_completed_never_puts_the_event_before_the_disable_reply() {
+        let mut d = Drainer::default();
+        d.request("disable A");
+        d.request("enable A");
+        d.act_queues("A");
+        d.pass();
+        d.act_settles("enable A"); // out of order: still blocked behind the disable's reply
+        d.pass();
+        assert!(d.wire.is_empty());
+        d.act_settles("disable A");
+        d.pass();
+        let pos = |s: &str| d.wire.iter().position(|w| w == s).unwrap();
+        assert!(pos("reply disable A") < pos("event A"));
+        assert!(pos("reply disable A") < pos("reply enable A"));
+        assert_eq!(d.wire.len(), 3);
+    }
+
+    #[test]
+    fn two_preempts_each_post_after_their_replies_in_order() {
+        let mut d = Drainer::default();
+        d.request("disable A");
+        d.act_queues("A");
+        d.act_settles("disable A");
+        d.pass();
+        d.request("disable B");
+        d.act_queues("B");
+        d.pass();
+        d.act_settles("disable B");
+        d.pass();
+        assert_eq!(
+            d.wire,
+            ["reply disable A", "event A", "reply disable B", "event B"]
+        );
+    }
+
+    #[test]
+    fn no_completion_without_a_host_act() {
+        let mut d = Drainer::default();
+        d.request("disable A");
+        d.act_settles("disable A"); // the act failed: nothing queued
+        d.pass();
+        assert_eq!(d.wire, ["reply disable A"]);
+        assert!(preempt_posts_ready(0));
+        assert!(!preempt_posts_ready(1));
+    }
+
+    /// This VM's plane: client 0x31 has twin 0x40 under group 0xe0 (token 0x13) and client 0x32 a
+    /// Translated ring 0x41 (host 0x80c). Nothing else exists here.
+    fn resolve(list: &[(u32, u32)]) -> DisableList<u32> {
+        let twins = [((0x31u32, 0x40u32), Some(0xe0u32), 0x13u32)];
+        resolve_disable_list(
+            list,
+            |c, h| twins.iter().find(|t| t.0 == (c, h)).map(|t| t.2),
+            |c, h| {
+                twins
+                    .iter()
+                    .filter(|t| t.0.0 == c && t.1 == Some(h))
+                    .map(|t| (t.0, t.2))
+                    .collect()
+            },
+            |c, h| ((c, h) == (0x32, 0x41)).then_some(0x80c),
+        )
+    }
+
+    #[test]
+    fn a_group_handle_resolves_to_its_twins_and_an_unknown_one_is_named() {
+        let r = resolve(&[(0x31, 0xe0)]);
+        assert_eq!(r.pt, [((0x31, 0x40), 0x13)]);
+        assert!(r.tr.is_empty() && r.unknown.is_empty());
+        // ENABLE of a group this plane never saw (freed, or never born): unknown, refused whole.
+        let r = resolve(&[(0x31, 0xe0), (0x31, 0xe1)]);
+        assert_eq!(r.unknown, [(0x31, 0xe1)]);
+        assert_eq!(r.pt.len(), 1);
+    }
+
+    #[test]
+    fn another_vms_handles_never_resolve_here() {
+        // Another VM's guest RM hands out the same handle shapes; this plane's maps hold only its own
+        // twins, so a foreign (client, group) pair is unknown — never a twin of this VM.
+        let r = resolve(&[(0x33, 0xe0)]);
+        assert!(r.pt.is_empty() && r.tr.is_empty());
+        assert_eq!(r.unknown, [(0x33, 0xe0)]);
+        // The same group handle under a different client is not this client's group.
+        let r = resolve(&[(0x32, 0xe0)]);
+        assert_eq!(r.unknown, [(0x32, 0xe0)]);
+        // A Translated ring resolves by its own handle only.
+        let r = resolve(&[(0x32, 0x41)]);
+        assert_eq!(r.tr, [((0x32, 0x41), 0x80c)]);
     }
 }

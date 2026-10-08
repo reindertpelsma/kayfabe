@@ -2993,7 +2993,12 @@ impl Device {
     /// derived from a real host completion, never forged. With no live registration nothing is
     /// posted (a post to a dead pair wedges the RPC path) — logged by name.
     fn deliver_preempt_complete(&self) {
-        let done = self.chans.take_preempt_done();
+        // ★ 2026-10-08 (after run84): taken under the GSP lock, and only when no reply is held — the
+        // event follows its control's reply ([`crate::chan::preempt_posts_ready`]).
+        let Ok(mut guard) = self.gsp.lock() else {
+            return;
+        };
+        let done = self.chans.take_preempt_done(guard.fsm.held_len());
         if done.is_empty() {
             return;
         }
@@ -3006,10 +3011,6 @@ impl Device {
         };
         let mut back = Vec::new();
         let mut posted_any = false;
-        let Ok(mut guard) = self.gsp.lock() else {
-            self.chans.requeue_preempt_done(done);
-            return;
-        };
         for (i, &(client, ev)) in done.iter().enumerate() {
             let target = dp.model.lock().ok().and_then(|g| g.preempt_target(client));
             let Some(t) = target else {
