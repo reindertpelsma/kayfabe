@@ -943,7 +943,7 @@ fn a_reconnect_forgets_the_connection_and_replays_the_latest_frame() {
 
 /// ★ Invariants 10, 12 and the input bounds (§8.4): unknown types skipped exactly; keys and
 /// buttons inside evdev's range; ABS clamped and dropped for a zero range; REL summed; the
-/// horizontal wheel dropped; GRAB and CLOSE handed over.
+/// wheel by sign, the horizontal one too (since §8.20); GRAB and CLOSE handed over.
 #[test]
 fn input_is_bounded_before_the_vmm_sees_it() {
     let mut t = T::new(false);
@@ -992,7 +992,15 @@ fn input_is_bounded_before_the_vmm_sees_it() {
                 dy: 3
             },
             Input::Wheel {
-                up: false,
+                dx: 0,
+                dy: -1,
+                to: Pointer::Absolute
+            },
+            // ★ 2026-10-08 (§8.20): the horizontal detent is handed on by sign (before: dropped
+            // here); a VMM without a horizontal wheel ignores it at its sink
+            Input::Wheel {
+                dx: 1,
+                dy: 0,
                 to: Pointer::Absolute
             },
             Input::Grab(true),
@@ -2588,7 +2596,8 @@ fn under_grab_every_pointer_event_goes_to_the_relative_device_and_no_abs() {
                 to: Pointer::Absolute
             },
             Input::Wheel {
-                up: true,
+                dx: 0,
+                dy: 1,
                 to: Pointer::Absolute
             },
         ]
@@ -2613,7 +2622,8 @@ fn under_grab_every_pointer_event_goes_to_the_relative_device_and_no_abs() {
                 to: Pointer::Relative
             },
             Input::Wheel {
-                up: false,
+                dx: 0,
+                dy: -1,
                 to: Pointer::Relative
             },
             Input::Btn {

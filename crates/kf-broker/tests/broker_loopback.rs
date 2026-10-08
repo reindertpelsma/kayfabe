@@ -386,7 +386,8 @@ fn linear_udmabuf_frames_release_and_scripted_input() {
     );
     assert!(
         i.contains(&Input::Wheel {
-            up: true,
+            dx: 0,
+            dy: 1,
             to: Pointer::Absolute
         }),
         "{i:?}"

@@ -58,7 +58,8 @@
 //!   written.
 //!
 //! It is VMM-agnostic: socket I/O goes through [`Link`], fd-handler and timer registration
-//! through [`Host`], and input comes back as [`Input`] for the VMM to inject. Every entry takes
+//! through [`Host`], and input comes back as [`Input`], which [`crate::InputPolicy`] delivers to
+//! the VMM's [`crate::InputSink`]. Every entry takes
 //! the time (`now_ms`), so the machine is deterministic under test. Every syscall is
 //! non-blocking; nothing here waits.
 
@@ -177,9 +178,10 @@ pub trait Host {
 /// decides it (the grab state is the broker's, mirrored on every packet); the VMM only maps it to
 /// its own devices — the ABSOLUTE one (a tablet bound to the display) or the RELATIVE one (a
 /// mouse).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Pointer {
     /// The absolute pointer — every event while the broker is not grabbed.
+    #[default]
     Absolute,
     /// The relative pointer — every pointer event while the broker is grabbed: motion, buttons
     /// and the wheel all come from ONE device, as from a real mouse.
@@ -224,11 +226,14 @@ pub enum Input {
         /// Rows.
         dy: i32,
     },
-    /// One vertical wheel detent (horizontal detents are not mapped by QEMU 10.2's virtio or
-    /// USB pointers, so they are dropped).
+    /// One wheel detent per packet, by sign (the magnitude is not used, as before): `dy` +1 up
+    /// (away from the user) / -1 down, `dx` +1 right / -1 left (★ 2026-10-08, §8.20: handed on;
+    /// a VMM without a horizontal wheel — QEMU 10.2's virtio and USB pointers — ignores it).
     Wheel {
-        /// Up (away from the user).
-        up: bool,
+        /// Horizontal: -1, 0 or +1.
+        dx: i32,
+        /// Vertical: -1, 0 or +1.
+        dy: i32,
         /// ★ §8.19: the device it belongs to (the relative one while grabbed).
         to: Pointer,
     },
@@ -1960,7 +1965,15 @@ impl<L: Link> Relay<L> {
                     emit(out, Input::Rel { dx: p.x, dy: p.y });
                 }
             }
-            EV_WHEEL if p.x != 0 => emit(out, Input::Wheel { up: p.x > 0, to }),
+            // `proto.h`: x = vertical detents, y = horizontal
+            EV_WHEEL if p.x != 0 || p.y != 0 => emit(
+                out,
+                Input::Wheel {
+                    dx: p.y.signum(),
+                    dy: p.x.signum(),
+                    to,
+                },
+            ),
             EV_GRAB => {
                 say!("grab {}", if p.x != 0 { "ON" } else { "off" });
                 emit(out, Input::Grab(p.x != 0));
