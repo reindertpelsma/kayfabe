@@ -3574,3 +3574,11 @@ allocation failed (an NVRM debug print or the twin's context-buffer VAs).
 **Stop (time box, 2026-10-08 ~16:50).** The D3D/compositor wall moved: the per-process channel is born on an unprivileged host twin, its doorbells
 are relayed and its first entry is fetched by the engine. D3D11/12 device creation was not re-probed (the guest's compositor TDRs first);
 not claimed.
+
+## Run69 setup (diagnostic, alone, 4096 MiB): is the host VA space's guest-range reservation what leaves host RM no room?
+
+Same binary and flags as run68 plus `KF3_NO_GUEST_VA_RESERVE=1` (an existing kf-host switch: host twin spaces are made WITHOUT the
+`GUEST_VA_RANGES` reservations, so host RM may place its own buffers anywhere; a guest row that then collides is named `HeldByHost`).
+`[measured, run68 at d67e9290]` the guest's mappings in the compositor's space start at `0x1_2000_2000`; the fault was at `0x13000`, a VA no guest
+row maps, so the faulting read is host RM's own (inferred). **H-room:** the reservation leaves host RM no VA for part of the twin's GR context.
+*Falsifier:* `can't alloc VA space for mapping` again at the twin's birth, or the same Xid 31 at a low VA.
