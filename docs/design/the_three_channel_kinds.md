@@ -39,6 +39,20 @@ a value ogkm expects to read that no engine ever produces. It does **not** mean 
 the guest's copy": §46 forbids that, and §37 already said emulated channels execute *through a
 raw client the VMM owns*, i.e. on the GPU.
 
+### 1.1 A sub-kind, not a fourth kind: Passthrough with a USERD relay (2026-10-08, owner)
+
+**STATUS: LIVE, 2026-10-08 — behind `KF3_WIN_USER_CHANNELS_PASSTHROUGH` (default off); design in
+`V3_USERD_RELAY.md`.** Windows' per-process channels are classified as Passthrough work: the guest's ring and
+push buffers run unparsed on an unprivileged host twin. But the host cannot adopt Windows' USERD (it is a
+slot of the guest RM's pool in guest system memory, at a bus address too wide for a USERD), so the twin
+gets a kayfabe-owned video-memory USERD and kayfabe copies `GP_PUT` in and `GP_GET` back (4 bytes each way,
+host-derived). Owner, 2026-10-08: *"so that isn't passthrough then, so it isn't an exception to
+passthrough."* Agreed, and it matters for reasoning: in **plain** Passthrough the hardware writes the
+adopted USERD, so `GP_GET` tracks the engine by construction and a doorbell is all the VMM does. In the
+**relayed** variant kayfabe owns that property and must reproduce it: the guest's `GP_GET` has to follow
+the engine's progress whether or not another doorbell comes (`KF3_RELAY_GET_REFRESH`). Say "relayed
+Passthrough" for it, never plain "Passthrough", when `GP_GET`, USERD or the doorbell path is the subject.
+
 ## 2. Why CeUtils forced the third kind — measured in ogkm, not inferred
 
 `ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/channel_utils.c:1053-1091`:
