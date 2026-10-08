@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+# shellcheck disable=SC1090,SC2054  # the state file is this script's own; commas are QEMU property lists
 # windows_broker.sh — the Windows 11 guest (NVIDIA 580.88) on kf3, shown in a SECOND display-broker
 # window on the host's live desktop, beside the Linux guest of scripts/bench/display/interactive.sh
 # (its own socket, its own window title, its own run directory). 2026-10-08, the owner: "It's ok to
@@ -15,7 +16,15 @@
 #   windows_broker.sh status      the running guest, its run directory, QGA ping, host Xid count
 #   windows_broker.sh autologon   (desktop overlay, guest running) through QGA as SYSTEM: give the
 #                                 local account 'kf' a password from $W/windows-desktop/secrets
-#                                 (0600, generated here, never in git) and enable Winlogon autologon
+#                                 (0600, generated here, never committed) and enable Winlogon autologon
+#   windows_broker.sh nvidia disable|enable|status   (guest running) the guest's NVIDIA display device, through
+#                                 QGA + pnputil (nvidia_device.ps1); takes effect at the next boot (`reboot`)
+#   windows_broker.sh reboot      restart the guest (QGA, Restart-Computer -Force)
+#
+# ★ 2026-10-08 (run58): the visible, interactive desktop TODAY is the Basic Display fallback: `desktop`,
+#   `autologon`, `nvidia disable`, `reboot` — Windows then draws through Microsoft Basic Display on kf3's GOP
+#   framebuffer (1920x1080, software rendering, no GPU acceleration) and kf3 shows it in the window. With the NVIDIA
+#   driver enabled the screen stays on the boot frame (runs 54-57 in traces/windows_code43_walls_20261007/README.md).
 #
 # Same guest and harness as runs 47-53 (`pc_sdr_experiment.py`'s pinned template: machine pc, 8 GiB,
 # 8 vCPU, virtio-blk/net, QGA, kf3 fb-mb=4096 bar1-size=128 MiB), with these differences, all named
@@ -126,8 +135,20 @@ autologon)
     timeout 120 python3 "$TOOLS/qmp.py" "$RUN/qga.sock" qga-exec powershell.exe -NoProfile -Command "$ps" | grep -E 'AUTOLOGON_SET|rror'
     say "autologon set for 'kf' (password in $RUN/secrets/win_password, 0600); takes effect at the next boot"
     exit 0 ;;
+nvidia)
+    running_pid > /dev/null || die "no Windows guest running"
+    . "$STATE"
+    act=${2:-status}; case "$act" in disable|enable|status) ;; *) die "nvidia disable|enable|status" ;; esac
+    tmp=$(mktemp); printf '$Action = %s\n' "'$act'" > "$tmp"; cat "$HERE/nvidia_device.ps1" >> "$tmp"
+    timeout 280 python3 "$TOOLS/qmp.py" "$RUN/qga.sock" qga-exec powershell.exe -NoProfile -Command "$(cat "$tmp")"
+    rm -f "$tmp"; exit 0 ;;
+reboot)
+    running_pid > /dev/null || die "no Windows guest running"
+    . "$STATE"
+    timeout 30 python3 "$TOOLS/qmp.py" "$RUN/qga.sock" qga-exec powershell.exe -NoProfile -Command "Restart-Computer -Force"
+    say "guest restarting (the window shows OVMF, then Windows)"; exit 0 ;;
 run|desktop) ;;
-*) die "usage: $0 run [N] | desktop | stop | broker | status | autologon" ;;
+*) die "usage: $0 run [N] | desktop | stop | broker | status | autologon | nvidia disable|enable|status | reboot" ;;
 esac
 
 # ── run / desktop ───────────────────────────────────────────────────────────────────────────────

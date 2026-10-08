@@ -1,0 +1,10 @@
+NV before: NVIDIA GeForce RTX 4070 Status=OK Problem=CM_PROB_NONE PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&267A616A&0&30
+pnputil: Microsoft PnP Utility
+pnputil: 
+pnputil: Disabling device:          PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&267a616a&0&30
+pnputil: Device disabled successfully.
+pnputil: 
+after: Microsoft Basic Display Adapter Status=Unknown Problem=CM_PROB_PHANTOM Present=False
+after: NVIDIA GeForce RTX 4070 Status=Error Problem=CM_PROB_DISABLED Present=True
+
+[rc=0]
