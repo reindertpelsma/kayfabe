@@ -1,0 +1,14 @@
+SES uptime_s 48
+SES quser No User exists for *
+SES proc csrss pid=848 session=0
+SES proc csrss pid=932 session=1
+SES proc dwm pid=1392 session=1
+SES proc LogonUI pid=1384 session=1
+SES proc winlogon pid=1020 session=1
+SES evt 12:02:34 Microsoft-Windows-WER-SystemErrorReporting id=1001 lvl=Error :: The computer has rebooted from a bugcheck. The bugcheck was: 0x00000116 (0xffffa5867622a010, 0xfffff8031bbd4930, 0xffffffffc000009a, 0x0000000000000004). A dump was saved in: C:\Windows\MEMORY.DMP. Report Id: c7c02107-20
+SES evt 12:02:14 Microsoft-Windows-Kernel-Power id=41 lvl=Critical :: The system has rebooted without cleanly shutting down first. This error could be caused if the system stopped responding, crashed, or lost power unexpectedly.
+SES display 'Microsoft Basic Display Adapter' Status=Unknown Problem=CM_PROB_PHANTOM ProblemStatus= Id=PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\3&267A616A&0&48
+SES display 'NVIDIA GeForce RTX 4070' Status=Error Problem=CM_PROB_FAILED_POST_START ProblemStatus=0 Id=PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&267A616A&0&30
+SES vc 'NVIDIA GeForce RTX 4070' AdapterRAM=4293918720 Mode=x@ DriverVersion=32.0.15.8088
+
+[rc=0]

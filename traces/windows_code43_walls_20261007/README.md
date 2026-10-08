@@ -3242,3 +3242,60 @@ freed everything. *Falsifiers (fixed now):* (a) `D3D11CreateDevice`/`D3D12Create
 requests answered → the remaining cause is elsewhere (next: the refused GSS controls in the create window, `0x20809004`/`0x2080b201`, or user-mode
 state); (b) for the display: no core `UPDATE` and no configuration for `KFB0001` in the CCD database within 10 min → H-dwm falsified for the display.
 Recorded either way: TDR/bugcheck (run46 saw 0x116 with the runlist flag before the deferred API existed), `DEAD` channels, host Xid.
+
+### Run57 result: the NVIDIA driver commits a mode (head 0 armed, 1920x1080@60) — then DWM's first 3D work dies in the rewriter, TDR, bugcheck 0x116
+
+Binary `kf3-bins/40230e23`, 4096 MiB alone, flags as run56 plus `KF3_ZCULL_BIND_PROBE=1` and `KF3_SW_RUNLIST_HOST_OWNED=1` (labelled
+experiment); started 14:00:52 CEST, Xid 86 before and after (every 20 s sample). [command](run57-command.json), [trace](run57-qemu.log.gz),
+[timeline](run57-display-gr-timeline.txt), [dxgkrnl probe](run57-dxgk-probe.txt), [session probe, second boot](run57-session-probe-boot2.txt).
+
+`[measured, run57 at 40230e23, 2026-10-08]`:
+- The runlist submits are answered (`SW-RUNLIST HOST-OWNED` x6) and the desktop's GR channel `0xc1d00027:0xff04000c` (token `0xe`, host `0x44`,
+  `PRIVILEGE=KERNEL`, GR tier, objects 5080/c7b5/a140/902d/c997/c9c0) is born and scheduled.
+- **H-dwm: SUPPORTED for the commit.** `the guest armed its first head at +25095 ms`, **`head 0 ACTIVE raster 2200x1125 period 16666666 ns`**
+  (1920x1080 at 60 Hz), 7 core `UPDATE`s, IS_MODE_POSSIBLE x31; and dxgkrnl's CCD database now holds a **Configuration for `KFB0001` at
+  1920x1080** (`MSNILKFB00011_27_07EA_83_...`, `Recent`/`Internal` set) — none existed in runs 53-56. The window kept the boot frame (`no armed
+  head has scanned a window yet`): no window surface was presented before the next event.
+- **The next wall:** the desktop channel's first segment (gp 0, 10 words) starts `200406c0 00000001 20244000 00000001 10000004 ...` — method
+  `0x1b00` (3D `SET_REPORT_SEMAPHORE_A..D`, a semaphore release) on **subchannel 0 with no `SET_OBJECT` in the ring** — and the rewriter kills
+  the channel: `DEAD: ring: Rewrite { gp: 0, why: NoCeObject { subch: 0, method: 6912 } }`. The display channels are then freed, the guest
+  bugchecks **0x116 (VIDEO_TDR_FAILURE)** and reboots (the launcher's `-action reboot=reset`); on the second boot the NVIDIA adapter is
+  `CM_PROB_FAILED_POST_START` (Code 43). No host Xid.
+- The D3D probe could not be run (the guest crashed ~35 s after the commit); D3D create success is therefore NOT measured.
+
+**Inferred (not tested).** Windows' kernel GR channel binds its subchannels with `SET_OBJECT` (run32: 0 = c997, 1 = c9c0, 4 = c7b5, 5 = 5080) and
+then runs INITIALIZE_CTX / PROMOTE_CTX for each new channel (§U); a channel created afterwards starts using subchannel 0 without its own
+`SET_OBJECT`, so its bindings come from the context image Windows promoted. Under ruling B those commands are "satisfied by the twin's own host
+context", which carries no such binding — the rewriter (and the host engine) see subchannel 0 unbound.
+
+## Stop: an owner decision is needed — WDDM's user work runs on guest-KERNEL channels (2026-10-08, after run57)
+
+**What.** Every Windows channel, including the ones that carry the desktop's and the D3D user-mode driver's command buffers, is allocated by the
+kernel driver with `PRIVILEGE=KERNEL` (WDDM's model), so kayfabe makes it Translated and re-authors its pushbuffer from per-class allowlists
+(§S, guest-kernel GR work: "re-author from an allowlist ... never copies guest pushbuffer words ... native first"). The first desktop segment needs
+(1) subchannel bindings that Windows expects from its promoted context image, and (2) the whole 3D (and compute) method vocabulary a compositor
+and every D3D application emit. The allowlist today covers the observed 2D/I2M/CE methods and one 3D semaphore release.
+
+**Evidence.** Run57 above (head armed, CCD configuration stored, the channel's death at gp 0, bugcheck 0x116); runs 54-56 (no commit while the
+creates were refused); run32 (the kernel channel's own SET_OBJECTs).
+
+**Options.**
+- (a) **Translated, full allowlists.** Re-author every 3D/compute method Windows emits, class by class, each set validated on the native oracle;
+  plus host-authored `SET_OBJECT`s for the subchannels the promoted context would have bound (from the classes the guest allocated on that
+  channel, which kayfabe knows — authored, not forwarded). Safe by construction; large (the 3D class alone has hundreds of methods; every new game
+  can find a new one), and every unlisted method is a TDR.
+- (b) **WDDM user-work channels as Passthrough on unprivileged host USER channels.** The guest's bytes run unmodified on a host channel that is
+  USER-privileged (asserted at birth, as today for Linux user channels): privileged methods fault on the host engine instead of being filtered
+  by kayfabe; VA identity within the VM's own space. This is how Linux user channels already run. It needs a ruling because these channels are
+  guest-KERNEL ones (Q7 classifies them kernel) and because the deferred API (§U) is Translated-only today.
+- (c) **Hybrid:** keep the KMD's own kernel channels (paging, the kernel GR/CE channels) Translated; run the per-process user-work TSGs
+  (identified by their owning client and `GPU_PROMOTE_CTX` target, not by guest bytes) as (b).
+
+**Recommendation:** (c). It keeps the guest-kernel work under re-authoring, and gives D3D the path that already runs Linux user work. Before any
+code: a native-oracle check that a USER host channel running a 3D segment that starts with host-authored SET_OBJECTs behaves (no Xid), then one
+Windows run with the probes of run57.
+
+**Other decisions this loop produced (owner):** the six NV0073 answers and IMP_ENABLE=TRUE of `KF3_DISPLAY_CTRL_PROBE`/`KF3_DISPLAY_IMP_ENABLE`
+should become real answers (§S.2: virtual-monitor features are implemented; HDCP answers "absent"), designed from `kf_disp::model` with ogkm layouts;
+`GR_CTXSW_PREEMPTION_BIND` and the cross-client `ZCULL_BIND` need the real host-authored bind (or a ruling that preemption/zcull buffers are
+host-owned); `0x20801111` (task B) is now shown to be on the desktop's path. Draft for OWNER_RULINGS: below, not inserted.
