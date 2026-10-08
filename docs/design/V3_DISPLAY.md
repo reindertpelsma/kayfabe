@@ -1,5 +1,12 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+**STATUS: LIVE, 2026-10-08 (later) — §8.18: the three defects of §8.17 are fixed and measured** at kf3
+`2a20e699` on the trusted host: the early-frame dead display (a late copy given up at 2 s; 0/13 dead
+after the fix, 7/7 before), the `x11-dispsw` twin at host 595.91.07 (Cinnamon starts normally), and
+the GPU-copy rung at 595.91.07 (offered; GNOME imports it: `gpucopy=169` of `sent=170`). ⊘ The
+paragraph below says "worked around in the launcher, not fixed" and "Cinnamon runs in fallback mode":
+both are superseded by §8.18.
+
 **STATUS: LIVE, 2026-10-08 — the interactive broker window, §8.17.** Branch
 `claude/broker-interactive-20261008`, kf3 binary `0e64a960`, broker nvkvm-pv `badf2d7`, trusted host
 (RTX 4070, host 595.91.07, GNOME Wayland). One command (`scripts/bench/display/interactive.sh`) shows a
@@ -3698,6 +3705,13 @@ before X and real GPU-copy passes. Evidence, failed probes and full caveats:
 
 ### 8.17 The interactive broker window on the trusted host (2026-10-08)
 
+> ⊘ **SUPERSEDED IN PART 2026-10-08 (later), §8.18:** the "Defect found" paragraph's root cause is
+> found and fixed in kf3 (not a broker race: a copy delayed 3.5 s by host RM was given up for good),
+> and the launcher's 3 s broker delay is removed; "Cinnamon runs in fallback mode" was kayfabe's
+> refusal of `NV906F_CTRL_GET_CLASS_ENGINEID` at 595.91.07, fixed; "the GPU-copy rung is not
+> offered at host 595.91.07" was an unmeasured tag in `drmnv.tsv`, measured and offered. The text
+> below is the record as first written.
+
 **STATUS: RESEARCH — RUN ON THE TRUSTED HOST, 2026-10-08** (runs p1-p4, ab1-ab4, wl1; kf3 binary
 `0e64a960`; broker nvkvm-pv `badf2d7`; RTX 4070, host 595.91.07, GNOME Wayland;
 `traces/v3_display/broker_interactive_20261008/`). Nothing in kf3's code changed on this branch.
@@ -3800,3 +3814,89 @@ kf3.c reduced to the eight calls.
 
 **Owner decisions:** (a) the first-copy stall — fix in kf3 (a box hunt) before the launcher's delay is
 removed; (b) the `x11-dispsw` host read at 595.91.07; (c) whether the `InputSink` refactor goes ahead.
+
+### 8.18 The early-frame freeze, `x11-dispsw` at 595.91.07, and the buffer path per environment (2026-10-08, later)
+
+**STATUS: RESEARCH — RUN ON THE TRUSTED HOST, 2026-10-08** (kf3 `2a20e699`, built by `build_kf3.sh`;
+before: `0e64a960`; broker nvkvm-pv `badf2d7`; RTX 4070, host 595.91.07; runs e1-*, wl2, wl3, p5, xvfb;
+`traces/v3_display/broker_interactive_20261008/`).
+
+**1. The early-frame freeze — root cause and fix.** Falsifiers stated before each run
+(`scripts/bench/display/early_frame.sh`, kf3 `0e64a960`, `KF3_DISPLAY_TRACE=1`):
+- e1-a (broker listening before QEMU): H "the GPU never completes copy 1" predicts no
+  `TRACE scanout copy 1 done` before the give-up — none came; the give-up followed the VA manager's
+  `mem t=3.710s [1/3] prewarm … ram_obj 3528088 us` (host RM registering the 8 GiB guest-RAM memfd).
+- e1-b (no `display-broker` at all, console readback at +1 s): H "the broker's memfd/registered frames
+  cause it" predicts LIVE — STALL. Falsified: any early copy stalls.
+- e1-c (broker listening, QEMU `-S`, `cont` at +6 s): STALL — the guest's firmware is not involved.
+- e1-d ×2 (as e1-a with `-m 2048`): H "the copy waits behind the prewarm and is given up at 2 s"
+  predicts LIVE, since the registration takes 0.88 s there — LIVE 2/2 (`ram_obj 880778 us`).
+
+**The broken invariant.** The worker treated "no completion signal within `STUCK_COPY` (2 s)" as a
+LOST completion: it dropped the in-flight copy, set `failed` for the VM's life and never served the
+copy's barrier, so no frame was published again and the core-channel completions queued behind that
+barrier never ran (the guest's nvidia-modeset then times out, `Error while waiting for GPU progress`).
+But the signal was only LATE: the display stream's work was queued behind host RM's 3.5 s
+registration of the guest's RAM (which side waits: the display worker on its stream's
+`cuLaunchHostFunc` eventfd; whose event is late: that host function's, held up by the host RM, not
+lost). A timeout is evidence of neither completion nor loss. **Fix** (`kf-qemu` `display.rs`
+`give_up_if_stuck`/`stuck_verdict`, `kf-cuda` `DisplayGpu::signal_state`): every completion signal
+now records an event; a copy past 2 s is given up only when `cuEventQuery` reports a stream FAILURE
+(or there is no GPU context to ask); while it reports "not ready"/"done", the worker waits for the
+real signal, forges nothing, and logs one line (`copy 1 has not completed in 2s and its stream reports
+no failure … waiting`). GPU-free test: `a_late_copy_behind_a_busy_host_rm_is_waited_for_not_given_up`
+(the interleaving's timings; known-positive: the old rule loses it at 2.1 s). The launcher's 3 s broker
+delay is removed: the broker starts first, and a running broker is reused.
+
+**Measured after the fix (`2a20e699`, 2026-10-08):** broker listening at QEMU start (0 s) LIVE 3/3;
+console readback at +1 s without a broker LIVE 3/3; QEMU restarted three times against one live broker
+(its 4 attaches) LIVE 3/3; broker listening + `-S` + `cont` at +6 s LIVE 1/1; each with the waiting line
+and then `TRACE scanout copy 1 done` after the prewarm (`ram_obj 2960324 us`). Before (`0e64a960`):
+STALL in all 7 early cases (ab D, E; p1; p3; e1 a, b, c). The interactive launcher, broker first, ran
+to the desktop three times (wl2, p5, demo-final). Not measured: a stream that really fails (the `Lost`
+branch is GPU-free-tested only).
+
+**2. `x11-dispsw` at host 595.91.07 — kayfabe's defect, fixed.** The refused read: kf-host's twin
+readback `NV906F_CTRL_GET_CLASS_ENGINEID` (`0x906f0101`, `ctrl906f.h:94-103`), status `Other(19314)`
+= `HOST_ABI_REFUSED` (`0x4B72`) — never sent: the control had no `kf_abi::hostabi::HOST_CONTROLS` row,
+and an unlisted control is refused outside `[580.65.06, 581)`. Derived, not captured: the driver
+matrix now measures `NV906F_CTRL_GET_CLASS_ENGINEID_PARAMS` (one 16-byte layout at all 30 tags
+535.309.01 … 615.71.09) and the id (`host_chan_cmds`, `tools/drivermatrix/host.spec`; regen
+2026-10-08, +6 rows in `ranges.tsv`), and the row carries it at 580 and 595 (test
+`the_display_sw_readback_is_carried_at_595_and_580`). **Measured (wl2, `2a20e699`):** 8 of 8 guest
+GF100_DISP_SW twinned, `software classID n = the guest's [kept]`, 0 refused; Xorg has no `Failed to
+allocate display software resources`; `cinnamon --replace` runs, no segfault, `glxinfo`: NVIDIA GeForce
+RTX 4070, direct rendering; the frame shows the normal Cinnamon desktop (`wl2_desktop.png`), no
+fallback dialog. Same in p5 and demo-final. Normal, for comparison: the 2026-10-04 box (RTX 3060, host
+580.159.04) had the twins and an X desktop (`traces/v3_display/broker_20261004/`). Left: one
+`Flip event timeout on head 0` at guest 7.5 s in each boot (also before the fix; not chased).
+
+**3. The buffer path per environment.** kayfabe's order: rung 0 (a GPU copy into kayfabe-owned VRAM,
+block-linear, offered only after an explicit yes for the pair and `CAP_MODIFIERS`+`CAP_RELEASE`, and
+not for a compositor on another GPU) → rung 1 LINEAR udmabuf (unknown verdict counts as yes) / rung 1b
+implicit modifier → F_SHM, with every "no" final for the connection and unacknowledged dma-buf commits
+backing off to shm. Why rung 0 was not offered at 595.91.07: `traces/driver_matrix/drmnv.tsv` had no
+595.91.07 rows (the tag was added to `tags.txt` after the 2026-10-03 probe); `drmnv.py --tags
+595.91.07` (2026-10-08) measured every item equal to 595.84's, so `kf_abi::drmnv` offers it now.
+
+| environment | native NVIDIA | LINEAR dma-buf | shm | how |
+|---|---|---|---|---|
+| this host: GNOME Wayland on the NVIDIA GPU | YES — **measured** wl2: `gpucopy=169` of `sent=170`, `the display imported a GPU-copy frame`; one 5 s back-off trip at start (3 early commits unreleased), then native | advertised, refused at import — **measured** (`the display CANNOT show XR24 … 0x0`) | **measured** wl3 (`display-broker-vram=off`): `presenting through wl_shm`, `sent=398 releases=396`, desktop up | GPU-free: `env_native_display_ends_native_and_falls_back_to_shm_never_linear_again` |
+| laptop: compositor on an Intel iGPU, NVIDIA dGPU without display | NO | YES | YES | **MODELLED BY TEST ONLY** (no such hardware): `env_other_gpu_compositor_ends_linear_and_falls_back_to_shm` |
+| Xvfb / headless llvmpipe | NO | NO | YES | **measured** for Xvfb (xvfb1): the X11 broker `has no DRI3 … descending to the shm tier`, the relay `frames go as shared memory`, `180 attach, 180 commit, 0 rejected`, `releases=180`; llvmpipe modelled by `env_software_display_ends_on_shm` |
+
+A refusal of an advertised path leads to the next path in every test and run above; none stalled.
+
+**nvkvm-pv's selection (reference, `badf2d7`: `src/qemu/nvkvm_isolate_handlers.c:2110-2140`,
+`nvkvm_present_egl.c:1630-1700`, `nvkvm_display_relay.c:640-660,1380-1420`) against kayfabe's**:
+(1) nvkvm-pv's native path exports the GUEST's own buffer; kayfabe GPU-copies into its own VRAM
+object (`OWNER_RULINGS.md` §L) — one GPU copy more, nothing of the guest's exported. (2) nvkvm-pv goes
+native OPTIMISTICALLY while the verdict is unknown; kayfabe needs an explicit yes (the first frames
+go LINEAR/shm). (3) nvkvm-pv's LINEAR is a readback by the guest's GPU after a native "no"; kayfabe's
+host-RAM udmabuf is filled by the same D2H copy as the console. (4) shm after a LINEAR "no": the same
+pages as a memfd in both. (5) Verdicts: both per connection, unknown → answer, yes → no allowed, a no
+stays no (`relay_format_verdict_next`; kayfabe also records `badf2d7`'s unsolicited `x=0`). (6) kayfabe
+adds acknowledgement detectors (no RELEASE → back off to shm 5 s, doubling) and the EV_DEVICE
+other-GPU check; nvkvm-pv relies on the broker's `x=0` (read from the source, not run). (7) kayfabe
+has rung 1b (implicit modifier) for a broker without `CAP_MODIFIERS`. None of these makes a refused
+path stall.

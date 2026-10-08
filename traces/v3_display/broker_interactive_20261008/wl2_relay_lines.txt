@@ -1,0 +1,24 @@
+broker: GPU-copy rung possible — render node renderD128 (226:128), nvidia-drm gpu_id 0x100, modifier 0x0300000000606014, slot attributes s1-nvkms-offscreen
+P4 memory plane: store 8192 MiB (imported into the walker), walker pools 236 MiB of host GPU memory (walk pool 1048576 runs, slot pool 2097152 runs (2097152 free), max per space 1048576, slots held 0, grows 0, retries 0,
+broker: the compositor renders on this GPU: the GPU-copy rung may be used
+broker: the display CAN show XR24 modifier 0x0300000000606014
+display: copy 1 has not completed in 2s and its stream reports no failure (the host RM or the GPU has not run it yet): waiting for its signal, nothing is forged meanwhile
+broker: frames go as a LINEAR dma-buf (udmabuf, zero-copy for the broker)
+broker: the display CAN show XR24 modifier 0x0000000000000000
+broker: frames go as a GPU copy in host VRAM (a block-linear dma-buf, modifier 0x0300000000606014; no byte crosses PCIe, nothing of the guest's is exported)
+broker: the display CANNOT show XR24 modifier 0x0000000000000000
+broker: GPU-copy frames are not acknowledged (3 committed, no RELEASE for 1000 ms — the compositor may not import them): backing off to the host rungs for 5 s, then trying again (trip 1)
+broker: the display imported a GPU-copy frame (its RELEASE came back)
+act display-SW twin: 0xc1d0000d:0x15070 GF100_DISP_SW on twin host 0x30 -> host object 0xcafe0036 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (483 us, off the GSP lock)
+act display-SW twin: 0xc1d0000d:0x15071 GF100_DISP_SW on twin host 0x30 -> host object 0xcafe0037 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (313 us, off the GSP lock)
+act display-SW twin: 0xc1d0000d:0x15072 GF100_DISP_SW on twin host 0x30 -> host object 0xcafe0038 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (306 us, off the GSP lock)
+act display-SW twin: 0xc1d0000d:0x15073 GF100_DISP_SW on twin host 0x30 -> host object 0xcafe0039 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (309 us, off the GSP lock)
+act display-SW twin: 0xc1d00018:0xbeef4900 GF100_DISP_SW on twin host 0x32 -> host object 0xcafe005a (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (354 us, off the GSP lock)
+act display-SW twin: 0xc1d00018:0xbeef4901 GF100_DISP_SW on twin host 0x32 -> host object 0xcafe005b (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (297 us, off the GSP lock)
+act display-SW twin: 0xc1d00018:0xbeef4902 GF100_DISP_SW on twin host 0x32 -> host object 0xcafe005c (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (303 us, off the GSP lock)
+act display-SW twin: 0xc1d00018:0xbeef4903 GF100_DISP_SW on twin host 0x32 -> host object 0xcafe005d (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (300 us, off the GSP lock)
+act display-SW twin: 0xc1d0001a:0xbeef4900 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0084 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (371 us, off the GSP lock)
+act display-SW twin: 0xc1d0001a:0xbeef4901 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0085 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (297 us, off the GSP lock)
+act display-SW twin: 0xc1d0001a:0xbeef4902 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0086 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (315 us, off the GSP lock)
+act display-SW twin: 0xc1d0001a:0xbeef4903 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0087 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (301 us, off the GSP lock)
+broker[up=1 sent=176 gpucopy=175 gpucopy_backoffs=1 dmabuf_trips=0 carrier_refused=0 carrier_unchecked=0 formats_unasked=0 dropped=0 uncommitted=0 recovered=0 releases=157 unknown_releases=16 reclaims=18 blocked=7 backstops=1 reconnects=0 failed_attempts=0 peer_refused=0 cursor=hover cursor_sets=1 cursor_hides=0 cursor_shows=0 cursor_refused=0]

@@ -1,0 +1,112 @@
+== e1-121238-a-pre-trace
+qemu-system-x86_64: -device kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,x11-dispsw=on,display=on,gop=on,display-broker=/run/user/1000/nvkvm/display.sock,di
+family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 ma
+mem t=3.710s [1/3] prewarm: spare host space 0xcafe0012 ready before the guest runs — vaspace 1402 us, ram_obj 3528088 us (0xcafe0011+0x200000000), fb_window 2819 us, ram_window 127095 us (total 365
+display: scanout REFUSED copy 1 did not complete in 2s
+mem t=3.906s [2/3] prewarm: spare host space 0xcafe0016 ready before the guest runs — vaspace 1347 us, ram_obj 0 us (0xcafe0011+0x200000000), fb_window 2961 us, ram_window 141718 us (total 146034 us
+family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 ma
+== e1-121250-b-noprop-shot1
+qemu-system-x86_64: -device kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,x11-dispsw=on,display=on,gop=on: info: kf3: family=Ada phase=Cold trapped=0 applied
+family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 ma
+mem t=3.147s [1/3] prewarm: spare host space 0xcafe0012 ready before the guest runs — vaspace 1489 us, ram_obj 2964956 us (0xcafe0011+0x200000000), fb_window 3054 us, ram_window 126751 us (total 309
+display: scanout REFUSED copy 1 did not complete in 2s
+mem t=3.327s [2/3] prewarm: spare host space 0xcafe0016 ready before the guest runs — vaspace 1352 us, ram_obj 0 us (0xcafe0011+0x200000000), fb_window 3058 us, ram_window 125591 us (total 130008 us
+mem t=3.509s [3/3] prewarm: spare host space 0xcafe001a ready before the guest runs — vaspace 1348 us, ram_obj 0 us (0xcafe0011+0x200000000), fb_window 3310 us, ram_window 127016 us (total 131680 us
+== e1-121301-c-pre-paused6
+qemu-system-x86_64: -device kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,x11-dispsw=on,display=on,gop=on,display-broker=/run/user/1000/nvkvm/display.sock,di
+family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 ma
+mem t=3.141s [1/3] prewarm: spare host space 0xcafe0012 ready before the guest runs — vaspace 1456 us, ram_obj 2961082 us (0xcafe0011+0x200000000), fb_window 2652 us, ram_window 124552 us (total 308
+display: scanout REFUSED copy 1 did not complete in 2s
+mem t=3.319s [2/3] prewarm: spare host space 0xcafe0016 ready before the guest runs — vaspace 1316 us, ram_obj 0 us (0xcafe0011+0x200000000), fb_window 2408 us, ram_window 123472 us (total 127204 us
+mem t=3.496s [3/3] prewarm: spare host space 0xcafe001a ready before the guest runs — vaspace 1396 us, ram_obj 0 us (0xcafe0011+0x200000000), fb_window 2396 us, ram_window 123298 us (total 127097 us
+== e1-121353-d-pre-2g-1
+qemu-system-x86_64: -device kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,x11-dispsw=on,display=on,gop=on,display-broker=/run/user/1000/nvkvm/display.sock,di
+mem t=0.967s [1/3] prewarm: spare host space 0xcafe0012 ready before the guest runs — vaspace 1416 us, ram_obj 880778 us (0xcafe0011+0x80000000), fb_window 3031 us, ram_window 31773 us (total 917009
+mem t=1.054s [2/3] prewarm: spare host space 0xcafe0016 ready before the guest runs — vaspace 2167 us, ram_obj 0 us (0xcafe0011+0x80000000), fb_window 2988 us, ram_window 31468 us (total 36628 us)
+mem t=1.142s [3/3] prewarm: spare host space 0xcafe001a ready before the guest runs — vaspace 2161 us, ram_obj 0 us (0xcafe0011+0x80000000), fb_window 3029 us, ram_window 32465 us (total 37662 us)
+display fps[cap=75(unset) copies=2.9 checks=60.9 same=58 ondemand=0 over=0]
+family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 ma
+== e1-121404-d-pre-2g-2
+qemu-system-x86_64: -device kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,x11-dispsw=on,display=on,gop=on,display-broker=/run/user/1000/nvkvm/display.sock,di
+mem t=0.863s [1/3] prewarm: spare host space 0xcafe0012 ready before the guest runs — vaspace 1388 us, ram_obj 777099 us (0xcafe0011+0x80000000), fb_window 2705 us, ram_window 31539 us (total 812743
+mem t=0.950s [2/3] prewarm: spare host space 0xcafe0016 ready before the guest runs — vaspace 2180 us, ram_obj 0 us (0xcafe0011+0x80000000), fb_window 2930 us, ram_window 31484 us (total 36600 us)
+mem t=1.037s [3/3] prewarm: spare host space 0xcafe001a ready before the guest runs — vaspace 2145 us, ram_obj 0 us (0xcafe0011+0x80000000), fb_window 3065 us, ram_window 31490 us (total 36707 us)
+display fps[cap=75(unset) copies=2.9 checks=60.9 same=58 ondemand=0 over=0]
+family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 ma
+== e1-121727-fix-pre-1
+qemu-system-x86_64: -device kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,x11-dispsw=on,display=on,gop=on,display-broker=/run/user/1000/nvkvm/display.sock,di
+family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 ma
+mem t=3.141s [1/3] prewarm: spare host space 0xcafe0012 ready before the guest runs — vaspace 1458 us, ram_obj 2960324 us (0xcafe0011+0x200000000), fb_window 2626 us, ram_window 126278 us (total 309
+display: copy 1 has not completed in 2s and its stream reports no failure (the host RM or the GPU has not run it yet): waiting for its signal, nothing is forged meanwhile
+display: TRACE scanout copy 1 done: 1920x1080 fnv=0e33e2d8dffc1383
+mem t=3.321s [2/3] prewarm: spare host space 0xcafe0016 ready before the guest runs — vaspace 1333 us, ram_obj 0 us (0xcafe0011+0x200000000), fb_window 3280 us, ram_window 125338 us (total 129958 us
+== e1-121739-fix-shot1-1
+qemu-system-x86_64: -device kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,x11-dispsw=on,display=on,gop=on: info: kf3: family=Ada phase=Cold trapped=0 applied
+family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 ma
+mem t=3.133s [1/3] prewarm: spare host space 0xcafe0012 ready before the guest runs — vaspace 1414 us, ram_obj 2953401 us (0xcafe0011+0x200000000), fb_window 2772 us, ram_window 125503 us (total 308
+display: copy 1 has not completed in 2s and its stream reports no failure (the host RM or the GPU has not run it yet): waiting for its signal, nothing is forged meanwhile
+display: TRACE scanout copy 1 done: 1920x1080 fnv=0e33e2d8dffc1383
+mem t=3.313s [2/3] prewarm: spare host space 0xcafe0016 ready before the guest runs — vaspace 1351 us, ram_obj 0 us (0xcafe0011+0x200000000), fb_window 3132 us, ram_window 124864 us (total 129353 us
+== e1-121750-fix-pre-2
+qemu-system-x86_64: -device kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,x11-dispsw=on,display=on,gop=on,display-broker=/run/user/1000/nvkvm/display.sock,di
+family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 ma
+mem t=3.117s [1/3] prewarm: spare host space 0xcafe0012 ready before the guest runs — vaspace 1421 us, ram_obj 2934821 us (0xcafe0011+0x200000000), fb_window 2757 us, ram_window 127411 us (total 306
+display: copy 1 has not completed in 2s and its stream reports no failure (the host RM or the GPU has not run it yet): waiting for its signal, nothing is forged meanwhile
+display: TRACE scanout copy 1 done: 1920x1080 fnv=0e33e2d8dffc1383
+mem t=3.299s [2/3] prewarm: spare host space 0xcafe0016 ready before the guest runs — vaspace 1361 us, ram_obj 0 us (0xcafe0011+0x200000000), fb_window 3006 us, ram_window 127658 us (total 132031 us
+== e1-121802-fix-shot1-2
+qemu-system-x86_64: -device kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,x11-dispsw=on,display=on,gop=on: info: kf3: family=Ada phase=Cold trapped=0 applied
+family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 ma
+mem t=3.129s [1/3] prewarm: spare host space 0xcafe0012 ready before the guest runs — vaspace 1414 us, ram_obj 2948735 us (0xcafe0011+0x200000000), fb_window 2690 us, ram_window 125664 us (total 307
+display: copy 1 has not completed in 2s and its stream reports no failure (the host RM or the GPU has not run it yet): waiting for its signal, nothing is forged meanwhile
+display: TRACE scanout copy 1 done: 1920x1080 fnv=0e33e2d8dffc1383
+mem t=3.309s [2/3] prewarm: spare host space 0xcafe0016 ready before the guest runs — vaspace 1370 us, ram_obj 0 us (0xcafe0011+0x200000000), fb_window 2958 us, ram_window 125370 us (total 129704 us
+== e1-121813-fix-pre-3
+qemu-system-x86_64: -device kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,x11-dispsw=on,display=on,gop=on,display-broker=/run/user/1000/nvkvm/display.sock,di
+family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 ma
+mem t=3.112s [1/3] prewarm: spare host space 0xcafe0012 ready before the guest runs — vaspace 1408 us, ram_obj 2931816 us (0xcafe0011+0x200000000), fb_window 2694 us, ram_window 125529 us (total 306
+display: copy 1 has not completed in 2s and its stream reports no failure (the host RM or the GPU has not run it yet): waiting for its signal, nothing is forged meanwhile
+display: TRACE scanout copy 1 done: 1920x1080 fnv=0e33e2d8dffc1383
+mem t=3.292s [2/3] prewarm: spare host space 0xcafe0016 ready before the guest runs — vaspace 1333 us, ram_obj 0 us (0xcafe0011+0x200000000), fb_window 3166 us, ram_window 125102 us (total 129607 us
+== e1-121825-fix-shot1-3
+qemu-system-x86_64: -device kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,x11-dispsw=on,display=on,gop=on: info: kf3: family=Ada phase=Cold trapped=0 applied
+family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 ma
+mem t=3.143s [1/3] prewarm: spare host space 0xcafe0012 ready before the guest runs — vaspace 1412 us, ram_obj 2961222 us (0xcafe0011+0x200000000), fb_window 2772 us, ram_window 126780 us (total 309
+display: copy 1 has not completed in 2s and its stream reports no failure (the host RM or the GPU has not run it yet): waiting for its signal, nothing is forged meanwhile
+display: TRACE scanout copy 1 done: 1920x1080 fnv=0e33e2d8dffc1383
+mem t=3.323s [2/3] prewarm: spare host space 0xcafe0016 ready before the guest runs — vaspace 1378 us, ram_obj 0 us (0xcafe0011+0x200000000), fb_window 3057 us, ram_window 125364 us (total 129804 us
+== e1-121849-restart-live-1
+qemu-system-x86_64: -device kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,x11-dispsw=on,display=on,gop=on,display-broker=/run/user/1000/nvkvm/display.sock,di
+family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 ma
+mem t=3.134s [1/3] prewarm: spare host space 0xcafe0012 ready before the guest runs — vaspace 1453 us, ram_obj 2949719 us (0xcafe0011+0x200000000), fb_window 2706 us, ram_window 129828 us (total 308
+display: copy 1 has not completed in 2s and its stream reports no failure (the host RM or the GPU has not run it yet): waiting for its signal, nothing is forged meanwhile
+display: TRACE scanout copy 1 done: 1920x1080 fnv=0e33e2d8dffc1383
+mem t=3.317s [2/3] prewarm: spare host space 0xcafe0016 ready before the guest runs — vaspace 1342 us, ram_obj 0 us (0xcafe0011+0x200000000), fb_window 2934 us, ram_window 128656 us (total 132938 us
+== e1-121900-restart-live-2
+qemu-system-x86_64: -device kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,x11-dispsw=on,display=on,gop=on,display-broker=/run/user/1000/nvkvm/display.sock,di
+family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 ma
+mem t=3.167s [1/3] prewarm: spare host space 0xcafe0012 ready before the guest runs — vaspace 1427 us, ram_obj 2985460 us (0xcafe0011+0x200000000), fb_window 2722 us, ram_window 125538 us (total 311
+display: copy 1 has not completed in 2s and its stream reports no failure (the host RM or the GPU has not run it yet): waiting for its signal, nothing is forged meanwhile
+display: TRACE scanout copy 1 done: 1920x1080 fnv=0e33e2d8dffc1383
+mem t=3.346s [2/3] prewarm: spare host space 0xcafe0016 ready before the guest runs — vaspace 1341 us, ram_obj 0 us (0xcafe0011+0x200000000), fb_window 3089 us, ram_window 125252 us (total 129688 us
+== e1-121911-restart-live-3
+qemu-system-x86_64: -device kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,x11-dispsw=on,display=on,gop=on,display-broker=/run/user/1000/nvkvm/display.sock,di
+family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 ma
+mem t=3.134s [1/3] prewarm: spare host space 0xcafe0012 ready before the guest runs — vaspace 1420 us, ram_obj 2953155 us (0xcafe0011+0x200000000), fb_window 2601 us, ram_window 126632 us (total 308
+display: copy 1 has not completed in 2s and its stream reports no failure (the host RM or the GPU has not run it yet): waiting for its signal, nothing is forged meanwhile
+display: TRACE scanout copy 1 done: 1920x1080 fnv=0e33e2d8dffc1383
+mem t=3.314s [2/3] prewarm: spare host space 0xcafe0016 ready before the guest runs — vaspace 1331 us, ram_obj 0 us (0xcafe0011+0x200000000), fb_window 3118 us, ram_window 125776 us (total 130230 us
+== e1-121922-paused-live
+qemu-system-x86_64: -device kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,x11-dispsw=on,display=on,gop=on,display-broker=/run/user/1000/nvkvm/display.sock,di
+family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 ma
+mem t=3.118s [1/3] prewarm: spare host space 0xcafe0012 ready before the guest runs — vaspace 1322 us, ram_obj 2938611 us (0xcafe0011+0x200000000), fb_window 2602 us, ram_window 124783 us (total 306
+display: copy 1 has not completed in 2s and its stream reports no failure (the host RM or the GPU has not run it yet): waiting for its signal, nothing is forged meanwhile
+display: TRACE scanout copy 1 done: 1920x1080 fnv=0e33e2d8dffc1383
+mem t=3.296s [2/3] prewarm: spare host space 0xcafe0016 ready before the guest runs — vaspace 1405 us, ram_obj 0 us (0xcafe0011+0x200000000), fb_window 2397 us, ram_window 123584 us (total 127394 us
+== e1-123054-xvfb-shm
+qemu-system-x86_64: -device kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,x11-dispsw=on,display=on,gop=on,display-broker=/run/user/1000/nvkvm/display.sock,di
+family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 ma
+mem t=3.130s [1/3] prewarm: spare host space 0xcafe0012 ready before the guest runs — vaspace 1596 us, ram_obj 2950267 us (0xcafe0011+0x200000000), fb_window 2752 us, ram_window 125460 us (total 308
+display: copy 1 has not completed in 2s and its stream reports no failure (the host RM or the GPU has not run it yet): waiting for its signal, nothing is forged meanwhile
+mem t=3.310s [2/3] prewarm: spare host space 0xcafe0016 ready before the guest runs — vaspace 1379 us, ram_obj 0 us (0xcafe0011+0x200000000), fb_window 3084 us, ram_window 124934 us (total 129405 us
+mem t=3.489s [3/3] prewarm: spare host space 0xcafe001a ready before the guest runs — vaspace 1377 us, ram_obj 0 us (0xcafe0011+0x200000000), fb_window 3038 us, ram_window 124904 us (total 129325 us

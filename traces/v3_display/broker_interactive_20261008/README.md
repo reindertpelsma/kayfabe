@@ -25,3 +25,13 @@ first line (`a372a279` p1, `b435bbd9` p4 and wl1). V3_DISPLAY.md §8.17 is the d
 
 The PNGs are the kf3 console's framebuffer readback, not a photo of the host window. No host desktop
 screenshot is committed (it is the owner's live session).
+
+## Later the same day (kf3 `2a20e699`, V3_DISPLAY.md §8.18)
+
+| file | what |
+|---|---|
+| `e1_runs.txt` | every early-frame boot (`scripts/bench/display/early_frame.sh`): a/b/c/d on `0e64a960` (STALL ×3; LIVE ×2 at 2 GiB), `fix-*`, `restart-live-*`, `paused-live`, `xvfb-shm` on `2a20e699` (LIVE) — the prewarm, waiting and `copy 1 done` lines |
+| `p5_proof.log` | `input_proof.sh p5` on `2a20e699`: grub key, keys, ABS (10 positions within 1 px), REL (70,30), a broker restart, a reboot, a QEMU restart |
+| `wl2_relay_lines.txt`, `wl2_broker_lines.txt`, `wl2_desktop.png` | the launcher with the real Wayland broker: 8/8 display-SW twins kept, the GPU-copy rung imported by GNOME, Cinnamon's normal desktop (console readback) |
+| `wl3_shm_regression.txt` | the same with `display-broker-vram=off`: LINEAR refused, wl_shm carries the frames |
+| `xvfb_broker.log` | the X11 broker on Xvfb (no DRI3 → shm tier) against kf3: 180 frames, 0 rejected |
