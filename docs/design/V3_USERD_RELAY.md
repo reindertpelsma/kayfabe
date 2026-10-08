@@ -1,6 +1,12 @@
 # V3 USERD relay — a Passthrough twin whose USERD the host cannot adopt
 
-**STATUS: DESIGN-ONLY → being implemented behind `KF3_WIN_USER_CHANNELS_PASSTHROUGH` (default off), 2026-10-08.**
+**STATUS: LIVE (implemented, measured), 2026-10-08 — behind `KF3_WIN_USER_CHANNELS_PASSTHROUGH` (default off).** `[measured, runs 68-72
+at d67e9290..8de8ef26]` the Windows compositor's per-process channel is born over kayfabe's USERD, its doorbells are relayed (98 forwarded in
+run71) and the engine consumes every entry (`host GP_GET = GP_PUT`); the guest's `GP_GET` lags by the documented staleness (3 entries at
+release). Two fixes the first runs needed are folded in: the worker must treat a relayed twin as alive (`ChanPlane::alive`, run67), and a
+Windows process space maps below host RM's default VA start (run69/70: `KF3_TWIN_VA_BASE`, diagnostic). Record:
+`traces/windows_code43_walls_20261007/README.md`, runs 67-72.
+⊘ The original status line: *DESIGN-ONLY → being implemented behind the flag, 2026-10-08.*
 Coordinator decision of 2026-10-08 (option (i) of `traces/windows_code43_walls_20261007/README.md`, "Stop (fourth session)"); option (ii),
 a host IOMMU identity domain, is out (it touches the owner's live desktop GPU). Owner ruling context: `docs/OWNER_RULINGS.md` §V
 ("a translated can become passthrough, if you know at channel creation").

@@ -3643,3 +3643,26 @@ twin of the probe's D3D devices. [run71 timeline](run71-timeline.txt), [run71 Xi
   `LAUNCH_DMA 0x8` (semaphore only). Why one twin accepts the subchannel-0 methods and the other refuses them is not established.
 - **Physical operands in per-process push buffers** (the owner's question): 19 peeked user-work segments (284 words, compositor + probe):
   10 `LAUNCH_DMA` (`0x686` x4, `0x8` x3, `0x10` x3), **0 with `SRC_TYPE` or `DST_TYPE` = PHYSICAL** `[measured, run72]` — still a small sample.
+
+## Stop (fourth session, ~17:15 CEST): where Windows-with-NVIDIA stands, and what is next
+
+**What moved this session** (flags all default-off; one labelled experiment):
+1. Classification at channel creation (`windows_user_work`): per-process work = the process's own `ProcessID` (≠ the kernel driver's) and, for
+   graphics, a context share; right on every channel of runs 60-72.
+2. USERD relay (`V3_USERD_RELAY.md`): a per-process twin is born Passthrough over kayfabe's own USERD; doorbells relayed by a worker.
+3. Host VA space start: a Windows process space maps from VA `0x10000`; with the twin spaces starting at 64 KiB (`KF3_TWIN_VA_BASE=10000`,
+   diagnostic) the compositor's twin runs (run70) and consumes all its work (run71), with no Xid; Windows reports **1920x1080@60**.
+
+**The walls now** `[measured]`: (a) every twin of a D3D device the probe creates RCs on its first submission (`Xid 32`, PBDMA `DEVICE`), the
+guest TDRs and bugchecks; the compositor's twin with the same first segment does not — cause not established (candidates to separate next: the
+subchannel bindings Windows does not send — `SET_OBJECT` never appears in the peeked streams, and the copy twins' first segment uses
+subchannel 4 bare; the cross-client ZCULL/preemption binds the probe answers without binding). (b) No window surface is presented yet (the
+display's window channels carry only LUT methods), so the broker window keeps the boot frame. (c) `KF3_TWIN_VA_BASE` is a diagnostic: the real
+rule must start a twin space where the guest's own space starts (a `SHARED_MANAGEMENT` space whose external PDEs the kernel driver fills below
+RM's default start), without letting host RM place its own buffers into the guest's low range. (d) An in-guest reboot is not a clean second
+boot (P4.5).
+
+**Decisions waiting (owner):** the soundness question (tables in this record: kernel channels use physical operands; 19 per-process segments
+showed none; doorbells all from ring 0); `KF3_SW_RUNLIST_HOST_OWNED` (on the compositor's path, still a labelled experiment); whether kayfabe may
+author `SET_OBJECT` bindings for a Passthrough twin (it would need a kayfabe-owned ring in front of the guest's entries — a design change to
+"Passthrough never reads a GP entry").

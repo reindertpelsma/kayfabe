@@ -9,6 +9,13 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+**Windows with NVIDIA, 2026-10-08 fourth session, runs 60-72 (branch `claude/windows-display-20261008`; record: `traces/windows_code43_walls_20261007/README.md`
+"Stop (fourth session, ~17:15)").** `[measured, runs 67-72, 2026-10-08]` with `KF3_WIN_USER_CHANNELS_PASSTHROUGH` (classification + USERD relay,
+`docs/design/V3_USERD_RELAY.md`) and the diagnostic `KF3_TWIN_VA_BASE=10000`, the compositor's per-process channel runs on an unprivileged host twin
+(all its work consumed, no Xid) and Windows reports a 1920x1080@60 mode; D3D devices created by a test process RC their twins (Xid 32, PBDMA DEVICE)
+and the guest TDRs; no window surface is presented yet. Next: the D3D twins' RC (subchannel bindings vs binds answered without binding), a real rule
+for the twin space's VA start, the window surface.
+
 **Windows user work as Passthrough (OWNER_RULINGS §V), 2026-10-08 fourth session, runs 60-64 (branch `claude/windows-display-20261008`;
 [record](../traces/windows_code43_walls_20261007/README.md#loop-2026-10-08-fourth-session-windows-user-work-as-passthrough-owner_rulings-v)).**
 `[measured, runs 60/61/64 at 3a578d50/883f878e/ac3456ac, 2026-10-08]`: every Windows channel is PRIVILEGE=KERNEL and `PRIVILEGED_CHANNEL`; the kernel
