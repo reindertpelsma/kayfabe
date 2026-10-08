@@ -305,10 +305,17 @@ pub fn windows_user_work(f: &UserWorkFacts) -> Result<(), &'static str> {
     {
         return Err("not a graphics or copy engine");
     }
-    if f.ctx_share == 0 {
+    // ★ A subcontext (context share) exists only for graphics: a copy engine has none, so a copy
+    // channel is judged by its process alone. `[measured, run70 at 4b14d74f, 2026-10-08]` a D3D device
+    // creates a graphics channel WITH a context share and a copy channel (engine 0xc) WITHOUT one, both
+    // under the process's own `ProcessID` (0x14c0) in the same per-process VA space; the copy channel,
+    // kept Translated, was refused there by the twin-state rule and the device creation failed.
+    // `[measured, run60]` every kernel-driver copy channel declares the kernel driver's process.
+    let graphics = engine == kf_abi::submit::ENGINE_TYPE_GRAPHICS;
+    if graphics && f.ctx_share == 0 {
         return Err("no context share (the kernel driver's own channels declare none)");
     }
-    if !f.ctx_share_known {
+    if graphics && !f.ctx_share_known {
         return Err("the context share was never allocated in this client");
     }
     let pid = f.process_id.ok_or("no ProcessID")?;
@@ -2196,6 +2203,28 @@ mod tests {
                 };
                 assert!(windows_user_work(&f).is_err(), "{engine:#x}");
             }
+        }
+
+        #[test]
+        fn a_d3d_copy_channel_is_judged_by_its_process_alone() {
+            // [measured, run70] engine 0xc, no context share, ProcessID 0x14c0
+            let ce = UserWorkFacts {
+                engine: Some(0xc),
+                ctx_share: 0,
+                ctx_share_known: false,
+                process_id: Some(0x14c0),
+                kernel_pid: Some(0x34c),
+                ..dwm()
+            };
+            assert_eq!(windows_user_work(&ce), Ok(()));
+            let kernel_ce = UserWorkFacts {
+                process_id: Some(0x34c),
+                ..ce
+            };
+            assert_eq!(
+                windows_user_work(&kernel_ce),
+                Err("the kernel driver's own process")
+            );
         }
 
         #[test]
