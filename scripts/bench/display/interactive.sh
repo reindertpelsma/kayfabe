@@ -72,7 +72,6 @@ broker_up() {
     fi
     brokers_down "$sock"
     install -d -o "$SU" -m 0700 "$(dirname "$sock")"; rm -f "$sock"
-    BACKEND=$backend
     if [ "$backend" = test ]; then
         # input_proof.sh: the broker's display-less backend, input scripted through a FIFO
         local fifo=${KF_BROKER_FIFO:?KF_BROKER_FIFO names the test backend input FIFO}
@@ -112,6 +111,7 @@ pick_qemu() {
     die "no kf3 binary for any of the last 200 commits under $BENCH/kf3-bins (build_kf3.sh)"
 }
 
+# shellcheck disable=SC2054  # the commas are QEMU property lists inside one argument
 qemu_args() {   # $1 = run dir; fills QARGS
     local d=$1 sock; sock=$(SOCK_OF)
     cp /usr/share/OVMF/OVMF_VARS_4M.fd "$d/ovmf_vars.fd"
@@ -240,10 +240,18 @@ session || die "no graphical session on seat0 — log in on the host's screen fi
 [ -e "$IMG" ] || die "no guest disk $IMG — run: $0 prep"
 pgrep -x qemu-system-x86 >/dev/null && die "a QEMU is already running ($(pgrep -x qemu-system-x86 | tr '\n' ' ')): the GPU runs one guest at a time"
 pick_qemu
-RUN=$WORK/run-$(date +%Y%m%d-%H%M%S); mkdir -p "$RUN"
+RUN=${KF_RUN_DIR:-$WORK/run-$(date +%Y%m%d-%H%M%S)}; mkdir -p "$RUN"
 echo "INTERACTIVE_START kf3=$QREV checkout=$(git -C "$REPO" rev-parse --short=8 HEAD) $(date -Is)" | tee "$RUN/marker.txt"
 exec 9>"$LOCK"; flock -n 9 || die "the GPU lock $LOCK is held by another run (fuser $LOCK)"
-broker_up "$RUN/broker.log"
+# a broker already listening on the socket is reused (a QEMU restart reattaches to it, §8.17) and
+# left running at exit; one this run starts is stopped with it
+OWN_BROKER=1
+if [ "${KF_BROKER_BACKEND:-auto}" != test ] && [ -S "$(SOCK_OF)" ] \
+   && pgrep -f "^[^ ]*nvkvm-display-broker --socket $(SOCK_OF)( |\$)" >/dev/null; then
+    OWN_BROKER=0; say "broker: reusing the running one on $(SOCK_OF) (pid $(pgrep -n -f "^[^ ]*nvkvm-display-broker --socket $(SOCK_OF)( |\$)"))"
+else
+    broker_up "$RUN/broker.log"
+fi
 say "session: $SU (uid $SUID) session $SID type=$STYPE wayland=${WD:-none} x=${XD:-none}; locked=$(loginctl show-session "$SID" -p LockedHint --value)"
 qemu_args "$RUN"
 printf '%q ' "$QBIN" "${QARGS[@]}" > "$RUN/cmdline.txt"
@@ -251,7 +259,7 @@ printf '%q ' "$QBIN" "${QARGS[@]}" > "$RUN/cmdline.txt"
 q=$!; echo "$q" > "$PIDF"
 cleanup() {
     kill -0 "$q" 2>/dev/null && { kill "$q"; sleep 2; kill -9 "$q" 2>/dev/null; }
-    brokers_down "$(SOCK_OF)"; rm -f "$PIDF"
+    [ "$OWN_BROKER" = 1 ] && brokers_down "$(SOCK_OF)"; rm -f "$PIDF"
     echo "INTERACTIVE_EXIT rc=${rc:-?} $(date -Is)" | tee -a "$RUN/marker.txt"
 }
 trap 'rc=130; cleanup; exit 130' INT TERM
