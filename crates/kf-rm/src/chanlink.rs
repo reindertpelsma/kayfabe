@@ -3519,7 +3519,7 @@ mod tests {
     #[test]
     fn a_deferred_5080_answer_holds_the_reply() {
         let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
-        let sink: ChanSink = Arc::new(|_| ChanAnswer::Deferred(kf_gsp::Deferred::new()));
+        let sink: ChanSink = std::sync::Arc::new(|_| ChanAnswer::Deferred(kf_gsp::Deferred::new()));
         let mut link = ChannelPolicy::new(abi, kf_abi::GuestOs::Windows, sink);
         let payload: Vec<u8> = [0xc1d0_0027u32, 0xff04_000c, 0xff1f_e010, 0x5080, 0, 0, 0, 0]
             .into_iter()
