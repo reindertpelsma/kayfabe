@@ -1709,7 +1709,12 @@ mod twin_va_start_tests {
     fn floor_space() -> VaSpace {
         let (lo, hi) = MirrorVaStart::GuestFloor.low_range().expect("low range");
         let mut guest = [GuestVaRange::default(); 3];
-        for (i, (l, h)) in GUEST_VA_RANGES.iter().copied().chain([(lo, hi)]).enumerate() {
+        for (i, (l, h)) in GUEST_VA_RANGES
+            .iter()
+            .copied()
+            .chain([(lo, hi)])
+            .enumerate()
+        {
             guest[i] = GuestVaRange {
                 handle: 0x100 + u32::try_from(i).expect("small"),
                 lo: l,
@@ -1742,7 +1747,7 @@ mod twin_va_start_tests {
         assert!(GUEST_VA_RANGES.iter().all(|&(lo, _)| hi <= lo));
     }
 
-    /// ★ Task A, measured shape: the rows Windows mapped in runs 69-72 resolve — `0x10000+0x6000`
+    /// ★ Task A: the rows Windows mapped (`[measured, runs 69-72 at d67e9290..8de8ef26, 2026-10-08]`) resolve — `0x10000+0x6000`
     /// (the compositor's low page) and `0x13000` through the low reservation, `0x1_2000_2000` through
     /// the first guest range, `0x400_0000` (a D3D ring) through the space's range.
     #[test]

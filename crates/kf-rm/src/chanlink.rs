@@ -3533,7 +3533,11 @@ mod tests {
             elements: 1,
             delivered: Vec::new(),
         };
-        assert_eq!(link.respond(&cmd), None, "no refusal: the object seat builds the reply");
+        assert_eq!(
+            link.respond(&cmd),
+            None,
+            "no refusal: the object seat builds the reply"
+        );
         assert!(link.defers(&cmd).is_some(), "the reply waits for the act");
     }
 

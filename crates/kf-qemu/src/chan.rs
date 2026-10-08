@@ -3442,7 +3442,8 @@ impl ChanPlane {
             // carry reaches the host engine as a software method with no host object behind it,
             // and the host RCs that channel (fail closed). `[measured, runs 47-57]` Windows' deferred
             // triggers all ran on its kernel GR channel.
-            if twin_defapi_plan(twin_defapi_object(), user_work) == TwinDefapiPlan::AuthorHostObject {
+            if twin_defapi_plan(twin_defapi_object(), user_work) == TwinDefapiPlan::AuthorHostObject
+            {
                 return self.twin_defapi_act(client, parent, handle);
             }
             eprintln!(
@@ -6499,7 +6500,7 @@ mod sw_scan_tests {
     }
 
     /// A method on subchannel 5 (the deferred-API trigger shape Windows' kernel channels use,
-    /// `[measured, run72]` "subch 5 value 0x1 method 0x200") and a SetObject on subchannel 6 are
+    /// `[measured, run72 at 8de8ef26, 2026-10-08]` "subch 5 value 0x1 method 0x200") and a SetObject on subchannel 6 are
     /// software methods; a Host-only method on subchannel 7 (NOP, `0x8`) is not.
     #[test]
     fn software_subchannel_methods_are_found_and_host_methods_are_not() {
@@ -6558,6 +6559,9 @@ mod twin_defapi_tests {
         assert_eq!(twin_defapi_plan(false, false), TwinDefapiPlan::NoHostObject);
         assert_eq!(twin_defapi_plan(false, true), TwinDefapiPlan::NoHostObject);
         assert_eq!(twin_defapi_plan(true, false), TwinDefapiPlan::NoHostObject);
-        assert_eq!(twin_defapi_plan(true, true), TwinDefapiPlan::AuthorHostObject);
+        assert_eq!(
+            twin_defapi_plan(true, true),
+            TwinDefapiPlan::AuthorHostObject
+        );
     }
 }

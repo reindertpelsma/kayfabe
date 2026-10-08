@@ -3740,7 +3740,7 @@ Binary `kf3-bins/3f23995a`, alone, 4096 MiB, flags as run72 minus `KF3_TWIN_VA_B
 - Fixed after the run: the two new refusal codes were `0x4B72`/`0x4B73`, already `HOST_ABI_REFUSED`/`PRIVILEGED_CHANNEL_REFUSED`
   (`kf-host/src/lib.rs`); now `0x4B77`/`0x4B78`, with a uniqueness test.
 
-**Verdict on the coordinator's hypotheses** (`[documented]` + `[measured, run73]`): **H-subch** (missing `SET_OBJECT` on 0-4) — not the
+**Verdict on the coordinator's hypotheses** (`[documented]` + `[measured, run73 at 3f23995a, 2026-10-08]`): **H-subch** (missing `SET_OBJECT` on 0-4) — not the
 cause: the twins die on a `SET_OBJECT` that IS present, on a SOFTWARE subchannel; NVIDIA's documentation rules out a `DEVICE`
 interrupt from a missing binding on 0-4. **H-bind** — not the cause (the Xid is a PBDMA software-method interrupt, and the copy twins
 have no ZCULL/preemption state). **H-va** — not the cause (no MMU fault; the low rows map). **H-sw** — the cause for the copy twins.
@@ -3802,7 +3802,7 @@ event of the engine a D3D copy twin runs on (`engine 0xc`, COPY3) is not relayed
 **What moved** (all default-off; flags named):
 1. **Task A, the real VA-start rule** (`kf_host::channel::MirrorVaStart`, on with `KF3_WIN_USER_CHANNELS_PASSTHROUGH`): twin spaces start
    at one 64 KiB big page with `[64 KiB, 1 MiB)` reserved for guest rows; NULL-page and wrapping rows refused by name; the guest's
-   declaration is checked and logged (`VAS-DECL`) but never sets the base. `KF3_TWIN_VA_BASE` is gone. Measured working in runs 73 and 76.
+   declaration is checked and logged (`VAS-DECL`) but never sets the base. `KF3_TWIN_VA_BASE` is gone. `[measured, runs 73/76 at 3f23995a/f649d2c3, 2026-10-08]` it works.
 2. **Task B, why the D3D twins were RC'd:** every D3D device channel (graphics and copy) binds `NV50_DEFERRED_API` to SOFTWARE
    subchannel 5 (`SET_OBJECT` data `0x5080`); host RM, with no such object on the unprivileged twin, answers with Xid 32 / PBDMA
    `DEVICE`. The compositor's channel never uses a software subchannel, which is why it ran. H-subch, H-bind and H-va are not the cause.
