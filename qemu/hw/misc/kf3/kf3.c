@@ -80,6 +80,15 @@
 #include <linux/input-event-codes.h>
 #include "kf3.h"
 #include "kf3_gop.h"
+/* ★ ABI 24, DIAGNOSTIC (KF3_BAR0_READ_TRACE and x-gsp-observer, both default off; OWNER_RULINGS.md
+ * sec. X, docs/design/V3_BAR0_TRACE_MODE.md): the VFIO reference's OWN tracer — QEMU's vfio trace
+ * events (the same generated code, backend and timestamps as vfio-pci's) and the shared GSP observer
+ * (tools/vfio-gsp-observer, installed in hw/vfio by its apply.py; KF3_GSP_OBSERVER is defined by
+ * meson.build only when the tree has it). */
+#include "trace/trace-hw_vfio.h"
+#ifdef KF3_GSP_OBSERVER
+#include "../../vfio/gsp-observer.h"
+#endif
 
 #if QEMU_VERSION_MAJOR < 10 || (QEMU_VERSION_MAJOR == 10 && QEMU_VERSION_MINOR < 2)
 #error "kf3-gpu requires QEMU 10.2+ (memory_region_enable_lockless_io keeps the vCPU path BQL-free)"
@@ -99,6 +108,8 @@ typedef struct Kf3Vec {
     EventNotifier e;   /* wraps the Rust-owned eventfd (never closed here) */
     int virq;          /* the KVM MSI route while the vector is in use, else -1 */
     bool have;
+    struct Kf3State *s; /* ★ ABI 24 trace mode only: the main-loop MSI path's owner and vector */
+    unsigned nr;
 } Kf3Vec;
 
 typedef struct Kf3Piece {
@@ -106,6 +117,7 @@ typedef struct Kf3Piece {
     uint64_t base;
     MemoryRegion mr;
     bool shadow;   /* a shadow ROM device (how 1): the only pieces the KF3_BAR0_TRACE trap toggles */
+    bool rtrace;   /* ★ ABI 24 trace mode: this shadow piece's reads exit for the whole run */
 } Kf3Piece;
 
 /* One BAR1 usermode-view overlay: an ALIAS of the 64 KiB usermode ROM device, re-pointed and
@@ -206,7 +218,55 @@ struct Kf3State {
     bool read_trap_want;             /* qatomic: the drainer's latest wish */
     bool read_trap_on;               /* main loop only: what is applied */
     uint64_t read_trap_flips;
+    /* ★ ABI 24, DIAGNOSTIC, default off (KF3_BAR0_READ_TRACE=1 and/or x-gsp-observer=PATH): the
+     * VFIO reference's tracer on this device. tr_on = Rust's kf3_trace_mode (set once at realize);
+     * diag = tr_on or the observer: BAR0 uses kf3_piece_ops_trace and MSI-X goes through the main
+     * loop (vfio's x-no-kvm-msix shape) instead of KVM irqfds. Both false = today's device. */
+    bool tr_on;
+    bool diag;
+    char tr_name[40];
+    Notifier tr_exit;
+    char *gsp_observer_path;         /* property x-gsp-observer (vfio-pci's name) */
+    uint32_t gsp_observer_seconds;   /* property x-gsp-observer-seconds (vfio-pci: 300) */
+#ifdef KF3_GSP_OBSERVER
+    GspObserver *obs;
+#endif
 };
+
+/* ── ★ ABI 24, DIAGNOSTIC: the BAR0 trace mode (both helpers are reached only with it on) ───── */
+
+/* The shared GSP observer, BEFORE the access is served (vfio's order). Its producer is serialized
+ * by the BQL; a lockless vCPU takes it only for the observer's few trigger offsets. */
+static void kf3_obs_mmio(struct Kf3State *s, hwaddr off, uint64_t val, unsigned size, bool write)
+{
+#ifdef KF3_GSP_OBSERVER
+    if (s->obs && gsp_observer_is_trigger(off, size, write)) {
+        bool locked = bql_locked();
+        if (!locked) {
+            bql_lock();
+        }
+        gsp_observer_mmio(s->obs, off, val, size, write);
+        if (!locked) {
+            bql_unlock();
+        }
+    }
+#endif
+}
+
+/* The record, AFTER the access is served (vfio region.c's order), through QEMU's own vfio trace
+ * events; Rust admits it (selection, record and byte caps, drop counter). */
+static void kf3_trace_rw(struct Kf3State *s, hwaddr off, uint64_t val, unsigned size, bool write)
+{
+    if (write) {
+        if (trace_event_get_state_backends(TRACE_VFIO_REGION_WRITE) &&
+            kf3_trace_admit(s->h, 1, off, size, val)) {
+            trace_vfio_region_write(s->tr_name, 0, off, val, size);
+        }
+    } else if (trace_event_get_state_backends(TRACE_VFIO_REGION_READ) &&
+               kf3_trace_admit(s->h, 0, off, size, val)) {
+        trace_vfio_region_read(s->tr_name, 0, off, size, val);
+    }
+}
 
 /* ── BAR0 ───────────────────────────────────────────────────────────────────────────────── */
 
@@ -271,6 +331,41 @@ static const MemoryRegionOps kf3_piece_ops = {
     .impl = { .min_access_size = 1, .max_access_size = 8 },
 };
 
+/* ★ ABI 24, DIAGNOSTIC: BAR0's ops in trace mode ONLY — chosen once at realize (kf3_piece_ops_for),
+ * so with the mode off the vCPU runs exactly kf3_piece_read/kf3_piece_write above. The answer is
+ * the same call; the shared GSP observer sees the access first and QEMU's vfio trace event records
+ * it after, as vfio-pci does. */
+static uint64_t kf3_piece_read_trace(void *opaque, hwaddr addr, unsigned size)
+{
+    Kf3Piece *p = opaque;
+    uint64_t v;
+    kf3_obs_mmio(p->s, p->base + addr, 0, size, false);
+    v = kf3_piece_read(opaque, addr, size);
+    kf3_trace_rw(p->s, p->base + addr, v, size, false);
+    return v;
+}
+
+static void kf3_piece_write_trace(void *opaque, hwaddr addr, uint64_t val, unsigned size)
+{
+    Kf3Piece *p = opaque;
+    kf3_obs_mmio(p->s, p->base + addr, val, size, true);
+    kf3_piece_write(opaque, addr, val, size);
+    kf3_trace_rw(p->s, p->base + addr, val, size, true);
+}
+
+static const MemoryRegionOps kf3_piece_ops_trace = {
+    .read = kf3_piece_read_trace,
+    .write = kf3_piece_write_trace,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+    .valid = { .min_access_size = 1, .max_access_size = 8 },
+    .impl = { .min_access_size = 1, .max_access_size = 8 },
+};
+
+static const MemoryRegionOps *kf3_piece_ops_for(struct Kf3State *s)
+{
+    return s->diag ? &kf3_piece_ops_trace : &kf3_piece_ops;
+}
+
 /* A ROM device over pages we did not allocate: memory_region_init_rom_device_nomigrate, with the
  * RAM block taken from the host usermode window instead of qemu_ram_alloc. The window outlives
  * the region (the Rust device lives for the process). */
@@ -309,7 +404,7 @@ static bool kf3_host_rom_ops(Kf3State *s, Kf3Piece *p, const char *name, uint64_
 
 static bool kf3_host_rom(Kf3State *s, Kf3Piece *p, const char *name, uint64_t len, bool timer, Error **errp)
 {
-    return kf3_host_rom_ops(s, p, name, len, &kf3_piece_ops, p, timer, errp);
+    return kf3_host_rom_ops(s, p, name, len, kf3_piece_ops_for(s), p, timer, errp);
 }
 
 static bool kf3_bar0_build(Kf3State *s, uint64_t size, Error **errp)
@@ -342,7 +437,7 @@ static bool kf3_bar0_build(Kf3State *s, uint64_t size, Error **errp)
         name = g_strdup_printf("kf3-bar0@%" PRIx64 "/how%u", r->base, r->how);
         if (r->how == 3) {
             /* HOLE: a read that must exit (Hopper+ FSP EMEM). Trapping IO both ways. */
-            memory_region_init_io(&p->mr, OBJECT(s), &kf3_piece_ops, p, name, r->len);
+            memory_region_init_io(&p->mr, OBJECT(s), kf3_piece_ops_for(s), p, name, r->len);
         } else if (r->how == 2 || r->how == 4) {
             /* HOST PASSTHROUGH (§53.1 C): a ROM device whose RAM IS the host's usermode window —
              * reads hit the live microsecond counter with no exit, writes (the doorbell) trap.
@@ -366,7 +461,7 @@ static bool kf3_bar0_build(Kf3State *s, uint64_t size, Error **errp)
             continue;
         } else {
             /* Shadow (1): reads from RAM with no exit, writes trap. */
-            if (!memory_region_init_rom_device_nomigrate(&p->mr, OBJECT(s), &kf3_piece_ops, p,
+            if (!memory_region_init_rom_device_nomigrate(&p->mr, OBJECT(s), kf3_piece_ops_for(s), p,
                                                          name, r->len, errp)) {
                 return false;
             }
@@ -376,6 +471,12 @@ static bool kf3_bar0_build(Kf3State *s, uint64_t size, Error **errp)
             }
             memory_region_set_dirty(&p->mr, 0, r->len);
             p->shadow = true;
+            /* ★ ABI 24 trace mode only: a piece overlapping a selected read range serves its
+             * reads by exit for the whole run (kf3_bar0_read answers from this same shadow). */
+            if (s->tr_on && kf3_trace_piece(s->h, r->base, r->len)) {
+                memory_region_rom_device_set_romd(&p->mr, false);
+                p->rtrace = true;
+            }
         }
         memory_region_enable_lockless_io(&p->mr);
         memory_region_add_subregion(&s->bar0, r->base, &p->mr);
@@ -401,7 +502,8 @@ static void kf3_read_trap_bh(void *opaque)
     memory_region_transaction_begin();
     for (i = 0; i < s->n_pieces; i++) {
         if (s->pieces[i].shadow) {
-            memory_region_rom_device_set_romd(&s->pieces[i].mr, !on);
+            /* a trace-mode piece (ABI 24) stays trapped whatever the window wants */
+            memory_region_rom_device_set_romd(&s->pieces[i].mr, !(on || s->pieces[i].rtrace));
         }
     }
     memory_region_transaction_commit();
@@ -809,6 +911,52 @@ static void kf3_vector_release(PCIDevice *pci, unsigned v)
         kvm_irqchip_release_virq(kvm_state, x->virq);
         x->virq = -1;
     }
+}
+
+/* ★ ABI 24, DIAGNOSTIC (trace mode / x-gsp-observer only; never registered otherwise): MSI-X through
+ * the main loop in vfio's x-no-kvm-msix shape (hw/vfio/pci.c vfio_msi_interrupt): the shared GSP
+ * observer samples the status queue, QEMU's vfio_msi_interrupt event records the raise, then
+ * msix_notify (which sets a masked vector's pending bit). Rust raises exactly as before: one
+ * write(2) on the same eventfd. Main loop, BQL held. */
+static void kf3_msi_user(void *opaque)
+{
+    Kf3Vec *x = opaque;
+    struct Kf3State *s = x->s;
+    PCIDevice *pci = PCI_DEVICE(s);
+
+    if (!event_notifier_test_and_clear(&x->e)) {
+        return;
+    }
+#ifdef KF3_GSP_OBSERVER
+    if (s->obs) {
+        gsp_observer_irq(s->obs);
+    }
+#endif
+    if (s->tr_on && trace_event_get_state_backends(TRACE_VFIO_MSI_INTERRUPT)) {
+        MSIMessage m = msix_get_message(pci, x->nr);
+        if (kf3_trace_admit(s->h, 2, x->nr, m.data, m.address)) {
+            trace_vfio_msi_interrupt(s->tr_name, x->nr, m.address, m.data);
+        }
+    }
+    msix_notify(pci, x->nr);
+}
+
+static void kf3_msi_user_off(struct Kf3State *s)
+{
+    for (unsigned i = 0; i < KF3_MAX_VECTORS; i++) {
+        if (s->vec[i].s) {
+            qemu_set_fd_handler(event_notifier_get_fd(&s->vec[i].e), NULL, NULL, NULL);
+            s->vec[i].s = NULL;
+        }
+    }
+}
+
+static void kf3_trace_exit(Notifier *n, void *data)
+{
+    struct Kf3State *s = container_of(n, struct Kf3State, tr_exit);
+    char rep[1024] = "";
+    kf3_trace_report(s->h, rep, sizeof(rep));
+    info_report("%s", rep);
 }
 
 /* ── realize / exit ─────────────────────────────────────────────────────────────────────── */
@@ -1440,6 +1588,33 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         error_setg(errp, "kf3: no identity");
         goto fail;
     }
+    /* ★ ABI 24, DIAGNOSTIC, default off: Rust read KF3_BAR0_READ_TRACE at realize. Off (and no
+     * x-gsp-observer) = BAR0, its ops and the irqfd MSI path are built exactly as before. */
+    s->tr_on = kf3_trace_mode(s->h) == 1;
+    s->diag = s->tr_on || s->gsp_observer_path;
+    if (s->diag && s->db_ioeventfd) {
+        error_setg(errp, "kf3: the BAR0 trace and x-gsp-observer need doorbell-ioeventfd=off "
+                   "(an ioeventfd doorbell write never reaches them)");
+        goto fail;
+    }
+#ifndef KF3_GSP_OBSERVER
+    if (s->gsp_observer_path) {
+        error_setg(errp, "kf3: x-gsp-observer: this QEMU tree has no shared GSP observer "
+                   "(install tools/vfio-gsp-observer with its apply.py, then rebuild)");
+        goto fail;
+    }
+#endif
+    if (s->tr_on) {
+        kf3_trace_name(s->h, s->tr_name, sizeof(s->tr_name));
+        warn_report("kf3: ★★ DIAGNOSTIC BAR0 TRACE MODE ON (KF3_BAR0_READ_TRACE=1, default off; "
+                    "OWNER_RULINGS.md sec. X): selected BAR0 reads EXIT and every record goes through "
+                    "QEMU's vfio trace events as %s; MSI-X goes through the main loop. Slow by design.",
+                    s->tr_name);
+        if (!trace_event_get_state_backends(TRACE_VFIO_REGION_READ)) {
+            warn_report("kf3: BAR0 trace mode is on but the vfio_region_read trace event is not "
+                        "enabled: nothing is recorded (pass -trace events=FILE,file=LOG)");
+        }
+    }
     /* The host's own identity, so the guest's stock driver binds. */
     pci_config_set_vendor_id(c, id.vendor);
     pci_config_set_device_id(c, id.device);
@@ -1498,8 +1673,9 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         for (unsigned i = 0; i < s->msix_vectors; i++) {
             msix_vector_use(pci, i);
         }
-        /* ⊘ No irqfd, no interrupts: refuse rather than fall back to a BQL-taking notify. */
-        if (!kvm_msi_via_irqfd_enabled()) {
+        /* ⊘ No irqfd, no interrupts: refuse rather than fall back to a BQL-taking notify.
+         * (★ ABI 24: the diagnostic trace mode alone takes the main-loop path on purpose.) */
+        if (!s->diag && !kvm_msi_via_irqfd_enabled()) {
             error_setg(errp, "kf3: KVM MSI-via-irqfd is not available (kernel irqchip required)");
             goto fail;
         }
@@ -1509,13 +1685,31 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
             if (fd >= 0) {
                 event_notifier_init_fd(&s->vec[i].e, fd);
                 s->vec[i].have = true;
+                if (s->diag) {
+                    s->vec[i].s = s;
+                    s->vec[i].nr = i;
+                    qemu_set_fd_handler(fd, kf3_msi_user, NULL, &s->vec[i]);
+                }
             }
         }
-        if (msix_set_vector_notifiers(pci, kf3_vector_use, kf3_vector_release, NULL) < 0) {
+        if (!s->diag &&
+            msix_set_vector_notifiers(pci, kf3_vector_use, kf3_vector_release, NULL) < 0) {
             error_setg(errp, "kf3: MSI-X vector notifiers refused");
             goto fail;
         }
     }
+#ifdef KF3_GSP_OBSERVER
+    /* ★ ABI 24, DIAGNOSTIC: the shared GSP observer (vfio-pci's x-gsp-observer, same code) */
+    if (s->gsp_observer_path) {
+        s->obs = gsp_observer_open(pci, s->gsp_observer_path, s->gsp_observer_seconds, errp);
+        if (!s->obs) {
+            goto fail;
+        }
+        warn_report("kf3: ★★ DIAGNOSTIC GSP OBSERVER ON (x-gsp-observer=%s, %u s): the VFIO "
+                    "reference's observer samples this guest's GSP queues", s->gsp_observer_path,
+                    s->gsp_observer_seconds);
+    }
+#endif
 
     /* ★ ABI 7: config-space words the guest's RM reads by CONFIG CYCLE (Hopper+ read the PCIe
      * link capabilities there, not through the BAR0 XVE mirror). Read-only (no wmask), and refused
@@ -1596,9 +1790,19 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         kf3_status(s->h, st, sizeof(st));
         info_report("%s (BAR0 pieces=%u)", st, s->n_pieces);
     }
+    if (s->tr_on) {
+        /* ★ ABI 24: the trace's report at exit (registered after the last failure point) */
+        s->tr_exit.notify = kf3_trace_exit;
+        qemu_add_exit_notifier(&s->tr_exit);
+    }
     return;
 
 fail:
+#ifdef KF3_GSP_OBSERVER
+    gsp_observer_close(s->obs);
+    s->obs = NULL;
+#endif
+    kf3_msi_user_off(s);
     kf3_broker_exit(s);
     /* Every failure after the discard requirement was taken. QEMU calls no exit for a failed
      * realize, so it is given back here. ⊘ Pre-existing and unchanged: a failure after kf3_realize
@@ -1620,6 +1824,16 @@ static void kf3_dev_exit(PCIDevice *pci)
                     s->irq_routes, s->irq_route_fail, s->bar1_ov_applied, s->bar1_ov_failed,
                     s->db_sites_added, s->db_sites_removed);
         memory_listener_unregister(&s->listener);
+        /* ★ ABI 24, DIAGNOSTIC: the report now, and nothing traced or observed after this */
+        if (s->tr_on) {
+            qemu_remove_exit_notifier(&s->tr_exit);
+            kf3_trace_exit(&s->tr_exit, NULL);
+        }
+#ifdef KF3_GSP_OBSERVER
+        gsp_observer_close(s->obs);
+        s->obs = NULL;
+#endif
+        kf3_msi_user_off(s);
         /* ★ ABI 12: the broker relay stops BEFORE the console closes (its input targets it) */
         kf3_broker_exit(s);
         /* ★ ABI 16: no refresh answer arrives after this; a screendump still waiting ends now */
@@ -1643,7 +1857,9 @@ static void kf3_dev_exit(PCIDevice *pci)
         kf3_unrealize(s->h);
     }
     if (s->msix_vectors > 0) {
-        msix_unset_vector_notifiers(pci);
+        if (!s->diag) {   /* ★ ABI 24: the trace mode never set them */
+            msix_unset_vector_notifiers(pci);
+        }
         msix_uninit(pci, &s->msix_bar, &s->msix_bar);
     }
     if (s->discard_required) {
@@ -1694,6 +1910,12 @@ static const Property kf3_properties[] = {
      * EDID, byte for byte. 24..75 sets the cap and the monitor's preferred rate; below 24, above 75
      * (owner decision D3) or without display=on, realize is refused by name. */
     DEFINE_PROP_UINT32("display-max-fps", Kf3State, display_max_fps, 0),
+    /* ★ ABI 24, DIAGNOSTIC (2026-10-09, OWNER_RULINGS.md sec. X; unset = off): the VFIO reference's
+     * GSP observer on this device — vfio-pci's property name, the same code (hw/vfio/gsp-observer.c,
+     * tools/vfio-gsp-observer) and the same output file format. A fresh path (created O_EXCL). The
+     * capture window from realize, 1..7200 s (vfio-pci's is fixed at 300). */
+    DEFINE_PROP_STRING("x-gsp-observer", Kf3State, gsp_observer_path),
+    DEFINE_PROP_UINT32("x-gsp-observer-seconds", Kf3State, gsp_observer_seconds, 300),
 };
 
 static void kf3_class_init(ObjectClass *klass, const void *data)

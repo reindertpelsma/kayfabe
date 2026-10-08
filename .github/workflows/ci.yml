@@ -1707,6 +1707,12 @@ jobs:
           #   and its one `ReadTrapHook::adopt` block.
           #   ⊘ No new power: the verb only flips ROMD on kayfabe's own BAR0 shadow pieces; a read
           #     that exits is answered from the same shadow word. Nothing reaches the host.
+          # kf-qemu 67 -> 69 (2026-10-09, claude/kf3-read-trace-20261008, KF3 ABI 24; the default-off
+          # BAR0 trace mode, OWNER_RULINGS.md §X):
+          #   ffi_unsafe.rs (+2): `kf3_trace_name` and `kf3_trace_report` (`unsafe extern "C" fn`:
+          #   `buf` is null or writable for `len` bytes — the same contract as `kf3_status`; both
+          #   write through the existing `write_err`, which bounds the copy to `len - 1` and NULs).
+          #   ⊘ No new power: they copy a Rust-owned string out; no pointer is kept.
           # ★ kf-chan:0 (2026-10-04, P1+P2 inc C, `docs/design/V3_P1P2_TSPACE.md` §3.8). OWNER_RULINGS
           # §R(b): code that produces an address hardware will dereference is PERIMETER material
           # even when it compiles as safe Rust, so the Translated plane's address authoring lives in
@@ -1717,7 +1723,7 @@ jobs:
           # 0 and does not move; kf-chan keeps `unsafe_code = "forbid"` through `[lints] workspace`.
           # Listing the crate here is what lets gate B accept a `*_unsafe.rs` file in it, and makes
           # the ratchet count it (0) from now on — a future `unsafe {}` there moves this number.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:97 kf-cuda:78 kf-qemu:67 firmware/kf-gop:78 kf-chan:0"
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:97 kf-cuda:78 kf-qemu:69 firmware/kf-gop:78 kf-chan:0"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.

@@ -307,6 +307,9 @@ pub struct Device {
     /// ★ EXPERIMENT `x11-dispsw` ([`Config::x11_dispsw`]): the status line's `dispsw[...]` segment
     /// is printed only when it is on.
     x11_dispsw: bool,
+    /// ★ DIAGNOSTIC, default off (`KF3_BAR0_READ_TRACE=1`, [`crate::readtrace`]): the BAR0 access
+    /// trace in the VFIO reference's record format. Off: the C device takes none of its paths.
+    pub trace: crate::readtrace::AccessTrace,
 }
 
 impl Device {
@@ -377,6 +380,19 @@ impl Device {
             ));
         }
         let pci = crate::hostfacts::read_host_pci(&sysfs)?;
+        // ★ DIAGNOSTIC (default off): a malformed knob refuses realize by name.
+        let trace = crate::readtrace::AccessTrace::new(
+            crate::readtrace::TraceConfig::from_env().map_err(|e| format!("BAR0 trace: {e}"))?,
+            &bdf,
+        );
+        if trace.on() {
+            eprintln!(
+                "kf3: ★★ DIAGNOSTIC BAR0 TRACE MODE ON (KF3_BAR0_READ_TRACE=1; OWNER_RULINGS.md §X, \
+                 default off): BAR0 reads in the selected ranges EXIT to the VMM and are logged with \
+                 QEMU's vfio trace events as {} — slow by design, never a production configuration",
+                trace.name()
+            );
+        }
         // ★ The boot display's option ROM: the embedded GOP driver wrapped with the identity this
         // device presents (`kf3_identity`) and the boot framebuffer's descriptor.
         let gop_rom = gop
@@ -1110,6 +1126,7 @@ impl Device {
             unload_layout,
             b5_logged: AtomicU64::new(0),
             fn47_logged: AtomicU64::new(0),
+            trace,
         })
     }
 

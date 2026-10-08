@@ -1,0 +1,7 @@
+{
+  "hw/vfio/pci.c": "4ffc778a881310aaa128f66ec5326fcd53e2240cfccfee32f215fba316993b66",
+  "hw/vfio/region.c": "49f6e06bdba3e3bfa57650d36d5bb9bc28681cc5c957b087fb3b220314d58240",
+  "hw/vfio/pci.h": "73498496a8790b41df6becc8e1cb8ae6e5e86bec561a714e282f15e93e4cba74",
+  "hw/vfio/meson.build": "64ec69ae2fa5d2b4d97d0521a9fc1bb42ca8e091135ab14f3f53d74d3ea16d15",
+  "include/hw/vfio/vfio-device.h": "6b52b90596edd7bbb1c05209844de4e87d0f3528e1257323e1040a2c45f638ab"
+}
