@@ -52,6 +52,60 @@ use std::time::{Duration, Instant};
 /// Heads any family's register file indexes.
 const MAX_HEADS: usize = kf_disp::ports::MAX_HEADS;
 
+/// ★ 2026-10-08 EXPERIMENT (H-loadv; `KF3_DISPLAY_LOADV=1`, default off): bit 0 of
+/// `NV_PDISP_FE_EVT_STAT_HEAD_TIMING(h)`. ⚠ NOT in ogkm's published `dev_disp.h` (v03_00 names only
+/// LAST_DATA 1:1, VBLANK 2:2, RG_LINE_A 5:5, RG_LINE_B 6:6), so it is named here by hand, from:
+/// nouveau `nvkm/engine/disp/gv100.c` `gv100_disp_intr_head_timing` ("`/* LAST_DATA, LOADV. */`",
+/// `stat & 0x00000003`, LAST_DATA being bit 1); and the measurement `[measured, VFIO DVI reference
+/// boot3, 2026-10-08, traces/vfio_dvi_reference_20261008]`: on real hardware Windows reads
+/// `0x611800` = `0x7` at every head-timing ISR (1902 reads) and `0x5` after it write-1-clears `0x2`
+/// (it never clears bit 0), while kf3 publishes `0x6`/`0x4`. The bit is not an enable bit Windows
+/// sets (`0x611d80` <- `0x3f0062`), so it never reaches RM by itself; what it changes is what the
+/// guest READS. Owner review needed before it may become default (a hand-named field).
+pub const EVT_STAT_HEAD_TIMING_LOADV: u32 = 1 << 0;
+
+/// `KF3_DISPLAY_LOADV=1` (read once): the H-loadv experiment ([`EVT_STAT_HEAD_TIMING_LOADV`]).
+fn loadv_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("KF3_DISPLAY_LOADV").is_ok_and(|v| v == "1"))
+}
+
+/// ⚠ DIAGNOSTIC (2026-10-08, `KF3_DISPLAY_WRITE_TRACE=1`, default off): every guest write in the
+/// display aperture (BAR0 writes trap by design — no read is trapped), the head-timing interrupts
+/// raised and the window latches, each with the host-uptime clock the `maplog` lines use, so they
+/// align with the channel/ETW timelines. Bounded: [`DISPLAY_TRACE_CAP`] lines per kind and run.
+fn write_trace_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("KF3_DISPLAY_WRITE_TRACE").is_ok_and(|v| v == "1"))
+}
+
+/// Lines per kind the display write trace prints in a run.
+const DISPLAY_TRACE_CAP: u32 = 4096;
+
+/// Take one of a bounded trace's lines (`false` once `cap` were taken). Lock-free.
+fn trace_slot(n: &AtomicU32, cap: u32) -> bool {
+    n.fetch_add(1, Ordering::Relaxed) < cap
+}
+
+/// ★ One head's FRAME EDGE (the worker's tick for that head), as the hardware latches it: the
+/// head-timing events every frame sets — LAST_DATA and VBLANK, plus LOADV under the H-loadv
+/// experiment — become PENDING whether or not the guest enabled them (`[measured, VFIO DVI
+/// reference boot3, RTX 4070, 2026-10-08]` `0x611800` reads `0x7` while LAST_DATA is disabled), and the display interrupt
+/// is due at this edge exactly when an ENABLED bit is pending (`RM_INTR_STAT_HEAD_TIMING`, derived).
+/// So: an interrupt at every frame edge while the guest keeps LAST_DATA enabled, none after it
+/// disabled it, and none at the enable itself when the guest cleared the bit first (Windows'
+/// order on hardware, 113/113: `0x611800` <- `0x2`, then `0x611d80` <- enable; its first interrupt
+/// came 0.58-16.87 ms later, at the next frame edge). Returns the RM-visible bits (non-zero =
+/// raise the display vector after this tick's effects).
+fn frame_edge(ports: &Ports, map: &RegMap, h: usize, loadv: bool) -> u32 {
+    let mut bits = map.head_last_data | map.head_vblank;
+    if loadv {
+        bits |= EVT_STAT_HEAD_TIMING_LOADV;
+    }
+    ports.raise(EventReg::HeadTiming(h), bits);
+    ports.rm_head_timing(h)
+}
+
 /// `NV_PDISP_FE_CORE_HEAD_STATE(i)`: base, stride, the `OPERATING_MODE` field `(hi, lo)`, and its
 /// `AWAKE` and `SLEEP` values.
 type CoreHeadState = (u64, u64, (u8, u8), u32, u32);
@@ -1631,7 +1685,18 @@ impl DisplayPlane {
         self.counters.writes.fetch_add(1, Ordering::Relaxed);
         #[allow(clippy::cast_possible_truncation)]
         let v = val as u32;
-        match self.map.classify(off) {
+        let class = self.map.classify(off);
+        if write_trace_on() {
+            // ⚠ DIAGNOSTIC (default off, bounded): one line from the vCPU — never on in production
+            static N: AtomicU32 = AtomicU32::new(0);
+            if trace_slot(&N, DISPLAY_TRACE_CAP) {
+                eprintln!(
+                    "kf3: display: WTRACE t={:.6} WRITE {off:#08x} <- {val:#x} w{width} {class:?}",
+                    kf_mem::maplog::t()
+                );
+            }
+        }
+        match class {
             DispWrite::Put(chn) => {
                 store(off, v);
                 if self.ports.post_put(chn, v) {
@@ -1973,6 +2038,22 @@ impl Device {
         }
         let trace = std::env::var("KF3_DISPLAY_TRACE").is_ok_and(|v| v == "1");
         engine.trace = trace;
+        let loadv = loadv_on();
+        let wtrace = write_trace_on();
+        let vsync_traced = AtomicU32::new(0);
+        let latch_traced = AtomicU32::new(0);
+        if wtrace {
+            // anchor the trace clock here, so no vCPU ever pays its first `/proc/uptime` read
+            let _ = kf_mem::maplog::t();
+            eprintln!(
+                "kf3: display: WRITE TRACE diagnostic enabled (guest display writes, raised head-timing interrupts, window latches; {DISPLAY_TRACE_CAP} lines per kind)"
+            );
+        }
+        if loadv {
+            eprintln!(
+                "kf3: display: EXPERIMENT KF3_DISPLAY_LOADV=1 — every frame edge also sets EVT_STAT_HEAD_TIMING bit {EVT_STAT_HEAD_TIMING_LOADV:#x} (LOADV), and the event registers are republished at every edge"
+            );
+        }
         if std::env::var("KF3_DISPLAY_METHOD_TRACE").is_ok_and(|v| v == "1") {
             engine.trace_methods(kf_disp::engine::MAX_METHOD_TRACE);
             eprintln!("kf3: display: bounded METHOD diagnostic enabled (65536 DMA writes maximum)");
@@ -2244,12 +2325,16 @@ impl Device {
                 if let Some((lb, ls)) = dp.map.loadv {
                     store(lb + h as u64 * ls, f);
                 }
-                dp.ports.raise(
-                    EventReg::HeadTiming(h),
-                    dp.map.head_last_data | dp.map.head_vblank,
-                );
-                let irq = dp.ports.rm_head_timing(h);
+                let irq = frame_edge(&dp.ports, &dp.map, h, loadv);
                 raised |= irq != 0;
+                if wtrace && irq != 0 && trace_slot(&vsync_traced, DISPLAY_TRACE_CAP) {
+                    eprintln!(
+                        "kf3: display: WTRACE t={:.6} VSYNC h{h} frame={f} evt={:#x} en={:#x} rm={irq:#x}",
+                        kf_mem::maplog::t(),
+                        dp.ports.event(EventReg::HeadTiming(h)),
+                        dp.ports.event(EventReg::HeadTimingEn(h)),
+                    );
+                }
                 counts[h].ticks += 1;
                 if irq & dp.map.head_vblank != 0 {
                     counts[h].vblirq += 1;
@@ -2570,6 +2655,12 @@ impl Device {
                         if trace {
                             eprintln!("kf3: display: TRACE window {window} latched");
                         }
+                        if wtrace && trace_slot(&latch_traced, DISPLAY_TRACE_CAP) {
+                            eprintln!(
+                                "kf3: display: WTRACE t={:.6} LATCH window {window}",
+                                kf_mem::maplog::t()
+                            );
+                        }
                     }
                     Effect::Trace(line) => eprintln!("kf3: display: TRACE {line}"),
                     Effect::Exception { chn, at, what } => {
@@ -2587,10 +2678,12 @@ impl Device {
             }
             dp.counters.updates.store(engine.updates, Ordering::Relaxed);
             dp.counters.methods.store(engine.methods, Ordering::Relaxed);
-            // 8. the display interrupt — after the registers it announces
-            if raised {
+            // 8. the display interrupt — after the registers it announces. ★ H-loadv: the event
+            // registers are also republished at every frame edge without an interrupt, so a read
+            // shows what the frame latched (the hardware's `0x611800` is live)
+            if raised || (loadv && ticked != 0) {
                 dp.publish_events(&store);
-                if dp.ports.anything_pending(dp.map.heads as usize) {
+                if raised && dp.ports.anything_pending(dp.map.heads as usize) {
                     dp.counters.irqs.fetch_add(1, Ordering::Relaxed);
                     self.latch_and_deliver(kf_rm::authored::DISP_STALL_VECTOR);
                 }
@@ -4262,6 +4355,81 @@ mod tests {
         assert_eq!(m.classify(0x0061_1C30), DispWrite::ReadOnly);
         assert_eq!(m.classify(0x0061_1EC0), DispWrite::ReadOnly);
         assert_eq!(m.classify(0x0061_2078), DispWrite::Plain);
+    }
+
+    /// ★ 2026-10-08 (H-flip, the VFIO DVI reference): the head-timing interrupt follows the frame
+    /// edges while the guest keeps LAST_DATA enabled, and only then. Replays Windows' measured order
+    /// on hardware (boot3, 113/113 enables): read `0x611800`, write-1-clear LAST_DATA, enable — no
+    /// interrupt at the enable; one at EVERY following frame edge while enabled (the ISR clears it
+    /// each time); none once the guest disabled it, although the event keeps latching.
+    #[test]
+    fn the_head_timing_interrupt_is_every_frame_edge_while_enabled_and_never_at_the_enable() {
+        let m = map();
+        let p = Ports::default();
+        let ld = m.head_last_data;
+        assert_eq!(ld, 0x2, "LAST_DATA is bit 1 (dev_disp.h v03_00)");
+        // frames before the guest enables anything: pending, but nothing reaches RM
+        for _ in 0..3 {
+            assert_eq!(frame_edge(&p, &m, 0, false), 0, "disabled: no interrupt");
+        }
+        assert_eq!(p.event(EventReg::HeadTiming(0)) & ld, ld, "still latched");
+        // Windows' enable: clear, then enable — the stale latch must not fire at the enable
+        p.guest_write(EventReg::HeadTiming(0), ld);
+        p.guest_write(EventReg::HeadTimingEn(0), 0x003f_0062);
+        assert_eq!(p.rm_head_timing(0), 0, "no early interrupt at the enable");
+        assert_eq!(p.rm_dispatch(4), 0);
+        // every frame edge while enabled raises; the ISR's W1C re-arms it for the next frame
+        for frame in 0..5 {
+            assert_eq!(
+                frame_edge(&p, &m, 0, false),
+                ld,
+                "frame {frame}: LAST_DATA reaches RM"
+            );
+            assert_eq!(p.rm_dispatch(4), 1, "head 0 is the pending head");
+            p.guest_write(EventReg::HeadTiming(0), ld);
+            assert_eq!(p.rm_head_timing(0), 0, "cleared until the next edge");
+        }
+        // the disable is honoured at once, and at every later edge
+        p.guest_write(EventReg::HeadTimingEn(0), 0x003f_0060);
+        for _ in 0..3 {
+            assert_eq!(frame_edge(&p, &m, 0, false), 0, "disabled: no interrupt");
+        }
+        // another head's edge never raises head 0
+        p.guest_write(EventReg::HeadTimingEn(1), 0);
+        assert_eq!(frame_edge(&p, &m, 1, false), 0);
+    }
+
+    /// ★ H-loadv (`KF3_DISPLAY_LOADV`): the guest reads `EVT_STAT_HEAD_TIMING` as the hardware
+    /// showed it — `0x7` at the ISR, `0x5` after its write-1-clear of `0x2` — and LOADV, which no
+    /// enable Windows writes covers, never raises an interrupt by itself.
+    #[test]
+    fn loadv_reads_as_the_hardware_read_it_and_raises_nothing_by_itself() {
+        let m = map();
+        let p = Ports::default();
+        assert_eq!(frame_edge(&p, &m, 0, true), 0, "nothing enabled yet");
+        assert_eq!(
+            p.event(EventReg::HeadTiming(0)),
+            0x7,
+            "hardware: 0x611800 = 0x7"
+        );
+        p.guest_write(EventReg::HeadTiming(0), 0x2);
+        p.guest_write(EventReg::HeadTimingEn(0), 0x003f_0062);
+        assert_eq!(
+            p.event(EventReg::HeadTiming(0)),
+            0x5,
+            "hardware: 0x5 after the clear"
+        );
+        assert_eq!(p.rm_head_timing(0), 0, "LOADV and VBLANK are not enabled");
+        assert_eq!(
+            frame_edge(&p, &m, 0, true),
+            0x2,
+            "only LAST_DATA reaches RM"
+        );
+        assert_eq!(p.event(EventReg::HeadTiming(0)), 0x7);
+        // without the experiment the register reads what kf3 published before it
+        let q = Ports::default();
+        let _ = frame_edge(&q, &m, 0, false);
+        assert_eq!(q.event(EventReg::HeadTiming(0)), 0x6);
     }
 
     fn frame(addr: usize, serial: u64) -> FrameView {
