@@ -366,6 +366,9 @@ struct PeekState {
     /// The previous batch's raw entries, re-read at the next step: a change means the guest wrote
     /// an entry AFTER ringing for it.
     prev: Vec<(u32, [u8; 8])>,
+    /// ⚠ (after run76) the last one-word semaphore release peeked — (engine form, VA, payload, GP
+    /// index) — compared with memory at the twin's release ([`last_fence_release`]).
+    fence: Option<(&'static str, u64, u32, u32)>,
 }
 
 /// Per relayed twin: at most this many GP entries are peeked.
@@ -431,6 +434,43 @@ fn scan_sw_methods(words: &[u32]) -> SwScan {
                         words.get(i + 1).copied()
                     },
                 });
+            }
+        }
+        if h.form == kf_abi::submit::MethodForm::EndPbSegment {
+            break;
+        }
+        i = i.saturating_add(1).saturating_add(h.arg_words);
+    }
+    out
+}
+
+/// ⚠ DIAGNOSTIC (2026-10-08, after run76; `KF3_RELAY_PB_PEEK=1` only): the LAST one-word semaphore
+/// RELEASE a peeked segment asks the engine for — `(engine, VA, payload)` — so the twin's release can
+/// compare the payload with what the memory holds (did the engine write its last fence?). Two
+/// incrementing forms, the ones Windows' per-process streams use `[measured, run76 at f649d2c3]`:
+/// the 3D/compute `SET_REPORT_SEMAPHORE_A..D` (`0x1b00`, 4 words; `D.OPERATION` 1:0 = RELEASE and
+/// `D.STRUCTURE_SIZE` 28 = ONE_WORD; `ogkm-580: clc797.h`), and the copy engine's
+/// `SET_SEMAPHORE_A/B` + `SET_SEMAPHORE_PAYLOAD` (`0x240`, 3 words; `clc7b5.h`). Pure; bounded by
+/// `words`; anything else is skipped.
+fn last_fence_release(words: &[u32]) -> Option<(&'static str, u64, u32)> {
+    let mut out = None;
+    let mut i = 0usize;
+    while i < words.len() {
+        let Some(h) = kf_abi::submit::method_header_decode(words[i]) else {
+            break;
+        };
+        let args = words.get(i + 1..i + 1 + h.arg_words);
+        if h.form == kf_abi::submit::MethodForm::Incrementing
+            && let Some(a) = args
+        {
+            match (h.method, a.len()) {
+                (0x1b00, 4) if a[3] & 3 == 0 && a[3] & (1 << 28) != 0 => {
+                    out = Some(("3d", (u64::from(a[0] & 0xff) << 32) | u64::from(a[1]), a[2]));
+                }
+                (0x240, 3) => {
+                    out = Some(("ce", (u64::from(a[0] & 0x1ffff) << 32) | u64::from(a[1]), a[2]));
+                }
+                _ => {}
             }
         }
         if h.form == kf_abi::submit::MethodForm::EndPbSegment {
@@ -4256,8 +4296,36 @@ impl ChanPlane {
         let Some(r) = self.relays.lock().ok().and_then(|mut m| m.remove(&token)) else {
             return;
         };
-        let Ok(g) = r.lock() else { return };
+        let Ok(mut g) = r.lock() else { return };
         let (mem, cookie) = (g.mem, g.cookie);
+        // ⚠ DIAGNOSTIC (after run76; only when the peek ran): did the engine write the last fence
+        // release the guest asked of this twin? Read 4 bytes at its VA through the mirror's rows.
+        if let Some((kind, fva, payload, gp)) = g.peek.fence {
+            let g = &mut *g;
+            let mirror = g.mirror.clone();
+            let store_len =
+                store_read_bound(crate::tspace::enabled(), mirror.fb_len, self.layout.carve());
+            let mut m = Mem {
+                mirror: &mirror,
+                ram: self.ram,
+                rm: self.rm,
+                store: self.store,
+                store_len,
+                views: &mut g.views,
+                inbox: &self.inbox,
+            };
+            let mut b = [0u8; 4];
+            let now = m.read(fva, &mut b).map(|()| u32::from_le_bytes(b));
+            eprintln!(
+                "kf3: chan token {:#x} (host {token:#x}) FENCE-AT-RELEASE (diagnostic) last {kind} release GP[{gp:#x}] va={fva:#x} payload={payload:#x} memory={now:x?} — {}",
+                g.idx,
+                match now {
+                    Ok(v) if v == payload => "the engine wrote it",
+                    Ok(_) => "NOT the payload (the engine did not write it, or a later one overwrote it)",
+                    Err(_) => "unreadable",
+                }
+            );
+        }
         // Diagnostic: the guest slot's cursors at release — a GP_PUT ahead of the relay's means the
         // guest queued work it never rang for.
         eprintln!(
@@ -4477,6 +4545,9 @@ impl ChanPlane {
                                     .map(|c| u32::from_le_bytes(*c))
                                     .collect();
                                 let scan = scan_sw_methods(&w);
+                                if let Some((k, fva, p)) = last_fence_release(&w) {
+                                    g.peek.fence = Some((k, fva, p, idx));
+                                }
                                 let body = w
                                     .iter()
                                     .take(64)
@@ -6603,6 +6674,38 @@ mod sw_scan_tests {
             ]
         );
         assert_eq!(s.per_subch[7], 1);
+    }
+
+    /// ⚠ The after-run76 fence finder: the kernel-inserted epilogue of a Windows per-process GR
+    /// segment (`[measured, run76 at f649d2c3]` token 0x15: a one-word release of the fence value,
+    /// then a four-word timestamp report) yields the ONE-WORD release; a copy-engine semaphore yields
+    /// its own; the last one in the segment wins.
+    #[test]
+    fn the_fence_finder_takes_the_last_one_word_release() {
+        use super::last_fence_release;
+        let gr = [
+            0x2004_06c0,
+            0x0000_0001,
+            0x200e_7000,
+            0x0000_000c,
+            0x1000_0004,
+            0x2004_06c0,
+            0x0000_0001,
+            0x200e_7020,
+            0x0000_0000,
+            0x0000_0004,
+        ];
+        assert_eq!(last_fence_release(&gr), Some(("3d", 0x1_200e_7000, 0xc)));
+        let ce = [0x2003_8090, 0x0000_0001, 0x200e_b000, 0x0000_0009, 0x2001_80c0, 0x0000_0008];
+        assert_eq!(last_fence_release(&ce), Some(("ce", 0x1_200e_b000, 9)));
+        // An acquire (OPERATION = 1) is not a release.
+        assert_eq!(
+            last_fence_release(&[0x2004_06c0, 1, 0x1000, 5, 0x1000_0001]),
+            None
+        );
+        // Truncated: the header promises more words than were read — nothing, never a read past.
+        assert_eq!(last_fence_release(&[0x2004_06c0, 1, 0x1000]), None);
+        assert_eq!(last_fence_release(&[]), None);
     }
 
     /// Hostile input: a count that runs past the words read never reads past them, and an

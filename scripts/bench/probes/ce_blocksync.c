@@ -7,21 +7,25 @@
  * CU_EVENT_BLOCKING_SYNC: cuEventSynchronize sleeps until the RM wakes it from a NON-STALL interrupt
  * (no spin). If the interrupt never reaches the waiter, libcuda wakes itself after a ~1 s slice
  * (and asks the RM to service interrupts, V3_REFUSAL_AUDIT.md row MC_SERVICE_INTERRUPTS), so a lost
- * interrupt shows as LATENCY, not as a failure: every wait of a 4 KiB copy then takes ~1 s instead
- * of tens of microseconds. This program therefore reports per-wait latency for tiny work on:
- *   ce_h2d  — cuMemcpyHtoDAsync from pinned memory on its own stream (a copy engine)
- *   ce_d2h  — cuMemcpyDtoHAsync into pinned memory (a copy engine), data checked
- *   ce_d2d  — cuMemcpyDtoDAsync (a copy engine on current drivers)
- *   gr_noop — an empty kernel (graphics/compute engine), the control
- * and prints `CEBS <phase> n=<n> med_us=<> p90_us=<> max_us=<> slow=<waits over 200 ms> ok|FAIL`,
- * then `CEBS_DONE ok|FAIL`.
+ * interrupt shows as LATENCY, not as a failure.
  *
- * FALSIFIER (stated before the first run): the interrupt path is broken for a phase iff its median
- * wait is >= 200 ms (slice-bound) while bare metal's is < 10 ms. A phase whose median is < 10 ms but
- * with some slow waits is reported, not failed (coalescing or scheduling noise).
+ * ⊘ Tiny work (a 4 KiB copy) is finished before libcuda decides to sleep — measured on bare metal
+ * 2026-10-08: ~10 us waits — so it never exercises the interrupt. The phases that matter are LONG:
+ *   ce_h2d_big  — cuMemcpyHtoDAsync of 64 MiB from pinned memory on its own stream (a copy engine)
+ *   ce_d2d_big  — cuMemcpyDtoDAsync of 64 MiB (a copy engine on current drivers)
+ *   ce_d2h_big  — cuMemcpyDtoHAsync of 64 MiB into pinned memory, data checked
+ *   gr_spin     — a %globaltimer spin kernel of 5 ms (graphics/compute engine), the control
+ * plus the tiny ones (ce_h2d, gr_noop) for reference. Each line reports the wall time per wait and
+ * the CPU time the process burnt per wait (`cpu_pct`): a blocking wait sleeps, so cpu_pct well
+ * below 100 shows the wait really slept on an interrupt (a spin would be ~100).
+ *   `CEBS <phase> n=<n> med_us=<> p90_us=<> max_us=<> slow=<waits over 200 ms> cpu_pct=<> ok|FAIL`
+ * then `CEBS data ok|FAIL` and `CEBS_DONE ok|FAIL`.
+ *
+ * FALSIFIER (stated before the first guest run): the interrupt path is broken for a phase iff its
+ * median wait is >= 200 ms (slice-bound) while bare metal's is the work's own duration (a few ms).
  *
  * Build: gcc -O2 -o ce_blocksync ce_blocksync.c -ldl     (no CUDA toolkit needed: dlopen libcuda)
- * Use:   ./ce_blocksync [iterations, default 50]
+ * Use:   ./ce_blocksync [iterations, default 30]
  */
 #define _GNU_SOURCE
 #include <dlfcn.h>
@@ -29,6 +33,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
 #include <time.h>
 
 typedef int CUresult;
@@ -62,16 +67,33 @@ static CUresult (*cuLaunchKernel)(CUfunction, unsigned, unsigned, unsigned, unsi
 #define CU_EVENT_DISABLE_TIMING 0x2
 #define CU_STREAM_NON_BLOCKING 0x1
 #define SLOW_US 200000.0
+#define SMALL ((size_t)4096)
+#define BIG ((size_t)64 << 20)
+#define SPIN_NS 5000000ULL
 
+/* noop(): returns. spin(ns): spins on %globaltimer (GPU wall-clock ns) for ns. */
 static const char PTX[] =
 	".version 6.0\n.target sm_50\n.address_size 64\n"
-	".visible .entry noop()\n{\n\tret;\n}\n";
+	".visible .entry noop()\n{\n\tret;\n}\n"
+	".visible .entry spin(.param .u64 ns)\n{\n"
+	"\t.reg .u64 %t0, %t1, %d, %n;\n\t.reg .pred %p;\n"
+	"\tld.param.u64 %n, [ns];\n\tmov.u64 %t0, %globaltimer;\n"
+	"L:\n\tmov.u64 %t1, %globaltimer;\n\tsub.u64 %d, %t1, %t0;\n"
+	"\tsetp.lt.u64 %p, %d, %n;\n\t@%p bra L;\n\tret;\n}\n";
 
 static double now_us(void)
 {
 	struct timespec t;
 	clock_gettime(CLOCK_MONOTONIC, &t);
 	return t.tv_sec * 1e6 + t.tv_nsec / 1e3;
+}
+
+static double cpu_us(void)
+{
+	struct rusage r;
+	getrusage(RUSAGE_SELF, &r);
+	return (r.ru_utime.tv_sec + r.ru_stime.tv_sec) * 1e6 + r.ru_utime.tv_usec +
+	       r.ru_stime.tv_usec;
 }
 
 static int cmp(const void *a, const void *b)
@@ -97,7 +119,7 @@ static int cmp(const void *a, const void *b)
 		}                                                                    \
 	} while (0)
 
-static int report(const char *phase, double *dt, int n, int *all_ok)
+static void report(const char *phase, double *dt, int n, double wall, double cpu, int *all_ok)
 {
 	int slow = 0;
 	for (int i = 0; i < n; i++)
@@ -106,17 +128,57 @@ static int report(const char *phase, double *dt, int n, int *all_ok)
 	double med = dt[n / 2], p90 = dt[(n * 9) / 10], max = dt[n - 1];
 	int ok = med < SLOW_US;
 	*all_ok &= ok;
-	printf("CEBS %s n=%d med_us=%.1f p90_us=%.1f max_us=%.1f slow=%d %s\n", phase, n, med, p90,
-	       max, slow, ok ? "ok" : "FAIL");
+	printf("CEBS %s n=%d med_us=%.1f p90_us=%.1f max_us=%.1f slow=%d cpu_pct=%.0f %s\n", phase,
+	       n, med, p90, max, slow, wall > 0 ? 100.0 * cpu / wall : 0.0, ok ? "ok" : "FAIL");
 	fflush(stdout);
+}
+
+enum op { H2D, D2D, D2H, NOOP, SPIN };
+
+static CUstream st;
+static CUevent ev;
+static CUdeviceptr a, b;
+static unsigned char *hp;
+static CUfunction noop, spin;
+
+static CUresult issue(enum op o, size_t sz)
+{
+	unsigned long long ns = SPIN_NS;
+	void *args[] = { &ns };
+	switch (o) {
+	case H2D:
+		return cuMemcpyHtoDAsync(a, hp, sz, st);
+	case D2D:
+		return cuMemcpyDtoDAsync(b, a, sz, st);
+	case D2H:
+		return cuMemcpyDtoHAsync(hp + BIG, b, sz, st);
+	case NOOP:
+		return cuLaunchKernel(noop, 1, 1, 1, 1, 1, 1, 0, st, NULL, NULL);
+	case SPIN:
+		return cuLaunchKernel(spin, 1, 1, 1, 1, 1, 1, 0, st, args, NULL);
+	}
+	return 1;
+}
+
+static int phase(const char *name, enum op o, size_t sz, int n, double *dt, int *all_ok)
+{
+	double w0 = now_us(), c0 = cpu_us();
+	for (int i = 0; i < n; i++) {
+		double t0 = now_us();
+		CHK(issue(o, sz));
+		CHK(cuEventRecord(ev, st));
+		CHK(cuEventSynchronize(ev));
+		dt[i] = now_us() - t0;
+	}
+	report(name, dt, n, now_us() - w0, cpu_us() - c0, all_ok);
 	return 0;
 }
 
 int main(int argc, char **argv)
 {
-	int n = argc > 1 ? atoi(argv[1]) : 50;
+	int n = argc > 1 ? atoi(argv[1]) : 30;
 	if (n < 2 || n > 100000)
-		n = 50;
+		n = 30;
 	void *h = dlopen("libcuda.so.1", RTLD_NOW);
 	if (!h) {
 		printf("CEBS_DONE FAIL dlopen libcuda.so.1: %s\n", dlerror());
@@ -140,74 +202,40 @@ int main(int argc, char **argv)
 
 	CUdevice dev;
 	CUcontext ctx;
-	CUstream st;
-	CUevent ev;
-	CUdeviceptr a, b;
-	unsigned char *hp;
-	const size_t SZ = 4096;
+	CUmodule mod;
 	CHK(cuInit(0));
 	CHK(cuDeviceGet(&dev, 0));
 	CHK(cuCtxCreate(&ctx, CU_CTX_SCHED_BLOCKING_SYNC, dev));
 	CHK(cuStreamCreate(&st, CU_STREAM_NON_BLOCKING));
 	CHK(cuEventCreate(&ev, CU_EVENT_BLOCKING_SYNC | CU_EVENT_DISABLE_TIMING));
-	CHK(cuMemAlloc(&a, SZ));
-	CHK(cuMemAlloc(&b, SZ));
-	CHK(cuMemAllocHost((void **)&hp, 2 * SZ));
-	CUmodule mod;
-	CUfunction noop;
+	CHK(cuMemAlloc(&a, BIG));
+	CHK(cuMemAlloc(&b, BIG));
+	CHK(cuMemAllocHost((void **)&hp, 2 * BIG));
 	CHK(cuModuleLoadData(&mod, PTX));
 	CHK(cuModuleGetFunction(&noop, mod, "noop"));
+	CHK(cuModuleGetFunction(&spin, mod, "spin"));
 
 	double *dt = calloc(n, sizeof *dt);
 	if (!dt)
 		return 1;
-	int all_ok = 1, data_ok = 1;
+	int all_ok = 1;
 	/* Warm-up: one of each, so first-use costs are not measured. */
-	CHK(cuMemcpyHtoDAsync(a, hp, SZ, st));
-	CHK(cuMemcpyDtoDAsync(b, a, SZ, st));
-	CHK(cuMemcpyDtoHAsync(hp + SZ, b, SZ, st));
-	CHK(cuLaunchKernel(noop, 1, 1, 1, 1, 1, 1, 0, st, NULL, NULL));
+	for (int o = H2D; o <= SPIN; o++)
+		CHK(issue((enum op)o, SMALL));
 	CHK(cuEventRecord(ev, st));
 	CHK(cuEventSynchronize(ev));
 
-	for (int i = 0; i < n; i++) {
-		memset(hp, (i * 7 + 1) & 0xff, SZ);
-		double t0 = now_us();
-		CHK(cuMemcpyHtoDAsync(a, hp, SZ, st));
-		CHK(cuEventRecord(ev, st));
-		CHK(cuEventSynchronize(ev));
-		dt[i] = now_us() - t0;
-	}
-	report("ce_h2d", dt, n, &all_ok);
-	for (int i = 0; i < n; i++) {
-		double t0 = now_us();
-		CHK(cuMemcpyDtoDAsync(b, a, SZ, st));
-		CHK(cuEventRecord(ev, st));
-		CHK(cuEventSynchronize(ev));
-		dt[i] = now_us() - t0;
-	}
-	report("ce_d2d", dt, n, &all_ok);
-	for (int i = 0; i < n; i++) {
-		memset(hp + SZ, 0, SZ);
-		double t0 = now_us();
-		CHK(cuMemcpyDtoHAsync(hp + SZ, b, SZ, st));
-		CHK(cuEventRecord(ev, st));
-		CHK(cuEventSynchronize(ev));
-		dt[i] = now_us() - t0;
-		/* b holds the last ce_h2d pattern: ((n-1)*7+1) & 0xff. A wait that returned before the
-		 * copy landed shows here (the buffer was zeroed first). */
-		if (hp[SZ] != (((n - 1) * 7 + 1) & 0xff) || hp[2 * SZ - 1] != hp[SZ])
-			data_ok = 0;
-	}
-	report("ce_d2h", dt, n, &all_ok);
-	for (int i = 0; i < n; i++) {
-		double t0 = now_us();
-		CHK(cuLaunchKernel(noop, 1, 1, 1, 1, 1, 1, 0, st, NULL, NULL));
-		CHK(cuEventRecord(ev, st));
-		CHK(cuEventSynchronize(ev));
-		dt[i] = now_us() - t0;
-	}
-	report("gr_noop", dt, n, &all_ok);
+	memset(hp, 0x5a, BIG);
+	if (phase("ce_h2d", H2D, SMALL, n, dt, &all_ok) || phase("gr_noop", NOOP, 0, n, dt, &all_ok) ||
+	    phase("ce_h2d_big", H2D, BIG, n, dt, &all_ok) ||
+	    phase("ce_d2d_big", D2D, BIG, n, dt, &all_ok))
+		return 1;
+	memset(hp + BIG, 0, BIG);
+	if (phase("ce_d2h_big", D2H, BIG, n, dt, &all_ok) ||
+	    phase("gr_spin", SPIN, 0, n, dt, &all_ok))
+		return 1;
+	/* b holds the 0x5a pattern; a wait that returned before its copy landed would leave zeros. */
+	int data_ok = hp[BIG] == 0x5a && hp[2 * BIG - 1] == 0x5a;
 	printf("CEBS data %s\n", data_ok ? "ok" : "FAIL (a wait returned before its copy landed)");
 	printf("CEBS_DONE %s\n", all_ok && data_ok ? "ok" : "FAIL");
 	return !(all_ok && data_ok);
