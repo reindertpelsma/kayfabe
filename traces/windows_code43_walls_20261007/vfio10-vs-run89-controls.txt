@@ -1,0 +1,63 @@
+# RM controls in the real-hardware VFIO reference (boundary-vfio-10, 4087 request RPCs) that the guest NEVER issued in kayfabe run89 (a trace log that dedupes refused repeats),
+# in VFIO order. cols: control  name(OGKM if public)  first-VFIO-control-index  VFIO-count
+# NOTE: kayfabe run89 stops at the stall; these are controls Windows issued on real hardware in the later phases.
+0x20802a06   NV2080_CTRL_CMD_CE_UPDATE_CLASS_DB                      #38    x2
+0x20802a0d   NV2080_CTRL_CMD_CE_UPDATE_PCE_LCE_MAPPINGS_V2           #39    x1
+0x2080a0a7   <no public name>                                        #72    x4
+0x2080a028   <no public name>                                        #73    x12
+0x2080a026   <no public name>                                        #75    x2
+0x731365     NV0073_CTRL_CMD_DP_SET_MANUAL_DISPLAYPORT               #191   x3
+0x73117a     <no public name>                                        #194   x6
+0x20800a39   NV2080_CTRL_CMD_INTERNAL_GR_SET_FECS_TRACE_RD_OFFSET    #2200  x1
+0x20800a37   NV2080_CTRL_CMD_INTERNAL_GR_SET_FECS_TRACE_HW_ENABLE    #2201  x1
+0x20801221   NV2080_CTRL_CMD_GR_GFX_POOL_ADD_SLOTS                   #2238  x1
+0x2080015f   NV2080_CTRL_CMD_GPU_QUERY_SCRUBBER_STATUS               #2255  x1
+0x731152     NV0073_CTRL_CMD_DFP_ASSIGN_SOR                          #2327  x8
+0x731341     NV0073_CTRL_CMD_DP_AUXCH_CTRL                           #2333  x57
+0x731602     NV0073_CTRL_CMD_PSR_GET_SR_PANEL_INFO                   #2347  x1
+0x731360     NV0073_CTRL_CMD_DP_GET_LINK_CONFIG                      #2369  x3
+0x731144     NV0073_CTRL_CMD_DFP_SET_ELD_AUDIO_CAPS                  #2445  x30
+0x20808530   <no public name>                                        #2596  x1
+0x731343     NV0073_CTRL_CMD_DP_CTRL                                 #2649  x2
+0x731362     NV0073_CTRL_CMD_DP_CONFIG_STREAM                        #2650  x1
+0x731378     NV0073_CTRL_CMD_DP_SET_STEREO_MSA_PROPERTIES            #2651  x2
+0x731381     NV0073_CTRL_CMD_DP_SET_MSA_PROPERTIES_V2                #2652  x1
+0x73114e     NV0073_CTRL_CMD_DFP_UPDATE_DYNAMIC_DFP_CACHE            #2658  x1
+0x731368     <no public name>                                        #2668  x1
+0x731150     NV0073_CTRL_CMD_DFP_SET_AUDIO_ENABLE                    #2669  x1
+0x731359     NV0073_CTRL_CMD_DP_SET_AUDIO_MUTESTREAM                 #2670  x2
+0x2080b202   <no public name>                                        #2675  x11
+0x20809029   <no public name>                                        #2739  x21
+0x2080902a   <no public name>                                        #2740  x14
+0x20809019   <no public name>                                        #2743  x3
+0x2080901b   <no public name>                                        #2744  x1
+0x20809037   <no public name>                                        #2747  x75
+0x2080b216   <no public name>                                        #2748  x1
+0x2080a0c4   <no public name>                                        #2749  x3
+0x2080a0c5   <no public name>                                        #2750  x1
+0x2080a0d1   <no public name>                                        #2751  x74
+0x20808539   <no public name>                                        #2752  x75
+0x20808537   <no public name>                                        #2754  x1
+0x2080a080   <no public name>                                        #2755  x2
+0x2080a095   <no public name>                                        #2756  x1
+0x2080a637   <no public name>                                        #2757  x3
+0x2080a081   <no public name>                                        #2764  x1
+0x2080b209   <no public name>                                        #2766  x1
+0x2080b210   <no public name>                                        #2767  x1
+0x2080902b   <no public name>                                        #2770  x8
+0x2080902c   <no public name>                                        #2779  x7
+0x2080d02d   <no public name>                                        #2801  x2
+0x2080a612   <no public name>                                        #2806  x3
+0x2080a0cc   <no public name>                                        #2812  x1
+0x2080a0c8   <no public name>                                        #2813  x2
+0x2080852b   <no public name>                                        #2819  x1
+0x2080852c   <no public name>                                        #2821  x1
+0x2080a0a8   <no public name>                                        #2825  x74
+0x20809063   <no public name>                                        #2845  x1
+0x2080a079   <no public name>                                        #2964  x1
+0x2080e0af   <no public name>                                        #2965  x1
+0x2080880f   <no public name>                                        #2992  x1
+
+# kayfabe run89 only (not in VFIO): 0x20801222(NV2080_CTRL_CMD_GR_GFX_POOL_REMOVE_SLOTS), 0x2080852f(?), 0x2080853b(?), 0x2080a619(?), 0x730245(NV0073_CTRL_CMD_SPECIFIC_GET_EDID_V2), 0x7302a2(NV0073_CTRL_CMD_SPECIFIC_GET_HDMI_GPU_CAPS), 0x7302a6(NV0073_CTRL_CMD_SPECIFIC_GET_HDMI_SCDC_DATA)
+
+# GSP-initiated posts in VFIO (vfio10-gsp-events.txt): 20x RUNLIST_PREEMPT_COMPLETE(139) [27x FIFO_DISABLE_CHANNELS 0x2080110b near the end], 2x PSTATE_CHANGE(33) at rpc 3560/3564, 1x HDCP_STATUS_CHANGE(34) at rpc 4071 (the last post), 1x AUDIO_HDCP_REQUEST(45) at rpc 3119.
