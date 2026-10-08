@@ -124,8 +124,10 @@ pub static ALLOC_PARAMS: &[(ClassName, &StructRuns)] = &[
         &m::NV_MEMORY_VIRTUAL_ALLOCATION_PARAMS,
     ),
     (
+        // Review 2026-10-08, finding 2: RM reads NV_MEMORY_ALLOCATION_PARAMS for this class
+        // (ogkm-595.84 virtual_mem.c:299,354), the struct that differs at 535.309.01.
         ClassName::Exact("NV50_MEMORY_VIRTUAL"),
-        &m::NV_MEMORY_VIRTUAL_ALLOCATION_PARAMS,
+        &m::NV_MEMORY_ALLOCATION_PARAMS,
     ),
     (
         ClassName::Exact("NV01_MEMORY_LOCAL_USER"),

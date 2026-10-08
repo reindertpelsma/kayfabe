@@ -2143,6 +2143,9 @@ impl Device {
             }
             // 2. every DMA channel whose PUT moved
             for chn in 0..kf_disp::ports::NUM_CHANNELS as u32 {
+                if queue.len() >= QUEUE_CAP {
+                    break; // backpressure: PUT stays behind in the guest's ring (see QUEUE_CAP)
+                }
                 let Some((pb, decoded, life)) = engine.pushbuffer(chn) else {
                     continue;
                 };
@@ -2167,6 +2170,9 @@ impl Device {
             }
             // 3. cursors: every posted Update
             for h in 0..dp.map.heads {
+                if queue.len() >= QUEUE_CAP {
+                    break; // backpressure, as above: the posts stay pending
+                }
                 let c = &dp.cursor[h as usize];
                 let n = c.updates.load(Ordering::Acquire);
                 if n == cursor_seen[h as usize] {
@@ -2196,6 +2202,9 @@ impl Device {
                 let h = t.head as usize;
                 if h >= dp.map.heads as usize {
                     continue;
+                }
+                if queue.len() >= QUEUE_CAP {
+                    continue; // backpressure, as above: no new vblank effects while the queue is full
                 }
                 dp.counters.vblanks.fetch_add(1, Ordering::Relaxed);
                 let s = engine.vblank(t.head, &mut |a| io.acquired(a));
@@ -2748,6 +2757,22 @@ struct Queued {
 /// to be the time after which the display stopped for good).
 const STUCK_COPY: Duration = Duration::from_secs(2);
 
+/// ★ Review 2026-10-08 (b5c9f717..ac5d086f, finding 1): a copy whose stream says it FINISHED
+/// (`Ok(true)`) but whose completion signal has not arrived this long past [`STUCK_COPY`] is a lost
+/// signal on kayfabe's side, not a copy waiting behind host RM: the late-copy wait is bounded for
+/// that case. (A copy still queued behind a busy host RM, `Ok(false)`, is waited for as before:
+/// registering a big guest-RAM object takes seconds, and the queue below is bounded by
+/// [`QUEUE_CAP`] instead.)
+const SIGNAL_GRACE: Duration = Duration::from_secs(10);
+
+/// ★ Review 2026-10-08, finding 1: the most completions (effects, GETs) held behind a copy that has
+/// not completed. Past it the worker stops reading the guest's display pushbuffers, cursor posts
+/// and vblank effects until the queue drains: the guest's PUT waits in the guest's own ring, so
+/// nothing is dropped, nothing is forged as complete, no vCPU waits, and a lost completion cannot
+/// make the VMM's memory grow with the guest's writes. Far above any normal depth (a few entries
+/// per frame).
+const QUEUE_CAP: usize = 4096;
+
 /// ★ §8.18: what a copy still in flight after `elapsed` is, given its stream's state (`None`: no
 /// display GPU; `Ok(false)` queued, `Ok(true)` done with its signal on the way, `Err` failed).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2765,6 +2790,10 @@ fn stuck_verdict(elapsed: Duration, state: Option<Result<bool, String>>) -> Stuc
         return Stuck::Running;
     }
     match state {
+        Some(Ok(true)) if elapsed > STUCK_COPY + SIGNAL_GRACE => Stuck::Lost(format!(
+            "the stream finished the copy but its completion signal did not arrive within \
+             {SIGNAL_GRACE:?} of the {STUCK_COPY:?} mark"
+        )),
         Some(Ok(_)) => Stuck::Waiting,
         Some(Err(e)) => Stuck::Lost(format!("the display stream failed: {e}")),
         None => Stuck::Lost("no display GPU context to ask".into()),
@@ -3944,6 +3973,17 @@ mod tests {
                 "{t} ms, done: its signal is on the way"
             );
         }
+        // review finding 1: a FINISHED copy whose signal never comes is bounded, a queued one is not
+        let late = STUCK_COPY + SIGNAL_GRACE + ms(1);
+        assert!(matches!(
+            stuck_verdict(late, Some(Ok(true))),
+            Stuck::Lost(w) if w.contains("completion signal")
+        ));
+        assert_eq!(
+            stuck_verdict(STUCK_COPY + SIGNAL_GRACE, Some(Ok(true))),
+            Stuck::Waiting
+        );
+        assert_eq!(stuck_verdict(ms(600_000), Some(Ok(false))), Stuck::Waiting);
         let old_rule = |e: Duration| e > STUCK_COPY;
         assert!(
             old_rule(ms(2_100))
