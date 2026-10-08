@@ -341,7 +341,94 @@ struct Relay {
     mirror: Mirror,
     views: StoreViews,
     gpfifo_va: u64,
-    peeked: u32,
+    peek: PeekState,
+}
+
+/// ⚠ DIAGNOSTIC only (`KF3_RELAY_PB_PEEK=1`): the peek's cursor and bounds for one relayed twin.
+#[derive(Default)]
+struct PeekState {
+    /// The next GP index to peek.
+    next: u32,
+    /// GP entries peeked so far (bounded by [`PEEK_ENTRY_BUDGET`]).
+    entries: u32,
+    /// Software-subchannel methods logged so far (bounded by [`PEEK_SW_BUDGET`]).
+    sw_logged: u32,
+    /// The previous batch's raw entries, re-read at the next step: a change means the guest wrote
+    /// an entry AFTER ringing for it.
+    prev: Vec<(u32, [u8; 8])>,
+}
+
+/// Per relayed twin: at most this many GP entries are peeked.
+const PEEK_ENTRY_BUDGET: u32 = 512;
+/// Per relayed twin: at most this many software-subchannel methods are logged.
+const PEEK_SW_BUDGET: u32 = 64;
+/// Per segment: at most this many words are read (and scanned); at most 64 are printed.
+const PEEK_SEGMENT_WORDS: usize = 512;
+
+/// ⚠ DIAGNOSTIC (2026-10-08, run73): one method a push-buffer segment addresses to a SOFTWARE
+/// subchannel. `[NVIDIA, open-gpu-doc ga100 dev_ram.ref "Subchannels 5-7 are for software methods"
+/// and dev_pbdma.ref NV_PPBDMA_INTR_0_DEVICE]`: any method on subchannels 5-7, SetObject included,
+/// is kicked back to software through the PBDMA's DEVICE interrupt; Host-only methods (the
+/// `NV_UDMA` range below `0x100`, SetObject excepted) ignore the subchannel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SwMethod {
+    /// Index of the header word in the segment.
+    word: usize,
+    subch: u32,
+    /// Byte method address.
+    method: u32,
+    /// The first datum (the header's own for an immediate), if it was read.
+    data: Option<u32>,
+}
+
+/// What [`scan_sw_methods`] found in one segment.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct SwScan {
+    hits: Vec<SwMethod>,
+    /// Method headers seen, per subchannel.
+    per_subch: [u32; 8],
+    /// A header word with no defined format stopped the scan here (`method_header_decode` = None).
+    undecodable_at: Option<usize>,
+}
+
+/// Walk a segment's words header by header (bounded by `words`) and collect every method on a
+/// software subchannel. Pure; never follows anything outside `words`.
+fn scan_sw_methods(words: &[u32]) -> SwScan {
+    let mut out = SwScan::default();
+    let mut i = 0usize;
+    while i < words.len() {
+        let Some(h) = kf_abi::submit::method_header_decode(words[i]) else {
+            out.undecodable_at = Some(i);
+            break;
+        };
+        let counted = !matches!(
+            h.form,
+            kf_abi::submit::MethodForm::EndPbSegment | kf_abi::submit::MethodForm::SubDeviceMask
+        );
+        if counted && (h.arg_words > 0 || h.form == kf_abi::submit::MethodForm::Immediate) {
+            if let Some(n) = out.per_subch.get_mut(h.subchannel as usize) {
+                *n += 1;
+            }
+            let host_only = h.method != kf_abi::submit::SET_OBJECT && h.method < 0x100;
+            if h.subchannel >= 5 && !host_only {
+                out.hits.push(SwMethod {
+                    word: i,
+                    subch: h.subchannel,
+                    method: h.method,
+                    data: if h.form == kf_abi::submit::MethodForm::Immediate {
+                        Some(h.immd)
+                    } else {
+                        words.get(i + 1).copied()
+                    },
+                });
+            }
+        }
+        if h.form == kf_abi::submit::MethodForm::EndPbSegment {
+            break;
+        }
+        i = i.saturating_add(1).saturating_add(h.arg_words);
+    }
+    out
 }
 
 /// The I/O of one relay step ([`kf_chan::userd_relay::step`]).
@@ -4139,8 +4226,10 @@ impl ChanPlane {
     }
 
     /// ⚠⚠ DIAGNOSTIC (2026-10-08, `KF3_RELAY_PB_PEEK=1`, default off — the one place a relayed
-    /// twin's guest bytes are READ, never executed or forwarded by kayfabe): log the first 12 GP entries
-    /// a relayed twin was rung for, with up to 48 words of each segment, so a host RC of that twin
+    /// twin's guest bytes are READ, never executed or forwarded by kayfabe): log the GP entries a relayed
+    /// twin was rung for (v2, run73: EVERY entry of each batch up to [`PEEK_ENTRY_BUDGET`], runs of zero
+    /// entries coalesced, each segment scanned for software-subchannel methods ([`scan_sw_methods`]),
+    /// and the previous batch re-read for late writes), so a host RC of that twin
     /// (`[measured, run71 at 2959ed5f]` Xid 32, PBDMA `DEVICE` interrupt) can be traced to a method, and
     /// so the owner's physical-operand question has a sample from a per-process channel. Bounded per
     /// twin; reads go through the mirror's own rows (an unmapped VA is reported, never followed).
@@ -4162,43 +4251,107 @@ impl ChanPlane {
             views: &mut g.views,
             inbox: &self.inbox,
         };
-        // GP entries are peeked from index 0 up to the first 12 the guest rang for (the twin's first
-        // submissions are what an early RC follows).
-        let mut idx = g.peeked % entries;
-        while g.peeked < 12 && idx != new_put {
+        let tok = g.idx;
+        // ★ run73 (v2): first re-read the previous batch — an entry that changed was written by the
+        // guest AFTER it rang for it (then the engine may have fetched the old bytes).
+        for (i, old) in std::mem::take(&mut g.peek.prev) {
+            let mut e = [0u8; 8];
+            let gpva = g.gpfifo_va + u64::from(i) * 8;
+            if mem.read(gpva, &mut e).is_ok() && e != old {
+                eprintln!(
+                    "kf3: chan token {tok:#x} RELAY-PEEK (diagnostic) GP[{i:#x}] CHANGED after its doorbell: was {:016x} now {:016x}",
+                    u64::from_le_bytes(old),
+                    u64::from_le_bytes(e)
+                );
+            }
+        }
+        // Every entry in [next, new_put), bounded per twin; zero entries are counted, not listed.
+        let mut idx = g.peek.next % entries;
+        let mut zeros: Option<(u32, u32)> = None;
+        let flush_zeros = |z: &mut Option<(u32, u32)>| {
+            if let Some((a, n)) = z.take() {
+                eprintln!(
+                    "kf3: chan token {tok:#x} RELAY-PEEK (diagnostic) GP[{a:#x}..+{n:#x}] all-zero entries (NOP control entries)"
+                );
+            }
+        };
+        while g.peek.entries < PEEK_ENTRY_BUDGET && idx != new_put % entries {
             let mut e = [0u8; 8];
             let gpva = g.gpfifo_va + u64::from(idx) * 8;
-            let line = match mem.read(gpva, &mut e) {
-                Err(why) => format!("GP[{idx:#x}] @{gpva:#x}: unreadable ({why})"),
+            g.peek.entries += 1;
+            match mem.read(gpva, &mut e) {
+                Err(why) => {
+                    flush_zeros(&mut zeros);
+                    eprintln!(
+                        "kf3: chan token {tok:#x} RELAY-PEEK (diagnostic) GP[{idx:#x}] @{gpva:#x}: unreadable ({why})"
+                    );
+                }
+                Ok(()) if e == [0u8; 8] => {
+                    g.peek.prev.push((idx, e));
+                    zeros = match zeros {
+                        Some((a, n)) => Some((a, n + 1)),
+                        None => Some((idx, 1)),
+                    };
+                }
                 Ok(()) => {
+                    flush_zeros(&mut zeros);
+                    g.peek.prev.push((idx, e));
                     let lo = u32::from_le_bytes([e[0], e[1], e[2], e[3]]);
                     let hi = u32::from_le_bytes([e[4], e[5], e[6], e[7]]);
                     let va = u64::from(lo & !3) | (u64::from(hi & 0xff) << 32);
                     let words = (hi >> 10) & 0x1f_ffff;
-                    let n = words.min(48) as usize;
-                    let mut buf = vec![0u8; n * 4];
-                    let body = match mem.read(va, &mut buf) {
-                        Ok(()) => buf
-                            .chunks_exact(4)
-                            .map(|c| {
-                                format!("{:08x}", u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
-                            })
-                            .collect::<Vec<_>>()
-                            .join(" "),
-                        Err(why) => format!("unreadable ({why})"),
-                    };
-                    format!(
-                        "GP[{idx:#x}] lo={lo:#010x} hi={hi:#010x} va={va:#x} words={words}: {body}"
-                    )
+                    if words == 0 {
+                        eprintln!(
+                            "kf3: chan token {tok:#x} RELAY-PEEK (diagnostic) GP[{idx:#x}] lo={lo:#010x} hi={hi:#010x} CONTROL entry opcode={:#x} sync={}",
+                            lo & 0xff,
+                            hi >> 31
+                        );
+                    } else {
+                        let n = (words as usize).min(PEEK_SEGMENT_WORDS);
+                        let mut buf = vec![0u8; n * 4];
+                        match mem.read(va, &mut buf) {
+                            Ok(()) => {
+                                let w: Vec<u32> = buf
+                                    .chunks_exact(4)
+                                    .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                                    .collect();
+                                let scan = scan_sw_methods(&w);
+                                let body = w
+                                    .iter()
+                                    .take(64)
+                                    .map(|x| format!("{x:08x}"))
+                                    .collect::<Vec<_>>()
+                                    .join(" ");
+                                eprintln!(
+                                    "kf3: chan token {tok:#x} RELAY-PEEK (diagnostic) GP[{idx:#x}] lo={lo:#010x} hi={hi:#010x} va={va:#x} words={words} level={} sync={} subch_headers={:?} sw_methods={} undecodable_at={:?}: {body}",
+                                    (hi >> 9) & 1,
+                                    hi >> 31,
+                                    scan.per_subch,
+                                    scan.hits.len(),
+                                    scan.undecodable_at
+                                );
+                                for h in scan.hits {
+                                    if g.peek.sw_logged >= PEEK_SW_BUDGET {
+                                        break;
+                                    }
+                                    g.peek.sw_logged += 1;
+                                    eprintln!(
+                                        "kf3: chan token {tok:#x} RELAY-PEEK (diagnostic) SW-SUBCH METHOD GP[{idx:#x}] word {} subch {} method {:#x} data {:x?} — a software method (PBDMA DEVICE on the twin)",
+                                        h.word, h.subch, h.method, h.data
+                                    );
+                                }
+                            }
+                            Err(why) => eprintln!(
+                                "kf3: chan token {tok:#x} RELAY-PEEK (diagnostic) GP[{idx:#x}] lo={lo:#010x} hi={hi:#010x} va={va:#x} words={words}: segment unreadable ({why})"
+                            ),
+                        }
+                    }
                 }
-            };
-            eprintln!(
-                "kf3: chan token {:#x} RELAY-PEEK (diagnostic) {line}",
-                g.idx
-            );
-            g.peeked += 1;
+            }
             idx = (idx + 1) % entries;
         }
+        flush_zeros(&mut zeros);
+        g.peek.next = idx;
     }
 
     fn slot(&self, ht: u32) -> Option<Arc<Mutex<Slot>>> {
@@ -4571,7 +4724,7 @@ impl ChanPlane {
                                     mirror: relay_mirror.clone(),
                                     views: StoreViews::new(),
                                     gpfifo_va: a.gpfifo_va,
-                                    peeked: 0,
+                                    peek: PeekState::default(),
                                 })));
                             }
                             true
@@ -5771,7 +5924,7 @@ mod dispsw_tests {
             space: kf_host::VaSpace {
                 space: 0,
                 range: 0,
-                guest: [kf_host::channel::GuestVaRange::default(); 2],
+                guest: [kf_host::channel::GuestVaRange::default(); 3],
             },
             rows: crate::mem::PlacedRows::default(),
             falcon_ctx: None,
@@ -6207,5 +6360,97 @@ mod rows_tests {
         );
         assert_eq!(resolve_rows(&rows, 0x4800, 0x1000), Err(0x5000));
         assert_eq!(resolve_rows(&rows, 0x800, 0x10), Err(0x800));
+    }
+}
+
+#[cfg(test)]
+mod sw_scan_tests {
+    use super::{SwMethod, scan_sw_methods};
+
+    /// ★ run73 diagnostic: the segments peeked in run72 (`[measured, run72 at 8de8ef26]`) carry no
+    /// software-subchannel method — the 3D report-semaphore pair on subchannel 0 and the CE
+    /// semaphore + LAUNCH_DMA on subchannel 4 are engine methods.
+    #[test]
+    fn run72_first_segments_have_no_software_method() {
+        let gr = [
+            0x2004_06c0,
+            1,
+            0x2024_4000,
+            1,
+            0x1000_0004,
+            0x2004_06c0,
+            1,
+            0x2024_4010,
+            1,
+            4,
+        ];
+        let s = scan_sw_methods(&gr);
+        assert!(s.hits.is_empty());
+        assert_eq!(s.per_subch[0], 2);
+        assert_eq!(s.undecodable_at, None);
+        let ce = [
+            0x2003_8090,
+            1,
+            0x2035_3000,
+            1,
+            0x2001_80c0,
+            8,
+            0x2003_8090,
+            1,
+            0x2035_3010,
+            1,
+            0x2001_80c0,
+            0x10,
+        ];
+        let s = scan_sw_methods(&ce);
+        assert!(s.hits.is_empty());
+        assert_eq!(s.per_subch[4], 4);
+    }
+
+    /// A method on subchannel 5 (the deferred-API trigger shape Windows' kernel channels use,
+    /// `[measured, run72]` "subch 5 value 0x1 method 0x200") and a SetObject on subchannel 6 are
+    /// software methods; a Host-only method on subchannel 7 (NOP, `0x8`) is not.
+    #[test]
+    fn software_subchannel_methods_are_found_and_host_methods_are_not() {
+        // INC subch 5 method 0x200 count 1, data 0x40000002; IMMD subch 6 SET_OBJECT data 0x123;
+        // INC subch 7 method 0x8 (NOP, Host-only) count 1.
+        let words = [
+            0x2001_a080,
+            0x4000_0002,
+            0x8000_0000 | (0x123 << 16) | (6 << 13),
+            0x2001_e002,
+            0,
+        ];
+        let s = scan_sw_methods(&words);
+        assert_eq!(
+            s.hits,
+            vec![
+                SwMethod {
+                    word: 0,
+                    subch: 5,
+                    method: 0x200,
+                    data: Some(0x4000_0002)
+                },
+                SwMethod {
+                    word: 2,
+                    subch: 6,
+                    method: 0,
+                    data: Some(0x123)
+                },
+            ]
+        );
+        assert_eq!(s.per_subch[7], 1);
+    }
+
+    /// Hostile input: a count that runs past the words read never reads past them, and an
+    /// undefined header stops the scan by name.
+    #[test]
+    fn scan_is_bounded_and_stops_at_an_undefined_header() {
+        let s = scan_sw_methods(&[0x3fff_a080]); // INC subch 5, count 0x1fff, no data words
+        assert_eq!(s.hits.len(), 1);
+        assert_eq!(s.hits[0].data, None);
+        let s = scan_sw_methods(&[0xc000_0000, 0x2001_a080, 1]); // RESERVED6 first
+        assert_eq!(s.undecodable_at, Some(0));
+        assert!(s.hits.is_empty());
     }
 }

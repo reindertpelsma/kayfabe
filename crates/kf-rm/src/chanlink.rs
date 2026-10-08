@@ -977,6 +977,32 @@ impl ChannelPolicy {
                     vf("vaBase"),
                     vf("vaSize")
                 );
+                // ★ 2026-10-08 (task A): the full 64-bit declaration, checked and named (logged only;
+                // no twin space takes its start or size from it — `kf_host::channel::TWIN_VA_FLOOR`).
+                let v64 = |path: &'static str| {
+                    vp.and_then(|p| {
+                        layout_u64(
+                            &kf_abi::generated::matrix::NV_VASPACE_ALLOCATION_PARAMETERS,
+                            self.abi.driver_version(),
+                            p,
+                            path,
+                        )
+                    })
+                };
+                if let (Some(flags), Some(base), Some(size)) =
+                    (vf("flags"), v64("vaBase"), v64("vaSize"))
+                {
+                    match vas_declaration(flags, base, size) {
+                        Ok(d) => eprintln!(
+                            "kf-rm: chanlink: VAS-DECL {:#x}:{:#x} vaBase={base:#x} vaSize={size:#x} end={:x?} shared_management={}",
+                            h.client, h.handle, d.end, d.shared_management
+                        ),
+                        Err(why) => eprintln!(
+                            "kf-rm: chanlink: VAS-DECL {:#x}:{:#x} REFUSED (named, logged only): {why:?}",
+                            h.client, h.handle
+                        ),
+                    }
+                }
                 return None;
             }
             Some(AllocParams::Tsg) => {
@@ -2150,8 +2176,123 @@ fn layout_u32(
     Some(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
 }
 
+/// ★ 2026-10-08 (task A): a `u64` field of a generated params layout, as [`layout_u32`].
+fn layout_u64(
+    runs: &'static kf_abi::matrix::StructRuns,
+    version: kf_abi::DriverVersion,
+    params: &[u8],
+    path: &'static str,
+) -> Option<u64> {
+    let l = kf_abi::matrix::Resolved::of(runs, version).ok()?;
+    let off = l.need(path).ok()?.off();
+    let b = params.get(off..off.checked_add(8)?)?;
+    Some(u64::from_le_bytes(b.try_into().ok()?))
+}
+
+/// `NV_VASPACE_ALLOCATION_FLAGS_SHARED_MANAGEMENT` (`nvos.h:3162`, `BIT(2)`).
+pub const VASPACE_FLAGS_SHARED_MANAGEMENT: u32 = 1 << 2;
+/// The GMMU's VA ceiling on every family kayfabe serves (`NVBIT64(virtAddrBitHi + 1)`, 49 bits:
+/// `gpu_vaspace.c:1107`; the MMU format's root covers bits 48:47).
+pub const GMMU_VA_CEILING: u64 = 1 << 49;
+
+/// ★ 2026-10-08 (task A) — what a guest's `FERMI_VASPACE_A` DECLARES, checked. Diagnostic only: the
+/// twin's host space never takes its start or size from it (`kf_host::channel::TWIN_VA_FLOOR`), so
+/// a declaration can only be logged and named; the guest's own RM performs the same overflow check
+/// AFTER its RPC (`vaspace_api.c:351-362`), so the RPC carries whatever a hostile guest wrote.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VasDeclaration {
+    /// `vaBase` as declared (0 = "RM picks").
+    pub va_base: u64,
+    /// `vaBase + vaSize` (exclusive), or `None` when `vaSize` is 0 ("RM's default size").
+    pub end: Option<u64>,
+    /// The OS hooks PDEs beneath RM's root (Windows process spaces): page tables may map below
+    /// `va_base` and below RM's own start.
+    pub shared_management: bool,
+}
+
+/// Why a declaration is refused (named; never clamped).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VasDeclRefusal {
+    /// `vaBase + vaSize` does not fit in 64 bits.
+    Wraps { va_base: u64, va_size: u64 },
+    /// The declared range reaches past the GMMU's VA ceiling ([`GMMU_VA_CEILING`]).
+    BeyondGmmu { end: u64 },
+}
+
+/// Check a guest's declared VA space (`flags`, `vaBase`, `vaSize`).
+///
+/// # Errors
+/// [`VasDeclRefusal`], by name.
+pub fn vas_declaration(
+    flags: u32,
+    va_base: u64,
+    va_size: u64,
+) -> Result<VasDeclaration, VasDeclRefusal> {
+    let end = if va_size == 0 {
+        None
+    } else {
+        let end = va_base
+            .checked_add(va_size)
+            .ok_or(VasDeclRefusal::Wraps { va_base, va_size })?;
+        if end > GMMU_VA_CEILING {
+            return Err(VasDeclRefusal::BeyondGmmu { end });
+        }
+        Some(end)
+    };
+    if va_size == 0 && va_base >= GMMU_VA_CEILING {
+        return Err(VasDeclRefusal::BeyondGmmu { end: va_base });
+    }
+    Ok(VasDeclaration {
+        va_base,
+        end,
+        shared_management: flags & VASPACE_FLAGS_SHARED_MANAGEMENT != 0,
+    })
+}
+
 #[cfg(test)]
 mod tests {
+
+    /// ★ 2026-10-08 (task A): the declarations Windows made in runs 70-72, and hostile ones.
+    mod vas_decl {
+        use super::super::{GMMU_VA_CEILING, VasDeclRefusal, vas_declaration};
+
+        #[test]
+        fn windows_process_spaces_declare_shared_management() {
+            // `[measured, run70 at 4b14d74f]` flags 0x5, vaBase 0x20000000 (lo32), vaSize 0x40000000.
+            let d = vas_declaration(0x5, 0x2000_0000, 0x4000_0000).expect("ok");
+            assert!(d.shared_management);
+            assert_eq!(d.end, Some(0x6000_0000));
+            // A kernel-driver space: flags 0, nothing declared.
+            let k = vas_declaration(0, 0, 0).expect("ok");
+            assert!(!k.shared_management);
+            assert_eq!(k.end, None);
+        }
+
+        #[test]
+        fn wrapped_and_huge_declarations_are_refused_by_name() {
+            assert_eq!(
+                vas_declaration(0x5, u64::MAX - 0xfff, 0x2000),
+                Err(VasDeclRefusal::Wraps {
+                    va_base: u64::MAX - 0xfff,
+                    va_size: 0x2000
+                })
+            );
+            assert_eq!(
+                vas_declaration(0x5, 0, GMMU_VA_CEILING + 0x1000),
+                Err(VasDeclRefusal::BeyondGmmu {
+                    end: GMMU_VA_CEILING + 0x1000
+                })
+            );
+            assert_eq!(
+                vas_declaration(0, GMMU_VA_CEILING, 0),
+                Err(VasDeclRefusal::BeyondGmmu {
+                    end: GMMU_VA_CEILING
+                })
+            );
+            // Exactly the ceiling is accepted.
+            assert!(vas_declaration(0x5, 0, GMMU_VA_CEILING).is_ok());
+        }
+    }
 
     /// ★ 2026-10-08: [`super::windows_user_work`] over the channels of `[measured, run60 at 3a578d50]`
     /// and hostile variants of them.

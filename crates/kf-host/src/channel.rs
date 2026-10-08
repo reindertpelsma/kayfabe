@@ -58,7 +58,9 @@ pub struct VaSpace {
     /// The virtual range (`hDma`).
     pub range: u32,
     /// ★ v3-gfx: the guest-allocatable VA ranges, RESERVED in this space (handle 0 = not reserved).
-    pub guest: [GuestVaRange; 2],
+    /// Slots 0-1: [`GUEST_VA_RANGES`]; slot 2: [`MirrorVaStart::low_range`] (2026-10-08, only in a
+    /// space started at [`TWIN_VA_FLOOR`]).
+    pub guest: [GuestVaRange; 3],
 }
 
 /// ★ v3-gfx — **a VA range reserved in the host space for the GUEST'S mappings.**
@@ -115,9 +117,10 @@ impl VaSpace {
     /// RM never allocates across the split window, and `2^47` is the CPU-VA ceiling).
     ///
     /// # Errors
-    /// [`VA_STRADDLES_RESERVATION`].
+    /// [`VA_STRADDLES_RESERVATION`]; [`VA_BELOW_TWIN_FLOOR`] and [`VA_ROW_WRAPS`]
+    /// ([`guest_row_end`]).
     pub fn dma_for(&self, va: u64, len: u64) -> Result<u32, RmError> {
-        let end = va.saturating_add(len.max(1));
+        let end = guest_row_end(va, len)?;
         for g in self.guest.iter().filter(|g| g.handle != 0) {
             if va >= g.lo && end <= g.hi {
                 return Ok(g.handle);
@@ -142,6 +145,105 @@ impl VaSpace {
 
 /// A FIXED map that straddles the edge of a [`GuestVaRange`].
 pub const VA_STRADDLES_RESERVATION: u32 = 0x4B71;
+/// A guest row inside the NULL big page `[0, TWIN_VA_FLOOR)` — refused before any host call.
+pub const VA_BELOW_TWIN_FLOOR: u32 = 0x4B72;
+/// A guest row whose end does not fit in 64 bits (`va + len` wraps) — refused before any host call.
+pub const VA_ROW_WRAPS: u32 = 0x4B73;
+
+/// ★ 2026-10-08 (Windows walls, task A) — **where a guest-mirror twin's host VA space starts.**
+///
+/// The rule. A twin's host space mirrors the guest's page tables, so it must accept every VA those
+/// tables can name — and that is NOT bounded by any RM's allocator start:
+/// - host RM starts a space at `vaStartMin` = 1 MiB unless `vaBase` is given
+///   (`ogkm-595.84: gpu_vaspace.c:1105,1158-1165`, `g_gpu_vaspace_nvoc.h:781-785`); the guest's own RM
+///   computes the same start for ITS allocator;
+/// - but a `SHARED_MANAGEMENT` space (`NV_VASPACE_ALLOCATION_FLAGS` bit 2, `nvos.h:3162`) lets the OS
+///   hook its own PDEs beneath RM's root (`gpu_vaspace.c:1138-1145`), and Windows does: `[measured,
+///   run60/run70 at 3a578d50/4b14d74f, 2026-10-08]` every Windows process space is allocated with
+///   flags `0x5` (MINIMIZE_PTETABLE_SIZE | SHARED_MANAGEMENT), and `[measured, run69 at d67e9290,
+///   2026-10-08]` its page tables map VA `0x10000` (a host space starting at 1 MiB refused that row,
+///   `rangeLo <= rangeHi @ gpu_vaspace.c:1363`, and the twin faulted at `0x13000`, Xid 31).
+///
+/// So the start is the first non-NULL big page: [`TWIN_VA_FLOOR`] (64 KiB = `NV_VASPACE_BIG_PAGE_SIZE_64K`,
+/// the big page size Windows' process spaces declare, `[measured, run70]` `bigPageSize=0x10000`; RM
+/// documents `vaBase` as aligned to the space's largest page size, `nvos.h:3119-3123`, and the
+/// constructor does not check it, `gpu_vaspace.c:1158-1165`; `[measured, runs 70-72 at
+/// 4b14d74f..8de8ef26, 2026-10-08]` host RM 595.91.07 accepts `0x10000`). Nothing the guest declares moves it: the
+/// guest's `vaBase`/`vaSize` describe ITS RM's allocator window, not the reach of its page tables, and a
+/// guest-chosen base could only ever refuse its own rows. The NULL big page `[0, 64 KiB)` stays outside
+/// every twin space; a row there is refused by name ([`VA_BELOW_TWIN_FLOOR`]).
+///
+/// What keeps host RM's OWN buffers out of the guest's low range: `[TWIN_VA_FLOOR, 1 MiB)` is reserved
+/// for guest rows exactly like [`GUEST_VA_RANGES`] ([`MirrorVaStart::low_range`]), so host RM's own
+/// placements land where they did with the default start. The range is a constant — never widened by
+/// guest input — and lies wholly below host RM's default start, so the space's host-side layout is
+/// otherwise unchanged.
+///
+/// Default OFF: applied only when a twin can run in a `SHARED_MANAGEMENT` space at all, i.e. under
+/// `KF3_WIN_USER_CHANNELS_PASSTHROUGH=1` (Windows per-process work, `OWNER_RULINGS.md` §V). Linux
+/// guests keep host RM's default start. It replaces the diagnostic `KF3_TWIN_VA_BASE` (runs 70-72).
+pub const TWIN_VA_FLOOR: u64 = 0x1_0000;
+/// Host RM's default VA-space start (`gvaspaceGetReservedVaspaceBase`, 1 MiB on a non-MIG GPU).
+pub const HOST_DEFAULT_VA_START: u64 = 0x10_0000;
+
+/// Where a guest-mirror host space starts ([`TWIN_VA_FLOOR`] explains the rule).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MirrorVaStart {
+    /// Host RM's default (`vaBase = 0` → 1 MiB): every guest whose page tables stay above it.
+    HostDefault,
+    /// [`TWIN_VA_FLOOR`], with `[TWIN_VA_FLOOR, HOST_DEFAULT_VA_START)` reserved for guest rows.
+    GuestFloor,
+}
+
+impl MirrorVaStart {
+    /// The rule's switch: [`MirrorVaStart::GuestFloor`] iff Windows per-process work may run on twins
+    /// (`KF3_WIN_USER_CHANNELS_PASSTHROUGH=1`, default off).
+    #[must_use]
+    pub fn from_env() -> Self {
+        Self::select(std::env::var("KF3_WIN_USER_CHANNELS_PASSTHROUGH").as_deref() == Ok("1"))
+    }
+
+    /// Pure form of [`MirrorVaStart::from_env`].
+    #[must_use]
+    pub const fn select(windows_user_twins: bool) -> Self {
+        if windows_user_twins {
+            Self::GuestFloor
+        } else {
+            Self::HostDefault
+        }
+    }
+
+    /// The `vaBase` to request (0 = host RM's default).
+    #[must_use]
+    pub const fn va_base(self) -> u64 {
+        match self {
+            Self::HostDefault => 0,
+            Self::GuestFloor => TWIN_VA_FLOOR,
+        }
+    }
+
+    /// The low guest range to reserve before host RM places anything, if any.
+    #[must_use]
+    pub const fn low_range(self) -> Option<(u64, u64)> {
+        match self {
+            Self::HostDefault => None,
+            Self::GuestFloor => Some((TWIN_VA_FLOOR, HOST_DEFAULT_VA_START)),
+        }
+    }
+}
+
+/// The exclusive end of a guest row `[va, va+len)`, refusing by name a row in the NULL big page or one
+/// whose end wraps. A zero-length row is treated as one byte (as before).
+///
+/// # Errors
+/// [`VA_BELOW_TWIN_FLOOR`], [`VA_ROW_WRAPS`].
+pub fn guest_row_end(va: u64, len: u64) -> Result<u64, RmError> {
+    if va < TWIN_VA_FLOOR {
+        return Err(RmError::Other(VA_BELOW_TWIN_FLOOR));
+    }
+    va.checked_add(len.max(1))
+        .ok_or(RmError::Other(VA_ROW_WRAPS))
+}
 
 /// One born host channel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -361,21 +463,17 @@ impl HostRm {
 
     fn alloc_vaspace_with(&self, reserve_guest: bool) -> Result<VaSpace, RmError> {
         let mut params = [0u8; NvVaspaceAllocationParameters::SIZE];
-        // ⚠ DIAGNOSTIC (2026-10-08, Windows run70; default unset): `KF3_TWIN_VA_BASE=<hex>` gives a
-        // guest-mirror space this `vaBase` instead of host RM's default start (1 MiB,
-        // `gvaspaceGetReservedVaspaceBase`). [measured, run69 at d67e9290] a Windows process space
-        // maps guest rows at VA 0x10000; the mirror's map of them was refused (`rangeLo <= rangeHi`)
-        // and the twin's PBDMA faulted reading 0x13000.
-        let va_base = if reserve_guest {
-            std::env::var("KF3_TWIN_VA_BASE")
-                .ok()
-                .and_then(|v| u64::from_str_radix(v.trim_start_matches("0x"), 16).ok())
-                .unwrap_or(0)
+        // ★ 2026-10-08 (task A): a guest-mirror space starts where the guest's page tables can map
+        // ([`TWIN_VA_FLOOR`] states the rule and its evidence). ⊘ Replaces the run70-72 diagnostic
+        // `KF3_TWIN_VA_BASE=<hex>` (a guest-independent but operator-chosen base, with NO reservation
+        // keeping host RM's own buffers out of the low range it opened).
+        let start = if reserve_guest {
+            MirrorVaStart::from_env()
         } else {
-            0
+            MirrorVaStart::HostDefault
         };
         NvVaspaceAllocationParameters {
-            va_base,
+            va_base: start.va_base(),
             ..NvVaspaceAllocationParameters::default()
         }
         .encode_into(&mut params)
@@ -414,12 +512,14 @@ impl HostRm {
                 let mut vas = VaSpace {
                     space,
                     range: h,
-                    guest: [GuestVaRange::default(); 2],
+                    guest: [GuestVaRange::default(); 3],
                 };
                 // ★ v3-gfx: reserve the guest's ranges BEFORE anything is placed in the space. A
                 // refusal leaves that range unreserved (the pre-v3-gfx behaviour), and says so.
+                // ★ 2026-10-08: plus the low guest range of a floor-started space (slot 2).
                 if reserve_guest {
-                    for (slot, &(lo, hi)) in vas.guest.iter_mut().zip(GUEST_VA_RANGES.iter()) {
+                    let ranges = GUEST_VA_RANGES.iter().copied().chain(start.low_range());
+                    for (slot, (lo, hi)) in vas.guest.iter_mut().zip(ranges) {
                         match self.reserve_va(space, lo, hi - lo) {
                             Ok(handle) => *slot = GuestVaRange { handle, lo, hi },
                             Err(e) => eprintln!(
@@ -1574,6 +1674,93 @@ mod disp_sw_tests {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod twin_va_start_tests {
+    use super::{
+        GUEST_VA_RANGES, GuestVaRange, HOST_DEFAULT_VA_START, MirrorVaStart, TWIN_VA_FLOOR,
+        VA_BELOW_TWIN_FLOOR, VA_ROW_WRAPS, VA_STRADDLES_RESERVATION, VaSpace, guest_row_end,
+    };
+    use crate::RmError;
+
+    fn floor_space() -> VaSpace {
+        let (lo, hi) = MirrorVaStart::GuestFloor.low_range().expect("low range");
+        let mut guest = [GuestVaRange::default(); 3];
+        for (i, (l, h)) in GUEST_VA_RANGES.iter().copied().chain([(lo, hi)]).enumerate() {
+            guest[i] = GuestVaRange {
+                handle: 0x100 + u32::try_from(i).expect("small"),
+                lo: l,
+                hi: h,
+            };
+        }
+        VaSpace {
+            space: 1,
+            range: 2,
+            guest,
+        }
+    }
+
+    /// ★ Task A: the rule is OFF by default (Linux keeps host RM's start, nothing reserved low), and
+    /// ON it starts at one 64 KiB big page with `[64 KiB, 1 MiB)` reserved — constants, not inputs.
+    #[test]
+    fn the_start_is_host_default_unless_windows_user_twins_are_enabled() {
+        assert_eq!(MirrorVaStart::select(false), MirrorVaStart::HostDefault);
+        assert_eq!(MirrorVaStart::HostDefault.va_base(), 0);
+        assert_eq!(MirrorVaStart::HostDefault.low_range(), None);
+        assert_eq!(MirrorVaStart::select(true), MirrorVaStart::GuestFloor);
+        assert_eq!(MirrorVaStart::GuestFloor.va_base(), 0x1_0000);
+        assert_eq!(
+            MirrorVaStart::GuestFloor.low_range(),
+            Some((TWIN_VA_FLOOR, HOST_DEFAULT_VA_START))
+        );
+        // The low range lies wholly below every other guest range: host RM's own placements keep
+        // the room they had with the default start.
+        let (_, hi) = MirrorVaStart::GuestFloor.low_range().expect("low");
+        assert!(GUEST_VA_RANGES.iter().all(|&(lo, _)| hi <= lo));
+    }
+
+    /// ★ Task A, measured shape: the rows Windows mapped in runs 69-72 resolve — `0x10000+0x6000`
+    /// (the compositor's low page) and `0x13000` through the low reservation, `0x1_2000_2000` through
+    /// the first guest range, `0x400_0000` (a D3D ring) through the space's range.
+    #[test]
+    fn windows_low_rows_map_through_the_low_reservation() {
+        let s = floor_space();
+        assert_eq!(s.dma_for(0x1_0000, 0x6000), Ok(0x102));
+        assert_eq!(s.dma_for(0x1_3000, 0x1000), Ok(0x102));
+        assert_eq!(s.dma_for(0x1_2000_2000, 0x1_0000), Ok(0x100));
+        assert_eq!(s.dma_for(0x400_0000, 0x1_0000), Ok(2));
+        assert!(s.guest_reserved(0x1_0000, 0xf_0000));
+    }
+
+    /// ★ Hostile input: a row in the NULL big page (VA 0 included), a row whose end wraps, and a row
+    /// straddling the low reservation's edge are each refused BY NAME before any host call — a
+    /// guest's page tables can never widen or move the twin's space.
+    #[test]
+    fn null_page_wrapped_and_straddling_rows_are_refused_by_name() {
+        let s = floor_space();
+        for va in [0, 0x1000, 0xf000] {
+            assert_eq!(
+                s.dma_for(va, 0x1000),
+                Err(RmError::Other(VA_BELOW_TWIN_FLOOR)),
+                "{va:#x}"
+            );
+        }
+        assert_eq!(
+            s.dma_for(u64::MAX - 0xfff, 0x2000),
+            Err(RmError::Other(VA_ROW_WRAPS))
+        );
+        assert_eq!(
+            guest_row_end(0x1_0000, u64::MAX),
+            Err(RmError::Other(VA_ROW_WRAPS))
+        );
+        assert_eq!(
+            s.dma_for(0xf_f000, 0x2000),
+            Err(RmError::Other(VA_STRADDLES_RESERVATION))
+        );
+        // A zero-length row is one byte (the pre-existing convention).
+        assert_eq!(guest_row_end(0x1_0000, 0), Ok(0x1_0001));
     }
 }
 
