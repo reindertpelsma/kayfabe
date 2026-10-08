@@ -3666,3 +3666,49 @@ boot (P4.5).
 showed none; doorbells all from ring 0); `KF3_SW_RUNLIST_HOST_OWNED` (on the compositor's path, still a labelled experiment); whether kayfabe may
 author `SET_OBJECT` bindings for a Passthrough twin (it would need a kayfabe-owned ring in front of the guest's entries — a design change to
 "Passthrough never reads a GP entry").
+
+# Loop 2026-10-08 (fifth session), branch `claude/windows-walls-20261008`: the VA-start rule, and why the D3D twins are RC'd
+
+Started from the fourth session's stop (above) at `1a142d0a`.
+
+## Before any boot: what NVIDIA's own documentation says the Xid 32 `intr 00800000` is (no run)
+
+`[documented, NVIDIA open-gpu-doc, Ampere GA100 dev_pbdma.ref / dev_ram.ref]` (Ada's Host is not separately documented there):
+- `NV_PPBDMA_INTR_0_DEVICE` is bit 23 (`0x00800000`): *"indicates a SW-class method. More specifically, it indicates that the
+  method's subchannel specified a SW engine or a non-existent engine. Note the subchannel-to-engine mapping is fixed, and that it
+  is not possible to specify a non-existent engine."*
+- dev_ram.ref: *"Methods on subchannels 0-4 are handled by the primary engine served by the runlist, except that subchannel 4
+  targets GRCOPY0 and GRCOPY1 on the graphics runlist."* *"Subchannels 5-7 are for software methods. Any methods on these
+  subchannels (including SetObject methods) are kicked back to software ... using the NV_PPBDMA_INTR_*_DEVICE interrupt."*
+- dev_pbdma.ref, `NV_UDMA_OBJECT`: *"SetObject is not required by any engine."*
+
+What this does to the three candidate causes (`[inferred from the documentation]`, to be checked by run73):
+- **H-subch** (a missing `SET_OBJECT` on subchannels 0-4): a method on 0-4 cannot raise `DEVICE` (fixed mapping, SetObject not
+  required), so authoring `SET_OBJECT` bindings for the guest's classes cannot cure this Xid. Not built; the flag the coordinator
+  allowed is not needed unless run73 shows a `DEVICE` RC with no software-subchannel method in the stream.
+- **H-bind** (ZCULL / preemption binds missing): would surface as graphics-engine exceptions or context-switch errors, not as a
+  PBDMA `DEVICE` interrupt.
+- **H-va** (a mapping the segment touches is missing): would surface as an MMU fault (Xid 31), not Xid 32. `[measured, runs 71-72
+  at 2959ed5f/8de8ef26]` the probe twins took Xid 32 only.
+- **H-sw** (new): the D3D twins' streams carry a method on a SOFTWARE subchannel (5-7) — which Windows' own RM services on bare
+  metal (its kernel channels do exactly that: `[measured, run72]` "DEFERRED-API trigger ... subch 5 ... method 0x200" on the kernel
+  GR channel) but which host RM, on an unprivileged twin with no such object, answers with an RC.
+- Re-read of run72's peek: it logged only GP entries 0..0xb of each twin, but the D3D twins were rung with `GP_PUT = 0x24` (GR) and
+  `0x10` (CE), and their host `GP_GET` reached `0x24` / `0x10` before the RC. So entries `0xc..0x23` (GR) and `0xc..0xf` (CE) were
+  executed and NEVER seen; the fourth session's "entries 1-35 all zero" covered 1-0xb only.
+
+## Run73 setup (alone, 4096 MiB): the VA-start rule (task A) and the full peek of the D3D twins (task B)
+
+Binary `kf3-bins/3f23995a` (this branch: `MirrorVaStart`, `VAS-DECL`, relay peek v2), flags as run72 MINUS `KF3_TWIN_VA_BASE`
+(removed; the rule is on under `KF3_WIN_USER_CHANNELS_PASSTHROUGH=1`). Probes as run71/72 (`video_memory_probe.ps1`,
+`d3d12_signal_probe.ps1`, `display_probe.ps1`), QMP screendumps.
+
+- **H-rule** (task A): with the twin spaces started at 64 KiB and `[64 KiB, 1 MiB)` reserved for guest rows, the compositor's twin
+  runs as in runs 70-72 and Windows reports 1920x1080@60, with no diagnostic env var. *Falsifiers:* an NVRM `can't alloc VA space
+  for mapping` at a twin's birth; an Xid 31 on the compositor's twin; a `HeldByHost` (`held>0`) for a row below 1 MiB. Recorded
+  either way: whether host RM accepts the `[64 KiB, 1 MiB)` reservation (else the log says `NOT reserved`).
+- **H-sw** (task B): every D3D twin that takes `Xid 32 intr 00800000` has at least one `SW-SUBCH METHOD` line (subchannel 5-7) among
+  the entries it consumed. *Falsifier:* an RC'd twin whose peek covers every entry up to its host `GP_GET` and shows no
+  software-subchannel method → H-sw is false, and the PBDMA executed bytes kayfabe's view of the guest does not show (next step:
+  compare the host mapping of the ring and segments against the guest rows).
+- **H-late**: entries read as zero were written after the doorbell. *Falsifier:* no `CHANGED after its doorbell` line.
