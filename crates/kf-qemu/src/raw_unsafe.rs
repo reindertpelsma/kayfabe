@@ -586,84 +586,82 @@ mod qemu_sink_tests {
     use core::ffi::c_void;
     use std::cell::RefCell;
 
-    type Log = RefCell<Vec<String>>;
-
-    fn say(o: *mut c_void, s: String) {
-        // SAFETY: every test passes a leaked `Log` as `opaque`, used on this thread only.
-        let l = unsafe { &*o.cast::<Log>() };
-        l.borrow_mut().push(s);
+    thread_local! {
+        static LOG: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
     }
-    unsafe extern "C" fn key(o: *mut c_void, c: u32, d: u32) -> i32 {
-        say(o, format!("key {c} {d}"));
+
+    fn say(s: String) {
+        LOG.with(|l| l.borrow_mut().push(s));
+    }
+    fn said() -> Vec<String> {
+        LOG.with(|l| std::mem::take(&mut *l.borrow_mut()))
+    }
+    // safe `extern "C"` items: a safe function pointer coerces to the verbs' `unsafe` types
+    extern "C" fn key(_: *mut c_void, c: u32, d: u32) -> i32 {
+        say(format!("key {c} {d}"));
         i32::from(c != 0x2fe)
     }
-    unsafe extern "C" fn button(o: *mut c_void, b: u32, d: u32, r: u32) {
-        say(o, format!("button {b} {d} rel={r}"));
+    extern "C" fn button(_: *mut c_void, b: u32, d: u32, r: u32) {
+        say(format!("button {b} {d} rel={r}"));
     }
-    unsafe extern "C" fn wheel(o: *mut c_void, dx: i32, dy: i32, r: u32) {
-        say(o, format!("wheel {dx} {dy} rel={r}"));
+    extern "C" fn wheel(_: *mut c_void, dx: i32, dy: i32, r: u32) {
+        say(format!("wheel {dx} {dy} rel={r}"));
     }
-    unsafe extern "C" fn abs(o: *mut c_void, x: u32, y: u32, w: u32, h: u32) {
-        say(o, format!("abs {x} {y} {w}x{h}"));
+    extern "C" fn abs(_: *mut c_void, x: u32, y: u32, w: u32, h: u32) {
+        say(format!("abs {x} {y} {w}x{h}"));
     }
-    unsafe extern "C" fn rel(o: *mut c_void, dx: i32, dy: i32) {
-        say(o, format!("rel {dx} {dy}"));
+    extern "C" fn rel(_: *mut c_void, dx: i32, dy: i32) {
+        say(format!("rel {dx} {dy}"));
     }
-    unsafe extern "C" fn sync(o: *mut c_void) {
-        say(o, "sync".into());
+    extern "C" fn sync(_: *mut c_void) {
+        say("sync".into());
     }
-    unsafe extern "C" fn pointers(o: *mut c_void, out: *mut Kf3Pointer, cap: u32) -> u32 {
-        say(o, format!("pointers cap={cap}"));
-        for i in 0..cap.min(3) {
-            let p = Kf3Pointer {
+    extern "C" fn pointers(_: *mut c_void, out: *mut Kf3Pointer, cap: u32) -> u32 {
+        say(format!("pointers cap={cap}"));
+        let n = cap.min(3) as usize;
+        // SAFETY: the sink passes `out` writable for `cap` entries (the verb's contract).
+        let out = unsafe { core::slice::from_raw_parts_mut(out, n) };
+        for (i, o) in (0u32..).zip(out.iter_mut()) {
+            *o = Kf3Pointer {
                 id: 10 + i,
                 absolute: u8::from(i == 1),
                 paravirtual: u8::from(i > 0),
                 pad: [0; 2],
                 name: [b'M'; 56], // no NUL: the whole field is the name
             };
-            // SAFETY: `out` is writable for `cap` entries (the verb's contract).
-            unsafe { *out.add(i as usize) = p };
         }
         cap + 5 // over-reports: the sink must not trust it
     }
-    unsafe extern "C" fn select(o: *mut c_void, id: u32, r: u32) {
-        say(o, format!("select {id} rel={r}"));
+    extern "C" fn select(_: *mut c_void, id: u32, r: u32) {
+        say(format!("select {id} rel={r}"));
     }
-    unsafe extern "C" fn missing(o: *mut c_void, r: u32) {
-        say(o, format!("missing rel={r}"));
+    extern "C" fn missing(_: *mut c_void, r: u32) {
+        say(format!("missing rel={r}"));
     }
-    unsafe extern "C" fn close(o: *mut c_void, f: u32) {
-        say(o, format!("close {f}"));
+    extern "C" fn close(_: *mut c_void, f: u32) {
+        say(format!("close {f}"));
     }
-    unsafe extern "C" fn resize(o: *mut c_void, w: u32, h: u32, m: u32) {
-        say(o, format!("resize {w} {h} {m}"));
+    extern "C" fn resize(_: *mut c_void, w: u32, h: u32, m: u32) {
+        say(format!("resize {w} {h} {m}"));
     }
-    unsafe extern "C" fn cdefine(
-        o: *mut c_void,
-        w: u32,
-        h: u32,
-        hx: u32,
-        hy: u32,
-        px: *const u32,
-    ) -> i32 {
-        // SAFETY: `px` holds `w * h` words for the call (the verb's contract).
+    extern "C" fn cdefine(_: *mut c_void, w: u32, h: u32, hx: u32, hy: u32, px: *const u32) -> i32 {
+        // SAFETY: the sink passes `px` holding `w * h` words for the call (the verb's contract).
         let px = unsafe { core::slice::from_raw_parts(px, (w * h) as usize) };
-        say(
-            o,
-            format!("define {w}x{h} {hx},{hy} last={:#x}", px[px.len() - 1]),
-        );
+        say(format!(
+            "define {w}x{h} {hx},{hy} last={:#x}",
+            px[px.len() - 1]
+        ));
         1
     }
-    unsafe extern "C" fn chide(o: *mut c_void) -> i32 {
-        say(o, "hide".into());
+    extern "C" fn chide(_: *mut c_void) -> i32 {
+        say("hide".into());
         1
     }
-    unsafe extern "C" fn cmove(o: *mut c_void, x: i32, y: i32) -> i32 {
-        say(o, format!("move {x} {y}"));
+    extern "C" fn cmove(_: *mut c_void, x: i32, y: i32) -> i32 {
+        say(format!("move {x} {y}"));
         1
     }
-    unsafe extern "C" fn cabs(_: *mut c_void) -> u32 {
+    extern "C" fn cabs(_: *mut c_void) -> u32 {
         1
     }
 
@@ -698,10 +696,9 @@ mod qemu_sink_tests {
     #[test]
     fn the_policy_reaches_the_c_verbs_with_the_abi_numbers() {
         use kf_broker::{Input, InputPolicy, Pointer};
-        let l: &'static Log = Box::leak(Box::default());
-        let opaque = core::ptr::from_ref(l).cast_mut().cast::<c_void>();
-        // SAFETY: the verbs above honour the contract; `opaque` is a leaked `Log`.
-        let mut s = unsafe { QemuSink::adopt(&ops(), opaque) }.unwrap();
+        // SAFETY: the verbs above honour the contract and never read `opaque`.
+        let mut s = unsafe { QemuSink::adopt(&ops(), core::ptr::null_mut()) }.unwrap();
+        said();
         let mut p = InputPolicy::new();
         p.connected(&mut s);
         p.deliver(
@@ -739,7 +736,7 @@ mod qemu_sink_tests {
             &mut s,
         );
         assert_eq!(
-            *l.borrow(),
+            said(),
             [
                 "pointers cap=16",
                 "pointers cap=16",
@@ -769,7 +766,7 @@ mod qemu_sink_tests {
         assert_eq!(out[2].name.len(), 56);
         assert!(out[1].kind == Pointer::Absolute && out[1].paravirtual);
         // the cursor: the define carries exactly width*height words
-        l.borrow_mut().clear();
+        said();
         let shape = kf_broker::CursorShape {
             width: 2,
             height: 3,
@@ -782,6 +779,6 @@ mod qemu_sink_tests {
             shape,
             &px[..5]
         ));
-        assert_eq!(*l.borrow(), ["define 2x3 1,2 last=0xdeadbeef"]);
+        assert_eq!(said(), ["define 2x3 1,2 last=0xdeadbeef"]);
     }
 }
