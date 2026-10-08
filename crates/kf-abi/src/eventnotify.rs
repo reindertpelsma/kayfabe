@@ -1225,7 +1225,7 @@ mod nonstall_slot_tests {
     }
 
     /// ★ `NV01_EVENT_NONSTALL_INTR` is typed by hand (the driver matrix has no `nvos.h` flag
-    /// family), so it is PINNED to the per-tag measurement: `nvos.h` read at every tag of the
+    /// family), so it is PINNED to `nvos.h` as read on 2026-10-08 at every tag of the
     /// matrix (`traces/rawclient_ce_interrupt_20261008/nvos_event_flags_by_tag.txt`). The file
     /// must cover exactly [`crate::generated::matrix::MEASURED`], and every tag must agree.
     #[test]
