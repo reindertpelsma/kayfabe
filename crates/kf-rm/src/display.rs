@@ -717,7 +717,11 @@ impl DisplayRegistry {
             });
             eprintln!(
                 "kf-rm: display: RUNLIST_PREEMPT_COMPLETE event {client:#x}:{event:#x} (parent {parent:#x}) {}",
-                if kept { "registered" } else { "NOT registered (too many)" }
+                if kept {
+                    "registered"
+                } else {
+                    "NOT registered (too many)"
+                }
             );
             return;
         }

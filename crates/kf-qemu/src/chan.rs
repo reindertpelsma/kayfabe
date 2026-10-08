@@ -472,7 +472,11 @@ fn last_fence_release(words: &[u32]) -> Option<(&'static str, u64, u32)> {
                     out = Some(("3d", (u64::from(a[0] & 0xff) << 32) | u64::from(a[1]), a[2]));
                 }
                 (0x240, 3) => {
-                    out = Some(("ce", (u64::from(a[0] & 0x1ffff) << 32) | u64::from(a[1]), a[2]));
+                    out = Some((
+                        "ce",
+                        (u64::from(a[0] & 0x1ffff) << 32) | u64::from(a[1]),
+                        a[2],
+                    ));
                 }
                 _ => {}
             }
@@ -4378,7 +4382,8 @@ impl ChanPlane {
                 g.idx,
                 match now {
                     Ok(v) if v == payload => "the engine wrote it",
-                    Ok(_) => "NOT the payload (the engine did not write it, or a later one overwrote it)",
+                    Ok(_) =>
+                        "NOT the payload (the engine did not write it, or a later one overwrote it)",
                     Err(_) => "unreadable",
                 }
             );
@@ -6759,7 +6764,14 @@ mod sw_scan_tests {
             0x0000_0004,
         ];
         assert_eq!(last_fence_release(&gr), Some(("3d", 0x1_200e_7000, 0xc)));
-        let ce = [0x2003_8090, 0x0000_0001, 0x200e_b000, 0x0000_0009, 0x2001_80c0, 0x0000_0008];
+        let ce = [
+            0x2003_8090,
+            0x0000_0001,
+            0x200e_b000,
+            0x0000_0009,
+            0x2001_80c0,
+            0x0000_0008,
+        ];
         assert_eq!(last_fence_release(&ce), Some(("ce", 0x1_200e_b000, 9)));
         // An acquire (OPERATION = 1) is not a release.
         assert_eq!(

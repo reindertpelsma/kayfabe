@@ -1666,9 +1666,17 @@ impl DisplayPlane {
                         eprintln!(
                             "kf3: display: RM_INTR_EN_HEAD_TIMING({h}) <- {v:#x} (LAST_DATA bit {:#x} {}, VBLANK bit {:#x} {})",
                             self.map.head_last_data,
-                            if v & self.map.head_last_data != 0 { "on" } else { "off" },
+                            if v & self.map.head_last_data != 0 {
+                                "on"
+                            } else {
+                                "off"
+                            },
                             self.map.head_vblank,
-                            if v & self.map.head_vblank != 0 { "on" } else { "off" }
+                            if v & self.map.head_vblank != 0 {
+                                "on"
+                            } else {
+                                "off"
+                            }
                         );
                     }
                     return self.ports.rm_head_timing(h) != 0;

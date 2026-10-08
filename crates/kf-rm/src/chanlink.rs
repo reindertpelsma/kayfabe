@@ -1731,8 +1731,8 @@ impl ChannelPolicy {
                 // [measured, run83 at 10bfb7a0] the kernel then RE-ENABLES those groups with the
                 // synchronous form (bDisable=0, no event); refusing it left them disabled and the
                 // next work on them TDR'd — so the re-enable is admitted the same way (switch on).
-                let cross_client_ok = d.runlist_preempt_event != 0
-                    || (async_preempt_enabled() && !d.disable);
+                let cross_client_ok =
+                    d.runlist_preempt_event != 0 || (async_preempt_enabled() && !d.disable);
                 if !cross_client_ok
                     && let Some((c, ch)) = d.list.iter().find(|(c, _)| *c != h.client)
                 {
@@ -3359,9 +3359,21 @@ mod tests {
     fn an_async_preempt_needs_the_switch_and_a_disable() {
         assert!(super::async_preempt_admitted(false, 0, true));
         assert!(super::async_preempt_admitted(false, 0, false));
-        assert!(!super::async_preempt_admitted(false, 0xffff_8000_0000_1000, true));
-        assert!(super::async_preempt_admitted(true, 0xffff_8000_0000_1000, true));
-        assert!(!super::async_preempt_admitted(true, 0xffff_8000_0000_1000, false));
+        assert!(!super::async_preempt_admitted(
+            false,
+            0xffff_8000_0000_1000,
+            true
+        ));
+        assert!(super::async_preempt_admitted(
+            true,
+            0xffff_8000_0000_1000,
+            true
+        ));
+        assert!(!super::async_preempt_admitted(
+            true,
+            0xffff_8000_0000_1000,
+            false
+        ));
     }
 
     /// ★ EXPERIMENT `x11-dispsw`. OFF (the default): a `GF100_DISP_SW` alloc reaches no plane — the

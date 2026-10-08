@@ -665,7 +665,11 @@ impl DisplayModel {
     /// ★ 2026-10-08: the live `RUNLIST_PREEMPT_COMPLETE` registration of `client` (newest first).
     #[must_use]
     pub fn preempt_target(&self, client: u32) -> Option<HotplugRegistration> {
-        self.preempt.iter().rev().find(|h| h.client == client).copied()
+        self.preempt
+            .iter()
+            .rev()
+            .find(|h| h.client == client)
+            .copied()
     }
 
     /// ★ Record an ACCEPTED `GSP_RM_ALLOC` of an `NV01_EVENT*` handle `event` whose parent is the
