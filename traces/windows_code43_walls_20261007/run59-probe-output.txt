@@ -1,0 +1,46 @@
+VMP whoami nt authority\system
+VMP session 0
+VMP CreateDXGIFactory1 0x00000000
+VMP adapter0.GetDesc1 name='NVIDIA GeForce RTX 4070' vendor=0x10de device=0x2786 rev=161
+VMP adapter0.GetDesc1 DedicatedVideoMemory=3929141248 (3747 MB) DedicatedSystemMemory=0 (0 MB) SharedSystemMemory=4291598336 (4092 MB)
+VMP adapter0.GetDesc1 LUID=0:00006103 Flags=0x0
+VMP adapter0.GetDesc2 0x00000000 GraphicsPreemptionGranularity=3 ComputePreemptionGranularity=1
+VMP adapter0 QueryInterface(IDXGIAdapter3) 0x00000000
+VMP adapter0 QueryVideoMemoryInfo(node 0, LOCAL) 0x00000000 Budget=3339770062 (3185 MB) CurrentUsage=0 (0 MB) AvailableForReservation=1768113562 (1686 MB) CurrentReservation=0 (0 MB)
+VMP adapter0 QueryVideoMemoryInfo(node 0, NON_LOCAL) 0x00000000 Budget=3862438504 (3683 MB) CurrentUsage=0 (0 MB) AvailableForReservation=2038509210 (1944 MB) CurrentReservation=0 (0 MB)
+VMP adapter0 D3DKMTOpenAdapterFromLuid NTSTATUS 0x00000000
+VMP adapter0 hAdapter 0x40000180
+VMP adapter0 KMTQAITYPE_GETSEGMENTSIZE NTSTATUS 0x00000000 DedicatedVideoMemorySize=3929141248 (3747 MB) DedicatedSystemMemorySize=0 (0 MB) SharedSystemMemorySize=4291598336 (4092 MB)
+VMP adapter0 KMTQAITYPE_DRIVERVERSION NTSTATUS 0x00000000 value 0xc80
+VMP adapter0 KMTQAITYPE_ADAPTERTYPE NTSTATUS 0x00000000 value 0x31b
+VMP adapter0 D3DKMTCreateDevice NTSTATUS 0x00000000 hDevice 0x400001c0
+VMP adapter0 D3DKMTDestroyDevice NTSTATUS 0x00000000
+VMP adapter1.GetDesc1 name='Microsoft Basic Render Driver' vendor=0x1414 device=0x008c rev=0
+VMP adapter1.GetDesc1 DedicatedVideoMemory=0 (0 MB) DedicatedSystemMemory=0 (0 MB) SharedSystemMemory=4291598336 (4092 MB)
+VMP adapter1.GetDesc1 LUID=0:00006b5f Flags=0x2
+VMP adapter1.GetDesc2 0x00000000 GraphicsPreemptionGranularity=4 ComputePreemptionGranularity=4
+VMP adapter1 QueryInterface(IDXGIAdapter3) 0x00000000
+VMP adapter1 QueryVideoMemoryInfo(node 0, LOCAL) 0x00000000 Budget=3862438504 (3683 MB) CurrentUsage=0 (0 MB) AvailableForReservation=2038509210 (1944 MB) CurrentReservation=0 (0 MB)
+VMP adapter1 QueryVideoMemoryInfo(node 0, NON_LOCAL) 0x00000000 Budget=0 (0 MB) CurrentUsage=0 (0 MB) AvailableForReservation=0 (0 MB) CurrentReservation=0 (0 MB)
+VMP adapter1 D3DKMTOpenAdapterFromLuid NTSTATUS 0x00000000
+VMP adapter1 hAdapter 0x40000200
+VMP adapter1 KMTQAITYPE_GETSEGMENTSIZE NTSTATUS 0x00000000 DedicatedVideoMemorySize=0 (0 MB) DedicatedSystemMemorySize=0 (0 MB) SharedSystemMemorySize=4291598336 (4092 MB)
+VMP adapter1 KMTQAITYPE_DRIVERVERSION NTSTATUS 0x00000000 value 0xc80
+VMP adapter1 KMTQAITYPE_ADAPTERTYPE NTSTATUS 0x00000000 value 0x105
+VMP adapter1 D3DKMTCreateDevice NTSTATUS 0x00000000 hDevice 0x40000240
+VMP adapter1 D3DKMTDestroyDevice NTSTATUS 0x00000000
+VMP control D3D12CreateDevice(Basic Render Driver, 11_0) 0x00000000
+VMP D3D12CreateDevice(NVIDIA, 11_0) 0x8876017c
+VMP D3D12CreateDevice(NVIDIA, 12_0) 0x8876017c
+VMP D3D12CreateDevice(NVIDIA, 12_1) 0x8876017c
+VMP D3D12CreateDevice(NVIDIA, 12_2) 0x8876017c
+VMP D3D11CreateDevice(NVIDIA, hardware) 0x8876017c feature level 0x0
+VMP after-create QueryInterface(IDXGIAdapter3) 0x00000000
+VMP after-create QueryVideoMemoryInfo(node 0, LOCAL) 0x00000000 Budget=3339770062 (3185 MB) CurrentUsage=0 (0 MB) AvailableForReservation=1768113562 (1686 MB) CurrentReservation=0 (0 MB)
+VMP after-create QueryVideoMemoryInfo(node 0, NON_LOCAL) 0x00000000 Budget=3862438504 (3683 MB) CurrentUsage=0 (0 MB) AvailableForReservation=2038509210 (1944 MB) CurrentReservation=0 (0 MB)
+VMP done
+VMP Win32_VideoController name='NVIDIA GeForce RTX 4070' AdapterRAM=4293918720 VideoProcessor='NVIDIA GeForce RTX 4070' Status=OK ConfigManagerErrorCode=0 DriverVersion=32.0.15.8088
+VMP class-key 0000 DriverDesc='Microsoft Basic Display Adapter' HardwareInformation.ChipType= HardwareInformation.DacType= HardwareInformation.AdapterString=Microsoft Basic Display Adapter HardwareInformation.BiosString= HardwareInformation.MemorySize=0
+VMP class-key 0001 DriverDesc='NVIDIA GeForce RTX 4070' HardwareInformation.ChipType=NVIDIA GeForce RTX 4070 HardwareInformation.DacType=Integrated RAMDAC HardwareInformation.AdapterString=NVIDIA GeForce RTX 4070 HardwareInformation.BiosString=Version95.4.3e.8.be HardwareInformation.MemorySize=4293918720 HardwareInformation.qwMemorySize=4294967296
+
+[rc=0]

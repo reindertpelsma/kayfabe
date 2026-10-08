@@ -1,0 +1,17 @@
+SMI query:
+SMI name, driver_version, memory.total [MiB], memory.used [MiB], memory.free [MiB], pstate, utilization.gpu [%], temperature.gpu, display_active, display_mode
+SMI NVIDIA GeForce RTX 4070, 580.88, 4096 MiB, 0 MiB, 3748 MiB, [N/A], [N/A], 0, Disabled, [Requested functionality has been deprecated]
+SMI exit=0
+SMI mem Total                             : 4096 MiB
+SMI mem Used                              : 0 MiB
+SMI mem Free                              : 3748 MiB
+SMI mem Total                             : 128 MiB
+SMI mem Used                              : 100 MiB
+SMI mem Free                              : 28 MiB
+SMI mem Total                             : N/A
+SMI mem Used                              : N/A
+SMI mem Free                              : N/A
+SMI adapter 'Microsoft Basic Display Adapter' Status=Unknown Problem=CM_PROB_PHANTOM Present=False
+SMI adapter 'NVIDIA GeForce RTX 4070' Status=OK Problem=CM_PROB_NONE Present=True
+
+[rc=0]

@@ -3335,3 +3335,30 @@ scanout needs the GR walls of runs 55-57.
 > `GPU_PROMOTE_CTX` target, never by guest bytes) run as (b). Recommendation (c), after a native-oracle check. Also needed with it:
 > `GR_CTXSW_PREEMPTION_BIND` and the KMD's cross-client `GR_CTXSW_ZCULL_BIND` as real host-authored binds on the twin (or a ruling that these
 > buffers are host-owned and the controls are answered `NV_OK` with nothing bound), and task B (`0x20801111`) confirmed.
+
+## Run59 (goal checks, alone, 4096 MiB): nvidia-smi now reports FB memory; D3D still `0x8876017c`
+
+Binary `kf3-bins/40230e23`, flags as run56 (preempt-bind probe and the two display probes; NO runlist flag, NO ZCULL probe, so no crash),
+started 14:19:07 CEST, stopped by ACPI, Xid 86 before and after. [command](run59-command.json), [nvidia-smi and adapters](run59-smi-probe.txt),
+[D3D/video-memory probe](run59-probe-output.txt), [trace](run59-qemu.log.gz).
+
+`[measured, run59 at 40230e23, 2026-10-08]`: NVIDIA adapter Status OK, Code 0. `nvidia-smi` exit 0: `NVIDIA GeForce RTX 4070, 580.88,
+memory.total 4096 MiB, memory.used 0 MiB, memory.free 3748 MiB, pstate [N/A], utilization.gpu [N/A], temperature 0, display_active Disabled`;
+`-q -d MEMORY`: FB 4096/0/3748 MiB, BAR1 128/100/28 MiB. **The FB fields were `N/A` in runs 48-53**: serving the 7 FB indices (run54 onward)
+is what changed between those runs and this one (inferred link; the FB-index change is the only change on the memory path).
+`D3D11CreateDevice`/`D3D12CreateDevice` on the NVIDIA adapter: `0x8876017c` (as runs 50-56); Basic Render control 0.
+
+## Two kf3 VMs on one GPU (owner question), and the state left running
+
+`[measured, 2026-10-08]` run54 (Windows 1024 MiB store beside the Linux guest's 8192 MiB, 3 min 20 s) and the final state (the Linux demo
+`interactive.sh` with kf3 `4bc62999` restarted at 14:20:24, then the Windows desktop overlay at 1024 MiB from 14:22:33): both VMs run, both broker
+windows are fed, the host's NVRM Xid count stays 86 across every sample. Store sizes larger than the free VRAM are refused at realize by name
+(4096 and 2048 MiB beside the Linux guest). One host-side oddity, recorded: at host uptime 233343 s (about 14:01:30 CEST, during run57's TDR,
+Windows alone on the GPU) the host driver logged `nvAssertFailedNoLog: rangeLo <= rangeHi @ gpu_vaspace.c:1363` and
+`dmaAllocMapping_GM107: can't alloc VA space for mapping` (twice); no Xid, the GPU stayed usable (runs 58-59 and the Linux guest ran after it).
+Which kayfabe mapping asked for it was not traced (inferred: a teardown-time mapping of the dying channel).
+
+**Left running (2026-10-08 14:30 CEST):** the Linux demo (`interactive.sh`, window "kayfabe guest") and the Windows desktop overlay (`windows_broker.sh
+desktop`, `WIN_FB_MB=1024`, window "kayfabe Windows", NVIDIA disabled in that overlay, autologon `kf` verified over two reboots after the
+`DevicePasswordLessBuildVersion` fix). Stop Windows: `scripts/bench/windows/windows_broker.sh stop` (as root on the host; the Linux guest is not
+touched). Back to the NVIDIA driver in the overlay: `windows_broker.sh nvidia enable` then `reboot` (the screen then stays on the boot frame, runs 54-56).
