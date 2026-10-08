@@ -3486,3 +3486,46 @@ Recommendation: (i), designed with its doorbell and completion path written down
 
 **Decisions needed:** (1) the owner's soundness question, with the table above; (2) `KF3_SW_RUNLIST_HOST_OWNED` (still "undecided", now
 on the D3D/compositor path in run60 at 3a578d50, 2026-10-08); (3) USERD relay (i) vs IOMMU identity (ii); (4) the preemption/ZCULL binds on twins (probes only).
+
+### Runs 65-66: do the per-process channels look like user-mode-submission channels? (coordinator's follow-up questions)
+
+Run65 `ad626617`, run66 `6eaa251e` (run66 adds `DBCPL`: for each write to the usermode doorbell `NOTIFY_CHANNEL_PENDING` — BAR0 `0xBB0090`
+on Ada, `kf_trap::memmap::VF_USERMODE_PAGE + 0x90`; run65's diagnostic watched Turing's `0x810090` and saw nothing — the writing vCPU's
+privilege level (CS.RPL, `KVM_GET_SREGS`) and RIP, default-off `KF3_DOORBELL_CPL`); both with run57's flags (user work Translated) and the
+census. Started 16:22:22 / 16:25:18 CEST, Xid 93 throughout; run65 stopped by ACPI, run66 by the guest agent's shutdown.
+[run65 scheduling probe](run65-sched-probe.txt), [run65 channel facts](run65-chan-facts.txt), [run66 doorbells, facts and census](run66-dbcpl-facts.txt),
+trace `run66-qemu.log.gz`.
+
+`[measured, run66 at 6eaa251e, 2026-10-08]`, per question:
+1. *Usermode doorbell object allocated by a per-process client?* No `VOLTA_USERMODE_A`-family alloc (`0xc361`..`0xc761`) reaches the GSP
+   from any client in runs 64-66 — the guest's CPU-RM constructs that class without an RPC (`[inferred]` from its absence for kernel clients
+   too, who certainly ring doorbells), so the RPC trace cannot answer this; CPU mappings of USERD/doorbells never cross to the host.
+2. *Who writes the doorbells?* **All 32 doorbell writes come from guest ring 0 (`cpl=0`), from three kernel addresses
+   (`0xfffff80722a5ea3d`, `0xfffff80722a5dc5c`, `0xfffff807224aa1c9`): the kernel GR channel (token `0x3`), the display-side GR channel (`0xd`),
+   the kernel-driver CE channels (`0x1000c` x24, `0x10001` x2, `0x10002`), and the compositor's per-process channel (`0xe`) x3 from the same
+   kernel RIP `0xfffff80722a5dc5c` as a kernel CE channel.** No doorbell from user mode in this guest.
+3. *Scheduling mode* `[measured, run65 at ad626617]`: build 26100; `GraphicsDrivers\HwSchMode` absent (the OS default applies; what that default
+   is on this adapter was not read — `dxdiag` was not run before the guest's TDR), no user-mode-submission key under `GraphicsDrivers`;
+   `FeatureSetUsage` WddmVersion 3200; NVIDIA key `FeatureControl = 4`.
+4. *Alloc fields, per-process vs kernel* (run66 `CHAN-FACTS`, all 15 channels): identical except `flags` (only the `USERD_INDEX` bits = chid
+   differ; bit 5 `PRIVILEGED_CHANNEL` set on all, bit 7 `DENY_PHYSICAL_MODE_CE` on none), `gpFifoEntries` (32768 for the compositor's channel;
+   2048-16384 kernel), `hContextShare`/`ProcessID` (the classification facts) and the VA space. `hObjectError = hObjectBuffer = 0` and
+   `hPhysChannelGroup = 0` everywhere; every channel names an `hUserdMemory` object of its own client and its USERD resolves into the guest RM's
+   one system-memory pool (512-byte slots, `internalFlags = 0x16` on all).
+
+**What this says about the Passthrough classification.** The per-process channels do NOT look like user-mode-submission channels in this guest:
+their doorbell is rung by the kernel driver, from kernel code, exactly as for its own channels `[measured]`; who writes their GP entries is not
+visible, but with a kernel-mode doorbell the kernel driver submitting on the process's behalf is the consistent reading `[inferred: WDDM's
+kernel-mode submission]`. So "user-written ring + doorbell = the Linux user channel shape" is **not** established. What does hold `[measured]`:
+the per-process channels run in the process's own VA space with a subcontext, and the one segment seen was virtual-only. The classification's
+safety therefore rests on the host twin (asserted-USER, the VM's memory only, physical operands refused by hardware — copy engine measured,
+graphics pending the oracle), not on Windows' submission model; its functional risk is a kernel-inserted physical or privileged entry on such a
+channel, which would RC the twin (fail closed, named).
+
+### P4.5 gap recorded: an in-guest reboot inside one QEMU process is not a clean second boot for Windows
+
+`[measured, run57 at 40230e23 and run62 at 883f878e, 2026-10-08]` After a guest reboot that stays in the same QEMU process (the launcher's
+`-action reboot=reset`; run57 after its bugcheck 0x116, run62 after a plain `Restart-Computer`), the NVIDIA adapter comes back at **Code 43**
+(`CM_PROB_FAILED_POST_START`), the GSP going `Running -> Suspending -> Halted` right after its boot; a second boot of the same disk in a NEW
+QEMU process (run62, `WIN_REUSE=1`) starts the driver normally. This is a kf3 teardown/re-init gap on guest reset (P4.5), not a Windows wall;
+until it is fixed, Windows runs use a fresh QEMU per boot (`windows_broker.sh stop N` then `WIN_REUSE=1 ... run N`).
