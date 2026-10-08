@@ -54,7 +54,7 @@ fn status(p: &mut InitTablePolicy, object: u32, event: u32, action: u32) -> u32 
         .rpc_result
 }
 
-fn index(runs: &kf_abi::matrix::ValueRuns) -> u32 {
+fn index(runs: &'static kf_abi::matrix::ValueRuns) -> u32 {
     runs.at_u32(BENCH_DRIVER)
         .ok()
         .flatten()
@@ -79,7 +79,10 @@ fn every_copy_engine_gr0_and_video_notifier_is_served_as_the_real_gsp_serves_it(
         );
         n += 1;
     }
-    assert!(n >= 25, "GR0 + CE0..9 + NVENC + NVDEC + OFA at least, got {n}");
+    assert!(
+        n >= 25,
+        "GR0 + CE0..9 + NVENC + NVDEC + OFA at least, got {n}"
+    );
 }
 
 #[test]
@@ -90,7 +93,12 @@ fn ce2_and_ce4_to_ce9_the_indices_kf3_refused_0x56_are_now_served() {
         &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE4,
         &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE9,
     ] {
-        assert_eq!(status(&mut p, 0xabcd_2080, index(runs), ACTION_REPEAT), 0, "{}", runs.name);
+        assert_eq!(
+            status(&mut p, 0xabcd_2080, index(runs), ACTION_REPEAT),
+            0,
+            "{}",
+            runs.name
+        );
     }
 }
 
@@ -119,7 +127,12 @@ fn notifiers_of_engines_this_device_announces_no_vector_for_stay_refused() {
     ] {
         let ix = index(runs);
         assert!(!eventnotify::is_engine_nonstall_notifier(BENCH_DRIVER, ix));
-        assert_ne!(status(&mut p, 0xabcd_2080, ix, ACTION_REPEAT), 0, "{}", runs.name);
+        assert_ne!(
+            status(&mut p, 0xabcd_2080, ix, ACTION_REPEAT),
+            0,
+            "{}",
+            runs.name
+        );
     }
 }
 
@@ -134,7 +147,11 @@ fn hostile_indices_are_refused_by_name() {
         u32::MAX,
         3, // THERMAL_SW: a legal index no list admits
     ] {
-        assert_ne!(status(&mut p, 0xabcd_2080, ix, ACTION_REPEAT), 0, "index {ix:#x}");
+        assert_ne!(
+            status(&mut p, 0xabcd_2080, ix, ACTION_REPEAT),
+            0,
+            "index {ix:#x}"
+        );
     }
     // An action outside the three, on an admitted engine index.
     let ce0 = index(&m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE0);
