@@ -172,6 +172,8 @@ mod tests {
             code: 0x4c,
             sequence: 1,
             payload,
+            elements: 1,
+            delivered: Vec::new(),
         }
     }
 
