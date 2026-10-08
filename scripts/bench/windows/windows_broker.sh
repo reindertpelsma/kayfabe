@@ -6,20 +6,27 @@
 # (its own socket, its own window title, its own run directory). 2026-10-08, the owner: "It's ok to
 # have 2 broker screens on the 1.20 host."
 #
+# ★ 2026-10-08 (later): INSTANCES. `desktop` (the persistent overlay, window "kayfabe Windows", socket
+#   windows.sock) and each `run N` (a fresh overlay, window "kayfabe Windows run N", socket windows-runN.sock)
+#   run side by side, each with its own state file ($W/windows-broker-<inst>.state). Every command that acts on
+#   a guest names its instance (`desktop` or the run number); nothing ever picks one by default.
+#
 #   windows_broker.sh run [N]     boot run N (default: the next free boundary-kayfabe-N) DETACHED:
-#                                 a fresh overlay of the baseline, the broker window, QEMU; returns
-#   windows_broker.sh desktop     boot the persistent desktop overlay ($W/windows-desktop) instead of
-#                                 a fresh one (autologon is configured there once, see `autologon`)
-#   windows_broker.sh stop        ACPI power-down of the running Windows guest (kill after 90 s),
-#                                 then its broker window; the Linux guest is never touched
-#   windows_broker.sh broker      (re)start only the Windows broker window (kf3 reconnects to it)
-#   windows_broker.sh status      the running guest, its run directory, QGA ping, host Xid count
+#                                 a fresh overlay of the baseline, its own broker window, QEMU; returns
+#   windows_broker.sh desktop     boot the persistent desktop overlay ($W/windows-desktop); refused while
+#                                 any QEMU has that overlay open (never two VMs on one disk)
+#   windows_broker.sh stop INST   CLEAN shutdown: ACPI power-down, wait up to 180 s, then QGA shutdown,
+#                                 wait up to 120 s more; only then a kill, logged UNCLEAN — and for `desktop`
+#                                 not even then unless WIN_FORCE_KILL=1 (an unclean stop corrupted the
+#                                 desktop overlay's UEFI variables once, 2026-10-08). Then its broker window.
+#   windows_broker.sh broker INST (re)start only that instance's broker window (kf3 reconnects to it)
+#   windows_broker.sh status [INST]  running guests, run directories, QGA ping, host Xid count
 #   windows_broker.sh autologon   (desktop overlay, guest running) through QGA as SYSTEM: give the
 #                                 local account 'kf' a password from $W/windows-desktop/secrets
 #                                 (0600, generated here, never committed) and enable Winlogon autologon
-#   windows_broker.sh nvidia disable|enable|status   (guest running) the guest's NVIDIA display device, through
+#   windows_broker.sh nvidia disable|enable|status INST   the guest's NVIDIA display device, through
 #                                 QGA + pnputil (nvidia_device.ps1); takes effect at the next boot (`reboot`)
-#   windows_broker.sh reboot      restart the guest (QGA, Restart-Computer -Force)
+#   windows_broker.sh reboot INST restart the guest (QGA, Restart-Computer -Force)
 #
 # ★ 2026-10-08 (run58): the visible, interactive desktop TODAY is the Basic Display fallback: `desktop`,
 #   `autologon`, `nvidia disable`, `reboot` — Windows then draws through Microsoft Basic Display on kf3's GOP
@@ -49,11 +56,26 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 W=${WIN_DIR:-/var/lib/kf-windows-20261005}
 B=${BROKER_BIN:-/opt/nvkvm-broker/nvkvm-display-broker}
 TOOLS=$W/boundary-tools
-STATE=$W/windows-broker.state
 cmd=${1:-}
 say(){ printf '[windows] %s\n' "$*"; }
 die(){ printf '[windows] ★ %s\n' "$*" >&2; exit 2; }
 [ "$(id -u)" = 0 ] || die "run as root"
+
+# ── instances ──────────────────────────────────────────────────────────────────────────────────
+# $1 = `desktop` or a run number → INST, STATE, RUNDIR, WTITLE, SOCKNAME
+inst() {
+    case "${1:-}" in
+    desktop) INST=desktop; RUNDIR=$W/windows-desktop; WTITLE=${WIN_TITLE:-kayfabe Windows}; SOCKNAME=windows.sock ;;
+    ''|*[!0-9]*) die "name the instance: desktop or a run number (got '${1:-}')" ;;
+    *) INST=run$1; RUNDIR=$W/boundary-kayfabe-$1; WTITLE=${WIN_TITLE:-kayfabe Windows run $1}; SOCKNAME=windows-run$1.sock ;;
+    esac
+    STATE=$W/windows-broker-$INST.state
+    # the single state file of the first version (2026-10-08, runs 54-59) named the desktop
+    if [ "$INST" = desktop ] && [ ! -s "$STATE" ] && [ -s "$W/windows-broker.state" ] \
+       && grep -qx "RUN=$W/windows-desktop" "$W/windows-broker.state"; then
+        cp "$W/windows-broker.state" "$STATE"
+    fi
+}
 
 # the desktop session (seat0's active graphical session), as interactive.sh finds it
 session() {
@@ -71,7 +93,7 @@ session() {
         XD=$(tr '\0' '\n' < "/proc/$xp/cmdline" | grep -m1 '^:[0-9]')
         XA=$(tr '\0' '\n' < "/proc/$xp/cmdline" | grep -A1 -m1 '^-auth$' | tail -1)
     fi
-    SOCK=$SRUN/nvkvm/windows.sock
+    SOCK=$SRUN/nvkvm/$SOCKNAME
 }
 
 broker_down() {
@@ -91,43 +113,73 @@ broker_up() {   # $1 = log
     setsid runuser -u "$SU" -- env XDG_RUNTIME_DIR="$SRUN" WAYLAND_DISPLAY="$WD" DISPLAY="$XD" \
         XAUTHORITY="$XA" DBUS_SESSION_BUS_ADDRESS="unix:path=$SRUN/bus" \
         "$B" --socket "$SOCK" --backend "$backend" --persist --verbose \
-        --title "${WIN_TITLE:-kayfabe Windows}" ${BROKER_ARGS:-} > "$log" 2>&1 < /dev/null &
+        --title "$WTITLE" ${BROKER_ARGS:-} > "$log" 2>&1 < /dev/null &
     for _ in $(seq 50); do [ -S "$SOCK" ] && break; sleep 0.2; done
     [ -S "$SOCK" ] || { tail -5 "$log" >&2; die "the broker did not create $SOCK (log $log)"; }
-    say "broker: backend $backend, socket $SOCK, title '${WIN_TITLE:-kayfabe Windows}' (log $log)"
+    say "broker: backend $backend, socket $SOCK, title '$WTITLE' (log $log)"
 }
 
-running_pid() { [ -s "$STATE" ] && . "$STATE" && [ -n "${QPID:-}" ] && kill -0 "$QPID" 2>/dev/null && echo "$QPID"; }
+# the QEMU of the current instance, if alive AND still the QEMU of that run directory
+running_pid() {
+    [ -s "$STATE" ] || return 1
+    local qp rd
+    qp=$(sed -n 's/^QPID=//p' "$STATE"); rd=$(sed -n 's/^RUN=//p' "$STATE")
+    [ -n "$qp" ] && kill -0 "$qp" 2>/dev/null && tr '\0' ' ' < "/proc/$qp/cmdline" | grep -q "file=$rd/windows.qcow2" \
+        && echo "$qp"
+}
 
 xid_count() { dmesg 2>/dev/null | grep -c 'NVRM: Xid'; }
 
+wait_gone() {   # $1 = pid, $2 = seconds
+    local i; for i in $(seq "$2"); do kill -0 "$1" 2>/dev/null || return 0; sleep 1; done; return 1
+}
+
 case "$cmd" in
 stop)
-    session || true
+    inst "${2:-}"; session || true
     if q=$(running_pid); then
-        . "$STATE"
-        python3 "$TOOLS/qmp.py" "$RUN/qmp.sock" cmd system_powerdown >/dev/null 2>&1
-        for _ in $(seq 90); do kill -0 "$q" 2>/dev/null || break; sleep 1; done
-        kill -0 "$q" 2>/dev/null && { kill "$q"; sleep 3; kill -9 "$q" 2>/dev/null; say "QEMU $q killed after 90 s"; }
-        echo "WINDOWS_EXIT stop $(date -Is)" >> "$RUN/marker.txt"
+        python3 "$TOOLS/qmp.py" "$RUNDIR/qmp.sock" cmd system_powerdown >/dev/null 2>&1
+        if wait_gone "$q" 180; then how=acpi
+        else
+            say "no ACPI shutdown after 180 s — asking the guest agent"
+            timeout 30 python3 "$TOOLS/qmp.py" "$RUNDIR/qga.sock" qga-exec shutdown.exe /s /f /t 0 >/dev/null 2>&1
+            if wait_gone "$q" 120; then how=qga
+            elif [ "$INST" = desktop ] && [ "${WIN_FORCE_KILL:-0}" != 1 ]; then
+                die "the desktop guest (QEMU $q) did not shut down; NOT killed (WIN_FORCE_KILL=1 kills it, unclean)"
+            else
+                kill "$q"; wait_gone "$q" 10 || kill -9 "$q" 2>/dev/null; how=UNCLEAN-kill
+                say "★ QEMU $q killed after 300 s without a clean shutdown (UNCLEAN)"
+            fi
+        fi
+        echo "WINDOWS_EXIT stop=$how $(date -Is) xid=$(xid_count)" >> "$RUNDIR/marker.txt"
     else
-        say "no Windows guest running"
+        say "no $INST guest running"
     fi
     [ -n "${SOCK:-}" ] && broker_down
-    say "stopped (Xid count now $(xid_count))"; exit 0 ;;
+    say "$INST stopped (Xid count now $(xid_count))"; exit 0 ;;
 status)
-    if q=$(running_pid); then
-        . "$STATE"; say "running: QEMU $q, run $RUN, kf3 $KF3_REV, since $(stat -c %y "$RUN/marker.txt")"
-        timeout 15 python3 "$TOOLS/qmp.py" "$RUN/qga.sock" qga-ping >/dev/null 2>&1 && say "QGA answers" || say "QGA silent"
-    else say "no Windows guest running"; fi
+    for st in "$W"/windows-broker-*.state; do
+        [ -e "$st" ] || continue
+        i=${st##*/windows-broker-}; i=${i%.state}; [ "$i" = desktop ] || i=${i#run}
+        [ -n "${2:-}" ] && [ "$2" != "$i" ] && continue
+        inst "$i"
+        if q=$(running_pid); then
+            say "$INST: QEMU $q, $RUNDIR, kf3 $(sed -n 's/^KF3_REV=//p' "$STATE")"
+            if timeout 15 python3 "$TOOLS/qmp.py" "$RUNDIR/qga.sock" qga-ping >/dev/null 2>&1; then
+                say "  QGA answers"
+            else
+                say "  QGA silent"
+            fi
+        fi
+    done
     say "host Xid lines in dmesg: $(xid_count)"; exit 0 ;;
 broker)
-    session || die "no graphical session on seat0"
-    broker_up "$W/windows-broker-$(date +%Y%m%d-%H%M%S).log"; exit 0 ;;
+    inst "${2:-}"; session || die "no graphical session on seat0"
+    broker_up "$RUNDIR/broker-$(date +%Y%m%d-%H%M%S).log"; exit 0 ;;
 autologon)
-    q=$(running_pid) || die "no Windows guest running"
-    . "$STATE"
-    [ "$RUN" = "$W/windows-desktop" ] || die "autologon only on the persistent desktop overlay (windows_broker.sh desktop)"
+    inst desktop
+    running_pid > /dev/null || die "the desktop guest is not running"
+    RUN=$RUNDIR
     install -d -m 0700 "$RUN/secrets"
     [ -s "$RUN/secrets/win_password" ] || { openssl rand -base64 18 | tr -d '\n/+=' > "$RUN/secrets/win_password"; chmod 0600 "$RUN/secrets/win_password"; }
     PW=$(cat "$RUN/secrets/win_password")
@@ -140,41 +192,44 @@ autologon)
     say "autologon set for 'kf' (password in $RUN/secrets/win_password, 0600); takes effect at the next boot"
     exit 0 ;;
 nvidia)
-    running_pid > /dev/null || die "no Windows guest running"
-    . "$STATE"
-    act=${2:-status}; case "$act" in disable|enable|status) ;; *) die "nvidia disable|enable|status" ;; esac
+    act=${2:-status}; case "$act" in disable|enable|status) ;; *) die "nvidia disable|enable|status INST" ;; esac
+    inst "${3:-}"
+    running_pid > /dev/null || die "no $INST guest running"
     tmp=$(mktemp); printf '$Action = %s\n' "'$act'" > "$tmp"; cat "$HERE/nvidia_device.ps1" >> "$tmp"
-    timeout 280 python3 "$TOOLS/qmp.py" "$RUN/qga.sock" qga-exec powershell.exe -NoProfile -Command "$(cat "$tmp")"
+    timeout 280 python3 "$TOOLS/qmp.py" "$RUNDIR/qga.sock" qga-exec powershell.exe -NoProfile -Command "$(cat "$tmp")"
     rm -f "$tmp"; exit 0 ;;
 reboot)
-    running_pid > /dev/null || die "no Windows guest running"
-    . "$STATE"
-    timeout 30 python3 "$TOOLS/qmp.py" "$RUN/qga.sock" qga-exec powershell.exe -NoProfile -Command "Restart-Computer -Force"
-    say "guest restarting (the window shows OVMF, then Windows)"; exit 0 ;;
+    inst "${2:-}"
+    running_pid > /dev/null || die "no $INST guest running"
+    timeout 30 python3 "$TOOLS/qmp.py" "$RUNDIR/qga.sock" qga-exec powershell.exe -NoProfile -Command "Restart-Computer -Force"
+    say "$INST restarting (the window shows OVMF, then Windows)"; exit 0 ;;
 run|desktop) ;;
-*) die "usage: $0 run [N] | desktop | stop | broker | status | autologon | nvidia disable|enable|status | reboot" ;;
+*) die "usage: $0 run [N] | desktop | stop INST | broker INST | status [INST] | autologon | nvidia disable|enable|status INST | reboot INST" ;;
 esac
 
 # ── run / desktop ───────────────────────────────────────────────────────────────────────────────
 [ -n "${KF3_REV:-}" ] || die "KF3_REV names the kf3 binary (under $W/kf3-bins)"
 QBIN=$W/kf3-bins/$KF3_REV/qemu-system-x86_64
 [ -x "$QBIN" ] || die "no kf3 binary at $QBIN"
-q=$(running_pid) && die "a Windows guest is already running (QEMU $q); $0 stop first"
-session || die "no graphical session on seat0"
 if [ "$cmd" = desktop ]; then
-    RUN=$W/windows-desktop; NAME=kayfabe-windows-desktop
-    mkdir -p "$RUN"; chmod 0700 "$RUN"
-    [ -e "$RUN/windows.qcow2" ] || qemu-img create -q -f qcow2 -F qcow2 -b "$W/baseline/windows.qcow2" "$RUN/windows.qcow2" || die "qemu-img"
-    [ -e "$RUN/OVMF_VARS.fd" ] || cp "$W/baseline/OVMF_VARS.fd" "$RUN/OVMF_VARS.fd"
+    inst desktop
+    q=$(running_pid) && die "the desktop guest is already running (QEMU $q)"
+    pgrep -f "file=$RUNDIR/windows.qcow2" > /dev/null && die "a QEMU already has $RUNDIR/windows.qcow2 open"
+    NAME=kayfabe-windows-desktop
+    mkdir -p "$RUNDIR"; chmod 0700 "$RUNDIR"
+    [ -e "$RUNDIR/windows.qcow2" ] || qemu-img create -q -f qcow2 -F qcow2 -b "$W/baseline/windows.qcow2" "$RUNDIR/windows.qcow2" || die "qemu-img"
+    [ -e "$RUNDIR/OVMF_VARS.fd" ] || cp "$W/baseline/OVMF_VARS.fd" "$RUNDIR/OVMF_VARS.fd"
 else
     N=${2:-}
     if [ -z "$N" ]; then N=54; while [ -e "$W/boundary-kayfabe-$N" ]; do N=$((N + 1)); done; fi
-    RUN=$W/boundary-kayfabe-$N; NAME=boundary-kayfabe-$N
-    [ -e "$RUN" ] && die "$RUN exists (a run directory is never reused)"
-    mkdir -m 0700 "$RUN"
-    qemu-img create -q -f qcow2 -F qcow2 -b "$W/baseline/windows.qcow2" "$RUN/windows.qcow2" || die "qemu-img"
-    cp "$W/baseline/OVMF_VARS.fd" "$RUN/OVMF_VARS.fd"
+    inst "$N"; NAME=boundary-kayfabe-$N
+    [ -e "$RUNDIR" ] && die "$RUNDIR exists (a run directory is never reused)"
+    mkdir -m 0700 "$RUNDIR"
+    qemu-img create -q -f qcow2 -F qcow2 -b "$W/baseline/windows.qcow2" "$RUNDIR/windows.qcow2" || die "qemu-img"
+    cp "$W/baseline/OVMF_VARS.fd" "$RUNDIR/OVMF_VARS.fd"
 fi
+RUN=$RUNDIR
+session || die "no graphical session on seat0"
 rm -f "$RUN"/qmp.sock "$RUN"/qga.sock
 stamp=$(date +%Y%m%d-%H%M%S)
 echo "WINDOWS_START kf3=$KF3_REV run=$RUN checkout=$(git -C "$HERE/../../.." rev-parse --short=8 HEAD 2>/dev/null) xid_before=$(xid_count) $(date -Is)" | tee -a "$RUN/marker.txt"
@@ -221,15 +276,15 @@ QPID=$!
 printf 'QPID=%s\nRUN=%s\nKF3_REV=%s\n' "$QPID" "$RUN" "$KF3_REV" > "$STATE"
 say "QEMU pid $QPID, kf3 $KF3_REV, run $RUN (qemu.log, serial.log, command.json, marker.txt)"
 if [ "${WIN_MAX_SECONDS:-0}" -gt 0 ]; then
-    setsid bash -c "sleep $WIN_MAX_SECONDS; kill -0 $QPID 2>/dev/null && '$0' stop" > /dev/null 2>&1 < /dev/null &
+    setsid bash -c "sleep $WIN_MAX_SECONDS; kill -0 $QPID 2>/dev/null && '$0' stop ${N:-desktop}" > /dev/null 2>&1 < /dev/null &
 fi
 setsid bash -c "while kill -0 $QPID 2>/dev/null; do sleep 5; done; echo \"WINDOWS_EXIT qemu-gone \$(date -Is) xid_after=\$(dmesg | grep -c 'NVRM: Xid')\" >> '$RUN/marker.txt'" > /dev/null 2>&1 < /dev/null &
 cat <<EOF
 
-  ┌ kayfabe Windows window: "${WIN_TITLE:-kayfabe Windows}" on ${SU}'s desktop (beside the Linux one) ┐
+  ┌ kayfabe Windows window: "$WTITLE" on ${SU}'s desktop ┐
   │ hover = absolute USB tablet; CTRL+ALT+G grab (PS/2 relative mouse); CTRL+ALT+F fullscreen
   │ guest PowerShell as SYSTEM: scripts/bench/windows/qga_run_ps.py ${N:-desktop} <file.ps1>
-  │ stop: $0 stop
+  │ stop: $0 stop ${N:-desktop}
   └────────────────────────────────────────────────────────────────────────────────────────────┘
 EOF
 exit 0

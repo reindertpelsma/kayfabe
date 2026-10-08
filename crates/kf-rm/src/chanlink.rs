@@ -838,9 +838,27 @@ impl ChannelPolicy {
                     .vas_under
                     .entry((h.client, h.parent))
                     .or_insert(h.handle);
+                // ★ 2026-10-08 (Windows user-work classification, diagnostic): the declared index,
+                // flags and size, read through the generated layout (logged, never acted on).
+                let vp = crate::rmrpc::alloc_params_window(&self.abi, body);
+                let vf = |path: &'static str| {
+                    vp.and_then(|p| {
+                        layout_u32(
+                            &kf_abi::generated::matrix::NV_VASPACE_ALLOCATION_PARAMETERS,
+                            self.abi.driver_version(),
+                            p,
+                            path,
+                        )
+                    })
+                };
                 eprintln!(
-                    "kf-rm: chanlink: FERMI_VASPACE_A {:#x}:{:#x} under {:#x} (device default for it: {first:#x})",
-                    h.client, h.handle, h.parent
+                    "kf-rm: chanlink: FERMI_VASPACE_A {:#x}:{:#x} under {:#x} (device default for it: {first:#x}) VAS-FACTS index={:x?} flags={:x?} bigPageSize={:x?}",
+                    h.client,
+                    h.handle,
+                    h.parent,
+                    vf("index"),
+                    vf("flags"),
+                    vf("bigPageSize")
                 );
                 return None;
             }
@@ -965,6 +983,37 @@ impl ChannelPolicy {
                 .ok()
                 .flatten(),
         };
+        // ★ 2026-10-08 (Windows user-work classification, diagnostic): the declared process ids and
+        // raw internal flags beside the facts the route uses — logged for the criterion's evidence.
+        let cf = |path: &'static str| {
+            layout_u32(
+                &kf_abi::generated::matrix::NV_CHANNEL_ALLOC_PARAMS,
+                self.abi.driver_version(),
+                params,
+                path,
+            )
+        };
+        eprintln!(
+            "kf-rm: chanlink: CHAN-FACTS {:#x}:{:#x} parent={:#x} class={:#x} engine={:x?} flags={:#x} hVASpace={:#x} ctxShare={:#x} vas={:#x}:{:x?} tsg={:x?} device={:#x} kernel={} privilege={:?} internalFlags={:x?} ProcessID={:x?} SubProcessID={:x?} kernel_pid_decl={}",
+            st.client,
+            st.handle,
+            st.parent,
+            st.class,
+            st.engine_type,
+            st.flags,
+            st.h_vaspace,
+            st.ctx_share,
+            st.vaspace_client,
+            st.vaspace,
+            st.tsg,
+            st.device,
+            st.kernel_client,
+            st.privilege,
+            cf("internalFlags"),
+            cf("ProcessID"),
+            cf("SubProcessID"),
+            st.declared_kernel_pid
+        );
         self.carried += 1;
         self.carry_alloc(ChanStatement::Alloc(st), cmd, h.client, h.handle)
     }
@@ -1913,6 +1962,20 @@ impl CommandPolicy for ChannelPolicy {
             _ => None,
         }
     }
+}
+
+/// ★ 2026-10-08: a `u32` field of a generated params layout at `version`, or `None` (unmeasured
+/// layout, missing field, short params).
+fn layout_u32(
+    runs: &'static kf_abi::matrix::StructRuns,
+    version: kf_abi::DriverVersion,
+    params: &[u8],
+    path: &'static str,
+) -> Option<u32> {
+    let l = kf_abi::matrix::Resolved::of(runs, version).ok()?;
+    let off = l.need(path).ok()?.off();
+    let b = params.get(off..off.checked_add(4)?)?;
+    Some(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
 }
 
 #[cfg(test)]
