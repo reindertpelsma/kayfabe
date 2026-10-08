@@ -63,7 +63,7 @@
 //! `paramsSize=0x18`), not libcuda's, so reading one word of it is not a read of user
 //! memory either.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use kf_abi::generated::classes::NV01_EVENT_OS_EVENT;
@@ -131,10 +131,83 @@ impl OsEventRegistration {
     }
 }
 
+/// ★★★ **The guest's non-stall subscriptions, by slot** (2026-10-08, owner ruling §X) — read
+/// lock-free by the device's interrupt plane on every host non-stall edge.
+///
+/// A slot (`kf_abi::eventnotify::nonstall_slot`) is "the guest has a live `NV01_EVENT_OS_EVENT`
+/// with `NV01_EVENT_NONSTALL_INTR` on this notifier": the guest CPU-RM's own subscription, which
+/// it walks when the device raises the engine's vector (`event_notification.c:688-737`). Counted
+/// up on the registration, down on the `FREE` that retires it.
+///
+/// ⊘ **Errs towards waking, never towards silence.** A registration the bounded table could not
+/// remember ([`OS_EVENT_MAX`]) makes its slot STICKY (armed for the rest of the VM's life): its
+/// retire could never be seen, and a missed wake is a correctness bug while a spurious one is
+/// harmless (the guest's waiter re-checks its semaphore). An alloc the object model later
+/// refused is still counted here (the observer cannot see the answer): spurious wakes only.
+#[derive(Debug)]
+pub struct NonstallArms {
+    counts: [AtomicU32; kf_abi::eventnotify::NONSTALL_SLOTS],
+    sticky: AtomicU64,
+}
+
+impl Default for NonstallArms {
+    fn default() -> NonstallArms {
+        NonstallArms {
+            counts: std::array::from_fn(|_| AtomicU32::new(0)),
+            sticky: AtomicU64::new(0),
+        }
+    }
+}
+
+impl NonstallArms {
+    /// Whether the guest has a live (or sticky) non-stall subscription on `slot`. Two relaxed
+    /// loads; an out-of-range slot is never armed.
+    #[must_use]
+    pub fn armed(&self, slot: usize) -> bool {
+        self.counts
+            .get(slot)
+            .is_some_and(|c| c.load(Ordering::Relaxed) > 0)
+            || (slot < 64 && self.sticky.load(Ordering::Relaxed) & (1 << slot) != 0)
+    }
+
+    /// Live subscriptions on `slot` (for the report).
+    #[must_use]
+    pub fn count(&self, slot: usize) -> u32 {
+        self.counts
+            .get(slot)
+            .map_or(0, |c| c.load(Ordering::Relaxed))
+    }
+
+    /// The sticky slots, as a bit mask (for the report).
+    #[must_use]
+    pub fn sticky(&self) -> u64 {
+        self.sticky.load(Ordering::Relaxed)
+    }
+
+    fn up(&self, slot: usize) {
+        if let Some(c) = self.counts.get(slot) {
+            c.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    fn down(&self, slot: usize) {
+        if let Some(c) = self.counts.get(slot) {
+            let _ = c.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+        }
+    }
+
+    fn stick(&self, slot: usize) {
+        if slot < 64 {
+            self.sticky.fetch_or(1 << slot, Ordering::Relaxed);
+        }
+    }
+}
+
 /// The shared registry. Cloneable so the plane and the chain link hold the same one.
 #[derive(Debug, Clone, Default)]
 pub struct OsEventLog {
-    live: Arc<Mutex<Vec<OsEventRegistration>>>,
+    live: Arc<Mutex<Vec<(OsEventRegistration, Option<usize>)>>>,
+    nonstall: Arc<NonstallArms>,
     registered: Arc<AtomicU64>,
     retired: Arc<AtomicU64>,
     overflowed: Arc<AtomicU64>,
@@ -161,20 +234,41 @@ impl OsEventLog {
     ///
     /// Returns whether a new row was added.
     pub fn register(&self, reg: OsEventRegistration) -> bool {
+        self.register_slot(reg, None)
+    }
+
+    /// [`OsEventLog::register`], and count it on the guest's non-stall subscription `slot`
+    /// ([`NonstallArms`]) — `None` for a registration that is not a non-stall one.
+    pub fn register_slot(&self, reg: OsEventRegistration, slot: Option<usize>) -> bool {
         let mut live = self.live.lock().unwrap_or_else(|e| e.into_inner());
         if live
             .iter()
-            .any(|r| r.client == reg.client && r.event == reg.event)
+            .any(|(r, _)| r.client == reg.client && r.event == reg.event)
         {
             return false;
         }
         if live.len() >= OS_EVENT_MAX {
             self.overflowed.fetch_add(1, Ordering::Relaxed);
+            // ⊘ Not remembered, so its FREE can never be seen: the slot stays armed for good
+            // (a spurious wake is harmless, a missed one is not — [`NonstallArms`]).
+            if let Some(s) = slot {
+                self.nonstall.stick(s);
+            }
             return false;
         }
-        live.push(reg);
+        if let Some(s) = slot {
+            self.nonstall.up(s);
+        }
+        live.push((reg, slot));
         self.registered.fetch_add(1, Ordering::Relaxed);
         true
+    }
+
+    /// ★ The guest's non-stall subscriptions — the same counters the registry keeps, shared
+    /// (`Arc`), read lock-free by the device's interrupt plane.
+    #[must_use]
+    pub fn nonstall_arms(&self) -> Arc<NonstallArms> {
+        Arc::clone(&self.nonstall)
     }
 
     /// ★★★ Retire every row the guest's `FREE` killed. See this module's header for what
@@ -199,10 +293,15 @@ impl OsEventLog {
     pub fn retire(&self, client: u32, handle: u32) -> usize {
         let mut live = self.live.lock().unwrap_or_else(|e| e.into_inner());
         let before = live.len();
-        live.retain(|r| {
+        let nonstall = &self.nonstall;
+        live.retain(|(r, slot)| {
             let this_event = r.client == client && r.event == handle;
             let this_client_root = client == handle && r.client == handle;
-            !(this_event || this_client_root)
+            let drop = this_event || this_client_root;
+            if drop && let Some(s) = slot {
+                nonstall.down(*s);
+            }
+            !drop
         });
         let dropped = before - live.len();
         if dropped > 0 {
@@ -233,7 +332,7 @@ impl OsEventLog {
     pub fn find(&self, client: u32, event: u32) -> Option<OsEventRegistration> {
         let live = self.live.lock().unwrap_or_else(|e| e.into_inner());
         live.iter()
-            .copied()
+            .map(|(r, _)| *r)
             .find(|r| r.client == client && r.event == event)
     }
 
@@ -241,7 +340,7 @@ impl OsEventLog {
     #[must_use]
     pub fn live(&self) -> Vec<OsEventRegistration> {
         let live = self.live.lock().unwrap_or_else(|e| e.into_inner());
-        live.clone()
+        live.iter().map(|(r, _)| *r).collect()
     }
 
     /// How many distinct `(hClient, hEvent)` pairs have ever been registered.
@@ -405,11 +504,18 @@ impl CommandObserver for OsEventRecorder {
                     self.log.note_malformed();
                     return;
                 };
-                self.log.register(OsEventRegistration {
-                    client: h.client,
-                    event: h.handle,
-                    notify_index,
-                });
+                // ★ 2026-10-08 (§X): a NON-STALL registration is the guest's subscription to an
+                // engine's (or the host's) non-stall edges, resolved at the guest's version.
+                let slot =
+                    kf_abi::eventnotify::nonstall_slot(self.driver.driver_version(), notify_index);
+                self.log.register_slot(
+                    OsEventRegistration {
+                        client: h.client,
+                        event: h.handle,
+                        notify_index,
+                    },
+                    slot,
+                );
             }
             // ★★★ The retire path. `rpc_free_v03_00` IS `NVOS00_PARAMETERS`
             // (`hRoot = hClient`, `hObjectOld = hObject`), which is why the ordinary free
@@ -639,6 +745,63 @@ mod tests {
         let left = log.live();
         assert_eq!(left.len(), 1);
         assert_eq!(left[0].client, 0xc1d0_000d, "the other client is untouched");
+    }
+
+    /// ★ 2026-10-08 (§X): a NON-STALL registration arms its slot, its `FREE` disarms it; a stall
+    /// registration on the same index arms nothing.
+    #[test]
+    fn a_nonstall_registration_arms_its_slot_until_freed() {
+        use kf_abi::eventnotify::{NONSTALL_SLOT_FIFO_EVENT_MTHD, NV01_EVENT_NONSTALL_INTR};
+        let log = OsEventLog::new();
+        let arms = log.nonstall_arms();
+        let mut rec = recorder(&log);
+        let mut params = [0u8; NV0005_ALLOC_PARAMETERS_SIZE];
+        params[NOTIFY_INDEX_AT..NOTIFY_INDEX_AT + 4].copy_from_slice(&35u32.to_le_bytes());
+        observe(
+            &mut rec,
+            RpcFunction::RmAlloc,
+            alloc_rpc(0xc1d0_000c, 0x5c00_0079, NV01_EVENT_OS_EVENT, &params),
+        );
+        assert!(!arms.armed(NONSTALL_SLOT_FIFO_EVENT_MTHD), "a stall event");
+        params[NOTIFY_INDEX_AT..NOTIFY_INDEX_AT + 4]
+            .copy_from_slice(&(35u32 | NV01_EVENT_NONSTALL_INTR).to_le_bytes());
+        for ev in [0x5c00_007a, 0x5c00_007b] {
+            observe(
+                &mut rec,
+                RpcFunction::RmAlloc,
+                alloc_rpc(0xc1d0_000c, ev, NV01_EVENT_OS_EVENT, &params),
+            );
+        }
+        assert_eq!(arms.count(NONSTALL_SLOT_FIFO_EVENT_MTHD), 2);
+        assert_eq!(log.retire(0xc1d0_000c, 0x5c00_007a), 1);
+        assert!(arms.armed(NONSTALL_SLOT_FIFO_EVENT_MTHD), "one subscription left");
+        assert_eq!(log.retire(0xc1d0_000c, 0xc1d0_000c), 2, "the root free");
+        assert!(!arms.armed(NONSTALL_SLOT_FIFO_EVENT_MTHD));
+        assert!(!arms.armed(usize::MAX), "a hostile slot is never armed");
+    }
+
+    /// ⊘ A non-stall registration past the bound is not remembered — so its slot sticks armed
+    /// (a missed wake is the bug; a spurious one is not).
+    #[test]
+    fn an_overflowed_nonstall_registration_sticks_its_slot() {
+        let log = OsEventLog::new();
+        for i in 0..OS_EVENT_MAX as u32 {
+            log.register(OsEventRegistration {
+                client: 1,
+                event: 0x1000 + i,
+                notify_index: 0,
+            });
+        }
+        let reg = OsEventRegistration {
+            client: 1,
+            event: 0x9000,
+            notify_index: 0,
+        };
+        assert!(!log.register_slot(reg, Some(3)));
+        assert!(log.nonstall_arms().armed(3));
+        assert_eq!(log.nonstall_arms().sticky(), 1 << 3);
+        assert_eq!(log.retire(1, 1), OS_EVENT_MAX);
+        assert!(log.nonstall_arms().armed(3), "still armed: its free was never seen");
     }
 
     /// The table refuses to remember past its bound, and says so — it never evicts.

@@ -556,6 +556,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
                     stop,
                     &|_| {},
                     &|| {},
+                    &|| false,
                 )
             });
         }
