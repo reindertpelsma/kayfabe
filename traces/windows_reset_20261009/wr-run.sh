@@ -56,7 +56,7 @@ if [ "${WR_TDROFF_ARM:-0}" = 1 ]; then
     done ) &
 fi
 PUTS(){ grep -o 'disp\[writes=[0-9]* puts=[0-9]* methods=[0-9]* updates=[0-9]*' $LOG | tail -1; }
-ST(){ echo "[$(PUTS)] vsyncs=$(grep -c 'WTRACE.*VSYNC' $LOG) latch=$(grep -c 'LATCH window' $LOG) refused=$(grep -c 'scanout REFUSED' $LOG) chinfo=$(grep -c 'cmd=0xc3700104' $LOG) vga=$(grep -c 'fn=49 ' $LOG) core_freed=$(grep -c 'ChannelFreed { kind: Core' $LOG) birth_refused=$(grep -c 'birth REFUSED' $LOG)"; }
+ST(){ echo "[$(PUTS)] vsyncs=$(grep -c 'WTRACE.*VSYNC' $LOG) latch=$(grep -c 'LATCH window' $LOG) refused=$(grep -c 'scanout REFUSED' $LOG) chinfo=$(grep -c 'cmd=0xc3700104' $LOG) vga=$(grep -c 'fn=49 ' $LOG) core_freed=$(grep -c 'ChannelFreed { kind: Core' $LOG) birth_refused=$(grep -c 'birth REFUSED' $LOG) snaps=$(grep -c 'PT-SNAP BEGIN' $LOG) xid=$(dmesg | grep -c 'NVRM: Xid')"; }
 stall=0
 for i in $(seq 1 480); do
   kill -0 $QPID 2>/dev/null || { L "qemu gone at ${i}x0.5s"; break; }

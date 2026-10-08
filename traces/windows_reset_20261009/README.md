@@ -174,3 +174,51 @@ the first black frame; falsified if no frame between the boot logo and the black
 Boot 3 (run 101's disk again, `WR_REUSE=1 WR_STALL_ETW=1`): with `TdrLevel=0` the stall is held; the harness stops the ETW session
 in it and decodes the tail. **H-tail falsifier:** the decoded tail does not end at an unfinished queue/DMA packet (then the stall is
 not a GPU-scheduler wait).
+
+## 6. Run 101 (binary `kf3-bins/f5c93b21`, boot 2, RTX 4070, 2026-10-09): H-repro falsified in its timing; the lock screen shown; a host MMU fault
+
+`[measured, run 101 at f5c93b21, RTX 4070, 2026-10-09 23:22:58-23:34:52 UTC]` files `run101-*` ([harness](run101-harness.log),
+[qemu log](run101-qemu.log.gz), [frames](run101-frames.tsv), [a frame](run101-frame-232320-lockscreen.png), [bugcheck](run101-bugcheck.json)).
+kf3 clock → UTC: `UTC = kf − 273282.363 s` (the teardown's `RM_INTR_EN ← 0` at kf 274501.265 = trace 23:27:18.902).
+- **The owner's observation is CONFIRMED in substance:** from 23:23:14 to the end of the frame series (23:24:13) every
+  screendump is the **Windows lock screen drawn through kf3's display by the NVIDIA driver** (clock "11:23", "Thursday,
+  October 8", the Windows wallpaper; [frame](run101-frame-232320-lockscreen.png)) — a clock, as the owner saw (the lock
+  screen's, no taskbar: no user is logged on). Frames before 23:23:14 are black (the boot layer). The first window scanout
+  was at +10.96 s (23:23:09.5).
+- **H-repro is falsified in its timing:** no stall 5 s after the first frame — the lock screen ran for ~4 min (64
+  LATCHes, flips when the clock changes). Then: 23:27:08.57 a walk (`SPLIT` ticket by the kernel copy channel `0x80c`)
+  **unmaps the D3D process's VA range** in its space `VasKey(…399696)` (0x4014000-0x4024000, 0x4046000-…, 0x40cc000-…;
+  34+8+34+8+34+30 rows), the space where its Passthrough twins `0x15` (GR, host 0x3c, GPFIFO 0x4000000) and `0x1016`
+  (CE3, host 0x2003d, GPFIFO 0x4036000; last doorbell 274255.768 = 23:23:13.4) still live; **23:27:14 host Xid 31** (two
+  lines, `dmesg`): `channel 0x0200003d … ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x0_04036000 … FAULT_PTE
+  ACCESS_TYPE_VIRT_READ` and `channel 0x0000003c … GR0_PBDMA0 … @ 0x0_04034000 … FAULT_PTE ACCESS_TYPE_VIRT_WRITE`
+  — the two twins' PBDMAs touched their own ring/USERD-area VAs after the guest unmapped them; 23:27:18.87 the display
+  teardown (TDR), the recovery's channel birth refused at the T-space rule again (`birth REFUSED` ×1, `SWITCH_TO_VGA`
+  ×1), **0x116** `(…, 0xfffff807224d4930, 0xffffffffc000009a, 0x4)` (same signature). The guest hung (no reboot), killed
+  after 300 s. `[inferred]` a process (the lock screen's?) went away while its channels' twins were still scheduled;
+  why a twin's PBDMA fetched after 4 min of silence is open (a guest write to the adopted USERD's GP_PUT reaches the
+  host channel without a doorbell).
+- **QGA never answered** during the 4 min of desktop (60 attempts), so the TDR-off/ETW arming did not happen;
+  `TdrLevel=0` cannot be set offline on the bench host (no hivex). The ETW plan is dropped for now.
+
+So the stall trigger is not one event: run 100 a silent stop of all GPU work 5 s after the first frame (no Xid), run 101 a
+host MMU fault on a D3D process's twins after the guest unmapped their VA (Xid 31). Common: the Passthrough twins of one
+D3D process (GR `0x15` + CE `0x1016`, born ~0.7 s before the stall in run 100), and the same fatal recovery.
+
+## 7. Boot 3 (run 102), stated before the boot (2026-10-09, RTX 4070): the armed-rule relay + the stall snapshot
+
+Binary `kf3-bins/3e9bcdce` = this branch with `claude/passthrough-nsi-nogate-20261008` (`4b8399d1`, the owner-ruled
+armed-rule non-stall relay: every host edge to every VM whose guest armed the event, kernel `0x7e`/`0x78` registrations
+counted as armed, `FIFO_EVENT_MTHD` on its own vector, nothing dropped) merged in place of the old live-twin + doorbell gate
+(conflicts resolved in favour of the new relay; the `KF3_RELAY_GET_REFRESH` refresh kept in its engine-edge raise; GPU-free
+tests, clippy debt, fmt and `ci_gates.sh` green at `3e9bcdce`), plus the new default-off **stall snapshot**
+(`KF3_PT_STALL_SNAPSHOT=1`: after 1 s with no doorbell to any live Passthrough twin, and at each twin's free, every twin's
+USERD `GPGet`/`GPPut` from guest RAM, its ring entries, the decoded methods of the last segments and the value at every
+semaphore they name; GPU-free test `snap_tests`). Same flags as run 100 otherwise (caps probe, mirror + ILUT experiments,
+read trace, frames).
+**Falsifier (coordinator's, stated before the boot):** with the armed-rule relay the guest still stops all GPU work ~5 s
+after the first frame (last doorbell on token `0x1016`, then silence while VSync continues). The report carries the
+relay's report line (`fifo_armed`, `kernel_nonstall_registered`, edges/raised/not-armed per vector) and, from the
+snapshot, for `0x1016` and every twin whether `GPGet == GPPut` (the GPU finished: a completion not delivered) or not
+(which method/semaphore it waits on and who should release it). VFIO boot3 cannot show the same channel's state: the
+reference traces BAR0 and GSP RPCs, never guest memory.
