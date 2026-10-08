@@ -60,8 +60,17 @@ sleep 1; shot grub_menu
 P "GRUB_MENU serial=$(grep -ac 'GNU GRUB' "$RUN/serial.log")"
 key 108; sleep 0.5; key 103; sleep 0.5      # down, up: stops the countdown
 key 18; sleep 2; shot grub_editor           # 'e' opens the entry editor
-P "GRUB_KEY e -> editor_on_serial=$(grep -ac 'Minimum Emacs-like screen editing' "$RUN/serial.log") linux_line=$(grep -ac 'linux.*vmlinuz' "$RUN/serial.log")"
-key 1; sleep 1; key 28                      # Escape back to the menu, Enter boots the entry
+ed=$(grep -ac 'Minimum Emacs-like screen editing' "$RUN/serial.log")
+P "GRUB_KEY $([ "$ed" -gt 0 ] && echo PASS || echo FAIL) broker e -> editor_on_serial=$ed countdown_left=$(grep -ao 'automatically in [0-9]s' "$RUN/serial.log" | tail -1)"
+if [ "$ed" -gt 0 ]; then
+    key 1; sleep 1; key 28                  # Escape back to the menu, Enter boots the entry
+else
+    # the control: the same key through QEMU's monitor (PS/2) — tells "grub takes no key" from
+    # "the broker's key never reached the PS/2 keyboard"
+    mon "sendkey e"; sleep 2
+    P "GRUB_MONITOR_KEY sendkey e -> editor_on_serial=$(grep -ac 'Minimum Emacs-like screen editing' "$RUN/serial.log")"
+    mon "sendkey esc"; sleep 1; mon "sendkey ret"
+fi
 sleep 8; shot t_efistub
 wait_ssh 100 || { P "FAIL guest never answered ssh"; }
 for _ in $(seq 60); do gq "$GX xset q >/dev/null 2>&1 && pgrep -u ubuntu -x cinnamon >/dev/null && echo UP" 10 | grep -q UP && break; sleep 3; done
@@ -155,9 +164,11 @@ if [ "${PROOF_REATTACH:-0}" = 1 ]; then
     mon quit; for _ in $(seq 30); do [ -n "$(qpid)" ] || break; sleep 1; done
     wait "$VMPID" 2>/dev/null
     RUN=$OUT/vm2
-    KF_BROKER_BACKEND=auto KF_RUN_DIR=$RUN "$HERE/interactive.sh" run > "$RUN.out" 2>&1 &
+    KF_REUSE_BROKER=1 KF_RUN_DIR=$RUN "$HERE/interactive.sh" run > "$RUN.out" 2>&1 &
     VMPID=$!
     for _ in $(seq 60); do grep -aq 'kf3: broker: connected' "$RUN/qemu.log" 2>/dev/null && break; sleep 1; done
+    sleep 15
+    P "REATTACH_DISPLAY stalled=$(grep -ac 'did not complete' "$RUN/qemu.log") $(grep -ao 'display fps\[[^]]*\]' "$RUN/qemu.log" | tail -1) (predicted from ab-D: stalled, gop=on with the broker connected at start)"
     P "REATTACH broker_pid_before=$bp after=$(pgrep -n -f "^[^ ]*nvkvm-display-broker --socket") qemu=$q->$(qpid) launcher=[$(grep -a 'reusing' "$RUN.out" | cut -c1-120)] relay=[$(grep -a 'kf3: broker: connected' "$RUN/qemu.log" | head -1 | sed 's/.*kf3: broker: //' | cut -c1-160)] broker_accepts=$(grep -ac 'accepted uid' "$OUT/vm1/broker2.log")"
 fi
 # stop the VM (and the broker the run started)

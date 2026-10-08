@@ -243,16 +243,21 @@ pick_qemu
 RUN=${KF_RUN_DIR:-$WORK/run-$(date +%Y%m%d-%H%M%S)}; mkdir -p "$RUN"
 echo "INTERACTIVE_START kf3=$QREV checkout=$(git -C "$REPO" rev-parse --short=8 HEAD) $(date -Is)" | tee "$RUN/marker.txt"
 exec 9>"$LOCK"; flock -n 9 || die "the GPU lock $LOCK is held by another run (fuser $LOCK)"
-# a broker already listening on the socket is reused (a QEMU restart reattaches to it, §8.17) and
-# left running at exit; one this run starts is stopped with it
+say "session: $SU (uid $SUID) session $SID type=$STYPE wayland=${WD:-none} x=${XD:-none}; locked=$(loginctl show-session "$SID" -p LockedHint --value)"
+# ⊘ [measured 2026-10-08, kf3 0e64a960, host 595.91.07, runs ab-D/E against ab-H/I/J, V3_DISPLAY.md
+# §8.17] with gop=on, a broker that is ALREADY connected when the display worker composes its first
+# boot frame stalls that copy ("scanout REFUSED copy 1 did not complete in 2s") and the display
+# stays dead (the guest's nvidia-modeset then times out on its core channel). A broker that
+# connects 3 s or more after QEMU starts does not. So the broker is started once the worker shows
+# the boot layer, plus KF_BROKER_DELAY seconds; the relay's own retry (at most every 5 s) connects.
+# KF_REUSE_BROKER=1 keeps a broker that is already running (the QEMU-restart reattach measurement).
 OWN_BROKER=1
-if [ "${KF_BROKER_BACKEND:-auto}" != test ] && [ -S "$(SOCK_OF)" ] \
+if [ "${KF_REUSE_BROKER:-0}" = 1 ] && [ -S "$(SOCK_OF)" ] \
    && pgrep -f "^[^ ]*nvkvm-display-broker --socket $(SOCK_OF)( |\$)" >/dev/null; then
     OWN_BROKER=0; say "broker: reusing the running one on $(SOCK_OF) (pid $(pgrep -n -f "^[^ ]*nvkvm-display-broker --socket $(SOCK_OF)( |\$)"))"
 else
-    broker_up "$RUN/broker.log"
+    brokers_down "$(SOCK_OF)"
 fi
-say "session: $SU (uid $SUID) session $SID type=$STYPE wayland=${WD:-none} x=${XD:-none}; locked=$(loginctl show-session "$SID" -p LockedHint --value)"
 qemu_args "$RUN"
 printf '%q ' "$QBIN" "${QARGS[@]}" > "$RUN/cmdline.txt"
 "$QBIN" "${QARGS[@]}" > "$RUN/qemu.log" 2>&1 &
@@ -263,6 +268,15 @@ cleanup() {
     echo "INTERACTIVE_EXIT rc=${rc:-?} $(date -Is)" | tee -a "$RUN/marker.txt"
 }
 trap 'rc=130; cleanup; exit 130' INT TERM
+if [ "$OWN_BROKER" = 1 ]; then
+    for _ in $(seq 150); do
+        grep -aq 'kf3: display: +[0-9]* ms the console shows\|kf3: display worker up' "$RUN/qemu.log" 2>/dev/null && break
+        kill -0 "$q" 2>/dev/null || break
+        sleep 0.2
+    done
+    sleep "${KF_BROKER_DELAY:-3}"
+    broker_up "$RUN/broker.log"
+fi
 say "QEMU pid $q, kf3 $QREV ($QBIN)"
 banner
 wait "$q"; rc=$?
