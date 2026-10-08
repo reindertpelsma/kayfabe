@@ -46,3 +46,6 @@ FIFO_EVENT_MTHD). Behaviour does not depend on it (the relay forwards FIFO_EVENT
   FALSIFIER: arm GR0's non-stall notifier (NV2080_NOTIFIERS_GR0) in the raw client and run a COPY0 copy on bare metal;
   GR0 silent on every COPY0 iteration while FIFO_EVENT_MTHD fires = the hypothesis is false. (The --ce-interrupt arm
   watches CE0..CE9 and FIFO_EVENT_MTHD only; GR0 has to be added to its token set first. Not run.)
+  ⊘ RUN 2026-10-08 (GR0 added to the arm at f589ab23; traces/passthrough_nsi_nogate_20261008/bare_*): the falsifier did
+  NOT happen. Bare metal, 2 runs: a COPY0 copy's interrupt lands on GR0 50/50 and FIFO_EVENT_MTHD 50/50, CE0 0/50; COPY2's
+  on CE2 and FIFO_EVENT_MTHD, GR0 0/50. The hypothesis stands as measured.

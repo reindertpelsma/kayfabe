@@ -34,8 +34,15 @@
 //! - an engine-notifier edge → that engine's guest vector, if the guest armed that engine;
 //! - a `FIFO_EVENT_MTHD` edge → a guest vector whose service fires the guest's own HOST notifier
 //!   (every engine's does), chosen with the least collateral by [`host_notify_vector`]: one no
-//!   armed engine shares, else GR0's — if the guest armed `FIFO_EVENT_MTHD` (the guest kernel's own
-//!   CeUtils does, `mem_utils.c:1906`, so in practice always).
+//!   armed engine shares, else GR0's — if the guest armed `FIFO_EVENT_MTHD` (libcuda does,
+//!   `kf_rm::osevent`). `[measured 2026-10-08, kf3 15a400b5, fast guest]` before the raw client
+//!   armed it, 131 host `FIFO_EVENT_MTHD` edges arrived with it unarmed (`NotArmed`, nothing
+//!   raised; whose work they were is not established), and the quiet window and controls stayed
+//!   clean.
+//!
+//! `[measured 2026-10-08, traces/passthrough_nsi_nogate_20261008/]` in the kf3 guest at 15a400b5
+//! every `--ce-interrupt` leg lands exactly where it lands on bare metal (COPY0: GR0 and
+//! `FIFO_EVENT_MTHD` 50/50; COPY2: CE2 and `FIFO_EVENT_MTHD` 50/50; controls 0/10).
 //!
 //! ⊘ **INVARIANT: an edge may be delayed, never dropped.** Losing a wake for relevant work is a
 //! correctness bug; a cross-tenant wake is a minor denial of service, accepted (the guest's

@@ -73,7 +73,11 @@ is never dropped: by default every armed edge raises at once; an optional pacing
 (`KF3_PT_NSI_MIN_INTERVAL_US`, default off) only delays, with a pending flag per vector raised by the
 worker's tick even if no further edge comes. The guest's leaf pending bit is a level held until the guest's
 write-1-to-clear, and the guest clears before it services, so merged raises cannot lose a wake.
-`KF3_PT_NSI_RELAY=0` (FIFO edges counted, not raised) stays the falsifier mode.
+`KF3_PT_NSI_RELAY=0` (FIFO edges counted, not raised) stays the falsifier mode. `[measured 2026-10-08, RTX
+4070, kf3 15a400b5/b831b364, traces/passthrough_nsi_nogate_20261008/]` the guest's `--ce-interrupt` legs land
+exactly as on bare metal (all 50/50, controls 0/10), the 30-arm suite passes 30/30, pacing at 50 ms alone
+loses no completion (tick-delivered late raises 99/49/148), and beside a noisy neighbour VM every interrupt
+leg of both guests completes while their controls see each other's edges (the residual below).
 
 **Residual, accepted (owner, 2026-10-08).** (1) *Minor denial of service:* one tenant's non-stall work makes
 every other VM that armed the same event wake more often (a spurious interrupt; the guest's waiter re-checks

@@ -1,0 +1,64 @@
+STATUS: LIVE, 2026-10-08. Non-stall relay under owner ruling §X (wake every VM whose guest ARMED the event, never drop) —
+hardware evidence. Branch claude/passthrough-nsi-nogate-20261008.
+Host: RTX 4070 (AD104), driver 595.91.07 (open kernel module), the trusted bench host; IOMMU DMA-FQ, 01:00.0 on nvidia,
+no other QEMU on the GPU during any run (each run's start line records qemu=0). Every run took the shared GPU lock
+/tmp/kayfabe-fastguest.lock: the suite scripts per arm; the noisy-neighbour pair under one flock held by nsi-noisy.sh
+(each guest's harness then on a private lock). Guest: the fast lane (KF_FROM_HOST=1: the host's kernel and nvidia
+modules, guest driver 595.91.07). Scripts: nsi-build.sh, nsi-run.sh, nsi-noisy.sh (here). Build lines: build*.log.
+
+Revisions (device code identical in each pair noted):
+- f589ab23  raw client watches GR0 too (R35_LANDED_PER_TOKEN); kf3 raises GR0's vector for every FIFO_EVENT_MTHD edge.
+- 15a400b5  kf3 raises a FIFO_EVENT_MTHD edge on the vector no armed engine shares, else GR0's (host_notify_vector).
+- b831b364  = 15a400b5's kf-* code + the raw client's KF_CE_IRQ_ITERATIONS (the neighbour's long load).
+
+FALSIFIERS, stated before each run:
+- bare (GRCE, the owner's secondary hypothesis): GR0 silent on every COPY0 iteration while FIFO_EVENT_MTHD fires = false.
+- guest: any interrupt leg below 50/50, or a control above 0/10 with no other tenant = armed-event forwarding does not
+  deliver every completion; fifo_armed = 0 in the pt_nsi report = the guest's registrations never reached kf_rm::osevent.
+- suite30: fewer than 30 PASS = a regression.
+- paced (KF3_PT_NSI_MIN_INTERVAL_US alone, no other edge source): any leg below 50/50 = pacing loses a wake (only the
+  worker's tick can deliver an owed raise here, because the client waits for its wake before the next submission);
+  late = 0 = pacing never engaged.
+- noisy: a victim interrupt leg below 50/50 readable or semaphore-by-the-bound = a lost completion; victim late = 0 =
+  pacing did not engage. Controls and the quiet window seeing the neighbour is the accepted residual, not a failure.
+
+MEASURED:
+- bare_nsi_bare{1,2}_f589ab23_ce-interrupt_r35.log  bare metal, 2 runs, PASS both. 12 of 12 notifiers armed. COPY0 launch
+      and COPY0 host-NSI: FIFO_EVENT_MTHD 50/50 AND GR0 50/50, CE0 0/50. COPY2 launch: CE2 50/50, FIFO_EVENT_MTHD 50/50,
+      GR0 0/50. Controls 0/10, quiet window clean. The GRCE falsifier did NOT happen: a COPY0 (graphics CE) copy's
+      interrupt lands on GR0's notifier, which is why CE0's stays silent.
+- guest_G_f589ab23_*  kf3 guest, FIFO edge -> GR0's vector: --ce-interrupt FAIL only because the guest fired GR0 on 50/50
+      COPY2 iterations (bare metal: 0/50); every interrupt leg 50/50, controls 0/10. This is why 15a400b5 changed the
+      vector choice.
+- guest_G_15a400b5_*  kf3 guest, default (no pacing): --ce-client PASS, --ce-interrupt PASS; every leg lands exactly as on
+      bare metal (COPY0: FIFO_EVENT_MTHD 50/50, GR0 50/50; COPY2: CE2 50/50, FIFO_EVENT_MTHD 50/50; controls 0/10; quiet
+      window clean after 1 window). Wake median: COPY0 launch 553 us, host-NSI 547 us, COPY2 410 us. pt_nsi: fifo_edges=269,
+      fifo_raised=138 (on vector 4, NVENC1's: no armed engine shares it), fifo_armed=1; not_armed=262 (131 FIFO, 129 GR0,
+      2 CE2 edges arrived before the client armed or after; nothing raised for them).
+- guest_suite30_15a400b5_per_arm.txt, run-suite30.log  the 30 default arms in the kf3 guest: 30 PASS / 0 FAIL / 0 CRASH.
+- guest_P2000_15a400b5_*  KF3_PT_NSI_MIN_INTERVAL_US=2000: PASS, all legs 50/50, but pacing never engaged (late=0): the
+      client's iterations are about 30 ms apart.
+- guest_P50000_15a400b5_*  KF3_PT_NSI_MIN_INTERVAL_US=50000, alone: PASS, every leg 50/50 readable, semaphore by the
+      bound 50/50, controls 0/10. Pacing engaged on every vector: v0 late=99, v1 late=49, v4 late=148 (each with as many
+      coalesced_later_raised); owed=false at the end. Wake median rose to about 24 ms (the interval's remainder plus
+      the 1 ms tick). No completion lost with the tick as the only deliverer.
+- guest_V20000_b831b364_*, neighbour_N1200_b831b364_*, run-noisy2.log  noisy neighbour: a second kf3 guest running
+      --ce-interrupt with 1200 iterations per leg (no pacing) beside the victim's --ce-interrupt with
+      KF3_PT_NSI_MIN_INTERVAL_US=20000. Victim: every interrupt leg readable 50/50, semaphore by the bound 50/50, data
+      50/50 (no lost completion); the verdict is FAIL only on negative controls: the neighbour's CE2 and FIFO_EVENT_MTHD
+      edges reached it (COPY0 legs CE2 21/50 and 44/50; both no-interrupt controls 10/10). Victim quiet window clean only
+      after 92 windows (27.6 s). Victim pacing engaged: v1 late=70 coalesced_later_raised=90, v4 late=163
+      coalesced_later_raised=324, v0 late=0; COPY2 wake median 13.9 ms. Neighbour: every interrupt leg 1200/1200
+      readable and semaphore by the bound; it in turn saw the victim's edges (COPY2 leg GR0 73/1200, COPY0 control
+      FIFO_EVENT_MTHD+GR0 7/10). Both guests ran to completion; the host stayed clean (qemu=0 after).
+      ⊘ run-noisy.log (first attempt at 15a400b5) overlapped only about 3 s: the client runs an arm once however many
+      times it is listed, which is why KF_CE_IRQ_ITERATIONS was added.
+
+INFERRED (not measured):
+- The victim's owed=true for v1 and v4 at teardown (guest_V20000 pt_nsi line) is a raise still inside its 20 ms window
+  when the guest powered off after its client exited; no leg was waiting on it (all legs had completed).
+- A raise of NVENC1's vector fires the guest's FIFO_EVENT_MTHD because every engine's notification service ends in the
+  HOST notify (ogkm-595.84: intr.c:1210-1214, kernel_falcon.c:397). The guest runs measured this end to end (FIFO 50/50),
+  not the mechanism.
+- The armed counts in the final pt_nsi lines are 1 for GR0, CE0..CE3 and FIFO_EVENT_MTHD after the client exited: either
+  the guest's FREE of the client had not reached kf3 before power-off or it did not retire them; not established.
