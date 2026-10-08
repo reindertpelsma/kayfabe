@@ -1524,8 +1524,14 @@ impl Device {
             Action::RingHostInline { host_token } => {
                 // ★ P5b: a Passthrough token — ONE fenced store into the host's doorbell, and two
                 // relaxed counters for the per-token ledger. Nothing else on the vCPU.
+                // ★ 2026-10-08: the twin's engine counts the submission BEFORE the store, so its
+                // completion edge can never be judged before its doorbell (`kf_chan::ptnsi`).
+                let tok = self.plane.token_index.of_doorbell(val as u32);
+                if let Some(tok) = tok {
+                    self.chans.note_submit(tok);
+                }
                 let reached = self.rm.doorbell(host_token).is_ok();
-                if let Some(tok) = self.plane.token_index.of_doorbell(val as u32) {
+                if let Some(tok) = tok {
                     self.chans.note_inline(tok, reached);
                 }
             }
@@ -2554,13 +2560,14 @@ impl Device {
             String::new()
         };
         let chan = format!(
-            " chan[births={} pt_births={} acts={}/{}refused worst_act_us={} nsi=[{}] served={} parks={} host_rings={} contended={} poisoned={} tokens=[{}]]",
+            " chan[births={} pt_births={} acts={}/{}refused worst_act_us={} nsi=[{}] pt_nsi=[{}] served={} parks={} host_rings={} contended={} poisoned={} tokens=[{}]]",
             self.chans.births.load(o),
             self.chans.pt_births.load(o),
             self.chans.acts_run.load(o),
             self.chans.acts_refused.load(o),
             self.chans.act_worst_us.load(o),
             nsi.join(" "),
+            self.chans.pt_summary(),
             ws.served.load(o),
             ws.parks.load(o),
             ws.host_rings.load(o),
@@ -3134,22 +3141,24 @@ impl Device {
             else {
                 return;
             };
-            e.wakes.fetch_add(1, Ordering::Relaxed);
+            let wake = e.wakes.fetch_add(1, Ordering::Relaxed) + 1;
             // ⊘ Only an engine a guest twin runs on: the notifier is GPU-wide, and a wake with no
             // twin there is our own ring's, the walker's or another tenant's — not guest work.
             let live = e.live.load(Ordering::Relaxed) > 0;
-            let raise = live && e.vector.is_some();
+            // ★ 2026-10-08: the Passthrough gate judges it too (`kf_chan::ptnsi`); it decides only
+            // under `KF3_PT_NSI_GATE_ENGINES=1`.
+            let (raise, verdict) = self.chans.pt_judge_engine_edge(e);
             if !live {
                 e.unraised_no_live.fetch_add(1, Ordering::Relaxed);
             } else if e.vector.is_none() {
                 e.unraised_no_vector.fetch_add(1, Ordering::Relaxed);
             }
-            if kf_mem::maplog::on() {
+            if kf_mem::maplog::on() || wake <= 8 || wake.is_power_of_two() {
                 eprintln!(
-                    "kf3: maplog t={:.6} NSI host {} wake #{} raised={raise}",
-                    kf_mem::maplog::t(),
+                    "kf3: PT-NSI host {} notifier wake #{wake} raised={raise} verdict={verdict:?} vector={:?} live={}",
                     e.name,
-                    e.wakes.load(Ordering::Relaxed)
+                    e.vector,
+                    e.live.load(Ordering::Relaxed)
                 );
             }
             if raise && let Some(v) = e.vector {
@@ -3169,6 +3178,15 @@ impl Device {
             &self.worker_stats,
             &self.stop,
             &on_other,
+            &|| {
+                // ★ 2026-10-08 (`kf_chan::ptnsi`): a REAL host FIFO_EVENT_MTHD edge — on this host a
+                // graphics CE's completion arrives ONLY here (measured at 9925108e, bare metal), so
+                // it is judged for every engine with a live Passthrough twin and a doorbell
+                // outstanding, and each distinct guest vector is raised once.
+                self.chans
+                    .pt_judge_fifo_edge()
+                    .for_each(|v| self.latch_and_deliver(v));
+            },
         );
     }
 }
@@ -3223,9 +3241,13 @@ impl kf_chan::dbfast::Sink for Device {
             .plane
             .trap_write(Class::Doorbell, 0, off, u64::from(value), 4)
         {
-            Action::RingHostInline { host_token } => Delivered::Rang {
-                reached: self.rm.doorbell(host_token).is_ok(),
-            },
+            Action::RingHostInline { host_token } => {
+                // ★ 2026-10-08: counted on the twin's engine BEFORE the store (`kf_chan::ptnsi`).
+                self.chans.note_submit(idx);
+                Delivered::Rang {
+                    reached: self.rm.doorbell(host_token).is_ok(),
+                }
+            }
             Action::WakeWorker => {
                 let _ = self.worker_efd.signal();
                 Delivered::Handed

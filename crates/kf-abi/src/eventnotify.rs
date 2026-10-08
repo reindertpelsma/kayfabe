@@ -710,6 +710,85 @@ pub fn is_ruled_notifier(version: crate::DriverVersion, index: u32) -> bool {
         .any(|n| n.index_at(version) == Some(index))
 }
 
+/// ★★★ **Engine non-stall notifiers — the fourth promise: the guest's own CPU-RM delivers them
+/// from the vector THIS device raises** (2026-10-08).
+///
+/// The rows are the notify indices OGKM maps to an engine for a non-stall event
+/// (`eventGetEngineTypeFromSubNotifyIndex`, `ogkm-595.91.07: rmapi/event_notification.c:473-660`),
+/// restricted to the engines this device's interrupt plane announces (GR0, every copy engine,
+/// NVENC, NVDEC, OFA — `kf-qemu` `ChanPlane::new`). Named by the generated per-version runs, never
+/// a bare index.
+///
+/// - **What the GSP is asked is bookkeeping.** `subdeviceCtrlCmdEventSetNotification_IMPL`
+///   (`ogkm-595.91.07: subdevice_ctrl_event_kernel.c:79-147`) checks only an event list on the
+///   subdevice, `event < NV2080_NOTIFIERS_MAXCOUNT`, `event != TIMER` and the action, then records
+///   `notifyActions[event]`. It never asks whether the engine exists. `[measured 2026-10-08,
+///   rawclient --ce-interrupt at 9925108e, bare_ce-interrupt_9925108e_run1.log]` on the RTX 4070
+///   (COPY0..COPY3 only) the host RM armed all of CE0..CE9: 11 of 11 notifiers armed.
+/// - **What delivers is the guest's non-stall interrupt tree.** An event allocated with
+///   `NV01_EVENT_NONSTALL_INTR` joins `pGpu->engineNonstallIntrEventNotifications[engine]`
+///   (`event_notification.c:683-737`), which the guest CPU-RM walks from its own notification
+///   service (`kceServiceNotificationInterrupt` → `engineNonStallIntrNotify`,
+///   `ogkm-595.91.07: kernel_ce.c:700-720`) when THIS device raises the engine's vector:
+///   kf-qemu's engine notifiers and, for Passthrough twins, `kf_chan::ptnsi` on the host's
+///   `FIFO_EVENT_MTHD` edge.
+/// - **An engine the device does not have** is not in the served engine list (the host's own), so
+///   no guest channel can run on it and its event cannot occur: accepting it is silence that is
+///   true, and it is what the real GSP answers.
+///
+/// ⊘ Before this list, CE2 and CE4..CE9 were refused `NV_ERR_NOT_SUPPORTED`
+/// (`guest_kf3_ce-interrupt_serial_9925108e.log`) while CE0/CE1/CE3 were admitted only because a
+/// Windows boot happened to arm them ([`RULED_NOTIFIERS`]) — a captured list standing in for a rule.
+pub const ENGINE_NONSTALL_NOTIFIERS: &[&crate::matrix::ValueRuns] = {
+    use crate::generated::matrix as m;
+    &[
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_GR0,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE0,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE1,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE2,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE3,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE4,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE5,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE6,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE7,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE8,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE9,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE10,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE11,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE12,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE13,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE14,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE15,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE16,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE17,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE18,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE19,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_NVENC0,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_NVENC1,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_NVENC2,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_NVENC3,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_NVDEC0,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_NVDEC1,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_NVDEC2,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_NVDEC3,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_NVDEC4,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_NVDEC5,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_NVDEC6,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_NVDEC7,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_OFA0,
+        &m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_OFA1,
+    ]
+};
+
+/// Whether `index` is an engine non-stall notifier at the guest's driver `version` — see
+/// [`ENGINE_NONSTALL_NOTIFIERS`]. An unmeasured version, or a name absent there, admits nothing.
+#[must_use]
+pub fn is_engine_nonstall_notifier(version: crate::DriverVersion, index: u32) -> bool {
+    ENGINE_NONSTALL_NOTIFIERS
+        .iter()
+        .any(|n| n.at_u32(version).ok().flatten() == Some(index))
+}
+
 /// One row of [`GUEST_RAISED_NOTIFIERS`] — an index, and where the guest's own RM raises it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GuestRaisedNotifier {

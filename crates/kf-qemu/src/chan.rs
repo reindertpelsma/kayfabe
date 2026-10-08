@@ -298,6 +298,9 @@ pub struct EngineEvent {
     pub cpending: AtomicU64,
     /// Relays raised on this engine's guest vector for Translated copy-engine work.
     pub crelays: AtomicU64,
+    /// ★ 2026-10-08 (`kf_chan::ptnsi`): this VM's Passthrough twins on this engine — doorbells
+    /// counted, and the verdict for every host edge judged for them.
+    pub pt: kf_chan::ptnsi::PtGate,
 }
 
 /// A CE class id on ANY family — the class tables are generated per family and class ids are
@@ -1688,6 +1691,12 @@ pub struct ChanPlane {
     pub act_total_us: AtomicU64,
     /// Passthrough twins born.
     pub pt_births: AtomicU64,
+    /// ★ 2026-10-08: host `FIFO_EVENT_MTHD` edges judged for Passthrough twins.
+    pub pt_fifo_edges: AtomicU64,
+    /// …engine verdicts on them that raised.
+    pub pt_fifo_raised: AtomicU64,
+    /// …of which the engine had no usable guest vector (counted, never raised; healthy value 0).
+    pub pt_unvectored: AtomicU64,
     /// ★ v3-video: host NVENC session slots held per guest client (acquired on OUR host client;
     /// released with the guest's release or its client's free).
     enc_sessions: Mutex<HashMap<u32, u32>>,
@@ -1709,6 +1718,14 @@ pub struct ChanPlane {
     /// ★ `KF3_MAPLOG` only: per guest token, when its last inline doorbell was rung (µs on the
     /// `kf_mem::maplog` clock; 0 = never, or maplog off).
     rung_at_us: Box<[AtomicU64]>,
+    /// ★ 2026-10-08 (`kf_chan::ptnsi`): per guest token, the index + 1 into [`ChanPlane::engines`]
+    /// of its live Passthrough twin's engine (0 = none). Written by the act thread at birth and
+    /// retire, read by the vCPU / drainer doorbell path (one relaxed load).
+    tok_engine: Box<[AtomicU32]>,
+    /// ★ 2026-10-08: the Passthrough relay's settings (`KF3_PT_NSI_*`, read once at realize).
+    pt_cfg: PtNsiCfg,
+    /// The plane's monotonic origin (the Passthrough gate's clock).
+    t0: std::time::Instant,
     /// ★ P5c: the host robust-channel event fd — one dataless `NV01_EVENT_OS_EVENT` per twin's
     /// context DMA (notify index 0: `krcErrorSendEventNotificationsCtxDma_FWCLIENT` walks exactly
     /// those, `kernel_rc_notification.c:380-400`), all on this fd. A worker's poller watches it.
@@ -1887,6 +1904,30 @@ fn withdraw_kept<H: crate::dispsw::DispSwHost>(
     )
 }
 
+/// ★ 2026-10-08: the Passthrough completion relay's settings (`kf_chan::ptnsi`), read once.
+#[derive(Debug, Clone, Copy)]
+struct PtNsiCfg {
+    /// `KF3_PT_NSI_RELAY=0`: judge and count host `FIFO_EVENT_MTHD` edges, raise nothing.
+    relay: bool,
+    /// `KF3_PT_NSI_AFTERGLOW_MS` (default 1000).
+    afterglow_us: u64,
+    /// `KF3_PT_NSI_GATE_ENGINES=1`: the engine notifiers' edges are gated by the same rule (default
+    /// off: they keep the measured live-twin rule).
+    gate_engines: bool,
+}
+
+impl PtNsiCfg {
+    fn from_env() -> PtNsiCfg {
+        PtNsiCfg {
+            relay: std::env::var("KF3_PT_NSI_RELAY").map_or(true, |v| v.trim() != "0"),
+            afterglow_us: kf_chan::ptnsi::afterglow_us_from(
+                std::env::var("KF3_PT_NSI_AFTERGLOW_MS").ok().as_deref(),
+            ),
+            gate_engines: std::env::var("KF3_PT_NSI_GATE_ENGINES").is_ok_and(|v| v.trim() == "1"),
+        }
+    }
+}
+
 impl ChanPlane {
     /// Build the plane: open the session's completion fd (host ioctls — realize, never a vCPU).
     ///
@@ -2004,6 +2045,7 @@ impl ChanPlane {
                 trelays: AtomicU64::new(0),
                 cpending: AtomicU64::new(0),
                 crelays: AtomicU64::new(0),
+                pt: kf_chan::ptnsi::PtGate::default(),
             });
         }
         eprintln!(
@@ -2013,6 +2055,13 @@ impl ChanPlane {
                 .map(|e| format!("{}->{:x?}", e.name, e.vector))
                 .collect::<Vec<_>>()
                 .join(" ")
+        );
+        let pt_cfg = PtNsiCfg::from_env();
+        eprintln!(
+            "kf3: passthrough NSI relay: host FIFO_EVENT_MTHD edges -> the guest vector of every engine with a live Passthrough twin AND a doorbell outstanding (relay={} afterglow={} us gate_engine_notifiers={}; KF3_PT_NSI_RELAY / KF3_PT_NSI_AFTERGLOW_MS / KF3_PT_NSI_GATE_ENGINES)",
+            if pt_cfg.relay { "on" } else { "OFF (judged and counted only)" },
+            pt_cfg.afterglow_us,
+            pt_cfg.gate_engines
         );
         // ★ P5c: the RC fd (realize-time host ioctls, never a vCPU).
         let rc_ev = rm
@@ -2059,11 +2108,17 @@ impl ChanPlane {
             act_worst_us: AtomicU64::new(0),
             act_total_us: AtomicU64::new(0),
             pt_births: AtomicU64::new(0),
+            pt_fifo_edges: AtomicU64::new(0),
+            pt_fifo_raised: AtomicU64::new(0),
+            pt_unvectored: AtomicU64::new(0),
             groups: Mutex::new(HashMap::new()),
             enc_sessions: Mutex::new(HashMap::new()),
             rung: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rang: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rung_at_us: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
+            tok_engine: (0..tokens).map(|_| AtomicU32::new(0)).collect(),
+            pt_cfg,
+            t0: std::time::Instant::now(),
             rc_ev,
             rc_queue: Mutex::new(Vec::new()),
             preempt_done: Mutex::new(Vec::new()),
@@ -2160,6 +2215,121 @@ impl ChanPlane {
             *a = Some(tx);
         }
         Ok(())
+    }
+
+    /// ★ **vCPU or drainer, BEFORE the host doorbell store** (2026-10-08, `kf_chan::ptnsi`): a
+    /// doorbell of guest token `idx` is about to ring its Passthrough twin — count it on the
+    /// twin's engine. One relaxed load and one add; nothing else.
+    pub fn note_submit(&self, idx: u32) {
+        let e = self
+            .tok_engine
+            .get(idx as usize)
+            .map_or(0, |w| w.load(Ordering::Relaxed));
+        if let Some(e) = (e as usize).checked_sub(1).and_then(|i| self.engines.get(i)) {
+            e.pt.note_submit();
+        }
+    }
+
+    /// The Passthrough gate's clock: µs since the plane was built.
+    fn pt_now_us(&self) -> u64 {
+        u64::try_from(self.t0.elapsed().as_micros()).unwrap_or(u64::MAX)
+    }
+
+    /// ★ **Worker**, on a REAL host `FIFO_EVENT_MTHD` edge (2026-10-08): judge it for every engine
+    /// (`kf_chan::ptnsi::PtGate::on_edge`) and return the guest vectors to raise, coalesced. An
+    /// engine with no guest vector is counted (`unvectored`), never raised. With
+    /// `KF3_PT_NSI_RELAY=0` the edge is judged and counted and NOTHING is returned (the falsifier
+    /// run: does the edge come?).
+    pub fn pt_judge_fifo_edge(&self) -> kf_chan::ptnsi::VectorSet {
+        let mut set = kf_chan::ptnsi::VectorSet::default();
+        let now = self.pt_now_us();
+        self.pt_fifo_edges.fetch_add(1, Ordering::Relaxed);
+        for e in &self.engines {
+            let live = e.live.load(Ordering::Relaxed);
+            let v = e.pt.on_edge(live, now, self.pt_cfg.afterglow_us);
+            if !v.raises() {
+                continue;
+            }
+            let n = self.pt_fifo_raised.fetch_add(1, Ordering::Relaxed) + 1;
+            if n <= 16 || n.is_power_of_two() {
+                eprintln!(
+                    "kf3: PT-NSI host FIFO_EVENT_MTHD edge -> guest {} vector {:?}: {v:?} (live twins {live}; {}; verdict #{n}{})",
+                    e.name,
+                    e.vector,
+                    e.pt.summary(),
+                    if self.pt_cfg.relay { "" } else { ", RELAY OFF: not raised" }
+                );
+            }
+            match e.vector {
+                Some(vec) if self.pt_cfg.relay => {
+                    e.raised.fetch_add(1, Ordering::Relaxed);
+                    if !set.insert(vec) && vec >= 256 {
+                        self.pt_unvectored.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+                Some(_) => {}
+                None => {
+                    self.pt_unvectored.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+        }
+        set
+    }
+
+    /// ★ **Worker**, on engine `e`'s own host notifier (2026-10-08): judge the edge for this VM's
+    /// Passthrough twins there. Returns whether to raise and the verdict: the verdict decides under
+    /// `KF3_PT_NSI_GATE_ENGINES=1`, else the measured pre-2026-10-08 rule does (a live twin).
+    pub fn pt_judge_engine_edge(&self, e: &EngineEvent) -> (bool, kf_chan::ptnsi::Verdict) {
+        let live = e.live.load(Ordering::Relaxed);
+        let v = e.pt.on_edge(live, self.pt_now_us(), self.pt_cfg.afterglow_us);
+        let raise = if self.pt_cfg.gate_engines {
+            v.raises()
+        } else {
+            live > 0
+        };
+        (raise && e.vector.is_some(), v)
+    }
+
+    /// The `PT-NSI` report: FIFO edges judged, verdicts raised, and every engine whose gate saw a
+    /// doorbell or an edge.
+    #[must_use]
+    pub fn pt_summary(&self) -> String {
+        let o = Ordering::Relaxed;
+        let per: Vec<String> = self
+            .engines
+            .iter()
+            .filter(|e| e.pt.submits() > 0 || e.live.load(o) > 0)
+            .map(|e| {
+                format!(
+                    "{}[{} vec={:?} live={} wakes={} raised={}]",
+                    e.name,
+                    e.pt.summary(),
+                    e.vector,
+                    e.live.load(o),
+                    e.wakes.load(o),
+                    e.raised.load(o)
+                )
+            })
+            .collect();
+        format!(
+            "fifo_edges={} verdicts_raised={} unvectored={} relay={} {}",
+            self.pt_fifo_edges.load(o),
+            self.pt_fifo_raised.load(o),
+            self.pt_unvectored.load(o),
+            if self.pt_cfg.relay { "on" } else { "OFF" },
+            per.join(" ")
+        )
+    }
+
+    /// The act thread: token `idx`'s Passthrough twin on host engine `engine_type` was born
+    /// (`Some`) or retired (`None`) — the doorbell path's engine index.
+    fn tok_engine_set(&self, idx: u32, engine_type: Option<u32>) {
+        let v = engine_type
+            .and_then(|et| self.engines.iter().position(|e| e.engine_type == et))
+            .map_or(0, |i| u32::try_from(i + 1).unwrap_or(0));
+        if let Some(w) = self.tok_engine.get(idx as usize) {
+            w.store(v, Ordering::Relaxed);
+        }
     }
 
     /// ★ **vCPU**: a doorbell on guest token `idx` was rung inline; `reached` = the host store
@@ -4252,6 +4422,7 @@ impl ChanPlane {
                     if let Some(n) = t.notifier {
                         me.release_notifier(n);
                     }
+                    me.tok_engine_set(t.idx, None);
                     me.engine_live(t.engine, false);
                     // ★ The per-token hardware ledger (`run_fast_guest.sh` gates on it): every ring
                     // of a Passthrough token IS a host doorbell, so `emulated` is only the rings
@@ -5157,6 +5328,7 @@ impl ChanPlane {
                         }
                         _ => false,
                     };
+                    me.tok_engine_set(idx, Some(engine));
                     let _ = me.take_ledger(idx);
                     // ★ After the token word and the twin: until its placement lands, the trap
                     // serves this token; after, its eventfd does. No lock is held here.

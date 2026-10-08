@@ -2433,6 +2433,12 @@ impl CommandPolicy for InitTablePolicy {
                     // ★ 2026-10-07, owner ruling §S: stub / absent-on-virtual-display / posted
                     // by the display plane (`RULED_NOTIFIERS`, every row with its argument).
                     && !eventnotify::is_ruled_notifier(self.driver.driver_version(), reg.event)
+                    // ★ 2026-10-08: an engine's non-stall notifier — the guest's own CPU-RM
+                    // delivers it from the vector this device raises (`ENGINE_NONSTALL_NOTIFIERS`).
+                    && !eventnotify::is_engine_nonstall_notifier(
+                        self.driver.driver_version(),
+                        reg.event,
+                    )
                     && !self.probe_arm.contains(reg.event)
                 {
                     return refuse();
