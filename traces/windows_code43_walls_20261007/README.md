@@ -3396,7 +3396,7 @@ driver channel (paging, kernel GR, video, display-side) logs `USER WORK`; (3) a 
 *Cost of a misclassification:* a user channel kept Translated hits the rewriter (as in run57, fail closed); a kernel channel made Passthrough
 runs on an asserted-USER host channel in a VA space holding only this VM's memory — it cannot reach another VM or the host (unprivileged
 channel, bounded VAS); a physical operand is refused by the copy engine (`traces/phys_operand_oracle_20261008/`; GR classes are still being
-measured by the oracle, not claimed here). The flag `KF3_WIN_USER_CHANNELS_PASSTHROUGH` (default off) also admits Windows' per-channel 5080
+measured by the oracle, not claimed here; criterion first applied in run61 at 883f878e, 2026-10-08). The flag `KF3_WIN_USER_CHANNELS_PASSTHROUGH` (default off) also admits Windows' per-channel 5080
 as a guest-graph object on such a twin (never triggered by kayfabe) and resolves deferred INITIALIZE/PROMOTE/EVICT that target such a twin
 (ruling B; EVICT = host channel off the runlist).
 
@@ -3462,7 +3462,7 @@ What the traces can NOT show: who has a CPU mapping of a ring, push buffer or US
 RPC carries it), and therefore whether a process can write its own ring or push buffers. `[inferred, WDDM's model, not measured]`: per-process
 command buffers are built by the user-mode driver in the process's GPU VA space and submitted by the kernel driver.
 
-What each outcome means: the kernel-driver channels DO use physical operands (measured) — they are kernel work in effect and stay Translated
+What each outcome means: the kernel-driver channels DO use physical operands ([measured, run64 at ac3456ac, 2026-10-08]) — they are kernel work in effect and stay Translated
 (the criterion keeps every one of them there). For the per-process channels the evidence is not enough to call their content virtual-only; the
 Passthrough classification's soundness rests on the host side instead: the twin is an asserted-USER host channel in a VA space holding only
 this VM's memory, so a physical operand on it is refused by the hardware (copy engine: measured by the oracle, Xid 32 + RC; graphics classes:
@@ -3471,7 +3471,7 @@ NEEDS a physical operand (then it would fail closed under Passthrough) is open; 
 
 ## Stop (fourth session, 2026-10-08 ~16:20): the next wall is USERD; decisions waiting
 
-**What moved:** a measured, two-fact criterion separates the kernel driver's channels from per-process user work at channel creation (runs 60,
+**What moved:** a two-fact criterion ([measured, runs 60/61/64 at 3a578d50/883f878e/ac3456ac, 2026-10-08]) separates the kernel driver's channels from per-process user work at channel creation (runs 60,
 61, 64 agree); the software-runlist submit is shown to be on the compositor's path (run60 bisect). **The wall:** a Passthrough twin cannot adopt
 a Windows USERD (guest system memory, IOVA `0x7ff9...` on this host), so no user-work channel is born; the subchannel-binding question of run57
 is therefore not reached.
@@ -3485,4 +3485,4 @@ limit on a 32 GiB host): a host-level change that needs the GPU's driver rebound
 Recommendation: (i), designed with its doorbell and completion path written down first.
 
 **Decisions needed:** (1) the owner's soundness question, with the table above; (2) `KF3_SW_RUNLIST_HOST_OWNED` (still "undecided", now
-measured on the D3D/compositor path, run60); (3) USERD relay (i) vs IOMMU identity (ii); (4) the preemption/ZCULL binds on twins (probes only).
+on the D3D/compositor path in run60 at 3a578d50, 2026-10-08); (3) USERD relay (i) vs IOMMU identity (ii); (4) the preemption/ZCULL binds on twins (probes only).
