@@ -15,10 +15,12 @@
 //! `[measured 2026-10-08, rawclient --ce-interrupt at 9925108e, RTX 4070, bare metal,
 //! traces/rawclient_ce_interrupt_20261008/bare_ce-interrupt_9925108e_run{1,2,3}.log]` a COPY0
 //! copy's interrupt arrives on `FIFO_EVENT_MTHD` ONLY (CE0's own notifier stays silent); a COPY2
-//! copy's on both CE2 and `FIFO_EVENT_MTHD`. `[inferred, not measured]` why CE0 stays silent:
-//! COPY0 is a graphics CE (GRCE) on that die and may be serviced as GR0, so its edge would come on
-//! GR0's notifier; the falsifier is in `traces/passthrough_interrupt_20261008/INDEX.txt` (arm GR0
-//! in the raw client, run a COPY0 copy). Behaviour does not depend on which is true.
+//! copy's on both CE2 and `FIFO_EVENT_MTHD`. Why CE0 stays silent — the owner's GRCE hypothesis:
+//! COPY0 is a graphics CE on that die, serviced as GR0. `[measured 2026-10-08, rawclient
+//! --ce-interrupt at f589ab23 with GR0 watched, bare metal, 2 runs,
+//! traces/passthrough_nsi_nogate_20261008/]` its falsifier did not happen: a COPY0 copy's interrupt
+//! lands on GR0 AND `FIFO_EVENT_MTHD` in 50/50 iterations (CE0 0/50); COPY2's on CE2 and
+//! `FIFO_EVENT_MTHD` (GR0 0/50). Behaviour does not depend on it.
 //!
 //! ## The rule (owner, 2026-10-08): follow NVIDIA — an interrupt wakes everyone subscribed
 //!
@@ -30,11 +32,10 @@
 //! subscription, never a doorbell, never "has a live twin", never "has work outstanding"):
 //!
 //! - an engine-notifier edge → that engine's guest vector, if the guest armed that engine;
-//! - a `FIFO_EVENT_MTHD` edge → the guest vector whose service fires the guest's own HOST
-//!   notifier (GR0's: its service record never waives it, `ogkm-595.84: kernel_graphics.c:2665`;
-//!   `[measured 2026-10-08, guest_kf3_85459d73_relayON_ce-interrupt_serial.log]` raising vector 0,
-//!   which GR0 and CE0 share on AD104, woke the guest's `FIFO_EVENT_MTHD` 50/50), if the guest
-//!   armed `FIFO_EVENT_MTHD`.
+//! - a `FIFO_EVENT_MTHD` edge → a guest vector whose service fires the guest's own HOST notifier
+//!   (every engine's does), chosen with the least collateral by [`host_notify_vector`]: one no
+//!   armed engine shares, else GR0's — if the guest armed `FIFO_EVENT_MTHD` (the guest kernel's own
+//!   CeUtils does, `mem_utils.c:1906`, so in practice always).
 //!
 //! ⊘ **INVARIANT: an edge may be delayed, never dropped.** Losing a wake for relevant work is a
 //! correctness bug; a cross-tenant wake is a minor denial of service, accepted (the guest's
@@ -262,6 +263,39 @@ impl Pacer {
             out.join(" ")
         )
     }
+}
+
+/// ★ The guest vector a host `FIFO_EVENT_MTHD` edge is raised on: one whose service fires the
+/// guest's own HOST notifier (every engine's does — `bDefaultNonstallNotify`, no engine waives it,
+/// `ogkm-595.84: intr.c:1210-1214`) with the LEAST collateral — the first vector, in `engines`
+/// order, that no engine the guest ARMED is announced on, so the guest fires `FIFO_EVENT_MTHD` and
+/// no engine notification anyone waits on. If every vector carries an armed engine, `fallback`
+/// (GR0's): a spurious engine wake, accepted (owner ruling §X). `engines` yields `(vector, armed)`.
+///
+/// `[measured 2026-10-08, kf3 f589ab23, guest --ce-interrupt]` raising GR0's vector for every
+/// `FIFO_EVENT_MTHD` edge made the guest fire GR0's notifier on 50/50 COPY2 iterations, which bare
+/// metal never does (`traces/passthrough_nsi_nogate_20261008/`) — the reason for this choice.
+#[must_use]
+pub fn host_notify_vector(
+    engines: impl Iterator<Item = (Option<u32>, bool)> + Clone,
+    fallback: Option<u32>,
+) -> Option<u32> {
+    let mut armed = [0u64; VECTORS / 64];
+    for (v, a) in engines.clone() {
+        if let (Some(v), true) = (v, a)
+            && let Some(w) = armed.get_mut(v as usize / 64)
+        {
+            *w |= 1 << (v % 64);
+        }
+    }
+    engines
+        .filter_map(|(v, _)| v)
+        .find(|&v| {
+            armed
+                .get(v as usize / 64)
+                .is_some_and(|w| w & (1 << (v % 64)) == 0)
+        })
+        .or(fallback)
 }
 
 /// Which host notifier an edge came on.
@@ -600,6 +634,30 @@ mod tests {
     }
 
     /// Two workers judging edges on one VM at once (pacing off): every armed edge raises.
+    #[test]
+    fn the_host_notify_vector_avoids_every_vector_an_armed_engine_shares() {
+        // AD104's served table: GR0, CE0, CE1 on 0; CE2 on 1; CE3 on 2; NVENC1 4; NVDEC0 3; OFA 5.
+        let table = |armed: &[bool; 8]| {
+            let armed = *armed;
+            let v = [0, 0, 0, 1, 2, 4, 3, 5];
+            (0..8).map(move |i| (Some(v[i]), armed[i]))
+        };
+        // Only the guest kernel's FIFO_EVENT_MTHD is armed: the first vector (GR0's) is clean.
+        assert_eq!(host_notify_vector(table(&[false; 8]), Some(0)), Some(0));
+        // CE1 armed shares vector 0 with GR0: vector 0 is out, CE2's 1 is next.
+        let a = [false, false, true, false, false, false, false, false];
+        assert_eq!(host_notify_vector(table(&a), Some(0)), Some(1));
+        // GR0 and every CE armed (the --ce-interrupt client): a video engine's vector.
+        let a = [true, true, true, true, true, false, false, false];
+        assert_eq!(host_notify_vector(table(&a), Some(0)), Some(4));
+        // Everything armed: the fallback (a spurious engine wake, accepted).
+        assert_eq!(host_notify_vector(table(&[true; 8]), Some(0)), Some(0));
+        // Unvectored engines are skipped; hostile vectors never index out of range.
+        let e = [(None, false), (Some(u32::MAX), true), (Some(7), false)];
+        assert_eq!(host_notify_vector(e.into_iter(), None), Some(7));
+        assert_eq!(host_notify_vector([(None, false)].into_iter(), None), None);
+    }
+
     #[test]
     fn two_workers_raise_every_armed_edge() {
         let r = Relay::new(0, true);

@@ -65,7 +65,10 @@ host GPU and serviced by the host RM; what reaches kayfabe is a GPU-wide host no
 host edge is forwarded to **every VM whose guest armed that event** (a live guest
 `NV01_EVENT_OS_EVENT` with `NV01_EVENT_NONSTALL_INTR` on that notifier, recorded by the host from the
 guest's alloc RPC, `kf_rm::osevent::NonstallArms`). An engine edge raises that engine's vector; a
-`FIFO_EVENT_MTHD` edge raises GR0's vector, whose service fires the guest's own `FIFO_EVENT_MTHD`. An edge
+`FIFO_EVENT_MTHD` edge raises a vector whose guest service fires the guest's own `FIFO_EVENT_MTHD` (every
+engine's does) and, if one exists, that no armed engine is announced on, else GR0's
+(`kf_chan::ptnsi::host_notify_vector`; GR0's alone made the guest see a GR0 wake for every COPY2 copy,
+which bare metal never shows). An edge
 is never dropped: by default every armed edge raises at once; an optional pacing knob
 (`KF3_PT_NSI_MIN_INTERVAL_US`, default off) only delays, with a pending flag per vector raised by the
 worker's tick even if no further edge comes. The guest's leaf pending bit is a level held until the guest's

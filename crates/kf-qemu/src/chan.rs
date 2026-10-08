@@ -1380,6 +1380,8 @@ pub struct ChanPlane {
     pub pt_births: AtomicU64,
     /// ★ 2026-10-08 (owner ruling §X): host `FIFO_EVENT_MTHD` edges seen by the relay.
     pub pt_fifo_edges: AtomicU64,
+    /// …of which raised a guest vector at once.
+    pub pt_fifo_raised: AtomicU64,
     /// ★ v3-video: host NVENC session slots held per guest client (acquired on OUR host client;
     /// released with the guest's release or its client's free).
     enc_sessions: Mutex<HashMap<u32, u32>>,
@@ -1407,8 +1409,8 @@ pub struct ChanPlane {
     /// The guest's non-stall subscriptions (`kf_rm::osevent::NonstallArms`), set once at realize
     /// from the served chain's os-event registry; read lock-free by the workers.
     nsi_arms: std::sync::OnceLock<std::sync::Arc<kf_rm::osevent::NonstallArms>>,
-    /// The index into [`ChanPlane::engines`] of GR0 — its vector's service fires the guest's own
-    /// HOST (`FIFO_EVENT_MTHD`) notifier.
+    /// The index into [`ChanPlane::engines`] of GR0 — the fallback vector for a host
+    /// `FIFO_EVENT_MTHD` edge when every vector carries an armed engine.
     host_notify_engine: Option<usize>,
     /// The plane's monotonic origin (the relay's pacing clock).
     t0: std::time::Instant,
@@ -1746,7 +1748,7 @@ impl ChanPlane {
             .iter()
             .position(|e| e.engine_type == kf_abi::submit::ENGINE_TYPE_GRAPHICS);
         eprintln!(
-            "kf3: non-stall relay (owner ruling 2026-10-08): every host edge -> the guest vector of every event this guest ARMED, never dropped; FIFO_EVENT_MTHD -> {} vector {:?} (relay={}, pacing={}; KF3_PT_NSI_RELAY / KF3_PT_NSI_MIN_INTERVAL_US)",
+            "kf3: non-stall relay (owner ruling 2026-10-08): every host edge -> the guest vector of every event this guest ARMED, never dropped; FIFO_EVENT_MTHD -> a vector no armed engine shares, else {} vector {:?} (relay={}, pacing={}; KF3_PT_NSI_RELAY / KF3_PT_NSI_MIN_INTERVAL_US)",
             host_notify_engine.map_or("no GR0", |i| engines[i].name.as_str()),
             host_notify_engine.and_then(|i| engines[i].vector),
             if nsi.relays_fifo() {
@@ -1804,6 +1806,7 @@ impl ChanPlane {
             act_total_us: AtomicU64::new(0),
             pt_births: AtomicU64::new(0),
             pt_fifo_edges: AtomicU64::new(0),
+            pt_fifo_raised: AtomicU64::new(0),
             groups: Mutex::new(HashMap::new()),
             enc_sessions: Mutex::new(HashMap::new()),
             rung: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
@@ -1930,16 +1933,25 @@ impl ChanPlane {
     }
 
     /// ★ **Worker**, on a REAL host `FIFO_EVENT_MTHD` edge (2026-10-08, owner ruling §X): if the
-    /// guest armed `FIFO_EVENT_MTHD`, raise GR0's vector — its service fires the guest's own HOST
-    /// notifier (`kf_chan::ptnsi` module doc) — via `deliver`. Never dropped: unarmed is counted,
+    /// guest armed `FIFO_EVENT_MTHD`, raise the vector `kf_chan::ptnsi::host_notify_vector` picks —
+    /// one whose guest service fires the guest's own HOST notifier and, if possible, no engine
+    /// event the guest armed (GR0's otherwise) — via `deliver`. Never dropped: unarmed is counted,
     /// paced is owed. With `KF3_PT_NSI_RELAY=0` the edge is counted only (the falsifier run).
     pub fn nsi_fifo_edge(&self, deliver: impl FnOnce(u32)) -> kf_chan::ptnsi::Verdict {
         let n = self.pt_fifo_edges.fetch_add(1, Ordering::Relaxed) + 1;
         let armed = self.nsi_armed(Some(kf_abi::eventnotify::NONSTALL_SLOT_FIFO_EVENT_MTHD));
-        let vector = self
-            .host_notify_engine
-            .and_then(|i| self.engines.get(i))
-            .and_then(|e| e.vector);
+        let vector = if armed {
+            kf_chan::ptnsi::host_notify_vector(
+                self.engines
+                    .iter()
+                    .map(|e| (e.vector, self.nsi_armed(e.slot))),
+                self.host_notify_engine
+                    .and_then(|i| self.engines.get(i))
+                    .and_then(|e| e.vector),
+            )
+        } else {
+            None
+        };
         let verdict = self.nsi.edge(
             kf_chan::ptnsi::EdgeKind::Fifo,
             armed,
@@ -1947,9 +1959,7 @@ impl ChanPlane {
             self.nsi_now_ns(),
         );
         if let kf_chan::ptnsi::Verdict::Raise(v) = verdict {
-            if let Some(e) = self.host_notify_engine.and_then(|i| self.engines.get(i)) {
-                e.raised.fetch_add(1, Ordering::Relaxed);
-            }
+            self.pt_fifo_raised.fetch_add(1, Ordering::Relaxed);
             deliver(v);
         }
         if n <= 16 || n.is_power_of_two() {
@@ -2026,8 +2036,9 @@ impl ChanPlane {
             })
             .collect();
         format!(
-            "fifo_edges={} fifo_armed={} sticky={:#x} {} {}",
+            "fifo_edges={} fifo_raised={} fifo_armed={} sticky={:#x} {} {}",
             self.pt_fifo_edges.load(o),
+            self.pt_fifo_raised.load(o),
             count(Some(kf_abi::eventnotify::NONSTALL_SLOT_FIFO_EVENT_MTHD)),
             arms.map_or(0, |a| a.sticky()),
             self.nsi.summary(),
