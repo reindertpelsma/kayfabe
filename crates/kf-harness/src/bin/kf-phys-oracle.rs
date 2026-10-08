@@ -23,8 +23,12 @@
 //!
 //! ```text
 //! kf-phys-oracle <arm> <deny>
-//!   arm  = virt | phys_fb | phys_sysmem
+//!   arm  = virt | phys_fb | phys_sysmem | phys_dst_fb
 //!   deny = 1 (production: DENY_PHYSICAL_MODE_CE=TRUE) | 0 (unprivileged, belt off)
+//!   KF_PHYS_ENGINE=N selects the CE instance (COPY0+N); default 0
+//!
+//! `phys_dst_fb` is the honour-into-own-page detector: DST is PHYSICAL and names dst's own FB
+//! offset (a page the test allocated). If honoured, the write lands only in the test's page.
 //! ```
 //!
 //! `virt` is the rig control: a virtual→virtual copy that MUST deliver, proving a null result in a
@@ -87,7 +91,10 @@ fn phys_attr(rm: &HostRm, obj: u32) -> Result<(u64, u32), String> {
 
 /// A CE copy push: `src → dst` of `len` bytes, releasing `payload` at `sem_va`. `src_physical`
 /// chooses `SRC_TYPE` and (when physical) the `SET_SRC_PHYS_MODE` target. The destination is
-/// ALWAYS virtual.
+/// virtual unless a `Some(target)` makes that side PHYSICAL. ⊘ A physical DESTINATION is only
+/// ever a page the test allocated (owner-authorised 2026-10-08): if the hardware honours it, the
+/// only thing written is the test's own page, never any other address.
+#[allow(clippy::too_many_arguments)] // a pushbuffer encoder; each operand is a distinct field
 fn copy_push(
     ce_class: u32,
     src: u64,
@@ -96,11 +103,16 @@ fn copy_push(
     sem_va: u64,
     payload: u32,
     src_physical: Option<u32>,
+    dst_physical: Option<u32>,
 ) -> Option<Vec<u32>> {
     let sub = CE_SUBCHANNEL;
     let mut w = vec![method_header_inc(sub, SET_OBJECT, 1)?, ce_class];
     if let Some(target) = src_physical {
         w.push(method_header_inc(sub, ce::SET_SRC_PHYS_MODE, 1)?);
+        w.push(target);
+    }
+    if let Some(target) = dst_physical {
+        w.push(method_header_inc(sub, ce::SET_DST_PHYS_MODE, 1)?);
         w.push(target);
     }
     w.extend([
@@ -122,12 +134,16 @@ fn copy_push(
         | ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD
         | ce::LAUNCH_SRC_PITCH
         | ce::LAUNCH_DST_PITCH
-        | ce::LAUNCH_MULTI_LINE_DISABLE
-        | ce::LAUNCH_DST_VIRTUAL;
+        | ce::LAUNCH_MULTI_LINE_DISABLE;
     flags |= if src_physical.is_some() {
         ce::LAUNCH_SRC_PHYSICAL
     } else {
         ce::LAUNCH_SRC_VIRTUAL
+    };
+    flags |= if dst_physical.is_some() {
+        ce::LAUNCH_DST_PHYSICAL
+    } else {
+        ce::LAUNCH_DST_VIRTUAL
     };
     w.extend([method_header_inc(sub, ce::LAUNCH_DMA, 1)?, flags]);
     Some(w)
@@ -162,7 +178,10 @@ fn run(l: &mut Ledger, arm: &str, deny: bool) -> Result<(), String> {
             .map_err(|e| format!("stamp dst: {e:?}"))?;
     }
 
-    // Source and the operand the push will carry.
+    // Source/destination operands the push will carry. `dst_operand` defaults to the virtual
+    // `dst_va`; `phys_dst_fb` replaces it with dst's own physical FB offset (a page we allocated).
+    let mut dst_operand = dst_va;
+    let mut dst_physical: Option<u32> = None;
     let (src_operand, src_physical, _src_keep): (u64, Option<u32>, Box<dyn std::any::Any>) =
         match arm {
             "virt" => {
@@ -173,6 +192,25 @@ fn run(l: &mut Ledger, arm: &str, deny: bool) -> Result<(), String> {
                     .map(space, src, MapBacking::Dedicated, 0, OBJ_BYTES, None, false)
                     .map_err(|e| format!("map src: {e:?}"))?;
                 fill_vram(&rm, src)?;
+                (src_va, None, Box::new(()))
+            }
+            "phys_dst_fb" => {
+                // SRC virtual (a filled page we own); DST PHYSICAL = dst's own FB offset. If the
+                // hardware honours it, the only page written is our own dst (owner-authorised).
+                let src = rm
+                    .alloc_device_local(OBJ_BYTES)
+                    .map_err(|e| format!("src obj: {e:?}"))?;
+                let src_va = rm
+                    .map(space, src, MapBacking::Dedicated, 0, OBJ_BYTES, None, false)
+                    .map_err(|e| format!("map src: {e:?}"))?;
+                fill_vram(&rm, src)?;
+                let (dphys, ap) = phys_attr(&rm, dst)?;
+                l.measure("dst_phys_fb", format!("addr={dphys:#x} aperture={ap}"));
+                if ap != 0 {
+                    return Err(format!("expected VIDMEM aperture for dst, got {ap}"));
+                }
+                dst_operand = dphys;
+                dst_physical = Some(ce::PHYS_MODE_TARGET_LOCAL_FB);
                 (src_va, None, Box::new(()))
             }
             "phys_fb" => {
@@ -242,10 +280,18 @@ fn run(l: &mut Ledger, arm: &str, deny: bool) -> Result<(), String> {
     let (_rn, ring_cpu) = rm
         .map_cpu(ring, RING_BYTES, CachePolicy::Uncached)
         .map_err(|e| format!("cpu ring: {e:?}"))?;
+    // KF_PHYS_ENGINE=N selects the CE instance (COPY0+N) so a second copy engine, as Windows'
+    // own channels may land on, is exercised too. Default 0.
+    let engine = ENGINE_TYPE_COPY0
+        + std::env::var("KF_PHYS_ENGINE")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(0);
+    l.measure("engine_type", format!("{engine:#x} (COPY0=0x9)"));
     let chan = rm
         .birth_channel_with(
             space,
-            ENGINE_TYPE_COPY0,
+            engine,
             RingSpec {
                 gp_fifo_va: ring_va + GPFIFO_OFF,
                 gp_fifo_entries: GPFIFO_ENTRIES,
@@ -261,7 +307,7 @@ fn run(l: &mut Ledger, arm: &str, deny: bool) -> Result<(), String> {
         chan.born_user.is_some(),
         format!("token={:#x} (reply checked PRIVILEGE_USER)", chan.token),
     );
-    rm.alloc_ce_object(chan, ENGINE_TYPE_COPY0)
+    rm.alloc_ce_object(chan, engine)
         .map_err(|e| format!("ce object: {e:?}"))?;
     rm.schedule(chan).map_err(|e| format!("schedule: {e:?}"))?;
 
@@ -270,11 +316,12 @@ fn run(l: &mut Ledger, arm: &str, deny: bool) -> Result<(), String> {
     let words = copy_push(
         rm.ce_class_id(),
         src_operand,
-        dst_va,
+        dst_operand,
         COPY_LEN,
         ring_va + SEM_OFF,
         payload,
         src_physical,
+        dst_physical,
     )
     .ok_or("push encode")?;
     for (i, w) in words.iter().enumerate() {
