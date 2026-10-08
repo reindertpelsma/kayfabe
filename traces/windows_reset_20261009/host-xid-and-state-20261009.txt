@@ -1,0 +1,6 @@
+[Fri Oct  9 01:27:14 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=2936907, name=qemu-system-x86, channel 0x0200003d, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x0_04036000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+[Fri Oct  9 01:27:14 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=2936907, name=qemu-system-x86, channel 0x0000003c, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0x0_04034000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_WRITE
+[Fri Oct  9 01:53:33 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=2973311, name=qemu-system-x86, channel 0x0000003c, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0x0_04034000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_WRITE
+DMA-FQ
+nvidia
+0

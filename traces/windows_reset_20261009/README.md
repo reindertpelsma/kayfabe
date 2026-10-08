@@ -5,6 +5,13 @@
 GPU's caps page (`KF3_DISPLAY_CAPS_PROBE`, run 99) Windows programs window 0 after the modeset, and ~19.6 s after driver
 start the guest resets the display and stops answering. What differs from the real RTX 4070 at and before the reset?
 
+**Where it stands after the 4-boot time-box (runs 100-103, RTX 4070, 2026-10-09; details §4-§11):** the halt of §0 is fixed
+behind two default-off flags and Windows then flips at 60 Hz and draws its lock screen through kf3; the guest still TDRs and
+bugchecks 0x116. Measured below: in runs 101/103 the D3D process's Passthrough GR/CE twins take host Xid 31 (FAULT_PTE) on VAs
+kf3 never unmapped, after page-table walks that unmapped other rows of the same 2 MiB region (H-pde, §10, next); in runs
+100/102 no fault, every twin fetched and released everything (stall snapshot, §8). Falsified: the armed-rule relay as the fix
+(§8), H-flipdone (§10). Every recovery fails at a classification + T-space refusal (§11, owner decision proposed).
+
 Labels: `[measured, <source>]` read from a capture or a disk (the runs and captures of 2026-10-08/09, RTX 4070); `[code]` read from kf3's code; `[source]` read from a pinned
 reference source; `[inferred]` reasoning, never evidence. kf3 times are the `kf_mem::maplog` clock of the run's log
 (`WTRACE t=`); hardware times are seconds of day of VFIO DVI reference boot3 (`traces/vfio_dvi_reference_20261008/`, branch
@@ -267,3 +274,73 @@ context DMA `0xff1fe1b0`, and its notifier per `SET_NOTIFIER_CONTROL`) is not pu
 **Falsifier:** for the last latched flip, `TRACE release chn 1 … -> Ok(())` and `TRACE notify chn 1 … -> Ok(())` appear within
 one frame of its latch, with the same offsets and values as the earlier flips that did complete, and the guest still stops
 flipping — then kf3 publishes what it publishes for every flip and the wall is in what the KMD expects beyond it.
+
+## 10. Run 103 (binary `kf3-bins/3e9bcdce`, boot 4, RTX 4070, 2026-10-09): H-flipdone FALSIFIED; the stall follows a burst, and the D3D GR twin faults (Xid 31)
+
+`[measured, run 103 at 3e9bcdce, RTX 4070, 2026-10-09 23:51:49-23:54:41 UTC]` files `run103-*` ([harness](run103-harness.log),
+[qemu log](run103-qemu.log.gz), [BAR0 trace](run103-trace.log.gz), [frames](run103-frames.tsv), [bugcheck](run103-bugcheck.json)),
+[host Xid lines + final host state](host-xid-and-state-20261009.txt). Flags = run 102's + `KF3_DISPLAY_TRACE=1`.
+kf3 clock → UTC: second of day = `kf − 190062.364` (window-0 PUT `0x940` at kf 276072.786060 = trace 23:53:30.421645; ⊘ the
+kf3 `WTRACE` write lines are capped, so the late `0x611d80` writes in the log are not the trace's last ones — the
+alignment uses a PUT value present on both).
+
+**Owner observation (UNCONFIRMED by a frame, consistent with the traces):** the lock screen stayed up a long time (clock 11:52),
+the owner interacted with it through the broker window (~01:52-01:54 CEST), saw a short animation, then black. (1) kf3 and
+the broker log no input events (the broker log has attach/format lines only; input goes through QEMU's USB tablet, which
+the BAR0 trace does not see), so the interaction is placed by its effect: the first flip burst after the idle period.
+(2) `[measured, run 103 trace + kf3 log, RTX 4070, 2026-10-09]`:
+- first scanout +12.49 s (≈23:52:05.4); initial lock-screen draw 23:52:08-09 (53 flips); frames 23:52:09.3-23:52:44 show the
+  lock screen ([frames](run103-frames.tsv); the frame series ended before the interaction);
+- **idle lock screen: one flip per 30 s** (23:52:39, 23:53:09: 4 window-0 writes, 1 LATCH, 1 release, 1 notify each; 2-3
+  doorbells on `0x11`/`0x13`/`0x15`);
+- **burst (the interaction → animation): 23:53:30.40-23:53:31.25**, 26 flips at 60 Hz (106 window-0 writes) with doorbells
+  on `0x11`/`0x13`/`0x15`/`0x1014`/`0x1016`; **last latched flip 23:53:31.251** (kf 276073.6156);
+- 23:53:31.79-31.81 (kf 276074.156-.176): walks for page-table `SPLIT` tickets of the kernel copy channel `0x80c` UNMAP and,
+  20 ms later, re-MAP at new backing pages ranges of the D3D process's space `VasKey(…399696)` — among them
+  `va=0x404c000 len=0x2000` (unmapped 276074.156, `0x404d000` re-mapped 276074.176 at another page);
+- stall snapshot #4 at 23:53:33.17 (1 s after the last doorbell): **token `0x15` (the D3D GR twin, host `0x3c`): `GPGet=0x2f0
+  GPPut=0x3d7` — entries put and NOT fetched; USERD `Get=0x404d490 Put=0x404d504`: the PBDMA stopped inside segment
+  GP[0x2ef] (`va=0x404d440`, 49 words), 20 words in** — i.e. in the page `0x404d000` that the walk had just unmapped and
+  re-mapped. Every other twin (`0xe`, `0xf`, `0x11`, `0x13`, `0x1010`-`0x1016`): `GPGet == GPPut`, releases in memory.
+- **23:53:33 host Xid 31: `channel 0x0000003c … ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0x0_04034000 … FAULT_PTE
+  ACCESS_TYPE_VIRT_WRITE`** — token `0x15`'s PBDMA writing its host semaphore (`SEM_ADDR 0x4034000`, the release every
+  earlier snapshot of `0x15` found in memory). kf3's rows never unmapped `0x4034000` (one MAP at 275991.02, no UNMAP: checked
+  with [tools/covers.py](tools/covers.py)); run 101's fault VAs `0x4034000`/`0x4036000` were never unmapped either, and its
+  fault also followed walks unmapping other rows of the same 2 MiB region (`0x4000000-0x41fffff`) 6 s earlier.
+- **23:53:34.045 the TDR's state collection — 2.79 s after the last flip** (runs 100/102: 2.12/2.06 s: the "TDR clock starts at
+  the last flip" reading does not hold here; here the GR twin faulted ~1.8 s after the last flip); teardown, recovery refused
+  at the T-space rule (`birth REFUSED` ×1), `SWITCH_TO_VGA`, **0x116** `(…, 0xfffff8034fe24930, 0xffffffffc000009a, 0x4)`,
+  reboot, Code 43.
+
+(3) **H-flipdone: FALSIFIED** `[measured, run 103 KF3_DISPLAY_TRACE, 2026-10-09]`: all 83 window-0 completions of the boot are published
+`-> Ok(())`, each in the same millisecond as its LATCH (one release at `0xff1fe1b0 + 16·n` with the flip's value, one notifier
+at `0xff1fe1a0`), the idle-period flips and the burst's alike; the last latched flip before the stall (276073.6156) got
+`release +0x110 value 0x52 -> Ok(())` and `notify +0xb00 -> Ok(())` exactly like the 25 burst flips before it. Every flip of
+the burst latched in its own frame (latch 9-16 ms after its PUT, the next PUT ~16 ms later): Windows never had two flips
+outstanding, so the overlap case (a flip queued while the previous is still armed, retired by the next VSync, as hardware boot3
+does) did not occur in this run and is not tested. **The quiet lock screen shows the display/flip path healthy at low rate,
+and the burst shows it healthy at 60 Hz until the stall; the stall is in the render plane** (here: the GR twin's PBDMA faults).
+
+`[inferred]` **H-pde (next, stated, not run):** when kf3 applies a walk's UNMAP rows inside a 2 MiB region of a Passthrough twin's
+host space, the host loses the PTEs of OTHER rows of that region that kf3 still holds as mapped (`0x4034000`, `0x4036000`), so a
+twin running in that space faults on a VA the guest never unmapped. Falsifier: on the bench host (raw client or fast guest), map
+two 4 KiB rows in one 2 MiB region of a host VA space, unmap one through kf3's mirror path, then let a copy engine read and write
+the other — no fault. Runs 100 and 102 (stall, no Xid, every twin `GPGet == GPPut`) are not explained by it.
+
+## 11. The recovery wall (queued; analysis for an owner decision — no policy changed)
+
+`[measured, runs 100-103]` every TDR recovery fails the same way: the kernel driver's restart creates a copy channel
+(`0xc1d00048:0xff040000`, engine `0xb`, `ProcessID=4`, no context share) that `kf_rm::chanlink::windows_user_work` classifies
+**USER WORK → Passthrough** ("a process other than the kernel driver's"), then a GR channel in the same VA space
+(`0xc1d0004a:0xff040001`, graphics, no context share → kernel work → Translated) that the T-space rule refuses
+(`KernelInUserSpace`, `V3_P1P2_TSPACE.md` §4.2) → RmAlloc `0x40` → StartDevice fails → `0x1B0` live dump → `0x116`.
+Cause `[measured]`: the classifier learns ONE kernel-driver process id at the driver's first start — `0x34c` in run 102 (14 channels
+declare it) — and the recovery runs in the System process (`ProcessID=4`, 5 channels), so the kernel driver's own copy channel
+is taken for user work. `[source, ogkm]` none: this is Windows-KMD behaviour (the recovery thread's process), not RM's.
+**Proposal (for the owner; not implemented):** (a) treat `ProcessID=4` (the Windows System process: no user code runs there)
+as the kernel driver's process in `windows_user_work` — safety: a hostile guest can declare any ProcessID today; declaring 4
+only moves a channel to the Translated route, the stricter one (kayfabe reads its ring and authors every host action), so it
+grants nothing; the residual is that a guest-kernel lie keeps user work Translated (slower, never unsafe); or (b) re-learn the
+kernel driver's process id at each adapter start (the first kernel channel after an all-free) — weaker, because "first after
+an all-free" is guest-timed. The T-space rule itself (a Translated channel never shares a space with a Passthrough one) is
+not touched by either.

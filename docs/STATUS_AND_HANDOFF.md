@@ -9,6 +9,22 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+**Windows reset after the first flips, 2026-10-09 (branch `claude/windows-reset-20261009` = `claude/display-reply-diff-20261008`
++ `claude/kf3-read-trace-20261008` + `claude/passthrough-nsi-nogate-20261008`; [record](../traces/windows_reset_20261009/README.md);
+4 hardware boots, runs 100-103, RTX 4070).** ⊘ The trace-mode ruling of the read-trace branch is renumbered **§Y** in
+`OWNER_RULINGS.md` (§X is the non-stall ruling); KF3 ABI 25 = the trace verbs + the input-sink verbs. `[measured, runs 98-103,
+2026-10-09]` (1) Runs 98/99's "reset ~19.6 s after driver start" is TDR + bugcheck **0x116**: kf3 refused Windows' mirrored
+DIRECT10 colour program (`ILUT/OLUT_CONTROL 0x4050a`, MIRROR=1; ILUT offset in 256-byte units) and halted its display engine;
+fixed behind `KF3_DISPLAY_LUT_MIRROR=1 KF3_DISPLAY_ILUT_OFFSET_256=1` (default off; GPU-free test with the measured program):
+flips then run at 60 Hz and Windows draws its lock screen through kf3 (frame in the record). (2) The guest still TDRs (0x116,
+runs 100-103): in runs 101/103 the D3D process's Passthrough GR/CE twins take **host Xid 31 (FAULT_PTE at `0x4034000`/`0x4036000`)**
+after kf3 applies page-table walks that UNMAP other rows of the same 2 MiB region (H-pde, stated, not run); in runs 100/102
+there is no Xid and the new **stall snapshot** (`KF3_PT_STALL_SNAPSHOT=1`, default off) shows every twin `GPGet == GPPut` with its
+fences in guest memory. Falsified: the armed-rule non-stall relay as the fix (run 102), H-flipdone (run 103: every flip's
+release/notify published Ok in its latch's millisecond). (3) Every TDR recovery then fails at the T-space rule because the
+recovery's own copy channel (`ProcessID=4`) is classified user work — owner decision proposed in the record §11 (no policy
+changed). Host left at DMA-FQ, `nvidia` bound, lock released.
+
 **kf3 BAR0 trace mode with the VFIO reference's own tracer, 2026-10-09 (branch `claude/kf3-read-trace-20261008` from
 `claude/display-reply-diff-20261008`; owner ruling `OWNER_RULINGS.md` §X; design `docs/design/V3_BAR0_TRACE_MODE.md`;
 [record](../traces/kf3_read_trace_20261009/README.md)).** Default off. `KF3_BAR0_READ_TRACE=1` makes kf3's selected BAR0
