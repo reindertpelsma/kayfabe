@@ -146,7 +146,7 @@ banner() {
   │   CTRL+ALT+G   GRAB: keyboard + pointer locked to the guest, relative mouse;
   │                press CTRL+ALT+G again to RELEASE (focus loss also releases)
   │   CTRL+ALT+F   fullscreen on/off
-  │   grub menu    shows for 5 s after TianoCore; arrows/Enter work in the window
+  │   grub menu    10 s after TianoCore (the window appears ~4 s after QEMU starts)
   │   desktop      Cinnamon logs in by itself as 'ubuntu' (~60-90 s)
   │   stop         Ctrl-C here, or: $0 stop  (or close the window: it asks the
   │                guest to power down)
@@ -204,8 +204,8 @@ echo "APT_RC=$?"
 cat > /etc/default/grub.d/99-kf-interactive.cfg <<'EOF'
 # kayfabe interactive.sh: a visible grub menu, and nvidia-drm's console after the driver loads
 GRUB_TIMEOUT_STYLE=menu
-GRUB_TIMEOUT=5
-GRUB_RECORDFAIL_TIMEOUT=5
+GRUB_TIMEOUT=10
+GRUB_RECORDFAIL_TIMEOUT=10
 GRUB_CMDLINE_LINUX_DEFAULT="console=tty1 console=ttyS0 nvidia-drm.modeset=1 nvidia-drm.fbdev=1"
 EOF
 update-grub
@@ -220,6 +220,24 @@ user-session=cinnamon
 EOF
 systemctl set-default graphical.target
 systemctl enable lightdm
+# ⊘ [measured 2026-10-08, run proof-p2] without an xorg.conf X picked modesetting, whose glamor
+# fails on nvidia-drm ("modeset(0): Failed to create pixmap"), and lightdm restarted X forever
+cat > /etc/X11/xorg.conf <<'EOF'
+# kayfabe interactive.sh: the stock NVIDIA X driver on kf3 (guest PCI 00:02.0)
+Section "ServerLayout"
+    Identifier "kf3"
+    Screen 0 "kf3-screen"
+EndSection
+Section "Device"
+    Identifier "kf3-gpu"
+    Driver "nvidia"
+    BusID "PCI:0:2:0"
+EndSection
+Section "Screen"
+    Identifier "kf3-screen"
+    Device "kf3-gpu"
+EndSection
+EOF
 usermod -aG input ubuntu
 # the desktop must not lock or blank while the owner looks away
 sudo -u ubuntu dbus-launch gsettings set org.cinnamon.desktop.screensaver lock-enabled false || true

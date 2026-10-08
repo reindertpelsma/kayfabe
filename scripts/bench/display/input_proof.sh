@@ -48,30 +48,34 @@ shot(){ mon "screendump $OUT/$1.ppm kf0"; sleep 1.5; [ -s "$OUT/$1.ppm" ] && con
 qpid(){ pgrep -f "^[^ ]*qemu-system-x86_64 -name kayfabe-interactive" | head -1; }
 wait_ssh(){ for _ in $(seq "${1:-100}"); do gq true 8 >/dev/null 2>&1 && return 0; [ -n "$(qpid)" ] || return 2; sleep 3; done; return 1; }
 
-RUN=$OUT/vm1; start_vm 1280x720 "$RUN"
+RUN=$OUT/vm1; start_vm 1280x720 "$RUN"; T0=$(date +%s)
+# the boot display before nvidia, as the console's framebuffer readback: one shot a second for 30 s
+( for i in $(seq -w 1 30); do sleep 1; [ -S "$RUN/qemu.mon" ] && shot "boot_t$i"; done ) &
+SHOTS=$!
 for _ in $(seq 60); do grep -aq 'accepted uid' "$RUN/broker.log" 2>/dev/null && break; sleep 0.5; done
-P "BROKER_CONNECTED $(grep -a -m1 'accepted uid' "$RUN/broker.log" | cut -c1-160)"
+P "BROKER_CONNECTED +$(( $(date +%s) - T0 ))s $(grep -a -m1 'accepted uid' "$RUN/broker.log" | cut -c1-160)"
 send "f 1" "p 1"
-# the boot display before nvidia: TianoCore, then grub's menu (GRUB_TERMINAL=console also writes it
-# to the serial port, which is how the script sees it)
-sleep 6; shot t06_ovmf
-for _ in $(seq 120); do grep -aq 'GNU GRUB' "$RUN/serial.log" 2>/dev/null && break; sleep 0.5; done
+# grub (GRUB_TERMINAL=console also writes its menu to the serial port): a DOWN key each second from
+# the broker's connection until the menu is on the serial port — the first one grub reads stops its
+# 10 s countdown — then 'e' opens the entry editor, whose help text is the evidence
+for _ in $(seq 25); do grep -aq 'GNU GRUB' "$RUN/serial.log" 2>/dev/null && break; key 108; sleep 1; done
+P "GRUB_MENU +$(( $(date +%s) - T0 ))s serial=$(grep -ac 'GNU GRUB' "$RUN/serial.log") countdown=[$(grep -ao 'automatically in [0-9]*s' "$RUN/serial.log" | tr '\n' ' ')]"
 sleep 1; shot grub_menu
-P "GRUB_MENU serial=$(grep -ac 'GNU GRUB' "$RUN/serial.log")"
-key 108; sleep 0.5; key 103; sleep 0.5      # down, up: stops the countdown
-key 18; sleep 2; shot grub_editor           # 'e' opens the entry editor
+key 18
+for _ in $(seq 10); do grep -aq 'Minimum Emacs-like screen editing' "$RUN/serial.log" && break; sleep 1; done
+shot grub_editor
 ed=$(grep -ac 'Minimum Emacs-like screen editing' "$RUN/serial.log")
 P "GRUB_KEY $([ "$ed" -gt 0 ] && echo PASS || echo FAIL) broker e -> editor_on_serial=$ed countdown_left=$(grep -ao 'automatically in [0-9]s' "$RUN/serial.log" | tail -1)"
 if [ "$ed" -gt 0 ]; then
-    key 1; sleep 1; key 28                  # Escape back to the menu, Enter boots the entry
+    key 1; sleep 1; key 102; sleep 0.5; key 28   # Escape to the menu, Home (the first entry), Enter
 else
     # the control: the same key through QEMU's monitor (PS/2) — tells "grub takes no key" from
     # "the broker's key never reached the PS/2 keyboard"
     mon "sendkey e"; sleep 2
     P "GRUB_MONITOR_KEY sendkey e -> editor_on_serial=$(grep -ac 'Minimum Emacs-like screen editing' "$RUN/serial.log")"
-    mon "sendkey esc"; sleep 1; mon "sendkey ret"
+    mon "sendkey esc"; sleep 1; mon "sendkey home"; mon "sendkey ret"
 fi
-sleep 8; shot t_efistub
+wait "$SHOTS" 2>/dev/null
 wait_ssh 100 || { P "FAIL guest never answered ssh"; }
 for _ in $(seq 60); do gq "$GX xset q >/dev/null 2>&1 && pgrep -u ubuntu -x cinnamon >/dev/null && echo UP" 10 | grep -q UP && break; sleep 3; done
 P "DESKTOP $(gq "pgrep -u ubuntu -x cinnamon >/dev/null && echo cinnamon_up; $GX xdpyinfo | grep -m1 dimensions")"
