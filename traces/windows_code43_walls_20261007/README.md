@@ -3600,3 +3600,22 @@ Binary `kf3-bins/4b14d74f` (adds the `KF3_TWIN_VA_BASE` switch for guest-mirror 
 `KF3_TWIN_VA_BASE=10000`. **H-vabase:** with the host space starting at 64 KiB the mirror maps `0x10000`, no `can't alloc` assert, and the
 twin's PBDMA does not fault there. *Falsifiers:* the asserts or the `0x13000` fault again; a new `HeldByHost` collision (host RM placing its
 own buffers below 1 MiB where the guest maps) is recorded if it appears.
+
+### Run70 result: H-vabase SUPPORTED — the compositor's channel RUNS on its unprivileged host twin (no fault, no Xid); Windows reports a 1920x1080@60 mode; D3D creation from session 0 still fails, now at its copy channel
+
+Binary `kf3-bins/4b14d74f`, `KF3_TWIN_VA_BASE=10000`, flags as run68; started 16:55:37 CEST, ACPI stop 16:58:47, Xid 95 before and after.
+[timeline](run70-timeline.txt), [D3D probe](run70-probe-output.txt), [session probe](run70-session-probe.txt), trace `run70-qemu.log.gz`.
+
+`[measured, run70 at 4b14d74f, 2026-10-08]`:
+- No `can't alloc VA space` assert and **no Xid**: the compositor's twin (token `0xe`, host `0x64`) runs — the relay forwarded `GP_PUT` 2, 3, 5,
+  6, 9, 0xc, 0xe, 0xf ... 0x1d (#16) ... 0x38 (#32) and on: the engine executes the compositor's work on an unprivileged host channel, never
+  parsed by kayfabe.
+- The head is armed (1080p60) and the display engine completed core updates (`5 updates completed, 8620 methods`); **`Win32_VideoController`
+  reports `Mode=1920x1080@60`** (runs 53-59: no mode), NVIDIA Code 0, LogonUI and dwm in session 1, no TDR at 115 s of uptime. The window
+  channels still carry only CSC LUT methods — no window surface is presented yet, so the broker window keeps the boot frame.
+- `D3D11CreateDevice`/`D3D12CreateDevice` (the probe, session 0): still `0x8876017c`. Each create now births its graphics channel Passthrough
+  and then a **copy channel (engine `0xc`) with no context share under the process's own `ProcessID` (0x14c0)** in the same VA space, which the
+  classifier kept Translated (its graphics-only subcontext check) and which the T-space rule then refused (`a Translated channel never runs in a
+  space a user channel runs in`) — fail closed, the create torn down.
+- Fixed for run71 (`2959ed5f`): a copy channel has no subcontext, so it is judged by its process alone (GPU-free tests updated). The
+  `VAS-FACTS` now show the Windows process spaces' `vaBase`: `0` or `0x20000000`, `vaSize` `0x20000000`-`0x40000000` (lo32), flags `0x5`.
