@@ -1,0 +1,21 @@
+DSP session 0 user nt authority\system
+DSP QueryDisplayConfig ALL_PATHS: rc=0 paths=0 modes=0; ONLY_ACTIVE_PATHS: rc=0 paths=0 modes=0; DATABASE_CURRENT: rc=0 paths=0 modes=0; 
+DSP VideoController Name='NVIDIA GeForce RTX 4070' Status=OK ConfigManagerErrorCode=0 H= V= Hz= VideoProcessor='NVIDIA GeForce RTX 4070' PNP=PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&267A616A&0&30
+DSP Win32_DesktopMonitor count=1
+DSP DesktopMonitor Name='Generic PnP Monitor' Status=OK PNP=DISPLAY\KFB0001\4&4B3BF4B&0&UID6291712 H= V=
+DSP WmiMonitorID count=1
+DSP WmiMonitorID Instance=DISPLAY\KFB0001\4&4b3bf4b&0&UID6291712_0 Active=True Product=48 48 48 49 0 0 0 0 0 0 0 0 0 0 0 0 Mfg=75,70,66,0,0,0,0,0,0,0,0,0,0,0,0,0
+DSP WmiMonitorBasicDisplayParams count=1
+DSP BasicDisplayParams Instance=DISPLAY\KFB0001\4&4b3bf4b&0&UID6291712_0 Active=True MaxH=25cm MaxV=25cm Digital=1
+DSP WmiMonitorListedSupportedSourceModes count=1
+DSP ListedModes Instance=DISPLAY\KFB0001\4&4b3bf4b&0&UID6291712_0 n=7
+DSP PnpDevice Class=Monitor count=5
+DSP PnpMonitor 'Generic Monitor (U2790B)' Status=Unknown Present=False Id=DISPLAY\AOC2790\4&4B3BF4B&0&UID6291713
+DSP PnpMonitor 'Generic Monitor' Status=Unknown Present=False Id=DISPLAY\DEFAULT_MONITOR\4&4B3BF4B&0&UID0
+DSP PnpMonitor 'Generic Monitor' Status=Unknown Present=False Id=DISPLAY\DEFAULT_MONITOR\1&8713BCA&0&UID0
+DSP PnpMonitor 'Generic Monitor (kayfabe)' Status=OK Present=True Id=DISPLAY\KFB0001\4&4B3BF4B&0&UID6291712
+DSP PnpMonitor 'Generic Monitor' Status=Unknown Present=False Id=DISPLAY\DEFAULT_MONITOR\4&87107AC&0&UID0
+DSP PnpDisplay 'Microsoft Basic Display Adapter' Status=Unknown Present=False Problem=CM_PROB_PHANTOM Id=PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\3&267A616A&0&48
+DSP PnpDisplay 'NVIDIA GeForce RTX 4070' Status=OK Present=True Problem=CM_PROB_NONE Id=PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&267A616A&0&30
+
+[rc=0]
