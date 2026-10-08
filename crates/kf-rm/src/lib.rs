@@ -521,6 +521,13 @@ pub fn served_chain(
             preempt_bind_probe::FLAG
         );
     }
+    if preempt_bind_probe::zcull_enabled() {
+        chain.push(Box::new(preempt_bind_probe::ZcullBindProbe::new(driver)));
+        eprintln!(
+            "kf-rm: PROBE {}=1: a cross-client GR_CTXSW_ZCULL_BIND answered NV_OK, NOTHING bound on the host (probe, not a shipped behaviour)",
+            preempt_bind_probe::ZCULL_FLAG
+        );
+    }
     // ⚠ PROBE (default off): H-modeset, 2026-10-08 — `display_ctrl_probe.rs`.
     if display_ctrl_probe::enabled() {
         chain.push(Box::new(display_ctrl_probe::DisplayCtrlProbe::new(driver)));

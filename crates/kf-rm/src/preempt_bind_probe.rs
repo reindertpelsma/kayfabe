@@ -138,9 +138,119 @@ impl CommandPolicy for PreemptBindProbe {
 
 kf_util::assert_send_sync!(PreemptBindProbe);
 
+/// ⚠⚠ **PROBE — default off (`KF3_ZCULL_BIND_PROBE=1`).** 2026-10-08 (Windows run56): with the
+/// preemption binds answered, each failed D3D create sends `GR_CTXSW_ZCULL_BIND` from the KMD's kernel
+/// client naming the UMD client's channel, which the channel plane refuses `0x1b` (another client's
+/// channel). This probe answers ONLY that cross-client case `NV_OK` with the request echoed and
+/// nothing bound on the host; a same-client bind still reaches the channel plane as before.
+pub const ZCULL_FLAG: &str = "KF3_ZCULL_BIND_PROBE";
+
+/// Whether the ZCULL probe flag is on (`=1`).
+#[must_use]
+pub fn zcull_enabled() -> bool {
+    std::env::var(ZCULL_FLAG).as_deref() == Ok("1")
+}
+
+/// The ZCULL cross-client probe link.
+#[derive(Debug, Clone)]
+pub struct ZcullBindProbe {
+    driver: kf_abi::versions::DriverAbiTable,
+    shape: Option<(u32, usize)>,
+    answered: u64,
+}
+
+impl ZcullBindProbe {
+    /// A link for the guest driver `driver` (inert if the control is not measured there).
+    #[must_use]
+    pub fn new(driver: kf_abi::versions::DriverAbiTable) -> ZcullBindProbe {
+        use kf_abi::generated::matrix as m;
+        let v = driver.driver_version();
+        let shape = (|| {
+            let cmd = m::CTRL_CMDS_NV2080_CTRL_CMD_GR_CTXSW_ZCULL_BIND
+                .at_u32(v)
+                .ok()??;
+            let l =
+                kf_abi::matrix::Resolved::of(&m::NV2080_CTRL_GR_CTXSW_ZCULL_BIND_PARAMS, v).ok()?;
+            Some((cmd, l.size()))
+        })();
+        ZcullBindProbe {
+            driver,
+            shape,
+            answered: 0,
+        }
+    }
+}
+
+impl CommandPolicy for ZcullBindProbe {
+    fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        let (id, size) = self.shape?;
+        if cmd.function != RpcFunction::RmControl {
+            return None;
+        }
+        let req = self.driver.decode_rpc_control(&cmd.payload).ok()?;
+        if req.cmd != id
+            || kf_abi::rpc_params_are_serialized(req.rmapi_rpc_flags)
+            || req.params_size as usize != size
+        {
+            return None;
+        }
+        let p = cmd
+            .payload
+            .get(req.params_at..req.params_at.checked_add(size)?)?;
+        let named = word(p, 0);
+        if named == req.client {
+            return None;
+        }
+        let mut body = cmd.payload.clone();
+        let st = self.driver.rm_control_wire().status_off;
+        body.get_mut(st..st + 4)?
+            .copy_from_slice(&NV_OK.to_le_bytes());
+        self.answered += 1;
+        if self.answered <= LOG_CAP {
+            eprintln!(
+                "kf-rm: PROBE {ZCULL_FLAG} {:#010x} from client={:#x} names hClient={:#x} hChannel={:#x} va={:#x} mode={}: NV_OK, request echoed, NOTHING bound on the host — a probe #{}",
+                req.cmd,
+                req.client,
+                named,
+                word(p, 4),
+                u64::from(word(p, 8)) | (u64::from(word(p, 12)) << 32),
+                word(p, 16),
+                self.answered
+            );
+        }
+        Some(Reply {
+            rpc_result: NV_OK,
+            body,
+        })
+    }
+}
+
+kf_util::assert_send_sync!(ZcullBindProbe);
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_zcull_probe_answers_only_the_cross_client_bind() {
+        let abi = windows_abi();
+        let mut p = ZcullBindProbe::new(abi);
+        let mut params = vec![0u8; 24];
+        params[0..4].copy_from_slice(&0xc1d0_0040u32.to_le_bytes());
+        let r = p
+            .respond(&control(&abi, 0x2080_1208, &params, 0))
+            .expect("cross-client answered");
+        assert_eq!(r.rpc_result, 0);
+        params[0..4].copy_from_slice(&0xc1d0_0002u32.to_le_bytes());
+        assert!(
+            p.respond(&control(&abi, 0x2080_1208, &params, 0)).is_none(),
+            "same client goes to the channel plane"
+        );
+        assert!(
+            p.respond(&control(&abi, 0x2080_1208, &[0u8; 20], 0))
+                .is_none()
+        );
+    }
 
     fn windows_abi() -> kf_abi::versions::DriverAbiTable {
         *kf_abi::versions::table_for(kf_abi::DriverVersion {
