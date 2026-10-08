@@ -468,6 +468,11 @@ pub struct DisplayModel {
     /// query instead of refusing it (see `NAMED_CONTROLS`). Set only by a link that also twins the
     /// object on the host ([`Self::offer_display_sw`]).
     display_sw_offered: bool,
+    /// ⚠ PROBE (default `false`, 2026-10-08, Windows run56 — `KF3_DISPLAY_IMP_ENABLE=1` through
+    /// [`Self::report_imp_enabled`]): answer `IMP_SET_GET_PARAMETER` GET `IMP_ENABLE` TRUE, as the real
+    /// GPU does (vfio-10 RPC 2645), instead of FALSE. Consistent with `mode_possible`, which already
+    /// answers every IS_MODE_POSSIBLE "possible".
+    imp_enabled: bool,
     /// ★ 3c: display ids whose monitor changed since the last `INTERNAL_GET_HOTPLUG_UNPLUG_STATE`.
     pub pending_plug: u32,
     /// ★ 3c: the live hotplug registrations (at most [`MAX_HOTPLUG_REGISTRATIONS`]).
@@ -551,6 +556,7 @@ impl DisplayModel {
             ports: Arc::new(Ports::default()),
             waker: None,
             display_sw_offered: false,
+            imp_enabled: false,
             pending_plug: 0,
             hotplug: Vec::new(),
             display_events: BTreeMap::new(),
@@ -565,6 +571,11 @@ impl DisplayModel {
     /// an object offered WITHOUT a host twin is run m3c (186 host Xid 32, 1.3 FPS GL).
     pub fn offer_display_sw(&mut self, on: bool) {
         self.display_sw_offered = on;
+    }
+
+    /// ⚠ PROBE (default off): report IMP as enabled (`IMP_SET_GET_PARAMETER` GET `IMP_ENABLE` = TRUE).
+    pub fn report_imp_enabled(&mut self, on: bool) {
+        self.imp_enabled = on;
     }
 
     /// Whether the display-SW object is offered ([`Self::offer_display_sw`]).
@@ -827,7 +838,7 @@ impl DisplayModel {
                 if p.get("operation") != Some(get) || p.get("index") != Some(imp_enable) {
                     return Err(NV_ERR_NOT_SUPPORTED);
                 }
-                p.set("value", 0);
+                p.set("value", u64::from(self.imp_enabled));
                 Ok(p.buf)
             }
             "hotplug_after_edid" => {

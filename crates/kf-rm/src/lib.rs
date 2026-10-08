@@ -19,6 +19,7 @@ pub mod census;
 pub mod chanlink;
 pub mod defapi;
 pub mod display;
+pub mod display_ctrl_probe;
 pub mod faultbuffer;
 pub mod fecstrace;
 mod gfxpool_probe;
@@ -518,6 +519,14 @@ pub fn served_chain(
         eprintln!(
             "kf-rm: PROBE {}=1: GR_CTXSW_PREEMPTION_BIND answered NV_OK, NOTHING bound on the host (H-preempt-bind probe, not a shipped behaviour)",
             preempt_bind_probe::FLAG
+        );
+    }
+    // ⚠ PROBE (default off): H-modeset, 2026-10-08 — `display_ctrl_probe.rs`.
+    if display_ctrl_probe::enabled() {
+        chain.push(Box::new(display_ctrl_probe::DisplayCtrlProbe::new(driver)));
+        eprintln!(
+            "kf-rm: PROBE {}=1: six NV0073 controls answered NV_OK with the request echoed (H-modeset probe, not a shipped behaviour)",
+            display_ctrl_probe::FLAG
         );
     }
     if std::env::var("KF3_MEMORY_LIST_PROBE").as_deref() == Ok("1")

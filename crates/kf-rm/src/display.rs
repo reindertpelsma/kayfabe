@@ -389,6 +389,15 @@ impl DisplayPolicy {
     /// With no derived layouts (the M0 link) the query is not claimed and stays refused.
     #[must_use]
     pub fn offering_display_sw(mut self, on: bool) -> DisplayPolicy {
+        // ⚠ PROBE (default off, 2026-10-08, Windows run56): report IMP enabled, as the real GPU does.
+        if std::env::var("KF3_DISPLAY_IMP_ENABLE").as_deref() == Ok("1")
+            && let Some(m) = &self.model
+        {
+            lock(m).report_imp_enabled(true);
+            eprintln!(
+                "kf-rm: display: PROBE KF3_DISPLAY_IMP_ENABLE=1 — IMP_SET_GET_PARAMETER GET IMP_ENABLE answered TRUE (real-GPU answer; IS_MODE_POSSIBLE already says possible)"
+            );
+        }
         if on && let Some(m) = &self.model {
             lock(m).offer_display_sw(true);
             self.dispsw_pairing = Some(DispSwPairing::default());
