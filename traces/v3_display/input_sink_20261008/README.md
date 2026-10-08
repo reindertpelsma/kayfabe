@@ -32,4 +32,4 @@ and `g1` (`2a20e699`, A-D):
 
 ## Results
 
-(filled in after the runs; measured lines are quoted from the logs in this directory)
+(pending the runs)

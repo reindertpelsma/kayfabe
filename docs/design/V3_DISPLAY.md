@@ -1,5 +1,10 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+**STATUS: LIVE, 2026-10-08 (evening) — §8.20: the VMM-neutral input traits (`OWNER_RULINGS.md` §V,
+KF3 ABI 23).** The broker's input and console-cursor policy is `kf-broker`'s (`InputPolicy`,
+`ConsoleCursor::apply`) behind `InputSink`/`CursorSink`; kf3.c only implements the verbs. ⊘ §8.4's
+table and §8.17's "Proposed, NOT built" paragraph are superseded by §8.20 (marked in place).
+
 **STATUS: LIVE, 2026-10-08 (later still) — §8.19: mouse-look under the grab.** The owner's Minecraft camera snap-back was not reproduced: a GLFW-style X client sums injected relative motion exactly (runs g1, g2); while grabbed every pointer event now goes to the relative device and no ABS is generated (`4bc62999`).
 
 **STATUS: LIVE, 2026-10-08 (later) — §8.18: the three defects of §8.17 are fixed and measured** at kf3
@@ -2366,6 +2371,13 @@ and the wheel go to the console-bound tablet in both modes, so under grab motion
 two guest evdev devices — an application that reads ONE raw evdev device would see motion without
 buttons (inferred, no such application was run).
 
+⊘ **SUPERSEDED IN PART 2026-10-08 (§8.20, KF3 ABI 23, `OWNER_RULINGS.md` §V): kf3.c no longer
+dispatches.** The table below is the ABI 12-22 mapping, kept as the "old" column of §8.20's
+old -> new table. Since ABI 23 the policy in it (the forwarded button set, the GRAB device choice,
+the absent-tablet check, the sync points, the wheel as one detent per packet, CLOSE) is
+`kf_broker::InputPolicy`'s, and kf3.c only implements the VMM-neutral `kf_broker::InputSink` verbs —
+one QEMU call each. The QEMU calls in the right-hand column are unchanged.
+
 Rust bounds every value (`kf_broker::Input`) and kf3.c dispatches on kf3's own console:
 
 | event | QEMU 10.2 call |
@@ -3801,6 +3813,13 @@ consecutive REL packets of one read batch (at most 64) into one event; same sum,
 Rust. Verdict: no input difference explains a relative-mode failure, and none was measured. nvkvm-pv's own
 relay was not run as a control (it needs its QEMU build).
 
+⊘ **SUPERSEDED 2026-10-08 (later), §8.20:** the owner ruled "yes" (`OWNER_RULINGS.md` §V) and the
+refactor below is BUILT, in a different shape: `kf_broker::InputSink` has eleven verbs (key, button,
+wheel, abs, rel, sync, pointer_devices, select_pointer, missing_pointer, close, resize_hint) plus
+`kf_broker::CursorSink` (define, hide, move, pointer_is_absolute) for the console cursor; the device
+choice prefers a device the VMM marks PARAVIRTUAL (QEMU's shim marks names containing "Virtio"), so
+no QEMU name is in kf-broker. The paragraph is the proposal as first written.
+
 **Hypervisor-agnostic split — where policy still sits in `kf3.c`** (the owner's rule of 2026-10-08:
 input policy in `kf-broker` behind a VMM-neutral trait, only the API shim in the VMM): (1) the choice of
 pointing device on GRAB/ungrab (`kf3_broker_set_relative`: absolute vs relative, prefer a name containing
@@ -3967,3 +3986,114 @@ owner's account). `interactive.sh run --record` records in the guest (evtest on 
 `xinput test-xi2 --root`) and the relay counts; `interactive.sh collect` gathers it. Frame pacing: the
 owner's photo at 13:04 shows `60 fps T: 120 (fifo) @60Hz` (after the host load ended); the 13:00
 `30 fps` coincided with the merge-bar job.
+
+### 8.20 The VMM-neutral input traits — `InputSink`, `CursorSink` (`OWNER_RULINGS.md` §V; KF3 ABI 23)
+
+**STATUS: LIVE, 2026-10-08 — BUILT, GPU-free tested; hardware: see "Measured" below** (branch
+`claude/input-sink-trait-20261008`; `traces/v3_display/input_sink_20261008/`).
+
+The owner's ruling (2026-10-08): "Yes full vmm neutral input traits for a broker to hook on." The
+broker's keyboard, pointer and cursor handling hooks onto any hypervisor through a VMM-neutral trait;
+the policy is Rust's, in `kf-broker`; only a thin shim names the VMM.
+
+**The split.** Three stages, the first two in `kf-broker`, VMM-free:
+
+1. `Relay` (`conn.rs`, unchanged in substance): broker packets -> bounded `Input` — evdev ranges, the
+   ABS clamp into its range (cap 2^20), REL summed per read (saturating), the grab mirrored from
+   every packet, buttons/wheel routed to the RELATIVE pointer while grabbed, no ABS while grabbed
+   (dropped and counted), the last pre-grab ABS re-sent when the grab ends, SURFACE clamped to
+   64..8192 and de-duplicated, CLOSE's repeat-ask log. ★ One change: the horizontal wheel is now
+   handed on by sign (`Input::Wheel { dx, dy, to }`); before it was dropped here.
+2. `InputPolicy` (`input.rs`, NEW — the policy kf3.c held): which key codes exist (`is_evdev_key`:
+   not `KEY_RESERVED`, not above `KEY_MAX`, not in a BUTTON block); which buttons are forwarded
+   (`Button`: left, right, middle, side, extra); the pointing device on a grab and on its end (the
+   first PARAVIRTUAL device of the kind, else the first); the missing-device warning (once per kind
+   per VM; the absolute one checked at the first connection that passed the peer check); where
+   the sync points fall; close (force off / powerdown). At most `MAX_SINK_CALLS_PER_INPUT` = 2 sink
+   calls per input, at most 2 inputs per packet, at most `READ_BATCH` = 64 packets per read.
+   Refusals are counted (`input[...]` on the status line) and logged once per kind.
+3. The VMM's `InputSink` (and `CursorSink` for its console): one verb per decision.
+
+```rust
+pub trait InputSink {                                   // kf_broker::input
+    fn key(&mut self, code: u16, down: bool) -> bool;   // evdev code; false = VMM cannot map it
+    fn button(&mut self, b: Button, down: bool, to: Pointer);   // queued
+    fn wheel(&mut self, dx: i32, dy: i32, to: Pointer);         // one detent, queued
+    fn abs(&mut self, x: u32, y: u32, range: AbsRange);         // x < width, y < height; queued
+    fn rel(&mut self, dx: i32, dy: i32);                        // queued
+    fn sync(&mut self);                                         // evdev SYN_REPORT
+    fn pointer_devices(&mut self, out: &mut [PointerDevice]) -> usize;  // {id, kind, paravirtual, name}
+    fn select_pointer(&mut self, id: u32, kind: Pointer);
+    fn missing_pointer(&mut self, kind: Pointer);               // once per kind: say how to add one
+    fn close(&mut self, r: PowerRequest);                       // ForceOff | Powerdown
+    fn resize_hint(&mut self, width: u32, height: u32, refresh_mhz: u32);
+}
+pub trait CursorSink {                                  // kf_broker::console
+    fn define_cursor(&mut self, shape: CursorShape, pixels: &[u32]) -> bool;  // premultiplied ARGB
+    fn hide_cursor(&mut self) -> bool;
+    fn move_cursor(&mut self, x: i32, y: i32) -> bool;
+    fn pointer_is_absolute(&mut self) -> bool;
+}
+```
+
+`ConsoleCursor::apply` now makes the decisions kf3.c made after `poll`: the hidden image for "none";
+an image only with a shape in `1..=256` and the hot spot inside, and only with its own pixels; a move
+only while `pointer_is_absolute()`; what a verb did not apply handed out again.
+
+**QEMU's shim** (`qemu/hw/misc/kf3/kf3.c`, `Kf3InputOps`, 15 verbs; `crates/kf-qemu/src/raw_unsafe.rs`
+`QemuSink` adapts them, ABI 23). kf3.c's input and cursor code: branch points 53 -> 22 (`if`/`case`/
+`for`/`?`; what is left is null guards, QEMU's key map, `relative ? NULL : con`, the wheel's sign, the
+"Virtio" name test, `force`), non-comment lines 177 -> 186 (each verb is now its own function), QEMU
+calls 33 -> 29; the file as a whole 1685 -> 1705 lines. No QEMU type or name is in `kf-broker`.
+
+**Old -> new, per broker event** (the old column is §8.4's table, ABI 12-22):
+
+| event | ABI 12-22: kf3.c decided | ABI 23: `InputPolicy` decides -> sink verb -> QEMU call (unchanged) |
+|---|---|---|
+| KEY | `0 <= x <= KEY_MAX` (Rust), then QEMU's map, `send_key_qcode` | `is_evdev_key` (also refuses `KEY_RESERVED` and BUTTON-block codes) -> `key` -> map check, `qemu_input_event_send_key_qcode(con, …)`; an unmapped code is reported back and counted |
+| BTN | `kf3_broker_btn`: L/R/M/SIDE/EXTRA, else dropped; `queue_btn(w0 ? NULL : con)`, sync | `Button::from_evdev` (same five; others dropped, counted) -> `button` + `sync` -> `qemu_input_queue_btn(relative ? NULL : con)`, `qemu_input_event_sync` |
+| WHEEL | vertical only: press, sync, release, sync | one detent by sign, vertical AND horizontal handed on -> `wheel` + `sync` -> press, sync, release (vertical); QEMU 10.2 drops `dx` (no WHEEL_LEFT/RIGHT mapping) — same guest-visible result |
+| ABS | `w0 && w1`; `queue_abs` X, Y; sync | `w, h > 0` (Rust already guaranteed it), x, y clamped -> `abs` + `sync` -> `qemu_input_queue_abs(con, X/Y, v, 0, range)`, sync |
+| REL | `queue_rel` X, Y; sync | -> `rel` + `sync` -> same |
+| GRAB | `kf3_broker_set_relative`: `qmp_query_mice`, first of the kind preferring a name with "Virtio", `qemu_mouse_set`; warn EVERY time none exists | `pointer_devices` (VMM marks `paravirtual`) -> first paravirtual of the kind, else first -> `select_pointer` -> `qemu_mouse_set`; none: warned ONCE per kind (Rust's line) + `missing_pointer` (QEMU's "add -device …") |
+| ungrab re-sync | (Rust emitted the ABS) | unchanged: GRAB(false) then the last pre-grab ABS |
+| (connect) | `kf3_broker_check_pointer` at the first watch of a new socket | `InputPolicy::connected` after the entry in which the relay connected (same main-loop turn) |
+| CLOSE | force -> `qemu_system_shutdown_request(HOST_UI)`, else `qemu_system_powerdown_request` | `PowerRequest` -> `close` -> same |
+| SURFACE | `dpy_ui_info_supported`, `dpy_set_ui_info` (refresh only if > 0) | -> `resize_hint` -> same |
+| console cursor | `kf3_display_cursor` + `_pixels` + `_done`; C chose hidden/define/move | `ConsoleCursor::apply` -> `cursor_define`/`cursor_hide`/`cursor_move`, `cursor_absolute` -> `cursor_alloc`+`dpy_cursor_define`, `cursor_builtin_hidden`, `dpy_mouse_set`, `qemu_input_is_absolute` |
+
+Deliberate differences, none guest-visible on QEMU 10.2 (inferred from the table; measured below): the
+horizontal wheel reaches the sink (QEMU ignores it); the relative-device warning is once per VM, not
+per grab; codes 0 and the BUTTON blocks sent as KEY are refused in Rust (QEMU's linux->qcode map has no
+entry for them either — inferred from the map's lookup, not measured); a new `input[…]` status
+fragment follows `broker[…]`.
+
+**What another VMM implements.** The same eleven input verbs and four cursor verbs, nothing else; the
+relay's socket needs `Host` (watch an fd, arm a timer) as before. *cloud-hypervisor, crosvm,
+Firecracker* have no QEMU-style input layer; each gives the guest virtio-input devices (crosvm
+`--input` keyboard/mouse/multi-touch, cloud-hypervisor and Firecracker through a vhost-user-input
+backend or their own virtio-input device). There, `key`/`button`/`wheel`/`abs`/`rel` append evdev
+`(type, code, value)` events to the right device's event queue (keyboard; the absolute device's
+`ABS_X/ABS_Y` scaled with `AbsRange::scale` to its axis; the relative device's `REL_X/REL_Y`,
+`REL_WHEEL`/`REL_HWHEEL`), `sync` appends `SYN_REPORT` and kicks the queue, `pointer_devices` lists the
+two devices (both `paravirtual`), `select_pointer` is a no-op (two separate devices: the policy's
+`to` routing already picks the device), `missing_pointer` names the flag that adds one, `close` is the
+VMM's ACPI power button / stop, `resize_hint` is ignored or re-modes, and the `CursorSink` is whatever
+console the VMM has (none: return `false`, and the policy keeps retrying at its pace — or never
+construct a console cursor). `tests/input_sink.rs`'s `EvdevSink` is exactly that recorder:
+`an_evdev_style_sink_gets_a_plain_virtio_input_stream`.
+
+**GPU-free tests** (all on this branch): `crates/kf-broker/tests/input_sink.rs` (9, through the real
+relay and a scripted link): `absolute_lands_at_the_right_scaled_place` (1706/3033 for (100,100) of
+1920x1080, the evtest values of §8.17), `relative_deltas_sum_with_saturation`,
+`keys_with_modifiers_in_order_and_unknown_codes_refused`, `buttons_and_wheel_route_in_hover_and_in_grab`,
+`grab_switch_and_release_resync`, `the_missing_absolute_device_is_warned_once`,
+`close_and_surface_are_one_verb_each`, `hostile_input_never_panics_and_is_bounded_per_packet` (>10 000
+random packets, extreme and NaN-bit operands, random grab flags, a 40-device list, broker restarts, a
+truncated packet: no panic, every ABS in range, every key an evdev key, ≤ 2 sink calls per input),
+`an_evdev_style_sink_gets_a_plain_virtio_input_stream`; `kf-broker` unit tests (scale, key/button
+disjointness, name sanitising, the cursor sink); `kf-qemu` `raw_unsafe.rs`
+`the_policy_reaches_the_c_verbs_with_the_abi_numbers` and `a_missing_verb_is_refused` (C-ABI verbs,
+no QEMU); `wire_mirror.rs` (layouts of `Kf3Pointer`, `Kf3InputOps`, the 15 verb types redeclared from
+Rust, `KF3_BTN_*`, two new known-positive drifts). The relay's existing input tests are unchanged
+except the horizontal wheel.
