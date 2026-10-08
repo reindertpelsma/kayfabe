@@ -1,0 +1,4 @@
+PROOF_START tag=p1 checkout=a372a279 broker=badf2d707da4 2026-10-08T11:14:36+02:00
+PROOF_BROKER_CONNECTED nvkvm-broker: accepted uid 0 gid 0 pid 1894211
+PROOF_GRUB_MENU serial=1
+PROOF_GRUB_KEY e -> editor_on_serial=0 linux_line=0

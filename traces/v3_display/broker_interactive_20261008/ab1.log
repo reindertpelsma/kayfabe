@@ -1,0 +1,5 @@
+AB_START 2026-10-08T11:17:39+02:00 qemu=/workspace/bench/kf3-bins/0e64a960/qemu-system-x86_64
+AB B props=[display=on,gop=on] result=COPIES after=6s display fps[cap=75(unset) copies=0.9 checks=30.7 same=30 ondemand=1 over=0]  shot=6220817 progress_err=0
+AB A props=[display=on] result=COPIES after=16s display fps[cap=75(unset) h3[armed=60.000 tick=59.99 clamped=0 late_max_us=1015 kms=0.0 tear=0.0 held=0 core_imm=1 vblirq=0.0]  shot=6220817 progress_err=0
+AB C props=[display=on,display-broker=/run/user/1000/nvkvm/display.sock,display-broker-uid=1000] result=COPIES after=16s display fps[cap=75(unset) h3[armed=60.000 tick=59.08 clamped=0 late_max_us=1001 kms=0.0 tear=0.0 held=0 core_imm=1 vblirq=0.0]  shot=6220817 progress_err=0
+AB_EXIT 2026-10-08T11:18:39+02:00

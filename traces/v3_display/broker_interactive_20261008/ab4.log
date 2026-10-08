@@ -1,0 +1,8 @@
+AB_START 2026-10-08T11:21:53+02:00 qemu=/workspace/bench/kf3-bins/0e64a960/qemu-system-x86_64
+AB_LATE broker started after 3s; copies so far: 
+AB I@1920x1080~3 props=[display=on,gop=on,display-broker=/run/user/1000/nvkvm/display.sock,display-broker-uid=1000] result=COPIES after=2s display fps[cap=75(unset) copies=1.9 checks=59.9 same=286 ondemand=1 over=0]  shot=6220817 progress_err=0
+AB_BROKER I@1920x1080~3 nvkvm-broker: client attached: window 1920x1080, capabilities 0xfff, display device unknown 0:0
+AB_LATE broker started after 8s; copies so far: copies=0.0
+AB J@1920x1080~8 props=[display=on,gop=on,display-broker=/run/user/1000/nvkvm/display.sock,display-broker-uid=1000] result=COPIES after=1s display fps[cap=75(unset) copies=20.9 checks=53.9 same=32 ondemand=1 over=0]  shot=6220817 progress_err=0
+AB_BROKER J@1920x1080~8 nvkvm-broker: client attached: window 1920x1080, capabilities 0xfff, display device unknown 0:0
+AB_EXIT 2026-10-08T11:22:23+02:00

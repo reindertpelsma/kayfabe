@@ -2374,3 +2374,165 @@ fn the_hello_line_claims_shared_memory_only_for_slots_without_a_dma_buf() {
         );
     }
 }
+
+// ── §8.18: the buffer path each display environment ends on (owner, 2026-10-08) ─────────────
+
+/// Which path the last ATTACH of slot `j` took.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BufPath {
+    Native,
+    Linear,
+    Implicit,
+    Shm,
+}
+
+impl T {
+    /// One frame, after the broker returned the pacing credit; the path its ATTACH took.
+    fn frame_path(&mut self, host: bool, vram: bool) -> BufPath {
+        // a displaying broker gives every shown frame back: RELEASE each held slot under each
+        // of its backings (an id the relay did not send on that slot is ignored)
+        let held = self.ring.held_mask();
+        for j in (0..self.ring.slots()).filter(|j| held & (1 << j) != 0) {
+            let mut ids = vec![self.memfd_id(j)];
+            ids.extend(self.ring.fds(j).unwrap().dmabuf_id());
+            ids.extend(self.ring.vram(j).map(|v| v.id()));
+            for id in ids {
+                self.pkt(EV_RELEASE, 0, 0, id as u32, (id >> 32) as u32);
+            }
+        }
+        self.pkt(EV_FRAME, 0, 0, 0, 0);
+        self.read();
+        self.clear();
+        let j = self.publish_kinds(64, 32, host, vram);
+        self.frame();
+        let (c, id) = self
+            .sent()
+            .into_iter()
+            .find(|(c, _)| c.ty == CMD_ATTACH)
+            .expect("a frame always goes: a refusal must never stall the display");
+        assert!(
+            self.types().contains(&CMD_COMMIT),
+            "an ATTACH is committed: {:?}",
+            self.types()
+        );
+        if c.modifier == BL && id == self.ring.vram(j).map(|v| v.id()) {
+            BufPath::Native
+        } else if c.flags == CMD_F_SHM && id == Some(self.memfd_id(j)) {
+            BufPath::Shm
+        } else if c.flags == 0 && id == self.ring.fds(j).unwrap().dmabuf_id() {
+            match c.modifier {
+                MOD_LINEAR => BufPath::Linear,
+                MOD_INVALID => BufPath::Implicit,
+                m => panic!("a dma-buf under modifier {m:#x}"),
+            }
+        } else {
+            panic!("an ATTACH of no known backing: {c:?} {id:?}")
+        }
+    }
+
+    /// The display's answer for (XR24, `modifier`).
+    fn verdict(&self, modifier: u64, yes: bool) {
+        self.pkt(
+            EV_FORMAT,
+            i32::from(yes),
+            FOURCC_XR24 as i32,
+            modifier as u32,
+            (modifier >> 32) as u32,
+        );
+    }
+}
+
+/// ★ Environment 1, measured on the trusted host (run wl1, 2026-10-08): GNOME Wayland on the
+/// NVIDIA GPU that renders the guest. Native block-linear YES, LINEAR advertised and then
+/// refused at import (mutter's import fails; `badf2d7` sends the unsolicited `x=0`), shm YES.
+/// The path must end native, pass through shm (never LINEAR again) while the native answer is
+/// pending, and land on shm — not a stall — when the native path is later refused too.
+#[test]
+fn env_native_display_ends_native_and_falls_back_to_shm_never_linear_again() {
+    let mut t = T::vram_over(T::new(true));
+    t.up(NATIVE_CAPS);
+    assert_eq!(
+        t.frame_path(true, false),
+        BufPath::Linear,
+        "unanswered: optimistic"
+    );
+    t.verdict(MOD_LINEAR, true); // advertised …
+    t.read();
+    t.verdict(MOD_LINEAR, false); // … and refused at import
+    t.read();
+    assert_eq!(
+        t.frame_path(true, false),
+        BufPath::Shm,
+        "the refusal lands on shm"
+    );
+    t.bl_verdict(true);
+    t.read();
+    assert_eq!(t.frame_path(true, true), BufPath::Native);
+    let j = t.ring.held_mask().trailing_zeros() as usize;
+    t.release_vram(j);
+    assert_eq!(t.frame_path(true, true), BufPath::Native, "and stays native");
+    t.bl_verdict(false); // the native import refused later
+    t.read();
+    assert_eq!(
+        t.frame_path(true, true),
+        BufPath::Shm,
+        "never LINEAR: it was refused"
+    );
+    assert_eq!(t.frame_path(true, true), BufPath::Shm);
+}
+
+/// ★ Environment 2, MODELLED (no such hardware was run): a laptop whose compositor runs on an
+/// Intel iGPU, the NVIDIA dGPU with no display. The compositor names its own render node
+/// (EV_DEVICE, not this GPU), advertises no NVIDIA modifier (the block-linear pair: no) and
+/// imports LINEAR. The path must end LINEAR; a later LINEAR refusal lands on shm.
+#[test]
+fn env_other_gpu_compositor_ends_linear_and_falls_back_to_shm() {
+    use kf_broker::wire::{CAP_DEVICE, DEVICE_F_KNOWN, DEVICE_F_RENDER, EV_DEVICE};
+    let mut t = T::vram_over(T::new(true));
+    t.up(NATIVE_CAPS | CAP_DEVICE);
+    t.pkt(EV_DEVICE, DEVICE_F_KNOWN | DEVICE_F_RENDER, 0, 226, 130);
+    t.bl_verdict(false);
+    t.read();
+    assert!(
+        !t.ring.want_vram(),
+        "no GPU copy for another GPU's compositor"
+    );
+    t.verdict(MOD_LINEAR, true);
+    t.read();
+    assert_eq!(t.frame_path(true, true), BufPath::Linear);
+    assert_eq!(t.frame_path(true, true), BufPath::Linear);
+    t.verdict(MOD_LINEAR, false);
+    t.read();
+    assert_eq!(t.frame_path(true, true), BufPath::Shm);
+}
+
+/// ★ Environment 3, MODELLED: Xvfb / a headless llvmpipe compositor. No explicit modifiers (no
+/// `CAP_MODIFIERS`, so neither the native pair nor LINEAR is asked), and the implicit-modifier
+/// dma-buf refused: shm from the first frame on. With no `/dev/udmabuf` at all the same.
+#[test]
+fn env_software_display_ends_on_shm() {
+    let mut t = T::vram_over(T::new(true));
+    t.up(CAP_RELEASE);
+    assert_eq!(t.frame_path(true, false), BufPath::Shm, "unanswered: shm");
+    t.verdict(MOD_INVALID, false);
+    t.read();
+    assert_eq!(t.frame_path(true, true), BufPath::Shm);
+    assert!(!t.ring.want_vram());
+    // a "no" is final for the connection (nvkvm-pv's `relay_format_verdict_next` keeps a 0): a
+    // later yes does not move it off shm
+    t.verdict(MOD_INVALID, true);
+    t.read();
+    assert_eq!(t.frame_path(true, true), BufPath::Shm);
+    // a display that says yes to the implicit modifier gets the dma-buf (rung 1b)
+    let mut t = T::vram_over(T::new(true));
+    t.up(CAP_RELEASE);
+    assert_eq!(t.frame_path(true, false), BufPath::Shm, "asked; unanswered");
+    t.verdict(MOD_INVALID, true);
+    t.read();
+    assert_eq!(t.frame_path(true, false), BufPath::Implicit);
+    let mut t = T::vram_over(T::new(false));
+    t.up(CAP_MODIFIERS | CAP_RELEASE);
+    for _ in 0..3 {
+        assert_eq!(t.frame_path(true, false), BufPath::Shm, "no udmabuf: shm");
+    }
+}

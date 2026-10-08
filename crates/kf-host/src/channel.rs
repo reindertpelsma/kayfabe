@@ -1074,7 +1074,12 @@ impl HostRm {
     /// asks its OWN CPU-RM the same question about its own object (`kernel_channel.c:2950-2970`),
     /// so the twin serves its `SET_OBJECT` only when both numbers agree.
     ///
-    /// ⊘ Not a [`kf_abi::hostabi::HOST_CONTROLS`] row (the driver matrix has no
+    /// ⊘ CORRECTED 2026-10-08 (run wl1, host 595.91.07): the paragraph below was the defect —
+    /// outside `[580.65.06, 581)` the unlisted control was refused before the ioctl
+    /// (`HOST_ABI_REFUSED`, logged as `Other(19314)`), so x11-dispsw refused every guest
+    /// GF100_DISP_SW at 595 and the guest X driver failed "display software resources". It is now
+    /// a measured `HOST_CONTROLS` row (`NV906F_CTRL_GET_CLASS_ENGINEID_PARAMS`, `host_chan_cmds`).
+    /// As first written: Not a [`kf_abi::hostabi::HOST_CONTROLS`] row (the driver matrix has no
     /// `NV906F_CTRL_GET_CLASS_ENGINEID_PARAMS`): carried as bytes on the interval the host encoders
     /// were written for and refused by name elsewhere — a refusal the caller turns into a refused
     /// display-SW alloc.

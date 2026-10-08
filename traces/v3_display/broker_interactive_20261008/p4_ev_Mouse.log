@@ -1,0 +1,53 @@
+Input driver version is 1.0.1
+Input device ID: bus 0x6 vendor 0x627 product 0x2 version 0x2
+Input device name: "QEMU Virtio Mouse"
+Supported events:
+  Event type 0 (EV_SYN)
+  Event type 1 (EV_KEY)
+    Event code 272 (BTN_LEFT)
+    Event code 273 (BTN_RIGHT)
+    Event code 274 (BTN_MIDDLE)
+    Event code 275 (BTN_SIDE)
+    Event code 276 (BTN_EXTRA)
+    Event code 330 (BTN_TOUCH)
+    Event code 336 (BTN_GEAR_DOWN)
+    Event code 337 (BTN_GEAR_UP)
+  Event type 2 (EV_REL)
+    Event code 0 (REL_X)
+    Event code 1 (REL_Y)
+    Event code 8 (REL_WHEEL)
+Properties:
+Testing ... (interrupt to exit)
+Event: time 1791452248.960079, type 2 (EV_REL), code 0 (REL_X), value 10
+Event: time 1791452248.960079, -------------- SYN_REPORT ------------
+Event: time 1791452249.011779, type 2 (EV_REL), code 0 (REL_X), value 10
+Event: time 1791452249.011779, -------------- SYN_REPORT ------------
+Event: time 1791452249.063814, type 2 (EV_REL), code 0 (REL_X), value 10
+Event: time 1791452249.063814, -------------- SYN_REPORT ------------
+Event: time 1791452249.115973, type 2 (EV_REL), code 0 (REL_X), value 10
+Event: time 1791452249.115973, -------------- SYN_REPORT ------------
+Event: time 1791452249.167932, type 2 (EV_REL), code 0 (REL_X), value 10
+Event: time 1791452249.167932, -------------- SYN_REPORT ------------
+Event: time 1791452249.219968, type 2 (EV_REL), code 0 (REL_X), value 10
+Event: time 1791452249.219968, -------------- SYN_REPORT ------------
+Event: time 1791452249.272098, type 2 (EV_REL), code 0 (REL_X), value 10
+Event: time 1791452249.272098, -------------- SYN_REPORT ------------
+Event: time 1791452249.324028, type 2 (EV_REL), code 0 (REL_X), value 10
+Event: time 1791452249.324028, -------------- SYN_REPORT ------------
+Event: time 1791452249.376362, type 2 (EV_REL), code 0 (REL_X), value 10
+Event: time 1791452249.376362, -------------- SYN_REPORT ------------
+Event: time 1791452249.428285, type 2 (EV_REL), code 0 (REL_X), value 10
+Event: time 1791452249.428285, -------------- SYN_REPORT ------------
+Event: time 1791452249.482510, type 2 (EV_REL), code 1 (REL_Y), value 10
+Event: time 1791452249.482510, -------------- SYN_REPORT ------------
+Event: time 1791452249.534414, type 2 (EV_REL), code 1 (REL_Y), value 10
+Event: time 1791452249.534414, -------------- SYN_REPORT ------------
+Event: time 1791452249.586509, type 2 (EV_REL), code 1 (REL_Y), value 10
+Event: time 1791452249.586509, -------------- SYN_REPORT ------------
+Event: time 1791452249.638557, type 2 (EV_REL), code 1 (REL_Y), value 10
+Event: time 1791452249.638557, -------------- SYN_REPORT ------------
+Event: time 1791452249.690581, type 2 (EV_REL), code 1 (REL_Y), value 10
+Event: time 1791452249.690581, -------------- SYN_REPORT ------------
+Event: time 1791452249.747339, type 2 (EV_REL), code 0 (REL_X), value -30
+Event: time 1791452249.747339, type 2 (EV_REL), code 1 (REL_Y), value -20
+Event: time 1791452249.747339, -------------- SYN_REPORT ------------

@@ -1,0 +1,1 @@
+nvkvm-broker: ERROR: this display ADVERTISED XR24 modifier 0x0000000000000000 and then refused to import it.  Frames in that layout will be rejected rather than retried; the VMM is being told so it can send something else.

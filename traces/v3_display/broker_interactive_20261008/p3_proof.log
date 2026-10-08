@@ -1,0 +1,4 @@
+PROOF_START tag=p3 checkout=9ba9a95e broker=badf2d707da4 2026-10-08T11:29:30+02:00
+PROOF_BROKER_CONNECTED +9s nvkvm-broker: accepted uid 0 gid 0 pid 1898079
+PROOF_GRUB_MENU +9s serial=1 countdown=[automatically in 10s automatically in 9s ]
+PROOF_GRUB_KEY PASS broker e -> editor_on_serial=1 countdown_left=automatically in 6s

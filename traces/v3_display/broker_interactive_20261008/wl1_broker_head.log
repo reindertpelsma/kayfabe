@@ -1,0 +1,81 @@
+nvkvm-broker: the compositor imports on DRM device 226:128 (render node)
+nvkvm-broker: no zxdg_decoration_manager_v1: the window will have no title bar, no close button and no resize grips, and --title will render nowhere.  That is the compositor's choice, not a bug here.
+nvkvm-broker: drawing a client-side title bar (28 px): this compositor offers no server-side decorations
+nvkvm-broker: resize borders: 14 px of grabbable edge around the window
+nvkvm-broker: output scale is 1.500 — the guest is told PHYSICAL pixels, so a fullscreen guest buffer can cover the output
+nvkvm-broker: title bar: mapped, 1920x28 at the top of the window
+nvkvm-broker: the compositor advertises 56 (format, modifier) pairs
+nvkvm-broker:     AB24  modifier 0x00ffffffffffffff (implicit)
+nvkvm-broker:     AB24  modifier 0x0300000000606010 (NVIDIA)
+nvkvm-broker:     AB24  modifier 0x0300000000606011 (NVIDIA)
+nvkvm-broker:     AB24  modifier 0x0300000000606012 (NVIDIA)
+nvkvm-broker:     AB24  modifier 0x0300000000606013 (NVIDIA)
+nvkvm-broker:     AB24  modifier 0x0300000000606014 (NVIDIA)
+nvkvm-broker:     AB24  modifier 0x0300000000606015 (NVIDIA)
+nvkvm-broker:     AB24  modifier 0x0300000000e08010 (NVIDIA)
+nvkvm-broker:     AB24  modifier 0x0300000000e08011 (NVIDIA)
+nvkvm-broker:     AB24  modifier 0x0300000000e08012 (NVIDIA)
+nvkvm-broker:     AB24  modifier 0x0300000000e08013 (NVIDIA)
+nvkvm-broker:     AB24  modifier 0x0300000000e08014 (NVIDIA)
+nvkvm-broker:     AB24  modifier 0x0300000000e08015 (NVIDIA)
+nvkvm-broker:     AB24  modifier 0x0000000000000000 (LINEAR)
+nvkvm-broker:     XB24  modifier 0x00ffffffffffffff (implicit)
+nvkvm-broker:     XB24  modifier 0x0300000000606010 (NVIDIA)
+nvkvm-broker:     XB24  modifier 0x0300000000606011 (NVIDIA)
+nvkvm-broker:     XB24  modifier 0x0300000000606012 (NVIDIA)
+nvkvm-broker:     XB24  modifier 0x0300000000606013 (NVIDIA)
+nvkvm-broker:     XB24  modifier 0x0300000000606014 (NVIDIA)
+nvkvm-broker:     XB24  modifier 0x0300000000606015 (NVIDIA)
+nvkvm-broker:     XB24  modifier 0x0300000000e08010 (NVIDIA)
+nvkvm-broker:     XB24  modifier 0x0300000000e08011 (NVIDIA)
+nvkvm-broker:     XB24  modifier 0x0300000000e08012 (NVIDIA)
+nvkvm-broker:     XB24  modifier 0x0300000000e08013 (NVIDIA)
+nvkvm-broker:     XB24  modifier 0x0300000000e08014 (NVIDIA)
+nvkvm-broker:     XB24  modifier 0x0300000000e08015 (NVIDIA)
+nvkvm-broker:     XB24  modifier 0x0000000000000000 (LINEAR)
+nvkvm-broker:     AR24  modifier 0x00ffffffffffffff (implicit)
+nvkvm-broker:     AR24  modifier 0x0300000000606010 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000606011 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000606012 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000606013 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000606014 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000606015 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000e08010 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000e08011 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000e08012 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000e08013 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000e08014 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0300000000e08015 (NVIDIA)
+nvkvm-broker:     AR24  modifier 0x0000000000000000 (LINEAR)
+nvkvm-broker:     XR24  modifier 0x00ffffffffffffff (implicit)
+nvkvm-broker:     XR24  modifier 0x0300000000606010 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000606011 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000606012 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000606013 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000606014 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000606015 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000e08010 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000e08011 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000e08012 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000e08013 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000e08014 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0300000000e08015 (NVIDIA)
+nvkvm-broker:     XR24  modifier 0x0000000000000000 (LINEAR)
+nvkvm-broker: backend 'wayland': window 1920x1080
+nvkvm-broker: grab capabilities: keyboard=1 abs=1 rel=1 lock=1 shortcuts-inhibited=1 focus-events=1 fullscreen=1
+nvkvm-broker: GRAB IS TOTAL: under CTRL+ALT+G every key reaches the guest and the pointer is locked to the window.
+nvkvm-broker: listening on /run/user/1000/nvkvm/display.sock (mode 0600)
+nvkvm-broker:   allowed uid 0
+nvkvm-broker:   allowed uid 1000
+nvkvm-broker: no client yet: showing the placeholder (1920x1080)
+nvkvm-broker: accepted uid 0 gid 0 pid 1902088
+nvkvm-broker: client attached: window 1920x1080, capabilities 0xfff, display device render node 226:128
+nvkvm-broker: grab: CTRL+ALT+G toggles, CTRL+ALT+F fullscreen. all keyboard input is captured under grab.
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0000000000000000 (LINEAR) -> YES
+nvkvm-broker: probing whether this display can import XR24 modifier 0x0000000000000000 (one frame is dropped to find out)
+nvkvm-broker: the VM reports: clipboard agent not seen yet (it is announced the first time the guest copies something)
+nvkvm-broker: ERROR: this display ADVERTISED XR24 modifier 0x0000000000000000 and then refused to import it.  Frames in that layout will be rejected rather than retried; the VMM is being told so it can send something else.
+nvkvm-broker: ERROR: ATTACH: fourcc XR24 modifier 0x0000000000000000 (LINEAR) is not advertised by this display.  If the compositor runs on a different GPU than the guest's, no modifier will ever match and a readback/copy path is required — the VMM can ask first with CMD_QUERY_FORMAT; run the broker with --verbose to see what it does advertise.
+nvkvm-broker: presenting through wl_shm: the display refused every dma-buf layout offered, so frames are shared as plain memory.  This works everywhere and costs the compositor one upload per frame.
+nvkvm-broker: host output refresh is 59.996 Hz — telling the guest, so it need not stay at its built-in default
+nvkvm-broker: Present: COPY - the compositor is compositing it  (refresh 16.667 ms)

@@ -264,6 +264,9 @@ pub struct DisplayGpu {
     color_event: EventHandle,
     color_recorded: bool,
     color_snapshots: [Option<ColorLut>; 65],
+    /// ★ 2026-10-08 (`V3_DISPLAY.md` §8.18): recorded with every completion signal, so a copy whose
+    /// signal is late can be asked "still queued, or failed?" without blocking.
+    signal_event: EventHandle,
 }
 
 /// ★ One page-locked host frame buffer the display console reads (M2). Its address crosses to the
@@ -467,6 +470,7 @@ impl DisplayGpu {
             })
             .map_err(|e| format!("the SDR colour kernels did not load: {e}"));
         let color_event = cu.event_create()?;
+        let signal_event = cu.event_create()?;
         Ok(DisplayGpu {
             cu,
             ctx,
@@ -488,6 +492,7 @@ impl DisplayGpu {
             color_event,
             color_recorded: false,
             color_snapshots: [None; 65],
+            signal_event,
         })
     }
 
@@ -1015,7 +1020,19 @@ impl DisplayGpu {
     /// # Errors
     /// The CUDA error.
     pub fn compose_signal(&self) -> Result<(), CudaError> {
+        self.cu.event_record(self.signal_event, self.stream)?;
         self.cu.launch_host_signal(self.stream, &self.done)
+    }
+
+    /// ★ 2026-10-08 (`V3_DISPLAY.md` §8.18): the state of the work before the last
+    /// [`Self::compose_signal`] — **never blocks**. `Ok(false)`: still queued (the GPU, or the host
+    /// RM in front of it, has not run it yet); `Ok(true)`: done, its signal is on its way; `Err`:
+    /// the stream failed, by name — the only answer that means the completion will never come.
+    ///
+    /// # Errors
+    /// The CUDA error the stream reports.
+    pub fn signal_state(&self) -> Result<bool, CudaError> {
+        self.cu.event_query(self.signal_event)
     }
 
     /// ★ The staging frame's D2H copy into `dst` (tight, `w * 4` bytes a row), without the signal
@@ -1513,6 +1530,7 @@ impl Drop for DisplayGpu {
         // the stream drains (every queued host signal with it) before the context goes
         self.cu.stream_destroy(self.stream);
         self.cu.event_destroy(self.color_event);
+        self.cu.event_destroy(self.signal_event);
         if let Some((p, _)) = self.staging.take() {
             self.cu.mem_free(p);
         }

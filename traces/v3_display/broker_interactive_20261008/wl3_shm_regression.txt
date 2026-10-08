@@ -1,0 +1,6 @@
+broker: frames go as a LINEAR dma-buf (udmabuf, zero-copy for the broker)
+broker: the display CAN show XR24 modifier 0x0000000000000000
+broker: the display CANNOT show XR24 modifier 0x0000000000000000
+broker: frames go as shared memory (F_SHM) — an X11 broker accepts it only with --present-mode=shm, and a refusal is not reported back
+broker[up=1 sent=973 gpucopy=0 gpucopy_backoffs=0 dmabuf_trips=0 carrier_refused=0 carrier_unchecked=0 formats_unasked=0 dropped=0 uncommitted=0 recovered=0 releases=971 unknown_releases=0 reclaims=2 blocked=0 backstops=0 reconnects=0 failed_attempts=0 peer_refused=0 cursor=hover cursor_sets=48 cursor_hides=0 cursor_shows=0 cursor_refused=0]
+nvkvm-broker: presenting through wl_shm: the display refused every dma-buf layout offered, so frames are shared as plain memory.  This works everywhere and costs the compositor one upload per frame.

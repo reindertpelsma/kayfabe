@@ -1,0 +1,8 @@
+AB_START 2026-10-08T11:19:06+02:00 qemu=/workspace/bench/kf3-bins/0e64a960/qemu-system-x86_64
+AB D@1920x1080 props=[display=on,gop=on,display-broker=/run/user/1000/nvkvm/display.sock,display-broker-uid=1000] result=STALL after=5s display fps[cap=75(unset) copies=0.0 checks=0.0 same=0 ondemand=1 over=0] display: scanout REFUSED copy 1 did not complete in 2s shot=921615 progress_err=0
+AB_BROKER D@1920x1080 nvkvm-broker: client attached: window 1920x1080, capabilities 0xfff, display device unknown 0:0
+AB E@1280x720 props=[display=on,gop=on,display-broker=/run/user/1000/nvkvm/display.sock,display-broker-uid=1000] result=STALL after=5s display fps[cap=75(unset) copies=0.0 checks=0.0 same=0 ondemand=1 over=0] display: scanout REFUSED copy 1 did not complete in 2s shot=921615 progress_err=0
+AB_BROKER E@1280x720 nvkvm-broker: client attached: window 1280x720, capabilities 0xfff, display device unknown 0:0
+AB F@1280x720 props=[display=on,display-broker=/run/user/1000/nvkvm/display.sock,display-broker-uid=1000] result=COPIES after=16s display fps[cap=75(unset) h3[armed=59.979 tick=59.96 clamped=0 late_max_us=1004 kms=0.0 tear=0.0 held=0 core_imm=1 vblirq=0.0]  shot=2764816 progress_err=0
+AB_BROKER F@1280x720 nvkvm-broker: client attached: window 1280x720, capabilities 0xfff, display device unknown 0:0
+AB_EXIT 2026-10-08T11:19:57+02:00
