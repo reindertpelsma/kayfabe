@@ -2895,7 +2895,19 @@ impl ChanPlane {
                 } else if let Some(ht) = self.translated_of(c, h) {
                     tr.push(((c, h), ht));
                 } else {
-                    unknown.push((c, h));
+                    // ★ 2026-10-08 (run82): an entry may name a CHANNEL GROUP (Windows' kernel
+                    // preempts a process's TSG by its handle) — every twin of that client
+                    // allocated under it.
+                    let members: Vec<_> = m
+                        .iter()
+                        .filter(|(k, v)| k.0 == c && v.tsg == Some(h))
+                        .map(|(k, v)| (*k, v.chan))
+                        .collect();
+                    if members.is_empty() {
+                        unknown.push((c, h));
+                    } else {
+                        pt.extend(members);
+                    }
                 }
             }
         }

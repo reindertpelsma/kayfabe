@@ -1722,7 +1722,16 @@ impl ChannelPolicy {
                 // in-tree caller lists channels of the calling client (`nv_gpu_ops.c:957-981`,
                 // `RES_GET_CLIENT_HANDLE` of channels iterated from that very client), and one
                 // guest process must never stop another's twin.
-                if let Some((c, ch)) = d.list.iter().find(|(c, _)| *c != h.client) {
+                // ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`, run82 at 54b12063): the ASYNC form is the guest
+                // KERNEL's own scheduler (CPU-RM admits `pRunlistPreemptEvent` from kernel clients
+                // only, `kernel_fifo_ctrl.c:725-730`), and Windows' kernel client names the
+                // per-process clients' channel groups — physical RM resolves every entry's own
+                // `hClient` (`kernel_fifo_ctrl.c:870-890`). Those are this VM's clients and twins;
+                // VM-to-VM isolation is the host's, inside one VM it is the guest kernel's (§V).
+                let cross_client_ok = d.runlist_preempt_event != 0;
+                if !cross_client_ok
+                    && let Some((c, ch)) = d.list.iter().find(|(c, _)| *c != h.client)
+                {
                     return Some(Self::refusal(
                         NV_ERR_INSUFFICIENT_PERMISSIONS,
                         &format!(
