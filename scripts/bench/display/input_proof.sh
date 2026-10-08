@@ -49,11 +49,13 @@ qpid(){ pgrep -f "^[^ ]*qemu-system-x86_64 -name kayfabe-interactive" | head -1;
 wait_ssh(){ for _ in $(seq "${1:-100}"); do gq true 8 >/dev/null 2>&1 && return 0; [ -n "$(qpid)" ] || return 2; sleep 3; done; return 1; }
 
 RUN=$OUT/vm1; start_vm 1280x720 "$RUN"; T0=$(date +%s)
-# the boot display before nvidia, as the console's framebuffer readback: one shot a second for 30 s
-( for i in $(seq -w 1 30); do sleep 1; [ -S "$RUN/qemu.mon" ] && shot "boot_t$i"; done ) &
-SHOTS=$!
 for _ in $(seq 60); do grep -aq 'accepted uid' "$RUN/broker.log" 2>/dev/null && break; sleep 0.5; done
 P "BROKER_CONNECTED +$(( $(date +%s) - T0 ))s $(grep -a -m1 'accepted uid' "$RUN/broker.log" | cut -c1-160)"
+# the boot display before nvidia, as the console's framebuffer readback: one shot a second for 25 s
+# — only from the broker's connection on: ⊘ [measured, run proof-p3] a console readback in the first
+# ~2 s after QEMU starts stalls kf3's first scanout copy for good (V3_DISPLAY.md §8.17)
+( for i in $(seq -w 1 25); do shot "boot_t$i"; sleep 1; done ) &
+SHOTS=$!
 send "f 1" "p 1"
 # grub (GRUB_TERMINAL=console also writes its menu to the serial port): a DOWN key each second from
 # the broker's connection until the menu is on the serial port — the first one grub reads stops its
