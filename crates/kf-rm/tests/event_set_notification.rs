@@ -695,9 +695,11 @@ fn the_probe_admits_exactly_the_named_index_and_the_default_still_refuses_an_unl
         0,
         "a probe naming 36 serves the arming — reachability instrumentation"
     );
-    // …and nothing it does not name: 38 is another legal index on neither list.
+    // …and nothing it does not name: 3 (THERMAL_SW) is another legal index on no list.
+    // ⊘ 2026-10-08: was 38, which is NV2080_NOTIFIERS_NVENC0 — now admitted as an engine
+    // non-stall notifier (`ENGINE_NONSTALL_NOTIFIERS`).
     assert_ne!(
-        probed.respond(&arming_of(38)).expect("claimed").rpc_result,
+        probed.respond(&arming_of(3)).expect("claimed").rpc_result,
         0,
         "the probe is a set, not a switch: an unnamed, undelivered index stays refused"
     );
