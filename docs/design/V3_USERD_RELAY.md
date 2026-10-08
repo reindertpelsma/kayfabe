@@ -11,7 +11,7 @@ Coordinator decision of 2026-10-08 (option (i) of `traces/windows_code43_walls_2
 a host IOMMU identity domain, is out (it touches the owner's live desktop GPU). Owner ruling context: `docs/OWNER_RULINGS.md` §V
 ("a translated can become passthrough, if you know at channel creation").
 
-## 1. The problem, measured
+## 1. The problem (run61 at 883f878e, 2026-10-08)
 
 `[measured, run61 at 883f878e, 2026-10-08]` A Windows per-process (user-work) channel classified Passthrough
 (`kf_rm::chanlink::windows_user_work`) declares its USERD as a 512-byte slot of the guest RM's USERD pool in guest SYSTEM memory. A
@@ -69,7 +69,7 @@ kayfabe. Two 4-byte cursors are relayed between the guest's slot and this USERD;
   CPU view released and object freed, in that order, after the host channel is gone (no store can reach a released view: the worker's step
   holds the relay's lock, and removal takes it).
 - **Guest reboot / GSP re-init**: every twin is retired through the same free path, so every relay goes with its twin.
-  (`[measured, runs 57/62]` an in-process guest reboot is not yet a clean second boot for Windows — a P4.5 gap, recorded separately.)
+  (`[measured, run57 at 40230e23 and run62 at 883f878e, 2026-10-08]` an in-process guest reboot is not yet a clean second boot for Windows — a P4.5 gap, recorded separately.)
 - **Allocation failure**: if the USERD object or its CPU view cannot be made, the birth is **refused by name** (`NV_ERR_INSUFFICIENT_RESOURCES`,
   "USERD relay: ...") and nothing is left behind; the guest's channel allocation fails (fail closed), never a twin without a relay.
 

@@ -3514,7 +3514,7 @@ trace `run66-qemu.log.gz`.
    one system-memory pool (512-byte slots, `internalFlags = 0x16` on all).
 
 **What this says about the Passthrough classification.** The per-process channels do NOT look like user-mode-submission channels in this guest:
-their doorbell is rung by the kernel driver, from kernel code, exactly as for its own channels `[measured]`; who writes their GP entries is not
+their doorbell is rung by the kernel driver, from kernel code, exactly as for its own channels `[measured, run66 at 6eaa251e, 2026-10-08]`; who writes their GP entries is not
 visible, but with a kernel-mode doorbell the kernel driver submitting on the process's behalf is the consistent reading `[inferred: WDDM's
 kernel-mode submission]`. So "user-written ring + doorbell = the Linux user channel shape" is **not** established. What does hold `[measured]`:
 the per-process channels run in the process's own VA space with a subcontext, and the one segment seen was virtual-only. The classification's
@@ -3653,7 +3653,7 @@ twin of the probe's D3D devices. [run71 timeline](run71-timeline.txt), [run71 Xi
 3. Host VA space start: a Windows process space maps from VA `0x10000`; with the twin spaces starting at 64 KiB (`KF3_TWIN_VA_BASE=10000`,
    diagnostic) the compositor's twin runs (run70) and consumes all its work (run71), with no Xid; Windows reports **1920x1080@60**.
 
-**The walls now** `[measured]`: (a) every twin of a D3D device the probe creates RCs on its first submission (`Xid 32`, PBDMA `DEVICE`), the
+**The walls now** `[measured, runs 70-72 at 4b14d74f/2959ed5f/8de8ef26, 2026-10-08]`: (a) every twin of a D3D device the probe creates RCs on its first submission (`Xid 32`, PBDMA `DEVICE`), the
 guest TDRs and bugchecks; the compositor's twin with the same first segment does not — cause not established (candidates to separate next: the
 subchannel bindings Windows does not send — `SET_OBJECT` never appears in the peeked streams, and the copy twins' first segment uses
 subchannel 4 bare; the cross-client ZCULL/preemption binds the probe answers without binding). (b) No window surface is presented yet (the

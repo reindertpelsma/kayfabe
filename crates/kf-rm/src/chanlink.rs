@@ -2207,7 +2207,7 @@ mod tests {
 
         #[test]
         fn a_d3d_copy_channel_is_judged_by_its_process_alone() {
-            // [measured, run70] engine 0xc, no context share, ProcessID 0x14c0
+            // [measured, run70 at 4b14d74f, 2026-10-08] engine 0xc, no context share, ProcessID 0x14c0
             let ce = UserWorkFacts {
                 engine: Some(0xc),
                 ctx_share: 0,
