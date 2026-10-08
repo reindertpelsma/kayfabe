@@ -4357,8 +4357,14 @@ impl ChanPlane {
     /// `None` when `ht` is not a relayed twin.
     fn relay_serve(&self, ht: u32) -> Option<bool> {
         let r = self.relays.lock().ok()?.get(&ht).cloned()?;
-        let Ok(mut g) = r.try_lock() else {
-            self.contended.fetch_add(1, Ordering::Relaxed);
+        // ⊘ A BLOCKING lock (2026-10-08, run77 at 492fb3f0): the token's BUSY state keeps two steps
+        // apart, but the GP_GET refresh (`relay_refresh_all`, on a host wake or the park tick) also
+        // takes this lock for two 4-byte accesses — a `try_lock` here then CONSUMED the doorbell
+        // (run77: the compositor's guest GP_PUT 0x12 never forwarded, host stuck at 0xf, TDR). The
+        // refresh never waits (it skips a held relay); a step waits at most for its two accesses —
+        // on a worker, never a vCPU, never under a lock a vCPU takes.
+        let Ok(mut g) = r.lock() else {
+            self.poisoned.fetch_add(1, Ordering::Relaxed);
             return Some(false);
         };
         let g = &mut *g;
