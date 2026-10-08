@@ -1144,7 +1144,7 @@ impl ChannelPolicy {
             )
         };
         eprintln!(
-            "kf-rm: chanlink: CHAN-FACTS {:#x}:{:#x} parent={:#x} class={:#x} engine={:x?} flags={:#x} hVASpace={:#x} ctxShare={:#x} vas={:#x}:{:x?} tsg={:x?} device={:#x} kernel={} privilege={:?} internalFlags={:x?} ProcessID={:x?} SubProcessID={:x?} kernel_pid_decl={}",
+            "kf-rm: chanlink: CHAN-FACTS {:#x}:{:#x} parent={:#x} class={:#x} engine={:x?} flags={:#x} hVASpace={:#x} ctxShare={:#x} vas={:#x}:{:x?} tsg={:x?} device={:#x} kernel={} privilege={:?} internalFlags={:x?} ProcessID={:x?} SubProcessID={:x?} kernel_pid_decl={} hObjectError={:x?} hObjectBuffer={:x?} gpFifoOffset={:#x} gpFifoEntries={} hUserdMemory0={:x?} userd={:x?} hPhysChannelGroup={:x?}",
             st.client,
             st.handle,
             st.parent,
@@ -1162,7 +1162,14 @@ impl ChannelPolicy {
             cf("internalFlags"),
             cf("ProcessID"),
             cf("SubProcessID"),
-            st.declared_kernel_pid
+            st.declared_kernel_pid,
+            cf("hObjectError"),
+            cf("hObjectBuffer"),
+            st.gpfifo_va,
+            st.entries,
+            cf("hUserdMemory"),
+            st.userd,
+            cf("hPhysChannelGroup")
         );
         self.carried += 1;
         self.carry_alloc(ChanStatement::Alloc(st), cmd, h.client, h.handle)

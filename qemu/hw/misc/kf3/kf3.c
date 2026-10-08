@@ -62,6 +62,9 @@
 #include "system/memory.h"
 #include "system/address-spaces.h"
 #include "system/kvm.h"
+#include "hw/core/cpu.h"   /* current_cpu, CPUState::kvm_fd (the DBCPL diagnostic) */
+#include "qemu/atomic.h"
+#include <sys/ioctl.h>
 #include "system/system.h"   /* qemu_uuid, qemu_uuid_set (ABI 22: the VM identity for gpu-uuid=auto) */
 #include "qemu/uuid.h"
 #include "qemu/event_notifier.h"
@@ -216,9 +219,45 @@ static uint64_t kf3_piece_read(void *opaque, hwaddr addr, unsigned size)
     return kf3_bar0_read(p->s->h, p->base + addr, size);
 }
 
+/* ★ 2026-10-08 DIAGNOSTIC (KF3_DOORBELL_CPL=1, default off; Windows user-mode-submission question):
+ * for the first 4096 writes to the usermode page's NOTIFY_CHANNEL_PENDING (BAR0 0x810000 + 0x90 on
+ * Turing..Ada), log the doorbell value with the writing vCPU's privilege level (CS.RPL from
+ * KVM_GET_SREGS) and RIP (KVM_GET_REGS): a ring 3 writer is guest userspace ringing its own channel.
+ * Read-only ioctls on the trapping vCPU's own fd, on its own thread, between KVM_RUNs; nothing is
+ * changed and nothing waits. */
+static int kf3_dbcpl_left = -1;
+
+static void kf3_dbcpl(hwaddr off, uint64_t val)
+{
+    if (kf3_dbcpl_left == -1) {
+        const char *e = getenv("KF3_DOORBELL_CPL");
+        kf3_dbcpl_left = (e && e[0] == '1') ? 4096 : 0;
+    }
+    if (kf3_dbcpl_left <= 0 || off < 0x810000 || off >= 0x820000 || (off & 0xfff) != 0x90) {
+        return;
+    }
+    if (qatomic_fetch_dec(&kf3_dbcpl_left) <= 0) {
+        return;
+    }
+    CPUState *cs = current_cpu;
+    struct kvm_sregs sr;
+    struct kvm_regs r;
+    int cpl = -1;
+    unsigned long long rip = 0;
+    if (cs && kvm_enabled() && ioctl(cs->kvm_fd, KVM_GET_SREGS, &sr) == 0) {
+        cpl = sr.cs.selector & 3;
+    }
+    if (cs && kvm_enabled() && ioctl(cs->kvm_fd, KVM_GET_REGS, &r) == 0) {
+        rip = r.rip;
+    }
+    fprintf(stderr, "kf3: DBCPL off=%#llx value=%#x cpl=%d rip=%#llx\n",
+            (unsigned long long)off, (unsigned)val, cpl, rip);
+}
+
 static void kf3_piece_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
     Kf3Piece *p = opaque;
+    kf3_dbcpl(p->base + addr, val);
     kf3_bar0_write(p->s->h, p->base + addr, val, size);
 }
 
