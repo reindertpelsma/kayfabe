@@ -220,8 +220,8 @@ static uint64_t kf3_piece_read(void *opaque, hwaddr addr, unsigned size)
 }
 
 /* ★ 2026-10-08 DIAGNOSTIC (KF3_DOORBELL_CPL=1, default off; Windows user-mode-submission question):
- * for the first 4096 writes to the usermode page's NOTIFY_CHANNEL_PENDING (BAR0 0x810000 + 0x90 on
- * Turing..Ada), log the doorbell value with the writing vCPU's privilege level (CS.RPL from
+ * for the first 4096 writes to the usermode page's NOTIFY_CHANNEL_PENDING (BAR0 0x810090 on Turing,
+ * 0xBB0090 on Ampere..Ada), log the doorbell value with the writing vCPU's privilege level (CS.RPL from
  * KVM_GET_SREGS) and RIP (KVM_GET_REGS): a ring 3 writer is guest userspace ringing its own channel.
  * Read-only ioctls on the trapping vCPU's own fd, on its own thread, between KVM_RUNs; nothing is
  * changed and nothing waits. */
@@ -233,7 +233,9 @@ static void kf3_dbcpl(hwaddr off, uint64_t val)
         const char *e = getenv("KF3_DOORBELL_CPL");
         kf3_dbcpl_left = (e && e[0] == '1') ? 4096 : 0;
     }
-    if (kf3_dbcpl_left <= 0 || off < 0x810000 || off >= 0x820000 || (off & 0xfff) != 0x90) {
+    /* the usermode/VF page: 0x810000 (Turing) or 0xBB0000 = NV_VIRTUAL_FUNCTION_FULL_PHYS_OFFSET +
+     * 0x30000 (Ampere+; kf_trap::memmap::VF_USERMODE_PAGE); the doorbell at +0x90 */
+    if (kf3_dbcpl_left <= 0 || (off != 0x810090 && off != 0xBB0090)) {
         return;
     }
     if (qatomic_fetch_dec(&kf3_dbcpl_left) <= 0) {
