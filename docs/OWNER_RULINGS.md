@@ -821,3 +821,28 @@ power control, thermal and process, preempt management is host"*.
 - A stray `0x200` with no 5080 object raises Xid 32 on the firing channel only and the channel is
   RC'd; no MMU fault reaches nvidia-uvm. Not measured: cross-object, cross-channel and cross-client
   isolation, and rate (the probe's CE channel could not bind a software object).
+
+## V. GPU UUID per VM and GPU; a VMM-neutral input trait; Translated channels forward unknown entries (2026-10-08)
+
+- **GPU UUID** (owner, 2026-10-08): the guest-visible UUID is a hash of the host GPU's UUID and the VM
+  id, one value per VM and GPU: stable enough across restarts, never the host's own UUID. The user may
+  supply an explicit UUID per GPU (`gpu-uuid=`). Purpose as before: orchestrators must not see two VMs
+  with the same GPU id (`docs/design/V3_GPU_UUID.md`). Of the four sub-decisions A-D there, the owner
+  answered "a hash of host GPU UUID and VM id, per VM x GPU": that keeps the implemented identity
+  source (`vm-id=`, else QEMU `-uuid`), the `slot` (PCI `devfn`) byte, and `auto` needing the host
+  UUID. ⊘ Two points are the implementer's defaults, not stated by the owner: with no VM identity a
+  random UUID for that boot with a named warning (B), and a refusal to realize when the host UUID is
+  unreadable (D). Launchers in `scripts/` must pass `-uuid` so a VM keeps its GPU UUID.
+- **Display broker and input** (owner, 2026-10-08): the broker's keyboard, pointer and cursor logic
+  hooks onto the VMM through a full VMM-neutral trait. Policy (bounds, grab, absolute/relative choice,
+  button and wheel routing, re-sync) lives in Rust in `kf-broker`; only a thin shim names the VMM.
+- **Translated channels, unknown entries** (owner, 2026-10-08, "ok go ahead"; DRAFT, conditions pending
+  `traces/phys_operand_oracle_20261008/`): a known push-buffer entry in a Translated channel is
+  inspected and its physical operands translated and checked; an unknown entry is forwarded as
+  virtual-address-only. Conditions: the host twin is unprivileged with an address space that holds only
+  that VM's memory; hardware refuses physical operands on an unprivileged channel for that engine class
+  (measured per class, by the oracle; a class it does not clear stays allowlist-only); entry framing and
+  lengths are bounds-checked from the push-buffer header for every entry; guest-controlled integer
+  arithmetic panics rather than wraps (`overflow-checks = true` in the release profile); every
+  forwarded unknown method is logged and counted. Isolation inside one VM is the guest kernel's;
+  VM-to-VM and VM-to-host isolation is the host channel's privilege and address space.
