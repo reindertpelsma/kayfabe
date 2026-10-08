@@ -106,6 +106,35 @@ fn armed_defaults_on() -> bool {
     *ON.get_or_init(|| std::env::var("KF3_DISPLAY_ARMED_DEFAULTS").is_ok_and(|v| v == "1"))
 }
 
+/// ⚠ EXPERIMENTS (default off, 2026-10-09, H-mirror; `KF3_DISPLAY_LUT_MIRROR=1`,
+/// `KF3_DISPLAY_ILUT_OFFSET_256=1`, read once; `traces/windows_reset_20261009/`). `[measured,
+/// runs 98/99, RTX 4070]` Windows' first colour program (window 0 ILUT and head 0 OLUT, control
+/// `0x4050a` = DIRECT10 + MIRROR; ILUT offset `0x21`) is refused by the SDR decoder, the refusal
+/// halts every display channel, no later flip or core update is consumed, and ~17.5 s later the
+/// guest resets the display and bugchecks 0x116. See `kf_disp::color::Experiments` for what each
+/// flag changes and why it is exact.
+fn color_experiments() -> kf_disp::color::Experiments {
+    static X: std::sync::OnceLock<kf_disp::color::Experiments> = std::sync::OnceLock::new();
+    *X.get_or_init(|| {
+        let on = |n: &str| std::env::var(n).is_ok_and(|v| v == "1");
+        let x = kf_disp::color::Experiments {
+            lut_mirror: on("KF3_DISPLAY_LUT_MIRROR"),
+            ilut_offset_256: on("KF3_DISPLAY_ILUT_OFFSET_256"),
+        };
+        if x.lut_mirror {
+            eprintln!(
+                "kf3: display: EXPERIMENT KF3_DISPLAY_LUT_MIRROR=1 — MIRROR accepted on DIRECT ILUT/OLUT where no negative input can reach it"
+            );
+        }
+        if x.ilut_offset_256 {
+            eprintln!(
+                "kf3: display: EXPERIMENT KF3_DISPLAY_ILUT_OFFSET_256=1 — SET_OFFSET_ILUT read in 256-byte units (as OLUT/TMO)"
+            );
+        }
+        x
+    })
+}
+
 /// `nvkms-evo3.c:1437-1438`'s default `MIN_FRAME_IDLE` (H-armeddefault): leading, trailing lines.
 const MIN_FRAME_IDLE_DEFAULT: (u32, u32) = (2, 1);
 
@@ -1705,6 +1734,10 @@ impl DisplayPlane {
             kf_disp::caps::page
         };
         let sdr_color = std::env::var("KF3_DISPLAY_SDR_COLOR").as_deref() == Ok("1");
+        if sdr_color {
+            // read (and confirm in the log) the decoder experiments at birth, not at first use
+            let _ = color_experiments();
+        }
         if sdr_color && constructor_probe {
             return Err(
                 "display=on: SDR processing cannot be combined with constructor-only probes".into(),
@@ -3882,15 +3915,21 @@ impl ScanState {
                     return Err("colour frame has refused windows".into());
                 }
                 let mut inputs = Vec::new();
+                let x = color_experiments();
+                let mut matrices = Vec::new();
+                let mut ilut_mirror = false;
                 for layer in &planned.layers {
                     let so = comp
                         .layers
                         .iter()
                         .find(|so| so.window == layer.window)
                         .ok_or("colour layer has no armed window")?;
-                    let lut = kf_disp::color::input(t, win, |m| {
-                        engine.armed(ChannelKind::Window, so.window, m).unwrap_or(0)
-                    })
+                    let lut = kf_disp::color::input(
+                        t,
+                        win,
+                        |m| engine.armed(ChannelKind::Window, so.window, m).unwrap_or(0),
+                        x,
+                    )
                     .map_err(str::to_owned)?;
                     let life = engine
                         .generation(so.chn)
@@ -3904,6 +3943,8 @@ impl ScanState {
                             .ok_or("missing armed inline tables")?,
                     )
                     .map_err(str::to_owned)?;
+                    matrices.extend(pipeline.matrices);
+                    ilut_mirror |= lut.is_some_and(|l| l.mirror);
                     let tmo = self.colors.resolve(
                         32 + so.window as usize,
                         so.client,
@@ -3936,10 +3977,32 @@ impl ScanState {
                     )?;
                     inputs.push((input, tmo, program));
                 }
-                let out = kf_disp::color::output(t, core, comp.head, |m| {
-                    engine.armed(ChannelKind::Core, 0, m).unwrap_or(0)
-                })
+                let out = kf_disp::color::output(
+                    t,
+                    core,
+                    comp.head,
+                    |m| engine.armed(ChannelKind::Core, 0, m).unwrap_or(0),
+                    x,
+                )
                 .map_err(str::to_owned)?;
+                // ⚠ KF3_DISPLAY_LUT_MIRROR: the kernels have no negative side, so a mirrored
+                // OLUT is taken only when no armed matrix can make its input negative
+                if out.lut.is_some_and(|l| l.mirror)
+                    && !kf_disp::color::mirror_inert(matrices.iter().chain([&out.matrix]))
+                {
+                    return Err(
+                        "mirrored OLUT behind a signed matrix (input may be negative)".into(),
+                    );
+                }
+                if ilut_mirror || out.lut.is_some_and(|l| l.mirror) {
+                    static NOTED: std::sync::Once = std::sync::Once::new();
+                    NOTED.call_once(|| {
+                        eprintln!(
+                            "kf3: display: EXPERIMENT KF3_DISPLAY_LUT_MIRROR=1 — a mirrored LUT accepted (ILUT mirrored={ilut_mirror}, OLUT {:?}; every input provably nonnegative)",
+                            out.lut
+                        );
+                    });
+                }
                 let client = engine.client(0).ok_or("no core colour client")?;
                 let life = engine.generation(0).ok_or("no core colour incarnation")?;
                 let lut = self

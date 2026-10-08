@@ -269,6 +269,15 @@ ARGS=(-name "$NAME" -nodefaults -no-user-config
     -global i440FX-pcihost.pci-hole64-size=32G
     -device qemu-xhci,id=xhci,addr=0x7 -device usb-tablet,bus=xhci.0
     -device "$KF3")
+# ★ 2026-10-09, DIAGNOSTIC (default off; docs/design/V3_BAR0_TRACE_MODE.md): WIN_TRACE=1 records the
+# boot with the VFIO reference's tracer, as win_vm.sh's WINVM_TRACE does — QEMU trace events into
+# $RUN/trace.log (kf3's BAR0 read records also need KF3_BAR0_READ_TRACE=1 in the environment) and,
+# with WIN_GSP_OBSERVER=1, the shared GSP observer into $RUN/gsp.jsonl (fresh per run directory).
+if [ "${WIN_TRACE:-0}" = 1 ]; then
+    ARGS+=(-msg timestamp=on -trace "events=$HERE/../trace-events-vfio-reference.txt,file=$RUN/trace.log")
+    [ "${WIN_GSP_OBSERVER:-0}" = 1 ] && ARGS+=(-global "kf3-gpu.x-gsp-observer=$RUN/gsp.jsonl"
+        -global "kf3-gpu.x-gsp-observer-seconds=${WIN_GSP_OBSERVER_SECONDS:-3600}")
+fi
 # the harness's flag list (pc_boundary_experiment.py FLAGS + pc_sdr_experiment.py) and KF3_DEFERRED_API
 FLAGS="KF3_GFX_POOL_PROBE KF3_TIMER_MAP KF3_TSPACE KF3_SW_RUNLIST_PROBE KF3_MEMORY_LIST_PROBE KF3_DISPLAY_SDR_COLOR KF3_DISPLAY_METHOD_TRACE KF3_KERNEL_GR_CE KF3_KERNEL_NVDEC_CTX KF3_KERNEL_NVENC_CTX KF3_KERNEL_OFA_CTX KF3_KERNEL_GR_WORK KF3_SW_SUBCH_INERT KF3_TRANSLATED_CE_RELAY KF3_BAR0_TRACE KF3_MAPLOG KF3_DEFERRED_API ${WIN_FLAGS:-}"
 ENV=(KF3_RPC_TRACE=1); for f in $FLAGS; do case $f in *=*) ENV+=("$f") ;; *) ENV+=("$f=1") ;; esac; done

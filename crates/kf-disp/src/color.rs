@@ -52,6 +52,29 @@ impl Binding {
     }
 }
 
+/// ⚠ Default-off experiments on the decoder (2026-10-09, `traces/windows_reset_20261009/`). Each is
+/// a fix the Windows KMD's own colour program needs; off, the decoder is exactly the shipped one.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Experiments {
+    /// `KF3_DISPLAY_LUT_MIRROR`: accept `*_LUT_CONTROL_MIRROR_ENABLE` on a DIRECT8/DIRECT10 table.
+    /// `[measured, runs 98/99, RTX 4070, 2026-10-09]` Windows arms window 0's ILUT and head 0's OLUT
+    /// with control `0x4050a` (DIRECT10, 1029 entries, MIRROR=1); the shipped decoder refuses it
+    /// and the refusal halts every display channel (the guest's later flips and core updates are
+    /// never consumed → 0x116). `[inferred]` MIRROR reflects the table about zero, i.e. changes
+    /// only NEGATIVE inputs; NVKMS and nouveau never set it. The kernels do not implement the
+    /// negative side, so a mirrored table is accepted only where no negative value can reach it:
+    /// the ILUT always (its index is a UNORM8 component), the OLUT only when every armed matrix
+    /// before it is nonnegative ([`mirror_inert`]); otherwise it is still refused.
+    pub lut_mirror: bool,
+    /// `KF3_DISPLAY_ILUT_OFFSET_256`: `SET_OFFSET_ILUT` in 256-byte units, as `SET_OFFSET_OLUT` and
+    /// `SET_OFFSET_TMO_LUT` already are. `[source]` nouveau (linux 6f3ed7fec,
+    /// `dispnv50/wndwc57e.c:140`) writes `SET_OFFSET_ILUT = offset >> 8`; NVKMS always writes 0
+    /// (`nvkms-evo3.c:4224`, `offsetof(NVEvoLutDataRec, base)`), so it cannot tell the unit.
+    /// `[measured, run 99]` Windows writes `0x21` — misaligned as bytes, `0x2100` in 256-byte units
+    /// (= NVKMS's own `NVEvoLutDataRec.output` offset).
+    pub ilut_offset_256: bool,
+}
+
 /// Bounded LUT binding: direct input/output table or segmented linear tone table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Lut {
@@ -61,6 +84,17 @@ pub struct Lut {
     pub binding: Binding,
     /// Interpolate between adjacent entries instead of taking the lower entry.
     pub interpolate: bool,
+    /// The guest armed MIRROR (only ever true under [`Experiments::lut_mirror`]).
+    pub mirror: bool,
+}
+
+/// Can a mirrored OLUT be sampled exactly by kernels without a negative side? Yes when every armed
+/// matrix on the way is nonnegative: the ILUT is validated to `[0, 1]`, CSC0 entries are UNORM16,
+/// CSC1 entries are checked nonnegative, the tone curve is UNORM, blend factors are nonnegative, so
+/// only a negative coefficient or offset can produce a negative OLUT input.
+#[must_use]
+pub fn mirror_inert<'a>(matrices: impl IntoIterator<Item = &'a [i32; 12]>) -> bool {
+    matrices.into_iter().all(|m| m.iter().all(|&v| v >= 0))
 }
 
 /// An output transform: signed coefficients stored in the class's encoded S5.14 format.
@@ -179,10 +213,19 @@ impl Control {
             mirror: t.f(c, &format!("{name}_MIRROR"))?,
         })
     }
-    fn read(self, binding: Binding, read: &impl Fn(u32) -> u32) -> Result<Lut, &'static str> {
+    fn read(
+        self,
+        binding: Binding,
+        read: &impl Fn(u32) -> u32,
+        allow_mirror: bool,
+    ) -> Result<Lut, &'static str> {
         let v = read(self.method);
         let mask = |(hi, lo): (u8, u8)| (u32::MAX >> (31 - hi + lo)) << lo;
-        let supported = mask(self.size) | mask(self.mode) | mask(self.interpolate);
+        let mut supported = mask(self.size) | mask(self.mode) | mask(self.interpolate);
+        let mirror = get(v, self.mirror) != 0;
+        if allow_mirror {
+            supported |= mask(self.mirror);
+        }
         let entries = if get(v, self.mode) == self.direct10 {
             1025
         } else if get(v, self.mode) == self.direct8 {
@@ -190,13 +233,14 @@ impl Control {
         } else {
             return Err("LUT segmented mode requires a separate transfer program");
         };
-        if get(v, self.size) != entries + 4 || get(v, self.mirror) != 0 || v & !supported != 0 {
+        if get(v, self.size) != entries + 4 || (mirror && !allow_mirror) || v & !supported != 0 {
             return Err("LUT requires matching unmirrored DIRECT8 or DIRECT10 extent");
         }
         Ok(Lut {
             entries,
             binding,
             interpolate: get(v, self.interpolate) != 0,
+            mirror,
         })
     }
 }
@@ -206,19 +250,25 @@ pub fn input(
     t: &ClassTable,
     c: u32,
     read: impl Fn(u32) -> u32,
+    x: Experiments,
 ) -> Result<Option<Lut>, &'static str> {
     let mut fmt = [0; 12];
     for (i, v) in fmt.iter_mut().enumerate() {
         let name = format!("SET_FMT_COEFFICIENT_C{}{}", i / 4, i % 4);
         *v = read(t.v(c, &name).ok_or("missing FMT vocabulary")?);
     }
-    let a = Address::resolve(t, c, None, "ILUT", 0).ok_or("missing ILUT vocabulary")?;
+    let shift = if x.ilut_offset_256 { 8 } else { 0 };
+    let a = Address::resolve(t, c, None, "ILUT", shift).ok_or("missing ILUT vocabulary")?;
     let binding = a.read(&read)?;
     if fmt != IDENTITY.map(|v| v as u32) {
         return Err("nonidentity FMT is outside SDR subset");
     }
     let ctl = Control::resolve(t, c, None, "SET_ILUT_CONTROL").ok_or("missing ILUT control")?;
-    binding.map(|b| ctl.read(b, &read)).transpose()
+    // the ILUT's index is a UNORM8 component (`kf_color_compose`): never negative, so a mirrored
+    // table samples exactly as an unmirrored one
+    binding
+        .map(|b| ctl.read(b, &read, x.lut_mirror))
+        .transpose()
 }
 
 /// An indexed inline CSC table. Fixed extents never depend on guest data.
@@ -409,6 +459,7 @@ pub fn pipeline(
             entries: get(ctl, size) - 4,
             binding,
             interpolate: get(ctl, interp) != 0,
+            mirror: false,
         });
     }
     Ok(p)
@@ -420,11 +471,16 @@ pub fn output(
     c: u32,
     head: u32,
     read: impl Fn(u32) -> u32,
+    x: Experiments,
 ) -> Result<Output, &'static str> {
     let a = Address::resolve(t, c, Some(head), "OLUT", 8).ok_or("missing OLUT vocabulary")?;
     let ctl = Control::resolve(t, c, Some(head), "HEAD_SET_OLUT_CONTROL")
         .ok_or("missing OLUT control")?;
-    let lut = a.read(&read)?.map(|b| ctl.read(b, &read)).transpose()?;
+    // a mirrored OLUT is decoded here; the caller accepts it only under `mirror_inert`
+    let lut = a
+        .read(&read)?
+        .map(|b| ctl.read(b, &read, x.lut_mirror))
+        .transpose()?;
     let mut matrix = IDENTITY;
     for stage in [0, 1] {
         let name = format!("HEAD_SET_OCSC{stage}CONTROL");
@@ -539,9 +595,14 @@ mod tests {
                     None,
                     control(t, win, "SET_ILUT_CONTROL", false),
                 );
-                let i = input(t, win, |m| b.get(&m).copied().unwrap_or(0))
-                    .unwrap()
-                    .unwrap();
+                let i = input(
+                    t,
+                    win,
+                    |m| b.get(&m).copied().unwrap_or(0),
+                    Experiments::default(),
+                )
+                .unwrap()
+                .unwrap();
                 if win != 0xca7e {
                     assert_eq!(
                         i.binding,
@@ -566,10 +627,15 @@ mod tests {
                 );
                 set(&mut b, t, win, "SET_ILUT_CONTROL", None, direct8);
                 assert_eq!(
-                    input(t, win, |m| b.get(&m).copied().unwrap_or(0))
-                        .unwrap()
-                        .unwrap()
-                        .entries,
+                    input(
+                        t,
+                        win,
+                        |m| b.get(&m).copied().unwrap_or(0),
+                        Experiments::default()
+                    )
+                    .unwrap()
+                    .unwrap()
+                    .entries,
                     257
                 );
                 set(
@@ -580,7 +646,15 @@ mod tests {
                     None,
                     crate::class::put(direct8, t.f(win, "SET_ILUT_CONTROL_SIZE").unwrap(), 1029),
                 );
-                assert!(input(t, win, |m| b.get(&m).copied().unwrap_or(0)).is_err());
+                assert!(
+                    input(
+                        t,
+                        win,
+                        |m| b.get(&m).copied().unwrap_or(0),
+                        Experiments::default()
+                    )
+                    .is_err()
+                );
                 set(
                     &mut b,
                     t,
@@ -607,7 +681,14 @@ mod tests {
                     Some(3),
                     u32::MAX,
                 );
-                let o = output(t, core, 3, |m| b.get(&m).copied().unwrap_or(0)).unwrap();
+                let o = output(
+                    t,
+                    core,
+                    3,
+                    |m| b.get(&m).copied().unwrap_or(0),
+                    Experiments::default(),
+                )
+                .unwrap();
                 assert!(o.lut.unwrap().interpolate);
                 if core != 0xca7d {
                     assert_eq!(
@@ -628,11 +709,26 @@ mod tests {
                     control(t, win, "SET_ILUT_CONTROL", false) | 2,
                 );
                 assert!(
-                    input(t, win, |m| b.get(&m).copied().unwrap_or(0)).is_err(),
+                    input(
+                        t,
+                        win,
+                        |m| b.get(&m).copied().unwrap_or(0),
+                        Experiments::default()
+                    )
+                    .is_err(),
                     "mirror is not silently accepted"
                 );
                 set(&mut b, t, core, "HEAD_SET_OLUT_FP_NORM_SCALE", Some(3), 1);
-                assert!(output(t, core, 3, |m| b.get(&m).copied().unwrap_or(0)).is_err());
+                assert!(
+                    output(
+                        t,
+                        core,
+                        3,
+                        |m| b.get(&m).copied().unwrap_or(0),
+                        Experiments::default()
+                    )
+                    .is_err()
+                );
             }
         }
     }
@@ -684,15 +780,209 @@ mod tests {
             Some(3),
             (-65536i32) as u32 & 0x1fffff,
         );
-        let o = output(t, c, 3, |m| b.get(&m).copied().unwrap_or(0)).unwrap();
+        let o = output(
+            t,
+            c,
+            3,
+            |m| b.get(&m).copied().unwrap_or(0),
+            Experiments::default(),
+        )
+        .unwrap();
         assert_eq!((o.matrix[1], o.matrix[3]), (-65536, 32));
         set(&mut b, t, c, "HEAD_SET_OCSC1CONTROL", Some(3), 1);
-        assert!(output(t, c, 3, |m| b.get(&m).copied().unwrap_or(0)).is_err());
         assert!(
-            input(&ClassTable::default(), 0xc67e, |_| 0).is_err(),
+            output(
+                t,
+                c,
+                3,
+                |m| b.get(&m).copied().unwrap_or(0),
+                Experiments::default()
+            )
+            .is_err()
+        );
+        assert!(
+            input(
+                &ClassTable::default(),
+                0xc67e,
+                |_| 0,
+                Experiments::default()
+            )
+            .is_err(),
             "missing vocabulary fails closed"
         );
     }
+
+    /// The colour program Windows armed in runs 98/99 (RTX 4070, 2026-10-09; window 0 = class
+    /// C67E channel 1, head 0 of core C77D; every word the guest's pushes set, read from the
+    /// `TRACE METHOD` lines before the refusal; LUT entry words omitted). Measured words in a
+    /// test fixture only — the decoder derives everything from the class table.
+    fn run99_windows_program(t: &ClassTable) -> HashMap<u32, u32> {
+        let (win, core) = (0xc67e, 0xc77d);
+        let mut b = HashMap::new();
+        for (i, v) in IDENTITY.iter().enumerate() {
+            set(
+                &mut b,
+                t,
+                win,
+                &format!("SET_FMT_COEFFICIENT_C{}{}", i / 4, i % 4),
+                None,
+                *v as u32,
+            );
+            set(
+                &mut b,
+                t,
+                win,
+                &format!("SET_CSC11COEFFICIENT_C{}{}", i / 4, i % 4),
+                None,
+                *v as u32,
+            );
+        }
+        set(&mut b, t, win, "SET_ILUT_CONTROL", None, 0x0004_050a);
+        set(&mut b, t, win, "SET_CONTEXT_DMA_ILUT", None, 0xff1f_e313);
+        set(&mut b, t, win, "SET_OFFSET_ILUT", None, 0x21);
+        set(&mut b, t, win, "SET_TMO_CONTROL", None, 1);
+        set(&mut b, t, win, "SET_CSC11CONTROL", None, 1);
+        set(
+            &mut b,
+            t,
+            win,
+            "SET_CSC0LUT_SEGMENT_SIZE",
+            None,
+            0x0005_0020,
+        );
+        set(
+            &mut b,
+            t,
+            win,
+            "SET_CSC1LUT_SEGMENT_SIZE",
+            None,
+            0x0002_003f,
+        );
+        set(
+            &mut b,
+            t,
+            core,
+            "HEAD_SET_OLUT_CONTROL",
+            Some(0),
+            0x0004_050a,
+        );
+        set(
+            &mut b,
+            t,
+            core,
+            "HEAD_SET_OLUT_FP_NORM_SCALE",
+            Some(0),
+            u32::MAX,
+        );
+        set(
+            &mut b,
+            t,
+            core,
+            "HEAD_SET_CONTEXT_DMA_OLUT",
+            Some(0),
+            0xff1f_e144,
+        );
+        set(&mut b, t, core, "HEAD_SET_OFFSET_OLUT", Some(0), 0);
+        set(&mut b, t, core, "HEAD_SET_OCSC0CONTROL", Some(0), 1);
+        for (i, v) in IDENTITY.iter().enumerate() {
+            let v = if i % 4 == 3 { 0x20 } else { *v as u32 };
+            set(
+                &mut b,
+                t,
+                core,
+                &format!("HEAD_SET_OCSC0COEFFICIENT_C{}{}", i / 4, i % 4),
+                Some(0),
+                v,
+            );
+        }
+        b
+    }
+
+    #[test]
+    fn the_windows_mirrored_program_decodes_only_under_the_experiments() {
+        let (win, core) = (0xc67e, 0xc77d);
+        for version in ["580.65.06", "580.159.04"] {
+            let t = crate::class::for_version(version).unwrap();
+            let b = run99_windows_program(t);
+            let r = |m: u32| b.get(&m).copied().unwrap_or(0);
+            let off = Experiments::default();
+            // shipped decoder: the exact refusal of runs 98/99
+            assert_eq!(
+                input(t, win, r, off),
+                Err("LUT requires matching unmirrored DIRECT8 or DIRECT10 extent")
+            );
+            assert!(output(t, core, 0, r, off).is_err());
+            // mirror alone: decoded, but the byte offset 0x21 is a misaligned table
+            let mirror = Experiments {
+                lut_mirror: true,
+                ..off
+            };
+            let i = input(t, win, r, mirror).unwrap().unwrap();
+            assert_eq!(
+                i.binding,
+                Binding::Dma {
+                    handle: 0xff1f_e313,
+                    offset: 0x21
+                }
+            );
+            let dma = CtxDma {
+                target: Target::Vidmem,
+                base: 0,
+                limit: 0xffff,
+                block_linear: false,
+                writable: false,
+            };
+            assert_eq!(
+                i.binding.span(Some(&dma)),
+                Err("LUT entry address is misaligned")
+            );
+            // both: the 256-byte unit → 0x2100, aligned and inside a 64 KiB context DMA
+            let both = Experiments {
+                lut_mirror: true,
+                ilut_offset_256: true,
+            };
+            let i = input(t, win, r, both).unwrap().unwrap();
+            assert_eq!(
+                i.binding,
+                Binding::Dma {
+                    handle: 0xff1f_e313,
+                    offset: 0x2100
+                }
+            );
+            assert_eq!((i.entries, i.mirror, i.interpolate), (1025, true, false));
+            assert_eq!(i.binding.span(Some(&dma)), Ok(0x2100));
+            let tables = std::array::from_fn(|_| InlineLut::default());
+            let p = pipeline(t, win, r, &tables).unwrap();
+            assert!(
+                p.tmo.is_none(),
+                "TMO_CONTROL without a context DMA is bypass"
+            );
+            assert_eq!(p.matrices[3], IDENTITY);
+            let o = output(t, core, 0, r, both).unwrap();
+            let l = o.lut.unwrap();
+            assert_eq!(
+                l.binding,
+                Binding::Dma {
+                    handle: 0xff1f_e144,
+                    offset: 0
+                }
+            );
+            assert!(l.mirror && l.entries == 1025);
+            assert_eq!(o.matrix[3], 0x20, "OCSC0 rounding bias kept");
+            assert!(mirror_inert(p.matrices.iter().chain([&o.matrix])));
+            // a negative coefficient anywhere before a mirrored OLUT: not provably inert
+            let mut neg = o.matrix;
+            neg[1] = -1;
+            assert!(!mirror_inert(p.matrices.iter().chain([&neg])));
+            // the ILUT offset unit alone changes nothing else
+            let unit = Experiments {
+                ilut_offset_256: true,
+                ..off
+            };
+            assert!(input(t, win, r, unit).is_err());
+        }
+    }
+
     #[test]
     fn tmo_controls_and_bindings_decode_in_every_family_and_refuse_other_chroma_policies() {
         for version in ["580.65.06", "580.159.04"] {
