@@ -176,7 +176,7 @@ if [ "${PROOF_REATTACH:-0}" = 1 ]; then
     mon quit; for _ in $(seq 30); do [ -n "$(qpid)" ] || break; sleep 1; done
     wait "$VMPID" 2>/dev/null
     RUN=$OUT/vm2
-    KF_REUSE_BROKER=1 KF_RUN_DIR=$RUN "$HERE/interactive.sh" run > "$RUN.out" 2>&1 &
+    KF_RUN_DIR=$RUN "$HERE/interactive.sh" run > "$RUN.out" 2>&1 &
     VMPID=$!
     for _ in $(seq 60); do grep -aq 'kf3: broker: connected' "$RUN/qemu.log" 2>/dev/null && break; sleep 1; done
     sleep 15

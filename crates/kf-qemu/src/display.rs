@@ -2381,7 +2381,7 @@ impl Device {
             {
                 scan.completed(&mut io);
             }
-            scan.give_up_if_stuck(dp);
+            scan.give_up_if_stuck(&io);
             // ★ D2: the console head's tick — the armed head's own, or for a picture with no armed
             // head (the boot layer, a preserved scanout) the check clock
             let watched = dp.console.wanted_within(WATCHED_MS);
@@ -2744,8 +2744,32 @@ struct Queued {
     item: Item,
 }
 
-/// How long a scanout copy may take before the display stops without forged completion.
+/// How long a scanout copy may take before its stream is asked whether it failed (§8.18; it used
+/// to be the time after which the display stopped for good).
 const STUCK_COPY: Duration = Duration::from_secs(2);
+
+/// ★ §8.18: what a copy still in flight after `elapsed` is, given its stream's state (`None`: no
+/// display GPU; `Ok(false)` queued, `Ok(true)` done with its signal on the way, `Err` failed).
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Stuck {
+    /// Not yet late.
+    Running,
+    /// Late, but the stream reports no failure: wait for the real signal.
+    Waiting,
+    /// The stream failed (or there is no GPU to ask): the completion will never come.
+    Lost(String),
+}
+
+fn stuck_verdict(elapsed: Duration, state: Option<Result<bool, String>>) -> Stuck {
+    if elapsed <= STUCK_COPY {
+        return Stuck::Running;
+    }
+    match state {
+        Some(Ok(_)) => Stuck::Waiting,
+        Some(Err(e)) => Stuck::Lost(format!("the display stream failed: {e}")),
+        None => Stuck::Lost("no display GPU context to ask".into()),
+    }
+}
 
 /// A frame the console shows up to 1080p fits here; a larger mode grows the slot once, to the max.
 const FRAME_SMALL: usize = 1920 * 1080 * 4;
@@ -2792,6 +2816,8 @@ struct ScanState {
     idle_at: Option<Instant>,
     serial: u64,
     refusals_logged: u32,
+    /// The last copy number logged as late but not lost ([`ScanState::give_up_if_stuck`]).
+    slow_logged: u64,
     /// `KF3_DISPLAY_TRACE`: each copy's source, and a digest of what it copied.
     trace: bool,
     /// The compose kernel's bring-up self-test verdict (the console shows nothing on its failure).
@@ -3224,14 +3250,45 @@ impl ScanState {
 
     /// A lost GPU completion stops the display. Neither the slot nor successful guest
     /// completion is published; a timeout is not evidence that GPU work completed.
-    fn give_up_if_stuck(&mut self, dp: &DisplayPlane) {
-        if let Some(Inflight { n, t0: t, .. }) = self.inflight
-            && t.elapsed() > STUCK_COPY
-        {
-            self.inflight = None;
-            self.failed = true;
-            self.serve_now(dp);
-            self.refuse(dp, &format!("copy {n} did not complete in {STUCK_COPY:?}"));
+    ///
+    /// ⊘ CORRECTED 2026-10-08 (`V3_DISPLAY.md` §8.18, runs e1-a…d, kf3 `0e64a960`, host
+    /// 595.91.07): nor is a timeout evidence that the completion was LOST. The first copy, asked
+    /// for within ~0.3 s of QEMU starting (a broker already listening, a console readback), sat
+    /// behind the VA manager's prewarm — host RM registering the 8 GiB guest-RAM memfd took 3.53 s
+    /// (`ram_obj 3528088 us`; 0.88 s at 2 GiB, where no copy was given up) — and was given up at
+    /// 2 s with `failed` set for the VM's life and its barrier never served, so the display and the
+    /// guest's core channel stayed dead. A copy past [`STUCK_COPY`] is now given up only when its
+    /// stream REPORTS a failure ([`stuck_verdict`]); still queued, it is waited for, with one line
+    /// naming the wait.
+    fn give_up_if_stuck(&mut self, io: &Io<'_>) {
+        let dp = io.dp;
+        let Some(Inflight { n, t0: t, .. }) = self.inflight else {
+            return;
+        };
+        let state = io
+            .gpu
+            .as_ref()
+            .map(|g| g.signal_state().map_err(|e| e.to_string()));
+        match stuck_verdict(t.elapsed(), state) {
+            Stuck::Running => {}
+            Stuck::Waiting => {
+                if self.slow_logged < n {
+                    self.slow_logged = n;
+                    eprintln!(
+                        "kf3: display: copy {n} has not completed in {STUCK_COPY:?} and its stream \
+                         reports no failure (the host RM or the GPU has not run it yet): waiting for \
+                         its signal, nothing is forged meanwhile"
+                    );
+                }
+            }
+            Stuck::Lost(why) => {
+                self.inflight = None;
+                self.failed = true;
+                self.serve_now(dp);
+                let line =
+                    format!("copy {n} did not complete in {STUCK_COPY:?} and is lost: {why}");
+                self.refuse(dp, &line);
+            }
         }
     }
 
@@ -3864,6 +3921,42 @@ impl ScanState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ★ §8.18, the interleaving of runs e1-a…d (2026-10-08): the first copy is queued at +0.3 s,
+    /// host RM spends 3.53 s registering the guest-RAM memfd, the copy's signal comes after that.
+    /// At every point of that wait the copy is NOT lost (the old rule gave it up at 2 s for good);
+    /// only a stream that reports a failure, or no GPU to ask, loses it. Known-positive: the old
+    /// rule (`elapsed > STUCK_COPY` alone) answers "lost" at 2.1 s, which this test refuses.
+    #[test]
+    fn a_late_copy_behind_a_busy_host_rm_is_waited_for_not_given_up() {
+        let ms = Duration::from_millis;
+        assert_eq!(stuck_verdict(ms(300), Some(Ok(false))), Stuck::Running);
+        assert_eq!(stuck_verdict(STUCK_COPY, Some(Ok(false))), Stuck::Running);
+        for t in [2_100, 3_528, 10_000] {
+            assert_eq!(
+                stuck_verdict(ms(t), Some(Ok(false))),
+                Stuck::Waiting,
+                "{t} ms, still queued"
+            );
+            assert_eq!(
+                stuck_verdict(ms(t), Some(Ok(true))),
+                Stuck::Waiting,
+                "{t} ms, done: its signal is on the way"
+            );
+        }
+        let old_rule = |e: Duration| e > STUCK_COPY;
+        assert!(
+            old_rule(ms(2_100))
+                && stuck_verdict(ms(2_100), Some(Ok(false))) != Stuck::Lost(String::new()),
+            "the case the old rule lost"
+        );
+        assert!(matches!(
+            stuck_verdict(ms(2_100), Some(Err("CUDA_ERROR_ILLEGAL_ADDRESS".into()))),
+            Stuck::Lost(w) if w.contains("ILLEGAL_ADDRESS")
+        ));
+        assert!(matches!(stuck_verdict(ms(2_100), None), Stuck::Lost(_)));
+        assert_eq!(stuck_verdict(ms(100), None), Stuck::Running);
+    }
 
     #[test]
     fn color_snapshot_binding_survives_unbind_but_not_update_or_incarnation_change() {
