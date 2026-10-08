@@ -3983,3 +3983,26 @@ preempt in this boot either. All twin relays consistent and every last fence wri
   `NV2080_CTRL_CMD_INTERNAL_PERF_BOOST_SET_2X` (0x20800a9a; vfio-10 answers it OK) — weak, run83 refused it too.
 - D3D11/12 creation: not shown (the guest TDRs before a probe can run). The owner's window: boot frame / armed 1080p
   head, no presented surface.
+
+## Run89 (owner's control, fresh disk): the USERD relay removed — the twins ADOPT the guest's sysmem USERD under an identity IOMMU
+
+Owner decision 2026-10-08 (relayed by the coordinator). *Falsifier stated first:* "with the relay removed the TDR does not
+occur" is falsified if the guest still bugchecks 0x116 within the same window. Binary `kf3-bins/5f3c17b4` (adds
+`KF3_USERD_RELAY_OFF=1`, CONTROL, default off: a Windows user-work twin is born over the guest's own sysmem USERD, as any
+Passthrough twin), flags as runs 85-88 plus that one; default TdrDelay. [command](run89-command.json), [marker](run89-marker.txt),
+trace `run89-qemu.log.gz`.
+
+Procedure (host 172.22.1.20, logs [identity](run89-iommu-identity.log), [restore](run89-iommu-restore.log)): both demos stopped
+cleanly; GPU group 11 (`0000:01:00.0` nvidia + `0000:01:00.1` snd_hda_intel), type `DMA-FQ`; `systemctl stop gdm`
+(+ nvidia-persistenced), `rmmod nvidia_drm nvidia_modeset nvidia_uvm nvidia`, audio function unbound, `echo identity >
+/sys/kernel/iommu_groups/11/type` (accepted at runtime, no reboot), audio rebound, modules reloaded, gdm restarted (owner
+autologin), `nvidia-smi` healthy. After the run the same procedure wrote `DMA-FQ` back (the first attempt found `nvidia_uvm`
+still referenced for a moment after QEMU exited and changed nothing; the retry 20 s later succeeded). **The group is back at
+`DMA-FQ`.**
+
+`[measured, run89 at 5f3c17b4, 2026-10-08]`: every user-work twin was born with `userd=Ram {…}` (adopted, the guest's own
+page), **zero `USERD relay` lines**, no new `kchannelCreateUserdMemDesc_GV100 … physical addr size … incorrect` in dmesg
+(the last one is at 240790 s, before this session). The async preempts and re-enables were served (255281.52-.54 host s), and
+the teardown followed at 255284.90 (+3.4 s) — **bugcheck 0x116 (`…, 0xffffffffc000009a, 4`), the same window. The relay is
+exonerated: the timeout does not depend on it.** No Xid (the launcher's count read 115 after the run: dmesg's ring rotated;
+no Xid line is newer than this session's start).

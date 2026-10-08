@@ -1,0 +1,8 @@
+IOMMU_SWITCH_START group=11 from=identity to=DMA-FQ 2026-10-08T20:08:38+02:00
+Warning: The unit file, source configuration file or drop-ins of gdm.service changed on disk. Run 'systemctl daemon-reload' to reload units.
+TYPE WRITTEN
+type now: DMA-FQ
+Warning: The unit file, source configuration file or drop-ins of gdm.service changed on disk. Run 'systemctl daemon-reload' to reload units.
+NVIDIA GeForce RTX 4070, 445 MiB
+active
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-08T20:08:54+02:00
