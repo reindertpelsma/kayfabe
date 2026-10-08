@@ -31,6 +31,8 @@ IMG=${KF_IMG:-$WORK/desktop.qcow2}
 LOCK=${KF_LOCK:-/tmp/kayfabe-fastguest.lock}
 PIDF=$WORK/qemu.pid
 cmd=${1:-run}
+RECORD=0; [ "${2:-}" = --record ] && RECORD=1
+GSSH=(ssh -i "$BENCH/guest_key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5 ubuntu@192.168.77.2)
 mkdir -p "$WORK"
 say(){ printf '[interactive] %s\n' "$*"; }
 die(){ printf '[interactive] ★ %s\n' "$*" >&2; exit 2; }
@@ -249,8 +251,18 @@ GUEST
     for _ in $(seq 90); do kill -0 $q 2>/dev/null || break; sleep 1; done
     kill -0 $q 2>/dev/null && kill -9 $q
     say "INTERACTIVE_PREP_EXIT $(date -Is)"; exit 0 ;;
+collect)
+    # ★ §8.19: the --record recorders' files, into the newest run directory
+    R=$(ls -dt "$WORK"/run-* "$WORK"/demo-* 2>/dev/null | head -1)
+    [ -n "$R" ] || die "no run directory under $WORK"
+    mkdir -p "$R/record"
+    timeout 60 "${GSSH[@]}" 'cd /tmp/kf-rec 2>/dev/null && sudo tar -cf - .' | tar -C "$R/record" -xf - \
+        || die "nothing to collect from the guest (/tmp/kf-rec)"
+    grep -a 'kf3: broker: \(grab\|input while grabbed\|pointing device\)' "$R/qemu.log" > "$R/record/relay_input.txt"
+    grep -a 'grab\|REL\|lock' "$R/broker.log" > "$R/record/broker_grab.txt" 2>/dev/null
+    say "collected into $R/record: $(ls "$R/record" | tr '\n' ' ')"; exit 0 ;;
 run) ;;
-*) die "usage: $0 [run|stop|prep|broker]" ;;
+*) die "usage: $0 [run [--record]|stop|prep|broker|collect]" ;;
 esac
 
 # ── run ─────────────────────────────────────────────────────────────────────────────────────────
@@ -286,6 +298,26 @@ cleanup() {
 trap 'rc=130; cleanup; exit 130' INT TERM
 say "QEMU pid $q, kf3 $QREV ($QBIN)"
 banner
+# ★ §8.19 (`run --record`): once the guest desktop is up, evtest on both virtio pointers and
+# `xinput test-xi2 --root` (raw and core motion, buttons, with device ids) record in the guest;
+# the relay logs once a second what the broker sent while grabbed. `$0 collect` gathers it all.
+if [ "$RECORD" = 1 ]; then
+    (
+        for _ in $(seq 100); do timeout 8 "${GSSH[@]}" true 2>/dev/null && break; sleep 3; done
+        for _ in $(seq 60); do
+            timeout 10 "${GSSH[@]}" 'pgrep -u ubuntu -x cinnamon >/dev/null' 2>/dev/null && break; sleep 3
+        done
+        timeout 30 "${GSSH[@]}" 'mkdir -p /tmp/kf-rec; for n in Tablet Mouse; do ev=$(grep -A5 "Name=\"QEMU Virtio $n\"" /proc/bus/input/devices | grep -o "event[0-9]*" | head -1); (sudo stdbuf -oL evtest /dev/input/$ev < /dev/null > /tmp/kf-rec/evtest_$n.log 2>&1 &); done; (sudo -u ubuntu env DISPLAY=:0 XAUTHORITY=/home/ubuntu/.Xauthority stdbuf -oL xinput test-xi2 --root < /dev/null > /tmp/kf-rec/xi2.log 2>&1 &); sudo -u ubuntu env DISPLAY=:0 XAUTHORITY=/home/ubuntu/.Xauthority xinput list > /tmp/kf-rec/xinput_list.txt; echo started' > "$RUN/record.txt" 2>&1
+        cat <<EOF
+
+  ┌ RECORDING is on (guest: evtest on both virtio pointers, xinput test-xi2 --root) ────────────
+  │ 1. start Minecraft and enter a world; 2. press CTRL+ALT+G; 3. move the mouse for 20 s
+  │    (slow and fast, left/right); 4. press CTRL+ALT+G again; 5. tell the agent the time.
+  │ The agent then runs: $0 collect   (files go to $RUN/record/)
+  └──────────────────────────────────────────────────────────────────────────────────────────
+EOF
+    ) &
+fi
 wait "$q"; rc=$?
 say "QEMU exited rc=$rc (log $RUN/qemu.log)"
 cleanup

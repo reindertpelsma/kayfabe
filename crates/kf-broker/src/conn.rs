@@ -173,6 +173,19 @@ pub trait Host {
     fn timer(&mut self, deadline_ms: Option<u64>);
 }
 
+/// ★ §8.19 (2026-10-08): which of the VM's two pointing devices an event belongs to. The relay
+/// decides it (the grab state is the broker's, mirrored on every packet); the VMM only maps it to
+/// its own devices — the ABSOLUTE one (a tablet bound to the display) or the RELATIVE one (a
+/// mouse).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Pointer {
+    /// The absolute pointer — every event while the broker is not grabbed.
+    Absolute,
+    /// The relative pointer — every pointer event while the broker is grabbed: motion, buttons
+    /// and the wheel all come from ONE device, as from a real mouse.
+    Relative,
+}
+
 /// ★ Input for the VMM to inject, every value already bounded (the broker is the trusted side
 /// of the socket, but trusted is not unbounded, `relay.c:1872-1873`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -190,6 +203,8 @@ pub enum Input {
         code: u16,
         /// Pressed.
         down: bool,
+        /// ★ §8.19: the device it belongs to (the relative one while grabbed).
+        to: Pointer,
     },
     /// An absolute position in a `w` x `h` range, clamped into it; `w`, `h` > 0.
     Abs {
@@ -214,6 +229,8 @@ pub enum Input {
     Wheel {
         /// Up (away from the user).
         up: bool,
+        /// ★ §8.19: the device it belongs to (the relative one while grabbed).
+        to: Pointer,
     },
     /// The broker grabbed (or released) the pointer: switch to a relative (absolute) device.
     Grab(bool),
@@ -442,6 +459,30 @@ struct Conn<S> {
     grabbed: bool,
     /// ★ §O: the cursor as this connection knows it.
     cursor: CursorConn,
+    /// ★ §8.19: the last absolute position handed on (re-sent when a grab ends: the host's pointer
+    /// was locked where it was, so the tablet goes back to it).
+    last_abs: Option<(i32, i32, i32, i32)>,
+    /// ★ §8.19: input received while grabbed, logged once a second (`grab_log`).
+    grab_counts: GrabCounts,
+}
+
+/// ★ §8.19: what the broker sent while grabbed, in one logging interval — the instrument for "is an
+/// absolute report, or a button on the absolute device, reaching the guest during mouse-look?".
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct GrabCounts {
+    since: u64,
+    key: u32,
+    btn: u32,
+    wheel: u32,
+    rel_packets: u32,
+    rel_events: u32,
+    abs_dropped: u32,
+}
+
+impl GrabCounts {
+    fn any(&self) -> bool {
+        self.key + self.btn + self.wheel + self.rel_packets + self.abs_dropped > 0
+    }
 }
 
 /// ★ An acknowledgement detector for one class of dma-buf rungs. A broker that drops a dma-buf
@@ -871,6 +912,8 @@ impl<L: Link> Relay<L> {
             dmabuf: Ack::new(),
             grabbed: false,
             cursor: CursorConn::default(),
+            last_abs: None,
+            grab_counts: GrabCounts::default(),
         });
         host.watch(fd, true, false);
     }
@@ -1846,13 +1889,26 @@ impl<L: Link> Relay<L> {
         }
         // ★ §O: the grab is mirrored on EVERY packet (`proto.h`: "a client can never disagree with
         // the broker about grab state"); EV_GRAB's own `x` is the edge it announces
+        let mut was_grabbed = false;
         if let Some(c) = self.conn.as_mut() {
+            was_grabbed = c.grabbed;
             c.grabbed = if p.ty == EV_GRAB {
                 p.x != 0
             } else {
                 p.flags & F_GRABBED != 0
             };
         }
+        let grabbed = self.conn.as_ref().is_some_and(|c| c.grabbed);
+        self.grab_count(now, p, grabbed, was_grabbed);
+        // ★ §8.19: while grabbed every pointer event belongs to the RELATIVE device — motion,
+        // buttons and the wheel from one device, as from a real mouse. A button on the absolute
+        // device made the guest's X server switch its pointer to that slave, whose last position
+        // is the tablet's stale one: the snap back a warp-to-centre game sees as a rejected move.
+        let to = if grabbed {
+            Pointer::Relative
+        } else {
+            Pointer::Absolute
+        };
         let emit = |out: &mut Vec<Input>, i: Input| {
             if out.len() < cap {
                 out.push(i);
@@ -1871,12 +1927,19 @@ impl<L: Link> Relay<L> {
                 Input::Btn {
                     code: p.x as u16,
                     down: p.y != 0,
+                    to,
                 },
             ),
+            // ★ §8.19: no absolute report is generated while grabbed (the broker sends none —
+            // `nb_sink_abs`; one that does is dropped here and counted)
+            EV_ABS if grabbed => {}
             EV_ABS if p.w0 > 0 && p.w1 > 0 => {
                 let w = i32::try_from(p.w0.min(1 << 20)).unwrap_or(1);
                 let h = i32::try_from(p.w1.min(1 << 20)).unwrap_or(1);
                 let (x, y) = (p.x.clamp(0, w - 1), p.y.clamp(0, h - 1));
+                if let Some(c) = self.conn.as_mut() {
+                    c.last_abs = Some((x, y, w, h));
+                }
                 // ★ §O: the pointer the guest will move its cursor to — the worker derives the
                 // hot spot NVKMS does not program from it (`crate::cursor::HotTracker`)
                 if let Some(s) = &self.cursor {
@@ -1897,10 +1960,17 @@ impl<L: Link> Relay<L> {
                     emit(out, Input::Rel { dx: p.x, dy: p.y });
                 }
             }
-            EV_WHEEL if p.x != 0 => emit(out, Input::Wheel { up: p.x > 0 }),
+            EV_WHEEL if p.x != 0 => emit(out, Input::Wheel { up: p.x > 0, to }),
             EV_GRAB => {
                 say!("grab {}", if p.x != 0 { "ON" } else { "off" });
                 emit(out, Input::Grab(p.x != 0));
+                // ★ §8.19: the grab ended — the absolute device is put back where the host's
+                // pointer is: where it was locked, i.e. the last position before the grab
+                if p.x == 0
+                    && let Some((x, y, w, h)) = self.conn.as_ref().and_then(|c| c.last_abs)
+                {
+                    emit(out, Input::Abs { x, y, w, h });
+                }
             }
             EV_FOCUS => say!(
                 "window {}",
@@ -1943,6 +2013,51 @@ impl<L: Link> Relay<L> {
             // packets, so skipping one is exact
             EV_POINTER | EV_HELLO | EV_CLIPBOARD => {}
             _ => {}
+        }
+    }
+
+    /// ★ §8.19: count what arrives while grabbed and log it once a second (and at the grab's end):
+    /// keys, buttons and wheel ticks (all handed to the relative device), REL packets, and any
+    /// absolute report the broker sent anyway (dropped).
+    fn grab_count(&mut self, now: u64, p: &Pkt, grabbed: bool, was_grabbed: bool) {
+        let Some(c) = self.conn.as_mut() else {
+            return;
+        };
+        let g = &mut c.grab_counts;
+        if grabbed {
+            if g.since == 0 {
+                g.since = now.max(1);
+            }
+            match p.ty {
+                EV_KEY => g.key += 1,
+                EV_BTN => g.btn += 1,
+                EV_WHEEL => g.wheel += 1,
+                EV_REL => g.rel_packets += 1,
+                EV_ABS => g.abs_dropped += 1,
+                _ => {}
+            }
+        }
+        let due = grabbed && now.saturating_sub(g.since) >= 1000;
+        let ended = was_grabbed && !grabbed;
+        if (due || ended) && g.any() {
+            let s = *g;
+            say!(
+                "input while grabbed ({} ms): {} key, {} button and {} wheel event(s) to the \
+                 relative pointer, {} REL packet(s), {} absolute report(s) dropped{}",
+                now.saturating_sub(s.since),
+                s.key,
+                s.btn,
+                s.wheel,
+                s.rel_packets,
+                s.abs_dropped,
+                if ended { " — grab ended" } else { "" }
+            );
+        }
+        if due || ended {
+            *g = GrabCounts {
+                since: if grabbed { now.max(1) } else { 0 },
+                ..GrabCounts::default()
+            };
         }
     }
 

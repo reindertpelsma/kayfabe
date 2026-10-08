@@ -36,7 +36,7 @@ pub mod link;
 pub mod slots;
 pub mod wire;
 
-pub use conn::{Counters, Host, Input, Link, Recv, Relay, RelayConfig, Rung, Sent};
+pub use conn::{Counters, Host, Input, Link, Pointer, Recv, Relay, RelayConfig, Rung, Sent};
 #[doc(hidden)]
 pub use conn::{LogCapture, capture_log};
 pub use console::{
