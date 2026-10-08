@@ -83,3 +83,13 @@ Files: [command](run93-command.json), [marker](run93-marker.txt), [harness](run9
   hand-typed from ogkm-595.84, the 580 headers lack it; default off). `KF3_DISPLAY_LOADV` is OFF again (one variable).
   *Prediction:* after the modeset, the guest writes window PUTs and window updates latch. *Falsifier:* the display PUT count
   stays at the modeset's value through the TDR (no window programming), as in run 93.
+
+## 5. Run 94 (binary `kf3-bins/2c77140b`): INVALID for H-hdcp — the variable never reached the guest
+
+`[measured, run94 at 2c77140b, RTX 4070, 2026-10-08]` files `run94-*`. The experiment flag was read (its log line is
+there) but `0x00730280` stayed `UNSERVICED` (3 of 3 `result=none`): the display link's claim set is taken from the
+model when the link is built, and only the model's flag was set. Nothing about H-hdcp was tested; the boot repeats run
+93 without LOADV (`puts=39` at the stall marker, stall ~15 s after launch, 9 Passthrough frees, bugcheck stop). Fixed in
+the next commit (`DisplayPolicy::answering_hdcp_state` adds the claim; a link-level test answers it through
+`respond()`). The `xid=57` at the end is dmesg's ring rotating (the newest Xid line is 22:14:45, before this session).
+Run 95 repeats run 94's setup with the fix; the falsifier of §4 stands as written.

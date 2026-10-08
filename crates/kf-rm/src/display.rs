@@ -398,13 +398,9 @@ impl DisplayPolicy {
                 "kf-rm: display: PROBE KF3_DISPLAY_IMP_ENABLE=1 — IMP_SET_GET_PARAMETER GET IMP_ENABLE answered TRUE (real-GPU answer; IS_MODE_POSSIBLE already says possible)"
             );
         }
-        // ⚠ EXPERIMENT (default off, 2026-10-08, H-hdcp): answer GET_HDCP_STATE (nothing capable,
-        // nothing encrypting) instead of refusing it — the real GPU answers it OK right before
-        // Windows' first window programming (VFIO DVI reference boot3).
-        if std::env::var("KF3_DISPLAY_HDCP_STATE").as_deref() == Ok("1")
-            && let Some(m) = &self.model
-        {
-            lock(m).answer_hdcp_state(true);
+        // ⚠ EXPERIMENT (default off, 2026-10-08, H-hdcp): see [`Self::answering_hdcp_state`].
+        if std::env::var("KF3_DISPLAY_HDCP_STATE").as_deref() == Ok("1") && self.model.is_some() {
+            self = self.answering_hdcp_state();
             eprintln!(
                 "kf-rm: display: EXPERIMENT KF3_DISPLAY_HDCP_STATE=1 — NV0073 SPECIFIC_GET_HDCP_STATE answered NV_OK, flags 0 (no HDCP on the emulated DVI-D attach point)"
             );
@@ -428,6 +424,21 @@ impl DisplayPolicy {
             model,
             objects: BTreeMap::new(),
         })
+    }
+
+    /// ⚠ EXPERIMENT (default off, 2026-10-08, H-hdcp; `KF3_DISPLAY_HDCP_STATE=1`): answer
+    /// `NV0073_CTRL_CMD_SPECIFIC_GET_HDCP_STATE` (nothing capable, nothing encrypting) instead of
+    /// refusing it — the real GPU answers it OK right before Windows' first window programming (VFIO
+    /// DVI reference boot3, RTX 4070, 2026-10-08). The model answers it and this link CLAIMS it: the
+    /// claim set is taken from the model at construction, so it is added here too (run 94 at
+    /// `2c77140b` set only the model's flag, and the control stayed unserviced).
+    #[must_use]
+    pub fn answering_hdcp_state(mut self) -> DisplayPolicy {
+        if let Some(m) = &self.model {
+            lock(m).answer_hdcp_state(true);
+            self.claimed.insert(kf_disp::model::GET_HDCP_STATE);
+        }
+        self
     }
 
     /// The model this link delegates to (a handle on the same registry), if any.
@@ -1192,6 +1203,43 @@ mod tests {
                 "{cmd:#010x} through respond()"
             );
         }
+    }
+
+    /// ⚠ H-hdcp: `GET_HDCP_STATE` is not claimed by default (refused, as before); under the
+    /// experiment the LINK claims it and answers it NV_OK, flags 0 — through `respond()`, the path the
+    /// guest's RPC takes (run 94 at `2c77140b` showed the model's flag alone left it unserviced).
+    #[test]
+    fn get_hdcp_state_is_claimed_and_answered_only_under_the_experiment() {
+        let cmd = kf_disp::model::GET_HDCP_STATE;
+        let p = policy();
+        assert!(!p.claims(cmd));
+        let mut p = p.answering_hdcp_state();
+        assert!(p.claims(cmd));
+        let id = {
+            let m = p.model().expect("model");
+            let mut g = m.lock().unwrap();
+            // one display of this device: the first bit GET_SUPPORTED would report
+            (0..32)
+                .map(|b| 1u32 << b)
+                .find(|b| {
+                    g.control(cmd, &[0u32.to_le_bytes(), b.to_le_bytes(), [0; 4]].concat())
+                        == Some(Ok([0u32.to_le_bytes(), b.to_le_bytes(), [0; 4]].concat()))
+                })
+                .expect("a display")
+        };
+        let params = [
+            0u32.to_le_bytes(),
+            id.to_le_bytes(),
+            0x0000_ffffu32.to_le_bytes(),
+        ]
+        .concat();
+        let r = p.respond(&control(cmd, 0, &params)).expect("answered");
+        assert_eq!(r.rpc_result, NV_OK);
+        assert_eq!(
+            u32::from_le_bytes(r.body[40 + 8..40 + 12].try_into().unwrap()),
+            1 << 1,
+            "outputs cleared, the cached-state input kept"
+        );
     }
 
     /// ★ Step (1): the link's claims are the model's — the M0 set, `CHANNEL_PUSHBUFFER`, and the

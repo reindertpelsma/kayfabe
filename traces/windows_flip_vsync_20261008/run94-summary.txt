@@ -1,0 +1,23 @@
+trace lines 180 first t 266300.59909
+PUTs per channel: {'win0': 6, 'win1': 6, 'win2': 6, 'win3': 6, 'win4': 6, 'win5': 6, 'win6': 6, 'win7': 6, 'core': 25}
+  core first 266300.599297 last 266308.446664
+  win0 first 266300.599090 last 266308.447319
+  win1 first 266300.599119 last 266308.447416
+  win2 first 266300.599143 last 266308.447521
+  win3 first 266300.599167 last 266308.447605
+  win4 first 266300.599191 last 266308.447689
+  win5 first 266300.599215 last 266308.447887
+  win6 first 266300.599239 last 266308.447978
+  win7 first 266300.599263 last 266308.448064
+EVT_STAT W1C writes (0x611800): 9  SET_GET_BLANKING_CTRL writes (0x680240): ['266301.894400=0x1', '266304.296173=0x1', '266304.296925=0x1']
+LAST_DATA enable writes (0x611d80): 6
+  266301.897181 EN <- 0x2 (on)
+  266301.912783 EN <- 0x0 (off)
+  266301.972288 EN <- 0x2 (on)
+  266301.979954 EN <- 0x0 (off)
+  266304.395298 EN <- 0x2 (on)
+  266304.399182 EN <- 0x0 (off)
+raised head-timing interrupts (VSYNC lines): 3
+window latches: 0 []
+window latches followed by a raised VSync within 34 ms: 0 of 0
+passthrough births 11 passthrough frees 9 stall marker (0x00730108 after first birth) near t 266306.410337

@@ -820,6 +820,7 @@ impl DisplayModel {
             .iter()
             .map(|(c, _)| *c)
             .chain(NAMED_CONTROLS.iter().filter_map(|(n, _)| self.l.k32(n)))
+            .chain(self.hdcp_state.then_some(GET_HDCP_STATE))
             .collect()
     }
 
