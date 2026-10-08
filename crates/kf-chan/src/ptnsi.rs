@@ -23,7 +23,7 @@
 //! ## The rule (owner, 2026-10-08): follow NVIDIA — an interrupt wakes everyone subscribed
 //!
 //! RM wakes EVERY client registered on an engine's non-stall list
-//! (`_gpuEngineEventNotificationListNotify`, `event_notification.c:330-452`), whoever's work it
+//! (`_gpuEngineEventNotificationListNotify`, `ogkm-595.84: event_notification.c:330-452`), whoever's work it
 //! was. kayfabe does the same, one level up: a host edge is forwarded to every VM whose guest has
 //! **armed** that event — a live guest `NV01_EVENT_OS_EVENT` with `NV01_EVENT_NONSTALL_INTR` on
 //! that notifier (`kf_rm::osevent::NonstallArms`, a host-recorded fact about the guest's own
@@ -31,7 +31,7 @@
 //!
 //! - an engine-notifier edge → that engine's guest vector, if the guest armed that engine;
 //! - a `FIFO_EVENT_MTHD` edge → the guest vector whose service fires the guest's own HOST
-//!   notifier (GR0's: `kgraphicsServiceNotificationInterrupt` never waives it, `kernel_graphics.c:2665`;
+//!   notifier (GR0's: its service record never waives it, `ogkm-595.84: kernel_graphics.c:2665`;
 //!   `[measured 2026-10-08, guest_kf3_85459d73_relayON_ce-interrupt_serial.log]` raising vector 0,
 //!   which GR0 and CE0 share on AD104, woke the guest's `FIFO_EVENT_MTHD` 50/50), if the guest
 //!   armed `FIFO_EVENT_MTHD`.

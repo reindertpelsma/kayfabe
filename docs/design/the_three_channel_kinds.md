@@ -53,6 +53,37 @@ adopted USERD, so `GP_GET` tracks the engine by construction and a doorbell is a
 the engine's progress whether or not another doorbell comes (`KF3_RELAY_GET_REFRESH`). Say "relayed
 Passthrough" for it, never plain "Passthrough", when `GP_GET`, USERD or the doorbell path is the subject.
 
+### 1.2 Passthrough completion interrupts: every VM that armed the event is woken (2026-10-08, owner)
+
+**STATUS: LIVE, 2026-10-08 — `kf_chan::ptnsi`, owner ruling §X; branch
+`claude/passthrough-nsi-nogate-20261008`.** ⊘ *This supersedes the doorbell gate of
+`claude/passthrough-interrupt-20261008` (96336228: an edge raised only with a live twin AND a doorbell
+counted since the last edge, 1 s afterglow). That gate trusted a guest-controlled signal and could drop a
+completion that landed after the afterglow.* A Passthrough twin's completion interrupt is raised by the
+host GPU and serviced by the host RM; what reaches kayfabe is a GPU-wide host notifier with no identity
+(`FIFO_EVENT_MTHD`, or the engine's own notifier). kayfabe now does what RM does for its own clients: a
+host edge is forwarded to **every VM whose guest armed that event** (a live guest
+`NV01_EVENT_OS_EVENT` with `NV01_EVENT_NONSTALL_INTR` on that notifier, recorded by the host from the
+guest's alloc RPC, `kf_rm::osevent::NonstallArms`). An engine edge raises that engine's vector; a
+`FIFO_EVENT_MTHD` edge raises GR0's vector, whose service fires the guest's own `FIFO_EVENT_MTHD`. An edge
+is never dropped: by default every armed edge raises at once; an optional pacing knob
+(`KF3_PT_NSI_MIN_INTERVAL_US`, default off) only delays, with a pending flag per vector raised by the
+worker's tick even if no further edge comes. The guest's leaf pending bit is a level held until the guest's
+write-1-to-clear, and the guest clears before it services, so merged raises cannot lose a wake.
+`KF3_PT_NSI_RELAY=0` (FIFO edges counted, not raised) stays the falsifier mode.
+
+**Residual, accepted (owner, 2026-10-08).** (1) *Minor denial of service:* one tenant's non-stall work makes
+every other VM that armed the same event wake more often (a spurious interrupt; the guest's waiter re-checks
+its semaphore and sleeps again). This is RM's own semantics on bare metal, where every registered client on
+an engine is woken, and the alternative, filtering by a guess about whose work it was, loses completions.
+(2) *Timing visibility:* a guest that armed an engine's event learns, by when its interrupts arrive, that
+some tenant used that engine class (for `FIFO_EVENT_MTHD`: some host-driven engine), at the rate it is used.
+It learns nothing about which tenant, or what the work was. `[measured 2026-10-08,
+traces/rawclient_ce_interrupt_20261008/bare_tenant_noise_*]` this is already visible to any unprivileged
+host process today: with a Windows desktop VM on the same GPU, the raw client's quiet window (nothing
+submitted) was never clean, CE3 and `FIFO_EVENT_MTHD` readable in 200 of 200 windows. A guest that armed
+nothing is never woken.
+
 ## 2. Why CeUtils forced the third kind — measured in ogkm, not inferred
 
 `ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/channel_utils.c:1053-1091`:

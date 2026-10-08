@@ -1,6 +1,6 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-10-07 (§S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-10-07 (§S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
@@ -953,3 +953,27 @@ All owner statements of 2026-10-08, in the order the open-decision list was give
   regeneratable"; the archive copy remains); `/workspace/nvidia-gpu-passthrough` is backed up to
   `/mnt/windows-work/archive/`.
 - **Models:** Sonnet 5.5 by default, Opus 5.5 as the strongest tier (`CLAUDE.md`, *Models by risk*).
+
+## X. Non-stall interrupts wake every VM that armed the event; an edge is never dropped (2026-10-08)
+
+Two owner statements on the same day; the second supersedes the gate/bucket part of the first.
+
+- **First (2026-10-08):** remove the doorbell requirement from the Passthrough non-stall relay
+  (`kf_chan::ptnsi`, branch `claude/passthrough-interrupt-20261008`): doorbells are guest-controlled and a
+  weak boundary (the guest can ring to open the gate; the doorbell hook is slated to be replaced), and the
+  1 s afterglow could lose completions. The host notifiers are GPU-wide anyway: RM delivers an engine's
+  non-stall edge to every client registered on it, whoever's work it was. ⊘ *Superseded the same day:*
+  this statement also asked for a live-twin condition and a per-vector token bucket; see the next item.
+- **Second, binding (2026-10-08): follow NVIDIA — an interrupt wakes everyone.** Losing an interrupt for
+  relevant work is a correctness bug; a cross-tenant wake is only a minor denial of service. So:
+  - forward every host `FIFO_EVENT_MTHD` edge and every engine-notifier edge to every VM whose guest has
+    **armed** that event (its own non-stall subscription, a host-recorded fact), not "has a live twin",
+    not a doorbell, not outstanding work;
+  - **invariant: an edge may be delayed, never dropped.** No dropping token bucket. Default: no pacing.
+    Any pacing knob is env-tunable, default off, and loss-free (a pending flag per VM and vector, and a
+    guaranteed trailing raise by a timer even if no further edge arrives);
+  - keep the hostile-index refusal and the armed-event check, and `KF3_PT_NSI_RELAY=0` as the falsifier
+    mode; counters: raised, coalesced-and-later-raised, no-armed-event;
+  - the accepted residuals are written down: a tenant can make other guests wake more often (minor DoS,
+    accepted, it is RM's own semantics) and a guest learns, by timing, that some tenant used an engine
+    class it armed. Where: `docs/design/the_three_channel_kinds.md` §1.2 and `docs/FAQ.md`.

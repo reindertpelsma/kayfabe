@@ -1,6 +1,6 @@
 # kayfabe FAQ
 
-**STATUS: LIVE, 2026-10-08.** Questions the VM community asks first, answered from the design and the
+**STATUS: LIVE, 2026-10-08 (non-stall interrupt entry added the same day).** Questions the VM community asks first, answered from the design and the
 evidence in this repository. A statement carries its evidence or says it is inferred.
 
 ## Does kayfabe need an IOMMU? Is VM isolation weaker than with VFIO?
@@ -56,3 +56,32 @@ more than it would under VFIO, which is why that code gets hostile-input tests a
 **Paravirtual projects in general.** Other paravirtual GPU projects (the owner reports virtio-nvgpu
 says the same of itself; not re-checked here) and nvkvm-pv have no IOMMU-based isolation, and for them
 it likewise does not decide the boundary: the guest does not own the device.
+
+## Can one VM's GPU work wake another VM? Does a VM learn when other tenants use the GPU?
+
+**Short answer:** yes, a little, on purpose — the same as for processes on one bare-metal GPU. Decided by
+the owner on 2026-10-08 (`docs/OWNER_RULINGS.md` §X).
+
+**What happens.** A "non-stall" interrupt (a completion signal a program asks for, for example after a
+copy) is raised by the physical GPU and serviced by the host driver. The host driver's notification is
+GPU-wide: it says "an engine of this kind finished something", not whose work it was, and the host driver
+itself wakes every client registered on that engine. kayfabe passes the notification on to every VM whose
+guest registered for that event (a non-stall event its own driver allocated, which kayfabe records), and
+to no other VM. It never drops one: a lost completion interrupt leaves a program waiting for work that
+already finished, which is a correctness bug.
+
+**What a tenant can do to others (accepted).** By running GPU work that asks for interrupts, a tenant makes
+the other VMs that registered for the same engine's events take extra interrupts. Each is spurious for them:
+the waiting program checks its own completion value, finds it unchanged and waits again. This is a minor
+denial of service, accepted for correctness, and it is the host driver's own behaviour between processes.
+An optional pacing setting (`KF3_PT_NSI_MIN_INTERVAL_US`, off by default) can cap how often one guest
+vector is raised; it delays an interrupt, it never drops one.
+
+**What a guest learns (accepted).** A guest that registered for an engine's events can tell, from when its
+interrupts arrive, that some tenant used that kind of engine and roughly how often. It does not learn which
+tenant, what the work was, or any data. [measured, `traces/rawclient_ce_interrupt_20261008/`,
+`bare_tenant_noise_*`] any unprivileged process on the host can already observe this: with another VM on
+the GPU, an idle raw client saw these notifications in every observation window.
+
+**What is not shared.** Memory, address spaces, channels and results stay per VM; see the IOMMU answer
+above. Design: `design/the_three_channel_kinds.md` §1.2.

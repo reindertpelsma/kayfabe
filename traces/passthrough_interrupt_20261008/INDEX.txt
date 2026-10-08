@@ -1,4 +1,5 @@
 STATUS: LIVE, 2026-10-08. Passthrough completion interrupts (kf_chan::ptnsi) — evidence. Branch claude/passthrough-interrupt-20261008.
+⊘ The doorbell gate measured here is superseded (owner ruling §X, see the end of this file).
 Host: RTX 4070 (AD104), driver 595.91.07 (open kernel module), the trusted bench host. Every hardware run took the shared
 GPU lock (/tmp/kayfabe-fastguest.lock; the suite scripts per arm, the Windows run with flock -o around the whole run).
 Client under test: kayfabe-rm-ladder built at 9925108e (the --ce-interrupt arm, R35; unchanged on this branch).
@@ -35,3 +36,13 @@ MEASURED (each line names its file):
 INFERRED (not measured): the Windows TDR is not caused by a missing completion interrupt of a Passthrough twin — the guest
 now receives one on GR's and CE3's vectors after every host edge while it has work outstanding, and stalls at the same
 point. The relay's afterglow (1 s default) is a bound chosen by argument (ptnsi.rs module doc), not a measured optimum.
+  ⊘ SUPERSEDED 2026-10-08 (owner ruling §X, branch claude/passthrough-nsi-nogate-20261008): the doorbell gate and its
+  afterglow are removed; every host edge goes to every VM whose guest armed the event, never dropped. The runs above
+  were made with the gate (kf3-bins/85459d73) and stay evidence for that binary only.
+
+INFERRED (not measured), the owner's secondary hypothesis: CE0's own notifier stays silent for a COPY0 copy because COPY0
+is a graphics CE (GRCE) on AD104, serviced by the host as GR0, so its edge would come on GR0's notifier (plus
+FIFO_EVENT_MTHD). Behaviour does not depend on it (the relay forwards FIFO_EVENT_MTHD either way).
+  FALSIFIER: arm GR0's non-stall notifier (NV2080_NOTIFIERS_GR0) in the raw client and run a COPY0 copy on bare metal;
+  GR0 silent on every COPY0 iteration while FIFO_EVENT_MTHD fires = the hypothesis is false. (The --ce-interrupt arm
+  watches CE0..CE9 and FIFO_EVENT_MTHD only; GR0 has to be added to its token set first. Not run.)
