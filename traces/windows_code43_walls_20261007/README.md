@@ -3529,3 +3529,12 @@ channel, which would RC the twin (fail closed, named).
 (`CM_PROB_FAILED_POST_START`), the GSP going `Running -> Suspending -> Halted` right after its boot; a second boot of the same disk in a NEW
 QEMU process (run62, `WIN_REUSE=1`) starts the driver normally. This is a kf3 teardown/re-init gap on guest reset (P4.5), not a Windows wall;
 until it is fixed, Windows runs use a fresh QEMU per boot (`windows_broker.sh stop N` then `WIN_REUSE=1 ... run N`).
+
+## Run67 setup (alone, 4096 MiB): the USERD relay (`docs/design/V3_USERD_RELAY.md`)
+
+Binary `kf3-bins/8288ff8e` (this branch with the relay), flags as run61 (`KF3_WIN_USER_CHANNELS_PASSTHROUGH=1`, the runlist experiment and the
+probes) plus `KF3_TCENSUS=1`. **H-relay:** the user-work twins are born over kayfabe's USERD and their doorbells reach the host through the relay.
+*Falsifiers:* a `birth passthrough REFUSED` for a user-work channel, or no `USERD relay: GP_PUT ... forwarded` line once the compositor runs.
+**H-pt (from run61):** D3D device creation succeeds and the compositor's first segment runs on the twin. *Falsifiers:* `0x8876017c` again; or the
+twin RC'd (host Xid / RC record) on its first segment — then the subchannel bindings are the wall (authored next, from the guest's own class
+allocations on that channel).
