@@ -693,8 +693,6 @@ struct LegChan {
     token: u64,
     /// The CE notifier token this engine's own interrupt would land on (`CE<engine>`).
     ce_token: usize,
-    /// `true` for a channel this arm built (and must free); `false` for the shared `COPY0` one.
-    owned: bool,
 }
 
 /// An asynchronous copy engine to try after `COPY0`: one with its own non-stall vector on the dies
@@ -894,7 +892,6 @@ impl HostRmBackend {
             raw: self.narrow(ce0.chan)?,
             token: ce0.token,
             ce_token: TOKEN_COPY0,
-            owned: false,
         };
         let raw_chan = copy0.raw;
         let ce_class = self.conn.classes.ce_object().ce_object_id().0;
@@ -1075,7 +1072,6 @@ impl HostRmBackend {
             raw,
             token,
             ce_token: ordinal as usize,
-            owned: true,
         })
     }
 
