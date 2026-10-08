@@ -1653,6 +1653,24 @@ impl DisplayPlane {
                 self.ports.guest_write(r, v);
                 self.publish_events(store);
                 if let EventReg::HeadTimingEn(h) = r {
+                    // ⚠ DIAGNOSTIC (2026-10-08, after run78: Windows raised 2 display interrupts in
+                    // 161 vblanks, Linux 2123 in 2642): the guest's head-timing interrupt enables,
+                    // the first 32, under the existing method-trace switch. A line from the vCPU —
+                    // never on in production.
+                    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+                    static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                    if *ON.get_or_init(|| {
+                        std::env::var("KF3_DISPLAY_METHOD_TRACE").is_ok_and(|x| x == "1")
+                    }) && N.fetch_add(1, Ordering::Relaxed) < 32
+                    {
+                        eprintln!(
+                            "kf3: display: RM_INTR_EN_HEAD_TIMING({h}) <- {v:#x} (LAST_DATA bit {:#x} {}, VBLANK bit {:#x} {})",
+                            self.map.head_last_data,
+                            if v & self.map.head_last_data != 0 { "on" } else { "off" },
+                            self.map.head_vblank,
+                            if v & self.map.head_vblank != 0 { "on" } else { "off" }
+                        );
+                    }
                     return self.ports.rm_head_timing(h) != 0;
                 }
             }
