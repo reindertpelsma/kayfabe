@@ -149,8 +149,16 @@ pub const CE_NOTIFIER_NAMES: [&str; 10] = [
 pub const FIFO_NOTIFIER_NAME: &str = "NV2080_NOTIFIERS_FIFO_EVENT_MTHD";
 /// Token of the `FIFO_EVENT_MTHD` file.
 pub const TOKEN_FIFO: usize = 10;
-/// Tokens watched: `CE0..CE9` and `FIFO_EVENT_MTHD`.
-pub const TOKENS: usize = 11;
+/// ★ 2026-10-08: GR0's non-stall notifier (`NV2080_NOTIFIERS_GR0`). Watched so the GRCE hypothesis
+/// can be falsified: a `COPY0` that is a graphics CE may be serviced as GR0, so its interrupt
+/// would land on GR0's notifier (plus `FIFO_EVENT_MTHD`) rather than CE0's. It is in `COPY0`'s
+/// positive set (where it lands is reported per leg, never assumed), and a negative control
+/// everywhere else.
+pub const TOKEN_GR0: usize = 11;
+/// The GR0 notifier's SDK name.
+pub const GR0_NOTIFIER_NAME: &str = "NV2080_NOTIFIERS_GR0";
+/// Tokens watched: `CE0..CE9`, `FIFO_EVENT_MTHD` and `GR0`.
+pub const TOKENS: usize = 12;
 /// The token of the engine a `COPY0` channel is on.
 pub const TOKEN_COPY0: usize = 0;
 
@@ -163,6 +171,8 @@ const LAST_CE_CLASS_WITH_INTERRUPT_TYPE: u32 = 0xC7B5;
 pub fn token_name(t: usize) -> String {
     if t == TOKEN_FIFO {
         "FIFO_EVENT_MTHD".to_string()
+    } else if t == TOKEN_GR0 {
+        "GR0".to_string()
     } else {
         format!("CE{t}")
     }
@@ -515,7 +525,7 @@ pub struct CeIrqEvidence {
     pub notifiers: [u32; TOKENS],
     /// The CE class the channel's object is.
     pub ce_class: u32,
-    /// Tokens whose event was registered AND armed (bit `t` = token `t`). On bare metal all eleven.
+    /// Tokens whose event was registered AND armed (bit `t` = token `t`). On bare metal all twelve (eleven before GR0 was added, 2026-10-08).
     /// `FIFO_EVENT_MTHD` is required; any other token a host refuses to arm is listed in
     /// [`Self::unarmed`] and simply not watched, so the controls cover only what was armed.
     pub armed_mask: u16,
@@ -856,7 +866,7 @@ impl HostRmBackend {
     }
 
     /// ★★★ **The `--ce-interrupt` run.** Allocates the copy-engine channel (the one
-    /// `ce_copy_outcome` uses), registers eleven non-stall events on eleven event files BEFORE
+    /// `ce_copy_outcome` uses), registers twelve non-stall events on twelve event files BEFORE
     /// anything is submitted, then runs the legs and the controls described in the module doc.
     ///
     /// # Errors
@@ -914,6 +924,9 @@ impl HostRmBackend {
         notifiers[TOKEN_FIFO] = abi
             .notifier(FIFO_NOTIFIER_NAME)
             .map_err(|e| abi_refused(FIFO_NOTIFIER_NAME, &e))?;
+        notifiers[TOKEN_GR0] = abi
+            .notifier(GR0_NOTIFIER_NAME)
+            .map_err(|e| abi_refused(GR0_NOTIFIER_NAME, &e))?;
 
         // --- the operands FIRST, mapped in both spaces: `map_dma_both` places the same VA in the
         // isolate's own space, and a channel ring created there beforehand can own that VA already
@@ -974,7 +987,7 @@ impl HostRmBackend {
             }
         };
 
-        // --- eleven event files, each armed, BEFORE the first submission ------------------------
+        // --- twelve event files (CE0..CE9, FIFO_EVENT_MTHD, GR0), each armed, BEFORE the first submission ------------------------
         let poller = Poller::create().map_err(|e| raw_poll_error(&e))?;
         let subdevice = self.conn.subdevice;
         // ★ A refusal to arm is fatal only for `FIFO_EVENT_MTHD`, the notifier every interrupt leg can
@@ -1065,10 +1078,24 @@ impl HostRmBackend {
         // interrupt delivered as the default (`bDefaultNonstallNotify`, `intr.c:1195-1205`), and
         // which of the two a given die does is MEASURED (reported per leg), not assumed. Every
         // token outside the set is the negative control.
+        // ★ 2026-10-08: `COPY0`'s set also holds GR0 (the GRCE hypothesis, [`TOKEN_GR0`]).
         let own = |c: &LegChan| ((1u16 << c.ce_token) | (1 << TOKEN_FIFO)) & armed_mask;
+        let gr0 = (1u16 << TOKEN_GR0) & armed_mask;
         let mut plan: Vec<(u32, LegChan, CeWake, u16, usize)> = vec![
-            (0, copy0, CeWake::LaunchInterrupt, own(&copy0), iterations),
-            (0, copy0, CeWake::HostNonStall, 1 << TOKEN_FIFO, iterations),
+            (
+                0,
+                copy0,
+                CeWake::LaunchInterrupt,
+                own(&copy0) | gr0,
+                iterations,
+            ),
+            (
+                0,
+                copy0,
+                CeWake::HostNonStall,
+                (1 << TOKEN_FIFO) | gr0,
+                iterations,
+            ),
             (0, copy0, CeWake::None, 0, control_iterations),
         ];
         if let Some(c) = async_ce {
