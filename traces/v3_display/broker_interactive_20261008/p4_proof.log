@@ -1,0 +1,31 @@
+PROOF_START tag=p4 checkout=b435bbd9 broker=badf2d707da4 2026-10-08T11:32:39+02:00
+PROOF_BROKER_CONNECTED +8s nvkvm-broker: accepted uid 0 gid 0 pid 1898933
+PROOF_GRUB_MENU +8s serial=1 countdown=[automatically in 10s automatically in 9s ]
+PROOF_GRUB_KEY PASS broker e -> editor_on_serial=1 countdown_left=automatically in 6s
+PROOF_DESKTOP   dimensions:    1920x1080 pixels (250x252 millimeters)
+PROOF_ABS FAIL window=1280x720 inject=100,100 want=150,150 got=99,99 screen=1920x1080
+PROOF_ABS FAIL window=1280x720 inject=1000,600 want=1500,900 got=999,599 screen=1920x1080
+PROOF_ABS FAIL window=1280x720 inject=640,360 want=960,540 got=639,359 screen=1920x1080
+PROOF_ABS FAIL window=1280x720 inject=1279,719 want=1918,1078 got=1278,718 screen=1920x1080
+PROOF_GRAB_ON broker=[nvkvm-broker: grab capabilities: keyboard=1 abs=1 rel=1 lock=1 shortcuts-inhibited=1 focus-events=1 fullscreen=1|nvkvm-broker: grab: CTRL+ALT+G toggles, CTRL+AL] kf3=[pointing device -> #5 QEMU Virtio Mouse (relative)]
+PROOF_REL_X11 PASS inject_sum=70,30 pointer=639,299->709,329 delta=70,30 (flat profile)
+PROOF_ABS_UNDER_GRAB PASS_DROPPED pointer=709,329->709,329
+PROOF_GRAB_OFF kf3=[pointing device -> #4 QEMU Virtio Tablet (absolute)]
+PROOF_ABS FAIL window=1280x720 inject=200,150 want=300,225 got=199,149 screen=1920x1080
+PROOF_BROKER2  relay=[re-sent geometry 1920x1080 and the last frame to the new broker|the display broker closed the connection; the display and input are gone for now (184 frames relayed, 0 dropped, 0 attached without a co]
+PROOF_ABS FAIL window=800x600 inject=400,300 want=960,540 got=199,149 screen=1920x1080
+PROOF_ABS FAIL window=800x600 inject=799,599 want=1917,1078 got=199,149 screen=1920x1080
+PROOF_ABS FAIL window=800x600 inject=0,0 want=0,0 got=199,149 screen=1920x1080
+PROOF_EVDEV_MOUSE rel_x_sum=70 rel_y_sum=30 btn=[] wheel=[1]
+PROOF_EVDEV_TABLET abs_events=12 btn=[BTN_LEFT=1 BTN_LEFT=0 BTN_RIGHT=1 BTN_RIGHT=0 ] wheel=3
+PROOF_EVDEV_KEYBOARD edges=[KEY_LEFTSHIFT=1 KEY_A=1 KEY_A=0 KEY_LEFTSHIFT=0 KEY_LEFTCTRL=1 KEY_L=1 KEY_L=0 KEY_LEFTCTRL=0 KEY_A=1 KEY_A=0 KEY_LEFTCTRL=1 KEY_LEFTALT=1 KEY_LEFTCTRL=0 KEY_LEFTALT=0 KEY_ESC=1 KEY_ESC=0 KEY_LEFTCTRL=1 KEY_LEFTALT=1 KEY_LEFTCTRL=0 KEY_LEFTALT=0 ]
+PROOF_KEYS PASS want=[KEY_LEFTSHIFT=1 KEY_A=1 KEY_A=0 KEY_LEFTSHIFT=0 KEY_LEFTCTRL=1 KEY_L=1 KEY_L=0 KEY_LEFTCTRL=0 KEY_A=1 KEY_A=0 ] got=[KEY_LEFTSHIFT=1 KEY_A=1 KEY_A=0 KEY_LEFTSHIFT=0 KEY_LEFTCTRL=1 KEY_L=1 KEY_L=0 KEY_LEFTCTRL=0 KEY_A=1 KEY_A=0 KEY_LEFTCTRL=1 KEY_LEFTALT=1 KEY_LEFTCTRL=0 KEY_LEFTALT=0 KEY_LEFTCTRL=1 KEY_LEFTALT=1 KEY_LEFTCTRL=0 KEY_LEFTALT=0 ]
+PROOF_STATUS broker[up=0 sent=184 gpucopy=0 gpucopy_backoffs=0 dmabuf_trips=0 carrier_refused=0 carrier_unchecked=0 formats_unasked=0 dropped=0 uncommitted=0 recovered=0 releases=184 unknown_releases=0 reclaims=0 blocked=0 backstops=0 reconnects=0 failed_attempts=14 peer_refused=0 cursor=composed cursor_sets=2 cursor_hides=0 cursor_shows=0 cursor_refused=0]
+PROOF_UNLOAD rc=0 0  relay=[display: ChannelFreed { kind: Window, instance: 6, preserve: false }|display: ChannelFreed { kind: WindowImm, instance: 7, preserve: false }|display: ChannelFreed { kind: Window, instance: 7, preserve: false }|display: ChannelFreed { kind: Core, instance: 0, preserve: false }|]
+PROOF_REBOOT1 qemu_pid=1898933 alive=yes guest=ssh_up login_prompt=1 grub=1 nvrm=31 xid=0 wpr=0 rminit_fail=0 smi=[GPU 0: NVIDIA GeForce RTX 4070 (UUID: GPU-8a57410c-214c-acc5-c496-df21ab0e237c) ] desktop=no
+PROOF_REBOOT1_KF3 family=Ada phase=Running trapped=56182 applied=3521 refused=4 serviced=1735 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=1039 walks=1052/1052 cleared=1039 superseded=0 named_missed=6 unreconciled=0 mapped=1938 unmapped=1155 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=951 priv_withheld_bytes=0x1bf502000 priv_mirrored=12 sked=0/0held carve_gpu=0 carve_kernel=4 carve_cpu=2 fn70=3 roots=16 root_moves=0 stmts=43/43 refused=0 pramin_repoints=38 pramin_miss=0 last_miss=0x0 pramin_worst_us=171 (map 64 mmap 91) pramin_maps=38 pramin_mmaps=38 pramin_kept=0 pramin_kept_n
+PROOF_REBOOT2 qemu_pid=1898933 alive=yes guest=ssh_up login_prompt=2 grub=1 nvrm=31 xid=0 wpr=0 rminit_fail=0 smi=[GPU 0: NVIDIA GeForce RTX 4070 (UUID: GPU-8a57410c-214c-acc5-c496-df21ab0e237c) ] desktop=no
+PROOF_REBOOT2_KF3 family=Ada phase=Running trapped=88897 applied=5553 refused=6 serviced=2815 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=1607 walks=1627/1627 cleared=1607 superseded=0 named_missed=9 unreconciled=0 mapped=3015 unmapped=2179 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=1539 priv_withheld_bytes=0x2d27a6000 priv_mirrored=18 sked=0/0held carve_gpu=0 carve_kernel=6 carve_cpu=3 fn70=5 roots=24 root_moves=0 stmts=68/68 refused=0 pramin_repoints=58 pramin_miss=0 last_miss=0x0 pramin_worst_us=171 (map 64 mmap 91) pramin_maps=58 pramin_mmaps=58 pramin_kept=0 pramin_kept_
+PROOF_REATTACH_DISPLAY stalled=0 display fps[cap=75(unset) h3[armed=60.000 tick=59.07 clamped=0 late_max_us=1009 kms=0.0 tear=0.0 held=0 core_imm=2 vblirq=0.0] (predicted from ab-D: stalled, gop=on with the broker connected at start)
+PROOF_REATTACH broker_pid_before= after=1901377 qemu=1898933->1901317 launcher=[] relay=[connected to /run/user/1000/nvkvm/display.sock, capabilities 0xfff] broker_accepts=0
+PROOF_EXIT 2026-10-08T11:42:12+02:00 qemu_left=0

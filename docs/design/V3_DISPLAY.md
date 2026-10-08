@@ -1,5 +1,14 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+**STATUS: LIVE, 2026-10-08 — the interactive broker window, §8.17.** Branch
+`claude/broker-interactive-20261008`, kf3 binary `0e64a960`, broker nvkvm-pv `badf2d7`, trusted host
+(RTX 4070, host 595.91.07, GNOME Wayland). One command (`scripts/bench/display/interactive.sh`) shows a
+Linux guest from grub to the NVIDIA X desktop in a broker window; key, button, absolute and relative
+input reach the guest (run p4); two clean reboots in one QEMU come back to the desktop. Found: a kf3
+first-scanout-copy stall within ~2 s of QEMU start (worked around in the launcher, not fixed), and on
+host 595.91.07 the `x11-dispsw` twin is refused, so Cinnamon runs in fallback mode. The 2026-10-06
+status below is unchanged.
+
 **STATUS: LIVE, 2026-10-06 — bounded SDR implementation update.** Branch
 `codex/sdr-lut-20261006`, product `2aa8b92de6c6ab158f9bc8e788be792408a074a3`,
 adds opt-in GPU ILUT/OLUT processing and truthful DIRECT10 declarations.
@@ -2184,7 +2193,11 @@ relative path (which includes the `@name` abstract spelling); an embedded NUL; a
 more. A broker that is not running is **not** an error: the relay retries in the background and the VM
 boots regardless.
 
-**Reset:** kf3 has no reset path — a guest reboot needs a QEMU restart (owner default). The broker
+⊘ **CORRECTED 2026-10-08 (run p4, kf3 `0e64a960`, §8.17): the next sentence's consequence did not
+hold there.** Two clean guest `reboot`s in one QEMU process, broker connected, both came back: QEMU
+alive, grub and the login prompt on the serial port, `nvidia-smi -L` answering, 0 Xid, no
+`RmInitAdapter failed`, no WPR text, and the NVIDIA X desktop back in the frame. What a reset does NOT
+redo was not examined. **Reset:** kf3 has no reset path — a guest reboot needs a QEMU restart (owner default). The broker
 connection and the frame slots are VM-lifetime state. **Boot display / Secure Boot:** not involved in
 this step (the boot framebuffer is the GOP option ROM's, step 1; Secure Boot stays off for it).
 
@@ -2332,6 +2345,17 @@ go on showing a slot overwritten after a disconnect. The worst case is a torn fr
 valid (udmabuf and the registration pin them).
 
 ### 8.4 Input — broker packet → QEMU (kf3.c, ported from `relay_handle`)
+
+⊘ **CORRECTED 2026-10-08 (run p4, §8.17): the GRAB row's "mouse-look is known not to work" is not
+supported by a measurement.** Under the broker's CTRL+ALT+G the relay put the Virtio mouse in front
+(`pointing device -> #5 QEMU Virtio Mouse (relative)`), sixteen REL packets summing (70, 30) arrived on
+the guest's `QEMU Virtio Mouse` evdev as REL_X 70 / REL_Y 30, the guest X pointer moved by exactly
+(70, 30) under libinput's flat profile, an ABS sent while grabbed was dropped by the broker, and the
+release put the tablet back. kf3's input path is nvkvm-pv's `relay_handle` (`badf2d7`/main) with the
+same QEMU calls (§8.17 lists the differences). What remains is a property, not a failure: buttons
+and the wheel go to the console-bound tablet in both modes, so under grab motion and clicks come from
+two guest evdev devices — an application that reads ONE raw evdev device would see motion without
+buttons (inferred, no such application was run).
 
 Rust bounds every value (`kf_broker::Input`) and kf3.c dispatches on kf3's own console:
 
@@ -3671,3 +3695,108 @@ before X and real GPU-copy passes. Evidence, failed probes and full caveats:
 - R6 a refresh-only host change: needs the broker to re-send `SURFACE` when only the rate changes —
   nvkvm-pv's `nb_sink_surface` (`broker-cursor-gpucopy` at `badf2d7`) compares the size alone and
   drops it, so the relay's new de-dup is not exercised by that broker yet.
+
+### 8.17 The interactive broker window on the trusted host (2026-10-08)
+
+**STATUS: RESEARCH — RUN ON THE TRUSTED HOST, 2026-10-08** (runs p1-p4, ab1-ab4, wl1; kf3 binary
+`0e64a960`; broker nvkvm-pv `badf2d7`; RTX 4070, host 595.91.07, GNOME Wayland;
+`traces/v3_display/broker_interactive_20261008/`). Nothing in kf3's code changed on this branch.
+
+**The launcher.** `scripts/bench/display/interactive.sh` (as root, from ssh, while the desktop session
+is logged in) finds seat0's active session, starts the broker as that user inside it (`--backend
+wayland` on a Wayland session, else `x11`), and boots kf3 with OVMF, `gop=on`, `x11-dispsw=on`,
+`display-broker=/run/user/<uid>/nvkvm/display.sock`, `display-broker-uid=<uid>`, a virtio keyboard, a
+virtio tablet bound to `kf0` and a virtio mouse. `prep` builds the broker into `/opt/nvkvm-broker` from a
+`git archive` of the pinned revision (the clone is not touched) and makes the guest disk (an overlay of
+`guest.qcow2` with Cinnamon, lightdm autologin, an `xorg.conf` naming the NVIDIA DDX, a 10 s grub menu,
+`nvidia-drm.modeset=1 fbdev=1`). `stop` powers the guest down. CTRL+ALT+G grabs/releases, CTRL+ALT+F
+toggles fullscreen (the broker's hotkeys).
+
+**Falsifiers, stated before run p4** (`input_proof.sh`'s header): ABS — the guest pointer more than 2 px
+from the injected position scaled by the range; REL — the evdev REL sum on `QEMU Virtio Mouse` differs
+from the injected sum, or the X pointer does not move by it under the flat profile; KEY — an injected
+edge missing or extra on `QEMU Virtio Keyboard`; grub — no editor text after `e`.
+
+**Measured, run p4 (2026-10-08, checkout `b435bbd9`, kf3 `0e64a960`)** — input through the REAL broker
+(`badf2d7`, its display-less `test` backend scripted on stdin, so the broker's own focus gate, hotkey
+chord and grab rules are on the path), the guest recording with evtest and xdotool:
+- **grub**: a DOWN key from the broker stopped grub's countdown at 6 s and `e` opened the entry editor
+  (serial text and `p4_grub_editor.png`). OVMF has no virtio-input driver; the keys reached grub through
+  QEMU's routing to the PS/2 keyboard (the virtio keyboard is inactive until Linux binds it).
+- **keys**: shift+a, ctrl+l, a — the ten edges arrive in order on `QEMU Virtio Keyboard`. The CTRL+ALT
+  of the grab chord reach the guest and are released by the broker (`nb_release_all`); G never does.
+- **absolute**: four positions and one after the grab: evtest's ABS_X is `x * 32767 / 1920` exactly
+  (1706 for 100), the X pointer lands at `x - 1` (99 for 100; QEMU's `qemu_input_scale_axis` divides by
+  the range, not range − 1). Graded FAIL by the script, which assumed the `--size 1280x720` window; the
+  test backend's window had taken the guest's 1920x1080 from the relay's WINDOW, so the range was 1920 —
+  against that range every position is within 1 px. The script is corrected; a window smaller than the
+  guest frame was NOT run (the test backend cannot hold one; the restart meant to try was broken).
+- **relative**: CTRL+ALT+G → `pointing device -> #5 QEMU Virtio Mouse (relative)`; 16 REL packets
+  summing (70, 30) → evdev REL_X 70, REL_Y 30 on the mouse; the X pointer moved (639,299) → (709,329);
+  an ABS while grabbed was dropped (pointer unchanged); release → `#4 QEMU Virtio Tablet (absolute)`.
+- **buttons, wheel**: BTN_LEFT and a BTN_RIGHT under grab arrive on the TABLET device (the handler bound
+  to `kf0` takes buttons in both modes); wheel detents too.
+- **unload** (`modprobe -r nvidia_drm nvidia_modeset nvidia`, rc 0, after stopping lightdm): the window
+  goes black (`p4_after_unload_15s.png`: every pixel 0) and stays so — no console comes back, as §4.11.13
+  records for bare metal on Linux 7.x; not chased.
+- **two clean reboots in one QEMU, broker connected**: QEMU alive, grub and the login prompt again, 0 Xid,
+  no `RmInitAdapter failed`, no WPR text in the guest dmesg, `nvidia-smi -L` answers, and the X desktop
+  is back (`p4_reboot2_after.png`).
+- **NV0073 controls** (`KF3_RPC_TRACE=1`, three boots): the guest sent 22 different NV0073 controls to
+  kf3's GSP (`p4_nv0073_rpc_census.txt`); `SYSTEM_GET_CONNECTOR_TABLE` (0x73011d), `SYSTEM_GET_HOTPLUG_CONFIG`
+  (0x730109) and `DP_GET_CAPS` (0x731369) are NOT among them — this Linux 580.159.04 guest did not call
+  them over the RPC. kf3 does not claim them (`kf-rm` `display.rs`
+  `unsupported_windows_controls_never_get_a_success_reply`), so a caller gets the normal refusal
+  (inferred from that test; not run here).
+
+**Measured, the real Wayland broker (run wl1, 2026-10-08 11:42, the owner watching):** the window maps
+on GNOME (mutter offers no server-side decorations; the broker draws its own 28 px title bar; output
+scale 1.5). The GPU-copy rung is not offered at host 595.91.07 (`the nvidia-drm ABI is not measured`).
+The relay's LINEAR udmabuf was advertised by mutter and then refused at import, so the broker presents
+through **wl_shm** (`presenting through wl_shm …`) — the shm rung is the only one that ran on this stack.
+Status at the snapshot: `sent=167 releases=165 reclaims=2 dmabuf_trips=0`. The owner reports the guest's
+NVIDIA desktop and its cursor in the window. Wayland-backend input was the owner's own hand test; it was
+not automated (injecting into the owner's live session was not done).
+
+**Defect found, measured (ab1-ab4, p1, p3; kf3 `0e64a960`):** with `gop=on`, kf3's FIRST scanout copy,
+when it is requested within about 2 s of QEMU starting, never completes (`scanout REFUSED copy 1 did not
+complete in 2s`); the worker then sets `failed` and the display is dead for the VM's life (the guest's
+nvidia-modeset then times out on its core channel, `Error while waiting for GPU progress … c77d`). Who
+requests it does not matter: a broker already listening when QEMU starts (ab D, E — also what a QEMU
+restart against a still-running broker does) or a console readback at +1 s (p3). Not seen: no broker
+property (ab B), the property with no broker (ab G), no `gop` (ab A, C, F), a broker connecting at +3 s,
++8 s, +20 s (ab I, J, H), p2/p4 (broker at +8 s). **Root cause not established.** Workaround in the
+launcher: the broker starts once the worker is up plus 3 s. A QEMU restart that reattaches to a broker
+left running was not measured separately; by ab D it connects at once and hits this stall.
+
+**Measured: Cinnamon runs in fallback mode on this host** (p4, wl1). Xorg: `(EE) NVIDIA(0): Failed to
+allocate display software resources`; `cinnamon` segfaults in `libnvidia-glcore.so.580.159.04`. kf3:
+`display-SW twin REFUSED (0x56): GF100_DISP_SW … its software classID was not readable (Other(19314))` —
+the `x11-dispsw` twin's host read is refused at host 595.91.07, where the box run of 2026-10-03 (host
+580.159.04) had it working. Without the `xorg.conf`, X chose modesetting and failed outright (`modeset(0):
+Failed to create pixmap`, run p2). Next: measure that host control's layout at 595.91.07.
+
+**nvkvm-pv's relay against kf3's, input only** (`src/qemu/nvkvm_display_relay.c` at `9bc7d7f`, the
+input code is the same at `badf2d7`): KEY — nvkvm-pv calls `qemu_input_event_send_key_linux` (QEMU 11.1),
+kf3 `qemu_input_event_send_key_qcode` (10.2), the same map lookup as the filter: equivalent. BTN, ABS,
+WHEEL, GRAB (`qmp_query_mice` + `qemu_mouse_set`, Virtio preferred): the same calls. REL — kf3 sums
+consecutive REL packets of one read batch (at most 64) into one event; same sum, fewer sync points
+(measured equal sums above). ABS — kf3 additionally clamps to `[0, w-1]` and caps the range at 2^20 in
+Rust. Verdict: no input difference explains a relative-mode failure, and none was measured. nvkvm-pv's own
+relay was not run as a control (it needs its QEMU build).
+
+**Hypervisor-agnostic split — where policy still sits in `kf3.c`** (the owner's rule of 2026-10-08:
+input policy in `kf-broker` behind a VMM-neutral trait, only the API shim in the VMM): (1) the choice of
+pointing device on GRAB/ungrab (`kf3_broker_set_relative`: absolute vs relative, prefer a name containing
+"Virtio", else the first); (2) the forwarded button set (`kf3_broker_btn`: LEFT/RIGHT/MIDDLE/SIDE/EXTRA);
+(3) the absent-tablet warning (`kf3_broker_check_pointer`); (4) the wheel as a press-release pair and
+CLOSE force→shutdown / else→powerdown. Already in Rust and VMM-neutral: the evdev range, ABS clamp and
+range cap, REL summing, wheel direction, SURFACE clamp and de-duplication. Proposed, NOT built (it changes
+the KF3 ABI and needs a kf3 rebuild and a box run): a `kf_broker::InputSink` trait — `key(code, down)`,
+`button(Button, down)`, `abs(x, y, w, h)`, `rel(dx, dy)`, `sync()`, `pointers() -> Vec<Pointer {index,
+absolute, name}>`, `select_pointer(index)`, `powerdown(force)` — with the device choice, button set and
+warning as Rust functions over it (tests with a fake sink: the GRAB choice, the summing, the clamp), and
+kf3.c reduced to the eight calls.
+
+**Owner decisions:** (a) the first-copy stall — fix in kf3 (a box hunt) before the launcher's delay is
+removed; (b) the `x11-dispsw` host read at 595.91.07; (c) whether the `InputSink` refactor goes ahead.

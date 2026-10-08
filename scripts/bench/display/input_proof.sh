@@ -91,17 +91,20 @@ gq "$GX xinput set-prop 'QEMU Virtio Mouse' 'libinput Accel Profile Enabled' 0 1
 sleep 2
 ptr(){ gq "$GX xdotool getmouselocation" | sed -n 's/^x:\([0-9]*\) y:\([0-9]*\).*/\1 \2/p'; }
 read -r SW SH < <(gq "$GX xdpyinfo" | sed -n 's/.*dimensions: *\([0-9]*\)x\([0-9]*\) pixels.*/\1 \2/p')
-abs_check(){   # $1 $2 = window position, $3 $4 = window size
+# ⊘ [run p4, 2026-10-08] the test backend's window takes the guest's size from the relay's WINDOW
+# (1920x1080 there), so `--size` is only its size before the first frame and the ABS range is the
+# guest's frame: the evtest values were x*32767/1920 exactly. The checks pass that range.
+abs_check(){   # $1 $2 = window position, $3 $4 = the ABS range (the broker window = the guest frame)
     send "a $1 $2"; sleep 1
     local want_x=$(( $1 * SW / $3 )) want_y=$(( $2 * SH / $4 )) got gx gy v=PASS
     got=$(ptr); read -r gx gy <<< "$got"
     { [ -z "$gx" ] || [ $(( gx > want_x ? gx - want_x : want_x - gx )) -gt 2 ] || [ $(( gy > want_y ? gy - want_y : want_y - gy )) -gt 2 ]; } && v=FAIL
     P "ABS $v window=$3x$4 inject=$1,$2 want=$want_x,$want_y got=${gx:-?},${gy:-?} screen=${SW}x$SH"
 }
-abs_check 100 100 1280 720
-abs_check 1000 600 1280 720
-abs_check 640 360 1280 720
-abs_check 1279 719 1280 720
+abs_check 100 100 "$SW" "$SH"
+abs_check 1000 600 "$SW" "$SH"
+abs_check 640 360 "$SW" "$SH"
+abs_check "$((SW - 1))" "$((SH - 1))" "$SW" "$SH"
 # keys: shift+a, ctrl+l, and plain a
 m0=$(grep -ac 'grab' "$RUN/broker.log")
 send "k 42 1" "k 30 1" "k 30 0" "k 42 0" "k 29 1" "k 38 1" "k 38 0" "k 29 0" "k 30 1" "k 30 0"
@@ -125,17 +128,20 @@ P "ABS_UNDER_GRAB $([ "$cx,$cy" = "$ax,$ay" ] && echo PASS_DROPPED || echo FAIL_
 send "b 273 1" "b 273 0"; sleep 0.5; key 1    # a right click under grab (closes its menu with Escape)
 send "k 29 1" "k 56 1" "k 34 1" "k 34 0" "k 56 0" "k 29 0"; sleep 1.5
 P "GRAB_OFF kf3=[$(grep -a 'pointing device ->' "$RUN/qemu.log" | tail -1 | sed 's/.*kf3: broker: //')]"
-abs_check 200 150 1280 720
-# a second, non-default window size: the broker restarted with --size 800x600 (QEMU reconnects)
+abs_check 200 150 "$SW" "$SH"
+# the broker restarted (QEMU reconnects and re-sends its geometry and last frame)
+# ⊘ [run p4] the socket path was read AFTER the kill had removed it: the restart got an empty
+# --socket and this step never ran. The path is read first now.
+sock=$(ls /run/user/*/nvkvm/display.sock 2>/dev/null | head -1)
 pkill -f "^[^ ]*nvkvm-display-broker --socket /run/user/[0-9]*/nvkvm/display.sock" ; sleep 1
-sock=$(ls /run/user/*/nvkvm/display.sock 2>/dev/null | head -1); rm -f "$sock"
+rm -f "$sock"
 runuser -u "$SU" -- /opt/nvkvm-broker/nvkvm-display-broker --socket "$sock" --backend test --persist --verbose --size 800x600 < "$FIFO" > "$RUN/broker2.log" 2>&1 &
 for _ in $(seq 40); do grep -aq 'accepted uid' "$RUN/broker2.log" 2>/dev/null && break; sleep 0.5; done
 send "f 1" "p 1"; sleep 1
 P "BROKER2 $(grep -a -m1 'accepted uid' "$RUN/broker2.log" | cut -c1-120) relay=[$(grep -a 'kf3: broker: \(connected\|re-sent\|the display broker closed\)' "$RUN/qemu.log" | tail -2 | sed 's/.*kf3: broker: //' | tr '\n' '|' | cut -c1-200)]"
-abs_check 400 300 800 600
-abs_check 799 599 800 600
-abs_check 0 0 800 600
+abs_check 400 300 "$SW" "$SH"
+abs_check 1500 900 "$SW" "$SH"
+abs_check 0 0 "$SW" "$SH"
 sleep 1
 for n in Keyboard Tablet Mouse; do gq "sudo cat /tmp/ev_$n.log" > "$OUT/ev_$n.log"; done
 # evdev sums and edges
