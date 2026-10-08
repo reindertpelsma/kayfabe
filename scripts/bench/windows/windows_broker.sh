@@ -131,7 +131,11 @@ autologon)
     install -d -m 0700 "$RUN/secrets"
     [ -s "$RUN/secrets/win_password" ] || { openssl rand -base64 18 | tr -d '\n/+=' > "$RUN/secrets/win_password"; chmod 0600 "$RUN/secrets/win_password"; }
     PW=$(cat "$RUN/secrets/win_password")
-    ps="\$u='kf'; if (-not (Get-LocalUser -Name \$u -ErrorAction SilentlyContinue)) { New-LocalUser -Name \$u -Password (ConvertTo-SecureString '$PW' -AsPlainText -Force) -PasswordNeverExpires | Out-Null; Add-LocalGroupMember -Group Administrators -Member \$u } else { Set-LocalUser -Name \$u -Password (ConvertTo-SecureString '$PW' -AsPlainText -Force) }; \$k='HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon'; Set-ItemProperty \$k AutoAdminLogon '1'; Set-ItemProperty \$k DefaultUserName \$u; Set-ItemProperty \$k DefaultPassword '$PW'; Set-ItemProperty \$k DefaultDomainName '.'; 'AUTOLOGON_SET'"
+    ps="\$u='kf'; if (-not (Get-LocalUser -Name \$u -ErrorAction SilentlyContinue)) { New-LocalUser -Name \$u -Password (ConvertTo-SecureString '$PW' -AsPlainText -Force) -PasswordNeverExpires | Out-Null; Add-LocalGroupMember -Group Administrators -Member \$u } else { Set-LocalUser -Name \$u -Password (ConvertTo-SecureString '$PW' -AsPlainText -Force) }; \$k='HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon'; Set-ItemProperty \$k AutoAdminLogon '1'; Set-ItemProperty \$k DefaultUserName \$u; Set-ItemProperty \$k DefaultPassword '$PW'; Set-ItemProperty \$k DefaultDomainName '.'; Remove-ItemProperty \$k AutoLogonCount -ErrorAction SilentlyContinue; Set-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\PasswordLess\\Device' DevicePasswordLessBuildVersion 0 -Type DWord -ErrorAction SilentlyContinue; 'AUTOLOGON_SET'"
+    # ⊘ [measured 2026-10-08, run58 desktop] with only the Winlogon values, the first reboot logged in and the
+    # next boot showed the lock screen: Windows had reset AutoAdminLogon to 0 and dropped DefaultPassword
+    # (DevicePasswordLessBuildVersion was 2, the passwordless default). Setting it to 0 is the documented fix
+    # (inferred to be the cause; checked by the following boot).
     timeout 120 python3 "$TOOLS/qmp.py" "$RUN/qga.sock" qga-exec powershell.exe -NoProfile -Command "$ps" | grep -E 'AUTOLOGON_SET|rror'
     say "autologon set for 'kf' (password in $RUN/secrets/win_password, 0600); takes effect at the next boot"
     exit 0 ;;
