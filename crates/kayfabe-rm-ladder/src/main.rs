@@ -4037,6 +4037,13 @@ fn ce_interrupt(rm: &mut HostRmBackend, gpu: u32) -> bool {
 
     /// Neither zero nor a value the destination is pre-filled with (`!base` per iteration).
     const PATTERN: u32 = 0xC0FF_EE35;
+    // ★ 2026-10-08: `KF_CE_IRQ_ITERATIONS` (1..=10000) — a longer run, for a noisy-neighbour load
+    // beside another VM. Unset: the owner's N = 50.
+    let iters = std::env::var("KF_CE_IRQ_ITERATIONS")
+        .ok()
+        .and_then(|s| s.trim().parse::<usize>().ok())
+        .filter(|n| (1..=10_000).contains(n))
+        .unwrap_or(CE_IRQ_ITERATIONS);
 
     println!(
         "info  R35 CE interrupt    = GPU {gpu}, euid {} — non-stall events armed through RAW RM \
@@ -4045,7 +4052,7 @@ fn ce_interrupt(rm: &mut HostRmBackend, gpu: u32) -> bool {
         kayfabe_linux_raw::geteuid()
     );
     println!(
-        "info  R35 the bar         = per interrupt leg {CE_IRQ_ITERATIONS} of {CE_IRQ_ITERATIONS}: \
+        "info  R35 the bar         = per interrupt leg {iters} of {iters}: \
          a file of the leg's positive set (its engine's own notifier or the host's default \
          one) readable within {} ms, the semaphore holding the payload, every copied word \
          verified; every file OUTSIDE the set silent; the no-interrupt control silent; the \
@@ -4057,8 +4064,7 @@ fn ce_interrupt(rm: &mut HostRmBackend, gpu: u32) -> bool {
         println!("FAIL  R35 vaspace         = the rung needs its own address space");
         return false;
     };
-    let ev = match rm.prove_ce_interrupt(vas, PATTERN, CE_IRQ_ITERATIONS, CE_IRQ_CONTROL_ITERATIONS)
-    {
+    let ev = match rm.prove_ce_interrupt(vas, PATTERN, iters, CE_IRQ_CONTROL_ITERATIONS) {
         Ok(e) => e,
         Err(e) => {
             println!("FAIL  R35 setup           = refused by name: {e:?}");
