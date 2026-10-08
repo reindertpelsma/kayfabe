@@ -3115,3 +3115,44 @@ exposure table: the reply carries no field, only the status; the request carries
 host-authored bind; (3) one Windows run with the probe (`video_memory_probe.ps1`), comparing the last request before the Free storm. Independent and cheap: serve the 7 missing
 FB indices (all `hardware config`, vfio values in `vfio8-9-10-fb-bus-info.txt`) through `FORWARDED_FB_EXTRA_INDICES` (hostquery.rs, one array) with the validation test; it
 tests the `qwMemorySize` 0 / NVML N/A symptom, not the budget. Not done: either change.
+
+# Loop 2026-10-08 (third session), branch `claude/windows-display-20261008`: Windows on screen, and the D3D wall
+
+(Continues at run 54, from `integration/master-candidate-20261008` at `ac5d086f`. Owner goal for the day: Windows reports a real
+display, visible and interactive in a second broker window on the trusted host's desktop, beside the Linux demo guest. Conventions as
+in the second session: `[measured, runN at <rev>, <date>]` versus `[inferred]`; every hypothesis states its falsifier before the run.)
+
+**Launcher.** `scripts/bench/windows/windows_broker.sh` (new): the runs 47-53 guest and kf3 properties, plus kf3
+`display-broker=/run/user/1000/nvkvm/windows.sock,display-broker-uid=1000` (its own window, title "kayfabe Windows"), and by default
+`gop=on` with **no** QEMU std VGA (run53 had `-device VGA,addr=0x9` and no GOP on kf3), PS/2 keyboard+mouse and a USB tablet. It does
+not take `/tmp/kayfabe-fastguest.lock` (the Linux guest of `interactive.sh` holds it): two kf3 VMs share the RTX 4070 for the first
+time, so host `dmesg` Xid lines are counted before and after every run. The audited runner is not used (it takes the lock); its
+environment (`KF3_RPC_TRACE=1` and the flag list) is reproduced and recorded in each run's `command.json`.
+
+## Run54 setup (one boot, three questions batched): display on the GOP and the broker, H-preempt-bind probe, the 7 FB indices
+
+Binary `kf3-bins/a88764b3` (this branch: `ac5d086f` + the FB indices + the default-off probe), flags as run53 plus
+`KF3_PREEMPT_BIND_PROBE=1`. Guest probes through QGA as in run53 (`display_probe.ps1`, `video_memory_probe.ps1`), QMP `screendump`
+of `kf0` at each stage.
+
+**H-gop (display, inferred):** with kf3 the only display device and its GOP on, the window shows OVMF/TianoCore and the Windows boot
+logo (firmware framebuffer), and Windows' Basic Display driver keeps that framebuffer until nvlddmkm starts. *Falsifier:* the window
+stays black (no frame) through the firmware stage, or Windows does not reach QGA within 5 min (then gop=on is itself a wall).
+
+**H-scanout (display, inferred):** the run53 console said "no head has scanned a window" because nvlddmkm never committed a mode:
+`[measured, run53 at 80169b57, 2026-10-08]` the core channel received 810 methods, all setup and LUT loads, and no `UPDATE`
+(`0x200`); the window channels received only CSC0/CSC1 LUT methods (`0x4a4/0x4a8/0x584/0x588`), no surface. The refused NV0073
+controls (`SET_OD_PACKET` x8, `GET_ACPI_DOD_DISPLAY_PORT_ATTACHMENT` x5, `GET_CONNECTOR_TABLE`, `GET_HOTPLUG_CONFIG`,
+`DP_GET_CAPS`, `VRR_DISPLAY_INFO`, private `0x730128/0x7302a3/0x730280`) are the candidates. *This run only measures:* whether a core
+`UPDATE` arrives once the NVIDIA adapter is the POST adapter, and the order of refusals before it. *Falsifier of "the GOP topology
+alone lets nvlddmkm modeset":* no core `UPDATE` and the same refusals.
+
+**H-preempt-bind (probe):** refusing `GR_CTXSW_PREEMPTION_BIND` (`0x20801211`) makes D3D device creation fail `0x8876017c`.
+*Falsifier (fixed before the run):* with the probe answering the bind `NV_OK` (nothing bound on the host), `D3D11CreateDevice` and
+`D3D12CreateDevice` on the NVIDIA adapter still return `0x8876017c` and the probe's `PROBE KF3_PREEMPT_BIND_PROBE` lines show the
+binds answered (if no bind arrives at all, the hypothesis is untested, not falsified).
+
+**H-fb7:** the 7 FB indices answered from the host's own `FB_GET_INFO_V2` make Windows' boot-time request succeed (no
+`W349REFUSE-LIST` line for `0x20801303`). *Falsifier:* the refusal line again (the host refused one of the seven), or the request
+answered but `AdapterRAM`/`qwMemorySize` still 0 and NVML FB still `N/A` (then those symptoms do not come from this control; recorded
+either way, not a pass criterion).
