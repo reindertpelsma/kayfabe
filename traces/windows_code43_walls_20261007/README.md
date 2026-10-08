@@ -3362,3 +3362,48 @@ Which kayfabe mapping asked for it was not traced (inferred: a teardown-time map
 desktop`, `WIN_FB_MB=1024`, window "kayfabe Windows", NVIDIA disabled in that overlay, autologon `kf` verified over two reboots after the
 `DevicePasswordLessBuildVersion` fix). Stop Windows: `scripts/bench/windows/windows_broker.sh stop` (as root on the host; the Linux guest is not
 touched). Back to the NVIDIA driver in the overlay: `windows_broker.sh nvidia enable` then `reboot` (the screen then stays on the boot frame, runs 54-56).
+
+# Loop 2026-10-08 (fourth session): Windows user work as Passthrough (OWNER_RULINGS §V)
+
+Owner, 2026-10-08 (relayed): *"If you do not need to translate, then a translated can become passthrough, if you know at channel
+creation. I hope you can get windows with nvidia to work."* Branch merged with `integration/master-candidate-20261008` at `58df3556`.
+`windows_broker.sh` now runs instances side by side (`desktop` and `run N`, each with its own window "kayfabe Windows run N"), and `stop`
+is clean (ACPI, then QGA, kill only as a last resort and never for the desktop overlay without `WIN_FORCE_KILL=1`).
+
+## Run60 (diagnostic, alone, 4096 MiB): the channel facts, and the runlist-submit bisect
+
+Binary `kf3-bins/3a578d50` (adds the `CHAN-FACTS`/`VAS-FACTS` log lines, nothing acted on), flags as run57 MINUS `KF3_SW_RUNLIST_HOST_OWNED`
+(ZCULL, preempt and display probes on). Started 15:41:22 CEST, ACPI stop at 15:42:47, Xid 93 before and after (7 Xids arrived on the host
+between 14:30 and 15:41 from other work; none in this run). [facts](run60-chan-vas-facts.txt), [trace](run60-qemu.log.gz),
+[command](run60-command.json).
+
+`[measured, run60 at 3a578d50, 2026-10-08]`, every channel of the boot:
+- **All** Windows channels carry `internalFlags` PRIVILEGE=KERNEL (`0x16`), RM-internal ones included — privilege cannot tell user work.
+- The kernel driver's channels (paging CE `0xc1d00013`, kernel GR `0xc1d00015`, CEs, video `0x13/0x1c/0x33`, and two display-side pairs
+  `0xc1d00020` CE, `0xc1d00023/24` CE+GR): **`hContextShare = 0` and `ProcessID = 0x350`**, all eleven.
+- The desktop's and D3D clients' graphics channels (`0xc1d00027`, `0x2b`, `0x30`, `0x33`, `0x36`, `0x37`, `0x3b`, re-created while their
+  creates fail): **`hContextShare = 0xff0e0200`** (a `FERMI_CONTEXT_SHARE_A`, class `0x9067`, under the TSG) **and their own `ProcessID`**
+  (`0x3b8`, `0x554`, `0x54c`). Each lives in its own VA space owned by a per-process client.
+- *Bisect:* with the ZCULL bind answered but the software-runlist submit (`0x20801111`) refused, no head is armed and the D3D/compositor
+  channels are re-created again and again (16 refused submits): **the submit refusal is (part of) the create wall** (run57 had both answered
+  and committed a mode). `KF3_SW_RUNLIST_HOST_OWNED` (owner: "stays off and undecided", §W) is therefore used below as a labelled experiment.
+
+**The criterion (`kf_rm::chanlink::windows_user_work`), stated with its falsifiers.** A Windows guest-kernel GR or CE channel is per-process
+USER work iff it declares a context share the guest allocated **and** a `ProcessID` different from the kernel driver's (the `ProcessID` of the
+guest's first guest-kernel, non-internal channel). Both facts must agree. *Falsifiers:* (1) a channel so classified emits a physical operand
+or a privileged method (it is RC'd on its unprivileged host twin — a named host Xid / RC record, the channel dies; never silent); (2) a kernel
+driver channel (paging, kernel GR, video, display-side) logs `USER WORK`; (3) a D3D/compositor channel logs `kernel work`.
+*Cost of a misclassification:* a user channel kept Translated hits the rewriter (as in run57, fail closed); a kernel channel made Passthrough
+runs on an asserted-USER host channel in a VA space holding only this VM's memory — it cannot reach another VM or the host (unprivileged
+channel, bounded VAS); a physical operand is refused by the copy engine (`traces/phys_operand_oracle_20261008/`; GR classes are still being
+measured by the oracle, not claimed here). The flag `KF3_WIN_USER_CHANNELS_PASSTHROUGH` (default off) also admits Windows' per-channel 5080
+as a guest-graph object on such a twin (never triggered by kayfabe) and resolves deferred INITIALIZE/PROMOTE/EVICT that target such a twin
+(ruling B; EVICT = host channel off the runlist).
+
+## Run61 setup (alone, 4096 MiB): Windows user work as Passthrough
+
+Binary built from this branch at the commit that adds this text; flags as run57 (incl. `KF3_SW_RUNLIST_HOST_OWNED=1`, labelled experiment) plus
+`KF3_WIN_USER_CHANNELS_PASSTHROUGH=1`. **H-pt:** with the compositor's and D3D clients' channels Passthrough, D3D device creation on the NVIDIA
+adapter succeeds and the compositor's first segment runs. *Falsifiers (fixed now):* `D3D11CreateDevice`/`D3D12CreateDevice` still `0x8876017c`;
+or the first Passthrough GR segment is RC'd on the host (host Xid / RC record) — then the subchannel bindings Windows expects from its
+promoted context are the wall (run57's inference), and kayfabe must author them; or any classification falsifier above.
