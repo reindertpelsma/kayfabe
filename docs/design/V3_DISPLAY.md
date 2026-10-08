@@ -3948,6 +3948,14 @@ tablet (source 8) with no x/y valuator, which GLFW ignores. **H-snap is falsifie
 client on this X stack.** The X pipeline (broker → relay → QEMU → virtio mouse → libinput → XI2)
 delivers relative motion exactly.
 
+> ⊘ **CORRECTED 2026-10-08 (runs s1, s3; below, "The two broker fixes"):** the wlrec1 numbers in the
+> next paragraph do not measure sub-pixel motion. The `MOUSE_DPI` hwdb entry never applied to the
+> uinput device (70-mouse.rules looks it up only for `ID_BUS` usb/bluetooth), and with a udev rule
+> that does set it (verified with `udevadm info`), 200 counts arrived as 200 at "1600 dpi" too: on this
+> stack the unaccelerated deltas a mouse yields are whole counts (libinput documents them as raw
+> device coordinates — inferred as the reason). wlrec1's 379 was the owner's own mouse and a grab
+> dropped by GNOME's prompt, not 0.625 × 600. Read the paragraph as the record of a run, not a result.
+
 **H-trunc (the broker's REL conversion), falsifier stated before run wlrec1:** nvkvm-pv's Wayland
 backend hands on `wl_fixed_to_int(udx)` (truncation) per relative event, so a high-resolution mouse's
 fractional unaccelerated deltas (0.625 a count at 1600 DPI) would be lost; falsified if the guest
@@ -3986,6 +3994,26 @@ owner's account). `interactive.sh run --record` records in the guest (evtest on 
 `xinput test-xi2 --root`) and the relay counts; `interactive.sh collect` gathers it. Frame pacing: the
 owner's photo at 13:04 shows `60 fps T: 120 (fifo) @60Hz` (after the host load ended); the 13:00
 `30 fps` coincided with the merge-bar job.
+
+**The two broker fixes (owner decision, 2026-10-08) — nvkvm-pv branch `kf-broker-fixes-20261008` at
+`9b5f64b92db1`, from `badf2d7`; built to `/opt/nvkvm-broker-next` (the shared `/opt/nvkvm-broker` is
+untouched).** (1) `relptr_motion` carries the sub-pixel remainder per axis and sends only whole
+pixels (reset at every grab change). (2) The host cursor under grab: `wl_pointer.set_cursor` was sent
+with `last_serial`, which keys move too — the grab is taken with CTRL+ALT+G, so the compositor ignored
+the hide (a protocol reading, inferred as the likelier cause of the owner's second cursor); it now
+always carries the last pointer-ENTER serial, and `wl_set_grab` hides the host cursor wherever the
+pointer is (title bar, border, dialog), putting the arrow back at the grab's end. `selftest.sh`: 82
+checks, all passed.
+
+**Measured, run s3 (2026-10-08, the running demo guest, kf3 `4bc62999`, GNOME Wayland, the uinput test
+mouse, the broker swapped per phase on the same socket):** old `badf2d7`: 200 slow counts (one per
+20 ms) at 1600 and at 1000 dpi → 200 and 200; 600 fast (one per 2 ms) → 600. New `9b5f64b`: 200, 200,
+600, and 600 fast at 1600 dpi → 600. Identical: no regression, and no loss to fix with a mouse here
+(see the correction above) — the remainder matters for a source of FRACTIONAL deltas (touchpads,
+compositors that scale relative motion), which was not run. Falsifier for fix (2), stated before the
+owner looks: with the new broker, CTRL+ALT+G pressed with the host pointer over the broker's title bar
+and again over the picture must leave exactly ONE cursor (the guest's, composed into the frame); two
+cursors falsify it. Not observable by the agent (GNOME refuses screenshots); the owner's check.
 
 ### 8.20 The VMM-neutral input traits — `InputSink`, `CursorSink` (`OWNER_RULINGS.md` §V; KF3 ABI 23)
 
