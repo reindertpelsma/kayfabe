@@ -1912,7 +1912,7 @@ struct PtNsiCfg {
     /// `KF3_PT_NSI_AFTERGLOW_MS` (default 1000).
     afterglow_us: u64,
     /// `KF3_PT_NSI_GATE_ENGINES=1`: the engine notifiers' edges are gated by the same rule (default
-    /// off: they keep the measured live-twin rule).
+    /// off: they keep the pre-2026-10-08 live-twin rule).
     gate_engines: bool,
 }
 
@@ -2289,7 +2289,7 @@ impl ChanPlane {
 
     /// ★ **Worker**, on engine `e`'s own host notifier (2026-10-08): judge the edge for this VM's
     /// Passthrough twins there. Returns whether to raise and the verdict: the verdict decides under
-    /// `KF3_PT_NSI_GATE_ENGINES=1`, else the measured pre-2026-10-08 rule does (a live twin).
+    /// `KF3_PT_NSI_GATE_ENGINES=1`, else the pre-2026-10-08 rule does (a live twin).
     pub fn pt_judge_engine_edge(&self, e: &EngineEvent) -> (bool, kf_chan::ptnsi::Verdict) {
         let live = e.live.load(Ordering::Relaxed);
         let v =
