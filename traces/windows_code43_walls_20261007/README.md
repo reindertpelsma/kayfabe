@@ -3712,3 +3712,49 @@ Binary `kf3-bins/3f23995a` (this branch: `MirrorVaStart`, `VAS-DECL`, relay peek
   software-subchannel method → H-sw is false, and the PBDMA executed bytes kayfabe's view of the guest does not show (next step:
   compare the host mapping of the ring and segments against the guest rows).
 - **H-late**: entries read as zero were written after the doorbell. *Falsifier:* no `CHANGED after its doorbell` line.
+
+### Run73 result: H-rule holds; H-sw holds for every D3D copy twin — they bind `NV50_DEFERRED_API` to software subchannel 5 and are RC'd there; the D3D graphics twins' software method lies past the 512 words scanned
+
+Binary `kf3-bins/3f23995a`, alone, 4096 MiB, flags as run72 minus `KF3_TWIN_VA_BASE`; started 17:42:25 CEST, ACPI stop 17:44:48, Xid 109 →
+116 (all 7 on this run's twins). [timeline](run73-timeline.txt), [peek](run73-relay-peek.txt), [host Xids](run73-host-xid.txt),
+[probe](run73-d3d12-probe.txt), [command](run73-command.json), trace `run73-qemu.log.gz`.
+
+`[measured, run73 at 3f23995a, 2026-10-08]`:
+- **H-rule (task A): holds.** No `can't alloc VA space` assert, no Xid 31, `held=0`, no `NOT reserved` line (host RM accepted the
+  `[64 KiB, 1 MiB)` reservation); the compositor's twin is born (token `0xe`, host `0x44`) and relayed, the head is armed at +10.7 s. Its low
+  rows map through the reservation (`MAP va=0x10000 len=0x3000 ... ack=1`, `va=0x13000 len=0x3000 ... ack=1`). `VAS-DECL` (64-bit):
+  the compositor's space declares `vaBase=0x1_0000_0000 vaSize=0x1_2000_0000 shared_management=true` — its page tables map `0x10000`,
+  4 GiB BELOW the declared base: the declaration describes RM's allocator window, not the page tables' reach (the rule's premise).
+- **H-sw: holds for the copy twins.** Each D3D device's copy twin (tokens `0x1012`, `0x1014`, `0x1016`) consumes GP[0xe], a SUBROUTINE
+  segment whose word 6-7 is `2001a000 00005080` = `SET_OBJECT` on **subchannel 5**, data `0x5080` (`NV50_DEFERRED_API`), then
+  host-semaphore and CE methods; each of those twins takes `Xid 32 ... intr 00800000` (`0x02000048`, `0x0200004a`, `0x0200004c`).
+  The compositor's twin's streams (`token 0xe`, 168 segments peeked) use subchannels 0 and 4 only — no software subchannel: that is
+  the difference between the twin that runs and the twins that die.
+- **H-sw for the graphics twins: not shown yet.** The four D3D graphics twins (`0x45/47/49/4b`) take the same Xid; their peeked
+  segments carry no software-subchannel method in the first 512 words scanned, but three of them are 8039-11174 words long (GP[0x10],
+  GP[0x1a], GP[0x20] of token `0xf`): the scan bound, not the stream, ended the search. Run74 scans whole segments (16384 words).
+- **H-late: falsified.** No `CHANGED after its doorbell`: the 13 zero GP entries (1..0xd) are real NOP control entries in every D3D
+  ring; the D3D devices' real work starts at GP[0xe] in SUBROUTINE segments (`level=1`), with `sync=1` NOP entries between them.
+- Unrequested: Windows created these D3D devices by itself at boot (no probe was run before them); the guest then TDR'd, came back at
+  Code 43 (the P4.5 gap) and the probe found no NVIDIA adapter. Screen: 640x480 after the in-process reboot.
+- Fixed after the run: the two new refusal codes were `0x4B72`/`0x4B73`, already `HOST_ABI_REFUSED`/`PRIVILEGED_CHANNEL_REFUSED`
+  (`kf-host/src/lib.rs`); now `0x4B77`/`0x4B78`, with a uniqueness test.
+
+**Verdict on the coordinator's hypotheses** (`[documented]` + `[measured, run73]`): **H-subch** (missing `SET_OBJECT` on 0-4) — not the
+cause: the twins die on a `SET_OBJECT` that IS present, on a SOFTWARE subchannel; NVIDIA's documentation rules out a `DEVICE`
+interrupt from a missing binding on 0-4. **H-bind** — not the cause (the Xid is a PBDMA software-method interrupt, and the copy twins
+have no ZCULL/preemption state). **H-va** — not the cause (no MMU fault; the low rows map). **H-sw** — the cause for the copy twins.
+
+## Run74 setup (alone, 4096 MiB): a host `NV50_DEFERRED_API` on each Windows user-work twin (labelled experiment)
+
+Binary `kf3-bins/082117df`, flags as run73 plus `KF3_WIN_TWIN_DEFAPI_OBJECT=1` (EXPERIMENT, default off; OWNER_RULINGS §U.1 says the
+class is Translated-only — an owner decision is pending). When the guest allocates `NV50_DEFERRED_API` on a Windows user-work twin,
+kayfabe authors ONE host object of that class under the twin's host channel (no params; nothing registered on it), so the guest's
+`SET_OBJECT(0x5080)` on its software subchannel finds an object of that class (RM matches a software `SET_OBJECT` by class or by
+software classID, `kernel_channel.c:3433-3436`). A later `0x200` trigger finds nothing registered and fails closed.
+- **H-defapi-obj:** the copy twins pass GP[0xe] without an RC. *Falsifiers:* a copy twin that carries the host object still takes
+  `Xid 32 intr 00800000`; or the host refuses the authored alloc (logged by name).
+- **H-sw-gr:** the graphics twins' RC follows a software-subchannel method somewhere in their whole segments. *Falsifier:* an RC'd
+  graphics twin whose peek covers every consumed segment in full and shows no `SW-SUBCH` line.
+- Recorded either way: every `SW-SUBCH` method beyond the bind (a `0x200` trigger would be the next wall: nothing is registered on the
+  host object), D3D11/D3D12 creation (`d3d12_signal_probe.ps1`), and the display's window-channel methods.
