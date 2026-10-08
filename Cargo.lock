@@ -123,6 +123,7 @@ dependencies = [
  "kayfabe-linux-raw",
  "kayfabe-util",
  "kayfabe-vmm",
+ "kf-abi",
  "trybuild",
 ]
 

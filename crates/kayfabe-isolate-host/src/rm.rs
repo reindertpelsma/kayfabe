@@ -14,7 +14,7 @@
 //! |------|---------|--------------------|
 //! | R0 | `openat` the control node from the granted `/dev` directory | a descriptor |
 //! | R1 | `openat` `nvidia<gpu>` | a descriptor |
-//! | R2 | `NV_ESC_CHECK_VERSION_STR` query | a version string inside the interval these encoders were transcribed for; ★ **a gate since 2026-07-31** |
+//! | R2 | `NV_ESC_CHECK_VERSION_STR` query | a version string that is a MEASURED tag of the driver matrix (⊘ until 2026-10-08: inside the interval these encoders were transcribed for); ★ **a gate since 2026-07-31** |
 //! | R3 | `NV_ESC_REGISTER_FD` binding the GPU node to the control session | rc 0 |
 //! | R4 | `NV01_ROOT_CLIENT` | RM writes back an `hClient` |
 //! | R5 | `NV01_DEVICE_0` with `deviceId = gpu` | status 0 |
@@ -36,13 +36,23 @@
 //!
 //! ## ★★★ R2 IS A GATE, and what it is a gate on is THIS FILE
 //!
+//! ⊘⊘ **CORRECTED 2026-10-08 — R2 is now a gate on the MEASURED host axis, not on a pin.** The
+//! owner ruled the raw client must run on every driver kayfabe supports, and v3 measured the host
+//! axis this section says cannot have a red (`kf_abi::generated::matrix`, 30 tags). R2 resolves
+//! the host driver to its measured layouts ([`crate::hostabi::gate`]); every alloc body, control
+//! body and `NVOS46`/`NVOS47` this file sends is carried to them at its choke point ([`across`]),
+//! and the blocks written at hand offsets are required to be the bench's. A driver the matrix
+//! never measured is refused by name; unreadable and unparsable still never default. The text
+//! below describes the pin as it stood from 2026-07-31 to 2026-10-08.
+//!
 //! Every parameter block below is encoded by a **const-size, version-free** encoder —
 //! `…::SIZE` buffers and `encode_into`, used unconditionally — and those encoders were
 //! transcribed from one driver (`kayfabe_abi::submit` §"Provenance": `ogkm-580:
 //! 580.159.04`). So this file is silently pinned to a host driver interval it never
 //! states. Run it against a host outside that interval and nothing errors: the ioctls
 //! succeed and the fields land in the wrong places — at `ogkm-610` `NV_CHANNEL_ALLOC_PARAMS`
-//! gains a field at +32 and `engineType` moves from +128 to +132, which is the C's proven
+//! gains a field at +32 and `engineType` moves from +128 to +132 (⊘ CORRECTED 2026-10-08: +136,
+//! measured — `crate::hostabi`'s `a_610_channel_is_carried…` test), which is the C's proven
 //! `engineType = 0` bug class arrived at from a different road.
 //!
 //! ⊘ **The fix is not a host version axis.** There is one host driver available to this
@@ -239,6 +249,7 @@ pub mod local_status {
             super::USERD_IN_STORE_NEEDS_BIRTH_IN_B,
         ),
         ("NOTIFIER_NOT_IN_B", super::NOTIFIER_NOT_IN_B),
+        ("HOST_ABI_REFUSED", super::HOST_ABI_REFUSED),
         ("VA_ALREADY_MAPPED", super::VA_ALREADY_MAPPED),
         ("ABI_ENCODE_FAILED", super::ABI_ENCODE_FAILED),
         ("IOCTL_NUMBER_UNBUILDABLE", super::IOCTL_NUMBER_UNBUILDABLE),
@@ -466,6 +477,18 @@ pub const USERD_IN_STORE_NEEDS_BIRTH_IN_B: u32 = 0x4B6A;
 /// misrouted `hObjectError` fails in the worst available way: RM accepts a plausible handle,
 /// the channel is born, and the guest polls notifier bytes nobody writes.
 pub const NOTIFIER_NOT_IN_B: u32 = 0x4B6B;
+
+/// ★★★ A block this client would send cannot cross to the host driver's MATRIX layout
+/// ([`crate::hostabi`]): an unlisted control/class outside the encoders' interval, a struct the
+/// host does not have, a field the host lacks that the request sets, a moved control id. The
+/// refusal's prose is printed once, by name, where it happens ([`abi_refused`]). `"Kl"`.
+pub const HOST_ABI_REFUSED: u32 = 0x4B6C;
+
+/// Print a host-ABI refusal by name and turn it into the status callers see.
+pub(crate) fn abi_refused(what: &str, e: &crate::hostabi::Refusal) -> RmError {
+    eprintln!("kayfabe-isolate-host: HOST-ABI REFUSED {what}: {e}");
+    RmError::Other(HOST_ABI_REFUSED)
+}
 
 /// The opaque status a verb this rung does not implement reports.
 ///
@@ -1038,6 +1061,9 @@ mod birth_conn {
         device: u32,
         /// `NV20_SUBDEVICE_0` under `device`.
         _subdevice: u32,
+        /// ★ The host driver's matrix ABI, from the connection that adopted B (its R2), so
+        /// every block B sends crosses exactly as the connection's own do (`crate::hostabi`).
+        abi: crate::hostabi::ClientAbi,
         /// Every handle THIS connection minted inside B — the answer [`Self::is_ours`] gives.
         ///
         /// ⊘⊘⊘ **w825 — the NUMBERS come from ONE process-wide counter, [`BIRTH_NEXT`], not
@@ -1080,6 +1106,7 @@ mod birth_conn {
             gpu_index: u32,
             ctl: CharDevice,
             node: CharDevice,
+            abi: crate::hostabi::ClientAbi,
         ) -> Result<BirthConn, RmError> {
             let conn = BirthConn {
                 ctl,
@@ -1087,6 +1114,7 @@ mod birth_conn {
                 handed,
                 device: 0,
                 _subdevice: 0,
+                abi,
                 minted: Mutex::new(std::collections::BTreeSet::new()),
             };
             // ⊘⊘ **THE TYPED STRUCTS AND THE REAL `deviceId`, not a zeroed byte array.**
@@ -1145,8 +1173,18 @@ mod birth_conn {
             h
         }
 
-        /// `NV_ESC_RM_ALLOC` under **B**.
+        /// `NV_ESC_RM_ALLOC` under **B**, its body carried to the host's measured layout
+        /// (`crate::hostabi`, 2026-10-08).
         fn alloc(&self, parent: u32, class: u32, params: &mut [u8]) -> Result<u32, RmError> {
+            let crossing = self.abi.alloc_crossing(class, params.len());
+            let what = format!("alloc class {class:#06x}");
+            super::across(&self.abi, crossing, &what, params, |p| {
+                self.alloc_host(parent, class, p)
+            })
+        }
+
+        /// [`Self::alloc`] with the body already in the host's layout.
+        fn alloc_host(&self, parent: u32, class: u32, params: &mut [u8]) -> Result<u32, RmError> {
             let want = self.mint();
             let mut arg = [0u8; Nvos21Parameters::SIZE];
             Nvos21Parameters {
@@ -1459,6 +1497,16 @@ mod birth_conn {
             cmd: u32,
             params: &mut [u8],
         ) -> Result<(), RmError> {
+            // ★ 2026-10-08: carried to the host's measured layout (`crate::hostabi`).
+            let crossing = self.abi.control_crossing(cmd, params.len());
+            let what = format!("control {cmd:#010x}");
+            super::across(&self.abi, crossing, &what, params, |p| {
+                self.control_host(object, cmd, p)
+            })
+        }
+
+        /// [`Self::control`] with the body already in the host's layout.
+        fn control_host(&self, object: u32, cmd: u32, params: &mut [u8]) -> Result<(), RmError> {
             let mut arg = [0u8; Nvos54Parameters::SIZE];
             Nvos54Parameters {
                 h_client: self.handed.root(),
@@ -1614,11 +1662,19 @@ mod birth_conn {
             }
             .encode_into(&mut arg)
             .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
-            let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY_DMA as u8, arg.len())
-                .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
-            self.ctl
-                .ioctl(req, &mut arg, &mut [])
-                .map_err(|e| ioctl_error(&e))?;
+            // ★ 2026-10-08: carried to the host's measured `NVOS46` layout (`crate::hostabi`).
+            super::across(
+                &self.abi,
+                self.abi.nvos46(),
+                "NVOS46_PARAMETERS",
+                &mut arg,
+                |a| {
+                    let req =
+                        ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY_DMA as u8, a.len())
+                            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
+                    self.ctl.ioctl(req, a, &mut []).map_err(|e| ioctl_error(&e))
+                },
+            )?;
             let out =
                 Nvos46Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
             // ★★★★★ w755d — see [`VA_ALREADY_MAPPED`]. This site is ALWAYS a FIXED map, so
@@ -1673,11 +1729,19 @@ mod birth_conn {
             }
             .encode_into(&mut arg)
             .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
-            let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_UNMAP_MEMORY_DMA as u8, arg.len())
-                .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
-            self.ctl
-                .ioctl(req, &mut arg, &mut [])
-                .map_err(|e| ioctl_error(&e))?;
+            // ★ 2026-10-08: carried to the host's measured `NVOS47` layout (`crate::hostabi`).
+            super::across(
+                &self.abi,
+                self.abi.nvos47(),
+                "NVOS47_PARAMETERS",
+                &mut arg,
+                |a| {
+                    let req =
+                        ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_UNMAP_MEMORY_DMA as u8, a.len())
+                            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
+                    self.ctl.ioctl(req, a, &mut []).map_err(|e| ioctl_error(&e))
+                },
+            )?;
             let out =
                 Nvos47Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
             status_check(out.status)
@@ -1788,6 +1852,9 @@ pub struct RmConnection {
     /// check succeeded — but nothing downstream reads it to *select* anything, and that is
     /// the honest state of the host axis rather than an omission. See the module docs.
     version: String,
+    /// ★★★ The host driver's MEASURED ABI (2026-10-08, [`crate::hostabi`]): what R2 resolved
+    /// the version to, and what every block this connection sends is carried through.
+    abi: crate::hostabi::ClientAbi,
     objects: Mutex<Objects>,
     /// ★ The CPU mappings, in their **own** mutex rather than inside [`Objects`].
     ///
@@ -3349,6 +3416,12 @@ impl RmConnection {
         Self::open_with(dev, gpu, None)
     }
 
+    /// ★ The host driver's measured ABI that R2 resolved (2026-10-08, [`crate::hostabi`]).
+    #[must_use]
+    pub fn host_abi(&self) -> crate::hostabi::ClientAbi {
+        self.abi
+    }
+
     /// The class profile this connection allocates with — the caller's pin, or the one derived
     /// from the host's class list ([`RmConnection::open_on_host`]).
     #[must_use]
@@ -3383,7 +3456,7 @@ impl RmConnection {
         // filling the string in, which the open driver enforces
         // (`C: src/qemu/virtio_nvgpu.c:1157-1170`). See [`host_version_gate`] for why the
         // rung changed and why the answer is a refusal rather than a table.
-        let version =
+        let (version, abi) =
             host_version_gate(read_version(&ctl).as_deref()).map_err(|detail| BringUpError {
                 rung: "R2 host driver version",
                 detail,
@@ -3422,6 +3495,7 @@ impl RmConnection {
             device: 0,
             subdevice: 0,
             version,
+            abi,
             classes,
             birth: Mutex::new(BTreeMap::new()),
             birth_ranges: Mutex::new(BTreeMap::new()),
@@ -3912,6 +3986,24 @@ impl RmConnection {
         class: u32,
         params: &mut [u8],
     ) -> Result<u32, RmError> {
+        // ★★★ 2026-10-08 — the body crosses to the host's MEASURED layout ([`crate::hostabi`]):
+        // untouched where it is the bench's, carried by field name where it is not, refused by
+        // name where it cannot be.
+        let crossing = self.abi.alloc_crossing(class, params.len());
+        let what = format!("alloc class {class:#06x}");
+        across(&self.abi, crossing, &what, params, |p| {
+            self.raw_alloc_host(parent, want, class, p)
+        })
+    }
+
+    /// [`Self::raw_alloc`] with the body already in the host's layout.
+    fn raw_alloc_host(
+        &self,
+        parent: u32,
+        want: u32,
+        class: u32,
+        params: &mut [u8],
+    ) -> Result<u32, RmError> {
         let mut arg = [0u8; Nvos21Parameters::SIZE];
         Nvos21Parameters {
             h_root: self.client.raw(),
@@ -3966,6 +4058,23 @@ impl RmConnection {
         inner_at: usize,
         inner: &mut [u8],
     ) -> Result<u32, RmError> {
+        // ★ 2026-10-08: the nest's pointer sits at a BENCH offset (`inner_at`), so this body
+        // may only cross verbatim — the host's layout must be the bench's, else refused by name
+        // ([`crate::hostabi`]; `[matrix]` `NV_MEMORY_LIST_ALLOCATION_PARAMS` is one layout at
+        // every measured tag, pinned by `the_nested_alloc_body_never_moves`).
+        match self.abi.alloc_crossing(class, params.len()) {
+            Ok(crate::hostabi::Crossing::Verbatim) => {}
+            Ok(crate::hostabi::Crossing::Carried { strukt, .. }) => {
+                return Err(abi_refused(
+                    &format!("nested alloc class {class:#06x}"),
+                    &crate::hostabi::Refusal::VerbatimDiffers {
+                        strukt,
+                        version: self.abi.version(),
+                    },
+                ));
+            }
+            Err(e) => return Err(abi_refused(&format!("nested alloc class {class:#06x}"), &e)),
+        }
         let mut arg = [0u8; Nvos21Parameters::SIZE];
         Nvos21Parameters {
             h_root: self.client.raw(),
@@ -4169,7 +4278,7 @@ impl RmConnection {
         }
         // ⊘ The device tree is built with **no lock held**: it is four ioctls, and R1 has no
         // exception for "only four".
-        let conn = BirthConn::open(handed, self.gpu_index, ctl, node)?;
+        let conn = BirthConn::open(handed, self.gpu_index, ctl, node, self.abi)?;
         let mut held = self
             .birth
             .lock()
@@ -4501,6 +4610,16 @@ impl RmConnection {
     }
 
     fn raw_control(&self, object: u32, cmd: u32, payload: &mut [u8]) -> Result<(), RmError> {
+        // ★★★ 2026-10-08 — carried to the host's MEASURED layout ([`crate::hostabi`]).
+        let crossing = self.abi.control_crossing(cmd, payload.len());
+        let what = format!("control {cmd:#010x}");
+        across(&self.abi, crossing, &what, payload, |p| {
+            self.raw_control_host(object, cmd, p)
+        })
+    }
+
+    /// [`Self::raw_control`] with the body already in the host's layout.
+    fn raw_control_host(&self, object: u32, cmd: u32, payload: &mut [u8]) -> Result<(), RmError> {
         let mut arg = [0u8; Nvos54Parameters::SIZE];
         Nvos54Parameters {
             h_client: self.client.raw(),
@@ -4709,11 +4828,18 @@ impl RmConnection {
         }
         .encode_into(&mut arg)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
-        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY_DMA as u8, arg.len())
-            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
-        self.ctl
-            .ioctl(req, &mut arg, &mut [])
-            .map_err(|e| ioctl_error(&e))?;
+        // ★ 2026-10-08: carried to the host's measured `NVOS46` layout (`crate::hostabi`).
+        across(
+            &self.abi,
+            self.abi.nvos46(),
+            "NVOS46_PARAMETERS",
+            &mut arg,
+            |a| {
+                let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY_DMA as u8, a.len())
+                    .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
+                self.ctl.ioctl(req, a, &mut []).map_err(|e| ioctl_error(&e))
+            },
+        )?;
         let out = Nvos46Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         // ★★★★★ w755d — see [`VA_ALREADY_MAPPED`]. `0x51` on a FIXED map is ADDRESS
         // OCCUPANCY, not capacity, and `status_check` would report it as `NoMemory`.
@@ -4841,11 +4967,19 @@ impl RmConnection {
         }
         .encode_into(&mut arg)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
-        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_UNMAP_MEMORY_DMA as u8, arg.len())
-            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
-        self.ctl
-            .ioctl(req, &mut arg, &mut [])
-            .map_err(|e| ioctl_error(&e))?;
+        // ★ 2026-10-08: carried to the host's measured `NVOS47` layout (`crate::hostabi`).
+        across(
+            &self.abi,
+            self.abi.nvos47(),
+            "NVOS47_PARAMETERS",
+            &mut arg,
+            |a| {
+                let req =
+                    ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_UNMAP_MEMORY_DMA as u8, a.len())
+                        .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
+                self.ctl.ioctl(req, a, &mut []).map_err(|e| ioctl_error(&e))
+            },
+        )?;
         let out = Nvos47Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)
     }
@@ -5747,9 +5881,35 @@ fn declared_channel_engine_type(
 ///
 /// # Errors
 /// The refusal's own prose, ready to be the [`BringUpError::detail`] of rung R2.
-fn host_version_gate(reported: Option<&str>) -> Result<String, String> {
-    kayfabe_abi::host_driver::check(reported).map_err(|r| r.to_string())?;
-    Ok(reported.unwrap_or_default().to_string())
+fn host_version_gate(
+    reported: Option<&str>,
+) -> Result<(String, crate::hostabi::ClientAbi), String> {
+    crate::hostabi::gate(reported)
+}
+
+/// ★★★ Send `body` across to the host through `crossing`: `issue` runs over the body in the
+/// HOST's layout and the reply is carried back into the bench layout. A refusal is printed by name
+/// ([`abi_refused`]) and becomes [`HOST_ABI_REFUSED`]. 2026-10-08, [`crate::hostabi`].
+pub(crate) fn across<R>(
+    abi: &crate::hostabi::ClientAbi,
+    crossing: Result<crate::hostabi::Crossing, crate::hostabi::Refusal>,
+    what: &str,
+    body: &mut [u8],
+    issue: impl FnOnce(&mut [u8]) -> Result<R, RmError>,
+) -> Result<R, RmError> {
+    let c = crossing.map_err(|e| abi_refused(what, &e))?;
+    c.issue(abi, body, issue)
+        .map_err(|e| abi_refused(what, &e))?
+}
+
+/// ★ R2 on ANY control descriptor — for an escape layer that is not an [`RmConnection`] (the
+/// ladder's route-K `Esc`): the host driver's version, read on that descriptor, resolved to its
+/// measured ABI, or R2's named refusal. 2026-10-08, [`crate::hostabi`].
+///
+/// # Errors
+/// R2's refusal prose.
+pub fn host_abi_on(ctl: &CharDevice) -> Result<crate::hostabi::ClientAbi, String> {
+    host_version_gate(read_version(ctl).as_deref()).map(|(_, abi)| abi)
 }
 
 /// R2: `NV_ESC_CHECK_VERSION_STR`, query form.
@@ -10615,6 +10775,12 @@ impl HostRmBackend {
         // ★ `pdbAddr` returned alongside: it names WHICH tree answered, so the caller can
         // check the reply against the VAS it believes it asked about rather than trust it.
         Ok((out.page_table(), out.pdb_addr))
+    }
+
+    /// ★ The host driver's measured ABI its connection's R2 resolved (2026-10-08).
+    #[must_use]
+    pub fn host_abi(&self) -> crate::hostabi::ClientAbi {
+        self.conn.host_abi()
     }
 
     /// ★ The class profile this backend's connection allocates with — derived from the host's
@@ -16135,7 +16301,9 @@ mod tests {
     #[test]
     fn r2_admits_the_benchs_host_driver_and_refuses_silence() {
         assert_eq!(
-            host_version_gate(Some("580.159.04")).as_deref(),
+            host_version_gate(Some("580.159.04"))
+                .map(|(v, _)| v)
+                .as_deref(),
             Ok("580.159.04"),
             "the driver this crate's encoders were transcribed from must pass R2"
         );
@@ -16153,9 +16321,17 @@ mod tests {
     ///
     /// ⚠ `rung()` cannot be used for it: it formats with `Debug`, which would deliver the
     /// message quoted and backslash-escaped. This asserts the shape a log actually shows.
+    ///
+    /// ⊘⊘ SUPERSEDED 2026-10-08 (owner: the raw client runs on every driver kayfabe supports):
+    /// this used to drive **610.43.02** and assert the refusal named `NV_CHANNEL_ALLOC_PARAMS`.
+    /// 610.43.02 is a MEASURED tag now, so the same hazard is asserted the other way round —
+    /// `crate::hostabi`'s `a_610_channel_is_carried_with_engine_type_at_its_own_offset` proves
+    /// `engineType` reaches its measured +136 there (not the +132 this test's old text and the
+    /// module docs claimed) — and the R2-failure shape is asserted on a driver the
+    /// matrix never measured (610.43.01), which must still be refused BY NAME.
     #[test]
     fn a_refused_host_driver_arrives_as_a_named_r2_failure() {
-        let detail = host_version_gate(Some("610.43.02")).expect_err("610 must refuse");
+        let detail = host_version_gate(Some("610.43.01")).expect_err("unmeasured must refuse");
         let e = BringUpError {
             rung: "R2 host driver version",
             detail,
@@ -16165,8 +16341,8 @@ mod tests {
             shown.starts_with("RM bring-up failed at R2 host driver version: "),
             "names the rung: {shown}"
         );
-        assert!(shown.contains("host driver is 610.43.02"), "{shown}");
-        assert!(shown.contains("NV_CHANNEL_ALLOC_PARAMS"), "{shown}");
+        assert!(shown.contains("host driver 610.43.01"), "{shown}");
+        assert!(shown.contains("not a measured tag"), "{shown}");
         assert!(!shown.contains('\\'), "not Debug-escaped: {shown}");
     }
 

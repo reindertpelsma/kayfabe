@@ -88,6 +88,7 @@ pub mod export;
 pub mod fbjoin;
 pub mod fdcross;
 pub mod guestram;
+pub mod hostabi;
 pub mod isolate;
 pub mod listobj;
 pub mod loopback;

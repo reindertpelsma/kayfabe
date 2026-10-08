@@ -5425,6 +5425,30 @@ pub const NV0000_ALLOC_PARAMETERS: StructRuns = StructRuns {
     ],
 };
 
+const NV0000_CTRL_CLIENT_SHARE_OBJECT_PARAMS_L0: Layout = Layout {
+    size: 16,
+    fields: &[
+        f("hObject", 0, 4, 0),
+        f("sharePolicy", 4, 12, 0),
+        f("sharePolicy.accessMask", 8, 4, 0),
+        f("sharePolicy.accessMask.limbs", 8, 4, 4),
+        f("sharePolicy.action", 14, 1, 0),
+        f("sharePolicy.target", 4, 4, 0),
+        f("sharePolicy.type", 12, 2, 0),
+    ],
+};
+/// `NV0000_CTRL_CLIENT_SHARE_OBJECT_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV0000_CTRL_CLIENT_SHARE_OBJECT_PARAMS: StructRuns = StructRuns {
+    name: "NV0000_CTRL_CLIENT_SHARE_OBJECT_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&NV0000_CTRL_CLIENT_SHARE_OBJECT_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
+    ],
+};
+
 const NV0000_CTRL_GPU_GET_ID_INFO_V2_PARAMS_L0: Layout = Layout {
     size: 32,
     fields: &[
@@ -5539,6 +5563,32 @@ pub const NV0005_ALLOC_PARAMETERS: StructRuns = StructRuns {
     ],
 };
 
+const NV0041_CTRL_GET_SURFACE_PHYS_ATTR_PARAMS_L0: Layout = Layout {
+    size: 48,
+    fields: &[
+        f("comprFormat", 16, 4, 0),
+        f("comprOffset", 12, 4, 0),
+        f("contigSegmentSize", 40, 8, 0),
+        f("gpuCacheAttr", 24, 4, 0),
+        f("gpuP2PCacheAttr", 28, 4, 0),
+        f("memAperture", 20, 4, 0),
+        f("memFormat", 8, 4, 0),
+        f("memOffset", 0, 8, 0),
+        f("mmuContext", 32, 4, 0),
+    ],
+};
+/// `NV0041_CTRL_GET_SURFACE_PHYS_ATTR_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV0041_CTRL_GET_SURFACE_PHYS_ATTR_PARAMS: StructRuns = StructRuns {
+    name: "NV0041_CTRL_GET_SURFACE_PHYS_ATTR_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&NV0041_CTRL_GET_SURFACE_PHYS_ATTR_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
+    ],
+};
+
 const NV0080_ALLOC_PARAMETERS_L0: Layout = Layout {
     size: 56,
     fields: &[
@@ -5579,6 +5629,68 @@ pub const NV0080_CTRL_BSP_GET_CAPS_PARAMS_V2: StructRuns = StructRuns {
             Some(&NV0080_CTRL_BSP_GET_CAPS_PARAMS_V2_L0),
         ), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), None), // 610.43.02 … 615.71.09
+    ],
+};
+
+const NV0080_CTRL_DMA_GET_PDE_INFO_PARAMS_L0: Layout = Layout {
+    size: 208,
+    fields: &[
+        f("gpuAddr", 0, 8, 0),
+        f("hVASpace", 200, 4, 0),
+        f("pdbAddr", 192, 8, 0),
+        f("pdeAddrSpace", 20, 4, 0),
+        f("pdeEntrySize", 16, 4, 0),
+        f("pdeSize", 24, 4, 0),
+        f("pdeVirtAddr", 8, 8, 0),
+        f("pteBlocks", 32, 160, 32),
+        f("pteBlocks[]", 32, 32, 0),
+        f("pteBlocks[].pageSize", 48, 4, 0),
+        f("pteBlocks[].pdeFlags", 60, 4, 0),
+        f("pteBlocks[].pdeVASpaceSize", 56, 4, 0),
+        f("pteBlocks[].pteAddrSpace", 52, 4, 0),
+        f("pteBlocks[].pteCacheAttrib", 40, 4, 0),
+        f("pteBlocks[].pteEntrySize", 44, 4, 0),
+        f("pteBlocks[].ptePhysAddr", 32, 8, 0),
+        f("subDeviceId", 28, 4, 0),
+    ],
+};
+/// `NV0080_CTRL_DMA_GET_PDE_INFO_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV0080_CTRL_DMA_GET_PDE_INFO_PARAMS: StructRuns = StructRuns {
+    name: "NV0080_CTRL_DMA_GET_PDE_INFO_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&NV0080_CTRL_DMA_GET_PDE_INFO_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
+    ],
+};
+
+const NV0080_CTRL_DMA_GET_PTE_INFO_PARAMS_L0: Layout = Layout {
+    size: 184,
+    fields: &[
+        f("gpuAddr", 0, 8, 0),
+        f("hVASpace", 176, 4, 0),
+        f("pteBlocks", 16, 160, 32),
+        f("pteBlocks[]", 16, 32, 0),
+        f("pteBlocks[].comptagLine", 32, 4, 0),
+        f("pteBlocks[].kind", 36, 4, 0),
+        f("pteBlocks[].pageSize", 16, 8, 0),
+        f("pteBlocks[].pteEntrySize", 24, 8, 0),
+        f("pteBlocks[].pteFlags", 40, 4, 0),
+        f("skipVASpaceInit", 12, 1, 0),
+        f("subDeviceId", 8, 4, 0),
+    ],
+};
+/// `NV0080_CTRL_DMA_GET_PTE_INFO_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV0080_CTRL_DMA_GET_PTE_INFO_PARAMS: StructRuns = StructRuns {
+    name: "NV0080_CTRL_DMA_GET_PTE_INFO_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&NV0080_CTRL_DMA_GET_PTE_INFO_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
     ],
 };
 
@@ -6379,6 +6491,22 @@ pub const NV2080_CTRL_FIFO_DISABLE_CHANNELS_PARAMS: StructRuns = StructRuns {
     ],
 };
 
+const NV2080_CTRL_FIFO_GET_ALLOCATED_CHANNELS_PARAMS_L0: Layout = Layout {
+    size: 516,
+    fields: &[f("bitMask", 4, 512, 4), f("runlistId", 0, 4, 0)],
+};
+/// `NV2080_CTRL_FIFO_GET_ALLOCATED_CHANNELS_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_FIFO_GET_ALLOCATED_CHANNELS_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_FIFO_GET_ALLOCATED_CHANNELS_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&NV2080_CTRL_FIFO_GET_ALLOCATED_CHANNELS_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
+    ],
+};
+
 const NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_PARAMS_L0: Layout = Layout {
     size: 3212,
     fields: &[
@@ -6423,6 +6551,29 @@ pub const NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_PARAMS: StructRuns = StructRuns
             v(615, 71, 9),
             Some(&NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_PARAMS_L1),
         ), // 615.71.09 … 615.71.09
+    ],
+};
+
+const NV2080_CTRL_FIFO_GET_INFO_PARAMS_L0: Layout = Layout {
+    size: 2056,
+    fields: &[
+        f("engineType", 2052, 4, 0),
+        f("fifoInfoTbl", 4, 2048, 8),
+        f("fifoInfoTblSize", 0, 4, 0),
+        f("fifoInfoTbl[]", 4, 8, 0),
+        f("fifoInfoTbl[].data", 8, 4, 0),
+        f("fifoInfoTbl[].index", 4, 4, 0),
+    ],
+};
+/// `NV2080_CTRL_FIFO_GET_INFO_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_FIFO_GET_INFO_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_FIFO_GET_INFO_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&NV2080_CTRL_FIFO_GET_INFO_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
     ],
 };
 
@@ -6690,6 +6841,27 @@ pub const NV2080_CTRL_GPU_GET_PES_INFO_PARAMS: StructRuns = StructRuns {
             v(615, 71, 9),
             Some(&NV2080_CTRL_GPU_GET_PES_INFO_PARAMS_L1),
         ), // 615.71.09 … 615.71.09
+    ],
+};
+
+const NV2080_CTRL_GPU_GET_PIDS_PARAMS_L0: Layout = Layout {
+    size: 3812,
+    fields: &[
+        f("id", 4, 4, 0),
+        f("idType", 0, 4, 0),
+        f("pidTbl", 12, 3800, 4),
+        f("pidTblCount", 8, 4, 0),
+    ],
+};
+/// `NV2080_CTRL_GPU_GET_PIDS_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_GPU_GET_PIDS_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_GPU_GET_PIDS_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&NV2080_CTRL_GPU_GET_PIDS_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
     ],
 };
 
@@ -9684,6 +9856,28 @@ pub const NV83DE_CTRL_DEBUG_SET_EXCEPTION_MASK_PARAMS: StructRuns = StructRuns {
     ],
 };
 
+const NV906F_CTRL_GET_MMU_FAULT_INFO_PARAMS_L0: Layout = Layout {
+    size: 104,
+    fields: &[
+        f("addrHi", 0, 4, 0),
+        f("addrLo", 4, 4, 0),
+        f("faultString", 12, 32, 1),
+        f("faultType", 8, 4, 0),
+        f("shaderProgramVA", 48, 56, 8),
+    ],
+};
+/// `NV906F_CTRL_GET_MMU_FAULT_INFO_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV906F_CTRL_GET_MMU_FAULT_INFO_PARAMS: StructRuns = StructRuns {
+    name: "NV906F_CTRL_GET_MMU_FAULT_INFO_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&NV906F_CTRL_GET_MMU_FAULT_INFO_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
+    ],
+};
+
 const NV9072_ALLOCATION_PARAMETERS_L0: Layout = Layout {
     size: 12,
     fields: &[
@@ -11110,6 +11304,52 @@ pub const NV_MEMORY_ALLOCATION_PARAMS: StructRuns = StructRuns {
     ],
 };
 
+const NV_MEMORY_LIST_ALLOCATION_PARAMS_L0: Layout = Layout {
+    size: 152,
+    fields: &[
+        f("align", 120, 8, 0),
+        f("attr", 40, 4, 0),
+        f("attr2", 44, 4, 0),
+        f("comprcovg", 60, 4, 0),
+        f("ctagOffset", 108, 4, 0),
+        f("flags", 36, 4, 0),
+        f("flagsOs02", 144, 4, 0),
+        f("format", 56, 4, 0),
+        f("guestId", 80, 8, 0),
+        f("hClient", 0, 4, 0),
+        f("hHwResClient", 12, 4, 0),
+        f("hHwResDevice", 16, 4, 0),
+        f("hHwResHandle", 20, 4, 0),
+        f("hObject", 8, 4, 0),
+        f("hParent", 4, 4, 0),
+        f("heapOwner", 72, 4, 0),
+        f("height", 48, 4, 0),
+        f("limit", 136, 8, 0),
+        f("pageCount", 68, 4, 0),
+        f("pageNumberList", 128, 8, 0),
+        f("pitch", 104, 4, 0),
+        f("pteAdjust", 24, 4, 0),
+        f("rangeBegin", 88, 8, 0),
+        f("rangeEnd", 96, 8, 0),
+        f("reserved_0", 28, 4, 0),
+        f("size", 112, 8, 0),
+        f("type", 32, 4, 0),
+        f("width", 52, 4, 0),
+        f("zcullcovg", 64, 4, 0),
+    ],
+};
+/// `NV_MEMORY_LIST_ALLOCATION_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV_MEMORY_LIST_ALLOCATION_PARAMS: StructRuns = StructRuns {
+    name: "NV_MEMORY_LIST_ALLOCATION_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&NV_MEMORY_LIST_ALLOCATION_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
+    ],
+};
+
 const NV_MEMORY_VIRTUAL_ALLOCATION_PARAMS_L0: Layout = Layout {
     size: 24,
     fields: &[
@@ -11297,6 +11537,63 @@ pub const NV01TIMERMAP: StructRuns = StructRuns {
     ],
 };
 
+const UVM_CREATE_EXTERNAL_RANGE_PARAMS_L0: Layout = Layout {
+    size: 24,
+    fields: &[
+        f("base", 0, 8, 0),
+        f("length", 8, 8, 0),
+        f("rmStatus", 16, 4, 0),
+    ],
+};
+/// `UVM_CREATE_EXTERNAL_RANGE_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const UVM_CREATE_EXTERNAL_RANGE_PARAMS: StructRuns = StructRuns {
+    name: "UVM_CREATE_EXTERNAL_RANGE_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&UVM_CREATE_EXTERNAL_RANGE_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
+    ],
+};
+
+const UVM_FREE_PARAMS_L0: Layout = Layout {
+    size: 24,
+    fields: &[
+        f("base", 0, 8, 0),
+        f("length", 8, 8, 0),
+        f("rmStatus", 16, 4, 0),
+    ],
+};
+const UVM_FREE_PARAMS_L1: Layout = Layout {
+    size: 16,
+    fields: &[f("base", 0, 8, 0), f("rmStatus", 8, 4, 0)],
+};
+/// `UVM_FREE_PARAMS` — 2 distinct consumed layout(s) over 2 run(s).
+pub const UVM_FREE_PARAMS: StructRuns = StructRuns {
+    name: "UVM_FREE_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(580, 178, 4), Some(&UVM_FREE_PARAMS_L0)), // 535.309.01 … 580.178.04
+        r(v(590, 48, 1), v(615, 71, 9), Some(&UVM_FREE_PARAMS_L1)),   // 590.48.01 … 615.71.09
+    ],
+};
+
+const UVM_INITIALIZE_PARAMS_L0: Layout = Layout {
+    size: 16,
+    fields: &[f("flags", 0, 8, 0), f("rmStatus", 8, 4, 0)],
+};
+/// `UVM_INITIALIZE_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const UVM_INITIALIZE_PARAMS: StructRuns = StructRuns {
+    name: "UVM_INITIALIZE_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&UVM_INITIALIZE_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
+    ],
+};
+
 const UVM_MAP_EXTERNAL_ALLOCATION_PARAMS_L0: Layout = Layout {
     size: 1200,
     fields: &[
@@ -11358,6 +11655,47 @@ pub const UVM_MAP_EXTERNAL_ALLOCATION_PARAMS: StructRuns = StructRuns {
     ],
 };
 
+const UVM_MM_INITIALIZE_PARAMS_L0: Layout = Layout {
+    size: 8,
+    fields: &[f("rmStatus", 4, 4, 0), f("uvmFd", 0, 4, 0)],
+};
+/// `UVM_MM_INITIALIZE_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const UVM_MM_INITIALIZE_PARAMS: StructRuns = StructRuns {
+    name: "UVM_MM_INITIALIZE_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&UVM_MM_INITIALIZE_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
+    ],
+};
+
+const UVM_REGISTER_CHANNEL_PARAMS_L0: Layout = Layout {
+    size: 56,
+    fields: &[
+        f("base", 32, 8, 0),
+        f("gpuUuid", 0, 16, 0),
+        f("gpuUuid.uuid", 0, 16, 1),
+        f("hChannel", 24, 4, 0),
+        f("hClient", 20, 4, 0),
+        f("length", 40, 8, 0),
+        f("rmCtrlFd", 16, 4, 0),
+        f("rmStatus", 48, 4, 0),
+    ],
+};
+/// `UVM_REGISTER_CHANNEL_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const UVM_REGISTER_CHANNEL_PARAMS: StructRuns = StructRuns {
+    name: "UVM_REGISTER_CHANNEL_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&UVM_REGISTER_CHANNEL_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
+    ],
+};
+
 const UVM_REGISTER_GPU_PARAMS_L0: Layout = Layout {
     size: 40,
     fields: &[
@@ -11379,6 +11717,84 @@ pub const UVM_REGISTER_GPU_PARAMS: StructRuns = StructRuns {
             v(535, 309, 1),
             v(615, 71, 9),
             Some(&UVM_REGISTER_GPU_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
+    ],
+};
+
+const UVM_REGISTER_GPU_VASPACE_PARAMS_L0: Layout = Layout {
+    size: 32,
+    fields: &[
+        f("gpuUuid", 0, 16, 0),
+        f("gpuUuid.uuid", 0, 16, 1),
+        f("hClient", 20, 4, 0),
+        f("hVaSpace", 24, 4, 0),
+        f("rmCtrlFd", 16, 4, 0),
+        f("rmStatus", 28, 4, 0),
+    ],
+};
+/// `UVM_REGISTER_GPU_VASPACE_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const UVM_REGISTER_GPU_VASPACE_PARAMS: StructRuns = StructRuns {
+    name: "UVM_REGISTER_GPU_VASPACE_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&UVM_REGISTER_GPU_VASPACE_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
+    ],
+};
+
+const UVM_UNREGISTER_CHANNEL_PARAMS_L0: Layout = Layout {
+    size: 28,
+    fields: &[
+        f("gpuUuid", 0, 16, 0),
+        f("gpuUuid.uuid", 0, 16, 1),
+        f("hChannel", 20, 4, 0),
+        f("hClient", 16, 4, 0),
+        f("rmStatus", 24, 4, 0),
+    ],
+};
+const UVM_UNREGISTER_CHANNEL_PARAMS_L1: Layout = Layout {
+    size: 12,
+    fields: &[
+        f("hChannel", 4, 4, 0),
+        f("hClient", 0, 4, 0),
+        f("rmStatus", 8, 4, 0),
+    ],
+};
+/// `UVM_UNREGISTER_CHANNEL_PARAMS` — 2 distinct consumed layout(s) over 2 run(s).
+pub const UVM_UNREGISTER_CHANNEL_PARAMS: StructRuns = StructRuns {
+    name: "UVM_UNREGISTER_CHANNEL_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(580, 178, 4),
+            Some(&UVM_UNREGISTER_CHANNEL_PARAMS_L0),
+        ), // 535.309.01 … 580.178.04
+        r(
+            v(590, 48, 1),
+            v(615, 71, 9),
+            Some(&UVM_UNREGISTER_CHANNEL_PARAMS_L1),
+        ), // 590.48.01 … 615.71.09
+    ],
+};
+
+const UVM_UNREGISTER_GPU_PARAMS_L0: Layout = Layout {
+    size: 20,
+    fields: &[
+        f("gpu_uuid", 0, 16, 0),
+        f("gpu_uuid.uuid", 0, 16, 1),
+        f("rmStatus", 16, 4, 0),
+    ],
+};
+/// `UVM_UNREGISTER_GPU_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const UVM_UNREGISTER_GPU_PARAMS: StructRuns = StructRuns {
+    name: "UVM_UNREGISTER_GPU_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&UVM_UNREGISTER_GPU_PARAMS_L0),
         ), // 535.309.01 … 615.71.09
     ],
 };
@@ -14267,6 +14683,14 @@ pub const CLASS_IDS_WPPS_CONFIG_SESSION: ValueRuns = ValueRuns {
     ],
 };
 
+/// `ctrl_cmds:NV0000_CTRL_CMD_CLIENT_SHARE_OBJECT`
+pub const CTRL_CMDS_NV0000_CTRL_CMD_CLIENT_SHARE_OBJECT: ValueRuns = ValueRuns {
+    name: "ctrl_cmds:NV0000_CTRL_CMD_CLIENT_SHARE_OBJECT",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0xd06)), // 535.309.01 … 615.71.09
+    ],
+};
+
 /// `ctrl_cmds:NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2`
 pub const CTRL_CMDS_NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2: ValueRuns = ValueRuns {
     name: "ctrl_cmds:NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2",
@@ -14299,11 +14723,35 @@ pub const CTRL_CMDS_NV0000_CTRL_CMD_SYSTEM_GET_CLASSLIST: ValueRuns = ValueRuns 
     ],
 };
 
+/// `ctrl_cmds:NV0041_CTRL_CMD_GET_SURFACE_PHYS_ATTR`
+pub const CTRL_CMDS_NV0041_CTRL_CMD_GET_SURFACE_PHYS_ATTR: ValueRuns = ValueRuns {
+    name: "ctrl_cmds:NV0041_CTRL_CMD_GET_SURFACE_PHYS_ATTR",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x410103)), // 535.309.01 … 615.71.09
+    ],
+};
+
 /// `ctrl_cmds:NV0080_CTRL_CMD_BSP_GET_CAPS_V2`
 pub const CTRL_CMDS_NV0080_CTRL_CMD_BSP_GET_CAPS_V2: ValueRuns = ValueRuns {
     name: "ctrl_cmds:NV0080_CTRL_CMD_BSP_GET_CAPS_V2",
     runs: &[
         r(v(535, 309, 1), v(615, 71, 9), Some(0x801c02)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `ctrl_cmds:NV0080_CTRL_CMD_DMA_GET_PDE_INFO`
+pub const CTRL_CMDS_NV0080_CTRL_CMD_DMA_GET_PDE_INFO: ValueRuns = ValueRuns {
+    name: "ctrl_cmds:NV0080_CTRL_CMD_DMA_GET_PDE_INFO",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x801809)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `ctrl_cmds:NV0080_CTRL_CMD_DMA_GET_PTE_INFO`
+pub const CTRL_CMDS_NV0080_CTRL_CMD_DMA_GET_PTE_INFO: ValueRuns = ValueRuns {
+    name: "ctrl_cmds:NV0080_CTRL_CMD_DMA_GET_PTE_INFO",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x801801)), // 535.309.01 … 615.71.09
     ],
 };
 
@@ -14536,11 +14984,27 @@ pub const CTRL_CMDS_NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS: ValueRuns = ValueRuns
     ],
 };
 
+/// `ctrl_cmds:NV2080_CTRL_CMD_FIFO_GET_ALLOCATED_CHANNELS`
+pub const CTRL_CMDS_NV2080_CTRL_CMD_FIFO_GET_ALLOCATED_CHANNELS: ValueRuns = ValueRuns {
+    name: "ctrl_cmds:NV2080_CTRL_CMD_FIFO_GET_ALLOCATED_CHANNELS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x20801119)), // 535.309.01 … 615.71.09
+    ],
+};
+
 /// `ctrl_cmds:NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE`
 pub const CTRL_CMDS_NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE: ValueRuns = ValueRuns {
     name: "ctrl_cmds:NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE",
     runs: &[
         r(v(535, 309, 1), v(615, 71, 9), Some(0x20801112)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `ctrl_cmds:NV2080_CTRL_CMD_FIFO_GET_INFO`
+pub const CTRL_CMDS_NV2080_CTRL_CMD_FIFO_GET_INFO: ValueRuns = ValueRuns {
+    name: "ctrl_cmds:NV2080_CTRL_CMD_FIFO_GET_INFO",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x20801109)), // 535.309.01 … 615.71.09
     ],
 };
 
@@ -14606,6 +15070,14 @@ pub const CTRL_CMDS_NV2080_CTRL_CMD_GPU_GET_PES_INFO: ValueRuns = ValueRuns {
     name: "ctrl_cmds:NV2080_CTRL_CMD_GPU_GET_PES_INFO",
     runs: &[
         r(v(535, 309, 1), v(615, 71, 9), Some(0x20800168)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `ctrl_cmds:NV2080_CTRL_CMD_GPU_GET_PIDS`
+pub const CTRL_CMDS_NV2080_CTRL_CMD_GPU_GET_PIDS: ValueRuns = ValueRuns {
+    name: "ctrl_cmds:NV2080_CTRL_CMD_GPU_GET_PIDS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x2080018d)), // 535.309.01 … 615.71.09
     ],
 };
 
@@ -15194,6 +15666,14 @@ pub const CTRL_CMDS_NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK: ValueRuns = ValueR
     name: "ctrl_cmds:NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK",
     runs: &[
         r(v(535, 309, 1), v(615, 71, 9), Some(0x83de0309)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `ctrl_cmds:NV906F_CTRL_CMD_GET_MMU_FAULT_INFO`
+pub const CTRL_CMDS_NV906F_CTRL_CMD_GET_MMU_FAULT_INFO: ValueRuns = ValueRuns {
+    name: "ctrl_cmds:NV906F_CTRL_CMD_GET_MMU_FAULT_INFO",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x906f0106)), // 535.309.01 … 615.71.09
     ],
 };
 
@@ -32904,6 +33384,14 @@ pub const UVM_IOCTLS_UVM_DEBUG_V1: ValueRuns = ValueRuns {
     ],
 };
 
+/// `uvm_ioctls:UVM_DEINITIALIZE`
+pub const UVM_IOCTLS_UVM_DEINITIALIZE: ValueRuns = ValueRuns {
+    name: "uvm_ioctls:UVM_DEINITIALIZE",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x30000002)), // 535.309.01 … 615.71.09
+    ],
+};
+
 /// `uvm_ioctls:UVM_DESTROY_RANGE_GROUP`
 pub const UVM_IOCTLS_UVM_DESTROY_RANGE_GROUP: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_DESTROY_RANGE_GROUP",
@@ -33164,6 +33652,14 @@ pub const UVM_IOCTLS_UVM_IMPORT_DMA_BUF: ValueRuns = ValueRuns {
     runs: &[
         r(v(535, 309, 1), v(610, 57, 4), None), // 535.309.01 … 610.57.04
         r(v(615, 71, 9), v(615, 71, 9), Some(0x53)), // 615.71.09 … 615.71.09
+    ],
+};
+
+/// `uvm_ioctls:UVM_INITIALIZE`
+pub const UVM_IOCTLS_UVM_INITIALIZE: ValueRuns = ValueRuns {
+    name: "uvm_ioctls:UVM_INITIALIZE",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x30000001)), // 535.309.01 … 615.71.09
     ],
 };
 
@@ -34021,13 +34517,17 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &LIBOSMEMORYREGIONINITARGUMENT,
     &MESSAGE_QUEUE_INIT_ARGUMENTS,
     &NV0000_ALLOC_PARAMETERS,
+    &NV0000_CTRL_CLIENT_SHARE_OBJECT_PARAMS,
     &NV0000_CTRL_GPU_GET_ID_INFO_V2_PARAMS,
     &NV0000_CTRL_OS_UNIX_EXPORT_OBJECT_TO_FD_PARAMS,
     &NV0000_CTRL_OS_UNIX_IMPORT_OBJECT_FROM_FD_PARAMS,
     &NV0000_CTRL_SYSTEM_GET_CLASSLIST_PARAMS,
     &NV0005_ALLOC_PARAMETERS,
+    &NV0041_CTRL_GET_SURFACE_PHYS_ATTR_PARAMS,
     &NV0080_ALLOC_PARAMETERS,
     &NV0080_CTRL_BSP_GET_CAPS_PARAMS_V2,
+    &NV0080_CTRL_DMA_GET_PDE_INFO_PARAMS,
+    &NV0080_CTRL_DMA_GET_PTE_INFO_PARAMS,
     &NV0080_CTRL_DMA_SET_DEFAULT_VASPACE_PARAMS,
     &NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS,
     &NV0080_CTRL_DMA_UNSET_PAGE_DIRECTORY_PARAMS,
@@ -34061,7 +34561,9 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &NV2080_CTRL_FB_GET_INFO_V2_PARAMS,
     &NV2080_CTRL_FIFO_CHANNEL_PREEMPTIVE_REMOVAL_PARAMS,
     &NV2080_CTRL_FIFO_DISABLE_CHANNELS_PARAMS,
+    &NV2080_CTRL_FIFO_GET_ALLOCATED_CHANNELS_PARAMS,
     &NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_PARAMS,
+    &NV2080_CTRL_FIFO_GET_INFO_PARAMS,
     &NV2080_CTRL_FIFO_UPDATE_CHANNEL_INFO_PARAMS,
     &NV2080_CTRL_GPU_EVICT_CTX_PARAMS,
     &NV2080_CTRL_GPU_GET_CONSTRUCTED_FALCON_INFO_PARAMS,
@@ -34069,6 +34571,7 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &NV2080_CTRL_GPU_GET_INFO_V2_PARAMS,
     &NV2080_CTRL_GPU_GET_NAME_STRING_PARAMS,
     &NV2080_CTRL_GPU_GET_PES_INFO_PARAMS,
+    &NV2080_CTRL_GPU_GET_PIDS_PARAMS,
     &NV2080_CTRL_GPU_GET_SHORT_NAME_STRING_PARAMS,
     &NV2080_CTRL_GPU_INITIALIZE_CTX_PARAMS,
     &NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS,
@@ -34133,6 +34636,7 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &NV5080_CTRL_REMOVE_API_PARAMS,
     &NV83DE_ALLOC_PARAMETERS,
     &NV83DE_CTRL_DEBUG_SET_EXCEPTION_MASK_PARAMS,
+    &NV906F_CTRL_GET_MMU_FAULT_INFO_PARAMS,
     &NV9072_ALLOCATION_PARAMETERS,
     &NV9096_CTRL_GET_ZBC_CLEAR_TABLE_SIZE_PARAMS,
     &NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS,
@@ -34167,6 +34671,7 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &NV_CTXSHARE_ALLOCATION_PARAMETERS,
     &NV_GR_ALLOCATION_PARAMETERS,
     &NV_MEMORY_ALLOCATION_PARAMS,
+    &NV_MEMORY_LIST_ALLOCATION_PARAMS,
     &NV_MEMORY_VIRTUAL_ALLOCATION_PARAMS,
     &NV_MSENC_ALLOCATION_PARAMETERS,
     &NV_NVDEC_ALLOCATION_PARAMETERS,
@@ -34175,8 +34680,16 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &NV_SEMAPHORE_SURFACE_ALLOC_PARAMETERS,
     &NV_VASPACE_ALLOCATION_PARAMETERS,
     &NV01TIMERMAP,
+    &UVM_CREATE_EXTERNAL_RANGE_PARAMS,
+    &UVM_FREE_PARAMS,
+    &UVM_INITIALIZE_PARAMS,
     &UVM_MAP_EXTERNAL_ALLOCATION_PARAMS,
+    &UVM_MM_INITIALIZE_PARAMS,
+    &UVM_REGISTER_CHANNEL_PARAMS,
     &UVM_REGISTER_GPU_PARAMS,
+    &UVM_REGISTER_GPU_VASPACE_PARAMS,
+    &UVM_UNREGISTER_CHANNEL_PARAMS,
+    &UVM_UNREGISTER_GPU_PARAMS,
     &MSGQRXHEADER,
     &MSGQTXHEADER,
     &NV_IOCTL_ALLOC_OS_EVENT_T,
@@ -34460,11 +34973,15 @@ pub const ALL_VALUES: &[&ValueRuns] = &[
     &CLASS_IDS_VOLTA_CHANNEL_GPFIFO_A,
     &CLASS_IDS_VOLTA_USERMODE_A,
     &CLASS_IDS_WPPS_CONFIG_SESSION,
+    &CTRL_CMDS_NV0000_CTRL_CMD_CLIENT_SHARE_OBJECT,
     &CTRL_CMDS_NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2,
     &CTRL_CMDS_NV0000_CTRL_CMD_OS_UNIX_EXPORT_OBJECT_TO_FD,
     &CTRL_CMDS_NV0000_CTRL_CMD_OS_UNIX_IMPORT_OBJECT_FROM_FD,
     &CTRL_CMDS_NV0000_CTRL_CMD_SYSTEM_GET_CLASSLIST,
+    &CTRL_CMDS_NV0041_CTRL_CMD_GET_SURFACE_PHYS_ATTR,
     &CTRL_CMDS_NV0080_CTRL_CMD_BSP_GET_CAPS_V2,
+    &CTRL_CMDS_NV0080_CTRL_CMD_DMA_GET_PDE_INFO,
+    &CTRL_CMDS_NV0080_CTRL_CMD_DMA_GET_PTE_INFO,
     &CTRL_CMDS_NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
     &CTRL_CMDS_NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY,
     &CTRL_CMDS_NV0080_CTRL_CMD_FIFO_GET_ENGINE_CONTEXT_PROPERTIES,
@@ -34493,7 +35010,9 @@ pub const ALL_VALUES: &[&ValueRuns] = &[
     &CTRL_CMDS_NV2080_CTRL_CMD_FB_GET_INFO_V2,
     &CTRL_CMDS_NV2080_CTRL_CMD_FIFO_CHANNEL_PREEMPTIVE_REMOVAL,
     &CTRL_CMDS_NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS,
+    &CTRL_CMDS_NV2080_CTRL_CMD_FIFO_GET_ALLOCATED_CHANNELS,
     &CTRL_CMDS_NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE,
+    &CTRL_CMDS_NV2080_CTRL_CMD_FIFO_GET_INFO,
     &CTRL_CMDS_NV2080_CTRL_CMD_FIFO_UPDATE_CHANNEL_INFO,
     &CTRL_CMDS_NV2080_CTRL_CMD_GET_RC_RECOVERY,
     &CTRL_CMDS_NV2080_CTRL_CMD_GPU_EVICT_CTX,
@@ -34502,6 +35021,7 @@ pub const ALL_VALUES: &[&ValueRuns] = &[
     &CTRL_CMDS_NV2080_CTRL_CMD_GPU_GET_INFO_V2,
     &CTRL_CMDS_NV2080_CTRL_CMD_GPU_GET_NAME_STRING,
     &CTRL_CMDS_NV2080_CTRL_CMD_GPU_GET_PES_INFO,
+    &CTRL_CMDS_NV2080_CTRL_CMD_GPU_GET_PIDS,
     &CTRL_CMDS_NV2080_CTRL_CMD_GPU_GET_SHORT_NAME_STRING,
     &CTRL_CMDS_NV2080_CTRL_CMD_GPU_INITIALIZE_CTX,
     &CTRL_CMDS_NV2080_CTRL_CMD_GPU_PROMOTE_CTX,
@@ -34573,6 +35093,7 @@ pub const ALL_VALUES: &[&ValueRuns] = &[
     &CTRL_CMDS_NV5080_CTRL_CMD_DEFERRED_API_V2,
     &CTRL_CMDS_NV5080_CTRL_CMD_REMOVE_API,
     &CTRL_CMDS_NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK,
+    &CTRL_CMDS_NV906F_CTRL_CMD_GET_MMU_FAULT_INFO,
     &CTRL_CMDS_NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
     &CTRL_CMDS_NVA06C_CTRL_CMD_BIND,
     &CTRL_CMDS_NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
@@ -36634,6 +37155,7 @@ pub const ALL_VALUES: &[&ValueRuns] = &[
     &UVM_IOCTLS_UVM_DEBUG_ACCESS_MEMORY,
     &UVM_IOCTLS_UVM_DEBUG_ACCESS_PAGE_SIZE,
     &UVM_IOCTLS_UVM_DEBUG_V1,
+    &UVM_IOCTLS_UVM_DEINITIALIZE,
     &UVM_IOCTLS_UVM_DESTROY_RANGE_GROUP,
     &UVM_IOCTLS_UVM_DISABLE_PEER_ACCESS,
     &UVM_IOCTLS_UVM_DISABLE_READ_DUPLICATION,
@@ -36666,6 +37188,7 @@ pub const ALL_VALUES: &[&ValueRuns] = &[
     &UVM_IOCTLS_UVM_FREE,
     &UVM_IOCTLS_UVM_GET_GPU_UUID_TABLE,
     &UVM_IOCTLS_UVM_IMPORT_DMA_BUF,
+    &UVM_IOCTLS_UVM_INITIALIZE,
     &UVM_IOCTLS_UVM_INIT_FLAGS_DISABLE_HMM,
     &UVM_IOCTLS_UVM_INIT_FLAGS_DISABLE_PAGEABLE_ACCESS,
     &UVM_IOCTLS_UVM_INIT_FLAGS_DISABLE_PAGEABLE_MIGRATIONS,

@@ -363,3 +363,30 @@ nv5080_flags_delete_lo:nv5080_flags_delete_lo
 nv5080_flags_delete_hi:nv5080_flags_delete_hi
 nv5080_flags_wait_tlb_lo:nv5080_flags_wait_tlb_lo
 nv5080_flags_wait_tlb_hi:nv5080_flags_wait_tlb_hi
+# ── 2026-10-08 (raw client on every measured driver): every struct and control id the frozen
+#    raw client (kayfabe-rm-ladder + kayfabe-isolate-host::rm) sends to the host RM / UVM, so
+#    `kayfabe_isolate_host::hostabi` can carry or refuse each one by its measured layout ──
+NV906F_CTRL_GET_MMU_FAULT_INFO_PARAMS.*
+NV0080_CTRL_DMA_GET_PTE_INFO_PARAMS.*
+NV0080_CTRL_DMA_GET_PDE_INFO_PARAMS.*
+NV_MEMORY_LIST_ALLOCATION_PARAMS.*
+NV0000_CTRL_CLIENT_SHARE_OBJECT_PARAMS.*
+NV0041_CTRL_GET_SURFACE_PHYS_ATTR_PARAMS.*
+NV2080_CTRL_FIFO_GET_ALLOCATED_CHANNELS_PARAMS.*
+NV2080_CTRL_FIFO_GET_INFO_PARAMS.*
+NV2080_CTRL_GPU_GET_PIDS_PARAMS.*
+UVM_MM_INITIALIZE_PARAMS.*
+UVM_REGISTER_GPU_VASPACE_PARAMS.*
+UVM_UNREGISTER_GPU_PARAMS.*
+UVM_CREATE_EXTERNAL_RANGE_PARAMS.*
+UVM_FREE_PARAMS.*
+UVM_REGISTER_CHANNEL_PARAMS.*
+UVM_UNREGISTER_CHANNEL_PARAMS.*
+ctrl_cmds:NV0000_CTRL_CMD_CLIENT_SHARE_OBJECT
+ctrl_cmds:NV0041_CTRL_CMD_GET_SURFACE_PHYS_ATTR
+ctrl_cmds:NV0080_CTRL_CMD_DMA_GET_PTE_INFO
+ctrl_cmds:NV0080_CTRL_CMD_DMA_GET_PDE_INFO
+ctrl_cmds:NV2080_CTRL_CMD_GPU_GET_PIDS
+ctrl_cmds:NV2080_CTRL_CMD_FIFO_GET_INFO
+ctrl_cmds:NV2080_CTRL_CMD_FIFO_GET_ALLOCATED_CHANNELS
+ctrl_cmds:NV906F_CTRL_CMD_GET_MMU_FAULT_INFO

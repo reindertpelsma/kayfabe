@@ -12523,6 +12523,11 @@ mod route_k {
         root: u32,
         /// The next handle to mint under `root`.
         next: u32,
+        /// ★ 2026-10-08 — the host driver's MEASURED ABI, read on `ctl` itself (R2's own gate,
+        /// `kayfabe_isolate_host::hostabi`), or R2's named refusal. Every body below crosses to
+        /// the host's layout through it, exactly as `RmConnection`'s do; a refusal is returned
+        /// by name from the first escape that needs it.
+        abi: Result<kayfabe_isolate_host::hostabi::ClientAbi, String>,
     }
 
     impl<'a> Esc<'a> {
@@ -12532,7 +12537,40 @@ mod route_k {
                 ctl,
                 root,
                 next: first,
+                abi: kayfabe_isolate_host::rm::host_abi_on(ctl),
             }
+        }
+
+        /// The matrix ABI, or R2's refusal as this escape's failure.
+        fn abi(
+            &self,
+            what: &'static str,
+        ) -> Result<kayfabe_isolate_host::hostabi::ClientAbi, Fail> {
+            self.abi.clone().map_err(|detail| Fail::Refused {
+                what,
+                detail: format!("R2 host driver version: {detail}"),
+            })
+        }
+
+        /// Carry `body` across `crossing` and run `issue` over the host-layout bytes.
+        fn across<R>(
+            abi: &kayfabe_isolate_host::hostabi::ClientAbi,
+            crossing: Result<
+                kayfabe_isolate_host::hostabi::Crossing,
+                kayfabe_isolate_host::hostabi::Refusal,
+            >,
+            what: &'static str,
+            body: &mut [u8],
+            issue: impl FnOnce(&mut [u8]) -> Result<R, Fail>,
+        ) -> Result<R, Fail> {
+            let refused = |e: kayfabe_isolate_host::hostabi::Refusal| Fail::Refused {
+                what,
+                detail: format!("HOST-ABI REFUSED: {e}"),
+            };
+            crossing
+                .map_err(refused)?
+                .issue(abi, body, issue)
+                .map_err(refused)?
         }
 
         /// Mint the next handle value under `root`.
@@ -12545,6 +12583,27 @@ mod route_k {
         /// `NV_ESC_RM_ALLOC`. ★ `params` is **left as RM returned it**: `alloc_free.c:207-211`
         /// copies the parameter block back on success, and row 1 is read straight out of it.
         fn alloc(
+            &mut self,
+            parent: u32,
+            class: u32,
+            params: &mut [u8],
+            what: &'static str,
+        ) -> Result<u32, Fail> {
+            // ★ 2026-10-08: carried to the host's measured layout (`hostabi`). `NV01_ROOT_CLIENT`
+            // has no body, so it crosses verbatim before any version is known to be good —
+            // exactly as R4 follows R2 in `RmConnection::open`.
+            if params.is_empty() {
+                return self.alloc_host(parent, class, params, what);
+            }
+            let abi = self.abi(what)?;
+            let crossing = abi.alloc_crossing(class, params.len());
+            Self::across(&abi, crossing, what, params, |p| {
+                self.alloc_host(parent, class, p, what)
+            })
+        }
+
+        /// [`Self::alloc`] with the body already in the host's layout.
+        fn alloc_host(
             &mut self,
             parent: u32,
             class: u32,
@@ -12598,6 +12657,22 @@ mod route_k {
 
         /// `NV_ESC_RM_CONTROL`.
         fn control(
+            &self,
+            object: u32,
+            cmd: u32,
+            payload: &mut [u8],
+            what: &'static str,
+        ) -> Result<(), Fail> {
+            // ★ 2026-10-08: carried to the host's measured layout (`hostabi`).
+            let abi = self.abi(what)?;
+            let crossing = abi.control_crossing(cmd, payload.len());
+            Self::across(&abi, crossing, what, payload, |p| {
+                self.control_host(object, cmd, p, what)
+            })
+        }
+
+        /// [`Self::control`] with the body already in the host's layout.
+        fn control_host(
             &self,
             object: u32,
             cmd: u32,
@@ -12827,17 +12902,19 @@ mod route_k {
                 what,
                 detail: format!("encode: {e:?}"),
             })?;
-            let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY_DMA as u8, arg.len())
-                .map_err(|e| Fail::Refused {
-                what,
-                detail: format!("request: {e:?}"),
-            })?;
-            self.ctl
-                .ioctl(req, &mut arg, &mut [])
-                .map_err(|e| Fail::Refused {
+            // ★ 2026-10-08: carried to the host's measured `NVOS46` layout (`hostabi`).
+            let abi = self.abi(what)?;
+            Self::across(&abi, abi.nvos46(), what, &mut arg, |a| {
+                let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY_DMA as u8, a.len())
+                    .map_err(|e| Fail::Refused {
+                        what,
+                        detail: format!("request: {e:?}"),
+                    })?;
+                self.ctl.ioctl(req, a, &mut []).map_err(|e| Fail::Refused {
                     what,
                     detail: format!("{e:?}"),
-                })?;
+                })
+            })?;
             let out = Nvos46Parameters::decode(&arg).map_err(|e| Fail::Refused {
                 what,
                 detail: format!("decode: {e:?}"),
@@ -17221,6 +17298,24 @@ mod uvm_raw {
         }
     }
 
+    /// ★ The host driver's matrix ABI, read once per process on a fresh `/dev/nvidiactl` (R2's own
+    /// gate, `kayfabe_isolate_host::rm::host_abi_on`) — this module holds only an fd NUMBER for
+    /// the RM client, never the descriptor, so it asks the frontend itself.
+    fn host_abi() -> Result<kayfabe_isolate_host::hostabi::ClientAbi, String> {
+        static ABI: std::sync::OnceLock<Result<kayfabe_isolate_host::hostabi::ClientAbi, String>> =
+            std::sync::OnceLock::new();
+        ABI.get_or_init(|| {
+            let ctl = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open("/dev/nvidiactl")
+                .map(|f| CharDevice::adopt(std::os::fd::OwnedFd::from(f)))
+                .map_err(|e| format!("open /dev/nvidiactl: {e}"))?;
+            kayfabe_isolate_host::rm::host_abi_on(&ctl)
+        })
+        .clone()
+    }
+
     /// Open `/dev/nvidia-uvm` read-write through `std` and adopt the descriptor.
     ///
     /// ⊘ [`CharDevice::openat`] needs a held `DevDir`, which is the sandbox capability the
@@ -17247,7 +17342,15 @@ mod uvm_raw {
         what: &'static str,
         also_ok: &[u32],
     ) -> Result<(), String> {
-        match dev.ioctl(request, &mut buf, &mut []) {
+        // ★ 2026-10-08 — the bench-layout block crosses to the HOST driver's measured UVM layout
+        // (`kayfabe_isolate_host::hostabi::ClientAbi::uvm_issue`): at 590.48.01+ `UVM_FREE` and
+        // `UVM_UNREGISTER_CHANNEL` shrank, and the reply is carried back so `status_at` (a bench
+        // offset) still reads `rmStatus`.
+        let abi = host_abi().map_err(|e| format!("{what}: R2 host driver version: {e}"))?;
+        let sent = abi
+            .uvm_issue(what, &mut buf, |b| dev.ioctl(request, b, &mut []))
+            .map_err(|e| format!("{what}: HOST-ABI REFUSED: {e}"))?;
+        match sent {
             Ok(_) => {
                 let st = status_of(&buf, status_at);
                 if st == 0 || also_ok.contains(&st) {

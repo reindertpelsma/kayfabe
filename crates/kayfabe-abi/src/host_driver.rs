@@ -1,5 +1,15 @@
 //! ★★★ The **host** driver's version — the axis that does not exist, made LOUD.
 //!
+//! ⊘⊘ **SUPERSEDED 2026-10-08 as the raw client's R2 gate.** The axis this module says is "not
+//! built" was built and MEASURED in v3 (`kf_abi::generated::matrix`, 30 ogkm tags 535.309.01 …
+//! 615.71.09; `kf_abi::hostabi`), and the owner ruled the raw client must run on every driver
+//! kayfabe supports. `kayfabe-isolate-host`'s R2 now resolves the host driver to its measured
+//! layouts and carries every block it sends (`kayfabe_isolate_host::hostabi`); a driver the matrix
+//! never measured is still refused by name, and unreadable/unparsable still never default. The
+//! pin below — `[580.65.06, 581)` — survives only as the interval inside which an UNLISTED block
+//! keeps its old verbatim contract. This module and its tests are kept as written: they are still
+//! true statements about the encoders' provenance and about the refusal's prose.
+//!
 //! # 0. What this module is for
 //!
 //! `four_axes_of_variation.md` states the product property: the guest driver version and

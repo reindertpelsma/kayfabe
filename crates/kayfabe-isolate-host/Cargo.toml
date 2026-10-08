@@ -9,6 +9,11 @@ license.workspace = true
 kayfabe-util.workspace = true
 kayfabe-arch.workspace = true
 kayfabe-abi.workspace = true
+# ★ 2026-10-08 — the MEASURED host-driver axis (`kf_abi::generated::matrix`, `kf_abi::hostabi`):
+# R2 resolves the host driver to its measured layouts and every block this crate sends is carried
+# to them (`src/hostabi.rs`). The edge points from the frozen tree INTO v3, which
+# `scripts/ci/dependencies.py` allows; the reverse is forbidden.
+kf-abi.workspace = true
 # ★ #156 — the arch-impl crate, for `HostClasses` PROFILES only. This crate holds the
 # host-forwarding path, and three of the class ids it allocates change with the host
 # board's generation, so the numbers live behind `kayfabe_arch::HostClasses` and in the
