@@ -1,8 +1,15 @@
 # Physical-operand oracle — does an UNPRIVILEGED host channel honour a PHYSICAL operand?
 
-**STATUS: RESEARCH, 2026-10-08. Recommendation only; no ruling written. Blocks the owner's
-Windows channel-policy decision (`OWNER_RULINGS.md` §U.3, `docs/design/the_three_channel_kinds.md`
-§3).**
+**STATUS: RESEARCH, 2026-10-08 (extended same day with the GR/compute/video classes and the
+physical-DESTINATION arm). Recommendation only; no ruling written. Blocks the owner's Windows
+channel-policy decision (`OWNER_RULINGS.md` §U.3, `docs/design/the_three_channel_kinds.md` §3).**
+
+**Headline: no method is honoured on an unprivileged channel on any engine tested or read.** The
+copy engine is the only engine whose push-buffer methods can express a physical-aperture operand,
+and the hardware refuses it (Xid 32) on a `USER` channel — for a physical SOURCE *and* a physical
+DESTINATION, on two CE instances, with and without kayfabe's belt. The 3D, compute and video
+classes have no physical-operand method at all (reading). So there is nothing to honour that the
+hardware does not refuse, and the forward-unknown route has no honoured counterexample here.
 
 ## The question
 
@@ -58,27 +65,40 @@ echoed `reply_flags=0x80` (`DENY_PHYSICAL_MODE_CE` bit 7); `deny=0` echoed `0x0`
 | CE `0xC7B5` PHYSICAL LOCAL_FB | USER, deny=0 (belt off) | **no** | no | **Xid 32** pid 2097004 | PHYSICAL REFUSED |
 | CE `0xC7B5` PHYSICAL COHERENT_SYSMEM | USER, deny=1 | **no** | no | **Xid 32** pid 2097498 | PHYSICAL REFUSED (see sysmem caveat) |
 | CE `0xC7B5` PHYSICAL COHERENT_SYSMEM | USER, deny=0 | **no** | no | **Xid 32** pid 2097704 | PHYSICAL REFUSED (see sysmem caveat) |
-| 3D `0xC997` / compute `0xC9C0` physical-target methods | — | — | — | — | **UNTESTED** (reading only) |
+| CE `0xC7B5` PHYSICAL **DST** LOCAL_FB (own page) | USER, deny=1 | **no** (own page intact) | no | **Xid 32** pid 2109287 (`DBG1 0x218e`) | PHYSICAL REFUSED |
+| CE `0xC7B5` PHYSICAL **DST** LOCAL_FB (own page) | USER, deny=0 | **no** | no | **Xid 32** pid 2109384 (`DBG1 0x218e`) | PHYSICAL REFUSED |
+| CE `0xC7B5` PHYSICAL LOCAL_FB, **2nd CE** (engine `0xa`, COPY1) | USER, deny=0 | **no** | no | **Xid 32** pid 2109492 | PHYSICAL REFUSED |
+| 3D `0xC997`, compute `0xC9C0`/`0xC6C0`+QMD, video `0xC9B0`/`0xC9B7`/`0xC9FA` | any | — | — | — | **N/A by construction** — no physical-operand method exists (reading, below) |
 | host/FIFO `0xC56F` GP_ENTRY / SEM_ADDR | — | — | — | — | **N/A by construction** (no physical operand) |
 
-The LOCAL_FB source was a VRAM object the test owns (`GET_SURFACE_PHYS_ATTR` → `addr=0x8130000
-aperture=0` VIDMEM, a sane ~135 MiB FB offset), filled with the known pattern. DST was always a
-VIRTUAL VRAM object the test owns — never a physical destination, never an address the test did not
-allocate.
+The second round (physical DST, COPY1) ran with **both demo VMs still running** (interactive +
+Windows desktop), ~700 MiB free VRAM; the oracle coexists with the VMs and the VIRTUAL control still
+delivered. `HCE_DBG1` distinguishes the fault: `0x118e` for a physical SOURCE, `0x218e` for a
+physical DESTINATION.
 
-The four Xid lines (verbatim), all `HCE_DBG0 00000300` = the host-copy-engine `LAUNCH_DMA` (`0x300`)
-that carried `SRC_TYPE=PHYSICAL`, channel RC'd:
+The LOCAL_FB source/destination was a VRAM object the test owns (`GET_SURFACE_PHYS_ATTR` →
+`addr=0x8130000`/`0x3510000` `aperture=0` VIDMEM, sane ~50–135 MiB FB offsets), filled with the
+known pattern for a source, or stamped with a sentinel for a destination. The physical DESTINATION
+is only ever **the test's own page** (owner-authorised 2026-10-08): had the hardware honoured it,
+the single thing written would be that page. No address the test did not allocate was ever named.
+
+The Xid lines (verbatim), all `HCE_DBG0 00000300` = the host-copy-engine `LAUNCH_DMA` (`0x300`) that
+carried the physical operand, channel RC'd:
 
 ```
-NVRM: Xid (PCI:0000:01:00): 32, pid=2096908, name=kf-phys-oracle, channel 0x00000007 intr1 00000004 HCE_DBG0 00000300 HCE_DBG1 0000118e   # phys_fb deny=1
-NVRM: Xid (PCI:0000:01:00): 32, pid=2097004, name=kf-phys-oracle, channel 0x00000007 intr1 00000004 HCE_DBG0 00000300 HCE_DBG1 0000118e   # phys_fb deny=0
-NVRM: Xid (PCI:0000:01:00): 32, pid=2097498, name=kf-phys-oracle, channel 0x00000007 intr1 00000004 HCE_DBG0 00000300 HCE_DBG1 0000118e   # phys_sysmem deny=1
-NVRM: Xid (PCI:0000:01:00): 32, pid=2097704, name=kf-phys-oracle, channel 0x00000007 intr1 00000004 HCE_DBG0 00000300 HCE_DBG1 0000118e   # phys_sysmem deny=0
+NVRM: Xid (PCI:0000:01:00): 32, pid=2096908, name=kf-phys-oracle, channel 0x00000007 ... HCE_DBG0 00000300 HCE_DBG1 0000118e   # phys_fb (SRC) deny=1
+NVRM: Xid (PCI:0000:01:00): 32, pid=2097004, name=kf-phys-oracle, channel 0x00000007 ... HCE_DBG0 00000300 HCE_DBG1 0000118e   # phys_fb (SRC) deny=0
+NVRM: Xid (PCI:0000:01:00): 32, pid=2097498, name=kf-phys-oracle, channel 0x00000007 ... HCE_DBG0 00000300 HCE_DBG1 0000118e   # phys_sysmem (SRC) deny=1
+NVRM: Xid (PCI:0000:01:00): 32, pid=2097704, name=kf-phys-oracle, channel 0x00000007 ... HCE_DBG0 00000300 HCE_DBG1 0000118e   # phys_sysmem (SRC) deny=0
+NVRM: Xid (PCI:0000:01:00): 32, pid=2109287, name=kf-phys-oracle, channel 0x0000005e ... HCE_DBG0 00000300 HCE_DBG1 0000218e   # phys_dst_fb (DST) deny=1
+NVRM: Xid (PCI:0000:01:00): 32, pid=2109384, name=kf-phys-oracle, channel 0x0000005e ... HCE_DBG0 00000300 HCE_DBG1 0000218e   # phys_dst_fb (DST) deny=0
+NVRM: Xid (PCI:0000:01:00): 32, pid=2109492, name=kf-phys-oracle, channel 0x0000005e ... HCE_DBG0 00000300 HCE_DBG1 0000118e   # phys_fb (SRC) COPY1 deny=0
 ```
 
 Xid 32 is the PBDMA / host-CE pushbuffer error; here the engine rejected the physical-mode
 `LAUNCH_DMA` on a `USER` channel. The host survived every RC: `nvidia-smi` healthy throughout, no
-"fell off the bus", no fatal. Host Xid count went 86 → 90 (exactly the four arms) and stayed at 90.
+"fell off the bus", no fatal. Host Xid count went 86 → 90 (first round) → 93 (the three second-round
+arms; the VIRTUAL control raised none), and both demo VMs stayed up.
 
 ### Attribution
 
@@ -98,10 +118,36 @@ free, defends the same thing, and makes the refusal explicit).
   ADMIN/KERNEL channel by design, and no kernel-module patch path to force `PRIVILEGED_CHANNEL`
   exists on this host. Per the task the control was **skipped, not hacked**. "Physical is honoured
   on a PRIVILEGED channel" is therefore **inferred** from OGKM, not measured here.
-- **3D/compute untested.** Those classes expose aperture `TARGET` fields on
-  semaphore/notifier/report/zcull/PM methods, but exercising them needs a GR/compute context not
-  built in this time-box. Inferred (not measured): the engine gates them at the same channel level
-  the CE result shows. Needs its own arm before any conclusion.
+- **3D/compute/video need no run.** ⊘ CORRECTED 2026-10-08 (superseding the earlier "untested,
+  needs its own arm"): a read of the class headers (next section) shows these classes expose **no**
+  physical-aperture method at all — every memory operand is a VA through the channel VAS. There is
+  therefore no physical operand to submit, so this is a **reading** result (N/A by construction),
+  not a run that is missing.
+
+## GR, compute and video classes — reading (no physical operand exists)
+
+The owner's channel policy turns on the GR classes, because Windows' D3D and compositor channels
+are GR (3D + compute). An enumeration of the Ada class headers in `third_party/ogkm` (595.84 tree)
+for every method that takes a memory address with an aperture/TARGET field or a physical mode:
+
+| class | what the header has for memory operands | `_APERTURE`/`_PHYSICAL`/`VID_MEM`/`SYS_MEM` count |
+|---|---|---|
+| 3D `0xC997` (ADA_A) | `SET_NOTIFY_A/B`, `SET_REPORT_SEMAPHORE_ADDRESS_*`, `PEER_SEMAPHORE_RELEASE_OFFSET_*`, I2M `LAUNCH_DMA`/`OFFSET_OUT`, texture/sampler pool bases, shader-local-memory bases — **all plain UPPER/LOWER VA pairs**; `LAUNCH_DMA` has only `DST_MEMORY_LAYOUT` (blocklinear/pitch) | **0** |
+| compute `0xC9C0` → `0xC6C0` (ADA_COMPUTE_A) + `cla0c0qmd.h` | `SET_REPORT_SEMAPHORE_*`, I2M `LAUNCH_DMA`/`OFFSET_OUT`, `SET_SHADER_LOCAL/SHARED_MEMORY_*`, QMD `CONSTANT_BUFFER_ADDR_*`/program address — **all VA** | **0** |
+| NVDEC `0xC9B0`, NVENC `0xC9B7`, OFA `0xC9FA` | semaphore and surface addresses are VAs | **0** |
+| host/FIFO `0xC56F`/`0xC86F` | GP entry + `SEM_ADDR` are VAs; aperture fixed by the instance block | no per-entry physical operand |
+
+⇒ **The copy engine (`0xC7B5`) is the only engine on this GPU whose push-buffer methods can express
+a physical-aperture operand** (`SET_SRC/DST_PHYS_MODE` + `LAUNCH_DMA_SRC/DST_TYPE`). On GR, compute
+and the video engines there is no physical-mode bit, no `SET_*_PHYS_MODE`, and no `VID_MEM`/`SYS_MEM`
+aperture enum on any address method: a guest-authored physical address cannot even be encoded, so
+the engine resolves every operand through the channel's VAS. Nothing to honour, nothing to refuse.
+(ZCULL/PM/preemption-buffer bases are set through RM controls / ctxsw, not as user-class push
+methods, so they are not a guest-reachable physical operand either.)
+
+Not run: a GR/compute VIRTUAL control (would only re-confirm the VAS path the CE control already
+shows); and whether a PRIVILEGED GR channel could use a physical operand — moot, since the method
+does not exist in the class.
 
 ## Verdict per engine class
 
@@ -111,7 +157,14 @@ free, defends the same thing, and makes the refusal explicit).
 - **Copy engine (`0xC7B5`), physical COHERENT_SYSMEM operand:** **refused/faulted** (Xid 32), both
   belt states. Cleared, with the sysmem-address caveat above (re-run with a known-good sysmem
   physical address to make it as strong as the FB arm).
-- **3D (`0xC997`) / compute (`0xC9C0`) physical-target methods:** **untested.** Not cleared.
+- **Copy engine (`0xC7B5`), physical DESTINATION (LOCAL_FB, own page):** **refused/faulted** (Xid 32,
+  `HCE_DBG1 0x218e`), both belt states. Honour would have written only the test's own page; it did
+  not — **cleared**. A physical DST is refused exactly as a physical SRC.
+- **Copy engine, second instance (COPY1, engine `0xa`):** physical SRC **refused** (Xid 32) on a
+  `USER` channel, same as COPY0 — the gating is per-channel, not per-CE-instance. Cleared.
+- **3D (`0xC997`), compute (`0xC9C0`/`0xC6C0`+QMD), video NVDEC/NVENC/OFA (`0xC9B0`/`0xC9B7`/`0xC9FA`):**
+  **N/A by construction (reading)** — no physical-operand method in the class; every operand is a VA
+  through the channel VAS. Nothing to honour. No HONOURED method on any engine.
 - **Host/FIFO (`0xC56F`) GP_ENTRY / SEM_ADDR:** **N/A by construction** — no guest-settable physical
   operand in a push entry; the pushbuffer-fetch aperture is fixed by the channel's instance block.
 
@@ -123,9 +176,17 @@ free, defends the same thing, and makes the refusal explicit).
    channel; the VAS bound (`the_three_channel_kinds.md` §4a) catches everything else. Keep
    `DENY_PHYSICAL_MODE_CE` on the forwarding channel — it is free and explicit — but it is **not**
    the load-bearing defence; the channel's `USER` level is.
-2. **Do not open the route for GR/compute (or any engine with physical-aperture methods) yet.** Run
-   this oracle per class first, or restrict forwarded entries to the copy engine.
-3. **The fault is the designed mechanism** (`the_three_channel_kinds.md` §5.3: forward a deliberate
+2. **GR/compute/video (Windows D3D + compositor channels): reading-safe.** These classes have no
+   physical-operand method — a forwarded unknown entry on a GR/compute/video channel cannot carry a
+   physical address, because the class provides no bit for one; every operand resolves through the
+   channel's VAS. So the forward-unknown route does not need a per-run clearance for them the way CE
+   did; the containment is the VAS, and there is no physical escape hatch to close. (If a future
+   chip adds a physical-mode method to a GR class, re-run this oracle for it — the oracle and the
+   header enumeration are the check.)
+3. **Physical DST is refused exactly as physical SRC**, so forwarding cannot turn a copy's
+   destination into a host-physical write either. The DENY belt is free and explicit; the load-bearing
+   defence is the channel's `USER` level plus the VAS bound.
+4. **The fault is the designed mechanism** (`the_three_channel_kinds.md` §5.3: forward a deliberate
    fault). Xid 32 here is exactly the robust-channel RC the design wants; the §5.3 *named-sentinel*
    refinement still applies, so a deliberate refusal is distinguishable in `dmesg` from a real defect.
 
@@ -140,5 +201,12 @@ KF_GATE_GPU=0 kf-phys-oracle phys_fb 1       # production: physical FB on a USER
 KF_GATE_GPU=0 kf-phys-oracle phys_fb 0       # belt off, still USER
 KF_GATE_GPU=0 kf-phys-oracle phys_sysmem 1
 KF_GATE_GPU=0 kf-phys-oracle phys_sysmem 0
+KF_GATE_GPU=0 kf-phys-oracle phys_dst_fb 1    # physical DESTINATION into the test's OWN page
+KF_GATE_GPU=0 kf-phys-oracle phys_dst_fb 0
+KF_GATE_GPU=0 KF_PHYS_ENGINE=1 kf-phys-oracle phys_fb 0   # the second copy engine (COPY1)
 # after each: dmesg | grep 'NVRM: Xid'  and  nvidia-smi   (a channel RC is a result, not a failure)
 ```
+
+A physical-operand arm cannot be written for GR/compute/video: those classes expose no physical
+method (see the reading section), so there is nothing to submit — the check there is the header
+enumeration, not a run.
