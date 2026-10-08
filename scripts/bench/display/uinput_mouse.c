@@ -4,7 +4,7 @@
 // CTRL+ALT+G again. With a udev hwdb MOUSE_DPI for its name, libinput normalises one count to
 // 1000/dpi units — what a real high-resolution mouse hands a Wayland client as unaccelerated deltas.
 //
-//   uinput_mouse <name> <n> <us>
+//   uinput_mouse <name> <n> <us> [nochord]
 #include <fcntl.h>
 #include <linux/uinput.h>
 #include <stdio.h>
@@ -39,6 +39,8 @@ int main(int argc, char **argv)
         return 2;
     }
     int n = atoi(argv[2]), us = atoi(argv[3]);
+    // argv[4] "nochord": motion only (the grab is already held, or is toggled by hand)
+    int chord = !(argc > 4 && strcmp(argv[4], "nochord") == 0);
     int fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
     if (fd < 0) {
         perror("/dev/uinput");
@@ -61,12 +63,14 @@ int main(int argc, char **argv)
     ioctl(fd, UI_DEV_SETUP, &s);
     ioctl(fd, UI_DEV_CREATE);
     sleep(2); // the compositor opens the new device
+    if (chord) {
     key(fd, KEY_LEFTCTRL, 1);
     key(fd, KEY_LEFTALT, 1);
     key(fd, KEY_G, 1);
     key(fd, KEY_G, 0);
     key(fd, KEY_LEFTALT, 0);
     key(fd, KEY_LEFTCTRL, 0);
+    }
     usleep(500000);
     for (int i = 0; i < n; i++) {
         emit(fd, EV_REL, REL_X, 1);
@@ -74,12 +78,14 @@ int main(int argc, char **argv)
         usleep(us);
     }
     usleep(500000);
+    if (chord) {
     key(fd, KEY_LEFTCTRL, 1);
     key(fd, KEY_LEFTALT, 1);
     key(fd, KEY_G, 1);
     key(fd, KEY_G, 0);
     key(fd, KEY_LEFTALT, 0);
     key(fd, KEY_LEFTCTRL, 0);
+    }
     sleep(1);
     ioctl(fd, UI_DEV_DESTROY);
     close(fd);

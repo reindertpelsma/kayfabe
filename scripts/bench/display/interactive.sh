@@ -145,7 +145,8 @@ banner() {
   ┌──────────────────────────────────────────────────────────────────────────────┐
   │ kayfabe guest window: "kayfabe guest" on ${SU}'s desktop
   │   pointer      hover = absolute tablet (the guest pointer follows yours)
-  │   CTRL+ALT+G   GRAB: keyboard + pointer locked to the guest, relative mouse;
+  │   CTRL+ALT+G   GRAB: keyboard + pointer locked to the guest, relative mouse (GNOME asks
+  │                once whether to allow inhibiting shortcuts: click Allow);
   │                press CTRL+ALT+G again to RELEASE (focus loss also releases)
   │   CTRL+ALT+F   fullscreen on/off
   │   grub menu    10 s after TianoCore; arrows, e and Enter work in the window
@@ -182,6 +183,19 @@ prep)
     make -C "$S/src/broker" report nvkvm-display-broker nvkvm-broker-testclient > "/opt/nvkvm-broker/make-$REV.log" 2>&1 \
         || die "broker build failed: /opt/nvkvm-broker/make-$REV.log"
     install -m 0755 "$S/src/broker/nvkvm-display-broker" "$S/src/broker/nvkvm-broker-testclient" /opt/nvkvm-broker/
+    # ★ §8.19: GNOME asks once whether the broker may inhibit system shortcuts (its grab) and keeps
+    # the answer in the permission store keyed by the client's desktop id; the broker's
+    # xdg_toplevel app id is "nvkvm-display-broker", which matched no .desktop file, so the
+    # grant could not be stored by that id ([measured 2026-10-08] the store held only qemu.desktop
+    # after the owner clicked Allow). A hidden desktop entry gives it one (inferred to make GNOME
+    # remember; not yet confirmed by a second grab).
+    install -D -m 0644 /dev/stdin /usr/local/share/applications/nvkvm-display-broker.desktop <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=kayfabe display broker
+Exec=/opt/nvkvm-broker/nvkvm-display-broker
+NoDisplay=true
+EOF
     git -C "$NVPV" rev-parse --short=12 "$REV" > /opt/nvkvm-broker/REV; chmod -R a+rX /opt/nvkvm-broker
     say "broker $(cat /opt/nvkvm-broker/REV): $(grep -A4 'backends:' "/opt/nvkvm-broker/make-$REV.log" | tr -s ' ' | tr '\n' ' ')"
     if [ -e "$IMG" ]; then say "guest disk $IMG exists — kept (delete it to provision again)"; exit 0; fi
