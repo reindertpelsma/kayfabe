@@ -32,7 +32,9 @@
 #
 # env: KF3_REV (kf3 binary under $W/kf3-bins; required), WIN_FLAGS (space-separated extra KF3_*
 #   flags set to 1, e.g. "KF3_PREEMPT_BIND_PROBE"), WIN_STDVGA (0), WIN_MAX_SECONDS (0 = no bound),
-#   WIN_TITLE ("kayfabe Windows"), WIN_RAM_MB (8192).
+#   WIN_TITLE ("kayfabe Windows"), WIN_RAM_MB (8192), WIN_FB_MB (4096; the store is real host VRAM:
+#   [measured, run54 at a88764b3, 2026-10-08] beside the Linux guest (fb-mb=8192) a 4096 MiB store is
+#   refused NoMemory on the 12 GiB RTX 4070, so 2048 there).
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 W=${WIN_DIR:-/var/lib/kf-windows-20261005}
@@ -153,7 +155,7 @@ stamp=$(date +%Y%m%d-%H%M%S)
 echo "WINDOWS_START kf3=$KF3_REV run=$RUN checkout=$(git -C "$HERE/../../.." rev-parse --short=8 HEAD 2>/dev/null) xid_before=$(xid_count) $(date -Is)" | tee -a "$RUN/marker.txt"
 broker_up "$RUN/broker-$stamp.log"
 
-KF3="kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,display=on,guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0,display-broker=$SOCK,display-broker-uid=$SUID"
+KF3="kf3-gpu,fb-mb=${WIN_FB_MB:-4096},bar1-size=134217728,bar2-size=33554432,display=on,guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0,display-broker=$SOCK,display-broker-uid=$SUID"
 VGA=()
 if [ "${WIN_STDVGA:-0}" = 1 ]; then VGA=(-device VGA,addr=0x9); else KF3+=",gop=on"; fi
 # shellcheck disable=SC2054
