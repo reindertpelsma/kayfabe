@@ -3156,3 +3156,53 @@ binds answered (if no bind arrives at all, the hypothesis is untested, not falsi
 `W349REFUSE-LIST` line for `0x20801303`). *Falsifier:* the refusal line again (the host refused one of the seven), or the request
 answered but `AdapterRAM`/`qwMemorySize` still 0 and NVML FB still `N/A` (then those symptoms do not come from this control; recorded
 either way, not a pass criterion).
+
+### Run54 (display/concurrency check only, store 1024 MiB beside the Linux guest — NOT interpreted for D3D) and run55 (alone, store 4096 MiB as run53) — results
+
+`[measured, run54/run55 at a88764b3, 2026-10-08]` (records in `/var/lib/kf-windows-20261005/boundary-kayfabe-54` and `-55` on the trusted host;
+committed extracts listed below):
+- **Two kf3 VMs on one GPU, store sizes.** Beside the Linux guest (kf3 `4bc62999`, `fb-mb=8192`, host VRAM 9.5 of 12 GiB used), kf3 refused the
+  Windows device at realize: `store of 4096 MiB refused: NoMemory`, and again at 2048 MiB (host free VRAM 2326 MiB). At **1024 MiB** it booted
+  (run54): the two VMs ran together for 3 min 20 s with **no new host Xid** (86 before and after), Windows reached QGA and LogonUI. Run54 is a
+  boot/display check only; the D3D probe was not run on it (the store is a confounder of an out-of-video-memory error). The Linux guest was then
+  stopped by the coordinator (owner permission) and every interpreted run below uses run53's 4096 MiB, alone on the GPU.
+- **H-gop: SUPPORTED.** The broker window and kf3's console show OVMF/TianoCore on kf3's GOP and Windows' boot spinner (QMP screendump of `kf0`,
+  [run54 t0000](run54-screendump-t0000.png)). The image then freezes on that frame: kf3 logs `boot display seed ... retired at the first change`
+  and the console keeps showing the BOOT layer. Windows lists no Basic Display adapter any more (the std VGA is gone; its old instance is
+  `CM_PROB_PHANTOM`), the NVIDIA adapter is Code 0. *The run53 "Basic Display adapter Code 10" was the QEMU std VGA (1234:1111) in the runs 1-53
+  template, never driven because Windows' POST adapter path does not start BasicDisplay on it (inferred from the OVMF GOP being on that VGA in
+  run53 and Code 10 = CM_PROB_FAILED_START; not decoded further). "display not initialised" in run53 = no kf3 GOP and no NVIDIA scanout.*
+- **The glitch the owner photographed** (a dotted yellow/green/red line about 100 rows down, plus a white speck): it is **in kf3's console surface**
+  (the screendump, i.e. the guest framebuffer at store offset 0 as kf3 scans it), not a broker presentation artefact. The speck is a frozen frame of
+  Windows' boot spinner; the dotted rows are non-pixel data written into FB offset 0 after the boot layer stopped tracking (`[inferred]`: Windows
+  RM places page-directory data at FB 0 — runs 43/44 measured a directory level there — which the frozen boot layer then shows as pixels). GOP mode
+  1920x1080, pitch 7680.
+- **H-scanout's measurement:** still **no core `UPDATE`** and **no `NVC372 IS_MODE_POSSIBLE` (0xc3720101)** in run54 or run55: the bounded method
+  diagnostic again holds exactly 8330 display methods (core 810: setup and output LUTs; windows: CSC0/CSC1 LUT entries only), the same count as
+  run53. LogonUI and dwm run in session 1 (so Windows has an interactive console session that wants a display); `Win32_VideoController` reports no
+  mode. VFIO reference (vfio-10, `gsp_ctrl_scan.py`): before its first `IS_MODE_POSSIBLE` (RPC 2649) the real GSP answers `IMP_SET_GET_PARAMETER`
+  GET IMP_ENABLE with TRUE (RPC 2648); kf-disp answers FALSE. And six `NV0073` controls the real GSP answers status 0 are refused here
+  (`0x730109` GET_HOTPLUG_CONFIG, `0x73012c` VRR_DISPLAY_INFO, `0x73013d` QUERY_DISPLAY_IDS_WITH_MUX, `0x73014b` CHECK_SIDEBAND_I2C_SUPPORT,
+  `0x731369` DP_GET_CAPS, private `0x7302a3`) plus `0x73011d` GET_CONNECTOR_TABLE and private `0x730128`/`0x730280` with non-trivial replies.
+  `SET_OD_PACKET` (`0x730288`, x8) and `GET_ACPI_DOD_DISPLAY_PORT_ATTACHMENT` (`0x730285`) are refused by the real GSP as well (`0x1f`/`0x56`),
+  so they are not candidates.
+- **H-fb7: SUPPORTED (list part and symptom).** No `W349REFUSE-LIST` for `0x20801303` in run54/55 (the host answered all seven indices); and
+  **`Win32_VideoController.AdapterRAM` 4293918720 and the class key's `qwMemorySize` 4294967296** (run53: 0 and 0) — the NVIDIA driver's own memory
+  size now equals the 4096 MiB store. (Run54 at 1024 MiB: AdapterRAM 1073741824.) `BUS_GET_INFO_V2` index 24 is still refused (not in scope).
+- **H-preempt-bind: FALSIFIED as the cause of `0x8876017c`.** Run55 (4096 MiB, alone): the probe answered 16 binds (`flags=0x2 gfxp=1`, then
+  `flags=0x1 cilp=1`, per create), and `D3D12CreateDevice` (11_0 to 12_2) and `D3D11CreateDevice` on the NVIDIA adapter **still return
+  `0x8876017c`**; Basic Render control 0; Budget 3185 MB as run53. The wall MOVED inside the create, though: after the two answered binds
+  each create now sends `GR_CTXSW_ZCULL_BIND` (`0x20801208`) — refused `0x1b` by kayfabe's channel plane ("ZCULL_BIND names client 0xc1d00040
+  from client 0xc1d00002": the KMD's kernel client binds the UMD client's channel) — and then **two software-runlist submits `0x20801111`,
+  refused**, then the Free of everything. vfio-10 answers all three (ZCULL_BIND once, `0x20801111` 13 times, status 0).
+  [probe output](run55-probe-output.txt), [RM window](run55-probe-window.log).
+
+## Run56 setup (alone, 4096 MiB): H-modeset probes
+
+Binary `kf3-bins/03932e9f` (run55's code plus two default-off display probes), flags as run55 plus `KF3_DISPLAY_IMP_ENABLE=1` (IMP_ENABLE
+answered TRUE, vfio-10's answer) and `KF3_DISPLAY_CTRL_PROBE=1` (the six NV0073 controls above answered `NV_OK` with the request echoed; for four
+the echo equals vfio-10's reply, for GET_HOTPLUG_CONFIG and DP_GET_CAPS it is all-zero).
+**H-modeset (inferred):** nvlddmkm does not commit a mode because one of these answers stops it before mode validation. *Prediction:*
+`0xc3720101` IS_MODE_POSSIBLE requests, a core `UPDATE` (`method=0x200` on `kind=Core`), a window surface, and a frame in the broker window.
+*Falsifier (fixed now):* no `0xc3720101` and no core `UPDATE` in 10 min of guest uptime with LogonUI running. If it holds, the two probes are
+bisected later and the real answers designed; if it falsifies, the next candidates are GET_CONNECTOR_TABLE and the private `0x730128`/`0x730280`.
