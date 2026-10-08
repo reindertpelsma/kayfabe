@@ -1,0 +1,36 @@
+--ce-interrupt (R35) — evidence, 2026-10-08. Branch claude/rawclient-ce-interrupt-20261008.
+Host: RTX 4070 (AD104, CE class 0xc7b5), driver 595.91.07 (open kernel module), the trusted bench host.
+Client revision under test: 9925108e (every *_9925108e* file). kf3 device binary for the guest runs: built at
+6d9e6a76 by scripts/bench/build_kf3.sh; `git diff 6d9e6a76 9925108e` touches only crates/kayfabe-isolate-host and
+crates/kayfabe-rm-ladder, so its kf-* and qemu/ sources are 9925108e's. The guest is the fast lane (KF_FROM_HOST=1:
+kernel and nvidia modules of the host, i.e. guest driver 595.91.07).
+
+MEASURED (each line names its file):
+- bare30_default_arms_9925108e.out        the 30 default arms, unchanged: 30 PASS / 0 FAIL / 0 CRASH.
+- bare_ce-interrupt_9925108e_run{1,2,3}.log, ..._unprivileged_euid65534.log
+      --ce-interrupt on bare metal, no other tenant on the GPU (hardware_cycle_9925108e.log: tenant-qemu 0 before and
+      after each), 3 runs as root and 1 as euid 65534 with no groups: PASS 4/4. 11 of 11 notifiers armed.
+      COPY0 ce-launch-interrupt: 50/50 readable, it landed on FIFO_EVENT_MTHD only (CE0 silent);
+      COPY0 host-non-stall: 50/50, FIFO_EVENT_MTHD only; COPY2 ce-launch-interrupt: 50/50, CE2 AND FIFO_EVENT_MTHD;
+      no-interrupt control on COPY0 and COPY2: 0/10 readable each, every other file silent;
+      quiet window: nothing readable; channel-sourced registration: RM refused it, status 0x1f.
+      wake_us (doorbell to epoll returning the positive token), per run: COPY0 launch median 169-180 max 280-442,
+      COPY0 host-NSI median 171-183 max 276-428, COPY2 launch median 75 max 88-98.
+- guest_kf3_*_9925108e.*                  the same client in the kf3 fast guest: --ce-client PASS (control), --ce-interrupt FAIL.
+      11 notifiers asked, 4 armed (CE0 CE1 CE3 FIFO_EVENT_MTHD); EVENT_SET_NOTIFICATION for CE2 and CE4..CE9 answered
+      NV_ERR_NOT_SUPPORTED (0x56). COPY0 (a Passthrough channel in kf3, host engine 0x9): launch interrupt 0/3 and host
+      NSI 0/3 readable, the leg gives up after 3 silent iterations, while the semaphore (3/3), the host fence (3/3) and
+      the copied data (3/3) are all present. COPY2 (Passthrough, engine 0xb): launch interrupt 50/50 readable on
+      FIFO_EVENT_MTHD, median 476 us, max 652 us. kf3 log: no line contains 'NSI'; see the key lines file.
+- bare_tenant_noise_*                     the instrument seeing another tenant. With a Windows desktop VM running on the same
+      GPU the quiet window was never clean (200 of 200 windows, 60 s: CE3 and FIFO_EVENT_MTHD readable with nothing
+      submitted); a first run with two display VMs present failed the same window; and once (no VM was present at the
+      end of that run, one was starting around its start — INFERRED, not established) a single FIFO_EVENT_MTHD edge
+      appeared in 1 of 10 no-interrupt iterations. These are not results about kayfabe.
+- nvos_event_flags_by_tag.txt             NV01_EVENT_WITHOUT_EVENT_DATA and NV01_EVENT_NONSTALL_INTR read from NVIDIA's
+      open-gpu-kernel-modules nvos.h at every one of the 30 driver-matrix tags: identical (0x10000000, 0x08000000).
+
+INFERRED (not measured): why COPY0 is silent in the guest — kf3's channel plane relays host FIFO_EVENT_MTHD edges for
+its Translated rings on host COPY2 (kf3 log: "completions on FIFO_EVENT_MTHD + CE2"), and its interrupt plane maps host
+CE2 to a guest vector, while a Passthrough COPY0 channel's FIFO_EVENT_MTHD edge (what COPY0's interrupt is on bare metal)
+has no relay. The kf3 key lines are the evidence for the inputs; the connection between them is a reading.

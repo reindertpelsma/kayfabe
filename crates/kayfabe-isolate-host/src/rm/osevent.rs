@@ -55,17 +55,35 @@
 //!
 //! # The controls (falsifiers stated BEFORE the run)
 //!
-//! - **F1** *(the claim)*: a copy launched with the interrupt edge makes exactly ITS notifier's file
-//!   readable within [`CE_IRQ_WAKE_BOUND`], 50 times of 50. Falsified by one silent iteration.
-//! - **F2** *(negative control, other notifiers)*: while that happens, the OTHER ten events
-//!   (`CE0..CE9` minus the engine's own, plus `FIFO_EVENT_MTHD`), each on its own file, stay silent.
-//!   Falsified by any of them becoming readable.
-//! - **F3** *(negative control, no interrupt edge)*: the SAME copy + semaphore with NO interrupt bit
-//!   leaves ALL eleven files silent. This is the control that separates "the interrupt woke us" from
-//!   "the work completing woke us".
-//! - **F4** *(background)*: with nothing submitted all eleven are silent for [`CE_IRQ_QUIET`].
-//!   ⊘ These notifiers are GPU-wide: another client's copies on the same engine would wake CE0 too.
-//!   F3 and F4 are what bound that.
+//! - **F1** *(the claim)*: a copy launched with the interrupt edge makes a file of its leg's POSITIVE
+//!   SET readable within [`CE_IRQ_WAKE_BOUND`], 50 times of 50, with its semaphore, its host fence (host
+//!   leg) and every copied word present. The set is the engine's own notifier `CE<n>` and the host's
+//!   default `FIFO_EVENT_MTHD`; which of them a given engine lands on is printed per leg, not
+//!   assumed. Falsified by one silent iteration (a leg gives up after [`CE_IRQ_GIVE_UP_AFTER`]).
+//! - **F2** *(negative control, other notifiers)*: while that happens, every armed file OUTSIDE the set
+//!   stays silent. Falsified by any of them becoming readable.
+//! - **F3** *(negative control, no interrupt edge)*: the SAME copy + semaphore with NO interrupt bit,
+//!   on each engine used, leaves ALL armed files silent. This is the control that separates "the
+//!   interrupt woke us" from "the work completing woke us".
+//! - **F4** *(background)*: with nothing submitted all armed files are silent for [`CE_IRQ_QUIET`].
+//!   ⊘ These notifiers are GPU-wide: another client's copies wake them too, so the arm waits up to
+//!   [`CE_IRQ_QUIET_PATIENCE`] for a clean window and FAILS by name if it never gets one.
+//!
+//! # What the first runs observed (RTX 4070 / 595.91.07, 2026-10-08, `traces/rawclient_ce_interrupt_20261008/`)
+//!
+//! - Bare metal, 4 of 4 runs PASS with no other tenant on the GPU, one of them as euid 65534: the
+//!   `COPY0` launch interrupt and the host `NON_STALL_INTERRUPT` both land on `FIFO_EVENT_MTHD` only
+//!   (`CE0` is silent: `COPY0`/`COPY1` are the graphics copy engines); an asynchronous `COPY2` launch
+//!   interrupt lands on `CE2` AND `FIFO_EVENT_MTHD`; a copy with no interrupt edge wakes nothing; a
+//!   channel-sourced registration is refused by RM (`0x1f`). Wake latency medians 75-183 us, max
+//!   under 0.65 ms.
+//! - In the kf3 fast guest the same client FAILS: kf3 answers `NV_ERR_NOT_SUPPORTED` to arming `CE2`
+//!   and `CE4..CE9`; the `COPY0` channel (a Passthrough channel there) never wakes either file on
+//!   either edge while its semaphore, fence and data are all present; the `COPY2` launch interrupt
+//!   does wake `FIFO_EVENT_MTHD` (median 476 us). This arm is where that shows.
+//! - With another tenant's VM on the GPU the quiet window is never clean and the arm FAILS on it —
+//!   the GPU-wide notifiers do carry the other tenant's interrupts.
+//! - The two `NV01_EVENT_*` flag bits are read from `nvos.h` at all 30 matrix tags: identical.
 
 use super::*;
 use kayfabe_linux_raw::{PollTimeout, Poller, ReadyTokens};

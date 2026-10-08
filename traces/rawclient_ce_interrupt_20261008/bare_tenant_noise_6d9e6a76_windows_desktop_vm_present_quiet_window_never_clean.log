@@ -1,0 +1,28 @@
+info  RMLADDER ARGV     = [--ce-interrupt]
+ok    R2 version         = "595.91.07"
+ok    R4 hClient         = 0xc1d00037
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=6d9e6a76
+info  R35 CE interrupt    = GPU 0, euid 0 — non-stall events armed through RAW RM IOCTLS ONLY (ALLOC_OS_EVENT, NV01_EVENT_OS_EVENT, EVENT_SET_NOTIFICATION), polled with epoll. No libcuda is loaded by this process
+info  R35 the bar         = per interrupt leg 50 of 50: a file of the leg's positive set (its engine's own notifier or the host's default one) readable within 2000 ms, the semaphore holding the payload, every copied word verified; every file OUTSIDE the set silent; the no-interrupt control silent; the quiet window silent. ⊘ A wake is a WAKE: the semaphore is read after it
+info  R35 notifier map    = CE0=23 CE1=24 CE2=25 CE3=26 CE4=27 CE5=28 CE6=29 CE7=30 CE8=31 CE9=32 FIFO_EVENT_MTHD=35 (indices read from the driver matrix at the host's version); copy-engine class 0xc7b5
+FAIL   R35 quiet window      = nothing submitted: readable files = CE3,FIFO_EVENT_MTHD (after 200 window(s), 60110 ms of waiting; patience 60000 ms)
+info  R35 channel source  = RM REFUSED a non-stall event whose source is the CHANNEL with status 0x1f (NV_ERR_INVALID_ARGUMENT is 0x1f): the engine non-stall lists hang off the SUBDEVICE (event_notification.c:688-703), so the events above use it
+FAIL   R35 leg ce-launch-interrupt@COPY0        = positive any of [CE0,FIFO_EVENT_MTHD]: readable 50/50 (it landed on: FIFO_EVENT_MTHD), wake_us min 40 median 58 p90 130 max 219 (n=50); semaphore at the wake 50/50, by the bound 50/50; data verified 50/50; files OUTSIDE the set that fired: CE3; stale-before 3/50; repeat reports 76
+R35_LATENCIES_US leg=ce-launch-interrupt@COPY0 92,74,73,73,67,86,67,70,72,63,68,69,60,55,57,54,215,53,53,59,98,53,52,49,48,43,49,58,54,47,48,54,58,208,55,219,59,54,53,49,130,214,62,49,40,54,59,56,171,52
+FAIL   R35 leg host-non-stall-interrupt@COPY0   = positive any of [FIFO_EVENT_MTHD]: readable 50/50 (it landed on: FIFO_EVENT_MTHD), wake_us min 43 median 56 p90 91 max 334 (n=50); semaphore at the wake 50/50, by the bound 50/50, host fence 50/50; data verified 50/50; files OUTSIDE the set that fired: CE3; stale-before 2/50; repeat reports 77
+R35_LATENCIES_US leg=host-non-stall-interrupt@COPY0 55,56,56,55,72,45,56,235,67,334,63,137,62,55,45,43,56,62,55,64,56,46,60,100,53,55,91,74,55,52,176,56,54,56,48,52,60,54,55,56,50,53,69,53,59,59,58,54,59,52
+FAIL   R35 leg no-interrupt-control@COPY0       = positive (none expected): readable 0/10 (it landed on: none), no wake; semaphore at the wake 0/10, by the bound 10/10; data verified 10/10; files OUTSIDE the set that fired: CE3,FIFO_EVENT_MTHD; stale-before 0/10; repeat reports 0
+R35_LATENCIES_US leg=no-interrupt-control@COPY0 
+FAIL   R35 leg ce-launch-interrupt@COPY2        = positive any of [CE2,FIFO_EVENT_MTHD]: readable 50/50 (it landed on: CE2,FIFO_EVENT_MTHD), wake_us min 40 median 46 p90 63 max 218 (n=50); semaphore at the wake 50/50, by the bound 50/50; data verified 50/50; files OUTSIDE the set that fired: CE3; stale-before 1/50; repeat reports 119
+R35_LATENCIES_US leg=ce-launch-interrupt@COPY2 48,61,49,64,49,48,46,40,42,58,46,46,44,61,45,44,48,48,63,45,46,51,50,46,56,45,40,45,48,46,131,45,47,47,46,140,46,45,41,48,48,43,218,48,43,45,44,45,143,56
+FAIL   R35 leg no-interrupt-control@COPY2       = positive (none expected): readable 0/10 (it landed on: none), no wake; semaphore at the wake 0/10, by the bound 10/10; data verified 10/10; files OUTSIDE the set that fired: CE3,FIFO_EVENT_MTHD; stale-before 0/10; repeat reports 0
+R35_LATENCIES_US leg=no-interrupt-control@COPY2 
+FAIL  R35 quiet window: CE3,FIFO_EVENT_MTHD became readable with nothing submitted, in every one of 200 windows over 60110 ms (another tenant on this GPU?)
+FAIL  R35 ce-launch-interrupt@COPY0: NEGATIVE CONTROL FIRED in 50 iterations (tokens CE3)
+FAIL  R35 host-non-stall-interrupt@COPY0: NEGATIVE CONTROL FIRED in 50 iterations (tokens CE3)
+FAIL  R35 no-interrupt-control@COPY0: NEGATIVE CONTROL FIRED in 10 iterations (tokens CE3,FIFO_EVENT_MTHD)
+FAIL  R35 ce-launch-interrupt@COPY2: NEGATIVE CONTROL FIRED in 49 iterations (tokens CE3)
+FAIL  R35 no-interrupt-control@COPY2: NEGATIVE CONTROL FIRED in 10 iterations (tokens CE3,FIFO_EVENT_MTHD)
+R35_OUTCOME=(F)
+done — CE interrupt only (WITH FAILED EVIDENCE)
