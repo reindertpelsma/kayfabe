@@ -46,7 +46,9 @@
 //! RM sees is one of the memfd's. A hard in-process timeout (`KF_USERD_TIMEOUT_S`, default 150)
 //! ends the process.
 
-use kf_abi::submit::{ENGINE_TYPE_COPY0, Nv0041SurfacePhysAttr, NV0041_CTRL_CMD_GET_SURFACE_PHYS_ATTR};
+use kf_abi::submit::{
+    ENGINE_TYPE_COPY0, NV0041_CTRL_CMD_GET_SURFACE_PHYS_ATTR, Nv0041SurfacePhysAttr,
+};
 use kf_harness::Ledger;
 use kf_host::{HostRm, MapBacking, RingSpec, RmError};
 use kf_linux_raw::{Backing, CachePolicy, DevDir, HostOffset, HostPageSize, HostProt, SharedRam};
@@ -63,7 +65,11 @@ const USERD_ADDR_LIMIT: u64 = 1 << 40;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let case = args.get(1).map(String::as_str).unwrap_or("ctl_vram").to_owned();
+    let case = args
+        .get(1)
+        .map(String::as_str)
+        .unwrap_or("ctl_vram")
+        .to_owned();
     let offset = args
         .get(2)
         .and_then(|s| u64::from_str_radix(s.trim_start_matches("0x"), 16).ok())
@@ -131,7 +137,9 @@ fn describe(rm: &HostRm, ram: &SharedRam, off: u64, len: u64) -> Result<u32, Str
 
 fn run(l: &mut Ledger, case: &str, offset: u64) -> Result<(), String> {
     if !offset.is_multiple_of(PAGE) || offset >= BIG_BYTES {
-        return Err(format!("offset {offset:#x} not a page inside the 8 GiB object"));
+        return Err(format!(
+            "offset {offset:#x} not a page inside the 8 GiB object"
+        ));
     }
     let dev = DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
     let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes)
@@ -194,7 +202,15 @@ fn run(l: &mut Ledger, case: &str, offset: u64) -> Result<(), String> {
         .alloc_device_local(RING_BYTES)
         .map_err(|e| format!("ring obj: {e:?}"))?;
     let ring_va = rm
-        .map(space, ring, MapBacking::Dedicated, 0, RING_BYTES, None, false)
+        .map(
+            space,
+            ring,
+            MapBacking::Dedicated,
+            0,
+            RING_BYTES,
+            None,
+            false,
+        )
         .map_err(|e| format!("map ring: {e:?}"))?;
     rm.invalidate_tlb(space)
         .map_err(|e| format!("invalidate: {e:?}"))?;
@@ -219,7 +235,11 @@ fn run(l: &mut Ledger, case: &str, offset: u64) -> Result<(), String> {
                 iova.map_or_else(|| "vram".to_owned(), |a| format!("{a:#x}"))
             );
             if case == "ctl_vram" {
-                l.check("control_born", true, "VRAM USERD birth works (rig is sound)");
+                l.check(
+                    "control_born",
+                    true,
+                    "VRAM USERD birth works (rig is sound)",
+                );
             }
             let _ = rm.free(chan.chan);
             let _ = rm.free(chan.tsg);
