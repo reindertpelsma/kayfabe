@@ -336,6 +336,12 @@ struct Relay {
     chan: kf_host::Channel,
     /// The guest token (for the log).
     idx: u32,
+    /// ⚠ DIAGNOSTIC only (`KF3_RELAY_PB_PEEK=1`, default off): the guest VA space's mirror, the
+    /// ring's VA, and how many GP entries were peeked — see [`ChanPlane::relay_peek`].
+    mirror: Arc<Mirror>,
+    views: StoreViews,
+    gpfifo_va: u64,
+    peeked: u32,
 }
 
 /// The I/O of one relay step ([`kf_chan::userd_relay::step`]).
@@ -4103,6 +4109,7 @@ impl ChanPlane {
         };
         match kf_chan::userd_relay::step(&mut g.st, &mut io) {
             Ok(kf_chan::userd_relay::Outcome::Forwarded(p)) => {
+                self.relay_peek(g, p);
                 if g.st.forwarded <= 8 || g.st.forwarded.is_power_of_two() {
                     eprintln!(
                         "kf3: chan token {:#x} (host {ht:#x}) USERD relay: GP_PUT {p:#x} forwarded and rung (#{}) — no GP entry or push-buffer word read",
@@ -4128,6 +4135,69 @@ impl ChanPlane {
                 );
                 Some(false)
             }
+        }
+    }
+
+    /// ⚠⚠ DIAGNOSTIC (2026-10-08, `KF3_RELAY_PB_PEEK=1`, default off — the one place a relayed
+    /// twin's guest bytes are READ, never executed or forwarded by kayfabe): log the first 12 GP entries
+    /// a relayed twin was rung for, with up to 48 words of each segment, so a host RC of that twin
+    /// (`[measured, run71 at 2959ed5f]` Xid 32, PBDMA `DEVICE` interrupt) can be traced to a method, and
+    /// so the owner's physical-operand question has a sample from a per-process channel. Bounded per
+    /// twin; reads go through the mirror's own rows (an unmapped VA is reported, never followed).
+    fn relay_peek(&self, g: &mut Relay, new_put: u32) {
+        static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        if !*ON.get_or_init(|| std::env::var("KF3_RELAY_PB_PEEK").as_deref() == Ok("1")) {
+            return;
+        }
+        let entries = g.st.entries.max(1);
+        let mirror = g.mirror.clone();
+        let store_len =
+            store_read_bound(crate::tspace::enabled(), mirror.fb_len, self.layout.carve());
+        let mut mem = Mem {
+            mirror: &mirror,
+            ram: self.ram,
+            rm: self.rm,
+            store: self.store,
+            store_len,
+            views: &mut g.views,
+            inbox: &self.inbox,
+        };
+        // GP entries are peeked from index 0 up to the first 12 the guest rang for (the twin's first
+        // submissions are what an early RC follows).
+        let mut idx = g.peeked % entries;
+        while g.peeked < 12 && idx != new_put {
+            let mut e = [0u8; 8];
+            let gpva = g.gpfifo_va + u64::from(idx) * 8;
+            let line = match mem.read(gpva, &mut e) {
+                Err(why) => format!("GP[{idx:#x}] @{gpva:#x}: unreadable ({why})"),
+                Ok(()) => {
+                    let lo = u32::from_le_bytes([e[0], e[1], e[2], e[3]]);
+                    let hi = u32::from_le_bytes([e[4], e[5], e[6], e[7]]);
+                    let va = u64::from(lo & !3) | (u64::from(hi & 0xff) << 32);
+                    let words = (hi >> 10) & 0x1f_ffff;
+                    let n = words.min(48) as usize;
+                    let mut buf = vec![0u8; n * 4];
+                    let body = match mem.read(va, &mut buf) {
+                        Ok(()) => buf
+                            .chunks_exact(4)
+                            .map(|c| {
+                                format!("{:08x}", u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                            })
+                            .collect::<Vec<_>>()
+                            .join(" "),
+                        Err(why) => format!("unreadable ({why})"),
+                    };
+                    format!(
+                        "GP[{idx:#x}] lo={lo:#010x} hi={hi:#010x} va={va:#x} words={words}: {body}"
+                    )
+                }
+            };
+            eprintln!(
+                "kf3: chan token {:#x} RELAY-PEEK (diagnostic) {line}",
+                g.idx
+            );
+            g.peeked += 1;
+            idx = (idx + 1) % entries;
         }
     }
 
@@ -4361,6 +4431,7 @@ impl ChanPlane {
                 err_ctx: 0,
             };
             let space = mirror.space;
+            let relay_mirror = mirror.clone();
             let rows = mirror.rows.clone();
             // ★ P5c: counted NOW (on the drainer, in statement order), so a VA-space free that
             // follows can never recycle the space under a birth still queued.
@@ -4497,6 +4568,10 @@ impl ChanPlane {
                                     mem,
                                     chan,
                                     idx,
+                                    mirror: relay_mirror.clone(),
+                                    views: StoreViews::new(),
+                                    gpfifo_va: a.gpfifo_va,
+                                    peeked: 0,
                                 })));
                             }
                             true
