@@ -800,7 +800,7 @@ impl HostRmBackend {
     /// anything is submitted, then runs the legs and the controls described in the module doc.
     ///
     /// # Errors
-    /// Whatever a setup step refused, by name. A failed MEASUREMENT is not an error: it is in
+    /// Whatever a setup step refused, by name. A failed check is not an error: it is in
     /// [`CeIrqEvidence::failures`].
     pub fn prove_ce_interrupt(
         &mut self,
