@@ -2743,6 +2743,13 @@ pub mod ce {
     /// `NVC7B5_SET_SEMAPHORE_PAYLOAD` @ `0x248` — the value the engine will write
     /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:51-52`).
     pub const SET_SEMAPHORE_PAYLOAD: u32 = 0x0000_0248;
+    /// `SET_*_PHYS_MODE_TARGET_LOCAL_FB` — `TARGET` (`1:0`) value 0 (`clc7b5.h:68,77`): a
+    /// physical operand that resides in the local framebuffer.
+    pub const PHYS_MODE_TARGET_LOCAL_FB: u32 = 0;
+    /// `SET_*_PHYS_MODE_TARGET_COHERENT_SYSMEM` — value 1 (`clc7b5.h:69,78`).
+    pub const PHYS_MODE_TARGET_COHERENT_SYSMEM: u32 = 1;
+    /// `SET_*_PHYS_MODE_TARGET_NONCOHERENT_SYSMEM` — value 2 (`clc7b5.h:70,79`).
+    pub const PHYS_MODE_TARGET_NONCOHERENT_SYSMEM: u32 = 2;
     /// `NVC7B5_LAUNCH_DMA` @ `0x300` — the method that starts the copy
     /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:84`).
     pub const LAUNCH_DMA: u32 = 0x0000_0300;

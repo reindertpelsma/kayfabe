@@ -506,6 +506,16 @@ pub static HOST_CONTROLS: &[HostControl] = &[
         0x2080_0404,
         NV2080_CTRL_TIMER_GET_REGISTER_OFFSET_PARAMS
     ),
+    // ★ A host-side query of a surface's PHYSICAL address (VIDMEM FB offset / SYSMEM addr),
+    // used only by the physical-operand oracle (`kf-harness kf-phys-oracle`) to name the
+    // address of a page the test itself allocated. The layout is a fixed SDK struct; the
+    // matrix carries one captured layout for it, so the carry is an identity on every
+    // driver in the matrix.
+    hc!(
+        "NV0041_CTRL_CMD_GET_SURFACE_PHYS_ATTR",
+        0x0041_0103,
+        NV0041_CTRL_GET_SURFACE_PHYS_ATTR_PARAMS
+    ),
     hc!(
         "NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2",
         0x0000_0205,

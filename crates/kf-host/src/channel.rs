@@ -226,6 +226,24 @@ fn negctl_skip_cap_bracket() -> bool {
 /// (`kernel_channel.c:278-290`), so a set bit in the reply can only be RM's own verdict.
 #[must_use]
 pub fn channel_alloc_request(ring: &RingSpec, engine_type: u32) -> ChannelAllocParams {
+    channel_alloc_request_with(ring, engine_type, true)
+}
+
+/// Like [`channel_alloc_request`] but with `DENY_PHYSICAL_MODE_CE` chosen by the caller.
+///
+/// ⊘ **Production always passes `deny_physical_ce = true`** ([`channel_alloc_request`]). The
+/// `false` form exists for ONE caller: the physical-operand oracle (`kf-harness kf-phys-oracle`),
+/// which exercises whether the hardware honours a physical CE operand on a channel that is
+/// unprivileged **but without kayfabe's own CE-deny belt** — isolating the belt's contribution
+/// from the channel's `PRIVILEGE_USER` level (`OWNER_RULINGS.md` §U.3; the owner's Windows
+/// channel-policy question). It never relaxes the `PRIVILEGED_CHANNEL` (5:5) clear, so the born
+/// channel's `USER` level is still checked in the alloc reply, whichever value this flag takes.
+#[must_use]
+pub fn channel_alloc_request_with(
+    ring: &RingSpec,
+    engine_type: u32,
+    deny_physical_ce: bool,
+) -> ChannelAllocParams {
     ChannelAllocParams {
         h_object_error: ring.err_notifier,
         gp_fifo_offset: ring.gp_fifo_va,
@@ -238,7 +256,11 @@ pub fn channel_alloc_request(ring: &RingSpec, engine_type: u32) -> ChannelAllocP
         // physical memory: `[measured p6b8]` UVM's CE launches on subchannel 4 escaped a
         // subchannel-keyed rewriter, verbatim and physical, with no Xid (fixed at commit
         // 00f62991).
-        flags: NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE,
+        flags: if deny_physical_ce {
+            NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE
+        } else {
+            0
+        },
         h_context_share: 0,
         h_va_space: 0,
         h_userd_memory_0: ring.userd_memory,
@@ -753,11 +775,29 @@ impl HostRm {
         engine_type: u32,
         ring: RingSpec,
     ) -> Result<Channel, RmError> {
+        self.birth_channel_with(space, engine_type, ring, true)
+    }
+
+    /// Like [`HostRm::birth_channel`] but with `DENY_PHYSICAL_MODE_CE` chosen by the caller.
+    ///
+    /// ⊘ Production uses [`HostRm::birth_channel`] (`deny_physical_ce = true`). The `false` form is
+    /// for the physical-operand oracle only (see [`channel_alloc_request_with`]); the reply check
+    /// still proves the channel `USER`.
+    ///
+    /// # Errors
+    /// As [`HostRm::birth_channel`].
+    pub fn birth_channel_with(
+        &self,
+        space: VaSpace,
+        engine_type: u32,
+        ring: RingSpec,
+        deny_physical_ce: bool,
+    ) -> Result<Channel, RmError> {
         if !ring.userd_offset.is_multiple_of(USERD_ALIGNMENT) {
             return Err(RmError::Other(USERD_OFFSET_MISALIGNED));
         }
         let tsg = self.birth_group(space, engine_type)?;
-        self.birth_member(tsg, engine_type, ring, true)
+        self.birth_member(tsg, engine_type, ring, true, deny_physical_ce)
             .inspect_err(|_| {
                 let _ = self.free(tsg);
             })
@@ -804,6 +844,10 @@ impl HostRm {
     /// (`kernel_channel.c:607-668`) — one GR context, as CUDA's one-ctxshare TSG has on hardware.
     /// A failure frees the channel (never the group, which the caller owns).
     ///
+    /// `deny_physical_ce` is `DENY_PHYSICAL_MODE_CE`: production passes `true` on every channel
+    /// (see [`channel_alloc_request`]); only the physical-operand oracle passes `false`, and the
+    /// `born_user` reply check proves the channel `USER` either way.
+    ///
     /// # Errors
     /// [`USERD_OFFSET_MISALIGNED`] before any host call; else the host's refusal.
     pub fn birth_member(
@@ -812,11 +856,12 @@ impl HostRm {
         engine_type: u32,
         ring: RingSpec,
         first: bool,
+        deny_physical_ce: bool,
     ) -> Result<Channel, RmError> {
         if !ring.userd_offset.is_multiple_of(USERD_ALIGNMENT) {
             return Err(RmError::Other(USERD_OFFSET_MISALIGNED));
         }
-        let request = channel_alloc_request(&ring, engine_type);
+        let request = channel_alloc_request_with(&ring, engine_type, deny_physical_ce);
         let mut chan_params = [0u8; ChannelAllocParams::SIZE];
         if request.encode_into(&mut chan_params).is_err() {
             return Err(RmError::Other(ABI_ENCODE_FAILED));
