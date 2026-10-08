@@ -823,7 +823,15 @@ impl ChannelPolicy {
                     self.refused += 1;
                     Some(Self::refusal(status, &why, cmd))
                 }
-                ChanAnswer::NotOurs | ChanAnswer::Deferred(_) => {
+                // ⚠ 2026-10-08 (EXPERIMENT `KF3_WIN_TWIN_DEFAPI_OBJECT`, default off): the plane
+                // authors a host object on a Windows user-work twin as an act — held exactly like an
+                // engine object's alloc ([`Self::settle_alloc`]). `[measured, run74 at 082117df]`
+                // without this arm the act ran but the guest read `0x56`.
+                ChanAnswer::Deferred(d) => {
+                    self.pending = Some(d);
+                    None
+                }
+                ChanAnswer::NotOurs => {
                     self.refused += 1;
                     Some(Self::refusal(
                         NV_ERR_NOT_SUPPORTED,
@@ -3503,6 +3511,30 @@ mod tests {
                 }]
             );
         }
+    }
+
+    /// ⚠ EXPERIMENT `KF3_WIN_TWIN_DEFAPI_OBJECT` (`[measured, run74 at 082117df]`): when the plane
+    /// answers a 5080 alloc with an act, the reply is HELD for that act (as an engine object's is) —
+    /// not turned into `NOT_SUPPORTED`.
+    #[test]
+    fn a_deferred_5080_answer_holds_the_reply() {
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
+        let sink: ChanSink = Arc::new(|_| ChanAnswer::Deferred(kf_gsp::Deferred::new()));
+        let mut link = ChannelPolicy::new(abi, kf_abi::GuestOs::Windows, sink);
+        let payload: Vec<u8> = [0xc1d0_0027u32, 0xff04_000c, 0xff1f_e010, 0x5080, 0, 0, 0, 0]
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        let cmd = RpcCommand {
+            function: RpcFunction::RmAlloc,
+            code: 0x67,
+            sequence: 1,
+            payload,
+            elements: 1,
+            delivered: Vec::new(),
+        };
+        assert_eq!(link.respond(&cmd), None, "no refusal: the object seat builds the reply");
+        assert!(link.defers(&cmd).is_some(), "the reply waits for the act");
     }
 
     #[test]
