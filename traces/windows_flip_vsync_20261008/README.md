@@ -93,3 +93,24 @@ model when the link is built, and only the model's flag was set. Nothing about H
 the next commit (`DisplayPolicy::answering_hdcp_state` adds the claim; a link-level test answers it through
 `respond()`). The `xid=57` at the end is dmesg's ring rotating (the newest Xid line is 22:14:45, before this session).
 Run 95 repeats run 94's setup with the fix; the falsifier of §4 stands as written.
+
+## 6. Run 95 (binary `kf3-bins/5f0e3b37`, `KF3_DISPLAY_HDCP_STATE` + write trace): H-hdcp FALSIFIED
+
+`[measured, run95 at 5f0e3b37, RTX 4070, 2026-10-08]` files `run95-*`. `0x00730280` answered `result=0x0` 4 of 4 times
+(flags 0, the hardware's answer); the guest still wrote **no display PUT** after the modeset (`puts=39` at the stall
+marker, ~15 s after launch), no window latch, the same three short LAST_DATA enables (15.4 ms with a VSync at the frame
+edge, 4.7 ms with one, 4.2 ms without one), stall marker, 9 Passthrough frees, bugcheck stop. The refusal of
+GET_HDCP_STATE is not what keeps the KMD from programming the primary surface.
+
+## 7. Run 96 setup: H-corelatch (the last boot of the time-box; falsifier stated before the run)
+
+The one remaining measured difference in the same stretch: `[measured, VFIO DVI reference boot3, RTX 4070, 2026-10-08]`
+Windows' modeset core PUTs come one per frame on hardware (12.520125, 12.535982, 12.552647 s — each core update completes at
+a frame edge and the KMD waits for it), while under kf3 the same PUT sequence completes within 3 ms (`[measured, run93,
+2026-10-08]` 265784.565581-265784.568386): kf3 latches every update group that includes the core at once.
+- **H-corelatch** (inferred): the KMD's state machine expects the modeset's core updates to complete at frame edges (it
+  enables LAST_DATA to see the next one); when they have all completed before its first VSync, it takes the path that
+  disables LAST_DATA and never programs the primary surface. Variable: `KF3_DISPLAY_CORE_AT_VBLANK=1` (a core update on
+  an active head latches and notifies at that head's next vblank; the first modeset, with no active head, still at once;
+  default off; engine test `a_core_update_on_an_active_head_waits_for_the_vblank_only_under_the_experiment`). LOADV and
+  HDCP OFF. *Falsifier:* the display PUT count stays at the modeset's value through the TDR (no window programming).

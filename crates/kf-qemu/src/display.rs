@@ -2038,6 +2038,15 @@ impl Device {
         }
         let trace = std::env::var("KF3_DISPLAY_TRACE").is_ok_and(|v| v == "1");
         engine.trace = trace;
+        // ⚠ EXPERIMENT (default off, 2026-10-08, H-corelatch): core updates latch at an active
+        // head's vblank, as the hardware's do (`kf_disp::engine::Engine::core_latch_at_vblank`)
+        engine.core_latch_at_vblank =
+            std::env::var("KF3_DISPLAY_CORE_AT_VBLANK").is_ok_and(|v| v == "1");
+        if engine.core_latch_at_vblank {
+            eprintln!(
+                "kf3: display: EXPERIMENT KF3_DISPLAY_CORE_AT_VBLANK=1 — a core update on an active head latches (and notifies) at its next vblank"
+            );
+        }
         let loadv = loadv_on();
         let wtrace = write_trace_on();
         let vsync_traced = AtomicU32::new(0);

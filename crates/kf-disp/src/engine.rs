@@ -515,6 +515,12 @@ pub struct Engine {
     /// against the cap too. In kayfabe a flip copies a finished buffer, so it never tears; the gate
     /// is about rate only. On by default.
     pub tear_gate: bool,
+    /// ⚠ EXPERIMENT (default `false`, 2026-10-08, H-corelatch; `KF3_DISPLAY_CORE_AT_VBLANK=1`): an
+    /// update group that includes the CORE latches at the next vblank of an active head, as the
+    /// hardware's does, instead of at once. `[measured, VFIO DVI reference boot3, RTX 4070,
+    /// 2026-10-08]` Windows' modeset core PUTs come one per frame (12.520125, 12.535982, 12.552647 s:
+    /// it waits a frame for each), while under kf3 the same PUTs complete within 3 ms (run 93).
+    pub core_latch_at_vblank: bool,
     /// Per head: a window of it latched since its last tick (the gate's state).
     presented: [bool; 8],
     /// Per head: presents by path.
@@ -538,6 +544,7 @@ impl Engine {
             method_trace_remaining: 0,
             method_trace_configured: false,
             tear_gate: true,
+            core_latch_at_vblank: false,
             presented: [false; 8],
             pace: [PaceCounts::default(); 8],
         }
@@ -1015,7 +1022,10 @@ impl Engine {
         let gated = tear_head
             .filter(|h| self.tear_gate && vblank_head.is_none() && self.presented[*h as usize]);
         let park = if has_core {
-            None
+            // ⚠ H-corelatch: the first active head's next vblank (none active: at once, as before)
+            self.core_latch_at_vblank
+                .then(|| heads.iter().find(|m| m.period_ns > 0).map(|m| m.head))
+                .flatten()
         } else {
             vblank_head.or(gated)
         };

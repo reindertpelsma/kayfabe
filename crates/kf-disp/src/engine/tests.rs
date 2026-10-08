@@ -1104,3 +1104,45 @@ fn indexed_color_table_overflow_stops_before_update() {
     );
     assert_eq!(e.updates, 0);
 }
+
+/// ⚠ H-corelatch (`Engine::core_latch_at_vblank`, default off): once a head is active, a core
+/// UPDATE latches — and states its notifier — at that head's next vblank, not at once; with no
+/// active head (the first modeset) it still latches at once. Off, every core update is immediate.
+#[test]
+fn a_core_update_on_an_active_head_waits_for_the_vblank_only_under_the_experiment() {
+    for on in [false, true] {
+        let mut e = engine();
+        e.core_latch_at_vblank = on;
+        e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+        let mut r = Ring::new();
+        modeset(&mut r, 0, 0);
+        r.m(m(CORE, "UPDATE"), 0);
+        let s = e.step(0, &r.bytes(), r.put(), &mut all_ok);
+        assert!(
+            s.effects.iter().any(|x| matches!(x, Effect::CoreArmed(_))),
+            "no active head yet: the modeset latches at once (on={on})"
+        );
+        assert!(
+            e.heads_armed()
+                .iter()
+                .any(|h| h.head == 0 && h.period_ns > 0)
+        );
+        core_notifier(&mut r, 0xcafe_0001, 2);
+        r.m(m(CORE, "UPDATE"), 0);
+        let s = e.step(0, &r.bytes(), r.put(), &mut all_ok);
+        let notified = |s: &Step| s.effects.iter().any(|x| matches!(x, Effect::Notify { .. }));
+        if on {
+            assert!(!notified(&s), "parked for head 0's vblank");
+            assert!(
+                e.vblank(1, &mut all_ok).effects.is_empty(),
+                "another head's tick"
+            );
+            assert!(
+                notified(&e.vblank(0, &mut all_ok)),
+                "head 0's tick latches it"
+            );
+        } else {
+            assert!(notified(&s), "default: at once");
+        }
+    }
+}
