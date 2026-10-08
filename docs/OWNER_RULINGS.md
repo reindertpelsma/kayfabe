@@ -900,8 +900,8 @@ its reason still holds before relying on it (see the top of this file).
 - **Display broker and input** (owner, 2026-10-08): the broker's keyboard, pointer and cursor logic
   hooks onto the VMM through a full VMM-neutral trait. Policy (bounds, grab, absolute/relative choice,
   button and wheel routing, re-sync) lives in Rust in `kf-broker`; only a thin shim names the VMM.
-- **Translated channels, unknown entries** (owner, 2026-10-08, "ok go ahead"; DRAFT, conditions pending
-  `traces/phys_operand_oracle_20261008/`): a known push-buffer entry in a Translated channel is
+- **Translated channels, unknown entries** (owner, 2026-10-08, "ok go ahead"; the oracle's evidence is in
+  `traces/phys_operand_oracle_20261008/`, branch `claude/phys-operand-oracle-20261008`; still a DRAFT ruling): a known push-buffer entry in a Translated channel is
   inspected and its physical operands translated and checked; an unknown entry is forwarded as
   virtual-address-only. Conditions: the host twin is unprivileged with an address space that holds only
   that VM's memory; hardware refuses physical operands on an unprivileged channel for that engine class
@@ -910,6 +910,14 @@ its reason still holds before relying on it (see the top of this file).
   arithmetic panics rather than wraps (`overflow-checks = true` in the release profile); every
   forwarded unknown method is logged and counted. Isolation inside one VM is the guest kernel's;
   VM-to-VM and VM-to-host isolation is the host channel's privilege and address space.
+  - **Evidence, 2026-10-08 (RTX 4070, driver 595.91.07, oracle rev `8c084ab7`):** [measured] on a
+    `USER`-privilege channel the copy engine (class `0xC7B5`) refuses a PHYSICAL operand, source and
+    destination, local FB and coherent sysmem, with or without the extra deny setting: Xid 32, channel
+    reset, nothing delivered, while the VIRTUAL control is delivered. [OGKM reading, not measured] the 3D
+    (`0xC997`), compute (`0xC9C0`/`0xC6C0`), video (NVDEC/NVENC/OFA) and host/FIFO methods have no
+    physical-aperture operand at all, so a forwarded unknown entry there cannot encode a physical
+    address and containment is the VA space. Not done: a privileged-channel positive control (no safe
+    way to create one on that host; "honoured on a privileged channel" stays inferred).
 
 ## W. Answers to the 2026-10-08 open decisions
 
