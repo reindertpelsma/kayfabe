@@ -4181,6 +4181,20 @@ fn ce_interrupt(rm: &mut HostRmBackend, gpu: u32) -> bool {
         );
         let us: Vec<String> = leg.latencies().iter().map(u64::to_string).collect();
         println!("R35_LATENCIES_US leg={} {}", leg.label(), us.join(","));
+        // ★ 2026-10-08: per token, in how many iterations it became readable (the union above
+        // cannot say whether GR0 fired on EVERY COPY0 iteration — the GRCE falsifier).
+        let per: Vec<String> = (0..TOKENS)
+            .filter(|t| (landed | others) & (1 << t) != 0)
+            .map(|t| {
+                let c = leg
+                    .iters
+                    .iter()
+                    .filter(|i| (i.pos_fired | i.others) & (1 << t) != 0)
+                    .count();
+                format!("{}={c}/{n}", token_name(t))
+            })
+            .collect();
+        println!("R35_LANDED_PER_TOKEN leg={} {}", leg.label(), per.join(" "));
     }
     let failures = ev.failures(CE_IRQ_WAKE_BOUND);
     for f in &failures {
