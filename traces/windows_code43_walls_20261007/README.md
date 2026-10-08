@@ -3299,3 +3299,39 @@ Windows run with the probes of run57.
 should become real answers (§S.2: virtual-monitor features are implemented; HDCP answers "absent"), designed from `kf_disp::model` with ogkm layouts;
 `GR_CTXSW_PREEMPTION_BIND` and the cross-client `ZCULL_BIND` need the real host-authored bind (or a ruling that preemption/zcull buffers are
 host-owned); `0x20801111` (task B) is now shown to be on the desktop's path. Draft for OWNER_RULINGS: below, not inserted.
+
+## Run58 (display only, labelled fallback): a visible, interactive Windows 11 desktop in the broker window — Microsoft Basic Display on kf3's GOP framebuffer, NVIDIA driver disabled
+
+Binary `kf3-bins/40230e23`, 4096 MiB alone, `windows_broker.sh desktop` (persistent overlay `/var/lib/kf-windows-20261005/windows-desktop`
+of the same baseline; default flag list, **no probes**), started 14:06:09 CEST. Steps: `autologon` (local account `kf`, password generated on
+the host, 0600, not committed), `nvidia disable` (pnputil: the NVIDIA adapter `CM_PROB_DISABLED`), `reboot`.
+[command](run58-desktop-command.json), [first logon](run58-desktop-screendump-t0000.png), [desktop](run58-desktop-screendump-t0090.png),
+[after input](run58-desktop-screendump-after-input.png), [NVIDIA disable](run58-nvidia-disable.txt), [broker log tail](run58-broker-log-tail.txt).
+
+`[measured, run58 at 40230e23, 2026-10-08]`:
+- After the reboot the window shows OVMF, then Windows' first-logon screens ("Getting things ready for you.", "Almost there."), then the
+  **Windows 11 desktop at 1920x1080** with Start menu, taskbar and clock, about 90 s after the reboot. `quser`: `kf console Active`.
+- Input through QEMU's input layer (the path the broker's relay feeds): a QMP `esc` key closed the Start menu, and an absolute pointer event
+  moved the cursor to the screen centre (USB tablet; PS/2 keyboard). The broker relay itself was not exercised by a person in this run.
+- The broker presents the frames (`Present: COPY - the compositor is compositing it`, host refresh 59.996 Hz); kf3: `copies` on demand when
+  the frame changes (`checks` ~60/s). No host Xid (86 throughout).
+- What it is, plainly: Windows' **Microsoft Basic Display** driver drawing (software rendering) into the firmware framebuffer kf3's GOP set up
+  (BAR1 `[0, 0x7f0000)` seeded to store 0); kf3 scans that out as its boot layer. **No NVIDIA driver, no GPU acceleration, no D3D on the GPU.**
+  It shows the display, broker and input path end to end; it is not "the NVIDIA adapter reporting a display".
+
+**Why "display not initialised" and "Basic Display Code 10" in run53, now explained.** Runs 1-53 had the QEMU std VGA (1234:1111) as the
+firmware display and kf3 without GOP; Windows' Basic Display instance on that VGA never started (Code 10), and kf3's console had neither a GOP
+frame nor an NVIDIA scanout. With kf3 `gop=on` and no std VGA, the firmware and Basic Display draw on kf3 (runs 54-58), and nvlddmkm's own
+scanout needs the GR walls of runs 55-57.
+
+## Draft for `docs/OWNER_RULINGS.md` (NOT inserted; for the owner to accept, change or reject)
+
+> **V. Windows user work on WDDM's kernel channels (draft, 2026-10-08).** Windows allocates every channel from its kernel driver with
+> `PRIVILEGE=KERNEL`, including the per-process channels that carry the D3D user-mode driver's and the compositor's command buffers. kayfabe
+> classifies them kernel (§Q, Q7) and re-authors them from allowlists (§S guest-kernel GR work). Decision: (a) keep all Translated and grow the
+> allowlists to the full 3D/compute vocabulary, with host-authored `SET_OBJECT`s for the subchannels Windows binds through its promoted context;
+> (b) run them as Passthrough on asserted-USER host channels (the GPU enforces privilege; VA identity inside the VM's own space); (c) hybrid —
+> the KMD's own kernel channels (paging, kernel GR/CE) stay Translated, per-process user-work TSGs (identified by the owning client and the
+> `GPU_PROMOTE_CTX` target, never by guest bytes) run as (b). Recommendation (c), after a native-oracle check. Also needed with it:
+> `GR_CTXSW_PREEMPTION_BIND` and the KMD's cross-client `GR_CTXSW_ZCULL_BIND` as real host-authored binds on the twin (or a ruling that these
+> buffers are host-owned and the controls are answered `NV_OK` with nothing bound), and task B (`0x20801111`) confirmed.

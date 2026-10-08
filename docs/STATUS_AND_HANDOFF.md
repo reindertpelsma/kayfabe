@@ -9,6 +9,18 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+**Windows display loop, 2026-10-08 third session (branch `claude/windows-display-20261008` from `ac5d086f`, runs 54-58;
+[record](../traces/windows_code43_walls_20261007/README.md#loop-2026-10-08-third-session-branch-claudewindows-display-20261008-windows-on-screen-and-the-d3d-wall)).**
+New launcher `scripts/bench/windows/windows_broker.sh` (Windows in a second broker window, its own socket/title; `desktop`, `autologon`,
+`nvidia disable|enable`, `reboot`, `stop`). `[measured, runs 54-58 at a88764b3/03932e9f/40230e23, 2026-10-08]`: kf3 `gop=on` without the std VGA shows
+OVMF and Windows' boot in the window; the 7 FB indices are served (AdapterRAM/qwMemorySize now 4 GiB, was 0); H-preempt-bind is FALSIFIED as the
+cause of `0x8876017c` (binds answered, same HRESULT), the create then stops at a cross-client `ZCULL_BIND` and the software-runlist submit; display
+probes (IMP_ENABLE TRUE + six echoed NV0073 controls) start mode validation, and with the GR refusals also answered (run57, labelled experiment) the
+NVIDIA driver **commits 1920x1080@60** (head armed, CCD configuration stored) — then the desktop's first 3D segment dies in the rewriter (subchannel 0
+never bound in the ring), TDR, bugcheck 0x116. Owner decision needed: WDDM user work runs on guest-KERNEL channels (options a/b/c, recommendation (c),
+draft ruling in the record). A visible interactive desktop exists today only as the **Basic Display fallback** (run58: NVIDIA disabled, software
+rendering on kf3's GOP framebuffer). Two kf3 VMs share the GPU without Xid, but the Linux guest's 8 GiB store leaves no room for a 2-4 GiB Windows store.
+
 ### 0.0 ★ RESUME HERE — 2026-10-07
 
 **MASTER CANDIDATE, 2026-10-08 — branch `integration/master-candidate-20261008`. Master is unchanged (`906a76a4`); this branch is a straight fast-forward of it (207+ commits).** Owner, 2026-10-08: merge the verified work so there are fewer sub-branches, record it, push, stop for the day. The standing merge approval (recorded in the owner-decisions summary lower in this file, next to the §Q/§R bullets) requires the EXACT commit to pass CI, review, and a real-GPU guest boot with the merge bar and the apps, so master was NOT touched: the candidate waits for that run.
