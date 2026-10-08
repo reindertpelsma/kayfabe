@@ -1,6 +1,6 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-10-07 (§S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-09 (diagnostic BAR0 trace mode, the VFIO tracer).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-10-07 (§S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
@@ -900,8 +900,8 @@ its reason still holds before relying on it (see the top of this file).
 - **Display broker and input** (owner, 2026-10-08): the broker's keyboard, pointer and cursor logic
   hooks onto the VMM through a full VMM-neutral trait. Policy (bounds, grab, absolute/relative choice,
   button and wheel routing, re-sync) lives in Rust in `kf-broker`; only a thin shim names the VMM.
-- **Translated channels, unknown entries** (owner, 2026-10-08, "ok go ahead"; DRAFT, conditions pending
-  `traces/phys_operand_oracle_20261008/`): a known push-buffer entry in a Translated channel is
+- **Translated channels, unknown entries** (owner, 2026-10-08, "ok go ahead"; the oracle's evidence is in
+  `traces/phys_operand_oracle_20261008/`, branch `claude/phys-operand-oracle-20261008`; still a DRAFT ruling): a known push-buffer entry in a Translated channel is
   inspected and its physical operands translated and checked; an unknown entry is forwarded as
   virtual-address-only. Conditions: the host twin is unprivileged with an address space that holds only
   that VM's memory; hardware refuses physical operands on an unprivileged channel for that engine class
@@ -910,6 +910,14 @@ its reason still holds before relying on it (see the top of this file).
   arithmetic panics rather than wraps (`overflow-checks = true` in the release profile); every
   forwarded unknown method is logged and counted. Isolation inside one VM is the guest kernel's;
   VM-to-VM and VM-to-host isolation is the host channel's privilege and address space.
+  - **Evidence, 2026-10-08 (RTX 4070, driver 595.91.07, oracle rev `8c084ab7`):** [measured] on a
+    `USER`-privilege channel the copy engine (class `0xC7B5`) refuses a PHYSICAL operand, source and
+    destination, local FB and coherent sysmem, with or without the extra deny setting: Xid 32, channel
+    reset, nothing delivered, while the VIRTUAL control is delivered. [OGKM reading, not measured] the 3D
+    (`0xC997`), compute (`0xC9C0`/`0xC6C0`), video (NVDEC/NVENC/OFA) and host/FIFO methods have no
+    physical-aperture operand at all, so a forwarded unknown entry there cannot encode a physical
+    address and containment is the VA space. Not done: a privileged-channel positive control (no safe
+    way to create one on that host; "honoured on a privileged channel" stays inferred).
 
 ## W. Answers to the 2026-10-08 open decisions
 
@@ -946,7 +954,10 @@ All owner statements of 2026-10-08, in the order the open-decision list was give
   `/mnt/windows-work/archive/`.
 - **Models:** Sonnet 5.5 by default, Opus 5.5 as the strongest tier (`CLAUDE.md`, *Models by risk*).
 
-## X. A diagnostic BAR0 trace mode with the VFIO reference's own tracer (2026-10-09)
+## Y. A diagnostic BAR0 trace mode with the VFIO reference's own tracer (2026-10-09)
+
+⊘ Numbered **§X** on `claude/kf3-read-trace-20261008` (and in its code comments and `V3_BAR0_TRACE_MODE.md`); renumbered
+§Y at the merge into `claude/windows-reset-20261009` (2026-10-09), because §X is the non-stall ruling of 2026-10-08.
 
 **STATUS: LIVE, 2026-10-09.** Owner rulings of 2026-10-09, relayed by the coordinator. A second,
 broader exception to "only BAR0 writes trap" (`AGENTS.md`, Rules; `design/THE_CONSTRAINTS.md`) than
@@ -970,3 +981,26 @@ environment switch `KF3_BAR0_READ_TRACE=1` (ranges, caps: `crates/kf-qemu/src/re
 own `vfio_region_read`/`vfio_region_write`/`vfio_msi_interrupt` trace events called by `kf3.c`, and the
 shared GSP observer (`tools/vfio-gsp-observer`, `gsp_observer_*`) behind kf3's `x-gsp-observer`
 property.
+## X. Non-stall interrupts wake every VM that armed the event; an edge is never dropped (2026-10-08)
+
+Two owner statements on the same day; the second supersedes the gate/bucket part of the first.
+
+- **First (2026-10-08):** remove the doorbell requirement from the Passthrough non-stall relay
+  (`kf_chan::ptnsi`, branch `claude/passthrough-interrupt-20261008`): doorbells are guest-controlled and a
+  weak boundary (the guest can ring to open the gate; the doorbell hook is slated to be replaced), and the
+  1 s afterglow could lose completions. The host notifiers are GPU-wide anyway: RM delivers an engine's
+  non-stall edge to every client registered on it, whoever's work it was. ⊘ *Superseded the same day:*
+  this statement also asked for a live-twin condition and a per-vector token bucket; see the next item.
+- **Second, binding (2026-10-08): follow NVIDIA — an interrupt wakes everyone.** Losing an interrupt for
+  relevant work is a correctness bug; a cross-tenant wake is only a minor denial of service. So:
+  - forward every host `FIFO_EVENT_MTHD` edge and every engine-notifier edge to every VM whose guest has
+    **armed** that event (its own non-stall subscription, a host-recorded fact), not "has a live twin",
+    not a doorbell, not outstanding work;
+  - **invariant: an edge may be delayed, never dropped.** No dropping token bucket. Default: no pacing.
+    Any pacing knob is env-tunable, default off, and loss-free (a pending flag per VM and vector, and a
+    guaranteed trailing raise by a timer even if no further edge arrives);
+  - keep the hostile-index refusal and the armed-event check, and `KF3_PT_NSI_RELAY=0` as the falsifier
+    mode; counters: raised, coalesced-and-later-raised, no-armed-event;
+  - the accepted residuals are written down: a tenant can make other guests wake more often (minor DoS,
+    accepted, it is RM's own semantics) and a guest learns, by timing, that some tenant used an engine
+    class it armed. Where: `docs/design/the_three_channel_kinds.md` §1.2 and `docs/FAQ.md`.

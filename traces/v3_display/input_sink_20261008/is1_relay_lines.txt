@@ -1,0 +1,45 @@
+broker: GPU-copy rung possible — render node renderD128 (226:128), nvidia-drm gpu_id 0x100, modifier 0x0300000000606014, slot attributes s1-nvkms-offscreen
+broker: /dev/udmabuf opened — frames can go as a dma-buf (rungs 1 and 1b)
+broker: relay to /run/user/1000/nvkvm/display.sock (brokers accepted: uid 0, QEMU's effective uid at each connect, display-broker-uid 1000); no clipboard
+broker: connected to /run/user/1000/nvkvm/display.sock, capabilities 0xfff
+broker: broker window is now 1280x720 at 0 mHz
+broker: window inactive (input suspended)
+broker: grab off
+broker: guest cursor: the HOST pointer shows it (hover; not composed)
+broker: pointing device -> #4 QEMU Virtio Tablet (absolute)
+broker: the display CANNOT show XR24 modifier 0x0300000000606014
+broker: window active
+broker: guest resolution is now 1920x1080
+broker: frames go as a LINEAR dma-buf (udmabuf, zero-copy for the broker)
+broker: the display CAN show XR24 modifier 0x0000000000000000
+broker: broker window is now 1920x1080 at 0 mHz
+broker: guest cursor image 256x256 hot 0,0 sent (1 so far)
+broker: guest cursor image 256x256 hot 3,1 sent (2 so far)
+broker: grab ON
+broker: guest cursor: composed into the frame (grabbed; the broker hides its own image)
+broker: pointing device -> #5 QEMU Virtio Mouse (relative)
+broker: input while grabbed (1718 ms): 0 key, 0 button and 0 wheel event(s) to the relative pointer, 1 REL packet(s), 0 absolute report(s) dropped
+broker: input while grabbed (3303 ms): 0 key, 1 button and 0 wheel event(s) to the relative pointer, 15 REL packet(s), 0 absolute report(s) dropped
+broker: input while grabbed (504 ms): 6 key, 1 button and 0 wheel event(s) to the relative pointer, 0 REL packet(s), 0 absolute report(s) dropped — grab ended
+broker: grab off
+broker: guest cursor: the HOST pointer shows it (hover; not composed)
+broker: pointing device -> #4 QEMU Virtio Tablet (absolute)
+broker: the broker is going away (reason 0)
+broker: guest cursor: composed into the frame (no broker)
+broker: the display broker closed the connection; the display and input are gone for now (254 frames relayed, 0 dropped, 0 attached without a commit, 254 releases, 0 reclaimed). The VM keeps running; reconnecting in the 
+broker: connection attempt failed: cannot connect to /run/user/1000/nvkvm/display.sock: connect(AF_UNIX) failed (errno 2) — is the display broker running?
+broker: retrying in the background (up to every 5000 ms); the VM continues running
+broker: connected to /run/user/1000/nvkvm/display.sock, capabilities 0xfff
+broker: frames go as a LINEAR dma-buf (udmabuf, zero-copy for the broker)
+broker: re-sent geometry 1920x1080 and the last frame to the new broker
+broker: reconnected to the display broker (reconnect #1)
+broker: broker window is now 800x600 at 0 mHz
+broker: window inactive (input suspended)
+broker: grab off
+broker: guest cursor: the HOST pointer shows it (hover; not composed)
+broker: guest cursor image 256x256 hot 3,1 sent (3 so far)
+broker: pointing device -> #4 QEMU Virtio Tablet (absolute)
+broker: the display CANNOT show XR24 modifier 0x0300000000606014
+broker: the display CAN show XR24 modifier 0x0000000000000000
+broker: broker window is now 1920x1080 at 0 mHz
+broker: window active

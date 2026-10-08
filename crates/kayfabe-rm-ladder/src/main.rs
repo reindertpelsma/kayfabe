@@ -4008,6 +4008,210 @@ fn crit1(state: kayfabe_isolate_host::rm::Crit1State) {
     );
 }
 
+/// ★★★ R35 — `--ce-interrupt`: a completion delivered BY INTERRUPT, from the raw, unprivileged
+/// client.
+///
+/// > Owner, 2026-10-08: *"why not arm the eventfd in the raw client, its just a poll, the api is
+/// > known, we even implemented in nvkvm-pv and you did in kayfabe."*
+///
+/// Eleven OS events (the non-stall notifiers `CE0..CE9` and `FIFO_EVENT_MTHD`), each on its own
+/// registered GPU node file, are armed BEFORE anything is submitted. Then, 50 times each:
+///
+/// - **leg `ce-launch-interrupt`** — a 4 KiB copy whose `LAUNCH_DMA` releases the semaphore AND
+///   carries `INTERRUPT_TYPE = NON_BLOCKING`: the `CE0` file must become readable (epoll, 2 s
+///   bound), the semaphore must hold the payload, every copied word must verify;
+/// - **leg `host-non-stall-interrupt`** — the same copy, then a `RELEASE_WFI` host fence and the
+///   host `NON_STALL_INTERRUPT` method: the `FIFO_EVENT_MTHD` file must become readable.
+///
+/// Negative controls, graded: every OTHER file stays silent through both legs; a final leg of the
+/// SAME copy with NO interrupt edge leaves all eleven silent; and with nothing submitted all
+/// eleven are silent for 300 ms. `ChannelSourceProbe` additionally ASKS RM to register the event
+/// on the channel (the owner's wording) and prints the answer. See
+/// `kayfabe_isolate_host::rm::osevent` for the falsifiers and for why the pollable object is a
+/// GPU node file and not an `eventfd(2)`.
+fn ce_interrupt(rm: &mut HostRmBackend, gpu: u32) -> bool {
+    use kayfabe_isolate_host::rm::osevent::{
+        CE_IRQ_CONTROL_ITERATIONS, CE_IRQ_GIVE_UP_AFTER, CE_IRQ_ITERATIONS, CE_IRQ_QUIET_PATIENCE,
+        CE_IRQ_WAKE_BOUND, ChannelSourceProbe, TOKENS, mask_names, token_name,
+    };
+
+    /// Neither zero nor a value the destination is pre-filled with (`!base` per iteration).
+    const PATTERN: u32 = 0xC0FF_EE35;
+    // ★ 2026-10-08: `KF_CE_IRQ_ITERATIONS` (1..=10000) — a longer run, for a noisy-neighbour load
+    // beside another VM. Unset: the owner's N = 50.
+    let iters = std::env::var("KF_CE_IRQ_ITERATIONS")
+        .ok()
+        .and_then(|s| s.trim().parse::<usize>().ok())
+        .filter(|n| (1..=10_000).contains(n))
+        .unwrap_or(CE_IRQ_ITERATIONS);
+
+    println!(
+        "info  R35 CE interrupt    = GPU {gpu}, euid {} — non-stall events armed through RAW RM \
+         IOCTLS ONLY (ALLOC_OS_EVENT, NV01_EVENT_OS_EVENT, EVENT_SET_NOTIFICATION), polled with \
+         epoll. No libcuda is loaded by this process",
+        kayfabe_linux_raw::geteuid()
+    );
+    println!(
+        "info  R35 the bar         = per interrupt leg {iters} of {iters}: \
+         a file of the leg's positive set (its engine's own notifier or the host's default \
+         one) readable within {} ms, the semaphore holding the payload, every copied word \
+         verified; every file OUTSIDE the set silent; the no-interrupt control silent; the \
+         quiet window silent. ⊘ A wake is a WAKE: the semaphore is read after it",
+        CE_IRQ_WAKE_BOUND.as_millis()
+    );
+
+    let Ok(vas) = rm.alloc_vaspace() else {
+        println!("FAIL  R35 vaspace         = the rung needs its own address space");
+        return false;
+    };
+    let ev = match rm.prove_ce_interrupt(vas, PATTERN, iters, CE_IRQ_CONTROL_ITERATIONS) {
+        Ok(e) => e,
+        Err(e) => {
+            println!("FAIL  R35 setup           = refused by name: {e:?}");
+            println!("R35_OUTCOME=(F)");
+            let _ = rm.free(vas);
+            return false;
+        }
+    };
+
+    let map: Vec<String> = (0..TOKENS)
+        .map(|t| format!("{}={}", token_name(t), ev.notifiers[t]))
+        .collect();
+    println!(
+        "info  R35 notifier map    = {} (indices read from the driver matrix at the host's \
+         version); copy-engine class {:#06x}",
+        map.join(" "),
+        ev.ce_class
+    );
+    println!(
+        "info  R35 armed           = {} of {TOKENS} notifiers armed [{}]{}",
+        ev.armed_mask.count_ones(),
+        mask_names(ev.armed_mask),
+        if ev.unarmed.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "; NOT armed: {}",
+                ev.unarmed
+                    .iter()
+                    .map(|(t, why)| format!("{} ({why})", token_name(*t)))
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            )
+        }
+    );
+    println!(
+        "{}  R35 quiet window      = nothing submitted: readable files = {} (after {} window(s), \
+         {} ms of waiting; patience {} ms)",
+        if ev.quiet_mask == 0 {
+            "★    "
+        } else {
+            "FAIL "
+        },
+        mask_names(ev.quiet_mask),
+        ev.quiet_attempts,
+        ev.quiet_waited_ms,
+        CE_IRQ_QUIET_PATIENCE.as_millis()
+    );
+    match &ev.channel_source {
+        ChannelSourceProbe::Refused(s) => println!(
+            "info  R35 channel source  = RM REFUSED a non-stall event whose source is the CHANNEL \
+             with status {s:#x} (NV_ERR_INVALID_ARGUMENT is 0x1f): the engine non-stall lists \
+             hang off the SUBDEVICE (event_notification.c:688-703), so the events above use it"
+        ),
+        ChannelSourceProbe::Accepted => println!(
+            "info  R35 channel source  = RM ACCEPTED a non-stall event whose source is the \
+             channel (freed again) — it was not used for the legs below"
+        ),
+        ChannelSourceProbe::Unmeasured(why) => {
+            println!("info  R35 channel source  = UNMEASURED: {why}");
+        }
+        ChannelSourceProbe::NotRun => println!("info  R35 channel source  = not run"),
+    }
+    for (what, why) in &ev.skipped {
+        println!("skip  R35 leg {what:<32} = NOT RUN: {why}");
+    }
+    for leg in &ev.legs {
+        let n = leg.iters.len();
+        let woke = leg.iters.iter().filter(|i| i.wake_us.is_some()).count();
+        let sem_wake = leg.iters.iter().filter(|i| i.sem_at_wake).count();
+        let sem = leg.iters.iter().filter(|i| i.sem_ok).count();
+        let data = leg.iters.iter().filter(|i| i.data_ok).count();
+        let stale = leg.iters.iter().filter(|i| i.stale != 0).count();
+        let extra: u32 = leg.iters.iter().map(|i| u32::from(i.extra_positive)).sum();
+        let others = leg.iters.iter().fold(0u16, |m, i| m | i.others);
+        let which = if leg.positive == 0 {
+            "(none expected)".to_string()
+        } else {
+            format!("any of [{}]", mask_names(leg.positive))
+        };
+        let landed = leg.iters.iter().fold(0u16, |m, i| m | i.pos_fired);
+        let lat = leg.stats().map_or_else(
+            || "no wake".to_string(),
+            |s| {
+                format!(
+                    "wake_us min {} median {} p90 {} max {} (n={})",
+                    s.min_us, s.median_us, s.p90_us, s.max_us, s.n
+                )
+            },
+        );
+        let lat = if leg.gave_up {
+            format!(
+                "{lat} [GAVE UP early: {CE_IRQ_GIVE_UP_AFTER} silent iterations in a row, {} asked]",
+                leg.expected
+            )
+        } else {
+            lat
+        };
+        let fence = if leg.iters.iter().any(|i| i.fence_ok.is_some()) {
+            format!(
+                ", host fence {}/{n}",
+                leg.iters
+                    .iter()
+                    .filter(|i| i.fence_ok == Some(true))
+                    .count()
+            )
+        } else {
+            String::new()
+        };
+        let failed = !leg.failures(CE_IRQ_WAKE_BOUND).is_empty();
+        println!(
+            "{}  R35 leg {:<32} = positive {which}: readable {woke}/{n} (it landed on: {}), {lat}; \
+             semaphore at the wake {sem_wake}/{n}, by the bound {sem}/{n}{fence}; data verified \
+             {data}/{n}; files OUTSIDE the set that fired: {}; stale-before {stale}/{n}; repeat \
+             reports {extra}",
+            if failed { "FAIL " } else { "★    " },
+            leg.label(),
+            mask_names(landed),
+            mask_names(others),
+        );
+        let us: Vec<String> = leg.latencies().iter().map(u64::to_string).collect();
+        println!("R35_LATENCIES_US leg={} {}", leg.label(), us.join(","));
+        // ★ 2026-10-08: per token, in how many iterations it became readable (the union above
+        // cannot say whether GR0 fired on EVERY COPY0 iteration — the GRCE falsifier).
+        let per: Vec<String> = (0..TOKENS)
+            .filter(|t| (landed | others) & (1 << t) != 0)
+            .map(|t| {
+                let c = leg
+                    .iters
+                    .iter()
+                    .filter(|i| (i.pos_fired | i.others) & (1 << t) != 0)
+                    .count();
+                format!("{}={c}/{n}", token_name(t))
+            })
+            .collect();
+        println!("R35_LANDED_PER_TOKEN leg={} {}", leg.label(), per.join(" "));
+    }
+    let failures = ev.failures(CE_IRQ_WAKE_BOUND);
+    for f in &failures {
+        println!("FAIL  R35 {f}");
+    }
+    let ok = failures.is_empty();
+    println!("R35_OUTCOME={}", if ok { "(P)" } else { "(F)" });
+    let _ = rm.free(vas);
+    ok
+}
+
 fn ce_client(
     rm: &mut HostRmBackend,
     gpu: u32,
@@ -14841,6 +15045,8 @@ fn ladder_main() -> std::process::ExitCode {
     // in this file — see `docs/design/list_object_alias_probe.md`.
     let mut want_list_object = false;
     let mut want_ce_client = false;
+    // R35 (2026-10-08) - see `ce_interrupt`. Its own arm; no default arm sets it.
+    let mut want_ce_interrupt = false;
     // ★ R34 — see `--ce-client-guest-ram`. Default decoy depth is the LLM's own order of
     // magnitude (`[measured w415llm]` 13 313 guest-RAM rows), not a round number chosen for
     // looking like one; a depth below the real workload's tests nothing the client already did.
@@ -15152,6 +15358,7 @@ fn ladder_main() -> std::process::ExitCode {
             // a program small enough to push into a guest, so it must not drag the isolate,
             // the sandbox rung or a second channel along.
             "--ce-client" => want_ce_client = true,
+            "--ce-interrupt" => want_ce_interrupt = true,
             "--ce-client-guest-ram" => want_ce_guest_ram = true,
             "--guest-ram-dst-vidmem" => {
                 guest_ram_dst_vidmem = true;
@@ -15390,6 +15597,29 @@ fn ladder_main() -> std::process::ExitCode {
         println!("R34_OUTCOME={}", if ok { "(P)" } else { "(F)" });
         let _ = rm.free(vas);
         return std::process::ExitCode::from(u8::from(!ok));
+    }
+
+    // ★ R35 runs here and RETURNS, like R33: it allocates its own VAS and channel, and nothing
+    // earlier in the ladder may have touched the engine whose interrupt it listens for.
+    if want_ce_interrupt {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        let ok = ce_interrupt(&mut rm, gpu);
+        println!(
+            "done — CE interrupt only ({})",
+            if ok {
+                "ALL BARS MET"
+            } else {
+                "WITH FAILED EVIDENCE"
+            }
+        );
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
     }
 
     if want_ce_client {

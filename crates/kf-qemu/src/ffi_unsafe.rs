@@ -20,13 +20,13 @@ use std::os::unix::ffi::OsStrExt as _;
 /// before master's boot display took 11; the merge folds them into this one bump:
 /// `kf3_realize` gains `display_broker` (after `gop`), whose word carries the broker in bit 0 and
 /// `display-broker-vram` in bits 1-2 (0 auto, 1 on, 2 off; [`kf_broker::gpucopy::VramMode::from_abi`]);
-/// the broker relay's surface ([`Kf3BrokerEvent`], [`kf3_broker_start`], [`kf3_broker_frame_fd`],
+/// the broker relay's surface (`Kf3BrokerEvent`, [`kf3_broker_start`], [`kf3_broker_frame_fd`],
 /// [`kf3_broker_ready`], [`kf3_broker_stop`]); [`kf3_display_ui_info`] (the console's `ui_info`
 /// hook) and the broker's `SURFACE` event (kind 8). (⊘ "`v3-dispsw-exp` takes 13 when it merges"
 /// is corrected by the registry under 16: 13 is that branch's own number.)
-/// ★ Still 12 on 2026-10-04 (§8.13): the console's cursor in hover ([`Kf3Cursor`],
-/// [`kf3_display_cursor`], [`kf3_display_cursor_pixels`], and since the review of the same day
-/// [`kf3_display_cursor_done`]) joins the broker's surface while it is unmerged — the bump is per
+/// ★ Still 12 on 2026-10-04 (§8.13): the console's cursor in hover (`Kf3Cursor`,
+/// `kf3_display_cursor`, `kf3_display_cursor_pixels`, and since the review of the same day
+/// `kf3_display_cursor_done`) joins the broker's surface while it is unmerged — the bump is per
 /// surface reaching master, and an archive without these symbols fails to LINK with a kf3.c that
 /// calls them, never at run time.
 /// ★ 16 (2026-10-04, `v3-maxfps`, `docs/design/V3_DISPLAY.md` §8.16, `OWNER_RULINGS.md` §M): the
@@ -54,7 +54,17 @@ use std::os::unix::ffi::OsStrExt as _;
 /// mode's verbs ([`kf3_trace_mode`], [`kf3_trace_piece`], [`kf3_trace_admit`], [`kf3_trace_name`],
 /// [`kf3_trace_report`]; `crate::readtrace`). 23 is `0da871c1`'s thin input/cursor shim (another
 /// branch), so this surface takes the next number.
-pub const KF3_ABI: u32 = 24;
+/// ★ 23 (2026-10-08, `claude/input-sink-trait-20261008`, `OWNER_RULINGS.md` §V,
+/// `docs/design/V3_DISPLAY.md` §8.20): ABI 22 with the broker's input and the console cursor
+/// behind kf-broker's VMM-neutral `InputSink`/`CursorSink` — [`kf3_broker_start`] gains `ops`
+/// ([`Kf3InputOps`], before `opaque`); [`kf3_broker_ready`] loses its event array (it delivers
+/// through the verbs); [`kf3_display_cursor_apply`] replaces `kf3_display_cursor`,
+/// `kf3_display_cursor_pixels` and `kf3_display_cursor_done`; `Kf3BrokerEvent` and `Kf3Cursor`
+/// give way to [`Kf3Pointer`] and [`Kf3InputOps`]. A branch that took 23 meanwhile takes a new
+/// number at its merge.
+/// 25 (2026-10-09, the merge of both at `claude/windows-reset-20261009`): 24's trace verbs AND
+/// 23's input/cursor verbs (disjoint surfaces).
+pub const KF3_ABI: u32 = 25;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -662,74 +672,96 @@ pub struct Kf3Frame {
     pub serial: u64,
 }
 
-/// ★ ABI 12 (display step 3): one input event from the display broker for the C device to inject
-/// (`kind`: 1 key, 2 button, 3 absolute, 4 relative, 5 wheel, 6 grab, 7 close; 8 surface —
-/// `x`, `y` = the broker window's size, `w0` = its refresh in mHz). Every value is
-/// already bounded by the relay (`kf_broker::Input`); the C device still checks a key code
-/// against QEMU's own map.
+/// ★ ABI 23 (2026-10-08, `OWNER_RULINGS.md` §V; `docs/design/V3_DISPLAY.md` §8.20): one pointing
+/// device the guest has, as the C device's pointers verb lists it (`InPointersFn`). ⊘ Replaces
+/// ABI 12's `Kf3BrokerEvent` (the per-packet event array) and `Kf3Cursor`: the C device no longer
+/// receives events to interpret — kf-broker calls its verbs ([`Kf3InputOps`]).
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Kf3BrokerEvent {
-    /// `KF3_BROKER_*` (kf3.h).
-    pub kind: u32,
-    /// Key/button code, x, dx, wheel direction (+1 up, -1 down), grab on, close forced.
-    pub x: i32,
-    /// Pressed, y, dy.
-    pub y: i32,
-    /// The absolute range's width.
-    pub w0: u32,
-    /// The absolute range's height.
-    pub w1: u32,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Kf3Pointer {
+    /// QEMU's mouse index (`qemu_mouse_set`).
+    pub id: u32,
+    /// 1: absolute (a tablet); 0: relative.
+    pub absolute: u8,
+    /// 1: a paravirtual (virtio-input) device.
+    pub paravirtual: u8,
+    /// Padding.
+    pub pad: [u8; 2],
+    /// The device's name, NUL-terminated or cut (the log only).
+    pub name: [u8; 56],
 }
 
-/// ★ §8.13 (KF3 ABI 12's broker surface, before it reaches master): what QEMU's console is told
-/// about the guest's cursor while a cursor-capable broker hovers ([`kf3_display_cursor`]). `what`:
-/// bit 0 DEFINE — `width` x `height` with the hot spot (`width` = 0: the hidden cursor), its pixels
-/// from [`kf3_display_cursor_pixels`]; bit 1 MOUSE — `dpy_mouse_set(x, y, on)`.
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Kf3Cursor {
-    /// `KF3_CURSOR_DEFINE` | `KF3_CURSOR_MOUSE`.
-    pub what: u32,
-    /// The image's width (0: the hidden cursor) …
-    pub width: u32,
-    /// … and height (at most 256 each).
-    pub height: u32,
-    /// The hot spot's column …
-    pub hot_x: u32,
-    /// … and row, inside the image.
-    pub hot_y: u32,
-    /// The guest pointer on the console's frame: column …
-    pub x: i32,
-    /// … and row.
-    pub y: i32,
-    /// Whether the cursor is shown.
-    pub on: u32,
-}
-
-impl Kf3BrokerEvent {
-    fn of(i: kf_broker::Input) -> Kf3BrokerEvent {
-        use kf_broker::Input as I;
-        let relative = |to: kf_broker::Pointer| u32::from(to == kf_broker::Pointer::Relative);
-        let (kind, x, y, w0, w1) = match i {
-            I::Key { code, down } => (1, i32::from(code), i32::from(down), 0, 0),
-            // ★ §8.19: w0 = 1 names the RELATIVE pointer (the relay's grab policy), 0 the absolute
-            I::Btn { code, down, to } => (2, i32::from(code), i32::from(down), relative(to), 0),
-            I::Abs { x, y, w, h } => (
-                3,
-                x,
-                y,
-                u32::try_from(w).unwrap_or(1),
-                u32::try_from(h).unwrap_or(1),
-            ),
-            I::Rel { dx, dy } => (4, dx, dy, 0, 0),
-            I::Wheel { up, to } => (5, if up { 1 } else { -1 }, 0, relative(to), 0),
-            I::Grab(on) => (6, i32::from(on), 0, 0, 0),
-            I::Close { force } => (7, i32::from(force), 0, 0, 0),
-            I::Surface { w, h, mhz } => (8, w, h, mhz, 0),
-        };
-        Kf3BrokerEvent { kind, x, y, w0, w1 }
+impl Default for Kf3Pointer {
+    fn default() -> Kf3Pointer {
+        Kf3Pointer {
+            id: 0,
+            absolute: 0,
+            paravirtual: 0,
+            pad: [0; 2],
+            name: [0; 56],
+        }
     }
+}
+
+impl Kf3Pointer {
+    /// The VMM-neutral device ([`kf_broker::PointerDevice`]); the name up to its NUL, lossily.
+    #[must_use]
+    pub fn device(&self) -> kf_broker::PointerDevice {
+        let end = self
+            .name
+            .iter()
+            .position(|&b| b == 0)
+            .unwrap_or(self.name.len());
+        kf_broker::PointerDevice {
+            id: self.id,
+            kind: if self.absolute != 0 {
+                kf_broker::Pointer::Absolute
+            } else {
+                kf_broker::Pointer::Relative
+            },
+            paravirtual: self.paravirtual != 0,
+            name: String::from_utf8_lossy(&self.name[..end]).into_owned(),
+        }
+    }
+}
+
+/// ★ ABI 23 (`OWNER_RULINGS.md` §V): the C device's input and console-cursor verbs — QEMU's half
+/// of `kf_broker::InputSink` and `kf_broker::CursorSink`, handed over at [`kf3_broker_start`] and
+/// copied there (every verb must be present). The verbs' contracts are their types'
+/// (`crate::raw_unsafe`).
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Kf3InputOps {
+    /// A key edge.
+    pub key: Option<crate::raw_unsafe::InKeyFn>,
+    /// A button edge.
+    pub button: Option<crate::raw_unsafe::InButtonFn>,
+    /// One wheel detent.
+    pub wheel: Option<crate::raw_unsafe::InWheelFn>,
+    /// An absolute position.
+    pub abs: Option<crate::raw_unsafe::InAbsFn>,
+    /// Relative motion.
+    pub rel: Option<crate::raw_unsafe::InRelFn>,
+    /// End of a pointer report.
+    pub sync: Option<crate::raw_unsafe::InSyncFn>,
+    /// The pointing devices.
+    pub pointers: Option<crate::raw_unsafe::InPointersFn>,
+    /// Select a pointing device.
+    pub select_pointer: Option<crate::raw_unsafe::InSelectFn>,
+    /// A kind of pointing device is missing.
+    pub missing_pointer: Option<crate::raw_unsafe::InMissingFn>,
+    /// The window was closed.
+    pub close: Option<crate::raw_unsafe::InCloseFn>,
+    /// The window's size and refresh.
+    pub resize_hint: Option<crate::raw_unsafe::InResizeFn>,
+    /// The console cursor's image.
+    pub cursor_define: Option<crate::raw_unsafe::CurDefineFn>,
+    /// The console's hidden cursor.
+    pub cursor_hide: Option<crate::raw_unsafe::CurHideFn>,
+    /// The console cursor's position.
+    pub cursor_move: Option<crate::raw_unsafe::CurMoveFn>,
+    /// Whether the console's pointer is absolute.
+    pub cursor_absolute: Option<crate::raw_unsafe::CurAbsoluteFn>,
 }
 
 /// ★ ABI 10 (`v3-display2`'s 9; QEMU's main thread, the console's `gfx_update`): the newest frame
@@ -792,102 +824,29 @@ pub extern "C" fn kf3_display_refresh_drain(h: *mut c_void) {
     }
 }
 
-/// ★ §8.13 (ABI 12, main thread: the console's `gfx_update`, AFTER it took its frame, and each
-/// broker pump): what QEMU's console should be told about the guest's cursor now — the
-/// coordinator's decision of 2026-10-04: while a cursor-capable broker hovers the frames carry no
-/// cursor (§O), so the console gets it through QEMU's cursor API (VNC shows it as a real pointer);
-/// under grab, or with no such broker, it stays composed. The define follows the frame the console
-/// shows and is paced (`kf_broker::ConsoleCursor::poll`). Returns `out.what` (0: nothing to do,
-/// also without a display or a broker; `*out` untouched then); after a nonzero return the caller
-/// reports what it applied with [`kf3_display_cursor_done`].
-///
-/// # Safety
-/// `out` is writable (null and misalignment are refused here).
+/// ★ §8.13, ⊘ ABI 23 (`OWNER_RULINGS.md` §V, 2026-10-08; main thread: the console's `gfx_update`
+/// AFTER it took its frame, and its refresh answer): bring QEMU's console cursor to the guest's —
+/// while a cursor-capable broker hovers the frames carry no cursor (§O), so the console gets it
+/// through QEMU's cursor API (VNC shows it as a real pointer); under grab, or with no such broker,
+/// it stays composed. kf-broker decides what, when and whether (`kf_broker::ConsoleCursor::apply`)
+/// and calls the C device's cursor verbs given at [`kf3_broker_start`]. Returns the number of
+/// parts handed out (0: nothing to do, no display or no broker). ⊘ Replaces ABI 12's
+/// `kf3_display_cursor` / `_pixels` / `_done`, whose define/hide/move decisions were the C
+/// device's.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn kf3_display_cursor(h: *mut c_void, out: *mut Kf3Cursor) -> i32 {
-    let (Some(dp), false) = (
-        dev(h).and_then(|d| d.display),
-        out.is_null() || !out.is_aligned(),
-    ) else {
+pub extern "C" fn kf3_display_cursor_apply(h: *mut c_void) -> i32 {
+    let Some(dp) = dev(h).and_then(|d| d.display) else {
         return 0;
     };
     let Some(seat) = dp.broker.as_ref() else {
         return 0;
     };
-    let u = seat.console_cursor(
+    let u = seat.apply_console_cursor(
         dp.console.cursor_point(),
         dp.console.shown_frame(),
         dp.console.now_ms(),
     );
-    let mut c = Kf3Cursor::default();
-    if let Some(define) = u.define {
-        c.what |= 1;
-        if let Some(sh) = define {
-            (c.width, c.height, c.hot_x, c.hot_y) = (sh.width, sh.height, sh.hot.0, sh.hot.1);
-        }
-    }
-    if let Some((x, y, on)) = u.mouse {
-        c.what |= 2;
-        (c.x, c.y, c.on) = (x, y, u32::from(on));
-    }
-    if c.what == 0 {
-        return 0;
-    }
-    // SAFETY: `out` is writable (caller contract), checked non-null and aligned above.
-    unsafe { *out = c };
-    i32::try_from(c.what).unwrap_or(0)
-}
-
-/// ★ §8.13 (ABI 12, main thread, right after acting on a nonzero [`kf3_display_cursor`]): what the C
-/// device APPLIED of it — `KF3_CURSOR_DEFINE` when `dpy_cursor_define` ran, `KF3_CURSOR_MOUSE`
-/// when `dpy_mouse_set` ran (only under an absolute pointer). A part not applied is handed out
-/// again at a later poll (the review of 2026-10-04: Rust used to believe the console held a
-/// cursor the C side had refused to define, and never retried).
-#[unsafe(no_mangle)]
-pub extern "C" fn kf3_display_cursor_done(h: *mut c_void, applied: u32) {
-    if let Some(seat) = dev(h)
-        .and_then(|d| d.display)
-        .and_then(|dp| dp.broker.as_ref())
-    {
-        seat.console_cursor_done(applied & 1 != 0, applied & 2 != 0);
-    }
-}
-
-/// The most words [`kf3_display_cursor_pixels`] writes: a 256x256 cursor (the broker's bound,
-/// `kf_broker::wire::CURSOR_MAX_DIM`).
-const CURSOR_MAX_WORDS: u32 = 256 * 256;
-
-/// ★ §8.13 (ABI 12, main thread, right after a DEFINE from [`kf3_display_cursor`]): the defined
-/// image's pixels into `data` — QEMU's `QEMUCursor` data, one host-endian `0xAARRGGBB` word per
-/// pixel, PREMULTIPLIED (what VNC's alpha cursor carries; ⊘ straight until the review of
-/// 2026-10-04) — copied from kayfabe's own copy of the image, never guest memory.
-/// `words` must be exactly the defined `width * height`. 0, or -1 with nothing written.
-///
-/// # Safety
-/// `data` is null or writable for `words` aligned `u32`s (validated here: null, misalignment and
-/// more than 256x256 words are refused before a byte is written).
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn kf3_display_cursor_pixels(
-    h: *mut c_void,
-    data: *mut u32,
-    words: u32,
-) -> i32 {
-    if data.is_null() || !data.is_aligned() || words == 0 || words > CURSOR_MAX_WORDS {
-        return -1;
-    }
-    let Some(seat) = dev(h)
-        .and_then(|d| d.display)
-        .and_then(|dp| dp.broker.as_ref())
-    else {
-        return -1;
-    };
-    // SAFETY: `data` is non-null, aligned, and writable for `words` u32s (caller contract);
-    // `words` is at most 256x256, so the slice is at most 256 KiB, and it lives only for the call.
-    let out = unsafe { core::slice::from_raw_parts_mut(data, words as usize) };
-    match seat.console_cursor_pixels(out) {
-        Ok(()) => 0,
-        Err(_) => -1,
-    }
+    i32::from(u.define.is_some()) + i32::from(u.mouse.is_some())
 }
 
 /// ★ ABI 10 (`v3-ioeventfd`'s 9): the doorbell register's offset inside the 64 KiB usermode page
@@ -946,14 +905,16 @@ pub extern "C" fn kf3_doorbell_site(h: *mut c_void, gpa: u64, add: u32) {
 /// broker's socket (absolute, shorter than `sun_path`); `extra_uid` is the `display-broker-uid`
 /// property — `-1` none, or one more uid accepted as the broker (any other value is refused by
 /// name); `watch`/`timer` are the C device's fd-handler and timer verbs, called back only from
-/// inside the `kf3_broker_*` entries. Returns 0, or -1 with a message (a broker that is not
+/// inside the `kf3_broker_*` entries. ★ ABI 23 (`OWNER_RULINGS.md` §V, §8.20): `ops` is the C
+/// device's input and console-cursor verbs (copied here; every one must be present), called with
+/// the same `opaque` under the same rules. Returns 0, or -1 with a message (a broker that is not
 /// running yet is NOT an error: the first attempt runs from the main loop's timer, and a failed
 /// one is retried in the background).
 ///
 /// # Safety
-/// `path` is a NUL-terminated string; `err` is null or writable for `err_len` bytes; `watch` and
-/// `timer` must be callable with `opaque` on the main loop for the device's lifetime, must not
-/// re-enter a `kf3_broker_*` entry, and must not block.
+/// `path` is a NUL-terminated string; `ops` is null or readable; `err` is null or writable for
+/// `err_len` bytes; `watch`, `timer` and every verb in `ops` must be callable with `opaque` on the
+/// main loop for the device's lifetime, must not re-enter a `kf3_*` entry, and must not block.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn kf3_broker_start(
     h: *mut c_void,
@@ -961,12 +922,19 @@ pub unsafe extern "C" fn kf3_broker_start(
     extra_uid: i64,
     watch: Option<crate::raw_unsafe::BrokerWatchFn>,
     timer: Option<crate::raw_unsafe::BrokerTimerFn>,
+    ops: *const Kf3InputOps,
     opaque: *mut c_void,
     now_ms: u64,
     err: *mut c_char,
     err_len: usize,
 ) -> i32 {
-    let (Some(d), false, Some(watch), Some(timer)) = (dev(h), path.is_null(), watch, timer) else {
+    let (Some(d), false, Some(watch), Some(timer), false) = (
+        dev(h),
+        path.is_null(),
+        watch,
+        timer,
+        ops.is_null() || !ops.is_aligned(),
+    ) else {
         write_err(err, err_len, "kf3_broker_start: a null argument");
         return -1;
     };
@@ -978,12 +946,20 @@ pub unsafe extern "C" fn kf3_broker_start(
         );
         return -1;
     };
+    // SAFETY: `ops` is non-null and aligned (checked above) and readable (caller contract); it is
+    // copied, never kept.
+    let ops = unsafe { *ops };
+    // SAFETY: forwarded from this function's contract.
+    let Some(sink) = (unsafe { crate::raw_unsafe::QemuSink::adopt(&ops, opaque) }) else {
+        write_err(err, err_len, "kf3_broker_start: an input verb is missing");
+        return -1;
+    };
     // SAFETY: the caller promises a NUL-terminated string.
     let p = unsafe { CStr::from_ptr(path) };
     let path = std::path::PathBuf::from(std::ffi::OsStr::from_bytes(p.to_bytes()));
     // SAFETY: forwarded from this function's contract.
     let hooks = unsafe { crate::raw_unsafe::BrokerHooks::adopt(watch, timer, opaque) };
-    match seat.start(&path, extra_uid, hooks, now_ms) {
+    match seat.start(&path, extra_uid, hooks, sink, now_ms) {
         Ok(()) => 0,
         Err(e) => {
             write_err(err, err_len, &e);
@@ -1003,31 +979,21 @@ pub extern "C" fn kf3_broker_frame_fd(h: *mut c_void) -> i32 {
 }
 
 /// ★ ABI 12 (main loop, BQL held): something the relay waits on is ready — `fd` is the socket
-/// (`rd`/`wr` say which), the frame eventfd, or -1 for the relay's timer. Writes at most `cap`
-/// input events to `out` and returns how many (never negative; 0 on a bad handle). Reads at most
-/// `cap` packets from the socket; level-triggered readiness delivers the rest.
-///
-/// # Safety
-/// `out` is null or writable for `cap` events.
+/// (`rd`/`wr` say which), the frame eventfd, or -1 for the relay's timer. Reads at most
+/// `kf_broker::conn::READ_BATCH` packets from the socket (level-triggered readiness delivers the
+/// rest). ★ ABI 23 (§8.20): the input is DELIVERED here, through the verbs given at
+/// [`kf3_broker_start`] (`kf_broker::InputPolicy`), and the console's cursor follows (§8.13: every
+/// cursor post is followed by a frame publish, which lands here). Returns the inputs delivered
+/// (0 on a bad handle). ⊘ ABI 12 wrote `Kf3BrokerEvent`s for the C device to interpret.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn kf3_broker_ready(
-    h: *mut c_void,
-    fd: i32,
-    rd: u32,
-    wr: u32,
-    now_ms: u64,
-    out: *mut Kf3BrokerEvent,
-    cap: u32,
-) -> i32 {
+pub extern "C" fn kf3_broker_ready(h: *mut c_void, fd: i32, rd: u32, wr: u32, now_ms: u64) -> i32 {
     let Some(dp) = dev(h).and_then(|d| d.display) else {
         return 0;
     };
     let Some(seat) = dp.broker.as_ref() else {
         return 0;
     };
-    let cap = if out.is_null() { 0 } else { cap as usize };
-    let mut evs = Vec::with_capacity(cap.min(kf_broker::conn::READ_BATCH));
-    let active = seat.ready(fd, rd != 0, wr != 0, now_ms, &mut evs, cap.max(1));
+    let (active, n) = seat.ready(fd, rd != 0, wr != 0, now_ms);
     if active {
         // broker activity keeps the refresh clock at the watched rate; it asks for a host copy
         // only while the broker is fed through host memory (§8.11, two demand signals)
@@ -1037,12 +1003,12 @@ pub unsafe extern "C" fn kf3_broker_ready(
     if seat.became_active(active) {
         dp.console.note_new_watcher();
     }
-    let n = evs.len().min(cap);
-    for (i, e) in evs.iter().take(n).enumerate() {
-        // SAFETY: `i < n <= cap`, and `out` is writable for `cap` events (caller contract).
-        unsafe { *out.add(i) = Kf3BrokerEvent::of(*e) };
-    }
-    i32::try_from(n).unwrap_or(0)
+    seat.apply_console_cursor(
+        dp.console.cursor_point(),
+        dp.console.shown_frame(),
+        dp.console.now_ms(),
+    );
+    i32::try_from(n).unwrap_or(i32::MAX)
 }
 
 /// ★ ABI 12 (main loop, device exit, BEFORE the console closes): stop the relay — unwatch, close,

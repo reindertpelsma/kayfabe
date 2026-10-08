@@ -1,0 +1,29 @@
+PROOF_START tag=is1 checkout=01f5a7d1 broker=badf2d707da4 2026-10-08T16:32:24+02:00
+PROOF_BROKER_CONNECTED +2s nvkvm-broker: accepted uid 0 gid 0 pid 2191963
+PROOF_GRUB_MENU +6s serial=1 countdown=[]
+PROOF_GRUB_KEY PASS broker e -> editor_on_serial=1 countdown_left=automatically in 8s
+PROOF_DESKTOP cinnamon_up
+  dimensions:    1920x1080 pixels (250x252 millimeters)
+PROOF_ABS PASS window=1920x1080 inject=100,100 want=100,100 got=99,99 screen=1920x1080
+PROOF_ABS PASS window=1920x1080 inject=1000,600 want=1000,600 got=999,599 screen=1920x1080
+PROOF_ABS PASS window=1920x1080 inject=640,360 want=640,360 got=639,359 screen=1920x1080
+PROOF_ABS PASS window=1920x1080 inject=1919,1079 want=1919,1079 got=1918,1078 screen=1920x1080
+PROOF_GRAB_ON broker=[nvkvm-broker: grab capabilities: keyboard=1 abs=1 rel=1 lock=1 shortcuts-inhibited=1 focus-events=1 fullscreen=1|nvkvm-broker: grab: CTRL+ALT+G toggles, CTRL+AL] kf3=[pointing device -> #5 QEMU Virtio Mouse (relative)]
+PROOF_REL_X11 PASS inject_sum=70,30 pointer=639,299->709,329 delta=70,30 (flat profile)
+PROOF_ABS_UNDER_GRAB PASS_DROPPED pointer=709,329->709,329
+PROOF_GRAB_OFF kf3=[pointing device -> #4 QEMU Virtio Tablet (absolute)]
+PROOF_ABS PASS window=1920x1080 inject=200,150 want=200,150 got=199,149 screen=1920x1080
+PROOF_BROKER2 nvkvm-broker: accepted uid 0 gid 0 pid 2191963 relay=[connected to /run/user/1000/nvkvm/display.sock, capabilities 0xfff|re-sent geometry 1920x1080 and the last frame to the new broker|]
+PROOF_ABS PASS window=1920x1080 inject=400,300 want=400,300 got=399,299 screen=1920x1080
+PROOF_ABS PASS window=1920x1080 inject=1500,900 want=1500,900 got=1499,899 screen=1920x1080
+PROOF_ABS PASS window=1920x1080 inject=0,0 want=0,0 got=0,0 screen=1920x1080
+PROOF_EVDEV_MOUSE rel_x_sum=70 rel_y_sum=30 btn=[BTN_RIGHT=1 BTN_RIGHT=0 ] wheel=[1]
+PROOF_EVDEV_TABLET abs_events=18 btn=[BTN_LEFT=1 BTN_LEFT=0 ] wheel=3
+PROOF_EVDEV_KEYBOARD edges=[KEY_LEFTSHIFT=1 KEY_A=1 KEY_A=0 KEY_LEFTSHIFT=0 KEY_LEFTCTRL=1 KEY_L=1 KEY_L=0 KEY_LEFTCTRL=0 KEY_A=1 KEY_A=0 KEY_LEFTCTRL=1 KEY_LEFTALT=1 KEY_LEFTCTRL=0 KEY_LEFTALT=0 KEY_ESC=1 KEY_ESC=0 KEY_LEFTCTRL=1 KEY_LEFTALT=1 KEY_LEFTCTRL=0 KEY_LEFTALT=0 ]
+PROOF_KEYS PASS want=[KEY_LEFTSHIFT=1 KEY_A=1 KEY_A=0 KEY_LEFTSHIFT=0 KEY_LEFTCTRL=1 KEY_L=1 KEY_L=0 KEY_LEFTCTRL=0 KEY_A=1 KEY_A=0 ] got=[KEY_LEFTSHIFT=1 KEY_A=1 KEY_A=0 KEY_LEFTSHIFT=0 KEY_LEFTCTRL=1 KEY_L=1 KEY_L=0 KEY_LEFTCTRL=0 KEY_A=1 KEY_A=0 KEY_LEFTCTRL=1 KEY_LEFTALT=1 KEY_LEFTCTRL=0 KEY_LEFTALT=0 KEY_LEFTCTRL=1 KEY_LEFTALT=1 KEY_LEFTCTRL=0 KEY_LEFTALT=0 ]
+PROOF_STATUS broker[up=1 sent=256 gpucopy=0 gpucopy_backoffs=0 dmabuf_trips=0 carrier_refused=0 carrier_unchecked=0 formats_unasked=0 dropped=0 uncommitted=0 recovered=0 releases=256 unknown_releases=0 reclaims=0 blocked=0 backstops=0 reconnects=1 failed_attempts=2 peer_refused=0 cursor=hover cursor_sets=3 cursor_hides=0 cursor_shows=0 cursor_refused=0]
+PROOF_REBOOT1 qemu_pid=2191963 alive=yes guest=ssh_up login_prompt=2 grub=1 nvrm=22 xid=0 wpr=0 rminit_fail=0 smi=[GPU 0: NVIDIA GeForce RTX 4070 (UUID: GPU-655a9ba2-27b2-dc13-e432-71a01fc7fe19) ] desktop=up
+PROOF_REBOOT1_KF3 family=Ada phase=Running trapped=136195 applied=4274 refused=4 serviced=2472 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=1210 walks=1223/1223 cleared=1210 superseded=0 named_missed=6 unreconciled=0 mapped=4451 unmapped=1974 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=2329 priv_withheld_bytes=0x4601ab000 priv_mirrored=12 sked=0/0held carve_gpu=0 carve_kernel=4 carve_cpu=2 fn70=3 roots=16 root_moves=0 stmts=50/50 refused=0 pramin_repoints=38 pramin_miss=0 last_miss=0x0 pramin_worst_us=381 (map 36 mmap 58) pramin_maps=38 pramin_mmaps=38 pramin_kept=0 pramin_kept
+PROOF_REATTACH_DISPLAY stalled=0 display fps[cap=75(unset) copies=0.9 checks=59.9 same=640 ondemand=0 over=0] (predicted from ab-D: stalled, gop=on with the broker connected at start)
+PROOF_REATTACH broker_pid_before=2193653 after=2193918 qemu=2191963->2193926 launcher=[] relay=[connected to /run/user/1000/nvkvm/display.sock, capabilities 0xfff] broker_accepts=1
+PROOF_EXIT 2026-10-08T16:36:30+02:00 qemu_left=0

@@ -20,6 +20,9 @@ pub const COMPLETIONS_TAG: u64 = 1 << 32;
 const SCAN_LIMIT: usize = 64;
 /// How long a parked worker sleeps before re-checking `stop` — never a correctness timeout.
 const PARK_MS: u32 = 50;
+/// ★ 2026-10-08: how long a parked worker sleeps while `on_tick` says a raise is owed (the
+/// paced Passthrough relay's trailing raise, `kf_chan::ptnsi::Pacer::flush`).
+const OWED_PARK_MS: u32 = 1;
 
 /// Counters, for gates — never read on a hot path.
 #[derive(Debug, Default)]
@@ -62,7 +65,9 @@ pub const TICK_TAG: u64 = u64::MAX;
 /// [`OTHER_TAG_BASE`] is reported to `on_other` (P5b: engine non-stall events → guest MSI-X).
 /// ★ 2026-10-08: `on_completion` runs once per readiness of `completions` (a REAL host
 /// `FIFO_EVENT_MTHD` edge), after the in-flight tokens were rung — the device's Passthrough relay
-/// (`kf_chan::ptnsi`) judges it there.
+/// (`kf_chan::ptnsi`) judges it there. `on_tick` runs once per loop iteration, edge or not (the
+/// relay's timer: it raises what pacing owes) and answers whether anything is still owed — the
+/// park is then at most [`OWED_PARK_MS`], so an owed raise goes out even if no edge ever comes.
 #[allow(clippy::too_many_arguments)]
 pub fn run(
     plane: &Plane<'_>,
@@ -74,12 +79,14 @@ pub fn run(
     stop: &AtomicBool,
     on_other: &dyn Fn(u64),
     on_completion: &dyn Fn(),
+    on_tick: &dyn Fn() -> bool,
 ) {
     let mut scratch = Vec::with_capacity(SCAN_LIMIT);
     let prof = stats.prof.load(Ordering::Relaxed);
     let mut busy_from = std::time::Instant::now();
     let mut after_timeout = false;
     while !stop.load(Ordering::Acquire) {
+        let owed = on_tick();
         // §5.3: every `seen` load happens-before the scan.
         let seen = plane.worker_wake().seen();
         let n = plane.worker_pass(host, &mut scratch, SCAN_LIMIT);
@@ -103,7 +110,8 @@ pub fn run(
             stats.busy_ns.fetch_add(b, Ordering::Relaxed);
             stats.max_busy_ns.fetch_max(b, Ordering::Relaxed);
         }
-        let got = poller.wait(&mut ready, PollTimeout::Millis(PARK_MS));
+        let park = if owed { OWED_PARK_MS } else { PARK_MS };
+        let got = poller.wait(&mut ready, PollTimeout::Millis(park));
         if let Some(tw) = tw {
             busy_from = std::time::Instant::now();
             let w = u64::try_from(busy_from.duration_since(tw).as_nanos()).unwrap_or(u64::MAX);

@@ -1,7 +1,7 @@
 //! Compile the repository-owned C seam and compare every carried Rust field's layout.
 //! This uses the actual QEMU header, needs no QEMU build, and never opens a GPU.
 
-use kf_qemu::ffi_unsafe::{KF3_ABI, Kf3BrokerEvent, Kf3Cursor, Kf3Frame, Kf3Identity, Kf3Region};
+use kf_qemu::ffi_unsafe::{KF3_ABI, Kf3Frame, Kf3Identity, Kf3InputOps, Kf3Pointer, Kf3Region};
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem::{align_of, offset_of, size_of};
 use std::process::Command;
@@ -58,8 +58,8 @@ fn the_c_header_and_rust_seam_have_identical_layouts() {
         "Kf3Identity",
         "Kf3Region",
         "Kf3Frame",
-        "Kf3BrokerEvent",
-        "Kf3Cursor",
+        "Kf3Pointer",
+        "Kf3InputOps",
     ];
     let declared: Vec<_> = rust
         .split("#[repr(C)]")
@@ -118,11 +118,23 @@ fn the_c_header_and_rust_seam_have_identical_layouts() {
     layout!(Kf3Region, [bar => "bar", how => "how", pad => "pad", base => "base", len => "len"]);
     layout!(Kf3Frame, [data => "data", width => "width", height => "height", stride => "stride",
         format => "format", serial => "serial"]);
-    layout!(Kf3BrokerEvent, [kind => "kind", x => "x", y => "y", w0 => "w0", w1 => "w1"]);
-    layout!(Kf3Cursor, [what => "what", width => "width", height => "height", hot_x => "hot_x",
-        hot_y => "hot_y", x => "x", y => "y", on => "on"]);
-    value!("cursor_define", "KF3_CURSOR_DEFINE", 1);
-    value!("cursor_mouse", "KF3_CURSOR_MOUSE", 2);
+    // ★ ABI 23 (OWNER_RULINGS.md §V, V3_DISPLAY.md §8.20): the input/cursor verbs and the device list
+    layout!(Kf3Pointer, [id => "id", absolute => "absolute", paravirtual => "paravirtual",
+        pad => "pad", name => "name"]);
+    layout!(Kf3InputOps, [key => "key", button => "button", wheel => "wheel", abs => "abs",
+        rel => "rel", sync => "sync", pointers => "pointers", select_pointer => "select_pointer",
+        missing_pointer => "missing_pointer", close => "close", resize_hint => "resize_hint",
+        cursor_define => "cursor_define", cursor_hide => "cursor_hide",
+        cursor_move => "cursor_move", cursor_absolute => "cursor_absolute"]);
+    {
+        use kf_broker::Button as B;
+        use kf_qemu::raw_unsafe::button_abi;
+        value!("btn_left", "KF3_BTN_LEFT", button_abi(B::Left));
+        value!("btn_right", "KF3_BTN_RIGHT", button_abi(B::Right));
+        value!("btn_middle", "KF3_BTN_MIDDLE", button_abi(B::Middle));
+        value!("btn_side", "KF3_BTN_SIDE", button_abi(B::Side));
+        value!("btn_extra", "KF3_BTN_EXTRA", button_abi(B::Extra));
+    }
     value!(
         "cursor_max_dim",
         "KF3_CURSOR_MAX_DIM",
@@ -277,7 +289,7 @@ fn c_type(rust: &str) -> String {
         "usize" => "size_t",
         "c_void" | "()" => "void",
         "c_char" => "char",
-        "Kf3Identity" | "Kf3Region" | "Kf3Frame" | "Kf3BrokerEvent" | "Kf3Cursor" => t,
+        "Kf3Identity" | "Kf3Region" | "Kf3Frame" | "Kf3Pointer" | "Kf3InputOps" => t,
         other => panic!("the mirror cannot spell the Rust FFI type `{other}` in C — add it"),
     }
     .to_string()
@@ -308,8 +320,18 @@ struct Seam {
 fn seam() -> Seam {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let header = std::fs::read_to_string(root.join("qemu/hw/misc/kf3/kf3.h")).unwrap();
-    let exports = rust_entry_points(include_str!("../src/ffi_unsafe.rs"));
+    let ffi = include_str!("../src/ffi_unsafe.rs");
+    let exports = rust_entry_points(ffi);
     let aliases = rust_callbacks(include_str!("../src/raw_unsafe.rs"));
+    // ★ ABI 23: callback types also reach C as `#[repr(C)]` struct fields (Kf3InputOps)
+    let field_callbacks: Vec<String> = ffi
+        .lines()
+        .filter_map(|l| {
+            let t = l.trim().strip_prefix("pub ")?.split_once(": ")?.1;
+            let t = t.strip_suffix(',')?;
+            (t.starts_with("Option<") && t.ends_with("Fn>")).then(|| t.to_string())
+        })
+        .collect();
     let clean = strip_c_comments(&header);
     let ident = |at: usize| -> String {
         clean[at..]
@@ -338,23 +360,26 @@ fn seam() -> Seam {
     // The callback types the exports take (`Option<…::XFn>` → `Kf3XFn`), each from its Rust alias.
     let mut rust_callbacks = BTreeSet::new();
     let mut redeclared = String::new();
-    for sig in exports.values() {
-        for p in &sig.params {
-            let Some(path) = p.strip_prefix("Option<").and_then(|s| s.strip_suffix('>')) else {
-                continue;
-            };
-            let alias = path.rsplit("::").next().unwrap();
-            let c = c_type(p);
-            if rust_callbacks.insert(c.clone()) {
-                let a = aliases
-                    .get(alias)
-                    .unwrap_or_else(|| panic!("no Rust alias `{alias}` for `{c}`"));
-                redeclared.push_str(&format!(
-                    "typedef {} (*{c})({});\n",
-                    c_type(&a.ret),
-                    c_params(a)
-                ));
-            }
+    let params: Vec<String> = exports
+        .values()
+        .flat_map(|sig| sig.params.iter().cloned())
+        .chain(field_callbacks)
+        .collect();
+    for p in &params {
+        let Some(path) = p.strip_prefix("Option<").and_then(|s| s.strip_suffix('>')) else {
+            continue;
+        };
+        let alias = path.rsplit("::").next().unwrap();
+        let c = c_type(p);
+        if rust_callbacks.insert(c.clone()) {
+            let a = aliases
+                .get(alias)
+                .unwrap_or_else(|| panic!("no Rust alias `{alias}` for `{c}`"));
+            redeclared.push_str(&format!(
+                "typedef {} (*{c})({});\n",
+                c_type(&a.ret),
+                c_params(a)
+            ));
         }
     }
     for (name, sig) in &exports {
@@ -463,8 +488,18 @@ fn a_signature_that_drifted_from_kf3_h_is_refused() {
             "typedef void (*Kf3BrokerTimerFn)(void *, int32_t);",
         ),
         (
-            "int32_t kf3_broker_ready(void *, int32_t, uint32_t, uint32_t, uint64_t, Kf3BrokerEvent *, uint32_t);",
-            "int32_t kf3_broker_ready(void *, int32_t, uint32_t, uint32_t, uint32_t, Kf3BrokerEvent *, uint64_t);",
+            "int32_t kf3_broker_ready(void *, int32_t, uint32_t, uint32_t, uint64_t);",
+            "int32_t kf3_broker_ready(void *, int32_t, uint32_t, uint32_t, uint32_t);",
+        ),
+        // ★ ABI 23: a verb carried as a struct field (Kf3InputOps) — a parameter's sign changed,
+        // and the define verb's pixels made writable
+        (
+            "typedef void (*Kf3InAbsFn)(void *, uint32_t, uint32_t, uint32_t, uint32_t);",
+            "typedef void (*Kf3InAbsFn)(void *, int32_t, uint32_t, uint32_t, uint32_t);",
+        ),
+        (
+            "typedef int32_t (*Kf3CurDefineFn)(void *, uint32_t, uint32_t, uint32_t, uint32_t, const uint32_t *);",
+            "typedef int32_t (*Kf3CurDefineFn)(void *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t *);",
         ),
     ];
     for (was, now) in drift {

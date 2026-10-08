@@ -789,6 +789,75 @@ pub fn is_engine_nonstall_notifier(version: crate::DriverVersion, index: u32) ->
         .any(|n| n.at_u32(version).ok().flatten() == Some(index))
 }
 
+/// `NV01_EVENT_NONSTALL_INTR` (`ogkm-595.84: nvos.h:438`), OR-ed into an `NV0005` alloc's
+/// `notifyIndex`: the event joins the guest CPU-RM's per-engine non-stall list, which the guest
+/// walks when this device raises the engine's vector (`event_notification.c:688-737`).
+pub const NV01_EVENT_NONSTALL_INTR: u32 = 0x0800_0000;
+
+/// `NV0005_NOTIFY_INDEX_INDEX` = bits `15:0` of `notifyIndex` (`ogkm-595.84: cl0005.h:56`).
+pub const NV0005_NOTIFY_INDEX_INDEX_MASK: u32 = 0xFFFF;
+
+/// ★★★ **Non-stall subscription slots** (2026-10-08, owner ruling §X) — a version-independent name
+/// for "the guest registered a non-stall event on THIS notifier": slot 0 is
+/// `NV2080_NOTIFIERS_FIFO_EVENT_MTHD` (RM's host notifier, `RM_ENGINE_TYPE_HOST`), slot `1 + i` is
+/// [`ENGINE_NONSTALL_NOTIFIERS`]`[i]`. The guest's index is resolved to a slot at the guest's own
+/// driver version, so the device's engines (which know their engine, not the guest's index) can
+/// ask by name.
+pub const NONSTALL_SLOTS: usize = 1 + ENGINE_NONSTALL_NOTIFIERS.len();
+
+/// The slot of `NV2080_NOTIFIERS_FIFO_EVENT_MTHD`.
+pub const NONSTALL_SLOT_FIFO_EVENT_MTHD: usize = 0;
+
+/// The slot of `NV2080_NOTIFIERS_GR0`.
+pub const NONSTALL_SLOT_GR0: usize = 1;
+
+/// The slot of `NV2080_NOTIFIERS_CE<n>` (`n < 20`), else `None`.
+#[must_use]
+pub const fn nonstall_slot_ce(n: u32) -> Option<usize> {
+    if n < 20 { Some(2 + n as usize) } else { None }
+}
+
+/// The slot of `NV2080_NOTIFIERS_NVENC<n>` (`n < 4`), else `None`.
+#[must_use]
+pub const fn nonstall_slot_nvenc(n: u32) -> Option<usize> {
+    if n < 4 { Some(22 + n as usize) } else { None }
+}
+
+/// The slot of `NV2080_NOTIFIERS_NVDEC<n>` (`n < 8`), else `None`.
+#[must_use]
+pub const fn nonstall_slot_nvdec(n: u32) -> Option<usize> {
+    if n < 8 { Some(26 + n as usize) } else { None }
+}
+
+/// The slot of `NV2080_NOTIFIERS_OFA<n>` (`n < 2`), else `None`.
+#[must_use]
+pub const fn nonstall_slot_ofa(n: u32) -> Option<usize> {
+    if n < 2 { Some(34 + n as usize) } else { None }
+}
+
+/// The subscription slot a guest `NV01_EVENT_OS_EVENT` alloc's raw `notify_index` names at the
+/// guest's driver `version`, or `None`: not a non-stall registration (no
+/// [`NV01_EVENT_NONSTALL_INTR`]), or an index that is neither `FIFO_EVENT_MTHD` nor an engine row.
+/// ⊘ `notify_index` is guest bytes: only its index field is compared, against generated values.
+#[must_use]
+pub fn nonstall_slot(version: crate::DriverVersion, notify_index: u32) -> Option<usize> {
+    if notify_index & NV01_EVENT_NONSTALL_INTR == 0 {
+        return None;
+    }
+    let index = notify_index & NV0005_NOTIFY_INDEX_INDEX_MASK;
+    let fifo = crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_FIFO_EVENT_MTHD
+        .at_u32(version)
+        .ok()
+        .flatten();
+    if fifo == Some(index) {
+        return Some(NONSTALL_SLOT_FIFO_EVENT_MTHD);
+    }
+    ENGINE_NONSTALL_NOTIFIERS
+        .iter()
+        .position(|n| n.at_u32(version).ok().flatten() == Some(index))
+        .map(|i| 1 + i)
+}
+
 /// One row of [`GUEST_RAISED_NOTIFIERS`] — an index, and where the guest's own RM raises it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GuestRaisedNotifier {
@@ -1112,6 +1181,107 @@ pub fn encode_event_set_notification(reg: &EventSetNotification) -> Vec<u8> {
     params[INFO32_OFF..INFO32_OFF + 4].copy_from_slice(&reg.info32.to_le_bytes());
     params[INFO16_OFF..INFO16_OFF + 2].copy_from_slice(&reg.info16.to_le_bytes());
     params
+}
+
+#[cfg(test)]
+mod nonstall_slot_tests {
+    use super::*;
+    use crate::generated::matrix as m;
+    use crate::versions::BENCH_DRIVER;
+
+    fn idx(r: &'static crate::matrix::ValueRuns) -> u32 {
+        r.at_u32(BENCH_DRIVER)
+            .ok()
+            .flatten()
+            .expect("measured at the bench driver")
+    }
+
+    #[test]
+    fn the_named_slot_helpers_match_the_row_names() {
+        let row = |s: usize| ENGINE_NONSTALL_NOTIFIERS[s - 1].name;
+        assert!(row(NONSTALL_SLOT_GR0).ends_with("NV2080_NOTIFIERS_GR0"));
+        for n in 0..20 {
+            let s = nonstall_slot_ce(n).expect("ce");
+            assert!(
+                row(s).ends_with(&format!("NV2080_NOTIFIERS_CE{n}")),
+                "{}",
+                row(s)
+            );
+        }
+        for n in 0..4 {
+            assert!(row(nonstall_slot_nvenc(n).unwrap()).ends_with(&format!("NVENC{n}")));
+        }
+        for n in 0..8 {
+            assert!(row(nonstall_slot_nvdec(n).unwrap()).ends_with(&format!("NVDEC{n}")));
+        }
+        for n in 0..2 {
+            assert!(row(nonstall_slot_ofa(n).unwrap()).ends_with(&format!("OFA{n}")));
+        }
+        assert_eq!(nonstall_slot_ofa(1), Some(NONSTALL_SLOTS - 1));
+        assert_eq!(nonstall_slot_ce(20), None);
+        assert_eq!(nonstall_slot_nvenc(4), None);
+        assert_eq!(nonstall_slot_nvdec(8), None);
+        assert_eq!(nonstall_slot_ofa(2), None);
+    }
+
+    /// ★ `NV01_EVENT_NONSTALL_INTR` is typed by hand (the driver matrix has no `nvos.h` flag
+    /// family), so it is PINNED to `nvos.h` as read on 2026-10-08 at every tag of the
+    /// matrix (`traces/rawclient_ce_interrupt_20261008/nvos_event_flags_by_tag.txt`). The file
+    /// must cover exactly [`crate::generated::matrix::MEASURED`], and every tag must agree.
+    #[test]
+    fn the_nonstall_flag_is_pinned_to_every_measured_tag() {
+        let file = include_str!(
+            "../../../traces/rawclient_ce_interrupt_20261008/nvos_event_flags_by_tag.txt"
+        );
+        let mut tags = Vec::new();
+        for line in file
+            .lines()
+            .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
+        {
+            let mut it = line.split_whitespace();
+            let tag = it.next().expect("tag");
+            let v = it
+                .find_map(|f| f.strip_prefix("NONSTALL_INTR=("))
+                .and_then(|f| f.strip_suffix(')'))
+                .and_then(|h| u32::from_str_radix(h.trim_start_matches("0x"), 16).ok())
+                .expect("NONSTALL_INTR value");
+            assert_eq!(v, NV01_EVENT_NONSTALL_INTR, "tag {tag}");
+            tags.push(crate::DriverVersion::parse(tag).expect("tag parses"));
+        }
+        tags.sort();
+        let mut measured = crate::generated::matrix::MEASURED.to_vec();
+        measured.sort();
+        assert_eq!(
+            tags, measured,
+            "the file covers exactly the matrix's measured tags"
+        );
+    }
+
+    #[test]
+    fn a_nonstall_registration_resolves_and_anything_else_does_not() {
+        let fifo = idx(&m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_FIFO_EVENT_MTHD);
+        let ce2 = idx(&m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_CE2);
+        let ns = NV01_EVENT_NONSTALL_INTR;
+        assert_eq!(
+            nonstall_slot(BENCH_DRIVER, fifo | ns),
+            Some(NONSTALL_SLOT_FIFO_EVENT_MTHD)
+        );
+        // Other flag bits (WITHOUT_EVENT_DATA, the raw client's shape) do not matter.
+        assert_eq!(
+            nonstall_slot(BENCH_DRIVER, ce2 | ns | 0x1000_0000),
+            nonstall_slot_ce(2)
+        );
+        assert_eq!(nonstall_slot(BENCH_DRIVER, ce2), None, "a stall event");
+        assert_eq!(
+            nonstall_slot(BENCH_DRIVER, ns | 0xFFFF),
+            None,
+            "no such index"
+        );
+        assert_eq!(
+            nonstall_slot(BENCH_DRIVER, ns | NV2080_NOTIFIERS_TIMER),
+            None
+        );
+    }
 }
 
 #[cfg(test)]

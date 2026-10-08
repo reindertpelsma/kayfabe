@@ -1707,12 +1707,36 @@ jobs:
           #   and its one `ReadTrapHook::adopt` block.
           #   ⊘ No new power: the verb only flips ROMD on kayfabe's own BAR0 shadow pieces; a read
           #     that exits is answered from the same shadow word. Nothing reaches the host.
+          # kf-qemu 84 -> 86 at the merge (2026-10-09, claude/windows-reset-20261009, KF3 ABI 25): the two
+          # entries below are disjoint, 67 + 17 (input sink) + 2 (trace) = 86.
           # kf-qemu 67 -> 69 (2026-10-09, claude/kf3-read-trace-20261008, KF3 ABI 24; the default-off
           # BAR0 trace mode, OWNER_RULINGS.md §X):
           #   ffi_unsafe.rs (+2): `kf3_trace_name` and `kf3_trace_report` (`unsafe extern "C" fn`:
           #   `buf` is null or writable for `len` bytes — the same contract as `kf3_status`; both
           #   write through the existing `write_err`, which bounds the copy to `len - 1` and NULs).
           #   ⊘ No new power: they copy a Rust-owned string out; no pointer is kept.
+          # kf-qemu 67 -> 84 (2026-10-08, claude/input-sink-trait-20261008, KF3 ABI 23;
+          # OWNER_RULINGS.md §V, V3_DISPLAY.md §8.20 — the broker's input and console-cursor
+          # policy moved out of kf3.c into kf-broker behind a VMM-neutral trait):
+          #   raw_unsafe.rs (+17): `QemuSink` — `unsafe impl Send` (opaque is the C device's
+          #   state, alive for the process; the verbs are only called on the main loop from inside
+          #   an entry, the copy kept behind the seat's mutexes), `unsafe fn adopt` (every verb
+          #   callable with opaque on the main loop, never blocking or re-entering; the pointers
+          #   verb writes at most `cap` entries, the define verb reads at most width*height
+          #   words), and ONE `unsafe { }` call per verb (15: key, button, wheel, abs, rel, sync,
+          #   pointers, select, missing, close, resize, cursor define/hide/move/absolute). The
+          #   pointers call passes a Rust-owned array of 16 and clamps the returned count to it;
+          #   the define call passes a slice whose length was checked to be width*height.
+          #   raw_unsafe.rs tests (+4): the recording verbs' one write into the device list and
+          #   one read of the pixels (each bounded by the verb's own arguments), and two
+          #   `QemuSink::adopt` calls.
+          #   ffi_unsafe.rs (-4): `kf3_display_cursor`, `kf3_display_cursor_pixels` and the
+          #   event-array `kf3_broker_ready` are gone (-6: three `unsafe extern "C" fn`s and their
+          #   writes through C pointers); `kf3_broker_start` gains two blocks (+2): the copy of the
+          #   null- and alignment-checked `Kf3InputOps`, and `QemuSink::adopt` under the entry's
+          #   forwarded contract.
+          #   ⊘ No new power: each verb is one QEMU input/console call the C device already made
+          #     (§8.20's old -> new table); no guest pointer reaches any of them.
           # ★ kf-chan:0 (2026-10-04, P1+P2 inc C, `docs/design/V3_P1P2_TSPACE.md` §3.8). OWNER_RULINGS
           # §R(b): code that produces an address hardware will dereference is PERIMETER material
           # even when it compiles as safe Rust, so the Translated plane's address authoring lives in
@@ -1723,7 +1747,7 @@ jobs:
           # 0 and does not move; kf-chan keeps `unsafe_code = "forbid"` through `[lints] workspace`.
           # Listing the crate here is what lets gate B accept a `*_unsafe.rs` file in it, and makes
           # the ratchet count it (0) from now on — a future `unsafe {}` there moves this number.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:97 kf-cuda:78 kf-qemu:69 firmware/kf-gop:78 kf-chan:0"
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:97 kf-cuda:78 kf-qemu:86 firmware/kf-gop:78 kf-chan:0"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.

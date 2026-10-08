@@ -747,6 +747,9 @@ impl Device {
         // ⚠ The guest OS is DECLARED, never sniffed (it is a `#define` in the guest driver's build,
         // invisible on the wire); this device answers as a Linux guest.
         let chain_logs = kf_rm::ChainLogs::default();
+        // ★ 2026-10-08 (owner ruling §X): the relay wakes a guest for the non-stall events IT armed
+        // — read from the same os-event registry the served chain records them in.
+        chans.set_os_events(&chain_logs.os_events);
         let census = kf_rm::census::ControlCensusLog::new();
         // ★ The boot display: fn 72's body, kept by the GSP state machine for fn 65's encoder —
         // ONE cell across every `ReselectAtFn1` rebuild, like the census (`kf_gsp::sysinfo`) — with
@@ -1541,12 +1544,7 @@ impl Device {
             Action::RingHostInline { host_token } => {
                 // ★ P5b: a Passthrough token — ONE fenced store into the host's doorbell, and two
                 // relaxed counters for the per-token ledger. Nothing else on the vCPU.
-                // ★ 2026-10-08: the twin's engine counts the submission BEFORE the store, so its
-                // completion edge can never be judged before its doorbell (`kf_chan::ptnsi`).
                 let tok = self.plane.token_index.of_doorbell(val as u32);
-                if let Some(tok) = tok {
-                    self.chans.note_submit(tok);
-                }
                 let reached = self.rm.doorbell(host_token).is_ok();
                 if let Some(tok) = tok {
                     self.chans.note_inline(tok, reached);
@@ -3159,31 +3157,23 @@ impl Device {
                 return;
             };
             let wake = e.wakes.fetch_add(1, Ordering::Relaxed) + 1;
-            // ⊘ Only an engine a guest twin runs on: the notifier is GPU-wide, and a wake with no
-            // twin there is our own ring's, the walker's or another tenant's — not guest work.
-            let live = e.live.load(Ordering::Relaxed) > 0;
-            // ★ 2026-10-08: the Passthrough gate judges it too (`kf_chan::ptnsi`); it decides only
-            // under `KF3_PT_NSI_GATE_ENGINES=1`.
-            let (raise, verdict) = self.chans.pt_judge_engine_edge(e);
-            if !live {
-                e.unraised_no_live.fetch_add(1, Ordering::Relaxed);
-            } else if e.vector.is_none() {
-                e.unraised_no_vector.fetch_add(1, Ordering::Relaxed);
-            }
+            // ★ 2026-10-08 (owner ruling §X, `kf_chan::ptnsi`): the notifier is GPU-wide, and RM
+            // wakes every client registered on it — so does this: the engine's vector is raised
+            // whenever the guest ARMED this engine's non-stall event, whoever's work it was.
+            // Never dropped (an owed paced raise goes out on the worker's tick).
+            let verdict = self.chans.nsi_engine_edge(e, |v| {
+                // ★ 2026-10-08 (`KF3_RELAY_GET_REFRESH`): the relayed twins' GP_GET first, so the
+                // guest's handler reads the engine's value (nothing with the switch off).
+                let _ = self.chans.relay_refresh_all("a host non-stall wake");
+                self.latch_and_deliver(v);
+            });
             if kf_mem::maplog::on() || wake <= 8 || wake.is_power_of_two() {
                 eprintln!(
-                    "kf3: PT-NSI host {} notifier wake #{wake} raised={raise} verdict={verdict:?} vector={:?} live={}",
+                    "kf3: PT-NSI host {} notifier wake #{wake}: {verdict:?} (vector {:?}, live twins {})",
                     e.name,
                     e.vector,
                     e.live.load(Ordering::Relaxed)
                 );
-            }
-            if raise && let Some(v) = e.vector {
-                // ★ 2026-10-08 (`KF3_RELAY_GET_REFRESH`): the relayed twins' GP_GET first, so the
-                // guest's handler reads the engine's value (nothing with the switch off).
-                let _ = self.chans.relay_refresh_all("a host non-stall wake");
-                e.raised.fetch_add(1, Ordering::Relaxed);
-                self.latch_and_deliver(v);
             }
         };
         kf_chan::worker::run(
@@ -3196,14 +3186,15 @@ impl Device {
             &self.stop,
             &on_other,
             &|| {
-                // ★ 2026-10-08 (`kf_chan::ptnsi`): a REAL host FIFO_EVENT_MTHD edge — on this host a
-                // graphics CE's completion arrives ONLY here (measured at 9925108e, bare metal), so
-                // it is judged for every engine with a live Passthrough twin and a doorbell
-                // outstanding, and each distinct guest vector is raised once.
-                self.chans
-                    .pt_judge_fifo_edge()
-                    .for_each(|v| self.latch_and_deliver(v));
+                // ★ 2026-10-08 (owner ruling §X, `kf_chan::ptnsi`): a REAL host FIFO_EVENT_MTHD edge
+                // (on the 4070 a COPY0 copy's completion arrives here and on GR0's notifier, never
+                // on CE0's — measured at f589ab23, bare metal) — raised on a vector whose service
+                // fires the guest's own FIFO_EVENT_MTHD (`host_notify_vector`), if the guest armed
+                // it. Never dropped.
+                let _ = self.chans.nsi_fifo_edge(|v| self.latch_and_deliver(v));
             },
+            // The relay's timer: what optional pacing owes goes out even if no edge comes.
+            &|| self.chans.nsi_tick(|v| self.latch_and_deliver(v)),
         );
     }
 }
@@ -3259,8 +3250,6 @@ impl kf_chan::dbfast::Sink for Device {
             .trap_write(Class::Doorbell, 0, off, u64::from(value), 4)
         {
             Action::RingHostInline { host_token } => {
-                // ★ 2026-10-08: counted on the twin's engine BEFORE the store (`kf_chan::ptnsi`).
-                self.chans.note_submit(idx);
                 Delivered::Rang {
                     reached: self.rm.doorbell(host_token).is_ok(),
                 }

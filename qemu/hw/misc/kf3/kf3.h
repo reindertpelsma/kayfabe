@@ -48,7 +48,16 @@
 /* 24 (2026-10-09, claude/kf3-read-trace-20261008): ABI 22 plus the default-off BAR0 trace mode
  * (KF3_BAR0_READ_TRACE; OWNER_RULINGS.md sec. X): kf3_trace_mode, kf3_trace_piece, kf3_trace_admit,
  * kf3_trace_name, kf3_trace_report. 23 is another branch's (0da871c1, the input/cursor shim). */
-#define KF3_ABI 24
+/* ★ 23 (2026-10-08, claude/input-sink-trait-20261008; OWNER_RULINGS.md sec. V,
+ * docs/design/V3_DISPLAY.md sec. 8.20): ABI 22 with the broker's input and the console cursor
+ * behind kf-broker's VMM-neutral InputSink/CursorSink. This device no longer interprets events:
+ * kf3_broker_start takes Kf3InputOps (its input and cursor verbs, each one QEMU call), which Rust
+ * calls from inside kf3_broker_ready and kf3_display_cursor_apply. Gone: Kf3BrokerEvent and
+ * KF3_BROKER_* kinds, Kf3Cursor and KF3_CURSOR_DEFINE/MOUSE, kf3_display_cursor,
+ * kf3_display_cursor_pixels, kf3_display_cursor_done, and kf3_broker_ready's event array. */
+/* 25 (2026-10-09, merge of both at claude/windows-reset-20261009): 24's trace verbs AND 23's
+ * input/cursor verbs; the two surfaces are disjoint. */
+#define KF3_ABI 25
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -75,37 +84,64 @@ typedef struct Kf3Frame {
     uint64_t serial;
 } Kf3Frame;
 
-/* ★ ABI 12: one input event from the display broker, already bounded by Rust (kf_broker::Input).
- * kind: KF3_BROKER_* below. */
-typedef struct Kf3BrokerEvent {
-    uint32_t kind;
-    int32_t x, y;   /* key/button code + pressed; x, y; dx, dy; wheel +1 up / -1 down; grab; force */
-    uint32_t w0, w1; /* the absolute range (KF3_BROKER_ABS); BTN/WHEEL: w0 = 1 for the RELATIVE
-                      * pointer, 0 for the absolute one (the relay's grab policy, §8.19) */
-} Kf3BrokerEvent;
-#define KF3_BROKER_KEY 1
-#define KF3_BROKER_BTN 2
-#define KF3_BROKER_ABS 3
-#define KF3_BROKER_REL 4
-#define KF3_BROKER_WHEEL 5
-#define KF3_BROKER_GRAB 6
-#define KF3_BROKER_CLOSE 7
-#define KF3_BROKER_SURFACE 8   /* x, y = the broker window's size; w0 = its refresh in mHz (0: unknown) */
-
-/* ★ ABI 12 (docs/design/V3_DISPLAY.md §8.13): the guest's cursor for the console while a
- * cursor-capable broker hovers. what: KF3_CURSOR_DEFINE (width x height + hot spot; width 0 = the
- * hidden cursor; pixels from kf3_display_cursor_pixels), KF3_CURSOR_MOUSE (x, y, on; on is always
- * 1 — a hidden cursor is the hidden image — and the C device moves it only under an absolute
- * pointer). */
-typedef struct Kf3Cursor {
-    uint32_t what;
-    uint32_t width, height, hot_x, hot_y;
-    int32_t x, y;
-    uint32_t on;
-} Kf3Cursor;
-#define KF3_CURSOR_DEFINE 1
-#define KF3_CURSOR_MOUSE 2
+/* ★ ABI 23 (OWNER_RULINGS.md sec. V, docs/design/V3_DISPLAY.md sec. 8.20): one pointing device the
+ * guest has, as the pointers verb lists it. id: QEMU's mouse index (qemu_mouse_set); absolute: 1 a
+ * tablet, 0 a mouse; paravirtual: 1 a virtio-input device; name: NUL-terminated or cut (log only). */
+typedef struct Kf3Pointer {
+    uint32_t id;
+    uint8_t absolute, paravirtual, pad[2];
+    char name[56];
+} Kf3Pointer;
 #define KF3_CURSOR_MAX_DIM 256
+/* Kf3InputOps' button numbers (kf_broker::Button). */
+#define KF3_BTN_LEFT 0
+#define KF3_BTN_RIGHT 1
+#define KF3_BTN_MIDDLE 2
+#define KF3_BTN_SIDE 3
+#define KF3_BTN_EXTRA 4
+
+/* ★ ABI 23: this device's input and console-cursor verbs — QEMU's half of kf-broker's
+ * VMM-neutral InputSink and CursorSink. Rust decides every policy (which keys and buttons, which
+ * pointing device on grab, sync points, the missing-device warning, define/hide/move); each verb
+ * is the QEMU call that carries one decision out. Called only from inside kf3_broker_ready and
+ * kf3_display_cursor_apply (main loop, BQL held); none may block or re-enter a kf3_* entry.
+ * relative: 1 = the relative pointing device, 0 = the absolute one. Pointer verbs (button, wheel,
+ * abs, rel) are QUEUED until sync; key is a whole report. Each int32_t return is 1 = applied. */
+typedef int32_t (*Kf3InKeyFn)(void *opaque, uint32_t evdev, uint32_t down);
+typedef void (*Kf3InButtonFn)(void *opaque, uint32_t button, uint32_t down, uint32_t relative);
+typedef void (*Kf3InWheelFn)(void *opaque, int32_t dx, int32_t dy, uint32_t relative);
+typedef void (*Kf3InAbsFn)(void *opaque, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
+typedef void (*Kf3InRelFn)(void *opaque, int32_t dx, int32_t dy);
+typedef void (*Kf3InSyncFn)(void *opaque);
+typedef uint32_t (*Kf3InPointersFn)(void *opaque, Kf3Pointer *out, uint32_t cap);
+typedef void (*Kf3InSelectFn)(void *opaque, uint32_t id, uint32_t relative);
+typedef void (*Kf3InMissingFn)(void *opaque, uint32_t relative);
+typedef void (*Kf3InCloseFn)(void *opaque, uint32_t force);
+typedef void (*Kf3InResizeFn)(void *opaque, uint32_t width, uint32_t height, uint32_t refresh_mhz);
+/* the console's cursor: width x height in 1..KF3_CURSOR_MAX_DIM, the hot spot inside, pixels
+ * exactly width*height premultiplied 0xAARRGGBB words valid for the call */
+typedef int32_t (*Kf3CurDefineFn)(void *opaque, uint32_t width, uint32_t height, uint32_t hot_x,
+                                  uint32_t hot_y, const uint32_t *pixels);
+typedef int32_t (*Kf3CurHideFn)(void *opaque);
+typedef int32_t (*Kf3CurMoveFn)(void *opaque, int32_t x, int32_t y);
+typedef uint32_t (*Kf3CurAbsoluteFn)(void *opaque);
+typedef struct Kf3InputOps {
+    Kf3InKeyFn key;
+    Kf3InButtonFn button;
+    Kf3InWheelFn wheel;
+    Kf3InAbsFn abs;
+    Kf3InRelFn rel;
+    Kf3InSyncFn sync;
+    Kf3InPointersFn pointers;
+    Kf3InSelectFn select_pointer;
+    Kf3InMissingFn missing_pointer;
+    Kf3InCloseFn close;
+    Kf3InResizeFn resize_hint;
+    Kf3CurDefineFn cursor_define;
+    Kf3CurHideFn cursor_hide;
+    Kf3CurMoveFn cursor_move;
+    Kf3CurAbsoluteFn cursor_absolute;
+} Kf3InputOps;
 
 uint32_t kf3_abi_version(void);
 /* ★ ABI 8: `display` (0/1) — the virtual NVDisplay (docs/design/V3_DISPLAY.md).
@@ -180,26 +216,22 @@ int32_t kf3_set_ioeventfd(void *h, Kf3IoeventfdFn f, void *opaque, uint32_t budg
 void kf3_doorbell_site(void *h, uint64_t gpa, uint32_t add);
 /* ★ ABI 12 (display step 3): the display-broker relay. Main loop only, BQL held. Rust owns the
  * socket; it calls `watch` (fd handlers; (0, 0) BEFORE it closes the fd) and `timer`
- * (QEMU_CLOCK_REALTIME ms, -1 = none) back only from inside these entries. kf3_broker_ready: `fd`
- * is the socket, the frame eventfd, or -1 for the timer; returns the events written to `out`. */
+ * (QEMU_CLOCK_REALTIME ms, -1 = none) back only from inside these entries. ★ ABI 23: `ops` is
+ * this device's input and cursor verbs (copied; every one must be set). kf3_broker_ready: `fd` is
+ * the socket, the frame eventfd, or -1 for the timer; it DELIVERS the input through `ops` and
+ * brings the console cursor along; returns the inputs delivered. */
 typedef void (*Kf3BrokerWatchFn)(void *opaque, int32_t fd, uint32_t read, uint32_t write);
 typedef void (*Kf3BrokerTimerFn)(void *opaque, int64_t deadline_ms);
 int32_t kf3_broker_start(void *h, const char *path, int64_t extra_uid, Kf3BrokerWatchFn watch,
-                         Kf3BrokerTimerFn timer, void *opaque, uint64_t now_ms, char *err,
-                         size_t err_len);
+                         Kf3BrokerTimerFn timer, const Kf3InputOps *ops, void *opaque,
+                         uint64_t now_ms, char *err, size_t err_len);
 int32_t kf3_broker_frame_fd(void *h);
-int32_t kf3_broker_ready(void *h, int32_t fd, uint32_t rd, uint32_t wr, uint64_t now_ms,
-                         Kf3BrokerEvent *out, uint32_t cap);
+int32_t kf3_broker_ready(void *h, int32_t fd, uint32_t rd, uint32_t wr, uint64_t now_ms);
 void kf3_broker_stop(void *h);
-/* ★ ABI 12 (§8.13): the console's cursor in hover (main loop: gfx_update after its frame, and each
- * broker pump). kf3_display_cursor returns out->what (0: nothing to do); after a DEFINE with
- * width > 0, kf3_display_cursor_pixels fills exactly width*height QEMUCursor words (0xAARRGGBB,
- * PREMULTIPLIED — what VNC's alpha cursor carries) or returns -1; after any nonzero what,
- * kf3_display_cursor_done reports the KF3_CURSOR_* parts that were applied (a part not applied is
- * handed out again later). */
-int32_t kf3_display_cursor(void *h, Kf3Cursor *out);
-int32_t kf3_display_cursor_pixels(void *h, uint32_t *data, uint32_t words);
-void kf3_display_cursor_done(void *h, uint32_t applied);
+/* ★ §8.13, ⊘ ABI 23: the console's cursor in hover (main loop: gfx_update after its frame, and the
+ * refresh answer) — Rust decides and calls the cursor verbs given at kf3_broker_start; returns the
+ * parts handed out (0: nothing, no display, or no broker). */
+int32_t kf3_display_cursor_apply(void *h);
 /* ★ ABI 16 (§8.16, main loop): the console's on-demand refresh. kf3_display_refresh asks for a
  * frame no older than now: 1 = the worker will make kf3_display_refresh_fd readable when the newest
  * frame is (call kf3_display_refresh_drain, show the frame, end the wait); 0 = no answer will come

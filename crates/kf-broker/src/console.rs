@@ -188,6 +188,24 @@ impl ConsoleCursorUpdate {
     }
 }
 
+/// ★ **What a VMM implements so its own console shows the guest's cursor in hover** (§8.13;
+/// `OWNER_RULINGS.md` §V, 2026-10-08) — [`ConsoleCursor::apply`] decides what and when, this only
+/// does it. Main loop; nothing may block. Each verb returns whether it was APPLIED: a part not
+/// applied is handed out again at a later poll.
+pub trait CursorSink {
+    /// Show `shape` with `pixels` — exactly `width * height` host-endian `0xAARRGGBB` words,
+    /// PREMULTIPLIED, rows tight ([`ConsoleCursor::pixels`]); `1..=CURSOR_MAX_DIM` each way, the
+    /// hot spot inside.
+    fn define_cursor(&mut self, shape: CursorShape, pixels: &[u32]) -> bool;
+    /// Show no cursor (the hidden image; the pointer is never turned "off").
+    fn hide_cursor(&mut self) -> bool;
+    /// Put the cursor's hot spot at `(x, y)` on the console's frame.
+    fn move_cursor(&mut self, x: i32, y: i32) -> bool;
+    /// Whether the console's pointer input is ABSOLUTE now. A move is made only then: a frontend
+    /// may warp the HOST pointer for a relative one (QEMU's GTK, `ui/gtk.c:447-467`).
+    fn pointer_is_absolute(&mut self) -> bool;
+}
+
 /// What a poll changed, so [`ConsoleCursor::done`] can take back the part the VMM did not apply.
 #[derive(Debug)]
 struct Undo {
@@ -330,6 +348,45 @@ impl ConsoleCursor {
         if u.moved && !mouse {
             self.mouse = u.mouse;
         }
+    }
+
+    /// ★ One poll ([`ConsoleCursor::poll`]) carried out through `sink`, and what was applied
+    /// reported back ([`ConsoleCursor::done`]): an image is defined only with its own pixels and a
+    /// shape inside [`crate::wire::CURSOR_MAX_DIM`] with the hot spot inside it; the pointer is
+    /// moved only under an absolute pointer. At most three sink calls. Returns the poll's update.
+    pub fn apply(
+        &mut self,
+        share: &CursorShare,
+        point: Option<(i32, i32)>,
+        frame: ShownFrame,
+        now_ms: u64,
+        sink: &mut dyn CursorSink,
+    ) -> ConsoleCursorUpdate {
+        let u = self.poll(share, point, frame, now_ms);
+        if u.is_empty() {
+            return u;
+        }
+        let max = crate::wire::CURSOR_MAX_DIM;
+        let define = match u.define {
+            None => false,
+            Some(None) => sink.hide_cursor(),
+            Some(Some(sh))
+                if (1..=max).contains(&sh.width)
+                    && (1..=max).contains(&sh.height)
+                    && sh.hot.0 < sh.width
+                    && sh.hot.1 < sh.height =>
+            {
+                let mut px = vec![0u32; sh.width as usize * sh.height as usize];
+                self.pixels(&mut px).is_ok() && sink.define_cursor(sh, &px)
+            }
+            Some(Some(_)) => false,
+        };
+        let mouse = match u.mouse {
+            Some((x, y, _)) if sink.pointer_is_absolute() => sink.move_cursor(x, y),
+            _ => false,
+        };
+        self.done(define, mouse);
+        u
     }
 
     /// DEFINEs handed out so far.
@@ -634,6 +691,74 @@ mod tests {
                 .is_empty(),
             "applied: not repeated"
         );
+    }
+
+    /// A [`CursorSink`] that records, with a switchable absolute pointer and define result.
+    #[derive(Default)]
+    struct Sink {
+        calls: Vec<String>,
+        relative: bool,
+        refuse_define: bool,
+    }
+
+    impl CursorSink for Sink {
+        fn define_cursor(&mut self, s: CursorShape, px: &[u32]) -> bool {
+            assert_eq!(px.len(), (s.width * s.height) as usize);
+            self.calls.push(format!(
+                "define {}x{} hot {:?} px0 {:#010x}",
+                s.width, s.height, s.hot, px[0]
+            ));
+            !self.refuse_define
+        }
+        fn hide_cursor(&mut self) -> bool {
+            self.calls.push("hide".into());
+            true
+        }
+        fn move_cursor(&mut self, x: i32, y: i32) -> bool {
+            self.calls.push(format!("move {x},{y}"));
+            true
+        }
+        fn pointer_is_absolute(&mut self) -> bool {
+            !self.relative
+        }
+    }
+
+    /// ★ §8.20 (`OWNER_RULINGS.md` §V): the console cursor through the VMM-neutral sink — the
+    /// decisions kf3.c made (hidden for no image, a define only with its own pixels, a move only
+    /// under an ABSOLUTE pointer, a part not applied handed out again) are `apply`'s now.
+    #[test]
+    fn the_cursor_sink_is_told_define_move_and_hide_and_reports_what_it_applied() {
+        let share = CursorShare::new();
+        let mut c = ConsoleCursor::default();
+        let mut s = Sink {
+            relative: true,
+            refuse_define: true,
+            ..Sink::default()
+        };
+        hover(&share);
+        share.post(img(8, (2, 3)));
+        c.apply(&share, Some((10, 20)), FREE, 0, &mut s);
+        assert_eq!(
+            s.calls,
+            ["define 32x32 hot (2, 3) px0 0x0b0a0908"],
+            "relative input: no move; the define was refused"
+        );
+        assert_eq!(c.failed(), 1);
+        s.calls.clear();
+        (s.relative, s.refuse_define) = (false, false);
+        c.apply(&share, Some((10, 20)), FREE, DEFINE_MIN_MS, &mut s);
+        assert_eq!(
+            s.calls,
+            ["define 32x32 hot (2, 3) px0 0x0b0a0908", "move 12,23"],
+            "both handed out again; the move is the hot spot's place"
+        );
+        s.calls.clear();
+        c.apply(&share, Some((10, 20)), FREE, 2 * DEFINE_MIN_MS, &mut s);
+        assert!(s.calls.is_empty(), "applied: not repeated");
+        // the broker goes away: the console's cursor is hidden
+        share.set_mode(CursorMode::Off);
+        c.apply(&share, Some((10, 20)), FREE, 3 * DEFINE_MIN_MS, &mut s);
+        assert_eq!(s.calls, ["hide"]);
     }
 
     /// ★ The console's point survives every value a head can hold — `(-1, -1)` included, which the

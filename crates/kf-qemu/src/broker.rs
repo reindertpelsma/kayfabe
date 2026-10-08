@@ -12,8 +12,11 @@
 //!   device lives. Unset, nothing here exists and the console keeps `cuMemAllocHost` frames.
 //! - **the relay seat** ([`BrokerSeat::start`] / [`BrokerSeat::ready`] / [`BrokerSeat::stop`],
 //!   QEMU's MAIN LOOP only): the C device registers the socket and a timer through the hooks it
-//!   passed, wakes the relay for socket readiness, the worker's frame eventfd and the timer, and
-//!   injects the [`Input`] that comes back.
+//!   passed, wakes the relay for socket readiness, the worker's frame eventfd and the timer.
+//!   ★ ABI 23 (`OWNER_RULINGS.md` §V, `V3_DISPLAY.md` §8.20): the [`Input`] that comes back is
+//!   delivered HERE by kf-broker's [`InputPolicy`] through the C device's verbs
+//!   ([`QemuSink`], kf-broker's VMM-neutral `InputSink`), and the console cursor through the same
+//!   verbs (`CursorSink`) — the C device decides nothing.
 //!
 //! - ★ **the guest's cursor** ([`BrokerSeat::cursor`], `OWNER_RULINGS.md` §O): the
 //!   [`CursorShare`] the relay publishes the hover/grab mode in and the worker posts the guest's
@@ -24,11 +27,22 @@
 //! the worker and the main loop (the relay's mutex is taken only on the main loop; a status read
 //! from elsewhere only tries it).
 
-use crate::raw_unsafe::BrokerHooks;
+use crate::raw_unsafe::{BrokerHooks, QemuSink};
 use kf_broker::{
-    ConsoleCursor, ConsoleCursorUpdate, CursorShare, FrameRing, Input, InstallRefusal, Relay,
-    RelayConfig, ShownFrame, SlotFds, UnixLink,
+    ConsoleCursor, ConsoleCursorUpdate, CursorShare, FrameRing, Input, InputPolicy, InstallRefusal,
+    Relay, RelayConfig, ShownFrame, SlotFds, UnixLink,
 };
+
+/// The relay with what the main loop drives it with: the C device's hooks, the VM-lifetime input
+/// policy, and the C device's input verbs.
+struct Seated {
+    relay: Relay<UnixLink>,
+    hooks: BrokerHooks,
+    policy: InputPolicy,
+    sink: QemuSink,
+    /// Scratch for one read's inputs (at most a batch).
+    inputs: Vec<Input>,
+}
 use kf_cuda::display::{DisplayGpu, Frame};
 use kf_linux_raw::{
     Backing, CachePolicy, HostPageSize, HostProt, MappedRegion, Notifier, SharedRam, udmabuf_create,
@@ -43,13 +57,14 @@ pub struct BrokerSeat {
     wake: Notifier,
     /// `/dev/udmabuf`, when it could be opened (`root:kvm 0660`): the dma-buf rungs.
     udmabuf: Option<std::fs::File>,
-    /// The relay and the C device's hooks — the main loop only.
-    relay: Mutex<Option<(Relay<UnixLink>, BrokerHooks)>>,
+    /// The relay, the C device's hooks and verbs, and the input policy — the main loop only.
+    relay: Mutex<Option<Seated>>,
     /// ★ §O: the guest's cursor between the worker and the relay.
     cursor: Arc<CursorShare>,
-    /// ★ §8.13: the same cursor for QEMU's own console while the broker hovers — the main loop
-    /// only (the console's `gfx_update`), so the lock is never contended; it is `try_lock`ed.
-    console: Mutex<ConsoleCursor>,
+    /// ★ §8.13: the same cursor for QEMU's own console while the broker hovers, and the C
+    /// device's cursor verbs (from [`BrokerSeat::start`]) — the main loop only (the console's
+    /// `gfx_update`, each pump), so the lock is never contended; it is `try_lock`ed.
+    console: Mutex<(ConsoleCursor, Option<QemuSink>)>,
     /// ★ §8.16: whether the relay was ACTIVE at the previous [`BrokerSeat::ready`] (main loop).
     was_active: std::sync::atomic::AtomicBool,
 }
@@ -90,46 +105,31 @@ impl BrokerSeat {
             udmabuf,
             relay: Mutex::new(None),
             cursor: Arc::new(CursorShare::new()),
-            console: Mutex::new(ConsoleCursor::default()),
+            console: Mutex::new((ConsoleCursor::default(), None)),
             was_active: std::sync::atomic::AtomicBool::new(false),
         })
     }
 
-    /// ★ §8.13, **main loop** (the console's `gfx_update`, and each broker pump): what QEMU's
-    /// console should be told about the guest's cursor now ([`kf_broker::ConsoleCursor::poll`]),
-    /// given `point` (the cursor image's top-left on the console's frame), `frame` (what the frame
-    /// the console shows carries) and `now_ms` (the pacing clock). Nothing when the lock is busy
-    /// (never, on one thread).
-    pub fn console_cursor(
+    /// ★ §8.13, ⊘ ABI 23 (`OWNER_RULINGS.md` §V), **main loop** (the console's `gfx_update`, its
+    /// refresh answer, and each broker pump): bring QEMU's console cursor to the guest's — kf-broker
+    /// decides ([`kf_broker::ConsoleCursor::apply`]) given `point` (the cursor image's top-left on
+    /// the console's frame), `frame` (what the frame the console shows carries) and `now_ms` (the
+    /// pacing clock), and calls the C device's cursor verbs. Nothing before [`BrokerSeat::start`]
+    /// gave the verbs, or when the lock is busy (never, on one thread).
+    pub fn apply_console_cursor(
         &self,
         point: Option<(i32, i32)>,
         frame: ShownFrame,
         now_ms: u64,
     ) -> ConsoleCursorUpdate {
-        self.console
-            .try_lock()
-            .map(|mut c| c.poll(&self.cursor, point, frame, now_ms))
-            .unwrap_or_default()
-    }
-
-    /// ★ §8.13, **main loop**: what the C device applied of the last [`BrokerSeat::console_cursor`]
-    /// ([`kf_broker::ConsoleCursor::done`]) — a part it did not apply is handed out again.
-    pub fn console_cursor_done(&self, define: bool, mouse: bool) {
-        if let Ok(mut c) = self.console.try_lock() {
-            c.done(define, mouse);
+        let Ok(mut g) = self.console.try_lock() else {
+            return ConsoleCursorUpdate::default();
+        };
+        let (console, sink) = &mut *g;
+        match sink.as_mut() {
+            Some(s) => console.apply(&self.cursor, point, frame, now_ms, s),
+            None => ConsoleCursorUpdate::default(),
         }
-    }
-
-    /// ★ §8.13, **main loop**: the image the last define described, into `out` — exactly its
-    /// `width * height` words of premultiplied `0xAARRGGBB` ([`kf_broker::ConsoleCursor::pixels`]).
-    ///
-    /// # Errors
-    /// Nothing latched, a size mismatch, or the lock busy — nothing written.
-    pub fn console_cursor_pixels(&self, out: &mut [u32]) -> Result<(), String> {
-        self.console
-            .try_lock()
-            .map_err(|_| "the console cursor is busy".to_string())?
-            .pixels(out)
     }
 
     /// ★ **Worker** (and the relay, through its own handle): the guest's cursor share — the mode
@@ -233,6 +233,8 @@ impl BrokerSeat {
     /// loop, after `-run-with user=`/`-runas` dropped privileges; a broker that is not up yet is
     /// retried in the background (never a startup dependency).
     ///
+    /// ★ ABI 23: `sink` is the C device's input and console-cursor verbs.
+    ///
     /// # Errors
     /// A refused path, a `display-broker-uid` that is not -1 or a uid, or a second start.
     pub fn start(
@@ -240,6 +242,7 @@ impl BrokerSeat {
         path: &std::path::Path,
         extra_uid: i64,
         mut hooks: BrokerHooks,
+        sink: QemuSink,
         now_ms: u64,
     ) -> Result<(), String> {
         kf_linux_raw::check_socket_path(path).map_err(|e| format!("display-broker: {e}"))?;
@@ -267,45 +270,63 @@ impl BrokerSeat {
         )
         .with_cursor(self.cursor.clone());
         relay.start(now_ms, &mut hooks);
-        *g = Some((relay, hooks));
+        if let Ok(mut c) = self.console.try_lock() {
+            c.1 = Some(sink);
+        }
+        *g = Some(Seated {
+            relay,
+            hooks,
+            policy: InputPolicy::new(),
+            sink,
+            inputs: Vec::with_capacity(kf_broker::conn::READ_BATCH),
+        });
         Ok(())
     }
 
     /// ★ **Main loop**: something is ready — `fd` is the socket (`rd`/`wr`), the frame eventfd,
-    /// or `-1` for the timer. Input for the C device is appended to `out` (at most `cap`).
-    /// Returns whether a broker is connected and ACTIVE (its activity counts as demand).
-    pub fn ready(
-        &self,
-        fd: i32,
-        rd: bool,
-        wr: bool,
-        now_ms: u64,
-        out: &mut Vec<Input>,
-        cap: usize,
-    ) -> bool {
+    /// or `-1` for the timer. ★ ABI 23: the input of one read (at most a batch) is delivered
+    /// through the C device's verbs by kf-broker's [`InputPolicy`]; a connection that passed the
+    /// peer check gets the policy's first-connection device check. Returns whether a broker is
+    /// connected and ACTIVE (its activity counts as demand) and the inputs delivered.
+    pub fn ready(&self, fd: i32, rd: bool, wr: bool, now_ms: u64) -> (bool, usize) {
         let Ok(mut g) = self.relay.lock() else {
-            return false;
+            return (false, 0);
         };
-        let Some((relay, hooks)) = g.as_mut() else {
-            return false;
+        let Some(s) = g.as_mut() else {
+            return (false, 0);
         };
+        s.inputs.clear();
         if fd >= 0 && fd == self.frame_fd() {
             let _ = self.wake.drain();
-            relay.on_frame(now_ms, hooks);
-        } else if fd >= 0 && Some(fd) == relay.socket_fd() {
-            relay.on_socket(now_ms, rd, wr, hooks, out, cap);
+            s.relay.on_frame(now_ms, &mut s.hooks);
+        } else if fd >= 0 && Some(fd) == s.relay.socket_fd() {
+            s.relay.on_socket(
+                now_ms,
+                rd,
+                wr,
+                &mut s.hooks,
+                &mut s.inputs,
+                kf_broker::conn::READ_BATCH,
+            );
         } else {
-            relay.on_timer(now_ms, hooks);
+            s.relay.on_timer(now_ms, &mut s.hooks);
         }
-        relay.active()
+        if s.relay.connected() {
+            s.policy.connected(&mut s.sink);
+        }
+        s.policy.deliver(&s.inputs, &mut s.sink);
+        (s.relay.active(), s.inputs.len())
     }
 
     /// ★ **Main loop**, device exit: unwatch, close, no timer.
     pub fn stop(&self) {
         if let Ok(mut g) = self.relay.lock()
-            && let Some((mut relay, mut hooks)) = g.take()
+            && let Some(mut s) = g.take()
         {
-            relay.stop(&mut hooks);
+            s.relay.stop(&mut s.hooks);
+        }
+        if let Ok(mut c) = self.console.try_lock() {
+            c.1 = None;
         }
     }
 
@@ -313,9 +334,10 @@ impl BrokerSeat {
     #[must_use]
     pub fn status(&self) -> String {
         match self.relay.try_lock() {
-            Ok(g) => g
-                .as_ref()
-                .map_or_else(|| "broker[not started]".into(), |(r, _)| r.status()),
+            Ok(g) => g.as_ref().map_or_else(
+                || "broker[not started]".into(),
+                |s| format!("{} {}", s.relay.status(), s.policy.status()),
+            ),
             Err(_) => "broker[busy]".into(),
         }
     }

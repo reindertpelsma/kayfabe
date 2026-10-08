@@ -18,11 +18,15 @@
 //!   effective uid at each connect, `display-broker-uid`);
 //! - [`cursor`] — ★ the guest's cursor as the host pointer in hover mode (`OWNER_RULINGS.md` §O):
 //!   the [`CursorShare`] the worker and the relay meet in, and what the broker is sent;
-//! - [`console`] — ★ the same cursor for the VMM's own console while a broker hovers (§8.13).
+//! - [`console`] — ★ the same cursor for the VMM's own console while a broker hovers (§8.13),
+//!   applied through the VMM-neutral [`CursorSink`];
+//! - [`input`] — ★ the input policy (`OWNER_RULINGS.md` §V, §8.20) and the VMM-neutral
+//!   [`InputSink`] it drives.
 //!
 //! The VMM's part is small and is the only VMM-specific code: register the socket and a timer
-//! ([`Host`]), wake the relay when the worker publishes a frame, and inject [`Input`] through
-//! its own input devices (for QEMU, `qemu/hw/misc/kf3/kf3.c`).
+//! ([`Host`]), wake the relay when the worker publishes a frame, and implement [`InputSink`] and
+//! [`CursorSink`] over its own input devices and console (for QEMU, `qemu/hw/misc/kf3/kf3.c`
+//! through `kf-qemu`).
 //!
 //! Attribution: protocol semantics and the input mapping are ported from nvkvm-pv
 //! `src/qemu/nvkvm_display_relay.c` at `368d2db` (Apache-2.0, same author); the vendored header
@@ -32,6 +36,7 @@ pub mod conn;
 pub mod console;
 pub mod cursor;
 pub mod gpucopy;
+pub mod input;
 pub mod link;
 pub mod slots;
 pub mod wire;
@@ -40,9 +45,13 @@ pub use conn::{Counters, Host, Input, Link, Pointer, Recv, Relay, RelayConfig, R
 #[doc(hidden)]
 pub use conn::{LogCapture, capture_log};
 pub use console::{
-    ConsoleCursor, ConsoleCursorUpdate, CursorPoint, CursorShape, FrameCursors, ShownFrame,
+    ConsoleCursor, ConsoleCursorUpdate, CursorPoint, CursorShape, CursorSink, FrameCursors,
+    ShownFrame,
 };
 pub use cursor::{CursorImage, CursorMode, CursorShare, CursorWant, HotTracker, PointerAbs};
+pub use input::{
+    AbsRange, Button, InputCounters, InputPolicy, InputSink, PointerDevice, PowerRequest,
+};
 pub use link::{MAX_BROKER_UID, UnixLink, broker_uid_property, broker_uids, effective_uid};
 pub use slots::{
     FrameGeom, FrameRing, InstallRefusal, Kind, SlotFds, Take, VramFds, VramGeom, frame_bytes,

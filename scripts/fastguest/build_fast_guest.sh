@@ -552,6 +552,14 @@ else
     echo "FASTGUEST: multi-GPU runs done at $(cut -d' ' -f1 /proc/uptime)s (worst=$worst)"
     echo "FASTGUEST: client rc=$worst at $(cut -d' ' -f1 /proc/uptime)s"
 fi
+# ★ 2026-10-09: `KF_POWEROFF_DELAY_S=<n>` (kernel cmdline via KF_APPEND, default 0) — wait n seconds
+# (whole numbers, at most 60) before powering off, so the guest RM's teardown of the client (its
+# FREEs) reaches the device before its end-of-run report.
+case "${KF_POWEROFF_DELAY_S:-0}" in
+    ''|*[!0-9]*) ;;
+    *) d=$KF_POWEROFF_DELAY_S; [ "$d" -gt 60 ] && d=60
+       [ "$d" -gt 0 ] && { echo "FASTGUEST: waiting ${d}s before poweroff (KF_POWEROFF_DELAY_S)"; sleep "$d"; } ;;
+esac
 echo "FASTGUEST: DONE"
 poweroff -f
 INIT

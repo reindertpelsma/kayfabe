@@ -1,0 +1,19 @@
+NSI_START 2026-10-09T00:24:03+02:00 rev=d00c9f2b steps=guest suite30 src=d00c9f2b qemu=0 9 MiB, 0 %
+== STEP guest start 2026-10-09T00:24:03+02:00 qemu=0
+--ce-interrupt               PASS      10s   10s
+FAST_CELL_ARM arm=ce-interrupt verdict=PASS secs=10 client_ms=6750
+
+FAST_SUITE_PASS=2 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=2
+FAST_SUITE_RC=0
+== STEP guest exit 2026-10-09T00:24:20+02:00 qemu=0
+== STEP suite30 start 2026-10-09T00:24:20+02:00 qemu=0
+FAST_CELL_ARM arm=concurrent-fuzz verdict=PASS secs=5 client_ms=1520
+--cross-client-leak          PASS      4s    4s
+FAST_CELL_ARM arm=cross-client-leak verdict=PASS secs=4 client_ms=470
+--rpc-mixed-allocs           PASS      5s    5s
+FAST_CELL_ARM arm=rpc-mixed-allocs verdict=PASS secs=5 client_ms=1240
+
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAST_SUITE_RC=0
+== STEP suite30 exit 2026-10-09T00:27:44+02:00 qemu=0
+NSI_DONE 2026-10-09T00:27:44+02:00

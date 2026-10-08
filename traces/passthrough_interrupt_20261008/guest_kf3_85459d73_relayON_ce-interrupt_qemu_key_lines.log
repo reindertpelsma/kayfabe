@@ -1,0 +1,51 @@
+kf3: channel plane: Translated rings on host COPY2 (engine 0xb); completions on FIFO_EVENT_MTHD + CE2
+kf3: interrupt plane: host non-stall events -> guest vectors [GR0->Some(0) CE0->Some(0) CE1->Some(0) CE2->Some(1) CE3->Some(2) NVENC1->Some(4) NVDEC0->Some(3) OFA->Some(5)]
+kf3: passthrough NSI relay: host FIFO_EVENT_MTHD edges -> the guest vector of every engine with a live Passthrough twin AND a doorbell outstanding (relay=on afterglow=1000000 us gate_engine_notifiers=false; KF3_PT_NSI_RELAY / KF3_PT_NSI_AFTERGLOW_MS / KF3_PT_NSI_GATE_ENGINES)
+kf3: PT-NSI host GR0 notifier wake #1 raised=false verdict=NoTwin vector=Some(0) live=0
+kf3: PT-NSI host GR0 notifier wake #2 raised=false verdict=NoTwin vector=Some(0) live=0
+kf3: PT-NSI host GR0 notifier wake #3 raised=false verdict=NoTwin vector=Some(0) live=0
+kf3: PT-NSI host GR0 notifier wake #4 raised=false verdict=NoTwin vector=Some(0) live=0
+kf3: PT-NSI host GR0 notifier wake #5 raised=false verdict=NoTwin vector=Some(0) live=0
+kf3: PT-NSI host GR0 notifier wake #6 raised=false verdict=NoTwin vector=Some(0) live=0
+kf3: PT-NSI host GR0 notifier wake #7 raised=false verdict=NoTwin vector=Some(0) live=0
+kf3: PT-NSI host GR0 notifier wake #8 raised=false verdict=NoTwin vector=Some(0) live=0
+kf3: PT-NSI host GR0 notifier wake #16 raised=false verdict=NoTwin vector=Some(0) live=0
+kf3: act birth translated: chan 0xc1e00006:0x2 BORN Translated: token 0x801 -> host 0x10018 in VasKey(13970166069873082380) gpfifo=0x120064000x4096 userd=Some(Framebuffer { base: 8243642368, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birt
+kf3: PT-NSI host GR0 notifier wake #32 raised=false verdict=NoTwin vector=Some(0) live=0
+kf3: act birth translated: chan 0xc1e00007:0x2 BORN Translated: token 0x802 -> host 0x10019 in VasKey(13970166074168049674) gpfifo=0x320064000x4096 userd=Some(Framebuffer { base: 8243707904, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birt
+kf3: PT-NSI host CE2 notifier wake #1 raised=false verdict=NoTwin vector=Some(1) live=0
+kf3: PT-NSI host CE2 notifier wake #2 raised=false verdict=NoTwin vector=Some(1) live=0
+kf3: PT-NSI host GR0 notifier wake #64 raised=false verdict=NoTwin vector=Some(0) live=0
+kf3: act birth passthrough: chan 0xc1d0000b:0xcafe000c BORN Passthrough: token 0x3 -> host 0x1a in VasKey(13965662495126192136) gpfifo=0x120021000x64 userd=Store { store: 3405643781, off: 274432 } engine=0x9 declared_kernel_pid=false privilege=1 rc=none fast=off (1851 us, off the GSP lock)
+kf3: act birth passthrough: chan 0xc1d0000b:0xcafe0010 BORN Passthrough: token 0x804 -> host 0x1001b in VasKey(13965662495126192136) gpfifo=0x120031000x64 userd=Store { store: 3405643781, off: 405504 } engine=0xb declared_kernel_pid=false privilege=1 rc=none fast=off (1563 us, off the GSP lock)
+kf3: PT-NSI host GR0 notifier wake #128 raised=false verdict=NoTwin vector=Some(0) live=0
+kf3: PT-NSI host FIFO_EVENT_MTHD edge -> guest CE0 vector Some(0): Fresh (live twins 1; edges=132 fresh=1 afterglow=0 idle=6 no_twin=125 submits=1; verdict #1)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge -> guest CE0 vector Some(0): Fresh (live twins 1; edges=133 fresh=2 afterglow=0 idle=6 no_twin=125 submits=2; verdict #2)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge -> guest CE0 vector Some(0): Fresh (live twins 1; edges=134 fresh=3 afterglow=0 idle=6 no_twin=125 submits=3; verdict #3)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge -> guest CE0 vector Some(0): Fresh (live twins 1; edges=135 fresh=4 afterglow=0 idle=6 no_twin=125 submits=4; verdict #4)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge -> guest CE0 vector Some(0): Fresh (live twins 1; edges=136 fresh=5 afterglow=0 idle=6 no_twin=125 submits=5; verdict #5)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge -> guest CE0 vector Some(0): Fresh (live twins 1; edges=137 fresh=6 afterglow=0 idle=6 no_twin=125 submits=6; verdict #6)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge -> guest CE0 vector Some(0): Fresh (live twins 1; edges=138 fresh=7 afterglow=0 idle=6 no_twin=125 submits=7; verdict #7)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge -> guest CE0 vector Some(0): Fresh (live twins 1; edges=139 fresh=8 afterglow=0 idle=6 no_twin=125 submits=8; verdict #8)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge -> guest CE0 vector Some(0): Fresh (live twins 1; edges=140 fresh=9 afterglow=0 idle=6 no_twin=125 submits=9; verdict #9)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge -> guest CE0 vector Some(0): Fresh (live twins 1; edges=141 fresh=10 afterglow=0 idle=6 no_twin=125 submits=10; verdict #10)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge -> guest CE0 vector Some(0): Fresh (live twins 1; edges=142 fresh=11 afterglow=0 idle=6 no_twin=125 submits=11; verdict #11)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge -> guest CE0 vector Some(0): Fresh (live twins 1; edges=143 fresh=12 afterglow=0 idle=6 no_twin=125 submits=12; verdict #12)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge -> guest CE0 vector Some(0): Fresh (live twins 1; edges=144 fresh=13 afterglow=0 idle=6 no_twin=125 submits=13; verdict #13)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge -> guest CE0 vector Some(0): Fresh (live twins 1; edges=145 fresh=14 afterglow=0 idle=6 no_twin=125 submits=14; verdict #14)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge -> guest CE0 vector Some(0): Fresh (live twins 1; edges=146 fresh=15 afterglow=0 idle=6 no_twin=125 submits=15; verdict #15)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge -> guest CE0 vector Some(0): Fresh (live twins 1; edges=147 fresh=16 afterglow=0 idle=6 no_twin=125 submits=16; verdict #16)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge -> guest CE0 vector Some(0): Fresh (live twins 1; edges=163 fresh=32 afterglow=0 idle=6 no_twin=125 submits=32; verdict #32)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge -> guest CE0 vector Some(0): Fresh (live twins 1; edges=195 fresh=64 afterglow=0 idle=6 no_twin=125 submits=64; verdict #64)
+kf3: PT-NSI host CE2 notifier wake #3 raised=true verdict=Fresh vector=Some(1) live=1
+kf3: PT-NSI host CE2 notifier wake #4 raised=true verdict=Fresh vector=Some(1) live=1
+kf3: PT-NSI host CE2 notifier wake #5 raised=true verdict=Fresh vector=Some(1) live=1
+kf3: PT-NSI host CE2 notifier wake #6 raised=true verdict=Fresh vector=Some(1) live=1
+kf3: PT-NSI host CE2 notifier wake #7 raised=true verdict=Fresh vector=Some(1) live=1
+kf3: PT-NSI host CE2 notifier wake #8 raised=true verdict=Fresh vector=Some(1) live=1
+kf3: PT-NSI host CE2 notifier wake #16 raised=true verdict=Fresh vector=Some(1) live=1
+kf3: PT-NSI host FIFO_EVENT_MTHD edge -> guest CE2 vector Some(1): Afterglow (live twins 1; edges=261 fresh=14 afterglow=14 idle=102 no_twin=131 submits=14; verdict #128)
+kf3: PT-NSI host CE2 notifier wake #32 raised=true verdict=Fresh vector=Some(1) live=1
+kf3: chan token 0x802 (host 0x10019) RETIRED, forwarded=2 submissions=2 splits=0/0 serves=5 last_put=Some(2) gp_get=Some(2) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: chan token 0x801 (host 0x10018) RETIRED, forwarded=8 submissions=8 splits=0/0 serves=15 last_put=Some(8) gp_get=Some(8) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+pt_nsi=[fifo_edges=277 verdicts_raised=184 unvectored=0 relay=on CE0[edges=277 fresh=101 afterglow=37 idle=14 no_twin=125 submits=110 vec=Some(0) live=1 wakes=0 raised=138] CE2[edges=325 fresh=46 afterglow=46 idle=102 no_twin=131 submits=46 vec=Some(1) live=1 wakes=48 raised=92]] served=6 parks=529 host_rings=2 contended=0 poisoned=0 tokens=
