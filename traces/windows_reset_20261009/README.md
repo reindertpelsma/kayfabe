@@ -114,3 +114,63 @@ connect. **Falsifier:** with both flags confirmed, no refusal and the engine con
 tears the display down / bugchecks 0x116 → the halt was not the cause (then the read trace and the GSP observer of this
 boot are the comparison with boot3). **Other outcome:** a different `scanout REFUSED` line → the next wall on the same
 path (not a falsification; it names the next field to support).
+
+## 4. Run 100 (binary `kf3-bins/f5c93b21`, boot 1): the halt is gone; the 0x116 is not — two new walls, measured
+
+`[measured, run 100 at f5c93b21, RTX 4070, 2026-10-09 23:09:56-23:13:28 UTC]` files: [harness log](run100-harness.log),
+[marker](run100-marker.txt), [command](run100-command.json), [qemu log](run100-qemu.log.gz), [BAR0 read trace](run100-trace.log.gz)
+(VFIO reference format; 138242 records, flushed 23:10:05-23:10:16), [GSP observer](run100-gsp.jsonl.gz),
+[bugcheck recovery](run100-bugcheck.json) and [dump headers](run100-dump-headers.txt), [System event log tail](run100-system-evtx-tail.txt), probe outputs `run100-flip-*.out`.
+kf3 clock → UTC: `UTC = kf − 273462.364 s` (window-0 PUT `0x740` at kf 273473.554091 = trace 23:10:11.189627; the teardown's
+`RM_INTR_EN ← 0` at kf 273476.995547 = 23:10:14.631097, residual 0.1 ms).
+
+**H-mirror's prediction, item by item:** both EXPERIMENT lines — yes; `a mirrored LUT accepted (ILUT mirrored=true, OLUT … mirror:
+true)` — yes; **no `scanout REFUSED`** — yes; the engine consumes: `updates` 66 at +17 s (run 99: 14), methods 6102 → 11477, **28 window
+LATCHes at 60 Hz with WindowImm PUTs** (run 99: none after the halt) — yes; `GET_CHANNEL_INFO` ×2 in the boot (= hardware's 2; run 99:
+690) — yes. But: **display teardown 7.2 s after the first frame and bugcheck 0x116 again** — `[measured]` `Minidump/100826-4875-01.dmp`
+`0x116 (0xffffa50b72918010, 0xfffff8016b1d4930, 0xffffffffc000009a, 0x4)` (System event 1001 at the next boot: "rebooted from a
+bugcheck"). Windows rebooted itself (`-action reboot=reset`); the second Windows boot in the same QEMU process has the adapter at
+**Code 43** (known: an in-process reboot never restarts kf3's GSP model), so the D3D probes found only the Basic Render Driver and
+`nvidia-smi` failed. **Verdict:** H-mirror is confirmed for what it said about the halt (the halt caused run 99's stalled flips and
+its GET_CHANNEL_INFO poll) and **falsified as the cause of the 0x116**: with the halt gone the guest still TDRs. Two further walls:
+
+1. **The TDR trigger (open): all guest GPU work stops at 23:10:11.24 — 5 s of desktop after the first frame.**
+   `[measured, run 100 kf3 log + BAR0 trace]` first window scanout `+10412 ms` (≈23:10:06.4); flips and LATCHes at 60 Hz up to the
+   last LATCH at 23:10:11.199; the last user-work doorbell `0x20016` = token `0x1016` (the Passthrough CE channel of process
+   `0xc1d00037`, born ~23:10:10.5, `CtxBind{bound:false}`) at 23:10:11.2348, the last kernel-CE doorbell (`0x1000c`) at 11.2375;
+   then **no doorbell, no RPC, no window PUT** for 2.0 s while VSync interrupts keep being raised and acknowledged (`EVT_STAT`
+   write-clears every frame, 515 MSIs, ISR reads of `0x611c00`/`0x611ec0`/`0xb810xx` throughout); at **23:10:13.32 the TDR** (the
+   guest reads the core ARMED area `0x688000…`, `0x680240`, `0x682288` and posts GSP RPCs — the KMD's timeout state collection);
+   23:10:14.60-14.91 the teardown (window disable, core free, all 9 Passthrough twins freed). Host: **no Xid** during the run
+   (`dmesg` 01:09:55-01:13:28 CEST holds only the two module loads). `[inferred]` a GPU-scheduler packet whose completion never
+   reached the guest, not a fault; which packet/fence is not visible to kf3 (Passthrough work runs on the host; kf3 logs the
+   doorbells, not the host GP_GET).
+2. **The TDR recovery then fails at a kf3 refusal → 0x1B0 → 0x116.** `[measured]` `LiveKernelReports/WATCHDOG-20261008-2310.dmp` =
+   `0x1B0 VIDEO_MINIPORT_FAILED_LIVEDUMP (0x2 "start device failed", 0xc000009a, 0x108, …)`. In the recovery's restart
+   (kf 273478.009 = 23:10:15.645) kf3 refuses the kernel driver's new GR channel: `chan 0xc1d0004a:0xff040001 birth REFUSED: twin
+   state: VA space … (KernelInUserSpace(1)) — a Translated channel never runs in a space a user channel runs in
+   (V3_P1P2_TSPACE.md §4.2)` (RmAlloc `0xc56f` → `0x40`); 10 ms earlier a Passthrough CE twin (`0xc1d00048:0xff040000`, token `0x802`)
+   was born in that same VA space. The guest's last kayfabe-visible act is `SWITCH_TO_VGA` (fn 49, refused `0x56`), as in run 99.
+   This is what makes the TDR fatal (a recovery that succeeds leaves a TDR, not a bugcheck).
+
+**What kf3 itself did at the black frame `[measured]`:** nothing of its own — the black frame (`+17712 ms the console shows BLACK`)
+follows the guest's own window disable in the teardown (`+17462 ms … a lit head has no window`), 3.4 s after the last flip; no kf3
+display event, hotplug, EDID or mode change in between.
+
+**Owner observation (UNCONFIRMED, 2026-10-09):** watching run 100's window, the owner briefly saw the Windows taskbar clock before
+the screen went black. Consistent with the log (5 s of 60 Hz flips of window 0 before the stall) but not confirmed by a frame: run
+100 took screendumps only at +40 s and at the end (both after the reboot). From boot 2 on the harness takes one timestamped
+screendump per second ([tools/frames.py](tools/frames.py) classifies them and builds a contact sheet).
+
+## 5. Boot 2 (run 101), stated before the boot: reproduce with frames, and arm the stall measurement
+
+Same binary and flags as run 100; `WR_SHOTS=90` (one screendump per second from the launch, host UTC in the name) and
+`WR_TDROFF_ARM=1` (QGA, as soon as the guest answers — in its first or its post-bugcheck boot — runs `tdr_off_etw_arm.ps1`:
+`TdrLevel=0` and the boot-time DxgKrnl ETW session, both for the NEXT boot of this disk).
+**H-repro** (stated 2026-10-09, before run 101 on the RTX 4070): run 100's course repeats — window-0 flips for several seconds, all
+doorbells stop, a TDR ~2 s later, the recovery refused at the T-space rule, 0x116. Falsifier: no stall within 60 s of the first
+frame, or a different abort. **Owner observation:** confirmed if a frame with desktop content (a non-black taskbar strip) precedes
+the first black frame; falsified if no frame between the boot logo and the black frame shows the desktop.
+Boot 3 (run 101's disk again, `WR_REUSE=1 WR_STALL_ETW=1`): with `TdrLevel=0` the stall is held; the harness stops the ETW session
+in it and decodes the tail. **H-tail falsifier:** the decoded tail does not end at an unfinished queue/DMA packet (then the stall is
+not a GPU-scheduler wait).

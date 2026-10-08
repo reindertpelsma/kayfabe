@@ -1,0 +1,4 @@
+run 100 disk (read-only NBD + ntfs-3g, 2026-10-09), dump headers (DUMP_HEADER64: BugCheckCode @0x38, parameters @0x40..0x58, DumpType @0xf98)
+Windows/LiveKernelReports/WATCHDOG/WATCHDOG-20261008-2310.dmp  PAGEDU64 DumpType 4  0x1b0 (0x2, 0xffffffffc000009a, 0x108, 0xfffff8033bbd4f10)
+Windows/Minidump/100826-4875-01.dmp                             PAGEDU64 DumpType 4  0x116 (0xffffa50b72918010, 0xfffff8016b1d4930, 0xffffffffc000009a, 0x4)
+pagefile.sys: header all zero (the dump was moved to MEMORY.DMP / Minidump at the post-bugcheck boot)
