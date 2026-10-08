@@ -56,9 +56,12 @@ is frozen (see *Layout*).
 
 - **Correctness before cost.** A wrong hypothesis or a week spent on something irrelevant costs far more
   than tokens. Never downgrade a model for work whose wrong answer would redirect the effort.
-- **Models by risk.** Hypothesis work, decoding unknown semantics, root-cause hunts and anything that feeds
-  an owner decision run on the strongest model. Cheaper models only do mechanical work with checkable
-  output (evidence collection, formatting, running a script, grep sweeps).
+- **Models by risk.** Owner, 2026-10-08: the gap between Sonnet 5.5 and Opus 5.5 is small, so **Sonnet 5.5
+  is the default for agents and Opus 5.5 is the strongest tier** (what Fable was). Opus 5.5 runs hypothesis
+  work, decoding unknown semantics, root-cause hunts, security review and anything that feeds an owner
+  decision, and whatever a wrong answer would redirect for a week. Sonnet 5.5 runs the rest, including
+  mechanical work with checkable output (evidence collection, formatting, running a script, grep sweeps,
+  Windows iteration loops once the question is stated).
 - **Every hypothesis states its falsifier before the run:** the result that would prove it wrong. Report the
   result either way. Keep *measured* and *inferred* apart; an inference is never written as evidence.
   (Precedent: "the 24 watchdog assertions never change, so the walls are irrelevant" was an inference. The

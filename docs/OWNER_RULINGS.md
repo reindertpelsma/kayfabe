@@ -846,3 +846,33 @@ power control, thermal and process, preempt management is host"*.
   arithmetic panics rather than wraps (`overflow-checks = true` in the release profile); every
   forwarded unknown method is logged and counted. Isolation inside one VM is the guest kernel's;
   VM-to-VM and VM-to-host isolation is the host channel's privilege and address space.
+
+## W. Answers to the 2026-10-08 open decisions
+
+All owner statements of 2026-10-08, in the order the open-decision list was given.
+
+- **nvkvm-pv broker diffs: apply** (owner: "yes apply"): keep the sub-pixel remainder per axis in
+  `relptr_motion` (a relative delta below one pixel must not truncate to nothing), and hide the host
+  cursor in `wl_set_grab` wherever the pointer is when the grab starts (one cursor, not two).
+- **Colour: "No color correction" (610 SAT_MODE 3) versus mode 2:** *test and decide: we should prevent
+  incorrect results.* Until the hardware test says it is the same, mode 3 stays refused.
+- **Arbitrary chroma correction: keep it out** while apps do not use it and the screen renders correctly
+  (it would not apply to screen sharing either); revisit only if a real workload needs it.
+- **Segmented capability bits (`LOGNR`) for Windows: the implementer decides** (decision: not declared
+  until a Windows run shows it asks).
+- **`EVICT_CTX` under ruling B (§U):** a control kayfabe authors on the VM's own host twin, safe by
+  construction; the owner's reading is that Windows shares OGKM's behaviour and does not depend on the
+  eviction result in guest memory. Accepted as the direct act; "Windows never reads the context buffer
+  back" stays an inference until a D3D run shows otherwise.
+- **RUSD (`0x20800afe`/`0x20800aff`) and `utilization.gpu`:** the owner asks for GPU utilization to be
+  served read-only (`nvidia-smi` is unprivileged on bare metal); power is not important. Direction: the
+  values the guest sees are this VM's own, never host-wide quantities (§S exposure rule); the design
+  and its measurements are open work (`docs/STATUS_AND_HANDOFF.md`).
+- **Software-runlist flag (`KF3_SW_RUNLIST_HOST_OWNED`):** stays off and undecided.
+- **`raw_control_native`:** under review, see the handoff; production code must not call it.
+- **§T (recovered directives):** later rulings always win over recovered ones; keep only what is useful
+  and does not conflict; **avoid directions from the v1/v2 kayfabe architecture** altogether.
+- **Disks:** the 13 GB `base.qcow2` original under `/data/paguro-work.old` is deleted ("fully
+  regeneratable"; the archive copy remains); `/workspace/nvidia-gpu-passthrough` is backed up to
+  `/mnt/windows-work/archive/`.
+- **Models:** Sonnet 5.5 by default, Opus 5.5 as the strongest tier (`CLAUDE.md`, *Models by risk*).
