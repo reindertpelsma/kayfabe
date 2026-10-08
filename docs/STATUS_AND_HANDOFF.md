@@ -20,7 +20,13 @@ prediction: a window-0 PUT after the modeset (`puts` > 39). Not yet implemented,
 connector (H-hdmi) and the crossbar / `DFP_ASSIGN_SOR` path (H-xbar). ⊘ The record's §0 (ordered stream alignment,
 boot3 vs run 93) corrects "same decisions until the DDI": the first display WRITE that differs is at driver start
 (11.0746 s: the hardware KMD initialises only windows 0/2/4/6, kf3's guest all eight, with different push sizes), right
-after it read the caps page (101 of 1024 words differ, incl. even/odd window caps) and the firmware's ARMED state.
+after it read the caps page (101 of 1024 words differ, incl. even/odd window caps) and the firmware's ARMED state. **Runs 97-99
+(2026-10-09, RTX 4070, record §7-§11):** the reply/read-back batch (commit-time controls, hotplug mask, blank/armed defaults)
+is falsified (run 97, `puts=39`); the real GPU's caps page (`KF3_DISPLAY_CAPS_PROBE`, a captured table: probe only) is
+sufficient on its own (run 99) — Windows then initialises windows 0/2/4/6 like the hardware and programs and flips window 0
+after the modeset (`puts=63` at the marker, ~18 s of flips and VSyncs). Next wall: the display re-initialises ~19.6 s after
+driver start and the guest stops answering QGA (D3D11/D3D12/nvidia-smi probes could not run). Owner question: author the
+deciding caps fields (per-field bisection first) — the captured page cannot ship.
 
 **Windows flip / vsync, 2026-10-08 (branch `claude/windows-flip-vsync-20261008` = `claude/windows-pass-20261008` + the
 Passthrough completion-interrupt commits; runs 93-96; [record](../traces/windows_flip_vsync_20261008/README.md)).**

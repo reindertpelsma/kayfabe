@@ -320,3 +320,33 @@ branch change no code). Harness [drd-run2.sh](drd-run2.sh): the marker no longer
 then the QGA probes (D3D11 clear + read-back, D3D12 fence, monitor info + `nvidia-smi`, the user-session probe), then a
 clean stop. Prediction (H-caps sufficient): driver-start init on windows 0/2/4/6 and a window 0 PUT after the modeset.
 Falsifier: no window PUT after the modeset (`puts=39` at the marker) — then H-hdmi and/or H-xbar is necessary.
+
+## 11. Run 99 (binary `1048afc7`, H-caps alone): H-caps is SUFFICIENT — stop, the time-box (3 boots) is spent
+
+`[measured, run99 at 1048afc7, RTX 4070, 2026-10-09]` files `run99-*`. Flags: run 97's set + `KF3_DISPLAY_CAPS_PROBE` only
+(log: `CAPS_PROBE … 99 words`; no HDMI/xbar probe line). Same outcome as run 98: driver-start init on windows 0/2/4/6 only,
+and after the modeset `0x90f10106` → core PUT + **window 0 PUT** and flips; `puts=63` at the marker (15 s), 100 after 40 s;
+915 VSyncs (frame 1059, 271547.42 s). ~19.6 s after driver start (271548.13) the guest's RM again re-initialised the display
+from scratch (as in run 98), after which no VSync and no PUT follow. The QGA probes (D3D11 clear + read-back, D3D12 fence,
+monitor info + `nvidia-smi`, the user-session probe) started 55 s after launch and **all four timed out connecting to the
+guest agent** (`qga_open` 30 s), the guest did not answer the ACPI stop (killed after 300 s, unclean); both screendumps (+40 s,
++3 min) show the same frame: the firmware logo and the Windows boot spinner ([run99-screen-after40.png](run99-screen-after40.png)).
+Host left clean: no QEMU, group 11 `DMA-FQ`, `0000:01:00.0` on `nvidia` (P8), no Xid during runs 97-99.
+
+**Result of the batch, measured (runs 97-99, RTX 4070, 2026-10-09):** the caps page is the gate of the primary-window programming. With the real GPU's caps
+page alone, Windows (a) initialises the hardware's window set at driver start and (b) programs window 0 after the modeset and
+flips it for ~18 s; with the authored page (runs 88-97) it does neither, whatever else is answered as on hardware. H-commit,
+H-edidseen, H-blankstate, H-armeddefault (run 97) are not needed; H-hdmi and H-xbar are not needed for (a)-(b) (run 99).
+
+**Not answered (stated, not inferred away):** whether the guest gets past the D3D device — the probes could not reach the
+guest; and the cause of the display re-initialisation ~19.6 s after driver start (it happens with and without the HDMI/xbar
+probes). `[inferred]` It is the next wall: a TDR-class reset after ~18 s of working flips, i.e. after the first D3D/DWM
+work, where runs 60-72 met the D3D twins' RC; the run-98/99 kf3 logs are the place to look (the Passthrough channel
+lifecycle around 271547-271548 / 271332-271333), before any guest-side analysis.
+
+**Which caps word decides, and the design question (owner):** the probe is a CAPTURED table and can never ship. The
+design is to author a page with the property that mattered. `[inferred]` The KMD picks the windows whose
+`PRECOMP_WIN_PIPE_HDR_CAPA` advertises the scaler and TMO (and ALPHA/FULL/UNIT_WIDTH) as the per-head primaries; kf3's
+authored page gives all eight windows identical caps without those. A GPU-free next step: per-field bisection of the page
+(window CAPA-F, head CAPA-F, SOR caps, words 0x8-0xf0) in one batched boot with several probe pages, then authoring the
+deciding fields from the class definitions (`derive_display_classes.sh` already carries the CAPA-F fields).
