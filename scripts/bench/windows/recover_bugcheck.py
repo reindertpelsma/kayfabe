@@ -58,7 +58,7 @@ def dump_header(data):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--run', type=int, choices=range(1, 100), required=True)
+    parser.add_argument('--run', type=int, choices=range(1, 1000), required=True)
     args = parser.parse_args()
     if os.geteuid():
         parser.error('root required for the read-only NBD mount')

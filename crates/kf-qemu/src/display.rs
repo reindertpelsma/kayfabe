@@ -4451,6 +4451,7 @@ mod tests {
                 offset: 256,
             },
             interpolate: false,
+            mirror: false,
         });
         let dma = CtxDma {
             target: Target::Vidmem,

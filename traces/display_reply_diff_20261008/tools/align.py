@@ -260,4 +260,117 @@ def main():
         t0 % 60, t1 % 60, len(hw), len(hk), len(kf), kf[0]['ln'], kf[-1]['ln'], sm.ratio(), len(rows)))
 
 
-main()
+# kf3's WTRACE and maplog lines share one clock (kf_mem::maplog::t)
+VS = re.compile(r'(?:WTRACE|maplog) t=([\d.]+) ')
+# channel PUT registers: their values differ by the driver-start push base (record §0 P17), never a first difference
+PUTS = {0x680000} | {0x690000 + 0x1000 * w for w in range(8)} | {0x6b0000 + 0x1000 * w for w in range(8)}
+
+
+def kf_timed(path):
+    """kf items (as kf_items) each stamped with the latest WTRACE time at or before it (VSYNC lines
+    every ~16 ms bound the error), plus kf3's own engine progress lines (no hardware counterpart)."""
+    out, t = [], None
+    items = {e['ln']: e for e in kf_items(path)}
+    for ln, line in enumerate(op(path), 1):
+        m = VS.search(line)
+        if m:
+            t = float(m.group(1))
+        if ln in items:
+            e = items[ln]
+            e['t'] = e.get('t', t)
+            out.append(e)
+        elif 'updates completed' in line or 'scanout REFUSED' in line or ('channel ' in line and 'STOPPED' in line):
+            out.append(dict(ln=ln, k=('P',), t=t, note=line.strip()[:160]))
+    return out
+
+
+# per-frame acknowledgements: the guest's EVT_STAT_HEAD_TIMING write-1-to-clear once per VSync, on both
+FRAME_ACK = {0x611800}
+
+
+def post(hwp, trp, kfp, od, secs):
+    """--post: from the first window-0 PUT after the modeset, `secs` seconds on the hardware, and on kf3
+    up to the guest's display teardown (the first RM_INTR_EN_HEAD_TIMING(0) <- 0 followed by FREE RPCs)
+    or `secs`. Ordered alignment (difflib) of C/A/F/O items and display writes, frame acks excluded;
+    then per-kind counts per second. kf3 traps no display read and logs no MSI: R/I are hardware-only."""
+    rp = hw_rpcs(hwp)
+    acc, _ = hw_bar0(trp, 0, 1e9)
+    put0 = next(e for e in acc if e['k'] == ('W', 0x690000) and e['t'] % 60 > 12.0)
+    t0 = put0['t']
+    t1 = t0 + secs
+    hw = [e for e in rp if t0 <= e['t'] <= t1] + [e for e in acc if t0 <= e['t'] <= t1]
+    hw.sort(key=lambda e: e['t'])
+    kall = kf_timed(kfp)
+    # kf start: the first window-0 PUT after the modeset's core PUT 0 (the post-modeset window programming)
+    mset = next(i for i, e in enumerate(kall) if e['k'] == ('W', 0x680000) and e.get('v') == 0)
+    ks = next(i for i, e in enumerate(kall) if i > mset and e['k'] == ('W', 0x690000))
+    kt0 = kall[ks]['t']
+    ke = len(kall)
+    for i in range(ks, len(kall)):
+        e = kall[i]
+        if e['t'] is not None and e['t'] > kt0 + secs:
+            ke = i
+            break
+        if e['k'] == ('W', 0x611d80) and e.get('v') == 0 and any(x['k'] == ('F',) for x in kall[i + 1:i + 6]):
+            ke = i + 1
+            break
+    kf = kall[ks:ke]
+    hk = [e for e in hw if e['k'][0] in 'CAFOW' and not (e['k'][0] == 'W' and e['k'][1] in FRAME_ACK)]
+    kk = [e for e in kf if e['k'][0] in 'CAFOW' and not (e['k'][0] == 'W' and e['k'][1] in FRAME_ACK)]
+    sm = difflib.SequenceMatcher(None, [e['k'] for e in hk], [e['k'] for e in kk], autojunk=False)
+    first = None
+    with open(od + '/post-aligned.txt', 'w') as f:
+        f.write('# hw %.6f..%.6f s-of-day (boot3, from the first window-0 PUT) items %d; kf lines %d..%d '
+                't %.6f..%s items %d; frame acks %s excluded\n' % (
+                    t0, t1, len(hk), kf[0]['ln'], kf[-1]['ln'], kt0, kf[-1]['t'], len(kk),
+                    ','.join('0x%x' % a for a in FRAME_ACK)))
+        for tag, i1, i2, j1, j2 in sm.get_opcodes():
+            if tag == 'equal':
+                for a, b in zip(hk[i1:i2], kk[j1:j2]):
+                    d = []
+                    if a['k'][0] in 'CA' and a.get('status') != b.get('status'):
+                        d.append('status hw=%s kf=%s' % (a.get('status'), b.get('status')))
+                    if a['k'][0] == 'W' and a['v'] != b['v']:
+                        d.append('value hw=0x%x kf=0x%x' % (a['v'], b['v']))
+                    f.write('%s +%8.3f %-58s | k%06d +%8.3f %-58s %s\n' % (
+                        'DIFF' if d else '    ', a['t'] - t0, fmt(a), b['ln'], (b['t'] or kt0) - kt0, fmt(b), ' / '.join(d)))
+                    if d and first is None and not (a['k'][0] == 'W' and a['k'][1] in PUTS):
+                        first = ('field', round(a['t'] - t0, 6), fmt(a), b['ln'], fmt(b), d)
+            else:
+                for a in hk[i1:i2]:
+                    f.write('HWONLY +%8.3f %-58s | %s\n' % (a['t'] - t0, fmt(a), tag))
+                for b in kk[j1:j2]:
+                    f.write('KFONLY  %9s %-58s | k%06d +%8.3f %s\n' % ('', '', b['ln'], (b['t'] or kt0) - kt0, fmt(b)))
+                if first is None:
+                    first = (tag, round(hk[i1]['t'] - t0, 6) if i1 < i2 else None, fmt(hk[i1]) if i1 < i2 else '',
+                             kk[j1]['ln'] if j1 < j2 else None, fmt(kk[j1]) if j1 < j2 else '', [])
+
+    def key(e):
+        k = e['k']
+        if k[0] == 'C':
+            return 'ctrl 0x%08x' % k[1]
+        if k[0] in 'WR':
+            return '%s 0x%06x' % (k[0], k[1])
+        if k[0] == 'P':
+            return 'kf3 engine: ' + re.sub(r'\d+', 'N', e['note'].split('display: ', 1)[-1])[:60]
+        return fmt(e).split(' st=')[0]
+    hc, kc = collections.defaultdict(collections.Counter), collections.defaultdict(collections.Counter)
+    for e in hw:
+        hc[key(e)][int(e['t'] - t0)] += 1
+    for e in kf:
+        kc[key(e)][int((e['t'] or kt0) - kt0)] += 1
+    with open(od + '/post-counts.txt', 'w') as f:
+        f.write('# kind | hw total | kf total | hw per second 0..%d | kf per second\n' % int(secs))
+        for k in sorted(set(hc) | set(kc), key=lambda k: -(sum(hc[k].values()) + sum(kc[k].values()))):
+            hs = ' '.join(str(hc[k][s]) for s in range(int(secs) + 1))
+            ks_ = ' '.join(str(kc[k][s]) for s in range(int(secs) + 1))
+            f.write('%-44s | %6d | %6d | %s | %s\n' % (k, sum(hc[k].values()), sum(kc[k].values()), hs, ks_))
+    print('post: hw t0=%.6f items=%d kf t0=%.6f items=%d (lines %d..%d, end t=%s) ratio=%.3f first-difference=%s' % (
+        t0, len(hk), kt0, len(kk), kf[0]['ln'], kf[-1]['ln'], kf[-1]['t'], sm.ratio(), first))
+
+
+if len(sys.argv) > 1 and sys.argv[1] == '--post':
+    # align.py --post HW_GSP_JSONL HW_QEMU_TRACE KF_LOG OUTDIR [SECONDS]
+    post(*sys.argv[2:6], float(sys.argv[6]) if len(sys.argv) > 6 else 20.0)
+else:
+    main()
