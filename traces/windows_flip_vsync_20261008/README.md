@@ -114,3 +114,43 @@ a frame edge and the KMD waits for it), while under kf3 the same PUT sequence co
   an active head latches and notifies at that head's next vblank; the first modeset, with no active head, still at once;
   default off; engine test `a_core_update_on_an_active_head_waits_for_the_vblank_only_under_the_experiment`). LOADV and
   HDCP OFF. *Falsifier:* the display PUT count stays at the modeset's value through the TDR (no window programming).
+
+## 8. Run 96 (binary `kf3-bins/61b95494`, `KF3_DISPLAY_CORE_AT_VBLANK` + write trace): H-corelatch FALSIFIED
+
+`[measured, run96 at 61b95494, RTX 4070, 2026-10-08]` files `run96-*`. The variable took effect: the modeset's last three
+core PUTs now come one per frame (266667.370900 -> .388559 -> .404756 -> .420899, 16-18 ms apart, as on hardware), and the
+first VSync after the enable came 15.2 ms later at the frame edge. The guest still disabled LAST_DATA 0.2 ms after that
+VSync, wrote **no display PUT** after the modeset (`puts=39` at the stall marker), no window latch; stall marker, 9
+Passthrough frees, bugcheck stop. The per-boot lock was taken with `flock -o` from the IOMMU switch to its restore
+(coordinator's correction during this session; runs 93-95 held it for the whole session).
+
+## 9. Stop: the time-box (4 hardware boots: 93, 94 invalid, 95, 96) is spent
+
+**Measured (runs 88, 92, 93-96 and the VFIO DVI reference; RTX 4070, 2026-10-08):**
+- kf3 raises the head-timing interrupt at every frame edge while LAST_DATA is enabled, none at an enable after the
+  guest's clear, none after a disable (code + tests + runs 93-96: every raised VSync is at a frame edge 4.8-15.4 ms after
+  its enable). H-flip's premise (an early one-shot / no per-frame VSync) does not hold.
+- **No flip ever reaches kf3's display**: from the modeset to the TDR the guest writes no display-channel PUT (5 boots:
+  `puts=39`), so 0 flips are latched and 0 are retired by a VSync. H-flip's falsifier ("every flip completed by a VSync
+  and still 0x116") cannot be reached, because the first divergence is before it: the KMD never programs the primary
+  surface. On hardware it programs window 0 ~25 ms after its first post-modeset VSync (12.596 s) and every flip ~1 ms
+  after the flip's queue completion.
+- Falsified as the reason for that: H-loadv (EVT_STAT bit 0, run 93), H-hdcp (GET_HDCP_STATE refused, run 95),
+  H-corelatch (core updates completing at once, run 96). Each of these made kf3 match the hardware in the named respect
+  and changed nothing else visible.
+- The LAST_DATA disable is not caused by a VSync: in every boot the third enable is turned off after ~4.3 ms with no
+  VSync in between.
+
+**Inferred, untested (next, in this order):** what the KMD reads in the ~0.2 ms between the post-modeset VSync and its
+disable decides it, and BAR0 reads are invisible in kf3 (no read trap outside §S's scope): (1) window ARMED state (the
+upper 2 KiB of each window's user area — kf3 mirrors only the core's; the hardware returns the armed SET_PARAMS 0xcf at
+each flip); (2) `NVC67D_GET_RG_SCAN_LINE` (a static shadow word in kf3, a live scanline on hardware); (3)
+`SET_GET_BLANKING_CTRL` (hardware reads 0x3 until the next frame edge after a BLANK write, kf3 0x1 at once);
+(4) the task's list — RUSD `0x20800afe` (owner decision pending), the 25th event registration, PSTATE_CHANGE, SEC2. A read
+trap scoped to the display aperture between the modeset and the first flip (an extension of the §S exception; owner
+decision) would answer which register the KMD reads there in one boot.
+
+Host state left (2026-10-08 23:17 CEST): no QEMU of this session, IOMMU group 11 `DMA-FQ`, `0000:01:00.0` on `nvidia`,
+`nvidia-smi` healthy, no new Xid line (the newest is 22:14:45, before this session; the count moved 60 -> 55 by dmesg
+rotation), `/tmp/kayfabe-fastguest.lock` free. Host checkout `/var/lib/kf-windows-20261005/flipv` (branch `kf-flipv-next`)
+holds this branch's code; binaries `kf3-bins/{68673e6e,2c77140b,5f0e3b37,61b95494}`.

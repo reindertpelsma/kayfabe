@@ -9,6 +9,16 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+**Windows flip / vsync, 2026-10-08 (branch `claude/windows-flip-vsync-20261008` = `claude/windows-pass-20261008` + the
+Passthrough completion-interrupt commits; runs 93-96; [record](../traces/windows_flip_vsync_20261008/README.md)).**
+`[measured, runs 93-96 at 68673e6e/2c77140b/5f0e3b37/61b95494, RTX 4070, 2026-10-08]` kf3 already raises LAST_DATA at
+every frame edge while enabled (now one tested function), so H-flip's premise does not hold; the first divergence is
+earlier: **Windows never programs a window into kf3's display after the modeset** (display PUT count 39 from the modeset to
+the TDR in every boot), so no flip can be retired by a VSync. Falsified as the cause: EVT_STAT LOADV (`KF3_DISPLAY_LOADV`),
+the refused GET_HDCP_STATE (`KF3_DISPLAY_HDCP_STATE`), instant core-update completion (`KF3_DISPLAY_CORE_AT_VBLANK`); all
+three stay default-off experiments. `KF3_DISPLAY_WRITE_TRACE` (diagnostic) logs every guest display write. Next candidates
+and the owner question (a display-aperture read trap) are in the record's §9.
+
 **Windows with NVIDIA, 2026-10-08 fourth session, runs 60-72 (branch `claude/windows-display-20261008`; record: `traces/windows_code43_walls_20261007/README.md`
 "Stop (fourth session, ~17:15)").** `[measured, runs 67-72, 2026-10-08]` with `KF3_WIN_USER_CHANNELS_PASSTHROUGH` (classification + USERD relay,
 `docs/design/V3_USERD_RELAY.md`) and the diagnostic `KF3_TWIN_VA_BASE=10000`, the compositor's per-process channel runs on an unprivileged host twin
