@@ -1190,7 +1190,10 @@ mod nonstall_slot_tests {
     use crate::versions::BENCH_DRIVER;
 
     fn idx(r: &'static crate::matrix::ValueRuns) -> u32 {
-        r.at_u32(BENCH_DRIVER).ok().flatten().expect("measured at the bench driver")
+        r.at_u32(BENCH_DRIVER)
+            .ok()
+            .flatten()
+            .expect("measured at the bench driver")
     }
 
     #[test]
@@ -1199,7 +1202,11 @@ mod nonstall_slot_tests {
         assert!(row(NONSTALL_SLOT_GR0).ends_with("NV2080_NOTIFIERS_GR0"));
         for n in 0..20 {
             let s = nonstall_slot_ce(n).expect("ce");
-            assert!(row(s).ends_with(&format!("NV2080_NOTIFIERS_CE{n}")), "{}", row(s));
+            assert!(
+                row(s).ends_with(&format!("NV2080_NOTIFIERS_CE{n}")),
+                "{}",
+                row(s)
+            );
         }
         for n in 0..4 {
             assert!(row(nonstall_slot_nvenc(n).unwrap()).ends_with(&format!("NVENC{n}")));
@@ -1232,7 +1239,11 @@ mod nonstall_slot_tests {
             nonstall_slot_ce(2)
         );
         assert_eq!(nonstall_slot(BENCH_DRIVER, ce2), None, "a stall event");
-        assert_eq!(nonstall_slot(BENCH_DRIVER, ns | 0xFFFF), None, "no such index");
+        assert_eq!(
+            nonstall_slot(BENCH_DRIVER, ns | 0xFFFF),
+            None,
+            "no such index"
+        );
         assert_eq!(
             nonstall_slot(BENCH_DRIVER, ns | NV2080_NOTIFIERS_TIMER),
             None

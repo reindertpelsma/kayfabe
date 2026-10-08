@@ -424,7 +424,11 @@ mod tests {
         );
         assert!(got.is_empty());
         assert!(!p.flush(1_100 * US, |v| got.push(v)), "nothing owed after");
-        assert_eq!(got, vec![5], "raised once, by the tick, with no further edge");
+        assert_eq!(
+            got,
+            vec![5],
+            "raised once, by the tick, with no further edge"
+        );
         assert_eq!(p.raised(5), 2);
         assert_eq!(p.coalesced_raised(5), 1);
     }
@@ -453,7 +457,11 @@ mod tests {
     fn vectors_are_paced_independently() {
         let p = Pacer::new(100 * US);
         assert_eq!(p.offer(0, 0), Offer::Raise);
-        assert_eq!(p.offer(65, 0), Offer::Raise, "another vector has its own window");
+        assert_eq!(
+            p.offer(65, 0),
+            Offer::Raise,
+            "another vector has its own window"
+        );
         assert_eq!(p.offer(0, 1), Offer::Pending);
         let mut got = Vec::new();
         p.flush(100 * US, |v| got.push(v));
@@ -505,7 +513,10 @@ mod tests {
             40_000,
             "every edge raised at once or coalesced into a raise that went out"
         );
-        assert_eq!(delivered.load(Ordering::Relaxed), p.slots[9].late.load(Ordering::Relaxed));
+        assert_eq!(
+            delivered.load(Ordering::Relaxed),
+            p.slots[9].late.load(Ordering::Relaxed)
+        );
     }
 
     #[test]
@@ -513,7 +524,10 @@ mod tests {
         let r = Relay::new(0, true);
         for t in 0..500 {
             assert_eq!(r.edge(EdgeKind::Fifo, true, Some(0), t), Verdict::Raise(0));
-            assert_eq!(r.edge(EdgeKind::Engine, true, Some(4), t), Verdict::Raise(4));
+            assert_eq!(
+                r.edge(EdgeKind::Engine, true, Some(4), t),
+                Verdict::Raise(4)
+            );
         }
         assert_eq!(r.pacer().raised(0), 500);
         assert_eq!(r.pacer().raised(4), 500);
@@ -534,16 +548,28 @@ mod tests {
     fn two_vms_one_armed_one_not_see_the_same_gpu_wide_edge_differently() {
         let (a, b) = (Relay::new(0, true), Relay::new(0, true));
         // The same host edge reaches both VMs' workers; only B's guest armed the event.
-        assert_eq!(a.edge(EdgeKind::Engine, false, Some(2), 7), Verdict::NotArmed);
-        assert_eq!(b.edge(EdgeKind::Engine, true, Some(2), 7), Verdict::Raise(2));
+        assert_eq!(
+            a.edge(EdgeKind::Engine, false, Some(2), 7),
+            Verdict::NotArmed
+        );
+        assert_eq!(
+            b.edge(EdgeKind::Engine, true, Some(2), 7),
+            Verdict::Raise(2)
+        );
     }
 
     #[test]
     fn hostile_or_missing_vectors_are_refused_not_raised() {
         let r = Relay::new(0, true);
         assert_eq!(r.edge(EdgeKind::Engine, true, None, 0), Verdict::Unvectored);
-        assert_eq!(r.edge(EdgeKind::Engine, true, Some(256), 0), Verdict::Refused);
-        assert_eq!(r.edge(EdgeKind::Fifo, true, Some(u32::MAX), 0), Verdict::Refused);
+        assert_eq!(
+            r.edge(EdgeKind::Engine, true, Some(256), 0),
+            Verdict::Refused
+        );
+        assert_eq!(
+            r.edge(EdgeKind::Fifo, true, Some(u32::MAX), 0),
+            Verdict::Refused
+        );
         assert_eq!(r.unvectored.load(Ordering::Relaxed), 1);
         assert_eq!(r.pacer().refused.load(Ordering::Relaxed), 2);
     }
@@ -552,7 +578,10 @@ mod tests {
     fn the_falsifier_mode_counts_fifo_edges_and_still_raises_engine_edges() {
         let r = Relay::new(0, false);
         assert_eq!(r.edge(EdgeKind::Fifo, true, Some(0), 0), Verdict::RelayOff);
-        assert_eq!(r.edge(EdgeKind::Engine, true, Some(1), 0), Verdict::Raise(1));
+        assert_eq!(
+            r.edge(EdgeKind::Engine, true, Some(1), 0),
+            Verdict::Raise(1)
+        );
         assert_eq!(r.relay_off.load(Ordering::Relaxed), 1);
         assert!(r.summary().contains("relay=OFF"));
     }
@@ -561,7 +590,10 @@ mod tests {
     fn with_pacing_on_an_armed_edge_is_owed_then_raised_by_the_tick() {
         let r = Relay::new(100 * US, true);
         assert_eq!(r.edge(EdgeKind::Fifo, true, Some(0), 0), Verdict::Raise(0));
-        assert_eq!(r.edge(EdgeKind::Fifo, true, Some(0), 10 * US), Verdict::Owed);
+        assert_eq!(
+            r.edge(EdgeKind::Fifo, true, Some(0), 10 * US),
+            Verdict::Owed
+        );
         let mut got = Vec::new();
         assert!(!r.flush(100 * US, |v| got.push(v)));
         assert_eq!(got, vec![0]);

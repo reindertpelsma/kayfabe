@@ -79,9 +79,9 @@ vector is raised; it delays an interrupt, it never drops one.
 
 **What a guest learns (accepted).** A guest that registered for an engine's events can tell, from when its
 interrupts arrive, that some tenant used that kind of engine and roughly how often. It does not learn which
-tenant, what the work was, or any data. [measured, `traces/rawclient_ce_interrupt_20261008/`,
-`bare_tenant_noise_*`] any unprivileged process on the host can already observe this: with another VM on
-the GPU, an idle raw client saw these notifications in every observation window.
+tenant, what the work was, or any data. Any unprivileged process on the host can already observe this
+[measured 2026-10-08, RTX 4070, `traces/rawclient_ce_interrupt_20261008/bare_tenant_noise_*`]: with another
+VM on the GPU, an idle raw client saw these notifications in every observation window.
 
 **What is not shared.** Memory, address spaces, channels and results stay per VM; see the IOMMU answer
 above. Design: `design/the_three_channel_kinds.md` §1.2.

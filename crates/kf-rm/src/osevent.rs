@@ -774,7 +774,10 @@ mod tests {
         }
         assert_eq!(arms.count(NONSTALL_SLOT_FIFO_EVENT_MTHD), 2);
         assert_eq!(log.retire(0xc1d0_000c, 0x5c00_007a), 1);
-        assert!(arms.armed(NONSTALL_SLOT_FIFO_EVENT_MTHD), "one subscription left");
+        assert!(
+            arms.armed(NONSTALL_SLOT_FIFO_EVENT_MTHD),
+            "one subscription left"
+        );
         assert_eq!(log.retire(0xc1d0_000c, 0xc1d0_000c), 2, "the root free");
         assert!(!arms.armed(NONSTALL_SLOT_FIFO_EVENT_MTHD));
         assert!(!arms.armed(usize::MAX), "a hostile slot is never armed");
@@ -801,7 +804,10 @@ mod tests {
         assert!(log.nonstall_arms().armed(3));
         assert_eq!(log.nonstall_arms().sticky(), 1 << 3);
         assert_eq!(log.retire(1, 1), OS_EVENT_MAX);
-        assert!(log.nonstall_arms().armed(3), "still armed: its free was never seen");
+        assert!(
+            log.nonstall_arms().armed(3),
+            "still armed: its free was never seen"
+        );
     }
 
     /// The table refuses to remember past its bound, and says so — it never evicts.
