@@ -190,9 +190,12 @@ impl NonstallArms {
         }
     }
 
+    /// Only ever called under [`OsEventLog`]'s row lock (as is `up`), so writers never race and
+    /// a load-then-store cannot lose an update; readers stay lock-free.
     fn down(&self, slot: usize) {
         if let Some(c) = self.counts.get(slot) {
-            let _ = c.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+            let v = c.load(Ordering::Relaxed);
+            c.store(v.saturating_sub(1), Ordering::Relaxed);
         }
     }
 
@@ -203,10 +206,13 @@ impl NonstallArms {
     }
 }
 
+/// One remembered registration and its non-stall subscription slot, if any.
+type Row = (OsEventRegistration, Option<usize>);
+
 /// The shared registry. Cloneable so the plane and the chain link hold the same one.
 #[derive(Debug, Clone, Default)]
 pub struct OsEventLog {
-    live: Arc<Mutex<Vec<(OsEventRegistration, Option<usize>)>>>,
+    live: Arc<Mutex<Vec<Row>>>,
     nonstall: Arc<NonstallArms>,
     registered: Arc<AtomicU64>,
     retired: Arc<AtomicU64>,
