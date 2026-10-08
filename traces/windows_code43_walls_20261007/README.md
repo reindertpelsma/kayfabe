@@ -3758,3 +3758,60 @@ software classID, `kernel_channel.c:3433-3436`). A later `0x200` trigger finds n
   graphics twin whose peek covers every consumed segment in full and shows no `SW-SUBCH` line.
 - Recorded either way: every `SW-SUBCH` method beyond the bind (a `0x200` trigger would be the next wall: nothing is registered on the
   host object), D3D11/D3D12 creation (`d3d12_signal_probe.ps1`), and the display's window-channel methods.
+
+### Run74 result (the experiment's first binary): the host objects were made, but the guest read `0x56` for its 5080 alloc
+
+Binary `kf3-bins/082117df`, flags as the run74 setup; 17:49:54-17:54:03 CEST, Xid 116 → 116. [timeline](run74-timeline.txt), [marker](run74-marker.txt).
+`[measured, run74 at 082117df, 2026-10-08]` the act authored the host `NV50_DEFERRED_API` on each user-work twin, but the channel link turned
+the plane's `Deferred` answer into `NOT_SUPPORTED` (`GSP REFUSED fn103/0x00005080=0x56`): every per-process channel was born, never rung
+(`forwarded=0`) and freed — the run60 create loop. Not a test of H-defapi-obj. Fixed (`3e5d7f64`, test
+`a_deferred_5080_answer_holds_the_reply`): the reply is held for the act, as an engine object's is. Run75 never started its QEMU (the
+launcher was killed by a closed pipe in the operator's command; nothing ran).
+
+### Run76 result: H-defapi-obj HOLDS — no D3D twin is RC'd; H-sw-gr holds; the guest then TDRs anyway (bugcheck 0x116, recovery failed `0xc000009a`), cause not yet found
+
+Binary `kf3-bins/f649d2c3`, flags as the run74 setup; started 17:58:10 CEST, ACPI stop 18:00:40, **Xid 116 → 116 (none)**.
+[timeline](run76-timeline.txt), [software-subchannel methods](run76-sw-subch.txt), [D3D twin peeks](run76-peek-d3d.txt), [guest
+crash events](run76-crash.txt), [probe](run76-d3d12-probe.txt), [command](run76-command.json), trace `run76-qemu.log.gz`.
+
+`[measured, run76 at f649d2c3, 2026-10-08]`:
+- **H-defapi-obj: holds.** 11 host `NV50_DEFERRED_API` objects authored (one per user-work twin, `cafe0087..cafe0168`). The copy twins
+  pass their `SET_OBJECT(0x5080)` on subchannel 5 and run to their last entry (token `0x1016`: `GP_PUT 0x10 → 0x54`, five doorbells,
+  host `GP_GET = 0x54`); **no host Xid at all** in the run (runs 71-73: 7 per boot).
+- **H-sw-gr: holds.** The scan over whole segments finds the graphics twins' bind: `SW-SUBCH METHOD GP[0x10] word 7502 subch 5 method 0x0
+  data 0x5080` on tokens `0xf`, `0x11`, `0x13`, `0x15` — the same `SET_OBJECT(NV50_DEFERRED_API)` on software subchannel 5, 7502 words
+  into the device's first big segment (past run73's 512-word bound). With the host object they too run on: token `0x15` consumed
+  `GP_PUT 0x24 → 0x190` (ten doorbells, host `GP_GET = 0x190`). No `0x200` trigger appears in any peeked D3D stream (7 software
+  methods, all the bind) — so "nothing registered on the host object" was never exercised.
+- **Then the guest TDRs.** Windows' System log: `BugCheck 0x116 (VIDEO_TDR_FAILURE) (…, …, 0xffffffffc000009a, 4)` — a GPU timeout was
+  detected and its recovery failed with `STATUS_INSUFFICIENT_RESOURCES`; the driver unloads (`UnloadingGuestDriver`), the in-process reboot
+  comes back at Code 43 (P4.5) and the probe sees no NVIDIA adapter. Which engine/fence timed out is not in kayfabe's log (no Xid, no
+  refusal of a channel the D3D devices use). One unserviced control right before the teardown: `0x007302a5` (NV0073, in no OGKM header,
+  refused since run30). The relay's guest `GP_GET` lags at release (token `0x15`: guest `0x17f`, host `0x190`) — the documented staleness.
+- **Display (task C):** the head is armed at +9.6 s; the window channels still carry only `0x584/0x588/0x4a4/0x4a8` (CSC/LUT
+  methods, 15040 of them) — no surface, no present. D3D11/D3D12 creation could not be probed (the adapter was gone by then).
+
+**Inferred, not measured (candidates for the TDR, to separate next):** (a) a completion the guest never sees: the D3D work's fences are
+semaphore releases the engine writes into guest memory, but WDDM learns of them through the completion interrupt — if the non-stall
+event of the engine a D3D copy twin runs on (`engine 0xc`, COPY3) is not relayed to the guest's vector, the fence looks stuck —
+`[measured, run76]` host non-stall wakes: GR0 3757 (1025 raised to the guest), CE3 393 (7 raised), CE2 976 (0 raised); what
+`raised=false` means for each is not decoded here; (b) a stale guest `GP_GET` read as "no progress"; (c) the unserviced `0x007302a5`.
+
+## Stop (fifth session, ~18:05 CEST): where Windows-with-NVIDIA stands
+
+**What moved** (all default-off; flags named):
+1. **Task A, the real VA-start rule** (`kf_host::channel::MirrorVaStart`, on with `KF3_WIN_USER_CHANNELS_PASSTHROUGH`): twin spaces start
+   at one 64 KiB big page with `[64 KiB, 1 MiB)` reserved for guest rows; NULL-page and wrapping rows refused by name; the guest's
+   declaration is checked and logged (`VAS-DECL`) but never sets the base. `KF3_TWIN_VA_BASE` is gone. Measured working in runs 73 and 76.
+2. **Task B, why the D3D twins were RC'd:** every D3D device channel (graphics and copy) binds `NV50_DEFERRED_API` to SOFTWARE
+   subchannel 5 (`SET_OBJECT` data `0x5080`); host RM, with no such object on the unprivileged twin, answers with Xid 32 / PBDMA
+   `DEVICE`. The compositor's channel never uses a software subchannel, which is why it ran. H-subch, H-bind and H-va are not the cause.
+3. **The experiment `KF3_WIN_TWIN_DEFAPI_OBJECT`** (owner decision pending, §U.1): one host `NV50_DEFERRED_API` per user-work twin, authored
+   from the guest's own alloc, nothing registered — removes every Xid (run76).
+
+**The wall now:** a TDR after the D3D work runs (bugcheck 0x116, recovery fails `0xc000009a`); no window surface yet.
+
+**Decisions waiting (owner):** (1) `KF3_WIN_TWIN_DEFAPI_OBJECT` against §U.1 ("5080 is Translated-only"): the twin is unprivileged with a
+VM-only space (§U.3's conditions), the host object has nothing registered and no `0x200` was seen on a D3D channel — accept as the
+Windows user-work rule, or keep it an experiment; (2) `KF3_SW_RUNLIST_HOST_OWNED` (unchanged, still on the path); (3) whether a `0x200`
+on such a twin, if one ever appears, may be served by host registrations authored from the guest's `DEFERRED_API` controls (§U.4).

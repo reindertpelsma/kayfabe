@@ -1,0 +1,503 @@
+kf-host: HOST-ABI REFUSED control 0x2080014a: host control 0x2080014a has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver 595.91.07 is outside the interval the host encoders were written for — its layout is unknown
+kf-host: HOST-ABI REFUSED control 0x20809064: host control 0x20809064 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a084: host control 0x2080a084 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a026: host control 0x2080a026 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a87=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800aff=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800aaf=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x00800292=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a80=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20802a0f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080017e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a30=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a2e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800b03=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800b05=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a3f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: chanlink: VAS-DECL 0xc1e00007:0xbaba0042 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf-rm: chanlink: CLASSIFY 0xc1e00007:0xbaba0045 kernel work -> Translated (an RM-internal client)
+kf3: act birth translated: chan 0xc1e00007:0xbaba0045 BORN Translated: token 0x1 -> host 0x2e in VasKey(13970166077300801602) gpfifo=0x0x32 userd=Some(Framebuffer { base: 4020568064, size: 512 }) engine=0x1 tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_
+kf-rm: chanlink: VAS-DECL 0xc1e00008:0xa vaBase=0x0 vaSize=0x24006c008 end=Some(24006c008) shared_management=false
+kf-rm: chanlink: CLASSIFY 0xc1e00008:0x2 kernel work -> Translated (an RM-internal client)
+kf3: act birth translated: chan 0xc1e00008:0x2 BORN Translated: token 0x801 -> host 0x1002e in VasKey(13970166078463016970) gpfifo=0x220064000x4096 userd=Some(Framebuffer { base: 4019388416, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-intern
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080013f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20809004=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x00801306=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20810108=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801823=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800ab8=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800173=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20802a12=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800160=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20802801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080012f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20802806=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080205b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080a060=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20802068=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x00800106=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080a70a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080a801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080a02f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x208081ea=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20808524=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x00730285=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x0073011d=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a3a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20801110=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080080b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: chanlink: VAS-DECL 0xc1d00002:0xff000870 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x00730288=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20801220=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20801222=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: chanlink: CLASSIFY 0xc1d00013:0xff040000 kernel work -> Translated (the kernel driver's own process)
+kf3: act birth translated: chan 0xc1d00013:0xff040000 BORN Translated: token 0x802 -> host 0x1002f in VasKey(13965662457344034928) gpfifo=0x12024b000x16384 userd=Some(Sysmem { base: 9555329024, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KER
+kf3: chan 0xc1d00013:0xff040000: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x1002f, software classID Some(1) (OWNER_RULINGS §U.1)
+kf-rm: chanlink: CLASSIFY 0xc1d00015:0xff040001 kernel work -> Translated (no context share (the kernel driver's own channels declare none))
+kf3: act birth translated: chan 0xc1d00015:0xff040001 BORN Translated: token 0x3 -> host 0x30 in VasKey(13965662457344034928) gpfifo=0x120276000x8192 userd=Some(Sysmem { base: 9555329536, size: 512 }) engine=0x1 tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ri
+kf3: chan 0xc1d00015:0xff040001: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x30, software classID Some(1) (OWNER_RULINGS §U.1)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: chanlink: VAS-DECL 0xc1d00002:0xff000870 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf-rm: chanlink: VAS-DECL 0xc1d00002:0xff000850 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf-rm: chanlink: VAS-DECL 0xc1d00002:0xff000850 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf-rm: chanlink: VAS-DECL 0xc1d00002:0xff000850 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf-rm: chanlink: CLASSIFY 0xc1d00016:0xff040002 kernel work -> Translated (the kernel driver's own process)
+kf3: act birth translated: chan 0xc1d00016:0xff040002 BORN Translated: token 0x804 -> host 0x10031 in VasKey(13965662457344034928) gpfifo=0x1204f0000x16384 userd=Some(Sysmem { base: 9555330048, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL ring_v
+kf3: chan 0xc1d00016:0xff040002: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x10031, software classID Some(1) (OWNER_RULINGS §U.1)
+kf-rm: chanlink: CLASSIFY 0xc1d00018:0xff040003 kernel work -> Translated (not a graphics or copy engine)
+kf3: act birth translated: chan 0xc1d00018:0xff040003 BORN Translated: token 0x1805 -> host 0x30032 in VasKey(13965662457344034928) gpfifo=0x1203c6000x2048 userd=Some(Sysmem { base: 9555330560, size: 512 }) engine=0x13 tsg=None kernel_by=PRIVILEGE=KERNEL ring_
+kf3: chan 0xc1d00018:0xff040003: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x30032, software classID Some(1) (OWNER_RULINGS §U.1)
+kf-rm: chanlink: CLASSIFY 0xc1d00019:0xff040004 kernel work -> Translated (the kernel driver's own process)
+kf3: act birth translated: chan 0xc1d00019:0xff040004 BORN Translated: token 0x806 -> host 0x10033 in VasKey(13965662457344034928) gpfifo=0x12051b000x2048 userd=Some(Sysmem { base: 9555331072, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERN
+kf3: chan 0xc1d00019:0xff040004: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x10033, software classID Some(1) (OWNER_RULINGS §U.1)
+kf-rm: chanlink: CLASSIFY 0xc1d0001a:0xff040005 kernel work -> Translated (not a graphics or copy engine)
+kf3: act birth translated: chan 0xc1d0001a:0xff040005 BORN Translated: token 0x2007 -> host 0xc0034 in VasKey(13965662457344034928) gpfifo=0x120522000x2048 userd=Some(Sysmem { base: 9555331584, size: 512 }) engine=0x1c tsg=None kernel_by=PRIVILEGE=KERNEL ring_
+kf3: chan 0xc1d0001a:0xff040005: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0xc0034, software classID Some(1) (OWNER_RULINGS §U.1)
+kf-rm: chanlink: CLASSIFY 0xc1d0001b:0xff040006 kernel work -> Translated (not a graphics or copy engine)
+kf3: act birth translated: chan 0xc1d0001b:0xff040006 BORN Translated: token 0x2008 -> host 0xc0035 in VasKey(13965662457344034928) gpfifo=0x120529000x2048 userd=Some(Sysmem { base: 9555332096, size: 512 }) engine=0x1c tsg=None kernel_by=PRIVILEGE=KERNEL ring_
+kf3: chan 0xc1d0001b:0xff040006: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0xc0035, software classID Some(1) (OWNER_RULINGS §U.1)
+kf-rm: chanlink: CLASSIFY 0xc1d0001c:0xff040007 kernel work -> Translated (not a graphics or copy engine)
+kf3: act birth translated: chan 0xc1d0001c:0xff040007 BORN Translated: token 0x2809 -> host 0x50036 in VasKey(13965662457344034928) gpfifo=0x120530000x2048 userd=Some(Sysmem { base: 9555332608, size: 512 }) engine=0x33 tsg=None kernel_by=PRIVILEGE=KERNEL ring_
+kf3: chan 0xc1d0001c:0xff040007: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x50036, software classID Some(1) (OWNER_RULINGS §U.1)
+kf-rm: chanlink: CLASSIFY 0xc1d0001d:0xff040008 kernel work -> Translated (not a graphics or copy engine)
+kf3: act birth translated: chan 0xc1d0001d:0xff040008 BORN Translated: token 0x200a -> host 0xc0037 in VasKey(13965662457344034928) gpfifo=0x120538000x2048 userd=Some(Sysmem { base: 9554378752, size: 512 }) engine=0x1c tsg=None kernel_by=PRIVILEGE=KERNEL ring_
+kf3: chan 0xc1d0001d:0xff040008: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0xc0037, software classID Some(1) (OWNER_RULINGS §U.1)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x007302a2=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x007302a6=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x00730128=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080a630=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: chanlink: VAS-DECL 0xc1d0001e:0xff000850 vaBase=0x100000000 vaSize=0x40000000 end=Some(140000000) shared_management=true
+kf-rm: chanlink: CLASSIFY 0xc1d00020:0xff040009 kernel work -> Translated (the kernel driver's own process)
+kf3: act birth translated: chan 0xc1d00020:0xff040009 BORN Translated: token 0x80b -> host 0x10038 in VasKey(13965662577603119184) gpfifo=0x1200c4000x4096 userd=Some(Sysmem { base: 9554288640, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL ring_va
+kf3: chan 0xc1d00020:0xff040009: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x10038, software classID Some(1) (OWNER_RULINGS §U.1)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080852e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080852a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: chanlink: VAS-DECL 0xc1d00021:0xff000850 vaBase=0x20000000 vaSize=0x40000000 end=Some(60000000) shared_management=true
+kf-rm: chanlink: CLASSIFY 0xc1d00023:0xff04000a kernel work -> Translated (the kernel driver's own process)
+kf3: act birth translated: chan 0xc1d00023:0xff04000a BORN Translated: token 0x80c -> host 0x10039 in VasKey(13965662590488021072) gpfifo=0x200c4000x16384 userd=Some(Sysmem { base: 9553960960, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERN
+kf3: chan 0xc1d00023:0xff04000a: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x10039, software classID Some(1) (OWNER_RULINGS §U.1)
+kf-rm: chanlink: CLASSIFY 0xc1d00024:0xff04000b kernel work -> Translated (no context share (the kernel driver's own channels declare none))
+kf3: act birth translated: chan 0xc1d00024:0xff04000b BORN Translated: token 0xd -> host 0x3a in VasKey(13965662590488021072) gpfifo=0x200ef000x16384 userd=Some(Sysmem { base: 9553961472, size: 512 }) engine=0x1 tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ri
+kf3: chan 0xc1d00024:0xff04000b: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x3a, software classID Some(1) (OWNER_RULINGS §U.1)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: chanlink: VAS-DECL 0xc1d00025:0xff000850 vaBase=0x100000000 vaSize=0x120000000 end=Some(220000000) shared_management=true
+kf-rm: chanlink: CLASSIFY 0xc1d00027:0xff04000c USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d00027:0xff04000c BORN Passthrough: token 0xe -> host 0x44 in VasKey(13965662607667890256) gpfifo=0x1200c4000x32768 userd=Ram { ram: 3405643793, off: 8479649792 } engine=0x1 declared_kernel_pid=false PRIVILEGE=KERNEL WINDOW
+kf3: act deferred-API twin object: EXPERIMENT KF3_WIN_TWIN_DEFAPI_OBJECT: 0xc1d00027:0xff1fe010 NV50_DEFERRED_API on Windows user-work twin host 0x44 -> host object 0xcafe0087 (authored, no params, NOTHING registered: a 0x200 on it fails closed) (220 us, off t
+kf3: act engine object: 0xc1d00027:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x44 -> host object 0xcafe0088 (203 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d00027:0xff04000c GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x44 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x5 va_ids=0xa05 bound=true — not forwarded,
+kf3: act engine object: 0xc1d00027:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x44 -> host object 0xcafe0089 (1029 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d00027:0xff04000c GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x44 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, 
+kf3: act engine object: 0xc1d00027:0xff1fe02c class 0x902d (TwoD) on twin host 0x44 -> host object 0xcafe008a (567 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act engine object: 0xc1d00027:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x44 -> host object 0xcafe008b (456 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act engine object: 0xc1d00027:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x44 -> host object 0xcafe008c (452 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x00730280=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x00730122=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: display: the guest armed its first head at +9607 ms — the boot layer is retired after 129 boot frame(s)
+kf3: display: 1 updates completed, 8589 methods
+kf3: display: 2 updates completed, 8591 methods
+kf3: display: 3 updates completed, 8614 methods
+kf3: display: 4 updates completed, 8617 methods
+kf3: display: 5 updates completed, 8620 methods
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x00730282=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x2 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x3 forwarded and rung (#2) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x6 forwarded and rung (#3) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x9 forwarded and rung (#4) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0xc forwarded and rung (#5) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0xe forwarded and rung (#6) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0xf forwarded and rung (#7) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x11 forwarded and rung (#8) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x1e forwarded and rung (#16) — no GP entry or push-buffer word read
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080b201=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080852f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080a618=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080a619=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080853a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080853b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x39 forwarded and rung (#32) — no GP entry or push-buffer word read
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x007302a5=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: chanlink: VAS-DECL 0xc1d00028:0xff000850 vaBase=0x100000000 vaSize=0x120000000 end=Some(220000000) shared_management=true
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x84 forwarded and rung (#64) — no GP entry or push-buffer word read
+kf-rm: chanlink: CLASSIFY 0xc1d0002a:0xff04000d USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d0002a:0xff04000d BORN Passthrough: token 0xf -> host 0x45 in VasKey(13965662620552792144) gpfifo=0x4000000x8192 userd=Ram { ram: 3405643793, off: 8479641600 } engine=0x1 declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS-U
+kf3: act deferred-API twin object: EXPERIMENT KF3_WIN_TWIN_DEFAPI_OBJECT: 0xc1d0002a:0xff1fe010 NV50_DEFERRED_API on Windows user-work twin host 0x45 -> host object 0xcafe009b (authored, no params, NOTHING registered: a 0x200 on it fails closed) (207 us, off t
+kf3: act engine object: 0xc1d0002a:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x45 -> host object 0xcafe009c (209 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d0002a:0xff04000d GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x45 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=3 init_ids=0x4 va_ids=0xa04 bound=true — not forwarded,
+kf3: act engine object: 0xc1d0002a:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x45 -> host object 0xcafe009d (1039 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d0002a:0xff04000d GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x45 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, 
+kf3: act engine object: 0xc1d0002a:0xff1fe02c class 0x902d (TwoD) on twin host 0x45 -> host object 0xcafe009e (601 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act engine object: 0xc1d0002a:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x45 -> host object 0xcafe009f (472 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act engine object: 0xc1d0002a:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x45 -> host object 0xcafe00a0 (459 us, off the GSP lock)
+kf-rm: chanlink: CLASSIFY 0xc1d0002b:0xff04000e USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d0002b:0xff04000e BORN Passthrough: token 0x1010 -> host 0x20046 in VasKey(13965662620552792144) gpfifo=0x4036000x8192 userd=Ram { ram: 3405643793, off: 8479642112 } engine=0xc declared_kernel_pid=false PRIVILEGE=KERNEL WIN
+kf3: act deferred-API twin object: EXPERIMENT KF3_WIN_TWIN_DEFAPI_OBJECT: 0xc1d0002b:0xff1fe010 NV50_DEFERRED_API on Windows user-work twin host 0x20046 -> host object 0xcafe00a4 (authored, no params, NOTHING registered: a 0x200 on it fails closed) (217 us, of
+kf3: act engine object: 0xc1d0002b:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x20046 -> host object 0xcafe00a5 (205 us, off the GSP lock)
+kf-rm: RPC-REFUSED #1 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing 
+kf3: GSP REFUSED fn103/0x0000402c=0x56 (GSP_RM_ALLOC) first_seq=0 — the guest read a non-OK status
+kf-rm: RPC-REFUSED #2 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing 
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: RPC-REFUSED #3 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing 
+kf-rm: RPC-REFUSED #4 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing 
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a9a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: chan token 0xf (host 0x45) USERD relay: GP_PUT 0x24 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: chanlink: CLASSIFY 0xc1d0002f:0xff04000f USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d0002f:0xff04000f BORN Passthrough: token 0x11 -> host 0x47 in VasKey(13965662620552792144) gpfifo=0x14533000x8192 userd=Ram { ram: 3405643793, off: 8479490048 } engine=0x1 declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS
+kf3: act deferred-API twin object: EXPERIMENT KF3_WIN_TWIN_DEFAPI_OBJECT: 0xc1d0002f:0xff1fe010 NV50_DEFERRED_API on Windows user-work twin host 0x47 -> host object 0xcafe00b9 (authored, no params, NOTHING registered: a 0x200 on it fails closed) (203 us, off t
+kf3: act engine object: 0xc1d0002f:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x47 -> host object 0xcafe00ba (193 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d0002f:0xff04000f GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x47 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=3 init_ids=0x4 va_ids=0xa04 bound=true — not forwarded,
+kf3: act engine object: 0xc1d0002f:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x47 -> host object 0xcafe00bb (991 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d0002f:0xff04000f GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x47 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, 
+kf3: act engine object: 0xc1d0002f:0xff1fe02c class 0x902d (TwoD) on twin host 0x47 -> host object 0xcafe00bc (548 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act engine object: 0xc1d0002f:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x47 -> host object 0xcafe00bd (461 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act engine object: 0xc1d0002f:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x47 -> host object 0xcafe00be (460 us, off the GSP lock)
+kf-rm: chanlink: CLASSIFY 0xc1d00030:0xff040010 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d00030:0xff040010 BORN Passthrough: token 0x1012 -> host 0x20048 in VasKey(13965662620552792144) gpfifo=0x145ea000x8192 userd=Ram { ram: 3405643793, off: 8479490560 } engine=0xc declared_kernel_pid=false PRIVILEGE=KERNEL WI
+kf3: act deferred-API twin object: EXPERIMENT KF3_WIN_TWIN_DEFAPI_OBJECT: 0xc1d00030:0xff1fe010 NV50_DEFERRED_API on Windows user-work twin host 0x20048 -> host object 0xcafe00c6 (authored, no params, NOTHING registered: a 0x200 on it fails closed) (209 us, of
+kf3: act engine object: 0xc1d00030:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x20048 -> host object 0xcafe00c7 (195 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: chan token 0x11 (host 0x47) USERD relay: GP_PUT 0x24 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0x1012 (host 0x20048) USERD relay: GP_PUT 0x10 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0x11 (host 0x47) USERD relay: GP_PUT 0x50 forwarded and rung (#2) — no GP entry or push-buffer word read
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: chanlink: CLASSIFY 0xc1d00031:0xff040011 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d00031:0xff040011 BORN Passthrough: token 0x13 -> host 0x49 in VasKey(13965662620552792144) gpfifo=0x14de4000x8192 userd=Ram { ram: 3405643793, off: 8479338496 } engine=0x1 declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS
+kf3: act deferred-API twin object: EXPERIMENT KF3_WIN_TWIN_DEFAPI_OBJECT: 0xc1d00031:0xff1fe010 NV50_DEFERRED_API on Windows user-work twin host 0x49 -> host object 0xcafe00df (authored, no params, NOTHING registered: a 0x200 on it fails closed) (196 us, off t
+kf3: act engine object: 0xc1d00031:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x49 -> host object 0xcafe00e0 (193 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d00031:0xff040011 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x49 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=3 init_ids=0x4 va_ids=0xa04 bound=true — not forwarded,
+kf3: act engine object: 0xc1d00031:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x49 -> host object 0xcafe00e1 (973 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d00031:0xff040011 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x49 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, 
+kf3: act engine object: 0xc1d00031:0xff1fe02c class 0x902d (TwoD) on twin host 0x49 -> host object 0xcafe00e2 (567 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act engine object: 0xc1d00031:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x49 -> host object 0xcafe00e3 (449 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act engine object: 0xc1d00031:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x49 -> host object 0xcafe00e4 (486 us, off the GSP lock)
+kf-rm: chanlink: CLASSIFY 0xc1d00032:0xff040012 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d00032:0xff040012 BORN Passthrough: token 0x1014 -> host 0x2004a in VasKey(13965662620552792144) gpfifo=0x15161000x8192 userd=Ram { ram: 3405643793, off: 8479339008 } engine=0xc declared_kernel_pid=false PRIVILEGE=KERNEL WI
+kf3: act deferred-API twin object: EXPERIMENT KF3_WIN_TWIN_DEFAPI_OBJECT: 0xc1d00032:0xff1fe010 NV50_DEFERRED_API on Windows user-work twin host 0x2004a -> host object 0xcafe00ec (authored, no params, NOTHING registered: a 0x200 on it fails closed) (215 us, of
+kf3: act engine object: 0xc1d00032:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x2004a -> host object 0xcafe00ed (211 us, off the GSP lock)
+kf-rm: RPC-REFUSED #5 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing 
+kf-rm: RPC-REFUSED #6 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing 
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: chan token 0x13 (host 0x49) USERD relay: GP_PUT 0x24 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0x1014 (host 0x2004a) USERD relay: GP_PUT 0x10 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf-rm: channel plane REFUSED (0x1f): DISABLE_CHANNELS with a pRunlistPreemptEvent (async preempt) is not served
+kf3: chan token 0x13 (host 0x49) USERD relay: GP_PUT 0x3e forwarded and rung (#2) — no GP entry or push-buffer word read
+kf3: GSP REFUSED fn76/0x2080110b=0x1f (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: channel plane REFUSED (0x1f): DISABLE_CHANNELS with a pRunlistPreemptEvent (async preempt) is not served
+kf3: chan token 0x13 (host 0x49) USERD relay: GP_PUT 0x4f forwarded and rung (#3) — no GP entry or push-buffer word read
+kf3: chan token 0x11 (host 0x47) USERD relay: GP_PUT 0x73 forwarded and rung (#3) — no GP entry or push-buffer word read
+kf3: chan token 0x13 (host 0x49) USERD relay: GP_PUT 0x60 forwarded and rung (#4) — no GP entry or push-buffer word read
+kf3: chan token 0x13 (host 0x49) USERD relay: GP_PUT 0x71 forwarded and rung (#5) — no GP entry or push-buffer word read
+kf3: chan token 0x11 (host 0x47) USERD relay: GP_PUT 0x91 forwarded and rung (#4) — no GP entry or push-buffer word read
+kf-rm: RPC-REFUSED #7 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing 
+kf-rm: RPC-REFUSED #8 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing 
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: RPC-REFUSED #9 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing 
+kf-rm: RPC-REFUSED #10 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: chanlink: VAS-DECL 0xc1d00036:0xff000850 vaBase=0x100000000 vaSize=0x120000000 end=Some(220000000) shared_management=true
+kf-rm: chanlink: CLASSIFY 0xc1d00038:0xff040013 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d00038:0xff040013 BORN Passthrough: token 0x15 -> host 0x4b in VasKey(13965662680682334288) gpfifo=0x4000000x8192 userd=Ram { ram: 3405643793, off: 8478859264 } engine=0x1 declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS-
+kf3: act deferred-API twin object: EXPERIMENT KF3_WIN_TWIN_DEFAPI_OBJECT: 0xc1d00038:0xff1fe010 NV50_DEFERRED_API on Windows user-work twin host 0x4b -> host object 0xcafe0117 (authored, no params, NOTHING registered: a 0x200 on it fails closed) (217 us, off t
+kf3: act engine object: 0xc1d00038:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x4b -> host object 0xcafe0118 (214 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d00038:0xff040013 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x4b (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=3 init_ids=0x4 va_ids=0xa04 bound=true — not forwarded,
+kf3: act engine object: 0xc1d00038:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x4b -> host object 0xcafe0119 (1103 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote ctx: chan 0xc1d00038:0xff040013 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x4b (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, 
+kf3: act engine object: 0xc1d00038:0xff1fe02c class 0x902d (TwoD) on twin host 0x4b -> host object 0xcafe011a (627 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act engine object: 0xc1d00038:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x4b -> host object 0xcafe011b (473 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act engine object: 0xc1d00038:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x4b -> host object 0xcafe011c (504 us, off the GSP lock)
+kf-rm: chanlink: CLASSIFY 0xc1d00039:0xff040014 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d00039:0xff040014 BORN Passthrough: token 0x1016 -> host 0x2004c in VasKey(13965662680682334288) gpfifo=0x4036000x8192 userd=Ram { ram: 3405643793, off: 8478859776 } engine=0xc declared_kernel_pid=false PRIVILEGE=KERNEL WIN
+kf3: act deferred-API twin object: EXPERIMENT KF3_WIN_TWIN_DEFAPI_OBJECT: 0xc1d00039:0xff1fe010 NV50_DEFERRED_API on Windows user-work twin host 0x2004c -> host object 0xcafe0121 (authored, no params, NOTHING registered: a 0x200 on it fails closed) (219 us, of
+kf3: act engine object: 0xc1d00039:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x2004c -> host object 0xcafe0122 (217 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: chan token 0x15 (host 0x4b) USERD relay: GP_PUT 0x24 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0x1016 (host 0x2004c) USERD relay: GP_PUT 0x10 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0x15 (host 0x4b) USERD relay: GP_PUT 0x67 forwarded and rung (#2) — no GP entry or push-buffer word read
+kf3: chan token 0x1016 (host 0x2004c) USERD relay: GP_PUT 0x21 forwarded and rung (#2) — no GP entry or push-buffer word read
+kf3: chan token 0x1016 (host 0x2004c) USERD relay: GP_PUT 0x32 forwarded and rung (#3) — no GP entry or push-buffer word read
+kf3: chan token 0x15 (host 0x4b) USERD relay: GP_PUT 0x78 forwarded and rung (#3) — no GP entry or push-buffer word read
+kf3: chan token 0x1016 (host 0x2004c) USERD relay: GP_PUT 0x43 forwarded and rung (#4) — no GP entry or push-buffer word read
+kf3: chan token 0x15 (host 0x4b) USERD relay: GP_PUT 0xbb forwarded and rung (#4) — no GP entry or push-buffer word read
+kf3: chan token 0x15 (host 0x4b) USERD relay: GP_PUT 0xcc forwarded and rung (#5) — no GP entry or push-buffer word read
+kf3: chan token 0x15 (host 0x4b) USERD relay: GP_PUT 0x12b forwarded and rung (#6) — no GP entry or push-buffer word read
+kf3: chan token 0x15 (host 0x4b) USERD relay: GP_PUT 0x13c forwarded and rung (#7) — no GP entry or push-buffer word read
+kf3: chan token 0x1016 (host 0x2004c) USERD relay: GP_PUT 0x54 forwarded and rung (#5) — no GP entry or push-buffer word read
+kf3: chan token 0x15 (host 0x4b) USERD relay: GP_PUT 0x14d forwarded and rung (#8) — no GP entry or push-buffer word read
+kf3: chan token 0x13 (host 0x49) USERD relay: GP_PUT 0x82 forwarded and rung (#6) — no GP entry or push-buffer word read
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: display: 6 updates completed, 8627 methods
+kf3: display: 7 updates completed, 8636 methods
+kf3: act free: 0xc1d00027:0xff1fe032: engine object host 0xcafe008c freed (409 us, off the GSP lock)
+kf3: act free: 0xc1d00027:0xff1fe026: engine object host 0xcafe008b freed (316 us, off the GSP lock)
+kf3: act free: 0xc1d00027:0xff1fe034: engine object host 0xcafe0088 freed (267 us, off the GSP lock)
+kf3: act free: 0xc1d00027:0xff1fe01a: engine object host 0xcafe0089 freed (310 us, off the GSP lock)
+kf3: act free: 0xc1d00027:0xff1fe02c: engine object host 0xcafe008a freed (303 us, off the GSP lock)
+kf3: chan token 0xe (host 0x44) USERD relay released: forwarded=79 refused=0 gets=100 last_put=159 guest[GP_PUT=Some(9f) GP_GET=Some(9e)] host[GP_PUT=Some(9f) GP_GET=Some(9f)]
+kf3: act free: 0xc1d0002a:0xff1fe032: engine object host 0xcafe00a0 freed (467 us, off the GSP lock)
+kf3: act free: 0xc1d0002a:0xff1fe026: engine object host 0xcafe009f freed (327 us, off the GSP lock)
+kf3: act free: 0xc1d0002a:0xff1fe034: engine object host 0xcafe009c freed (272 us, off the GSP lock)
+kf3: act free: 0xc1d0002a:0xff1fe01a: engine object host 0xcafe009d freed (306 us, off the GSP lock)
+kf3: act free: 0xc1d0002a:0xff1fe02c: engine object host 0xcafe009e freed (324 us, off the GSP lock)
+kf3: chan token 0xf (host 0x45) USERD relay released: forwarded=1 refused=0 gets=1 last_put=36 guest[GP_PUT=Some(24) GP_GET=Some(0)] host[GP_PUT=Some(24) GP_GET=Some(24)]
+kf3: act free: 0xc1d0002b:0xff1fe034: engine object host 0xcafe00a5 freed (374 us, off the GSP lock)
+kf3: chan token 0x1010 (host 0x20046) USERD relay released: forwarded=0 refused=0 gets=0 last_put=0 guest[GP_PUT=Some(0) GP_GET=Some(0)] host[GP_PUT=Some(0) GP_GET=Some(0)]
+kf3: act free: 0xc1d0002f:0xff1fe032: engine object host 0xcafe00be freed (371 us, off the GSP lock)
+kf3: act free: 0xc1d0002f:0xff1fe026: engine object host 0xcafe00bd freed (331 us, off the GSP lock)
+kf3: act free: 0xc1d0002f:0xff1fe034: engine object host 0xcafe00ba freed (274 us, off the GSP lock)
+kf3: act free: 0xc1d0002f:0xff1fe01a: engine object host 0xcafe00bb freed (316 us, off the GSP lock)
+kf3: act free: 0xc1d0002f:0xff1fe02c: engine object host 0xcafe00bc freed (314 us, off the GSP lock)
+kf3: chan token 0x11 (host 0x47) USERD relay released: forwarded=4 refused=0 gets=4 last_put=145 guest[GP_PUT=Some(91) GP_GET=Some(73)] host[GP_PUT=Some(91) GP_GET=Some(91)]
+kf3: act free: 0xc1d00030:0xff1fe034: engine object host 0xcafe00c7 freed (384 us, off the GSP lock)
+kf3: chan token 0x1012 (host 0x20048) USERD relay released: forwarded=1 refused=0 gets=1 last_put=16 guest[GP_PUT=Some(10) GP_GET=Some(0)] host[GP_PUT=Some(10) GP_GET=Some(10)]
+kf3: act free: 0xc1d00031:0xff1fe032: engine object host 0xcafe00e4 freed (356 us, off the GSP lock)
+kf3: act free: 0xc1d00031:0xff1fe026: engine object host 0xcafe00e3 freed (331 us, off the GSP lock)
+kf3: act free: 0xc1d00031:0xff1fe034: engine object host 0xcafe00e0 freed (278 us, off the GSP lock)
+kf3: act free: 0xc1d00031:0xff1fe01a: engine object host 0xcafe00e1 freed (307 us, off the GSP lock)
+kf3: act free: 0xc1d00031:0xff1fe02c: engine object host 0xcafe00e2 freed (305 us, off the GSP lock)
+kf3: chan token 0x13 (host 0x49) USERD relay released: forwarded=6 refused=0 gets=6 last_put=130 guest[GP_PUT=Some(82) GP_GET=Some(71)] host[GP_PUT=Some(82) GP_GET=Some(82)]
+kf3: act free: 0xc1d00032:0xff1fe034: engine object host 0xcafe00ed freed (398 us, off the GSP lock)
+kf3: chan token 0x1014 (host 0x2004a) USERD relay released: forwarded=1 refused=0 gets=1 last_put=16 guest[GP_PUT=Some(10) GP_GET=Some(0)] host[GP_PUT=Some(10) GP_GET=Some(10)]
+kf3: act free: 0xc1d00038:0xff1fe032: engine object host 0xcafe011c freed (359 us, off the GSP lock)
+kf3: act free: 0xc1d00038:0xff1fe026: engine object host 0xcafe011b freed (330 us, off the GSP lock)
+kf3: act free: 0xc1d00038:0xff1fe034: engine object host 0xcafe0118 freed (261 us, off the GSP lock)
+kf3: act free: 0xc1d00038:0xff1fe01a: engine object host 0xcafe0119 freed (302 us, off the GSP lock)
+kf3: act free: 0xc1d00038:0xff1fe02c: engine object host 0xcafe011a freed (295 us, off the GSP lock)
+kf3: chan token 0x15 (host 0x4b) USERD relay released: forwarded=10 refused=0 gets=10 last_put=400 guest[GP_PUT=Some(190) GP_GET=Some(17f)] host[GP_PUT=Some(190) GP_GET=Some(190)]
+kf3: act free: 0xc1d00039:0xff1fe034: engine object host 0xcafe0122 freed (372 us, off the GSP lock)
+kf3: chan token 0x1016 (host 0x2004c) USERD relay released: forwarded=5 refused=0 gets=5 last_put=84 guest[GP_PUT=Some(54) GP_GET=Some(43)] host[GP_PUT=Some(54) GP_GET=Some(54)]
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=47 UnloadingGuestDriver seq=0  result=0x0
+kf3: GSP rpc UnloadingGuestDriver seq=0
+kf3: GSP phase Running -> Suspending
+kf3: GSP phase Suspending -> Halted
+kf3: GSP command service REFUSED: QueueNotBound
+kf3: GSP command service REFUSED: QueueNotBound
+kf3: GSP phase Halted -> ProtectedRegionUp
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: chanlink: VAS-DECL 0xc1e00040:0xbaba0042 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf-rm: chanlink: CLASSIFY 0xc1e00040:0xbaba0045 kernel work -> Translated (an RM-internal client)
+kf3: act birth translated: chan 0xc1e00040:0xbaba0045 BORN Translated: token 0x1 -> host 0x2e in VasKey(13970166322113937474) gpfifo=0x0x32 userd=Some(Framebuffer { base: 4020568064, size: 512 }) engine=0x1 tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_
+kf-rm: chanlink: VAS-DECL 0xc1e00041:0xa vaBase=0x0 vaSize=0x24006c008 end=Some(24006c008) shared_management=false
+kf-rm: chanlink: CLASSIFY 0xc1e00041:0x2 kernel work -> Translated (an RM-internal client)
+kf3: act birth translated: chan 0xc1e00041:0x2 BORN Translated: token 0x801 -> host 0x1002e in VasKey(13970166323276152842) gpfifo=0x220064000x4096 userd=Some(Framebuffer { base: 4019388416, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-intern
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: chanlink: VAS-DECL 0xc1d0003b:0xff000870 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: chanlink: CLASSIFY 0xc1d0004a:0xff040000 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d0004a:0xff040000 BORN Passthrough: token 0x802 -> host 0x1002f in VasKey(13965662702157170800) gpfifo=0x12024b000x16384 userd=Ram { ram: 3405643793, off: 8481660928 } engine=0xb declared_kernel_pid=false PRIVILEGE=KERNEL W
+kf3: act deferred-API twin object: EXPERIMENT KF3_WIN_TWIN_DEFAPI_OBJECT: 0xc1d0004a:0xff1fe010 NV50_DEFERRED_API on Windows user-work twin host 0x1002f -> host object 0xcafe0161 (authored, no params, NOTHING registered: a 0x200 on it fails closed) (217 us, of
+kf3: act engine object: 0xc1d0004a:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x1002f -> host object 0xcafe0162 (212 us, off the GSP lock)
+kf-rm: chanlink: CLASSIFY 0xc1d0004c:0xff040001 kernel work -> Translated (no context share (the kernel driver's own channels declare none))
+kf3: chan 0xc1d0004c:0xff040001 birth REFUSED: twin state: VA space VasKey(13965662702157170800) (KernelInUserSpace(1)) — a Translated channel never runs in a space a user channel runs in (V3_P1P2_TSPACE.md §4.2) (decl ChannelAlloc { client: c1d0004c, paren
+kf-rm: channel plane REFUSED (0x40): 0xc1d0004c:0xff040001 alloc: twin state: VA space VasKey(13965662702157170800) (KernelInUserSpace(1)) — a Translated channel never runs in a space a user channel runs in (V3_P1P2_TSPACE.md §4.2)
+kf3: GSP REFUSED fn103/0x0000c56f=0x40 (GSP_RM_ALLOC) first_seq=0 — the guest read a non-OK status
+kf-rm: chanlink: VAS-DECL 0xc1d0004d:0xff000850 vaBase=0x100000000 vaSize=0x40000000 end=Some(140000000) shared_management=true
+kf-rm: chanlink: CLASSIFY 0xc1d0004f:0xff040002 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d0004f:0xff040002 BORN Passthrough: token 0x803 -> host 0x10030 in VasKey(13965662779466582096) gpfifo=0x1200c4000x4096 userd=Ram { ram: 3405643793, off: 8481161216 } engine=0xb declared_kernel_pid=false PRIVILEGE=KERNEL WI
+kf3: act deferred-API twin object: EXPERIMENT KF3_WIN_TWIN_DEFAPI_OBJECT: 0xc1d0004f:0xff1fe010 NV50_DEFERRED_API on Windows user-work twin host 0x10030 -> host object 0xcafe0168 (authored, no params, NOTHING registered: a 0x200 on it fails closed) (196 us, of
+kf3: act engine object: 0xc1d0004f:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x10030 -> host object 0xcafe0169 (200 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 49, sequence: 0 }
+kf3: GSP REFUSED fn49=0x56 (?) first_seq=0 — the guest read a non-OK status
+kf3: GSP command service REFUSED: PeerWritePtrOutOfRange { value: 705033754, count: 63 }
+kf3: GSP command service REFUSED: PeerWritePtrOutOfRange { value: 705033754, count: 63 }

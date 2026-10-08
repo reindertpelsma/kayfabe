@@ -1,0 +1,14 @@
+CRASH 15:58:15 id=153 src=Microsoft-Windows-Kernel-Boot Virtualization-based security (policies: 0) is disabled.
+CRASH 15:58:16 id=172 src=Microsoft-Windows-Kernel-Power Connectivity state in standby: Disconnected, Reason: NIC compliance
+CRASH 15:58:20 id=14 src=Microsoft-Windows-Wininit Credential Guard configuration:  Registry Configuration: 0x2 Test Configuration: 0 Auto Enablement: 1
+CRASH 15:58:46 id=153 src=Microsoft-Windows-Kernel-Boot Virtualization-based security (policies: 0) is disabled.
+CRASH 15:58:50 id=41 src=Microsoft-Windows-Kernel-Power The system has rebooted without cleanly shutting down first. This error could be caused if the system stopped responding, crashed, or lost power unexpectedly.
+CRASH 15:58:50 id=172 src=Microsoft-Windows-Kernel-Power Connectivity state in standby: Disconnected, Reason: NIC compliance
+CRASH 15:58:52 id=14 src=Microsoft-Windows-Wininit Credential Guard configuration:  Registry Configuration: 0x2 Test Configuration: 0 Auto Enablement: 1
+CRASH 15:58:53 id=6008 src=EventLog The previous system shutdown at 3:58:21 PM on ?10/?8/?2026 was unexpected.
+CRASH 15:58:55 id=1001 src=Microsoft-Windows-WER-SystemErrorReporting The computer has rebooted from a bugcheck.  The bugcheck was: 0x00000116 (0xffffcf8d1c817300, 0xfffff80759054930, 0xffffffffc000009a, 0x0000000000000004). A dump was saved in: C:\Windows\MEMORY.DMP. Report Id: 96372d52-55a5-4f4c-be5c-a3834f4ef77a.
+CRASH minidump 100826-5984-01.dmp 10/08/2026 15:58:55
+CRASH lastboot 10/08/2026 15:58:46
+CRASH video name='NVIDIA GeForce RTX 4070' status=Error err=43 mode=x
+
+[rc=0]
