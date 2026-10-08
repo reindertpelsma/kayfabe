@@ -3819,3 +3819,84 @@ on such a twin, if one ever appears, may be served by host registrations authore
 **Left running (2026-10-08 18:07 CEST):** the Linux demo (`interactive.sh`, kf3 `4bc62999`, window "kayfabe guest") and the Windows desktop
 overlay (`windows_broker.sh desktop`, kf3 `40230e23`, 1024 MiB store, window "kayfabe Windows"): the Basic Display desktop, logged in, at
 1920x1080 (NVIDIA disabled — with NVIDIA enabled the guest still TDRs, run76). Host Xid count 116, unchanged since run73.
+
+# Loop 2026-10-08 (sixth session), branch `claude/windows-timeout-20261008`: why the guest times out after the twins ran their work
+
+Started from the fifth session's stop at `6626c536`. Every boot below: alone on the GPU (both demos stopped cleanly first), store 4096 MiB,
+flags as run76 (`KF3_WIN_USER_CHANNELS_PASSTHROUGH`, `KF3_WIN_TWIN_DEFAPI_OBJECT`, `KF3_SW_RUNLIST_HOST_OWNED`, the probes, `KF3_RELAY_PB_PEEK`)
+plus the one named variable. Host Xid count 116 before and after every run (no Xid in this session).
+
+## Re-read of run76 before any boot: the copy-engine interrupts were not dropped (H-ce-intr as framed: falsified)
+
+`[measured, run76 at f649d2c3, 2026-10-08]` (its status line `nsi=[GR0:3438/963raised CE2:974/924raised CE3:393/7raised]` and the
+`NSI host` lines): the fifth session's "CE2 976 wakes, none raised" read the per-wake `raised=false` of the maplog line, but CE2 is the
+host engine of the Translated kernel rings and its completions are raised through the Translated CE relay (`NSI RELAY ... CE2 vector 1`,
+924 of 974). CE3's 386 unraised wakes all precede the first CE3 twin; **from the first Passthrough birth to the first free there is no
+unraised wake on GR0 or CE3** (every one raised). The per-engine counters now name the reason a wake is not raised (`nolive`, `novec`).
+Linux oracle (owner's order, second witness): `scripts/bench/probes/ce_blocksync.c` (driver API, `CU_CTX_SCHED_BLOCKING_SYNC`, a
+blocking-sync event; 64 MiB copies and a 5 ms spin so libcuda really sleeps). *Falsifier stated first:* a median wait >= 200 ms
+(slice-bound) in the guest. `[measured, kf3 4bc62999 Linux demo guest and bare metal 595.91.07, 2026-10-08]` bare metal: `ce_h2d_big`
+2535 us (cpu 2 %), `ce_d2h_big` 2580 us, `gr_spin` 5036 us; kf3 guest: 2608 us (cpu 4 %), 2665 us, 5118 us; 30/30 waits each, data ok.
+The copy-engine completion awaited by interrupt works in a kf3 Linux guest. ⊘ Not done: the raw-client arm the owner asked for first
+(an OS event on a CE channel's non-stall notifier + LAUNCH_DMA interrupt) — the frozen raw client has no OS-event plumbing; open work.
+
+## Run77/78 (H-getget): the relay's GP_GET refreshed on every host wake and the worker tick (`KF3_RELAY_GET_REFRESH`, default off)
+
+*Falsifier:* the TDR (bugcheck 0x116) still occurs while every relay shows guest `GP_GET` == host `GP_GET` at release. Run76's release
+lines had shown guest `GP_GET = 0` on the twins rung once (host `0x24`/`0x10`).
+- Run77 (`492fb3f0`): INVALID — the refresh's lock made the step's `try_lock` consume a doorbell (the compositor's guest `GP_PUT 0x12`
+  never forwarded, host stuck at `0xf`); fixed in `42b332b3` (the step waits for the lock; the refresh skips a held relay).
+- Run78 (`42b332b3`): `[measured, run78 at 42b332b3, 2026-10-08]` every relay at release has guest `GP_PUT`/`GP_GET` equal to the host's,
+  and every peeked one-word fence release was written by the engine (`FENCE-AT-RELEASE ... the engine wrote it`, new diagnostic). The
+  guest still bugchecks 0x116 (`0xc000009a`). **H-getget falsified as the cause.** [timeline](run78-timeline.txt)
+- A kernel dump (WinDbg in the guest, public symbols): the bugcheck is `dxgkrnl!TdrResetFromTimeout -> ADAPTER_RENDER::Reset ->
+  TdrBugcheckOnTimeout` at 27 s of uptime; `TDR_RECOVERY_CONTEXT` is not in the public PDB (raw words kept out of this record).
+
+## Run79 (same disk, guest `TdrDelay = TdrDdiDelay = 30`): the timeout scales with TdrDelay — and starts at a refused async preempt
+
+`[measured, runs 78/79 at 42b332b3/a99aaefe, 2026-10-08]` ([timing](run77-84-preempt-timing.txt), [run79 timeline](run79-timeline.txt)):
+in both boots the guest's kernel client issues `NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS` with a `pRunlistPreemptEvent` (the scheduler's
+asynchronous preempt) and kayfabe refused it (`0x1f`); the teardown follows **3.5 s** later with the default TdrDelay and **31.4 s** later
+with TdrDelay 30, and the guest's diagnostic snapshot (`NV0073 SYSTEM_GET_CONNECT_STATE`, the refused `0x007302a5`, `NVC370
+GET_CHANNEL_INFO`) comes 2.1 s (run78) and 18.4 s (run79) after it. All GPU work had completed (fences written, `GP_GET` current). **H-preempt:** the
+TDR is the preemption request that never completes — the GSP answers it with `RUNLIST_PREEMPT_COMPLETE` (139, eventData = the pointer;
+vfio-10 RPC 3307/3308), which kayfabe armed silently and never posted. The display enabled vblank (`LAST_DATA`) three times briefly and
+the window channels still carry only LUT methods (not the cause; recorded). `0x007302a5`: in no OGKM header, issued 6 times per boot
+from early on, refused by name, not on the TDR's path (kept refused; no derivable answer).
+
+## Runs 82-84: the async preempt served, `RUNLIST_PREEMPT_COMPLETE` posted from the host's completion (`KF3_ASYNC_PREEMPT`, default off)
+
+OWNER_RULINGS §S (139): *"serve it only as a real unprivileged preempt of the VM's own channel group, and post the completion only
+from the host's real completion."* The async form is carried to the plane as the same host `DISABLE_CHANNELS` over the twins as the
+synchronous form; when that host verb returns, the drainer posts a LIST `POST_EVENT` (index 139, eventData = the guest's value, never
+dereferenced) to the caller's live registration for 139 (recorded at the event alloc; retired with the hotplug ones). *Falsifier:* the
+TDR at the same delay with the completion posted.
+- Run82 (`54b12063`): the preempt names the D3D process's channel GROUP of another client (`0xc1d00031:0xff0e0000`) and the
+  cross-client rule refused it — TDR as before. Fixed (`10bfb7a0`): the kernel-only async form may name this VM's other clients (physical
+  RM resolves each entry's own `hClient`), and a group handle resolves to its twins.
+- Run83 (`10bfb7a0`): `[measured, run83 at 10bfb7a0, 2026-10-08]` both async preempts served, `RUNLIST_PREEMPT_COMPLETE posted to
+  0xc1d00002:0xff0620a0` (the same hEvent as vfio-10) right after the host verb; the kernel's cross-client RE-ENABLE was refused; **no TDR:
+  the NVIDIA adapter at `Status OK`, Code 0, 1920x1080 for ~130 s** (runs 76-82 each tore down within ~35 s of the head being armed). The D3D probe then hung
+  and the guest bugchecked 0x116 during it.
+- Run84 (`4d733007`, re-enable admitted too): `[measured, run84 at 4d733007, 2026-10-08]` preempts and re-enables all served, both
+  completions posted — and the teardown follows 3.5 s after the re-enable. **H-preempt holds for run79→83 (the refused preempt was the
+  TDR's start); after a served re-enable a further timeout remains, cause not established.** Candidates (inferred, untested): the
+  preempted twin is not rescheduled on the host after `DISABLE_CHANNELS(bDisable=0)` (the guest's later `GPFIFO_SCHEDULE`/runlist
+  submit is answered by the `KF3_SW_RUNLIST_HOST_OWNED` experiment, which does not touch the twin), or the resubmitted packets need a
+  completion the guest no longer gets after a preempt. D3D11/D3D12 creation: not shown to work (run83's probe hung). The owner's window
+  showed the boot frame / the armed 1080p head with no presented surface in these runs (window channels: LUT methods only).
+
+## Decisions and recommendations (sixth session)
+
+- **`KF3_WIN_TWIN_DEFAPI_OBJECT` — RECOMMENDED, pending the owner** (coordinator's decision, recorded in OWNER_RULINGS style, not
+  inserted there): part of the Windows user-work Passthrough set, default off. It meets the owner's rule for an unprivileged-origin
+  deferred-API channel (§U.3): the twin is asserted USER, in a VA space holding only this VM's memory, no physical operands (refused by
+  hardware), and the host object has nothing registered (a `0x200` on it fails closed). Runs 76-84: no Xid.
+- **`KF3_ASYNC_PREEMPT` (new, default off)** implements §S's 139 rule; the cross-client entries it admits (the guest kernel naming its own
+  processes' groups, and their re-enable) need the owner's confirmation that "inside one VM, isolation is the guest kernel's" (§V wording)
+  covers DISABLE_CHANNELS too.
+- **`KF3_RELAY_GET_REFRESH` (new, default off)**: correct but not the cause; keep as the relay's fidelity fix (GP_GET current between doorbells).
+- Open: the raw-client CE interrupt arm (owner's step 1), the after-re-enable timeout (run84), the in-process reboot gap (P4.5).
+
+**Left running (2026-10-08 ~19:20 CEST):** the Linux demo (`interactive.sh`, kf3 `4bc62999`) and the Windows desktop overlay
+(`windows_broker.sh desktop`, kf3 `40230e23`, 1024 MiB store, NVIDIA disabled, Basic Display). Host Xid count 116.

@@ -1,0 +1,516 @@
+  21335 249981.391 kf-rm: rpc-trace fn=76 RmControl cmd=0x90f10106 client=0xc1d00021 object=0xff000850 result=0x0
+  21376 249981.396 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800af0 client=0x0 object=0x0 result=0x0
+  21378 249981.396 kf-rm: rpc-trace fn=76 RmControl cmd=0x0073010a client=0xc1d00002 object=0xff0a0000 result=0x0
+  21382 249981.398 kf-rm: rpc-trace fn=76 RmControl cmd=0x00730245 client=0xc1d00002 object=0xff0a0000 result=0x0
+  21384 249981.398 kf-rm: rpc-trace fn=76 RmControl cmd=0x00730108 client=0xc1d00002 object=0xff0a0000 result=0x0
+  21387 249981.398 kf-rm: rpc-trace fn=76 RmControl cmd=0x00730245 client=0xc1d00002 object=0xff0a0000 result=0x0  (x5)
+  21399 249981.431 kf-rm: rpc-trace fn=76 RmControl cmd=0xc3720101 client=0xc1d00002 object=0xff0a0100 result=0x0
+  21402 249981.431 kf-rm: rpc-trace fn=103 RmAlloc class=0x0000 client=0xc1d00025 parent=0x0 handle=0x0 result=0x0
+  21404 249981.431 kf-rm: rpc-trace fn=103 RmAlloc class=0x0080 client=0xc1d00025 parent=0xc1d00025 handle=0xff020000 device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00025,
+  21406 249981.431 kf-rm: rpc-trace fn=103 RmAlloc class=0x2080 client=0xc1d00025 parent=0xff020000 handle=0xff030000 result=0x0
+  21409 249981.431 kf-rm: rpc-trace fn=103 RmAlloc class=0x0000 client=0xc1d00026 parent=0x0 handle=0x0 result=0x0
+  21411 249981.431 kf-rm: rpc-trace fn=103 RmAlloc class=0x0080 client=0xc1d00026 parent=0xc1d00026 handle=0xff020000 device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00026,
+  21413 249981.431 kf-rm: rpc-trace fn=103 RmAlloc class=0x2080 client=0xc1d00026 parent=0xff020000 handle=0xff030000 result=0x0
+  21415 249981.431 kf-rm: rpc-trace fn=103 RmAlloc class=0x0073 client=0xc1d00026 parent=0xff020000 handle=0xff0a0000 result=0x0
+  21419 249981.431 kf-rm: rpc-trace fn=103 RmAlloc class=0x90f1 client=0xc1d00025 parent=0xff020000 handle=0xff000850 result=0x0
+  21441 249981.441 kf-rm: rpc-trace fn=76 RmControl cmd=0x90f10106 client=0xc1d00025 object=0xff000850 result=0x0
+  21451 249981.443 kf-rm: rpc-trace fn=76 RmControl cmd=0x00801812 client=0xc1d00025 object=0xff020000 result=0x0
+  21495 249981.445 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d00025 parent=0xff020000 handle=0xff000010 result=0x0
+  21497 249981.445 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d00025 parent=0xff020000 handle=0xff1fe038 result=0x0
+  21504 249981.446 kf-rm: rpc-trace fn=103 RmAlloc class=0x9096 client=0xc1d00026 parent=0xff030000 handle=0xff1fe002 result=0x0
+  21507 249981.447 kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #6)
+  21509 249981.447 kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #7)
+  21516 249981.448 kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #8)
+  21519 249981.448 kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #9)
+  21522 249981.448 kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #10)
+  21528 249981.449 kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #11)
+  21530 249981.449 kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #12)
+  21533 249981.449 kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #13)
+  21539 249981.450 kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #14)
+  21541 249981.450 kf-rm: rpc-trace fn=103 RmAlloc class=0x0000 client=0xc1d00027 parent=0x0 handle=0x0 result=0x0
+  21543 249981.450 kf-rm: rpc-trace fn=103 RmAlloc class=0x0080 client=0xc1d00027 parent=0xc1d00027 handle=0xff020000 device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00025,
+  21545 249981.450 kf-rm: rpc-trace fn=103 RmAlloc class=0x2080 client=0xc1d00027 parent=0xff020000 handle=0xff030000 result=0x0
+  21547 249981.450 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d00027 parent=0xff020000 handle=0xff000010 result=0x0
+  21549 249981.450 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d00027 parent=0xff020000 handle=0xff1fe038 result=0x0
+  21552 249981.450 kf-rm: rpc-trace fn=76 RmControl cmd=0x0080170e client=0xc1d00027 object=0xff020000 result=0x0
+  21593 249981.456 kf-rm: rpc-trace fn=76 RmControl cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+  21595 249981.456 kf-rm: rpc-trace fn=103 RmAlloc class=0xa06c client=0xc1d00027 parent=0xff020000 handle=0xff0e0000 tsg_facts=TsgAllocFacts { h_vaspace: 0, engine_type: 1 } result=0x0
+  21597 249981.456 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c010a client=0xc1d00027 object=0xff0e0000 result=0x0
+  21599 249981.456 kf-rm: rpc-trace fn=103 RmAlloc class=0x9067 client=0xc1d00027 parent=0xff0e0000 handle=0xff0e0200 result=0x0
+  21608 249981.458 kf-rm: rpc-trace fn=103 RmAlloc class=0xc56f client=0xc1d00027 parent=0xff0e0000 handle=0xff04000c result=0x0
+  21612 249981.458 kf3: act birth passthrough: chan 0xc1d00027:0xff04000c BORN Passthrough: token 0xe -> host 0x44 in VasKey(13965662607667890256) gpfifo=0x1200c4000x32768 userd=Ram { ram: 
+  21614 249981.458 kf-rm: rpc-trace fn=103 RmAlloc class=0x5080 client=0xc1d00027 parent=0xff04000c handle=0xff1fe010 result=0x0
+  21619 249981.458 kf-rm: rpc-trace fn=103 RmAlloc class=0xc7b5 client=0xc1d00027 parent=0xff04000c handle=0xff1fe034 result=0x0
+  21631 249981.461 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+  21633 249981.461 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a3a client=0x0 object=0x0 result=none
+  21678 249981.463 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080012b client=0xc1d00027 object=0xff030000 result=0x0
+  21684 249981.463 kf-rm: rpc-trace fn=103 RmAlloc class=0xa140 client=0xc1d00027 parent=0xff04000c handle=0xff1fe01a result=0x0
+  21689 249981.463 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+  21691 249981.463 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a3a client=0x0 object=0x0 result=none
+  21845 249981.472 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080012b client=0xc1d00027 object=0xff030000 result=0x0
+  21851 249981.472 kf-rm: rpc-trace fn=103 RmAlloc class=0x902d client=0xc1d00027 parent=0xff04000c handle=0xff1fe02c result=0x0
+  21856 249981.472 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+  21858 249981.472 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a3a client=0x0 object=0x0 result=none
+  21861 249981.472 kf-rm: rpc-trace fn=103 RmAlloc class=0xc997 client=0xc1d00027 parent=0xff04000c handle=0xff1fe026 result=0x0
+  21866 249981.472 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+  21868 249981.472 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a3a client=0x0 object=0x0 result=none
+  21871 249981.472 kf-rm: rpc-trace fn=103 RmAlloc class=0xc9c0 client=0xc1d00027 parent=0xff04000c handle=0xff1fe032 result=0x0
+  21876 249981.472 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c0103 client=0xc1d00027 object=0xff0e0000 result=0x0
+  21881 249981.472 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c0101 client=0xc1d00027 object=0xff0e0000 result=0x0
+  21905 249981.476 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801111 client=0xc1d00002 object=0xff030000 result=0x0
+  21907 249981.476 kf-rm: rpc-trace fn=76 RmControl cmd=0xc3720101 client=0xc1d00002 object=0xff0a0100 result=0x0  (x2)
+  21911 249981.476 kf-rm: rpc-trace fn=76 RmControl cmd=0x007302a4 client=0xc1d00002 object=0xff0a0000 result=0x0
+  21913 249981.476 kf-rm: rpc-trace fn=76 RmControl cmd=0x00730280 client=0xc1d00002 object=0xff0a0000 result=none
+  21916 249981.476 kf3: GSP REFUSED fn76/0x00730280=0x56 (GSP_RM_CONTROL) first_— the guest read a non-OK status
+  21917 249981.476 kf-rm: rpc-trace fn=76 RmControl cmd=0x00730122 client=0xc1d00002 object=0xff0a0000 result=none
+  21920 249981.476 kf3: GSP REFUSED fn76/0x00730122=0x56 (GSP_RM_CONTROL) first_— the guest read a non-OK status
+  21921 249981.476 kf-rm: rpc-trace fn=76 RmControl cmd=0x00730128 client=0xc1d00002 object=0xff0a0000 result=none
+  21925 249981.476 kf-rm: rpc-trace fn=76 RmControl cmd=0x0073012c client=0xc1d00002 object=0xff0a0000 result=0x0
+  21927 249981.476 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800af1 client=0x0 object=0x0 result=0x0
+  21929 249981.476 kf-rm: rpc-trace fn=76 RmControl cmd=0x0073028b client=0xc1d00002 object=0xff0a0000 result=0x0
+  21962 249981.476 kf-rm: rpc-trace fn=76 RmControl cmd=0xc3720101 client=0xc1d00002 object=0xff0a0100 result=0x0
+  22200 249981.476 kf-rm: rpc-trace fn=76 RmControl cmd=0xc3700104 client=0xc1d00002 object=0xff1fe100 result=0x0
+  22206 249981.476 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800af2 client=0x0 object=0x0 result=0x0
+  22243 249981.476 kf-rm: rpc-trace fn=76 RmControl cmd=0x00730282 client=0xc1d00002 object=0xff0a0000 result=none
+  22246 249981.476 kf3: GSP REFUSED fn76/0x00730282=0x56 (GSP_RM_CONTROL) first_— the guest read a non-OK status
+  22247 249981.476 kf-rm: rpc-trace fn=76 RmControl cmd=0x00730280 client=0xc1d00002 object=0xff0a0000 result=none
+  22251 249981.476 kf-rm: rpc-trace fn=76 RmControl cmd=0x007302a4 client=0xc1d00002 object=0xff0a0000 result=0x0
+  22253 249981.476 kf-rm: rpc-trace fn=76 RmControl cmd=0x20808159 client=0xc1d00002 object=0xff030000 result=0x0
+  22256 249981.483 kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #15)
+  22259 249981.484 kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #16)
+  22376 249981.492 kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #32)
+  22508 249981.501 kf-rm: rpc-trace fn=76 RmControl cmd=0x90f10106 client=0xc1d00025 object=0xff000850 result=0x0
+  22527 249981.502 kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x2 forwarded and rung (#1) — no GP entry or push-buffer word read
+  22529 249981.502 kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x3 forwarded and rung (#2) — no GP entry or push-buffer word read
+  22538 249981.552 kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x6 forwarded and rung (#3) — no GP entry or push-buffer word read
+  22543 249981.552 kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x9 forwarded and rung (#4) — no GP entry or push-buffer word read
+  22549 249981.587 kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0xc forwarded and rung (#5) — no GP entry or push-buffer word read
+  22555 249981.623 kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0xf forwarded and rung (#6) — no GP entry or push-buffer word read
+  22562 249981.695 kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x12 forwarded and rung (#7) — no GP entry or push-buffer word read
+  22567 249981.695 kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x15 forwarded and rung (#8) — no GP entry or push-buffer word read
+  22592 249981.909 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809064 client=0xc1d00002 object=0xff030000 result=0x0
+  22595 249981.909 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809004 client=0xc1d00002 object=0xff030000 result=none
+  22599 249981.909 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080b201 client=0xc1d00002 object=0xff030000 result=none
+  22602 249981.909 kf3: GSP REFUSED fn76/0x2080b201=0x56 (GSP_RM_CONTROL) first_— the guest read a non-OK status
+  22603 249981.909 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809064 client=0xc1d00002 object=0xff030000 result=0x0
+  22606 249981.909 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809004 client=0xc1d00002 object=0xff030000 result=none
+  22610 249981.909 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080852e client=0xc1d00002 object=0xff030000 result=none
+  22614 249981.909 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080852f client=0xc1d00002 object=0xff030000 result=none
+  22617 249981.909 kf3: GSP REFUSED fn76/0x2080852f=0x56 (GSP_RM_CONTROL) first_— the guest read a non-OK status
+  22619 249981.909 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080a618 client=0xc1d00002 object=0xff030000 result=none
+  22622 249981.909 kf3: GSP REFUSED fn76/0x2080a618=0x56 (GSP_RM_CONTROL) first_— the guest read a non-OK status
+  22624 249981.909 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080a619 client=0xc1d00002 object=0xff030000 result=none
+  22628 249981.909 kf3: GSP REFUSED fn76/0x2080a619=0x56 (GSP_RM_CONTROL) first_— the guest read a non-OK status
+  22630 249981.909 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080853a client=0xc1d00002 object=0xff030000 result=none
+  22633 249981.909 kf3: GSP REFUSED fn76/0x2080853a=0x56 (GSP_RM_CONTROL) first_— the guest read a non-OK status
+  22635 249981.909 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080853b client=0xc1d00002 object=0xff030000 result=none
+  22638 249981.909 kf3: GSP REFUSED fn76/0x2080853b=0x56 (GSP_RM_CONTROL) first_— the guest read a non-OK status
+  22639 249981.909 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809064 client=0xc1d00002 object=0xff030000 result=0x0
+  22642 249981.909 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809004 client=0xc1d00002 object=0xff030000 result=none
+  22646 249981.909 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080b201 client=0xc1d00002 object=0xff030000 result=none
+  22660 249981.980 kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x2d forwarded and rung (#16) — no GP entry or push-buffer word read
+  22678 249982.163 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809064 client=0xc1d00002 object=0xff030000 result=0x0
+  22681 249982.163 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809004 client=0xc1d00002 object=0xff030000 result=none
+  22685 249982.163 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080b201 client=0xc1d00002 object=0xff030000 result=none
+  22688 249982.163 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809064 client=0xc1d00002 object=0xff030000 result=0x0
+  22691 249982.163 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809004 client=0xc1d00002 object=0xff030000 result=none
+  22695 249982.163 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080b201 client=0xc1d00002 object=0xff030000 result=none
+  22703 249982.198 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809064 client=0xc1d00002 object=0xff030000 result=0x0
+  22706 249982.198 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809004 client=0xc1d00002 object=0xff030000 result=none
+  22710 249982.198 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080b201 client=0xc1d00002 object=0xff030000 result=none
+  22713 249982.198 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809064 client=0xc1d00002 object=0xff030000 result=0x0
+  22716 249982.198 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809004 client=0xc1d00002 object=0xff030000 result=none
+  22720 249982.198 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080b201 client=0xc1d00002 object=0xff030000 result=none
+  22727 249982.233 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809064 client=0xc1d00002 object=0xff030000 result=0x0
+  22730 249982.233 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809004 client=0xc1d00002 object=0xff030000 result=none
+  22734 249982.233 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080b201 client=0xc1d00002 object=0xff030000 result=none
+  22777 249982.558 kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x5d forwarded and rung (#32) — no GP entry or push-buffer word read
+  22824 249982.987 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809064 client=0xc1d00002 object=0xff030000 result=0x0
+  22827 249982.987 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809004 client=0xc1d00002 object=0xff030000 result=none
+  22831 249982.987 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080b201 client=0xc1d00002 object=0xff030000 result=none
+  22834 249982.987 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809064 client=0xc1d00002 object=0xff030000 result=0x0
+  22837 249982.987 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809004 client=0xc1d00002 object=0xff030000 result=none
+  22841 249982.987 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080852e client=0xc1d00002 object=0xff030000 result=none
+  22845 249982.987 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080852f client=0xc1d00002 object=0xff030000 result=none
+  22849 249982.987 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080a618 client=0xc1d00002 object=0xff030000 result=none
+  22853 249982.987 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080a619 client=0xc1d00002 object=0xff030000 result=none
+  22858 249982.987 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080853a client=0xc1d00002 object=0xff030000 result=none
+  22862 249982.987 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080853b client=0xc1d00002 object=0xff030000 result=none
+  22865 249982.987 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809064 client=0xc1d00002 object=0xff030000 result=0x0
+  22868 249982.987 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809004 client=0xc1d00002 object=0xff030000 result=none
+  22872 249982.987 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080b201 client=0xc1d00002 object=0xff030000 result=none
+  22891 249983.128 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809064 client=0xc1d00002 object=0xff030000 result=0x0
+  22894 249983.128 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809004 client=0xc1d00002 object=0xff030000 result=none
+  22897 249983.128 kf-rm: rpc-trace fn=76 RmControl cmd=0x20808159 client=0xc1d00002 object=0xff030000 result=0x0
+  22899 249983.128 kf-rm: rpc-trace fn=76 RmControl cmd=0x007302a5 client=0xc1d00002 object=0xff0a0000 result=none
+  22902 249983.128 kf3: GSP REFUSED fn76/0x007302a5=0x56 (GSP_RM_CONTROL) first_— the guest read a non-OK status
+  22903 249983.128 kf-rm: rpc-trace fn=76 RmControl cmd=0x20808159 client=0xc1d00002 object=0xff030000 result=0x0  (x2)
+  22912 249983.163 kf-rm: rpc-trace fn=103 RmAlloc class=0x0000 client=0xc1d00028 parent=0x0 handle=0x0 result=0x0
+  22914 249983.163 kf-rm: rpc-trace fn=103 RmAlloc class=0x0080 client=0xc1d00028 parent=0xc1d00028 handle=0xff020000 device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00028,
+  22916 249983.163 kf-rm: rpc-trace fn=103 RmAlloc class=0x2080 client=0xc1d00028 parent=0xff020000 handle=0xff030000 result=0x0
+  22919 249983.163 kf-rm: rpc-trace fn=103 RmAlloc class=0x0000 client=0xc1d00029 parent=0x0 handle=0x0 result=0x0
+  22921 249983.163 kf-rm: rpc-trace fn=103 RmAlloc class=0x0080 client=0xc1d00029 parent=0xc1d00029 handle=0xff020000 device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00029,
+  22923 249983.163 kf-rm: rpc-trace fn=103 RmAlloc class=0x2080 client=0xc1d00029 parent=0xff020000 handle=0xff030000 result=0x0
+  22925 249983.163 kf-rm: rpc-trace fn=103 RmAlloc class=0x0073 client=0xc1d00029 parent=0xff020000 handle=0xff0a0000 result=0x0
+  22929 249983.163 kf-rm: rpc-trace fn=103 RmAlloc class=0x90f1 client=0xc1d00028 parent=0xff020000 handle=0xff000850 result=0x0
+  22951 249983.172 kf-rm: rpc-trace fn=76 RmControl cmd=0x90f10106 client=0xc1d00028 object=0xff000850 result=0x0
+  22961 249983.174 kf-rm: rpc-trace fn=76 RmControl cmd=0x00801812 client=0xc1d00028 object=0xff020000 result=0x0
+  23005 249983.177 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d00028 parent=0xff020000 handle=0xff000010 result=0x0
+  23007 249983.177 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d00028 parent=0xff020000 handle=0xff1fe038 result=0x0
+  23014 249983.178 kf-rm: rpc-trace fn=103 RmAlloc class=0x9096 client=0xc1d00029 parent=0xff030000 handle=0xff1fe002 result=0x0
+  23043 249983.207 kf-rm: rpc-trace fn=103 RmAlloc class=0x0000 client=0xc1d0002a parent=0x0 handle=0x0 result=0x0
+  23045 249983.207 kf-rm: rpc-trace fn=103 RmAlloc class=0x0080 client=0xc1d0002a parent=0xc1d0002a handle=0xff020000 device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00028,
+  23047 249983.207 kf-rm: rpc-trace fn=103 RmAlloc class=0x2080 client=0xc1d0002a parent=0xff020000 handle=0xff030000 result=0x0
+  23049 249983.207 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d0002a parent=0xff020000 handle=0xff000010 result=0x0
+  23051 249983.207 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d0002a parent=0xff020000 handle=0xff1fe038 result=0x0
+  23054 249983.207 kf-rm: rpc-trace fn=76 RmControl cmd=0x0080170e client=0xc1d0002a object=0xff020000 result=0x0
+  23095 249983.213 kf-rm: rpc-trace fn=76 RmControl cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+  23097 249983.213 kf-rm: rpc-trace fn=103 RmAlloc class=0xa06c client=0xc1d0002a parent=0xff020000 handle=0xff0e0000 tsg_facts=TsgAllocFacts { h_vaspace: 0, engine_type: 1 } result=0x0
+  23099 249983.213 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c010a client=0xc1d0002a object=0xff0e0000 result=0x0
+  23101 249983.213 kf-rm: rpc-trace fn=103 RmAlloc class=0x9067 client=0xc1d0002a parent=0xff0e0000 handle=0xff0e0200 result=0x0
+  23110 249983.214 kf-rm: rpc-trace fn=103 RmAlloc class=0xc56f client=0xc1d0002a parent=0xff0e0000 handle=0xff04000d result=0x0
+  23114 249983.214 kf3: act birth passthrough: chan 0xc1d0002a:0xff04000d BORN Passthrough: token 0xf -> host 0x45 in VasKey(13965662620552792144) gpfifo=0x4000000x8192 userd=Ram { ram: 340
+  23116 249983.214 kf-rm: rpc-trace fn=103 RmAlloc class=0x5080 client=0xc1d0002a parent=0xff04000d handle=0xff1fe010 result=0x0
+  23121 249983.214 kf-rm: rpc-trace fn=103 RmAlloc class=0xc7b5 client=0xc1d0002a parent=0xff04000d handle=0xff1fe034 result=0x0
+  23133 249983.218 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+  23135 249983.218 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a3a client=0x0 object=0x0 result=none
+  23162 249983.219 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080012b client=0xc1d0002a object=0xff030000 result=0x0
+  23168 249983.219 kf-rm: rpc-trace fn=103 RmAlloc class=0xa140 client=0xc1d0002a parent=0xff04000d handle=0xff1fe01a result=0x0
+  23173 249983.219 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+  23175 249983.219 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a3a client=0x0 object=0x0 result=none
+  23323 249983.240 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080012b client=0xc1d0002a object=0xff030000 result=0x0
+  23329 249983.240 kf-rm: rpc-trace fn=103 RmAlloc class=0x902d client=0xc1d0002a parent=0xff04000d handle=0xff1fe02c result=0x0
+  23334 249983.240 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+  23336 249983.240 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a3a client=0x0 object=0x0 result=none
+  23339 249983.240 kf-rm: rpc-trace fn=103 RmAlloc class=0xc997 client=0xc1d0002a parent=0xff04000d handle=0xff1fe026 result=0x0
+  23344 249983.240 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+  23346 249983.240 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a3a client=0x0 object=0x0 result=none
+  23349 249983.240 kf-rm: rpc-trace fn=103 RmAlloc class=0xc9c0 client=0xc1d0002a parent=0xff04000d handle=0xff1fe032 result=0x0
+  23354 249983.240 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c0103 client=0xc1d0002a object=0xff0e0000 result=0x0
+  23359 249983.240 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c0101 client=0xc1d0002a object=0xff0e0000 result=0x0
+  23438 249983.251 kf-rm: rpc-trace fn=76 RmControl cmd=0x50800101 client=0xc1d00015 object=0xff1fe010 result=0x0
+  23442 249983.251 kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #64)
+  23445 249983.251 kf-rm: rpc-trace fn=76 RmControl cmd=0x50800101 client=0xc1d00015 object=0xff1fe010 result=0x0
+  23466 249983.253 kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest GR0 vector 0: a Translated GR-tier ring retired engine-written work (rings=2, relay #3)
+  23469 249983.253 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801211 client=0xc1d00002 object=0xff030000 result=0x0
+  23520 249983.257 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801208 client=0xc1d00002 object=0xff030000 result=0x0
+  23523 249983.257 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801211 client=0xc1d00002 object=0xff030000 result=0x0
+  23527 249983.257 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801111 client=0xc1d00002 object=0xff030000 result=0x0
+  23586 249983.260 kf-rm: rpc-trace fn=103 RmAlloc class=0x0000 client=0xc1d0002b parent=0x0 handle=0x0 result=0x0
+  23588 249983.260 kf-rm: rpc-trace fn=103 RmAlloc class=0x0080 client=0xc1d0002b parent=0xc1d0002b handle=0xff020000 device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00028,
+  23603 249983.261 kf-rm: rpc-trace fn=103 RmAlloc class=0x2080 client=0xc1d0002b parent=0xff020000 handle=0xff030000 result=0x0
+  23608 249983.261 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d0002b parent=0xff020000 handle=0xff000010 result=0x0
+  23616 249983.261 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d0002b parent=0xff020000 handle=0xff1fe038 result=0x0
+  23623 249983.261 kf-rm: rpc-trace fn=76 RmControl cmd=0x0080170e client=0xc1d0002b object=0xff020000 result=0x0
+  23655 249983.263 kf-rm: rpc-trace fn=76 RmControl cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+  23657 249983.263 kf-rm: rpc-trace fn=103 RmAlloc class=0xa06c client=0xc1d0002b parent=0xff020000 handle=0xff0e0000 tsg_facts=TsgAllocFacts { h_vaspace: 0, engine_type: c } result=0x0
+  23659 249983.263 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c010a client=0xc1d0002b object=0xff0e0000 result=0x0
+  23668 249983.264 kf-rm: rpc-trace fn=103 RmAlloc class=0xc56f client=0xc1d0002b parent=0xff0e0000 handle=0xff04000e result=0x0
+  23672 249983.264 kf3: act birth passthrough: chan 0xc1d0002b:0xff04000e BORN Passthrough: token 0x1010 -> host 0x20046 in VasKey(13965662620552792144) gpfifo=0x4036000x8192 userd=Ram { ra
+  23674 249983.264 kf-rm: rpc-trace fn=103 RmAlloc class=0x5080 client=0xc1d0002b parent=0xff04000e handle=0xff1fe010 result=0x0
+  23679 249983.264 kf-rm: rpc-trace fn=103 RmAlloc class=0xc7b5 client=0xc1d0002b parent=0xff04000e handle=0xff1fe034 result=0x0
+  23684 249983.264 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c0103 client=0xc1d0002b object=0xff0e0000 result=0x0
+  23689 249983.264 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c0101 client=0xc1d0002b object=0xff0e0000 result=0x0
+  23711 249983.270 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801111 client=0xc1d00002 object=0xff030000 result=0x0
+  23940 249983.288 kf-rm: rpc-trace fn=103 RmAlloc class=0x0000 client=0xc1d0002c parent=0x0 handle=0x0 result=0x0
+  23944 249983.288 kf-rm: rpc-trace fn=103 RmAlloc class=0x0080 client=0xc1d0002c parent=0xc1d0002c handle=0xb1000000 device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d0002c,
+  23952 249983.288 kf-rm: rpc-trace fn=103 RmAlloc class=0x2080 client=0xc1d0002c parent=0xb1000000 handle=0xb2000000 result=0x0
+  23955 249983.288 kf-rm: rpc-trace fn=103 RmAlloc class=0x2081 client=0xc1d0002c parent=0xb2000000 handle=0xbc000000 result=0x0
+  23963 249983.289 kf-rm: rpc-trace fn=103 RmAlloc class=0x0073 client=0xc1d0002c parent=0xb1000000 handle=0xb3000000 result=0x0
+  23980 249983.290 kf-rm: rpc-trace fn=76 RmControl cmd=0x00730250 client=0xc1d00002 object=0xff0a0000 result=0x0
+  23999 249983.293 kf-rm: rpc-trace fn=76 RmControl cmd=0x20808159 client=0xc1d00002 object=0xff030000 result=0x0  (x3)
+  24033 249983.294 kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #128)
+  24035 249983.294 kf-rm: rpc-trace fn=76 RmControl cmd=0x20808159 client=0xc1d00002 object=0xff030000 result=0x0  (x2)
+  24333 249983.305 kf-rm: rpc-trace fn=103 RmAlloc class=0x0000 client=0xc1d0002d parent=0x0 handle=0x0 result=0x0
+  24339 249983.305 kf-rm: rpc-trace fn=103 RmAlloc class=0x0080 client=0xc1d0002d parent=0xc1d0002d handle=0xb1000000 device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d0002d,
+  24345 249983.305 kf-rm: rpc-trace fn=103 RmAlloc class=0x2080 client=0xc1d0002d parent=0xb1000000 handle=0xb2000000 result=0x0
+  24352 249983.306 kf-rm: rpc-trace fn=103 RmAlloc class=0x2081 client=0xc1d0002d parent=0xb2000000 handle=0xbc000000 result=0x0
+  24367 249983.306 kf-rm: rpc-trace fn=103 RmAlloc class=0x0073 client=0xc1d0002d parent=0xb1000000 handle=0xb3000000 result=0x0
+  24372 249983.306 kf-rm: rpc-trace fn=103 RmAlloc class=0x402c client=0xc1d0002d parent=0xb2000000 handle=0xb8000000 result=0x56
+  24374 249983.306 kf3: GSP REFUSED fn103/0x0000402c=0x56 (GSP_RM_ALLOC) first_— the guest read a non-OK status
+  24390 249983.307 kf-rm: rpc-trace fn=103 RmAlloc class=0x402c client=0xc1d0002d parent=0xb2000000 handle=0xb8000000 result=0x56
+  24401 249983.307 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800aff client=0x0 object=0x0 result=none  (x2)
+  24438 249983.309 kf-rm: rpc-trace fn=10 Free  result=0x0  (x5)
+  24479 249983.310 kf-rm: rpc-trace fn=103 RmAlloc class=0x0000 client=0xc1d0002e parent=0x0 handle=0x0 result=0x0
+  24482 249983.310 kf-rm: rpc-trace fn=103 RmAlloc class=0x0080 client=0xc1d0002e parent=0xc1d0002e handle=0xb1000000 device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d0002e,
+  24490 249983.310 kf-rm: rpc-trace fn=103 RmAlloc class=0x2080 client=0xc1d0002e parent=0xb1000000 handle=0xb2000000 result=0x0
+  24492 249983.310 kf-rm: rpc-trace fn=103 RmAlloc class=0x2081 client=0xc1d0002e parent=0xb2000000 handle=0xbc000000 result=0x0
+  24494 249983.310 kf-rm: rpc-trace fn=103 RmAlloc class=0x0073 client=0xc1d0002e parent=0xb1000000 handle=0xb3000000 result=0x0
+  24503 249983.311 kf-rm: rpc-trace fn=103 RmAlloc class=0x402c client=0xc1d0002e parent=0xb2000000 handle=0xb8000000 result=0x56  (x2)
+  24527 249983.312 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800aff client=0x0 object=0x0 result=none  (x2)
+  24992 249983.376 kf-rm: rpc-trace fn=76 RmControl cmd=0x90f10106 client=0xc1d00028 object=0xff000850 result=0x0
+  25013 249983.379 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a9a client=0xc1d00014 object=0xff030000 result=none
+  25016 249983.379 kf3: GSP REFUSED fn76/0x20800a9a=0x56 (GSP_RM_CONTROL) first_— the guest read a non-OK status
+  25038 249983.379 kf3: chan token 0xf (host 0x45) USERD relay: GP_PUT 0x24 forwarded and rung (#1) — no GP entry or push-buffer word read
+  25177 249983.411 kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0xa5 forwarded and rung (#64) — no GP entry or push-buffer word read
+  25179 249983.449 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809064 client=0xc1d00002 object=0xff030000 result=0x0
+  25182 249983.449 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809004 client=0xc1d00002 object=0xff030000 result=none
+  25185 249983.449 kf-rm: rpc-trace fn=76 RmControl cmd=0x007302a5 client=0xc1d00002 object=0xff0a0000 result=none
+  25188 249983.449 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809064 client=0xc1d00002 object=0xff030000 result=0x0
+  25191 249983.449 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809004 client=0xc1d00002 object=0xff030000 result=none
+  25194 249983.449 kf-rm: rpc-trace fn=76 RmControl cmd=0x007302a5 client=0xc1d00002 object=0xff0a0000 result=none
+  25199 249983.469 kf-rm: rpc-trace fn=103 RmAlloc class=0x0000 client=0xc1d0002f parent=0x0 handle=0x0 result=0x0
+  25204 249983.469 kf-rm: rpc-trace fn=103 RmAlloc class=0x0080 client=0xc1d0002f parent=0xc1d0002f handle=0xff020000 device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00028,
+  25207 249983.469 kf-rm: rpc-trace fn=103 RmAlloc class=0x2080 client=0xc1d0002f parent=0xff020000 handle=0xff030000 result=0x0
+  25221 249983.470 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d0002f parent=0xff020000 handle=0xff000010 result=0x0
+  25227 249983.470 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d0002f parent=0xff020000 handle=0xff1fe038 result=0x0
+  25231 249983.470 kf-rm: rpc-trace fn=76 RmControl cmd=0x0080170e client=0xc1d0002f object=0xff020000 result=0x0
+  25270 249983.472 kf-rm: rpc-trace fn=76 RmControl cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+  25272 249983.472 kf-rm: rpc-trace fn=103 RmAlloc class=0xa06c client=0xc1d0002f parent=0xff020000 handle=0xff0e0000 tsg_facts=TsgAllocFacts { h_vaspace: 0, engine_type: 1 } result=0x0
+  25274 249983.472 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c010a client=0xc1d0002f object=0xff0e0000 result=0x0
+  25276 249983.472 kf-rm: rpc-trace fn=103 RmAlloc class=0x9067 client=0xc1d0002f parent=0xff0e0000 handle=0xff0e0200 result=0x0
+  25285 249983.473 kf-rm: rpc-trace fn=103 RmAlloc class=0xc56f client=0xc1d0002f parent=0xff0e0000 handle=0xff04000f result=0x0
+  25289 249983.473 kf3: act birth passthrough: chan 0xc1d0002f:0xff04000f BORN Passthrough: token 0x11 -> host 0x47 in VasKey(13965662620552792144) gpfifo=0x14533000x8192 userd=Ram { ram: 3
+  25291 249983.473 kf-rm: rpc-trace fn=103 RmAlloc class=0x5080 client=0xc1d0002f parent=0xff04000f handle=0xff1fe010 result=0x0
+  25296 249983.473 kf-rm: rpc-trace fn=103 RmAlloc class=0xc7b5 client=0xc1d0002f parent=0xff04000f handle=0xff1fe034 result=0x0
+  25317 249983.477 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+  25319 249983.477 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a3a client=0x0 object=0x0 result=none
+  25361 249983.478 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080012b client=0xc1d0002f object=0xff030000 result=0x0
+  25367 249983.478 kf-rm: rpc-trace fn=103 RmAlloc class=0xa140 client=0xc1d0002f parent=0xff04000f handle=0xff1fe01a result=0x0
+  25372 249983.478 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+  25374 249983.478 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a3a client=0x0 object=0x0 result=none
+  25571 249983.488 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080012b client=0xc1d0002f object=0xff030000 result=0x0
+  25577 249983.488 kf-rm: rpc-trace fn=103 RmAlloc class=0x902d client=0xc1d0002f parent=0xff04000f handle=0xff1fe02c result=0x0
+  25582 249983.488 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+  25584 249983.488 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a3a client=0x0 object=0x0 result=none
+  25587 249983.488 kf-rm: rpc-trace fn=103 RmAlloc class=0xc997 client=0xc1d0002f parent=0xff04000f handle=0xff1fe026 result=0x0
+  25592 249983.488 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+  25594 249983.488 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a3a client=0x0 object=0x0 result=none
+  25597 249983.488 kf-rm: rpc-trace fn=103 RmAlloc class=0xc9c0 client=0xc1d0002f parent=0xff04000f handle=0xff1fe032 result=0x0
+  25602 249983.488 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c0103 client=0xc1d0002f object=0xff0e0000 result=0x0
+  25607 249983.488 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c0101 client=0xc1d0002f object=0xff0e0000 result=0x0
+  25693 249983.498 kf-rm: rpc-trace fn=76 RmControl cmd=0x50800101 client=0xc1d00015 object=0xff1fe010 result=0x0  (x2)
+  25721 249983.501 kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest GR0 vector 0: a Translated GR-tier ring retired engine-written work (rings=2, relay #4)
+  25724 249983.501 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801211 client=0xc1d00002 object=0xff030000 result=0x0
+  25793 249983.506 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801208 client=0xc1d00002 object=0xff030000 result=0x0
+  25796 249983.506 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801211 client=0xc1d00002 object=0xff030000 result=0x0
+  25800 249983.506 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801111 client=0xc1d00002 object=0xff030000 result=0x0
+  25802 249983.506 kf-rm: rpc-trace fn=76 RmControl cmd=0xc3720101 client=0xc1d00002 object=0xff0a0100 result=0x0
+  25832 249983.509 kf-rm: rpc-trace fn=103 RmAlloc class=0x0000 client=0xc1d00030 parent=0x0 handle=0x0 result=0x0
+  25837 249983.509 kf-rm: rpc-trace fn=103 RmAlloc class=0x0080 client=0xc1d00030 parent=0xc1d00030 handle=0xff020000 device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00028,
+  25841 249983.509 kf-rm: rpc-trace fn=103 RmAlloc class=0x2080 client=0xc1d00030 parent=0xff020000 handle=0xff030000 result=0x0
+  25864 249983.510 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d00030 parent=0xff020000 handle=0xff000010 result=0x0
+  25870 249983.510 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d00030 parent=0xff020000 handle=0xff1fe038 result=0x0
+  25874 249983.510 kf-rm: rpc-trace fn=76 RmControl cmd=0x0080170e client=0xc1d00030 object=0xff020000 result=0x0
+  26015 249983.514 kf-rm: rpc-trace fn=76 RmControl cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+  26021 249983.514 kf-rm: rpc-trace fn=103 RmAlloc class=0xa06c client=0xc1d00030 parent=0xff020000 handle=0xff0e0000 tsg_facts=TsgAllocFacts { h_vaspace: 0, engine_type: c } result=0x0
+  26023 249983.514 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c010a client=0xc1d00030 object=0xff0e0000 result=0x0
+  26060 249983.515 kf-rm: rpc-trace fn=103 RmAlloc class=0xc56f client=0xc1d00030 parent=0xff0e0000 handle=0xff040010 result=0x0
+  26090 249983.516 kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #256)
+  26144 249983.518 kf3: act birth passthrough: chan 0xc1d00030:0xff040010 BORN Passthrough: token 0x1012 -> host 0x20048 in VasKey(13965662620552792144) gpfifo=0x145ea000x8192 userd=Ram { r
+  26147 249983.518 kf-rm: rpc-trace fn=103 RmAlloc class=0x5080 client=0xc1d00030 parent=0xff040010 handle=0xff1fe010 result=0x0
+  26152 249983.518 kf-rm: rpc-trace fn=103 RmAlloc class=0xc7b5 client=0xc1d00030 parent=0xff040010 handle=0xff1fe034 result=0x0
+  26157 249983.518 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c0103 client=0xc1d00030 object=0xff0e0000 result=0x0
+  26162 249983.518 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c0101 client=0xc1d00030 object=0xff0e0000 result=0x0
+  26196 249983.521 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801111 client=0xc1d00002 object=0xff030000 result=0x0
+  28245 249983.599 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a9a client=0xc1d00014 object=0xff030000 result=none
+  28279 249983.600 kf3: chan token 0x11 (host 0x47) USERD relay: GP_PUT 0x24 forwarded and rung (#1) — no GP entry or push-buffer word read
+  28884 249983.676 kf3: chan token 0x1012 (host 0x20048) USERD relay: GP_PUT 0x10 forwarded and rung (#1) — no GP entry or push-buffer word read
+  29101 249983.683 kf3: chan token 0x11 (host 0x47) USERD relay: GP_PUT 0x50 forwarded and rung (#2) — no GP entry or push-buffer word read
+  29139 249983.684 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809064 client=0xc1d00002 object=0xff030000 result=0x0
+  29142 249983.684 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809004 client=0xc1d00002 object=0xff030000 result=none
+  29145 249983.684 kf-rm: rpc-trace fn=76 RmControl cmd=0x007302a5 client=0xc1d00002 object=0xff0a0000 result=none
+  29149 249983.684 kf-rm: rpc-trace fn=103 RmAlloc class=0x0000 client=0xc1d00031 parent=0x0 handle=0x0 result=0x0
+  29151 249983.684 kf-rm: rpc-trace fn=103 RmAlloc class=0x0080 client=0xc1d00031 parent=0xc1d00031 handle=0xff020000 device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00028,
+  29153 249983.684 kf-rm: rpc-trace fn=103 RmAlloc class=0x2080 client=0xc1d00031 parent=0xff020000 handle=0xff030000 result=0x0
+  29159 249983.770 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d00031 parent=0xff020000 handle=0xff000010 result=0x0
+  29162 249983.770 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d00031 parent=0xff020000 handle=0xff1fe038 result=0x0
+  29187 249983.771 kf-rm: rpc-trace fn=76 RmControl cmd=0x0080170e client=0xc1d00031 object=0xff020000 result=0x0
+  29259 249983.773 kf-rm: rpc-trace fn=76 RmControl cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+  29261 249983.773 kf-rm: rpc-trace fn=103 RmAlloc class=0xa06c client=0xc1d00031 parent=0xff020000 handle=0xff0e0000 tsg_facts=TsgAllocFacts { h_vaspace: 0, engine_type: 1 } result=0x0
+  29263 249983.773 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c010a client=0xc1d00031 object=0xff0e0000 result=0x0
+  29265 249983.773 kf-rm: rpc-trace fn=103 RmAlloc class=0x9067 client=0xc1d00031 parent=0xff0e0000 handle=0xff0e0200 result=0x0
+  29275 249983.774 kf-rm: rpc-trace fn=103 RmAlloc class=0xc56f client=0xc1d00031 parent=0xff0e0000 handle=0xff040011 result=0x0
+  29279 249983.774 kf3: act birth passthrough: chan 0xc1d00031:0xff040011 BORN Passthrough: token 0x13 -> host 0x49 in VasKey(13965662620552792144) gpfifo=0x14de4000x8192 userd=Ram { ram: 3
+  29281 249983.774 kf-rm: rpc-trace fn=103 RmAlloc class=0x5080 client=0xc1d00031 parent=0xff040011 handle=0xff1fe010 result=0x0
+  29286 249983.774 kf-rm: rpc-trace fn=103 RmAlloc class=0xc7b5 client=0xc1d00031 parent=0xff040011 handle=0xff1fe034 result=0x0
+  29317 249983.778 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+  29319 249983.778 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a3a client=0x0 object=0x0 result=none
+  29381 249983.780 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080012b client=0xc1d00031 object=0xff030000 result=0x0
+  29387 249983.780 kf-rm: rpc-trace fn=103 RmAlloc class=0xa140 client=0xc1d00031 parent=0xff040011 handle=0xff1fe01a result=0x0
+  29392 249983.780 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+  29394 249983.780 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a3a client=0x0 object=0x0 result=none
+  29640 249983.791 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080012b client=0xc1d00031 object=0xff030000 result=0x0
+  29646 249983.791 kf-rm: rpc-trace fn=103 RmAlloc class=0x902d client=0xc1d00031 parent=0xff040011 handle=0xff1fe02c result=0x0
+  29651 249983.791 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+  29653 249983.791 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a3a client=0x0 object=0x0 result=none
+  29656 249983.791 kf-rm: rpc-trace fn=103 RmAlloc class=0xc997 client=0xc1d00031 parent=0xff040011 handle=0xff1fe026 result=0x0
+  29661 249983.791 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+  29663 249983.791 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a3a client=0x0 object=0x0 result=none
+  29666 249983.791 kf-rm: rpc-trace fn=103 RmAlloc class=0xc9c0 client=0xc1d00031 parent=0xff040011 handle=0xff1fe032 result=0x0
+  29671 249983.791 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c0103 client=0xc1d00031 object=0xff0e0000 result=0x0
+  29676 249983.791 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c0101 client=0xc1d00031 object=0xff0e0000 result=0x0
+  29780 249983.801 kf-rm: rpc-trace fn=76 RmControl cmd=0x50800101 client=0xc1d00015 object=0xff1fe010 result=0x0  (x2)
+  29801 249983.803 kf-rm: rpc-trace fn=103 RmAlloc class=0x0000 client=0xc1d00032 parent=0x0 handle=0x0 result=0x0
+  29804 249983.803 kf-rm: rpc-trace fn=103 RmAlloc class=0x0080 client=0xc1d00032 parent=0xc1d00032 handle=0xb1000000 device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00032,
+  29811 249983.803 kf-rm: rpc-trace fn=103 RmAlloc class=0x2080 client=0xc1d00032 parent=0xb1000000 handle=0xb2000000 result=0x0
+  29816 249983.803 kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest GR0 vector 0: a Translated GR-tier ring retired engine-written work (rings=2, relay #5)
+  29818 249983.803 kf-rm: rpc-trace fn=103 RmAlloc class=0x2081 client=0xc1d00032 parent=0xb2000000 handle=0xbc000000 result=0x0
+  29821 249983.803 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801211 client=0xc1d00002 object=0xff030000 result=0x0
+  29823 249983.803 kf-rm: rpc-trace fn=103 RmAlloc class=0x0073 client=0xc1d00032 parent=0xb1000000 handle=0xb3000000 result=0x0
+  29826 249983.803 kf-rm: rpc-trace fn=103 RmAlloc class=0x402c client=0xc1d00032 parent=0xb2000000 handle=0xb8000000 result=0x56  (x2)
+  29836 249983.805 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800aff client=0x0 object=0x0 result=none  (x2)
+  29854 249983.806 kf-rm: rpc-trace fn=10 Free  result=0x0  (x5)
+  29924 249983.809 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801208 client=0xc1d00002 object=0xff030000 result=0x0
+  29927 249983.809 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801211 client=0xc1d00002 object=0xff030000 result=0x0
+  29931 249983.809 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801111 client=0xc1d00002 object=0xff030000 result=0x0
+  29971 249983.811 kf-rm: rpc-trace fn=103 RmAlloc class=0x0000 client=0xc1d00033 parent=0x0 handle=0x0 result=0x0
+  29973 249983.811 kf-rm: rpc-trace fn=103 RmAlloc class=0x0080 client=0xc1d00033 parent=0xc1d00033 handle=0xff020000 device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00028,
+  29979 249983.811 kf-rm: rpc-trace fn=103 RmAlloc class=0x2080 client=0xc1d00033 parent=0xff020000 handle=0xff030000 result=0x0
+  29982 249983.811 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d00033 parent=0xff020000 handle=0xff000010 result=0x0
+  30015 249983.812 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d00033 parent=0xff020000 handle=0xff1fe038 result=0x0
+  30020 249983.812 kf-rm: rpc-trace fn=76 RmControl cmd=0x0080170e client=0xc1d00033 object=0xff020000 result=0x0
+  30135 249983.815 kf-rm: rpc-trace fn=76 RmControl cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+  30142 249983.816 kf-rm: rpc-trace fn=103 RmAlloc class=0xa06c client=0xc1d00033 parent=0xff020000 handle=0xff0e0000 tsg_facts=TsgAllocFacts { h_vaspace: 0, engine_type: c } result=0x0
+  30144 249983.816 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c010a client=0xc1d00033 object=0xff0e0000 result=0x0
+  30254 249983.819 kf-rm: rpc-trace fn=103 RmAlloc class=0xc56f client=0xc1d00033 parent=0xff0e0000 handle=0xff040012 result=0x0
+  30296 249983.821 kf3: act birth passthrough: chan 0xc1d00033:0xff040012 BORN Passthrough: token 0x1014 -> host 0x2004a in VasKey(13965662620552792144) gpfifo=0x15161000x8192 userd=Ram { r
+  30335 249983.822 kf-rm: rpc-trace fn=103 RmAlloc class=0x5080 client=0xc1d00033 parent=0xff040012 handle=0xff1fe010 result=0x0
+  30344 249983.822 kf-rm: rpc-trace fn=103 RmAlloc class=0xc7b5 client=0xc1d00033 parent=0xff040012 handle=0xff1fe034 result=0x0
+  30383 249983.823 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c0103 client=0xc1d00033 object=0xff0e0000 result=0x0
+  30390 249983.823 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c0101 client=0xc1d00033 object=0xff0e0000 result=0x0
+  30434 249983.825 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801111 client=0xc1d00002 object=0xff030000 result=0x0
+  32517 249983.894 kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1: a Translated copy-engine ring retired work after its host fence (relay #512)
+  33094 249983.912 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a9a client=0xc1d00014 object=0xff030000 result=none
+  33194 249983.915 kf3: chan token 0x13 (host 0x49) USERD relay: GP_PUT 0x24 forwarded and rung (#1) — no GP entry or push-buffer word read
+  33430 249983.926 kf3: chan token 0x1014 (host 0x2004a) USERD relay: GP_PUT 0x10 forwarded and rung (#1) — no GP entry or push-buffer word read
+  33608 249983.932 kf3: chan token 0x13 (host 0x49) USERD relay: GP_PUT 0x3e forwarded and rung (#2) — no GP entry or push-buffer word read
+  33611 249983.932 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080110b client=0xc1d00002 object=0xff030000 result=0x1f
+  33614 249983.932 kf3: GSP REFUSED fn76/0x2080110b=0x1f (GSP_RM_CONTROL) first_— the guest read a non-OK status
+  33616 249983.932 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080110b client=0xc1d00002 object=0xff030000 result=0x1f
+  34860 249983.993 kf3: chan token 0x11 (host 0x47) USERD relay: GP_PUT 0x73 forwarded and rung (#3) — no GP entry or push-buffer word read
+  34909 249983.994 kf3: chan token 0x13 (host 0x49) USERD relay: GP_PUT 0x4f forwarded and rung (#3) — no GP entry or push-buffer word read
+  34922 249983.995 kf3: chan token 0x13 (host 0x49) USERD relay: GP_PUT 0x60 forwarded and rung (#4) — no GP entry or push-buffer word read
+  35096 249984.000 kf3: chan token 0x13 (host 0x49) USERD relay: GP_PUT 0x71 forwarded and rung (#5) — no GP entry or push-buffer word read
+  35107 249984.001 kf3: chan token 0x11 (host 0x47) USERD relay: GP_PUT 0x91 forwarded and rung (#4) — no GP entry or push-buffer word read
+  35109 249984.001 kf-rm: rpc-trace fn=103 RmAlloc class=0x0000 client=0xc1d00034 parent=0x0 handle=0x0 result=0x0
+  35111 249984.001 kf-rm: rpc-trace fn=103 RmAlloc class=0x0080 client=0xc1d00034 parent=0xc1d00034 handle=0xb1000000 device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00034,
+  35113 249984.001 kf-rm: rpc-trace fn=103 RmAlloc class=0x2080 client=0xc1d00034 parent=0xb1000000 handle=0xb2000000 result=0x0
+  35115 249984.001 kf-rm: rpc-trace fn=103 RmAlloc class=0x2081 client=0xc1d00034 parent=0xb2000000 handle=0xbc000000 result=0x0
+  35117 249984.001 kf-rm: rpc-trace fn=103 RmAlloc class=0x0073 client=0xc1d00034 parent=0xb1000000 handle=0xb3000000 result=0x0
+  35120 249984.001 kf-rm: rpc-trace fn=103 RmAlloc class=0x402c client=0xc1d00034 parent=0xb2000000 handle=0xb8000000 result=0x56  (x2)
+  35125 249984.001 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800aff client=0x0 object=0x0 result=none  (x2)
+  35131 249984.001 kf-rm: rpc-trace fn=10 Free  result=0x0  (x5)
+  35142 249984.001 kf-rm: rpc-trace fn=103 RmAlloc class=0x0000 client=0xc1d00035 parent=0x0 handle=0x0 result=0x0
+  35144 249984.001 kf-rm: rpc-trace fn=103 RmAlloc class=0x0080 client=0xc1d00035 parent=0xc1d00035 handle=0xb1000000 device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00035,
+  35146 249984.001 kf-rm: rpc-trace fn=103 RmAlloc class=0x2080 client=0xc1d00035 parent=0xb1000000 handle=0xb2000000 result=0x0
+  35148 249984.001 kf-rm: rpc-trace fn=103 RmAlloc class=0x2081 client=0xc1d00035 parent=0xb2000000 handle=0xbc000000 result=0x0
+  35150 249984.001 kf-rm: rpc-trace fn=103 RmAlloc class=0x0073 client=0xc1d00035 parent=0xb1000000 handle=0xb3000000 result=0x0
+  35153 249984.001 kf-rm: rpc-trace fn=103 RmAlloc class=0x402c client=0xc1d00035 parent=0xb2000000 handle=0xb8000000 result=0x56  (x2)
+  35158 249984.001 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800aff client=0x0 object=0x0 result=none  (x2)
+  35166 249984.001 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809064 client=0xc1d00002 object=0xff030000 result=0x0
+  35169 249984.001 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809004 client=0xc1d00002 object=0xff030000 result=none
+  35172 249984.001 kf-rm: rpc-trace fn=76 RmControl cmd=0x007302a5 client=0xc1d00002 object=0xff0a0000 result=none
+  35176 249984.001 kf-rm: rpc-trace fn=103 RmAlloc class=0x0000 client=0xc1d00036 parent=0x0 handle=0x0 result=0x0
+  35178 249984.001 kf-rm: rpc-trace fn=103 RmAlloc class=0x0080 client=0xc1d00036 parent=0xc1d00036 handle=0xff020000 device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00036,
+  35180 249984.001 kf-rm: rpc-trace fn=103 RmAlloc class=0x2080 client=0xc1d00036 parent=0xff020000 handle=0xff030000 result=0x0
+  35183 249984.001 kf-rm: rpc-trace fn=103 RmAlloc class=0x0000 client=0xc1d00037 parent=0x0 handle=0x0 result=0x0
+  35185 249984.001 kf-rm: rpc-trace fn=103 RmAlloc class=0x0080 client=0xc1d00037 parent=0xc1d00037 handle=0xff020000 device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00037,
+  35187 249984.001 kf-rm: rpc-trace fn=103 RmAlloc class=0x2080 client=0xc1d00037 parent=0xff020000 handle=0xff030000 result=0x0
+  35189 249984.001 kf-rm: rpc-trace fn=103 RmAlloc class=0x0073 client=0xc1d00037 parent=0xff020000 handle=0xff0a0000 result=0x0
+  35193 249984.001 kf-rm: rpc-trace fn=103 RmAlloc class=0x90f1 client=0xc1d00036 parent=0xff020000 handle=0xff000850 result=0x0
+  35219 249984.475 kf-rm: rpc-trace fn=76 RmControl cmd=0x90f10106 client=0xc1d00036 object=0xff000850 result=0x0
+  35229 249984.477 kf-rm: rpc-trace fn=76 RmControl cmd=0x00801812 client=0xc1d00036 object=0xff020000 result=0x0
+  35281 249984.479 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d00036 parent=0xff020000 handle=0xff000010 result=0x0
+  35283 249984.479 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d00036 parent=0xff020000 handle=0xff1fe038 result=0x0
+  35291 249984.480 kf-rm: rpc-trace fn=103 RmAlloc class=0x9096 client=0xc1d00037 parent=0xff030000 handle=0xff1fe002 result=0x0
+  35303 249984.487 kf-rm: rpc-trace fn=103 RmAlloc class=0x0000 client=0xc1d00038 parent=0x0 handle=0x0 result=0x0
+  35305 249984.487 kf-rm: rpc-trace fn=103 RmAlloc class=0x0080 client=0xc1d00038 parent=0xc1d00038 handle=0xff020000 device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00036,
+  35313 249984.487 kf-rm: rpc-trace fn=103 RmAlloc class=0x2080 client=0xc1d00038 parent=0xff020000 handle=0xff030000 result=0x0
+  35316 249984.487 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d00038 parent=0xff020000 handle=0xff000010 result=0x0
+  35319 249984.488 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d00038 parent=0xff020000 handle=0xff1fe038 result=0x0
+  35326 249984.488 kf-rm: rpc-trace fn=76 RmControl cmd=0x0080170e client=0xc1d00038 object=0xff020000 result=0x0
+  35370 249984.492 kf-rm: rpc-trace fn=76 RmControl cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+  35372 249984.492 kf-rm: rpc-trace fn=103 RmAlloc class=0xa06c client=0xc1d00038 parent=0xff020000 handle=0xff0e0000 tsg_facts=TsgAllocFacts { h_vaspace: 0, engine_type: 1 } result=0x0
+  35374 249984.492 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c010a client=0xc1d00038 object=0xff0e0000 result=0x0
+  35376 249984.492 kf-rm: rpc-trace fn=103 RmAlloc class=0x9067 client=0xc1d00038 parent=0xff0e0000 handle=0xff0e0200 result=0x0
+  35386 249984.493 kf-rm: rpc-trace fn=103 RmAlloc class=0xc56f client=0xc1d00038 parent=0xff0e0000 handle=0xff040013 result=0x0
+  35390 249984.493 kf3: act birth passthrough: chan 0xc1d00038:0xff040013 BORN Passthrough: token 0x15 -> host 0x4b in VasKey(13965662680682334288) gpfifo=0x4000000x8192 userd=Ram { ram: 34
+  35392 249984.493 kf-rm: rpc-trace fn=103 RmAlloc class=0x5080 client=0xc1d00038 parent=0xff040013 handle=0xff1fe010 result=0x0
+  35397 249984.493 kf-rm: rpc-trace fn=103 RmAlloc class=0xc7b5 client=0xc1d00038 parent=0xff040013 handle=0xff1fe034 result=0x0
+  35407 249984.497 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+  35409 249984.497 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a3a client=0x0 object=0x0 result=none
+  35433 249984.498 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080012b client=0xc1d00038 object=0xff030000 result=0x0
+  35439 249984.498 kf-rm: rpc-trace fn=103 RmAlloc class=0xa140 client=0xc1d00038 parent=0xff040013 handle=0xff1fe01a result=0x0
+  35444 249984.498 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+  35446 249984.498 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a3a client=0x0 object=0x0 result=none
+  35599 249984.507 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080012b client=0xc1d00038 object=0xff030000 result=0x0
+  35604 249984.507 kf-rm: rpc-trace fn=103 RmAlloc class=0x902d client=0xc1d00038 parent=0xff040013 handle=0xff1fe02c result=0x0
+  35609 249984.507 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+  35611 249984.507 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a3a client=0x0 object=0x0 result=none
+  35614 249984.507 kf-rm: rpc-trace fn=103 RmAlloc class=0xc997 client=0xc1d00038 parent=0xff040013 handle=0xff1fe026 result=0x0
+  35619 249984.507 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+  35621 249984.507 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a3a client=0x0 object=0x0 result=none
+  35624 249984.507 kf-rm: rpc-trace fn=103 RmAlloc class=0xc9c0 client=0xc1d00038 parent=0xff040013 handle=0xff1fe032 result=0x0
+  35629 249984.507 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c0103 client=0xc1d00038 object=0xff0e0000 result=0x0
+  35634 249984.507 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c0101 client=0xc1d00038 object=0xff0e0000 result=0x0
+  35708 249984.518 kf-rm: rpc-trace fn=76 RmControl cmd=0x50800101 client=0xc1d00015 object=0xff1fe010 result=0x0  (x2)
+  35737 249984.521 kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest GR0 vector 0: a Translated GR-tier ring retired engine-written work (rings=2, relay #6)
+  35739 249984.521 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801211 client=0xc1d00002 object=0xff030000 result=0x0
+  35789 249984.525 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801208 client=0xc1d00002 object=0xff030000 result=0x0
+  35792 249984.525 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801211 client=0xc1d00002 object=0xff030000 result=0x0
+  35796 249984.525 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801111 client=0xc1d00002 object=0xff030000 result=0x0
+  35822 249984.528 kf-rm: rpc-trace fn=103 RmAlloc class=0x0000 client=0xc1d00039 parent=0x0 handle=0x0 result=0x0
+  35825 249984.528 kf-rm: rpc-trace fn=103 RmAlloc class=0x0080 client=0xc1d00039 parent=0xc1d00039 handle=0xff020000 device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00036,
+  35827 249984.528 kf-rm: rpc-trace fn=103 RmAlloc class=0x2080 client=0xc1d00039 parent=0xff020000 handle=0xff030000 result=0x0
+  35833 249984.528 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d00039 parent=0xff020000 handle=0xff000010 result=0x0
+  35842 249984.529 kf-rm: rpc-trace fn=103 RmAlloc class=0x0070 client=0xc1d00039 parent=0xff020000 handle=0xff1fe038 result=0x0
+  35847 249984.529 kf-rm: rpc-trace fn=76 RmControl cmd=0x0080170e client=0xc1d00039 object=0xff020000 result=0x0
+  35911 249984.531 kf-rm: rpc-trace fn=76 RmControl cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+  35917 249984.531 kf-rm: rpc-trace fn=103 RmAlloc class=0xa06c client=0xc1d00039 parent=0xff020000 handle=0xff0e0000 tsg_facts=TsgAllocFacts { h_vaspace: 0, engine_type: c } result=0x0
+  35919 249984.531 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c010a client=0xc1d00039 object=0xff0e0000 result=0x0
+  35936 249984.532 kf-rm: rpc-trace fn=103 RmAlloc class=0xc56f client=0xc1d00039 parent=0xff0e0000 handle=0xff040014 result=0x0
+  35940 249984.532 kf3: act birth passthrough: chan 0xc1d00039:0xff040014 BORN Passthrough: token 0x1016 -> host 0x2004c in VasKey(13965662680682334288) gpfifo=0x4036000x8192 userd=Ram { ra
+  35942 249984.532 kf-rm: rpc-trace fn=103 RmAlloc class=0x5080 client=0xc1d00039 parent=0xff040014 handle=0xff1fe010 result=0x0
+  35947 249984.532 kf-rm: rpc-trace fn=103 RmAlloc class=0xc7b5 client=0xc1d00039 parent=0xff040014 handle=0xff1fe034 result=0x0
+  35952 249984.532 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c0103 client=0xc1d00039 object=0xff0e0000 result=0x0
+  35957 249984.532 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c0101 client=0xc1d00039 object=0xff0e0000 result=0x0
+  35974 249984.537 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801111 client=0xc1d00002 object=0xff030000 result=0x0
+  36868 249984.579 kf-rm: rpc-trace fn=76 RmControl cmd=0x90f10106 client=0xc1d00036 object=0xff000850 result=0x0
+  37204 249984.591 kf-rm: rpc-trace fn=76 RmControl cmd=0x20800a9a client=0xc1d00014 object=0xff030000 result=none
+  37237 249984.592 kf3: chan token 0x15 (host 0x4b) USERD relay: GP_PUT 0x24 forwarded and rung (#1) — no GP entry or push-buffer word read
+  37721 249984.611 kf3: chan token 0x1016 (host 0x2004c) USERD relay: GP_PUT 0x10 forwarded and rung (#1) — no GP entry or push-buffer word read
+  37993 249984.620 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c0103 client=0xc1d00039 object=0xff0e0000 result=0x0
+  38012 249984.620 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801111 client=0xc1d00002 object=0xff030000 result=0x0
+  38020 249984.621 kf-rm: rpc-trace fn=76 RmControl cmd=0xa06c0103 client=0xc1d00038 object=0xff0e0000 result=0x0
+  38041 249984.622 kf3: chan token 0x15 (host 0x4b) USERD relay: GP_PUT 0x5d forwarded and rung (#2) — no GP entry or push-buffer word read
+  38053 249984.622 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801111 client=0xc1d00002 object=0xff030000 result=0x0
+  38146 249984.700 kf3: chan token 0x15 (host 0x4b) USERD relay: GP_PUT 0x78 forwarded and rung (#3) — no GP entry or push-buffer word read
+  38232 249984.704 kf3: chan token 0x1016 (host 0x2004c) USERD relay: GP_PUT 0x21 forwarded and rung (#2) — no GP entry or push-buffer word read
+  38295 249984.780 kf3: chan token 0x1016 (host 0x2004c) USERD relay: GP_PUT 0x32 forwarded and rung (#3) — no GP entry or push-buffer word read
+  38434 249984.824 kf3: chan token 0x1016 (host 0x2004c) USERD relay: GP_PUT 0x43 forwarded and rung (#4) — no GP entry or push-buffer word read
+  38586 249984.831 kf3: chan token 0x15 (host 0x4b) USERD relay: GP_PUT 0xa6 forwarded and rung (#4) — no GP entry or push-buffer word read
+  38656 249984.833 kf3: chan token 0x15 (host 0x4b) USERD relay: GP_PUT 0xcd forwarded and rung (#5) — no GP entry or push-buffer word read
+  38664 249984.834 kf3: chan token 0x15 (host 0x4b) USERD relay: GP_PUT 0xde forwarded and rung (#6) — no GP entry or push-buffer word read
+  39196 249984.927 kf3: chan token 0x15 (host 0x4b) USERD relay: GP_PUT 0x13d forwarded and rung (#7) — no GP entry or push-buffer word read
+  39204 249984.928 kf3: chan token 0x15 (host 0x4b) USERD relay: GP_PUT 0x14e forwarded and rung (#8) — no GP entry or push-buffer word read
+  39213 249984.973 kf3: chan token 0x1016 (host 0x2004c) USERD relay: GP_PUT 0x54 forwarded and rung (#5) — no GP entry or push-buffer word read
+  39510 249986.056 kf3: chan token 0x13 (host 0x49) USERD relay: GP_PUT 0x82 forwarded and rung (#6) — no GP entry or push-buffer word read
+  39611 249986.060 kf3: chan token 0x13 (host 0x49) USERD relay: GP_PUT 0x93 forwarded and rung (#7) — no GP entry or push-buffer word read
+  39628 249986.061 kf3: chan token 0x11 (host 0x47) USERD relay: GP_PUT 0xb9 forwarded and rung (#5) — no GP entry or push-buffer word read
+  39701 250002.363 kf-rm: rpc-trace fn=76 RmControl cmd=0x00730108 client=0xc1d00002 object=0xff0a0000 result=0x0
+  39703 250002.363 kf-rm: rpc-trace fn=76 RmControl cmd=0x007302a5 client=0xc1d00002 object=0xff0a0000 result=none
+  39707 250002.363 kf-rm: rpc-trace fn=76 RmControl cmd=0x20801111 client=0xc1d00002 object=0xff030000 result=0x0  (x2)
+  39728 250002.363 kf-rm: rpc-trace fn=76 RmControl cmd=0xc3700104 client=0xc1d00002 object=0xff1fe100 result=0x0
+  39746 250015.209 kf-rm: rpc-trace fn=10 Free  result=0x0  (x3)
+  39757 250015.209 kf3: act free: 0xc1d00020:0xff040009: translated host 0x10038 (1762 us, off the GSP lock)
+  39767 250015.213 kf-rm: rpc-trace fn=10 Free  result=0x0  (x23)
+  39853 250015.216 kf3: act free: 0xc1d00024:0xff04000b: translated host 0x3a (2684 us, off the GSP lock)
+  39926 250015.224 kf-rm: rpc-trace fn=10 Free  result=0x0  (x68)
+  40859 250015.263 kf3: act free: 0xc1d00018:0xff040003: translated host 0x30032 (1848 us, off the GSP lock)
+  40868 250015.265 kf-rm: rpc-trace fn=10 Free  result=0x0  (x8)
+  40889 250015.265 kf3: act free: 0xc1d00019:0xff040004: translated host 0x10033 (1458 us, off the GSP lock)
+  40891 250015.265 kf-rm: rpc-trace fn=10 Free  result=0x0  (x9)
+  40940 250015.270 kf3: act free: 0xc1d0001a:0xff040005: translated host 0xc0034 (1710 us, off the GSP lock)
+  40951 250015.272 kf-rm: rpc-trace fn=10 Free  result=0x0  (x8)
+  40978 250015.273 kf3: act free: 0xc1d0001b:0xff040006: translated host 0xc0035 (1691 us, off the GSP lock)
+  40988 250015.276 kf-rm: rpc-trace fn=10 Free  result=0x0  (x8)
+  41015 250015.277 kf3: act free: 0xc1d0001c:0xff040007: translated host 0x50036 (1673 us, off the GSP lock)
+  41023 250015.279 kf-rm: rpc-trace fn=10 Free  result=0x0  (x8)
+  41050 250015.280 kf3: act free: 0xc1d0001d:0xff040008: translated host 0xc0037 (1728 us, off the GSP lock)
+  41060 250015.283 kf-rm: rpc-trace fn=10 Free  result=0x0  (x8)
+  41081 250015.283 kf3: act free: 0xc1d00016:0xff040002: translated host 0x10031 (1487 us, off the GSP lock)
+  41096 250015.286 kf-rm: rpc-trace fn=10 Free  result=0x0  (x8)
+  41117 250015.286 kf3: act free: 0xc1d00023:0xff04000a: translated host 0x10039 (1482 us, off the GSP lock)
+  41119 250015.286 kf-rm: rpc-trace fn=10 Free  result=0x0  (x13)
+  41164 250015.286 kf3: act free: 0xc1d00027:0xff04000c: passthrough 0xc1d00027:0xff04000c token 0xe host 0x44 objects=0 ctx=CtxBind { initialized: 5, va_bound: 2685, bound: true, promotes:

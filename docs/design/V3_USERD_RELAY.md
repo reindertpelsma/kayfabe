@@ -45,6 +45,15 @@ kayfabe. Two 4-byte cursors are relayed between the guest's slot and this USERD;
 
 ### 2.2 The GP_GET write-back (twin → guest)
 
+⊘ *Correction (2026-10-08, runs 76-78 at f649d2c3/492fb3f0/42b332b3, above the text it corrects):* the per-doorbell write-back left
+the guest's `GP_GET` at 0 on a twin rung once while the engine had consumed every entry (run76). The follow-up named below is built:
+`kf_chan::userd_relay::refresh` (behind `KF3_RELAY_GET_REFRESH`, default off) writes the engine's `GP_GET` into the guest's slot on
+every host non-stall wake (before the guest's interrupt is raised) and on the worker's park tick (`kf_chan::worker::TICK_TAG`), bounded
+to `[0, entries)`, never reading `GP_PUT`, never ringing. The step now takes the relay's lock BLOCKING: with a `try_lock`, a refresh
+holding the lock made a step return "served" and the doorbell was lost (run77). `[measured, run78 at 42b332b3, 2026-10-08]` guest and
+host cursors agree at release; the guest's TDR was not caused by staleness (it is the refused async preempt,
+`traces/windows_code43_walls_20261007/README.md`, sixth session).
+
 - Who: the same worker step, after the doorbell (2.1, step 4): a plain load of the engine-written `GP_GET` from the twin's USERD, a plain
   store into the guest's slot. Host-derived only; the guest's value is never read back into the twin.
 - When: at every doorbell of that channel. Between two doorbells the guest's `GP_GET` is stale by at most the work since the last one.
