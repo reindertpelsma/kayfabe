@@ -207,7 +207,11 @@ mod tests {
     #[test]
     fn a_submission_then_its_edge_raises() {
         let g = PtGate::default();
-        assert_eq!(g.on_edge(1, 10, AG), Verdict::Idle, "edge before the doorbell");
+        assert_eq!(
+            g.on_edge(1, 10, AG),
+            Verdict::Idle,
+            "edge before the doorbell"
+        );
         g.note_submit();
         assert_eq!(g.on_edge(1, 20, AG), Verdict::Fresh);
         assert!(Verdict::Fresh.raises());
@@ -228,7 +232,11 @@ mod tests {
         // The lost-wakeup case: another tenant's edge consumes the doorbell first.
         let g = PtGate::default();
         g.note_submit();
-        assert_eq!(g.on_edge(1, 50, AG), Verdict::Fresh, "the foreign edge (spurious, harmless)");
+        assert_eq!(
+            g.on_edge(1, 50, AG),
+            Verdict::Fresh,
+            "the foreign edge (spurious, harmless)"
+        );
         assert_eq!(
             g.on_edge(1, 50 + 170, AG),
             Verdict::Afterglow,
@@ -250,7 +258,11 @@ mod tests {
         // Two VMs are two planes, so two gates; only B's guest rang a doorbell.
         let (a, b) = (PtGate::default(), PtGate::default());
         b.note_submit();
-        assert_eq!(a.on_edge(1, 10, AG), Verdict::Idle, "VM A has a twin but no work");
+        assert_eq!(
+            a.on_edge(1, 10, AG),
+            Verdict::Idle,
+            "VM A has a twin but no work"
+        );
         assert_eq!(b.on_edge(1, 10, AG), Verdict::Fresh);
     }
 

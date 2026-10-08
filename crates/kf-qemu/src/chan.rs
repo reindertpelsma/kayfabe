@@ -1738,7 +1738,11 @@ impl ChanPlane {
         let pt_cfg = PtNsiCfg::from_env();
         eprintln!(
             "kf3: passthrough NSI relay: host FIFO_EVENT_MTHD edges -> the guest vector of every engine with a live Passthrough twin AND a doorbell outstanding (relay={} afterglow={} us gate_engine_notifiers={}; KF3_PT_NSI_RELAY / KF3_PT_NSI_AFTERGLOW_MS / KF3_PT_NSI_GATE_ENGINES)",
-            if pt_cfg.relay { "on" } else { "OFF (judged and counted only)" },
+            if pt_cfg.relay {
+                "on"
+            } else {
+                "OFF (judged and counted only)"
+            },
             pt_cfg.afterglow_us,
             pt_cfg.gate_engines
         );
@@ -1902,7 +1906,10 @@ impl ChanPlane {
             .tok_engine
             .get(idx as usize)
             .map_or(0, |w| w.load(Ordering::Relaxed));
-        if let Some(e) = (e as usize).checked_sub(1).and_then(|i| self.engines.get(i)) {
+        if let Some(e) = (e as usize)
+            .checked_sub(1)
+            .and_then(|i| self.engines.get(i))
+        {
             e.pt.note_submit();
         }
     }
@@ -1934,7 +1941,11 @@ impl ChanPlane {
                     e.name,
                     e.vector,
                     e.pt.summary(),
-                    if self.pt_cfg.relay { "" } else { ", RELAY OFF: not raised" }
+                    if self.pt_cfg.relay {
+                        ""
+                    } else {
+                        ", RELAY OFF: not raised"
+                    }
                 );
             }
             match e.vector {
@@ -1958,7 +1969,8 @@ impl ChanPlane {
     /// `KF3_PT_NSI_GATE_ENGINES=1`, else the measured pre-2026-10-08 rule does (a live twin).
     pub fn pt_judge_engine_edge(&self, e: &EngineEvent) -> (bool, kf_chan::ptnsi::Verdict) {
         let live = e.live.load(Ordering::Relaxed);
-        let v = e.pt.on_edge(live, self.pt_now_us(), self.pt_cfg.afterglow_us);
+        let v =
+            e.pt.on_edge(live, self.pt_now_us(), self.pt_cfg.afterglow_us);
         let raise = if self.pt_cfg.gate_engines {
             v.raises()
         } else {
