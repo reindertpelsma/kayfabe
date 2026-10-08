@@ -3407,3 +3407,82 @@ Binary built from this branch at the commit that adds this text; flags as run57 
 adapter succeeds and the compositor's first segment runs. *Falsifiers (fixed now):* `D3D11CreateDevice`/`D3D12CreateDevice` still `0x8876017c`;
 or the first Passthrough GR segment is RC'd on the host (host Xid / RC record) — then the subchannel bindings Windows expects from its
 promoted context are the wall (run57's inference), and kayfabe must author them; or any classification falsifier above.
+
+### Run61 result: the classification holds; every user-work Passthrough birth is refused by host RM — Windows' USERD is in guest SYSTEM memory, at an IOVA too wide for a USERD
+
+Binary `kf3-bins/883f878e`, 4096 MiB alone (the Linux demo stopped for VRAM: a first attempt beside it was refused `NoMemory` at realize,
+`boundary-kayfabe-61-refused-nomem`), flags as run57 plus `KF3_WIN_USER_CHANNELS_PASSTHROUGH=1`; started 15:53:01 CEST, Xid 93 before and
+after. [classification and births](run61-classify-births.txt), [host NVRM lines](run61-host-nvrm.txt), [trace](run61-qemu.log.gz).
+
+`[measured, run61 at 883f878e, 2026-10-08]`:
+- `CLASSIFY`: all 13 kernel-driver channels (and the two RM-internal ones) `kernel work -> Translated` with the expected reason; all 8
+  compositor/D3D channels (`0xc1d00027`, `2e`, `31`, `34`, `37`, `3a`, `3b`, `3e`) `USER WORK -> Passthrough`. **No classification falsifier
+  fired.**
+- Every user-work birth: `act birth passthrough REFUSED (0x1a): birth: Other(30)`; host dmesg: `kchannelCreateUserdMemDesc_GV100: physical
+  addr size of userdAddrHi=0x00007ff9, userAddrLo=0x007cb4d8 is incorrect!` → `NV_ERR_INVALID_ADDRESS` (`kernel_channel_gv100.c:211-219`).
+  The guest's USERD for these channels is a 512-byte slot of the guest RM's USERD pool in guest SYSTEM memory (`Sysmem { base: 0x2396... }`,
+  consecutive slots, the same pool the kernel channels use); the Passthrough twin adopts it through kayfabe's guest-RAM OS descriptor, and the
+  host's IOMMU (domain type `DMA-FQ` for the GPU's group) gives that page a DMA address of `0x7ff9_f969_b000`, wider than a USERD may be.
+  Linux guests never met this: their user channels' USERD is in video memory.
+- The D3D creates therefore failed as before (the channel alloc returns an error); H-pt is **not tested** (the channel never ran).
+
+### Run62 result (guest-side knob, no effect): `RMInstLoc = 0x30000` (USERD in video memory) does not move Windows' USERD
+
+Same binary and flags. First boot: the `RMInstLoc` DWORD set to `0x30000` (`nvrm_registry.h:209-213`, USERD = VID) in the NVIDIA adapter's
+class key `...\0001` and the `nvlddmkm` service keys ([values](run62-instloc.txt)). `[measured, run62 at 883f878e, 2026-10-08]`: an in-guest
+reboot inside the same QEMU process brought the NVIDIA adapter back at **Code 43** (`CM_PROB_FAILED_POST_START`; GSP `Running -> Suspending ->
+Halted` right after boot — the same as run57's second boot: an in-process guest reboot is not a clean second boot on kf3 today); a second boot in
+a NEW QEMU process on the same disk (`windows_broker.sh WIN_REUSE=1`) started the driver normally, and **all 12 Windows-RM USERDs were still in
+system memory** (two RM-internal ones in FB, as before); the user-work births were refused as in run61 ([births](run62-boot2-classify-births.txt)).
+So either the Windows RM does not read `RMInstLoc` from those keys or the USERD pool ignores it; not pursued further.
+
+### Runs 63-64 (census): what the kernel-driver channels and the one user-work segment contain
+
+Run63 `883f878e`, run64 `ac3456ac` (adds `LAUNCH_DMA` words to the count-only Translated census); both with the user-work flag OFF (all channels
+Translated, as run57), the runlist experiment on and `KF3_TCENSUS=1`; each reached the mode commit (`head armed` at +12.6 s in run63) and the
+same death of the compositor's channel at gp 0, then the guest's TDR bugcheck; both stopped (run63 by the launcher's last-resort kill after 300 s
+without an ACPI or agent shutdown: the guest was at its post-bugcheck Code-43 boot; fresh overlays, nothing kept). Xid 93 throughout.
+[run63 census](run63-census-births.txt), [run64 census and facts](run64-census-births-facts.txt), traces `run63-qemu.log.gz`, `run64-qemu.log.gz`.
+
+## The owner's question: how does Windows keep a user-mode driver from emitting physical operands, if every channel is kernel-privileged?
+
+Reported only from what the traces show (coordinator's decode of run60 `CHAN-FACTS`, checked against `alloc_channel.h`: `NVOS04_FLAGS`
+bit 5 `PRIVILEGED_CHANNEL` is set on EVERY Windows channel, `0x201620`/`0x80201620` for the per-process ones; bit 7
+`DENY_PHYSICAL_MODE_CE` on none; `internalFlags` privilege level 2 = kernel on all).
+
+| | kernel-driver channels (13) | per-process user-work channels (compositor, D3D) |
+|---|---|---|
+| process / subcontext | `ProcessID` = the kernel driver's (0x350 run60, 0x34c run64), `hContextShare` 0 | own `ProcessID` (0x3b8, 0x554, 0x54c run60; 0x3b4 run64), a `FERMI_CONTEXT_SHARE_A` |
+| GPFIFO ring | a VA in the kernel driver's VA space (`0xc1d00002:0xff000870`, e.g. `0x12024b000`) or in two display-side spaces (`0xc1d0001e/21`) | a VA in the process's own VA space (`0xc1d00025:0xff000850`, ring `0x1200c4000`, 32768 entries) |
+| USERD | a 512-byte slot of the guest RM's USERD pool, guest system memory (two RM-internal channels: FB) | the same pool, the next slots (guest system memory) |
+| push-buffer seen | kernel GR / CE segments in the kernel VA space (runs 31-57) | ONE segment of ONE channel: gp 0 at `0x120104080` in the process's VA space, 10 words, two 3D `SET_REPORT_SEMAPHORE` releases on subchannel 0 |
+| physical operands counted | **run64: the display-side CE `0xc1d00023` (token `0x80c`, kernel `ProcessID`, no subcontext): 49 `LAUNCH_DMA`, 29 with `DST_TYPE = PHYSICAL`** (`0x2186` x18, `0x2586` x11); the others semaphore-only (`0xc` x8, `0x4c` x11) or virtual (`0x4000586` x1) | **0 in the one segment seen** — far too small a sample to claim absence |
+
+What the traces can NOT show: who has a CPU mapping of a ring, push buffer or USERD slot (Windows maps memory for the CPU inside the guest; no
+RPC carries it), and therefore whether a process can write its own ring or push buffers. `[inferred, WDDM's model, not measured]`: per-process
+command buffers are built by the user-mode driver in the process's GPU VA space and submitted by the kernel driver.
+
+What each outcome means: the kernel-driver channels DO use physical operands (measured) — they are kernel work in effect and stay Translated
+(the criterion keeps every one of them there). For the per-process channels the evidence is not enough to call their content virtual-only; the
+Passthrough classification's soundness rests on the host side instead: the twin is an asserted-USER host channel in a VA space holding only
+this VM's memory, so a physical operand on it is refused by the hardware (copy engine: measured by the oracle, Xid 32 + RC; graphics classes:
+pending the oracle) — on bare metal those channels are `PRIVILEGED_CHANNEL`, under kayfabe they would not be. Whether Windows' user work ever
+NEEDS a physical operand (then it would fail closed under Passthrough) is open; a larger sample needs the channels to run.
+
+## Stop (fourth session, 2026-10-08 ~16:20): the next wall is USERD; decisions waiting
+
+**What moved:** a measured, two-fact criterion separates the kernel driver's channels from per-process user work at channel creation (runs 60,
+61, 64 agree); the software-runlist submit is shown to be on the compositor's path (run60 bisect). **The wall:** a Passthrough twin cannot adopt
+a Windows USERD (guest system memory, IOVA `0x7ff9...` on this host), so no user-work channel is born; the subchannel-binding question of run57
+is therefore not reached.
+
+**Options for the USERD wall (no code yet):** (i) *USERD relay*: the twin gets a kayfabe-owned video-memory USERD; kayfabe copies the guest's
+`GP_PUT` to it at each doorbell (no longer a pure inline doorbell: a worker, as Translated channels have) and the engine's `GP_GET` back to the
+guest's slot — 4 bytes each way, never a push-buffer word; the ring and push buffers stay the guest's, unparsed. A worker-owned ring would also
+let kayfabe author the subchannel bindings (`SET_OBJECT` of the classes the guest allocated on the channel, `cla06fsubch.h`: 3D 0, compute 1,
+I2M 2, 2D 3, copy 4) before the guest's first entry. (ii) *Host IOMMU identity domain for the GPU* (DMA address = physical, below the USERD
+limit on a 32 GiB host): a host-level change that needs the GPU's driver rebound or a host reboot — the owner's desktop runs on this GPU.
+Recommendation: (i), designed with its doorbell and completion path written down first.
+
+**Decisions needed:** (1) the owner's soundness question, with the table above; (2) `KF3_SW_RUNLIST_HOST_OWNED` (still "undecided", now
+measured on the D3D/compositor path, run60); (3) USERD relay (i) vs IOMMU identity (ii); (4) the preemption/ZCULL binds on twins (probes only).

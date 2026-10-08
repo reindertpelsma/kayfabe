@@ -1,0 +1,3 @@
+[Thu Oct  8 15:53:14 2026] NVRM: GPU0 kchannelCreateUserdMemDesc_GV100: physical addr size of userdAddrHi=0x00007ff9, userAddrLo=0x007cb5f0 is incorrect!
+[Thu Oct  8 15:53:17 2026] NVRM: GPU0 kchannelCreateUserdMemDesc_GV100: physical addr size of userdAddrHi=0x00007ff9, userAddrLo=0x007cb8c0 is incorrect!
+[Thu Oct  8 15:53:17 2026] NVRM: GPU0 kchannelCreateUserdMemDesc_GV100: physical addr size of userdAddrHi=0x00007ff9, userAddrLo=0x007cb8c0 is incorrect!
