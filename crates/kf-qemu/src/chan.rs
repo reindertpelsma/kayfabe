@@ -4059,9 +4059,23 @@ impl ChanPlane {
         };
         let Ok(g) = r.lock() else { return };
         let (mem, cookie) = (g.mem, g.cookie);
+        // Diagnostic: the guest slot's cursors at release — a GP_PUT ahead of the relay's means the
+        // guest queued work it never rang for.
         eprintln!(
-            "kf3: chan token {:#x} (host {token:#x}) USERD relay released: forwarded={} refused={} gets={} last_put={}",
-            g.idx, g.st.forwarded, g.st.refused, g.st.gets, g.st.host_put
+            "kf3: chan token {:#x} (host {token:#x}) USERD relay released: forwarded={} refused={} gets={} last_put={} guest[GP_PUT={:x?} GP_GET={:x?}] host[GP_PUT={:x?} GP_GET={:x?}]",
+            g.idx,
+            g.st.forwarded,
+            g.st.refused,
+            g.st.gets,
+            g.st.host_put,
+            g.guest.load(kf_abi::submit::USERD_GP_PUT).ok(),
+            g.guest.load(kf_abi::submit::USERD_GP_GET).ok(),
+            g.host
+                .load_u32(HostOffset::new(kf_abi::submit::USERD_GP_PUT))
+                .ok(),
+            g.host
+                .load_u32(HostOffset::new(kf_abi::submit::USERD_GP_GET))
+                .ok()
         );
         drop(g);
         drop(r);
@@ -5590,6 +5604,13 @@ impl ChanPlane {
     /// Whether the channel behind `ht` can take work (a dead one cannot: §7 then poisons).
     #[must_use]
     pub fn alive(&self, ht: u32) -> bool {
+        // ★ 2026-10-08 (`V3_USERD_RELAY.md`): a relayed twin is served by the worker too; it has no
+        // Translated slot (its ring is the guest's, never pumped), so its liveness is the relay's.
+        // [measured, run67 at 8288ff8e] without this the plane judged it untranslatable and never
+        // ran a relay step (gets=0).
+        if self.relays.lock().is_ok_and(|m| m.contains_key(&ht)) {
+            return true;
+        }
         self.slot(ht)
             .is_some_and(|s| s.try_lock().map_or(true, |g| g.dead.is_none()))
     }
