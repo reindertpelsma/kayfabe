@@ -48,6 +48,18 @@ pub const SET_STATIC_EDID_DATA: u32 = 0x2080_0adf;
 
 /// `NV402C_CTRL_NUM_I2C_PORTS` — "no external daughterboard" (`kern_disp.c:504-511`).
 pub const NO_I2C_PORT: u32 = 16;
+
+/// ⚠ EXPERIMENT (2026-10-08, H-hdcp, `KF3_DISPLAY_HDCP_STATE=1`, default off):
+/// `NV0073_CTRL_CMD_SPECIFIC_GET_HDCP_STATE`. ⚠ Not in ogkm-580's published `ctrl0073specific.h` (the
+/// guest's branch); taken from ogkm-595.84 `ctrl0073specific.h:787-795` (id `0x730280`; params
+/// `{ NvU32 subDeviceInstance; NvU32 displayId; NvU32 flags; }`, 12 bytes) — the size the 580.88
+/// guest sends (`paramsSize 0xc`, VFIO DVI reference capture, RTX 4070, 2026-10-08). Hand-typed, not
+/// derived: owner review before it may become default.
+pub const GET_HDCP_STATE: u32 = 0x0073_0280;
+
+/// `NV0073_CTRL_SPECIFIC_HDCP_STATE_ENCRYPTING_CACHED` (bit 1, an INPUT — ogkm-595.84
+/// `ctrl0073specific.h:800`); every other defined bit is an output.
+const HDCP_STATE_ENCRYPTING_CACHED: u32 = 1 << 1;
 /// Display channel numbers run core `0`, windows `1..=32`, window-immediates `33..=64`, cursors
 /// `73..=80` (`published/disp/v03_00/dev_disp.h`: `NV_PDISP_CHN_NUM_*`); `clientChannelTable` is
 /// indexed by it without a bounds check (`disp_channel.c:254-263`), so the count is one past the
@@ -475,6 +487,11 @@ pub struct DisplayModel {
     /// GPU does (vfio-10 RPC 2645), instead of FALSE. Consistent with `mode_possible`, which already
     /// answers every IS_MODE_POSSIBLE "possible".
     imp_enabled: bool,
+    /// ⚠ EXPERIMENT (default `false`, 2026-10-08, H-hdcp — `KF3_DISPLAY_HDCP_STATE=1` through
+    /// [`Self::answer_hdcp_state`]): answer [`GET_HDCP_STATE`] for a display of this device — NV_OK,
+    /// nothing capable, nothing encrypting (an emulated DVI-D attach point has no HDCP transmitter
+    /// and its virtual monitor no receiver) — instead of refusing it NOT_SUPPORTED.
+    hdcp_state: bool,
     /// ★ 3c: display ids whose monitor changed since the last `INTERNAL_GET_HOTPLUG_UNPLUG_STATE`.
     pub pending_plug: u32,
     /// ★ 3c: the live hotplug registrations (at most [`MAX_HOTPLUG_REGISTRATIONS`]).
@@ -563,6 +580,7 @@ impl DisplayModel {
             waker: None,
             display_sw_offered: false,
             imp_enabled: false,
+            hdcp_state: false,
             pending_plug: 0,
             hotplug: Vec::new(),
             preempt: Vec::new(),
@@ -583,6 +601,11 @@ impl DisplayModel {
     /// ⚠ PROBE (default off): report IMP as enabled (`IMP_SET_GET_PARAMETER` GET `IMP_ENABLE` = TRUE).
     pub fn report_imp_enabled(&mut self, on: bool) {
         self.imp_enabled = on;
+    }
+
+    /// ⚠ EXPERIMENT (default off, H-hdcp): answer [`GET_HDCP_STATE`] (see the field).
+    pub fn answer_hdcp_state(&mut self, on: bool) {
+        self.hdcp_state = on;
     }
 
     /// Whether the display-SW object is offered ([`Self::offer_display_sw`]).
@@ -804,6 +827,9 @@ impl DisplayModel {
         if let Some((_, k)) = INTERNAL_CONTROLS.iter().find(|(c, _)| *c == cmd) {
             return Some(k);
         }
+        if self.hdcp_state && cmd == GET_HDCP_STATE {
+            return Some("hdcp_state");
+        }
         NAMED_CONTROLS
             .iter()
             .find(|(n, _)| self.l.k32(n) == Some(cmd))
@@ -878,6 +904,24 @@ impl DisplayModel {
                 }
                 p.set("value", u64::from(self.imp_enabled));
                 Ok(p.buf)
+            }
+            "hdcp_state" => {
+                // ⊘ Hostile guest: exactly the 12-byte shape, subdevice 0, ONE display of this
+                // device (ogkm-595.84 `ctrl0073specific.h:705-709`: more than one is
+                // INVALID_ARGUMENT). The answer is the real GPU's for its DVI-mode monitor, too
+                // (VFIO DVI reference capture, RTX 4070, 2026-10-08: flags 0 in every reply).
+                if params.len() != 12 {
+                    return Err(NV_ERR_INVALID_ARGUMENT);
+                }
+                let w =
+                    |i: usize| u32::from_le_bytes(params[i..i + 4].try_into().unwrap_or([0; 4]));
+                let (sub, id, flags) = (w(0), w(4), w(8));
+                if sub != 0 || id.count_ones() != 1 || id & self.all_displays() == 0 {
+                    return Err(NV_ERR_INVALID_ARGUMENT);
+                }
+                let mut out = params.to_vec();
+                out[8..12].copy_from_slice(&(flags & HDCP_STATE_ENCRYPTING_CACHED).to_le_bytes());
+                Ok(out)
             }
             "hotplug_after_edid" => {
                 let mut p = self.view("NV0073_CTRL_SYSTEM_GET_HOTPLUG_STATE_PARAMS", params)?;
@@ -1470,6 +1514,50 @@ mod tests {
             .expect("view")
             .get(f)
             .expect(f)
+    }
+
+    /// ⚠ H-hdcp (`KF3_DISPLAY_HDCP_STATE`): refused NOT_SUPPORTED by default (not claimed at all);
+    /// with the experiment, a well-formed query for one of this device's displays is NV_OK with
+    /// every output bit clear (the cached-state INPUT bit passes through), anything else is
+    /// INVALID_ARGUMENT — the request/reply pair the real GPU gave, replayed.
+    #[test]
+    fn get_hdcp_state_is_refused_by_default_and_answered_not_capable_under_the_experiment() {
+        let mut m = model();
+        let id = m.all_displays();
+        assert_eq!(id.count_ones(), 1, "one monitor");
+        let req = |sub: u32, id: u32, flags: u32| {
+            [sub.to_le_bytes(), id.to_le_bytes(), flags.to_le_bytes()].concat()
+        };
+        assert!(
+            m.control(GET_HDCP_STATE, &req(0, id, 0)).is_none(),
+            "not claimed by default"
+        );
+        m.answer_hdcp_state(true);
+        assert_eq!(
+            m.control(GET_HDCP_STATE, &req(0, id, 0)),
+            Some(Ok(req(0, id, 0)))
+        );
+        assert_eq!(
+            m.control(GET_HDCP_STATE, &req(0, id, 0xffff_ffff)),
+            Some(Ok(req(0, id, HDCP_STATE_ENCRYPTING_CACHED))),
+            "outputs cleared, the input bit kept"
+        );
+        for bad in [
+            req(1, id, 0),
+            req(0, id | (id << 1), 0),
+            req(0, id << 1, 0),
+            req(0, 0, 0),
+        ] {
+            assert_eq!(
+                m.control(GET_HDCP_STATE, &bad),
+                Some(Err(NV_ERR_INVALID_ARGUMENT))
+            );
+        }
+        assert_eq!(
+            m.control(GET_HDCP_STATE, &req(0, id, 0)[..8]),
+            Some(Err(NV_ERR_INVALID_ARGUMENT)),
+            "short params"
+        );
     }
 
     /// ★ The NVKMS bring-up conversation, in its order (`nvkms-rm.c:1665-1882`): caps, heads, the

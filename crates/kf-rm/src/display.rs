@@ -398,6 +398,17 @@ impl DisplayPolicy {
                 "kf-rm: display: PROBE KF3_DISPLAY_IMP_ENABLE=1 — IMP_SET_GET_PARAMETER GET IMP_ENABLE answered TRUE (real-GPU answer; IS_MODE_POSSIBLE already says possible)"
             );
         }
+        // ⚠ EXPERIMENT (default off, 2026-10-08, H-hdcp): answer GET_HDCP_STATE (nothing capable,
+        // nothing encrypting) instead of refusing it — the real GPU answers it OK right before
+        // Windows' first window programming (VFIO DVI reference boot3).
+        if std::env::var("KF3_DISPLAY_HDCP_STATE").as_deref() == Ok("1")
+            && let Some(m) = &self.model
+        {
+            lock(m).answer_hdcp_state(true);
+            eprintln!(
+                "kf-rm: display: EXPERIMENT KF3_DISPLAY_HDCP_STATE=1 — NV0073 SPECIFIC_GET_HDCP_STATE answered NV_OK, flags 0 (no HDCP on the emulated DVI-D attach point)"
+            );
+        }
         if on && let Some(m) = &self.model {
             lock(m).offer_display_sw(true);
             self.dispsw_pairing = Some(DispSwPairing::default());

@@ -31,7 +31,7 @@ Windows 11 guest with 580.88, the trusted bench host.
   timing; the measured first divergence is earlier: **the KMD never programs a flip into kf3's display** — so no flip can
   be retired by a VSync, whatever kf3 raises.
 
-What the KMD reads around a VSync and a flip on real hardware `[measured, boot3]`: the ISR reads only
+What the KMD reads around a VSync and a flip on real hardware `[measured, VFIO DVI reference boot3, RTX 4070, 2026-10-08]`: the ISR reads only
 `RM_INTR_DISPATCH` (0x611ec0), `RM_INTR_STAT_HEAD_TIMING(0)` (0x611c00 = 0x2), `EVT_STAT_HEAD_TIMING(0)` (0x611800 = **0x7**)
 and write-1-clears **0x2** only (2017 times; it reads 0x5 after the clear and never clears bit 0); each flip reads window
 0's ARMED `SET_PARAMS` (0x690a2c = 0xcf) and `SET_COMPOSITION_CONTROL` (0x690aec), and the core's
@@ -52,3 +52,34 @@ LOADV" (`gv100_disp_intr_head_timing`).
   modeset's value through the TDR, as in runs 88/92.
 - Diagnostic in every run (no behaviour change): `KF3_DISPLAY_WRITE_TRACE=1` — every guest display write, every raised
   head-timing interrupt and every window latch, with the `maplog` clock.
+
+## 3. Run 93 (fresh overlay, identity IOMMU, run92's flags + `KF3_DISPLAY_LOADV` + `KF3_DISPLAY_WRITE_TRACE`, binary `kf3-bins/68673e6e`)
+
+Files: [command](run93-command.json), [marker](run93-marker.txt), [harness](run93-harness.log), [summary](run93-summary.txt)
+(`flipsum.py` over the log), trace `run93-qemu.log.gz`. `[measured, run93 at 68673e6e, RTX 4070, 2026-10-08]`:
+
+- **H-loadv FALSIFIED.** The guest read `EVT_STAT_HEAD_TIMING(0)` = `0x7` at its VSync ISR, as on hardware
+  (`VSYNC h0 frame=1 evt=0x7 en=0x2`), and still wrote **no display PUT** between the modeset (last modeset core PUT at
+  265784.568386) and the TDR: `disp[... puts=39 ... updates=5]` at the stall marker, the same count as runs 88/92. No window
+  latch before the teardown. Stall marker `0x00730108` ~15 s after launch; 9 Passthrough twins freed; bugcheck stop.
+- LAST_DATA timeline (host uptime s): on 265784.569251 -> VSync raised 265784.584445 (15.2 ms, the next frame edge) ->
+  W1C, W1C, **off** 265784.584656; on 265784.629798 -> VSync 265784.634607 (4.8 ms) -> off 265784.634813; on
+  265787.309982 -> **off 265787.314265 with no VSync in between** (4.3 ms). So the guest also disables LAST_DATA without
+  any VSync having arrived: the disable is not caused by an early VSync.
+- Flips that reached kf3's display: **0**; flips completed by a VSync: 0 (no window latch at all). dxgkrnl's own flip count
+  needs the guest ETW, which this run did not collect. The guest TDRs (stall marker, then the teardown: 9 frees).
+- The kf3 sequence parallels the hardware one step for step up to the first VSync after the modeset, RPC by RPC:
+  hardware `0x00730282` (0x56), **`0x00730280` GET_HDCP_STATE = OK**, `0x007302a4`, LAST_DATA on, `0x20808159`, VSync,
+  `0x90f10106`, then **alloc `0x007e` + window 0 programmed (12.596)**; kf3: `0x00730282` (0x56), **`0x00730280` REFUSED
+  0x56**, LAST_DATA on, `0x007302a4`, `0x20808159`, VSync, LAST_DATA off, `0x90f10106` — and no alloc `0x007e`, no window
+  programming. The same refusal precedes the modeset on both sides' order (hardware 12.494635 OK). The hardware's reply is
+  NV_OK with flags 0 (nothing capable, nothing encrypting; request and reply decoded from `boot{1,2,3}-gsp.jsonl.gz`).
+
+## 4. Run 94 setup: H-hdcp (falsifier stated before the run)
+
+- **H-hdcp** (inferred): the KMD gates the first programming of the primary surface on `NV0073_CTRL_CMD_SPECIFIC_GET_HDCP_STATE`
+  succeeding; refused, it never programs a window, so no flip is ever latched or retired and dxgkrnl's present never
+  completes. Variable: `KF3_DISPLAY_HDCP_STATE=1` (answer NV_OK, flags 0 — the hardware's answer; id and 12-byte layout
+  hand-typed from ogkm-595.84, the 580 headers lack it; default off). `KF3_DISPLAY_LOADV` is OFF again (one variable).
+  *Prediction:* after the modeset, the guest writes window PUTs and window updates latch. *Falsifier:* the display PUT count
+  stays at the modeset's value through the TDR (no window programming), as in run 93.
