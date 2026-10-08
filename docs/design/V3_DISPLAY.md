@@ -1,5 +1,7 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+**STATUS: LIVE, 2026-10-08 (later still) — §8.19: mouse-look under the grab.** The owner's Minecraft camera snap-back was not reproduced: a GLFW-style X client sums injected relative motion exactly (runs g1, g2); while grabbed every pointer event now goes to the relative device and no ABS is generated (`4bc62999`).
+
 **STATUS: LIVE, 2026-10-08 (later) — §8.18: the three defects of §8.17 are fixed and measured** at kf3
 `2a20e699` on the trusted host: the early-frame dead display (a late copy given up at 2 s; 0/13 dead
 after the fix, 7/7 before), the `x11-dispsw` twin at host 595.91.07 (Cinnamon starts normally), and
@@ -3900,3 +3902,68 @@ adds acknowledgement detectors (no RELEASE → back off to shm 5 s, doubling) an
 other-GPU check; nvkvm-pv relies on the broker's `x=0` (read from the source, not run). (7) kayfabe
 has rung 1b (implicit modifier) for a broker without `CAP_MODIFIERS`. None of these makes a refused
 path stall.
+
+### 8.19 Mouse-look under the broker's grab (Minecraft on X11, owner report 2026-10-08)
+
+**STATUS: RESEARCH — RUN ON THE TRUSTED HOST, 2026-10-08** (kf3 `2a20e699` before, `4bc62999` after;
+broker nvkvm-pv `badf2d7`; runs g1, g2, wlrec1; `traces/v3_display/broker_interactive_20261008/`).
+The owner's symptom — under CTRL+ALT+G, Minecraft 26.3's camera "wiggles and returns", while the
+desktop grab works — was NOT reproduced; what was measured and changed is below.
+
+**The model of the game.** `scripts/bench/display/warpgrab.c` does what GLFW's disabled-cursor mode
+does on X11: `XGrabPointer` confined to its window with a blank cursor, `XWarpPointer` to the centre
+after every motion that left it, the camera delta from the core position minus the last position
+(GLFW with raw motion off) and, separately, from XI2 `RawMotion` (raw motion on), with the source
+device of each raw event. `grab_repro.sh` runs it in the guest X session while the real broker's test
+backend grabs and injects 20 REL packets of (10, 0), with the tablet's last report placed far from the
+centre first.
+
+**H-snap (the owner's and the coordinator's hypothesis), its falsifier stated before run g1:** a
+button, wheel tick or ABS report on the absolute tablet during the grab snaps the X pointer back to the
+tablet's stale position, so the core-delta camera sees a jump of hundreds of pixels; falsified if every
+case sums to the injected (200, 0) with no jump. **Measured, g1 (2026-10-08, kf3 `2a20e699`):** A (REL
+only), B (a click and a wheel tick in the middle, both on the TABLET device as routed then), C (B with
+the tablet disabled in X) and D (an ABS packet in the middle, dropped by the broker) all gave core
+(200, 0), raw (200, 0), 0 jumps, max core step 10. In B the wheel produced one raw event from the
+tablet (source 8) with no x/y valuator, which GLFW ignores. **H-snap is falsified for a GLFW-style
+client on this X stack.** The X pipeline (broker → relay → QEMU → virtio mouse → libinput → XI2)
+delivers relative motion exactly.
+
+**H-trunc (the broker's REL conversion), falsifier stated before run wlrec1:** nvkvm-pv's Wayland
+backend hands on `wl_fixed_to_int(udx)` (truncation) per relative event, so a high-resolution mouse's
+fractional unaccelerated deltas (0.625 a count at 1600 DPI) would be lost; falsified if the guest
+receives ≈ 0.625 × the counts. **Measured, wlrec1 (kf3 `4bc62999`, GNOME Wayland, a uinput test mouse
+on the host, pointer locked):** 600 counts at 1000 DPI → 600 REL on the guest's virtio mouse; 600
+counts at 1600 DPI (hwdb `MOUSE_DPI`) → 379 REL packets of +1 ≈ 375 expected. Mutter batches relative
+motion per frame, so at 2 ms per count nothing was lost; slower single-count motion is NOT measured
+and would still truncate (a sub-unit remainder per event — a broker diff is proposed in the report,
+`/root/nvkvm-pv` untouched). The owner moved the real mouse during this run (REL_Y values in the guest
+log), and GNOME's one-time "inhibit shortcuts" prompt (answered Allow at 13:14) dropped the first grab
+(`grab dropped: the window lost focus`); only the locked-pointer runs are counted above.
+
+**Changed anyway (the routing invariant the owner asked for), kf-broker, VMM-neutral:** while the
+broker is grabbed (`F_GRABBED` on every packet) every pointer event goes to the RELATIVE device —
+`Input::Btn`/`Input::Wheel` carry `to: Pointer::{Absolute, Relative}`, kf3.c maps Relative to QEMU's
+unbound handler (`src = NULL`); no ABS is generated (one sent anyway is dropped and counted); the
+grab's end re-sends the last pre-grab ABS (the host pointer was locked there). Once a second while
+grabbed the relay logs `input while grabbed: N key, N button and N wheel event(s) to the relative
+pointer, N REL packet(s), N absolute report(s) dropped`. Tests:
+`under_grab_every_pointer_event_goes_to_the_relative_device_and_no_abs`,
+`input_while_grabbed_is_counted_and_logged_once_a_second`. **Measured, g2 (2026-10-08, `4bc62999`):** case B now
+puts both buttons and the wheel on the virtio MOUSE (tablet events 0), sums (200, 0) again.
+
+**Two cursors in the owner's photo (grab, Minecraft's game menu).** Identified from the code and the
+logs, not from a host screenshot (GNOME refused `org.gnome.Shell.Screenshot`: "Screenshot is not
+allowed"): under grab kf3 composes the guest's cursor into the frame (`guest cursor: composed into the
+frame (grabbed; the broker hides its own image)`) — the MOVING one. The broker hides the host pointer
+only through `cur_apply`, which returns early unless the pointer is over the CONTENT surface
+(`nb_session_wl.c` `cur_apply`, `badf2d7`): a grab taken while the host pointer is over the broker's
+own title bar keeps the host arrow, locked where it was — the STILL one, which in the photo sits just
+under the title bar (inferred). It cannot move the guest: no ABS is sent while grabbed (broker
+`nb_sink_abs`, and now the relay; `0 absolute report(s) dropped` in every interval of runs g2 and wlrec1, 2026-10-08).
+
+**Not done / owner's part:** Minecraft itself was not run by the agent (the official launcher needs the
+owner's account). `interactive.sh run --record` records in the guest (evtest on both virtio pointers,
+`xinput test-xi2 --root`) and the relay counts; `interactive.sh collect` gathers it. Frame pacing: the
+owner's photo at 13:04 shows `60 fps T: 120 (fifo) @60Hz` (after the host load ended); the 13:00
+`30 fps` coincided with the merge-bar job.

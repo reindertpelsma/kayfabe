@@ -1,0 +1,6 @@
+GRAB_START tag=g2 checkout=4bc62999 2026-10-08T13:10:55+02:00
+GRAB_DESKTOP cinnamon_up
+GRAB_BUILD ok
+GRAB_CASE A RESULT grab=0 core=200,0 raw=200,0 motions=41 warps=20 raws=20 buttons=0 jumps=0 raw_sources=9 tablet_events=2 tablet_btn=0 mouse_rel_x=200 mouse_btn=0 mouse_wheel=1 max_core_jump=10
+GRAB_CASE B RESULT grab=0 core=200,0 raw=200,0 motions=41 warps=20 raws=21 buttons=4 jumps=0 raw_sources=9 tablet_events=0 tablet_btn=0 mouse_rel_x=200 mouse_btn=2 mouse_wheel=2 max_core_jump=10
+GRAB_EXIT 2026-10-08T13:12:47+02:00
