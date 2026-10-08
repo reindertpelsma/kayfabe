@@ -36,10 +36,11 @@
  *  - ★ 2026-10-03, the display broker (property display-broker, unset = off;
  *    docs/design/V3_DISPLAY.md §8): Rust (crates/kf-broker, crates/kf-qemu/src/broker.rs) owns the
  *    socket and decides everything; this file registers the fd handlers and the timer Rust asks
- *    for, and injects the broker's input through QEMU's input layer on kf3's own console. The input
- *    mapping and the close policy are ported from nvkvm-pv src/qemu/nvkvm_display_relay.c at
- *    368d2db (Apache-2.0, same author; relay_btn, relay_set_relative, relay_handle), for the
- *    QEMU 10.2 API (qemu_input_event_send_key_qcode). Main loop only, BQL held; no vCPU path.
+ *    for, and injects the broker's input through QEMU's input layer on kf3's own console.
+ *    ⊘ 2026-10-08 (ABI 23, OWNER_RULINGS.md §V, §8.20): the input and cursor POLICY (ported from
+ *    nvkvm-pv src/qemu/nvkvm_display_relay.c at 368d2db — relay_btn, relay_set_relative,
+ *    relay_handle) moved to kf-broker behind a VMM-neutral trait; this file keeps only the verbs
+ *    (Kf3InputOps), one QEMU 10.2 call each. Main loop only, BQL held; no vCPU path.
  *  - ★ 2026-10-03, the boot display (property gop, default off; docs/design/V3_DISPLAY.md §4.11):
  *    the PCI expansion ROM — the constant kf-gop UEFI driver embedded in Rust, wrapped at realize
  *    with this device's ids and its framebuffer descriptor (kf3_option_rom) — registered as the ROM
@@ -74,7 +75,6 @@
 #include "qemu/timer.h"
 #include "system/runstate.h"
 #include <linux/kvm.h>
-#include <linux/input-event-codes.h>
 #include "kf3.h"
 #include "kf3_gop.h"
 
@@ -187,7 +187,6 @@ struct Kf3State {
     QEMUTimer *broker_timer;
     int broker_sock;                 /* the socket Rust asked us to watch, or -1 */
     int broker_frame_fd;             /* the display worker's frame eventfd, or -1 */
-    bool broker_pointer_checked;     /* the absolute-pointer check ran (once, at the first connect) */
     /* ★ ABI 16 (docs/design/V3_DISPLAY.md sec. 8.16, OWNER_RULINGS sec. M): the cap on every head's
      * emulated vblank tick (whole Hz; 0 = unset: 75, today's EDID). Rust validates it by name. */
     uint32_t display_max_fps;
@@ -792,53 +791,72 @@ static pixman_format_code_t kf3_pixman_format(uint32_t f)
 /* ★ ABI 12 (docs/design/V3_DISPLAY.md §8.13): the guest's cursor for THIS console while a
  * cursor-capable broker hovers — the frames then carry none (OWNER_RULINGS §O), so the console gets
  * it through QEMU's cursor API and a VNC client draws it as a real pointer (the coordinator's
- * decision of 2026-10-04). Rust decides what and when — following the frame the console SHOWS,
- * paced; without a broker, under grab, or for a cursor the frame composes (XOR), it says nothing or
- * "hidden". Ownership per QEMU 10.2.4: cursor_alloc and cursor_builtin_hidden return a cursor with
+ * decision of 2026-10-04). ⊘ ABI 23 (OWNER_RULINGS §V, §8.20): Rust decides what, when and
+ * whether (kf_broker::ConsoleCursor::apply: following the frame the console SHOWS, paced; the
+ * hidden image for none; a move only under an ABSOLUTE pointer, since GTK's gd_mouse_set warps
+ * the HOST pointer whenever the console's input is relative, ui/gtk.c:447-467) and calls these
+ * four verbs; each is QEMU's call and reports whether it was applied (a part not applied is
+ * retried). Ownership per QEMU 10.2.4: cursor_alloc and cursor_builtin_hidden return a cursor with
  * one reference (ui/cursor.c:93-108), or NULL; dpy_cursor_define takes its own
- * (ui/console.c:961-980), so ours is dropped right after. The pixels are copied from kayfabe's own
- * copy of the image (never guest memory), bounded to the width x height this function allocated.
- * ⊘ The review of 2026-10-04: dpy_mouse_set only under an ABSOLUTE pointer — GTK's gd_mouse_set
- * warps the HOST pointer whenever the console's input is relative (ui/gtk.c:447-467), which a
- * broker grab, or a guest that leaves the tablet idle, makes it; no frontend needs the position
- * then. And Rust is told what was applied, so a define this function could not make is retried.
- * Main thread, BQL held; nothing here waits. */
+ * (ui/console.c:961-980), so ours is dropped right after. The pixels are kayfabe's own copy of the
+ * image (never guest memory), exactly width x height words, copied into what this function
+ * allocated. Main thread, BQL held; nothing here waits. */
+static int32_t kf3_cur_define(void *opaque, uint32_t width, uint32_t height, uint32_t hot_x,
+                              uint32_t hot_y, const uint32_t *pixels)
+{
+    Kf3State *s = opaque;
+    QEMUCursor *qc;
+
+    if (!s->con || !pixels || width == 0 || height == 0 || width > KF3_CURSOR_MAX_DIM ||
+        height > KF3_CURSOR_MAX_DIM) {
+        return 0;
+    }
+    qc = cursor_alloc((uint16_t)width, (uint16_t)height);
+    if (!qc) {
+        return 0;
+    }
+    memcpy(qc->data, pixels, (size_t)width * height * sizeof(uint32_t));
+    qc->hot_x = (int)hot_x;
+    qc->hot_y = (int)hot_y;
+    dpy_cursor_define(s->con, qc);
+    cursor_unref(qc);
+    return 1;
+}
+
+static int32_t kf3_cur_hide(void *opaque)
+{
+    Kf3State *s = opaque;
+    QEMUCursor *qc = s->con ? cursor_builtin_hidden() : NULL;
+
+    if (!qc) {
+        return 0;
+    }
+    dpy_cursor_define(s->con, qc);
+    cursor_unref(qc);
+    return 1;
+}
+
+static int32_t kf3_cur_move(void *opaque, int32_t x, int32_t y)
+{
+    Kf3State *s = opaque;
+
+    if (!s->con) {
+        return 0;
+    }
+    dpy_mouse_set(s->con, x, y, true);
+    return 1;
+}
+
+static uint32_t kf3_cur_absolute(void *opaque)
+{
+    Kf3State *s = opaque;
+
+    return s->con && qemu_input_is_absolute(s->con);
+}
+
 static void kf3_console_cursor(Kf3State *s)
 {
-    Kf3Cursor c;
-    QEMUCursor *qc = NULL;
-    uint32_t applied = 0;
-    int32_t what = kf3_display_cursor(s->h, &c);
-
-    if (what <= 0) {
-        return;
-    }
-    if (what & KF3_CURSOR_DEFINE) {
-        if (c.width == 0 || c.height == 0) {
-            qc = cursor_builtin_hidden();
-        } else if (c.width <= KF3_CURSOR_MAX_DIM && c.height <= KF3_CURSOR_MAX_DIM &&
-                   c.hot_x < c.width && c.hot_y < c.height) {
-            qc = cursor_alloc((uint16_t)c.width, (uint16_t)c.height);
-            if (qc && kf3_display_cursor_pixels(s->h, qc->data, c.width * c.height) != 0) {
-                cursor_unref(qc);
-                qc = NULL;
-            }
-            if (qc) {
-                qc->hot_x = (int)c.hot_x;
-                qc->hot_y = (int)c.hot_y;
-            }
-        }
-        if (qc) {
-            dpy_cursor_define(s->con, qc);
-            cursor_unref(qc);
-            applied |= KF3_CURSOR_DEFINE;
-        }
-    }
-    if ((what & KF3_CURSOR_MOUSE) && qemu_input_is_absolute(s->con)) {
-        dpy_mouse_set(s->con, c.x, c.y, c.on != 0);
-        applied |= KF3_CURSOR_MOUSE;
-    }
-    kf3_display_cursor_done(s->h, applied);
+    kf3_display_cursor_apply(s->h);
 }
 
 /* The newest frame onto the console's surface (gfx_update). */
@@ -962,10 +980,8 @@ static const GraphicHwOps kf3_gfx_ops_broker = {
 };
 
 /* ── the display-broker relay (display step 3, docs/design/V3_DISPLAY.md §8) ─────────────────
- * Rust decides; this file registers what Rust asks for and injects input. Every function here
- * runs on the main loop with the BQL held. */
-
-#define KF3_BROKER_BATCH 64
+ * Rust decides; this file registers what Rust asks for and carries out its input verbs. Every
+ * function here runs on the main loop with the BQL held. */
 
 static void kf3_broker_pump(Kf3State *s, int fd, bool rd, bool wr);
 
@@ -992,37 +1008,10 @@ static void kf3_broker_timer_cb(void *opaque)
     kf3_broker_pump(opaque, -1, false, false);
 }
 
-/* Design §1.3 (the review of v3-broker, 2026-10-03): the broker's pointer position arrives as
- * absolute events, and without an absolute pointing device (-device virtio-tablet-pci) they find no
- * handler and are dropped without a word. Checked once, at the first connection that passed the
- * peer check — on the main loop, so every -device on the command line exists by then (the tablet
- * may be listed after kf3). Keys and buttons do not depend on it. */
-static void kf3_broker_check_pointer(Kf3State *s)
-{
-    MouseInfoList *mice, *e;
-    bool absolute = false;
-
-    if (s->broker_pointer_checked) {
-        return;
-    }
-    s->broker_pointer_checked = true;
-    mice = qmp_query_mice(NULL);
-    for (e = mice; e; e = e->next) {
-        if (e->value->absolute) {
-            absolute = true;
-        }
-    }
-    qapi_free_MouseInfoList(mice);
-    if (!absolute) {
-        warn_report("kf3: broker: NO absolute pointing device exists, so the broker's pointer "
-                    "position goes nowhere (keys and buttons still work). Add -device "
-                    "virtio-tablet-pci,display=%s,head=0.",
-                    DEVICE(s)->id ? DEVICE(s)->id : "<this kf3-gpu's id>");
-    }
-}
-
 /* Rust's watch verb (Kf3BrokerWatchFn). (0, 0) arrives BEFORE Rust closes the fd, so no stale
- * descriptor number stays registered (nvkvm-pv relay.c:724-743's order). */
+ * descriptor number stays registered (nvkvm-pv relay.c:724-743's order). ⊘ ABI 23 (§8.20): the
+ * absent-tablet check at a new connection is kf-broker's (InputPolicy::connected), through the
+ * pointers verb. */
 static void kf3_broker_watch(void *opaque, int32_t fd, uint32_t rd, uint32_t wr)
 {
     Kf3State *s = opaque;
@@ -1033,10 +1022,6 @@ static void kf3_broker_watch(void *opaque, int32_t fd, uint32_t rd, uint32_t wr)
             s->broker_sock = -1;
         }
         return;
-    }
-    if (s->broker_sock < 0) {
-        /* a new connection: Rust watches a socket only after its peer check passed */
-        kf3_broker_check_pointer(s);
     }
     s->broker_sock = fd;
     qemu_set_fd_handler(fd, rd ? kf3_broker_sock_rd : NULL, wr ? kf3_broker_sock_wr : NULL, s);
@@ -1057,152 +1042,186 @@ static void kf3_broker_timer(void *opaque, int64_t deadline_ms)
     }
 }
 
-/* nvkvm-pv relay.c:1101-1111. */
-static InputButton kf3_broker_btn(int code)
+/* ── ★ ABI 23 (OWNER_RULINGS.md §V, 2026-10-08; docs/design/V3_DISPLAY.md §8.20): the input
+ * verbs — kf-broker's VMM-neutral InputSink for QEMU. Every decision is Rust's (crates/kf-broker
+ * src/input.rs: which keys and buttons, which pointing device on a grab and on its end, where the
+ * sync points fall, the missing-device warning, close); each verb is the QEMU call that carries one
+ * out, aimed at kf3's own console: qemu_input_find_handler takes a handler bound to it first
+ * (-device virtio-tablet-pci,display=<kf3 id>), then any unbound one. ⊘ Until ABI 22 this file
+ * interpreted Kf3BrokerEvents itself (nvkvm-pv relay.c:1101-1462, the QEMU 10.2 spelling); §8.20
+ * has the old -> new table. */
+
+static int32_t kf3_in_key(void *opaque, uint32_t evdev, uint32_t down)
 {
-    switch (code) {
-    case BTN_LEFT:   return INPUT_BUTTON_LEFT;
-    case BTN_RIGHT:  return INPUT_BUTTON_RIGHT;
-    case BTN_MIDDLE: return INPUT_BUTTON_MIDDLE;
-    case BTN_SIDE:   return INPUT_BUTTON_SIDE;
-    case BTN_EXTRA:  return INPUT_BUTTON_EXTRA;
-    default:         return INPUT_BUTTON__MAX;
+    Kf3State *s = opaque;
+
+    /* QEMU's linux -> qcode map is this VMM's mapping: a code it cannot map is reported back */
+    if (evdev >= qemu_input_map_linux_to_qcode_len ||
+        qemu_input_map_linux_to_qcode[evdev] == Q_KEY_CODE_UNMAPPED) {
+        return 0;
+    }
+    qemu_input_event_send_key_qcode(s->con, qemu_input_linux_to_qcode(evdev), down != 0);
+    return 1;
+}
+
+static const InputButton kf3_in_buttons[] = {
+    [KF3_BTN_LEFT] = INPUT_BUTTON_LEFT,     [KF3_BTN_RIGHT] = INPUT_BUTTON_RIGHT,
+    [KF3_BTN_MIDDLE] = INPUT_BUTTON_MIDDLE, [KF3_BTN_SIDE] = INPUT_BUTTON_SIDE,
+    [KF3_BTN_EXTRA] = INPUT_BUTTON_EXTRA,
+};
+
+/* relative: with src NULL QEMU's qemu_input_find_handler skips every display-bound handler — the
+ * tablet bound to kf3's console — and takes the first unbound one, the relative device the select
+ * verb put in front (§8.19: motion, buttons and wheel then come from ONE guest device) */
+static QemuConsole *kf3_in_src(Kf3State *s, uint32_t relative)
+{
+    return relative ? NULL : s->con;
+}
+
+static void kf3_in_button(void *opaque, uint32_t button, uint32_t down, uint32_t relative)
+{
+    Kf3State *s = opaque;
+
+    if (button < ARRAY_SIZE(kf3_in_buttons)) {
+        qemu_input_queue_btn(kf3_in_src(s, relative), kf3_in_buttons[button], down != 0);
     }
 }
 
-/* On grab a RELATIVE pointing device goes in front, on ungrab the absolute one — picked
- * deterministically, preferring Virtio (nvkvm-pv relay.c:1125-1191, copied; ⚠ it is known not to
- * give mouse-look, broker-design.md). */
-static void kf3_broker_set_relative(bool relative)
+/* QEMU's wheel is a button: one detent is a press, a sync and a release (Rust's sync follows).
+ * QEMU 10.2's virtio and USB pointers map no WHEEL_LEFT/RIGHT, so dx is not carried. */
+static void kf3_in_wheel(void *opaque, int32_t dx, int32_t dy, uint32_t relative)
 {
-    MouseInfoList *mice = qmp_query_mice(NULL), *e;
-    MouseInfo *pick = NULL;
+    Kf3State *s = opaque;
+    InputButton b = dy > 0 ? INPUT_BUTTON_WHEEL_UP : INPUT_BUTTON_WHEEL_DOWN;
 
-    for (e = mice; e; e = e->next) {
-        if (e->value->absolute == relative) {
-            continue;
-        }
-        if (!pick) {
-            pick = e->value;
-        }
-        if (e->value->name && strstr(e->value->name, "Virtio")) {
-            pick = e->value;
-            break;
-        }
-    }
-    if (pick) {
-        qemu_mouse_set((int)pick->index, NULL);
-        info_report("kf3: broker: pointing device -> #%d %s (%s)", (int)pick->index, pick->name,
-                    relative ? "relative" : "absolute");
-    } else {
-        warn_report("kf3: broker: NO %s pointing device exists, so %s. Add -device %s.",
-                    relative ? "relative" : "absolute",
-                    relative ? "pointer motion goes nowhere while grabbed"
-                             : "the pointer cannot be put back on ungrab",
-                    relative ? "virtio-mouse-pci" : "virtio-tablet-pci");
-    }
-    qapi_free_MouseInfoList(mice);
-}
-
-/* One event, already bounded by Rust (nvkvm-pv relay.c:1193-1462, the QEMU 10.2 spelling). Input is
- * aimed at kf3's own console: qemu_input_find_handler takes a handler bound to it first
- * (-device virtio-tablet-pci,display=<kf3 id>), then any unbound one. */
-static void kf3_broker_input(Kf3State *s, const Kf3BrokerEvent *e)
-{
-    QemuConsole *con = s->con;
-    InputButton b;
-
-    switch (e->kind) {
-    case KF3_BROKER_KEY:
-        /* the map lookup is the validity filter: a key QEMU cannot map is dropped */
-        if (e->x >= 0 && (guint)e->x < qemu_input_map_linux_to_qcode_len &&
-            qemu_input_map_linux_to_qcode[e->x] != Q_KEY_CODE_UNMAPPED) {
-            qemu_input_event_send_key_qcode(con, qemu_input_linux_to_qcode((unsigned)e->x),
-                                            e->y != 0);
-        }
-        break;
-    case KF3_BROKER_BTN:
-        /* §8.19: the relay names the pointer (w0 = 1: the relative one, under grab). With src NULL
-         * QEMU's qemu_input_find_handler skips every display-bound handler — the tablet bound to
-         * kf3's console — and takes the first unbound one, the relative device kf3_broker_set_
-         * relative() put in front: motion, buttons and wheel then come from ONE guest device. */
-        b = kf3_broker_btn(e->x);
-        if (b != INPUT_BUTTON__MAX) {
-            qemu_input_queue_btn(e->w0 ? NULL : con, b, e->y != 0);
-            qemu_input_event_sync();
-        }
-        break;
-    case KF3_BROKER_ABS:
-        if (e->w0 && e->w1) {
-            qemu_input_queue_abs(con, INPUT_AXIS_X, e->x, 0, (int)e->w0);
-            qemu_input_queue_abs(con, INPUT_AXIS_Y, e->y, 0, (int)e->w1);
-            qemu_input_event_sync();
-        }
-        break;
-    case KF3_BROKER_REL:
-        qemu_input_queue_rel(con, INPUT_AXIS_X, e->x);
-        qemu_input_queue_rel(con, INPUT_AXIS_Y, e->y);
-        qemu_input_event_sync();
-        break;
-    case KF3_BROKER_WHEEL:
-        /* vertical only: QEMU 10.2's virtio and USB pointers map no WHEEL_LEFT/RIGHT */
-        b = e->x > 0 ? INPUT_BUTTON_WHEEL_UP : INPUT_BUTTON_WHEEL_DOWN;
-        qemu_input_queue_btn(e->w0 ? NULL : con, b, true);
-        qemu_input_event_sync();
-        qemu_input_queue_btn(e->w0 ? NULL : con, b, false);
-        qemu_input_event_sync();
-        break;
-    case KF3_BROKER_GRAB:
-        kf3_broker_set_relative(e->x != 0);
-        break;
-    case KF3_BROKER_SURFACE:
-        /* 3c: forward every hint, as nvkvm-pv's relay.c:1259-1306 does — whether a windowed resize
-         * re-modes the guest is the broker's --resolution policy; QEMU coalesces for 1 s and only
-         * a change reaches kf3_ui_info */
-        if (con && e->x > 0 && e->y > 0 && dpy_ui_info_supported(con)) {
-            QemuUIInfo info = *dpy_get_ui_info(con);
-
-            info.width = (uint32_t)e->x;
-            info.height = (uint32_t)e->y;
-            if (e->w0 > 0) {
-                info.refresh_rate = e->w0;
-            }
-            dpy_set_ui_info(con, &info, true);
-        }
-        break;
-    case KF3_BROKER_CLOSE:
-        /* the policy is the VMM's (proto.h): force = stop now; otherwise an ACPI powerdown the
-         * guest decides on (Rust logs the repeat-ask message) */
-        if (e->x) {
-            qemu_system_shutdown_request(SHUTDOWN_CAUSE_HOST_UI);
-        } else {
-            qemu_system_powerdown_request();
-        }
-        break;
-    default:
-        break;
-    }
-}
-
-static void kf3_broker_pump(Kf3State *s, int fd, bool rd, bool wr)
-{
-    Kf3BrokerEvent ev[KF3_BROKER_BATCH];
-    int32_t n, i;
-
-    if (!s->h) {
+    (void)dx;
+    if (dy == 0) {
         return;
     }
-    n = kf3_broker_ready(s->h, fd, rd ? 1 : 0, wr ? 1 : 0,
-                         (uint64_t)qemu_clock_get_ms(QEMU_CLOCK_REALTIME), ev, KF3_BROKER_BATCH);
-    for (i = 0; i < n && i < KF3_BROKER_BATCH; i++) {
-        kf3_broker_input(s, &ev[i]);
+    qemu_input_queue_btn(kf3_in_src(s, relative), b, true);
+    qemu_input_event_sync();
+    qemu_input_queue_btn(kf3_in_src(s, relative), b, false);
+}
+
+/* QEMU scales value * INPUT_EVENT_ABS_MAX / range (qemu_input_scale_axis) */
+static void kf3_in_abs(void *opaque, uint32_t x, uint32_t y, uint32_t width, uint32_t height)
+{
+    Kf3State *s = opaque;
+
+    qemu_input_queue_abs(s->con, INPUT_AXIS_X, (int)x, 0, (int)width);
+    qemu_input_queue_abs(s->con, INPUT_AXIS_Y, (int)y, 0, (int)height);
+}
+
+static void kf3_in_rel(void *opaque, int32_t dx, int32_t dy)
+{
+    Kf3State *s = opaque;
+
+    qemu_input_queue_rel(s->con, INPUT_AXIS_X, dx);
+    qemu_input_queue_rel(s->con, INPUT_AXIS_Y, dy);
+}
+
+static void kf3_in_sync(void *opaque)
+{
+    (void)opaque;
+    qemu_input_event_sync();
+}
+
+/* QEMU's pointing devices; it names its virtio-input ones "QEMU Virtio Tablet/Mouse" */
+static uint32_t kf3_in_pointers(void *opaque, Kf3Pointer *out, uint32_t cap)
+{
+    MouseInfoList *mice = qmp_query_mice(NULL), *e;
+    uint32_t n = 0;
+
+    (void)opaque;
+    for (e = mice; e && n < cap; e = e->next, n++) {
+        memset(&out[n], 0, sizeof(out[n]));
+        out[n].id = (uint32_t)e->value->index;
+        out[n].absolute = e->value->absolute;
+        out[n].paravirtual = e->value->name && strstr(e->value->name, "Virtio");
+        if (e->value->name) {
+            g_strlcpy(out[n].name, e->value->name, sizeof(out[n].name));
+        }
     }
-    /* §8.13: every cursor post is followed by a frame publish, which lands here — so the console's
-     * cursor follows at once, not at its next refresh (VNC's backs off to seconds when idle); a
-     * define held back by the pacing, or waiting for the console to show a cursor-free frame, goes
-     * at the next pump or refresh */
-    if (s->con) {
-        kf3_console_cursor(s);
+    qapi_free_MouseInfoList(mice);
+    return n;
+}
+
+static void kf3_in_select_pointer(void *opaque, uint32_t id, uint32_t relative)
+{
+    (void)opaque;
+    (void)relative;
+    qemu_mouse_set((int)id, NULL);
+}
+
+/* Rust logged what is lost; this says how to add the device on QEMU's command line */
+static void kf3_in_missing_pointer(void *opaque, uint32_t relative)
+{
+    Kf3State *s = opaque;
+
+    if (relative) {
+        warn_report("kf3: broker: add -device virtio-mouse-pci for the grab's relative pointer");
+    } else {
+        warn_report("kf3: broker: add -device virtio-tablet-pci,display=%s,head=0 for the "
+                    "broker's absolute pointer",
+                    DEVICE(s)->id ? DEVICE(s)->id : "<this kf3-gpu's id>");
+    }
+}
+
+/* force = stop now; otherwise an ACPI powerdown the guest decides on (Rust logs the repeat-ask) */
+static void kf3_in_close(void *opaque, uint32_t force)
+{
+    (void)opaque;
+    if (force) {
+        qemu_system_shutdown_request(SHUTDOWN_CAUSE_HOST_UI);
+    } else {
+        qemu_system_powerdown_request();
+    }
+}
+
+/* 3c: a resize hint through the console's ui_info (QEMU coalesces for 1 s and only a change reaches
+ * kf3_ui_info); a refresh of 0 (unknown) keeps the console's */
+static void kf3_in_resize_hint(void *opaque, uint32_t width, uint32_t height, uint32_t refresh_mhz)
+{
+    Kf3State *s = opaque;
+    QemuUIInfo info;
+
+    if (!s->con || width == 0 || height == 0 || !dpy_ui_info_supported(s->con)) {
+        return;
+    }
+    info = *dpy_get_ui_info(s->con);
+    info.width = width;
+    info.height = height;
+    if (refresh_mhz > 0) {
+        info.refresh_rate = refresh_mhz;
+    }
+    dpy_set_ui_info(s->con, &info, true);
+}
+
+static const Kf3InputOps kf3_input_ops = {
+    .key = kf3_in_key,
+    .button = kf3_in_button,
+    .wheel = kf3_in_wheel,
+    .abs = kf3_in_abs,
+    .rel = kf3_in_rel,
+    .sync = kf3_in_sync,
+    .pointers = kf3_in_pointers,
+    .select_pointer = kf3_in_select_pointer,
+    .missing_pointer = kf3_in_missing_pointer,
+    .close = kf3_in_close,
+    .resize_hint = kf3_in_resize_hint,
+    .cursor_define = kf3_cur_define,
+    .cursor_hide = kf3_cur_hide,
+    .cursor_move = kf3_cur_move,
+    .cursor_absolute = kf3_cur_absolute,
+};
+
+/* ⊘ ABI 23: Rust delivers the input through kf3_input_ops and brings the console cursor along
+ * (§8.13: every cursor post is followed by a frame publish, which lands here). */
+static void kf3_broker_pump(Kf3State *s, int fd, bool rd, bool wr)
+{
+    if (s->h) {
+        kf3_broker_ready(s->h, fd, rd ? 1 : 0, wr ? 1 : 0,
+                         (uint64_t)qemu_clock_get_ms(QEMU_CLOCK_REALTIME));
     }
 }
 
@@ -1228,7 +1247,8 @@ static bool kf3_broker_realize(Kf3State *s, Error **errp)
     s->broker_timer = timer_new_ms(QEMU_CLOCK_REALTIME, kf3_broker_timer_cb, s);
     qemu_set_fd_handler(s->broker_frame_fd, kf3_broker_frame_rd, NULL, s);
     if (kf3_broker_start(s->h, s->display_broker, s->display_broker_uid, kf3_broker_watch,
-                         kf3_broker_timer, s, (uint64_t)qemu_clock_get_ms(QEMU_CLOCK_REALTIME),
+                         kf3_broker_timer, &kf3_input_ops, s,
+                         (uint64_t)qemu_clock_get_ms(QEMU_CLOCK_REALTIME),
                          err, sizeof(err)) != 0) {
         error_setg(errp, "kf3: %s", err);
         return false;
