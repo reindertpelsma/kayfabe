@@ -1627,10 +1627,12 @@ impl Device {
             .iter()
             .map(|e| {
                 format!(
-                    "{}:wakes={},raised={},live={},vec={:?}",
+                    "{}:wakes={},raised={},nolive={},novec={},live={},vec={:?}",
                     e.name,
                     e.wakes.load(o),
                     e.raised.load(o),
+                    e.unraised_no_live.load(o),
+                    e.unraised_no_vector.load(o),
                     e.live.load(o),
                     e.vector
                 )
@@ -2498,7 +2500,18 @@ impl Device {
             .engines
             .iter()
             .filter(|e| e.wakes.load(o) > 0)
-            .map(|e| format!("{}:{}/{}raised", e.name, e.wakes.load(o), e.raised.load(o)))
+            .map(|e| {
+                // ★ 2026-10-08: `raised` also counts the Translated rings' relays; `nolive`/`novec`
+                // name why a wake was not raised (no live guest twin on the engine / no vector).
+                format!(
+                    "{}:{}/{}raised(nolive={},novec={})",
+                    e.name,
+                    e.wakes.load(o),
+                    e.raised.load(o),
+                    e.unraised_no_live.load(o),
+                    e.unraised_no_vector.load(o)
+                )
+            })
             .collect();
         let (va, vr, vx) = self.rm.view_counts();
         let rc = format!(
@@ -3032,6 +3045,12 @@ impl Device {
                 self.chans.rc_scan();
                 return;
             }
+            // ★ 2026-10-08 (`KF3_RELAY_GET_REFRESH`, default off): the park tick refreshes every
+            // relayed twin's engine-written GP_GET in its guest slot (nothing with the switch off).
+            if tag == kf_chan::worker::TICK_TAG {
+                let _ = self.chans.relay_refresh_all("the worker tick");
+                return;
+            }
             let Some(e) = tag
                 .checked_sub(kf_chan::worker::OTHER_TAG_BASE)
                 .and_then(|i| self.chans.engines.get(i as usize))
@@ -3041,7 +3060,13 @@ impl Device {
             e.wakes.fetch_add(1, Ordering::Relaxed);
             // ⊘ Only an engine a guest twin runs on: the notifier is GPU-wide, and a wake with no
             // twin there is our own ring's, the walker's or another tenant's — not guest work.
-            let raise = e.live.load(Ordering::Relaxed) > 0 && e.vector.is_some();
+            let live = e.live.load(Ordering::Relaxed) > 0;
+            let raise = live && e.vector.is_some();
+            if !live {
+                e.unraised_no_live.fetch_add(1, Ordering::Relaxed);
+            } else if e.vector.is_none() {
+                e.unraised_no_vector.fetch_add(1, Ordering::Relaxed);
+            }
             if kf_mem::maplog::on() {
                 eprintln!(
                     "kf3: maplog t={:.6} NSI host {} wake #{} raised={raise}",
@@ -3051,6 +3076,9 @@ impl Device {
                 );
             }
             if raise && let Some(v) = e.vector {
+                // ★ 2026-10-08 (`KF3_RELAY_GET_REFRESH`): the relayed twins' GP_GET first, so the
+                // guest's handler reads the engine's value (nothing with the switch off).
+                let _ = self.chans.relay_refresh_all("a host non-stall wake");
                 e.raised.fetch_add(1, Ordering::Relaxed);
                 self.latch_and_deliver(v);
             }

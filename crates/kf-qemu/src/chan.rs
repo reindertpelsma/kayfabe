@@ -224,6 +224,11 @@ pub struct EngineEvent {
     pub wakes: AtomicU64,
     /// Wakes raised to the guest.
     pub raised: AtomicU64,
+    /// ★ 2026-10-08 (coordinator's first step on H-ce-intr): wakes NOT raised because no guest twin
+    /// was live on this engine (`live == 0`)…
+    pub unraised_no_live: AtomicU64,
+    /// …and because the served table gives this engine no guest vector (`vector == None`).
+    pub unraised_no_vector: AtomicU64,
     /// ★ GR tier (2026-10-07): live Translated kernel-GR rings on this engine whose completions
     /// are the guest's work (their fence tail's `NON_STALL_INTERRUPT` follows the engine's own
     /// writes of the guest's semaphores and `GP_GET`).
@@ -1018,6 +1023,15 @@ fn deferred_api_trigger() -> bool {
 fn translated_ce_relay() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("KF3_TRANSLATED_CE_RELAY").is_some_and(|v| v == "1"))
+}
+
+// ★ 2026-10-08 (`V3_USERD_RELAY.md` §2.2's follow-up; H-getget after run76): a relayed twin's
+// engine-written GP_GET is also written into the guest's slot on every host non-stall wake (before the
+// guest's interrupt) and on the worker's park tick — not only at a doorbell. Host-derived only; never
+// rings, never reads GP_PUT. Default off (one variable per run).
+fn relay_get_refresh() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_RELAY_GET_REFRESH").is_some_and(|v| v == "1"))
 }
 
 // Experimental decoder context ownership only; codec submissions still refuse.
@@ -1862,6 +1876,8 @@ impl ChanPlane {
                 live: AtomicU64::new(0),
                 wakes: AtomicU64::new(0),
                 raised: AtomicU64::new(0),
+                unraised_no_live: AtomicU64::new(0),
+                unraised_no_vector: AtomicU64::new(0),
                 tlive: AtomicU64::new(0),
                 trelays: AtomicU64::new(0),
                 cpending: AtomicU64::new(0),
@@ -4313,6 +4329,59 @@ impl ChanPlane {
                 Some(false)
             }
         }
+    }
+
+    /// ★ 2026-10-08 (`KF3_RELAY_GET_REFRESH=1`, default off; [`kf_chan::userd_relay::refresh`]): on a
+    /// worker, write every relayed twin's engine-written `GP_GET` into its guest slot when it moved —
+    /// called on an engine's host non-stall wake (before the guest's interrupt is raised) and on the
+    /// worker's park tick. A relay whose lock a doorbell step holds is skipped (that step writes it
+    /// back). Returns `(relays seen, stores made)`; nothing at all with the switch off.
+    pub fn relay_refresh_all(&self, why: &str) -> (u32, u32) {
+        if !relay_get_refresh() {
+            return (0, 0);
+        }
+        let rs: Vec<_> = match self.relays.lock() {
+            Ok(m) if !m.is_empty() => m.iter().map(|(k, v)| (*k, v.clone())).collect(),
+            _ => return (0, 0),
+        };
+        let (mut seen, mut stored) = (0u32, 0u32);
+        for (ht, r) in rs {
+            let Ok(mut g) = r.try_lock() else { continue };
+            seen += 1;
+            let g = &mut *g;
+            let mut io = RelayMem {
+                guest: &g.guest,
+                host: &g.host,
+                rm: self.rm,
+                token: g.chan.token,
+            };
+            match kf_chan::userd_relay::refresh(&mut g.st, &mut io) {
+                Ok(kf_chan::userd_relay::Refresh::Stored(v)) => {
+                    stored += 1;
+                    let n = g.st.refreshed;
+                    if n <= 8 || n.is_power_of_two() {
+                        eprintln!(
+                            "kf3: chan token {:#x} (host {ht:#x}) USERD relay: GP_GET {v:#x} refreshed on {why} (#{n}; engine-written, outside a doorbell)",
+                            g.idx
+                        );
+                    }
+                }
+                Ok(kf_chan::userd_relay::Refresh::Same) => {}
+                Ok(kf_chan::userd_relay::Refresh::Refused(v)) => {
+                    if g.st.get_refused <= 4 {
+                        eprintln!(
+                            "kf3: chan token {:#x} (host {ht:#x}) USERD relay: engine GP_GET {v:#x} outside its {}-entry ring — NOT stored (#{})",
+                            g.idx, g.st.entries, g.st.get_refused
+                        );
+                    }
+                }
+                Err(e) => eprintln!(
+                    "kf3: chan token {:#x} (host {ht:#x}) USERD relay refresh failed: {e}",
+                    g.idx
+                ),
+            }
+        }
+        (seen, stored)
     }
 
     /// ⚠⚠ DIAGNOSTIC (2026-10-08, `KF3_RELAY_PB_PEEK=1`, default off — the one place a relayed

@@ -51,6 +51,12 @@ pub struct WorkerStats {
 /// are handed to `on_other`; nothing else reaches it.
 pub const OTHER_TAG_BASE: u64 = 2 << 32;
 
+/// ★ 2026-10-08: the tag `on_other` receives once after EVERY park wait of a worker ends (events or the
+/// [`PARK_MS`] timeout) — a bounded-period tick on the worker, never a vCPU. No fd carries it. Used by
+/// `KF3_RELAY_GET_REFRESH` (the USERD relay's `GP_GET` refresh while a relayed twin lives); a caller
+/// that ignores it loses nothing.
+pub const TICK_TAG: u64 = u64::MAX;
+
 /// One worker thread's loop, until `stop`. `poller` watches `efd` at [`WORKER_EFD_TAG`] and
 /// `completions` at [`COMPLETIONS_TAG`]; any fd the caller watched at a tag `>=`
 /// [`OTHER_TAG_BASE`] is reported to `on_other` (P5b: engine non-stall events → guest MSI-X).
@@ -121,5 +127,6 @@ pub fn run(
                 }
             }
         }
+        on_other(TICK_TAG);
     }
 }
