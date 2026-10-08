@@ -933,6 +933,11 @@ All owner statements of 2026-10-08, in the order the open-decision list was give
   values the guest sees are this VM's own, never host-wide quantities (§S exposure rule); the design
   and its measurements are open work (`docs/STATUS_AND_HANDOFF.md`).
 - **Software-runlist flag (`KF3_SW_RUNLIST_HOST_OWNED`):** stays off and undecided.
+  - ⊘ *Later idea, not for now (owner, 2026-10-08):* "for B ... kayfabe can quota VMs
+    scheduling/fairness, is related." If kayfabe owns the scheduling of the host twins (B), a per-VM
+    share, timeslice or fairness quota has a natural place; a guest-built runlist, which B ignores,
+    could then never raise a VM's share. Whether the host exposes the needed controls to an
+    unprivileged client is not checked (inferred open question).
 - **`raw_control_native`:** under review, see the handoff; production code must not call it.
 - **§T (recovered directives):** later rulings always win over recovered ones; keep only what is useful
   and does not conflict; **avoid directions from the v1/v2 kayfabe architecture** altogether.
