@@ -161,6 +161,11 @@ EOF
 
 case "$cmd" in
 stop)
+    # Review 2026-10-08, finding 3: a stale pid file (a SIGKILLed launcher) may name a REUSED pid;
+    # only a process that is this launcher's QEMU (-name kayfabe-interactive) is ever signalled.
+    if [ -s "$PIDF" ] && ! tr '\0' ' ' <"/proc/$(cat "$PIDF")/cmdline" 2>/dev/null | grep -q -- '-name kayfabe-interactive'; then
+        rm -f "$PIDF"
+    fi
     if [ -s "$PIDF" ] && kill -0 "$(cat "$PIDF")" 2>/dev/null; then
         q=$(cat "$PIDF"); mon=$(ls -t "$WORK"/run-*/qemu.mon 2>/dev/null | head -1)
         [ -S "$mon" ] && printf 'system_powerdown\n' | timeout 5 socat - "UNIX-CONNECT:$mon" >/dev/null 2>&1

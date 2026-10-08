@@ -93,3 +93,11 @@ kayfabe-linux-raw = { path = "crates/kayfabe-linux-raw" }
 [workspace.lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
+
+# Owner, 2026-10-08 (hostile-guest hardening): a guest-controlled integer that overflows must PANIC
+# (the VM stops, fail closed), never wrap silently past a bounds check. Rust's release default is
+# overflow-checks = off, so the shipped VMM (cargo build --release -p kf-qemu) wrapped. Memory safety
+# of safe Rust is not the same as authorisation: a missing range check still authors a wrong host
+# action without panicking, which is why the Translated path also checks ranges explicitly.
+[profile.release]
+overflow-checks = true
