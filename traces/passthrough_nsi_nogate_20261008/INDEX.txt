@@ -55,6 +55,15 @@ armed, live_twins) still above 0 = the FREE path does not retire them.
   false in general: fn 1's clear and a reused pair moving its arm can each REMOVE an arm the earlier binary kept.
   Whether those runs would change is not measured.
 
+CONFIRM at d00c9f2b (2026-10-09, after the re-review of 7519cd89: same-slot arm move, atomic down, late-raise
+crediting, overflow split; same host and lock discipline). FALSIFIER, stated before: any leg below 50/50, a control above
+0/10, a suite arm not PASS, or a non-zero overflow count.
+- guest_G_d00c9f2b_*  --ce-client PASS, --ce-interrupt PASS; COPY0 FIFO_EVENT_MTHD 50/50 + GR0 50/50 (both legs), COPY2
+      CE2 50/50 + FIFO_EVENT_MTHD 50/50, controls 0/10. pt_nsi: kernel_nonstall_registered=2, arm_clears=1,
+      os_event_overflowed=0, kernel_nonstall_overflowed=0, fifo_edges=274 of which fifo_raised=243, pacing off.
+- guest_suite30_d00c9f2b_per_arm.txt, run-final.log  30 PASS / 0 FAIL / 0 CRASH; every run's overflow counts 0.
+- Not run: pacing (the late-raise crediting change is covered by unit tests only), noisy neighbour, Windows.
+
 MEASURED:
 - bare_nsi_bare{1,2}_f589ab23_ce-interrupt_r35.log  bare metal, 2 runs, PASS both. 12 of 12 notifiers armed. COPY0 launch
       and COPY0 host-NSI: FIFO_EVENT_MTHD 50/50 AND GR0 50/50, CE0 0/50. COPY2 launch: CE2 50/50, FIFO_EVENT_MTHD 50/50,
