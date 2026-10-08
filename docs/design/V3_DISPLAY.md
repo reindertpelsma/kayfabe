@@ -3881,9 +3881,9 @@ backing off to shm. Why rung 0 was not offered at 595.91.07: `traces/driver_matr
 
 | environment | native NVIDIA | LINEAR dma-buf | shm | how |
 |---|---|---|---|---|
-| this host: GNOME Wayland on the NVIDIA GPU | YES — **measured** wl2: `gpucopy=169` of `sent=170`, `the display imported a GPU-copy frame`; one 5 s back-off trip at start (3 early commits unreleased), then native | advertised, refused at import — **measured** (`the display CANNOT show XR24 … 0x0`) | **measured** wl3 (`display-broker-vram=off`): `presenting through wl_shm`, `sent=398 releases=396`, desktop up | GPU-free: `env_native_display_ends_native_and_falls_back_to_shm_never_linear_again` |
+| this host: GNOME Wayland on the NVIDIA GPU | YES — **measured** wl2 (2026-10-08, kf3 `2a20e699`): `gpucopy=169` of `sent=170`, `the display imported a GPU-copy frame`; one 5 s back-off trip at start (3 early commits unreleased), then native | advertised, refused at import — **measured** (wl1, wl2, 2026-10-08: `the display CANNOT show XR24 … 0x0`) | **measured** wl3 (2026-10-08, `2a20e699`, `display-broker-vram=off`): `presenting through wl_shm`, `sent=398 releases=396`, desktop up | GPU-free: `env_native_display_ends_native_and_falls_back_to_shm_never_linear_again` |
 | laptop: compositor on an Intel iGPU, NVIDIA dGPU without display | NO | YES | YES | **MODELLED BY TEST ONLY** (no such hardware): `env_other_gpu_compositor_ends_linear_and_falls_back_to_shm` |
-| Xvfb / headless llvmpipe | NO | NO | YES | **measured** for Xvfb (xvfb1): the X11 broker `has no DRI3 … descending to the shm tier`, the relay `frames go as shared memory`, `180 attach, 180 commit, 0 rejected`, `releases=180`; llvmpipe modelled by `env_software_display_ends_on_shm` |
+| Xvfb / headless llvmpipe | NO | NO | YES | **measured** for Xvfb (xvfb1, 2026-10-08, `2a20e699`): the X11 broker `has no DRI3 … descending to the shm tier`, the relay `frames go as shared memory`, `180 attach, 180 commit, 0 rejected`, `releases=180`; llvmpipe modelled by `env_software_display_ends_on_shm` |
 
 A refusal of an advertised path leads to the next path in every test and run above; none stalled.
 
