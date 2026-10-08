@@ -9,6 +9,17 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+**Windows user work as Passthrough (OWNER_RULINGS §V), 2026-10-08 fourth session, runs 60-64 (branch `claude/windows-display-20261008`;
+[record](../traces/windows_code43_walls_20261007/README.md#loop-2026-10-08-fourth-session-windows-user-work-as-passthrough-owner_rulings-v)).**
+`[measured, runs 60/61/64 at 3a578d50/883f878e/ac3456ac, 2026-10-08]`: every Windows channel is PRIVILEGE=KERNEL and `PRIVILEGED_CHANNEL`; the kernel
+driver's 13 channels declare no context share and the driver's own `ProcessID`, the compositor/D3D channels a `FERMI_CONTEXT_SHARE_A` and their own
+process — `kf_rm::chanlink::windows_user_work` (flag `KF3_WIN_USER_CHANNELS_PASSTHROUGH`, default off) classifies by both and was right on every
+channel. Kernel channels measurably use physical operands (29 `DST_TYPE=PHYSICAL` launches on one display-side CE, run64); the one user-work segment
+seen (10 words) had none (sample too small). **Wall:** a Passthrough twin cannot adopt Windows' USERD (guest system memory; host IOMMU `DMA-FQ` gives
+IOVA `0x7ff9...`, wider than a USERD: host RM `NV_ERR_INVALID_ADDRESS`); `RMInstLoc` in the guest registry does not move it. Next: a USERD relay
+(kayfabe-owned USERD, GP_PUT/GP_GET copied, ring/push buffers unparsed) or a host IOMMU identity domain; decisions listed in the record.
+`windows_broker.sh` runs instances side by side and stops cleanly.
+
 **Windows display loop, 2026-10-08 third session (branch `claude/windows-display-20261008` from `ac5d086f`, runs 54-58;
 [record](../traces/windows_code43_walls_20261007/README.md#loop-2026-10-08-third-session-branch-claudewindows-display-20261008-windows-on-screen-and-the-d3d-wall)).**
 New launcher `scripts/bench/windows/windows_broker.sh` (Windows in a second broker window, its own socket/title; `desktop`, `autologon`,
