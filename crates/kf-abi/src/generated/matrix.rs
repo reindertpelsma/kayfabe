@@ -9856,6 +9856,27 @@ pub const NV83DE_CTRL_DEBUG_SET_EXCEPTION_MASK_PARAMS: StructRuns = StructRuns {
     ],
 };
 
+const NV906F_CTRL_GET_CLASS_ENGINEID_PARAMS_L0: Layout = Layout {
+    size: 16,
+    fields: &[
+        f("classEngineID", 4, 4, 0),
+        f("classID", 8, 4, 0),
+        f("engineID", 12, 4, 0),
+        f("hObject", 0, 4, 0),
+    ],
+};
+/// `NV906F_CTRL_GET_CLASS_ENGINEID_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV906F_CTRL_GET_CLASS_ENGINEID_PARAMS: StructRuns = StructRuns {
+    name: "NV906F_CTRL_GET_CLASS_ENGINEID_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&NV906F_CTRL_GET_CLASS_ENGINEID_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
+    ],
+};
+
 const NV906F_CTRL_GET_MMU_FAULT_INFO_PARAMS_L0: Layout = Layout {
     size: 104,
     fields: &[
@@ -25619,6 +25640,14 @@ pub const GSP_MSGQ_CONSTS_MSGQ_VERSION_MINOR: ValueRuns = ValueRuns {
     ],
 };
 
+/// `host_chan_cmds:NV906F_CTRL_GET_CLASS_ENGINEID`
+pub const HOST_CHAN_CMDS_NV906F_CTRL_GET_CLASS_ENGINEID: ValueRuns = ValueRuns {
+    name: "host_chan_cmds:NV906F_CTRL_GET_CLASS_ENGINEID",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x906f0101)), // 535.309.01 … 615.71.09
+    ],
+};
+
 /// `host_zbc_cmds:NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE`
 pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE: ValueRuns = ValueRuns {
     name: "host_zbc_cmds:NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE",
@@ -34636,6 +34665,7 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &NV5080_CTRL_REMOVE_API_PARAMS,
     &NV83DE_ALLOC_PARAMETERS,
     &NV83DE_CTRL_DEBUG_SET_EXCEPTION_MASK_PARAMS,
+    &NV906F_CTRL_GET_CLASS_ENGINEID_PARAMS,
     &NV906F_CTRL_GET_MMU_FAULT_INFO_PARAMS,
     &NV9072_ALLOCATION_PARAMETERS,
     &NV9096_CTRL_GET_ZBC_CLEAR_TABLE_SIZE_PARAMS,
@@ -36244,6 +36274,7 @@ pub const ALL_VALUES: &[&ValueRuns] = &[
     &GSP_MSGQ_CONSTS_MSGQ_VERSION,
     &GSP_MSGQ_CONSTS_MSGQ_VERSION_MAJOR,
     &GSP_MSGQ_CONSTS_MSGQ_VERSION_MINOR,
+    &HOST_CHAN_CMDS_NV906F_CTRL_GET_CLASS_ENGINEID,
     &HOST_ZBC_CMDS_NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE,
     &HOST_ZBC_CMDS_NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE_ENTRY,
     &HOST_ZBC_CMDS_NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE_SIZE,

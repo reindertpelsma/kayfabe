@@ -766,6 +766,15 @@ pub static HOST_CONTROLS: &[HostControl] = &[
         NVA06C_CTRL_PREEMPT_PARAMS
     ),
     hc!("NVA06F_CTRL_CMD_BIND", 0xa06f_0104, NVA06F_CTRL_BIND_PARAMS),
+    // ★ 2026-10-08 (x11-dispsw at host 595.91.07, `V3_DISPLAY.md` §8.18): the display-SW twin's
+    // readback (kf-host `disp_sw_class_id`). Unlisted, it was refused outside the encoded interval
+    // (`HOST_ABI_REFUSED`, run wl1), so every guest GF100_DISP_SW was refused there. Its id has no
+    // `_CMD_` in its name, so the matrix measures it under `host_chan_cmds` (`host.spec`).
+    hc!(
+        "NV906F_CTRL_GET_CLASS_ENGINEID",
+        0x906f_0101,
+        NV906F_CTRL_GET_CLASS_ENGINEID_PARAMS
+    ),
     hc!(
         "NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN",
         0xc36f_0108,
@@ -891,6 +900,7 @@ mod tests {
                 .find(|r| {
                     r.name == format!("ctrl_cmds:{}", c.name)
                         || r.name == format!("host_zbc_cmds:{}", c.name)
+                        || r.name == format!("host_chan_cmds:{}", c.name)
                 })
                 .unwrap_or_else(|| panic!("{} is not in the matrix (consumed.txt)", c.name));
             let mut seen = false;
@@ -929,6 +939,16 @@ mod tests {
     }
 
     /// An unlisted control passes through only where the old contract holds; elsewhere it is refused.
+    #[test]
+    fn the_display_sw_readback_is_carried_at_595_and_580() {
+        // ★ 2026-10-08 (run wl1): refused at 595.91.07 while it was unlisted; its params are one
+        // layout at every measured tag, so it now goes untouched at 580 and at 595
+        for v in ["580.159.04", "595.91.07", "610.43.02"] {
+            let c = host(v).control_carry(0x906f_0101);
+            assert!(c.is_ok(), "{v}: {c:?}");
+        }
+    }
+
     #[test]
     fn an_unlisted_control_is_refused_outside_the_encoded_interval() {
         assert!(
