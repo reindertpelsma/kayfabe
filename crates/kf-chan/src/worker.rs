@@ -54,6 +54,9 @@ pub const OTHER_TAG_BASE: u64 = 2 << 32;
 /// One worker thread's loop, until `stop`. `poller` watches `efd` at [`WORKER_EFD_TAG`] and
 /// `completions` at [`COMPLETIONS_TAG`]; any fd the caller watched at a tag `>=`
 /// [`OTHER_TAG_BASE`] is reported to `on_other` (P5b: engine non-stall events → guest MSI-X).
+/// ★ 2026-10-08: `on_completion` runs once per readiness of `completions` (a REAL host
+/// `FIFO_EVENT_MTHD` edge), after the in-flight tokens were rung — the device's Passthrough relay
+/// (`kf_chan::ptnsi`) judges it there.
 #[allow(clippy::too_many_arguments)]
 pub fn run(
     plane: &Plane<'_>,
@@ -64,6 +67,7 @@ pub fn run(
     stats: &WorkerStats,
     stop: &AtomicBool,
     on_other: &dyn Fn(u64),
+    on_completion: &dyn Fn(),
 ) {
     let mut scratch = Vec::with_capacity(SCAN_LIMIT);
     let prof = stats.prof.load(Ordering::Relaxed);
@@ -116,6 +120,7 @@ pub fn run(
                             let _ = efd.signal();
                         }
                     });
+                    on_completion();
                 } else {
                     let _ = efd.drain();
                 }

@@ -19,6 +19,7 @@ pub mod dbfast;
 pub mod grtables;
 pub mod host;
 pub mod passthrough;
+pub mod ptnsi;
 pub mod ring;
 pub mod swmethod;
 pub mod tmode;

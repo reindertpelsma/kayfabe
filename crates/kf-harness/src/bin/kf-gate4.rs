@@ -546,7 +546,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
                 .map_err(|e| format!("watch: {e:?}"))?;
             let (channels, stop, efd, done, stats) = (&channels, &stop, &efd, &done, &stats);
             sc.spawn(move || {
-                kf_chan::worker::run(plane, channels, &poller, efd, done, stats, stop, &|_| {})
+                kf_chan::worker::run(plane, channels, &poller, efd, done, stats, stop, &|_| {}, &|| {})
             });
         }
         // vCPUs: advance GP_PUT, then ring — exactly what the guest's store to the doorbell does.
