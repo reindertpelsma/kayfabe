@@ -223,10 +223,21 @@ else
     N=${2:-}
     if [ -z "$N" ]; then N=54; while [ -e "$W/boundary-kayfabe-$N" ]; do N=$((N + 1)); done; fi
     inst "$N"; NAME=boundary-kayfabe-$N
-    [ -e "$RUNDIR" ] && die "$RUNDIR exists (a run directory is never reused)"
-    mkdir -m 0700 "$RUNDIR"
-    qemu-img create -q -f qcow2 -F qcow2 -b "$W/baseline/windows.qcow2" "$RUNDIR/windows.qcow2" || die "qemu-img"
-    cp "$W/baseline/OVMF_VARS.fd" "$RUNDIR/OVMF_VARS.fd"
+    if [ "${WIN_REUSE:-0}" = 1 ]; then
+        # ★ 2026-10-08 (run62): a SECOND boot of run N's own disk in a NEW QEMU process (after a clean
+        # stop) — the guest-side change made in its first boot (e.g. a registry value) is kept. An
+        # in-guest reboot is not the same thing: [measured, run57 and run62 at 883f878e] the second
+        # boot inside one QEMU process found the NVIDIA adapter at Code 43 both times.
+        [ -e "$RUNDIR/windows.qcow2" ] || die "WIN_REUSE=1: $RUNDIR has no disk"
+        running_pid > /dev/null && die "run $N is still running"
+        pgrep -f "file=$RUNDIR/windows.qcow2" > /dev/null && die "a QEMU already has $RUNDIR/windows.qcow2 open"
+        mv "$RUNDIR/qemu.log" "$RUNDIR/qemu-boot$(date +%H%M%S).log" 2>/dev/null
+    else
+        [ -e "$RUNDIR" ] && die "$RUNDIR exists (a run directory is never reused; WIN_REUSE=1 boots its disk again)"
+        mkdir -m 0700 "$RUNDIR"
+        qemu-img create -q -f qcow2 -F qcow2 -b "$W/baseline/windows.qcow2" "$RUNDIR/windows.qcow2" || die "qemu-img"
+        cp "$W/baseline/OVMF_VARS.fd" "$RUNDIR/OVMF_VARS.fd"
+    fi
 fi
 RUN=$RUNDIR
 session || die "no graphical session on seat0"
