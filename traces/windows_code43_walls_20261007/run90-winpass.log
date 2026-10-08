@@ -1,0 +1,22 @@
+WINPASS 2026-10-08T20:58:46+02:00 START run=90 reuse=0 rev=5f3c17b4 iommu=identity steps=wait_stall wait_reboot hags arm stop
+WINPASS 2026-10-08T20:58:55+02:00 stall marker seen=2 after 19x0.5s
+WINPASS 2026-10-08T20:58:55+02:00 teardown seen=1
+WINPASS 2026-10-08T21:09:32+02:00 qga after reboot rc=1
+WINPASS 2026-10-08T21:10:02+02:00 ps hags.ps1 rc-line: [rc=1]
+WINPASS 2026-10-08T21:10:32+02:00 ps dxg_etw_arm.ps1 rc-line: [rc=1]
+[windows] ★ QEMU 2440200 killed after 300 s without a clean shutdown (UNCLEAN)
+[windows] run90 stopped (Xid count now 60)
+WINPASS 2026-10-08T21:16:06+02:00 END xid_dmesg=60
+WINPASS 2026-10-08T21:16:29+02:00 START run=90 reuse=1 rev=5f3c17b4 iommu=identity steps=qga arm hags sleep:60 stop
+WINPASS 2026-10-08T21:16:43+02:00 qga rc=0
+WINPASS 2026-10-08T21:16:45+02:00 ps dxg_etw_arm.ps1 rc-line: [rc=0]
+WINPASS 2026-10-08T21:17:17+02:00 ps hags.ps1 rc-line: [rc=1]
+[windows] ★ QEMU 2451906 killed after 300 s without a clean shutdown (UNCLEAN)
+[windows] run90 stopped (Xid count now 60)
+WINPASS 2026-10-08T21:23:50+02:00 END xid_dmesg=60
+WINPASS 2026-10-08T21:24:49+02:00 START run=90 reuse=1 rev=5f3c17b4 iommu=identity steps=wait_stall etwstop wait_frees sleep:15 kill
+WINPASS 2026-10-08T21:25:56+02:00 stall marker after 134x0.5s: 0
+WINPASS 2026-10-08T21:25:57+02:00 ps etwstopnow.ps1 rc-line: [rc=1]
+WINPASS 2026-10-08T21:30:59+02:00 teardown (passthrough frees) seen=0
+WINPASS 2026-10-08T21:31:14+02:00 killed (QMP quit)
+WINPASS 2026-10-08T21:31:14+02:00 END xid_dmesg=60

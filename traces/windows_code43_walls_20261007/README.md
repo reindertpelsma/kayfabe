@@ -4006,3 +4006,84 @@ page), **zero `USERD relay` lines**, no new `kchannelCreateUserdMemDesc_GV100 �
 the teardown followed at 255284.90 (+3.4 s) — **bugcheck 0x116 (`…, 0xffffffffc000009a, 4`), the same window. The relay is
 exonerated: the timeout does not depend on it.** No Xid (the launcher's count read 115 after the run: dmesg's ring rotated;
 no Xid line is newer than this session's start).
+
+# Loop 2026-10-08 (eighth session), branch `claude/windows-pass-20261008`: where the guest stalls (stopped early for the VFIO DVI reference)
+
+> ★ **IOMMU STATE LEFT BEHIND (owner directive, binding for this loop): the RTX 4070's group (group 11:
+> `0000:01:00.0` + `0000:01:00.1`) is in `identity` mode since 2026-10-08 20:58:28 CEST**
+> ([log](run90-iommu-identity.log); `iommu_type.sh identity` on the host, runtime switch, no reboot). It was NOT
+> restored. **To revert:** stop both demos and every QEMU, then on the host `bash /var/lib/kf-windows-20261005/iommu_type.sh DMA-FQ`
+> (stops gdm, unloads nvidia_drm/modeset/uvm/nvidia, unbinds the audio function, writes `DMA-FQ` to
+> `/sys/kernel/iommu_groups/<n>/type` with `n = readlink /sys/bus/pci/devices/0000:01:00.0/iommu_group`, rebinds, reloads,
+> restarts gdm). A host reboot or a module reload that rebuilds the default domain may put it back to `DMA-FQ`: check
+> `/sys/kernel/iommu_groups/11/type` before any identity-dependent run (run89's procedure, above).
+
+Started from the seventh session's stop at `6f91a53d` (code-identical to `5f3c17b4` apart from rustfmt, so the runs use
+`kf3-bins/5f3c17b4`), flags exactly run89's (`KF3_USERD_RELAY_OFF=1`, adopted guest USERD, identity IOMMU). Stopped
+after ~1 h by the coordinator (the GPU goes to vfio-pci for a like-for-like VFIO reference with a DVI-D monitor).
+
+## Re-read before any boot (no run): what the host logs already say about the stall (runs 88/89)
+
+- `[measured, run88 at 256e510f, 2026-10-08]` the teardown at 254877.285 is **30.13 s after** the D3D device's last
+  rings (token 0x15 GP_PUT 0x142 and token 0x1016 GP_PUT 0x54, both at 254847.155): with TdrDelay 30 the timed object is
+  work submitted at that instant. After token 0x13 (GP_PUT 0x93) and 0x11 (0xb9) at 254848.022 **the guest rings no
+  doorbell and sends no RPC for 14.8 s** (only `0x00730108` at 254862.81, then the frees): the guest is silent, not busy.
+- `[measured, run88]` every ring of the D3D device's copy twin 0x1016 (5) has exactly one host CE3 non-stall wake, raised
+  to the guest (CE3 1324 wakes, 7 raised, the rest `nolive`); GR0 wakes for 0x15 all raised. Doorbell ledger (runs 88/89):
+  every Passthrough ring reached the host (`rung = forwarded = trap`).
+- `[measured, run88 relay peek]` **the user-work twins' streams carry no interrupt request**: no host `NON_STALL_INTERRUPT`
+  header in any peeked segment of tokens 0xe/0xf/0x11/0x13/0x15/0x1016; the KMD's own tail segment (`level=0`) on the
+  copy twin is a one-word release (fence N at `0x1200eb000`) plus a four-word release (`0x1200eb000 + 0x10·N`) with
+  `LAUNCH_DMA` 0x8/0x10 (INTERRUPT_TYPE NONE); on the GR twin two `SET_REPORT_SEMAPHORE` releases (D = `0x10000004`,
+  `0x4`: AWAKEN_ENABLE clear). The paging channel 0x80c, by contrast, has 615 `LAUNCH_DMA 0x4c` (NON_BLOCKING
+  interrupt) for 614 paging DMA packets.
+- `[measured, run88 ETW]` **every DMA-packet event (Start/Stop/Info, 614 each) is a `CLIENT_PAGING_BUFFER`**; the render
+  contexts have QueuePacket events only (render, wait, signal, MMIO-flip) and no DmaPacket events. *Inferred (untested):*
+  hardware-accelerated GPU scheduling (HAGS) is ON in the guest (no `HwSchMode` value in the registry — Windows 11
+  26100's default — and the render work bypasses the DMA-packet path), so user-work completion is tracked by
+  progress/monitored fences the KMD must notice, not by DMA-completed interrupts. Candidate (inferred, untested): the
+  KMD learns of user-work completion through something kayfabe does not reproduce (an interrupt real hardware raises,
+  or the HAGS runlist submits that `KF3_SW_RUNLIST_HOST_OWNED` answers and ignores).
+- `[inferred, clock alignment ±0.1 s assumed]` run88's ETW trace ends at guest 17:59:44.244 UTC; the host saw 0x15 born at
+  17:59:44.228 and the guest's last rings at 17:59:45.655, so the trace lost at least ~1.4 s of events before the stall:
+  H-tail (the trace's end is an NTFS/flush artefact of the bugcheck, not dxgkrnl going silent) is supported, not proven.
+- Display (coordinator's lead b): `vblirq` counts only ticks with the **VBLANK** bit enabled; Windows enables
+  **LAST_DATA** (`0x2`), and the display worker raises the display vector on every tick whose enabled pending bits are
+  non-zero (`display.rs` steps 4 and 8). `vblirq=0.0` is therefore a counter-labelling artefact, not evidence that no vsync
+  interrupt was raised; run88's ETW holds 3 `VSyncInterrupt` events, one per brief enable. Not tested further.
+- The coordinator's DP/SOR cluster: kayfabe's head is DVI-D/TMDS by design (`V3_DISPLAY.md` §4.2), so the DP/AUX/audio
+  controls are expected to be absent (coordinator's own correction).
+
+## Run90 (fresh disk, identity, run89 flags, `5f3c17b4`): the run89 pattern reproduces; the in-stall ETW stop did not happen
+
+Tooling: `scripts/bench/windows/winpass_cycle.sh` (launch, QGA steps, stop) with `dxg_etw_stop_now.ps1` (stop the boot-time
+DxgKrnl session DURING the stall and keep its file), `dxg_etw_decode_kept.ps1`, `tdr_off_etw_arm.ps1`, `hags_status.ps1`.
+[command](run90-command.json), [marker](run90-marker.txt), [harness log](run90-winpass.log), traces `run90-boot{1,2,3}-qemu.log.gz`.
+- Boot 1 (fresh) and boot 2 (`WIN_REUSE=1`): `[measured, run90 at 5f3c17b4, 2026-10-08]` the same course as run89 —
+  Passthrough twins 0xe..0x15 and 0x1016 born with `userd=Ram` (adopted), zero `USERD relay` lines, then all 9
+  Passthrough twins freed (TDR teardown) and the kernel channels reborn; host Xid count unchanged (60). The bugcheck
+  code was not read this time. Boot 2's QGA armed the boot-time DxgKrnl ETW session (Base keyword) and TdrDelay =
+  TdrDdiDelay = 30 for the next boot; `hags_status.ps1` (dxdiag) did not finish before the bugcheck.
+- Boot 3 (the measurement, `WIN_REUSE=1`): INVALID — after two unclean stops (a guest stopped at a bugcheck answers
+  neither ACPI nor QGA, so the launcher killed QEMU after 300 s twice) Windows never started the NVIDIA driver (kf3
+  phase `Cold` throughout, no RPC) and the VM powered itself off after ~70 s (inferred: Windows recovery after
+  consecutive failed boots). **Nothing about the stall was measured in boot 3.**
+- Harness bug found and fixed in the committed script: a broker window started inside `flock` inherited the GPU lock's fd
+  and held `/tmp/kayfabe-fastguest.lock` after QEMU was gone (it blocked another agent ~10 min; killed 21:42 CEST). Use
+  `flock -o`.
+
+## Where it stands, and the next runs (not done: stopped for the VFIO reference)
+
+- **Not shown:** D3D11/D3D12 creation, a draw, a stable NVIDIA desktop. The owner's window shows the boot frame / the
+  armed 1080p head with no presented surface (runs 88-90); the persistent desktop overlay (Basic Display, NVIDIA
+  disabled) was restarted at 21:43 CEST (`KF3_REV=40230e23 WIN_FB_MB=1024 windows_broker.sh desktop`).
+- **Next, one variable each (falsifier first):**
+  1. *H-tail / the hung object* — fresh disk; boot 1 runs `tdr_off_etw_arm.ps1` through QGA before its TDR (QGA answered
+     at +14 s in run90); boot 2 then holds the stall with `TdrLevel = 0` (no teardown, no bugcheck, no unclean stop), and
+     QGA stops the ETW session in the stall (`dxg_etw_stop_now.ps1`), decodes it (`dxg_etw_decode_kept.ps1`) and reads
+     `hags_status.ps1`. Falsifier of H-tail: a trace stopped in the stall still ends at the D3D device's first work.
+     The decoded tail names the queue packet / wait / signal that never completes and its fence.
+  2. *H-hags* — the same disk with `HwSchMode = 2→1` (HAGS off, `hwsch_off.ps1` via `ps:`), nothing else changed.
+     Falsifier: the stall at the D3D device's first work persists with HAGS off. If HAGS off passes, the HAGS
+     completion path (fences/interrupts/runlist submits) is the wall, and the VFIO DVI reference's MSI deliveries per
+     vector around the first D3D work name what real hardware raises there.
