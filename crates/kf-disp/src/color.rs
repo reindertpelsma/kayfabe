@@ -70,7 +70,7 @@ pub struct Experiments {
     /// `SET_OFFSET_TMO_LUT` already are. `[source]` nouveau (linux 6f3ed7fec,
     /// `dispnv50/wndwc57e.c:140`) writes `SET_OFFSET_ILUT = offset >> 8`; NVKMS always writes 0
     /// (`nvkms-evo3.c:4224`, `offsetof(NVEvoLutDataRec, base)`), so it cannot tell the unit.
-    /// `[measured, run 99]` Windows writes `0x21` — misaligned as bytes, `0x2100` in 256-byte units
+    /// `[measured, run 99, RTX 4070, 2026-10-09]` Windows writes `0x21` — misaligned as bytes, `0x2100` in 256-byte units
     /// (= NVKMS's own `NVEvoLutDataRec.output` offset).
     pub ilut_offset_256: bool,
 }

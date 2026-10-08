@@ -5,7 +5,7 @@
 GPU's caps page (`KF3_DISPLAY_CAPS_PROBE`, run 99) Windows programs window 0 after the modeset, and ~19.6 s after driver
 start the guest resets the display and stops answering. What differs from the real RTX 4070 at and before the reset?
 
-Labels: `[measured, <source>]` read from a capture or a disk; `[code]` read from kf3's code; `[source]` read from a pinned
+Labels: `[measured, <source>]` read from a capture or a disk (the runs and captures of 2026-10-08/09, RTX 4070); `[code]` read from kf3's code; `[source]` read from a pinned
 reference source; `[inferred]` reasoning, never evidence. kf3 times are the `kf_mem::maplog` clock of the run's log
 (`WTRACE t=`); hardware times are seconds of day of VFIO DVI reference boot3 (`traces/vfio_dvi_reference_20261008/`, branch
 `claude/vfio-dvi-reference-20261008`).
@@ -89,7 +89,7 @@ differ by the driver-start push base, §0 P17 of the reply-diff record, and are 
 | `KF3_DISPLAY_LUT_MIRROR=1` | kf-disp `color.rs`, kf-qemu `display.rs` | `*_LUT_CONTROL_MIRROR` accepted on a DIRECT8/DIRECT10 ILUT/OLUT | `[inferred]` MIRROR reflects the table about zero (changes negative inputs only). The kernels have no negative side, so it is accepted only where no negative value can reach the table: the ILUT always (its index is a UNORM8 component, `kf_color_compose`), the OLUT only when every armed window matrix and the head's OCSC0 are nonnegative (`color::mirror_inert`; the ILUT is validated to [0,1], CSC LUTs and TMO are nonnegative); otherwise still refused |
 | `KF3_DISPLAY_ILUT_OFFSET_256=1` | kf-disp `color.rs` | `SET_OFFSET_ILUT` read in 256-byte units | `[source]` nouveau `wndwc57e.c:140`; same unit as OLUT/TMO |
 
-Test: `color::tests::the_windows_mirrored_program_decodes_only_under_the_experiments` feeds run 99's measured program
+Test: `color::tests::the_windows_mirrored_program_decodes_only_under_the_experiments` feeds run 99's measured program (RTX 4070, 2026-10-09)
 (both driver tags): off → the run's exact refusal; mirror alone → decoded but the 0x21 byte offset is misaligned; both →
 ILUT `0xff1fe313 + 0x2100`, 1025 entries, OLUT `0xff1fe144 + 0`, TMO bypass, the pipeline nonnegative; a negative coefficient
 before a mirrored OLUT is not inert. Startup confirmation lines: `EXPERIMENT KF3_DISPLAY_LUT_MIRROR=1 …`,
@@ -106,7 +106,7 @@ Binary: this branch's tip through `build_kf3.sh` on the read-trace QEMU tree. Fl
 (`KF3_BAR0_READ_TRACE=1 KF3_READ_TRACE_RANGES=0x110000-0x110fff,0xb81000-0xb81fff`, display range always,
 `WIN_TRACE=1 WIN_GSP_OBSERVER=1`).
 
-**H-mirror:** the 0x116 is caused by kf3's halt after refusing Windows' mirrored colour program. **Prediction:** both
+**H-mirror** (stated 2026-10-09, before run 100 on the RTX 4070)**:** the 0x116 is caused by kf3's halt after refusing Windows' mirrored colour program. **Prediction:** both
 EXPERIMENT lines; no `scanout REFUSED`; `updates completed` passes 14 and the status line's `methods=` keeps rising;
 window 0 keeps flipping (window PUTs at the hardware's rate, hundreds per second while the desktop draws); no
 `GET_CHANNEL_INFO` burst; no display teardown at ~+19.6 s; no `0x116` header in `pagefile.sys` afterwards; the QGA probes
