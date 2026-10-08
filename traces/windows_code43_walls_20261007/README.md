@@ -3206,3 +3206,39 @@ the echo equals vfio-10's reply, for GET_HOTPLUG_CONFIG and DP_GET_CAPS it is al
 `0xc3720101` IS_MODE_POSSIBLE requests, a core `UPDATE` (`method=0x200` on `kind=Core`), a window surface, and a frame in the broker window.
 *Falsifier (fixed now):* no `0xc3720101` and no core `UPDATE` in 10 min of guest uptime with LogonUI running. If it holds, the two probes are
 bisected later and the real answers designed; if it falsifies, the next candidates are GET_CONNECTOR_TABLE and the private `0x730128`/`0x730280`.
+
+### Run56 result: mode validation now runs (28 `IS_MODE_POSSIBLE`), still no commit; dxgkrnl stores no configuration for the kayfabe monitor
+
+Binary `kf3-bins/03932e9f`, 4096 MiB alone, flags as run55 plus `KF3_DISPLAY_IMP_ENABLE=1` and `KF3_DISPLAY_CTRL_PROBE=1`; started 13:55:52 CEST,
+stopped by ACPI at 14:00 (Xid 86 before and after). [command](run56-command.json), [trace](run56-qemu.log.gz), [dxgkrnl probe](run56-dxgk-probe.txt),
+[session probe](run56-session-probe.txt), [screendump](run56-screendump-t0240.png).
+
+`[measured, run56 at 03932e9f, 2026-10-08]`:
+- The six echoed controls are asked and answered; IMP_ENABLE answered TRUE. **`NVC372 IS_MODE_POSSIBLE` now arrives: 28 requests, all answered
+  "possible"** (run53-55: none). Before them Windows asks `SPECIFIC_GET_HDMI_GPU_CAPS` (`0x7302a2`) and `GET_HDMI_SCDC_DATA` (`0x7302a6`) and the
+  private `0x730128` twice — all refused; after them a user-mode client (`0xc1d00038`, NVIDIA's display container, inferred) asks
+  `SPECIFIC_GET_HDCP_STATE` (`0x730280`, identified from ogkm 610's header) — refused.
+- **Still no core `UPDATE`**, the method diagnostic again holds exactly 8330 methods, the window still shows the frozen boot frame, LogonUI/dwm run in
+  session 1 and `Win32_VideoController` reports no mode.
+- **dxgkrnl's CCD database** (`GraphicsDrivers\Connectivity`) holds `KFB00011_27_07EA_83` with only a `SetId` (no `Recent`/`Internal`/`eXtend`), and
+  `GraphicsDrivers\Configuration` holds **no entry for it** — the VFIO boots stored `AOC2790...` with 3840x2160. So dxgkrnl never committed a topology
+  with the kayfabe monitor.
+- In the same window the GR-channel creates of the desktop session itself fail the same way as the D3D probe's: **15 refused `0x20801111`
+  software-runlist submits and 3 refused cross-client `ZCULL_BIND`** after IS_MODE_POSSIBLE began (dwm/LogonUI creating their D3D devices).
+
+**Falsifier outcome (H-modeset).** Partly supported: the probes moved the display wall (mode validation runs), but the predicted `UPDATE` and frame did not
+come. *Inferred, next hypothesis* **H-dwm**: the desktop compositor cannot create its D3D device on the NVIDIA adapter (the same `0x8876017c` wall), so
+dxgkrnl never commits a path for the monitor; the D3D wall and the display wall are one wall. Its known last two refusals are the software-runlist
+submit `0x20801111` (owner decision pending since run43: `KF3_SW_RUNLIST_HOST_OWNED`, option (b)) and the cross-client `ZCULL_BIND`.
+
+## Run57 setup (alone, 4096 MiB): the two GR-create refusals answered (labelled experiment + probe)
+
+Binary `kf3-bins/40230e23` (run56's code plus the default-off `KF3_ZCULL_BIND_PROBE`, which answers only a cross-client ZCULL_BIND `NV_OK`, nothing
+bound on the host). Flags as run56 plus `KF3_ZCULL_BIND_PROBE=1` and **`KF3_SW_RUNLIST_HOST_OWNED=1`** (task B, option (b), AWAITING OWNER
+CONFIRMATION — run here as a labelled experiment exactly as in run46: submits answered `NV_OK` and ignored, kernel channels scheduled at birth by
+kayfabe; never a shipped default).
+**H-dwm / H-create (inferred):** with the binds, the ZCULL_BIND and the runlist submit answered, the D3D device creation passes the point where it
+freed everything. *Falsifiers (fixed now):* (a) `D3D11CreateDevice`/`D3D12CreateDevice` on the NVIDIA adapter still `0x8876017c` with the same last
+requests answered → the remaining cause is elsewhere (next: the refused GSS controls in the create window, `0x20809004`/`0x2080b201`, or user-mode
+state); (b) for the display: no core `UPDATE` and no configuration for `KFB0001` in the CCD database within 10 min → H-dwm falsified for the display.
+Recorded either way: TDR/bugcheck (run46 saw 0x116 with the runlist flag before the deferred API existed), `DEAD` channels, host Xid.

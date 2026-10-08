@@ -1,0 +1,12 @@
+SES uptime_s 240
+SES quser No User exists for *
+SES proc csrss pid=844 session=0
+SES proc csrss pid=948 session=1
+SES proc dwm pid=1364 session=1
+SES proc LogonUI pid=1356 session=1
+SES proc winlogon pid=612 session=1
+SES display 'Microsoft Basic Display Adapter' Status=Unknown Problem=CM_PROB_PHANTOM ProblemStatus= Id=PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\3&267A616A&0&48
+SES display 'NVIDIA GeForce RTX 4070' Status=OK Problem=CM_PROB_NONE ProblemStatus= Id=PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&267A616A&0&30
+SES vc 'NVIDIA GeForce RTX 4070' AdapterRAM=4293918720 Mode=x@ DriverVersion=32.0.15.8088
+
+[rc=0]
