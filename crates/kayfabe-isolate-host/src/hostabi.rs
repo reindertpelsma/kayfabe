@@ -659,7 +659,20 @@ impl ClientAbi {
                         version: v,
                     });
                 }
-                self.crossing(runs)
+                // ★ A body that is NEITHER layout's size is refused by RM on its size before a
+                // byte of it is read (`ogkm-580: src/nvidia/src/libraries/resserv/src/
+                // rs_resource.c:133-141`, unchanged at `ogkm-610`), so it crosses as sent and RM's
+                // own in-band refusal stays the answer — what a size probe exists to see.
+                // Bench-sized bodies are carried; a host-sized one is ambiguous and refused.
+                let c = self.crossing(runs)?;
+                if let Crossing::Carried { carry, .. } = &c
+                    && let Carry::Carried { bench, host } = carry
+                    && len != bench.size()
+                    && len != host.size()
+                {
+                    return Ok(Crossing::Verbatim);
+                }
+                Ok(c)
             }
             None if self.in_encoded_interval() => Ok(Crossing::Verbatim),
             None => Err(Refusal::Unlisted {
@@ -761,6 +774,10 @@ mod tests {
 
     fn host(v: &str) -> ClientAbi {
         ClientAbi::for_host(HostDriverVersion::parse(v).expect("parses")).expect("measured")
+    }
+
+    fn bench_id(name: &str) -> u32 {
+        value(&format!("ctrl_cmds:{name}"), BENCH_DRIVER).expect("in the matrix at the bench")
     }
 
     fn tag(v: DriverVersion) -> String {
@@ -1279,6 +1296,23 @@ mod tests {
             "{e}"
         );
         assert!(e.to_string().contains("595.91.07"), "{e}");
+        // A LISTED control whose body is neither layout's size crosses as sent (RM refuses it on
+        // size, unread); the bench size is carried; the host size alone is ambiguous and refused.
+        let name = bench_id("NV2080_CTRL_CMD_GPU_GET_NAME_STRING");
+        let abi = host("595.91.07");
+        assert!(matches!(
+            abi.control_crossing(name, 4),
+            Ok(Crossing::Verbatim)
+        ));
+        let c = abi.control_crossing(name, 132).expect("bench size carries");
+        assert!(matches!(c, Crossing::Carried { .. }));
+        assert_eq!(c.host_len(132), 68);
+        let mut host_sized = [0u8; 68];
+        let c68 = abi.control_crossing(name, 68).expect("listed");
+        assert!(
+            c68.issue(&abi, &mut host_sized, |_| ()).is_err(),
+            "host-sized is ambiguous"
+        );
         // An empty body carries nothing and is never refused.
         assert!(matches!(
             host("595.91.07").control_crossing(probe, 0),

@@ -10822,6 +10822,18 @@ impl HostRmBackend {
         cmd: u32,
         payload: &mut [u8],
     ) -> Result<(), RmError> {
+        // ★ 2026-10-08 — a command whose class word is not the DEVICE's cannot be dispatched on
+        // the device object at all: RM looks the method up on the object's own exported table and
+        // answers `NV_ERR_NOT_SUPPORTED` before reading a byte (`ogkm-580: src/nvidia/src/
+        // libraries/resserv/src/rs_resource.c:128-131`). There is no layout to get wrong, so it
+        // crosses as sent — on EVERY host driver — and RM's in-band refusal stays the calibration's
+        // known-positive. Anything the device could dispatch goes through the carry like every
+        // other control. ⊘ Found on the trusted host's 595.91.07 (run `rawclient595bare`, rev
+        // f7aad91c, 2026-10-08): the carry refused `0x20800ffe` as unlisted and R33's in-band
+        // calibration went vacuous while the arm still exited 0.
+        if cmd >> 16 != NV01_DEVICE_0 {
+            return self.conn.raw_control_host(self.conn.device, cmd, payload);
+        }
         self.conn.raw_control(self.conn.device, cmd, payload)
     }
 
