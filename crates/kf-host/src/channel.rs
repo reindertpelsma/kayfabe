@@ -361,9 +361,25 @@ impl HostRm {
 
     fn alloc_vaspace_with(&self, reserve_guest: bool) -> Result<VaSpace, RmError> {
         let mut params = [0u8; NvVaspaceAllocationParameters::SIZE];
-        NvVaspaceAllocationParameters::default()
-            .encode_into(&mut params)
-            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+        // ⚠ DIAGNOSTIC (2026-10-08, Windows run70; default unset): `KF3_TWIN_VA_BASE=<hex>` gives a
+        // guest-mirror space this `vaBase` instead of host RM's default start (1 MiB,
+        // `gvaspaceGetReservedVaspaceBase`). [measured, run69 at d67e9290] a Windows process space
+        // maps guest rows at VA 0x10000; the mirror's map of them was refused (`rangeLo <= rangeHi`)
+        // and the twin's PBDMA faulted reading 0x13000.
+        let va_base = if reserve_guest {
+            std::env::var("KF3_TWIN_VA_BASE")
+                .ok()
+                .and_then(|v| u64::from_str_radix(v.trim_start_matches("0x"), 16).ok())
+                .unwrap_or(0)
+        } else {
+            0
+        };
+        NvVaspaceAllocationParameters {
+            va_base,
+            ..NvVaspaceAllocationParameters::default()
+        }
+        .encode_into(&mut params)
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let want = self.mint();
         let space = self.raw_alloc(
             self.device,

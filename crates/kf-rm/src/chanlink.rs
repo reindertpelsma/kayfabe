@@ -960,13 +960,15 @@ impl ChannelPolicy {
                     })
                 };
                 eprintln!(
-                    "kf-rm: chanlink: FERMI_VASPACE_A {:#x}:{:#x} under {:#x} (device default for it: {first:#x}) VAS-FACTS index={:x?} flags={:x?} bigPageSize={:x?}",
+                    "kf-rm: chanlink: FERMI_VASPACE_A {:#x}:{:#x} under {:#x} (device default for it: {first:#x}) VAS-FACTS index={:x?} flags={:x?} bigPageSize={:x?} vaBase(lo32)={:x?} vaSize(lo32)={:x?}",
                     h.client,
                     h.handle,
                     h.parent,
                     vf("index"),
                     vf("flags"),
-                    vf("bigPageSize")
+                    vf("bigPageSize"),
+                    vf("vaBase"),
+                    vf("vaSize")
                 );
                 return None;
             }
