@@ -1,80 +1,56 @@
-# V3 — the guest's IOMMU (and the host's)
+# V3 vIOMMU — a guest IOMMU in front of the kf3 device (design only)
 
-**STATUS: DESIGN-ONLY, 2026-09-25.** Owner: *"just write it down … under kayfabe the security is
-slim compared to bare metal GPU, but it's to support any stock OS."* ⇒ vIOMMU support is a
-**compatibility** requirement (a stock guest may enable one), not a security feature. Nothing
-below is built. Today a guest that puts a vIOMMU in front of kf3 would have its GPU's
-system-memory DMA land at the wrong addresses (see §3).
+**STATUS: DESIGN-ONLY, 2026-10-08.** Nothing is built. Prompted by the owner's question whether Windows
+needs an IOMMU and what a vIOMMU would cost. Today kayfabe presents no vIOMMU: every bus address the
+guest hands the device is a guest-physical address (GPA), and Windows 11 runs without one (its
+hardware requirements are Secure Boot and TPM 2.0; Kernel DMA Protection and the DMA part of
+virtualization-based security are optional features that use an IOMMU only when firmware advertises
+one, and WDDM's "IoMmu" memory model is for GPUs sharing the CPU address space, while discrete NVIDIA
+GPUs use the GpuMmu model). Not needed for any current goal; recorded so the cost is not re-derived.
 
-## 1. What a GPU page table holds for system memory
+## 1. What changes
 
-The NVIDIA driver never writes a physical address for sysmem. It pins pages and calls the kernel
-DMA API — `dma_map_page_attrs` / `dma_map_sg` (`ogkm-580 kernel-open/nvidia/nv-dma.c:64, :222`,
-`nv_dma_map_pages` `:439`, `nv_dma_map_sgt` `:363`) — and writes the returned `dma_addr_t` into
-the sysmem PTEs. What that value is depends on the IOMMU mode of the machine the driver runs on:
+With a guest IOMMU (QEMU `intel-iommu` on q35, which supplies the ACPI DMAR table Windows uses) the
+device's DMA addresses are IOVAs and the guest's IOMMU tables map IOVA to GPA. Every place kayfabe
+consumes a guest bus address gets one extra step, IOVA to GPA, before the existing GPA to host-memory
+step. The `USERD` address check that failed in Windows run 61 is a HOST IOMMU property (the GPU's
+group sits in a translated `DMA-FQ` domain on the host) and is unrelated to a guest vIOMMU.
 
-| IOMMU mode | `dma_addr_t` = | the device can reach |
-|---|---|---|
-| none, or `iommu=pt` (identity domain) | the physical address | all of RAM |
-| translated (DMA / DMA-FQ domain) | an IOVA; the IOMMU translates it to the physical address | only what the kernel `dma_map`'d (+ stale entries until the IOTLB flush) |
+## 2. Where the step goes (inventory 2026-10-08: reading, not a run)
 
-⊘ Terminology: `iommu.strict=1` is the **IOTLB invalidation policy**, not the translate-or-not
-switch. Lazy mode (DMA-FQ, a common default) defers flushes, so a just-unmapped page stays
-reachable briefly; strict closes that window. Either way a device keeps every mapping the driver
-legitimately made — and a GPU driver maps a lot.
+- CPU-side reads and writes of guest memory: the `GuestRam` trait (`kf-gsp/src/ram.rs`,
+  `read(gpa, ..)`, `write(gpa, ..)`), referenced from about 20 files. An IOVA-aware wrapper at this
+  one trait covers the RPC queues, ring reads, and message queues.
+- GPU-side: where the VA manager resolves a PTE's system-memory address to a host mapping (the
+  memory ledger, `kf-mem/src/ledger.rs`, and `kf-qemu/src/mem.rs`) and the memory-list descriptors
+  (`kf-rm/src/memory_list.rs`).
+- A contiguous IOVA range maps to scattered GPAs: reads and writes split per page, and "one row per
+  contiguous range" splits into runs.
+- The translation itself is QEMU's: the PCI device's IOMMU address space and an address-space
+  translate call, behind a thread-safe central function with a small cache.
 
-## 2. The host's IOMMU — covered by construction
+## 3. Invalidation: two different barriers (owner, 2026-10-08)
 
-kayfabe is an unprivileged host process and never sees an HPA or a host IOVA:
-- guest RAM reaches the host GPU as an OS descriptor over the guest memfd (`kf-qemu mem.rs
-  guest_ram_object`): host RM pins it and `dma_map`s it through the host kernel;
-- the store is host vidmem that host RM maps.
+- The normal GMMU invalidate is the guest's statement that it has finished editing a VA space's PTEs;
+  kayfabe uses it as the commit point of the diff.
+- An IOMMU invalidate is the guest's statement that it changed IOVA to GPA translations. The GPU PTEs
+  are unchanged (they hold IOVAs) but now mean something else, so the GMMU path alone would never
+  notice. The IOMMU invalidation is scoped to IOVA map relocations only.
+- Design: each host mapping records the IOVA ranges and the GPA runs it was resolved through (a
+  reverse index). An invalidation of a domain/range finds the affected mappings; the VA-manager
+  thread re-translates them and compares with the recorded runs (equal: nothing; different: remap,
+  then a host-side GPU TLB invalidate of that VA space). Comparing results instead of trusting the
+  event means a missed or coalesced invalidation cannot leave a stale mapping for long. A generation
+  counter per IOMMU domain, checked at each normal PTE commit, is a cheap staleness test.
+- Stale window: between the guest's invalidation completing and the re-map the host GPU may still DMA
+  to the old GPA page. That page is guest RAM, so it harms only the guest. A strict version would
+  hold the invalidation's completion as the register path holds `MMU_INVALIDATE`, but QEMU's
+  emulation completes it on the vCPU, which would need a QEMU patch; the lazy form is the first cut.
 
-So the host's IOMMU mode needs nothing from us. ⚠ It does set the **stakes of a bug**: with
-`iommu=pt`, anything that makes our host channel emit a PHYSICAL address reaches any host RAM
-(the subchannel hole, `00f62991`, would have). ⇒ `DENY_PHYSICAL_MODE_CE` on every host channel we
-birth is the guarantee that holds on `iommu=pt` hosts too; it must never be dropped.
+## 4. Effort and first step
 
-## 3. The guest's IOMMU — the gap
-
-The guest driver runs the same `dma_map` inside the guest, against our emulated device:
-
-- **No vIOMMU (today's q35 without `intel-iommu`):** `dma_addr_t` = guest-physical. The walker's
-  sysmem leaf is a GPA → `RamMap::file_range` → memfd offset → host RM (host kernel's IOVA below).
-  This is the translation chain kf3 implements.
-- **vIOMMU present** (common: clouds with >255 vCPUs need x2APIC interrupt remapping; any guest
-  wanting DMA isolation from its devices): the guest's PTEs hold **guest IOVAs**. kf3 treats them
-  as GPAs ⇒ wrong memory.
-
-### Double translation — the design
-
-```
-guest PTE (guest IOVA) ──vIOMMU tables (guest-owned)──▶ GPA ──RamMap──▶ memfd offset ──host RM──▶ host IOVA/HPA
-```
-
-1. **Address space.** kf3 obtains its DMA address space with `pci_device_iommu_address_space()`
-   (QEMU; Cloud Hypervisor: virtio-iommu's equivalent) instead of assuming system memory.
-2. **Translate per run, off the vCPU.** The VA-manager thread translates each walked sysmem run
-   IOVA → GPA through that address space (`address_space_translate` / the IOMMU region's
-   `translate`), splitting a run where the vIOMMU mapping is discontiguous. A run the vIOMMU does
-   not map is a **fault** for the guest (as on real hardware: an IOMMU fault, not a read of
-   whatever is there) — refused by name, never mapped.
-3. **Invalidation is a sync point.** Register an IOMMU notifier: a guest vIOMMU unmap/invalidate
-   must unmap our host rows for every run it covers **before** the guest's invalidation completes
-   — the same shape as the MMU_INVALIDATE trigger (`THE_THREE_SYNCHRONIZATION_POINTS`). Mapping
-   and unmapping stay authored host verbs; nothing guest-chosen reaches a host flag.
-4. **Scope.** The CPU windows (BAR1/BAR2/PRAMIN) are guest-physical MMIO and are not behind the
-   vIOMMU; only the device's DMA (sysmem leaves, USERD/GPFIFO in guest RAM, semaphores) is.
-5. **Per family.** Nothing here depends on the GPU family; the vIOMMU is a VMM property.
-
-### Until it is built
-
-kf3 should **refuse at realize** when it sits behind a vIOMMU (the device's DMA address space is
-not system memory), naming the reason, rather than silently mistranslating. ⊘ Not built either.
-
-## 4. What this is and is not
-
-- It adds protection **for the guest against its own (emulated) GPU**. It does not strengthen host
-  isolation, which is bounded by host RM + the host IOMMU + `DENY_PHYSICAL_MODE_CE` (§2).
-- Without a vIOMMU the device can reach all guest RAM — kf3 pins the whole guest memfd as one OS
-  descriptor, the same posture as any emulated DMA-capable device.
+About 4 days to 2 weeks (an estimate; a first working cut in a few days). The first step is a one-day
+spike: a `GuestRam` wrapper that is the identity when no vIOMMU is present, the QEMU translate call,
+and a Linux boot with `intel_iommu=on` to see which consumers still fail. Testing: Linux in strict
+and passthrough modes; Windows with the DMAR table present. New trap surface: the IOMMU's own
+registers, which belong to QEMU's `intel-iommu` and not to kf3.
