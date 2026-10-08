@@ -4,7 +4,8 @@
 at d67e9290..8de8ef26]` the Windows compositor's per-process channel is born over kayfabe's USERD, its doorbells are relayed (98 forwarded in
 run71) and the engine consumes every entry (`host GP_GET = GP_PUT`); the guest's `GP_GET` lags by the documented staleness (3 entries at
 release). Two fixes the first runs needed are folded in: the worker must treat a relayed twin as alive (`ChanPlane::alive`, run67), and a
-Windows process space maps below host RM's default VA start (run69/70: `KF3_TWIN_VA_BASE`, diagnostic). Record:
+Windows process space maps below host RM's default VA start (run69/70: `KF3_TWIN_VA_BASE`, diagnostic — ⊘ replaced 2026-10-08 by the
+rule `kf_host::channel::MirrorVaStart`, measured in runs 73 and 76 at 3f23995a/f649d2c3). Record:
 `traces/windows_code43_walls_20261007/README.md`, runs 67-72.
 ⊘ The original status line: *DESIGN-ONLY → being implemented behind the flag, 2026-10-08.*
 Coordinator decision of 2026-10-08 (option (i) of `traces/windows_code43_walls_20261007/README.md`, "Stop (fourth session)"); option (ii),
@@ -77,5 +78,10 @@ kayfabe. Two 4-byte cursors are relayed between the guest's slot and this USERD;
 
 The classification (`windows_user_work`), the twin's privilege (asserted USER), its VA space (the guest's mirror), the scheduling (the
 guest's own `GPFIFO_SCHEDULE`), the error notifier (the twin's RC record lands in the guest's notifier, P5c), and the rule that kayfabe never
-reads a Passthrough push buffer. Subchannel bindings (run57's inference) are authored only if a run shows the first segment RC'd for want of
+reads a Passthrough push buffer. ⊘ *Correction (2026-10-08, runs 73-76 at 3f23995a..f649d2c3, above the text it corrects):* the D3D twins'
+RC was not a missing binding on subchannels 0-4 (NVIDIA's dev_ram.ref: the mapping is fixed and SetObject is not required by any engine);
+every D3D device channel binds `NV50_DEFERRED_API` to SOFTWARE subchannel 5 (`SET_OBJECT 0x5080`) and host RM, with no such object on
+the twin, raises PBDMA `DEVICE` (Xid 32). The labelled experiment `KF3_WIN_TWIN_DEFAPI_OBJECT` (default off) authors one host object of
+that class on the twin from the guest's own alloc, nothing registered: no Xid in run76. `traces/windows_code43_walls_20261007/README.md`,
+runs 73-76. The original sentence: Subchannel bindings (run57's inference) are authored only if a run shows the first segment RC'd for want of
 them — from the guest's own class allocations on that channel, never from guest bytes.
