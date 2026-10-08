@@ -1,0 +1,11 @@
+SUBPX_START s3 guest=2102556 2026-10-08T15:25:11+02:00
+SUBPX_BROKER old=badf2d707da4
+SUBPX_OLD_slow dpi=1600 counts=200 every=20000us expected=125 received=200
+SUBPX_OLD_slow dpi=1000 counts=200 every=20000us expected=200 received=200
+SUBPX_OLD_fast dpi=1000 counts=600 every=2000us expected=600 received=600
+SUBPX_BROKER new=9b5f64b92db1
+SUBPX_NEW_slow dpi=1600 counts=200 every=20000us expected=125 received=200
+SUBPX_NEW_slow dpi=1000 counts=200 every=20000us expected=200 received=200
+SUBPX_NEW_fast dpi=1000 counts=600 every=2000us expected=600 received=600
+SUBPX_NEW_fast dpi=1600 counts=600 every=2000us expected=375 received=600
+SUBPX_EXIT 2026-10-08T15:26:40+02:00 demo left with the new broker, windowed
