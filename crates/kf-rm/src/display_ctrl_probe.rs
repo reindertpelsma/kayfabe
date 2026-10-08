@@ -93,6 +93,112 @@ impl CommandPolicy for DisplayCtrlProbe {
 
 kf_util::assert_send_sync!(DisplayCtrlProbe);
 
+/// ⚠⚠ **PROBE — default off (`KF3_DISPLAY_PRIVATE_PROBE=1`), never a shipped behaviour.**
+///
+/// 2026-10-08 (H-commit, `traces/display_reply_diff_20261008/`): inside the modeset commit
+/// (`[measured, VFIO DVI reference boots 1-3, RTX 4070 / 580.88, 2026-10-08]`, boot3 12.4946-12.4965 s)
+/// Windows sends `GET_HDCP_STATE`, then two NV04_DISPLAY_COMMON controls that ogkm-595.84 does not
+/// name, `0x00730122` (8 bytes) and `0x00730128` (20 bytes). The real GSP answers both `NV_OK`;
+/// kf3 refuses both `NOT_SUPPORTED` (runs 88-96). This probe answers them with the real GPU's
+/// reply, for the one request shape it was measured on — never a guessed layout:
+/// - `0x00730122`: request `{0, displayId}`, reply byte-identical to the request (boots 1-3);
+///   answered for subdevice 0 and a single-bit display id, echoed.
+/// - `0x00730128`: request all-zero, reply words `{0, 1, 0xff, 0, 0}` (boots 1-3, all three calls
+///   of each boot); answered for the all-zero request only.
+///
+/// ⊘ Never: another size, another request shape, a serialized envelope, or anything sent anywhere.
+pub const PRIVATE_FLAG: &str = "KF3_DISPLAY_PRIVATE_PROBE";
+
+/// `(command, params size)` — sizes as the 580.88 guest sends them.
+pub const PRIVATE: [(u32, usize); 2] = [(0x0073_0122, 8), (0x0073_0128, 20)];
+
+/// The reply words of `0x00730128` the real GPU gave the all-zero request.
+const PRIVATE_0128_REPLY: [u32; 5] = [0, 1, 0xff, 0, 0];
+
+/// Whether [`PRIVATE_FLAG`] is on (`=1`).
+#[must_use]
+pub fn private_enabled() -> bool {
+    std::env::var(PRIVATE_FLAG).as_deref() == Ok("1")
+}
+
+/// The reply params for one private control, or `None` (not this probe's: refused as before).
+#[must_use]
+pub fn private_answer(cmd: u32, params: &[u8]) -> Option<Vec<u8>> {
+    let &(_, size) = PRIVATE.iter().find(|(c, _)| *c == cmd)?;
+    if params.len() != size {
+        return None;
+    }
+    let w = |i: usize| -> Option<u32> {
+        Some(u32::from_le_bytes(
+            params.get(4 * i..4 * i + 4)?.try_into().ok()?,
+        ))
+    };
+    match cmd {
+        0x0073_0122 => (w(0)? == 0 && w(1)?.count_ones() == 1).then(|| params.to_vec()),
+        0x0073_0128 => params.iter().all(|b| *b == 0).then(|| {
+            PRIVATE_0128_REPLY
+                .iter()
+                .flat_map(|x| x.to_le_bytes())
+                .collect()
+        }),
+        _ => None,
+    }
+}
+
+/// The private-control probe link.
+#[derive(Debug, Clone)]
+pub struct DisplayPrivateProbe {
+    driver: kf_abi::versions::DriverAbiTable,
+    answered: u64,
+}
+
+impl DisplayPrivateProbe {
+    /// A link for the guest driver `driver`.
+    #[must_use]
+    pub fn new(driver: kf_abi::versions::DriverAbiTable) -> DisplayPrivateProbe {
+        DisplayPrivateProbe {
+            driver,
+            answered: 0,
+        }
+    }
+}
+
+impl CommandPolicy for DisplayPrivateProbe {
+    fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        if cmd.function != RpcFunction::RmControl {
+            return None;
+        }
+        let req = self.driver.decode_rpc_control(&cmd.payload).ok()?;
+        if kf_abi::rpc_params_are_serialized(req.rmapi_rpc_flags) {
+            return None;
+        }
+        let size = req.params_size as usize;
+        let params = cmd
+            .payload
+            .get(req.params_at..req.params_at.checked_add(size)?)?;
+        let out = private_answer(req.cmd, params)?;
+        let mut body = cmd.payload.clone();
+        body.get_mut(req.params_at..req.params_at + size)?
+            .copy_from_slice(&out);
+        let st = self.driver.rm_control_wire().status_off;
+        body.get_mut(st..st + 4)?
+            .copy_from_slice(&NV_OK.to_le_bytes());
+        self.answered += 1;
+        if self.answered <= LOG_CAP {
+            eprintln!(
+                "kf-rm: PROBE {PRIVATE_FLAG} {:#010x} client={:#x} object={:#x}: NV_OK with the real GPU's measured reply — a probe, not a shipped behaviour #{}",
+                req.cmd, req.client, req.object, self.answered
+            );
+        }
+        Some(Reply {
+            rpc_result: NV_OK,
+            body,
+        })
+    }
+}
+
+kf_util::assert_send_sync!(DisplayPrivateProbe);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -137,5 +243,41 @@ mod tests {
             assert!(p.respond(&control(c, &vec![0u8; n + 4])).is_none());
         }
         assert!(p.respond(&control(0x0073_011d, &[0u8; 272])).is_none());
+    }
+
+    /// ⚠ `KF3_DISPLAY_PRIVATE_PROBE`: the two unnamed commit-time controls get the real GPU's reply
+    /// for exactly the measured request shape (VFIO DVI reference, RTX 4070, 2026-10-08); every other shape, size or id is not answered.
+    #[test]
+    fn the_private_probe_answers_only_the_measured_shapes() {
+        let mut p = DisplayPrivateProbe::new(abi());
+        let w = abi().rm_control_wire();
+        let words = |v: &[u32]| -> Vec<u8> { v.iter().flat_map(|x| x.to_le_bytes()).collect() };
+        // 0x00730122 {0, 0x100}: echoed
+        let r = p
+            .respond(&control(0x0073_0122, &words(&[0, 0x100])))
+            .expect("answered");
+        assert_eq!(&r.body[w.status_off..w.status_off + 4], &[0; 4]);
+        assert_eq!(&r.body[w.params_off..], &words(&[0, 0x100])[..]);
+        // 0x00730128 all-zero: the measured reply (RTX 4070, 2026-10-08)
+        let r = p
+            .respond(&control(0x0073_0128, &[0u8; 20]))
+            .expect("answered");
+        assert_eq!(&r.body[w.params_off..], &words(&[0, 1, 0xff, 0, 0])[..]);
+        // hostile / unmeasured shapes are not answered
+        for (c, params) in [
+            (0x0073_0122, words(&[1, 0x100])),
+            (0x0073_0122, words(&[0, 0x300])),
+            (0x0073_0122, words(&[0, 0])),
+            (0x0073_0122, words(&[0, 0x100, 0])),
+            (0x0073_0128, words(&[0, 0, 0, 0, 1])),
+            (0x0073_0128, vec![0u8; 16]),
+            (0x0073_0129, vec![0u8; 20]),
+        ] {
+            assert!(
+                p.respond(&control(c, &params)).is_none(),
+                "{c:#x} {params:?}"
+            );
+        }
+        assert_eq!(private_answer(0x0073_0122, &[0u8; 3]), None, "short");
     }
 }

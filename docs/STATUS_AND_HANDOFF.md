@@ -9,6 +9,16 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+**Display reply diff, 2026-10-09 (GPU-free; branch `claude/display-reply-diff-20261008` from `claude/windows-flip-vsync-20261008`;
+[record](../traces/display_reply_diff_20261008/README.md)).** Every display RPC reply and display register read-back the
+Windows KMD sees on the real RTX 4070 before its first window PUT (VFIO DVI reference boot3), diffed field by field against
+kf3's (bodies by replaying the hardware requests through kf's display link: `cargo run -p kf-rm --example display_replay`).
+From the modeset to the DDI both guests send the same RPCs and the same modeset pushbuffer sizes; the differences are ranked
+in the record's §2/§5. Five default-off flags for ONE batched boot (record §6): `KF3_DISPLAY_PRIVATE_PROBE`,
+`KF3_DISPLAY_HOTPLUG_EDID_SEEN`, `KF3_DISPLAY_BLANK_STATE`, `KF3_DISPLAY_ARMED_DEFAULTS` (new) + `KF3_DISPLAY_HDCP_STATE`;
+prediction: a window-0 PUT after the modeset (`puts` > 39). Not yet implemented, next if falsified: an HDMI_A-in-DVI-mode
+connector (H-hdmi) and the crossbar / `DFP_ASSIGN_SOR` path (H-xbar).
+
 **Windows flip / vsync, 2026-10-08 (branch `claude/windows-flip-vsync-20261008` = `claude/windows-pass-20261008` + the
 Passthrough completion-interrupt commits; runs 93-96; [record](../traces/windows_flip_vsync_20261008/README.md)).**
 `[measured, runs 93-96 at 68673e6e/2c77140b/5f0e3b37/61b95494, RTX 4070, 2026-10-08]` kf3 already raises LAST_DATA at

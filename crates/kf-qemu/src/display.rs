@@ -79,6 +79,36 @@ fn write_trace_on() -> bool {
     *ON.get_or_init(|| std::env::var("KF3_DISPLAY_WRITE_TRACE").is_ok_and(|v| v == "1"))
 }
 
+/// ⚠ EXPERIMENT (default off, 2026-10-08, H-blankstate; `KF3_DISPLAY_BLANK_STATE=1`, read once).
+/// The core channel's `SET_GET_BLANKING_CTRL(h)` (core user area, derived) READS back the head's
+/// blanking state on the hardware: `[measured, VFIO DVI reference boot3, RTX 4070, 2026-10-08]`
+/// Windows reads all four heads right after the core channel's birth (11.0769 s): `0x2` (UNBLANK)
+/// for the head the firmware lit, `0x1` (BLANK) for the three unlit ones — kf3's plain shadow word
+/// reads `0` (neither), a value the hardware never returned. Under the experiment a new core life
+/// publishes BLANK for every head (kf3 presents no head lit at the core's birth:
+/// `SYSTEM_GET_ACTIVE` answers 0); the guest's own writes then overwrite it as before.
+fn blank_state_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("KF3_DISPLAY_BLANK_STATE").is_ok_and(|v| v == "1"))
+}
+
+/// ⚠ EXPERIMENT (default off, 2026-10-08, H-armeddefault; `KF3_DISPLAY_ARMED_DEFAULTS=1`, read
+/// once). `[measured, VFIO DVI reference boot3, RTX 4070, 2026-10-08]` Windows reads the core's
+/// ARMED `HEAD_SET_MIN_FRAME_IDLE(h)` (`0x68a218 + h·0x400`) 335 times around its first
+/// IS_MODE_POSSIBLE and once inside the modeset (12.498437 s, right after BLANK): `0x10002` for all
+/// four heads, a value its own pushbuffers never write (`[measured, run96]`: no `0x2218/0x2618/…`
+/// method), i.e. the engine's default — the one NVKMS itself programs when IMP gives none
+/// (`ogkm-595.84 nvkms-evo3.c:1433-1438`: LEADING_RASTER_LINES 2, TRAILING_RASTER_LINES 1). kf3's
+/// ARMED mirror reads `0` until the guest writes the method. Under the experiment a new core life's
+/// ARMED mirror starts with that default for every head (field positions derived).
+fn armed_defaults_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("KF3_DISPLAY_ARMED_DEFAULTS").is_ok_and(|v| v == "1"))
+}
+
+/// `nvkms-evo3.c:1437-1438`'s default `MIN_FRAME_IDLE` (H-armeddefault): leading, trailing lines.
+const MIN_FRAME_IDLE_DEFAULT: (u32, u32) = (2, 1);
+
 /// Lines per kind the display write trace prints in a run.
 const DISPLAY_TRACE_CAP: u32 = 4096;
 
@@ -152,6 +182,12 @@ pub struct RegMap {
     core_head_state: Option<CoreHeadState>,
     rg_dpca: (u64, u64, (u8, u8)),
     loadv: Option<(u64, u64)>,
+    /// H-blankstate: the core's `SET_GET_BLANKING_CTRL(h)` (offset in the core user area, stride)
+    /// and its BLANK read-back value; `None` when the class table lacks the names.
+    blanking: Option<(u64, u64, u32)>,
+    /// H-armeddefault: the core's `HEAD_SET_MIN_FRAME_IDLE(h)` (method offset, stride) and the
+    /// default word; `None` when the class table lacks the names.
+    min_frame_idle: Option<(u64, u64, u32)>,
 }
 
 fn kind_index(k: ChannelKind) -> usize {
@@ -242,6 +278,34 @@ impl RegMap {
             None => None,
         };
         let dpca = a2("NV_PDISP_RG_DPCA")?;
+        // ⚠ the two experiments' class names (optional: a table without them leaves them off)
+        let core = row.classes.core;
+        let arr = |n: &str| -> Option<(u64, u64)> {
+            let b = u64::from(t.a(core, n, 0)?);
+            Some((b, u64::from(t.a(core, n, 1)?).checked_sub(b)?))
+        };
+        let blanking = arr("SET_GET_BLANKING_CTRL").and_then(|(b, s)| {
+            let blank = kf_disp::class::put(
+                0,
+                t.f(core, "SET_GET_BLANKING_CTRL_BLANK")?,
+                t.v(core, "SET_GET_BLANKING_CTRL_BLANK_ENABLE")?,
+            );
+            Some((b, s, blank))
+        });
+        let min_frame_idle = arr("HEAD_SET_MIN_FRAME_IDLE").and_then(|(b, s)| {
+            let (lead, trail) = MIN_FRAME_IDLE_DEFAULT;
+            let w = kf_disp::class::put(
+                0,
+                t.f(core, "HEAD_SET_MIN_FRAME_IDLE_LEADING_RASTER_LINES")?,
+                lead,
+            );
+            let w = kf_disp::class::put(
+                w,
+                t.f(core, "HEAD_SET_MIN_FRAME_IDLE_TRAILING_RASTER_LINES")?,
+                trail,
+            );
+            Some((b, s, w))
+        });
         Ok(RegMap {
             lo,
             hi,
@@ -301,7 +365,26 @@ impl RegMap {
             core_head_state,
             rg_dpca: (dpca.0, dpca.1, f("NV_PDISP_RG_DPCA_FRM_CNT")?),
             loadv: a2("NV_PDISP_POSTCOMP_HEAD_LOADV_COUNTER").ok(),
+            blanking,
+            min_frame_idle,
         })
+    }
+
+    /// ★ The words a new core life publishes under the H-blankstate / H-armeddefault experiments,
+    /// as `(BAR0 offset, value)`: BLANK in every head's `SET_GET_BLANKING_CTRL`, and the default
+    /// `MIN_FRAME_IDLE` in every head's ARMED copy. Empty with both off (the default).
+    #[must_use]
+    pub fn core_birth_words(&self, blank_state: bool, armed_defaults: bool) -> Vec<(u64, u32)> {
+        let mut out = Vec::new();
+        for h in 0..u64::from(self.heads) {
+            if blank_state && let Some((b, s, v)) = self.blanking {
+                out.push((self.core_assy + b + h * s, v));
+            }
+            if armed_defaults && let Some((b, s, v)) = self.min_frame_idle {
+                out.push((self.core_armed + b + h * s, v));
+            }
+        }
+        out
     }
 
     /// Is BAR0 offset `off` in the display aperture (`NV_PDISP`)?
@@ -2048,6 +2131,19 @@ impl Device {
             );
         }
         let loadv = loadv_on();
+        let (blank_state, armed_defaults) = (blank_state_on(), armed_defaults_on());
+        if blank_state {
+            eprintln!(
+                "kf3: display: EXPERIMENT KF3_DISPLAY_BLANK_STATE=1 — a new core life reads BLANK in every head's SET_GET_BLANKING_CTRL ({} words)",
+                dp.map.core_birth_words(true, false).len()
+            );
+        }
+        if armed_defaults {
+            eprintln!(
+                "kf3: display: EXPERIMENT KF3_DISPLAY_ARMED_DEFAULTS=1 — a new core life's ARMED HEAD_SET_MIN_FRAME_IDLE is the engine default (leading 2, trailing 1; {} words)",
+                dp.map.core_birth_words(false, true).len()
+            );
+        }
         let wtrace = write_trace_on();
         let vsync_traced = AtomicU32::new(0);
         let latch_traced = AtomicU32::new(0);
@@ -2229,6 +2325,11 @@ impl Device {
                                 // a new core life starts with an empty ARMED mirror
                                 for o in (0..dp.map.core_len / 2).step_by(4) {
                                     store(dp.map.core_armed + o, 0);
+                                }
+                                // ⚠ H-blankstate / H-armeddefault (default off): the hardware's
+                                // read-backs at a core channel's birth
+                                for (o, v) in dp.map.core_birth_words(blank_state, armed_defaults) {
+                                    store(o, v);
                                 }
                             }
                             self.display_chan_status(kind, instance, Some(true));
@@ -4307,6 +4408,52 @@ mod tests {
         let r = Regs::for_ip("580.159.04", 0x0401_0000).unwrap();
         let t = kf_disp::class::for_version("580.159.04").unwrap();
         RegMap::resolve(&r, t, &kf_chip::display::AMPERE).expect("GA10x register map")
+    }
+
+    /// ⚠ H-blankstate / H-armeddefault (default off): a new core life publishes nothing extra with
+    /// both off; under the experiments, the hardware's measured read-backs at the derived offsets —
+    /// on Ada (the 580.88 guest's C77D core, the guest-driver row `580.65.06`) `0x680240 + 4h` reads
+    /// BLANK (`0x1`) and the ARMED `0x68a218 + 0x400h` reads `0x10002`, the values the RTX 4070
+    /// returned for its unlit heads / every head (VFIO DVI reference boot3). Each stored word is
+    /// inside the core user area, the BLANK one in the guest-writable half (the guest overwrites it).
+    #[test]
+    fn the_core_birth_words_are_the_hardware_read_backs_only_under_the_experiments() {
+        for (ver, ip, row) in [
+            ("580.65.06", 0x0404_0000, &kf_chip::display::ADA),
+            ("580.159.04", 0x0401_0000, &kf_chip::display::AMPERE),
+        ] {
+            let r = Regs::for_ip(ver, ip).unwrap();
+            let t = kf_disp::class::for_version(ver).unwrap();
+            let m = RegMap::resolve(&r, t, row).expect("register map");
+            assert!(
+                m.core_birth_words(false, false).is_empty(),
+                "{ver}: off by default"
+            );
+            let blank = m.core_birth_words(true, false);
+            let armed = m.core_birth_words(false, true);
+            let heads = u64::from(m.heads);
+            assert_eq!(blank.len() as u64, heads);
+            assert_eq!(armed.len() as u64, heads);
+            for h in 0..heads {
+                assert_eq!(
+                    blank[h as usize],
+                    (0x0068_0240 + 4 * h, 0x1),
+                    "{ver} head {h}"
+                );
+                assert_eq!(
+                    armed[h as usize],
+                    (0x0068_a218 + 0x400 * h, 0x0001_0002),
+                    "{ver} head {h}"
+                );
+                assert_eq!(m.classify(blank[h as usize].0), DispWrite::Plain);
+                assert_eq!(
+                    m.classify(armed[h as usize].0),
+                    DispWrite::ReadOnly,
+                    "ARMED half"
+                );
+            }
+            assert_eq!(m.core_birth_words(true, true).len() as u64, 2 * heads);
+        }
     }
 
     /// ★ The vCPU decode on GA10x: each DMA channel's PUT, its read-only GET and ARMED half, the

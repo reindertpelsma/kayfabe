@@ -536,6 +536,17 @@ pub fn served_chain(
             display_ctrl_probe::FLAG
         );
     }
+    // ⚠ PROBE (default off): H-commit, 2026-10-08 — the two unnamed commit-time controls
+    // (`display_ctrl_probe::DisplayPrivateProbe`, `traces/display_reply_diff_20261008/`).
+    if display_ctrl_probe::private_enabled() {
+        chain.push(Box::new(display_ctrl_probe::DisplayPrivateProbe::new(
+            driver,
+        )));
+        eprintln!(
+            "kf-rm: PROBE {}=1: NV0073 0x00730122 / 0x00730128 answered with the real GPU's measured reply (H-commit probe, not a shipped behaviour)",
+            display_ctrl_probe::PRIVATE_FLAG
+        );
+    }
     if std::env::var("KF3_MEMORY_LIST_PROBE").as_deref() == Ok("1")
         && let Some(policy) = objects.take()
     {

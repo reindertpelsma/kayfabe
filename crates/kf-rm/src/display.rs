@@ -243,6 +243,10 @@ pub struct DisplayPolicy {
     dispsw_pairing: Option<DispSwPairing>,
 }
 
+/// ⚠ EXPERIMENT flag (default off, 2026-10-08, H-edidseen): see
+/// [`kf_disp::model::DisplayModel::answer_hotplug_edid_seen`].
+pub const HOTPLUG_EDID_SEEN_FLAG: &str = "KF3_DISPLAY_HOTPLUG_EDID_SEEN";
+
 /// `NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES` (`ogkm-580:
 /// ctrl2080internal.h:1537`) — sent by exactly one caller in the guest's CPU-RM, the
 /// `GF100_DISP_SW` constructor (`disp_sw.c:74`).
@@ -403,6 +407,16 @@ impl DisplayPolicy {
             self = self.answering_hdcp_state();
             eprintln!(
                 "kf-rm: display: EXPERIMENT KF3_DISPLAY_HDCP_STATE=1 — NV0073 SPECIFIC_GET_HDCP_STATE answered NV_OK, flags 0 (no HDCP on the emulated DVI-D attach point)"
+            );
+        }
+        // ⚠ EXPERIMENT (default off, 2026-10-08, H-edidseen,
+        // `traces/display_reply_diff_20261008/`): `hotplugAfterEdidMask` from the guest's EDID reads.
+        if std::env::var(HOTPLUG_EDID_SEEN_FLAG).as_deref() == Ok("1")
+            && let Some(m) = &self.model
+        {
+            lock(m).answer_hotplug_edid_seen(true);
+            eprintln!(
+                "kf-rm: display: EXPERIMENT {HOTPLUG_EDID_SEEN_FLAG}=1 — SYSTEM_GET_HOTPLUG_STATE lists a display in hotplugAfterEdidMask only until its EDID is read (ogkm's definition; the real GPU's 0x7e00)"
             );
         }
         if on && let Some(m) = &self.model {

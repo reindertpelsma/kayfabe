@@ -492,6 +492,18 @@ pub struct DisplayModel {
     /// nothing capable, nothing encrypting (an emulated DVI-D attach point has no HDCP transmitter
     /// and its virtual monitor no receiver) — instead of refusing it NOT_SUPPORTED.
     hdcp_state: bool,
+    /// ⚠ EXPERIMENT (default `false`, 2026-10-08, H-edidseen — `KF3_DISPLAY_HOTPLUG_EDID_SEEN=1`
+    /// through [`Self::answer_hotplug_edid_seen`]): `SYSTEM_GET_HOTPLUG_STATE.hotplugAfterEdidMask`
+    /// as ogkm defines it — "the set of displays that have seen a hotplug or hotunplug event sometime
+    /// after the last valid EDID read; if the device never has a valid EDID read, then it will always
+    /// be listed" (`ogkm-595.84 ctrl0073system.h:503-507`) — instead of every display of this device.
+    /// `[measured, VFIO DVI reference boots 1-3, RTX 4070, 2026-10-08]` the real GPU answers `0x7e00`:
+    /// every display EXCEPT the connected `0x100`, whose EDID the guest had read.
+    hotplug_edid_seen: bool,
+    /// The displays whose EDID the guest read (`SPECIFIC_GET_EDID_V2`, answered) since their monitor
+    /// last changed ([`Self::set_monitor`] clears the bit). Kept whether or not the experiment is on;
+    /// only [`Self::hotplug_edid_seen`] lets an answer read it.
+    pub edid_seen: u32,
     /// ★ 3c: display ids whose monitor changed since the last `INTERNAL_GET_HOTPLUG_UNPLUG_STATE`.
     pub pending_plug: u32,
     /// ★ 3c: the live hotplug registrations (at most [`MAX_HOTPLUG_REGISTRATIONS`]).
@@ -581,6 +593,8 @@ impl DisplayModel {
             display_sw_offered: false,
             imp_enabled: false,
             hdcp_state: false,
+            hotplug_edid_seen: false,
+            edid_seen: 0,
             pending_plug: 0,
             hotplug: Vec::new(),
             preempt: Vec::new(),
@@ -608,6 +622,12 @@ impl DisplayModel {
         self.hdcp_state = on;
     }
 
+    /// ⚠ EXPERIMENT (default off, H-edidseen): answer `hotplugAfterEdidMask` from the EDID reads
+    /// the guest made (see the field).
+    pub fn answer_hotplug_edid_seen(&mut self, on: bool) {
+        self.hotplug_edid_seen = on;
+    }
+
     /// Whether the display-SW object is offered ([`Self::offer_display_sw`]).
     #[must_use]
     pub fn display_sw_offered(&self) -> bool {
@@ -626,6 +646,8 @@ impl DisplayModel {
         }
         c.monitor = monitor;
         self.pending_plug |= c.display_id;
+        // a new monitor: its EDID has not been read since this hotplug
+        self.edid_seen &= !c.display_id;
         Some(c.display_id)
     }
 
@@ -933,7 +955,14 @@ impl DisplayModel {
                     "flags",
                     k("NV0073_CTRL_SYSTEM_GET_HOTPLUG_STATE_FLAGS_LID_OPEN")?,
                 );
-                p.set("hotplugAfterEdidMask", u64::from(self.all_displays()));
+                // ⚠ H-edidseen (default off): a display whose EDID was read since its last
+                // hotplug is not listed (ogkm's definition; the real GPU's measured answer, RTX 4070, 2026-10-08)
+                let after_edid = if self.hotplug_edid_seen {
+                    self.all_displays() & !self.edid_seen
+                } else {
+                    self.all_displays()
+                };
+                p.set("hotplugAfterEdidMask", u64::from(after_edid));
                 Ok(p.buf)
             }
             "ip_version" => {
@@ -1136,6 +1165,8 @@ impl DisplayModel {
                     return Err(NV_ERR_INVALID_ARGUMENT);
                 }
                 p.set("bufferSize", edid.len() as u64);
+                // a valid EDID read of this display (H-edidseen's `hotplugAfterEdidMask`)
+                self.edid_seen |= c.display_id;
                 Ok(p.buf)
             }
             "set_edid" => {
@@ -1558,6 +1589,47 @@ mod tests {
             m.control(GET_HDCP_STATE, &req(0, id, 0)[..8]),
             Some(Err(NV_ERR_INVALID_ARGUMENT)),
             "short params"
+        );
+    }
+
+    /// ⚠ H-edidseen (`KF3_DISPLAY_HOTPLUG_EDID_SEEN`): by default every display is listed in
+    /// `hotplugAfterEdidMask` (unchanged); with the experiment a display drops out once its EDID
+    /// was answered, and comes back when its monitor changes (a hotplug) — ogkm's definition, and
+    /// the real GPU's measured `0x7e00` (the connected `0x100` NOT listed after its EDID read; VFIO DVI
+    /// reference boots 1-3, RTX 4070, 2026-10-08).
+    #[test]
+    fn hotplug_after_edid_lists_a_display_until_its_edid_is_read_only_under_the_experiment() {
+        let mut m = model();
+        let id = m.all_displays();
+        let words = |w: &[u32]| -> Vec<u8> { w.iter().flat_map(|x| x.to_le_bytes()).collect() };
+        let hp = cmd(&m, "NV0073_CTRL_CMD_SYSTEM_GET_HOTPLUG_STATE");
+        let ed = cmd(&m, "NV0073_CTRL_CMD_SPECIFIC_GET_EDID_V2");
+        let mut edid_req = vec![0u8; size(&m, "NV0073_CTRL_SPECIFIC_GET_EDID_V2_PARAMS")];
+        edid_req[4..8].copy_from_slice(&id.to_le_bytes());
+        // default: listed before and after an EDID read
+        assert_eq!(m.control(hp, &[0; 12]), Some(Ok(words(&[0, 0, id]))));
+        assert!(matches!(m.control(ed, &edid_req), Some(Ok(_))));
+        assert_eq!(m.edid_seen, id, "the read is recorded either way");
+        assert_eq!(m.control(hp, &[0; 12]), Some(Ok(words(&[0, 0, id]))));
+        // the experiment: not listed after the read …
+        m.answer_hotplug_edid_seen(true);
+        assert_eq!(m.control(hp, &[0; 12]), Some(Ok(words(&[0, 0, 0]))));
+        // … listed again after a hotplug (a new monitor), until it is read again
+        let mut other = Monitor::default_1080p();
+        other.max_pixel_khz += 1;
+        assert_eq!(m.set_monitor(0, other), Some(id));
+        assert_eq!(m.control(hp, &[0; 12]), Some(Ok(words(&[0, 0, id]))));
+        // a refused read (a display this device lacks) records nothing
+        edid_req[4..8].copy_from_slice(&(id << 1).to_le_bytes());
+        assert_eq!(m.control(ed, &edid_req), Some(Err(NV_ERR_INVALID_ARGUMENT)));
+        assert_eq!(m.control(hp, &[0; 12]), Some(Ok(words(&[0, 0, id]))));
+        edid_req[4..8].copy_from_slice(&id.to_le_bytes());
+        assert!(matches!(m.control(ed, &edid_req), Some(Ok(_))));
+        assert_eq!(m.control(hp, &[0; 12]), Some(Ok(words(&[0, 0, 0]))));
+        // hostile shapes stay refused
+        assert_eq!(
+            m.control(hp, &words(&[1, 0, 0])),
+            Some(Err(NV_ERR_INVALID_ARGUMENT))
         );
     }
 
