@@ -4511,7 +4511,6 @@ impl ChanPlane {
                     if let Some(n) = t.notifier {
                         me.release_notifier(n);
                     }
-                    me.tok_engine_set(t.idx, None);
                     me.engine_live(t.engine, false);
                     // ★ The per-token hardware ledger (`run_fast_guest.sh` gates on it): every ring
                     // of a Passthrough token IS a host doorbell, so `emulated` is only the rings
@@ -5417,7 +5416,6 @@ impl ChanPlane {
                         }
                         _ => false,
                     };
-                    me.tok_engine_set(idx, Some(engine));
                     let _ = me.take_ledger(idx);
                     // ★ After the token word and the twin: until its placement lands, the trap
                     // serves this token; after, its eventfd does. No lock is held here.
