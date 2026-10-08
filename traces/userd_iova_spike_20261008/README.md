@@ -64,7 +64,7 @@ quoted was NOT in this host's dmesg for any case. No Xid appeared in any case (t
 is 20:08:14, from another agent's raw-client job, before this matrix started at 20:19); `nvidia-smi`
 answered after every case and the GPU memory use did not change.
 
-## Why: the IOMMU latch (each bullet marked Measured or Inferred)
+## Why: the IOMMU latch, in two labelled parts
 
 - **Measured** (`dmesg -T`, 2026-10-08 20:09:30): `nvidia 0000:01:00.0: Using 47-bit DMA addresses`.
   That is the notice dma-iommu prints when its 32-bit-first IOVA attempt for this device has failed
