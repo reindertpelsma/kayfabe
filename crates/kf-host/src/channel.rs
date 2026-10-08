@@ -146,9 +146,9 @@ impl VaSpace {
 /// A FIXED map that straddles the edge of a [`GuestVaRange`].
 pub const VA_STRADDLES_RESERVATION: u32 = 0x4B71;
 /// A guest row inside the NULL big page `[0, TWIN_VA_FLOOR)` — refused before any host call.
-pub const VA_BELOW_TWIN_FLOOR: u32 = 0x4B72;
+pub const VA_BELOW_TWIN_FLOOR: u32 = 0x4B77;
 /// A guest row whose end does not fit in 64 bits (`va + len` wraps) — refused before any host call.
-pub const VA_ROW_WRAPS: u32 = 0x4B73;
+pub const VA_ROW_WRAPS: u32 = 0x4B78;
 
 /// ★ 2026-10-08 (Windows walls, task A) — **where a guest-mirror twin's host VA space starts.**
 ///
@@ -1152,6 +1152,27 @@ impl HostRm {
         Ok(h)
     }
 
+    /// ⚠ EXPERIMENT (2026-10-08, `KF3_WIN_TWIN_DEFAPI_OBJECT`, default off): an `NV50_DEFERRED_API`
+    /// (`0x5080`) under `chan`, with NO params (`RS_OPTIONAL(NV5080_ALLOC_PARAMS)`,
+    /// `ogkm-595.84: resource_list.h:1524-1528`; `notifyCompletion` stays false) and nothing
+    /// registered on it — the only thing it can do is be found by a `SET_OBJECT` on the channel's
+    /// software subchannel. Unprivileged class (`RS_FLAGS_ALLOC_NON_PRIVILEGED`, OWNER_RULINGS §U.1).
+    ///
+    /// # Errors
+    /// The host's refusal.
+    pub fn alloc_deferred_api(&self, chan: Channel) -> Result<u32, RmError> {
+        let want = self.mint();
+        let h = self.raw_alloc(
+            chan.chan,
+            want,
+            kf_abi::generated::classes::NV50_DEFERRED_API_CLASS,
+            None,
+            &mut [],
+        )?;
+        self.remember(h, chan.chan);
+        Ok(h)
+    }
+
     /// ★ EXPERIMENT `x11-dispsw` (default off; `docs/design/V3_DISPLAY.md`, the 2026-10-03 note): a
     /// `GF100_DISP_SW` object on `chan` — the host twin of a guest's display-software object, so the
     /// software methods the guest's channel sends reach a host object instead of raising Xid 32.
@@ -1732,6 +1753,29 @@ mod twin_va_start_tests {
         assert_eq!(s.dma_for(0x1_2000_2000, 0x1_0000), Ok(0x100));
         assert_eq!(s.dma_for(0x400_0000, 0x1_0000), Ok(2));
         assert!(s.guest_reserved(0x1_0000, 0xf_0000));
+    }
+
+    /// The two refusal codes collide with no other kf-host code (`Other(n)` is how a refusal is
+    /// named in the logs; run73 showed `0x4B72` already meant `HOST_ABI_REFUSED`).
+    #[test]
+    fn the_refusal_codes_are_unique_in_kf_host() {
+        let codes = [
+            crate::MAPPING_ATTRIBUTE_REFUSED,
+            crate::VA_ALREADY_MAPPED,
+            crate::HOST_ABI_REFUSED,
+            crate::PRIVILEGED_CHANNEL_REFUSED,
+            crate::CAP_BRACKET_REFUSED,
+            crate::CHANNEL_CLASS_OUTSIDE_BIRTH,
+            crate::DISP_SW_CLASS_ID_UNREADABLE,
+            super::USERD_OFFSET_MISALIGNED,
+            VA_STRADDLES_RESERVATION,
+            VA_BELOW_TWIN_FLOOR,
+            VA_ROW_WRAPS,
+        ];
+        let mut sorted = codes.to_vec();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(sorted.len(), codes.len());
     }
 
     /// ★ Hostile input: a row in the NULL big page (VA 0 included), a row whose end wraps, and a row

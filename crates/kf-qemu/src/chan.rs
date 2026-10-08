@@ -96,6 +96,11 @@ struct PtChan {
     /// the guest's `SET_OBJECT` meets) — every later display-SW alloc here is refused by name
     /// ([`crate::dispsw::twin_watched`]). Set once, never cleared: it goes with the twin.
     dispsw_host_refused: bool,
+    /// ⚠ EXPERIMENT (2026-10-08, `KF3_WIN_TWIN_DEFAPI_OBJECT=1`, default off; [`twin_defapi_object`]):
+    /// the host `NV50_DEFERRED_API` authored on this Windows user-work twin from the guest's own
+    /// alloc of that class on the channel — (guest handle, host handle). At most one per twin; freed
+    /// by host RM with the twin's channel.
+    defapi_host: Option<(u32, u32)>,
     /// ★ v3-promote: the guest's `GPU_PROMOTE_CTX` / `GPU_EVICT_CTX` statements for this channel,
     /// satisfied by the twin (never forwarded).
     ctx: CtxBind,
@@ -363,7 +368,7 @@ const PEEK_ENTRY_BUDGET: u32 = 512;
 /// Per relayed twin: at most this many software-subchannel methods are logged.
 const PEEK_SW_BUDGET: u32 = 64;
 /// Per segment: at most this many words are read (and scanned); at most 64 are printed.
-const PEEK_SEGMENT_WORDS: usize = 512;
+const PEEK_SEGMENT_WORDS: usize = 16384;
 
 /// ⚠ DIAGNOSTIC (2026-10-08, run73): one method a push-buffer segment addresses to a SOFTWARE
 /// subchannel. `[NVIDIA, open-gpu-doc ga100 dev_ram.ref "Subchannels 5-7 are for software methods"
@@ -429,6 +434,31 @@ fn scan_sw_methods(words: &[u32]) -> SwScan {
         i = i.saturating_add(1).saturating_add(h.arg_words);
     }
     out
+}
+
+/// What an `NV50_DEFERRED_API` alloc on a Passthrough channel becomes (the experiment's decision).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TwinDefapiPlan {
+    /// The pre-experiment behaviour: a guest-graph node only (Windows user work), or §U.1's path.
+    NoHostObject,
+    /// ⚠ `KF3_WIN_TWIN_DEFAPI_OBJECT=1` on a Windows user-work twin: author one host object.
+    AuthorHostObject,
+}
+
+/// Pure: the experiment applies only with its switch on AND on a Windows user-work twin; a Linux
+/// Passthrough channel or a Translated one never gets a host `NV50_DEFERRED_API` from it.
+fn twin_defapi_plan(switch_on: bool, user_work: bool) -> TwinDefapiPlan {
+    if switch_on && user_work {
+        TwinDefapiPlan::AuthorHostObject
+    } else {
+        TwinDefapiPlan::NoHostObject
+    }
+}
+
+/// ⚠ EXPERIMENT switch (default off): [`ChanPlane::twin_defapi_act`].
+fn twin_defapi_object() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("KF3_WIN_TWIN_DEFAPI_OBJECT").as_deref() == Ok("1"))
 }
 
 /// The I/O of one relay step ([`kf_chan::userd_relay::step`]).
@@ -3412,6 +3442,9 @@ impl ChanPlane {
             // carry reaches the host engine as a software method with no host object behind it,
             // and the host RCs that channel (fail closed). `[measured, runs 47-57]` Windows' deferred
             // triggers all ran on its kernel GR channel.
+            if twin_defapi_plan(twin_defapi_object(), user_work) == TwinDefapiPlan::AuthorHostObject {
+                return self.twin_defapi_act(client, parent, handle);
+            }
             eprintln!(
                 "kf3: chan {client:#x}:{parent:#x}: NV50_DEFERRED_API {handle:#x} ADMITTED as a guest-graph object on a Windows user-work Passthrough twin (never triggered by kayfabe; §V)"
             );
@@ -3436,6 +3469,62 @@ impl ChanPlane {
             }
             crate::defapi::Admission::Refused(status, why) => ChanAnswer::Refused { status, why },
         }
+    }
+
+    /// ⚠ EXPERIMENT (2026-10-08, `KF3_WIN_TWIN_DEFAPI_OBJECT=1`, default off — an owner decision is
+    /// pending: OWNER_RULINGS §U.1 says the class is Translated-only). `[measured, run73 at 3f23995a]`
+    /// every D3D device copy channel of Windows 580.88 binds its `NV50_DEFERRED_API` to SOFTWARE
+    /// subchannel 5 (`SET_OBJECT` data `0x5080`) early in its stream; on an unprivileged host twin with
+    /// no such object, host RM answers that software method with an RC (Xid 32, PBDMA `DEVICE`).
+    ///
+    /// What this does: one host `NV50_DEFERRED_API` under the twin's host channel, AUTHORED from the
+    /// guest's own alloc of that class on that channel (no params: `RS_OPTIONAL(NV5080_ALLOC_PARAMS)`,
+    /// `resource_list.h:1524-1528`; the guest's params never reach the host), so the guest's
+    /// `SET_OBJECT` on its software subchannel finds an object of that class on the twin (RM matches a
+    /// software `SET_OBJECT` by external class or software classID, `kernel_channel.c:3433-3436`).
+    /// What it does NOT do: register any deferred entry on the host object (the guest's
+    /// `NV5080_CTRL_CMD_DEFERRED_API*` controls stay guest-graph only, §U.4 undecided), so a `0x200`
+    /// trigger on that subchannel finds nothing registered and host RM fails it (fail closed, an RC of
+    /// that twin only); no host action is ever taken from a guest word. At most one per twin.
+    fn twin_defapi_act(&self, client: u32, parent: u32, handle: u32) -> ChanAnswer {
+        self.defer(
+            "deferred-API twin object",
+            Box::new(move |me: &ChanPlane| {
+                let chan = {
+                    let m = me
+                        .pt
+                        .lock()
+                        .map_err(|_| (NV_ERR_NOT_SUPPORTED, "pt poisoned".to_string()))?;
+                    let v = m
+                        .get(&(client, parent))
+                        .ok_or((NV_ERR_NOT_SUPPORTED, "the twin is gone".to_string()))?;
+                    if let Some((g, h)) = v.defapi_host {
+                        return Ok(format!(
+                            "{client:#x}:{handle:#x}: twin host {:#x} already carries the host NV50_DEFERRED_API {h:#x} (for guest {g:#x}); this one is guest-graph only",
+                            v.chan.token
+                        ));
+                    }
+                    v.chan
+                };
+                let h = me.rm.alloc_deferred_api(chan).map_err(|e| {
+                    (
+                        NV_ERR_NOT_SUPPORTED,
+                        format!(
+                            "EXPERIMENT KF3_WIN_TWIN_DEFAPI_OBJECT: the host refused the authored NV50_DEFERRED_API ({e:?})"
+                        ),
+                    )
+                })?;
+                if let Ok(mut m) = me.pt.lock()
+                    && let Some(v) = m.get_mut(&(client, parent))
+                {
+                    v.defapi_host = Some((handle, h));
+                }
+                Ok(format!(
+                    "EXPERIMENT KF3_WIN_TWIN_DEFAPI_OBJECT: {client:#x}:{handle:#x} NV50_DEFERRED_API on Windows user-work twin host {:#x} -> host object {h:#x} (authored, no params, NOTHING registered: a 0x200 on it fails closed)",
+                    chan.token
+                ))
+            }),
+        )
     }
 
     /// ★★ OWNER_RULINGS §U: a deferred INITIALIZE/PROMOTE/EVICT — on the plane's act thread (it
@@ -4695,6 +4784,7 @@ impl ChanPlane {
                             disp_sw: HashMap::new(),
                             sw_ids: crate::dispsw::SwClassIds::default(),
                             dispsw_host_refused: false,
+                            defapi_host: None,
                             ctx: CtxBind::default(),
                             user_work: a.user_work,
                             live,
@@ -5914,6 +6004,7 @@ mod dispsw_tests {
             disp_sw: disp_sw.iter().copied().collect(),
             sw_ids: crate::dispsw::SwClassIds::default(),
             dispsw_host_refused: false,
+            defapi_host: None,
             ctx: CtxBind::default(),
             user_work: false,
             live: Arc::new(AtomicU64::new(0)),
@@ -6452,5 +6543,21 @@ mod sw_scan_tests {
         let s = scan_sw_methods(&[0xc000_0000, 0x2001_a080, 1]); // RESERVED6 first
         assert_eq!(s.undecodable_at, Some(0));
         assert!(s.hits.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod twin_defapi_tests {
+    use super::{TwinDefapiPlan, twin_defapi_plan};
+
+    /// ⚠ EXPERIMENT `KF3_WIN_TWIN_DEFAPI_OBJECT`: off by default (the switch is read from the
+    /// environment, unset in production launchers), and even on it authors a host object only for a
+    /// Windows user-work twin.
+    #[test]
+    fn a_host_deferred_api_object_needs_the_switch_and_a_user_work_twin() {
+        assert_eq!(twin_defapi_plan(false, false), TwinDefapiPlan::NoHostObject);
+        assert_eq!(twin_defapi_plan(false, true), TwinDefapiPlan::NoHostObject);
+        assert_eq!(twin_defapi_plan(true, false), TwinDefapiPlan::NoHostObject);
+        assert_eq!(twin_defapi_plan(true, true), TwinDefapiPlan::AuthorHostObject);
     }
 }
