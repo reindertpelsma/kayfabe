@@ -24,6 +24,7 @@ for step in "$@"; do
     bare)    for i in 1 2; do bash scripts/fastguest/bare_metal_suite.sh nsi_bare${i}_$R 180 --ce-interrupt 2>&1 | grep "^--ce-interrupt"; done ;;
     guest)   bash scripts/fastguest/fast_suite.sh nsi_G_$R 180 --ce-client --ce-interrupt 2>&1 | tail -5 ;;
     suite30) bash scripts/fastguest/fast_suite.sh nsi_S_$R 180 2>&1 | tail -8 ;;
+    guestwait) KF_APPEND="KF_POWEROFF_DELAY_S=5 " bash scripts/fastguest/fast_suite.sh nsi_W_$R 180 --ce-interrupt 2>&1 | tail -4 ;;
     paced)   KF3_PT_NSI_MIN_INTERVAL_US=$PACE_US bash scripts/fastguest/fast_suite.sh nsi_P${PACE_US}_$R 180 --ce-interrupt 2>&1 | tail -4 ;;
   esac
   echo "== STEP $step exit $(date -Is) qemu=$(pgrep -c qemu-system)"

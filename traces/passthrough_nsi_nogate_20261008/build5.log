@@ -1,0 +1,20 @@
+BUILD_START 2026-10-09T00:03:26+02:00 rev=eca43847
+== raw-client tests
+603 |         ABI_DECODE_FAILED, ABI_ENCODE_FAILED, CharDevice, IMPOSSIBLE_CONVERSION,
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 95 filtered out; finished in 0.03s
+== raw client
+    Finished `release` profile [optimized] target(s) in 9.16s
+a23ec6d906c8568a
+== kf3
+build_kf3 rc=0
+KF3_BUILT /var/lib/kf-windows-20261005/kf3-bins/eca43847/qemu-system-x86_64 rev=eca43847 mtime=2026-10-09 00:03:54.148220242 +0200 (shared build dir /var/lib/kf-windows-20261005/qemu-build-kf3)
+== initrd
+initrd rc=0
+== built: /var/lib/kf-nsi-20261008/fastguest-eca43847/initrd.cpio.gz  361M
+== kernel release: 7.0.0-34-generic
+total 385808
+drwxr-xr-x  2 root root      4096 Oct  9 00:03 .
+drwxr-xr-x 11 root root      4096 Oct  9 00:03 ..
+-rw-r--r--  1 root root 377753008 Oct  9 00:04 initrd.cpio.gz
+-rw-------  1 root root  17303944 Oct  9 00:03 vmlinuz
+BUILD_DONE 2026-10-09T00:04:12+02:00 rev=eca43847

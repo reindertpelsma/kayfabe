@@ -1,0 +1,30 @@
+alias-two-vas FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+alias-unmap-observe FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+atomics-probe FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+bar1-crossing FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+blockage-coverage FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+bus-info-sweep FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+ce-client-guest-ram FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+ce-client FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+concurrency FASTGUEST: client rc=0 
+concurrent-fuzz FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+cross-client-leak FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+defer-liveness FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+dictated-ring-negative FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+dictated-ring FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+doorbell-census FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+engines FASTGUEST: client rc=0 
+executor-vas FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+gpga-reserve-probe FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+gpu-info-sweep FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+guest-ram-pin FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+guest-ring-channel FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+late-map-race FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+map-propagation FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+map-stress FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+missing-page-fault FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+pce-mask-probe FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+rpc-mixed-allocs FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+timer FASTGUEST: client rc=0 
+uvm-invalidate FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
+uvm-mean FASTGUEST: client rc=0 REV_UNDER_TEST=eca43847
