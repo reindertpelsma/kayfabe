@@ -4915,18 +4915,18 @@ impl ChanPlane {
             let relay_guest = if userd_relay_off() {
                 None
             } else if a.user_work && matches!(a.userd, Some(kf_arch::UserdMem::Sysmem { .. })) {
-                    match self.userd_view(a.userd) {
-                        Ok(v) => Some(v),
-                        Err(e) => {
-                            return refuse(
-                                NV_ERR_NOT_SUPPORTED,
-                                format!("USERD relay: guest slot: {e}"),
-                            );
-                        }
+                match self.userd_view(a.userd) {
+                    Ok(v) => Some(v),
+                    Err(e) => {
+                        return refuse(
+                            NV_ERR_NOT_SUPPORTED,
+                            format!("USERD relay: guest slot: {e}"),
+                        );
                     }
-                } else {
-                    None
-                };
+                }
+            } else {
+                None
+            };
             // ★ The guest's USERD, adopted AT CREATION (RM zeroes it — `rm_takes_a_guest_userd`):
             // a store slice, or guest RAM through the mirror's RAM object.
             let userd = match a.userd {
@@ -7003,7 +7003,10 @@ mod preempt_order_tests {
         d.request("disable A");
         d.act_queues("A");
         d.pass(); // run84's window: the act queued, its reply not settled yet
-        assert!(d.wire.is_empty(), "nothing may reach the guest before the reply");
+        assert!(
+            d.wire.is_empty(),
+            "nothing may reach the guest before the reply"
+        );
         d.act_settles("disable A");
         d.pass();
         assert_eq!(d.wire, ["reply disable A", "event A"]);

@@ -3973,7 +3973,7 @@ preempt in this boot either. All twin relays consistent and every last fence wri
 
 ## Where it stands (seventh session)
 
-- **Measured:** the timeout is the GPU scheduler's (TdrDelay-scaled), it starts at the first work of a D3D device created
+- **`[measured, runs 85-89 at 256e510f/5f3c17b4, 2026-10-08]`:** the timeout is the GPU scheduler's (TdrDelay-scaled), it starts at the first work of a D3D device created
   at boot (clients `0x34..0x37`: GR twin token 0x15 + CE twin 0x1016), it needs no preempt, and no twin is behind: every
   twin's GP_GET equals its GP_PUT and every peeked fence was written.
 - **Inferred, untested (candidates):** (a) a packet dxgkrnl submits after token 0x13's GP[0x91] — a 64-bit host
