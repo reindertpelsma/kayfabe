@@ -2222,9 +2222,17 @@ pub struct VasDeclaration {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VasDeclRefusal {
     /// `vaBase + vaSize` does not fit in 64 bits.
-    Wraps { va_base: u64, va_size: u64 },
+    Wraps {
+        /// The declared `vaBase`.
+        va_base: u64,
+        /// The declared `vaSize`.
+        va_size: u64,
+    },
     /// The declared range reaches past the GMMU's VA ceiling ([`GMMU_VA_CEILING`]).
-    BeyondGmmu { end: u64 },
+    BeyondGmmu {
+        /// The declared range's exclusive end (or `vaBase` when no size was declared).
+        end: u64,
+    },
 }
 
 /// Check a guest's declared VA space (`flags`, `vaBase`, `vaSize`).

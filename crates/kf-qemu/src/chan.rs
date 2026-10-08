@@ -4402,8 +4402,10 @@ impl ChanPlane {
                         match mem.read(va, &mut buf) {
                             Ok(()) => {
                                 let w: Vec<u32> = buf
-                                    .chunks_exact(4)
-                                    .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                                    .as_chunks::<4>()
+                                    .0
+                                    .iter()
+                                    .map(|c| u32::from_le_bytes(*c))
                                     .collect();
                                 let scan = scan_sw_methods(&w);
                                 let body = w
