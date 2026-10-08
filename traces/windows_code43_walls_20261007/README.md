@@ -3619,3 +3619,27 @@ Binary `kf3-bins/4b14d74f`, `KF3_TWIN_VA_BASE=10000`, flags as run68; started 16
   space a user channel runs in`) — fail closed, the create torn down.
 - Fixed for run71 (`2959ed5f`): a copy channel has no subcontext, so it is judged by its process alone (GPU-free tests updated). The
   `VAS-FACTS` now show the Windows process spaces' `vaBase`: `0` or `0x20000000`, `vaSize` `0x20000000`-`0x40000000` (lo32), flags `0x5`.
+
+### Runs 71-72 result: the compositor's work runs to completion on its twin; every D3D device the probe creates RCs its twins (Xid 32, PBDMA `DEVICE`); TDR follows
+
+Run71 `2959ed5f` (16:59:27 CEST), run72 `8de8ef26` (17:03:31; adds the default-off `KF3_RELAY_PB_PEEK` diagnostic, the one place a relayed
+twin's guest words are READ — logged, never executed or forwarded by kayfabe), flags as run70. Xid 95 → 102 (run71) → 109 (run72), every one on a
+twin of the probe's D3D devices. [run71 timeline](run71-timeline.txt), [run71 Xids](run71-host-xid.txt), [run72 timeline](run72-timeline.txt),
+[run72 peek](run72-relay-peek.txt), [run72 Xids](run72-host-xid.txt), traces `run71-qemu.log.gz`, `run72-qemu.log.gz`.
+
+`[measured, runs 71-72 at 2959ed5f/8de8ef26, 2026-10-08]`:
+- The copy channel of a D3D device is now born Passthrough too (`engine=0xc`, relayed). Each probe create births a GR + CE twin pair.
+- **The compositor's twin runs its work to completion:** run71's release line `forwarded=98 ... host[GP_PUT=0xc0 GP_GET=0xc0]` (the engine consumed
+  every entry Windows submitted; the guest's own `GP_GET=0xbd` lagged by 3 — the relay's documented staleness), no Xid on it; host non-stall
+  interrupts on GR0 are raised to the guest (1001 in run72).
+- **Every twin of the probe's D3D devices takes `Xid 32 ... intr 00800000`** — PBDMA `INTR_0` bit 23, `DEVICE` (`[inferred]` from the
+  register's layout as nouveau names it: a method the engine refused, e.g. one on a subchannel with no object) — on its first submission
+  (GR twins `0x65/67/69/6b`, CE twins `0x02000066..6c`); then Windows TDRs and bugchecks 0x116 (run71 second boot: Code 43, the P4.5 gap).
+  D3D11/12 creation therefore still fails (run71 probe output stops after `D3DKMTCreateDevice`).
+- Peeked first submissions (run72): the compositor and the probe's GR channels start with the SAME 10-word segment (two 3D
+  `SET_REPORT_SEMAPHORE_A-D` on subchannel 0, no `SET_OBJECT`) — on the compositor's twin it runs, on the probe's it is followed by an RC; the
+  probe's first `GP_PUT` is `0x24` with entries 1-35 all zero (control NOPs), the compositor's 2-3 real entries. The compositor's GP[1] is a
+  32-word segment at **VA 0x13000** (the low region of run69): copy-engine and 3D methods. The CE twins' first segment: CE semaphore and
+  `LAUNCH_DMA 0x8` (semaphore only). Why one twin accepts the subchannel-0 methods and the other refuses them is not established.
+- **Physical operands in per-process push buffers** (the owner's question): 19 peeked user-work segments (284 words, compositor + probe):
+  10 `LAUNCH_DMA` (`0x686` x4, `0x8` x3, `0x10` x3), **0 with `SRC_TYPE` or `DST_TYPE` = PHYSICAL** `[measured, run72]` — still a small sample.

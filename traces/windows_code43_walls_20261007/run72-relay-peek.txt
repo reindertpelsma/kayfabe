@@ -1,0 +1,96 @@
+kf3: chan token 0xe RELAY-PEEK (diagnostic) GP[0x0] lo=0x20104080 hi=0x00002801 va=0x120104080 words=10: 200406c0 00000001 20244000 00000001 10000004 200406c0 00000001 20244010 00000001 00000004
+kf3: chan token 0xe RELAY-PEEK (diagnostic) GP[0x1] lo=0x00013000 hi=0x00008200 va=0x13000 words=32: 20018104 00001e00 200581c3 00001040 00000780 00000438 00000001 00000000 20028102 00000000 00200000 200181c2 03303210 20028106 0000002b 0000002d 20028100 00000000 0107bcac 200281d3 000003ab 00000339 200180c0 00000686 200206c0 00000000 00016100 200206c2 00000001 1000f010 200106c3 0000f003
+kf3: chan token 0xe RELAY-PEEK (diagnostic) GP[0x2] lo=0x201040a8 hi=0x00002801 va=0x1201040a8 words=10: 200406c0 00000001 20244000 00000002 10000004 200406c0 00000001 20244020 00000000 00000004
+kf3: chan token 0xe RELAY-PEEK (diagnostic) GP[0x3] lo=0x201040d0 hi=0x00002801 va=0x1201040d0 words=10: 200406c0 00000001 20244000 00000003 10000004 200406c0 00000001 20244030 00000001 00000004
+kf3: chan token 0xe RELAY-PEEK (diagnostic) GP[0x4] lo=0x00010000 hi=0x00008200 va=0x10000 words=32: 20018104 00001e00 200581c3 00001040 00000780 00000438 00000001 00000000 20028102 00000000 00200000 200181c2 03303210 20028106 0000002b 0000002d 20028100 00000000 0107bcac 200281d3 000003ab 00000339 200180c0 00000686 200206c0 00000000 00016100 200206c2 00000002 1000f010 200106c3 0000f003
+kf3: chan token 0xe RELAY-PEEK (diagnostic) GP[0x5] lo=0x201040f8 hi=0x00002801 va=0x1201040f8 words=10: 200406c0 00000001 20244000 00000004 10000004 200406c0 00000001 20244040 00000000 00000004
+kf3: chan token 0xe RELAY-PEEK (diagnostic) GP[0x6] lo=0x20104120 hi=0x00002801 va=0x120104120 words=10: 200406c0 00000001 20244000 00000005 10000004 200406c0 00000001 20244050 00000001 00000004
+kf3: chan token 0xe RELAY-PEEK (diagnostic) GP[0x7] lo=0x00013000 hi=0x00008200 va=0x13000 words=32: 20018104 00001e00 200581c3 00001040 00000780 00000438 00000001 00000000 20028102 00000000 00200000 200181c2 03303210 20028106 0000002b 0000002d 20028100 00000000 0107bcac 200281d3 000003ab 00000339 200180c0 00000686 200206c0 00000000 00016100 200206c2 00000003 1000f010 200106c3 0000f003
+kf3: chan token 0xe RELAY-PEEK (diagnostic) GP[0x8] lo=0x20104148 hi=0x00002801 va=0x120104148 words=10: 200406c0 00000001 20244000 00000006 10000004 200406c0 00000001 20244060 00000000 00000004
+kf3: chan token 0xe RELAY-PEEK (diagnostic) GP[0x9] lo=0x20104170 hi=0x00002801 va=0x120104170 words=10: 200406c0 00000001 20244000 00000007 10000004 200406c0 00000001 20244070 00000001 00000004
+kf3: chan token 0xe RELAY-PEEK (diagnostic) GP[0xa] lo=0x00010000 hi=0x00008200 va=0x10000 words=32: 20018104 00001e00 200581c3 00001040 00000780 00000438 00000001 00000000 20028102 00000000 00200000 200181c2 03303210 20028106 0000002b 0000002d 20028100 00000000 0107bcac 200281d3 000003ab 00000339 200180c0 00000686 200206c0 00000000 00016100 200206c2 00000004 1000f010 200106c3 0000f003
+kf3: chan token 0xe RELAY-PEEK (diagnostic) GP[0xb] lo=0x20104198 hi=0x00002801 va=0x120104198 words=10: 200406c0 00000001 20244000 00000008 10000004 200406c0 00000001 20244080 00000000 00000004
+kf3: chan token 0xf RELAY-PEEK (diagnostic) GP[0x0] lo=0x200c4080 hi=0x00002801 va=0x1200c4080 words=10: 200406c0 00000001 200e7000 00000001 10000004 200406c0 00000001 200e7010 00000001 00000004
+kf3: chan token 0xf RELAY-PEEK (diagnostic) GP[0x1] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0xf RELAY-PEEK (diagnostic) GP[0x2] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0xf RELAY-PEEK (diagnostic) GP[0x3] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0xf RELAY-PEEK (diagnostic) GP[0x4] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0xf RELAY-PEEK (diagnostic) GP[0x5] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0xf RELAY-PEEK (diagnostic) GP[0x6] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0xf RELAY-PEEK (diagnostic) GP[0x7] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0xf RELAY-PEEK (diagnostic) GP[0x8] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0xf RELAY-PEEK (diagnostic) GP[0x9] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0xf RELAY-PEEK (diagnostic) GP[0xa] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0xf RELAY-PEEK (diagnostic) GP[0xb] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x11 RELAY-PEEK (diagnostic) GP[0x0] lo=0x20210080 hi=0x00002801 va=0x120210080 words=10: 200406c0 00000001 200ef000 00000001 10000004 200406c0 00000001 200ef010 00000001 00000004
+kf3: chan token 0x11 RELAY-PEEK (diagnostic) GP[0x1] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x11 RELAY-PEEK (diagnostic) GP[0x2] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x11 RELAY-PEEK (diagnostic) GP[0x3] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x11 RELAY-PEEK (diagnostic) GP[0x4] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x11 RELAY-PEEK (diagnostic) GP[0x5] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x11 RELAY-PEEK (diagnostic) GP[0x6] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x11 RELAY-PEEK (diagnostic) GP[0x7] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x11 RELAY-PEEK (diagnostic) GP[0x8] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x11 RELAY-PEEK (diagnostic) GP[0x9] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x11 RELAY-PEEK (diagnostic) GP[0xa] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x11 RELAY-PEEK (diagnostic) GP[0xb] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1012 RELAY-PEEK (diagnostic) GP[0x0] lo=0x20350080 hi=0x00003001 va=0x120350080 words=12: 20038090 00000001 20353000 00000001 200180c0 00000008 20038090 00000001 20353010 00000001 200180c0 00000010
+kf3: chan token 0x1012 RELAY-PEEK (diagnostic) GP[0x1] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1012 RELAY-PEEK (diagnostic) GP[0x2] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1012 RELAY-PEEK (diagnostic) GP[0x3] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1012 RELAY-PEEK (diagnostic) GP[0x4] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1012 RELAY-PEEK (diagnostic) GP[0x5] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1012 RELAY-PEEK (diagnostic) GP[0x6] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1012 RELAY-PEEK (diagnostic) GP[0x7] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1012 RELAY-PEEK (diagnostic) GP[0x8] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1012 RELAY-PEEK (diagnostic) GP[0x9] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1012 RELAY-PEEK (diagnostic) GP[0xa] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1012 RELAY-PEEK (diagnostic) GP[0xb] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x13 RELAY-PEEK (diagnostic) GP[0x0] lo=0x20354080 hi=0x00002801 va=0x120354080 words=10: 200406c0 00000001 20377000 00000001 10000004 200406c0 00000001 20377010 00000001 00000004
+kf3: chan token 0x13 RELAY-PEEK (diagnostic) GP[0x1] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x13 RELAY-PEEK (diagnostic) GP[0x2] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x13 RELAY-PEEK (diagnostic) GP[0x3] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x13 RELAY-PEEK (diagnostic) GP[0x4] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x13 RELAY-PEEK (diagnostic) GP[0x5] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x13 RELAY-PEEK (diagnostic) GP[0x6] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x13 RELAY-PEEK (diagnostic) GP[0x7] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x13 RELAY-PEEK (diagnostic) GP[0x8] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x13 RELAY-PEEK (diagnostic) GP[0x9] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x13 RELAY-PEEK (diagnostic) GP[0xa] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x13 RELAY-PEEK (diagnostic) GP[0xb] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1014 RELAY-PEEK (diagnostic) GP[0x0] lo=0x20378080 hi=0x00003001 va=0x120378080 words=12: 20038090 00000001 2037b000 00000001 200180c0 00000008 20038090 00000001 2037b010 00000001 200180c0 00000010
+kf3: chan token 0x1014 RELAY-PEEK (diagnostic) GP[0x1] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1014 RELAY-PEEK (diagnostic) GP[0x2] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1014 RELAY-PEEK (diagnostic) GP[0x3] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1014 RELAY-PEEK (diagnostic) GP[0x4] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1014 RELAY-PEEK (diagnostic) GP[0x5] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1014 RELAY-PEEK (diagnostic) GP[0x6] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1014 RELAY-PEEK (diagnostic) GP[0x7] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1014 RELAY-PEEK (diagnostic) GP[0x8] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1014 RELAY-PEEK (diagnostic) GP[0x9] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1014 RELAY-PEEK (diagnostic) GP[0xa] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1014 RELAY-PEEK (diagnostic) GP[0xb] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x15 RELAY-PEEK (diagnostic) GP[0x0] lo=0x200c4080 hi=0x00002801 va=0x1200c4080 words=10: 200406c0 00000001 200e7000 00000001 10000004 200406c0 00000001 200e7010 00000001 00000004
+kf3: chan token 0x15 RELAY-PEEK (diagnostic) GP[0x1] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x15 RELAY-PEEK (diagnostic) GP[0x2] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x15 RELAY-PEEK (diagnostic) GP[0x3] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x15 RELAY-PEEK (diagnostic) GP[0x4] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x15 RELAY-PEEK (diagnostic) GP[0x5] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x15 RELAY-PEEK (diagnostic) GP[0x6] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x15 RELAY-PEEK (diagnostic) GP[0x7] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x15 RELAY-PEEK (diagnostic) GP[0x8] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x15 RELAY-PEEK (diagnostic) GP[0x9] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x15 RELAY-PEEK (diagnostic) GP[0xa] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x15 RELAY-PEEK (diagnostic) GP[0xb] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1016 RELAY-PEEK (diagnostic) GP[0x0] lo=0x200e8080 hi=0x00003001 va=0x1200e8080 words=12: 20038090 00000001 200eb000 00000001 200180c0 00000008 20038090 00000001 200eb010 00000001 200180c0 00000010
+kf3: chan token 0x1016 RELAY-PEEK (diagnostic) GP[0x1] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1016 RELAY-PEEK (diagnostic) GP[0x2] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1016 RELAY-PEEK (diagnostic) GP[0x3] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1016 RELAY-PEEK (diagnostic) GP[0x4] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1016 RELAY-PEEK (diagnostic) GP[0x5] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1016 RELAY-PEEK (diagnostic) GP[0x6] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1016 RELAY-PEEK (diagnostic) GP[0x7] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1016 RELAY-PEEK (diagnostic) GP[0x8] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1016 RELAY-PEEK (diagnostic) GP[0x9] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1016 RELAY-PEEK (diagnostic) GP[0xa] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
+kf3: chan token 0x1016 RELAY-PEEK (diagnostic) GP[0xb] lo=0x00000000 hi=0x00000000 va=0x0 words=0: 
