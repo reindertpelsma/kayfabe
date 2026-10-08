@@ -245,6 +245,16 @@ host-axis cell they share, including both in-branch boundaries (535.54.03 → 53
 550.40.07 → 550.40.53 UVM). nvkvm-pv's profile boundaries therefore apply to H3/H4/H7 as stated:
 `NVKVM_ABI_525` (channel 304) … `NVKVM_ABI_610` (channel 376).
 
+> ⊘ **CORRECTED 2026-10-08 — the grader is version-aware now** (owner: *"the raw client should
+> work on all driver versions kayfabe is also going to support"*). R2 resolves the driver to
+> its matrix layouts and the client carries every block it sends
+> (`kayfabe_isolate_host::hostabi`; `UVM_FREE`/`UVM_UNREGISTER_CHANNEL` included); a driver the
+> matrix never measured is still refused by name. Runs on the trusted host (RTX 4070,
+> 595.91.07): bare-metal 30/30 (`rawclient595bare2`, rev 6c8bedc6) and fast guest 30/30 with
+> the guest on 595.91.07 (`rawclient595fast`, client rev 6c8bedc6, kf3 binary b5c9f717),
+> both 2026-10-08. No 580 host was run for this change; on every 580 tag from 580.65.06 the
+> client's blocks are the bench's own layouts (`hostabi.rs::what_differs_at_595_and_on_the_580_line`).
+
 The raw client (`kayfabe-rm-ladder`, the thin guest's grader, running against the **guest**
 driver) has its own copy of H1/H2/H3/H4/H5/H7 and the UVM layouts (`UVM_MAP_EXTERNAL_ALLOCATION`
 1200 before 550.40.53; `UVM_FREE`/`UVM_UNREGISTER_CHANNEL` shrink at 590.44.01) — so the thin
@@ -498,6 +508,8 @@ A box that vanished: rent one of the same arch, provision it, `vput` the last pu
   since 2026-09-28, `HOST_DRIVER=<v>`: `XFree86/`, then `tesla/`; `CC` = the kernel's compiler); the
   guest stays at 580.159.04 (the bench image, and a thin guest staged from 580.159.04 with
   `guest-driver=580.159.04` declared so a defaulted device cannot take the host's version).
+- ⊘ CORRECTED 2026-10-08: the thin guest's raw client now grades every matrix driver (§8.2
+  item 1's supersession, rev 6c8bedc6); the text below stood until then.
 - **Non-580 guests are graded by the fat ladder** (ruling 1): the thin guest's raw client is a
   580-only RM client and refuses them at R2, so their thin row is `failure_point.sh` — did the
   guest's RM initialise, and if not, where it stopped — and the fat-guest CUDA ladder is the verdict.
@@ -774,6 +786,9 @@ numbering is itself per version (lower at 535/545) — translated by NAME throug
 
 ### 8.2 Decisions — RULED 2026-09-26 (coordinator, under the owner's standing rule: best-bet experiments on sub-branches; anything security-policy is flagged for the owner before merge)
 
+1. ⊘ SUPERSEDED 2026-10-08 — see the correction above §2's raw-client paragraph: the grader
+   runs on every driver of the matrix (runs `rawclient595bare2`, `rawclient595fast`, rev 6c8bedc6).
+   The ruling as it stood:
 1. **The grader is a 580-only RM client** — `kayfabe-rm-ladder` refuses any guest driver outside
    [580.65.06, 581) at rung R2 and carries 580 layouts (`GET_CLASSLIST_V2`, `NVOS46`, `NVOS47`,
    `GPFIFO_SCHEDULE`, UVM), so the thin guest cannot grade a 570/575/590/595/610 guest.
