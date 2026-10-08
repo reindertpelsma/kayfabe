@@ -45,7 +45,10 @@
  * diagnostic BAR0-read trap exception). */
 /* 22 (2026-10-08, claude/gpu-uuid-per-vm-20261008): ABI 21 plus the per-VM GPU UUID. kf3_realize
  * gains gpu_uuid and vm_id (nullable strings) and pci_devfn after gop_efi. */
-#define KF3_ABI 22
+/* 24 (2026-10-09, claude/kf3-read-trace-20261008): ABI 22 plus the default-off BAR0 trace mode
+ * (KF3_BAR0_READ_TRACE; OWNER_RULINGS.md sec. X): kf3_trace_mode, kf3_trace_piece, kf3_trace_admit,
+ * kf3_trace_name, kf3_trace_report. 23 is another branch's (0da871c1, the input/cursor shim). */
+#define KF3_ABI 24
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -152,6 +155,17 @@ void kf3_bar1_usermode_write(void *h, uint64_t vf_rel, uint64_t val, uint32_t wi
  * main-loop bottom half. Rust calls it only from the register drainer, only with the flag on. */
 typedef void (*Kf3ReadTrapFn)(void *opaque, uint32_t on);
 int32_t kf3_set_read_trap(void *h, Kf3ReadTrapFn f, void *opaque);
+/* ★ ABI 24, DIAGNOSTIC (KF3_BAR0_READ_TRACE, default off; crates/kf-qemu/src/readtrace.rs): the BAR0
+ * trace mode. kf3_trace_mode: 1 on, 0 off (then NONE of the trace paths exist: ROMD on, irqfd MSI,
+ * no trace call), -1 bad handle. kf3_trace_piece: 1 when a shadow piece's reads must exit.
+ * kf3_trace_admit (lock-free; vCPU or main loop): kind 0 read / 1 write (a offset, b width,
+ * c value), 2 MSI (a vector, b data, c address); 1 = write the record, 0 = unselected or capped.
+ * kf3_trace_name: the device name in the records; kf3_trace_report: the exit report line. */
+int32_t kf3_trace_mode(void *h);
+uint32_t kf3_trace_piece(void *h, uint64_t base, uint64_t len);
+uint32_t kf3_trace_admit(void *h, uint32_t kind, uint64_t a, uint64_t b, uint64_t c);
+void kf3_trace_name(void *h, char *buf, size_t len);
+void kf3_trace_report(void *h, char *buf, size_t len);
 /* ★ ABI 10 (v3-display2's 9): the newest display frame, for the console's gfx_update (main thread);
  * -1 = none yet. */
 int32_t kf3_display_frame(void *h, Kf3Frame *out);

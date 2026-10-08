@@ -1,0 +1,8 @@
+# ana/rtobs-decoded.json: 323 request RPCs, 1 GSP-initiated messages
+# GSP-initiated functions: 0x1001x1
+ARM2080 rpc=28 event=194 action=2
+ARM2080 rpc=77 event=35 action=2
+ARM2080 rpc=89 event=35 action=2
+# NV2080 indices armed (whole boot): {35: 2, 194: 1}
+# indices posted (whole boot): {}
+# armed, never posted: [35, 194]

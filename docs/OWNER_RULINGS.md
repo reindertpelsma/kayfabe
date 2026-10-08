@@ -1,6 +1,6 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-10-07 (§S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-10-07 (§S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-09 (diagnostic BAR0 trace mode, the VFIO tracer).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
@@ -945,3 +945,28 @@ All owner statements of 2026-10-08, in the order the open-decision list was give
   regeneratable"; the archive copy remains); `/workspace/nvidia-gpu-passthrough` is backed up to
   `/mnt/windows-work/archive/`.
 - **Models:** Sonnet 5.5 by default, Opus 5.5 as the strongest tier (`CLAUDE.md`, *Models by risk*).
+
+## X. A diagnostic BAR0 trace mode with the VFIO reference's own tracer (2026-10-09)
+
+**STATUS: LIVE, 2026-10-09.** Owner rulings of 2026-10-09, relayed by the coordinator. A second,
+broader exception to "only BAR0 writes trap" (`AGENTS.md`, Rules; `design/THE_CONSTRAINTS.md`) than
+§S's scoped window; it does not replace §S.
+1. **What is allowed.** For diagnostics, kf3's BAR0 **reads may exit** (trap) to the VMM and be
+   logged; boot slowness does not matter.
+2. **Default off.** In every default, production and performance configuration the BAR0 mapping, the
+   exit behaviour and the code path stay exactly as before: "only BAR0 writes trap; nothing blocks on
+   a vCPU" stays the default. The mode is an explicit, loudly reported diagnostic exception, like the
+   existing probe flags.
+3. **The same tracer as the VFIO reference** (owner emphasis, same day: "using THE SAME tracer is the
+   most valuable thing"; "inject the same PCIe tracer used for VFIO into kayfabe's device, so both
+   give the same responses in the same formats"). Not a parallel look-alike: the observer is made a
+   device-agnostic helper that both the patched vfio-pci and kf3 call, with the same properties and
+   output, so the `scripts/bench/windows` harnesses and analysers work unchanged for both.
+4. **Hostile guest bytes.** The trace has a hard cap on log volume (bytes and records), a drop counter
+   reported at the end, and never grows memory or disk without bound per guest action.
+
+Implemented (branch `claude/kf3-read-trace-20261008`, `docs/design/V3_BAR0_TRACE_MODE.md`): the
+environment switch `KF3_BAR0_READ_TRACE=1` (ranges, caps: `crates/kf-qemu/src/readtrace.rs`), QEMU's
+own `vfio_region_read`/`vfio_region_write`/`vfio_msi_interrupt` trace events called by `kf3.c`, and the
+shared GSP observer (`tools/vfio-gsp-observer`, `gsp_observer_*`) behind kf3's `x-gsp-observer`
+property.

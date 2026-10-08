@@ -284,6 +284,17 @@ case "${KF_CONSOLE:-hvc}" in
     *) echo "run_fast_guest: KF_CONSOLE must be hvc or serial, got [${KF_CONSOLE}]" >&2; exit 2 ;;
 esac
 echo "== console: ${KF_CONSOLE:-hvc} ($CONSOLE)"
+# ★ 2026-10-09, DIAGNOSTIC (docs/design/V3_BAR0_TRACE_MODE.md; default unset = nothing added):
+# `KF_TRACE_EVENTS=<file>` enables QEMU's trace events listed in it (the VFIO reference's list:
+# vfio_region_read, vfio_region_write, vfio_msi_interrupt, ...) into `fast_<tag>_trace.log`. With
+# `KF3_BAR0_READ_TRACE=1` in the environment, kf3 records its BAR0 accesses through those events.
+TRACEARGS=()
+if [ -n "${KF_TRACE_EVENTS:-}" ]; then
+    [ -f "$KF_TRACE_EVENTS" ] || { echo "run_fast_guest: KF_TRACE_EVENTS=$KF_TRACE_EVENTS is not a file"; exit 2; }
+    rm -f "$BENCH/fast_${TAG}_trace.log"
+    TRACEARGS=(-trace "events=$KF_TRACE_EVENTS,file=$BENCH/fast_${TAG}_trace.log")
+    echo "== QEMU trace: $KF_TRACE_EVENTS -> $BENCH/fast_${TAG}_trace.log (KF3_BAR0_READ_TRACE=${KF3_BAR0_READ_TRACE:-unset})"
+fi
 
 start=$(date +%s)
 timeout --kill-after=3 "$BUDGET" "$Q" -name kf-fastguest \
@@ -291,7 +302,7 @@ timeout --kill-after=3 "$BUDGET" "$Q" -name kf-fastguest \
     -kernel "$FG/vmlinuz" -initrd "$FG/initrd.cpio.gz" \
     -append "$CONSOLE panic=1 loglevel=6 ${KF_APPEND:-}${MGPU_TOK}KF_ARMS=$ARMS_TOK KF_IOCTL_TRACE=${KF_IOCTL_TRACE:-ring} KF_BUDGET_S=$BUDGET" \
     "${DEVARGS[@]}" \
-    -msg timestamp=on \
+    -msg timestamp=on "${TRACEARGS[@]}" \
     "${CONARGS[@]}" -display none \
     > "$BENCH/fast_${TAG}_qemu.log" 2>&1
 rc=$?

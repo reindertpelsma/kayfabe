@@ -9,6 +9,18 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+**kf3 BAR0 trace mode with the VFIO reference's own tracer, 2026-10-09 (branch `claude/kf3-read-trace-20261008` from
+`claude/display-reply-diff-20261008`; owner ruling `OWNER_RULINGS.md` §X; design `docs/design/V3_BAR0_TRACE_MODE.md`;
+[record](../traces/kf3_read_trace_20261009/README.md)).** Default off. `KF3_BAR0_READ_TRACE=1` makes kf3's selected BAR0
+reads exit (display range + `KF3_READ_TRACE_RANGES`, or `all`) and records reads, writes and MSIs through QEMU's own
+`vfio_region_read`/`vfio_region_write`/`vfio_msi_interrupt` trace events; `x-gsp-observer=` on `kf3-gpu` attaches the GSP
+observer, now one device-agnostic helper shared with vfio-pci (`tools/vfio-gsp-observer`). Caps on records and bytes with a
+drop counter. `[measured, runs rtoff/rton/rtcap/rtobs at 9cebeea9, RTX 4070, 2026-10-09]` off 30/30 with `read_exits` 0 as
+before; on (all ranges) 30/30, +12 % client time; a 4 MiB cap held; the VFIO analysers read kf3's outputs unchanged. For
+the Windows display trace: env and `win_vm.sh` switches in the design doc §7; the bench QEMU tree with the shared observer
+is `/var/lib/kf-windows-20261005/readtrace/qemu-10.2.4` (the older `/var/lib/kf-windows-20261005/qemu-10.2.4` has the
+VFIO-only observer, so a kf3 built there refuses `x-gsp-observer` by name). Not run yet: Windows.
+
 **Display reply diff, 2026-10-09 (GPU-free; branch `claude/display-reply-diff-20261008` from `claude/windows-flip-vsync-20261008`;
 [record](../traces/display_reply_diff_20261008/README.md)).** Every display RPC reply and display register read-back the
 Windows KMD sees on the real RTX 4070 before its first window PUT (VFIO DVI reference boot3), diffed field by field against

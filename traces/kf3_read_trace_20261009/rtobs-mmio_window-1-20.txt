@@ -1,0 +1,25 @@
+after head 2: bar0 R 110804=1, bar0 R 110808=1, bar0 W 110080=1, bar0-poll/intr=1
+after head 3: bar0 R 110804=1, bar0 R 110808=1, bar0-poll/intr=8
+after head 4: bar0 R 110804=1, bar0 R 110808=1, bar0-poll/intr=2
+after head 5: bar0 R 110804=1, bar0 R 110808=1, bar0-poll/intr=1
+after head 6: bar0 R 110804=1, bar0 R 110808=1, bar0-poll/intr=2
+after head 7: bar0 R 110804=1, bar0 R 110808=1, bar0-poll/intr=3
+after head 8: bar0 R 110804=1, bar0 R 110808=1, bar0-poll/intr=1
+after head 9: bar0 R 110804=1, bar0 R 110808=1, bar0-poll/intr=1
+after head 10: bar0 R 110804=1, bar0 R 110808=1, bar0-poll/intr=1
+after head 11: bar0 R 110804=1, bar0 R 110808=1, bar0-poll/intr=7
+after head 12: bar0 R 110804=1, bar0 R 110808=1, bar0-poll/intr=1
+after head 13: bar0 R 110804=1, bar0 R 110808=1, bar0-poll/intr=1
+after head 14: bar0 R 110804=1, bar0 R 110808=1, bar0-poll/intr=1
+after head 15: bar0 R 110804=1, bar0 R 110808=1, bar0-poll/intr=1
+after head 16: bar0 R 110804=1, bar0 R 110808=1, bar0-poll/intr=1
+after head 17: bar0 R 110804=1, bar0 R 110808=1, bar0 W 088030=1, bar0 W 088080=2, bar0-poll/intr=1
+after head 18: bar0 R 110804=1, bar0 R 110808=1, bar0-poll/intr=1
+after head 19: bar0 R 110804=1, bar0 R 110808=1, bar0-poll/intr=1
+after head 20: bar0 R 110804=1, bar0 R 110808=1, bar0-poll/intr=1
+# distinct BAR0 non-poll values (up to 8):
+W 088030 0x0
+W 088080 0x10
+W 110080 0x0
+R 110804 0x1dba5ca3
+R 110808 0x1dba5ca3
