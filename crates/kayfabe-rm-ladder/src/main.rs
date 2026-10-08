@@ -4031,8 +4031,8 @@ fn crit1(state: kayfabe_isolate_host::rm::Crit1State) {
 /// GPU node file and not an `eventfd(2)`.
 fn ce_interrupt(rm: &mut HostRmBackend, gpu: u32) -> bool {
     use kayfabe_isolate_host::rm::osevent::{
-        CE_IRQ_CONTROL_ITERATIONS, CE_IRQ_ITERATIONS, CE_IRQ_QUIET_PATIENCE, CE_IRQ_WAKE_BOUND,
-        ChannelSourceProbe, TOKENS, mask_names, token_name,
+        CE_IRQ_CONTROL_ITERATIONS, CE_IRQ_GIVE_UP_AFTER, CE_IRQ_ITERATIONS, CE_IRQ_QUIET_PATIENCE,
+        CE_IRQ_WAKE_BOUND, ChannelSourceProbe, TOKENS, mask_names, token_name,
     };
 
     /// Neither zero nor a value the destination is pre-filled with (`!base` per iteration).
@@ -4076,6 +4076,23 @@ fn ce_interrupt(rm: &mut HostRmBackend, gpu: u32) -> bool {
          version); copy-engine class {:#06x}",
         map.join(" "),
         ev.ce_class
+    );
+    println!(
+        "info  R35 armed           = {} of {TOKENS} notifiers armed [{}]{}",
+        ev.armed_mask.count_ones(),
+        mask_names(ev.armed_mask),
+        if ev.unarmed.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "; NOT armed: {}",
+                ev.unarmed
+                    .iter()
+                    .map(|(t, why)| format!("{} ({why})", token_name(*t)))
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            )
+        }
     );
     println!(
         "{}  R35 quiet window      = nothing submitted: readable files = {} (after {} window(s), \
@@ -4132,6 +4149,14 @@ fn ce_interrupt(rm: &mut HostRmBackend, gpu: u32) -> bool {
                 )
             },
         );
+        let lat = if leg.gave_up {
+            format!(
+                "{lat} [GAVE UP early: {CE_IRQ_GIVE_UP_AFTER} silent iterations in a row, {} asked]",
+                leg.expected
+            )
+        } else {
+            lat
+        };
         let fence = if leg.iters.iter().any(|i| i.fence_ok.is_some()) {
             format!(
                 ", host fence {}/{n}",

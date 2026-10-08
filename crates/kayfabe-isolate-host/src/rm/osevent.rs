@@ -93,6 +93,11 @@ pub const CE_IRQ_QUIET: Duration = Duration::from_millis(300);
 /// "silent" control unreadable. The window is retried until it is clean or this patience runs out;
 /// if it never is, the arm FAILS on the quiet window by name — it does not grade a noisy GPU.
 pub const CE_IRQ_QUIET_PATIENCE: Duration = Duration::from_secs(60);
+/// ★ Consecutive iterations that never woke before a positive leg gives up. Each silent iteration
+/// costs the whole [`CE_IRQ_WAKE_BOUND`]; 50 of them would be 100 s, longer than a guest's budget
+/// (a self-deadline abort loses every verdict the arm had already earned). Three in a row is a
+/// result — the leg then FAILS by name, with the iterations it did run.
+pub const CE_IRQ_GIVE_UP_AFTER: usize = 3;
 /// After the positive wake: how long the other files are watched for a stray readiness.
 pub const CE_IRQ_GRACE: Duration = Duration::from_millis(25);
 /// The control leg's per-iteration window: long enough for a real interrupt to have arrived many
@@ -360,6 +365,8 @@ pub struct CeIrqLeg {
     pub expected: usize,
     /// What each observed.
     pub iters: Vec<CeIrqIter>,
+    /// The leg stopped early after [`CE_IRQ_GIVE_UP_AFTER`] consecutive silent iterations.
+    pub gave_up: bool,
 }
 
 impl CeIrqLeg {
@@ -391,9 +398,14 @@ impl CeIrqLeg {
         let name = label.as_str();
         if self.iters.is_empty() || self.iters.len() != self.expected {
             f.push(format!(
-                "{name}: ran {} of {} iterations",
+                "{name}: ran {} of {} iterations{}",
                 self.iters.len(),
-                self.expected
+                self.expected,
+                if self.gave_up {
+                    format!(" (gave up after {CE_IRQ_GIVE_UP_AFTER} consecutive silent iterations)")
+                } else {
+                    String::new()
+                }
             ));
         }
         let bound_us = u64::try_from(bound.as_micros()).unwrap_or(u64::MAX);
@@ -485,6 +497,12 @@ pub struct CeIrqEvidence {
     pub notifiers: [u32; TOKENS],
     /// The CE class the channel's object is.
     pub ce_class: u32,
+    /// Tokens whose event was registered AND armed (bit `t` = token `t`). On bare metal all eleven.
+    /// `FIFO_EVENT_MTHD` is required; any other token a host refuses to arm is listed in
+    /// [`Self::unarmed`] and simply not watched, so the controls cover only what was armed.
+    pub armed_mask: u16,
+    /// Tokens that could NOT be armed, with the step and the status that refused them.
+    pub unarmed: Vec<(usize, String)>,
     /// Tokens readable during the LAST quiet window (F4): must be none.
     pub quiet_mask: u16,
     /// How many quiet windows it took, and how long the arm waited for one, in milliseconds.
@@ -507,6 +525,9 @@ impl CeIrqEvidence {
     #[must_use]
     pub fn failures(&self, bound: Duration) -> Vec<String> {
         let mut f = Vec::new();
+        if self.armed_mask & (1 << TOKEN_FIFO) == 0 {
+            f.push("FIFO_EVENT_MTHD could not be armed: no interrupt can be observed".to_string());
+        }
         if self.quiet_mask != 0 {
             f.push(format!(
                 "quiet window: {} became readable with nothing submitted, in every one of {} \
@@ -716,6 +737,17 @@ fn raw_poll_error(e: &RawError) -> RmError {
     ioctl_error(e)
 }
 
+/// Name the setup step a refusal came from. ⊘ A bare `Other(86)` on a log line says only that RM
+/// (or a guest's emulated RM) answered `NV_ERR_NOT_SUPPORTED` somewhere in a dozen calls; the step
+/// is what the next reader needs, and it is printed where it happens.
+fn step<T>(what: &str, r: Result<T, RmError>) -> Result<T, RmError> {
+    if let Err(e) = &r {
+        eprintln!("kayfabe-isolate-host: CE-INTERRUPT setup step `{what}` refused: {e:?}");
+        println!("info  R35 setup step     = `{what}` refused: {e:?}");
+    }
+    r
+}
+
 /// What one timed wait saw.
 #[derive(Debug, Clone, Copy, Default)]
 struct Waited {
@@ -868,13 +900,25 @@ impl HostRmBackend {
         // --- the operands FIRST, mapped in both spaces: `map_dma_both` places the same VA in the
         // isolate's own space, and a channel ring created there beforehand can own that VA already
         // (`VA_ALREADY_MAPPED` came back when the channel was first, 2026-10-08; the cause is inferred) --
-        let src = self.conn.alloc_device_local(CE_IRQ_BYTES)?;
+        let src = step(
+            "alloc source operand",
+            self.conn.alloc_device_local(CE_IRQ_BYTES),
+        )?;
         opened.src = Some(src);
-        let dst = self.conn.alloc_device_local(CE_IRQ_BYTES)?;
+        let dst = step(
+            "alloc destination operand",
+            self.conn.alloc_device_local(CE_IRQ_BYTES),
+        )?;
         opened.dst = Some(dst);
-        let src_va = self.map_dma_both(key, src, CE_IRQ_BYTES, None)?;
+        let src_va = step(
+            "map source operand",
+            self.map_dma_both(key, src, CE_IRQ_BYTES, None),
+        )?;
         opened.src_va = Some(src_va);
-        let dst_va = self.map_dma_both(key, dst, CE_IRQ_BYTES, None)?;
+        let dst_va = step(
+            "map destination operand",
+            self.map_dma_both(key, dst, CE_IRQ_BYTES, None),
+        )?;
         opened.dst_va = Some(dst_va);
         let (_src_node, src_map) =
             self.conn
@@ -886,7 +930,7 @@ impl HostRmBackend {
         // --- the COPY0 channel: the one `ce_copy_outcome` uses, allocated and scheduled, NOTHING
         // submitted to it yet. (Operands are mapped first, above.) -------------------------------
         let exec = self.executor_vas(key)?;
-        let ce0 = self.ce_channel(key, exec)?;
+        let ce0 = step("COPY0 channel (ce_channel)", self.ce_channel(key, exec))?;
         let copy0 = LegChan {
             chan: ce0.chan,
             raw: self.narrow(ce0.chan)?,
@@ -915,15 +959,55 @@ impl HostRmBackend {
         // --- eleven event files, each armed, BEFORE the first submission ------------------------
         let poller = Poller::create().map_err(|e| raw_poll_error(&e))?;
         let subdevice = self.conn.subdevice;
+        // ★ A refusal to arm is fatal only for `FIFO_EVENT_MTHD`, the notifier every interrupt leg can
+        // land on. A host (or a guest's emulated RM) that will not arm a CE notifier simply has it
+        // reported as unarmed and not watched: a guest RM answers `NV_ERR_NOT_SUPPORTED` for the
+        // notifiers it cannot honestly deliver (`kf_abi::eventnotify::SILENT_NOTIFIERS`), and that
+        // is a finding about the guest, not a reason to refuse to measure the rest.
+        let mut armed_mask = 0u16;
+        let mut unarmed: Vec<(usize, String)> = Vec::new();
         for (tok, &notifier) in notifiers.iter().enumerate() {
-            let file = self.conn.open_os_event_file()?;
-            let h = self.conn.alloc_os_event(&file, subdevice, notifier, true)?;
-            opened.events.push(h);
-            self.conn.arm_notifier_repeat(notifier)?;
+            let name = token_name(tok);
+            let fatal = tok == TOKEN_FIFO;
+            let file = match step(
+                &format!("open event file for {name}"),
+                self.conn.open_os_event_file(),
+            ) {
+                Ok(f) => f,
+                Err(e) if fatal => return Err(e),
+                Err(e) => {
+                    unarmed.push((tok, format!("open event file: {e:?}")));
+                    continue;
+                }
+            };
+            let h = match step(
+                &format!("NV01_EVENT_OS_EVENT {name} (notifier {notifier})"),
+                self.conn.alloc_os_event(&file, subdevice, notifier, true),
+            ) {
+                Ok(h) => h,
+                Err(e) if fatal => return Err(e),
+                Err(e) => {
+                    unarmed.push((tok, format!("NV01_EVENT_OS_EVENT: {e:?}")));
+                    continue;
+                }
+            };
+            if let Err(e) = step(
+                &format!("EVENT_SET_NOTIFICATION {name} (notifier {notifier})"),
+                self.conn.arm_notifier_repeat(notifier),
+            ) {
+                let _ = self.free(self.stamp(h));
+                if fatal {
+                    return Err(e);
+                }
+                unarmed.push((tok, format!("EVENT_SET_NOTIFICATION: {e:?}")));
+                continue;
+            }
             poller
                 .watch(file.as_fd(), tok as u64)
                 .map_err(|e| raw_poll_error(&e))?;
+            opened.events.push(h);
             opened.files.push(file);
+            armed_mask |= 1 << tok;
         }
 
         // --- the channel-source probe: the owner's wording, asked of RM --------------------------
@@ -963,7 +1047,7 @@ impl HostRmBackend {
         // interrupt delivered as the default (`bDefaultNonstallNotify`, `intr.c:1195-1205`), and
         // which of the two a given die does is MEASURED (reported per leg), not assumed. Every
         // token outside the set is the negative control.
-        let own = |c: &LegChan| (1u16 << c.ce_token) | (1 << TOKEN_FIFO);
+        let own = |c: &LegChan| ((1u16 << c.ce_token) | (1 << TOKEN_FIFO)) & armed_mask;
         let mut plan: Vec<(u32, LegChan, CeWake, u16, usize)> = vec![
             (0, copy0, CeWake::LaunchInterrupt, own(&copy0), iterations),
             (0, copy0, CeWake::HostNonStall, 1 << TOKEN_FIFO, iterations),
@@ -995,7 +1079,9 @@ impl HostRmBackend {
                 positive,
                 expected: n,
                 iters: Vec::with_capacity(n),
+                gave_up: false,
             };
+            let mut silent_run = 0usize;
             for _ in 0..n {
                 seq = seq.wrapping_add(1);
                 let base = pattern.wrapping_add(seq.wrapping_mul(0x0001_0001));
@@ -1016,7 +1102,16 @@ impl HostRmBackend {
                     self.one_iteration(&lc, payload, src_va, dst_va, wake, positive, &poller)?;
                 it.stale = stale;
                 it.data_ok = it.data_ok && self.dst_verifies(dst, base)?;
+                silent_run = if positive != 0 && it.wake_us.is_none() {
+                    silent_run + 1
+                } else {
+                    0
+                };
                 leg.iters.push(it);
+                if silent_run >= CE_IRQ_GIVE_UP_AFTER {
+                    leg.gave_up = true;
+                    break;
+                }
             }
             legs.push(leg);
         }
@@ -1024,6 +1119,8 @@ impl HostRmBackend {
         Ok(CeIrqEvidence {
             notifiers,
             ce_class,
+            armed_mask,
+            unarmed,
             quiet_mask,
             quiet_attempts,
             quiet_waited_ms,
@@ -1354,6 +1451,7 @@ mod tests {
             positive,
             expected: iters.len().max(1),
             iters,
+            gave_up: false,
         }
     }
 
@@ -1418,6 +1516,7 @@ mod tests {
             positive: 1 << TOKEN_FIFO,
             expected: 50,
             iters: vec![],
+            gave_up: false,
         };
         assert!(!empty.failures(BOUND).is_empty());
         // The host leg also requires its fence.
@@ -1452,6 +1551,8 @@ mod tests {
         CeIrqEvidence {
             notifiers: [0; TOKENS],
             ce_class: 0xC7B5,
+            armed_mask: (1 << TOKENS) - 1,
+            unarmed: vec![],
             quiet_mask: 0,
             quiet_attempts: 1,
             quiet_waited_ms: 300,
