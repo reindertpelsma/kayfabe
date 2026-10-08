@@ -1,0 +1,185 @@
+# VFIO requests: 2839 (of 6869)  kayfabe requests: 667 (of 1894)  cut at alloc class 0x9067
+
+## Alignment (first 12 non-equal blocks; V = VFIO index, K = kayfabe index)
+- delete V[0:4] K[0:0]
+    V 20:01:35.229200 fn GSP_SET_SYSTEM_INFO reply=none
+    V 20:01:35.229200 fn SET_REGISTRY reply=none
+    V 20:01:35.843446 fn GSP_SET_SYSTEM_INFO reply=none
+    V 20:01:35.843446 fn SET_REGISTRY reply=none
+- delete V[27:28] K[23:23]
+    V 20:01:36.001687 ctrl 0x20800a61 reply=0x0
+- delete V[60:63] K[55:55]
+    V 20:01:36.155453 ctrl 0x20802a06 reply=0x0
+    V 20:01:36.155827 ctrl 0x20802a0d reply=0x0
+    V 20:01:36.156633 ctrl 0x20802a06 reply=0x0
+- delete V[119:123] K[111:111]
+    V 20:01:36.242435 ctrl 0x2080a0a7 reply=0x0
+    V 20:01:36.242957 ctrl 0x2080a028 reply=0x0
+    V 20:01:36.243326 ctrl 0x2080a028 reply=0x0
+    V 20:01:36.243685 ctrl 0x2080a026 reply=0x0
+- delete V[126:148] K[114:114]
+    V 20:01:36.245525 ctrl 0x20801823 reply=0x0
+    V 20:01:36.245793 ctrl 0x20801823 reply=0x0
+    V 20:01:36.246017 ctrl 0x20801823 reply=0x0
+    V 20:01:36.246228 ctrl 0x20801823 reply=0x0
+    V 20:01:36.246676 ctrl 0x20801823 reply=0x0
+    V 20:01:36.246856 ctrl 0x20801823 reply=0x0
+- delete V[178:184] K[144:144]
+    V 20:01:36.260773 ctrl 0x0073028b reply=0x0
+    V 20:01:36.261104 ctrl 0x0073028b reply=0x0
+    V 20:01:36.261419 ctrl 0x0073028b reply=0x0
+    V 20:01:36.261761 ctrl 0x0073028b reply=0x0
+    V 20:01:36.262089 ctrl 0x0073028b reply=0x0
+    V 20:01:36.262408 ctrl 0x0073028b reply=0x0
+- delete V[202:203] K[162:162]
+    V 20:01:36.271206 ctrl 0x20800160 reply=0x0
+- delete V[206:207] K[165:165]
+    V 20:01:36.273028 ctrl 0x20800aff reply=0x0
+- delete V[215:221] K[173:173]
+    V 20:01:36.282190 ctrl 0x0073028b reply=0x0
+    V 20:01:36.282512 ctrl 0x0073028b reply=0x0
+    V 20:01:36.282822 ctrl 0x0073028b reply=0x0
+    V 20:01:36.283134 ctrl 0x0073028b reply=0x0
+    V 20:01:36.283457 ctrl 0x0073028b reply=0x0
+    V 20:01:36.283770 ctrl 0x0073028b reply=0x0
+- delete V[222:228] K[174:174]
+    V 20:01:36.284604 ctrl 0x00730240 reply=0x0
+    V 20:01:36.284929 ctrl 0x00730240 reply=0x0
+    V 20:01:36.285232 ctrl 0x00730240 reply=0x0
+    V 20:01:36.285542 ctrl 0x00730240 reply=0x0
+    V 20:01:36.285859 ctrl 0x00730240 reply=0x0
+    V 20:01:36.286169 ctrl 0x00730240 reply=0x0
+- delete V[235:280] K[181:181]
+    V 20:01:36.288876 ctrl 0x00730250 reply=0x0
+    V 20:01:36.289183 ctrl 0x0073028b reply=0x0
+    V 20:01:36.289501 ctrl 0x00730285 reply=0x56
+    V 20:01:36.289813 ctrl 0x00731140 reply=0x0
+    V 20:01:36.290130 ctrl 0x0073028a reply=0x0
+    V 20:01:36.290818 ctrl 0x00731365 reply=0x0
+- delete V[293:2249] K[194:194]
+    V 20:01:36.323643 ctrl 0x0073010b reply=0x0
+    V 20:01:36.323992 ctrl 0x0073010b reply=0x0
+    V 20:01:36.324371 ctrl 0x0073010b reply=0x0
+    V 20:01:36.324713 ctrl 0x0073010b reply=0x0
+    V 20:01:36.325067 ctrl 0x0073010b reply=0x0
+    V 20:01:36.325462 ctrl 0x0073010b reply=0x0
+
+## Matched requests answered with a different status (in order)
+- V[32] 20:01:36.005677 ctrl 0x20800afe: VFIO 0x0, kayfabe 0x56
+- V[33] 20:01:36.006203 ctrl 0x20800aff: VFIO 0x0, kayfabe 0x56
+- V[40] 20:01:36.008363 ctrl 0x20800aaf: VFIO 0x0, kayfabe 0x56
+- V[51] 20:01:36.144719 ctrl 0x00800292: VFIO 0x0, kayfabe 0x56
+- V[52] 20:01:36.144963 ctrl 0x20800a80: VFIO 0x0, kayfabe 0x56
+- V[57] 20:01:36.154402 ctrl 0x20800a80: VFIO 0x0, kayfabe 0x56
+- V[59] 20:01:36.155228 ctrl 0x20802a0f: VFIO 0x0, kayfabe 0x56
+- V[63] 20:01:36.157489 ctrl 0x2080017e: VFIO 0x0, kayfabe 0x56
+- V[73] 20:01:36.162242 ctrl 0x20800a30: VFIO 0x0, kayfabe 0x56
+- V[75] 20:01:36.162801 ctrl 0x20800a2e: VFIO 0x0, kayfabe 0x56
+- V[77] 20:01:36.163291 ctrl 0x20800b03: VFIO 0x0, kayfabe 0x56
+- V[80] 20:01:36.164378 ctrl 0x20800a3f: VFIO 0x0, kayfabe 0x56
+- V[113] 20:01:36.239118 ctrl 0x2080013f: VFIO 0x0, kayfabe 0x56
+- V[118] 20:01:36.241439 ctrl 0x20809004: VFIO 0x0, kayfabe 0x56
+- V[124] 20:01:36.244482 ctrl 0x00801306: VFIO 0x0, kayfabe 0x56
+- V[125] 20:01:36.245137 ctrl 0x20810108: VFIO 0x0, kayfabe 0x56
+- V[149] 20:01:36.249877 ctrl 0x20801823: VFIO 0x0, kayfabe 0x56
+- V[150] 20:01:36.250766 ctrl 0x20800ab8: VFIO 0x0, kayfabe 0x56
+- V[153] 20:01:36.251806 ctrl 0x20802a12: VFIO 0x0, kayfabe 0x56
+- V[154] 20:01:36.252022 ctrl 0x20802a12: VFIO 0x0, kayfabe 0x56
+- V[155] 20:01:36.252228 ctrl 0x20802a12: VFIO 0x0, kayfabe 0x56
+- V[156] 20:01:36.252435 ctrl 0x20802a12: VFIO 0x0, kayfabe 0x56
+- V[162] 20:01:36.254866 ctrl 0x20800160: VFIO 0x0, kayfabe 0x56
+- V[163] 20:01:36.255365 ctrl 0x20802801: VFIO 0x0, kayfabe 0x56
+- V[174] 20:01:36.259382 ctrl 0x20802806: VFIO 0x0, kayfabe 0x56
+- V[186] 20:01:36.263645 ctrl 0x2080205b: VFIO 0x0, kayfabe 0x56
+- V[187] 20:01:36.266180 ctrl 0x2080a060: VFIO 0x0, kayfabe 0x56
+- V[188] 20:01:36.266441 ctrl 0x20802068: VFIO 0x0, kayfabe 0x56
+- V[189] 20:01:36.266748 ctrl 0x00800106: VFIO 0x0, kayfabe 0x56
+- V[190] 20:01:36.267103 ctrl 0x2080a70a: VFIO 0x0, kayfabe 0x56
+- V[191] 20:01:36.267515 ctrl 0x2080a801: VFIO 0x0, kayfabe 0x56
+- V[198] 20:01:36.270075 ctrl 0x20802a12: VFIO 0x0, kayfabe 0x56
+- V[199] 20:01:36.270296 ctrl 0x20802a12: VFIO 0x0, kayfabe 0x56
+- V[200] 20:01:36.270501 ctrl 0x20802a12: VFIO 0x0, kayfabe 0x56
+- V[201] 20:01:36.270699 ctrl 0x20802a12: VFIO 0x0, kayfabe 0x56
+- V[205] 20:01:36.272720 ctrl 0x208081ea: VFIO 0x0, kayfabe 0x56
+- V[207] 20:01:36.279445 ctrl 0x20808524: VFIO 0x0, kayfabe 0x56
+- V[281] 20:01:36.304486 ctrl 0x00730285: VFIO 0x1f, kayfabe 0x56
+- V[282] 20:01:36.304810 ctrl 0x00730285: VFIO 0x1f, kayfabe 0x56
+- V[283] 20:01:36.305124 ctrl 0x00730285: VFIO 0x1f, kayfabe 0x56
+- V[284] 20:01:36.305421 ctrl 0x00730285: VFIO 0x1f, kayfabe 0x56
+- V[286] 20:01:36.306236 ctrl 0x0073011d: VFIO 0x0, kayfabe 0x56
+- V[2254] 20:01:36.952885 ctrl 0x20800a3a: VFIO 0x0, kayfabe 0x56
+- V[2257] 20:01:36.953754 ctrl 0x20801110: VFIO 0x0, kayfabe 0x56
+- V[2268] 20:01:36.959964 ctrl 0x2080080b: VFIO 0x0, kayfabe 0x56
+- V[2352] 20:01:37.123713 ctrl 0x00730288: VFIO 0x1f, kayfabe 0x56
+- V[2353] 20:01:37.124043 ctrl 0x00730288: VFIO 0x1f, kayfabe 0x56
+- V[2354] 20:01:37.124407 ctrl 0x00730288: VFIO 0x1f, kayfabe 0x56
+- V[2355] 20:01:37.124717 ctrl 0x00730288: VFIO 0x1f, kayfabe 0x56
+- V[2356] 20:01:37.125076 ctrl 0x00730288: VFIO 0x1f, kayfabe 0x56
+- V[2357] 20:01:37.125386 ctrl 0x00730288: VFIO 0x1f, kayfabe 0x56
+- V[2358] 20:01:37.125722 ctrl 0x00730288: VFIO 0x1f, kayfabe 0x56
+- V[2359] 20:01:37.126157 ctrl 0x00730288: VFIO 0x1f, kayfabe 0x56
+- V[2361] 20:01:37.127899 ctrl 0x20801220: VFIO 0x0, kayfabe 0x56
+- V[2603] 20:01:37.316056 ctrl 0x007302a2: VFIO 0x0, kayfabe 0x56
+- V[2604] 20:01:37.316369 ctrl 0x007302a6: VFIO 0x14, kayfabe 0x56
+- V[2607] 20:01:37.318308 ctrl 0x00730128: VFIO 0x0, kayfabe 0x56
+- V[2609] 20:01:37.319168 ctrl 0x00730128: VFIO 0x0, kayfabe 0x56
+- V[2725] 20:01:37.376451 ctrl 0x2080a801: VFIO 0x0, kayfabe 0x56
+- V[2727] 20:01:37.377443 ctrl 0x2080a630: VFIO 0x0, kayfabe 0x56
+(total 62)
+
+## Kinds only VFIO issues (count, first VFIO index)
+- fn GSP_SET_SYSTEM_INFO x2 first V[0] 20:01:35.229200
+- fn SET_REGISTRY x2 first V[1] 20:01:35.229200
+- ctrl 0x20802a06 x2 first V[60] 20:01:36.155453
+- ctrl 0x20802a0d x1 first V[61] 20:01:36.155827
+- ctrl 0x2080a0a7 x1 first V[119] 20:01:36.242435
+- ctrl 0x2080a028 x2 first V[120] 20:01:36.242957
+- ctrl 0x2080a026 x1 first V[122] 20:01:36.243685
+- ctrl 0x00731365 x3 first V[240] 20:01:36.290818
+- ctrl 0x0073117a x6 first V[244] 20:01:36.292094
+- fn ALLOC_MEMORY x3 first V[2252] 20:01:36.951673
+- ctrl 0x20800a39 x1 first V[2255] 20:01:36.953099
+- ctrl 0x20800a37 x1 first V[2256] 20:01:36.953317
+- ctrl 0x20801221 x1 first V[2362] 20:01:37.128246
+- ctrl 0x2080015f x1 first V[2407] 20:01:37.154706
+- alloc 0x95a1 x1 first V[2469] 20:01:37.189173
+- ctrl 0x00731152 x7 first V[2580] 20:01:37.243170
+- ctrl 0x00731341 x3 first V[2586] 20:01:37.245625
+- ctrl 0x00730282 x3 first V[2589] 20:01:37.246631
+- ctrl 0x00730293 x1 first V[2602] 20:01:37.315723
+- ctrl 0x00731144 x28 first V[2610] 20:01:37.319557
+- ctrl 0x20808530 x1 first V[2754] 20:01:37.405746
+
+## Kinds only kayfabe sees (count)
+- ctrl 0x20801222 x1 first K[302]
+
+## Kinds with different counts (VFIO, kayfabe)
+- alloc 0x0000 38 37
+- alloc 0x0080 38 37
+- alloc 0x2080 38 37
+- ctrl 0x20800a61 5 4
+- ctrl 0x20802a08 17 16
+- ctrl 0x20800aff 2 1
+- ctrl 0x20800301 25 24
+- fn FREE 16 17
+- alloc 0xc56f 15 14
+- ctrl 0x2080012b 9 8
+- ctrl 0xa06f0103 9 8
+- ctrl 0x20801823 24 2
+- ctrl 0x20800160 2 1
+- ctrl 0x0073028b 23 3
+- ctrl 0x00731369 4 1
+- ctrl 0x00730287 4 1
+- ctrl 0x00730240 7 1
+- ctrl 0x00730250 7 1
+- ctrl 0x00730285 11 5
+- ctrl 0x00731140 13 1
+- ctrl 0x0073028a 7 1
+- ctrl 0x00730245 7 8
+- ctrl 0x0073010b 1960 4
+- ctrl 0x20800a3a 1 9
+- alloc 0x0070 40 38
+- ctrl 0x0080170e 14 13
+- alloc 0x5080 13 12
+- alloc 0x0078 25 24
+- ctrl 0xc3720101 84 28

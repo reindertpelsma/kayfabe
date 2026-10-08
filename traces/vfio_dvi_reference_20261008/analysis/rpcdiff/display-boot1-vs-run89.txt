@@ -1,0 +1,57 @@
+kind               name                                             VFIO (status x n)            kayfabe (status x n)         note
+alloc 0x0073       NV0073_CTRL_CMD_DP_GET_AUXLOGGER_BUFFER_DATA_PARAMS_MESSAGE_ID 0x0 x10                      0x0 x11                      
+ctrl 0x00730151    NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA           0x0 x1                       0x0 x1                       
+ctrl 0x00730107    NV0073_CTRL_CMD_SYSTEM_GET_SUPPORTED             0x0 x1                       0x0 x1                       
+ctrl 0x0073028b    NV0073_CTRL_CMD_SPECIFIC_OR_GET_INFO             0x0 x52                      0x0 x6                       
+ctrl 0x0073013d    NV0073_CTRL_CMD_SYSTEM_QUERY_DISPLAY_IDS_WITH_MUX 0x0 x1                       0x0 x1                       
+alloc 0xc372       ?                                                0x0 x1                       0x0 x1                       
+ctrl 0x00730101    NV0073_CTRL_CMD_SYSTEM_GET_CAPS_V2               0x0 x2                       0x0 x2                       
+ctrl 0x00731369    NV0073_CTRL_CMD_DP_GET_CAPS                      0x0 x4                       0x0 x1                       
+ctrl 0x0073014b    NV0073_CTRL_CMD_SYSTEM_CHECK_SIDEBAND_I2C_SUPPORT 0x0 x1                       0x0 x1                       
+ctrl 0x00730102    NV0073_CTRL_CMD_SYSTEM_GET_NUM_HEADS             0x0 x7                       0x0 x5                       
+ctrl 0x00730287    NV0073_CTRL_CMD_SPECIFIC_GET_ALL_HEAD_MASK       0x0 x4                       0x0 x1                       
+ctrl 0x00730108    NV0073_CTRL_CMD_SYSTEM_GET_CONNECT_STATE         0x0 x3                       0x0 x4                       
+ctrl 0x00730240    NV0073_CTRL_CMD_SPECIFIC_GET_TYPE                0x0 x7                       0x0 x1                       
+ctrl 0x00730250    NV0073_CTRL_CMD_SPECIFIC_GET_CONNECTOR_DATA      0x0 x22                      0x0 x4                       
+ctrl 0x00730285    NV0073_CTRL_CMD_SPECIFIC_GET_ACPI_DOD_DISPLAY_PORT_ATTACHMENT 0x1f x4 0x56 x7              0x56 x5                      STATUS DIFFERS
+ctrl 0x00731140    NV0073_CTRL_CMD_DFP_GET_INFO                     0x0 x21                      0x0 x3                       
+ctrl 0x0073028a    NV0073_CTRL_CMD_SPECIFIC_GET_PCLK_LIMIT          0x0 x7                       0x0 x1                       
+ctrl 0x00731365    NV0073_CTRL_CMD_DP_SET_MANUAL_DISPLAYPORT        0x0 x3                       -                            STATUS DIFFERS
+ctrl 0x0073117a    ?                                                0x0 x6                       -                            STATUS DIFFERS
+ctrl 0x00730116    NV0073_CTRL_CMD_SYSTEM_GET_INTERNAL_DISPLAYS     0x0 x1                       0x0 x1                       
+ctrl 0x0073011d    NV0073_CTRL_CMD_SYSTEM_GET_CONNECTOR_TABLE       0x0 x1                       0x56 x1                      STATUS DIFFERS
+ctrl 0x00730245    NV0073_CTRL_CMD_SPECIFIC_GET_EDID_V2             0x0 x7                       0x0 x8                       
+ctrl 0x0073010b    NV0073_CTRL_CMD_SYSTEM_GET_HEAD_ROUTING_MAP      0x0 x1960                    0x0 x4                       
+ctrl 0x0073012c    NV0073_CTRL_CMD_SYSTEM_VRR_DISPLAY_INFO          0x0 x3                       0x0 x3                       
+ctrl 0x00730109    NV0073_CTRL_CMD_SYSTEM_GET_HOTPLUG_CONFIG        0x0 x1                       0x0 x1                       
+alloc 0xc770       NVC770_DISPLAY                                   0x0 x1                       0x0 x1                       
+ctrl 0x50700709    NV5070_CTRL_CMD_SYSTEM_GET_CAPS_V2               0x0 x1                       0x0 x1                       
+ctrl 0x50700117    NV5070_CTRL_CMD_SET_RMFREE_FLAGS                 0x0 x1                       0x0 x1                       
+alloc 0xc77d       ?                                                0x0 x1                       0x0 x1                       
+alloc 0xc67e       ?                                                0x0 x8                       0x0 x8                       
+alloc 0xc67b       ?                                                0x0 x8                       0x0 x8                       
+alloc 0xc67a       ?                                                0x0 x4                       0x0 x4                       
+ctrl 0xc3700201    NVC370_CTRL_CMD_GET_LOCKPINS_CAPS                0x0 x1                       0x0 x1                       
+ctrl 0x00730288    NV0073_CTRL_CMD_SPECIFIC_SET_OD_PACKET           0x1f x8                      0x56 x8                      STATUS DIFFERS
+ctrl 0x00730301    NV0073_CTRL_CMD_EVENT_SET_NOTIFICATION           0x0 x2                       0x0 x2                       
+ctrl 0x0073010c    NV0073_CTRL_CMD_SYSTEM_GET_ACTIVE                0x0 x32                      0x0 x24                      
+ctrl 0x007302a3    ?                                                0x0 x1                       0x0 x1                       
+ctrl 0x00731152    NV0073_CTRL_CMD_DFP_ASSIGN_SOR                   0x0 x8                       -                            STATUS DIFFERS
+ctrl 0x00731341    NV0073_CTRL_CMD_DP_AUXCH_CTRL                    0xffff x3                    -                            STATUS DIFFERS
+ctrl 0x00730282    NV0073_CTRL_CMD_SPECIFIC_HDCP_CTRL               0x56 x4                      0x56 x1                      
+ctrl 0x00731142    NV0073_CTRL_CMD_DFP_GET_DISPLAYPORT_DONGLE_INFO  0x0 x7                       0x0 x1                       
+ctrl 0x00730293    NV0073_CTRL_CMD_SPECIFIC_SET_HDMI_SINK_CAPS      0x0 x1                       -                            STATUS DIFFERS
+ctrl 0x007302a2    NV0073_CTRL_CMD_SPECIFIC_GET_HDMI_GPU_CAPS       0x0 x1                       0x56 x1                      STATUS DIFFERS
+ctrl 0x007302a6    NV0073_CTRL_CMD_SPECIFIC_GET_HDMI_SCDC_DATA      0x14 x1                      0x56 x1                      STATUS DIFFERS
+ctrl 0x00730128    ?                                                0x0 x3                       0x56 x3                      STATUS DIFFERS
+ctrl 0x00731144    NV0073_CTRL_CMD_DFP_SET_ELD_AUDIO_CAPS           0x0 x28                      -                            STATUS DIFFERS
+ctrl 0x50700118    NV5070_CTRL_CMD_IMP_SET_GET_PARAMETER            0x0 x1                       0x0 x1                       
+ctrl 0xc3720101    NVC372_CTRL_CMD_IS_MODE_POSSIBLE                 0x0 x88                      0x0 x32                      
+ctrl 0x0073010a    NV0073_CTRL_CMD_SYSTEM_GET_HOTPLUG_STATE         0x0 x1                       0x0 x1                       
+ctrl 0x007302a4    NV0073_CTRL_CMD_SPECIFIC_DISPLAY_CHANGE          0x0 x2                       0x0 x2                       
+ctrl 0x00730280    NV0073_CTRL_CMD_SPECIFIC_GET_HDCP_STATE          0x0 x7                       0x56 x4                      STATUS DIFFERS
+ctrl 0x00730122    ?                                                0x0 x1                       0x56 x1                      STATUS DIFFERS
+ctrl 0x00730273    NV0073_CTRL_CMD_SPECIFIC_SET_HDMI_ENABLE         0x0 x1                       -                            STATUS DIFFERS
+ctrl 0xc3700104    NVC370_CTRL_CMD_GET_CHANNEL_INFO                 0x0 x1                       0x0 x2                       
+ctrl 0x007302a5    ?                                                0x0 x9                       0x56 x10                     STATUS DIFFERS
+alloc 0x402c       ?                                                0x0 x2                       0x56 x6                      STATUS DIFFERS

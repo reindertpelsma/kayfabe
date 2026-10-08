@@ -1,0 +1,2 @@
+enables 113 cleared-just-before 113 latency to first DISP W1C ms: min 0.58 med 8.32 max 16.87
+latencies < 1 ms: 8

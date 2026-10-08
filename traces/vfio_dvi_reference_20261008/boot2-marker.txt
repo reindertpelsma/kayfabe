@@ -1,0 +1,2 @@
+WINDOWS_START 2026-10-08T22:06:28+02:00 boot=2 reuse xid=60 iommu=DMA-FQ connectors_host_view=n/a(vfio)
+WINDOWS_EXIT stop=qga 2026-10-08T22:09:50+02:00 xid=60

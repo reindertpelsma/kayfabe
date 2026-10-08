@@ -9,6 +9,16 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+**VFIO DVI-D reference, 2026-10-08 (branch `claude/vfio-dvi-reference-20261008`; record:
+[`traces/vfio_dvi_reference_20261008/README.md`](../traces/vfio_dvi_reference_20261008/README.md)).** `[measured]` Windows 11 +
+NVIDIA 580.88 on the host RTX 4070 via vfio-pci (IOMMU DMA-FQ), Philips 243V5 on HDMI-A-1: working desktop, `nvidia-smi` in an
+in-session command prompt, D3D11 clear + D3D12 fences OK, HAGS Enabled:True; one MSI vector, sources named via the interrupt
+tree (GR0/CE2/CE3 non-stall per user-work completion — kayfabe run88 raises them too, so lead A is not the wall). **First measured
+divergence from kayfabe run88: the desktop's flips are never retired by a VSync** (real: LAST_DATA stays on until a VSync retires
+each flip, 430/430; run88: 3 VSyncs, all `FLIPMODE_NO_DEVICE`, LAST_DATA turned off before flip 2 completed). H-flip (inferred,
+falsifier in the record): the unretired flip is the stall. The GSP RPC streams match inside the D3D device window. Host left
+DMA-FQ, nvidia bound, lock released.
+
 **Windows with NVIDIA, 2026-10-08 fourth session, runs 60-72 (branch `claude/windows-display-20261008`; record: `traces/windows_code43_walls_20261007/README.md`
 "Stop (fourth session, ~17:15)").** `[measured, runs 67-72, 2026-10-08]` with `KF3_WIN_USER_CHANNELS_PASSTHROUGH` (classification + USERD relay,
 `docs/design/V3_USERD_RELAY.md`) and the diagnostic `KF3_TWIN_VA_BASE=10000`, the compositor's per-process channel runs on an unprivileged host twin

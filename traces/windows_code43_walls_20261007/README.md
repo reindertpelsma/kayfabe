@@ -4044,6 +4044,14 @@ after ~1 h by the coordinator (the GPU goes to vfio-pci for a like-for-like VFIO
   progress/monitored fences the KMD must notice, not by DMA-completed interrupts. Candidate (inferred, untested): the
   KMD learns of user-work completion through something kayfabe does not reproduce (an interrupt real hardware raises,
   or the HAGS runlist submits that `KF3_SW_RUNLIST_HOST_OWNED` answers and ignores).
+- ⊘ **Correction (2026-10-08, VFIO DVI reference, `traces/vfio_dvi_reference_20261008/README.md`) — H-tail FALSIFIED
+  `[measured]`, and lead (A) as framed here does not hold either: on real hardware and in run88 alike every user-work
+  completion follows a non-stall interrupt raised to the guest (run88: 74/83 render completions within 0.5 ms of a raised GR0
+  wake):** with the clock fitted from raised GR0 wakes against render completions (FILETIME − kf3 monotonic =
+  13435701136.2222 s), run88's last ETW event (254848.022158) lies within 0.1 ms of the last raised GR0 wake (.022166) and every
+  packet in the trace completed: the trace does not lose its tail; the guest really goes silent after 254848.022. The same
+  record measures the first divergence from real hardware: flip 2 (and 4, 6) is never retired by a VSync under kayfabe (3
+  VSyncs in run88, all `FLIPMODE_NO_DEVICE`; on real hardware 430/430 flips are retired). The bullet below is superseded.
 - `[inferred, clock alignment ±0.1 s assumed]` run88's ETW trace ends at guest 17:59:44.244 UTC; the host saw 0x15 born at
   17:59:44.228 and the guest's last rings at 17:59:45.655, so the trace lost at least ~1.4 s of events before the stall:
   H-tail (the trace's end is an NTFS/flush artefact of the bugcheck, not dxgkrnl going silent) is supported, not proven.

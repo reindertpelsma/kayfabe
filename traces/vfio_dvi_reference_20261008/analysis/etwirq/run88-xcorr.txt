@@ -1,0 +1,17 @@
+offset FILETIME_s - mono_s = 13435701136.2222 (votes 95 coarse, 34 fine); top fine bins [(0.0002, 34), (0.0003, 21), (0.0001, 16), (0.0009, 8), (-0.0001, 6)]
+QE RENDER   n=  83 preceded within 0.5 ms by raised GR0: 74
+QE RENDER   n=  83 preceded within 0.5 ms by raised CE3: 5
+QE RENDER   n=  83 preceded within 0.5 ms by raised ANY: 76
+QE SIGNAL   n=1067 preceded within 0.5 ms by raised GR0: 930
+QE SIGNAL   n=1067 preceded within 0.5 ms by raised CE3: 3
+QE SIGNAL   n=1067 preceded within 0.5 ms by raised ANY: 930
+QE PAGING   n= 614 preceded within 0.5 ms by raised GR0: 521
+QE PAGING   n= 614 preceded within 0.5 ms by raised CE3: 2
+QE PAGING   n= 614 preceded within 0.5 ms by raised ANY: 521
+QE WAIT     n=  31 preceded within 0.5 ms by raised GR0: 26
+QE WAIT     n=  31 preceded within 0.5 ms by raised CE3: 0
+QE WAIT     n=  31 preceded within 0.5 ms by raised ANY: 26
+QE MMIOFLIP n=   3 preceded within 0.5 ms by raised GR0: 2
+QE MMIOFLIP n=   3 preceded within 0.5 ms by raised CE3: 0
+QE MMIOFLIP n=   3 preceded within 0.5 ms by raised ANY: 2
+last ETW QE at mono 254848.022

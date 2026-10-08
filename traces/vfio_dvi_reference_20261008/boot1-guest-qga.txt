@@ -1,0 +1,113 @@
+=== d3d11_clear_probe (QGA, SYSTEM) ===
+PROBE whoami nt authority\system session 0
+PROBE 20:02:29.5972624 CreateDXGIFactory1 0x00000000
+PROBE 20:02:29.8270988 D3D11CreateDevice(NVIDIA) 0x00000000 level 0xb000
+PROBE 20:02:29.8270988 CreateTexture2D(RT) 0x00000000
+PROBE 20:02:29.8270988 CreateTexture2D(STAGING) 0x00000000
+PROBE 20:02:29.8315982 CreateRenderTargetView 0x00000000
+PROBE 20:02:29.8315982 round 1 ClearRenderTargetView+CopyResource+Flush issued
+PROBE 20:02:29.8315982 round 1 Map(READ) ok pixel0 0xffbf7f40 UNEXPECTED
+PROBE 20:02:29.8315982 round 2 ClearRenderTargetView+CopyResource+Flush issued
+PROBE 20:02:29.8361059 round 2 Map(READ) ok pixel0 0xffbf7f40 UNEXPECTED
+PROBE 20:02:29.8361059 round 3 ClearRenderTargetView+CopyResource+Flush issued
+PROBE 20:02:29.8361059 round 3 Map(READ) ok pixel0 0xffbf7f40 UNEXPECTED
+PROBE 20:02:29.8361059 done
+
+[rc=0]
+=== d3d12_signal_probe (QGA, SYSTEM) ===
+PROBE whoami nt authority\system
+PROBE session 0
+PROBE quser quser : No User exists for *
+PROBE quser At line:63 char:2
+PROBE quser + (quser 2>&1 | Out-String).Trim() -split "`n" | ForEach-Object { "PROB ...
+PROBE quser +  ~~~~~~~~~~
+PROBE quser + CategoryInfo          : NotSpecified: (No User exists for *:String) [], RemoteException
+PROBE quser + FullyQualifiedErrorId : NativeCommandError
+PROBE CreateDXGIFactory1 0x00000000
+PROBE adapter 0 vendor 0x10de NVIDIA GeForce RTX 4070 dedicated 11762 MB
+PROBE adapter 1 vendor 0x1414 Microsoft Basic Render Driver dedicated 0 MB
+PROBE control D3D12CreateDevice(Basic Render Driver, 11_0) 0x00000000
+PROBE D3D11CreateDevice(NVIDIA, hardware) 0x00000000 feature level 0xb000
+PROBE D3D12CreateDevice(11_0) 0x00000000
+PROBE DIRECT CreateCommandQueue 0x00000000
+PROBE DIRECT CreateFence 0x00000000
+PROBE DIRECT Signal(1) hr 0x00000000 wait SIGNALED completed 1
+PROBE DIRECT Signal(2) hr 0x00000000 wait SIGNALED completed 2
+PROBE DIRECT Signal(3) hr 0x00000000 wait SIGNALED completed 3
+PROBE COPY CreateCommandQueue 0x00000000
+PROBE COPY CreateFence 0x00000000
+PROBE COPY Signal(1) hr 0x00000000 wait SIGNALED completed 1
+PROBE COPY Signal(2) hr 0x00000000 wait SIGNALED completed 2
+PROBE COPY Signal(3) hr 0x00000000 wait SIGNALED completed 3
+PROBE done
+
+[rc=0]
+=== dxg_etw_arm (QGA, SYSTEM) ===
+ETWARM TdrDelay=30 TdrDdiDelay=30
+ETWARM create: The command completed successfully.
+ETWARM 
+ETWARM Name:                 kfdxg
+ETWARM Status:               Undefined
+ETWARM Root Path:            C:\kf
+ETWARM Segment:              Off
+ETWARM Schedules:            On
+ETWARM Segment Max Size:     512 MB
+ETWARM 
+ETWARM Name:                 kfdxg\kfdxg
+ETWARM Type:                 Trace
+ETWARM Output Location:      C:\kf\kfdxg.etl
+ETWARM Append:               Off
+ETWARM Circular:             Off
+ETWARM Overwrite:            Off
+ETWARM Buffer Size:          1024
+ETWARM Buffers Lost:         0
+ETWARM Buffers Written:      0
+ETWARM Buffer Flush Timer:   1
+ETWARM Clock Type:           Performance
+ETWARM File Mode:            File
+ETWARM 
+ETWARM Provider:
+ETWARM Name:                 Microsoft-Windows-DxgKrnl
+ETWARM Provider Guid:        {802EC45A-1E99-4B83-9920-87C98277BA9D}
+ETWARM Level:                5
+ETWARM KeywordsAll:          0x0
+ETWARM KeywordsAny:          0x1 (Base)
+ETWARM Properties:           0
+ETWARM Filter Type:          0
+ETWARM 
+ETWARM The command completed successfully.
+
+[rc=0]
+=== hags_status (QGA, SYSTEM) ===
+HAGS Card name: NVIDIA GeForce RTX 4070
+HAGS Device Problem Code: No Problem
+HAGS Current Mode: Unknown
+HAGS Driver Version: 32.0.15.8088
+HAGS DDI Version: 12
+HAGS Feature Levels: 12_2,12_1,12_0,11_1,11_0,10_1,10_0,9_3,9_2,9_1,1_0_CORE
+HAGS Driver Model: WDDM 3.2
+HAGS Hardware Scheduling: DriverSupportState:Stable Enabled:True
+HAGS Card name: Microsoft Basic Display Adapter
+HAGS Device Problem Code: 0000000A [CM_PROB_FAILED_START]
+HAGS Current Mode: Unknown
+HAGS Driver Version: 10.0.26100.1
+HAGS DDI Version: unknown
+HAGS Feature Levels: Unknown
+HAGS Driver Model: Unknown
+HAGS Hardware Scheduling:
+HAGS Driver Version:
+HAGS HwSchMode= TdrDelay= TdrDdiDelay=
+HAGS PNP Microsoft Basic Display Adapter Error CM_PROB_FAILED_START
+HAGS PNP NVIDIA GeForce RTX 4070 OK CM_PROB_NONE
+
+[rc=0]
+=== vdr_monitor_info (QGA, SYSTEM) ===
+MON id DISPLAY\PHLC0D1\4&4b3bf4b&0&UID6291712_0 maker=PHL product=C0D1 name=PHL 243V5 year=2016 active=True
+MON conn DISPLAY\PHLC0D1\4&4b3bf4b&0&UID6291712_0 VideoOutputTechnology=5
+MON modes DISPLAY\PHLC0D1\4&4b3bf4b&0&UID6291712_0 n=17 preferred=10
+VC Microsoft Basic Display Adapter 1920x1080@60 status=Error err=10
+VC NVIDIA GeForce RTX 4070 1920x1080@60 status=OK err=0
+REG HwSchMode= TdrDelay= TdrDdiDelay= TdrLevel=
+NVSMI NVIDIA GeForce RTX 4070, 580.88, Enabled, [Requested functionality has been deprecated], P8, 68 MiB
+
+[rc=0]

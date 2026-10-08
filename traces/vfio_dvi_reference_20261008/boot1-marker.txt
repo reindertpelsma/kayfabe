@@ -1,0 +1,2 @@
+WINDOWS_START 2026-10-08T22:01:23+02:00 boot=1 fresh xid=60 iommu=DMA-FQ connectors_host_view=n/a(vfio)
+WINDOWS_EXIT stop=acpi 2026-10-08T22:06:17+02:00 xid=60

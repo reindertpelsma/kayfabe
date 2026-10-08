@@ -1,0 +1,113 @@
+=== d3d12_signal_probe (QGA, SYSTEM) ===
+PROBE whoami nt authority\system
+PROBE session 0
+PROBE quser USERNAME              SESSIONNAME        ID  STATE   IDLE TIME  LOGON TIME
+PROBE quser kf                    console             1  Active      none   10/8/2026 8:06 PM
+PROBE CreateDXGIFactory1 0x00000000
+PROBE adapter 0 vendor 0x10de NVIDIA GeForce RTX 4070 dedicated 11762 MB
+PROBE adapter 1 vendor 0x1414 Microsoft Basic Render Driver dedicated 0 MB
+PROBE control D3D12CreateDevice(Basic Render Driver, 11_0) 0x00000000
+PROBE D3D11CreateDevice(NVIDIA, hardware) 0x00000000 feature level 0xb000
+PROBE D3D12CreateDevice(11_0) 0x00000000
+PROBE DIRECT CreateCommandQueue 0x00000000
+PROBE DIRECT CreateFence 0x00000000
+PROBE DIRECT Signal(1) hr 0x00000000 wait SIGNALED completed 1
+PROBE DIRECT Signal(2) hr 0x00000000 wait SIGNALED completed 2
+PROBE DIRECT Signal(3) hr 0x00000000 wait SIGNALED completed 3
+PROBE COPY CreateCommandQueue 0x00000000
+PROBE COPY CreateFence 0x00000000
+PROBE COPY Signal(1) hr 0x00000000 wait SIGNALED completed 1
+PROBE COPY Signal(2) hr 0x00000000 wait SIGNALED completed 2
+PROBE COPY Signal(3) hr 0x00000000 wait SIGNALED completed 3
+PROBE done
+
+[rc=0]
+=== dxg_etw_stop_now (QGA, SYSTEM) ===
+ETWSTOPNOW The command completed successfully. 2026-10-08T20:07:45.6189066+00:00
+ETWSTOPNOW kept C:\kf\kfdxg-stall-200745.etl 393216000
+
+[rc=0]
+=== hags_status (QGA, SYSTEM) ===
+HAGS Card name: NVIDIA GeForce RTX 4070
+HAGS Device Problem Code: No Problem
+HAGS Current Mode: Unknown
+HAGS Driver Version: 32.0.15.8088
+HAGS DDI Version: 12
+HAGS Feature Levels: 12_2,12_1,12_0,11_1,11_0,10_1,10_0,9_3,9_2,9_1,1_0_CORE
+HAGS Driver Model: WDDM 3.2
+HAGS Hardware Scheduling: DriverSupportState:Stable Enabled:True
+HAGS Card name: Microsoft Basic Display Adapter
+HAGS Device Problem Code: 0000000A [CM_PROB_FAILED_START]
+HAGS Current Mode: Unknown
+HAGS Driver Version: 10.0.26100.1
+HAGS DDI Version: unknown
+HAGS Feature Levels: Unknown
+HAGS Driver Model: Unknown
+HAGS Hardware Scheduling:
+HAGS Driver Version:
+HAGS HwSchMode= TdrDelay=30 TdrDdiDelay=30
+HAGS PNP Microsoft Basic Display Adapter Error CM_PROB_FAILED_START
+HAGS PNP NVIDIA GeForce RTX 4070 OK CM_PROB_NONE
+
+[rc=0]
+=== stage_etw_extract (QGA, SYSTEM) ===
+STAGED vdr_etw_extract.ps1 2483
+STARTED pid 3960 2026-10-08T20:08:17.5100426Z
+
+[rc=0]
+=== vdr_monitor_info (QGA, SYSTEM) ===
+MON id DISPLAY\PHLC0D1\4&4b3bf4b&0&UID6291712_0 maker=PHL product=C0D1 name=PHL 243V5 year=2016 active=True
+MON conn DISPLAY\PHLC0D1\4&4b3bf4b&0&UID6291712_0 VideoOutputTechnology=5
+MON modes DISPLAY\PHLC0D1\4&4b3bf4b&0&UID6291712_0 n=17 preferred=10
+VC Microsoft Basic Display Adapter 1920x1080@60 status=Error err=10
+VC NVIDIA GeForce RTX 4070 1920x1080@60 status=OK err=0
+REG HwSchMode= TdrDelay=30 TdrDdiDelay=30 TdrLevel=
+NVSMI NVIDIA GeForce RTX 4070, 580.88, Enabled, [Requested functionality has been deprecated], P5, 181 MiB
+
+[rc=0]
+=== vdr_user_session (QGA, SYSTEM) ===
+USER start 2026-10-08T20:07:03.2886869Z
+USER task state Ready after 13 s; 2026-10-08T20:07:17.5142005Z
+USER quser USERNAME SESSIONNAME ID STATE IDLE TIME LOGON TIME kf console 1 Active none 10/8/2026 8:06 PM
+SMI Thu Oct  8 20:07:11 2026       
+SMI +-----------------------------------------------------------------------------------------+
+SMI | NVIDIA-SMI 580.88                 Driver Version: 580.88         CUDA Version: 13.0     |
+SMI +-----------------------------------------+------------------------+----------------------+
+SMI | GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+SMI | Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+SMI |                                         |                        |               MIG M. |
+SMI |=========================================+========================+======================|
+SMI |   0  NVIDIA GeForce RTX 4070      WDDM  |   00000000:00:06.0  On |                  N/A |
+SMI |  0%   40C    P0             28W /  200W |     172MiB /  12282MiB |      0%      Default |
+SMI |                                         |                        |                  N/A |
+SMI +-----------------------------------------+------------------------+----------------------+
+SMI 
+SMI +-----------------------------------------------------------------------------------------+
+SMI | Processes:                                                                              |
+SMI |  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+SMI |        ID   ID                                                               Usage      |
+SMI |=========================================================================================|
+SMI |    0   N/A  N/A            1348    C+G   C:\Windows\System32\dwm.exe           N/A      |
+SMI |    0   N/A  N/A            5352    C+G   C:\Windows\explorer.exe               N/A      |
+SMI |    0   N/A  N/A            5396    C+G   ...indows\System32\ShellHost.exe      N/A      |
+SMI |    0   N/A  N/A            7260    C+G   ...y\StartMenuExperienceHost.exe      N/A      |
+SMI |    0   N/A  N/A            7268    C+G   ..._cw5n1h2txyewy\SearchHost.exe      N/A      |
+SMI +-----------------------------------------------------------------------------------------+
+SMI exit=0 utc=2026-10-08T20:07:11.4295720Z
+D3DU PROBE whoami vastwin\kf session 1
+D3DU PROBE 20:07:13.7324671 CreateDXGIFactory1 0x00000000
+D3DU PROBE 20:07:13.9613431 D3D11CreateDevice(NVIDIA) 0x00000000 level 0xb000
+D3DU PROBE 20:07:13.9613431 CreateTexture2D(RT) 0x00000000
+D3DU PROBE 20:07:13.9613431 CreateTexture2D(STAGING) 0x00000000
+D3DU PROBE 20:07:13.9613431 CreateRenderTargetView 0x00000000
+D3DU PROBE 20:07:13.9658753 round 1 ClearRenderTargetView+CopyResource+Flush issued
+D3DU PROBE 20:07:13.9658753 round 1 Map(READ) ok pixel0 0xffbf7f40 UNEXPECTED
+D3DU PROBE 20:07:13.9658753 round 2 ClearRenderTargetView+CopyResource+Flush issued
+D3DU PROBE 20:07:13.9658753 round 2 Map(READ) ok pixel0 0xffbf7f40 UNEXPECTED
+D3DU PROBE 20:07:13.9704853 round 3 ClearRenderTargetView+CopyResource+Flush issued
+D3DU PROBE 20:07:13.9704853 round 3 Map(READ) ok pixel0 0xffbf7f40 UNEXPECTED
+D3DU PROBE 20:07:13.9704853 done
+SCR screens: \\.\DISPLAY1 {X=0,Y=0,Width=1920,Height=1080} primary=True
+USER shot 1394169
+
+[rc=0]

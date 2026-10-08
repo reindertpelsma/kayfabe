@@ -1,0 +1,10 @@
+CLOCK host_mid_ns=1791490007013651922 guest_ns=1791490005704030000 guest_minus_host_ms=-1309.622 rtt_ms=0.267
+CLOCK host_mid_ns=1791490007214325724 guest_ns=1791490005904356000 guest_minus_host_ms=-1309.970 rtt_ms=0.901
+CLOCK host_mid_ns=1791490007415128068 guest_ns=1791490006105387000 guest_minus_host_ms=-1309.741 rtt_ms=0.507
+CLOCK host_mid_ns=1791490007615674122 guest_ns=1791490006308529000 guest_minus_host_ms=-1307.145 rtt_ms=0.401
+CLOCK host_mid_ns=1791490007816174007 guest_ns=1791490006505804000 guest_minus_host_ms=-1310.370 rtt_ms=0.419
+CLOCK host_mid_ns=1791490068046071701 guest_ns=1791490066738691000 guest_minus_host_ms=-1307.381 rtt_ms=0.291
+CLOCK host_mid_ns=1791490068246446252 guest_ns=1791490066936501000 guest_minus_host_ms=-1309.945 rtt_ms=0.306
+CLOCK host_mid_ns=1791490068446805308 guest_ns=1791490067139853000 guest_minus_host_ms=-1306.952 rtt_ms=0.284
+CLOCK host_mid_ns=1791490068647172149 guest_ns=1791490067339796000 guest_minus_host_ms=-1307.376 rtt_ms=0.328
+CLOCK host_mid_ns=1791490068847596895 guest_ns=1791490067540971000 guest_minus_host_ms=-1306.626 rtt_ms=0.396

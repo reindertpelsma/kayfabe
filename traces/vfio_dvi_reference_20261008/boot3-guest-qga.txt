@@ -1,0 +1,80 @@
+=== d3d12_signal_probe (QGA, SYSTEM) ===
+PROBE whoami nt authority\system
+PROBE session 0
+PROBE quser USERNAME              SESSIONNAME        ID  STATE   IDLE TIME  LOGON TIME
+PROBE quser kf                    console             1  Active      none   10/8/2026 8:10 PM
+PROBE CreateDXGIFactory1 0x00000000
+PROBE adapter 0 vendor 0x10de NVIDIA GeForce RTX 4070 dedicated 11762 MB
+PROBE adapter 1 vendor 0x1414 Microsoft Basic Render Driver dedicated 0 MB
+PROBE control D3D12CreateDevice(Basic Render Driver, 11_0) 0x00000000
+PROBE D3D11CreateDevice(NVIDIA, hardware) 0x00000000 feature level 0xb000
+PROBE D3D12CreateDevice(11_0) 0x00000000
+PROBE DIRECT CreateCommandQueue 0x00000000
+PROBE DIRECT CreateFence 0x00000000
+PROBE DIRECT Signal(1) hr 0x00000000 wait SIGNALED completed 1
+PROBE DIRECT Signal(2) hr 0x00000000 wait SIGNALED completed 2
+PROBE DIRECT Signal(3) hr 0x00000000 wait SIGNALED completed 3
+PROBE COPY CreateCommandQueue 0x00000000
+PROBE COPY CreateFence 0x00000000
+PROBE COPY Signal(1) hr 0x00000000 wait SIGNALED completed 1
+PROBE COPY Signal(2) hr 0x00000000 wait SIGNALED completed 2
+PROBE COPY Signal(3) hr 0x00000000 wait SIGNALED completed 3
+PROBE done
+
+[rc=0]
+=== dxg_etw_stop_now (QGA, SYSTEM) ===
+ETWSTOPNOW The command completed successfully. 2026-10-08T20:11:11.2057455+00:00
+ETWSTOPNOW kept C:\kf\kfdxg-stall-201111.etl 329252864
+
+[rc=0]
+=== stage_etw_extract (QGA, SYSTEM) ===
+STAGED vdr_etw_extract.ps1 2483
+STARTED pid 1564 2026-10-08T20:11:18.4810628Z
+
+[rc=0]
+=== vdr_user_session (QGA, SYSTEM) ===
+USER start 2026-10-08T20:10:50.6026546Z
+USER task state Ready after 12 s; 2026-10-08T20:11:03.7126709Z
+USER quser USERNAME SESSIONNAME ID STATE IDLE TIME LOGON TIME kf console 1 Active none 10/8/2026 8:10 PM
+SMI Thu Oct  8 20:10:58 2026       
+SMI +-----------------------------------------------------------------------------------------+
+SMI | NVIDIA-SMI 580.88                 Driver Version: 580.88         CUDA Version: 13.0     |
+SMI +-----------------------------------------+------------------------+----------------------+
+SMI | GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+SMI | Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+SMI |                                         |                        |               MIG M. |
+SMI |=========================================+========================+======================|
+SMI |   0  NVIDIA GeForce RTX 4070      WDDM  |   00000000:00:06.0  On |                  N/A |
+SMI |  0%   39C    P8             10W /  200W |     209MiB /  12282MiB |      0%      Default |
+SMI |                                         |                        |                  N/A |
+SMI +-----------------------------------------+------------------------+----------------------+
+SMI 
+SMI +-----------------------------------------------------------------------------------------+
+SMI | Processes:                                                                              |
+SMI |  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+SMI |        ID   ID                                                               Usage      |
+SMI |=========================================================================================|
+SMI |    0   N/A  N/A            1368    C+G   C:\Windows\System32\dwm.exe           N/A      |
+SMI |    0   N/A  N/A            5724    C+G   ...indows\System32\ShellHost.exe      N/A      |
+SMI |    0   N/A  N/A            5740    C+G   C:\Windows\explorer.exe               N/A      |
+SMI |    0   N/A  N/A            6688    C+G   ...y\StartMenuExperienceHost.exe      N/A      |
+SMI |    0   N/A  N/A            6712    C+G   ..._cw5n1h2txyewy\SearchHost.exe      N/A      |
+SMI +-----------------------------------------------------------------------------------------+
+SMI exit=0 utc=2026-10-08T20:10:58.1521945Z
+D3DU PROBE whoami vastwin\kf session 1
+D3DU PROBE 20:10:59.5157549 CreateDXGIFactory1 0x00000000
+D3DU PROBE 20:10:59.7867730 D3D11CreateDevice(NVIDIA) 0x00000000 level 0xb000
+D3DU PROBE 20:10:59.7867730 CreateTexture2D(RT) 0x00000000
+D3DU PROBE 20:10:59.7867730 CreateTexture2D(STAGING) 0x00000000
+D3DU PROBE 20:10:59.7913163 CreateRenderTargetView 0x00000000
+D3DU PROBE 20:10:59.7913163 round 1 ClearRenderTargetView+CopyResource+Flush issued
+D3DU PROBE 20:10:59.7958351 round 1 Map(READ) ok pixel0 0xffbf7f40 UNEXPECTED
+D3DU PROBE 20:10:59.7958351 round 2 ClearRenderTargetView+CopyResource+Flush issued
+D3DU PROBE 20:10:59.7958351 round 2 Map(READ) ok pixel0 0xffbf7f40 UNEXPECTED
+D3DU PROBE 20:10:59.7958351 round 3 ClearRenderTargetView+CopyResource+Flush issued
+D3DU PROBE 20:10:59.7958351 round 3 Map(READ) ok pixel0 0xffbf7f40 UNEXPECTED
+D3DU PROBE 20:10:59.7958351 done
+SCR screens: \\.\DISPLAY1 {X=0,Y=0,Width=1920,Height=1080} primary=True
+USER shot 1790979
+
+[rc=0]

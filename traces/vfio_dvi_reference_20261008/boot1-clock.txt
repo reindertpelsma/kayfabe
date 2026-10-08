@@ -1,0 +1,5 @@
+CLOCK host_mid_ns=1791489716980005566 guest_ns=1791489714994223000 guest_minus_host_ms=-1985.783 rtt_ms=0.292
+CLOCK host_mid_ns=1791489717180392644 guest_ns=1791489715191146000 guest_minus_host_ms=-1989.247 rtt_ms=0.334
+CLOCK host_mid_ns=1791489717380867297 guest_ns=1791489715392839000 guest_minus_host_ms=-1988.028 rtt_ms=0.489
+CLOCK host_mid_ns=1791489717581356100 guest_ns=1791489715592413000 guest_minus_host_ms=-1988.943 rtt_ms=0.350
+CLOCK host_mid_ns=1791489717781796948 guest_ns=1791489715791624000 guest_minus_host_ms=-1990.173 rtt_ms=0.386

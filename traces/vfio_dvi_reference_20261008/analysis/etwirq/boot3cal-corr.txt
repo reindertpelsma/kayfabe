@@ -1,0 +1,68 @@
+ETW first occurrences (host time):
+  20:10:11.491680 ID551  ctx=1
+  20:10:11.491693 UNW  ctx=0xFFFFBF8F106D1900
+  20:10:12.466262 QI DXGKETW_PAGING_COMMAND_BUFFER ctx=0xFFFFBF8F109DF8A0
+  20:10:12.466273 QI2  ctx=0xFFFFBF8F109DF8A0
+  20:10:12.466973 QS DXGKETW_PAGING_COMMAND_BUFFER ctx=0xFFFFBF8F109DF8A0
+  20:10:12.467139 QS DXGKETW_SIGNAL_COMMAND_BUFFER ctx=0xFFFFBF8F109DF8A0
+  20:10:12.467637 S DXGKETW_CLIENT_PAGING_BUFFER ctx=0xFFFFBF8F109DF8A0
+  20:10:12.467717 E DXGKETW_CLIENT_PAGING_BUFFER ctx=0xFFFFBF8F109DF8A0
+  20:10:12.467727 QE DXGKETW_PAGING_COMMAND_BUFFER ctx=0xFFFFBF8F109DF8A0
+  20:10:12.467738 SIG  ctx=1
+  20:10:12.467747 QE DXGKETW_SIGNAL_COMMAND_BUFFER ctx=0xFFFFBF8F109DF8A0
+  20:10:12.594953 QI DXGKETW_RENDER_COMMAND_BUFFER ctx=0xFFFFBF8F10AF6F00
+  20:10:12.595870 QE DXGKETW_RENDER_COMMAND_BUFFER ctx=0xFFFFBF8F10AF6F00
+  20:10:14.231129 UQP  ctx=0xFFFFBF8F117F2010
+  20:10:14.231147 QE DXGKETW_WAIT_COMMAND_BUFFER ctx=0xFFFFBF8F113BD350
+  20:10:14.236560 ID550  ctx=1
+  20:10:14.779690 QI DXGKETW_MMIOFLIP_COMMAND_BUFFER ctx=0xFFFFBF8F0B94FA00
+  20:10:14.780441 QE DXGKETW_MMIOFLIP_COMMAND_BUFFER ctx=0xFFFFBF8F0B94FA00
+  20:10:14.786199 VI  ctx=0xFFFFBF8F10A55000
+  20:10:14.786372 VD DXGKETW_FLIPMODE_IMMEDIATE_SW_FLIP_QUEUE ctx=0xFFFFBF8F10A55000
+  20:10:15.287020 VD DXGKETW_FLIPMODE_NO_DEVICE ctx=0xFFFFBF8F10A55000
+  20:10:15.664857 QI DXGKETW_SOFTWARE_COMMAND_BUFFER ctx=0xFFFFBF8F11CF6090
+  20:10:15.667135 QE DXGKETW_SOFTWARE_COMMAND_BUFFER ctx=0xFFFFBF8F11CF6090
+  20:10:19.520823 QI DXGKETW_DEVICE_COMMAND_BUFFER ctx=0xFFFFBF8F109D7B40
+  20:10:19.520864 QS DXGKETW_DEVICE_COMMAND_BUFFER ctx=0xFFFFBF8F109D7B40
+  20:10:19.520873 QE DXGKETW_DEVICE_COMMAND_BUFFER ctx=0xFFFFBF8F109D7B40
+  20:10:19.648274 UNW WaitAny ctx=0xFFFFBF8F124E2AE0
+QE RENDER    n= 1595  within  0.5 ms preceded by MSI: any 1464, nonstall 1463 (GR0 1393 CE2 199 CE3 119), disp 6, gsp 0, unattributed 50
+QE RENDER    n= 1595  within  2.0 ms preceded by MSI: any 1583, nonstall 1576 (GR0 1532 CE2 390 CE3 206), disp 369, gsp 2, unattributed 96
+QE RENDER    n= 1595  within 10.0 ms preceded by MSI: any 1594, nonstall 1587 (GR0 1563 CE2 504 CE3 276), disp 1475, gsp 4, unattributed 190
+QE SIGNAL    n= 6538  within  0.5 ms preceded by MSI: any 5735, nonstall 5705 (GR0 1166 CE2 4806 CE3 96), disp 73, gsp 0, unattributed 80
+QE SIGNAL    n= 6538  within  2.0 ms preceded by MSI: any 6517, nonstall 6511 (GR0 2042 CE2 5466 CE3 311), disp 749, gsp 9, unattributed 344
+QE SIGNAL    n= 6538  within 10.0 ms preceded by MSI: any 6538, nonstall 6532 (GR0 3438 CE2 5583 CE3 791), disp 3522, gsp 118, unattributed 1171
+QE WAIT      n=  998  within  0.5 ms preceded by MSI: any 976, nonstall 972 (GR0 857 CE2 163 CE3 44), disp 7, gsp 0, unattributed 36
+QE WAIT      n=  998  within  2.0 ms preceded by MSI: any 996, nonstall 995 (GR0 926 CE2 260 CE3 84), disp 292, gsp 0, unattributed 58
+QE WAIT      n=  998  within 10.0 ms preceded by MSI: any 998, nonstall 997 (GR0 967 CE2 322 CE3 137), disp 910, gsp 2, unattributed 102
+QE MMIOFLIP  n=  430  within  0.5 ms preceded by MSI: any 403, nonstall 403 (GR0 387 CE2 32 CE3 21), disp 1, gsp 0, unattributed 15
+QE MMIOFLIP  n=  430  within  2.0 ms preceded by MSI: any 423, nonstall 423 (GR0 421 CE2 77 CE3 34), disp 104, gsp 0, unattributed 24
+QE MMIOFLIP  n=  430  within 10.0 ms preceded by MSI: any 429, nonstall 429 (GR0 429 CE2 106 CE3 46), disp 423, gsp 0, unattributed 50
+QE PAGING    n= 2984  within  0.5 ms preceded by MSI: any 2741, nonstall 2723 (GR0 157 CE2 2685 CE3 30), disp 40, gsp 0, unattributed 28
+QE PAGING    n= 2984  within  2.0 ms preceded by MSI: any 2973, nonstall 2973 (GR0 442 CE2 2973 CE3 116), disp 254, gsp 5, unattributed 153
+QE PAGING    n= 2984  within 10.0 ms preceded by MSI: any 2984, nonstall 2984 (GR0 1235 CE2 2982 CE3 363), disp 1312, gsp 67, unattributed 605
+QE SOFTWARE  n=  123  within  0.5 ms preceded by MSI: any 115, nonstall 115 (GR0 102 CE2 21 CE3 0), disp 1, gsp 0, unattributed 1
+QE SOFTWARE  n=  123  within  2.0 ms preceded by MSI: any 121, nonstall 121 (GR0 120 CE2 49 CE3 5), disp 46, gsp 0, unattributed 4
+QE SOFTWARE  n=  123  within 10.0 ms preceded by MSI: any 122, nonstall 122 (GR0 122 CE2 62 CE3 19), disp 91, gsp 0, unattributed 10
+nonstall MSI <- last doorbell token: count, median ms, p90 ms
+  CE2 token 0x1000d: n=2834 med=0.083 p90=0.149
+  GR0 token 0x14: n=1707 med=0.161 p90=1.000
+  GR0 token 0x12: n=224 med=0.175 p90=0.247
+  GR0 token 0x1000d: n=112 med=0.093 p90=0.313
+  GR0 token 0xf: n=109 med=0.590 p90=0.824
+  CE3 token 0x20015: n=85 med=0.102 p90=0.166
+  GR0 token 0x20015: n=84 med=0.163 p90=0.942
+  CE3 token 0x14: n=29 med=0.088 p90=0.243
+  CE2 token 0x14: n=26 med=0.098 p90=0.400
+  CE3 token 0x1000d: n=18 med=0.089 p90=0.199
+  GR0 token 0x22: n=17 med=0.181 p90=0.843
+  GR0 token 0x16: n=16 med=0.168 p90=0.353
+  GR0 token 0x10: n=15 med=0.498 p90=0.960
+  GR0 token 0x1c: n=10 med=0.115 p90=0.648
+  CE2 token 0x12: n=9 med=0.170 p90=0.233
+  GR0 token 0x19: n=8 med=0.185 p90=0.971
+  CE3 token 0x2001b: n=7 med=0.365 p90=1.868
+  GR0 token 0x20: n=7 med=0.191 p90=0.235
+  CE2 token 0x1c: n=6 med=0.081 p90=0.204
+  CE2 token 0x22: n=6 med=0.062 p90=0.094
+MSI total 7051 doorbells 10893 etw events 50066
