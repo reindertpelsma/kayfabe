@@ -99,6 +99,9 @@ struct PtChan {
     /// ★ v3-promote: the guest's `GPU_PROMOTE_CTX` / `GPU_EVICT_CTX` statements for this channel,
     /// satisfied by the twin (never forwarded).
     ctx: CtxBind,
+    /// ★ 2026-10-08: a Windows guest-kernel channel classified per-process USER work at its alloc
+    /// (`KF3_WIN_USER_CHANNELS_PASSTHROUGH`); fixed for the twin's life.
+    user_work: bool,
     /// ★ P5c: the mirror's live-channel count (released at free).
     live: Arc<AtomicU64>,
     /// ★ P1+P2 inc D: the twin's state word, when this channel was counted as a user of it
@@ -3240,13 +3243,28 @@ impl ChanPlane {
     /// ★★ OWNER_RULINGS §U.1: an `NV50_DEFERRED_API_CLASS` alloc — admitted (and numbered) under a
     /// Translated channel, refused `NV_ERR_NOT_SUPPORTED` under a Passthrough twin.
     fn deferred_api_object(&self, client: u32, parent: u32, handle: u32) -> ChanAnswer {
-        let passthrough = self
+        let (passthrough, user_work) = self
             .pt
             .lock()
-            .is_ok_and(|m| m.contains_key(&(client, parent)));
+            .ok()
+            .and_then(|m| m.get(&(client, parent)).map(|v| (true, v.user_work)))
+            .unwrap_or((false, false));
         if passthrough {
             // The guest numbered it anyway: keep the twin's display-SW mirror equal.
             let _ = register_other_sw(&self.pt, (client, parent));
+        }
+        if user_work {
+            // ★★ 2026-10-08 (§V, `KF3_WIN_USER_CHANNELS_PASSTHROUGH`): Windows allocates a 5080 on
+            // EVERY channel, its per-process ones included; refusing it fails the D3D device
+            // creation. On a Passthrough twin nothing ever reads the ring, so the object is a
+            // guest-graph node only: no host object, no trigger. A `0x200` the guest's bytes
+            // carry reaches the host engine as a software method with no host object behind it,
+            // and the host RCs that channel (fail closed). `[measured, runs 47-57]` Windows' deferred
+            // triggers all ran on its kernel GR channel.
+            eprintln!(
+                "kf3: chan {client:#x}:{parent:#x}: NV50_DEFERRED_API {handle:#x} ADMITTED as a guest-graph object on a Windows user-work Passthrough twin (never triggered by kayfabe; §V)"
+            );
+            return ChanAnswer::Done;
         }
         let ht = self.translated_ht(client, parent);
         let verdict = {
@@ -3343,6 +3361,12 @@ impl ChanPlane {
                 .filter_map(|(k, _)| by_obj.get(k).copied())
                 .collect()
         };
+        if named.is_empty()
+            && let Some(r) =
+                self.deferred_ctx_passthrough(&planned.entry.decoded, chan_client, object)
+        {
+            return r;
+        }
         let mut targets = Vec::new();
         for ht in &named {
             let Some(slot) = self.slot(*ht) else { continue };
@@ -3396,6 +3420,64 @@ impl ChanPlane {
                 crate::defapi::CtxEffect::Evict => "host ring(s) off the runlist, context UNBOUND",
             }
         ))
+    }
+
+    /// ★★ 2026-10-08 (§V): a deferred INITIALIZE/PROMOTE/EVICT whose target is a Windows user-work
+    /// Passthrough twin (the channel, or every member of the TSG it names). INITIALIZE and PROMOTE are
+    /// satisfied by the twin's own host context (ruling B, as for Translated twins); EVICT takes the
+    /// twin's host channel off its runlist (the direct path's act, `evict_ctx`). `None` when no
+    /// user-work twin matches (the caller's Translated path then decides).
+    fn deferred_ctx_passthrough(
+        &self,
+        bundle: &kf_abi::defapi::Bundle,
+        chan_client: u32,
+        object: u32,
+    ) -> Option<Result<String, (u32, String)>> {
+        let hit: Vec<((u32, u32), kf_host::Channel, u32)> = self
+            .pt
+            .lock()
+            .ok()?
+            .iter()
+            .filter(|((c, h), v)| {
+                *c == chan_client && v.user_work && (*h == object || v.tsg == Some(object))
+            })
+            .map(|(k, v)| (*k, v.chan, v.engine))
+            .collect();
+        if hit.is_empty() {
+            return None;
+        }
+        let evict = matches!(bundle, kf_abi::defapi::Bundle::EvictCtx { .. });
+        for (k, chan, engine) in &hit {
+            if *engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS {
+                continue;
+            }
+            if evict && let Err(e) = self.rm.schedule_enable(*chan, false) {
+                return Some(Err((
+                    NV_ERR_INVALID_STATE,
+                    format!("Passthrough twin host {:#x} evict: {e:?}", chan.token),
+                )));
+            }
+            if let Ok(mut m) = self.pt.lock()
+                && let Some(v) = m.get_mut(k)
+            {
+                if evict {
+                    v.ctx.bound = false;
+                    v.ctx.va_bound = 0;
+                    v.ctx.evicts += 1;
+                } else {
+                    v.ctx.promotes += 1;
+                }
+            }
+        }
+        Some(Ok(format!(
+            "{bundle:?} on {chan_client:#x}:{object:#x} -> Windows user-work Passthrough twin(s) {:x?}: {} (owner ruling B / §U / §V)",
+            hit.iter().map(|h| h.1.token).collect::<Vec<_>>(),
+            if evict {
+                "host channel(s) off the runlist, context UNBOUND"
+            } else {
+                "satisfied by each twin's own host context"
+            }
+        )))
     }
 
     fn software_object(&self, client: u32, parent: u32, class: u32) -> ChanAnswer {
@@ -3887,24 +3969,29 @@ impl ChanPlane {
             );
             ChanAnswer::Refused { status, why }
         };
-        let passthrough = !a.kernel_client;
-        let kernel_gr = a.kernel_client
+        // ★★ 2026-10-08 (OWNER_RULINGS §V, `KF3_WIN_USER_CHANNELS_PASSTHROUGH`): a Windows
+        // guest-kernel channel the link classified as per-process USER work at its alloc
+        // (`kf_rm::chanlink::windows_user_work`) takes the Passthrough route; every kernel-only
+        // route below is for the others.
+        let passthrough = !a.kernel_client || a.user_work;
+        let kernel_work = a.kernel_client && !a.user_work;
+        let kernel_gr = kernel_work
             && engine == kf_abi::submit::ENGINE_TYPE_GRAPHICS
             && kernel_gr_ce()
             && crate::tspace::enabled();
-        let kernel_nvdec = a.kernel_client
+        let kernel_nvdec = kernel_work
             && kf_abi::submit::nvdec_index_of_engine_type(engine).is_some()
             && kernel_nvdec_ctx()
             && crate::tspace::enabled();
-        let kernel_nvenc = a.kernel_client
+        let kernel_nvenc = kernel_work
             && kf_abi::submit::nvenc_index_of_engine_type(engine).is_some()
             && kernel_nvenc_ctx()
             && crate::tspace::enabled();
-        let kernel_ofa = a.kernel_client
+        let kernel_ofa = kernel_work
             && kf_abi::submit::ofa_index_of_engine_type(engine).is_some()
             && kernel_ofa_ctx()
             && crate::tspace::enabled();
-        if a.kernel_client
+        if kernel_work
             && !is_copy_engine(engine)
             && !kernel_gr
             && !kernel_nvdec
@@ -4131,7 +4218,7 @@ impl ChanPlane {
                             return Err((NV_ERR_INSUFFICIENT_RESOURCES, e));
                         }
                     };
-                    let owner = if a.kernel_client { Owner::Kernel } else { Owner::User };
+                    let owner = if a.kernel_client && !a.user_work { Owner::Kernel } else { Owner::User };
                     let alloc = me
                         .caps
                         .lock()
@@ -4163,6 +4250,7 @@ impl ChanPlane {
                             sw_ids: crate::dispsw::SwClassIds::default(),
                             dispsw_host_refused: false,
                             ctx: CtxBind::default(),
+                            user_work: a.user_work,
                             live,
                             twin,
                             notifier,
@@ -4180,14 +4268,15 @@ impl ChanPlane {
                     // serves this token; after, its eventfd does. No lock is held here.
                     let fast = me.fast_register(idx, runlist, chid);
                     Ok(format!(
-                        "chan {:#x}:{:#x} BORN Passthrough: token {idx:#x} -> host {:#x} in {key:?} gpfifo={:#x}x{} userd={userd:?} engine={engine:#x} declared_kernel_pid={} {} rc={rc} {fast}",
+                        "chan {:#x}:{:#x} BORN Passthrough: token {idx:#x} -> host {:#x} in {key:?} gpfifo={:#x}x{} userd={userd:?} engine={engine:#x} declared_kernel_pid={} {}{} rc={rc} {fast}",
                         a.client,
                         a.handle,
                         chan.token,
                         a.gpfifo_va,
                         g.entries,
                         a.declared_kernel_pid,
-                        kernel_by(&a)
+                        kernel_by(&a),
+                        if a.user_work { " WINDOWS-USER-WORK (§V, ProcessID/subcontext)" } else { "" }
                     ))
                 }),
             );
@@ -5348,6 +5437,7 @@ mod dispsw_tests {
             sw_ids: crate::dispsw::SwClassIds::default(),
             dispsw_host_refused: false,
             ctx: CtxBind::default(),
+            user_work: false,
             live: Arc::new(AtomicU64::new(0)),
             twin: None,
             notifier: None,

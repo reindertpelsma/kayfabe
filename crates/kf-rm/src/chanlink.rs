@@ -231,6 +231,94 @@ pub struct ChannelAlloc {
     /// ★ P5c: the error notifier the guest kernel resolved for it (`errorNotifierMem`) — where a
     /// GSP writes the channel's robust-channel record (`kernel_channel.c:548-590`).
     pub error_notifier: Option<kf_arch::fault::ErrorNotifier>,
+    /// ★ 2026-10-08: `ProcessID` as declared (generated layout; `None` when unmeasured or short).
+    pub process_id: Option<u32>,
+    /// ★★ 2026-10-08 (OWNER_RULINGS §V; `KF3_WIN_USER_CHANNELS_PASSTHROUGH`, default off): a Windows
+    /// guest-KERNEL-stamped channel classified at birth as per-process USER work
+    /// ([`windows_user_work`]) — the plane births it as a Passthrough twin (never inspected,
+    /// unprivileged host channel, the VM's own VA space) instead of Translated. Decided once, from
+    /// the alloc's facts; it never changes over the channel's life.
+    pub user_work: bool,
+}
+
+/// ★★ 2026-10-08 — the facts [`windows_user_work`] decides from, all known at the channel's alloc.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct UserWorkFacts {
+    /// `KF3_WIN_USER_CHANNELS_PASSTHROUGH=1`.
+    pub flag: bool,
+    /// The guest declared the Windows build of its driver (fn 1, the host-stub cell's identity).
+    pub windows: bool,
+    /// The channel is guest-KERNEL by [`kernel_channel`] (only such a channel is reclassified).
+    pub kernel_stamped: bool,
+    /// The client is one of the guest RM's own internal clients.
+    pub rm_internal: bool,
+    /// `engineType` (resolved).
+    pub engine: Option<u32>,
+    /// `hContextShare` as declared.
+    pub ctx_share: u32,
+    /// The context share names a `FERMI_CONTEXT_SHARE_A` this link saw allocated in the client.
+    pub ctx_share_known: bool,
+    /// `ProcessID` as declared.
+    pub process_id: Option<u32>,
+    /// `ProcessID` of the guest's FIRST guest-kernel channel outside the RM-internal clients (the
+    /// kernel driver's own system context; `[measured, run60 at 3a578d50, 2026-10-08]` 0x350 on all
+    /// eleven of its kernel channels).
+    pub kernel_pid: Option<u32>,
+}
+
+/// ★★ 2026-10-08 (OWNER_RULINGS §V, the owner: "If you do not need to translate, then a translated can
+/// become passthrough, if you know at channel creation"): is this Windows channel per-process USER
+/// work? `Ok(())` = yes (Passthrough); `Err(why)` = no, the channel keeps the route it had.
+///
+/// The criterion, from `[measured, run60 at 3a578d50, 2026-10-08]` (every channel of one boot,
+/// `run60-chan-vas-facts.txt`): Windows stamps EVERY channel `PRIVILEGE=KERNEL`; the kernel driver's
+/// own channels (paging CE, kernel GR, video, and the two display-side GR/CE pairs) declare
+/// `hContextShare = 0` and `ProcessID = 0x350`; the desktop compositor's and the D3D clients'
+/// graphics channels declare a `FERMI_CONTEXT_SHARE_A` (a subcontext) and their own process id
+/// (`0x3b8`, `0x554`, `0x54c`). Both facts must say "user": a channel with a subcontext in the kernel
+/// driver's process, or one in another process without a subcontext, stays Translated.
+///
+/// ⊘ Not a security boundary, and it does not need to be: the facts are guest-kernel bytes, but a
+/// MISCLASSIFIED channel only loses the Translated route's inspection. A Passthrough twin is an
+/// asserted-USER host channel whose VA space holds only this VM's memory, so it cannot name another
+/// VM's or the host's memory; a physical operand on it is refused by the hardware (`[measured]`
+/// copy engine: `traces/phys_operand_oracle_20261008/`, Xid 32, the channel RC'd — fail closed).
+///
+/// # Errors
+/// The first fact that keeps the channel off the Passthrough route, by name.
+pub fn windows_user_work(f: &UserWorkFacts) -> Result<(), &'static str> {
+    if !f.flag {
+        return Err("flag off");
+    }
+    if !f.windows {
+        return Err("no Windows driver identity declared");
+    }
+    if !f.kernel_stamped {
+        return Err("not guest-kernel (already Passthrough)");
+    }
+    if f.rm_internal {
+        return Err("an RM-internal client");
+    }
+    let engine = f.engine.ok_or("no engine type")?;
+    if engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS
+        && kf_abi::submit::copy_index_of_engine_type(engine).is_none()
+    {
+        return Err("not a graphics or copy engine");
+    }
+    if f.ctx_share == 0 {
+        return Err("no context share (the kernel driver's own channels declare none)");
+    }
+    if !f.ctx_share_known {
+        return Err("the context share was never allocated in this client");
+    }
+    let pid = f.process_id.ok_or("no ProcessID")?;
+    let kpid = f
+        .kernel_pid
+        .ok_or("the kernel driver's process id is not known yet")?;
+    if pid == kpid {
+        return Err("the kernel driver's own process");
+    }
+    Ok(())
 }
 
 /// A statement for the channel plane.
@@ -587,7 +675,16 @@ pub struct ChannelPolicy {
     /// [`ChanStatement::DisplaySw`] ([`Self::with_display_sw_twins`]); `false` (the default) leaves
     /// them graph nodes, byte for byte as before.
     display_sw_twins: bool,
+    /// ★ 2026-10-08: `KF3_WIN_USER_CHANNELS_PASSTHROUGH=1` (read once at construction).
+    user_work_flag: bool,
+    /// ★ 2026-10-08: the guest declared the Windows build of its driver (fn 1).
+    windows_identity: bool,
+    /// ★ 2026-10-08: `ProcessID` of the first guest-kernel, non-internal channel ([`UserWorkFacts`]).
+    windows_kernel_pid: Option<u32>,
 }
+
+/// ★ 2026-10-08: the flag of [`windows_user_work`].
+pub const USER_WORK_FLAG: &str = "KF3_WIN_USER_CHANNELS_PASSTHROUGH";
 
 impl ChannelPolicy {
     /// A link for one guest driver's wire.
@@ -615,7 +712,18 @@ impl ChannelPolicy {
             carried: 0,
             refused: 0,
             display_sw_twins: false,
+            user_work_flag: std::env::var(USER_WORK_FLAG).as_deref() == Ok("1"),
+            windows_identity: false,
+            windows_kernel_pid: None,
         }
+    }
+
+    /// ★ 2026-10-08: the flag of [`windows_user_work`], set explicitly (tests; the device reads
+    /// [`USER_WORK_FLAG`] at construction).
+    #[must_use]
+    pub fn with_user_work_flag(mut self, on: bool) -> ChannelPolicy {
+        self.user_work_flag = on;
+        self
     }
 
     /// ★ EXPERIMENT `x11-dispsw` (default off; owner question 2026-10-03 item 2, option A): every
@@ -942,6 +1050,46 @@ impl ChannelPolicy {
             e => e,
         };
         let privilege = self.abi.decode_channel_privilege(params).ok().flatten();
+        let process_id = layout_u32(
+            &kf_abi::generated::matrix::NV_CHANNEL_ALLOC_PARAMS,
+            self.abi.driver_version(),
+            params,
+            "ProcessID",
+        );
+        let kernel_stamped = kernel_channel(h.client, privilege);
+        if kernel_stamped && !is_rm_internal_client(h.client) && self.windows_kernel_pid.is_none() {
+            self.windows_kernel_pid = process_id;
+        }
+        let user_work = windows_user_work(&UserWorkFacts {
+            flag: self.user_work_flag,
+            windows: self.windows_identity,
+            kernel_stamped,
+            rm_internal: is_rm_internal_client(h.client),
+            engine: match self.abi.decode_channel_engine_type(params).ok().flatten() {
+                Some(0) | None => tsg.map(|t| t.2).filter(|e| *e != 0),
+                e => e,
+            },
+            ctx_share: f.h_ctx_share,
+            ctx_share_known: f.h_ctx_share != 0
+                && self.ctxshares.contains_key(&(h.client, f.h_ctx_share)),
+            process_id,
+            kernel_pid: self.windows_kernel_pid,
+        });
+        if self.user_work_flag && kernel_stamped {
+            eprintln!(
+                "kf-rm: chanlink: CLASSIFY {:#x}:{:#x} {} ({})",
+                h.client,
+                h.handle,
+                if user_work.is_ok() {
+                    "USER WORK -> Passthrough"
+                } else {
+                    "kernel work -> Translated"
+                },
+                user_work
+                    .err()
+                    .unwrap_or("subcontext and a process other than the kernel driver's")
+            );
+        }
         // ★ v3-gfx: a dup'd VA space is the ORIGINAL object (`DUP_OBJECT` aliases, it does not copy).
         let (vaspace_client, vaspace) = match vaspace {
             Some((c, v)) => {
@@ -982,6 +1130,8 @@ impl ChannelPolicy {
                 .decode_channel_error_notifier(params)
                 .ok()
                 .flatten(),
+            process_id,
+            user_work: user_work.is_ok(),
         };
         // ★ 2026-10-08 (Windows user-work classification, diagnostic): the declared process ids and
         // raw internal flags beside the facts the route uses — logged for the criterion's evidence.
@@ -1959,6 +2109,12 @@ impl CommandPolicy for ChannelPolicy {
             RpcFunction::RmControl => self.on_control(cmd),
             RpcFunction::Free => self.on_free(cmd),
             RpcFunction::DupObject => self.on_dup(cmd),
+            RpcFunction::SetGuestSystemInfo => {
+                // ★ 2026-10-08: every declaration replaces the previous one (as the host stub does).
+                self.windows_identity = kf_abi::hoststub::cell(self.abi.driver_version())
+                    .is_some_and(|c| c.matches_identity(&cmd.payload));
+                None
+            }
             _ => None,
         }
     }
@@ -1980,6 +2136,161 @@ fn layout_u32(
 
 #[cfg(test)]
 mod tests {
+
+    /// ★ 2026-10-08: [`super::windows_user_work`] over the channels of `[measured, run60 at 3a578d50]`
+    /// and hostile variants of them.
+    mod user_work {
+        use super::super::{UserWorkFacts, windows_user_work};
+        const GR: u32 = kf_abi::submit::ENGINE_TYPE_GRAPHICS;
+        const CE0: u32 = 0xb;
+
+        fn dwm() -> UserWorkFacts {
+            UserWorkFacts {
+                flag: true,
+                windows: true,
+                kernel_stamped: true,
+                rm_internal: false,
+                engine: Some(GR),
+                ctx_share: 0xff0e_0200,
+                ctx_share_known: true,
+                process_id: Some(0x3b8),
+                kernel_pid: Some(0x350),
+            }
+        }
+
+        #[test]
+        fn run60s_compositor_and_d3d_channels_are_user_work() {
+            for pid in [0x3b8, 0x554, 0x54c] {
+                let f = UserWorkFacts {
+                    process_id: Some(pid),
+                    ..dwm()
+                };
+                assert_eq!(windows_user_work(&f), Ok(()), "{pid:#x}");
+            }
+            let ce = UserWorkFacts {
+                engine: Some(CE0),
+                ..dwm()
+            };
+            assert_eq!(windows_user_work(&ce), Ok(()));
+        }
+
+        #[test]
+        fn run60s_kernel_driver_channels_stay_translated() {
+            // paging CE, kernel GR, video, and the display-side GR/CE pair: no subcontext, pid 0x350
+            for engine in [CE0, GR, 0x13, 0x1c, 0x33] {
+                let f = UserWorkFacts {
+                    engine: Some(engine),
+                    ctx_share: 0,
+                    ctx_share_known: false,
+                    process_id: Some(0x350),
+                    ..dwm()
+                };
+                assert!(windows_user_work(&f).is_err(), "{engine:#x}");
+            }
+        }
+
+        #[test]
+        fn one_fact_alone_never_reclassifies() {
+            // a subcontext in the kernel driver's own process
+            let a = UserWorkFacts {
+                process_id: Some(0x350),
+                ..dwm()
+            };
+            assert_eq!(
+                windows_user_work(&a),
+                Err("the kernel driver's own process")
+            );
+            // another process without a subcontext
+            let b = UserWorkFacts {
+                ctx_share: 0,
+                ctx_share_known: false,
+                ..dwm()
+            };
+            assert!(windows_user_work(&b).is_err());
+        }
+
+        #[test]
+        fn hostile_or_incomplete_facts_keep_the_translated_route() {
+            let cases: [(UserWorkFacts, &str); 9] = [
+                (
+                    UserWorkFacts {
+                        flag: false,
+                        ..dwm()
+                    },
+                    "flag off",
+                ),
+                (
+                    UserWorkFacts {
+                        windows: false,
+                        ..dwm()
+                    },
+                    "no Windows driver identity declared",
+                ),
+                (
+                    UserWorkFacts {
+                        kernel_stamped: false,
+                        ..dwm()
+                    },
+                    "not guest-kernel (already Passthrough)",
+                ),
+                (
+                    UserWorkFacts {
+                        rm_internal: true,
+                        ..dwm()
+                    },
+                    "an RM-internal client",
+                ),
+                (
+                    UserWorkFacts {
+                        engine: None,
+                        ..dwm()
+                    },
+                    "no engine type",
+                ),
+                (
+                    UserWorkFacts {
+                        engine: Some(0x13),
+                        ..dwm()
+                    },
+                    "not a graphics or copy engine",
+                ),
+                (
+                    UserWorkFacts {
+                        ctx_share_known: false,
+                        ..dwm()
+                    },
+                    "the context share was never allocated in this client",
+                ),
+                (
+                    UserWorkFacts {
+                        process_id: None,
+                        ..dwm()
+                    },
+                    "no ProcessID",
+                ),
+                (
+                    UserWorkFacts {
+                        kernel_pid: None,
+                        ..dwm()
+                    },
+                    "the kernel driver's process id is not known yet",
+                ),
+            ];
+            for (f, why) in cases {
+                assert_eq!(windows_user_work(&f), Err(why), "{f:?}");
+            }
+        }
+
+        #[test]
+        fn the_decision_is_a_pure_function_of_the_alloc_facts() {
+            // Decided once at the alloc: the same facts give the same route, every time (the plane
+            // keeps it in the twin for the channel's life; nothing re-asks).
+            let f = dwm();
+            assert_eq!(windows_user_work(&f), windows_user_work(&f));
+            assert_eq!(UserWorkFacts::default(), UserWorkFacts::default());
+            assert!(windows_user_work(&UserWorkFacts::default()).is_err());
+        }
+    }
 
     fn device_declaration(
         client: u32,
