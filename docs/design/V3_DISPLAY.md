@@ -3989,8 +3989,19 @@ owner's photo at 13:04 shows `60 fps T: 120 (fifo) @60Hz` (after the host load e
 
 ### 8.20 The VMM-neutral input traits — `InputSink`, `CursorSink` (`OWNER_RULINGS.md` §V; KF3 ABI 23)
 
-**STATUS: LIVE, 2026-10-08 — BUILT, GPU-free tested; hardware: see "Measured" below** (branch
-`claude/input-sink-trait-20261008`; `traces/v3_display/input_sink_20261008/`).
+**STATUS: LIVE, 2026-10-08 — BUILT, GPU-free tested, and measured equal to the previous mapping on
+the trusted host** (branch `claude/input-sink-trait-20261008`, kf3 `cc43d9aa`;
+`traces/v3_display/input_sink_20261008/`).
+
+**Measured (runs isc, is1, ig1, 2026-10-08; falsifiers committed before the first boot in the trace
+README):** `input_proof.sh` with the control binary (kf3 `4bc62999`, whose kf-broker, kf3.c and
+broker.rs equal this branch's base) and with kf3 `cc43d9aa` gave the same PROOF lines (grub key, 8 ABS
+positions within 1 px, REL (70, 30) under grab, ABS dropped under grab, device switches `#5 … Mouse
+(relative)` / `#4 … Tablet (absolute)`, broker restart, keys) and IDENTICAL guest evdev streams
+(keyboard 40, mouse 37, tablet 35 events, timestamps removed); is1 also rebooted cleanly (0 Xid) and
+reattached a restarted QEMU (no stall). `grab_repro.sh` (ig1): cases A-D sum (200, 0), 0 jumps, B/C
+buttons and wheel on the mouse only — g2's values. A working Linux demo was left running on
+`cc43d9aa` (Cinnamon up, GPU copy rung, 16:39).
 
 The owner's ruling (2026-10-08): "Yes full vmm neutral input traits for a broker to hook on." The
 broker's keyboard, pointer and cursor handling hooks onto any hypervisor through a VMM-neutral trait;

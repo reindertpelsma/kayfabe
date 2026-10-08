@@ -1,0 +1,62 @@
+Input driver version is 1.0.1
+Input device ID: bus 0x6 vendor 0x627 product 0x3 version 0x2
+Input device name: "QEMU Virtio Tablet"
+Supported events:
+  Event type 0 (EV_SYN)
+  Event type 1 (EV_KEY)
+    Event code 272 (BTN_LEFT)
+    Event code 273 (BTN_RIGHT)
+    Event code 274 (BTN_MIDDLE)
+    Event code 275 (BTN_SIDE)
+    Event code 276 (BTN_EXTRA)
+    Event code 330 (BTN_TOUCH)
+    Event code 336 (BTN_GEAR_DOWN)
+    Event code 337 (BTN_GEAR_UP)
+  Event type 2 (EV_REL)
+    Event code 8 (REL_WHEEL)
+  Event type 3 (EV_ABS)
+    Event code 0 (ABS_X)
+      Value      0
+      Min        0
+      Max    32767
+    Event code 1 (ABS_Y)
+      Value      0
+      Min        0
+      Max    32767
+Properties:
+Testing ... (interrupt to exit)
+Event: time 1791469856.652043, type 3 (EV_ABS), code 0 (ABS_X), value 1706
+Event: time 1791469856.652043, type 3 (EV_ABS), code 1 (ABS_Y), value 3033
+Event: time 1791469856.652043, -------------- SYN_REPORT ------------
+Event: time 1791469857.860869, type 3 (EV_ABS), code 0 (ABS_X), value 17066
+Event: time 1791469857.860869, type 3 (EV_ABS), code 1 (ABS_Y), value 18203
+Event: time 1791469857.860869, -------------- SYN_REPORT ------------
+Event: time 1791469859.070397, type 3 (EV_ABS), code 0 (ABS_X), value 10922
+Event: time 1791469859.070397, type 3 (EV_ABS), code 1 (ABS_Y), value 10922
+Event: time 1791469859.070397, -------------- SYN_REPORT ------------
+Event: time 1791469860.278675, type 3 (EV_ABS), code 0 (ABS_X), value 32749
+Event: time 1791469860.278675, type 3 (EV_ABS), code 1 (ABS_Y), value 32736
+Event: time 1791469860.278675, -------------- SYN_REPORT ------------
+Event: time 1791469862.490911, type 3 (EV_ABS), code 0 (ABS_X), value 10922
+Event: time 1791469862.490911, type 3 (EV_ABS), code 1 (ABS_Y), value 9101
+Event: time 1791469862.490911, -------------- SYN_REPORT ------------
+Event: time 1791469862.992862, type 1 (EV_KEY), code 272 (BTN_LEFT), value 1
+Event: time 1791469862.992862, -------------- SYN_REPORT ------------
+Event: time 1791469862.992871, type 1 (EV_KEY), code 272 (BTN_LEFT), value 0
+Event: time 1791469862.992871, -------------- SYN_REPORT ------------
+Event: time 1791469862.992872, type 2 (EV_REL), code 8 (REL_WHEEL), value 1
+Event: time 1791469862.992872, -------------- SYN_REPORT ------------
+Event: time 1791469862.992874, type 2 (EV_REL), code 8 (REL_WHEEL), value -1
+Event: time 1791469862.992874, -------------- SYN_REPORT ------------
+Event: time 1791469870.925063, type 3 (EV_ABS), code 0 (ABS_X), value 3413
+Event: time 1791469870.925063, type 3 (EV_ABS), code 1 (ABS_Y), value 4550
+Event: time 1791469870.925063, -------------- SYN_REPORT ------------
+Event: time 1791469874.681879, type 3 (EV_ABS), code 0 (ABS_X), value 6826
+Event: time 1791469874.681879, type 3 (EV_ABS), code 1 (ABS_Y), value 9101
+Event: time 1791469874.681879, -------------- SYN_REPORT ------------
+Event: time 1791469875.890968, type 3 (EV_ABS), code 0 (ABS_X), value 25599
+Event: time 1791469875.890968, type 3 (EV_ABS), code 1 (ABS_Y), value 27305
+Event: time 1791469875.890968, -------------- SYN_REPORT ------------
+Event: time 1791469877.099829, type 3 (EV_ABS), code 0 (ABS_X), value 0
+Event: time 1791469877.099829, type 3 (EV_ABS), code 1 (ABS_Y), value 0
+Event: time 1791469877.099829, -------------- SYN_REPORT ------------

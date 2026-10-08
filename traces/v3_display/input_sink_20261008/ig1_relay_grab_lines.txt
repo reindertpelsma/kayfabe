@@ -1,0 +1,12 @@
+broker: input while grabbed (1005 ms): 0 key, 0 button and 0 wheel event(s) to the relative pointer, 1 REL packet(s), 0 absolute report(s) dropped
+broker: input while grabbed (1016 ms): 0 key, 2 button and 1 wheel event(s) to the relative pointer, 19 REL packet(s), 0 absolute report(s) dropped
+broker: input while grabbed (534 ms): 4 key, 0 button and 0 wheel event(s) to the relative pointer, 0 REL packet(s), 0 absolute report(s) dropped — grab ended
+broker: grab off
+broker: pointing device -> #4 QEMU Virtio Tablet (absolute)
+broker: grab ON
+broker: pointing device -> #5 QEMU Virtio Mouse (relative)
+broker: input while grabbed (1004 ms): 0 key, 0 button and 0 wheel event(s) to the relative pointer, 1 REL packet(s), 0 absolute report(s) dropped
+broker: input while grabbed (1347 ms): 1 key, 0 button and 0 wheel event(s) to the relative pointer, 19 REL packet(s), 0 absolute report(s) dropped
+broker: input while grabbed (0 ms): 3 key, 0 button and 0 wheel event(s) to the relative pointer, 0 REL packet(s), 0 absolute report(s) dropped — grab ended
+broker: grab off
+broker: pointing device -> #4 QEMU Virtio Tablet (absolute)
