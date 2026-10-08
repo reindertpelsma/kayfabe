@@ -5,6 +5,8 @@ K=/var/lib/kf-windows-20261005/kayfabe-broker-interactive/scripts/bench/display
 W=/var/lib/kf-windows-20261005/broker-interactive
 U=$W/uinput_mouse
 G=(ssh -i /workspace/bench/guest_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR ubuntu@192.168.77.2)
+# review 2026-10-08 (finding 4): the test rule never outlives an aborted run
+trap 'rm -f /etc/udev/rules.d/99-kf-broker-test.rules; udevadm control --reload' EXIT
 cat > /etc/udev/rules.d/99-kf-broker-test.rules <<'EOF'
 ACTION=="add|change", KERNEL=="event*", ATTRS{name}=="kf-test-1600dpi", ENV{MOUSE_DPI}="1600@1000"
 ACTION=="add|change", KERNEL=="event*", ATTRS{name}=="kf-test-1000dpi", ENV{MOUSE_DPI}="1000@1000"

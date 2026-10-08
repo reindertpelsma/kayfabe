@@ -19,6 +19,8 @@ cc -O2 -o "$U" "$HERE/uinput_mouse.c" || exit 2
 # ⊘ [run s1, 2026-10-08] a hwdb `mouse:` entry never applies to a uinput device: 70-mouse.rules
 # looks it up only for ID_BUS usb/bluetooth, which a virtual device lacks (s1's 1600 dpi steps
 # arrived 1:1). A rule sets the property libinput reads instead.
+# review 2026-10-08 (finding 4): the test rule never outlives an aborted run
+trap 'rm -f /etc/udev/rules.d/99-kf-broker-test.rules; udevadm control --reload' EXIT
 cat > /etc/udev/rules.d/99-kf-broker-test.rules <<'EOF'
 ACTION=="add|change", KERNEL=="event*", ATTRS{name}=="kf-test-1600dpi", ENV{MOUSE_DPI}="1600@1000"
 ACTION=="add|change", KERNEL=="event*", ATTRS{name}=="kf-test-1000dpi", ENV{MOUSE_DPI}="1000@1000"

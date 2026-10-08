@@ -299,7 +299,11 @@ fn run(l: &mut Ledger, arm: &str, deny: bool) -> Result<(), String> {
                 userd_offset: USERD_OFF,
                 err_notifier: 0,
             },
-            deny,
+            if deny {
+                kf_host::channel::PhysicalCeBelt::Deny
+            } else {
+                kf_host::channel::PhysicalCeBelt::Off
+            },
         )
         .map_err(|e| format!("birth: {e:?}"))?;
     l.check(

@@ -120,7 +120,13 @@ pub fn birth_twin_in(
     };
     match join {
         Some(tsg) => rm
-            .birth_member(tsg, g.engine, ring, false, true)
+            .birth_member(
+                tsg,
+                g.engine,
+                ring,
+                false,
+                kf_host::channel::PhysicalCeBelt::Deny,
+            )
             .map_err(|e| format!("birth into group {tsg:#x}: {e:?}")),
         None => rm
             .birth_channel(space, g.engine, ring)

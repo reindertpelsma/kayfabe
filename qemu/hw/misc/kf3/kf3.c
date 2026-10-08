@@ -808,7 +808,7 @@ static int32_t kf3_cur_define(void *opaque, uint32_t width, uint32_t height, uin
     QEMUCursor *qc;
 
     if (!s->con || !pixels || width == 0 || height == 0 || width > KF3_CURSOR_MAX_DIM ||
-        height > KF3_CURSOR_MAX_DIM) {
+        height > KF3_CURSOR_MAX_DIM || hot_x >= width || hot_y >= height) {
         return 0;
     }
     qc = cursor_alloc((uint16_t)width, (uint16_t)height);
@@ -1108,6 +1108,12 @@ static void kf3_in_abs(void *opaque, uint32_t x, uint32_t y, uint32_t width, uin
 {
     Kf3State *s = opaque;
 
+    /* the shim re-checks what Rust validated: QEMU scales by range, and a zero or over-INT_MAX
+     * range or value must never reach it (review 2026-10-08, finding 1) */
+    if (!width || !height || width > (uint32_t)INT_MAX || height > (uint32_t)INT_MAX ||
+        x > (uint32_t)INT_MAX || y > (uint32_t)INT_MAX) {
+        return;
+    }
     qemu_input_queue_abs(s->con, INPUT_AXIS_X, (int)x, 0, (int)width);
     qemu_input_queue_abs(s->con, INPUT_AXIS_Y, (int)y, 0, (int)height);
 }

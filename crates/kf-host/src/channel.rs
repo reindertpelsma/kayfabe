@@ -229,6 +229,26 @@ pub fn channel_alloc_request(ring: &RingSpec, engine_type: u32) -> ChannelAllocP
     channel_alloc_request_with(ring, engine_type, true)
 }
 
+/// ★ Review 2026-10-08 (finding 2): the `DENY_PHYSICAL_MODE_CE` belt as a TYPE, so a call site cannot
+/// swap it with the neighbouring `first` boolean and silently turn the belt off on production channels.
+/// Production always passes [`PhysicalCeBelt::Deny`]; `Off` is for the physical-operand oracle only
+/// (`kf-harness kf-phys-oracle`), and a test pins that no other crate names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PhysicalCeBelt {
+    /// `DENY_PHYSICAL_MODE_CE = TRUE` (every production channel).
+    Deny,
+    /// The belt off (oracle only; the channel is still born and checked `USER`).
+    Off,
+}
+
+impl PhysicalCeBelt {
+    /// The flag value.
+    #[must_use]
+    pub const fn denied(self) -> bool {
+        matches!(self, Self::Deny)
+    }
+}
+
 /// Like [`channel_alloc_request`] but with `DENY_PHYSICAL_MODE_CE` chosen by the caller.
 ///
 /// ⊘ **Production always passes `deny_physical_ce = true`** ([`channel_alloc_request`]). The
@@ -775,7 +795,7 @@ impl HostRm {
         engine_type: u32,
         ring: RingSpec,
     ) -> Result<Channel, RmError> {
-        self.birth_channel_with(space, engine_type, ring, true)
+        self.birth_channel_with(space, engine_type, ring, PhysicalCeBelt::Deny)
     }
 
     /// Like [`HostRm::birth_channel`] but with `DENY_PHYSICAL_MODE_CE` chosen by the caller.
@@ -791,13 +811,13 @@ impl HostRm {
         space: VaSpace,
         engine_type: u32,
         ring: RingSpec,
-        deny_physical_ce: bool,
+        belt: PhysicalCeBelt,
     ) -> Result<Channel, RmError> {
         if !ring.userd_offset.is_multiple_of(USERD_ALIGNMENT) {
             return Err(RmError::Other(USERD_OFFSET_MISALIGNED));
         }
         let tsg = self.birth_group(space, engine_type)?;
-        self.birth_member(tsg, engine_type, ring, true, deny_physical_ce)
+        self.birth_member(tsg, engine_type, ring, true, belt)
             .inspect_err(|_| {
                 let _ = self.free(tsg);
             })
@@ -856,12 +876,12 @@ impl HostRm {
         engine_type: u32,
         ring: RingSpec,
         first: bool,
-        deny_physical_ce: bool,
+        belt: PhysicalCeBelt,
     ) -> Result<Channel, RmError> {
         if !ring.userd_offset.is_multiple_of(USERD_ALIGNMENT) {
             return Err(RmError::Other(USERD_OFFSET_MISALIGNED));
         }
-        let request = channel_alloc_request_with(&ring, engine_type, deny_physical_ce);
+        let request = channel_alloc_request_with(&ring, engine_type, belt.denied());
         let mut chan_params = [0u8; ChannelAllocParams::SIZE];
         if request.encode_into(&mut chan_params).is_err() {
             return Err(RmError::Other(ABI_ENCODE_FAILED));

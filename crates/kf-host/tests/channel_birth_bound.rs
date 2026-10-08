@@ -413,3 +413,58 @@ fn the_scanner_catches_a_planted_unadmitted_alloc() {
         .collect();
     assert_eq!(flagged, ["bad"]);
 }
+
+/// ★ Review 2026-10-08 (finding 2): the belt-off value is a TYPE now, and only the physical-operand
+/// oracle may name it. A production caller that wrote `PhysicalCeBelt::Off` (or the two booleans of
+/// the old signature, swapped) would turn off `DENY_PHYSICAL_MODE_CE` on production channels.
+#[test]
+fn only_the_oracle_names_the_belt_off_and_the_passthrough_birth_names_deny() {
+    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+        for e in std::fs::read_dir(dir).expect("read dir") {
+            let p = e.expect("entry").path();
+            if p.is_dir() {
+                walk(&p, out);
+            } else if p.extension().is_some_and(|x| x == "rs") {
+                out.push(p);
+            }
+        }
+    }
+    let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let mut files = Vec::new();
+    for c in std::fs::read_dir(&crates).expect("crates dir") {
+        let src = c.expect("entry").path().join("src");
+        if src.is_dir() {
+            walk(&src, &mut files);
+        }
+    }
+    let code = |p: &Path| -> String {
+        std::fs::read_to_string(p)
+            .expect("read")
+            .lines()
+            .filter(|l| !l.trim_start().starts_with("//"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let mut naming_off: Vec<String> = files
+        .iter()
+        .filter(|p| code(p).contains("PhysicalCeBelt::Off"))
+        .map(|p| {
+            p.strip_prefix(&crates)
+                .expect("under crates")
+                .display()
+                .to_string()
+        })
+        .collect();
+    naming_off.sort();
+    assert_eq!(
+        naming_off,
+        vec!["kf-harness/src/bin/kf-phys-oracle.rs".to_string()],
+        "★★★ another source file names `PhysicalCeBelt::Off`: production channels must keep the belt"
+    );
+    // non-vacuity: the production Passthrough birth does name the belt, and it says Deny
+    let pt = crates.join("kf-chan/src/passthrough.rs");
+    assert!(
+        code(&pt).contains("PhysicalCeBelt::Deny"),
+        "★ the Passthrough birth no longer passes `PhysicalCeBelt::Deny`"
+    );
+}
