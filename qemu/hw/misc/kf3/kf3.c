@@ -1122,9 +1122,13 @@ static void kf3_broker_input(Kf3State *s, const Kf3BrokerEvent *e)
         }
         break;
     case KF3_BROKER_BTN:
+        /* §8.19: the relay names the pointer (w0 = 1: the relative one, under grab). With src NULL
+         * QEMU's qemu_input_find_handler skips every display-bound handler — the tablet bound to
+         * kf3's console — and takes the first unbound one, the relative device kf3_broker_set_
+         * relative() put in front: motion, buttons and wheel then come from ONE guest device. */
         b = kf3_broker_btn(e->x);
         if (b != INPUT_BUTTON__MAX) {
-            qemu_input_queue_btn(con, b, e->y != 0);
+            qemu_input_queue_btn(e->w0 ? NULL : con, b, e->y != 0);
             qemu_input_event_sync();
         }
         break;
@@ -1143,9 +1147,9 @@ static void kf3_broker_input(Kf3State *s, const Kf3BrokerEvent *e)
     case KF3_BROKER_WHEEL:
         /* vertical only: QEMU 10.2's virtio and USB pointers map no WHEEL_LEFT/RIGHT */
         b = e->x > 0 ? INPUT_BUTTON_WHEEL_UP : INPUT_BUTTON_WHEEL_DOWN;
-        qemu_input_queue_btn(con, b, true);
+        qemu_input_queue_btn(e->w0 ? NULL : con, b, true);
         qemu_input_event_sync();
-        qemu_input_queue_btn(con, b, false);
+        qemu_input_queue_btn(e->w0 ? NULL : con, b, false);
         qemu_input_event_sync();
         break;
     case KF3_BROKER_GRAB:

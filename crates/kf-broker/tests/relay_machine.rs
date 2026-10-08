@@ -9,8 +9,8 @@ use kf_broker::wire::{
     FOURCC_XR24, MOD_INVALID, MOD_LINEAR, PKT_SIZE, Pkt,
 };
 use kf_broker::{
-    FrameGeom, FrameRing, Host, Input, Kind, Link, Recv, Relay, RelayConfig, Sent, SlotFds,
-    VramFds, VramGeom,
+    FrameGeom, FrameRing, Host, Input, Kind, Link, Pointer, Recv, Relay, RelayConfig, Sent,
+    SlotFds, VramFds, VramGeom,
 };
 use kf_linux_raw::{SharedRam, fd_inode};
 use std::cell::RefCell;
@@ -978,7 +978,8 @@ fn input_is_bounded_before_the_vmm_sees_it() {
             },
             Input::Btn {
                 code: 0x110,
-                down: false
+                down: false,
+                to: Pointer::Absolute
             },
             Input::Abs {
                 x: 1919,
@@ -990,7 +991,10 @@ fn input_is_bounded_before_the_vmm_sees_it() {
                 dx: i32::MAX,
                 dy: 3
             },
-            Input::Wheel { up: false },
+            Input::Wheel {
+                up: false,
+                to: Pointer::Absolute
+            },
             Input::Grab(true),
             Input::Close { force: false },
             Input::Close { force: false },
@@ -2470,7 +2474,11 @@ fn env_native_display_ends_native_and_falls_back_to_shm_never_linear_again() {
     assert_eq!(t.frame_path(true, true), BufPath::Native);
     let j = t.ring.held_mask().trailing_zeros() as usize;
     t.release_vram(j);
-    assert_eq!(t.frame_path(true, true), BufPath::Native, "and stays native");
+    assert_eq!(
+        t.frame_path(true, true),
+        BufPath::Native,
+        "and stays native"
+    );
     t.bl_verdict(false); // the native import refused later
     t.read();
     assert_eq!(
@@ -2535,4 +2543,152 @@ fn env_software_display_ends_on_shm() {
     for _ in 0..3 {
         assert_eq!(t.frame_path(true, false), BufPath::Shm, "no udmabuf: shm");
     }
+}
+
+// ── §8.19: the grab routing invariant (owner, 2026-10-08: Minecraft's mouse-look) ───────────
+
+/// A packet carrying the broker's grab state, as every packet does (`F_GRABBED`).
+fn grabbed_pkt(t: &T, ty: u16, x: i32, y: i32, w0: u32, w1: u32) {
+    let p = Pkt {
+        ty,
+        flags: kf_broker::wire::F_GRABBED,
+        x,
+        y,
+        w0,
+        w1,
+        ..Pkt::default()
+    };
+    t.wire.borrow_mut().inbox.extend(p.encode());
+}
+
+/// ★ While grabbed: motion, buttons and the wheel all go to the RELATIVE pointer, no absolute
+/// report is generated (one the broker sends anyway is dropped), and the grab's end hands the
+/// absolute device the last position before the grab (where the host's locked pointer is).
+/// Outside a grab the same buttons and wheel go to the absolute pointer, as before.
+#[test]
+fn under_grab_every_pointer_event_goes_to_the_relative_device_and_no_abs() {
+    let mut t = T::new(false);
+    t.up(0);
+    t.pkt(EV_ABS, 300, 200, 1920, 1080);
+    t.pkt(EV_BTN, 272, 1, 0, 0);
+    t.pkt(EV_WHEEL, 1, 0, 0, 0);
+    let before = t.read();
+    assert_eq!(
+        before,
+        vec![
+            Input::Abs {
+                x: 300,
+                y: 200,
+                w: 1920,
+                h: 1080
+            },
+            Input::Btn {
+                code: 272,
+                down: true,
+                to: Pointer::Absolute
+            },
+            Input::Wheel {
+                up: true,
+                to: Pointer::Absolute
+            },
+        ]
+    );
+    // the grab (EV_GRAB carries F_GRABBED too) and what follows it
+    grabbed_pkt(&t, EV_GRAB, 1, 0, 0, 0);
+    grabbed_pkt(&t, EV_REL, 5, 0, 0, 0);
+    grabbed_pkt(&t, EV_REL, 5, -2, 0, 0);
+    grabbed_pkt(&t, EV_BTN, 272, 0, 0, 0);
+    grabbed_pkt(&t, EV_ABS, 1700, 900, 1920, 1080); // a broker that sends one anyway
+    grabbed_pkt(&t, EV_WHEEL, -1, 0, 0, 0);
+    grabbed_pkt(&t, EV_BTN, 273, 1, 0, 0);
+    let during = t.read();
+    assert_eq!(
+        during,
+        vec![
+            Input::Grab(true),
+            Input::Rel { dx: 10, dy: -2 },
+            Input::Btn {
+                code: 272,
+                down: false,
+                to: Pointer::Relative
+            },
+            Input::Wheel {
+                up: false,
+                to: Pointer::Relative
+            },
+            Input::Btn {
+                code: 273,
+                down: true,
+                to: Pointer::Relative
+            },
+        ],
+        "no Abs while grabbed, every button and wheel tick to the relative device"
+    );
+    // the end of the grab: the absolute device is re-synced to the pre-grab position
+    t.pkt(EV_GRAB, 0, 0, 0, 0);
+    t.pkt(EV_BTN, 273, 0, 0, 0);
+    assert_eq!(
+        t.read(),
+        vec![
+            Input::Grab(false),
+            Input::Abs {
+                x: 300,
+                y: 200,
+                w: 1920,
+                h: 1080
+            },
+            Input::Btn {
+                code: 273,
+                down: false,
+                to: Pointer::Absolute
+            },
+        ]
+    );
+}
+
+/// ★ The once-a-second count of what arrived while grabbed — the instrument for "does an absolute
+/// report or a button on the absolute device reach the guest during mouse-look?".
+#[test]
+fn input_while_grabbed_is_counted_and_logged_once_a_second() {
+    let mut t = T::new(false);
+    t.up(0);
+    let log = kf_broker::capture_log();
+    grabbed_pkt(&t, EV_GRAB, 1, 0, 0, 0);
+    for _ in 0..3 {
+        grabbed_pkt(&t, EV_REL, 1, 1, 0, 0);
+    }
+    grabbed_pkt(&t, EV_ABS, 1, 1, 10, 10);
+    grabbed_pkt(&t, EV_BTN, 272, 1, 0, 0);
+    t.read();
+    assert!(
+        !log.lines()
+            .iter()
+            .any(|l| l.contains("input while grabbed")),
+        "not before a second"
+    );
+    t.now += 1_000;
+    grabbed_pkt(&t, EV_REL, 1, 0, 0, 0);
+    t.read();
+    let l = log.lines();
+    let line = l
+        .iter()
+        .find(|l| l.contains("input while grabbed"))
+        .expect("logged after a second");
+    assert!(
+        line.contains("1 button")
+            && line.contains("4 REL packet")
+            && line.contains("1 absolute report(s) dropped"),
+        "{line}"
+    );
+    // the end of the grab flushes the interval's count
+    grabbed_pkt(&t, EV_KEY, 30, 1, 0, 0);
+    t.pkt(EV_GRAB, 0, 0, 0, 0);
+    t.read();
+    assert!(
+        log.lines()
+            .iter()
+            .any(|l| l.contains("1 key") && l.contains("grab ended")),
+        "{:?}",
+        log.lines()
+    );
 }

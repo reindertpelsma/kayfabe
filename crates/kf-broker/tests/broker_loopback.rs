@@ -18,7 +18,9 @@
 //! it; the two squatter cases need root and say so when it is not (they need no broker binary).
 
 use kf_broker::wire::{Cmd, EV_FORMAT, FOURCC_XR24, MOD_INVALID, MOD_LINEAR, PKT_SIZE, Pkt};
-use kf_broker::{FrameGeom, FrameRing, Host, Input, Relay, RelayConfig, SlotFds, UnixLink};
+use kf_broker::{
+    FrameGeom, FrameRing, Host, Input, Pointer, Relay, RelayConfig, SlotFds, UnixLink,
+};
 use kf_linux_raw::{HostPageSize, SharedRam, udmabuf_create};
 use std::io::{BufRead as _, BufReader, Write as _};
 use std::os::fd::AsFd as _;
@@ -372,7 +374,8 @@ fn linear_udmabuf_frames_release_and_scripted_input() {
     assert!(
         i.contains(&Input::Btn {
             code: 272,
-            down: true
+            down: true,
+            to: Pointer::Absolute
         }),
         "{i:?}"
     );
@@ -381,7 +384,13 @@ fn linear_udmabuf_frames_release_and_scripted_input() {
             .any(|e| matches!(e, Input::Abs { x: 100, y: 200, .. })),
         "{i:?}"
     );
-    assert!(i.contains(&Input::Wheel { up: true }), "{i:?}");
+    assert!(
+        i.contains(&Input::Wheel {
+            up: true,
+            to: Pointer::Absolute
+        }),
+        "{i:?}"
+    );
     assert!(
         r.worst < Duration::from_millis(50),
         "a relay call took {:?}",

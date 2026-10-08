@@ -77,7 +77,8 @@ typedef struct Kf3Frame {
 typedef struct Kf3BrokerEvent {
     uint32_t kind;
     int32_t x, y;   /* key/button code + pressed; x, y; dx, dy; wheel +1 up / -1 down; grab; force */
-    uint32_t w0, w1; /* the absolute range (KF3_BROKER_ABS) */
+    uint32_t w0, w1; /* the absolute range (KF3_BROKER_ABS); BTN/WHEEL: w0 = 1 for the RELATIVE
+                      * pointer, 0 for the absolute one (the relay's grab policy, §8.19) */
 } Kf3BrokerEvent;
 #define KF3_BROKER_KEY 1
 #define KF3_BROKER_BTN 2

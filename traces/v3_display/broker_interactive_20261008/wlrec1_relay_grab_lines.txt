@@ -1,0 +1,25 @@
+broker: grab off
+qemu-system-x86_64: info: kf3: broker: pointing device -> #4 QEMU Virtio Tablet (absolute)
+broker: grab ON
+qemu-system-x86_64: info: kf3: broker: pointing device -> #5 QEMU Virtio Mouse (relative)
+broker: grab off
+qemu-system-x86_64: info: kf3: broker: pointing device -> #4 QEMU Virtio Tablet (absolute)
+broker: grab ON
+qemu-system-x86_64: info: kf3: broker: pointing device -> #5 QEMU Virtio Mouse (relative)
+broker: input while grabbed (1002 ms): 0 key, 0 button and 0 wheel event(s) to the relative pointer, 387 REL packet(s), 0 absolute report(s) dropped
+broker: input while grabbed (1044 ms): 0 key, 0 button and 0 wheel event(s) to the relative pointer, 213 REL packet(s), 0 absolute report(s) dropped
+broker: input while grabbed (1111 ms): 0 key, 0 button and 0 wheel event(s) to the relative pointer, 177 REL packet(s), 0 absolute report(s) dropped
+broker: input while grabbed (1000 ms): 0 key, 0 button and 0 wheel event(s) to the relative pointer, 222 REL packet(s), 0 absolute report(s) dropped
+broker: input while grabbed (1001 ms): 0 key, 0 button and 0 wheel event(s) to the relative pointer, 378 REL packet(s), 0 absolute report(s) dropped
+broker: input while grabbed (1037 ms): 0 key, 0 button and 0 wheel event(s) to the relative pointer, 1 REL packet(s), 0 absolute report(s) dropped
+broker: input while grabbed (341 ms): 4 key, 0 button and 0 wheel event(s) to the relative pointer, 0 REL packet(s), 0 absolute report(s) dropped — grab ended
+broker: grab off
+qemu-system-x86_64: info: kf3: broker: pointing device -> #4 QEMU Virtio Tablet (absolute)
+broker: grab ON
+qemu-system-x86_64: info: kf3: broker: pointing device -> #5 QEMU Virtio Mouse (relative)
+broker: grab off
+qemu-system-x86_64: info: kf3: broker: pointing device -> #4 QEMU Virtio Tablet (absolute)
+broker: grab ON
+qemu-system-x86_64: info: kf3: broker: pointing device -> #5 QEMU Virtio Mouse (relative)
+broker: grab off
+qemu-system-x86_64: info: kf3: broker: pointing device -> #4 QEMU Virtio Tablet (absolute)

@@ -657,9 +657,11 @@ pub struct Kf3Cursor {
 impl Kf3BrokerEvent {
     fn of(i: kf_broker::Input) -> Kf3BrokerEvent {
         use kf_broker::Input as I;
+        let relative = |to: kf_broker::Pointer| u32::from(to == kf_broker::Pointer::Relative);
         let (kind, x, y, w0, w1) = match i {
             I::Key { code, down } => (1, i32::from(code), i32::from(down), 0, 0),
-            I::Btn { code, down } => (2, i32::from(code), i32::from(down), 0, 0),
+            // ★ §8.19: w0 = 1 names the RELATIVE pointer (the relay's grab policy), 0 the absolute
+            I::Btn { code, down, to } => (2, i32::from(code), i32::from(down), relative(to), 0),
             I::Abs { x, y, w, h } => (
                 3,
                 x,
@@ -668,7 +670,7 @@ impl Kf3BrokerEvent {
                 u32::try_from(h).unwrap_or(1),
             ),
             I::Rel { dx, dy } => (4, dx, dy, 0, 0),
-            I::Wheel { up } => (5, if up { 1 } else { -1 }, 0, 0, 0),
+            I::Wheel { up, to } => (5, if up { 1 } else { -1 }, 0, relative(to), 0),
             I::Grab(on) => (6, i32::from(on), 0, 0, 0),
             I::Close { force } => (7, i32::from(force), 0, 0, 0),
             I::Surface { w, h, mhz } => (8, w, h, mhz, 0),

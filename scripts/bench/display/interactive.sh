@@ -31,6 +31,8 @@ IMG=${KF_IMG:-$WORK/desktop.qcow2}
 LOCK=${KF_LOCK:-/tmp/kayfabe-fastguest.lock}
 PIDF=$WORK/qemu.pid
 cmd=${1:-run}
+RECORD=0; [ "${2:-}" = --record ] && RECORD=1
+GSSH=(ssh -i "$BENCH/guest_key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5 ubuntu@192.168.77.2)
 mkdir -p "$WORK"
 say(){ printf '[interactive] %s\n' "$*"; }
 die(){ printf '[interactive] ★ %s\n' "$*" >&2; exit 2; }
@@ -143,7 +145,8 @@ banner() {
   ┌──────────────────────────────────────────────────────────────────────────────┐
   │ kayfabe guest window: "kayfabe guest" on ${SU}'s desktop
   │   pointer      hover = absolute tablet (the guest pointer follows yours)
-  │   CTRL+ALT+G   GRAB: keyboard + pointer locked to the guest, relative mouse;
+  │   CTRL+ALT+G   GRAB: keyboard + pointer locked to the guest, relative mouse (GNOME asks
+  │                once whether to allow inhibiting shortcuts: click Allow);
   │                press CTRL+ALT+G again to RELEASE (focus loss also releases)
   │   CTRL+ALT+F   fullscreen on/off
   │   grub menu    10 s after TianoCore; arrows, e and Enter work in the window
@@ -180,6 +183,19 @@ prep)
     make -C "$S/src/broker" report nvkvm-display-broker nvkvm-broker-testclient > "/opt/nvkvm-broker/make-$REV.log" 2>&1 \
         || die "broker build failed: /opt/nvkvm-broker/make-$REV.log"
     install -m 0755 "$S/src/broker/nvkvm-display-broker" "$S/src/broker/nvkvm-broker-testclient" /opt/nvkvm-broker/
+    # ★ §8.19: GNOME asks once whether the broker may inhibit system shortcuts (its grab) and keeps
+    # the answer in the permission store keyed by the client's desktop id; the broker's
+    # xdg_toplevel app id is "nvkvm-display-broker", which matched no .desktop file, so the
+    # grant could not be stored by that id ([measured 2026-10-08] the store held only qemu.desktop
+    # after the owner clicked Allow). A hidden desktop entry gives it one (inferred to make GNOME
+    # remember; not yet confirmed by a second grab).
+    install -D -m 0644 /dev/stdin /usr/local/share/applications/nvkvm-display-broker.desktop <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=kayfabe display broker
+Exec=/opt/nvkvm-broker/nvkvm-display-broker
+NoDisplay=true
+EOF
     git -C "$NVPV" rev-parse --short=12 "$REV" > /opt/nvkvm-broker/REV; chmod -R a+rX /opt/nvkvm-broker
     say "broker $(cat /opt/nvkvm-broker/REV): $(grep -A4 'backends:' "/opt/nvkvm-broker/make-$REV.log" | tr -s ' ' | tr '\n' ' ')"
     if [ -e "$IMG" ]; then say "guest disk $IMG exists — kept (delete it to provision again)"; exit 0; fi
@@ -249,8 +265,18 @@ GUEST
     for _ in $(seq 90); do kill -0 $q 2>/dev/null || break; sleep 1; done
     kill -0 $q 2>/dev/null && kill -9 $q
     say "INTERACTIVE_PREP_EXIT $(date -Is)"; exit 0 ;;
+collect)
+    # ★ §8.19: the --record recorders' files, into the newest run directory
+    R=$(ls -dt "$WORK"/run-* "$WORK"/demo-* 2>/dev/null | head -1)
+    [ -n "$R" ] || die "no run directory under $WORK"
+    mkdir -p "$R/record"
+    timeout 60 "${GSSH[@]}" 'cd /tmp/kf-rec 2>/dev/null && sudo tar -cf - .' | tar -C "$R/record" -xf - \
+        || die "nothing to collect from the guest (/tmp/kf-rec)"
+    grep -a 'kf3: broker: \(grab\|input while grabbed\|pointing device\)' "$R/qemu.log" > "$R/record/relay_input.txt"
+    grep -a 'grab\|REL\|lock' "$R/broker.log" > "$R/record/broker_grab.txt" 2>/dev/null
+    say "collected into $R/record: $(ls "$R/record" | tr '\n' ' ')"; exit 0 ;;
 run) ;;
-*) die "usage: $0 [run|stop|prep|broker]" ;;
+*) die "usage: $0 [run [--record]|stop|prep|broker|collect]" ;;
 esac
 
 # ── run ─────────────────────────────────────────────────────────────────────────────────────────
@@ -286,6 +312,26 @@ cleanup() {
 trap 'rc=130; cleanup; exit 130' INT TERM
 say "QEMU pid $q, kf3 $QREV ($QBIN)"
 banner
+# ★ §8.19 (`run --record`): once the guest desktop is up, evtest on both virtio pointers and
+# `xinput test-xi2 --root` (raw and core motion, buttons, with device ids) record in the guest;
+# the relay logs once a second what the broker sent while grabbed. `$0 collect` gathers it all.
+if [ "$RECORD" = 1 ]; then
+    (
+        for _ in $(seq 100); do timeout 8 "${GSSH[@]}" true 2>/dev/null && break; sleep 3; done
+        for _ in $(seq 60); do
+            timeout 10 "${GSSH[@]}" 'pgrep -u ubuntu -x cinnamon >/dev/null' 2>/dev/null && break; sleep 3
+        done
+        timeout 30 "${GSSH[@]}" 'mkdir -p /tmp/kf-rec; for n in Tablet Mouse; do ev=$(grep -A5 "Name=\"QEMU Virtio $n\"" /proc/bus/input/devices | grep -o "event[0-9]*" | head -1); (sudo stdbuf -oL evtest /dev/input/$ev < /dev/null > /tmp/kf-rec/evtest_$n.log 2>&1 &); done; (sudo -u ubuntu env DISPLAY=:0 XAUTHORITY=/home/ubuntu/.Xauthority stdbuf -oL xinput test-xi2 --root < /dev/null > /tmp/kf-rec/xi2.log 2>&1 &); sudo -u ubuntu env DISPLAY=:0 XAUTHORITY=/home/ubuntu/.Xauthority xinput list > /tmp/kf-rec/xinput_list.txt; echo started' > "$RUN/record.txt" 2>&1
+        cat <<EOF
+
+  ┌ RECORDING is on (guest: evtest on both virtio pointers, xinput test-xi2 --root) ────────────
+  │ 1. start Minecraft and enter a world; 2. press CTRL+ALT+G; 3. move the mouse for 20 s
+  │    (slow and fast, left/right); 4. press CTRL+ALT+G again; 5. tell the agent the time.
+  │ The agent then runs: $0 collect   (files go to $RUN/record/)
+  └──────────────────────────────────────────────────────────────────────────────────────────
+EOF
+    ) &
+fi
 wait "$q"; rc=$?
 say "QEMU exited rc=$rc (log $RUN/qemu.log)"
 cleanup

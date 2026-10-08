@@ -1,0 +1,19 @@
+nvkvm-broker: resize borders: 14 px of grabbable edge around the window
+nvkvm-broker: grab capabilities: keyboard=1 abs=1 rel=1 lock=1 shortcuts-inhibited=1 focus-events=1 fullscreen=1
+nvkvm-broker: GRAB IS TOTAL: under CTRL+ALT+G every key reaches the guest and the pointer is locked to the window.
+nvkvm-broker: grab: CTRL+ALT+G toggles, CTRL+ALT+F fullscreen. all keyboard input is captured under grab.
+nvkvm-broker: grab ON: requesting shortcuts-inhibit pointer-lock relative-pointer
+nvkvm-broker: grab ON
+nvkvm-broker: grab off: requesting shortcuts-inhibit pointer-lock relative-pointer
+nvkvm-broker: grab dropped: the window lost focus
+nvkvm-broker: grab ON: requesting shortcuts-inhibit pointer-lock relative-pointer
+nvkvm-broker: grab ON
+nvkvm-broker: grab: shortcuts inhibitor ACTIVE — compositor bindings (Super, Alt+Tab, ...) now reach the guest
+nvkvm-broker: grab: pointer LOCKED to the window
+nvkvm-broker: grab off: requesting shortcuts-inhibit pointer-lock relative-pointer
+nvkvm-broker: grab off
+nvkvm-broker: grab ON: requesting shortcuts-inhibit pointer-lock relative-pointer
+nvkvm-broker: grab ON
+nvkvm-broker: grab: shortcuts inhibitor ACTIVE — compositor bindings (Super, Alt+Tab, ...) now reach the guest
+nvkvm-broker: grab: pointer LOCKED to the window
+nvkvm-broker: grab off: requesting shortcuts-inhibit pointer-lock relative-pointer
