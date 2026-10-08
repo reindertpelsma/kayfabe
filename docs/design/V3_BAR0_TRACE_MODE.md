@@ -156,5 +156,15 @@ Decode and analyse exactly as for VFIO:
 
 ## 8. Results on the bench
 
-See the commit that adds this section's numbers (fast-guest runs on the bench 4070, revision named
-there).
+Bench host 172.22.1.20, RTX 4070, 2026-10-09, binary built at `9cebeea9` (runs `rtoff`, `rton`,
+`rtcap`, `rtobs`; record and files: `traces/kf3_read_trace_20261009/README.md`):
+
+- **Off:** 30/30; `read_exits` 0 at every mid-run heartbeat, as in another revision's suite
+  (`mchost2`, `0e64a960`); per-arm times within ±1 s of it.
+- **On, every range selected:** 30/30, 0 drops; client time +12 % over the suite (worst arm +24 %
+  while recording 2.17 M lines); a PMC_BOOT_0 read is the same text as in the VFIO boot3 trace.
+- **Cap:** a 4 MiB byte cap held (file 4 194 263 B), 2 996 553 records dropped and reported, arm PASS.
+- **Shared observer on kf3:** 644 records from sequence 0, no gaps or drops; `decode.py`,
+  `vfio_events.py`, `mmio_window.py` and `vfio_msi_vectors.py` read the outputs unchanged.
+- Not run: a Windows boot (next, by the display work), a VFIO boot on the refactored observer (its
+  behaviour is covered by the observer's own tests; the reference binary `a8845e69` is unchanged).
