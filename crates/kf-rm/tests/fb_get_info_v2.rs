@@ -417,7 +417,7 @@ fn windows_58088s_nineteen_index_request_is_served_whole_with_the_hosts_words() 
     );
     let refused = policy.respond(&fb_command(&indices)).expect("claimed");
     assert!(
-        reply_params(&refused).is_none_or(|(status, _)| status != 0),
-        "a missing row refuses the request"
+        refused.body.is_empty() && refused.rpc_result != 0,
+        "a missing row refuses the whole request"
     );
 }
