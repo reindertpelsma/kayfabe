@@ -115,7 +115,7 @@ tears the display down / bugchecks 0x116 → the halt was not the cause (then th
 boot are the comparison with boot3). **Other outcome:** a different `scanout REFUSED` line → the next wall on the same
 path (not a falsification; it names the next field to support).
 
-## 4. Run 100 (binary `kf3-bins/f5c93b21`, boot 1): the halt is gone; the 0x116 is not — two new walls, measured
+## 4. Run 100 (binary `kf3-bins/f5c93b21`, boot 1, RTX 4070, 2026-10-09): the halt is gone; the 0x116 is not — two new walls, measured
 
 `[measured, run 100 at f5c93b21, RTX 4070, 2026-10-09 23:09:56-23:13:28 UTC]` files: [harness log](run100-harness.log),
 [marker](run100-marker.txt), [command](run100-command.json), [qemu log](run100-qemu.log.gz), [BAR0 read trace](run100-trace.log.gz)
@@ -127,7 +127,7 @@ kf3 clock → UTC: `UTC = kf − 273462.364 s` (window-0 PUT `0x740` at kf 27347
 **H-mirror's prediction, item by item:** both EXPERIMENT lines — yes; `a mirrored LUT accepted (ILUT mirrored=true, OLUT … mirror:
 true)` — yes; **no `scanout REFUSED`** — yes; the engine consumes: `updates` 66 at +17 s (run 99: 14), methods 6102 → 11477, **28 window
 LATCHes at 60 Hz with WindowImm PUTs** (run 99: none after the halt) — yes; `GET_CHANNEL_INFO` ×2 in the boot (= hardware's 2; run 99:
-690) — yes. But: **display teardown 7.2 s after the first frame and bugcheck 0x116 again** — `[measured]` `Minidump/100826-4875-01.dmp`
+690) — yes. But: **display teardown 7.2 s after the first frame and bugcheck 0x116 again** — `[measured, run 100 disk, 2026-10-09]` `Minidump/100826-4875-01.dmp`
 `0x116 (0xffffa50b72918010, 0xfffff8016b1d4930, 0xffffffffc000009a, 0x4)` (System event 1001 at the next boot: "rebooted from a
 bugcheck"). Windows rebooted itself (`-action reboot=reset`); the second Windows boot in the same QEMU process has the adapter at
 **Code 43** (known: an in-process reboot never restarts kf3's GSP model), so the D3D probes found only the Basic Render Driver and
@@ -153,7 +153,7 @@ its GET_CHANNEL_INFO poll) and **falsified as the cause of the 0x116**: with the
    was born in that same VA space. The guest's last kayfabe-visible act is `SWITCH_TO_VGA` (fn 49, refused `0x56`), as in run 99.
    This is what makes the TDR fatal (a recovery that succeeds leaves a TDR, not a bugcheck).
 
-**What kf3 itself did at the black frame `[measured]`:** nothing of its own — the black frame (`+17712 ms the console shows BLACK`)
+**What kf3 itself did at the black frame `[measured, run 100, 2026-10-09]`:** nothing of its own — the black frame (`+17712 ms the console shows BLACK`)
 follows the guest's own window disable in the teardown (`+17462 ms … a lit head has no window`), 3.4 s after the last flip; no kf3
 display event, hotplug, EDID or mode change in between.
 
@@ -162,7 +162,7 @@ the screen went black. Consistent with the log (5 s of 60 Hz flips of window 0 b
 100 took screendumps only at +40 s and at the end (both after the reboot). From boot 2 on the harness takes one timestamped
 screendump per second ([tools/frames.py](tools/frames.py) classifies them and builds a contact sheet).
 
-## 5. Boot 2 (run 101), stated before the boot: reproduce with frames, and arm the stall measurement
+## 5. Boot 2 (run 101, RTX 4070, 2026-10-09), stated before the boot: reproduce with frames, and arm the stall measurement
 
 Same binary and flags as run 100; `WR_SHOTS=90` (one screendump per second from the launch, host UTC in the name) and
 `WR_TDROFF_ARM=1` (QGA, as soon as the guest answers — in its first or its post-bugcheck boot — runs `tdr_off_etw_arm.ps1`:
