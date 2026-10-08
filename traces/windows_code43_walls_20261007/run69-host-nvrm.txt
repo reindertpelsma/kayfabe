@@ -1,0 +1,5 @@
+[Thu Oct  8 16:51:21 2026] NVRM: nvAssertFailedNoLog: Assertion failed: rangeLo <= rangeHi @ gpu_vaspace.c:1363
+[Thu Oct  8 16:51:21 2026] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+[Thu Oct  8 16:51:21 2026] NVRM: nvAssertFailedNoLog: Assertion failed: rangeLo <= rangeHi @ gpu_vaspace.c:1363
+[Thu Oct  8 16:51:21 2026] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+[Thu Oct  8 16:51:29 2026] NVRM: Xid (PCI:0000:01:00): 31, pid=2200164, name=qemu-system-x86, channel 0x00000064, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0x0_00013000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ

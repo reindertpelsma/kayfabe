@@ -3582,3 +3582,21 @@ Same binary and flags as run68 plus `KF3_NO_GUEST_VA_RESERVE=1` (an existing kf-
 `[measured, run68 at d67e9290]` the guest's mappings in the compositor's space start at `0x1_2000_2000`; the fault was at `0x13000`, a VA no guest
 row maps, so the faulting read is host RM's own (inferred). **H-room:** the reservation leaves host RM no VA for part of the twin's GR context.
 *Falsifier:* `can't alloc VA space for mapping` again at the twin's birth, or the same Xid 31 at a low VA.
+
+### Run69 result: H-room FALSIFIED — and the real cause found in the mirror log: Windows maps the process space from VA `0x10000`, below host RM's VA-space start
+
+`[measured, run69 at d67e9290, 2026-10-08]` ([mirror and relay lines](run69-relay-mirror.txt), [host NVRM](run69-host-nvrm.txt), trace
+`run69-qemu.log.gz`): without the guest-range reservations the same pair (`can't alloc VA space` x2) and the same `Xid 31 ... GR0_PBDMA0
+HUBCLIENT_ESC faulted @ 0x0_00013000, FAULT_PDE` occur; the relay forwarded `GP_PUT` 2 then 3 and the engine fetched entry 0. The mirror's MAP
+rows for the compositor's space include **`MAP va=0x10000 len=0x6000 at=0x21f19f000 ap=3`** (system memory) — so `0x13000` IS a guest
+mapping, one the host space could not take: host RM starts every VA space at `vaStartMin = 1 MiB` unless `vaBase` is given
+(`ogkm-595.84: gpu_vaspace.c:1105,1156-1161`, `g_gpu_vaspace_nvoc.h:781-785`), the mirror's FIXED map at `0x10000` is refused
+(`rangeLo <= rangeHi`, `gpu_vaspace.c:1363`) — those are the two NVRM asserts — and the PBDMA's read of `0x13000` finds no PDE `[inferred: the
+read is the guest's own entry or semaphore there; not decoded]`.
+
+## Run70 setup: the twin spaces start at 64 KiB (`KF3_TWIN_VA_BASE=10000`, diagnostic)
+
+Binary `kf3-bins/4b14d74f` (adds the `KF3_TWIN_VA_BASE` switch for guest-mirror spaces and `vaBase` in `VAS-FACTS`), flags as run68 plus
+`KF3_TWIN_VA_BASE=10000`. **H-vabase:** with the host space starting at 64 KiB the mirror maps `0x10000`, no `can't alloc` assert, and the
+twin's PBDMA does not fault there. *Falsifiers:* the asserts or the `0x13000` fault again; a new `HeldByHost` collision (host RM placing its
+own buffers below 1 MiB where the guest maps) is recorded if it appears.
