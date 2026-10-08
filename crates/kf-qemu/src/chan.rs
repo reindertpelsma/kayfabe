@@ -318,6 +318,61 @@ impl kf_chan::host::UserdInit for UserdView {
     }
 }
 
+/// ★★ 2026-10-08 (`docs/design/V3_USERD_RELAY.md`, `KF3_WIN_USER_CHANNELS_PASSTHROUGH`): a Passthrough
+/// twin whose USERD the host cannot adopt (a Windows per-process channel's USERD is a guest-RAM slot at
+/// an IOVA wider than a USERD may be). The twin's USERD is a kayfabe-owned video-memory object; a
+/// worker relays `GP_PUT` in and `GP_GET` out, four bytes each, never a GP entry or push-buffer word.
+struct Relay {
+    st: kf_chan::userd_relay::RelayState,
+    /// The guest's own USERD slot (guest RAM).
+    guest: UserdView,
+    /// kayfabe's USERD object (4 KiB, in no GPU VA space), its CPU view, and the view's release
+    /// cookie.
+    host: VolatileRegion,
+    _node: kf_linux_raw::CharDevice,
+    cookie: u64,
+    mem: u32,
+    /// The twin.
+    chan: kf_host::Channel,
+    /// The guest token (for the log).
+    idx: u32,
+}
+
+/// The I/O of one relay step ([`kf_chan::userd_relay::step`]).
+struct RelayMem<'a> {
+    guest: &'a UserdView,
+    host: &'a VolatileRegion,
+    rm: &'a HostRm,
+    token: u32,
+}
+
+impl kf_chan::userd_relay::RelayIo for RelayMem<'_> {
+    fn guest_put(&mut self) -> Result<u32, String> {
+        self.guest.load(kf_abi::submit::USERD_GP_PUT)
+    }
+    fn store_host_put(&mut self, put: u32) -> Result<(), String> {
+        self.host
+            .store_u32(HostOffset::new(kf_abi::submit::USERD_GP_PUT), put)
+            .map_err(|e| format!("{e:?}"))
+    }
+    fn fence(&mut self) {
+        kf_linux_raw::release_fence();
+    }
+    fn ring(&mut self) -> Result<(), String> {
+        self.rm
+            .doorbell(self.token)
+            .map_err(|e| format!("doorbell: {e:?}"))
+    }
+    fn host_get(&mut self) -> Result<u32, String> {
+        self.host
+            .load_u32(HostOffset::new(kf_abi::submit::USERD_GP_GET))
+            .map_err(|e| format!("{e:?}"))
+    }
+    fn store_guest_get(&mut self, get: u32) -> Result<(), String> {
+        self.guest.store(kf_abi::submit::USERD_GP_GET, get)
+    }
+}
+
 struct Userd<'a>(&'a UserdView);
 impl GuestUserd for Userd<'_> {
     fn gp_put(&mut self) -> Result<u32, String> {
@@ -1351,6 +1406,8 @@ pub struct ChanPlane {
     family: kf_chip::Family,
     /// ★ P5b: the guest's user channels' twins, by `(hClient, hChannel)`.
     pt: Mutex<HashMap<(u32, u32), PtChan>>,
+    /// ★ 2026-10-08 (`V3_USERD_RELAY.md`): relayed-USERD twins, by host token.
+    relays: Mutex<HashMap<u32, Arc<Mutex<Relay>>>>,
     /// ★ P5b: guest engine object `(hClient, hObject)` → its channel's key.
     pt_objs: Mutex<HashMap<(u32, u32), (u32, u32)>>,
     /// ★ w827: guest debugger session `(hClient, hDebugger)` → its host twin: `(guest device, host
@@ -1729,6 +1786,7 @@ impl ChanPlane {
             stop: AtomicBool::new(false),
             family,
             pt: Mutex::new(HashMap::new()),
+            relays: Mutex::new(HashMap::new()),
             pt_objs: Mutex::new(HashMap::new()),
             dbg: Mutex::new(HashMap::new()),
             cuda_limit: Mutex::new((std::collections::BTreeSet::new(), false)),
@@ -3930,9 +3988,12 @@ impl ChanPlane {
         chan: kf_host::Channel,
     ) -> Result<(), kf_host::RmError> {
         let Some(k) = guest_tsg.map(|t| (client, t, ctx_share)) else {
-            return self.rm.free_channel(chan);
+            let r = self.rm.free_channel(chan);
+            self.drop_relay(chan.token);
+            return r;
         };
         let r = self.rm.free_member(chan);
+        self.drop_relay(chan.token);
         let last = self
             .groups
             .lock()
@@ -3950,6 +4011,109 @@ impl ChanPlane {
             r.and(self.rm.free(chan.tsg))
         } else {
             r
+        }
+    }
+
+    /// ★ 2026-10-08 (`V3_USERD_RELAY.md` §2): kayfabe's own USERD for a relayed twin — a 4 KiB
+    /// device-local object (in no GPU VA space) and one CPU view of it. Everything made is given back on
+    /// failure.
+    fn relay_userd(&self) -> Result<(u32, kf_linux_raw::CharDevice, u64, VolatileRegion), String> {
+        let mem = self
+            .rm
+            .alloc_device_local(0x1000)
+            .map_err(|e| format!("USERD object: {e:?}"))?;
+        let (node, cookie) =
+            match self
+                .rm
+                .arm_cpu_view(MapNode::Gpu, mem, 0, 0x1000, ViewAccess::ReadWrite)
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    let _ = self.rm.free(mem);
+                    return Err(format!("USERD view: {e:?}"));
+                }
+            };
+        match VolatileRegion::map(
+            Backing::DeviceFile { fd: node.as_fd() },
+            0x1000,
+            CachePolicy::Uncached,
+            HostPageSize::query(),
+        ) {
+            Ok(region) => Ok((mem, node, cookie, region)),
+            Err(e) => {
+                let _ = self.rm.release_cpu_view(kf_host::CpuViewRelease {
+                    h_memory: mem,
+                    p_linear_address: cookie,
+                });
+                let _ = self.rm.free(mem);
+                Err(format!("USERD mmap: {e:?}"))
+            }
+        }
+    }
+
+    /// ★ 2026-10-08: remove the relay of host token `token` (if any) and give back its USERD — after
+    /// the host channel is gone; a worker step holds the relay's lock, so none is mid-store.
+    fn drop_relay(&self, token: u32) {
+        let Some(r) = self.relays.lock().ok().and_then(|mut m| m.remove(&token)) else {
+            return;
+        };
+        let Ok(g) = r.lock() else { return };
+        let (mem, cookie) = (g.mem, g.cookie);
+        eprintln!(
+            "kf3: chan token {:#x} (host {token:#x}) USERD relay released: forwarded={} refused={} gets={} last_put={}",
+            g.idx, g.st.forwarded, g.st.refused, g.st.gets, g.st.host_put
+        );
+        drop(g);
+        drop(r);
+        let _ = self.rm.release_cpu_view(kf_host::CpuViewRelease {
+            h_memory: mem,
+            p_linear_address: cookie,
+        });
+        let _ = self.rm.free(mem);
+    }
+
+    /// ★ 2026-10-08 (`V3_USERD_RELAY.md` §2.1-2.2): one relay step for host token `ht`, on a worker.
+    /// `None` when `ht` is not a relayed twin.
+    fn relay_serve(&self, ht: u32) -> Option<bool> {
+        let r = self.relays.lock().ok()?.get(&ht).cloned()?;
+        let Ok(mut g) = r.try_lock() else {
+            self.contended.fetch_add(1, Ordering::Relaxed);
+            return Some(false);
+        };
+        let g = &mut *g;
+        let mut io = RelayMem {
+            guest: &g.guest,
+            host: &g.host,
+            rm: self.rm,
+            token: g.chan.token,
+        };
+        match kf_chan::userd_relay::step(&mut g.st, &mut io) {
+            Ok(kf_chan::userd_relay::Outcome::Forwarded(p)) => {
+                if g.st.forwarded <= 8 || g.st.forwarded.is_power_of_two() {
+                    eprintln!(
+                        "kf3: chan token {:#x} (host {ht:#x}) USERD relay: GP_PUT {p:#x} forwarded and rung (#{}) — no GP entry or push-buffer word read",
+                        g.idx, g.st.forwarded
+                    );
+                }
+                Some(true)
+            }
+            Ok(kf_chan::userd_relay::Outcome::Unchanged) => Some(false),
+            Ok(kf_chan::userd_relay::Outcome::Refused(p)) => {
+                if g.st.refused <= 4 {
+                    eprintln!(
+                        "kf3: chan token {:#x} (host {ht:#x}) USERD relay REFUSED a guest GP_PUT {p:#x} outside its {}-entry ring (not stored, not rung; #{})",
+                        g.idx, g.st.entries, g.st.refused
+                    );
+                }
+                Some(false)
+            }
+            Err(e) => {
+                eprintln!(
+                    "kf3: chan token {:#x} (host {ht:#x}) USERD relay step failed: {e}",
+                    g.idx
+                );
+                Some(false)
+            }
         }
     }
 
@@ -4084,6 +4248,23 @@ impl ChanPlane {
             );
         }
         if passthrough {
+            // ★★ 2026-10-08 (`V3_USERD_RELAY.md`): a Windows user-work twin with a guest-RAM USERD is
+            // born over kayfabe's own USERD and relayed; the guest's slot is only read (`GP_PUT`) and
+            // written (`GP_GET`) by a worker. Its guest-RAM view is made here, before any host verb.
+            let relay_guest =
+                if a.user_work && matches!(a.userd, Some(kf_arch::UserdMem::Sysmem { .. })) {
+                    match self.userd_view(a.userd) {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            return refuse(
+                                NV_ERR_NOT_SUPPORTED,
+                                format!("USERD relay: guest slot: {e}"),
+                            );
+                        }
+                    }
+                } else {
+                    None
+                };
             // ★ The guest's USERD, adopted AT CREATION (RM zeroes it — `rm_takes_a_guest_userd`):
             // a store slice, or guest RAM through the mirror's RAM object.
             let userd = match a.userd {
@@ -4196,7 +4377,24 @@ impl ChanPlane {
                 "birth passthrough",
                 Box::new(move |me: &ChanPlane| {
                     let notifier = err_at.and_then(|(obj, off, at)| me.arm_notifier(a.client, a.handle, obj, off, at));
-                    let g = kf_chan::passthrough::GuestChannel { err_ctx: notifier.as_ref().map_or(0, |n| n.ctx), ..g0 };
+                    // ★ 2026-10-08: the relayed twin's own USERD (refused by name, fail closed, if it
+                    // cannot be made — never a twin without its relay).
+                    let relay_host = match relay_guest.as_ref().map(|_| me.relay_userd()) {
+                        Some(Ok(h)) => Some(h),
+                        Some(Err(e)) => {
+                            live.fetch_sub(1, Ordering::AcqRel);
+                            if let Some(t) = &twin {
+                                t.user_done();
+                            }
+                            if let Some(n) = notifier {
+                                me.release_notifier(n);
+                            }
+                            return Err((NV_ERR_INSUFFICIENT_RESOURCES, format!("USERD relay: {e}")));
+                        }
+                        None => None,
+                    };
+                    let userd_at = relay_host.as_ref().map_or(g0.userd, |h| kf_chan::passthrough::UserdAt::Store { store: h.0, off: 0 });
+                    let g = kf_chan::passthrough::GuestChannel { err_ctx: notifier.as_ref().map_or(0, |n| n.ctx), userd: userd_at, ..g0 };
                     // ★ v3-video: a member of a guest TSG joins the host group standing for it.
                     let gkey = a.tsg.map(|t| (a.client, t, a.ctx_share));
                     let join = gkey.and_then(|k| me.groups.lock().ok().and_then(|m| m.get(&k).map(|g| g.0)));
@@ -4215,6 +4413,11 @@ impl ChanPlane {
                             if let Some(n) = notifier {
                                 me.release_notifier(n);
                             }
+                            if let Some((mem, _node, cookie, region)) = relay_host {
+                                drop(region);
+                                let _ = me.rm.release_cpu_view(kf_host::CpuViewRelease { h_memory: mem, p_linear_address: cookie });
+                                let _ = me.rm.free(mem);
+                            }
                             return Err((NV_ERR_INSUFFICIENT_RESOURCES, e));
                         }
                     };
@@ -4223,7 +4426,7 @@ impl ChanPlane {
                         .caps
                         .lock()
                         .map_err(|_| "caps poisoned".to_string())
-                        .and_then(|mut c| me.plane.allocate_channel(&mut c, idx, Route::Passthrough, chan.token, owner).map_err(|e| format!("{e:?}")));
+                        .and_then(|mut c| me.plane.allocate_channel(&mut c, idx, if relay_host.is_some() { Route::Translated } else { Route::Passthrough }, chan.token, owner).map_err(|e| format!("{e:?}")));
                     if let Err(e) = alloc {
                         let _ = me.release_twin(a.client, a.tsg, a.ctx_share, chan);
                         live.fetch_sub(1, Ordering::AcqRel);
@@ -4232,6 +4435,11 @@ impl ChanPlane {
                         }
                         if let Some(n) = notifier {
                             me.release_notifier(n);
+                        }
+                        if let Some((mem, _node, cookie, region)) = relay_host {
+                            drop(region);
+                            let _ = me.rm.release_cpu_view(kf_host::CpuViewRelease { h_memory: mem, p_linear_address: cookie });
+                            let _ = me.rm.free(mem);
                         }
                         return Err((NV_ERR_INSUFFICIENT_RESOURCES, format!("token {idx:#x}: {e}")));
                     }
@@ -4263,10 +4471,28 @@ impl ChanPlane {
                     }
                     me.pt_births.fetch_add(1, Ordering::Relaxed);
                     me.engine_live(engine, true);
+                    let relayed = match (relay_host, relay_guest) {
+                        (Some((mem, node, cookie, host)), Some(guest)) => {
+                            if let Ok(mut m) = me.relays.lock() {
+                                m.insert(chan.token, Arc::new(Mutex::new(Relay {
+                                    st: kf_chan::userd_relay::RelayState::new(g.entries),
+                                    guest,
+                                    host,
+                                    _node: node,
+                                    cookie,
+                                    mem,
+                                    chan,
+                                    idx,
+                                })));
+                            }
+                            true
+                        }
+                        _ => false,
+                    };
                     let _ = me.take_ledger(idx);
                     // ★ After the token word and the twin: until its placement lands, the trap
                     // serves this token; after, its eventfd does. No lock is held here.
-                    let fast = me.fast_register(idx, runlist, chid);
+                    let fast = if relayed { "fast=off (USERD relay: doorbells go to a worker)".to_string() } else { me.fast_register(idx, runlist, chid) };
                     Ok(format!(
                         "chan {:#x}:{:#x} BORN Passthrough: token {idx:#x} -> host {:#x} in {key:?} gpfifo={:#x}x{} userd={userd:?} engine={engine:#x} declared_kernel_pid={} {}{} rc={rc} {fast}",
                         a.client,
@@ -4970,6 +5196,9 @@ impl ChanPlane {
     /// ★ A WORKER's entry (`HostOps::run_translated`): pump the channel behind `ht`. Never waits.
     /// Returns whether anything reached the GPU.
     pub fn serve(&self, ht: u32) -> bool {
+        if let Some(r) = self.relay_serve(ht) {
+            return r;
+        }
         let Some(slot) = self.slot(ht) else {
             return false;
         };

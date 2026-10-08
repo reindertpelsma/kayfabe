@@ -25,4 +25,5 @@ pub mod tmode;
 pub mod translated;
 pub mod tspace_unsafe;
 pub mod ttables;
+pub mod userd_relay;
 pub mod worker;
