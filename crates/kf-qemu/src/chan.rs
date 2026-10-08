@@ -338,7 +338,7 @@ struct Relay {
     idx: u32,
     /// ⚠ DIAGNOSTIC only (`KF3_RELAY_PB_PEEK=1`, default off): the guest VA space's mirror, the
     /// ring's VA, and how many GP entries were peeked — see [`ChanPlane::relay_peek`].
-    mirror: Arc<Mirror>,
+    mirror: Mirror,
     views: StoreViews,
     gpfifo_va: u64,
     peeked: u32,
