@@ -3538,3 +3538,39 @@ probes) plus `KF3_TCENSUS=1`. **H-relay:** the user-work twins are born over kay
 **H-pt (from run61):** D3D device creation succeeds and the compositor's first segment runs on the twin. *Falsifiers:* `0x8876017c` again; or the
 twin RC'd (host Xid / RC record) on its first segment — then the subchannel bindings are the wall (authored next, from the guest's own class
 allocations on that channel).
+
+### Runs 67-68 result: the USERD relay works — the compositor's channel is born Passthrough and its first submission reaches the engine; the twin then takes Xid 31 (PBDMA fault at VA 0x13000) after host RM could not map part of its GR context
+
+Run67 `8288ff8e` (16:40:48 CEST; the Linux demo, restarted at 16:38 by another agent's finished input-sink chain, stopped first for VRAM),
+run68 `d67e9290` (16:44:10; adds the fix below and `KF3_DOORBELL_CPL`); flags as the run67 setup. [run67 timeline](run67-relay-births.txt),
+[run68 timeline](run68-relay-timeline.txt), [run68 host NVRM lines](run68-host-nvrm.txt), traces `run67-qemu.log.gz`, `run68-qemu.log.gz`.
+
+`[measured, run67 at 8288ff8e and run68 at d67e9290, 2026-10-08]`:
+- **H-relay: SUPPORTED.** `chan 0xc1d00027:0xff04000c BORN Passthrough: token 0xe -> host 0x44 ... WINDOWS-USER-WORK` with the relay (both runs;
+  run61's `NV_ERR_INVALID_ADDRESS` is gone). Windows then allocates the copy, I2M, 2D, 3D and compute objects on the twin, sends two direct
+  `GPU_PROMOTE_CTX` (satisfied by the twin, ruling B), sets its timeslice, schedules it, and the head is armed (1920x1080@60).
+- Run67: no relay step ever ran (`gets=0`): the plane's worker judged the twin "not translatable" (`ChanPlane::alive` knew only Translated
+  slots), so the guest's doorbells were absorbed; Windows reset the channel (`NV906F RESET_CHANNEL` x4, refused) and freed it. Fixed in run68
+  (a relayed twin is alive).
+- Run68: the three doorbells of token `0xe` (`cpl=0`, kernel RIP, as in run66) reach the relay: **`USERD relay: GP_PUT 0x3 forwarded and rung`**,
+  and the engine fetched (`host GP_GET = 1` at release, written back to the guest's slot). Then the host logs **`Xid 31 ... channel 0x44 ... MMU
+  Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0x0_00013000, FAULT_PDE, VIRT_READ`** — the twin is RC'd, contained to it (fail closed; no
+  other channel, VM or the host desktop affected; Xid 93 → 94). The guest then resets the channel (75 `RESET_CHANNEL`) and the screen keeps the boot
+  frame ([last screendump](run68-screendump-last.png)).
+- Seven seconds before the fault, while the twin's engine objects (its GR context) were being created, host RM logged **`dmaAllocMapping_GM107:
+  can't alloc VA space for mapping`** (`rangeLo <= rangeHi @ gpu_vaspace.c:1363`) twice — the same pair at run67's twin birth (16:41:01) —
+  i.e. host RM could not place part of the twin's GR context in the twin's host VA space (the mirror of the process's VA space).
+- The mirror withholds the guest's PRIVILEGED mappings from a user twin (by design): **10 privileged runs, 0x4f80000 bytes, in the compositor's
+  process VA space** were withheld (`[measured]`: Windows maps kernel-privileged buffers inside a process's GPU VA space — part of the owner's
+  question; what they hold is not decoded).
+
+**Inferred (not tested), the next wall:** the PBDMA/ESC fault at a low VA with no PDE follows host RM's failure to map a context buffer of the
+twin's GR context in its host space (`VA 0x13000` lies inside the range Windows itself promoted for this channel's context, `0x11000 +
+0xdc300`, run53's decode — a coincidence or the same layout; not established). Candidates, to separate in the next run: (a) the host VA space
+built for a Windows process mirror leaves host RM no hole for its own context placements (the reserved guest ranges `GUEST_VA_RANGES` plus
+Windows' own layout), (b) the withheld privileged runs include something the PBDMA reads. Recorded host-side evidence to read first: which RM
+allocation failed (an NVRM debug print or the twin's context-buffer VAs).
+
+**Stop (time box, 2026-10-08 ~16:50).** The D3D/compositor wall moved: the per-process channel is born on an unprivileged host twin, its doorbells
+are relayed and its first entry is fetched by the engine. D3D11/12 device creation was not re-probed (the guest's compositor TDRs first);
+not claimed.
