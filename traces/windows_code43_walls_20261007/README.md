@@ -2965,7 +2965,7 @@ Branch `claude/code43-deferred-20261008`; evidence for runs 47-52 in this direct
 # Loop 2026-10-08 (second session), branch `claude/code43-d3d-20261008`: why does D3D device creation say out-of-video-memory?
 
 (Continues at run 53. Binary and guest as in runs 47-52 unless a setup says otherwise. Every run states its
-hypothesis and falsifier before it starts. `[measured, runN at <rev>, <date>]` = read from a file or a guest/host output; `[inferred]`
+hypothesis and falsifier before it starts. `[measured, runN at <rev>, <date>]` (convention of run53 at 80169b57, 2026-10-08) = read from a file or a guest/host output; `[inferred]`
 = reasoning, not yet tested.)
 
 ## Reference read from the VFIO traces (vfio-8/9/10) before any boot: what Windows asks the real GSP for FB info (vfio-8/9/10)
