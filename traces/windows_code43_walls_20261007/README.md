@@ -3815,3 +3815,7 @@ event of the engine a D3D copy twin runs on (`engine 0xc`, COPY3) is not relayed
 VM-only space (§U.3's conditions), the host object has nothing registered and no `0x200` was seen on a D3D channel — accept as the
 Windows user-work rule, or keep it an experiment; (2) `KF3_SW_RUNLIST_HOST_OWNED` (unchanged, still on the path); (3) whether a `0x200`
 on such a twin, if one ever appears, may be served by host registrations authored from the guest's `DEFERRED_API` controls (§U.4).
+
+**Left running (2026-10-08 18:07 CEST):** the Linux demo (`interactive.sh`, kf3 `4bc62999`, window "kayfabe guest") and the Windows desktop
+overlay (`windows_broker.sh desktop`, kf3 `40230e23`, 1024 MiB store, window "kayfabe Windows"): the Basic Display desktop, logged in, at
+1920x1080 (NVIDIA disabled — with NVIDIA enabled the guest still TDRs, run76). Host Xid count 116, unchanged since run73.
