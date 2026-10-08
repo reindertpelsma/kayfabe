@@ -3068,9 +3068,10 @@ impl Device {
             &on_other,
             &|| {
                 // ★ 2026-10-08 (owner ruling §X, `kf_chan::ptnsi`): a REAL host FIFO_EVENT_MTHD edge
-                // — a COPY0 copy's completion arrives ONLY here on the 4070 (measured at 9925108e,
-                // bare metal) — raised on the vector whose service fires the guest's own
-                // FIFO_EVENT_MTHD, if the guest armed it. Never dropped.
+                // (on the 4070 a COPY0 copy's completion arrives here and on GR0's notifier, never
+                // on CE0's — measured at f589ab23, bare metal) — raised on a vector whose service
+                // fires the guest's own FIFO_EVENT_MTHD (`host_notify_vector`), if the guest armed
+                // it. Never dropped.
                 let _ = self.chans.nsi_fifo_edge(|v| self.latch_and_deliver(v));
             },
             // The relay's timer: what optional pacing owes goes out even if no edge comes.

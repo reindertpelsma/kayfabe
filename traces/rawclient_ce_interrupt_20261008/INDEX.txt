@@ -1,3 +1,4 @@
+STATUS: ANSWERED, 2026-10-08 (corrections dated in place, each ABOVE the text it corrects).
 --ce-interrupt (R35) — evidence, 2026-10-08. Branch claude/rawclient-ce-interrupt-20261008.
 Host: RTX 4070 (AD104, CE class 0xc7b5), driver 595.91.07 (open kernel module), the trusted bench host.
 Client revision under test: 9925108e (every *_9925108e* file). kf3 device binary for the guest runs: built at
@@ -7,6 +8,10 @@ kernel and nvidia modules of the host, i.e. guest driver 595.91.07).
 
 MEASURED (each line names its file):
 - bare30_default_arms_9925108e.out        the 30 default arms, unchanged: 30 PASS / 0 FAIL / 0 CRASH.
+⊘ CORRECTION 2026-10-08 (applies to the two bare-metal and guest bullets below): GR0's notifier was NOT watched at
+9925108e (the arm watched CE0..CE9 and FIFO_EVENT_MTHD only), so "FIFO_EVENT_MTHD only (CE0 silent)" means "of the
+watched files". At f589ab23, with GR0 watched (traces/passthrough_nsi_nogate_20261008/bare_nsi_bare{1,2}_*), a COPY0
+copy's interrupt lands on GR0 50/50 AND FIFO_EVENT_MTHD 50/50, CE0 0/50; COPY2's on CE2 and FIFO_EVENT_MTHD, GR0 0/50.
 - bare_ce-interrupt_9925108e_run{1,2,3}.log, ..._unprivileged_euid65534.log
       --ce-interrupt on bare metal, no other tenant on the GPU (hardware_cycle_9925108e.log: tenant-qemu 0 before and
       after each), 3 runs as root and 1 as euid 65534 with no groups: PASS 4/4. 11 of 11 notifiers armed.
@@ -30,6 +35,10 @@ MEASURED (each line names its file):
 - nvos_event_flags_by_tag.txt             NV01_EVENT_WITHOUT_EVENT_DATA and NV01_EVENT_NONSTALL_INTR read from NVIDIA's
       open-gpu-kernel-modules nvos.h at every one of the 30 driver-matrix tags: identical (0x10000000, 0x08000000).
 
+⊘ ANSWERED 2026-10-08 (the paragraph below): measured on branch claude/passthrough-interrupt-20261008
+(traces/passthrough_interrupt_20261008/, run A with KF3_PT_NSI_RELAY=0): the host FIFO_EVENT_MTHD edge after a
+Passthrough COPY0 doorbell DOES arrive at kf3 and was dropped (no relay for Passthrough twins); with the relay on, COPY0
+50/50. Its relay is now owner ruling §X (traces/passthrough_nsi_nogate_20261008/).
 INFERRED (not measured): why COPY0 is silent in the guest — kf3's channel plane relays host FIFO_EVENT_MTHD edges for
 its Translated rings on host COPY2 (kf3 log: "completions on FIFO_EVENT_MTHD + CE2"), and its interrupt plane maps host
 CE2 to a guest vector, while a Passthrough COPY0 channel's FIFO_EVENT_MTHD edge (what COPY0's interrupt is on bare metal)

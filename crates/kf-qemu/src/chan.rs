@@ -2001,11 +2001,20 @@ impl ChanPlane {
     /// ★ **Worker tick** (every loop; at least every millisecond while something is owed): raise
     /// what the optional pacing owes. Returns whether anything is still owed. With pacing off
     /// (the default) it is one branch.
-    pub fn nsi_tick(&self, deliver: impl FnMut(u32)) -> bool {
+    ///
+    /// A late raise counts in `raised` of the first engine announced on its vector (the pacer
+    /// owes per VECTOR, so it cannot say which engine's edge it carries; per vector, `late` is
+    /// exact).
+    pub fn nsi_tick(&self, mut deliver: impl FnMut(u32)) -> bool {
         if self.nsi.pacer().interval_ns() == 0 {
             return false;
         }
-        self.nsi.flush(self.nsi_now_ns(), deliver)
+        self.nsi.flush(self.nsi_now_ns(), |v| {
+            if let Some(e) = self.engines.iter().find(|e| e.vector == Some(v)) {
+                e.raised.fetch_add(1, Ordering::Relaxed);
+            }
+            deliver(v);
+        })
     }
 
     /// The `PT-NSI` report: the relay's counters, the guest's armed subscriptions and every engine
@@ -2036,11 +2045,13 @@ impl ChanPlane {
             })
             .collect();
         format!(
-            "fifo_edges={} fifo_raised={} fifo_armed={} sticky={:#x} {} {}",
+            "fifo_edges={} fifo_raised={} fifo_armed={} sticky={:#x} kernel_nonstall_registered={} arm_clears={} {} {}",
             self.pt_fifo_edges.load(o),
             self.pt_fifo_raised.load(o),
             count(Some(kf_abi::eventnotify::NONSTALL_SLOT_FIFO_EVENT_MTHD)),
             arms.map_or(0, |a| a.sticky()),
+            arms.map_or(0, |a| a.kernel_registered.load(o)),
+            arms.map_or(0, |a| a.clears.load(o)),
             self.nsi.summary(),
             per.join(" ")
         )

@@ -12,33 +12,39 @@
 //!   host-driven engine's non-stall service under `bDefaultNonstallNotify`
 //!   (`ogkm-595.91.07: intr.c:1210-1214`).
 //!
+//! ⊘ CORRECTION (2026-10-08, to the 9925108e sentence after it): GR0's notifier was not watched
+//! at 9925108e, so "`FIFO_EVENT_MTHD` ONLY" means "of the watched files". `[measured 2026-10-08,
+//! rawclient --ce-interrupt at f589ab23 with GR0 watched, bare metal, 2 runs,
+//! traces/passthrough_nsi_nogate_20261008/]` a COPY0 copy's interrupt lands on GR0 AND
+//! `FIFO_EVENT_MTHD` in 50/50 iterations (CE0 0/50); COPY2's on CE2 and `FIFO_EVENT_MTHD` (GR0
+//! 0/50) — the owner's GRCE hypothesis (COPY0 is a graphics CE, serviced as GR0) survived its
+//! falsifier. Behaviour does not depend on it.
+//!
 //! `[measured 2026-10-08, rawclient --ce-interrupt at 9925108e, RTX 4070, bare metal,
 //! traces/rawclient_ce_interrupt_20261008/bare_ce-interrupt_9925108e_run{1,2,3}.log]` a COPY0
 //! copy's interrupt arrives on `FIFO_EVENT_MTHD` ONLY (CE0's own notifier stays silent); a COPY2
-//! copy's on both CE2 and `FIFO_EVENT_MTHD`. Why CE0 stays silent — the owner's GRCE hypothesis:
-//! COPY0 is a graphics CE on that die, serviced as GR0. `[measured 2026-10-08, rawclient
-//! --ce-interrupt at f589ab23 with GR0 watched, bare metal, 2 runs,
-//! traces/passthrough_nsi_nogate_20261008/]` its falsifier did not happen: a COPY0 copy's interrupt
-//! lands on GR0 AND `FIFO_EVENT_MTHD` in 50/50 iterations (CE0 0/50); COPY2's on CE2 and
-//! `FIFO_EVENT_MTHD` (GR0 0/50). Behaviour does not depend on it.
+//! copy's on both CE2 and `FIFO_EVENT_MTHD`.
 //!
 //! ## The rule (owner, 2026-10-08): follow NVIDIA — an interrupt wakes everyone subscribed
 //!
 //! RM wakes EVERY client registered on an engine's non-stall list
 //! (`_gpuEngineEventNotificationListNotify`, `ogkm-595.84: event_notification.c:330-452`), whoever's work it
 //! was. kayfabe does the same, one level up: a host edge is forwarded to every VM whose guest has
-//! **armed** that event — a live guest `NV01_EVENT_OS_EVENT` with `NV01_EVENT_NONSTALL_INTR` on
-//! that notifier (`kf_rm::osevent::NonstallArms`, a host-recorded fact about the guest's own
+//! **armed** that event — a live guest event (userspace's `NV01_EVENT_OS_EVENT` or the guest
+//! kernel's `NV01_EVENT_KERNEL_CALLBACK[_EX]`) with `NV01_EVENT_NONSTALL_INTR` on that notifier (`kf_rm::osevent::NonstallArms`, a host-recorded fact about the guest's own
 //! subscription, never a doorbell, never "has a live twin", never "has work outstanding"):
 //!
 //! - an engine-notifier edge → that engine's guest vector, if the guest armed that engine;
 //! - a `FIFO_EVENT_MTHD` edge → a guest vector whose service fires the guest's own HOST notifier
 //!   (every engine's does), chosen with the least collateral by [`host_notify_vector`]: one no
 //!   armed engine shares, else GR0's — if the guest armed `FIFO_EVENT_MTHD` (libcuda does,
-//!   `kf_rm::osevent`). `[measured 2026-10-08, kf3 15a400b5, fast guest]` before the raw client
-//!   armed it, 131 host `FIFO_EVENT_MTHD` edges arrived with it unarmed (`NotArmed`, nothing
-//!   raised; whose work they were is not established), and the quiet window and controls stayed
-//!   clean.
+//!   `kf_rm::osevent`), and so does the guest KERNEL's CeUtils (`NV01_EVENT_KERNEL_CALLBACK_EX`,
+//!   `mem_utils.c:1905-1906`). ⊘ CORRECTION (2026-10-09, review of 1f083ac4, to the measurement
+//!   after it): the kernel-callback classes were not counted as armed at 15a400b5, so the 131
+//!   unarmed edges below include edges the guest kernel had subscribed to.
+//!   `[measured 2026-10-08, kf3 15a400b5, fast guest]` 131 host `FIFO_EVENT_MTHD` edges arrived
+//!   while the slot was unarmed (`NotArmed`, nothing raised; whose work they were is not
+//!   established), and the quiet window and controls stayed clean.
 //!
 //! `[measured 2026-10-08, traces/passthrough_nsi_nogate_20261008/]` in the kf3 guest at 15a400b5
 //! every `--ce-interrupt` leg lands exactly where it lands on bare metal (COPY0: GR0 and
@@ -640,7 +646,6 @@ mod tests {
         assert_eq!(got, vec![0]);
     }
 
-    /// Two workers judging edges on one VM at once (pacing off): every armed edge raises.
     #[test]
     fn the_host_notify_vector_avoids_every_vector_an_armed_engine_shares() {
         // AD104's served table: GR0, CE0, CE1 on 0; CE2 on 1; CE3 on 2; NVENC1 4; NVDEC0 3; OFA 5.
@@ -665,6 +670,7 @@ mod tests {
         assert_eq!(host_notify_vector([(None, false)].into_iter(), None), None);
     }
 
+    /// Two workers judging edges on one VM at once (pacing off): every armed edge raises.
     #[test]
     fn two_workers_raise_every_armed_edge() {
         let r = Relay::new(0, true);

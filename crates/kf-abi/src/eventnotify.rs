@@ -1224,6 +1224,39 @@ mod nonstall_slot_tests {
         assert_eq!(nonstall_slot_ofa(2), None);
     }
 
+    /// ★ `NV01_EVENT_NONSTALL_INTR` is typed by hand (the driver matrix has no `nvos.h` flag
+    /// family), so it is PINNED to the per-tag measurement: `nvos.h` read at every tag of the
+    /// matrix (`traces/rawclient_ce_interrupt_20261008/nvos_event_flags_by_tag.txt`). The file
+    /// must cover exactly [`crate::generated::matrix::MEASURED`], and every tag must agree.
+    #[test]
+    fn the_nonstall_flag_is_pinned_to_every_measured_tag() {
+        let file = include_str!(
+            "../../../traces/rawclient_ce_interrupt_20261008/nvos_event_flags_by_tag.txt"
+        );
+        let mut tags = Vec::new();
+        for line in file
+            .lines()
+            .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
+        {
+            let mut it = line.split_whitespace();
+            let tag = it.next().expect("tag");
+            let v = it
+                .find_map(|f| f.strip_prefix("NONSTALL_INTR=("))
+                .and_then(|f| f.strip_suffix(')'))
+                .and_then(|h| u32::from_str_radix(h.trim_start_matches("0x"), 16).ok())
+                .expect("NONSTALL_INTR value");
+            assert_eq!(v, NV01_EVENT_NONSTALL_INTR, "tag {tag}");
+            tags.push(crate::DriverVersion::parse(tag).expect("tag parses"));
+        }
+        tags.sort();
+        let mut measured = crate::generated::matrix::MEASURED.to_vec();
+        measured.sort();
+        assert_eq!(
+            tags, measured,
+            "the file covers exactly the matrix's measured tags"
+        );
+    }
+
     #[test]
     fn a_nonstall_registration_resolves_and_anything_else_does_not() {
         let fifo = idx(&m::NV2080_NOTIFIERS_NV2080_NOTIFIERS_FIFO_EVENT_MTHD);

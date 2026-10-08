@@ -1,6 +1,10 @@
 # The three channel kinds — passthrough, translated, emulated
 
-**STATUS: DESIGN, 2026-09-19 (w803). Owner ruling. Not yet implemented.**
+**STATUS: LIVE, 2026-10-08.** The three kinds are implemented in v3 (`ARCHITECTURE.md`, *channel kinds*;
+`kf-chan`), and §1.1 and §1.2 carry their own LIVE status lines. ⊘ *Superseded status line, kept as
+history: "DESIGN, 2026-09-19 (w803). Owner ruling. Not yet implemented."* — the text below §1.2 is
+that 2026-09-19 design ruling; where it and the code disagree, `ARCHITECTURE.md` and
+`docs/STATUS_DETAIL.md` say what was built.
 
 > **Owner:** *"I think for the second case `SRC/DST_TYPE = PHYSICAL` we can create a new
 > channel type beyond emulated and passthrough. Named virtual."* … *"emulated remains for
