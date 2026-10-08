@@ -1,0 +1,37 @@
+STATUS: LIVE, 2026-10-08. Passthrough completion interrupts (kf_chan::ptnsi) — evidence. Branch claude/passthrough-interrupt-20261008.
+Host: RTX 4070 (AD104), driver 595.91.07 (open kernel module), the trusted bench host. Every hardware run took the shared
+GPU lock (/tmp/kayfabe-fastguest.lock; the suite scripts per arm, the Windows run with flock -o around the whole run).
+Client under test: kayfabe-rm-ladder built at 9925108e (the --ce-interrupt arm, R35; unchanged on this branch).
+kf3 device binary for the Linux guest runs: kf3-bins/85459d73 (this branch, built by scripts/bench/build_kf3.sh).
+Guest: the fast lane (KF_FROM_HOST=1: the host's kernel and nvidia modules, guest driver 595.91.07).
+
+FALSIFIER, stated before run A: "the host FIFO_EVENT_MTHD edge does NOT come for the Passthrough COPY0 twin" (i.e. it is not
+armed, or not fired, for passthrough work) — would be shown by run A's CE0 gate judging no Fresh verdict on a FIFO_EVENT_MTHD
+edge after the COPY0 legs' doorbells. The alternative: the edge comes and kf3 drops it (no relay for Passthrough twins).
+
+MEASURED (each line names its file):
+- bare_ce-interrupt_client9925108e.log   bare metal, --ce-interrupt: PASS. COPY0 launch 50/50 on FIFO_EVENT_MTHD only (median
+      wake 89 us), COPY0 host-NSI 50/50 (median 83 us), COPY2 50/50 on CE2+FIFO_EVENT_MTHD (median 76 us), controls 0/10.
+- guest_kf3_85459d73_relayOFF_*           run A, KF3_PT_NSI_RELAY=0 (edges judged and counted, nothing raised): --ce-interrupt
+      FAIL as at 9925108e (COPY0 launch 0/3, host-NSI 0/3, gave up). The falsifier did NOT happen: after the COPY0
+      doorbells the host FIFO_EVENT_MTHD edges arrived and the CE0 gate judged them Fresh (one per iteration, "PT-NSI
+      host FIFO_EVENT_MTHD edge -> guest CE0 ... Fresh"), while CE0's own host notifier woke 0 times (pt_nsi line:
+      CE0 wakes=0). So the host edge exists and kf3 dropped it. 11 of 11 notifiers armed (CE2 and CE4..CE9 were
+      NV_ERR_NOT_SUPPORTED at 9925108e; now served, kf_abi::eventnotify::ENGINE_NONSTALL_NOTIFIERS).
+- guest_kf3_85459d73_relayON_*, guest_kf3_85459d73_ce-client_ce-interrupt_suite.out
+      run B, default (relay on): --ce-client PASS, --ce-interrupt PASS, every leg: quiet window clean; COPY0 launch 50/50
+      (on FIFO_EVENT_MTHD, wake median 550 us, max 738); COPY0 host-NSI 50/50 (median 552, max 714); COPY2 launch 50/50
+      (CE2+FIFO_EVENT_MTHD, median 485, max 606); no-interrupt controls 0/10 on COPY0 and COPY2.
+- guest_kf3_85459d73_fast_suite30.out     the 30 default arms in the kf3 guest at 85459d73: 30 PASS / 0 FAIL / 0 CRASH.
+- windows_run92_*                         Windows (580.88 guest) on kf3 916355df = claude/windows-pass-20261008 c39681eb with
+      this branch's four commits cherry-picked (a host-side checkout, not pushed), run90's flag set (WIN_FLAGS incl.
+      KF3_WIN_USER_CHANNELS_PASSTHROUGH and KF3_USERD_RELAY_OFF), IOMMU identity for the run (switched from DMA-FQ and
+      back, gdm untouched). The stall did NOT move: the boot has the shape of run90 boot1
+      (windows_run90boot1_kf3_5f3c17b4_stall_lines.txt, from the windows-pass branch's run90-boot1-qemu.log.gz): the same
+      11 Passthrough births, nearly the same per-token doorbell counts (tok 0x15 rung 11 vs 9, tok 0x1016 rung 5 vs 5),
+      then the TDR snapshot 0x00730108 after the last birth (marker 16 s after the run started) and the teardown. What changed is only the interrupts: GR0's vector
+      raised 2969 times (run90: 1037), CE3's 1107 (run90: 7).
+
+INFERRED (not measured): the Windows TDR is not caused by a missing completion interrupt of a Passthrough twin — the guest
+now receives one on GR's and CE3's vectors after every host edge while it has work outstanding, and stalls at the same
+point. The relay's afterglow (1 s default) is a bound chosen by argument (ptnsi.rs module doc), not a measured optimum.
