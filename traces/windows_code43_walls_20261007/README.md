@@ -3854,6 +3854,11 @@ lines had shown guest `GP_GET = 0` on the twins rung once (host `0x24`/`0x10`).
 
 ## Run79 (same disk, guest `TdrDelay = TdrDdiDelay = 30`): the timeout scales with TdrDelay — and starts at a refused async preempt
 
+> ⊘ **Corrected 2026-10-08 (seventh session, runs 85-88, below):** the preempt is NOT what times out. `[measured, run85 and
+> run88 at 256e510f, 2026-10-08]` boots with no `DISABLE_CHANNELS` at all TDR the same way, and a boot that served every
+> preempt with each `RUNLIST_PREEMPT_COMPLETE` after its reply (run86) TDRs at TdrDelay too. The coincidence in time is
+> real (the scheduler's preempt and the stall both start at the same D3D device's first work); the causation below is not.
+
 `[measured, runs 78/79 at 42b332b3/a99aaefe, 2026-10-08]` ([timing](run77-84-preempt-timing.txt), [run79 timeline](run79-timeline.txt)):
 in both boots the guest's kernel client issues `NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS` with a `pRunlistPreemptEvent` (the scheduler's
 asynchronous preempt) and kayfabe refused it (`0x1f`); the teardown follows **3.5 s** later with the default TdrDelay and **31.4 s** later
@@ -3865,6 +3870,12 @@ the window channels still carry only LUT methods (not the cause; recorded). `0x0
 from early on, refused by name, not on the TDR's path (kept refused; no derivable answer).
 
 ## Runs 82-84: the async preempt served, `RUNLIST_PREEMPT_COMPLETE` posted from the host's completion (`KF3_ASYNC_PREEMPT`, default off)
+
+> ⊘ **Corrected 2026-10-08 (seventh session, runs 85-88, below), above the text it corrects:** "H-preempt holds" and "the
+> teardown follows 3.5 s after the re-enable" are timing, not cause — the TDR occurs with no preempt at all (run85, run88)
+> and with every preempt and re-enable served in the GSP's own order (run86). Run83's survival is not explained by the
+> refused re-enable as such (open). Also: in run84 the first preempt's event reached the guest BEFORE its reply (vfio-10:
+> reply first, always) — fixed in `256e510f`, not the cause.
 
 OWNER_RULINGS §S (139): *"serve it only as a real unprivileged preempt of the VM's own channel group, and post the completion only
 from the host's real completion."* The async form is carried to the plane as the same host `DISABLE_CHANNELS` over the twins as the
@@ -3900,3 +3911,75 @@ TDR at the same delay with the completion posted.
 
 **Left running (2026-10-08 ~19:20 CEST):** the Linux demo (`interactive.sh`, kf3 `4bc62999`) and the Windows desktop overlay
 (`windows_broker.sh desktop`, kf3 `40230e23`, 1024 MiB store, NVIDIA disabled, Basic Display). Host Xid count 116.
+
+# Loop 2026-10-08 (seventh session), branch `claude/windows-reenable-20261008`: why the guest times out after the re-enable
+
+Started from the sixth session's stop at `dcca0331`. Binary `kf3-bins/256e510f` for runs 85-88: the run84 flag set
+(`KF3_PREEMPT_BIND_PROBE KF3_DISPLAY_IMP_ENABLE KF3_DISPLAY_CTRL_PROBE KF3_ZCULL_BIND_PROBE KF3_SW_RUNLIST_HOST_OWNED
+KF3_WIN_USER_CHANNELS_PASSTHROUGH KF3_TCENSUS KF3_RELAY_PB_PEEK KF3_WIN_TWIN_DEFAPI_OBJECT KF3_RELAY_GET_REFRESH
+KF3_ASYNC_PREEMPT` plus the launcher's), alone on the GPU (both demos stopped cleanly), store 4096 MiB. Runs 86-88 are later
+boots of run85's own disk in new QEMU processes (`WIN_REUSE=1`, run79's method), each with one guest-side setting changed
+through QGA in the boot before. Host Xid count 116 before and after every boot. [marker](run85-88-marker.txt),
+[run88 command](run88-command.json), traces `run85..88-qemu.log.gz`, guest DxgKrnl ETW extracts `run86-etw-*`, `run87-etw.txt.gz`,
+`run88-etw.txt.gz` (tools: `scripts/bench/windows/dxg_etw_arm.ps1`, `dxg_etw_stop.ps1`, `dxg_sched_unfinished.py`).
+
+## Before any boot: two differences between run83 (survived) and run84 (TDR), and the VFIO reference
+
+- `[measured, run84 at 4d733007, 2026-10-08]` the FIRST async preempt's `RUNLIST_PREEMPT_COMPLETE` reached the guest BEFORE
+  its control's reply (the act queues the completion when the host verb returns, before its deferred reply settles; a
+  drainer pass in between posted it). Run83: reply first, both times. `[measured, vfio-10 gsp.jsonl, 2026-10-05 capture]`
+  the GSP answers reply-then-event every time (RPCs 6628-6633 and 8100-8126), and after the re-enable (6634-6637) it posts
+  no further event in that window: **H-event2 falsified** for the GSP message stream (no second event exists to wait for).
+- **H-ctx:** `[measured, run84]` no deferred-API trigger names the re-enabled groups' channels after the re-enable (the
+  only triggers are InitializeCtx/PromoteCtx for the next new device, chid 21): nothing was asked, so H-ctx is not supported.
+- **H-pending-completion (twins):** `[measured, run84]` every relay at release has guest GP_PUT = GP_GET = the host's, and
+  every peeked last fence release was written by the engine; run83 instead left token 0x13's later work unexecuted
+  (GP_PUT 0x4e..0x92 forwarded, GP_GET never moved: the twin stayed disabled) — and survived.
+- Fixed (`256e510f`, default-off path): the drainer takes queued completions only under the GSP lock with no reply held
+  (`preempt_posts_ready`), so the event follows its reply. The disable/enable act now names each twin and logs each relay's
+  cursors before/after the host verb. `KF3_ASYNC_PREEMPT_REENABLE_NOACT` (diagnostic, default off, never shipped) exists for the
+  coordinator's no-act bisect; it was NOT run (run85 made it moot, below). GPU-free tests: `preempt_order_tests` (6).
+
+## Run85 (fresh disk, H-order): falsifier — the TDR within ~3.5 s of a served re-enable with every event after its reply
+
+`[measured, run85 at 256e510f, 2026-10-08]` this boot issued **no `DISABLE_CHANNELS` at all** (no preempt, no re-enable), and
+the guest still tore down and bugchecked 0x116 (`…, 0xffffffffc000009a, 4`) about 20 s after boot — the same pattern as
+runs 78/84 (token 0x13 work, then `0x00730108`/`0x007302a5`, then the frees). **The preempt/re-enable is not necessary for
+the timeout: H-runlist and the re-enable act as the cause are falsified; the coordinator's no-act bisect would test a path
+the failure does not need.**
+
+## Run86 (same disk, TdrDelay = TdrDdiDelay = 30, boot-time DxgKrnl ETW, all keywords)
+
+`[measured, run86 at 256e510f, 2026-10-08]` both async preempts served, each `RUNLIST_PREEMPT_COMPLETE` posted after its reply
+(the act line, then the reply, then the post), relays idle at the preempt (`host 0x49: guest PUT=GET=0x3e = host`; CE `0x10`);
+both re-enables served; teardown ~31.5 s after the D3D device's first work. **H-order falsified as the cause** (the fix
+stays: it is the GSP's order). The ETW trace (all keywords) ended at the same D3D device's birth.
+
+## Run87 (same disk, ETW Base keyword only, flushed every second)
+
+`[measured, run87 at 256e510f, 2026-10-08]` at the trace's end every DMA packet (609 started, 609 stopped) and every queue
+packet (1656/1656) had completed; 670 `AttemptPreemption`, all misses (556 `PreemptionAttemptMissAlreadyRunning`, 114
+`MissNoCommand`). The DxgKrnl stream again stops at the new D3D device's first work (19:49:11 guest UTC, the host saw token
+0x1016 born then) although the session ran 19 s longer. Whether dxgkrnl's scheduler itself goes silent then or the trace
+loses its tail is not established (inferred either way).
+
+## Run88 (same disk, TdrDelay = 30, TdrDdiDelay = 5, ETW Base + Profiler): DDI timeout or GPU-scheduler timeout?
+
+Falsifier stated first: a DDI timeout (a thread held in the KMD) tears down ≈ 5 s + recovery after the stall; a scheduler
+timeout ≈ 30 s + recovery. `[measured, run88 at 256e510f, 2026-10-08]` last D3D work 254847.16 (host s), token 0x13/0x11 work
+at +0.9 s, `0x00730108` at +15.6 s, **teardown at +30.2 s: a TdrDelay (GPU-scheduler) timeout, not a DDI timeout (H-ddi
+falsified).** The only DDI entered and never left at the trace end is `DxgkCddTerminateThread` (CDD's thread routine). No
+preempt in this boot either. All twin relays consistent and every last fence written at release, as in runs 84-86.
+
+## Where it stands (seventh session)
+
+- **Measured:** the timeout is the GPU scheduler's (TdrDelay-scaled), it starts at the first work of a D3D device created
+  at boot (clients `0x34..0x37`: GR twin token 0x15 + CE twin 0x1016), it needs no preempt, and no twin is behind: every
+  twin's GP_GET equals its GP_PUT and every peeked fence was written.
+- **Inferred, untested (candidates):** (a) a packet dxgkrnl submits after token 0x13's GP[0x91] — a 64-bit host
+  `SEM_EXECUTE` release (payload 0x91, VA 0x14dad000: a monitored fence) — never reaches a ring kayfabe relays (run83
+  never ran that work and never timed out); (b) a present/flip that waits on that fence and needs the display to complete
+  it (the window channels carry only LUT methods; `vblirq=0.0` in the display status); (c) the refused
+  `NV2080_CTRL_CMD_INTERNAL_PERF_BOOST_SET_2X` (0x20800a9a; vfio-10 answers it OK) — weak, run83 refused it too.
+- D3D11/12 creation: not shown (the guest TDRs before a probe can run). The owner's window: boot frame / armed 1080p
+  head, no presented surface.

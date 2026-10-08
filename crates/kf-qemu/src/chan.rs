@@ -1136,6 +1136,13 @@ fn relay_get_refresh() -> bool {
     *ON.get_or_init(|| std::env::var_os("KF3_RELAY_GET_REFRESH").is_some_and(|v| v == "1"))
 }
 
+// ⚠ CONTROL (2026-10-08, owner decision): `KF3_USERD_RELAY_OFF=1` births Windows user-work twins over
+// the guest's own sysmem USERD (adoption, no relay). Default off.
+fn userd_relay_off() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_USERD_RELAY_OFF").is_some_and(|v| v == "1"))
+}
+
 // ⚠ DIAGNOSTIC (2026-10-08, after run84; default off, never shipped): answer a twins-only re-enable
 // (`DISABLE_CHANNELS(bDisable=FALSE)`) NV_OK with no host act — see [`ChanPlane::disable_channels`].
 fn reenable_noact() -> bool {
@@ -4901,8 +4908,13 @@ impl ChanPlane {
             // ★★ 2026-10-08 (`V3_USERD_RELAY.md`): a Windows user-work twin with a guest-RAM USERD is
             // born over kayfabe's own USERD and relayed; the guest's slot is only read (`GP_PUT`) and
             // written (`GP_GET`) by a worker. Its guest-RAM view is made here, before any host verb.
-            let relay_guest =
-                if a.user_work && matches!(a.userd, Some(kf_arch::UserdMem::Sysmem { .. })) {
+            // ⚠ CONTROL (2026-10-08, owner decision; `KF3_USERD_RELAY_OFF=1`, default off): no relay —
+            // the Windows user-work twin ADOPTS the guest's sysmem USERD like any Passthrough twin.
+            // Only meaningful with the GPU's IOMMU group in identity mode (host RM refuses a USERD
+            // whose DMA address is wider than PTR_HI allows; the birth then fails by name, as run61).
+            let relay_guest = if userd_relay_off() {
+                None
+            } else if a.user_work && matches!(a.userd, Some(kf_arch::UserdMem::Sysmem { .. })) {
                     match self.userd_view(a.userd) {
                         Ok(v) => Some(v),
                         Err(e) => {
