@@ -503,6 +503,9 @@ mod tests {
             "575.51.02",
             "580.159.04",
             "590.48.01",
+            // `[measured 2026-10-08, drmnv.py --tags 595.91.07]` the trusted host's driver: its
+            // rows equal 595.84's item for item; unlisted before, so the rung was refused there
+            "595.91.07",
             "610.43.02",
             "615.71.09",
         ] {
