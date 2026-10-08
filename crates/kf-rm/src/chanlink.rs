@@ -241,6 +241,22 @@ pub struct ChannelAlloc {
     pub user_work: bool,
 }
 
+/// ★ 2026-10-08: `KF3_ASYNC_PREEMPT=1` (default off) serves `DISABLE_CHANNELS` with a
+/// `pRunlistPreemptEvent` ([`async_preempt_admitted`]).
+fn async_preempt_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_ASYNC_PREEMPT").is_some_and(|v| v == "1"))
+}
+
+/// ★ 2026-10-08 — may a `DISABLE_CHANNELS` carrying `pRunlistPreemptEvent = ev` reach the plane?
+/// The synchronous form (`ev == 0`) always may; the asynchronous one only with the switch on AND
+/// as a DISABLE (`bDisable`): a preempt-complete is posted only for a host disable+preempt that
+/// really ran (RM itself preempts only on disable, `kernel_fifo_ctrl.c:720-760`).
+#[must_use]
+pub fn async_preempt_admitted(enabled: bool, ev: u64, disable: bool) -> bool {
+    ev == 0 || (enabled && disable)
+}
+
 /// ★★ 2026-10-08 — the facts [`windows_user_work`] decides from, all known at the channel's alloc.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct UserWorkFacts {
@@ -525,6 +541,11 @@ pub enum ChanStatement {
         rewind_gp_put: bool,
         /// `(hClient, hChannel)` entries.
         list: ChanList,
+        /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`, default off): `pRunlistPreemptEvent` — an opaque
+        /// guest-kernel value, never dereferenced; echoed back as the `RUNLIST_PREEMPT_COMPLETE`
+        /// `eventData` once the HOST's disable+preempt completed (vfio-10: the GSP posts it so).
+        /// `None` for the synchronous form.
+        preempt_event: Option<u64>,
     },
     /// ★★★ v3-chanctl: `NVA06C_CTRL_CMD_PREEMPT` (`0xa06c0105`) on a channel group — ROUTE_TO_PHYSICAL
     /// with no CPU-RM body (`g_kernel_channel_group_api_nvoc.c:273`), so the whole verb is ours.
@@ -1679,7 +1700,18 @@ impl ChannelPolicy {
                 // ⊘ `pRunlistPreemptEvent` is a KEVENT pointer in the GUEST kernel's address space
                 // (kernel callers only, `kernel_fifo_ctrl.c:720-725`): nothing on the host can
                 // signal it, so the asynchronous form is refused by name, never dropped.
-                if d.runlist_preempt_event != 0 {
+                // ★ 2026-10-08 (`KF3_ASYNC_PREEMPT=1`, default off; OWNER_RULINGS §S applied to
+                // RUNLIST_PREEMPT_COMPLETE): served as the synchronous host disable+preempt of the
+                // VM's own twins, and the completion is posted to the guest's RM as
+                // RUNLIST_PREEMPT_COMPLETE with the value as eventData — the GSP's own shape
+                // (vfio-10 RPC 3307/3308) — only after the host verb returned. The value is never
+                // dereferenced. [measured, runs 78/79] the refusal is followed by the TDR exactly
+                // TdrDelay later.
+                if !async_preempt_admitted(
+                    async_preempt_enabled(),
+                    d.runlist_preempt_event,
+                    d.disable,
+                ) {
                     return Some(Self::refusal(
                         NV_ERR_INVALID_ARGUMENT,
                         "DISABLE_CHANNELS with a pRunlistPreemptEvent (async preempt) is not served",
@@ -1706,6 +1738,8 @@ impl ChannelPolicy {
                     only_scheduling: d.only_disable_scheduling,
                     rewind_gp_put: d.rewind_gp_put,
                     list: ChanList::new(&d.list)?,
+                    preempt_event: (d.runlist_preempt_event != 0)
+                        .then_some(d.runlist_preempt_event),
                 }
             }
             _ => return None,
@@ -3272,7 +3306,7 @@ mod tests {
         assert_eq!(r.rpc_result, NV_OK);
         assert!(matches!(
             seen.lock().unwrap().last().copied(),
-            Some(ChanStatement::DisableChannels { client, disable: true, only_scheduling: false, rewind_gp_put: false, list }) if client == c && list.as_slice() == [(c, ch)]
+            Some(ChanStatement::DisableChannels { client, disable: true, only_scheduling: false, rewind_gp_put: false, list, preempt_event: None }) if client == c && list.as_slice() == [(c, ch)]
         ));
         assert_eq!(seen.lock().unwrap().len(), n + 1);
         let r = link
@@ -3304,6 +3338,17 @@ mod tests {
             n + 1,
             "neither refusal reached the plane"
         );
+    }
+
+    /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): the asynchronous DISABLE_CHANNELS reaches the plane only
+    /// with the switch on and as a disable; the synchronous form is unchanged either way.
+    #[test]
+    fn an_async_preempt_needs_the_switch_and_a_disable() {
+        assert!(super::async_preempt_admitted(false, 0, true));
+        assert!(super::async_preempt_admitted(false, 0, false));
+        assert!(!super::async_preempt_admitted(false, 0xffff_8000_0000_1000, true));
+        assert!(super::async_preempt_admitted(true, 0xffff_8000_0000_1000, true));
+        assert!(!super::async_preempt_admitted(true, 0xffff_8000_0000_1000, false));
     }
 
     /// ★ EXPERIMENT `x11-dispsw`. OFF (the default): a `GF100_DISP_SW` alloc reaches no plane — the

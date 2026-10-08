@@ -2266,6 +2266,7 @@ impl Device {
             after_timeout = false;
             self.deliver_rc();
             self.deliver_hotplug();
+            self.deliver_preempt_complete();
             // The experiment's bounded spin: only while doorbells are flowing, only if the privileged
             // ring is empty (register work never waits behind it), and never past the bound.
             if let (Some(d), Some(t)) = (spin, last_delivery)
@@ -2980,6 +2981,81 @@ impl Device {
         }
         drop(guard);
         if posted {
+            self.latch_and_deliver(kf_rm::authored::GSP_STALL_VECTOR);
+        }
+    }
+
+    /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`, default off), on the drainer (the GSP queue's owner): post
+    /// each completed async preempt as the GSP does (vfio-10 RPC 3308): a LIST `POST_EVENT`,
+    /// `NV2080_NOTIFIERS_RUNLIST_PREEMPT_COMPLETE`, `eventData` = the guest's own
+    /// `pRunlistPreemptEvent` value, addressed to the calling client's live registration for that
+    /// index. ⊘ Queued only after the HOST disable+preempt returned (`ChanPlane::disable_channels`):
+    /// derived from a real host completion, never forged. With no live registration nothing is
+    /// posted (a post to a dead pair wedges the RPC path) — logged by name.
+    fn deliver_preempt_complete(&self) {
+        let done = self.chans.take_preempt_done();
+        if done.is_empty() {
+            return;
+        }
+        let Some(dp) = self.display else {
+            eprintln!(
+                "kf3: preempt-complete for {} async preempt(s) NOT posted: no display model holds the registrations",
+                done.len()
+            );
+            return;
+        };
+        let mut back = Vec::new();
+        let mut posted_any = false;
+        let Ok(mut guard) = self.gsp.lock() else {
+            self.chans.requeue_preempt_done(done);
+            return;
+        };
+        for (i, &(client, ev)) in done.iter().enumerate() {
+            let target = dp.model.lock().ok().and_then(|g| g.preempt_target(client));
+            let Some(t) = target else {
+                eprintln!(
+                    "kf3: RUNLIST_PREEMPT_COMPLETE for client {client:#x} NOT posted: no live registration"
+                );
+                continue;
+            };
+            let n = kf_abi::postevent::SubdeviceNotify {
+                client: t.client,
+                event: t.event,
+                notify_index: kf_disp::model::NOTIFIERS_RUNLIST_PREEMPT_COMPLETE,
+                event_data: ev.to_le_bytes(),
+            };
+            let payload = match n.encode() {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("kf3: RUNLIST_PREEMPT_COMPLETE NOT posted: {e}");
+                    continue;
+                }
+            };
+            let g = &mut *guard;
+            let mut ram = Ram(self);
+            match g.fsm.post_subdevice_event(&mut ram, payload) {
+                Ok(()) => {
+                    posted_any = true;
+                    eprintln!(
+                        "kf3: RUNLIST_PREEMPT_COMPLETE posted to {:#x}:{:#x} (eventData {ev:#x}) after the host's disable+preempt returned",
+                        t.client, t.event
+                    );
+                }
+                Err(kf_gsp::GspFault::QueueFull { .. }) => {
+                    back.extend_from_slice(&done[i..]);
+                    break;
+                }
+                Err(f) => eprintln!("kf3: RUNLIST_PREEMPT_COMPLETE REFUSED by the queue: {f:?}"),
+            }
+        }
+        if posted_any {
+            self.publish(&mut guard);
+        }
+        drop(guard);
+        if !back.is_empty() {
+            self.chans.requeue_preempt_done(back);
+        }
+        if posted_any {
             self.latch_and_deliver(kf_rm::authored::GSP_STALL_VECTOR);
         }
     }

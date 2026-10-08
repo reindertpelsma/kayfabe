@@ -200,6 +200,8 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
 
 /// `NV2080_NOTIFIERS_HOTPLUG` (`cl2080_notification.h:37`).
 pub const NOTIFIERS_HOTPLUG: u32 = 1;
+/// `NV2080_NOTIFIERS_RUNLIST_PREEMPT_COMPLETE` (`ogkm-580: cl2080_notification.h:178`).
+pub const NOTIFIERS_RUNLIST_PREEMPT_COMPLETE: u32 = 139;
 /// `NV01_EVENT_CLIENT_RM` (`nvos.h:436`): what a `GSP_RM_ALLOC` of an event carries on top of its
 /// notify index (`event.c:148-170`).
 pub const EVENT_CLIENT_RM: u32 = 0x0400_0000;
@@ -477,6 +479,10 @@ pub struct DisplayModel {
     pub pending_plug: u32,
     /// ★ 3c: the live hotplug registrations (at most [`MAX_HOTPLUG_REGISTRATIONS`]).
     pub hotplug: Vec<HotplugRegistration>,
+    /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): the live `NV2080_NOTIFIERS_RUNLIST_PREEMPT_COMPLETE`
+    /// registrations (same bound, same retire rules as [`Self::hotplug`]) — where a preempt-complete
+    /// `POST_EVENT` is addressed.
+    pub preempt: Vec<HotplugRegistration>,
     /// ★ Bound events and notifier actions by display object `(client, handle)` (at most
     /// [`MAX_EVENT_OBJECTS`]). ⊘ Bookkeeping only: this display raises no NV0073 notifier, so no
     /// event is ever posted for these (`NV0073_CTRL_CMD_EVENT_SET_NOTIFICATION` answers).
@@ -559,6 +565,7 @@ impl DisplayModel {
             imp_enabled: false,
             pending_plug: 0,
             hotplug: Vec::new(),
+            preempt: Vec::new(),
             display_events: BTreeMap::new(),
             rmfree_marks: BTreeSet::new(),
             rmfree_spent: BTreeSet::new(),
@@ -620,18 +627,45 @@ impl DisplayModel {
     /// ★ 3c: an accepted FREE of `handle` under `client` (the client itself when equal): every
     /// registration naming it as its event, its parent or its client is retired. Returns how many.
     pub fn retire_hotplug(&mut self, client: u32, handle: u32) -> usize {
-        let before = self.hotplug.len();
-        self.hotplug.retain(|h| {
+        let keep = |h: &HotplugRegistration| {
             h.client != client || (handle != client && h.event != handle && h.parent != handle)
-        });
-        before - self.hotplug.len()
+        };
+        let before = self.hotplug.len() + self.preempt.len();
+        self.hotplug.retain(keep);
+        self.preempt.retain(keep);
+        before - self.hotplug.len() - self.preempt.len()
     }
 
-    /// ★ 3c: a GSP re-init (the guest driver reloaded): every registration is dead.
+    /// ★ 3c: a GSP re-init (the guest driver reloaded): every registration is dead (the
+    /// preempt-complete ones too).
     pub fn retire_all_hotplug(&mut self) -> usize {
-        let n = self.hotplug.len();
+        let n = self.hotplug.len() + self.preempt.len();
         self.hotplug.clear();
+        self.preempt.clear();
         n
+    }
+
+    /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): record a `RUNLIST_PREEMPT_COMPLETE` registration (an
+    /// ACCEPTED event alloc with that notify index), bounded as [`Self::register_hotplug`].
+    pub fn register_preempt(&mut self, r: HotplugRegistration) -> bool {
+        if self
+            .preempt
+            .iter()
+            .any(|h| (h.client, h.event) == (r.client, r.event))
+        {
+            return true;
+        }
+        if self.preempt.len() >= MAX_HOTPLUG_REGISTRATIONS {
+            return false;
+        }
+        self.preempt.push(r);
+        true
+    }
+
+    /// ★ 2026-10-08: the live `RUNLIST_PREEMPT_COMPLETE` registration of `client` (newest first).
+    #[must_use]
+    pub fn preempt_target(&self, client: u32) -> Option<HotplugRegistration> {
+        self.preempt.iter().rev().find(|h| h.client == client).copied()
     }
 
     /// ★ Record an ACCEPTED `GSP_RM_ALLOC` of an `NV01_EVENT*` handle `event` whose parent is the

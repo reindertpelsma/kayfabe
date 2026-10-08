@@ -707,6 +707,20 @@ impl DisplayRegistry {
         // every event whose notify index is HOTPLUG). The top six bits are flags (`nvos.h:418-436`:
         // BROADCAST … CLIENT_RM), so NVKMS's `HOTPLUG | CLIENT_RM` (0x7e) and the Windows driver's
         // class-0x78 HOTPLUG event both register; any other index does not.
+        // ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): a RUNLIST_PREEMPT_COMPLETE registration is the
+        // `(hClient, hEvent)` a preempt-complete post names (vfio-10: `hEvent 0xff0620a0`, index 139).
+        if idx & NOTIFY_INDEX_MASK == kf_disp::model::NOTIFIERS_RUNLIST_PREEMPT_COMPLETE {
+            let kept = lock(&self.model).register_preempt(kf_disp::model::HotplugRegistration {
+                client,
+                event,
+                parent,
+            });
+            eprintln!(
+                "kf-rm: display: RUNLIST_PREEMPT_COMPLETE event {client:#x}:{event:#x} (parent {parent:#x}) {}",
+                if kept { "registered" } else { "NOT registered (too many)" }
+            );
+            return;
+        }
         if idx & NOTIFY_INDEX_MASK != kf_disp::model::NOTIFIERS_HOTPLUG {
             return;
         }

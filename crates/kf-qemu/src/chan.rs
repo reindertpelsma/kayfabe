@@ -181,6 +181,10 @@ struct PtNotifier {
     guest_stop_write: bool,
 }
 
+/// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): at most this many completed async preempts wait for the
+/// drainer (a guest cannot grow a host allocation by preempting in a loop).
+const PREEMPT_DONE_MAX: usize = 64;
+
 /// `ROBUST_CHANNEL_PREEMPTIVE_REMOVAL` (`ogkm-580: nverror.h:61`).
 const ROBUST_CHANNEL_PREEMPTIVE_REMOVAL: u32 = 45;
 
@@ -1637,6 +1641,10 @@ pub struct ChanPlane {
     pub rc_ev: kf_host::EventFd,
     /// ★ P5c: RC events waiting for the register drainer (which owns the GSP queue).
     rc_queue: Mutex<Vec<RcEvent>>,
+    /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): `(hClient, pRunlistPreemptEvent)` of async
+    /// `DISABLE_CHANNELS` whose HOST disable+preempt returned — posted by the drainer as
+    /// `RUNLIST_PREEMPT_COMPLETE` ([`ChanPlane::take_preempt_done`]). Bounded.
+    preempt_done: Mutex<Vec<(u32, u64)>>,
     /// Twins born with the guest's notifier armed as their host error context.
     pub rc_armed: AtomicU64,
     /// Twins whose declared notifier could NOT be armed (named at birth) — their faults are silent.
@@ -1984,6 +1992,7 @@ impl ChanPlane {
             rung_at_us: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rc_ev,
             rc_queue: Mutex::new(Vec::new()),
+            preempt_done: Mutex::new(Vec::new()),
             rc_armed: AtomicU64::new(0),
             rc_unarmed: AtomicU64::new(0),
             heap_out: AtomicU64::new(0),
@@ -2113,6 +2122,24 @@ impl ChanPlane {
             .get(idx as usize)
             .map_or(0, |c| c.swap(0, Ordering::Relaxed));
         (r, f)
+    }
+
+    /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): the completed async preempts not yet posted (drained).
+    pub fn take_preempt_done(&self) -> Vec<(u32, u64)> {
+        self.preempt_done
+            .lock()
+            .map(|mut q| std::mem::take(&mut *q))
+            .unwrap_or_default()
+    }
+
+    /// ★ 2026-10-08: give back preempt completions the queue could not take yet (front first).
+    pub fn requeue_preempt_done(&self, back: Vec<(u32, u64)>) {
+        if let Ok(mut q) = self.preempt_done.lock() {
+            let mut v = back;
+            v.append(&mut q);
+            v.truncate(PREEMPT_DONE_MAX);
+            *q = v;
+        }
     }
 
     /// ★ GR tier: the guest vector to raise because a GR-tier pump retired engine-written work
@@ -2733,12 +2760,14 @@ impl ChanPlane {
                 only_scheduling,
                 rewind_gp_put,
                 list,
+                preempt_event,
             } => self.disable_channels(
                 client,
                 disable,
                 only_scheduling,
                 rewind_gp_put,
                 list.as_slice(),
+                preempt_event,
             ),
             ChanStatement::Preempt {
                 client,
@@ -2844,6 +2873,7 @@ impl ChanPlane {
         only_scheduling: bool,
         rewind: bool,
         list: &[(u32, u32)],
+        preempt_event: Option<u64>,
     ) -> ChanAnswer {
         if list.is_empty() {
             // Vacuously true: RM disables nothing (the only in-tree caller never sends it).
@@ -2917,6 +2947,16 @@ impl ChanPlane {
                         }
                     }
                 }
+                // ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): the host's disable+preempt RETURNED — the host's
+                // real completion — so the guest's RUNLIST_PREEMPT_COMPLETE may be posted now (by the
+                // drainer, after this act's held reply). Never before, never without it.
+                if let Some(ev) = preempt_event
+                    && disable
+                    && let Ok(mut q) = me.preempt_done.lock()
+                    && q.len() < PREEMPT_DONE_MAX
+                {
+                    q.push((client, ev));
+                }
                 if !disable {
                     for s in &slots {
                         let idx = s.lock().ok().map(|mut g| {
@@ -2932,9 +2972,14 @@ impl ChanPlane {
                     }
                 }
                 Ok(format!(
-                    "{client:#x} DISABLE_CHANNELS(bDisable={disable}, bOnlyDisableScheduling={only_scheduling}, bRewindGpPut={rewind}) over {} twin(s) + {} Translated ring(s)",
+                    "{client:#x} DISABLE_CHANNELS(bDisable={disable}, bOnlyDisableScheduling={only_scheduling}, bRewindGpPut={rewind}) over {} twin(s) + {} Translated ring(s){}",
                     pt.len(),
-                    tr.len()
+                    tr.len(),
+                    if preempt_event.is_some() {
+                        " — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued"
+                    } else {
+                        ""
+                    }
                 ))
             }),
         )
