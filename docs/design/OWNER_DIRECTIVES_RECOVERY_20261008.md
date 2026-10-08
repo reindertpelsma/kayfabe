@@ -29,7 +29,7 @@ could not tell. It was kept only when the subject is not the architecture at all
 2026-09-20 was kept, so every entry kept below is from 2026-10-01 or later.
 
 **Counts.** 13 recovered entries plus the `THE_CONSTRAINTS.md` edit. Of the 13 entries, 4 are kept
-(T.1 in part, T.2, T.3, T.11) and 9 are dropped (T.4 to T.10, T.12, T.13). The `THE_CONSTRAINTS.md`
+(T.1 in part, T.2, T.3, T.11, and T.12 restored 2026-10-08) and 8 are dropped (T.4 to T.10, T.13). The `THE_CONSTRAINTS.md`
 edit (three supersession marks) is dropped. The table has 20 rows (entries split where they hold separate directives): 4 kept, 16 dropped.
 
 ## The table
@@ -53,7 +53,7 @@ Row numbers are the original entry numbers of the recovered §T.
 | T.9 | Write about licensing by mechanism and outcome, never "the licence not being paid" | 2026-09-14 | DROP | v1/v2-era. A later text, `docs/PRODUCT_POSITIONING.md` (2026-10-01, "after issue #1 and an owner discussion"), says "without passthrough or licensing". The filter cannot tell which the owner wants, so it drops. The recovered entry itself flagged that file for the owner. |
 | T.10 | AMD is out of scope (separate kayfabe-amd project, deferred) | 2026-09-14, 2026-09-16 | DROP | v1/v2-era; stated in the context of an earlier project plan ("winapps-nviidia"). Its "build no vendor abstraction" is the original author's addition, stronger than the quotes. Dropped on the dating rule; the owner can re-rule it in one line. |
 | T.11 | Docs for agents (verbose, step by step, rulings) are wanted; prominent human-facing docs are written for people | 2026-10-07 | **KEEP** | v3-era, not stated elsewhere, useful. Two clauses of the original How-to-apply ("states limitations up front instead of burying them", "does not read as AI-written") were cut, because the owner's quote does not say them. |
-| T.12 | Rent only Vast "verified" hosts | 2026-07-28, 2026-07-30 | DROP | v1/v2-era (nvkvm start). The later box README's rent command (`vms_enabled=true ...`, `scripts/bench/box/README.md`) has no verified filter, and §C records VM offers by die, not by verification. The filter cannot tell it still holds. |
+| T.12 | Rent only Vast "verified" hosts | 2026-07-28, 2026-07-30 | KEEP (restored 2026-10-08, owner-side review) | v1/v2-era (nvkvm start). The later box README's rent command (`vms_enabled=true ...`, `scripts/bench/box/README.md`) has no verified filter, and §C records VM offers by die, not by verification. The filter cannot tell it still holds. |
 | T.13 | Isolates were removed on 2026-09-20 (the recorded owner quotes) | 2026-09-20 | DROP | Subject is the v1/v2 architecture (isolates). Duplicate: `THE_ARCHITECTURE_v3.md` §1 ("One process ... No isolate children") already records it with the owner's quote, and `THE_CONSTRAINTS.md` line 7-8 already says isolates and the scratchpad are deleted in v3. |
 | C.3 | `THE_CONSTRAINTS.md` item 3 ("Multiple concurrent workers in isolates"): SUPERSEDED mark citing §T.13 | edit of 2026-10-07 | DROP | Isolates are the v1/v2 subject; the mark cites T.13, which is dropped. The file is not edited. |
 | C.14 | `THE_CONSTRAINTS.md` item 14 ("Isolates can have multiple threads"): SUPERSEDED mark citing §T.13 | edit of 2026-10-07 | DROP | Same reason as C.3. |
@@ -69,7 +69,7 @@ scratchpad mechanisms are deleted in v3.
   depends on the coordinator-relayed correction of 2026-10-07 and carries an unresolved conflict with
   the owner's own 2026-10-04 words ("I temporarily borrow this machine"). It was kept because the
   correction is the later statement and says the machine is trusted; the owner should confirm.
-- **T.9, T.10, T.12.** Their subjects are not the architecture. They were dropped on the dating rule
+- **T.9, T.10 (and T.12, restored).** Their subjects are not the architecture. They were dropped on the dating rule
   and on a later text that may disagree. These are the three entries most likely to be wanted back.
 - **Stale pointers.** `docs/STATUS_AND_HANDOFF.md` still lists "approval of §T" as an owner decision
   waiting and the old branch as left out. This pass does not edit that file.

@@ -758,8 +758,8 @@ power control, thermal and process, preempt management is host"*.
 **STATUS: LIVE, 2026-10-08.** Recovered from earlier sessions (an audit of the owner's messages,
 2026-10-07; branch `docs/owner-directives-20261007`, commits `d548a7a8` and `49b99d1e`), FILTERED
 2026-10-08 under the owner's rule (§W: later rulings win; v1/v2 directives excluded). Unmeasured claims
-stay as the original states them and are marked as recovered. Of 13 recovered entries, 4 are kept
-(T.1, T.2, T.3, T.11); the numbers are the original ones, because `traces/windows_code43_walls_20261007/README.md`
+stay as the original states them and are marked as recovered. Of 13 recovered entries, 5 are kept
+(T.1, T.2, T.3, T.11, T.12); the numbers are the original ones, because `traces/windows_code43_walls_20261007/README.md`
 cites T.1. Every original directive, with its KEEP or DROP and the reason, is in
 `docs/design/OWNER_DIRECTIVES_RECOVERY_20261008.md`. Each quote is copied verbatim from the owner's
 message, typos kept, and `…` joins fragments of one message. The audit's message dumps are not in the
@@ -777,10 +777,14 @@ its reason still holds before relying on it (see the top of this file).
    - **How to apply:** on 172.22.1.20, driver, VFIO and display changes, including destructive ones,
      need no permission. Firmware changes and anything that could brick hardware are forbidden. Vast
      boxes follow §F and `scripts/bench/box/README.md`.
-   - ⚠ **Owner to confirm.** The same 2026-10-04 message also says *"I temporarily borrow this
-     machine, so I don't know how long I have it, don't use it for persistent storage of code you
-     need to keep access to."* That sits badly with "our own pc hardware". Until the owner settles it,
-     keep pushing work that matters (§F, 2026-09-30).
+   - ✔ **Confirmed by the owner, 2026-10-08:** *"you have full permission to do whatever is needed on
+     172.22.1.20. no need to ask"*, *"yes no secrets on them. 172.22.1.20 is trusted"*, and about vast
+     boxes *"you can do whatever you want on vast boxes, on those I care the least, if it breaks we just
+     rerent"*. So no permission is needed on 172.22.1.20, and vast boxes may be wedged or re-rented
+     freely; the §F and box-README rules still hold (no secrets on a box, only instance ids this
+     session rented, no instance key printed). The 2026-10-04 "I temporarily borrow this machine"
+     remark is superseded by the 10-07 and 10-08 statements; pushing work that matters (§F) stays
+     good practice.
 2. **Outside repositories are untrusted; clone them, do not web-fetch them.**
    - Owner, 2026-10-01 12:20, about a fork of virtio-nvgpu: *"(Do not trust stranger repos if you
      clone)."*
@@ -803,6 +807,15 @@ its reason still holds before relying on it (see the top of this file).
     - **How to apply:** internal and agent-facing docs may be verbose, step by step and explicit
       about rulings, and they are wanted. Prominent human-facing text (the README, announcements,
       the r/VFIO post) is written for people.
+
+12. **Rent only Vast "verified" hosts.** *(Restored 2026-10-08: it was dropped by the filter for a
+    "conflict" with a README command that merely does not mention the filter; the owner's statement
+    stands, and it was followed on 2026-10-08.)*
+    - Owner, 2026-07-28 01:35: *"and do verified if possible :-)"*, then at 01:36: *"to have some
+      trust"*.
+    - Owner, 2026-07-30 17:32: *"and only use verified hosts."*
+    - **How to apply:** filter Vast offers to verified hosts (`verified=true` in the offer search).
+      The other box rules are in §F and in `scripts/bench/box/README.md`.
 
 ## U. The deferred API (class 0x5080) is Translated-only; the doorbell is not a boundary (2026-10-07)
 
