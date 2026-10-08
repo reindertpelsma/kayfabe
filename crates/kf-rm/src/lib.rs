@@ -31,6 +31,7 @@ pub mod inert;
 pub mod inittables;
 pub mod memory_list;
 pub mod osevent;
+pub mod preempt_bind_probe;
 pub mod rmgraph;
 pub mod rmrpc;
 pub mod rpc;
@@ -508,6 +509,15 @@ pub fn served_chain(
         eprintln!(
             "kf-rm: {}=1: software-runlist submits answered NV_OK and ignored; kernel channels scheduled at birth — AWAITING OWNER CONFIRMATION",
             sw_runlist_host::FLAG
+        );
+    }
+    // ⚠ PROBE (default off): H-preempt-bind, 2026-10-08 — `preempt_bind_probe.rs`. Answers
+    // `GR_CTXSW_PREEMPTION_BIND` NV_OK with nothing sent to the host; never a shipped behaviour.
+    if preempt_bind_probe::enabled() {
+        chain.push(Box::new(preempt_bind_probe::PreemptBindProbe::new(driver)));
+        eprintln!(
+            "kf-rm: PROBE {}=1: GR_CTXSW_PREEMPTION_BIND answered NV_OK, NOTHING bound on the host (H-preempt-bind probe, not a shipped behaviour)",
+            preempt_bind_probe::FLAG
         );
     }
     if std::env::var("KF3_MEMORY_LIST_PROBE").as_deref() == Ok("1")

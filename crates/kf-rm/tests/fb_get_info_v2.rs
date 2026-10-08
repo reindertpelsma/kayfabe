@@ -361,3 +361,63 @@ fn a_floorswept_hosts_fb_masks_are_served_verbatim_never_rebuilt_from_a_count() 
         ]
     );
 }
+
+/// ★ 2026-10-08 (Windows 580.88): the one boot-time `FB_GET_INFO_V2` Windows sends — the 19 indices of
+/// vfio-8/9/10 (`[measured, run53 at 80169b57, 2026-10-08]`) — is served whole once the host facts carry
+/// the seven extra rows (`kf_rm::hostquery::FORWARDED_FB_EXTRA_INDICES`), each word the host's own, in
+/// the guest's order. Values: the real RTX 4070's replies (`vfio8-9-10-fb-bus-info.txt`).
+#[test]
+fn windows_58088s_nineteen_index_request_is_served_whole_with_the_hosts_words() {
+    let vfio: [(u32, u32); 19] = [
+        (0x01, 0xffff_0000),
+        (0x02, 0xc000),
+        (0x04, 3),
+        (0x0b, 0xc0),
+        (0x0c, 1),
+        (0x0d, 0x12),
+        (0x14, 7),
+        (0x19, 3),
+        (0x1a, 7),
+        (0x1b, 0x0240_0000),
+        (0x1c, 0xf),
+        (0x21, 0),
+        (0x22, 6),
+        (0x23, 0x12),
+        (0x25, 0),
+        (0x2b, 0x3f),
+        (0x35, 2),
+        (0x37, 0),
+        (0x38, 0),
+    ];
+    let mut host = ga106::host_facts();
+    for (idx, v) in host.forwarded_fb_info.iter_mut() {
+        *v = vfio.iter().find(|(i, _)| i == idx).expect("forwarded").1;
+    }
+    host.forwarded_fb_extra = kf_rm::hostquery::FORWARDED_FB_EXTRA_INDICES
+        .iter()
+        .map(|&i| (i, vfio.iter().find(|(j, _)| *j == i).expect("in vfio").1))
+        .collect();
+    let mut policy = InitTablePolicy::new(
+        ga106::board(),
+        std::sync::Arc::new(host.clone()),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    );
+    let indices: Vec<u32> = vfio.iter().map(|(i, _)| *i).collect();
+    let reply = policy.respond(&fb_command(&indices)).expect("claimed");
+    let params = &reply.body[PARAMS_AT..PARAMS_AT + FB_GET_INFO_V2_PARAMS_SIZE];
+    assert_eq!(fbinfo::decode_fb_info_pairs(params).unwrap(), vfio.to_vec());
+
+    // Without the seven extra rows (a host that refused them) the whole request is refused, as
+    // before — never answered with zeros.
+    host.forwarded_fb_extra.retain(|(i, _)| *i == 0x04);
+    let mut policy = InitTablePolicy::new(
+        ga106::board(),
+        std::sync::Arc::new(host),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    );
+    let refused = policy.respond(&fb_command(&indices)).expect("claimed");
+    assert!(
+        reply_params(&refused).is_none_or(|(status, _)| status != 0),
+        "a missing row refuses the request"
+    );
+}
