@@ -109,6 +109,135 @@ fn armed_defaults_on() -> bool {
 /// `nvkms-evo3.c:1437-1438`'s default `MIN_FRAME_IDLE` (H-armeddefault): leading, trailing lines.
 const MIN_FRAME_IDLE_DEFAULT: (u32, u32) = (2, 1);
 
+/// ⚠⚠ PROBE (default off, 2026-10-09, H-caps; `KF3_DISPLAY_CAPS_PROBE=1`, read once) — never a
+/// shipped behaviour, and a CAPTURED table (the defect v3 exists to end), so it may only ever be a
+/// probe. `[measured, VFIO DVI reference boot3, RTX 4070, 2026-10-08]` (record
+/// `traces/display_reply_diff_20261008/` §0 row P16r) Windows reads the whole caps page
+/// (`NV_PDISP_FE_SW`) at 10.9488 s and 0.12 s later initialises only windows 0/2/4/6 — the windows
+/// whose `PRECOMP_WIN_PIPE_HDR_CAPA` has the scaler and TMO; the odd windows have CSC11 only — while
+/// under kf3 (every window alike) it initialises all eight. 101 of the page's 1024 words differ.
+/// Under the probe kf3 publishes the real GPU's page, for its caps class and page base only.
+fn caps_probe_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("KF3_DISPLAY_CAPS_PROBE").is_ok_and(|v| v == "1"))
+}
+
+/// The caps class and page base the probe's page was measured with (RTX 4070, 2026-10-08).
+const CAPS_PROBE_AT: (u32, u64) = (0xC773, 0x0064_0000);
+
+/// The real GPU's caps page: every non-zero word, `(byte offset, value)` (VFIO DVI reference boot3,
+/// 8-byte reads 10.948826-10.953350 s; RTX 4070, 2026-10-08).
+const CAPS_PROBE_WORDS: [(u32, u32); 99] = [
+    (0x000, 0x00000f0f),
+    (0x004, 0x000000ff),
+    (0x008, 0x00000432),
+    (0x00c, 0x00000100),
+    (0x010, 0x81f22b20),
+    (0x018, 0x00001822),
+    (0x048, 0x00000a00),
+    (0x058, 0x00000a00),
+    (0x068, 0x00000a00),
+    (0x078, 0x00000a00),
+    (0x0c0, 0x00000010),
+    (0x0d0, 0x00000010),
+    (0x0e0, 0x00000010),
+    (0x0f0, 0x00000010),
+    (0x144, 0x1b000300),
+    (0x14c, 0x1b000300),
+    (0x154, 0x1b000300),
+    (0x15c, 0x1b000300),
+    (0x5e4, 0x00000086),
+    (0x5e8, 0x00000086),
+    (0x5ec, 0x00000086),
+    (0x5f0, 0x00000086),
+    (0x5f4, 0x00000086),
+    (0x5f8, 0x00000086),
+    (0x5fc, 0x00000086),
+    (0x600, 0x00000086),
+    (0x604, 0x00000086),
+    (0x608, 0x003c0051),
+    (0x60c, 0x003c0051),
+    (0x610, 0x003c0051),
+    (0x614, 0x003c0051),
+    (0x618, 0x003c0051),
+    (0x61c, 0x003c0051),
+    (0x620, 0x003c0051),
+    (0x624, 0x003c0051),
+    (0x680, 0x00ff01d0),
+    (0x684, 0x0000d681),
+    (0x688, 0x03580e0e),
+    (0x68c, 0x0a001400),
+    (0x690, 0x00000506),
+    (0x694, 0x00001400),
+    (0x6a0, 0x00ff01d0),
+    (0x6a4, 0x0000d680),
+    (0x6a8, 0x03580e0e),
+    (0x6ac, 0x0a001400),
+    (0x6b0, 0x00000506),
+    (0x6b4, 0x00001400),
+    (0x6c0, 0x00ff01d0),
+    (0x6c4, 0x0000d680),
+    (0x6c8, 0x03580e0e),
+    (0x6cc, 0x0a001400),
+    (0x6d0, 0x00000506),
+    (0x6d4, 0x00001400),
+    (0x6e0, 0x00ff01d0),
+    (0x6e4, 0x0000d680),
+    (0x6e8, 0x03580e0e),
+    (0x6ec, 0x0a001400),
+    (0x6f0, 0x00000506),
+    (0x6f4, 0x00001400),
+    (0x780, 0x01df21d0),
+    (0x784, 0x0000da90),
+    (0x788, 0x000e164e),
+    (0x78c, 0x5075816a),
+    (0x790, 0x000e1a4e),
+    (0x794, 0x0a001400),
+    (0x7a0, 0x010021d0),
+    (0x7a4, 0x0000da90),
+    (0x7b0, 0x000e0000),
+    (0x7b4, 0x0a001400),
+    (0x7c0, 0x01df21d0),
+    (0x7c4, 0x0000da90),
+    (0x7c8, 0x000e164e),
+    (0x7cc, 0x5075816a),
+    (0x7d0, 0x000e1a4e),
+    (0x7d4, 0x0a001400),
+    (0x7e0, 0x010021d0),
+    (0x7e4, 0x0000da90),
+    (0x7f0, 0x000e0000),
+    (0x7f4, 0x0a001400),
+    (0x800, 0x01df21d0),
+    (0x804, 0x0000da90),
+    (0x808, 0x000e164e),
+    (0x80c, 0x5075816a),
+    (0x810, 0x000e1a4e),
+    (0x814, 0x0a001400),
+    (0x820, 0x010021d0),
+    (0x824, 0x0000da90),
+    (0x830, 0x000e0000),
+    (0x834, 0x0a001400),
+    (0x840, 0x01df21d0),
+    (0x844, 0x0000da90),
+    (0x848, 0x000e164e),
+    (0x84c, 0x5075816a),
+    (0x850, 0x000e1a4e),
+    (0x854, 0x0a001400),
+    (0x860, 0x010021d0),
+    (0x864, 0x0000da90),
+    (0x870, 0x000e0000),
+    (0x874, 0x0a001400),
+];
+
+/// H-caps: the measured page (VFIO DVI reference boot3, RTX 4070, 2026-10-08) for the caps class and
+/// page base it was measured with, else `None`.
+fn caps_probe_page(base: u64, caps_class: u32) -> Option<kf_disp::caps::CapsPage> {
+    ((caps_class, base) == CAPS_PROBE_AT).then(|| kf_disp::caps::CapsPage {
+        base,
+        words: CAPS_PROBE_WORDS.to_vec(),
+    })
+}
+
 /// Lines per kind the display write trace prints in a run.
 const DISPLAY_TRACE_CAP: u32 = 4096;
 
@@ -1594,6 +1723,27 @@ impl DisplayPlane {
             caps_author(t, &regs, row.classes.caps, row.heads, row.windows)
         }
         .map_err(|e| format!("display=on: caps page: {}", e.0))?;
+        // ⚠⚠ PROBE (default off, H-caps): the real GPU's caps page instead of the authored one
+        let caps = if caps_probe_on() {
+            match caps_probe_page(caps.base, row.classes.caps) {
+                Some(p) => {
+                    eprintln!(
+                        "kf3: display: PROBE KF3_DISPLAY_CAPS_PROBE=1 — the caps page is the real GPU's measured page ({} words; H-caps probe, not a shipped behaviour)",
+                        p.words.len()
+                    );
+                    p
+                }
+                None => {
+                    eprintln!(
+                        "kf3: display: PROBE KF3_DISPLAY_CAPS_PROBE=1 REFUSED — caps class {:#x} / page {:#x} is not the measured one; the authored page stays",
+                        row.classes.caps, caps.base
+                    );
+                    caps
+                }
+            }
+        } else {
+            caps
+        };
         let layout = Layout::from_regs(&regs)
             .ok_or("display=on: the instance-memory layout is not derived")?;
         let map = RegMap::resolve(&regs, t, row)?;
@@ -4408,6 +4558,37 @@ mod tests {
         let r = Regs::for_ip("580.159.04", 0x0401_0000).unwrap();
         let t = kf_disp::class::for_version("580.159.04").unwrap();
         RegMap::resolve(&r, t, &kf_chip::display::AMPERE).expect("GA10x register map")
+    }
+
+    /// ⚠⚠ H-caps probe (default off): the measured page is published only for the caps class and
+    /// page base it was measured with (Ada's C773 at `0x640000`, VFIO DVI reference boot3, RTX 4070,
+    /// 2026-10-08); its words are in the page, 4-byte aligned, distinct, and it presents the same
+    /// engine as kf3's authored page (`SYS_CAP` heads 0-3 + SORs 0-3, `SYS_CAPB` windows 0-7) — what
+    /// differs is the per-window / per-head / per-SOR capabilities only.
+    #[test]
+    fn the_caps_probe_page_is_the_measured_one_for_its_class_only() {
+        assert!(
+            caps_probe_page(0x0064_0000, 0xC673).is_none(),
+            "another class"
+        );
+        assert!(
+            caps_probe_page(0x0064_1000, 0xC773).is_none(),
+            "another base"
+        );
+        let p = caps_probe_page(0x0064_0000, 0xC773).expect("the measured class");
+        let mut seen = std::collections::BTreeSet::new();
+        for (o, _) in &p.words {
+            assert!(*o < 0x1000 && o % 4 == 0 && seen.insert(*o), "{o:#x}");
+        }
+        let t = kf_disp::class::for_version("580.65.06").unwrap();
+        let r = Regs::for_ip("580.65.06", kf_chip::display::ADA.ip_version).unwrap();
+        let authored = kf_disp::caps::sdr_page(t, &r, 0xC773, 0xC77D, 4, 8).expect("SDR page");
+        assert_eq!(authored.base, p.base);
+        assert_eq!(p.word(0), authored.word(0), "SYS_CAP");
+        assert_eq!(p.word(4), authored.word(4), "SYS_CAPB");
+        // the window-capability difference the record names: even windows scaler + TMO, odd not
+        assert_ne!(p.word(0x780), p.word(0x7a0));
+        assert_eq!(authored.word(0x780), authored.word(0x7a0));
     }
 
     /// ⚠ H-blankstate / H-armeddefault (default off): a new core life publishes nothing extra with

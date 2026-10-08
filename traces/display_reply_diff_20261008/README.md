@@ -81,7 +81,7 @@ CONTENTS are not in the hardware trace (only the PUT writes); kf3's `METHOD` tra
 | 13 | 10.224177-10.924169 h269-2224 | `GET_HEAD_ROUTING_MAP` ×1956 | absent | hw-only (7 displays) | measured |
 | 14 | 10.924525 h2225 | `GET_HOTPLUG_CONFIG` | probe echo | 0x7f00 vs 0 | hw measured, kf code |
 | 15 | 10.948185 h2251 | NV5070 `SYSTEM_GET_CAPS_V2` | same | 0x24 vs 0 | hw measured, kf code |
-| 16r | **10.948826-10.953350** | READ the caps page `NV_PDISP_FE_SW` 0x640000-0x640fff (8-byte reads) | no read visible | **97 of 1024 words differ** ([list](caps-page-boot3-vs-kf.txt)): `PRECOMP_WIN_PIPE_HDR_CAPA(w)` even windows `0x01df21d0` (SCLR, TMO, CSC*, ALPHA/FULL/UNIT_WIDTH) / odd windows `0x010021d0` (CSC11 only) vs kf `0x01c70000` for all 8; CAPB-F (ILUT, scaler, TMO precisions) vs 0; `POSTCOMP_HEAD_HDR_CAPA-F(h)` vs 0; `SOR_CAP` DP_A/DP_B/DP_8_LANES vs DUAL_TMDS; `SOR_CLK_CAP` DP_MAX 81 vs 0; `HEAD_CLK_CAP` 0x86 ×8 vs 0x77 ×4; words 0x8-0x18, 0x48-0x78, 0xc0-0xf0 vs 0 | hw measured vs kf code (`kf_disp::caps::page`, Ada, 580.65.06, dumped) |
+| 16r | **10.948826-10.953350** | READ the caps page `NV_PDISP_FE_SW` 0x640000-0x640fff (8-byte reads) | no read visible | **101 of 1024 words differ** ([list](caps-page-boot3-vs-kf.txt)): `PRECOMP_WIN_PIPE_HDR_CAPA(w)` even windows `0x01df21d0` (SCLR, TMO, CSC*, ALPHA/FULL/UNIT_WIDTH) / odd windows `0x010021d0` (CSC11 only) vs kf `0x01d70000` (CSC*, TMO) for all 8; CAPB-F (scaler, precisions; kf: ILUT/TMO sizes only) differ; `POSTCOMP_HEAD_HDR_CAPA/C-F(h)` vs 0; `SOR_CAP` DP_A/DP_B/DP_8_LANES vs DUAL_TMDS; `SOR_CLK_CAP` DP_MAX 81 vs 0; `HEAD_CLK_CAP` 0x86 ×8 vs 0x77 ×4; words 0x8-0x18, 0x48-0x78, 0xc0-0xf0 vs 0 | hw measured vs kf code (`kf_disp::caps::sdr_page` — the broker sets `KF3_DISPLAY_SDR_COLOR` in every Windows run — Ada, 580.65.06, dumped) |
 | 17r | 11.052579-11.074487 | READ the core ARMED area 0x688000-0x68bfff (8-byte) and every window's ARMED/state words | no read visible | hw: the firmware's lit head 0 + windows (most words `0xbadf5040`); window PUTs read 0x974/0x950/0x950/0x95c; kf: shadow, 0 | hw measured vs kf code (§2 #7) |
 | **16** | **11.074621 h5103** | W window 0 PUT `0x690000` ← 0x30; windows 1-7 ← 0x10 | ← 0x0 for all 8 | **first display write difference**: the KMD's channel-init pushes differ | measured |
 | 17 | 11.075438-11.076918 h5168-5219 | core PUT 0x10,0xe30,0,0x6b0,0x9c0,0xcd0,0,0x310,0x620; windows **0,2,4,6 only**: 0x340/0x320, 0x910/0x8f0, 0xa20/0xa00, 0, 0x7f0 | core 0x10,0x130,0x150,0x460,0x770,0xa80,0xd90; **all 8 windows**: 0x5d0, 0xed0 | push sizes and the window set differ (hardware programs only the full-caps windows of row 16r) | measured; the caps link is inferred |
@@ -258,3 +258,37 @@ all), and LAST_DATA staying enabled past the first VSync (hardware: on 12.5708 �
 stays 39 with every flag confirmed; then H-hdmi and H-xbar (§4, not implemented) are next, before the read-trap owner question
 of the flip-vsync record §9. If puts > 39: bisect in two boots (commit cluster {HDCP, PRIVATE} vs {EDID_SEEN, BLANK_STATE,
 ARMED_DEFAULTS, LOADV}).
+
+## 7. Run 97 (binary `kf3-bins/34a63c90`, the §6 batch): the batch is FALSIFIED
+
+`[measured, run97 at 34a63c90, RTX 4070, 2026-10-09]` files `run97-*` (harness [drd-run.sh](drd-run.sh) = the flip record's
+`flip-run.sh` with this checkout; `flock -o /tmp/kayfabe-fastguest.lock` held from the IOMMU switch 00:23:05 to the DMA-FQ
+restore 00:24:02; `0000:01:00.0` back on `nvidia`, no new Xid). Every flag took effect: the log carries the `EXPERIMENT` /
+`PROBE` line of each of the eight (`KF3_DISPLAY_WRITE_TRACE`: 178 `WTRACE` lines), and the rpc-trace shows `0x00730280`,
+`0x00730122`, `0x00730128` `result=0x0` (were refused in runs 88-96). One flag changed the guest's behaviour where §0
+predicted it would: after `SYSTEM_GET_HOTPLUG_STATE` the guest now reads the EDID **5** times (run 96: 6; hardware: 5, row
+P28b) — the guest acts on `hotplugAfterEdidMask`. Everything else is as in run 96: the driver-start window init is unchanged
+(all eight windows, PUTs 0x5d0 / 0xed0 — row P17), the modeset's core PUTs are the same, the guest disables LAST_DATA 0.26 ms
+after the first VSync, and **`puts=39` at the stall marker** (15.5 s), 73 after the TDR. Falsified: H-commit (all three
+commit-time controls answered as on hardware), H-edidseen, H-blankstate, H-armeddefault, together with LOADV and
+CORE_AT_VBLANK.
+
+## 8. The next boot (run 98): H-hdmi + H-xbar (coordinator's next two) + H-caps (§0's earliest candidate)
+
+Three more default-off probes, each answering with the real GPU's measured reply (VFIO DVI reference boot3, RTX 4070,
+2026-10-08) for the measured shape only (GPU-free tests:
+`display_ctrl_probe::tests::the_topology_probes_answer_the_measured_requests_byte_for_byte`,
+`display::tests::the_caps_probe_page_is_the_measured_one_for_its_class_only`):
+- `KF3_DISPLAY_HDMI_PROBE` (H-hdmi, rows P9-P10, P24-P26, P32-P33, P41): `GET_CONNECTOR_DATA(0x100)` present / `HDMI_A`,
+  `DFP_GET_INFO(0x100)` flags `0x00105300`, and the HDMI path (`SET_HDMI_ENABLE`, `SET_HDMI_SINK_CAPS`, `GET_HDMI_GPU_CAPS`,
+  `GET_HDMI_SCDC_DATA` with its status `0x14`, `DFP_SET_ELD_AUDIO_CAPS`).
+- `KF3_DISPLAY_XBAR_PROBE` (H-xbar, rows P6, P22, P26, P30): `SYSTEM_GET_CAPS_V2` `{0x81, 0x2f}`; `DFP_ASSIGN_SOR` answered
+  from kf3's own topology (display `0x100 << i` on SOR `i`, SINGLE — byte-identical to the hardware's answer for `0x100`).
+- `KF3_DISPLAY_CAPS_PROBE` (H-caps, row P16r): the real GPU's caps page (99 non-zero words) for Ada's C773 page only. A
+  captured table — a probe, never a design.
+
+Flags: run 97's set plus the three (binary: this branch's tip, 2026-10-09). Falsifiers, stated before the boot: **H-caps** — with the measured page the guest still
+initialises all eight windows at driver start (row P17 unchanged); **H-hdmi** — the guest sends `SET_HDMI_ENABLE` /
+`DFP_SET_ELD_AUDIO_CAPS` (the path is taken) and still writes no window PUT after the modeset; **H-xbar** — `DFP_ASSIGN_SOR`
+is sent and answered and still no window PUT. Whole batch: `puts=39` at the stall marker with all three confirmed. If
+`puts > 39`: one bisect boot (time-box: 3 boots), H-caps alone vs H-hdmi + H-xbar.

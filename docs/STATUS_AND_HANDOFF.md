@@ -20,7 +20,7 @@ prediction: a window-0 PUT after the modeset (`puts` > 39). Not yet implemented,
 connector (H-hdmi) and the crossbar / `DFP_ASSIGN_SOR` path (H-xbar). ⊘ The record's §0 (ordered stream alignment,
 boot3 vs run 93) corrects "same decisions until the DDI": the first display WRITE that differs is at driver start
 (11.0746 s: the hardware KMD initialises only windows 0/2/4/6, kf3's guest all eight, with different push sizes), right
-after it read the caps page (97 of 1024 words differ, incl. even/odd window caps) and the firmware's ARMED state.
+after it read the caps page (101 of 1024 words differ, incl. even/odd window caps) and the firmware's ARMED state.
 
 **Windows flip / vsync, 2026-10-08 (branch `claude/windows-flip-vsync-20261008` = `claude/windows-pass-20261008` + the
 Passthrough completion-interrupt commits; runs 93-96; [record](../traces/windows_flip_vsync_20261008/README.md)).**

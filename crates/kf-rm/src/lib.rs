@@ -547,6 +547,25 @@ pub fn served_chain(
             display_ctrl_probe::PRIVATE_FLAG
         );
     }
+    // ⚠ PROBE (default off): H-hdmi / H-xbar, 2026-10-09 — the connector identity and HDMI path,
+    // the crossbar caps and `DFP_ASSIGN_SOR` (`display_ctrl_probe::DisplayTopologyProbe`). Ahead of
+    // the display link, so its identity answers replace the model's while the probe is on.
+    let (hdmi, xbar) = (
+        display_ctrl_probe::hdmi_enabled(),
+        display_ctrl_probe::xbar_enabled(),
+    );
+    if hdmi || xbar {
+        chain.push(Box::new(display_ctrl_probe::DisplayTopologyProbe::new(
+            driver, hdmi, xbar,
+        )));
+        eprintln!(
+            "kf-rm: PROBE {}={} {}={}: connector identity / HDMI path and crossbar caps / DFP_ASSIGN_SOR answered with the real GPU's measured replies (H-hdmi / H-xbar probe, not a shipped behaviour)",
+            display_ctrl_probe::HDMI_FLAG,
+            u8::from(hdmi),
+            display_ctrl_probe::XBAR_FLAG,
+            u8::from(xbar)
+        );
+    }
     if std::env::var("KF3_MEMORY_LIST_PROBE").as_deref() == Ok("1")
         && let Some(policy) = objects.take()
     {
