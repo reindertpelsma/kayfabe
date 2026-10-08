@@ -54,3 +54,28 @@ spike: a `GuestRam` wrapper that is the identity when no vIOMMU is present, the 
 and a Linux boot with `intel_iommu=on` to see which consumers still fail. Testing: Linux in strict
 and passthrough modes; Windows with the DMAR table present. New trap surface: the IOMMU's own
 registers, which belong to QEMU's `intel-iommu` and not to kf3.
+
+## 5. The VMM-neutral boundary (owner, 2026-10-08)
+
+Owner: the `GuestRam` reads and writes are one shared trait, so a scattered read in one place is an
+easy change, and the ledger already lets one DMA mapping be several host maps; the only thing to
+design is the IOVA invalidation, which must hook in through a hypervisor-agnostic invalidate
+function. So the whole VMM-facing surface is one small trait in Rust (policy in a kayfabe crate, a
+thin shim per VMM, the same split as the input sink of `OWNER_RULINGS.md` §V):
+
+- `translate(domain, iova, len, access) -> Vec<Run>` — the guest IOMMU's answer as GPA runs, or a
+  named refusal (not mapped, wrong permission, beyond the domain). Every run is checked against
+  guest RAM bounds by kayfabe, never trusted from the shim.
+- `subscribe_invalidate(callback)` — the shim calls `callback(domain, iova_range)` for every
+  invalidation of a translation (a page-selective, domain or global IOTLB invalidation maps to
+  `range = whole domain`). The callback must not block and must be cheap: it enqueues the range for
+  the VA-manager thread (coalescing overlapping ranges, bounded queue; on overflow it widens to
+  "whole domain" and never drops an event).
+- The QEMU shim implements both with the PCI device's IOMMU address space, an address-space
+  translate call and an IOMMU notifier; another VMM (cloud-hypervisor or crosvm with virtio-iommu, or
+  an in-process IOMMU model) implements the same two functions.
+- With no vIOMMU the trait is the identity (`translate` returns the GPA as one run, no invalidations),
+  so every existing path is unchanged.
+- Tests need no GPU: a fake IOMMU that remaps ranges between calls, hostile ranges, overflow of the
+  invalidation queue, and a relocation that must make the re-resolution produce a different host
+  mapping.
