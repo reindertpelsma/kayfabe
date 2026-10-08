@@ -1728,7 +1728,11 @@ impl ChannelPolicy {
                 // per-process clients' channel groups — physical RM resolves every entry's own
                 // `hClient` (`kernel_fifo_ctrl.c:870-890`). Those are this VM's clients and twins;
                 // VM-to-VM isolation is the host's, inside one VM it is the guest kernel's (§V).
-                let cross_client_ok = d.runlist_preempt_event != 0;
+                // [measured, run83 at 10bfb7a0] the kernel then RE-ENABLES those groups with the
+                // synchronous form (bDisable=0, no event); refusing it left them disabled and the
+                // next work on them TDR'd — so the re-enable is admitted the same way (switch on).
+                let cross_client_ok = d.runlist_preempt_event != 0
+                    || (async_preempt_enabled() && !d.disable);
                 if !cross_client_ok
                     && let Some((c, ch)) = d.list.iter().find(|(c, _)| *c != h.client)
                 {
