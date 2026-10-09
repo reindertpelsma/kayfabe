@@ -36,6 +36,7 @@
 
 use crate::mem::{Mirror, Mirrors, RamMap, resolve_placed, resolve_placed_prefix};
 use crate::raw_unsafe::RawRegion;
+use crate::slotcell::{ScheduleStep, SlotCell, SlotMeta};
 use kf_chan::completions::Completions;
 use kf_chan::host::{ChanError, GuestUserd, HostRing, Publisher, Split, TranslatedChannel};
 use kf_chan::ring::{GuestMemory, TranslatedRing};
@@ -147,16 +148,16 @@ struct PtChan {
 /// `magic_lo` against that fill (`:1046-1099`). ⇒ the "stub" is the buffer exactly as the guest
 /// left it: we write no byte.
 #[derive(Debug, Default, Clone, Copy)]
-struct CtxBind {
+pub(crate) struct CtxBind {
     /// Buffer ids the guest asked to be initialised (bitmask of `bufferId`).
-    initialized: u32,
+    pub(crate) initialized: u32,
     /// Buffer ids whose VA the guest promoted (the UVM bind).
-    va_bound: u32,
+    pub(crate) va_bound: u32,
     /// `bIsContextBound`'s mirror: a VA promote succeeded and no evict followed.
-    bound: bool,
+    pub(crate) bound: bool,
     /// Promotes / evicts answered.
-    promotes: u32,
-    evicts: u32,
+    pub(crate) promotes: u32,
+    pub(crate) evicts: u32,
 }
 
 /// ★ P5c: a twin's error context: the host `NV01_CONTEXT_DMA` over the guest's notifier record
@@ -757,17 +758,15 @@ struct Slot {
     key: VasKey,
     mirror: Mirror,
     userd: UserdView,
+    /// The guest token — an immutable copy of [`SlotMeta::guest_idx`] for the pump, which holds
+    /// the lock anyway. The drainer reads the meta, never this.
     guest_idx: u32,
     guest_engine: u32,
-    ctx: CtxBind,
-    scheduled: bool,
     dead: Option<String>,
     /// Serves (doorbells + completion rings that reached this channel).
     serves: u64,
     /// The last `GP_PUT` the pump read (for the log).
     last_put: Option<u32>,
-    /// ★ P6: the channel's group (a TSG `GPFIFO_SCHEDULE` names it).
-    tsg: Option<u32>,
     /// ★ P6: the split the channel is suspended on, once asked.
     split: Option<u64>,
     /// ★ P6: splits requested over the channel's life.
@@ -776,12 +775,6 @@ struct Slot {
     views: StoreViews,
     /// ★ P6: the Q7 privilege stamp it was born under (for the log).
     privilege: Option<kf_abi::notifier::ChannelPrivilege>,
-    /// ★ v3-chanctl: the guest STOPPED it — our host ring is disabled and off its runlist until
-    /// the guest schedules it again.
-    stopped: bool,
-    /// ★ v3-chanctl: the guest DISABLED it (`DISABLE_CHANNELS`); the pump fetches nothing and our
-    /// host ring is disabled until `bDisable=FALSE`.
-    disabled: bool,
     /// ★ v3-initrace: the completion probe's record (empty unless `KF3_COMPLETION_PROBE`).
     probe: ProbeRec,
     /// ★ P1+P2 inc D: the ring lives in the T-space (its slot goes back to the T-space's pool).
@@ -1322,7 +1315,7 @@ pub struct ChanPlane {
     pub completions: Completions,
     caps: TimedMutex<VmCaps>,
     /// Host token → channel.
-    slots: TimedRwLock<HashMap<u32, Arc<TimedMutex<Slot>>>>,
+    slots: TimedRwLock<HashMap<u32, Arc<SlotCell<Slot>>>>,
     /// `(hClient, hObject)` → host token.
     by_obj: TimedMutex<HashMap<(u32, u32), u32>>,
     /// ★ OWNER_RULINGS §U: each Translated channel's software objects, by host token.
@@ -2028,9 +2021,10 @@ impl ChanPlane {
                     })
                     .unwrap_or_default()
                     .into_iter()
+                    // ⊘ The group is the slot's immutable meta: never the pump lock a worker holds.
                     .filter(|ht| {
                         self.slot(*ht)
-                            .is_some_and(|s| s.lock().is_ok_and(|g| g.tsg == Some(object)))
+                            .is_some_and(|s| crate::slotcell::in_group(&s.meta, object))
                     })
                     .collect();
                 if !members.is_empty() {
@@ -2116,8 +2110,8 @@ impl ChanPlane {
                     {
                         return self.defer("bind translated context", Box::new(move |me: &ChanPlane| {
                             let slot = me.slot(ht).ok_or_else(|| (NV_ERR_INVALID_STATE, "GR slot gone".into()))?;
-                            let g = slot.lock().map_err(|_| (NV_ERR_INVALID_STATE, "GR slot poisoned".into()))?;
-                            if g.guest_engine != engine_type || !g.chan.host().owns_context(engine_type) || g.dead.is_some() {
+                            let g = &slot.meta;
+                            if g.guest_engine != engine_type || !g.owns_context(engine_type) || g.is_dead() {
                                 return Err((NV_ERR_INVALID_STATE, "BIND has no matching owned context".into()));
                             }
                             Ok(format!("{client:#x}:{object:#x} BIND satisfied by owned context on host {ht:#x}"))
@@ -2169,10 +2163,7 @@ impl ChanPlane {
                     .ok()
                     .and_then(|m| m.get(&(client, object)).copied())
                 {
-                    return match self
-                        .slot(ht)
-                        .and_then(|s| s.lock().ok().map(|g| g.guest_idx))
-                    {
+                    return match self.slot(ht).map(|s| s.meta.guest_idx) {
                         // ★ The token is OUR doorbell's vocabulary (we are the host): the table
                         // index, in the VECTOR field the trap masks (`kf_trap::trap`).
                         Some(idx) => ChanAnswer::Token(idx),
@@ -2372,11 +2363,10 @@ impl ChanPlane {
                         // not contend with a pump while the GSP drainer is locked.
                         for ht in translated {
                             if let Some(slot) = me.slot(ht)
-                                && let Ok(g) = slot.lock()
-                                && g.tsg == Some(object)
-                                && g.dead.is_none()
+                                && slot.meta.tsg == Some(object)
+                                && !slot.meta.is_dead()
                             {
-                                twins.push(g.chan.host().channel());
+                                twins.push(slot.meta.host);
                             }
                         }
                         if twins.is_empty() {
@@ -2431,8 +2421,7 @@ impl ChanPlane {
                         let c = twin
                             .or_else(|| {
                                 let slot = me.slot(translated?)?;
-                                let g = slot.lock().ok()?;
-                                g.dead.is_none().then(|| g.chan.host().channel())
+                                (!slot.meta.is_dead()).then_some(slot.meta.host)
                             })
                             .ok_or_else(|| {
                                 (
@@ -2578,12 +2567,9 @@ impl ChanPlane {
                 "stop translated",
                 Box::new(move |me: &ChanPlane| {
                     let slot = me.slot(ht).ok_or_else(|| (NV_ERR_INVALID_STATE, format!("host {ht:#x}: slot gone")))?;
-                    let host = {
-                        let mut g = slot.lock().map_err(|_| (NV_ERR_INVALID_STATE, "slot poisoned".to_string()))?;
-                        g.scheduled = false;
-                        g.stopped = true;
-                        g.chan.host().channel()
-                    };
+                    slot.meta.set_scheduled(false);
+                    slot.meta.set_stopped(true);
+                    let host = slot.meta.host;
                     me.rm
                         .disable_channels(&[host], true, false, false)
                         .and_then(|()| me.rm.schedule_enable(host, false))
@@ -2692,14 +2678,11 @@ impl ChanPlane {
                 let mut slots = Vec::new();
                 for (_, ht) in &tr {
                     let slot = me.slot(*ht).ok_or_else(|| (NV_ERR_INVALID_STATE, format!("host {ht:#x}: slot gone")))?;
-                    let host = {
-                        let mut g = slot.lock().map_err(|_| (NV_ERR_INVALID_STATE, "slot poisoned".to_string()))?;
-                        if disable {
-                            // The pump stops fetching BEFORE the host verb.
-                            g.disabled = true;
-                        }
-                        g.chan.host().channel()
-                    };
+                    if disable {
+                        // The pump stops fetching BEFORE the host verb.
+                        slot.meta.set_disabled(true);
+                    }
+                    let host = slot.meta.host;
                     hosts.push(host);
                     slots.push(slot);
                 }
@@ -2715,14 +2698,9 @@ impl ChanPlane {
                 }
                 if !disable {
                     for s in &slots {
-                        let idx = s.lock().ok().map(|mut g| {
-                            g.disabled = false;
-                            g.guest_idx
-                        });
+                        s.meta.set_disabled(false);
                         // Work the guest queued while disabled is picked up now.
-                        if let Some(i) = idx
-                            && me.plane.ring_internal(i)
-                        {
+                        if me.plane.ring_internal(s.meta.guest_idx) {
                             let _ = me.wake.signal();
                         }
                     }
@@ -2783,7 +2761,7 @@ impl ChanPlane {
                 for ht in &tr {
                     let host = me
                         .slot(*ht)
-                        .and_then(|s| s.lock().ok().map(|g| g.chan.host().channel()))
+                        .map(|s| s.meta.host)
                         .ok_or_else(|| (NV_ERR_INVALID_STATE, format!("host {ht:#x}: slot gone")))?;
                     me.rm.preempt(host).map_err(|e| (NV_ERR_INVALID_STATE, format!("Translated ring host {ht:#x} PREEMPT: {e:?}")))?;
                 }
@@ -2816,21 +2794,21 @@ impl ChanPlane {
         if let Some(ht) = self.translated_of(client, object) {
             return self.defer("promote translated context", Box::new(move |me: &ChanPlane| {
                 let slot = me.slot(ht).ok_or_else(|| (NV_ERR_INVALID_STATE, "GR slot gone".into()))?;
-                let mut g = slot.lock().map_err(|_| (NV_ERR_INVALID_STATE, "GR slot poisoned".into()))?;
-                let context = g.chan.host().gr_context();
-                let video = g.chan.host().video_context();
-                if g.guest_engine != engine_type || !g.chan.host().owns_context(engine_type) || g.dead.is_some()
+                let context = slot.meta.gr_context;
+                let video = slot.meta.video_context;
+                if slot.meta.guest_engine != engine_type || !slot.meta.owns_context(engine_type) || slot.meta.is_dead()
                     || (video.is_some() && entries != 0)
                 {
                     return Err((NV_ERR_INVALID_ARGUMENT, "GPU_PROMOTE_CTX has no matching owned context or invalid video entries".into()));
                 }
                 // Owner ruling B: the actual host context was created at birth,
                 // before this statement. No guest PA, VA or context byte is used.
-                g.ctx.initialized |= initialize;
-                g.ctx.va_bound |= with_va;
-                g.ctx.bound |= with_va != 0;
-                g.ctx.promotes += 1;
-                Ok(format!("{client:#x}:{object:#x} GPU_PROMOTE_CTX satisfied by Translated host {ht:#x} GR={context:x?} VIDEO={video:x?} entries={entries} init_ids={initialize:#x} va_ids={with_va:#x} bound={} — no guest buffer touched", g.ctx.bound))
+                let mut ctx = slot.meta.ctx.lock().map_err(|_| (NV_ERR_INVALID_STATE, "GR ctx poisoned".into()))?;
+                ctx.initialized |= initialize;
+                ctx.va_bound |= with_va;
+                ctx.bound |= with_va != 0;
+                ctx.promotes += 1;
+                Ok(format!("{client:#x}:{object:#x} GPU_PROMOTE_CTX satisfied by Translated host {ht:#x} GR={context:x?} VIDEO={video:x?} entries={entries} init_ids={initialize:#x} va_ids={with_va:#x} bound={} — no guest buffer touched", ctx.bound))
             }));
         }
         let Some((engine, ht)) = self
@@ -2936,20 +2914,17 @@ impl ChanPlane {
         if let Some(ht) = self.translated_of(client, object) {
             return self.defer("evict translated context", Box::new(move |me: &ChanPlane| {
                 let slot = me.slot(ht).ok_or_else(|| (NV_ERR_INVALID_STATE, "GR slot gone".into()))?;
-                let host = {
-                    let g = slot.lock().map_err(|_| (NV_ERR_INVALID_STATE, "GR slot poisoned".into()))?;
-                    if g.guest_engine != engine_type || !g.chan.host().owns_context(engine_type)
-                    {
-                        return Err((NV_ERR_INVALID_ARGUMENT, "GPU_EVICT_CTX has no matching owned context".into()));
-                    }
-                    g.chan.host().channel()
-                };
+                if slot.meta.guest_engine != engine_type || !slot.meta.owns_context(engine_type)
+                {
+                    return Err((NV_ERR_INVALID_ARGUMENT, "GPU_EVICT_CTX has no matching owned context".into()));
+                }
+                let host = slot.meta.host;
                 me.rm.schedule_enable(host, false).map_err(|e| (NV_ERR_INVALID_STATE, format!("GR host {ht:#x} evict: {e:?}")))?;
-                let mut g = slot.lock().map_err(|_| (NV_ERR_INVALID_STATE, "GR slot poisoned".into()))?;
-                g.scheduled = false;
-                g.ctx.bound = false;
-                g.ctx.va_bound = 0;
-                g.ctx.evicts += 1;
+                slot.meta.set_scheduled(false);
+                let mut ctx = slot.meta.ctx.lock().map_err(|_| (NV_ERR_INVALID_STATE, "GR ctx poisoned".into()))?;
+                ctx.bound = false;
+                ctx.va_bound = 0;
+                ctx.evicts += 1;
                 Ok(format!("{client:#x}:{object:#x} GPU_EVICT_CTX: Translated host {ht:#x} off runlist, context UNBOUND"))
             }));
         }
@@ -2993,44 +2968,29 @@ impl ChanPlane {
         };
         // ★ v3-chanctl: a STOPPED Translated channel's host ring was disabled and taken off its
         // runlist — re-enable it (host verbs: an act) before the pump may fetch again.
-        if enable && slot.try_lock().is_ok_and(|g| g.stopped) {
-            return self.defer(
+        // ⊘ The drainer's half is lock-free ([`crate::slotcell::plan_schedule`]): the flags are the
+        // slot's atomics, never the pump lock a worker holds.
+        let idx = match crate::slotcell::plan_schedule(&slot.meta, enable) {
+            ScheduleStep::Restart => {
+                return self.defer(
                 "restart translated",
                 Box::new(move |me: &ChanPlane| {
                     let slot = me.slot(ht).ok_or_else(|| (NV_ERR_INVALID_STATE, format!("host {ht:#x}: slot gone")))?;
-                    let (host, disabled) = slot
-                        .lock()
-                        .map(|g| (g.chan.host().channel(), g.disabled))
-                        .map_err(|_| (NV_ERR_INVALID_STATE, "slot poisoned".to_string()))?;
+                    let (host, disabled) = (slot.meta.host, slot.meta.is_disabled());
                     if !disabled {
                         me.rm.disable_channels(&[host], false, false, false).map_err(|e| (NV_ERR_INVALID_STATE, format!("host ring {ht:#x} re-enable: {e:?}")))?;
                     }
                     me.rm.schedule_enable(host, true).map_err(|e| (NV_ERR_INVALID_STATE, format!("host ring {ht:#x} schedule: {e:?}")))?;
-                    let idx = slot.lock().map(|mut g| {
-                        g.stopped = false;
-                        g.scheduled = true;
-                        g.guest_idx
-                    });
-                    if let Ok(i) = idx
-                        && me.plane.ring_internal(i)
-                    {
+                    slot.meta.set_stopped(false);
+                    slot.meta.set_scheduled(true);
+                    if me.plane.ring_internal(slot.meta.guest_idx) {
                         let _ = me.wake.signal();
                     }
                     Ok(format!("{client:#x}:{object:#x} GPFIFO_SCHEDULE enable=true: Translated ring host {ht:#x} restarted after STOP"))
                 }),
             );
-        }
-        let idx = match slot.lock() {
-            Ok(mut g) => {
-                g.scheduled = enable;
-                g.guest_idx
             }
-            Err(_) => {
-                return ChanAnswer::Refused {
-                    status: NV_ERR_INVALID_STATE,
-                    why: "slot poisoned".into(),
-                };
-            }
+            ScheduleStep::Set { token } => token,
         };
         eprintln!(
             "kf3: chan {client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} (token {idx:#x}, host {ht:#x})"
@@ -3387,14 +3347,12 @@ impl ChanPlane {
         let mut targets = Vec::new();
         for ht in &named {
             let Some(slot) = self.slot(*ht) else { continue };
-            let g = slot
-                .lock()
-                .map_err(|_| (NV_ERR_INVALID_STATE, "slot poisoned".to_string()))?;
+            let g = &slot.meta;
             targets.push(crate::defapi::Target {
                 ht: *ht,
                 engine: g.guest_engine,
-                owns_context: g.chan.host().owns_context(g.guest_engine),
-                dead: g.dead.is_some(),
+                owns_context: g.owns_context(g.guest_engine),
+                dead: g.is_dead(),
             });
         }
         let (effect, hit) = crate::defapi::ctx_verdict(&planned.entry.decoded, &targets)
@@ -3403,28 +3361,26 @@ impl ChanPlane {
             let Some(slot) = self.slot(*ht) else { continue };
             match effect {
                 crate::defapi::CtxEffect::Satisfied => {
-                    let mut g = slot
+                    slot.meta
+                        .ctx
                         .lock()
-                        .map_err(|_| (NV_ERR_INVALID_STATE, "slot poisoned".to_string()))?;
-                    g.ctx.promotes += 1;
+                        .map_err(|_| (NV_ERR_INVALID_STATE, "ctx poisoned".to_string()))?
+                        .promotes += 1;
                 }
                 crate::defapi::CtxEffect::Evict => {
-                    let host = slot
-                        .lock()
-                        .map_err(|_| (NV_ERR_INVALID_STATE, "slot poisoned".to_string()))?
-                        .chan
-                        .host()
-                        .channel();
+                    let host = slot.meta.host;
                     self.rm.schedule_enable(host, false).map_err(|e| {
                         (NV_ERR_INVALID_STATE, format!("host {ht:#x} evict: {e:?}"))
                     })?;
-                    let mut g = slot
+                    slot.meta.set_scheduled(false);
+                    let mut ctx = slot
+                        .meta
+                        .ctx
                         .lock()
-                        .map_err(|_| (NV_ERR_INVALID_STATE, "slot poisoned".to_string()))?;
-                    g.scheduled = false;
-                    g.ctx.bound = false;
-                    g.ctx.va_bound = 0;
-                    g.ctx.evicts += 1;
+                        .map_err(|_| (NV_ERR_INVALID_STATE, "ctx poisoned".to_string()))?;
+                    ctx.bound = false;
+                    ctx.va_bound = 0;
+                    ctx.evicts += 1;
                 }
             }
         }
@@ -3713,11 +3669,10 @@ impl ChanPlane {
             }
         }
         for ht in &translated {
-            // Stop the pump before the act frees its twin (the slot lock is the worker's).
-            if let Some(s) = self.slot(*ht)
-                && let Ok(mut g) = s.try_lock()
-            {
-                g.scheduled = false;
+            // Stop the pump before the act frees its twin: an atomic, so it takes effect even while
+            // a worker holds the pump lock (the old `try_lock` skipped the write then).
+            if let Some(s) = self.slot(*ht) {
+                crate::slotcell::stop_pump(&s.meta);
             }
         }
         self.defer(
@@ -3912,7 +3867,7 @@ impl ChanPlane {
         }
     }
 
-    fn slot(&self, ht: u32) -> Option<Arc<TimedMutex<Slot>>> {
+    fn slot(&self, ht: u32) -> Option<Arc<SlotCell<Slot>>> {
         self.slots.read().ok()?.get(&ht).cloned()
     }
 
@@ -4432,6 +4387,15 @@ impl ChanPlane {
                     }
                     return Err(fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("token {idx:#x}: {e}"))));
                 }
+                // ⚠ Host-owned scheduling (default off, awaiting owner confirmation).
+                let meta = SlotMeta::new(
+                    idx,
+                    a.tsg,
+                    chan.host().channel(),
+                    engine,
+                    (chan.host().gr_context(), chan.host().video_context()),
+                    sw_runlist_host_owned(),
+                );
                 let slot = Slot {
                     chan,
                     key,
@@ -4439,19 +4403,13 @@ impl ChanPlane {
                     userd,
                     guest_idx: idx,
                     guest_engine: engine,
-                    ctx: CtxBind::default(),
-                    // ⚠ Host-owned scheduling (default off, awaiting owner confirmation).
-                    scheduled: sw_runlist_host_owned(),
                     dead: None,
                     serves: 0,
                     last_put: None,
-                    tsg: a.tsg,
                     split: None,
                     splits: 0,
                     views: StoreViews::new(),
                     privilege: a.privilege,
-                    stopped: false,
-                    disabled: false,
                     probe: ProbeRec::default(),
                     tspace_ring: ts.is_some(),
                     inca_seen: 0,
@@ -4467,7 +4425,14 @@ impl ChanPlane {
                     me.engine_tlive(engine, true);
                 }
                 if let Ok(mut s) = me.slots.write() {
-                    s.insert(ht, Arc::new(TimedMutex::new(me.stall, LockId::Slot, slot)));
+                    s.insert(
+                        ht,
+                        Arc::new(SlotCell::new(
+                            me.stall,
+                            meta,
+                            slot,
+                        )),
+                    );
                 }
                 if let Ok(mut m) = me.by_obj.lock() {
                     m.insert((a.client, a.handle), ht);
@@ -4649,8 +4614,11 @@ impl ChanPlane {
         let Some(slot) = self.slot(t.host) else {
             return vec![format!("{tag}: no Translated slot (already retired?)")];
         };
-        let Ok(g) = slot.lock() else {
-            return vec![format!("{tag}: slot poisoned")];
+        // ⊘ On the drainer: never the pump lock a worker holds (a busy slot is named, not waited for).
+        let Ok(g) = slot.try_lock() else {
+            return vec![format!(
+                "{tag}: slot busy (a worker is pumping) or poisoned"
+            )];
         };
         let words = |f: &dyn Fn(u64) -> Result<u32, String>, n: u64| -> String {
             (0..n)
@@ -4661,7 +4629,7 @@ impl ChanPlane {
         let mut out = vec![format!(
             "{tag}: USERD[0..64] (token {:#x}, scheduled={} serves={} last_put={:?}): {}",
             g.guest_idx,
-            g.scheduled,
+            slot.meta.is_scheduled(),
             g.serves,
             g.last_put,
             words(&|o| g.userd.load(o), 64)
@@ -4933,9 +4901,9 @@ impl ChanPlane {
         let g = &mut *g;
         g.serves += 1;
         if g.dead.is_some()
-            || !g.scheduled
-            || g.disabled
-            || g.stopped
+            || !slot.meta.is_scheduled()
+            || slot.meta.is_disabled()
+            || slot.meta.is_stopped()
             || self.stop.load(Ordering::Acquire)
         {
             return false;
@@ -5160,6 +5128,7 @@ impl ChanPlane {
                 g.mirror.log.recent(8)
             );
             g.dead = Some(why);
+            slot.meta.set_dead();
             self.completions.clear(g.guest_idx);
         }
         g.chan.counts().1 > before
@@ -5258,9 +5227,9 @@ impl ChanPlane {
                         at.elapsed().as_millis()
                     )),
                 g.dead,
-                g.scheduled,
-                g.stopped,
-                g.disabled
+                slot.meta.is_scheduled(),
+                slot.meta.is_stopped(),
+                slot.meta.is_disabled()
             )];
             for f in &infl {
                 lines.push(format!(
@@ -5313,8 +5282,7 @@ impl ChanPlane {
     /// Whether the channel behind `ht` can take work (a dead one cannot: §7 then poisons).
     #[must_use]
     pub fn alive(&self, ht: u32) -> bool {
-        self.slot(ht)
-            .is_some_and(|s| s.try_lock().map_or(true, |g| g.dead.is_none()))
+        self.slot(ht).is_some_and(|s| !s.meta.is_dead())
     }
 
     /// `forwarded=` per token, for the boot log.

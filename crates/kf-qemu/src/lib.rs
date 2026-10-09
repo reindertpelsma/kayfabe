@@ -25,5 +25,6 @@ pub mod mem;
 pub mod prof;
 pub mod raw_unsafe;
 pub mod rmfacts;
+mod slotcell;
 pub mod tspace;
 pub mod twin;

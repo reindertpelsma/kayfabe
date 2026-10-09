@@ -65,3 +65,33 @@ seconds ⇒ the drainer stalled; `drainer_lock_wait_max_us` > 0 ⇒ the drainer 
 
 Tests: `kf_chan::stall::tests` (gauge, lock wait by name and role, rwlock, held-reply aging on an
 injected clock, the fragment's names, scope timer).
+
+## 3.A The slot lock (item A) — built
+
+**Before.** A Translated channel's whole state sat behind one `Mutex<Slot>`. A worker holds it across
+a whole `pump` (`StoreViews::view_for` → an RM `arm_cpu_view` ioctl + `mmap`, the USERD scan, the
+completion probe). The drainer took it with a blocking `lock()` to read `tsg` (TSG schedule filter),
+`guest_idx` (the `Token` statement) and to flip `scheduled` (`schedule_translated`), so a guest RPC
+could wait for a pump. `serve` itself uses `try_lock` ("must never be contended"). The drainer's
+`try_lock` sites had the opposite defect: a contended `try_lock` read `stopped == false` and skipped the
+free's `scheduled = false` silently.
+
+**After** (`crates/kf-qemu/src/slotcell.rs`). `SlotCell = SlotMeta + pump lock`. `SlotMeta` holds the
+immutable `guest_idx`, `tsg`, host channel, guest engine and the birth-fixed host contexts, and the
+atomics `scheduled`, `stopped`, `disabled`, `dead`, plus the act-only `ctx` mutex (never contended: only
+the act thread writes it). The drainer touches only `SlotMeta` (`plan_schedule`, `stop_pump`,
+`in_group`, `meta.guest_idx`); the status line and the BAR0-trace dump use `try_lock`. As a bonus the
+act thread no longer takes the slot lock in any act except `retire` (stop, restart, disable, evict,
+preempt, timeslice, bind, promote and the deferred context all use the meta).
+
+**What changed in behaviour, exactly.** A `GPFIFO_SCHEDULE(false)` used to wait for a pump in flight;
+now the flag flips at once and a pump already past its check in `serve` finishes that one pass, like the
+GPU finishing work it already fetched when a channel is descheduled. The pump authors `GP_GET` only for
+work the host fence reached, so the extra pass forges nothing. The free path still takes the pump lock
+(on the act thread, in `retire`) before it frees the twin, so no pump touches a freed twin.
+
+**Falsifier / tests** (`slotcell::tests`): `the_drainer_paths_return_while_a_worker_holds_the_pump_lock`
+(a thread holds the pump lock; the token read, TSG filter, schedule flip and free-stop return within
+2 s — each was a `lock()` before); its control `the_pump_state_is_locked_while_the_worker_holds_it` (a
+blocking `lock()` in the same situation does not return, i.e. the old code path waits);
+`a_stop_and_a_free_are_seen_under_contention` (the two silent `try_lock` defects).
