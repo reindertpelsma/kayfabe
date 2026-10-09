@@ -1037,6 +1037,58 @@ impl HostRm {
         unmap_pieces(self, space, va, len, true, unmap_flags(defer))
     }
 
+    /// ★ 2026-10-09: ONE FIXED map of `[offset, offset+len)` of `memory` at `at` THROUGH `h_dma`
+    /// — a reservation the caller made over that VA ([`HostRm::reserve_va`]; `kf_mem::batch`'s
+    /// micro reservations). No piece routing: the caller guarantees `[at, at+len)` lies inside
+    /// `h_dma` (RM asserts it, `dma.c:155-159`). Flags as [`HostRm::map_kind`].
+    ///
+    /// # Errors
+    /// The host's refusal, or [`RmError::PlacementRefused`].
+    #[allow(clippy::too_many_arguments)]
+    pub fn map_in(
+        &self,
+        h_dma: u32,
+        memory: u32,
+        backing: MapBacking,
+        offset: u64,
+        len: u64,
+        at: u64,
+        defer: bool,
+        kind: u8,
+        perm: MapPerm,
+    ) -> Result<u64, RmError> {
+        guest_row_end(at, len)?;
+        let extra = if defer {
+            NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE
+        } else {
+            0
+        } | if kind != 0 {
+            NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES
+        } else {
+            0
+        } | perm.nvos46_flags();
+        self.raw_map_dma_slice(
+            h_dma,
+            memory,
+            offset,
+            len,
+            Some(at),
+            extra,
+            backing == MapBacking::SharedSlice,
+            u32::from(kind),
+        )
+    }
+
+    /// ★ 2026-10-09: ONE unmap THROUGH `h_dma` (a reservation of ours): `size == 0` the whole
+    /// mapping keyed by its exact start, else every mapping intersecting `[va, va+size)` — exact
+    /// inside an `NV50_MEMORY_VIRTUAL` reservation (`virt_mem_allocator_gm107.c:1578-1633`).
+    ///
+    /// # Errors
+    /// The host's status.
+    pub fn unmap_in(&self, h_dma: u32, va: u64, size: u64, defer: bool) -> Result<(), RmError> {
+        self.raw_unmap_dma_range(h_dma, va, size, unmap_flags(defer))
+    }
+
     /// ★★★ **Map N scattered pieces of a file at ONE VA-contiguous range, in O(1) host RM calls**
     /// (`V3_BATCHED_MAP.md` §3): stitch the pieces into one host view
     /// ([`kf_linux_raw::MappedRegion::stitch`]), describe it with ONE
@@ -1069,6 +1121,28 @@ impl HostRm {
         kind: u8,
         perm: MapPerm,
     ) -> Result<u32, ScatterError> {
+        self.map_scattered_through(space, None, fd, pieces, at, defer, kind, perm)
+    }
+
+    /// ★ 2026-10-09: [`HostRm::map_scattered`] mapped THROUGH `through` (a reservation the caller
+    /// made with [`HostRm::reserve_va`] over the batch's VA, `kf_mem::batch` "micro reservation")
+    /// instead of the space's own routing — so a later partial unmap is exact (see
+    /// [`HostRm::unmap_range`]). `None` is [`HostRm::map_scattered`].
+    ///
+    /// # Errors
+    /// As [`HostRm::map_scattered`].
+    #[allow(clippy::too_many_arguments)]
+    pub fn map_scattered_through(
+        &self,
+        space: VaSpace,
+        through: Option<u32>,
+        fd: std::os::fd::BorrowedFd<'_>,
+        pieces: &[(u64, u64)],
+        at: u64,
+        defer: bool,
+        kind: u8,
+        perm: MapPerm,
+    ) -> Result<u32, ScatterError> {
         let t0 = std::time::Instant::now();
         let view = kf_linux_raw::MappedRegion::stitch(
             fd,
@@ -1089,17 +1163,30 @@ impl HostRm {
         // 4 096 populated VMAs on the nested bench, vs 0.5 ms for the map itself).
         reap_view(view);
         let t_drop = t0.elapsed();
-        let r = self.map_kind(
-            space,
-            obj,
-            MapBacking::SharedSlice,
-            0,
-            len,
-            Some(at),
-            defer,
-            kind,
-            perm,
-        );
+        let r = match through {
+            None => self.map_kind(
+                space,
+                obj,
+                MapBacking::SharedSlice,
+                0,
+                len,
+                Some(at),
+                defer,
+                kind,
+                perm,
+            ),
+            Some(h) => self.map_in(
+                h,
+                obj,
+                MapBacking::SharedSlice,
+                0,
+                len,
+                at,
+                defer,
+                kind,
+                perm,
+            ),
+        };
         // ★ Bounded phase breakdown (the first 32 batches of the process): stitch vs pin vs map.
         static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 32 {

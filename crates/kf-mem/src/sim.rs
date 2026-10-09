@@ -1,32 +1,37 @@
 //! ★★★ **A simulated host RM for ONE host VA space — the GPU-free proof of the batched path**
 //! (owner direction 2026-10-09: "the batching logic must be tested properly WITHOUT a GPU").
 //!
-//! The model implements, byte for byte, what host RM does with OUR map/unmap verbs in one client,
-//! read from `ogkm-595.84` (the host runs 595.91.07):
+//! The model implements what host RM does with OUR map/unmap verbs in one client, read from
+//! `ogkm-595.84` (the host runs 595.91.07):
 //!
 //! - **Two kinds of `hDma`.** The space's `range` is an `NV01_MEMORY_VIRTUAL`, constructed with
 //!   `bReserveVaOnAlloc = NV_FALSE` (`virtual_mem.c:349-354`): EVERY map through it allocates its
 //!   own VA heap block, and every unmap frees "the block containing the unmapped part's start"
 //!   (`virt_mem_allocator_gm107.c:1635-1638` → `gvaspaceFree`, `gpu_vaspace.c:1631-1640`, whose
-//!   `eheapGetBlock` is a containment search, `eheap_old.c:1005-1027`). A guest reservation is an
-//!   `NV50_MEMORY_VIRTUAL` (`bReserveVaOnAlloc = NV_TRUE`, `virtual_mem.c:593`): an unmap only
-//!   invalidates the PTEs of exactly the unmapped part (`virt_mem_allocator_gm107.c:1578-1633`).
-//! - **A FIXED map fails on occupancy** (`VA_ALREADY_MAPPED`; production answers `HeldByHost`).
+//!   `eheapGetBlock` is a containment search, `eheap_old.c:1005-1027`). A reservation is an
+//!   `NV50_MEMORY_VIRTUAL` (`bReserveVaOnAlloc = NV_TRUE`, `virtual_mem.c:593`) that owns ONE heap
+//!   block for its whole VA (a FIXED `eheapAlloc`, `gpu_vaspace.c:1374-1386`, refused with
+//!   `NV_ERR_NO_MEMORY` over any existing block); an unmap inside it only invalidates the PTEs of
+//!   exactly the unmapped part (`virt_mem_allocator_gm107.c:1578-1633`).
+//! - **A FIXED map fails on occupancy** (`VA_ALREADY_MAPPED`; production answers `HeldByHost`): in
+//!   the `NV01` range a map needs a free heap block, so it also fails over a reservation.
 //! - **`size == 0`** unmaps the ONE mapping that starts exactly at `va`, else `OBJECT_NOT_FOUND`
 //!   (`rs_server.c:2436-2452`).
 //! - **`size != 0`** removes EVERY mapping of the `hDma` that intersects the range — whoever placed
 //!   it — splitting a straddler into its outside remnants, and answers `NV_OK` over gaps
 //!   (`rs_server.c:2453-2514`, `2316-2416`; `virtual_mem.c:1697-1804`).
-//! - **The consequence the model exists for:** a range unmap that SPLITS a mapping of the
-//!   `NV01` range frees the WHOLE original VA block — the remnants RM still lists lose their PTEs
-//!   (a GPU access faults: host Xid 31 `FAULT_PTE`), and freeing a remnant later finds no block
-//!   (`NV_ASSERT(NULL != pMemBlock) @ gpu_vaspace.c:1639`). Both were MEASURED on the GPU host in
-//!   Windows runs 242/243 (batched path on) and in no run with `KF3_NO_BATCHED_MAP=1`.
-//! - **Freeing a memory object** unmaps every mapping of it (`rs_client.c` back-references).
+//! - **The consequence the model exists for:** a range unmap that SPLITS a mapping of the `NV01`
+//!   range frees the WHOLE original VA block — the remnants RM still lists lose their PTEs (host
+//!   Xid 31 `FAULT_PTE`), and freeing a remnant later finds no block (`NV_ASSERT(NULL !=
+//!   pMemBlock) @ gpu_vaspace.c:1639`). Both were MEASURED in Windows runs 242/243 (batched on).
+//! - **Freeing a memory object** unmaps every mapping of it; **freeing a reservation** unmaps every
+//!   mapping inside it and returns its block.
 //!
-//! Tests may also place FOREIGN mappings — what kayfabe's other code (windows, rings, a twin's
-//! USERD view, another twin) maps through the same client and `hDma` — and the model records as a
-//! VIOLATION any mirror verb that removes or splits one.
+//! Tests may place FOREIGN mappings (what kayfabe's other code maps through the same client and
+//! `hDma`); a mirror verb that removes or splits one is a VIOLATION. And a test may arm a GUARD —
+//! the VAs whose guest mapping does not change in this refresh — that is checked after EVERY host
+//! call: an unchanged VA that is transiently unmapped is a violation (owner, 2026-10-09: "every VA
+//! whose guest mapping is UNCHANGED must stay accessible at ALL times").
 
 use crate::apply::{ApplyCfg, DiffRun, apply_entry};
 use crate::batch::{BatchedVas, SpaceVerbs};
@@ -41,7 +46,7 @@ use std::collections::BTreeMap;
 pub const P: u64 = 0x1000;
 /// The space's `NV01_MEMORY_VIRTUAL` range (`bReserveVaOnAlloc = false`).
 pub const RANGE: u32 = 0x100;
-/// A guest reservation (`NV50_MEMORY_VIRTUAL`, `bReserveVaOnAlloc = true`).
+/// The static guest reservation (`NV50_MEMORY_VIRTUAL`, `bReserveVaOnAlloc = true`).
 pub const RESV: u32 = 0x200;
 const RAM_OBJ: u32 = 0x10;
 const STORE_OBJ: u32 = 0x11;
@@ -78,33 +83,80 @@ pub struct SimMap {
 /// What one model page translates to: `(ram, backing offset)`.
 pub type Backing = (bool, u64);
 
+/// Host calls and the stitch's mm syscalls, as production would issue them (the syscall budget).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Counters {
+    /// `NV_ESC_RM_MAP_MEMORY_DMA` (one per `hDma` piece).
+    pub rm_map: u64,
+    /// `NV_ESC_RM_UNMAP_MEMORY_DMA` (one per `hDma` piece).
+    pub rm_unmap: u64,
+    /// `NV_ESC_RM_ALLOC_MEMORY` of a batch's OS descriptor.
+    pub rm_desc: u64,
+    /// `NV_ESC_RM_ALLOC` of a micro reservation.
+    pub rm_reserve: u64,
+    /// `NV_ESC_RM_FREE` (batch objects and reservations).
+    pub rm_free: u64,
+    /// `mmap` calls of the stitch (one `PROT_NONE` reservation + one `MAP_FIXED` per
+    /// file-discontiguous piece).
+    pub mmap: u64,
+    /// `munmap` of a stitched view (one per batch; O(pieces) kernel work).
+    pub munmap: u64,
+    /// VMAs those `munmap`s tore down.
+    pub munmap_vmas: u64,
+    /// Bytes pinned through stitched views.
+    pub stitched_bytes: u64,
+}
+
+impl Counters {
+    /// Every RM ioctl.
+    #[must_use]
+    pub fn rm_total(&self) -> u64 {
+        self.rm_map + self.rm_unmap + self.rm_desc + self.rm_reserve + self.rm_free
+    }
+}
+
 /// The host RM state of one space.
 #[derive(Debug)]
 pub struct SimRm {
-    /// The space (its reservations decide each piece's `hDma`, as production's `dma_pieces`).
+    /// The space (its static reservations decide each piece's `hDma`, as production's
+    /// `dma_pieces`).
     pub space: VaSpace,
     /// Every mapping RM lists, any `hDma`.
     pub maps: Vec<SimMap>,
-    /// `NV01` VA heap blocks, `start → end`.
+    /// VA heap blocks, `start → end` (`NV01` per-map blocks and reservation blocks).
     pub blocks: BTreeMap<u64, u64>,
+    /// Micro reservations, `handle → (lo, hi)`.
+    pub resv: BTreeMap<u32, (u64, u64)>,
     /// Batch objects: page → backing.
     pub objs: BTreeMap<u32, Vec<Backing>>,
     next_obj: u32,
     /// Mirror verbs that removed or split a foreign mapping.
     pub violations: Vec<String>,
+    /// Unchanged VAs found unmapped (or re-pointed) after a host call.
+    pub transient: Vec<String>,
+    /// The pages that must keep their translation after every host call (the guard).
+    pub guard: Vec<(u64, Backing)>,
     /// `gvaspaceFree` found no block (`NV_ASSERT @ gpu_vaspace.c:1639`).
     pub asserts: u32,
     /// Every mirror range unmap, `(va, len)`.
     pub ranges: Vec<(u64, u64)>,
     /// Bytes mirror range unmaps covered where nothing at all was mapped.
     pub gap_bytes: u64,
+    /// The next micro reservation is refused (a host that does not accept small reservations).
+    pub refuse_reserve: bool,
+    /// Skip the guard (the workload counts only; the property test always guards).
+    pub no_guard: bool,
+    /// The next stitched-batch map fails after the descriptor is built.
+    pub fail_next_batch_map: bool,
+    /// Calls issued.
+    pub n: Counters,
 }
 
 /// The model behind a `&Sim` [`SpaceVerbs`].
 #[derive(Debug)]
 pub struct Sim(pub RefCell<SimRm>);
 
-/// The test space: `[base, base + pages*P)`, with ONE guest reservation `[resv_lo, resv_hi)`.
+/// A test space with ONE static guest reservation `[resv_lo, resv_hi)`.
 #[must_use]
 pub fn space(resv_lo: u64, resv_hi: u64) -> VaSpace {
     VaSpace {
@@ -130,12 +182,19 @@ impl Sim {
             space,
             maps: Vec::new(),
             blocks: BTreeMap::new(),
+            resv: BTreeMap::new(),
             objs: BTreeMap::new(),
             next_obj: 0x1000,
             violations: Vec::new(),
+            transient: Vec::new(),
+            guard: Vec::new(),
             asserts: 0,
             ranges: Vec::new(),
             gap_bytes: 0,
+            refuse_reserve: false,
+            no_guard: false,
+            fail_next_batch_map: false,
+            n: Counters::default(),
         }))
     }
 }
@@ -151,11 +210,33 @@ impl SimRm {
             .map_err(|e| format!("pieces {va:#x}+{len:#x}: {e:?}"))
     }
 
+    /// ★ The guard: every unchanged VA still translates as before. Called after EVERY host call.
+    fn check_guard(&mut self, after: &str) {
+        let bad: Vec<String> = self
+            .guard
+            .iter()
+            .filter(|&&(p, want)| self.translate(p, Owner::Mirror) != Some(want))
+            .map(|&(p, want)| {
+                format!(
+                    "after {after}: UNCHANGED VA {p:#x} transiently unmapped or re-pointed (want {want:x?}, got {:x?})",
+                    self.translate(p, Owner::Mirror)
+                )
+            })
+            .collect();
+        self.transient.extend(bad);
+    }
+
+    /// Whether a heap block overlaps `[va, va+len)` (blocks never overlap one another).
+    fn block_overlaps(&self, va: u64, len: u64) -> bool {
+        self.blocks
+            .range(..va + len)
+            .next_back()
+            .is_some_and(|(_, &e)| e > va)
+    }
+
     fn occupied(&self, hdma: u32, va: u64, len: u64) -> bool {
         if hdma == RANGE {
-            self.blocks
-                .iter()
-                .any(|(&s, &e)| overlaps(s, e - s, va, len))
+            self.block_overlaps(va, len)
         } else {
             self.maps
                 .iter()
@@ -163,13 +244,21 @@ impl SimRm {
         }
     }
 
-    /// One FIXED map of `[va, va+len)` (all pieces or none). `Err(true)` = occupied.
-    fn map(&mut self, va: u64, len: u64, obj: u32, off: u64, owner: Owner) -> Result<(), bool> {
-        let pieces = self.pieces(va, len).map_err(|_| false)?;
+    /// FIXED map pieces, all or none, one ioctl each. `Err(true)` = occupied.
+    fn map_pieces(
+        &mut self,
+        pieces: &[(u32, u64, u64)],
+        va: u64,
+        obj: u32,
+        off: u64,
+        owner: Owner,
+    ) -> Result<(), bool> {
         if pieces.iter().any(|&(h, pv, pl)| self.occupied(h, pv, pl)) {
+            self.n.rm_map += 1;
             return Err(true);
         }
-        for (h, pv, pl) in pieces {
+        for &(h, pv, pl) in pieces {
+            self.n.rm_map += 1;
             if h == RANGE {
                 self.blocks.insert(pv, pv + pl);
             }
@@ -182,8 +271,24 @@ impl SimRm {
                 owner,
                 broken: false,
             });
+            self.check_guard("map");
         }
         Ok(())
+    }
+
+    /// One FIXED map through the space's own routing.
+    fn map(&mut self, va: u64, len: u64, obj: u32, off: u64, owner: Owner) -> Result<(), bool> {
+        let pieces = self.pieces(va, len).map_err(|_| false)?;
+        self.map_pieces(&pieces, va, obj, off, owner)
+    }
+
+    /// One FIXED map THROUGH the micro reservation `h` (must lie inside it).
+    fn map_through(&mut self, h: u32, va: u64, len: u64, obj: u32, off: u64) -> Result<(), bool> {
+        let &(lo, hi) = self.resv.get(&h).ok_or(false)?;
+        if va < lo || va + len > hi {
+            return Err(false);
+        }
+        self.map_pieces(&[(h, va, len)], va, obj, off, Owner::Mirror)
     }
 
     /// `gvaspaceFree(vAddr)`: the block CONTAINING `addr` goes whole; every other `NV01` mapping
@@ -220,6 +325,7 @@ impl SimRm {
 
     /// `size == 0` in `hdma` at the exact start `va`.
     fn unmap_whole_in(&mut self, hdma: u32, va: u64, by_mirror: bool) -> Result<(), String> {
+        self.n.rm_unmap += u64::from(by_mirror);
         let i = self
             .maps
             .iter()
@@ -234,11 +340,13 @@ impl SimRm {
                 self.vaspace_free(m.va);
             }
         }
+        self.check_guard("whole unmap");
         Ok(())
     }
 
     /// `size != 0` in `hdma`: every intersecting mapping, split at the edges.
     fn unmap_range_in(&mut self, hdma: u32, a: u64, b: u64, by_mirror: bool) {
+        self.n.rm_unmap += u64::from(by_mirror);
         let mut hit: Vec<usize> = self
             .maps
             .iter()
@@ -274,17 +382,45 @@ impl SimRm {
                 }
             }
         }
+        self.check_guard("range unmap");
     }
 
-    /// Free `obj`: every mapping of it goes (whole-mapping unmaps).
-    fn free(&mut self, obj: u32) -> Result<(), String> {
-        if self.objs.remove(&obj).is_none() {
-            return Err(format!("free {obj:#x}: no such object"));
+    /// Free `h`: a batch object (every mapping of it goes) or a micro reservation (every mapping
+    /// inside it goes, its block is returned).
+    fn free(&mut self, h: u32) -> Result<(), String> {
+        self.n.rm_free += 1;
+        if self.objs.remove(&h).is_some() {
+            while let Some(m) = self.maps.iter().find(|m| m.obj == h).cloned() {
+                self.n.rm_unmap -= 1; // part of the free, not a separate ioctl
+                let _ = self.unmap_whole_in(m.hdma, m.va, true);
+            }
+        } else if let Some((lo, _)) = self.resv.remove(&h) {
+            self.maps.retain(|m| m.hdma != h);
+            self.blocks.remove(&lo);
+        } else {
+            return Err(format!("free {h:#x}: no such object"));
         }
-        while let Some(m) = self.maps.iter().find(|m| m.obj == obj).cloned() {
-            let _ = self.unmap_whole_in(m.hdma, m.va, true);
-        }
+        self.check_guard("free");
         Ok(())
+    }
+
+    /// A FIXED `NV50_MEMORY_VIRTUAL` over `[va, va+len)`: one heap block, refused over any block
+    /// or static reservation.
+    fn reserve(&mut self, va: u64, len: u64) -> Result<u32, String> {
+        self.n.rm_reserve += 1;
+        let statics = self
+            .space
+            .guest
+            .iter()
+            .any(|g| g.handle != 0 && overlaps(g.lo, g.hi - g.lo, va, len));
+        if self.refuse_reserve || statics || self.block_overlaps(va, len) {
+            return Err(format!("reserve {va:#x}+{len:#x}: NV_ERR_NO_MEMORY"));
+        }
+        let h = self.next_obj;
+        self.next_obj += 1;
+        self.blocks.insert(va, va + len);
+        self.resv.insert(h, (va, va + len));
+        Ok(h)
     }
 
     /// What VA page `va` translates to through a live (not broken) mapping of `owner`.
@@ -314,8 +450,12 @@ impl SimRm {
 
     /// Place a FOREIGN mapping (other kayfabe code, same client + `hDma`).
     pub fn place_foreign(&mut self, id: u32, va: u64, len: u64) -> bool {
-        self.map(va, len, FOREIGN_OBJ, va, Owner::Foreign(id))
-            .is_ok()
+        let n = self.n;
+        let ok = self
+            .map(va, len, FOREIGN_OBJ, va, Owner::Foreign(id))
+            .is_ok();
+        self.n = n;
+        ok
     }
 
     /// Its owner removes a foreign mapping (whole-mapping unmaps of its pieces).
@@ -344,16 +484,42 @@ impl SimRm {
                 .iter()
                 .all(|m| !m.broken && m.va >= va && m.va + m.len <= va + len)
     }
+
+    fn stitch(&mut self, rows: &[Desired]) -> Result<(u32, u64, u64), String> {
+        let first = rows.first().ok_or("empty batch")?;
+        let mut pages: Vec<Backing> = Vec::new();
+        let mut next = first.va;
+        let mut pieces = 0u64;
+        let mut last_end: Option<u64> = None;
+        for d in rows {
+            if !d.ram || d.va != next || d.perm != first.perm || d.kind != first.kind {
+                return Err("batch rows not one VA-contiguous same-kind same-perm RAM range".into());
+            }
+            next = d.va + d.len;
+            if last_end != Some(d.off) {
+                pieces += 1;
+            }
+            last_end = Some(d.off + d.len);
+            pages.extend((0..d.len / P).map(|i| (true, d.off + i * P)));
+        }
+        // The stitch: one PROT_NONE reservation + one MAP_FIXED per file-discontiguous piece; the
+        // descriptor; the view's munmap (on the reaper — still the VA thread's mm syscalls).
+        self.n.mmap += 1 + pieces;
+        self.n.munmap += 1;
+        self.n.munmap_vmas += pieces;
+        self.n.rm_desc += 1;
+        self.n.stitched_bytes += next - first.va;
+        let h = self.next_obj;
+        self.next_obj += 1;
+        self.objs.insert(h, pages);
+        Ok((h, first.va, next - first.va))
+    }
 }
 
 impl SpaceVerbs for &Sim {
     fn map_row(&self, d: &Desired, _defer: bool) -> Result<Mapped, String> {
         let obj = if d.ram { RAM_OBJ } else { STORE_OBJ };
-        match self
-            .0
-            .borrow_mut()
-            .map(d.va, d.len, obj, d.off, Owner::Mirror)
-        {
+        match self.0.borrow_mut().map(d.va, d.len, obj, d.off, Owner::Mirror) {
             Ok(()) => Ok(Mapped::Placed),
             Err(true) => Ok(Mapped::HeldByHost),
             Err(false) => Err(format!("map {:#x}+{:#x}: refused", d.va, d.len)),
@@ -376,27 +542,13 @@ impl SpaceVerbs for &Sim {
         rows: &[Desired],
         _defer: bool,
     ) -> Result<u32, String> {
-        let first = rows.first().ok_or("empty batch")?;
-        let mut pages: Vec<Backing> = Vec::new();
-        let mut next = first.va;
-        for d in rows {
-            if !d.ram || d.va != next || d.perm != first.perm || d.kind != first.kind {
-                return Err(
-                    "batch rows not one VA-contiguous same-kind same-perm RAM range".into(),
-                );
-            }
-            next = d.va + d.len;
-            pages.extend((0..d.len / P).map(|i| (true, d.off + i * P)));
-        }
         let mut rm = self.0.borrow_mut();
-        let h = rm.next_obj;
-        rm.next_obj += 1;
-        rm.objs.insert(h, pages);
-        match rm.map(first.va, next - first.va, h, 0, Owner::Mirror) {
+        let (h, va, len) = rm.stitch(rows)?;
+        match rm.map(va, len, h, 0, Owner::Mirror) {
             Ok(()) => Ok(h),
             Err(_) => {
                 let _ = rm.free(h);
-                Err(format!("batch {:#x}: map refused", first.va))
+                Err(format!("batch {va:#x}: map refused"))
             }
         }
     }
@@ -436,6 +588,62 @@ impl SpaceVerbs for &Sim {
     fn splits_safely(&self, va: u64, len: u64) -> bool {
         self.0.borrow().space.guest_reserved(va, len)
     }
+    fn reserve(&self, va: u64, len: u64) -> Result<u32, String> {
+        self.0.borrow_mut().reserve(va, len)
+    }
+    fn map_row_in(&self, h: u32, d: &Desired, _defer: bool) -> Result<Mapped, String> {
+        let obj = if d.ram { RAM_OBJ } else { STORE_OBJ };
+        match self.0.borrow_mut().map_through(h, d.va, d.len, obj, d.off) {
+            Ok(()) => Ok(Mapped::Placed),
+            Err(true) => Ok(Mapped::HeldByHost),
+            Err(false) => Err(format!("map {:#x} in {h:#x}: outside the reservation", d.va)),
+        }
+    }
+    fn map_sked_in(&self, h: u32, s: &SkedRow, _defer: bool) -> Result<Mapped, String> {
+        match self
+            .0
+            .borrow_mut()
+            .map_through(h, s.va, s.len, STORE_OBJ, s.off)
+        {
+            Ok(()) => Ok(Mapped::Placed),
+            Err(true) => Ok(Mapped::HeldByHost),
+            Err(false) => Err(format!("map SKED {:#x} in {h:#x}: refused", s.va)),
+        }
+    }
+    fn map_scattered_in(
+        &self,
+        h: u32,
+        _ram_fd: std::os::fd::BorrowedFd<'_>,
+        rows: &[Desired],
+        _defer: bool,
+    ) -> Result<u32, String> {
+        let mut rm = self.0.borrow_mut();
+        let (obj, va, len) = rm.stitch(rows)?;
+        let fail = core::mem::take(&mut rm.fail_next_batch_map);
+        match (fail, rm.map_through(h, va, len, obj, 0)) {
+            (false, Ok(())) => Ok(obj),
+            (true, Ok(())) => {
+                // Injected: the map "failed" — RM rolled it back (the mapping is not listed).
+                rm.maps.retain(|m| m.obj != obj);
+                let _ = rm.free(obj);
+                Err(format!("batch {va:#x} in {h:#x}: map refused (injected)"))
+            }
+            (_, Err(_)) => {
+                let _ = rm.free(obj);
+                Err(format!("batch {va:#x} in {h:#x}: map refused"))
+            }
+        }
+    }
+    fn unmap_in(&self, h: u32, va: u64, size: u64, _defer: bool) -> Result<(), String> {
+        let mut rm = self.0.borrow_mut();
+        if size == 0 {
+            rm.unmap_whole_in(h, va, true)
+        } else {
+            rm.ranges.push((va, size));
+            rm.unmap_range_in(h, va, va + size, true);
+            Ok(())
+        }
+    }
 }
 
 /// ★ The production glue of `kf_qemu::mem::GpuMirror`'s [`MapTarget`] impl, over the model: a row
@@ -452,14 +660,21 @@ pub struct SimMirror<'a> {
 }
 
 impl<'a> SimMirror<'a> {
-    /// A fresh mirror over `sim`.
+    /// A fresh mirror over `sim`; `low_reserve` batches the unreserved range through micro
+    /// reservations.
     #[must_use]
-    pub fn new(sim: &'a Sim, batching: bool) -> Self {
+    pub fn new(sim: &'a Sim, batching: bool, low_reserve: bool) -> Self {
         SimMirror {
-            bv: BatchedVas::new(sim),
+            bv: BatchedVas::with_low_reserve(sim, low_reserve),
             rows: RefCell::new(BTreeMap::new()),
             batching,
         }
+    }
+
+    /// The model under this mirror.
+    #[must_use]
+    pub fn sim(&self) -> &'a Sim {
+        self.bv.vas
     }
 
     /// `GpuMirror::unmap_all_rows` + `drain` (the retire).
@@ -584,6 +799,9 @@ pub struct Committed {
     pub ram: bool,
     /// Backing offset of the first page.
     pub off: u64,
+    /// The MAP run that placed it (its UNMAP carries the same `at`/flags, as the walker's does:
+    /// `kf_walk.cu` emits the committed placement itself with `op = UNMAP`).
+    pub run: DiffRun,
 }
 
 /// The apply configuration of the model (identity guest-RAM layout, 4 KiB grain).
@@ -600,7 +818,7 @@ pub fn cfg(ram_offset: &dyn Fn(u64, u64) -> Option<u64>) -> ApplyCfg<'_> {
     }
 }
 
-/// One MAP run.
+/// One MAP run of 4 KiB leaves.
 #[must_use]
 pub fn map_run(va: u64, len: u64, ram: bool, off: u64, read_only: bool) -> DiffRun {
     DiffRun {
@@ -619,53 +837,93 @@ pub fn map_run(va: u64, len: u64, ram: bool, off: u64, read_only: bool) -> DiffR
     }
 }
 
-/// One UNMAP run of a committed placement.
+/// One UNMAP run of a committed placement — the placement itself, `op = UNMAP` (as the walker).
 #[must_use]
 pub fn unmap_run(va: u64, c: &Committed) -> DiffRun {
     DiffRun {
         unmap: true,
         va,
         len: c.len,
-        at: 0,
-        ap: 0,
         held: c.held,
-        kind: 0,
-        perm: MapPerm::READ_WRITE,
-        privileged: false,
+        ..c.run
     }
 }
 
-/// Apply `runs` and commit by the acknowledgements, as the walker does.
+/// The backing a page has per the walker's committed placements (non-held): `(ram, off, ro)`.
+fn backing_of(c: &BTreeMap<u64, Committed>, p: u64) -> Option<(bool, u64, bool, u8)> {
+    c.range(..=p)
+        .next_back()
+        .filter(|&(&v, x)| p < v + x.len && !x.held)
+        .map(|(&v, x)| (x.ram, x.off + (p - v), x.run.perm.read_only, x.run.kind))
+}
+
+/// ★ Apply `runs` (one refresh) and commit by the acknowledgements, as the walker does — with the
+/// GUARD armed: every page mapped before the refresh whose guest mapping is the SAME after it
+/// (same backing, same permissions, same kind — whether or not a run of the diff names it) is
+/// UNCHANGED and must translate as before after EVERY host call of the refresh.
 pub fn apply_and_commit(
-    target: &dyn MapTarget,
+    m: &SimMirror<'_>,
     runs: &[DiffRun],
     committed: &mut BTreeMap<u64, Committed>,
 ) -> crate::apply::Applied {
+    // The guest's view after the refresh: the committed set with the UNMAPs removed and the MAPs
+    // added (what the walker will commit if everything lands).
+    let mut after = committed.clone();
+    for r in runs.iter().filter(|r| r.unmap) {
+        after.remove(&r.va);
+    }
+    for r in runs.iter().filter(|r| !r.unmap) {
+        after.insert(
+            r.va,
+            Committed {
+                len: r.len,
+                held: false,
+                ram: r.ap == AP_SYS_COHERENT,
+                off: r.at,
+                run: *r,
+            },
+        );
+    }
+    let guard_on = !m.sim().0.borrow().no_guard;
+    if guard_on {
+        let guard: Vec<(u64, Backing)> = committed
+            .iter()
+            .filter(|(_, c)| !c.held)
+            .flat_map(|(&v, c)| (0..c.len / P).map(move |i| v + i * P))
+            .filter(|&p| backing_of(committed, p) == backing_of(&after, p))
+            .filter_map(|p| backing_of(committed, p).map(|(r, o, _, _)| (p, (r, o))))
+            .collect();
+        m.sim().0.borrow_mut().guard = guard;
+    }
     let id = |gpa: u64, _len: u64| Some(gpa);
-    let out = apply_entry(target, runs, &cfg(&id));
-    for (r, &code) in runs.iter().zip(&out.codes) {
-        if r.unmap {
-            if code == KFWR_ACK_APPLIED || code == KFWR_ACK_HELD {
-                committed.remove(&r.va);
-            }
-        } else if code == KFWR_ACK_APPLIED || code == KFWR_ACK_HELD {
+    let out = apply_entry(m, runs, &cfg(&id));
+    m.sim().0.borrow_mut().guard.clear();
+    let acked = |i: usize| out.codes[i] == KFWR_ACK_APPLIED || out.codes[i] == KFWR_ACK_HELD;
+    for (i, r) in runs.iter().enumerate().filter(|(_, r)| r.unmap) {
+        if acked(i) {
+            committed.remove(&r.va);
+        }
+    }
+    for (i, r) in runs.iter().enumerate().filter(|(_, r)| !r.unmap) {
+        if acked(i) {
             committed.insert(
                 r.va,
                 Committed {
                     len: r.len,
-                    held: code == KFWR_ACK_HELD,
+                    held: out.codes[i] == KFWR_ACK_HELD,
                     ram: r.ap == AP_SYS_COHERENT,
                     off: r.at,
+                    run: *r,
                 },
             );
         }
     }
     out
 }
-
-/// ★ The invariants, after every step: no foreign mapping touched by a mirror verb; no `gvaspaceFree`
-/// assertion; no mirror mapping whose PTEs are gone; every foreign mapping intact; and the host's
-/// mirror-owned translation of every page EQUALS what the walker committed (no stale, no missing).
+/// ★ The invariants, after every step: no foreign mapping touched by a mirror verb; no unchanged
+/// VA transiently unmapped (checked after every host call); no `gvaspaceFree` assertion; no mirror
+/// mapping whose PTEs are gone; every foreign mapping intact; and the host's mirror-owned
+/// translation of every page EQUALS what the walker committed (no stale, no missing).
 ///
 /// # Errors
 /// The first broken invariant, by name.
@@ -679,6 +937,9 @@ pub fn check(
     let rm = sim.0.borrow();
     if let Some(v) = rm.violations.first() {
         return Err(format!("VIOLATION {v}"));
+    }
+    if let Some(v) = rm.transient.first() {
+        return Err(format!("TRANSIENT {v}"));
     }
     if rm.asserts != 0 {
         return Err(format!(
@@ -716,478 +977,4 @@ pub fn check(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The model space: 96 pages; pages 32..64 are a guest reservation (`NV50`), the rest go
-    /// through the `NV01` range — the Windows shape (`[1 MiB, 4.5 GiB)` is unreserved) and the
-    /// Linux/CUDA shape (above 4.5 GiB, reserved) in one space, with two straddle edges.
-    const BASE: u64 = 0x100_0000;
-    const PAGES: u64 = 96;
-    const RESV_LO: u64 = BASE + 32 * P;
-    const RESV_HI: u64 = BASE + 64 * P;
-
-    fn pg(i: u64) -> u64 {
-        BASE + i * P
-    }
-
-    fn fresh() -> Sim {
-        Sim::new(space(RESV_LO, RESV_HI))
-    }
-
-    /// Map `rows` = `(page, pages, backing page)` of guest RAM through apply; all must be APPLIED.
-    fn map_ram(m: &SimMirror<'_>, c: &mut BTreeMap<u64, Committed>, rows: &[(u64, u64, u64)]) {
-        let runs: Vec<DiffRun> = rows
-            .iter()
-            .map(|&(p, n, b)| map_run(pg(p), n * P, true, b * P, false))
-            .collect();
-        let out = apply_and_commit(m, &runs, c);
-        assert_eq!(out.refused, 0, "{:?}", out.first_refusal);
-    }
-
-    fn unmap_pages(m: &SimMirror<'_>, c: &mut BTreeMap<u64, Committed>, pages: &[u64]) {
-        let runs: Vec<DiffRun> = pages
-            .iter()
-            .map(|&p| unmap_run(pg(p), &c[&pg(p)]))
-            .collect();
-        let out = apply_and_commit(m, &runs, c);
-        assert_eq!(out.refused, 0, "{:?}", out.first_refusal);
-    }
-
-    /// ★★★ THE ROOT-CAUSE REGRESSION (Windows runs 242/243, host Xid 31 `FAULT_PTE` at
-    /// `0x4034000`, `gpu_vaspace.c:1639` at exit): four scattered guest-RAM rows in the UNRESERVED
-    /// part of the space (through the `NV01` range) are placed, and ONE middle row is unmapped. The
-    /// other three must stay mapped. Before the fix the four went as one batch mapping, the single
-    /// unmap became a range that SPLIT it, and host RM freed the whole VA block.
-    #[test]
-    fn unmapping_one_row_of_several_outside_a_reservation_keeps_the_others_mapped() {
-        let sim = fresh();
-        let m = SimMirror::new(&sim, true);
-        let mut c = BTreeMap::new();
-        map_ram(
-            &m,
-            &mut c,
-            &[(4, 1, 900), (5, 1, 17), (6, 1, 333), (7, 1, 5)],
-        );
-        check(&sim, &c, &BTreeMap::new(), BASE, pg(PAGES)).unwrap();
-        unmap_pages(&m, &mut c, &[5]);
-        check(&sim, &c, &BTreeMap::new(), BASE, pg(PAGES)).unwrap();
-        // ... and the teardown frees cleanly (no assertion, no leak).
-        unmap_pages(&m, &mut c, &[4, 6, 7]);
-        check(&sim, &c, &BTreeMap::new(), BASE, pg(PAGES)).unwrap();
-        assert!(sim.0.borrow().maps.is_empty());
-    }
-
-    /// Inside a reservation (`NV50`, the Linux/CUDA shape) a partial unmap is exact: the batch is
-    /// kept (ONE host map for the four rows) and its piece unmaps alone.
-    #[test]
-    fn inside_a_reservation_rows_still_batch_and_a_piece_unmaps_alone() {
-        let sim = fresh();
-        let m = SimMirror::new(&sim, true);
-        let mut c = BTreeMap::new();
-        map_ram(
-            &m,
-            &mut c,
-            &[(40, 1, 900), (41, 1, 17), (42, 1, 333), (43, 1, 5)],
-        );
-        assert_eq!(
-            sim.0.borrow().maps.len(),
-            1,
-            "one batched host mapping for four rows"
-        );
-        unmap_pages(&m, &mut c, &[41]);
-        check(&sim, &c, &BTreeMap::new(), BASE, pg(PAGES)).unwrap();
-        unmap_pages(&m, &mut c, &[40, 42, 43]);
-        check(&sim, &c, &BTreeMap::new(), BASE, pg(PAGES)).unwrap();
-        assert!(sim.0.borrow().maps.is_empty() && sim.0.borrow().objs.is_empty());
-    }
-
-    /// A range over two own placements with a FOREIGN mapping in the gap between them must take
-    /// the two placements and never the foreign one.
-    #[test]
-    fn a_range_never_reaches_a_foreign_mapping_between_own_placements() {
-        for (lo, label) in [(4u64, "NV01 range"), (40, "NV50 reservation")] {
-            let sim = fresh();
-            let m = SimMirror::new(&sim, true);
-            let mut c = BTreeMap::new();
-            map_ram(&m, &mut c, &[(lo, 1, 10), (lo + 1, 1, 11)]);
-            assert!(sim.0.borrow_mut().place_foreign(1, pg(lo + 2), P));
-            map_ram(&m, &mut c, &[(lo + 3, 1, 12), (lo + 4, 1, 13)]);
-            let foreign = BTreeMap::from([(1u32, (pg(lo + 2), P))]);
-            let r = m.bv.unmap_range(pg(lo), 5 * P, true);
-            for p in [lo, lo + 1, lo + 3, lo + 4] {
-                c.remove(&pg(p));
-            }
-            m.rows.borrow_mut().clear();
-            assert!(r.is_ok(), "{label}: {r:?}");
-            check(&sim, &c, &foreign, BASE, pg(PAGES)).unwrap_or_else(|e| panic!("{label}: {e}"));
-            assert_eq!(
-                sim.0.borrow().gap_bytes,
-                0,
-                "{label}: no byte of a gap is unmapped"
-            );
-        }
-    }
-
-    /// Two own placements across an EMPTY gap: still two host calls (one per owned span) — a
-    /// range is never stretched over VA nobody of ours holds, known-empty or not.
-    #[test]
-    fn a_range_across_an_empty_gap_is_one_call_per_owned_span() {
-        let sim = fresh();
-        let m = SimMirror::new(&sim, true);
-        let mut c = BTreeMap::new();
-        map_ram(&m, &mut c, &[(40, 1, 10), (41, 1, 11)]);
-        map_ram(&m, &mut c, &[(44, 1, 12), (45, 1, 13)]);
-        m.bv.unmap_range(pg(40), 6 * P, true).unwrap();
-        let rm = sim.0.borrow();
-        assert_eq!(rm.ranges, vec![(pg(40), 2 * P), (pg(44), 2 * P)]);
-        assert_eq!(rm.gap_bytes, 0);
-        assert!(rm.maps.is_empty() && rm.objs.is_empty());
-    }
-
-    /// Nothing of ours in the range: no host call at all.
-    #[test]
-    fn a_range_over_nothing_of_ours_makes_no_host_call() {
-        let sim = fresh();
-        let m = SimMirror::new(&sim, true);
-        assert!(sim.0.borrow_mut().place_foreign(3, pg(10), 4 * P));
-        m.bv.unmap_range(pg(8), 8 * P, true).unwrap();
-        assert!(sim.0.borrow().ranges.is_empty());
-        check(
-            &sim,
-            &BTreeMap::new(),
-            &BTreeMap::from([(3, (pg(10), 4 * P))]),
-            BASE,
-            pg(PAGES),
-        )
-        .unwrap();
-    }
-
-    /// A range that would SPLIT one of our mappings outside a reservation is refused before any
-    /// host call (a per-run row wider than the range — no caller does this; belt and braces).
-    #[test]
-    fn a_range_that_would_split_ours_outside_a_reservation_is_refused() {
-        let sim = fresh();
-        let m = SimMirror::new(&sim, true);
-        let mut c = BTreeMap::new();
-        map_ram(&m, &mut c, &[(4, 4, 100)]);
-        let r = m.bv.unmap_range(pg(5), P, true);
-        assert!(r.is_err_and(|e| e.contains("outside a VA-reserving hDma")));
-        assert!(sim.0.borrow().ranges.is_empty());
-        check(&sim, &c, &BTreeMap::new(), BASE, pg(PAGES)).unwrap();
-    }
-
-    /// A range that ends exactly where a foreign mapping starts leaves it alone.
-    #[test]
-    fn a_range_ending_at_a_foreign_mapping_leaves_it() {
-        let sim = fresh();
-        let m = SimMirror::new(&sim, true);
-        let mut c = BTreeMap::new();
-        assert!(sim.0.borrow_mut().place_foreign(7, pg(42), 2 * P));
-        map_ram(&m, &mut c, &[(40, 1, 1), (41, 1, 9)]);
-        unmap_pages(&m, &mut c, &[40, 41]);
-        check(
-            &sim,
-            &c,
-            &BTreeMap::from([(7, (pg(42), 2 * P))]),
-            BASE,
-            pg(PAGES),
-        )
-        .unwrap();
-    }
-
-    /// Sparse unmaps (every other page) around foreign pages: one verdict each, foreign intact.
-    #[test]
-    fn sparse_unmaps_around_foreign_pages() {
-        for lo in [2u64, 34] {
-            let sim = fresh();
-            let m = SimMirror::new(&sim, true);
-            let mut c = BTreeMap::new();
-            let mut foreign = BTreeMap::new();
-            map_ram(&m, &mut c, &[(lo, 1, 3), (lo + 2, 1, 4), (lo + 4, 1, 5)]);
-            for (id, p) in [(1u32, lo + 1), (2, lo + 3)] {
-                assert!(sim.0.borrow_mut().place_foreign(id, pg(p), P));
-                foreign.insert(id, (pg(p), P));
-            }
-            unmap_pages(&m, &mut c, &[lo, lo + 2, lo + 4]);
-            check(&sim, &c, &foreign, BASE, pg(PAGES)).unwrap();
-        }
-    }
-
-    /// Whole-space retire with foreign windows present: every mirror mapping goes, every batch
-    /// object is freed, the foreign windows stay.
-    #[test]
-    fn retire_with_foreign_windows_takes_only_ours() {
-        let sim = fresh();
-        let m = SimMirror::new(&sim, true);
-        let mut c = BTreeMap::new();
-        let foreign = BTreeMap::from([
-            (1u32, (pg(0), 2 * P)),
-            (2, (pg(50), 3 * P)),
-            (3, (pg(90), P)),
-        ]);
-        for (&id, &(va, len)) in &foreign {
-            assert!(sim.0.borrow_mut().place_foreign(id, va, len));
-        }
-        map_ram(
-            &m,
-            &mut c,
-            &[
-                (2, 1, 7),
-                (3, 1, 70),
-                (4, 2, 700),
-                (30, 1, 1),
-                (31, 1, 2),
-                (32, 1, 3),
-                (33, 1, 4),
-            ],
-        );
-        map_ram(
-            &m,
-            &mut c,
-            &[
-                (45, 1, 8),
-                (46, 1, 80),
-                (47, 1, 800),
-                (53, 1, 9),
-                (54, 1, 90),
-                (63, 1, 5),
-                (64, 1, 6),
-            ],
-        );
-        check(&sim, &c, &foreign, BASE, pg(PAGES)).unwrap();
-        assert_eq!(m.retire(), 0);
-        c.clear();
-        check(&sim, &c, &foreign, BASE, pg(PAGES)).unwrap();
-        let rm = sim.0.borrow();
-        assert!(rm.maps.iter().all(|x| x.owner != Owner::Mirror) && rm.objs.is_empty());
-    }
-
-    /// ★★★ **The property test**: thousands of random walker diffs — maps (scattered, contiguous,
-    /// vidmem, read-only), remaps, partial unmaps, straddles of the reservation edges, whole-space
-    /// retires — through the REAL apply + [`BatchedVas`] code against the model, with foreign
-    /// mappings sprinkled into gaps. Every invariant of [`check`] after EVERY step.
-    #[test]
-    fn property_batched_mirror_against_the_host_rm_model() {
-        let mut failures = Vec::new();
-        let mut total = Stats::default();
-        for seed in 1..=300u64 {
-            match run_seed(seed, 60, true) {
-                Ok(s) => total.sum(s),
-                Err(e) => failures.push(format!("seed {seed}: {e}")),
-            }
-        }
-        let kinds = [
-            "VIOLATION",
-            "FAULT_PTE",
-            "assertion",
-            "translates",
-            "retire",
-            "survived",
-        ];
-        let histogram: Vec<(&str, usize)> = kinds
-            .iter()
-            .map(|k| (*k, failures.iter().filter(|f| f.contains(k)).count()))
-            .collect();
-        assert!(
-            failures.is_empty(),
-            "{} of 300 seeds failed {histogram:?}; first: {}",
-            failures.len(),
-            failures[0]
-        );
-        // ★ A green run must have exercised the batched path: batches (inside the reservation),
-        // range unmaps, held rows (foreign in the way), and retires.
-        eprintln!("property (batched): {total:?}");
-        assert!(
-            total.batches > 100 && total.ranges > 100 && total.held > 10 && total.retires > 10,
-            "the property run did not exercise the batched path: {total:?}"
-        );
-    }
-
-    /// The same property on the per-run path (`KF3_NO_BATCHED_MAP=1`, the A/B opt-out): no batch,
-    /// no range — the reference the batched path must equal.
-    #[test]
-    fn property_per_run_path_against_the_host_rm_model() {
-        for seed in 1..=100u64 {
-            let s = run_seed(seed, 60, false).unwrap_or_else(|e| panic!("seed {seed}: {e}"));
-            assert_eq!((s.batches, s.ranges), (0, 0), "the opt-out never batches");
-        }
-    }
-
-    /// What one seed exercised (so a green run cannot be a run that never batched).
-    #[derive(Debug, Default, Clone, Copy)]
-    struct Stats {
-        batches: usize,
-        batched_runs: usize,
-        ranges: usize,
-        fallbacks: usize,
-        held: usize,
-        retires: usize,
-    }
-
-    impl Stats {
-        fn add(&mut self, a: &crate::apply::Applied) {
-            self.batches += a.batches;
-            self.batched_runs += a.batched_runs;
-            self.ranges += a.range_unmaps;
-            self.fallbacks += a.batch_fallbacks;
-            self.held += a.held;
-        }
-        fn sum(&mut self, o: Stats) {
-            self.batches += o.batches;
-            self.batched_runs += o.batched_runs;
-            self.ranges += o.ranges;
-            self.fallbacks += o.fallbacks;
-            self.held += o.held;
-            self.retires += o.retires;
-        }
-    }
-
-    fn run_seed(seed: u64, steps: usize, batching: bool) -> Result<Stats, String> {
-        let mut st = Stats::default();
-        let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
-        let sim = fresh();
-        let mut m = SimMirror::new(&sim, batching);
-        let mut c: BTreeMap<u64, Committed> = BTreeMap::new();
-        let mut foreign: BTreeMap<u32, (u64, u64)> = BTreeMap::new();
-        let mut next_id = 1u32;
-        let busy = |c: &BTreeMap<u64, Committed>, f: &BTreeMap<u32, (u64, u64)>, p: u64| {
-            let va = pg(p);
-            c.range(..=va)
-                .next_back()
-                .is_some_and(|(&v, x)| va < v + x.len)
-                || f.values().any(|&(v, l)| v <= va && va < v + l)
-        };
-        for step in 0..steps {
-            let op = rng.below(100);
-            let what;
-            if op < 45 {
-                // MAP a window of uncommitted pages (foreign pages may be inside: HeldByHost).
-                let start = rng.below(PAGES);
-                let want = 1 + rng.below(12);
-                let mut n = 0;
-                while n < want
-                    && start + n < PAGES
-                    && !c
-                        .range(..=pg(start + n))
-                        .next_back()
-                        .is_some_and(|(&v, x)| pg(start + n) < v + x.len)
-                {
-                    n += 1;
-                }
-                let mut runs = Vec::new();
-                let mut p = start;
-                let ro = rng.below(100) < 15;
-                while p < start + n {
-                    let k = (1 + rng.below(4)).min(start + n - p);
-                    let ram = rng.below(100) < 85;
-                    let back = rng.below(4096);
-                    runs.push(map_run(
-                        pg(p),
-                        k * P,
-                        ram,
-                        back * P,
-                        ro && rng.below(2) == 0,
-                    ));
-                    p += k;
-                }
-                what = format!("map {} run(s) from page {start}", runs.len());
-                st.add(&apply_and_commit(&m, &runs, &mut c));
-            } else if op < 70 {
-                // UNMAP (sparse or contiguous) the placements wholly inside a window.
-                let start = rng.below(PAGES);
-                let n = 1 + rng.below(16);
-                let sparse = rng.below(3) == 0;
-                let runs: Vec<DiffRun> = c
-                    .range(pg(start)..pg(start + n))
-                    .filter(|&(&v, x)| v + x.len <= pg(start + n))
-                    .enumerate()
-                    .filter(|(i, _)| !sparse || i % 2 == 0)
-                    .map(|(_, (&v, x))| unmap_run(v, x))
-                    .collect();
-                what = format!("unmap {} run(s) in pages {start}+{n}", runs.len());
-                st.add(&apply_and_commit(&m, &runs, &mut c));
-            } else if op < 85 {
-                // REMAP: unmap the placements inside a window and map new backing over them.
-                let start = rng.below(PAGES);
-                let n = 1 + rng.below(10);
-                let old: Vec<(u64, Committed)> = c
-                    .range(pg(start)..pg(start + n))
-                    .filter(|&(&v, x)| v + x.len <= pg(start + n))
-                    .map(|(&v, &x)| (v, x))
-                    .collect();
-                let mut runs: Vec<DiffRun> = old.iter().map(|(v, x)| unmap_run(*v, x)).collect();
-                for (v, x) in &old {
-                    let mut q = *v;
-                    while q < v + x.len {
-                        let k = ((1 + rng.below(3)) * P).min(v + x.len - q);
-                        runs.push(map_run(
-                            q,
-                            k,
-                            rng.below(100) < 85,
-                            rng.below(4096) * P,
-                            false,
-                        ));
-                        q += k;
-                    }
-                }
-                what = format!("remap {} placement(s) in pages {start}+{n}", old.len());
-                st.add(&apply_and_commit(&m, &runs, &mut c));
-            } else if op < 93 {
-                // A FOREIGN mapping lands in a gap.
-                let p = rng.below(PAGES);
-                let n = 1 + rng.below(3);
-                if (p..p + n).all(|q| q < PAGES && !busy(&c, &foreign, q))
-                    && sim.0.borrow_mut().place_foreign(next_id, pg(p), n * P)
-                {
-                    foreign.insert(next_id, (pg(p), n * P));
-                    next_id += 1;
-                }
-                what = format!("foreign at page {p}+{n}");
-            } else if op < 97 {
-                // Its owner removes a foreign mapping.
-                let key = foreign
-                    .keys()
-                    .nth(rng.below(foreign.len() as u64 + 1) as usize)
-                    .copied();
-                if let Some(id) = key {
-                    sim.0.borrow_mut().remove_foreign(id);
-                    foreign.remove(&id);
-                }
-                what = "foreign removed".into();
-            } else {
-                // The guest frees the VA space: retire, then a fresh mirror on the SAME host space.
-                let refused = m.retire();
-                if refused != 0 {
-                    return Err(format!("step {step}: retire refused {refused} row(s)"));
-                }
-                c.clear();
-                check(&sim, &c, &foreign, BASE, pg(PAGES))
-                    .map_err(|e| format!("step {step} (retire): {e}"))?;
-                if sim.0.borrow().maps.iter().any(|x| x.owner == Owner::Mirror) {
-                    return Err(format!("step {step}: a mirror mapping survived the retire"));
-                }
-                m = SimMirror::new(&sim, batching);
-                st.retires += 1;
-                what = "retire".into();
-            }
-            check(&sim, &c, &foreign, BASE, pg(PAGES))
-                .map_err(|e| format!("step {step} ({what}): {e}"))?;
-            let splits =
-                m.bv.unsafe_splits
-                    .load(std::sync::atomic::Ordering::Relaxed);
-            if splits != 0 {
-                return Err(format!(
-                    "step {step} ({what}): {splits} range(s) refused as unsafe splits (expected none: no batch outside a reservation)"
-                ));
-            }
-            let gap = sim.0.borrow().gap_bytes;
-            if gap != 0 {
-                return Err(format!(
-                    "step {step} ({what}): a range unmap covered {gap:#x} gap bytes"
-                ));
-            }
-        }
-        Ok(st)
-    }
-}
+mod tests;

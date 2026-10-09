@@ -374,6 +374,21 @@ impl HostVas<'_> {
         rows: &[Desired],
         defer: bool,
     ) -> Result<u32, String> {
+        self.map_scattered_through(None, ram_fd, rows, defer)
+    }
+
+    /// ★ 2026-10-09: [`HostVas::map_scattered`] mapped THROUGH the reservation `through` when
+    /// given (`crate::batch` micro reservations; `kf_host::HostRm::map_scattered_through`).
+    ///
+    /// # Errors
+    /// As [`HostVas::map_scattered`].
+    pub fn map_scattered_through(
+        &self,
+        through: Option<u32>,
+        ram_fd: std::os::fd::BorrowedFd<'_>,
+        rows: &[Desired],
+        defer: bool,
+    ) -> Result<u32, String> {
         let first = rows.first().ok_or("empty batch")?;
         let mut next = first.va;
         let mut pieces: Vec<(u64, u64)> = Vec::with_capacity(rows.len());
@@ -394,8 +409,8 @@ impl HostVas<'_> {
             }
         }
         self.rm
-            .map_scattered(
-                self.space, ram_fd, &pieces, first.va, defer, first.kind, first.perm,
+            .map_scattered_through(
+                self.space, through, ram_fd, &pieces, first.va, defer, first.kind, first.perm,
             )
             .map_err(|e| {
                 format!(
