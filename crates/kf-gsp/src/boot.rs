@@ -848,6 +848,9 @@ pub struct GspFsm {
     /// sees it and answered in as many replies as it arrived in ([`crate::large`]).
     large: crate::large::Assembler,
     swgen0_pending: bool,
+    /// ★ How many replies and events were posted to the guest's status queue (statistics; shared with the
+    /// device shell, kept across a reset, ignored by equality: [`crate::poststats`]).
+    post_stats: crate::poststats::PostStats,
     /// ★★★★★ §16.76 — **the os-event flow-control gate**, and it is a SECOND flag beside
     /// [`GspFsm::swgen0_pending`] rather than a reuse of it.
     ///
@@ -1032,6 +1035,7 @@ impl GspFsm {
             queue: QueueState::Unbound,
             large: crate::large::Assembler::default(),
             swgen0_pending: false,
+            post_stats: crate::poststats::PostStats::new(),
             events_outstanding: false,
             mailbox_lo: 0,
             mailbox_hi: 0,
@@ -1133,8 +1137,10 @@ impl GspFsm {
         // ⊘ w472b's fix (carrying a `defer_commands` flag across the reset) is gone with the flag:
         // deferral is structural in v3, so a reset cannot disarm it.
         let system_info = self.system_info.take();
+        let post_stats = self.post_stats.clone();
         *self = GspFsm::new(self.abi);
         self.system_info = system_info;
+        self.post_stats = post_stats;
         Transition::E11
     }
 
@@ -2398,7 +2404,14 @@ impl GspFsm {
             b.stat.free_cache = free - elements;
         }
         self.swgen0_pending = true;
+        self.post_stats.note(rpc.function);
         Ok(())
+    }
+
+    /// ★ The shared counters of the messages this machine posted (replies and events apart).
+    #[must_use]
+    pub fn post_stats(&self) -> crate::poststats::PostStats {
+        self.post_stats.clone()
     }
 
     /// Post an unsolicited event.

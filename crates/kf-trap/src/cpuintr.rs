@@ -34,7 +34,7 @@
 //! file, which raised unconditionally: with the state now applied synchronously there is no
 //! bookkeeping lag to protect against, and a spurious vector is still harmless to the ISR.
 
-use core::sync::atomic::{AtomicU32, Ordering};
+use core::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 /// PRIV-relative offsets (`dev_vm.h`, every family above).
 pub const LEAF_OFF: u64 = 0x1000;
@@ -103,6 +103,10 @@ pub struct CpuIntr {
     leaf: [AtomicU32; MAX_LEAF],
     leaf_en: [AtomicU32; MAX_LEAF],
     top_en: AtomicU32,
+    /// ★ Guest write-1-to-clear writes to `LEAF(i)` (statistics; [`CpuIntr::w1c_summary`]).
+    w1c_writes: [AtomicU64; MAX_LEAF],
+    /// ★ Pending bits those writes actually cleared (`old & v`), per leaf.
+    w1c_cleared: [AtomicU64; MAX_LEAF],
 }
 
 /// `NV_CTRL_INTR_GPU_VECTOR_TO_SUBTREE` — the leaf register index halved (`dev_ctrl_defines.h:77`).
@@ -121,6 +125,8 @@ impl CpuIntr {
             leaf: core::array::from_fn(|_| AtomicU32::new(0)),
             leaf_en: core::array::from_fn(|_| AtomicU32::new(0)),
             top_en: AtomicU32::new(0),
+            w1c_writes: core::array::from_fn(|_| AtomicU64::new(0)),
+            w1c_cleared: core::array::from_fn(|_| AtomicU64::new(0)),
         })
     }
 
@@ -191,6 +197,23 @@ impl CpuIntr {
         )
     }
 
+    /// ★ The guest's write-1-to-clear traffic, per leaf with any: `L<i>=<writes>/<bits cleared>`
+    /// (a write that clears nothing is a clear of a bit that was not pending). Empty if none.
+    #[must_use]
+    pub fn w1c_summary(&self) -> String {
+        let mut v = Vec::new();
+        for i in 0..self.n_leaf {
+            let w = self.w1c_writes[i].load(Ordering::Relaxed);
+            if w != 0 {
+                v.push(format!(
+                    "L{i}={w}/{}",
+                    self.w1c_cleared[i].load(Ordering::Relaxed)
+                ));
+            }
+        }
+        v.join(",")
+    }
+
     /// What the guest reads at `r`.
     #[must_use]
     pub fn read(&self, r: Reg) -> u32 {
@@ -208,7 +231,9 @@ impl CpuIntr {
         match r {
             // Write-1-to-clear (`intrClearLeafVector_TU102`, `intr_tu102.c:648-663`).
             Reg::Leaf(i) => {
-                self.leaf[i].fetch_and(!v, Ordering::AcqRel);
+                let old = self.leaf[i].fetch_and(!v, Ordering::AcqRel);
+                self.w1c_writes[i].fetch_add(1, Ordering::Relaxed);
+                self.w1c_cleared[i].fetch_add(u64::from((old & v).count_ones()), Ordering::Relaxed);
                 Raise::None
             }
             Reg::LeafEnSet(i) => {
@@ -326,6 +351,18 @@ mod tests {
         assert_eq!(w(pb + LEAF_OFF + 4 * leaf, 1 << bit), Raise::None, "W1C");
         assert_eq!(t.read(Reg::Leaf(leaf as usize)), 0);
         assert_eq!(t.read(Reg::Top), 0, "TOP is derived");
+    }
+
+    #[test]
+    fn guest_clears_are_counted_per_leaf() {
+        let t = CpuIntr::new(kf_chip::Family::Ampere, UM).unwrap();
+        assert_eq!(t.w1c_summary(), "");
+        t.latch(155);
+        t.latch(154);
+        t.write(Reg::Leaf(4), 1 << 27);
+        t.write(Reg::Leaf(4), 1 << 27); // already clear: a write, no bit
+        t.write(Reg::Leaf(0), 1);
+        assert_eq!(t.w1c_summary(), "L0=1/0,L4=2/1");
     }
 
     #[test]

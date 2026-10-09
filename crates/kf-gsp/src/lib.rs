@@ -120,6 +120,7 @@ pub mod boot;
 pub mod element;
 pub mod fault;
 pub mod large;
+pub mod poststats;
 pub mod ram;
 pub mod refusal;
 pub mod ring;
@@ -141,6 +142,7 @@ pub use element::{
 };
 pub use fault::{GspFault, LayoutError, RamRefused, RegionError, RxLinkCode};
 pub use kf_arch::gsp::BootPhase;
+pub use poststats::PostStats;
 pub use ram::{GuestRam, RegionMap};
 pub use refusal::{RefusalLedger, RefusalRow};
 pub use ring::{

@@ -13,6 +13,7 @@
 //! | [`timer`] | the time registers refused by name, per FAMILY (`kf_chip::Family`) |
 //! | [`trap`] | THE trap: doorbell / userspace-mappable (do nothing) / privileged |
 //! | [`fspemem`] | Hopper+/Blackwell: FSP's RM EMEM channel (auto-increment data port + FSP's COT reply), served on the vCPU |
+//! | [`irqsrc`] | source-tagged raise counters of the CPU interrupt tree (why the device interrupted the guest) and the trace-mode ring |
 //! | [`mmuinval`] | the MMU invalidate registers: PDB latch + the trigger that arms, publishes, and reads busy until the VA manager clears it (P4) |
 //! | [`pramin`] | the PRAMIN window-base register per family (decode + slot plan; P4) |
 //! | [`memmap`] | the per-family BAR memory map: backed / trap-write / hole (read exits only for read side effects: PIO auto-increment ports, and — w828 — Hopper+'s read-started memop token registers) |
@@ -28,6 +29,7 @@ pub mod bitmap;
 pub mod cacheop;
 pub mod cpuintr;
 pub mod fspemem;
+pub mod irqsrc;
 pub mod memmap;
 pub mod mmuinval;
 pub mod model;
