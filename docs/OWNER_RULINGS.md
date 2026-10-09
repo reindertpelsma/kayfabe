@@ -940,6 +940,8 @@ All owner statements of 2026-10-08, in the order the open-decision list was give
   served read-only (`nvidia-smi` is unprivileged on bare metal); power is not important. Direction: the
   values the guest sees are this VM's own, never host-wide quantities (§S exposure rule); the design
   and its measurements are open work (`docs/STATUS_AND_HANDOFF.md`).
+  - ⊘ **Superseded in part, 2026-10-09 (§Z):** host-wide read-only telemetry may be shared when it is not
+    worse than what a container sees, under the two conditions of §Z.
 - **Software-runlist flag (`KF3_SW_RUNLIST_HOST_OWNED`):** stays off and undecided.
   - ⊘ *Later idea, not for now (owner, 2026-10-08):* "for B ... kayfabe can quota VMs
     scheduling/fairness, is related." If kayfabe owns the scheduling of the host twins (B), a per-VM
@@ -953,3 +955,32 @@ All owner statements of 2026-10-08, in the order the open-decision list was give
   regeneratable"; the archive copy remains); `/workspace/nvidia-gpu-passthrough` is backed up to
   `/mnt/windows-work/archive/`.
 - **Models:** Sonnet 5.5 by default, Opus 5.5 as the strongest tier (`CLAUDE.md`, *Models by risk*).
+
+## Z. Sharing host-wide read-only telemetry (GSS-legacy controls, RUSD) (2026-10-09)
+
+**STATUS: LIVE, 2026-10-09.** Owner: *"if it's not worse than containers I am much more open to sharing, as
+long as kayfabe properly bound checks and you confirm from ogkm no CPU/VMM pointers can be in it that
+kayfabe wasn't aware of."* Context: the GSS-legacy controls (`cmd & 0xC000 == 0x8000`, opaque, forwarded by
+RM to the GSP; `docs/design/V3_REFUSAL_AUDIT.md`) and RUSD (`0x20800afe`/`0x20800aff`) describe the whole
+GPU (clocks, thermal, utilization, perf samples), so on a shared host they say something about other
+tenants.
+
+- **The test is "not worse than a container":** a container process can issue the same non-privileged
+  `NV_ESC_RM_CONTROL` calls on `/dev/nvidiactl` and sees the same whole-GPU values (this is what gVisor's
+  nvproxy and nvkvm-pv's control allowlist forward). Sharing is accepted where a guest learns nothing a
+  container on the same host would not.
+- **Condition 1: kayfabe bound-checks.** Command class by the parsed command word only (never a sentinel
+  another rule can reinterpret), parameter size capped, reply bounded by the guest's declared size, a hard
+  per-boot cap, one host call at a time on the act thread, host status and bytes returned as the host gave
+  them (never an echo, never a forged OK).
+- **Condition 2: ogkm confirms no pointer kayfabe is unaware of.** For the GSS-legacy family this rests on
+  `rmapi_gss_legacy_control.c` (a flat `portMemExCopyFromUser` of `paramsSize` in, a flat copy out, no
+  pointer fix-ups, then an RPC to the GSP, so an embedded user pointer could not work) and is stated the same
+  way by nvproxy (`frontend.go:894-905`). ⊘ The limit of that argument, recorded rather than hidden: the
+  commands are undocumented, so ogkm cannot rule out a field that the GSP reads as a GPU address, a handle
+  or a sysmem address. That risk is the one an unprivileged host user already carries; it is bounded here by
+  the privilege mask (the `0xC000` privileged variant stays refused) and by the GSP's own validation.
+- **Not covered by this ruling:** display controls (`0x73xxxx`, `0x5070xxxx`: they address the guest's
+  virtual display and are modelled, never forwarded) and anything privileged.
+- **Status of the code:** `KF3_GSS_NATIVE` (branch `claude/gss-native-20261009`) is an experiment flag, default
+  off; making it a default feature and the per-VM-versus-shared decision for RUSD follow a hardware result.
