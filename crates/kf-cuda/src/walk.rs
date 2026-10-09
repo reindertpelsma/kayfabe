@@ -1366,6 +1366,9 @@ impl WalkKernel {
         if self.capacity_retry(&report, &f)? {
             return Ok(None);
         }
+        // ★ ABI 6: OBSERVATION ONLY — print the kernel's refusal samples (bounded: the first 32
+        // lines of the process). Nothing below depends on them.
+        crate::refusal_samples::log_report_samples(&report);
         Ok(Some(Collected {
             report,
             gpu_us,

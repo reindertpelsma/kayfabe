@@ -153,9 +153,54 @@ static void dump(const Fix &f)
                (unsigned long long)f.rn[i].len, f.rn[i].flags, f.rn[i].pdb_index);
 }
 
+/* ABI 6 -- THE REFUSAL SAMPLES' INVARIANTS, asserted on EVERY report any case validates (so the
+ * hostile corpus, the racing cases and the differentials all exercise them).
+ *
+ * The strong one is TOCTOU evidence: a leaf-type sample (MISALIGNED_LEAF / LEAF_OOB) must be
+ * SELF-CONSISTENT -- its `gpga` is exactly what the format decodes from its own `raw`, and a
+ * MISALIGNED one really is misaligned by the page size it carries. Under the racing cases the
+ * guest rewrites the tables while the kernel walks, so a kernel that re-read guest memory after
+ * deciding (rather than keeping the one copy) would record a `raw` that does not decode to the
+ * `gpga`/refusal it reports. (VER2 fixtures: kfb_pte_addr is the VER2 PTE target decode.) */
+#ifndef KF_PROBE_NO_SAMPLES
+static void check_samples(const Fix &f)
+{
+    const KfReportHeader &h = f.hdr;
+    if (h.magic != KFWR_MAGIC) return;
+    CHECK_M(h.sample_count <= KF_REFUSAL_SAMPLES, "sample_count past the array");
+    CHECK_EQ(h.sample_count, h.sample_total < KF_REFUSAL_SAMPLES ? h.sample_total : KF_REFUSAL_SAMPLES);
+    CHECK_M(h.sample_total <= h.refusals, "a sample is offered only for a counted refusal");
+    if (h.sample_total) CHECK_M(h.flags & KFWR_HF_REFUSED, "samples imply the REFUSED flag");
+    for (uint32_t i = 0; i < KF_REFUSAL_SAMPLES; i++) {
+        const KfRefusalSample &s = h.samples[i];
+        if (i >= h.sample_count) {
+            CHECK_M(s.va == 0 && s.raw == 0 && s.gpga == 0 && s.ps_bytes == 0 && s.bit == 0,
+                    "an unused sample slot is zero");
+            continue;
+        }
+        CHECK_M(s.bit != 0u && (s.bit & (s.bit - 1u)) == 0u, "a sample names exactly one refusal bit");
+        CHECK_M((s.bit & h.refuse_mask) == s.bit, "a sample's bit is in the report's refuse_mask");
+        CHECK_M(s.level <= KF_SAMPLE_LVL_SMALL, "level within the descriptor's slots + 2 leaf tables");
+        CHECK_M(s.entry < KF_MAX_PDB, "entry within the walk entries");
+        if (s.bit & (KFWR_R_MISALIGNED_LEAF | KFWR_R_LEAF_OOB)) {
+            CHECK_M(s.raw & PTE_VALID, "a leaf sample's raw entry is a VALID entry");
+            CHECK_EQ(s.gpga, kfb_pte_addr(s.raw));
+            if (s.bit == KFWR_R_MISALIGNED_LEAF) {
+                CHECK_M(s.ps_bytes == (64ull << 10) || s.ps_bytes == (2ull << 20) || s.ps_bytes == (512ull << 20),
+                        "a 4 KiB leaf can never be misaligned; the others carry their page size");
+                CHECK_M((s.gpga & (s.ps_bytes - 1ull)) != 0ull, "MISALIGNED means misaligned, by the carried size");
+            }
+        }
+    }
+}
+#else
+static void check_samples(const Fix &) {}
+#endif
+
 /* the format doc's property 3, plus the ordering the diff's merge join needs */
 static void validate(Fix &f)
 {
+    check_samples(f);
     const char *why = NULL;
     /* §39(c): the REAL window, so every caller of validate() -- the racers
      * included -- asserts that no run escapes the store. */
@@ -1570,6 +1615,240 @@ static void t_hostile_type_confusion(void)
     if (g_fails_here) dump(f);
 }
 
+/* === ABI 6 -- REFUSAL SAMPLES (observation only) ===================================
+ *
+ * Owner question (run 223: `refusals=103 refuse_mask=0x400`): are misaligned leaves valid or
+ * garbage? The report must SHOW them. These cases pin that the samples carry the exact raw
+ * entries, are capped at KF_REFUSAL_SAMPLES, and -- the other half -- that RECORDING them changed
+ * nothing: same runs, same refusal count, same refuse_mask. */
+
+/* One misaligned leaf the fixture planted. */
+struct WantSample { uint64_t va, raw, gpga, ps; uint32_t level; };
+static const uint32_t LVL_512M_VER2 = 3u;   /* VER2 fixture: dir[] = {-, PD3, PD2, PD1, PD0(dual)} */
+static const uint32_t LVL_2M_VER2   = 4u;
+
+/* Plant `n64` misaligned 64 KiB leaves, `n2m` misaligned 2 MiB leaves and `n512` misaligned
+ * 512 MiB leaves, beside three LEGAL ones (4 KiB, 64 KiB, 2 MiB). */
+static void plant_refusal_fixture(Fix &f, Tree &t, uint32_t n64, uint32_t n2m, uint32_t n512,
+                                  std::map<uint64_t, WantSample> &want)
+{
+    t.map4k(VBASE, 0x300000ull);
+    t.map64k(VBASE + (2ull << 21), 0x400000ull);
+    t.map2m(VBASE + (4ull << 21), 0x600000ull);
+    for (uint32_t i = 0; i < n64; i++) {
+        const uint64_t va = VBASE + (6ull << 21) + (uint64_t)i * 65536ull;
+        const uint64_t gpga = 0x500000ull + (uint64_t)i * 0x10000ull + 0x1000ull * (1u + i % 15u);
+        t.map64k(va, gpga);
+        want[va] = WantSample{va, kfb_pte(gpga), gpga, 64ull << 10, KF_SAMPLE_LVL_BIG};
+    }
+    for (uint32_t i = 0; i < n2m; i++) {
+        const uint64_t va = VBASE + ((8ull + i) << 21);
+        const uint64_t gpga = 0x800000ull + 0x1000ull * (1u + i);
+        t.map2m(va, gpga);
+        want[va] = WantSample{va, kfb_pte(gpga), gpga, 2ull << 20, LVL_2M_VER2};
+    }
+    for (uint32_t i = 0; i < n512; i++) {
+        const uint64_t va = (VBASE + ((uint64_t)(i + 1) << 29)) & ~((1ull << 29) - 1ull);
+        const uint64_t gpga = 0x20000000ull + 0x1000ull * (1u + i);
+        t.map512m(va, gpga);
+        want[va] = WantSample{va, kfb_pte(gpga), gpga, 512ull << 20, LVL_512M_VER2};
+    }
+    f.upload();
+}
+
+/* The legal runs the fixture must still produce, whatever was refused. */
+static void expect_legal_runs_only(Fix &f)
+{
+    expect(f, {
+        {VBASE,                    0x300000ull, 4096ull,       F4K,  KFWR_OP_MAP},
+        {VBASE + (2ull << 21),     0x400000ull, 64ull << 10,   F64K, KFWR_OP_MAP},
+        {VBASE + (4ull << 21),     0x600000ull, 2ull << 20,    F2M,  KFWR_OP_MAP},
+    });
+}
+
+#ifdef KF_PROBE_NO_SAMPLES
+/* Compiled against the PRE-ABI-6 kernel: prints the observable result of the fixture, so the
+ * same lines from the new kernel can be compared byte for byte (run output UNCHANGED). */
+static void t_refusal_samples_probe(void)
+{
+    for (int serial = 0; serial < 2; serial++) {
+        if (serial) setenv("KF_WALK_SERIAL", "1", 1); else unsetenv("KF_WALK_SERIAL");
+        Fix f(8u << 20, cfg_default());
+        Tree t(f.g);
+        std::map<uint64_t, WantSample> want;
+        plant_refusal_fixture(f, t, 10, 2, 2, want);
+        CHECK_EQ(f.refresh({t.root}), 0);
+        printf("PROBE serial=%d runs=%u refusals=%u mask=0x%x flags=0x%x entries=%llu\n", serial,
+               f.hdr.run_count, f.hdr.refusals, f.hdr.refuse_mask, f.hdr.flags,
+               (unsigned long long)f.hdr.entries_visited);
+        for (uint32_t i = 0; i < f.hdr.run_count; i++)
+            printf("PROBE   run va=0x%llx gpga=0x%llx len=0x%llx flags=0x%x op=%u pdb=%u\n",
+                   (unsigned long long)f.rn[i].va, (unsigned long long)f.rn[i].gpga,
+                   (unsigned long long)f.rn[i].len, f.rn[i].flags, f.rn[i].op, f.rn[i].pdb_index);
+        printf("PROBE   pdb0 first=%u n=%u vflags=0x%x r2=0x%llx\n", f.pe[0].first_run, f.pe[0].run_count,
+               f.pe[0].vas_flags, (unsigned long long)f.pe[0].reserved2);
+    }
+    unsetenv("KF_WALK_SERIAL");
+}
+#else
+/* The samples of `f` are exactly the planted leaves: each is distinct, each is in `want`, and
+ * every field -- the RAW 64-bit entry first -- is what the fixture wrote. */
+static void check_samples_against(Fix &f, const std::map<uint64_t, WantSample> &want, uint32_t expect_n)
+{
+    CHECK_EQ(f.hdr.sample_count, expect_n);
+    std::set<uint64_t> seen;
+    for (uint32_t i = 0; i < f.hdr.sample_count && i < KF_REFUSAL_SAMPLES; i++) {
+        const KfRefusalSample &s = f.hdr.samples[i];
+        auto it = want.find(s.va);
+        CHECK_M(it != want.end(), "a sample names a VA the fixture did not plant");
+        if (it == want.end()) continue;
+        CHECK_M(seen.insert(s.va).second, "two samples for one leaf (a slot was written twice)");
+        CHECK_EQ(s.raw, it->second.raw);          /* the exact raw entry */
+        CHECK_EQ(s.gpga, it->second.gpga);
+        CHECK_EQ(s.ps_bytes, it->second.ps);
+        CHECK_EQ(s.level, it->second.level);
+        CHECK_EQ(s.bit, KFWR_R_MISALIGNED_LEAF);
+        CHECK_EQ(s.entry, 0);
+    }
+    CHECK_EQ(seen.size(), expect_n);
+}
+
+static void refusal_samples_case(bool serial)
+{
+    if (serial) setenv("KF_WALK_SERIAL", "1", 1); else unsetenv("KF_WALK_SERIAL");
+    {   /* 14 misaligned leaves across three page sizes: the cap bites, the runs do not move */
+        Fix f(8u << 20, cfg_default());
+        Tree t(f.g);
+        std::map<uint64_t, WantSample> want;
+        plant_refusal_fixture(f, t, 10, 2, 2, want);
+        CHECK_EQ(f.refresh({t.root}), 0);
+        expect_legal_runs_only(f);                                   /* run output UNCHANGED */
+        CHECK_EQ(f.hdr.refusals, 14);
+        CHECK_EQ(f.hdr.refuse_mask, KFWR_R_MISALIGNED_LEAF);
+        CHECK_M(f.pe[0].vas_flags & KFWR_V_REFUSED, "the entry is still failed by name");
+        CHECK_EQ((uint32_t)f.pe[0].reserved2, KFWR_R_MISALIGNED_LEAF);
+        CHECK_EQ(f.hdr.sample_total, 14);
+        check_samples_against(f, want, KF_REFUSAL_SAMPLES);          /* capped at 8 */
+        if (g_fails_here) dump(f);
+    }
+    {   /* fewer than the cap: EVERY refused leaf is sampled, exactly once */
+        Fix f(8u << 20, cfg_default());
+        Tree t(f.g);
+        std::map<uint64_t, WantSample> want;
+        plant_refusal_fixture(f, t, 1, 1, 1, want);
+        CHECK_EQ(f.refresh({t.root}), 0);
+        expect_legal_runs_only(f);
+        CHECK_EQ(f.hdr.refusals, 3);
+        CHECK_EQ(f.hdr.sample_total, 3);
+        check_samples_against(f, want, 3);
+        if (g_fails_here) dump(f);
+    }
+    {   /* exactly the cap */
+        Fix f(8u << 20, cfg_default());
+        Tree t(f.g);
+        std::map<uint64_t, WantSample> want;
+        plant_refusal_fixture(f, t, 8, 0, 0, want);
+        CHECK_EQ(f.refresh({t.root}), 0);
+        expect_legal_runs_only(f);
+        CHECK_EQ(f.hdr.sample_total, 8);
+        check_samples_against(f, want, 8);
+    }
+    {   /* a clean walk reports no samples at all */
+        Fix f(8u << 20, cfg_default());
+        Tree t(f.g);
+        std::map<uint64_t, WantSample> want;
+        plant_refusal_fixture(f, t, 0, 0, 0, want);
+        CHECK_EQ(f.refresh({t.root}), 0);
+        expect_legal_runs_only(f);
+        CHECK_EQ(f.hdr.refusals, 0);
+        CHECK_EQ(f.hdr.sample_count, 0);
+        CHECK_EQ(f.hdr.sample_total, 0);
+    }
+    {   /* the ticket counter is per walk: a second walk on the SAME walker starts again at 0 */
+        Fix f(8u << 20, cfg_default());
+        Tree t(f.g);
+        std::map<uint64_t, WantSample> want;
+        plant_refusal_fixture(f, t, 10, 2, 2, want);
+        CHECK_EQ(f.refresh({t.root}), 0);
+        CHECK_EQ(f.hdr.sample_total, 14);
+        CHECK_EQ(f.refresh({t.root}), 0);
+        CHECK_EQ(f.hdr.sample_total, 14);
+        check_samples_against(f, want, KF_REFUSAL_SAMPLES);
+    }
+    unsetenv("KF_WALK_SERIAL");
+}
+
+static void t_refusal_samples_parallel(void) { refusal_samples_case(false); }
+static void t_refusal_samples_serial(void)   { refusal_samples_case(true); }
+
+/* Directory-entry refusals (parallel walk) and LEAF_OOB carry samples too, and name the
+ * descriptor's level. */
+static void t_refusal_samples_other_kinds(void)
+{
+    unsetenv("KF_WALK_SERIAL");
+    {   /* a FOREIGN_AP PDE in the root, and a table pointer past the window two levels down */
+        Fix f(8u << 20, cfg_default());
+        Tree t(f.g);
+        t.map4k(VBASE, 0x300000ull);
+        const uint64_t foreign = kfb_pde(0x300000ull, AP_PDE_SCOH);
+        t.poke_pd3(0, foreign);                                       /* root slot 0: sysmem table */
+        const uint64_t oob_to = (uint64_t)f.g.size() + (1u << 20);
+        const uint64_t oob = kfb_pde(oob_to);
+        t.poke(t.pd2(VBASE), vi2(VBASE) + 1u, oob);                   /* PD2 slot: table past the end */
+        f.upload();
+        CHECK_EQ(f.refresh({t.root}), 0);
+        hostile_invariants(f);
+        CHECK_EQ(f.hdr.run_count, 1);                                  /* the legal 4 KiB survives */
+        CHECK_EQ(f.hdr.refuse_mask, KFWR_R_FOREIGN_AP | KFWR_R_OOB);
+        CHECK_EQ(f.hdr.sample_total, 2);
+        CHECK_EQ(f.hdr.sample_count, 2);
+        bool saw_foreign = false, saw_oob = false;
+        for (uint32_t i = 0; i < f.hdr.sample_count && i < KF_REFUSAL_SAMPLES; i++) {
+            const KfRefusalSample &s = f.hdr.samples[i];
+            if (s.bit == KFWR_R_FOREIGN_AP) {
+                saw_foreign = true;
+                CHECK_EQ(s.raw, foreign);
+                CHECK_EQ(s.level, 1);                                  /* VER2: the root is dir[1] */
+                CHECK_EQ(s.va, 0);
+                CHECK_EQ(s.gpga, 0x300000ull);
+                CHECK_EQ(s.ps_bytes, 4096);                            /* the child table's size */
+            } else if (s.bit == KFWR_R_OOB) {
+                saw_oob = true;
+                CHECK_EQ(s.raw, oob);
+                CHECK_EQ(s.level, 2);
+                CHECK_EQ(s.va, ((uint64_t)vi3(VBASE) << 47) | ((uint64_t)(vi2(VBASE) + 1u) << 38));
+                CHECK_EQ(s.gpga, oob_to);
+                CHECK_EQ(s.ps_bytes, 4096);
+            } else {
+                failf(__LINE__, "unexpected sample bit", NULL);
+            }
+        }
+        CHECK(saw_foreign);
+        CHECK(saw_oob);
+        if (g_fails_here) dump(f);
+    }
+    {   /* LEAF_OOB: a leaf past the end of GPGA samples its raw entry and its LENGTH */
+        Fix f(8u << 20, cfg_span(8u << 20));
+        Tree t(f.g);
+        const uint64_t gpga = (uint64_t)f.g.size() + (16u << 20);
+        t.map4k(VBASE, gpga);
+        f.upload();
+        CHECK_EQ(f.refresh({t.root}), 0);
+        hostile_invariants(f);
+        CHECK_EQ(f.hdr.run_count, 0);
+        CHECK_EQ(f.hdr.refuse_mask, KFWR_R_LEAF_OOB);
+        CHECK_EQ(f.hdr.sample_count, 1);
+        const KfRefusalSample &s = f.hdr.samples[0];
+        CHECK_EQ(s.bit, KFWR_R_LEAF_OOB);
+        CHECK_EQ(s.raw, kfb_pte(gpga));
+        CHECK_EQ(s.gpga, gpga);
+        CHECK_EQ(s.va, VBASE);
+        CHECK_EQ(s.ps_bytes, 4096);                                    /* LEAF_OOB carries the leaf's length */
+        CHECK_EQ(s.level, KF_SAMPLE_LVL_SMALL);
+    }
+}
+#endif /* KF_PROBE_NO_SAMPLES */
+
 static void t_legal_shared_page_table(void)
 {
     /* TWO PDEs pointing at ONE page table. This is LEGAL. It must NOT be refused,
@@ -2484,6 +2763,13 @@ static const Case CASES[] = {
     { "hostile/all_ones_vidmem_pointer",        t_hostile_all_ones_vid_pointer },
     { "hostile/type_confusion",                 t_hostile_type_confusion },
     { "hostile/foreign_aperture",               t_hostile_foreign_aperture },
+#ifdef KF_PROBE_NO_SAMPLES
+    { "hostile/refusal_samples_probe",          t_refusal_samples_probe },
+#else
+    { "hostile/refusal_samples_parallel",       t_refusal_samples_parallel },
+    { "hostile/refusal_samples_serial",         t_refusal_samples_serial },
+    { "hostile/refusal_samples_other_kinds",    t_refusal_samples_other_kinds },
+#endif
     { "hostile/enormous_but_legal",             t_hostile_enormous_but_legal },
     { "hostile/report_run_cap",                 t_hostile_report_run_cap },
     { "hostile/entry_budget",                   t_hostile_budget },
@@ -2520,10 +2806,20 @@ int main(int argc, char **argv)
     printf("device: %s  sm_%d%d  driver-jit-from-PTX\n", prop.name, prop.major, prop.minor);
     printf("sizeof: header=%zu pdb=%zu run=%zu\n",
            sizeof(KfReportHeader), sizeof(KfPdbEntry), sizeof(KfMapRun));
+#ifdef KF_PROBE_NO_SAMPLES
+    /* the PRE-ABI-6 kernel: the format doc's 64/32/32 */
     if (sizeof(KfReportHeader) != 64 || sizeof(KfPdbEntry) != 32 || sizeof(KfMapRun) != 32) {
         printf("FATAL: report ABI is not the format doc's 64/32/32\n");
         return 2;
     }
+#else
+    /* ABI 6: the format doc's 64-byte header, 8 bytes of sample counts, 8 samples of 40 */
+    if (sizeof(KfReportHeader) != 64 + 8 + 8 * 40 || sizeof(KfRefusalSample) != 40 ||
+        sizeof(KfPdbEntry) != 32 || sizeof(KfMapRun) != 32) {
+        printf("FATAL: report ABI is not 392/40/32/32\n");
+        return 2;
+    }
+#endif
 
     size_t n = sizeof(CASES) / sizeof(CASES[0]);
     for (size_t i = 0; i < n; i++) {

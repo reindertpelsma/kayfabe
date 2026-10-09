@@ -32,6 +32,7 @@ pub mod diffmodel;
 pub mod display;
 pub mod driver_unsafe;
 pub mod posture;
+pub mod refusal_samples;
 pub mod selftest;
 pub mod synth;
 pub mod walk;

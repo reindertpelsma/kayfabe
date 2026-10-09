@@ -167,6 +167,40 @@ extern "C" {
 #define KFWR_PS_2M    2u
 #define KFWR_PS_512M  3u
 
+/* ★★★ 2026-10-09 (ABI 6): REFUSAL SAMPLES — observation only. A report carried a COUNT and a
+ * MASK of refusals, which cannot answer "are these leaves valid-but-misaligned, or garbage?"
+ * (run 223: `refusals=103 refuse_mask=0x400` on a real Windows guest). The first
+ * KF_REFUSAL_SAMPLES refusals that name a guest ENTRY, in a walk, are recorded here, by what the
+ * kernel actually decoded — nothing is hardcoded per family.
+ *
+ *   va        the VA of the entry (the base of the page it spells, or of the table it points at)
+ *   raw       the 64-bit entry EXACTLY AS THE KERNEL READ IT. Every guest word is read once into a
+ *             register / shared-memory word and every decision (and this record) comes from that
+ *             one copy; nothing here re-reads guest memory.
+ *   gpga      the target the format decoded from `raw` (a leaf's page base, or a table's address)
+ *   ps_bytes  what `gpga` was required to be aligned to: the leaf's page size, or the table's size
+ *   bit       the KFWR_R_* bit this refusal set (MISALIGNED_LEAF, LEAF_OOB, UNALIGNED, OOB,
+ *             FOREIGN_AP)
+ *   level     the FORMAT DESCRIPTOR's directory index (KfFormat::dir[level]) of the entry; for a
+ *             leaf-table entry KF_SAMPLE_LVL_BIG (the big PTE table) or KF_SAMPLE_LVL_SMALL
+ *   entry     the walk entry (address space) index, i.e. KfPdbEntry index in the report
+ * Refusals that name no guest entry (RUN_CAP, BUDGET, PDB_CAP, FRONTIER_CAP, BAD_SLOT...) are
+ * counted in `refusals`/`refuse_mask` as before and are not sampled. Which refusals fill the 8
+ * slots first is a race between threads (an atomic counter reserves a slot); the SET is unspecific
+ * beyond "the first 8 to arrive". The serial test walk samples leaf refusals only. */
+#define KF_REFUSAL_SAMPLES 8u
+#define KF_SAMPLE_LVL_BIG   5u   /* == KF_DIRS      (checked in kf_walk.cu) */
+#define KF_SAMPLE_LVL_SMALL 6u   /* == KF_DIRS + 1                          */
+typedef struct KfRefusalSample {
+    uint64_t va;
+    uint64_t raw;
+    uint64_t gpga;
+    uint64_t ps_bytes;
+    uint32_t bit;
+    uint16_t level;
+    uint16_t entry;
+} KfRefusalSample;
+
 typedef struct KfReportHeader {
     uint32_t magic;
     uint16_t version;
@@ -189,6 +223,13 @@ typedef struct KfReportHeader {
      * the format doc asks for ("the format-version knowledge stays in the kernel
      * and does not leak into the host's parser"). */
     uint8_t  ps_log2[4];
+    /* ★ ABI 6: refusal samples. `sample_count` (<= KF_REFUSAL_SAMPLES) is how many of
+     * `samples[]` are valid; `sample_total` is how many sampleable refusals the walk offered (it
+     * may exceed the cap, and is not `refusals`: that one also counts the unsampled kinds). A
+     * host reads `samples[i]` for i < min(sample_count, KF_REFUSAL_SAMPLES) only. */
+    uint32_t sample_count;
+    uint32_t sample_total;
+    KfRefusalSample samples[KF_REFUSAL_SAMPLES];
 } KfReportHeader;
 
 typedef struct KfPdbEntry {
@@ -266,12 +307,14 @@ typedef struct KfScope {
     uint64_t va_len;
 } KfScope;
 
-/* Bumped whenever the format descriptor's layout changes. A host/PTX skew must
+/* Bumped whenever the format descriptor's layout changes (or the report/device ABI does). A host/PTX skew must
  * fail LOUDLY at launch rather than decode garbage field offsets and look like a
  * page-table bug (THE_CONSTRAINTS.md §21). */
-#define KF_ABI_VERSION 5u   /* 3: the diff/ack protocol; 4: the host-managed capacity layout (KfLayout, KfDev::need);
+#define KF_ABI_VERSION 6u   /* 3: the diff/ack protocol; 4: the host-managed capacity layout (KfLayout, KfDev::need);
                               * 5: permission bits join the diff key (kf_hkey), selected per launch by
-                              *    KfArgs::key_perm (a subset of KFWR_RF_KEY_PERM_ALL) */
+                              *    KfArgs::key_perm (a subset of KFWR_RF_KEY_PERM_ALL)
+                              * 6: refusal samples (KfRefusalSample): KfReportHeader grows 64 -> 392 bytes and
+                              *    KfDev gains the sample accumulator; KfFormat and KfArgs are unchanged */
 
 #define KF_TBL_VER2 2u   /* Pascal…Ada  — GA10x is the tested one               */
 #define KF_TBL_VER3 3u   /* Hopper/Blackwell — SKETCHED, NEVER RUN, and refused

@@ -52,7 +52,32 @@ pub const KF_MAX_SCOPE: usize = 256;
 /// ★ 5 (v3-roperm): permission bits joined the diff key, selected per launch by
 /// [`KfArgs::key_perm`] — a PTX built before it would keep a guest RW→RO downgrade as "same" while
 /// this crate's model re-maps, and would read the field as padding.
-pub const KF_ABI_VERSION: u32 = 5;
+///
+/// ★ 6 (2026-10-09, refusal samples): [`KfReportHeader`] grew 64 → 392 bytes ([`KfRefusalSample`]
+/// array) and [`KfDev`] gained the sample accumulator. [`KfFormat`] and [`KfArgs`] did not move,
+/// so only this number (and the PTX's `.param`-independent semantics) tells a PTX built before it
+/// — which writes a 64-byte header — from one that writes 392: the host would otherwise read
+/// 328 bytes of the next region as samples.
+pub const KF_ABI_VERSION: u32 = 6;
+
+/// Refusal samples one walk's report carries. Mirrors `KF_REFUSAL_SAMPLES` in `kf_walk.h`.
+pub const KF_REFUSAL_SAMPLES: usize = 8;
+/// A [`KfRefusalSample::level`] naming the BIG (64 KiB) leaf-table entry; directory entries carry
+/// the descriptor's `dir[]` index instead. Mirrors `KF_SAMPLE_LVL_BIG` (`== KF_DIRS`).
+pub const KF_SAMPLE_LVL_BIG: u16 = 5;
+/// A [`KfRefusalSample::level`] naming the SMALL (4 KiB) leaf-table entry. Mirrors
+/// `KF_SAMPLE_LVL_SMALL` (`== KF_DIRS + 1`).
+pub const KF_SAMPLE_LVL_SMALL: u16 = 6;
+/// `KFWR_R_MISALIGNED_LEAF`: a leaf whose target is not aligned to its own page size.
+pub const KFWR_R_MISALIGNED_LEAF: u32 = 1 << 10;
+/// `KFWR_R_LEAF_OOB`: a leaf whose `[gpga, gpga+len)` leaves the GPGA window (or is PEER).
+pub const KFWR_R_LEAF_OOB: u32 = 1 << 13;
+/// `KFWR_R_OOB`: a table would leave the GPGA buffer.
+pub const KFWR_R_OOB: u32 = 1 << 0;
+/// `KFWR_R_UNALIGNED`: a table pointer is not naturally aligned.
+pub const KFWR_R_UNALIGNED: u32 = 1 << 1;
+/// `KFWR_R_FOREIGN_AP`: a table page is not in vidmem.
+pub const KFWR_R_FOREIGN_AP: u32 = 1 << 2;
 
 /// `KFWR_OP_UNMAP` — the run names a VA being RETIRED, so it carries no `gpga` and is exempt
 /// from the §39(c) containment check. Mirrors `kf_walk.h:88`.
@@ -306,6 +331,12 @@ pub struct KfDev {
     /// ★ w829: per entry, the capacity it NEEDED (the walk's uncapped run count, or a diff's
     /// placements + maps when its slot could not hold them).
     pub need: [u32; KF_MAX_PDB],
+    /// ★ ABI 6: the refusal-sample ticket counter, zeroed by `kf_begin_kernel`.
+    pub nsample: u32,
+    /// Explicit padding: [`KfRefusalSample`] is 8-aligned.
+    pub sample_pad: u32,
+    /// ★ ABI 6: the samples; only the kernel writes them.
+    pub sample: [KfRefusalSample; KF_REFUSAL_SAMPLES],
 }
 
 impl Default for KfDev {
@@ -334,6 +365,9 @@ impl Default for KfDev {
             walk_abort: 0,
             sparse_slots: 0,
             need: [0; KF_MAX_PDB],
+            nsample: 0,
+            sample_pad: 0,
+            sample: [KfRefusalSample::default(); KF_REFUSAL_SAMPLES],
         }
     }
 }
@@ -497,6 +531,49 @@ pub struct KfReportHeader {
     /// Page-size code → `log2(bytes)`. ★ The report is self-describing, so this parser needs
     /// no format-version knowledge.
     pub ps_log2: [u8; 4],
+    /// ★ ABI 6: how many of [`Self::samples`] are valid (`<=` [`KF_REFUSAL_SAMPLES`] as the kernel
+    /// writes it; ALWAYS read through [`KfReportHeader::refusal_samples`], which clamps again).
+    pub sample_count: u32,
+    /// ★ ABI 6: how many sampleable refusals (those naming a guest entry) the walk offered. May
+    /// exceed the cap; is not `refusals`, which also counts the unsampled kinds.
+    pub sample_total: u32,
+    /// ★ ABI 6: the first [`KF_REFUSAL_SAMPLES`] refusals that named a guest entry. OBSERVATION
+    /// ONLY: nothing acts on these.
+    pub samples: [KfRefusalSample; KF_REFUSAL_SAMPLES],
+}
+
+/// ★★★ **One refusal, as the kernel saw it** (`KfRefusalSample` in `kf_walk.h`, ABI 6) — what a
+/// count and a mask cannot say. Every field is a value the kernel held in a register when it
+/// refused: `raw` is the 64-bit entry as read (once), `gpga` what the format decoded from it,
+/// `ps_bytes` what that had to be aligned to, `bit` the `KFWR_R_*` it set.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[repr(C)]
+pub struct KfRefusalSample {
+    /// The entry's VA (the base of the page it spells, or of the table it points at).
+    pub va: u64,
+    /// The raw 64-bit entry, as read.
+    pub raw: u64,
+    /// The target the format decoded from `raw`.
+    pub gpga: u64,
+    /// What `gpga` was required to be aligned to (leaf page size; a table's size).
+    pub ps_bytes: u64,
+    /// The `KFWR_R_*` bit this refusal set.
+    pub bit: u32,
+    /// The descriptor's `dir[]` index, or [`KF_SAMPLE_LVL_BIG`] / [`KF_SAMPLE_LVL_SMALL`].
+    pub level: u16,
+    /// The walk entry (address space) index — the `KfPdbEntry` index in the report.
+    pub entry: u16,
+}
+
+impl KfReportHeader {
+    /// The valid samples, CLAMPED to the array here as well as by the kernel: a count the device
+    /// wrote is guest-influenced state's neighbour, and a slice out of range would panic the
+    /// thread that collects.
+    #[must_use]
+    pub fn refusal_samples(&self) -> &[KfRefusalSample] {
+        let n = (self.sample_count as usize).min(KF_REFUSAL_SAMPLES);
+        &self.samples[..n]
+    }
 }
 
 /// One address space's slice of the run array.
@@ -718,6 +795,26 @@ impl<const N: usize> LeField for [u8; N] {
     }
 }
 
+impl LeField for KfRefusalSample {
+    fn get(b: &[u8], at: usize) -> Self {
+        KfRefusalSample::decode(&b[at..at + KfRefusalSample::BYTES])
+    }
+    fn put(&self, b: &mut [u8], at: usize) {
+        b[at..at + KfRefusalSample::BYTES].copy_from_slice(&self.encode());
+    }
+}
+
+impl<const N: usize> LeField for [KfRefusalSample; N] {
+    fn get(b: &[u8], at: usize) -> Self {
+        core::array::from_fn(|i| <KfRefusalSample as LeField>::get(b, at + i * KfRefusalSample::BYTES))
+    }
+    fn put(&self, b: &mut [u8], at: usize) {
+        for (i, s) in self.iter().enumerate() {
+            LeField::put(s, b, at + i * KfRefusalSample::BYTES);
+        }
+    }
+}
+
 /// Generate a report struct's ONE decoder (and its inverse) from its field list.
 macro_rules! report_codec {
     ($t:ident { $($f:ident: $ty:ty),+ $(,)? }) => {
@@ -782,6 +879,19 @@ report_codec!(KfReportHeader {
     refuse_mask: u32,
     sparse_slots: u32,
     ps_log2: [u8; 4],
+    sample_count: u32,
+    sample_total: u32,
+    samples: [KfRefusalSample; KF_REFUSAL_SAMPLES],
+});
+
+report_codec!(KfRefusalSample {
+    va: u64,
+    raw: u64,
+    gpga: u64,
+    ps_bytes: u64,
+    bit: u32,
+    level: u16,
+    entry: u16,
 });
 
 report_codec!(KfPdbEntry {
@@ -1051,10 +1161,21 @@ mod tests {
     use super::*;
     use core::mem::{offset_of, size_of};
 
-    /// `[1, 2, …, n]`: every byte distinct and non-zero, so a field read at the wrong offset, at the
-    /// wrong width or in the wrong byte order cannot come out right by accident.
+    /// `[1, 2, …, 255, 1, 2, …]`: non-zero, and distinct within any 255-byte window, so a field read
+    /// at the wrong offset, at the wrong width or in the wrong byte order cannot come out right by
+    /// accident. (The header is 392 bytes since ABI 6, so the pattern repeats once.)
     fn seq(n: usize) -> Vec<u8> {
-        (1..=n).map(|i| u8::try_from(i).expect("< 256")).collect()
+        (0..n)
+            .map(|i| u8::try_from(i % 255 + 1).expect("< 256"))
+            .collect()
+    }
+
+    /// `n` little-endian bytes of `doc` at `at`, as the integer the documented layout means.
+    fn le(doc: &[u8], at: usize, n: usize) -> u64 {
+        doc[at..at + n]
+            .iter()
+            .rev()
+            .fold(0u64, |a, b| (a << 8) | u64::from(*b))
     }
 
     /// ★★★ **THE HEADER'S DOCUMENTED LAYOUT, PINNED** (`cuda/walk/kf_walk.h`: *"little-endian,
@@ -1065,8 +1186,23 @@ mod tests {
     fn the_report_structs_have_the_headers_documented_layout() {
         assert_eq!(
             (size_of::<KfReportHeader>(), KfReportHeader::BYTES),
-            (64, 64)
+            (392, 392),
+            "ABI 6: 64 (the format doc's header) + 8 (counts) + 8 * 40 (samples)"
         );
+        assert_eq!(
+            (size_of::<KfRefusalSample>(), KfRefusalSample::BYTES),
+            (40, 40)
+        );
+        let sm = [
+            offset_of!(KfRefusalSample, va),
+            offset_of!(KfRefusalSample, raw),
+            offset_of!(KfRefusalSample, gpga),
+            offset_of!(KfRefusalSample, ps_bytes),
+            offset_of!(KfRefusalSample, bit),
+            offset_of!(KfRefusalSample, level),
+            offset_of!(KfRefusalSample, entry),
+        ];
+        assert_eq!(sm, [0, 8, 16, 24, 32, 36, 38]);
         assert_eq!((size_of::<KfPdbEntry>(), KfPdbEntry::BYTES), (32, 32));
         assert_eq!((size_of::<KfMapRun>(), KfMapRun::BYTES), (32, 32));
         let h = [
@@ -1084,8 +1220,14 @@ mod tests {
             offset_of!(KfReportHeader, refuse_mask),
             offset_of!(KfReportHeader, sparse_slots),
             offset_of!(KfReportHeader, ps_log2),
+            offset_of!(KfReportHeader, sample_count),
+            offset_of!(KfReportHeader, sample_total),
+            offset_of!(KfReportHeader, samples),
         ];
-        assert_eq!(h, [0, 4, 6, 8, 16, 24, 28, 32, 36, 40, 48, 52, 56, 60]);
+        assert_eq!(
+            h,
+            [0, 4, 6, 8, 16, 24, 28, 32, 36, 40, 48, 52, 56, 60, 64, 68, 72]
+        );
         let p = [
             offset_of!(KfPdbEntry, pdb),
             offset_of!(KfPdbEntry, first_run),
@@ -1128,6 +1270,21 @@ mod tests {
             refuse_mask: 0x3837_3635,
             sparse_slots: 0x3C3B_3A39,
             ps_log2: [0x3D, 0x3E, 0x3F, 0x40],
+            sample_count: 0x4443_4241,
+            sample_total: 0x4847_4645,
+            samples: core::array::from_fn(|i| {
+                let b = 72 + i * KfRefusalSample::BYTES;
+                let d = seq(KfReportHeader::BYTES);
+                KfRefusalSample {
+                    va: le(&d, b, 8),
+                    raw: le(&d, b + 8, 8),
+                    gpga: le(&d, b + 16, 8),
+                    ps_bytes: le(&d, b + 24, 8),
+                    bit: le(&d, b + 32, 4) as u32,
+                    level: le(&d, b + 36, 2) as u16,
+                    entry: le(&d, b + 38, 2) as u16,
+                }
+            }),
         };
         let pdb = KfPdbEntry {
             pdb: 0x0807_0605_0403_0201,
@@ -1177,6 +1334,19 @@ mod tests {
             }};
         }
         round_trip!(KfReportHeader, hdr);
+        let d = seq(KfRefusalSample::BYTES);
+        round_trip!(
+            KfRefusalSample,
+            KfRefusalSample {
+                va: le(&d, 0, 8),
+                raw: le(&d, 8, 8),
+                gpga: le(&d, 16, 8),
+                ps_bytes: le(&d, 24, 8),
+                bit: u32::try_from(le(&d, 32, 4)).expect("4 bytes"),
+                level: u16::try_from(le(&d, 36, 2)).expect("2 bytes"),
+                entry: u16::try_from(le(&d, 38, 2)).expect("2 bytes"),
+            }
+        );
         round_trip!(KfPdbEntry, pdb);
         round_trip!(KfMapRun, run);
         // Arrays decode struct by struct, as `try_collect` reads them; a trailing partial struct
