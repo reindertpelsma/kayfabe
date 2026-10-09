@@ -37,6 +37,7 @@
 use crate::mem::{Mirror, Mirrors, RamMap, resolve_placed, resolve_placed_prefix};
 use crate::raw_unsafe::RawRegion;
 use crate::slotcell::{ScheduleStep, SlotCell, SlotMeta};
+use kf_chan::actloop::{self, ActQueue, ActStats, Cont, Finish, Step, Wait};
 use kf_chan::completions::Completions;
 use kf_chan::host::{ChanError, GuestUserd, HostRing, Publisher, Split, TranslatedChannel};
 use kf_chan::ring::{GuestMemory, TranslatedRing};
@@ -68,8 +69,23 @@ const NV2080_NOTIFIERS_GR0: u32 = 12;
 /// ★ P5b: one host act, run on the plane's act thread. `Err((status, why))` refuses by name.
 type Act = Box<dyn FnOnce(&ChanPlane) -> Result<String, (u32, String)> + Send>;
 
-/// One queued act: the act, the held reply it resolves, its label, and when it was queued.
-type ActMsg = (Act, kf_gsp::Deferred, &'static str, std::time::Instant);
+/// An act's outcome: the log line, or the status and why the guest's reply is refused.
+type ActResult = Result<String, (u32, String)>;
+
+/// One step of an act on the event loop ([`kf_chan::actloop`]).
+type ActStep = Step<ChanPlane, ActResult>;
+
+/// A continuation of an act.
+type ActCont = Cont<ChanPlane, ActResult>;
+
+/// Queues an act behind the others, resolving `Deferred` with its outcome — what the display-SW
+/// withdraw hook holds, so a unit test can stand in for the act queue.
+type SubmitAct = Arc<dyn Fn(Act, kf_gsp::Deferred, &'static str) + Send + Sync>;
+
+/// What an acknowledgement-awaiting continuation runs next: the removal's ledger, or `None` when
+/// the drainer did not answer.
+type AfterRemoval =
+    Box<dyn FnOnce(&ChanPlane, Option<kf_chan::dbfast::FastLedger>) -> ActStep + Send>;
 
 /// ★ P5b: a guest USER channel's host twin (Passthrough).
 struct PtChan {
@@ -1357,7 +1373,9 @@ pub struct ChanPlane {
     /// per-Device edges, so the union is exactly the guest's own state).
     cuda_limit: TimedMutex<(std::collections::BTreeSet<(u32, u32)>, bool)>,
     /// ★ P5b: the act thread's queue (`None` until [`ChanPlane::start`]).
-    acts: TimedMutex<Option<std::sync::mpsc::Sender<ActMsg>>>,
+    acts: std::sync::OnceLock<ActQueue<ChanPlane, ActResult>>,
+    /// The act loop's counters (set by [`ChanPlane::start`]).
+    pub act_stats: std::sync::OnceLock<Arc<ActStats>>,
     /// The register drainer's wake: an act that resolved a held reply signals it.
     release: &'static kf_linux_raw::Notifier,
     /// ★ P5b §2.7: the per-engine host non-stall events.
@@ -1451,6 +1469,23 @@ fn take_twin_object(
         .or_else(|| disp_sw.remove(&object).map(|h| (h, true)))
 }
 
+/// How many 1 ms retries a free gives a token a worker still holds BUSY before it names it STRANDED.
+const RETIRE_BUSY_TRIES: u32 = 200;
+
+/// After how many 1 ms retries a free names the pump lock a worker still holds.
+const RETIRE_LOCK_NAME_AFTER: u32 = 200;
+
+/// A guest free's act, between its stages ([`ChanPlane::free_stage`]): what was already freed (the
+/// log line) and what is still to do, in statement order.
+struct FreeState {
+    client: u32,
+    object: u32,
+    line: Vec<String>,
+    translated: std::collections::VecDeque<u32>,
+    twins: std::collections::VecDeque<((u32, u32), PtChan)>,
+    obj: Option<(u32, bool)>,
+}
+
 /// The plane's debugger-session twins, `(hClient, hDebugger)` → `(guest device, host session, host GR
 /// object)` ([`ChanPlane`]'s `dbg`).
 type DbgMap = HashMap<(u32, u32), (u32, u32, u32)>;
@@ -1524,7 +1559,7 @@ const DISPSW_WITHDRAW: &str = "display-SW withdraw";
 /// `tx`, so it runs after the act that set `kept` (the host object the act kept; 0: none).
 fn attach_dispsw_withdraw(
     d: &kf_gsp::Deferred,
-    tx: std::sync::mpsc::Sender<ActMsg>,
+    submit: SubmitAct,
     kept: Arc<AtomicU32>,
     key: (u32, u32),
     handle: u32,
@@ -1543,12 +1578,7 @@ fn attach_dispsw_withdraw(
             ))
         });
         // Nobody waits on this cell: the guest already has the refusal.
-        let _ = tx.send((
-            undo,
-            kf_gsp::Deferred::new(),
-            DISPSW_WITHDRAW,
-            std::time::Instant::now(),
-        ));
+        submit(undo, kf_gsp::Deferred::new(), DISPSW_WITHDRAW);
     });
 }
 
@@ -1752,7 +1782,8 @@ impl ChanPlane {
                 LockId::Misc,
                 (std::collections::BTreeSet::new(), false),
             ),
-            acts: TimedMutex::new(stall, LockId::Acts, None),
+            acts: std::sync::OnceLock::new(),
+            act_stats: std::sync::OnceLock::new(),
             release,
             engines,
             acts_run: AtomicU64::new(0),
@@ -1830,48 +1861,68 @@ impl ChanPlane {
     /// # Errors
     /// The spawn.
     pub fn start(&'static self) -> Result<(), String> {
-        let (tx, rx) = std::sync::mpsc::channel::<ActMsg>();
+        let (queue, event_loop) = actloop::channel::<ChanPlane, ActResult>()?;
+        let _ = self.act_stats.set(Arc::clone(&event_loop.stats));
+        self.acts
+            .set(queue)
+            .map_err(|_| "the act thread is already running".to_string())?;
         std::thread::Builder::new()
             .name("kf3-chan-act".into())
             .spawn(move || {
-                kf_chan::stall::set_role(kf_chan::stall::Role::Act);
                 kf_util::log::set_class(kf_util::log::ThreadClass::Act);
-                while let Ok((act, d, what, queued)) = rx.recv() {
-                    let t0 = std::time::Instant::now();
-                    self.stall
-                        .act_queue_wait
-                        .record(t0.saturating_duration_since(queued));
-                    let r = act(self);
-                    self.stall.act_run.since(t0);
-                    self.stall.act_total.since(queued);
-                    let us = u64::try_from(t0.elapsed().as_micros()).unwrap_or(u64::MAX);
-                    self.act_worst_us.fetch_max(us, Ordering::Relaxed);
-                    self.act_total_us.fetch_add(us, Ordering::Relaxed);
-                    self.acts_run.fetch_add(1, Ordering::Relaxed);
-                    match r {
-                        Ok(line) => {
-                            kf_util::klog_trace!(
-                                "kf3: act {what}: {line} ({us} us, off the GSP lock)"
-                            );
-                            d.resolve(0);
-                        }
-                        Err((status, why)) => {
-                            self.acts_refused.fetch_add(1, Ordering::Relaxed);
-                            kf_util::klog_limited!(
-                                "kf3: act {what} REFUSED ({status:#x}): {why} ({us} us)"
-                            );
-                            d.resolve(status);
-                        }
-                    }
-                    // The held reply may go now: the drainer posts it.
-                    let _ = self.release.signal();
-                }
+                // ★ An event loop: a wait (a retry timer, the drainer's acknowledgement) is a
+                // continuation resumed from epoll — the thread never sleeps and never waits for an
+                // ack (`kf_chan::actloop`, `docs/design/V3_NONSTALL_THREADS.md` §3.C).
+                event_loop.run(self, &self.stop, self.stall);
             })
             .map_err(|e| format!("act thread: {e}"))?;
-        if let Ok(mut a) = self.acts.lock() {
-            *a = Some(tx);
-        }
         Ok(())
+    }
+
+    /// What an act does when it finishes: count it, log it, resolve the guest's held reply, wake the
+    /// drainer to post it.
+    fn finish_act(d: kf_gsp::Deferred) -> Finish<ChanPlane, ActResult> {
+        Box::new(move |me: &ChanPlane, r: ActResult, t: actloop::JobTimes| {
+            let us = u64::try_from(t.total.as_micros()).unwrap_or(u64::MAX);
+            me.act_worst_us.fetch_max(us, Ordering::Relaxed);
+            me.act_total_us.fetch_add(us, Ordering::Relaxed);
+            me.acts_run.fetch_add(1, Ordering::Relaxed);
+            let what = t.label;
+            match r {
+                Ok(line) => {
+                    kf_util::klog_trace!("kf3: act {what}: {line} ({us} us, off the GSP lock)");
+                    d.resolve(0);
+                }
+                Err((status, why)) => {
+                    me.acts_refused.fetch_add(1, Ordering::Relaxed);
+                    kf_util::klog_limited!(
+                        "kf3: act {what} REFUSED ({status:#x}): {why} ({us} us)"
+                    );
+                    d.resolve(status);
+                }
+            }
+            // The held reply may go now: the drainer posts it.
+            let _ = me.release.signal();
+        })
+    }
+
+    /// Queue an act that may wait, resolving `d` with its outcome. `false`: no act thread.
+    fn submit_steps(&self, what: &'static str, first: ActCont, d: kf_gsp::Deferred) -> bool {
+        self.acts
+            .get()
+            .is_some_and(|q| q.submit(what, first, Self::finish_act(d)))
+    }
+
+    /// The act queue as a closure for the display-SW withdraw hook.
+    fn submit_fn(&self) -> Option<SubmitAct> {
+        let q = self.acts.get()?.clone();
+        Some(Arc::new(move |act: Act, d: kf_gsp::Deferred, what| {
+            q.submit(
+                what,
+                Box::new(move |me: &ChanPlane| Step::Done(act(me))),
+                ChanPlane::finish_act(d),
+            );
+        }))
     }
 
     /// ★ **vCPU**: a doorbell on guest token `idx` was rung inline; `reached` = the host store
@@ -1968,14 +2019,33 @@ impl ChanPlane {
 
     /// Queue `act` and answer [`ChanAnswer::Deferred`] — the drainer returns at once.
     fn defer(&self, what: &'static str, act: Act) -> ChanAnswer {
+        self.defer_steps(what, Box::new(move |me: &ChanPlane| Step::Done(act(me))))
+    }
+
+    /// The act event loop's counters for the status line: acts accepted / finished, waits entered,
+    /// queue depth (now / peak) and the longest wait (a head-of-line delay for the acts behind it,
+    /// not a stall: the thread serves other inputs meanwhile).
+    #[must_use]
+    pub fn act_fragment(&self) -> String {
+        let o = Ordering::Relaxed;
+        self.act_stats.get().map_or_else(String::new, |a| {
+            format!(
+                " actq[accepted={} finished={} waits={} depth={}/{} wait_max_us={}]",
+                a.accepted.load(o),
+                a.finished.load(o),
+                a.waits.load(o),
+                a.depth.load(o),
+                a.depth_max.load(o),
+                a.wait_time.max_us()
+            )
+        })
+    }
+
+    /// Queue an act that may WAIT (a timer, the drainer's acknowledgement) as continuations and
+    /// answer [`ChanAnswer::Deferred`].
+    fn defer_steps(&self, what: &'static str, first: ActCont) -> ChanAnswer {
         let d = kf_gsp::Deferred::new();
-        let sent = self.acts.lock().ok().and_then(|a| {
-            a.as_ref().map(|tx| {
-                tx.send((act, d.clone(), what, std::time::Instant::now()))
-                    .is_ok()
-            })
-        });
-        if sent == Some(true) {
+        if self.submit_steps(what, first, d.clone()) {
             ChanAnswer::Deferred(d)
         } else {
             ChanAnswer::Refused {
@@ -3197,9 +3267,9 @@ impl ChanPlane {
             }),
         );
         if let ChanAnswer::Deferred(d) = &answer
-            && let Some(tx) = self.acts.lock().ok().and_then(|a| a.clone())
+            && let Some(submit) = self.submit_fn()
         {
-            attach_dispsw_withdraw(d, tx, kept, key, handle);
+            attach_dispsw_withdraw(d, submit, kept, key, handle);
         }
         answer
     }
@@ -3294,18 +3364,11 @@ impl ChanPlane {
             }
             r
         });
-        let sent = self.acts.lock().ok().and_then(|a| {
-            a.as_ref().map(|tx| {
-                tx.send((
-                    act,
-                    kf_gsp::Deferred::new(),
-                    "deferred API context",
-                    std::time::Instant::now(),
-                ))
-                .is_ok()
-            })
-        });
-        if sent == Some(true) {
+        if self.submit_steps(
+            "deferred API context",
+            Box::new(move |me: &ChanPlane| Step::Done(act(me))),
+            kf_gsp::Deferred::new(),
+        ) {
             Ok(())
         } else {
             Err("deferred API context: the act thread is not running".into())
@@ -3682,84 +3745,174 @@ impl ChanPlane {
                 crate::slotcell::stop_pump(&s.meta);
             }
         }
-        self.defer(
+        // ★ The free is an act that WAITS (the drainer's acknowledgement of each fast-path removal, a
+        // BUSY token's release): a state machine on the act thread's event loop, never a sleep or an
+        // ack wait (`kf_chan::actloop`). Statement order is kept: the whole free finishes before the
+        // next act starts.
+        let st = FreeState {
+            client,
+            object,
+            line: Vec::new(),
+            translated: translated.into(),
+            twins: twins.into(),
+            obj,
+        };
+        self.defer_steps(
             "free",
             Box::new(move |me: &ChanPlane| {
-                let mut line = Vec::new();
+                let mut st = st;
                 if client == object {
-                    line.extend(me.release_encoder_sessions(client));
+                    st.line.extend(me.release_encoder_sessions(client));
                 }
                 for h in debuggers {
                     let r = me.rm.free(h);
-                    line.push(format!("debugger session host {h:#x} {}", if r.is_ok() { "freed" } else { "FREE REFUSED" }));
+                    st.line.push(format!(
+                        "debugger session host {h:#x} {}",
+                        if r.is_ok() { "freed" } else { "FREE REFUSED" }
+                    ));
                 }
                 if limit_off {
                     let r = me.rm.perf_cuda_limit(false);
-                    line.push(format!("host CUDA limit off ({})", if r.is_ok() { "ok" } else { "REFUSED" }));
+                    st.line.push(format!(
+                        "host CUDA limit off ({})",
+                        if r.is_ok() { "ok" } else { "REFUSED" }
+                    ));
                 }
-                for ht in translated {
-                    me.retire(ht);
-                    line.push(format!("translated host {ht:#x}"));
-                }
-                for ((c, h), t) in twins {
-                    // ★ The fast path goes FIRST: its placements removed, its eventfd's last count
-                    // delivered (to the token word, retired on the drainer at the statement — so
-                    // absorbed), acknowledged — only then may the twin go and the token be reborn.
-                    let fast = me.dbfast.deregister(t.idx);
-                    let r = me.release_twin(c, t.tsg, t.ctx_share, t.chan);
-                    t.live.fetch_sub(1, Ordering::AcqRel);
-                    // ★ P1+P2 inc D, review fix 2026-10-04 (§4.2): the twin's user ends only if
-                    // host RM really freed the channel. A refused free leaves it counted — the
-                    // space can then never become a guest-KERNEL space, where privileged leaves
-                    // would be mirrored under a channel that may still run.
-                    if let Some(tw) = &t.twin {
-                        if r.is_ok() {
-                            tw.user_released();
-                        } else {
-                            line.push(format!(
-                                "twin {:#x} stays counted (its host free was refused): its space never turns kernel",
-                                t.idx
-                            ));
-                        }
-                    }
-                    // The error context goes AFTER its channel (host RM refuses freeing a context
-                    // DMA a live channel names as its error context).
-                    if let Some(n) = t.notifier {
-                        me.release_notifier(n);
-                    }
-                    me.engine_live(t.engine, false);
-                    // ★ The per-token hardware ledger (`run_fast_guest.sh` gates on it): every ring
-                    // of a Passthrough token IS a host doorbell, so `emulated` is only the rings
-                    // that failed to reach the host — never a CPU executor.
-                    // `rung`/`forwarded` cover BOTH transports (the grader's rule is per token and
-                    // must not lose the doorbells the trap no longer sees); `trap=`/`fast=` split them.
-                    let (trap_rung, trap_reached) = me.take_ledger(t.idx);
-                    let (f_rung, f_fwd) = fast.map_or((0, 0), |l| (l.doorbells - l.absorbed, l.forwarded));
-                    let (rung, reached) = (trap_rung + f_rung, trap_reached + f_fwd);
-                    kf_util::klog!(
-                        "kf3: DOORBELL-LEDGER tok={:#010x} route=passthrough rung={rung} emulated={} forwarded={reached} host={:#x} trap={trap_rung}{}",
-                        t.idx,
-                        rung - reached.min(rung),
-                        t.chan.token,
-                        Self::fast_fields(fast)
-                    );
-                    crate::dispsw::released_with_channel(r.is_ok(), t.disp_sw.len(), &me.dispsw);
-                    let disp_sw = if t.disp_sw.is_empty() { String::new() } else { format!(" disp_sw={}", t.disp_sw.len()) };
-                    line.push(format!("passthrough {c:#x}:{h:#x} token {:#x} host {:#x} objects={}{disp_sw} ctx={:?} {}", t.idx, t.chan.token, t.objects.len(), t.ctx, if r.is_ok() { "freed" } else { "FREE REFUSED" }));
-                }
-                if let Some((h, disp_sw)) = obj {
-                    if disp_sw {
-                        line.push(format!("display-SW object host {h:#x} {}", crate::dispsw::release_one(me.rm, h, &me.dispsw)));
-                    } else {
-                        let r = me.rm.free(h);
-                        line.push(format!("engine object host {h:#x} {}", if r.is_ok() { "freed" } else { "FREE REFUSED" }));
-                    }
-                }
-                // ⊘ A host free that refuses leaks a host object; the guest's object is gone
-                // either way, so the guest is answered OK and the leak is named here.
-                Ok(format!("{client:#x}:{object:#x}: {}", line.join("; ")))
+                me.free_stage(st)
             }),
         )
+    }
+
+    /// The free act's next stage: retire the next Translated channel, free the next Passthrough
+    /// twin (each may wait), then the engine object; the result when nothing is left.
+    fn free_stage(&self, mut st: FreeState) -> ActStep {
+        if let Some(ht) = st.translated.pop_front() {
+            st.line.push(format!("translated host {ht:#x}"));
+            return self.retire_steps(ht, Box::new(move |me: &ChanPlane| me.free_stage(st)));
+        }
+        if let Some(((c, h), t)) = st.twins.pop_front() {
+            // ★ The fast path goes FIRST: its placements removed, its eventfd's last count
+            // delivered (to the token word, retired on the drainer at the statement — so
+            // absorbed), acknowledged — only then may the twin go and the token be reborn. The
+            // act thread waits for the acknowledgement on its event loop, not in a call.
+            let Some(rm) = self.dbfast.begin_deregister(t.idx) else {
+                self.free_twin(&mut st, (c, h), t, None);
+                return self.free_stage(st);
+            };
+            return self.await_removal(
+                rm,
+                Box::new(move |me: &ChanPlane, fast| {
+                    me.free_twin(&mut st, (c, h), t, fast);
+                    me.free_stage(st)
+                }),
+            );
+        }
+        if let Some((h, disp_sw)) = st.obj.take() {
+            if disp_sw {
+                st.line.push(format!(
+                    "display-SW object host {h:#x} {}",
+                    crate::dispsw::release_one(self.rm, h, &self.dispsw)
+                ));
+            } else {
+                let r = self.rm.free(h);
+                st.line.push(format!(
+                    "engine object host {h:#x} {}",
+                    if r.is_ok() { "freed" } else { "FREE REFUSED" }
+                ));
+            }
+        }
+        // ⊘ A host free that refuses leaks a host object; the guest's object is gone
+        // either way, so the guest is answered OK and the leak is named here.
+        Step::Done(Ok(format!(
+            "{}:{}: {}",
+            format_args!("{:#x}", st.client),
+            format_args!("{:#x}", st.object),
+            st.line.join("; ")
+        )))
+    }
+
+    /// Wait (on the act thread's event loop) for the drainer's acknowledgement of `rm`, then run
+    /// `then` with its ledger — or `None` when the drainer did not answer in time.
+    fn await_removal(&self, rm: kf_chan::dbfast::Removal, then: AfterRemoval) -> ActStep {
+        use kf_chan::dbfast::RemovalPoll;
+        match self.dbfast.poll_removal(&rm) {
+            RemovalPoll::Done(l) => then(self, Some(l)),
+            RemovalPoll::TimedOut => then(self, None),
+            RemovalPoll::Pending => {
+                // The poll itself decides at the deadline; the extra margin only lets it see it.
+                let wait = Wait::Fd {
+                    fd: rm.fd(),
+                    deadline: rm.deadline() + std::time::Duration::from_millis(50),
+                };
+                Step::Wait(
+                    wait,
+                    Box::new(move |me: &ChanPlane| me.await_removal(rm, then)),
+                )
+            }
+        }
+    }
+
+    /// One Passthrough twin's host free, once its fast-path removal was acknowledged (`fast`).
+    fn free_twin(
+        &self,
+        st: &mut FreeState,
+        (c, h): (u32, u32),
+        t: PtChan,
+        fast: Option<kf_chan::dbfast::FastLedger>,
+    ) {
+        let me = self;
+        let line = &mut st.line;
+        let r = me.release_twin(c, t.tsg, t.ctx_share, t.chan);
+        t.live.fetch_sub(1, Ordering::AcqRel);
+        // ★ P1+P2 inc D, review fix 2026-10-04 (§4.2): the twin's user ends only if
+        // host RM really freed the channel. A refused free leaves it counted — the
+        // space can then never become a guest-KERNEL space, where privileged leaves
+        // would be mirrored under a channel that may still run.
+        if let Some(tw) = &t.twin {
+            if r.is_ok() {
+                tw.user_released();
+            } else {
+                line.push(format!(
+                    "twin {:#x} stays counted (its host free was refused): its space never turns kernel",
+                    t.idx
+                ));
+            }
+        }
+        // The error context goes AFTER its channel (host RM refuses freeing a context
+        // DMA a live channel names as its error context).
+        if let Some(n) = t.notifier {
+            me.release_notifier(n);
+        }
+        me.engine_live(t.engine, false);
+        // ★ The per-token hardware ledger (`run_fast_guest.sh` gates on it): every ring
+        // of a Passthrough token IS a host doorbell, so `emulated` is only the rings
+        // that failed to reach the host — never a CPU executor.
+        // `rung`/`forwarded` cover BOTH transports (the grader's rule is per token and
+        // must not lose the doorbells the trap no longer sees); `trap=`/`fast=` split them.
+        let (trap_rung, trap_reached) = me.take_ledger(t.idx);
+        let (f_rung, f_fwd) = fast.map_or((0, 0), |l| (l.doorbells - l.absorbed, l.forwarded));
+        let (rung, reached) = (trap_rung + f_rung, trap_reached + f_fwd);
+        kf_util::klog!(
+            "kf3: DOORBELL-LEDGER tok={:#010x} route=passthrough rung={rung} emulated={} forwarded={reached} host={:#x} trap={trap_rung}{}",
+            t.idx,
+            rung - reached.min(rung),
+            t.chan.token,
+            Self::fast_fields(fast)
+        );
+        crate::dispsw::released_with_channel(r.is_ok(), t.disp_sw.len(), &me.dispsw);
+        let disp_sw = if t.disp_sw.is_empty() {
+            String::new()
+        } else {
+            format!(" disp_sw={}", t.disp_sw.len())
+        };
+        line.push(format!(
+            "passthrough {c:#x}:{h:#x} token {:#x} host {:#x} objects={}{disp_sw} ctx={:?} {}",
+            t.idx,
+            t.chan.token,
+            t.objects.len(),
+            t.ctx,
+            if r.is_ok() { "freed" } else { "FREE REFUSED" }
+        ));
     }
 
     /// ★ v3-video: a guest NVENC session acquire/release, carried to the HOST's GPU-wide slot
@@ -4748,40 +4901,105 @@ impl ChanPlane {
         }
     }
 
-    fn retire(&self, ht: u32) {
+    /// Retire one Translated channel (a guest free), as continuations on the act thread's event loop;
+    /// `next` runs when it is done. Nothing here sleeps or waits for another thread:
+    ///
+    /// 1. the slot leaves the map and the pump is told to stop (`scheduled` is an atomic);
+    /// 2. the doorbell fast path is removed and the drainer's acknowledgement AWAITED on an fd;
+    /// 3. a token a worker still holds BUSY is retried on a 1 ms timer (bounded, then named);
+    /// 4. the pump lock is taken with `try_lock`, retried on a timer — a worker finishing a pump —
+    ///    and then everything else (host frees, ledger lines) is one synchronous step.
+    fn retire_steps(&self, ht: u32, next: ActCont) -> ActStep {
         let Some(slot) = self.slots.write().ok().and_then(|mut s| s.remove(&ht)) else {
-            return;
+            return next(self);
         };
-        // ★ The fast path goes FIRST, with NO slot lock held (it waits for the drainer's ack, and a
-        // statement on the drainer may lock a slot): placements removed, the eventfd's last count
-        // handed to the still-live token (its worker sees `scheduled == false`), acknowledged.
-        let fast = match slot.lock() {
-            Ok(g) => Some(g.guest_idx),
-            Err(_) => None,
-        }
-        .and_then(|idx| self.dbfast.deregister(idx));
-        let Ok(mut g) = slot.lock() else { return };
-        if g.gr_tier {
-            self.engine_tlive(g.guest_engine, false);
-        }
-        // §5.2: free waits out BUSY. The slot lock is held, so no worker is inside the pump — but
-        // one may still hold the TOKEN for a moment after it: retry on the act thread (never a
-        // lock the drainer holds), bounded, and name a token that stays stranded.
-        let mut freed = false;
-        for _ in 0..200 {
-            if let Ok(mut c) = self.caps.lock()
-                && self.plane.free_channel(&mut c, g.guest_idx)
-            {
-                freed = true;
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(1));
+        // The worker that finds the slot sees `scheduled == false` and does not pump it.
+        slot.meta.set_scheduled(false);
+        // ★ The fast path goes FIRST, with NO slot lock held (a statement on the drainer may need
+        // the drainer to acknowledge it): placements removed, the eventfd's last count handed to
+        // the still-live token (its worker sees `scheduled == false`), acknowledged.
+        let Some(rm) = self.dbfast.begin_deregister(slot.meta.guest_idx) else {
+            return self.retire_busy(ht, slot, None, RETIRE_BUSY_TRIES, next);
+        };
+        self.await_removal(
+            rm,
+            Box::new(move |me: &ChanPlane, fast| {
+                me.retire_busy(ht, slot, fast, RETIRE_BUSY_TRIES, next)
+            }),
+        )
+    }
+
+    /// §5.2: free waits out BUSY. A worker may still hold the TOKEN for a moment (it finishes its
+    /// pass — `scheduled` is already false, so it does no new work): retry on a timer, bounded, and
+    /// name a token that stays stranded.
+    fn retire_busy(
+        &self,
+        ht: u32,
+        slot: Arc<SlotCell<Slot>>,
+        fast: Option<kf_chan::dbfast::FastLedger>,
+        tries_left: u32,
+        next: ActCont,
+    ) -> ActStep {
+        let idx = slot.meta.guest_idx;
+        let freed = self
+            .caps
+            .lock()
+            .is_ok_and(|mut c| self.plane.free_channel(&mut c, idx));
+        if !freed && tries_left > 0 {
+            return Step::Wait(
+                Wait::Timer(std::time::Duration::from_millis(1)),
+                Box::new(move |me: &ChanPlane| {
+                    me.retire_busy(ht, slot, fast, tries_left - 1, next)
+                }),
+            );
         }
         if !freed {
             kf_util::klog_limited!(
-                "kf3: chan token {:#x} (host {ht:#x}) STRANDED: still BUSY after 200 ms",
-                g.guest_idx
+                "kf3: chan token {idx:#x} (host {ht:#x}) STRANDED: still BUSY after {RETIRE_BUSY_TRIES} ms"
             );
+        }
+        self.retire_lock(ht, slot, fast, 0, next)
+    }
+
+    /// The pump lock, by `try_lock`: a worker inside `pump` holds it for as long as its host calls
+    /// take, and the act thread waits for it on a timer, not in a blocking `lock()`.
+    fn retire_lock(
+        &self,
+        ht: u32,
+        slot: Arc<SlotCell<Slot>>,
+        fast: Option<kf_chan::dbfast::FastLedger>,
+        spins: u32,
+        next: ActCont,
+    ) -> ActStep {
+        let done = match slot.try_lock() {
+            Ok(mut g) => {
+                self.retire_body(ht, &mut g, fast);
+                true
+            }
+            Err(std::sync::TryLockError::Poisoned(_)) => true,
+            Err(std::sync::TryLockError::WouldBlock) => false,
+        };
+        if done {
+            return next(self);
+        }
+        if spins == RETIRE_LOCK_NAME_AFTER {
+            kf_util::klog_limited!(
+                "kf3: chan token {:#x} (host {ht:#x}): its pump still holds the slot lock after {RETIRE_LOCK_NAME_AFTER} ms — the free keeps waiting on a timer",
+                slot.meta.guest_idx
+            );
+        }
+        Step::Wait(
+            Wait::Timer(std::time::Duration::from_millis(1)),
+            Box::new(move |me: &ChanPlane| {
+                me.retire_lock(ht, slot, fast, spins.saturating_add(1), next)
+            }),
+        )
+    }
+
+    /// The synchronous rest of a retire, with the pump lock held and the token freed.
+    fn retire_body(&self, ht: u32, g: &mut Slot, fast: Option<kf_chan::dbfast::FastLedger>) {
+        if g.gr_tier {
+            self.engine_tlive(g.guest_engine, false);
         }
         let freed_chan = self.rm.free_channel(g.chan.host().channel()).is_ok();
         // ★ v3-appfix J: the ring's 1 MiB object, its GPU mapping and its host BAR1 CPU view went
@@ -5337,13 +5555,16 @@ impl ChanPlane {
     /// Stop serving (device teardown).
     pub fn stop(&self) {
         self.stop.store(true, Ordering::Release);
+        if let Some(q) = self.acts.get() {
+            q.poke();
+        }
     }
 }
 
 #[cfg(test)]
 mod dispsw_tests {
     use super::{
-        CtxBind, DISPSW_WITHDRAW, PtChan, PtMap, attach_dispsw_withdraw, dispsw_live,
+        CtxBind, DISPSW_WITHDRAW, PtChan, PtMap, SubmitAct, attach_dispsw_withdraw, dispsw_live,
         dispsw_mark_host_refused, register_other_sw, take_twin_object, withdraw_kept,
     };
     use crate::dispsw::{
@@ -5578,15 +5799,20 @@ mod dispsw_tests {
     #[test]
     fn an_orphaned_display_sw_act_queues_exactly_one_withdraw() {
         let d = kf_gsp::Deferred::new();
-        let (tx, rx) = std::sync::mpsc::channel();
-        attach_dispsw_withdraw(&d, tx, Arc::new(AtomicU32::new(0xa0)), (A, CH1), 0x70);
-        assert!(rx.try_recv().is_err(), "nothing until orphaned");
+        let queued: Arc<std::sync::Mutex<Vec<&'static str>>> = Arc::default();
+        let q = Arc::clone(&queued);
+        let submit: SubmitAct = Arc::new(move |_act, _cell, what| q.lock().unwrap().push(what));
+        attach_dispsw_withdraw(&d, submit, Arc::new(AtomicU32::new(0xa0)), (A, CH1), 0x70);
+        assert!(queued.lock().unwrap().is_empty(), "nothing until orphaned");
         d.resolve(0);
         assert!(d.run_orphan_undo());
-        let (_act, _cell, what, _queued) = rx.try_recv().expect("the withdraw is queued");
-        assert_eq!(what, DISPSW_WITHDRAW);
+        assert_eq!(
+            *queued.lock().unwrap(),
+            vec![DISPSW_WITHDRAW],
+            "the withdraw is queued"
+        );
         assert!(!d.run_orphan_undo(), "once");
-        assert!(rx.try_recv().is_err());
+        assert_eq!(queued.lock().unwrap().len(), 1);
     }
 
     /// ★ A guest free of a display-SW object on a LIVE twin is ours (`Some(_, true)`), so the plane

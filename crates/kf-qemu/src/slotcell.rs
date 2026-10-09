@@ -29,7 +29,7 @@
 
 use kf_chan::stall::{LockId, Stall, TimedMutex};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{LockResult, Mutex, MutexGuard, TryLockResult};
+use std::sync::{Mutex, MutexGuard, TryLockResult};
 
 /// The host ring's `(GR context, video context)`, as `HostRing` reports them.
 pub type HostContexts = (Option<(u32, u32)>, Option<(u32, u32, u32)>);
@@ -160,12 +160,12 @@ impl<T> SlotCell<T> {
         }
     }
 
-    /// The pump state, blocking. ⊘ Never from the drainer; the act thread uses [`Self::try_lock`]
-    /// where it can wait on an event instead.
+    /// The pump state, blocking (tests: the control that shows what the drainer no longer does).
     ///
     /// # Errors
     /// Poisoned.
-    pub fn lock(&self) -> LockResult<MutexGuard<'_, T>> {
+    #[cfg(test)]
+    pub fn lock(&self) -> std::sync::LockResult<MutexGuard<'_, T>> {
         self.pump.lock()
     }
 

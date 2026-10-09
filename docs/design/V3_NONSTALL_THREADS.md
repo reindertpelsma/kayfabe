@@ -1,9 +1,10 @@
 # V3 — the non-stall rule: the register drainer and every input-serving thread never stall
 
-**STATUS: IN PROGRESS, 2026-10-09. Branch `claude/nonstall-sonnet-20261009` (off `master` at
-`7040011a`). GPU-FREE-TESTED ONLY: nothing here has run on hardware.** Item E (the measurements) is
-built; A–D are built in the commits that follow it; C (the act thread) is built as a strict-FIFO event
-loop — the per-key lanes are a PROPOSAL for the owner (§5), not built. Each section says what is built.
+**STATUS: BUILT, GPU-FREE-TESTED ONLY, 2026-10-09. Branch `claude/nonstall-sonnet-20261009` (off
+`master` at `7040011a`, not merged). NOTHING HERE HAS RUN ON HARDWARE** — §7 lists the exact commands.
+Built: E (measurement), A (slot lock), B (quiet logging), D (one bounded doorbell batch), C (the act
+thread as a strict-FIFO event loop). NOT built, owner's call: per-key act lanes (§5), the ordering
+restoration for doorbells beyond a batch (§3.D), a bounded logger thread (§3.B, only if measured needed).
 
 ## 0. The rule (owner, 2026-10-09, binding)
 
@@ -30,22 +31,26 @@ differ and are given here for `master`. `NonstallArms`, `pt_stall_snapshot_poll`
 
 | # | thread | site (master) | what blocks | status |
 |---|---|---|---|---|
-| A1 | drainer | `chan.rs` `ChanPlane::statement`, `Schedule` TSG filter (`s.lock().is_ok_and(g.tsg …)`) | the per-channel slot `Mutex`, which a worker holds across a whole `pump` | built (§3.A) |
-| A2 | drainer | `statement`, `Token` (`s.lock().map(g.guest_idx)`) | same | built |
-| A3 | drainer | `schedule_translated` (`slot.lock()` for `scheduled`/`guest_idx`; `try_lock` for `stopped`, which silently read "not stopped" under contention) | same | built |
-| A4 | drainer | free statement, `try_lock … g.scheduled = false` (skipped silently under contention: the pump kept running) | same | built |
-| B  | drainer, act, workers | ~370 `eprintln!` in the VMM crates; one per RPC on the drainer (`device.rs` `log_report`, `apply_register`, `chanlink.rs`, `boot.rs`, `chan.rs`) | Rust's process-wide stderr lock; `write(2)` under dirty throttling; ENOSPC panics and kills the thread silently | built (§3.B) |
-| C1 | act | `ChanPlane::retire` | 200 × `sleep(1 ms)` while the slot lock is held | built (§3.C) |
-| C2 | act | `DbFast::deregister` | `recv_timeout(2 s)` for the drainer's acknowledgement | built |
-| C3 | act | `DbFast::register`/`deregister`, `site_add`/`site_del` | `KVM_IOEVENTFD` (an SRCU grace period) under the registry lock | open, §5 |
-| C4 | act | every RM verb an act makes (`alloc`, `map`, `free`, `schedule_enable`, `disable_channels`, preempt …) | host RM's API lock / a GSP RPC inside `nvidia.ko` | open, §5 |
-| C5 | drainer | `deliver_rc`/`release_settled`: a held reply waits for its act | the FIFO of held replies (`release_held` stops at the first pending one) | open, §5 |
-| D  | drainer | `DbFast::service_ready` | repeated while 64 fds were ready | built (§3.D) |
-| E  | — | measurement | — | built (§4) |
-| G  | drainer | `Device::drainer_loop` heartbeat: `rm.gpu_time_ns()` every 500 ms | a host RM ioctl on the drainer (mostly a register read; not proven non-blocking) | **open — found by this work, not in the audit** |
-| H  | drainer | `status_line` (every 2 s): `va_stats`, `vat_prev`, `chans.counts()` | `counts()` takes every slot lock with a blocking `lock()` | built with A (§3.A) |
+| A1 | drainer | `chan.rs` `ChanPlane::statement`, `Schedule` TSG filter | the per-channel slot `Mutex`, which a worker holds across a whole `pump` | **fixed** §3.A |
+| A2 | drainer | `statement`, `Token` | same | **fixed** |
+| A3 | drainer | `schedule_translated` (`lock()` for `scheduled`/`guest_idx`; `try_lock` for `stopped`, which read "not stopped" under contention) | same | **fixed** |
+| A4 | drainer | free statement `try_lock … scheduled = false` (skipped under contention) | same | **fixed** |
+| A5 | act | stop / restart / disable / evict / preempt / timeslice / bind / promote / deferred-ctx acts: `slot.lock()` | the same pump lock | **fixed** (they read `SlotMeta`; only `retire` still takes the lock, by `try_lock` + timer) |
+| B | drainer, act, workers, VA, display | ~340 `eprintln!` (one per RPC on the drainer) | stderr lock; `write(2)` under throttling; ENOSPC/EPIPE panic kills the thread | **fixed** §3.B (quiet + never-panicking + measured) |
+| C1 | act | `ChanPlane::retire`: 200 × `sleep(1 ms)` with the slot lock held | a sleep | **fixed** §3.C (timer continuation) |
+| C2 | act | `DbFast::deregister`: `recv_timeout(2 s)` | an acknowledgement wait | **fixed** (`begin_deregister` + fd wait) |
+| C3 | act, main loop | `DbFast::register`/`begin_deregister`, `site_add`/`site_del`: `KVM_IOEVENTFD` under the registry lock | an SRCU grace period in the kernel | **open** §5 (a blocking syscall; measured as `act_run`) |
+| C4 | act | every RM verb an act makes | host RM's API lock / a GSP RPC in `nvidia.ko` | **open** §5 |
+| C5 | drainer | held replies: `release_held` stops at the first reply whose act is pending | the FIFO of held replies | **open** §5 (head-of-line, not a stall of the drainer) |
+| C6 | act | brief `lock()` on `pt`, `pt_objs`, `by_obj`, `scopes`, `caps`, `groups` (the drainer holds them for microseconds) | a contended std mutex | **open, measured**: `act_lock_wait_max_us`, `lock_wait_worst` |
+| D | drainer | `DbFast::service_ready` repeated while 64 fds were ready | an unbounded loop | **fixed** §3.D |
+| E | — | measurement | — | **built** §3.E |
+| G | drainer | heartbeat `rm.gpu_time_ns()` every 500 ms | a host RM ioctl | **fixed** (moved to `kf3-status`, §3.B); found by this work, not in the audit |
+| H | drainer | `status_line` every 2 s (`va_stats`, `chans.counts()` …) | locks | **fixed** (moved to `kf3-status`; `try_lock` only on the GSP lock) |
+| I | drainer | `apply_register` → `self.gsp.lock()` and the GSP FSM's work; `deliver_rc`; `deliver_hotplug` | the drainer's own work (the only other holder is `seal_shadow` at init) | by design; **measured** (`apply_max_us`, `drain_pass_max_us`) |
+| J | vCPU/main | `bar0trace` and `KF3_MAPLOG` print from a vCPU | stderr | default-off diagnostics, `PERTURBING_DIAGNOSTIC_ON` |
 
-## 4. Measurement (item E) — built
+## 3.E Measurement (item E) — built
 
 Always on, no flag, atomics only (`kf_chan::stall`). The status line (printed by the drainer every 2 s
 when it changes) carries a `stall[...]` segment:
@@ -176,3 +181,152 @@ text it corrects.
 before the change — now one call = one full batch, one poll; the next call serves the rest);
 `a_privileged_write_is_applied_within_one_doorbell_batch_while_the_guest_keeps_ringing` (a real
 `Plane::drainer_pass`: the write is applied after exactly one batch of 64 deliveries).
+
+## 3.C The act thread as an event loop (item C) — built, strict FIFO
+
+**Before.** `kf3-chan-act` ran each act to completion. Two acts waited inside their step: `retire`
+(200 × `thread::sleep(1 ms)` for a token a worker still held BUSY, with the slot lock held) and
+`DbFast::deregister` (`recv_timeout(2 s)` for the drainer's acknowledgement). During either, the thread
+read nothing — every act queued behind it, and so every guest RPC whose reply is a host act.
+
+**After** (`kf-chan/src/actloop.rs`). An act is a first continuation plus a `finish` callback. A step
+returns `Done(result)` or `Wait(Timer | Fd+deadline, next)`. The loop `epoll`s on its submission eventfd
+and on the waited-for fd (the drainer signals an eventfd after it acknowledges a removal), so **a new act
+is accepted the moment it is submitted, even while one waits**, and nothing sleeps. `retire` and `free`
+are state machines (`retire_steps` → `await_removal` → `retire_busy` (1 ms timer, ≤ 200) → `retire_lock`
+(`try_lock`, 1 ms timer) → the synchronous host frees; `free_stage` for the Passthrough twins). The
+status line carries `actq[accepted finished waits depth=now/peak wait_max_us]`.
+
+**Ordering: strict FIFO, deliberately.** One act is current at a time; the next starts when it finished,
+so acts take effect in STATEMENT ORDER for every dependency key (client / object / channel) — the
+documented invariant — with no cross-key reordering to prove. This removes the *stall* (the thread is
+never unresponsive and a wait costs no thread) but not the *head-of-line wait*: an act queued behind a
+waiting one starts after it. A wait is short in practice (the drainer's ack: microseconds to a drainer
+pass; a BUSY token: the length of one worker pass) and is now visible: `actq[wait_max_us]`.
+
+**Tests** (`actloop::tests`, `dbfast::tests`):
+- `a_second_act_is_accepted_within_milliseconds_while_the_first_waits_on_a_timer` — the first act waits
+  400 ms, the second is accepted within 100 ms (`accepted==2`, `depth==2`), nothing finished out of
+  order, completion order = submission order.
+- `control_a_step_that_sleeps_accepts_nothing_meanwhile` — the old shape (a step that sleeps 300 ms): the
+  second act is NOT read for the whole sleep, and `act_run_max_us` shows it. This is the behaviour the
+  retire/deregister waits had.
+- `an_ack_wait_resumes_on_the_signal_and_at_the_deadline_when_none_comes`, `retry_waits_on_timers_and_gives_up_after_its_tries`,
+  `stop_ends_the_loop_while_an_act_waits`.
+- `begin_deregister_returns_at_once_and_the_ack_arrives_on_its_eventfd` — with no drainer running the
+  old `deregister` blocked 2 s; the new call returns at once, the ack arrives on the fd, carries the final
+  drain's ledger, and a lost ack is reported at the deadline.
+
+**Not testable GPU-free:** the `retire`/`free` state machines themselves (they need a host RM); their
+building blocks are tested above. Hardware: §7.
+
+## 5. Open: which acts block inside host RM, and a proposal for per-key lanes (OWNER DECIDES; not built)
+
+**Acts whose synchronous step can block inside host RM (an RM ioctl into `nvidia.ko`, which serialises
+on host RM's API lock and may issue a GSP RPC) — all are `act_run`:**
+
+| act (label) | blocking verbs | worst case |
+|---|---|---|
+| `birth passthrough`, `birth translated` | TSG/channel alloc, ring object alloc + map + CPU view, GR/video context creation (golden-context init), `schedule_enable` | the longest: a first GR channel creates the host GR context (100s of ms) |
+| `engine object` | `rm.alloc` of the engine class (GR3D/compute/copy/video) | GR objects: context promote |
+| `free` | `rm.free`, `free_channel`, `release_host` (unmap + object free + view release), `perf_cuda_limit`, encoder sessions; the fast-path deassign (`KVM_IOEVENTFD`, an SRCU grace period) | a free waits for the channel's work to drain |
+| `preempt`, `ctxsw preemption` | `NVA06C PREEMPT(bWait=1)` | **unbounded if the GPU context is hung** |
+| `stop`, `stop translated`, `disable channels`, `schedule`, `restart translated`, `evict ctx`, `evict translated context` | `DISABLE_CHANNELS`, `GPFIFO_SCHEDULE` (RM RPC to GSP, runlist update) | ms |
+| `timeslice`, `channel timeslice` | `SET_TIMESLICE` | ms |
+| `debugger`, `debugger exception mask`, `zcull bind`, `cuda limit` | alloc / control | ms |
+| `display-SW twin`, `bind/promote translated context` | alloc / none | ms / none |
+
+**What a blocked ioctl does to every queued act.** Serial head-of-line blocking: the thread is inside
+`ioctl(2)`, so the single FIFO is stopped; each act behind it — from every client and channel — waits, and
+so does the guest RPC (its reply is held, `release_held` is FIFO, so every later reply is held behind the
+first pending one too). One hung `PREEMPT` stops every other guest process's allocations and frees.
+`stall[act_run_max_us, act_wait_max_us]` measure it; the strict-FIFO event loop cannot remove it.
+
+**Proposal: N lanes keyed by an explicit dependency key, FIFO within a lane.**
+- *Key.* Every act declares `(client, resource)` where `resource` is its channel's host token (a
+  channel's own acts: schedule/stop/disable/evict/preempt/timeslice/free/promote), or the client alone
+  for client-scoped acts (birth/engine object/debugger/limit/encoder). Lane = `hash(client) % N`, with
+  `N = 4`; a cross-client act (the ones that name two clients: none identified; `dup` is served by the
+  graph, not an act) takes ALL lanes (a barrier).
+- *Order argument.* Within one client every act lands on one lane, in statement order — the invariant
+  holds per client (and so per object and channel, which belong to one client). Two clients' acts may
+  interleave: that needs independence, which holds on host RM objects (a client's handles are its own),
+  and must be CHECKED for the shared state: (1) the guest chid heap — a token index freed by client A and
+  reborn by client B — the free's reply is held until its act resolves, so a serial guest RM cannot reuse
+  the chid before; a hostile guest can, so `birth` must first take the token in the `caps`/plane table
+  (it does: `allocate_channel` fails on a live token) and a free must remove it before the act (the
+  Passthrough free does, at the statement); (2) the VA mirrors / T-space shared by clients of one guest
+  VA space; (3) the host groups map keyed `(client, tsg, ctxshare)` — per client, safe; (4) `pt`, `scopes`,
+  `caps` — maps behind their own locks, not ordered state.
+- *What it buys.* A hung preempt of client A stops only A's lane; with 4 lanes, a hash collision still
+  stops 1/4 of the clients. It does NOT help a single client (CUDA process) whose own acts queue.
+- *What it costs / risks.* A second and later lane run host-RM calls concurrently; host RM serialises on its
+  API lock anyway (measured 1.00x scaling for workers, `THE_CONSTRAINTS.md`), so the gain is liveness
+  isolation, not throughput. The ordering argument above rests on (1)–(4) and on there being no act that
+  names two clients; both need an audit of the 24 act sites I could not make with confidence without a
+  hardware run (the ladder's multi-process lanes are the test) — hence "proposal".
+- *Alternative.* Keep one lane; give `preempt` a deadline (`NVA06C PREEMPT(bWait=0)` + a poll by the
+  event loop), which removes the one unbounded verb; every other act is bounded by host RM.
+
+## 6. What remains open
+
+1. Per-key lanes (§5) — owner's decision. 2. The doorbell-ordering beyond one batch (§3.D) — owner's call.
+3. `KVM_IOEVENTFD` under the registry lock on the act thread and the main loop (C3) — a blocking syscall
+by nature; a helper thread for placements would remove it from the act thread. 4. The act-thread
+`lock()`s on the plane maps (C6) — measured, not removed. 5. `DOORBELL-LEDGER`/`RETIRED` lines are kept
+unconditionally (§3.B). 6. A bounded logger thread, if `log[... over1ms]` shows the need. 7. The Windows
+branch's `NonstallArms`, `pt_stall_snapshot_poll`, `deliver_preempt_complete` are NOT ported (item F:
+`NonstallArms` ordering is a separate branch).
+
+## 7. Hardware verification (later, one box, strictly serial — NOT run by this branch)
+
+Every GPU lane takes the shared GPU lock itself (`exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9`
+inside `build_kf3.sh`, `run_fast_guest.sh`, `broker_lane.sh`, `interactive.sh`): run the steps one after
+another, NEVER holding that lock in the calling shell (a held parent lock deadlocks the child's `flock`).
+Rent per `scripts/bench/box/README.md`. Order:
+
+```
+# 1. GPU-free, anywhere
+cargo test -p kf-util -p kf-chan -p kf-core -p kf-rm -p kf-gsp -p kf-mem -p kf-host -p kf-qemu
+bash scripts/ci/clippy.sh && python3 scripts/ci/dependencies.py
+# 2. on the box
+bash scripts/bench/v3_gates.sh                                  # 9/9
+bash scripts/bench/build_kf3.sh /workspace/bench/qemu-10.2.4 /workspace/bench/qemu-build-kf3   # KF3_RC=0
+KF_DEVICE=kf3 scripts/fastguest/fast_suite.sh nonstall 180      # 30/30 (rebuild the raw client and fast guest first)
+# 3. the Linux guest with the display broker (owner: retest occasionally so it keeps working), after 2.
+bash scripts/bench/display/broker_lane.sh prep <nvkvm-pv-rev>   # once per box
+bash scripts/bench/display/broker_lane.sh run nonstall_brk      # evidence: /workspace/bench/brk/nonstall_brk/
+bash scripts/bench/display/interactive.sh prep                  # once per box
+bash scripts/bench/display/input_proof.sh nonstall_input        # evidence: $WORK/proof-nonstall_input/proof.log
+bash scripts/bench/display/interactive.sh                       # the owner's window; Ctrl-C / `interactive.sh stop`
+#    with that window up, vkcube in the guest (the cube must be animating IN the broker window):
+ssh -i /workspace/bench/guest_key ubuntu@192.168.77.2 'sudo -u ubuntu env DISPLAY=:0 XAUTHORITY=/home/ubuntu/.Xauthority timeout 30 vkcube --c 300; echo RC=$?'
+#    and the scripted flip/pace check (X11 vkcube FIFO + IMMEDIATE, glxgears), headless display lane:
+DISPLAY_HOOK=max_fps_x11_hook DISPLAY_KF3_EXTRA=x11-dispsw=on bash scripts/bench/display/lane.sh nonstall_x11
+# 4. fat-guest lanes the owner already runs: cuda_ladder.sh, the app matrix, llm_parity.sh, gfx_suite.sh, video_lane.sh
+# 5. a Windows boot (scripts/bench/windows/win_vm.sh) and read the stall[...] segment of the status line
+```
+
+**Pass criteria.**
+- `v3_gates.sh` 9/9; `build_kf3.sh` `KF3_RC=0` with the revision installed under `kf3-bins/<rev>/`;
+  `fast_suite` 30/30; each lane's claim cites that revision.
+- *Broker lane (`broker_lane.sh run`, `V3_DISPLAY.md` §8.9/§8.17: what "working" means):* `BRK_GUEST_DESKTOP=`
+  reports the guest desktop up (Cinnamon) and `BRK_WINDOW id=[…]` is a window (not `none`); `BRK_RUNGS`
+  shows frames delivered; `BRK_RELAY_CONNECTED` ≥ 1; the host-vs-guest frame diff lines
+  (`BRK_HOST_VS_GUEST`) show the desktop on the host; vkcube flips: the ssh command above prints `RC=0` and
+  the cube animates in the broker window, and `lane.sh nonstall_x11` prints `D4_*_B3_VKCUBE_FIFO_480 RC=0`
+  and `D4_*_B5_VKCUBE_IMMEDIATE… RC=0` (no `Assertion`) with a non-zero `fps=[…]`; no `did not complete` / `scanout REFUSED`
+  in `qemu.log`; 0 Xid in the host dmesg.
+- *Input (`input_proof.sh`):* `PROOF_GRUB_KEY PASS`, `PROOF_KEYS PASS`, every `PROOF_ABS` within 2 px of
+  the scaled position, `PROOF_REL_X11 PASS`, `PROOF_ABS_UNDER_GRAB PASS_DROPPED`, `PROOF_DESKTOP`
+  shows cinnamon up; `PROOF_EXIT`/`EXIT` present with `qemu_left=0`.
+- *Non-stall witnesses, from the status line of any of the above (printed by `kf3-status`):*
+  `stall[drain_pass_max_us=… apply_max_us=… held_age_max_us=… act_wait_max_us=… act_run_max_us=…
+  lock_wait_max_us=… drainer_lock_wait_max_us=0 …] log[max_call_us=… drainer_over1ms=0 …]` and
+  `actq[… wait_max_us=…]`. Falsifiers: `drainer_lock_wait_max_us > 0` ⇒ the drainer still blocks on a
+  lock (see `lock_wait_worst=`); `drain_pass_max_us` over ~10 ms outside the first seconds of boot ⇒ a
+  drainer stall (read `apply_max_us` and `lock_wait_worst`); `act_run_max_us` ≥ 10 ms ⇒ an act step is a
+  blocking host verb (§5); `log[drainer_over1ms>0]` ⇒ add the bounded logger thread (§3.B);
+  `doorbell_batch_full` rising with `drain_pass_max_us` ⇒ the guest rings more than 64 tokens at once.
+- A Windows boot: the same counters, with `KF3_LOG_VERBOSE=1` only if the RPC trace is wanted
+  (`win_vm.sh` exports it by default).

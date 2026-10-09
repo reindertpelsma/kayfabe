@@ -1,6 +1,6 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-10-07 (§S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-10-07 (§S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-09 (the non-stall rule).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
@@ -953,3 +953,20 @@ All owner statements of 2026-10-08, in the order the open-decision list was give
   regeneratable"; the archive copy remains); `/workspace/nvidia-gpu-passthrough` is backed up to
   `/mnt/windows-work/archive/`.
 - **Models:** Sonnet 5.5 by default, Opus 5.5 as the strongest tier (`CLAUDE.md`, *Models by risk*).
+
+## X. The non-stall rule: the drainer and every input-serving thread never stall (2026-10-09)
+
+Binding. The register drainer and every thread that serves new input (the act thread `kf3-chan-act`, the
+workers, the doorbell servicer; also the VA and display threads' logging) may NEVER stall. A **stall** is
+any state where the thread cannot serve another input: a sleep, a timed wait, an acknowledgement wait, a
+contended blocking lock, a blocking write, an unbounded loop. A wait inside an `epoll`/`select` that also
+accepts new requests is not a stall. A 200 ms stall in the drainer is forbidden outright; the same holds
+for the act thread, because every guest RPC whose reply is a host act waits behind it.
+- **Production is quiet:** in steady state no input-serving thread logs per RPC / statement / doorbell /
+  act. Allowed: a bounded number of boot-phase lines, rare error lines under once-style limits, and
+  anything behind an explicit default-off diagnostic flag (the status line then says
+  `PERTURBING_DIAGNOSTIC_ON`). Non-blocking logging machinery is NOT wanted; quiet is the mechanism and
+  `log[max_call_us=…]` the witness.
+- **Events go per subscription at NVIDIA's granularity;** no new filtering between host events and guest
+  interrupts — an extra edge is fixed at its source.
+- Implementation, inventory, falsifiers and what is open: `design/V3_NONSTALL_THREADS.md`.

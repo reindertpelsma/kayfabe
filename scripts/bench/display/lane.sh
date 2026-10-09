@@ -14,6 +14,9 @@
 #       (or missing). ⊘ CORRECTED 2026-10-03 (the review of v3-gop-unload): this script ended with an
 #       echo, so it exited 0 whatever boot_capture and the hook found.
 set -uo pipefail
+# The lane greps per-statement log lines (display fps, broker connects); production is quiet by default
+# (docs/design/V3_NONSTALL_THREADS.md). KF3_LOG_VERBOSE=0 in the environment turns it off here too.
+export KF3_LOG_VERBOSE="${KF3_LOG_VERBOSE-1}"
 TAG=${1:?usage: lane.sh <tag>}
 HERE="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$HERE/../../.." && pwd)"
 export NVKVM_RAM_MB=${NVKVM_RAM_MB:-8192} KF_SMP=${KF_SMP:-6}

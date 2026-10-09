@@ -23,6 +23,9 @@
 # Logs: $WORK/run-<stamp>/ (qemu.log, serial.log, broker.log, qemu.mon). Each run writes a start
 #   marker and an EXIT line (CLAUDE.md, "a killed job and a running job look the same").
 set -uo pipefail
+# The lane greps per-statement log lines (display fps, broker connects); production is quiet by default
+# (docs/design/V3_NONSTALL_THREADS.md). KF3_LOG_VERBOSE=0 in the environment turns it off here too.
+export KF3_LOG_VERBOSE="${KF3_LOG_VERBOSE-1}"
 HERE="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$HERE/../../.." && pwd)"
 BENCH=${BENCH_DIR:-/workspace/bench}
 WORK=${KF_INTERACTIVE_DIR:-/var/lib/kf-windows-20261005/broker-interactive}

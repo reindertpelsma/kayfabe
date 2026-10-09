@@ -23,6 +23,9 @@
 # Every claim cites the kf3 binary's revision (boot_capture's run_<tag>_rev.txt) and the broker's
 # (PREP_BROKER_REV, /root/nvkvm-pv). A start marker and an EXIT line are written by this script.
 set -uo pipefail
+# The lane greps per-statement log lines (display fps, broker connects); production is quiet by default
+# (docs/design/V3_NONSTALL_THREADS.md). KF3_LOG_VERBOSE=0 in the environment turns it off here too.
+export KF3_LOG_VERBOSE="${KF3_LOG_VERBOSE-1}"
 HERE="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$HERE/../../.." && pwd)"
 BENCH=${BENCH_DIR:-/workspace/bench}
 NVPV=${NVPV_DIR:-/root/nvkvm-pv}

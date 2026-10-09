@@ -2629,7 +2629,7 @@ impl Device {
             self.chans.contended.load(o),
             self.chans.poisoned.load(o),
             toks.join(" ")
-        );
+        ) + &self.chans.act_fragment();
         let ic = &self.irq_counts;
         let irq = format!(
             " irq[writes={} raised={} held={} oor={}]",

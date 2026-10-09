@@ -17,6 +17,9 @@
 # flat profile; KEY — any injected edge missing on the QEMU Virtio Keyboard, or an extra one; grub —
 # no editor text on the serial console after `e`.
 set -uo pipefail
+# The lane greps per-statement log lines (display fps, broker connects); production is quiet by default
+# (docs/design/V3_NONSTALL_THREADS.md). KF3_LOG_VERBOSE=0 in the environment turns it off here too.
+export KF3_LOG_VERBOSE="${KF3_LOG_VERBOSE-1}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TAG=${1:?usage: input_proof.sh <tag>}
 BENCH=${BENCH_DIR:-/workspace/bench}

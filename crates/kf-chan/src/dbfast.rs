@@ -301,6 +301,9 @@ enum Cmd {
     Remove {
         tag: u64,
         ack: mpsc::SyncSender<FastLedger>,
+        /// Signalled (an eventfd write) after the acknowledgement is sent, so the waiting thread can
+        /// `epoll` for it instead of blocking on the channel.
+        wake: Option<Arc<Notifier>>,
         /// Drop the final count instead of delivering it (a registration replaced under a live
         /// token: its count predates the token's current generation).
         discard: bool,
@@ -318,6 +321,51 @@ struct Live {
 struct Side {
     rx: mpsc::Receiver<Cmd>,
     live: HashMap<u64, Live>,
+}
+
+/// A removal in flight ([`DbFast::begin_deregister`]): the act thread waits for the drainer's
+/// acknowledgement on [`Removal::fd`], then asks [`DbFast::poll_removal`].
+pub struct Removal {
+    idx: u32,
+    tag: u64,
+    done: mpsc::Receiver<FastLedger>,
+    wake: Arc<Notifier>,
+    sites: u32,
+    refused: u32,
+    t0: Instant,
+    deadline: Duration,
+}
+
+impl Removal {
+    /// The eventfd the drainer signals once it has acknowledged (watch it, then poll).
+    #[must_use]
+    pub fn fd(&self) -> Arc<Notifier> {
+        Arc::clone(&self.wake)
+    }
+
+    /// How long the acknowledgement may take before it is reported lost.
+    #[must_use]
+    pub fn deadline(&self) -> Duration {
+        self.deadline
+    }
+
+    /// Replace the acknowledgement deadline (tests).
+    #[must_use]
+    pub fn with_deadline(mut self, d: Duration) -> Self {
+        self.deadline = d;
+        self
+    }
+}
+
+/// What [`DbFast::poll_removal`] found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemovalPoll {
+    /// Not acknowledged yet.
+    Pending,
+    /// Acknowledged: no store of the old registration can be delivered any more.
+    Done(FastLedger),
+    /// The drainer did not answer within the deadline (counted in `ack_timeouts`; must stay 0).
+    TimedOut,
 }
 
 /// What [`DbFast::register`] did — the channel's doorbells take the fast path at the sites it
@@ -574,6 +622,7 @@ impl DbFast {
             self.send(Cmd::Remove {
                 tag: old.tag,
                 ack,
+                wake: None,
                 discard: true,
             });
             c.live_regs.fetch_sub(1, Ordering::Relaxed);
@@ -620,12 +669,16 @@ impl DbFast {
         out
     }
 
-    /// ★ **Act thread — a channel is being freed.** Removes every KVM placement of `idx`, then
-    /// hands the eventfd to the drainer for its final drain and waits for the acknowledgement: when
-    /// this returns, no store of the old registration can be delivered any more, so the caller may
-    /// free the twin and a later birth may reuse the token. `None` when `idx` had no registration
-    /// (the fast path was off, or refused it) or the drainer did not answer (counted).
-    pub fn deregister(&self, idx: u32) -> Option<FastLedger> {
+    /// ★ **Act thread — a channel is being freed, step 1 of 2 (NON-BLOCKING in the drainer's
+    /// ack).** Removes every KVM placement of `idx` (⚠ `KVM_IOEVENTFD` deassign: an SRCU grace period
+    /// in the kernel — a blocking syscall the act thread cannot avoid, §5 of
+    /// `V3_NONSTALL_THREADS.md`), hands the eventfd to the drainer for its final drain, and returns a
+    /// [`Removal`] — WITHOUT waiting for the drainer's acknowledgement. The caller waits on
+    /// [`Removal::fd`] in its event loop (`actloop::Wait::Fd`) and calls [`Removal::poll`]; when that
+    /// reports [`RemovalPoll::Done`], no store of the old registration can be delivered any more, so
+    /// the caller may free the twin and a later birth may reuse the token. `None` when `idx` had no
+    /// registration (the fast path was off, or refused it).
+    pub fn begin_deregister(&self, idx: u32) -> Option<Removal> {
         let (reg, sites_held) = {
             let mut r = self.lock_reg().ok()?;
             let reg = r.regs.remove(&idx)?;
@@ -639,27 +692,73 @@ impl DbFast {
         let c = &self.counters;
         let _ = self.poller.unwatch(reg.efd.as_source_fd());
         let (ack, done) = mpsc::sync_channel(1);
-        let t0 = Instant::now();
+        let wake = match Notifier::create() {
+            Ok(n) => Arc::new(n),
+            Err(_) => return None,
+        };
         self.send(Cmd::Remove {
             tag: reg.tag,
             ack,
+            wake: Some(Arc::clone(&wake)),
             discard: false,
         });
         c.deregistered.fetch_add(1, Ordering::Relaxed);
         c.live_regs.fetch_sub(1, Ordering::Relaxed);
-        match done.recv_timeout(ACK_TIMEOUT) {
+        Some(Removal {
+            idx,
+            tag: reg.tag,
+            done,
+            wake,
+            sites: sites_held,
+            refused: reg.refused,
+            t0: Instant::now(),
+            deadline: ACK_TIMEOUT,
+        })
+    }
+
+    /// Step 2 of [`DbFast::begin_deregister`]: has the drainer acknowledged `rm`?
+    pub fn poll_removal(&self, rm: &Removal) -> RemovalPoll {
+        match rm.done.try_recv() {
             Ok(mut l) => {
                 self.ack_wait
-                    .add(u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX));
-                l.sites = sites_held;
-                l.refused = reg.refused;
+                    .add(u64::try_from(rm.t0.elapsed().as_nanos()).unwrap_or(u64::MAX));
+                l.sites = rm.sites;
+                l.refused = rm.refused;
+                RemovalPoll::Done(l)
+            }
+            Err(mpsc::TryRecvError::Empty) if rm.t0.elapsed() < rm.deadline => RemovalPoll::Pending,
+            Err(_) => {
+                self.counters.ack_timeouts.fetch_add(1, Ordering::Relaxed);
+                kf_util::klog!(
+                    "kf3: DBFAST tok={:#x} registration {:#x}: the drainer did not acknowledge its removal within {:?}",
+                    rm.idx,
+                    rm.tag,
+                    rm.deadline
+                );
+                RemovalPoll::TimedOut
+            }
+        }
+    }
+
+    /// ★ **A channel is being freed — the BLOCKING form** (tests and tools; ⚠ never the act thread,
+    /// which uses [`DbFast::begin_deregister`]): [`DbFast::begin_deregister`], then wait for the
+    /// acknowledgement. `None` when `idx` had no registration or the drainer did not answer (counted).
+    pub fn deregister(&self, idx: u32) -> Option<FastLedger> {
+        let rm = self.begin_deregister(idx)?;
+        match rm.done.recv_timeout(rm.deadline) {
+            Ok(mut l) => {
+                self.ack_wait
+                    .add(u64::try_from(rm.t0.elapsed().as_nanos()).unwrap_or(u64::MAX));
+                l.sites = rm.sites;
+                l.refused = rm.refused;
                 Some(l)
             }
             Err(_) => {
-                c.ack_timeouts.fetch_add(1, Ordering::Relaxed);
-                kf_util::klog_limited!(
-                    "kf3: DBFAST tok={idx:#x} registration {:#x}: the drainer did not acknowledge its removal within {ACK_TIMEOUT:?}",
-                    reg.tag
+                self.counters.ack_timeouts.fetch_add(1, Ordering::Relaxed);
+                kf_util::klog!(
+                    "kf3: DBFAST tok={idx:#x} registration {:#x}: the drainer did not acknowledge its removal within {:?}",
+                    rm.tag,
+                    rm.deadline
                 );
                 None
             }
@@ -767,7 +866,12 @@ impl DbFast {
                         },
                     );
                 }
-                Cmd::Remove { tag, ack, discard } => {
+                Cmd::Remove {
+                    tag,
+                    ack,
+                    wake,
+                    discard,
+                } => {
                     let mut ledger = FastLedger::default();
                     if let Some(mut l) = side.live.remove(&tag) {
                         // ★ The FINAL drain: every KVM placement is gone, so this count is the last
@@ -782,6 +886,10 @@ impl DbFast {
                         ledger = l.ledger;
                     }
                     let _ = ack.send(ledger);
+                    if let Some(w) = wake {
+                        // After the ledger is in the channel: the waiter's `poll` finds it.
+                        let _ = w.signal();
+                    }
                 }
             }
         }
@@ -1344,6 +1452,57 @@ mod tests {
             before, MAX_READY_BATCH,
             "exactly one batch preceded the write"
         );
+    }
+
+    /// ★ (C) The act thread's half of a removal does not wait for the drainer: `begin_deregister`
+    /// returns at once with the drainer not running at all (the old `deregister` blocked for its
+    /// 2 s acknowledgement timeout here), the acknowledgement arrives on the removal's eventfd when
+    /// the drainer runs, and carries the final drain's ledger; a lost acknowledgement is reported
+    /// at the deadline, not waited for.
+    #[test]
+    fn begin_deregister_returns_at_once_and_the_ack_arrives_on_its_eventfd() {
+        let f = Arc::new(DbFast::new(8, kick()).unwrap());
+        f.enable(Box::new(Arc::new(FakeKvm::default())));
+        f.site_add(0x90);
+        let s = Rec::default();
+        f.register(7, 0x7);
+        efd_of(&f, 7).signal().unwrap(); // a count pending at removal
+        let t = Instant::now();
+        let rm = f.begin_deregister(7).expect("registered");
+        assert!(
+            t.elapsed() < Duration::from_millis(500),
+            "begin_deregister waited for the drainer ({:?})",
+            t.elapsed()
+        );
+        assert_eq!(f.poll_removal(&rm), RemovalPoll::Pending, "no drainer yet");
+        let fd = rm.fd();
+        assert_eq!(fd.drain().unwrap(), 0, "nothing signalled yet");
+        // The drainer runs: it applies the Remove (final drain) and acknowledges.
+        f.service_ready(&s);
+        assert_eq!(
+            fd.drain().unwrap(),
+            1,
+            "the ack is signalled on the eventfd"
+        );
+        match f.poll_removal(&rm) {
+            RemovalPoll::Done(l) => assert_eq!((l.doorbells, l.forwarded), (1, 1)),
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(
+            s.got.lock().unwrap().len(),
+            1,
+            "the final drain delivered it"
+        );
+        // A lost acknowledgement: reported at the deadline.
+        f.register(8, 0x8);
+        let rm = f
+            .begin_deregister(8)
+            .expect("registered")
+            .with_deadline(Duration::from_millis(20));
+        assert_eq!(f.poll_removal(&rm), RemovalPoll::Pending);
+        std::thread::sleep(Duration::from_millis(30));
+        assert_eq!(f.poll_removal(&rm), RemovalPoll::TimedOut);
+        assert_eq!(f.counters.ack_timeouts.load(Ordering::Relaxed), 1);
     }
 
     #[test]
