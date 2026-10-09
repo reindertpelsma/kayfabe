@@ -21,6 +21,7 @@ pub mod gop;
 pub mod gpucopy;
 pub mod gpuuid;
 pub mod hostfacts;
+pub mod latejoin;
 pub mod mem;
 pub mod prof;
 pub mod raw_unsafe;

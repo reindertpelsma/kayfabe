@@ -1853,6 +1853,9 @@ pub struct ChanPlane {
     /// class `c797`) — fence never signalled. Per-ctxshare groups keep CUDA's one-group shape and
     /// restore v3-gfx's measured shape for Vulkan (a separate host group per subcontext).
     groups: Mutex<HashMap<(u32, u32, u32), (u32, u32)>>,
+    /// ★ 2026-10-09 (`crate::latejoin`): which guest TSGs the guest has scheduled — written at
+    /// statement time by the drainer, read by the birth act (`KF3_SCHEDULE_LATE_JOINERS`).
+    guest_sched: Mutex<crate::latejoin::GuestTsgSched>,
     /// ★ Per guest token: doorbells the vCPU trap rang INLINE, and how many reached the host's
     /// doorbell (the `DOORBELL-LEDGER` line at free; atomics only — the vCPU writes them).
     rung: Box<[AtomicU64]>,
@@ -2276,6 +2279,7 @@ impl ChanPlane {
             pt_fifo_raised: AtomicU64::new(0),
             pt_fifo_owed: std::array::from_fn(|_| AtomicU64::new(0)),
             groups: Mutex::new(HashMap::new()),
+            guest_sched: Mutex::new(crate::latejoin::GuestTsgSched::default()),
             enc_sessions: Mutex::new(HashMap::new()),
             rung: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rang: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
@@ -2701,6 +2705,110 @@ impl ChanPlane {
             .collect()
     }
 
+    /// A `GPFIFO_SCHEDULE` statement on `object` (a channel or a TSG): the guest's own schedule,
+    /// carried to its twins' host groups. ⊘ Never blocks: the host verb is an act.
+    fn schedule_statement(&self, client: u32, object: u32, enable: bool) -> ChanAnswer {
+        if let Some(ht) = self
+            .by_obj
+            .lock()
+            .ok()
+            .and_then(|m| m.get(&(client, object)).copied())
+        {
+            return self.schedule_translated(client, object, ht, enable);
+        }
+        // ★ P6: a TSG schedule (`0xa06c0101`) over Translated members (nvidia-uvm's
+        // channels live in groups): every member's slot, as its own schedule.
+        let members: Vec<u32> = self
+            .by_obj
+            .lock()
+            .map(|m| {
+                m.iter()
+                    .filter(|(k, _)| k.0 == client)
+                    .map(|(_, v)| *v)
+                    .collect::<Vec<u32>>()
+            })
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|ht| {
+                self.slot(*ht)
+                    .is_some_and(|s| s.lock().is_ok_and(|g| g.tsg == Some(object)))
+            })
+            .collect();
+        if !members.is_empty() {
+            for ht in members {
+                if let ChanAnswer::Refused { status, why } =
+                    self.schedule_translated(client, object, ht, enable)
+                {
+                    return ChanAnswer::Refused { status, why };
+                }
+            }
+            return ChanAnswer::Done;
+        }
+        // ★ P5b: a user channel (or its group) — the twin's own schedule, as an act.
+        let twins: Vec<((u32, u32), kf_host::Channel)> = self
+            .pt
+            .lock()
+            .map(|m| {
+                m.iter()
+                    .filter(|(k, v)| {
+                        k.0 == client && (k.1 == object || v.tsg == Some(object))
+                    })
+                    .map(|(k, v)| (*k, v.chan))
+                    .collect()
+            })
+            .unwrap_or_default();
+        if twins.is_empty() {
+            return ChanAnswer::NotOurs;
+        }
+        self.defer(
+            "schedule",
+            Box::new(move |me: &ChanPlane| {
+                let run = || -> Result<String, (u32, String)> {
+                    let mut restarted = 0;
+                    // ★ v3-video: twins of one guest TSG share ONE host group — schedule it once.
+                    let mut groups_done = std::collections::HashSet::new();
+                    for (k, c) in &twins {
+                        // ★ v3-chanctl: a STOPPED twin is re-enabled before it is scheduled
+                        // (STOP disabled it; "it has to be scheduled, bound and enabled again",
+                        // `ctrla06fgpfifo.h:219-221`) — unless the guest ALSO disabled it with
+                        // DISABLE_CHANNELS, which only its own `bDisable=FALSE` undoes.
+                        let (stopped, disabled) =
+                            me.pt.lock().ok().and_then(|m| m.get(k).map(|v| (v.stopped, v.disabled))).unwrap_or((false, false));
+                        if enable && stopped {
+                            if !disabled {
+                                me.rm
+                                    .disable_channels(&[*c], false, false, false)
+                                    .map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x} re-enable after STOP: {e:?}", c.token)))?;
+                            }
+                            restarted += 1;
+                            if let Ok(mut m) = me.pt.lock()
+                                && let Some(v) = m.get_mut(k)
+                            {
+                                v.stopped = false;
+                                if let Some(n) = v.notifier.as_mut() {
+                                    // The record as the guest left it is the new baseline.
+                                    n.guest_stop_write = false;
+                                    n.at_arm = n.words().unwrap_or(n.at_arm);
+                                }
+                            }
+                        }
+                        crate::latejoin::schedule_group_once(me.rm, &mut groups_done, *c, enable)
+                            .map_err(|e| (NV_ERR_INVALID_STATE, e))?;
+                    }
+                    Ok(format!("{client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} on {} twin(s) ({restarted} restarted after STOP)", twins.len()))
+                };
+                let result = run();
+                // ★ 2026-10-09: a schedule the host refused is not the guest's scheduled state.
+                if result.is_err()
+                    && let Ok(mut s) = me.guest_sched.lock()
+                {
+                    s.forget(client, object);
+                }
+                result
+            }),
+        )
+    }
+
     /// ★ The drainer's entry: one statement from the served chain (`kf_rm::chanlink`). ⊘ Never
     /// blocks: a statement that implies a host act answers [`ChanAnswer::Deferred`] and the act
     /// runs on the act thread (P5b).
@@ -2712,96 +2820,16 @@ impl ChanPlane {
                 object,
                 enable,
             } => {
-                if let Some(ht) = self
-                    .by_obj
-                    .lock()
-                    .ok()
-                    .and_then(|m| m.get(&(client, object)).copied())
+                let answer = self.schedule_statement(client, object, enable);
+                // ★ 2026-10-09 (late TSG joiners): the guest's own scheduled state, recorded at
+                // STATEMENT time (statement order is the act thread's order, so a twin whose birth
+                // act is still queued sees it). A refused statement is not a schedule.
+                if !matches!(answer, ChanAnswer::Refused { .. })
+                    && let Ok(mut s) = self.guest_sched.lock()
                 {
-                    return self.schedule_translated(client, object, ht, enable);
+                    s.record(client, object, enable);
                 }
-                // ★ P6: a TSG schedule (`0xa06c0101`) over Translated members (nvidia-uvm's
-                // channels live in groups): every member's slot, as its own schedule.
-                let members: Vec<u32> = self
-                    .by_obj
-                    .lock()
-                    .map(|m| {
-                        m.iter()
-                            .filter(|(k, _)| k.0 == client)
-                            .map(|(_, v)| *v)
-                            .collect::<Vec<u32>>()
-                    })
-                    .unwrap_or_default()
-                    .into_iter()
-                    .filter(|ht| {
-                        self.slot(*ht)
-                            .is_some_and(|s| s.lock().is_ok_and(|g| g.tsg == Some(object)))
-                    })
-                    .collect();
-                if !members.is_empty() {
-                    for ht in members {
-                        if let ChanAnswer::Refused { status, why } =
-                            self.schedule_translated(client, object, ht, enable)
-                        {
-                            return ChanAnswer::Refused { status, why };
-                        }
-                    }
-                    return ChanAnswer::Done;
-                }
-                // ★ P5b: a user channel (or its group) — the twin's own schedule, as an act.
-                let twins: Vec<((u32, u32), kf_host::Channel)> = self
-                    .pt
-                    .lock()
-                    .map(|m| {
-                        m.iter()
-                            .filter(|(k, v)| {
-                                k.0 == client && (k.1 == object || v.tsg == Some(object))
-                            })
-                            .map(|(k, v)| (*k, v.chan))
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                if twins.is_empty() {
-                    return ChanAnswer::NotOurs;
-                }
-                self.defer(
-                    "schedule",
-                    Box::new(move |me: &ChanPlane| {
-                        let mut restarted = 0;
-                        // ★ v3-video: twins of one guest TSG share ONE host group — schedule it once.
-                        let mut groups_done = std::collections::HashSet::new();
-                        for (k, c) in &twins {
-                            // ★ v3-chanctl: a STOPPED twin is re-enabled before it is scheduled
-                            // (STOP disabled it; "it has to be scheduled, bound and enabled again",
-                            // `ctrla06fgpfifo.h:219-221`) — unless the guest ALSO disabled it with
-                            // DISABLE_CHANNELS, which only its own `bDisable=FALSE` undoes.
-                            let (stopped, disabled) =
-                                me.pt.lock().ok().and_then(|m| m.get(k).map(|v| (v.stopped, v.disabled))).unwrap_or((false, false));
-                            if enable && stopped {
-                                if !disabled {
-                                    me.rm
-                                        .disable_channels(&[*c], false, false, false)
-                                        .map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x} re-enable after STOP: {e:?}", c.token)))?;
-                                }
-                                restarted += 1;
-                                if let Ok(mut m) = me.pt.lock()
-                                    && let Some(v) = m.get_mut(k)
-                                {
-                                    v.stopped = false;
-                                    if let Some(n) = v.notifier.as_mut() {
-                                        // The record as the guest left it is the new baseline.
-                                        n.guest_stop_write = false;
-                                        n.at_arm = n.words().unwrap_or(n.at_arm);
-                                    }
-                                }
-                            }
-                            if groups_done.insert(c.tsg) {
-                                me.rm.schedule_enable(*c, enable).map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x}: {e:?}", c.token)))?;
-                            }
-                        }
-                        Ok(format!("{client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} on {} twin(s) ({restarted} restarted after STOP)", twins.len()))
-                    }),
-                )
+                answer
             }
             ChanStatement::Bind {
                 client,
@@ -4421,6 +4449,11 @@ impl ChanPlane {
     }
 
     fn free(&self, client: u32, object: u32) -> ChanAnswer {
+        // ★ 2026-10-09: a freed TSG (or client) is no longer scheduled — its handle may come back
+        // as a new group, whose first channel must not be scheduled from the old one's state.
+        if let Ok(mut s) = self.guest_sched.lock() {
+            s.forget(client, object);
+        }
         // ★ §U: a freed 5080 names nothing any more; a freed channel's numbering goes with it.
         if let (Ok(mut m), Ok(scopes)) = (self.sw_objs.lock(), self.scopes.lock()) {
             m.retain(|_, o| {
@@ -5746,10 +5779,16 @@ impl ChanPlane {
                         }
                     };
                     let owner = if a.kernel_client && !a.user_work { Owner::Kernel } else { Owner::User };
-                    let alloc = me
-                        .caps
-                        .lock()
-                        .map_err(|_| "caps poisoned".to_string())
+                    // ★ 2026-10-09 (`KF3_SCHEDULE_LATE_JOINERS=1`, default off; `crate::latejoin`): a twin
+                    // born into a guest TSG the guest has ALREADY scheduled is in a host group nobody
+                    // else schedules (the guest sent its one schedule before the channel existed).
+                    // The schedule of its own host group, authored from the guest's own scheduled
+                    // state. A refusal is the birth's refusal, by name.
+                    let late = crate::latejoin::schedule_late_joiner(me.rm, crate::latejoin::enabled(), &me.guest_sched, a.client, a.tsg, chan);
+                    let alloc = late
+                        .clone()
+                        .map(|_| ())
+                        .and_then(|()| me.caps.lock().map_err(|_| "caps poisoned".to_string()))
                         .and_then(|mut c| me.plane.allocate_channel(&mut c, idx, if relay_host.is_some() { Route::Translated } else { Route::Passthrough }, chan.token, owner).map_err(|e| format!("{e:?}")));
                     if let Err(e) = alloc {
                         let _ = me.release_twin(a.client, a.tsg, a.ctx_share, chan);
@@ -5831,7 +5870,7 @@ impl ChanPlane {
                     // serves this token; after, its eventfd does. No lock is held here.
                     let fast = if relayed { "fast=off (USERD relay: doorbells go to a worker)".to_string() } else { me.fast_register(idx, runlist, chid) };
                     Ok(format!(
-                        "chan {:#x}:{:#x} BORN Passthrough: token {idx:#x} -> host {:#x} in {key:?} gpfifo={:#x}x{} userd={userd:?} engine={engine:#x} declared_kernel_pid={} {}{} rc={rc} {fast}",
+                        "chan {:#x}:{:#x} BORN Passthrough: token {idx:#x} -> host {:#x} in {key:?} gpfifo={:#x}x{} userd={userd:?} engine={engine:#x} declared_kernel_pid={} {}{} rc={rc} late_joiner_schedule={:?} {fast}",
                         a.client,
                         a.handle,
                         chan.token,
@@ -5839,7 +5878,8 @@ impl ChanPlane {
                         g.entries,
                         a.declared_kernel_pid,
                         kernel_by(&a),
-                        if a.user_work { " WINDOWS-USER-WORK (§V, ProcessID/subcontext)" } else { "" }
+                        if a.user_work { " WINDOWS-USER-WORK (§V, ProcessID/subcontext)" } else { "" },
+                        late.as_ref().ok()
                     ))
                 }),
             );

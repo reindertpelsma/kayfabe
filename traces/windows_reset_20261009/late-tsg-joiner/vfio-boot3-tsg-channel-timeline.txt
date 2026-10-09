@@ -1,0 +1,231 @@
+    0.0000 ALLOC 0xc56f client 0xc1e00007 parent 0xcaf00000 h 0xbaba0045
+    0.0214 ALLOC 0xc56f client 0xc1e00008 parent 0xb h 0x2
+    0.0695 CTRL 0xa06f0104 client 0xc1e00008 obj 0x2 ps 4 
+    0.0697 CTRL 0xa06f0103 client 0xc1e00008 obj 0x2 ps 3  params=010000
+    1.0878 ALLOC 0xa06c client 0xc1d00013 parent 0xff010000 h 0xff0e0000
+    1.0882 CTRL 0xa06c010a client 0xc1d00013 obj 0xff0e0000 ps 88 
+    1.0897 ALLOC 0xc56f client 0xc1d00013 parent 0xff0e0000 h 0xff040000
+    1.0919 CTRL 0xa06c0103 client 0xc1d00013 obj 0xff0e0000 ps 8 
+    1.0923 CTRL 0xa06c0101 client 0xc1d00013 obj 0xff0e0000 ps 3  params=010000
+    1.0985 ALLOC 0xa06c client 0xc1d00015 parent 0xff010000 h 0xff0e0000
+    1.0989 CTRL 0xa06c010a client 0xc1d00015 obj 0xff0e0000 ps 88 
+    1.0996 ALLOC 0xc56f client 0xc1d00015 parent 0xff0e0000 h 0xff040001
+    1.1087 CTRL 0xa06c0103 client 0xc1d00015 obj 0xff0e0000 ps 8 
+    1.1090 CTRL 0xa06c0101 client 0xc1d00015 obj 0xff0e0000 ps 3  params=010100
+    1.1196 ALLOC 0xc56f client 0xc1d00016 parent 0xff020000 h 0xff040002
+    1.1222 CTRL 0xa06f0103 client 0xc1d00016 obj 0xff040002 ps 3  params=010000
+    1.1308 ALLOC 0xc56f client 0xc1d00018 parent 0xff020000 h 0xff040003
+    1.1350 CTRL 0xa06f0103 client 0xc1d00018 obj 0xff040003 ps 3  params=010000
+    1.1389 ALLOC 0xa06c client 0xc1d00019 parent 0xff020000 h 0xff0e0000
+    1.1392 CTRL 0xa06c010a client 0xc1d00019 obj 0xff0e0000 ps 88 
+    1.1400 ALLOC 0xc56f client 0xc1d00019 parent 0xff0e0000 h 0xff040004
+    1.1422 CTRL 0xa06c0103 client 0xc1d00019 obj 0xff0e0000 ps 8 
+    1.1425 CTRL 0xa06c0101 client 0xc1d00019 obj 0xff0e0000 ps 3  params=010000
+    1.1469 ALLOC 0xc56f client 0xc1d0001a parent 0xff020000 h 0xff040005
+    1.1496 CTRL 0xa06f0103 client 0xc1d0001a obj 0xff040005 ps 3  params=010000
+    1.1540 ALLOC 0xc56f client 0xc1d0001b parent 0xff020000 h 0xff040006
+    1.1578 CTRL 0xa06f0103 client 0xc1d0001b obj 0xff040006 ps 3  params=010000
+    1.1622 ALLOC 0xc56f client 0xc1d0001c parent 0xff020000 h 0xff040007
+    1.1653 CTRL 0xa06f0103 client 0xc1d0001c obj 0xff040007 ps 3  params=010000
+    1.1703 ALLOC 0xc56f client 0xc1d0001d parent 0xff020000 h 0xff040008
+    1.1741 CTRL 0xa06f0103 client 0xc1d0001d obj 0xff040008 ps 3  params=010000
+    1.1785 ALLOC 0xc56f client 0xc1d0001e parent 0xff020000 h 0xff040009
+    1.1813 CTRL 0xa06f0103 client 0xc1d0001e obj 0xff040009 ps 3  params=010000
+    1.3800 ALLOC 0xc56f client 0xc1d00021 parent 0xff020000 h 0xff04000a
+    1.3826 CTRL 0xa06f0103 client 0xc1d00021 obj 0xff04000a ps 3  params=010000
+    1.4140 ALLOC 0xa06c client 0xc1d00024 parent 0xff020000 h 0xff0e0000
+    1.4144 CTRL 0xa06c010a client 0xc1d00024 obj 0xff0e0000 ps 88 
+    1.4158 ALLOC 0xc56f client 0xc1d00024 parent 0xff0e0000 h 0xff04000b
+    1.4180 CTRL 0xa06c0103 client 0xc1d00024 obj 0xff0e0000 ps 8 
+    1.4184 CTRL 0xa06c0101 client 0xc1d00024 obj 0xff0e0000 ps 3  params=010000
+    1.4226 ALLOC 0xa06c client 0xc1d00025 parent 0xff020000 h 0xff0e0000
+    1.4230 CTRL 0xa06c010a client 0xc1d00025 obj 0xff0e0000 ps 88 
+    1.4238 ALLOC 0xc56f client 0xc1d00025 parent 0xff0e0000 h 0xff04000c
+    2.4205 ALLOC 0xa06c client 0xc1d00028 parent 0xff020000 h 0xff0e0000
+    2.4208 CTRL 0xa06c010a client 0xc1d00028 obj 0xff0e0000 ps 88 
+    2.4228 ALLOC 0xc56f client 0xc1d00028 parent 0xff0e0000 h 0xff04000d
+    2.4322 CTRL 0xa06c0103 client 0xc1d00028 obj 0xff0e0000 ps 8 
+    2.4325 CTRL 0xa06c0101 client 0xc1d00028 obj 0xff0e0000 ps 3  params=010100
+    4.0504 ALLOC 0xa06c client 0xc1d0002b parent 0xff020000 h 0xff0e0000
+    4.0508 CTRL 0xa06c010a client 0xc1d0002b obj 0xff0e0000 ps 88 
+    4.0518 ALLOC 0xc56f client 0xc1d0002b parent 0xff0e0000 h 0xff04000e
+    4.0612 CTRL 0xa06c0103 client 0xc1d0002b obj 0xff0e0000 ps 8 
+    4.0615 CTRL 0xa06c0101 client 0xc1d0002b obj 0xff0e0000 ps 3  params=010100
+    4.0841 ALLOC 0xa06c client 0xc1d0002c parent 0xff020000 h 0xff0e0000
+    4.0845 CTRL 0xa06c010a client 0xc1d0002c obj 0xff0e0000 ps 88 
+    4.0853 ALLOC 0xc56f client 0xc1d0002c parent 0xff0e0000 h 0xff04000f
+    4.0876 CTRL 0xa06c0103 client 0xc1d0002c obj 0xff0e0000 ps 8 
+    4.0880 CTRL 0xa06c0101 client 0xc1d0002c obj 0xff0e0000 ps 3  params=010100
+    4.2813 ALLOC 0xa06c client 0xc1d0002f parent 0xff020000 h 0xff0e0000
+    4.2817 CTRL 0xa06c010a client 0xc1d0002f obj 0xff0e0000 ps 88 
+    4.2849 ALLOC 0xc56f client 0xc1d0002f parent 0xff0e0000 h 0xff040010
+    4.2981 CTRL 0xa06c0103 client 0xc1d0002f obj 0xff0e0000 ps 8 
+    4.2985 CTRL 0xa06c0101 client 0xc1d0002f obj 0xff0e0000 ps 3  params=010100
+    4.3131 ALLOC 0xa06c client 0xc1d00030 parent 0xff020000 h 0xff0e0000
+    4.3134 CTRL 0xa06c010a client 0xc1d00030 obj 0xff0e0000 ps 88 
+    4.3146 ALLOC 0xc56f client 0xc1d00030 parent 0xff0e0000 h 0xff040011
+    4.3169 CTRL 0xa06c0103 client 0xc1d00030 obj 0xff0e0000 ps 8 
+    4.3173 CTRL 0xa06c0101 client 0xc1d00030 obj 0xff0e0000 ps 3  params=010100
+    4.5678 ALLOC 0xa06c client 0xc1d00031 parent 0xff020000 h 0xff0e0000
+    4.5682 CTRL 0xa06c010a client 0xc1d00031 obj 0xff0e0000 ps 88 
+    4.5743 ALLOC 0xc56f client 0xc1d00031 parent 0xff0e0000 h 0xff040012
+    4.6082 CTRL 0xa06c0103 client 0xc1d00031 obj 0xff0e0000 ps 8 
+    4.6096 CTRL 0xa06c0101 client 0xc1d00031 obj 0xff0e0000 ps 3  params=010100
+    4.6291 ALLOC 0xa06c client 0xc1d00033 parent 0xff020000 h 0xff0e0000
+    4.6295 CTRL 0xa06c010a client 0xc1d00033 obj 0xff0e0000 ps 88 
+    4.6307 ALLOC 0xc56f client 0xc1d00033 parent 0xff0e0000 h 0xff040013
+    4.6330 CTRL 0xa06c0103 client 0xc1d00033 obj 0xff0e0000 ps 8 
+    4.6334 CTRL 0xa06c0101 client 0xc1d00033 obj 0xff0e0000 ps 3  params=010100
+    5.3973 ALLOC 0xa06c client 0xc1d00036 parent 0xff020000 h 0xff0e0000
+    5.3977 CTRL 0xa06c010a client 0xc1d00036 obj 0xff0e0000 ps 88 
+    5.3989 ALLOC 0xc56f client 0xc1d00036 parent 0xff0e0000 h 0xff040014
+    5.4092 CTRL 0xa06c0103 client 0xc1d00036 obj 0xff0e0000 ps 8 
+    5.4096 CTRL 0xa06c0101 client 0xc1d00036 obj 0xff0e0000 ps 3  params=010100
+    5.4362 ALLOC 0xa06c client 0xc1d00037 parent 0xff020000 h 0xff0e0000
+    5.4366 CTRL 0xa06c010a client 0xc1d00037 obj 0xff0e0000 ps 88 
+    5.4373 ALLOC 0xc56f client 0xc1d00037 parent 0xff0e0000 h 0xff040015
+    5.4400 CTRL 0xa06c0103 client 0xc1d00037 obj 0xff0e0000 ps 8 
+    5.4405 CTRL 0xa06c0101 client 0xc1d00037 obj 0xff0e0000 ps 3  params=010100
+    5.5194 CTRL 0xa06c0103 client 0xc1d00037 obj 0xff0e0000 ps 8 
+    5.5205 CTRL 0xa06c0103 client 0xc1d00036 obj 0xff0e0000 ps 8 
+    7.2758 ALLOC 0xa06c client 0xc1d0003c parent 0xff020000 h 0xff0e0000
+    7.2763 CTRL 0xa06c010a client 0xc1d0003c obj 0xff0e0000 ps 88 
+    7.2775 ALLOC 0xc56f client 0xc1d0003c parent 0xff0e0000 h 0xff040016
+    7.2919 CTRL 0xa06c0103 client 0xc1d0003c obj 0xff0e0000 ps 8 
+    7.2923 CTRL 0xa06c0101 client 0xc1d0003c obj 0xff0e0000 ps 3  params=010100
+    7.3020 ALLOC 0xa06c client 0xc1d0003d parent 0xff020000 h 0xff0e0000
+    7.3025 CTRL 0xa06c010a client 0xc1d0003d obj 0xff0e0000 ps 88 
+    7.3048 ALLOC 0xc56f client 0xc1d0003d parent 0xff0e0000 h 0xff040017
+    7.3244 CTRL 0xa06c0103 client 0xc1d0003d obj 0xff0e0000 ps 8 
+    7.3250 CTRL 0xa06c0101 client 0xc1d0003d obj 0xff0e0000 ps 3  params=010100
+    7.3459 ALLOC 0xa06c client 0xc1d0003e parent 0xff020000 h 0xff0e0000
+    7.3465 CTRL 0xa06c010a client 0xc1d0003e obj 0xff0e0000 ps 88 
+    7.3505 ALLOC 0xc56f client 0xc1d0003e parent 0xff0e0000 h 0xff040018
+    7.3550 CTRL 0xa06c0103 client 0xc1d0003e obj 0xff0e0000 ps 8 
+    7.3557 CTRL 0xa06c0101 client 0xc1d0003e obj 0xff0e0000 ps 3  params=010100
+    7.3699 ALLOC 0xa06c client 0xc1d0003f parent 0xff020000 h 0xff0e0000
+    7.3705 CTRL 0xa06c010a client 0xc1d0003f obj 0xff0e0000 ps 88 
+    7.3715 ALLOC 0xc56f client 0xc1d0003f parent 0xff0e0000 h 0xff040019
+    7.3750 CTRL 0xa06c0103 client 0xc1d0003f obj 0xff0e0000 ps 8 
+    7.3757 CTRL 0xa06c0101 client 0xc1d0003f obj 0xff0e0000 ps 3  params=010100
+    7.5432 CTRL 0xa06c0103 client 0xc1d0003f obj 0xff0e0000 ps 8 
+    7.5447 CTRL 0xa06c0103 client 0xc1d0003d obj 0xff0e0000 ps 8 
+    7.7878 ALLOC 0xa06c client 0xc1d00042 parent 0xff020000 h 0xff0e0000
+    7.7882 CTRL 0xa06c010a client 0xc1d00042 obj 0xff0e0000 ps 88 
+    7.7895 ALLOC 0xc56f client 0xc1d00042 parent 0xff0e0000 h 0xff04001a
+    7.8017 CTRL 0xa06c0103 client 0xc1d00042 obj 0xff0e0000 ps 8 
+    7.8022 CTRL 0xa06c0101 client 0xc1d00042 obj 0xff0e0000 ps 3  params=010100
+    7.8391 ALLOC 0xa06c client 0xc1d00045 parent 0xff020000 h 0xff0e0000
+    7.8396 CTRL 0xa06c010a client 0xc1d00045 obj 0xff0e0000 ps 88 
+    7.8410 ALLOC 0xc56f client 0xc1d00045 parent 0xff0e0000 h 0xff04001b
+    7.8572 CTRL 0xa06c0103 client 0xc1d00045 obj 0xff0e0000 ps 8 
+    7.8579 CTRL 0xa06c0101 client 0xc1d00045 obj 0xff0e0000 ps 3  params=010100
+    7.8589 ALLOC 0xa06c client 0xc1d00046 parent 0xff020000 h 0xff0e0000
+    7.8593 CTRL 0xa06c010a client 0xc1d00046 obj 0xff0e0000 ps 88 
+    7.8604 ALLOC 0xc56f client 0xc1d00046 parent 0xff0e0000 h 0xff04001c
+    7.8681 CTRL 0xa06c0103 client 0xc1d00046 obj 0xff0e0000 ps 8 
+    7.8688 CTRL 0xa06c0101 client 0xc1d00046 obj 0xff0e0000 ps 3  params=010100
+    7.9029 ALLOC 0xa06c client 0xc1d00047 parent 0xff020000 h 0xff0e0000
+    7.9033 CTRL 0xa06c010a client 0xc1d00047 obj 0xff0e0000 ps 88 
+    7.9044 ALLOC 0xc56f client 0xc1d00047 parent 0xff0e0000 h 0xff04001d
+    7.9082 CTRL 0xa06c0103 client 0xc1d00047 obj 0xff0e0000 ps 8 
+    7.9091 CTRL 0xa06c0101 client 0xc1d00047 obj 0xff0e0000 ps 3  params=010100
+    8.6033 ALLOC 0xa06c client 0xc1d00048 parent 0xff020000 h 0xff0e0000
+    8.6037 CTRL 0xa06c010a client 0xc1d00048 obj 0xff0e0000 ps 88 
+    8.6049 ALLOC 0xc56f client 0xc1d00048 parent 0xff0e0000 h 0xff04001e
+    8.6156 CTRL 0xa06c0103 client 0xc1d00048 obj 0xff0e0000 ps 8 
+    8.6165 CTRL 0xa06c0101 client 0xc1d00048 obj 0xff0e0000 ps 3  params=010100
+    8.6363 ALLOC 0xa06c client 0xc1d00049 parent 0xff020000 h 0xff0e0000
+    8.6367 CTRL 0xa06c010a client 0xc1d00049 obj 0xff0e0000 ps 88 
+    8.6374 ALLOC 0xc56f client 0xc1d00049 parent 0xff0e0000 h 0xff04001f
+    8.6396 CTRL 0xa06c0103 client 0xc1d00049 obj 0xff0e0000 ps 8 
+    8.6400 CTRL 0xa06c0101 client 0xc1d00049 obj 0xff0e0000 ps 3  params=010100
+    8.8022 ALLOC 0xa06c client 0xc1d0004a parent 0xff020000 h 0xff0e0000
+    8.8026 CTRL 0xa06c010a client 0xc1d0004a obj 0xff0e0000 ps 88 
+    8.8038 ALLOC 0xc56f client 0xc1d0004a parent 0xff0e0000 h 0xff040020
+    8.8137 CTRL 0xa06c0103 client 0xc1d0004a obj 0xff0e0000 ps 8 
+    8.8148 CTRL 0xa06c0101 client 0xc1d0004a obj 0xff0e0000 ps 3  params=010100
+    8.8396 ALLOC 0xa06c client 0xc1d0004b parent 0xff020000 h 0xff0e0000
+    8.8400 CTRL 0xa06c010a client 0xc1d0004b obj 0xff0e0000 ps 88 
+    8.8407 ALLOC 0xc56f client 0xc1d0004b parent 0xff0e0000 h 0xff040021
+    8.8429 CTRL 0xa06c0103 client 0xc1d0004b obj 0xff0e0000 ps 8 
+    8.8434 CTRL 0xa06c0101 client 0xc1d0004b obj 0xff0e0000 ps 3  params=010100
+    9.1682 CTRL 0xa06c0103 client 0xc1d00037 obj 0xff0e0000 ps 8 
+    9.1698 CTRL 0xa06c0103 client 0xc1d00036 obj 0xff0e0000 ps 8 
+   41.7283 CTRL 0xa06c0103 client 0xc1d0004b obj 0xff0e0000 ps 8 
+   41.7320 CTRL 0xa06c0103 client 0xc1d0004a obj 0xff0e0000 ps 8 
+   41.7368 CTRL 0xa06c0103 client 0xc1d0003f obj 0xff0e0000 ps 8 
+   41.7384 CTRL 0xa06c0103 client 0xc1d0003d obj 0xff0e0000 ps 8 
+   41.9982 CTRL 0xa06c0103 client 0xc1d0004b obj 0xff0e0000 ps 8 
+   42.0040 CTRL 0xa06c0103 client 0xc1d0004a obj 0xff0e0000 ps 8 
+   42.0084 CTRL 0xa06c0103 client 0xc1d0003f obj 0xff0e0000 ps 8 
+   42.0102 CTRL 0xa06c0103 client 0xc1d0003d obj 0xff0e0000 ps 8 
+   50.6476 ALLOC 0xa06c client 0xc1d00059 parent 0xff020000 h 0xff0e0000
+   50.6486 CTRL 0xa06c010a client 0xc1d00059 obj 0xff0e0000 ps 88 
+   50.6505 ALLOC 0xc56f client 0xc1d00059 parent 0xff0e0000 h 0xff040014
+   50.6642 CTRL 0xa06c0103 client 0xc1d00059 obj 0xff0e0000 ps 8 
+   50.6647 CTRL 0xa06c0101 client 0xc1d00059 obj 0xff0e0000 ps 3  params=010100
+   50.7002 ALLOC 0xa06c client 0xc1d0005a parent 0xff020000 h 0xff0e0000
+   50.7008 CTRL 0xa06c010a client 0xc1d0005a obj 0xff0e0000 ps 88 
+   50.7015 ALLOC 0xc56f client 0xc1d0005a parent 0xff0e0000 h 0xff040015
+   50.7046 CTRL 0xa06c0103 client 0xc1d0005a obj 0xff0e0000 ps 8 
+   50.7051 CTRL 0xa06c0101 client 0xc1d0005a obj 0xff0e0000 ps 3  params=010100
+   59.1285 ALLOC 0xa06c client 0xc1d0005d parent 0xff020000 h 0xff0e0000
+   59.1297 CTRL 0xa06c010a client 0xc1d0005d obj 0xff0e0000 ps 88 
+   59.1312 ALLOC 0xc56f client 0xc1d0005d parent 0xff0e0000 h 0xff040014
+   59.1445 CTRL 0xa06c0103 client 0xc1d0005d obj 0xff0e0000 ps 8 
+   59.1451 CTRL 0xa06c0101 client 0xc1d0005d obj 0xff0e0000 ps 3  params=010100
+   59.1802 ALLOC 0xa06c client 0xc1d0005e parent 0xff020000 h 0xff0e0000
+   59.1809 CTRL 0xa06c010a client 0xc1d0005e obj 0xff0e0000 ps 88 
+   59.1817 ALLOC 0xc56f client 0xc1d0005e parent 0xff0e0000 h 0xff040015
+   59.1846 CTRL 0xa06c0103 client 0xc1d0005e obj 0xff0e0000 ps 8 
+   59.1851 CTRL 0xa06c0101 client 0xc1d0005e obj 0xff0e0000 ps 3  params=010100
+   59.2554 ALLOC 0xa06c client 0xc1d0005f parent 0xff020000 h 0xff0e0000
+   59.2557 CTRL 0xa06c010a client 0xc1d0005f obj 0xff0e0000 ps 88 
+   59.2569 ALLOC 0xc56f client 0xc1d0005f parent 0xff0e0000 h 0xff040022
+   59.2661 CTRL 0xa06c0103 client 0xc1d0005f obj 0xff0e0000 ps 8 
+   59.2665 CTRL 0xa06c0101 client 0xc1d0005f obj 0xff0e0000 ps 3  params=010100
+   59.2921 ALLOC 0xa06c client 0xc1d00060 parent 0xff020000 h 0xff0e0000
+   59.2925 CTRL 0xa06c010a client 0xc1d00060 obj 0xff0e0000 ps 88 
+   59.2932 ALLOC 0xc56f client 0xc1d00060 parent 0xff0e0000 h 0xff040023
+   59.2958 CTRL 0xa06c0103 client 0xc1d00060 obj 0xff0e0000 ps 8 
+   59.2962 CTRL 0xa06c0101 client 0xc1d00060 obj 0xff0e0000 ps 3  params=010100
+   59.3158 ALLOC 0xa06c client 0xc1d00061 parent 0xff020000 h 0xff0e0000
+   59.3162 CTRL 0xa06c010a client 0xc1d00061 obj 0xff0e0000 ps 88 
+   59.3169 ALLOC 0xc56f client 0xc1d00061 parent 0xff0e0000 h 0xff040024
+   59.3192 CTRL 0xa06c0103 client 0xc1d00061 obj 0xff0e0000 ps 8 
+   59.3196 CTRL 0xa06c0101 client 0xc1d00061 obj 0xff0e0000 ps 3  params=010100
+   59.3799 ALLOC 0xa06c client 0xc1d00062 parent 0xff020000 h 0xff0e0000
+   59.3803 CTRL 0xa06c010a client 0xc1d00062 obj 0xff0e0000 ps 88 
+   59.3810 ALLOC 0xc56f client 0xc1d00062 parent 0xff0e0000 h 0xff040025
+   59.3834 CTRL 0xa06c0103 client 0xc1d00062 obj 0xff0e0000 ps 8 
+   59.3838 CTRL 0xa06c0101 client 0xc1d00062 obj 0xff0e0000 ps 3  params=010000
+   59.4137 ALLOC 0xa06c client 0xc1d00063 parent 0xff020000 h 0xff0e0000
+   59.4140 CTRL 0xa06c010a client 0xc1d00063 obj 0xff0e0000 ps 88 
+   59.4152 ALLOC 0xc56f client 0xc1d00063 parent 0xff0e0000 h 0xff040026
+   59.4243 CTRL 0xa06c0103 client 0xc1d00063 obj 0xff0e0000 ps 8 
+   59.4248 CTRL 0xa06c0101 client 0xc1d00063 obj 0xff0e0000 ps 3  params=010100
+   59.4390 ALLOC 0xc56f client 0xc1d00063 parent 0xff0e0000 h 0xff0e0102
+   59.4463 ALLOC 0xc56f client 0xc1d00063 parent 0xff0e0000 h 0xff0e0103
+   59.5282 ALLOC 0xc56f client 0xc1d00063 parent 0xff0e0000 h 0xff0e0104
+   59.5705 ALLOC 0xa06c client 0xc1d00064 parent 0xff020000 h 0xff0e0000
+   59.5709 CTRL 0xa06c010a client 0xc1d00064 obj 0xff0e0000 ps 88 
+   59.5716 ALLOC 0xc56f client 0xc1d00064 parent 0xff0e0000 h 0xff040027
+   59.5739 CTRL 0xa06c0103 client 0xc1d00064 obj 0xff0e0000 ps 8 
+   59.5745 CTRL 0xa06c0101 client 0xc1d00064 obj 0xff0e0000 ps 3  params=010100
+   90.3662 ALLOC 0xa06c client 0xc1d00067 parent 0xff020000 h 0xff0e0000
+   90.3676 CTRL 0xa06c010a client 0xc1d00067 obj 0xff0e0000 ps 88 
+   90.3694 ALLOC 0xc56f client 0xc1d00067 parent 0xff0e0000 h 0xff040014
+   90.3832 CTRL 0xa06c0103 client 0xc1d00067 obj 0xff0e0000 ps 8 
+   90.3837 CTRL 0xa06c0101 client 0xc1d00067 obj 0xff0e0000 ps 3  params=010100
+   90.4145 ALLOC 0xa06c client 0xc1d00068 parent 0xff020000 h 0xff0e0000
+   90.4151 CTRL 0xa06c010a client 0xc1d00068 obj 0xff0e0000 ps 88 
+   90.4158 ALLOC 0xc56f client 0xc1d00068 parent 0xff0e0000 h 0xff040015
+   90.4186 CTRL 0xa06c0103 client 0xc1d00068 obj 0xff0e0000 ps 8 
+   90.4190 CTRL 0xa06c0101 client 0xc1d00068 obj 0xff0e0000 ps 3  params=010100
+   90.5180 CTRL 0xa06c0103 client 0xc1d0004b obj 0xff0e0000 ps 8 
+   90.5193 CTRL 0xa06c0103 client 0xc1d0004a obj 0xff0e0000 ps 8 
+   90.5209 CTRL 0xa06c0103 client 0xc1d0003f obj 0xff0e0000 ps 8 
+   90.5221 CTRL 0xa06c0103 client 0xc1d0003d obj 0xff0e0000 ps 8 
+   90.5521 CTRL 0xa06c0103 client 0xc1d00068 obj 0xff0e0000 ps 8 
+   90.5535 CTRL 0xa06c0103 client 0xc1d00067 obj 0xff0e0000 ps 8 
