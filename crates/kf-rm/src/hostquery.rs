@@ -635,7 +635,16 @@ pub fn query_intr_table(
     )?;
     let kinds = kinds.map_err(|_| FieldCause::DependsOn("engines"))?;
     let mut table = hostfacts::derive_static_intr_table(&s)?;
+    // ★ 2026-10-09 (`KF3_INTR_TABLE_HW_SHAPE=1`, default OFF): the shape a GSP-client kernel table has
+    // (`authored::hw_shape_static_rows`, `docs/design/V3_IRQ_SOURCE_TRACE.md` §3).
+    let hw_shape = authored::intr_table_hw_shape();
+    if hw_shape {
+        table = authored::hw_shape_static_rows(table);
+    }
     table.extend(authored::engine_notification_rows(kinds, grce_mask));
+    if hw_shape {
+        table.extend(authored::grce_placeholder_rows(kinds, grce_mask));
+    }
     authored::with_gsp_and_disp_rows(table).map_err(|_| {
         FieldCause::Reply(FactRefusal::Unservable {
             cmd: hostfacts::NV2080_CTRL_CMD_MC_GET_STATIC_INTR_TABLE,

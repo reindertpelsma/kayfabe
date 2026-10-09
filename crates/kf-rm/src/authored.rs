@@ -237,6 +237,72 @@ pub fn engine_notification_rows(engines: &[EngineKind], grce_mask: u64) -> Vec<I
     out
 }
 
+/// ★ 2026-10-09 (`KF3_INTR_TABLE_HW_SHAPE=1`, default OFF; `docs/design/V3_IRQ_SOURCE_TRACE.md` §3) —
+/// the stall rows the host's `MC_GET_STATIC_INTR_TABLE` reports that a GSP-client kernel table does NOT
+/// carry: `MC_ENGINE_IDX_TMR` (1), `NON_REPLAYABLE_FAULT` (61), `NON_REPLAYABLE_FAULT_ERROR` (63) and
+/// `INFO_FAULT` (64).
+///
+/// `[measured]` the real GSP's reply to `INTERNAL_INTR_GET_KERNEL_TABLE` on the same RTX 4070 (VFIO
+/// reference, boot3) has no row for any of the four; the kayfabe reply (run 100/104) has all four with
+/// stall vectors 148/132/133/134, which the guest then enables and nothing ever raises.
+/// `[ogkm]` why they are the physical RM's: `kgmmuRegisterIntrService_IMPL` registers
+/// `NON_REPLAYABLE_FAULT(_ERROR)` only `if (!IS_GSP_CLIENT(pGpu))` (`kern_gmmu.c:2273-2286`), i.e. a CPU-RM
+/// that has a GSP owns no service for them; the control that reports them is the vGPU one (*"static
+/// interrupts needed by VGPU from Host RM"*, `ctrl2080mc.h:262`), whose consumer `intrInitInterruptTable_VF`
+/// has no GSP to leave them to (`intr_vgpu.c:222-260`). `[inferred]` `INFO_FAULT` and `TMR` do have
+/// CPU-RM services in a GSP client (`kern_gmmu.c:2237-2250`, `timer.c:1959`), so for those two the rule is
+/// the measurement alone, not ogkm.
+pub const GSP_OWNED_STATIC_ROWS: [u16; 4] = [1, 61, 63, 64];
+
+/// ★ `KF3_INTR_TABLE_HW_SHAPE=1`: the host's static rows, shaped as a GSP-client kernel table carries them:
+/// the [`GSP_OWNED_STATIC_ROWS`] dropped, and `vectorNonStall` invalid on the rest.
+///
+/// The second half is `[ogkm]`: a static row is a STALL interrupt type (faults, access counter, doorbell,
+/// FECS log — `NV2080_INTR_TYPE_*`), and the VF consumer that reads this control sets
+/// `intrVectorNonStall = intrVectorStall` itself (`intr_vgpu.c:84-85`), which is exactly the duplicate
+/// kayfabe's table shows (the host's reply echoes the stall vector in the non-stall field); `[measured]` the
+/// real kernel table has `-1` there for 59/60/62/73.
+#[must_use]
+pub fn hw_shape_static_rows(rows: Vec<IntrTableEntry>) -> Vec<IntrTableEntry> {
+    rows.into_iter()
+        .filter(|e| !GSP_OWNED_STATIC_ROWS.contains(&e.engine_idx))
+        .map(|mut e| {
+            e.vector_non_stall = INTR_VECTOR_INVALID;
+            e
+        })
+        .collect()
+}
+
+/// ★ `KF3_INTR_TABLE_HW_SHAPE=1`: a copy engine that notifies through GR (a GRCE) still has a row in the
+/// real kernel table, with BOTH vectors invalid (`[measured]` CE0 and CE1 on the RTX 4070:
+/// `stall=-1 nonstall=-1`); [`engine_notification_rows`] gives it none. The GRCE set is the host's own mask
+/// (`kf_abi::cecaps::HostCeCaps::grce_mask`).
+#[must_use]
+pub fn grce_placeholder_rows(engines: &[EngineKind], grce_mask: u64) -> Vec<IntrTableEntry> {
+    engines
+        .iter()
+        .filter_map(|k| match *k {
+            EngineKind::Copy(i) if i < 64 && grce_mask & (1u64 << i) != 0 => Some(IntrTableEntry {
+                engine_idx: (MC_CE0 + i) as u16,
+                pmc_intr_mask: 0,
+                vector_stall: INTR_VECTOR_INVALID,
+                vector_non_stall: INTR_VECTOR_INVALID,
+            }),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The switch's name.
+pub const INTR_TABLE_HW_SHAPE_ENV: &str = "KF3_INTR_TABLE_HW_SHAPE";
+
+/// Whether `KF3_INTR_TABLE_HW_SHAPE=1` is set (read once).
+#[must_use]
+pub fn intr_table_hw_shape() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var(INTR_TABLE_HW_SHAPE_ENV).is_ok_and(|v| v.trim() == "1"))
+}
+
 /// ★ P5b §2.7 — **the guest vector a HOST engine's non-stall completion is announced on**, read
 /// back out of the table the guest was served (`intr_table`), never restated: `GR<i>` → the
 /// `MC_ENGINE_IDX_GR<i>` row, async `CE<i>` → the `MC_ENGINE_IDX_CE<i>` row, and a GRCE — which
@@ -762,5 +828,93 @@ mod hwref_check {
                 assert_eq!(ours, want, "{g:?} OFA{i}");
             }
         }
+    }
+}
+
+/// ★ `KF3_INTR_TABLE_HW_SHAPE`: the shaping, on the table the host actually reports (run 100's
+/// kernel table) and held to the real GSP's (VFIO boot3) for every row both state.
+#[cfg(test)]
+mod hw_shape {
+    use super::*;
+
+    fn row(engine_idx: u16, s: u32, n: u32) -> IntrTableEntry {
+        IntrTableEntry {
+            engine_idx,
+            pmc_intr_mask: 0,
+            vector_stall: s,
+            vector_non_stall: n,
+        }
+    }
+
+    /// The static rows a Linux host RM 595.91.07 answered (`stall == non-stall`), in its order.
+    fn host_rows() -> Vec<IntrTableEntry> {
+        let mut v = vec![
+            row(61, 132, 132),
+            row(63, 133, 133),
+            row(64, 134, 134),
+            row(59, 64, 64),
+            row(62, 131, 131),
+            row(60, 72, 72),
+            row(1, 148, 148),
+            row(73, 129, 129),
+        ];
+        v.extend((156..164).map(|i| row(i, INTR_VECTOR_INVALID, INTR_VECTOR_INVALID)));
+        v
+    }
+
+    /// The real GSP's stall rows (VFIO reference boot3, RTX 4070).
+    fn gsp_stall_rows() -> Vec<IntrTableEntry> {
+        let mut v = vec![row(59, 64, INTR_VECTOR_INVALID), row(62, 131, INTR_VECTOR_INVALID)];
+        v.push(row(60, 72, INTR_VECTOR_INVALID));
+        v.push(row(73, 129, INTR_VECTOR_INVALID));
+        v.extend((156..164).map(|i| row(i, INTR_VECTOR_INVALID, INTR_VECTOR_INVALID)));
+        v
+    }
+
+    #[test]
+    fn the_shaped_static_rows_are_the_gsps_stall_rows() {
+        let mut got = hw_shape_static_rows(host_rows());
+        let mut want = gsp_stall_rows();
+        got.sort_by_key(|e| e.engine_idx);
+        want.sort_by_key(|e| e.engine_idx);
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn the_gsp_and_disp_rows_still_append_and_no_owned_row_survives() {
+        let t = with_gsp_and_disp_rows(hw_shape_static_rows(host_rows())).unwrap();
+        for idx in GSP_OWNED_STATIC_ROWS {
+            assert!(t.iter().all(|e| e.engine_idx != idx), "row {idx} kept");
+        }
+        assert!(t.iter().any(|e| e.engine_idx == MC_ENGINE_IDX_GSP
+            && e.vector_stall == GSP_STALL_VECTOR
+            && e.vector_non_stall == INTR_VECTOR_INVALID));
+        assert!(t.iter().all(|e| e.vector_stall == INTR_VECTOR_INVALID
+            || e.vector_non_stall == INTR_VECTOR_INVALID));
+    }
+
+    #[test]
+    fn a_gr_copy_engine_gets_an_empty_row_and_an_async_one_does_not() {
+        let engines = [
+            EngineKind::Graphics(0),
+            EngineKind::Copy(0),
+            EngineKind::Copy(1),
+            EngineKind::Copy(2),
+            EngineKind::Copy(3),
+        ];
+        let rows = grce_placeholder_rows(&engines, 0b11);
+        assert_eq!(
+            rows,
+            vec![
+                row(15, INTR_VECTOR_INVALID, INTR_VECTOR_INVALID),
+                row(16, INTR_VECTOR_INVALID, INTR_VECTOR_INVALID)
+            ]
+        );
+        assert!(grce_placeholder_rows(&engines, 0).is_empty());
+        // and the lookup the relay uses still finds GR0 for a GRCE, with the placeholder rows present
+        let mut table = engine_notification_rows(&engines, 0b11);
+        table.extend(rows);
+        assert_eq!(non_stall_vector_for(&table, EngineKind::Copy(0)), Some(0));
+        assert_eq!(non_stall_vector_for(&table, EngineKind::Copy(2)), Some(1));
     }
 }
