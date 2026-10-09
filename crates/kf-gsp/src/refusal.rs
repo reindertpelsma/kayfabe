@@ -89,12 +89,13 @@ impl RefusalLedger {
             count: 1,
             first_sequence: sequence,
         };
+        // ⊘ A row is "fresh" (one log line on the register drainer) exactly once: when it is STORED.
+        // A row the table has no room for is never found again, so every repeat of it would be
+        // "first seen" and cost a `write(2)` on the drainer — a guest-reachable unbounded emit
+        // (drainer verification 2026-10-09, F-L1). Past the cap the counts (`distinct`, `total`) keep
+        // moving and the log stays quiet; `fresh` is therefore bounded by the cap as well.
         if self.rows.len() < REFUSAL_ROWS_MAX {
             self.rows.push(row);
-        }
-        // ⊘ `fresh` is drained by the device on every service pass; it is bounded by the same cap
-        // so a guest minting ids faster than the drainer runs cannot grow it either.
-        if self.fresh.len() < REFUSAL_ROWS_MAX {
             self.fresh.push(row);
         }
     }
