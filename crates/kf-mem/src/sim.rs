@@ -290,9 +290,10 @@ impl SimRm {
     /// What VA page `va` translates to through a live (not broken) mapping of `owner`.
     #[must_use]
     pub fn translate(&self, va: u64, owner: Owner) -> Option<Backing> {
-        let m = self.maps.iter().find(|m| {
-            !m.broken && m.owner == owner && m.va <= va && va < m.va + m.len
-        })?;
+        let m = self
+            .maps
+            .iter()
+            .find(|m| !m.broken && m.owner == owner && m.va <= va && va < m.va + m.len)?;
         let o = m.off + (va - m.va);
         Some(match m.obj {
             RAM_OBJ => (true, o),
@@ -313,7 +314,8 @@ impl SimRm {
 
     /// Place a FOREIGN mapping (other kayfabe code, same client + `hDma`).
     pub fn place_foreign(&mut self, id: u32, va: u64, len: u64) -> bool {
-        self.map(va, len, FOREIGN_OBJ, va, Owner::Foreign(id)).is_ok()
+        self.map(va, len, FOREIGN_OBJ, va, Owner::Foreign(id))
+            .is_ok()
     }
 
     /// Its owner removes a foreign mapping (whole-mapping unmaps of its pieces).
@@ -347,7 +349,11 @@ impl SimRm {
 impl SpaceVerbs for &Sim {
     fn map_row(&self, d: &Desired, _defer: bool) -> Result<Mapped, String> {
         let obj = if d.ram { RAM_OBJ } else { STORE_OBJ };
-        match self.0.borrow_mut().map(d.va, d.len, obj, d.off, Owner::Mirror) {
+        match self
+            .0
+            .borrow_mut()
+            .map(d.va, d.len, obj, d.off, Owner::Mirror)
+        {
             Ok(()) => Ok(Mapped::Placed),
             Err(true) => Ok(Mapped::HeldByHost),
             Err(false) => Err(format!("map {:#x}+{:#x}: refused", d.va, d.len)),
@@ -375,7 +381,9 @@ impl SpaceVerbs for &Sim {
         let mut next = first.va;
         for d in rows {
             if !d.ram || d.va != next || d.perm != first.perm || d.kind != first.kind {
-                return Err("batch rows not one VA-contiguous same-kind same-perm RAM range".into());
+                return Err(
+                    "batch rows not one VA-contiguous same-kind same-perm RAM range".into(),
+                );
             }
             next = d.va + d.len;
             pages.extend((0..d.len / P).map(|i| (true, d.off + i * P)));
@@ -756,7 +764,11 @@ mod tests {
         let sim = fresh();
         let m = SimMirror::new(&sim, true);
         let mut c = BTreeMap::new();
-        map_ram(&m, &mut c, &[(4, 1, 900), (5, 1, 17), (6, 1, 333), (7, 1, 5)]);
+        map_ram(
+            &m,
+            &mut c,
+            &[(4, 1, 900), (5, 1, 17), (6, 1, 333), (7, 1, 5)],
+        );
         check(&sim, &c, &BTreeMap::new(), BASE, pg(PAGES)).unwrap();
         unmap_pages(&m, &mut c, &[5]);
         check(&sim, &c, &BTreeMap::new(), BASE, pg(PAGES)).unwrap();
@@ -773,7 +785,11 @@ mod tests {
         let sim = fresh();
         let m = SimMirror::new(&sim, true);
         let mut c = BTreeMap::new();
-        map_ram(&m, &mut c, &[(40, 1, 900), (41, 1, 17), (42, 1, 333), (43, 1, 5)]);
+        map_ram(
+            &m,
+            &mut c,
+            &[(40, 1, 900), (41, 1, 17), (42, 1, 333), (43, 1, 5)],
+        );
         assert_eq!(
             sim.0.borrow().maps.len(),
             1,
@@ -804,10 +820,61 @@ mod tests {
             }
             m.rows.borrow_mut().clear();
             assert!(r.is_ok(), "{label}: {r:?}");
-            check(&sim, &c, &foreign, BASE, pg(PAGES))
-                .unwrap_or_else(|e| panic!("{label}: {e}"));
-            assert_eq!(sim.0.borrow().gap_bytes, 0, "{label}: no byte of a gap is unmapped");
+            check(&sim, &c, &foreign, BASE, pg(PAGES)).unwrap_or_else(|e| panic!("{label}: {e}"));
+            assert_eq!(
+                sim.0.borrow().gap_bytes,
+                0,
+                "{label}: no byte of a gap is unmapped"
+            );
         }
+    }
+
+    /// Two own placements across an EMPTY gap: still two host calls (one per owned span) — a
+    /// range is never stretched over VA nobody of ours holds, known-empty or not.
+    #[test]
+    fn a_range_across_an_empty_gap_is_one_call_per_owned_span() {
+        let sim = fresh();
+        let m = SimMirror::new(&sim, true);
+        let mut c = BTreeMap::new();
+        map_ram(&m, &mut c, &[(40, 1, 10), (41, 1, 11)]);
+        map_ram(&m, &mut c, &[(44, 1, 12), (45, 1, 13)]);
+        m.bv.unmap_range(pg(40), 6 * P, true).unwrap();
+        let rm = sim.0.borrow();
+        assert_eq!(rm.ranges, vec![(pg(40), 2 * P), (pg(44), 2 * P)]);
+        assert_eq!(rm.gap_bytes, 0);
+        assert!(rm.maps.is_empty() && rm.objs.is_empty());
+    }
+
+    /// Nothing of ours in the range: no host call at all.
+    #[test]
+    fn a_range_over_nothing_of_ours_makes_no_host_call() {
+        let sim = fresh();
+        let m = SimMirror::new(&sim, true);
+        assert!(sim.0.borrow_mut().place_foreign(3, pg(10), 4 * P));
+        m.bv.unmap_range(pg(8), 8 * P, true).unwrap();
+        assert!(sim.0.borrow().ranges.is_empty());
+        check(
+            &sim,
+            &BTreeMap::new(),
+            &BTreeMap::from([(3, (pg(10), 4 * P))]),
+            BASE,
+            pg(PAGES),
+        )
+        .unwrap();
+    }
+
+    /// A range that would SPLIT one of our mappings outside a reservation is refused before any
+    /// host call (a per-run row wider than the range — no caller does this; belt and braces).
+    #[test]
+    fn a_range_that_would_split_ours_outside_a_reservation_is_refused() {
+        let sim = fresh();
+        let m = SimMirror::new(&sim, true);
+        let mut c = BTreeMap::new();
+        map_ram(&m, &mut c, &[(4, 4, 100)]);
+        let r = m.bv.unmap_range(pg(5), P, true);
+        assert!(r.is_err_and(|e| e.contains("outside a VA-reserving hDma")));
+        assert!(sim.0.borrow().ranges.is_empty());
+        check(&sim, &c, &BTreeMap::new(), BASE, pg(PAGES)).unwrap();
     }
 
     /// A range that ends exactly where a foreign mapping starts leaves it alone.
@@ -819,7 +886,14 @@ mod tests {
         assert!(sim.0.borrow_mut().place_foreign(7, pg(42), 2 * P));
         map_ram(&m, &mut c, &[(40, 1, 1), (41, 1, 9)]);
         unmap_pages(&m, &mut c, &[40, 41]);
-        check(&sim, &c, &BTreeMap::from([(7, (pg(42), 2 * P))]), BASE, pg(PAGES)).unwrap();
+        check(
+            &sim,
+            &c,
+            &BTreeMap::from([(7, (pg(42), 2 * P))]),
+            BASE,
+            pg(PAGES),
+        )
+        .unwrap();
     }
 
     /// Sparse unmaps (every other page) around foreign pages: one verdict each, foreign intact.
@@ -847,12 +921,40 @@ mod tests {
         let sim = fresh();
         let m = SimMirror::new(&sim, true);
         let mut c = BTreeMap::new();
-        let foreign = BTreeMap::from([(1u32, (pg(0), 2 * P)), (2, (pg(50), 3 * P)), (3, (pg(90), P))]);
+        let foreign = BTreeMap::from([
+            (1u32, (pg(0), 2 * P)),
+            (2, (pg(50), 3 * P)),
+            (3, (pg(90), P)),
+        ]);
         for (&id, &(va, len)) in &foreign {
             assert!(sim.0.borrow_mut().place_foreign(id, va, len));
         }
-        map_ram(&m, &mut c, &[(2, 1, 7), (3, 1, 70), (4, 2, 700), (30, 1, 1), (31, 1, 2), (32, 1, 3), (33, 1, 4)]);
-        map_ram(&m, &mut c, &[(45, 1, 8), (46, 1, 80), (47, 1, 800), (53, 1, 9), (54, 1, 90), (63, 1, 5), (64, 1, 6)]);
+        map_ram(
+            &m,
+            &mut c,
+            &[
+                (2, 1, 7),
+                (3, 1, 70),
+                (4, 2, 700),
+                (30, 1, 1),
+                (31, 1, 2),
+                (32, 1, 3),
+                (33, 1, 4),
+            ],
+        );
+        map_ram(
+            &m,
+            &mut c,
+            &[
+                (45, 1, 8),
+                (46, 1, 80),
+                (47, 1, 800),
+                (53, 1, 9),
+                (54, 1, 90),
+                (63, 1, 5),
+                (64, 1, 6),
+            ],
+        );
         check(&sim, &c, &foreign, BASE, pg(PAGES)).unwrap();
         assert_eq!(m.retire(), 0);
         c.clear();
@@ -868,12 +970,21 @@ mod tests {
     #[test]
     fn property_batched_mirror_against_the_host_rm_model() {
         let mut failures = Vec::new();
+        let mut total = Stats::default();
         for seed in 1..=300u64 {
-            if let Err(e) = run_seed(seed, 60, true) {
-                failures.push(format!("seed {seed}: {e}"));
+            match run_seed(seed, 60, true) {
+                Ok(s) => total.sum(s),
+                Err(e) => failures.push(format!("seed {seed}: {e}")),
             }
         }
-        let kinds = ["VIOLATION", "FAULT_PTE", "assertion", "translates", "retire", "survived"];
+        let kinds = [
+            "VIOLATION",
+            "FAULT_PTE",
+            "assertion",
+            "translates",
+            "retire",
+            "survived",
+        ];
         let histogram: Vec<(&str, usize)> = kinds
             .iter()
             .map(|k| (*k, failures.iter().filter(|f| f.contains(k)).count()))
@@ -884,6 +995,13 @@ mod tests {
             failures.len(),
             failures[0]
         );
+        // ★ A green run must have exercised the batched path: batches (inside the reservation),
+        // range unmaps, held rows (foreign in the way), and retires.
+        eprintln!("property (batched): {total:?}");
+        assert!(
+            total.batches > 100 && total.ranges > 100 && total.held > 10 && total.retires > 10,
+            "the property run did not exercise the batched path: {total:?}"
+        );
     }
 
     /// The same property on the per-run path (`KF3_NO_BATCHED_MAP=1`, the A/B opt-out): no batch,
@@ -891,11 +1009,42 @@ mod tests {
     #[test]
     fn property_per_run_path_against_the_host_rm_model() {
         for seed in 1..=100u64 {
-            run_seed(seed, 60, false).unwrap_or_else(|e| panic!("seed {seed}: {e}"));
+            let s = run_seed(seed, 60, false).unwrap_or_else(|e| panic!("seed {seed}: {e}"));
+            assert_eq!((s.batches, s.ranges), (0, 0), "the opt-out never batches");
         }
     }
 
-    fn run_seed(seed: u64, steps: usize, batching: bool) -> Result<(), String> {
+    /// What one seed exercised (so a green run cannot be a run that never batched).
+    #[derive(Debug, Default, Clone, Copy)]
+    struct Stats {
+        batches: usize,
+        batched_runs: usize,
+        ranges: usize,
+        fallbacks: usize,
+        held: usize,
+        retires: usize,
+    }
+
+    impl Stats {
+        fn add(&mut self, a: &crate::apply::Applied) {
+            self.batches += a.batches;
+            self.batched_runs += a.batched_runs;
+            self.ranges += a.range_unmaps;
+            self.fallbacks += a.batch_fallbacks;
+            self.held += a.held;
+        }
+        fn sum(&mut self, o: Stats) {
+            self.batches += o.batches;
+            self.batched_runs += o.batched_runs;
+            self.ranges += o.ranges;
+            self.fallbacks += o.fallbacks;
+            self.held += o.held;
+            self.retires += o.retires;
+        }
+    }
+
+    fn run_seed(seed: u64, steps: usize, batching: bool) -> Result<Stats, String> {
+        let mut st = Stats::default();
         let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
         let sim = fresh();
         let mut m = SimMirror::new(&sim, batching);
@@ -904,7 +1053,9 @@ mod tests {
         let mut next_id = 1u32;
         let busy = |c: &BTreeMap<u64, Committed>, f: &BTreeMap<u32, (u64, u64)>, p: u64| {
             let va = pg(p);
-            c.range(..=va).next_back().is_some_and(|(&v, x)| va < v + x.len)
+            c.range(..=va)
+                .next_back()
+                .is_some_and(|(&v, x)| va < v + x.len)
                 || f.values().any(|&(v, l)| v <= va && va < v + l)
         };
         for step in 0..steps {
@@ -931,11 +1082,17 @@ mod tests {
                     let k = (1 + rng.below(4)).min(start + n - p);
                     let ram = rng.below(100) < 85;
                     let back = rng.below(4096);
-                    runs.push(map_run(pg(p), k * P, ram, back * P, ro && rng.below(2) == 0));
+                    runs.push(map_run(
+                        pg(p),
+                        k * P,
+                        ram,
+                        back * P,
+                        ro && rng.below(2) == 0,
+                    ));
                     p += k;
                 }
                 what = format!("map {} run(s) from page {start}", runs.len());
-                apply_and_commit(&m, &runs, &mut c);
+                st.add(&apply_and_commit(&m, &runs, &mut c));
             } else if op < 70 {
                 // UNMAP (sparse or contiguous) the placements wholly inside a window.
                 let start = rng.below(PAGES);
@@ -949,7 +1106,7 @@ mod tests {
                     .map(|(_, (&v, x))| unmap_run(v, x))
                     .collect();
                 what = format!("unmap {} run(s) in pages {start}+{n}", runs.len());
-                apply_and_commit(&m, &runs, &mut c);
+                st.add(&apply_and_commit(&m, &runs, &mut c));
             } else if op < 85 {
                 // REMAP: unmap the placements inside a window and map new backing over them.
                 let start = rng.below(PAGES);
@@ -964,12 +1121,18 @@ mod tests {
                     let mut q = *v;
                     while q < v + x.len {
                         let k = ((1 + rng.below(3)) * P).min(v + x.len - q);
-                        runs.push(map_run(q, k, rng.below(100) < 85, rng.below(4096) * P, false));
+                        runs.push(map_run(
+                            q,
+                            k,
+                            rng.below(100) < 85,
+                            rng.below(4096) * P,
+                            false,
+                        ));
                         q += k;
                     }
                 }
                 what = format!("remap {} placement(s) in pages {start}+{n}", old.len());
-                apply_and_commit(&m, &runs, &mut c);
+                st.add(&apply_and_commit(&m, &runs, &mut c));
             } else if op < 93 {
                 // A FOREIGN mapping lands in a gap.
                 let p = rng.below(PAGES);
@@ -983,7 +1146,10 @@ mod tests {
                 what = format!("foreign at page {p}+{n}");
             } else if op < 97 {
                 // Its owner removes a foreign mapping.
-                let key = foreign.keys().nth(rng.below(foreign.len() as u64 + 1) as usize).copied();
+                let key = foreign
+                    .keys()
+                    .nth(rng.below(foreign.len() as u64 + 1) as usize)
+                    .copied();
                 if let Some(id) = key {
                     sim.0.borrow_mut().remove_foreign(id);
                     foreign.remove(&id);
@@ -1002,11 +1168,26 @@ mod tests {
                     return Err(format!("step {step}: a mirror mapping survived the retire"));
                 }
                 m = SimMirror::new(&sim, batching);
+                st.retires += 1;
                 what = "retire".into();
             }
             check(&sim, &c, &foreign, BASE, pg(PAGES))
                 .map_err(|e| format!("step {step} ({what}): {e}"))?;
+            let splits =
+                m.bv.unsafe_splits
+                    .load(std::sync::atomic::Ordering::Relaxed);
+            if splits != 0 {
+                return Err(format!(
+                    "step {step} ({what}): {splits} range(s) refused as unsafe splits (expected none: no batch outside a reservation)"
+                ));
+            }
+            let gap = sim.0.borrow().gap_bytes;
+            if gap != 0 {
+                return Err(format!(
+                    "step {step} ({what}): a range unmap covered {gap:#x} gap bytes"
+                ));
+            }
         }
-        Ok(())
+        Ok(st)
     }
 }

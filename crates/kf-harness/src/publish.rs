@@ -133,7 +133,7 @@ impl<'a> Batching<'a> {
 
 impl MapTarget for Batching<'_> {
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
-        let m = self.bv.vas.map(d, defer)?;
+        let m = self.bv.map(d, defer)?;
         if m == Mapped::Placed {
             self.lens.borrow_mut().insert(d.va, d.len);
         }
@@ -166,7 +166,7 @@ impl MapTarget for Batching<'_> {
     }
     // ★ v3-cdp: the production verb; its unmap is the whole-mapping one (`unmap_run` with no length).
     fn map_sked(&self, s: &kf_mem::ledger::SkedRow, defer: bool) -> Result<Mapped, String> {
-        self.bv.vas.map_sked(s, defer)
+        self.bv.map_sked(s, defer)
     }
 }
 

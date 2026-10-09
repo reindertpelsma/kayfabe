@@ -1004,6 +1004,18 @@ impl HostRm {
     /// ⊘ The range must be one the caller OWNS whole: RM removes whatever of this client's
     /// mappings lie in it, so a range reaching into a window or a ring would take it down too.
     ///
+    /// ⊘★ **(2026-10-09) A range that SPLITS a mapping is safe ONLY inside a guest reservation.**
+    /// [`VaSpace::range`] is an `NV01_MEMORY_VIRTUAL` (`bReserveVaOnAlloc = NV_FALSE`,
+    /// `ogkm-595.84 virtual_mem.c:349`): each map through it allocates its own VA block, and an
+    /// unmap frees the block CONTAINING the unmapped part's start (`virt_mem_allocator_gm107.c:1635
+    /// -1638` → `gpu_vaspace.c:1631-1640`, a containment search, `eheap_old.c:1005-1027`) — so a
+    /// partial unmap there frees the WHOLE original block and the remnants RM still lists lose
+    /// their PTEs. `[measured, Windows runs 242/243]` host Xid 31 `FAULT_PTE` at `0x4034000` and
+    /// `NV_ASSERT(NULL != pMemBlock) @ gpu_vaspace.c:1639` at exit. A reservation
+    /// (`NV50_MEMORY_VIRTUAL`, [`GuestVaRange`]) invalidates exactly the unmapped PTEs
+    /// (`virt_mem_allocator_gm107.c:1578-1633`). The caller (`kf_mem::batch::BatchedVas`) enforces
+    /// it: [`VaSpace::guest_reserved`] is the predicate.
+    ///
     /// ★ STATUS (2026-10-09): a range that straddles a reservation edge is no longer refused
     /// (`VA_STRADDLES_RESERVATION`, before any host call); it is unmapped piece by piece
     /// ([`VaSpace::dma_pieces`]), one range unmap per `hDma`. Every piece is attempted even if one
@@ -2154,6 +2166,35 @@ mod split_row_tests {
 
     fn named(code: u32) -> Result<Vec<(u32, u64, u64)>, RmError> {
         Err(RmError::Other(code))
+    }
+
+    /// ★ 2026-10-09: the batch predicate (`kf_mem::batch::SpaceVerbs::splits_safely`) — only a
+    /// range wholly inside ONE guest reservation may hold a mapping a range unmap will split; the
+    /// Windows process VAs `[1 MiB, 4.5 GiB)` (`[measured run 243]` `0x4034000`) and anything
+    /// crossing an edge go through the `NV01` range, where a split frees the whole VA block.
+    #[test]
+    fn only_a_range_inside_one_reservation_splits_safely() {
+        let s = floor_space();
+        let (lo, hi) = GUEST_VA_RANGES[0];
+        assert!(s.guest_reserved(lo, 0x4000));
+        assert!(
+            s.guest_reserved(0x2_0000_0000, 0x10_0000),
+            "CUDA VAs (gate 4: 128 GiB)"
+        );
+        assert!(
+            !s.guest_reserved(0x403_0000, 0x8000),
+            "Windows process VA: the NV01 range"
+        );
+        assert!(!s.guest_reserved(lo - 0x1000, 0x2000), "crossing an edge");
+        assert!(
+            !s.guest_reserved(hi - 0x1000, 0x2000),
+            "crossing into the host hole"
+        );
+        assert!(!s.guest_reserved(HOST_HOLE_LO, 0x1000));
+        assert!(
+            s.guest_reserved(TWIN_VA_FLOOR, 0x1000),
+            "the Windows low range is reserved"
+        );
     }
 
     #[test]

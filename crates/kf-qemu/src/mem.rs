@@ -1108,7 +1108,15 @@ impl SpaceCalls {
 }
 
 /// ★ `KF3_NO_BATCHED_MAP=1` turns batched maps and range unmaps off (the per-run path, as before
-/// `V3_BATCHED_MAP.md`) — for A/B measurement. Read once.
+/// `V3_BATCHED_MAP.md`) — an explicit OPT-OUT for A/B measurement only. Read once. Default: ON.
+///
+/// ★ STATUS (2026-10-09): the flag is no longer a workaround. Every Windows run since run 114 set
+/// it because the batched path froze the guest after sign-in (`[measured, runs 242/243]` host Xid
+/// 31 `FAULT_PTE` at `0x4034000`, `gpu_vaspace.c:1639` assertions at exit). Root cause: a range
+/// unmap that SPLIT a batch mapping placed through the space's `NV01_MEMORY_VIRTUAL` range — host
+/// RM frees the whole VA block there. Fixed in `kf_mem::batch::BatchedVas` (no batch outside a
+/// guest reservation; ranges over owned spans only), proven against a host RM model
+/// (`kf_mem` `sim` tests); `V3_BATCHED_MAP.md` §8.
 fn batching_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("KF3_NO_BATCHED_MAP").is_none())
@@ -1218,7 +1226,9 @@ impl MapTarget for GpuMirror {
     }
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         let t = std::time::Instant::now();
-        let m = self.vas.map(d, defer);
+        // ★ 2026-10-09: through the batch layer, which records every host mapping of ours
+        // (`kf_mem::batch::OwnMaps`) — a range unmap covers exactly those, never a gap.
+        let m = self.bv.map(d, defer);
         self.calls.maps.fetch_add(1, Ordering::Relaxed);
         self.calls.map_ns.fetch_add(ns_since(t), Ordering::Relaxed);
         let m = m?;
@@ -1242,7 +1252,11 @@ impl MapTarget for GpuMirror {
         let placed = self.bv.place(fd.borrow(), rows, defer);
         self.calls.map_ns.fetch_add(ns_since(t), Ordering::Relaxed);
         if let Err(e) = placed {
-            self.calls.batch_refused.fetch_add(1, Ordering::Relaxed);
+            // ★ 2026-10-09: `NOT_BATCHED` = rows outside a guest reservation, placed per run by
+            // design (`BatchedVas` rule 2) — not a refused batch.
+            if e != kf_mem::ledger::NOT_BATCHED {
+                self.calls.batch_refused.fetch_add(1, Ordering::Relaxed);
+            }
             return Err(e);
         }
         self.calls.batches.fetch_add(1, Ordering::Relaxed);
@@ -1262,7 +1276,7 @@ impl MapTarget for GpuMirror {
     }
     fn map_sked(&self, s: &kf_mem::ledger::SkedRow, defer: bool) -> Result<Mapped, String> {
         let t = std::time::Instant::now();
-        let m = self.vas.map_sked(s, defer);
+        let m = self.bv.map_sked(s, defer);
         self.calls.maps.fetch_add(1, Ordering::Relaxed);
         self.calls.map_ns.fetch_add(ns_since(t), Ordering::Relaxed);
         let m = m?;
@@ -1279,7 +1293,7 @@ impl MapTarget for GpuMirror {
         let sked = self.sked.lock().ok().and_then(|mut k| k.remove(&va));
         if let Some(len) = sked {
             let t = std::time::Instant::now();
-            let r = self.vas.unmap(va, defer);
+            let r = self.bv.unmap_run(va, None, defer);
             self.calls.unmaps.fetch_add(1, Ordering::Relaxed);
             self.calls
                 .unmap_ns
