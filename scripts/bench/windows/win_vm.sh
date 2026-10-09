@@ -725,7 +725,9 @@ cmd_run() {
     # shared GSP observer into logs/<tag>_b<n>_gsp.jsonl (a fresh file per boot, as it requires).
     local tracea=()
     if [ "${WINVM_TRACE:-0}" = 1 ]; then
-      tracea=(-trace "events=$REPO/scripts/bench/trace-events-vfio-reference.txt,file=$VM/logs/${tag}_b${n}_trace.log")
+      # ★ ABI 26: a kf3 boot's list adds `kf3_irq_raise` (docs/design/V3_IRQ_SOURCE_TRACE.md).
+      local tev=vfio; [ "$kf3" = 1 ] && tev=kf3
+      tracea=(-trace "events=$REPO/scripts/bench/trace-events-${tev}-reference.txt,file=$VM/logs/${tag}_b${n}_trace.log")
       [ "${WINVM_GSP_OBSERVER:-0}" = 1 ] && [ "$kf3" = 1 ] && \
         tracea+=(-global "kf3-gpu.x-gsp-observer=$VM/logs/${tag}_b${n}_gsp.jsonl"
                  -global "kf3-gpu.x-gsp-observer-seconds=${WINVM_GSP_OBSERVER_SECONDS:-3600}")

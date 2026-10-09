@@ -931,6 +931,17 @@ static void kf3_msi_user(void *opaque)
         gsp_observer_irq(s->obs);
     }
 #endif
+    if (s->tr_on) {
+        /* ABI 26: the raises queued since the last wake, one event each, in front of the MSI line
+         * they caused (raises that coalesce into one wake show as several events and one MSI).
+         * Drained even when the event is off, so the ring never holds a stale backlog. */
+        uint32_t rvec, rsrc, rout;
+        while (kf3_irq_raise_next(s->h, &rvec, &rsrc, &rout)) {
+            if (trace_event_get_state_backends(TRACE_KF3_IRQ_RAISE)) {
+                trace_kf3_irq_raise(s->tr_name, (int)rvec, (int)rsrc, (int)rout);
+            }
+        }
+    }
     if (s->tr_on && trace_event_get_state_backends(TRACE_VFIO_MSI_INTERRUPT)) {
         MSIMessage m = msix_get_message(pci, x->nr);
         if (kf3_trace_admit(s->h, 2, x->nr, m.data, m.address)) {

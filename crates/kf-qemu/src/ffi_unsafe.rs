@@ -64,7 +64,9 @@ use std::os::unix::ffi::OsStrExt as _;
 /// number at its merge.
 /// 25 (2026-10-09, the merge of both at `claude/windows-reset-20261009`): 24's trace verbs AND
 /// 23's input/cursor verbs (disjoint surfaces).
-pub const KF3_ABI: u32 = 25;
+/// 26 (2026-10-09, `claude/irq-source-trace-20261009`): ABI 25 plus [`kf3_irq_raise_next`], the trace
+/// mode's source-tagged raise records (`kf_trap::irqsrc`, `docs/design/V3_IRQ_SOURCE_TRACE.md`).
+pub const KF3_ABI: u32 = 26;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -610,6 +612,37 @@ pub extern "C" fn kf3_trace_admit(h: *mut c_void, kind: u32, a: u64, b: u64, c: 
         (Some(d), Some(k)) => u32::from(d.trace.admit(k, a, b, c)),
         _ => 0,
     }
+}
+
+/// ★ ABI 26 (trace mode only; the main loop, the ONE consumer): pop the oldest queued interrupt-raise
+/// record — `vector` (the CPU-tree vector, or 512 for "any": a guest enable released pending
+/// vectors), `source` (`kf_trap::irqsrc::IrqSource::id`: class in the low byte, engine slot in the
+/// next) and `outcome` (1 message sent, 0 held, 2 out of range). Returns 1 and fills them, or 0 when
+/// the queue is empty, the mode is off or any pointer is null. The C device writes one
+/// `kf3_irq_raise` trace event per record just before the `vfio_msi_interrupt` of the same wake.
+///
+/// # Safety
+/// `vector`, `source` and `outcome` are writable `u32`s.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_irq_raise_next(
+    h: *mut c_void,
+    vector: *mut u32,
+    source: *mut u32,
+    outcome: *mut u32,
+) -> u32 {
+    if vector.is_null() || source.is_null() || outcome.is_null() {
+        return 0;
+    }
+    let Some(r) = dev(h).and_then(|d| d.irq_src.ring.pop()) else {
+        return 0;
+    };
+    // SAFETY: the three pointers are writable (caller contract) and were checked non-null.
+    unsafe {
+        *vector = r.vector;
+        *source = r.source;
+        *outcome = r.outcome;
+    }
+    1
 }
 
 /// ★ ABI 24: the device name the trace records carry (the host GPU's PCI address unless

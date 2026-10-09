@@ -57,7 +57,9 @@
  * kf3_display_cursor_pixels, kf3_display_cursor_done, and kf3_broker_ready's event array. */
 /* 25 (2026-10-09, merge of both at claude/windows-reset-20261009): 24's trace verbs AND 23's
  * input/cursor verbs; the two surfaces are disjoint. */
-#define KF3_ABI 25
+/* 26 (2026-10-09, claude/irq-source-trace-20261009): ABI 25 plus kf3_irq_raise_next, the trace mode's
+ * source-tagged interrupt-raise records (docs/design/V3_IRQ_SOURCE_TRACE.md). */
+#define KF3_ABI 26
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -202,6 +204,12 @@ uint32_t kf3_trace_piece(void *h, uint64_t base, uint64_t len);
 uint32_t kf3_trace_admit(void *h, uint32_t kind, uint64_t a, uint64_t b, uint64_t c);
 void kf3_trace_name(void *h, char *buf, size_t len);
 void kf3_trace_report(void *h, char *buf, size_t len);
+/* ★ ABI 26, DIAGNOSTIC (trace mode only; main loop = the one consumer): pop the oldest queued
+ * interrupt-raise record. 1 and *vector (CPU-tree vector, 512 = "any"), *source (class in the low
+ * byte, engine slot in the next) and *outcome (1 sent, 0 held, 2 out of range); 0 when empty or the
+ * mode is off. The device writes one kf3_irq_raise trace event per record in front of the
+ * vfio_msi_interrupt line of the same wake. */
+uint32_t kf3_irq_raise_next(void *h, uint32_t *vector, uint32_t *source, uint32_t *outcome);
 /* ★ ABI 10 (v3-display2's 9): the newest display frame, for the console's gfx_update (main thread);
  * -1 = none yet. */
 int32_t kf3_display_frame(void *h, Kf3Frame *out);

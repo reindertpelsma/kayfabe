@@ -274,7 +274,10 @@ ARGS=(-name "$NAME" -nodefaults -no-user-config
 # $RUN/trace.log (kf3's BAR0 read records also need KF3_BAR0_READ_TRACE=1 in the environment) and,
 # with WIN_GSP_OBSERVER=1, the shared GSP observer into $RUN/gsp.jsonl (fresh per run directory).
 if [ "${WIN_TRACE:-0}" = 1 ]; then
-    ARGS+=(-msg timestamp=on -trace "events=$HERE/../trace-events-vfio-reference.txt,file=$RUN/trace.log")
+    # ★ ABI 26: the kf3 event list is the VFIO reference's plus `kf3_irq_raise` (one line per interrupt
+    # raise with its source, in front of the vfio_msi_interrupt line it caused;
+    # docs/design/V3_IRQ_SOURCE_TRACE.md).
+    ARGS+=(-msg timestamp=on -trace "events=$HERE/../trace-events-kf3-reference.txt,file=$RUN/trace.log")
     [ "${WIN_GSP_OBSERVER:-0}" = 1 ] && ARGS+=(-global "kf3-gpu.x-gsp-observer=$RUN/gsp.jsonl"
         -global "kf3-gpu.x-gsp-observer-seconds=${WIN_GSP_OBSERVER_SECONDS:-3600}")
 fi

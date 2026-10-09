@@ -37,6 +37,12 @@ mkdir -p "$QEMU/hw/misc/kf3"
 # box build failed "kf3_gop.h: No such file or directory" because this line named three files.
 cp "$REPO"/qemu/hw/misc/kf3/*.c "$REPO"/qemu/hw/misc/kf3/*.h "$REPO"/qemu/hw/misc/kf3/meson.build "$QEMU/hw/misc/kf3/"
 cp "$ARCHIVE" "$QEMU/hw/misc/kf3/libkf_qemu.a"
+# ★ ABI 26 (docs/design/V3_IRQ_SOURCE_TRACE.md): kf3.c's trace-mode event `kf3_irq_raise` lives in the
+# generated trace/trace-hw_vfio.h it already includes, so its definition joins hw/vfio/trace-events
+# (once; the non-comment lines of the overlay's own trace-events).
+if ! grep -q '^kf3_irq_raise(' "$QEMU/hw/vfio/trace-events"; then
+  grep -v '^#' "$REPO/qemu/hw/misc/kf3/trace-events" | grep . >> "$QEMU/hw/vfio/trace-events"
+fi
 grep -q "subdir('kf3')" "$QEMU/hw/misc/meson.build" || printf "\nsubdir('kf3')\n" >> "$QEMU/hw/misc/meson.build"
 grep -q '^config KF3' "$QEMU/hw/misc/Kconfig" || printf '\nconfig KF3\n    bool\n    default y if TEST_DEVICES\n    depends on PCI\n' >> "$QEMU/hw/misc/Kconfig"
 # One build at a time in the shared build dir (a second waits, it does not interleave).

@@ -2978,7 +2978,18 @@ impl Device {
                 dp.publish_events(&store);
                 if raised && dp.ports.anything_pending(dp.map.heads as usize) {
                     dp.counters.irqs.fetch_add(1, Ordering::Relaxed);
-                    self.latch_and_deliver(kf_rm::authored::DISP_STALL_VECTOR);
+                    // ★ Why (`kf_trap::irqsrc`): an enabled head-timing event first, then an AWAKEN,
+                    // then a window semaphore; one source per raise.
+                    let src = if dp.ports.rm_dispatch(dp.map.heads as usize) != 0 {
+                        kf_trap::irqsrc::IrqSource::DisplayTiming
+                    } else if dp.ports.event(EventReg::AwakenWin) != 0
+                        || dp.ports.event(EventReg::AwakenOther) != 0
+                    {
+                        kf_trap::irqsrc::IrqSource::DisplayAwaken
+                    } else {
+                        kf_trap::irqsrc::IrqSource::DisplaySem
+                    };
+                    self.latch_and_deliver(kf_rm::authored::DISP_STALL_VECTOR, src);
                 }
             }
             // 9. ★ §8.16: the achieved rates per path, per window of at least 1 s — published for

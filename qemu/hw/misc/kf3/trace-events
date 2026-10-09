@@ -1,0 +1,12 @@
+# kf3-gpu trace events (ABI 26; docs/design/V3_IRQ_SOURCE_TRACE.md).
+#
+# Not a QEMU trace-events directory of its own: scripts/bench/build_kf3.sh appends these lines to
+# hw/vfio/trace-events of the QEMU tree it builds (once), so the generated trace/trace-hw_vfio.h that
+# kf3.c already includes for vfio_region_read / vfio_msi_interrupt carries them too, with no change to
+# the tree's meson files. The record format follows the vfio events so one analyser reads both.
+#
+# One event per interrupt raise the Rust device recorded, in trace mode only (KF3_BAR0_READ_TRACE=1).
+# vector: the CPU-tree vector (512 = a guest enable released pending vectors); source: low byte =
+# kf_trap::irqsrc source class, next byte = engine slot; outcome: 1 message sent, 0 held, 2 out of
+# range. Written in front of the vfio_msi_interrupt line of the wake that sent the message.
+kf3_irq_raise(const char *name, int vector, int source, int outcome) " (%s) vector %d source %#x outcome %d"

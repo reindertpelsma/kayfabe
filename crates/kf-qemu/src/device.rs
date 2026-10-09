@@ -21,6 +21,7 @@ use kf_chip::bar0::{
 use kf_core::{HostOps, HostSlice, Plane, Step, Translatable, Vmm};
 use kf_gsp::{CommandPolicy, GspFsm, GuestRam, RamRefused};
 use kf_linux_raw::{Notifier, PollTimeout, Poller, ReadyTokens};
+use kf_trap::irqsrc::IrqSource;
 use kf_trap::{Action, Class, Route, WriteSemantics};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -270,6 +271,12 @@ pub struct Device {
     irq_lines: Vec<Notifier>,
     /// Interrupt counters for the boot log.
     pub irq_counts: IrqCounts,
+    /// ★ 2026-10-09 (`docs/design/V3_IRQ_SOURCE_TRACE.md`): WHY each interrupt was raised — per
+    /// `(source, vector)` sent and held counts, always on (relaxed atomics; no print, no lock), and
+    /// in `KF3_BAR0_READ_TRACE` mode the ring behind the `kf3_irq_raise` trace event.
+    pub irq_src: kf_trap::irqsrc::IrqSourceCounts,
+    /// ★ Replies and events the GSP model posted to the guest's status queue (shared with the FSM).
+    gsp_posts: kf_gsp::PostStats,
     pub(crate) stop: AtomicBool,
     /// ★ Display step 3c: display ids whose monitor changed and whose hotplug the register drainer
     /// still owes the guest (set by the display worker, taken by the drainer).
@@ -925,8 +932,10 @@ impl Device {
             Some((0, off)) => off,
             _ => u64::MAX,
         };
+        let fsm = console.fsm(abi);
+        let gsp_posts = fsm.post_stats();
         let gsp = Gsp {
-            fsm: console.fsm(abi),
+            fsm,
             model,
             policy,
             published: std::collections::HashMap::new(),
@@ -1112,6 +1121,15 @@ impl Device {
                 .map(|_| Notifier::create().map_err(|e| format!("irq eventfd: {e:?}")))
                 .collect::<Result<Vec<_>, _>>()?,
             irq_counts: IrqCounts::default(),
+            irq_src: {
+                let c = kf_trap::irqsrc::IrqSourceCounts::default();
+                // Trace mode only: queue every raise for the C device's `kf3_irq_raise` events.
+                if trace.on() {
+                    c.ring.enable();
+                }
+                c
+            },
+            gsp_posts,
             drainer_efd,
             stop: AtomicBool::new(false),
             hotplug_pending: AtomicU32::new(0),
@@ -1454,7 +1472,10 @@ impl Device {
                 &|o, v, w| self.shadow_store(o, v, w),
             ) {
                 dp.counters.irqs.fetch_add(1, Ordering::Relaxed);
-                self.latch_and_deliver(kf_rm::authored::DISP_STALL_VECTOR);
+                self.latch_and_deliver(
+                    kf_rm::authored::DISP_STALL_VECTOR,
+                    IrqSource::DisplayEnable,
+                );
             }
             return;
         }
@@ -1488,6 +1509,22 @@ impl Device {
             let raise = self.intr.write(r, val as u32);
             self.intr
                 .shadow(r, |o, v| self.shadow_store(o, u64::from(v), 4));
+            // ★ Why: the guest's own loopback trigger names its vector; an enable that released an
+            // already-pending vector may release several, so it takes the "any" bucket.
+            match r {
+                kf_trap::cpuintr::Reg::Trigger => self.irq_src.note(
+                    IrqSource::GuestTrigger,
+                    (val as u32) & 0xFFF,
+                    raise,
+                ),
+                kf_trap::cpuintr::Reg::LeafEnSet(_) | kf_trap::cpuintr::Reg::TopEnSet
+                    if raise == kf_trap::cpuintr::Raise::Message =>
+                {
+                    self.irq_src
+                        .note(IrqSource::GuestEnable, kf_trap::irqsrc::ANY_VECTOR, raise);
+                }
+                _ => {}
+            }
             self.deliver(raise);
             return;
         }
@@ -1682,9 +1719,12 @@ impl Device {
         )
     }
 
-    /// ★ Latch `vector` (a completion this device announces) and deliver — any thread.
-    pub fn latch_and_deliver(&self, vector: u32) {
+    /// ★ Latch `vector` (a completion this device announces) and deliver — any thread. `source` says
+    /// WHY (`kf_trap::irqsrc`): it is counted per `(source, vector)` and, in trace mode, queued for
+    /// the `kf3_irq_raise` trace event.
+    pub fn latch_and_deliver(&self, vector: u32, source: IrqSource) {
         let raise = self.intr.latch(vector);
+        self.irq_src.note(source, vector, raise);
         self.intr
             .shadow_all(|o, v| self.shadow_store(o, u64::from(v), 4));
         if raise == kf_trap::cpuintr::Raise::None {
@@ -2598,12 +2638,19 @@ impl Device {
             toks.join(" ")
         );
         let ic = &self.irq_counts;
+        let (gsp_replies, gsp_events) = self.gsp_posts.get();
         let irq = format!(
-            " irq[writes={} raised={} held={} oor={}]",
+            " irq[writes={} raised={} held={} oor={} by_vec[{}] w1c[{}] gsp[replies={} events={} stall_sent={} stall_held={}]]",
             ic.writes.load(o),
             ic.raised.load(o),
             ic.held.load(o),
-            ic.out_of_range.load(o)
+            ic.out_of_range.load(o),
+            self.irq_src.render(),
+            self.intr.w1c_summary(),
+            gsp_replies,
+            gsp_events,
+            self.irq_src.sent_on(kf_rm::authored::GSP_STALL_VECTOR),
+            self.irq_src.held_on(kf_rm::authored::GSP_STALL_VECTOR),
         ) + &self.display.map_or_else(String::new, |dp| {
             let d = &dp.counters;
             format!(
@@ -2940,7 +2987,7 @@ impl Device {
         // ★ The interrupt goes AFTER the message and its registers are visible, and outside the
         // GSP lock (one eventfd write).
         if posted > 0 {
-            self.latch_and_deliver(kf_rm::authored::GSP_STALL_VECTOR);
+            self.latch_and_deliver(kf_rm::authored::GSP_STALL_VECTOR, IrqSource::Rc);
         }
         if !back.is_empty() {
             self.chans.requeue_rc(back);
@@ -3010,7 +3057,7 @@ impl Device {
         }
         drop(guard);
         if posted {
-            self.latch_and_deliver(kf_rm::authored::GSP_STALL_VECTOR);
+            self.latch_and_deliver(kf_rm::authored::GSP_STALL_VECTOR, IrqSource::Hotplug);
         }
     }
 
@@ -3086,7 +3133,7 @@ impl Device {
             self.chans.requeue_preempt_done(back);
         }
         if posted_any {
-            self.latch_and_deliver(kf_rm::authored::GSP_STALL_VECTOR);
+            self.latch_and_deliver(kf_rm::authored::GSP_STALL_VECTOR, IrqSource::PreemptDone);
         }
     }
 
@@ -3164,6 +3211,7 @@ impl Device {
                 return;
             };
             let wake = e.wakes.fetch_add(1, Ordering::Relaxed) + 1;
+            let engine_slot = tag.saturating_sub(kf_chan::worker::OTHER_TAG_BASE).min(255) as u8;
             // ★ 2026-10-08 (owner ruling §X, `kf_chan::ptnsi`): the notifier is GPU-wide, and RM
             // wakes every client registered on it — so does this: the engine's vector is raised
             // whenever the guest ARMED this engine's non-stall event, whoever's work it was.
@@ -3172,7 +3220,7 @@ impl Device {
                 // ★ 2026-10-08 (`KF3_RELAY_GET_REFRESH`): the relayed twins' GP_GET first, so the
                 // guest's handler reads the engine's value (nothing with the switch off).
                 let _ = self.chans.relay_refresh_all("a host non-stall wake");
-                self.latch_and_deliver(v);
+                self.latch_and_deliver(v, IrqSource::EngineNonstall(engine_slot));
             });
             if kf_mem::maplog::on() || wake <= 8 || wake.is_power_of_two() {
                 eprintln!(
@@ -3198,10 +3246,15 @@ impl Device {
                 // on CE0's — measured at f589ab23, bare metal) — raised on a vector whose service
                 // fires the guest's own FIFO_EVENT_MTHD (`host_notify_vector`), if the guest armed
                 // it. Never dropped.
-                let _ = self.chans.nsi_fifo_edge(|v| self.latch_and_deliver(v));
+                let _ = self
+                    .chans
+                    .nsi_fifo_edge(|v| self.latch_and_deliver(v, IrqSource::FifoRelay));
             },
             // The relay's timer: what optional pacing owes goes out even if no edge comes.
-            &|| self.chans.nsi_tick(|v| self.latch_and_deliver(v)),
+            &|| {
+                self.chans
+                    .nsi_tick(|v| self.latch_and_deliver(v, IrqSource::NsiTick))
+            },
         );
     }
 }
@@ -3285,7 +3338,7 @@ impl HostOps for Device {
         // vector, here on the worker, never a vCPU. ⊘ The relay itself is NOT yet measured: no
         // run has retired GR-tier work in a guest (run32's GR segment was refused).
         if let Some((v, name, n, rings)) = self.chans.take_gr_relay() {
-            self.latch_and_deliver(v);
+            self.latch_and_deliver(v, IrqSource::TranslatedGrRelay);
             // Bounded: the first 16 relays, then each power of two.
             if n <= 16 || n.is_power_of_two() {
                 eprintln!(
@@ -3296,7 +3349,7 @@ impl HostOps for Device {
         // ★ 2026-10-07 (`KF3_TRANSLATED_CE_RELAY`, default off): the same relay for a Translated
         // copy-engine ring, to the vector of the ring's own guest engine, after its host fence.
         self.chans.for_each_ce_relay(|v, name, n| {
-            self.latch_and_deliver(v);
+            self.latch_and_deliver(v, IrqSource::TranslatedCeRelay);
             if n <= 16 || n.is_power_of_two() {
                 eprintln!(
                     "kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest {name} vector {v}: a Translated copy-engine ring retired work after its host fence (relay #{n})"
