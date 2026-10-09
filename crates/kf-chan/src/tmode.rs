@@ -37,7 +37,7 @@ use kf_abi::submit::{MethodForm, ce, fifo, method_header_decode, method_header_i
 use kf_host::MapPerm;
 
 /// At most this many pieces per launch (§3.4); a launch that would need more is refused by name.
-pub const MAX_PIECES: usize = 64;
+pub const MAX_PIECES: usize = 4096;
 /// The output cap per pushed piece (§3.5): far below the host ring's half-pushbuffer limit.
 pub const CHUNK_BYTES: usize = 64 << 10;
 
