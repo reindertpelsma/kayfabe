@@ -24,11 +24,11 @@ realize by name). Classes, comma-separated:
 
 | class | what is raised every period (only if the guest has enabled it) |
 |---|---|
-| `nonstall` | every non-stall engine vector of the served interrupt table |
+| `nonstall` | every non-stall engine vector of the served interrupt table that no row also uses as a stall vector (the served table repeats the stall vector in the non-stall column for engines 59-64, 73 and 1; those are stall vectors and belong to `errors`) |
 | `gsp` | the GSP stall vector (`MC_ENGINE_IDX_GSP` = 50) |
 | `disp` | the display stall vector (`MC_ENGINE_IDX_DISP` = 2) |
 | `all-completion` | `nonstall` + `gsp` + `disp` |
-| `errors` | every OTHER stall vector of the table. Explicit opt-in; **never** part of `all-completion` |
+| `errors` | every OTHER stall vector of the table (including the duplicated rows above). Explicit opt-in; **never** part of `all-completion` |
 | `dispstat` | raises nothing; makes the display model PRESENT `STAT_HEAD_TIMING(h)` bit 1 (LAST_DATA) set and `INTR_DISPATCH` bit h set while the guest's `RM_INTR_EN_HEAD_TIMING(h)` has that bit set (what `0x611c00`/`0x611ec0` read on hardware). Only the words the guest reads change; no event, frame or interrupt logic does. Separate so its effect can be bisected |
 
 ## 3. Rules (checked by the unit tests in `crates/kf-qemu/src/irqflood.rs`)

@@ -152,7 +152,12 @@ pub struct Plan {
 }
 
 impl Plan {
-    /// Sort the served table's vectors into classes.
+    /// Sort the served table's vectors into classes. A vector that is the STALL vector of any row
+    /// is a stall vector, whatever its non-stall column says: the served table repeats the stall
+    /// vector as the non-stall one for engines 59-64, 73 and 1, and a stall interrupt with no
+    /// cause behind it is a level the guest's ISR cannot clear (measured, run 108: `LEAF(4)` read
+    /// `0x30` on 9067 reads per second after one raise of vectors 132 and 133). So `nonstall` holds
+    /// only vectors no row uses as a stall vector; those belong to `errors`.
     #[must_use]
     pub fn from_table(table: &[IntrTableEntry]) -> Plan {
         let valid = |v: u32| (v != INTR_VECTOR_INVALID).then_some(v);
@@ -162,25 +167,26 @@ impl Plan {
                 .find(|e| e.engine_idx == idx)
                 .and_then(|e| valid(e.vector_stall))
         };
+        let stall: Vec<u32> = table.iter().filter_map(|e| valid(e.vector_stall)).collect();
         let mut p = Plan {
             nonstall: table
                 .iter()
                 .filter_map(|e| valid(e.vector_non_stall))
+                .filter(|v| !stall.contains(v))
                 .collect(),
             gsp: stall_of(MC_ENGINE_IDX_GSP),
             disp: stall_of(MC_ENGINE_IDX_DISP),
-            errors: Vec::new(),
+            errors: stall
+                .iter()
+                .copied()
+                .filter(|v| Some(*v) != stall_of(MC_ENGINE_IDX_GSP))
+                .filter(|v| Some(*v) != stall_of(MC_ENGINE_IDX_DISP))
+                .collect(),
         };
         p.nonstall.sort_unstable();
         p.nonstall.dedup();
-        let mut errors: Vec<u32> = table
-            .iter()
-            .filter_map(|e| valid(e.vector_stall))
-            .filter(|v| Some(*v) != p.gsp && Some(*v) != p.disp && !p.nonstall.contains(v))
-            .collect();
-        errors.sort_unstable();
-        errors.dedup();
-        p.errors = errors;
+        p.errors.sort_unstable();
+        p.errors.dedup();
         p
     }
 
@@ -372,20 +378,20 @@ mod tests {
     #[test]
     fn the_plan_sorts_the_served_table() {
         let p = Plan::from_table(&table());
-        assert_eq!(p.nonstall, vec![0, 1, 133]);
-        assert_eq!((p.gsp, p.disp), (Some(155), Some(154)));
         assert_eq!(
-            p.errors,
-            vec![64],
-            "133 is a non-stall vector too, so not an error"
+            p.nonstall,
+            vec![0, 1],
+            "133 is also a stall vector, so it is not non-stall"
         );
+        assert_eq!((p.gsp, p.disp), (Some(155), Some(154)));
+        assert_eq!(p.errors, vec![64, 133]);
     }
 
     #[test]
     fn only_enabled_vectors_are_raised_and_counted() {
         let f = flood("all-completion:10");
         let sink = Fake::default();
-        *sink.enabled.lock().unwrap() = vec![1, 155]; // not 0, 133, 154; 64 is not selected
+        *sink.enabled.lock().unwrap() = vec![1, 155, 64, 133]; // not 0, 154; 64 and 133 are enabled but are `errors`
         let v = f.plan.select(&f.spec.classes);
         assert_eq!(tick(&v, &sink, &f.counts), 2);
         assert_eq!(tick(&v, &sink, &f.counts), 2);
@@ -404,13 +410,15 @@ mod tests {
         let sel = |s: &str| p.select(&Spec::parse(s).unwrap().classes);
         assert_eq!(sel("gsp:10"), vec![155]);
         assert_eq!(sel("disp:10"), vec![154]);
-        assert_eq!(sel("nonstall:10"), vec![0, 1, 133]);
-        assert_eq!(sel("all-completion:10"), vec![0, 1, 133, 154, 155]);
-        assert!(
-            !sel("all-completion:10").contains(&64),
-            "errors NEVER in all-completion"
-        );
-        assert_eq!(sel("errors:10"), vec![64]);
+        assert_eq!(sel("nonstall:10"), vec![0, 1]);
+        assert_eq!(sel("all-completion:10"), vec![0, 1, 154, 155]);
+        for e in [64, 133] {
+            assert!(
+                !sel("all-completion:10").contains(&e),
+                "errors NEVER in all-completion"
+            );
+        }
+        assert_eq!(sel("errors:10"), vec![64, 133]);
         assert_eq!(
             sel("all-completion,errors:10"),
             vec![0, 1, 64, 133, 154, 155]
