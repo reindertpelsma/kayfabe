@@ -344,3 +344,58 @@ grants nothing; the residual is that a guest-kernel lie keeps user work Translat
 kernel driver's process id at each adapter start (the first kernel channel after an all-free) — weaker, because "first after
 an all-free" is guest-timed. The T-space rule itself (a Translated channel never shares a space with a Passthrough one) is
 not touched by either.
+
+## 12. H-pde investigation, session 1 (branch `claude/windows-pde-20261009`, 2026-10-09) — GPU-free only, paused by the owner
+
+**STATUS: LIVE, 2026-10-09 — paused before any hardware run (0 of the 4-run time-box used).** Bench host left untouched
+(checked at the stop: group 11 `DMA-FQ`, `01:00.0` on `nvidia`, no QEMU, `/tmp/kayfabe-fastguest.lock` free).
+
+**The mapper path `[code]`:** walk diff → `kf_mem::apply::apply_entry` (unmaps first, then maps, one invalidate) →
+`kf_qemu::mem::GpuMirror` (`MapTarget`) → `kf_mem::batch::BatchedVas` → `kf_host::HostRm`. (a) VA-adjacent guest-RAM MAP runs
+of one kind and one permission set go as ONE batch (`apply.rs` `contiguous_groups` … `map_batch`): ONE
+`NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` + ONE fixed `NV_ESC_RM_MAP_MEMORY_DMA` (4 KiB pin, `CACHE_SNOOP`, `DEFER_TLB`), booked in
+`BatchBook`. (b) VA-adjacent UNMAP runs go as ONE `NV_ESC_RM_UNMAP_MEMORY_DMA` with `size != 0` (`unmap_range`), which is
+RM's **partial unmap**: RM splits any mapping straddling an edge (`rs_server.c:2418-2518`, `virtual_mem.c:1695-1810`: new
+left/right `CLI_DMA_MAPPING_INFO` with `memdescCreateSubMem` of the original, `dmaFreeMap` of a sub-memdesc for the cut
+part, then `memdescFree`/`memdescDestroy` of the ORIGINAL memdesc, `virtual_mem.c:1799-1800`). (c) A single run not in a
+batch is unmapped with `size = 0` (whole mapping keyed by its exact start). Not yet read: `dmaFreeMapping_GM107`
+(`virt_mem_allocator_gm107.c:1531`) — which PTEs it clears and whether a page table is freed — and whether freeing the
+original memdesc of an OS-descriptor mapping touches the sub-memdescs the kept parts now hold.
+
+**Run 103's ops in `0x4000000-0x41fffff` of the D3D space** `[measured, run103-qemu.log maplog rows, VasKey(13965662672092399696),
+host space 0xcafe0108, root 0xef9e9000; every row ack=1, kind 0x6]` (the same rows also appear at `0x100_0400_0000+`):
+
+| kf time | walk | rows | host call `[code: inferred from the grouping rule, the per-call log is capped]` |
+|---|---|---|---|
+| 275991.0196 | #3003 | MAP `0x4000000+0x10000` (alone: `0x4010000-0x4013fff` not yet mapped) and MAP `0x4014000 … 0x406c000`, 36 VA-contiguous ap=3 (guest RAM) rows incl. `0x4034000+0x1000`, `0x4036000+0x10000`, `0x404c000+0x2000` | per-run map; **ONE batch mapping `[0x4014000, 0x406c000)`** |
+| 275991.1991 | #3066 | MAP `0x4010000 … 0x4014000` (4 rows) | a second batch |
+| 276074.1564 | #3105 | UNMAP `0x404c000 … 0x406c000` (15 rows) | `unmap_range(0x404c000, 0x20000)`: partial unmap, RM keeps `[0x4014000, 0x404c000)` as a new mapping |
+| 276074.1763 | #3119 | MAP `0x404c000 … 0x406c000` at NEW backings (`0x404d000` → `0x231865000`) | a new batch |
+| 276074.1807 | #3124 | UNMAP `0x4010000 … 0x4014000` | range = the whole second batch |
+| 276074.1840 | #3128 | UNMAP `0x4014000 … 0x4034000` (17 rows) | `unmap_range(0x4014000, 0x20000)`: **a second split of the already-split mapping**, its end exactly at `0x4034000` |
+| — | — | nothing in `0x4034000-0x404bfff` after #3003 | the kept part `[0x4034000, 0x404c000)` |
+| ≈276075.8 (23:53:33) | host | Xid 31 FAULT_PTE VIRT_WRITE `@0x4034000` = the FIRST page of the kept part | |
+
+**H-split (new, refines H-pde; stated, not run):** RM's partial unmap of a batched OS-descriptor mapping (or the second split
+of an already-split one) leaves the KEPT part's PTEs invalid. **Falsifier:** on the bench host, one `map_scattered` batch of
+4 KiB guest-RAM-like rows over `[A, A+0x58000)` in a host space, `unmap_range(A+0x38000, 0x20000)`, then `unmap_range(A,
+0x20000)`, then a copy engine writes and reads `A+0x20000` and `A+0x37000` (and a control page never split): no fault and
+the data round-trips → H-split falsified. Control: the same with per-run maps (`KF3_NO_BATCHED_MAP=1` path: no batch, no
+partial unmap). H-pde (the record's §10 wording) and **H-remap** keep the falsifiers stated in the task: H-pde — two 4 KiB
+rows in one 2 MiB region via the mirror path, unmap one, CE reads/writes the other: no fault; H-remap — rewrite a PTE of a
+page a running channel fetches from: a fault only with UNMAP-then-MAP ordering, none with an atomic remap.
+`[inferred]` The run-103 stall point (twin `0x15` stopped in `GP[0x2ef]` at `0x404d440`, page `0x404d000` unmapped at .156
+and re-mapped at another page at .176) is H-remap's window; the Xid at `0x4034000` is H-split's edge. Run 101's sequence has
+not been reconstructed yet (its unmaps `0x4014000-0x4024000`, `0x4046000-…` are also pieces of a batch by the same rule).
+
+**Next (exact):** (1) GPU-free: read `dmaFreeMapping_GM107` and the memdesc refcount of `memdescCreateSubMem` for an OS
+descriptor; confirm the batch from the run's `APPLIED`/retire counters if possible. (2) Hardware run 1 (cheapest A/B): run
+103's flags + `KF3_NO_BATCHED_MAP=1`, binary `kf3-bins/3e9bcdce`, under `flock -o /tmp/kayfabe-fastguest.lock`:
+`WR_SHOTS=90 bash traces/windows_reset_20261009/wr-run.sh 104 3e9bcdce "KF3_DISPLAY_CORE_AT_VBLANK KF3_DISPLAY_WRITE_TRACE
+KF3_DISPLAY_HDCP_STATE KF3_DISPLAY_PRIVATE_PROBE KF3_DISPLAY_HOTPLUG_EDID_SEEN KF3_DISPLAY_BLANK_STATE KF3_DISPLAY_ARMED_DEFAULTS
+KF3_DISPLAY_LOADV KF3_DISPLAY_CAPS_PROBE KF3_DISPLAY_LUT_MIRROR KF3_DISPLAY_ILUT_OFFSET_256 KF3_PT_STALL_SNAPSHOT KF3_DISPLAY_TRACE
+KF3_NO_BATCHED_MAP"` (flag list = `run103-command.json` beyond `WIN_FLAGS`' fixed set; check the EXTRA names against the
+harness before the run). Falsifier: Xid 31 on a never-unmapped VA again → batching/partial unmap is not the cause. (3) The
+regression arm (H-split falsifier above) in `kf-harness` (it already has a `BatchedVas` target, `publish.rs`) or
+`kayfabe-rm-ladder`; then the fix (e.g. never range-unmap part of a live batch: unmap a batch only whole, or re-place the
+kept rows; never a range wider than the guest's rows), the arm failing before and passing after, then ONE Windows boot.

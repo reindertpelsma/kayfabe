@@ -9,6 +9,14 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+**H-pde, 2026-10-09 (branch `claude/windows-pde-20261009` off `claude/windows-reset-20261009`; paused by the owner, GPU-free
+only, 0 hardware runs; [record §12](../traces/windows_reset_20261009/README.md)).** `[measured, run 103 maplog]` the faulting VA
+`0x4034000` was never unmapped, but it sat in ONE batched guest-RAM host mapping `[0x4014000, 0x406c000)` (by the grouping rule,
+`[code]`) that kf3 then range-unmapped twice (`[0x404c000,+0x20000)` at 276074.156, `[0x4014000,+0x20000)` at 276074.184 — ending
+exactly at `0x4034000`); RM splits such mappings (`virtual_mem.c:1695-1810`). New hypothesis **H-split** (RM's partial unmap of a
+batch loses the kept part's PTEs) with its falsifier, H-pde/H-remap falsifiers, and the exact next run (`KF3_NO_BATCHED_MAP=1` A/B on
+run 103's flags, `kf3-bins/3e9bcdce`) are in the record. Host left clean (DMA-FQ, `nvidia`, no QEMU, lock free).
+
 **Windows reset after the first flips, 2026-10-09 (branch `claude/windows-reset-20261009` = `claude/display-reply-diff-20261008`
 + `claude/kf3-read-trace-20261008` + `claude/passthrough-nsi-nogate-20261008`; [record](../traces/windows_reset_20261009/README.md);
 4 hardware boots, runs 100-103, RTX 4070).** ⊘ The trace-mode ruling of the read-trace branch is renumbered **§Y** in
