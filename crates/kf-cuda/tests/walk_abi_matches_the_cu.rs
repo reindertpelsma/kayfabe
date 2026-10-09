@@ -111,15 +111,18 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
     let kf_max_reset = extract_define(&h, "KF_MAX_RESET");
     let kf_max_pdb_l = extract_define(&h, "KF_MAX_PDB_L");
     let kf_max_slots = extract_define(&h, "KF_MAX_SLOTS");
+    let kf_refusal_samples = extract_define(&h, "KF_REFUSAL_SAMPLES");
 
     let mut prog = String::new();
     prog.push_str("#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n");
     prog.push_str(&format!(
         "#define KF_DIRS {kf_dirs}\n#define KF_MAX_PDB {kf_max_pdb}\n#define KF_MAX_RESET {kf_max_reset}\n\
-         #define KF_MAX_PDB_L {kf_max_pdb_l}\n#define KF_MAX_SLOTS {kf_max_slots}\n"
+         #define KF_MAX_PDB_L {kf_max_pdb_l}\n#define KF_MAX_SLOTS {kf_max_slots}\n\
+         #define KF_REFUSAL_SAMPLES {kf_refusal_samples}\n"
     ));
     // The report ABI lives in the header; the launch ABI lives in the .cu.
     for name in [
+        "KfRefusalSample",
         "KfReportHeader",
         "KfPdbEntry",
         "KfMapRun",
@@ -143,6 +146,7 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
         "KfWin",
         "KfDev",
         "KfArgs",
+        "KfRefusalSample",
         "KfReportHeader",
         "KfPdbEntry",
         "KfMapRun",
@@ -197,6 +201,19 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
         ("KfReportHeader", "refuse_mask"),
         ("KfReportHeader", "sparse_slots"),
         ("KfReportHeader", "ps_log2"),
+        ("KfReportHeader", "sample_count"),
+        ("KfReportHeader", "sample_total"),
+        ("KfReportHeader", "samples"),
+        ("KfRefusalSample", "va"),
+        ("KfRefusalSample", "raw"),
+        ("KfRefusalSample", "gpga"),
+        ("KfRefusalSample", "ps_bytes"),
+        ("KfRefusalSample", "bit"),
+        ("KfRefusalSample", "level"),
+        ("KfRefusalSample", "entry"),
+        ("KfDev", "nsample"),
+        ("KfDev", "sample_pad"),
+        ("KfDev", "sample"),
         ("KfMapRun", "gpga"),
         ("KfMapRun", "len"),
         ("KfMapRun", "flags"),
@@ -273,6 +290,7 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
     check("size KfWin", size_of::<KfWin>());
     check("size KfDev", size_of::<KfDev>());
     check("size KfArgs", size_of::<KfArgs>());
+    check("size KfRefusalSample", size_of::<KfRefusalSample>());
     check("size KfReportHeader", size_of::<KfReportHeader>());
     check("size KfPdbEntry", size_of::<KfPdbEntry>());
     check("size KfMapRun", size_of::<KfMapRun>());
@@ -341,6 +359,27 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
         "off KfReportHeader.sparse_slots"
     );
     off!(KfReportHeader, ps_log2, "off KfReportHeader.ps_log2");
+    off!(
+        KfReportHeader,
+        sample_count,
+        "off KfReportHeader.sample_count"
+    );
+    off!(
+        KfReportHeader,
+        sample_total,
+        "off KfReportHeader.sample_total"
+    );
+    off!(KfReportHeader, samples, "off KfReportHeader.samples");
+    off!(KfRefusalSample, va, "off KfRefusalSample.va");
+    off!(KfRefusalSample, raw, "off KfRefusalSample.raw");
+    off!(KfRefusalSample, gpga, "off KfRefusalSample.gpga");
+    off!(KfRefusalSample, ps_bytes, "off KfRefusalSample.ps_bytes");
+    off!(KfRefusalSample, bit, "off KfRefusalSample.bit");
+    off!(KfRefusalSample, level, "off KfRefusalSample.level");
+    off!(KfRefusalSample, entry, "off KfRefusalSample.entry");
+    off!(KfDev, nsample, "off KfDev.nsample");
+    off!(KfDev, sample_pad, "off KfDev.sample_pad");
+    off!(KfDev, sample, "off KfDev.sample");
     off!(KfMapRun, gpga, "off KfMapRun.gpga");
     off!(KfMapRun, len, "off KfMapRun.len");
     off!(KfMapRun, flags, "off KfMapRun.flags");
@@ -367,7 +406,7 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
 /// # Panics
 /// On a declaration this reader does not understand (a nested struct, a bitfield) — the report
 /// structs have neither, and one appearing must break this test rather than be skipped.
-fn fields_of(def: &str) -> Vec<(String, Option<usize>)> {
+fn fields_of(def: &str, consts: &[(&str, usize)]) -> Vec<(String, Option<usize>)> {
     let open = def.find('{').expect("a struct body");
     let close = def.rfind('}').expect("a struct body");
     let mut body = String::new();
@@ -393,14 +432,18 @@ fn fields_of(def: &str) -> Vec<(String, Option<usize>)> {
             );
             let last = d.split_whitespace().last().expect("a declarator");
             match last.split_once('[') {
-                Some((n, len)) => (
-                    n.to_string(),
-                    Some(
-                        len.trim_end_matches(']')
-                            .parse()
-                            .expect("a literal array length"),
-                    ),
-                ),
+                Some((n, len)) => {
+                    let len = len.trim_end_matches(']').trim();
+                    // A literal, or a `#define` the caller resolved from the header itself.
+                    let len = len.parse().unwrap_or_else(|_| {
+                        consts
+                            .iter()
+                            .find(|(k, _)| *k == len)
+                            .unwrap_or_else(|| panic!("array length `{len}` is neither a literal nor a resolved define"))
+                            .1
+                    });
+                    (n.to_string(), Some(len))
+                }
                 None => (last.to_string(), None),
             }
         })
@@ -425,6 +468,11 @@ impl Flat for u64 {
     fn flat(&self, key: &str, out: &mut std::collections::BTreeMap<String, u64>) {
         out.insert(key.to_string(), *self);
     }
+}
+/// An array of structs has no single value; its layout is checked by name and its elements by
+/// their own struct (see `STRUCT_ARRAYS`).
+impl<const N: usize> Flat for [KfRefusalSample; N] {
+    fn flat(&self, _key: &str, _out: &mut std::collections::BTreeMap<String, u64>) {}
 }
 impl<const N: usize> Flat for [u8; N] {
     fn flat(&self, key: &str, out: &mut std::collections::BTreeMap<String, u64>) {
@@ -453,13 +501,22 @@ fn every_report_field_decodes_to_what_the_c_compiler_reads() {
     use std::collections::{BTreeMap, BTreeSet};
     let root = repo_root();
     let h = std::fs::read_to_string(root.join("cuda/walk/kf_walk.h")).expect("the .h");
-    let names = ["KfReportHeader", "KfPdbEntry", "KfMapRun"];
+    let names = ["KfRefusalSample", "KfReportHeader", "KfPdbEntry", "KfMapRun"];
+    // ABI 6: the one array-of-struct member. Its layout (offset, width) is checked here and its
+    // bytes by the whole-struct `encode(decode(C's bytes)) == C's bytes`; its elements' fields are
+    // checked by the `KfRefusalSample` entry above, whose size is the array's stride.
+    const STRUCT_ARRAYS: [&str; 1] = ["samples"];
+    let samples_n: usize = extract_define(&h, "KF_REFUSAL_SAMPLES")
+        .trim_end_matches('u')
+        .parse()
+        .expect("KF_REFUSAL_SAMPLES is a literal");
 
     let mut prog = String::from("#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n");
+    prog.push_str(&format!("#define KF_REFUSAL_SAMPLES {samples_n}\n"));
     let mut c_fields: BTreeMap<&str, Vec<(String, Option<usize>)>> = BTreeMap::new();
     for t in names {
         let def = extract_struct(&h, t);
-        c_fields.insert(t, fields_of(&def));
+        c_fields.insert(t, fields_of(&def, &[("KF_REFUSAL_SAMPLES", samples_n)]));
         prog.push_str(&def);
         prog.push('\n');
     }
@@ -476,6 +533,9 @@ fn every_report_field_decodes_to_what_the_c_compiler_reads() {
                 "printf(\"off {t}.{f} %zu\\n\", offsetof({t}, {f}));\n\
                  printf(\"width {t}.{f} %zu\\n\", sizeof x.{f});\n"
             ));
+            if STRUCT_ARRAYS.contains(&f.as_str()) {
+                continue;
+            }
             match n {
                 None => prog.push_str(&format!(
                     "printf(\"val {t}.{f} %llu\\n\", (unsigned long long)x.{f});\n"
@@ -549,10 +609,14 @@ fn every_report_field_decodes_to_what_the_c_compiler_reads() {
     }
     let sides = [
         (
+            "KfRefusalSample",
+            rust_side!(KfRefusalSample; va, raw, gpga, ps_bytes, bit, level, entry),
+        ),
+        (
             "KfReportHeader",
             rust_side!(KfReportHeader; magic, version, flags, generation, acked_generation, pdb_count,
                 pdb_capacity, run_count, run_capacity, entries_visited, refusals, refuse_mask,
-                sparse_slots, ps_log2),
+                sparse_slots, ps_log2, sample_count, sample_total, samples),
         ),
         (
             "KfPdbEntry",
@@ -990,6 +1054,37 @@ fn the_report_constants_match_the_header() {
     assert_eq!(parse("KF_TBL_VER3"), u64::from(kf_cuda::abi::KF_TBL_VER3));
     assert_eq!(parse("KF_MAX_PDB"), kf_cuda::abi::KF_MAX_PDB as u64);
     assert_eq!(parse("KF_MAX_SCOPE"), kf_cuda::abi::KF_MAX_SCOPE as u64);
+    // ABI 6: refusal samples.
+    assert_eq!(
+        parse("KF_REFUSAL_SAMPLES"),
+        kf_cuda::abi::KF_REFUSAL_SAMPLES as u64
+    );
+    assert_eq!(
+        parse("KF_SAMPLE_LVL_BIG"),
+        u64::from(kf_cuda::abi::KF_SAMPLE_LVL_BIG)
+    );
+    assert_eq!(
+        parse("KF_SAMPLE_LVL_SMALL"),
+        u64::from(kf_cuda::abi::KF_SAMPLE_LVL_SMALL)
+    );
+    assert_eq!(
+        u64::from(kf_cuda::abi::KF_SAMPLE_LVL_BIG),
+        kf_cuda::abi::KF_DIRS as u64,
+        "a leaf-table level is one past the directory slots"
+    );
+    assert_eq!(
+        u64::from(kf_cuda::abi::KF_SAMPLE_LVL_SMALL),
+        kf_cuda::abi::KF_DIRS as u64 + 1
+    );
+    for (n, r) in [
+        ("KFWR_R_OOB", kf_cuda::abi::KFWR_R_OOB),
+        ("KFWR_R_UNALIGNED", kf_cuda::abi::KFWR_R_UNALIGNED),
+        ("KFWR_R_FOREIGN_AP", kf_cuda::abi::KFWR_R_FOREIGN_AP),
+        ("KFWR_R_MISALIGNED_LEAF", kf_cuda::abi::KFWR_R_MISALIGNED_LEAF),
+        ("KFWR_R_LEAF_OOB", kf_cuda::abi::KFWR_R_LEAF_OOB),
+    ] {
+        assert_eq!(parse(n), u64::from(r), "{n} differs");
+    }
     for (n, r) in [
         ("KFWR_AP_VIDMEM", kf_cuda::abi::AP_VID),
         ("KFWR_AP_PEER", kf_cuda::abi::AP_PEER),
