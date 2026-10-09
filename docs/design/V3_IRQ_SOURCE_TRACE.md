@@ -14,7 +14,7 @@ These are about `traces/windows_reset_20261009/README.md` §13.2 on `claude/wind
 branch does not contain; fold them into that README (above the text they correct) when the two meet.
 
 1. **"GSP stall 155 pending at ISR time: hardware 24 % of 69,282 leaf-4 reads, kayfabe 0.2 % of 16,623" is a statement about
-   two phases of the boot, not about the lock screen.** [measured] (`irq/an5.py` over `boot3/trace.log`, per-phase
+   two phases of the boot, not about the lock screen.** [measured] (`traces/irq_source_trace_20261009/tools/leaf4_bit27_by_phase.py` over `boot3/trace.log`, per-phase
    counts of `LEAF(4)` = `0xb81010` reads with bit 27 set): the 15,172 pending reads of the first 2 s
    (`20:10:10`-`20:10:12`, 18,404 reads, 82 %) and the 1,292 of the last 10 s (the driver teardown) are 97 % of the
    16.7 k; the busy phase `20:10:14`-`20:10:20` is 0.6 % (79 of 13,288), the quiet phase 0.8 %, the lock-screen idle
@@ -134,7 +134,7 @@ not followed by a pending bit 27 of `LEAF(4)` or an MSI more often than chance.
   interrupt exists to deliver **events**; replies are collected by the poller.
 * The firmware side (when the GSP raises SWGEN0) is not in ogkm (GSP-RM is a binary); it is read from the trace below.
 
-### 2.3 Hardware [measured, RTX 4070 VFIO boot3 2026-10-08: `trace.log` + `gsp.jsonl`, scripts `irq/an3.py`, `an4.py`, `an5.py`]
+### 2.3 Hardware [measured, RTX 4070 VFIO boot3 2026-10-08: `trace.log` + `gsp.jsonl`, scripts `traces/irq_source_trace_20261009/tools/{gsp_msg_vs_irq,gsp_msg_vs_irq_window,leaf4_bit27_by_phase,msi_leaf4_per_second}.py`]
 
 * Over the boot the GSP stream holds 5,232 replies (command → reply pairs) and 78 events (72 `POST_EVENT`: 60 × notify 139
   `RUNLIST_PREEMPT_COMPLETE`, 11 × 33 `PSTATE_CHANGE`, 1 × 34 `HDCP_STATUS_CHANGE`; plus `GSP_INIT_DONE`, `GSP_RUN_CPU_SEQUENCER`,
@@ -187,7 +187,7 @@ falsified by `authored::hw_shape` tests failing.
 `28638efa` (2026-09-24, "HostFacts from the real host RM") and `7320292f` ("we are the GSP", w827). So **everything is host-derived or
 authored by rule; nothing is captured** — the GA106 capture is the test oracle only.
 
-### 3.2 Each discrepancy (hardware boot3 vs kayfabe run 100 of 2026-10-08, RTX 4070; tables dumped by `irq/itab.py`)
+### 3.2 Each discrepancy (hardware boot3 vs kayfabe run 100 of 2026-10-08, RTX 4070; tables dumped by `traces/irq_source_trace_20261009/tools/kernel_table_dump.py`)
 
 | discrepancy | why the row exists [measured] | derived or authored | minimal derived correction |
 |---|---|---|---|
