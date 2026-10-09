@@ -92,7 +92,8 @@ leniency was the header/body measurement bug above.
 |---|---|---|---|---|---|---|
 | `t1` | 1 rule (`0x20809004`, default) | n/a (not the falsifier run) | owner manually signed in + ran `nvidia-smi`; desktop reached | — | — | reference/diagnostic boot to measure one rewrite's real-hardware status; not a survival test |
 | `probe2` | 9 rules (mixed mechanisms, see above) | n/a | owner manually interacted (sign-in); desktop reached | — | — | diagnostic boot to compare rewrite mechanisms per family |
-| `idle1` | 58 rules (full list, default rewrite) | *filled in below once the boot completes* | | | | |
+| `idle1` | 58 rules (full list, default rewrite) | **driver dead at load, before the lock screen**: GSP stream ends 14:52:19.85Z (observer +7.0 s), guest nvlddmkm id=14 at 14:52:18.95, 14+153 at 14:52:24.4, LogonUI first seen 14:52:29; NVIDIA device Code 43 (coordinator's read), Basic Display Adapter Code 10 | owner input attached ~5 min later; no NVIDIA display to use | driver failure ~19 s after QEMU start, ~10 s before the lock screen | nvlddmkm 14/153 only; no TDR 0x117, no LiveDump, no UnloadingGuestDriver | verify_rewrites: 58/58 refused, 0 ineffective; QEMU counters rewritten=76 verify_failed=0 header_bad=0 seq_gaps=0 |
+| `bisA` | 49 rules (58 minus the 9 keys kayfabe also answers OK) | **not completed: host 172.22.1.20 became unreachable (ssh/ping timeout) about a minute after the launch; result unknown** | | | | falsifier stated before the run: A is still Code 43 / nvlddmkm 14+153 at boot; falsified if Code 0 and nvidia-smi exit 0 three minutes after LogonUI |
 
 *(further rows added as the idle-only and gesture boots run; see `runs/` on the host for the raw
 evidence — `command.json`, `gsp.jsonl`, `trace.log`, `verify.txt`, `guestlogs/` per boot. Evidence
@@ -106,6 +107,8 @@ copied into this directory is filtered: no secrets, no owner home/Scaleway IPs.)
 - **Measured, corrected:** `t1`'s single-rule rewrite was effective, not ineffective (see
   *Correction* above) — the owner's manual sign-in on `t1`/`probe2` succeeded on real hardware
   with those specific refusals active.
+- **Measured (idle1):** with all 58 refusals the real-hardware guest never gets a working NVIDIA driver: it fails at load (nvlddmkm 14/153), before the lock screen and before any input, so the falsifier's first clause (lock screen with a live driver for >= 3 min) is NOT met. First divergence from the unablated VFIO reference (boot3) at request 60: after the refused fn76 0x20802a0f the reference sends 0x20802a06/0x20802a0d, the ablated guest does not (kayfabe's guest does not either); then a ~850-iteration retry loop over 0x730108/0x731152/0x731341/0x731140/0x73117a/0x730282, then 0xc3700104 and 0x73029a, then silence.
+- **Inferred, not yet measured (which refusals matter):** the 58-rule set is sufficient to kill the driver at load; which subset is responsible is the bisect (49-rule boot A pending, host unreachable). 9 of the 58 are also answered OK by kayfabe at least once (coordinator's overshoot analysis), so the 58 overshoot kayfabe.
 - **Inferred, not yet measured:** whether the full 58-rule refusal set, held for 3+ idle minutes
   and/or a scripted gesture with no manual interaction, reproduces kayfabe's TDR 0x117 — this is
   the actual experiment the falsifier is about, pending the `idle1`/gesture boots below.
