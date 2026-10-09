@@ -1,0 +1,38 @@
+START112 2026-10-09T11:17:57 rev=66eeebb6 flood=[] xid=38
+WRRUN 2026-10-09T11:17:57.154261480Z START run=112 rev=66eeebb6 extra=[KF3_DISPLAY_CORE_AT_VBLANK KF3_DISPLAY_WRITE_TRACE KF3_DISPLAY_HDCP_STATE KF3_DISPLAY_PRIVATE_PROBE KF3_DISPLAY_HOTPLUG_EDID_SEEN KF3_DISPLAY_BLANK_STATE KF3_DISPLAY_ARMED_DEFAULTS KF3_DISPLAY_LOADV KF3_DISPLAY_CAPS_PROBE KF3_DISPLAY_LUT_MIRROR KF3_DISPLAY_ILUT_OFFSET_256 KF3_PT_STALL_SNAPSHOT KF3_DISPLAY_TRACE KF3_NO_BATCHED_MAP ] trace=1 shots=90 reuse=0 tdroff_arm=0 stall_etw=0
+IOMMU_SWITCH_START group=11 from=DMA-FQ to=identity 2026-10-09T13:17:57+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-09T13:17:59+02:00
+WRRUN 2026-10-09T11:18:00.889310990Z launched qpid=3241952 flags=[KF3_PREEMPT_BIND_PROBE KF3_DISPLAY_IMP_ENABLE KF3_DISPLAY_CTRL_PROBE KF3_ZCULL_BIND_PROBE KF3_SW_RUNLIST_HOST_OWNED KF3_WIN_USER_CHANNELS_PASSTHROUGH KF3_TCENSUS KF3_RELAY_PB_PEEK KF3_WIN_TWIN_DEFAPI_OBJECT KF3_RELAY_GET_REFRESH KF3_ASYNC_PREEMPT KF3_USERD_RELAY_OFF KF3_DISPLAY_CORE_AT_VBLANK KF3_DISPLAY_WRITE_TRACE KF3_DISPLAY_HDCP_STATE KF3_DISPLAY_PRIVATE_PROBE KF3_DISPLAY_HOTPLUG_EDID_SEEN KF3_DISPLAY_BLANK_STATE KF3_DISPLAY_ARMED_DEFAULTS KF3_DISPLAY_LOADV KF3_DISPLAY_CAPS_PROBE KF3_DISPLAY_LUT_MIRROR KF3_DISPLAY_ILUT_OFFSET_256 KF3_PT_STALL_SNAPSHOT KF3_DISPLAY_TRACE KF3_NO_BATCHED_MAP ]
+WRRUN 2026-10-09T11:18:18.585876728Z marker after 36x0.5s stall=1 [disp[writes=287 puts=78 methods=5800 updates=22] vsyncs=171 latch=8 refused=0 chinfo=1 vga=0 core_freed=0 birth_refused=0 snaps=1 xid=38
+WRRUN 2026-10-09T11:18:18.595494600Z experiments: 2 mirror, 1 ilut-unit, 1 caps; refused: 
+WRRUN 2026-10-09T11:18:58.630194200Z after 40s: [disp[writes=424 puts=119 methods=11175 updates=26] vsyncs=222 latch=9 refused=0 chinfo=2 vga=0 core_freed=1 birth_refused=1 snaps=11 xid=38
+WRRUN 2026-10-09T11:19:28.859616583Z ps d3d11_clear_probe.ps1 rc=0 lines=21 rc-line: [rc=1] 
+WRRUN 2026-10-09T11:19:59.89007390Z ps d3d12_signal_probe.ps1 rc=0 lines=21 rc-line: [rc=1] 
+WRRUN 2026-10-09T11:20:29.317474179Z ps vdr_monitor_info.ps1 rc=0 lines=21 rc-line: [rc=1] 
+WRRUN 2026-10-09T11:20:29.354672171Z before stop: [disp[writes=424 puts=119 methods=11175 updates=26] vsyncs=222 latch=9 refused=0 chinfo=2 vga=0 core_freed=1 birth_refused=1 snaps=11 xid=38 shots=89
+[windows] ★ QEMU 3241952 killed after 300 s without a clean shutdown (UNCLEAN)
+[windows] run112 stopped (Xid count now 38)
+WRRUN 2026-10-09T11:26:06.135105140Z qemu left: 0
+IOMMU_SWITCH_START group=11 from=identity to=DMA-FQ 2026-10-09T13:26:06+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-09T13:26:08+02:00
+WRRUN 2026-10-09T11:26:08.586630424Z END type=DMA-FQ driver=nvidia xid_lines=38 2026-10-09T11:26:00.058623Z qemu-system-x86_64: info: kf3: BAR0-TRACE report name=0000:01:00.0 records=198984 (cap 8000000) bytes<=17725794 (cap 2147483648) reads=86870 writes=103618 msi=8496 dropped=
+EXIT112 rc=0 2026-10-09T11:26:08 xid=38
+drwxr-xr-x 2 root root 4096 Oct  9 13:26 .
+drwxr-xr-x 9 root root 4096 Oct  9 13:26 ..
+-rw-r--r-- 1 root root 1759 Oct  9 13:26 analysis.txt
+-rw-r--r-- 1 root root 4082 Oct  9 13:26 command.json
+-rw-r--r-- 1 root root  837 Oct  9 13:26 flip-d3d11_clear_probe.ps1.out
+-rw-r--r-- 1 root root  837 Oct  9 13:26 flip-d3d12_signal_probe.ps1.out
+-rw-r--r-- 1 root root  837 Oct  9 13:26 flip-vdr_monitor_info.ps1.out
+-rw-r--r-- 1 root root  456 Oct  9 13:26 frame-last.png
+-rw-r--r-- 1 root root  195 Oct  9 13:26 last-disp-status.txt
+-rw-r--r-- 1 root root  265 Oct  9 13:26 marker.txt
+-rw-r--r-- 1 root root 1473 Oct  9 13:26 per-second.txt
+-rw-r--r-- 1 root root    0 Oct  9 13:26 qemu-flood-lines.txt
+-rw-r--r-- 1 root root 3582 Oct  9 13:26 qemu-teardown-lines.txt
+-rw-r--r-- 1 root root 2928 Oct  9 13:26 wr-run112.log
+COLLECTED112 2026-10-09T11:26:09

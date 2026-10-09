@@ -1,0 +1,29 @@
+  39690 SNAP #1 t=316214.428174 twins=9 db=358  chans=9 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={'a release the memory holds': 15}
+  41703 SNAP #2 t=316243.715194 twins=9 db=363  chans=9 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={'a release the memory holds': 15}
+  43922 SNAP #3 t=316273.767216 twins=9 db=369  chans=9 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={'a release the memory holds': 15}
+  46142 SNAP #4 t=316303.810676 twins=9 db=374  chans=9 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={'a release the memory holds': 15}
+  63986 SNAP #free:0x1018 t=316482.085535 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={}
+  64149 SNAP #free:0x17 t=316482.102297 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={}
+  81006 SNAP #free:0xe t=316491.610272 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={}
+  81068 SNAP #free:0xf t=316491.617404 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={}
+  81108 SNAP #free:0x1010 t=316491.621761 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={}
+  81165 SNAP #free:0x11 t=316491.629145 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={'a release the memory holds': 1}
+  81200 SNAP #free:0x1012 t=316491.632762 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={}
+  81254 SNAP #free:0x13 t=316491.639820 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={'a release the memory holds': 1}
+  81291 SNAP #free:0x1014 t=316491.643491 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={}
+  81343 SNAP #free:0x15 t=316491.650878 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={'a release the memory holds': 1}
+  81386 SNAP #free:0x1016 t=316491.654982 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={'a release the memory holds': 1}
+  81439 SNAP #free:0x17 t=316491.662321 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={'a release the memory holds': 1}
+  81482 SNAP #free:0x1018 t=316491.666677 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={}
+  81534 SNAP #free:0x19 t=316491.673941 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={}
+  81568 SNAP #free:0x101a t=316491.677544 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={}
+  81602 SNAP #free:0x101b t=316491.682351 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={}
+  81636 SNAP #free:0x81c t=316491.687058 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={}
+  81688 SNAP #free:0x1d t=316491.694054 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={'a release the memory holds': 1}
+  81724 SNAP #free:0x1e t=316491.698023 twins=0 db=0  chans=1 GPGet!=GPPut:1 Put!=Get:0  sem verdicts={}
+        NONEQ ('0x1e', '0x1', 1, True, False, '0x0', '0x10', ' ring=0x155b1000x8192 — GPGet != GPPut: entries put and NOT ')
+  81759 SNAP #free:0x1f t=316491.700906 twins=0 db=0  chans=1 GPGet!=GPPut:1 Put!=Get:0  sem verdicts={}
+        NONEQ ('0x1f', '0x1', 1, True, False, '0x0', '0x12', ' ring=0x155c1000x8192 — GPGet != GPPut: entries put and NOT ')
+  81795 SNAP #free:0x20 t=316491.704722 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={}
+  83301 EV   kf-rm: rpc-trace fn=47 UnloadingGuestDriver seq=0  result=0x0
+  90285 EV   kf3: chan 0xc1d00059:0xff040001 birth REFUSED: twin state: VA space VasKey(13965662757991745648) (KernelInUserSpace(1)) 

@@ -1,0 +1,5 @@
+kf3: ★★ PERTURBING DIAGNOSTIC ON: irq-flood nonstall:10 (KF3_DEBUG_IRQ_FLOOD; docs/design/V3_DEBUG_IRQ_FLOOD.md) — bare interrupts, no completion word; never a production configuration
+PERTURBING DIAGNOSTIC ON: irq-flood nonstall:10 ticks=0 raised[]
+PERTURBING DIAGNOSTIC ON: irq-flood nonstall:10 ticks=3015 raised[v0=2182 v1=2182 v2=2182 v3=2182 v4=2182 v5=2182]
+PERTURBING DIAGNOSTIC ON: irq-flood nonstall:10 ticks=6026 raised[v0=5193 v1=5193 v2=5193 v3=5193 v4=5193 v5=5193]
+PERTURBING DIAGNOSTIC ON: irq-flood nonstall:10 ticks=8630 raised[v0=7797 v1=7797 v2=7797 v3=7797 v4=7797 v5=7797]

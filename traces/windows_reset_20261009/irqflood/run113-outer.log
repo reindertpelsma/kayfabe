@@ -1,0 +1,39 @@
+START113 2026-10-09T11:26:29 rev=66eeebb6 flood=[KF3_DEBUG_IRQ_FLOOD=nonstall:10] xid=38
+WRRUN 2026-10-09T11:26:29.345446379Z START run=113 rev=66eeebb6 extra=[KF3_DISPLAY_CORE_AT_VBLANK KF3_DISPLAY_WRITE_TRACE KF3_DISPLAY_HDCP_STATE KF3_DISPLAY_PRIVATE_PROBE KF3_DISPLAY_HOTPLUG_EDID_SEEN KF3_DISPLAY_BLANK_STATE KF3_DISPLAY_ARMED_DEFAULTS KF3_DISPLAY_LOADV KF3_DISPLAY_CAPS_PROBE KF3_DISPLAY_LUT_MIRROR KF3_DISPLAY_ILUT_OFFSET_256 KF3_PT_STALL_SNAPSHOT KF3_DISPLAY_TRACE KF3_NO_BATCHED_MAP KF3_DEBUG_IRQ_FLOOD=nonstall:10] trace=1 shots=90 reuse=0 tdroff_arm=0 stall_etw=0
+IOMMU_SWITCH_START group=11 from=DMA-FQ to=identity 2026-10-09T13:26:29+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-09T13:26:31+02:00
+WRRUN 2026-10-09T11:26:33.47782176Z launched qpid=3247310 flags=[KF3_PREEMPT_BIND_PROBE KF3_DISPLAY_IMP_ENABLE KF3_DISPLAY_CTRL_PROBE KF3_ZCULL_BIND_PROBE KF3_SW_RUNLIST_HOST_OWNED KF3_WIN_USER_CHANNELS_PASSTHROUGH KF3_TCENSUS KF3_RELAY_PB_PEEK KF3_WIN_TWIN_DEFAPI_OBJECT KF3_RELAY_GET_REFRESH KF3_ASYNC_PREEMPT KF3_USERD_RELAY_OFF KF3_DISPLAY_CORE_AT_VBLANK KF3_DISPLAY_WRITE_TRACE KF3_DISPLAY_HDCP_STATE KF3_DISPLAY_PRIVATE_PROBE KF3_DISPLAY_HOTPLUG_EDID_SEEN KF3_DISPLAY_BLANK_STATE KF3_DISPLAY_ARMED_DEFAULTS KF3_DISPLAY_LOADV KF3_DISPLAY_CAPS_PROBE KF3_DISPLAY_LUT_MIRROR KF3_DISPLAY_ILUT_OFFSET_256 KF3_PT_STALL_SNAPSHOT KF3_DISPLAY_TRACE KF3_NO_BATCHED_MAP KF3_DEBUG_IRQ_FLOOD=nonstall:10]
+WRRUN 2026-10-09T11:27:00.911082826Z marker after 56x0.5s stall=1 [disp[writes=4245 puts=455 methods=9190 updates=1324] vsyncs=259 latch=81 refused=2 chinfo=1 vga=0 core_freed=0 birth_refused=0 snaps=2 xid=38
+WRRUN 2026-10-09T11:27:00.921110704Z experiments: 2 mirror, 1 ilut-unit, 1 caps; refused: kf3: display: scanout REFUSED cursor: cursor head 0: only an A8R8G8B8 cursor is composable
+WRRUN 2026-10-09T11:27:40.962780630Z after 40s: [disp[writes=4496 puts=496 methods=14634 updates=1362] vsyncs=319 latch=82 refused=2 chinfo=2 vga=1 core_freed=1 birth_refused=1 snaps=12 xid=38
+WRRUN 2026-10-09T11:27:43.379761011Z ps d3d11_clear_probe.ps1 rc=0 lines=5 rc-line: [rc=0] PROBE 11:27:40.9307205 no NVIDIA adapter 
+WRRUN 2026-10-09T11:27:45.596761051Z ps d3d12_signal_probe.ps1 rc=0 lines=14 rc-line: [rc=0] PROBE no NVIDIA adapter 
+WRRUN 2026-10-09T11:27:47.811197372Z ps vdr_monitor_info.ps1 rc=0 lines=8 rc-line: [rc=0] VC NVIDIA GeForce RTX 4070 x@ status=Error err=43 
+WRRUN 2026-10-09T11:27:48.306425099Z before stop: [disp[writes=4496 puts=496 methods=14634 updates=1362] vsyncs=319 latch=82 refused=2 chinfo=2 vga=1 core_freed=1 birth_refused=1 snaps=12 xid=38 shots=90
+[windows] run113 stopped (Xid count now 38)
+WRRUN 2026-10-09T11:28:06.500819301Z qemu left: 0
+IOMMU_SWITCH_START group=11 from=identity to=DMA-FQ 2026-10-09T13:28:06+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-09T13:28:08+02:00
+WRRUN 2026-10-09T11:28:08.943536639Z END type=DMA-FQ driver=nvidia xid_lines=38 2026-10-09T11:27:59.846553Z qemu-system-x86_64: info: kf3: BAR0-TRACE report name=0000:01:00.0 records=286387 (cap 8000000) bytes<=25454053 (cap 2147483648) reads=127270 writes=140753 msi=18364 droppe
+EXIT113 rc=0 2026-10-09T11:28:08 xid=38
+drwxr-xr-x  2 root root   4096 Oct  9 13:28 .
+drwxr-xr-x 10 root root   4096 Oct  9 13:28 ..
+-rw-r--r--  1 root root   3429 Oct  9 13:28 analysis.txt
+-rw-r--r--  1 root root   4124 Oct  9 13:28 command.json
+-rw-r--r--  1 root root    145 Oct  9 13:28 flip-d3d11_clear_probe.ps1.out
+-rw-r--r--  1 root root    611 Oct  9 13:28 flip-d3d12_signal_probe.ps1.out
+-rw-r--r--  1 root root    605 Oct  9 13:28 flip-vdr_monitor_info.ps1.out
+-rw-r--r--  1 root root  73316 Oct  9 13:28 frame-first-lock.png
+-rw-r--r--  1 root root    456 Oct  9 13:28 frame-last.png
+-rw-r--r--  1 root root 127029 Oct  9 13:28 frame-mid-lock.png
+-rw-r--r--  1 root root    194 Oct  9 13:28 last-disp-status.txt
+-rw-r--r--  1 root root    257 Oct  9 13:28 marker.txt
+-rw-r--r--  1 root root   3647 Oct  9 13:28 per-second.txt
+-rw-r--r--  1 root root    601 Oct  9 13:28 qemu-flood-lines.txt
+-rw-r--r--  1 root root   3720 Oct  9 13:28 qemu-teardown-lines.txt
+-rw-r--r--  1 root root   3125 Oct  9 13:28 wr-run113.log
+COLLECTED113 2026-10-09T11:28:09

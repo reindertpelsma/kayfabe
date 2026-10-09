@@ -1,0 +1,12 @@
+<string>26100</string>
+<string></string>
+<string>Multiprocessor Free</string>
+<string>0</string>
+ =
+<string></string>
+<string></string>
+<string>8</string>
+<string>60</string>
+<string>0 Coordinated Universal Time</string>
+ =MQAuADEAAAAwAAAAVwBpAG4AZABvAHcAcwAgADEAMAAgAEUAbgB0AGUAcgBwAHIAaQBzAGUAIABMAFQAUwBDACAAMgAwADIANAAgAEUAdgBhAGwAdQBhAHQAaQBvAG4AAAAxADAALgAwAC4AMgA2ADEAMAAwACAAQgB1AGkAbABkACAAMgA2ADEAMAAwACAAIAAAAE0AdQBsAHQAaQBwAHIAbwBjAGUAcwBzAG8AcgAgAEYAcgBlAGUAAAAyADYAM
+dam

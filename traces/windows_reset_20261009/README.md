@@ -436,7 +436,7 @@ CE2 57%), then fix that edge on the real path; (4) the D3D12 probe death under `
 
 ## 16. Runs 112 onward: spread of the flood, then the vector bisect (branch `claude/irqflood-bisect-20261009`, 2026-10-09)
 
-**STATUS: LIVE, 2026-10-09 (plan committed before the first boot of this section; results below it when they exist).**
+**STATUS: LIVE, 2026-10-09 (plan committed before the first boot, as its own commit on this branch; Part A run, 4 boots, runs 112-115; Part B NOT run, its gate was not met; Part C analysed from the existing boots 109 and 111, no new boot; 4 of the 12 budgeted boots used). §15's lead is NOT established by the repeats (§16.1).**
 
 **What is run.** ONE binary for every boot of this section: `kf3-bins/66eeebb6` = `b728b480` + the `v<n>` class tokens of `docs/design/V3_DEBUG_IRQ_FLOOD.md` (a rebuild in the
 private `irqflood-qemu/` tree; flood-off and `nonstall`/`gsp`/`disp` code paths unchanged; unit tests in `crates/kf-qemu/src/irqflood.rs`). Flags identical to runs 109-111
@@ -448,3 +448,68 @@ the D3D11 and D3D12 probes both pass AND no bugcheck for 120 s after the probes.
 
 **Matrix.** Part A (spread, 4 boots): 112 off, 113 `nonstall:10`, 114 off, 115 `nonstall:10`. Part B (only if A shows `nonstall:10` clearly better than off in BOTH repeats): `v0`, `v1`, `v2`,
 `v3,v4,v5` at 10 ms, then the helping vector(s) at 100 and 1000 ms. Part C: the D3D12 death, from the boots that reach the probe. Budget: 12 boots.
+
+### 16.1 Part A: the spread (four boots, RTX 4070, 2026-10-09, UTC; evidence `irqflood/run112 ... run115`)
+
+All four boots: `kf3-bins/66eeebb6` (one binary), run 104's flags with `KF3_NO_BATCHED_MAP=1`, `WR_SHOTS=90` (screenshots cover the first ~72 s only), BAR0 read trace on, launcher
+`irqflood/irqflood-launch2.sh`, chain `irqflood/chain.sh`. Order interleaved (off, nonstall, off, nonstall). Host Xid count 38 before and after every boot; group 11 back on DMA-FQ and 01:00.0 on nvidia after each.
+"Guest quiet" = the second after which the guest's own MSIs stopped (the flood's own ~100 MSI/s remain), from `tools/msi_phases.py`; "+N s" counts from the harness launch (`WINDOWS_START` in `marker.txt`).
+
+| run | flood | lock screen (non-black fraction > 0.1), UTC (+s after launch) | guest quiet (driver gone) | `UnloadingGuestDriver` | QGA (3 probes) | bugcheck | MSI/s at the lock screen (median) |
+|---|---|---|---|---|---|---|---|
+| 112 | off | never drawn (boot spinner only, fraction <= 0.011) | 11:18:20 (+21 s) | yes | 3/3 timeout | none | no lock screen |
+| 113 | `nonstall:10` | 11:26:47.7 (+17) to 11:27:01.4 (+30): 14 s | 11:27:03 (+32 s) | yes | answered: `no NVIDIA adapter`, Error 43 | none | 215 |
+| 114 | off | 11:28:48.1 (+16) to 11:29:43.5 (+71): 55 s | 11:29:45 (+73 s) | yes | answered: `no NVIDIA adapter`, Error 43 | none | 131 |
+| 115 | `nonstall:10` | 11:31:31.9 (+20) to 11:32:01.3 (+49): 29 s | 11:32:03 (+51 s) | yes | 3/3 timeout | none | 230 |
+
+Lock frames were viewed (`run114/frame-mid-lock.png` is the lock screen, `run114/frame-last.png` is black). A non-black fraction is not a liveness proof, so the death times come from the guest's own MSIs stopping,
+which agrees with the last lock frame in every run.
+
+**Pooled with the earlier boots (other binaries, same flags)**, time from launch to the guest going quiet: flood off about 19-23 s (runs 104, 105, 107, and 112 at 21 s), 73 s (114), 231 s (R0, run 106);
+`nonstall:10` 32 s (113), 51 s (115), >= 285 s (111); `all-completion:10` >= 285 s (109). The flood-off boots span 19 s to 231 s. The two new `nonstall:10` repeats (32 s and 51 s) are both shorter than the new flood-off
+repeat 114 (73 s).
+
+**Verdict against the falsifier (stated before the first boot): MET.** `nonstall:10` is not better than flood-off in both repeats, so **the §15 result is not established: the baseline spread (19 s to 231 s with the
+flood off) swallows the effect.** Part B was therefore not run (its gate was "clearly better in BOTH repeats"). `[measured]` for the table; `[inferred]` that a flood effect, if any, is smaller than the baseline spread at n = 2 per arm.
+
+`[measured]` with the flood off a boot can hold the idle lock screen for 55 s and the driver for 73 s (114); the long lives of runs 106, 109 and 111 lie inside a distribution that already contains 73 s and 231 s with no flood.
+None of the four new boots reached the harness's D3D11/D3D12 probes with a working driver (the probes ran against a dead driver), so no new D3D12 evidence came from Part A.
+
+### 16.2 Part C: the D3D12 death, from the existing boots 109 (`all-completion:10`) and 111 (`nonstall:10`) (analysed; no new boot; `irqflood/c-d3d12-death/`, scripts in `irqflood/tools/`)
+
+The harness's D3D12 probe prints only when it ends, so a hung probe says nothing about where it hung; the evidence is kayfabe's log, the BAR0 trace and the guest's System event log. Times UTC; the log's `maplog t=` is the
+host monotonic clock (run 111: t=316491.6 is the teardown, at about 11:07:11 on the BAR0 trace's clock).
+
+`[measured]` run 111 (nonstall:10, 2026-10-09, RTX 4070):
+- Timeline (`c-d3d12-death/run111/bar0-per-second-d3d12-window.txt`): the D3D11 probe's burst 11:06:59; the D3D12 probe's burst 11:07:02 (2377 MSI in that second, 819 writes in the doorbell page); the guest's interrupt-tree traffic
+  falls from about 2000 reads/s to about 230 reads/s at 11:07:05-06; the TDR recovery burst 11:07:09 (609 MSI, 4558 command-block reads); no guest MSI at 11:07:10; the teardown frees all 20 twins within 0.1 s (t=316491.610-316491.705).
+- Guest System log (python-evtx on the exported `System.evtx`): `Kernel-Power 41` and `WER-SystemErrorReporting 1001`, bugcheck `0x116` with parameters `0xffffc88bc66ee010, 0xfffff80072f54930, 0xffffffffc000009a, 0x4`
+  (third parameter `STATUS_INSUFFICIENT_RESOURCES`; run 109 has the same parameters 2-low-bits `...4930`, 3 and 4). The log holds no Display 4101, nvlddmkm or dxgkrnl event before it: the guest did not get to log a TDR.
+- Stall snapshots on the idle lock screen (`PT-SNAP stall #1-#4`, 30 s apart, runs 109 and 111): 9 twins, all `GPGet == GPPut`, all 15 semaphore words "a release the memory holds": **no pending GPU work at the lock screen**.
+- Snapshots at the teardown (`pt-snap-summary.txt`, `at-free-doorbell-ages.txt`): 18 of 20 twins `GPGet == GPPut`; **tok 0x1e (`GPGet=0x0 GPPut=0x10`) and tok 0x1f (`GPGet=0x0 GPPut=0x12`): entries put and never fetched**, each after exactly ONE
+  doorbell, forwarded to the host at t=316485.218 (6.5 s before the teardown; about 11:07:04.7, the moment the guest's interrupt-tree traffic collapses). Their `GP[0x0]` (10 words) is pending, the rest of the window empty. tok 0x20 never got a doorbell. The host Xid count stayed 38: the host GPU did not fault.
+- **`birth-vs-schedule.txt`: every twin of the boot has a `GPFIFO_SCHEDULE enable=true` authored within a few log lines after its birth, except 0x1e, 0x1f and 0x20.** Those three (`0xc1d00046:0xff0e0102/03/04`, class 0xc56f, with Compute 0xc9c0 and DmaCopy 0xc7b5 objects, in subcontexts) were
+  allocated into the guest TSG `0xff0e0000` that the guest had already scheduled ONCE (`0xa06c0101`, log line 71989, which covered only tok 0x1d). The guest sent no further schedule control for them (the log's only `0xa06c0101` for that client). The handler
+  (`crates/kf-qemu/src/chan.rs`, the GPFIFO_SCHEDULE statement, about lines 2740-2802) authors a schedule for the twins that exist when the statement arrives.
+- Interrupt tree in the last 6 s (`interrupt-tree-reads-last6s.txt`): `LEAF(4)` (`0xb81010`) read `0x0` on every sampled read of it (no stall vector pending), and `0xb81200` read `0x3f`, consistent with the six flooded non-stall vectors. Nothing is stuck.
+
+`[measured]` run 109 (all-completion:10, same date): the D3D12 probe created no new channel (no `BORN` after the D3D11 probe's); the last doorbells went to the lock-screen channels (0x11, 0x13, 0x1014, 0x15, 0x1016) 2.5-4.5 s before the teardown; **at the teardown
+every twin shows `GPGet == GPPut` and every semaphore "a release the memory holds"**: nothing pending and no unscheduled twin, yet bugcheck `0x116`. The display head-timing status reads (`0x611000`, flooded `disp`) ran at about 4000/s at 10:55:03-04 and fell to about 400/s at
+10:55:05 (the same pre-TDR slow-down as run 111); TDR recovery burst 10:55:07.
+
+`[inferred]` (two boots, not an established cause)
+- **Run 111 is shape (a), pending GPU work that never completes, and the cause is on our side, not an interrupt:** the D3D12 probe's channels 0x1e and 0x1f joined an already-scheduled guest TSG and their twins were never scheduled; the host fetched nothing from them, so the probe's fence signals
+  could not execute, and Windows' TDR fired about 4-6 s after the doorbell. A flood cannot help this: no vector announces work the host never started. Falsifier: an unscheduled late joiner whose `GPGet` advances, or the same shape after an authored schedule for late joiners.
+- **Run 109 is not shape (a):** no pending GPU work at all. That leaves (b) a notification (or a non-interrupt message such as a GSP event, which the flood never writes) that never arrived for work that did complete, or (c) something else. With every non-stall, GSP and display vector
+  raised every 10 ms a plain "missing interrupt" is not it; what remains is a completion word, a status value or a GSP message, as §15.2 listed. The data does not decide between (b) and (c).
+- The two deaths differ, so "the D3D12 failure" has no single reading; the part with a concrete lead is (a).
+
+### 16.3 Result, and what is not established
+
+- **Not established:** that `nonstall:10` (or any flood) keeps Windows alive longer than the unperturbed baseline. The favourable boots (106 R0 at 231 s, 109, 111) lie inside a flood-off range that already spans 19 s to 231 s.
+- **Not run:** the vector bisect (Part B), because its gate was not met. The `v<n>` tokens are in `66eeebb6` and unit-tested, unused on hardware.
+- **Success criterion of the experiment:** not met in any new boot (no D3D11/D3D12 pass; the lock screen was held >= 60 s only in the earlier single boots 106, 109, 111).
+- **Lead handed over (GPU-free to check, one hardware boot to confirm):** a twin born into a guest TSG that was already scheduled gets no schedule. Check the birth and the schedule handler in `chan.rs` against the host RM's behaviour for a channel added to an enabled group, then confirm with a boot that
+  reaches the D3D12 probe (that boot needs the lock screen to be held, which is the baseline's own lottery, not the flood).
+- **Escalation, exactly what is unclear:** (1) run 109's death has no pending work and no unscheduled twin, and its cause (b or c) cannot be read from kayfabe's log; it needs the guest side (ETW or the 0x116 dump's parameter-2 module offset `0x14930`) or a same-tracer VFIO reference run of the probe.
+  (2) Whether the flood changes anything at all needs more than n = 2 per arm; at 6-9 minutes a boot that is a decision, not a default.

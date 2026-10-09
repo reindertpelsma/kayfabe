@@ -69,6 +69,11 @@ realize by name). Classes, comma-separated:
 
 ## 5. What the first runs showed (2026-10-09; `traces/windows_reset_20261009/README.md` §15)
 
+**Correction 2026-10-09 (README §16, runs 112-115, one binary `66eeebb6`): the repeats did NOT reproduce §15's lead.** `nonstall:10` repeated twice held the driver 32 s and 51 s; flood off repeated twice
+held it 21 s and 73 s; with the earlier boots the flood-off range is 19 s to 231 s, so the baseline spread swallows the effect and the falsifier of §4 is met for the "flood keeps Windows alive" claim. The vector bisect (`v<n>`) was not
+run. The D3D12 death in the two long boots has two different shapes (§16.2); one of them (run 111) is pending GPU work on twins that never got a schedule, which no interrupt could fix. The text below is the first-run record and is
+superseded where it says "the lead is a lost non-stall notification".
+
 - **A stall vector with no cause is a stuck level.** The served table repeats the stall vector as the non-stall one for engines 59-64, 73 and 1.
   Raising those under `nonstall` left `LEAF(4)` = `0x30` pending for good and the guest ISR spun (run 108). They are `errors`, never `nonstall`
   (`Plan::from_table`). Never raise a stall vector whose source the guest cannot clear unless the experiment is about exactly that.

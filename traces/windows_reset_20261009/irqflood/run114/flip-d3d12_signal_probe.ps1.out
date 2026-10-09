@@ -1,0 +1,14 @@
+PROBE whoami nt authority\system
+PROBE session 0
+PROBE quser quser : No User exists for *
+PROBE quser At line:63 char:2
+PROBE quser + (quser 2>&1 | Out-String).Trim() -split "`n" | ForEach-Object { "PROB ...
+PROBE quser +  ~~~~~~~~~~
+PROBE quser + CategoryInfo          : NotSpecified: (No User exists for *:String) [], RemoteException
+PROBE quser + FullyQualifiedErrorId : NativeCommandError
+PROBE CreateDXGIFactory1 0x00000000
+PROBE adapter 0 vendor 0x1414 Microsoft Basic Render Driver dedicated 0 MB
+PROBE adapter 1 vendor 0x1414 Microsoft Basic Render Driver dedicated 0 MB
+PROBE no NVIDIA adapter
+
+[rc=0]

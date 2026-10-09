@@ -1,0 +1,17 @@
+  40221 SNAP #1 t=315461.889702 twins=9 db=412  chans=9 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={'a release the memory holds': 15}
+  42326 SNAP #2 t=315491.211947 twins=9 db=417  chans=9 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={'a release the memory holds': 15}
+  44550 SNAP #3 t=315521.300832 twins=9 db=422  chans=9 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={'a release the memory holds': 15}
+  46739 SNAP #4 t=315551.343065 twins=9 db=427  chans=9 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={'a release the memory holds': 15}
+  64520 SNAP #free:0x1018 t=315732.443620 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={}
+  64686 SNAP #free:0x17 t=315732.467387 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={}
+  70491 SNAP #free:0xe t=315769.754057 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={}
+  70550 SNAP #free:0xf t=315769.761479 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={}
+  70581 SNAP #free:0x1010 t=315769.765997 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={}
+  70635 SNAP #free:0x11 t=315769.775982 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={'a release the memory holds': 1}
+  70670 SNAP #free:0x1012 t=315769.780335 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={}
+  70724 SNAP #free:0x13 t=315769.790329 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={'a release the memory holds': 1}
+  70761 SNAP #free:0x1014 t=315769.794402 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={'a release the memory holds': 1}
+  70819 SNAP #free:0x15 t=315769.804166 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={'a release the memory holds': 1}
+  70855 SNAP #free:0x1016 t=315769.808294 twins=0 db=0  chans=1 GPGet!=GPPut:0 Put!=Get:0  sem verdicts={'a release the memory holds': 1}
+  72279 EV   kf-rm: rpc-trace fn=47 UnloadingGuestDriver seq=0  result=0x0
+  79274 EV   kf3: chan 0xc1d00052:0xff040001 birth REFUSED: twin state: VA space VasKey(13965662727926974576) (KernelInUserSpace(1)) 
