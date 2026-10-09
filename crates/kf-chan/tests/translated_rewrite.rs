@@ -538,7 +538,7 @@ fn releases_are_recorded_and_the_words_are_unchanged() {
     );
 }
 
-/// A strict channel state — inc A's by-name refusals enforced (`KF3_INCA_REFUSE=1`, T-mode).
+/// A strict channel state — inc A's by-name refusals enforced (kf3 always, since 2026-10-10).
 fn strict() -> CeState {
     CeState {
         strict: true,

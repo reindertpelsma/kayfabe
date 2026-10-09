@@ -941,11 +941,7 @@ pub fn cut_is_inexact(
 /// ★ P1+P2 inc A (review fix 2026-10-04; strict hardwired 2026-10-10): the row removal a range
 /// unmap makes — always EXACT ([`cut_rows`]); a cut the removal before inc A would have got wrong
 /// is counted in [`ROWS_INEXACT`].
-pub fn cut_for(
-    rows: &mut std::collections::BTreeMap<u64, PlacedRow>,
-    va: u64,
-    end: u64,
-) -> RowCut {
+pub fn cut_for(rows: &mut std::collections::BTreeMap<u64, PlacedRow>, va: u64, end: u64) -> RowCut {
     if cut_is_inexact(rows, va, end) {
         ROWS_INEXACT.fetch_add(1, Ordering::Relaxed);
     }
@@ -2499,7 +2495,7 @@ pub fn tmode_reuse(key: VasKey, sp: &Spare) -> TwinRecord {
 /// is freed instead.
 #[must_use]
 pub fn retire_spare(mi: &Mirror, refused: usize) -> Option<Spare> {
-    (refused == 0).then(|| Spare {
+    (refused == 0).then_some(Spare {
         space: mi.space,
         negctl_window: mi.negctl_window,
         ram_obj: mi.ram_obj,
@@ -3233,16 +3229,121 @@ mod tests {
         );
     }
 
-    /// A host that counts every window map and places it where RM placed `GROWS_DOWN` windows.
+    // ★★★ 2026-10-10 (`OWNER_RULINGS.md` §AB; `docs/design/V3_WINDOW_EXPOSURE_REVIEW.md`,
+    // `crate::exposure`) — **the owner invariants over the real placement paths**: in a mirror
+    // (where Passthrough channels run) every mapping has a guest-leaf origin; whole-RAM windows,
+    // store windows and the ring region exist only in the privileged T-space.
+
+    const STORE: u32 = 0x1;
+    const RAM_OBJ: u32 = 0x20;
+    const STORE_12G: u64 = 12 << 30;
+    const RAM_8G: u64 = 8 << 30;
+
+    /// ★ A fake host for EVERY host verb the twin life cycle ([`TwinHost`]) and the T-space build
+    /// ([`crate::tspace::TSpaceHost`]) issue. It keeps a ledger of what each verb placed, per
+    /// space, the origin derived from the verb and the memory it names — never from the caller.
     #[derive(Default)]
-    struct CountingHost {
+    struct LedgerHost {
+        next_space: std::cell::Cell<u32>,
+        /// `(space, placement)` for every mapping or reservation a verb placed.
+        placed: std::cell::RefCell<Vec<(u32, crate::exposure::Placement)>>,
+        /// Spaces a bare (T-space) allocation made.
+        bare: std::cell::RefCell<Vec<u32>>,
+        /// Twin window maps (`TwinHost::map_window`): `(space, memory, len)`.
         maps: std::cell::RefCell<Vec<(u32, u32, u64)>>,
+        /// Where the next bottom-up T-space window lands.
+        next_low: std::cell::Cell<u64>,
     }
-    impl TwinHost for CountingHost {
-        fn map_window(&self, s: kf_host::VaSpace, memory: u32, len: u64) -> Result<u64, String> {
-            self.maps.borrow_mut().push((s.space, memory, len));
-            Ok(0x1_fffe_0000_0000)
+    impl LedgerHost {
+        fn new_space(&self) -> kf_host::VaSpace {
+            let n = self.next_space.get() + 0x10;
+            self.next_space.set(n);
+            space(n)
         }
+        fn origin(memory: u32) -> crate::exposure::Origin {
+            match memory {
+                STORE => crate::exposure::Origin::StoreWindow,
+                RAM_OBJ => crate::exposure::Origin::RamWindow,
+                _ => crate::exposure::Origin::Unnamed,
+            }
+        }
+        fn record(&self, s: u32, lo: u64, len: u64, origin: crate::exposure::Origin) {
+            self.placed.borrow_mut().push((
+                s,
+                crate::exposure::Placement {
+                    lo,
+                    hi: lo.saturating_add(len),
+                    origin,
+                },
+            ));
+        }
+        fn in_space(&self, s: u32) -> Vec<crate::exposure::Placement> {
+            self.placed
+                .borrow()
+                .iter()
+                .filter(|(x, _)| *x == s)
+                .map(|(_, p)| *p)
+                .collect()
+        }
+    }
+    impl TwinHost for LedgerHost {
+        fn alloc_space(&self) -> Result<kf_host::VaSpace, String> {
+            Ok(self.new_space())
+        }
+        fn map_window(&self, s: kf_host::VaSpace, memory: u32, len: u64) -> Result<u64, String> {
+            // Where RM placed a `GROWS_DOWN` window.
+            let base = 0x1_fffe_0000_0000;
+            self.maps.borrow_mut().push((s.space, memory, len));
+            self.record(s.space, base, len, Self::origin(memory));
+            Ok(base)
+        }
+    }
+    impl crate::tspace::TSpaceHost for LedgerHost {
+        fn alloc_bare(&self) -> Result<kf_host::VaSpace, String> {
+            let s = self.new_space();
+            self.bare.borrow_mut().push(s.space);
+            self.next_low.set(0x1_2000_0000);
+            Ok(s)
+        }
+        fn reserve(&self, s: kf_host::VaSpace, at: u64, len: u64) -> Result<u32, String> {
+            let origin = if at == RING_REGION_BASE {
+                crate::exposure::Origin::RingRegion
+            } else {
+                crate::exposure::Origin::Unnamed
+            };
+            self.record(s.space, at, len, origin);
+            Ok(0x99)
+        }
+        fn map_window(
+            &self,
+            s: kf_host::VaSpace,
+            memory: u32,
+            len: u64,
+            _: bool,
+            _: kf_host::MapPerm,
+            _: bool,
+        ) -> Result<u64, String> {
+            let base = self.next_low.get();
+            self.next_low
+                .set((base + len + (16 << 20)).next_multiple_of(2 << 20));
+            self.record(s.space, base, len, Self::origin(memory));
+            Ok(base)
+        }
+        fn map_fixed_4k(
+            &self,
+            s: kf_host::VaSpace,
+            memory: u32,
+            _: u64,
+            len: u64,
+            at: u64,
+            _: kf_host::MapPerm,
+        ) -> Result<u64, String> {
+            self.next_low
+                .set((at + len + (16 << 20)).next_multiple_of(2 << 20));
+            self.record(s.space, at, len, Self::origin(memory));
+            Ok(at)
+        }
+        fn free_space(&self, _: kf_host::VaSpace) {}
     }
     fn space(n: u32) -> kf_host::VaSpace {
         kf_host::VaSpace {
@@ -3251,44 +3352,264 @@ mod tests {
             guest: Default::default(),
         }
     }
+    /// A guest process's VA space (a user client) and one of the guest RM's internal clients'.
+    fn user_key() -> VasKey {
+        VasKey((0xc1d0_002b_u64 << 32) | 5)
+    }
+    fn rm_internal_key() -> VasKey {
+        VasKey((0xc1e0_0007_u64 << 32) | 1)
+    }
 
-    /// ★★ P1+P2 inc D (§7 test 12), review fix 2026-10-04 — **no T-mode twin path maps a window**:
-    /// a created twin, a prewarmed spare and a recycled spare are each driven against a host that
-    /// COUNTS window maps — zero — and each record holds no window, no RAM window, no ring slot
-    /// taken and no VMM range, and is named `windows=none` by a line DERIVED from it. ⊘ The positive
-    /// control (`KF3_NEGCTL_TWIN_WINDOW`) maps one window per new twin and spare, and the record and
-    /// its line NAME it — what the box-log gate's `WINDOWS=NONE` must catch.
+    /// A guest leaf as the walker places it through `GpuMirror`'s `MapTarget::map`: a row.
+    fn place_leaf(rec: &TwinRecord, va: u64, len: u64, off: u64, ram: bool) {
+        let perm = kf_host::MapPerm::READ_WRITE;
+        rec.mirror
+            .rows
+            .write()
+            .expect("rows")
+            .insert(va, (len, off, ram, perm));
+    }
+
+    /// Every mapping a twin record says its space holds: its rows (guest leaves) and kayfabe's
+    /// placements (the control's window, its VMM ranges).
+    fn record_placements(rec: &TwinRecord) -> Vec<crate::exposure::Placement> {
+        let mut v: Vec<_> = rec
+            .mirror
+            .rows
+            .read()
+            .expect("rows")
+            .iter()
+            .map(|(&va, &(len, ..))| crate::exposure::Placement {
+                lo: va,
+                hi: va + len,
+                origin: crate::exposure::Origin::GuestLeaf,
+            })
+            .collect();
+        v.extend(crate::exposure::mirror_placements(
+            &rec.mirror,
+            &rec.reserved,
+        ));
+        v
+    }
+
+    /// ★ The audit: every space the fake host saw, judged by its kind (the T-space is the space
+    /// the build reported; every other space is a mirror), plus every twin record. Returns the
+    /// violations, named.
+    fn audit(
+        h: &LedgerHost,
+        tspace: Option<u32>,
+        records: &[&TwinRecord],
+    ) -> Vec<(u32, crate::exposure::Placement)> {
+        use crate::exposure::{SpaceKind, violations};
+        let mut spaces: Vec<u32> = h.placed.borrow().iter().map(|(s, _)| *s).collect();
+        spaces.extend(records.iter().map(|r| r.mirror.space.space));
+        spaces.sort_unstable();
+        spaces.dedup();
+        let mut out = Vec::new();
+        for s in spaces {
+            let kind = if Some(s) == tspace {
+                SpaceKind::PrivilegedTSpace
+            } else {
+                SpaceKind::Mirror
+            };
+            out.extend(violations(kind, &h.in_space(s)).into_iter().map(|p| (s, p)));
+        }
+        for r in records {
+            out.extend(
+                violations(SpaceKind::Mirror, &record_placements(r))
+                    .into_iter()
+                    .map(|p| (r.mirror.space.space, p)),
+            );
+        }
+        out
+    }
+
+    /// The whole life of a VM's spaces, through the real path functions: the T-space build
+    /// (`tspace::prewarm`'s), a prewarmed spare ([`prewarm`]'s), a created twin
+    /// ([`create_mirror`]'s: a space, then [`tmode_twin`]), a recycled spare ([`apply_statement`]'s
+    /// [`tmode_reuse`]), a retired twin ([`retire_mirror`]'s [`retire_spare`]) and its reuse. Guest
+    /// leaves are placed in every twin, one of them over `[RING_REGION_BASE, 2^40)` (a guest leaf
+    /// there is the guest's, now that no twin reserves the region).
+    fn life(h: &LedgerHost, key: VasKey, negctl: bool) -> (Option<u32>, Vec<TwinRecord>) {
+        let t = crate::tspace::TSpace::build(
+            h,
+            STORE,
+            STORE_12G - 0x1042_0000,
+            (RAM_OBJ, RAM_8G),
+            false,
+        )
+        .expect("T-space built");
+        let tspace = h.bare.borrow().first().copied();
+        assert!(
+            t.line()
+                .starts_with(&format!("tspace space={:#x} ", tspace.unwrap_or(0)))
+        );
+        let spare = prewarm_spare(h, Some(RAM_OBJ), STORE, STORE_12G, negctl).expect("spare");
+        let created = tmode_twin(
+            h,
+            key,
+            TwinHost::alloc_space(h).expect("space"),
+            Some(RAM_OBJ),
+            STORE,
+            STORE_12G,
+            negctl,
+        );
+        place_leaf(&created, 0x7f00_0000_0000, 0x20_0000, 0x40_0000, false);
+        place_leaf(&created, RING_REGION_BASE, 0x1000, 0x1000, true);
+        let recycled = tmode_reuse(key, &spare);
+        place_leaf(&recycled, 0x1_0000_0000, 0x1000, 0x2000, true);
+        assert!(
+            retire_spare(&created.mirror, 1).is_none(),
+            "a refused unmap frees the space"
+        );
+        let retired = retire_spare(&created.mirror, 0).expect("kept as a spare");
+        let reborn = tmode_reuse(key, &retired);
+        (tspace, vec![created, recycled, reborn])
+    }
+
+    /// ★★ The invariants hold on every path, for a user key and a guest-kernel key: no mirror
+    /// carries a window, a ring region or any kayfabe placement (the fake host saw no map in any
+    /// mirror space, and no record names one); the whole-RAM window, the store window and the
+    /// ring region exist, and only in the T-space; the T-space is never a mirror.
+    #[test]
+    fn owner_invariant_holds_on_every_tmode_mirror_path() {
+        use crate::exposure::Origin;
+        for key in [user_key(), rm_internal_key()] {
+            let h = LedgerHost::default();
+            let (tspace, recs) = life(&h, key, false);
+            let refs: Vec<&TwinRecord> = recs.iter().collect();
+            assert_eq!(audit(&h, tspace, &refs), vec![], "{key:?}");
+            assert!(h.maps.borrow().is_empty(), "{:?}", h.maps.borrow());
+            for rec in &recs {
+                assert_ne!(
+                    Some(rec.mirror.space.space),
+                    tspace,
+                    "a mirror is never the T-space"
+                );
+                assert!(rec.reserved.is_empty(), "no VMM range in a twin");
+                assert_eq!(windows_text(&rec.mirror), "windows=none");
+                assert!(
+                    record_placements(rec)
+                        .iter()
+                        .all(|p| p.origin == Origin::GuestLeaf),
+                    "only guest leaves"
+                );
+            }
+            // The T-space holds exactly the windows and the ring region — and they are there.
+            let ts = h.in_space(tspace.expect("T-space"));
+            for o in [Origin::RingRegion, Origin::StoreWindow, Origin::RamWindow] {
+                assert!(
+                    ts.iter().any(|p| p.origin == o),
+                    "{o:?} in the T-space: {ts:?}"
+                );
+            }
+            // Its store window ends at the carve-out (never kayfabe's firmware region).
+            let store_end = ts
+                .iter()
+                .filter(|p| p.origin == Origin::StoreWindow)
+                .map(|p| p.hi)
+                .max();
+            let store_lo = ts
+                .iter()
+                .filter(|p| p.origin == Origin::StoreWindow)
+                .map(|p| p.lo)
+                .min();
+            assert_eq!(
+                store_end.zip(store_lo).map(|(e, l)| e - l),
+                Some(STORE_12G - 0x1042_0000)
+            );
+        }
+    }
+
+    /// ⊘ Deliberate violations — the check must fail on each: (1) the positive control
+    /// (`KF3_NEGCTL_TWIN_WINDOW`) maps a store window in each new twin and spare: named on the
+    /// created, recycled and retired-then-reused paths, in the ledger AND in the records; (2) a
+    /// whole-RAM window planted in a twin (what the deleted P5 path did); (3) a planted ring
+    /// region in a clean twin's record; (4) the T-space judged as a mirror.
+    #[test]
+    fn owner_invariant_check_catches_a_planted_window() {
+        use crate::exposure::{Origin, SpaceKind, violations};
+        let key = user_key();
+        // (1)
+        let h = LedgerHost::default();
+        let (tspace, recs) = life(&h, key, true);
+        let refs: Vec<&TwinRecord> = recs.iter().collect();
+        let v = audit(&h, tspace, &refs);
+        assert_eq!(
+            h.maps.borrow().len(),
+            2,
+            "one window per new twin and spare"
+        );
+        // Two ledger maps (created twin, prewarmed spare) + three records naming one each.
+        assert_eq!(v.len(), 5, "{v:?}");
+        assert!(v.iter().all(|(s, p)| p.origin == Origin::StoreWindow
+            && p.hi - p.lo == STORE_12G
+            && Some(*s) != tspace));
+        for rec in &recs {
+            assert!(windows_text(&rec.mirror).starts_with("windows fb=0x1fffe00000000+"));
+        }
+        // (2)
+        let h = LedgerHost::default();
+        let (tspace, recs) = life(&h, key, false);
+        let twin = recs[0].mirror.space;
+        TwinHost::map_window(&h, twin, RAM_OBJ, RAM_8G).expect("planted");
+        let refs: Vec<&TwinRecord> = recs.iter().collect();
+        let v = audit(&h, tspace, &refs);
+        assert_eq!(v.len(), 1, "{v:?}");
+        assert_eq!((v[0].0, v[0].1.origin), (twin.space, Origin::RamWindow));
+        // (3)
+        let clean = tmode_twin(
+            &h,
+            key,
+            space(0x400),
+            Some(RAM_OBJ),
+            STORE,
+            STORE_12G,
+            false,
+        );
+        let planted = TwinRecord {
+            mirror: clean.mirror.clone(),
+            reserved: vec![(RING_REGION_BASE, kf_chan::host::RING_VA_LIMIT)],
+        };
+        let v = audit(&LedgerHost::default(), None, &[&planted]);
+        assert_eq!(v.len(), 1);
+        assert_eq!(v[0].1.origin, Origin::RingRegion);
+        // (4) The T-space's own placements are violations if it were a mirror.
+        let ts = h.in_space(tspace.expect("T-space"));
+        assert_eq!(violations(SpaceKind::Mirror, &ts).len(), ts.len());
+        assert!(!ts.is_empty());
+    }
+
+    /// ★ P1+P2 inc D (§7 test 12), review fix 2026-10-04 — **no twin path maps a window**: a
+    /// created twin, a prewarmed spare and a recycled spare each hold no window and no VMM range,
+    /// and are named `windows=none` by a line DERIVED from the record. ⊘ The positive control
+    /// (`KF3_NEGCTL_TWIN_WINDOW`) maps one window per new twin and spare, and the record and its
+    /// line NAME it — what the box-log gate's `WINDOWS=NONE` must catch.
     #[test]
     fn no_tmode_twin_path_maps_a_window() {
-        const STORE_LEN: u64 = 12 << 30;
-        let key = VasKey((0xc1d0_002b_u64 << 32) | 5);
-        let h = CountingHost::default();
-        let created = tmode_twin(&h, key, space(0x10), Some(0x20), 0x1, STORE_LEN, false);
-        let spare = tmode_spare(&h, space(0x12), Some(0x20), 0x1, STORE_LEN, false);
+        let key = user_key();
+        let h = LedgerHost::default();
+        let created = tmode_twin(&h, key, space(0x10), Some(RAM_OBJ), STORE, STORE_12G, false);
+        let spare = tmode_spare(&h, space(0x12), Some(RAM_OBJ), STORE, STORE_12G, false);
         let recycled = tmode_reuse(key, &spare);
         assert!(h.maps.borrow().is_empty(), "{:?}", h.maps.borrow());
         assert_eq!(spare_windows_text(&spare), "windows=none");
         for rec in [&created, &recycled] {
-            let mi = &rec.mirror;
-            assert_eq!((mi.fb_len, mi.ram), (0, None));
+            assert_eq!(rec.mirror.negctl_window, None);
             assert!(
                 rec.reserved.is_empty(),
                 "no VMM range a guest leaf must avoid"
             );
+            assert_eq!(windows_text(&rec.mirror), "windows=none");
             assert!(
-                take_ring_slot(&mi.rings).is_some_and(|at| at == RING_REGION_BASE),
-                "no ring slot taken in the twin"
-            );
-            assert_eq!(windows_text(mi), "windows=none");
-            assert!(
-                !mi.kernel_vas.is_kernel(),
+                !rec.mirror.kernel_vas.is_kernel(),
                 "a user client's space starts unclassified"
             );
         }
         // ⊘ The positive control.
-        let h = CountingHost::default();
-        let created = tmode_twin(&h, key, space(0x10), Some(0x20), 0x1, STORE_LEN, true);
-        let spare = tmode_spare(&h, space(0x12), Some(0x20), 0x1, STORE_LEN, true);
+        let h = LedgerHost::default();
+        let created = tmode_twin(&h, key, space(0x10), Some(RAM_OBJ), STORE, STORE_12G, true);
+        let spare = tmode_spare(&h, space(0x12), Some(RAM_OBJ), STORE, STORE_12G, true);
         let recycled = tmode_reuse(key, &spare);
         assert_eq!(
             h.maps.borrow().len(),
@@ -3299,7 +3620,7 @@ mod tests {
             assert!(windows_text(&rec.mirror).starts_with("windows fb=0x1fffe00000000+"));
             assert_eq!(
                 rec.reserved,
-                vec![(0x1_fffe_0000_0000, 0x1_fffe_0000_0000 + STORE_LEN)]
+                vec![(0x1_fffe_0000_0000, 0x1_fffe_0000_0000 + STORE_12G)]
             );
         }
         assert!(spare_windows_text(&spare).starts_with("windows fb="));

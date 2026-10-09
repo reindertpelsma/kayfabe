@@ -656,7 +656,10 @@ mod tests {
     fn only_a_guest_kernel_channel_is_privileged() {
         assert!(Privileged::of(true, false).is_some());
         assert!(Privileged::of(true, true).is_none(), "Windows user work");
-        assert!(Privileged::of(false, false).is_none(), "a guest user channel");
+        assert!(
+            Privileged::of(false, false).is_none(),
+            "a guest user channel"
+        );
         assert!(Privileged::of(false, true).is_none());
     }
 

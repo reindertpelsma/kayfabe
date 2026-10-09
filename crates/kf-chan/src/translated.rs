@@ -163,8 +163,10 @@ pub struct CeState {
     /// inc A refuses by name — a [`REFUSED_METHODS`] write, a `SubDeviceMask` header, a GP control
     /// entry other than `NOP` and a family's extended base. ⊘ `false` (the default path until box
     /// step 1 shows the counts at 0 on each measured family): each is COUNTED in [`CeState::inca`]
-    /// and handled exactly as before inc A — forwarded, pushed raw, skipped. The device sets it from
-    /// `KF3_INCA_REFUSE=1` or `KF3_TSPACE=1` (T-mode refuses them in its own decoder regardless).
+    /// and handled exactly as before inc A — forwarded, pushed raw, skipped. ★ 2026-10-10
+    /// (`OWNER_RULINGS.md` §AB): kf3 always sets it (`KF3_INCA_REFUSE` and `KF3_TSPACE` are
+    /// deleted; T-mode refuses them in its own decoder regardless); `false` is reached only by
+    /// tests.
     pub strict: bool,
     /// ★ P1+P2 inc A, the count-only arm: what [`CeState::strict`] would have refused.
     pub inca: IncACounts,

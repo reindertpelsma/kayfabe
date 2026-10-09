@@ -64,10 +64,11 @@ pub struct ApplyCfg<'a> {
     /// ([`Applied::carve_gpu`], [`Applied::carve_cpu`]) and, on a GPU target with
     /// [`ApplyCfg::carve_refuse`], refused. `store_bytes` (the default) disables both.
     pub carve: u64,
-    /// ★ P1+P2 inc A2: refuse — not only count — a leaf into the carve-out on a GPU target a guest
-    /// non-kernel channel may run in ([`carve_reached`]). ON with `KF3_TSPACE=1` (review fix
-    /// 2026-10-04); OFF on the default path until a count-only A/B on each measured family shows
-    /// the counter at 0 (§4.3).
+    /// ★ P1+P2 inc A2: refuse — not only count — a leaf into the carve-out on a GPU target
+    /// ([`carve_reached`]). ★ 2026-10-10 (§AB): kf3 sets it ON always (`KF3_TSPACE` is hardwired;
+    /// OFF only under its positive control `KF3_NEGCTL_CARVE`), and it now covers guest-KERNEL
+    /// spaces too. ⊘ The text it supersedes: "a GPU target a guest non-kernel channel may run in
+    /// … ON with `KF3_TSPACE=1`; OFF on the default path until a count-only A/B".
     pub carve_refuse: bool,
 }
 
@@ -141,8 +142,9 @@ pub struct Applied {
     /// ([`MapTarget::gpu_space`]) a guest non-kernel channel may run in (it withholds privileged
     /// leaves) — counted, and refused only with [`ApplyCfg::carve_refuse`].
     pub carve_gpu: usize,
-    /// ★ Review fix 2026-10-04: the same on a guest-KERNEL GPU space — counted only, never refused
-    /// ([`carve_reached`]).
+    /// ★ Review fix 2026-10-04: the same on a guest-KERNEL GPU space, counted apart. ⊘ Corrected
+    /// 2026-10-10 (§AB): refused too under [`ApplyCfg::carve_refuse`] (was "counted only, never
+    /// refused") ([`carve_reached`]).
     pub carve_kernel: usize,
     /// ★ P1+P2 inc A (§4.3): the same on a CPU view (the guest kernel's BAR1/BAR2) — count-only.
     pub carve_cpu: usize,
@@ -320,12 +322,21 @@ impl PermPolicy {
 /// channel created non-kernel may run in — a twin that withholds privileged leaves
 /// ([`MapTarget::withholds_privileged`]: `User(n)` or `Unclassified`).
 ///
-/// ★ Review fix 2026-10-04 (HIGH): with `KF3_TSPACE=1` the device turns refusal ON, so a twin an
-/// unprivileged guest channel runs in never maps kayfabe's declared firmware region. A guest-KERNEL
-/// space is only counted ([`Applied::carve_kernel`]): under T-mode no channel runs in one
-/// (passthrough births are refused there, Translated work runs in the T-space) and CeUtils'
-/// `VIRTUAL_MODE` FB alias lives in one — refusing it there could fail `RmInitAdapter` for no
-/// isolation gain (§4.3, UNVERIFIED whether the alias reaches the carve-out).
+/// ⊘ **Corrected 2026-10-10 (`OWNER_RULINGS.md` §AB; `V3_WINDOW_EXPOSURE_REVIEW.md` row 6), above
+/// the 2026-10-04 text it supersedes:** under [`ApplyCfg::carve_refuse`] (hardwired ON in kf3 with
+/// the T-space) a carve-out leaf is REFUSED on EVERY host GPU space, a guest-KERNEL space included
+/// (still counted apart in [`Applied::carve_kernel`]). A mirror never maps kayfabe memory (§Q, §AB
+/// rule 2): no channel runs in a guest-kernel mirror, so a refusal there costs no work, and a
+/// refused leaf is absent, which an invalidate completes over (§AA). ⚠ Unmeasured: whether the
+/// guest RM's CeUtils `VIRTUAL_MODE` FB alias reaches the carve-out (the reason the kernel arm was
+/// count-only); the Linux fast suite and the Windows boot verify it.
+///
+/// ⊘ SUPERSEDED 2026-10-10 (above): *Review fix 2026-10-04 (HIGH): with `KF3_TSPACE=1` the device
+/// turns refusal ON, so a twin an unprivileged guest channel runs in never maps kayfabe's declared
+/// firmware region. A guest-KERNEL space is only counted ([`Applied::carve_kernel`]): under T-mode
+/// no channel runs in one (passthrough births are refused there, Translated work runs in the
+/// T-space) and CeUtils' `VIRTUAL_MODE` FB alias lives in one — refusing it there could fail
+/// `RmInitAdapter` for no isolation gain (§4.3, UNVERIFIED whether the alias reaches the carve-out).*
 fn carve_reached(
     target: &dyn MapTarget,
     off: u64,
@@ -344,7 +355,7 @@ fn carve_reached(
         cfg.carve_refuse
     } else {
         out.carve_kernel += 1;
-        false
+        cfg.carve_refuse
     }
 }
 
@@ -1825,7 +1836,7 @@ mod tests {
                     (KFWR_ACK_APPLIED, 1, 0),
                     "count-only {at:#x} sked={sked}"
                 );
-                // GPU target, refusal (inc A2; ON under KF3_TSPACE=1): refused by name, never placed.
+                // GPU target, refusal (inc A2; always ON in kf3 since 2026-10-10): refused, never placed.
                 let t = twin();
                 let a = apply_entry(&t, std::slice::from_ref(&leaf), &cfg_with(true));
                 assert_eq!(
@@ -1854,19 +1865,35 @@ mod tests {
                     (0, 1, 0),
                     "cpu view {at:#x} sked={sked}"
                 );
-                // ★ A guest-KERNEL GPU space (it mirrors privileged leaves): counted apart, mapped
-                // even in refusal mode — no guest non-kernel channel runs there (review fix
-                // 2026-10-04, `carve_reached`).
-                let t = Rec {
+                // ★ A guest-KERNEL GPU space (it mirrors privileged leaves): counted apart, and
+                // (corrected 2026-10-10, §AB; `carve_reached`) REFUSED in refusal mode too — a
+                // mirror never maps kayfabe memory; count-only mode still maps it.
+                let kernel = || Rec {
                     gpu: true,
                     withhold_priv: false,
                     ..Rec::default()
                 };
+                let t = kernel();
                 let a = apply_entry(&t, std::slice::from_ref(&leaf), &cfg_with(true));
                 assert_eq!(
                     (a.codes[0], a.carve_gpu, a.carve_kernel, a.refused),
-                    (KFWR_ACK_APPLIED, 0, 1, 0),
+                    (KFWR_ACK_FAILED, 0, 1, 1),
                     "kernel space {at:#x} sked={sked}"
+                );
+                assert!(
+                    t.ops
+                        .borrow()
+                        .iter()
+                        .all(|o| !o.starts_with("map") && !o.starts_with("sked")),
+                    "nothing placed in a kernel space: {:?}",
+                    t.ops.borrow()
+                );
+                let t = kernel();
+                let a = apply_entry(&t, std::slice::from_ref(&leaf), &cfg_with(false));
+                assert_eq!(
+                    (a.codes[0], a.carve_kernel, a.refused),
+                    (KFWR_ACK_APPLIED, 1, 0),
+                    "kernel space, count-only {at:#x} sked={sked}"
                 );
             }
         }
