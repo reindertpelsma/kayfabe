@@ -435,6 +435,41 @@ unmap is NOT the cause. No Xid and Windows stays up past the old 0x116 point →
 - One run cannot show H-split fixes anything: the Xid did not occur in the arm that was supposed to remove it, but the stall
   did occur, and the stall was the problem.
 
+### 13.1 Same-tracer diff, run 104 vs the VFIO reference (boot3), added after the owner asked "don't you observe a difference on the trace"
+
+⊘ §13 above was first written from counters and screenshots; the aligned register trace should have been read first (owner
+method, 2026-10-09). The statements about the black screen in §13 stand, but the *cause* statements in §13 `[inferred]` are
+superseded by this subsection. Tools: `run104/tools/*.py` (they read the host traces: kayfabe
+`boundary-kayfabe-104/trace.log`, reference `vfio-dvi-20261008/boot3/trace.log`, same `vfio_region_*`/`vfio_msi_interrupt` events).
+
+`[measured]` (BAR0 register names from ogkm 595.84: `0xB81000+4i` = `CPU_INTR_LEAF(i)`, `0xB81600` = `CPU_INTR_TOP(0)`, `0x611D80` =
+`NV_PDISP_FE_RM_INTR_EN_HEAD_TIMING(0)`, `0x611C00` = `..._INTR_STAT_HEAD_TIMING(0)`, `0x611EC0` = `..._INTR_DISPATCH`, `0x611C30` = `..._INTR_STAT_CTRL_DISP`):
+1. **Interrupt rate.** Windows busy phase: kayfabe 1371 / 2140 / 3511 MSIs per second (08:10:37-38), hardware 714 / 557 / 504 (boot3 20:10:17-19);
+   one busy second: hw 402 vs kayfabe 3511 (about 9x). Lock screen idle: kayfabe 144-173 per second (08:10:43-45), hardware 17-19 (20:10:55-58). All on
+   vector 0, same MSI address, in both.
+2. **Interrupt-tree status the guest reads** (`run104/tools/leaf104.py`). Hardware at idle and busy: `LEAF(4)` = `0x80000000` (bit 31, steady),
+   `LEAF(5)` = `0x1182f`, `LEAF(6)` = `5` on every read; `LEAF(0)` = 1. Kayfabe: `LEAF(5)` = `LEAF(6)` = 0 on every read; `LEAF(4)` = 0 or
+   `0x4000000` (bit 26) only; `LEAF(0)` has bits 1-2 set (values 3/6/7) for most reads in the busy second (1588 of 1748 reads = 3), i.e. the relay's
+   CE2 / CE3 vectors, where hardware shows 1 (and `0x80`/`0x100` rarely). Per interrupt the ISR does a similar amount of work (about 5 reads of
+   `0x611EC0` on hardware, 7 in kayfabe), but `INTR_DISPATCH` is nonzero for 25% of hardware reads and 8% of kayfabe reads.
+3. **Display timing interrupt enable.** `0x611D80` reads back `0x3f0060` (steady) on hardware and `0` in kayfabe; the guest's read-modify-write therefore
+   writes `0x3f0062`/`0x3f0060` on hardware and `0x2`/`0x0` in kayfabe. On hardware the guest toggles the enable every 50-100 ms (226 writes in the
+   boot); in kayfabe it is enabled at 08:10:42.851 and stays enabled until 08:10:46.446 (18 writes in the whole run).
+4. **Periodic reads kayfabe's guest does not do.** At the lock screen hardware reads `0x110094` (about 100 per second) and the PTIMER pair `0x9400`/`0x9410`
+   (about 120 + 250 per 3 s); kayfabe reads neither in the steady state (`r:gsp/falcon` 0-10 per second against 60-290 on hardware).
+5. **The guest goes silent.** After 08:10:48 the kayfabe trace holds 6 writes for the remaining 8 minutes (QEMU alive, QGA unreachable): the guest stopped
+   touching the GPU entirely after a short burst at 08:10:46-47 (GSP traffic: the driver teardown).
+6. **Bulk difference, not relevant:** hardware reads 160k offsets in `0x300000-0x39ffff` (VBIOS ROM window), kayfabe reads none.
+
+`[inferred]` (to test): the guest sits in an interrupt-service loop in kayfabe: relayed non-stall edges (`PT-NSI host GR0/CE3 notifier wake #3303/#1280`,
+many with `live twins 0`) raise vectors the guest ISR then finds mostly empty (leaf 5/6 never show the pending bits hardware keeps), and the display
+timing interrupt stays armed (`0x611D80` base wrong). A busy ISR/DPC path of that rate is a candidate for the guest-side stall that ends in the TDR.
+Caveat: the read trace itself makes every BAR0 read an exit; the same applies to the VFIO reference trace, but the amplification is larger in kayfabe
+where the storm is.
+**Falsifier for the next run (batching off, one variable):** `KF3_PT_NSI_RELAY=0` with the same read trace: if the MSI rate stays at about 150 per second at
+the lock screen and the screen still goes black at about 3 s, the relayed non-stall edges are not the cause (look at the display timing interrupt next:
+make `0x611D80` read back the firmware base `0x3f0060`).
+
 **Not done:** the stall snapshots (11 taken) and the 0x116 bugcheck were not read; no in-guest data exists (agent dead).
 **Next:** the stall itself (twin states at the stall, runs 100/102/104) and the recovery wall (§11, owner decision pending).
 The H-split regression arm (§12 step 3) is still worth running GPU-side but is no longer on the critical path.
