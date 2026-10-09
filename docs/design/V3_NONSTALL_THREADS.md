@@ -2,9 +2,8 @@
 
 **STATUS: BUILT, GPU-FREE-TESTED ONLY, 2026-10-09. Branch `claude/nonstall-sonnet-20261009` (off
 `master` at `7040011a`, not merged). NOTHING HERE HAS RUN ON HARDWARE** — §7 lists the exact commands.
-Built: E (measurement), A (slot lock), B (quiet logging), D (one bounded doorbell batch), C (the act
-thread as a strict-FIFO event loop). NOT built, owner's call: per-key act lanes (§5), the ordering
-restoration for doorbells beyond a batch (§3.D), a bounded logger thread (§3.B, only if measured needed).
+Built: E (measurement), A (slot lock), B (quiet logging), D (a bounded per-call doorbell snapshot), C (the act
+thread as a strict-FIFO event loop). NOT built, owner's call: per-key act lanes (§5), a bounded logger thread (§3.B, only if measured needed).
 
 ## 0. The rule (owner, 2026-10-09, binding)
 
@@ -157,30 +156,38 @@ stalled drainer no longer freezes the heartbeat the guest reads (it used to, by 
 formats and `try_send`s into a bounded queue, dropping the newest line and counting it; a thread
 does the writes. Until a run shows the need it is measured, not built.
 
-## 3.D Doorbell servicing (item D) — built
+## 3.D Doorbell servicing (item D) — built: a per-call snapshot
 
 **Before.** `DbFast::service_ready` (called at the top of the drainer loop and before EVERY privileged
 write is applied) repeated while a poll came back with a full batch (`MAX_READY_BATCH` = 64). A guest
 ringing 64+ tokens continuously — each delivery re-arms its eventfd — kept the drainer there:
 privileged writes, held-reply release, RC and hotplug delivery starved.
 
-**After.** One non-blocking poll of at most 64 fds per call, delivered, and back to the loop. A fd still
-ready is level-triggered and is served by the next call; a call that filled the batch increments
-`stall[doorbell_batch_full=]`. **Doorbells stay first, but bounded.**
+**After.** One call delivers every doorbell that is READY AT THE TIME OF THE CALL, **each registered
+token at most once**, and returns. Implementation: polls (`epoll_wait(0)`, ≤ 64 fds each) with a
+per-call set of tags already served; a token reported again (the guest re-rang after the snapshot) is
+skipped and served by the NEXT call; the call ends on a short poll, on a poll that reports nothing new,
+or after `registered + 1` polls. Work per call: at most one delivery per registered token (≤ the 256
+placement budget), and polls bounded by the registry — never by how fast the guest rings.
+`stall[doorbell_batch_full=]` counts calls whose first poll was full (more than a batch ready).
 
-**Behaviour change (decision for the owner).** `V3_DOORBELL_IOEVENTFD.md` §4 promised that a doorbell
-stored before a later privileged write is delivered before that write is applied. That now holds for up
-to one batch of ready tokens; beyond it a doorbell can follow the write. It is never lost, the trap never
-ordered different tokens against privileged writes, and `deregister`'s final drain closes the
-free-after-doorbell case. The bounded way to restore the full guarantee, if wanted: a per-call snapshot
-(each ready tag at most once, at most `live_regs` polls). Not built; §4 carries the correction above the
-text it corrects.
+**The ordering invariant is kept** (`V3_DOORBELL_IOEVENTFD.md` §4): a doorbell a vCPU stored before a
+later privileged write was signalled before the write was queued, hence before the sweep that precedes
+applying it, so it is in the snapshot and delivered before the write — with any number of tokens ready.
+(Reading a token's eventfd resets its whole count, so the first delivery covers every earlier store.)
+Assumption pinned by a test: epoll's ready list is FIFO (a token ready before the call is reported
+before one re-rung during it), so a poll with nothing new means nothing fresh is left.
+*Correction of the first version of this item:* it delivered ONE batch and returned, which weakened this
+guarantee for more than 64 ready tokens; that was wrong and is replaced by the snapshot.
 
-**Falsifier / tests** (`dbfast::tests`): `service_ready_is_one_bounded_batch_even_while_the_guest_keeps_ringing`
-(100 tokens whose every delivery re-rings: the old code never returned — observed as a 5 s timeout
-before the change — now one call = one full batch, one poll; the next call serves the rest);
-`a_privileged_write_is_applied_within_one_doorbell_batch_while_the_guest_keeps_ringing` (a real
-`Plane::drainer_pass`: the write is applied after exactly one batch of 64 deliveries).
+**Tests** (`dbfast::tests`):
+`a_doorbell_signalled_before_a_privileged_write_is_delivered_before_it_even_with_over_a_batch_ready` (a
+real `Plane::drainer_pass`; all 100 doorbells precede the write — the one-batch version delivered 64, the
+test failed before the fix); `a_call_delivers_every_ready_token_once_and_returns_while_the_guest_keeps_ringing`
+(exactly 100, the re-rings are the next call's); `a_guest_ringing_as_fast_as_it_can_cannot_keep_one_call_running`
+(a second thread signals all 100 fds in a tight loop: deliveries ≤ 100, polls ≤ 101, the call returns);
+`control_the_old_loop_never_returns_while_the_guest_keeps_ringing` (the old repeat-while-full loop does not
+end until a 300 ms cut-off).
 
 ## 3.C The act thread as an event loop (item C) — built, strict FIFO
 
@@ -270,7 +277,7 @@ first pending one too). One hung `PREEMPT` stops every other guest process's all
 
 ## 6. What remains open
 
-1. Per-key lanes (§5) — owner's decision. 2. The doorbell-ordering beyond one batch (§3.D) — owner's call.
+1. Per-key lanes (§5) — owner's decision. 2. (closed: the doorbell order is kept by the snapshot, §3.D.)
 3. `KVM_IOEVENTFD` under the registry lock on the act thread and the main loop (C3) — a blocking syscall
 by nature; a helper thread for placements would remove it from the act thread. 4. The act-thread
 `lock()`s on the plane maps (C6) — measured, not removed. 5. `DOORBELL-LEDGER`/`RETIRED` lines are kept

@@ -47,7 +47,7 @@
 
 use crate::stall::{LockId, Stall};
 use kf_linux_raw::{MAX_READY_BATCH, Notifier, PollTimeout, Poller, ReadyTokens};
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::os::fd::BorrowedFd;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, mpsc};
@@ -923,15 +923,34 @@ impl DbFast {
     /// are the caller's own and are skipped). `t_wake` is when the wait returned. Returns how many
     /// deliveries were made. Never blocks.
     pub fn on_ready(&self, tags: &ReadyTokens, t_wake: Instant, sink: &dyn Sink) -> usize {
+        self.deliver_tags(tags, t_wake, sink, None).0
+    }
+
+    /// Deliver the doorbell tags of one poll. With `seen`, a tag already served in this snapshot is
+    /// skipped and every tag met is added to it. Returns `(deliveries, tags met for the first time)`.
+    fn deliver_tags(
+        &self,
+        tags: &ReadyTokens,
+        t_wake: Instant,
+        sink: &dyn Sink,
+        mut seen: Option<&mut HashSet<u64>>,
+    ) -> (usize, usize) {
         let Ok(mut side) = self.side.lock() else {
-            return 0;
+            return (0, 0);
         };
         let side = &mut *side;
         // Commands first: a Remove queued before this report is honoured before its tag is read.
         self.sync(side, sink);
         let mut n = 0;
         let mut ready = 0u64;
+        let mut fresh = 0;
         for tag in tags.iter().filter(|t| *t >= DB_TAG_BASE) {
+            if let Some(seen) = seen.as_deref_mut()
+                && !seen.insert(tag)
+            {
+                continue;
+            }
+            fresh += 1;
             ready += 1;
             if !side.live.contains_key(&tag) {
                 self.sync(side, sink);
@@ -950,58 +969,72 @@ impl DbFast {
             }
         }
         self.counters.max_batch.fetch_max(ready, Ordering::Relaxed);
-        n
+        (n, fresh)
     }
 
-    /// ★ **Drainer — deliver the doorbells that are ready NOW: ONE bounded batch** (at the top of its
-    /// loop, and before a privileged register write is applied). One non-blocking poll of at most
-    /// [`MAX_READY_BATCH`] fds, delivered, and back to the caller; a no-op without a syscall when
-    /// nothing is registered. Returns how many deliveries were made.
+    /// ★ **Drainer — deliver the doorbells that are ready at the time of the call: a per-call
+    /// SNAPSHOT** (at the top of its loop, and before a privileged register write is applied).
+    /// Every registered token whose eventfd is ready is served, **each at most once**, and the call
+    /// returns; a no-op without a syscall when nothing is registered. Returns how many deliveries
+    /// were made.
     ///
-    /// ⊘ **Not a loop.** It used to repeat while a poll came back full, so a guest ringing 64+ tokens
-    /// continuously could keep the drainer here forever, with privileged writes, held-reply release
-    /// and hotplug/RC delivery starved (owner rule 2026-10-09: no unbounded loop on the drainer). A
-    /// fd still ready is level-triggered: the next call delivers it. A call that filled the batch is
-    /// counted ([`Stall::doorbell_batch_full`]).
+    /// ⊘ **Bounded by the registry, never by the guest.** It used to repeat until a poll came back
+    /// short, so a guest ringing 64+ tokens continuously could keep the drainer here (owner rule
+    /// 2026-10-09: no unbounded loop on the drainer). Now a token served in this call is skipped if
+    /// it is reported again (the guest re-rang after the snapshot; the next call serves it), a poll
+    /// that reports nothing new ends the call, and at most `registered + 1` polls are made — so the
+    /// work is at most one delivery per registered token (≤ the placement budget, 256), whatever the
+    /// ring rate. More than one poll happens only when more than [`MAX_READY_BATCH`] tokens are
+    /// ready at once ([`Stall::doorbell_batch_full`] counts those calls).
     ///
-    /// ⚠ **Ordering, as relaxed.** §4's "a doorbell a vCPU stored before a later privileged write is
-    /// delivered before that write is applied" held only because this looped until the ready set was
-    /// empty. With more than a batch of tokens ready at once, a doorbell beyond the first batch can
-    /// now be delivered after a privileged write queued behind it. The trap never ordered doorbells of
-    /// DIFFERENT tokens against privileged writes (a worker served them asynchronously), and a
-    /// doorbell is never lost (level-triggered); the case that mattered, a free after its own
-    /// doorbell, is closed by `deregister`'s final drain. If the owner wants the old guarantee back,
-    /// the bounded way is a per-call snapshot (each ready tag at most once, at most `live_regs`
-    /// polls) — not built.
+    /// ★ **The ordering invariant is kept** (§4 of the design document): a doorbell a vCPU stored
+    /// before a later privileged write was signalled before the write was queued, hence before this
+    /// call (made when the write is applied) polls — so its token is in the snapshot and is
+    /// delivered before the write. Draining a token reads (and so resets) its whole count, including
+    /// that store, in the first delivery.
     pub fn service_ready(&self, sink: &dyn Sink) -> usize {
         // Commands first (a queued Remove's acknowledgement is someone's wait); then, with nothing
         // registered on this side, there is nothing a poll could report: no syscall.
-        match self.side.lock() {
+        let registered = match self.side.lock() {
             Ok(mut side) => {
                 self.sync(&mut side, sink);
                 if side.live.is_empty() {
                     return 0;
                 }
+                side.live.len()
             }
             Err(_) => return 0,
+        };
+        let mut seen: HashSet<u64> = HashSet::new();
+        let mut total = 0;
+        for poll in 0..=registered {
+            let mut ready = ReadyTokens::new();
+            self.counters.polls.fetch_add(1, Ordering::Relaxed);
+            let t = Instant::now();
+            let got = self
+                .poller
+                .wait(&mut ready, PollTimeout::Immediate)
+                .unwrap_or(0);
+            let (n, fresh) = self.deliver_tags(&ready, t, sink, Some(&mut seen));
+            if n > 0 {
+                self.counters.poll_hits.fetch_add(1, Ordering::Relaxed);
+            }
+            total += n;
+            if poll == 0
+                && got >= MAX_READY_BATCH
+                && let Some(st) = self.stall.get()
+            {
+                st.doorbell_batch_full.fetch_add(1, Ordering::Relaxed);
+            }
+            // A short poll reported everything that was ready; a poll with nothing new means only
+            // re-rings (already served) are left. (epoll's ready list is FIFO: a token that became
+            // ready before the call is reported before one the guest re-rang during it, and
+            // unreported ones stay at the front — pinned by the over-a-batch test below.)
+            if got < MAX_READY_BATCH || fresh == 0 {
+                break;
+            }
         }
-        let mut ready = ReadyTokens::new();
-        self.counters.polls.fetch_add(1, Ordering::Relaxed);
-        let t = Instant::now();
-        let got = self
-            .poller
-            .wait(&mut ready, PollTimeout::Immediate)
-            .unwrap_or(0);
-        let n = self.on_ready(&ready, t, sink);
-        if n > 0 {
-            self.counters.poll_hits.fetch_add(1, Ordering::Relaxed);
-        }
-        if got >= MAX_READY_BATCH
-            && let Some(st) = self.stall.get()
-        {
-            st.doorbell_batch_full.fetch_add(1, Ordering::Relaxed);
-        }
-        n
+        total
     }
 
     /// One line for the device's status/boot log.
@@ -1331,69 +1364,137 @@ mod tests {
         assert_eq!(f.live(), (1, 1));
     }
 
-    /// ★ FALSIFIER of the doorbell-servicing stall (D): 100 tokens ring continuously (every delivery
-    /// re-arms its eventfd, as a guest storing in a loop does). The old `service_ready` repeated
-    /// while a poll came back full and never returned; now one call is one bounded batch, and the
-    /// rest is picked up by the next call (the drainer's loop interleaves its other work between).
-    #[test]
-    fn service_ready_is_one_bounded_batch_even_while_the_guest_keeps_ringing() {
-        struct Rering(Arc<DbFast>);
-        impl Sink for Rering {
-            fn deliver(&self, _idx: u32, _value: u32, tag: u64) -> Delivered {
-                if let Some(e) = self.0.efd_for_bench(tag) {
-                    let _ = e.signal(); // the guest rings again at once
-                }
-                Delivered::Rang { reached: true }
+    /// A sink that re-rings the delivered token's eventfd at once (a guest storing in a loop).
+    struct Rering(Arc<DbFast>, Arc<Mutex<Vec<&'static str>>>);
+    impl Sink for Rering {
+        fn deliver(&self, _idx: u32, _value: u32, tag: u64) -> Delivered {
+            self.1.lock().unwrap().push("doorbell");
+            if let Some(e) = self.0.efd_for_bench(tag) {
+                let _ = e.signal(); // the guest rings again at once
             }
+            Delivered::Rang { reached: true }
         }
+    }
+
+    fn ringing_fast_path(n: u32) -> (Arc<DbFast>, Arc<Mutex<Vec<&'static str>>>, &'static Stall) {
         let st = Stall::leak();
         let f = Arc::new(DbFast::new(1 << 20, kick()).unwrap());
         f.attach_stall(st);
         f.enable(Box::new(Arc::new(FakeKvm::default())));
         f.site_add(0x90);
-        for i in 0..100u32 {
+        for i in 0..n {
             f.register(i, 0x1000 + i);
             efd_of(&f, i).signal().unwrap();
         }
+        (f, Arc::default(), st)
+    }
+
+    /// ★ (D) `service_ready` is a per-call SNAPSHOT: it delivers every doorbell ready at the time of
+    /// the call, each registered token at most once, then returns — whatever the guest does
+    /// meanwhile. 100 tokens (more than one 64-fd batch) ring continuously (every delivery re-arms
+    /// its eventfd): one call delivers exactly 100, in two polls, and returns; the re-rings are
+    /// served by the NEXT call.
+    #[test]
+    fn a_call_delivers_every_ready_token_once_and_returns_while_the_guest_keeps_ringing() {
+        let (f, order, st) = ringing_fast_path(100);
         let (tx, rx) = mpsc::channel();
         let g = Arc::clone(&f);
+        let o = Arc::clone(&order);
         std::thread::spawn(move || {
-            let sink = Rering(Arc::clone(&g));
+            let sink = Rering(Arc::clone(&g), o);
             let first = g.service_ready(&sink);
+            let polls_after_first = g.counters.polls.load(Ordering::Relaxed);
             let second = g.service_ready(&sink);
-            let _ = tx.send((first, second));
+            let _ = tx.send((first, polls_after_first, second));
         });
-        let (first, second) = rx
+        let (first, polls, second) = rx
             .recv_timeout(Duration::from_secs(5))
             .expect("service_ready looped while the guest kept ringing");
-        assert_eq!(first, MAX_READY_BATCH, "100 ready: one full batch, no more");
-        assert!(second > 0, "the rest is served by the next call");
-        assert_eq!(
-            f.counters.polls.load(Ordering::Relaxed),
-            2,
-            "one poll per call"
-        );
+        assert_eq!(first, 100, "every token that was ready, once");
+        // 64 fresh, then the other 36 beside the first 28 re-rings (already served), then only
+        // re-rings: three polls, and the call is over.
+        assert!((2..=4).contains(&polls), "polls: {polls}");
+        assert_eq!(second, 100, "the re-rings are the next call's snapshot");
         assert_eq!(st.doorbell_batch_full.load(Ordering::Relaxed), 2);
     }
 
-    /// ★ The drainer's contract (D): with 100 tokens ringing continuously AND a privileged register
-    /// write queued, `drainer_pass` applies the write — after at most ONE doorbell batch — and
-    /// returns. (`apply_register` sweeps doorbells before it applies, exactly as the device's does.)
+    /// ★ (D, bound) A guest that re-rings continuously from ANOTHER thread — as fast as it can —
+    /// cannot keep one call running: deliveries are bounded by the registry size (each token once),
+    /// polls by the registry size + 1, whatever the ring rate.
     #[test]
-    fn a_privileged_write_is_applied_within_one_doorbell_batch_while_the_guest_keeps_ringing() {
+    fn a_guest_ringing_as_fast_as_it_can_cannot_keep_one_call_running() {
+        let n = 100u32;
+        let (f, order, _st) = ringing_fast_path(n);
+        let stop = Arc::new(AtomicBool::new(false));
+        let ringer = {
+            let (f, stop) = (Arc::clone(&f), Arc::clone(&stop));
+            std::thread::spawn(move || {
+                while !stop.load(Ordering::Acquire) {
+                    for i in 0..n {
+                        let _ = efd_of(&f, i).signal();
+                    }
+                }
+            })
+        };
+        let sink = Rering(Arc::clone(&f), order);
+        let polls0 = f.counters.polls.load(Ordering::Relaxed);
+        let t = Instant::now();
+        let delivered = f.service_ready(&sink);
+        let took = t.elapsed();
+        let polls = f.counters.polls.load(Ordering::Relaxed) - polls0;
+        stop.store(true, Ordering::Release);
+        ringer.join().unwrap();
+        assert!(
+            delivered <= n as usize,
+            "each token at most once: {delivered}"
+        );
+        assert!(
+            polls <= u64::from(n) + 1,
+            "polls bounded by the registry: {polls}"
+        );
+        assert!(took < Duration::from_secs(2), "one call took {took:?}");
+    }
+
+    /// The control — the OLD behaviour, reproduced: repeat while a poll comes back full. With a
+    /// guest ringing 100 tokens continuously it does not return until something outside stops it.
+    #[test]
+    fn control_the_old_loop_never_returns_while_the_guest_keeps_ringing() {
+        let (f, order, _st) = ringing_fast_path(100);
+        let sink = Rering(Arc::clone(&f), order);
+        let t = Instant::now();
+        let mut rounds = 0u32;
+        loop {
+            let mut ready = ReadyTokens::new();
+            let got = f
+                .poller
+                .wait(&mut ready, PollTimeout::Immediate)
+                .unwrap_or(0);
+            f.on_ready(&ready, Instant::now(), &sink);
+            rounds += 1;
+            if got < MAX_READY_BATCH || t.elapsed() > Duration::from_millis(300) {
+                break;
+            }
+        }
+        // 100 re-armed fds: every poll after the first is full again (64), so the loop only ended at
+        // our 300 ms cut-off — the new call above returns in two polls.
+        assert!(
+            t.elapsed() > Duration::from_millis(250),
+            "returned after {rounds} rounds"
+        );
+        assert!(rounds > 100, "{rounds}");
+    }
+
+    /// ★ (D, ORDER — an invariant, `V3_DOORBELL_IOEVENTFD.md` §4) A doorbell a vCPU stored before a
+    /// later privileged write is delivered before that write is applied, EVEN WITH MORE THAN ONE
+    /// BATCH of tokens ready: 100 tokens signalled before the write, a real `Plane::drainer_pass`,
+    /// `apply_register` sweeping first as the device's does. All 100 precede the write; the guest's
+    /// re-rings (after the snapshot) do not delay it.
+    #[test]
+    fn a_doorbell_signalled_before_a_privileged_write_is_delivered_before_it_even_with_over_a_batch_ready()
+     {
         use kf_core::{HostOps, HostSlice, Plane, Step, Translatable, Vmm};
         use kf_trap::RegWrite;
 
-        struct Rering(Arc<DbFast>, Arc<Mutex<Vec<&'static str>>>);
-        impl Sink for Rering {
-            fn deliver(&self, _idx: u32, _value: u32, tag: u64) -> Delivered {
-                self.1.lock().unwrap().push("doorbell");
-                if let Some(e) = self.0.efd_for_bench(tag) {
-                    let _ = e.signal();
-                }
-                Delivered::Rang { reached: true }
-            }
-        }
         struct Dev(Arc<DbFast>, Rering, Arc<Mutex<Vec<&'static str>>>);
         impl HostOps for Dev {
             fn ring_host(&self, _: u32) {}
@@ -1415,14 +1516,7 @@ mod tests {
             fn teardown_step(&self, _: Step) {}
         }
 
-        let f = Arc::new(DbFast::new(1 << 20, kick()).unwrap());
-        f.enable(Box::new(Arc::new(FakeKvm::default())));
-        f.site_add(0x90);
-        for i in 0..100u32 {
-            f.register(i, 0x1000 + i);
-            efd_of(&f, i).signal().unwrap();
-        }
-        let order = Arc::new(Mutex::new(Vec::new()));
+        let (f, order, _st) = ringing_fast_path(100);
         let dev = Dev(
             Arc::clone(&f),
             Rering(Arc::clone(&f), Arc::clone(&order)),
@@ -1449,8 +1543,8 @@ mod tests {
         let before = o.iter().take_while(|e| **e == "doorbell").count();
         assert_eq!(o.last(), Some(&"APPLIED"));
         assert_eq!(
-            before, MAX_READY_BATCH,
-            "exactly one batch preceded the write"
+            before, 100,
+            "all 100 doorbells signalled before the write were delivered before it"
         );
     }
 
