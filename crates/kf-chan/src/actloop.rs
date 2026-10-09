@@ -503,6 +503,47 @@ mod tests {
         stop(&q, &stop_flag, h);
     }
 
+    /// ★ Drainer verification 2026-10-09 (`V3_NONSTALL_THREADS.md` §9, item D3): the drainer hands
+    /// a statement's host act to this queue (`ActQueue::submit`, through `ChanPlane::defer*`), and
+    /// the act thread may sit 1.3 s inside a blocking host verb (an RM ioctl into a busy host RM).
+    /// `submit` is an unbounded `mpsc::send` plus a non-blocking eventfd write: it returns at once
+    /// however stuck the consumer is, and the queued acts are not lost.
+    #[test]
+    fn submit_returns_at_once_while_the_act_thread_is_stuck_in_a_blocking_step() {
+        let (q, stats, stop_flag, ctx, _st, h) = spawn();
+        let stuck: Cont<Ctx, Out> = Box::new(|_| {
+            std::thread::sleep(Duration::from_millis(1300));
+            Step::Done("stuck".into())
+        });
+        assert!(q.submit("stuck", stuck, finish()));
+        assert!(until(|| stats.accepted.load(Ordering::Relaxed) == 1, 500));
+        std::thread::sleep(Duration::from_millis(50)); // the loop is now inside the sleeping step
+        let t = Instant::now();
+        for _ in 0..200 {
+            assert!(q.submit("queued", done("queued"), finish()));
+        }
+        let took = t.elapsed();
+        assert!(
+            took < Duration::from_millis(50),
+            "200 submits took {took:?} while the act thread was stuck"
+        );
+        assert_eq!(
+            stats.finished.load(Ordering::Relaxed),
+            0,
+            "the consumer really was still inside the step"
+        );
+        assert!(until(
+            || stats.finished.load(Ordering::Relaxed) == 201,
+            5000
+        ));
+        assert_eq!(
+            ctx.log.lock().unwrap().len(),
+            1 + 2 * 200,
+            "the stuck act's `done`, then every queued act's `ran` and `done`"
+        );
+        stop(&q, &stop_flag, h);
+    }
+
     /// An acknowledgement wait resumes as soon as the other thread signals, long before its deadline,
     /// and a lost acknowledgement resumes at the deadline.
     #[test]

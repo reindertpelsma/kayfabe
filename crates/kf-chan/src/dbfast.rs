@@ -1165,6 +1165,101 @@ mod tests {
         );
     }
 
+    /// A KVM stand-in whose `KVM_IOEVENTFD` takes `delay` (the kernel waits out an SRCU grace
+    /// period) and says when a call is inside it.
+    struct SlowKvm {
+        delay: Duration,
+        inside: AtomicBool,
+    }
+    impl Ioeventfd for Arc<SlowKvm> {
+        fn set(
+            &self,
+            _gpa: u64,
+            _value: u32,
+            _fd: BorrowedFd<'_>,
+            _assign: bool,
+        ) -> Result<(), i32> {
+            self.inside.store(true, Ordering::SeqCst);
+            std::thread::sleep(self.delay);
+            Ok(())
+        }
+    }
+
+    /// ★ Drainer verification 2026-10-09 (`V3_NONSTALL_THREADS.md` §9, item D2): the registry lock is
+    /// held by the main loop (`site_add`) or the act thread (`register`, `begin_deregister`) across
+    /// `KVM_IOEVENTFD`. Here a thread sits 1.3 s inside that call with the lock held, while the
+    /// "drainer" delivers a doorbell through both of its entries (`service_ready`, `on_ready`) and
+    /// prints the status line: none of them waits (< 50 ms each), and the delivery still happens.
+    #[test]
+    fn the_drainer_serves_doorbells_while_another_thread_sits_in_kvm_ioeventfd() {
+        let f = Arc::new(DbFast::new(16, kick()).unwrap());
+        let kvm = Arc::new(SlowKvm {
+            delay: Duration::from_millis(1300),
+            inside: AtomicBool::new(false),
+        });
+        assert!(f.enable(Box::new(Arc::clone(&kvm))));
+        // A live token with no site yet: nothing to place, so no KVM call, and it returns at once.
+        assert!(matches!(
+            f.register(1, 0x10001),
+            RegOutcome::Registered { placed: 0, .. }
+        ));
+        let efd = efd_of(&f, 1);
+        let s = Arc::new(Rec::default());
+        // The main loop maps the doorbell register: every live token is placed there, under the
+        // registry lock, in a KVM_IOEVENTFD that takes 1.3 s.
+        let g = Arc::clone(&f);
+        let main_loop = std::thread::spawn(move || g.site_add(0x1000_0090));
+        let t0 = Instant::now();
+        while !kvm.inside.load(Ordering::SeqCst) {
+            assert!(
+                t0.elapsed() < Duration::from_secs(5),
+                "the slow call never started"
+            );
+            std::thread::yield_now();
+        }
+        // ── the drainer, meanwhile ──
+        efd.signal().unwrap();
+        let t = Instant::now();
+        let n = f.service_ready(&*s);
+        let took = t.elapsed();
+        assert_eq!(n, 1, "the doorbell was delivered");
+        assert!(
+            took < Duration::from_millis(50),
+            "service_ready took {took:?}"
+        );
+
+        efd.signal().unwrap();
+        let mut ready = ReadyTokens::new();
+        f.poller()
+            .wait(&mut ready, PollTimeout::Millis(200))
+            .unwrap();
+        let t = Instant::now();
+        let n = f.on_ready(&ready, t, &*s);
+        let took = t.elapsed();
+        assert_eq!(n, 1, "the doorbell the wait reported was delivered");
+        assert!(took < Duration::from_millis(50), "on_ready took {took:?}");
+
+        let t = Instant::now();
+        let line = f.status();
+        assert!(t.elapsed() < Duration::from_millis(50), "status waited");
+        assert!(line.contains("doorbells=2"), "{line}");
+        assert!(
+            !main_loop.is_finished(),
+            "the slow KVM call must still have been running while the drainer worked"
+        );
+        // CONTROL: the lock really is held — a thread that takes the registry waits for the call.
+        let g = Arc::clone(&f);
+        let reader = std::thread::spawn(move || g.live());
+        std::thread::sleep(Duration::from_millis(100));
+        assert!(
+            !reader.is_finished(),
+            "control: a registry reader must wait behind the slow call, or this test proves nothing"
+        );
+        main_loop.join().unwrap();
+        reader.join().unwrap();
+        assert_eq!(s.got.lock().unwrap().len(), 2);
+    }
+
     #[test]
     fn off_until_enabled_and_then_every_site_gets_every_token() {
         let f = DbFast::new(16, kick()).unwrap();

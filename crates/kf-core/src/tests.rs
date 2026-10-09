@@ -1373,3 +1373,52 @@ fn caps_are_released_on_free_so_a_long_lived_guest_is_not_refused_forever() {
         "every acquire was matched by a release"
     );
 }
+
+#[test]
+fn a_drainer_pass_applies_at_most_its_budget_whatever_is_queued_or_still_arriving() {
+    // ★ Drainer verification 2026-10-09 (`V3_NONSTALL_THREADS.md` §9, item D1): `Plane::drainer_pass`
+    // is the only loop between the drainer's doorbell sweep and its park, and it is bounded by
+    // `budget` (the device passes 256) — not by how many privileged writes are queued, nor by a
+    // vCPU that keeps writing while the pass runs.
+    use std::sync::Arc;
+    let vmm = Box::leak(Box::new(plane::Vmm::new()));
+    let p = Arc::new(Plane::new(vmm, 64, 0x3f));
+    let host = Arc::new(RecordingHost::default());
+    let cls = Class::Privileged {
+        readable: true,
+        semantics: WriteSemantics::Plain,
+    };
+    for i in 0..2000u64 {
+        p.trap_write(cls, 0, 0x1000, i, 4);
+    }
+    assert_eq!(p.drainer_pass(&*host, 256), 256, "one pass is one budget");
+    assert_eq!(p.occupancy_for_test(), 2000 - 256);
+    // A vCPU that never stops writing cannot extend a pass either.
+    let stop = Arc::new(AtomicBool::new(false));
+    let writer = {
+        let (p, stop) = (Arc::clone(&p), Arc::clone(&stop));
+        std::thread::spawn(move || {
+            let mut n = 0u64;
+            while !stop.load(Ordering::Acquire) {
+                p.trap_write(cls, 0, 0x1008, n, 4);
+                n += 1;
+                std::thread::yield_now();
+            }
+        })
+    };
+    let t = std::time::Instant::now();
+    let mut applied = 0;
+    for _ in 0..4 {
+        let n = p.drainer_pass(&*host, 256);
+        assert!(n <= 256);
+        applied += n;
+    }
+    stop.store(true, Ordering::Release);
+    writer.join().unwrap();
+    assert!(applied <= 4 * 256);
+    assert!(
+        t.elapsed() < std::time::Duration::from_secs(1),
+        "four bounded passes took {:?}",
+        t.elapsed()
+    );
+}

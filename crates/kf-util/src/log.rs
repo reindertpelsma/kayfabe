@@ -283,6 +283,45 @@ mod tests {
         assert!(fragment().contains("max_call_us="));
     }
 
+    /// A sink that blocks every write until the test releases it (a full pipe, a stalled disk).
+    struct Gate(std::sync::mpsc::Receiver<()>);
+    impl Write for Gate {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            let _ = self.0.recv();
+            Ok(b.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// ★ CONTROL (drainer verification 2026-10-09, `V3_NONSTALL_THREADS.md` §9, item L1): `klog!` is a
+    /// synchronous `write(2)`, so a log call lasts exactly as long as its sink blocks — there is no
+    /// queue, ring or drop policy between the caller and the sink (§3.B, deliberately). What keeps
+    /// the register drainer out of this is only HOW OFTEN it logs, which the tests of the lines it can
+    /// reach bound (`kf-gsp` `past_the_cap_a_repeated_refusal_is_not_fresh_again`, `kf-rm`
+    /// `drainer_log_flood`).
+    #[test]
+    fn control_a_log_call_lasts_exactly_as_long_as_its_sink_blocks() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let h = std::thread::spawn(move || {
+            set_class(ThreadClass::Act);
+            let t0 = Instant::now();
+            emit_to(&mut Gate(rx), format_args!("blocked"));
+            t0.elapsed()
+        });
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        assert!(
+            !h.is_finished(),
+            "the call returned while its sink was blocked"
+        );
+        tx.send(()).unwrap();
+        let took = h.join().unwrap();
+        assert!(took >= std::time::Duration::from_millis(250), "{took:?}");
+        let (s, _) = stats();
+        assert!(s[ThreadClass::Act as usize].max_ns >= 250_000_000);
+    }
+
     #[test]
     fn limited_prints_the_first_four_then_powers_of_two() {
         let printed: Vec<u64> = (1..=40).filter(|n| limited(*n)).collect();

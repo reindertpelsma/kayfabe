@@ -202,4 +202,33 @@ mod tests {
         );
         assert_eq!(l.take_fresh().len(), REFUSAL_ROWS_MAX);
     }
+
+    /// ★ FINDING F-L1 of `docs/design/V3_NONSTALL_THREADS.md` §9 (the drainer verification,
+    /// 2026-10-09): `fresh` is what `log_fresh_refusals` prints, ONE `klog!` (a `write(2)`) per
+    /// row, on the register drainer. Past the cap a row is not stored, so it can never be found
+    /// again — and so EVERY repeat of it was "first seen" and was queued for a log line. A guest
+    /// that repeats one refused control 1000 times after 128 distinct ones therefore made the
+    /// drainer write 1000 lines. A guest-reachable unbounded emit.
+    #[test]
+    fn past_the_cap_a_repeated_refusal_is_not_fresh_again() {
+        let mut l = RefusalLedger::new();
+        for i in 0..REFUSAL_ROWS_MAX as u32 {
+            l.note(76, Some(i), 0x56, i);
+        }
+        assert_eq!(l.take_fresh().len(), REFUSAL_ROWS_MAX);
+        let mut lines = 0;
+        for seq in 0..1000 {
+            l.note(76, Some(0xdead_0000), 0x56, seq);
+            lines += l.take_fresh().len();
+        }
+        assert_eq!(
+            lines, 0,
+            "a row the table has no room for must not cost a log line per repeat"
+        );
+        assert_eq!(
+            l.total(),
+            REFUSAL_ROWS_MAX as u64 + 1000,
+            "total stays true"
+        );
+    }
 }

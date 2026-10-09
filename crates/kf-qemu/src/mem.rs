@@ -3934,6 +3934,48 @@ mod memory_list_tests {
             .is_none()
         );
     }
+    /// ★ Drainer verification 2026-10-09 (`V3_NONSTALL_THREADS.md` §9, item K1): the two locks of
+    /// this file that the register drainer takes BLOCKING — `RamMap::blocks` (every guest-RAM
+    /// access of the GSP FSM, via `block_for`) and `Inbox::q` (`push`, every page-directory
+    /// statement). Another thread holds each for 1.3 s, as a stuck holder would; the drainer-side call
+    /// must return in < 50 ms. It does NOT: both are plain std locks and the drainer waits for them.
+    /// What bounds the wait in production is what their other takers do under them, which is a
+    /// `Vec` insert/remove (`RamMap::add`/`del`, QEMU's main loop at memory-topology changes) and a
+    /// `mem::take` (`Inbox::take`, the VA thread) — microseconds, nothing that syscalls or waits
+    /// (§9 table). `#[ignore]`d: it is the finding, run it with `--ignored`.
+    #[test]
+    #[ignore = "FINDING K1 (by design): the drainer blocks on RamMap::blocks and Inbox::q; their other takers hold them for microseconds"]
+    fn the_drainer_side_of_ram_and_inbox_returns_while_another_thread_holds_their_locks() {
+        let (ram, block) = setup();
+        let map: &'static RamMap = ram.0;
+        let inbox = std::sync::Arc::new(Inbox::new().unwrap());
+        let (held_tx, held_rx) = std::sync::mpsc::channel();
+        let (map2, inbox2) = (map, std::sync::Arc::clone(&inbox));
+        let holder = std::thread::spawn(move || {
+            let _w = map2.blocks.write().unwrap();
+            let _q = inbox2.q.lock().unwrap();
+            held_tx.send(()).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(1300));
+        });
+        held_rx.recv().unwrap();
+        let t = std::time::Instant::now();
+        let covered = map.block_for(block.gpa, 16).is_some();
+        let took_ram = t.elapsed();
+        let t = std::time::Instant::now();
+        inbox.push(MemStatement::Sysmembar);
+        let took_inbox = t.elapsed();
+        holder.join().unwrap();
+        assert!(covered);
+        assert!(
+            took_ram < std::time::Duration::from_millis(50),
+            "RamMap::block_for took {took_ram:?}"
+        );
+        assert!(
+            took_inbox < std::time::Duration::from_millis(50),
+            "Inbox::push took {took_inbox:?}"
+        );
+    }
+
     #[test]
     fn memory_list_epoch_exhaustion_is_terminal() {
         let (ram, block) = setup();
