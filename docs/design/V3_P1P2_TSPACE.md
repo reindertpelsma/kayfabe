@@ -1,6 +1,35 @@
 # P1 + P2: no window in any space an unprivileged guest channel uses; Translated work in its own space
 
-**STATUS: RESEARCH, 2026-10-05.** Integration branch
+**STATUS: LIVE, 2026-10-10 — HARDWIRED (`OWNER_RULINGS.md` §AB), branch
+`claude/hardwire-tspace-20261010`, GPU-free tests only; no hardware has run this revision.**
+This correction is placed above every status and plan below it; where they say "behind
+`KF3_TSPACE`", "default OFF", "the default path" or "count-only unless strict", read this:
+
+- `KF3_TSPACE` is **deleted**. The T-space is built at every prewarm and every Translated channel
+  runs in it, refused by name when it is not built (never a mirror ring). This is the end state the
+  plan called "inc E" (§8), reached by owner ruling rather than by box steps 1-6. Those box steps
+  were never run; the hardware verification owed is now the merge gate (the branch's handoff note
+  `docs/design/V3_TSPACE_HARDWIRED.md` §5).
+- The legacy P5 path is **deleted**: no mirror, prewarmed spare or recycled spare carries a
+  store window, a guest-RAM window or a ring region (`kf_qemu::mem::Mirror` and `Spare` no longer
+  have the fields). `vmm_ranges`, the legacy rewriter windows (`Windows`, `SlotWindow`) and the
+  default path's `TwinState::force_kernel` are deleted. Audit S1-21's window half is closed in code.
+- `KF3_INCA_REFUSE` is **deleted**: inc A is always strict (`kf_qemu::tspace::INCA_STRICT`). The
+  pre-inc-A row removal is deleted; `rows_inexact=` still counts cuts where exactness mattered.
+- Inc A2 (row A2 below) is **always on**, and since this revision it also refuses carve-out
+  leaves in guest-kernel mirrors (`kf_mem::apply::carve_reached`;
+  `V3_WINDOW_EXPOSURE_REVIEW.md` row 6). This supersedes "a guest-KERNEL space is counted".
+- ★ **Rule 4 (privilege):** the T-space maps all guest RAM and the whole store below the
+  carve-out, so `TSpace::ring` and `TSpace::windows` require a `kf_qemu::tspace::Privileged`
+  witness (a guest-kernel channel that is not Windows per-process user work). An unprivileged
+  Translated birth is refused by name. **Not built:** a per-operand space for unprivileged
+  Translated channels. No channel kind needs it today.
+- The shadow (inc C, `KF3_TSHADOW`'s shadow half, `KF3_NEGCTL_SHADOW`) ran only beside the
+  legacy rewriter and can no longer run. `KF3_TSHADOW` still turns on the census. The box-log gate's
+  `--default`, `--census` and `--windows` arms describe paths that no longer exist. Its known
+  positive for `WINDOWS=NONE` is `--negctl window` (`KF3_NEGCTL_TWIN_WINDOW`, kept as a control).
+
+**STATUS: RESEARCH, 2026-10-05 (superseded in part by the 2026-10-10 status above).** Integration branch
 `codex/p1p2-integration-2026-10-05` combines master `906a76a4` with this branch's
 complete `31b64802` tip. `KF3_TSPACE` remains **off by default**. No hardware has
 run this integration. P0 (`v3-sec-nonpriv`, through `76dba5bd`) and scratch-window
@@ -768,6 +797,13 @@ the freeing arms of `twin_state_cas` (`kf-qemu`); the strict and count-only arms
 refusal test; `the_remap_fields_are_the_class_header`.
 
 ## 8. Rollout and increments
+
+⊘ **Corrected 2026-10-10 (`OWNER_RULINGS.md` §AB), above the plan it overrides:** the owner ruled
+the end state directly. Row E's code half is done on `claude/hardwire-tspace-20261010` (the
+window, ring-slot and spare-window code is deleted, `KF3_TSPACE` and `KF3_INCA_REFUSE` with it)
+without the A/B box evidence rows A-D asked for. Row E's "refusal of unclassified methods
+default-on" was already in the T-mode decoder. The box tests below are now the merge gate's
+evidence, not preconditions for a flag flip. The `KF3_TSPACE=0` arms no longer exist.
 
 Each increment is pushed to `v3-p1p2` with CI green. Before master, each needs the merge bar on a real
 GPU at the exact commit, plus its own box test (§R). Box runs are **specified here, not run**.

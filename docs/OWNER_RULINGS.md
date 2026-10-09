@@ -1,6 +1,6 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-10-07 (§S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-10-07 (§S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
@@ -1037,3 +1037,35 @@ designated anyway. That prevents a guest-wide crash."*
 - **Second half (open):** whether misaligned leaves are valid despite the misalignment and should be
   accepted (owner: yes, if the content is valid) — needs the leaves seen first.
 
+
+## AB. The T-space is hardwired; only guest leaves in a Passthrough space; whole guest RAM only for privileged channels (2026-10-10)
+
+**STATUS: LIVE, 2026-10-10.** Binding owner rulings, relayed by the coordinator. They follow the
+window-exposure review (`design/V3_WINDOW_EXPOSURE_REVIEW.md`) and complete §Q's address model.
+Implemented on `claude/hardwire-tspace-20261010` (GPU-free tests only; the hardware gate is in
+`design/V3_TSPACE_HARDWIRED.md` §5).
+
+1. **Delete `KF3_TSPACE`; hardwire the T-space behaviour.** Every Translated channel runs in the
+   T-space, which is built at prewarm. With no T-space, a Translated birth is refused by name; there
+   is never a fallback to a mirror window or a mirror ring.
+2. **In a PASSTHROUGH space nothing kayfabe- or host-owned may be mapped.** Every VA mapping
+   there comes from the guest's page-table leaves, and only that. The only future exception is the
+   not-yet-implemented sysmem-USERD address-size fix, and it must stay absent until it is ruled on.
+   This applies to every mirrored space (twins, prewarmed spares, recycled spares). The legacy P5
+   windows and ring region are deleted. A carve-out leaf is refused in every GPU mirror.
+3. **Only TRANSLATED channels may have host-owned mappings** (windows, rings), and they live in a
+   T-space that no Passthrough channel can ever use.
+4. **Only PRIVILEGED (guest-kernel) channels may have the ENTIRE guest RAM mapped.** An
+   unprivileged Translated channel gets nothing wider than what its own validated operands need.
+   - As built: the T-space's windows and rings need a `kf_qemu::tspace::Privileged` witness, made
+     only from the alloc's facts (`kernel_client && !user_work`). An unprivileged Translated birth
+     is refused by name. No route produces one today.
+   - Not built: the per-operand space such a channel would need.
+- **Also the same day (coordinator, owner instruction):** keep every measurement, diagnostic and
+  control flag (`KF3_BAR0_TRACE`, `KF3_MAPLOG`, `KF3_RPC_TRACE`, the display traces, `KF3_TCENSUS`,
+  `KF3_PT_STALL_SNAPSHOT`, the GSP observer, the `KF3_NEGCTL_*` controls, …). Remove or hardwire
+  only behaviour flags. Renaming to `KF3_DIAG_*` is a separate step that has not been asked for.
+- Supersedes: §Q's "(Audit S1-21 records where the code departs from this today)" for the window
+  half. The `KF3_TSPACE` / `KF3_INCA_REFUSE` "default off until box step 1" rollout in
+  `design/V3_P1P2_TSPACE.md` §8 (corrected there). The `KF3_TSPACE` row of
+  `design/V3_FLAG_INVENTORY.md` (its follow-up note is `design/V3_TSPACE_HARDWIRED.md`).

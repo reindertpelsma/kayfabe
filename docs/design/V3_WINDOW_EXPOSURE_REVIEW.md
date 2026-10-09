@@ -1,6 +1,26 @@
 # What kayfabe maps into a guest channel's GPU address space, and who can reach it
 
-**STATUS: RESEARCH, 2026-10-10.** A security review of the source on
+**STATUS: ANSWERED, 2026-10-10 (later the same day), on `claude/hardwire-tspace-20261010`, GPU-free
+only.** This correction is placed above the review it answers. The owner ruled (`OWNER_RULINGS.md`
+§AB) that `KF3_TSPACE` is deleted and the T-space hardwired; that branch merges this review and
+acts on it:
+- Rows 1-4 (store window, guest-RAM window, ring region and its reservation in mirrors) are
+  **gone**. The default-path code is deleted, together with this review's `default_*` helpers and
+  its known-violation test. `crate::exposure` now judges every mirror as guest-leaf-only, whatever
+  its twin state.
+- Row 6: a guest leaf into the firmware carve-out is now **refused** in every GPU mirror,
+  guest-kernel spaces included, not only counted (`kf_mem::apply::carve_reached`).
+- The Translated dependency on mirror windows (`chan.rs` `Windows`/`SlotWindow`) and on mirror rings
+  is removed. A Translated birth uses only the T-space and is refused by name when it is not built.
+- Rule 4 (only a privileged channel may have all guest RAM mapped): the T-space's windows and
+  rings need a `kf_qemu::tspace::Privileged` witness. An unprivileged Translated birth is refused.
+- The sysmem-USERD relay (row 14) is kept; it maps nothing into a GPU VA.
+- The positive control `KF3_NEGCTL_TWIN_WINDOW` is kept. It is the one remaining path that puts a
+  window in a mirror, and only in a dedicated control run.
+- Rows 9-10 (host RM's own buffers, GSP's split-VAS range) are unchanged and still open.
+Where the text below says "the default build" or "today", it describes `c6fff2e3`.
+
+**STATUS: RESEARCH, 2026-10-10 (superseded in part by the status above).** A security review of the source on
 `claude/window-exposure-review-20261009`, which branches from `claude/tmode-pieces-20261009` at
 `c6fff2e3`. It answers the owner's question of 2026-10-10 and checks every mapping against the
 owner's ruling of the same day. No GPU was used. Each fact is tagged **[read]** (seen in source),
