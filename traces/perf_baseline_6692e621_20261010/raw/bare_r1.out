@@ -1,0 +1,66 @@
+BARE_SUITE_STARTED=2026-10-10T00:41:44+02:00 arms=30 budget=180s
+bin=/var/lib/kf-windows-20261005/perf-baseline/6692e621/bin/kayfabe-rm-ladder  rev=c6fff2e3f
+gpu=NVIDIA GeForce RTX 4070  driver=595.91.07(open)  pci_dev=0x278610DE  cc=8.9
+ARM                          VERDICT    secs  why
+--timer                      PASS         0s  0s
+BARE_CELL_ARM arm=timer verdict=PASS secs=0 ms=109 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--engines                    PASS         0s  0s
+BARE_CELL_ARM arm=engines verdict=PASS secs=0 ms=108 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--doorbell-census            PASS         0s  0s
+BARE_CELL_ARM arm=doorbell-census verdict=PASS secs=0 ms=209 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--gpu-info-sweep             PASS         0s  0s
+BARE_CELL_ARM arm=gpu-info-sweep verdict=PASS secs=0 ms=109 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--bus-info-sweep             PASS         3s  3s
+BARE_CELL_ARM arm=bus-info-sweep verdict=PASS secs=3 ms=3319 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--concurrency                PASS         3s  3s
+BARE_CELL_ARM arm=concurrency verdict=PASS secs=3 ms=3011 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--defer-liveness             PASS        13s  13s
+BARE_CELL_ARM arm=defer-liveness verdict=PASS secs=13 ms=12117 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--blockage-coverage          PASS         0s  0s
+BARE_CELL_ARM arm=blockage-coverage verdict=PASS secs=0 ms=510 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--alias-two-vas              PASS         0s  0s
+BARE_CELL_ARM arm=alias-two-vas verdict=PASS secs=0 ms=109 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--alias-unmap-observe        PASS         0s  0s
+BARE_CELL_ARM arm=alias-unmap-observe verdict=PASS secs=0 ms=109 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--map-propagation            PASS         0s  0s
+BARE_CELL_ARM arm=map-propagation verdict=PASS secs=0 ms=108 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--late-map-race              PASS         1s  1s
+BARE_CELL_ARM arm=late-map-race verdict=PASS secs=1 ms=510 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--missing-page-fault         PASS         3s  3s
+BARE_CELL_ARM arm=missing-page-fault verdict=PASS secs=3 ms=3112 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--uvm-invalidate             PASS         0s  0s
+BARE_CELL_ARM arm=uvm-invalidate verdict=PASS secs=0 ms=108 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--uvm-mean                   PASS         0s  0s
+BARE_CELL_ARM arm=uvm-mean verdict=PASS secs=0 ms=209 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--executor-vas               PASS         1s  1s
+BARE_CELL_ARM arm=executor-vas verdict=PASS secs=1 ms=109 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--guest-ring-channel         PASS         0s  0s
+BARE_CELL_ARM arm=guest-ring-channel verdict=PASS secs=0 ms=109 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--dictated-ring              PASS         0s  0s
+BARE_CELL_ARM arm=dictated-ring verdict=PASS secs=0 ms=109 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--dictated-ring-negative     PASS         0s  0s
+BARE_CELL_ARM arm=dictated-ring-negative verdict=PASS secs=0 ms=109 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--ce-client                  PASS         0s  0s
+BARE_CELL_ARM arm=ce-client verdict=PASS secs=0 ms=109 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--ce-client-guest-ram        PASS         2s  2s
+BARE_CELL_ARM arm=ce-client-guest-ram verdict=PASS secs=2 ms=2110 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--guest-ram-pin              PASS         0s  0s
+BARE_CELL_ARM arm=guest-ram-pin verdict=PASS secs=0 ms=109 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--bar1-crossing              PASS         0s  0s
+BARE_CELL_ARM arm=bar1-crossing verdict=PASS secs=0 ms=109 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--atomics-probe              PASS         0s  0s
+BARE_CELL_ARM arm=atomics-probe verdict=PASS secs=0 ms=109 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--pce-mask-probe             PASS         1s  1s
+BARE_CELL_ARM arm=pce-mask-probe verdict=PASS secs=1 ms=109 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--gpga-reserve-probe         PASS        27s  27s
+BARE_CELL_ARM arm=gpga-reserve-probe verdict=PASS secs=27 ms=27523 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--map-stress                 PASS         0s  0s
+BARE_CELL_ARM arm=map-stress verdict=PASS secs=0 ms=109 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--concurrent-fuzz            PASS         0s  0s
+BARE_CELL_ARM arm=concurrent-fuzz verdict=PASS secs=0 ms=209 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--cross-client-leak          PASS         1s  1s
+BARE_CELL_ARM arm=cross-client-leak verdict=PASS secs=1 ms=109 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+--rpc-mixed-allocs           PASS         0s  0s
+BARE_CELL_ARM arm=rpc-mixed-allocs verdict=PASS secs=0 ms=912 rc=0 pci_dev=0x278610DE drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+BARE_CELL pci_dev=0x278610DE gpu="NVIDIA GeForce RTX 4070" drv=595.91.07 kmod=open cc=8.9 rev=c6fff2e3f pass=30 fail=0 crash=0 arms=30 uuid=GPU-66e52545-2112-d450-dc8e-cb07d6f31d6c

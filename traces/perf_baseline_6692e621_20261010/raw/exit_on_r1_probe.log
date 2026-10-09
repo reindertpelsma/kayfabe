@@ -1,0 +1,73 @@
+=== boot_capture tag=perf_6692e621_exit_on_r1 at 2026-10-10T01:01:33+02:00 ===
+=== source revision: c6fff2e3f ===
+=== qemu binary: -rwxr-xr-x 1 root root 93468360 Oct 10 00:16 /var/lib/kf-windows-20261005/kf3-bins/6692e621/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /var/lib/kf-windows-20261005/kayfabe-perf-harness/scripts/bench/boot_nvkvm.sh  sha256=82f88b7bb676717a
+    used: /var/lib/kf-windows-20261005/kayfabe-perf-harness/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Fri Oct  9 23:01:34 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.84                 Driver Version: 595.84         CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4070        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Oct  9 23:01 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Oct  9 23:01 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Oct  9 23:01 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Oct  9 23:01 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Oct  9 23:01 .
+drwxr-xr-x 18 root root   4000 Oct  9 23:01 ..
+cr--------  1 root root 240, 1 Oct  9 23:01 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Oct  9 23:01 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2064384  0
+nvidia              14807040  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /var/lib/kf-windows-20261005/kayfabe-perf-harness/scripts/bench/dbfast_exit_hook.sh at 2026-10-10T01:01:35+02:00 ===
+DBX_START 2026-10-10T01:01:35+02:00 probe=0x007f07ff stores=200000 extra=doorbell-ioeventfd=on,dummy-bar=on
+GCC_DBX_RC=0
+DBX_BDF=0000:00:03.0
+DBX_probe_r1 off=0xbb0090 value=0x007f07ff stores=200000 batch=100 p50_ns=1851 p90_ns=1908 p99_ns=2327 mean_ns=1868 max_ns=2725
+DBX_unknown_r1 off=0xbb0090 value=0x007f07fe stores=200000 batch=100 p50_ns=6145 p90_ns=6193 p99_ns=6216 mean_ns=6145 max_ns=6451
+DBX_probe_r2 off=0xbb0090 value=0x007f07ff stores=200000 batch=100 p50_ns=1839 p90_ns=1926 p99_ns=1992 mean_ns=1865 max_ns=2335
+DBX_unknown_r2 off=0xbb0090 value=0x007f07fe stores=200000 batch=100 p50_ns=6155 p90_ns=6209 p99_ns=6436 mean_ns=6168 max_ns=8780
+DBX_probe_r3 off=0xbb0090 value=0x007f07ff stores=200000 batch=100 p50_ns=1836 p90_ns=1919 p99_ns=1973 mean_ns=1856 max_ns=2002
+DBX_unknown_r3 off=0xbb0090 value=0x007f07fe stores=200000 batch=100 p50_ns=6150 p90_ns=6199 p99_ns=6431 mean_ns=6160 max_ns=9825
+DBX_dummy_lockless off=0x8000 value=0x00000001 stores=200000 batch=100 p50_ns=5226 p90_ns=5277 p99_ns=5482 mean_ns=5231 max_ns=7890
+DBX_dummy_bql off=0x9000 value=0x00000001 stores=200000 batch=100 p50_ns=5380 p90_ns=5440 p99_ns=5475 mean_ns=5386 max_ns=5728
+DBX_dummy_ioeventfd off=0xa000 value=0x00000001 stores=200000 batch=100 p50_ns=1284 p90_ns=1325 p99_ns=1340 mean_ns=1291 max_ns=1437
+DBX_DONE 2026-10-10T01:01:45+02:00
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 33 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=33
+GUEST_DMESG_AFTER_NVRM=30
+GUEST_DMESG_WORKLOAD_DELTA=0
+=== HOST dmesg delta for this boot (watermark 1639 → 1639) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0
