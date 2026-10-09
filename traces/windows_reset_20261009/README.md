@@ -473,3 +473,23 @@ make `0x611D80` read back the firmware base `0x3f0060`).
 **Not done:** the stall snapshots (11 taken) and the 0x116 bugcheck were not read; no in-guest data exists (agent dead).
 **Next:** the stall itself (twin states at the stall, runs 100/102/104) and the recovery wall (§11, owner decision pending).
 The H-split regression arm (§12 step 3) is still worth running GPU-side but is no longer on the critical path.
+
+## 14. Run 105: the interrupt relay off (`KF3_PT_NSI_RELAY=0`), run 104 otherwise unchanged (2026-10-09)
+
+**STATUS: LIVE, 2026-10-09 (stated before the boot; result below when filled).** One hardware run: binary `kf3-bins/3e9bcdce`,
+run 104's flags (including `KF3_NO_BATCHED_MAP=1`, kept so ONE variable changes) plus `KF3_PT_NSI_RELAY=0`, `WR_SHOTS=90`,
+same harness (`wr-run.sh 105`), under `flock -o /tmp/kayfabe-fastguest.lock`. Mechanism checked, not guessed:
+`crates/kf-qemu/src/chan.rs:2064` reads `KF3_PT_NSI_RELAY` and the relay is off exactly when the trimmed value is `0`
+(unset or anything else = on); `windows_broker.sh:283` turns a `WIN_FLAGS` word into `NAME=1` only when it has no `=`
+(`case $f in *=*) ENV+=("$f")`), and `wr-run.sh` appends its third argument to `WIN_FLAGS`, so the word `KF3_PT_NSI_RELAY=0`
+reaches QEMU as `KF3_PT_NSI_RELAY=0` unchanged. No harness change is needed. `strings` on the binary shows the variable name.
+Note (code comment, `chan.rs:2055`): `=0` switches off only the relay of host `FIFO_EVENT_MTHD` edges (counted, not raised);
+engine-notifier edges (GR0/CE notifier wakes) are still raised. So this run tests the FIFO-event part of the relay only.
+
+**Falsifier (stated before the run):**
+- If with the relay off the lock-screen MSI rate is still about 150/s (anything above about 60/s counts as "still high") AND the
+  screen still goes black within about 5 s of the lock screen appearing, then the relayed non-stall edges (the FIFO-event part
+  switched off here) are NOT the cause of the interrupt rate or the black screen.
+- If the MSI rate drops to hardware-like levels (below 40/s) and the lock screen stays (non-black frames continuing past 20 s),
+  the relay is implicated.
+- A third outcome (rate drops but the screen still goes black, or the reverse) is reported as such.
