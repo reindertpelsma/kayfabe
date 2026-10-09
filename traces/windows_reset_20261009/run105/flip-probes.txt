@@ -1,0 +1,30 @@
+== flip-d3d11_clear_probe.ps1.out
+PROBE whoami nt authority\system session 0
+PROBE 09:03:55.3815030 CreateDXGIFactory1 0x00000000
+PROBE 09:03:55.3815030 no NVIDIA adapter
+
+[rc=0]
+== flip-d3d12_signal_probe.ps1.out
+PROBE whoami nt authority\system
+PROBE session 0
+PROBE quser quser : No User exists for *
+PROBE quser At line:63 char:2
+PROBE quser + (quser 2>&1 | Out-String).Trim() -split "`n" | ForEach-Object { "PROB ...
+PROBE quser +  ~~~~~~~~~~
+PROBE quser + CategoryInfo          : NotSpecified: (No User exists for *:String) [], RemoteException
+PROBE quser + FullyQualifiedErrorId : NativeCommandError
+PROBE CreateDXGIFactory1 0x00000000
+PROBE adapter 0 vendor 0x1414 Microsoft Basic Render Driver dedicated 0 MB
+PROBE adapter 1 vendor 0x1414 Microsoft Basic Render Driver dedicated 0 MB
+PROBE no NVIDIA adapter
+
+[rc=0]
+== flip-vdr_monitor_info.ps1.out
+MON id DISPLAY\KFB0001\1&8713bca&0&UID0_0 maker=KFB product=0001 name=kayfabe year=2026 active=True
+MON conn DISPLAY\KFB0001\1&8713bca&0&UID0_0 VideoOutputTechnology=4294967295
+MON modes DISPLAY\KFB0001\1&8713bca&0&UID0_0 n=7 preferred=3
+VC NVIDIA GeForce RTX 4070 x@ status=Error err=43
+REG HwSchMode= TdrDelay= TdrDdiDelay= TdrLevel=
+NVSMI NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode. | 
+
+[rc=0]

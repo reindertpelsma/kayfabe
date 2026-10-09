@@ -476,7 +476,7 @@ The H-split regression arm (§12 step 3) is still worth running GPU-side but is 
 
 ## 14. Run 105: the interrupt relay off (`KF3_PT_NSI_RELAY=0`), run 104 otherwise unchanged (2026-10-09)
 
-**STATUS: LIVE, 2026-10-09 (stated before the boot; result below when filled).** One hardware run: binary `kf3-bins/3e9bcdce`,
+**STATUS: LIVE, 2026-10-09 (plan committed before the boot as a2683459; result in §14.1).** One hardware run: binary `kf3-bins/3e9bcdce`,
 run 104's flags (including `KF3_NO_BATCHED_MAP=1`, kept so ONE variable changes) plus `KF3_PT_NSI_RELAY=0`, `WR_SHOTS=90`,
 same harness (`wr-run.sh 105`), under `flock -o /tmp/kayfabe-fastguest.lock`. Mechanism checked, not guessed:
 `crates/kf-qemu/src/chan.rs:2064` reads `KF3_PT_NSI_RELAY` and the relay is off exactly when the trimmed value is `0`
@@ -493,3 +493,74 @@ engine-notifier edges (GR0/CE notifier wakes) are still raised. So this run test
 - If the MSI rate drops to hardware-like levels (below 40/s) and the lock screen stays (non-black frames continuing past 20 s),
   the relay is implicated.
 - A third outcome (rate drops but the screen still goes black, or the reverse) is reported as such.
+
+### 14.1 Result (run 105, executed 2026-10-09 09:02:56-09:04:32 UTC, host 172.22.1.20, RTX 4070)
+
+Evidence: `run105/` (small files; the full logs stay on the host in `/var/lib/kf-windows-20261005/boundary-kayfabe-105/`). Run
+launcher: `wr-run.sh 105 3e9bcdce "<run 104's EXTRA> KF3_PT_NSI_RELAY=0"` under `flock -o /tmp/kayfabe-fastguest.lock`, `WR_SHOTS=90`.
+Tools: `run105/tools/*.py` (copies of `run104/tools` with run-105 paths and times, plus `nonblack105.py`, `leaf0hist105.py`).
+
+**Outcome against the falsifier: the "relay implicated" clause is NOT met; the "still high" clause is met; the screen clause cannot be
+read literally because this boot never drew the lock screen. Reported as: the FIFO_EVENT_MTHD relay is not the cause of the high
+interrupt rate or of the black screen; the run also differs from run 104 in ways nobody can attribute to the flag from one run.**
+
+`[measured]`
+1. **The flag took effect.** `qemu.log`: `relay=OFF (FIFO_EVENT_MTHD edges counted only)` (run 104: `relay=on`);
+   `PT-NSI host FIFO_EVENT_MTHD edge #1024/#2048/#4096: RelayOff (guest armed=true, vector Some(1))` (run 104: `Raise(1)` on the
+   same lines), so at least 4096 FIFO edges were counted and not raised (`run105/qemu-relay-and-teardown-lines.txt`,
+   `run105/command.json` has `KF3_PT_NSI_RELAY=0` in `flags`). The binary, all other flags and the harness are run 104's.
+2. **MSI rate** (`run105/tl105-per-second.txt`, per UTC second, run 104's in `tl104-per-second.txt`). Run 105: 605, 1059, 632, 115, 543,
+   1019, 626 (09:03:06-12), then **120, 121, 143, 80** (09:03:13-16), then 0 (09:03:17 and later). Total 5065 MSIs against 8929 in
+   run 104. Run 104's lock-screen seconds were 145, 144, 173. Hardware idle: 17-19 per second, busy 400-700. So the post-busy
+   phase of run 105 is **120-143 per second: above the 60 threshold, about 7x the hardware idle rate** (not hardware-like). The
+   busy phase fell by about 43% (4600 MSIs in 7 s against 8100 in 7 s in run 104; one run each, run-to-run spread unknown).
+3. **The lock screen was not drawn.** Non-black fraction per screenshot (`run105/shots-nonblack-fraction.txt`; python3 -I, every
+   997th byte after the PPM header, share of bytes above 16): 0.010 for the TianoCore logo plus boot spinner frames
+   (09:03:01-08, `run105/frame-090303-boot-spinner.png`), 0.006 at 09:03:08, 0.0 at 09:03:09-11, **0.001 at 09:03:12-15: a black screen with
+   "Please wait" and two dots** (`run105/frame-090312-please-wait.png`), and **0.0 from 09:03:16.5 to the last frame (09:04:10)**. The
+   maximum is 0.011. Run 104 reached 0.314 (lock screen) from 08:10:42.96. Run 102 (relay on) also never drew the lock screen (§8: "the stall
+   came 3.4 s after the first scanout, before the lock screen drew"); runs 101, 103 and 104 (relay on) drew it.
+4. **Leaf registers** (`run105/analysis-output.txt`, `leaf105.py`, `leaf0hist105.py`). Quiet phase 09:03:13-15 (384 MSIs): `LEAF(0)` = 4 on
+   108 of 109 reads, `LEAF(4)` = 0 (390) or `0x4000000` (434), `LEAF(5)` = `LEAF(6)` = 0 on every read (hardware: `LEAF(4)` = `0x80000000`,
+   `LEAF(5)` = `0x1182f`, `LEAF(6)` = 5, `LEAF(0)` = 1). Busy second 09:03:07: `LEAF(0)` = 1 on 932 of 1023 reads, `LEAF(5)` = `LEAF(6)` = 0.
+   Over the whole run `LEAF(0)` had bit 1 (CE2, vector 1, the vector the FIFO edges were raised on) set on **804 of 3801 reads in
+   run 105, against 3856 of 3974 in run 104**; bit 2 (CE3, vector 2): 596 against 576. `0x611EC0` reads: 4168 against 4264.
+5. **`0x611D80`** (`en105.py`, `rd105.py`): 20 writes, all `0x2`/`0x0` (the guest's read-modify-write of a base of 0), first at 09:03:08.540,
+   last (`0`) at 09:03:15.956; reads return only `0` (21) and `2` (12). The firmware base `0x3f0060` of hardware (226 writes, 342 reads) is not
+   there: unchanged from run 104.
+6. **BAR0 trace goes silent at 09:03:17** (the last second with traffic is 09:03:16: 1606 GSP writes, 4105 GSP reads, the driver teardown burst).
+   After that only one burst of 2 reads and 4 writes at 09:03:42 (the GSP queue) until the end; compare run 104: silent after 08:10:48.
+   Both silences come about 21 s after the QEMU launch (run 105: launch 09:02:56.3, last traffic 09:03:16-17; run 104: launch 08:10:27.5,
+   last traffic 08:10:47-48).
+7. **Stall marker and teardown:** `stall=1` after 19 s (`vsyncs=183`, 09:03:15.3); after 40 more s `vga=1 core_freed=1 birth_refused=1`
+   (`run105/wr-run105.log`); `kf-rm: rpc-trace fn=47 UnloadingGuestDriver` and `birth REFUSED ... KernelInUserSpace(1)` as in run 104
+   (`run105/qemu-relay-and-teardown-lines.txt`).
+8. **Host Xid:** none new. The broker's counter reads 43 before and after (`run105/marker.txt`); `journalctl -k --since 11:02` has 0 Xid lines;
+   the last Xid in dmesg is run 103's (kernel time 276075.77). A later `dmesg | grep -c Xid` reads 40 only because the ring buffer has dropped
+   its three oldest lines (the last line is unchanged). Host left clean (see the end).
+9. **QGA reachable this time, unlike run 104.** The three PowerShell probes ran and answered (`run105/flip-probes.txt`): `no NVIDIA adapter`
+   (`CreateDXGIFactory1` ok, no NVIDIA adapter) for the two D3D probes and `VC NVIDIA GeForce RTX 4070 status=Error err=43` plus the kayfabe
+   monitor (`KFB0001`, 7 modes) for the third; the clean stop worked (`stop=acpi`, QEMU gone at 11:04:26, not killed after 300 s). Run 104's
+   probes timed out and its stop needed the kill after 300 s.
+10. **What `KF3_PT_NSI_RELAY=0` does not switch off** (code and log): the engine-notifier edges still raise (`PT-NSI host GR0 notifier wake ...
+    Raise(0)` 2039 lines in BOTH runs; CE3 `Raise(2)` 375 against 321) and the separate Translated-ring relay (`device.rs:3292/3302`, the
+    `NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CE2 vector 1 ... (relay #N)` lines, `KF3_TRANSLATED_CE_RELAY`, always on in
+    `windows_broker.sh`) still ran: `relay #1024` was logged in both runs.
+
+`[inferred]`
+- The FIFO_EVENT_MTHD relay (the part the flag removes) is **not** what keeps the quiet-phase interrupt rate at 120-143/s and **not** what
+  blanks the screen: with it off, the rate is the same order as with it on (145-173 in run 104), the leaf-register pattern the guest reads
+  stays unlike hardware (`LEAF(5)`/`LEAF(6)` = 0), the display-timing base stays 0, and the screen is black. The flag does take away the vector-1
+  pending bit the FIFO edges set (item 4), which is the expected effect, and that did not help.
+- The remaining sources of raised vectors (engine-notifier edges, the Translated-ring relay) are untouched by this run, so "no relay at all"
+  is still untested. Switching them off is a different experiment (the engine edges are the owner-ruled armed-rule relay, §X of the interrupt
+  design; do not change that without an owner decision).
+- Run 105 did not reach the lock screen. Run 102 (relay on) did not either, runs 101/103/104 (relay on) did, so the lock screen appears in
+  3 of 4 relay-on runs and 0 of 1 relay-off runs: **one run cannot say that relay-off makes it worse or better**. The QGA being reachable and the
+  clean stop are likewise single-run observations (run 102 was also a no-lock-screen run; its QGA state is not compared here).
+- Not shown: why the guest stops touching the GPU at about 21 s after launch in both runs. The identical delay in runs 104 and 105 is a
+  measured coincidence; a timer-driven guest teardown (TDR timeout after the last flip, §8) is the existing explanation and was not retested.
+
+**Next:** (1) the display-timing base: make `0x611d80` read back the firmware base `0x3f0060` (the §13.1 point 3 difference, still unchanged and
+the cheapest remaining item the hardware trace names); (2) the stall itself (§11, twin states at the stall, runs 100/102/104/105); (3) only
+if wanted, a run with the engine-notifier relay also off, which needs an owner decision because it overrides ruling §X.
