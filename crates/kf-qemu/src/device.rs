@@ -13,6 +13,7 @@
 use crate::raw_unsafe::RawRegion;
 use kf_arch::gsp::{GspModel, GspReg};
 use kf_chan::dbfast::{DbFast, Delivered};
+use kf_chan::stall::{HeldBook, LockId, Role, Stall, Timed, TimedMutex};
 use kf_chip::Family;
 use kf_chip::bar0::{
     Bar0Facts, BootReg, ConfigWord, boot_regs, config_words, fb_layout, pcie_link_caps,
@@ -241,7 +242,7 @@ pub struct Device {
     /// The NVDM type of the last command FSP acknowledged (status line).
     fsp_replies_type: std::sync::atomic::AtomicU32,
     pub(crate) ram: &'static crate::mem::RamMap,
-    gsp: Mutex<Gsp>,
+    gsp: TimedMutex<Gsp>,
     /// ★ w828: the SAME register model the drainer's FSM answers from, shared lock-free with the
     /// vCPU for ONE question — [`GspModel::answer_on_store`] (what a register reads back the
     /// instant the guest's write lands, when the write alone decides it).
@@ -286,6 +287,11 @@ pub struct Device {
     qhead_off: u64,
     /// Held replies' queue-head stamps, oldest first (drainer only) — for [`crate::prof`].
     held_stamps: Mutex<std::collections::VecDeque<u64>>,
+    /// ★ The stall instruments (`docs/design/V3_NONSTALL_THREADS.md`): always on, atomics only.
+    pub stall: &'static Stall,
+    /// ★ When each currently held guest reply was held (drainer only; never contended) — its age at
+    /// release is [`Stall::held_reply_age`].
+    held_book: Mutex<HeldBook>,
     /// ★ v3-display: the emulated NVDisplay (`display=on`), leaked for the process so the vCPU path
     /// holds a plain reference (`crate::display`). `None`: the displayless posture, unchanged.
     pub display: Option<&'static crate::display::DisplayPlane>,
@@ -658,7 +664,9 @@ impl Device {
         // waits on doorbell eventfds with its other work); its kick is the drainer's own wake. The
         // guest's token layout comes from the die group's HAL + the hwref table; unresolved ⇒ every
         // doorbell stays trapped (named here).
+        let stall: &'static Stall = Stall::leak();
         let dbfast: &'static DbFast = Box::leak(Box::new(DbFast::new(0, drainer_efd)?));
+        dbfast.attach_stall(stall);
         let token_fmt = kf_chip::hwref::DieGroup::from_arch(architecture, implementation)
             .map_err(|e| format!("{e:?}"))
             .and_then(kf_trap::tokenindex::GuestTokenFormat::for_die_group);
@@ -715,6 +723,7 @@ impl Device {
                 &host.engines,
                 dbfast,
                 token_fmt,
+                stall,
             )?));
         chans.start()?;
         // ★ OWNER_RULINGS §U: the VM's deferred-API tables — filled by the object seat (the guest's
@@ -1070,7 +1079,7 @@ impl Device {
             pieces: OnceLock::new(),
             staged: Mutex::new(Vec::new()),
             ram,
-            gsp: Mutex::new(gsp),
+            gsp: TimedMutex::new(stall, LockId::Gsp, gsp),
             store_model,
             holes: kf_trap::memmap::holes_for(family)
                 .iter()
@@ -1102,6 +1111,8 @@ impl Device {
             bar1_overlay,
             qhead_off,
             held_stamps: Mutex::new(std::collections::VecDeque::new()),
+            stall,
+            held_book: Mutex::new(HeldBook::new()),
             display: display_plane,
             x11_dispsw: cfg.x11_dispsw,
             gop,
@@ -2175,6 +2186,7 @@ impl Device {
         if poller.watch(self.drainer_efd.as_source_fd(), 0).is_err() {
             return;
         }
+        kf_chan::stall::set_role(Role::Drainer);
         let mut beat = (std::time::Instant::now(), String::new());
         // ★ The GSP heartbeats (`kf_chip::Family::gsp_heartbeat_mailboxes`): a 595.84+ guest reads
         // them after every RPC poll. Stored on this thread (never a vCPU) every 0.5 s — well inside
@@ -2204,6 +2216,9 @@ impl Device {
         }
         let mut last_delivery: Option<std::time::Instant> = None;
         while !self.stop.load(Ordering::Acquire) {
+            // ★ The stall instrument: this iteration, loop top to its park (or to the next
+            // iteration when it found work) — never the park itself.
+            let t_iter = std::time::Instant::now();
             if let Some([gsprm, libos]) = heartbeat
                 && hb_at.elapsed() >= std::time::Duration::from_millis(500)
             {
@@ -2252,6 +2267,7 @@ impl Device {
                         .fetch_add(1, Ordering::Relaxed);
                     after_timeout = false;
                 }
+                self.stall.drainer_pass.since(t_iter);
                 continue;
             }
             let released = self.release_settled();
@@ -2271,8 +2287,10 @@ impl Device {
                 && self.plane.ring.occupancy() == 0
             {
                 std::hint::spin_loop();
+                self.stall.drainer_pass.since(t_iter);
                 continue;
             }
+            self.stall.drainer_pass.since(t_iter);
             if !self.plane.drainer_wake.try_park(seen) {
                 continue;
             }
@@ -2620,8 +2638,13 @@ impl Device {
         // ★ EXPERIMENT x11-dispsw: `""` with the switch off (the line is the line it was).
         let irq = irq + &self.chans.dispsw_status(self.x11_dispsw);
         let db = format!(" {}", self.dbfast.status());
+        // ★ The stall instruments (always on): the falsifiers of the non-stall rule.
+        let stall = self.stall.fragment(
+            std::time::Instant::now(),
+            self.held_book.try_lock().ok().as_deref(),
+        );
         format!(
-            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq}{db} unserviced=[{}] gsp_refusals[{refusals}]",
+            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq}{db}{stall} unserviced=[{}] gsp_refusals[{refusals}]",
             self.family,
             c.trapped.load(o),
             c.applied.load(o),
@@ -2729,6 +2752,16 @@ impl Device {
         }
     }
 
+    /// The FSM now holds `len` guest replies: age the ones released since the last call
+    /// ([`Stall::held_reply_age`]). Drainer only, so the ledger lock is never contended.
+    fn note_held(&self, len: usize) {
+        if let Ok(mut b) = self.held_book.lock()
+            && b.len() != len
+        {
+            b.sync(len, std::time::Instant::now(), &self.stall.held_reply_age);
+        }
+    }
+
     /// ★ P4, on the drainer: deliver held replies whose statements the VA thread has settled.
     fn release_settled(&self) -> bool {
         if !self.mem.inbox.all_settled() {
@@ -2743,6 +2776,7 @@ impl Device {
         let g = &mut *g;
         let mut ram = Ram(self);
         let released = g.fsm.release_held(&mut ram);
+        self.note_held(g.fsm.held_len());
         log_fresh_refusals(&mut g.fsm);
         match released {
             Ok(n) if n > 0 => {
@@ -3169,6 +3203,8 @@ impl HostOps for Device {
     }
     fn run_emulated(&self, _host_token: u32, _up_to_seq: u64) {}
     fn apply_register(&self, bar: u8, offset: u32, value: u64, _width: u8) {
+        // ★ The stall instrument: the whole write, doorbell sweep and GSP-lock wait included.
+        let _timed = Timed::start(&self.stall.apply_register);
         // ★ 2026-09-30: every doorbell already signalled is delivered BEFORE this privileged write
         // is applied — a vCPU's doorbell and its later register write keep their order, as the trap
         // kept it (`docs/design/V3_DOORBELL_IOEVENTFD.md` §4). Before the GSP lock: never under it.
@@ -3281,11 +3317,13 @@ impl HostOps for Device {
         // settled every statement received — its root written and walked (§49.1 for the RPC
         // path). Otherwise `release_settled` delivers it when the VA thread wakes this thread.
         let held_mid = g.fsm.held_len();
+        self.note_held(held_mid);
         let released = if self.mem.inbox.all_settled() {
             g.fsm.release_held(&mut ram).unwrap_or(0)
         } else {
             0
         };
+        self.note_held(g.fsm.held_len());
         log_fresh_refusals(&mut g.fsm);
         let t_pub = if prof { crate::prof::now_ns() } else { 0 };
         self.publish(g);

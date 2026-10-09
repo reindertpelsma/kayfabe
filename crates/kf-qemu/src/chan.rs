@@ -39,6 +39,7 @@ use crate::raw_unsafe::RawRegion;
 use kf_chan::completions::Completions;
 use kf_chan::host::{ChanError, GuestUserd, HostRing, Publisher, Split, TranslatedChannel};
 use kf_chan::ring::{GuestMemory, TranslatedRing};
+use kf_chan::stall::{LockId, Stall, TimedMutex, TimedRwLock};
 use kf_chan::translated::{Target, Window};
 use kf_core::{Owner, Plane, VmCaps};
 use kf_host::{HostRm, MapNode, ViewAccess};
@@ -48,7 +49,7 @@ use kf_rm::chanlink::{ChanAnswer, ChanStatement, ChannelAlloc};
 use kf_trap::Route;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 
 /// `NV_ERR_INVALID_STATE`.
 const NV_ERR_INVALID_STATE: u32 = 0x40;
@@ -65,6 +66,9 @@ const NV2080_NOTIFIERS_GR0: u32 = 12;
 
 /// ★ P5b: one host act, run on the plane's act thread. `Err((status, why))` refuses by name.
 type Act = Box<dyn FnOnce(&ChanPlane) -> Result<String, (u32, String)> + Send>;
+
+/// One queued act: the act, the held reply it resolves, its label, and when it was queued.
+type ActMsg = (Act, kf_gsp::Deferred, &'static str, std::time::Instant);
 
 /// ★ P5b: a guest USER channel's host twin (Passthrough).
 struct PtChan {
@@ -1316,19 +1320,19 @@ pub struct ChanPlane {
     inbox: std::sync::Arc<crate::mem::Inbox>,
     /// The session's ONE completion fd + in-flight set (`kf_chan::completions`).
     pub completions: Completions,
-    caps: Mutex<VmCaps>,
+    caps: TimedMutex<VmCaps>,
     /// Host token → channel.
-    slots: RwLock<HashMap<u32, Arc<Mutex<Slot>>>>,
+    slots: TimedRwLock<HashMap<u32, Arc<TimedMutex<Slot>>>>,
     /// `(hClient, hObject)` → host token.
-    by_obj: Mutex<HashMap<(u32, u32), u32>>,
+    by_obj: TimedMutex<HashMap<(u32, u32), u32>>,
     /// ★ OWNER_RULINGS §U: each Translated channel's software objects, by host token.
-    sw_objs: Mutex<HashMap<u32, crate::defapi::SwObjs>>,
+    sw_objs: TimedMutex<HashMap<u32, crate::defapi::SwObjs>>,
     /// ★ OWNER_RULINGS §U: the VM's deferred-API tables (the object seat's), once attached.
     defapi_reg: std::sync::OnceLock<Arc<kf_rm::defapi::Registry>>,
     /// Deferred-API triggers started.
     pub defapi_triggers: AtomicU64,
     /// ★ v3-promote: a Translated channel's group / parent / device (what a guest free can name).
-    scopes: Mutex<HashMap<(u32, u32), ChanScope>>,
+    scopes: TimedMutex<HashMap<(u32, u32), ChanScope>>,
     /// The worker eventfd (a schedule that finds work pending wakes one).
     wake: &'static kf_linux_raw::Notifier,
     /// Serves that found the slot lock held — must stay 0 (BUSY excludes).
@@ -1347,18 +1351,18 @@ pub struct ChanPlane {
     /// The host family (its generated class sets check a guest engine-object class).
     family: kf_chip::Family,
     /// ★ P5b: the guest's user channels' twins, by `(hClient, hChannel)`.
-    pt: Mutex<HashMap<(u32, u32), PtChan>>,
+    pt: TimedMutex<HashMap<(u32, u32), PtChan>>,
     /// ★ P5b: guest engine object `(hClient, hObject)` → its channel's key.
-    pt_objs: Mutex<HashMap<(u32, u32), (u32, u32)>>,
+    pt_objs: TimedMutex<HashMap<(u32, u32), (u32, u32)>>,
     /// ★ w827: guest debugger session `(hClient, hDebugger)` → its host twin: `(guest device, host
     /// session, host GR object it is bound to)`.
-    dbg: Mutex<HashMap<(u32, u32), (u32, u32, u32)>>,
+    dbg: TimedMutex<DbgMap>,
     /// ★ w827: guest Devices `(hClient, hDevice)` whose CUDA limit is on, and whether OUR host
     /// device's is — the host limit is on iff any guest Device's is (the guest kernel sends only
     /// per-Device edges, so the union is exactly the guest's own state).
-    cuda_limit: Mutex<(std::collections::BTreeSet<(u32, u32)>, bool)>,
+    cuda_limit: TimedMutex<(std::collections::BTreeSet<(u32, u32)>, bool)>,
     /// ★ P5b: the act thread's queue (`None` until [`ChanPlane::start`]).
-    acts: Mutex<Option<std::sync::mpsc::Sender<(Act, kf_gsp::Deferred, &'static str)>>>,
+    acts: TimedMutex<Option<std::sync::mpsc::Sender<ActMsg>>>,
     /// The register drainer's wake: an act that resolved a held reply signals it.
     release: &'static kf_linux_raw::Notifier,
     /// ★ P5b §2.7: the per-engine host non-stall events.
@@ -1375,7 +1379,7 @@ pub struct ChanPlane {
     pub pt_births: AtomicU64,
     /// ★ v3-video: host NVENC session slots held per guest client (acquired on OUR host client;
     /// released with the guest's release or its client's free).
-    enc_sessions: Mutex<HashMap<u32, u32>>,
+    enc_sessions: TimedMutex<HashMap<u32, u32>>,
     /// ★ v3-video: guest TSG `(hClient, hTsg, hContextShare)` → `(host group, live members)` — the
     /// guest's TSG membership mirrored, so its channels share ONE host GR context as on hardware.
     /// Touched by acts only (serialised on the act thread).
@@ -1386,7 +1390,7 @@ pub struct ChanPlane {
     /// merged onto one legacy subcontext and the compute channel took Xid 69 (class error, 3D
     /// class `c797`) — fence never signalled. Per-ctxshare groups keep CUDA's one-group shape and
     /// restore v3-gfx's measured shape for Vulkan (a separate host group per subcontext).
-    groups: Mutex<HashMap<(u32, u32, u32), (u32, u32)>>,
+    groups: TimedMutex<GroupMap>,
     /// ★ Per guest token: doorbells the vCPU trap rang INLINE, and how many reached the host's
     /// doorbell (the `DOORBELL-LEDGER` line at free; atomics only — the vCPU writes them).
     rung: Box<[AtomicU64]>,
@@ -1399,7 +1403,7 @@ pub struct ChanPlane {
     /// those, `kernel_rc_notification.c:380-400`), all on this fd. A worker's poller watches it.
     pub rc_ev: kf_host::EventFd,
     /// ★ P5c: RC events waiting for the register drainer (which owns the GSP queue).
-    rc_queue: Mutex<Vec<RcEvent>>,
+    rc_queue: TimedMutex<Vec<RcEvent>>,
     /// Twins born with the guest's notifier armed as their host error context.
     pub rc_armed: AtomicU64,
     /// Twins whose declared notifier could NOT be armed (named at birth) — their faults are silent.
@@ -1425,6 +1429,8 @@ pub struct ChanPlane {
     /// born channel — Passthrough AND Translated — registers its guest token; every free removes it
     /// before the twin goes.
     dbfast: &'static kf_chan::dbfast::DbFast,
+    /// ★ The stall instruments (`docs/design/V3_NONSTALL_THREADS.md`).
+    stall: &'static Stall,
     /// The guest's token layout (the DATAMATCH value of a channel `(runlist, chid)`); `None` ⇒ no
     /// registration is ever made and every doorbell stays trapped.
     token_fmt: Option<kf_trap::tokenindex::GuestTokenFormat>,
@@ -1450,6 +1456,14 @@ fn take_twin_object(
         .or_else(|| disp_sw.remove(&object).map(|h| (h, true)))
 }
 
+/// The plane's debugger-session twins, `(hClient, hDebugger)` → `(guest device, host session, host GR
+/// object)` ([`ChanPlane`]'s `dbg`).
+type DbgMap = HashMap<(u32, u32), (u32, u32, u32)>;
+
+/// The plane's host groups, `(hClient, hTsg, hContextShare)` → `(host group, live members)`
+/// ([`ChanPlane`]'s `groups`).
+type GroupMap = HashMap<(u32, u32, u32), (u32, u32)>;
+
 /// The plane's passthrough twins, by `(client, channel handle)` ([`ChanPlane`]'s `pt`).
 type PtMap = HashMap<(u32, u32), PtChan>;
 
@@ -1465,7 +1479,7 @@ type ObjIndex = HashMap<(u32, u32), (u32, u32)>;
 /// free takes its twin out at statement time, so a freed channel's twins stop counting at once.
 /// `host_refused_before`: the twin's mark ([`dispsw_mark_host_refused`]). A poisoned map counts as
 /// full (`usize::MAX`), so the caps refuse.
-fn dispsw_live(pt: &Mutex<PtMap>, key: (u32, u32)) -> crate::dispsw::Live {
+fn dispsw_live(pt: &TimedMutex<PtMap>, key: (u32, u32)) -> crate::dispsw::Live {
     pt.lock().map_or(
         crate::dispsw::Live {
             chan: usize::MAX,
@@ -1483,7 +1497,11 @@ fn dispsw_live(pt: &Mutex<PtMap>, key: (u32, u32)) -> crate::dispsw::Live {
 /// ★ x11-dispsw (review 2026-10-03, LOW): a host display-SW alloc on channel `key`'s twin was
 /// refused ([`crate::dispsw::twin_watched`]) — mark the twin, so every later display-SW alloc on it
 /// is refused by name. Only while the map still holds THAT twin (`chan`); `true` when marked.
-fn dispsw_mark_host_refused(pt: &Mutex<PtMap>, key: (u32, u32), chan: kf_host::Channel) -> bool {
+fn dispsw_mark_host_refused(
+    pt: &TimedMutex<PtMap>,
+    key: (u32, u32),
+    chan: kf_host::Channel,
+) -> bool {
     pt.lock().is_ok_and(|mut m| match m.get_mut(&key) {
         Some(v) if v.chan == chan => {
             v.dispsw_host_refused = true;
@@ -1496,7 +1514,7 @@ fn dispsw_mark_host_refused(pt: &Mutex<PtMap>, key: (u32, u32), chan: kf_host::C
 /// ★ x11-dispsw (review 2026-10-03, MEDIUM; its test, LOW): the guest numbered another `ENG_SW`
 /// object under channel `key` ([`ChanPlane::software_object`]) — that twin's mirror advances, and
 /// no other channel's. `None`: no twin holds the channel; `Some(None)`: the mirror lost the count.
-fn register_other_sw(pt: &Mutex<PtMap>, key: (u32, u32)) -> Option<Option<u16>> {
+fn register_other_sw(pt: &TimedMutex<PtMap>, key: (u32, u32)) -> Option<Option<u16>> {
     pt.lock()
         .ok()
         .and_then(|mut m| m.get_mut(&key).map(|v| v.sw_ids.register()))
@@ -1511,7 +1529,7 @@ const DISPSW_WITHDRAW: &str = "display-SW withdraw";
 /// `tx`, so it runs after the act that set `kept` (the host object the act kept; 0: none).
 fn attach_dispsw_withdraw(
     d: &kf_gsp::Deferred,
-    tx: std::sync::mpsc::Sender<(Act, kf_gsp::Deferred, &'static str)>,
+    tx: std::sync::mpsc::Sender<ActMsg>,
     kept: Arc<AtomicU32>,
     key: (u32, u32),
     handle: u32,
@@ -1530,7 +1548,12 @@ fn attach_dispsw_withdraw(
             ))
         });
         // Nobody waits on this cell: the guest already has the refusal.
-        let _ = tx.send((undo, kf_gsp::Deferred::new(), DISPSW_WITHDRAW));
+        let _ = tx.send((
+            undo,
+            kf_gsp::Deferred::new(),
+            DISPSW_WITHDRAW,
+            std::time::Instant::now(),
+        ));
     });
 }
 
@@ -1539,8 +1562,8 @@ fn attach_dispsw_withdraw(
 /// still name it ([`crate::dispsw::withdraw_disp_sw`]), and free it on the host. The log line.
 fn withdraw_kept<H: crate::dispsw::DispSwHost>(
     host: &H,
-    pt: &Mutex<PtMap>,
-    pt_objs: &Mutex<ObjIndex>,
+    pt: &TimedMutex<PtMap>,
+    pt_objs: &TimedMutex<ObjIndex>,
     key: (u32, u32),
     handle: u32,
     h: u32,
@@ -1591,6 +1614,7 @@ impl ChanPlane {
         engine_table: &[kf_abi::inittables::FifoDeviceEntry],
         dbfast: &'static kf_chan::dbfast::DbFast,
         token_fmt: Option<kf_trap::tokenindex::GuestTokenFormat>,
+        stall: &'static Stall,
     ) -> Result<ChanPlane, String> {
         // ★ Authored, never the guest's engine number: the first HOST copy engine that is not a
         // graphics CE. ⊘ A GRCE shares the GR runlist and routes subchannels 0-3 to GR — RM's
@@ -1710,13 +1734,13 @@ impl ChanPlane {
             inbox,
             completions,
             // Declared caps: channels are the only twin this plane mints.
-            caps: Mutex::new(VmCaps::from_declared(64, 64, 64, 64)),
-            slots: RwLock::new(HashMap::new()),
-            by_obj: Mutex::new(HashMap::new()),
-            sw_objs: Mutex::new(HashMap::new()),
+            caps: TimedMutex::new(stall, LockId::Caps, VmCaps::from_declared(64, 64, 64, 64)),
+            slots: TimedRwLock::new(stall, LockId::Slots, HashMap::new()),
+            by_obj: TimedMutex::new(stall, LockId::ByObj, HashMap::new()),
+            sw_objs: TimedMutex::new(stall, LockId::SwObjs, HashMap::new()),
             defapi_reg: std::sync::OnceLock::new(),
             defapi_triggers: AtomicU64::new(0),
-            scopes: Mutex::new(HashMap::new()),
+            scopes: TimedMutex::new(stall, LockId::Scopes, HashMap::new()),
             wake,
             contended: AtomicU64::new(0),
             poisoned: AtomicU64::new(0),
@@ -1725,11 +1749,15 @@ impl ChanPlane {
             engine_table: engine_table.to_vec(),
             stop: AtomicBool::new(false),
             family,
-            pt: Mutex::new(HashMap::new()),
-            pt_objs: Mutex::new(HashMap::new()),
-            dbg: Mutex::new(HashMap::new()),
-            cuda_limit: Mutex::new((std::collections::BTreeSet::new(), false)),
-            acts: Mutex::new(None),
+            pt: TimedMutex::new(stall, LockId::Pt, HashMap::new()),
+            pt_objs: TimedMutex::new(stall, LockId::PtObjs, HashMap::new()),
+            dbg: TimedMutex::new(stall, LockId::Misc, HashMap::new()),
+            cuda_limit: TimedMutex::new(
+                stall,
+                LockId::Misc,
+                (std::collections::BTreeSet::new(), false),
+            ),
+            acts: TimedMutex::new(stall, LockId::Acts, None),
             release,
             engines,
             acts_run: AtomicU64::new(0),
@@ -1737,13 +1765,13 @@ impl ChanPlane {
             act_worst_us: AtomicU64::new(0),
             act_total_us: AtomicU64::new(0),
             pt_births: AtomicU64::new(0),
-            groups: Mutex::new(HashMap::new()),
-            enc_sessions: Mutex::new(HashMap::new()),
+            groups: TimedMutex::new(stall, LockId::Misc, HashMap::new()),
+            enc_sessions: TimedMutex::new(stall, LockId::Misc, HashMap::new()),
             rung: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rang: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rung_at_us: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rc_ev,
-            rc_queue: Mutex::new(Vec::new()),
+            rc_queue: TimedMutex::new(stall, LockId::RcQueue, Vec::new()),
             rc_armed: AtomicU64::new(0),
             rc_unarmed: AtomicU64::new(0),
             heap_out: AtomicU64::new(0),
@@ -1756,6 +1784,7 @@ impl ChanPlane {
             dispsw: crate::dispsw::DispSwCounters::default(),
             dbfast,
             token_fmt,
+            stall,
         })
     }
 
@@ -1806,13 +1835,19 @@ impl ChanPlane {
     /// # Errors
     /// The spawn.
     pub fn start(&'static self) -> Result<(), String> {
-        let (tx, rx) = std::sync::mpsc::channel::<(Act, kf_gsp::Deferred, &'static str)>();
+        let (tx, rx) = std::sync::mpsc::channel::<ActMsg>();
         std::thread::Builder::new()
             .name("kf3-chan-act".into())
             .spawn(move || {
-                while let Ok((act, d, what)) = rx.recv() {
+                kf_chan::stall::set_role(kf_chan::stall::Role::Act);
+                while let Ok((act, d, what, queued)) = rx.recv() {
                     let t0 = std::time::Instant::now();
+                    self.stall
+                        .act_queue_wait
+                        .record(t0.saturating_duration_since(queued));
                     let r = act(self);
+                    self.stall.act_run.since(t0);
+                    self.stall.act_total.since(queued);
                     let us = u64::try_from(t0.elapsed().as_micros()).unwrap_or(u64::MAX);
                     self.act_worst_us.fetch_max(us, Ordering::Relaxed);
                     self.act_total_us.fetch_add(us, Ordering::Relaxed);
@@ -1934,11 +1969,12 @@ impl ChanPlane {
     /// Queue `act` and answer [`ChanAnswer::Deferred`] — the drainer returns at once.
     fn defer(&self, what: &'static str, act: Act) -> ChanAnswer {
         let d = kf_gsp::Deferred::new();
-        let sent = self
-            .acts
-            .lock()
-            .ok()
-            .and_then(|a| a.as_ref().map(|tx| tx.send((act, d.clone(), what)).is_ok()));
+        let sent = self.acts.lock().ok().and_then(|a| {
+            a.as_ref().map(|tx| {
+                tx.send((act, d.clone(), what, std::time::Instant::now()))
+                    .is_ok()
+            })
+        });
         if sent == Some(true) {
             ChanAnswer::Deferred(d)
         } else {
@@ -3293,8 +3329,13 @@ impl ChanPlane {
         });
         let sent = self.acts.lock().ok().and_then(|a| {
             a.as_ref().map(|tx| {
-                tx.send((act, kf_gsp::Deferred::new(), "deferred API context"))
-                    .is_ok()
+                tx.send((
+                    act,
+                    kf_gsp::Deferred::new(),
+                    "deferred API context",
+                    std::time::Instant::now(),
+                ))
+                .is_ok()
             })
         });
         if sent == Some(true) {
@@ -3871,7 +3912,7 @@ impl ChanPlane {
         }
     }
 
-    fn slot(&self, ht: u32) -> Option<Arc<Mutex<Slot>>> {
+    fn slot(&self, ht: u32) -> Option<Arc<TimedMutex<Slot>>> {
         self.slots.read().ok()?.get(&ht).cloned()
     }
 
@@ -4426,7 +4467,7 @@ impl ChanPlane {
                     me.engine_tlive(engine, true);
                 }
                 if let Ok(mut s) = me.slots.write() {
-                    s.insert(ht, Arc::new(Mutex::new(slot)));
+                    s.insert(ht, Arc::new(TimedMutex::new(me.stall, LockId::Slot, slot)));
                 }
                 if let Ok(mut m) = me.by_obj.lock() {
                     m.insert((a.client, a.handle), ht);
@@ -5317,11 +5358,12 @@ mod dispsw_tests {
     use crate::dispsw::{
         DispSwCounters, DispSwHost, Live, NV_ERR_INSUFFICIENT_RESOURCES, PER_CHANNEL_CAP, twin_one,
     };
+    use kf_chan::stall::{LockId, Stall, TimedMutex};
     use kf_chip::classes::Kind;
     use std::cell::RefCell;
     use std::collections::HashMap;
+    use std::sync::Arc;
     use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-    use std::sync::{Arc, Mutex};
 
     const A: u32 = 0xc1d0_0001;
     const B: u32 = 0xc1d0_0002;
@@ -5365,7 +5407,7 @@ mod dispsw_tests {
 
     /// Two clients, three twinned channels — client A's `CH1` and `CH2`, and client B's `CH1` (the
     /// same handle in another client): 3 + 1 + 2 display-SW twins.
-    fn plane_map() -> Mutex<PtMap> {
+    fn plane_map() -> TimedMutex<PtMap> {
         let mut m = PtMap::new();
         m.insert(
             (A, CH1),
@@ -5373,7 +5415,7 @@ mod dispsw_tests {
         );
         m.insert((A, CH2), twin(2, &[(0x73, 0xa3)]));
         m.insert((B, CH1), twin(3, &[(0x70, 0xb0), (0x71, 0xb1)]));
-        Mutex::new(m)
+        TimedMutex::new(Stall::leak(), LockId::Pt, m)
     }
 
     fn live(chan: usize, vm: usize) -> Live {
@@ -5504,10 +5546,11 @@ mod dispsw_tests {
     #[test]
     fn the_undo_withdraws_the_kept_twin_and_frees_it_once() {
         let pt = plane_map();
-        let objs = Mutex::new(HashMap::from([
-            ((A, 0x70), (A, CH1)),
-            ((B, 0x70), (B, CH1)),
-        ]));
+        let objs = TimedMutex::new(
+            Stall::leak(),
+            LockId::PtObjs,
+            HashMap::from([((A, 0x70), (A, CH1)), ((B, 0x70), (B, CH1))]),
+        );
         let host = FreesOnly::default();
         let c = DispSwCounters::default();
         let line = withdraw_kept(&host, &pt, &objs, (A, CH1), 0x70, 0xa0, &c);
@@ -5549,7 +5592,7 @@ mod dispsw_tests {
         assert!(rx.try_recv().is_err(), "nothing until orphaned");
         d.resolve(0);
         assert!(d.run_orphan_undo());
-        let (_act, _cell, what) = rx.try_recv().expect("the withdraw is queued");
+        let (_act, _cell, what, _queued) = rx.try_recv().expect("the withdraw is queued");
         assert_eq!(what, DISPSW_WITHDRAW);
         assert!(!d.run_orphan_undo(), "once");
         assert!(rx.try_recv().is_err());

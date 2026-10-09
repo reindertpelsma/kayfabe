@@ -45,6 +45,7 @@
 //! drainer has delivered the registration's last count — so the caller frees the twin (and a later
 //! act re-births the token) only after the old eventfd can deliver nothing more.
 
+use crate::stall::{LockId, Stall};
 use kf_linux_raw::{MAX_READY_BATCH, Notifier, PollTimeout, Poller, ReadyTokens};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::os::fd::BorrowedFd;
@@ -347,6 +348,8 @@ pub struct DbFast {
     poller: Poller,
     kick: &'static Notifier,
     reg: Mutex<Registry>,
+    /// Where blocked waits on `reg` are recorded, once the device attaches its instruments.
+    stall: OnceLock<&'static Stall>,
     tx: Mutex<mpsc::Sender<Cmd>>,
     side: Mutex<Side>,
     /// Counters.
@@ -378,6 +381,7 @@ impl DbFast {
             poller: Poller::create().map_err(|e| format!("doorbell poller: {e:?}"))?,
             kick,
             reg: Mutex::new(Registry::default()),
+            stall: OnceLock::new(),
             tx: Mutex::new(tx),
             side: Mutex::new(Side {
                 rx,
@@ -388,6 +392,31 @@ impl DbFast {
             ack_wait: Hist::default(),
             printed: AtomicU64::new(0),
         })
+    }
+
+    /// Attach the device's stall instruments: blocked waits on the registry lock are recorded.
+    pub fn attach_stall(&self, st: &'static Stall) {
+        let _ = self.stall.set(st);
+    }
+
+    /// The registry lock, its blocked wait recorded ([`LockId::DbReg`]). The main loop and the act
+    /// thread hold it across `KVM_IOEVENTFD`; the drainer never takes it.
+    fn lock_reg(&self) -> std::sync::LockResult<std::sync::MutexGuard<'_, Registry>> {
+        match self.reg.try_lock() {
+            Ok(g) => Ok(g),
+            Err(std::sync::TryLockError::Poisoned(p)) => Err(p),
+            Err(std::sync::TryLockError::WouldBlock) => {
+                let t = Instant::now();
+                let r = self.reg.lock();
+                if let Some(st) = self.stall.get() {
+                    st.note_lock_wait(
+                        LockId::DbReg,
+                        u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX),
+                    );
+                }
+                r
+            }
+        }
     }
 
     /// ★ Turn the fast path ON by handing it the KVM verb. Until this is called every token stays
@@ -522,7 +551,7 @@ impl DbFast {
                 return RegOutcome::Refused;
             }
         };
-        let Ok(mut r) = self.reg.lock() else {
+        let Ok(mut r) = self.lock_reg() else {
             return RegOutcome::Refused;
         };
         if let Some(old) = r.regs.remove(&idx) {
@@ -598,7 +627,7 @@ impl DbFast {
     /// (the fast path was off, or refused it) or the drainer did not answer (counted).
     pub fn deregister(&self, idx: u32) -> Option<FastLedger> {
         let (reg, sites_held) = {
-            let mut r = self.reg.lock().ok()?;
+            let mut r = self.lock_reg().ok()?;
             let reg = r.regs.remove(&idx)?;
             for site in &reg.placed {
                 self.unplace(&reg, idx, *site);
@@ -641,7 +670,7 @@ impl DbFast {
     /// device's memory listener: BAR0 mapped, or a Hopper+ BAR1 usermode view placed). Every live
     /// registration is placed there too, under the budget.
     pub fn site_add(&self, gpa: u64) {
-        let Ok(mut r) = self.reg.lock() else { return };
+        let Ok(mut r) = self.lock_reg() else { return };
         if !r.sites.insert(gpa) {
             return;
         }
@@ -662,7 +691,7 @@ impl DbFast {
     /// ★ **Main loop — the doorbell register at `gpa` went away** (BAR moved or decode off, a BAR1
     /// view removed): every placement there is removed.
     pub fn site_del(&self, gpa: u64) {
-        let Ok(mut r) = self.reg.lock() else { return };
+        let Ok(mut r) = self.lock_reg() else { return };
         if !r.sites.remove(&gpa) {
             return;
         }
