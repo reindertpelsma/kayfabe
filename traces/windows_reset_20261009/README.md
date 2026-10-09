@@ -433,3 +433,18 @@ D3D12 signal probe ran** (run 109 about 10:55:08, run 111 about 11:07:11, MSI/BA
 **Next (in order of cost):** (1) repeat R0 (flood off, `b728b480`) and `nonstall:10` twice each to get the spread; (2) bisect vectors 0-5 (GR0 vector 0 against the CE vectors 1-5) and the period
 (100 and 1000 ms) at `nonstall`; (3) find which host non-stall edge the relay does not raise: the `PT-NSI` lines with `live twins 0` and `unraised_no_live` against the hardware pattern of §13.2 (GR0 vec 0 pending 45%,
 CE2 57%), then fix that edge on the real path; (4) the D3D12 probe death under `nonstall:10` (which wait does it hang on). The flood stays a diagnostic.
+
+## 16. Runs 112 onward: spread of the flood, then the vector bisect (branch `claude/irqflood-bisect-20261009`, 2026-10-09)
+
+**STATUS: LIVE, 2026-10-09 (plan committed before the first boot of this section; results below it when they exist).**
+
+**What is run.** ONE binary for every boot of this section: `kf3-bins/66eeebb6` = `b728b480` + the `v<n>` class tokens of `docs/design/V3_DEBUG_IRQ_FLOOD.md` (a rebuild in the
+private `irqflood-qemu/` tree; flood-off and `nonstall`/`gsp`/`disp` code paths unchanged; unit tests in `crates/kf-qemu/src/irqflood.rs`). Flags identical to runs 109-111
+(run 104's flags with **`KF3_NO_BATCHED_MAP=1`**, `WR_SHOTS=90`, BAR0 read trace on); only the flood word changes. Launcher `irqflood/irqflood-launch2.sh`, chain `irqflood/chain.sh`.
+
+**Falsifier (stated before the first boot):** if `nonstall:10` is not better than flood-off in BOTH repeats, the §15 result is baseline noise. "Better" = the idle lock screen and
+the guest driver alive well beyond the flood-off boots' 18-23 s (and beyond the R0 outlier of 231 s with the same measures). **Success of the experiment:** lock screen held >= 60 s AND
+the D3D11 and D3D12 probes both pass AND no bugcheck for 120 s after the probes.
+
+**Matrix.** Part A (spread, 4 boots): 112 off, 113 `nonstall:10`, 114 off, 115 `nonstall:10`. Part B (only if A shows `nonstall:10` clearly better than off in BOTH repeats): `v0`, `v1`, `v2`,
+`v3,v4,v5` at 10 ms, then the helping vector(s) at 100 and 1000 ms. Part C: the D3D12 death, from the boots that reach the probe. Budget: 12 boots.
