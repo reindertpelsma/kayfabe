@@ -513,3 +513,24 @@ every twin shows `GPGet == GPPut` and every semaphore "a release the memory hold
   reaches the D3D12 probe (that boot needs the lock screen to be held, which is the baseline's own lottery, not the flood).
 - **Escalation, exactly what is unclear:** (1) run 109's death has no pending work and no unscheduled twin, and its cause (b or c) cannot be read from kayfabe's log; it needs the guest side (ETW or the 0x116 dump's parameter-2 module offset `0x14930`) or a same-tracer VFIO reference run of the probe.
   (2) Whether the flood changes anything at all needs more than n = 2 per arm; at 6-9 minutes a boot that is a decision, not a default.
+
+## 17. The guest's OWN logs, read live through the guest agent (branch `claude/guest-logs-20261009`, 2026-10-09)
+
+**STATUS: LIVE, 2026-10-09 (plan committed before the first boot; results are added below in 17.1 onward).**
+
+**Why.** Every offline `System.evtx` of §4-§16 holds no event from the run period (the guest does not flush its log before QEMU is killed), so "no Display/nvlddmkm/dxgkrnl event preceded the 0x116" is not
+evidence. Under kf3 the guest never sends the ~1 Hz control set (`0x2080a0d1`, `0x2080a0a8`, `0x20809037`, `0x20808539`) that the same image sends about 75 times per 100 s on real hardware (VFIO runs
+boundary-vfio-8..10), and the image installs "NVIDIA Display Container LS" as an auto-start user-mode service. In runs 113 and 114 the guest agent still answered after the NVIDIA driver died (Code 43, no adapter).
+This section reads the guest's event logs, services, processes and PnP state **live** (QGA `guest-exec` as SYSTEM, read-only) at three moments.
+
+**Falsifier (stated before the first boot):** *"the NVIDIA Display Container service is running and healthy in the kayfabe guest"* (then its missing 1 Hz loop needs another explanation). The opposite finding is a
+stopped, crashed or never-started service, or an error event naming it.
+
+**Moments.** A: the full collector as soon as QGA answers (pinged every 5 s) while the driver is up. B: right after the guest's driver died (first of: kayfabe's log shows `UnloadingGuestDriver`; the NVIDIA video
+controller reports an error code or vanishes), before any reboot. C: B + 60 s if the OS still answers. A light sample (services, processes, GPU problem code; 1-3 s) every ~6 s from A to the end gives the timeline;
+the samples nearest B+60 s and B+120 s are kept as D60 / D120 (Display Container state in a long-lived boot). If no death by 330 s, one late full snapshot (L). Up to three boots.
+
+**What is run.** `kf3-bins/66eeebb6`, flood OFF, the exact flags of run 114 (`irqflood-launch2.sh` with an empty flood word, `KF3_NO_BATCHED_MAP=1`, BAR0 read trace, 90 s of screenshots) -- `guest_logs/gl-run.sh` is
+`wr-run.sh` with the D3D probes replaced by the collector. Files in `traces/windows_reset_20261009/guest_logs/`: `guest_logs_collect.ps1` (full, read-only, no `nvidia-smi` because it issues RM controls and would perturb the
+guest), `guest_logs_light.ps1`, `gl-monitor.py`, `gl-run.sh`, `gl-launch.sh`. The collector's own load (CIM queries, `Get-WinEvent`) is a perturbation of the guest, as small as a read-only collection can be; the
+run's lifetime is compared with the flood-off spread of 19-231 s (§16.1).
