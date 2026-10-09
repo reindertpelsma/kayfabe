@@ -1,0 +1,152 @@
+diff --git a/hw/vfio/meson.build b/hw/vfio/meson.build
+index 82f6869..35bc42f 100644
+--- a/hw/vfio/meson.build
++++ b/hw/vfio/meson.build
+@@ -10,6 +10,9 @@ vfio_ss.add(files(
+ vfio_ss.add(when: 'CONFIG_PSERIES', if_true: files('spapr.c'))
+ vfio_ss.add(when: 'CONFIG_VFIO_PCI', if_true: files(
+   'pci-quirks.c',
++  'gsp-observer.c',
++  'observer.c',
++  'queue.c',
+   'pci.c',
+ ))
+ vfio_ss.add(when: 'CONFIG_VFIO_CCW', if_true: files('ccw.c'))
+diff --git a/hw/vfio/pci.c b/hw/vfio/pci.c
+index b46b130..3c75412 100644
+--- a/hw/vfio/pci.c
++++ b/hw/vfio/pci.c
+@@ -41,6 +41,7 @@
+ #include "system/kvm.h"
+ #include "system/runstate.h"
+ #include "pci.h"
++#include "gsp-observer.h"
+ #include "trace.h"
+ #include "qapi/error.h"
+ #include "migration/blocker.h"
+@@ -123,6 +124,7 @@ static void vfio_intx_interrupt(void *opaque)
+         return;
+     }
+ 
++    vfio_gsp_irq(vdev);
+     trace_vfio_intx_interrupt(vdev->vbasedev.name, 'A' + vdev->intx.pin);
+ 
+     vdev->intx.pending = true;
+@@ -462,6 +464,7 @@ static void vfio_msi_interrupt(void *opaque)
+         abort();
+     }
+ 
++    vfio_gsp_irq(vdev);
+     msg = get_msg(pdev, nr);
+     trace_vfio_msi_interrupt(vdev->vbasedev.name, nr, msg.address, msg.data);
+     notify(pdev, nr);
+@@ -1975,7 +1978,9 @@ static void vfio_bar_register(VFIOPCIDevice *vdev, int nr)
+     if (bar->region.size) {
+         memory_region_add_subregion(bar->mr, 0, bar->region.mem);
+ 
+-        if (vfio_region_mmap(&bar->region)) {
++        /* Diagnostic hooks need BAR0 accesses; retain BAR1/BAR2 mappings. */
++        if ((!vdev->gsp_observer_path || nr != 0) &&
++            vfio_region_mmap(&bar->region)) {
+             error_report("Failed to mmap %s BAR %d. Performance may be slow",
+                          vdev->vbasedev.name, nr);
+         }
+@@ -2892,6 +2897,7 @@ void vfio_sub_page_bar_update_mappings(VFIOPCIDevice *vdev)
+ }
+ 
+ static VFIODeviceOps vfio_pci_ops = {
++    .gsp_observe = vfio_gsp_region,
+     .vfio_compute_needs_reset = vfio_pci_compute_needs_reset,
+     .vfio_hot_reset_multi = vfio_pci_hot_reset_multi,
+     .vfio_eoi = vfio_pci_intx_eoi,
+@@ -3524,6 +3530,10 @@ static void vfio_pci_realize(PCIDevice *pdev, Error **errp)
+         }
+     }
+ 
++    if (!vfio_gsp_open(vdev, errp)) {
++        vfio_migration_exit(vbasedev);
++        goto out_deregister;
++    }
+     vfio_pci_register_err_notifier(vdev);
+     vfio_pci_register_req_notifier(vdev);
+     vfio_setup_resetfn_quirk(vdev);
+@@ -3565,6 +3575,7 @@ static void vfio_exitfn(PCIDevice *pdev)
+     VFIOPCIDevice *vdev = VFIO_PCI_DEVICE(pdev);
+     VFIODevice *vbasedev = &vdev->vbasedev;
+ 
++    vfio_gsp_close(vdev);
+     vfio_unregister_req_notifier(vdev);
+     vfio_unregister_err_notifier(vdev);
+     pci_device_set_intx_routing_notifier(pdev, NULL);
+@@ -3593,6 +3604,7 @@ static void vfio_pci_reset(DeviceState *dev)
+         return;
+     }
+ 
++    vfio_gsp_reset(vdev);
+     trace_vfio_pci_reset(vdev->vbasedev.name);
+ 
+     vfio_pci_pre_reset(vdev);
+@@ -3728,6 +3740,11 @@ static const Property vfio_pci_properties[] = {
+     DEFINE_PROP_BOOL("x-no-mmap", VFIOPCIDevice, vbasedev.no_mmap, false),
+     DEFINE_PROP_BOOL("x-balloon-allowed", VFIOPCIDevice,
+                      vbasedev.ram_block_discard_allowed, false),
++    DEFINE_PROP_STRING("x-gsp-observer", VFIOPCIDevice, gsp_observer_path),
++    DEFINE_PROP_UINT32("x-gsp-observer-seconds", VFIOPCIDevice, gsp_observer_seconds, 0),
++    /* DEBUG ONLY, PERTURBING (2026-10-09 refusal ablation; off by default; requires x-gsp-observer).
++     * See gsp-observer.c gsp_observer_refuse_load() for the file format and what it does. */
++    DEFINE_PROP_STRING("x-gsp-refuse", VFIOPCIDevice, gsp_refuse_path),
+     DEFINE_PROP_BOOL("x-no-kvm-intx", VFIOPCIDevice, no_kvm_intx, false),
+     DEFINE_PROP_BOOL("x-no-kvm-msi", VFIOPCIDevice, no_kvm_msi, false),
+     DEFINE_PROP_BOOL("x-no-kvm-msix", VFIOPCIDevice, no_kvm_msix, false),
+diff --git a/hw/vfio/pci.h b/hw/vfio/pci.h
+index 0f78cf9..65c5ac8 100644
+--- a/hw/vfio/pci.h
++++ b/hw/vfio/pci.h
+@@ -175,6 +175,10 @@ struct VFIOPCIDevice {
+     bool has_flr;
+     bool has_pm_reset;
+     bool rom_read_failed;
++    char *gsp_observer_path;
++    char *gsp_refuse_path;          /* x-gsp-refuse: DEBUG ONLY, perturbing (see gsp-observer.c) */
++    uint32_t gsp_observer_seconds;  /* x-gsp-observer-seconds: capture window, 0 = 300 */
++    struct GspObserver *gsp_observer;
+     bool no_kvm_intx;
+     bool no_kvm_msi;
+     bool no_kvm_msix;
+diff --git a/hw/vfio/region.c b/hw/vfio/region.c
+index b165ab0..48ed7a6 100644
+--- a/hw/vfio/region.c
++++ b/hw/vfio/region.c
+@@ -65,6 +65,9 @@ void vfio_region_write(void *opaque, hwaddr addr,
+         break;
+     }
+ 
++    if (vbasedev->ops->gsp_observe) {
++        vbasedev->ops->gsp_observe(vbasedev, region->nr, addr, data, size, true);
++    }
+     ret = vbasedev->io_ops->region_write(vbasedev, region->nr,
+                                          addr, size, &buf, region->post_wr);
+     if (ret != size) {
+@@ -101,6 +104,9 @@ uint64_t vfio_region_read(void *opaque,
+     uint64_t data = 0;
+     int ret;
+ 
++    if (vbasedev->ops->gsp_observe) {
++        vbasedev->ops->gsp_observe(vbasedev, region->nr, addr, 0, size, false);
++    }
+     ret = vbasedev->io_ops->region_read(vbasedev, region->nr, addr, size, &buf);
+     if (ret != size) {
+         error_report("%s(%s:region%d+0x%"HWADDR_PRIx", %d) failed: %s",
+diff --git a/include/hw/vfio/vfio-device.h b/include/hw/vfio/vfio-device.h
+index 0fe6c60..84c55ab 100644
+--- a/include/hw/vfio/vfio-device.h
++++ b/include/hw/vfio/vfio-device.h
+@@ -95,6 +95,8 @@ typedef struct VFIODevice {
+ } VFIODevice;
+ 
+ struct VFIODeviceOps {
++    /* Optional read-only diagnostic; called before forwarding region access. */
++    void (*gsp_observe)(VFIODevice *, int, hwaddr, uint64_t, unsigned, bool);
+     void (*vfio_compute_needs_reset)(VFIODevice *vdev);
+     int (*vfio_hot_reset_multi)(VFIODevice *vdev);
+     void (*vfio_eoi)(VFIODevice *vdev);

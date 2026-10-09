@@ -1,0 +1,64 @@
+# subset of refusal-full.txt (--drop 0x20801823,0x20808524,0x2080852a,0x20809004,0x2080a060,0x2080a088,0x2080a630,0x2080a70a,0x2080a801): 49 rules kept, 9 left out
+# kayfabe refusal set, computed by make_refusal_list.py from the observer streams of runs 114 118 152
+# format: FN KEY  (NEWKEY optional: default = vg_refuse_default_key)
+# fn71 CONTINUATION_RECORD: refused 286 times in runs 114,118,152; not a request of its own, not rewritten
+76 0x73011d   # refused 3 times in runs 114,118,152
+76 0x730282   # refused 3 times in runs 114,118,152
+76 0x730285   # refused 30 times in runs 114,118,152
+76 0x730288   # refused 40 times in runs 114,118,152
+76 0x7302a2   # refused 3 times in runs 114,118,152
+76 0x7302a5   # refused 34 times in runs 114,118,152
+76 0x7302a6   # refused 3 times in runs 114,118,152
+76 0x800106   # refused 3 times in runs 114,118,152
+76 0x800292   # refused 6 times in runs 114,118,152
+76 0x801306   # refused 3 times in runs 114,118,152
+76 0x2080012f   # refused 3 times in runs 114,118,152
+76 0x2080013f   # refused 6 times in runs 114,118,152
+76 0x20800160   # refused 3 times in runs 114,118,152
+76 0x20800173   # refused 3 times in runs 114,118,152
+76 0x2080017e   # refused 6 times in runs 114,118,152
+76 0x2080080b   # refused 3 times in runs 114,118,152
+76 0x20800a2e   # refused 6 times in runs 114,118,152
+76 0x20800a30   # refused 6 times in runs 114,118,152
+76 0x20800a3a   # refused 98 times in runs 114,118,152
+76 0x20800a3f   # refused 6 times in runs 114,118,152
+76 0x20800a80   # refused 12 times in runs 114,118,152
+76 0x20800a87   # refused 6 times in runs 114,118,152
+76 0x20800a9a   # refused 14 times in runs 114,118,152
+76 0x20800aaf   # refused 6 times in runs 114,118,152
+76 0x20800ab8   # refused 3 times in runs 114,118,152
+76 0x20800afe   # refused 9 times in runs 114,118,152
+76 0x20800aff   # refused 24 times in runs 114,118,152
+76 0x20800b03   # refused 6 times in runs 114,118,152
+76 0x20800b05   # refused 6 times in runs 114,118,152
+76 0x20801110   # refused 3 times in runs 114,118,152
+76 0x20801220   # refused 3 times in runs 114,118,152
+76 0x20801222   # refused 3 times in runs 114,118,152
+# not in this subset: 76 0x20801823   # refused 3 times in runs 114,118,152
+76 0x2080205b   # refused 6 times in runs 114,118,152
+76 0x20802068   # refused 6 times in runs 114,118,152
+76 0x20802801   # refused 3 times in runs 114,118,152
+76 0x20802806   # refused 3 times in runs 114,118,152
+76 0x20802a0f   # refused 6 times in runs 114,118,152
+76 0x20802a12   # refused 24 times in runs 114,118,152
+76 0x208081ea   # refused 6 times in runs 114,118,152
+# not in this subset: 76 0x20808524   # refused 3 times in runs 114,118,152
+# not in this subset: 76 0x2080852a   # refused 3 times in runs 114,118,152
+76 0x2080852e   # refused 146 times in runs 114,118,152
+76 0x2080852f   # refused 143 times in runs 114,118,152
+76 0x2080853a   # refused 143 times in runs 114,118,152
+76 0x2080853b   # refused 143 times in runs 114,118,152
+# not in this subset: 76 0x20809004   # refused 778 times in runs 114,118,152
+76 0x2080a02f   # refused 3 times in runs 114,118,152
+# not in this subset: 76 0x2080a060   # refused 6 times in runs 114,118,152
+# not in this subset: 76 0x2080a088   # refused 6 times in runs 114,118,152
+76 0x2080a618   # refused 143 times in runs 114,118,152
+76 0x2080a619   # refused 143 times in runs 114,118,152
+# not in this subset: 76 0x2080a630   # refused 3 times in runs 114,118,152
+# not in this subset: 76 0x2080a70a   # refused 3 times in runs 114,118,152
+# not in this subset: 76 0x2080a801   # refused 6 times in runs 114,118,152
+76 0x2080b201   # refused 613 times in runs 114,118,152
+76 0x20810108   # refused 6 times in runs 114,118,152
+103 0x402c   # refused 18 times in runs 114,118,152
+# ignored: fn103 0xc56f (different cause)
+# rules: 58

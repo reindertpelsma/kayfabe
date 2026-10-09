@@ -1,0 +1,520 @@
+--- /tmp/claude-0/-workspace-kayfabe/d616bc12-a382-4a26-869c-0f097966b6ab/scratchpad/w/base/core/observer.h	2026-10-09 16:02:53.401211703 +0200
++++ observer.h	2026-10-09 16:39:57.846362629 +0200
+@@ -20,6 +20,36 @@
+     unsigned char table_copy[KFGT_PAGE],libos[KFGT_PAGE];
+ } VG_OBSERVER;
+ void vg_init(VG_OBSERVER *,VG_READ,VG_EMIT,void *);
++
++/* ---- 2026-10-09 refusal ablation: DEBUG ONLY, PERTURBING, default off ------------------------------
++ * The one place where this helper WRITES guest RAM. vg_refuse_scan() is called at the command-queue
++ * doorbell write BEFORE the write is forwarded to the device, i.e. after vg_mmio() has recorded the
++ * original request. For every new message in the command queue whose (function, key) is on the rule
++ * list it replaces the key by an invalid one and fixes the element checksum, so that the real GSP
++ * refuses the request. fn 76 GSP_RM_CONTROL: key = cmd (u32 at element+88); fn 103 GSP_RM_ALLOC:
++ * key = hClass (u32 at element+92). Checksum: XOR of the u32 words of 48+length bytes (rounded up to
++ * 8) is zero (message_queue_cpu.c _checkSum32), so a key change old->new changes the stored
++ * checksum word at element+32 by old^new. Nothing else is touched. */
++typedef int (*VG_WRITE)(void *,uint64_t,const void *,size_t);
++#define VG_REFUSE_MAX_RULES 128u
++/* field 0 = the default key (fn76 cmd / fn103 hClass, as above); field 1 = fn76's hObject (offset
++ * element+84): for a GSS-legacy control (cmd bit 0x8000 set) the firmware accepts an unknown cmd id
++ * unconditionally, so an invalid cmd never refuses it; corrupting the object handle instead makes
++ * the lookup itself fail (fn76 only; a rule with field 1 and fn!=76 is refused by vg_refuse_add). */
++typedef struct { uint32_t fn,key,newkey; unsigned field; uint64_t hits; } VG_RULE;
++typedef void (*VG_REFUSE_LOG)(void *,const VG_RULE *,uint32_t seq,uint32_t slot,uint32_t pages,int verified);
++typedef struct {
++    VG_RULE rule[VG_REFUSE_MAX_RULES]; unsigned nrules;
++    VG_WRITE write; VG_REFUSE_LOG log; void *opaque;
++    uint64_t generation; uint32_t next_seq; int have_next;
++    uint64_t doorbells,inactive,header_bad,scanned,matched,rewritten,verify_failed,ambiguous,seq_gaps,truncated;
++} VG_REFUSE;
++void vg_refuse_init(VG_REFUSE *,VG_WRITE,VG_REFUSE_LOG,void *);
++/* The default invalid key for a rule given without one (0 on failure for unsupported fn). */
++uint32_t vg_refuse_default_key(uint32_t fn,uint32_t key);
++int vg_refuse_add(VG_REFUSE *,uint32_t fn,uint32_t key,uint32_t newkey /* 0 = default */);
++int vg_refuse_add_field(VG_REFUSE *,uint32_t fn,uint32_t key,uint32_t newkey,unsigned field);
++void vg_refuse_scan(VG_OBSERVER *,VG_REFUSE *);
+ /* Call before forwarding BAR0 writes / interrupt injection. Never writes RAM. */
+ void vg_mmio(VG_OBSERVER *,uint64_t offset,uint64_t data,unsigned size,int write,uint64_t ns);
+ void vg_poll(VG_OBSERVER *,uint64_t ns);
+--- /tmp/claude-0/-workspace-kayfabe/d616bc12-a382-4a26-869c-0f097966b6ab/scratchpad/w/base/core/observer.c	2026-10-09 16:02:53.400856326 +0200
++++ observer.c	2026-10-09 16:39:57.846310241 +0200
+@@ -1,6 +1,10 @@
+ /* SPDX-License-Identifier: GPL-2.0-or-later
+  * Bootstrap offsets: compiler output from OGKM 580.65.06, see layout.c.
+- * No NVIDIA implementation code copied. No scanning or memory writes.
++ * No NVIDIA implementation code copied.
++ * 2026-10-09: vg_refuse_scan() (observer.h) is the one place that writes guest RAM, and only when
++ * a caller has turned the DEBUG-ONLY refusal ablation on (see gsp-observer.c, x-gsp-refuse). With
++ * no rules loaded (vg_refuse_init() never called, or VG_REFUSE.write/nrules unset) nothing here
++ * writes anything; vg_init()/vg_mmio()/vg_poll() are unchanged and still never write RAM.
+  */
+ #include "observer.h"
+ #include <string.h>
+@@ -95,3 +99,121 @@
+     if((write && size==4 && off>=0x110c00 && off<0x110c40 && !(off&7)) ||
+        off==0x110004 || off==0x110008) vg_poll(v,ns);
+ }
++
++/* ---- refusal ablation (see observer.h) ---- */
++void vg_refuse_init(VG_REFUSE *r,VG_WRITE w,VG_REFUSE_LOG log,void *opaque) {
++    memset(r,0,sizeof(*r));r->write=w;r->log=log;r->opaque=opaque;
++}
++uint32_t vg_refuse_default_key(uint32_t fn,uint32_t key) {
++    /* Same class bits, command index moved into 0xff00-0xffff: no such method exists on any object. */
++    if(fn==76) return (key&0xffff0000u)|0xff00u|(key&0xffu);
++    if(fn==103) return 0xfff00000u|(key&0xffffu);
++    return 0;
++}
++int vg_refuse_add(VG_REFUSE *r,uint32_t fn,uint32_t key,uint32_t newkey) {
++    return vg_refuse_add_field(r,fn,key,newkey,0);
++}
++int vg_refuse_add_field(VG_REFUSE *r,uint32_t fn,uint32_t key,uint32_t newkey,unsigned field) {
++    if(r->nrules>=VG_REFUSE_MAX_RULES || (fn!=76 && fn!=103) || (field && (field!=1 || fn!=76))) return 0;
++    if(!field) {
++        if(!newkey) newkey=vg_refuse_default_key(fn,key);
++        if(!newkey || newkey==key) return 0;              /* key: the matched field (cmd/hClass) */
++    }
++    /* field==1 (hObject): newkey is the replacement handle, 0 (NULL) is a valid choice; it is
++     * compared against the ORIGINAL HANDLE at scan time, not against `key` (the matched cmd). */
++    r->rule[r->nrules].fn=fn;r->rule[r->nrules].key=key;r->rule[r->nrules].newkey=newkey;
++    r->rule[r->nrules].field=field;r->rule[r->nrules].hits=0;r->nrules++;
++    return 1;
++}
++static uint32_t xor_words(const unsigned char *p,uint32_t bytes) {
++    uint32_t i,s=0;for(i=0;i<bytes;i+=4) s^=kf_u32(p+i);return s;
++}
++/* The committed message that ENDS at element `end` with `i` pages, read into msg[] (i*4096 bytes).
++ * 1 if the element header and checksum are valid. */
++static int load_message(VG_OBSERVER *v,unsigned first,const KFGT_QUEUE *q,uint32_t slot,uint32_t i,
++                        unsigned char *msg,uint32_t *seq) {
++    uint32_t k,length,bytes;
++    for(k=0;k<i;k++) {
++        if(!read_ram(v,v->ptes[first+1+(slot+k)%q->count],msg+(size_t)k*KFGT_PAGE,KFGT_PAGE)) return 0;
++    }
++    length=kf_u32(msg+56);
++    if(kf_u32(msg+48)!=0x03000000u || kf_u32(msg+52)!=KFGT_RPC_SIGNATURE || length<32 ||
++       length>KFGT_MAX_MESSAGE-48 || kf_u32(msg+40)!=i || i!=(48+length+KFGT_PAGE-1)/KFGT_PAGE) return 0;
++    bytes=(48+length+7u)&~7u;
++    if(xor_words(msg,bytes)) return 0;
++    *seq=kf_u32(msg+36);return 1;
++}
++void vg_refuse_scan(VG_OBSERVER *v,VG_REFUSE *r) {
++    unsigned char hdr[KFGT_PAGE];
++    static unsigned char msg[KFGT_MAX_MESSAGE],chk[KFGT_MAX_MESSAGE];
++    struct { uint32_t slot,pages,seq; } m[32];
++    KFGT_QUEUE q;unsigned first,nm=0,j,x;uint32_t end,readp,unread,total=0;
++    r->doorbells++;
++    if(!r->nrules || !r->write) return;
++    if(!v->active) {r->inactive++;return;}
++    if(r->generation!=v->generation) {r->generation=v->generation;r->have_next=0;}
++    first=v->offset[0]/KFGT_PAGE;
++    if(!read_ram(v,v->ptes[first],hdr,KFGT_PAGE) || !kf_queue_header(hdr,sizeof(hdr),&q) ||
++       q.size!=v->size[0]) {r->header_bad++;return;}
++    end=q.write;readp=kf_u32(hdr+32);
++    unread=(end+q.count-readp)%q.count;
++    while(nm<32 && total<unread) {
++        uint32_t i,found=0,fseq=0,best=0;
++        for(i=1;i<=16 && i<q.count;i++) {
++            uint32_t s=(end+q.count-i)%q.count,seq;
++            if(load_message(v,first,&q,s,i,msg,&seq)) {
++                if(!found || (uint32_t)(seq-fseq)<0x80000000u) {fseq=seq;best=i;}
++                found++;
++            }
++        }
++        if(!found) break;
++        if(found>1) r->ambiguous++;
++        if(total+best>unread) break;                         /* straddles the GSP's read pointer: consumed */
++        if(r->have_next && (uint32_t)(fseq-r->next_seq)>=0x80000000u) break; /* already seen */
++        m[nm].slot=(end+q.count-best)%q.count;m[nm].pages=best;m[nm].seq=fseq;nm++;
++        total+=best;end=m[nm-1].slot;
++    }
++    if(!nm) return;
++    if(nm==32) r->truncated++;
++    if(r->have_next && m[nm-1].seq!=r->next_seq) r->seq_gaps+=(uint32_t)(m[nm-1].seq-r->next_seq);
++    for(j=nm;j--;) {                                           /* oldest first */
++        uint32_t seq,fn,keyoff,key,newkey=0,old_sum,ok=0;unsigned field=0,ruleidx=0,hit=0;
++        r->scanned++;
++        if(!load_message(v,first,&q,m[j].slot,m[j].pages,msg,&seq)) continue;
++        fn=kf_u32(msg+60);
++        if(fn!=76 && fn!=103) continue;
++        keyoff=fn==76?88:92;key=kf_u32(msg+keyoff);
++        for(x=0;x<r->nrules;x++) if(r->rule[x].fn==fn && r->rule[x].key==key) {
++            newkey=r->rule[x].newkey;field=r->rule[x].field;ruleidx=x;hit=1;break;
++        }
++        if(!hit) continue;
++        if(field==1) {
++            keyoff=84; /* fn76 hObject, in place of cmd */
++            if(kf_u32(msg+keyoff)==newkey) continue; /* already that handle: nothing to rewrite */
++        }
++        r->matched++;
++        old_sum=kf_u32(msg+32);
++        /* one write of bytes 32..keyoff+3 of the first page: checksum, seq, count, header, the
++         * rewritten field. The checksum delta is old-value-AT-keyoff XOR newkey: for field 0,
++         * keyoff is where `key` was read from, so they are the same value; for field 1 (hObject)
++         * `key` is the matched cmd at a DIFFERENT offset, so the old hObject must be re-read. */
++        {
++            unsigned char patch[64];
++            uint32_t oldval=field?kf_u32(msg+keyoff):key;
++            uint32_t len=keyoff+4-32,ns=old_sum^oldval^newkey,k;
++            memcpy(patch,msg+32,len);
++            for(k=0;k<4;k++) {patch[k]=(unsigned char)(ns>>(8*k));patch[keyoff-32+k]=(unsigned char)(newkey>>(8*k));}
++            if(r->write(v->opaque,v->ptes[first+1+m[j].slot%q.count]+32,patch,len)) {
++                ok=load_message(v,first,&q,m[j].slot,m[j].pages,chk,&seq) && kf_u32(chk+keyoff)==newkey;
++                if(!ok) {  /* restore the original bytes */
++                    r->write(v->opaque,v->ptes[first+1+m[j].slot%q.count]+32,msg+32,len);
++                }
++            }
++        }
++        if(ok) {r->rewritten++;} else r->verify_failed++;
++        r->rule[ruleidx].hits+=ok;
++        if(r->log) {VG_RULE shown;shown.fn=fn;shown.key=key;shown.newkey=newkey;shown.hits=0;
++                    r->log(r->opaque,&shown,seq,m[j].slot,m[j].pages,ok);}
++    }
++    r->next_seq=m[0].seq+1;r->have_next=1;
++}
+--- /tmp/claude-0/-workspace-kayfabe/d616bc12-a382-4a26-869c-0f097966b6ab/scratchpad/w/base/qemu/gsp-observer.c	2026-10-09 16:02:53.401211703 +0200
++++ gsp-observer.c	2026-10-09 16:39:57.846403366 +0200
+@@ -43,6 +43,10 @@
+     bool stopped, io_error, limited;
+     bool joined;             /* the writer thread was joined (exit notifier or close) */
+     const char *device_type; /* the owning device's QOM type, for the header's provenance */
++    /* 2026-10-09 refusal ablation (DEBUG ONLY, perturbing): see gsp_observer_refuse_load() */
++    bool refuse_on;
++    VG_REFUSE refuse;
++    uint64_t refuse_last_report;
+ };
+ 
+ static uint64_t now_ns(void)
+@@ -88,6 +92,18 @@
+     return 1;
+ }
+ 
++/* Guest RAM write, for the refusal ablation ONLY (the observer itself never writes). Same
++ * restrictions as guest_ram(): identity DMA, ordinary RAM, no MMIO. */
++static int guest_ram_write(void *opaque, uint64_t pa, const void *in, size_t bytes)
++{
++    GspObserver *s = opaque;
++    AddressSpace *as = pci_device_iommu_address_space(s->device);
++    if (!s->refuse_on || !guest_ram(opaque, pa, NULL, bytes)) {
++        return 0;
++    }
++    return address_space_write(as, pa, MEMTXATTRS_UNSPECIFIED, in, bytes) == MEMTX_OK;
++}
++
+ static void ring_copy(GspObserver *s, uint64_t at, void *data,
+                       size_t bytes, bool into_ring)
+ {
+@@ -276,10 +292,16 @@
+     g_free(s);
+ }
+ 
++static void refuse_counters(GspObserver *s, const char *why);
++
+ static void observer_exit(Notifier *n, void *data)
+ {
+     /* Drain only: the owning device still holds the pointer and frees it in its own close. */
+-    gsp_observer_stop(container_of(n, GspObserver, exit));
++    GspObserver *s = container_of(n, GspObserver, exit);
++    if (s->refuse_on) {
++        refuse_counters(s, "exit");
++    }
++    gsp_observer_stop(s);
+ }
+ 
+ GspObserver *gsp_observer_open(PCIDevice *pdev, const char *path, uint64_t seconds,
+@@ -327,6 +349,11 @@
+ 
+ static bool active(GspObserver *s, uint64_t now)
+ {
++    if (s && s->refuse_on && !s->joined) {
++        /* The refusals must not stop when the capture window or the record caps are spent: the
++         * core keeps tracking the queues, record() drops what no longer fits. */
++        return true;
++    }
+     if (!s || s->limited || s->joined || qatomic_load_acquire(&s->io_error)) {
+         return false;
+     }
+@@ -337,6 +364,143 @@
+     return true;
+ }
+ 
++/* ── refusal ablation (DEBUG ONLY, PERTURBING; vfio-pci property x-gsp-refuse=FILE) ──────────
++ * FILE lists one rule per line: `FN KEY [NEWKEY]`, numbers in any C base, `#` comments. FN 76
++ * (GSP_RM_CONTROL, KEY = cmd) or 103 (GSP_RM_ALLOC, KEY = hClass). Before each command-queue
++ * doorbell write is forwarded, every new queue message that matches is changed to NEWKEY
++ * (default: vg_refuse_default_key) and its checksum fixed, so the real GSP answers with an error.
++ * Each (fn,key) is logged once (with `-msg timestamp=on` the QEMU log gives the time); counters
++ * are printed every 1000 rewrites, at reset and at exit. */
++static void refuse_counters(GspObserver *s, const char *why)
++{
++    VG_REFUSE *r = &s->refuse;
++    info_report("x-gsp-refuse: %s: rules=%u doorbells=%" PRIu64 " scanned=%" PRIu64
++                " matched=%" PRIu64 " rewritten=%" PRIu64 " verify_failed=%" PRIu64
++                " inactive=%" PRIu64 " header_bad=%" PRIu64 " ambiguous=%" PRIu64
++                " seq_gaps=%" PRIu64 " truncated=%" PRIu64,
++                why, r->nrules, r->doorbells, r->scanned, r->matched, r->rewritten,
++                r->verify_failed, r->inactive, r->header_bad, r->ambiguous, r->seq_gaps,
++                r->truncated);
++    s->refuse_last_report = r->rewritten;
++}
++
++static void refuse_log(void *opaque, const VG_RULE *rule, uint32_t seq, uint32_t slot,
++                       uint32_t pages, int verified)
++{
++    GspObserver *s = opaque;
++    unsigned i;
++    for (i = 0; i < s->refuse.nrules; i++) {
++        VG_RULE *r = &s->refuse.rule[i];
++        if (r->fn == rule->fn && r->key == rule->key) {
++            if ((r->hits <= 1 && verified) || !verified) {
++                info_report("x-gsp-refuse: %s fn%u %s 0x%08x -> 0x%08x queue_seq=%u slot=%u pages=%u (hits %" PRIu64 ")",
++                            verified ? "REWROTE" : "FAILED", rule->fn,
++                            rule->fn == 76 ? "cmd" : "class", rule->key, rule->newkey,
++                            seq, slot, pages, r->hits);
++            }
++            break;
++        }
++    }
++    if (s->refuse.rewritten >= s->refuse_last_report + 1000) {
++        refuse_counters(s, "progress");
++    }
++}
++
++static void refuse_doorbell(GspObserver *s)
++{
++    vg_refuse_scan(&s->core, &s->refuse);
++}
++
++bool gsp_observer_refuse_load(GspObserver *s, const char *path, Error **errp)
++{
++    /* One rule per line: `FN KEY [NEWKEY [obj]]`, numbers in any C base (strtoul base 0), `#`
++     * comments, blank lines skipped. NEWKEY empty/absent means vg_refuse_default_key(). The
++     * trailing `obj` keyword (fn 76 only) rewrites hObject (element+84) instead of cmd: the
++     * firmware accepts an unknown cmd id unconditionally for a GSS-legacy control (cmd bit 0x8000
++     * set), so NEWKEY there is the replacement object handle (0 = NULL is a legitimate choice and
++     * must be written as `0`, not left empty, since empty always means "use the default key"). */
++    g_autofree char *text = NULL;
++    g_auto(GStrv) lines = NULL;
++    gsize len;
++    unsigned i;
++    if (!g_file_get_contents(path, &text, &len, NULL)) {
++        error_setg(errp, "x-gsp-refuse: cannot read %s", path);
++        return false;
++    }
++    vg_refuse_init(&s->refuse, guest_ram_write, refuse_log, s);
++    lines = g_strsplit(text, "\n", -1);
++    for (i = 0; lines[i]; i++) {
++        g_auto(GStrv) tok = NULL;
++        char *hash = strchr(lines[i], '#');
++        unsigned long fn, key, newkey = 0;
++        char *end;
++        unsigned field = 0;
++        unsigned ntok;
++        if (hash) {
++            *hash = 0;
++        }
++        if (!*g_strstrip(lines[i])) {
++            continue;
++        }
++        tok = g_strsplit_set(lines[i], " \t", -1);
++        ntok = 0;
++        while (tok[ntok]) {
++            ntok++;
++        }
++        /* g_strsplit_set leaves empty strings between repeated separators; drop them. */
++        {
++            unsigned r, w = 0;
++            for (r = 0; r < ntok; r++) {
++                if (*tok[r]) {
++                    tok[w++] = tok[r];
++                }
++            }
++            ntok = w;
++        }
++        if (ntok < 2 || ntok > 4) {
++            error_setg(errp, "x-gsp-refuse: %s:%u: expected `FN KEY [NEWKEY [obj]]`", path, i + 1);
++            return false;
++        }
++        fn = strtoul(tok[0], &end, 0);
++        if (*end) {
++            error_setg(errp, "x-gsp-refuse: %s:%u: bad function", path, i + 1);
++            return false;
++        }
++        key = strtoul(tok[1], &end, 0);
++        if (*end) {
++            error_setg(errp, "x-gsp-refuse: %s:%u: bad key", path, i + 1);
++            return false;
++        }
++        if (ntok >= 3) {
++            newkey = strtoul(tok[2], &end, 0);
++            if (*end) {
++                error_setg(errp, "x-gsp-refuse: %s:%u: bad new key", path, i + 1);
++                return false;
++            }
++        }
++        if (ntok == 4) {
++            if (strcmp(tok[3], "obj") != 0) {
++                error_setg(errp, "x-gsp-refuse: %s:%u: unknown field %s (only `obj` is defined)",
++                           path, i + 1, tok[3]);
++                return false;
++            }
++            field = 1;
++        }
++        if (fn > 0xffff || key > 0xffffffffUL || newkey > 0xffffffffUL ||
++            !vg_refuse_add_field(&s->refuse, fn, key, newkey, field)) {
++            error_setg(errp, "x-gsp-refuse: %s:%u: rule refused (fn must be 76 or 103, <= %u rules, "
++                       "`obj` only on fn 76, new key must differ unless `obj`)",
++                       path, i + 1, VG_REFUSE_MAX_RULES);
++            return false;
++        }
++    }
++    s->refuse_on = true;
++    warn_report("PERTURBING DIAGNOSTIC ON: x-gsp-refuse=%s (%u rules): command-queue messages "
++                "are rewritten in guest RAM before the doorbell reaches the GPU", path,
++                s->refuse.nrules);
++    return true;
++}
++
+ void gsp_observer_irq(GspObserver *s)
+ {
+     uint64_t now;
+@@ -366,7 +530,10 @@
+     now = now_ns();
+     if (active(s, now)) {
+         s->trigger = addr == 0x110040 || addr == 0x110044 ? 1 : addr >= 0x110c00 ? 2 : 4;
+-        vg_mmio(&s->core, addr, data, size, write, now);
++        vg_mmio(&s->core, addr, data, size, write, now);   /* records the ORIGINAL request first */
++        if (s->refuse_on && write && size == 4 && addr == 0x110c00) {
++            refuse_doorbell(s);                              /* then the rewrite, before the forward */
++        }
+     }
+ }
+ 
+@@ -374,6 +541,7 @@
+ {
+     assert(bql_locked());
+     vg_reset(&s->core);
++    s->refuse.have_next = 0;
+ }
+ 
+ /* ── vfio-pci (the x-gsp-observer property); behaviour as before the 2026-10-09 split ── */
+@@ -383,6 +551,10 @@
+ bool vfio_gsp_open(VFIOPCIDevice *vdev, Error **errp)
+ {
+     if (!vdev->gsp_observer_path) {
++        if (vdev->gsp_refuse_path) {
++            error_setg(errp, "x-gsp-refuse requires x-gsp-observer");
++            return false;
++        }
+         return true;
+     }
+     if (!vdev->no_kvm_intx ||
+@@ -395,8 +567,17 @@
+         return false;
+     }
+     vdev->gsp_observer = gsp_observer_open(PCI_DEVICE(vdev), vdev->gsp_observer_path,
+-                                           VFIO_GSP_SECONDS, errp);
+-    return vdev->gsp_observer != NULL;
++                                           vdev->gsp_observer_seconds ? vdev->gsp_observer_seconds
++                                                                      : VFIO_GSP_SECONDS, errp);
++    if (!vdev->gsp_observer) {
++        return false;
++    }
++    if (vdev->gsp_refuse_path &&
++        !gsp_observer_refuse_load(vdev->gsp_observer, vdev->gsp_refuse_path, errp)) {
++        vfio_gsp_close(vdev);
++        return false;
++    }
++    return true;
+ }
+ 
+ void vfio_gsp_close(VFIOPCIDevice *vdev)
+--- /tmp/claude-0/-workspace-kayfabe/d616bc12-a382-4a26-869c-0f097966b6ab/scratchpad/w/base/qemu/gsp-observer.h	2026-10-09 16:02:53.401788295 +0200
++++ gsp-observer.h	2026-10-09 16:39:57.846452187 +0200
+@@ -25,6 +25,9 @@
+ /* Call BEFORE injecting an interrupt. */
+ void gsp_observer_irq(GspObserver *s);
+ void gsp_observer_reset(GspObserver *s);
++/* DEBUG ONLY, PERTURBING (2026-10-09 refusal ablation): read the rule file and turn the doorbell
++ * rewrite on. false with errp set on a bad file. */
++bool gsp_observer_refuse_load(GspObserver *s, const char *path, Error **errp);
+ 
+ /* ── vfio-pci integration (integration.patch) ── */
+ typedef struct VFIOPCIDevice VFIOPCIDevice;
+--- /tmp/claude-0/-workspace-kayfabe/d616bc12-a382-4a26-869c-0f097966b6ab/scratchpad/w/base/tests/core_test.c	2026-10-09 16:02:53.401788295 +0200
++++ core_test.c	2026-10-09 16:39:57.848075143 +0200
+@@ -36,6 +36,66 @@
+     header(f->ram+0x4000);message(f->ram+0x5000,0,72,UINT32_MAX);w32(f->ram+0x4010,1);
+ }
+ static void boot(VG_OBSERVER *v) {vg_mmio(v,0x110040,0x1000,4,1,1);vg_mmio(v,0x110044,0,4,1,2);}
++
++/* ---- refusal ablation tests ---- */
++typedef struct { unsigned n; uint32_t fn[8],key[8],newkey[8],seq[8]; int ok[8]; } RLOG;
++static int write_ram(void *opaque,uint64_t pa,const void *in,size_t n) {
++    FIXTURE *f=opaque;
++    if(pa<0x1000 || pa>=0xc000 || n>0xc000-pa) return 0;
++    memcpy(f->ram+pa,in,n);return 1;
++}
++static void rlog(void *o,const VG_RULE *r,uint32_t seq,uint32_t slot,uint32_t pages,int ok) {
++    RLOG *l=o;(void)slot;(void)pages;
++    if(l->n<8){l->fn[l->n]=r->fn;l->key[l->n]=r->key;l->newkey[l->n]=r->newkey;l->seq[l->n]=seq;l->ok[l->n]=ok;}
++    l->n++;
++}
++static void rpcmsg(unsigned char *p,uint32_t seq,uint32_t fn,uint32_t key,uint32_t keyoff) {
++    unsigned i;uint32_t sum=0;memset(p,0,4096);w32(p+36,seq);w32(p+40,1);
++    w32(p+48,0x03000000);w32(p+52,KFGT_RPC_SIGNATURE);w32(p+56,64);w32(p+60,fn);w32(p+64,UINT32_MAX);
++    w32(p+keyoff,key);
++    for(i=0;i<112;i+=4)sum^=kf_u32(p+i);
++    w32(p+32,sum);
++}
++static int msg_ok(const unsigned char *p) {unsigned i;uint32_t s=0;for(i=0;i<112;i+=4)s^=kf_u32(p+i);return s==0;}
++static void refuse_tests(void) {
++    VG_OBSERVER *v=calloc(1,sizeof(*v));FIXTURE *f=calloc(1,sizeof(*f));VG_REFUSE r;RLOG l;
++    memset(&l,0,sizeof(l));
++    assert(v&&f);fixture(f);vg_init(v,read_ram,emit,f);boot(v);assert(v->active);
++    vg_refuse_init(&r,write_ram,rlog,&l);r.write=write_ram;
++    assert(vg_refuse_default_key(76,0x20809004)==0x2080ff04);
++    assert(vg_refuse_default_key(103,0x402c)==0xfff0402c);
++    assert(!vg_refuse_add(&r,71,1,0)&&!vg_refuse_add(&r,76,5,5));
++    assert(vg_refuse_add(&r,76,0x20809004,0)&&vg_refuse_add(&r,103,0x402c,0x1234));
++    assert(!vg_refuse_add_field(&r,103,0x402c,0,1)); /* field 1 only for fn76 */
++    assert(vg_refuse_add_field(&r,76,0x1,0,1));      /* a 3rd rule: fn76 cmd 0x1 -> hObject=0 (NULL) */
++    /* no doorbell scan with an empty window */
++    vg_refuse_scan(v,&r);assert(r.rewritten==0);
++    /* queue: slot0 seq0 fn72 (fixture), add slot1 seq1 fn76 match, slot2 seq2 fn103 match; write=3, read=1 */
++    rpcmsg(f->ram+0x6000,1,76,0x20809004,88);
++    rpcmsg(f->ram+0x7000,2,103,0x402c,92);
++    /* geometry: 16384 bytes = 3 entries; slots 0..2 live at 0x5000,0x6000,0x7000 */
++    w32(f->ram+0x4010,0);w32(f->ram+0x4020,1);                /* write=0 (after slot2), read=1 */
++    vg_refuse_scan(v,&r);
++    assert(r.matched==2&&r.rewritten==2&&l.n==2);
++    assert(kf_u32(f->ram+0x6000+88)==0x2080ff04&&kf_u32(f->ram+0x7000+92)==0x1234);
++    assert(msg_ok(f->ram+0x6000)&&msg_ok(f->ram+0x7000));
++    assert(l.fn[0]==76&&l.seq[0]==1&&l.fn[1]==103&&l.seq[1]==2&&l.ok[0]&&l.ok[1]);
++    vg_refuse_scan(v,&r);assert(r.rewritten==2); /* seen: never twice */
++    /* field 1 (hObject): cmd 0x1 at slot with a nonzero hObject gets it zeroed, cmd stays */
++    rpcmsg(f->ram+0x5000,3,76,0x1,88);
++    {   /* poke hObject after the checksum, then fix the checksum (the test's own job, not the code under test) */
++        uint32_t old=kf_u32(f->ram+0x5000+84);
++        w32(f->ram+0x5000+84,0x77);
++        w32(f->ram+0x5000+32,kf_u32(f->ram+0x5000+32)^old^0x77);
++    }
++    assert(msg_ok(f->ram+0x5000));
++    w32(f->ram+0x4020,0);w32(f->ram+0x4010,1);           /* read=0 (GSP consumed through slot2), write=1 (slot0 new) */
++    vg_refuse_scan(v,&r);
++    assert(r.matched==3&&r.rewritten==3&&l.n==3);
++    assert(kf_u32(f->ram+0x5000+88)==0x1&&kf_u32(f->ram+0x5000+84)==0);
++    assert(msg_ok(f->ram+0x5000));
++    free(f);free(v);
++}
+ int main(void) {
+     VG_OBSERVER *v=calloc(1,sizeof(*v));FIXTURE *f=calloc(1,sizeof(*f));unsigned i;
+     assert(v&&f);fixture(f);vg_init(v,read_ram,emit,f);boot(v);
+@@ -63,5 +123,5 @@
+     /* High mailbox alone or unrelated MMIO cannot attach. */
+     fixture(f);vg_reset(v);vg_mmio(v,0x110044,0,4,1,8);assert(!v->active);
+     vg_mmio(v,0x1000,0x1000,4,1,9);assert(!v->active);
+-    free(f);free(v);puts("VFIO GSP bootstrap/queue core tests passed");return 0;
++    free(f);free(v);refuse_tests();puts("VFIO GSP bootstrap/queue core tests passed");return 0;
+ }

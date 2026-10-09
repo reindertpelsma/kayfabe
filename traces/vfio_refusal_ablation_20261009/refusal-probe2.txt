@@ -1,0 +1,25 @@
+# Probe boot 2 (2026-10-09): find a rewrite that the real GSP actually refuses, per family.
+# t1/boot1 showed the DEFAULT rewrite (flip bit15 of cmd's low word, same class) is INEFFECTIVE for a
+# GSS-legacy control (cmd & 0x8000 != 0: the firmware accepts ANY cmd id with that bit set, by design;
+# coordinator's finding from t1/boot1, 0x20809004 -> 0x2080ff04, 479/479 replies status 0x0).
+# This file tests, on DISTINCT original keys so one boot can diagnose all of them independently
+# (verify_rewrites.py checks each rule's reply status separately):
+#   candidate A for GSS-legacy (bit15 SET originals): CLEAR bit15, same low byte  -> still same "shape"
+#   candidate B for GSS-legacy: corrupt hObject (field `obj`) instead of cmd -- the lookup itself fails
+#   sanity: the DEFAULT rewrite (bit15 SET-flip; works when bit15 was already clear) on non-legacy keys
+#     (NV2080 class, low16 < 0x8000), a non-2080-class control, a display-class control, and one alloc
+#
+# GSS-legacy (cmd bit 0x8000 set) -- candidate A: clear bit15, keep the low byte
+76 0x20809004 0x20807f04
+76 0x2080852e 0x20807e2e
+# GSS-legacy -- candidate B: corrupt hObject to NULL instead of touching cmd at all
+76 0x2080b201 0 obj
+76 0x2080a618 0 obj
+# non-legacy NV2080 controls (low16 < 0x8000): default rewrite (flip bit15 on, same class+low byte)
+76 0x2080012f
+76 0x20800a3a
+# non-2080-class controls: default rewrite
+76 0x800106
+76 0x730285
+# alloc: default rewrite (invalid class, same low word)
+103 0x402c

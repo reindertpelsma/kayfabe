@@ -1,0 +1,23 @@
+{
+  "libos_stride": 32,
+  "libos_pa": 8,
+  "libos_size": 16,
+  "libos_kind": 24,
+  "libos_location": 25,
+  "sysmem": 1,
+  "contiguous": 1,
+  "mq_bytes": 32,
+  "mq_pa": 0,
+  "mq_pages": 8,
+  "mq_cmd": 16,
+  "mq_stat": 24,
+  "mailbox0": 1114176,
+  "mailbox1": 1114180,
+  "doorbell0": 1117184,
+  "doorbell_stride": 8,
+  "doorbells": 8,
+  "irq_clear": 1114116,
+  "irq_status": 1114120,
+  "source": "OGKM580.65.06",
+  "revision": "307159f2623d3bf45feb9177bd2da52ffbc5ddf9"
+}
