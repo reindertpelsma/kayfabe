@@ -122,6 +122,12 @@ accepts it). vfio-pci's behaviour is otherwise unchanged, and the observer's own
 
 Events file: `scripts/bench/trace-events-vfio-reference.txt` (the reference's boot3 list).
 
+★ 2026-10-09 (ABI 26, `V3_IRQ_SOURCE_TRACE.md` §1.3): for a kf3 boot use
+`scripts/bench/trace-events-kf3-reference.txt` — the same list plus `kf3_irq_raise`, one line per interrupt
+raise with its source and vector, written just before the `vfio_msi_interrupt` line it caused. The Windows
+launchers (`windows_broker.sh`, `win_vm.sh` for a kf3 boot) already pass it; `KF_TRACE_EVENTS` (the fast
+guest) is the caller's choice.
+
 **Fast guest** (one arm; PMC_BOOT_0 and the GSP registers added to the display range):
 
 ```sh

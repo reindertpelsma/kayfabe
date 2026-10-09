@@ -935,10 +935,11 @@ static void kf3_msi_user(void *opaque)
         /* ABI 26: the raises queued since the last wake, one event each, in front of the MSI line
          * they caused (raises that coalesce into one wake show as several events and one MSI).
          * Drained even when the event is off, so the ring never holds a stale backlog. */
-        uint32_t rvec, rsrc, rout;
-        while (kf3_irq_raise_next(s->h, &rvec, &rsrc, &rout)) {
+        uint64_t rec;
+        while ((rec = kf3_irq_raise_next(s->h)) != 0) {
             if (trace_event_get_state_backends(TRACE_KF3_IRQ_RAISE)) {
-                trace_kf3_irq_raise(s->tr_name, (int)rvec, (int)rsrc, (int)rout);
+                trace_kf3_irq_raise(s->tr_name, (int)(rec & 0xffff), (int)((rec >> 16) & 0xffff),
+                                    (int)((rec >> 32) & 3));
             }
         }
     }

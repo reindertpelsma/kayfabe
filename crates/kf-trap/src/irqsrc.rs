@@ -576,7 +576,7 @@ mod tests {
         }
         assert_eq!(got.len(), RING, "one ring's worth survives");
         assert_eq!(r.dropped(), 10);
-        assert_eq!(got[0].vector, 10 % 512, "the oldest kept is record 10");
+        assert_eq!(got[0].vector, 10, "the oldest kept is record 10");
         assert_eq!(got[RING - 1].vector, (n - 1) % 512);
     }
 

@@ -615,34 +615,21 @@ pub extern "C" fn kf3_trace_admit(h: *mut c_void, kind: u32, a: u64, b: u64, c: 
 }
 
 /// ★ ABI 26 (trace mode only; the main loop, the ONE consumer): pop the oldest queued interrupt-raise
-/// record — `vector` (the CPU-tree vector, or 512 for "any": a guest enable released pending
-/// vectors), `source` (`kf_trap::irqsrc::IrqSource::id`: class in the low byte, engine slot in the
-/// next) and `outcome` (1 message sent, 0 held, 2 out of range). Returns 1 and fills them, or 0 when
-/// the queue is empty, the mode is off or any pointer is null. The C device writes one
-/// `kf3_irq_raise` trace event per record just before the `vfio_msi_interrupt` of the same wake.
-///
-/// # Safety
-/// `vector`, `source` and `outcome` are writable `u32`s.
+/// record, packed in one word so no pointer crosses the seam: bit 63 set when a record is returned
+/// (0 = the queue is empty, the mode is off or the handle is bad); bits 0-15 the CPU-tree `vector`
+/// (512 = "any": a guest enable released pending vectors); bits 16-31 the `source`
+/// (`kf_trap::irqsrc::IrqSource::id`: class in the low byte, engine slot in the next); bits 32-33 the
+/// `outcome` (1 message sent, 0 held, 2 out of range). The C device writes one `kf3_irq_raise` trace
+/// event per record just before the `vfio_msi_interrupt` of the same wake.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn kf3_irq_raise_next(
-    h: *mut c_void,
-    vector: *mut u32,
-    source: *mut u32,
-    outcome: *mut u32,
-) -> u32 {
-    if vector.is_null() || source.is_null() || outcome.is_null() {
-        return 0;
-    }
+pub extern "C" fn kf3_irq_raise_next(h: *mut c_void) -> u64 {
     let Some(r) = dev(h).and_then(|d| d.irq_src.ring.pop()) else {
         return 0;
     };
-    // SAFETY: the three pointers are writable (caller contract) and were checked non-null.
-    unsafe {
-        *vector = r.vector;
-        *source = r.source;
-        *outcome = r.outcome;
-    }
-    1
+    1 << 63
+        | u64::from(r.outcome & 3) << 32
+        | u64::from(r.source & 0xffff) << 16
+        | u64::from(r.vector & 0xffff)
 }
 
 /// ★ ABI 24: the device name the trace records carry (the host GPU's PCI address unless

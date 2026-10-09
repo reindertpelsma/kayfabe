@@ -205,11 +205,11 @@ uint32_t kf3_trace_admit(void *h, uint32_t kind, uint64_t a, uint64_t b, uint64_
 void kf3_trace_name(void *h, char *buf, size_t len);
 void kf3_trace_report(void *h, char *buf, size_t len);
 /* ★ ABI 26, DIAGNOSTIC (trace mode only; main loop = the one consumer): pop the oldest queued
- * interrupt-raise record. 1 and *vector (CPU-tree vector, 512 = "any"), *source (class in the low
- * byte, engine slot in the next) and *outcome (1 sent, 0 held, 2 out of range); 0 when empty or the
- * mode is off. The device writes one kf3_irq_raise trace event per record in front of the
- * vfio_msi_interrupt line of the same wake. */
-uint32_t kf3_irq_raise_next(void *h, uint32_t *vector, uint32_t *source, uint32_t *outcome);
+ * interrupt-raise record, packed in one word. 0 = none (queue empty, mode off); else bit 63 set,
+ * bits 0-15 the CPU-tree vector (512 = "any"), bits 16-31 the source (class in the low byte, engine
+ * slot in the next), bits 32-33 the outcome (1 sent, 0 held, 2 out of range). The device writes one
+ * kf3_irq_raise trace event per record in front of the vfio_msi_interrupt line of the same wake. */
+uint64_t kf3_irq_raise_next(void *h);
 /* ★ ABI 10 (v3-display2's 9): the newest display frame, for the console's gfx_update (main thread);
  * -1 = none yet. */
 int32_t kf3_display_frame(void *h, Kf3Frame *out);

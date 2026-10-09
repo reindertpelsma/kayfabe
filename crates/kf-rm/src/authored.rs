@@ -261,7 +261,7 @@ pub const GSP_OWNED_STATIC_ROWS: [u16; 4] = [1, 61, 63, 64];
 /// FECS log — `NV2080_INTR_TYPE_*`), and the VF consumer that reads this control sets
 /// `intrVectorNonStall = intrVectorStall` itself (`intr_vgpu.c:84-85`), which is exactly the duplicate
 /// kayfabe's table shows (the host's reply echoes the stall vector in the non-stall field); `[measured]` the
-/// real kernel table has `-1` there for 59/60/62/73.
+/// real kernel table (RTX 4070, VFIO boot3, 2026-10-08) has `-1` there for 59/60/62/73.
 #[must_use]
 pub fn hw_shape_static_rows(rows: Vec<IntrTableEntry>) -> Vec<IntrTableEntry> {
     rows.into_iter()
