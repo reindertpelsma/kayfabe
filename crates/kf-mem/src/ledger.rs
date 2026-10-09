@@ -407,6 +407,20 @@ impl HostVas<'_> {
                 )
             })
     }
+
+    /// ★ 2026-10-09: unmap the ONE committed row `[va, va+len)` — every piece of it. A row that
+    /// straddles a reservation edge of the twin space was MAPPED as one map per `hDma`
+    /// (`kf_host::VaSpace::dma_pieces`; `[measured, run 225]` Windows' `0xb0000+0x80000` and
+    /// `0xff000+0x2000`), so the whole-mapping unmap keyed by `va` alone ([`MapTarget::unmap`])
+    /// would leave the later pieces mapped. `len` must be the length the row was mapped with.
+    ///
+    /// # Errors
+    /// The host's refusal of the first refused piece, by name.
+    pub fn unmap_row(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
+        self.rm
+            .unmap_row(self.space, va, len, defer)
+            .map_err(|e| format!("unmap {va:#x}+{len:#x}: {e:?}"))
+    }
 }
 
 impl MapTarget for HostVas<'_> {

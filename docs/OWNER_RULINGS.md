@@ -1020,6 +1020,16 @@ designated anyway. That prevents a guest-wide crash."*
 - ⊘ **Not covered, still held:** a refused UNMAP (a placement the guest dropped may still be live on
   the host) and a refused invalidate — those are kayfabe's own failures, not errors in the guest's
   tables. Confirm with the owner whether they should also complete.
+- ★ **Correction to the evidence below (2026-10-09, run 225, real GPU): the refused map was a kayfabe
+  defect, not an error in the guest's tables, and is now fixed in the host verbs.** The refusal
+  `Other(19313)` is `VA_STRADDLES_RESERVATION`: Windows maps rows that CROSS the 1 MiB edge of the
+  twin space's low reservation (`0xb0000+0x80000`, `0xff000+0x2000`), a FIXED
+  `NV_ESC_RM_MAP_MEMORY_DMA` names ONE `hDma`, and kayfabe refused instead of mapping. The GPU then
+  used the unmapped VA and faulted (host Xid 31, `FAULT_PTE` at `0xff000` / `0xb0000`); the Windows
+  driver died. `HostRm::map_kind`, `unmap_row` and `unmap_range` now SPLIT such a row at the
+  reservation edges (`VaSpace::dma_pieces`): one map per `hDma` of the same memory object, all or
+  nothing. "Cleared over absence" is therefore not the answer for these rows; they are mapped.
+  Unit-tested only; the hardware verdict is the next Windows run.
 - Evidence: run 223 (`inval=3138 cleared=3137 unreconciled=1`, walk refused leaves
   `refuse_mask=0x400`, then a TDR 0x117 after the guest polled `MMU_INVALIDATE`'s trigger bit
   forever); runs 221/190/181 refused one map (`0xb0000+0x80000: Other(19313)`).

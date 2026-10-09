@@ -112,9 +112,21 @@ const NV50_MEMORY_VIRTUAL: u32 = 0x50a0;
 const NVOS32_RESERVE_FLAGS: u32 = 0x0000_0010 | 0x0000_0400 | 0x0008_0000;
 
 impl VaSpace {
-    /// The `hDma` a mapping of `[va, va+len)` names: the reservation that contains it, else the
-    /// space's range. ⊘ A mapping straddling a reservation edge is refused by name (the guest's
-    /// RM never allocates across the split window, and `2^47` is the CPU-VA ceiling).
+    /// ★ **STATUS (2026-10-09): this is the ONE-handle form; a straddling row is no longer refused
+    /// by the map/unmap verbs — they split it with [`VaSpace::dma_pieces`].** `[measured, run 225,
+    /// real GPU, 2026-10-09]` Windows' guest maps rows that CROSS the 1 MiB edge of the low
+    /// reservation (`map 0xb0000+0x80000`, `map 0xff000+0x2000`); refusing them here
+    /// ([`VA_STRADDLES_RESERVATION`], `0x4B71` = 19313) left the VA unmapped on the twin, the GPU
+    /// used it and faulted (host Xid 31, `FAULT_PTE` at `0xff000` / `0xb0000`), and the Windows
+    /// driver died. A FIXED `NV_ESC_RM_MAP_MEMORY_DMA` names ONE `hDma`, so such a row is TWO maps
+    /// of the same memory object, one per `hDma` ([`VaSpace::dma_pieces`]).
+    ///
+    /// (Superseded text, kept for the callers that still need one handle:) The `hDma` a mapping of
+    /// `[va, va+len)` names: the reservation that contains it, else the space's range. ⊘ A mapping
+    /// straddling a reservation edge is refused by name here (the guest's RM never allocates across
+    /// the split window, and `2^47` is the CPU-VA ceiling) — [`HostRm::map_kind`],
+    /// [`HostRm::unmap_row`] and [`HostRm::unmap_range`] do NOT call this; they call
+    /// [`VaSpace::dma_pieces`].
     ///
     /// # Errors
     /// [`VA_STRADDLES_RESERVATION`]; [`VA_BELOW_TWIN_FLOOR`] and [`VA_ROW_WRAPS`]
@@ -132,6 +144,52 @@ impl VaSpace {
         Ok(self.range)
     }
 
+    /// ★ **STATUS (2026-10-09, LIVE): split a guest row at the reservation edges, one piece per
+    /// `hDma`.** Returns `(hDma, va, len)` pieces that are contiguous, in order, and cover exactly
+    /// `[va, va+len)`; each lies wholly inside ONE live guest reservation (that reservation's
+    /// handle) or wholly outside every reservation (the space's [`VaSpace::range`]). A row inside
+    /// one object is exactly one piece — `(dma_for(va, len), va, len)`, no behaviour change. A
+    /// zero-length row is the one-byte convention of [`guest_row_end`], returned as one piece of
+    /// length 0.
+    ///
+    /// Hostile input: `va` and `len` are untrusted. The arithmetic is checked, the loop makes
+    /// progress every turn and is bounded by [`VA_PIECES_MAX`] (`2 * reservations + 1`), so no
+    /// guest value sizes an allocation, and a huge or reversed row is refused by name before any
+    /// host call.
+    ///
+    /// # Errors
+    /// [`VA_BELOW_TWIN_FLOOR`] and [`VA_ROW_WRAPS`] ([`guest_row_end`]); [`VA_PIECE_UNPLACEABLE`]
+    /// for a piece no `hDma` can take (the space has no range object, or the bound is exceeded).
+    pub fn dma_pieces(&self, va: u64, len: u64) -> Result<Vec<(u32, u64, u64)>, RmError> {
+        let end = guest_row_end(va, len)?;
+        let mut out = Vec::with_capacity(VA_PIECES_MAX);
+        let mut cur = va;
+        while cur < end {
+            if out.len() >= VA_PIECES_MAX {
+                return Err(RmError::Other(VA_PIECE_UNPLACEABLE));
+            }
+            let live = || self.guest.iter().filter(|g| g.handle != 0 && g.lo < g.hi);
+            let (handle, stop) = match live().find(|g| g.lo <= cur && cur < g.hi) {
+                Some(g) => (g.handle, g.hi.min(end)),
+                None => {
+                    let next = live().filter(|g| g.lo > cur).map(|g| g.lo).min();
+                    (self.range, next.unwrap_or(end).min(end))
+                }
+            };
+            if handle == 0 || stop <= cur {
+                return Err(RmError::Other(VA_PIECE_UNPLACEABLE));
+            }
+            out.push((handle, cur, stop - cur));
+            cur = stop;
+        }
+        if len == 0
+            && let [(_, _, l)] = out.as_mut_slice()
+        {
+            *l = 0;
+        }
+        Ok(out)
+    }
+
     /// ★ v3-int: whether `[va, va+len)` lies wholly inside a LIVE guest reservation — i.e. host
     /// RM's own allocator can never place anything there (only the guest's FIXED maps land in it).
     #[must_use]
@@ -143,8 +201,19 @@ impl VaSpace {
     }
 }
 
-/// A FIXED map that straddles the edge of a [`GuestVaRange`].
+/// A FIXED map that straddles the edge of a [`GuestVaRange`] — refused by [`VaSpace::dma_for`] (the
+/// one-handle form) only. ★ STATUS (2026-10-09): [`HostRm::map_kind`] / [`HostRm::unmap_row`] /
+/// [`HostRm::unmap_range`] no longer refuse it; they split the row ([`VaSpace::dma_pieces`]).
+/// `[measured, run 225]` the refusal (`Other(19313)`) was the cause of Xid 31 at `0xff000` /
+/// `0xb0000`.
 pub const VA_STRADDLES_RESERVATION: u32 = 0x4B71;
+/// A piece of a guest row that no `hDma` can take ([`VaSpace::dma_pieces`]): the space has no range
+/// object, or the piece count exceeds [`VA_PIECES_MAX`] (cannot happen with well-formed
+/// reservations) — refused before any host call.
+pub const VA_PIECE_UNPLACEABLE: u32 = 0x4B79;
+/// The most pieces [`VaSpace::dma_pieces`] returns: a row alternates outside-gap / reservation, and
+/// [`VaSpace::guest`] holds three reservations, so at most `3 + 4 = 2 * 3 + 1`.
+pub const VA_PIECES_MAX: usize = 2 * 3 + 1;
 /// A guest row inside the NULL big page `[0, TWIN_VA_FLOOR)` — refused before any host call.
 pub const VA_BELOW_TWIN_FLOOR: u32 = 0x4B77;
 /// A guest row whose end does not fit in 64 bits (`va + len` wraps) — refused before any host call.
@@ -243,6 +312,119 @@ pub fn guest_row_end(va: u64, len: u64) -> Result<u64, RmError> {
     }
     va.checked_add(len.max(1))
         .ok_or(RmError::Other(VA_ROW_WRAPS))
+}
+
+/// The `NVOS47` flags of an unmap (`defer`: leave the TLB invalidate to the batch's one).
+const fn unmap_flags(defer: bool) -> u32 {
+    if defer {
+        NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE
+    } else {
+        0
+    }
+}
+
+/// The arguments of one FIXED map ([`DmaVerbs::map_one`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct MapPiece {
+    pub(crate) memory: u32,
+    pub(crate) offset: u64,
+    pub(crate) len: u64,
+    pub(crate) at: u64,
+    pub(crate) extra: u32,
+    pub(crate) shared: bool,
+    pub(crate) kind: u32,
+}
+
+/// The two host verbs a split row is built from — [`HostRm`] in production, a recorder in tests.
+pub(crate) trait DmaVerbs {
+    /// One FIXED `NV_ESC_RM_MAP_MEMORY_DMA` of `[offset, offset+len)` of `memory` at `at` in
+    /// `h_dma`, asserting its own placement ([`HostRm::raw_map_dma_slice`]).
+    fn map_one(&self, h_dma: u32, p: MapPiece) -> Result<u64, RmError>;
+    /// One `NV_ESC_RM_UNMAP_MEMORY_DMA` in `h_dma`: `size == 0` the whole mapping keyed by its exact
+    /// start `va`, else every mapping intersecting `[va, va+size)`.
+    fn unmap_one(&self, h_dma: u32, va: u64, size: u64, flags: u32) -> Result<(), RmError>;
+}
+
+impl DmaVerbs for HostRm {
+    fn map_one(&self, h_dma: u32, p: MapPiece) -> Result<u64, RmError> {
+        self.raw_map_dma_slice(
+            h_dma,
+            p.memory,
+            p.offset,
+            p.len,
+            Some(p.at),
+            p.extra,
+            p.shared,
+            p.kind,
+        )
+    }
+    fn unmap_one(&self, h_dma: u32, va: u64, size: u64, flags: u32) -> Result<(), RmError> {
+        self.raw_unmap_dma_range(h_dma, va, size, flags)
+    }
+}
+
+/// ★ **Map a FIXED row as one map per `hDma` it touches, all or nothing** ([`HostRm::map_kind`]).
+/// `row.offset` is the offset of `row.at` inside the memory object; piece `i` maps
+/// `row.offset + (piece.va - row.at)`. A row inside one object is ONE call with the row's own
+/// arguments (no behaviour change). On a refused piece the pieces already mapped are unmapped
+/// again (by exact start, with `rollback_flags`, newest first) and the piece's error returned.
+pub(crate) fn map_pieces<V: DmaVerbs + ?Sized>(
+    v: &V,
+    space: VaSpace,
+    row: MapPiece,
+    rollback_flags: u32,
+) -> Result<u64, RmError> {
+    let pieces = space.dma_pieces(row.at, row.len)?;
+    if let [(h, _, len)] = pieces.as_slice() {
+        return v.map_one(*h, MapPiece { len: *len, ..row });
+    }
+    // Checked once, so no piece offset below can overflow (`piece.va - at < len`).
+    row.offset
+        .checked_add(row.len)
+        .ok_or(RmError::Other(VA_ROW_WRAPS))?;
+    for (i, &(h, va, len)) in pieces.iter().enumerate() {
+        let piece = MapPiece {
+            offset: row.offset + (va - row.at),
+            len,
+            at: va,
+            ..row
+        };
+        if let Err(e) = v.map_one(h, piece) {
+            for &(h0, va0, _) in pieces[..i].iter().rev() {
+                if let Err(r) = v.unmap_one(h0, va0, 0, rollback_flags) {
+                    eprintln!(
+                        "kf-host: split map {:#x}+{:#x}: piece {va:#x} refused ({e:?}); rolling back piece {va0:#x} was refused too ({r:?})",
+                        row.at, row.len
+                    );
+                }
+            }
+            return Err(e);
+        }
+    }
+    Ok(row.at)
+}
+
+/// Unmap `[va, va+len)` piece by piece. `by_range == false`: the whole-mapping unmap keyed by each
+/// piece's exact start ([`HostRm::unmap_row`]); `true`: a range unmap over each piece
+/// ([`HostRm::unmap_range`]). Every piece is attempted; the first refusal is returned.
+pub(crate) fn unmap_pieces<V: DmaVerbs + ?Sized>(
+    v: &V,
+    space: VaSpace,
+    va: u64,
+    len: u64,
+    by_range: bool,
+    flags: u32,
+) -> Result<(), RmError> {
+    let mut first = Ok(());
+    for (h, pva, plen) in space.dma_pieces(va, len)? {
+        let size = if by_range { plen } else { 0 };
+        if let Err(e) = v.unmap_one(h, pva, size, flags)
+            && first.is_ok()
+        {
+            first = Err(e);
+        }
+    }
+    first
 }
 
 /// One born host channel.
@@ -665,8 +847,18 @@ impl HostRm {
     /// ([`MapPerm::nvos46_flags`]). A read-only guest mapping is read-only on the host, so a GPU
     /// write through it FAULTS on the twin instead of landing.
     ///
+    /// ★ **STATUS (2026-10-09, LIVE): a FIXED row that straddles a reservation edge is SPLIT, not
+    /// refused.** `[measured, run 225]` Windows maps `0xb0000+0x80000` and `0xff000+0x2000`, across
+    /// the 1 MiB edge of the low reservation; the refusal (`VA_STRADDLES_RESERVATION`) left the VA
+    /// unmapped and the GPU faulted on it (Xid 31). A FIXED `NV_ESC_RM_MAP_MEMORY_DMA` names one
+    /// `hDma`, so the row becomes one map per piece of [`VaSpace::dma_pieces`], each of the SAME
+    /// memory object at `offset + (piece.va - at)`. ALL OR NOTHING: if a piece is refused, the pieces
+    /// already mapped are unmapped again (with this call's `defer`) and that piece's error is
+    /// returned. Each piece asserts its own placement ([`HostRm::raw_map_dma_slice`]).
+    ///
     /// # Errors
-    /// As [`HostRm::map`].
+    /// As [`HostRm::map`]; plus [`VA_BELOW_TWIN_FLOOR`], [`VA_ROW_WRAPS`], [`VA_PIECE_UNPLACEABLE`]
+    /// before any host call.
     #[allow(clippy::too_many_arguments)]
     pub fn map_kind(
         &self,
@@ -692,20 +884,34 @@ impl HostRm {
                 0
             };
         let extra = extra | perm.nvos46_flags();
-        let dma = match at {
-            Some(a) => space.dma_for(a, len)?,
-            None => space.range,
-        };
-        self.raw_map_dma_slice(
-            dma,
-            memory,
-            offset,
-            len,
-            at,
-            extra,
-            backing == MapBacking::SharedSlice,
-            u32::from(kind),
-        )
+        let shared = backing == MapBacking::SharedSlice;
+        match at {
+            // ★ 2026-10-09: a FIXED map is one map per `hDma` it touches ([`map_pieces`]).
+            Some(a) => map_pieces(
+                self,
+                space,
+                MapPiece {
+                    memory,
+                    offset,
+                    len,
+                    at: a,
+                    extra,
+                    shared,
+                    kind: u32::from(kind),
+                },
+                unmap_flags(defer),
+            ),
+            None => self.raw_map_dma_slice(
+                space.range,
+                memory,
+                offset,
+                len,
+                None,
+                extra,
+                shared,
+                u32::from(kind),
+            ),
+        }
     }
 
     /// ★ Map ALL of `memory` (`len` bytes) into `space` at an address RM chooses, and return it —
@@ -773,12 +979,21 @@ impl HostRm {
     /// # Errors
     /// The host's status.
     pub fn unmap(&self, space: VaSpace, va: u64, defer: bool) -> Result<(), RmError> {
-        let flags = if defer {
-            NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE
-        } else {
-            0
-        };
-        self.raw_unmap_dma_flags(space.dma_for(va, 1)?, va, flags)
+        self.raw_unmap_dma_flags(space.dma_for(va, 1)?, va, unmap_flags(defer))
+    }
+
+    /// ★ 2026-10-09: unmap the ONE row `[va, va+len)` that a [`HostRm::map`] placed — every piece of
+    /// it ([`VaSpace::dma_pieces`]), each by its exact start (the whole-mapping unmap, which every
+    /// host driver carries). A row inside one object is exactly [`HostRm::unmap`]. Every piece is
+    /// attempted even if one is refused; the first refusal is returned. `len` must be the length the
+    /// row was MAPPED with (a smaller one leaves the later pieces mapped; use
+    /// [`HostRm::unmap_range`] for a sub-range).
+    ///
+    /// # Errors
+    /// The host's status for the first refused piece; [`VA_BELOW_TWIN_FLOOR`], [`VA_ROW_WRAPS`],
+    /// [`VA_PIECE_UNPLACEABLE`] before any host call.
+    pub fn unmap_row(&self, space: VaSpace, va: u64, len: u64, defer: bool) -> Result<(), RmError> {
+        unmap_pieces(self, space, va, len, false, unmap_flags(defer))
     }
 
     /// ★★★ Unmap EVERY mapping of ours in `space` that intersects `[va, va+len)` — one host call
@@ -789,8 +1004,14 @@ impl HostRm {
     /// ⊘ The range must be one the caller OWNS whole: RM removes whatever of this client's
     /// mappings lie in it, so a range reaching into a window or a ring would take it down too.
     ///
+    /// ★ STATUS (2026-10-09): a range that straddles a reservation edge is no longer refused
+    /// (`VA_STRADDLES_RESERVATION`, before any host call); it is unmapped piece by piece
+    /// ([`VaSpace::dma_pieces`]), one range unmap per `hDma`. Every piece is attempted even if one
+    /// is refused; the first refusal is returned.
+    ///
     /// # Errors
-    /// [`VA_STRADDLES_RESERVATION`] before any host call; else the host's status.
+    /// The host's status for the first refused piece; [`VA_BELOW_TWIN_FLOOR`], [`VA_ROW_WRAPS`],
+    /// [`VA_PIECE_UNPLACEABLE`] before any host call.
     pub fn unmap_range(
         &self,
         space: VaSpace,
@@ -801,12 +1022,7 @@ impl HostRm {
         if len == 0 {
             return Err(RmError::NoMemory);
         }
-        let flags = if defer {
-            NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE
-        } else {
-            0
-        };
-        self.raw_unmap_dma_range(space.dma_for(va, len)?, va, len, flags)
+        unmap_pieces(self, space, va, len, true, unmap_flags(defer))
     }
 
     /// ★★★ **Map N scattered pieces of a file at ONE VA-contiguous range, in O(1) host RM calls**
@@ -823,6 +1039,10 @@ impl HostRm {
     /// misplaced one torn down by [`HostRm::map`]'s placement assertion, and the object is freed).
     /// Mapped as a [`MapBacking::SharedSlice`] (4 KiB pinned): a stitched object is not physically
     /// contiguous at any bigger page.
+    ///
+    /// ★ STATUS (2026-10-09): the map is [`HostRm::map_kind`]'s, so a batch whose VA range straddles
+    /// a reservation edge is mapped as one map per `hDma` of the ONE stitched object (all or
+    /// nothing, rolled back by `map_kind`) — it is no longer refused with `VA_STRADDLES_RESERVATION`.
     ///
     /// # Errors
     /// The stitch (by name), the descriptor or the map — whichever refused.
@@ -1841,6 +2061,7 @@ mod twin_va_start_tests {
             VA_STRADDLES_RESERVATION,
             VA_BELOW_TWIN_FLOOR,
             VA_ROW_WRAPS,
+            super::VA_PIECE_UNPLACEABLE,
         ];
         let mut sorted = codes.to_vec();
         sorted.sort_unstable();
@@ -1848,6 +2069,9 @@ mod twin_va_start_tests {
         assert_eq!(sorted.len(), codes.len());
     }
 
+    /// ★ STATUS (2026-10-09): this pins [`VaSpace::dma_for`], the ONE-handle form, only. The map and
+    /// unmap verbs no longer refuse a straddling row; they split it (`split_row_tests`).
+    ///
     /// ★ Hostile input: a row in the NULL big page (VA 0 included), a row whose end wraps, and a row
     /// straddling the low reservation's edge are each refused BY NAME before any host call — a
     /// guest's page tables can never widen or move the twin's space.
@@ -1875,6 +2099,560 @@ mod twin_va_start_tests {
         );
         // A zero-length row is one byte (the pre-existing convention).
         assert_eq!(guest_row_end(0x1_0000, 0), Ok(0x1_0001));
+    }
+}
+
+/// ★ 2026-10-09 — a guest row that straddles a reservation edge is SPLIT into one piece per `hDma`
+/// (`[measured, run 225]` Windows' `0xb0000+0x80000` and `0xff000+0x2000` across the 1 MiB edge of the
+/// low reservation; the old refusal let the GPU fault on the unmapped VA, Xid 31).
+#[cfg(test)]
+mod split_row_tests {
+    use super::{
+        DmaVerbs, GUEST_VA_RANGES, GuestVaRange, HOST_DEFAULT_VA_START, HOST_HOLE_LO, MapPiece,
+        TWIN_VA_FLOOR, VA_BELOW_TWIN_FLOOR, VA_PIECE_UNPLACEABLE, VA_PIECES_MAX, VA_ROW_WRAPS,
+        VaSpace, map_pieces, unmap_pieces,
+    };
+    use crate::RmError;
+    use std::cell::RefCell;
+
+    const LOW: u32 = 0x102;
+    const RANGE: u32 = 2;
+
+    /// The production layout of a Windows twin: slots 0-1 the guest ranges, slot 2 the low range.
+    fn floor_space() -> VaSpace {
+        let mut guest = [GuestVaRange::default(); 3];
+        for (i, (l, h)) in GUEST_VA_RANGES
+            .iter()
+            .copied()
+            .chain([(TWIN_VA_FLOOR, HOST_DEFAULT_VA_START)])
+            .enumerate()
+        {
+            guest[i] = GuestVaRange {
+                handle: 0x100 + u32::try_from(i).expect("small"),
+                lo: l,
+                hi: h,
+            };
+        }
+        VaSpace {
+            space: 1,
+            range: RANGE,
+            guest,
+        }
+    }
+
+    fn custom(res: &[(u32, u64, u64)]) -> VaSpace {
+        let mut guest = [GuestVaRange::default(); 3];
+        for (slot, &(handle, lo, hi)) in guest.iter_mut().zip(res) {
+            *slot = GuestVaRange { handle, lo, hi };
+        }
+        VaSpace {
+            space: 1,
+            range: RANGE,
+            guest,
+        }
+    }
+
+    fn named(code: u32) -> Result<Vec<(u32, u64, u64)>, RmError> {
+        Err(RmError::Other(code))
+    }
+
+    #[test]
+    fn a_row_inside_one_reservation_is_one_piece() {
+        let s = floor_space();
+        assert_eq!(
+            s.dma_pieces(0x1_0000, 0x6000),
+            Ok(vec![(LOW, 0x1_0000, 0x6000)])
+        );
+        assert_eq!(
+            s.dma_pieces(0x1_2000_2000, 0x1_0000),
+            Ok(vec![(0x100, 0x1_2000_2000, 0x1_0000)])
+        );
+        assert_eq!(
+            s.dma_pieces(0x400_0000, 0x1_0000),
+            Ok(vec![(RANGE, 0x400_0000, 0x1_0000)])
+        );
+        // The whole low reservation, exactly.
+        assert_eq!(
+            s.dma_pieces(TWIN_VA_FLOOR, HOST_DEFAULT_VA_START - TWIN_VA_FLOOR),
+            Ok(vec![(
+                LOW,
+                TWIN_VA_FLOOR,
+                HOST_DEFAULT_VA_START - TWIN_VA_FLOOR
+            )])
+        );
+    }
+
+    /// ★ The two rows run 225 measured Windows mapping.
+    #[test]
+    fn the_rows_windows_mapped_across_the_1_mib_edge_split_in_two() {
+        let s = floor_space();
+        assert_eq!(
+            s.dma_pieces(0xb_0000, 0x8_0000),
+            Ok(vec![
+                (LOW, 0xb_0000, 0x5_0000),
+                (RANGE, 0x10_0000, 0x3_0000)
+            ])
+        );
+        assert_eq!(
+            s.dma_pieces(0xf_f000, 0x2000),
+            Ok(vec![(LOW, 0xf_f000, 0x1000), (RANGE, 0x10_0000, 0x1000)])
+        );
+        // One byte either side of the edge.
+        assert_eq!(
+            s.dma_pieces(0xf_ffff, 2),
+            Ok(vec![(LOW, 0xf_ffff, 1), (RANGE, 0x10_0000, 1)])
+        );
+    }
+
+    #[test]
+    fn a_row_ending_or_starting_exactly_on_an_edge_is_one_piece() {
+        let s = floor_space();
+        assert_eq!(
+            s.dma_pieces(0xf_0000, 0x1_0000),
+            Ok(vec![(LOW, 0xf_0000, 0x1_0000)]),
+            "ends exactly on the edge"
+        );
+        assert_eq!(
+            s.dma_pieces(0x10_0000, 0x1000),
+            Ok(vec![(RANGE, 0x10_0000, 0x1000)]),
+            "starts exactly on the edge"
+        );
+        // Upper edge of a high reservation: [1 TiB, 2^47).
+        assert_eq!(
+            s.dma_pieces((1 << 47) - 0x1000, 0x1000),
+            Ok(vec![(0x101, (1 << 47) - 0x1000, 0x1000)])
+        );
+        assert_eq!(
+            s.dma_pieces((1 << 47) - 0x1000, 0x2000),
+            Ok(vec![
+                (0x101, (1 << 47) - 0x1000, 0x1000),
+                (RANGE, 1 << 47, 0x1000)
+            ])
+        );
+    }
+
+    #[test]
+    fn below_the_floor_wrap_and_zero_length_keep_their_names() {
+        let s = floor_space();
+        for va in [0, 0x1000, 0xf000, 0xffff] {
+            assert_eq!(
+                s.dma_pieces(va, 0x1000),
+                named(VA_BELOW_TWIN_FLOOR),
+                "{va:#x}"
+            );
+        }
+        // A row starting below the floor and reaching past it is still refused whole.
+        assert_eq!(s.dma_pieces(0xf000, 0x10_0000), named(VA_BELOW_TWIN_FLOOR));
+        assert_eq!(s.dma_pieces(u64::MAX - 0xfff, 0x2000), named(VA_ROW_WRAPS));
+        assert_eq!(s.dma_pieces(0x1_0000, u64::MAX), named(VA_ROW_WRAPS));
+        assert_eq!(s.dma_pieces(u64::MAX, u64::MAX), named(VA_ROW_WRAPS));
+        assert_eq!(s.dma_pieces(u64::MAX, 1), named(VA_ROW_WRAPS));
+        // A zero-length row is the one-byte convention, as ONE zero-length piece.
+        assert_eq!(s.dma_pieces(0xf_ffff, 0), Ok(vec![(LOW, 0xf_ffff, 0)]));
+    }
+
+    #[test]
+    fn a_row_spanning_a_reservation_entirely_has_three_pieces() {
+        let s = floor_space();
+        // The range below 4.5 GiB, ALL of the first guest range, then the host hole's first page.
+        let (lo, hi) = GUEST_VA_RANGES[0];
+        let va = lo - 0x2000;
+        let len = (HOST_HOLE_LO + 0x1000) - va;
+        assert_eq!(hi, HOST_HOLE_LO);
+        assert_eq!(
+            s.dma_pieces(va, len),
+            Ok(vec![
+                (RANGE, va, 0x2000),
+                (0x100, lo, hi - lo),
+                (RANGE, HOST_HOLE_LO, 0x1000)
+            ])
+        );
+        let c = custom(&[(0x10, 0x20_000, 0x30_000)]);
+        assert_eq!(
+            c.dma_pieces(0x10_000, 0x30_000),
+            Ok(vec![
+                (RANGE, 0x10_000, 0x10_000),
+                (0x10, 0x20_000, 0x10_000),
+                (RANGE, 0x30_000, 0x10_000)
+            ])
+        );
+    }
+
+    #[test]
+    fn two_adjacent_reservations_split_at_their_shared_edge() {
+        let s = custom(&[(0x10, 0x1_0000, 0x2_0000), (0x11, 0x2_0000, 0x3_0000)]);
+        assert_eq!(
+            s.dma_pieces(0x1_f000, 0x2000),
+            Ok(vec![(0x10, 0x1_f000, 0x1000), (0x11, 0x2_0000, 0x1000)])
+        );
+        assert_eq!(
+            s.dma_pieces(0x1_0000, 0x2_0000),
+            Ok(vec![(0x10, 0x1_0000, 0x1_0000), (0x11, 0x2_0000, 0x1_0000)])
+        );
+        // Out of order in the array: same answer.
+        let r = custom(&[(0x11, 0x2_0000, 0x3_0000), (0x10, 0x1_0000, 0x2_0000)]);
+        assert_eq!(
+            r.dma_pieces(0x1_f000, 0x2000),
+            s.dma_pieces(0x1_f000, 0x2000)
+        );
+    }
+
+    #[test]
+    fn an_unreserved_slot_is_the_range_and_an_absent_range_is_refused_by_name() {
+        // Slot handle 0 = "not reserved": rows there go through the range, with no split.
+        let s = custom(&[(0, 0x1_0000, 0x10_0000)]);
+        assert_eq!(
+            s.dma_pieces(0xb_0000, 0x8_0000),
+            Ok(vec![(RANGE, 0xb_0000, 0x8_0000)])
+        );
+        // A space with no range object cannot place the outside piece, and says so.
+        let mut z = floor_space();
+        z.range = 0;
+        assert_eq!(
+            z.dma_pieces(0xb_0000, 0x8_0000),
+            named(VA_PIECE_UNPLACEABLE)
+        );
+        assert_eq!(
+            z.dma_pieces(0xb_0000, 0x1000),
+            Ok(vec![(LOW, 0xb_0000, 0x1000)])
+        );
+    }
+
+    #[test]
+    fn the_piece_count_is_bounded_by_the_reservations() {
+        // Three reservations separated by gaps, a row over all of them: 4 gaps + 3 = 7 pieces.
+        let s = custom(&[
+            (0x10, 0x2_0000, 0x3_0000),
+            (0x11, 0x4_0000, 0x5_0000),
+            (0x12, 0x6_0000, 0x7_0000),
+        ]);
+        let p = s.dma_pieces(0x1_0000, 0x7_0000).expect("pieces");
+        assert_eq!(p.len(), VA_PIECES_MAX);
+        assert_eq!(p.iter().map(|x| x.2).sum::<u64>(), 0x7_0000);
+    }
+
+    /// Deterministic xorshift, so the property is reproducible.
+    struct Rng(u64);
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            self.0
+        }
+    }
+
+    /// ★ Property: for ANY (va, len), `dma_pieces` either names a refusal or returns pieces that
+    /// start at `va`, are contiguous and in order, sum to exactly `len`, never exceed the row, number
+    /// at most [`VA_PIECES_MAX`], and each lies wholly inside the reservation it names or wholly
+    /// outside every reservation (then names the range). A one-piece answer is `dma_for`'s.
+    #[test]
+    fn pieces_always_partition_the_row() {
+        let spaces = [
+            floor_space(),
+            custom(&[
+                (0x10, 0x2_0000, 0x3_0000),
+                (0x11, 0x3_0000, 0x5_0000),
+                (0x12, 0x9_0000, 0xa_0000),
+            ]),
+            custom(&[]),
+        ];
+        let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
+        // Edges of every space, plus extremes: rows are placed around them.
+        let mut anchors: Vec<u64> = vec![0, 1, 0xffff, 0x1_0000, u64::MAX, u64::MAX - 1, 1 << 47];
+        for s in &spaces {
+            for g in s.guest.iter().filter(|g| g.handle != 0) {
+                anchors.extend([g.lo, g.hi]);
+            }
+        }
+        let mut ok = 0u32;
+        let mut refused = 0u32;
+        for s in &spaces {
+            for _ in 0..20_000 {
+                let a = anchors[(rng.next() % anchors.len() as u64) as usize];
+                let va = match rng.next() % 3 {
+                    0 => a,
+                    1 => a.wrapping_sub(rng.next() % 0x3_0000),
+                    _ => a.wrapping_add(rng.next() % 0x3_0000),
+                };
+                let len = match rng.next() % 5 {
+                    0 => rng.next(),
+                    1 => rng.next() % 0x10,
+                    2 => rng.next() % 0x2_0000,
+                    3 => u64::MAX - rng.next() % 0x1000,
+                    _ => rng.next() % 0x1000_0000,
+                };
+                match s.dma_pieces(va, len) {
+                    Err(RmError::Other(c)) => {
+                        assert!(
+                            [VA_BELOW_TWIN_FLOOR, VA_ROW_WRAPS, VA_PIECE_UNPLACEABLE].contains(&c),
+                            "{va:#x}+{len:#x}: unexpected refusal {c:#x}"
+                        );
+                        refused += 1;
+                    }
+                    Err(e) => panic!("{va:#x}+{len:#x}: unexpected error {e:?}"),
+                    Ok(p) => {
+                        ok += 1;
+                        assert!(!p.is_empty() && p.len() <= VA_PIECES_MAX);
+                        assert!(va >= TWIN_VA_FLOOR && va.checked_add(len.max(1)).is_some());
+                        let mut cur = va;
+                        for &(h, pva, plen) in &p {
+                            assert_eq!(pva, cur, "contiguous, in order");
+                            let pend = pva.checked_add(plen).expect("no wrap");
+                            let inside = s.guest.iter().find(|g| {
+                                g.handle == h && g.handle != 0 && g.lo <= pva && pend <= g.hi
+                            });
+                            let outside = h == s.range
+                                && s.guest
+                                    .iter()
+                                    .filter(|g| g.handle != 0)
+                                    .all(|g| pend <= g.lo || g.hi <= pva);
+                            assert!(
+                                inside.is_some() || outside,
+                                "{va:#x}+{len:#x}: piece {h:#x} {pva:#x}+{plen:#x} is in no single object"
+                            );
+                            cur = pend;
+                        }
+                        let total: u64 = p.iter().map(|x| x.2).sum();
+                        assert_eq!(total, if len == 0 { 0 } else { len });
+                        if let [one] = p.as_slice()
+                            && len != 0
+                        {
+                            assert_eq!(s.dma_for(va, len), Ok(one.0), "one piece is dma_for's");
+                        }
+                    }
+                }
+            }
+        }
+        assert!(
+            ok > 1000 && refused > 1000,
+            "both arms exercised: {ok}/{refused}"
+        );
+    }
+
+    /// Records every host verb and refuses the n-th map / n-th unmap on request.
+    #[derive(Default)]
+    struct Fake {
+        log: RefCell<Vec<String>>,
+        maps: RefCell<u32>,
+        unmaps: RefCell<u32>,
+        fail_map_at: Option<u32>,
+        fail_unmap_at: Option<u32>,
+    }
+
+    impl DmaVerbs for Fake {
+        fn map_one(&self, h: u32, p: MapPiece) -> Result<u64, RmError> {
+            let n = *self.maps.borrow();
+            *self.maps.borrow_mut() += 1;
+            if self.fail_map_at == Some(n) {
+                self.log.borrow_mut().push(format!("map {h:#x} REFUSED"));
+                return Err(RmError::Other(0x77));
+            }
+            self.log.borrow_mut().push(format!(
+                "map {h:#x} mem {:#x} off {:#x} len {:#x} at {:#x} x{:#x} s{} k{}",
+                p.memory, p.offset, p.len, p.at, p.extra, p.shared as u8, p.kind
+            ));
+            Ok(p.at)
+        }
+        fn unmap_one(&self, h: u32, va: u64, size: u64, flags: u32) -> Result<(), RmError> {
+            let n = *self.unmaps.borrow();
+            *self.unmaps.borrow_mut() += 1;
+            self.log
+                .borrow_mut()
+                .push(format!("unmap {h:#x} {va:#x} size {size:#x} f{flags:#x}"));
+            if self.fail_unmap_at == Some(n) {
+                return Err(RmError::Other(0x78));
+            }
+            Ok(())
+        }
+    }
+
+    fn row(offset: u64, len: u64, at: u64) -> MapPiece {
+        MapPiece {
+            memory: 0xAA,
+            offset,
+            len,
+            at,
+            extra: 0x40,
+            shared: true,
+            kind: 6,
+        }
+    }
+
+    #[test]
+    fn a_row_inside_one_object_is_one_unchanged_map() {
+        let f = Fake::default();
+        let s = floor_space();
+        assert_eq!(
+            map_pieces(&f, s, row(0x5000, 0x6000, 0x1_0000), 8),
+            Ok(0x1_0000)
+        );
+        assert_eq!(
+            *f.log.borrow(),
+            ["map 0x102 mem 0xaa off 0x5000 len 0x6000 at 0x10000 x0x40 s1 k6"]
+        );
+    }
+
+    #[test]
+    fn a_straddling_map_issues_two_maps_of_the_same_object_at_the_right_offsets() {
+        let f = Fake::default();
+        let s = floor_space();
+        assert_eq!(
+            map_pieces(&f, s, row(0x5000, 0x8_0000, 0xb_0000), 8),
+            Ok(0xb_0000)
+        );
+        assert_eq!(
+            *f.log.borrow(),
+            [
+                "map 0x102 mem 0xaa off 0x5000 len 0x50000 at 0xb0000 x0x40 s1 k6",
+                "map 0x2 mem 0xaa off 0x55000 len 0x30000 at 0x100000 x0x40 s1 k6",
+            ]
+        );
+        let g = Fake::default();
+        assert_eq!(map_pieces(&g, s, row(0, 0x2000, 0xf_f000), 8), Ok(0xf_f000));
+        assert_eq!(
+            *g.log.borrow(),
+            [
+                "map 0x102 mem 0xaa off 0x0 len 0x1000 at 0xff000 x0x40 s1 k6",
+                "map 0x2 mem 0xaa off 0x1000 len 0x1000 at 0x100000 x0x40 s1 k6",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_refused_second_map_rolls_the_first_back() {
+        let f = Fake {
+            fail_map_at: Some(1),
+            ..Fake::default()
+        };
+        let s = floor_space();
+        assert_eq!(
+            map_pieces(&f, s, row(0, 0x8_0000, 0xb_0000), 0x2),
+            Err(RmError::Other(0x77)),
+            "the refused piece's own error"
+        );
+        assert_eq!(
+            *f.log.borrow(),
+            [
+                "map 0x102 mem 0xaa off 0x0 len 0x50000 at 0xb0000 x0x40 s1 k6",
+                "map 0x2 REFUSED",
+                // Exact-start whole-mapping unmap of the piece that landed, with the map's defer flag.
+                "unmap 0x102 0xb0000 size 0x0 f0x2",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_refused_first_map_leaves_nothing_to_roll_back() {
+        let f = Fake {
+            fail_map_at: Some(0),
+            ..Fake::default()
+        };
+        assert_eq!(
+            map_pieces(&f, floor_space(), row(0, 0x8_0000, 0xb_0000), 0),
+            Err(RmError::Other(0x77))
+        );
+        assert_eq!(*f.log.borrow(), ["map 0x102 REFUSED"]);
+    }
+
+    #[test]
+    fn a_refused_third_piece_rolls_back_the_two_before_it_newest_first() {
+        let s = custom(&[(0x10, 0x2_0000, 0x3_0000)]);
+        let f = Fake {
+            fail_map_at: Some(2),
+            ..Fake::default()
+        };
+        assert_eq!(
+            map_pieces(&f, s, row(0, 0x3_0000, 0x1_0000), 0),
+            Err(RmError::Other(0x77))
+        );
+        let log = f.log.borrow();
+        assert_eq!(log.len(), 5);
+        assert_eq!(log[3], "unmap 0x10 0x20000 size 0x0 f0x0");
+        assert_eq!(log[4], "unmap 0x2 0x10000 size 0x0 f0x0");
+    }
+
+    #[test]
+    fn a_failing_rollback_still_returns_the_maps_error() {
+        let f = Fake {
+            fail_map_at: Some(1),
+            fail_unmap_at: Some(0),
+            ..Fake::default()
+        };
+        assert_eq!(
+            map_pieces(&f, floor_space(), row(0, 0x8_0000, 0xb_0000), 0),
+            Err(RmError::Other(0x77))
+        );
+    }
+
+    #[test]
+    fn hostile_rows_are_refused_before_any_host_call() {
+        let f = Fake::default();
+        let s = floor_space();
+        for (r, code) in [
+            (row(0, 0x1000, 0xf000), VA_BELOW_TWIN_FLOOR),
+            (row(0, u64::MAX, 0x1_0000), VA_ROW_WRAPS),
+            (row(0, 0x2000, u64::MAX - 0xfff), VA_ROW_WRAPS),
+            // A memory offset that overflows once a straddling row is split.
+            (row(u64::MAX - 0x10, 0x8_0000, 0xb_0000), VA_ROW_WRAPS),
+        ] {
+            assert_eq!(map_pieces(&f, s, r, 0), Err(RmError::Other(code)), "{r:?}");
+        }
+        assert_eq!(
+            unmap_pieces(&f, s, 0xf000, 0x1000, false, 0),
+            Err(RmError::Other(VA_BELOW_TWIN_FLOOR))
+        );
+        assert_eq!(
+            unmap_pieces(&f, s, 0x1_0000, u64::MAX, true, 0),
+            Err(RmError::Other(VA_ROW_WRAPS))
+        );
+        assert!(f.log.borrow().is_empty());
+    }
+
+    #[test]
+    fn unmapping_a_straddling_row_unmaps_every_piece() {
+        let s = floor_space();
+        let f = Fake::default();
+        assert_eq!(unmap_pieces(&f, s, 0xb_0000, 0x8_0000, false, 0x2), Ok(()));
+        assert_eq!(
+            *f.log.borrow(),
+            [
+                "unmap 0x102 0xb0000 size 0x0 f0x2",
+                "unmap 0x2 0x100000 size 0x0 f0x2"
+            ],
+            "whole-mapping unmap keyed by each piece's start"
+        );
+        // A sub-range of the same placement: one range unmap per hDma, sized to the piece.
+        let g = Fake::default();
+        assert_eq!(unmap_pieces(&g, s, 0xf_f000, 0x2000, true, 0), Ok(()));
+        assert_eq!(
+            *g.log.borrow(),
+            [
+                "unmap 0x102 0xff000 size 0x1000 f0x0",
+                "unmap 0x2 0x100000 size 0x1000 f0x0"
+            ]
+        );
+        // A row inside one object stays one call.
+        let h = Fake::default();
+        assert_eq!(unmap_pieces(&h, s, 0x1_0000, 0x6000, true, 0), Ok(()));
+        assert_eq!(*h.log.borrow(), ["unmap 0x102 0x10000 size 0x6000 f0x0"]);
+    }
+
+    #[test]
+    fn a_refused_piece_unmap_does_not_stop_the_others_and_is_reported() {
+        let f = Fake {
+            fail_unmap_at: Some(0),
+            ..Fake::default()
+        };
+        assert_eq!(
+            unmap_pieces(&f, floor_space(), 0xb_0000, 0x8_0000, false, 0),
+            Err(RmError::Other(0x78))
+        );
+        assert_eq!(
+            f.log.borrow().len(),
+            2,
+            "the second piece was still unmapped"
+        );
     }
 }
 

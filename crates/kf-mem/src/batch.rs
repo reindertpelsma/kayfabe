@@ -234,8 +234,10 @@ impl<'rm> BatchedVas<'rm> {
         let in_batch = self.book.lock().is_ok_and(|b| b.covers(va));
         match (len, in_batch) {
             (Some(len), true) => self.unmap_range(va, len, defer),
+            // ★ 2026-10-09: by ROW, not by start — a row straddling a reservation edge of the twin
+            // space was mapped as several host mappings (one per `hDma`), all taken down here.
             (Some(len), false) => {
-                self.vas.unmap(va, defer)?;
+                self.vas.unmap_row(va, len, defer)?;
                 self.retired(va, len);
                 Ok(())
             }
