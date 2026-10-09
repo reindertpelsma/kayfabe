@@ -119,3 +119,17 @@ copied into this directory is filtered: no secrets, no owner home/Scaleway IPs.)
 
 Trailers: `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`,
 `Claude-Session: https://claude.ai/code/session_01BsKBVkrPunx1N6x6AoegFZ`.
+
+## Search plan (2026-10-09, owner request): find which refusals the driver needs
+
+STATUS: LIVE (tool written, not yet run on hardware; the host was down).
+
+`tools/ddsearch.py` runs delta debugging over the refusal list, with components (ogkm ctrl header, or
+the control's category byte when ogkm has no define) as the first unit and single keys inside the
+surviving components as the second. It finds a 1-minimal failing set, so an interaction (X matters only
+when Y is also refused) appears as a set of two or more. The found set is then removed and the search
+repeats on the rest, so independent causes are found one after the other. Oracle = one VFIO boot,
+exit 0 healthy / 1 driver dead / 2 invalid; results are cached and every subset runs twice
+(majority of three if they disagree). Offline check: `tools/test_ddsearch.py` (simulated driver with one
+single cause and one pair; found both in 57 simulated boots of a 40-rule list). The 58 rules fall into 23
+components. **Measured so far:** nothing from this tool. 58 rules: dead; none: works.
