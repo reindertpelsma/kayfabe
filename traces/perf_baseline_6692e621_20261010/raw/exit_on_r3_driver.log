@@ -1,0 +1,28 @@
+[boot_capture:perf_6692e621_exit_on_r3] BINARY kf3-bin-rev:6692e621  (/var/lib/kf-windows-20261005/kf3-bins/6692e621/qemu-system-x86_64)  ⇒ every claim from this boot cites THIS revision
+[boot_capture:perf_6692e621_exit_on_r3] host dmesg watermark: 1639 lines
+[boot_capture:perf_6692e621_exit_on_r3] booting (extra args: none)
+== kf3 binary: /var/lib/kf-windows-20261005/kf3-bins/6692e621/qemu-system-x86_64 (rev c6fff2e3)  device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,doorbell-ioeventfd=on,dummy-bar=on
+[boot_capture:perf_6692e621_exit_on_r3] guest is up after 8s
+[boot_capture:perf_6692e621_exit_on_r3] module unloaded and ring buffer cleared; loading cold
+[boot_capture:perf_6692e621_exit_on_r3] opening the device (this is what runs RmInitAdapter)
+[boot_capture:perf_6692e621_exit_on_r3] captured 33 dmesg lines, 30 NVRM, 0 adapter → /workspace/bench/run_perf_6692e621_exit_on_r3_dmesg.log
+[boot_capture:perf_6692e621_exit_on_r3] --- the verdict lines ---
+[boot_capture:perf_6692e621_exit_on_r3] running POST_CAPTURE_HOOK: /var/lib/kf-windows-20261005/kayfabe-perf-harness/scripts/bench/dbfast_exit_hook.sh
+[boot_capture:perf_6692e621_exit_on_r3] hook finished: rc=0
+[boot_capture:perf_6692e621_exit_on_r3] guest dmesg after workload: 33 lines (30 NVRM), delta 0 → /workspace/bench/run_perf_6692e621_exit_on_r3_dmesg_after.log
+[boot_capture:perf_6692e621_exit_on_r3] ⊘ the workload added ZERO guest kernel lines. Either the hook never touched the GPU,
+[boot_capture:perf_6692e621_exit_on_r3]   or this capture is not seeing what it thinks it is. Do NOT read it as 'driver silent'.
+[boot_capture:perf_6692e621_exit_on_r3] host dmesg delta: 0 lines, 0
+0 NVRM, 0
+0 Xid → /workspace/bench/run_perf_6692e621_exit_on_r3_hostdmesg.log
+[boot_capture:perf_6692e621_exit_on_r3] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:perf_6692e621_exit_on_r3] census present (kf3):
+    kf3: family=Ada phase=Halted trapped=609911 applied=2255 refused=4 serviced=365 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xbb0090 mem[inval=212 walks=222/222 cleared=212 superseded=0 named_missed=2 unreconciled=0 mapped=362 unmapped=362 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=2 fast_wakes=2 fast_forwarded=2 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10018 fast=0 fast_wakes=0 fast_forwarded=0 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=2 fast_wakes=2 fast_forwarded=2 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10018 fast=0 fast_wakes=0 fast_forwarded=0 fast_absorbed=0 fast_failed=0 fast_sites=1 fast_refused=0
+[boot_capture:perf_6692e621_exit_on_r3] evidence carried into the repo: /var/lib/kf-windows-20261005/kayfabe-perf-harness/traces/guest_boots/run_perf_6692e621_exit_on_r3_{qemu,dmesg,probe,hostdmesg}.log
+[boot_capture:perf_6692e621_exit_on_r3] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+[boot_capture:perf_6692e621_exit_on_r3]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+[boot_capture:perf_6692e621_exit_on_r3] done. serial=/workspace/bench/run_perf_6692e621_exit_on_r3_serial.log qemu=/workspace/bench/run_perf_6692e621_exit_on_r3_qemu.log dmesg=/workspace/bench/run_perf_6692e621_exit_on_r3_dmesg.log dmesg_after=/workspace/bench/run_perf_6692e621_exit_on_r3_dmesg_after.log probe=/workspace/bench/run_perf_6692e621_exit_on_r3_probe.log hostdmesg=/workspace/bench/run_perf_6692e621_exit_on_r3_hostdmesg.log
