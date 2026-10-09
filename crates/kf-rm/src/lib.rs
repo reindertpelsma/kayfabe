@@ -24,6 +24,7 @@ pub mod faultbuffer;
 pub mod fecstrace;
 mod gfxpool_probe;
 pub mod gpuuid;
+pub mod gssnative;
 pub mod guestsysinfo;
 pub mod hostfacts;
 pub mod hostquery;

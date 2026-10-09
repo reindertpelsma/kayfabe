@@ -381,6 +381,21 @@ struct HeldReply {
 pub struct Deferred {
     outcome: std::sync::Arc<core::sync::atomic::AtomicU64>,
     undo: std::sync::Arc<std::sync::Mutex<Option<OrphanUndo>>>,
+    /// ★ EXPERIMENT `KF3_GSS_NATIVE`: the HOST's reply bytes, written into the held reply when the
+    /// act succeeded ([`Self::set_reply_patch`]). `None` for every other act.
+    patch: std::sync::Arc<std::sync::Mutex<Option<ReplyPatch>>>,
+}
+
+/// ★ EXPERIMENT `KF3_GSS_NATIVE`: bytes an act wants in its held reply's payload, at `at`. Applied by
+/// [`GspFsm::release_held`] only when the act resolved `NV_OK` and only inside the payload the reply
+/// already has (the reply is clamped to the request's own size, `RpcCommand::reply`): a patch never
+/// grows a reply.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplyPatch {
+    /// Offset into the reply payload.
+    pub at: usize,
+    /// The bytes.
+    pub bytes: Vec<u8>,
 }
 
 /// What undoes a deferred act whose command another link refused ([`Deferred::on_orphaned`]).
@@ -397,7 +412,23 @@ impl Deferred {
         Deferred {
             outcome: std::sync::Arc::new(core::sync::atomic::AtomicU64::new(Self::PENDING)),
             undo: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            patch: std::sync::Arc::new(std::sync::Mutex::new(None)),
         }
+    }
+
+    /// ★ EXPERIMENT `KF3_GSS_NATIVE`: the bytes the held reply carries when the act succeeds. Set
+    /// BEFORE [`Self::resolve`] (the reply may be posted the moment the cell resolves). A second
+    /// call replaces the first.
+    pub fn set_reply_patch(&self, at: usize, bytes: Vec<u8>) {
+        if let Ok(mut p) = self.patch.lock() {
+            *p = Some(ReplyPatch { at, bytes });
+        }
+    }
+
+    /// The reply patch, if one was set (a copy: a post that fails is retried).
+    #[must_use]
+    pub fn reply_patch(&self) -> Option<ReplyPatch> {
+        self.patch.lock().ok().and_then(|p| p.clone())
     }
 
     /// Resolve with an `NV_STATUS` (`0` = the act succeeded). The first resolution wins.
@@ -482,7 +513,16 @@ fn settle_deferred(rpc: &mut OutgoingRpc, d: &Deferred, alloc: bool) -> bool {
             );
             true
         }
-        Some(0) => true,
+        Some(0) => {
+            // ★ EXPERIMENT `KF3_GSS_NATIVE`: the host's bytes, only inside the payload the reply has.
+            if let Some(p) = d.reply_patch()
+                && let Some(end) = p.at.checked_add(p.bytes.len())
+                && let Some(dst) = rpc.payload.get_mut(p.at..end)
+            {
+                dst.copy_from_slice(&p.bytes);
+            }
+            true
+        }
         Some(status) => {
             rpc.rpc_result = status;
             rpc.rpc_result_private = status;
@@ -3009,6 +3049,50 @@ mod a_reply_whose_status_is_a_host_act {
         let mut refused = held(0x19);
         assert!(settle_deferred(&mut refused, &twin, true));
         assert!(!bare.run_orphan_undo());
+    }
+
+    /// ★ EXPERIMENT `KF3_GSS_NATIVE`: the host's bytes land in the held reply when the act succeeded,
+    /// only inside the payload the reply has, and never when the act failed or the reply is a refusal.
+    #[test]
+    fn a_reply_patch_lands_only_on_success_and_only_inside_the_reply() {
+        let bytes = vec![0xAB, 0xCD, 0xEF];
+        // Success: written at `at`, nothing else moves.
+        let d = Deferred::new();
+        d.set_reply_patch(10, bytes.clone());
+        d.resolve(0);
+        let mut rpc = held(0);
+        assert!(settle_deferred(&mut rpc, &d, false));
+        assert_eq!(&rpc.payload[10..13], &bytes[..]);
+        assert_eq!(rpc.payload.len(), 40);
+        assert!(rpc.payload[..10].iter().all(|b| *b == 0));
+        assert!(rpc.payload[13..].iter().all(|b| *b == 0));
+        // A retried post settles again from a fresh clone: the patch is still there.
+        let mut again = held(0);
+        assert!(settle_deferred(&mut again, &d, false));
+        assert_eq!(again.payload, rpc.payload);
+        // Failure: the status is the reply's and the bytes are NOT written.
+        let bad = Deferred::new();
+        bad.set_reply_patch(10, bytes.clone());
+        bad.resolve(0x56);
+        let mut r = held(0);
+        assert!(settle_deferred(&mut r, &bad, false));
+        assert_eq!(r.rpc_result, 0x56);
+        assert!(r.payload.iter().all(|b| *b == 0));
+        // A patch that does not fit the reply is dropped whole (the reply never grows).
+        let big = Deferred::new();
+        big.set_reply_patch(38, bytes);
+        big.resolve(0);
+        let mut r = held(0);
+        assert!(settle_deferred(&mut r, &big, false));
+        assert_eq!(r.payload.len(), 40);
+        assert!(r.payload.iter().all(|b| *b == 0));
+        // A refused reply (another link) is not patched.
+        let refused = Deferred::new();
+        refused.set_reply_patch(0, vec![1]);
+        refused.resolve(0);
+        let mut r = held(0x19);
+        assert!(settle_deferred(&mut r, &refused, false));
+        assert!(r.payload.iter().all(|b| *b == 0));
     }
 
     /// ⊘ The default defers nothing, and a chain reports the one link that deferred wherever it

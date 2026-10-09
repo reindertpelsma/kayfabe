@@ -1141,6 +1141,38 @@ impl HostRm {
 
     /// The control ioctl with `payload` exactly as given (already at the host's layout).
     fn raw_control_exact(&self, object: u32, cmd: u32, payload: &mut [u8]) -> Result<(), RmError> {
+        status_check(self.raw_control_status(object, cmd, payload)?)
+    }
+
+    /// ★ EXPERIMENT `KF3_GSS_NATIVE` (`docs/design/V3_GSS_NATIVE.md`): one `NV_ESC_RM_CONTROL` whose
+    /// `payload` is an OPAQUE byte string kayfabe does not interpret (a GSS-legacy control: no
+    /// public header, params in the GUEST driver's layout) — carried to the host UNCHANGED, with no
+    /// [`kf_abi::hostabi::HostAbi::control_carry`] decision (that gate protects layouts kayfabe's own
+    /// encoders write; here nothing is encoded). `payload` is exactly the declared `paramsSize`
+    /// bytes, so the kernel can neither read nor write more.
+    ///
+    /// Returns the HOST's `NV_STATUS` exactly as RM wrote it (`Ok(0)` = success; `payload` then holds
+    /// the host's reply), unmapped: the caller hands it to the guest. `Err` is only a failure to ask
+    /// (an ioctl error, an unbuildable request), never an RM answer.
+    ///
+    /// # Errors
+    /// [`RmError`] when the ioctl itself failed.
+    pub fn raw_control_opaque(
+        &self,
+        object: u32,
+        cmd: u32,
+        payload: &mut [u8],
+    ) -> Result<u32, RmError> {
+        self.raw_control_status(object, cmd, payload)
+    }
+
+    /// The control ioctl with `payload` exactly as given; the RM status it wrote, unmapped.
+    fn raw_control_status(
+        &self,
+        object: u32,
+        cmd: u32,
+        payload: &mut [u8],
+    ) -> Result<u32, RmError> {
         let mut arg = [0u8; Nvos54Parameters::SIZE];
         Nvos54Parameters {
             h_client: self.client.raw(),
@@ -1163,7 +1195,7 @@ impl HostRm {
             .ioctl(req, &mut arg, &mut patches)
             .map_err(|e| ioctl_error(&e))?;
         let out = Nvos54Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
-        status_check(out.status)
+        Ok(out.status)
     }
 
     /// ★★★★★ **The ONE place an `NVOS46` is built** — every GPU map in v3 goes through

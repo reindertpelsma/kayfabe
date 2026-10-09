@@ -63,6 +63,19 @@ const NV_ERR_INVALID_CLASS: u32 = 0x22;
 /// `NV2080_NOTIFIERS_GR0` = `NV2080_NOTIFIERS_GRAPHICS` (`ogkm-580: cl2080_notification.h:48,185`).
 const NV2080_NOTIFIERS_GR0: u32 = 12;
 
+/// ★ EXPERIMENT `KF3_GSS_NATIVE`: the host seam of `kf_rm::gssnative` over OUR host client: one
+/// `NV_ESC_RM_CONTROL` on kayfabe's own host subdevice, params carried unchanged
+/// ([`HostRm::raw_control_opaque`]).
+struct GssHostRm(&'static HostRm);
+
+impl kf_rm::gssnative::GssHost for GssHostRm {
+    fn control(&self, cmd: u32, params: &mut [u8]) -> Result<u32, String> {
+        self.0
+            .raw_control_opaque(self.0.subdevice(), cmd, params)
+            .map_err(|e| format!("{e:?}"))
+    }
+}
+
 /// ★ P5b: one host act, run on the plane's act thread. `Err((status, why))` refuses by name.
 type Act = Box<dyn FnOnce(&ChanPlane) -> Result<String, (u32, String)> + Send>;
 
@@ -2356,7 +2369,7 @@ impl ChanPlane {
     pub fn start(&'static self) -> Result<(), String> {
         let (tx, rx) = std::sync::mpsc::channel::<(Act, kf_gsp::Deferred, &'static str)>();
         std::thread::Builder::new()
-            .name("kf3-chan-act".into())
+            .name(kf_rm::gssnative::ACT_THREAD.into())
             .spawn(move || {
                 while let Ok((act, d, what)) = rx.recv() {
                     let t0 = std::time::Instant::now();
@@ -2367,7 +2380,11 @@ impl ChanPlane {
                     self.acts_run.fetch_add(1, Ordering::Relaxed);
                     match r {
                         Ok(line) => {
-                            eprintln!("kf3: act {what}: {line} ({us} us, off the GSP lock)");
+                            // EXPERIMENT KF3_GSS_NATIVE: an act that says nothing is quiet (its own
+                            // counters and once-lines speak; no per-RPC print).
+                            if !line.is_empty() {
+                                eprintln!("kf3: act {what}: {line} ({us} us, off the GSP lock)");
+                            }
                             d.resolve(0);
                         }
                         Err((status, why)) => {
@@ -2679,6 +2696,11 @@ impl ChanPlane {
     /// Queue `act` and answer [`ChanAnswer::Deferred`] — the drainer returns at once.
     fn defer(&self, what: &'static str, act: Act) -> ChanAnswer {
         let d = kf_gsp::Deferred::new();
+        self.defer_cell(what, act, d)
+    }
+
+    /// [`Self::defer`] with the caller's own cell (an act that must reach its own `Deferred`).
+    fn defer_cell(&self, what: &'static str, act: Act, d: kf_gsp::Deferred) -> ChanAnswer {
         let sent = self
             .acts
             .lock()
@@ -2691,6 +2713,32 @@ impl ChanPlane {
                 status: NV_ERR_INVALID_STATE,
                 why: format!("{what}: the act thread is not running"),
             }
+        }
+    }
+
+    /// ★ EXPERIMENT `KF3_GSS_NATIVE` (`docs/design/V3_GSS_NATIVE.md`): a non-privileged subdevice-level
+    /// GSS-legacy control, carried to OUR host subdevice as an act — the host call is the act
+    /// thread's (statement order, off the drainer, off every lock the drainer holds), the reply is
+    /// held on the cell, and a call that blocks on the host RM API lock shows in `acts` /
+    /// `act_worst_us`. The act resolves the cell itself (the host's status, not `0`) and says
+    /// nothing per call (`kf_rm::gssnative` counts, and says each first answer once).
+    pub fn gss_forward(
+        &self,
+        req: kf_rm::gssnative::GssRequest,
+        stats: &Arc<kf_rm::gssnative::Stats>,
+    ) -> kf_rm::gssnative::GssAnswer {
+        let d = kf_gsp::Deferred::new();
+        let (cell, stats) = (d.clone(), stats.clone());
+        let act: Act = Box::new(move |me: &ChanPlane| {
+            kf_rm::gssnative::execute(&stats, &GssHostRm(me.rm), req, &cell);
+            Ok(String::new())
+        });
+        match self.defer_cell("gss-native control", act, d) {
+            ChanAnswer::Deferred(d) => kf_rm::gssnative::GssAnswer::Deferred(d),
+            ChanAnswer::Refused { why, .. } => kf_rm::gssnative::GssAnswer::Refused { why },
+            _ => kf_rm::gssnative::GssAnswer::Refused {
+                why: "unexpected answer".into(),
+            },
         }
     }
 
