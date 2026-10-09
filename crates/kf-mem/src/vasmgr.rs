@@ -32,6 +32,14 @@
 //!
 //! ## What an invalidate that cannot be honoured does
 //!
+//! ★★ **Corrected 2026-10-09 (owner, `OWNER_RULINGS.md` §AA).** Where the failure is only ABSENCE
+//! (a refused map, a walk-refused leaf) the invalidate IS cleared, as hardware does: an MMU
+//! invalidate has no error channel, a bad leaf faults when the GPU USES it, and a withheld clear
+//! made the guest poll the trigger forever with its locks held (`[measured run 223]`:
+//! `inval=3138 cleared=3137`, then TDR 0x117 — a guest-wide crash from one unmappable range). The
+//! refusal stays counted and named; only a refused UNMAP or a refused invalidate still holds the
+//! clear (below). ⊘ The text that follows is the SUPERSEDED rule for the absence case.
+//!
 //! It is **not cleared**, and it is counted and named ([`VaStats::unreconciled`],
 //! [`VaStats::refusals`]). The guest then times out (§5.5's tripwire: an overdue trigger is a
 //! fault, not a slow path). Clearing it would tell the guest a mapping is live that is not —
@@ -47,10 +55,12 @@ use crate::ledger::{MapTarget, Settle};
 use kf_cuda::WalkEntry;
 use kf_trap::{ClearOutcome, InvalidateRequest, PdbAperture, Trigger};
 
-/// `KF3_INVALIDATE_CLEAR_OVER_ABSENT`: clear an invalidate whose spaces failed only by absence (read once).
+/// ★ Owner ruling 2026-10-09 (`OWNER_RULINGS.md` §AA): an invalidate completes although the guest's
+/// tables hold leaves we cannot map (hardware completes it too; a bad leaf faults when USED).
+/// ON by default; `KF3_INVALIDATE_CLEAR_OVER_ABSENT=0` restores the 2026-09-25 withheld clear (A/B).
 fn clear_over_absent() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var("KF3_INVALIDATE_CLEAR_OVER_ABSENT").is_ok_and(|v| v != "0"))
+    *ON.get_or_init(|| std::env::var("KF3_INVALIDATE_CLEAR_OVER_ABSENT").map_or(true, |v| v != "0"))
 }
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -830,7 +840,7 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     inflight: Option<Batch>,
     /// ★ P6: finished splits, `(ticket, outcome)`, until [`VaManager::take_splits`].
     splits_done: Vec<(u64, Result<(), String>)>,
-    /// `KF3_INVALIDATE_CLEAR_OVER_ABSENT` (read at construction; tests set it).
+    /// Owner ruling 2026-10-09: complete over absent leaves (read at construction; tests set it).
     clear_absent: bool,
     /// ★ Ruling 2026-09-26 (5): invalidates whose runs all applied but whose target's work is not
     /// live yet ([`Settle::Pending`]) — cleared by [`VaManager::on_targets`], never waited for.
@@ -1585,8 +1595,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 }
                 continue;
             };
-            // ★ EXPERIMENT `KF3_INVALIDATE_CLEAR_OVER_ABSENT` (default off, pending an owner ruling on
-            // 2026-09-25's "not cleared over leaves nobody mapped"): the clear is NOT withheld when
+            // ★ Owner ruling 2026-10-09 (§AA; supersedes 2026-09-25's "not cleared over leaves nobody
+            // mapped", opt-out `KF3_INVALIDATE_CLEAR_OVER_ABSENT=0`): the clear is NOT withheld when
             // every failed space failed only by ABSENCE (a refused map or a walk-refused leaf, never
             // an unmap or an invalidate refusal) and none is re-walking. A GPU access to an absent
             // leaf faults on that space's twin (as the split already does, v3-mapfix); the withheld
@@ -3001,13 +3011,13 @@ mod tests {
         assert!(ops(&r).is_empty());
     }
 
-    /// ★ `KF3_INVALIDATE_CLEAR_OVER_ABSENT` (default off): a space that failed ONLY by absence (a
+    /// ★ Owner ruling 2026-10-09: a space that failed ONLY by absence (a
     /// walk-refused leaf) no longer holds its invalidate armed forever; what the walk described is
     /// applied, the invalidate completes, and the refusal stays counted and named.
     #[test]
-    fn clear_over_absence_completes_the_invalidate_when_enabled() {
+    fn clear_over_absence_completes_the_invalidate_by_default() {
         let mut r = rig();
-        r.m.set_clear_over_absent(true);
+        assert!(r.m.clear_absent, "on by default");
         r.tables
             .borrow_mut()
             .insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
@@ -3026,9 +3036,9 @@ mod tests {
         assert!(r.m.stats.refusals.iter().any(|x| x.contains("REFUSED leaves")));
     }
 
-    /// The default is the 2026-09-25 ruling: without the flag the same refusal holds the clear.
+    /// The opt-out (`KF3_INVALIDATE_CLEAR_OVER_ABSENT=0`) restores the 2026-09-25 withheld clear.
     #[test]
-    fn clear_over_absence_is_off_by_default() {
+    fn clear_over_absence_can_be_switched_off() {
         let mut r = rig();
         r.m.set_clear_over_absent(false);
         r.tables

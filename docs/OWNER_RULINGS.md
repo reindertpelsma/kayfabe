@@ -1004,3 +1004,26 @@ Two owner statements on the same day; the second supersedes the gate/bucket part
   - the accepted residuals are written down: a tenant can make other guests wake more often (minor DoS,
     accepted, it is RM's own semantics) and a guest learns, by timing, that some tenant used an engine
     class it armed. Where: `docs/design/the_three_channel_kinds.md` §1.2 and `docs/FAQ.md`.
+
+## AA. An MMU invalidate completes over table errors, as hardware does (2026-10-09)
+
+**STATUS: LIVE.** Owner, 2026-10-09: *"we need to do as real hardware, if there is an error in the
+tables we just complete anyways, not withhold it. On real hardware, if it hits misaligned leaves, it
+just faults; if the driver would fix it, it has to do a new invalidate through the 3 channels v3
+designated anyway. That prevents a guest-wide crash."*
+
+- An invalidate whose spaces failed **only by absence** (a refused map, a walk-refused leaf) is
+  **cleared**; the refusal stays counted and named (`absent_cleared`, bounded log). A GPU access to an
+  absent leaf faults on that space's twin.
+- ⊘ **Supersedes** the 2026-09-25 line "its invalidate is not cleared over leaves nobody mapped"
+  (`crates/kf-mem/src/vasmgr.rs`, module comment, corrected in place).
+- ⊘ **Not covered, still held:** a refused UNMAP (a placement the guest dropped may still be live on
+  the host) and a refused invalidate — those are kayfabe's own failures, not errors in the guest's
+  tables. Confirm with the owner whether they should also complete.
+- Evidence: run 223 (`inval=3138 cleared=3137 unreconciled=1`, walk refused leaves
+  `refuse_mask=0x400`, then a TDR 0x117 after the guest polled `MMU_INVALIDATE`'s trigger bit
+  forever); runs 221/190/181 refused one map (`0xb0000+0x80000: Other(19313)`).
+- Opt-out for A/B: `KF3_INVALIDATE_CLEAR_OVER_ABSENT=0`.
+- **Second half (open):** whether misaligned leaves are valid despite the misalignment and should be
+  accepted (owner: yes, if the content is valid) — needs the leaves seen first.
+
