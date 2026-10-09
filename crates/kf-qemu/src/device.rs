@@ -307,6 +307,10 @@ pub struct Device {
     /// ★ EXPERIMENT `x11-dispsw` ([`Config::x11_dispsw`]): the status line's `dispsw[...]` segment
     /// is printed only when it is on.
     x11_dispsw: bool,
+    /// ★ EXPERIMENT `KF3_WIN_KERNEL_PID4` (default off, `docs/design/V3_RECOVERY_WALL.md`), read
+    /// once at realize: the status line says so when on. The rule itself lives in
+    /// `kf_rm::chanlink::windows_user_work`.
+    kernel_pid4: bool,
     /// ★ DIAGNOSTIC, default off (`KF3_BAR0_READ_TRACE=1`, [`crate::readtrace`]): the BAR0 access
     /// trace in the VFIO reference's record format. Off: the C device takes none of its paths.
     pub trace: crate::readtrace::AccessTrace,
@@ -319,6 +323,19 @@ impl Device {
     /// Any refusal, by name — the VM must not start on a guessed device.
     pub fn realize(cfg: &Config) -> Result<Device, String> {
         cfg.check()?;
+        // ★ EXPERIMENT `KF3_WIN_KERNEL_PID4` (default off): read once, here, and said once.
+        let kernel_pid4 = kf_rm::chanlink::kernel_pid4_enabled();
+        if kernel_pid4 {
+            eprintln!(
+                "kf3: ⚠ EXPERIMENT KF3_WIN_KERNEL_PID4 ON (docs/design/V3_RECOVERY_WALL.md): a Windows channel declaring ProcessID 4 (the System process) is judged as the kernel driver's own, \
+                 so it keeps the Translated route; it can never move a channel to Passthrough{}",
+                if std::env::var("KF3_WIN_USER_CHANNELS_PASSTHROUGH").as_deref() == Ok("1") {
+                    ""
+                } else {
+                    " (KF3_WIN_USER_CHANNELS_PASSTHROUGH is off: no effect)"
+                }
+            );
+        }
         // ★ The boot display (`gop=on`, `crate::gop`): decided from the configuration and the virtual
         // monitor alone, so a refusal costs nothing. `None` with `gop=off`: every step below that
         // reads it is then skipped, and the device is today's. ★ The same monitor the display
@@ -1123,6 +1140,7 @@ impl Device {
             held_stamps: Mutex::new(std::collections::VecDeque::new()),
             display: display_plane,
             x11_dispsw: cfg.x11_dispsw,
+            kernel_pid4,
             gop,
             gop_rom,
             bar1_mode,
@@ -2663,6 +2681,12 @@ impl Device {
         // ★ EXPERIMENT x11-dispsw: `""` with the switch off (the line is the line it was).
         let irq = irq + &self.chans.dispsw_status(self.x11_dispsw);
         let db = format!(" {}", self.dbfast.status());
+        // ★ EXPERIMENT `KF3_WIN_KERNEL_PID4`: `""` with the switch off (the line is the line it was).
+        let db = if self.kernel_pid4 {
+            db + " EXPERIMENT KF3_WIN_KERNEL_PID4"
+        } else {
+            db
+        };
         format!(
             "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq}{db} unserviced=[{}] gsp_refusals[{refusals}]",
             self.family,

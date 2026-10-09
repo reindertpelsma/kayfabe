@@ -299,4 +299,52 @@ mod tests {
         assert!(!legacy.force_kernel(), "today's flip ignores live users");
         assert!(legacy.is_kernel());
     }
+
+    /// ★ EXPERIMENT `KF3_WIN_KERNEL_PID4` against the T-space rule, on the run-113 restart
+    /// (`[measured, qemu.log 63705-63783]`): a pid-4 copy channel, then a pid-4 GR channel, born in
+    /// one VA space. The route is the one `kf_rm::chanlink::windows_user_work` gives each channel
+    /// (`passthrough = user work`); the twin state is the plane's own.
+    #[test]
+    fn a_pid4_restart_pair_shares_a_space_only_with_kernel_pid4() {
+        use kf_rm::chanlink::{UserWorkFacts, windows_user_work};
+        let facts = |engine: u32, pid: u32, on: bool| UserWorkFacts {
+            flag: true,
+            windows: true,
+            kernel_stamped: true,
+            rm_internal: false,
+            engine: Some(engine),
+            ctx_share: 0,
+            ctx_share_known: false,
+            process_id: Some(pid),
+            kernel_pid: Some(0x350),
+            system_pid_is_kernel: on,
+        };
+        let birth = |st: &TwinState, f: &UserWorkFacts| -> Result<(), TwinRefusal> {
+            if windows_user_work(f).is_ok() {
+                st.try_user()
+            } else {
+                st.try_kernel().map(|_| ())
+            }
+        };
+        // Off: the copy channel is user work (Passthrough), the GR channel is refused (run 113).
+        let off = TwinState::default();
+        assert_eq!(birth(&off, &facts(0xb, 4, false)), Ok(()));
+        assert_eq!(
+            birth(&off, &facts(kf_abi::submit::ENGINE_TYPE_GRAPHICS, 4, false)),
+            Err(TwinRefusal::KernelInUserSpace(1))
+        );
+        // On: both follow the kernel route and share the space.
+        let on = TwinState::default();
+        assert_eq!(birth(&on, &facts(0xb, 4, true)), Ok(()));
+        assert_eq!(
+            birth(&on, &facts(kf_abi::submit::ENGINE_TYPE_GRAPHICS, 4, true)),
+            Ok(())
+        );
+        assert!(on.is_kernel());
+        // A user process's channel (any other pid) still cannot join that kernel space.
+        assert_eq!(
+            birth(&on, &facts(0xb, 0x554, true)),
+            Err(TwinRefusal::UserInKernelSpace)
+        );
+    }
 }

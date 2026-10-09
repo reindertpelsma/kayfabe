@@ -280,6 +280,25 @@ pub struct UserWorkFacts {
     /// kernel driver's own system context; `[measured, run60 at 3a578d50, 2026-10-08]` 0x350 on all
     /// eleven of its kernel channels).
     pub kernel_pid: Option<u32>,
+    /// ★ EXPERIMENT `KF3_WIN_KERNEL_PID4` (default off, `docs/design/V3_RECOVERY_WALL.md`): the
+    /// Windows System process ([`WINDOWS_SYSTEM_PID`]) is ALSO the kernel driver's process. A
+    /// channel declaring it then keeps the Translated route (the stricter one). `false` = the rule
+    /// is byte for byte what it was.
+    pub system_pid_is_kernel: bool,
+}
+
+/// ★ The Windows System process id. No user code runs in it, and the kernel driver's reset and
+/// recovery paths (`[measured, runs 100-103, 113]` the post-TDR restart) run in it.
+pub const WINDOWS_SYSTEM_PID: u32 = 4;
+
+/// ★ EXPERIMENT (default off): the switch of [`UserWorkFacts::system_pid_is_kernel`].
+pub const KERNEL_PID4_FLAG: &str = "KF3_WIN_KERNEL_PID4";
+
+/// `KF3_WIN_KERNEL_PID4=1`, read once per process.
+#[must_use]
+pub fn kernel_pid4_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var(KERNEL_PID4_FLAG).as_deref() == Ok("1"))
 }
 
 /// ★★ 2026-10-08 (OWNER_RULINGS §V, the owner: "If you do not need to translate, then a translated can
@@ -340,6 +359,12 @@ pub fn windows_user_work(f: &UserWorkFacts) -> Result<(), &'static str> {
         .ok_or("the kernel driver's process id is not known yet")?;
     if pid == kpid {
         return Err("the kernel driver's own process");
+    }
+    // ★ EXPERIMENT `KF3_WIN_KERNEL_PID4`: a restart after a TDR runs in the System process, not in
+    // the process the first start learned. This test only ever keeps a channel on the Translated
+    // route (`Err`); it never moves one to Passthrough.
+    if f.system_pid_is_kernel && pid == WINDOWS_SYSTEM_PID {
+        return Err("the Windows System process (EXPERIMENT KF3_WIN_KERNEL_PID4)");
     }
     Ok(())
 }
@@ -709,6 +734,8 @@ pub struct ChannelPolicy {
     windows_identity: bool,
     /// ★ 2026-10-08: `ProcessID` of the first guest-kernel, non-internal channel ([`UserWorkFacts`]).
     windows_kernel_pid: Option<u32>,
+    /// ★ EXPERIMENT `KF3_WIN_KERNEL_PID4` ([`kernel_pid4_enabled`], read once).
+    system_pid_is_kernel: bool,
 }
 
 /// ★ 2026-10-08: the flag of [`windows_user_work`].
@@ -743,7 +770,16 @@ impl ChannelPolicy {
             user_work_flag: std::env::var(USER_WORK_FLAG).as_deref() == Ok("1"),
             windows_identity: false,
             windows_kernel_pid: None,
+            system_pid_is_kernel: kernel_pid4_enabled(),
         }
+    }
+
+    /// ★ EXPERIMENT `KF3_WIN_KERNEL_PID4`, set explicitly (tests; [`ChannelPolicy::new`] reads
+    /// [`KERNEL_PID4_FLAG`] once per process).
+    #[must_use]
+    pub fn with_kernel_pid4(mut self, on: bool) -> ChannelPolicy {
+        self.system_pid_is_kernel = on;
+        self
     }
 
     /// ★ 2026-10-08: the flag of [`windows_user_work`], set explicitly (tests; the device reads
@@ -1138,6 +1174,7 @@ impl ChannelPolicy {
                 && self.ctxshares.contains_key(&(h.client, f.h_ctx_share)),
             process_id,
             kernel_pid: self.windows_kernel_pid,
+            system_pid_is_kernel: self.system_pid_is_kernel,
         });
         if self.user_work_flag && kernel_stamped {
             eprintln!(
@@ -2375,6 +2412,7 @@ mod tests {
                 ctx_share_known: true,
                 process_id: Some(0x3b8),
                 kernel_pid: Some(0x350),
+                system_pid_is_kernel: false,
             }
         }
 
@@ -2520,6 +2558,183 @@ mod tests {
             ];
             for (f, why) in cases {
                 assert_eq!(windows_user_work(&f), Err(why), "{f:?}");
+            }
+        }
+
+        /// The rule exactly as it was before `KF3_WIN_KERNEL_PID4` (copied, not called): the oracle
+        /// the flag-off table is compared with.
+        fn rule_before_kernel_pid4(f: &UserWorkFacts) -> Result<(), &'static str> {
+            if !f.flag {
+                return Err("flag off");
+            }
+            if !f.windows {
+                return Err("no Windows driver identity declared");
+            }
+            if !f.kernel_stamped {
+                return Err("not guest-kernel (already Passthrough)");
+            }
+            if f.rm_internal {
+                return Err("an RM-internal client");
+            }
+            let engine = f.engine.ok_or("no engine type")?;
+            if engine != GR && kf_abi::submit::copy_index_of_engine_type(engine).is_none() {
+                return Err("not a graphics or copy engine");
+            }
+            if engine == GR && f.ctx_share == 0 {
+                return Err("no context share (the kernel driver's own channels declare none)");
+            }
+            if engine == GR && !f.ctx_share_known {
+                return Err("the context share was never allocated in this client");
+            }
+            let pid = f.process_id.ok_or("no ProcessID")?;
+            let kpid = f
+                .kernel_pid
+                .ok_or("the kernel driver's process id is not known yet")?;
+            if pid == kpid {
+                return Err("the kernel driver's own process");
+            }
+            Ok(())
+        }
+
+        /// Every combination of the facts the rule reads, over a table of process ids.
+        fn grid() -> Vec<UserWorkFacts> {
+            let pids = [
+                None,
+                Some(0),
+                Some(4),
+                Some(5),
+                Some(0x350),
+                Some(0x34c),
+                Some(0x3b8),
+                Some(0x14c0),
+                Some(u32::MAX),
+            ];
+            let kpids = [None, Some(0x350), Some(4)];
+            let engines = [None, Some(GR), Some(CE0), Some(0xc), Some(0x13), Some(0x1c)];
+            let mut v = Vec::new();
+            for pid in pids {
+                for kernel_pid in kpids {
+                    for engine in engines {
+                        for (ctx_share, ctx_share_known) in
+                            [(0, false), (0xff0e_0200, true), (0xff0e_0200, false)]
+                        {
+                            for (flag, windows, kernel_stamped, rm_internal) in [
+                                (true, true, true, false),
+                                (false, true, true, false),
+                                (true, false, true, false),
+                                (true, true, false, false),
+                                (true, true, true, true),
+                            ] {
+                                v.push(UserWorkFacts {
+                                    flag,
+                                    windows,
+                                    kernel_stamped,
+                                    rm_internal,
+                                    engine,
+                                    ctx_share,
+                                    ctx_share_known,
+                                    process_id: pid,
+                                    kernel_pid,
+                                    system_pid_is_kernel: false,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            v
+        }
+
+        /// `KF3_WIN_KERNEL_PID4` OFF: the classification of every fact combination is the old
+        /// rule's, pid 4 included (the defect the experiment exists for: a pid-4 copy channel is
+        /// USER work).
+        #[test]
+        fn kernel_pid4_off_changes_nothing() {
+            for f in grid() {
+                assert_eq!(windows_user_work(&f), rule_before_kernel_pid4(&f), "{f:?}");
+            }
+            // [measured, run 113, qemu.log line 63706] the post-TDR restart's copy channel.
+            let restart_ce = UserWorkFacts {
+                engine: Some(CE0),
+                ctx_share: 0,
+                ctx_share_known: false,
+                process_id: Some(4),
+                kernel_pid: Some(0x350),
+                ..dwm()
+            };
+            assert_eq!(
+                windows_user_work(&restart_ce),
+                Ok(()),
+                "flag off: USER work, as before"
+            );
+        }
+
+        /// ON: only a declared pid 4 changes, and only to Translated; every other pid is
+        /// classified as with the flag off.
+        #[test]
+        fn kernel_pid4_on_moves_only_pid4_and_only_to_translated() {
+            let mut changed = 0;
+            for f in grid() {
+                let on = UserWorkFacts {
+                    system_pid_is_kernel: true,
+                    ..f
+                };
+                let (was, now) = (windows_user_work(&f), windows_user_work(&on));
+                if f.process_id == Some(4) {
+                    if was.is_err() {
+                        assert_eq!(now, was, "{f:?}");
+                    } else {
+                        changed += 1;
+                        assert_eq!(
+                            now,
+                            Err("the Windows System process (EXPERIMENT KF3_WIN_KERNEL_PID4)")
+                        );
+                    }
+                } else {
+                    assert_eq!(now, was, "a pid other than 4 is judged as before: {f:?}");
+                }
+                // The safety property, over the whole grid: Passthrough with the flag on implies
+                // Passthrough with it off (the flag cannot move a channel to the less strict route).
+                if now.is_ok() {
+                    assert!(was.is_ok(), "{f:?}");
+                }
+            }
+            assert!(changed > 0, "the grid holds pid-4 channels the flag moves");
+        }
+
+        /// The run-113 restart channels through the rule, flag on: the copy channel (pid 4, no
+        /// subcontext) and the GR channel (pid 4, no subcontext) are both Translated, so the pair
+        /// can share a VA space; the compositor's and D3D clients' channels are still user work.
+        #[test]
+        fn run113s_restart_channels_are_translated_with_kernel_pid4() {
+            let on = |f: UserWorkFacts| {
+                windows_user_work(&UserWorkFacts {
+                    system_pid_is_kernel: true,
+                    ..f
+                })
+            };
+            let ce = UserWorkFacts {
+                engine: Some(CE0),
+                ctx_share: 0,
+                ctx_share_known: false,
+                process_id: Some(4),
+                kernel_pid: Some(0x350),
+                ..dwm()
+            };
+            let gr = UserWorkFacts {
+                engine: Some(GR),
+                ..ce
+            };
+            assert!(on(ce).is_err());
+            assert!(on(gr).is_err());
+            for pid in [0x3b8, 0x554, 0x54c] {
+                assert_eq!(
+                    on(UserWorkFacts {
+                        process_id: Some(pid),
+                        ..dwm()
+                    }),
+                    Ok(())
+                );
             }
         }
 
@@ -3617,6 +3832,114 @@ mod tests {
             "no refusal: the object seat builds the reply"
         );
         assert!(link.defers(&cmd).is_some(), "the reply waits for the act");
+    }
+
+    /// A kernel-stamped Windows `NV_CHANNEL_ALLOC_PARAMS` alloc (`class 0xc56f`) of `client:handle`
+    /// under `parent`, declaring `ProcessID = pid`, `engineType = engine`, no context share and no
+    /// VA space of its own (the shape of the kernel driver's own channels,
+    /// `[measured, run 113]`).
+    fn kernel_channel_alloc(
+        client: u32,
+        parent: u32,
+        handle: u32,
+        engine: u32,
+        pid: u32,
+    ) -> RpcCommand {
+        use kf_abi::generated::matrix::NV_CHANNEL_ALLOC_PARAMS;
+        let v = kf_abi::versions::BENCH_DRIVER;
+        let l = kf_abi::matrix::Resolved::of(&NV_CHANNEL_ALLOC_PARAMS, v).expect("measured");
+        let mut params = vec![0u8; l.size()];
+        for (path, val) in [
+            ("ProcessID", pid),
+            ("engineType", engine),
+            ("internalFlags", 0x16),
+            ("gpFifoEntries", 4096),
+        ] {
+            let off = l.need(path).expect("field").off();
+            params[off..off + 4].copy_from_slice(&val.to_le_bytes());
+        }
+        let mut payload: Vec<u8> = [client, parent, handle, 0xc56f, 0, params.len() as u32, 0, 0]
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        payload.extend(params);
+        RpcCommand {
+            function: RpcFunction::RmAlloc,
+            code: 103,
+            sequence: 1,
+            payload,
+            elements: 1,
+            delivered: Vec::new(),
+        }
+    }
+
+    /// ★ EXPERIMENT `KF3_WIN_KERNEL_PID4`, end to end through the link on the run-113 sequence: the
+    /// first start's kernel channel teaches pid `0x350`; the restart's copy channel declares pid 4.
+    /// Off, the link classifies it USER work (the Passthrough twin that made the GR channel born
+    /// next to it `KernelInUserSpace`); on, it keeps the Translated route. A channel in any other
+    /// process is classified as before. The classification is read from the pid the alloc
+    /// declares; the host adds no other fact.
+    #[test]
+    fn the_link_routes_a_pid4_channel_by_the_flag() {
+        use std::sync::{Arc, Mutex};
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
+        let run = |pid4: bool| -> Vec<(u32, bool)> {
+            let seen: Arc<Mutex<Vec<(u32, bool)>>> = Arc::default();
+            let s2 = seen.clone();
+            let sink: ChanSink = Arc::new(move |st| {
+                if let ChanStatement::Alloc(a) = st {
+                    s2.lock()
+                        .unwrap()
+                        .push((a.process_id.unwrap_or(u32::MAX), a.user_work));
+                }
+                ChanAnswer::Done
+            });
+            let mut link = ChannelPolicy::new(abi, kf_abi::GuestOs::Windows, sink)
+                .with_user_work_flag(true)
+                .with_kernel_pid4(pid4);
+            link.windows_identity = true;
+            // first start: the kernel driver's own copy channel (pid 0x350) teaches the pid; then
+            // the restart (System process, pid 4: a copy and a GR channel), then user processes
+            for (i, (engine, pid)) in [(0xb, 0x350), (0xb, 4), (0x1, 4), (0xb, 0x554), (0xb, 0x3b8)]
+                .into_iter()
+                .enumerate()
+            {
+                let h = 0xff04_0000 + i as u32;
+                let _ = link.respond(&kernel_channel_alloc(
+                    0xc1d0_0013,
+                    0xff0e_0000,
+                    h,
+                    engine,
+                    pid,
+                ));
+            }
+            let guard = seen.lock().unwrap();
+            guard.clone()
+        };
+        let off = run(false);
+        assert_eq!(
+            off,
+            vec![
+                (0x350, false),
+                (4, true),  // the defect: the System process's copy channel is USER work
+                (4, false), // GR without a subcontext stays kernel work
+                (0x554, true),
+                (0x3b8, true)
+            ],
+            "flag off: the classification is the one run 113 measured"
+        );
+        let on = run(true);
+        assert_eq!(
+            on,
+            vec![
+                (0x350, false),
+                (4, false),
+                (4, false),
+                (0x554, true),
+                (0x3b8, true)
+            ],
+            "flag on: only pid 4 moves, to Translated"
+        );
     }
 
     #[test]
