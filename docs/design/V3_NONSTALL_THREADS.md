@@ -151,3 +151,28 @@ stalled drainer no longer freezes the heartbeat the guest reads (it used to, by 
 (`log[... drainer_over1ms= act_over1ms=]` or `max_call_us`), add a bounded logger thread: `klog!`
 formats and `try_send`s into a bounded queue, dropping the newest line and counting it; a thread
 does the writes. Until a run shows the need it is measured, not built.
+
+## 3.D Doorbell servicing (item D) — built
+
+**Before.** `DbFast::service_ready` (called at the top of the drainer loop and before EVERY privileged
+write is applied) repeated while a poll came back with a full batch (`MAX_READY_BATCH` = 64). A guest
+ringing 64+ tokens continuously — each delivery re-arms its eventfd — kept the drainer there:
+privileged writes, held-reply release, RC and hotplug delivery starved.
+
+**After.** One non-blocking poll of at most 64 fds per call, delivered, and back to the loop. A fd still
+ready is level-triggered and is served by the next call; a call that filled the batch increments
+`stall[doorbell_batch_full=]`. **Doorbells stay first, but bounded.**
+
+**Behaviour change (decision for the owner).** `V3_DOORBELL_IOEVENTFD.md` §4 promised that a doorbell
+stored before a later privileged write is delivered before that write is applied. That now holds for up
+to one batch of ready tokens; beyond it a doorbell can follow the write. It is never lost, the trap never
+ordered different tokens against privileged writes, and `deregister`'s final drain closes the
+free-after-doorbell case. The bounded way to restore the full guarantee, if wanted: a per-call snapshot
+(each ready tag at most once, at most `live_regs` polls). Not built; §4 carries the correction above the
+text it corrects.
+
+**Falsifier / tests** (`dbfast::tests`): `service_ready_is_one_bounded_batch_even_while_the_guest_keeps_ringing`
+(100 tokens whose every delivery re-rings: the old code never returned — observed as a 5 s timeout
+before the change — now one call = one full batch, one poll; the next call serves the rest);
+`a_privileged_write_is_applied_within_one_doorbell_batch_while_the_guest_keeps_ringing` (a real
+`Plane::drainer_pass`: the write is applied after exactly one batch of 64 deliveries).

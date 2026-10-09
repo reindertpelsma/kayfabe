@@ -115,6 +115,14 @@ DATAMATCH) at every current site, under the budget. Until a placement lands the 
 token; after it, the eventfd does. A count KVM makes before the drainer has applied `Add` is still
 reported (level-triggered) and the drainer applies queued commands before it calls a tag stale.
 
+> ⊘ **CORRECTED 2026-10-09 (`V3_NONSTALL_THREADS.md` §3.D) — the ordering sentence below ("is delivered
+> before that write is applied") holds only for up to ONE batch (`MAX_READY_BATCH` = 64) of ready
+> tokens.** `service_ready` used to loop until the ready set was empty, so a guest ringing 64+ tokens
+> continuously could keep the drainer in it (owner rule: no unbounded loop on the drainer). It is now one
+> bounded poll per call; a doorbell beyond the first batch is delivered by the next call and can follow a
+> privileged write queued behind it. Never lost (level-triggered); the free-after-its-own-doorbell case is
+> closed by the final drain at `Remove`.
+
 **Delivery** (drainer): read — and so reset — the counter, **then** deliver once through the trap's
 arm. A store counted after the read leaves the fd ready for the next poll (drain-before-act). The
 drainer polls doorbells (non-blocking, one `epoll_wait(0)`, skipped with no syscall when nothing is
