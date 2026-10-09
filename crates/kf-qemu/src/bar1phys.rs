@@ -231,8 +231,7 @@ mod tests {
             off: 0,
             ram: false,
             kind: 0,
-            perm: kf_host::MapPerm::READ_WRITE,
-        };
+            perm: kf_host::MapPerm::READ_WRITE, leaf: 0, };
         w.map(&console, false).unwrap();
         w.invalidate().unwrap();
         w.unmap(0, false).unwrap();

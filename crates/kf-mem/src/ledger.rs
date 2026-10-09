@@ -26,6 +26,8 @@ pub struct Desired {
     /// (`crate::apply::PermPolicy::host_perm`). ⊘ Dropping them mapped every guest read-only leaf
     /// read-write.
     pub perm: kf_host::MapPerm,
+    /// ★ 2026-10-09: the guest leaf size in bytes (`crate::apply::DiffRun::leaf`; 0 = unknown).
+    pub leaf: u64,
 }
 
 /// A walked leaf's aperture, as the walk kernel reports it (`KFWR_RF_AP_*`, `cuda/walk/kf_walk.h:92-97`).
@@ -93,6 +95,7 @@ pub fn desired_from_leaves(
                     ram: false,
                     kind: 0,
                     perm: kf_host::MapPerm::READ_WRITE,
+                    leaf: 0,
                 })
                 .ok_or(LeafRefusal::OutsideStore { va, gpga: at, len }),
             AP_SYS_COHERENT | AP_SYS_NONCOHERENT => ram_offset(at, len)
@@ -103,6 +106,7 @@ pub fn desired_from_leaves(
                     ram: true,
                     kind: 0,
                     perm: kf_host::MapPerm::READ_WRITE,
+                    leaf: 0,
                 })
                 .ok_or(LeafRefusal::NotGuestRam { va, gpa: at, len }),
             _ => Err(LeafRefusal::Aperture { va, ap }),
@@ -374,6 +378,21 @@ impl HostVas<'_> {
         rows: &[Desired],
         defer: bool,
     ) -> Result<u32, String> {
+        self.map_scattered_through(None, ram_fd, rows, defer)
+    }
+
+    /// ★ 2026-10-09: [`HostVas::map_scattered`] mapped THROUGH the reservation `through` when
+    /// given (`crate::batch` micro reservations; `kf_host::HostRm::map_scattered_through`).
+    ///
+    /// # Errors
+    /// As [`HostVas::map_scattered`].
+    pub fn map_scattered_through(
+        &self,
+        through: Option<u32>,
+        ram_fd: std::os::fd::BorrowedFd<'_>,
+        rows: &[Desired],
+        defer: bool,
+    ) -> Result<u32, String> {
         let first = rows.first().ok_or("empty batch")?;
         let mut next = first.va;
         let mut pieces: Vec<(u64, u64)> = Vec::with_capacity(rows.len());
@@ -394,8 +413,8 @@ impl HostVas<'_> {
             }
         }
         self.rm
-            .map_scattered(
-                self.space, ram_fd, &pieces, first.va, defer, first.kind, first.perm,
+            .map_scattered_through(
+                self.space, through, ram_fd, &pieces, first.va, defer, first.kind, first.perm,
             )
             .map_err(|e| {
                 format!(

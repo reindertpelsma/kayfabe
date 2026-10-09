@@ -42,6 +42,12 @@ pub struct DiffRun {
     /// so a user twin WITHHOLDS the leaf ([`MapTarget::withholds_privileged`]) rather than map it
     /// where an unprivileged channel could reach it.
     pub privileged: bool,
+    /// ★ 2026-10-09: the guest LEAF size of the run's pages (`KfMapRun::page_size`: 4 KiB, 64 KiB,
+    /// 2 MiB, 512 MiB), in bytes; 0 = unknown (treated as the family grain). Outside a
+    /// VA-reserving `hDma` the host maps ONE mapping per leaf — the smallest unit the guest can
+    /// change independently — so every later change is a whole-mapping unmap
+    /// (`crate::batch::BatchedVas` rule 2).
+    pub leaf: u64,
 }
 
 /// How one entry's runs are turned into host rows.
@@ -136,6 +142,9 @@ pub struct Applied {
     /// Batches / ranges the target refused whose runs then went one by one (not refusals: every
     /// run still got its own verdict).
     pub batch_fallbacks: usize,
+    /// ★ 2026-10-09: runs (UNMAP or MAP) wholly satisfied by UNCHANGED pages — no host call at all
+    /// (a page the diff names with the same mapping is never unmapped nor re-mapped).
+    pub kept_runs: usize,
     /// The first such fallback's reason.
     pub first_batch_fallback: Option<String>,
     /// ★ P1+P2 inc A (§4.3): vidmem/SKED map runs into the firmware carve-out on a GPU target
@@ -312,7 +321,21 @@ impl PermPolicy {
             kind: m.kind(),
             perm: self.host_perm(m.flags),
             privileged: m.flags & kf_cuda::abi::KFWR_RF_PRIVILEGE != 0,
+            leaf: leaf_bytes(m.page_size()),
         }
+    }
+}
+
+/// ★ 2026-10-09: a walk run's page-size code (`kf_cuda::abi::PS_*`) as bytes; 0 for an unknown
+/// code (the caller then treats the run as made of family-grain leaves).
+#[must_use]
+pub const fn leaf_bytes(code: u8) -> u64 {
+    match code {
+        kf_cuda::abi::PS_4K => 0x1000,
+        kf_cuda::abi::PS_64K => 0x1_0000,
+        kf_cuda::abi::PS_2M => 0x20_0000,
+        kf_cuda::abi::PS_512M => 0x2000_0000,
+        _ => 0,
     }
 }
 
@@ -359,8 +382,92 @@ fn carve_reached(
     }
 }
 
+/// ★★★ 2026-10-09 — **a page the diff names but does not change.** The walker unmaps WHOLE
+/// committed placements and maps the pieces of the walk in the gaps (`kf_walk.cu`, "THE DIFF
+/// AGAINST THE COMMITTED PLACEMENTS"), and its UNMAP run IS the committed placement (same `at`,
+/// same flags). So a one-page change inside a 16-page row arrives as UNMAP(16 pages) + MAP(5) +
+/// MAP(1, new) + MAP(10): fifteen pages whose guest mapping did not change. The owner's rule
+/// (2026-10-09): *every VA whose guest mapping is unchanged stays accessible at all times* — so on
+/// a GPU target those pages get NO host call at all: neither unmapped nor re-mapped.
+///
+/// Unchanged ⇔ the UNMAP and the MAP name the same aperture, kind, permissions, privilege and
+/// LEAF SIZE, and the same linear backing over their overlap. (A leaf-size change is a change of
+/// the guest's mapping: its host mappings are re-made.)
+fn same_mapping(u: &DiffRun, m: &DiffRun) -> bool {
+    u.ap == m.ap
+        && u.kind == m.kind
+        && u.perm == m.perm
+        && u.privileged == m.privileged
+        && u.leaf == m.leaf
+        && u.at.wrapping_sub(u.va) == m.at.wrapping_sub(m.va)
+}
+
+/// Per run, the sub-ranges that are UNCHANGED ([`same_mapping`]) — for an UNMAP run the part that
+/// must NOT be unmapped, for a MAP run the part that must NOT be mapped. Only plain memory runs
+/// take part (a usermode view or a SKED page keeps its own verbs). O((U + M) log M).
+fn unchanged_parts(
+    runs: &[DiffRun],
+    cfg: &ApplyCfg<'_>,
+    withhold_privileged: bool,
+) -> Vec<Vec<(u64, u64)>> {
+    let plain = |r: &DiffRun| {
+        cfg.usermode
+            .and_then(|u| u.classify(r.ap, r.kind, r.at, r.len))
+            .is_none()
+            && kf_chip::sked::message_leaf(r.ap, r.kind) != Some(MessageLeaf::SkedReflected)
+    };
+    let mut kept: Vec<Vec<(u64, u64)>> = vec![Vec::new(); runs.len()];
+    let mut maps: Vec<usize> = (0..runs.len())
+        .filter(|&i| !runs[i].unmap && plain(&runs[i]))
+        .filter(|&i| !(runs[i].privileged && withhold_privileged))
+        .collect();
+    maps.sort_by_key(|&i| runs[i].va);
+    for (u, ur) in runs.iter().enumerate() {
+        if !ur.unmap || ur.held || !plain(ur) {
+            continue;
+        }
+        let u_end = ur.va.saturating_add(ur.len);
+        let first = maps.partition_point(|&m| runs[m].va.saturating_add(runs[m].len) <= ur.va);
+        for &m in maps[first..].iter().take_while(|&&m| runs[m].va < u_end) {
+            let mr = &runs[m];
+            let (s, e) = (ur.va.max(mr.va), u_end.min(mr.va.saturating_add(mr.len)));
+            if s < e && same_mapping(ur, mr) {
+                kept[u].push((s, e));
+                kept[m].push((s, e));
+            }
+        }
+    }
+    for k in &mut kept {
+        k.sort_unstable();
+    }
+    kept
+}
+
+/// `[lo, hi)` minus the sorted, disjoint `kept` intervals.
+fn subtract(lo: u64, hi: u64, kept: &[(u64, u64)]) -> Vec<(u64, u64)> {
+    let mut out = Vec::new();
+    let mut cur = lo;
+    for &(s, e) in kept {
+        if s > cur {
+            out.push((cur, s.min(hi)));
+        }
+        cur = cur.max(e);
+    }
+    if cur < hi {
+        out.push((cur, hi));
+    }
+    out.retain(|&(s, e)| s < e);
+    out
+}
+
 /// ★★★★★ **Apply `runs` (one entry's diff) through `target`.** Unmaps first (a held placement
 /// is retired without a host call), then maps, then ONE invalidate if anything changed.
+///
+/// ★★★ 2026-10-09 (GPU targets): only what CHANGED reaches the host. A page an UNMAP and a MAP
+/// of this entry name with the same mapping ([`same_mapping`]) is neither unmapped nor re-mapped
+/// — never transiently unmapped; the changed sub-ranges are unmapped by exact range over OUR
+/// placements (`crate::batch::BatchedVas::unmap_range`) and only the new pieces are mapped. A
+/// target that cannot unmap a sub-range answers by name and that run is refused.
 ///
 /// A map is not attempted — and is acknowledged FAILED, so the next diff retries it — when it
 /// cannot become a host row (outside the store, not guest RAM, not whole pages), when it overlaps
@@ -368,48 +475,77 @@ fn carve_reached(
 /// placement whose unmap was just refused (the two would overlap on the host). A walked piece
 /// wholly above a CPU window's extent has no CPU address: it is satisfied as HELD (nothing of
 /// ours placed); one crossing the extent is placed up to it.
+#[allow(clippy::too_many_lines)]
 pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>) -> Applied {
     let mut out = Applied {
         codes: vec![KFWR_ACK_APPLIED; runs.len()],
         ..Applied::default()
     };
+    let net = target.gpu_space();
+    let withhold_privileged = target.withholds_privileged();
+    let kept = if net {
+        unchanged_parts(runs, cfg, withhold_privileged)
+    } else {
+        vec![Vec::new(); runs.len()]
+    };
     let mut failed_unmaps: Vec<(u64, u64)> = Vec::new();
     // ★ `V3_BATCHED_MAP.md` §4: VA-adjacent unmaps go as ONE range (the union of exactly the
     // placements being removed, nothing else); a refused range falls back to one call per run,
-    // so every run still gets its own verdict.
-    let mut unmaps: Vec<usize> = Vec::new();
+    // so every run still gets its own verdict. ★ 2026-10-09: on a GPU target the pieces are the
+    // CHANGED sub-ranges only, and even a lone piece goes by range (a kept remnant is no longer
+    // keyed by the placement's start).
+    let mut pieces: Vec<(usize, u64, u64)> = Vec::new();
     for (i, r) in runs.iter().enumerate().filter(|(_, r)| r.unmap) {
         if r.held {
             out.held_retired += 1;
-        } else {
-            unmaps.push(i);
+            continue;
         }
+        let changed = subtract(r.va, r.va.saturating_add(r.len), &kept[i]);
+        if changed.is_empty() {
+            out.kept_runs += 1;
+        }
+        pieces.extend(changed.into_iter().map(|(s, e)| (i, s, e - s)));
     }
-    unmaps.sort_by_key(|&i| runs[i].va);
+    pieces.sort_by_key(|&(_, va, _)| va);
+    let idx: Vec<usize> = (0..pieces.len()).collect();
     for group in contiguous_groups(
-        &unmaps,
-        |i| (runs[i].va, runs[i].len),
+        &idx,
+        |k| (pieces[k].1, pieces[k].2),
         |_, _| true,
         usize::MAX,
     ) {
-        if group.len() >= 2 {
-            let (va, end) = (
-                runs[group[0]].va,
-                runs[group[group.len() - 1]].va + runs[group[group.len() - 1]].len,
-            );
+        let runs_in = |g: &[usize]| {
+            let mut v: Vec<usize> = g.iter().map(|&k| pieces[k].0).collect();
+            v.dedup();
+            v.len()
+        };
+        if group.len() >= 2 || net {
+            let va = pieces[group[0]].1;
+            let last = pieces[group[group.len() - 1]];
+            let end = last.1 + last.2;
             out.unmap_calls += 1;
             match target.unmap_range(va, end - va, true) {
                 Ok(()) => {
-                    out.unmapped += group.len();
+                    out.unmapped += runs_in(group);
                     out.range_unmaps += 1;
-                    out.range_unmapped_runs += group.len();
+                    out.range_unmapped_runs += runs_in(group);
                     continue;
                 }
                 Err(e) => out.fallback(e),
             }
         }
-        for &i in group {
+        for &k in group {
+            let (i, va, len) = pieces[k];
             let r = &runs[i];
+            if va != r.va || len != r.len {
+                failed_unmaps.push((va, va.saturating_add(len)));
+                out.unmap_refused += 1;
+                out.refuse(
+                    i,
+                    format!("unmap {va:#x}+{len:#x}: a sub-range of a placement and the target could not unmap it by range"),
+                );
+                continue;
+            }
             out.unmap_calls += 1;
             match target.unmap(r.va, true) {
                 Ok(()) => out.unmapped += 1,
@@ -423,17 +559,16 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
     }
     let extent = target.va_extent();
     let reserved = target.reserved();
-    let withhold_privileged = target.withholds_privileged();
     let mut pending: Vec<(usize, Desired)> = Vec::new();
-    for (i, r) in runs.iter().enumerate().filter(|(_, r)| !r.unmap) {
+    for (i, r0) in runs.iter().enumerate().filter(|(_, r)| !r.unmap) {
         // ★★★ Hopper+ internal MMIO FIRST: a usermode-page view is never a memory row.
         if let Some(leaf) = cfg
             .usermode
-            .and_then(|u| u.classify(r.ap, r.kind, r.at, r.len))
+            .and_then(|u| u.classify(r0.ap, r0.kind, r0.at, r0.len))
         {
             apply_usermode(
                 target,
-                r,
+                r0,
                 leaf,
                 extent,
                 &reserved,
@@ -447,100 +582,53 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
         // message-kind mapping (`V3_CDP.md`). ⊘ Only that case is diverted: a SYS_COH message leaf
         // on a family with no usermode MMIO (Turing … Ada: no producer is known) keeps its
         // pre-existing path, unchanged.
-        if kf_chip::sked::message_leaf(r.ap, r.kind) == Some(MessageLeaf::SkedReflected) {
+        if kf_chip::sked::message_leaf(r0.ap, r0.kind) == Some(MessageLeaf::SkedReflected) {
             let at = SkedAt {
                 extent,
                 reserved: &reserved,
                 failed_unmaps: &failed_unmaps,
                 withhold_privileged,
             };
-            apply_sked(target, r, cfg, &at, i, &mut out);
+            apply_sked(target, r0, cfg, &at, i, &mut out);
             continue;
         }
         // ★★★ v3-roperm: a PRIVILEGED memory leaf never reaches a user twin (guest-internal
         // isolation: an unprivileged guest channel must not reach what the guest kernel marked
         // privileged, and the host cannot express the bit). Withheld, counted, named.
-        if r.privileged {
+        if r0.privileged {
             if withhold_privileged {
-                out.withhold_privileged(i, r);
+                out.withhold_privileged(i, r0);
                 continue;
             }
             out.priv_mirrored += 1;
         }
-        let mut d =
-            match desired_from_leaves([(r.va, r.at, r.len, r.ap)], cfg.store_bytes, cfg.ram_offset)
-            {
-                // ★ v3-gfx: the host maps it with the guest's kind, uncompressed (`Desired::kind`).
-                // ★★★ v3-roperm: and with the guest leaf's permissions (`Desired::perm`).
-                Ok(v) if v.len() == 1 => Desired {
-                    kind: host_pte_kind(r.kind, v[0].ram, cfg.per_map_kind),
-                    perm: r.perm,
-                    ..v[0]
-                },
-                Ok(_) => {
-                    out.refuse(i, format!("map {:#x}: no row", r.va));
-                    continue;
-                }
-                Err(e) => {
-                    out.refuse(i, format!("leaf refused: {e:?}"));
-                    continue;
-                }
+        // ★ 2026-10-09: only the NEW pieces of the run reach the host; the unchanged part is
+        // already ours (a kept remnant of the placement this entry unmapped).
+        let new = subtract(r0.va, r0.va.saturating_add(r0.len), &kept[i]);
+        if new.is_empty() {
+            out.kept_runs += 1;
+            continue;
+        }
+        for (s, e) in new {
+            let r = DiffRun {
+                va: s,
+                len: e - s,
+                at: r0.at.wrapping_add(s - r0.va),
+                ..*r0
             };
-        if !d.ram && carve_reached(target, d.off, d.len, cfg, &mut out) {
-            out.refuse(
+            if let Some(d) = prepare_row(
+                target,
+                &r,
                 i,
-                format!(
-                    "leaf {:#x}+{:#x} names store {:#x}, inside the firmware carve-out at {:#x} — a twin maps no kayfabe memory (§Q)",
-                    d.va, d.len, d.off, cfg.carve
-                ),
-            );
-            continue;
-        }
-        if !whole_pages(&d, cfg.grain) {
-            out.refuse(
-                i,
-                format!(
-                    "leaf {:#x}+{:#x} (backing {:#x}) is not whole {:#x}-byte pages: a sub-page row would leave a hole",
-                    d.va, d.len, d.off, cfg.grain
-                ),
-            );
-            continue;
-        }
-        if let Some(ext) = extent {
-            if d.va >= ext {
-                out.clipped_bytes += d.len;
-                out.codes[i] = KFWR_ACK_HELD;
-                continue;
-            }
-            let end = d.va.saturating_add(d.len);
-            if end > ext {
-                out.clipped_bytes += end - ext;
-                d.len = ext - d.va;
+                cfg,
+                extent,
+                &reserved,
+                &failed_unmaps,
+                &mut out,
+            ) {
+                pending.push((i, d));
             }
         }
-        let end = d.va.saturating_add(d.len);
-        if let Some(&(a, b)) = reserved.iter().find(|&&(a, b)| d.va < b && a < end) {
-            out.vmm_overlaps += 1;
-            out.refuse(
-                i,
-                format!(
-                    "leaf {:#x}+{:#x} overlaps OUR placement [{a:#x}, {b:#x}) — a guest VA may never alias a VMM address; this leaf alone is refused (Q11)",
-                    d.va, d.len
-                ),
-            );
-            continue;
-        }
-        if failed_unmaps.iter().any(|&(a, b)| d.va < b && a < end) {
-            out.refuse(
-                i,
-                format!(
-                    "map {:#x}+{:#x}: over a placement whose unmap was refused",
-                    d.va, d.len
-                ),
-            );
-            continue;
-        }
-        pending.push((i, d));
     }
     // ★ `V3_BATCHED_MAP.md` §3: VA-contiguous guest-RAM rows of one kind go as ONE batched
     // placement; a refused batch placed nothing, so its rows go one by one and each gets its own
@@ -554,6 +642,9 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             && pending[a].1.kind == pending[b].1.kind
             && pending[a].1.perm == pending[b].1.perm
     };
+    // Per MAP run: a piece placed, a piece held by the host.
+    let mut placed: Vec<Vec<(u64, u64)>> = vec![Vec::new(); runs.len()];
+    let mut held_any = vec![false; runs.len()];
     for group in contiguous_groups(
         &idx,
         |k| (pending[k].1.va, pending[k].1.len),
@@ -568,6 +659,9 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                     out.mapped += rows.len();
                     out.batches += 1;
                     out.batched_runs += rows.len();
+                    for &k in group {
+                        placed[pending[k].0].push((pending[k].1.va, pending[k].1.len));
+                    }
                     continue;
                 }
                 Err(e) => out.fallback(e),
@@ -577,7 +671,10 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             let (i, d) = pending[k];
             out.map_calls += 1;
             match target.map(&d, true) {
-                Ok(Mapped::Placed) => out.mapped += 1,
+                Ok(Mapped::Placed) => {
+                    out.mapped += 1;
+                    placed[i].push((d.va, d.len));
+                }
                 Ok(Mapped::HeldByHost) => {
                     // Rare (a host-RM placement in the twin's VAS at the guest's VA): named per leaf.
                     eprintln!(
@@ -585,7 +682,7 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                         d.va, d.len
                     );
                     out.held += 1;
-                    out.codes[i] = KFWR_ACK_HELD;
+                    held_any[i] = true;
                     // ★ v3-gfx: name WHERE (bounded) — a held row is a guest VA host RM already owns.
                     static HELD_LOGGED: std::sync::atomic::AtomicU32 =
                         std::sync::atomic::AtomicU32::new(0);
@@ -598,6 +695,30 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                 }
                 Err(e) => out.refuse(i, e),
             }
+        }
+    }
+    // Verdicts of the MAP runs: HELD only when nothing of it is ours (no piece placed, nothing
+    // kept); a FAILED run's own pieces and kept part are taken down again (the walker re-emits it,
+    // and the ledger must hold nothing it does not commit) — named.
+    for (i, r) in runs.iter().enumerate().filter(|(_, r)| !r.unmap) {
+        if out.codes[i] == KFWR_ACK_FAILED {
+            let ours: Vec<(u64, u64)> = kept[i]
+                .iter()
+                .copied()
+                .chain(placed[i].iter().map(|&(v, l)| (v, v.saturating_add(l))))
+                .collect();
+            for (s, end) in ours {
+                out.unmap_calls += 1;
+                if let Err(why) = target.unmap_range(s, end - s, true) {
+                    out.first_refusal.get_or_insert(format!(
+                        "map {:#x}: refused, and taking down its other part {s:#x}+{:#x} was refused too: {why}",
+                        r.va,
+                        end - s
+                    ));
+                }
+            }
+        } else if held_any[i] && placed[i].is_empty() && kept[i].is_empty() {
+            out.codes[i] = KFWR_ACK_HELD;
         }
     }
     if out.mapped + out.unmapped + out.usermode_trapped + out.sked_placed > 0 {
@@ -613,6 +734,95 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
         }
     }
     out
+}
+
+/// One MAP run (or a new piece of one) → the host row, or its refusal recorded on run `i`.
+#[allow(clippy::too_many_arguments)]
+fn prepare_row(
+    target: &dyn MapTarget,
+    r: &DiffRun,
+    i: usize,
+    cfg: &ApplyCfg<'_>,
+    extent: Option<u64>,
+    reserved: &[(u64, u64)],
+    failed_unmaps: &[(u64, u64)],
+    out: &mut Applied,
+) -> Option<Desired> {
+    let mut d =
+        match desired_from_leaves([(r.va, r.at, r.len, r.ap)], cfg.store_bytes, cfg.ram_offset) {
+            // ★ v3-gfx: the host maps it with the guest's kind, uncompressed (`Desired::kind`).
+            // ★★★ v3-roperm: and with the guest leaf's permissions (`Desired::perm`).
+            // ★ 2026-10-09: and its leaf size (one host mapping per leaf outside a reservation).
+            Ok(v) if v.len() == 1 => Desired {
+                kind: host_pte_kind(r.kind, v[0].ram, cfg.per_map_kind),
+                perm: r.perm,
+                leaf: r.leaf,
+                ..v[0]
+            },
+            Ok(_) => {
+                out.refuse(i, format!("map {:#x}: no row", r.va));
+                return None;
+            }
+            Err(e) => {
+                out.refuse(i, format!("leaf refused: {e:?}"));
+                return None;
+            }
+        };
+    if !d.ram && carve_reached(target, d.off, d.len, cfg, out) {
+        out.refuse(
+            i,
+            format!(
+                "leaf {:#x}+{:#x} names store {:#x}, inside the firmware carve-out at {:#x} — a twin maps no kayfabe memory (§Q)",
+                d.va, d.len, d.off, cfg.carve
+            ),
+        );
+        return None;
+    }
+    if !whole_pages(&d, cfg.grain) {
+        out.refuse(
+            i,
+            format!(
+                "leaf {:#x}+{:#x} (backing {:#x}) is not whole {:#x}-byte pages: a sub-page row would leave a hole",
+                d.va, d.len, d.off, cfg.grain
+            ),
+        );
+        return None;
+    }
+    if let Some(ext) = extent {
+        if d.va >= ext {
+            out.clipped_bytes += d.len;
+            out.codes[i] = KFWR_ACK_HELD;
+            return None;
+        }
+        let end = d.va.saturating_add(d.len);
+        if end > ext {
+            out.clipped_bytes += end - ext;
+            d.len = ext - d.va;
+        }
+    }
+    let end = d.va.saturating_add(d.len);
+    if let Some(&(a, b)) = reserved.iter().find(|&&(a, b)| d.va < b && a < end) {
+        out.vmm_overlaps += 1;
+        out.refuse(
+            i,
+            format!(
+                "leaf {:#x}+{:#x} overlaps OUR placement [{a:#x}, {b:#x}) — a guest VA may never alias a VMM address; this leaf alone is refused (Q11)",
+                d.va, d.len
+            ),
+        );
+        return None;
+    }
+    if failed_unmaps.iter().any(|&(a, b)| d.va < b && a < end) {
+        out.refuse(
+            i,
+            format!(
+                "map {:#x}+{:#x}: over a placement whose unmap was refused",
+                d.va, d.len
+            ),
+        );
+        return None;
+    }
+    Some(d)
 }
 
 /// What [`apply_sked`] checks a row against — the entry's own bounds.
@@ -1008,6 +1218,7 @@ mod tests {
             kind: 0,
             perm: kf_host::MapPerm::READ_WRITE,
             privileged: false,
+            leaf: 0,
         }
     }
     fn u(va: u64, len: u64) -> DiffRun {
@@ -1021,6 +1232,7 @@ mod tests {
             kind: 0,
             perm: kf_host::MapPerm::READ_WRITE,
             privileged: false,
+            leaf: 0,
         }
     }
 
@@ -1304,6 +1516,7 @@ mod tests {
             kind: 0,
             perm: MapPerm::READ_WRITE,
             privileged: false,
+            leaf: 0x1000,
         };
         let atomic_on = PermPolicy {
             carry_atomic_disable: true,
@@ -1342,6 +1555,7 @@ mod tests {
                             volatile: true
                         },
                         privileged: true,
+                        leaf: leaf_bytes(ps),
                         ..plain
                     },
                     "ap {ap} kind {kind:#x} ps {ps} {policy:?}"
@@ -1381,6 +1595,11 @@ mod tests {
                 },
                 16..=23 => DiffRun {
                     kind: 1 << (bit - 16),
+                    ..plain
+                },
+                // ★ 2026-10-09: the page-size code is the leaf size (bits 8..11).
+                8..=11 => DiffRun {
+                    leaf: leaf_bytes(1 << (bit - 8)),
                     ..plain
                 },
                 31 => DiffRun {
@@ -1683,6 +1902,7 @@ mod tests {
             kind: 0x0F,
             perm: kf_host::MapPerm::READ_WRITE,
             privileged: false,
+            leaf: 0,
         }
     }
     fn hopper() -> ApplyCfg<'static> {

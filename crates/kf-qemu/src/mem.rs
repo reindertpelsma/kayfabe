@@ -1090,8 +1090,10 @@ impl SpaceCalls {
     }
 }
 
-/// ★ `KF3_NO_BATCHED_MAP=1` turns batched maps and range unmaps off (the per-run path, as before
+/// ★ `KF3_NO_BATCHED_MAP=1` turns batched MAPS off (the per-run path, as before
 /// `V3_BATCHED_MAP.md`) — an explicit OPT-OUT for A/B measurement only. Read once. Default: ON.
+/// ⊘ (2026-10-09) It no longer turns range unmaps off: an exact range over our own placements is
+/// how the apply's net diff removes a changed sub-range without touching unchanged pages.
 ///
 /// ★ STATUS (2026-10-09): the flag is no longer a workaround. Every Windows run since run 114 set
 /// it because the batched path froze the guest after sign-in (`[measured, runs 242/243]` host Xid
@@ -1103,6 +1105,17 @@ impl SpaceCalls {
 fn batching_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("KF3_NO_BATCHED_MAP").is_none())
+}
+
+/// ★ 2026-10-09: `KF3_BATCH_MICRO_RESERVE=1` batches guest-RAM rows OUTSIDE the guest
+/// reservations (Windows process VAs, `[1 MiB, 4.5 GiB)`) through a small FIXED
+/// `NV50_MEMORY_VIRTUAL` made over exactly each batch's VA (`kf_mem::batch` rule 2), so a later
+/// partial unmap is exact. DEFAULT OFF until the hardware experiment (`kf-micro-reserve-probe`,
+/// `V3_BATCHED_MAP.md` §8.1) shows host RM accepts such reservations there; off, rows there are
+/// placed one host mapping per guest leaf. Read once.
+fn micro_reserve_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("KF3_BATCH_MICRO_RESERVE").as_deref() == Ok("1"))
 }
 
 fn ns_since(t: std::time::Instant) -> u64 {
@@ -1125,7 +1138,7 @@ impl GpuMirror {
             log,
             reserved,
             ram,
-            bv: kf_mem::batch::BatchedVas::new(vas),
+            bv: kf_mem::batch::BatchedVas::with_low_reserve(vas, micro_reserve_enabled()),
             calls: SpaceCalls::default(),
             kernel_vas,
             sked: Mutex::new(std::collections::BTreeMap::new()),
@@ -1305,9 +1318,10 @@ impl MapTarget for GpuMirror {
         r
     }
     fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
-        if !batching_enabled() {
-            return Err(kf_mem::ledger::NOT_BATCHED.into());
-        }
+        // ★ 2026-10-09: NOT gated by `KF3_NO_BATCHED_MAP` — an exact range over OUR placements
+        // (`BatchedVas::unmap_range`: owned spans only, never a split in the NV01 range) is how the
+        // apply's net diff unmaps a changed sub-range of a placement without touching its
+        // unchanged pages. The opt-out disables batched MAPS only.
         let end = va.checked_add(len).ok_or("unmap range overflows")?;
         // ⊘ Belt and braces: RM removes EVERY mapping of ours in the range, so it must never reach
         // one of our VMM placements (a guest row over one is refused at map time — this re-checks).
@@ -3874,8 +3888,7 @@ mod tests {
             off: 0x2_0000,
             ram: false,
             kind: 0,
-            perm: kf_host::MapPerm::READ_WRITE,
-        };
+            perm: kf_host::MapPerm::READ_WRITE, leaf: 0, };
         win.map(&d, false).expect("map");
         assert_eq!(mappings_of(view_name), 1, "the view is placed");
         let before = WINDOW_ADVICE_REFUSED.load(Ordering::Relaxed);
