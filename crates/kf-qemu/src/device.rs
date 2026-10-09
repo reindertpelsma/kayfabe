@@ -254,8 +254,8 @@ pub struct Device {
     drainer_efd: &'static Notifier,
     /// ★ P5: the channel plane (the guest kernel's CE channels, Translated).
     pub chans: &'static crate::chan::ChanPlane,
-    /// ★ P1+P2 inc B (`docs/design/V3_P1P2_TSPACE.md` §2): the T-space, built once at prewarm with
-    /// `KF3_TSPACE=1` ([`crate::tspace`]); empty otherwise.
+    /// ★ P1+P2 inc B (`docs/design/V3_P1P2_TSPACE.md` §2): the T-space, built once at prewarm
+    /// ([`crate::tspace`]; always, since 2026-10-10).
     pub tspace: crate::tspace::TSpaceCell,
     /// ★ 2026-09-30: the doorbell fast path (`docs/design/V3_DOORBELL_IOEVENTFD.md`) — a KVM
     /// ioeventfd per live token, serviced by THIS device's register drainer. Off (every doorbell
@@ -738,13 +738,10 @@ impl Device {
         let mirrors = crate::mem::Mirrors::default();
         // ★ P1+P2 inc B: the T-space cell — filled once, on the VA thread, at prewarm.
         let tspace = crate::tspace::TSpaceCell::default();
+        // ★ 2026-10-10 (OWNER_RULINGS §AB): always ON — `KF3_TSPACE` is deleted. The line keeps
+        // its words (`ON: built at prewarm`), which the box-log gate reads.
         eprintln!(
-            "kf3: P1+P2 T-space {} (KF3_TSPACE; docs/design/V3_P1P2_TSPACE.md); host channel births require USER replies",
-            if crate::tspace::enabled() {
-                "ON: built at prewarm"
-            } else {
-                "OFF: today's mirrors and windows"
-            }
+            "kf3: P1+P2 T-space ON: built at prewarm (hardwired, OWNER_RULINGS §AB; docs/design/V3_P1P2_TSPACE.md); mirrors carry no window and no ring; host channel births require USER replies"
         );
         let chans: &'static crate::chan::ChanPlane =
             Box::leak(Box::new(crate::chan::ChanPlane::new(
@@ -1013,11 +1010,8 @@ impl Device {
             );
         }
         // ★ P6b (b): coverage at the family's smallest GMMU page.
-        let (carve_base, carve_refuse) = crate::tspace::carve_cfg(
-            layout.carve(),
-            crate::tspace::enabled(),
-            crate::tspace::negctl_carve(),
-        );
+        let (carve_base, carve_refuse) =
+            crate::tspace::carve_cfg(layout.carve(), crate::tspace::negctl_carve());
         if crate::tspace::negctl_carve() {
             eprintln!(
                 "kf3: ⚠ POSITIVE CONTROL KF3_NEGCTL_CARVE=1: every vidmem leaf counted as a carve-out leaf, none refused"
@@ -1036,8 +1030,9 @@ impl Device {
         .with_per_map_kind(per_map_kind)
         // ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §4.3): leaves into the firmware carve-out are
         // COUNTED (`carve_gpu=` / `carve_kernel=` / `carve_cpu=` on the status line). ★ Review fix
-        // 2026-10-04 (HIGH): REFUSED in twins a guest non-kernel channel runs in when
-        // `KF3_TSPACE=1` (inc A2 under the flag); the default path stays count-only until its A/B.
+        // 2026-10-04 (HIGH): REFUSED — hardwired 2026-10-10 (§AB) with the T-space, in every GPU
+        // mirror, guest-kernel spaces included (`V3_WINDOW_EXPOSURE_REVIEW.md` row 6); count-only
+        // only under the positive control `KF3_NEGCTL_CARVE`.
         .with_carve(carve_base, carve_refuse);
         va.table.insert(
             crate::mem::K_BAR2,
@@ -1896,20 +1891,14 @@ impl Device {
         // ★ w827: `PREWARM_SPARES` spares, one per idle tick (the first also pins the guest-RAM
         // object) — never while a statement, a walk or an armed invalidate is waiting on us.
         let mut prewarmed = 0u64;
-        // ★ P1+P2 inc B (`V3_P1P2_TSPACE.md` §2.3): with `KF3_TSPACE=1`, the T-space is the FIRST
+        // ★ P1+P2 inc B (`V3_P1P2_TSPACE.md` §2.3), hardwired 2026-10-10: the T-space is the FIRST
         // thing prewarm builds, on the first tick guest RAM is registered.
         let carve = kf_chip::bar0::fb_layout(self.mem.fb_len).map_or(0, |l| l.carve());
         let mut va_busy_from = crate::prof::now_ns();
         let mut cache_done = [0u64; kf_trap::cacheop::CacheOp::COUNT];
         while !self.stop.load(Ordering::Acquire) {
-            if crate::tspace::enabled()
-                && let Some(line) = crate::tspace::prewarm(
-                    &self.tspace,
-                    &self.mem,
-                    self.rm,
-                    self.store.handle,
-                    carve,
-                )
+            if let Some(line) =
+                crate::tspace::prewarm(&self.tspace, &self.mem, self.rm, self.store.handle, carve)
             {
                 eprintln!(
                     "kf3: mem t={:.3}s {line}",
@@ -2596,9 +2585,10 @@ impl Device {
             self.chans.rc_wakes.load(o),
             self.chans.rc_seen.load(o),
             self.counters.rc_posted.load(o),
-            // ★ P1+P2 inc A (review fix 2026-10-04): count-only unless strict — box step 1 gates
-            // on `counted=0 heap_out=0 rows_inexact=0` per measured family.
-            if crate::tspace::inca_strict() {
+            // ★ P1+P2 inc A (review fix 2026-10-04): strict, hardwired 2026-10-10 (§AB).
+            // `heap_out=` counts refusals; `rows_inexact=` counts range unmaps whose exact cut
+            // mattered (a row straddling an edge) — measurements, no longer a default-path gate.
+            if crate::tspace::INCA_STRICT {
                 "yes"
             } else {
                 "no"
@@ -2606,7 +2596,7 @@ impl Device {
             self.chans.inca_counted.load(o),
             self.chans.heap_out.load(o),
             crate::mem::ROWS_INEXACT.load(o)
-        ) + &if crate::tspace::enabled() {
+        ) + &{
             // ★ P1+P2 inc D: the T-mode counters the REGRESSION A/B gates on (0 on stock drivers).
             format!(
                 " tspace[built={} twin_refused={} tspace_refused={} slots_leaked={} twin_freeing={}]",
@@ -2623,8 +2613,6 @@ impl Device {
                     .map_or(0, |t| t.slots_leaked.load(o)),
                 self.chans.twin_freeing_refused.load(o)
             )
-        } else {
-            String::new()
         };
         let chan = format!(
             " chan[births={} pt_births={} acts={}/{}refused worst_act_us={} nsi=[{}] pt_nsi=[{}] served={} parks={} host_rings={} contended={} poisoned={} tokens=[{}]]",

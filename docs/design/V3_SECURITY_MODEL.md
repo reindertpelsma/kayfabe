@@ -63,6 +63,11 @@ stage-2 scope and is not covered here.
   process on bare metal could.
 
 **Status today.**
+- ⊘ **Corrected 2026-10-10 (`OWNER_RULINGS.md` §AB; `V3_TSPACE_HARDWIRED.md`), above the text
+  it corrects:** `KF3_TSPACE` is deleted and the T-space hardwired on `claude/hardwire-tspace-20261010`.
+  No twin carries a window or a ring in code. The window half of R1.1 holds in code, but it is
+  GPU-free tested only until that branch's hardware gate runs. A carve-out leaf is refused in every
+  GPU mirror, guest-kernel spaces included. The two items below describe the code before that branch.
 - ★ **2026-10-04 (P1+P2, `V3_P1P2_TSPACE.md`):** the fix is built on `v3-p1p2` behind `KF3_TSPACE`
   (default OFF): with the flag no mirror (twin) carries a window or a ring, and Translated work runs
   in the per-VM T-space. R1.1 holds for window reach only once the flag is default-on (inc E) after

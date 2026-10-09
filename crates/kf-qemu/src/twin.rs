@@ -24,9 +24,9 @@
 //! only in `Kernel` — so a privileged leaf is never placed in a space a user channel can run in,
 //! and no lock is added to the VA thread's path.
 //!
-//! ⚠ T-mode only (`KF3_TSPACE=1`). On the default path a Translated birth still marks the space
-//! kernel unconditionally ([`TwinState::force_kernel`]) and passthrough births do not count —
-//! today's behaviour, unchanged.
+//! ★ Always on since 2026-10-10 (`OWNER_RULINGS.md` §AB: `KF3_TSPACE` deleted). ⊘ The default
+//! path's unconditional flip (`force_kernel`: a Translated birth marked the space kernel with no
+//! refusal, passthrough births uncounted) is deleted with it.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -139,12 +139,6 @@ impl TwinState {
                 }
             })?;
         Ok(prev & KERNEL == 0)
-    }
-
-    /// The default path's unconditional flip (today's `kernel_vas.swap(true)`): returns whether the
-    /// space was already kernel.
-    pub fn force_kernel(&self) -> bool {
-        self.0.fetch_or(KERNEL, Ordering::AcqRel) & KERNEL != 0
     }
 }
 
@@ -293,11 +287,6 @@ mod tests {
             Err(TwinRefusal::KernelWhileUsersFree(1))
         );
         assert!(TwinState::for_kernel(true).is_kernel());
-        // The default path's flip.
-        let legacy = TwinState::default();
-        assert_eq!(legacy.try_user(), Ok(()));
-        assert!(!legacy.force_kernel(), "today's flip ignores live users");
-        assert!(legacy.is_kernel());
     }
 
     /// ★ EXPERIMENT `KF3_WIN_KERNEL_PID4` against the T-space rule, on the run-113 restart
