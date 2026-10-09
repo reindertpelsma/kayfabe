@@ -1626,6 +1626,7 @@ static void t_hostile_type_confusion(void)
 struct WantSample { uint64_t va, raw, gpga, ps; uint32_t level; };
 static const uint32_t LVL_512M_VER2 = 3u;   /* VER2 fixture: dir[] = {-, PD3, PD2, PD1, PD0(dual)} */
 static const uint32_t LVL_2M_VER2   = 4u;
+static const uint32_t LVL_BIG_VER2  = 5u;   /* the big (64 KiB) leaf table: one past the 5 dir slots */
 
 /* Plant `n64` misaligned 64 KiB leaves, `n2m` misaligned 2 MiB leaves and `n512` misaligned
  * 512 MiB leaves, beside three LEGAL ones (4 KiB, 64 KiB, 2 MiB). */
@@ -1639,7 +1640,7 @@ static void plant_refusal_fixture(Fix &f, Tree &t, uint32_t n64, uint32_t n2m, u
         const uint64_t va = VBASE + (6ull << 21) + (uint64_t)i * 65536ull;
         const uint64_t gpga = 0x500000ull + (uint64_t)i * 0x10000ull + 0x1000ull * (1u + i % 15u);
         t.map64k(va, gpga);
-        want[va] = WantSample{va, kfb_pte(gpga), gpga, 64ull << 10, KF_SAMPLE_LVL_BIG};
+        want[va] = WantSample{va, kfb_pte(gpga), gpga, 64ull << 10, LVL_BIG_VER2};
     }
     for (uint32_t i = 0; i < n2m; i++) {
         const uint64_t va = VBASE + ((8ull + i) << 21);
@@ -1715,6 +1716,8 @@ static void check_samples_against(Fix &f, const std::map<uint64_t, WantSample> &
 
 static void refusal_samples_case(bool serial)
 {
+    CHECK_EQ(LVL_BIG_VER2, KF_SAMPLE_LVL_BIG);       /* the fixture's literal is the header's */
+    CHECK_EQ(LVL_BIG_VER2 + 1u, KF_SAMPLE_LVL_SMALL);
     if (serial) setenv("KF_WALK_SERIAL", "1", 1); else unsetenv("KF_WALK_SERIAL");
     {   /* 14 misaligned leaves across three page sizes: the cap bites, the runs do not move */
         Fix f(8u << 20, cfg_default());
