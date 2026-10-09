@@ -19,8 +19,20 @@
 //! refused by name, never answered with a fallback to mirror windows (that would reopen S1-21), and
 //! the build never runs on a birth path (it pins and maps inside a held reply).
 //!
-//! ★ Inc B builds and logs it only, behind `KF3_TSPACE=1` (default OFF — the default path is
-//! today's, byte for byte). Inc D routes Translated births into it.
+//! ★ **Hardwired (owner ruling 2026-10-10, `OWNER_RULINGS.md` §AB): `KF3_TSPACE` is deleted.** The
+//! T-space is built at every prewarm and every Translated channel runs in it. No mirror, spare or
+//! recycled spare carries a window or a ring (§AB rule 2), so the legacy P5 path that mapped the
+//! whole guest store and all guest RAM into every mirrored space (audit S1-21) is gone.
+//!
+//! ★★ **This is the PRIVILEGED T-space (§AB rule 4).** Its two windows reach all of guest RAM and
+//! the whole guest store below the carve-out, so only a channel the guest's RM made privileged may
+//! run in it: [`TSpace::ring`] and [`TSpace::windows`] take a [`Privileged`] witness, which only
+//! [`Privileged::of`] makes, from the alloc's facts (a guest-kernel channel that is not Windows
+//! per-process user work). There is no unprivileged T-space: an unprivileged Translated birth is
+//! refused by name ([`UNPRIVILEGED_TRANSLATED`]). ⚠ Not built: the per-operand space an
+//! unprivileged Translated channel would need (maps of exactly its validated operands). No channel
+//! kind needs it today, because every Translated birth is a guest-kernel channel
+//! (`V3_P1P2_TSPACE.md`, the 2026-10-10 section).
 //!
 //! ★ Isolation by type (§2.5): [`TSpace`] keeps its host space private; it is never inserted into
 //! the mirror table, and no passthrough birth can name it.
@@ -28,26 +40,42 @@
 use crate::mem::{RING_REGION_BASE, RING_REGION_BYTES};
 use kf_host::{HostRm, MapPerm, VaSpace};
 
-/// ★ `KF3_TSPACE=1` (default OFF; read once): build the T-space at prewarm (inc B) and, from inc D,
-/// run every Translated channel in it with no window in any mirror.
-#[must_use]
-pub fn enabled() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("KF3_TSPACE").is_some_and(|v| v != "0"))
-}
-
 /// ★ P1+P2 inc A (review fix 2026-10-04, `V3_P1P2_TSPACE.md` §8) — **refuse what inc A refuses by
 /// name**: a `REFUSED_METHODS` write, a `SubDeviceMask` header, an unnamed GP control entry, a
 /// guest FB USERD/notifier outside the usable heap; and cut the placement rows exactly at both
-/// edges of a range unmap. ON with `KF3_INCA_REFUSE=1`, and always with `KF3_TSPACE=1`. ⊘ OFF (the
-/// default) each is COUNTED and handled exactly as before inc A, so the default path stays
-/// byte-for-byte today's until box step 1 shows the counts at 0 on each measured family (an owner
-/// decision then flips the default). Read once.
-#[must_use]
-pub fn inca_strict() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| enabled() || std::env::var_os("KF3_INCA_REFUSE").is_some_and(|v| v != "0"))
+/// edges of a range unmap. ★ Hardwired 2026-10-10 (§AB): strict was ON whenever `KF3_TSPACE=1`, so
+/// with the T-space hardwired `KF3_INCA_REFUSE` is deleted and inc A is always strict. The
+/// count-only arms the callees keep (`kf_chan`'s `set_inca(false, …)`, the channel plane's heap
+/// gate) are reached only by their unit tests.
+pub const INCA_STRICT: bool = true;
+
+/// ★★ §AB rule 4 (owner, 2026-10-10) — **the proof that a Translated channel is PRIVILEGED**, the
+/// only key to the T-space's whole-RAM and whole-store windows ([`TSpace::ring`],
+/// [`TSpace::windows`]). Only [`Privileged::of`] makes one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Privileged(());
+
+impl Privileged {
+    /// From the channel alloc's facts, which the guest's RM and kayfabe's link decide, never guest
+    /// userspace: `kernel_client` (`kf_rm::chanlink::kernel_channel`: RM's
+    /// `internalFlags.PRIVILEGE = KERNEL` stamp, or one of RM's own internal clients) and NOT
+    /// `user_work` (a Windows kernel-stamped channel the link classified as per-process user work,
+    /// OWNER_RULINGS §V, which is born Passthrough). `None` for every other channel.
+    #[must_use]
+    pub const fn of(kernel_client: bool, user_work: bool) -> Option<Privileged> {
+        if kernel_client && !user_work {
+            Some(Privileged(()))
+        } else {
+            None
+        }
+    }
 }
+
+/// ★ §AB rule 4: the refusal of a Translated birth with no [`Privileged`] witness. Unreachable on
+/// today's routes (an unprivileged channel is Passthrough); refused by name if one ever arrives,
+/// because an unprivileged Translated channel may get nothing wider than its own validated
+/// operands, and that per-operand space is not built.
+pub const UNPRIVILEGED_TRANSLATED: &str = "an UNPRIVILEGED Translated channel has no T-space: the T-space maps all of guest RAM and the guest store, which only a privileged (guest-kernel) channel may reach, and the per-operand space is not built (OWNER_RULINGS §AB rule 4)";
 
 /// ★ `KF3_NEGCTL_CARVE=1` — the carve-out counters' POSITIVE CONTROL: the bound drops to 0, so
 /// every vidmem leaf is counted (`carve_gpu=` / `carve_kernel=` / `carve_cpu=` must move on any
@@ -59,13 +87,13 @@ pub fn negctl_carve() -> bool {
 }
 
 /// ★ P1+P2 inc A2 (review fix 2026-10-04, HIGH): the walker's carve-out bound `(base, refuse)` for
-/// `kf_mem::vasmgr::VaManager::with_carve`. Refusal is ON in T-mode, so no twin a guest non-kernel
-/// channel runs in maps kayfabe's declared firmware region (§Q; `kf_mem::apply::carve_reached`
-/// keeps a guest-KERNEL space count-only); count-only on the default path until its A/B. The
-/// positive control (`negctl`) counts every vidmem leaf and refuses none.
+/// `kf_mem::vasmgr::VaManager::with_carve`. Refusal is ON (it was ON with `KF3_TSPACE=1`; hardwired
+/// 2026-10-10), so no twin a guest non-kernel channel runs in maps kayfabe's declared firmware
+/// region (§Q; `kf_mem::apply::carve_reached` keeps a guest-KERNEL space count-only). The positive
+/// control (`negctl`, a measurement flag, kept) counts every vidmem leaf and refuses none.
 #[must_use]
-pub const fn carve_cfg(carve: u64, tmode: bool, negctl: bool) -> (u64, bool) {
-    if negctl { (0, false) } else { (carve, tmode) }
+pub const fn carve_cfg(carve: u64, negctl: bool) -> (u64, bool) {
+    if negctl { (0, false) } else { (carve, true) }
 }
 
 /// ★ `KF3_NEGCTL_TSPACE_OVERSIZE=1` — the POSITIVE CONTROL of the build's ring-region bound
@@ -352,20 +380,26 @@ impl TSpace {
         (self.ram_base, self.ram_len)
     }
 
-    /// The windows, as the T-mode rewriter binds against them.
+    /// The windows, as the T-mode rewriter binds against them. They reach all of guest RAM and the
+    /// whole store below the carve-out, so only a [`Privileged`] channel gets them (§AB rule 4).
     #[must_use]
-    pub fn windows(&self) -> kf_chan::tspace_unsafe::TWindows {
+    pub fn windows(&self, _: Privileged) -> kf_chan::tspace_unsafe::TWindows {
         self.windows
     }
 
     /// ★ inc D (§2.4, §2.5) — **the ONLY place a map is placed in the T-space after its build:** a
-    /// Translated ring at a T-space ring slot, in the T-space layout (pushbuffer and GPFIFO
+    /// [`Privileged`] channel's Translated ring at a T-space ring slot, in the T-space layout (pushbuffer and GPFIFO
     /// read-only, the fence read-write, USERD in no GPU map). A refused birth leaks its slot
     /// (counted): a slot is reused only after a release that fully succeeded.
     ///
     /// # Errors
     /// The ring region is exhausted, or the host refused the ring (by name).
-    pub fn ring(&self, rm: &HostRm, engine: u32) -> Result<kf_chan::host::HostRing, String> {
+    pub fn ring(
+        &self,
+        rm: &HostRm,
+        engine: u32,
+        _: Privileged,
+    ) -> Result<kf_chan::host::HostRing, String> {
         let at = crate::mem::take_ring_slot(&self.rings)
             .ok_or("tspace: the ring region is exhausted (4096 slots for the VM's life)")?;
         kf_chan::host::HostRing::on_engine_layout(
@@ -608,14 +642,22 @@ mod tests {
         assert!(h.ops.borrow().last().is_some_and(|o| o.starts_with("free")));
     }
 
-    /// ★ Review fix 2026-10-04 (HIGH): T-mode refuses carve-out leaves in twins; the default path
-    /// counts them; the positive control counts every vidmem leaf and never refuses.
+    /// ★ Review fix 2026-10-04 (HIGH), hardwired 2026-10-10: carve-out leaves are refused in
+    /// twins; the positive control counts every vidmem leaf and never refuses.
     #[test]
-    fn the_carve_bound_refuses_in_tmode_only() {
-        assert_eq!(carve_cfg(CARVE, true, false), (CARVE, true));
-        assert_eq!(carve_cfg(CARVE, false, false), (CARVE, false));
-        assert_eq!(carve_cfg(CARVE, true, true), (0, false));
-        assert_eq!(carve_cfg(CARVE, false, true), (0, false));
+    fn the_carve_bound_refuses_unless_the_control_runs() {
+        assert_eq!(carve_cfg(CARVE, false), (CARVE, true));
+        assert_eq!(carve_cfg(CARVE, true), (0, false));
+    }
+
+    /// ★ §AB rule 4: only a guest-kernel channel that is not Windows per-process user work is
+    /// privileged, and only a privileged channel gets the T-space's windows and rings.
+    #[test]
+    fn only_a_guest_kernel_channel_is_privileged() {
+        assert!(Privileged::of(true, false).is_some());
+        assert!(Privileged::of(true, true).is_none(), "Windows user work");
+        assert!(Privileged::of(false, false).is_none(), "a guest user channel");
+        assert!(Privileged::of(false, true).is_none());
     }
 
     #[test]

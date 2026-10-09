@@ -910,30 +910,14 @@ pub fn cut_rows(
     cut
 }
 
-/// ★ P1+P2 inc A, count-only (review fix 2026-10-04): range unmaps whose row removal BEFORE inc A
-/// ([`legacy_cut_rows`]) differs from host RM's exact cut ([`cut_rows`]) — a row straddling an
-/// edge. Counted on the default path, which keeps that removal until box step 1 shows `0`
-/// (`inca[… rows_inexact=…]` on the status line).
+/// ★ P1+P2 inc A (review fix 2026-10-04), a measurement: range unmaps whose row removal before
+/// inc A (only the rows STARTING in the range, each whole) would have differed from host RM's
+/// exact cut ([`cut_rows`]), i.e. a row straddling an edge (`inca[… rows_inexact=…]` on the status
+/// line). ★ 2026-10-10 (§AB, inc A hardwired strict): the removal before inc A is deleted; the cut
+/// is always exact, and this counter still names how often the exactness mattered.
 pub static ROWS_INEXACT: AtomicU64 = AtomicU64::new(0);
 
-/// The removal before inc A, kept on the count-only default path: only the rows whose START lies
-/// in `[va, end)`, each whole.
-pub fn legacy_cut_rows(
-    rows: &mut std::collections::BTreeMap<u64, PlacedRow>,
-    va: u64,
-    end: u64,
-) -> RowCut {
-    let keys: Vec<u64> = rows.range(va..end).map(|(&k, _)| k).collect();
-    RowCut {
-        original: keys
-            .into_iter()
-            .filter_map(|k| rows.remove(&k).map(|v| (k, v)))
-            .collect(),
-        remnants: Vec::new(),
-    }
-}
-
-/// Whether [`legacy_cut_rows`] of `[va, end)` would differ from host RM's exact cut: a row
+/// Whether the removal before inc A of `[va, end)` would differ from host RM's exact cut: a row
 /// straddles the start, or a row starting inside ends past the end.
 #[must_use]
 pub fn cut_is_inexact(
@@ -954,25 +938,21 @@ pub fn cut_is_inexact(
             .any(|(&k, &(len, _, _, _))| k.saturating_add(len) > end)
 }
 
-/// ★ P1+P2 inc A (review fix 2026-10-04): the row removal a range unmap makes — EXACT when strict
-/// (`crate::tspace::inca_strict`), else the removal before inc A with a differing cut counted in
-/// [`ROWS_INEXACT`].
+/// ★ P1+P2 inc A (review fix 2026-10-04; strict hardwired 2026-10-10): the row removal a range
+/// unmap makes — always EXACT ([`cut_rows`]); a cut the removal before inc A would have got wrong
+/// is counted in [`ROWS_INEXACT`].
 pub fn cut_for(
-    strict: bool,
     rows: &mut std::collections::BTreeMap<u64, PlacedRow>,
     va: u64,
     end: u64,
 ) -> RowCut {
-    if strict {
-        return cut_rows(rows, va, end);
-    }
     if cut_is_inexact(rows, va, end) {
         ROWS_INEXACT.fetch_add(1, Ordering::Relaxed);
     }
-    legacy_cut_rows(rows, va, end)
+    cut_rows(rows, va, end)
 }
 
-/// Undo a [`cut_rows`] (or a [`legacy_cut_rows`]): remove its remnants, put the original rows back.
+/// Undo a [`cut_rows`]: remove its remnants, put the original rows back.
 pub fn uncut_rows(rows: &mut std::collections::BTreeMap<u64, PlacedRow>, cut: RowCut) {
     for k in cut.remnants {
         rows.remove(&k);
@@ -980,8 +960,14 @@ pub fn uncut_rows(rows: &mut std::collections::BTreeMap<u64, PlacedRow>, cut: Ro
     rows.extend(cut.original);
 }
 
-/// ★★★ P6b: **where OUR rings live in a mirrored space** — `[RING_REGION_BASE, RING_VA_LIMIT)`,
-/// 4 GiB (4096 one-MiB rings) at the very top of what a GP entry can address.
+/// ★★★ P6b: **where OUR rings live** — `[RING_REGION_BASE, RING_VA_LIMIT)`, 4 GiB (4096 one-MiB
+/// rings) at the very top of what a GP entry can address.
+///
+/// ⊘ **Corrected 2026-10-10 (`OWNER_RULINGS.md` §AB rules 2-3), above the P6b text below:** the
+/// region exists ONLY in the T-space ([`crate::tspace::TSpace`]), never in a mirrored (Passthrough)
+/// space, which holds no ring of ours; so the "guest leaf over the region is refused" guard below
+/// applies to no twin any more (a twin has no VMM range to protect). The P6b reasoning for WHERE
+/// the region lies still holds for the T-space.
 ///
 /// ⊘ A ring may not go where RM puts it: RM's bottom-up allocator in our host space is the SAME
 /// allocator the guest's RM runs in its own space (both start just above the split-VAS server
@@ -1046,7 +1032,8 @@ pub struct GpuMirror {
     /// ★ Review fix 2026-10-04: every change committed to `rows`, numbered ([`RowsLog`]) — shared
     /// with the channel plane's [`Mirror::log`].
     pub log: std::sync::Arc<RowsLog>,
-    /// ★ P6b: OUR VMM placements in this space — the two windows and the ring region.
+    /// ★ P6b: OUR VMM placements in this space a guest leaf may not overlap. ⊘ 2026-10-10 (§AB
+    /// rule 2): empty — a twin holds no window and no ring — except the positive control's window.
     pub reserved: Vec<(u64, u64)>,
     /// ★ `V3_BATCHED_MAP.md`: guest RAM as QEMU registered it — the memfd a batch is stitched from
     /// (`None`: this mirror never batches).
@@ -1196,18 +1183,6 @@ impl GpuMirror {
     }
 }
 
-/// The VMM ranges of a space whose windows are at `fb` and `ram` (`(base, len)`).
-#[must_use]
-pub fn vmm_ranges(fb: Option<(u64, u64)>, ram: Option<(u64, u64)>) -> Vec<(u64, u64)> {
-    let mut v = vec![(RING_REGION_BASE, kf_chan::host::RING_VA_LIMIT)];
-    v.extend(
-        fb.into_iter()
-            .chain(ram)
-            .map(|(b, l)| (b, b.saturating_add(l))),
-    );
-    v
-}
-
 impl MapTarget for GpuMirror {
     fn withholds_privileged(&self) -> bool {
         // ★ P1+P2 inc D: ONE atomic load of the per-twin state word (`crate::twin`).
@@ -1333,13 +1308,13 @@ impl MapTarget for GpuMirror {
         }
         // ⊘ Forget the rows FIRST (as `unmap`); put them back if the host refuses, so the per-run
         // fallback still knows each run's length. ★ P1+P2 inc A: cut EXACTLY at both edges, as host
-        // RM does ([`cut_rows`]) — when strict; the default path keeps the removal before inc A and
-        // counts a cut that differs ([`cut_for`]).
+        // RM does ([`cut_rows`]); a cut the removal before inc A would have got wrong is counted
+        // ([`cut_for`]).
         let cut = self
             .rows
             .write()
             .map(|mut r| {
-                let cut = cut_for(crate::tspace::inca_strict(), &mut r, va, end);
+                let cut = cut_for(&mut r, va, end);
                 if !cut.original.is_empty() {
                     self.log.commit(va, end);
                 }
@@ -1385,29 +1360,26 @@ impl MapTarget for GpuMirror {
     }
 }
 
-/// ★ P5: one mirrored guest VA space as the channel plane sees it — the host space, its two
-/// windows (`THE_TRANSLATED_PLANE.md` §2, §6, §12: in EVERY host VAS we create), and our rows.
+/// ★ P5: one mirrored guest VA space as the channel plane sees it — the host space and our rows.
+/// ⊘ 2026-10-10 (`OWNER_RULINGS.md` §AB rule 2): it carries NO window and NO ring. Every mapping
+/// in it is a row derived from a guest page-table leaf; the legacy store/RAM windows and ring
+/// region (P5 §12, "in EVERY host VAS we create", audit S1-21) are deleted with `KF3_TSPACE`.
+/// The only other mapping that can exist is the positive control's ([`negctl_twin_window`]).
 #[derive(Clone)]
 pub struct Mirror {
     /// The host VA space.
     pub space: kf_host::VaSpace,
-    /// Guest FB-physical `p` is host VA `fb_base + p` (`p < fb_len`).
-    pub fb_base: u64,
-    /// The identity window's length (the store's).
-    pub fb_len: u64,
-    /// Guest-RAM memfd offset `o` is host VA `ram_base + o` (`o < ram_len`); `None` when the space
-    /// has no guest-RAM object.
-    pub ram: Option<(u64, u64)>,
+    /// ⚠ CONTROL ONLY: the store window `KF3_NEGCTL_TWIN_WINDOW=1` maps (`(base, len)`), recorded
+    /// so the log line names it and the box-log gate's `WINDOWS=NONE` fails. `None` in production.
+    pub negctl_window: Option<(u64, u64)>,
     /// Our placements.
     pub rows: PlacedRows,
-    /// ★ P5b: the guest-RAM host object mapped at `ram` (a sysmem USERD's twin names it).
+    /// ★ P5b: the guest-RAM host object (a sysmem USERD's twin names it; never mapped here).
     pub ram_obj: Option<u32>,
     /// ★ P5c: host channels (twins, Translated rings) born in this space and not yet freed — the
     /// channel plane counts them. A retired space with any is NEVER recycled (a live engine in a
     /// space handed to another guest VA space would be a cross-tenant hazard).
     pub live: std::sync::Arc<AtomicU64>,
-    /// ★ P6b: this host space's ring slots ([`take_ring_slot`]).
-    pub rings: RingSlots,
     /// ★★★ v3-roperm: the space is the guest KERNEL's — set by the channel plane when it births a
     /// Translated channel here; the memory plane's [`GpuMirror`] reads it to decide whether a
     /// privileged guest leaf may be mirrored.
@@ -1428,21 +1400,18 @@ pub fn kernel_vas_for(key: VasKey) -> std::sync::Arc<crate::twin::TwinState> {
     ))
 }
 
-/// ★ P5c: a retired mirror's host space, its rows unmapped, its two windows still in place —
-/// ready to be the next guest VA space's mirror. `[measured c3, 61fc7ac8]` building one (space +
-/// the 8 GiB store window + the 2 GiB guest-RAM window) costs ~54 ms of host RM time; the raw
-/// client's `--concurrency` allocates and frees 2400 VA spaces (7 s on bare metal).
+/// ★ P5c: a retired mirror's host space, its rows unmapped — ready to be the next guest VA space's
+/// mirror. `[measured c3, 61fc7ac8]` the legacy build (space + the 8 GiB store window + the 2 GiB
+/// guest-RAM window) cost ~54 ms of host RM time; the raw client's `--concurrency` allocates and
+/// frees 2400 VA spaces (7 s on bare metal). ⊘ 2026-10-10 (§AB rule 2): a spare holds nothing of
+/// ours (no window, no ring) — only the positive control's window when it ran.
 #[derive(Debug, Clone)]
 pub struct Spare {
     space: kf_host::VaSpace,
-    fb_base: u64,
-    /// ★ Review fix 2026-10-04: the store window's length in this space — the store's on the
-    /// default path, 0 for a T-mode twin (no window) — so a recycled twin's record says what its
-    /// space actually holds.
-    fb_len: u64,
-    ram: Option<(u64, u64)>,
+    /// ⚠ CONTROL ONLY ([`Mirror::negctl_window`]): so a recycled twin's record says what its space
+    /// actually holds.
+    negctl_window: Option<(u64, u64)>,
     ram_obj: Option<u32>,
-    rings: RingSlots,
 }
 
 /// Spares kept; a retirement beyond this frees the host space instead.
@@ -2414,12 +2383,19 @@ impl MemPlane {
     }
 }
 
-/// ★ P1+P2 review fix (2026-10-04) — **the host verbs a T-mode twin path may call**: [`HostRm`] in
-/// kf3, a recorder in the tests, so "no window in any twin" is tested on the paths themselves
-/// (create, prewarm, reuse) rather than on a predicate.
+/// ★ P1+P2 review fix (2026-10-04) — **the host verbs a twin path may call**: [`HostRm`] in kf3, a
+/// recorder in the tests, so "no window in any twin" is tested on the paths themselves (create,
+/// prewarm, reuse, retire) rather than on a predicate. ★ 2026-10-10 (§AB rule 2): these are the
+/// ONLY host verbs the twin life cycle issues outside the walker's guest-leaf rows
+/// ([`GpuMirror`]'s `MapTarget`), and the only mapping verb among them is the positive control's.
 pub trait TwinHost {
-    /// A store window in `space`, `GROWS_DOWN`, as the default path places one. ⊘ In T-mode ONLY
-    /// the positive control ([`negctl_twin_window`]) calls it.
+    /// A host VA space for a twin ([`HostRm::alloc_vaspace`]).
+    ///
+    /// # Errors
+    /// The host's refusal, by name.
+    fn alloc_space(&self) -> Result<kf_host::VaSpace, String>;
+    /// A store window in `space`, `GROWS_DOWN`. ⊘ ONLY the positive control
+    /// ([`negctl_twin_window`]) calls it: §AB rule 2 forbids any window in a twin.
     ///
     /// # Errors
     /// The host's refusal, by name.
@@ -2427,15 +2403,20 @@ pub trait TwinHost {
 }
 
 impl TwinHost for HostRm {
+    fn alloc_space(&self) -> Result<kf_host::VaSpace, String> {
+        self.alloc_vaspace().map_err(|e| format!("{e:?}"))
+    }
     fn map_window(&self, space: kf_host::VaSpace, memory: u32, len: u64) -> Result<u64, String> {
         HostRm::map_window(self, space, memory, len, true).map_err(|e| format!("{e:?}"))
     }
 }
 
 /// ★ `KF3_NEGCTL_TWIN_WINDOW=1` — the POSITIVE CONTROL of "no window in any twin" (review fix
-/// 2026-10-04): in T-mode every new twin and every prewarmed spare ALSO gets a store window, recorded
-/// in its record, so its log line names it and the box-log gate's `WINDOWS=NONE` must fail. It
-/// reintroduces exactly the S1-21 defect; never set it outside a control run. Default OFF; read once.
+/// 2026-10-04): every new twin and every prewarmed spare ALSO gets a store window, recorded in its
+/// record, so its log line names it and the box-log gate's `WINDOWS=NONE` must fail. It
+/// reintroduces exactly the S1-21 defect, and it is the ONE path that breaks `OWNER_RULINGS.md`
+/// §AB rule 2 — kept (2026-10-10) because the owner keeps every measurement and control flag; never
+/// set it outside a dedicated control run. Default OFF; read once.
 #[must_use]
 pub fn negctl_twin_window() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
@@ -2467,17 +2448,11 @@ pub fn tmode_twin(
     let fb = negctl
         .then(|| host.map_window(space, store, store_len).ok())
         .flatten();
-    twin_record(
-        key,
-        space,
-        fb.map(|b| (b, store_len)),
-        ram_obj,
-        RingSlots::default(),
-    )
+    twin_record(key, space, fb.map(|b| (b, store_len)), ram_obj)
 }
 
-/// ★ A T-mode prewarmed spare: a plain space (the space and its reservations cost RM calls),
-/// with no window to pay for — `negctl` as for [`tmode_twin`].
+/// ★ A prewarmed spare: a plain space (the space and its reservations cost RM calls), with no
+/// window to pay for — `negctl` as for [`tmode_twin`].
 pub fn tmode_spare(
     host: &dyn TwinHost,
     space: kf_host::VaSpace,
@@ -2491,51 +2466,65 @@ pub fn tmode_spare(
         .flatten();
     Spare {
         space,
-        fb_base: fb.unwrap_or(0),
-        fb_len: fb.map_or(0, |_| store_len),
-        ram: None,
+        negctl_window: fb.map(|b| (b, store_len)),
         ram_obj,
-        rings: RingSlots::default(),
     }
 }
 
-/// ★ A recycled spare as a T-mode twin — no host verb; the record says what the space holds (a
-/// spare from a T-mode twin holds nothing of ours).
+/// ★ The prewarm path's spare: a host space from `host`, then [`tmode_spare`].
+///
+/// # Errors
+/// The host's refusal of the space, by name.
+pub fn prewarm_spare(
+    host: &dyn TwinHost,
+    ram_obj: Option<u32>,
+    store: u32,
+    store_len: u64,
+    negctl: bool,
+) -> Result<Spare, String> {
+    let space = host.alloc_space()?;
+    Ok(tmode_spare(host, space, ram_obj, store, store_len, negctl))
+}
+
+/// ★ A recycled spare as a twin — no host verb; the record says what the space holds (a spare
+/// holds nothing of ours, unless the positive control ran).
 #[must_use]
 pub fn tmode_reuse(key: VasKey, sp: &Spare) -> TwinRecord {
-    twin_record(
-        key,
-        sp.space,
-        (sp.fb_len > 0).then_some((sp.fb_base, sp.fb_len)),
-        sp.ram_obj,
-        sp.rings.clone(),
-    )
+    twin_record(key, sp.space, sp.negctl_window, sp.ram_obj)
+}
+
+/// ★ The retire path's spare: a retired mirror whose rows were all unmapped keeps its host space
+/// for the next guest VA space, carrying exactly what the mirror held besides its rows (nothing,
+/// unless the positive control ran). `None` when an unmap was refused: the space is not clean and
+/// is freed instead.
+#[must_use]
+pub fn retire_spare(mi: &Mirror, refused: usize) -> Option<Spare> {
+    (refused == 0).then(|| Spare {
+        space: mi.space,
+        negctl_window: mi.negctl_window,
+        ram_obj: mi.ram_obj,
+    })
 }
 
 fn twin_record(
     key: VasKey,
     space: kf_host::VaSpace,
-    fb: Option<(u64, u64)>,
+    negctl_window: Option<(u64, u64)>,
     ram_obj: Option<u32>,
-    rings: RingSlots,
 ) -> TwinRecord {
-    let (fb_base, fb_len) = fb.unwrap_or((0, 0));
     TwinRecord {
         mirror: Mirror {
             space,
-            fb_base,
-            fb_len,
-            ram: None,
+            negctl_window,
             rows: PlacedRows::default(),
             ram_obj,
             live: Default::default(),
-            rings,
             kernel_vas: kernel_vas_for(key),
             log: std::sync::Arc::default(),
         },
-        // ⊘ Not [`vmm_ranges`]: that one always names the ring region, and a T-mode twin has
-        // none — only a window, when the positive control mapped one, is a VMM range here.
-        reserved: fb
+        // ⊘ A twin has no ring region and no window: only the positive control's window, when
+        // it mapped one, is a VMM range here.
+        reserved: negctl_window
             .map(|(b, l)| vec![(b, b.saturating_add(l))])
             .unwrap_or_default(),
     }
@@ -2545,23 +2534,20 @@ fn twin_record(
 /// fix 2026-10-04: the T-mode lines printed a literal `windows=none` whatever was mapped).
 #[must_use]
 pub fn windows_text(m: &Mirror) -> String {
-    window_words(m.fb_base, m.fb_len, m.ram)
+    window_words(m.negctl_window)
 }
 
 /// [`windows_text`] for a spare.
 #[must_use]
 pub fn spare_windows_text(sp: &Spare) -> String {
-    window_words(sp.fb_base, sp.fb_len, sp.ram)
+    window_words(sp.negctl_window)
 }
 
-fn window_words(fb_base: u64, fb_len: u64, ram: Option<(u64, u64)>) -> String {
-    if fb_len == 0 && ram.is_none() {
-        return "windows=none".into();
+fn window_words(w: Option<(u64, u64)>) -> String {
+    match w {
+        None => "windows=none".into(),
+        Some((b, l)) => format!("windows fb={b:#x}+{l:#x} ram=NONE"),
     }
-    format!(
-        "windows fb={fb_base:#x}+{fb_len:#x} ram={}",
-        ram.map_or_else(|| "NONE".to_string(), |(b, l)| format!("{b:#x}+{l:#x}"))
-    )
 }
 
 /// ★ P1+P2 inc D: record a T-mode twin — its [`TwinRecord`] in the channel plane's table and the
@@ -2602,8 +2588,8 @@ fn record_twin(
     );
 }
 
-/// ★ Build a fresh mirror for `key`: a host space and its two windows (P5, §12). Returns the log
-/// line on refusal.
+/// ★ Build a fresh mirror for `key`: a host space and nothing of ours in it (§AB rule 2; the P5
+/// §12 windows are deleted). Returns the log line on refusal.
 fn create_mirror(
     m: &mut Manager,
     plane: &MemPlane,
@@ -2614,11 +2600,11 @@ fn create_mirror(
     let t_mirror = std::time::Instant::now();
     let us = |t: std::time::Instant| t.elapsed().as_micros();
     let t_step = std::time::Instant::now();
-    let space = match rm.alloc_vaspace() {
+    let space = match TwinHost::alloc_space(rm) {
         Ok(space) => space,
         Err(e) => {
             plane.counters.refused.fetch_add(1, Ordering::Relaxed);
-            return Err(format!("pagedir {key:?}: host VA space refused: {e:?}"));
+            return Err(format!("pagedir {key:?}: host VA space refused: {e}"));
         }
     };
     // ⊘ A space without the RAM object refuses every sysmem leaf and leaves the trigger armed —
@@ -2633,101 +2619,22 @@ fn create_mirror(
         }
     };
     let ram_obj_us = us(t_step);
-    if crate::tspace::enabled() {
-        // ★★ P1+P2 inc D (`V3_P1P2_TSPACE.md` §4.1): a twin carries NO window and NO ring — only
-        // rows derived from the guest's own page tables — and its record never hangs on a window.
-        // ★ Review fix 2026-10-04: the record is built by [`tmode_twin`] (tested against a host
-        // that counts window maps) and the line is derived from it ([`windows_text`]).
-        let rec = tmode_twin(
-            rm,
-            key,
-            space,
-            ram_obj.map(|(o, _)| o),
-            store,
-            plane.fb_len,
-            negctl_twin_window(),
-        );
-        let windows = windows_text(&rec.mirror);
-        record_twin(plane, key, rec, m, rm, store);
-        let ns = u64::try_from(t_mirror.elapsed().as_nanos()).unwrap_or(u64::MAX);
-        plane.counters.mirrors.fetch_add(1, Ordering::Relaxed);
-        plane.counters.mirror_ns.fetch_add(ns, Ordering::Relaxed);
-        plane
-            .counters
-            .mirror_ns_max
-            .fetch_max(ns, Ordering::Relaxed);
-        eprintln!(
-            "kf3: {key:?} mirror space={:#x}: {windows} rings=none ({} us: vaspace {vas_us} ram_obj {ram_obj_us})",
-            space.space,
-            ns / 1000
-        );
-        return Ok(());
-    }
-    // ★ P5: the two windows, in EVERY mirrored space (§12) — GROWS_DOWN, away from the guest's
-    // bottom-up VAs (§24.2). A space whose windows refuse is still a mirror (its virtual rows
-    // work); a Translated channel naming it refuses by name at birth.
-    let t_step = std::time::Instant::now();
-    let fb_base = rm.map_window(space, store, plane.fb_len, true);
-    let fb_us = us(t_step);
-    let t_step = std::time::Instant::now();
-    let ram_base = ram_obj.map(|(o, len)| rm.map_window(space, o, len, true).map(|b| (b, len)));
-    let ram_us = us(t_step);
-    let rows = PlacedRows::default();
-    let rings = RingSlots::default();
-    let kernel_vas = kernel_vas_for(key);
-    let log = std::sync::Arc::<RowsLog>::default();
-    let line = match (&fb_base, &ram_base) {
-        (Ok(fb), Some(Ok((rb, rl)))) => {
-            if let Ok(mut mm) = plane.mirrors.lock() {
-                mm.insert(
-                    key,
-                    Mirror {
-                        space,
-                        fb_base: *fb,
-                        fb_len: plane.fb_len,
-                        ram: Some((*rb, *rl)),
-                        rows: rows.clone(),
-                        ram_obj: ram_obj.map(|(o, _)| o),
-                        live: Default::default(),
-                        rings: rings.clone(),
-                        kernel_vas: kernel_vas.clone(),
-                        log: log.clone(),
-                    },
-                );
-            }
-            format!(
-                "windows fb={fb:#x}+{:#x} ram={rb:#x}+{rl:#x} rings={RING_REGION_BASE:#x}+{RING_REGION_BYTES:#x}",
-                plane.fb_len
-            )
-        }
-        (Ok(fb), None) => {
-            if let Ok(mut mm) = plane.mirrors.lock() {
-                mm.insert(
-                    key,
-                    Mirror {
-                        space,
-                        fb_base: *fb,
-                        fb_len: plane.fb_len,
-                        ram: None,
-                        rows: rows.clone(),
-                        ram_obj: None,
-                        live: Default::default(),
-                        rings: rings.clone(),
-                        kernel_vas: kernel_vas.clone(),
-                        log: log.clone(),
-                    },
-                );
-            }
-            format!(
-                "windows fb={fb:#x} ram=NONE rings={RING_REGION_BASE:#x}+{RING_REGION_BYTES:#x}"
-            )
-        }
-        (fb, ram) => format!("windows REFUSED fb={fb:?} ram={ram:?}"),
-    };
-    let reserved = vmm_ranges(
-        fb_base.as_ref().ok().map(|b| (*b, plane.fb_len)),
-        ram_base.as_ref().and_then(|r| r.as_ref().ok()).copied(),
+    // ★★ P1+P2 inc D (`V3_P1P2_TSPACE.md` §4.1), hardwired 2026-10-10 (§AB rule 2): a twin carries
+    // NO window and NO ring — only rows derived from the guest's own page tables — and its record
+    // never hangs on a window. ★ Review fix 2026-10-04: the record is built by [`tmode_twin`]
+    // (tested against a host that counts window maps) and the line is derived from it
+    // ([`windows_text`]).
+    let rec = tmode_twin(
+        rm,
+        key,
+        space,
+        ram_obj.map(|(o, _)| o),
+        store,
+        plane.fb_len,
+        negctl_twin_window(),
     );
+    let windows = windows_text(&rec.mirror);
+    record_twin(plane, key, rec, m, rm, store);
     let ns = u64::try_from(t_mirror.elapsed().as_nanos()).unwrap_or(u64::MAX);
     plane.counters.mirrors.fetch_add(1, Ordering::Relaxed);
     plane.counters.mirror_ns.fetch_add(ns, Ordering::Relaxed);
@@ -2736,24 +2643,9 @@ fn create_mirror(
         .mirror_ns_max
         .fetch_max(ns, Ordering::Relaxed);
     eprintln!(
-        "kf3: {key:?} mirror space={:#x}: {line} ({} us: vaspace {vas_us} ram_obj {ram_obj_us} fb_window {fb_us} ram_window {ram_us})",
+        "kf3: {key:?} mirror space={:#x}: {windows} rings=none ({} us: vaspace {vas_us} ram_obj {ram_obj_us})",
         space.space,
         ns / 1000
-    );
-    m.table.insert(
-        key,
-        Target::Gpu(GpuMirror::new(
-            HostVas {
-                rm,
-                space,
-                store,
-                ram_obj: ram_obj.map(|(o, _)| o),
-            },
-            (rows, log),
-            reserved,
-            Some(plane.ram),
-            kernel_vas,
-        )),
     );
     Ok(())
 }
@@ -2766,14 +2658,15 @@ fn create_mirror(
 /// whose GSP RPC timeout is 6 s (`[pr1]` Xid 119 *"Timeout after 6s of waiting for RPC response
 /// … 0x90f10106"*, then the PMA scrubber's construction fails `0x40`). The one-time part is the
 /// guest-RAM OS descriptor (host RM pins every page of the guest memfd) plus the first host VA
-/// space and its two window maps. Here, on the VA thread as soon as QEMU has registered an
-/// fd-backed RAM block (realize's listener replay — long before the guest's driver loads), we
-/// build the guest-RAM object and ONE complete spare space (space + store window + RAM window),
-/// so the first page-directory statement takes the spare (`mirrors_reused`) instead of paying.
+/// space (and, before 2026-10-10, its two window maps). Here, on the VA thread as soon as QEMU has
+/// registered an fd-backed RAM block (realize's listener replay — long before the guest's driver
+/// loads), we build the guest-RAM object and ONE spare space, so the first page-directory
+/// statement takes the spare (`mirrors_reused`) instead of paying. ⊘ 2026-10-10 (§AB rule 2): the
+/// spare holds no window.
 ///
 /// Returns `None` while guest RAM is not registered yet (the caller retries next tick; the
 /// `OnceLock` in [`MemPlane::guest_ram_object`] must never cache a "no RAM yet" refusal), else
-/// the log line. ⊘ Nothing here is guest-visible or guest-chosen: our space, our windows.
+/// the log line. ⊘ Nothing here is guest-visible or guest-chosen: our space.
 pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<String> {
     plane.ram.backing_fd()?;
     let t0 = std::time::Instant::now();
@@ -2785,86 +2678,39 @@ pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<Stri
     }
     let ram_obj_us = t0.elapsed().as_micros();
     let t1 = std::time::Instant::now();
-    let space = match rm.alloc_vaspace() {
-        Ok(s) => s,
+    // ★ P1+P2 inc D (§4.1), hardwired 2026-10-10 (§AB rule 2): spares are plain spaces — still
+    // prewarmed (the space and its reservations cost RM calls), with no window to pay for. ★ Review
+    // fix 2026-10-04: the line names what the spare's record holds ([`spare_windows_text`]).
+    let sp = match prewarm_spare(
+        rm,
+        ram_obj.ok().map(|(o, _)| o),
+        store,
+        plane.fb_len,
+        negctl_twin_window(),
+    ) {
+        Ok(sp) => sp,
         Err(e) => {
             return Some(format!(
-                "prewarm: host VA space refused: {e:?} (ram_obj {ram_obj_us} us)"
+                "prewarm: host VA space refused: {e} (ram_obj {ram_obj_us} us)"
             ));
         }
     };
     let vas_us = t1.elapsed().as_micros();
-    if crate::tspace::enabled() {
-        // ★ P1+P2 inc D (§4.1): spares are plain spaces — still prewarmed (the space and its
-        // reservations cost RM calls), with no window to pay for. ★ Review fix 2026-10-04: the
-        // line names what the spare's record holds ([`spare_windows_text`]), never a literal.
-        let sp = tmode_spare(
-            rm,
-            space,
-            ram_obj.ok().map(|(o, _)| o),
-            store,
-            plane.fb_len,
-            negctl_twin_window(),
-        );
-        let windows = spare_windows_text(&sp);
-        if let Ok(mut v) = plane.spares.lock() {
-            v.push(sp);
-        }
-        plane.counters.prewarmed.fetch_add(1, Ordering::Relaxed);
-        return Some(format!(
-            "prewarm: spare host space {:#x} ready before the guest runs — {windows} (vaspace {vas_us} us, ram_obj {ram_obj_us} us, total {} us)",
-            space.space,
-            t0.elapsed().as_micros()
-        ));
+    let windows = spare_windows_text(&sp);
+    let space = sp.space.space;
+    if let Ok(mut v) = plane.spares.lock() {
+        v.push(sp);
     }
-    let t2 = std::time::Instant::now();
-    let fb = rm.map_window(space, store, plane.fb_len, true);
-    let fb_us = t2.elapsed().as_micros();
-    let t3 = std::time::Instant::now();
-    let ram = ram_obj
-        .as_ref()
-        .ok()
-        .map(|(o, len)| rm.map_window(space, *o, *len, true).map(|b| (b, *len)));
-    let ram_us = t3.elapsed().as_micros();
-    let line = format!(
-        "vaspace {vas_us} us, ram_obj {ram_obj_us} us ({}), fb_window {fb_us} us, ram_window {ram_us} us",
-        match &ram_obj {
-            Ok((o, l)) => format!("{o:#x}+{l:#x}"),
-            Err(e) => e.clone(),
-        }
-    );
-    match (fb, ram) {
-        (Ok(fb_base), Some(Ok(r))) => {
-            let sp = Spare {
-                space,
-                fb_base,
-                fb_len: plane.fb_len,
-                ram: Some(r),
-                ram_obj: ram_obj.ok().map(|(o, _)| o),
-                rings: RingSlots::default(),
-            };
-            if let Ok(mut v) = plane.spares.lock() {
-                v.push(sp);
-            }
-            plane.counters.prewarmed.fetch_add(1, Ordering::Relaxed);
-            Some(format!(
-                "prewarm: spare host space {:#x} ready before the guest runs — {line} (total {} us)",
-                space.space,
-                t0.elapsed().as_micros()
-            ))
-        }
-        (fb, ram) => {
-            rm.free_vaspace(space);
-            Some(format!(
-                "prewarm: windows refused fb={fb:?} ram={ram:?} — no spare; {line}"
-            ))
-        }
-    }
+    plane.counters.prewarmed.fetch_add(1, Ordering::Relaxed);
+    Some(format!(
+        "prewarm: spare host space {space:#x} ready before the guest runs — {windows} (vaspace {vas_us} us, ram_obj {ram_obj_us} us, total {} us)",
+        t0.elapsed().as_micros()
+    ))
 }
 
 /// ★ P5c: the guest freed VA space `key` — unmap OUR rows (deferred, one invalidate) and keep the
-/// host space and its windows as a spare. ⊘ A space a live channel still runs in is never
-/// recycled (nor freed): it is kept, named.
+/// host space as a spare (it holds nothing of ours, §AB rule 2). ⊘ A space a live channel still
+/// runs in is never recycled (nor freed): it is kept, named.
 fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: VasKey) -> String {
     let mirror = plane.mirrors.lock().ok().and_then(|mut mm| mm.remove(&key));
     let Some(target) = m.remove(key) else {
@@ -2900,26 +2746,18 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
         refused += 1;
     }
     let unmap_us = t_unmap.elapsed().as_micros();
-    let spare = mirror.map(|mi| Spare {
-        space: mi.space,
-        fb_base: mi.fb_base,
-        fb_len: mi.fb_len,
-        ram: mi.ram,
-        ram_obj: mi.ram_obj,
-        rings: mi.rings,
-    });
-    let recycled = match (spare, refused) {
-        (Some(sp), 0) => plane
+    let recycled = match mirror.as_ref().and_then(|mi| retire_spare(mi, refused)) {
+        Some(sp) => plane
             .spares
             .lock()
             .ok()
             .filter(|v| v.len() < SPARES_MAX)
             .map(|mut v| v.push(sp))
             .is_some(),
-        _ => false,
+        None => false,
     };
     if !recycled {
-        // The windows go with the space; a refused unmap means the space is not clean — freed.
+        // A refused unmap means the space is not clean — freed.
         rm.free_vaspace(g.vas.space);
     }
     format!(
@@ -3056,8 +2894,9 @@ pub fn apply_statement(
             };
             if m.table.target(key).is_none() {
                 let reused = plane.spares.lock().ok().and_then(|mut v| v.pop());
-                if let Some(sp) = reused.as_ref().filter(|_| crate::tspace::enabled()) {
-                    // ★ P1+P2 inc D: a recycled T-mode spare is a plain space; classified afresh.
+                if let Some(sp) = reused.as_ref() {
+                    // ★ P1+P2 inc D: a recycled spare is a plain space (§AB rule 2); classified
+                    // afresh.
                     // ★ Review fix 2026-10-04: recorded with what its space holds and LOGGED.
                     let rec = tmode_reuse(key, sp);
                     let windows = windows_text(&rec.mirror);
@@ -3069,49 +2908,6 @@ pub fn apply_statement(
                     eprintln!(
                         "kf3: {key:?} mirror space={:#x}: {windows} rings=none (recycled)",
                         sp.space.space
-                    );
-                } else if let Some(sp) = reused {
-                    // ★ P5c: a retired space — its rows are gone, its windows are where they were.
-                    let rows = PlacedRows::default();
-                    let reserved = vmm_ranges(Some((sp.fb_base, plane.fb_len)), sp.ram);
-                    // ★ v3-roperm: a recycled host space is classified afresh for its new object.
-                    let kernel_vas = kernel_vas_for(key);
-                    let log = std::sync::Arc::<RowsLog>::default();
-                    if let Ok(mut mm) = plane.mirrors.lock() {
-                        mm.insert(
-                            key,
-                            Mirror {
-                                space: sp.space,
-                                fb_base: sp.fb_base,
-                                fb_len: plane.fb_len,
-                                ram: sp.ram,
-                                rows: rows.clone(),
-                                ram_obj: sp.ram_obj,
-                                live: Default::default(),
-                                rings: sp.rings.clone(),
-                                kernel_vas: kernel_vas.clone(),
-                                log: log.clone(),
-                            },
-                        );
-                    }
-                    plane
-                        .counters
-                        .mirrors_reused
-                        .fetch_add(1, Ordering::Relaxed);
-                    m.table.insert(
-                        key,
-                        Target::Gpu(GpuMirror::new(
-                            HostVas {
-                                rm,
-                                space: sp.space,
-                                store,
-                                ram_obj: sp.ram_obj,
-                            },
-                            (rows, log),
-                            reserved,
-                            Some(plane.ram),
-                            kernel_vas,
-                        )),
                     );
                 } else if let Err(line) = create_mirror(m, plane, rm, store, key) {
                     return line;
@@ -3310,30 +3106,21 @@ mod tests {
         let mut rows = base.clone();
         cut_rows(&mut rows, 0x2000, 0x2000);
         assert_eq!(rows, base);
-        // ★ Review fix 2026-10-04 — the count-only DEFAULT path keeps the removal before inc A,
-        // byte for byte: only rows STARTING in the range go, each whole — row 1 (straddling the
-        // start) stays at full length, rows 2 and 3 go whole (row 3's outside part included) —
-        // and the difference from host RM's cut is counted.
+        // ★ Strict hardwired 2026-10-10: the range unmap's cut is always the exact one; a cut the
+        // removal before inc A would have got wrong (a row straddling an edge) is counted.
         let mut rows = base.clone();
         assert!(cut_is_inexact(&rows, 0x2000, 0x9000));
         let before = ROWS_INEXACT.load(Ordering::Relaxed);
-        let cut = cut_for(false, &mut rows, 0x2000, 0x9000);
-        let legacy: BTreeMap<u64, PlacedRow> = [(0x1000, (0x3000, 0x10_0000, false, RO))]
-            .into_iter()
-            .collect();
-        assert_eq!(rows, legacy, "the removal before inc A");
+        let cut = cut_for(&mut rows, 0x2000, 0x9000);
+        assert_eq!(rows, want, "always the exact cut");
         assert!(ROWS_INEXACT.load(Ordering::Relaxed) > before, "counted");
         uncut_rows(&mut rows, cut);
         assert_eq!(rows, base, "a refused unmap restores the record");
-        // The strict arm is the exact cut.
-        let mut rows = base.clone();
-        cut_for(true, &mut rows, 0x2000, 0x9000);
-        assert_eq!(rows, want);
-        // A range no row straddles is exact either way, and not counted.
+        // A range no row straddles is exact, and not counted as inexact.
         assert!(!cut_is_inexact(&base, 0x4000, 0x5000));
         let mut a = base.clone();
         let mut b = base.clone();
-        cut_for(false, &mut a, 0x4000, 0x5000);
+        cut_for(&mut a, 0x4000, 0x5000);
         cut_rows(&mut b, 0x4000, 0x5000);
         assert_eq!(a, b);
     }

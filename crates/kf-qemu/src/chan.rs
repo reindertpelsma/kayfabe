@@ -907,11 +907,11 @@ struct Mem<'a> {
 /// completion probe's read-backs). ⊘ Never the mirror's store-WINDOW length: a T-mode twin carries
 /// no window and records `fb_len = 0`, so a bound taken from it made every vidmem fetch fail
 /// "past the store (0x0)" — every UVM Translated channel died at its first fetch (UVM's GPFIFO is
-/// vidmem on a dGPU, `ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:3386-3390`). In T-mode the
-/// bound is the carve-out base — a CPU read never touches kayfabe's firmware region either; on
-/// the default path it is the mirror's `fb_len`, which is the store's length there (today's value).
-const fn store_read_bound(tmode: bool, mirror_fb_len: u64, carve: u64) -> u64 {
-    if tmode { carve } else { mirror_fb_len }
+/// vidmem on a dGPU, `ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:3386-3390`). The bound is the
+/// carve-out base — a CPU read never touches kayfabe's firmware region either. ★ 2026-10-10: the
+/// legacy arm (the mirror's window length) is deleted with `KF3_TSPACE`; a mirror has no window.
+const fn store_read_bound(carve: u64) -> u64 {
+    carve
 }
 /// ★ P1+P2 inc C (`docs/design/V3_P1P2_TSPACE.md` §3.4) — the T-mode resolver's view of a
 /// mirror: OUR placement rows (never a copy of the guest's tables), each operand resolved under ONE
@@ -1157,38 +1157,16 @@ impl Publisher for VaSplit<'_> {
     }
 }
 
-/// The two windows of a mirror, for the rewriter.
-struct Windows<'a>(&'a Mirror);
-impl Window for Windows<'_> {
-    fn translate(&self, t: Target, phys: u64, len: u64) -> Option<u64> {
-        let end = phys.checked_add(len)?;
-        match t {
-            Target::LocalFb if end <= self.0.fb_len => Some(self.0.fb_base + phys),
-            // ⊘ A sysmem operand is a guest-PHYSICAL address; the RAM window is by memfd FILE
-            // offset. Identity only when guest RAM is one flat memfd from GPA 0 — resolved per
-            // block by the caller's layout, never assumed (see `Slot::ram_window`).
-            Target::CoherentSysmem | Target::NonCoherentSysmem => None,
-            Target::Peer => None,
-            _ => None,
-        }
-    }
-}
-
-/// The window with guest RAM resolved through the VMM's own layout.
-struct SlotWindow<'a> {
-    mirror: &'a Mirror,
-    ram: &'a RamMap,
-}
-impl Window for SlotWindow<'_> {
-    fn translate(&self, t: Target, phys: u64, len: u64) -> Option<u64> {
-        match t {
-            Target::CoherentSysmem | Target::NonCoherentSysmem => {
-                let (base, rlen) = self.mirror.ram?;
-                let off = self.ram.dma_to_file_range(phys, len)?;
-                (off.checked_add(len)? <= rlen).then(|| base + off)
-            }
-            other => Windows(self.mirror).translate(other, phys, len),
-        }
+/// ⊘ 2026-10-10 (`OWNER_RULINGS.md` §AB): **no mirror window.** The legacy rewriter translated
+/// physical operands through the store and guest-RAM windows every mirror carried (deleted with
+/// `KF3_TSPACE`); every Translated ring is now a T-mode ring, which binds its operands against the
+/// T-space's windows at push (`kf_chan::tmode::push_bound`) and never consults this one
+/// (`TranslatedRing::next` returns before the legacy rewrite). So the pump's `Window` argument
+/// translates nothing.
+struct NoMirrorWindow;
+impl Window for NoMirrorWindow {
+    fn translate(&self, _: Target, _: u64, _: u64) -> Option<u64> {
+        None
     }
 }
 
@@ -1241,6 +1219,12 @@ struct Slot {
 
 // Experiment on this branch: kernel GR channels run only authored CE work in
 // the private T-space, with a real host-owned GR context. Default off.
+// ★ 2026-10-10 (§AB, `KF3_TSPACE` hardwired): KEPT as a switch, deliberately. ON, it changes the
+// route of a channel every Linux boot creates — the guest RM's internal kernel GR channel (the
+// golden-image channel, today "not born") becomes a Translated ring with an owned host GR
+// context — and no Linux run with it exists; ON without `KF3_KERNEL_GR_WORK` (which §S.2 keeps
+// default-off "until proven") it is a ring that refuses every GR segment. The two are an owner
+// ruling together; the Windows profile sets both.
 fn kernel_gr_ce() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("KF3_KERNEL_GR_CE").is_some_and(|v| v == "1"))
@@ -1307,22 +1291,6 @@ fn reenable_noact() -> bool {
     *ON.get_or_init(|| {
         std::env::var_os("KF3_ASYNC_PREEMPT_REENABLE_NOACT").is_some_and(|v| v == "1")
     })
-}
-
-// Experimental decoder context ownership only; codec submissions still refuse.
-fn kernel_nvdec_ctx() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("KF3_KERNEL_NVDEC_CTX").is_some_and(|v| v == "1"))
-}
-
-fn kernel_nvenc_ctx() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("KF3_KERNEL_NVENC_CTX").is_some_and(|v| v == "1"))
-}
-
-fn kernel_ofa_ctx() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("KF3_KERNEL_OFA_CTX").is_some_and(|v| v == "1"))
 }
 
 /// ★ P1+P2 inc D (§7.13) — **`KF3_NEGCTL_STALE_BIND=1`**, the stale-bind counter's POSITIVE
@@ -4939,7 +4907,7 @@ impl ChanPlane {
             let g = &mut *g;
             let mirror = g.mirror.clone();
             let store_len =
-                store_read_bound(crate::tspace::enabled(), mirror.fb_len, self.layout.carve());
+                store_read_bound(self.layout.carve());
             let mut m = Mem {
                 mirror: &mirror,
                 ram: self.ram,
@@ -5142,7 +5110,7 @@ impl ChanPlane {
         let entries = g.st.entries.max(1);
         let mirror = g.mirror.clone();
         let store_len =
-            store_read_bound(crate::tspace::enabled(), mirror.fb_len, self.layout.carve());
+            store_read_bound(self.layout.carve());
         let mut mem = Mem {
             mirror: &mirror,
             ram: self.ram,
@@ -5538,22 +5506,18 @@ impl ChanPlane {
         // route below is for the others.
         let passthrough = !a.kernel_client || a.user_work;
         let kernel_work = a.kernel_client && !a.user_work;
+        // ★ 2026-10-10 (§AB): `KF3_TSPACE` is hardwired, so no route below is gated on it.
+        // `KF3_KERNEL_NVDEC_CTX`/`_NVENC_CTX`/`_OFA_CTX` are deleted and hardwired ON (the
+        // Windows profile's values; measured required, runs 21-24); `KF3_KERNEL_GR_CE` stays a
+        // switch ([`kernel_gr_ce`] says why).
         let kernel_gr = kernel_work
             && engine == kf_abi::submit::ENGINE_TYPE_GRAPHICS
-            && kernel_gr_ce()
-            && crate::tspace::enabled();
-        let kernel_nvdec = kernel_work
-            && kf_abi::submit::nvdec_index_of_engine_type(engine).is_some()
-            && kernel_nvdec_ctx()
-            && crate::tspace::enabled();
-        let kernel_nvenc = kernel_work
-            && kf_abi::submit::nvenc_index_of_engine_type(engine).is_some()
-            && kernel_nvenc_ctx()
-            && crate::tspace::enabled();
-        let kernel_ofa = kernel_work
-            && kf_abi::submit::ofa_index_of_engine_type(engine).is_some()
-            && kernel_ofa_ctx()
-            && crate::tspace::enabled();
+            && kernel_gr_ce();
+        let kernel_nvdec =
+            kernel_work && kf_abi::submit::nvdec_index_of_engine_type(engine).is_some();
+        let kernel_nvenc =
+            kernel_work && kf_abi::submit::nvenc_index_of_engine_type(engine).is_some();
+        let kernel_ofa = kernel_work && kf_abi::submit::ofa_index_of_engine_type(engine).is_some();
         if kernel_work
             && !is_copy_engine(engine)
             && !kernel_gr
@@ -6677,7 +6641,7 @@ impl ChanPlane {
         // ★ Review fix 2026-10-04 (HIGH): the CPU store views' bound is the STORE's readable
         // extent, never the mirror's window length (0 on a T-mode twin) — [`store_read_bound`].
         let store_len =
-            store_read_bound(crate::tspace::enabled(), mirror.fb_len, self.layout.carve());
+            store_read_bound(self.layout.carve());
         let mut mem = Mem {
             mirror: &mirror,
             ram: self.ram,
@@ -6686,10 +6650,6 @@ impl ChanPlane {
             store_len,
             views: &mut g.views,
             inbox: &self.inbox,
-        };
-        let win = SlotWindow {
-            mirror: &mirror,
-            ram: self.ram,
         };
         let mut split = VaSplit {
             inbox: &self.inbox,
@@ -6711,7 +6671,7 @@ impl ChanPlane {
             &mut Userd(&g.userd),
             &mut split,
             is_any_ce_class,
-            &win,
+            &NoMirrorWindow,
         );
         if !g.gr_tier
             && translated_ce_relay()
@@ -7480,16 +7440,15 @@ mod heap_tests {
 mod store_bound_tests {
     use super::{store_read_bound, view_span};
 
-    /// ★ Review fix 2026-10-04 (HIGH): a T-mode twin records NO store window (`fb_len` 0), yet
-    /// its Translated channel's GPFIFO and pushbuffer are read through vidmem rows — the CPU view
-    /// bound is the carve-out base in T-mode (a heap offset reads; the carve-out does not), and the
-    /// mirror's `fb_len` (the store's length) on the default path, as before.
+    /// ★ Review fix 2026-10-04 (HIGH): a twin records NO store window, yet its Translated
+    /// channel's GPFIFO and pushbuffer are read through vidmem rows — the CPU view bound is the
+    /// carve-out base (a heap offset reads; the carve-out does not).
     #[test]
     fn a_tmode_twin_reads_vidmem_rows_through_the_store_bound() {
         let l = kf_chip::bar0::fb_layout(12 << 30).expect("layout");
         let carve = l.carve();
-        let twin_fb_len = 0; // what a T-mode twin records: no window
-        let bound = store_read_bound(true, twin_fb_len, carve);
+        let twin_fb_len = 0; // what a twin holds: no window
+        let bound = store_read_bound(carve);
         assert_eq!(view_span(bound, 0x10_0040), Ok((0x10_0000, 0x1_0000)));
         assert_eq!(
             view_span(bound, carve - 4).map(|(o, n)| o + n),
@@ -7503,9 +7462,6 @@ mod store_bound_tests {
         assert!(view_span(bound, l.bar1_pde_base).is_err());
         // ⊘ The defect: the window length as the bound refuses every vidmem read.
         assert!(view_span(twin_fb_len, 0x10_0040).is_err());
-        // The default path: the mirror's fb_len (the store's length), unchanged.
-        assert_eq!(store_read_bound(false, l.fb_length, carve), l.fb_length);
-        assert!(view_span(l.fb_length, carve).is_ok());
     }
 }
 
