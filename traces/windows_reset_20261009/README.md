@@ -399,3 +399,42 @@ harness before the run). Falsifier: Xid 31 on a never-unmapped VA again → batc
 regression arm (H-split falsifier above) in `kf-harness` (it already has a `BatchedVas` target, `publish.rs`) or
 `kayfabe-rm-ladder`; then the fix (e.g. never range-unmap part of a live batch: unmap a batch only whole, or re-place the
 kept rows; never a range wider than the guest's rows), the arm failing before and passing after, then ONE Windows boot.
+
+## 13. Run 104: batching off (`KF3_NO_BATCHED_MAP=1`), H-split A/B (2026-10-09)
+
+**STATUS: LIVE, 2026-10-09.** One hardware run, kf3 binary `kf3-bins/3e9bcdce`, run 103's flags plus `KF3_NO_BATCHED_MAP=1` (`mem.rs:1114`),
+`WR_SHOTS=90`, under the fastguest flock. Evidence: `run104/` (small files; the full logs stay on the host in
+`/var/lib/kf-windows-20261005/boundary-kayfabe-104/`). Written by the coordinator after the run agent lost its worktree to a
+disk cleanup (coordinator error); the agent's run itself was not affected (it ran on the host).
+
+**Falsifier (stated before the run):** Xid 31 FAULT_PTE on a VA kf3 never unmapped (as in runs 101/103) → batching/partial
+unmap is NOT the cause. No Xid and Windows stays up past the old 0x116 point → H-split supported (one run). Stall with no Xid
+(as runs 100/102) → third outcome.
+
+**Result: third outcome. H-split is neither supported nor falsified, and batching is not what makes Windows stall.**
+
+`[measured]`
+- No new host Xid: the count stayed 43 before and after; the last Xid in dmesg is run 103's (`run104/host-xid-tail.txt`).
+- Timeline (UTC, run start 08:10:27): the Windows lock screen (clock "8:10") is on screen from 08:10:42.96 to 08:10:46.19, about
+  3.3 s, then every following frame is black until the stop (`run104/lockscreen-081045.png`, `run104/shots-nonblack-fraction.txt`:
+  non-black fraction 0.314 for those five frames, 0.0 for all frames after). The stall marker fired after 18 s
+  (`stall=1`, `vsyncs=165`), 40 s later `vga=1 core_freed=1 birth_refused=1` (`run104/wr-run104.log`).
+- The recovery-wall pattern again: `UnloadingGuestDriver`, then `chan 0xc1d0004a:0xff040001 birth REFUSED ... KernelInUserSpace(1)`
+  (`run104/qemu-teardown-lines.txt`).
+- The guest agent never answered: the three PowerShell probes' `[rc=1]` is `qmp.py` timing out on the QGA socket, not a probe
+  verdict (`run104/flip-d3d11_clear_probe.ps1.out`). So the guest was not reachable for the last ~2 minutes. The clean stop failed
+  (QEMU killed after 300 s).
+- With batching off kf3 issued no UNMAP in `0x4000000-0x41fffff` (`run104/maplog-unmaps-0x4.txt`: 26 unmaps starting 0x4…, none
+  in that window), so the range-unmap trigger of H-split was not exercised in this run.
+
+`[inferred]`
+- The black screen and teardown happen without the partial-unmap sequence, so batching/partial unmap is not necessary for the
+  stall. Runs 100/102 (batching on, no Xid) and run 104 (batching off, no Xid) look alike; runs 101/103 (Xid 31) are the
+  ones where the unmap sequence ran. The Xid on `0x4034000` is therefore at most a consequence of the recovery teardown racing
+  running channels, not the cause of the black screen. Not tested directly.
+- One run cannot show H-split fixes anything: the Xid did not occur in the arm that was supposed to remove it, but the stall
+  did occur, and the stall was the problem.
+
+**Not done:** the stall snapshots (11 taken) and the 0x116 bugcheck were not read; no in-guest data exists (agent dead).
+**Next:** the stall itself (twin states at the stall, runs 100/102/104) and the recovery wall (§11, owner decision pending).
+The H-split regression arm (§12 step 3) is still worth running GPU-side but is no longer on the critical path.
