@@ -13,6 +13,9 @@
 # Preconditions: provision_guest_gfx.sh ran (guest) and `provision_guest_gfx.sh host` (host).
 # A start marker and an exit line, so a killed run is not read as a running one.
 set -uo pipefail
+# Bench lanes read the per-RPC / per-statement / per-act log lines; production is quiet by default
+# (docs/design/V3_NONSTALL_THREADS.md). KF3_LOG_VERBOSE=0 in the environment turns it off here too.
+export KF3_LOG_VERBOSE="${KF3_LOG_VERBOSE-1}"
 HERE="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$HERE/../.." && pwd)"
 BENCH=${BENCH_DIR:-/workspace/bench}; TAG=${1:-gfxsuite}
 OUT=$BENCH/${TAG}_gfxsuite.out

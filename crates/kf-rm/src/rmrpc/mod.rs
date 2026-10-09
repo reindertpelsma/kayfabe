@@ -1844,7 +1844,7 @@ fn translate_published_pdes(
                 )
             })
             .collect();
-        eprintln!(
+        kf_util::klog_trace!(
             "kf-rm: server-context-only PDE copy client={:#x} vaspace={:#x} page_size={:#x} \
              levels=[{}] (inert)",
             client.0,

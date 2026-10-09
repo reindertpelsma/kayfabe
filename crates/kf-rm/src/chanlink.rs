@@ -631,7 +631,7 @@ impl ChannelPolicy {
     }
 
     fn refusal(status: u32, why: &str, cmd: &RpcCommand) -> Reply {
-        eprintln!("kf-rm: channel plane REFUSED ({status:#x}): {why}");
+        kf_util::klog_limited!("kf-rm: channel plane REFUSED ({status:#x}): {why}");
         Reply {
             rpc_result: status,
             body: cmd.payload.clone(),
@@ -658,7 +658,7 @@ impl ChannelPolicy {
                 // real cause of p5a's "internal clients are not marked by the pid sentinel".
                 self.kernel_clients.insert(h.client);
             }
-            eprintln!(
+            kf_util::klog_trace!(
                 "kf-rm: chanlink: client {:#x} root: kernel={} internal={}",
                 h.client,
                 self.kernel_clients.contains(&h.client),
@@ -838,9 +838,11 @@ impl ChannelPolicy {
                     .vas_under
                     .entry((h.client, h.parent))
                     .or_insert(h.handle);
-                eprintln!(
+                kf_util::klog_trace!(
                     "kf-rm: chanlink: FERMI_VASPACE_A {:#x}:{:#x} under {:#x} (device default for it: {first:#x})",
-                    h.client, h.handle, h.parent
+                    h.client,
+                    h.handle,
+                    h.parent
                 );
                 return None;
             }
@@ -1039,7 +1041,7 @@ impl ChannelPolicy {
             .and_then(|e| cmd.payload.get(h.params_at..e))
         else {
             if matches!(h.cmd, PROMOTE_CTX | EVICT_CTX) {
-                eprintln!(
+                kf_util::klog_limited!(
                     "kf-rm: chanlink: control {:#010x} declares {} params bytes, {} arrived (rpc flags {:#x}) — not carried",
                     h.cmd,
                     h.params_size,
@@ -1258,9 +1260,12 @@ impl ChannelPolicy {
                 }
             }
             PROMOTE_CTX => {
-                eprintln!(
+                kf_util::klog_trace!(
                     "kf-rm: chanlink: GPU_PROMOTE_CTX on {:#x}:{:#x} params={} rpc_flags={:#x}",
-                    h.client, h.object, h.params_size, h.rmapi_rpc_flags
+                    h.client,
+                    h.object,
+                    h.params_size,
+                    h.rmapi_rpc_flags
                 );
                 // ★ The capability gate this control's decoder would have applied (it is admitted).
                 if !self
@@ -1269,7 +1274,7 @@ impl ChannelPolicy {
                     .control(kf_arch::ids::ControlCmd(h.cmd))
                     .is_permitted()
                 {
-                    eprintln!(
+                    kf_util::klog_limited!(
                         "kf-rm: chanlink: GPU_PROMOTE_CTX not permitted by this boundary's allowlist"
                     );
                     return None;
@@ -1284,7 +1289,7 @@ impl ChannelPolicy {
                     {
                         let (engine_type, chan_client, object, va, size) =
                             self.abi.decode_falcon_promote(params).ok()?;
-                        eprintln!(
+                        kf_util::klog_trace!(
                             "kf-rm: chanlink: falcon ctx promote {chan_client:#x}:{object:#x} engine {engine_type:#x} guest ctx buffer VA {va:#x}+{size:#x}"
                         );
                         let st = ChanStatement::PromoteCtx {
@@ -1582,9 +1587,10 @@ impl ChannelPolicy {
             ));
         }
         self.vas_under.insert(device, vas);
-        eprintln!(
+        kf_util::klog_trace!(
             "kf-rm: chanlink: Device {:#x}:{:#x} default VA space set to {vas:#x} (SET_DEFAULT_VASPACE)",
-            h.client, h.object
+            h.client,
+            h.object
         );
         Some(Reply {
             rpc_result: NV_OK,
@@ -1621,9 +1627,11 @@ impl ChannelPolicy {
             ));
         };
         if p.property != layout.engine_timeslice_us {
-            eprintln!(
+            kf_util::klog_limited!(
                 "kf-rm: chanlink: SET_CHANNEL_PROPERTIES {:#x}:{:#x} property {:#x} is not served (only ENGINETIMESLICEINMICROSECONDS)",
-                h.client, p.channel, p.property
+                h.client,
+                p.channel,
+                p.property
             );
             return None;
         }

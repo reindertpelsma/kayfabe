@@ -196,6 +196,15 @@ pub unsafe extern "C" fn kf3_realize(
                 write_err(err, err_len, "could not start the register drainer thread");
                 return -1;
             }
+            // ★ The housekeeping thread: the GSP heartbeats and the status line, off the drainer.
+            if std::thread::Builder::new()
+                .name("kf3-status".into())
+                .spawn(move || d.housekeeping_loop())
+                .is_err()
+            {
+                write_err(err, err_len, "could not start the housekeeping thread");
+                return -1;
+            }
             // ★ P5: the workers — they serve rung Translated tokens and host completions.
             for i in 0..2 {
                 if std::thread::Builder::new()

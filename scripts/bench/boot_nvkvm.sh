@@ -5,6 +5,9 @@
 # error_report/info_report on stderr are captured -- `-daemonize` sends them to /dev/null.
 # Guest net = tap (host 192.168.77.1, guest 192.168.77.2); the shim build has no slirp.
 set -euo pipefail
+# Bench lanes read the per-RPC / per-statement / per-act log lines; production is quiet by default
+# (docs/design/V3_NONSTALL_THREADS.md). KF3_LOG_VERBOSE=0 in the environment turns it off here too.
+export KF3_LOG_VERBOSE="${KF3_LOG_VERBOSE-1}"
 TAG="${1:?usage: boot_nvkvm.sh <tag> [extra args]}"; shift || true
 cd /workspace/bench
 Q=${QEMU_BIN:-/workspace/bench/qemu-build/qemu-system-x86_64}

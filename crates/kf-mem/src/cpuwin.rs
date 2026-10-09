@@ -575,7 +575,7 @@ impl<V: ViewOps> MapTarget for CpuWindow<V> {
                 // later diff would re-emit an unmap nothing can satisfy.
                 Err(e) => {
                     self.stats.borrow_mut().refused += 1;
-                    eprintln!(
+                    kf_util::klog_limited!(
                         "kf3: window unmap {va:#x}: view release refused ({e}) — aperture leaked, counted"
                     );
                 }
@@ -593,7 +593,7 @@ impl<V: ViewOps> MapTarget for CpuWindow<V> {
     fn invalidate(&self) -> Result<(), String> {
         self.changes.set(self.changes.get().wrapping_add(1));
         if let Some(r) = self.retire_seed()? {
-            eprintln!("kf3: {}", r.line());
+            kf_util::klog!("kf3: {}", r.line());
         }
         Ok(())
     }

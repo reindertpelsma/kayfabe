@@ -54,10 +54,10 @@ impl Drop for TimerWindow<'_> {
             h_memory: self.object,
             p_linear_address: self.cookie,
         }) {
-            eprintln!("kf-host: timer CPU view release refused: {e:?}");
+            kf_util::klog!("kf-host: timer CPU view release refused: {e:?}");
         }
         if let Err(e) = self.owner.free(self.object) {
-            eprintln!("kf-host: timer object release refused: {e:?}");
+            kf_util::klog!("kf-host: timer object release refused: {e:?}");
         }
     }
 }

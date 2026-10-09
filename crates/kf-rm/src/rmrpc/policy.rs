@@ -689,7 +689,7 @@ const REFUSAL_LOG_MAX: u64 = 24;
 fn refusal_reply(r: BridgeRefusal) -> Reply {
     let n = REFUSALS_LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
     if n <= REFUSAL_LOG_MAX {
-        eprintln!(
+        kf_util::klog_limited!(
             "kf-rm: RPC-REFUSED #{n} {r:?} \u{21d2} answered NV_ERR_NOT_SUPPORTED (0x56). \u{2298} The \
              guest sees only the status; this line is the only place the REASON exists. \
              (printing the first {REFUSAL_LOG_MAX}; the total rides the refusal census)"
@@ -817,7 +817,7 @@ impl ObjectPolicy {
             let inner = params
                 .get(4..8)
                 .map_or(0, |b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
-            eprintln!(
+            kf_util::klog_trace!(
                 "kf-rm: DEFERRED-API {:#010x} on {:#x}:{:#x} hApiHandle={handle:#x} cmd={inner:#x} psz={} -> {status:#x}",
                 h.cmd,
                 h.client,

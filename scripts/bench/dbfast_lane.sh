@@ -15,6 +15,9 @@
 #               (100) — the launch-latency trade (single synchronous vs batched launches) with variance
 # ⚠ Everything on a vast box is NESTED. One DBL_<step>_RC line per step; the log ends with EXIT.
 set -uo pipefail
+# Bench lanes read the per-RPC / per-statement / per-act log lines; production is quiet by default
+# (docs/design/V3_NONSTALL_THREADS.md). KF3_LOG_VERBOSE=0 in the environment turns it off here too.
+export KF3_LOG_VERBOSE="${KF3_LOG_VERBOSE-1}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 T=${1:?tag}; STEPS=${2:-suite_on,exit,ladder,gpufree}

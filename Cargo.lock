@@ -229,6 +229,7 @@ dependencies = [
  "kf-host",
  "kf-linux-raw",
  "kf-trap",
+ "kf-util",
 ]
 
 [[package]]
@@ -336,6 +337,7 @@ dependencies = [
  "kf-cuda",
  "kf-host",
  "kf-trap",
+ "kf-util",
 ]
 
 [[package]]
@@ -362,6 +364,7 @@ dependencies = [
  "kf-oprom",
  "kf-rm",
  "kf-trap",
+ "kf-util",
 ]
 
 [[package]]

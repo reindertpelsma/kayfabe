@@ -5,6 +5,9 @@
 # /root/prov/LLM_TIMING exists for the timed part (other agents do not build while it does).
 #   usage: llm_parity_box.sh <tag> <kf3-binary> [steps=gprov,hprov,guest,guest_pm,host]  (also: build)
 set -uo pipefail
+# Bench lanes read the per-RPC / per-statement / per-act log lines; production is quiet by default
+# (docs/design/V3_NONSTALL_THREADS.md). KF3_LOG_VERBOSE=0 in the environment turns it off here too.
+export KF3_LOG_VERBOSE="${KF3_LOG_VERBOSE-1}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TAG=${1:?tag}; QB=${2:?kf3 binary}; STEPS=${3:-gprov,hprov,guest,guest_pm,host}
 OUT=/workspace/bench/llm; mkdir -p "$OUT"

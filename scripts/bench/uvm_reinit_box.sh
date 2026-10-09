@@ -5,6 +5,9 @@
 # running one when absence of a result is the only check).
 #   usage: uvm_reinit_box.sh <tag> [steps=build,loop]   env: URL_N, URL_PROG, KF_VAS_CENSUS, NVKVM_RAM_MB
 set -uo pipefail
+# Bench lanes read the per-RPC / per-statement / per-act log lines; production is quiet by default
+# (docs/design/V3_NONSTALL_THREADS.md). KF3_LOG_VERBOSE=0 in the environment turns it off here too.
+export KF3_LOG_VERBOSE="${KF3_LOG_VERBOSE-1}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TAG=${1:?tag}; STEPS=${2:-build,loop}
 OUT=/workspace/bench/uvmwall; mkdir -p "$OUT"

@@ -205,7 +205,7 @@ mod tests {
             Err(RawError::Syscall {
                 errno: Some(libc::ENOTTY),
                 ..
-            }) => eprintln!("EXPORT_SYNC_FILE: ENOTTY on this kernel (< 6.0)"),
+            }) => kf_util::klog!("EXPORT_SYNC_FILE: ENOTTY on this kernel (< 6.0)"),
             Err(e) => panic!("{e}"),
         }
         assert!(dma_buf_idle(ram.as_backing_fd()).is_err());

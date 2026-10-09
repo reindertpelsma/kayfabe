@@ -195,7 +195,9 @@ impl CommandPolicy for BarPdePolicy {
             Err(e) => {
                 self.refused += 1;
                 self.held_last = false;
-                eprintln!("kf-rm: UPDATE_BAR_PDE refused: {e:?} — the aperture stays as it was");
+                kf_util::klog_limited!(
+                    "kf-rm: UPDATE_BAR_PDE refused: {e:?} — the aperture stays as it was"
+                );
                 Some(Reply {
                     rpc_result: NV_ERR_INVALID_ARGUMENT,
                     body: Vec::new(),
@@ -487,9 +489,12 @@ impl CommandPolicy for PageDirPolicy {
                 ),
                 _ => format!("fn {}", cmd.code),
             };
-            eprintln!(
+            kf_util::klog!(
                 "kf-rm: census pagedir statement {:#x}:{:#x} (as {c:#x}:{v:#x}) root={:#x} {:?} via {carrier}",
-                st.client.0, st.vaspace.0, st.pdb.0, st.pdb_aperture
+                st.client.0,
+                st.vaspace.0,
+                st.pdb.0,
+                st.pdb_aperture
             );
         }
         st.client = kf_arch::ids::HClient(c);

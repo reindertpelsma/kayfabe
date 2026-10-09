@@ -17,6 +17,9 @@
 #      blender_cycles_optix repeated: imgcmp.sh pools them into the spread; same box/image only).
 # ⊘ Strictly serial; takes /tmp/kayfabe-fastguest.lock per boot and releases it between boots.
 set -uo pipefail
+# Bench lanes read the per-RPC / per-statement / per-act log lines; production is quiet by default
+# (docs/design/V3_NONSTALL_THREADS.md). KF3_LOG_VERBOSE=0 in the environment turns it off here too.
+export KF3_LOG_VERBOSE="${KF3_LOG_VERBOSE-1}"
 HERE="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$HERE/../../.." && pwd)"
 RUN=${1:?run}; shift
 R=${GSET_RESULTS:-/workspace/gfxset/results}/$RUN; mkdir -p "$R"

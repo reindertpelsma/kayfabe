@@ -208,7 +208,7 @@ fn negctl_skip_cap_bracket() -> bool {
     *SKIP.get_or_init(|| {
         let on = std::env::var_os("KF3_NEGCTL_SKIP_CAP_BRACKET").is_some_and(|v| v == "1");
         if on {
-            eprintln!(
+            kf_util::klog!(
                 "kf-host: ⚠ NEGATIVE CONTROL KF3_NEGCTL_SKIP_CAP_BRACKET=1: channel-alloc calls \
                  keep CAP_SYS_ADMIN; every birth RM stamps privileged must be refused"
             );
@@ -448,7 +448,7 @@ impl HostRm {
                     for (slot, &(lo, hi)) in vas.guest.iter_mut().zip(GUEST_VA_RANGES.iter()) {
                         match self.reserve_va(space, lo, hi - lo) {
                             Ok(handle) => *slot = GuestVaRange { handle, lo, hi },
-                            Err(e) => eprintln!(
+                            Err(e) => kf_util::klog_limited!(
                                 "kf-host: space {space:#x}: guest VA range [{lo:#x}, {hi:#x}) NOT reserved: {e:?} — host RM may place its own objects there"
                             ),
                         }
@@ -755,7 +755,7 @@ impl HostRm {
         // ★ Bounded phase breakdown (the first 32 batches of the process): stitch vs pin vs map.
         static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 32 {
-            eprintln!(
+            kf_util::klog!(
                 "kf-host: map_scattered {} pieces {len:#x} bytes: stitch {} us, descriptor {} us, hand view to reaper {} us, map {} us",
                 pieces.len(),
                 t_stitch.as_micros(),
@@ -920,10 +920,11 @@ impl HostRm {
             },
         )?;
         let chan = born.handle;
-        eprintln!(
+        kf_util::klog_trace!(
             "kf-host: channel birth h={chan:#x} engine={engine_type:#x} reply_flags={:#010x} \
              PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin={}",
-            born.privilege.reply_flags, born.cap
+            born.privilege.reply_flags,
+            born.cap
         );
         let unwind = |me: &Self| {
             let _ = me.free(chan);

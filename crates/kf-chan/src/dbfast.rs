@@ -452,7 +452,7 @@ impl DbFast {
 
     fn note_refusal(&self, what: std::fmt::Arguments<'_>) {
         if self.printed.fetch_add(1, Ordering::Relaxed) < PRINT_LIMIT {
-            eprintln!("kf3: DBFAST {what} — that doorbell stays on the TRAPPED path");
+            kf_util::klog!("kf3: DBFAST {what} — that doorbell stays on the TRAPPED path");
         }
     }
 
@@ -522,7 +522,7 @@ impl DbFast {
                 // the kernel holds nothing for this (site, value) and signals nothing — safe, but a
                 // defect, so it is loud.
                 c.deassign_failed.fetch_add(1, Ordering::Relaxed);
-                eprintln!(
+                kf_util::klog_limited!(
                     "kf3: DBFAST tok={idx:#x} value={:#010x} site={site:#x} DEASSIGN REFUSED (errno {errno}) — bookkeeping defect",
                     reg.value
                 );
@@ -559,7 +559,7 @@ impl DbFast {
             // came. Remove it now (its fd is never read again: no count of it can reach the new
             // registration), loudly.
             c.double_register.fetch_add(1, Ordering::Relaxed);
-            eprintln!(
+            kf_util::klog_limited!(
                 "kf3: DBFAST tok={idx:#x} registered again while registration {:#x} is live — removing the old one",
                 old.tag
             );
@@ -657,7 +657,7 @@ impl DbFast {
             }
             Err(_) => {
                 c.ack_timeouts.fetch_add(1, Ordering::Relaxed);
-                eprintln!(
+                kf_util::klog_limited!(
                     "kf3: DBFAST tok={idx:#x} registration {:#x}: the drainer did not acknowledge its removal within {ACK_TIMEOUT:?}",
                     reg.tag
                 );

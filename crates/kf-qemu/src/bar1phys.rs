@@ -131,7 +131,7 @@ pub fn view_key(c: &kf_mem::cpuwin::Coverage, seeded: bool) -> u64 {
 /// line says the rest are not; after that, nothing. Returns whether `n` is to be printed.
 pub fn bounded(n: u64, max: u64, family: &str) -> bool {
     if n == max {
-        eprintln!("kf3: {max} {family} lines logged — later ones are not");
+        kf_util::klog!("kf3: {max} {family} lines logged — later ones are not");
     }
     n < max
 }

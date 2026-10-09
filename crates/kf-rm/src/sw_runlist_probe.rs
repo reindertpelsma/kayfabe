@@ -92,9 +92,11 @@ impl Probe {
                 })
                 .is_ok()
             {
-                eprintln!(
+                kf_util::klog!(
                     "kf-rm: EXPERIMENT software-runlist request engine={} maxTSGs={} qosIntrEnableMask={:#x}; metadata only",
-                    params.engine, params.max_tsgs, params.qos
+                    params.engine,
+                    params.max_tsgs,
+                    params.qos
                 );
             }
             if params.max_tsgs != 0 || params.qos != 0 {
@@ -142,7 +144,9 @@ impl CommandPolicy for IdentityObserver {
             self.identity.store(admitted, Ordering::Relaxed);
         }
         if let Some(record) = self.request_observation(cmd) {
-            eprintln!("kf-rm: EXPERIMENT software-runlist diagnostic {record}; observation only");
+            kf_util::klog!(
+                "kf-rm: EXPERIMENT software-runlist diagnostic {record}; observation only"
+            );
         }
         None
     }

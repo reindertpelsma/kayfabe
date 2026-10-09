@@ -1163,7 +1163,9 @@ impl VramWorker {
                 format!("display VRAM: the pack kernel self-test FAILED: {e} — the GPU-copy rung is withdrawn")
             })?;
             self.selftested = true;
-            eprintln!("kf3: display: pack kernel self-test PASSED (into display VRAM slot {slot})");
+            kf_util::klog!(
+                "kf3: display: pack kernel self-test PASSED (into display VRAM slot {slot})"
+            );
         }
         let (slot, v) = p.into_backing()?;
         counters.vram_bytes.fetch_add(bytes, Ordering::Relaxed);
@@ -1209,7 +1211,7 @@ impl VramWorker {
     fn refuse(&mut self, ring: &kf_broker::FrameRing, e: String) {
         ring.withdraw(kf_broker::Kind::Vram);
         self.plan.refuse();
-        eprintln!("kf3: display: {e}");
+        kf_util::klog_limited!("kf3: display: {e}");
         self.refused = Some(e);
     }
 
@@ -1242,7 +1244,7 @@ impl VramWorker {
                 Err(e) => {
                     if !self.fence_err_logged {
                         self.fence_err_logged = true;
-                        eprintln!(
+                        kf_util::klog!(
                             "kf3: display: the dma-buf fence check is unavailable ({e}): VRAM slots \
                              are reused after RELEASE and the LRU order alone"
                         );
@@ -1377,7 +1379,7 @@ fn vram_worker(
             w.adopt(gpu, p, &counters)?;
         }
         w.install_waiting(ring)?;
-        eprintln!(
+        kf_util::klog!(
             "kf3: broker: display-broker-vram=on — {} MiB of display VRAM in {} slots, pack self-test passed",
             counters.vram_bytes.load(Ordering::Relaxed) >> 20,
             kf_broker::slots::BROKER_SLOTS
@@ -1470,7 +1472,7 @@ impl DisplayPlane {
         })?;
         // ★ §8.16: what the guest is told the monitor is — graded from the log alone
         if let Some(m) = model.connectors.first().map(|c| &c.monitor) {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: display: monitor {}x{} at {} mHz, range max {} Hz, EDID fnv1a64={:016x} \
                  (display-max-fps {})",
                 m.preferred.h_active,
@@ -1498,7 +1500,7 @@ impl DisplayPlane {
         gpu.import_store(store_fd, store_bytes)
             .map_err(|e| format!("display=on: store import into the display context: {e}"))?;
         let engine = if constructor_probe {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: EXPERIMENT display constructor probe: TMO advertised, ILUT surface loading={ilut_constructor_probe}, TMO surface loading={tmo_surface_constructor_probe}, OLUT surface loading={olut_constructor_probe}; ALL display methods refused before execution"
             );
             Engine::new_constructor_probe(vocab, row.heads, row.windows)
@@ -1867,7 +1869,7 @@ impl Io<'_> {
         self.dp.counters.refused.fetch_add(1, Ordering::Relaxed);
         if self.refusals_logged < 64 {
             self.refusals_logged += 1;
-            eprintln!("kf3: display: REFUSED {why}");
+            kf_util::klog_limited!("kf3: display: REFUSED {why}");
         }
     }
 
@@ -1897,6 +1899,7 @@ impl Device {
     /// ★★★ **The display worker** — its own thread; see the module docs. ⊘ Never a vCPU, never the
     /// drainer, and it holds the model's lock only to take statements.
     pub fn display_loop(&self) {
+        kf_util::log::set_class(kf_util::log::ThreadClass::Display);
         let Some(dp) = self.display else { return };
         let Some(init) = dp.take_init() else { return };
         let WorkerInit {
@@ -1909,7 +1912,7 @@ impl Device {
         if let Some(g) = &gpu
             && let Err(e) = g.make_current()
         {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: display: the plane's GPU context cannot be made current: {e} — the display plane is DOWN"
             );
             return;
@@ -1919,19 +1922,19 @@ impl Device {
         let bl_ok = gpu.as_mut().map(|g| {
             let r = selftest_compose(g);
             match &r {
-                Ok(()) => eprintln!("kf3: display: compose kernel self-test PASSED"),
-                Err(e) => eprintln!(
+                Ok(()) => kf_util::klog!("kf3: display: compose kernel self-test PASSED"),
+                Err(e) => kf_util::klog!(
                     "kf3: display: compose kernel self-test FAILED: {e} — the console will show nothing"
                 ),
             }
             r
         });
         let Ok(poller) = Poller::create() else {
-            eprintln!("kf3: display: epoll refused — the display plane is DOWN");
+            kf_util::klog!("kf3: display: epoll refused — the display plane is DOWN");
             return;
         };
         if poller.watch(dp.wake.as_source_fd(), 1).is_err() {
-            eprintln!("kf3: display: epoll watch refused — the display plane is DOWN");
+            kf_util::klog!("kf3: display: epoll watch refused — the display plane is DOWN");
             return;
         }
         // ★ M2: the scanout copies' completion (`cuLaunchHostFunc` after each copy) wakes the worker
@@ -1940,7 +1943,7 @@ impl Device {
                 .watch(std::os::fd::AsFd::as_fd(g.completion_fd()), 2)
                 .is_err()
         {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: display: epoll watch of the scanout completion refused — the display plane is DOWN"
             );
             return;
@@ -1949,11 +1952,14 @@ impl Device {
         engine.trace = trace;
         if std::env::var("KF3_DISPLAY_METHOD_TRACE").is_ok_and(|v| v == "1") {
             engine.trace_methods(kf_disp::engine::MAX_METHOD_TRACE);
-            eprintln!("kf3: display: bounded METHOD diagnostic enabled (65536 DMA writes maximum)");
+            kf_util::klog!(
+                "kf3: display: bounded METHOD diagnostic enabled (65536 DMA writes maximum)"
+            );
         }
-        eprintln!(
+        kf_util::klog!(
             "kf3: display worker up — engine {} heads / {} windows, caps page published",
-            dp.map.heads, dp.map.windows
+            dp.map.heads,
+            dp.map.windows
         );
         let store = |o: u64, v: u32| self.shadow_store(o, u64::from(v), 4);
         let mut io = Io {
@@ -1985,7 +1991,7 @@ impl Device {
             kf_disp::pace::cap_period_ns(kf_disp::pace::DEFAULT_PREFERRED_HZ),
             cap,
         ));
-        eprintln!(
+        kf_util::klog!(
             "kf3: display: display-max-fps {} — every head's vblank tick is capped at {cap} Hz; \
              copies without a flip are made at the console head's tick, while watched, and sent \
              only when the frame's checksum changed",
@@ -1996,7 +2002,7 @@ impl Device {
             }
         );
         if let Some(e) = io.gpu.as_ref().and_then(|g| g.checksum_refused()) {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: display: the checksum kernel is REFUSED ({e}) — every non-flip check is sent"
             );
         }
@@ -2019,9 +2025,12 @@ impl Device {
         let mut windowless_since: Option<Instant> = None;
         let started = Instant::now();
         if let Some(b) = dp.boot.as_ref() {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: display: boot layer — store [0, {:#x}) as {}x{} pitch {}, shown until the guest arms a head",
-                b.layer.extent, b.size.0, b.size.1, b.layer.pitch
+                b.layer.extent,
+                b.size.0,
+                b.size.1,
+                b.layer.pitch
             );
         }
         while !self.stop.load(Ordering::Acquire) {
@@ -2060,7 +2069,7 @@ impl Device {
                 .map(|mut g| g.take_statements())
                 .unwrap_or_default();
             for s in st {
-                eprintln!("kf3: display: {s:?}");
+                kf_util::klog_trace!("kf3: display: {s:?}");
                 match s {
                     Statement::InstMem(im) => {
                         io.inst = Some(im);
@@ -2157,7 +2166,7 @@ impl Device {
                     Ok(bytes) => {
                         let s = engine.step(chn, &bytes, put, &mut |a| io.acquired(a));
                         if trace {
-                            eprintln!(
+                            kf_util::klog!(
                                 "kf3: display: chn {chn} PUT {put:#x}: {} effects",
                                 s.effects.len()
                             );
@@ -2249,7 +2258,7 @@ impl Device {
                     .unwrap_or(u64::MAX)
                     .max(1);
                 dp.counters.boot_done_ms.store(ms, Ordering::Relaxed);
-                eprintln!(
+                kf_util::klog!(
                     "kf3: display: the guest armed its first head at +{ms} ms — the boot layer is retired after {} boot frame(s)",
                     dp.counters.boot_frames.load(Ordering::Relaxed)
                 );
@@ -2287,7 +2296,7 @@ impl Device {
             let key = shown_key(shown.as_ref(), &held, boot_done);
             if shown_last != Some(key) {
                 if shown_lines < SHOWN_LINES {
-                    eprintln!(
+                    kf_util::klog!(
                         "kf3: display: +{} ms the console shows {} (core channel {})",
                         started.elapsed().as_millis(),
                         shown_digest(shown.as_ref(), &held, boot_done),
@@ -2298,7 +2307,7 @@ impl Device {
                         }
                     );
                 } else if shown_lines == SHOWN_LINES {
-                    eprintln!(
+                    kf_util::klog!(
                         "kf3: display: {SHOWN_LINES} 'console shows' lines logged — later changes are not"
                     );
                 }
@@ -2476,7 +2485,7 @@ impl Device {
                             io.write(dma, offset, &io.notifier_finished.to_le_bytes())
                         });
                         if trace {
-                            eprintln!(
+                            kf_util::klog!(
                                 "kf3: display: TRACE notify chn {chn} handle {handle:#x} +{offset:#x} awaken={awaken} -> {r:?}"
                             );
                         }
@@ -2510,7 +2519,7 @@ impl Device {
                             io.write(dma, offset, if wide { &b[..] } else { &b[..4] })
                         });
                         if trace {
-                            eprintln!(
+                            kf_util::klog!(
                                 "kf3: display: TRACE release chn {chn} handle {handle:#x} +{offset:#x} value {value:#x} -> {r:?}"
                             );
                         }
@@ -2537,26 +2546,29 @@ impl Device {
                                     kf_disp::class::put(0, fld, if active { awake } else { sleep }),
                                 );
                             }
-                            eprintln!("kf3: display: {}", a.line(cap));
+                            kf_util::klog_trace!("kf3: display: {}", a.line(cap));
                         }
                     }
                     Effect::Latched { window } => {
                         if trace {
-                            eprintln!("kf3: display: TRACE window {window} latched");
+                            kf_util::klog!("kf3: display: TRACE window {window} latched");
                         }
                     }
-                    Effect::Trace(line) => eprintln!("kf3: display: TRACE {line}"),
+                    Effect::Trace(line) => kf_util::klog_trace!("kf3: display: TRACE {line}"),
                     Effect::Exception { chn, at, what } => {
                         dp.counters.exceptions.fetch_add(1, Ordering::Relaxed);
-                        eprintln!("kf3: display: channel {chn} STOPPED at {at:#x}: {what}");
+                        kf_util::klog_limited!(
+                            "kf3: display: channel {chn} STOPPED at {at:#x}: {what}"
+                        );
                     }
                 }
             }
             if engine.updates > u64::from(logged_updates) && logged_updates < 64 {
                 logged_updates = u32::try_from(engine.updates.min(64)).unwrap_or(64);
-                eprintln!(
+                kf_util::klog!(
                     "kf3: display: {} updates completed, {} methods",
-                    engine.updates, engine.methods
+                    engine.updates,
+                    engine.methods
                 );
             }
             dp.counters.updates.store(engine.updates, Ordering::Relaxed);
@@ -2613,7 +2625,7 @@ impl Device {
                     .as_ref()
                     .is_none_or(|(t, last)| *last != line && t.elapsed() >= Duration::from_secs(2));
                 if due {
-                    eprintln!("kf3: display {line}");
+                    kf_util::klog_trace!("kf3: display {line}");
                     fps_printed = Some((Instant::now(), line));
                 }
             }
@@ -2648,13 +2660,13 @@ impl Device {
         });
         match changed {
             Some((id, mw, mh, rate, fnv, true)) => {
-                eprintln!(
+                kf_util::klog_limited!(
                     "kf3: display: resize {w}x{h} at {mhz} mHz -> monitor {mw}x{mh} at {rate} mHz \
                      (EDID fnv1a64={fnv:016x}) on display {id:#x}; hotplug queued"
                 );
                 self.queue_hotplug(id);
             }
-            Some((id, mw, mh, rate, fnv, false)) => eprintln!(
+            Some((id, mw, mh, rate, fnv, false)) => kf_util::klog_limited!(
                 "kf3: display: resize {w}x{h} at {mhz} mHz -> monitor {mw}x{mh} at {rate} mHz \
                  (EDID fnv1a64={fnv:016x}) on display {id:#x}; no hotplug registration (the next \
                  probe reads it)"
@@ -3056,7 +3068,7 @@ fn broker_backing<F>(
         Err(e) => {
             // before the slot is refilled with memory the broker cannot receive
             ring.withdraw(kf_broker::Kind::Host);
-            eprintln!(
+            kf_util::klog_limited!(
                 "kf3: display: the BROKER host-memory frame backing is REFUSED ({e}) — the console \
                  keeps working; the host-memory rungs are withdrawn from every frame slot and the \
                  broker is sent no frame through host memory from now on (the GPU-copy rung, if \
@@ -3211,7 +3223,7 @@ impl ScanState {
         {
             let (wu, hu, st) = (w as usize, h as usize, w as usize * 4);
             let fnv = fnv_rgb_xrgb8888(&fr.read(0, st * hu), st, wu, hu);
-            eprintln!("kf3: display: TRACE scanout copy {n} done: {w}x{h} fnv={fnv:016x}");
+            kf_util::klog!("kf3: display: TRACE scanout copy {n} done: {w}x{h} fnv={fnv:016x}");
         }
         self.serial += 1;
         dp.console.publish(
@@ -3303,7 +3315,7 @@ impl ScanState {
             Stuck::Waiting => {
                 if self.slow_logged < n {
                     self.slow_logged = n;
-                    eprintln!(
+                    kf_util::klog_limited!(
                         "kf3: display: copy {n} has not completed in {STUCK_COPY:?} and its stream \
                          reports no failure (the host RM or the GPU has not run it yet): waiting for \
                          its signal, nothing is forged meanwhile"
@@ -3325,7 +3337,7 @@ impl ScanState {
         dp.counters.scanout_refused.fetch_add(1, Ordering::Relaxed);
         if self.refusals_logged < 16 {
             self.refusals_logged += 1;
-            eprintln!("kf3: display: scanout REFUSED {why}");
+            kf_util::klog_limited!("kf3: display: scanout REFUSED {why}");
         }
     }
 
@@ -3374,7 +3386,7 @@ impl ScanState {
                 let (word, mode) = kf_disp::scanout::cursor_composition(cs);
                 if let Some(n) = comp_log.changed(word) {
                     let c = h.alpha_census(&raw).unwrap_or_default();
-                    eprintln!(
+                    kf_util::klog!(
                         "kf3: display: guest cursor composition {word:#07x} = {mode} (K1 {}, cursor \
                          factor {}, viewport factor {}, mode {}); its {}x{} pixels: {} partially \
                          transparent, {} with a colour channel above alpha ({}) — change {n} (the \
@@ -3421,7 +3433,7 @@ impl ScanState {
                 self.cursor_refusals += 1;
                 let n = self.cursor_refusals;
                 if n <= 4 || n.is_multiple_of(256) {
-                    eprintln!(
+                    kf_util::klog_limited!(
                         "kf3: display: host cursor REFUSED: {e} — composed into the frame instead, \
                          and the host's is hidden ({n} so far)"
                     );
@@ -3907,7 +3919,7 @@ impl ScanState {
             match planned {
                 Ok(Some(l)) => {
                     if self.trace && (n <= 8 || n.is_multiple_of(50)) {
-                        eprintln!(
+                        kf_util::klog!(
                             "kf3: display: TRACE scanout copy {n}: window {} depth {} iso {:#x} -> src {:#x} {} pitch {} {}x{} at ({}, {}) flags {:#x} blend ({},{})/({},{})",
                             so.window,
                             so.depth,

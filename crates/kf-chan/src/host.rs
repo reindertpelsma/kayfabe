@@ -635,7 +635,7 @@ impl HostRing {
                 .rev()
                 .find(|c| supported.contains(c))
             else {
-                eprintln!(
+                kf_util::klog_limited!(
                     "kf-chan: ⊘ GR tier: host family {family:?} offers no supported {} — not admitted",
                     gc.name()
                 );
@@ -643,7 +643,7 @@ impl HostRing {
             };
             match rm.alloc_engine_object(self.chan, class, None) {
                 Ok(h) => made.push((class, h)),
-                Err(e) => eprintln!(
+                Err(e) => kf_util::klog_limited!(
                     "kf-chan: ⊘ GR tier: {} {class:#06x} REFUSED by the host ({e:?}) — not admitted",
                     gc.name()
                 ),
@@ -652,10 +652,12 @@ impl HostRing {
         if let Some((h, class)) = self.gr_context {
             made.push((class, h));
         }
-        eprintln!(
+        kf_util::klog_trace!(
             "kf-chan: GR tier admitted host channel {:#x} (token {:#x}) reply_flags={:#010x} \
              privilege=USER objects={made:x?}",
-            self.chan.chan, self.chan.token, stamp.reply_flags
+            self.chan.chan,
+            self.chan.token,
+            stamp.reply_flags
         );
         self.gr_objects.clone_from(&made);
         Ok(made)

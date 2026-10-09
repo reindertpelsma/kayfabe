@@ -383,7 +383,7 @@ impl Walker for GpuWalker {
         let got = self.kernel.try_collect().map_err(|e| e.to_string());
         // ★ w829: capacity growth / re-walks / ceilings are named in the log as they happen.
         for ev in self.kernel.take_capacity_events() {
-            eprintln!("kf3: walk {ev}");
+            kf_util::klog_trace!("kf3: walk {ev}");
         }
         let Some(c) = got? else {
             return Ok(None);
@@ -414,7 +414,7 @@ impl Walker for GpuWalker {
                     if p.refused_bits() != 0
                         && let Ok(runs) = self.kernel.debug_walk_runs(i as u32)
                     {
-                        eprintln!(
+                        kf_util::klog!(
                             "kf3: census walk entry {i} pdb {:#x}: {}",
                             p.pdb,
                             run_census(&runs)
@@ -437,7 +437,7 @@ impl Walker for GpuWalker {
                 if p.vas_flags & kf_cuda::abi::KFWR_V_OVERFLOW != 0
                     && let Ok(runs) = self.kernel.debug_walk_runs(i as u32)
                 {
-                    eprintln!(
+                    kf_util::klog!(
                         "kf3: census overflow entry {i} pdb {:#x} slot {}: {}",
                         p.pdb,
                         p.slot(),
@@ -449,7 +449,7 @@ impl Walker for GpuWalker {
         if r.header.refusals > 0 {
             // ★ P6b: a refusal inside a report is named — a walk that refused a table reports
             // fewer leaves than the guest's tables hold.
-            eprintln!(
+            kf_util::klog_limited!(
                 "kf3: walk report carried refusals={} refuse_mask={:#x} pdbs={:x?} runs={}",
                 r.header.refusals,
                 r.header.refuse_mask,
@@ -969,7 +969,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     ) {
         let o = trigger.complete(r.seq);
         if crate::maplog::on() {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: maplog t={:.6} CLEAR inval seq={} {o:?} (arrive->clear {} us)",
                 crate::maplog::t(),
                 r.seq,
@@ -1039,7 +1039,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     /// flight. `trigger` is the port's, for a request that can be cleared without a walk.
     pub fn on_invalidate(&mut self, req: InvalidateRequest, trigger: &Trigger) {
         if crate::maplog::on() {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: maplog t={:.6} ARRIVE {} (inflight walk: {})",
                 crate::maplog::t(),
                 maplog_want(&Want::Invalidate(req, std::time::Instant::now())),
@@ -1058,7 +1058,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     /// `ticket` by [`Self::take_splits`] once every named space applied (or failed, by name).
     pub fn on_split(&mut self, pdb: Option<u64>, ticket: u64, trigger: &Trigger) {
         if crate::maplog::on() {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: maplog t={:.6} ARRIVE {} (inflight walk: {})",
                 crate::maplog::t(),
                 maplog_want(&Want::Split {
@@ -1090,7 +1090,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             key: Some(key),
         };
         if crate::maplog::on() {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: maplog t={:.6} ARRIVE {}",
                 crate::maplog::t(),
                 maplog_want(&w)
@@ -1109,7 +1109,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     /// A root changed with no invalidate behind it (Q10): walk `key` at the next opportunity.
     pub fn schedule_walk(&mut self, key: VasKey, trigger: &Trigger) {
         if crate::maplog::on() {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: maplog t={:.6} ARRIVE {} (inflight walk: {})",
                 crate::maplog::t(),
                 maplog_want(&Want::Root(key)),
@@ -1188,7 +1188,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         }
         // Nothing of ours is named: nothing can be stale, so the clear is honest now.
         if crate::maplog::on() && !vacuous.is_empty() {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: maplog t={:.6} vacuous invalidate(s) {vacuous:?} cleared without a walk (nothing of ours named)",
                 crate::maplog::t()
             );
@@ -1234,7 +1234,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 self.stats.walks_submitted += 1;
                 batch.submitted = std::time::Instant::now();
                 if crate::maplog::on() {
-                    eprintln!(
+                    kf_util::klog!(
                         "kf3: maplog t={:.6} walk#{} SUBMIT {}",
                         crate::maplog::t(),
                         batch.id,
@@ -1394,7 +1394,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 // and which want's walk applied it (`walk#` — its SUBMIT line names the wants).
                 let tt = crate::maplog::t();
                 for (i, r) in e.runs.iter().enumerate() {
-                    eprintln!(
+                    kf_util::klog!(
                         "kf3: maplog t={tt:.6} walk#{} {key:?} root {walked_root:#x} {} va={:#x} len={:#x} at={:#x} ap={} kind={:#x} ack={}",
                         batch.id,
                         if r.unmap { "UNMAP" } else { "MAP" },
@@ -1412,7 +1412,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             // each ONE host map call on the guest-RAM object) — named, it is the next budget.
             // ★ V3_BATCHED_MAP: runs vs the verbs they cost (a batch / a range is ONE verb).
             if a.mapped + a.unmapped >= 1000 {
-                eprintln!(
+                kf_util::klog_trace!(
                     "kf3: mem large apply {key:?}: {} maps + {} unmaps in {} ms — {} map verb(s) ({} batch(es) carrying {} runs), {} unmap verb(s) ({} range(s) carrying {} runs), {} fallback(s){}",
                     a.mapped,
                     a.unmapped,
@@ -1430,7 +1430,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                         .unwrap_or_default()
                 );
             } else if let Some(w) = &a.first_batch_fallback {
-                eprintln!("kf3: mem batch fallback {key:?}: {w}");
+                kf_util::klog_limited!("kf3: mem batch fallback {key:?}: {w}");
             }
             for (i, &c) in a.codes.iter().enumerate() {
                 if let Some(slot) = codes.get_mut(e.first + i) {
@@ -1463,7 +1463,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 static MIRRORED: std::sync::atomic::AtomicU32 =
                     std::sync::atomic::AtomicU32::new(0);
                 if MIRRORED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 64 {
-                    eprintln!(
+                    kf_util::klog_trace!(
                         "kf3: {key:?} root {walked_root:#x}: {} privileged run(s) mirrored — a guest-kernel space or CPU window",
                         a.priv_mirrored
                     );
@@ -1473,9 +1473,10 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 // ★ v3-roperm: WHICH space withheld (the per-leaf line cannot name it), bounded.
                 static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
                 if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 64 {
-                    eprintln!(
+                    kf_util::klog_trace!(
                         "kf3: {key:?} root {walked_root:#x}: {} privileged run(s) ({:#x} bytes) withheld — a user twin",
-                        a.priv_withheld, a.priv_withheld_bytes
+                        a.priv_withheld,
+                        a.priv_withheld_bytes
                     );
                 }
             }
@@ -1552,7 +1553,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     (None, Some(k)) => {
                         self.stats.splits_unsettled += 1;
                         if self.stats.splits_unsettled <= 64 {
-                            eprintln!(
+                            kf_util::klog_limited!(
                                 "kf-mem: split {pdb:x?} (ticket {ticket}) completed over UNSETTLED {k:?} — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them"
                             );
                         }

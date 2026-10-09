@@ -36,7 +36,7 @@ pub fn init() {
     let _ = T0.get_or_init(Instant::now);
     ON.store(on, Ordering::Relaxed);
     if on {
-        eprintln!(
+        kf_util::klog!(
             "kf3: PROF armed (KF3_PROF=1) — attribution counters on; timing costs two clock reads per trap"
         );
     }

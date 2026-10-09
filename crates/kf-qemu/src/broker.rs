@@ -86,13 +86,13 @@ impl BrokerSeat {
         let wake = Notifier::create().map_err(|e| format!("display-broker eventfd: {e}"))?;
         let udmabuf = match kf_linux_raw::udmabuf_gate::open_device() {
             Ok(f) => {
-                eprintln!(
+                kf_util::klog!(
                     "kf3: broker: /dev/udmabuf opened — frames can go as a dma-buf (rungs 1 and 1b)"
                 );
                 Some(f)
             }
             Err(e) => {
-                eprintln!(
+                kf_util::klog!(
                     "kf3: broker: /dev/udmabuf cannot be opened ({e}) — frames go as shared memory \
                      (F_SHM) only; add QEMU's user to the kvm group for the dma-buf rungs"
                 );
@@ -182,7 +182,7 @@ impl BrokerSeat {
             let dmabuf = self.udmabuf.as_ref().and_then(|d| {
                 udmabuf_create(d.as_fd(), &ram, page)
                     .map_err(|e| {
-                        eprintln!(
+                        kf_util::klog_limited!(
                             "kf3: broker: UDMABUF_CREATE refused ({e}): this frame goes as F_SHM"
                         )
                     })
@@ -193,7 +193,7 @@ impl BrokerSeat {
                 Ok(()) => return Ok(frame),
                 Err((InstallRefusal::IdCollision(id), _)) => {
                     // an inode number another slot already carries: make a new backing
-                    eprintln!(
+                    kf_util::klog_limited!(
                         "kf3: broker: frame id {id} collides; recreating slot {slot}'s backing"
                     );
                     let _ = gpu.release_frame(frame);
@@ -254,7 +254,7 @@ impl BrokerSeat {
         if g.is_some() {
             return Err("display-broker: the relay is already started".into());
         }
-        eprintln!(
+        kf_util::klog!(
             "kf3: broker: relay to {} (brokers accepted: uid 0, QEMU's effective uid at each \
              connect{}); no clipboard",
             path.display(),

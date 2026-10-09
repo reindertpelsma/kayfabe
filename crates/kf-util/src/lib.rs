@@ -35,6 +35,7 @@ pub mod interval_map;
 pub mod leafwitness;
 pub mod lock;
 pub mod lockwitness;
+pub mod log;
 pub mod sha256;
 pub mod time;
 pub mod trapwitness;

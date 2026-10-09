@@ -175,10 +175,14 @@ impl VramSetup {
         )
         .map_err(|e| format!("GPU-copy rung: the display's own RM client: {e}"))?;
         let attrs = attrs_from_env()?;
-        eprintln!(
+        kf_util::klog!(
             "kf3: broker: GPU-copy rung possible — render node {} ({}:{}), nvidia-drm gpu_id \
              {:#x}, modifier {modifier:#018x}, slot attributes {}",
-            node.name, node.dev.0, node.dev.1, info.gpu_id, attrs.name
+            node.name,
+            node.dev.0,
+            node.dev.1,
+            info.gpu_id,
+            attrs.name
         );
         Ok(VramSetup {
             render,
@@ -272,7 +276,7 @@ impl VramSetup {
             }
             // dma-buf inodes come from their own counter, memfd inodes from shmem's: a clash is
             // possible. A fresh GEM import makes a fresh dma-buf; this one was never sent.
-            eprintln!(
+            kf_util::klog!(
                 "kf3: broker: display VRAM slot {slot}: dma-buf id {id} collides (attempt {}); \
                  importing again",
                 attempt + 1

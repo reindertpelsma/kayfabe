@@ -367,7 +367,7 @@ pub fn keep_statable_ofa(family: Family, kinds: Vec<EngineKind>) -> Vec<EngineKi
         .into_iter()
         .filter(|&k| match k {
             EngineKind::OpticalFlow(i) if authored::ofa_fault_id(family, i).is_none() => {
-                eprintln!("kf3: host facts: OFA{i} NOT advertised — {family:?}'s dev_fault.h states no NV_PFAULT_MMU_ENG_ID_OFA{i}");
+                kf_util::klog!("kf3: host facts: OFA{i} NOT advertised — {family:?}'s dev_fault.h states no NV_PFAULT_MMU_ENG_ID_OFA{i}");
                 false
             }
             _ => true,
@@ -445,16 +445,18 @@ pub fn query_gss_replay(host: &mut dyn HostControls) -> Vec<kf_abi::gssreplay::A
                 let bg = host.control(row.cmd, &mut b).ok().map(|()| b);
                 let (a, both) = kf_abi::gssreplay::Answer::from_probes(*row, &p, bg.as_deref());
                 if !both {
-                    eprintln!(
+                    kf_util::klog!(
                         "kf3: host facts: GSS {:#010x} {:x?}: the background probe was refused or changed the answer — zero-probe bytes only",
-                        row.cmd, row.inputs
+                        row.cmd,
+                        row.inputs
                     );
                 }
                 out.push(a);
             }
-            Err(e) => eprintln!(
+            Err(e) => kf_util::klog!(
                 "kf3: host facts: GSS {:#010x} {:x?} refused by the host ({e:?}) — not served",
-                row.cmd, row.inputs
+                row.cmd,
+                row.inputs
             ),
         }
     }
@@ -469,7 +471,7 @@ pub fn query_gss_replay(host: &mut dyn HostControls) -> Vec<kf_abi::gssreplay::A
 /// is then refused as the `_VF` body refuses an engine its table lacks.
 pub fn query_fifo_latency(host: &mut dyn HostControls) -> Vec<kf_abi::fifoctl::LatencyRow> {
     let Some(layout) = kf_abi::fifoctl::LatencyLayout::at(kf_abi::versions::BENCH_DRIVER) else {
-        eprintln!(
+        kf_util::klog!(
             "kf3: host facts: FIFO_GET_LATENCY_BUFFER_SIZE has no measured layout at the bench version — not served"
         );
         return Vec::new();
@@ -484,7 +486,9 @@ pub fn query_fifo_latency(host: &mut dyn HostControls) -> Vec<kf_abi::fifoctl::L
     {
         Some(t) => t,
         None => {
-            eprintln!("kf3: host facts: no host engine list — FIFO latency buffers not served");
+            kf_util::klog!(
+                "kf3: host facts: no host engine list — FIFO latency buffers not served"
+            );
             return Vec::new();
         }
     };
@@ -494,16 +498,16 @@ pub fn query_fifo_latency(host: &mut dyn HostControls) -> Vec<kf_abi::fifoctl::L
         match host.device_control(layout.cmd, &mut p) {
             Ok(()) => match layout.reply(t, &p) {
                 Some(row) => out.push(row),
-                None => eprintln!(
+                None => kf_util::klog!(
                     "kf3: host facts: FIFO latency buffer for engine {t:#x}: reply names another engine — not served"
                 ),
             },
-            Err(e) => eprintln!(
+            Err(e) => kf_util::klog!(
                 "kf3: host facts: FIFO latency buffer for engine {t:#x} refused by the host ({e:?}) — not served"
             ),
         }
     }
-    eprintln!(
+    kf_util::klog!(
         "kf3: host facts: FIFO latency buffers (engine, gp, pb) from the host: {:x?}",
         out.iter()
             .map(|r| (r.engine_id, r.gp_entries, r.pb_entries))
@@ -544,7 +548,7 @@ pub fn query_video_caps(
                     caps: p[..n].to_vec(),
                 });
             }
-            Err(e) => eprintln!(
+            Err(e) => kf_util::klog!(
                 "kf3: host facts: {cmd:#x} instance {instance} refused by the host ({e:?}) — not served"
             ),
         }
@@ -599,7 +603,7 @@ pub fn query_lce_pce_masks_over(
             Err(refused) if i == 0 => return Err(FieldCause::Host { cmd, refused }),
             // A PRESENT LCE the host refused is a hole too (served as `NoMaskForEngine`), said by name.
             Err(refused) if highest.is_some_and(|hi| i <= hi) => {
-                eprintln!(
+                kf_util::klog!(
                     "kf3: host facts: CE_GET_CE_PCE_MASK LCE{i} is present but refused ({refused:?}) — not served"
                 );
                 replies.push(None);
@@ -1663,7 +1667,7 @@ pub fn query_host_facts(
             match query_video_falcons(host, k) {
                 Ok(f) => f,
                 Err(e) => {
-                    eprintln!(
+                    kf_util::klog!(
                         "kf3: host facts: video engines NOT advertised — the host falcon table was refused: {e:?}"
                     );
                     Vec::new()
@@ -1702,7 +1706,7 @@ pub fn query_host_facts(
             if let Some(a) = kf_chip::authored_intr_subtree_map(*f)
                 && a != m
             {
-                eprintln!(
+                kf_util::klog!(
                     "kf3: host facts: intr_subtree_map: the host reports {m:x?}, ogkm's {f:?} rule says {a:x?} — serving the host's"
                 );
             }
@@ -1710,7 +1714,7 @@ pub fn query_host_facts(
         }
         (Err(e), Ok(f)) if lacks_subtree_map => match kf_chip::authored_intr_subtree_map(*f) {
             Some(a) => {
-                eprintln!(
+                kf_util::klog!(
                     "kf3: host facts: intr_subtree_map from the {f:?} family rule (ogkm intrInitSubtreeMap): the host \
                      driver has no MC_GET_INTR_CATEGORY_SUBTREE_MAP ({e:?})"
                 );

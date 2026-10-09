@@ -626,7 +626,7 @@ impl Publisher for VaSplit<'_> {
             .ok_or("software method started with nothing planned")?;
         let p = self.sw.plane;
         p.defapi_triggers.fetch_add(1, Ordering::Relaxed);
-        eprintln!(
+        kf_util::klog_trace!(
             "kf3: DEFERRED-API trigger token {:#x} subch {} value {:#x} method {:#x} hApiHandle {:#x} on {:#x}:{:#x} cmd {:#x}: {:?}",
             self.token,
             call.sub,
@@ -642,9 +642,10 @@ impl Publisher for VaSplit<'_> {
             let (g, payload) =
                 gate.ok_or("deferred DMA_INVALIDATE_TLB started without its gate")?;
             // ★ §U.2: the guest's hClientVA/hDeviceVA/hVASpace are ignored: our OWN space.
-            eprintln!(
+            kf_util::klog_trace!(
                 "kf3: DEFERRED-API token {:#x}: DMA_INVALIDATE_TLB (guest hVASpace {vaspace:#x} ignored) -> gate payload {payload} on the channel's own space {:?}",
-                self.token, self.sw.space
+                self.token,
+                self.sw.space
             );
             self.sw.st.ticket =
                 Some(
@@ -687,9 +688,10 @@ impl Publisher for VaSplit<'_> {
         }
         match outcome {
             Ok(line) => {
-                eprintln!(
+                kf_util::klog_trace!(
                     "kf3: DEFERRED-API token {:#x} hApiHandle {:#x} DONE: {line}",
-                    self.token, planned.entry.handle
+                    self.token,
+                    planned.entry.handle
                 );
                 Ok(Split::Done)
             }
@@ -1623,7 +1625,7 @@ impl ChanPlane {
         // ★ GR tier: a kernel-GR ring's fence tail NSI wakes FIFO_EVENT_MTHD, and NOT the GR0
         // notifier (measured 2026-10-07 by `kf-gr-tier` at 01870988, `completion_edges`:
         // `traces/windows_code43_walls_20261007/gr-tier-native-run32.log`), so nothing is added.
-        eprintln!(
+        kf_util::klog!(
             "kf3: channel plane: Translated rings on host COPY{lce} (engine {host_ce:#x}); completions on FIFO_EVENT_MTHD + CE{lce}"
         );
         // ★ P5b §2.7: one non-stall event per HOST engine a twin can run on — GR0 and every copy
@@ -1702,7 +1704,7 @@ impl ChanPlane {
                 crelays: AtomicU64::new(0),
             });
         }
-        eprintln!(
+        kf_util::klog!(
             "kf3: interrupt plane: host non-stall events -> guest vectors [{}]",
             engines
                 .iter()
@@ -1833,6 +1835,7 @@ impl ChanPlane {
             .name("kf3-chan-act".into())
             .spawn(move || {
                 kf_chan::stall::set_role(kf_chan::stall::Role::Act);
+                kf_util::log::set_class(kf_util::log::ThreadClass::Act);
                 while let Ok((act, d, what, queued)) = rx.recv() {
                     let t0 = std::time::Instant::now();
                     self.stall
@@ -1847,12 +1850,16 @@ impl ChanPlane {
                     self.acts_run.fetch_add(1, Ordering::Relaxed);
                     match r {
                         Ok(line) => {
-                            eprintln!("kf3: act {what}: {line} ({us} us, off the GSP lock)");
+                            kf_util::klog_trace!(
+                                "kf3: act {what}: {line} ({us} us, off the GSP lock)"
+                            );
                             d.resolve(0);
                         }
                         Err((status, why)) => {
                             self.acts_refused.fetch_add(1, Ordering::Relaxed);
-                            eprintln!("kf3: act {what} REFUSED ({status:#x}): {why} ({us} us)");
+                            kf_util::klog_limited!(
+                                "kf3: act {what} REFUSED ({status:#x}): {why} ({us} us)"
+                            );
                             d.resolve(status);
                         }
                     }
@@ -1883,7 +1890,7 @@ impl ChanPlane {
                 .rung
                 .get(idx as usize)
                 .map_or(0, |r| r.load(Ordering::Relaxed));
-            eprintln!("kf3: maplog t={t:.6} DOORBELL chid {idx:#x} #{n} reached={reached}");
+            kf_util::klog!("kf3: maplog t={t:.6} DOORBELL chid {idx:#x} #{n} reached={reached}");
         }
         if reached && let Some(c) = self.rang.get(idx as usize) {
             c.fetch_add(1, Ordering::Relaxed);
@@ -2128,7 +2135,7 @@ impl ChanPlane {
                             ),
                         };
                     }
-                    eprintln!(
+                    kf_util::klog_trace!(
                         "kf3: chan {client:#x}:{object:#x} BIND engine={engine_type:#x} (host {ht:#x})"
                     );
                     return ChanAnswer::Done;
@@ -2143,7 +2150,7 @@ impl ChanPlane {
                 match twin {
                     None => ChanAnswer::NotOurs,
                     Some((e, ht)) if e == engine_type => {
-                        eprintln!(
+                        kf_util::klog_trace!(
                             "kf3: chan {client:#x}:{object:#x} BIND engine={engine_type:#x} (passthrough host {ht:#x})"
                         );
                         ChanAnswer::Done
@@ -2819,7 +2826,7 @@ impl ChanPlane {
         else {
             // A channel without an owned host context stays the FSM's refusal.
             // Experimental kernel GR/NVDEC/NVENC paths require successful birth first.
-            eprintln!(
+            kf_util::klog_trace!(
                 "kf3: chan {client:#x}:{object:#x} GPU_PROMOTE_CTX: no passthrough twin — not ours (entries={entries})"
             );
             return ChanAnswer::NotOurs;
@@ -2839,7 +2846,7 @@ impl ChanPlane {
                 return ChanAnswer::NotOurs;
             };
             v.ctx.promotes += 1;
-            eprintln!(
+            kf_util::klog_trace!(
                 "kf3: chan {client:#x}:{object:#x} GPU_PROMOTE_CTX (video falcon ctx, engine {engine:#x}) SATISFIED BY TWIN host {ht:#x}: entries={entries} host_objects={} — not forwarded",
                 v.objects.len()
             );
@@ -2865,7 +2872,7 @@ impl ChanPlane {
             };
             v.ctx.initialized |= initialize;
             v.ctx.promotes += 1;
-            eprintln!(
+            kf_util::klog_trace!(
                 "kf3: chan {client:#x}:{object:#x} GPU_PROMOTE_CTX (initialize) SATISFIED BY TWIN host {ht:#x}: entries={entries} init_ids={initialize:#x} host_objects={} — not forwarded, no guest byte touched",
                 v.objects.len()
             );
@@ -2992,7 +2999,7 @@ impl ChanPlane {
             }
             ScheduleStep::Set { token } => token,
         };
-        eprintln!(
+        kf_util::klog_trace!(
             "kf3: chan {client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} (token {idx:#x}, host {ht:#x})"
         );
         if enable {
@@ -3065,7 +3072,7 @@ impl ChanPlane {
                 let fc = fc.filter(|&(va, len)| {
                     let reserved = space.guest_reserved(va, len);
                     if reserved {
-                        eprintln!(
+                        kf_util::klog_trace!(
                             "kf3: chan {client:#x}:{parent:#x} falcon ctx G={va:#x}+{len:#x} is inside the reserved guest VA — host RM places its own ctx in the host hole; not steered"
                         );
                     }
@@ -3227,7 +3234,7 @@ impl ChanPlane {
         let mut m = self.sw_objs.lock().ok()?;
         let o = m.get_mut(&ht)?;
         let n = o.number(class, handle);
-        eprintln!(
+        kf_util::klog_trace!(
             "kf3: chan {client:#x}:{parent:#x} (host {ht:#x}): class {class:#x} handle {handle:x?} took software classID {n:?}"
         );
         n
@@ -3255,7 +3262,7 @@ impl ChanPlane {
         };
         match verdict {
             crate::defapi::Admission::Admitted(n) => {
-                eprintln!(
+                kf_util::klog_trace!(
                     "kf3: chan {client:#x}:{parent:#x}: NV50_DEFERRED_API {handle:#x} ADMITTED on Translated host {:#x}, software classID {n:?} (OWNER_RULINGS §U.1)",
                     ht.unwrap_or(0)
                 );
@@ -3398,7 +3405,7 @@ impl ChanPlane {
     fn software_object(&self, client: u32, parent: u32, class: u32) -> ChanAnswer {
         if let Some(n) = register_other_sw(&self.pt, (client, parent)) {
             self.dispsw.other_sw.fetch_add(1, Ordering::Relaxed);
-            eprintln!(
+            kf_util::klog_trace!(
                 "kf3: chan {client:#x}:{parent:#x}: class {class:#x} took the guest's software classID {} on this channel (no host twin takes one; its next display-SW twin is repaid to match)",
                 n.map_or_else(
                     || "(past 65535: the mirror lost it)".to_string(),
@@ -3729,7 +3736,7 @@ impl ChanPlane {
                     let (trap_rung, trap_reached) = me.take_ledger(t.idx);
                     let (f_rung, f_fwd) = fast.map_or((0, 0), |l| (l.doorbells - l.absorbed, l.forwarded));
                     let (rung, reached) = (trap_rung + f_rung, trap_reached + f_fwd);
-                    eprintln!(
+                    kf_util::klog!(
                         "kf3: DOORBELL-LEDGER tok={:#010x} route=passthrough rung={rung} emulated={} forwarded={reached} host={:#x} trap={trap_rung}{}",
                         t.idx,
                         rung - reached.min(rung),
@@ -3877,9 +3884,10 @@ impl ChanPlane {
     fn birth(&self, a: ChannelAlloc) -> ChanAnswer {
         let engine = a.engine_type.unwrap_or(0);
         let refuse = |status: u32, why: String| {
-            eprintln!(
+            kf_util::klog_limited!(
                 "kf3: chan {:#x}:{:#x} birth REFUSED: {why} (decl {a:x?})",
-                a.client, a.handle
+                a.client,
+                a.handle
             );
             ChanAnswer::Refused { status, why }
         };
@@ -3907,9 +3915,13 @@ impl ChanPlane {
             && !kernel_nvenc
             && !kernel_ofa
         {
-            eprintln!(
+            kf_util::klog_limited!(
                 "kf3: chan {:#x}:{:#x} class={:#x} engine={engine:#x} kernel=true vaspace={:x?} chid={:x?} — a KERNEL non-CE channel: not born (kernel GR is P7)",
-                a.client, a.handle, a.class, a.vaspace, a.chid
+                a.client,
+                a.handle,
+                a.class,
+                a.vaspace,
+                a.chid
             );
             return ChanAnswer::NotOurs;
         }
@@ -3943,9 +3955,10 @@ impl ChanPlane {
             }
             HeapGate::Count(why) => {
                 self.heap_out.fetch_add(1, Ordering::Relaxed);
-                eprintln!(
+                kf_util::klog_limited!(
                     "kf3: chan {:#x}:{:#x} HEAP-OUT (count-only, inc A): {why}",
-                    a.client, a.handle
+                    a.client,
+                    a.handle
                 );
             }
         }
@@ -4041,9 +4054,10 @@ impl ChanPlane {
                         )),
                         _ => {
                             self.rc_unarmed.fetch_add(1, Ordering::Relaxed);
-                            eprintln!(
+                            kf_util::klog_limited!(
                                 "kf3: chan {:#x}:{:#x} RC-UNARMED: sysmem notifier @{gpa:#x} has no guest-RAM object/offset",
-                                a.client, a.handle
+                                a.client,
+                                a.handle
                             );
                             None
                         }
@@ -4059,9 +4073,10 @@ impl ChanPlane {
                 )),
                 Some(kf_arch::fault::ErrorNotifier::Unreachable) => {
                     self.rc_unarmed.fetch_add(1, Ordering::Relaxed);
-                    eprintln!(
+                    kf_util::klog_limited!(
                         "kf3: chan {:#x}:{:#x} RC-UNARMED: the declared notifier is in an aperture we cannot name",
-                        a.client, a.handle
+                        a.client,
+                        a.handle
                     );
                     None
                 }
@@ -4207,9 +4222,10 @@ impl ChanPlane {
                 }
             }
             match mirror.kernel_vas.try_kernel() {
-                Ok(true) => eprintln!(
+                Ok(true) => kf_util::klog_trace!(
                     "kf3: {key:?} is a guest-KERNEL space (Translated chan {:#x}:{:#x}): privileged leaves are mirrored here",
-                    a.client, a.handle
+                    a.client,
+                    a.handle
                 ),
                 Ok(false) => {}
                 Err(e) => {
@@ -4238,9 +4254,10 @@ impl ChanPlane {
         // no privileged leaf was ever walked in a space that turned kernel this way (UVM's): they
         // live in RM-internal clients' spaces, which are kernel from creation (`kernel_vas_for`).
         if !tmode && !mirror.kernel_vas.force_kernel() {
-            eprintln!(
+            kf_util::klog_trace!(
                 "kf3: {key:?} is a guest-KERNEL space (Translated chan {:#x}:{:#x}): privileged leaves are mirrored here",
-                a.client, a.handle
+                a.client,
+                a.handle
             );
         }
         self.defer(
@@ -4259,7 +4276,7 @@ impl ChanPlane {
                     // previous channel on this chid would have left.
                     let _ = userd.store(kf_abi::submit::USERD_GP_PUT, v);
                     let _ = userd.store(kf_abi::submit::USERD_GP_GET, v);
-                    eprintln!("kf3: chan {:#x}:{:#x} INJECTED stale USERD GP_PUT=GP_GET={v} (KF3_INJECT_STALE_USERD)", a.client, a.handle);
+                    kf_util::klog!("kf3: chan {:#x}:{:#x} INJECTED stale USERD GP_PUT=GP_GET={v} (KF3_INJECT_STALE_USERD)", a.client, a.handle);
                 }
                 // ★★★★★ v3-initrace: physical RM's allocation-time USERD initialisation — we are the
                 // physical RM (`kf_chan::host::UserdInit`). Before the reply, so no guest cursor can
@@ -4473,7 +4490,7 @@ impl ChanPlane {
     ) -> Option<PtNotifier> {
         let refuse = |why: String| {
             self.rc_unarmed.fetch_add(1, Ordering::Relaxed);
-            eprintln!("kf3: chan {client:#x}:{handle:#x} RC-UNARMED: {why}");
+            kf_util::klog_limited!("kf3: chan {client:#x}:{handle:#x} RC-UNARMED: {why}");
         };
         let ctx = match self.rm.alloc_context_dma(obj, off, 16) {
             Ok(c) => c,
@@ -4559,12 +4576,16 @@ impl ChanPlane {
         if k > 0 {
             self.rc_seen.fetch_add(k as u64, Ordering::Relaxed);
             for e in &found {
-                eprintln!(
+                kf_util::klog_limited!(
                     "kf3: RC host twin {:#x} (guest chid {:#x}, engine {:#x}) wrote its notifier: except_type={:#x} (Xid {}) — forwarding RC_TRIGGERED",
-                    e.host_token, e.chid, e.engine, e.except_type, e.except_type
+                    e.host_token,
+                    e.chid,
+                    e.engine,
+                    e.except_type,
+                    e.except_type
                 );
                 if kf_mem::maplog::on() {
-                    eprintln!(
+                    kf_util::klog!(
                         "kf3: maplog t={:.6} RC-SEEN twin host {:#x} guest chid {:#x} engine {:#x} except_type={:#x} doorbells rung={} last@{}",
                         kf_mem::maplog::t(),
                         e.host_token,
@@ -4757,7 +4778,7 @@ impl ChanPlane {
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
         if !freed {
-            eprintln!(
+            kf_util::klog_limited!(
                 "kf3: chan token {:#x} (host {ht:#x}) STRANDED: still BUSY after 200 ms",
                 g.guest_idx
             );
@@ -4780,7 +4801,7 @@ impl ChanPlane {
             if let Some(Ok(t)) = self.tspace.get() {
                 t.give_ring(ring_va, released);
             }
-            eprintln!(
+            kf_util::klog_trace!(
                 "kf3: TSPACE-RETIRE tok={:#x} host={ht:#x} key={:?} ring_va={ring_va:#x} released={released} {}",
                 g.guest_idx,
                 g.key,
@@ -4790,10 +4811,10 @@ impl ChanPlane {
             crate::mem::give_ring_slot(&g.mirror.rings, ring_va);
         }
         if let Some(l) = ring_line.as_deref().filter(|l| l.contains("REFUSED")) {
-            eprintln!("kf3: chan token {:#x} (host {ht:#x}) {l}", g.guest_idx);
+            kf_util::klog_limited!("kf3: chan token {:#x} (host {ht:#x}) {l}", g.guest_idx);
         }
         if !freed_chan {
-            eprintln!(
+            kf_util::klog_limited!(
                 "kf3: chan token {:#x} (host {ht:#x}): host channel free REFUSED — its ring is KEPT (the channel still names it)",
                 g.guest_idx
             );
@@ -4807,7 +4828,7 @@ impl ChanPlane {
                 p_linear_address: *cookie,
             });
         }
-        eprintln!(
+        kf_util::klog!(
             "kf3: DOORBELL-LEDGER tok={:#010x} route=translated emulated={} forwarded={} host={ht:#x}{}",
             g.guest_idx,
             u64::from(g.dead.is_some() && g.chan.counts().0 == 0),
@@ -4821,7 +4842,7 @@ impl ChanPlane {
                     .iter()
                     .map(|r| probe_read(self.ram, &g.mirror, None, *r).to_string())
                     .collect();
-                eprintln!(
+                kf_util::klog!(
                     "kf3: PROBE-RETIRE tok={:#x} fence seq={} gp_get={:?} submit->seen={}us seen {}ms before retire; at completion [{}]; at retire [{}]",
                     g.guest_idx,
                     f.seq,
@@ -4838,7 +4859,7 @@ impl ChanPlane {
                 );
             }
             for f in g.chan.probe_inflight() {
-                eprintln!(
+                kf_util::klog!(
                     "kf3: PROBE-RETIRE tok={:#x} fence seq={} STILL IN FLIGHT at retire ({}ms) releases={:?}",
                     g.guest_idx,
                     f.seq,
@@ -4849,7 +4870,7 @@ impl ChanPlane {
         }
         if let Some(sh) = g.chan.shadow() {
             // ★ P1+P2 inc C (`V3_P1P2_TSPACE.md` §3.6): what T-mode would have done on this channel.
-            eprintln!(
+            kf_util::klog!(
                 "kf3: TSHADOW tok={:#x} host={ht:#x} key={:?} {}",
                 g.guest_idx,
                 g.key,
@@ -4858,7 +4879,7 @@ impl ChanPlane {
         }
         if let Some(c) = g.chan.census() {
             // ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §3.6): one census line per Translated channel.
-            eprintln!(
+            kf_util::klog!(
                 "kf3: TCENSUS tok={:#x} host={ht:#x} key={:?} privilege={:?} {}",
                 g.guest_idx,
                 g.key,
@@ -4866,7 +4887,7 @@ impl ChanPlane {
                 c.line()
             );
         }
-        eprintln!(
+        kf_util::klog!(
             "kf3: chan token {:#x} (host {ht:#x}) RETIRED, forwarded={} submissions={} splits={}/{} serves={} last_put={:?} gp_get={:?} store_views={armed} privilege={:?} dead={:?} inca=[{}] gr_tier={} gr[methods={} inert_binds={} objects={:x?}] gp_get_by_engine={:?}",
             g.guest_idx,
             g.chan.counts().0,
@@ -4911,25 +4932,26 @@ impl ChanPlane {
         g.last_put = g.userd.load(kf_abi::submit::USERD_GP_PUT).ok();
         // Diagnostic (first 3 serves that find nothing to do): which words of the USERD page are
         // non-zero — a GP_PUT that landed elsewhere in the page shows up here. Worker thread only.
-        if g.last_put == Some(0) && g.serves <= 3 {
-            if let UserdView::Store { region, at, .. } = &g.userd {
-                let nz: Vec<String> = (0..0x1000u64)
-                    .step_by(4)
-                    .filter_map(|o| {
-                        region
-                            .load_u32(HostOffset::new(o))
-                            .ok()
-                            .filter(|v| *v != 0)
-                            .map(|v| format!("+{o:#x}={v:#x}"))
-                    })
-                    .take(16)
-                    .collect();
-                eprintln!(
-                    "kf3: chan token {:#x}: GP_PUT=0 at USERD+{at:#x}+0x8c; non-zero words in its page: [{}]",
-                    g.guest_idx,
-                    nz.join(" ")
-                );
-            }
+        if g.last_put == Some(0)
+            && g.serves <= 3
+            && let UserdView::Store { region, at, .. } = &g.userd
+        {
+            let nz: Vec<String> = (0..0x1000u64)
+                .step_by(4)
+                .filter_map(|o| {
+                    region
+                        .load_u32(HostOffset::new(o))
+                        .ok()
+                        .filter(|v| *v != 0)
+                        .map(|v| format!("+{o:#x}={v:#x}"))
+                })
+                .take(16)
+                .collect();
+            kf_util::klog_limited!(
+                "kf3: chan token {:#x}: GP_PUT=0 at USERD+{at:#x}+0x8c; non-zero words in its page: [{}]",
+                g.guest_idx,
+                nz.join(" ")
+            );
         }
         let before = g.chan.counts().1;
         let mirror = g.mirror.clone();
@@ -5061,7 +5083,7 @@ impl ChanPlane {
                 }
                 if g.probe.logged < 8 || bad || copy_bad {
                     g.probe.logged += 1;
-                    eprintln!(
+                    kf_util::klog!(
                         "kf3: PROBE t={:.6} tok={:#x} fence seq={} gp_get={:?} submit->seen-complete={dt}us put={:?} releases=[{}]{} data=[{}]",
                         kf_mem::maplog::t(),
                         g.guest_idx,
@@ -5103,9 +5125,10 @@ impl ChanPlane {
                 // ★ §U: a software method refused, or its host-authored action failed.
                 ChanError::Sw(w) => format!("software method: {w}"),
             };
-            eprintln!(
+            kf_util::klog_limited!(
                 "kf3: chan token {:#x} ({:?}) DEAD: {why}",
-                g.guest_idx, g.key
+                g.guest_idx,
+                g.key
             );
             // ★ 2026-10-07 (Windows Code43, run41: a kernel copy channel died with an EMPTY rows
             // map although the walker had mapped its ring into that space): is the channel's
@@ -5119,7 +5142,7 @@ impl ChanPlane {
                     )
                 })
             });
-            eprintln!(
+            kf_util::klog_limited!(
                 "kf3: chan token {:#x} death mirror: own space={:#x} rows={} log_epoch={} last row commits (epoch, lo, hi, ms ago)={:x?}; plane's mirror for the key now (same rows, space, rows): {plane_now:?}",
                 g.guest_idx,
                 g.mirror.space.space,

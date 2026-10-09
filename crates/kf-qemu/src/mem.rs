@@ -447,7 +447,7 @@ pub static WINDOW_ADVICE_REFUSED: AtomicU64 = AtomicU64::new(0);
 /// Count one refused window advice, and log the first of the process.
 fn advice_refused(what: &str, at: u64, len: u64, e: &RawError) {
     if WINDOW_ADVICE_REFUSED.fetch_add(1, Ordering::Relaxed) == 0 {
-        eprintln!("kf3: {what} @{at:#x}+{len:#x}: advice refused ({e:?}), counted");
+        kf_util::klog_limited!("kf3: {what} @{at:#x}+{len:#x}: advice refused ({e:?}), counted");
     }
 }
 
@@ -1303,7 +1303,7 @@ impl MapTarget for GpuMirror {
                     row
                 }
                 None => {
-                    eprintln!(
+                    kf_util::klog_limited!(
                         "kf3: mem unmap {va:#x}: no placement of ours there (host-held or handed to host RM) — no host call"
                     );
                     return Ok(());
@@ -1787,16 +1787,18 @@ impl Bar1Target {
                     // view, on the VA thread — the heartbeat misses an arm shorter than its period.
                     let n = self.overlay.installed.fetch_add(1, Ordering::Relaxed) + 1;
                     if n <= 32 {
-                        eprintln!(
+                        kf_util::klog_trace!(
                             "kf3: bar1db view LIVE #{n}: BAR1 {:#x}+{:#x} (usermode page {:#x}) now traps its doorbell",
-                            f.view.base, f.view.len, f.view.vf_rel
+                            f.view.base,
+                            f.view.len,
+                            f.view.vf_rel
                         );
                     }
                 }
                 (false, 0) => {
                     let n = self.overlay.removed.fetch_add(1, Ordering::Relaxed) + 1;
                     if n <= 32 {
-                        eprintln!(
+                        kf_util::klog_trace!(
                             "kf3: bar1db view REMOVED #{n}: BAR1 {:#x}+{:#x} (doorbells through BAR1 views so far: {})",
                             f.view.base,
                             f.view.len,
@@ -1964,7 +1966,7 @@ impl Inbox {
     pub fn request_split(&self, token: u32, pdb: Option<u64>) -> u64 {
         let t = self.next_ticket.fetch_add(1, Ordering::Relaxed);
         if kf_mem::maplog::on() {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: maplog t={:.6} SPLIT-REQUEST ticket={t} by channel token {token:#x} pdb={pdb:x?}",
                 kf_mem::maplog::t()
             );
@@ -1989,7 +1991,7 @@ impl Inbox {
         payload: u32,
     ) -> u64 {
         let t = self.next_ticket.fetch_add(1, Ordering::Relaxed);
-        eprintln!(
+        kf_util::klog_trace!(
             "kf3: GATE ticket={t} by channel token {token:#x}: walk {key:?}, then release payload {payload}"
         );
         if let Ok(mut g) = self.gates.lock() {
@@ -2030,7 +2032,7 @@ impl Inbox {
             (Ok(()), Some((g, payload))) => g
                 .release(payload)
                 .map(|()| {
-                    eprintln!(
+                    kf_util::klog_trace!(
                         "kf3: GATE ticket={ticket} RELEASED payload {payload} after the commit"
                     );
                 })
@@ -2170,7 +2172,7 @@ pub fn window_with_scratch(
     let mmaps = s
         .cover_advised(&w, HostOffset::ZERO, len)
         .map_err(|e| format!("{what} scratch placement: {e:?}"))?;
-    eprintln!(
+    kf_util::klog!(
         "kf3: {what} scratch: tile {:#x} x {mmaps} over {len:#x} (host RAM bound {:#x})",
         s.tile_len(),
         s.tile_len()
@@ -2246,7 +2248,7 @@ impl MemPlane {
         let (pramin_win, pramin_scratch) = window(pramin_len, "PRAMIN", c"kf3-scratch-pramin")?;
         let (bar1_win, bar1_scratch) = window(bar1_bytes, "BAR1", c"kf3-scratch-bar1")?;
         let (bar2_win, bar2_scratch) = window(bar2_bytes, "BAR2", c"kf3-scratch-bar2")?;
-        eprintln!(
+        kf_util::klog!(
             "kf3: scratch host-RAM bound {:#x} for this device (PRAMIN {:#x} + BAR1 {:#x} + BAR2 \
              {:#x}); whole-window scratch would have allowed {:#x}",
             pramin_scratch.tile_len() + bar1_scratch.tile_len() + bar2_scratch.tile_len(),
@@ -2344,7 +2346,9 @@ impl MemPlane {
                 let obj = rm
                     .alloc_os_descriptor(view, HostOffset::new(0), len)
                     .map_err(|e| format!("guest-RAM OS descriptor of {len:#x}: {e:?}"))?;
-                eprintln!("kf3: guest-RAM object {obj:#x} over {len:#x} bytes of the guest memfd");
+                kf_util::klog!(
+                    "kf3: guest-RAM object {obj:#x} over {len:#x} bytes of the guest memfd"
+                );
                 Ok((obj, len))
             },
         )
@@ -2628,7 +2632,7 @@ fn create_mirror(
     let ram_obj = match plane.guest_ram_object(rm) {
         Ok(o) => Some(o),
         Err(e) => {
-            eprintln!("kf3: {key:?}: {e} — its sysmem leaves will be refused");
+            kf_util::klog_limited!("kf3: {key:?}: {e} — its sysmem leaves will be refused");
             None
         }
     };
@@ -2656,7 +2660,7 @@ fn create_mirror(
             .counters
             .mirror_ns_max
             .fetch_max(ns, Ordering::Relaxed);
-        eprintln!(
+        kf_util::klog_trace!(
             "kf3: {key:?} mirror space={:#x}: {windows} rings=none ({} us: vaspace {vas_us} ram_obj {ram_obj_us})",
             space.space,
             ns / 1000
@@ -2735,7 +2739,7 @@ fn create_mirror(
         .counters
         .mirror_ns_max
         .fetch_max(ns, Ordering::Relaxed);
-    eprintln!(
+    kf_util::klog_trace!(
         "kf3: {key:?} mirror space={:#x}: {line} ({} us: vaspace {vas_us} ram_obj {ram_obj_us} fb_window {fb_us} ram_window {ram_us})",
         space.space,
         ns / 1000
@@ -3035,7 +3039,7 @@ pub fn apply_statement(
                 VasKey((u64::from(client) << 32) | u64::from(vaspace)),
             );
             if std::env::var_os("KF_VAS_CENSUS").is_some() {
-                eprintln!("kf3: census {line}");
+                kf_util::klog!("kf3: census {line}");
             }
             line
         }
@@ -3066,7 +3070,7 @@ pub fn apply_statement(
                         .counters
                         .mirrors_reused
                         .fetch_add(1, Ordering::Relaxed);
-                    eprintln!(
+                    kf_util::klog_trace!(
                         "kf3: {key:?} mirror space={:#x}: {windows} rings=none (recycled)",
                         sp.space.space
                     );
@@ -3130,7 +3134,7 @@ pub fn apply_statement(
                         plane.counters.root_moves.fetch_add(1, Ordering::Relaxed);
                     }
                     if change.walk_now() && std::env::var_os("KF_VAS_CENSUS").is_some() {
-                        eprintln!("kf3: census at {key:?} First: {}", vas_census(m));
+                        kf_util::klog!("kf3: census at {key:?} First: {}", vas_census(m));
                     }
                     format!("pagedir {key:?} root={:#x} {change:x?}", s.pdb.0)
                 }

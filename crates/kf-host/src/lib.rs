@@ -266,7 +266,7 @@ const PASSED_THROUGH: &[&kf_abi::matrix::StructRuns] = &[
 
 /// Print a host-ABI refusal once, by name, and turn it into the status class callers see.
 fn abi_refused(what: &str, e: &kf_abi::hostabi::HostAbiError) -> RmError {
-    eprintln!("kf-host: HOST-ABI REFUSED {what}: {e}");
+    kf_util::klog_limited!("kf-host: HOST-ABI REFUSED {what}: {e}");
     RmError::Other(HOST_ABI_REFUSED)
 }
 
@@ -899,7 +899,7 @@ impl HostRm {
         let (name, carry) = match strukt {
             None if params.is_empty() => return issue(params),
             None => {
-                eprintln!(
+                kf_util::klog_limited!(
                     "kf-host: HOST-ABI REFUSED {what}: a parameter block with no named struct"
                 );
                 return Err(RmError::Other(HOST_ABI_REFUSED));
@@ -909,7 +909,9 @@ impl HostRm {
                 (before.name, self.abi.carry_renamed(before, after))
             }
             Some(HostParams::NoHeader { .. }) => {
-                eprintln!("kf-host: HOST-ABI REFUSED {what}: allocation params with no header");
+                kf_util::klog_limited!(
+                    "kf-host: HOST-ABI REFUSED {what}: allocation params with no header"
+                );
                 return Err(RmError::Other(HOST_ABI_REFUSED));
             }
         };
@@ -1058,7 +1060,7 @@ impl HostRm {
         // at the bench layout, which is only known correct on the interval the encoders were
         // written for. (No caller today — `NV_MEMORY_LIST_ALLOCATION_PARAMS`.)
         if !self.abi.in_encoded_interval() {
-            eprintln!(
+            kf_util::klog_limited!(
                 "kf-host: HOST-ABI REFUSED nested alloc class {class:#06x}: not carried, and host driver {} is \
                  outside the interval its bench layout is known for",
                 self.abi.version()
@@ -1597,9 +1599,11 @@ impl HostRm {
         let n = self.views[if r.is_ok() { 1 } else { 2 }]
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if r.is_err() && n < 16 {
-            eprintln!(
+            kf_util::klog_limited!(
                 "kf-host: CPU view release REFUSED (#{n}): memory {:#x} cookie {:#x}: status {:#x} — its BAR1 aperture stays held",
-                r_mem, r_cookie, out.status
+                r_mem,
+                r_cookie,
+                out.status
             );
         }
         r

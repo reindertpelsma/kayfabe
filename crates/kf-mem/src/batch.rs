@@ -272,7 +272,7 @@ impl<'rm> BatchedVas<'rm> {
                 }
                 // ⊘ Not fatal to the unmap that emptied it (its mappings ARE gone); the object and
                 // its pinned pages live until the host client closes — named.
-                Err(e) => eprintln!(
+                Err(e) => kf_util::klog_limited!(
                     "kf-mem: batch object {h:#x} free refused: {e:?} — its pages stay pinned until the host client closes"
                 ),
             }

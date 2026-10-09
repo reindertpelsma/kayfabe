@@ -292,6 +292,9 @@ pub struct Device {
     /// ★ When each currently held guest reply was held (drainer only; never contended) — its age at
     /// release is [`Stall::held_reply_age`].
     held_book: Mutex<HeldBook>,
+    /// The GSP phase and refusal summary the status line saw last (it never waits for the drainer's
+    /// lock; a busy moment shows these).
+    status_cache: Mutex<(String, String)>,
     /// ★ v3-display: the emulated NVDisplay (`display=on`), leaked for the process so the vCPU path
     /// holds a plain reference (`crate::display`). `None`: the displayless posture, unchanged.
     pub display: Option<&'static crate::display::DisplayPlane>,
@@ -359,9 +362,9 @@ impl Device {
         let gpu_uuid =
             crate::gpuuid::resolve_for(cfg, host.host_gid, &mut kf_rm::gpuuid::os_entropy)?;
         for w in &gpu_uuid.warnings {
-            eprintln!("kf3: ⚠ {w}");
+            kf_util::klog!("kf3: ⚠ {w}");
         }
-        eprintln!(
+        kf_util::klog!(
             "kf3: guest GPU UUID {} (gpu-uuid={}, basis {:?}, devfn {:#x})",
             gpu_uuid.gid,
             kf_rm::gpuuid::GpuUuidMode::parse(cfg.gpu_uuid.as_deref()).map_or("?", |m| m.label()),
@@ -417,7 +420,7 @@ impl Device {
         let perm = kf_mem::apply::PermPolicy {
             carry_atomic_disable: std::env::var("KF3_CARRY_ATOMIC_DISABLE").is_ok_and(|v| v == "1"),
         };
-        eprintln!(
+        kf_util::klog!(
             "kf3: permission policy: READ_ONLY+VOLATILE carried to the host map, PRIVILEGED leaves withheld from user twins, ATOMIC_DISABLE {} (key_perm={:#x})",
             if perm.carry_atomic_disable {
                 "CARRIED (KF3_CARRY_ATOMIC_DISABLE=1)"
@@ -497,7 +500,7 @@ impl Device {
         // The export node stays open for the process (CUDA holds the import).
         std::mem::forget(export);
         // ★ The identity line a multi-GPU run is graded on: minor → PCI → RM instance → CUDA.
-        eprintln!(
+        kf_util::klog!(
             "kf3: host GPU minor={} bdf={bdf} gpuId={:#x} rm_device_instance={} cuda_device={:?} store={} MiB",
             cfg.gpu_minor,
             card.gpu_id,
@@ -537,7 +540,7 @@ impl Device {
             .map_err(|e| format!("guest driver {version}: {e}"))?;
         let abi = kf_rm::abi::gsp_abi_for(version)
             .map_err(|e| format!("GSP ABI for {version}: {e:?}"))?;
-        eprintln!(
+        kf_util::klog!(
             "kf3: guest driver {version} ({source}); measured ABI: static-info {:?}, element {:?}, \
              init-args {:?}, rm-control params@{}, vgx {:?}",
             table.gsp_static_info_wire(),
@@ -559,7 +562,7 @@ impl Device {
         // ★ Cosmetic: a host that did not answer BIOS_GET_INFO_V2 does not stop the VM — the ROM
         // declares the named neutral version and the guest's own ask is refused. Said by name.
         let vbios_version = host.vbios_version.unwrap_or_else(|| {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: host BIOS_GET_INFO_V2 (0x20800810) not answered: synthetic ROM declares \
                  NEUTRAL_VBIOS_VERSION {:?}; the guest's BIOS_GET_INFO_V2 will be refused",
                 kf_abi::vbios::NEUTRAL_VBIOS_VERSION
@@ -631,7 +634,7 @@ impl Device {
                 .ok_or("timer facts already shared")?
                 .chip_info
                 .timer_reg_base = Some(timer.bar0_base());
-            eprintln!(
+            kf_util::klog!(
                 "kf3: native timer BAR0={:#x}, read-only 4096-byte mapping, host/guest layout {:?}",
                 timer.bar0_base(),
                 timer.layout()
@@ -667,6 +670,32 @@ impl Device {
         let stall: &'static Stall = Stall::leak();
         let dbfast: &'static DbFast = Box::leak(Box::new(DbFast::new(0, drainer_efd)?));
         dbfast.attach_stall(stall);
+        // ★ Default-off diagnostic modes that perturb timing: the status line says so while on.
+        {
+            use kf_chan::stall::Diag;
+            let on = |name: &str| std::env::var_os(name).is_some_and(|v| v != "0");
+            if kf_util::log::verbose() {
+                stall.diag_on(Diag::LogVerbose);
+            }
+            if kf_mem::maplog::on() {
+                stall.diag_on(Diag::Maplog);
+            }
+            if crate::bar0trace::enabled() {
+                stall.diag_on(Diag::Bar0Trace);
+            }
+            if on("KF3_PROF") {
+                stall.diag_on(Diag::Prof);
+            }
+            if crate::chan::completion_probe_ms().is_some() {
+                stall.diag_on(Diag::CompletionProbe);
+            }
+            if on("KF3_DBFAST_SPIN_US") {
+                stall.diag_on(Diag::DbfastSpin);
+            }
+            if std::env::var("KF_IOCTL_TRACE").is_ok_and(|v| v != "off" && !v.is_empty()) {
+                stall.diag_on(Diag::IoctlTrace);
+            }
+        }
         let token_fmt = kf_chip::hwref::DieGroup::from_arch(architecture, implementation)
             .map_err(|e| format!("{e:?}"))
             .and_then(kf_trap::tokenindex::GuestTokenFormat::for_die_group);
@@ -677,7 +706,7 @@ impl Device {
         let bar1_mode = match bar1_mode {
             Ok(r) => Some(r),
             Err(e) => {
-                eprintln!("kf3: the BAR1-mode register does not resolve ({e}) — not observed");
+                kf_util::klog!("kf3: the BAR1-mode register does not resolve ({e}) — not observed");
                 None
             }
         };
@@ -688,7 +717,7 @@ impl Device {
         let token_fmt = match token_fmt {
             Ok(f) => Some(f),
             Err(e) => {
-                eprintln!(
+                kf_util::klog!(
                     "kf3: doorbell fast path: the guest's token layout does not resolve ({e}) — every doorbell stays TRAPPED"
                 );
                 None
@@ -697,7 +726,7 @@ impl Device {
         let mirrors = crate::mem::Mirrors::default();
         // ★ P1+P2 inc B: the T-space cell — filled once, on the VA thread, at prewarm.
         let tspace = crate::tspace::TSpaceCell::default();
-        eprintln!(
+        kf_util::klog!(
             "kf3: P1+P2 T-space {} (KF3_TSPACE; docs/design/V3_P1P2_TSPACE.md); host channel births require USER replies",
             if crate::tspace::enabled() {
                 "ON: built at prewarm"
@@ -756,12 +785,15 @@ impl Device {
                  bare metal (the guest driver hard-wires it displayless) — use a separate display adapter \
                  (docs/design/V3_DISPLAY.md §2.2)"
             ))?;
-            eprintln!(
+            kf_util::klog!(
                 "kf3: display plane ON — virtual NVDisplay for {} (IP {:#010x}, display class {:#06x}, {} heads)",
-                row.chips, row.ip_version, row.classes.display, row.heads
+                row.chips,
+                row.ip_version,
+                row.classes.display,
+                row.heads
             );
             if cfg.x11_dispsw {
-                eprintln!(
+                kf_util::klog!(
                     "kf3: ⚠ EXPERIMENT x11-dispsw ON (option A, OWNER_RULINGS §N; default off until its conditions hold): every guest GF100_DISP_SW is twinned \
                      under its channel's host twin with authored params (head 0, displayMask 0, caps 0) or refused by name"
                 );
@@ -786,7 +818,7 @@ impl Device {
                     let mode = cfg.display_broker_vram;
                     let setup = match mode {
                         VramMode::Off => {
-                            eprintln!("kf3: broker: display-broker-vram=off — host-memory rungs only");
+                            kf_util::klog!("kf3: broker: display-broker-vram=off — host-memory rungs only");
                             Ok(None)
                         }
                         VramMode::On | VramMode::Auto => {
@@ -801,7 +833,7 @@ impl Device {
                                     Err(format!("display-broker-vram=on: {e}"))
                                 }
                                 Err(e) => {
-                                    eprintln!(
+                                    kf_util::klog!(
                                         "kf3: broker: the GPU-copy rung is NOT offered: {e}; frames \
                                          go through host memory"
                                     );
@@ -829,7 +861,7 @@ impl Device {
                 .with_boot(gop.as_ref().map(crate::display::BootScan::of).transpose()?);
                 // the export node stays open for the process (CUDA holds the import)
                 std::mem::forget(export);
-                eprintln!(
+                kf_util::klog!(
                     "kf3: display plane built — derived registers, caps page, engine vocabulary, GPU context on {bdf}"
                 );
                 Some(Box::leak(Box::new(plane)))
@@ -942,7 +974,7 @@ impl Device {
         // `0x30000` and every BAR1 doorbell is a silent store. A detector that cannot fail under
         // this switch measures nothing. ⚠ Never for a real run; it is announced on every realize.
         let usermode_mmio = if std::env::var_os("KF3_NEGCTL_NO_BAR1_DOORBELL").is_some() {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: ⚠ NEGATIVE CONTROL KF3_NEGCTL_NO_BAR1_DOORBELL: BAR1 usermode views are NOT classified (family {family:?})"
             );
             None
@@ -954,7 +986,7 @@ impl Device {
         // depth/stencil leaf is refused by name (`kf_mem::apply::host_pte_kind`).
         let per_map_kind = rm.host_abi().per_map_pte_kind();
         if !per_map_kind {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: host driver {} has no per-map PTE kind (NVOS46 kindOverride is 580.65.06+): \
                  PITCH/GENERIC leaves map with the memory's own kind; a depth/stencil kind is refused by name",
                 rm.host_abi().version()
@@ -967,7 +999,7 @@ impl Device {
             crate::tspace::negctl_carve(),
         );
         if crate::tspace::negctl_carve() {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: ⚠ POSITIVE CONTROL KF3_NEGCTL_CARVE=1: every vidmem leaf counted as a carve-out leaf, none refused"
             );
         }
@@ -1011,7 +1043,7 @@ impl Device {
             bar1_win
                 .seed(crate::gop::FB_OFFSET, 0, b.bytes())
                 .map_err(|e| format!("gop=on: the BAR1 seed: {e}"))?;
-            eprintln!(
+            kf_util::klog!(
                 "kf3: boot display ON — option ROM {} bytes ({:04x}:{:04x}, KFGP BAR{} +{:#x}, {}x{} pitch {}, G = {:#x}); BAR1 [0, G) seeded with store [0, G), zeroed on the GPU; {}",
                 gop_rom.as_ref().map_or(0, Vec::len),
                 pci.vendor,
@@ -1052,7 +1084,7 @@ impl Device {
                 kf_trap::PdbAperture::Vidmem,
             )
             .map_err(|e| format!("our BAR1 root: {e:?}"))?;
-        eprintln!(
+        kf_util::klog!(
             "kf3: P4 memory plane: store {} MiB (imported into the walker), walker pools {} MiB of host GPU memory ({}), roots bar1={:#x} bar2={:#x}, PRAMIN one map+mmap per move, trigger @{:#x}",
             cfg.fb_mb,
             va.walker().kernel.pool_bytes() >> 20,
@@ -1113,6 +1145,7 @@ impl Device {
             held_stamps: Mutex::new(std::collections::VecDeque::new()),
             stall,
             held_book: Mutex::new(HeldBook::new()),
+            status_cache: Mutex::new(("Cold".to_string(), String::new())),
             display: display_plane,
             x11_dispsw: cfg.x11_dispsw,
             gop,
@@ -1612,15 +1645,17 @@ impl Device {
         let Some(ms) = crate::chan::completion_probe_ms() else {
             return;
         };
-        eprintln!("kf3: PROBE on — completion probe, overdue after {ms} ms (KF3_COMPLETION_PROBE)");
+        kf_util::klog!(
+            "kf3: PROBE on — completion probe, overdue after {ms} ms (KF3_COMPLETION_PROBE)"
+        );
         let overdue = std::time::Duration::from_millis(ms);
         while !self.stop.load(Ordering::Acquire) {
             let lines = self.chans.probe_tick(overdue);
             if !lines.is_empty() {
                 for l in &lines {
-                    eprintln!("{l}");
+                    kf_util::klog!("{l}");
                 }
-                eprintln!("{}", self.probe_device_state());
+                kf_util::klog!("{}", self.probe_device_state());
             }
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
@@ -1774,11 +1809,11 @@ impl Device {
             };
             self.mem.counters.cache_ops.fetch_add(1, Ordering::Relaxed);
             if let Err(e) = &r {
-                eprintln!(
+                kf_util::klog_limited!(
                     "kf3: L2 cache op {op:?} REFUSED by the host: {e:?} — the register is released anyway"
                 );
             } else if done[i] == 0 {
-                eprintln!(
+                kf_util::klog!(
                     "kf3: L2 cache op {op:?} served by host FB_FLUSH_GPU_CACHE in {} us (first of this op)",
                     t.elapsed().as_micros()
                 );
@@ -1797,11 +1832,12 @@ impl Device {
     /// the drainer, invalidates from a vCPU) and the walker's completion eventfd — and never
     /// blocks on the GPU: a walk is submitted and collected on its fd.
     pub fn va_loop(&self) {
+        kf_util::log::set_class(kf_util::log::ThreadClass::Va);
         let Some(mut m) = self.va.lock().ok().and_then(|mut g| g.take()) else {
             return;
         };
         if let Err(e) = m.walker().kernel.make_current() {
-            eprintln!("kf3: VA manager: walker context: {e} — the memory plane is DOWN");
+            kf_util::klog!("kf3: VA manager: walker context: {e} — the memory plane is DOWN");
             return;
         }
         const WAKE: u64 = 1;
@@ -1817,7 +1853,7 @@ impl Device {
                 )
                 .is_err()
         {
-            eprintln!("kf3: VA manager: epoll watch refused — the memory plane is DOWN");
+            kf_util::klog!("kf3: VA manager: epoll watch refused — the memory plane is DOWN");
             return;
         }
         let trigger = self.mem.port.trigger();
@@ -1855,7 +1891,7 @@ impl Device {
                     carve,
                 )
             {
-                eprintln!(
+                kf_util::klog_trace!(
                     "kf3: mem t={:.3}s {line}",
                     self.born.elapsed().as_secs_f64()
                 );
@@ -1869,7 +1905,7 @@ impl Device {
                 && let Some(line) = crate::mem::prewarm(&self.mem, self.rm, self.store.handle)
             {
                 prewarmed += 1;
-                eprintln!(
+                kf_util::klog!(
                     "kf3: mem t={:.3}s [{prewarmed}/{}] {line}",
                     self.born.elapsed().as_secs_f64(),
                     crate::mem::PREWARM_SPARES
@@ -1901,11 +1937,11 @@ impl Device {
                     trigger,
                 );
                 if kf_mem::maplog::on() {
-                    eprintln!("kf3: maplog t={:.6} STATEMENT {line}", kf_mem::maplog::t());
+                    kf_util::klog!("kf3: maplog t={:.6} STATEMENT {line}", kf_mem::maplog::t());
                 }
                 if logged < 256 {
                     logged += 1;
-                    eprintln!(
+                    kf_util::klog_trace!(
                         "kf3: mem t={:.3}s {line}",
                         self.born.elapsed().as_secs_f64()
                     );
@@ -1934,7 +1970,7 @@ impl Device {
             let t = m.on_targets(trigger);
             if (!t.completed.is_empty() || !t.unreconciled.is_empty()) && logged < 256 {
                 logged += 1;
-                eprintln!(
+                kf_util::klog_trace!(
                     "kf3: mem t={:.3}s deferred clears released completed={:?} unreconciled={:?}",
                     self.born.elapsed().as_secs_f64(),
                     t.completed,
@@ -1943,13 +1979,13 @@ impl Device {
             }
             for (ticket, res) in m.take_splits() {
                 if let Err(e) = &res {
-                    eprintln!(
+                    kf_util::klog_limited!(
                         "kf3: mem t={:.3}s split ticket {ticket} REFUSED: {e}",
                         self.born.elapsed().as_secs_f64()
                     );
                 }
                 if kf_mem::maplog::on() {
-                    eprintln!(
+                    kf_util::klog!(
                         "kf3: maplog t={:.6} SPLIT-DONE ticket={ticket} ok={}",
                         kf_mem::maplog::t(),
                         res.is_ok()
@@ -1977,7 +2013,7 @@ impl Device {
                         .ok()
                         .and_then(|mm| mm.get(k).map(|mi| mi.space.space));
                     if let Some(sp) = space {
-                        eprintln!(
+                        kf_util::klog!(
                             "kf3: maplog t={:.6} APPLIED {k:?} +{} -{} host space {sp:#x} doorbells {}",
                             kf_mem::maplog::t(),
                             a.mapped,
@@ -1994,7 +2030,7 @@ impl Device {
                     .iter()
                     .map(|(k, a)| format!("{:#x}:+{}-{}r{}", k.0, a.mapped, a.unmapped, a.refused))
                     .collect();
-                eprintln!(
+                kf_util::klog_trace!(
                     "kf3: mem t={:.3}s walk reconciled [{}] completed={:?} unreconciled={:?}",
                     self.born.elapsed().as_secs_f64(),
                     applied.join(" "),
@@ -2021,7 +2057,7 @@ impl Device {
                     bar1_view_last = Some(key);
                     if crate::bar1phys::bounded(bar1_view_lines, 256, "BAR1 boot-framebuffer view")
                     {
-                        eprintln!(
+                        kf_util::klog_limited!(
                             "kf3: mem t={:.3}s BAR1 boot framebuffer [{at:#x}, +{len:#x}) after BAR1 change #{}: guest views {:x?}; {:#x} bytes {}",
                             self.born.elapsed().as_secs_f64(),
                             w.changes(),
@@ -2054,7 +2090,7 @@ impl Device {
             {
                 // ⊘ bounded: a guest can ask as often as it writes the register
                 if crate::bar1phys::bounded(bar1_phys_lines, 128, "BAR1 physical-view") {
-                    eprintln!(
+                    kf_util::klog_trace!(
                         "kf3: mem t={:.3}s {line}",
                         self.born.elapsed().as_secs_f64()
                     );
@@ -2078,7 +2114,7 @@ impl Device {
                 }
             }
             for why in m.stats.refusals.iter().skip(refusals_seen) {
-                eprintln!(
+                kf_util::klog_limited!(
                     "kf3: mem t={:.3}s REFUSED {why}",
                     self.born.elapsed().as_secs_f64()
                 );
@@ -2088,7 +2124,7 @@ impl Device {
             let armed = self.mem.port.armed_request().map(|r| r.seq);
             if armed != armed_seen {
                 if m.stats.unreconciled > 0 {
-                    eprintln!(
+                    kf_util::klog_trace!(
                         "kf3: mem t={:.3}s trigger {} (seq {:?}; unreconciled so far {})",
                         self.born.elapsed().as_secs_f64(),
                         if armed.is_some() { "armed" } else { "idle" },
@@ -2116,9 +2152,11 @@ impl Device {
             .and_then(crate::mem::Target::cpu_window)
         {
             match w.retire_seed() {
-                Ok(Some(r)) => eprintln!("kf3: at stop: {}", r.line()),
+                Ok(Some(r)) => kf_util::klog!("kf3: at stop: {}", r.line()),
                 Ok(None) => {}
-                Err(e) => eprintln!("kf3: at stop: the boot display's seed was not released: {e}"),
+                Err(e) => {
+                    kf_util::klog!("kf3: at stop: the boot display's seed was not released: {e}")
+                }
             }
         }
     }
@@ -2176,6 +2214,39 @@ impl Device {
         }
     }
 
+    /// ★ The housekeeping thread (`kf3-status`) — NOT an input-serving thread, so it may sleep and
+    /// block: it carries what used to ride the drainer's loop (`docs/design/V3_NONSTALL_THREADS.md`
+    /// §3.B). Every 0.5 s the GSP heartbeats (`kf_chip::Family::gsp_heartbeat_mailboxes`): a 595.84+
+    /// guest reads them after every RPC poll, well inside its 1.3 × default-timeout window, in ms of
+    /// the host GPU clock the guest itself reads through the aliased usermode page — the one host RM
+    /// ioctl (`gpu_time_ns`) the drainer made on its own behalf. Every 2 s the status line, printed
+    /// only when it changed. ⊘ It only READS atomics and `try_lock`s: it never delays the drainer.
+    pub fn housekeeping_loop(&self) {
+        let heartbeat = self.plane.family.gsp_heartbeat_mailboxes();
+        let mut hb_at = std::time::Instant::now() - std::time::Duration::from_secs(1);
+        let mut beat = (std::time::Instant::now(), String::new());
+        while !self.stop.load(Ordering::Acquire) {
+            if let Some([gsprm, libos]) = heartbeat
+                && hb_at.elapsed() >= std::time::Duration::from_millis(500)
+            {
+                hb_at = std::time::Instant::now();
+                if let Ok(ns) = self.rm.gpu_time_ns() {
+                    let ms = u64::from((ns / 1_000_000) as u32);
+                    self.shadow_store(gsprm, ms, 4);
+                    self.shadow_store(libos, ms, 4);
+                }
+            }
+            if beat.0.elapsed() >= std::time::Duration::from_secs(2) {
+                let now = self.status_line();
+                if now != beat.1 {
+                    kf_util::klog!("{now}");
+                }
+                beat = (std::time::Instant::now(), now);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    }
+
     /// ★ The register drainer's loop: apply the privileged ring in order, park on its own wake
     /// word when empty. Runs on ONE thread (an ordered ring drained by many is not ordered).
     pub fn drainer_loop(&self) {
@@ -2187,13 +2258,7 @@ impl Device {
             return;
         }
         kf_chan::stall::set_role(Role::Drainer);
-        let mut beat = (std::time::Instant::now(), String::new());
-        // ★ The GSP heartbeats (`kf_chip::Family::gsp_heartbeat_mailboxes`): a 595.84+ guest reads
-        // them after every RPC poll. Stored on this thread (never a vCPU) every 0.5 s — well inside
-        // the guest's 1.3 × default-timeout window — in ms of the host GPU clock the guest itself
-        // reads through the aliased usermode page.
-        let heartbeat = self.plane.family.gsp_heartbeat_mailboxes();
-        let mut hb_at = std::time::Instant::now() - std::time::Duration::from_secs(1);
+        kf_util::log::set_class(kf_util::log::ThreadClass::Drainer);
         let mut prof_beat = std::time::Instant::now();
         let mut marks_seen = 0u64;
         let mut busy_from = crate::prof::now_ns();
@@ -2210,7 +2275,7 @@ impl Device {
             .filter(|us| *us > 0 && *us <= 1000)
             .map(std::time::Duration::from_micros);
         if let Some(d) = spin {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: ⚠ EXPERIMENT KF3_DBFAST_SPIN_US: the drainer polls doorbells for {d:?} after each delivery before parking"
             );
         }
@@ -2219,34 +2284,16 @@ impl Device {
             // ★ The stall instrument: this iteration, loop top to its park (or to the next
             // iteration when it found work) — never the park itself.
             let t_iter = std::time::Instant::now();
-            if let Some([gsprm, libos]) = heartbeat
-                && hb_at.elapsed() >= std::time::Duration::from_millis(500)
-            {
-                hb_at = std::time::Instant::now();
-                if let Ok(ns) = self.rm.gpu_time_ns() {
-                    let ms = u64::from((ns / 1_000_000) as u32);
-                    self.shadow_store(gsprm, ms, 4);
-                    self.shadow_store(libos, ms, 4);
-                }
-            }
-            // A heartbeat for the boot log, on the drainer (never a vCPU): printed only on change.
-            if beat.0.elapsed() >= std::time::Duration::from_secs(2) {
-                let now = self.status_line();
-                if now != beat.1 {
-                    eprintln!("{now}");
-                }
-                beat = (std::time::Instant::now(), now);
-            }
             if crate::prof::on() {
                 let m = self.prof.marks.load(Ordering::Relaxed);
                 if m != marks_seen {
                     marks_seen = m;
-                    eprintln!(
+                    kf_util::klog!(
                         "kf3: PROF MARK {m} t={:.3}s",
                         crate::prof::now_ns() as f64 / 1e9
                     );
                     self.prof_print();
-                    eprintln!("kf3: PROF MARK-END {m}");
+                    kf_util::klog!("kf3: PROF MARK-END {m}");
                 } else if prof_beat.elapsed() >= std::time::Duration::from_secs(5) {
                     prof_beat = std::time::Instant::now();
                     self.prof_print();
@@ -2332,7 +2379,7 @@ impl Device {
     ) -> bool {
         self.dbfast.set_budget(budget);
         let on = self.dbfast.enable(Box::new(hook));
-        eprintln!(
+        kf_util::klog!(
             "kf3: doorbell fast path {} — KVM ioeventfd per live token (Passthrough AND Translated), serviced by the register drainer; budget {budget} placements; unmatched/unregistered doorbells stay trapped",
             if on { "ON" } else { "REFUSED (already on)" }
         );
@@ -2353,21 +2400,21 @@ impl Device {
             return;
         };
         let Some(value) = u32::from_str_radix(raw.trim_start_matches("0x"), 16).ok() else {
-            eprintln!("kf3: KF3_DBFAST_PROBE={raw:?} is not a hex value — no probe");
+            kf_util::klog!("kf3: KF3_DBFAST_PROBE={raw:?} is not a hex value — no probe");
             return;
         };
         let Some(idx) = self.plane.token_index.of_doorbell(value) else {
-            eprintln!("kf3: KF3_DBFAST_PROBE {value:#010x} names no slot — no probe");
+            kf_util::klog!("kf3: KF3_DBFAST_PROBE {value:#010x} names no slot — no probe");
             return;
         };
         let route = self.plane.tokens.get(idx as usize).map(|w| w.load().route);
         if route != Some(Route::Unknown) {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: KF3_DBFAST_PROBE {value:#010x}: slot {idx:#x} is live ({route:?}) — REFUSED"
             );
             return;
         }
-        eprintln!(
+        kf_util::klog!(
             "kf3: ⚠ MEASUREMENT PROBE KF3_DBFAST_PROBE: doorbell value {value:#010x} (slot {idx:#x}, no channel) registered with the fast path: {:?}",
             self.dbfast.register(idx, value)
         );
@@ -2378,11 +2425,22 @@ impl Device {
     pub fn status_line(&self) -> String {
         let c = &self.counters;
         let o = Ordering::Relaxed;
-        let (phase, refusals) = self
-            .gsp
-            .try_lock()
-            .map(|g| (format!("{:?}", g.fsm.phase()), g.fsm.refusals().summary()))
-            .unwrap_or_else(|_| ("busy".into(), "busy".into()));
+        // ⊘ try_lock: the drainer owns this lock. A busy moment shows the last values seen (a status
+        // line that flickered "busy" would print a new line each time).
+        let (phase, refusals) = match self.gsp.try_lock() {
+            Ok(g) => {
+                let now = (format!("{:?}", g.fsm.phase()), g.fsm.refusals().summary());
+                if let Ok(mut c) = self.status_cache.lock() {
+                    c.clone_from(&now);
+                }
+                now
+            }
+            Err(_) => self
+                .status_cache
+                .lock()
+                .map(|c| c.clone())
+                .unwrap_or_default(),
+        };
         // The ledger's DISTINCT set names the control ids the RPC code alone hides.
         let unserviced: Vec<String> = self
             .chain_logs
@@ -2641,7 +2699,7 @@ impl Device {
         // ★ The stall instruments (always on): the falsifiers of the non-stall rule.
         let stall = self.stall.fragment(
             std::time::Instant::now(),
-            self.held_book.try_lock().ok().as_deref(),
+            self.held_book.lock().ok().as_deref(),
         );
         format!(
             "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq}{db}{stall} unserviced=[{}] gsp_refusals[{refusals}]",
@@ -2664,24 +2722,24 @@ impl Device {
             // what closed it; at the first `Free`, the window's channel memory is dumped once.
             if let Some(w) = self.chans.bar0trace.take_closed() {
                 for l in crate::bar0trace::render(&w, &format!("{:?}", c.function)) {
-                    eprintln!("{l}");
+                    kf_util::klog!("{l}");
                 }
                 if c.function == kf_gsp::RpcFunction::Free
                     && let Some(t) = w.chan
                     && self.chans.bar0trace.take_dump()
                 {
                     for l in self.chans.bar0trace_dump(t) {
-                        eprintln!("{l}");
+                        kf_util::klog!("{l}");
                     }
                 }
             }
-            eprintln!("kf3: GSP rpc {:?} seq={}", c.function, c.sequence);
+            kf_util::klog_trace!("kf3: GSP rpc {:?} seq={}", c.function, c.sequence);
             if c.function == kf_gsp::RpcFunction::UnloadingGuestDriver {
                 self.observe_unloading(c);
             }
         }
         for u in &r.unserviced {
-            eprintln!("kf3: GSP rpc UNSERVICED {u:?}");
+            kf_util::klog_limited!("kf3: GSP rpc UNSERVICED {u:?}");
         }
     }
 
@@ -2698,7 +2756,7 @@ impl Device {
         match crate::bar1phys::decode_unloading(self.unload_layout, &c.payload) {
             Ok(u) => {
                 if log {
-                    eprintln!(
+                    kf_util::klog!(
                         "kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq={}: bInPMTransition={} bGc6Entering={} newLevel={} — {}",
                         c.sequence,
                         u.pm,
@@ -2718,7 +2776,7 @@ impl Device {
                 }
             }
             Err(e) if log => {
-                eprintln!("kf3: GSP fn 47 seq={}: body not decoded ({e})", c.sequence);
+                kf_util::klog!("kf3: GSP fn 47 seq={}: body not decoded ({e})", c.sequence);
             }
             Err(_) => {}
         }
@@ -2734,7 +2792,7 @@ impl Device {
     ) {
         let n = self.b5_logged.fetch_add(1, Ordering::Relaxed);
         if crate::bar1phys::bounded(n, 64, "BAR1-mode write") {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: mem t={:.3}s the guest wrote {} = {value:#x} (MODE {}) at GSP phase {phase:?}",
                 self.born.elapsed().as_secs_f64(),
                 r.name,
@@ -2791,7 +2849,7 @@ impl Device {
             }
             Ok(_) => false,
             Err(e) => {
-                eprintln!("kf3: held reply post REFUSED: {e:?}");
+                kf_util::klog_limited!("kf3: held reply post REFUSED: {e:?}");
                 false
             }
         }
@@ -2813,10 +2871,10 @@ impl Device {
     /// ★ w827: print the `PROF` lines (drainer heartbeat, `KF3_PROF=1` only).
     fn prof_print(&self) {
         for l in self.prof.lines(&|o| self.reg_name(o)) {
-            eprintln!("{l}");
+            kf_util::klog!("{l}");
         }
         let ws = &self.worker_stats;
-        eprintln!(
+        kf_util::klog!(
             "kf3: PROF workers busy_ms={:.1} wait_ms={:.1} max_busy_us={:.1} waits={} timeouts={} timeouts_with_work={} served={}",
             ws.busy_ns.load(Ordering::Relaxed) as f64 / 1e6,
             ws.wait_ns.load(Ordering::Relaxed) as f64 / 1e6,
@@ -2832,7 +2890,7 @@ impl Device {
             .map(|v| v.timing.clone())
             .unwrap_or_default();
         let avg = |sum: u64, n: u64| sum.checked_div(n).unwrap_or(0) / 1000;
-        eprintln!(
+        kf_util::klog!(
             "kf3: PROF va invals={} arrive_to_clear_sum_ms={} arrive_to_clear_avg_us={} max_us={} walks={} walk_sum_ms={} walk_avg_us={} gpu_avg_us={} plan_avg_us={} apply_avg_us={} host_calls={}",
             va.invals,
             va.inval_ns / 1_000_000,
@@ -2846,7 +2904,7 @@ impl Device {
             avg(va.apply_ns, va.walks),
             va.host_calls,
         );
-        eprintln!(
+        kf_util::klog!(
             "kf3: PROF acts run={} worst_us={} total_us={} irq_raised={} irq_writes={}",
             self.chans.acts_run.load(Ordering::Relaxed),
             self.chans.act_worst_us.load(Ordering::Relaxed),
@@ -2878,7 +2936,7 @@ impl Device {
         let mut posted = 0usize;
         for e in evs {
             let Some(engine) = kf_abi::rc::EngineRoute::declared(e.engine) else {
-                eprintln!(
+                kf_util::klog_limited!(
                     "kf3: RC chid {:#x}: engine type 0 — no route; NOT posted",
                     e.chid
                 );
@@ -2912,13 +2970,16 @@ impl Device {
                 Ok(()) => {
                     posted += 1;
                     self.counters.rc_posted.fetch_add(1, Ordering::Relaxed);
-                    eprintln!(
+                    kf_util::klog_limited!(
                         "kf3: RC_TRIGGERED posted: guest chid {:#x} engine {:#x} except_type {:#x} (host {:#x})",
-                        e.chid, e.engine, e.except_type, e.host_token
+                        e.chid,
+                        e.engine,
+                        e.except_type,
+                        e.host_token
                     );
                 }
                 Err(kf_gsp::GspFault::QueueFull { .. }) => back.push(e),
-                Err(f) => eprintln!(
+                Err(f) => kf_util::klog_limited!(
                     "kf3: RC_TRIGGERED for chid {:#x} REFUSED by the queue: {f:?}",
                     e.chid
                 ),
@@ -2960,7 +3021,7 @@ impl Device {
         let Some(dp) = self.display else { return };
         let target = dp.model.lock().ok().and_then(|g| g.hotplug_target());
         let Some(t) = target else {
-            eprintln!(
+            kf_util::klog_limited!(
                 "kf3: display: hotplug for {mask:#x} NOT posted: no live registration (the next probe reads the new EDID)"
             );
             return;
@@ -2969,7 +3030,7 @@ impl Device {
             match kf_abi::postevent::SubdeviceNotify::hotplug(t.client, t.event, mask).encode() {
                 Ok(p) => p,
                 Err(e) => {
-                    eprintln!("kf3: display: hotplug NOT posted: {e}");
+                    kf_util::klog_limited!("kf3: display: hotplug NOT posted: {e}");
                     return;
                 }
             };
@@ -2981,9 +3042,10 @@ impl Device {
         let mut ram = Ram(self);
         let posted = match g.fsm.post_subdevice_event(&mut ram, payload) {
             Ok(()) => {
-                eprintln!(
+                kf_util::klog_limited!(
                     "kf3: display: hotplug posted for display {mask:#x} to {:#x}:{:#x}",
-                    t.client, t.event
+                    t.client,
+                    t.event
                 );
                 true
             }
@@ -2992,7 +3054,7 @@ impl Device {
                 false
             }
             Err(f) => {
-                eprintln!("kf3: display: hotplug REFUSED by the queue: {f:?}");
+                kf_util::klog_limited!("kf3: display: hotplug REFUSED by the queue: {f:?}");
                 false
             }
         };
@@ -3018,11 +3080,12 @@ impl Device {
     /// plane: a doorbell or a host completion wakes it; it claims a token and pumps the channel.
     /// ⊘ Never a vCPU; never waits on the GPU (a completion is an fd in its epoll set).
     pub fn worker_loop(&self) {
+        kf_util::log::set_class(kf_util::log::ThreadClass::Worker);
         self.worker_stats
             .prof
             .store(crate::prof::on(), Ordering::Relaxed);
         let Ok(poller) = Poller::create() else {
-            eprintln!("kf3: worker: epoll refused — the channel plane is DOWN");
+            kf_util::klog!("kf3: worker: epoll refused — the channel plane is DOWN");
             return;
         };
         if poller
@@ -3038,7 +3101,7 @@ impl Device {
                 )
                 .is_err()
         {
-            eprintln!("kf3: worker: epoll watch refused — the channel plane is DOWN");
+            kf_util::klog!("kf3: worker: epoll watch refused — the channel plane is DOWN");
             return;
         }
         // ★ P5b §2.7: every host engine's non-stall event, in the same poller — its readiness is a
@@ -3048,7 +3111,7 @@ impl Device {
                 .watch(e.ev.as_fd(), kf_chan::worker::OTHER_TAG_BASE + i as u64)
                 .is_err()
             {
-                eprintln!(
+                kf_util::klog!(
                     "kf3: worker: epoll watch of {} refused — its completions are not announced",
                     e.name
                 );
@@ -3057,7 +3120,7 @@ impl Device {
         // ★ P5c: the RC fd — a host twin's error context was written (its host RC path ran).
         let rc_tag = kf_chan::worker::OTHER_TAG_BASE + RC_TAG_OFFSET;
         if poller.watch(self.chans.rc_ev.as_fd(), rc_tag).is_err() {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: worker: epoll watch of the RC fd refused — guest channel faults will be SILENT"
             );
         }
@@ -3077,7 +3140,7 @@ impl Device {
             // twin there is our own ring's, the walker's or another tenant's — not guest work.
             let raise = e.live.load(Ordering::Relaxed) > 0 && e.vector.is_some();
             if kf_mem::maplog::on() {
-                eprintln!(
+                kf_util::klog!(
                     "kf3: maplog t={:.6} NSI host {} wake #{} raised={raise}",
                     kf_mem::maplog::t(),
                     e.name,
@@ -3184,7 +3247,7 @@ impl HostOps for Device {
             self.latch_and_deliver(v);
             // Bounded: the first 16 relays, then each power of two.
             if n <= 16 || n.is_power_of_two() {
-                eprintln!(
+                kf_util::klog!(
                     "kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest {name} vector {v}: a Translated GR-tier ring retired engine-written work (rings={rings}, relay #{n})"
                 );
             }
@@ -3194,7 +3257,7 @@ impl HostOps for Device {
         self.chans.for_each_ce_relay(|v, name, n| {
             self.latch_and_deliver(v);
             if n <= 16 || n.is_power_of_two() {
-                eprintln!(
+                kf_util::klog!(
                     "kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest {name} vector {v}: a Translated copy-engine ring retired work after its host fence (relay #{n})"
                 );
             }
@@ -3224,7 +3287,7 @@ impl HostOps for Device {
         let n = self.counters.applied.fetch_add(1, Ordering::Relaxed);
         // The first writes ARE the boot sequence; logged on the drainer (never a vCPU).
         if n < 512 {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: w#{n} bar{bar} @{offset:#08x} = {value:#x} phase={:?}",
                 g.fsm.phase()
             );
@@ -3257,7 +3320,7 @@ impl HostOps for Device {
             )
             && inject_fwsec_fail_take()
         {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: INJECTED: FWSEC-FRTS STARTCPU dropped (KF3_INJECT_FWSEC_FAIL) — WPR2 stays down, the guest's boot attempt fails"
             );
             self.publish(g);
@@ -3275,7 +3338,9 @@ impl HostOps for Device {
                 n_cmds += r.commands.len();
                 self.log_report(&r);
             }
-            Err(e) => eprintln!("kf3: GSP write @{offset:#x}={value:#x} REFUSED: {e:?}"),
+            Err(e) => {
+                kf_util::klog_limited!("kf3: GSP write @{offset:#x}={value:#x} REFUSED: {e:?}")
+            }
         }
         while g.fsm.pending_command_doorbells() > 0 {
             self.counters.serviced.fetch_add(1, Ordering::Relaxed);
@@ -3288,7 +3353,7 @@ impl HostOps for Device {
                     self.log_report(&r);
                 }
                 Err(e) => {
-                    eprintln!("kf3: GSP command service REFUSED: {e:?}");
+                    kf_util::klog_limited!("kf3: GSP command service REFUSED: {e:?}");
                     break;
                 }
             }
@@ -3296,13 +3361,13 @@ impl HostOps for Device {
         let after = g.fsm.phase();
         if after != before {
             // ★ The P2 gate's observable: the boot phase, logged by the drainer (never a vCPU).
-            eprintln!("kf3: GSP phase {before:?} -> {after:?}");
+            kf_util::klog!("kf3: GSP phase {before:?} -> {after:?}");
         }
         // ★★★ v3-initrace: the FWSEC that just raised WPR2 was commanded where to put FRTS — read it
         // before anything is published (the guest reads WPR2_ADDR_LO only after HALTED, published
         // last). One guest-RAM read of ≤ 8 words at offsets of the ROM we generated.
         if let Some(read) = g.fsm.resolve_frts_command(&mut ram) {
-            eprintln!(
+            kf_util::klog!(
                 "kf3: GSP WPR2 up at the guest's FWSEC-FRTS command: frts_offset={} → served WPR2_ADDR_LO={:?}",
                 read.map_or("unreadable/not FRTS — derived".to_string(), |o| format!(
                     "{o:#x}"
@@ -3373,7 +3438,7 @@ impl HostOps for Device {
     }
     fn forge_completion(&self, host_token: u32) {
         // ⊘ §8: never reached for a Translated route (`Completion::for_route`); counted if it is.
-        eprintln!(
+        kf_util::klog_limited!(
             "kf3: FORGE requested for host token {host_token:#x} — refused (no Emulated channel exists)"
         );
     }
@@ -3381,7 +3446,7 @@ impl HostOps for Device {
         // §7: a kernel channel is NEVER faulted — its work is refused and the device counted
         // poisoned, visibly (a translation miss on the scrubber is not the guest's fault to take).
         if self.chans.poisoned.fetch_add(1, Ordering::Relaxed) < 8 {
-            eprintln!("kf3: kernel channel host {host_token:#x} REFUSED-AND-POISONED (§7)");
+            kf_util::klog!("kf3: kernel channel host {host_token:#x} REFUSED-AND-POISONED (§7)");
         }
         self.counters.refused.fetch_add(1, Ordering::Relaxed);
     }
@@ -3412,7 +3477,7 @@ fn inject_fwsec_fail_take() -> bool {
 /// line here is a divergence until proven harmless.
 fn log_fresh_refusals(fsm: &mut kf_gsp::GspFsm) {
     for r in fsm.take_fresh_refusals() {
-        eprintln!(
+        kf_util::klog!(
             "kf3: GSP REFUSED {} ({}) first_seq={} — the guest read a non-OK status",
             r.key(),
             kf_rm::rpc::name_of(r.function).unwrap_or("?"),

@@ -378,9 +378,11 @@ fn trace_line(
         _ => String::new(),
     };
     let result = reply.map_or_else(|| "none".to_owned(), |r| format!("{:#x}", r.rpc_result));
-    eprintln!(
+    kf_util::klog!(
         "kf-rm: rpc-trace fn={} {:?} seq={} {what} result={result}",
-        cmd.code, cmd.function, cmd.sequence
+        cmd.code,
+        cmd.function,
+        cmd.sequence
     );
 }
 
@@ -491,7 +493,7 @@ impl<P: CommandPolicy> CommandPolicy for ControlCensus<P> {
         if rpc_trace() {
             trace_line(&self.driver, cmd, req.as_ref(), reply.as_ref());
             if let Some(record) = self.take_promotion_record(cmd, req.as_ref()) {
-                eprintln!("{record}");
+                kf_util::klog!("{record}");
             }
         }
         if let Some(req) = req {

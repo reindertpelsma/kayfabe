@@ -143,7 +143,7 @@ fn refused_segment(gp: u32, va: u64, words: &[u32], why: Refusal) -> RingRefusal
         .take(REFUSED_SEGMENT_LOG_WORDS)
         .map(|w| format!("{w:08x}"))
         .collect();
-    eprintln!(
+    kf_util::klog_limited!(
         "kf3: ring REFUSED segment gp {gp} va {va:#x} ({} words) {why:?}; first words: {}",
         words.len(),
         head.join(" ")

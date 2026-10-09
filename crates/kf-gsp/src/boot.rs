@@ -469,7 +469,7 @@ fn settle_deferred(rpc: &mut OutgoingRpc, d: &Deferred, alloc: bool) -> bool {
         None => false,
         Some(0) if rpc.rpc_result != 0 => {
             let undone = d.run_orphan_undo();
-            eprintln!(
+            kf_util::klog_limited!(
                 "kayfabe: HELD-REPLY fn={:#x} seq={}: its deferred act SUCCEEDED but the reply is a refusal ({:#x}) — {}",
                 rpc.function,
                 rpc.sequence,
@@ -792,6 +792,11 @@ impl CommandPolicy for PolicyChain {
     }
 }
 
+/// Whether the `n`th (1-based) line of a per-RPC kind is printed: the first 16, then each power of two.
+fn bounded_line(n: u64) -> bool {
+    n <= 16 || n.is_power_of_two()
+}
+
 /// The faked GSP: one resettable value.
 ///
 /// Resettability is not a feature bolted on (lesson L12): [`GspFsm::device_reset`]
@@ -828,6 +833,10 @@ pub struct GspFsm {
     /// ⊘ A `Vec` and not a map: it is ordered, it is single-digit in every measured boot,
     /// and the order replies are posted in is the order the guest asked for them.
     held: Vec<HeldReply>,
+    /// Holds and releases logged so far: the first 16 lines, then each power of two (a CUDA run
+    /// holds one reply per map, and every line is a write on the drainer).
+    held_logged: u64,
+    posted_logged: u64,
     /// ★★★ v3-refusals: every non-`NV_OK` reply posted, keyed by what it answered
     /// ([`crate::refusal`]). Written at the two posting sites only; answers nothing.
     refusals: crate::refusal::RefusalLedger,
@@ -1023,6 +1032,8 @@ impl GspFsm {
         GspFsm {
             pending_command_doorbells: 0,
             held: Vec::new(),
+            held_logged: 0,
+            posted_logged: 0,
             refusals: crate::refusal::RefusalLedger::new(),
             bcr_ctrl: None,
             after_suspend: AfterSuspend::AwaitsTeardownUcode,
@@ -1700,7 +1711,7 @@ impl GspFsm {
         // page; `gpa_same=false seq_same=true` would mean a live queue moved, which nothing
         // in 580 does and which we would want to hear about immediately.
         let gpa_same = self.region_identity == Some(shared_mem_pa);
-        eprintln!(
+        kf_util::klog!(
             "kayfabe: GSP-PUBLISH gpa=0x{shared_mem_pa:x} gpa_same={gpa_same} seq_last={seq_evidence:?} \
              cmd_seq={} ⇒ same_instance={same_instance}{}",
             self.cmd_seq,
@@ -1969,9 +1980,10 @@ impl GspFsm {
                     Some(whole)
                 }
                 crate::large::Step::Refused(why) => {
-                    eprintln!(
+                    kf_util::klog_limited!(
                         "kf-gsp: LARGE-RPC REFUSED fn {} seq {}: {why}",
-                        cmd.code, cmd.sequence
+                        cmd.code,
+                        cmd.sequence
                     );
                     if matches!(why, crate::large::LargeRefusal::Interrupted { .. }) {
                         self.answer(ram, policy, &cmd, report)?;
@@ -2152,7 +2164,7 @@ impl GspFsm {
             self.refusals
                 .note(full.function, detail, full.rpc_result, full.sequence);
         }
-        eprintln!(
+        kf_util::klog_trace!(
             "kf-gsp: large RPC fn {} seq {} joined from {} fragment(s), {} bytes, answered in {} replies (rpc_result {:#x})",
             whole.code,
             whole.sequence,
@@ -2261,11 +2273,15 @@ impl GspFsm {
             // range completed in the SAME SECOND as the `FAULT_PDE ACCESS_TYPE_VIRT_WRITE`
             // that hit it. So "did the hold run" must be legible FROM the artefact, never
             // inferred from the absence of some other line.
-            eprintln!(
-                "kayfabe: HELD-REPLY fn={:?} depth={} — this map reply WAITS for its rows",
-                cmd.function,
-                self.held.len() + 1
-            );
+            self.held_logged += 1;
+            if bounded_line(self.held_logged) {
+                kf_util::klog!(
+                    "kayfabe: HELD-REPLY fn={:?} depth={} — this map reply WAITS for its rows (hold #{})",
+                    cmd.function,
+                    self.held.len() + 1,
+                    self.held_logged
+                );
+            }
             self.held.push(HeldReply {
                 rpc: out,
                 deferred,
@@ -2536,7 +2552,13 @@ impl GspFsm {
             // ★ The pair of the HELD-REPLY line. Two counters that must be read together:
             // a boot with holds and no releases is a PARKED GUEST, and a boot with neither
             // is a guest that never waited for its rows at all. Neither is visible from one.
-            eprintln!("kayfabe: HELD-REPLY-POSTED n={posted} — their rows are on the host now");
+            self.posted_logged += 1;
+            if bounded_line(self.posted_logged) {
+                kf_util::klog!(
+                    "kayfabe: HELD-REPLY-POSTED n={posted} — their rows are on the host now (release #{})",
+                    self.posted_logged
+                );
+            }
         }
         Ok(posted)
     }

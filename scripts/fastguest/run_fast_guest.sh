@@ -18,6 +18,9 @@
 # hangs and a client that hangs are the same verdict here, deliberately: both mean "we cannot
 # iterate", and distinguishing them is the serial log's job, not the harness's.
 set -uo pipefail
+# Bench lanes read the per-RPC / per-statement / per-act log lines; production is quiet by default
+# (docs/design/V3_NONSTALL_THREADS.md). KF3_LOG_VERBOSE=0 in the environment turns it off here too.
+export KF3_LOG_VERBOSE="${KF3_LOG_VERBOSE-1}"
 
 TAG=${1:-fast}
 BUDGET=${2:-20}

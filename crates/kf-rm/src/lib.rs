@@ -318,14 +318,18 @@ impl ReselectAtFn1 {
             return Reselection::Kept;
         };
         if let Some(t) = r.twin {
-            eprintln!(
+            kf_util::klog!(
                 "kf-rm: the guest is Windows {} ({}), the Windows build of Linux {} (one changelist, \
                  {}): keyed as {}",
-                r.said, t.win_branch, t.linux_tag, t.linux_cl, t.linux_tag
+                r.said,
+                t.win_branch,
+                t.linux_tag,
+                t.linux_cl,
+                t.linux_tag
             );
         }
         if let Some(why) = &r.twin_refusal {
-            eprintln!(
+            kf_util::klog!(
                 "kf-rm: the guest says it is {:?}, not a Windows twin: {why}",
                 r.said
             );
@@ -397,19 +401,19 @@ impl kf_gsp::CommandPolicy for ReselectAtFn1 {
         if cmd.function == kf_gsp::RpcFunction::SetGuestSystemInfo {
             match self.on_fn1(&cmd.payload) {
                 Reselection::Kept => {}
-                Reselection::Reselected { from, to } => eprintln!(
+                Reselection::Reselected { from, to } => kf_util::klog!(
                     "kf-rm: guest driver RE-SELECTED at fn 1: {from} (defaulted) -> {to} (the guest's \
                      own; pre-fn-1 surface identical)"
                 ),
-                Reselection::RefusedDeclared { reported } => eprintln!(
+                Reselection::RefusedDeclared { reported } => kf_util::klog!(
                     "kf-rm: the guest says it is driver {reported}, the device was DECLARED {}; \
                      not re-selecting a declared version",
                     self.current
                 ),
-                Reselection::RefusedUnserved { reported, why } => eprintln!(
+                Reselection::RefusedUnserved { reported, why } => kf_util::klog!(
                     "kf-rm: the guest says it is driver {reported}; no table to re-select: {why}"
                 ),
-                Reselection::RefusedSurface { reported, what } => eprintln!(
+                Reselection::RefusedSurface { reported, what } => kf_util::klog!(
                     "kf-rm: the guest says it is driver {reported}; cannot re-select from {}: \
                      {what} differs and the guest already consumed it",
                     self.current
@@ -488,7 +492,7 @@ pub fn served_chain(
             sw_runlist_probe::Probe::new(driver, authored::engine_caps(&host.engines));
         objects = Some(policy.with_sw_runlist_probe(probe));
         chain.push(Box::new(observer));
-        eprintln!(
+        kf_util::klog!(
             "kf-rm: EXPERIMENT software-runlist allocation metadata only; native backing and scheduling are NOT implemented"
         );
     }
@@ -505,7 +509,7 @@ pub fn served_chain(
         chain.push(Box::new(sw_runlist_host::SwRunlistHostOwnedPolicy::new(
             driver,
         )));
-        eprintln!(
+        kf_util::klog!(
             "kf-rm: {}=1: software-runlist submits answered NV_OK and ignored; kernel channels scheduled at birth — AWAITING OWNER CONFIRMATION",
             sw_runlist_host::FLAG
         );
@@ -514,7 +518,7 @@ pub fn served_chain(
         && let Some(policy) = objects.take()
     {
         objects = Some(policy.with_memory_list_probe());
-        eprintln!(
+        kf_util::klog!(
             "kf-rm: EXPERIMENT contiguous SYSRAM descriptors backed by checked guest RAM; no scheduling"
         );
     }
@@ -524,7 +528,7 @@ pub fn served_chain(
     // (an offered object with no host twin is run m3c: 186 host Xid 32).
     let x11_dispsw = channels.is_some() && display.as_ref().is_some_and(|s| s.x11_dispsw);
     if std::env::var("KF3_GFX_POOL_PROBE").as_deref() == Ok("1") {
-        eprintln!(
+        kf_util::klog!(
             "kf-rm: EXPERIMENT virtual GfxP pool sizing enabled; lifecycle is not implemented"
         );
         chain.push(Box::new(gfxpool_probe::GfxPoolProbe { driver }));

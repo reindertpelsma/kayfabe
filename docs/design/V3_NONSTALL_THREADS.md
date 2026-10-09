@@ -95,3 +95,59 @@ work the host fence reached, so the extra pass forges nothing. The free path sti
 2 s — each was a `lock()` before); its control `the_pump_state_is_locked_while_the_worker_holds_it` (a
 blocking `lock()` in the same situation does not return, i.e. the old code path waits);
 `a_stop_and_a_free_are_seen_under_contention` (the two silent `try_lock` defects).
+
+## 3.B Logging (item B) — built: production is quiet
+
+**Rule (owner, 2026-10-09).** In steady state every input-serving thread (drainer, act thread, workers,
+VA thread, display worker) logs NOTHING per RPC, per statement, per doorbell or per act. Allowed: a
+bounded number of boot-phase lines (realize, first-N counters), a rare line that is itself the event,
+rare error lines under "once"-style limits (a repeating error cannot flood), and anything behind an
+explicit default-off diagnostic flag, which then makes the status line print
+`PERTURBING_DIAGNOSTIC_ON(...)`. Non-blocking logging machinery (a logger thread, a queue, a ring, a
+drop policy) is deliberately NOT built: QEMU itself logs synchronously (`qemu_log` = `flockfile` +
+`fprintf`, a failed write ignored); quiet is the mechanism and the max-log-call counter is the witness.
+
+**Before.** ~340 `eprintln!` in the VMM crates, one per RPC on the drainer (`GSP rpc`, `HELD-REPLY`, the
+chanlink and inittables statement lines) and per statement/act on the act thread. `eprintln!` takes the
+process-wide stderr lock, `write(2)` can sleep under dirty throttling, and on `ENOSPC`/`EPIPE` it
+PANICS, killing the calling thread (for the drainer, silently: there is no `panic=abort` and no
+`catch_unwind` at the FFI thread entry).
+
+**After** (`kf-util/src/log.rs`).
+- `klog!` — one `write(2)` to stderr, a failed write ignored (never a panic), the call's duration
+  recorded in always-on atomics per thread class (`set_class`: drainer, act, worker, va, display).
+  Status line: `log[max_call_us= max_call_class= drainer_calls= drainer_max_us= drainer_over1ms=
+  act_max_us= act_over1ms= worker_max_us= failed_writes=]`.
+- `klog_limited!` — the first 4 calls of a call site, then each power of two: every repeating error
+  line on a serving thread.
+- `klog_trace!` — only with `KF3_LOG_VERBOSE=1`; every per-RPC / per-statement / per-act / per-object
+  line. The bench lane scripts export `KF3_LOG_VERBOSE=1` by default (`${KF3_LOG_VERBOSE-1}`) because
+  their gates and `rpc_diff.py` read these lines; production does not.
+- Witness: `crates/kf-qemu/tests/no_raw_prints.rs` fails on any `eprintln!/println!/eprint!/print!/dbg!`
+  in kf-qemu, kf-chan, kf-rm, kf-gsp, kf-mem, kf-host, kf-core, kf-trap, kf-linux-raw (allowlist:
+  `ioctltrace.rs`, the `KF_IOCTL_TRACE` diagnostic written from an abort path; `kf-cuda`'s two realize-time
+  lines and the binaries are out of scope). `kf_util::log` tests: a writer that fails with `ENOSPC` is
+  counted and ignored; a slow write is the recorded max for its thread class; `limited` and `trace`.
+
+**Audit of every call (338 sites).**
+
+| kind | count | decision |
+|---|---|---|
+| realize / boot-phase / once-per-device (`kf3: guest GPU UUID`, host-facts, display plane up, `w#n` for the first 512 privileged writes, GSP phase changes, `at stop`) | ~170 | kept (`klog!`): bounded by construction |
+| lines already behind a default-off flag (`KF3_MAPLOG`, `KF3_BAR0_TRACE`, `KF3_PROF`, `KF3_COMPLETION_PROBE`, `KF_VAS_CENSUS`, `rpc_trace`, `KF3_TSHADOW`, display `trace`) | ~45 | kept; the flag is listed in `PERTURBING_DIAGNOSTIC_ON` |
+| repeating error / refusal lines (act REFUSED, birth REFUSED, DEAD, hotplug/RC refused, W349REFUSE, HOST-ABI REFUSED, display REFUSED, UNSERVICED …) | ~70 | `klog_limited!` |
+| per-RPC / statement / act / object lines (`GSP rpc <fn> seq`, `act …: …` incl. the BORN line, `GPFIFO_SCHEDULE`, BIND, PROMOTE, chanlink, hoststub, GSS census, mem `walk`/`apply`/`mirror`, `bar1db view`, `GATE ticket`, DEFERRED-API, display `statement`/`heads`/fps) | ~55 | `klog_trace!` (default off) |
+| bounded already (HELD-REPLY / -POSTED: now first 16 + powers of two; NSI RELAY; fn-47; `SHOWN_LINES`; map_scattered first 32) | ~8 | kept |
+| lifecycle lines the gates read: `DOORBELL-LEDGER` (one per channel free) and `RETIRED` | 3 | **kept unconditionally — a judgement call**: rate = channel lifecycle, not traffic, and `run_fast_guest.sh` gates on the ledger. Gate them behind `klog_trace!` if the owner wants zero |
+
+**The periodic status line and the GSP heartbeat left the drainer.** A `kf3-status` thread
+(`Device::housekeeping_loop`, not an input-serving thread) now prints the status line (every 2 s, on
+change) and stores the GSP heartbeat mailboxes every 0.5 s — the latter was a host RM ioctl
+(`gpu_time_ns`) on the drainer, not in the audit (inventory G). The status line only reads atomics and
+`try_lock`s; a busy GSP lock shows the last phase seen instead of flickering "busy". ⚠ Consequence: a
+stalled drainer no longer freezes the heartbeat the guest reads (it used to, by accident).
+
+**Escalation (not built).** If a real run shows a log call over about 1 ms on an input-serving thread
+(`log[... drainer_over1ms= act_over1ms=]` or `max_call_us`), add a bounded logger thread: `klog!`
+formats and `try_send`s into a bounded queue, dropping the newest line and counting it; a thread
+does the writes. Until a run shows the need it is measured, not built.

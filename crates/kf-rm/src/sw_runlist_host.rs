@@ -100,10 +100,13 @@ impl CommandPolicy for SwRunlistHostOwnedPolicy {
             .copy_from_slice(&NV_OK.to_le_bytes());
         self.answered += 1;
         if self.answered <= LOG_CAP {
-            eprintln!(
+            kf_util::klog!(
                 "kf-rm: SW-RUNLIST HOST-OWNED {:#010x} client={:#x} object={:#x}: NV_OK, request echoed, \
                  contents ignored (kernel channels are scheduled at birth) — AWAITING OWNER CONFIRMATION #{}",
-                req.cmd, req.client, req.object, self.answered
+                req.cmd,
+                req.client,
+                req.object,
+                self.answered
             );
         }
         Some(Reply {

@@ -15,6 +15,7 @@ kf-chip.workspace = true
 kf-core.workspace = true
 kf-gsp.workspace = true
 kf-host.workspace = true
+kf-util.workspace = true
 kf-linux-raw.workspace = true
 kf-mem.workspace = true
 kf-cuda.workspace = true

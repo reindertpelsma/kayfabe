@@ -72,9 +72,10 @@ impl CommandPolicy for FecsTracePolicy {
         *body.get_mut(req.params_at + l.enable_off)? = 0;
         self.answered += 1;
         if self.answered <= LOG_CAP {
-            eprintln!(
+            kf_util::klog_limited!(
                 "kf-rm: FECS-TRACE GET_FECS_TRACE_HW_ENABLE {:#010x}: NV_OK bEnable=NV_FALSE (no guest ctxsw trace; the SETs stay unserviced) #{}",
-                req.cmd, self.answered
+                req.cmd,
+                self.answered
             );
         }
         Some(Reply {

@@ -171,9 +171,13 @@ impl Applied {
         self.priv_withheld_bytes = self.priv_withheld_bytes.saturating_add(r.len);
         static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 64 {
-            eprintln!(
+            kf_util::klog_limited!(
                 "kf-mem: PRIVILEGED leaf {:#x}+{:#x} (ap={} at={:#x} kind={:#x}) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it",
-                r.va, r.len, r.ap, r.at, r.kind
+                r.va,
+                r.len,
+                r.ap,
+                r.at,
+                r.kind
             );
         }
     }
@@ -569,9 +573,10 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                 Ok(Mapped::Placed) => out.mapped += 1,
                 Ok(Mapped::HeldByHost) => {
                     // Rare (a host-RM placement in the twin's VAS at the guest's VA): named per leaf.
-                    eprintln!(
+                    kf_util::klog_trace!(
                         "kf3: mem leaf {:#x}+{:#x} HELD BY HOST (host RM placed its own buffer there)",
-                        d.va, d.len
+                        d.va,
+                        d.len
                     );
                     out.held += 1;
                     out.codes[i] = KFWR_ACK_HELD;
@@ -579,9 +584,11 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                     static HELD_LOGGED: std::sync::atomic::AtomicU32 =
                         std::sync::atomic::AtomicU32::new(0);
                     if HELD_LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 64 {
-                        eprintln!(
+                        kf_util::klog_trace!(
                             "kf-mem: HELD-BY-HOST guest row {:#x}+{:#x} (ram={}) — host RM already maps that VA",
-                            d.va, d.len, d.ram
+                            d.va,
+                            d.len,
+                            d.ram
                         );
                     }
                 }
@@ -717,9 +724,12 @@ fn apply_sked(
             out.sked_placed += 1;
             static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
             if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 64 {
-                eprintln!(
+                kf_util::klog_trace!(
                     "kf-mem: SKED-REFLECTED leaf {:#x}+{:#x} (ap={} at={:#x}) placed as a message-kind host mapping — device-side launches through it reach the host scheduler",
-                    s.va, s.len, r.ap, r.at
+                    s.va,
+                    s.len,
+                    r.ap,
+                    r.at
                 );
             }
         }
@@ -727,9 +737,10 @@ fn apply_sked(
             out.held += 1;
             out.sked_held += 1;
             out.codes[i] = KFWR_ACK_HELD;
-            eprintln!(
+            kf_util::klog_trace!(
                 "kf-mem: SKED-reflected leaf {:#x}+{:#x} HELD BY HOST (host RM already maps that VA)",
-                s.va, s.len
+                s.va,
+                s.len
             );
         }
         Err(e) => out.refuse(i, e),
@@ -829,9 +840,11 @@ fn apply_usermode(
             out.codes[i] = KFWR_ACK_HELD;
             static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
             if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 16 {
-                eprintln!(
+                kf_util::klog_limited!(
                     "kf-mem: USERMODE-VIEW-NOT-MIRRORED {:#x}+{:#x} (page {:#x}) — a GPU-originated doorbell through this VA is refused by name (no host mapping; it faults on the twin)",
-                    u.va, u.len, u.vf_rel
+                    u.va,
+                    u.len,
+                    u.vf_rel
                 );
             }
         }

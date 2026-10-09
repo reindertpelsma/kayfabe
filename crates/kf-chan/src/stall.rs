@@ -23,7 +23,8 @@
 //! | `act_wait_max_us` | longest an act sat in the queue before its first step ran | "an RPC whose reply is a host act does not wait behind another act" |
 //! | `act_run_max_us` | longest single synchronous act step (the time the act thread cannot serve anything) | "no act step blocks the act thread for more than N µs" |
 //! | `lock_wait_max_us`, `drainer_lock_wait_max_us`, `act_lock_wait_max_us` | longest time any thread (resp. the drainer, the act thread) BLOCKED on a [`TimedMutex`] / [`TimedRwLock`], with the lock's name | "the drainer never waits on a lock another thread holds" |
-//! | `log_dropped` | log lines dropped because the logger's queue was full | "logging never blocked a serving thread" (a drop is the price of not blocking) |
+//! | `log[max_call_us=… max_call_class=…]` | the longest single `klog!` call (a synchronous, never-panicking stderr write) and the thread class that made it | "logging never stalls a serving thread" (a call over ~1 ms ⇒ add a bounded logger thread, §3.B) |
+//! | `PERTURBING_DIAGNOSTIC_ON(…)` | a default-off diagnostic mode is active (it may block or slow producers by design) | "this run's timings are not production timings" |
 //!
 //! Each gauge also counts the samples that reached [`STALL_NS`] (`over10ms`): a count, so a single
 //! early outlier in a long boot does not hide a later change.
@@ -288,10 +289,8 @@ pub struct Stall {
     pub act_lock_wait: MaxGauge,
     /// Per lock.
     pub locks: [MaxGauge; LockId::ALL.len()],
-    /// Log lines dropped because the logger's queue was full.
-    pub log_dropped: AtomicU64,
-    /// Log lines handed to the logger.
-    pub log_queued: AtomicU64,
+    /// Default-off diagnostic modes that may perturb timing (bitmask of [`Diag`]).
+    diag: AtomicU64,
 }
 
 impl Default for Stall {
@@ -316,8 +315,7 @@ impl Stall {
             drainer_lock_wait: MaxGauge::new(),
             act_lock_wait: MaxGauge::new(),
             locks: std::array::from_fn(|_| MaxGauge::new()),
-            log_dropped: AtomicU64::new(0),
-            log_queued: AtomicU64::new(0),
+            diag: AtomicU64::new(0),
         }
     }
 
@@ -358,7 +356,7 @@ impl Stall {
         let mut s = String::new();
         let _ = write!(
             s,
-            " stall[drain_pass_max_us={} drain_pass_over10ms={} apply_max_us={} apply_over10ms={} held_age_max_us={} held_oldest_us={} act_wait_max_us={} act_run_max_us={} act_run_over10ms={} act_total_max_us={} lock_wait_max_us={} lock_wait_worst={}:{} drainer_lock_wait_max_us={} act_lock_wait_max_us={} doorbell_batch_full={} log_queued={} log_dropped={}]",
+            " stall[drain_pass_max_us={} drain_pass_over10ms={} apply_max_us={} apply_over10ms={} held_age_max_us={} held_oldest_us={} act_wait_max_us={} act_run_max_us={} act_run_over10ms={} act_total_max_us={} lock_wait_max_us={} lock_wait_worst={}:{} drainer_lock_wait_max_us={} act_lock_wait_max_us={} doorbell_batch_full={}]{}{}",
             self.drainer_pass.max_us(),
             self.drainer_pass.over(),
             self.apply_register.max_us(),
@@ -375,8 +373,8 @@ impl Stall {
             self.drainer_lock_wait.max_us(),
             self.act_lock_wait.max_us(),
             self.doorbell_batch_full.load(o),
-            self.log_queued.load(o),
-            self.log_dropped.load(o),
+            kf_util_log_fragment(),
+            self.diag_fragment(),
         );
         s
     }
@@ -496,6 +494,75 @@ impl<T: ?Sized> TimedRwLock<T> {
                 );
                 r
             }
+        }
+    }
+}
+
+/// The default-off diagnostic modes that perturb timing: the status line says so while any is on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Diag {
+    /// `KF3_MAPLOG`: per-event lines, some from a vCPU.
+    Maplog,
+    /// `KF3_BAR0_TRACE`: the BAR0 trace window after a schedule.
+    Bar0Trace,
+    /// `KF3_PROF`: the attribution instruments.
+    Prof,
+    /// `KF3_COMPLETION_PROBE`: the overdue-fence probe thread.
+    CompletionProbe,
+    /// `KF3_DBFAST_SPIN_US`: the drainer spins after a doorbell.
+    DbfastSpin,
+    /// `KF_IOCTL_TRACE`: the ioctl ring / verbose trace.
+    IoctlTrace,
+    /// `KF3_LOG_VERBOSE`: the per-RPC / per-statement / per-act log lines print.
+    LogVerbose,
+}
+
+impl Diag {
+    const ALL: [Diag; 7] = [
+        Diag::Maplog,
+        Diag::Bar0Trace,
+        Diag::Prof,
+        Diag::CompletionProbe,
+        Diag::DbfastSpin,
+        Diag::IoctlTrace,
+        Diag::LogVerbose,
+    ];
+    const fn name(self) -> &'static str {
+        match self {
+            Diag::Maplog => "KF3_MAPLOG",
+            Diag::Bar0Trace => "KF3_BAR0_TRACE",
+            Diag::Prof => "KF3_PROF",
+            Diag::CompletionProbe => "KF3_COMPLETION_PROBE",
+            Diag::DbfastSpin => "KF3_DBFAST_SPIN_US",
+            Diag::IoctlTrace => "KF_IOCTL_TRACE",
+            Diag::LogVerbose => "KF3_LOG_VERBOSE",
+        }
+    }
+}
+
+fn kf_util_log_fragment() -> String {
+    kf_util::log::fragment()
+}
+
+impl Stall {
+    /// A perturbing diagnostic mode is on for this run.
+    pub fn diag_on(&self, d: Diag) {
+        self.diag.fetch_or(1 << (d as u32), Ordering::Relaxed);
+    }
+
+    /// ` PERTURBING_DIAGNOSTIC_ON(…)` while any mode is on, else empty.
+    #[must_use]
+    pub fn diag_fragment(&self) -> String {
+        let bits = self.diag.load(Ordering::Relaxed);
+        let on: Vec<&str> = Diag::ALL
+            .iter()
+            .filter(|d| bits & (1 << (**d as u32)) != 0)
+            .map(|d| d.name())
+            .collect();
+        if on.is_empty() {
+            String::new()
+        } else {
+            format!(" PERTURBING_DIAGNOSTIC_ON({})", on.join(","))
         }
     }
 }
@@ -643,7 +710,7 @@ mod tests {
             "drainer_lock_wait_max_us=0",
             "act_lock_wait_max_us=0",
             "doorbell_batch_full=0",
-            "log_dropped=0",
+            "log[max_call_us=",
         ] {
             assert!(quiet.contains(name), "{name} missing from {quiet}");
         }
@@ -653,7 +720,8 @@ mod tests {
         st.act_queue_wait.record_ns(4_000_000);
         st.act_run.record_ns(15_000_000);
         st.note_lock_wait(LockId::Gsp, 6_000_000);
-        st.log_dropped.fetch_add(7, Ordering::Relaxed);
+        st.diag_on(Diag::Maplog);
+        st.diag_on(Diag::Prof);
         let mut book = HeldBook::new();
         book.sync(1, now, &MaxGauge::new());
         let loud = st.fragment(now + Duration::from_millis(9), Some(&book));
@@ -667,10 +735,11 @@ mod tests {
             "act_run_over10ms=1",
             "lock_wait_max_us=6000",
             "lock_wait_worst=gsp:6000",
-            "log_dropped=7",
+            "PERTURBING_DIAGNOSTIC_ON(KF3_MAPLOG,KF3_PROF)",
         ] {
             assert!(loud.contains(name), "{name} missing from {loud}");
         }
+        assert!(!quiet.contains("PERTURBING"), "{quiet}");
     }
 
     #[test]

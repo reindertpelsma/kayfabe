@@ -7,6 +7,7 @@ license.workspace = true
 
 [dependencies]
 kf-host.workspace = true
+kf-util.workspace = true
 kf-trap.workspace = true
 kf-cuda.workspace = true
 kf-chip.workspace = true

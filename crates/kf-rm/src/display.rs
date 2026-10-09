@@ -167,7 +167,7 @@ fn finish(s: Settle) {
     match s {
         Settle::Log(st) => {
             for s in st {
-                eprintln!("kf-rm: display: {s:?}");
+                kf_util::klog_trace!("kf-rm: display: {s:?}");
             }
         }
         Settle::Wake(w) => w.wake(),
@@ -300,7 +300,7 @@ impl DisplayPolicy {
         // no display plane here (the GPU-free configuration): the property needs one, so unset
         let model = model_for(&driver, row, 0).map(|m| Arc::new(Mutex::new(m)));
         if model.is_none() {
-            eprintln!(
+            kf_util::klog!(
                 "kf-rm: display: no derived display layouts for guest driver {} — answering the M0 set only \
                  (tools/derive_display_layouts.sh derives them)",
                 driver.driver_version()
@@ -330,7 +330,7 @@ impl DisplayPolicy {
     ) -> DisplayPolicy {
         let Some(layouts) = kf_disp::layout::for_version(&driver.driver_version().to_string())
         else {
-            eprintln!(
+            kf_util::klog!(
                 "kf-rm: display: no derived display layouts for guest driver {} — answering the M0 set only; the display \
                  plane sees nothing",
                 driver.driver_version()
@@ -340,7 +340,7 @@ impl DisplayPolicy {
         {
             let mut g = lock(shared);
             if g.layouts().version != layouts.version {
-                eprintln!(
+                kf_util::klog!(
                     "kf-rm: display: the plane's model re-targeted {} -> {}",
                     g.layouts().version,
                     layouts.version
@@ -392,7 +392,7 @@ impl DisplayPolicy {
         if on && let Some(m) = &self.model {
             lock(m).offer_display_sw(true);
             self.dispsw_pairing = Some(DispSwPairing::default());
-            eprintln!(
+            kf_util::klog!(
                 "kf-rm: display: EXPERIMENT x11-dispsw — GF100_DISP_SW is OFFERED (its constructor's query \
                  is answered; every alloc is twinned on the host or refused by name)"
             );
@@ -560,7 +560,7 @@ impl DisplayPolicy {
             // entry (`ogkm-580: src/nvidia/interface/rmapi/src/g_finn_rm_api.c:803-850`,
             // `FinnRmApiGetUnserializedSize`), so a serialized one is a layout the model has not
             // measured — refused by name rather than decoded blind.
-            eprintln!(
+            kf_util::klog_limited!(
                 "kf-rm: display: control {:#010x} arrived FINN-serialized — refused",
                 req.cmd
             );
@@ -639,9 +639,11 @@ impl DisplayRegistry {
         // ⊘ Serialized or short params: the object seat refuses the alloc (`rmrpc`'s
         // `SerializedParams` / the declared window), so there is nothing to record either.
         let Some(params) = crate::rmrpc::alloc_params_window(&self.driver, body) else {
-            eprintln!(
+            kf_util::klog_limited!(
                 "kf-rm: display: alloc {:#x}:{:#x} class {:#06x}: params not readable — not recorded",
-                h.client, h.handle, h.class
+                h.client,
+                h.handle,
+                h.class
             );
             return;
         };
@@ -649,9 +651,10 @@ impl DisplayRegistry {
         if self.objects.len() < MAX_DISPLAY_OBJECTS || self.objects.contains_key(&key) {
             self.objects.insert(key, h.parent);
         } else {
-            eprintln!(
+            kf_util::klog_limited!(
                 "kf-rm: display: {MAX_DISPLAY_OBJECTS} display objects remembered — {:#x}:{:#x}'s parent edge is not",
-                h.client, h.handle
+                h.client,
+                h.handle
             );
         }
         let (channel, recorded, st) = {
@@ -661,7 +664,7 @@ impl DisplayRegistry {
             (channel, recorded, settle(&mut g))
         };
         if channel && !recorded {
-            eprintln!(
+            kf_util::klog_limited!(
                 "kf-rm: display: channel alloc {:#x}:{:#x} class {:#06x} NOT recorded ({} params bytes: not the derived \
                  allocation struct, or an instance this display does not have)",
                 h.client,
@@ -706,7 +709,7 @@ impl DisplayRegistry {
             event,
             parent,
         });
-        eprintln!(
+        kf_util::klog_trace!(
             "kf-rm: display: hotplug event {client:#x}:{event:#x} (parent {parent:#x}) {}",
             if kept {
                 "registered"
@@ -756,7 +759,7 @@ impl DisplayRegistry {
             return;
         }
         if !lock(&self.model).bind_display_event(client, src, event) {
-            eprintln!(
+            kf_util::klog_limited!(
                 "kf-rm: display: event {client:#x}:{event:#x} on display object {src:#x} NOT bound \
                  (too many bindings); its EVENT_SET_NOTIFICATION will be refused"
             );
@@ -808,7 +811,7 @@ impl DisplayRegistry {
             // (NVKMS frees the event on teardown, `nvkms-rm.c:1917-1924`); a post to a dead pair
             // would wedge the RPC path
             if g.retire_hotplug(client, object) > 0 {
-                eprintln!(
+                kf_util::klog_trace!(
                     "kf-rm: display: hotplug registration retired by the FREE of {client:#x}:{object:#x}"
                 );
             }
@@ -860,12 +863,13 @@ impl DisplayPolicy {
                     .is_ok_and(|r| r.cmd == GET_ACTIVE_DISPLAY_DEVICES) =>
             {
                 if p.query() {
-                    eprintln!(
+                    kf_util::klog_limited!(
                         "kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc \
                          (unpaired={} of {} queries) — that constructor failed after its channel numbered it, so the \
                          channel's later display-SW objects are numbered one past their twins' (no channel is named: \
                          the query carries none)",
-                        p.unpaired, p.queries
+                        p.unpaired,
+                        p.queries
                     );
                 }
             }
@@ -896,12 +900,12 @@ impl CommandPolicy for DisplayPolicy {
                         (g.retire_all_hotplug(), g.retire_all_display_events())
                     };
                     if e > 0 {
-                        eprintln!(
+                        kf_util::klog!(
                             "kf-rm: display: GSP re-init — {e} display event binding(s) retired"
                         );
                     }
                     if n > 0 {
-                        eprintln!(
+                        kf_util::klog!(
                             "kf-rm: display: GSP re-init — {n} hotplug registration(s) retired"
                         );
                     }

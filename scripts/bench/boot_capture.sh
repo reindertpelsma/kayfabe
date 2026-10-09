@@ -58,6 +58,9 @@
 #   prevent, reproduced by the script itself on its first run. Hence: the device is opened
 #   BEFORE `dmesg` is read, and the check below is on `RmInitAdapter`, not on `NVRM`.
 set -uo pipefail
+# Bench lanes read the per-RPC / per-statement / per-act log lines; production is quiet by default
+# (docs/design/V3_NONSTALL_THREADS.md). KF3_LOG_VERBOSE=0 in the environment turns it off here too.
+export KF3_LOG_VERBOSE="${KF3_LOG_VERBOSE-1}"
 
 BENCH=${BENCH_DIR:-/workspace/bench}
 TAG=${1:?usage: boot_capture.sh <tag> [-- extra qemu args...]}

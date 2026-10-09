@@ -171,15 +171,15 @@ impl CommandPolicy for GuestSystemInfoPolicy {
                 // ★ 2026-10-04 (v3-windows, runbook C3): what the guest says it is, every field, for
                 // the log only — a Windows guest's strings and changelist are unmeasured.
                 match guestsysinfo::GuestIdentity::decode(&cmd.payload) {
-                    Ok(id) => eprintln!(
+                    Ok(id) => kf_util::klog!(
                         "kf-rm: fn 1 SET_GUEST_SYSTEM_INFO: the guest says {id}; this device answers \
                          as driver {}",
                         self.driver.driver_version()
                     ),
-                    Err(e) => eprintln!("kf-rm: fn 1 SET_GUEST_SYSTEM_INFO: undecodable: {e}"),
+                    Err(e) => kf_util::klog!("kf-rm: fn 1 SET_GUEST_SYSTEM_INFO: undecodable: {e}"),
                 }
                 if let Err(why) = self.check_driver_version(&cmd.payload) {
-                    eprintln!("kf-rm: SET_GUEST_SYSTEM_INFO refused: {why}");
+                    kf_util::klog!("kf-rm: SET_GUEST_SYSTEM_INFO refused: {why}");
                     return refuse();
                 }
                 match self.agreed_version(&cmd.payload) {
@@ -188,7 +188,7 @@ impl CommandPolicy for GuestSystemInfoPolicy {
                         body: encode_set_guest_system_info_reply(ours),
                     }),
                     Err(e) => {
-                        eprintln!(
+                        kf_util::klog!(
                             "kf-rm: SET_GUEST_SYSTEM_INFO refused: the vGPU handshake does not \
                              agree for driver {} ({e})",
                             self.driver.driver_version()

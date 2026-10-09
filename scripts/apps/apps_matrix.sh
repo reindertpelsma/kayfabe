@@ -10,6 +10,9 @@
 #      NVKVM_RAM_MB (16384), KF_SMP (6), KF3_FB_MB, APPS_GUEST_PM (0/1)
 # results: /workspace/apps/results/<run>/{host.res,guest.res,guest_isolated.res,<app>.*.log}
 set -uo pipefail
+# Bench lanes read the per-RPC / per-statement / per-act log lines; production is quiet by default
+# (docs/design/V3_NONSTALL_THREADS.md). KF3_LOG_VERBOSE=0 in the environment turns it off here too.
+export KF3_LOG_VERBOSE="${KF3_LOG_VERBOSE-1}"
 HERE="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$HERE/../.." && pwd)"
 SIDE=${1:?host|guest}; RUN=${2:?run}; shift 2
 R=/workspace/apps/results/$RUN; mkdir -p "$R"
