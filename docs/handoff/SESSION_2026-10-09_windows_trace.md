@@ -48,7 +48,7 @@ else they would contradict.
 
 `claude/windows-reset-20261009` (latest record; contains the read-trace and relay merges), `claude/windows-pde-20261009`,
 `claude/passthrough-nsi-nogate-20261008` (tip `4b8399d1`: reviewed twice, verified on the 4070, **merge bar on a real GPU box
-not completed**: the box was destroyed at the owner's request mid-run; a fresh box is needed, about 30 min to provision),
+INCOMPLETE**: `merge_check.sh` passed (tests 2448/0, v3 gates 9/9, bare-metal 30/30, fast guest 30/30), CUDA ladder 4/4 host and 4/4 guest, host app matrix 71/71, GitHub CI green; the guest app matrix was cut off at boot 46 when the box was destroyed at the owner's request; the numbers are verdict lines read during the run, no raw logs came back; evidence `claude/merge-bar-nsi-20261009` `02fa4f81`; a fresh box is needed for the guest apps, about 30 min to provision),
 `claude/kf3-read-trace-20261008`, `claude/vfio-dvi-reference-20261008`, `claude/display-reply-diff-20261008`,
 `claude/windows-flip-vsync-20261008`, `claude/rawclient-ce-interrupt-20261008`, `claude/passthrough-interrupt-20261008`
 (superseded by the nogate branch).
