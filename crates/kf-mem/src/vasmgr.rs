@@ -2550,6 +2550,8 @@ mod tests {
     #[test]
     fn a_refused_map_is_retried_by_the_next_invalidate_and_nothing_else_is() {
         let mut r = rig();
+        // The 2026-09-25 withheld clear, via the opt-out (the default completes: OWNER_RULINGS §AA).
+        r.m.set_clear_over_absent(false);
         let h = host(&r, None, Vec::new());
         *h.refuse_map_at.borrow_mut() = Some(0x1000_0000);
         r.m.table.insert(K_A, h);
@@ -2587,6 +2589,8 @@ mod tests {
     #[test]
     fn a_leaf_outside_the_store_is_refused_and_the_trigger_stays_armed() {
         let mut r = rig();
+        // The 2026-09-25 withheld clear, via the opt-out (the default completes: OWNER_RULINGS §AA).
+        r.m.set_clear_over_absent(false);
         r.tables
             .borrow_mut()
             .insert(PDB_A, vec![(0x1000_0000, STORE - 0x1000, 0x2000, 0)]);
@@ -2787,6 +2791,8 @@ mod tests {
     #[test]
     fn a_leaf_over_a_vmm_placement_is_refused_before_the_host_is_asked() {
         let mut r = rig();
+        // The 2026-09-25 withheld clear, via the opt-out (the default completes: OWNER_RULINGS §AA).
+        r.m.set_clear_over_absent(false);
         let h = host(&r, None, vec![(0xFF_0000_0000, 0x100_0000_0000)]);
         r.m.table.insert(K_A, h);
         r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
@@ -2840,6 +2846,8 @@ mod tests {
     #[test]
     fn coverage_is_whole_guest_pages_never_rounded_past_them() {
         let mut r = rig();
+        // The 2026-09-25 withheld clear, via the opt-out (the default completes: OWNER_RULINGS §AA).
+        r.m.set_clear_over_absent(false);
         r.tables
             .borrow_mut()
             .insert(PDB_A, vec![(0x1000_1000, 0x0300_0000, 0x10, 0)]);
@@ -2847,6 +2855,7 @@ mod tests {
         assert_eq!(out.unreconciled.len(), 1);
         assert!(r.ops.borrow().is_empty());
         let mut r = rig();
+        r.m.set_clear_over_absent(false);
         r.tables
             .borrow_mut()
             .insert(PDB_A, vec![(0x1000_1000, 0x0200_1000, 0x1000, 0)]);
@@ -2984,6 +2993,8 @@ mod tests {
     #[test]
     fn a_walk_refusal_fails_the_space_by_name_and_applies_the_rest() {
         let mut r = rig();
+        // The 2026-09-25 withheld clear, via the opt-out (the default completes: OWNER_RULINGS §AA).
+        r.m.set_clear_over_absent(false);
         r.tables
             .borrow_mut()
             .insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
@@ -3034,6 +3045,62 @@ mod tests {
         assert_eq!(r.m.stats.cleared_over_absent, 1);
         assert_eq!(r.m.stats.walk_refused_spaces, 1, "the refusal is still counted by name");
         assert!(r.m.stats.refusals.iter().any(|x| x.contains("REFUSED leaves")));
+    }
+
+    /// ★ Owner ruling 2026-10-09: a host-REFUSED map is absence too — the invalidate completes, the
+    /// refusal is named, and commit-on-ack still re-emits ONLY the refused map on the next diff.
+    #[test]
+    fn a_refused_map_completes_the_invalidate_and_is_retried_by_the_next_one() {
+        let mut r = rig();
+        let h = host(&r, None, Vec::new());
+        *h.refuse_map_at.borrow_mut() = Some(0x1000_0000);
+        r.m.table.insert(K_A, h);
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.tables.borrow_mut().insert(
+            PDB_A,
+            vec![
+                (0x1000_0000, 0x0200_0000, 0x1000, 0),
+                (0x2000_0000, 0x0300_0000, 0x1000, 0),
+            ],
+        );
+        let out = settle(&mut r, PDB_A);
+        assert!(out.unreconciled.is_empty());
+        assert_eq!(out.completed.len(), 1, "completed, last, after the maps that could land");
+        assert!(!busy(&r.port));
+        assert_eq!(r.m.stats.cleared_over_absent, 1);
+        assert!(r.m.stats.refusals[0].contains("refused (fake)"), "still named");
+        // The next invalidate re-emits only what failed.
+        if let Some(t) = r.m.table.target(K_A) {
+            *t.refuse_map_at.borrow_mut() = None;
+        }
+        r.ops.borrow_mut().clear();
+        let _ = settle(&mut r, PDB_A);
+        assert_eq!(
+            ops(&r),
+            vec![Op::Map(0x1000_0000, 0x0200_0000, 0x1000), Op::Invalidate],
+            "only the refused map, again"
+        );
+    }
+
+    /// ★ A refused UNMAP is NOT absence (the host may still hold a placement the guest dropped): the
+    /// clear is still withheld even with the default on.
+    #[test]
+    fn a_refused_unmap_still_holds_the_clear_by_default() {
+        let mut r = rig();
+        assert!(r.m.clear_absent);
+        let h = host(&r, None, Vec::new());
+        r.m.table.insert(K_A, h);
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
+        let _ = settle(&mut r, PDB_A);
+        r.tables.borrow_mut().insert(PDB_A, vec![]);
+        if let Some(t) = r.m.table.target(K_A) {
+            *t.refuse_unmap_at.borrow_mut() = Some(0x1000_0000);
+        }
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.unreconciled.len(), 1);
+        assert!(busy(&r.port), "a refused unmap holds the clear");
+        assert_eq!(r.m.stats.cleared_over_absent, 0);
     }
 
     /// The opt-out (`KF3_INVALIDATE_CLEAR_OVER_ABSENT=0`) restores the 2026-09-25 withheld clear.
