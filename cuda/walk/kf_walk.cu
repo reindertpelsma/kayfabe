@@ -250,6 +250,9 @@ __device__ __forceinline__ void kf_sample(KfDev *d, uint32_t entry, uint32_t bit
     if (i >= KF_REFUSAL_SAMPLES) return;
     KfRefusalSample s;
     s.va = va; s.raw = raw; s.gpga = gpga; s.ps_bytes = ps_bytes;
+#ifdef KF_BREAK_SAMPLE_RAW
+    s.raw = raw ^ 0x2ull;   /* known-positive: a sample that does not carry the entry as read */
+#endif
     s.bit = bit; s.level = (uint16_t)level; s.entry = (uint16_t)entry;
     d->sample[i] = s;
 }

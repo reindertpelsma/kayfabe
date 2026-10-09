@@ -2807,9 +2807,10 @@ int main(int argc, char **argv)
     printf("sizeof: header=%zu pdb=%zu run=%zu\n",
            sizeof(KfReportHeader), sizeof(KfPdbEntry), sizeof(KfMapRun));
 #ifdef KF_PROBE_NO_SAMPLES
-    /* the PRE-ABI-6 kernel: the format doc's 64/32/32 */
-    if (sizeof(KfReportHeader) != 64 || sizeof(KfPdbEntry) != 32 || sizeof(KfMapRun) != 32) {
-        printf("FATAL: report ABI is not the format doc's 64/32/32\n");
+    /* PROBE build: runs against the PRE-ABI-6 kernel (header 64) AND the ABI-6 one (header 392),
+     * so the same probe source can be diffed across the two. */
+    if (sizeof(KfReportHeader) < 64 || sizeof(KfPdbEntry) != 32 || sizeof(KfMapRun) != 32) {
+        printf("FATAL: report ABI is not the format doc's 64+/32/32\n");
         return 2;
     }
 #else

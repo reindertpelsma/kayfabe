@@ -163,6 +163,21 @@ check-seam-negative: kf_tests_baddesc kf_tests_badgeom kf_tests_badabi kf_tests
 	 if [ $$rc -ne 0 ]; then echo "SEAM FAIL: the CONTROL does not pass on the real descriptor"; exit 1; fi; \
 	 echo "seam ok: the control passes on the real descriptor"
 
+# ═══ THE REFUSAL SAMPLES' KNOWN-POSITIVE (ABI 6) ════════════════════════════════
+# -DKF_BREAK_SAMPLE_RAW records the sample's raw entry with a bit flipped and changes NOTHING
+# else. The sample cases (exact raw entries; gpga == the decode of raw) must then fail.
+kf_tests_badsample: kf_tests.cu kf_walk.cu kf_walk.h kf_tables.h
+	$(NVCC) $(ARCH) $(CFLAGS) -DKF_BREAK_SAMPLE_RAW -o $@ kf_tests.cu kf_walk.cu -lpthread
+
+check-sample-negative: kf_tests_badsample kf_tests
+	@./kf_tests_badsample hostile/refusal_samples > /tmp/kf_neg_s1.txt 2>&1; rc=$$?; \
+	 if [ $$rc -eq 0 ]; then echo "SAMPLE FAIL: the sample cases PASSED with a corrupted raw entry"; exit 1; fi; \
+	 echo "sample ok: a corrupted raw entry fails the sample cases (rc=$$rc), on:"; \
+	 grep -m1 '^    !' /tmp/kf_neg_s1.txt
+	@./kf_tests hostile/refusal_samples > /dev/null 2>&1; rc=$$?; \
+	 if [ $$rc -ne 0 ]; then echo "SAMPLE FAIL: the CONTROL sample cases do not pass on the unbroken binary"; exit 1; fi; \
+	 echo "sample ok: the control sample cases pass on the unbroken binary"
+
 # ⚠ The ONLY thing ever asserted about VER3: that the SKETCHED descriptor is well
 # formed. Not that it decodes anything — no VER3 table has ever existed here.
 check-ver3-sketch: kf_tests_ver3
@@ -196,11 +211,11 @@ kf_walk.ptx: kf_walk.cu kf_walk.h
 .PHONY: ptx
 ptx: kf_walk.ptx
 
-check: check-invariants kf_tests check-ptx check-negative check-coalesce-negative check-seam-negative check-ver3-sketch
+check: check-invariants kf_tests check-ptx check-negative check-coalesce-negative check-seam-negative check-sample-negative check-ver3-sketch
 
 clean:
 	rm -f kf_tests kf_tests_broken \
 	      kf_tests_nocoalesce kf_tests_nojoin \
-	      kf_tests_baddesc kf_tests_badgeom kf_tests_badabi kf_tests_ver3
+	      kf_tests_baddesc kf_tests_badgeom kf_tests_badabi kf_tests_ver3 kf_tests_badsample
 
-.PHONY: all ptx check check-invariants check-ptx check-negative check-coalesce-negative check-seam-negative clean
+.PHONY: all ptx check check-invariants check-ptx check-negative check-coalesce-negative check-seam-negative check-sample-negative clean
