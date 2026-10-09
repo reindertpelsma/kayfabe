@@ -155,7 +155,7 @@ impl Plan {
     /// Sort the served table's vectors into classes. A vector that is the STALL vector of any row
     /// is a stall vector, whatever its non-stall column says: the served table repeats the stall
     /// vector as the non-stall one for engines 59-64, 73 and 1, and a stall interrupt with no
-    /// cause behind it is a level the guest's ISR cannot clear (measured, run 108: `LEAF(4)` read
+    /// cause behind it is a level the guest's ISR cannot clear (measured 2026-10-09, RTX 4070, run 108: `LEAF(4)` read
     /// `0x30` on 9067 reads per second after one raise of vectors 132 and 133). So `nonstall` holds
     /// only vectors no row uses as a stall vector; those belong to `errors`.
     #[must_use]

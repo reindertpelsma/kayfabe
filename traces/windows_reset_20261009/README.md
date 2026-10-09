@@ -393,7 +393,7 @@ R1 (`all-completion:1000`) and R2 (`all-completion:100`) were NOT run: the six-b
 (below), R3, and two bisect boots (`gsp`, `nonstall`); `disp` (+`dispstat`) was not bisected and `dispstat` was never used. The order deviates from the
 brief (R3 before R1/R2) because the falsifier is stated on R3.
 
-The flawed boot (run 108), `[measured]`: the first `nonstall` class held every row's non-stall vector. The served table repeats the stall vector in the
+The flawed boot (run 108, 2026-10-09, RTX 4070), `[measured]`: the first `nonstall` class held every row's non-stall vector. The served table repeats the stall vector in the
 non-stall column for engines 59-64, 73 and 1 (vectors 64, 72, 129, 131, 132, 133, 134, 148), so one raise of 132/133 left `LEAF(4)` = `0x30`
 pending for good: **9067 reads of `0xb81010` per second** (55k reads of the interrupt tree per second, 215 MSI/s), the driver stopped after its 494th RPC.
 A stall interrupt with no cause behind it is a level the guest ISR cannot clear. Fixed in `b728b480` (a vector any row uses as a stall vector is in
@@ -410,7 +410,7 @@ Narrowing: `gsp:10` alone did not help (teardown at +16.5 s, no lock screen), `n
 QGA answered a command: yes. No bugcheck for 60 s: yes at the lock screen (nothing for 280 s), **but both arms bugchecked 0x116 minutes later, once the harness's
 D3D12 signal probe ran** (run 109 about 10:55:08, run 111 about 11:07:11, MSI/BAR0 silent afterwards). So the flood postpones the death; it does not cure it.
 
-`[measured]`
+`[measured]` (2026-10-09, RTX 4070, runs 106-111)
 - All numbers in the table; per-run files `irqflood/run1NN/{analysis.txt,per-second.txt,qemu-flood-lines.txt,qemu-teardown-lines.txt,bugcheck.json,wr-run1NN.log}`;
   frames `frame-first-lock.png` (clock "10:49" / "11:02") and `frame-last.png` per run.
 - Flood status lines: run 109 `PERTURBING DIAGNOSTIC ON: irq-flood nonstall,gsp,disp:10 ticks=51107 raised[v0=50250 v1=50250 v2=50250 v3=50250 v4=50250 v5=50250
