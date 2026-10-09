@@ -1813,6 +1813,25 @@ impl DisplayPlane {
             );
         }
         let ports = model.ports.clone();
+        // ★ 2026-10-09 EXPERIMENT (`KF3_DISPLAY_HEAD_TIMING_EN_BASE=<hex>`, default off, DIAGNOSTIC): the
+        // value `NV_PDISP_FE_RM_INTR_EN_HEAD_TIMING(h)` (0x611D80) reads back before the guest writes it.
+        // `[measured, VFIO DVI reference boot3, RTX 4070, 2026-10-08/09, traces/windows_reset_20261009
+        // README §13.1 point 3]` real hardware reads `0x3f0060` (firmware's enabled RG_LINE_A/B and
+        // semaphore events; ogkm names only LAST_DATA 1:1 and RG_LINE_A/B 5/6 in the STATUS register)
+        // and the guest read-modify-writes it (`0x3f0062`/`0x3f0060`); kf3 reads back 0 and the guest
+        // writes `0x2`/`0x0`. Per-die firmware state: NOT derived, so never a default without an owner
+        // ruling (derive, never capture).
+        if let Some(base) = std::env::var("KF3_DISPLAY_HEAD_TIMING_EN_BASE")
+            .ok()
+            .and_then(|v| u32::from_str_radix(v.trim_start_matches("0x"), 16).ok())
+        {
+            for h in 0..MAX_HEADS {
+                ports.head_timing_en[h].store(base, Ordering::Release);
+            }
+            eprintln!(
+                "kf3: display: EXPERIMENT KF3_DISPLAY_HEAD_TIMING_EN_BASE={base:#x} — 0x611d80 reads back this base (hardware: 0x3f0060)"
+            );
+        }
         let wake = Arc::new(Notifier::create().map_err(|e| format!("display eventfd: {e:?}"))?);
         let model: SharedDisplayModel = Arc::new(Mutex::new(model));
         {
