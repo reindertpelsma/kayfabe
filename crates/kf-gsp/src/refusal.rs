@@ -92,7 +92,7 @@ impl RefusalLedger {
         // ⊘ A row is "fresh" (one log line on the register drainer) exactly once: when it is STORED.
         // A row the table has no room for is never found again, so every repeat of it would be
         // "first seen" and cost a `write(2)` on the drainer — a guest-reachable unbounded emit
-        // (drainer verification 2026-10-09, F-L1). Past the cap the counts (`distinct`, `total`) keep
+        // (drainer verification 2026-10-09, §9 L1b). Past the cap the counts (`distinct`, `total`) keep
         // moving and the log stays quiet; `fresh` is therefore bounded by the cap as well.
         if self.rows.len() < REFUSAL_ROWS_MAX {
             self.rows.push(row);
@@ -204,7 +204,7 @@ mod tests {
         assert_eq!(l.take_fresh().len(), REFUSAL_ROWS_MAX);
     }
 
-    /// ★ FINDING F-L1 of `docs/design/V3_NONSTALL_THREADS.md` §9 (the drainer verification,
+    /// ★ FINDING L1b of `docs/design/V3_NONSTALL_THREADS.md` §9 (the drainer verification,
     /// 2026-10-09): `fresh` is what `log_fresh_refusals` prints, ONE `klog!` (a `write(2)`) per
     /// row, on the register drainer. Past the cap a row is not stored, so it can never be found
     /// again — and so EVERY repeat of it was "first seen" and was queued for a log line. A guest

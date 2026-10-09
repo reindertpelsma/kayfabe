@@ -2811,7 +2811,9 @@ impl Device {
     }
 
     /// The FSM now holds `len` guest replies: age the ones released since the last call
-    /// ([`Stall::held_reply_age`]). Drainer only, so the ledger lock is never contended.
+    /// ([`Stall::held_reply_age`]). ⚠ NOT "drainer only": `status_line` (the `kf3-status` thread) also
+    /// takes `held_book` for the length of one `Stall::fragment` call (microseconds, no I/O), so this
+    /// blocking `lock()` can wait that long (drainer verification 2026-10-09, §9 item K2).
     fn note_held(&self, len: usize) {
         if let Ok(mut b) = self.held_book.lock()
             && b.len() != len

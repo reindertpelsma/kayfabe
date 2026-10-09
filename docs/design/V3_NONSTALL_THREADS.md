@@ -5,6 +5,14 @@
 Built: E (measurement), A (slot lock), B (quiet logging), D (a bounded per-call doorbell snapshot), C (the act
 thread as a strict-FIFO event loop). NOT built, owner's call: per-key act lanes (§5), a bounded logger thread (§3.B, only if measured needed).
 
+**§9 (2026-10-09, branch `claude/drainer-verify-20261009`) verifies the register drainer from the code, not from
+this document, and CORRECTS it here, above the text it corrects:** (1) §2 row I names `seal_shadow` as the GSP
+lock's only other holder; `status_line` also takes it, with `try_lock`, for two short `format!`s. (2) §3.B's "production is
+quiet" holds for an honest guest only: lines that a guest can repeat at ring rate are still plain `klog!` (§9 L2),
+and a refusal-ledger overflow wrote one line per repeat (§9 L1b, fixed). (3) The `held_book` ledger is not "drainer
+only" (§9 K2). (4) The object model is not bounded work: one `GSP_RM_FREE` can keep the drainer inside
+`RmGraph::free_subtree` for hundreds of ms to seconds (§9 G1, OPEN). Open findings are listed in §9.4.
+
 ## 0. The rule (owner, 2026-10-09, binding)
 
 The register drainer, and every thread that serves new input, may NEVER stall. A **stall** is any state
@@ -380,3 +388,153 @@ DISPLAY_HOOK=max_fps_x11_hook DISPLAY_KF3_EXTRA=x11-dispsw=on bash scripts/bench
   `doorbell_batch_full` rising with `drain_pass_max_us` ⇒ the guest rings more than 64 tokens at once.
 - A Windows boot: the same counters, with `KF3_LOG_VERBOSE=1` only if the RPC trace is wanted
   (`win_vm.sh` exports it by default).
+
+## 9. Verification of the drainer (2026-10-09) — who can stall `kf3-drainer` for a second
+
+**STATUS: LIVE, 2026-10-09. GPU-free: read from the code of this branch (`e864ab26`; the tests and one
+fix are the two commits above this one) and tested where a test can be built. Nothing ran on hardware.** Tags: **[T]** measured by a test,
+**[R]** read from the code (file:line), **[I]** inferred. The question was asked after an earlier read-only audit
+(of `origin/claude/windows-reset-20261009`); none of its claims is taken on trust below.
+
+### 9.1 How the call graph was enumerated, and how I know I did not miss a path
+
+Entry: `Device::drainer_loop` (device.rs:2252): `DbFast::service_ready` → `Plane::drainer_pass(256)` →
+`HostOps::apply_register` ×≤256 (device.rs:3268) → `release_settled` → `deliver_rc` → `deliver_hotplug` → park
+(`try_park`, `Poller::wait(50 ms)`, `on_ready`). Method:
+
+1. **Crate boundary.** `kf-gsp`, `kf-rm`, `kf-abi`, `kf-arch`, `kf-chip`, `kf-disp`, `kf-trace`, `kf-core`, `kf-trap`
+   depend on neither `libc`, `kf-host`, `kf-linux-raw` nor `kf-cuda` (`Cargo.toml`), so a call in them reaches the
+   OS only through `std`. A scan of their non-test source (comments and `#[cfg(test)]` removed) for `Mutex`, `RwLock`,
+   `Condvar`, `lock(`, `recv`, `wait(`, `join(`, `sleep`, `park`, `std::fs/net/process/thread/io`, `mpsc`, `libc::`
+   found: 7 mutexes (K-table), `/dev/urandom` (`gpuuid.rs:311`, realize only), `std::env::var` reads
+   (`inittables.rs:1907`, `barpde.rs:482`, `sw_runlist_host.rs:41`: the env read lock, no writer at run time) and
+   `OnceLock` first-use tables (`kf-abi/versions.rs:573`, `kf-disp`, `kf-chip/hwref.rs`: a one-time compute). **[R]**
+2. **`dyn` boundary, shipped configuration** (`device.rs:871-938`): `CommandPolicy` = `ReselectAtFn1` →
+   `ControlCensus` → `StickyAnswerGuard` → `PolicyChain[HostStub, FecsTrace, (SwRunlistHostOwned, GfxPoolProbe,
+   sw-runlist probe: env, off), (Display if display=on), Channel, PageDir, Sysmembar, BarPde, Zbc, VfGuest,
+   Observing(FaultBuffer), Observing(OsEvent), InitTable, StaticInfo, GuestSystemInfo, Inert, Object(GraphObjects),
+   Unserviced]` (`kf-rm/lib.rs:458-604`). The injected callbacks: `ChanSink` = `ChanPlane::statement`
+   (device.rs:919), `MemSink` = `Inbox::push` (device.rs:911), `GuestRam` = `Ram(Device)`, `GuestRamAuthority` =
+   `MemoryListRam` (probe, env, off), `Sink` = `Device::deliver` (device.rs:3210), `HostOps` = `Device`,
+   `Ioeventfd` = `IoeventfdHook` (called by the act thread and the main loop only: dbfast.rs:515,587,681,771,792),
+   `OrphanUndo` = `attach_dispsw_withdraw` (x11-dispsw, off), `GspModel`/`BootSequence` = pure `kf-chip` rows.
+   `kf-rm` never receives a `HostControls` on this path: `rmfacts::host_facts` runs once at realize (device.rs:357).
+3. **Function by function** for `kf-qemu` and `kf-chan`: for every drainer-reachable function I read its body and every
+   lock / syscall / channel / eventfd / loop in it, then swept `kf-qemu` (including `.lock()` chains split across
+   lines) and checked the holder of each lock (K-table). Guard-scope scan: no lock guard bound in `chan.rs` /
+   `device.rs` is live across a `.rm.` call (the only candidates were false positives of a heuristic; the
+   `rows.write().map(|mut r| …)` in `engine_object` consumes its guard before `rm.unmap`). **[R]**
+
+### 9.2 The table
+
+| # | item | where | stall ≥ 1 s? | evidence | test |
+|---|---|---|---|---|---|
+| D1 | `drainer_pass` loop | kf-core plane.rs:553, device.rs:2309 | no, bounded by 256 writes | budget, not queue length or producer rate **[T]** | `kf-core` `a_drainer_pass_applies_at_most_its_budget…` |
+| D2 | doorbell servicing | dbfast.rs:925-1038 | no: `side` is the drainer's alone; `epoll_wait(0)` ≤ registered+1 polls of ≤64; eventfd read/write are `EFD_NONBLOCK` (host_fd_unsafe.rs:485); `deliver` = atomics + one `HostRm::doorbell` store (kf-host lib.rs:862) or a non-blocking eventfd write. The registry lock `reg` and `tx` are held across `KVM_IOEVENTFD` by the main loop / act thread and are **never** taken by a drainer function **[T]**. `sync()`'s `while try_recv` (dbfast.rs:851) ends when the act thread's queue is empty: bounded by the act rate, not by code **[I]** | `the_drainer_serves_doorbells_while_another_thread_sits_in_kvm_ioeventfd` (1.3 s in KVM, all calls < 50 ms, control: a registry reader waits), `dbfast_drainer_lock_takers` ×2 |
+| D3 | hand-off to the act thread | actloop.rs:131 | no: unbounded `mpsc::send` + non-blocking eventfd write | **[T]** | `submit_returns_at_once_while_the_act_thread_is_stuck_in_a_blocking_step` |
+| D4 | `apply_register` | device.rs:3268 | no wait of its own; **one doorbell may carry up to 4096 RPCs** (`avail ≤ msgCount`, region ≤ `max_entries` 4096 pages, element ≥ 4 KiB: boot.rs:1056,1910, ring.rs:256-262) | each RPC's cost is G/L below **[R]** | — |
+| D5 | GSP FSM | kf-gsp boot.rs | no | loops bounded: `RegionMap::load` ≤ 4096 (ram.rs:126), `large` ≤ 64 continuations, `publish` ≤ `max_entries`; refusal ledger ≤ 128 rows **[R]** | — |
+| D6 | guest RAM `Ram(self)` | device.rs:3174 → mem.rs:136 | no software wait; a memcpy ≤ one element from QEMU's shared memfd mapping can page-fault on the host (swap, userfaultfd) **[I]** | `RamMap::blocks` read lock: K1 | — |
+| D7 | policy chain syscalls | kf-rm | none (9.1 §1-2) **[R]** | — | — |
+| D8 | `ChanPlane::statement` | chan.rs:2084 | no host call outside an act closure (26 functions scanned; 0 hits; control sees them in the act helpers) **[T]**; locks: K-table | — | `kf-qemu` `drainer_no_host_calls` ×3 |
+| D9 | held replies | boot.rs:2526, device.rs:2824 | no: `outcome()` is an atomic; the orphan undo is the only caller-defined code under the lock and ships only for x11-dispsw (a queue send) **[R]** | — | — |
+| D10 | `publish`, `shadow_store`, `deliver_*`, `latch_and_deliver` | device.rs:2179,1253,2924,3016,1709 | no: ≤ ~50 volatile stores, atomics, one eventfd write | **[R]** | — |
+| D11 | park | wake.rs:73, device.rs:2341-2350 | not a stall by the rule (epoll that accepts doorbells and `drainer_efd`); `try_park` is a lock-free CAS loop | **[R]** | — |
+| D12 | `HostRm::doorbell` on a vCPU (claim a) | device.rs:1456-1591, kf-host lib.rs:862 | no | see 9.3(a) | — |
+| D13 | `bar0trace_dump` | chan.rs:4894 (device.rs `log_report`) | **yes, if `KF3_BAR0_TRACE=1`**: arms a CPU view (`openat` + `NV_ESC_RM_MAP_MEMORY` + `mmap`) and releases it (an RM ioctl) on the drainer, once per run. Default off; the status line then prints `PERTURBING_DIAGNOSTIC_ON` | **[T]** the scan names it as the one exception and that its only caller is behind `take_dump()` | `…the_one_drainer_side_host_call_is_the_default_off_bar0_trace_dump` |
+| L1 | a log call lasts as long as its sink blocks | kf-util log.rs:178 (`Stderr` lock + `write(2)`) | **yes, if the sink blocks and the drainer logs** | **[T]** control | `control_a_log_call_lasts_exactly_as_long_as_its_sink_blocks` |
+| L2 | guest-repeatable `klog!` on the drainer | `guestsysinfo.rs:174-191` (every fn 1, with 3×256 guest bytes), `lib.rs:321,332,404-416` (every fn 1), `kf-gsp/sysinfo.rs:94` (every fn 72), `staticinfo.rs:268-307` (every fn 65), `boot.rs:1714` (every boot-args publish), `device.rs:3364,3370` (every phase change / WPR2) | **yes, against a blocked sink**; the rate is the guest's | fn 1 ×100 → 100 drainer log calls **[T]**; the others **[R]** | `drainer_log_flood` ×2 (`#[ignore]`d findings) |
+| L1b | refusal ledger overflow | kf-gsp refusal.rs:92 | was: one line per repeat past 128 rows | 1000 repeats → 1000 lines **[T]**; **FIXED** in this branch | `past_the_cap_a_repeated_refusal_is_not_fresh_again` |
+| G1 | `RmGraph::free_subtree` fixpoint | rmgraph.rs:1885-1925 | **yes**: depth × table size; descending handles: 3000 deep = 333 ms, 10 000 deep = 4 s (release); the cap is 2^18 handles. Reachable from `GSP_RM_ALLOC` bytes (class, `hParent`, `hObject` are passed verbatim: rmrpc/mod.rs:1516-1525) | **[T]** | `one_rm_free_of_a_deep_chain_must_return_within_50_ms` (FAILS, `#[ignore]`d) |
+| G2 | `resolve_pending_dups` + `pending_dups.retain` | rmgraph.rs:2004, 1950 | no: 11 ms per alloc at 262 000 parked dups, 1000× an honest alloc | **[T]** | `parked_dups_tax_every_alloc…` (passes) |
+| G3 | `cache_targets` on every Device alloc | rmgraph.rs:1486, 1776 | no, but over 50 ms: 62 ms with 260 000 unrouted objects | **[T]** | `a_device_alloc_must_return_within_50_ms…` (FAILS, `#[ignore]`d) |
+| G4 | per-free scans of guest-grown tables | chanlink.rs:1738-1744 (`vas_aliases.values().any`, unbounded insert at :1711), barpde.rs:333-359, rmgraph.rs:1950 | unknown | **[R]**, not measured | — |
+
+**K-table: every lock the drainer can take, and every other taker** (a lock whose other holders hold it ≥ 1 ms across a
+syscall / I/O / wait / unbounded loop is a finding; none of these is, except the stderr lock):
+
+| lock | drainer sites | other takers → what they do while holding | worst case |
+|---|---|---|---|
+| `Device::gsp` (device.rs:245) | 3283, 2828, 2929, 3037 | `seal_shadow` 1225 (realize, before the guest runs); `status_line` 2430 `try_lock` (kf3-status and `kf3_status`): `format!("{:?}")` + `refusals().summary()` (≤128 rows) | µs **[R,T: scan]** |
+| `held_book` (device.rs:294) | `note_held` 2816 ×3 per apply | `status_line` 2702 holds it across `Stall::fragment` (K2): ~25 formatted numbers | tens of µs; strict-rule violation by the letter **[R]** |
+| `RamMap::blocks` (mem.rs:82) | every guest-RAM access (`block_for`) | `add`/`del` (QEMU main loop, topology change): a `Vec` insert/sort/retain; `MemoryListRam` (probe, off) holds a read guard over ≤ 4096 B | µs **[R]**; blocks if held: **[T]** K1 |
+| `Inbox::q` (mem.rs:1867) | `push` (every page-dir statement) | VA thread `take()` = `mem::take` | µs **[R]**; K1 |
+| `ChanPlane` `pt`, `pt_objs`, `by_obj`, `scopes`, `sw_objs`, `dbg`, `cuda_limit`, `enc_sessions`, `caps`, `mirrors`, `slots` (RwLock), `rc_queue` | the 26 functions of D8, `take_rc` every pass | act-thread closures: map insert/remove/clone of ≤ 64 channels (`VmCaps::from_declared(64,…)`, chan.rs:1774); worker `rc_scan` (chan.rs:4807) holds `pt` for ≤ 64 twins × 4 volatile loads (a VRAM view is an MMIO read: slow only if the GPU is wedged **[I]**); VA thread `mirrors` insert/remove, `pt_doorbells` `try_lock`; status `counts()`/`dispsw_status` | µs–sub-ms **[R]**; never across an `rm.` call (scan **[T]**) |
+| slot pump lock (`SlotCell`) | none (atomics only) | workers, act thread (`try_lock` + 1 ms timer) | n/a **[R]**, existing `slotcell` tests |
+| `Plane::kernel_tokens` (kf-core plane.rs:161) | `free_channel` 3841 (under `caps`) | worker `owner_of`, act `allocate_channel` | µs **[R]** |
+| `DisplayModel` (kf-rm display.rs:116) | `DisplayPolicy`, `deliver_hotplug` 3022 | display worker: `take_statements`, `set_monitor` (EDID build) display.rs:2068,2649 | µs **[R]** |
+| `defapi::Registry`, `UnservicedLog`, `ControlCensusLog`, `FaultBufferLog`, `OsEventLog`, `SharedRefusalCensus`, `SystemInfoCell`, `Deferred.undo` | the chain links | worker `lookup`/`executed` (registry); status thread `sample()` (unserviced); nobody else | µs **[R]** |
+| `DbFast::side` | `service_ready`, `deliver_tags` | none **[T]** | — |
+| process stderr lock + `write(2)` | `klog!` | every thread that logs (act, workers, VA, display, status) | the sink's stall (L1) |
+| libc allocator, env read lock, first-use `OnceLock` | everywhere | everyone | unavoidable **[I]** |
+
+### 9.3 Answers to the five claims
+
+- **(a) True with a precision.** The vCPU Passthrough doorbell (device.rs:1456-1591): `bar0trace.note` (one atomic
+  load when off), the timer-ignore decode, two relaxed counters, a range check, on Hopper+ the FSP-EMEM decode
+  (`fspemem.rs:143`, atomics), `Plane::trap_write` (one token-word load → `Action::RingHostInline`,
+  kf-trap trap.rs:127-134), then `HostRm::doorbell` (kf-host lib.rs:862: `release_fence` = compiler fence + `sfence`,
+  one `store_u32`) and `note_inline` (1–2 relaxed `fetch_add`, chan.rs:1942). No lock, syscall, allocation or wait.
+  With `KF3_MAPLOG` on, `note_inline` also `klog!`s from the vCPU (default-off diagnostic). **[R]** The same function runs
+  on the drainer for fast-path doorbells (`Sink::deliver`).
+- **(b) False.** The act thread is also fed by the **worker pump**: `deferred_ctx_act` (chan.rs:3462, called from
+  `VaSplit::sw_start`, chan.rs:675) on a guest NV50_DEFERRED_API trigger in a pushbuffer, and by the drainer's
+  `release_held` through the orphan undo (`attach_dispsw_withdraw`, chan.rs:1572; x11-dispsw only). Both are guest-caused,
+  neither is a GSP statement. **[R]**
+- **(c) True for production, with one named exception** (D13, `KF3_BAR0_TRACE`). The drainer's only host action is the
+  doorbell store. **[T]** (scan) + **[R]**
+- **(d) Yes, an RM ioctl.** `StoreViews::view_for` (chan.rs:394) on a miss calls `HostRm::arm_cpu_view` (kf-host
+  lib.rs:1490) = `openat("/dev/nvidia<N>")` + **`NV_ESC_RM_MAP_MEMORY` (0x4E)** on the control fd
+  (`arm_cpu_view_on`, :1552-1556) + `mmap`; when it already holds 8 views it first issues **`NV_ESC_RM_UNMAP_MEMORY`
+  (0x4F)** (`release_cpu_view`, :1577). In nvidia.ko the map goes `Nv04MapMemoryWithSecInfo` → `rmapiMapToCpuWithSecInfoV2`
+  → `serverMap` → `serverTopLock_Prologue` → `rmapiLockAcquire` on `g_RmApiLock` (a `portSyncRwLock`; write mode
+  unless the module is allowed shared mode) — read in ogkm **595.84** (`rs_server.c:2005`, `alloc_free.c:222-252`,
+  `rmapi.c:551-640`); the bench driver 580.159.04 was not re-read **[R, I for 580]**. So it can wait behind an act's
+  RM verb (e.g. `PREEMPT(bWait=1)`), on a **worker**, under that channel's pump lock. The drainer takes neither (slot
+  atomics, §3.A), and `Mem` is built only in `serve` (chan.rs:5297). The drainer's `bar0trace_dump` (D13) calls
+  `userd_view` → the same `arm_cpu_view`.
+- **(e) True, with `status_line`.** The GSP mutex is taken by the drainer (4 functions), `seal_shadow` (realize) and,
+  with `try_lock`, `status_line`; no other file can name the field **[T]** (`the_gsp_mutex_is_taken_by…`).
+
+### 9.4 The answer, and what is open
+
+**Who can keep `kf3-drainer` busy or blocked for a second or more?**
+1. **The guest, by sending the drainer an RPC whose object-model update is quadratic** (G1; G3 and the G4 sites are
+   the same family, smaller). OPEN. Not tiny to fix (a parent→children index in `RmGraph`), so not fixed here.
+2. **A blocked stderr sink, through any log line the guest can repeat** (L1 + L2). The quiet-production rule holds for an
+   honest guest only. OPEN for L2 (`klog!` → `klog_limited!` is one token per site but changes what the Windows lane
+   greps, e.g. the phase-change line prints a different phase each call, so I did not). L1b is fixed.
+3. **The host kernel**, under a guest-RAM page fault or an allocator / env lock **[I]**; and the store behind `sfence`
+   to a wedged GPU, which a vCPU suffers equally **[I]**.
+4. **Diagnostics**, only if switched on: `KF3_BAR0_TRACE` (RM ioctl on the drainer), `KF3_PROF`, `KF3_MAPLOG`,
+   `KF3_MEMORY_LIST_PROBE`.
+
+**Nobody else**, from the code: not the act thread (every wait is a continuation; `submit` cannot block), not a worker
+(the pump lock is not taken; its `NV_ESC_RM_MAP_MEMORY` stalls the worker, not the drainer), not host RM's API lock (the
+drainer takes no RM ioctl), not KVM (`KVM_IOEVENTFD` runs under `reg`, which the drainer never takes), not `kf3-status`
+(µs on `gsp` and `held_book`), not the VA thread or the display worker (µs on `Inbox::q`, `mirrors`, `DisplayModel`).
+
+### 9.5 What I could NOT verify, and why
+
+- **Whole-chain CPU cost.** Blocking primitives, syscalls and locks are enumerated exhaustively; the CPU cost of ~30 000
+  lines of links and decoders (`chanlink` 2969, `inittables` 3283, `display` 1645, `barpde` 804, `rmgraph` 2415 …) is
+  not. I found the quadratic sites by grepping per-event scans (`retain`, `values().any`, fixpoints), measured three, and
+  list three more (G4). There may be others. The chain as a whole was not driven with hostile bytes.
+- **`Device`-level behaviour** (`gsp`, `held_book`, `ChanPlane` locks, `apply_register`) needs `HostRm`, i.e. a GPU;
+  the evidence there is the scans and the code.
+- **Hardware stalls** (page faults, PCIe) and anything on a box: no stall[] counter was read.
+- **The 580.159.04 nvidia.ko** was not read; the RM-API-lock claim is from 595.84 and the repo's own measurement
+  (`THE_CONSTRAINTS.md:57`).
+- A timing bound is a property of one build on one box (release, this CPU).
+
+### 9.6 Tests added by this verification
+
+Run: `cargo test -p kf-util -p kf-chan -p kf-core -p kf-gsp -p kf-qemu -p kf-rm` (1068 passed, 0 failed, 6 ignored).
+Findings, which fail: `cargo test -p kf-rm --test drainer_log_flood -- --ignored --test-threads=1`;
+`cargo test --release -p kf-rm --test drainer_object_model_cost -- --ignored --nocapture --test-threads=1`;
+`cargo test -p kf-qemu --lib the_drainer_side_of_ram -- --ignored`.
+Passing: `kf-chan` `the_drainer_serves_doorbells_while_another_thread_sits_in_kvm_ioeventfd`,
+`submit_returns_at_once_while_the_act_thread_is_stuck_in_a_blocking_step`, `dbfast_drainer_lock_takers` (2);
+`kf-core` `a_drainer_pass_applies_at_most_its_budget…`; `kf-util` `control_a_log_call_lasts_exactly_as_long_as_its_sink_blocks`;
+`kf-gsp` `past_the_cap_a_repeated_refusal_is_not_fresh_again` (fails before the fix commit, passes after);
+`kf-qemu` `drainer_no_host_calls` (3), `drainer_lock_takers` (2).

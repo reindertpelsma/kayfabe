@@ -215,7 +215,8 @@ impl LockId {
 
 /// The reply-hold ledger: when each currently held guest reply was first held, oldest first.
 /// ⊘ Held replies are released strictly in order (`kf_gsp::GspFsm::release_held` stops at the
-/// first still-pending one), so a length is enough to age them. Drainer only.
+/// first still-pending one), so a length is enough to age them. Written by the drainer only; the
+/// status thread reads it (under the device's lock) while it formats [`Stall::fragment`].
 #[derive(Debug, Default)]
 pub struct HeldBook {
     q: VecDeque<Instant>,
