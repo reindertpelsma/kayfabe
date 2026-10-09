@@ -108,7 +108,9 @@ No `kf-*` crate depends on a `kayfabe-*` crate.
   constants. Never keep a captured per-die table. *All GPU families are first-class; GA10x is not
   primary.*
 - **No blocking work on a vCPU, and none under a lock that a vCPU takes**
-  (`THE_CONSTRAINTS.md`).
+  (`THE_CONSTRAINTS.md`). The wider rule is §35: **no thread that serves input may stall** (drainer,
+  act thread, workers, VA and display threads); waiting is allowed only inside an `epoll` that also
+  accepts new requests.
 - **Never copied into v3:** CPU reads of guest page tables, CPU-executed engine work, address
   tables and joins, isolates and the IPC plane, publication epochs and dirty gates, per-page BAR
   traps, and snapshots of the guest's tables (`V3_BUILD.md`, *Rules*).

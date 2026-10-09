@@ -40,6 +40,14 @@ is frozen (see *Layout*).
 - **Derive, never capture.** Per-die facts come from the host (unprivileged controls). Register
   offsets and class sets are generated from ogkm. Only family rows are maintained by hand. A
   captured per-die table is the defect that v3 exists to end. **All families are first-class.**
+- **No thread that serves input may stall** (`THE_CONSTRAINTS.md` §35, owner 2026-09-17, restated
+  2026-10-09). That is the register drainer, the act thread (`kf3-chan-act`), every worker, the VA
+  thread and the display thread, not only the vCPUs. A stall is any state where the thread cannot
+  serve other input: a sleep, a timed or acknowledgement wait, a contended blocking lock, a blocking
+  write, an unbounded loop. A wait inside an `epoll`/`select` that also accepts new requests is not a
+  stall. Only a call that returns almost instantly is exempt (logging, `mmap`), and never from the
+  lock rule. 200 ms is not "almost instantly". An exemption is a finding, not a configuration. Measure
+  it (max pass time, max held-reply age; `docs/design/V3_NONSTALL_THREADS.md`), do not assume it.
 - **Only BAR0 writes trap; nothing blocks on a vCPU or under a lock that a vCPU takes.** Mapping
   runs on the VA-manager side, never in a trap.
 - **No CPU executor for GPU work** and no forged completion for work that reached the GPU. Only
