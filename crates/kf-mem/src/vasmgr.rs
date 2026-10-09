@@ -46,6 +46,12 @@ use crate::apply::{Applied, ApplyCfg, DiffRun, apply_entry};
 use crate::ledger::{MapTarget, Settle};
 use kf_cuda::WalkEntry;
 use kf_trap::{ClearOutcome, InvalidateRequest, PdbAperture, Trigger};
+
+/// `KF3_INVALIDATE_CLEAR_OVER_ABSENT`: clear an invalidate whose spaces failed only by absence (read once).
+fn clear_over_absent() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("KF3_INVALIDATE_CLEAR_OVER_ABSENT").is_ok_and(|v| v != "0"))
+}
 use std::collections::{BTreeMap, BTreeSet};
 
 /// The most objects one walk may carry — the walk kernel's entries (`KF_MAX_PDB`).
@@ -677,6 +683,9 @@ pub struct VaStats {
     /// ★ Invalidates naming a PDB no object carries (counted; the trigger is cleared — we hold
     /// nothing for it).
     pub named_missed: u64,
+    /// ★ `KF3_INVALIDATE_CLEAR_OVER_ABSENT`: invalidates cleared although a space they named had
+    /// leaves refused by ABSENCE only (counted, named; default off).
+    pub cleared_over_absent: u64,
     /// ★ Invalidates NOT cleared because a space they named could not be reconciled.
     pub unreconciled: u64,
     /// The first 16 refusals, verbatim.
@@ -821,6 +830,8 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     inflight: Option<Batch>,
     /// ★ P6: finished splits, `(ticket, outcome)`, until [`VaManager::take_splits`].
     splits_done: Vec<(u64, Result<(), String>)>,
+    /// `KF3_INVALIDATE_CLEAR_OVER_ABSENT` (read at construction; tests set it).
+    clear_absent: bool,
     /// ★ Ruling 2026-09-26 (5): invalidates whose runs all applied but whose target's work is not
     /// live yet ([`Settle::Pending`]) — cleared by [`VaManager::on_targets`], never waited for.
     awaiting: Vec<(InvalidateRequest, Vec<VasKey>, std::time::Instant)>,
@@ -856,6 +867,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             pending: Vec::new(),
             inflight: None,
             splits_done: Vec::new(),
+            clear_absent: clear_over_absent(),
             awaiting: Vec::new(),
             page_grain: SMALL_PAGE,
             usermode: None,
@@ -912,6 +924,11 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     }
 
     /// The walker, mutably (harnesses: e.g. writing the tables the next walk reads).
+    /// `KF3_INVALIDATE_CLEAR_OVER_ABSENT`, settable (tests, the device).
+    pub fn set_clear_over_absent(&mut self, on: bool) {
+        self.clear_absent = on;
+    }
+
     pub fn walker_mut(&mut self) -> &mut W {
         &mut self.walker
     }
@@ -1568,7 +1585,19 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 }
                 continue;
             };
-            if bad.is_some() {
+            // ★ EXPERIMENT `KF3_INVALIDATE_CLEAR_OVER_ABSENT` (default off, pending an owner ruling on
+            // 2026-09-25's "not cleared over leaves nobody mapped"): the clear is NOT withheld when
+            // every failed space failed only by ABSENCE (a refused map or a walk-refused leaf, never
+            // an unmap or an invalidate refusal) and none is re-walking. A GPU access to an absent
+            // leaf faults on that space's twin (as the split already does, v3-mapfix); the withheld
+            // clear instead left the guest polling the trigger forever with its locks held
+            // (`[measured run 223]`: one uncleared MMU_INVALIDATE, TDR 0x117).
+            let absent_ok = bad.is_some()
+                && self.clear_absent
+                && keys
+                    .iter()
+                    .all(|k| !failed.contains(k) || (absent_only.contains(k) && !rewalk.contains(k)));
+            if bad.is_some() && !absent_ok {
                 self.stats.unreconciled += 1;
                 out.unreconciled.push(r.seq);
             } else if again {
@@ -1578,6 +1607,15 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 // ★ Ruling 2026-09-26 (5): a target whose accepted work is still in flight (the
                 // BAR1 doorbell overlay) defers THIS clear only — the guest keeps polling, which is
                 // legal; [`VaManager::on_targets`] clears it when the work is live.
+                if absent_ok {
+                    self.stats.cleared_over_absent += 1;
+                    if self.stats.cleared_over_absent <= 64 {
+                        eprintln!(
+                            "kf3: mem invalidate seq {} CLEARED OVER ABSENCE ({:?}): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT",
+                            r.seq, bad
+                        );
+                    }
+                }
                 match self.settle_keys(keys, &mut settled) {
                     Settle::Live => self.complete_invalidate(*r, *at, trigger, &mut out),
                     Settle::Pending => {
@@ -2961,6 +2999,46 @@ mod tests {
         let out = settle(&mut r, PDB_A);
         assert_eq!(out.completed.len(), 1);
         assert!(ops(&r).is_empty());
+    }
+
+    /// ★ `KF3_INVALIDATE_CLEAR_OVER_ABSENT` (default off): a space that failed ONLY by absence (a
+    /// walk-refused leaf) no longer holds its invalidate armed forever; what the walk described is
+    /// applied, the invalidate completes, and the refusal stays counted and named.
+    #[test]
+    fn clear_over_absence_completes_the_invalidate_when_enabled() {
+        let mut r = rig();
+        r.m.set_clear_over_absent(true);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
+        r.m.walker_mut().refuse_in = Some(PDB_A);
+        let out = settle(&mut r, PDB_A);
+        assert!(out.unreconciled.is_empty(), "not left armed");
+        assert_eq!(out.completed.len(), 1, "the invalidate completes");
+        assert!(!busy(&r.port), "the trigger is cleared");
+        assert_eq!(
+            ops(&r),
+            vec![Op::Map(0x1000, 0x10_0000, 0x1000), Op::Invalidate],
+            "the described leaf is applied"
+        );
+        assert_eq!(r.m.stats.cleared_over_absent, 1);
+        assert_eq!(r.m.stats.walk_refused_spaces, 1, "the refusal is still counted by name");
+        assert!(r.m.stats.refusals.iter().any(|x| x.contains("REFUSED leaves")));
+    }
+
+    /// The default is the 2026-09-25 ruling: without the flag the same refusal holds the clear.
+    #[test]
+    fn clear_over_absence_is_off_by_default() {
+        let mut r = rig();
+        r.m.set_clear_over_absent(false);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
+        r.m.walker_mut().refuse_in = Some(PDB_A);
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.unreconciled.len(), 1);
+        assert!(busy(&r.port));
+        assert_eq!(r.m.stats.cleared_over_absent, 0);
     }
 
     /// Past the walker's slots, an object is refused by name — never walked against a guess.
