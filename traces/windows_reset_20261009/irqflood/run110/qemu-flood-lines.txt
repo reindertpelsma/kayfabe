@@ -1,0 +1,5 @@
+kf3: ★★ PERTURBING DIAGNOSTIC ON: irq-flood gsp:10 (KF3_DEBUG_IRQ_FLOOD; docs/design/V3_DEBUG_IRQ_FLOOD.md) — bare interrupts, no completion word; never a production configuration
+PERTURBING DIAGNOSTIC ON: irq-flood gsp:10 ticks=0 raised[]
+PERTURBING DIAGNOSTIC ON: irq-flood gsp:10 ticks=3013 raised[v155=574]
+PERTURBING DIAGNOSTIC ON: irq-flood gsp:10 ticks=6020 raised[v155=574]
+PERTURBING DIAGNOSTIC ON: irq-flood gsp:10 ticks=8423 raised[v155=574]

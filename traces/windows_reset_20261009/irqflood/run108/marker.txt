@@ -1,0 +1,3 @@
+WINDOWS_START kf3=647cfbde run=/var/lib/kf-windows-20261005/boundary-kayfabe-108 checkout=2e5ddc5c xid_before=38 2026-10-09T12:43:26+02:00
+WINDOWS_EXIT stop=acpi 2026-10-09T12:49:25+02:00 xid=38
+WINDOWS_EXIT qemu-gone 2026-10-09T12:49:27+02:00 xid_after=38

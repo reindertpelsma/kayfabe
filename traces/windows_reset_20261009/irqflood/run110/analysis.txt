@@ -1,0 +1,25 @@
+== run boundary-kayfabe-110
+-- marker.txt
+WINDOWS_START kf3=b728b480 run=/var/lib/kf-windows-20261005/boundary-kayfabe-110 checkout=2e5ddc5c xid_before=38 2026-10-09T12:58:52+02:00
+WINDOWS_EXIT stop=acpi 2026-10-09T13:00:21+02:00 xid=38
+WINDOWS_EXIT qemu-gone 2026-10-09T13:00:23+02:00 xid_after=38
+-- screenshots (UTC HHMMSS.mmm : non-black fraction); lock screen = fraction > 0.1
+first shot 105854.521993668 last shot 110007.385902138 n = 89
+lock frames: 0 first None last None
+any non-black (>0.005): 9 first 105858.745886439 last 105905.204871075
+105858.745886439=0.010 105859.552980265=0.010 105900.362195046=0.010 105901.169886177=0.011 105901.977153126=0.010 105902.784064281=0.011 105903.591069757=0.006 105904.398103233=0.006 105905.204871075=0.007
+-- MSI per UTC second (trace.log)
+total 9155 seconds with MSI 10
+10:59:02=133 10:59:03=1877 10:59:04=2206 10:59:05=390 10:59:06=1425 10:59:07=1024 10:59:08=1333 10:59:09=231 10:59:10=378 10:59:11=158
+-- qemu.log
+banner: kf3: ★★ PERTURBING DIAGNOSTIC ON: irq-flood gsp:10 (KF3_DEBUG_IRQ_FLOOD; docs/design/V3_DEBUG_IRQ_FLOOD.md) — bare interrupts, no completion word; never a production configuration
+last status segment: PERTURBING DIAGNOSTIC ON: irq-flood gsp:10 ticks=8423 raised[v155=574]
+UnloadingGuestDriver         2 kf-rm: rpc-trace fn=47 UnloadingGuestDriver seq=0  result=0x0
+birth REFUSED                1 kf3: chan 0xc1d0004c:0xff040001 birth REFUSED: twin state: VA space VasKey(13965662702157170800) (KernelInUserSpace(1)) — a Translated channel never runs in a s
+stall=                       0 
+PT-STALL                     0 
+ChannelFreed { kind: Core    1 kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+-- QGA probes
+flip-d3d11_clear_probe.ps1.out lines 5 | PROBE 10:59:49.9620863 no NVIDIA adapter /  / [rc=0]
+flip-d3d12_signal_probe.ps1.out lines 14 | PROBE no NVIDIA adapter /  / [rc=0]
+flip-vdr_monitor_info.ps1.out lines 8 | NVSMI NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that t /  / [rc=0]

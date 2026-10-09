@@ -1,0 +1,15 @@
+PROBE whoami nt authority\system session 0
+PROBE 10:54:28.0338653 CreateDXGIFactory1 0x00000000
+PROBE 10:54:28.4244141 D3D11CreateDevice(NVIDIA) 0x00000000 level 0xb000
+PROBE 10:54:28.4244141 CreateTexture2D(RT) 0x00000000
+PROBE 10:54:28.4244141 CreateTexture2D(STAGING) 0x00000000
+PROBE 10:54:28.4244141 CreateRenderTargetView 0x00000000
+PROBE 10:54:28.4382985 round 1 ClearRenderTargetView+CopyResource+Flush issued
+PROBE 10:54:28.4382985 round 1 Map(READ) ok pixel0 0xffbf7f40 EXPECTED
+PROBE 10:54:28.4382985 round 2 ClearRenderTargetView+CopyResource+Flush issued
+PROBE 10:54:28.4382985 round 2 Map(READ) ok pixel0 0xffbf7f40 EXPECTED
+PROBE 10:54:28.4430437 round 3 ClearRenderTargetView+CopyResource+Flush issued
+PROBE 10:54:28.4430437 round 3 Map(READ) ok pixel0 0xffbf7f40 EXPECTED
+PROBE 10:54:28.4430437 done
+
+[rc=0]

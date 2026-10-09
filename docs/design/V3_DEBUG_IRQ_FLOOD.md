@@ -65,3 +65,13 @@ realize by name). Classes, comma-separated:
   (`OWNER_RULINGS.md` §X).
 - A flood that "works" is a lead, not a fix: the fix must come from the same facts, raised by the
   events that really cause them.
+
+## 5. What the first runs showed (2026-10-09; `traces/windows_reset_20261009/README.md` §15)
+
+- **A stall vector with no cause is a stuck level.** The served table repeats the stall vector as the non-stall one for engines 59-64, 73 and 1.
+  Raising those under `nonstall` left `LEAF(4)` = `0x30` pending for good and the guest ISR spun (run 108). They are `errors`, never `nonstall`
+  (`Plan::from_table`). Never raise a stall vector whose source the guest cannot clear unless the experiment is about exactly that.
+- **`gsp`** fires only while the guest has vector 155 enabled (it enables it while it waits on its queue): 574 raises in run 110.
+- **Outcome against the §4 tree:** the falsifier was not met. `all-completion:10` and `nonstall:10` kept the driver up through the idle lock screen for at least
+  285 s (flood off: 231 s once, about 20 s three times); `gsp:10` alone did not. Both flood arms still bugchecked 0x116 minutes later under the harness's D3D12 probe.
+  One boot per arm: the lead is a lost non-stall notification, not yet established (repeat the baseline and `nonstall:10`, then bisect vectors 0-5 and the period).

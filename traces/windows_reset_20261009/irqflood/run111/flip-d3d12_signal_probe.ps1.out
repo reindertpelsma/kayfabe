@@ -1,0 +1,19 @@
+
+[stderr]
+Traceback (most recent call last):
+  File "/var/lib/kf-windows-20261005/boundary-tools/qmp.py", line 201, in <module>
+    sys.exit(main(sys.argv))
+             ~~~~^^^^^^^^^^
+  File "/var/lib/kf-windows-20261005/boundary-tools/qmp.py", line 195, in main
+    return qga_exec(sock, rest[0], rest[1:])
+  File "/var/lib/kf-windows-20261005/boundary-tools/qmp.py", line 168, in qga_exec
+    st = recv(f).get("return", {})
+         ~~~~^^^
+  File "/var/lib/kf-windows-20261005/boundary-tools/qmp.py", line 42, in recv
+    line = f.readline()
+  File "/usr/lib/python3.14/socket.py", line 725, in readinto
+    return self._sock.recv_into(b)
+           ~~~~~~~~~~~~~~~~~~~~^^^
+TimeoutError: timed out
+
+[rc=1]

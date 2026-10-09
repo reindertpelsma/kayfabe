@@ -1,0 +1,8 @@
+MON id DISPLAY\KFB0001\4&4b3bf4b&0&UID6291712_0 maker=KFB product=0001 name=kayfabe year=2026 active=True
+MON conn DISPLAY\KFB0001\4&4b3bf4b&0&UID6291712_0 VideoOutputTechnology=4
+MON modes DISPLAY\KFB0001\4&4b3bf4b&0&UID6291712_0 n=7 preferred=3
+VC NVIDIA GeForce RTX 4070 1920x1080@60 status=OK err=0
+REG HwSchMode= TdrDelay= TdrDdiDelay= TdrLevel=
+NVSMI NVIDIA GeForce RTX 4070, 580.88, Enabled, [Requested functionality has been deprecated], [N/A], 132 MiB
+
+[rc=0]

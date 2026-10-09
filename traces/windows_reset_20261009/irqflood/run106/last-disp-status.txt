@@ -1,0 +1,1 @@
+disp[writes=877 puts=393 methods=12099 updates=134 notifies=70 releases=60 vblanks=40592 irqs=404 exceptions=0 refused=0 scanouts=304 scanout_refused=0 scanout_avg_us=910 scanout_max_us=65325]

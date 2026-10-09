@@ -1,0 +1,30 @@
+{
+  "schema": "kayfabe-bugcheck-recovery/1",
+  "run": 108,
+  "disk_access": "read-only NBD and NTFS; supervisor stopped",
+  "pagefile": {
+    "valid": false,
+    "signature": "0000000000000000",
+    "all_zero": true
+  },
+  "minidump": {
+    "valid": true,
+    "signature": "PAGEDU64",
+    "major": 15,
+    "build": 26100,
+    "machine": "0x8664",
+    "processors": 8,
+    "bugcheck_code": "0x9f",
+    "parameters": [
+      "0x3",
+      "0xffff888efc1d8060",
+      "0xfffff8061d083050",
+      "0xffff888efc1dea60"
+    ],
+    "file": "100926-3703-01.dmp"
+  },
+  "evtx_copied": [
+    "System.evtx"
+  ],
+  "cleanup_verified": true
+}

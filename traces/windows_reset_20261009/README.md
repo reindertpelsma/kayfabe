@@ -347,7 +347,7 @@ not touched by either.
 
 ## 15. Run 106 onward: the interrupt flood, `KF3_DEBUG_IRQ_FLOOD` (branch `claude/debug-irq-flood-20261009`, 2026-10-09)
 
-**STATUS: LIVE, 2026-10-09 (plan committed before the first boot; results in §15.2).** Note: §12-§14 (H-pde, run 104, run 105) are on
+**STATUS: LIVE, 2026-10-09 (plan committed before the first boot as 647cfbde; results in §15.1-§15.3; six boots, all spent).** Note: §12-§14 (H-pde, run 104, run 105) are on
 branch `claude/windows-pde-run104-20261009`; this branch was cut from `claude/windows-reset-20261009` (2e5ddc5c), which ends at §11. The
 section numbers follow that evidence branch.
 
@@ -369,3 +369,67 @@ Not claimed by this experiment: that a flood that helps is a fix (it is a lead; 
 **Per boot, recorded:** first/last non-black screenshot (every 997th byte of the PPM above 16, `irqflood/tools/nonblack.py`), MSI per
 second (`tools/tl.py`, as `tl104.py`), whether QGA answered, host Xid count before and after, the bugcheck when readable, the flood's
 per-vector raise counts (the status line's `PERTURBING DIAGNOSTIC ON: irq-flood ...` segment).
+
+### 15.1 What was run (six boots, RTX 4070, 2026-10-09, UTC; evidence `irqflood/run106 ... run111`)
+
+Binaries: `kf3-bins/647cfbde` (R0 and the flawed first flood boot), `kf3-bins/b728b480` (the fixed class sets; flood-off code identical to
+647cfbde), `kf3-bins/3e9bcdce` (the old binary, one control). All with run 104's flags including `KF3_NO_BATCHED_MAP=1` (**batching OFF in
+every boot**), `WR_SHOTS=90` (about 72 s of screenshots from the launch), the BAR0 read trace on. Launcher `irqflood/irqflood-launch.sh`
+(= run 105's launcher with the flood word as an extra `WIN_FLAGS` word). Host Xid count: 38 before and after every boot (no new Xid).
+Group 11 back on DMA-FQ and 01:00.0 on nvidia after each. A first launch of run 106 with `kf3-bins/3448f8a3` (built in the wrong QEMU tree: no
+GSP observer, QEMU refused realize at start, no guest ever booted) was discarded and its directory removed; the QEMU tree used from then on is
+a private copy of the observer-patched `readtrace` tree.
+
+| run | binary | flood | lock screen (UTC; s after launch) | what ended it | QGA probes (harness: 240 s wait, +40 s, then the three probes) | bugcheck on the disk |
+|---|---|---|---|---|---|---|
+| 106 R0 | 647cfbde | off | 10:21:41.3 (+16.4), still on at the last shot 10:22:39.6 (>=58 s) | stall marker +229 s (10:25:13.7); `UnloadingGuestDriver` about 10:25:16 (+231 s); trace silent after | no (3/3 timeout) | none (no dump) |
+| 107 control | 3e9bcdce | off | never drawn (non-black fraction <= 0.011: boot spinner only) | stall marker +20.5 s, teardown +23 s | no (3/3 timeout) | none |
+| 108 R3, flawed | 647cfbde | all-completion:10, nonstall class wrongly held vectors 132/133 | never drawn; driver init stopped at RPC #494 (vsyncs=0), ISR spinning | never reached a stall marker; `vdr_monitor_info` answered at +345 s with the GPU in Code 43 | 2 of 3 timed out, `vdr_monitor_info` answered: Error 43 | 0x9f |
+| 109 R3 | b728b480 | **all-completion:10** | 10:49:58.8 (+16.1), still on at the last shot 10:50:57.5 (>=58 s); the clock tick drawn 10:50:28 | no stall marker through the 240 s wait; D3D11 probe at +286 s OK; **0x116 about 10:55:08 (+325 s), after the D3D12 probe had run for 38 s** | **yes**: D3D11 clear/copy 3 rounds `EXPECTED`, `VC ... status=OK`, `nvidia-smi` OK; D3D12 probe timed out | 0x116 (`100926-4312-01.dmp`) |
+| 110 | b728b480 | gsp:10 | never drawn | stall marker +16.5 s, driver unloaded | yes, but `no NVIDIA adapter`, Error 43 | 0x116 |
+| 111 | b728b480 | **nonstall:10** | 11:02:30.8 (+17.4), still on at the last shot 11:03:28.2 (>=57 s) | no stall marker through 240 s; D3D11 probe at +285 s OK; **driver torn down at 11:07:11 (+298 s), 9 s after the D3D12 probe's GPU traffic began** | **yes**: D3D11 `EXPECTED` x3; then D3D12 timed out and `vdr` read Error 43, `nvidia-smi` failed | 0x116 |
+
+R1 (`all-completion:1000`) and R2 (`all-completion:100`) were NOT run: the six-boot budget went to R0, one control of the old binary, one flawed boot
+(below), R3, and two bisect boots (`gsp`, `nonstall`); `disp` (+`dispstat`) was not bisected and `dispstat` was never used. The order deviates from the
+brief (R3 before R1/R2) because the falsifier is stated on R3.
+
+The flawed boot (run 108), `[measured]`: the first `nonstall` class held every row's non-stall vector. The served table repeats the stall vector in the
+non-stall column for engines 59-64, 73 and 1 (vectors 64, 72, 129, 131, 132, 133, 134, 148), so one raise of 132/133 left `LEAF(4)` = `0x30`
+pending for good: **9067 reads of `0xb81010` per second** (55k reads of the interrupt tree per second, 215 MSI/s), the driver stopped after its 494th RPC.
+A stall interrupt with no cause behind it is a level the guest ISR cannot clear. Fixed in `b728b480` (a vector any row uses as a stall vector is in
+`errors`, never in `nonstall`); the unit test now encodes it. Run 108 is not evidence about the missing notification.
+
+### 15.2 Result against the falsifier
+
+**The falsifier is NOT met.** With `all-completion:10` (run 109) the lock screen came up as in the baseline and was not followed by the teardown: the
+driver stayed up through the idle lock screen for at least 285 s (a D3D11 clear, copy and readback on the real GPU returned the expected pixel, `nvidia-smi`
+worked, the monitor status was OK), against 231 s in R0 and 23 s in the old-binary control. So interrupts alone are NOT excluded as the missing piece.
+Narrowing: `gsp:10` alone did not help (teardown at +16.5 s, no lock screen), `nonstall:10` alone did (run 111, the same >= 285 s with D3D11 working).
+
+**The success criterion is only partly met.** Lock screen > 20 s: yes (both arms, >= 58 s seen in the 72 s of screenshots; the guest was alive at +285 s).
+QGA answered a command: yes. No bugcheck for 60 s: yes at the lock screen (nothing for 280 s), **but both arms bugchecked 0x116 minutes later, once the harness's
+D3D12 signal probe ran** (run 109 about 10:55:08, run 111 about 11:07:11, MSI/BAR0 silent afterwards). So the flood postpones the death; it does not cure it.
+
+`[measured]`
+- All numbers in the table; per-run files `irqflood/run1NN/{analysis.txt,per-second.txt,qemu-flood-lines.txt,qemu-teardown-lines.txt,bugcheck.json,wr-run1NN.log}`;
+  frames `frame-first-lock.png` (clock "10:49" / "11:02") and `frame-last.png` per run.
+- Flood status lines: run 109 `PERTURBING DIAGNOSTIC ON: irq-flood nonstall,gsp,disp:10 ticks=51107 raised[v0=50250 v1=50250 v2=50250 v3=50250 v4=50250 v5=50250
+  v154=30112 v155=29840]`; run 111 `irq-flood nonstall:10 ticks=34268 raised[v0=33199 ... v5=33199]`; run 110 `irq-flood gsp:10 ticks=8423 raised[v155=574]`. The guest keeps vectors
+  154/155 enabled only part of the time (v154 and v155 stopped counting at 30112/29840 ticks in run 109, v155 at 574 in run 110 when the driver unloaded): "only enabled
+  vectors" means the GSP class fires only while the guest waits on its queue.
+- MSI per second at the lock screen: R0 median 115 (83-142); run 109 median 209 (162-244); run 111 median 211 (174-291): the flood adds about 100 per second (one per
+  tick), the guest's own rate is unchanged. Hardware idle: 17-19.
+- The flood wrote no completion word (code: only `latch_and_deliver`); the guest's ISR serviced and cleared what was raised: in one sampled second of run 109 (10:52:20) `LEAF(4)` (`0xb81010`)
+  read `0xc000000` (vectors 154 and 155) on 218 reads, 698 W1C writes went to `LEAF(0)` and 198 to `LEAF(4)`; vector 155 is pending in about 31% of the `LEAF(4)` reads there (hardware: 24% of the ISR reads, kayfabe without flood: 0.2%).
+
+`[inferred]` (not shown by one boot per arm)
+- A lost or missing NON-STALL notification (vectors 0-5: GR0 and the copy-engine notifier vectors of the served table) is what the idle-lock-screen death needs; the GSP interrupt
+  by itself is not (run 110). Strength: n = 1 per arm; flood-off boots tore down at about 18-23 s (runs 104, 105, 107) or at 231 s (R0), flood-on boots lived to at least 285 s. The baseline spread is
+  wide (R0 itself kept the lock screen for 215 s), so a repeat of R0 and of `nonstall:10` is needed before this is called established.
+- The flood works as a wake-up the guest would otherwise miss; it cannot supply what a specific D3D12 wait needs, which is why the D3D12 probe still ends in 0x116. Not tested: that the
+  D3D12 probe is the trigger rather than the next idle death (its GPU traffic precedes the teardown by 9 s in run 111; run 109's D3D12 probe made no GPU traffic of its own).
+- A perturbed run is not a normal run (about 100 more MSIs per second and their ISR/DPC work); a timing effect of the flood, rather than a notification it supplies, is not excluded.
+
+**Next (in order of cost):** (1) repeat R0 (flood off, `b728b480`) and `nonstall:10` twice each to get the spread; (2) bisect vectors 0-5 (GR0 vector 0 against the CE vectors 1-5) and the period
+(100 and 1000 ms) at `nonstall`; (3) find which host non-stall edge the relay does not raise: the `PT-NSI` lines with `live twins 0` and `unraised_no_live` against the hardware pattern of §13.2 (GR0 vec 0 pending 45%,
+CE2 57%), then fix that edge on the real path; (4) the D3D12 probe death under `nonstall:10` (which wait does it hang on). The flood stays a diagnostic.
