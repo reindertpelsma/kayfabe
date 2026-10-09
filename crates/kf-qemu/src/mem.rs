@@ -2541,6 +2541,110 @@ fn twin_record(
     }
 }
 
+/// ★ 2026-10-10 (`docs/design/V3_WINDOW_EXPOSURE_REVIEW.md`) — **the DEFAULT path's two window
+/// maps, exactly as [`create_mirror`] and [`prewarm`] place them**: the store window over the WHOLE
+/// store (`fb_len`, the firmware carve-out included), then the guest-RAM window, each through `map`
+/// (`HostRm::map_window(space, memory, len, true)`, i.e. `GROWS_DOWN`, read-write, in kf3; a
+/// recorder in the tests). Factored out unchanged so the owner invariant of 2026-10-10 is tested
+/// on the path itself ([`crate::exposure`]). ⊘ This path VIOLATES that invariant (audit S1-21):
+/// both windows land in every mirror, user processes' included. It is deleted at P1+P2 inc E.
+pub struct DefaultWindows<E> {
+    /// The store window's base, or the host's refusal.
+    pub fb: Result<u64, E>,
+    /// The guest-RAM window `(base, len)`, or the host's refusal; `None` without a RAM object.
+    pub ram: Option<Result<(u64, u64), E>>,
+}
+
+/// See [`DefaultWindows`].
+pub fn default_windows<E>(
+    mut map: impl FnMut(u32, u64) -> Result<u64, E>,
+    store: u32,
+    fb_len: u64,
+    ram_obj: Option<(u32, u64)>,
+) -> DefaultWindows<E> {
+    let fb = map(store, fb_len);
+    let ram = ram_obj.map(|(o, len)| map(o, len).map(|b| (b, len)));
+    DefaultWindows { fb, ram }
+}
+
+impl<E> DefaultWindows<E> {
+    /// The VMM ranges a guest leaf must avoid in this space ([`vmm_ranges`]: the ring region
+    /// always, plus each window that mapped).
+    #[must_use]
+    pub fn reserved(&self, fb_len: u64) -> Vec<(u64, u64)> {
+        vmm_ranges(
+            self.fb.as_ref().ok().map(|b| (*b, fb_len)),
+            self.ram.as_ref().and_then(|r| r.as_ref().ok()).copied(),
+        )
+    }
+}
+
+/// ★ 2026-10-10: a default-path mirror record over windows that mapped (factored out of
+/// [`create_mirror`] unchanged; see [`DefaultWindows`]).
+#[allow(clippy::too_many_arguments)]
+fn default_mirror(
+    space: kf_host::VaSpace,
+    fb_base: u64,
+    fb_len: u64,
+    ram: Option<(u64, u64)>,
+    ram_obj: Option<u32>,
+    rows: PlacedRows,
+    rings: RingSlots,
+    kernel_vas: std::sync::Arc<crate::twin::TwinState>,
+    log: std::sync::Arc<RowsLog>,
+) -> Mirror {
+    Mirror {
+        space,
+        fb_base,
+        fb_len,
+        ram,
+        rows,
+        ram_obj,
+        live: Default::default(),
+        rings,
+        kernel_vas,
+        log,
+    }
+}
+
+/// ★ 2026-10-10: the spare a retired mirror leaves — its host space and what it still holds
+/// (factored out of [`retire_mirror`] unchanged).
+fn spare_of(mi: Mirror) -> Spare {
+    Spare {
+        space: mi.space,
+        fb_base: mi.fb_base,
+        fb_len: mi.fb_len,
+        ram: mi.ram,
+        ram_obj: mi.ram_obj,
+        rings: mi.rings,
+    }
+}
+
+/// ★ 2026-10-10: a DEFAULT-path prewarmed spare over windows that mapped (factored out of
+/// [`prewarm`] unchanged).
+fn default_spare(
+    space: kf_host::VaSpace,
+    fb_base: u64,
+    fb_len: u64,
+    ram: (u64, u64),
+    ram_obj: Option<u32>,
+) -> Spare {
+    Spare {
+        space,
+        fb_base,
+        fb_len,
+        ram: Some(ram),
+        ram_obj,
+        rings: RingSlots::default(),
+    }
+}
+
+/// ★ 2026-10-10: the VMM ranges of a recycled DEFAULT-path spare (factored out of
+/// [`apply_statement`] unchanged): its windows are where they were, and the ring region.
+fn default_reuse_reserved(sp: &Spare, fb_len: u64) -> Vec<(u64, u64)> {
+    vmm_ranges(Some((sp.fb_base, fb_len)), sp.ram)
+}
+
 /// ★ The windows a mirror carries, as its log line names them — DERIVED from the record (review
 /// fix 2026-10-04: the T-mode lines printed a literal `windows=none` whatever was mapped).
 #[must_use]
@@ -2666,12 +2770,29 @@ fn create_mirror(
     // ★ P5: the two windows, in EVERY mirrored space (§12) — GROWS_DOWN, away from the guest's
     // bottom-up VAs (§24.2). A space whose windows refuse is still a mirror (its virtual rows
     // work); a Translated channel naming it refuses by name at birth.
-    let t_step = std::time::Instant::now();
-    let fb_base = rm.map_window(space, store, plane.fb_len, true);
-    let fb_us = us(t_step);
-    let t_step = std::time::Instant::now();
-    let ram_base = ram_obj.map(|(o, len)| rm.map_window(space, o, len, true).map(|b| (b, len)));
-    let ram_us = us(t_step);
+    // ★ 2026-10-10: the two maps go through [`default_windows`] (unchanged; each still timed).
+    let mut took = [0u128; 2];
+    let mut n = 0usize;
+    let w = default_windows(
+        |memory, len| {
+            let t_step = std::time::Instant::now();
+            let r = rm.map_window(space, memory, len, true);
+            if let Some(slot) = took.get_mut(n) {
+                *slot = us(t_step);
+            }
+            n += 1;
+            r
+        },
+        store,
+        plane.fb_len,
+        ram_obj,
+    );
+    let [fb_us, ram_us] = took;
+    let reserved = w.reserved(plane.fb_len);
+    let DefaultWindows {
+        fb: fb_base,
+        ram: ram_base,
+    } = w;
     let rows = PlacedRows::default();
     let rings = RingSlots::default();
     let kernel_vas = kernel_vas_for(key);
@@ -2681,18 +2802,17 @@ fn create_mirror(
             if let Ok(mut mm) = plane.mirrors.lock() {
                 mm.insert(
                     key,
-                    Mirror {
+                    default_mirror(
                         space,
-                        fb_base: *fb,
-                        fb_len: plane.fb_len,
-                        ram: Some((*rb, *rl)),
-                        rows: rows.clone(),
-                        ram_obj: ram_obj.map(|(o, _)| o),
-                        live: Default::default(),
-                        rings: rings.clone(),
-                        kernel_vas: kernel_vas.clone(),
-                        log: log.clone(),
-                    },
+                        *fb,
+                        plane.fb_len,
+                        Some((*rb, *rl)),
+                        ram_obj.map(|(o, _)| o),
+                        rows.clone(),
+                        rings.clone(),
+                        kernel_vas.clone(),
+                        log.clone(),
+                    ),
                 );
             }
             format!(
@@ -2704,18 +2824,17 @@ fn create_mirror(
             if let Ok(mut mm) = plane.mirrors.lock() {
                 mm.insert(
                     key,
-                    Mirror {
+                    default_mirror(
                         space,
-                        fb_base: *fb,
-                        fb_len: plane.fb_len,
-                        ram: None,
-                        rows: rows.clone(),
-                        ram_obj: None,
-                        live: Default::default(),
-                        rings: rings.clone(),
-                        kernel_vas: kernel_vas.clone(),
-                        log: log.clone(),
-                    },
+                        *fb,
+                        plane.fb_len,
+                        None,
+                        None,
+                        rows.clone(),
+                        rings.clone(),
+                        kernel_vas.clone(),
+                        log.clone(),
+                    ),
                 );
             }
             format!(
@@ -2724,10 +2843,6 @@ fn create_mirror(
         }
         (fb, ram) => format!("windows REFUSED fb={fb:?} ram={ram:?}"),
     };
-    let reserved = vmm_ranges(
-        fb_base.as_ref().ok().map(|b| (*b, plane.fb_len)),
-        ram_base.as_ref().and_then(|r| r.as_ref().ok()).copied(),
-    );
     let ns = u64::try_from(t_mirror.elapsed().as_nanos()).unwrap_or(u64::MAX);
     plane.counters.mirrors.fetch_add(1, Ordering::Relaxed);
     plane.counters.mirror_ns.fetch_add(ns, Ordering::Relaxed);
@@ -2817,15 +2932,24 @@ pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<Stri
             t0.elapsed().as_micros()
         ));
     }
-    let t2 = std::time::Instant::now();
-    let fb = rm.map_window(space, store, plane.fb_len, true);
-    let fb_us = t2.elapsed().as_micros();
-    let t3 = std::time::Instant::now();
-    let ram = ram_obj
-        .as_ref()
-        .ok()
-        .map(|(o, len)| rm.map_window(space, *o, *len, true).map(|b| (b, *len)));
-    let ram_us = t3.elapsed().as_micros();
+    // ★ 2026-10-10: the two maps go through [`default_windows`] (unchanged; each still timed).
+    let mut took = [0u128; 2];
+    let mut n = 0usize;
+    let DefaultWindows { fb, ram } = default_windows(
+        |memory, len| {
+            let t = std::time::Instant::now();
+            let r = rm.map_window(space, memory, len, true);
+            if let Some(slot) = took.get_mut(n) {
+                *slot = t.elapsed().as_micros();
+            }
+            n += 1;
+            r
+        },
+        store,
+        plane.fb_len,
+        ram_obj.as_ref().ok().copied(),
+    );
+    let [fb_us, ram_us] = took;
     let line = format!(
         "vaspace {vas_us} us, ram_obj {ram_obj_us} us ({}), fb_window {fb_us} us, ram_window {ram_us} us",
         match &ram_obj {
@@ -2835,14 +2959,13 @@ pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<Stri
     );
     match (fb, ram) {
         (Ok(fb_base), Some(Ok(r))) => {
-            let sp = Spare {
+            let sp = default_spare(
                 space,
                 fb_base,
-                fb_len: plane.fb_len,
-                ram: Some(r),
-                ram_obj: ram_obj.ok().map(|(o, _)| o),
-                rings: RingSlots::default(),
-            };
+                plane.fb_len,
+                r,
+                ram_obj.ok().map(|(o, _)| o),
+            );
             if let Ok(mut v) = plane.spares.lock() {
                 v.push(sp);
             }
@@ -2900,14 +3023,7 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
         refused += 1;
     }
     let unmap_us = t_unmap.elapsed().as_micros();
-    let spare = mirror.map(|mi| Spare {
-        space: mi.space,
-        fb_base: mi.fb_base,
-        fb_len: mi.fb_len,
-        ram: mi.ram,
-        ram_obj: mi.ram_obj,
-        rings: mi.rings,
-    });
+    let spare = mirror.map(spare_of);
     let recycled = match (spare, refused) {
         (Some(sp), 0) => plane
             .spares
@@ -3073,7 +3189,7 @@ pub fn apply_statement(
                 } else if let Some(sp) = reused {
                     // ★ P5c: a retired space — its rows are gone, its windows are where they were.
                     let rows = PlacedRows::default();
-                    let reserved = vmm_ranges(Some((sp.fb_base, plane.fb_len)), sp.ram);
+                    let reserved = default_reuse_reserved(&sp, plane.fb_len);
                     // ★ v3-roperm: a recycled host space is classified afresh for its new object.
                     let kernel_vas = kernel_vas_for(key);
                     let log = std::sync::Arc::<RowsLog>::default();
@@ -3516,6 +3632,183 @@ mod tests {
             );
         }
         assert!(spare_windows_text(&spare).starts_with("windows fb="));
+    }
+
+    // ★★★ 2026-10-10 — **the owner invariant over the real placement paths**
+    // (`docs/design/V3_WINDOW_EXPOSURE_REVIEW.md`, `crate::exposure`): in a space a Passthrough
+    // channel can be born in, every mapping has a guest-leaf origin — no kayfabe placement.
+
+    const STORE_12G: u64 = 12 << 30;
+    /// A guest process's VA space (a user client) and one of the guest RM's internal clients'.
+    fn user_key() -> VasKey {
+        VasKey((0xc1d0_002b_u64 << 32) | 5)
+    }
+    fn rm_internal_key() -> VasKey {
+        VasKey((0xc1e0_0007_u64 << 32) | 1)
+    }
+
+    /// The violations of one record, as `crate::exposure` reads it.
+    fn record_violations(
+        tmode: bool,
+        m: &Mirror,
+        reserved: &[(u64, u64)],
+    ) -> Vec<crate::exposure::Placement> {
+        crate::exposure::violations(
+            crate::exposure::passthrough_admissible(tmode, &m.kernel_vas),
+            &crate::exposure::mirror_placements(m, reserved),
+        )
+    }
+    fn spare_placements(sp: &Spare) -> Vec<crate::exposure::Placement> {
+        crate::exposure::kayfabe_placements((sp.fb_base, sp.fb_len), sp.ram, &[])
+    }
+
+    /// ★ T-mode (`KF3_TSPACE=1`): created twin, prewarmed spare, recycled spare and a retired
+    /// twin's spare reused — none carries a kayfabe placement, for a user and a kernel key alike.
+    #[test]
+    fn owner_invariant_holds_on_every_tmode_mirror_path() {
+        let h = CountingHost::default();
+        for key in [user_key(), rm_internal_key()] {
+            let created = tmode_twin(&h, key, space(0x10), Some(0x20), 0x1, STORE_12G, false);
+            let spare = tmode_spare(&h, space(0x12), Some(0x20), 0x1, STORE_12G, false);
+            let recycled = tmode_reuse(key, &spare);
+            let retired = spare_of(created.mirror.clone());
+            let reborn = tmode_reuse(key, &retired);
+            for rec in [&created, &recycled, &reborn] {
+                assert!(
+                    crate::exposure::mirror_placements(&rec.mirror, &rec.reserved).is_empty(),
+                    "{key:?}: a T-mode mirror carries no kayfabe placement"
+                );
+                assert!(record_violations(true, &rec.mirror, &rec.reserved).is_empty());
+            }
+            assert!(spare_placements(&spare).is_empty());
+            assert!(spare_placements(&retired).is_empty());
+        }
+        assert!(h.maps.borrow().is_empty(), "{:?}", h.maps.borrow());
+    }
+
+    /// ⊘ Deliberate violation: the T-mode positive control (`KF3_NEGCTL_TWIN_WINDOW`) maps a store
+    /// window in each new twin and spare — the check must name it on the created, recycled and
+    /// retired-then-reused paths.
+    #[test]
+    fn owner_invariant_check_catches_a_planted_window() {
+        let h = CountingHost::default();
+        let key = user_key();
+        let created = tmode_twin(&h, key, space(0x10), Some(0x20), 0x1, STORE_12G, true);
+        let spare = tmode_spare(&h, space(0x12), Some(0x20), 0x1, STORE_12G, true);
+        let recycled = tmode_reuse(key, &spare);
+        let reborn = tmode_reuse(key, &spare_of(created.mirror.clone()));
+        for rec in [&created, &recycled, &reborn] {
+            let v = record_violations(true, &rec.mirror, &rec.reserved);
+            assert_eq!(v.len(), 1, "{v:?}");
+            assert_eq!(v[0].origin, crate::exposure::Origin::StoreWindow);
+            assert_eq!(v[0].hi - v[0].lo, STORE_12G);
+        }
+        // A planted ring region in an otherwise clean user twin is caught too.
+        let clean = tmode_twin(&h, key, space(0x14), Some(0x20), 0x1, STORE_12G, false);
+        let planted = vmm_ranges(None, None);
+        let v = record_violations(true, &clean.mirror, &planted);
+        assert_eq!(v.len(), 1);
+        assert_eq!(v[0].origin, crate::exposure::Origin::RingRegion);
+    }
+
+    /// ⊘⊘ **KNOWN VIOLATION (audit S1-21 / S1-23), the DEFAULT path (`KF3_TSPACE` unset — today's
+    /// default on every branch).** Driven through the same functions [`create_mirror`],
+    /// [`prewarm`], [`retire_mirror`] and the recycle arm of [`apply_statement`] call: EVERY mirror —
+    /// a guest user process's included, and a guest-kernel space, which on this path still admits
+    /// a passthrough birth — carries the store window over the WHOLE store (firmware carve-out
+    /// included), the guest-RAM window and the ring region. This test asserts the violation so that
+    /// it stays visible; it is deleted (and the T-mode tests above become the only ones) when inc E
+    /// removes this path.
+    #[test]
+    fn known_violation_the_default_path_maps_kayfabe_placements_in_every_mirror() {
+        use crate::exposure::Origin;
+        // `[measured, traces/v3_display/gop_box_20261003/run_b3_qemu.log:2747]` an 8 GiB store:
+        // `windows fb=0x1fffe00000000+0x200000000 ram=0x1fffc00000000+0x200000000
+        // rings=0xff00000000+0x100000000`, and a `privilege=0` Passthrough twin born in that space.
+        const STORE_8G: u64 = 8 << 30;
+        let fb_base = 0x1_fffe_0000_0000_u64;
+        let ram_base = 0x1_fffc_0000_0000_u64;
+        let mut calls = Vec::new();
+        let w = default_windows(
+            |memory, len| -> Result<u64, String> {
+                calls.push((memory, len));
+                Ok(if memory == 0x1 { fb_base } else { ram_base })
+            },
+            0x1,
+            STORE_8G,
+            Some((0x20, STORE_8G)),
+        );
+        assert_eq!(calls, vec![(0x1, STORE_8G), (0x20, STORE_8G)]);
+        let reserved = w.reserved(STORE_8G);
+        let (Ok(fb), Some(Ok(ram))) = (w.fb, w.ram) else {
+            panic!("the recorder maps both");
+        };
+        let want = vec![Origin::RingRegion, Origin::RamWindow, Origin::StoreWindow];
+        let origins =
+            |v: &[crate::exposure::Placement]| v.iter().map(|p| p.origin).collect::<Vec<_>>();
+        for key in [user_key(), rm_internal_key()] {
+            // create_mirror
+            let created = default_mirror(
+                space(0x10),
+                fb,
+                STORE_8G,
+                Some(ram),
+                Some(0x20),
+                PlacedRows::default(),
+                RingSlots::default(),
+                kernel_vas_for(key),
+                std::sync::Arc::default(),
+            );
+            assert_eq!(
+                origins(&record_violations(false, &created, &reserved)),
+                want,
+                "{key:?}"
+            );
+            // retire_mirror -> spare -> apply_statement's recycle arm
+            let retired = spare_of(created);
+            let reborn = default_reuse_reserved(&retired, STORE_8G);
+            let m = default_mirror(
+                retired.space,
+                retired.fb_base,
+                STORE_8G,
+                retired.ram,
+                retired.ram_obj,
+                PlacedRows::default(),
+                retired.rings.clone(),
+                kernel_vas_for(key),
+                std::sync::Arc::default(),
+            );
+            assert_eq!(
+                origins(&record_violations(false, &m, &reborn)),
+                want,
+                "{key:?}"
+            );
+        }
+        // prewarm -> spare -> recycle arm
+        let pre = default_spare(space(0x12), fb, STORE_8G, ram, Some(0x20));
+        let m = default_mirror(
+            pre.space,
+            pre.fb_base,
+            STORE_8G,
+            pre.ram,
+            pre.ram_obj,
+            PlacedRows::default(),
+            pre.rings.clone(),
+            kernel_vas_for(user_key()),
+            std::sync::Arc::default(),
+        );
+        let v = record_violations(false, &m, &default_reuse_reserved(&pre, STORE_8G));
+        assert_eq!(origins(&v), want);
+        // ⊘ The store window spans kayfabe's firmware carve-out (its BAR1/BAR2 roots), not only
+        // guest VRAM: it ends past the carve-out base.
+        let carve = kf_chip::bar0::fb_layout(STORE_8G)
+            .map(|l| l.carve())
+            .unwrap();
+        let store = v.iter().find(|p| p.origin == Origin::StoreWindow).unwrap();
+        assert!(store.hi - store.lo > carve);
+        // The windows sit near 2^49, inside a VER2 space's 49-bit VA; the ring region below 2^40.
+        assert!(store.hi <= 1 << 49);
+        assert_eq!(v[0].hi, 1 << 40);
     }
 
     #[test]
