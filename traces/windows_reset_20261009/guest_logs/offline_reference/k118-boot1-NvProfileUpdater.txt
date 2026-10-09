@@ -1,0 +1,28 @@
+1009-12:17:55.992 0C78 Starting logging.
+1009-12:17:55.992 0C78 Initialization complete.
+1009-12:17:56.007 0C78 Entering NvProfileUpdaterPlugin_Start
+1009-12:17:56.007 0C78 Device notification registered.
+1009-12:17:56.007 0C78 Exiting NvProfileUpdaterPlugin_Start
+1009-12:17:56.008 0EFC Waiting for global mutex... #0
+1009-12:17:56.008 0EFC Mutex is acquired.
+1009-12:17:56.008 0EFC Loading NvAPI to check if driver is working...
+1009-12:17:56.017 0EFC Driver version: 58088
+1009-12:17:56.017 0EFC Driver branch: r580_78
+1009-12:17:56.017 0EFC First run was already done, skipping first run activities.
+1009-12:17:56.021 0EFC Performing startup update check
+1009-12:17:56.021 0EFC Waiting for global mutex... #0
+1009-12:17:56.021 0EFC Mutex is acquired.
+1009-12:17:56.021 0EFC Loading NvAPI...
+1009-12:17:56.024 0EFC Driver version: 58088
+1009-12:17:56.024 0EFC Driver branch: r580_78
+1009-12:17:56.024 0EFC GFE is installed: 0
+1009-12:17:56.042 0EFC GPU [6] flag NVSupportOptimus was not found.
+1009-12:17:56.049 0EFC GPU [6] flag NvSupportMSHybrid: 1
+1009-12:17:56.049 0EFC GPU [6] coproc status: 1
+1009-12:17:56.056 0EFC GPU [6] flag NVSupportDisplayUpdate: 1
+1009-12:17:56.063 0EFC NvAPI_GPU_GetBrandType failed with -1
+1009-12:17:56.063 0EFC OptimusSystem: 1
+1009-12:17:56.063 0EFC NVSupportDisplayUpdate: 1
+1009-12:17:56.063 0EFC No GFE installed
+1009-12:17:56.063 0EFC No GFE installed
+1009-12:17:56.469 0EFC Waiting for next check or notification for 1440 minutes...

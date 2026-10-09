@@ -1,0 +1,36 @@
+# host_utc_start=12:20:18.869 duration=2.2s rc=0 complete=True stderr=''
+EVENTS utc=12:20:18.091 boot=12:17:48.500
+total=275 newest=12:20:17.868
+12:17:48.784 Microsoft-Windows-HAL id=17 L3 The clock interrupt is backed by a platform timer instead of a per-processor source. System performance may be degraded.
+12:17:48.784 Microsoft-Windows-HAL id=18 L3 The performance counter is not readable from user mode. System performance may be degraded.
+12:17:49.757 Microsoft-Windows-Kernel-Power id=172 L4 Connectivity state in standby: Disconnected, Reason: NIC compliance
+12:17:54.270 Microsoft-Windows-Wininit id=15 L3 Credential Guard and/or VBS Key Isolation are configured but the secure kernel is not running; continuing without them.
+12:17:55.572 EventLog id=6009 L4 Microsoft (R) Windows (R) 10.00. 26100 Multiprocessor Free.
+12:17:55.574 EventLog id=6005 L4 The Event log service was started.
+12:17:55.575 EventLog id=6013 L4 The system uptime is 7 seconds.
+12:17:56.414 Service Control Manager id=7026 L4 The following boot-start or system-start driver(s) did not load: dam uiomap
+12:19:57.395 Microsoft-Windows-DistributedCOM id=10016 L3 The application-specific permission settings do not grant Local Launch permission for the COM Server application with CLSID Windows.SecurityCenter.WscDataProtection and APPID Unavailable to the user N
+--- DxgKrnl-Operational
+--- LiveKernelReports
+--- nvtopps.log tail 12
+[20:55:19.255 2026/10/04]INFO: [PmuDataMonitor::postUninitialize]: gpu=0000000000000006
+[20:55:19.255 2026/10/04]INFO: [Scanner::ScannerManager::preUninitialize]: ScannerManager::uninitialize
+[20:55:19.255 2026/10/04]INFO: [jpac::JpacCore::uninitializeSelf]: JpacWorker uninitialize...
+[20:55:19.255 2026/10/04]INFO: [jpac::JpacCore::uninitializeSelf]: JpacWorker uninitialize complete.
+[20:55:19.256 2026/10/04]INFO: [nvtopps::InitImpl::Uninit::workerManager]: SUCCESS
+[20:55:19.256 2026/10/04]INFO: [nvtopps::InitImpl::Uninit::globalSettings]: SUCCESS
+[20:55:19.256 2026/10/04]INFO: [nvtopps::InitImpl::Uninit::ipc]: SUCCESS
+[20:55:19.274 2026/10/04]INFO: [nvtopps::InitImpl::Uninit::model]: SUCCESS
+[20:55:19.274 2026/10/04]INFO: [nvtopps::InitImpl::Uninit::nvapi]: SUCCESS
+[12:17:55.805 2026/10/09]INFO: [nvtopps::InitImpl::InitImpl]: nvtopps initialize... (session 0)
+[12:17:55.828 2026/10/09]ERROR! [`anonymous-namespace'::checkStatus]: NVAPI ERROR, Error code -1
+[12:17:55.828 2026/10/09]ERROR! [`anonymous-namespace'::checkStatus]: NVAPI ERROR message NVAPI_ERROR
+--- NVDisplay.ContainerLocalSystem.log size/tail 6
+size=17742 mtime=12:17:55.804
+#4(I)[2026-10-09 12:17:55,804]{000008D0}<NvcPluginManager> NvcPluginUnloadStats for 'NvcDispCorePlugin' => StopProcTime = 0 us, StopTimeTotal = 0 us, UninitializeProcTime = 0 us, UninitializeTimeTotal
+#5(I)[2026-10-09 12:17:55,804]{000008D0}<NvcTelemetryHelp> NvcPluginUnloadStats for NvcDispCorePlugin returned 1
+#6(I)[2026-10-09 12:17:55,804]{000008D0}<NvcPluginManager> Unloaded plugin 'NvcDispCorePlugin'
+#7(I)[2026-10-09 12:17:55,804]{000008D0}<NvcHost>          Container is started with 1. State: normal
+#8(I)[2026-10-09 12:17:55,804]{000008D0}<NvcTelemetryHelp> NvcLoadStats => LibraryLoadTime = 255902 us, InitializeTime = 63046 us, StartTime = 8972 us, TotalLoadTime = 380623 us
+#9(I)[2026-10-09 12:17:55,804]{000008D0}<NvcTelemetryHelp> NvcLoadStats returned 1
+=== END utc=12:20:18.600

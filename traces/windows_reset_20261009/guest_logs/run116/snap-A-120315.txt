@@ -1,0 +1,299 @@
+# moment A  host_utc_start=12:03:15.396  duration=7.4s  rc=0  complete=True  stderr=''
+GUESTLOGS utc=2026-10-09 12:03:15.555 boot_utc=12:02:32.500 up_s=43 whoami=nt authority\system build=26100
+=== SERVICES (Win32_Service: NV*/NVIDIA*)
+Name             : InventorySvc
+DisplayName      : Inventory and Compatibility Appraisal service
+State            : Stopped
+StartMode        : Manual
+DelayedAutoStart : False
+ExitCode         : 1077
+ProcessId        : 0
+StartName        : LocalSystem
+PathName         : C:\Windows\system32\svchost.exe -k InvSvcGroup -p
+Name             : NVDisplay.ContainerLocalSystem
+DisplayName      : NVIDIA Display Container LS
+State            : Running
+StartMode        : Auto
+DelayedAutoStart : False
+ExitCode         : 0
+ProcessId        : 2252
+StartName        : LocalSystem
+PathName         : C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\NVDisplay.Container.exe -s NVDisplay.ContainerLocalSystem -f C:\ProgramData\NVIDIA\NVDisplay.ContainerLocalSystem.log -l 3 -d 
+                   C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\plugins\LocalSystem -r -p 30000 -cfg NVDisplay.ContainerLocalSystem\LocalSystem /ert
+Name             : SessionEnv
+DisplayName      : Remote Desktop Configuration
+State            : Stopped
+StartMode        : Manual
+DelayedAutoStart : False
+ExitCode         : 1077
+ProcessId        : 0
+StartName        : localSystem
+PathName         : C:\Windows\System32\svchost.exe -k netsvcs -p
+=== SERVICES (Get-Service named)
+Name                            Status StartType     ServiceType
+----                            ------ ---------     -----------
+NVDisplay.ContainerLocalSystem Running Automatic Win32OwnProcess
+=== SERVICE PROCESS START TIMES
+NVDisplay.ContainerLocalSystem pid=2252 start_utc=12:02:39.538
+=== PROCESSES
+csrss                  pid=848   sess=0 cpu_s=1.11     handles=462   threads=14   start_utc=12:02:35.160 responding=True
+csrss                  pid=952   sess=1 cpu_s=0.39     handles=175   threads=15   start_utc=12:02:37.889 responding=True
+dwm                    pid=1360  sess=1 cpu_s=0.92     handles=1040  threads=54   start_utc=12:02:38.702 responding=True
+LogonUI                pid=1352  sess=1 cpu_s=0.92     handles=892   threads=38   start_utc=12:02:38.701 responding=True
+NVDisplay.Container    pid=2252  sess=0 cpu_s=0.28     handles=488   threads=20   start_utc=12:02:39.538 responding=True
+NVDisplay.Container    pid=3276  sess=1 cpu_s=1.22     handles=652   threads=33   start_utc=12:02:39.931 responding=True
+winlogon               pid=992   sess=1 cpu_s=0.16     handles=237   threads=6    start_utc=12:02:38.128 responding=True
+=== PNP DISPLAY/NVIDIA
+Display | Microsoft Basic Display Adapter | PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\3&267A616A&0&48 | status=Unknown problem= problemstatus=0x0
+Display | NVIDIA GeForce RTX 4070 | PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&267A616A&0&30 | status=OK problem=0 problemstatus=0x0
+=== VIDEOCONTROLLER
+Name                   : NVIDIA GeForce RTX 4070
+ConfigManagerErrorCode : 0
+Status                 : OK
+DriverVersion          : 32.0.15.8088
+PNPDeviceID            : PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&267A616A&0&30
+=== EVENTS System+Application since boot (12:02:32.500 UTC): total=99; Level 1-3 plus providers nvlddmkm|Display|DxgKrnl|Kernel-Power|WER-SystemErrorReporting|Service Control Manager|NVIDIA|Application Error|Windows Error Reporting|LiveKernel; oldest first, max 300
+selected=5
+12:02:32.782 Microsoft-Windows-HAL id=17 L3 The clock interrupt is backed by a platform timer instead of a per-processor source. System performance may be degraded.
+12:02:32.782 Microsoft-Windows-HAL id=18 L3 The performance counter is not readable from user mode. System performance may be degraded.
+12:02:33.712 Microsoft-Windows-Kernel-Power id=172 L4 Connectivity state in standby: Disconnected, Reason: NIC compliance
+12:02:38.026 Microsoft-Windows-Wininit id=15 L3 Credential Guard and/or VBS Key Isolation are configured but the secure kernel is not running; continuing without them.
+12:02:40.501 Service Control Manager id=7026 L4 The following boot-start or system-start driver(s) did not load: dam uiomap
+=== LOG Microsoft-Windows-DxgKrnl-Operational (newest 40, newest first)
+(none or log absent)
+=== LOG Microsoft-Windows-Kernel-LiveDump/Operational (newest 40, newest first)
+(none or log absent)
+=== LOG Microsoft-Windows-Kernel-PnP/Configuration (newest 40, newest first)
+12:02:37.872 Microsoft-Windows-Kernel-PnP id=410 L4 Device DISPLAY\KFB0001\4&4b3bf4b&0&UID6291712 was started. Driver Name: monitor.inf Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318} Service: monitor Lower Filters: Upper Filters: 
+12:02:37.866 Microsoft-Windows-Kernel-PnP id=400 L4 Device DISPLAY\KFB0001\4&4b3bf4b&0&UID6291712 was configured. Driver Name: monitor.inf Driver Package ID: monitor.inf_amd64_cf1e3aee79246903 Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318} Driver D
+12:02:35.164 Microsoft-Windows-Kernel-PnP id=410 L4 Device HID\VID_0627&PID_0001\6&285f85fd&0&0000 was started. Driver Name: msmouse.inf Class GUID: {4d36e96f-e325-11ce-bfc1-08002be10318} Service: mouhid Lower Filters: Upper Filters: 
+12:02:35.154 Microsoft-Windows-Kernel-PnP id=400 L4 Device HID\VID_0627&PID_0001\6&285f85fd&0&0000 was configured. Driver Name: msmouse.inf Driver Package ID: msmouse.inf_amd64_097bbd709f0c4972 Class GUID: {4d36e96f-e325-11ce-bfc1-08002be10318} Driver 
+12:02:35.152 Microsoft-Windows-Kernel-PnP id=410 L4 Device USB\VID_0627&PID_0001\28754-0000:00:07.0-1 was started. Driver Name: input.inf Class GUID: {745a17a0-74d3-11d0-b6fe-00a0c90f57da} Service: HidUsb Lower Filters: Upper Filters: 
+12:02:35.121 Microsoft-Windows-Kernel-PnP id=400 L4 Device USB\VID_0627&PID_0001\28754-0000:00:07.0-1 was configured. Driver Name: input.inf Driver Package ID: input.inf_amd64_6f9a6940085bc1e9 Class GUID: {745a17a0-74d3-11d0-b6fe-00a0c90f57da} Driver D
+12:02:34.725 Microsoft-Windows-Kernel-PnP id=410 L4 Device USB\ROOT_HUB30\4&1159398&0&0 was started. Driver Name: usbhub3.inf Class GUID: {36fc9e60-c465-11cf-8056-444553540000} Service: USBHUB3 Lower Filters: Upper Filters: 
+12:02:34.401 Microsoft-Windows-Kernel-PnP id=400 L4 Device USB\ROOT_HUB30\4&1159398&0&0 was configured. Driver Name: usbhub3.inf Driver Package ID: usbhub3.inf_amd64_454a71b4df8c8e7c Class GUID: {36fc9e60-c465-11cf-8056-444553540000} Driver Date: 07/02
+12:02:34.399 Microsoft-Windows-Kernel-PnP id=410 L4 Device PCI\VEN_1B36&DEV_000D&SUBSYS_11001AF4&REV_01\3&267a616a&0&38 was started. Driver Name: usbxhci.inf Class GUID: {36fc9e60-c465-11cf-8056-444553540000} Service: USBXHCI Lower Filters: Upper Filte
+12:02:32.874 Microsoft-Windows-Kernel-PnP id=400 L4 Device PCI\VEN_1B36&DEV_000D&SUBSYS_11001AF4&REV_01\3&267a616a&0&38 was configured. Driver Name: usbxhci.inf Driver Package ID: usbxhci.inf_amd64_77efc8f22d258e7b Class GUID: {36fc9e60-c465-11cf-8056-
+17:19:17.243 Microsoft-Windows-Kernel-PnP id=410 L4 Device SWD\MMDEVAPI\{0.0.0.00000000}.{8dbdeb3a-8de8-4d8f-85d6-fc1771f56ecb} was started. Driver Name: audioendpoint.inf Class GUID: {c166523c-fe0c-4a94-a586-f1a80cfbbf3e} Service: Lower Filters: Upper
+17:19:17.242 Microsoft-Windows-Kernel-PnP id=400 L4 Device SWD\MMDEVAPI\{0.0.0.00000000}.{8dbdeb3a-8de8-4d8f-85d6-fc1771f56ecb} was configured. Driver Name: audioendpoint.inf Driver Package ID: audioendpoint.inf_amd64_271c4d03bad18da8 Class GUID: {c166
+17:19:16.456 Microsoft-Windows-Kernel-PnP id=410 L4 Device DISPLAY\AOC2790\4&4b3bf4b&0&UID6291713 was started. Driver Name: monitor.inf Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318} Service: monitor Lower Filters: Upper Filters: 
+17:19:16.453 Microsoft-Windows-Kernel-PnP id=400 L4 Device DISPLAY\AOC2790\4&4b3bf4b&0&UID6291713 was configured. Driver Name: monitor.inf Driver Package ID: monitor.inf_amd64_cf1e3aee79246903 Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318} Driver D
+17:16:40.030 Microsoft-Windows-Kernel-PnP id=410 L4 Device DISPLAY\Default_Monitor\1&8713bca&0&UID0 was started. Driver Name: monitor.inf Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318} Service: monitor Lower Filters: Upper Filters: 
+17:16:40.021 Microsoft-Windows-Kernel-PnP id=400 L4 Device DISPLAY\Default_Monitor\1&8713bca&0&UID0 was configured. Driver Name: monitor.inf Driver Package ID: monitor.inf_amd64_cf1e3aee79246903 Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318} Driver
+16:55:48.135 Microsoft-Windows-Kernel-PnP id=410 L4 Device DISPLAY\Default_Monitor\4&4b3bf4b&0&UID0 was started. Driver Name: monitor.inf Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318} Service: monitor Lower Filters: Upper Filters: 
+16:55:48.131 Microsoft-Windows-Kernel-PnP id=400 L4 Device DISPLAY\Default_Monitor\4&4b3bf4b&0&UID0 was configured. Driver Name: monitor.inf Driver Package ID: monitor.inf_amd64_cf1e3aee79246903 Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318} Driver
+16:52:47.983 Microsoft-Windows-Kernel-PnP id=410 L4 Device HDAUDIO\FUNC_01&VEN_10DE&DEV_00A5&SUBSYS_145840EE&REV_1001\4&19e26fd5&0&0001 was started. Driver Name: hdaudio.inf Class GUID: {4d36e96c-e325-11ce-bfc1-08002be10318} Service: HdAudAddService Lo
+16:52:47.951 Microsoft-Windows-Kernel-PnP id=400 L4 Device HDAUDIO\FUNC_01&VEN_10DE&DEV_00A5&SUBSYS_145840EE&REV_1001\4&19e26fd5&0&0001 was configured. Driver Name: hdaudio.inf Driver Package ID: hdaudio.inf_amd64_22f2127ec785fb8d Class GUID: {4d36e96c
+16:52:47.945 Microsoft-Windows-Kernel-PnP id=411 L2 Device PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&267a616a&0&30 had a problem starting. Driver Name: display.inf Class GUID: {4d36e968-e325-11ce-bfc1-08002be10318} Service: BasicDisplay Lower Filt
+16:52:47.774 Microsoft-Windows-Kernel-PnP id=400 L4 Device PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&267a616a&0&30 was configured. Driver Name: display.inf Driver Package ID: display.inf_amd64_34a28de3c87d810f Class GUID: {4d36e968-e325-11ce-bfc1-
+16:52:47.068 Microsoft-Windows-Kernel-PnP id=430 L4 Device HDAUDIO\FUNC_01&VEN_10DE&DEV_00A5&SUBSYS_145840EE&REV_1001\4&19e26fd5&0&0001 requires further installation.
+16:52:47.067 Microsoft-Windows-Kernel-PnP id=410 L4 Device PCI\VEN_10DE&DEV_22BC&SUBSYS_40EE1458&REV_A1\3&267a616a&0&31 was started. Driver Name: hdaudbus.inf Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318} Service: HDAudBus Lower Filters: Upper Fil
+16:52:46.129 Microsoft-Windows-Kernel-PnP id=400 L4 Device PCI\VEN_10DE&DEV_22BC&SUBSYS_40EE1458&REV_A1\3&267a616a&0&31 was configured. Driver Name: hdaudbus.inf Driver Package ID: hdaudbus.inf_amd64_7c5144127b6ada21 Class GUID: {4d36e97d-e325-11ce-bfc
+16:52:46.128 Microsoft-Windows-Kernel-PnP id=430 L4 Device PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&267a616a&0&30 requires further installation.
+16:05:13.010 Microsoft-Windows-Kernel-PnP id=410 L4 Device PCI\VEN_1AF4&DEV_1000&SUBSYS_00011AF4&REV_00\3&267a616a&0&50 was started. Driver Name: oem0.inf Class GUID: {4d36e972-e325-11ce-bfc1-08002be10318} Service: netkvm Lower Filters: Upper Filters: 
+16:05:11.066 Microsoft-Windows-Kernel-PnP id=400 L4 Device PCI\VEN_1AF4&DEV_1000&SUBSYS_00011AF4&REV_00\3&267a616a&0&50 was configured. Driver Name: oem0.inf Driver Package ID: netkvm.inf_amd64_27809b5556f0001c Class GUID: {4d36e972-e325-11ce-bfc1-0800
+16:04:52.863 Microsoft-Windows-Kernel-PnP id=430 L4 Device PCI\VEN_1AF4&DEV_1000&SUBSYS_00011AF4&REV_00\3&267a616a&0&50 requires further installation.
+15:54:53.231 Microsoft-Windows-Kernel-PnP id=410 L4 Device STORAGE\VolumeSnapshot\HarddiskVolumeSnapshot1 was started. Driver Name: volsnap.inf Class GUID: {533c5b84-ec70-11d2-9505-00c04f79deaf} Service: Lower Filters: Upper Filters: 
+15:54:53.226 Microsoft-Windows-Kernel-PnP id=400 L4 Device STORAGE\VolumeSnapshot\HarddiskVolumeSnapshot1 was configured. Driver Name: volsnap.inf Driver Package ID: volsnap.inf_amd64_da435361dee3ff66 Class GUID: {533c5b84-ec70-11d2-9505-00c04f79deaf} 
+15:54:13.483 Microsoft-Windows-Kernel-PnP id=410 L4 Device SWD\PRINTENUM\PrintQueues was started. Driver Name: printqueue.inf Class GUID: {1ed2bbf9-11f0-4084-b21f-ad83a8e6dcdc} Service: Lower Filters: Upper Filters: 
+15:54:13.483 Microsoft-Windows-Kernel-PnP id=400 L4 Device SWD\PRINTENUM\PrintQueues was configured. Driver Name: printqueue.inf Driver Package ID: printqueue.inf_amd64_044b5f13f940e7c8 Class GUID: {1ed2bbf9-11f0-4084-b21f-ad83a8e6dcdc} Driver Date: 06
+15:53:38.453 Microsoft-Windows-Kernel-PnP id=410 L4 Device SWD\RADIO\{3DB5895D-CC28-44B3-AD3D-6F01A782B8D2} was started. Driver Name: c_swdevice.inf Class GUID: {62f9c741-b25a-46ce-b54c-9bccce08b6f2} Service: Lower Filters: Upper Filters: 
+15:53:38.452 Microsoft-Windows-Kernel-PnP id=400 L4 Device SWD\RADIO\{3DB5895D-CC28-44B3-AD3D-6F01A782B8D2} was configured. Driver Name: c_swdevice.inf Driver Package ID: c_swdevice.inf_amd64_845d51425d14f98b Class GUID: {62f9c741-b25a-46ce-b54c-9bccce
+22:53:00.696 Microsoft-Windows-Kernel-PnP id=410 L4 Device PCI\VEN_1AF4&DEV_1000&SUBSYS_00011AF4&REV_00\3&267a616a&0&10 was started. Driver Name: oem0.inf Class GUID: {4d36e972-e325-11ce-bfc1-08002be10318} Service: netkvm Lower Filters: Upper Filters: 
+22:53:00.592 Microsoft-Windows-Kernel-PnP id=400 L4 Device PCI\VEN_1AF4&DEV_1000&SUBSYS_00011AF4&REV_00\3&267a616a&0&10 was configured. Driver Name: oem0.inf Driver Package ID: netkvm.inf_amd64_27809b5556f0001c Class GUID: {4d36e972-e325-11ce-bfc1-0800
+22:53:00.390 Microsoft-Windows-Kernel-PnP id=410 L4 Device ROOT\KDNIC\0000 was started. Driver Name: kdnic.inf Class GUID: {4d36e972-e325-11ce-bfc1-08002be10318} Service: kdnic Lower Filters: Upper Filters: 
+22:53:00.272 Microsoft-Windows-Kernel-PnP id=400 L4 Device ROOT\KDNIC\0000 was configured. Driver Name: kdnic.inf Driver Package ID: kdnic.inf_amd64_a9d04a55194853d2 Class GUID: {4d36e972-e325-11ce-bfc1-08002be10318} Driver Date: 06/21/2006 Driver Vers
+22:52:47.728 Microsoft-Windows-Kernel-PnP id=410 L4 Device SWD\MMDEVAPI\MicrosoftGSWavetableSynth was started. Driver Name: c_swdevice.inf Class GUID: {62f9c741-b25a-46ce-b54c-9bccce08b6f2} Service: Lower Filters: Upper Filters: 
+=== DIR C:\Windows\LiveKernelReports
+=== DIR C:\Windows\Minidump
+=== DIR C:\ProgramData\NVIDIA Corporation
+12:02:41.003 296 C:\ProgramData\NVIDIA Corporation\Drs\nvAppTimestamps
+20:51:52.536 2569580 C:\ProgramData\NVIDIA Corporation\Drs\nvdrsdb0.bin
+20:51:52.054 2569580 C:\ProgramData\NVIDIA Corporation\Drs\nvdrsdb1.bin
+20:51:52.536 1 C:\ProgramData\NVIDIA Corporation\Drs\nvdrssel.bin
+17:19:16.633 0 C:\ProgramData\NVIDIA Corporation\Drs\nvdrswr.lk
+17:19:19.126 892 C:\ProgramData\NVIDIA Corporation\Drs\update.bin
+12:02:40.093 0 C:\ProgramData\NVIDIA Corporation\GameSessionTelemetry\telemetryPlugin.log
+20:51:50.757 0 C:\ProgramData\NVIDIA Corporation\GameSessionTelemetry\telemetryPlugin.log_backup
+17:19:19.126 <DIR> C:\ProgramData\NVIDIA Corporation\NvProfileUpdaterPlugin\drs
+17:19:19.354 216 C:\ProgramData\NVIDIA Corporation\NvProfileUpdaterPlugin\drs\metadata.json
+17:19:19.126 892 C:\ProgramData\NVIDIA Corporation\NvProfileUpdaterPlugin\drs\update.dat
+17:19:18.487 <DIR> C:\ProgramData\NVIDIA Corporation\NvProfileUpdaterPlugin\optimus
+17:19:19.029 227 C:\ProgramData\NVIDIA Corporation\NvProfileUpdaterPlugin\optimus\metadata.json
+17:19:18.487 12699468 C:\ProgramData\NVIDIA Corporation\NvProfileUpdaterPlugin\optimus\update.dat
+12:02:40.541 1504 C:\ProgramData\NVIDIA Corporation\NvProfileUpdaterPlugin\NvProfileUpdaterPlugin_1.log
+20:55:19.234 3999 C:\ProgramData\NVIDIA Corporation\NvProfileUpdaterPlugin\NvProfileUpdaterPlugin_1.log.bak
+17:39:55.491 <DIR> C:\ProgramData\NVIDIA Corporation\nvtopps\nct
+20:55:19.270 126976 C:\ProgramData\NVIDIA Corporation\nvtopps\nvtopps.db3
+12:02:39.926 18876 C:\ProgramData\NVIDIA Corporation\nvtopps\nvtopps.log
+=== DIR C:\ProgramData\NVIDIA
+17:19:21.119 <DIR> C:\ProgramData\NVIDIA\NGX
+12:02:40.532 10374 C:\ProgramData\NVIDIA\DisplaySessionContainer1.log
+20:55:19.234 17066 C:\ProgramData\NVIDIA\DisplaySessionContainer1.log_backup1
+12:02:39.901 1208 C:\ProgramData\NVIDIA\NvcDispCorePlugin.log
+20:51:50.580 1208 C:\ProgramData\NVIDIA\NvcDispCorePlugin.log_backup1
+12:02:39.562 0 C:\ProgramData\NVIDIA\NVDisplay.ContainerLocalSystem.log
+20:55:19.283 26632 C:\ProgramData\NVIDIA\NVDisplay.ContainerLocalSystem.log_backup1
+12:02:39.860 0 C:\ProgramData\NVIDIA\NVDisplayContainerWatchdog.log
+20:55:19.274 6808 C:\ProgramData\NVIDIA\NVDisplayContainerWatchdog.log_backup1
+17:19:51.848 <DIR> C:\ProgramData\NVIDIA\NGX\models
+17:19:21.411 <DIR> C:\ProgramData\NVIDIA\NGX\models\config
+17:19:51.848 <DIR> C:\ProgramData\NVIDIA\NGX\models\dlisp
+17:19:23.489 <DIR> C:\ProgramData\NVIDIA\NGX\models\dlss
+17:19:57.687 769 C:\ProgramData\NVIDIA\NGX\models\nvngx_config.txt
+=== NVIDIA log tails (newest 6 *.log under ProgramData\NVIDIA*, systemprofile and user LocalAppData NVIDIA, Windows\Temp nv*.log; last 40 lines each, 240 chars/line)
+candidates=12
+--- C:\ProgramData\NVIDIA Corporation\NvProfileUpdaterPlugin\NvProfileUpdaterPlugin_1.log size=1504 mtime_utc=12:02:40.541
+1009-12:02:40.074 0CD0 Starting logging.
+1009-12:02:40.075 0CD0 Initialization complete.
+1009-12:02:40.095 0CD0 Entering NvProfileUpdaterPlugin_Start
+1009-12:02:40.095 0CD0 Device notification registered.
+1009-12:02:40.095 0CD0 Exiting NvProfileUpdaterPlugin_Start
+1009-12:02:40.097 0EF0 Waiting for global mutex... #0
+1009-12:02:40.097 0EF0 Mutex is acquired.
+1009-12:02:40.097 0EF0 Loading NvAPI to check if driver is working...
+1009-12:02:40.103 0EF0 Driver version: 58088
+1009-12:02:40.103 0EF0 Driver branch: r580_78
+1009-12:02:40.103 0EF0 First run was already done, skipping first run activities.
+1009-12:02:40.106 0EF0 Performing startup update check
+1009-12:02:40.106 0EF0 Waiting for global mutex... #0
+1009-12:02:40.107 0EF0 Mutex is acquired.
+1009-12:02:40.107 0EF0 Loading NvAPI...
+1009-12:02:40.112 0EF0 Driver version: 58088
+1009-12:02:40.112 0EF0 Driver branch: r580_78
+1009-12:02:40.112 0EF0 GFE is installed: 0
+1009-12:02:40.518 0EF0 GPU [6] flag NVSupportOptimus was not found.
+1009-12:02:40.525 0EF0 GPU [6] flag NvSupportMSHybrid: 1
+1009-12:02:40.525 0EF0 GPU [6] coproc status: 1
+1009-12:02:40.529 0EF0 GPU [6] flag NVSupportDisplayUpdate: 1
+1009-12:02:40.545 0EF0 NvAPI_GPU_GetBrandType failed with -1
+1009-12:02:40.545 0EF0 OptimusSystem: 1
+1009-12:02:40.545 0EF0 NVSupportDisplayUpdate: 1
+1009-12:02:40.545 0EF0 No GFE installed
+1009-12:02:40.545 0EF0 No GFE installed
+1009-12:02:40.546 0EF0 Waiting for next check or notification for 1440 minutes...
+--- C:\ProgramData\NVIDIA\DisplaySessionContainer1.log size=10374 mtime_utc=12:02:40.532
+#1(W)[2026-10-09 12:02:40,039]{00000CD0}<NvcRegistryStora> Failed to initialize RegistryStorage with status 2
+#2(I)[2026-10-09 12:02:40,062]{00000CD0}<NvcPluginLoadHel> Secure loading C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\plugins\Session/_NvGSTPlugin.dll - 32.0.15.8088 at 00007FFA98D8
+#3(I)[2026-10-09 12:02:40,062]{00000CD0}<NvcPluginManager> Loaded C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\plugins\Session/_NvGSTPlugin.dll
+#4(I)[2026-10-09 12:02:40,062]{00000CD0}<NvcPluginManager> Loaded optional plugin GamesessionTelemetry_Plugin, version 1
+#5(I)[2026-10-09 12:02:40,062]{00000CD0}<NvcHost>          Creating directory listener to represent current folder state
+#6(I)[2026-10-09 12:02:40,062]{00000CD0}<DirectoryListene> Adding directory C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\plugins\Session.
+#7(I)[2026-10-09 12:02:40,066]{00000CD0}<NvcHost>          Successfully updated directory change listener
+#8(I)[2026-10-09 12:02:40,066]{00000CD0}<NvcHost>          Container is initializing
+#9(I)[2026-10-09 12:02:40,066]{00000CD0}<NvcPluginManager> Initiate transition to Initializing state for NvProfileUpdaterPlugin
+#0(I)[2026-10-09 12:02:40,071]{00000CD0}<NvcPluginManager> Transition to Initialized state for NvProfileUpdaterPlugin completed
+#1(I)[2026-10-09 12:02:40,071]{00000CD0}<NvcPluginManager> Initiate transition to Initializing state for NvXDSyncPlugin
+#2(I)[2026-10-09 12:02:40,075]{00000CD0}<NvcPluginManager> Transition to Initialized state for NvXDSyncPlugin completed
+#3(I)[2026-10-09 12:02:40,075]{00000CD0}<NvcPluginManager> Initiate transition to Initializing state for NvWksServicePlugin
+#4(I)[2026-10-09 12:02:40,089]{00000CD0}<NvcPluginManager> Transition to Initialized state for NvWksServicePlugin completed
+#5(I)[2026-10-09 12:02:40,089]{00000CD0}<NvcPluginManager> Initiate transition to Initializing state for GamesessionTelemetry_Plugin
+#6(I)[2026-10-09 12:02:40,093]{00000CD0}<NvcPluginManager> Transition to Initialized state for GamesessionTelemetry_Plugin completed
+#7(I)[2026-10-09 12:02:40,093]{00000CD0}<NvcHost>          Container is initialized with 1. State: normal
+#8(I)[2026-10-09 12:02:40,093]{00000CD0}<NvcHost>          Base host core
+#9(I)[2026-10-09 12:02:40,093]{00000CD0}<NvcHost>          Container is starting
+#0(I)[2026-10-09 12:02:40,093]{00000CD0}<NvcPluginManager> Initiate transition to Starting state for NvProfileUpdaterPlugin
+#1(I)[2026-10-09 12:02:40,093]{00000CD0}<NvcPluginManager> NvcPluginLoadStats for 'NvProfileUpdaterPlugin' => LibraryLoadTime = 40962 us, ImageLoadTime = 0 us, AbsLibraryLoadTime = 36420, InitializeProcTime = 4591 us, InitializeTimeTotal = 
+#2(I)[2026-10-09 12:02:40,093]{00000CD0}<NvcTelemetryHelp> NvcPluginLoadStats for NvProfileUpdaterPlugin returned 1
+#3(I)[2026-10-09 12:02:40,093]{00000CD0}<NvcPluginManager> Transition to Started state for NvProfileUpdaterPlugin completed
+#4(I)[2026-10-09 12:02:40,093]{00000CD0}<NvcPluginManager> Initiate transition to Starting state for NvXDSyncPlugin
+#5(I)[2026-10-09 12:02:40,093]{00000CD0}<NvcPluginManager> Transition to Starting state for NvXDSyncPlugin is in progress
+#6(I)[2026-10-09 12:02:40,093]{00000CD0}<NvcPluginManager> Initiate transition to Starting state for NvWksServicePlugin
+#7(I)[2026-10-09 12:02:40,093]{00000CD0}<NvcPluginManager> NvcPluginLoadStats for 'NvWksServicePlugin' => LibraryLoadTime = 13280 us, ImageLoadTime = 0 us, AbsLibraryLoadTime = 13280, InitializeProcTime = 13573 us, InitializeTimeTotal = 135
+#8(I)[2026-10-09 12:02:40,093]{00000CD0}<NvcTelemetryHelp> NvcPluginLoadStats for NvWksServicePlugin returned 1
+#9(I)[2026-10-09 12:02:40,093]{00000CD0}<NvcPluginManager> Transition to Started state for NvWksServicePlugin completed
+#0(I)[2026-10-09 12:02:40,093]{00000CD0}<NvcPluginManager> Initiate transition to Starting state for GamesessionTelemetry_Plugin
+#1(I)[2026-10-09 12:02:40,510]{00000CD0}<NvcPluginManager> NvcPluginLoadStats for 'GamesessionTelemetry_Plugin' => LibraryLoadTime = 22620 us, ImageLoadTime = 0 us, AbsLibraryLoadTime = 22620, InitializeProcTime = 4516 us, InitializeTimeTot
+#2(I)[2026-10-09 12:02:40,510]{00000CD0}<NvcTelemetryHelp> NvcPluginLoadStats for GamesessionTelemetry_Plugin returned 1
+#3(I)[2026-10-09 12:02:40,510]{00000CD0}<NvcPluginManager> Transition to Started state for GamesessionTelemetry_Plugin completed
+#4(I)[2026-10-09 12:02:40,532]{00000EF4}<NvcPluginManager> Notification 1 / 0000000000000000 from NvXDSyncPlugin
+#5(I)[2026-10-09 12:02:40,532]{00000EF4}<NvcPluginManager> NvcPluginLoadStats for 'NvXDSyncPlugin' => LibraryLoadTime = 27066 us, ImageLoadTime = 0 us, AbsLibraryLoadTime = 22580, InitializeProcTime = 4483 us, InitializeTimeTotal = 4483 us,
+#6(I)[2026-10-09 12:02:40,532]{00000EF4}<NvcTelemetryHelp> NvcPluginLoadStats for NvXDSyncPlugin returned 1
+#7(I)[2026-10-09 12:02:40,532]{00000EF4}<NvcPluginManager> Transition to Started state for NvXDSyncPlugin completed
+#8(I)[2026-10-09 12:02:40,532]{00000CD0}<NvcHost>          Container is started with 1. State: normal
+#9(I)[2026-10-09 12:02:40,532]{00000CD0}<NvcTelemetryHelp> NvcLoadStats => LibraryLoadTime = 103928 us, InitializeTime = 27163 us, StartTime = 438704 us, TotalLoadTime = 601160 us
+#0(I)[2026-10-09 12:02:40,532]{00000CD0}<NvcTelemetryHelp> NvcLoadStats returned 1
+--- C:\ProgramData\NVIDIA Corporation\GameSessionTelemetry\telemetryPlugin.log size=0 mtime_utc=12:02:40.093
+--- C:\ProgramData\NVIDIA Corporation\nvtopps\nvtopps.log size=18876 mtime_utc=12:02:39.926
+[20:51:50.841 2026/10/04]WARNING! [jpac::ControllerBase::init]: Controller settings are missing
+[20:51:50.841 2026/10/04]WARNING! [jpac::ControllerBase::init]: Controller settings are missing
+[20:51:50.841 2026/10/04]WARNING! [jpac::ControllerBase::init]: Controller settings are missing
+[20:51:50.841 2026/10/04]INFO: [jpac::JpacCore::initializeSelf]: JpacWorker initialize complete.
+[20:51:50.841 2026/10/04]INFO: [jpac::JpacCore::startSelf]: JpacWorker start...
+[20:51:50.841 2026/10/04]INFO: [jpac::JpacCore::startSelf]: JpacWorker start completed.
+[20:51:50.842 2026/10/04]INFO: [jpac::JpacWorker::acLineStatusEvent]: JpacWorker AC event 1.
+[20:51:50.842 2026/10/04]INFO: [jpac::JpacWorker::powerSchemeStatusEvent]: JpacWorker PowerScheme event 2.
+[20:51:50.842 2026/10/04]INFO: [jpac::JpacWorker::powerSliderStatusEvent]: JpacWorker PowerSlider event 3.
+[20:51:50.843 2026/10/04]INFO: [mmf::FrameServer::Details::Details]: UMD_FRM_MMF: Opened existing (element size 64->64, capacity 8064->8064)
+[20:51:50.868 2026/10/04]WARNING! [IpcDispatcher::OnMessage]: Message was rejected!
+[20:51:50.909 2026/10/04]INFO: [autofl::AutoFLWorkerImpl::update]: AUTOFL added GPU
+[20:51:51.788 2026/10/04]ERROR! [`anonymous-namespace'::checkStatus]: NVAPI ERROR, Error code -104
+[20:51:51.789 2026/10/04]ERROR! [`anonymous-namespace'::checkStatus]: NVAPI ERROR message NVAPI_NOT_SUPPORTED
+[20:51:51.789 2026/10/04]ERROR! [`anonymous-namespace'::checkStatus]: NVAPI ERROR, Error code -104
+[20:51:51.789 2026/10/04]ERROR! [`anonymous-namespace'::checkStatus]: NVAPI ERROR message NVAPI_NOT_SUPPORTED
+[20:51:51.796 2026/10/04]INFO: [Scanner::ScannerManager::sendScannerTelemetryData]: ScanStatusReporting failed to initialize!: 8007007e
+[20:51:51.796 2026/10/04]INFO: [Scanner::ScannerManager::sendScannerTelemetryData]: ScanStatusReporting uninitialize succeeded
+[20:55:19.193 2026/10/04]INFO: [nvtopps::StartImpl::Stop::systemState]: SUCCESS
+[20:55:19.194 2026/10/04]INFO: [jpac::JpacCore::stopSelf]: JpacWorker stop...
+[20:55:19.194 2026/10/04]INFO: [jpac::JpacCore::stopSelf]: JpacWorker stop completed.
+[20:55:19.207 2026/10/04]INFO: [Scanner::ScannerManager::update]: ScannerManager changing state to 4
+[20:55:19.230 2026/10/04]INFO: [PmuDataMonitor::postStop]: gpu=0000000000000006
+[20:55:19.230 2026/10/04]INFO: [nvtopps::StartImpl::Stop::workerManager]: FAIL
+[20:55:19.231 2026/10/04]INFO: [nvtopps::StartImpl::Stop::globalSettings]: SUCCESS
+[20:55:19.246 2026/10/04]INFO: [nvtopps::StartImpl::Stop::model]: SUCCESS
+[20:55:19.246 2026/10/04]INFO: [nvtopps::StartImpl::Stop::ipc]: SUCCESS
+[20:55:19.255 2026/10/04]INFO: [nvtopps::uninitialize]: nvtopps uninitialize...
+[20:55:19.255 2026/10/04]INFO: [PmuDataMonitor::postUninitialize]: gpu=0000000000000006
+[20:55:19.255 2026/10/04]INFO: [Scanner::ScannerManager::preUninitialize]: ScannerManager::uninitialize
+[20:55:19.255 2026/10/04]INFO: [jpac::JpacCore::uninitializeSelf]: JpacWorker uninitialize...
+[20:55:19.255 2026/10/04]INFO: [jpac::JpacCore::uninitializeSelf]: JpacWorker uninitialize complete.
+[20:55:19.256 2026/10/04]INFO: [nvtopps::InitImpl::Uninit::workerManager]: SUCCESS
+[20:55:19.256 2026/10/04]INFO: [nvtopps::InitImpl::Uninit::globalSettings]: SUCCESS
+[20:55:19.256 2026/10/04]INFO: [nvtopps::InitImpl::Uninit::ipc]: SUCCESS
+[20:55:19.274 2026/10/04]INFO: [nvtopps::InitImpl::Uninit::model]: SUCCESS
+[20:55:19.274 2026/10/04]INFO: [nvtopps::InitImpl::Uninit::nvapi]: SUCCESS
+[12:02:39.902 2026/10/09]INFO: [nvtopps::InitImpl::InitImpl]: nvtopps initialize... (session 0)
+[12:02:39.931 2026/10/09]ERROR! [`anonymous-namespace'::checkStatus]: NVAPI ERROR, Error code -1
+[12:02:39.931 2026/10/09]ERROR! [`anonymous-namespace'::checkStatus]: NVAPI ERROR message NVAPI_ERROR
+--- C:\ProgramData\NVIDIA\NvcDispCorePlugin.log size=1208 mtime_utc=12:02:39.901
+#0(I)[2026-10-09 12:02:39,856]{000008D0}<PluginContext>    PluginContext::Initialize called
+#1(I)[2026-10-09 12:02:39,856]{000008D0}<PluginContext>    Plugin-File C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\plugins\LocalSystem\NvcDispCorePlugin.dll
+#2(I)[2026-10-09 12:02:39,856]{000008D0}<PluginContext>    File-Version 32.0.15.8088
+#3(I)[2026-10-09 12:02:39,856]{000008D0}<PluginContext>    PluginContext::Initialize finished with result 1
+#4(I)[2026-10-09 12:02:39,896]{000008D0}<PluginContext>    PluginContext::Start called
+#5(I)[2026-10-09 12:02:39,896]{000008D0}<PluginContext>    No siblings disabled from INF. Notifying container with NVPLUGIN_NOTIFICATION_DONE
+#6(I)[2026-10-09 12:02:39,896]{000008D0}<PluginContext>    PluginContext::Start finished with result 1
+#7(I)[2026-10-09 12:02:39,901]{000008D0}<PluginContext>    PluginContext::Stop called
+#8(I)[2026-10-09 12:02:39,901]{000008D0}<PluginContext>    PluginContext::Stop finished
+#9(I)[2026-10-09 12:02:39,901]{000008D0}<PluginContext>    PluginContext::Uninitialize called
+#0(I)[2026-10-09 12:02:39,901]{000008D0}<PluginContext>    PluginContext::Uninitialize finished
+--- C:\ProgramData\NVIDIA\NVDisplayContainerWatchdog.log size=0 mtime_utc=12:02:39.860
+#0(I)[2026-10-09 12:02:39,860]{000008D0}<NvpChildGroup>    Add watchdog for C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\plugins\Session - 'C:\Windows\System32\DriverStore\FileReposi
+#1(I)[2026-10-09 12:02:39,860]{000008D0}<DirectoryListene> Adding directory C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\plugins\Session.
+#2(D)[2026-10-09 12:02:39,860]{000008D0}<DirectoryListene> Total number of current directories is 1.
+#3(D)[2026-10-09 12:02:39,860]{00000980}<DirectoryListene> Directory change listener thread started
+#4(D)[2026-10-09 12:02:39,860]{000008D0}<DirectoryListene> Directory listener thread started.
+#5(I)[2026-10-09 12:02:39,901]{00000C6C}<NvpWatchdog>          Running session 1 - 'Console'
+#6(I)[2026-10-09 12:02:39,901]{00000C6C}<NvpWatchdog>      Running sessions = 1, user sessions = 0 & service session
+#7(D)[2026-10-09 12:02:39,901]{00000C6C}<DirectoryEnumera> Process file C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\plugins\Session/nvprofileupdaterplugin.dll
+#8(D)[2026-10-09 12:02:39,901]{00000C6C}<DirectoryEnumera> OnItem returned FALSE for file C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\plugins\Session/nvprofileupdaterplugin.dll
+#9(D)[2026-10-09 12:02:39,901]{00000C6C}<NvpChildGroup>    Group =>
+#0(D)[2026-10-09 12:02:39,901]{00000C6C}<NvpChildGroup>        Folder: C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\plugins\Session
+#1(D)[2026-10-09 12:02:39,901]{00000C6C}<NvpChildGroup>        Container: elevated - C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\NVDisplay.Container.exe
+#2(D)[2026-10-09 12:02:39,901]{00000C6C}<NvpChildGroup>        Parameters: -f %ProgramData%\NVIDIA\DisplaySessionContainer%d.log -d C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\plugi
+#3(D)[2026-10-09 12:02:39,901]{00000C6C}<NvpChildGroup>        Processes =>
+#4(D)[2026-10-09 12:02:39,901]{00000C6C}<DirectoryEnumera> Process file C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\plugins\Session/nvprofileupdaterplugin.dll
+#5(D)[2026-10-09 12:02:39,901]{00000C6C}<DirectoryEnumera> OnItem returned FALSE for file C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\plugins\Session/nvprofileupdaterplugin.dll
+#6(I)[2026-10-09 12:02:39,901]{00000C6C}<NvpChildGroup>    Run containers for C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\plugins\Session
+#7(I)[2026-10-09 12:02:39,906]{00000C6C}<NvpChildProcess>  Run container for C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\plugins\Session in session 1
+#8(I)[2026-10-09 12:02:39,906]{00000C6C}<NvpChildProcess>  Use quit event 'Global\NvContainer2252-session1-c:_windows_system32_driverstore_filerepository_nv_dispi.inf_amd64_fe5f369669db2f36_display.nvcontainer_plugins_session' (error = 0) f
+#9(D)[2026-10-09 12:02:39,931]{00000C6C}<DirectoryEnumera> Process file C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\plugins\Session/nvprofileupdaterplugin.dll
+#0(D)[2026-10-09 12:02:39,931]{00000C6C}<DirectoryEnumera> OnItem returned FALSE for file C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\plugins\Session/nvprofileupdaterplugin.dll
+#1(D)[2026-10-09 12:02:39,931]{00000C6C}<NvpChildGroup>    Group =>
+#2(D)[2026-10-09 12:02:39,931]{00000C6C}<NvpChildGroup>        Folder: C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\plugins\Session
+#3(D)[2026-10-09 12:02:39,931]{00000C6C}<NvpChildGroup>        Container: elevated - C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\NVDisplay.Container.exe
+#4(D)[2026-10-09 12:02:39,931]{00000C6C}<NvpChildGroup>        Parameters: -f %ProgramData%\NVIDIA\DisplaySessionContainer%d.log -d C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\plugi
+#5(D)[2026-10-09 12:02:39,931]{00000C6C}<NvpChildGroup>        Processes =>
+#6(D)[2026-10-09 12:02:39,931]{00000C6C}<NvpChildProcess>          Session 1, process 00000000000005D4
+#7(D)[2026-10-09 12:02:39,931]{00000C6C}<NvpWatchdog>      Wait for 4 handles. Timeout = 4294967295
+=== END utc=12:03:20.361

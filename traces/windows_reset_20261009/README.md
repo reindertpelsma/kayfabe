@@ -516,7 +516,7 @@ every twin shows `GPGet == GPPut` and every semaphore "a release the memory hold
 
 ## 17. The guest's OWN logs, read live through the guest agent (branch `claude/guest-logs-20261009`, 2026-10-09)
 
-**STATUS: LIVE, 2026-10-09 (plan committed before the first boot; results are added below in 17.1 onward).**
+**STATUS: LIVE, 2026-10-09 (plan committed before the first boot, as its own commit; 3 boots run, runs 116-118; results in 17.1-17.5. The falsifier survives at the service level and fails at the plugin level, 17.4; moment B "driver dead, OS still running, QGA answering" did not occur in any boot, 17.2).**
 
 **Why.** Every offline `System.evtx` of §4-§16 holds no event from the run period (the guest does not flush its log before QEMU is killed), so "no Display/nvlddmkm/dxgkrnl event preceded the 0x116" is not
 evidence. Under kf3 the guest never sends the ~1 Hz control set (`0x2080a0d1`, `0x2080a0a8`, `0x20809037`, `0x20808539`) that the same image sends about 75 times per 100 s on real hardware (VFIO runs
@@ -534,3 +534,73 @@ the samples nearest B+60 s and B+120 s are kept as D60 / D120 (Display Container
 `wr-run.sh` with the D3D probes replaced by the collector. Files in `traces/windows_reset_20261009/guest_logs/`: `guest_logs_collect.ps1` (full, read-only, no `nvidia-smi` because it issues RM controls and would perturb the
 guest), `guest_logs_light.ps1`, `gl-monitor.py`, `gl-run.sh`, `gl-launch.sh`. The collector's own load (CIM queries, `Get-WinEvent`) is a perturbation of the guest, as small as a read-only collection can be; the
 run's lifetime is compared with the flood-off spread of 19-231 s (§16.1).
+
+**Tooling changed between the boots (the scripts in the directory are the last versions; the plan commit holds the first).** Run 116: `qmp.py qga-exec` (it waits 30 s for the first `guest-sync` after another client's connection, so
+moment A completed 30 s late), event window = since the boot, `*.log` tails only. Run 117: the monitor stops a call 6 s after kayfabe's log shows `UnloadingGuestDriver`; the event window is boot minus 20 min (events of the
+boot before a reboot are tagged `PRE-BOOT`; so are old Kernel-PnP entries of earlier days in the PnP log); the service filter was narrowed to `^NV|NVIDIA` (the first filter also listed InventorySvc and SessionEnv). Run 118: a native
+QGA client in `gl-monitor.py` (0xFF + short sync retries; A took 5 s instead of 35 s), an events-only sampler `guest_logs_events.ps1` every ~13 s (the live System/Application log, the tail of `nvtopps.log` and of the container log),
+14 log files instead of 8. All runs: `kf3-bins/66eeebb6`, flood off, run 114's flags; host Xid count 38 before and after every boot, group 11 back on DMA-FQ and 01:00.0 on nvidia after each, no other QEMU.
+
+### 17.1 The three boots (UTC, 2026-10-09; evidence `guest_logs/run116 ... run118`: `monitor.log`, `timeline.txt`, `snap-*.txt`, `E/`)
+
+| run | guest OS boot | first QGA answer | A (full, driver up) | the death: events, UTC | OS answers QGA again | B (first full snapshot after the death) | life of the first OS boot (to the last guest MSI) |
+|---|---|---|---|---|---|---|---|
+| 116 | 12:02:32.5 | 12:02:42 (+13 s) | 12:03:15 (up 43 s): GPU code 0, container Running | live dump `LiveKernelReports\WATCHDOG-20261009-1204.dmp` written 12:04:38.7; display-read burst from 12:04:33; last guest MSI 12:04:41 (82), none from 12:04:42; the QGA call started 12:04:40.7 never returned; `UnloadingGuestDriver` in kayfabe's log between 12:04:35.6 and 12:04:40.7 | 12:05:09, in the new OS boot of 12:04:54.5 | 12:05:10, NEW boot (up 16 s): GPU Code 43, container Running | 129 s |
+| 117 | 12:08:11.5 | 12:08:21 (+13.6 s) | 12:08:54 (up 43 s): code 0, container Running | live dump `WATCHDOG-20261009-1210.dmp` 12:10:38.6; burst 12:10:39 (1253 MSI); last guest MSI 12:10:40 (83), none from 12:10:41; `UnloadingGuestDriver` seen at about 12:10:40 (the call started 12:10:39.06 did not return and was killed 6 s after that) | 12:11:19, in the new OS boot of 12:10:55.5 | 12:11:19, NEW boot (up 23 s): Code 43, container Running; R 12:11:29, C 12:11:47 | 149 s |
+| 118 | 12:17:48.5 | 12:18:00 (+16 s) | 12:18:05 (up 17 s): code 0, container Running | NONE in 600 s: GPU `code0/OK` in all 125 light samples; the harness's ACPI stop at 12:27:47 then ended in a bugcheck anyway (17.2) | - | no B; L (late) snapshot 12:23:19; 41 live event samples | >= 600 s |
+
+`[measured]` The guest RTC is UTC and agrees with the host clock; guest-side times are the files' and events' own timestamps.
+
+### 17.2 Moment B, "after the driver died, before any reboot", could not be taken
+
+`[measured]` In runs 116 and 117 the guest bugchecked and rebooted. Kernel-Power 41 and WER-SystemErrorReporting 1001 in the new boot (live in run 117 `snap-B`; offline for 116 and 118, `offline_reference/evtx-k116.txt`, `evtx-k118.txt`):
+
+| run | bugcheck | arguments 1-4 |
+|---|---|---|
+| 116 | `0x116` | `0xffff8886c3424460, 0xfffff80312984930, 0xffffffffc000009a, 0x4` |
+| 117 | `0x116` | `0xffff97854a5e8010, 0xfffff8001db44930, 0xffffffffc000009a, 0x4` |
+| 118 (during the shutdown, below) | `0x116` | `0xffffe78e3a837010, 0xfffff80737734930, 0xffffffffc000009a, 0x4` |
+
+Argument 2 ends in `0x4930` in all three (the `+0x14930` call site of §16.2), argument 3 is `0xc000009a` (STATUS_INSUFFICIENT_RESOURCES), argument 4 is 4. Between the last good QGA answer and the new OS boot the guest answers nothing: 116: last good sample 12:04:35.6, the call
+at 12:04:40.7 hung, the new OS boot at 12:04:54.5 (14 s after the last MSI); 117: the call at 12:10:39.06 hung, the first full attempt (12:10:46-12:11:16) got no answer, the new OS boot at 12:10:55.5.
+**So the window "driver dead, OS up, QGA answering" was about 0 s in the two boots that died; what the QGA answered "after the driver died" here is the NEXT boot of the same disk**, which comes up with the device in Code 43 (17.3, 17.4).
+`[inferred]` the same happened in runs 113 and 114 (their probes ran 40 s after the stall marker and answered "no NVIDIA adapter, Error 43"): a reboot would have been invisible to those probes, which print no boot time. Falsifier of this reading: a probe that prints the boot time and shows the first boot's.
+
+`[measured]` Run 118 did not die in 600 s. The harness's ACPI power-down at 12:27:47 began a shutdown (EventLog 6006 at 12:27:51; the display unit and GSP were touched at 12:27:47-55, host BAR0-trace per-second counts of run 118), the guest's MSIs stopped at 12:27:55, the ACPI stop was not completed
+("no ACPI shutdown after 180 s", then QGA), and the NEXT boot at 12:28:16.5 logs Kernel-Power 41 with `0x116 ... 4930 ... c000009a`. **A driver that was healthy for 10 minutes fails the same way when the OS powers the machine down.** `[inferred]` the `0x116` is the driver's reset/teardown path failing, not something the lock-screen load does; falsifier: a `0x116` with a different argument 3, or a clean power-down of a kayfabe boot.
+
+### 17.3 What each moment showed (the guest's own view)
+
+- **A (driver up, 17-43 s after the OS boot):** `NVDisplay.ContainerLocalSystem` ("NVIDIA Display Container LS"), StartMode Auto, StartName LocalSystem, State **Running**, ExitCode 0, started 12:02:39.5 (7 s after the OS boot) in run 116; `NVDisplay.Container.exe` pid 2252 (session 0, 0.28 s CPU, 488 handles) and a second `NVDisplay.Container.exe` in session 1 (the user-session container, log `DisplaySessionContainer1.log`) started 12:02:39.9; the only NVIDIA* service. PnP: "NVIDIA GeForce RTX 4070" Status OK, problem 0, ProblemStatus 0; "Microsoft Basic Display Adapter" present (the std VGA). `csrss`, `winlogon`, `dwm`, `LogonUI` all Responding. Events since the boot: only HAL 17/18 (timer warnings), Kernel-Power 172, Wininit 15 (Credential Guard/VBS), SCM 7026 (`dam`, `uiomap` did not load): **no nvlddmkm, Display, DxgKrnl, WER or LiveKernel event**. `Microsoft-Windows-DxgKrnl-Operational` and `Kernel-LiveDump/Operational` do not exist on this image. `LiveKernelReports` and `Minidump` are empty.
+- **B (the NEW boot after the bugcheck, 16-23 s old; runs 116/117):** the same two container processes Running (new pids, started 4 s after the OS boot); the GPU device **Code 43** (ProblemStatus 0), Win32_VideoController `Error`; events: HAL 17/18, volmgr 162 ("Dump file generation succeded"), Kernel-Power 41, Wininit 15, WER-SystemErrorReporting 1001 ("rebooted from a bugcheck"), EventLog 6008 ("previous shutdown ... unexpected"), SCM 7026, WER 1001 "BlueScreen" twice. `LiveKernelReports\WATCHDOG-20261009-1204.dmp` (1.0 GB, 12:04:38.7) and `Minidump\100926-3000-01.dmp` (2.8 MB, 12:04:57.8) exist. The container's logs show the same start as in the first boot.
+- **C (+60 s):** unchanged: container Running, Code 43; the only new event is SCM 7040 (TrustedInstaller start type toggled) in 116. D60 and D120 light samples: container Running (pid 2244), Code 43, CPU 0-2 s, handles 465-473.
+- **L and the 41 event samples of the surviving boot (118):** GPU code 0 and container Running (pid 2252) in all samples for 600 s; NVDisplay.Container CPU stays at 0 and 1 s (idle), handles fall slowly (486/641 to 475/629); **no Display, nvlddmkm, DxgKrnl, WER or LiveKernel event in 10 minutes**, only DistributedCOM 10016 (12:19:57, WscDataProtection launch permission) and SCM 7040 (BITS start type, 12:21:14 and 12:23:18). The offline System.evtx of the same disk agrees (`offline_reference/evtx-k118.txt`).
+
+### 17.4 The Display Container itself, against the reference (read offline from cleanly stopped disks; `offline_reference/`)
+
+`[measured]` The reference is the same Windows image on real hardware, `boundary-vfio-9` (2026-10-05 13:38 UTC, one 100 s VFIO boot), read from its qcow2 overlay with `qemu-nbd -r` and a read-only NTFS mount; the kayfabe sides are runs 116 and 118 mounted the same way.
+- **Container logs:** `NVDisplay.ContainerLocalSystem.log` has the same start in VFIO (26 KB with its clean shutdown) and in kayfabe (container v1.39; plugins NvcDispCorePlugin, NvPluginWatchdog, NvXDCore, NvWksServicePlugin, NvTelemetryEventAnalyzer, NvMessageBusBroadcast, NvTopps_Plugin loaded and started; `Container is started with 1`; a diff of the normalised text shows only addresses and timings in the start). Nothing is logged in between at this log level in either. Run 118's boot-1 file stops in the middle of the shutdown sequence (the bugcheck cut it). `NVDisplayContainerWatchdog.log` and `DisplaySessionContainer1.log` agree the same way. **The container is healthy in both.**
+- **`nvtopps.log` (the NvTopps plugin: "PmuDataMonitor", the JPAC power worker, AUTOFL):**
+  - VFIO (13:39:01.497): `nvtopps initialize... (session 0)`, **`NvapiAdapter initialized (attempts: 1)`**, DB opened, `PmuDataMonitor::postInitialize gpu=0000000000000006`, `PmuDataMonitor::preStart`, `NVIDIA device has arrived: 0000000000000006`, `JpacWorker initialize/start`, `AUTOFL added GPU`, a few NVAPI_NOT_SUPPORTED (-104) errors in the first second, then the shutdown lines at the end. Earlier sessions of the same file (2026-10-04) look the same.
+  - kayfabe, first boots (12:02:39.902 in run 116, 12:17:55.805 in run 118): `nvtopps initialize... (session 0)`, 26 ms later **`ERROR! checkStatus: NVAPI ERROR, Error code -1` / `NVAPI ERROR message NVAPI_ERROR`**, and **nothing more**: no `NvapiAdapter initialized`, no PmuDataMonitor, no device "arrived", no JPAC worker, for the whole boot, including the 10-minute one. The second boots (device in Code 43) print the `initialize...` line only.
+- **`NvProfileUpdaterPlugin_1.log` (an NVAPI user):** VFIO: `Driver version: 58088`, flags (`NVSupportOptimus was not found`, `NvSupportMSHybrid: 1`), `coproc status: 1` (0.28 s later), `NVSupportDisplayUpdate: 1`, then "GFE is not installed, Geforce GPU present ..." and the Optimus/DRS profile updates. kayfabe, first boots (116, 118): the same start, then **`NvAPI_GPU_GetBrandType failed with -1`**, `OptimusSystem: 1`, `No GFE installed`, no update. kayfabe, second boots: **`NvAPI_Initialize failed with -6`**, retried every minute for the whole boot (-6 is NVAPI_NVIDIA_DEVICE_NOT_FOUND by my memory of nvapi.h, not checked here).
+
+**Falsifier outcome.** "The NVIDIA Display Container service is running and healthy in the kayfabe guest" is **not falsified at the service level**: it is Running in every sample of every boot (also in the new boot after the death), the process never exits, no event and no container log line names a crash, a stop or an error of `NVDisplay.Container`, and its log matches the VFIO one.
+**It is falsified one level down, inside the container:** the NvTopps plugin's first NVAPI call fails (`NVAPI_ERROR -1`) in every kayfabe boot, healthy or not, and `NvAPI_GPU_GetBrandType` fails too, while on real hardware both succeed. So the missing 1 Hz loop has a candidate producer that never starts.
+`[inferred]` (not measured) that the four controls (`0x2080a0d1`, `0x2080a0a8`, `0x20809037`, `0x20808539`) are sent by the NvTopps/PMU worker (`V3_REFUSAL_AUDIT.md` attributes `0x2080a0d1` to "perf sampling"); falsifier: a VFIO boot in which the container is stopped (or nvtopps kept out) and the 1 Hz set does not disappear, or a kayfabe boot in which nvtopps initializes and the set does not appear.
+Also `[inferred]`: the failing NVAPI call is answered by kayfabe with `0x56` for some RM control; which one is read by aligning the nvtopps timestamp (OS boot + 7.4 s) with kayfabe's `fn76` stream (NOT done; the log has no per-line clock outside `maplog t=`).
+
+### 17.5 Findings in plain words, measured and inferred apart
+
+1. `[measured]` The guest's own logs, read live, contain **no event that names nvlddmkm, Display, DxgKrnl or the NVIDIA container before the death**, in the two boots that died and the one that did not. The VFIO reference (offline) has none either, so their absence says nothing. **The first sign of the death in the guest is the TDR "WATCHDOG" live dump, written 1-3 s before the last guest MSI**; every other event is logged after the reboot (Kernel-Power 41, WER 1001, EventLog 6008).
+2. `[measured]` The OS does not answer the guest agent from the TDR (12:04:38.7 / 12:10:38.6) until its next boot 16-17 s later; a dead-driver OS cannot be inspected with QGA in these runs. The "QGA answered after the driver died" of runs 113/114 was most likely the next boot `[inferred]`.
+3. `[measured]` The failing reset has the same signature in all three bugchecks (`0x116`, argument 3 `0xc000009a`, argument 2 `...4930`), also when the OS asks a 10-minute-old healthy driver to power down (run 118).
+4. `[measured]` The Display Container is up and its log equals the VFIO log; its NvTopps plugin fails the first NVAPI call with `NVAPI_ERROR` in every kayfabe boot (also the surviving one) and never starts its GPU sampling; `NvAPI_GPU_GetBrandType` fails in the profile updater. `[inferred]` this is why the guest never sends the ~1 Hz control set.
+5. `[measured]` Lifetimes: 129 s, 149 s, >= 600 s (run 118; ended by the harness's stop). The flood-off spread so far was 19-231 s (§16.1), so 118 is the longest flood-off boot; the collector (a PowerShell run every ~5 s plus an event query every ~13 s) did not prevent it. `[not established]` whether the collector changes the lifetime (n = 1 per tool version).
+6. **Not understood, quoted verbatim:** `Microsoft-Windows-Kernel-PnP id=411 L2 Device PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&267a616a&0&30 had a problem starting. Driver Name: display.inf ... Service: BasicDisplay` (16:52:47.945, from the image's earlier history in the PnP configuration log, tagged `PRE-BOOT`, not from these boots). No other warning or error event of these boots is related to the GPU.
+
+### 17.6 What is next (no policy changed)
+
+1. Find the RM control that the first NVAPI call of nvtopps and `NvAPI_GPU_GetBrandType` need and kayfabe answers with `0x56`: align the nvtopps start (OS boot + 7.4 s) with the `fn76` stream of a kayfabe boot (`maplog t=` anchors), or run the same two NVAPI calls from a small read-only probe through QGA on VFIO and on kayfabe and compare the RM controls issued.
+2. The VFIO-side test for the loop's producer (stop the container, or keep `_nvtopps.dll` out, and count `0x2080a0d1`).
+3. The `0x116` at a clean power-down (run 118) is a repeatable trigger of the failing reset that needs no lock-screen timing lottery.

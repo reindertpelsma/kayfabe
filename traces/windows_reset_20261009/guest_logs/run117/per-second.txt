@@ -1,0 +1,147 @@
+12:08:16 {'w:pcie/other': 10059, 'r:gsp/falcon': 3705, 'w:gsp/falcon': 1437, 'r:disp': 1148, 'w:pmc/top': 18, 'r:pcie/other': 4057, 'msi': 344, 'w:disp': 67}
+12:08:17 {'r:pcie/other': 16955, 'w:pcie/other': 30028, 'msi': 2078}
+12:08:18 {'msi': 1838, 'w:pcie/other': 26356, 'r:pcie/other': 15362, 'w:gsp/falcon': 69, 'r:gsp/falcon': 438, 'r:disp': 75, 'w:disp': 36}
+12:08:19 {'w:pcie/other': 1612, 'msi': 206, 'r:pcie/other': 1758, 'r:disp': 162, 'w:gsp/falcon': 33, 'r:gsp/falcon': 82, 'w:disp': 43}
+12:08:20 {'w:pcie/other': 7304, 'msi': 1145, 'r:pcie/other': 7532, 'w:gsp/falcon': 178, 'r:gsp/falcon': 1145, 'r:disp': 26}
+12:08:21 {'w:pcie/other': 8078, 'msi': 1476, 'r:pcie/other': 8873, 'w:gsp/falcon': 173, 'r:gsp/falcon': 1420, 'r:disp': 493, 'w:disp': 39}
+12:08:22 {'w:pcie/other': 4110, 'r:pcie/other': 5494, 'msi': 876, 'w:gsp/falcon': 6, 'r:gsp/falcon': 83, 'r:disp': 2190, 'w:disp': 229}
+12:08:23 {'msi': 114, 'w:pcie/other': 768, 'r:pcie/other': 1027, 'r:disp': 138, 'w:disp': 7}
+12:08:24 {'msi': 113, 'w:pcie/other': 778, 'r:pcie/other': 1026, 'r:disp': 99, 'w:disp': 6}
+12:08:25 {'msi': 107, 'w:pcie/other': 762, 'r:pcie/other': 982}
+12:08:26 {'msi': 115, 'w:pcie/other': 816, 'r:pcie/other': 1045}
+12:08:27 {'msi': 96, 'w:pcie/other': 660, 'r:pcie/other': 863}
+12:08:28 {'msi': 104, 'w:pcie/other': 726, 'r:pcie/other': 940}
+12:08:29 {'msi': 116, 'w:pcie/other': 792, 'r:pcie/other': 1017}
+12:08:30 {'msi': 113, 'w:pcie/other': 768, 'r:pcie/other': 989}
+12:08:31 {'msi': 117, 'w:pcie/other': 768, 'r:pcie/other': 989}
+12:08:32 {'msi': 116, 'w:pcie/other': 792, 'r:pcie/other': 1017}
+12:08:33 {'msi': 119, 'w:pcie/other': 798, 'r:pcie/other': 1024}
+12:08:34 {'msi': 118, 'w:pcie/other': 985, 'r:pcie/other': 1054, 'r:disp': 4, 'w:gsp/falcon': 9, 'r:gsp/falcon': 23}
+12:08:35 {'msi': 113, 'w:pcie/other': 786, 'r:pcie/other': 1010}
+12:08:36 {'msi': 117, 'w:pcie/other': 816, 'r:pcie/other': 1045}
+12:08:37 {'msi': 110, 'w:pcie/other': 774, 'r:pcie/other': 996}
+12:08:38 {'msi': 119, 'w:pcie/other': 828, 'r:pcie/other': 1064}
+12:08:39 {'msi': 112, 'w:pcie/other': 792, 'r:pcie/other': 1017}
+12:08:40 {'msi': 114, 'w:pcie/other': 804, 'r:pcie/other': 1031}
+12:08:41 {'msi': 107, 'w:pcie/other': 762, 'r:pcie/other': 982}
+12:08:42 {'msi': 109, 'w:pcie/other': 762, 'r:pcie/other': 982}
+12:08:43 {'msi': 114, 'w:pcie/other': 798, 'r:pcie/other': 1024}
+12:08:44 {'msi': 117, 'w:pcie/other': 816, 'r:pcie/other': 1045}
+12:08:45 {'msi': 118, 'w:pcie/other': 792, 'r:pcie/other': 1017}
+12:08:46 {'msi': 119, 'w:pcie/other': 816, 'r:pcie/other': 1045}
+12:08:47 {'msi': 111, 'w:pcie/other': 768, 'r:pcie/other': 989}
+12:08:48 {'msi': 116, 'w:pcie/other': 810, 'r:pcie/other': 1038}
+12:08:49 {'msi': 100, 'w:pcie/other': 720, 'r:pcie/other': 933}
+12:08:50 {'msi': 120, 'w:pcie/other': 802, 'r:pcie/other': 1027}
+12:08:51 {'msi': 107, 'w:pcie/other': 760, 'r:pcie/other': 978}
+12:08:52 {'msi': 127, 'w:pcie/other': 837, 'r:pcie/other': 1133, 'r:disp': 190, 'w:disp': 13}
+12:08:53 {'msi': 101, 'w:pcie/other': 712, 'r:pcie/other': 949, 'r:disp': 99, 'w:disp': 6}
+12:08:54 {'msi': 106, 'w:pcie/other': 762, 'r:pcie/other': 982}
+12:08:55 {'msi': 98, 'w:pcie/other': 714, 'r:pcie/other': 926}
+12:08:56 {'msi': 102, 'w:pcie/other': 738, 'r:pcie/other': 954}
+12:08:57 {'msi': 107, 'w:pcie/other': 768, 'r:pcie/other': 989}
+12:08:58 {'msi': 95, 'w:pcie/other': 997, 'r:pcie/other': 949, 'w:gsp/falcon': 45, 'r:gsp/falcon': 89, 'r:disp': 696}
+12:08:59 {'msi': 109, 'w:pcie/other': 774, 'r:pcie/other': 996}
+12:09:00 {'msi': 102, 'w:pcie/other': 732, 'r:pcie/other': 947}
+12:09:01 {'msi': 102, 'w:pcie/other': 854, 'r:pcie/other': 954, 'w:gsp/falcon': 22, 'r:gsp/falcon': 48}
+12:09:02 {'msi': 115, 'w:pcie/other': 804, 'r:pcie/other': 1031}
+12:09:03 {'msi': 119, 'w:pcie/other': 828, 'r:pcie/other': 1059}
+12:09:04 {'msi': 113, 'w:pcie/other': 780, 'r:pcie/other': 1003}
+12:09:05 {'msi': 105, 'w:pcie/other': 744, 'r:pcie/other': 961}
+12:09:06 {'msi': 99, 'w:pcie/other': 854, 'r:pcie/other': 957, 'w:gsp/falcon': 22, 'r:gsp/falcon': 51}
+12:09:07 {'msi': 113, 'w:pcie/other': 762, 'r:pcie/other': 982}
+12:09:08 {'msi': 121, 'w:pcie/other': 828, 'r:pcie/other': 1064}
+12:09:09 {'msi': 116, 'w:pcie/other': 798, 'r:pcie/other': 1024}
+12:09:10 {'msi': 108, 'w:pcie/other': 774, 'r:pcie/other': 996}
+12:09:11 {'msi': 110, 'w:pcie/other': 926, 'r:pcie/other': 1033, 'w:gsp/falcon': 22, 'r:gsp/falcon': 45}
+12:09:12 {'msi': 116, 'w:pcie/other': 786, 'r:pcie/other': 1010}
+12:09:13 {'msi': 103, 'w:pcie/other': 726, 'r:pcie/other': 940}
+12:09:14 {'msi': 88, 'w:pcie/other': 648, 'r:pcie/other': 849}
+12:09:15 {'msi': 100, 'w:pcie/other': 702, 'r:pcie/other': 912}
+12:09:16 {'msi': 120, 'w:pcie/other': 816, 'r:pcie/other': 1045}
+12:09:17 {'msi': 109, 'w:pcie/other': 896, 'r:pcie/other': 1001, 'w:gsp/falcon': 22, 'r:gsp/falcon': 44}
+12:09:18 {'msi': 113, 'w:pcie/other': 744, 'r:pcie/other': 961}
+12:09:19 {'msi': 115, 'w:pcie/other': 774, 'r:pcie/other': 996}
+12:09:20 {'msi': 116, 'w:pcie/other': 914, 'r:pcie/other': 1062, 'w:gsp/falcon': 16, 'r:gsp/falcon': 33}
+12:09:21 {'msi': 118, 'w:pcie/other': 834, 'r:pcie/other': 1066}
+12:09:22 {'msi': 122, 'w:pcie/other': 965, 'r:pcie/other': 1152, 'r:disp': 219, 'w:disp': 14, 'w:gsp/falcon': 22, 'r:gsp/falcon': 47}
+12:09:23 {'msi': 111, 'w:pcie/other': 772, 'r:pcie/other': 1019, 'r:disp': 99, 'w:disp': 6}
+12:09:24 {'msi': 102, 'w:pcie/other': 738, 'r:pcie/other': 954}
+12:09:25 {'msi': 105, 'w:pcie/other': 750, 'r:pcie/other': 968}
+12:09:26 {'msi': 106, 'w:pcie/other': 762, 'r:pcie/other': 982}
+12:09:27 {'msi': 103, 'w:pcie/other': 744, 'r:pcie/other': 961}
+12:09:28 {'msi': 108, 'w:pcie/other': 902, 'r:pcie/other': 1013, 'w:gsp/falcon': 22, 'r:gsp/falcon': 49}
+12:09:29 {'msi': 117, 'w:pcie/other': 786, 'r:pcie/other': 1010}
+12:09:30 {'msi': 116, 'w:pcie/other': 798, 'r:pcie/other': 1024}
+12:09:31 {'msi': 119, 'w:pcie/other': 792, 'r:pcie/other': 1017}
+12:09:32 {'msi': 114, 'w:pcie/other': 738, 'r:pcie/other': 954}
+12:09:33 {'msi': 101, 'w:pcie/other': 854, 'r:pcie/other': 957, 'w:gsp/falcon': 22, 'r:gsp/falcon': 49}
+12:09:34 {'msi': 116, 'w:pcie/other': 780, 'r:pcie/other': 1003}
+12:09:35 {'msi': 113, 'w:pcie/other': 768, 'r:pcie/other': 989}
+12:09:36 {'msi': 116, 'w:pcie/other': 798, 'r:pcie/other': 1024}
+12:09:37 {'msi': 115, 'w:pcie/other': 786, 'r:pcie/other': 1010}
+12:09:38 {'msi': 114, 'w:pcie/other': 809, 'r:pcie/other': 1039}
+12:09:39 {'msi': 112, 'w:pcie/other': 938, 'r:pcie/other': 1060, 'w:gsp/falcon': 22, 'r:gsp/falcon': 58}
+12:09:40 {'msi': 112, 'w:pcie/other': 774, 'r:pcie/other': 996}
+12:09:41 {'msi': 111, 'w:pcie/other': 750, 'r:pcie/other': 968}
+12:09:42 {'msi': 118, 'w:pcie/other': 774, 'r:pcie/other': 996}
+12:09:43 {'msi': 116, 'w:pcie/other': 816, 'r:pcie/other': 1045}
+12:09:44 {'msi': 106, 'w:pcie/other': 902, 'r:pcie/other': 1004, 'w:gsp/falcon': 22, 'r:gsp/falcon': 44}
+12:09:45 {'msi': 97, 'w:pcie/other': 690, 'r:pcie/other': 898}
+12:09:46 {'msi': 113, 'w:pcie/other': 786, 'r:pcie/other': 1010}
+12:09:47 {'msi': 116, 'w:pcie/other': 804, 'r:pcie/other': 1031}
+12:09:48 {'msi': 118, 'w:pcie/other': 810, 'r:pcie/other': 1038}
+12:09:49 {'msi': 107, 'w:pcie/other': 726, 'r:pcie/other': 940}
+12:09:50 {'msi': 109, 'w:pcie/other': 896, 'r:pcie/other': 1002, 'w:gsp/falcon': 22, 'r:gsp/falcon': 49}
+12:09:51 {'msi': 117, 'w:pcie/other': 804, 'r:pcie/other': 1031}
+12:09:52 {'msi': 132, 'w:pcie/other': 861, 'r:pcie/other': 1168, 'r:disp': 227, 'w:disp': 14}
+12:09:53 {'msi': 121, 'w:pcie/other': 784, 'r:pcie/other': 1036, 'r:disp': 109, 'w:disp': 6}
+12:09:54 {'msi': 116, 'w:pcie/other': 810, 'r:pcie/other': 1038}
+12:09:55 {'msi': 114, 'w:pcie/other': 944, 'r:pcie/other': 1052, 'w:gsp/falcon': 22, 'r:gsp/falcon': 43}
+12:09:56 {'msi': 118, 'w:pcie/other': 750, 'r:pcie/other': 968}
+12:09:57 {'msi': 117, 'w:pcie/other': 792, 'r:pcie/other': 1017}
+12:09:58 {'msi': 120, 'w:pcie/other': 822, 'r:pcie/other': 1052}
+12:09:59 {'msi': 117, 'w:pcie/other': 792, 'r:pcie/other': 1017}
+12:10:00 {'msi': 109, 'w:pcie/other': 750, 'r:pcie/other': 968}
+12:10:01 {'msi': 112, 'w:pcie/other': 926, 'r:pcie/other': 1029, 'w:gsp/falcon': 22, 'r:gsp/falcon': 41}
+12:10:02 {'msi': 118, 'w:pcie/other': 828, 'r:pcie/other': 1059}
+12:10:03 {'msi': 115, 'w:pcie/other': 798, 'r:pcie/other': 1024}
+12:10:04 {'msi': 120, 'w:pcie/other': 804, 'r:pcie/other': 1031}
+12:10:05 {'msi': 120, 'w:pcie/other': 762, 'r:pcie/other': 982}
+12:10:06 {'msi': 110, 'w:pcie/other': 920, 'r:pcie/other': 1031, 'w:gsp/falcon': 22, 'r:gsp/falcon': 50}
+12:10:07 {'msi': 117, 'w:pcie/other': 810, 'r:pcie/other': 1038}
+12:10:08 {'msi': 121, 'w:pcie/other': 839, 'r:pcie/other': 1074}
+12:10:09 {'msi': 104, 'w:pcie/other': 732, 'r:pcie/other': 947}
+12:10:10 {'msi': 91, 'w:pcie/other': 654, 'r:pcie/other': 856}
+12:10:11 {'msi': 96, 'w:pcie/other': 696, 'r:pcie/other': 905}
+12:10:12 {'msi': 110, 'w:pcie/other': 926, 'r:pcie/other': 1043, 'w:gsp/falcon': 22, 'r:gsp/falcon': 55}
+12:10:13 {'msi': 99, 'w:pcie/other': 594, 'r:pcie/other': 786}
+12:10:14 {'msi': 89, 'w:pcie/other': 642, 'r:pcie/other': 842}
+12:10:15 {'msi': 81, 'w:pcie/other': 612, 'r:pcie/other': 807}
+12:10:16 {'msi': 98, 'w:pcie/other': 708, 'r:pcie/other': 919}
+12:10:17 {'msi': 111, 'w:pcie/other': 774, 'r:pcie/other': 996}
+12:10:18 {'msi': 104, 'w:pcie/other': 866, 'r:pcie/other': 966, 'w:gsp/falcon': 22, 'r:gsp/falcon': 44}
+12:10:19 {'msi': 113, 'w:pcie/other': 786, 'r:pcie/other': 1010}
+12:10:20 {'msi': 111, 'w:pcie/other': 792, 'r:pcie/other': 1017}
+12:10:21 {'msi': 110, 'w:pcie/other': 774, 'r:pcie/other': 996}
+12:10:22 {'msi': 144, 'w:pcie/other': 908, 'r:pcie/other': 1217, 'r:disp': 207, 'w:disp': 14}
+12:10:23 {'msi': 118, 'w:pcie/other': 948, 'r:pcie/other': 1085, 'w:gsp/falcon': 22, 'r:gsp/falcon': 46, 'r:disp': 99, 'w:disp': 6}
+12:10:24 {'msi': 120, 'w:pcie/other': 750, 'r:pcie/other': 968}
+12:10:25 {'msi': 119, 'w:pcie/other': 768, 'r:pcie/other': 989}
+12:10:26 {'msi': 118, 'w:pcie/other': 810, 'r:pcie/other': 1038}
+12:10:27 {'msi': 117, 'w:pcie/other': 762, 'r:pcie/other': 982}
+12:10:28 {'msi': 117, 'w:pcie/other': 822, 'r:pcie/other': 1052}
+12:10:29 {'msi': 118, 'w:pcie/other': 920, 'r:pcie/other': 1037, 'w:gsp/falcon': 22, 'r:gsp/falcon': 56}
+12:10:30 {'msi': 119, 'w:pcie/other': 810, 'r:pcie/other': 1038}
+12:10:31 {'msi': 112, 'w:pcie/other': 774, 'r:pcie/other': 996}
+12:10:32 {'msi': 117, 'w:pcie/other': 792, 'r:pcie/other': 1017}
+12:10:33 {'msi': 117, 'w:pcie/other': 816, 'r:pcie/other': 1045}
+12:10:34 {'msi': 114, 'w:pcie/other': 930, 'r:pcie/other': 1039, 'w:gsp/falcon': 22, 'r:gsp/falcon': 48, 'w:disp': 854, 'r:disp': 284}
+12:10:35 {'msi': 354, 'w:pcie/other': 1815, 'r:pcie/other': 2810, 'r:disp': 2486, 'w:disp': 1046}
+12:10:36 {'r:disp': 2916, 'r:pcie/other': 1571, 'w:pcie/other': 608, 'msi': 168, 'w:disp': 1002}
+12:10:37 {'r:pcie/other': 1025, 'r:disp': 2118, 'w:pcie/other': 542, 'msi': 132, 'w:disp': 96, 'w:gsp/falcon': 2, 'r:gsp/falcon': 10}
+12:10:38 {'msi': 121, 'r:pcie/other': 149, 'r:disp': 226, 'w:disp': 12, 'w:pcie/other': 63}
+12:10:39 {'msi': 1253, 'w:pcie/other': 8712, 'r:pcie/other': 2639, 'r:disp': 15560, 'w:disp': 17, 'w:gsp/falcon': 502, 'r:gsp/falcon': 1228, 'w:pmc/top': 4}
+12:10:40 {'w:pmc/top': 18, 'w:gsp/falcon': 1214, 'r:gsp/falcon': 1198, 'r:pcie/other': 1145, 'r:disp': 3267, 'w:pcie/other': 5401, 'msi': 83, 'w:disp': 67}
+12:10:41 {'w:pcie/other': 6, 'w:gsp/falcon': 1, 'r:gsp/falcon': 2, 'r:pcie/other': 1}
+12:10:59 {'w:pcie/other': 4, 'r:gsp/falcon': 2, 'w:gsp/falcon': 2}

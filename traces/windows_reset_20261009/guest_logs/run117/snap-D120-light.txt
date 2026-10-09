@@ -1,0 +1,10 @@
+# light sample at B+121s host_utc=12:12:45.454
+LIGHT utc=12:12:44.719 boot=12:10:55 up_s=109
+LS gpu=code43/Error svc=NVDisplay.ContainerLocalSystem=Running(pid2244) proc=csrss:788:cpu0:h405 csrss:864:cpu0:h168 dwm:1292:cpu0:h798 LogonUI:1284:cpu0:h764 NVDisplay.Container:2244:cpu1:h471 NVDisplay.Container:3308:cpu0:h465 winlogon:940:cpu0:h233
+
+Name                           State   StartMode ProcessId ExitCode
+----                           -----   --------- --------- --------
+NVDisplay.ContainerLocalSystem Running Auto           2244        0
+
+
+

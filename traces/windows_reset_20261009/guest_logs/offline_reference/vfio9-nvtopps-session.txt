@@ -1,0 +1,69 @@
+[13:39:01.497 2026/10/05]INFO: [nvtopps::InitImpl::InitImpl]: nvtopps initialize... (session 0)
+[13:39:01.503 2026/10/05]INFO: [nvtopps::InitImpl::InitImpl]: NvapiAdapter initialized (attempts: 1)
+[13:39:01.519 2026/10/05]INFO: [NvModel::Model::createStorageObject]: NvTOPPS DB opened as C:\ProgramData\NVIDIA Corporation\nvtopps\nvtopps.db3
+[13:39:01.520 2026/10/05]INFO: [NvModel::Model::createStorageObject]: NvTOPPS DB opened as :memory:
+[13:39:01.523 2026/10/05]INFO: [NvModel::Model::createStorageObject]: NvTOPPS DB opened as C:\Windows\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\Display.NvContainer\nvtopps.db3
+[13:39:01.525 2026/10/05]INFO: [NvModel::Model::initialize]: NvTOPPS DB populated from C:\ProgramData\NVIDIA Corporation\nvtopps\nvtopps.db3
+[13:39:01.529 2026/10/05]INFO: [PmuDataMonitor::postInitialize]: gpu=0000000000000006
+[13:39:01.582 2026/10/05]INFO: [rise::Rise::postInitialize]: RISE Initializing...
+[13:39:01.636 2026/10/05]INFO: [PmuDataMonitor::preStart]: gpu=0000000000000006
+[13:39:01.681 2026/10/05]INFO: [mmf::FrameServer::Details::Details]: UMD_FRM_MMF: Created new (element size 64, capacity 8064)
+[13:39:01.704 2026/10/05]INFO: [rise::Rise::initialize]: Initializing RISE Core.
+[13:39:01.706 2026/10/05]INFO: [nvtopps::SystemState::refreshGpuHandles]: NVIDIA device has arrived: 0000000000000006
+[13:39:01.706 2026/10/05]INFO: [jpac::JpacWorker::gpuHandlesEvent]: JpacWorker GPU handles changed 1 0 1.
+[13:39:01.707 2026/10/05]INFO: [jpac::JpacCore::startUp]: JpacWorker starting up.
+[13:39:01.707 2026/10/05]INFO: [jpac::JpacCore::initializeSelf]: JpacWorker initialize...
+[13:39:01.744 2026/10/05]INFO: [jpac::JpacCore::checkConfig]: JPAC config ID 1100
+[13:39:01.745 2026/10/05]ERROR! [jpac::JpacCore::getAcpiSysPwrTableVersion]: NvAPI_InitializeEx
+[13:39:01.758 2026/10/05]ERROR! [jpac::JpacCore::checkMtcTableSupport]: NvAPI_InitializeEx
+[13:39:01.758 2026/10/05]ERROR! [jpac::JpacCore::checkSbiosDbdc]: NvAPI_InitializeEx
+[13:39:01.758 2026/10/05]ERROR! [jpac::JpacCore::checkSbiosWm2]: NvAPI_InitializeEx
+[13:39:01.760 2026/10/05]ERROR! [jpac::ControlSettings::updatePtacConfig]: NvAPI_InitializeEx
+[13:39:01.760 2026/10/05]INFO: [mmf::FrameServer::Details::Details]: UMD_FRM_MMF: Opened existing (element size 64->64, capacity 8064->8064)
+[13:39:01.770 2026/10/05]WARNING! [IpcDispatcher::OnMessage]: Message was rejected!
+[13:39:01.791 2026/10/05]WARNING! [jpac::ControllerBase::init]: Controller settings are missing
+[13:39:01.791 2026/10/05]WARNING! [jpac::ControllerBase::init]: Controller settings are missing
+[13:39:01.791 2026/10/05]WARNING! [jpac::ControllerBase::init]: Controller settings are missing
+[13:39:01.791 2026/10/05]WARNING! [jpac::ControllerBase::init]: Controller settings are missing
+[13:39:01.791 2026/10/05]WARNING! [jpac::ControllerBase::init]: Controller settings are missing
+[13:39:01.791 2026/10/05]WARNING! [jpac::ControllerBase::init]: Controller settings are missing
+[13:39:01.791 2026/10/05]WARNING! [jpac::ControllerBase::init]: Controller settings are missing
+[13:39:01.791 2026/10/05]WARNING! [jpac::ControllerBase::init]: Controller settings are missing
+[13:39:01.791 2026/10/05]WARNING! [jpac::ControllerBase::init]: Controller settings are missing
+[13:39:01.791 2026/10/05]WARNING! [jpac::ControllerBase::init]: Controller settings are missing
+[13:39:01.791 2026/10/05]WARNING! [jpac::ControllerBase::init]: Controller settings are missing
+[13:39:01.791 2026/10/05]WARNING! [jpac::ControllerBase::init]: Controller settings are missing
+[13:39:01.792 2026/10/05]INFO: [jpac::JpacCore::initializeSelf]: JpacWorker initialize complete.
+[13:39:01.792 2026/10/05]INFO: [jpac::JpacCore::startSelf]: JpacWorker start...
+[13:39:01.792 2026/10/05]INFO: [jpac::JpacCore::startSelf]: JpacWorker start completed.
+[13:39:01.792 2026/10/05]INFO: [jpac::JpacWorker::acLineStatusEvent]: JpacWorker AC event 1.
+[13:39:01.792 2026/10/05]INFO: [jpac::JpacWorker::powerSliderStatusEvent]: JpacWorker PowerSlider event 3.
+[13:39:01.792 2026/10/05]INFO: [jpac::JpacWorker::powerSchemeStatusEvent]: JpacWorker PowerScheme event 2.
+[13:39:01.793 2026/10/05]INFO: [mmf::FrameServer::Details::Details]: UMD_FRM_MMF: Opened existing (element size 64->64, capacity 8064->8064)
+[13:39:01.818 2026/10/05]WARNING! [IpcDispatcher::OnMessage]: Message was rejected!
+[13:39:01.852 2026/10/05]INFO: [autofl::AutoFLWorkerImpl::update]: AUTOFL added GPU
+[13:39:02.048 2026/10/05]ERROR! [`anonymous-namespace'::checkStatus]: NVAPI ERROR, Error code -104
+[13:39:02.048 2026/10/05]ERROR! [`anonymous-namespace'::checkStatus]: NVAPI ERROR message NVAPI_NOT_SUPPORTED
+[13:39:02.048 2026/10/05]ERROR! [`anonymous-namespace'::checkStatus]: NVAPI ERROR, Error code -104
+[13:39:02.048 2026/10/05]ERROR! [`anonymous-namespace'::checkStatus]: NVAPI ERROR message NVAPI_NOT_SUPPORTED
+[13:39:02.063 2026/10/05]INFO: [Scanner::ScannerManager::sendScannerTelemetryData]: ScanStatusReporting failed to initialize!: 8007007e
+[13:39:02.063 2026/10/05]INFO: [Scanner::ScannerManager::sendScannerTelemetryData]: ScanStatusReporting uninitialize succeeded
+[13:40:16.637 2026/10/05]INFO: [nvtopps::StartImpl::Stop::systemState]: SUCCESS
+[13:40:16.639 2026/10/05]INFO: [jpac::JpacCore::stopSelf]: JpacWorker stop...
+[13:40:16.639 2026/10/05]INFO: [jpac::JpacCore::stopSelf]: JpacWorker stop completed.
+[13:40:16.664 2026/10/05]INFO: [Scanner::ScannerManager::update]: ScannerManager changing state to 4
+[13:40:16.678 2026/10/05]INFO: [nvtopps::uninitialize]: nvtopps uninitialize...
+[13:40:16.681 2026/10/05]INFO: [PmuDataMonitor::postStop]: gpu=0000000000000006
+[13:40:16.682 2026/10/05]INFO: [nvtopps::StartImpl::Stop::workerManager]: FAIL
+[13:40:16.682 2026/10/05]INFO: [nvtopps::StartImpl::Stop::globalSettings]: SUCCESS
+[13:40:16.698 2026/10/05]INFO: [nvtopps::StartImpl::Stop::model]: SUCCESS
+[13:40:16.699 2026/10/05]INFO: [nvtopps::StartImpl::Stop::ipc]: SUCCESS
+[13:40:16.700 2026/10/05]INFO: [PmuDataMonitor::postUninitialize]: gpu=0000000000000006
+[13:40:16.700 2026/10/05]INFO: [Scanner::ScannerManager::preUninitialize]: ScannerManager::uninitialize
+[13:40:16.700 2026/10/05]INFO: [jpac::JpacCore::uninitializeSelf]: JpacWorker uninitialize...
+[13:40:16.700 2026/10/05]INFO: [jpac::JpacCore::uninitializeSelf]: JpacWorker uninitialize complete.
+[13:40:16.701 2026/10/05]INFO: [nvtopps::InitImpl::Uninit::workerManager]: SUCCESS
+[13:40:16.701 2026/10/05]INFO: [nvtopps::InitImpl::Uninit::globalSettings]: SUCCESS
+[13:40:16.701 2026/10/05]INFO: [nvtopps::InitImpl::Uninit::ipc]: SUCCESS
+[13:40:16.716 2026/10/05]INFO: [nvtopps::InitImpl::Uninit::model]: SUCCESS
+[13:40:16.720 2026/10/05]INFO: [nvtopps::InitImpl::Uninit::nvapi]: SUCCESS

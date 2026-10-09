@@ -1,0 +1,27 @@
+== vfio-9: /mnt/gl-a/Windows/System32/winevt/Logs/System.evtx events since 2026-10-05 13:30: 83
+providers (count): Microsoft-Windows-HttpService=17, Microsoft-Windows-FilterManager=16, Microsoft-Windows-Kernel-Boot=8, Microsoft-Windows-Kernel-Processor-Power=8, Microsoft-Windows-Dhcp-Client=7, EventLog=4, Microsoft-Windows-Kernel-General=4, Microsoft-Windows-HAL=3, Microsoft-Windows-Wininit=3, Microsoft-Windows-Directory-Services-SAM=3, Microsoft-Windows-DHCPv6-Client=3, Microsoft-Windows-Ntfs=2, Service Control Manager=2, Microsoft-Windows-Kernel-Power=1, LsaSrv=1, User32=1
+selected 14 (Level 1-3 or provider match), newest 120:
+2026-10-05 13:38:36.739 Microsoft-Windows-Kernel-General id=12 L4 10 0 26100 1742 0 0 2026-10-05 13:38:36.500000+00:00
+2026-10-05 13:38:36.739 Microsoft-Windows-Kernel-General id=25 L4 2026-10-05 13:38:36.500000+00:00 2026-10-05 13:38:36+00:00 2 0 False False True 0
+2026-10-05 13:38:36.742 Microsoft-Windows-Kernel-General id=20 L4 0 True 0 0
+2026-10-05 13:38:36.767 Microsoft-Windows-HAL id=17 L3 
+2026-10-05 13:38:36.767 Microsoft-Windows-HAL id=18 L3 
+2026-10-05 13:38:38.427 Microsoft-Windows-Kernel-Power id=172 L4 2 6
+2026-10-05 13:38:54.743 Microsoft-Windows-Kernel-General id=24 L4 0 0 0 0 0
+2026-10-05 13:38:59.841 Microsoft-Windows-Wininit id=15 L3 
+2026-10-05 13:39:01.321 EventLog id=6009 L4 &lt;string&gt;10.00.&lt;/string&gt;
+&lt;string&gt;26100&lt;/string&gt;
+&lt;string&gt;&lt;/string&gt;
+&lt;string&gt;Multiprocessor Free&lt;/string&gt;
+&lt;string
+2026-10-05 13:39:01.323 EventLog id=6005 L4 
+2026-10-05 13:39:01.323 EventLog id=6013 L4 &lt;string&gt;24&lt;/string&gt;
+&lt;string&gt;&lt;/string&gt;
+&lt;string&gt;24&lt;/string&gt;
+&lt;string&gt;60&lt;/string&gt;
+&lt;string&gt;0 Coordinated Univer
+2026-10-05 13:39:02.114 Service Control Manager id=7026 L4 
+dam
+uiomap
+2026-10-05 13:40:11.585 Service Control Manager id=7031 L2 OpenSSH SSH Server 1 0 1 Restart the service
+2026-10-05 13:40:16.642 EventLog id=6006 L4 

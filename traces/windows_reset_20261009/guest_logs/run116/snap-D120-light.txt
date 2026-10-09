@@ -1,0 +1,12 @@
+# light sample at B+124s host_utc=12:07:12.365
+LIGHT utc=12:07:11.023 boot=12:04:54 up_s=137
+LS gpu=code43/Error svc=InventorySvc=Stopped(pid0);NVDisplay.ContainerLocalSystem=Running(pid2244);SessionEnv=Stopped(pid0) proc=csrss:784:cpu1:h447 csrss:860:cpu0:h169 dwm:1292:cpu1:h795 LogonUI:1284:cpu1:h761 NVDisplay.Container:2244:cpu2:h473 NVDisplay.Container:3284:cpu0:h465 winlogon:928:cpu0:h225
+
+Name                           State   StartMode ProcessId ExitCode
+----                           -----   --------- --------- --------
+InventorySvc                   Stopped Manual            0     1077
+NVDisplay.ContainerLocalSystem Running Auto           2244        0
+SessionEnv                     Stopped Manual            0     1077
+
+
+

@@ -1,0 +1,40 @@
+1005-13:39:01.708 0C70 Starting logging.
+1005-13:39:01.708 0C70 Initialization complete.
+1005-13:39:01.722 0C70 Entering NvProfileUpdaterPlugin_Start
+1005-13:39:01.722 0C70 Device notification registered.
+1005-13:39:01.722 0C70 Exiting NvProfileUpdaterPlugin_Start
+1005-13:39:01.724 0F30 Waiting for global mutex... #0
+1005-13:39:01.724 0F30 Mutex is acquired.
+1005-13:39:01.724 0F30 Loading NvAPI to check if driver is working...
+1005-13:39:01.730 0F30 Driver version: 58088
+1005-13:39:01.730 0F30 Driver branch: r580_78
+1005-13:39:01.730 0F30 First run was already done, skipping first run activities.
+1005-13:39:01.734 0F30 Performing startup update check
+1005-13:39:01.734 0F30 Waiting for global mutex... #0
+1005-13:39:01.734 0F30 Mutex is acquired.
+1005-13:39:01.734 0F30 Loading NvAPI...
+1005-13:39:01.739 0F30 Driver version: 58088
+1005-13:39:01.739 0F30 Driver branch: r580_78
+1005-13:39:01.739 0F30 GFE is installed: 0
+1005-13:39:01.762 0F30 GPU [6] flag NVSupportOptimus was not found.
+1005-13:39:01.771 0F30 GPU [6] flag NvSupportMSHybrid: 1
+1005-13:39:02.040 0F30 GPU [6] coproc status: 1
+1005-13:39:02.047 0F30 GPU [6] flag NVSupportDisplayUpdate: 1
+1005-13:39:02.054 0F30 GPU [6] : NVS 0
+1005-13:39:02.054 0F30 GPU [6] : Geforce 1
+1005-13:39:02.054 0F30 OptimusSystem: 1
+1005-13:39:02.054 0F30 NVSupportDisplayUpdate: 1
+1005-13:39:02.054 0F30 GFE is not installed,  Geforce GPU present hence OptimusProfile depdens on Optimus flag
+1005-13:39:02.054 0F30 Checking for OPTIMUS updates
+1005-13:39:02.055 0F30 Going to apply Optimus update C:\ProgramData\NVIDIA Corporation\NvProfileUpdaterPlugin\optimus\update.dat
+1005-13:39:03.147 0F30 NvUpdateWhiteList finished
+1005-13:39:03.229 0F30 Going to use URL: https://services.gfe.nvidia.com/GFE/v1.0/profiles/Optimus?{"branch":"r580_78"}
+1005-13:39:03.340 0F30 HTTP response code: 200
+1005-13:39:03.340 0F30 Downloaded metadata: {
+  "md5": "0d89fa5f5de5b9d84cf47674ca395c58",
+  "profile": "Version2",
+  "sha256": "d3c597ea8c567bd8593b716afb1361a6e5f851643e47fbf28f81f5d2ab37a3ea",
+  "size": 1143469,
+  "url": "https://download.gfe.nvidia.com/GFE/profiles/Optimus/Version2/38976193/nvcoproc.bin.gz",
+  "version": "38976193"
+}

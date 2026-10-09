@@ -6,7 +6,7 @@ $os=Get-CimInstance Win32_OperatingSystem
 'LIGHT utc=' + (Get-Date).ToUniversalTime().ToString('HH:mm:ss.fff') + ' boot=' + $os.LastBootUpTime.ToString('HH:mm:ss') + ' up_s=' + [int]((Get-Date)-$os.LastBootUpTime).TotalSeconds
 $v=@(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'NVIDIA' })
 $g='none'; if($v.Count){ $g=($v | ForEach-Object { 'code' + $_.ConfigManagerErrorCode + '/' + $_.Status }) -join ',' }
-$sv=@(Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'NV|NVIDIA' -or $_.DisplayName -match 'NVIDIA' })
+$sv=@(Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^NV|NVIDIA' -or $_.DisplayName -match 'NVIDIA' })
 $ss=($sv | ForEach-Object { $_.Name + '=' + $_.State + '(pid' + $_.ProcessId + ')' }) -join ';'
 $pr=@(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^(NVDisplay|nvcontainer|nvidia|NVIDIA|nvspcap|nvvsvc|dwm|LogonUI|winlogon|csrss)' })
 $ps=($pr | ForEach-Object { $_.Name + ':' + $_.Id + ':cpu' + [int]$_.CPU + ':h' + $_.HandleCount }) -join ' '

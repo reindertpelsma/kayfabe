@@ -1,0 +1,4 @@
+[12:17:55.805 2026/10/09]INFO: [nvtopps::InitImpl::InitImpl]: nvtopps initialize... (session 0)
+[12:17:55.828 2026/10/09]ERROR! [`anonymous-namespace'::checkStatus]: NVAPI ERROR, Error code -1
+[12:17:55.828 2026/10/09]ERROR! [`anonymous-namespace'::checkStatus]: NVAPI ERROR message NVAPI_ERROR
+[12:28:22.208 2026/10/09]INFO: [nvtopps::InitImpl::InitImpl]: nvtopps initialize... (session 0)

@@ -1,0 +1,9 @@
+12:02:28.962 +  0.0s monitor start run=116 qpid=3270289 deadline=600.0s unload_lines_at_start=0
+12:02:42.274 + 13.3s QGA answered; moment A
+12:03:12.396 + 43.4s FULL A try1 rc=1 dur=30.1s bytes=0 complete=False -> snap-A-120242-FAILED.txt
+12:03:22.803 + 53.8s FULL A try2 rc=0 dur=7.4s bytes=34032 complete=True -> snap-A-120315.txt
+12:05:10.868 +161.9s DEATH detected: videocontroller_error=False gpu=None unloading_in_qemu_log=True
+12:05:15.174 +166.2s FULL B try1 rc=0 dur=4.3s bytes=34512 complete=True -> snap-B-120510.txt
+12:06:17.157 +228.2s FULL C try1 rc=0 dur=3.2s bytes=37250 complete=True -> snap-C-120613.txt
+12:07:14.476 +285.5s B+120 s reached, stopping the collection
+12:07:14.476 +285.5s monitor end alive=True B=True C=True

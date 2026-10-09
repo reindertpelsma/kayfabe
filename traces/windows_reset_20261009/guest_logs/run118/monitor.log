@@ -1,0 +1,47 @@
+12:17:44.625 +  0.0s monitor start run=118 qpid=3281755 deadline=600.0s unload_lines_at_start=0
+12:18:00.689 + 16.1s QGA answered; moment A
+12:18:05.891 + 21.3s FULL A try1 rc=0 dur=5.2s bytes=62433 complete=True -> snap-A-121800.txt
+12:18:18.044 + 33.4s E001 rc=0 dur=1.5s bytes=3067
+12:18:32.542 + 47.9s E002 rc=0 dur=3.0s bytes=3067
+12:18:47.507 + 62.9s E003 rc=0 dur=2.2s bytes=3067
+12:19:01.152 + 76.5s E004 rc=0 dur=2.2s bytes=3067
+12:19:14.069 + 89.4s E005 rc=0 dur=2.2s bytes=3067
+12:19:26.747 +102.1s E006 rc=0 dur=1.5s bytes=3067
+12:19:39.432 +114.8s E007 rc=0 dur=1.5s bytes=3067
+12:19:53.545 +128.9s E008 rc=0 dur=2.2s bytes=3067
+12:20:06.956 +142.3s E009 rc=0 dur=2.2s bytes=3327
+12:20:21.086 +156.5s E010 rc=0 dur=2.2s bytes=3327
+12:20:34.019 +169.4s E011 rc=0 dur=2.2s bytes=3327
+12:20:48.141 +183.5s E012 rc=0 dur=2.2s bytes=3327
+12:21:02.275 +197.7s E013 rc=0 dur=2.2s bytes=3327
+12:21:16.435 +211.8s E014 rc=0 dur=2.2s bytes=3327
+12:21:30.897 +226.3s E015 rc=0 dur=2.2s bytes=3491
+12:21:45.795 +241.2s E016 rc=0 dur=2.2s bytes=3491
+12:22:01.445 +256.8s E017 rc=0 dur=3.0s bytes=3491
+12:22:17.143 +272.5s E018 rc=0 dur=2.2s bytes=3491
+12:22:30.133 +285.5s E019 rc=0 dur=2.2s bytes=3491
+12:22:43.616 +299.0s E020 rc=0 dur=2.2s bytes=3491
+12:22:57.087 +312.5s E021 rc=0 dur=2.2s bytes=3491
+12:23:11.276 +326.7s E022 rc=0 dur=2.2s bytes=3491
+12:23:15.510 +330.9s no death by 330 s: late full snapshot
+12:23:19.202 +334.6s FULL L try1 rc=0 dur=3.7s bytes=62873 complete=True -> snap-L-122315.txt
+12:23:29.176 +344.6s E023 rc=0 dur=2.2s bytes=3655
+12:23:44.118 +359.5s E024 rc=0 dur=2.2s bytes=3655
+12:23:57.107 +372.5s E025 rc=0 dur=2.2s bytes=3655
+12:24:10.585 +386.0s E026 rc=0 dur=2.2s bytes=3655
+12:24:24.057 +399.4s E027 rc=0 dur=2.2s bytes=3655
+12:24:37.053 +412.4s E028 rc=0 dur=2.2s bytes=3655
+12:24:50.556 +425.9s E029 rc=0 dur=2.2s bytes=3655
+12:25:04.054 +439.4s E030 rc=0 dur=2.2s bytes=3655
+12:25:19.755 +455.1s E031 rc=0 dur=3.7s bytes=3655
+12:25:33.255 +468.6s E032 rc=0 dur=2.2s bytes=3655
+12:25:46.743 +482.1s E033 rc=0 dur=2.2s bytes=3655
+12:26:00.973 +496.3s E034 rc=0 dur=2.2s bytes=3655
+12:26:13.261 +508.6s E035 rc=99 dur=1.0s bytes=0
+12:26:26.777 +522.2s E036 rc=0 dur=2.2s bytes=3655
+12:26:40.305 +535.7s E037 rc=0 dur=2.2s bytes=3655
+12:26:53.820 +549.2s E038 rc=0 dur=2.2s bytes=3655
+12:27:08.812 +564.2s E039 rc=0 dur=2.2s bytes=3655
+12:27:23.072 +578.4s E040 rc=0 dur=2.2s bytes=3655
+12:27:36.596 +592.0s E041 rc=0 dur=2.2s bytes=3655
+12:27:47.087 +602.5s monitor end alive=True B=False C=False

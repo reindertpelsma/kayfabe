@@ -1,0 +1,61 @@
+== kayfabe-118: /mnt/gl-b/Windows/System32/winevt/Logs/System.evtx events since 2026-10-09 12:15: 180
+providers (count): Microsoft-Windows-HttpService=34, Microsoft-Windows-FilterManager=32, Microsoft-Windows-Kernel-Boot=16, Microsoft-Windows-Kernel-Processor-Power=16, Microsoft-Windows-Dhcp-Client=12, Microsoft-Windows-WindowsUpdateClient=10, EventLog=8, Microsoft-Windows-Kernel-General=8, Microsoft-Windows-HAL=6, Microsoft-Windows-Wininit=6, Microsoft-Windows-Directory-Services-SAM=6, Service Control Manager=6, Microsoft-Windows-Ntfs=5, Microsoft-Windows-DHCPv6-Client=4, Microsoft-Windows-Kernel-Power=3, LsaSrv=2, Microsoft-Windows-DistributedCOM=2, User32=2, volmgr=1, Microsoft-Windows-WER-SystemErrorReporting=1
+selected 35 (Level 1-3 or provider match), newest 120:
+2026-10-09 12:17:48.749 Microsoft-Windows-Kernel-General id=12 L4 10 0 26100 1742 0 0 2026-10-09 12:17:48.500000+00:00
+2026-10-09 12:17:48.749 Microsoft-Windows-Kernel-General id=25 L4 2026-10-09 12:17:48.500000+00:00 2026-10-09 12:17:48+00:00 2 0 False False True 0
+2026-10-09 12:17:48.753 Microsoft-Windows-Kernel-General id=20 L4 0 True 0 0
+2026-10-09 12:17:48.784 Microsoft-Windows-HAL id=17 L3 
+2026-10-09 12:17:48.784 Microsoft-Windows-HAL id=18 L3 
+2026-10-09 12:17:49.757 Microsoft-Windows-Kernel-Power id=172 L4 2 6
+2026-10-09 12:17:50.877 Microsoft-Windows-Kernel-General id=24 L4 0 0 0 0 0
+2026-10-09 12:17:54.270 Microsoft-Windows-Wininit id=15 L3 
+2026-10-09 12:17:55.572 EventLog id=6009 L4 &lt;string&gt;10.00.&lt;/string&gt;
+&lt;string&gt;26100&lt;/string&gt;
+&lt;string&gt;&lt;/string&gt;
+&lt;string&gt;Multiprocessor Free&lt;/string&gt;
+&lt;string
+2026-10-09 12:17:55.574 EventLog id=6005 L4 
+2026-10-09 12:17:55.575 EventLog id=6013 L4 &lt;string&gt;7&lt;/string&gt;
+&lt;string&gt;&lt;/string&gt;
+&lt;string&gt;&lt;/string&gt;
+&lt;string&gt;7&lt;/string&gt;
+&lt;string&gt;60&lt;/string&gt;
+&lt;st
+2026-10-09 12:17:56.414 Service Control Manager id=7026 L4 
+dam
+uiomap
+2026-10-09 12:19:57.395 Microsoft-Windows-DistributedCOM id=10016 L3 application-specific Local Launch Windows.SecurityCenter.WscDataProtection Unavailable NT AUTHORITY SYSTEM S-1-5-18 LocalHost (Using LRPC) Unavailable Unavailab
+2026-10-09 12:21:14.464 Service Control Manager id=7040 L4 Background Intelligent Transfer Service demand start auto start BITS
+2026-10-09 12:23:18.733 Service Control Manager id=7040 L4 Background Intelligent Transfer Service auto start demand start BITS
+2026-10-09 12:27:45.874 Service Control Manager id=7031 L2 OpenSSH SSH Server 1 0 1 Restart the service
+2026-10-09 12:27:51.645 EventLog id=6006 L4 
+2026-10-09 12:28:16.740 Microsoft-Windows-Kernel-General id=12 L4 10 0 26100 1742 0 0 2026-10-09 12:28:16.500000+00:00
+2026-10-09 12:28:16.740 Microsoft-Windows-Kernel-General id=25 L4 2026-10-09 12:28:16.500000+00:00 2026-10-09 12:28:16+00:00 2 0 False False True 0
+2026-10-09 12:28:16.744 Microsoft-Windows-Kernel-General id=20 L4 0 True 0 0
+2026-10-09 12:28:16.770 Microsoft-Windows-HAL id=17 L3 
+2026-10-09 12:28:16.770 Microsoft-Windows-HAL id=18 L3 
+2026-10-09 12:28:18.288 volmgr id=162 L2 &lt;string&gt;\Device\HarddiskVolume3&lt;/string&gt;
+
+2026-10-09 12:28:18.476 Microsoft-Windows-Kernel-Power id=41 L1 278 0xffffe78e3a837010 0xfffff80737734930 0xffffffffc000009a 0x0000000000000004 0 134360224654035010 0 0 False 0 0 False 0 0 False False 0 0 3 0
+2026-10-09 12:28:18.476 Microsoft-Windows-Kernel-Power id=172 L4 2 6
+2026-10-09 12:28:19.543 Microsoft-Windows-Kernel-General id=24 L4 0 0 0 0 0
+2026-10-09 12:28:20.614 Microsoft-Windows-Wininit id=15 L3 
+2026-10-09 12:28:21.349 Microsoft-Windows-WER-SystemErrorReporting id=1001 L2 0x00000116 (0xffffe78e3a837010, 0xfffff80737734930, 0xffffffffc000009a, 0x0000000000000004) C:\Windows\MEMORY.DMP 902d493c-4d50-4f21-bbf4-1ed66bc61967
+2026-10-09 12:28:22.216 EventLog id=6009 L4 &lt;string&gt;10.00.&lt;/string&gt;
+&lt;string&gt;26100&lt;/string&gt;
+&lt;string&gt;&lt;/string&gt;
+&lt;string&gt;Multiprocessor Free&lt;/string&gt;
+&lt;string
+2026-10-09 12:28:22.216 EventLog id=6005 L4 
+2026-10-09 12:28:22.217 EventLog id=6013 L4 &lt;string&gt;5&lt;/string&gt;
+&lt;string&gt;&lt;/string&gt;
+&lt;string&gt;&lt;/string&gt;
+&lt;string&gt;5&lt;/string&gt;
+&lt;string&gt;60&lt;/string&gt;
+&lt;st
+2026-10-09 12:28:22.844 Service Control Manager id=7026 L4 
+dam
+uiomap
+2026-10-09 12:30:24.592 Microsoft-Windows-DistributedCOM id=10016 L3 application-specific Local Launch Windows.SecurityCenter.WscDataProtection Unavailable NT AUTHORITY SYSTEM S-1-5-18 LocalHost (Using LRPC) Unavailable Unavailab
+2026-10-09 12:30:46.350 Service Control Manager id=7031 L2 OpenSSH SSH Server 1 0 1 Restart the service
+2026-10-09 12:30:51.412 EventLog id=6006 L4 
