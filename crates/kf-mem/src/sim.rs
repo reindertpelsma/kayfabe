@@ -996,3 +996,5 @@ pub fn check(
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod adversarial;
