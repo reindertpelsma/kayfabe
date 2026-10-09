@@ -344,3 +344,28 @@ grants nothing; the residual is that a guest-kernel lie keeps user work Translat
 kernel driver's process id at each adapter start (the first kernel channel after an all-free) — weaker, because "first after
 an all-free" is guest-timed. The T-space rule itself (a Translated channel never shares a space with a Passthrough one) is
 not touched by either.
+
+## 15. Run 106 onward: the interrupt flood, `KF3_DEBUG_IRQ_FLOOD` (branch `claude/debug-irq-flood-20261009`, 2026-10-09)
+
+**STATUS: LIVE, 2026-10-09 (plan committed before the first boot; results in §15.2).** Note: §12-§14 (H-pde, run 104, run 105) are on
+branch `claude/windows-pde-run104-20261009`; this branch was cut from `claude/windows-reset-20261009` (2e5ddc5c), which ends at §11. The
+section numbers follow that evidence branch.
+
+**What is run.** The debug-only flood of `docs/design/V3_DEBUG_IRQ_FLOOD.md` (kf3 `kf3-bins/3448f8a3` = 2e5ddc5c + the flood commit, built
+on the bench host with `build_kf3.sh`; the thread, the display read-back words and the status segment exist only with the knob set).
+Harness: `wr-run.sh N 3448f8a3 "<EXTRA>"` under `flock -o /tmp/kayfabe-fastguest.lock`, `WR_SHOTS=90`, RTX 4070, with run 104's flags in
+EVERY boot, including **`KF3_NO_BATCHED_MAP=1` (batching OFF, as run 104)**; only the flood word changes. The word
+`KF3_DEBUG_IRQ_FLOOD=<classes>:<ms>` contains `=`, so `windows_broker.sh:283` passes it unchanged (as run 105's `KF3_PT_NSI_RELAY=0`).
+
+**Matrix (one boot each, stop when decisive, at most 6 boots):** R0 flood off (the baseline: lock screen about 3 s, then black); R1
+`all-completion:1000`; R2 `all-completion:100`; R3 `all-completion:10`. If any of R1-R3 is better than R0 (lock screen persists > 10 s),
+bisect at that period: `gsp` only, `disp,dispstat` only, `nonstall` only.
+
+**Falsifier (stated before the first boot):** if with `all-completion` at 10 ms the screen still goes black within about 5 s of the lock
+screen appearing and the guest tears down as in R0, interrupts alone are not the missing piece (what remains: a completion word, a GSP
+message or event, or status values). **Success (decisive):** lock screen persists > 20 s, no bugcheck for 60 s, QGA answers a command.
+Not claimed by this experiment: that a flood that helps is a fix (it is a lead; the fix has to come from the real events).
+
+**Per boot, recorded:** first/last non-black screenshot (every 997th byte of the PPM above 16, `irqflood/tools/nonblack.py`), MSI per
+second (`tools/tl.py`, as `tl104.py`), whether QGA answered, host Xid count before and after, the bugcheck when readable, the flood's
+per-vector raise counts (the status line's `PERTURBING DIAGNOSTIC ON: irq-flood ...` segment).
