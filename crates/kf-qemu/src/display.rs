@@ -2038,6 +2038,12 @@ impl DisplayPlane {
             }
             s
         };
+        // ⚠ PERTURBING DIAGNOSTIC (`KF3_DEBUG_IRQ_FLOOD=…dispstat…`, default off): present the
+        // head-timing status (LAST_DATA, bit 1) as set, and the dispatch word nonzero, while the
+        // guest's enable bit is set — what the hardware trace shows (`0x611c00` reads 2 almost
+        // always) — whether or not a frame edge has latched an event since the guest's last W1C.
+        // Only the words the guest READS change; no event, interrupt or frame logic does.
+        let dispstat = crate::irqflood::dispstat_on();
         for _ in 0..8 {
             let before = snap();
             store(m.evt_awaken_win, before[0]);
@@ -2045,6 +2051,7 @@ impl DisplayPlane {
             if let Some(o) = m.evt_sem_win {
                 store(o, before[2]);
             }
+            let mut dispatch = p.rm_dispatch(heads);
             for h in 0..heads {
                 store(
                     m.evt_head_timing.0 + h as u64 * m.evt_head_timing.1,
@@ -2053,12 +2060,17 @@ impl DisplayPlane {
                 if let Some((b, s)) = m.rm_intr_en_head_timing {
                     store(b + h as u64 * s, before[4 + 2 * h]);
                 }
+                let mut stat = p.rm_head_timing(h);
+                if dispstat && before[4 + 2 * h] & m.head_last_data != 0 {
+                    stat |= m.head_last_data;
+                    dispatch |= 1 << h;
+                }
                 store(
                     m.rm_intr_stat_head_timing.0 + h as u64 * m.rm_intr_stat_head_timing.1,
-                    p.rm_head_timing(h),
+                    stat,
                 );
             }
-            store(m.rm_intr_dispatch, p.rm_dispatch(heads));
+            store(m.rm_intr_dispatch, dispatch);
             store(
                 m.rm_ctrl_disp,
                 p.rm_ctrl_disp(m.rm_ctrl_awaken_bit, m.rm_ctrl_win_sem_bit),

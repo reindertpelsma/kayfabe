@@ -169,6 +169,17 @@ impl CpuIntr {
         p != 0 && self.top_en.load(Ordering::Acquire) & (1 << subtree_of_leaf(i)) != 0
     }
 
+    /// ⚠ DIAGNOSTIC (`KF3_DEBUG_IRQ_FLOOD`, `docs/design/V3_DEBUG_IRQ_FLOOD.md`): has the guest
+    /// ENABLED `vector` — its bit in `LEAF_EN` (the guest's own `LEAF_EN_SET`/`_CLEAR` writes) and
+    /// its subtree's bit in `TOP_EN` — so that a latch of it would send a message? Lock-free.
+    #[must_use]
+    pub fn vector_enabled(&self, vector: u32) -> bool {
+        let (i, bit) = ((vector / 32) as usize, vector % 32);
+        i < self.n_leaf
+            && self.leaf_en[i].load(Ordering::Acquire) & (1 << bit) != 0
+            && self.top_en.load(Ordering::Acquire) & (1 << subtree_of_leaf(i)) != 0
+    }
+
     /// ★ v3-initrace (diagnostic): every leaf's pending and enable words, and the top enable —
     /// `leaf[i]=pending/enabled …; top_en=…`, only leaves with a bit set in either.
     #[must_use]
@@ -341,6 +352,20 @@ mod tests {
         assert_eq!(t.latch(16 * 32), Raise::OutOfRange, "Ampere has 8 leaves");
         let h = CpuIntr::new(kf_chip::Family::Hopper, UM).unwrap();
         assert_ne!(h.latch(12 * 32), Raise::OutOfRange, "Hopper has 16");
+    }
+
+    #[test]
+    fn vector_enabled_follows_the_guests_leaf_and_top_enables() {
+        let t = CpuIntr::new(kf_chip::Family::Ampere, UM).unwrap();
+        assert!(!t.vector_enabled(155), "nothing enabled");
+        t.write(Reg::LeafEnSet(4), 1 << (155 % 32));
+        assert!(!t.vector_enabled(155), "leaf enabled, top still masked");
+        t.write(Reg::TopEnSet, 1 << 2);
+        assert!(t.vector_enabled(155));
+        assert!(!t.vector_enabled(154), "a neighbour is not enabled");
+        t.write(Reg::LeafEnClear(4), 1 << (155 % 32));
+        assert!(!t.vector_enabled(155), "the guest's CLEAR is honoured");
+        assert!(!t.vector_enabled(16 * 32), "beyond Ampere's 8 leaves");
     }
 
     #[test]

@@ -310,6 +310,9 @@ pub struct Device {
     /// ★ DIAGNOSTIC, default off (`KF3_BAR0_READ_TRACE=1`, [`crate::readtrace`]): the BAR0 access
     /// trace in the VFIO reference's record format. Off: the C device takes none of its paths.
     pub trace: crate::readtrace::AccessTrace,
+    /// ⚠ PERTURBING DIAGNOSTIC, default off (`KF3_DEBUG_IRQ_FLOOD`, [`crate::irqflood`]): a thread
+    /// that raises the guest-enabled interrupt vectors of the chosen classes every period.
+    irqflood: Option<crate::irqflood::Flood>,
 }
 
 impl Device {
@@ -393,6 +396,20 @@ impl Device {
                 trace.name()
             );
         }
+        // ⚠ PERTURBING DIAGNOSTIC (default off): a malformed knob refuses realize by name.
+        let irqflood = crate::irqflood::Spec::from_env()?.map(|spec| {
+            eprintln!(
+                "kf3: ★★ PERTURBING DIAGNOSTIC ON: irq-flood {} ({}; docs/design/V3_DEBUG_IRQ_FLOOD.md) — \
+                 bare interrupts, no completion word; never a production configuration",
+                spec.label(),
+                crate::irqflood::ENV
+            );
+            crate::irqflood::Flood {
+                spec,
+                plan: crate::irqflood::Plan::from_table(&host.intr_table),
+                counts: crate::irqflood::Counts::default(),
+            }
+        });
         // ★ The boot display's option ROM: the embedded GOP driver wrapped with the identity this
         // device presents (`kf3_identity`) and the boot framebuffer's descriptor.
         let gop_rom = gop
@@ -1130,6 +1147,7 @@ impl Device {
             b5_logged: AtomicU64::new(0),
             fn47_logged: AtomicU64::new(0),
             trace,
+            irqflood,
         })
     }
 
@@ -1610,6 +1628,31 @@ impl Device {
                 self.irq_counts.out_of_range.fetch_add(1, Ordering::Relaxed);
             }
         }
+    }
+
+    /// ⚠ PERTURBING DIAGNOSTIC (`KF3_DEBUG_IRQ_FLOOD`, default off): the flood's own thread. Every
+    /// period it latches and delivers the chosen classes' vectors that the guest has enabled
+    /// ([`crate::irqflood`]) — through [`Device::latch_and_deliver`], nothing else. ⊘ Never a vCPU,
+    /// never the drainer; it serves no input, so its sleep makes nothing deaf.
+    pub fn irqflood_loop(&self) {
+        struct Via<'a>(&'a Device);
+        impl crate::irqflood::Sink for Via<'_> {
+            fn enabled(&self, vector: u32) -> bool {
+                self.0.intr.vector_enabled(vector)
+            }
+            fn raise(&self, vector: u32) {
+                self.0.latch_and_deliver(vector);
+            }
+        }
+        if let Some(f) = &self.irqflood {
+            crate::irqflood::run(f, &Via(self), &self.stop);
+        }
+    }
+
+    /// Is the flood configured? (The C glue starts its thread only then.)
+    #[must_use]
+    pub fn irqflood_on(&self) -> bool {
+        self.irqflood.is_some()
     }
 
     /// ★ v3-initrace: the completion probe's own thread (`KF3_COMPLETION_PROBE`, default off) —
@@ -2662,6 +2705,12 @@ impl Device {
         });
         // ★ EXPERIMENT x11-dispsw: `""` with the switch off (the line is the line it was).
         let irq = irq + &self.chans.dispsw_status(self.x11_dispsw);
+        // ⚠ PERTURBING DIAGNOSTIC (`KF3_DEBUG_IRQ_FLOOD`): `""` with the switch off.
+        let irq = irq
+            + &self
+                .irqflood
+                .as_ref()
+                .map_or_else(String::new, |f| f.status());
         let db = format!(" {}", self.dbfast.status());
         format!(
             "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq}{db} unserviced=[{}] gsp_refusals[{refusals}]",

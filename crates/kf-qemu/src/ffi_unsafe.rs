@@ -223,6 +223,16 @@ pub unsafe extern "C" fn kf3_realize(
                 write_err(err, err_len, "could not start the completion-probe thread");
                 return -1;
             }
+            // ⚠ PERTURBING DIAGNOSTIC: the interrupt flood (`KF3_DEBUG_IRQ_FLOOD`, default off).
+            if d.irqflood_on()
+                && std::thread::Builder::new()
+                    .name("kf3-irqflood".into())
+                    .spawn(move || d.irqflood_loop())
+                    .is_err()
+            {
+                write_err(err, err_len, "could not start the irq-flood thread");
+                return -1;
+            }
             // ★ v3-display: the display worker (`display=on` only).
             if d.display.is_some()
                 && std::thread::Builder::new()
