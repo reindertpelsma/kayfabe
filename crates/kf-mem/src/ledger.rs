@@ -26,6 +26,8 @@ pub struct Desired {
     /// (`crate::apply::PermPolicy::host_perm`). ⊘ Dropping them mapped every guest read-only leaf
     /// read-write.
     pub perm: kf_host::MapPerm,
+    /// ★ 2026-10-09: the guest leaf size in bytes (`crate::apply::DiffRun::leaf`; 0 = unknown).
+    pub leaf: u64,
 }
 
 /// A walked leaf's aperture, as the walk kernel reports it (`KFWR_RF_AP_*`, `cuda/walk/kf_walk.h:92-97`).
@@ -93,6 +95,7 @@ pub fn desired_from_leaves(
                     ram: false,
                     kind: 0,
                     perm: kf_host::MapPerm::READ_WRITE,
+                    leaf: 0,
                 })
                 .ok_or(LeafRefusal::OutsideStore { va, gpga: at, len }),
             AP_SYS_COHERENT | AP_SYS_NONCOHERENT => ram_offset(at, len)
@@ -103,6 +106,7 @@ pub fn desired_from_leaves(
                     ram: true,
                     kind: 0,
                     perm: kf_host::MapPerm::READ_WRITE,
+                    leaf: 0,
                 })
                 .ok_or(LeafRefusal::NotGuestRam { va, gpa: at, len }),
             _ => Err(LeafRefusal::Aperture { va, ap }),

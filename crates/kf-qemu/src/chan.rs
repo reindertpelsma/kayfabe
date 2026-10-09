@@ -3940,7 +3940,10 @@ impl ChanPlane {
                 let steer = fc.map(|(va, len)| match rows.write().map(|mut r| r.remove(&va)) {
                     Ok(None) => format!(" [guest ctx VA {va:#x} not mirrored yet — host RM takes it free; the walker will find it held]"),
                     Err(_) => format!(" [placement rows poisoned — host ctx placement unsteered]"),
-                    Ok(Some(_)) => match me.rm.unmap(space, va, false) {
+                    // ★ 2026-10-09: by RANGE over the whole row — outside a reservation a row is one
+                    // host mapping per guest leaf (`kf_mem::batch`), so a start-keyed unmap would take
+                    // only its first leaf. The range covers whole mappings of ours only (no split).
+                    Ok(Some(row)) => match me.rm.unmap_range(space, va, row.0, false) {
                     Ok(()) => format!(" [host ctx steered onto the guest's ctx VA {va:#x}+{len:#x}]"),
                     Err(e) => format!(" [guest ctx VA {va:#x} not unmapped ({e:?}) — host ctx placement unsteered]"),
                     },

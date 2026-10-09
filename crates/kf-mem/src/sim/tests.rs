@@ -37,7 +37,9 @@ fn map_ram(m: &SimMirror<'_>, c: &mut BTreeMap<u64, Committed>, rows: &[(u64, u6
 
 /// `n` one-page rows from page `p`, scattered backing.
 fn scattered(p: u64, n: u64) -> Vec<(u64, u64, u64)> {
-    (0..n).map(|i| (p + i, 1, 7919 * (i + 1) % 4093 + 3)).collect()
+    (0..n)
+        .map(|i| (p + i, 1, 7919 * (i + 1) % 4093 + 3))
+        .collect()
 }
 
 fn unmap_pages(m: &SimMirror<'_>, c: &mut BTreeMap<u64, Committed>, pages: &[u64]) {
@@ -140,7 +142,131 @@ fn a_one_page_change_inside_a_16_page_row_leaves_the_other_15_mapped() {
             }
         }
     }
-    assert!(failures.is_empty(), "{} of 6 failed:\n{}", failures.len(), failures.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "{} of 6 failed:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
+
+/// Sparse changes: pages 2, 7 and 11 of a 16-page row are remapped, the other 13 are unchanged —
+/// in the `NV01` range and in a reservation, every path.
+#[test]
+fn sparse_changes_inside_a_row_leave_the_rest_mapped() {
+    for at in [4u64, 40] {
+        for (batching, low) in [(false, false), (true, false), (true, true)] {
+            let sim = fresh();
+            let m = SimMirror::new(&sim, batching, low);
+            let mut c = BTreeMap::new();
+            map_ram(&m, &mut c, &[(at, 16, 700)]);
+            let runs = remap_inside(&c, at, &[at + 2, at + 7, at + 11], 7000);
+            let out = apply_and_commit(&m, &runs, &mut c);
+            assert_eq!(out.refused, 0, "{:?}", out.first_refusal);
+            ok(&sim, &c, &BTreeMap::new());
+            // Only the three changed pages reached the host: 3 unmaps, 3 maps.
+            assert_eq!(out.mapped, 3, "at={at} batching={batching} low={low}");
+        }
+    }
+}
+
+/// A space whose `NV01` range has room for 2 MiB leaves: `[base, base + 8 MiB)` unreserved, the
+/// static reservation far above.
+fn big_space() -> (Sim, u64) {
+    let base = 0x4000_0000u64;
+    (Sim::new(space(base + (64 << 20), base + (128 << 20))), base)
+}
+
+fn leaf_run(va: u64, len: u64, back: u64, leaf: u64) -> DiffRun {
+    DiffRun {
+        leaf,
+        ..map_run(va, len, true, back, false)
+    }
+}
+
+/// ★ 64 KiB and 2 MiB leaves outside a reservation: ONE host mapping per leaf; changing one leaf
+/// unmaps and maps exactly that leaf, the other leaves are never touched.
+#[test]
+fn big_leaves_are_one_mapping_each_and_change_alone() {
+    for leaf in [0x1_0000u64, 0x20_0000] {
+        let (sim, base) = big_space();
+        let m = SimMirror::new(&sim, true, true);
+        let mut c = BTreeMap::new();
+        let row = leaf_run(base, 4 * leaf, 0x1000_0000, leaf);
+        assert_eq!(apply_and_commit(&m, &[row], &mut c).refused, 0);
+        assert_eq!(
+            sim.0.borrow().maps.len(),
+            4,
+            "leaf {leaf:#x}: one mapping per leaf"
+        );
+        // Leaf 2 is remapped; leaves 0, 1, 3 keep their backing.
+        let old = c[&base];
+        let runs = vec![
+            unmap_run(base, &old),
+            leaf_run(base, 2 * leaf, old.off, leaf),
+            leaf_run(base + 2 * leaf, leaf, 0x2000_0000, leaf),
+            leaf_run(base + 3 * leaf, leaf, old.off + 3 * leaf, leaf),
+        ];
+        let before = sim.0.borrow().n;
+        let out = apply_and_commit(&m, &runs, &mut c);
+        let after = sim.0.borrow().n;
+        assert_eq!(out.refused, 0, "{:?}", out.first_refusal);
+        assert_eq!(
+            (
+                after.rm_unmap - before.rm_unmap,
+                after.rm_map - before.rm_map
+            ),
+            (1, 1),
+            "leaf {leaf:#x}: exactly the changed leaf"
+        );
+        check(&sim, &c, &BTreeMap::new(), base, base + 4 * leaf).unwrap();
+    }
+}
+
+/// ★ A leaf-SIZE change is a change of the guest's mapping (its PTE level), so those VAs are
+/// re-made — but nothing else is touched, nothing stale is left, and it works both ways: sixteen
+/// 4 KiB leaves → one 64 KiB leaf over the same pages, and back.
+#[test]
+fn a_leaf_size_change_remakes_only_those_vas() {
+    for low in [false, true] {
+        let (sim, base) = big_space();
+        let m = SimMirror::new(&sim, true, low);
+        let mut c = BTreeMap::new();
+        // Neighbour leaves that must never be touched.
+        let left = leaf_run(base, 0x1_0000, 0x3000_0000, 0x1_0000);
+        let right = leaf_run(base + 0x2_0000, 0x1_0000, 0x3100_0000, 0x1_0000);
+        let small = leaf_run(base + 0x1_0000, 0x1_0000, 0x3200_0000, 0x1000);
+        assert_eq!(
+            apply_and_commit(&m, &[left, small, right], &mut c).refused,
+            0
+        );
+        // 4 KiB → 64 KiB, same backing: the walker unmaps the 4 KiB placement, maps one 64 KiB leaf.
+        let up = vec![
+            unmap_run(base + 0x1_0000, &c[&(base + 0x1_0000)]),
+            leaf_run(base + 0x1_0000, 0x1_0000, 0x3200_0000, 0x1_0000),
+        ];
+        assert_eq!(apply_and_commit(&m, &up, &mut c).refused, 0);
+        check(&sim, &c, &BTreeMap::new(), base, base + 0x3_0000).unwrap();
+        // ... and back: one 64 KiB leaf → sixteen 4 KiB leaves, page 5 remapped.
+        let mut down = vec![unmap_run(base + 0x1_0000, &c[&(base + 0x1_0000)])];
+        down.push(leaf_run(base + 0x1_0000, 5 * P, 0x3200_0000, 0x1000));
+        down.push(leaf_run(base + 0x1_5000, P, 0x3300_0000, 0x1000));
+        down.push(leaf_run(base + 0x1_6000, 10 * P, 0x3200_6000, 0x1000));
+        assert_eq!(apply_and_commit(&m, &down, &mut c).refused, 0);
+        check(&sim, &c, &BTreeMap::new(), base, base + 0x3_0000).unwrap();
+        // The neighbours were never touched: their single mappings are the originals.
+        let rm = sim.0.borrow();
+        for v in [base, base + 0x2_0000] {
+            assert_eq!(
+                rm.maps
+                    .iter()
+                    .filter(|x| x.va == v && x.len == 0x1_0000)
+                    .count(),
+                1,
+                "neighbour leaf {v:#x} intact"
+            );
+        }
+    }
 }
 
 /// ★ With micro reservations the unreserved range BATCHES (one map for 12 rows) and a partial
@@ -197,7 +323,11 @@ fn gate4_numbers_are_unchanged() {
         let torn = apply_and_commit(&m, &rest, &mut c);
         assert_eq!((torn.range_unmaps, torn.unmap_calls), (2, 2));
         assert_eq!(m.bv.frees.load(Relaxed), 1);
-        assert_eq!(m.bv.micro_made.load(Relaxed), 0, "no micro reservation in a guest one");
+        assert_eq!(
+            m.bv.micro_made.load(Relaxed),
+            0,
+            "no micro reservation in a guest one"
+        );
         check(&sim, &c, &BTreeMap::new(), BASE, pg(512)).unwrap();
     }
 }
@@ -279,7 +409,11 @@ fn a_range_over_nothing_of_ours_makes_no_host_call() {
     assert!(sim.0.borrow_mut().place_foreign(3, pg(10), 4 * P));
     m.bv.unmap_range(pg(8), 8 * P, true).unwrap();
     assert!(sim.0.borrow().ranges.is_empty());
-    ok(&sim, &BTreeMap::new(), &BTreeMap::from([(3, (pg(10), 4 * P))]));
+    ok(
+        &sim,
+        &BTreeMap::new(),
+        &BTreeMap::from([(3, (pg(10), 4 * P))]),
+    );
 }
 
 /// A range that would SPLIT one of our mappings in the `NV01` range is refused before any host
@@ -289,8 +423,15 @@ fn a_range_that_would_split_ours_outside_a_reservation_is_refused() {
     let sim = fresh();
     let m = SimMirror::new(&sim, true, true);
     let mut c = BTreeMap::new();
-    map_ram(&m, &mut c, &[(4, 4, 100)]);
-    let r = m.bv.unmap_range(pg(5), P, true);
+    // One 64 KiB guest leaf in the NV01 range is ONE host mapping; a 4 KiB range inside it
+    // would split it (no guest diff asks for this: a leaf changes whole).
+    let big = DiffRun {
+        leaf: 0x1_0000,
+        ..map_run(pg(16), 16 * P, true, 0x100 * P, false)
+    };
+    assert_eq!(apply_and_commit(&m, &[big], &mut c).refused, 0);
+    assert_eq!(sim.0.borrow().maps.len(), 1, "one mapping per 64 KiB leaf");
+    let r = m.bv.unmap_range(pg(17), P, true);
     assert!(r.is_err_and(|e| e.contains("outside a VA-reserving hDma")));
     assert!(sim.0.borrow().ranges.is_empty());
     ok(&sim, &c, &BTreeMap::new());
@@ -304,13 +445,31 @@ fn retire_with_foreign_windows_takes_only_ours() {
         let sim = fresh();
         let m = SimMirror::new(&sim, true, low);
         let mut c = BTreeMap::new();
-        let foreign = BTreeMap::from([(1u32, (pg(0), 2 * P)), (2, (pg(50), 3 * P)), (3, (pg(90), P))]);
+        let foreign = BTreeMap::from([
+            (1u32, (pg(0), 2 * P)),
+            (2, (pg(50), 3 * P)),
+            (3, (pg(90), P)),
+        ]);
         for (&id, &(va, len)) in &foreign {
             assert!(sim.0.borrow_mut().place_foreign(id, va, len));
         }
         map_ram(&m, &mut c, &scattered(2, 10));
-        map_ram(&m, &mut c, &[(30, 1, 1), (31, 1, 2), (32, 1, 3), (33, 1, 4)]);
-        map_ram(&m, &mut c, &[(45, 1, 8), (46, 1, 80), (47, 1, 800), (53, 1, 9), (54, 1, 90)]);
+        map_ram(
+            &m,
+            &mut c,
+            &[(30, 1, 1), (31, 1, 2), (32, 1, 3), (33, 1, 4)],
+        );
+        map_ram(
+            &m,
+            &mut c,
+            &[
+                (45, 1, 8),
+                (46, 1, 80),
+                (47, 1, 800),
+                (53, 1, 9),
+                (54, 1, 90),
+            ],
+        );
         map_ram(&m, &mut c, &scattered(64, 20));
         ok(&sim, &c, &foreign);
         assert_eq!(m.retire(), 0);
@@ -339,6 +498,7 @@ fn the_guard_catches_split_by_remap() {
             ram: true,
             kind: 0,
             perm: MapPerm::READ_WRITE,
+            leaf: 0,
         })
         .collect();
     SpaceVerbs::map_scattered(&v, fd, &rows, true).unwrap();
@@ -352,8 +512,16 @@ fn the_guard_catches_split_by_remap() {
     SpaceVerbs::map_row(&v, &rows[0], true).unwrap();
     SpaceVerbs::map_scattered(&v, fd, &rows[2..], true).unwrap();
     let rm = sim.0.borrow();
-    assert!(caught >= 3, "the whole-block unmap transiently unmapped 3 unchanged rows: {:?}", rm.transient);
-    assert!(rm.transient[0].contains("UNCHANGED VA"), "{}", rm.transient[0]);
+    assert!(
+        caught >= 3,
+        "the whole-block unmap transiently unmapped 3 unchanged rows: {:?}",
+        rm.transient
+    );
+    assert!(
+        rm.transient[0].contains("UNCHANGED VA"),
+        "{}",
+        rm.transient[0]
+    );
 }
 
 /// The micro reservation is refused (a host that does not accept small reservations): the rows go
@@ -388,9 +556,15 @@ fn a_batch_map_failing_inside_its_reservation_releases_it() {
         &mut c,
     );
     assert_eq!((out.batches, out.batch_fallbacks, out.mapped), (0, 1, 12));
-    assert!(out.first_batch_fallback.is_some_and(|e| e.contains("injected")));
+    assert!(
+        out.first_batch_fallback
+            .is_some_and(|e| e.contains("injected"))
+    );
     let rm = sim.0.borrow();
-    assert!(rm.resv.is_empty() && rm.objs.is_empty(), "nothing of the failed batch is left");
+    assert!(
+        rm.resv.is_empty() && rm.objs.is_empty(),
+        "nothing of the failed batch is left"
+    );
     drop(rm);
     assert_eq!(m.bv.micro_freed.load(Relaxed), 1);
     ok(&sim, &c, &BTreeMap::new());
@@ -411,10 +585,20 @@ fn many_rows_beyond_the_cap_are_two_reserved_batches() {
     assert_eq!((out.batches, out.batched_runs), (2, n as usize));
     assert_eq!(sim.0.borrow().resv.len(), 2);
     let edge = crate::apply::BATCH_MAX_RUNS as u64;
-    let cut: Vec<DiffRun> = (edge - 3..edge + 3).map(|p| unmap_run(pg(p), &c[&pg(p)])).collect();
+    let cut: Vec<DiffRun> = (edge - 3..edge + 3)
+        .map(|p| unmap_run(pg(p), &c[&pg(p)]))
+        .collect();
     let r = apply_and_commit(&m, &cut, &mut c);
-    assert_eq!((r.range_unmaps, r.unmap_calls), (1, 1), "one range over two reservations");
-    assert_eq!(sim.0.borrow().n.rm_unmap, 2, "one exact range per reservation");
+    assert_eq!(
+        (r.range_unmaps, r.unmap_calls),
+        (1, 1),
+        "one range over two reservations"
+    );
+    assert_eq!(
+        sim.0.borrow().n.rm_unmap,
+        2,
+        "one exact range per reservation"
+    );
     check(&sim, &c, &BTreeMap::new(), BASE, pg(n)).unwrap();
     assert_eq!(m.retire(), 0);
     let rm = sim.0.borrow();
@@ -465,7 +649,14 @@ fn property_batched_mirror_against_the_host_rm_model() {
                 Err(e) => failures.push(format!("seed {seed}: {e}")),
             }
         }
-        let kinds = ["VIOLATION", "TRANSIENT", "FAULT_PTE", "assertion", "translates", "retire"];
+        let kinds = [
+            "VIOLATION",
+            "TRANSIENT",
+            "FAULT_PTE",
+            "assertion",
+            "translates",
+            "retire",
+        ];
         let histogram: Vec<(&str, usize)> = kinds
             .iter()
             .map(|k| (*k, failures.iter().filter(|f| f.contains(k)).count()))
@@ -481,7 +672,11 @@ fn property_batched_mirror_against_the_host_rm_model() {
             total.batches > 100 && total.ranges > 100 && total.held > 10 && total.retires > 10,
             "the property run did not exercise the batched path: {total:?}"
         );
-        assert_eq!(total.micro > 50, low, "micro reservations iff low_reserve: {total:?}");
+        assert_eq!(
+            total.micro > 50,
+            low,
+            "micro reservations iff low_reserve: {total:?}"
+        );
     }
 }
 
@@ -490,7 +685,7 @@ fn property_batched_mirror_against_the_host_rm_model() {
 fn property_per_run_path_against_the_host_rm_model() {
     for seed in 1..=100u64 {
         let s = run_seed(seed, 60, false, false).unwrap_or_else(|e| panic!("seed {seed}: {e}"));
-        assert_eq!((s.batches, s.ranges), (0, 0), "the opt-out never batches");
+        assert_eq!(s.batches, 0, "the opt-out never batches");
     }
 }
 
@@ -505,7 +700,9 @@ fn run_seed(seed: u64, steps: usize, batching: bool, low: bool) -> Result<Stats,
     let mut next_id = 1u32;
     let busy = |c: &BTreeMap<u64, Committed>, f: &BTreeMap<u32, (u64, u64)>, p: u64| {
         let va = pg(p);
-        c.range(..=va).next_back().is_some_and(|(&v, x)| va < v + x.len)
+        c.range(..=va)
+            .next_back()
+            .is_some_and(|(&v, x)| va < v + x.len)
             || f.values().any(|&(v, l)| v <= va && va < v + l)
     };
     let free_at = |c: &BTreeMap<u64, Committed>, p: u64| {
@@ -531,7 +728,13 @@ fn run_seed(seed: u64, steps: usize, batching: bool, low: bool) -> Result<Stats,
                 let k = (1 + rng.below(3)).min(start + n - p);
                 let ram = rng.below(100) < 85;
                 let back = rng.below(4096);
-                runs.push(map_run(pg(p), k * P, ram, back * P, ro && rng.below(2) == 0));
+                runs.push(map_run(
+                    pg(p),
+                    k * P,
+                    ram,
+                    back * P,
+                    ro && rng.below(2) == 0,
+                ));
                 p += k;
             }
             what = format!("map {} run(s) from page {start}", runs.len());
@@ -564,12 +767,30 @@ fn run_seed(seed: u64, steps: usize, batching: bool, low: bool) -> Result<Stats,
                 let mut q = *v;
                 while q < v + x.len {
                     let k = ((1 + rng.below(3)) * P).min(v + x.len - q);
-                    runs.push(map_run(q, k, rng.below(100) < 85, rng.below(4096) * P, false));
+                    runs.push(map_run(
+                        q,
+                        k,
+                        rng.below(100) < 85,
+                        rng.below(4096) * P,
+                        false,
+                    ));
                     q += k;
                 }
             }
             what = format!("remap {} placement(s) in pages {start}+{n}", old.len());
             st.add(&apply_and_commit(&m, &runs, &mut c));
+        } else if op < 89 {
+            // PARTIAL REMAP: some pages inside one committed placement change, the rest is
+            // re-emitted with its old backing (the walker's diff) — the rest must stay mapped.
+            let keys: Vec<u64> = c.iter().filter(|(_, x)| !x.held).map(|(&v, _)| v).collect();
+            what = "partial remap".into();
+            if let Some(&v) = keys.get(rng.below(keys.len() as u64 + 1) as usize) {
+                let at = (v - BASE) / P;
+                let n = c[&v].len / P;
+                let changed: Vec<u64> = (at..at + n).filter(|_| rng.below(3) == 0).collect();
+                let runs = remap_inside(&c, at, &changed, 2000 + rng.below(1000));
+                st.add(&apply_and_commit(&m, &runs, &mut c));
+            }
         } else if op < 93 {
             // A FOREIGN mapping lands in a gap (never inside a micro reservation: other kayfabe
             // code maps through the space's own routing, which RM refuses there).
@@ -584,7 +805,10 @@ fn run_seed(seed: u64, steps: usize, batching: bool, low: bool) -> Result<Stats,
             what = format!("foreign at page {p}+{n}");
         } else if op < 97 {
             // Its owner removes a foreign mapping.
-            let key = foreign.keys().nth(rng.below(foreign.len() as u64 + 1) as usize).copied();
+            let key = foreign
+                .keys()
+                .nth(rng.below(foreign.len() as u64 + 1) as usize)
+                .copied();
             if let Some(id) = key {
                 sim.0.borrow_mut().remove_foreign(id);
                 foreign.remove(&id);
@@ -602,7 +826,9 @@ fn run_seed(seed: u64, steps: usize, batching: bool, low: bool) -> Result<Stats,
                 .map_err(|e| format!("step {step} (retire): {e}"))?;
             let rm = sim.0.borrow();
             if rm.maps.iter().any(|x| x.owner == Owner::Mirror) || !rm.resv.is_empty() {
-                return Err(format!("step {step}: a mirror mapping or reservation survived the retire"));
+                return Err(format!(
+                    "step {step}: a mirror mapping or reservation survived the retire"
+                ));
             }
             drop(rm);
             m = SimMirror::new(&sim, batching, low);
@@ -613,11 +839,15 @@ fn run_seed(seed: u64, steps: usize, batching: bool, low: bool) -> Result<Stats,
             .map_err(|e| format!("step {step} ({what}): {e}"))?;
         let splits = m.bv.unsafe_splits.load(Relaxed);
         if splits != 0 {
-            return Err(format!("step {step} ({what}): {splits} range(s) refused as unsafe splits"));
+            return Err(format!(
+                "step {step} ({what}): {splits} range(s) refused as unsafe splits"
+            ));
         }
         let gap = sim.0.borrow().gap_bytes;
         if gap != 0 {
-            return Err(format!("step {step} ({what}): a range unmap covered {gap:#x} gap bytes"));
+            return Err(format!(
+                "step {step} ({what}): a range unmap covered {gap:#x} gap bytes"
+            ));
         }
     }
     st.micro += m.bv.micro_made.load(Relaxed);
@@ -638,7 +868,10 @@ enum Shape {
 fn workload(shape: Shape, batching: bool, low: bool, steps: usize) -> (Counters, u64) {
     let pages_total: u64 = 1 << 16;
     let (lo, resv) = match shape {
-        Shape::Windows => (0u64, (BASE + (pages_total + 16) * P, BASE + (pages_total + 32) * P)),
+        Shape::Windows => (
+            0u64,
+            (BASE + (pages_total + 16) * P, BASE + (pages_total + 32) * P),
+        ),
         Shape::Cuda => (0u64, (BASE, BASE + pages_total * P)),
     };
     let sim = Sim::new(space(resv.0, resv.1));
@@ -747,6 +980,10 @@ fn workload_numbers() {
             .map(|&(_, _, n, _)| n)
             .unwrap()
     };
-    assert_eq!(get("Cuda", "batch, guest"), get("Cuda", "batch + micro"), "CUDA unchanged");
+    assert_eq!(
+        get("Cuda", "batch, guest"),
+        get("Cuda", "batch + micro"),
+        "CUDA unchanged"
+    );
     assert!(get("Windows", "batch + micro").rm_total() < get("Windows", "per-run").rm_total());
 }

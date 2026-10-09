@@ -493,7 +493,9 @@ impl SimRm {
         let mut last_end: Option<u64> = None;
         for d in rows {
             if !d.ram || d.va != next || d.perm != first.perm || d.kind != first.kind {
-                return Err("batch rows not one VA-contiguous same-kind same-perm RAM range".into());
+                return Err(
+                    "batch rows not one VA-contiguous same-kind same-perm RAM range".into(),
+                );
             }
             next = d.va + d.len;
             if last_end != Some(d.off) {
@@ -519,7 +521,11 @@ impl SimRm {
 impl SpaceVerbs for &Sim {
     fn map_row(&self, d: &Desired, _defer: bool) -> Result<Mapped, String> {
         let obj = if d.ram { RAM_OBJ } else { STORE_OBJ };
-        match self.0.borrow_mut().map(d.va, d.len, obj, d.off, Owner::Mirror) {
+        match self
+            .0
+            .borrow_mut()
+            .map(d.va, d.len, obj, d.off, Owner::Mirror)
+        {
             Ok(()) => Ok(Mapped::Placed),
             Err(true) => Ok(Mapped::HeldByHost),
             Err(false) => Err(format!("map {:#x}+{:#x}: refused", d.va, d.len)),
@@ -596,7 +602,10 @@ impl SpaceVerbs for &Sim {
         match self.0.borrow_mut().map_through(h, d.va, d.len, obj, d.off) {
             Ok(()) => Ok(Mapped::Placed),
             Err(true) => Ok(Mapped::HeldByHost),
-            Err(false) => Err(format!("map {:#x} in {h:#x}: outside the reservation", d.va)),
+            Err(false) => Err(format!(
+                "map {:#x} in {h:#x}: outside the reservation",
+                d.va
+            )),
         }
     }
     fn map_sked_in(&self, h: u32, s: &SkedRow, _defer: bool) -> Result<Mapped, String> {
@@ -736,9 +745,8 @@ impl MapTarget for SimMirror<'_> {
         r
     }
     fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
-        if !self.batching {
-            return Err(NOT_BATCHED.into());
-        }
+        // ★ Not gated by `batching`: an exact range over our own placements is how a changed
+        // sub-range of a placement is unmapped (`crate::apply` net diff) — not a batch.
         let end = va + len;
         // `cut_rows` (strict): rows wholly inside go, straddlers keep their outside parts.
         let saved = self.rows.borrow().clone();
@@ -834,6 +842,7 @@ pub fn map_run(va: u64, len: u64, ram: bool, off: u64, read_only: bool) -> DiffR
             ..MapPerm::READ_WRITE
         },
         privileged: false,
+        leaf: 0,
     }
 }
 
@@ -850,11 +859,20 @@ pub fn unmap_run(va: u64, c: &Committed) -> DiffRun {
 }
 
 /// The backing a page has per the walker's committed placements (non-held): `(ram, off, ro)`.
-fn backing_of(c: &BTreeMap<u64, Committed>, p: u64) -> Option<(bool, u64, bool, u8)> {
+/// (A leaf-size change is a change of the guest's mapping: it is part of the key.)
+fn backing_of(c: &BTreeMap<u64, Committed>, p: u64) -> Option<(bool, u64, bool, u8, u64)> {
     c.range(..=p)
         .next_back()
         .filter(|&(&v, x)| p < v + x.len && !x.held)
-        .map(|(&v, x)| (x.ram, x.off + (p - v), x.run.perm.read_only, x.run.kind))
+        .map(|(&v, x)| {
+            (
+                x.ram,
+                x.off + (p - v),
+                x.run.perm.read_only,
+                x.run.kind,
+                x.run.leaf,
+            )
+        })
 }
 
 /// ★ Apply `runs` (one refresh) and commit by the acknowledgements, as the walker does — with the
@@ -891,7 +909,7 @@ pub fn apply_and_commit(
             .filter(|(_, c)| !c.held)
             .flat_map(|(&v, c)| (0..c.len / P).map(move |i| v + i * P))
             .filter(|&p| backing_of(committed, p) == backing_of(&after, p))
-            .filter_map(|p| backing_of(committed, p).map(|(r, o, _, _)| (p, (r, o))))
+            .filter_map(|p| backing_of(committed, p).map(|(r, o, ..)| (p, (r, o))))
             .collect();
         m.sim().0.borrow_mut().guard = guard;
     }

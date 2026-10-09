@@ -6,9 +6,12 @@ mapping's WHOLE VA block in host RM; the remnants lose their PTEs. Every batch o
 reservation was such a mapping, so on Windows (whose process VAs lie in the unreserved
 `[1 MiB, 4.5 GiB)`) the first single-row unmap of a batch faulted the rest of it (`[measured, runs
 242/243]` host Xid 31 `FAULT_PTE` at `0x4034000`; `gpu_vaspace.c:1639` assertions at exit). §4's
-claim "with `size != 0` RM unmaps … splitting a straddler" holds for the resserv list only. Fixed:
-batches only inside a reservation; range unmaps only over owned spans. CUDA/Linux (VAs above
-4.5 GiB, reserved) keep batching. Unit/model-tested only; hardware verdict pending.
+claim "with `size != 0` RM unmaps … splitting a straddler" holds for the resserv list only. And a
+second defect on EVERY path (per-run included): the walker unmaps WHOLE placements, so a one-page
+change inside a coalesced row transiently unmapped the unchanged pages (§8.2). Fixed: the apply
+only touches what changed; outside any reservation one host mapping per guest leaf; batches only
+inside a VA-reserving `hDma` (guest reservation, or a micro reservation once §8.0 says so); range
+unmaps only over owned spans; no remap ever. Model-tested only; hardware verdict pending (§8.0).
 
 **STATUS: LIVE, 2026-09-26 — CODE + MEASURED on `vh` (RTX 3060 GA106, 580.159.04).** Branch
 `v3-batchmap` (off master `ce2cb06d`). Verb choice read from ogkm-580.159.04 source; §7 holds the
@@ -206,66 +209,206 @@ unmeasured.
   explicit forwarding (`b675274f`). A trait default that means "not supported" is invisible
   through a wrapper; the instrument that caught it was `map verbs = runs + 3`.
 
-## 8. Root cause of the Windows post-sign-in freeze, and the fix (2026-10-09)
+## 8. Root cause of the Windows post-sign-in freeze, the fix, and the low-range decision (2026-10-09)
 
-**STATUS: LIVE, 2026-10-09 — CODE + MODEL-TESTED; hardware verdict pending** (branch
-`claude/batched-map-rootcause-20261009`).
+**STATUS: LIVE, 2026-10-09 — CODE + MODEL-TESTED (`kf_mem::sim`); hardware verdict pending**
+(branch `claude/batched-map-rootcause-20261009`). Owner directives folded in: split-by-remap is
+FORBIDDEN (never written); every VA whose guest mapping is unchanged stays mapped at every instant;
+outside a reservation the host mapping unit is the guest LEAF.
 
-**Measured** (GPU host, RTX 4070 Ada, host driver 595.91.07, kf3 `c6fff2e3`): Windows runs 242
-and 243 (batched path ON; the ONLY flag difference from run 244 is `KF3_NO_BATCHED_MAP`) each
-raise exactly one host `Xid 31 … GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0x0_04034000 FAULT_PTE
-ACCESS_TYPE_VIRT_WRITE` on host channel `0x3c` (the twin of a user-work passthrough channel whose
-GPFIFO is at `0x4000000`), ~47 s in; the guest then stalls (no TDR) and the console goes black;
-and at QEMU exit host RM asserts `NULL != pMemBlock @ gpu_vaspace.c:1639` (242: 3×, 243: 2×).
-Run 244 (flag set) has neither. 242/243 placed batches (`kf-host: map_scattered` lines).
+### 8.0 ★ THE DECISION POINT — the micro-reservation experiment (run it first)
 
-**From source (ogkm-595.84), the mechanism:** `VaSpace::range` is an `NV01_MEMORY_VIRTUAL`
-(`bReserveVaOnAlloc = NV_FALSE`, `virtual_mem.c:349`). A FIXED map through it allocates its own
-VA heap block; `dmaFreeMapping_GM107` frees `vaspaceFree(pVAS, DmaOffset)` for it
-(`virt_mem_allocator_gm107.c:1635-1638`), and `gvaspaceFree` takes the block CONTAINING that
-address (`gpu_vaspace.c:1631-1640`, `eheapGetBlock` = `btreeSearch` containment). A partial unmap
-(`virtmemUnmapFrom`, `virtual_mem.c:1697-1804`) keeps left/right remnants in the mapping list but
-frees the whole block → the remnants' PTEs go (`FAULT_PTE` on the next GPU access), and freeing a
-remnant later finds no block (the `:1639` assertion). Inside a guest reservation
-(`NV50_MEMORY_VIRTUAL`, `bReserveVaOnAlloc = NV_TRUE`) only the unmapped PTEs are invalidated
-(`:1578-1633`) — exact. Windows process VAs (`0x4000000`, `0x14533000`) lie in the unreserved
-`[1 MiB, 4.5 GiB)`; CUDA VAs (gate 4: 128 GiB) lie in a reservation — why gates and the Linux
-suites never saw it. **Inferred** (not measured): `0x4034000` was a page of a batch that a later
-single-row unmap split.
+Can an unprivileged client reserve a SMALL fixed range in `[1 MiB, 4.5 GiB)` of a Windows-config
+twin space (`vaBase = TWIN_VA_FLOOR` 64 KiB, `[64 KiB, 1 MiB)` already reserved) and unmap part of
+a batch mapped THROUGH it exactly?
 
-**Falsifier stated before the model run:** if the model of the CURRENT code passed the property
-test, the cause was elsewhere. It did not: 267/300 seeds failed (251 `FAULT_PTE`, 16 `:1639`
-assertions); 0 foreign mappings touched through the real apply/retire paths; the per-run path
-(the flag's semantic) 100/100 clean. So the gap/foreign hypothesis is NOT what broke Windows;
-the split of a batch in the `NV01` range is.
+```text
+cargo build --release -p kf-harness --bin kf-micro-reserve-probe
+KF3_WIN_USER_CHANNELS_PASSTHROUGH=1 target/release/kf-micro-reserve-probe reserve
+KF3_WIN_USER_CHANNELS_PASSTHROUGH=1 target/release/kf-micro-reserve-probe nv01-control   # optional
+```
 
-**Fix (`kf_mem::batch::BatchedVas`, enforced below every caller):**
-1. A batch is placed only wholly inside ONE guest reservation (`SpaceVerbs::splits_safely` =
-   `VaSpace::guest_reserved`); elsewhere `place` answers `NOT_BATCHED` and the rows go per run
-   (one host mapping each; an exact-union range never splits one).
-2. `OwnMaps` records every host mapping of ours (per-run, SKED, batch, and the remnants a split
-   leaves). `unmap_range` unmaps one host range per maximal OWNED span — never a gap, never a
-   foreign mapping — and refuses (`SPLIT_OUTSIDE_RESERVATION`, counted `unsafe_splits`) a range
-   that would split one of ours outside a reservation. `unmap_run` decides whole-mapping vs piece
-   from the same ledger; nothing of ours at a VA = no host call.
-3. `KF3_NO_BATCHED_MAP` stays an A/B opt-out; the default is batched ON.
+`reserve`: census of 5 small reservations at Windows-like VAs (+ the old LARGE `[1 MiB, 4 GiB)`),
+then reserve 8 pages at `0x4030000`, map 8 VRAM pages THROUGH it as one mapping, unmap page 3 by
+range, CE-read pages 0 and 7 (must deliver), re-map page 3 (must deliver), tear down, free, VA free
+again. `nv01-control`: the same through the `NV01` range — the remnant's VA block is free (a FIXED
+map there lands) and page 7 faults (ONE Xid 31 on the probe's own channel; `gpu_vaspace.c:1639`
+at exit): runs 242/243 reproduced in isolation.
 
-**Tests (GPU-free, `cargo test -p kf-mem`, < 1 s):** `crate::sim` — a host RM model of one
-client (per-`hDma` lists, occupancy, `size == 0` / `size != 0` semantics, the `NV01` block free,
-object free, foreign mappings) driven through the real `apply_entry` + `BatchedVas` with
-`GpuMirror`'s glue: the property test (300 seeds × 60 steps of maps/remaps/sparse and partial
-unmaps/straddles/retires with foreign mappings in gaps; after every step: no foreign touched, no
-`:1639` assertion, no PTE-less mirror mapping, mirror translation of every page == the walker's
-committed set, `unsafe_splits == 0`, zero gap bytes) and targeted tests (the root-cause
-regression, batching still inside a reservation, ranges around/ending at foreign mappings,
-empty gaps, sparse runs, retire with foreign windows).
+| result of `reserve` | then |
+|---|---|
+| PASS (`reserve_small_accepted`, `remnant_*_reads`, `hole_remapped_reads`) | make `KF3_BATCH_MICRO_RESERVE=1` the default: the low range batches, partial unmaps exact (§8.3 rule 3) |
+| `reserve_*` refused | keep the default: one host map per guest leaf in the low range (zero risk, O(leaves) calls — §8.4); batch only inside guest reservations |
+| accepted but a remnant does not read | a defect in our reasoning about NV50 partial unmaps — stop, the CUDA path (which relies on it in the big reservations, gate 4) must be re-examined |
 
-**Still to verify on hardware:** a Windows boot WITHOUT `KF3_NO_BATCHED_MAP` (expect: no Xid 31,
-no `:1639` assertion at exit, sign-in survives; `batch(es)` only for VAs ≥ 4.5 GiB); v3 gates 9/9
-(gate 4 batches at 128 GiB, unchanged); the 30-arm fast suite and the CUDA no-PM lane (batch
-counts unchanged for CUDA spaces).
+Why it is expected to pass (source, inferred until measured): a FIXED `NV50_MEMORY_VIRTUAL` is a
+FIXED `eheapAlloc` (`gpu_vaspace.c:1374-1386`) refused with `NV_ERR_NO_MEMORY` only over an
+existing heap block; the client RM of a GSP client withholds only the split window
+`[4 GiB, 4.5 GiB)` (`gpu_vaspace.c:394-467`, `SPLIT_VAS_SERVER_RM_MANAGED_VA_START/SIZE`,
+`g_gpu_vaspace_nvoc.h:90-91`). `[measured gfx8]` refused ONE LARGE `[1 MiB, 4 GiB)` — under the
+default 1 MiB start, with host RM's own placements (the twin's context buffers, its rings) already
+in that range ⇒ an overlapping block (inferred). Our per-run FIXED maps there succeed through the
+same heap, so the VA we reserve (exactly a batch's, about to be mapped) is free.
 
-⊘ **Related, not fixed here:** the v3-video falcon-context steer (`kf_qemu::chan`, `me.rm.unmap`)
-unmaps a guest row by its start outside `BatchedVas`; it only steers outside a reservation, where
-after this fix no batch exists, so it can no longer hit a batch piece — but it bypasses `OwnMaps`
-(the ledger then still lists that row; a later range over it finds nothing at the host — `NV_OK`).
+### 8.1 Root cause of the freeze (measured + source)
+
+**Measured** (GPU host, RTX 4070 Ada, 595.91.07, kf3 `c6fff2e3`): runs 242/243 (batched on; the
+ONLY flag difference from run 244 is `KF3_NO_BATCHED_MAP`) each raise exactly one host
+`Xid 31 … GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0x0_04034000 FAULT_PTE ACCESS_TYPE_VIRT_WRITE` on host
+channel `0x3c` (twin of a user-work passthrough channel, GPFIFO at `0x4000000`) ~47 s in; the guest
+then stalls with no TDR; at QEMU exit host RM asserts `NULL != pMemBlock @ gpu_vaspace.c:1639`
+(242: 3×, 243: 2×). Run 244 has neither. 242/243 placed batches (`map_scattered` lines; the
+status line's `batch=0` is the doorbell fast path's `max_batch`, not batched maps).
+
+**Source (ogkm-595.84):** `VaSpace::range` is an `NV01_MEMORY_VIRTUAL` (`bReserveVaOnAlloc =
+NV_FALSE`, `virtual_mem.c:349`): each FIXED map allocates its own VA heap block, and
+`dmaFreeMapping_GM107` calls `vaspaceFree(pVAS, DmaOffset)` (`virt_mem_allocator_gm107.c:1635-1638`)
+whose `eheapGetBlock` is a containment search (`gpu_vaspace.c:1631-1640`, `eheap_old.c:1005-1027`).
+A partial unmap (`virtmemUnmapFrom`, `virtual_mem.c:1697-1804`) keeps left/right remnants in the
+mapping list but frees the whole block ⇒ remnant PTEs gone (`FAULT_PTE`), freeing a remnant later
+finds no block (the `:1639` assert). Inside an `NV50_MEMORY_VIRTUAL` (`bReserveVaOnAlloc =
+NV_TRUE`) only the unmapped PTEs are invalidated (`:1578-1633`) — exact. Windows process VAs lie in
+the unreserved `[1 MiB, 4.5 GiB)`; CUDA VAs (gate 4: 128 GiB) in a reservation — why the gates and
+Linux suites never saw it. **Inferred:** `0x4034000` was a page of a batch that a single-row unmap
+split. Falsifier stated before the model run — "if the model of the current code passes, the cause
+is elsewhere" — not met: 267/300 seeds failed (251 PTE losses, 16 `:1639` asserts), 0 foreign
+mappings touched by the real apply/retire paths, the per-run path clean (commit `4b1f8440`).
+
+### 8.2 The second defect, on every path: coalesced rows (owner correction, 2026-10-09)
+
+The walker coalesces leaves into runs and diffs WHOLE placements: its UNMAP run IS the committed
+placement (`kf_walk.cu:1157-1162`, same `gpga`/flags), the MAPs are the pieces in the gaps. A guest
+that remaps ONE page of a 16-page VA+GPA-contiguous row produces UNMAP(16) + MAP(5) + MAP(1, new) +
+MAP(10). Before this branch the apply unmapped all 16 and mapped 16 again: the 15 unchanged pages
+were transiently unmapped — `[model, commit 5cec7adb]` 6 of 6 configurations (NV01 range and
+reservation × per-run / batched / batched+micro). In the NV01 range a per-run row is moreover ONE
+host mapping, so no exact partial unmap of it exists at all. (Whether this transient window caused
+faults in Windows runs is not measured.)
+
+### 8.3 The design (code)
+
+1. **Net diff (`kf_mem::apply`, GPU targets).** A page an UNMAP and a MAP of the same entry name
+   with the same aperture, kind, permissions, privilege, LEAF SIZE and linear backing is
+   UNCHANGED: no host call at all. Only the changed sub-ranges are unmapped — by exact range over
+   OUR placements (`MapTarget::unmap_range`, now independent of `KF3_NO_BATCHED_MAP`) — and only
+   the new pieces are mapped. A leaf-size change is a change (its VAs are re-made). A MAP run whose
+   new piece fails takes its kept part down too (named) so the ledger never holds what the walker
+   did not commit.
+2. **Leaf-granular placement outside any reservation (`BatchedVas::map`).** The walk report's page
+   size (`KfMapRun::page_size` → `DiffRun::leaf` → `Desired::leaf`) sets the unit: one host map per
+   4 KiB / 64 KiB / 2 MiB leaf in the `NV01` range (bounded, `MAX_LEAF_PIECES`), one map per row
+   inside a reservation. Every later change there is a whole-mapping removal.
+3. **Batches only inside a VA-reserving `hDma`.** A guest reservation (as before), or — with
+   `KF3_BATCH_MICRO_RESERVE=1` (default OFF until §8.0 passes) and ≥ `LOW_RANGE_MIN_RUNS` (8) rows —
+   a MICRO reservation made over exactly the batch's VA (`HostRm::reserve_va`), the batch mapped
+   THROUGH it (`map_scattered_through`), later rows over its dead pages routed through it
+   (`map_in`), unmaps inside it by `unmap_in`, the reservation freed when nothing of ours is left in
+   it, every one freed at retire. A refused reservation ⇒ per leaf, named and counted.
+4. **Owned spans only (`OwnMaps`).** Every host mapping of ours is recorded at host-mapping
+   granularity with its `hDma`; a range unmap issues one call per maximal owned span per `hDma`,
+   never over a gap or a foreign mapping, and refuses (`SPLIT_OUTSIDE_RESERVATION`) any range that
+   would split one of ours in the `NV01` range.
+5. **No remap, ever.** RM refuses two maps of one VA (`VA_ALREADY_MAPPED`;
+   `intermapRegisterDmaMapping` "ensure no page can be mapped twice"), so make-before-break is
+   impossible and break-before-make transiently unmaps unchanged VAs: partial unmaps are made exact
+   instead (§8.0 or per leaf).
+6. Unchanged constraints: the VA-manager thread does all of it (no new thread, no wait, no lock
+   held across a host call); guest values bounded (checked/saturating arithmetic, piece caps); no
+   new `unsafe`; nothing per family.
+
+### 8.4 Syscall budget (reasoned from the numbers measured earlier; no new measurement)
+
+Inputs — *measured earlier (nested vast box, §1/§7)*: per-run RM map 19-22 µs; per-run unmap
+84-123 µs at ~12 k mappings in the `hDma` (35-39 µs at 1-4 k: grows with the count); stitch 6-14 µs
+per `MAP_FIXED` piece; descriptor 7-18 ms per 4096 pages (~2-4 µs/page: RM pins); the view's
+`munmap` 80-97 ms per 4096 VMAs (~20-24 µs/VMA, on the reaper thread); RM map of a batch 0.5 ms;
+range unmap of a 12 k-run space 3-8 ms. *Reasoned*: a micro reservation alloc/free ≈ one RM call
+each (~20 µs); bare metal several times cheaper than nested for every mm syscall (EPT-on-EPT page
+walks) — not measured.
+
+Per 4 KiB page, VA-manager thread, before the invalidate can clear (reasoned, nested):
+
+| strategy | mmap | munmap | RM map | RM unmap (later) | desc alloc/free | reserve alloc/free | VA-thread time / page |
+|---|---|---|---|---|---|---|---|
+| per run / per leaf | 0 | 0 | 1 | ≤ 1 (a range covers many) | 0 | 0 | ~20 µs map + 40-120 µs unmap (O(M)) |
+| batch, guest reservation (today) | 1 per file-discontiguous piece + 1 per batch | 1 per batch (reaper; O(pieces) work) | 1 per batch | 1 range per span | 1 + 1 per batch | 0 | ~8-18 µs (stitch + pin) |
+| batch + micro reservation (low range) | same | same | 1 per batch | 1 range per span | 1 + 1 per batch | 1 + 1 per batch | ~8-18 µs + ~40 µs per batch |
+
+Totals (reasoned, nested; scattered 4 KiB pages; "M" = mappings in the space):
+
+| pages | per run: map / unmap / ioctls | batch (4096 cap): VA thread / reaper / ioctls |
+|---|---|---|
+| 4096 | 82 ms / ~0.2-0.5 s / 8192 | ~40-75 ms / 80-97 ms / 3 + ranges |
+| 10 k | 200 ms / ~1 s / 20 k | ~100-180 ms / ~0.2 s / ~9 + ranges |
+| 100 k | 2 s / ≫ 10 s (O(M) per unmap, extrapolated) / 200 k | ~1-1.8 s / ~2.2 s / ~75 + ranges |
+
+**Crossover** (reasoned): a batch costs a fixed ~5 RM calls (+2 with a micro reservation) + 2 mm
+syscalls ≈ 120-160 µs, and saves per page ≈ (20 µs map − ~12 µs stitch+pin) + the later unmap
+(40-120 µs). On the map side alone that is ~15-20 pages; with the unmap side ≈ 2-4 pages. Kept
+conservative: `LOW_RANGE_MIN_RUNS = 8` in the low range (guest reservations keep ≥ 2). Simulator
+counts (`cargo test -p kf-mem workload_numbers -- --nocapture`, 2000 Windows-like steps = 19 790
+pages of 1-16-page allocations, 40 % frees; 60 CUDA-like steps = 40 278 pages):
+
+| workload | per run: RM calls/page | batch (guest resv only) | batch + micro: RM calls/page, mmaps, munmaps |
+|---|---|---|---|
+| Windows-like (low range) | 1.054 (19 790 maps + 1 070 unmaps) | 1.054 (nothing batches there) | 0.492 (3 224 maps, 1 759 unmaps, 1 491 desc, 883 reserve, 2 374 free), 19 548 mmaps, 1 491 munmaps |
+| CUDA-like (reserved) | 1.001 | 0.004 (36 maps, 33 unmaps, 36 desc, 36 free), 40 314 mmaps, 36 munmaps | identical (no micro reservation in a guest one) |
+
+**Cutting the per-piece syscalls** — what exists and what does not:
+- Coalescing file-contiguous pieces: already done (`HostVas::map_scattered`); a GPA-contiguous run
+  is ONE `MAP_FIXED`.
+- Does RM need the view after pinning? No: `os_lock_user_pages` pins with
+  `pin_user_pages(FOLL_LONGTERM)` and keeps the `struct page` array, never the address
+  (`kernel-open/nvidia/os-mlock.c:216-254`, `nv.c:3357-3400`); the view is already dropped right
+  after the descriptor (to the reaper). A persistent arena re-`MAP_FIXED` over old pieces saves
+  only the per-batch `PROT_NONE` mmap + one munmap call: each replacement still zaps and frees the
+  old VMA under `mmap_lock` for write, so the O(pieces) kernel work moves rather than vanishes.
+  Recommended instead (not done here; `kf-linux-raw` unsafe code): munmap the view in chunks
+  (e.g. 256 VMAs per call) so the reaper never holds `mmap_lock` for writing ~90 ms at a time.
+- Hugepages: a 2 MiB-backed memfd with 2 MiB guest leaves gives file-contiguous 2 MiB pieces —
+  already one mmap each by coalescing; 4 KiB pieces of a hugetlb memfd cannot be mapped at all
+  (the stitch is refused by name → per leaf).
+- One syscall for N scattered file pages: **none exists** in Linux for a shared file mapping
+  (`remap_file_pages` is emulated with one VMA per call since 4.0; `mremap` moves one VMA per
+  call; `madvise`/`process_madvise` map nothing; io_uring has no mmap op). `NV01_MEMORY_LIST_SYSTEM`
+  (a page list) is `RS_FLAGS_ALLOC_PRIVILEGED` (`resource_list.h:622-628`) — closed to kayfabe's
+  unprivileged client.
+
+**End state (recommended):** §8.0 passes ⇒ micro-reserved batches in the low range (≥ 8 runs),
+per leaf below that; guest reservations unchanged. §8.0 fails ⇒ per leaf in the low range (≈ 1 RM
+map per leaf, the unmap side ranges over whole leaves). Either way no partial unmap ever splits an
+`NV01` mapping, and no unchanged VA is ever transiently unmapped.
+
+### 8.5 Tests (GPU-free, `cargo test -p kf-mem`, ~17 s; `kf_mem::sim`)
+
+A host RM model of one client (per-`hDma` lists; NV01 per-map blocks and their whole-block free;
+NV50 reservations as one heap block, exact inside; occupancy; `size == 0` / `size != 0`; object and
+reservation free; foreign mappings) driven through the REAL `apply_entry` + `BatchedVas` with
+`GpuMirror`'s glue. **The GUARD:** every page whose guest mapping is the same before and after a
+refresh must translate identically after EVERY host call of that refresh. Invariants after every
+step: no foreign mapping touched, no transient, no `:1639` assert, no PTE-less mirror mapping,
+mirror translation == walker's committed set, zero gap bytes, zero unsafe splits.
+- property: 300 seeds × 60 steps × {guest-reservation batching, + micro reservations}, 100 seeds
+  per-run — maps, remaps, PARTIAL remaps inside placements, sparse/partial unmaps, straddles,
+  retires, foreign mappings.
+- targeted: the root-cause regression; one-page change inside a 16-page row (6 configurations);
+  sparse changes; 64 KiB and 2 MiB leaves; leaf-size change both ways; a deliberate split-by-remap
+  is caught by the guard; micro: exact partial unmap, refused reservation → per leaf, map failure
+  inside its reservation releases it, > cap = 2 reserved batches; gate-4 numbers unchanged (1 batch
+  / 1-call piece / 2 ranges + 1 free); foreign between/ending/sparse; empty gap = one call per span;
+  no call over nothing of ours; retire with foreign windows; workload counts.
+
+### 8.6 Still to verify on hardware
+
+1. §8.0 `kf-micro-reserve-probe reserve` (and optionally `nv01-control`).
+2. A Windows boot WITHOUT `KF3_NO_BATCHED_MAP` (and, after 1, with `KF3_BATCH_MICRO_RESERVE=1`):
+   expect no Xid 31, no `:1639` assert at exit, sign-in survives past `inval=4955`.
+3. `v3_gates.sh` 9/9 (gate 4: 1 batch, 1-call piece, 2 ranges, 1 free), the 30-arm fast suite, the
+   CUDA no-PM lane (batch counts unchanged for CUDA spaces), the Linux broker lane.
+
+⊘ **Related, fixed here:** the v3-video falcon-context steer (`kf_qemu::chan`) unmapped a guest row
+by its START outside `BatchedVas`; with per-leaf mappings that would take only the row's first
+leaf. It now unmaps the row by exact range (whole mappings of ours only). It still bypasses
+`OwnMaps` (the ledger keeps a stale entry for that row; a later owned-span range over it finds
+nothing of this client's `hDma` there and answers `NV_OK`) — route it through the mirror in a
+follow-up.

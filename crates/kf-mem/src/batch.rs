@@ -462,6 +462,12 @@ impl OwnMaps {
 /// fixed part ≈ 4 RM calls + 2 mm syscalls) — below it the rows go per run.
 pub const LOW_RANGE_MIN_RUNS: usize = 8;
 
+/// ★ 2026-10-09: the most leaf mappings ONE row is split into outside a reservation (a 512 MiB
+/// guest row of 4 KiB leaves) — a bound on host calls per row, never sized by an unchecked guest
+/// value. A longer row stays one mapping (its later partial change is then refused by name,
+/// [`SPLIT_OUTSIDE_RESERVATION`], never split).
+pub const MAX_LEAF_PIECES: u64 = 1 << 17;
+
 /// ★★★ **A host VA space that places batches and keeps their objects' books** — the one
 /// implementation production (`kf_qemu::mem::GpuMirror`) and the hardware gate share.
 ///
@@ -571,6 +577,41 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         out
     }
 
+    /// ★★★ 2026-10-09 — **[`BatchedVas::segments`], then one segment per guest LEAF wherever the
+    /// mapping would go through the space's `NV01` range** (no reservation of any kind over it).
+    /// There each map owns its own VA block and only a whole-mapping unmap is exact (rule 2), and a
+    /// guest can change any single leaf on its own (its PTEs are not coalesced), so the host
+    /// mapping unit is the leaf: `leaf` bytes when the segment is whole aligned leaves of it, else
+    /// the 4 KiB grain. Inside a reservation a coalesced row stays one mapping (partial unmaps are
+    /// exact there). Bounded: a hostile row is at most [`MAX_LEAF_PIECES`] pieces, else one piece
+    /// per segment is refused by the caller's own bounds (see `crate::apply`'s whole-page check).
+    fn leaf_segments(&self, va: u64, end: u64, leaf: u64) -> Vec<(Option<u32>, u64, u64)> {
+        let mut out = Vec::new();
+        for (via, s, e) in self.segments(va, end) {
+            if via.is_some() || self.vas.splits_safely(s, e - s) {
+                out.push((via, s, e));
+                continue;
+            }
+            let l = if leaf.is_power_of_two() && leaf >= BATCH_PAGE && (s | e).is_multiple_of(leaf)
+            {
+                leaf
+            } else {
+                BATCH_PAGE
+            };
+            if (e - s) / l > MAX_LEAF_PIECES {
+                out.push((None, s, e));
+                continue;
+            }
+            let mut cur = s;
+            while cur < e {
+                let next = cur.saturating_add(l).min(e);
+                out.push((None, cur, next));
+                cur = next;
+            }
+        }
+        out
+    }
+
     fn record(&self, va: u64, len: u64, batch: Option<u32>, via: Option<u32>) {
         if let Ok(mut o) = self.own.lock() {
             o.insert(va, len, batch, via);
@@ -592,10 +633,11 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         &self,
         va: u64,
         end: u64,
+        leaf: u64,
         defer: bool,
         one: &dyn Fn(Option<u32>, u64, u64) -> Result<Mapped, String>,
     ) -> Result<Mapped, String> {
-        let segs = self.segments(va, end);
+        let segs = self.leaf_segments(va, end, leaf);
         let mut placed: Vec<(Option<u32>, u64, u64)> = Vec::new();
         let mut verdict = Ok(Mapped::Placed);
         for &(via, s, e) in &segs {
@@ -638,7 +680,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
     /// The host's refusal, by name.
     pub fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         let end = d.va.saturating_add(d.len);
-        self.map_segments(d.va, end, defer, &|via, s, l| {
+        self.map_segments(d.va, end, d.leaf, defer, &|via, s, l| {
             let piece = Desired {
                 va: s,
                 len: l,
@@ -658,7 +700,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
     /// The host's refusal, by name.
     pub fn map_sked(&self, sk: &SkedRow, defer: bool) -> Result<Mapped, String> {
         let end = sk.va.saturating_add(sk.len);
-        self.map_segments(sk.va, end, defer, &|via, s, l| {
+        self.map_segments(sk.va, end, BATCH_PAGE, defer, &|via, s, l| {
             let piece = SkedRow {
                 va: s,
                 len: l,
@@ -705,12 +747,17 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             [(None, ..)] if self.vas.splits_safely(va, len) => {
                 (self.vas.map_scattered(ram_fd, rows, defer)?, None)
             }
-            [(Some(h), ..)] => (self.vas.map_scattered_in(*h, ram_fd, rows, defer)?, Some(*h)),
+            [(Some(h), ..)] => (
+                self.vas.map_scattered_in(*h, ram_fd, rows, defer)?,
+                Some(*h),
+            ),
             [(None, ..)] if self.low_reserve && rows.len() >= LOW_RANGE_MIN_RUNS => {
                 let h = match self.vas.reserve(va, len) {
                     Ok(h) => h,
                     Err(e) => {
-                        if self.micro_refused.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                        if self
+                            .micro_refused
+                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
                             < 8
                         {
                             eprintln!(
@@ -1031,7 +1078,10 @@ mod tests {
         );
         assert_eq!(
             plan.split,
-            vec![(0x10_0000, 2 * P, None), (0x10_0000 + 5 * P, 4 * P, Some(0x99))]
+            vec![
+                (0x10_0000, 2 * P, None),
+                (0x10_0000 + 5 * P, 4 * P, Some(0x99))
+            ]
         );
         assert_eq!(o.plan(0x20_0000, 0x30_0000), OwnPlan::default());
         // Adjacent mappings through different `hDma`s are two spans.

@@ -1022,6 +1022,7 @@ mod tests {
             ram,
             kind: 0,
             perm: kf_host::MapPerm::READ_WRITE,
+            leaf: 0,
         }
     }
 
@@ -1260,6 +1261,7 @@ mod tests {
             kind: 0,
             perm: kf_host::MapPerm::READ_WRITE,
             privileged: false,
+            leaf: 0,
         }
     }
 
