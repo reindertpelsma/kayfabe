@@ -44,7 +44,7 @@ differ and are given here for `master`. `NonstallArms`, `pt_stall_snapshot_poll`
 | C6 | act | brief `lock()` on `pt`, `pt_objs`, `by_obj`, `scopes`, `caps`, `groups` (the drainer holds them for microseconds) | a contended std mutex | **open, measured**: `act_lock_wait_max_us`, `lock_wait_worst` |
 | D | drainer | `DbFast::service_ready` repeated while 64 fds were ready | an unbounded loop | **fixed** §3.D |
 | E | — | measurement | — | **built** §3.E |
-| G | drainer | heartbeat `rm.gpu_time_ns()` every 500 ms | a host RM ioctl | **fixed** (moved to `kf3-status`, §3.B); found by this work, not in the audit |
+| G | drainer | the GSP heartbeat: `rm.gpu_time_ns()` + two shadow stores every 500 ms | volatile reads of the mapped usermode page (NOT an RM ioctl — corrected here; an earlier commit message said ioctl) | moved to `kf3-status` (§3.B); not a stall source, moved for the drainer's sake |
 | H | drainer | `status_line` every 2 s (`va_stats`, `chans.counts()` …) | locks | **fixed** (moved to `kf3-status`; `try_lock` only on the GSP lock) |
 | I | drainer | `apply_register` → `self.gsp.lock()` and the GSP FSM's work; `deliver_rc`; `deliver_hotplug` | the drainer's own work (the only other holder is `seal_shadow` at init) | by design; **measured** (`apply_max_us`, `drain_pass_max_us`) |
 | J | vCPU/main | `bar0trace` and `KF3_MAPLOG` print from a vCPU | stderr | default-off diagnostics, `PERTURBING_DIAGNOSTIC_ON` |
@@ -59,7 +59,7 @@ when it changes) carries a `stall[...]` segment:
 oldest held now), `act_wait_max_us` (queue wait before an act's first step), `act_run_max_us` (longest
 synchronous act step), `act_total_max_us`, `lock_wait_max_us` + `lock_wait_worst=<name>:<us>` (longest
 BLOCKED acquisition of any measured lock — `TimedMutex`/`TimedRwLock` — and which), the same for the
-drainer and the act thread alone, `doorbell_batch_full`, `log_queued`, `log_dropped`. Each gauge also
+drainer and the act thread alone, `doorbell_batch_full`, and (from `kf-util`) `log[max_call_us …]`. Each gauge also
 has an `over10ms` count (drainer pass, apply, act step).
 
 Falsifiers (what a number would prove): `drain_pass_max_us` above a few ms outside the boot's first
@@ -88,17 +88,37 @@ the act thread writes it). The drainer touches only `SlotMeta` (`plan_schedule`,
 act thread no longer takes the slot lock in any act except `retire` (stop, restart, disable, evict,
 preempt, timeslice, bind, promote and the deferred context all use the meta).
 
-**What changed in behaviour, exactly.** A `GPFIFO_SCHEDULE(false)` used to wait for a pump in flight;
-now the flag flips at once and a pump already past its check in `serve` finishes that one pass, like the
-GPU finishing work it already fetched when a channel is descheduled. The pump authors `GP_GET` only for
-work the host fence reached, so the extra pass forges nothing. The free path still takes the pump lock
-(on the act thread, in `retire`) before it frees the twin, so no pump touches a freed twin.
+**The disable guarantee, and how it is kept without blocking the drainer.** The guarantee: *after the
+guest's `GPFIFO_SCHEDULE(false)` / STOP / `DISABLE_CHANNELS(true)` / EVICT has been answered, no further
+work of that channel that was read BEFORE the disable is submitted* (a GP entry or pushbuffer segment the
+guest then frees or reuses). The old blocking `lock()` gave it by making the drainer wait for the pump.
+Now: the flags flip at once (atomics, `SeqCst`), and **the guest's reply is held** (a deferred act, like
+every other host-act reply) until no pump that started before the disable is still running:
+- a per-slot **pump epoch** (`SlotMeta::pump_epoch`): `serve` adds 1 right after it took the pump lock and
+  BEFORE it reads the schedule flags, and 1 again when the pump ends (odd = running);
+- the disable sets its flags, then reads the epoch (`quiesce_mark`): odd ⇒ a pump is in flight, the mark
+  is that epoch. This is a Dekker pair on sequentially consistent operations — either the pump sees the
+  flags (`may_pump()` false, it submits nothing) or the disable sees the pump (and waits for it);
+- the wait is `slotcell::quiesce`, a **1 ms timer continuation** on the act thread's event loop (the
+  drainer and the act thread keep accepting work; the held reply goes out when the epoch moves), with a
+  deadline of `QUIESCE_TRIES` = 10 000 ms after which the disable is **refused by name** (never a silent
+  success). With no pump running the answer is immediate (the drainer's reply stays `Done`).
+- covered: Translated `GPFIFO_SCHEDULE(false)` (single and TSG-wide), `stop translated`,
+  `DISABLE_CHANNELS(bDisable=TRUE)` over Translated rings, `evict translated context`. (A free is covered
+  by `retire`, which waits for the BUSY token and the pump lock; the deferred-API context evict runs for a
+  pump that has already returned `Pending`.) Passthrough twins have no CPU pump.
+- under strict FIFO the wait also delays the acts queued behind it, by at most the length of one pump.
 
 **Falsifier / tests** (`slotcell::tests`): `the_drainer_paths_return_while_a_worker_holds_the_pump_lock`
 (a thread holds the pump lock; the token read, TSG filter, schedule flip and free-stop return within
 2 s — each was a `lock()` before); its control `the_pump_state_is_locked_while_the_worker_holds_it` (a
 blocking `lock()` in the same situation does not return, i.e. the old code path waits);
-`a_stop_and_a_free_are_seen_under_contention` (the two silent `try_lock` defects).
+`a_stop_and_a_free_are_seen_under_contention` (the two silent `try_lock` defects); for the disable
+guarantee: `a_disable_is_not_answered_until_the_pump_in_flight_has_ended` (a worker mid-pump, the
+disable arrives, the reply is withheld while the act thread accepts other work, then released in order),
+`a_pump_that_never_ends_gets_the_disable_refused_by_name_at_the_deadline`,
+`a_pump_that_starts_after_the_disable_sees_it_and_submits_nothing`, and the 300-round race
+`no_pump_forwards_after_the_disable_is_released`.
 
 ## 3.B Logging (item B) — built: production is quiet
 
@@ -145,11 +165,34 @@ PANICS, killing the calling thread (for the drainer, silently: there is no `pani
 | lifecycle lines the gates read: `DOORBELL-LEDGER` (one per channel free) and `RETIRED` | 3 | **kept unconditionally — a judgement call**: rate = channel lifecycle, not traffic, and `run_fast_guest.sh` gates on the ledger. Gate them behind `klog_trace!` if the owner wants zero |
 
 **The periodic status line and the GSP heartbeat left the drainer.** A `kf3-status` thread
-(`Device::housekeeping_loop`, not an input-serving thread) now prints the status line (every 2 s, on
-change) and stores the GSP heartbeat mailboxes every 0.5 s — the latter was a host RM ioctl
-(`gpu_time_ns`) on the drainer, not in the audit (inventory G). The status line only reads atomics and
-`try_lock`s; a busy GSP lock shows the last phase seen instead of flickering "busy". ⚠ Consequence: a
-stalled drainer no longer freezes the heartbeat the guest reads (it used to, by accident).
+(`Device::housekeeping_loop`, not an input-serving thread) prints the status line (every 2 s, on change)
+and stores the GSP heartbeat mailboxes every 0.5 s. The status line only reads atomics and `try_lock`s;
+a busy GSP lock shows the last phase seen instead of flickering "busy". ⚠ A stalled drainer no longer
+freezes the heartbeat the guest reads (it used to, by accident).
+
+*Is the heartbeat safe off the drainer? (checked in code)*
+- `gpu_time_ns` is **not an RM call**: three `load_u32`s of the host's mapped, read-only usermode page
+  (`kf-host/src/lib.rs`), re-read until TIME_1 is stable. No lock, no ioctl, `&self` on an immutable field;
+  safe on any thread. (An earlier commit message and the first version of this section called it an RM
+  ioctl; that was wrong.)
+- `shadow_store` is `piece_for` (a binary search of `OnceLock<Vec<Piece>>`, sealed before any thread
+  starts — lock-free) plus `RawRegion::store`. The vCPU trap path calls the same function concurrently, so
+  it was already multi-threaded. `store` of 4 bytes is now ONE aligned `write_volatile` of a `u32`
+  (`raw_unsafe.rs`; it was a `copy_nonoverlapping` of 4 bytes, a single `mov` in practice but not
+  guaranteed) — no tearing.
+- **Race with the drainer's `publish`:** yes, on the same words. `GSP_MAILBOX0/1` (`0x110804/8`) are the
+  `GspFalconMailbox0/1` registers, in `GspReg::FIXED`, so `publish` stores the FSM's answer there when it
+  changed (or right after the guest wrote them: `apply_register` forgets the published value). The two
+  writers are independent single-word stores; the last one wins. That is the outcome set that existed
+  before the move (publish after a heartbeat on the next apply; a heartbeat after a publish ≤ 0.5 s
+  later), now at finer interleaving. It is harmless because the FSM never reads the shadow — it takes the
+  guest's mailbox writes (the libos boot args) from the privileged ring, not from the shadow word — and
+  the guest does not read those words back until it uses them as heartbeats (595.84+), where either value
+  is a fresh or at worst 0.5 s-old clock.
+- **Ordering relative to the guest's read:** none is promised or needed. The two stores are plain
+  (volatile) stores in program order, mailbox0 then mailbox1; on x86 (TSO) a vCPU sees them in that
+  order; the guest compares each word's progress separately. Nothing else is published behind them (the
+  RPC queue's data-before-edge ordering in `publish` has its own release fence).
 
 **Escalation (not built).** If a real run shows a log call over about 1 ms on an input-serving thread
 (`log[... drainer_over1ms= act_over1ms=]` or `max_call_us`), add a bounded logger thread: `klog!`

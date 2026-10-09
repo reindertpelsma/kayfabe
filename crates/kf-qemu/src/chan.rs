@@ -36,7 +36,7 @@
 
 use crate::mem::{Mirror, Mirrors, RamMap, resolve_placed, resolve_placed_prefix};
 use crate::raw_unsafe::RawRegion;
-use crate::slotcell::{ScheduleStep, SlotCell, SlotMeta};
+use crate::slotcell::{Marks, ScheduleStep, SlotCell, SlotMeta};
 use kf_chan::actloop::{self, ActQueue, ActStats, Cont, Finish, Step, Wait};
 use kf_chan::completions::Completions;
 use kf_chan::host::{ChanError, GuestUserd, HostRing, Publisher, Split, TranslatedChannel};
@@ -1469,6 +1469,18 @@ fn take_twin_object(
         .or_else(|| disp_sw.remove(&object).map(|h| (h, true)))
 }
 
+/// How long (1 ms steps) a disable's reply waits for a pump that started before it, before the disable
+/// is refused by name.
+const QUIESCE_TRIES: u32 = 10_000;
+
+/// What the drainer's half of a schedule statement produced ([`ChanPlane::schedule_flags`]).
+enum Sched {
+    /// A finished answer (not ours, or the restart act).
+    Answer(ChanAnswer),
+    /// The flags were set. With a DISABLE and a pump in flight: that slot and the epoch to wait out.
+    Flagged(Option<(Arc<SlotCell<Slot>>, u64)>),
+}
+
 /// How many 1 ms retries a free gives a token a worker still holds BUSY before it names it STRANDED.
 const RETIRE_BUSY_TRIES: u32 = 200;
 
@@ -2105,14 +2117,20 @@ impl ChanPlane {
                     })
                     .collect();
                 if !members.is_empty() {
+                    let mut marks: Marks<Slot> = Vec::new();
                     for ht in members {
-                        if let ChanAnswer::Refused { status, why } =
-                            self.schedule_translated(client, object, ht, enable)
-                        {
-                            return ChanAnswer::Refused { status, why };
+                        match self.schedule_flags(client, object, ht, enable) {
+                            Sched::Answer(ChanAnswer::Refused { status, why }) => {
+                                return ChanAnswer::Refused { status, why };
+                            }
+                            Sched::Answer(_) | Sched::Flagged(None) => {}
+                            Sched::Flagged(Some(m)) => marks.push(m),
                         }
                     }
-                    return ChanAnswer::Done;
+                    if marks.is_empty() {
+                        return ChanAnswer::Done;
+                    }
+                    return self.defer_quiesced("schedule group (disable)", marks);
                 }
                 // ★ P5b: a user channel (or its group) — the twin's own schedule, as an act.
                 let twins: Vec<((u32, u32), kf_host::Channel)> = self
@@ -2640,18 +2658,29 @@ impl ChanPlane {
     /// (`stopped` is cleared there); nothing else is left behind.
     fn stop_channel(&self, client: u32, object: u32, immediate: bool) -> ChanAnswer {
         if let Some(ht) = self.translated_of(client, object) {
-            return self.defer(
+            return self.defer_steps(
                 "stop translated",
                 Box::new(move |me: &ChanPlane| {
-                    let slot = me.slot(ht).ok_or_else(|| (NV_ERR_INVALID_STATE, format!("host {ht:#x}: slot gone")))?;
+                    let Some(slot) = me.slot(ht) else {
+                        return Step::Done(Err((NV_ERR_INVALID_STATE, format!("host {ht:#x}: slot gone"))));
+                    };
                     slot.meta.set_scheduled(false);
                     slot.meta.set_stopped(true);
                     let host = slot.meta.host;
-                    me.rm
-                        .disable_channels(&[host], true, false, false)
-                        .and_then(|()| me.rm.schedule_enable(host, false))
-                        .map_err(|e| (NV_ERR_INVALID_STATE, format!("host ring {ht:#x} stop: {e:?}")))?;
-                    Ok(format!("{client:#x}:{object:#x} STOP_CHANNEL(bImmediate={immediate}): Translated ring host {ht:#x} disabled + preempted + off its runlist"))
+                    // ★ The reply waits for a pump that started before the stop to end.
+                    let marks: Marks<Slot> = slot.meta.quiesce_mark().map(|m| (slot, m)).into_iter().collect();
+                    me.quiesce_then(
+                        marks,
+                        Box::new(move |me: &ChanPlane| {
+                            Step::Done(
+                                me.rm
+                                    .disable_channels(&[host], true, false, false)
+                                    .and_then(|()| me.rm.schedule_enable(host, false))
+                                    .map_err(|e| (NV_ERR_INVALID_STATE, format!("host ring {ht:#x} stop: {e:?}")))
+                                    .map(|()| format!("{client:#x}:{object:#x} STOP_CHANNEL(bImmediate={immediate}): Translated ring host {ht:#x} disabled + preempted + off its runlist")),
+                            )
+                        }),
+                    )
                 }),
             );
         }
@@ -2748,21 +2777,29 @@ impl ChanPlane {
                 ),
             };
         }
-        self.defer(
+        self.defer_steps(
             "disable channels",
             Box::new(move |me: &ChanPlane| {
                 let mut hosts: Vec<kf_host::Channel> = pt.iter().map(|(_, c)| *c).collect();
                 let mut slots = Vec::new();
+                let mut marks: Marks<Slot> = Vec::new();
                 for (_, ht) in &tr {
-                    let slot = me.slot(*ht).ok_or_else(|| (NV_ERR_INVALID_STATE, format!("host {ht:#x}: slot gone")))?;
+                    let Some(slot) = me.slot(*ht) else {
+                        return Step::Done(Err((NV_ERR_INVALID_STATE, format!("host {ht:#x}: slot gone"))));
+                    };
                     if disable {
                         // The pump stops fetching BEFORE the host verb.
                         slot.meta.set_disabled(true);
+                        marks.extend(slot.meta.quiesce_mark().map(|m| (Arc::clone(&slot), m)));
                     }
                     let host = slot.meta.host;
                     hosts.push(host);
                     slots.push(slot);
                 }
+                // ★ The reply waits for the pumps that started before the disable to end.
+                me.quiesce_then(
+                    marks,
+                    Box::new(move |me: &ChanPlane| Step::Done((|| -> ActResult {
                 me.rm
                     .disable_channels(&hosts, disable, only_scheduling, rewind)
                     .map_err(|e| (NV_ERR_INVALID_STATE, format!("host DISABLE_CHANNELS over {} channel(s): {e:?}", hosts.len())))?;
@@ -2787,6 +2824,8 @@ impl ChanPlane {
                     pt.len(),
                     tr.len()
                 ))
+                    })())),
+                )
             }),
         )
     }
@@ -2989,20 +3028,32 @@ impl ChanPlane {
     /// binding is recorded UNBOUND.
     fn evict_ctx(&self, client: u32, object: u32, engine_type: u32) -> ChanAnswer {
         if let Some(ht) = self.translated_of(client, object) {
-            return self.defer("evict translated context", Box::new(move |me: &ChanPlane| {
-                let slot = me.slot(ht).ok_or_else(|| (NV_ERR_INVALID_STATE, "GR slot gone".into()))?;
-                if slot.meta.guest_engine != engine_type || !slot.meta.owns_context(engine_type)
-                {
-                    return Err((NV_ERR_INVALID_ARGUMENT, "GPU_EVICT_CTX has no matching owned context".into()));
+            return self.defer_steps("evict translated context", Box::new(move |me: &ChanPlane| {
+                let r = (|| -> Result<Marks<Slot>, (u32, String)> {
+                    let slot = me.slot(ht).ok_or_else(|| (NV_ERR_INVALID_STATE, "GR slot gone".into()))?;
+                    if slot.meta.guest_engine != engine_type || !slot.meta.owns_context(engine_type)
+                    {
+                        return Err((NV_ERR_INVALID_ARGUMENT, "GPU_EVICT_CTX has no matching owned context".into()));
+                    }
+                    let host = slot.meta.host;
+                    me.rm.schedule_enable(host, false).map_err(|e| (NV_ERR_INVALID_STATE, format!("GR host {ht:#x} evict: {e:?}")))?;
+                    slot.meta.set_scheduled(false);
+                    {
+                        let mut ctx = slot.meta.ctx.lock().map_err(|_| (NV_ERR_INVALID_STATE, "GR ctx poisoned".into()))?;
+                        ctx.bound = false;
+                        ctx.va_bound = 0;
+                        ctx.evicts += 1;
+                    }
+                    // ★ The reply waits for a pump that started before the evict to end.
+                    Ok(slot.meta.quiesce_mark().map(|m| (slot, m)).into_iter().collect())
+                })();
+                match r {
+                    Err(e) => Step::Done(Err(e)),
+                    Ok(marks) => me.quiesce_then(
+                        marks,
+                        Box::new(move |_| Step::Done(Ok(format!("{client:#x}:{object:#x} GPU_EVICT_CTX: Translated host {ht:#x} off runlist, context UNBOUND")))),
+                    ),
                 }
-                let host = slot.meta.host;
-                me.rm.schedule_enable(host, false).map_err(|e| (NV_ERR_INVALID_STATE, format!("GR host {ht:#x} evict: {e:?}")))?;
-                slot.meta.set_scheduled(false);
-                let mut ctx = slot.meta.ctx.lock().map_err(|_| (NV_ERR_INVALID_STATE, "GR ctx poisoned".into()))?;
-                ctx.bound = false;
-                ctx.va_bound = 0;
-                ctx.evicts += 1;
-                Ok(format!("{client:#x}:{object:#x} GPU_EVICT_CTX: Translated host {ht:#x} off runlist, context UNBOUND"))
             }));
         }
         let Some((engine, chan)) = self
@@ -3039,9 +3090,23 @@ impl ChanPlane {
         )
     }
 
+    /// A guest `GPFIFO_SCHEDULE` on one Translated channel. ★ A DISABLE is answered only when no pump
+    /// that started before it is still running: with one in flight the reply is HELD by an act that
+    /// waits for that pump on the event loop ([`ChanPlane::quiesce_then`]) — the drainer waits for
+    /// nothing.
     fn schedule_translated(&self, client: u32, object: u32, ht: u32, enable: bool) -> ChanAnswer {
+        match self.schedule_flags(client, object, ht, enable) {
+            Sched::Answer(a) => a,
+            Sched::Flagged(None) => ChanAnswer::Done,
+            Sched::Flagged(Some(m)) => self.defer_quiesced("schedule (disable)", vec![m]),
+        }
+    }
+
+    /// The drainer's half of a schedule: flags only, no lock and no wait. `Flagged(Some(..))`: a pump
+    /// that started before a DISABLE is still running (the slot and the epoch to wait out).
+    fn schedule_flags(&self, client: u32, object: u32, ht: u32, enable: bool) -> Sched {
         let Some(slot) = self.slot(ht) else {
-            return ChanAnswer::NotOurs;
+            return Sched::Answer(ChanAnswer::NotOurs);
         };
         // ★ v3-chanctl: a STOPPED Translated channel's host ring was disabled and taken off its
         // runlist — re-enable it (host verbs: an act) before the pump may fetch again.
@@ -3049,7 +3114,7 @@ impl ChanPlane {
         // slot's atomics, never the pump lock a worker holds.
         let idx = match crate::slotcell::plan_schedule(&slot.meta, enable) {
             ScheduleStep::Restart => {
-                return self.defer(
+                return Sched::Answer(self.defer(
                 "restart translated",
                 Box::new(move |me: &ChanPlane| {
                     let slot = me.slot(ht).ok_or_else(|| (NV_ERR_INVALID_STATE, format!("host {ht:#x}: slot gone")))?;
@@ -3065,7 +3130,7 @@ impl ChanPlane {
                     }
                     Ok(format!("{client:#x}:{object:#x} GPFIFO_SCHEDULE enable=true: Translated ring host {ht:#x} restarted after STOP"))
                 }),
-            );
+            ));
             }
             ScheduleStep::Set { token } => token,
         };
@@ -3083,7 +3148,53 @@ impl ChanPlane {
         if enable && self.plane.ring_internal(idx) {
             let _ = self.wake.signal();
         }
-        ChanAnswer::Done
+        Sched::Flagged(if enable {
+            None
+        } else {
+            slot.meta.quiesce_mark().map(|m| (slot, m))
+        })
+    }
+
+    /// Hold the guest's reply (an act whose first step waits on the event loop) until none of the
+    /// marked pumps is still running, then answer OK; a pump that does not end within
+    /// [`QUIESCE_TRIES`] ms gets the disable REFUSED by name.
+    fn defer_quiesced(&self, what: &'static str, marks: Marks<Slot>) -> ChanAnswer {
+        self.defer_steps(
+            what,
+            Box::new(move |me: &ChanPlane| {
+                me.quiesce_then(
+                    marks,
+                    Box::new(move |_| {
+                        Step::Done(Ok(format!("{what}: no pump of the channel(s) is running")))
+                    }),
+                )
+            }),
+        )
+    }
+
+    /// ★ Run `then` once no pump that started before the disable (the `marks`) is still running; until
+    /// then a 1 ms timer step on the act thread's event loop. The guarantee this restores: **after the
+    /// guest's disable/stop/evict has been answered, no further work of that channel that was read
+    /// BEFORE the disable is submitted** — a pump past its flag check finishes first, and a pump
+    /// starting later sees the flags. The old blocking `lock()` gave it by making the drainer wait.
+    fn quiesce_then(&self, marks: Marks<Slot>, then: ActCont) -> ActStep {
+        crate::slotcell::quiesce(
+            self,
+            marks,
+            QUIESCE_TRIES,
+            then,
+            Box::new(|_, n| {
+                kf_util::klog_limited!(
+                    "kf3: a disable cannot be confirmed: {n} pump(s) of the channel still running after {QUIESCE_TRIES} ms"
+                );
+                Err((
+                    NV_ERR_INVALID_STATE,
+                    format!(
+                        "{n} pump(s) of the channel still running after {QUIESCE_TRIES} ms — not confirmed disabled"
+                    ),
+                ))
+            }),
+        )
     }
 
     /// ★ P5b: an engine object under a PASSTHROUGH twin — allocated on the twin with the guest's
@@ -5137,14 +5248,13 @@ impl ChanPlane {
             self.contended.fetch_add(1, Ordering::Relaxed);
             return false;
         };
+        // ★ The pump epoch goes odd BEFORE the flags are read (a Dekker pair with a disable's flags
+        // and `quiesce_mark`): either this pump sees the disable and submits nothing, or the disable
+        // sees this pump and holds its reply until the pump ends (`ChanPlane::quiesce_then`).
+        let _pump = slot.meta.pump_enter();
         let g = &mut *g;
         g.serves += 1;
-        if g.dead.is_some()
-            || !slot.meta.is_scheduled()
-            || slot.meta.is_disabled()
-            || slot.meta.is_stopped()
-            || self.stop.load(Ordering::Acquire)
-        {
+        if g.dead.is_some() || !slot.meta.may_pump() || self.stop.load(Ordering::Acquire) {
             return false;
         }
         g.last_put = g.userd.load(kf_abi::submit::USERD_GP_PUT).ok();

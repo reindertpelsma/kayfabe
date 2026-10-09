@@ -27,8 +27,10 @@
 //! `try_lock … g.scheduled = false` silently did nothing, so a stopped channel was re-scheduled as
 //! if running, and a freed channel's pump kept running. Atomics have no contended state.
 
+use kf_chan::actloop::{Cont, Step, Wait};
 use kf_chan::stall::{LockId, Stall, TimedMutex};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard, TryLockResult};
 
 /// The host ring's `(GR context, video context)`, as `HostRing` reports them.
@@ -59,6 +61,9 @@ pub struct SlotMeta {
     stopped: AtomicBool,
     disabled: AtomicBool,
     dead: AtomicBool,
+    /// The pump epoch: ODD while a pump of this channel is running, EVEN between pumps; every pump
+    /// start and end adds one. See [`SlotMeta::pump_enter`].
+    pump_epoch: AtomicU64,
     /// The guest's `GPU_PROMOTE_CTX` / `GPU_EVICT_CTX` statements for this channel (act thread).
     pub ctx: Mutex<crate::chan::CtxBind>,
 }
@@ -86,6 +91,7 @@ impl SlotMeta {
             stopped: AtomicBool::new(false),
             disabled: AtomicBool::new(false),
             dead: AtomicBool::new(false),
+            pump_epoch: AtomicU64::new(0),
             ctx: Mutex::new(crate::chan::CtxBind::default()),
         }
     }
@@ -101,19 +107,19 @@ impl SlotMeta {
     /// Whether the channel is scheduled now.
     #[must_use]
     pub fn is_scheduled(&self) -> bool {
-        self.scheduled.load(Ordering::Acquire)
+        self.scheduled.load(Ordering::SeqCst)
     }
 
     /// Whether the guest stopped the channel and has not restarted it.
     #[must_use]
     pub fn is_stopped(&self) -> bool {
-        self.stopped.load(Ordering::Acquire)
+        self.stopped.load(Ordering::SeqCst)
     }
 
     /// Whether the guest disabled the channel (`DISABLE_CHANNELS`) and has not re-enabled it.
     #[must_use]
     pub fn is_disabled(&self) -> bool {
-        self.disabled.load(Ordering::Acquire)
+        self.disabled.load(Ordering::SeqCst)
     }
 
     /// Whether the pump refused the channel for good (its reason is in the slot).
@@ -122,24 +128,66 @@ impl SlotMeta {
         self.dead.load(Ordering::Acquire)
     }
 
+    /// ★ **A pump of this channel starts** (the worker, right after it took the pump lock and BEFORE
+    /// it reads the schedule flags): the epoch becomes odd until the guard drops. Together with
+    /// [`SlotMeta::quiesce_mark`] this is a Dekker pair on sequentially consistent operations: of a
+    /// pump starting and a disable's flags being set, either the pump SEES the flags (and submits
+    /// nothing) or the disable SEES the pump (and waits for it). No pump can slip between.
+    #[must_use]
+    pub fn pump_enter(&self) -> PumpGuard<'_> {
+        self.pump_epoch.fetch_add(1, Ordering::SeqCst);
+        PumpGuard(self)
+    }
+
+    /// Whether the flags let a pump submit work now (read AFTER [`SlotMeta::pump_enter`]).
+    #[must_use]
+    pub fn may_pump(&self) -> bool {
+        !self.is_dead() && self.is_scheduled() && !self.is_disabled() && !self.is_stopped()
+    }
+
+    /// ★ After a disable/stop/evict set its flags: the epoch of the pump still running, if one is — a
+    /// pump that STARTED BEFORE the flags (it may already be past its flag check, and will still
+    /// forward what it read). `None`: no pump is running, and any later one sees the flags.
+    #[must_use]
+    pub fn quiesce_mark(&self) -> Option<u64> {
+        let e = self.pump_epoch.load(Ordering::SeqCst);
+        (e & 1 == 1).then_some(e)
+    }
+
+    /// Whether the pump `mark` was taken for has ended.
+    #[must_use]
+    pub fn pump_ended(&self, mark: u64) -> bool {
+        self.pump_epoch.load(Ordering::SeqCst) != mark
+    }
+
     /// Set the schedule flag.
     pub fn set_scheduled(&self, on: bool) {
-        self.scheduled.store(on, Ordering::Release);
+        self.scheduled.store(on, Ordering::SeqCst);
     }
 
     /// Set the stopped flag.
     pub fn set_stopped(&self, on: bool) {
-        self.stopped.store(on, Ordering::Release);
+        self.stopped.store(on, Ordering::SeqCst);
     }
 
     /// Set the disabled flag.
     pub fn set_disabled(&self, on: bool) {
-        self.disabled.store(on, Ordering::Release);
+        self.disabled.store(on, Ordering::SeqCst);
     }
 
     /// The pump gave the channel up.
     pub fn set_dead(&self) {
         self.dead.store(true, Ordering::Release);
+    }
+}
+
+/// A pump in flight ([`SlotMeta::pump_enter`]); dropping it ends the pump.
+#[derive(Debug)]
+pub struct PumpGuard<'a>(&'a SlotMeta);
+
+impl Drop for PumpGuard<'_> {
+    fn drop(&mut self) {
+        self.0.pump_epoch.fetch_add(1, Ordering::SeqCst);
     }
 }
 
@@ -213,6 +261,41 @@ pub fn stop_pump(meta: &SlotMeta) {
 #[must_use]
 pub fn in_group(meta: &SlotMeta, tsg: u32) -> bool {
     meta.tsg == Some(tsg)
+}
+
+/// Builds the refusal when a disable's wait is given up (`still_running` pumps).
+pub type TimedOut<C, T> = Box<dyn FnOnce(&C, usize) -> T + Send>;
+
+/// Slots whose in-flight pump a disable is waiting for: `(slot, mark)` from [`SlotMeta::quiesce_mark`].
+pub type Marks<S> = Vec<(Arc<SlotCell<S>>, u64)>;
+
+/// ★ **Hold a disable's reply until no pump that started before the disable is still running** —
+/// as continuations on the act thread's event loop (`kf_chan::actloop`): nothing sleeps and no thread
+/// blocks; a 1 ms timer resumes the check, the drainer and the act queue keep accepting other work.
+/// When every marked pump has ended, `then` runs (the host verb, or the answer). After `tries` timer
+/// steps the wait is given up and `timed_out(ctx, still_running)` builds the refusal — named, never a
+/// silent success: the guest is not told "disabled" while the channel may still forward work.
+pub fn quiesce<C: ?Sized + 'static, S: Send + Sync + 'static, T: 'static>(
+    ctx: &C,
+    marks: Marks<S>,
+    tries: u32,
+    then: Cont<C, T>,
+    timed_out: TimedOut<C, T>,
+) -> Step<C, T> {
+    let marks: Marks<S> = marks
+        .into_iter()
+        .filter(|(slot, mark)| !slot.meta.pump_ended(*mark))
+        .collect();
+    if marks.is_empty() {
+        return then(ctx);
+    }
+    if tries == 0 {
+        return Step::Done(timed_out(ctx, marks.len()));
+    }
+    Step::Wait(
+        Wait::Timer(std::time::Duration::from_millis(1)),
+        Box::new(move |c: &C| quiesce(c, marks, tries - 1, then, timed_out)),
+    )
 }
 
 #[cfg(test)]
@@ -336,5 +419,201 @@ mod tests {
             plan_schedule(&c.meta, false),
             ScheduleStep::Set { token: 0x2a }
         );
+    }
+
+    // ---- the disable guarantee: no work of a pump that started before it is forwarded after the
+    // guest was told ----
+
+    struct Ctx;
+    type Out = String;
+
+    type Rig = (
+        kf_chan::actloop::ActQueue<Ctx, Out>,
+        Arc<kf_chan::actloop::ActStats>,
+        Arc<AtomicBool>,
+        std::thread::JoinHandle<()>,
+        Arc<std::sync::Mutex<Vec<String>>>,
+    );
+
+    fn rig() -> Rig {
+        let (q, l) = kf_chan::actloop::channel::<Ctx, Out>().unwrap();
+        let stats = Arc::clone(&l.stats);
+        let stop = Arc::new(AtomicBool::new(false));
+        let s2 = Arc::clone(&stop);
+        let h = std::thread::spawn(move || l.run(&Ctx, &s2, Stall::leak()));
+        (q, stats, stop, h, Arc::default())
+    }
+
+    fn finish(log: &Arc<std::sync::Mutex<Vec<String>>>) -> kf_chan::actloop::Finish<Ctx, Out> {
+        let log = Arc::clone(log);
+        Box::new(move |_, t: Out, _| log.lock().unwrap().push(t))
+    }
+
+    fn until(f: impl Fn() -> bool, ms: u64) -> bool {
+        let t = std::time::Instant::now();
+        while t.elapsed() < Duration::from_millis(ms) {
+            if f() {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        f()
+    }
+
+    /// ★ FALSIFIER of the regression: a worker is MID-PUMP, the guest's disable arrives. The drainer
+    /// answers at once (it waits for nothing), but the disable's reply is not released until that pump
+    /// has ended — and meanwhile the act thread accepts other work. (With the flag-only change the
+    /// reply went out at once, and the pump went on forwarding what it had read.)
+    #[test]
+    fn a_disable_is_not_answered_until_the_pump_in_flight_has_ended() {
+        let c = cell();
+        c.meta.set_scheduled(true);
+        let (go, worker) = {
+            let (held_tx, held_rx) = mpsc::channel();
+            let (go_tx, go_rx) = mpsc::channel::<()>();
+            let c = Arc::clone(&c);
+            let h = std::thread::spawn(move || {
+                let _pump = c.meta.pump_enter();
+                let _g = c.lock().unwrap();
+                held_tx.send(()).unwrap();
+                let _ = go_rx.recv();
+            });
+            held_rx.recv().unwrap();
+            (go_tx, h)
+        };
+        // The drainer's half: flags at once, no wait.
+        assert_eq!(
+            plan_schedule(&c.meta, false),
+            ScheduleStep::Set { token: 0x2a }
+        );
+        let mark = c.meta.quiesce_mark().expect("a pump is running");
+        let (q, stats, stop, h, log) = rig();
+        let marks: Marks<u32> = vec![(Arc::clone(&c), mark)];
+        let first: Cont<Ctx, Out> = Box::new(move |ctx: &Ctx| {
+            quiesce(
+                ctx,
+                marks,
+                5000,
+                Box::new(|_| Step::Done("disable answered".to_string())),
+                Box::new(|_, n| format!("refused: {n} pump(s) still running")),
+            )
+        });
+        assert!(q.submit("disable", first, finish(&log)));
+        let second: Cont<Ctx, Out> = Box::new(|_| Step::Done("other act".to_string()));
+        std::thread::sleep(Duration::from_millis(30));
+        assert!(q.submit("other", second, finish(&log)));
+        assert!(
+            until(|| stats.accepted.load(Ordering::Relaxed) == 2, 200),
+            "the act thread did not accept other work while the disable waited"
+        );
+        std::thread::sleep(Duration::from_millis(60));
+        assert!(
+            log.lock().unwrap().is_empty(),
+            "the disable was answered while a pump that started before it was running: {:?}",
+            log.lock().unwrap()
+        );
+        // The pump ends: the reply is released, then the next act runs (statement order).
+        go.send(()).unwrap();
+        worker.join().unwrap();
+        assert!(until(|| log.lock().unwrap().len() == 2, 1000));
+        assert_eq!(*log.lock().unwrap(), vec!["disable answered", "other act"]);
+        stop.store(true, Ordering::Release);
+        q.poke();
+        h.join().unwrap();
+    }
+
+    /// A pump that never ends cannot hold the reply for ever: it is refused, named, after the
+    /// deadline (never a silent success).
+    #[test]
+    fn a_pump_that_never_ends_gets_the_disable_refused_by_name_at_the_deadline() {
+        let c = cell();
+        let _pump = c.meta.pump_enter();
+        c.meta.set_scheduled(false);
+        let mark = c.meta.quiesce_mark().unwrap();
+        let (q, _stats, stop, h, log) = rig();
+        let marks: Marks<u32> = vec![(Arc::clone(&c), mark)];
+        let first: Cont<Ctx, Out> = Box::new(move |ctx: &Ctx| {
+            quiesce(
+                ctx,
+                marks,
+                20,
+                Box::new(|_| Step::Done("answered".to_string())),
+                Box::new(|_, n| format!("refused:{n}")),
+            )
+        });
+        assert!(q.submit("disable", first, finish(&log)));
+        assert!(until(|| !log.lock().unwrap().is_empty(), 2000));
+        assert_eq!(*log.lock().unwrap(), vec!["refused:1"]);
+        stop.store(true, Ordering::Release);
+        q.poke();
+        h.join().unwrap();
+    }
+
+    /// With no pump running the disable is answered at once, and a pump that STARTS after the flags
+    /// sees them and submits nothing.
+    #[test]
+    fn a_pump_that_starts_after_the_disable_sees_it_and_submits_nothing() {
+        let c = cell();
+        c.meta.set_scheduled(true);
+        assert!(
+            c.meta.quiesce_mark().is_none(),
+            "no pump: nothing to wait for"
+        );
+        let _ = plan_schedule(&c.meta, false);
+        let pump = c.meta.pump_enter();
+        assert!(
+            !c.meta.may_pump(),
+            "the late pump sees `scheduled == false`"
+        );
+        drop(pump);
+        // stop, disable and dead are seen the same way
+        c.meta.set_scheduled(true);
+        c.meta.set_stopped(true);
+        let _p = c.meta.pump_enter();
+        assert!(!c.meta.may_pump());
+    }
+
+    /// The Dekker pair under contention: a pumper (enter, check the flags, "forward" if allowed, exit)
+    /// races a disabler (set the flags, mark, wait for the marked pump). After the disabler is
+    /// released, the pumper has forwarded NOTHING new — over many rounds.
+    #[test]
+    fn no_pump_forwards_after_the_disable_is_released() {
+        for round in 0..300u32 {
+            let c = cell();
+            c.meta.set_scheduled(true);
+            let forwarded = Arc::new(std::sync::atomic::AtomicU64::new(0));
+            let stop = Arc::new(AtomicBool::new(false));
+            let pumper = {
+                let (c, f, stop) = (Arc::clone(&c), Arc::clone(&forwarded), Arc::clone(&stop));
+                std::thread::spawn(move || {
+                    while !stop.load(Ordering::Acquire) {
+                        let _pump = c.meta.pump_enter();
+                        if c.meta.may_pump() {
+                            // forward: a little work, so the window is real
+                            for _ in 0..50 {
+                                std::hint::spin_loop();
+                            }
+                            f.fetch_add(1, Ordering::SeqCst);
+                        }
+                    }
+                })
+            };
+            std::thread::sleep(Duration::from_micros(u64::from(round % 7) * 40));
+            let _ = plan_schedule(&c.meta, false);
+            if let Some(mark) = c.meta.quiesce_mark() {
+                while !c.meta.pump_ended(mark) {
+                    std::hint::spin_loop();
+                }
+            }
+            let at_release = forwarded.load(Ordering::SeqCst);
+            std::thread::sleep(Duration::from_micros(300));
+            let later = forwarded.load(Ordering::SeqCst);
+            stop.store(true, Ordering::Release);
+            pumper.join().unwrap();
+            assert_eq!(
+                later, at_release,
+                "round {round}: a pump forwarded after the disable was released"
+            );
+        }
     }
 }

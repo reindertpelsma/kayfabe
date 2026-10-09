@@ -50,8 +50,16 @@ impl RawRegion {
         let Some(p) = self.span(off, 4) else {
             return false;
         };
-        // SAFETY: `span` bounds-checked 4 bytes; unaligned-safe write of a plain integer.
-        unsafe { core::ptr::write_unaligned(p.cast::<u32>(), v) };
+        if p.align_offset(core::mem::align_of::<u32>()) == 0 {
+            // SAFETY: `span` bounds-checked 4 bytes and the pointer is 4-aligned; ONE volatile 32-bit
+            // store, so a concurrent reader (a vCPU, or another thread's store of the same register —
+            // the GSP heartbeat beside the drainer's publish) sees one value or the other, never a
+            // mix.
+            unsafe { core::ptr::write_volatile(p.cast::<u32>(), v) };
+        } else {
+            // SAFETY: `span` bounds-checked 4 bytes; unaligned-safe write of a plain integer.
+            unsafe { core::ptr::write_unaligned(p.cast::<u32>(), v) };
+        }
         true
     }
 
@@ -68,6 +76,10 @@ impl RawRegion {
         let n = usize::from(width);
         if !matches!(n, 1 | 2 | 4 | 8) {
             return false;
+        }
+        if n == 4 {
+            let b = v.to_le_bytes();
+            return self.store_u32(off, u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
         }
         self.write_from(off, &v.to_le_bytes()[..n])
     }
