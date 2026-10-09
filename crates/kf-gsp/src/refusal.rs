@@ -40,7 +40,8 @@ pub struct RefusalRow {
     /// for `GSP_RM_CONTROL`, the class for `GSP_RM_ALLOC`; `None` for every other function or a
     /// header too short to decode (⊘ never `0`, which is a real class/control number).
     pub detail: Option<u32>,
-    /// The `rpc_result` posted.
+    /// The LOGICAL status posted: the reply's `rpc_result` before `GspFsm::wire_form`, so it is the same with
+    /// `KF3_CTRL_STATUS_IN_BODY` on (a control's status then travels in the body, `docs/design/V3_CTRL_STATUS_ENCODING.md`).
     pub status: u32,
     /// How many times this exact row was posted.
     pub count: u64,

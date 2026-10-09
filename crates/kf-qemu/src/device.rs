@@ -315,6 +315,10 @@ pub struct Device {
     /// realize: `Some` when on. The counters the status line prints (`gss[...]`); the same value the
     /// chain's seat writes.
     gss_native: Option<std::sync::Arc<kf_rm::gssnative::Stats>>,
+    /// ★ EXPERIMENT `KF3_CTRL_STATUS_IN_BODY` (default off, `docs/design/V3_CTRL_STATUS_ENCODING.md`),
+    /// read once at realize: the status line says so when on. The encoding itself lives in
+    /// `kf_gsp::GspFsm` (`wire_form`), which was built with the same value.
+    ctrl_status_in_body: bool,
     /// ★ DIAGNOSTIC, default off (`KF3_BAR0_READ_TRACE=1`, [`crate::readtrace`]): the BAR0 access
     /// trace in the VFIO reference's record format. Off: the C device takes none of its paths.
     pub trace: crate::readtrace::AccessTrace,
@@ -332,6 +336,16 @@ impl Device {
         // ★ EXPERIMENT `KF3_GSS_NATIVE` (default off): read once, here, and said once.
         let gss_native = kf_rm::gssnative::enabled()
             .then(|| std::sync::Arc::new(kf_rm::gssnative::Stats::new()));
+        // ★ EXPERIMENT `KF3_CTRL_STATUS_IN_BODY` (default off): read once, here, and said once.
+        let ctrl_status_in_body = kf_gsp::ctrl_status_in_body_enabled();
+        if ctrl_status_in_body {
+            eprintln!(
+                "kf3: ⚠ EXPERIMENT KF3_CTRL_STATUS_IN_BODY ON (docs/design/V3_CTRL_STATUS_ENCODING.md): every non-OK GSP_RM_CONTROL reply \
+                 is put on the wire as the real GSP does, VRPC header rpc_result = 0 and the NV status in the reply body (offset 12); \
+                 params keep their size and their zeroed OUT area; GSP_RM_ALLOC/FREE and every other function are unchanged; \
+                 the refusal ledger, the 'GSP REFUSED' lines and the census still carry the logical status"
+            );
+        }
         if gss_native.is_some() {
             eprintln!(
                 "kf3: ⚠ EXPERIMENT KF3_GSS_NATIVE ON (docs/design/V3_GSS_NATIVE.md): non-privileged subdevice-level GSS-legacy controls \
@@ -968,7 +982,9 @@ impl Device {
             _ => u64::MAX,
         };
         let gsp = Gsp {
-            fsm: console.fsm(abi),
+            fsm: console
+                .fsm(abi)
+                .with_ctrl_status_in_body(ctrl_status_in_body),
             model,
             policy,
             published: std::collections::HashMap::new(),
@@ -1167,6 +1183,7 @@ impl Device {
             x11_dispsw: cfg.x11_dispsw,
             kernel_pid4,
             gss_native,
+            ctrl_status_in_body,
             gop,
             gop_rom,
             bar1_mode,
@@ -2435,11 +2452,17 @@ impl Device {
     pub fn status_line(&self) -> String {
         let c = &self.counters;
         let o = Ordering::Relaxed;
-        let (phase, refusals) = self
+        let (phase, refusals, ctrl_encoded) = self
             .gsp
             .try_lock()
-            .map(|g| (format!("{:?}", g.fsm.phase()), g.fsm.refusals().summary()))
-            .unwrap_or_else(|_| ("busy".into(), "busy".into()));
+            .map(|g| {
+                (
+                    format!("{:?}", g.fsm.phase()),
+                    g.fsm.refusals().summary(),
+                    g.fsm.ctrl_status_in_body(),
+                )
+            })
+            .unwrap_or_else(|_| ("busy".into(), "busy".into(), None));
         // The ledger's DISTINCT set names the control ids the RPC code alone hides.
         let unserviced: Vec<String> = self
             .chain_logs
@@ -2717,6 +2740,15 @@ impl Device {
         let db = match &self.gss_native {
             Some(g) => db + " EXPERIMENT KF3_GSS_NATIVE " + &g.status(),
             None => db,
+        };
+        // ★ EXPERIMENT `KF3_CTRL_STATUS_IN_BODY`: `""` with the switch off (the line is the line it was).
+        let db = if self.ctrl_status_in_body {
+            db + &format!(
+                " EXPERIMENT KF3_CTRL_STATUS_IN_BODY encoded={}",
+                ctrl_encoded.map_or_else(|| "busy".to_string(), |n| n.to_string())
+            )
+        } else {
+            db
         };
         format!(
             "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq}{db} unserviced=[{}] gsp_refusals[{refusals}]",

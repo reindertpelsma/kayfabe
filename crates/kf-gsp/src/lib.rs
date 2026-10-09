@@ -128,9 +128,10 @@ pub mod seq;
 pub mod sysinfo;
 
 pub use boot::{
-    CommandObserver, CommandPolicy, Deferred, EchoOk, EventDelivery, GspAbi, GspFsm,
-    InitArgsLayout, Observing, PolicyChain, QueueBinding, QueueState, RM_ALLOC_PARAMS_STATUS_AT,
-    Reply, ReplyPatch, ServiceReport, Transition, Unserviced, stamp_alloc_status,
+    CTRL_STATUS_IN_BODY_FLAG, CommandObserver, CommandPolicy, Deferred, EchoOk, EventDelivery,
+    GspAbi, GspFsm, InitArgsLayout, Observing, PolicyChain, QueueBinding, QueueState,
+    RM_ALLOC_PARAMS_STATUS_AT, Reply, ReplyPatch, ServiceReport, Transition, Unserviced,
+    ctrl_status_in_body_enabled, stamp_alloc_status,
 };
 // ★ Re-exported, not defined here (task #121): `BootPhase` is read by the register model
 // and by the boot sequence, neither of which may depend on this crate. Every existing

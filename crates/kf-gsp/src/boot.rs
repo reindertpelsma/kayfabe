@@ -1004,6 +1004,22 @@ pub struct GspFsm {
     /// (`kf_qemu::gop::ConsoleWiring`; before that every kf3 device carried one).
     /// ⊘ Survives [`GspFsm::device_reset`]: it is the chain's, not one driver life's.
     system_info: Option<crate::sysinfo::SystemInfoCell>,
+    /// ★ EXPERIMENT `KF3_CTRL_STATUS_IN_BODY` (default off, `docs/design/V3_CTRL_STATUS_ENCODING.md`):
+    /// a non-OK `GSP_RM_CONTROL` reply is put on the wire as the real GSP puts it, VRPC header
+    /// `rpc_result` 0 and the status in the body ([`GspFsm::wire_form`]). Config, not a driver life's
+    /// state: survives [`GspFsm::device_reset`].
+    ctrl_status_in_body: bool,
+    /// … how many replies the switch re-encoded (the status line's counter). Survives a reset too.
+    ctrl_status_encoded: u64,
+}
+
+/// ★ EXPERIMENT switch: `KF3_CTRL_STATUS_IN_BODY=1` (`docs/design/V3_CTRL_STATUS_ENCODING.md`).
+pub const CTRL_STATUS_IN_BODY_FLAG: &str = "KF3_CTRL_STATUS_IN_BODY";
+
+/// `KF3_CTRL_STATUS_IN_BODY=1`, read once by the caller (the device, at realize).
+#[must_use]
+pub fn ctrl_status_in_body_enabled() -> bool {
+    std::env::var(CTRL_STATUS_IN_BODY_FLAG).as_deref() == Ok("1")
 }
 
 /// ★★★ v3-initrace — **FWSEC's FRTS command, read out of the DMEM image RM loaded it from.**
@@ -1087,7 +1103,54 @@ impl GspFsm {
             frts_image: None,
             frts_offset: None,
             system_info: None,
+            ctrl_status_in_body: false,
+            ctrl_status_encoded: 0,
         }
+    }
+
+    /// ★ EXPERIMENT `KF3_CTRL_STATUS_IN_BODY`: encode every non-OK `GSP_RM_CONTROL` reply the way the
+    /// real GSP does (header result 0, status at the body's `status` word). Default off: with it off
+    /// no reply differs from today's by a bit.
+    #[must_use]
+    pub fn with_ctrl_status_in_body(mut self, on: bool) -> GspFsm {
+        self.ctrl_status_in_body = on;
+        self
+    }
+
+    /// Is the experiment on, and how many replies has it re-encoded so far?
+    #[must_use]
+    pub fn ctrl_status_in_body(&self) -> Option<u64> {
+        self.ctrl_status_in_body.then_some(self.ctrl_status_encoded)
+    }
+
+    /// ★ EXPERIMENT `KF3_CTRL_STATUS_IN_BODY` — **the one encoding point** of a refused control.
+    ///
+    /// `rpc` carries the LOGICAL status in its `rpc_result` everywhere upstream (policies, census,
+    /// refusal ledger, held replies); only the bytes that reach the guest are changed here, and only
+    /// for a `GSP_RM_CONTROL` reply with a non-OK status: `rpc_result` and `rpc_result_private` become
+    /// 0 and the status is written at the body's `status` word (`rpc_gsp_rm_control_v.status`,
+    /// `rm_control_wire().status_off`, 12 at every measured tag). The body's size and every other byte
+    /// stay what the policy built (a zeroed OUT area for a refusal, never an echo), as the real GSP
+    /// answers (`ogkm: rpc.c rpcRmApiControl_GSP`: `if (rpc_params->status != NV_OK) status =
+    /// rpc_params->status`). ⊘ `GSP_RM_ALLOC`/`FREE` and every other function are untouched. A body too
+    /// short to hold the word is left as it is (no byte is invented).
+    ///
+    /// `None`: the reply goes out as built.
+    fn wire_form(&self, rpc: &OutgoingRpc) -> Option<OutgoingRpc> {
+        if !self.ctrl_status_in_body
+            || rpc.rpc_result == 0
+            || self.abi.rpc.codes.classify(rpc.function) != RpcFunction::RmControl
+        {
+            return None;
+        }
+        let at = self.abi.driver.rm_control_wire().status_off;
+        let mut out = rpc.clone();
+        out.payload
+            .get_mut(at..at + 4)?
+            .copy_from_slice(&rpc.rpc_result.to_le_bytes());
+        out.rpc_result = 0;
+        out.rpc_result_private = 0;
+        Some(out)
     }
 
     /// ★ Keep every `GSP_SET_SYSTEM_INFO` (fn 72) body in `cell` ([`crate::sysinfo`]) — it is still
@@ -1173,8 +1236,12 @@ impl GspFsm {
         // ⊘ w472b's fix (carrying a `defer_commands` flag across the reset) is gone with the flag:
         // deferral is structural in v3, so a reset cannot disarm it.
         let system_info = self.system_info.take();
+        // ★ EXPERIMENT `KF3_CTRL_STATUS_IN_BODY` is configuration, like the cell: it survives.
+        let (ctrl_on, ctrl_n) = (self.ctrl_status_in_body, self.ctrl_status_encoded);
         *self = GspFsm::new(self.abi);
         self.system_info = system_info;
+        self.ctrl_status_in_body = ctrl_on;
+        self.ctrl_status_encoded = ctrl_n;
         Transition::E11
     }
 
@@ -2156,8 +2223,16 @@ impl GspFsm {
                 whole.reply(NV_ERR_NOT_SUPPORTED, &[])
             }
         };
-        let replies =
-            crate::large::split_reply(&full, fragments, self.abi.rpc.codes.continuation_record);
+        // ★ EXPERIMENT `KF3_CTRL_STATUS_IN_BODY`: the guest reads `rpc_result` from the LAST message of a
+        // large reply, so the re-encoding happens BEFORE the split (every fragment then carries 0, and
+        // the status word sits in the head). `full` keeps the logical status for the ledger below.
+        let wired = self.wire_form(&full);
+        let counted = wired.is_some();
+        let replies = crate::large::split_reply(
+            wired.as_ref().unwrap_or(&full),
+            fragments,
+            self.abi.rpc.codes.continuation_record,
+        );
         let QueueState::Bound(binding) = &self.queue else {
             return Err(GspFault::QueueNotBound);
         };
@@ -2185,6 +2260,9 @@ impl GspFsm {
         }
         for r in &replies {
             self.post(ram, r)?;
+        }
+        if counted {
+            self.ctrl_status_encoded = self.ctrl_status_encoded.saturating_add(1);
         }
         // ★ v3-refusals: the guest reads the status from the last reply — one ledger row for the command.
         if full.rpc_result != 0 {
@@ -2389,6 +2467,11 @@ impl GspFsm {
         let QueueState::Bound(binding) = &self.queue else {
             return Err(GspFault::QueueNotBound);
         };
+        // ★ EXPERIMENT `KF3_CTRL_STATUS_IN_BODY`: the bytes the guest reads (see `wire_form`); the
+        // caller's `rpc` keeps the logical status for the ledger.
+        let wired = self.wire_form(rpc);
+        let counted = wired.is_some();
+        let rpc = wired.as_ref().unwrap_or(rpc);
         let geom = binding.geom.clone();
         let cursor = binding.stat;
         let count = geom.msg_count();
@@ -2433,6 +2516,9 @@ impl GspFsm {
             .write_u32(ram, geom.stat_write_ptr_off(), write_ptr)?;
 
         self.stat_seq = self.stat_seq.wrapping_add(1);
+        if counted {
+            self.ctrl_status_encoded = self.ctrl_status_encoded.saturating_add(1);
+        }
         if let QueueState::Bound(b) = &mut self.queue {
             b.stat.write_ptr = write_ptr;
             b.stat.free_cache = free - elements;
@@ -3592,5 +3678,411 @@ mod fn72_is_kept_for_fn65 {
             &rpc(RpcFunction::GspSetSystemInfo, 72, vec![7; 936], 3),
         );
         assert_eq!(f, GspFsm::new(abi()));
+    }
+}
+
+#[cfg(test)]
+mod ctrl_status_in_body {
+    //! ★ EXPERIMENT `KF3_CTRL_STATUS_IN_BODY` (`docs/design/V3_CTRL_STATUS_ENCODING.md`): the unit half.
+    //! A fake guest RAM, a bound queue pair, and the guest's own read of what was posted. The
+    //! switch changes the bytes of a non-OK `GSP_RM_CONTROL` reply and nothing else.
+    use super::a_life_ends_and_the_next_one_boots::abi;
+    use super::*;
+    use crate::large::Fragment;
+    use crate::ring::RxCursor;
+
+    const PAGE: usize = 4096;
+    /// Command queue: one header page and four elements; the status queue follows it.
+    const QUEUE_BYTES: u32 = (PAGE * 5) as u32;
+    const STAT_OFF: u64 = QUEUE_BYTES as u64;
+
+    struct Ram(Vec<u8>);
+    impl GuestRam for Ram {
+        fn read(&mut self, gpa: u64, buf: &mut [u8]) -> Result<(), crate::fault::RamRefused> {
+            let at = gpa as usize;
+            buf.copy_from_slice(&self.0[at..at + buf.len()]);
+            Ok(())
+        }
+        fn write(&mut self, gpa: u64, bytes: &[u8]) -> Result<(), crate::fault::RamRefused> {
+            let at = gpa as usize;
+            self.0[at..at + bytes.len()].copy_from_slice(bytes);
+            Ok(())
+        }
+    }
+
+    /// An FSM with a bound queue pair over a flat identity-mapped fake RAM.
+    fn bound(on: bool) -> (GspFsm, Ram) {
+        let a = abi();
+        let mut ram = Ram(vec![0u8; 2 * QUEUE_BYTES as usize]);
+        let header = crate::ring::TxHeader {
+            version: a.msgq.version,
+            size: QUEUE_BYTES,
+            msg_size: PAGE as u32,
+            msg_count: 4,
+            write_ptr: 0,
+            flags: a.msgq.swap_rx_flag,
+            rx_hdr_off: 32,
+            entry_off: PAGE as u32,
+        };
+        ram.write(0, &header.encode()).unwrap();
+        let pages = (0..(2 * QUEUE_BYTES as u64 / PAGE as u64))
+            .map(|i| i * PAGE as u64)
+            .collect();
+        let region = RegionMap::from_pages(PAGE as u64, pages).unwrap();
+        let geom = MsgqGeometry::bind(&mut ram, region, 0, STAT_OFF, &a.msgq).unwrap();
+        let mut f = GspFsm::new(a).with_ctrl_status_in_body(on);
+        let count = geom.msg_count();
+        f.queue = QueueState::Bound(QueueBinding {
+            geom,
+            stat: TxCursor::fresh(count),
+            cmd: RxCursor::default(),
+            peer_read_at_bind: 0,
+        });
+        (f, ram)
+    }
+
+    /// The policy: one fixed answer for everything (or none, for the unserviced default).
+    #[derive(Clone)]
+    struct Fixed {
+        reply: Option<Reply>,
+        hold: bool,
+    }
+    impl CommandPolicy for Fixed {
+        fn respond(&mut self, _cmd: &RpcCommand) -> Option<Reply> {
+            self.reply.clone()
+        }
+        fn holds_for_refresh(&self, _cmd: &RpcCommand) -> bool {
+            self.hold
+        }
+    }
+    fn refuse(status: u32) -> Fixed {
+        Fixed {
+            reply: Some(Reply {
+                rpc_result: status,
+                body: Vec::new(),
+            }),
+            hold: false,
+        }
+    }
+
+    fn command(function: RpcFunction, code: u32, sequence: u32, payload: Vec<u8>) -> RpcCommand {
+        RpcCommand {
+            function,
+            code,
+            sequence,
+            payload,
+            elements: 1,
+            delivered: Vec::new(),
+        }
+    }
+
+    /// `GSP_RM_CONTROL` in the ogkm layout (`rpc_gsp_rm_control_v`): hClient@0 hObject@4 cmd@8
+    /// status@12 paramsSize@16 flags@20, `params` after the fixed header.
+    fn control(params: usize) -> RpcCommand {
+        let off = abi().driver.rm_control_wire().params_off;
+        let mut p = vec![0u8; off + params];
+        p[0..4].copy_from_slice(&0xc1d0_0001u32.to_le_bytes());
+        p[4..8].copy_from_slice(&0x5c00_0001u32.to_le_bytes());
+        p[8..12].copy_from_slice(&0x2080_1702u32.to_le_bytes());
+        p[16..20].copy_from_slice(&(params as u32).to_le_bytes());
+        command(RpcFunction::RmControl, 76, 9, p)
+    }
+
+    fn alloc() -> RpcCommand {
+        let mut p = vec![0u8; 40];
+        p[0..4].copy_from_slice(&0xc1d0_0001u32.to_le_bytes());
+        p[12..16].copy_from_slice(&0x0000_0079u32.to_le_bytes());
+        p[20..24].copy_from_slice(&8u32.to_le_bytes());
+        command(RpcFunction::RmAlloc, 103, 4, p)
+    }
+
+    fn answer(f: &mut GspFsm, ram: &mut Ram, p: &mut Fixed, cmd: &RpcCommand) -> ServiceReport {
+        let mut report = ServiceReport::default();
+        f.answer(ram, p, cmd, &mut report).expect("posted");
+        report
+    }
+
+    /// What the guest reads from status-queue slot `slot`: the validated envelope and the payload.
+    fn read_reply(f: &GspFsm, ram: &mut Ram, slot: u32) -> IncomingRpc {
+        let QueueState::Bound(b) = f.queue() else {
+            panic!("unbound")
+        };
+        let geom = b.geom.clone();
+        let mut elem = vec![0u8; PAGE];
+        geom.region()
+            .read(
+                ram,
+                geom.stat_element_off(geom.msg_count().slot(slot)),
+                &mut elem,
+            )
+            .unwrap();
+        let a = abi();
+        let len = peek_len(&a.element, &elem, PAGE as u32, a.element_size_max).unwrap();
+        decode_message(&a.element, &elem, len, slot, &a.driver).unwrap()
+    }
+
+    fn status_word(payload: &[u8]) -> u32 {
+        let at = abi().driver.rm_control_wire().status_off;
+        u32::from_le_bytes(payload[at..at + 4].try_into().unwrap())
+    }
+
+    /// ★ The offset this experiment writes is the ogkm layout's: `rpc_gsp_rm_control_v.status` is
+    /// the fourth `u32` (hClient, hObject, cmd, status, paramsSize, flags ...), at every measured tag.
+    #[test]
+    fn the_status_word_sits_at_body_offset_12_in_the_ogkm_layout() {
+        let w = abi().driver.rm_control_wire();
+        assert_eq!(
+            (w.status_off, w.params_size_off, w.rpc_flags_off),
+            (12, 16, 20)
+        );
+        // A reply body written by hand the way the real GSP writes a failed control (boot3: header
+        // 0, body status 0x56; the request's words echoed), read the way `rpcRmApiControl_GSP`
+        // reads it: `rpc_params->status`.
+        let mut body = vec![0u8; w.params_off + 8];
+        for (i, v) in [0xc1d0_0001u32, 0x5c00_0001, 0x2080_1702, 0x56, 8, 0]
+            .iter()
+            .enumerate()
+        {
+            body[i * 4..i * 4 + 4].copy_from_slice(&v.to_le_bytes());
+        }
+        assert_eq!(status_word(&body), 0x56);
+        // The experiment writes that same word, and nothing else of the body, in a header-0 reply.
+        let (f, _) = bound(true);
+        let cmd = control(8);
+        let logical = cmd.reply(0x56, &[]);
+        let wired = f
+            .wire_form(&logical)
+            .expect("a refused control is re-encoded");
+        assert_eq!((wired.rpc_result, wired.rpc_result_private), (0, 0));
+        assert_eq!(status_word(&wired.payload), 0x56);
+        let mut expect = logical.payload.clone();
+        expect[12..16].copy_from_slice(&0x56u32.to_le_bytes());
+        assert_eq!(wired.payload, expect, "only the status word changed");
+    }
+
+    #[test]
+    fn a_refused_control_flag_on_is_header_zero_and_status_in_the_body() {
+        let (mut f, mut ram) = bound(true);
+        let cmd = control(24);
+        let report = answer(&mut f, &mut ram, &mut refuse(0x56), &cmd);
+        assert!(report.unserviced.is_empty(), "a policy answered it");
+        let r = read_reply(&f, &mut ram, 0);
+        assert_eq!(
+            (
+                r.envelope.function,
+                r.envelope.sequence,
+                r.envelope.rpc_result,
+                r.envelope.rpc_result_private
+            ),
+            (76, 9, 0, 0),
+            "the VRPC header carries no failure"
+        );
+        assert_eq!(status_word(&r.payload), 0x56);
+        assert_eq!(r.payload.len(), cmd.payload.len(), "same params length");
+        // The OUT area is the zeroed one of today, never an echo of the request.
+        let mut expect = vec![0u8; cmd.payload.len()];
+        expect[12..16].copy_from_slice(&0x56u32.to_le_bytes());
+        assert_eq!(r.payload, expect);
+        // The bookkeeping is keyed off the LOGICAL status.
+        let rows = f.refusals().rows();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            (rows[0].function, rows[0].detail, rows[0].status),
+            (76, Some(0x2080_1702), 0x56)
+        );
+        assert_eq!(f.ctrl_status_in_body(), Some(1));
+    }
+
+    /// Flag off is today's bytes: the header result is the status, the body is zeros.
+    #[test]
+    fn a_refused_control_flag_off_is_byte_identical_to_today() {
+        let (mut f, mut ram) = bound(false);
+        let cmd = control(24);
+        answer(&mut f, &mut ram, &mut refuse(0x56), &cmd);
+        let r = read_reply(&f, &mut ram, 0);
+        assert_eq!(
+            (r.envelope.rpc_result, r.envelope.rpc_result_private),
+            (0x56, 0x56)
+        );
+        assert_eq!(r.payload, vec![0u8; cmd.payload.len()]);
+        // Whole-element comparison with the message encoded independently of the switch.
+        let a = abi();
+        let want = encode_message(
+            &a.element,
+            a.rpc.header_version,
+            PAGE as u32,
+            a.element_size_max,
+            0,
+            &cmd.reply(0x56, &[]),
+        )
+        .unwrap();
+        let at = STAT_OFF as usize + PAGE;
+        assert_eq!(&ram.0[at..at + want.len()], &want[..]);
+        assert_eq!(f.refusals().rows()[0].status, 0x56);
+        assert_eq!(f.ctrl_status_in_body(), None);
+    }
+
+    /// The unserviced default (no policy answers): the same encoding, and the `Unserviced` report
+    /// still names the command.
+    #[test]
+    fn an_unserviced_control_flag_on_is_header_zero_and_still_reported() {
+        let (mut f, mut ram) = bound(true);
+        let cmd = control(16);
+        let mut none = Fixed {
+            reply: None,
+            hold: false,
+        };
+        let report = answer(&mut f, &mut ram, &mut none, &cmd);
+        assert_eq!(
+            report.unserviced,
+            vec![Unserviced {
+                code: 76,
+                sequence: 9
+            }]
+        );
+        let r = read_reply(&f, &mut ram, 0);
+        assert_eq!(
+            (r.envelope.rpc_result, status_word(&r.payload)),
+            (0, NV_ERR_NOT_SUPPORTED)
+        );
+        assert_eq!(f.refusals().rows()[0].status, NV_ERR_NOT_SUPPORTED);
+    }
+
+    /// A policy body with partial OUT data keeps every byte but the status word.
+    #[test]
+    fn a_refusal_with_a_partial_body_keeps_its_bytes() {
+        let (mut f, mut ram) = bound(true);
+        let cmd = control(24);
+        let off = abi().driver.rm_control_wire().params_off;
+        let mut body = vec![0u8; cmd.payload.len()];
+        body[off + 3] = 0xab;
+        body[12..16].copy_from_slice(&0x1111u32.to_le_bytes()); // a stale word: the logical status wins
+        let mut p = Fixed {
+            reply: Some(Reply {
+                rpc_result: 0x1f,
+                body: body.clone(),
+            }),
+            hold: false,
+        };
+        answer(&mut f, &mut ram, &mut p, &cmd);
+        let r = read_reply(&f, &mut ram, 0);
+        assert_eq!((r.envelope.rpc_result, status_word(&r.payload)), (0, 0x1f));
+        body[12..16].copy_from_slice(&0x1fu32.to_le_bytes());
+        assert_eq!(r.payload, body);
+    }
+
+    /// Everything but a refused control is bit-for-bit the same in both modes: a successful control,
+    /// refused, unserviced and successful allocs, and refused functions that are not controls.
+    #[test]
+    fn allocs_frees_other_functions_and_successes_are_identical_in_both_modes() {
+        let ctl = control(24);
+        let mut ok_body = ctl.payload.clone();
+        ok_body[40] = 7;
+        let al = alloc();
+        let stat = command(RpcFunction::GetGspStaticInfo, 65, 2, vec![0; 64]);
+        let free = command(RpcFunction::Free, 10, 3, vec![0; 16]);
+        let reply = |rpc_result, body| Fixed {
+            reply: Some(Reply { rpc_result, body }),
+            hold: false,
+        };
+        let cases: Vec<(&str, RpcCommand, Fixed)> = vec![
+            ("successful control", ctl, reply(0, ok_body)),
+            ("refused alloc", al.clone(), refuse(0x56)),
+            (
+                "unserviced alloc",
+                al.clone(),
+                Fixed {
+                    reply: None,
+                    hold: false,
+                },
+            ),
+            ("successful alloc", al, reply(0, vec![0; 32])),
+            ("refused get-static-info", stat, refuse(0x56)),
+            ("refused free", free, refuse(0x1f)),
+        ];
+        for (name, cmd, p) in cases {
+            let mut out = Vec::new();
+            for on in [false, true] {
+                let (mut f, mut ram) = bound(on);
+                answer(&mut f, &mut ram, &mut p.clone(), &cmd);
+                out.push((ram.0, f.refusals().summary()));
+            }
+            assert!(
+                out[0] == out[1],
+                "{name}: the switch changed the posted bytes or the ledger"
+            );
+        }
+    }
+
+    /// A held reply (the RPC-map sync point) is encoded when it is posted, and the ledger row is the
+    /// logical status.
+    #[test]
+    fn a_held_refused_control_is_encoded_at_release() {
+        let (mut f, mut ram) = bound(true);
+        let cmd = control(8);
+        let mut p = refuse(0x56);
+        p.hold = true;
+        answer(&mut f, &mut ram, &mut p, &cmd);
+        assert_eq!(f.held_len(), 1);
+        assert_eq!(f.release_held(&mut ram).unwrap(), 1);
+        let r = read_reply(&f, &mut ram, 0);
+        assert_eq!((r.envelope.rpc_result, status_word(&r.payload)), (0, 0x56));
+        assert_eq!(f.refusals().rows()[0].status, 0x56);
+    }
+
+    /// A joined large control: every fragment's header result is 0 (the guest reads it from the LAST
+    /// message) and the status sits in the head's body.
+    #[test]
+    fn a_refused_large_control_is_encoded_before_the_split() {
+        let mut whole = control(1000);
+        whole.payload.truncate(1000);
+        let frags = [
+            Fragment {
+                sequence: 9,
+                code: 76,
+                len: 900,
+            },
+            Fragment {
+                sequence: 10,
+                code: 71,
+                len: 100,
+            },
+        ];
+        for on in [true, false] {
+            let (mut f, mut ram) = bound(on);
+            let mut report = ServiceReport::default();
+            f.answer_large(&mut ram, &mut refuse(0x56), &whole, &frags, &mut report)
+                .expect("posted");
+            let head = read_reply(&f, &mut ram, 0);
+            let tail = read_reply(&f, &mut ram, 1);
+            assert_eq!(tail.envelope.function, 71);
+            if on {
+                assert_eq!((head.envelope.rpc_result, tail.envelope.rpc_result), (0, 0));
+                assert_eq!(status_word(&head.payload), 0x56);
+                assert_eq!(f.ctrl_status_in_body(), Some(1));
+            } else {
+                assert_eq!(
+                    (head.envelope.rpc_result, tail.envelope.rpc_result),
+                    (0x56, 0x56)
+                );
+                assert_eq!(status_word(&head.payload), 0);
+            }
+            assert_eq!(
+                f.refusals().rows()[0].status,
+                0x56,
+                "logical, in both modes"
+            );
+        }
+    }
+
+    /// The switch is configuration: a device reset keeps it.
+    #[test]
+    fn the_switch_survives_a_device_reset() {
+        let (mut f, _) = bound(true);
+        f.device_reset();
+        assert_eq!(f.ctrl_status_in_body(), Some(0));
+        let (mut g, _) = bound(false);
+        g.device_reset();
+        assert_eq!(g.ctrl_status_in_body(), None);
     }
 }
