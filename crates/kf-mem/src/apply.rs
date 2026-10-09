@@ -353,10 +353,11 @@ pub const fn leaf_bytes(code: u8) -> u64 {
 /// that STARTS in the carve-out; a run that straddles its base is clipped there (its part below is
 /// guest VRAM and is placed, the rest stays absent; [`Applied::carve_clipped_bytes`]). The
 /// "Unmeasured" below is now measured `[RTX 4070, 595.91.07, kf3 @ 7acb811b and 6fafcc6e]`: the
-/// guest RM's flat FB alias in a guest-KERNEL space, `0x120000000+0x1efc00000` of 2 MiB leaves
-/// naming store 0, DOES reach the carve-out (by `0x20000`), and refusing it whole killed the guest
-/// RM's kernel CE channel (`tspace bind: virtual_unresolved` at `0x30fb55000`, store
-/// `0x1efb55000`) — fast suite 0/30.
+/// guest RM's flat FB alias in a guest-KERNEL space covers the whole store, as two runs:
+/// `0x120000000+0x1efc00000` of 2 MiB leaves naming store 0 (straddles the base by `0x20000`) and
+/// `0x30fc00000+0x10400000` naming store `0x1efc00000` (wholly inside). Refusing the first whole
+/// killed the guest RM's kernel CE channel (`tspace bind: virtual_unresolved` at `0x30fb55000`,
+/// store `0x1efb55000`) — fast suite 0/30. With the clip: 30/30, the second run still refused.
 ///
 /// ⊘ **Corrected 2026-10-10 (`OWNER_RULINGS.md` §AB; `V3_WINDOW_EXPOSURE_REVIEW.md` row 6), above
 /// the 2026-10-04 text it supersedes:** under [`ApplyCfg::carve_refuse`] (hardwired ON in kf3 with
@@ -2228,8 +2229,10 @@ mod tests {
     /// RTX 4070 host): the measured shape. The guest RM's flat FB alias in a guest-KERNEL space is
     /// ONE run `0x120000000+0x1efc00000` of 2 MiB leaves naming store `0x0` (8 GiB store, carve-out
     /// at `0x1efbe0000` = `8 GiB - FW_CARVE_OUT_BYTES`): the run's last leaf straddles the carve-out
-    /// base by `0x20000` (inferred, not measured: the guest maps its usable FB rounded UP to 2 MiB —
-    /// `0x1efc00000` is the carve-out base rounded up to 2 MiB). Refusing the WHOLE
+    /// base by `0x20000`. (Measured on the fixed build: a second run `0x30fc00000+0x10400000` names
+    /// store `0x1efc00000`, so the alias covers the WHOLE store; that run lies wholly in the
+    /// carve-out and stays refused. Why the guest's runs break at `0x1efc00000` is not measured.)
+    /// Refusing the WHOLE
     /// run left the kernel CE channel's ring at VA `0x30fb55000` (store `0x1efb55000`, BELOW the
     /// carve-out) unresolved: `tspace bind: virtual_unresolved`, `REFUSED-AND-POISONED`, guest
     /// `memmgrMemSet … NV_ERR_TIMEOUT`. The carve-out bytes — and only they — stay absent, on a

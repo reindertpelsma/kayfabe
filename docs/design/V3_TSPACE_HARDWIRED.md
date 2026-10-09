@@ -8,6 +8,24 @@ GPU-free tests only. No hardware has run this revision.** Owner rulings: `docs/O
 `V3_P1P2_TSPACE.md` (status corrected there) and answers `V3_WINDOW_EXPOSURE_REVIEW.md` (status
 corrected there).
 
+> ⊘ **CORRECTION, 2026-10-10 (later the same day; branch `claude/fix-fastsuite-regression-20261010`,
+> placed above the text it corrects in §4 and §5).** The carve-out refusal in guest-kernel mirrors
+> (§4 *Hostile guest*, review row 6) broke Linux: `integration/windows-20261010` @ `6fafcc6e` ran
+> the fast suite **0/30** `[measured, RTX 4070, 595.91.07, not nested]`. Bisected on the `--timer`
+> arm: `2c6c0faa`, `277b8eb7`, `833a6f5a` PASS; **`7acb811b`** (first bad; `787f3339` does not
+> build) and `42009511` FAIL. Mechanism: the guest RM's flat FB alias in a kernel space is two
+> runs covering the whole 8 GiB store, `0x120000000+0x1efc00000` (store 0, 2 MiB leaves) and
+> `0x30fc00000+0x10400000` (store `0x1efc00000`). The first straddles the carve-out base
+> `0x1efbe0000` by `0x20000`, and `carve_reached` refused it **whole**, so the kernel CE channel's
+> ring at VA `0x30fb55000` (store `0x1efb55000`, below the carve-out) had no row: `tspace bind:
+> virtual_unresolved`, `REFUSED-AND-POISONED`, guest `memmgrMemSet … NV_ERR_TIMEOUT`. **Fix:** only
+> the carve-out BYTES are refused. A run that starts in the carve-out is refused as before; a run
+> that straddles its base is clipped there and its part below is placed
+> (`kf_mem::apply::prepare_row`, `carve_clipped=` on the status line). Verified at `2e10a0c7`:
+> fast suite 30/30, no `DEAD:` on any arm, `v3_gates.sh` 9/9; the wholly-inside run is still
+> refused on every arm. ⚠ Not run at the fix: the broker lane, the CUDA ladder and a Windows boot
+> (§5 items 3-5).
+
 ## 1. Code deleted
 
 - `kf_qemu::tspace::enabled` (`KF3_TSPACE`) and `inca_strict` (`KF3_INCA_REFUSE`). The constant

@@ -8,6 +8,11 @@ acts on it:
   **gone**. The default-path code is deleted, together with this review's `default_*` helpers and
   its known-violation test. `crate::exposure` now judges every mirror as guest-leaf-only, whatever
   its twin state.
+- ⊘ *Corrected 2026-10-10 (later the same day), above the row 6 line it corrects:* "refused"
+  means the carve-out **bytes** only. Refusing a whole guest leaf run that merely straddles the
+  carve-out base killed the guest RM's kernel CE channel (fast suite 0/30 at `6fafcc6e`, first bad
+  `7acb811b`; `V3_TSPACE_HARDWIRED.md`, correction at the top). A straddling run is now clipped at
+  the base and its part below is placed; a run that starts inside is refused as before.
 - Row 6: a guest leaf into the firmware carve-out is now **refused** in every GPU mirror,
   guest-kernel spaces included, not only counted (`kf_mem::apply::carve_reached`).
 - The Translated dependency on mirror windows (`chan.rs` `Windows`/`SlotWindow`) and on mirror rings
