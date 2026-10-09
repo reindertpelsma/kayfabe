@@ -223,6 +223,89 @@ fn big_leaves_are_one_mapping_each_and_change_alone() {
     }
 }
 
+/// ★★★ REGRESSION 2026-10-10 (`integration/windows-20261010` @ 6fafcc6e: fast suite 0/30, every
+/// guest kernel CE channel `REFUSED-AND-POISONED`), through the real [`BatchedVas`] over the host RM
+/// model. The measured shape: a guest-KERNEL space's flat FB alias, ONE run `0x120000000+0x1efc00000`
+/// of 2 MiB leaves naming store `0x0`, an 8 GiB store whose carve-out starts at `0x1efbe0000` — the
+/// run's last leaf straddles the carve-out base. The part below the carve-out is placed (one host
+/// mapping per whole leaf; the straddling leaf's lower part in pieces that never reach the
+/// carve-out), so the ring at VA `0x30fb55000` translates; no carve-out byte is mapped; and the
+/// walker's later UNMAP of the committed run removes exactly our mappings — no `NV01` split, no
+/// `gvaspaceFree` assertion.
+#[test]
+fn a_flat_fb_alias_straddling_the_carve_out_is_placed_below_it() {
+    const STORE: u64 = 0x2_0000_0000;
+    const CARVE: u64 = STORE - 0x1042_0000;
+    const VA: u64 = 0x1_2000_0000;
+    const LEN: u64 = 0x1_efc0_0000;
+    const LEAF: u64 = 0x20_0000;
+    // The guest reservation lies elsewhere: the alias goes through the `NV01` range.
+    let sim = Sim::new(space(0x80_0000_0000, 0x80_4000_0000));
+    sim.0.borrow_mut().no_guard = true;
+    let m = SimMirror::new(&sim, true, false);
+    let id = |gpa: u64, _len: u64| Some(gpa);
+    let cfg = ApplyCfg {
+        store_bytes: STORE,
+        carve: CARVE,
+        carve_refuse: true,
+        ..cfg(&id)
+    };
+    let run = DiffRun {
+        leaf: LEAF,
+        ..map_run(VA, LEN, false, 0, false)
+    };
+    let out = apply_entry(&m, &[run], &cfg);
+    assert_eq!(
+        (out.codes[0], out.refused),
+        (KFWR_ACK_APPLIED, 0),
+        "{:?}",
+        out.first_refusal
+    );
+    {
+        let rm = sim.0.borrow();
+        assert_eq!(
+            rm.translate(0x3_0fb5_5000, Owner::Mirror),
+            Some((false, 0x1_efb5_5000)),
+            "the kernel CE channel's ring (store below the carve-out) translates"
+        );
+        assert_eq!(
+            rm.translate(VA + CARVE - P, Owner::Mirror),
+            Some((false, CARVE - P))
+        );
+        for p in [VA + CARVE, VA + CARVE + 0x1_f000] {
+            assert_eq!(
+                rm.translate(p, Owner::Mirror),
+                None,
+                "carve-out page {p:#x}"
+            );
+        }
+        assert!(
+            rm.maps.iter().all(|x| x.off + x.len <= CARVE),
+            "no host mapping reaches the carve-out"
+        );
+        assert_eq!(rm.maps.iter().map(|x| x.len).sum::<u64>(), CARVE);
+        assert_eq!(
+            rm.maps.iter().filter(|x| x.len == LEAF).count() as u64,
+            CARVE / LEAF,
+            "one host mapping per whole guest leaf below the straddler"
+        );
+    }
+    let c = Committed {
+        len: LEN,
+        held: false,
+        ram: false,
+        off: 0,
+        run,
+    };
+    let out = apply_entry(&m, &[unmap_run(VA, &c)], &cfg);
+    assert_eq!(out.refused, 0, "{:?}", out.first_refusal);
+    let rm = sim.0.borrow();
+    assert!(rm.maps.is_empty(), "{} mapping(s) left", rm.maps.len());
+    assert_eq!(rm.asserts, 0);
+    assert!(rm.broken_mirror().is_empty());
+    assert!(rm.violations.is_empty(), "{:?}", rm.violations);
+}
+
 /// ★ A leaf-SIZE change is a change of the guest's mapping (its PTE level), so those VAs are
 /// re-made — but nothing else is touched, nothing stale is left, and it works both ways: sixteen
 /// 4 KiB leaves → one 64 KiB leaf over the same pages, and back.

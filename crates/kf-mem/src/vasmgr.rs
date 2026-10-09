@@ -749,6 +749,9 @@ pub struct VaStats {
     pub carve_kernel: u64,
     /// ★ P1+P2 inc A: the same on the guest kernel's CPU views (BAR1/BAR2) — count-only.
     pub carve_cpu: u64,
+    /// ★ 2026-10-10: carve-out bytes left absent from runs straddling the carve-out base
+    /// ([`crate::apply::Applied::carve_clipped_bytes`]).
+    pub carve_clipped_bytes: u64,
     /// ★ v3-cdp: SKED-reflected pages the host already held (not ours).
     pub sked_held: u64,
 }
@@ -1486,6 +1489,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             self.stats.carve_gpu += a.carve_gpu as u64;
             self.stats.carve_kernel += a.carve_kernel as u64;
             self.stats.carve_cpu += a.carve_cpu as u64;
+            self.stats.carve_clipped_bytes += a.carve_clipped_bytes;
             if a.priv_mirrored > 0 {
                 static MIRRORED: std::sync::atomic::AtomicU32 =
                     std::sync::atomic::AtomicU32::new(0);

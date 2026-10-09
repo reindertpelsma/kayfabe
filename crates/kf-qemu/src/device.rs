@@ -2477,7 +2477,7 @@ impl Device {
             tm.host_calls,
         );
         let mem = format!(
-            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} absent_cleared={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} priv_withheld={} priv_withheld_bytes={:#x} priv_mirrored={} sked={}/{}held carve_gpu={} carve_kernel={} carve_cpu={} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} pramin_kept={} pramin_kept_now={} window_advice_refused={} inline_opens={} reaped={} cache_ops={} sysmembars={} root_unsets={}]",
+            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} absent_cleared={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} priv_withheld={} priv_withheld_bytes={:#x} priv_mirrored={} sked={}/{}held carve_gpu={} carve_kernel={} carve_cpu={} carve_clipped={:#x} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} pramin_kept={} pramin_kept_now={} window_advice_refused={} inline_opens={} reaped={} cache_ops={} sysmembars={} root_unsets={}]",
             mc.invalidates.load(o),
             va.walks_reconciled,
             va.walks_submitted,
@@ -2499,6 +2499,7 @@ impl Device {
             va.carve_gpu,
             va.carve_kernel,
             va.carve_cpu,
+            va.carve_clipped_bytes,
             mc.bar_pdes.load(o),
             mc.roots.load(o),
             mc.root_moves.load(o),

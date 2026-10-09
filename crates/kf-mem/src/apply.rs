@@ -157,6 +157,9 @@ pub struct Applied {
     pub carve_kernel: usize,
     /// ★ P1+P2 inc A (§4.3): the same on a CPU view (the guest kernel's BAR1/BAR2) — count-only.
     pub carve_cpu: usize,
+    /// ★ 2026-10-10: carve-out bytes left ABSENT from runs that straddle the carve-out base (the
+    /// run's part below it is placed and the run acknowledged — [`prepare_row`]).
+    pub carve_clipped_bytes: u64,
 }
 
 impl Applied {
@@ -344,6 +347,16 @@ pub const fn leaf_bytes(code: u8) -> u64 {
 /// `true` (refuse) only under [`ApplyCfg::carve_refuse`] and only on a host GPU space a guest
 /// channel created non-kernel may run in — a twin that withholds privileged leaves
 /// ([`MapTarget::withholds_privileged`]: `User(n)` or `Unclassified`).
+///
+/// ⊘ **Corrected 2026-10-10 (later the same day; fix of the 6fafcc6e fast-suite regression), above
+/// the text it corrects:** "refused" means the carve-out BYTES only. [`prepare_row`] refuses a run
+/// that STARTS in the carve-out; a run that straddles its base is clipped there (its part below is
+/// guest VRAM and is placed, the rest stays absent; [`Applied::carve_clipped_bytes`]). The
+/// "Unmeasured" below is now measured `[RTX 4070, 595.91.07, kf3 @ 7acb811b and 6fafcc6e]`: the
+/// guest RM's flat FB alias in a guest-KERNEL space, `0x120000000+0x1efc00000` of 2 MiB leaves
+/// naming store 0, DOES reach the carve-out (by `0x20000`), and refusing it whole killed the guest
+/// RM's kernel CE channel (`tspace bind: virtual_unresolved` at `0x30fb55000`, store
+/// `0x1efb55000`) — fast suite 0/30.
 ///
 /// ⊘ **Corrected 2026-10-10 (`OWNER_RULINGS.md` §AB; `V3_WINDOW_EXPOSURE_REVIEW.md` row 6), above
 /// the 2026-10-04 text it supersedes:** under [`ApplyCfg::carve_refuse`] (hardwired ON in kf3 with
@@ -616,7 +629,7 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                 at: r0.at.wrapping_add(s - r0.va),
                 ..*r0
             };
-            if let Some(d) = prepare_row(
+            match prepare_row(
                 target,
                 &r,
                 i,
@@ -626,7 +639,9 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                 &failed_unmaps,
                 &mut out,
             ) {
-                pending.push((i, d));
+                Some((d, true)) => pending.extend(split_at_leaf(d).into_iter().map(|p| (i, p))),
+                Some((d, false)) => pending.push((i, d)),
+                None => {}
             }
         }
     }
@@ -747,7 +762,7 @@ fn prepare_row(
     reserved: &[(u64, u64)],
     failed_unmaps: &[(u64, u64)],
     out: &mut Applied,
-) -> Option<Desired> {
+) -> Option<(Desired, bool)> {
     let mut d =
         match desired_from_leaves([(r.va, r.at, r.len, r.ap)], cfg.store_bytes, cfg.ram_offset) {
             // ★ v3-gfx: the host maps it with the guest's kind, uncompressed (`Desired::kind`).
@@ -768,15 +783,43 @@ fn prepare_row(
                 return None;
             }
         };
+    // ★★★ 2026-10-10 (fix of the 6fafcc6e fast-suite regression; see
+    // `tests::a_run_straddling_the_carve_out_maps_all_but_the_carve_bytes`): only the carve-out
+    // BYTES are refused. A run that starts inside the carve-out is refused whole, as before; a run
+    // that STRADDLES its base (the guest RM's flat FB alias, whose last 2 MiB leaf overhangs it) is
+    // clipped at the base: the part below is guest VRAM the guest mapped and is placed, the part at
+    // and above is never mapped (absent: a GPU access there faults on OUR space). ⊘ Refusing the
+    // whole run unmapped every VRAM byte of the alias and killed the guest RM's kernel CE channel.
+    let mut carve_clipped = false;
     if !d.ram && carve_reached(target, d.off, d.len, cfg, out) {
-        out.refuse(
-            i,
-            format!(
-                "leaf {:#x}+{:#x} names store {:#x}, inside the firmware carve-out at {:#x} — a twin maps no kayfabe memory (§Q)",
-                d.va, d.len, d.off, cfg.carve
-            ),
-        );
-        return None;
+        if d.off >= cfg.carve {
+            out.refuse(
+                i,
+                format!(
+                    "leaf {:#x}+{:#x} names store {:#x}, inside the firmware carve-out at {:#x} — a twin maps no kayfabe memory (§Q)",
+                    d.va, d.len, d.off, cfg.carve
+                ),
+            );
+            return None;
+        }
+        let below = cfg.carve - d.off;
+        out.carve_clipped_bytes += d.len - below;
+        static CLIPPED_LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        if CLIPPED_LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 16 {
+            eprintln!(
+                "kf-mem: leaf {:#x}+{:#x} (store {:#x}) CLIPPED at the firmware carve-out {:#x}: {:#x}+{:#x} placed, {:#x}+{:#x} left absent (§Q)",
+                d.va,
+                d.len,
+                d.off,
+                cfg.carve,
+                d.va,
+                below,
+                d.va + below,
+                d.len - below
+            );
+        }
+        d.len = below;
+        carve_clipped = true;
     }
     if !whole_pages(&d, cfg.grain) {
         out.refuse(
@@ -822,7 +865,40 @@ fn prepare_row(
         );
         return None;
     }
-    Some(d)
+    Some((d, carve_clipped))
+}
+
+/// ★ 2026-10-10: a row clipped at the carve-out ends inside a guest leaf. Its whole leaves stay ONE
+/// host mapping each (`crate::batch::BatchedVas` rule 2: the guest changes a leaf alone, so the
+/// leaf is the host unit), and the cut leaf's lower part becomes its own row with the largest
+/// leaf its edges allow — never the 4 KiB fallback over the WHOLE row, which past
+/// `MAX_LEAF_PIECES` would make the entire alias one mapping no later leaf change could split.
+fn split_at_leaf(d: Desired) -> Vec<Desired> {
+    let end = d.va.saturating_add(d.len);
+    if !d.leaf.is_power_of_two() || end.is_multiple_of(d.leaf) {
+        return vec![d];
+    }
+    let cut = end & !(d.leaf - 1);
+    let tail_leaf = |s: u64| (1u64 << (s | end).trailing_zeros()).min(d.leaf);
+    if cut <= d.va {
+        return vec![Desired {
+            leaf: tail_leaf(d.va),
+            ..d
+        }];
+    }
+    vec![
+        Desired {
+            len: cut - d.va,
+            ..d
+        },
+        Desired {
+            va: cut,
+            len: end - cut,
+            off: d.off + (cut - d.va),
+            leaf: tail_leaf(cut),
+            ..d
+        },
+    ]
 }
 
 /// What [`apply_sked`] checks a row against — the entry's own bounds.
@@ -2146,6 +2222,82 @@ mod tests {
         };
         let a = apply_entry(&t, &[ram], &cfg_with(true));
         assert_eq!((a.codes[0], a.carve_gpu), (KFWR_ACK_APPLIED, 0));
+    }
+
+    /// ★★★ REGRESSION 2026-10-10 (`integration/windows-20261010` @ 6fafcc6e, fast suite 0/30 on the
+    /// RTX 4070 host): the measured shape. The guest RM's flat FB alias in a guest-KERNEL space is
+    /// ONE run `0x120000000+0x1efc00000` of 2 MiB leaves naming store `0x0` (8 GiB store, carve-out
+    /// at `0x1efbe0000` = `8 GiB - FW_CARVE_OUT_BYTES`): the run's last leaf straddles the carve-out
+    /// base by `0x20000` (inferred, not measured: the guest maps its usable FB rounded UP to 2 MiB —
+    /// `0x1efc00000` is the carve-out base rounded up to 2 MiB). Refusing the WHOLE
+    /// run left the kernel CE channel's ring at VA `0x30fb55000` (store `0x1efb55000`, BELOW the
+    /// carve-out) unresolved: `tspace bind: virtual_unresolved`, `REFUSED-AND-POISONED`, guest
+    /// `memmgrMemSet … NV_ERR_TIMEOUT`. The carve-out bytes — and only they — stay absent, on a
+    /// kernel space and on a user twin alike; the rest of the run is placed and acknowledged.
+    #[test]
+    fn a_run_straddling_the_carve_out_maps_all_but_the_carve_bytes() {
+        const STORE: u64 = 0x2_0000_0000;
+        const CARVE: u64 = STORE - 0x1042_0000;
+        const VA: u64 = 0x1_2000_0000;
+        const LEN: u64 = 0x1_efc0_0000;
+        const RING_VA: u64 = 0x3_0fb5_5000;
+        assert_eq!(CARVE, 0x1_efbe_0000, "the log's carve-out base");
+        assert!((VA..VA + LEN).contains(&RING_VA) && RING_VA - VA < CARVE);
+        let cfg_on = ApplyCfg {
+            store_bytes: STORE,
+            carve: CARVE,
+            carve_refuse: true,
+            ..cfg()
+        };
+        let run = DiffRun {
+            leaf: 0x20_0000,
+            ..m(VA, 0, LEN)
+        };
+        for user_twin in [false, true] {
+            let t = Rec {
+                gpu: true,
+                withhold_priv: user_twin,
+                ..Rec::default()
+            };
+            let a = apply_entry(&t, &[run], &cfg_on);
+            assert_eq!(
+                (a.codes[0], a.refused, a.first_refusal.as_deref()),
+                (KFWR_ACK_APPLIED, 0, None),
+                "user_twin={user_twin}"
+            );
+            assert_eq!(
+                a.carve_clipped_bytes, 0x2_0000,
+                "exactly the overhang left absent"
+            );
+            // Counted as a carve-out run on its own target kind, as before.
+            assert_eq!(
+                (a.carve_kernel, a.carve_gpu),
+                if user_twin { (0, 1) } else { (1, 0) }
+            );
+            // Whole 2 MiB leaves up to the straddling one, then that leaf's part below the
+            // carve-out (which holds the ring); nothing at or above the carve-out.
+            assert_eq!(
+                *t.ops.borrow(),
+                vec![
+                    format!("map {VA:#x}+{:#x}", 0x1_efa0_0000u64),
+                    format!("map {:#x}+{:#x}", VA + 0x1_efa0_0000, 0x1e_0000),
+                    "inval".to_string(),
+                ],
+                "user_twin={user_twin}"
+            );
+        }
+        // A run wholly inside the carve-out is still refused (FAILED), never placed.
+        let t = Rec {
+            gpu: true,
+            ..Rec::default()
+        };
+        let inside = DiffRun {
+            leaf: 0x20_0000,
+            ..m(0x4_0000_0000, CARVE, 0x2_0000)
+        };
+        let a = apply_entry(&t, &[inside], &cfg_on);
+        assert_eq!((a.codes[0], a.refused), (KFWR_ACK_FAILED, 1));
+        assert!(t.ops.borrow().iter().all(|o| !o.starts_with("map")));
     }
 
     // ★★★ v3-cdp (`V3_CDP.md`). The leaf the walker reported in a kf3 guest for libcuda's
