@@ -50,7 +50,14 @@ pub struct Classes {
     /// The display model presents the head-timing status and a non-zero dispatch while the
     /// guest's enable bit is set. Raises nothing.
     pub dispstat: bool,
+    /// Bit `n` = raise only the served NON-STALL vector number `n` (`v<n>` token, `n` < 64;
+    /// bisect aid: `v0` = GR0 on kf3's table, `v1`/`v2` = CE2/CE3). Combinable. A number that is
+    /// not a non-stall vector of the served table (a stall vector, or absent) selects nothing.
+    pub vmask: u64,
 }
+
+/// The highest vector number a `v<n>` token may name.
+pub const VMASK_MAX: u32 = 63;
 
 /// A parsed `KF3_DEBUG_IRQ_FLOOD` value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,6 +95,15 @@ impl Spec {
                 "all-completion" => (c.nonstall, c.gsp, c.disp) = (true, true, true),
                 "errors" => c.errors = true,
                 "dispstat" => c.dispstat = true,
+                other if other.len() > 1 && other.starts_with('v') => {
+                    let n: u32 = other[1..]
+                        .parse()
+                        .map_err(|_| format!("unknown class {other:?}"))?;
+                    if n > VMASK_MAX {
+                        return Err(format!("vector {n} is above {VMASK_MAX} ({other:?})"));
+                    }
+                    c.vmask |= 1 << n;
+                }
                 other => return Err(format!("unknown class {other:?}")),
             }
         }
@@ -117,7 +133,11 @@ impl Spec {
     #[must_use]
     pub fn label(&self) -> String {
         let c = &self.classes;
-        let names: Vec<&str> = [
+        let vs: Vec<String> = (0..=VMASK_MAX)
+            .filter(|n| c.vmask >> n & 1 == 1)
+            .map(|n| format!("v{n}"))
+            .collect();
+        let mut names: Vec<&str> = [
             (c.nonstall, "nonstall"),
             (c.gsp, "gsp"),
             (c.disp, "disp"),
@@ -127,6 +147,7 @@ impl Spec {
         .into_iter()
         .filter_map(|(on, n)| on.then_some(n))
         .collect();
+        names.extend(vs.iter().map(String::as_str));
         format!("{}:{}", names.join(","), self.period.as_millis())
     }
 }
@@ -190,6 +211,15 @@ impl Plan {
         p
     }
 
+    /// The `v<n>` numbers the knob names that are NOT non-stall vectors of this table (they
+    /// select nothing; the boot log says so).
+    #[must_use]
+    pub fn unknown_vectors(&self, c: &Classes) -> Vec<u32> {
+        (0..=VMASK_MAX)
+            .filter(|n| c.vmask >> n & 1 == 1 && !self.nonstall.contains(n))
+            .collect()
+    }
+
     /// The vectors the classes select (sorted, distinct).
     #[must_use]
     pub fn select(&self, c: &Classes) -> Vec<u32> {
@@ -197,6 +227,11 @@ impl Plan {
         if c.nonstall {
             v.extend(&self.nonstall);
         }
+        v.extend(
+            self.nonstall
+                .iter()
+                .filter(|&&n| n <= VMASK_MAX && c.vmask >> n & 1 == 1),
+        );
         if c.gsp {
             v.extend(self.gsp);
         }
@@ -424,6 +459,33 @@ mod tests {
             vec![0, 1, 64, 133, 154, 155]
         );
         assert!(sel("dispstat:10").is_empty(), "dispstat raises nothing");
+    }
+
+    #[test]
+    fn vector_tokens_select_single_non_stall_vectors() {
+        let p = Plan::from_table(&table());
+        let sel = |s: &str| p.select(&Spec::parse(s).unwrap().classes);
+        assert_eq!(sel("v0:10"), vec![0]);
+        assert_eq!(sel("v1:10"), vec![1]);
+        assert_eq!(sel("v1,v0:10"), vec![0, 1], "combinable, sorted");
+        assert_eq!(sel("v0,nonstall:10"), vec![0, 1], "union with the class");
+        assert_eq!(sel("v0,gsp:10"), vec![0, 155]);
+        // an absent number selects nothing; neither does a stall vector, whatever its non-stall column says
+        assert!(sel("v7:10").is_empty());
+        let mut t = table();
+        t.push(row(70, 5, 5)); // stall 5 repeated as non-stall 5, as kayfabe's engines 59-64 do
+        let p5 = Plan::from_table(&t);
+        assert!(p5.select(&Spec::parse("v5:10").unwrap().classes).is_empty());
+        assert_eq!(p5.errors, vec![5, 64, 133]);
+        assert_eq!(
+            p.unknown_vectors(&Spec::parse("v0,v7,v9:10").unwrap().classes),
+            vec![7, 9]
+        );
+        assert_eq!(Spec::parse("v2,v1:10").unwrap().label(), "v1,v2:10");
+        assert_eq!(Spec::parse("gsp,v3,v1:10").unwrap().label(), "gsp,v1,v3:10");
+        for bad in ["v:10", "vx:10", "v64:10", "v155:10", "v-1:10", "v1.5:10"] {
+            assert!(Spec::parse(bad).is_err(), "{bad:?} must be refused");
+        }
     }
 
     #[test]

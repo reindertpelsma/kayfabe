@@ -404,9 +404,16 @@ impl Device {
                 spec.label(),
                 crate::irqflood::ENV
             );
+            let plan = crate::irqflood::Plan::from_table(&host.intr_table);
+            let unknown = plan.unknown_vectors(&spec.classes);
+            if !unknown.is_empty() {
+                eprintln!(
+                    "kf3: irq-flood: v{unknown:?} are not non-stall vectors of the served table; they select nothing"
+                );
+            }
             crate::irqflood::Flood {
                 spec,
-                plan: crate::irqflood::Plan::from_table(&host.intr_table),
+                plan,
                 counts: crate::irqflood::Counts::default(),
             }
         });

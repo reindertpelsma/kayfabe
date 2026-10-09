@@ -29,6 +29,7 @@ realize by name). Classes, comma-separated:
 | `disp` | the display stall vector (`MC_ENGINE_IDX_DISP` = 2) |
 | `all-completion` | `nonstall` + `gsp` + `disp` |
 | `errors` | every OTHER stall vector of the table (including the duplicated rows above). Explicit opt-in; **never** part of `all-completion` |
+| `v<n>` (`v0`..`v63`) | only the served NON-STALL vector number `n` (bisect aid, added 2026-10-09 for the vector bisect; kf3's table: GR0 -> 0, CE2 -> 1, CE3 -> 2, NVDEC0 -> 3, NVENC1 -> 4, OFA -> 5). Combinable (`v1,v2:10`) and a union with the other classes. A number that is not in `nonstall` (a stall vector, including the `errors` rows, or absent) selects nothing and the boot log says so, so `errors` stay excluded from everything but `errors`. Numbers above 63 are refused |
 | `dispstat` | raises nothing; makes the display model PRESENT `STAT_HEAD_TIMING(h)` bit 1 (LAST_DATA) set and `INTR_DISPATCH` bit h set while the guest's `RM_INTR_EN_HEAD_TIMING(h)` has that bit set (what `0x611c00`/`0x611ec0` read on hardware). Only the words the guest reads change; no event, frame or interrupt logic does. Separate so its effect can be bisected |
 
 ## 3. Rules (checked by the unit tests in `crates/kf-qemu/src/irqflood.rs`)
