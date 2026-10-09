@@ -15,8 +15,91 @@
 //! ⊘ Pure data, no host calls: the caller frees what [`BatchBook::unmapped`] returns, outside any
 //! lock (THE_CONSTRAINTS "no blocking under a lock others block on").
 
-use crate::ledger::{Desired, HostVas, MapTarget};
+use crate::ledger::{Desired, HostVas, MapTarget, Mapped, SkedRow};
 use std::collections::BTreeMap;
+
+/// ★ 2026-10-09 — **the host verbs of ONE host VA space**, as [`BatchedVas`] uses them. Production
+/// is [`HostVas`] (the in-process host RM); the GPU-free tests drive the same [`BatchedVas`] code
+/// against a simulated host RM (`crate::sim`) that implements `ogkm-595.84 rs_server.c:2419-2520`
+/// and `virt_mem_allocator_gm107.c:1531-1638` exactly, foreign mappings included.
+pub trait SpaceVerbs {
+    /// One FIXED map of a row ([`MapTarget::map`] semantics: `HeldByHost` for an occupied VA).
+    ///
+    /// # Errors
+    /// The host's refusal, by name.
+    fn map_row(&self, d: &Desired, defer: bool) -> Result<Mapped, String>;
+    /// One FIXED message-kind map ([`MapTarget::map_sked`] semantics).
+    ///
+    /// # Errors
+    /// The host's refusal, by name.
+    fn map_sked_row(&self, s: &SkedRow, defer: bool) -> Result<Mapped, String>;
+    /// One stitched object mapped at `rows[0].va` ([`HostVas::map_scattered`]); returns its handle.
+    ///
+    /// # Errors
+    /// The host's refusal, by name; nothing of ours is then placed.
+    fn map_scattered(
+        &self,
+        ram_fd: std::os::fd::BorrowedFd<'_>,
+        rows: &[Desired],
+        defer: bool,
+    ) -> Result<u32, String>;
+    /// The whole-mapping unmap keyed by the EXACT start `va` (`NVOS47` `size == 0`).
+    ///
+    /// # Errors
+    /// The host's refusal, by name.
+    fn unmap_whole(&self, va: u64, defer: bool) -> Result<(), String>;
+    /// The whole-mapping unmap of every piece of the row `[va, va+len)` ([`HostVas::unmap_row`]).
+    ///
+    /// # Errors
+    /// The host's refusal, by name.
+    fn unmap_row(&self, va: u64, len: u64, defer: bool) -> Result<(), String>;
+    /// ONE host range unmap (`NVOS47` `size != 0`): RM removes or SPLITS every mapping of this
+    /// client's `hDma` that intersects the range, whoever placed it.
+    ///
+    /// # Errors
+    /// The host's refusal, by name.
+    fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String>;
+    /// Free one of our host objects (a batch object: RM unmaps every mapping of it first).
+    ///
+    /// # Errors
+    /// The host's refusal, by name.
+    fn free(&self, handle: u32) -> Result<(), String>;
+    /// ★ Whether host RM can SPLIT a mapping lying in `[va, va+len)` (a range unmap that covers
+    /// part of it) without damaging the part it keeps — see [`BatchedVas::unmap_range`].
+    fn splits_safely(&self, va: u64, len: u64) -> bool;
+}
+
+impl SpaceVerbs for HostVas<'_> {
+    fn map_row(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
+        MapTarget::map(self, d, defer)
+    }
+    fn map_sked_row(&self, s: &SkedRow, defer: bool) -> Result<Mapped, String> {
+        MapTarget::map_sked(self, s, defer)
+    }
+    fn map_scattered(
+        &self,
+        ram_fd: std::os::fd::BorrowedFd<'_>,
+        rows: &[Desired],
+        defer: bool,
+    ) -> Result<u32, String> {
+        HostVas::map_scattered(self, ram_fd, rows, defer)
+    }
+    fn unmap_whole(&self, va: u64, defer: bool) -> Result<(), String> {
+        MapTarget::unmap(self, va, defer)
+    }
+    fn unmap_row(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
+        HostVas::unmap_row(self, va, len, defer)
+    }
+    fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
+        MapTarget::unmap_range(self, va, len, defer)
+    }
+    fn free(&self, handle: u32) -> Result<(), String> {
+        self.rm.free(handle).map_err(|e| format!("{e:?}"))
+    }
+    fn splits_safely(&self, va: u64, len: u64) -> bool {
+        self.space.guest_reserved(va, len)
+    }
+}
 
 /// The granule the book tracks liveness in — the smallest GMMU page of every family, and the unit
 /// every guest-RAM row is whole multiples of (`crate::apply` refuses a sub-page row).
@@ -157,24 +240,42 @@ impl BatchBook {
 /// Every verb here is one WE author on OUR host space (§9); the book's lock is never held across a
 /// host call.
 #[derive(Debug)]
-pub struct BatchedVas<'rm> {
+pub struct BatchedVas<'rm, V: SpaceVerbs = HostVas<'rm>> {
     /// The host space.
-    pub vas: HostVas<'rm>,
+    pub vas: V,
     /// Our batch objects in it.
     pub book: std::sync::Mutex<BatchBook>,
     /// Batch objects freed (a counter for the instruments).
     pub frees: std::sync::atomic::AtomicU64,
+    _rm: std::marker::PhantomData<&'rm ()>,
 }
 
-impl<'rm> BatchedVas<'rm> {
+impl<V: SpaceVerbs> BatchedVas<'_, V> {
     /// Batches over `vas`, none yet.
     #[must_use]
-    pub fn new(vas: HostVas<'rm>) -> Self {
+    pub fn new(vas: V) -> Self {
         BatchedVas {
             vas,
             book: std::sync::Mutex::new(BatchBook::default()),
             frees: std::sync::atomic::AtomicU64::new(0),
+            _rm: std::marker::PhantomData,
         }
+    }
+
+    /// ★ One row, mapped per run (the per-run verb).
+    ///
+    /// # Errors
+    /// The host's refusal, by name.
+    pub fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
+        self.vas.map_row(d, defer)
+    }
+
+    /// ★ One SKED-reflected row (message kind).
+    ///
+    /// # Errors
+    /// The host's refusal, by name.
+    pub fn map_sked(&self, s: &SkedRow, defer: bool) -> Result<Mapped, String> {
+        self.vas.map_sked_row(s, defer)
     }
 
     /// ★ Place VA-contiguous guest-RAM `rows` as ONE batch stitched from `ram_fd` and book its
@@ -244,7 +345,7 @@ impl<'rm> BatchedVas<'rm> {
             (None, true) => Err(format!(
                 "unmap {va:#x}: a piece of a batch with no known length — refused (a whole-mapping unmap would take the batch)"
             )),
-            (None, false) => self.vas.unmap(va, defer),
+            (None, false) => self.vas.unmap_whole(va, defer),
         }
     }
 
@@ -267,7 +368,7 @@ impl<'rm> BatchedVas<'rm> {
 
     fn free(&self, handles: Vec<u32>) {
         for h in handles {
-            match self.vas.rm.free(h) {
+            match self.vas.free(h) {
                 Ok(()) => {
                     self.frees
                         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -275,7 +376,7 @@ impl<'rm> BatchedVas<'rm> {
                 // ⊘ Not fatal to the unmap that emptied it (its mappings ARE gone); the object and
                 // its pinned pages live until the host client closes — named.
                 Err(e) => eprintln!(
-                    "kf-mem: batch object {h:#x} free refused: {e:?} — its pages stay pinned until the host client closes"
+                    "kf-mem: batch object {h:#x} free refused: {e} — its pages stay pinned until the host client closes"
                 ),
             }
         }

@@ -15,4 +15,6 @@ pub mod batch;
 pub mod cpuwin;
 pub mod ledger;
 pub mod maplog;
+#[cfg(test)]
+pub(crate) mod sim;
 pub mod vasmgr;
