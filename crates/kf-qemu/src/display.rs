@@ -73,7 +73,7 @@ fn loadv_on() -> bool {
 /// ⚠ DIAGNOSTIC (2026-10-08, `KF3_DISPLAY_WRITE_TRACE=1`, default off): every guest write in the
 /// display aperture (BAR0 writes trap by design — no read is trapped), the head-timing interrupts
 /// raised and the window latches, each with the host-uptime clock the `maplog` lines use, so they
-/// align with the channel/ETW timelines. Bounded: [`DISPLAY_TRACE_CAP`] lines per kind and run.
+/// align with the channel/ETW timelines. Bounded: [`display_trace_cap`] lines per kind and run.
 fn write_trace_on() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var("KF3_DISPLAY_WRITE_TRACE").is_ok_and(|v| v == "1"))
@@ -268,7 +268,18 @@ fn caps_probe_page(base: u64, caps_class: u32) -> Option<kf_disp::caps::CapsPage
 }
 
 /// Lines per kind the display write trace prints in a run.
-const DISPLAY_TRACE_CAP: u32 = 4096;
+const DISPLAY_TRACE_CAP_DEFAULT: u32 = 4096;
+
+/// Lines per kind: [`DISPLAY_TRACE_CAP_DEFAULT`], or `KF3_DISPLAY_TRACE_CAP` (diagnostic only; read once).
+fn display_trace_cap() -> u32 {
+    static CAP: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+    *CAP.get_or_init(|| {
+        std::env::var("KF3_DISPLAY_TRACE_CAP")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(DISPLAY_TRACE_CAP_DEFAULT)
+    })
+}
 
 /// Take one of a bounded trace's lines (`false` once `cap` were taken). Lock-free.
 fn trace_slot(n: &AtomicU32, cap: u32) -> bool {
@@ -1955,7 +1966,7 @@ impl DisplayPlane {
         if write_trace_on() {
             // ⚠ DIAGNOSTIC (default off, bounded): one line from the vCPU — never on in production
             static N: AtomicU32 = AtomicU32::new(0);
-            if trace_slot(&N, DISPLAY_TRACE_CAP) {
+            if trace_slot(&N, display_trace_cap()) {
                 eprintln!(
                     "kf3: display: WTRACE t={:.6} WRITE {off:#08x} <- {val:#x} w{width} {class:?}",
                     kf_mem::maplog::t()
@@ -2334,7 +2345,8 @@ impl Device {
             // anchor the trace clock here, so no vCPU ever pays its first `/proc/uptime` read
             let _ = kf_mem::maplog::t();
             eprintln!(
-                "kf3: display: WRITE TRACE diagnostic enabled (guest display writes, raised head-timing interrupts, window latches; {DISPLAY_TRACE_CAP} lines per kind)"
+                "kf3: display: WRITE TRACE diagnostic enabled (guest display writes, raised head-timing interrupts, window latches; {} lines per kind)",
+                display_trace_cap()
             );
         }
         if loadv {
@@ -2620,7 +2632,7 @@ impl Device {
                 }
                 let irq = frame_edge(&dp.ports, &dp.map, h, loadv);
                 raised |= irq != 0;
-                if wtrace && irq != 0 && trace_slot(&vsync_traced, DISPLAY_TRACE_CAP) {
+                if wtrace && irq != 0 && trace_slot(&vsync_traced, display_trace_cap()) {
                     eprintln!(
                         "kf3: display: WTRACE t={:.6} VSYNC h{h} frame={f} evt={:#x} en={:#x} rm={irq:#x}",
                         kf_mem::maplog::t(),
@@ -2948,7 +2960,7 @@ impl Device {
                         if trace {
                             eprintln!("kf3: display: TRACE window {window} latched");
                         }
-                        if wtrace && trace_slot(&latch_traced, DISPLAY_TRACE_CAP) {
+                        if wtrace && trace_slot(&latch_traced, display_trace_cap()) {
                             eprintln!(
                                 "kf3: display: WTRACE t={:.6} LATCH window {window}",
                                 kf_mem::maplog::t()
