@@ -470,6 +470,23 @@ where the storm is.
 the lock screen and the screen still goes black at about 3 s, the relayed non-stall edges are not the cause (look at the display timing interrupt next:
 make `0x611D80` read back the firmware base `0x3f0060`).
 
+### 13.2 Interrupt TYPES, hardware boot3 vs kayfabe run 104 (owner question: which type fires on VFIO and not on kayfabe)
+
+`[measured]` tools `run104/tools/{bits104,itab104,en2104,pe104,pre104,ev104,tmr104}.py`; vector = leaf*32+bit; names from ogkm 595.84
+(`engine_idx.h`, `cl2080_notification.h`, the kernel interrupt table reply to control `0x20800a5c` in each side's GSP observer stream).
+1. **What the guest enabled** (writes to `CPU_INTR_LEAF_EN_SET/CLEAR`, `0xB81200+4i` / `0xB81400+4i`): hardware: non-stall `0,2,3,7,8,10,11,18`; stall `64,72,129,131,154,155`.
+   Kayfabe: non-stall `0..5`; stall `64,72,129,131,132,133,134,148,154,155`. **The guest never enables vectors 159 (PTIMER_ALARM), 152 (PMU), 141 (PFB) or leaf 5/6
+   on hardware**, so their pending bits (hardware: vec 159 in 72% of leaf-4 reads, leaf 5/6 steady) are masked status, not interrupts the guest takes: the earlier
+   "leaf 5/6 read 0 / PTIMER differences" candidates are withdrawn as causes (the hardware PTIMER time reads `0x9400/0x9410`, 67k, are not seen on kayfabe; reads there may bypass the trace, unresolved).
+2. **Types the guest does take, pending at ISR time** (share of that leaf's reads): GR0 non-stall (hw vec 0 45%, kf 76%); CE2 non-stall (hw vec 7 57%, kf vec 1 97%); CE3 non-stall (hw vec 8 3%, kf vec 2 14%);
+   display stall 154 (hw 3%, kf 4%); **GSP stall 155 (hw 24% of 69,282 reads, kf 0.2% of 16,623)**: the one enabled type that is much rarer on kayfabe.
+3. **Kernel interrupt table served to the guest differs** (24 entries each): kayfabe adds engines 61, 63, 64 and TMR(1) with stall vectors 132/133/134/148 (all enabled by the guest, never raised), sets
+   `vectorNonStall == vectorStall` for engines 59/60/61/62/63/64/73/1 (hardware: non-stall -1), numbers the non-stall vectors 0-5 (hardware: GR0 0, SEC2 2, NVDEC0 3, CE2 7, CE3 8, CE4 10, NVENC1 11, OFA 18),
+   and has no non-stall vector for SEC2 (47) or CE4 (19). `[inferred]` the numbering differences are harmless; the extra/duplicated rows and the missing SEC2/CE4 rows are not derived from the host (derive-never-capture applies).
+4. **GSP events (`POST_EVENT` 0x1003):** hardware 72 (notify 139 RUNLIST_PREEMPT_COMPLETE x60, 33 PSTATE_CHANGE x11, 34 HDCP_STATUS_CHANGE x1), kayfabe 2 (139 x2). Not comparable as counts: the hardware GSP stream spans 100 s,
+   kayfabe's 12 s; hardware's 139 posts come in bursts (20 at one instant at 10.5 s) after activity kayfabe never reached; both have 2 at about 5 s. No `NVA06C PREEMPT`/`FIFO_CHANNEL_PREEMPTIVE_REMOVAL` request is seen on either side, so the posts cannot be paired with requests here.
+`[inferred]` the remaining candidate TYPE is the GSP interrupt (vector 155): 24% vs 0.2% pending-at-ISR on a link where the guest enabled it on both sides. Whether kayfabe raises it when it posts replies and events is not established (next: source-tagged raise trace).
+
 **Not done:** the stall snapshots (11 taken) and the 0x116 bugcheck were not read; no in-guest data exists (agent dead).
 **Next:** the stall itself (twin states at the stall, runs 100/102/104) and the recovery wall (§11, owner decision pending).
 The H-split regression arm (§12 step 3) is still worth running GPU-side but is no longer on the critical path.
