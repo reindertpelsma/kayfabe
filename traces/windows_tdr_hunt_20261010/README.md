@@ -233,3 +233,19 @@ Binary 735b352e. Flags: production + `KF3_COMPLETION_PROBE=1500` (IRQ-RING) + `K
 device's MSI-X table + PBA, eventfd counts). Decision tree (coordinator): vector in IRR but undelivered with IF=1 -> guest/LAPIC state; vector never in IRR while the ring shows raises -> our delivery path (MSI-X mask/PBA, irqfd routing,
 coalescing, NotArmed drop); vector in ISR never EOI'd -> guest ISR stuck / level semantics. **Hypothesis H-I:** during the ~2 s BEFORE the declaration, the CE2/CE3/GR/display vector is raised by kayfabe (ring: `res=0` messages) while no vCPU's IRR/ISR ever holds
 vector 0x62 for a stale packet's completion, i.e. the eventfd/irqfd path loses or coalesces them (eventfd count > 0 or PBA bit set at the stall). **Falsifier:** the vector shows in IRR/ISR and is serviced (ISR/EOI cycles) throughout the 2 s window.
+
+### Run 274 result and a revision-linked finding (binary 735b352e = integration aeda9ffd = the FIRST, unfixed batched-map decisions code, + diagnostics)
+Run 274 again produced host **Xid 31 FAULT_PTE** (3 new: CE3_PBDMA0 reads at VA 0x04036000 on channels 0x0200003d/37/3f, GRAPHICS write fault 0x1483b000), a boot-time TDR at t=19 s, no cycle after the sign-in, a slow READY (185 s) and a wedged shutdown; the sampler got `EAGAIN` from QMP (busy) after
+its first sample, so there is no LAPIC time series from it (the `IRQ-RING`, `FLIP-LEDGER` and display trace are in `qemu.log`; the ledger again showed nothing unanswered). Host Xid count by run [measured, `dmesg`]:
+
+| runs | binary / code base | host Xid 31 FAULT_PTE |
+|---|---|---|
+| 260-271 | 459da55d, a4b96ee0, fcafeb2e, bb53ec57 (integration eff1b692 + diagnostics only) | **0** in every run |
+| 272 | 40481dd5 (merge of integration aeda9ffd = first batched-map decisions code) | 2 (GR0_PBDMA0 read 0x1499c000; GRAPHICS write 0x040fc000), both at boot |
+| 273 | 735b352e (same code base + ledger) | 2 more (cumulative 4) |
+| 274 | 735b352e | 3 more (cumulative 7): CE3_PBDMA0 reads 0x04036000 x3, GRAPHICS read 0x1483b000 |
+
+0 faults in 12 runs before the merge, 7 in 3 runs after it: the first batched-map decisions code (review: FIX-FIRST, steer-vs-map race) is the only difference of significance. **Runs 272, 274 are therefore not valid tests of the TDR hypotheses** (they are runs with a mirror fault); run 273 (2 Xids at boot, then clean) is the only usable one of the three and it is the flip-ledger result above. The addresses 0x4034000/0x4036000 are the same twin-space faults recorded in `traces/windows_reset_20261009/` (rows unmapped by a walk while a twin still reads them).
+
+### Run 275 — H-M (written before the run; binary 2da71abe = this branch merged with `origin/claude/batched-map-decisions-20261010` 2540b547, i.e. the FIXED batched-map code; production flags + `KF3_COMPLETION_PROBE` + `KF3_DISPLAY_WRITE_TRACE`)
+**H-M:** the FIXED code runs without host Xids and behaves like the eff1b692-era runs (first TDR timing as in 263-271: 5 s after the sign-in, cluster 80-125 s after READY), i.e. the Xid/black-screen runs 272-274 were the unfixed code. **Falsifier:** any host Xid 31 in run 275, or a boot that wedges again. As a data point for the owner's question (does batching explain the black screen / the stale packets): if H-M holds AND the first TDR still comes at the usual time with the display ledger clean, batching is not the cause of the TDR (the eff1b692-era runs 264-271 had the older batched-map code too, and the NO_BATCHED_MAP control was not run: see below).
