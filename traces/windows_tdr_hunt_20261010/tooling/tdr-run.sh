@@ -60,6 +60,39 @@ cleanup(){
   rm -f $STOPF
   exit 0
 }
+# STALLDUMP=1: after the sign-in, watch kayfabe's display trace (needs KF3_DISPLAY_WRITE_TRACE=1): the guest acks every VSync
+# (WRITE 0x611800) while LAST_DATA is enabled. When the display thread keeps raising VSyncs (VSYNC h0 ... rm=0x2) and the
+# guest has acked none for 600 ms, take (a) six register samples of every vCPU (stop; info registers -a; cont, 200 ms apart)
+# and (b) a full guest-memory dump at the stall, then end the hold. The run's host side keeps running while the vCPUs stop.
+stall_watch(){
+  local lg=$RUN/qemu.log off n a v quiet=0 samples=0
+  off=$(stat -c %s $lg)
+  while alive && [ ! -e $O/.stall_done ]; do
+    sleep 0.1
+    local cur; cur=$(stat -c %s $lg)
+    a=$(tail -c +$((off+1)) $lg | head -c $((cur-off)) | grep -a -c 'WRITE 0x611800')
+    v=$(tail -c +$((off+1)) $lg | head -c $((cur-off)) | grep -a -c 'VSYNC h0.*rm=0x2')
+    off=$cur
+    if [ "$a" = 0 ] && [ "$v" -gt 0 ]; then quiet=$((quiet+1)); else quiet=0; fi
+    if [ $quiet -ge 6 ]; then
+      L "STALL detected: no VSync ack for ~${quiet}00 ms while VSyncs are raised; sampling vCPUs"
+      for k in 1 2 3 4 5 6; do
+        Q cmd stop >/dev/null 2>&1
+        { echo "== sample $k $(date -u +%FT%T.%3N)"; Q cmd human-monitor-command '{"command-line":"info registers -a"}' 2>&1; } >> $O/stall-regs.txt
+        Q cmd cont >/dev/null 2>&1
+        sleep 0.2
+      done
+      L "STALL: dumping guest memory"
+      timeout 20 python3 $W/boundary-tools/qmp.py $RUN/qmp.sock cmd dump-guest-memory "{\"paging\":false,\"protocol\":\"file:$W/dumps/run$N-stall.elf\"}" >/dev/null 2>&1
+      for k in $(seq 1 90); do
+        st=$(timeout 8 python3 $W/boundary-tools/qmp.py $RUN/qmp.sock cmd query-dump 2>&1 | tr -d '\n ')
+        case "$st" in *completed*|*failed*) break;; esac; sleep 2
+      done
+      L "STALL: dump $st"
+      touch $O/.stall_done
+    fi
+  done
+}
 trap cleanup TERM INT
 L "gpu: $(nvidia-smi --query-gpu=name,driver_version,memory.used --format=csv,noheader)"
 bash $W/pti-iommu_nogdm.sh identity 2>&1 | tee -a $O/winprod.log
@@ -78,11 +111,11 @@ if [ "$TA" != 0 ] && alive; then
   if [ "${ETW:-0}" = 1 ]; then
     for try in 1 2 3 4 5 6; do
       : > $O/etw-arm.txt
-      GT=60 G qga-exec powershell.exe -NoProfile -Command 'New-Item -ItemType Directory -Force -Path C:\kf | Out-Null; logman delete kfdxg -ets 2>&1 | Out-Null; Remove-Item C:\kf\kfdxg*.etl -ErrorAction SilentlyContinue; logman create trace kfdxg -p "Microsoft-Windows-DxgKrnl" 0x1 5 -o C:\kf\kfdxg.etl -f bincirc -bs 1024 -nb 64 512 -ft 1 -max 512 -ets 2>&1; schtasks /create /tn kfetwstop /sc onevent /ec System /mo "*[System[Provider[@Name=\"nvlddmkm\"] and (EventID=153)]]" /ru SYSTEM /rl HIGHEST /f /tr "logman stop kfdxg -ets" 2>&1; logman query kfdxg -ets 2>&1 | Select-Object -First 6' > $O/etw-arm.txt 2>&1
-      grep -q "SUCCESS" $O/etw-arm.txt && break
+      GT=60 G qga-exec powershell.exe -NoProfile -Command 'New-Item -ItemType Directory -Force -Path C:\kf | Out-Null; $q = (logman query kfdxg -ets 2>&1 | Out-String); if ($q -match "Running") { "ETWARMED already-running" } else { Remove-Item C:\kf\kfdxg*.etl -ErrorAction SilentlyContinue; logman create trace kfdxg -p "Microsoft-Windows-DxgKrnl" 0x1 5 -o C:\kf\kfdxg.etl -f bincirc -bs 1024 -nb 64 512 -ft 1 -max 512 -ets 2>&1; $q = (logman query kfdxg -ets 2>&1 | Out-String); if ($q -match "Running") { "ETWARMED" } }' > $O/etw-arm.txt 2>&1
+      grep -q "ETWARMED" $O/etw-arm.txt && break
       sleep 5
     done
-    L "ETW armed (try $try, circular; self-stop task on nvlddmkm 153): $(grep -c . $O/etw-arm.txt) lines, $(grep -c -i 'success' $O/etw-arm.txt) success"
+    L "ETW armed (try $try, circular; self-stop task on nvlddmkm 153): $(grep -c . $O/etw-arm.txt) lines, $(grep -c ETWARMED $O/etw-arm.txt) armed"
   fi
   G qga-exec net.exe user vast $PW >/dev/null 2>&1; L "password set rc=$?"
   gps guest-pre.txt '"utc now: " + (Get-Date).ToUniversalTime().ToString("o"); $gd="HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers"; "GraphicsDrivers: " + ((Get-ItemProperty $gd | Select-Object * -ExcludeProperty PS* | Out-String).Trim())'
@@ -93,6 +126,11 @@ if [ "$TA" != 0 ] && alive; then
     key spc; sleep 3
     for c in k f s i g n 7; do key $c; done; key ret
     L "SIGNIN sent"
+    [ "${STALLDUMP:-0}" = 1 ] && { stall_watch & }
+    if [ "${ETW:-0}" = 1 ]; then
+      ( C0=$(ncyc); while alive && [ "$(ncyc)" -le "$C0" ]; do sleep 0.3; done
+        alive && { touch $O/.etw_stopped; L "ETW stop (tdr_cycles=$(ncyc))"; GT=900 timeout 900 python3 $W/boundary-tools/qmp.py $RUN/qga.sock qga-exec powershell.exe -NoProfile -Command "$(cat $W/kayfabe-win-6fafcc6e/scripts/bench/windows/dxg_etw_stop_tail.ps1)" > $O/etw-stop.txt 2>&1; L "ETW stop rc=$? lines=$(wc -l < $O/etw-stop.txt)"; } ) &
+    fi
     sleep 25; shot after-signin; snap after-signin
     ev(){ Q cmd input-send-event "{\"events\":$1}" >/dev/null 2>&1; sleep 0.15; }
     ev '[{"type":"abs","data":{"axis":"x","value":802}},{"type":"abs","data":{"axis":"y","value":4854}}]'
@@ -113,7 +151,7 @@ if [ "$TA" != 0 ] && alive; then
 fi
 # ---- timed hold: scroll Shorts, log the TDR (GSP cycle) count against the host clock every 5 s ----
 T0=$(date +%s); LASTC=-1; LASTK=0; I=0
-while alive && [ ! -e $STOPF ] && [ $(( $(date +%s) - T0 )) -lt $HOLD ]; do
+while alive && [ ! -e $STOPF ] && [ ! -e $O/.stall_done ] && [ $(( $(date +%s) - T0 )) -lt $HOLD ]; do
   C=$(ncyc); NOW=$(date +%s)
   if [ "$C" != "$LASTC" ]; then echo "$(date -u +%FT%T) tdr_cycles=$C hold_t=$((NOW-T0))" >> $O/tdr-timeline.txt; LASTC=$C; fi
   if [ $((NOW-LASTK)) -ge ${SCROLL_EVERY:-20} ]; then key down; LASTK=$NOW; fi
@@ -125,8 +163,8 @@ L "HOLD ended: alive=$(alive && echo 1 || echo 0) tdr_cycles=$(ncyc) stopfile=$(
 if alive; then
   gps guest-events.txt '"utc now: " + (Get-Date).ToUniversalTime().ToString("o"); "uptime: " + ((Get-Date) - (gcim Win32_OperatingSystem).LastBootUpTime).ToString(); Get-WinEvent -FilterHashtable @{LogName="System";StartTime=(Get-Date).AddMinutes(-60)} -ErrorAction SilentlyContinue | Where-Object { $_.ProviderName -match "nvlddmkm|Display|dxg|Kernel-Power|WER|BugCheck|LiveKernel|Watchdog|Wininit" -or $_.Id -in 4101,141,117,116,1001,41 } | Sort-Object TimeCreated | ForEach-Object { "{0} {1} {2} {3}" -f $_.TimeCreated.ToUniversalTime().ToString("o"),$_.ProviderName,$_.Id,(($_.Message -replace "\s+"," ")[0..220] -join "") }; "LiveKernelReports: " + ((Get-ChildItem C:\Windows\LiveKernelReports -Recurse -ErrorAction SilentlyContinue | Select-Object -First 30 FullName,Length,LastWriteTime | Out-String).Trim())'
 fi
-if [ "${ETW:-0}" = 1 ] && alive; then
-  L "ETW decode (the session was stopped by the guest task at the first nvlddmkm 153, or is stopped now)"
+if [ "${ETW:-0}" = 1 ] && [ ! -e $O/.etw_stopped ] && alive; then
+  L "ETW stop at the end of the hold (no TDR after sign-in)"
   GT=900 timeout 900 python3 $W/boundary-tools/qmp.py $RUN/qga.sock qga-exec powershell.exe -NoProfile -Command "$(cat $W/kayfabe-win-6fafcc6e/scripts/bench/windows/dxg_etw_stop_tail.ps1)" > $O/etw-stop.txt 2>&1
   L "ETW decode rc=$? lines=$(wc -l < $O/etw-stop.txt)"
 fi

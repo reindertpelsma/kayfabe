@@ -102,3 +102,29 @@ a relay whose lock a doorbell step holds is skipped that tick and caught up on t
 needs the `RELAY-LAG` line added in this branch (probe thread, 100 ms samples, summary per 2 s; first used in run 268). (2) The refresh stores only the engine's value (bounded to
 `[0, entries)`), never reads the guest's GP_PUT back into the twin, never rings; relay-lock takers are workers (`relay_serve`, `relay_refresh_all`, try_lock) and the act thread (`drop_relay`, after the
 host channel is gone, and the disable snapshot, try_lock); no vCPU or drainer path takes it (doorbell trap only sets the token bit).
+
+## Runs 268/269: the guest goes silent for ~2 s with VSync interrupts pending (measured), then the flip queue times out
+
+Instruments added in this branch (diagnostic, probe thread only, `KF3_COMPLETION_PROBE`): `RELAY-LAG` (guest GP_GET trail of every relayed twin, 100 ms samples), `VCPU-MAX` / `VCPU-STUCK`
+(a vCPU inside one BAR0 write handler for >200 ms is named). Binary `fcafeb2e` (= branch tip at that commit; built on the host from the branch).
+
+**[measured, run 268, `KF3_DISPLAY_WRITE_TRACE`, binary a4b96ee0]** Time series, without the GET refresh: 11 of 17 relayed twins are behind in steady state (cumulative 64058 of 79832 twin-samples lagged,
+max lag 1374 entries, 57 runs of >= 500 ms) - the lag does not heal by itself without the flag (and with it, 0 at free/disable). **It is not the TDR cause (run 267).**
+
+**[measured, runs 268 and 269, kayfabe display trace + guest ETW]** At the first TDR of the run, with kayfabe's display model healthy and delivering:
+* kayfabe raises a VSync (LAST_DATA, `evt=0x6 en=0x2 rm=0x2`) every 16.7 ms throughout, and the guest acked every one (`WRITE 0x611800 <- 0x2`) up to a point, then **acks none for ~2.2 s**
+  (run 268: 58898.8..58900.85; run 269: 59541.9..59544.1 maplog seconds, 30 VSyncs raised per 0.5 s the whole time), then acks again and the guest starts its own TDR teardown.
+* The guest's DxgKrnl ETW (run 269, circular session, 10:11:01.862 -> 10:11:07.585 UTC) agrees to the millisecond: the last VSync interrupt event at 10:11:01.862, then **NO DxgKrnl event of any kind for
+  2.34 s** (no VSync, no packet, no queue event), then three small events, a gap of 1.7 s, and the recovery's paging burst from 10:11:06.5. All DMA packets that had started had stopped
+  (`DMA starts 1586 stops 1586` before the recovery; the "never stopped" list is only the recovery's own tail). So nothing on the engines is outstanding: the flip queue's retiring VSync is simply never serviced.
+* During the silence the CPU_INTR interrupt-tree write counter is flat (no ISR runs; `irq[writes=]` unchanged over 100 ms) while `raised` grows ~18 per 100 ms and `leaf0=0x6 leaf4=0x4000000` stay pending (probe dumps).
+* `VCPU-MAX` stays at 131 us through the stall and there is no `VCPU-STUCK`: **no vCPU is inside a kayfabe BAR0 write handler**. `unreconciled=0`, no `HOST-FENCE-OVERDUE`, no host Xid.
+* The last guest action before the silence, in both runs: one RPC `GSP_RM_CONTROL` that kayfabe answers as UNSERVICED (`GSP rpc UNSERVICED { code: 76 }` 15-20 ms before the last ack); the per-control refusal counters
+  of the two status lines around it differ in exactly one entry: **`fn76/0x007302a5` (NV0073, display) +1** (run 269). 0x007302a5 is in no OGKM header and is refused by name since run 30
+  (`traces/windows_code43_walls_20261007/README.md`: "issued ~6 times per boot ... not on the TDR's path"). Whether the silence is a consequence of that refusal or only coincident is NOT established:
+  inferred only.
+
+**Not yet known (what the next run measures):** what the guest's CPUs are executing during the silence. Plan (run 270): `STALLDUMP=1` (this branch's `tooling/tdr-run.sh`): when the display trace shows
+VSyncs raised and no ack for 600 ms, take six `stop; info registers -a; cont` samples of every vCPU and a full guest-memory dump at the stall, resolve RIPs with the Microsoft symbols (ntoskrnl/dxgkrnl/dxgmms2) and
+read the thread stacks with the Volatility tools (`windows.tdrctx`/`waitfast`). Falsifier of "the guest is spinning/blocked in its own driver and the interrupt cannot run": all vCPUs idle (HLT) with the
+vector pending (then the interrupt delivery path is the culprit: MSI-X routing/mask/irqfd).
