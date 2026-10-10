@@ -1,0 +1,25 @@
+PROOF_START tag=pb1 checkout=89721ca4 broker=badf2d707da4 2026-10-10T23:56:17+02:00
+PROOF_BROKER_CONNECTED +2s nvkvm-broker: accepted uid 0 gid 0 pid 2591771
+PROOF_GRUB_MENU +7s serial=1 countdown=[]
+PROOF_GRUB_KEY PASS broker e -> editor_on_serial=1 countdown_left=automatically in 8s
+PROOF_DESKTOP cinnamon_up
+  dimensions:    1920x1080 pixels (250x252 millimeters)
+PROOF_ABS PASS window=1920x1080 inject=100,100 want=100,100 got=99,99 screen=1920x1080
+PROOF_ABS PASS window=1920x1080 inject=1000,600 want=1000,600 got=999,599 screen=1920x1080
+PROOF_ABS PASS window=1920x1080 inject=640,360 want=640,360 got=639,359 screen=1920x1080
+PROOF_ABS PASS window=1920x1080 inject=1919,1079 want=1919,1079 got=1918,1078 screen=1920x1080
+PROOF_GRAB_ON broker=[nvkvm-broker: grab capabilities: keyboard=1 abs=1 rel=1 lock=1 shortcuts-inhibited=1 focus-events=1 fullscreen=1|nvkvm-broker: grab: CTRL+ALT+G toggles, CTRL+AL] kf3=[pointing device -> #5 QEMU Virtio Mouse (relative)]
+PROOF_REL_X11 PASS inject_sum=70,30 pointer=639,299->709,329 delta=70,30 (flat profile)
+PROOF_ABS_UNDER_GRAB PASS_DROPPED pointer=709,329->709,329
+PROOF_GRAB_OFF kf3=[pointing device -> #4 QEMU Virtio Tablet (absolute)]
+PROOF_ABS PASS window=1920x1080 inject=200,150 want=200,150 got=199,149 screen=1920x1080
+PROOF_BROKER2 nvkvm-broker: accepted uid 0 gid 0 pid 2591771 relay=[connected to /run/user/1000/nvkvm/display.sock, capabilities 0xfff|re-sent geometry 1920x1080 and the last frame to the new broker|]
+PROOF_ABS PASS window=1920x1080 inject=400,300 want=400,300 got=399,299 screen=1920x1080
+PROOF_ABS PASS window=1920x1080 inject=1500,900 want=1500,900 got=1499,899 screen=1920x1080
+PROOF_ABS PASS window=1920x1080 inject=0,0 want=0,0 got=0,0 screen=1920x1080
+PROOF_EVDEV_MOUSE rel_x_sum=70 rel_y_sum=30 btn=[BTN_RIGHT=1 BTN_RIGHT=0 ] wheel=[1]
+PROOF_EVDEV_TABLET abs_events=18 btn=[BTN_LEFT=1 BTN_LEFT=0 ] wheel=3
+PROOF_EVDEV_KEYBOARD edges=[KEY_LEFTSHIFT=1 KEY_A=1 KEY_A=0 KEY_LEFTSHIFT=0 KEY_LEFTCTRL=1 KEY_L=1 KEY_L=0 KEY_LEFTCTRL=0 KEY_A=1 KEY_A=0 KEY_LEFTCTRL=1 KEY_LEFTALT=1 KEY_LEFTCTRL=0 KEY_LEFTALT=0 KEY_ESC=1 KEY_ESC=0 KEY_LEFTCTRL=1 KEY_LEFTALT=1 KEY_LEFTCTRL=0 KEY_LEFTALT=0 ]
+PROOF_KEYS PASS want=[KEY_LEFTSHIFT=1 KEY_A=1 KEY_A=0 KEY_LEFTSHIFT=0 KEY_LEFTCTRL=1 KEY_L=1 KEY_L=0 KEY_LEFTCTRL=0 KEY_A=1 KEY_A=0 ] got=[KEY_LEFTSHIFT=1 KEY_A=1 KEY_A=0 KEY_LEFTSHIFT=0 KEY_LEFTCTRL=1 KEY_L=1 KEY_L=0 KEY_LEFTCTRL=0 KEY_A=1 KEY_A=0 KEY_LEFTCTRL=1 KEY_LEFTALT=1 KEY_LEFTCTRL=0 KEY_LEFTALT=0 KEY_LEFTCTRL=1 KEY_LEFTALT=1 KEY_LEFTCTRL=0 KEY_LEFTALT=0 ]
+PROOF_STATUS broker[up=1 sent=266 gpucopy=0 gpucopy_backoffs=0 dmabuf_trips=0 carrier_refused=0 carrier_unchecked=0 formats_unasked=0 dropped=0 uncommitted=0 recovered=0 releases=266 unknown_releases=0 reclaims=0 blocked=0 backstops=0 reconnects=1 failed_attempts=2 peer_refused=0 cursor=hover cursor_sets=3 cursor_hides=0 cursor_shows=0 cursor_refused=0]
+PROOF_EXIT 2026-10-10T23:59:07+02:00 qemu_left=0

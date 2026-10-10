@@ -1,0 +1,4 @@
+kf3: PROBE on — completion probe, overdue after 1000 ms (KF3_COMPLETION_PROBE)
+kf3: INVAL-LAT t=100184.460 guest-visible arm->idle n=0 sum_ms=0.0 avg_us=0.0 p50_us=0.0 p90_us=0.0 p99_us=0.0 max_us=0.0 slow_over_12ms=0 rearms_while_busy=0
+kf3: INVAL-SLOW t=100185.359 utc_ms=1791667706288 guest-visible arm->idle 91.0 ms; VA thread: walk in flight=false pending wants=0 all_settled=true away since its previous publish 91.0 ms
+kf3: INVAL-SLOW t=100185.743 utc_ms=1791667706672 guest-visible arm->idle 29.0 ms; VA thread: walk in flight=false pending wants=0 all_settled=true away since its previous publish 28.9 ms
