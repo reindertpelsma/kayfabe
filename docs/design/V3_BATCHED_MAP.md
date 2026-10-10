@@ -732,10 +732,10 @@ exercised with reservations; model: every 7th/11th row map fails).
 
 **Why (a2) exists.** The measured regression at 6fafcc6e (fast suite 0/30) was a refused row: a
 guest-KERNEL space's flat FB alias is ONE run of 2 MiB leaves of 7.9 GiB; below the carve-out it is
-3 963 whole leaves = 2 029 056 grains — more than 2^20, so it can only be placed through a reservation. If host RM refused the one 7.9 GiB reservation
+3 965 whole leaves = 2 030 080 grains — more than 2^20, so it can only be placed through a reservation. If host RM refused the one 7.9 GiB reservation
 (the probe passed on small ranges; `[measured gfx8]` it refused one LARGE `[1 MiB, 4 GiB)`), D1 as
 literally decided would refuse the row again and poison every kernel CE channel. (a2) keeps the row
-placed and exact (3 963 leaf reservations, ~8 000 RM calls, reasoned ≈ 0.2 s). If every reservation is
+placed and exact (3 965 leaf reservations, ~8 000 RM calls, reasoned ≈ 0.2 s). If every reservation is
 refused (or reservations are off) the alias IS refused by name — the decision's rule, and the largest
 residual risk (§8.8.7). Model test: `flat_alias(AliasHost::{Accepts, RefusesBig, RefusesAll, Off})`.
 
@@ -980,7 +980,7 @@ NEGCTL opt-out) made one 4 GiB row of 2 MiB leaves cost 1 048 577 host calls to 
    one-shot tool — is unlimited). A row that would exceed either is refused by name
    (`REFRESH_BUDGET_EXHAUSTED`, absence, no host call; the walker retries it in a later refresh). The
    (a2) tier spends 2 amplified calls per leaf, so its up-to-2^20 leaf reservations are bounded by the same
-   budget (≤ 65 536 leaves per refresh): the flat FB alias (3 963 leaves, ~8 000 amplified) fits; a 4
+   budget (≤ 65 536 leaves per refresh): the flat FB alias (3 965 leaves, ~8 000 amplified) fits; a 4
    GiB row of 2 MiB leaves with every reservation refused (1 048 576 grains, ~1 046 528 amplified) does
    NOT — it is refused cold (≤ 2 host calls) instead of costing a million;
 4. the straddle of the withheld split window `[4 GiB, 4.5 GiB)` (inferred: host RM refuses any map or

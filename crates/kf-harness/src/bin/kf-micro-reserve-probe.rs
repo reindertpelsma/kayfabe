@@ -46,6 +46,68 @@ const PATTERN: u32 = 0x5EED_0000;
 const V_RESERVE: u64 = 0x0403_0000;
 const V_CONTROL: u64 = 0x0503_0000;
 
+/// How host RM answered one reservation request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Answer {
+    /// A handle.
+    Accepted,
+    /// A host-RM REFUSAL status (`NV_ERR_NO_MEMORY`, insufficient permissions, any other RM status):
+    /// the driver said no. This is what the 4 KiB floor exists for.
+    Refused,
+    /// Anything else — an interrupted syscall, a mis-placed FIXED map, one of this crate's own
+    /// transport/encode codes (`0x4B..`): NOT a refusal, an inconsistency, FAIL.
+    Error,
+}
+
+/// Classify a reservation's result (review 2 item 1: "any `reserve_va` Err ⇒ FALLBACK" let a
+/// transport error pass the gate as a clean fallback).
+fn classify(r: &Result<u32, kf_host::RmError>) -> Answer {
+    match r {
+        Ok(_) => Answer::Accepted,
+        Err(kf_host::RmError::NoMemory | kf_host::RmError::InsufficientPermissions) => {
+            Answer::Refused
+        }
+        // The crate's own named codes live in 0x4B00..0x4C00 (`ABI_ENCODE_FAILED` 0x4B63, …).
+        Err(kf_host::RmError::Other(c)) if !(0x4B00..0x4C00).contains(c) => Answer::Refused,
+        Err(_) => Answer::Error,
+    }
+}
+
+/// What the census of the 5 SMALL reservations says the box is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Posture {
+    /// ≥ 4 of 5 accepted: reservations are expected to work; everything must pass.
+    Expected,
+    /// ALL 5 refused with a host-RM refusal status: the fallback configuration — the gate then has
+    /// to PROVE the flat FB alias still places (the 6fafcc6e failure class).
+    AllRefused,
+    /// 1-3 accepted, or any non-refusal error: inconsistent, FAIL.
+    Inconsistent,
+}
+
+fn posture(small: &[Answer]) -> Posture {
+    let acc = small.iter().filter(|&&a| a == Answer::Accepted).count();
+    let refused = small.iter().filter(|&&a| a == Answer::Refused).count();
+    if small.iter().any(|&a| a == Answer::Error) {
+        Posture::Inconsistent
+    } else if acc >= 4 {
+        Posture::Expected
+    } else if acc == 0 && refused == small.len() && !small.is_empty() {
+        Posture::AllRefused
+    } else {
+        Posture::Inconsistent
+    }
+}
+
+/// The flat FB alias below the carve-out in 2 MiB leaves (`0x1efbe0000 / 2 MiB`), and whether the
+/// per-leaf reservation tier (2 amplified host calls per leaf) fits one refresh's amplification
+/// budget — the production ladder's bound (`kf_mem::batch::REFRESH_AMPLIFICATION_BUDGET`).
+const ALIAS_LEAVES: u64 = 0x1_efbe_0000 / 0x20_0000;
+
+fn ladder_fits_budget(leaves: u64) -> bool {
+    leaves.saturating_mul(2) <= kf_mem::batch::REFRESH_AMPLIFICATION_BUDGET
+}
+
 fn word(page: u64, w: u64) -> u32 {
     PATTERN | ((page as u32) << 8) | (w as u32 & 0xFF)
 }
@@ -74,7 +136,7 @@ fn main() {
     };
     if word == "FALLBACK" {
         println!(
-            "MICRO_RESERVE_FALLBACK_ACTIVE host RM refused the small FIXED reservation: the batched map runs on the 4 KiB floor on this driver (V3_BATCHED_MAP.md 8.8.3)"
+            "MICRO_RESERVE_FALLBACK_ACTIVE host RM refused the small FIXED reservation: the batched map runs on the per-leaf / 4 KiB floor on this driver and the flat FB alias was PROVEN placeable there (V3_BATCHED_MAP.md 8.8.3, 8.8.7)"
         );
     }
     println!("MICRO_RESERVE_VERDICT arm={arm} {word}");
@@ -106,27 +168,35 @@ fn run(l: &mut Ledger, arm: &str) -> Result<bool, String> {
             "LARGE [1 MiB, 4 GiB) (the gfx8 refusal)",
         ),
     ];
-    let mut accepted = 0;
+    let mut answers: Vec<Answer> = Vec::new();
     for (va, len, what) in census {
-        match rm.reserve_va(space.space, va, len) {
+        let r = rm.reserve_va(space.space, va, len);
+        let a = classify(&r);
+        answers.push(a);
+        match &r {
             Ok(h) => {
-                accepted += 1;
                 l.measure(
                     "reserve_census",
                     format!("{what} {va:#x}+{len:#x}: ACCEPTED"),
                 );
-                let _ = rm.free(h);
+                let _ = rm.free(*h);
             }
             Err(e) => l.measure(
                 "reserve_census",
-                format!("{what} {va:#x}+{len:#x}: refused {e:?}"),
+                format!("{what} {va:#x}+{len:#x}: {a:?} {e:?}"),
             ),
         }
     }
-    // Informational: the decisive reservation is the one the `reserve` arm makes below.
-    l.measure(
+    // The 5 small ones decide (the 6th, the old LARGE one, is information).
+    let small = &answers[..5];
+    let post = posture(small);
+    let accepted = answers.iter().filter(|&&a| a == Answer::Accepted).count();
+    l.check(
         "reserve_small_accepted",
-        format!("{accepted}/6 accepted (the 5 small ones are the census)"),
+        post != Posture::Inconsistent,
+        format!(
+            "{accepted}/6 accepted, small ones {small:?} ⇒ {post:?} (Expected = ≥ 4 of 5 accepted; AllRefused = all 5 refused with a host-RM refusal status; anything else, a transport error included, FAILS)"
+        ),
     );
     // ★ D1 (2026-10-10), INFORMATION ONLY (never gates): the flat FB alias of a guest-KERNEL space is
     // one 7.9 GiB row of 2 MiB leaves (`0x120000000+0x1efc00000`), which can ONLY be placed through
@@ -193,22 +263,90 @@ fn run(l: &mut Ledger, arm: &str) -> Result<bool, String> {
 
     match arm {
         "reserve" => {
-            // A refusal HERE is the fallback-active case, not a failure (see `main`).
-            let h = match rm.reserve_va(space.space, V_RESERVE, PAGES * P) {
-                Ok(h) => h,
-                Err(e) => {
-                    l.measure(
-                        "reserve_refused",
-                        format!("{V_RESERVE:#x}+{:#x}: {e:?}", PAGES * P),
-                    );
-                    l.check(
-                        "reserve_refused_is_a_clean_fallback",
-                        true,
-                        "nothing was placed; the 4 KiB grain is the floor",
-                    );
-                    return Ok(true);
-                }
-            };
+            if post == Posture::AllRefused {
+                // ★ Review 2 item 1 — THE FALLBACK CONFIGURATION: every small reservation was
+                // refused by host RM. The batched map then runs on the 4 KiB floor, and the one
+                // row that CANNOT be placed on the floor is the guest-kernel flat FB alias
+                // (2 030 080 grains > 2^20 per row; the 6fafcc6e fast-suite 0/30). So the gate
+                // PROVES the alias still places by the production ladder's last tier — one
+                // reservation per 2 MiB leaf — or FAILS, loudly: reserve a 2 MiB leaf at the
+                // alias base, map 2 MiB of VRAM through it, and read its first and last page
+                // through the CE; and the 3 965 leaves × 2 amplified calls must fit one refresh's
+                // budget.
+                println!(
+                    "MICRO_RESERVE_FALLBACK_CONFIGURATION all 5 small reservations were refused by host RM: proving the flat FB alias places via per-2-MiB-leaf reservations"
+                );
+                let leaf = 0x20_0000u64;
+                let alias_va = 0x1_2000_0000u64;
+                let ok_budget = ladder_fits_budget(ALIAS_LEAVES);
+                l.check(
+                    "fallback_alias_ladder_fits_the_budget",
+                    ok_budget,
+                    format!(
+                        "{ALIAS_LEAVES} leaves x 2 calls vs REFRESH_AMPLIFICATION_BUDGET {}",
+                        kf_mem::batch::REFRESH_AMPLIFICATION_BUDGET
+                    ),
+                );
+                let lr = rm.reserve_va(space.space, alias_va, leaf);
+                let la = classify(&lr);
+                let proven = match lr {
+                    Ok(h2) => {
+                        let big = rm
+                            .alloc_device_local(leaf)
+                            .map_err(|e| format!("2 MiB leaf object: {e:?}"))?;
+                        let (_bn, big_cpu) = rm
+                            .map_cpu(big, leaf, CachePolicy::Uncached)
+                            .map_err(|e| format!("cpu 2 MiB leaf: {e:?}"))?;
+                        let last = leaf / P - 1;
+                        for page in [0, last] {
+                            for w in 0..(P / 4) {
+                                big_cpu
+                                    .store_u32(HostOffset::new(page * P + w * 4), word(page, w))
+                                    .map_err(|e| format!("fill 2 MiB leaf: {e:?}"))?;
+                            }
+                        }
+                        rm.map_in(
+                            h2,
+                            big,
+                            MapBacking::SharedSlice,
+                            0,
+                            leaf,
+                            alias_va,
+                            false,
+                            0,
+                            MapPerm::READ_WRITE,
+                        )
+                        .map_err(|e| format!("map the 2 MiB leaf through its reservation: {e:?}"))?;
+                        let first = read(&rm, alias_va, 4, 0)?;
+                        let end = read(&rm, alias_va + last * P, 5, last)?;
+                        rm.unmap_in(h2, alias_va, leaf, false)
+                            .map_err(|e| format!("teardown 2 MiB leaf: {e:?}"))?;
+                        rm.free(h2).map_err(|e| format!("free 2 MiB leaf: {e:?}"))?;
+                        first && end
+                    }
+                    Err(e) => {
+                        println!(
+                            "MICRO_RESERVE_FLAT_ALIAS_UNPLACEABLE a 2 MiB leaf reservation at the flat FB alias base is refused too ({la:?} {e:?}): in this configuration the 7.9 GiB alias row is refused by name and every guest kernel CE channel would be poisoned — the 6fafcc6e failure class (fast suite 0/30)"
+                        );
+                        false
+                    }
+                };
+                l.check(
+                    "fallback_flat_fb_alias_placeable",
+                    proven,
+                    "a 2 MiB leaf reserved at the alias base, mapped and read through the CE (first and last page)",
+                );
+                return Ok(proven && ok_budget);
+            }
+            if post == Posture::Inconsistent {
+                // `reserve_small_accepted` already failed; nothing more is learned by going on.
+                return Ok(false);
+            }
+            // Reservations are expected: this one MUST be accepted (a refusal here, with the
+            // census accepting, is an inconsistency — FAIL, never a fallback).
+            let h = rm
+                .reserve_va(space.space, V_RESERVE, PAGES * P)
+                .map_err(|e| format!("reserve {V_RESERVE:#x} after the census accepted: {e:?}"))?;
             rm.map_in(
                 h,
                 src,
@@ -339,5 +477,57 @@ fn run(l: &mut Ledger, arm: &str) -> Result<bool, String> {
             Ok(false)
         }
         other => Err(format!("unknown arm {other:?} (reserve | nv01-control)")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kf_host::RmError;
+
+    #[test]
+    fn only_a_host_rm_refusal_status_is_a_refusal() {
+        assert_eq!(classify(&Ok(1)), Answer::Accepted);
+        assert_eq!(classify(&Err(RmError::NoMemory)), Answer::Refused);
+        assert_eq!(classify(&Err(RmError::InsufficientPermissions)), Answer::Refused);
+        // An RM status the driver returned (NV_ERR_INVALID_ARGUMENT 0x1F, NV_ERR_NOT_SUPPORTED 0x56…).
+        assert_eq!(classify(&Err(RmError::Other(0x1F))), Answer::Refused);
+        // This crate's own codes, a cancelled syscall and a mis-placed FIXED map are not refusals.
+        for e in [
+            RmError::Other(kf_host::ABI_ENCODE_FAILED),
+            RmError::Other(kf_host::IOCTL_NUMBER_UNBUILDABLE),
+            RmError::Other(kf_host::ABI_DECODE_FAILED),
+            RmError::Other(kf_host::NOT_ON_THIS_RUNG),
+            RmError::Interrupted,
+            RmError::PlacementRefused { want: 1, got: 2 },
+        ] {
+            assert_eq!(classify(&Err(e)), Answer::Error, "{e:?}");
+        }
+    }
+
+    #[test]
+    fn the_fallback_posture_needs_all_five_small_refused_by_status() {
+        use Answer::*;
+        assert_eq!(posture(&[Accepted; 5]), Posture::Expected);
+        assert_eq!(posture(&[Accepted, Accepted, Accepted, Accepted, Refused]), Posture::Expected);
+        assert_eq!(posture(&[Refused; 5]), Posture::AllRefused);
+        // Mixed (1-3 accepted): inconsistent.
+        for k in 1..4 {
+            let mut v = [Refused; 5];
+            v[..k].fill(Accepted);
+            assert_eq!(posture(&v), Posture::Inconsistent, "{k} accepted");
+        }
+        // One transport error among refusals (or acceptances) is not a fallback.
+        assert_eq!(posture(&[Refused, Refused, Refused, Refused, Error]), Posture::Inconsistent);
+        assert_eq!(posture(&[Accepted, Accepted, Accepted, Accepted, Error]), Posture::Inconsistent);
+        assert_eq!(posture(&[]), Posture::Inconsistent);
+    }
+
+    #[test]
+    fn the_alias_ladder_fits_one_refreshs_budget_and_a_4_gib_row_does_not() {
+        assert!(ladder_fits_budget(ALIAS_LEAVES), "{ALIAS_LEAVES} leaves");
+        assert_eq!(ALIAS_LEAVES, 3965);
+        // A row that needs a million per-unit reservations (a 4 GiB row of 4 KiB units) does not.
+        assert!(!ladder_fits_budget(1 << 20));
     }
 }

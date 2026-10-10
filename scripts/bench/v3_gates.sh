@@ -73,7 +73,17 @@ export PATH="$PATH:$HOME/.cargo/bin"
     user=$((user + $(echo "$out10" | grep -a 'kf-host: channel birth ' | grep -ac ' PRIVILEGED_CHANNEL=0 privilege=USER ')))
     refused=$((refused + $(echo "$out10" | grep -acE 'PRIVILEGED CHANNEL REFUSED|CHANNEL BIRTH REFUSED|CHANNEL CLASS REFUSED|CUDA THREAD REFUSED')))
     v10=$(echo "$out10" | grep -E '^MICRO_RESERVE_VERDICT arm=reserve ' | tail -1 | awk '{print $3}')
-    if [ "$rc10" -eq 0 ] && { [ "$v10" = "PASS" ] || [ "$v10" = "FALLBACK" ]; }; then g10=$v10; fi
+    if [ "$rc10" -eq 0 ] && [ "$v10" = "PASS" ]; then g10=PASS; fi
+    # FALLBACK (reservations refused) passes ONLY with the probe's own proof that the flat FB alias
+    # still places in that configuration (the 6fafcc6e 0/30 failure class): a FALLBACK verdict
+    # without the passing `fallback_flat_fb_alias_placeable` check line is a FAIL.
+    if [ "$rc10" -eq 0 ] && [ "$v10" = "FALLBACK" ]; then
+      if echo "$out10" | grep -aq '^CHECK fallback_flat_fb_alias_placeable PASS'; then
+        g10=FALLBACK
+      else
+        echo "GATE10_FALLBACK_UNPROVEN: the probe says FALLBACK but did not prove the flat FB alias places without reservations — FAIL"
+      fi
+    fi
   fi
   echo "GATE10_VERDICT=$g10"
   if [ "$g10" = "FALLBACK" ]; then

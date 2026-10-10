@@ -43,9 +43,13 @@ class GateRunnerTests(unittest.TestCase):
             # verdict, or no binary at all.
             if mode != "g10-missing":
                 verdict, code = {"g10-fail": ("FAIL", 1), "g10-fallback": ("FALLBACK", 0),
-                                 "g10-noverdict": (None, 0), "g10-bad-exit": ("PASS", 3)
+                                 "g10-noverdict": (None, 0), "g10-bad-exit": ("PASS", 3),
+                                 "g10-fallback-unproven": ("FALLBACK", 0)
                                  }.get(mode, ("PASS", 0))
                 line = f"echo MICRO_RESERVE_VERDICT arm=reserve {verdict}\n" if verdict else ""
+                if mode == "g10-fallback":
+                    # The probe's proof that the flat FB alias places without reservations.
+                    line = "echo 'CHECK fallback_flat_fb_alias_placeable PASS a 2 MiB leaf'\n" + line
                 if mode in ("g10-admin-birth", "g10-user-birth"):
                     flag = "1" if mode == "g10-admin-birth" else "0"
                     line = ("echo 'kf-host: channel birth h=0xcafe000d engine=0x9 reply_flags=0x00000080 "
@@ -68,7 +72,8 @@ class GateRunnerTests(unittest.TestCase):
     def test_gate_10_fails_only_on_an_inconsistency(self):
         """The summary line carries gate 10, so a consumer that reads only it cannot see 9/9 green
         while gate 10 failed; FALLBACK (reservation refused) passes, loudly."""
-        for mode in ("g10-fail", "g10-missing", "g10-noverdict", "g10-bad-exit"):
+        for mode in ("g10-fail", "g10-missing", "g10-noverdict", "g10-bad-exit",
+                     "g10-fallback-unproven"):
             with self.subTest(mode=mode):
                 result = self.run_fixture(mode)
                 self.assertNotEqual(result.returncode, 0, result.stdout)
@@ -77,6 +82,10 @@ class GateRunnerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("V3_GATES_SUMMARY pass=9 fail=0 gate10=FALLBACK", result.stdout)
         self.assertIn("GATE10_FALLBACK_ACTIVE", result.stdout)
+        # ... but a FALLBACK the probe did not PROVE (the flat FB alias, the 6fafcc6e failure class)
+        # is a FAIL: see the "g10-fallback-unproven" case above.
+        unproven = self.run_fixture("g10-fallback-unproven")
+        self.assertIn("GATE10_FALLBACK_UNPROVEN", unproven.stdout)
 
     def test_failed_missing_and_nonzero_exit_cannot_report_success(self):
         for mode in ("fail", "missing", "bad-exit"):
