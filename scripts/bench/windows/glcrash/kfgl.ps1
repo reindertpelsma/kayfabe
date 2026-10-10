@@ -3,7 +3,7 @@ $out = 'C:\kf\gl-result.txt'; Remove-Item $out -ErrorAction SilentlyContinue
 function R($m) { Add-Content $out ("{0} {1}" -f (Get-Date).ToUniversalTime().ToString('o'), $m) }
 for ($i = 0; $i -lt 30 -and -not (Test-Path 'D:\tools\kf_glgears.exe'); $i++) { Start-Sleep 2 }
 R ("D: tools present=" + (Test-Path 'D:\tools\kf_glgears.exe'))
-foreach ($t in 'cup2.exe') {
+foreach ($t in 'cup2.exe','cup3.exe','cup8.exe') {
   $o = & ("D:\tools\" + $t) 2>&1 | Out-String; R ("$t exit=$LASTEXITCODE out=" + ($o -replace "[\r\n]+", ' | '))
 }
 $p = Start-Process 'D:\tools\kf_glgears.exe' -PassThru; Start-Sleep 10
