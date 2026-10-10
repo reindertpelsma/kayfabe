@@ -1248,8 +1248,9 @@ stand-in (a real RM unmap is 84-123 µs `[measured earlier, vast 52624429, 2026-
   at most `STEER_HULL_MAX_CALLS` (16) host calls, not "one hull's host call" (which in the per-leaf
   tier was 2 048). A hung call would hold the maps over that hull — and the VA thread's own host calls
   hang equally.
-- The follow-up walks after budget refusals can repeat while each makes progress: the invalidate is
-  already cleared, but the VA thread works on the space for the extra walks.
+- ⊘ **WITHDRAWN 2026-10-10 (third review, §8.8.13.1; stale text fixed in the fourth):** "the follow-up
+  walks after budget refusals can repeat while each makes progress" — the follow-up walk is deleted
+  (it livelocked the VA thread); a budget-refused run waits for the guest's next walk of the space.
 
 ### 8.8.13 Third review round (2026-10-10, review of `5f9d479c`)
 
@@ -1297,6 +1298,11 @@ describe the old "any refusal passes" rule; the probe header and §8.8.11.1 say 
 prove (above). The flat-alias model test now asserts the per-leaf tier's spend (≥ 2 × 3 965 amplified
 calls, inside both budgets, no budget refusal).
 
+⊘ **Corrected 2026-10-10 (fourth review, §8.8.14), above the text it corrects:** the retry does NOT
+sleep 1 ms on the act thread (it is parked in a delay list, §8.8.14.4); the age bound runs from the step's
+first execution, not its enqueue; `StillReserved` refuses at once; and a MISSING row no longer means
+"nothing mirrored there" (§8.8.14.1).
+
 **8.8.13.5 The steer never proceeds without `Free` (item 5, SERIOUS).** The falcon steer exists so the
 host-owned context lands ON the guest's VA; the host alloc after a steer that did not complete
 re-introduces the original NVDEC wrong-frames bug (`[measured vvid vid10, V3_VIDEO_ENGINES.md]`). Before D2 a failed unmap
@@ -1338,4 +1344,58 @@ on the real apply path.
 | a 1 ms retry pause + 20 tries ≈ 20 ms worst delay of the act queue per stuck steer | inferred |
 | the act loop's requeue works with a real `ChanPlane` and a real video lane | NOT measured (hardware) |
 | the probe's per-leaf proof reflects 3 965 reservations in one space | NOT measured (it maps one leaf) |
+
+### 8.8.14 Fourth review round (2026-10-10; MERGE-OK of `11b67100`, residuals)
+
+**STATUS: LIVE, 2026-10-10 — CODE + MODEL-TESTED; hardware verdict pending (§8.8.6).**
+
+**8.8.14.1 A missing row is not "nothing there" (item 1, by reading).** After a refused first try the guest
+ctx mapping stayed in the ledger and `falcon_ctx` in `pt`; a later alloc on the same channel found
+`rows.remove(&va) == Ok(None)`, concluded "not mirrored yet", skipped `hand_to_host` and ran the host alloc
+unsteered — the vvid wrong-frames bug again. Now a missing row hands the ctx range `[va, va+len)` over all
+the same (`chan::steer_len`: the removed row's length, else the ctx length), and the alloc runs only after
+`Free` — the proof that nothing of ours (no mapping, no reservation) covers the range — or when there is no
+ledger at all (named). Test (model host, degraded configuration — every reservation refused, host RM
+refusing unmaps): `a_second_alloc_after_a_refused_steer_never_runs_the_host_alloc_unsteered` (first try
+refused; second alloc: no row, still refused ⇒ no alloc; host recovered ⇒ `Free` ⇒ alloc; a range with
+nothing of ours ⇒ `Free` at once) and `a_missing_steer_row_still_hands_the_ctx_range_over`.
+
+**8.8.14.2 `StillReserved` refuses at once (item 2).** A micro reservation of ours covers the VA because
+OTHER rows live in it; nothing the steer does clears that within 100 ms, so 20 retries only delayed the
+refusal. `steer_step` answers `Refuse` for it immediately (test: the decision table).
+
+**8.8.14.3 The age bound starts at the first execution (item 3).** `born` is taken when the step first
+RUNS (`EngineObj::act(.., born: None, ..)`), then carried; a busy act queue no longer eats the 100 ms.
+
+**8.8.14.4 No sleeping on the act thread (item 4).** The 1 ms `thread::sleep` per retry is replaced by
+`kf_qemu::actq::ActQueue`: a retry is parked with a `not_before` in an act-thread-local delay list
+(`delay_act`, drained by the act loop after each act); the loop runs everything queued first, then the
+earliest DUE parked retry, and blocks only until the earlier of (a new act, the earliest deadline)
+(`recv_timeout`). `[measured, model, 2026-10-10, cargo test -p kf-qemu stuck_steers_add_no_latency_to_unrelated_acts]`
+50 stuck steers retrying 19 times each (950 retries) while 40 unrelated acts arrive: the unrelated acts'
+worst latency **159 µs** (the sleeping design cost ~1 ms per stuck retry ahead of them). A retry can be
+starved by a queue that never empties for longer than 100 ms; it then runs late and decides on the state
+it finds (`Free` ⇒ the alloc proceeds, otherwise it refuses by age).
+
+**8.8.14.5 Stale text (item 5).** Fixed and folded: `batch.rs` (`note_budget_refusal` doc and log line),
+`apply.rs` (`Applied::budget_refused`), and the §8.8.12 bullet "follow-up walks … can repeat" — each now
+says the follow-up walk was deleted (§8.8.13.1) and a budget-refused run waits for the guest's next walk.
+
+**8.8.14.6 Lower items.**
+- *A requeued steer that runs after a channel free.* A retry (`tries > 0`) first checks that the twin
+  `(client, parent)` is still in `pt` with the same host channel token and that its falcon ctx is still
+  known; otherwise the birth is REFUSED by name (never the host alloc on the old channel).
+- *A hostile `PromoteCtx` naming a huge per-leaf row (pre-existing unbounded act-thread cost).* The
+  row length is guest-chosen; a 4 GiB per-leaf row is thousands of hulls. The act thread's hand-over is now
+  bounded by a time slice (`BatchedVas::hand_to_host_within`, `STEER_SLICE` = 10 ms: no new hull starts
+  after it; the answer is `StillOurs`, the hulls already handed over stay so) and the rest continues in a
+  later, parked act — so one act never runs past ~a slice plus one hull (≤ 16 host calls), and the
+  100 ms age bound ends a row that cannot be finished in time with a named refusal. Test
+  `a_hand_over_with_a_slice_stops_early_and_continues_to_free`. The row length itself is NOT capped
+  (the row is the guest's own mapping and must be handed over whole to be steered).
+
+**8.8.14.7 Measured vs inferred (2026-10-10).** Measured (model): the unrelated-act latency above; the
+slice test (each act < 60 ms with a 15 ms slice and 10 ms host calls); the degraded second-alloc test.
+Inferred: that the act queue seldom stays non-empty for 100 ms. Not measured: the act loop with a real
+`ChanPlane` and a real video lane.
 

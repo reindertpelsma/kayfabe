@@ -187,8 +187,9 @@ pub struct Applied {
     /// The VA intervals of [`Applied::remade_unchanged_pages`], `(start, end)`.
     pub remade: Vec<(u64, u64)>,
     /// ★ Review 2 item 5: runs refused for the refresh's host-call budget
-    /// ([`crate::batch::REFRESH_BUDGET_EXHAUSTED`]) — counted in `refused` too. The VA manager
-    /// walks the space again (fresh budget) while a refresh makes progress.
+    /// ([`crate::batch::REFRESH_BUDGET_EXHAUSTED`]) — counted in `refused` too. Absent until the
+    /// guest's next walk of the space (fresh budget); ⊘ the VA manager no longer walks the space
+    /// again by itself (that follow-up walk livelocked: `V3_BATCHED_MAP.md` §8.8.13.1).
     pub budget_refused: usize,
     /// ★ Review fix 2026-10-10: new pieces of a FAILED map run taken down again (never a kept page).
     pub taken_down: usize,
