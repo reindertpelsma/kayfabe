@@ -13,6 +13,8 @@ if tl and os.path.isdir(tl) and hasattr(os, "add_dll_directory"):
     os.environ["PATH"] = tl + os.pathsep + os.environ.get("PATH", "")
 try:
     import torch  # noqa: F401  (pre-loads the CUDA runtime DLLs)
+    if torch.cuda.is_available():     # names the device the script's CUDA context lands on (a GPU-use proof for short scripts)
+        print("KFDEV", torch.cuda.get_device_name(0), flush=True)
 except Exception as e:  # pragma: no cover
     print("kf_runpy: torch import failed:", e, file=sys.stderr)
 script = sys.argv[1]

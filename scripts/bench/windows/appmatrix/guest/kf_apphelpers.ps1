@@ -54,6 +54,34 @@ function Invoke-KfWait {
     else { "KFWAIT $Tag STILL_RUNNING_AFTER $TimeoutS s"; & taskkill.exe /PID $p.Id /T /F 2>&1 | Out-Null; $global:KfRc = 124 }
 }
 
+# run a program with redirected output; once the output matches $Pattern give it $GraceS seconds to exit by itself, then kill it
+# and report rc 0 (a program that finished its work but hangs in its teardown: hashcat after "Status: Cracked" on native NVIDIA).
+# Without a match: the program's own rc, or 124 after $TimeoutS. The output is echoed at the end.
+function Invoke-KfUntil {
+    param([string]$Exe, [string[]]$ArgList = @(), [string]$Cwd = '', [string]$Pattern, [int]$TimeoutS = 120, [int]$GraceS = 15, [string]$Out, [string]$Tag = 'app')
+    $o = Join-Path $Out "$Tag.stdout.txt"; $e = Join-Path $Out "$Tag.stderr.txt"
+    $sp = @{ FilePath = $Exe; PassThru = $true; RedirectStandardOutput = $o; RedirectStandardError = $e; WindowStyle = 'Hidden' }
+    if ($ArgList.Count -gt 0) { $sp.ArgumentList = $ArgList }
+    if ($Cwd) { $sp.WorkingDirectory = $Cwd }
+    try { $p = Start-Process @sp } catch { "KFUNTIL $Tag START_FAILED $_"; $global:KfRc = 127; return }
+    $null = $p.Handle
+    $t0 = Get-Date; $matched = $null
+    while (-not $p.HasExited -and ((Get-Date) - $t0).TotalSeconds -lt $TimeoutS) {
+        Start-Sleep -Milliseconds 500
+        if (-not $matched -and (Test-Path $o) -and ((Get-Content $o -Raw -ErrorAction SilentlyContinue) -match $Pattern)) { $matched = Get-Date }
+        if ($matched -and ((Get-Date) - $matched).TotalSeconds -ge $GraceS) { break }
+    }
+    $rc = 124
+    if ($p.HasExited) { $rc = $p.ExitCode }
+    else {
+        & taskkill.exe /PID $p.Id /T /F 2>&1 | Out-Null
+        if ($matched) { "KFUNTIL $Tag matched /$Pattern/ and did not exit within $GraceS s: killed"; $rc = 0 } else { "KFUNTIL $Tag STILL_RUNNING_AFTER $TimeoutS s" }
+    }
+    Get-Content $o -ErrorAction SilentlyContinue | ForEach-Object { "$_" }
+    if ((Test-Path $e) -and (Get-Item $e).Length -gt 0) { '[stderr]'; Get-Content $e -ErrorAction SilentlyContinue | ForEach-Object { "$_" } }
+    $global:KfRc = $rc
+}
+
 # sha256 (first 16 hex) of a string, for the host-vs-guest output digests (OUTSHA lines)
 function Get-KfDigest {
     param([string]$Text)
