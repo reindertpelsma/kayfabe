@@ -2392,6 +2392,7 @@ impl ChanPlane {
         family: kf_chip::Family,
         intr_table: &[kf_abi::inittables::IntrTableEntry],
         engine_table: &[kf_abi::inittables::FifoDeviceEntry],
+        declared_channels: u32,
         dbfast: &'static kf_chan::dbfast::DbFast,
         token_fmt: Option<kf_trap::tokenindex::GuestTokenFormat>,
     ) -> Result<ChanPlane, String> {
@@ -2539,8 +2540,10 @@ impl ChanPlane {
             mirrors,
             inbox,
             completions,
-            // Declared caps: channels are the only twin this plane mints.
-            caps: Mutex::new(VmCaps::from_declared(64, 64, 64, 64)),
+            // Declared caps: channels are the only twin this plane mints, and the cap is the number
+            // the guest was TOLD (`kf_rm::authored::declared_channel_cap`, §9.1) — a hardcoded 64
+            // refused the 65th live channel of a Windows desktop (OpenGL ICD crash, CUDA 999).
+            caps: Mutex::new(VmCaps::from_declared(declared_channels, 64, 64, 64)),
             slots: RwLock::new(HashMap::new()),
             by_obj: Mutex::new(HashMap::new()),
             sw_objs: Mutex::new(HashMap::new()),

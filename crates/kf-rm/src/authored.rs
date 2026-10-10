@@ -500,6 +500,33 @@ pub fn runlist_of_engine_type(engines: &[FifoDeviceEntry], nv2080: u32) -> Optio
         .map(|e| e.engine_data[slot::RUNLIST])
 }
 
+/// ★ 2026-10-11 (OpenGL/CUDA crash on the Windows guest, `traces/windows_gl_crash_20261011/README.md`):
+/// the number of channel twins the guest may hold LIVE, which is what we told it.
+///
+/// `V3` §9.1 says the cap "is not a number we invent": the guest was handed `numChannels`
+/// per runlist by `NV2080_CTRL_CMD_INTERNAL_FIFO_GET_NUM_CHANNELS` (`fifochannels`, row
+/// `FifoChannelsRow::channels_per_runlist`), and its chid heaps (`kfifoChidMgrConstruct`,
+/// `kernel_fifo.c:300-331`) are built to exactly that extent on every runlist the served FIFO
+/// table names. So the number of channels the guest can legitimately have is
+/// `channels_per_runlist` times the number of distinct runlists. The cap was a hardcoded 64 and
+/// the 65th live channel (Windows: kernel + DWM + Edge + one more D3D/GL/CUDA context) was
+/// refused `0x1a`, which the GL ICD dereferenced and cuCtxCreate returned 999 for.
+#[must_use]
+pub fn declared_channel_cap(
+    row: &kf_abi::fifochannels::FifoChannelsRow,
+    engines: &[FifoDeviceEntry],
+) -> u32 {
+    let mut runlists: Vec<u32> = engines
+        .iter()
+        .filter(|e| e.engine_data[slot::IS_HOST_DRIVEN_ENGINE] != 0)
+        .map(|e| e.engine_data[slot::RUNLIST])
+        .collect();
+    runlists.sort_unstable();
+    runlists.dedup();
+    row.channels_per_runlist
+        .saturating_mul(u32::try_from(runlists.len()).unwrap_or(u32::MAX))
+}
+
 /// `NV2080_ENGINE_TYPE_COPY(i)` over both decades.
 fn kf_chan_copy_engine_type(i: u32) -> Option<u32> {
     match i {
@@ -762,5 +789,34 @@ mod hwref_check {
                 assert_eq!(ours, want, "{g:?} OFA{i}");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod declared_channel_cap_tests {
+    use super::*;
+
+    fn entry(runlist: u32, host_driven: u32) -> FifoDeviceEntry {
+        let mut engine_data = [0u32; kf_abi::inittables::ENGINE_DATA_TYPES];
+        engine_data[slot::RUNLIST] = runlist;
+        engine_data[slot::IS_HOST_DRIVEN_ENGINE] = host_driven;
+        FifoDeviceEntry {
+            name: "t",
+            engine_data,
+            pbdma_ids: [0; kf_abi::inittables::ENGINE_MAX_PBDMA],
+            pbdma_fault_ids: [0; kf_abi::inittables::ENGINE_MAX_PBDMA],
+            num_pbdmas: 1,
+        }
+    }
+
+    /// The cap is the count the guest was told, per runlist, over the runlists it was told about:
+    /// far more than the 64 it used to be (a Windows desktop holds about 64 live channels).
+    #[test]
+    fn cap_is_what_the_guest_was_told() {
+        let row = kf_abi::fifochannels::FifoChannelsRow { channels_per_runlist: 0x800 };
+        // GR + GRCE share runlist 0; two async CEs own 1 and 2; a non-host-driven row is not counted.
+        let engines = [entry(0, 1), entry(0, 1), entry(1, 1), entry(2, 1), entry(9, 0)];
+        assert_eq!(declared_channel_cap(&row, &engines), 3 * 0x800);
+        assert!(declared_channel_cap(&row, &engines) > 65);
     }
 }

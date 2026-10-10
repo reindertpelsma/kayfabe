@@ -742,6 +742,7 @@ impl Device {
                 family,
                 &host.intr_table,
                 &host.engines,
+                kf_rm::authored::declared_channel_cap(&host.fifo_channels, &host.engines),
                 dbfast,
                 token_fmt,
             )?));
