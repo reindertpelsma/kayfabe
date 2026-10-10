@@ -1,5 +1,61 @@
 # Windows playback TDR, 2026-10-10 (branch `claude/playback-tdr-20261010`, from combined line 3aea0a79)
 
+# HANDOFF (2026-10-10 ~22:20 CEST; a fresh agent resumes from here; sections "Progress 1-4" below are the evidence)
+
+STATUS: LIVE. Product code on the branch, head = see `git log` (18da7c3c + docs). Labels: [measured] / [inferred].
+
+## H0. What is fixed, what is not
+* FIXED, hardware-verified (run 400-412): a console-only refusal never stops the guest display (`Fault::Console` vs `Fault::Gpu`); console YUV
+  overlay composition (NV12-class formats derived from the class names, plane 1 following luma when unprogrammed, BT.709 limited, nearest scale,
+  depth order incl. the SDR colour path); correct colours seen by the owner (run 403). P2 items (colour pipeline of the YUV window, clip, 10-bit): not done.
+* PARTLY FIXED, NOT VALIDATED: the overlay (window 4 / MPO) flip-completion deadlock (guest flip queue 547 after a present whose plane 0 completes and
+  plane 1 never does). Engine fix 17eb8b2f (an UPDATE naming a channel parked for its vblank joins that latch) is right but INSUFFICIENT: run 408/409/411
+  (all with it) still stall in a different order, see H1.
+* OPEN, P0: the stall of H1. No hardware run with the fix has yet had a clean overlay phase (run 410: 0 TDR but short; 400/401/403 had overlay, 385/402/404 none).
+
+## H1. The stall that remains [measured: runs 408, 409, 411; STALL reports + ring + per-channel state + effects ring]
+Sequence in the engine ring (run 411, seq 2617-2635; same shape in 408 and 409): core UPDATE; core UPDATE naming chn 5; window 0 UPDATE naming window 4;
+window 4 UPDATE naming the core (group {core, window 0, window 4} latches); window 4 UPDATE naming nothing + window-0-imm UPDATE; window-imm-4 UPDATE
+naming window 4 -> latch {5, 37}; THEN window 4: `SET_WINDOW_INTERLOCK_FLAGS` = 1 (names window 0) + `UPDATE` 0x1000 (interlock with its immediate channel):
+parked forever waiting for {chn 1, chn 37}. Per-channel state at the stall (run 409): chn 1 PUT == decoded (nothing new kicked), chn 37 PUT == decoded
+(its last UPDATE 0x2 is the OLD one), chn 5 GET stands before its UPDATE (published GET != PUT). So the guest has kicked window 4 and has NOT kicked the two
+channels the UPDATE names. ETW (408/409): the stuck present (id 510) handed plane 0 (completes) and plane 1 = Edge's RGB MPO plane (1295x986 at 22,13,
+`Opaque`), first appearance of plane 1; the guest flip queue declares the TDR 2.25 s later. No YUV involved (the video was not yet playing).
+nvkms (`nvkms-evo3.c` nvEvoUpdateC3) pushes the CORE first and the windows after it, so hardware waits for named channels that have not yet issued their UPDATE
+(R0); the Windows driver therefore must kick the partners; it does not.
+Hypotheses (falsifier in brackets):
+* H-GET: the Windows driver waits for the window channel's GET (or idle status) to pass its UPDATE before kicking the partner channels; real hardware advances
+  GET past an accepted UPDATE, kayfabe holds GET before it until the latch (engine doc comment: "GET stands before the UPDATE"). [Falsifier: the working
+  pattern (first-kicked channel names nothing, later ones name it) kicks partners while the first channel's GET still stands before its UPDATE; so H-GET
+  needs a driver path that differs for the stuck update. Test: publish GET past an accepted UPDATE (engine + `Item::Get` path), rerun Linux broker lane +
+  fast suite (NVKMS idle checks!) and the overlay run; or read the pusher thread's stack in the WATCHDOG dump: `dumpcfg/plugins/windows/waitunwind.py`,
+  `tdrctx.py` (host-only; diagnosis only): is it spinning on a read of the channel's user area?]
+* H-WAIT-NOTIFIER: the driver waits for plane 1's previous-flip notifier (FINISHED) before kicking the partners; kayfabe writes FINISHED at flip-away
+  (the stuck update). The effects ring (18da7c3c) lists the notifier writes: compare with plane 1's notifier words. [Falsifier: a FINISHED write for the
+  previous plane-1 flip exists before the stall.]
+* H-VCPU: the guest pusher is blocked in a trapped BAR0 write. [Falsifier: dump stack of the thread shows no kayfabe-trapped access.]
+Do NOT add timeouts that release the stuck update, nor a window-count cap (owner rulings; the owner wants MPO supported, MPO-off is diagnostic only).
+
+## H2. Runs (hold in seconds; TDR per phase boot/sign-in/Edge/Shorts-load/hold)
+| run | binary | note | TDR | outcome |
+|---|---|---|---|---|
+| 400 | f34d8937 | isolation fix only | 0/0/0/0/4 (hold 624-844 s) | overlay up, console video black (no YUV), flip-queue TDRs on plane 1 |
+| 401 | da6be258 | + console YUV | 0/0/0/0/2 (hold 732 s) | overlay drawn, magenta/green (chroma plane at offset 0) |
+| 402 | cc378992 | chroma follows luma | 0/0/2/1/- | TDRs in Edge phase, then NO overlay; video correct via DWM; bars clip correct |
+| 403 | 91b2890a | + STALL report | 0/0/0/0/2 (hold 72 s) | owner: colours correct; overlay on top of a PowerShell window (z-order, P2) |
+| 404 | 91b2890a | OverlayTestMode=5 + dwm restart (DIAGNOSTIC) | 0/0/0/0/0 (900 s hold, Shorts scrolling) | MPO off = clean |
+| 408 | 17eb8b2f | + join fix | 0/0/2/1/.. | stalls remain (H1) |
+| 409 | 7d766cbd | per-channel state | 0/0/2/.. | H1 evidence |
+| 410 | 18da7c3c | + effects ring | 0/0/0/0 (120 s hold) | no stall that time (race) |
+| 411 | 18da7c3c | probe after Edge | 0/0/2/1 | probe: exit 5 (no overlay support after the TDRs) |
+| 412 | 18da7c3c | probe BEFORE Edge (runner tdr-run22.sh) | see below | |
+Host tooling added (host-only, `tdrhunt/`, copies of the idea in this README): `tdr-run17..22.sh` (guest-side playback check `kfplay.ps1`, bars clip `bars.mp4`,
+staging over QGA `stage()`, interactive-session tasks `usertask()`, `DWM_OVERLAY_OFF=1`, `OCCLUDE=1`, `PROBE_SCNS="steady occlude recreate"` with
+`kf_overlayprobe.exe` built by `scripts/bench/windows/appmatrix/build_tools.sh`). TRAP: never edit a runner script while a run uses it (bash reads it
+incrementally; run 400 died that way): copy to a new name. The probe staged and ran on the first try (exit codes work).
+
+
+
 STATUS: LIVE, 2026-10-10. Progress log; newest HANDOFF at the top when I stop.
 
 ## Progress

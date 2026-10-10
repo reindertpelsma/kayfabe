@@ -221,8 +221,8 @@ def t_managed():                     # UnifiedMemoryStreams/Perf, conjugateGradi
     import cupy as cp
     import numpy as np
     n = 1 << 26                       # 256 MiB of float32
-    mem = cp.cuda.malloc_managed(n * 4)
-    arr = cp.ndarray((n,), dtype=cp.float32, memptr=cp.cuda.MemoryPointer(mem, 0))
+    mem = cp.cuda.malloc_managed(n * 4)       # CuPy >= 14 returns a MemoryPointer already (wrapping it again was a TypeError)
+    arr = cp.ndarray((n,), dtype=cp.float32, memptr=mem)
     arr[:] = cp.arange(n, dtype=cp.float32); cp.cuda.Device().synchronize()
     host = np.frombuffer((ctypes.c_char * (n * 4)).from_address(mem.ptr), dtype=np.float32)
     chk("managed_gpu_write_cpu_read", bool(host[12345] == 12345.0 and host[n - 1] == float(n - 1)))

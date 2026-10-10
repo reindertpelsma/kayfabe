@@ -58,6 +58,13 @@ class Verdicts(unittest.TestCase):
         app2 = dict(APP, nvidia_only=False)
         self.assertEqual(V.decide(app2, facts(pdh=dict(nv={"3D": 9.0}, other={"3D": 40.0})), "NVIDIA\nDONE\n")["verdict"], "PASS")
 
+    def test_pdh_instance_names_are_case_insensitive(self):
+        # Get-Counter lower-cases instance names: "engtype_3D" reaches the host as "3d" (found on the native-NVIDIA baseline)
+        app = dict(APP, proof=["pdh:3D|VideoDecode"])
+        self.assertEqual(V.decide(app, facts(pdh=dict(nv={"3d": 9.0}, other={})), "DONE\n")["verdict"], "PASS")
+        self.assertEqual(V.decide(app, facts(pdh=dict(nv={"videodecode": 4.0}, other={})), "DONE\n")["verdict"], "PASS")
+        self.assertEqual(V.decide(app, facts(pdh=dict(nv={"copy": 4.0}, other={})), "DONE\n")["verdict"], "FAIL")
+
     def test_engine_noise_below_threshold_is_no_proof(self):
         app = dict(APP, proof=["pdh:VideoEncode"])
         self.assertEqual(V.decide(app, facts(pdh=dict(nv={"VideoEncode": 0.0}, other={})), "DONE\n")["verdict"], "FAIL")

@@ -53,6 +53,9 @@ while (-not $p.HasExited) {
     if ($el -ge $nextSample) {
         $nextSample = $el + $sampleS
         $ids = Get-ProcessTreeIds -RootPid $rootPid
+        # Edge's browser process is not reliably a descendant of the supervisor (native baseline: the tree held 3 pids, none of Edge's
+        # 10+), so for kf_edge apps add every msedge.exe: the video-decode / 3D engine use is in the Edge GPU process
+        if ($Id -like "edge_*") { $ids = @($ids) + @(Get-Process -Name msedge -ErrorAction SilentlyContinue | ForEach-Object { [int]$_.Id }) }
         foreach ($i in $ids) { $allPids[[string]$i] = 1 }
         $s = Get-GpuEngineSample -Pids $ids -NvLuids $nv
         $pdhSamples++
@@ -87,8 +90,9 @@ Add-Content -Path $log -Value ("=== end rc=$rc secs=$secs " + $t1.ToString('o'))
 # end-of-app health and accounting
 $ev = Get-GuestEventSummary -Since $t0
 $boot1 = Get-BootTimeUtc
-$tail = @(Get-Content -Path $log -Tail 40 -ErrorAction SilentlyContinue)
-$digests = @(Get-Content -Path $log -ErrorAction SilentlyContinue | Where-Object { $_ -match '^(OUTSHA|DIGEST) ' } | Select-Object -First 8)
+# [string] casts: Get-Content strings carry PSPath/PSDrive note properties that Windows PowerShell 5.1's ConvertTo-Json expands (to -Depth 8: minutes of CPU)
+$tail = @(Get-Content -Path $log -Tail 40 -ErrorAction SilentlyContinue | ForEach-Object { [string]$_ })
+$digests = @(Get-Content -Path $log -ErrorAction SilentlyContinue | Where-Object { $_ -match '^(OUTSHA|DIGEST) ' } | Select-Object -First 8 | ForEach-Object { [string]$_ })
 $files = @(Get-ChildItem -Path "C:\kf\out\$Id" -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 20 | ForEach-Object { '{0} {1}' -f $_.FullName, $_.Length })
 $gpuErr = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'NVIDIA' } | ForEach-Object { '{0} status={1} code={2}' -f $_.Name, $_.Status, $_.ConfigManagerErrorCode })
 $facts = @{
