@@ -1,5 +1,41 @@
 # V3 — batched guest-RAM maps: N scattered runs, O(1) host calls
 
+**★ CORRECTION (2026-10-10, branch `claude/held-hole-20261010`) — the HELD-hole of the D1-D3 code
+(Windows run 289: 14 leaves `HELD BY HOST`, 4 host Xid 31 `FAULT_PTE`) is a reservation-geometry defect;
+read this before §8.8.1/§8.8.3.** Host RM does not hold the range a micro reservation asks for: it
+aligns the START down and the SIZE up to the page size it picks for the request (2 MiB when the
+request is at least 2 MiB, else the 64 KiB big page; `gvaspaceApplyDefaultAlignment`,
+`gpu_vaspace.c:1645`, `_memmgrPickDefaultGpuPageSize`, `mem_mgr.c:1743`). The ledger recorded the
+requested range, so the pad past its end (and the span below an unaligned start) was occupied on the
+host but invisible to `BatchedVas::segments`: the guest's later 4 KiB rows there got `VA_ALREADY_MAPPED`
+→ `HeldByHost` → no PTE → the engine faulted. Evidence: `[measured]` host dmesg of run 289 —
+`virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x20000 RangeLo: 0x144d0000`
+for a request at `0x144d5000`, `Assertion failed: vaHi <= pMemBlock->end @ gpu_vaspace.c:2022` /
+`dmaAllocMapping_GM107: can't update VA space for mapping @vaddr=0x14495000` (the 9 `batch fallback …
+Map(Other(31))` lines: a batch mapped through a reservation whose block is shorter than the batch);
+every HELD leaf and every faulting VA of run 289 is the tail of a 64 KiB unit (`0x1499c000+0x4000`,
+`0x15bac000+0x4000`, `0x14588000+0x8000`); the `eff1b692` line never reserved (runs 277-288, 290, 291:
+0 HELD, 0 new Xid); runs 272-276 and 289 (all D1-D3 code) did. `[measured, hardware probe, 2026-10-10,
+RTX 4070 595.91.07]` `kf-micro-reserve-probe reserve`: after `reserve_va(0x4030000, 8 pages)` a plain
+one-page map at `0x4038000` is refused (`Other(19305)` = `VA_ALREADY_MAPPED`), a page below an unaligned
+start is refused too, and an aligned 64 KiB reservation holds exactly 64 KiB (the page after it maps).
+Gate 10 passed in 289's tree because it only ever used the 8 pages it asked for.
+
+**Fix.** A reservation is made only over a range host RM holds EXACTLY (`reserve_exact`): `batch::place`
+reserves the run's aligned hull when nothing of ours lies in the pads (the ledger then records the real
+block; later pad rows map THROUGH it), else the aligned core only, and the head/tail go per run at the
+4 KiB grain; `leaf_segments` reserves aligned cores and grains the remnants; leaves below 64 KiB are 4 KiB
+grain. A neighbour of ours (or a host buffer) inside the 64 KiB unit makes the reservation impossible
+(`NoMemory`) and the rows go per run — correct, slower. `Applied`/`BatchedVas::held_ours` counts (and the log
+names, `HELD-BY-OURSELVES`) any `HeldByHost` for a VA our ledger says is ours. Model: `sim::SimRm` rounds
+reservations like the host (`reserve_rounds`, default ON) and fails any fixed map refused by a NON-foreign
+occupant (`SILENT ABSENCE`, `sim::check`); the 10 model tests that failed on the old code are the repro;
+regressions `a_batch_leaves_no_unrecorded_pad_the_guest_cannot_map`,
+`a_foreign_buffer_in_the_pad_makes_the_reservation_impossible_not_the_leaf_silent`. Residual: the 64 KiB
+unit is the Pascal+ big page (Maxwell's 128 KiB is not handled); a genuinely host-owned occupant is still
+`HELD` (by design, §P6b) — the 12 ms invalidate bound and the lock-step hand-over of such a VA are
+unchanged.
+
 **★ CORRECTION (2026-10-10, branch `claude/batched-map-decisions-20261010`, off `integration/windows-20261010` @ eff1b692) —
 the three decisions §8.7 left open are decided and implemented; read §8.8 first.** (D1) The
 transient of an UNCHANGED VA (`remade_unchanged_pages`) is gone by construction: outside every

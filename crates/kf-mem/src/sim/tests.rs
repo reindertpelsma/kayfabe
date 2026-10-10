@@ -917,6 +917,7 @@ fn a_batch_leaves_no_unrecorded_pad_the_guest_cannot_map() {
             .collect();
         map_ram(&m, &mut c, &pads);
         ok(&sim, &c, &BTreeMap::new());
+        assert_eq!(m.bv.held_ours.load(Relaxed), 0, "first={first} n={n}: HELD-BY-OURSELVES");
         assert!(
             c.values().all(|x| !x.held),
             "first={first} n={n}: no leaf acknowledged HELD without a foreign occupant"

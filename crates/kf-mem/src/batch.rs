@@ -1091,6 +1091,11 @@ pub struct BatchedVas<'rm, V: SpaceVerbs = HostVas<'rm>> {
     /// ★ Review fix 2026-10-10: mappings of ours found where a NEW row was about to be mapped (a
     /// mapping a refused rollback or take-down left behind) and removed first — counted.
     pub strays_removed: std::sync::atomic::AtomicU64,
+    /// ★ Held-hole fix: fixed maps host RM answered "occupied" for a VA OUR ledger says is ours (an
+    /// own mapping, or a micro reservation of ours covering the piece): the guest's leaf is
+    /// silently absent through a kayfabe defect, never through a host-owned buffer. Loud (named in
+    /// the log, the first 16) and counted; the GPU-free model fails on any (`sim::check`).
+    pub held_ours: std::sync::atomic::AtomicU64,
     /// ★ Review fix 2026-10-10 (finding 5): batch objects whose free host RM refused — still OURS,
     /// still mapped somewhere: [`BatchedVas::leftovers`] reports them so the space is never recycled.
     pub stuck_objects: std::sync::Mutex<Vec<u32>>,
@@ -1250,6 +1255,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             max_leaf_pieces: MAX_LEAF_PIECES,
             huge_refused: std::sync::atomic::AtomicU64::new(0),
             strays_removed: std::sync::atomic::AtomicU64::new(0),
+            held_ours: std::sync::atomic::AtomicU64::new(0),
             stuck_objects: std::sync::Mutex::new(Vec::new()),
             leaf_reserved: std::sync::atomic::AtomicU64::new(0),
             leaf_grained: std::sync::atomic::AtomicU64::new(0),
@@ -1530,6 +1536,24 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             out.push((None, cur, end));
         }
         out
+    }
+
+    /// ★ Held-hole fix: a piece host RM answered "occupied" for. If OUR ledger says the VA is ours
+    /// (a mapping of ours there, or a reservation of ours covering a piece placed outside one) the
+    /// absence of the guest's leaf is a kayfabe defect — counted and named.
+    fn note_held(&self, via: Option<u32>, s: u64, e: u64) {
+        let ours = via.is_none()
+            && (self.hold(&self.own, |o| (o.any_in(s, e), 1)) || self.micro_covers(s, e));
+        if ours {
+            static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+            bump(&self.held_ours);
+            if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 16 {
+                eprintln!(
+                    "kf-mem: HELD-BY-OURSELVES {s:#x}+{:#x}: host RM reports the VA occupied and OUR ledger says it is ours (a mapping or reservation of ours) — the guest's leaf is absent through a kayfabe defect, not a host buffer",
+                    e.saturating_sub(s)
+                );
+            }
+        }
     }
 
     /// Whether `[a, b)` (a pad, possibly empty) holds none of our mappings and is covered by none of
@@ -2148,6 +2172,9 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             match one(via, s, e.saturating_sub(s)) {
                 Ok(Mapped::Placed) => placed.push((via, s, e)),
                 other => {
+                    if other == Ok(Mapped::HeldByHost) {
+                        self.note_held(via, s, e);
+                    }
                     verdict = other;
                     break;
                 }
