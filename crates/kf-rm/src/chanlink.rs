@@ -340,11 +340,19 @@ pub fn windows_user_work(f: &UserWorkFacts) -> Result<(), &'static str> {
     let engine = f.engine.ok_or("no engine type")?;
     if engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS
         && kf_abi::submit::copy_index_of_engine_type(engine).is_none()
+        && !video_engine(engine)
     {
-        return Err("not a graphics or copy engine");
+        return Err("not a graphics, copy or video engine");
     }
-    // ★ A subcontext (context share) exists only for graphics: a copy engine has none, so a copy
-    // channel is judged by its process alone. `[measured, run70 at 4b14d74f, 2026-10-08]` a D3D device
+    // ★ A subcontext (context share) exists only for graphics: a copy or video engine has none, so
+    // such a channel is judged by its process alone. ★ 2026-10-10 (video): `[measured, Windows runs
+    // 295 and 384, RTX 4070]` Edge's video decode creates an NVDEC0 channel (engine 0x13, class c56f,
+    // no context share) under its own `ProcessID` (0x1db0) in its per-process VA space, which already
+    // holds six user channels; kept Translated, it was refused there by the twin-state rule
+    // (`KernelInUserSpace`), the guest's RmAlloc failed (0x40), and every such refusal was followed by a
+    // TDR (4 of 4). A guest USER video channel is a passthrough twin exactly like a GR/CE twin
+    // (`docs/design/V3_VIDEO_ENGINES.md` §2), and video methods have no physical-aperture operand
+    // (OWNER_RULINGS, 2026-10-08 evidence), so the VA space contains it. `[measured, run70 at 4b14d74f, 2026-10-08]` a D3D device
     // creates a graphics channel WITH a context share and a copy channel (engine 0xc) WITHOUT one, both
     // under the process's own `ProcessID` (0x14c0) in the same per-process VA space; the copy channel,
     // kept Translated, was refused there by the twin-state rule and the device creation failed.
@@ -370,6 +378,15 @@ pub fn windows_user_work(f: &UserWorkFacts) -> Result<(), &'static str> {
         return Err("the Windows System process (EXPERIMENT KF3_WIN_KERNEL_PID4)");
     }
     Ok(())
+}
+
+/// `engine` (NV2080 space) is a video engine: NVDEC0-7, NVENC0-3 or OFA0/1.
+#[must_use]
+pub fn video_engine(engine: u32) -> bool {
+    kf_abi::submit::nvdec_index_of_engine_type(engine).is_some()
+        || kf_abi::submit::nvenc_index_of_engine_type(engine).is_some()
+        || engine == kf_abi::submit::NV2080_ENGINE_TYPE_OFA0
+        || engine == kf_abi::submit::NV2080_ENGINE_TYPE_OFA1
 }
 
 /// A statement for the channel plane.
@@ -2451,6 +2468,40 @@ mod tests {
         }
 
         #[test]
+        fn a_user_processes_video_channel_is_judged_by_its_process_alone() {
+            // [measured, run 295] NVDEC0 (0x13), no context share, ProcessID 0x1db0 (Edge's decode)
+            for engine in [0x13, 0x14, 0x1b, 0x1c, 0x33, 0x3e] {
+                let v = UserWorkFacts {
+                    engine: Some(engine),
+                    ctx_share: 0,
+                    ctx_share_known: false,
+                    process_id: Some(0x1db0),
+                    kernel_pid: Some(0x350),
+                    ..dwm()
+                };
+                assert_eq!(windows_user_work(&v), Ok(()), "{engine:#x}");
+                // the kernel driver's own video channel, and the System process's, stay Translated
+                for pid in [0x350, super::WINDOWS_SYSTEM_PID] {
+                    let k = UserWorkFacts {
+                        process_id: Some(pid),
+                        system_pid_is_kernel: true,
+                        ..v
+                    };
+                    assert!(windows_user_work(&k).is_err(), "{engine:#x} pid {pid:#x}");
+                }
+            }
+            // a non-video, non-GR/CE engine (SEC2) is never user work
+            let sec2 = UserWorkFacts {
+                engine: Some(0x26),
+                ctx_share: 0,
+                ctx_share_known: false,
+                process_id: Some(0x1db0),
+                ..dwm()
+            };
+            assert!(windows_user_work(&sec2).is_err());
+        }
+
+        #[test]
         fn a_d3d_copy_channel_is_judged_by_its_process_alone() {
             // [measured, run70 at 4b14d74f, 2026-10-08] engine 0xc, no context share, ProcessID 0x14c0
             let ce = UserWorkFacts {
@@ -2532,10 +2583,10 @@ mod tests {
                 ),
                 (
                     UserWorkFacts {
-                        engine: Some(0x13),
+                        engine: Some(0x26),
                         ..dwm()
                     },
-                    "not a graphics or copy engine",
+                    "not a graphics, copy or video engine",
                 ),
                 (
                     UserWorkFacts {
@@ -2580,8 +2631,11 @@ mod tests {
                 return Err("an RM-internal client");
             }
             let engine = f.engine.ok_or("no engine type")?;
-            if engine != GR && kf_abi::submit::copy_index_of_engine_type(engine).is_none() {
-                return Err("not a graphics or copy engine");
+            if engine != GR
+                && kf_abi::submit::copy_index_of_engine_type(engine).is_none()
+                && !super::video_engine(engine)
+            {
+                return Err("not a graphics, copy or video engine");
             }
             if engine == GR && f.ctx_share == 0 {
                 return Err("no context share (the kernel driver's own channels declare none)");
